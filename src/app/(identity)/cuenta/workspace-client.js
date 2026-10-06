@@ -1,5 +1,6 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
+import {Building2,FolderKanban,LoaderCircle,RefreshCw,Check,ArrowUpRight,LockKeyhole} from 'lucide-react';
 import styles from './workspace.module.css';
 import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import {TaskCreatePanel} from './task-create-panel';
@@ -96,18 +97,19 @@ export function AccountWorkspace({getSessionToken}={}){
    if(mounted.current&&current===generation.current){if(data.scope!==account?.scope)throw new Error('La respuesta corresponde a otra organización.');if(data.state==='RECORDED')applySaved(data);else if(data.state==='NOT_OBSERVED'){setRetryAllowed(true);setNotice('No se observa un recibo todavía. Podés comprobar otra vez o reintentar exactamente la misma planificación; conservamos sus datos para evitar duplicados.');}else throw new Error('Todavía no se pudo comprobar el guardado. Conservamos el intento.');}
   }catch(error){if(mounted.current&&current===generation.current)setNotice(error.message);}finally{if(mounted.current&&current===generation.current)setSaving(false);}
  }
- return <section className={styles.workspace} aria-labelledby="workspace-title">
-  <div className={styles.heading}><div><p className={styles.eyebrow}>ESPACIO DE TRABAJO</p><h2 id="workspace-title">Mis obras</h2></div><button type="button" onClick={refresh} disabled={contextLocked||loading}>Actualizar</button></div>
-  <p className={styles.intro}>Elegí una obra para consultar sus tareas y organizar el trabajo con los permisos de tu empresa.</p>
+ return <section className={styles.workspace} aria-labelledby="workspace-title" aria-busy={loading}>
+  <div className={styles.heading}><div><p className={styles.eyebrow}>ESPACIO DE TRABAJO</p><h2 id="workspace-title">Mis obras</h2><p className={styles.intro}>Elegí dónde trabajar. Las tareas, el equipo y los registros quedan en la obra seleccionada.</p></div><button type="button" className={styles.refresh} onClick={refresh} disabled={contextLocked||loading} aria-describedby={contextLocked?'workspace-context-lock':undefined}><RefreshCw size={16} aria-hidden="true"/>Actualizar</button></div>
   <div role="status" aria-live="polite" className={notice?styles.notice:styles.silent}>{notice}</div>
-  {loading&&<p className={styles.loading}>Consultando registros autorizados…</p>}
-  {account&&<><div className={styles.context}><strong>{account.organizationName}</strong><span>{account.roleLabel}</span></div>
+  {loading&&<p className={styles.loading}><LoaderCircle size={18} className={styles.spinner} aria-hidden="true"/>Consultando registros autorizados…</p>}
+  {contextLocked&&<p className={styles.contextLock} id="workspace-context-lock"><LockKeyhole size={16} aria-hidden="true"/><span>Hay una acción en curso. Completala, cancelá el borrador o comprobá su resultado antes de actualizar o cambiar de obra.</span></p>}
+  {account&&<><div className={styles.context}><div className={styles.company}><Building2 size={22} aria-hidden="true"/><div><span>Empresa</span><strong>{account.organizationName}</strong></div></div><dl className={styles.contextDetails}><div><dt>Tu acceso</dt><dd>{account.roleLabel}</dd></div><div><dt>Obra activa</dt><dd>{view?.project.name||'Sin seleccionar'}</dd></div></dl></div>
    <WorkspaceRecoveryPanel key={account.scope} scope={account.scope} projects={account.projects} getSessionToken={getSessionToken} onRecovered={result=>{if(result.task)tasksChanged(result.task);}}/>
-   {!account.projects.length&&!loading&&<p className={styles.empty}>No hay obras activas asignadas a tu cuenta. El responsable debe aprobar la pertenencia; no se creó una obra ni se asignó un rol automáticamente.</p>}
-   <div className={styles.projects}>{account.projects.map(project=><button key={project.id} type="button" onClick={()=>open(project.id)} disabled={contextLocked} aria-pressed={view?.project.id===project.id}><span>{project.name}</span><small>Abrir obra</small></button>)}</div>
+   {!account.projects.length&&!loading&&<div className={styles.empty}><FolderKanban size={25} aria-hidden="true"/><strong>No hay obras activas asignadas a tu cuenta.</strong><p>Pedile al responsable que revise tu pertenencia y la obra asignada. Podés volver a actualizar cuando confirme el acceso.</p></div>}
+   {account.projects.length>0&&<div className={styles.projectCollection}><div className={styles.collectionHeading}><h3>Obras disponibles</h3><span>{account.projects.length}{account.projectsTruncated?' mostradas':account.projects.length===1?' asignada':' asignadas'}</span></div><div className={styles.projects}>{account.projects.map(project=><button key={project.id} type="button" onClick={()=>open(project.id)} disabled={contextLocked} aria-pressed={view?.project.id===project.id}><span className={styles.projectName}><FolderKanban size={18} aria-hidden="true"/><span>{project.name}</span></span><small>{view?.project.id===project.id?<><Check size={14} aria-hidden="true"/>Seleccionada</>:<>Abrir obra<ArrowUpRight size={14} aria-hidden="true"/></>}</small></button>)}</div></div>}
    {account.projectsTruncated&&<p>Se muestran las primeras 100 obras autorizadas.</p>}
+   {account.projects.length>0&&!view&&!loading&&<div className={styles.startState}><strong>Abrí una obra para empezar</strong><p>Consultá el cronograma, registrá el trabajo y accedé a las herramientas disponibles para tu rol.</p></div>}
   </>}
-  {view&&<WorkspaceToolsNavigation role={account?.role} canManageIntegrations={account?.canManageIntegrations} pending={modulePending} schedulePending={saving||Boolean(attempt)||Boolean(draft)||creatingTask} scheduleEditing={Boolean(draft)}/>}
+  {view&&<div className={styles.workbench}><WorkspaceToolsNavigation role={account?.role} canManageIntegrations={account?.canManageIntegrations} pending={modulePending} schedulePending={saving||Boolean(attempt)||Boolean(draft)||creatingTask} scheduleEditing={Boolean(draft)}/><div className={styles.modules}>
   {view&&<section aria-labelledby="schedule-title" className={styles.schedule}>
    <div className={styles.heading}><div><p className={styles.eyebrow}>CRONOGRAMA REGISTRADO</p><h3 id="schedule-title">{view.project.name}</h3></div><span>{view.tasks.length} de {view.totalTasks} tareas</span></div>
    {view.canPlanSchedule&&!draft&&<TaskCreatePanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={setTaskCreating} onCreated={task=>setView(current=>current&&current.project.id===view.project.id?{...current,totalTasks:current.tasks.some(t=>t.id===task.id)?current.totalTasks:current.totalTasks+1,tasks:current.tasks.some(t=>t.id===task.id)?current.tasks.map(t=>t.id===task.id?task:t):[task,...current.tasks]}:current)}/> }
@@ -133,5 +135,6 @@ export function AccountWorkspace({getSessionToken}={}){
   {view&&account?.canManageIntegrations&&<TemplateSendPanel key={`template-send:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={templatePending}/> }
   {view&&account?.role==='ADMIN'&&<ConstructorCrmPanel key={`crm:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={crmPending}/> }
   {view&&account?.canManageIntegrations&&<OperationsStatusPanel key={`operations:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken}/> }
+  </div></div>}
  </section>;
 }

@@ -61,6 +61,7 @@ try {
  const text=await page.evaluate(()=>document.body.innerText);
  for(const phrase of ['requieren autorizaciones independientes','La selfie es una imagen estática','no certifica prueba de vida','Pendientes de aceptación de cuenta','IDENTIDAD','Sólo el recordatorio de jornada abierta','envíos proactivos todavía no están implementados','no genera cotizaciones','No son una copia de tus borradores','no repite el envío','no se presume activo','Ese PIN no es el código de verificación recibido','Una implementación local o un recibo de preparación no acreditan']) assert.ok(text.includes(phrase),`Missing truthful boundary: ${phrase}`);
  assert.ok(!/sk_(live|test)_|whsec_|eyJ[a-zA-Z0-9_-]+\./.test(text));
+  for(const phrase of ['coexistencia','Cloud API o un proveedor','no se garantiza un historial completo','no abre la ventana de respuesta ni ejecuta jornada, identidad o avance','no desconecta el proveedor existente','ventana de 24 horas','Sólo guardar'])assert.ok(text.includes(phrase),`Missing number-preservation boundary: ${phrase}`);
  assert.equal(await page.$$eval('form,input,textarea',nodes=>nodes.length),0);
  checks.push('truthful-identity-whatsapp-crm-offline-and-publication-boundaries');
  checks.push('public-manual-does-not-collect-credentials-or-personal-data');

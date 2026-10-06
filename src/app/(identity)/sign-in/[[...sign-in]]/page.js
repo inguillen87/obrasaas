@@ -5,17 +5,18 @@ import { sessionIdentityConfig } from '../../../../lib/production-identity-confi
 import { identityAccountReturnPath, identitySignUpPath } from '../../../../lib/identity-return-path.mjs';
 import styles from '../../identity.module.css';
 import { IdentityWidget } from '../../identity-load-guard';
+import { AuthIntro } from '../../auth-intro';
 export const metadata = { title: 'Ingresar · ObraSaaS' };
 export default async function SignInPage({ searchParams }) {
   if (!sessionIdentityConfig().configured) return null;
   const query = await searchParams;
   const returnPath = identityAccountReturnPath(query);
-  return <section className={styles.card}>
+  return <div className={styles.authFrame}><AuthIntro /><section className={`${styles.card} ${styles.authCard}`}>
     <Link href="/" className={styles.brand}><ObraSaasLogo markSize={36} variant="inverse" /></Link>
     <h1>Ingresá a tu cuenta</h1>
     <p className={styles.lead}>Entrá para consultar y gestionar las obras de tu empresa.</p>
     <div className={styles.widget}><IdentityWidget><SignIn routing="path" path="/sign-in" signUpUrl={identitySignUpPath(query)}
       forceRedirectUrl={returnPath} signUpForceRedirectUrl={returnPath} /></IdentityWidget></div>
     <p className={styles.note}>El responsable de la obra define tu acceso.</p>
-  </section>;
+  </section></div>;
 }

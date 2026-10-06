@@ -2,7 +2,7 @@ import {WorkspaceError,workspaceId,operationId,digest} from './workspace-policy.
 import {buildCustomerTemplate,customerRemoteTemplateMatches,customerTemplateBlueprint} from './meta-customer-templates.mjs';
 import {customerChannelActive,customerJobTransaction,reserveCustomerOutbound,completeCustomerOutbound} from './meta-customer-outbound.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
-import {customerTemplateMessage} from './meta-customer-provider.mjs';
+import {customerTemplateMessage,metaCustomerTransportReady} from './meta-customer-provider.mjs';
 
 export const CUSTOMER_MANUAL_TEMPLATE='open_attendance_reminder';
 export const customerTemplateSendId=(actorId,projectId,id)=>'customer_outbound_'+digest(['meta-customer-template-send-v1',actorId,projectId,id]);
@@ -50,13 +50,13 @@ export function createMetaCustomerTemplateSend({workspace,connect,resolveRecipie
     const connections=(await client.query(`SELECT id,"projectId","phoneNumberId","whatsappBusinessId","encryptedAccessToken",enabled,"connectionStatus",metadata FROM public."WhatsAppConnection" WHERE "projectId"=$1`,[project.id])).rows;
     const connection=connections.length===1?connections[0]:null;
     const readiness=provider.readiness();
-    let approved=null;try{if(readiness.canLaunchMeta&&connection&&customerChannelActive(connection,now())){const current=approvedDefinition(connection,project);customerTemplateMessage({name:current.definition.name,language:current.definition.language,bodyParameters:[project.name]});approved=current;}}catch(error){if(!(error instanceof WorkspaceError))throw error;}
+    let approved=null;try{if(metaCustomerTransportReady(readiness)&&connection&&customerChannelActive(connection,now())){const current=approvedDefinition(connection,project);customerTemplateMessage({name:current.definition.name,language:current.definition.language,bodyParameters:[project.name]});approved=current;}}catch(error){if(!(error instanceof WorkspaceError))throw error;}
     const definition=customerTemplateBlueprint(CUSTOMER_MANUAL_TEMPLATE);
     const workers=(await client.query(`SELECT id,name FROM public."Worker" WHERE "projectId"=$1 AND active=true AND metadata->'participant'->>'status'='ACTIVE' ORDER BY name,id LIMIT 21`,[project.id])).rows;
     const records=[];
     for(const worker of workers.slice(0,20)){
      let reasonCode=null;
-     try{await resolveRecipient(client,{organizationId:member.organizationId,projectId:project.id,workerId:worker.id,permission:'attendance',environment,lock:false});await customerOpenAttendance(client,project.id,worker.id);if(!readiness.canLaunchMeta)reasonCode=readiness.launchCode;else if(!approved)reasonCode='META_CUSTOMER_TEMPLATE_APPROVAL_REQUIRED';}catch(error){if(!(error instanceof WorkspaceError))throw error;reasonCode=error.code;}
+     try{await resolveRecipient(client,{organizationId:member.organizationId,projectId:project.id,workerId:worker.id,permission:'attendance',environment,lock:false});await customerOpenAttendance(client,project.id,worker.id);if(!metaCustomerTransportReady(readiness))reasonCode=readiness.launchCode;else if(!approved)reasonCode='META_CUSTOMER_TEMPLATE_APPROVAL_REQUIRED';}catch(error){if(!(error instanceof WorkspaceError))throw error;reasonCode=error.code;}
      const pending=(await client.query(`SELECT id FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-outbound-v1' AND "eventType"='template' AND payload->>'workerId'=$2 AND outcome->>'state' IN ('SEND_STARTED','SEND_UNKNOWN') LIMIT 1`,[project.id,worker.id])).rows[0];
      if(pending)reasonCode='META_CUSTOMER_TEMPLATE_SEND_PENDING';
      records.push({workerId:worker.id,name:worker.name,eligible:reasonCode===null,reasonCode});
@@ -71,7 +71,7 @@ export function createMetaCustomerTemplateSend({workspace,connect,resolveRecipie
    const claim=await within(session,body,true,async(client,member,scope,project)=>{
     const id=customerTemplateSendId(member.actorId,project.id,body.operationId),prior=await existing(client,id,project.id,member.actorId,member.organizationId,true);
     if(prior){if(prior.payload.bodyDigest!==bodyDigest)throw new WorkspaceError('META_CUSTOMER_TEMPLATE_SEND_CONFLICT',409);return {done:publicCustomerTemplateSend(prior,{scope,projectId:project.id})};}
-    const readiness=provider.readiness();if(!readiness.canLaunchMeta)throw new WorkspaceError('META_CUSTOMER_CONFIGURATION_PENDING',503);
+    const readiness=provider.readiness();if(!metaCustomerTransportReady(readiness))throw new WorkspaceError('META_CUSTOMER_CONFIGURATION_PENDING',503);
     const connection=recipient.connection;
     if(recipient.kind!=='TEMPLATE_RECIPIENT_VERIFIED'||recipient.worker.id!==body.workerId||recipient.project.id!==project.id||connection.projectId!==project.id||!customerChannelActive(connection,now()))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_RECIPIENT_REQUIRED',403);
     const attendance=await customerOpenAttendance(client,project.id,body.workerId),approved=approvedDefinition(connection,project);
@@ -97,6 +97,7 @@ export function createMetaCustomerTemplateSend({workspace,connect,resolveRecipie
      const row=await existing(client,claim.id,project.id,member.actorId,member.organizationId,true);
      if(row?.leaseToken!==claim.leaseToken||row.outcome?.state!=='SEND_STARTED'||new Date(row.leaseExpiresAt).getTime()<=now())throw new WorkspaceError('META_CUSTOMER_OUTBOUND_LEASE_CHANGED',409);
      const connection=recipient.connection,attendance=await customerOpenAttendance(client,project.id,body.workerId),approved=approvedDefinition(connection,project);
+     if(!metaCustomerTransportReady(provider.readiness()))throw new WorkspaceError('META_CUSTOMER_CONFIGURATION_PENDING',503);
      if(channelClaim(connection,project)!==claim.request.channelClaim||recipientClaim(recipient)!==claim.request.recipientClaim||digest(approved)!==claim.request.templateClaim||digest(attendance)!==digest(claim.request.attendance)||project.name!==claim.request.message.bodyParameters[0])throw new WorkspaceError('META_CUSTOMER_TEMPLATE_SEND_STATE_CHANGED',409);
      const updated=await client.query(`UPDATE public."WebhookEvent" SET outcome=outcome||$4::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2 AND "leaseToken"=$3`,[claim.id,project.id,claim.leaseToken,JSON.stringify({dispatchStartedAt:new Date(now()).toISOString()})]);
      if(updated.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_OUTBOUND_LEASE_CHANGED',409);

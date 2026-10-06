@@ -30,3 +30,25 @@
 @media(max-width:500px){.shell{padding:14px 10px;align-items:start}.card{padding:24px 18px;border-radius:15px}.status div{flex-direction:column;gap:6px}.status dd{text-align:left}.widget{margin-inline:-8px;width:calc(100% + 16px);max-width:none}.widget :global(.cl-formFieldInput){font-size:16px}}
 
 .brand{min-height:44px;color:#F4F1E8;--font-manrope:"Manrope";}
+.authFrame{width:100%;max-width:1120px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,520px);border:1px solid #2d3e55;border-radius:24px;overflow:hidden;background:#0c1523;box-shadow:0 24px 72px #0004}
+.authIntro{display:flex;flex-direction:column;justify-content:space-between;gap:38px;min-width:0;padding:40px;background:linear-gradient(145deg,#122337,#0c1829);position:relative}
+.authStory{position:relative;z-index:1}
+.authKicker{margin:0 0 18px;font-size:11px;font-weight:700;letter-spacing:.16em;color:#f4b049}
+.authStory h2{font-family:Manrope,Inter,Arial,sans-serif;font-size:clamp(28px,3.3vw,40px);line-height:1.19;letter-spacing:-.045em;margin:0 0 20px;font-weight:650;color:#f4f1e8}
+.authStory>p:not(.authKicker){font-size:15px;line-height:1.7;max-width:350px;color:#bdcee2}
+.authSteps{list-style:none;margin:30px 0 0;padding:0;display:grid;gap:22px}
+.authSteps li{display:flex;gap:16px;align-items:flex-start}
+.authSteps li>span{display:flex;align-items:center;justify-content:center;width:34px;min-width:34px;height:34px;border:1px solid #42516a;border-radius:8px;font-size:11px;font-weight:700;color:#f4b049}
+.authSteps strong{font-size:14px;font-weight:650;color:#f4f1e8;line-height:1.5}
+.authSteps p{font-size:12px;line-height:1.7;color:#b4c4db;margin:3px 0 0;max-width:300px}
+.authHelp{padding-top:24px;border-top:1px solid #3a495e}
+.authHelp p{margin:0;color:#b4c4db;font-size:12px}
+.authHelp a{min-height:44px;display:inline-flex;align-items:center;gap:14px;color:#eef4ff;font-size:13px;text-decoration:none}
+.authHelp a:hover{text-decoration:underline;text-underline-offset:4px}
+.authHelp small{display:block;font-size:11px;color:#b4c4db;margin-top:12px}
+.authIntro a:focus-visible{outline:3px solid #a4ceff;outline-offset:4px}
+.authCard{max-width:none;border:0;border-radius:0;padding:38px 32px;align-self:center}
+.authCard>.brand{display:none}
+.authCard h1{margin-top:0;font-size:clamp(27px,3vw,31px)}
+@media(max-width:850px){.authFrame{max-width:620px;grid-template-columns:1fr}.authIntro{display:none}.authCard>.brand{display:inline-flex}.authCard h1{margin-top:24px}}
+@media(max-width:500px){.authFrame{border-radius:15px}.authCard{padding:24px 18px}}

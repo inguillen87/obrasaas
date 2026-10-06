@@ -4,7 +4,7 @@ import {metaCustomerReadiness} from '../src/lib/meta-customer-provider.mjs';
 import {OBRASAAS_META_CHANNEL} from '../src/lib/meta-channel-binding.mjs';
 import {metaOnboardingSnapshot,metaOnboardingReadinessView} from '../src/app/(identity)/cuenta/meta-onboarding-readiness-view.mjs';
 const context={scope:'a'.repeat(64),projectId:'p-a'};
-const environment={NEXT_PUBLIC_META_APP_ID:OBRASAAS_META_CHANNEL.appId,META_APP_SECRET:'synthetic-secret-only-12345678',META_CONFIG_ID:'123456789012345',META_GRAPH_API_VERSION:'v25.0',META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,24).toString('base64'),OBRASAAS_META_SIGNUP_RELEASE:'customer-self-service-v1',META_CUSTOMER_VERIFY_TOKEN:'synthetic-verify-token-only-'.repeat(2)};
+const environment={NEXT_PUBLIC_META_APP_ID:OBRASAAS_META_CHANNEL.appId,META_APP_SECRET:'synthetic-secret-only-12345678',META_CONFIG_ID:'123456789012345',META_GRAPH_API_VERSION:'v25.0',META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,24).toString('base64'),META_EMBEDDED_SIGNUP_VERSION:'4',OBRASAAS_META_SIGNUP_RELEASE:'customer-self-service-v1',META_CUSTOMER_VERIFY_TOKEN:'synthetic-verify-token-only-'.repeat(2)};
 const snapshot=(overrides={})=>({...context,companyName:'Empresa de ensayo',projectName:'Obra de ensayo',prepared:true,numberMode:'DEDICATED',readiness:metaCustomerReadiness(environment),signup:null,connection:null,...overrides});
 const state=(result,key)=>metaOnboardingReadinessView(result).steps.find(step=>step.key===key);
 
@@ -26,7 +26,12 @@ test('malformed, optimistic or unscoped readiness cannot replace a displayed sna
 });
 test('preparation and assisted number modes preserve their distinct next actions',()=>{
  assert.match(metaOnboardingReadinessView(snapshot({prepared:false,numberMode:null})).next,/Guardá la preparación/);
- for(const numberMode of ['BUSINESS_APP','EXISTING_API'])assert.match(metaOnboardingReadinessView(snapshot({numberMode})).next,/revisión específica/);
+ assert.match(metaOnboardingReadinessView(snapshot({numberMode:'BUSINESS_APP'})).next,/configuración v4/);
+ assert.match(metaOnboardingReadinessView(snapshot({numberMode:'EXISTING_API'})).next,/No se transfiere ni desconecta/);
+});
+test('an existing operational channel keeps its next step when v4 authorization is pending, without claiming a new signup is ready',()=>{
+ const result=snapshot({readiness:metaCustomerReadiness({...environment,META_EMBEDDED_SIGNUP_VERSION:undefined}),activation:{operational:true}});metaOnboardingSnapshot(result,context);assert.match(metaOnboardingReadinessView(result).next,/canal existente sigue habilitado/);assert.equal(result.readiness.canLaunchMeta,false);assert.equal(result.readiness.canUseCustomerTransport,true);
+ assert.throws(()=>metaOnboardingSnapshot({...result,readiness:{...result.readiness,canUseCustomerTransport:false}},context),{code:'META_CUSTOMER_READINESS_RESPONSE_INVALID'});
 });
 test('uncertain authorization and registration point to inspection before another effect',()=>{
  for(const current of ['EXCHANGE_STARTED','EXCHANGE_UNKNOWN','VERIFYING','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN'])assert.match(metaOnboardingReadinessView(snapshot({signup:{state:current,canReconcile:true}})).next,/mismo intento/);

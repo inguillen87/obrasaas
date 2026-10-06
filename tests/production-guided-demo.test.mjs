@@ -14,7 +14,8 @@ test('demonstration has no business I/O, credential collection, persistence or a
 test('home demo destinations do not point to protected dashboard and lead receipts are not fabricated',()=>{
  const source=read('src/app/page.js');assert.ok((source.match(/href="\/demo"/g)||[]).length>=2);
  assert.doesNotMatch(source,/href="\/dashboard"|setLeadSubmitted|handleLeadSubmit|fetch\(['"]\/api\/state|Plataforma activa — 5 obras|Compliance normativo|Setup en 3 minutos/);
- assert.ok(source.includes('Piloto de campo en preparación'));
+ assert.ok(source.includes('La conexión requiere un número autorizado y completar los requisitos de Meta.'));
+ assert.ok(source.includes('Ejemplo ilustrativo'));assert.ok(source.includes('Conversación de ejemplo'));
 });
 test('demonstration retains the approved brand and independent account path',()=>{
  const source=read('src/app/demo/demo-client.js');assert.ok(source.includes('ObraSaasLogo'));assert.ok(source.includes('href="/sign-in"'));

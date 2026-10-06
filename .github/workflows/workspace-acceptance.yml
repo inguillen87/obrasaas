@@ -1,7 +1,7 @@
 name: Authorized workspace acceptance
 on:
   push:
-    branches: [master, 'feat/integral-worksite-*', 'feat/pilot-readiness-*', 'hotfix/production-workspace-*', 'hotfix/customer-whatsapp-self-service-*', 'hotfix/new-constructor-onboarding-*', 'hotfix/field-team-journal-*', 'fix/whatsapp-signup-*', 'fix/clerk-*']
+    branches: [master, 'feat/integral-worksite-*', 'feat/pilot-readiness-*', 'feat/professional-experience-*', 'hotfix/production-workspace-*', 'hotfix/customer-whatsapp-self-service-*', 'hotfix/new-constructor-onboarding-*', 'hotfix/field-team-journal-*', 'fix/whatsapp-signup-*', 'fix/clerk-*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -59,6 +59,11 @@ jobs:
       - run: node scripts/verify-meta-kyc-chat-postgres.mjs
       - run: node scripts/verify-field-operations-postgres.mjs
       - run: node scripts/verify-meta-customer-postgres.mjs
+      - name: Feature-gated WhatsApp Business App coexistence and private source preservation
+        run: |
+          npx eslint src/lib/meta-customer-coexistence.mjs src/lib/meta-customer-app-projection.mjs scripts/verify-meta-customer-coexistence-postgres.mjs tests/production-meta-customer-coexistence.test.mjs --max-warnings 0
+          node --test tests/production-meta-customer-coexistence.test.mjs
+          node scripts/verify-meta-customer-coexistence-postgres.mjs
       - name: Customer inbox pagination and operation recovery
         run: |
           npx eslint scripts/verify-customer-inbox-*.mjs tests/production-customer-inbox.test.mjs
