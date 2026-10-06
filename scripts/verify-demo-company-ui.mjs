@@ -10,6 +10,8 @@ const root=process.cwd(),parent=path.join(root,'.vercel'),output=path.join(paren
 mkdirSync(output,{recursive:true});
 const fixture=mkdtempSync(path.join(parent,'demo-company-ui-')),app=path.join(fixture,'app');
 const files=['src/app/demo/page.js','src/app/demo/demo-client.js','src/app/demo/demo-explorer.js','src/app/demo/demo-example.mjs','src/app/demo/demo.module.css','src/app/(identity)/cuenta/schedule-workbench.js','src/app/(identity)/cuenta/schedule-workbench.mjs','src/app/(identity)/cuenta/schedule-workbench.module.css','src/app/(identity)/cuenta/constructor-crm-view.mjs','src/app/layout.js','src/app/globals.css','src/app/brand/brand-logo.js','src/app/brand/brand-logo.module.css','src/app/brand/brand-geometry.js'];
+const fontSources=JSON.parse(readFileSync(path.join(root,'src/app/fonts/sources.json'),'utf8'));
+files.push('src/app/fonts/sources.json',...fontSources.assets.flatMap(asset=>['src/app/fonts/'+asset.path,'src/app/fonts/'+asset.license.path]));
 for(const file of files){const target=path.join(app,file.replace('src/app/',''));mkdirSync(path.dirname(target),{recursive:true});copyFileSync(path.join(root,file),target);assert.deepEqual(readFileSync(path.join(root,file)),readFileSync(target));}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
@@ -18,10 +20,10 @@ let log='',browser,page;for(const stream of [server.stdout,server.stderr])stream
 const errors=[],mutations=[],apiCalls=[],checks=[],widths=[320,390,768,1280];
 const sourceManifest=files.map(file=>({path:file,sha256:createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')}));
 const click=label=>page.evaluate(text=>{const button=[...document.querySelectorAll('button')].find(node=>node.textContent.trim()===text);if(!button)throw new Error('Missing control '+text);button.click();},label);
-async function measure(){return page.evaluate(()=>{
+async function measure(){return page.evaluate(requestedWidth=>{
  const visible=node=>{const closed=node.closest('details:not([open])');if(closed&&!node.closest('summary'))return false;const rect=node.getBoundingClientRect();return rect.width>0&&rect.height>0&&getComputedStyle(node).visibility!=='hidden';};
- return {documentOverflow:document.documentElement.scrollWidth>innerWidth,overflow:[...document.querySelectorAll('main *,header *')].filter(node=>visible(node)&&!node.closest('svg')).filter(node=>{const rect=node.getBoundingClientRect();return rect.left<-.6||rect.right>innerWidth+.6;}).map(node=>node.tagName+':'+node.textContent.trim().slice(0,60)),targets:[...document.querySelectorAll('button,a,summary,input,select')].filter(visible).map(node=>({label:node.textContent.trim().slice(0,50)||node.getAttribute('aria-label'),height:node.getBoundingClientRect().height})),heading:document.querySelector('h1')?.textContent,activeAnimations:document.getAnimations().filter(animation=>animation.playState==='running').length};
- });}
+ return {documentOverflow:document.documentElement.scrollWidth>requestedWidth,overflow:[...document.querySelectorAll('main *,header *')].filter(node=>visible(node)&&!node.closest('svg')).filter(node=>{const rect=node.getBoundingClientRect();return rect.left<-.6||rect.right>requestedWidth+.6;}).map(node=>node.tagName+':'+node.textContent.trim().slice(0,60)),targets:[...document.querySelectorAll('button,a,summary,input,select')].filter(visible).map(node=>({label:node.textContent.trim().slice(0,50)||node.getAttribute('aria-label'),height:node.getBoundingClientRect().height})),heading:document.querySelector('h1')?.textContent,activeAnimations:document.getAnimations().filter(animation=>animation.playState==='running').length};
+ },page.viewport().width);}
 try{
  let ready=false;for(let count=0;count<100;count++){try{if((await fetch(origin+'/demo')).ok){ready=true;break;}}catch{}if(server.exitCode!==null)throw new Error(log);await new Promise(resolve=>setTimeout(resolve,500));}assert.ok(ready,'Demo fixture did not start');
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});page=await browser.newPage();await page.setBypassServiceWorker(true);page.on('pageerror',error=>errors.push(error.message));

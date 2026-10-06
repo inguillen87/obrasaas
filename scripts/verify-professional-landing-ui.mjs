@@ -36,12 +36,12 @@ async function canonicalNavigation(page){
  const legacy=paths.filter(route=>legacyRoutes.some(prefix=>route===prefix||route.startsWith(prefix+'/')));
  assert.deepEqual(legacy,[],'Public landing links to a legacy route');
 }
-async function geometry(page){return page.evaluate(()=>{
+async function geometry(page){return page.evaluate(requestedWidth=>{
  const visible=element=>{const closed=element.closest('details:not([open])');if(closed&&!element.closest('summary'))return false;const r=element.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(element).visibility!=='hidden';};
  const main=document.querySelector('main'),h1=main.querySelector('h1'),targets=[...document.querySelectorAll('a,summary,button')].filter(visible).map(element=>({label:(element.getAttribute('aria-label')||element.textContent).trim().slice(0,80),height:Math.round(element.getBoundingClientRect().height)}));
- const overflow=[...document.querySelectorAll('main *,header *,footer *')].filter(element=>visible(element)&&!element.closest('svg')).map(element=>({element:element.tagName,label:element.textContent.trim().slice(0,45),rect:element.getBoundingClientRect()})).filter(({rect})=>rect.left<-.6||rect.right>innerWidth+.6).map(({element,label})=>({element,label}));
- return {documentOverflow:document.documentElement.scrollWidth>innerWidth,overflow,targets,heroOpacity:getComputedStyle(h1).opacity,heroVisible:h1.getBoundingClientRect().height>0,headline:h1.textContent,exampleLabels:[...document.querySelectorAll('[data-landing-example]')].map(example=>({kind:example.dataset.landingExample,visibleLabel:/Ejemplo ilustrativo|Conversación de ejemplo/.test(example.textContent)})),activeAnimations:document.getAnimations().filter(animation=>animation.playState==='running'&&animation.effect?.target?.closest?.('main')).length};
- });}
+ const overflow=[...document.querySelectorAll('main *,header *,footer *')].filter(element=>visible(element)&&!element.closest('svg')).map(element=>({element:element.tagName,label:element.textContent.trim().slice(0,45),rect:element.getBoundingClientRect()})).filter(({rect})=>rect.left<-.6||rect.right>requestedWidth+.6).map(({element,label})=>({element,label}));
+ return {documentOverflow:document.documentElement.scrollWidth>requestedWidth,overflow,targets,heroOpacity:getComputedStyle(h1).opacity,heroVisible:h1.getBoundingClientRect().height>0,headline:h1.textContent,exampleLabels:[...document.querySelectorAll('[data-landing-example]')].map(example=>({kind:example.dataset.landingExample,visibleLabel:/Ejemplo ilustrativo|Conversación de ejemplo/.test(example.textContent)})),activeAnimations:document.getAnimations().filter(animation=>animation.playState==='running'&&animation.effect?.target?.closest?.('main')).length};
+ },page.viewport().width);}
 async function phoneSceneChecks(browser){
  const page=await browser.newPage(),apiRequests=[],mediaRequests=[];page.on('pageerror',error=>errors.push(error.message));
  await page.setViewport({width:390,height:1000});await page.setBypassServiceWorker(true);await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'no-preference'}]);

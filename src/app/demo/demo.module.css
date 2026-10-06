@@ -5,3 +5,6 @@
 @media(max-width:360px){.header{padding:10px 16px;gap:8px}.header>a:first-child{font-size:19px}.demoBadge{font-size:8px;padding:4px 6px}.header .account{font-size:10px;gap:4px}.sidebar{padding:16px}.workspaceContent{padding:24px 16px}.workspaceHeading{align-items:start}.workspaceHeading h1{font-size:25px}.sampleBadge{font-size:8px;padding:5px 7px}.workspaceNav button{font-size:9px;gap:6px}.workspaceNav button svg{width:15px}.overviewMetrics strong svg{display:none}.miniSchedule>div{grid-template-columns:1fr 66px 28px}}
 @media(prefers-reduced-motion:reduce){.shell *,.shell *::before,.shell *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 .canonicalSchedule button,.canonicalSchedule input,.canonicalSchedule select{min-height:44px}
+
+/* Keep enlarged entry controls and example labels inside the viewport. */
+.header,.workspaceHeading{flex-wrap:wrap}.header>a:first-child{max-width:100%}.workspaceHeading>div{min-width:0}.workspaceHeading h1{overflow-wrap:anywhere}.sampleBadge,.demoBadge{max-width:100%;white-space:normal;overflow-wrap:anywhere}.workspaceNav button{min-width:0;flex-wrap:wrap;overflow-wrap:anywhere}
