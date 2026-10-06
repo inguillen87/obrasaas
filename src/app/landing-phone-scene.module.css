@@ -20,3 +20,5 @@
 /* Controls grow with text and wrap before reaching the scene's edge. */
 .topline,.playback{flex-wrap:wrap}.deviceChoice{max-width:calc(100% - 20px);flex-wrap:wrap;justify-content:flex-end}.deviceChoice button{min-width:0;overflow-wrap:anywhere}.scenarios{font-size:11px;grid-template-columns:repeat(auto-fit,minmax(min(100%,6.2em),1fr))}.scenarios button{min-width:0;flex-wrap:wrap;padding:8px 4px;overflow-wrap:anywhere}.playback button{min-width:0;max-width:100%;flex-wrap:wrap;overflow-wrap:anywhere}.chatHeader strong,.record>strong,.recordPreview strong{overflow-wrap:anywhere}
 @media(max-width:620px){.scenarios{font-size:10px}}
+
+@media(max-width:620px){.deviceChoice button,.scenarios button,.playback button,.transcript summary{font-size:14px}}

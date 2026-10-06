@@ -8,8 +8,9 @@ import {IDENTITY_INSTANCE, IDENTITY_ORIGIN, IDENTITY_PUBLIC_KEY} from '../src/li
 
 // Local component evidence only: no real Clerk session, invitation, JWT or user.
 assert.ok(!process.env.VERCEL && !process.env.VERCEL_ENV, 'Local fixture only');
+const args=process.argv.slice(2);assert.ok(args.length===0||args.length===1&&args[0]==='--entry-only','Only --entry-only is supported');const entryOnly=args[0]==='--entry-only';
 const root = realpathSync(process.cwd()), parent = path.join(root, '.vercel');
-const output = path.join(parent, 'clerk-access-evidence');
+const output = path.join(parent, entryOnly?'clerk-entry-copy-evidence':'clerk-access-evidence');
 mkdirSync(output, {recursive:true});
 const dir = mkdtempSync(path.join(parent, 'clerk-access-ui-'));
 const src = path.join(dir, 'src'), app = path.join(src, 'app'), identity = path.join(app, '(identity)');
@@ -67,9 +68,10 @@ function Widget({kind,props}){
  const router=useRouter();
  return <div data-fixture-widget={kind} data-routing={props.routing} data-return={props.forceRedirectUrl} data-cross-return={props.signUpForceRedirectUrl||props.signInForceRedirectUrl} style={{width:'100%',padding:16,boxSizing:'border-box',border:'1px solid #71839a'}}>
  <p>Clerk simulado exclusivamente para esta prueba</p>
+ <label>Correo de ensayo<input className="cl-formFieldInput" type="email" style={{display:'block',width:'100%',boxSizing:'border-box'}} autoComplete="off" /></label>
  {(props.signUpUrl||props.signInUrl)&&<Link href={props.signUpUrl||props.signInUrl}>{kind==='SignIn'?'Registro sintético':'Ingreso sintético'}</Link>}
  {props.routing==='hash'&&<button type="button" onClick={()=>{window.location.hash='/verify';}}>Paso de invitación sintético</button>}
- <button type="button" onClick={()=>{document.cookie='__session=fixture.userA.signature; path=/; SameSite=Lax';setState({isSignedIn:true,userId:'user_A',sessionId:'sess_A',orgId:null,orgRole:null,token:'fixture.userA.signature',cookieSync:true});router.push(props.forceRedirectUrl);}}>Completar identidad sintética</button>
+ <button className="cl-formButtonPrimary" type="button" onClick={()=>{document.cookie='__session=fixture.userA.signature; path=/; SameSite=Lax';setState({isSignedIn:true,userId:'user_A',sessionId:'sess_A',orgId:null,orgRole:null,token:'fixture.userA.signature',cookieSync:true});router.push(props.forceRedirectUrl);}}>Completar identidad sintética</button>
  </div>;
 }
 export function SignIn(props){return <Widget kind="SignIn" props={props}/>;}
@@ -108,7 +110,7 @@ const validSession = () => ({authenticated:true,verification:'clerk-production-j
 let activeFixture;
 async function fixture(name, {width=390,signedIn=true,loaded=true,cookieSync=true,ssr='hold',tokenDelay=false,controlledClock=false} = {}) {
   const context = await browser.createBrowserContext(), page = await context.newPage();
-  await page.setViewport({width,height:1000});
+  await page.setViewport({width,height:1000,...(entryOnly?{isMobile:width<=390,hasTouch:width<=390}:{})});
   const record = {sessionRequests:[],businessReads:[],posts:[],external:[],refreshRequests:[],held:[],responseMode:'success',pending:new Set()};
   activeFixture={name,page,record};console.log('Scenario: '+name+' ('+width+')');
   page.on('request', request=>record.pending.add(request));
@@ -151,6 +153,23 @@ async function fixture(name, {width=390,signedIn=true,loaded=true,cookieSync=tru
   });
   const close = async () => {assert.deepEqual(record.posts, [], 'Access flow cannot auto-submit mutations');assert.deepEqual(record.external, []);await context.close();};
   return {context,page,record,close};
+}
+async function authEntryGeometry(width,kind) {
+ const f=await fixture('entry-copy-'+kind,{width,signedIn:false,ssr:'allow'}),{page,record}=f;
+ await page.goto(origin+'/'+kind+'?participar='+invitation+'&returnTo=https%3A%2F%2Fexample.invalid',{waitUntil:'networkidle0'});
+ await page.waitForSelector('[data-fixture-widget]');
+ const geometry=await page.evaluate(()=>{
+  const visible=node=>{const r=node.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(node).visibility!=='hidden';};
+  const links=[...document.querySelectorAll('a')].filter(node=>visible(node)&&!node.closest('[data-fixture-widget]'));
+  return {innerWidth,scrollWidth:document.documentElement.scrollWidth,links:links.map(node=>({height:node.getBoundingClientRect().height,left:node.getBoundingClientRect().left,right:node.getBoundingClientRect().right})),inputFont:parseFloat(getComputedStyle(document.querySelector('.cl-formFieldInput')).fontSize),inputHeight:document.querySelector('.cl-formFieldInput').getBoundingClientRect().height,buttonHeight:document.querySelector('.cl-formButtonPrimary').getBoundingClientRect().height,widgets:[...document.querySelectorAll('[data-fixture-widget]')].map(node=>({routing:node.dataset.routing,returnPath:node.dataset.return,crossReturn:node.dataset.crossReturn})),nested:document.querySelectorAll('a button,button a').length};
+ });
+ assert.equal(geometry.innerWidth,width);assert.ok(geometry.scrollWidth<=width);assert.equal(geometry.nested,0);assert.ok(geometry.links.length>0&&geometry.links.every(link=>link.height>=44&&link.left>=-.5&&link.right<=width+.5));assert.ok(geometry.inputHeight>=44&&geometry.buttonHeight>=44);if(width<=760)assert.ok(geometry.inputFont>=16,'Canonical input CSS must retain mobile16px');
+ assert.deepEqual(geometry.widgets,[{routing:'path',returnPath,crossReturn:returnPath}]);
+ await page.keyboard.press('Tab');
+ const brand=await page.evaluateHandle(()=>[...document.querySelectorAll('a[href="/"]')].find(node=>node.getBoundingClientRect().width>0&&node.getBoundingClientRect().height>0));await brand.asElement().focus();await brand.dispose();
+ const focus=await page.evaluate(()=>({tag:document.activeElement.tagName,href:document.activeElement.getAttribute('href'),outline:getComputedStyle(document.activeElement).outlineStyle}));assert.equal(focus.tag,'A');assert.equal(focus.href,'/');assert.equal(focus.outline,'solid');await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>Boolean(document.activeElement.closest('[class*=authFrame]'))),true,'Keyboard stays in the actual auth content after the brand');
+ const switchTo=kind==='sign-in'?'sign-up':'sign-in';await page.click('a[href="/'+switchTo+'?participar='+invitation+'"]');await page.waitForSelector('[data-fixture-widget="'+(switchTo==='sign-in'?'SignIn':'SignUp')+'"]');assert.equal(new URL(page.url()).pathname+new URL(page.url()).search,'/'+switchTo+'?participar='+invitation);assert.equal(await page.$eval('[data-fixture-widget]',node=>node.dataset.return),returnPath);assert.equal(record.sessionRequests.length,0);assert.equal(record.businessReads.length,0);
+ await page.screenshot({path:path.join(output,'entry-'+kind+'-'+width+'.png'),fullPage:true});checks.push({authEntry:kind,width,overflow:false,canonicalNavigationTargets44px:true,canonicalInputCssMobile16px:width<=760,syntheticWidgetOnly:true,keyboardFocusVisible:true,switchKeepsExactInvitationReturn:true,noBusinessReads:true});await f.close();
 }
 async function invitationFlow(width) {
   const f = await fixture('invitation-navigation', {width,signedIn:false,ssr:'allow'}), {page,record} = f;
@@ -358,12 +377,14 @@ try {
   }
   assert.ok(ready,'Fixture server unavailable: ' + log.slice(-6000));
   browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
+  if(entryOnly)for(const width of widths)for(const kind of ['sign-in','sign-up'])await authEntryGeometry(width,kind);
   for (const width of widths) await invitationFlow(width);
   for (const status of ['sign_in','sign_up']) await ticketFlow(status);
   await rejectedNavigation('complete-ticket-does-not-reenter-Clerk', 'participar='+invitation+'&__clerk_ticket=synthetic-ticket&__clerk_status=complete', '/sign-in?participar='+invitation);
   await rejectedNavigation('duplicate-ticket-does-not-reenter-Clerk', 'participar='+invitation+'&__clerk_ticket=a&__clerk_ticket=b&__clerk_status=sign_in', '/sign-in?participar='+invitation);
   await rejectedNavigation('malformed-ticket-does-not-reenter-Clerk', 'participar='+invitation+'&__clerk_ticket=invalid%2Fticket&__clerk_status=sign_in', '/sign-in?participar='+invitation);
   await rejectedNavigation('duplicate-invitation-and-unsafe-redirect-discarded', 'participar='+invitation+'&participar='+invitation+'&returnTo=https%3A%2F%2Fexample.invalid');
+  if(!entryOnly){
   for (const width of widths) await recoveryFresh(width);
   for (const mode of ['401','503','cookie','expired']) await recoveryError(mode);
   await initialProviderUnavailable();
@@ -373,8 +394,9 @@ try {
   await boundedWorkspaceToken();
   await signedOutWorkspace();
   for (const kind of ['response','token','unmount']) await lateRecovery(kind);
+  }
   assert.deepEqual(errors, []);
-  const proof={status:'PASS',environment:'actual-source-components-local-controlled-Clerk-hooks-and-server-verifier',checks,sourceManifest,harnessSha256,widths,errors,signedOutLinkContrast,
+  const proof={status:'PASS',environment:'actual-source-components-local-controlled-Clerk-hooks-and-server-verifier',checks,sourceManifest,harnessSha256,widths,errors,signedOutLinkContrast,focusedMode:entryOnly?'entry-only':null,
     realClerkLogin:false,realClerkInvitationAcceptance:false,emailDeliveryTested:false,cryptographicJWTVerified:false,productionDataWritten:false,providerWrites:0,automaticMutationRequests:0};
   for(const file of ['browser-failure.json','browser-failure.png'])rmSync(path.join(output,file),{force:true});
   writeFileSync(path.join(output,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
