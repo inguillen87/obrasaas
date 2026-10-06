@@ -22,11 +22,15 @@ const exactKeys=(value,keys)=>object(value)&&Object.keys(value).sort().join('|')
 const recoveryStates=['PAUSED','VERIFYING','REVIEW_REQUIRED','RESTORED','KEPT_DISABLED','MANUAL_REVIEW_REQUIRED'];
 const pausedStates=['PAUSED','VERIFYING','REVIEW_REQUIRED','MANUAL_REVIEW_REQUIRED'];
 const guardCodes=['META_CUSTOMER_LIFECYCLE_ORDER_UNCONFIRMED','META_CUSTOMER_LEGACY_LIFECYCLE_REVIEW_REQUIRED','META_CUSTOMER_ACTIVATION_RECONNECTION_REQUIRED','META_CUSTOMER_ACTIVATION_REAUTHORIZATION_REQUIRED','META_CUSTOMER_RECONNECTION_PAUSE_REQUIRED','META_CUSTOMER_RECONNECTION_PREPARATION_REQUIRED','META_CUSTOMER_RECONNECTION_PROVIDER_EVIDENCE_REQUIRED','META_CUSTOMER_SUBSCRIPTION_UNCONFIRMED','META_CUSTOMER_RECONNECTION_CHANGED','META_CUSTOMER_RECONNECTION_MANUAL_OVERRIDE','META_CUSTOMER_RECONNECTION_UNCONFIRMED'];
+const pilotMode=readiness=>readiness?.mode==='DEVELOPMENT_PILOT';
+export const metaOnboardingCanAuthorize=(readiness,now=Date.now())=>pilotMode(readiness)?readiness.pilot?.canLaunch===true&&Date.parse(readiness.pilot.expiresAt)>now:readiness?.canLaunchMeta===true;
+export function metaOnboardingFlow(readiness,numberMode,now=Date.now()){return pilotMode(readiness)?{available:numberMode==='DEDICATED'&&metaOnboardingCanAuthorize(readiness,now),configId:readiness.configId}:readiness?.flows?.[numberMode];}
 
 function validateChannelState(result){
  const activation=result.activation,c=result.coexistence;
  if(activation!==undefined&&activation!==null){
-  if(!object(activation)||typeof activation.operational!=='boolean'||Object.keys(activation).some(key=>!['state','operational','actorId','verifiedAt','lastCode','canActivate','canDeactivate','roundTrip','fieldJourney'].includes(key))||['canActivate','canDeactivate'].some(key=>has(activation,key)&&typeof activation[key]!=='boolean')||has(activation,'state')&&!['NOT_ACCEPTED','VERIFYING','REVIEW_REQUIRED','ACTIVE','DEACTIVATED'].includes(activation.state)||has(activation,'lastCode')&&!code(activation.lastCode)||has(activation,'verifiedAt')&&!timestamp(activation.verifiedAt)||['roundTrip','fieldJourney'].some(key=>has(activation,key)&&activation[key]!=='NOT_VERIFIED'))throw invalid();
+  if(!object(activation)||typeof activation.operational!=='boolean'||Object.keys(activation).some(key=>!['state','operational','attendanceOperational','actorId','verifiedAt','lastCode','canActivate','canDeactivate','roundTrip','fieldJourney'].includes(key))||['canActivate','canDeactivate'].some(key=>has(activation,key)&&typeof activation[key]!=='boolean')||has(activation,'state')&&!['NOT_ACCEPTED','VERIFYING','REVIEW_REQUIRED','ACTIVE','DEACTIVATED'].includes(activation.state)||has(activation,'lastCode')&&!code(activation.lastCode)||has(activation,'verifiedAt')&&!timestamp(activation.verifiedAt)||['roundTrip','fieldJourney'].some(key=>has(activation,key)&&activation[key]!=='NOT_VERIFIED'))throw invalid();
+  if(pilotMode(result.readiness)?typeof activation.attendanceOperational!=='boolean'||activation.operational!==false||activation.attendanceOperational&&(activation.state!=='ACTIVE'||result.readiness.pilot.canUseAttendanceTransport!==true):has(activation,'attendanceOperational'))throw invalid();
  }
  if(!c)return;
  if(has(c,'lifecycle')&&c.lifecycle!==null){
@@ -39,8 +43,9 @@ function validateChannelState(result){
  }
 }
 
-function channelView(result){
+function channelView(result,now){
  const activation=result.activation,r=result.coexistence?.recovery,l=result.coexistence?.lifecycle;
+ if(pilotMode(result.readiness)){const available=metaOnboardingCanAuthorize(result.readiness,now),expired=Date.parse(result.readiness.pilot.expiresAt)<=now,active=activation?.attendanceOperational===true&&available,disabled=activation?.state==='DEACTIVATED';return {state:active?'Asistencia limitada habilitada':disabled?'Desactivado por el administrador':expired?'Autorización limitada vencida':'Piloto pendiente de habilitación',detail:'El piloto propio permite vínculo individual y asistencia en esta obra hasta su vencimiento. Identidad por chat, archivos, Flows, plantillas, avances, stock y otras obras siguen pendientes.',next:active?'Comprobá recepción, respuesta, entrega y fichajes con participantes aprobados en teléfonos reales.':!available?'La autorización limitada no está disponible. Conservamos el intento; actualizá su estado o desactivá el canal.':null,canKeepDisabled:!active&&activation?.canDeactivate===true,recovery:r||null,lifecycle:l||null,showRecovery:Boolean(r||l||disabled)};}
  const guarded=activation?.canActivate===false&&guardCodes.includes(activation.lastCode);
  const manual=activation?.state==='DEACTIVATED'||r?.state==='KEPT_DISABLED';
  let state=activation?.operational===true?'Canal habilitado':'Pendiente de habilitación';
@@ -71,6 +76,11 @@ export function metaOnboardingSnapshot(result,{scope,projectId}){
  const r=result.readiness,keys=prerequisites.map(([key])=>key);
  if(!object(r)||!object(r.gates)||Object.keys(r.gates).sort().join('|')!==keys.slice().sort().join('|')||keys.some(key=>typeof r.gates[key]!=='boolean')||typeof r.canLaunchMeta!=='boolean'||r.canLaunchMeta!==keys.every(key=>r.gates[key])||r.operational!==false||r.signupVersion!=='4')throw invalid();
  if(typeof r.canUseCustomerTransport!=='boolean'||r.canUseCustomerTransport!==keys.filter(key=>key!=='signupVersion').every(key=>r.gates[key]))throw invalid();
+ if(has(r,'mode')&&!pilotMode(r)||!pilotMode(r)&&has(r,'pilot'))throw invalid();
+ if(pilotMode(r)){
+  const p=r.pilot,capabilityKeys=['attendance','binding','kyc','media','flows','templates','progress','stock','company'];
+  if(!exactKeys(p,['canLaunch','canUseAttendanceTransport','expiresAt','ownBusinessOnly','ownerReadbackReady','code','capabilities'])||typeof p.canLaunch!=='boolean'||p.canUseAttendanceTransport!==p.canLaunch||p.ownerReadbackReady!==p.canLaunch||p.ownBusinessOnly!==true||!timestamp(p.expiresAt)||p.expiresAt===null||!code(p.code)||p.code===null||!exactKeys(p.capabilities,capabilityKeys)||p.capabilities.attendance!==p.canLaunch||p.capabilities.binding!==p.canLaunch||capabilityKeys.filter(key=>!['attendance','binding'].includes(key)).some(key=>p.capabilities[key]!==false)||p.canLaunch&&(!keys.filter(key=>key!=='review').every(key=>r.gates[key])||!/^[1-9]\d{4,31}$/.test(r.appId||'')||!/^[1-9]\d{4,31}$/.test(r.configId||''))||p.canLaunch&&result.numberMode!==null&&result.numberMode!=='DEDICATED'||result.coexistence&&(p.canLaunch||result.coexistence.canSelectImport||result.coexistence.canContinueImport)||p.canLaunch&&result.companyRouting)throw invalid();
+ }
  if(!object(r.flows)||['DEDICATED','BUSINESS_APP','EXISTING_API'].some(mode=>!object(r.flows[mode])||typeof r.flows[mode].available!=='boolean')||r.flows.DEDICATED.available!==r.canLaunchMeta||r.flows.BUSINESS_APP.available&&!r.canLaunchMeta||r.flows.EXISTING_API.available!==false)throw invalid();
  if(['DEDICATED','BUSINESS_APP'].some(mode=>r.flows[mode].available&&!/^[1-9]\d{4,31}$/.test(r.flows[mode].configId||'')))throw invalid();
  const recovery=r.recovery;
@@ -83,9 +93,9 @@ export function metaOnboardingSnapshot(result,{scope,projectId}){
  return result;
 }
 
-export function metaOnboardingReadinessView(result){
- const readiness=result.readiness,signup=result.signup,connection=result.connection,channel=channelView(result);
- const configured=readiness.canLaunchMeta,coexistence=result.numberMode==='BUSINESS_APP',assisted=result.prepared&&result.numberMode!=='DEDICATED'&&readiness.flows?.[result.numberMode]?.available!==true;
+export function metaOnboardingReadinessView(result,now=Date.now()){
+ const readiness=result.readiness,signup=result.signup,connection=result.connection,channel=channelView(result,now);
+ const pilot=pilotMode(readiness),configured=metaOnboardingCanAuthorize(readiness,now),coexistence=result.numberMode==='BUSINESS_APP',assisted=result.prepared&&result.numberMode!=='DEDICATED'&&readiness.flows?.[result.numberMode]?.available!==true;
  const uncertain=signup&&['EXCHANGE_STARTED','EXCHANGE_UNKNOWN','VERIFYING','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN'].includes(signup.state);
  let next=result.prepared?'Consultá las condiciones de plataforma antes de autorizar el número.':'Guardá la preparación de WhatsApp para esta empresa y obra.';
  if(!result.prepared)next='Guardá la preparación de WhatsApp para esta empresa y obra.';
@@ -108,10 +118,10 @@ export function metaOnboardingReadinessView(result){
   next,
   steps:[
    {key:'preparation',title:'Preparación de esta obra',state:result.prepared?'Guardada':'Pendiente',detail:result.prepared?'El nombre del asistente y los circuitos están guardados.':'Prepará el asistente, el tipo de número y los circuitos.'},
-   {key:'platform',title:'Alta de clientes',state:configured?'Disponible para autorizar':'Pendiente de plataforma',detail:configured?'La configuración permite abrir el recorrido de Meta. Cada empresa debe autorizar sus propios activos.':'Revisá las condiciones pendientes con el equipo de ObraSaaS.'},
+   {key:'platform',title:pilot?'Piloto del negocio propio':'Alta de clientes',state:configured?pilot?'Autorización limitada disponible':'Disponible para autorizar':pilot?'Autorización limitada no disponible':'Pendiente de plataforma',detail:pilot?'La consulta de propiedad del negocio permite evaluar el piloto. El WABA y el número elegidos se comprobarán después de la autorización; el alta general de clientes conserva sus condiciones pendientes.':configured?'La configuración permite abrir el recorrido de Meta. Cada empresa debe autorizar sus propios activos.':'Revisá las condiciones pendientes con el equipo de ObraSaaS.'},
    {key:'business',title:'Revisión del negocio en Meta',state:'No comprobada aquí',detail:'Consultá el estado del negocio y los requisitos que Meta solicite. Si indica En revisión, esperá su resultado; podés seguir trabajando desde la web.'},
    {key:'number',title:'Conexión y registro del número',state:registered?'Registro confirmado · prueba pendiente':signup?.registrationRequired?'Registro pendiente':connection?'Conexión guardada · comprobar registro':'Sin conexión confirmada',detail:coexistence?'La coexistencia conserva WhatsApp Business y omite el registro con PIN. Las herramientas que Meta no sincroniza siguen en la app. La importación y la prueba real se comprueban por separado.':registered?'El registro no confirma recepción, respuesta o entrega.':'El código de SMS o llamada y el PIN de registro son pasos distintos. Consultá el intento y la conexión antes de repetir.'},
-   {key:'templates',title:'Plantillas de esta cuenta',state:consulted?'Catálogo consultado':'Sin catálogo comprobado',detail:consulted?`${approved} ${approved===1?'plantilla aprobada':'plantillas aprobadas'} en el catálogo consultado. La aprobación no acredita un envío ni su entrega.`:'Consultá las plantillas de la cuenta vinculada. La aprobación corresponde a cada mensaje e idioma.'},
+   {key:'templates',title:'Plantillas de esta cuenta',state:pilot?'Fuera del piloto':consulted?'Catálogo consultado':'Sin catálogo comprobado',detail:pilot?'El piloto permite respuestas de asistencia dentro de la conversación. Plantillas y mensajes proactivos necesitan su implementación y validación propias.':consulted?`${approved} ${approved===1?'plantilla aprobada':'plantillas aprobadas'} en el catálogo consultado. La aprobación no acredita un envío ni su entrega.`:'Consultá las plantillas de la cuenta vinculada. La aprobación corresponde a cada mensaje e idioma.'},
    {key:'activation',title:'Operación del canal',state:channel.state,detail:channel.detail},
    {key:'acceptance',title:'Prueba con participantes',state:'Sin aceptar',detail:'Comprobá recepción, respuesta y entrega en teléfonos reales, además de los accesos y el recorrido de dos participantes con roles distintos.'},
   ],

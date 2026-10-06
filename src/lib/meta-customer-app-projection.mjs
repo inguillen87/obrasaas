@@ -128,7 +128,7 @@ export function createMetaCustomerAppProjection({connect,provider,environment=pr
     await save(client,c,{customerLifecycle:{...lifecycle,recovery:{...recovery,version:1,state:'MANUAL_REVIEW_REQUIRED',automatic:false,authorizationSignupId:c.metadata.customerSignupId||null,reconnectEventId:event.id,reconnectedAt:lifecycle.observedAt,lastCode:'META_CUSTOMER_RECONNECTION_PAUSE_REQUIRED'}}},false);
     return lifecycleOutcome('META_CUSTOMER_RECONNECTION_PAUSE_REQUIRED','REVIEW_REQUIRED');
    }
-   const prepared=await profile(client,c),ready=provider&&metaCustomerTransportReady(provider.readiness());
+   const prepared=await profile(client,c),ready=!c.metadata?.developmentPilot&&provider&&metaCustomerTransportReady(provider.readiness());
    if(!ready||!prepared?.configured||prepared.numberMode!=='BUSINESS_APP'||s.verified!==true||!Number.isFinite(Date.parse(s.verifiedAt))){
     await save(client,c,{customerLifecycle:{...lifecycle,recovery:{...recovery,state:'REVIEW_REQUIRED',reconnectEventId:event.id,reconnectedAt:lifecycle.observedAt,leaseToken:context.leaseToken,lastCode:'META_CUSTOMER_RECONNECTION_PREPARATION_REQUIRED'}}});
     return {reconnect:true,preparationError:true};
@@ -172,6 +172,7 @@ export function createMetaCustomerAppProjection({connect,provider,environment=pr
   if(await provider.inspectSubscription({token:claimed.token,wabaId:c.whatsappBusinessId})!==true)throw new WorkspaceError('META_CUSTOMER_SUBSCRIPTION_UNCONFIRMED',409);
   return await locked(context,async(client,current,event,payload)=>{
    const s=current.metadata.coexistence,recovery=customerLifecycleRecovery(current);
+   if(current.metadata?.developmentPilot)throw new WorkspaceError('META_DEVELOPMENT_PILOT_ADAPTER_UNAVAILABLE',409);
    if(payload.value?.event!=='ACCOUNT_RECONNECTED'||current.id!==c.id||current.phoneNumberId!==c.phoneNumberId||current.whatsappBusinessId!==c.whatsappBusinessId||current.encryptedAccessToken!==c.encryptedAccessToken||current.metadata.customerLifecycle?.sourceEventId!==event.id||metaCustomerContentDigest(recovery)!==claimed.recoveryDigest||digest([s.verified,s.verifiedAt,current.metadata.customerSignupId])!==claimed.grantDigest||digest(await profile(client,current))!==claimed.profileDigest||!metaCustomerTransportReady(provider.readiness()))throw new WorkspaceError('META_CUSTOMER_RECONNECTION_CHANGED',409);
    const unchangedActivation=digest(current.metadata.customerActivation||null)===recovery.activationDigest,wasAccepted=current.metadata.customerActivation?.version===1&&current.metadata.customerActivation.state==='ACTIVE'&&typeof current.metadata.customerActivation.actorId==='string';
    const restore=recovery.previouslyEnabled===true&&unchangedActivation&&wasAccepted;

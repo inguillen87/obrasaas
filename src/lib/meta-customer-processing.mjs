@@ -7,6 +7,7 @@ import {customerJobTransaction} from './meta-customer-outbound.mjs';
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
 import {exactSecretMatch} from './legacy-access-boundary.js';
 import {META_CUSTOMER_PROTOCOL,resolveMetaCloudProtocol,metaCloudEventMatches} from './meta-cloud-protocol.mjs';
+import {lockDevelopmentPilotIssuer,assertDevelopmentPilotCommit} from './meta-development-pilot-policy.mjs';
 
 const validEvent=id=>/^customer_webhook_[a-f0-9]{64}$/.test(id||'');
 export const META_CUSTOMER_PROOF_REVIEW_CODES=Object.freeze(['WORKER_CHANNEL_SIGNED_PROOF_REQUIRED','WORKER_CHANNEL_PROOF_INTEGRITY','META_CUSTOMER_EVENT_PROOF_REQUIRED','META_CUSTOMER_INBOX_PAYLOAD_UNVERIFIED']);
@@ -24,7 +25,20 @@ export function decodeSignedCloudEvent(event,channel,environment,protocol=META_C
 }
 export const decodeSignedCustomerEvent=(event,channel,environment)=>decodeSignedCloudEvent(event,channel,environment,META_CUSTOMER_PROTOCOL);
 const safeOutcome=result=>({version:1,classifierVersion:'enterprise-1677ff7-obra-intent-v1',intent:result.intent||null,reviewState:result.reviewState||'REVIEW_REQUIRED',businessApplied:result.businessApplied===true,replySent:result.replySent===true,kind:typeof result.kind==='string'?result.kind.slice(0,64):null,receiptId:typeof result.receiptId==='string'?result.receiptId.slice(0,160):null,replyState:result.replyState||null,code:result.code||null,identity:{status:result.identityStatus||'NOT_CHECKED',workerId:result.workerId||null}});
-export function createMetaCustomerProcessor({connect,dispatch,outbound,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{},protocol=META_CUSTOMER_PROTOCOL,lockChannel=lockMetaCustomerInboxChannel,authorizationCodes=[]}){
+export function createDevelopmentPilotDispatchGuard({connect,environment=process.env}){
+ return context=>customerJobTransaction(connect,async client=>{
+  const candidate=(await client.query(`SELECT c.*,p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c.id=$1 AND c."projectId"=$2`,[context.channelId,context.projectId])).rows[0];
+  if(!candidate?.metadata?.developmentPilot)return false;
+  const initial=(await client.query(`SELECT id,"projectId",provider,payload FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-v1'`,[context.eventId,context.projectId])).rows[0];
+  if(!initial||initial.payload?.payloadDigest!==context.payloadDigest)throw new WorkspaceError('META_CUSTOMER_EVENT_PROOF_REQUIRED',409);
+  const payload=decodeSignedCustomerEvent(initial,candidate,environment);if(payload.type!=='message')return false;
+  const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.getTime();await lockDevelopmentPilotIssuer(client,candidate,{environment,now});
+  const project=(await client.query(`SELECT id FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE' FOR SHARE`,[candidate.projectId,candidate.organizationId])).rows[0];if(!project)throw new WorkspaceError('META_DEVELOPMENT_PILOT_UNAVAILABLE',403);
+  if(!['text','interactive','location'].includes(payload.value?.type))throw new WorkspaceError('META_DEVELOPMENT_PILOT_ADAPTER_UNAVAILABLE',409);
+  await assertDevelopmentPilotCommit(client,candidate,environment);return true;
+ });
+}
+export function createMetaCustomerProcessor({connect,dispatch,outbound,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{},beforeDispatch=async()=>false,protocol=META_CUSTOMER_PROTOCOL,lockChannel=lockMetaCustomerInboxChannel,authorizationCodes=[]}){
  resolveMetaCloudProtocol(protocol);
  const within=run=>customerJobTransaction(connect,run);
  async function claim(eventId){return within(async client=>{
@@ -57,7 +71,7 @@ export function createMetaCustomerProcessor({connect,dispatch,outbound,environme
    const context=await claim(eventId);if(context.done||context.busy)return context;await afterClaim();
    try{
     let result;
-    try{result=await dispatch(context);}catch(error){
+    try{context.developmentPilot=await beforeDispatch(context)===true;result=await dispatch(context);}catch(error){
      // Authorization failures are durable observations, never invitations to
      // guess a recipient, imitate a web session, or run a fallback engine.
      if(error instanceof WorkspaceError&&(authorizationObservations.has(error.code)||authorizationCodes.includes(error.code)))result=await observe(context,error.code);else throw error;

@@ -71,6 +71,7 @@ export function createCompanyChannelStore({workspace}){
     const c=(await client.query(`SELECT * FROM public."WhatsAppConnection" WHERE id=$1 AND "projectId"=$2 FOR UPDATE`,[discovery.id,discovery.projectId])).rows[0];
     await client.query('SAVEPOINT company_channel_action');let state='RECORDED',code=null;
     try{
+     if(c?.metadata?.developmentPilot)fail('COMPANY_CHANNEL_CATALOG_REQUIRED');
      await requireCompanyChannelSchema(client);assertWorkerCustomerConnection(c,member.organizationId,c.projectId);
      const owner=(await client.query(`SELECT * FROM public."WhatsAppCompanyChannel" WHERE "connectionId"=$1 AND "organizationId"=$2 FOR UPDATE`,[c.id,member.organizationId])).rows[0];if(!owner||owner.anchorProjectId!==c.projectId)fail('COMPANY_CHANNEL_CATALOG_REQUIRED');
      if(owner.revision!==input.payload.revision)fail('COMPANY_CHANNEL_REVISION_CHANGED');

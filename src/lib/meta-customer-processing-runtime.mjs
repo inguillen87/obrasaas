@@ -5,7 +5,7 @@ import {createMetaFieldBridge} from './meta-field-bridge.mjs';
 import {createPilotMediaAnalyzer} from './pilot-media.mjs';
 import {createMetaCustomerProvider} from './meta-customer-provider.mjs';
 import {createMetaCustomerOutbound} from './meta-customer-outbound.mjs';
-import {createMetaCustomerProcessor} from './meta-customer-processing.mjs';
+import {createMetaCustomerProcessor,createDevelopmentPilotDispatchGuard} from './meta-customer-processing.mjs';
 import {createMetaKycBridge} from './meta-kyc-bridge.mjs';
 import {createMetaKycOutbound} from './meta-kyc-outbound.mjs';
 import {resolveMetaKycAuthority,META_KYC_AUTHORIZATION_CODES} from './meta-kyc-identity.mjs';
@@ -25,4 +25,4 @@ const kycBridge=createMetaKycBridge({connect:connectWorkspace,provider,deposit})
 const kycOutbound=createMetaKycOutbound({connect:connectWorkspace,provider});
 const appProjection=createMetaCustomerAppProjection({connect:connectWorkspace,provider});
 export const productionMetaCustomerOutbound=createMetaCustomerOutbound({connect:connectWorkspace,resolveIdentity:resolveWorkerChannelIdentity,provider});
-export const productionMetaCustomerProcessor=createMetaCustomerProcessor({connect:connectWorkspace,dispatch:async context=>(await appProjection.execute(context))||(await companyBridge.execute(context))||(await kycBridge.execute(context))||bridge.execute(context),authorizationCodes:[...META_KYC_AUTHORIZATION_CODES,'COMPANY_CHANNEL_SOURCE_REQUIRED','COMPANY_CHANNEL_SUSPENDED','COMPANY_CHANNEL_CONTEXT_CHANGED','COMPANY_CHANNEL_IDENTITY_AMBIGUOUS','COMPANY_CHANNEL_CATALOG_REQUIRED'],outbound:{send:async(context,reply,{purpose}={})=>(await isCompany(context))?companyOutbound.send(context,reply):purpose==='KYC_CAPTURE'?kycOutbound.send(context,reply):productionMetaCustomerOutbound.send(context,reply),observeStatus:(...args)=>productionMetaCustomerOutbound.observeStatus(...args)}});
+export const productionMetaCustomerProcessor=createMetaCustomerProcessor({connect:connectWorkspace,beforeDispatch:createDevelopmentPilotDispatchGuard({connect:connectWorkspace}),dispatch:async context=>context.developmentPilot?bridge.execute(context):(await appProjection.execute(context))||(await companyBridge.execute(context))||(await kycBridge.execute(context))||bridge.execute(context),authorizationCodes:[...META_KYC_AUTHORIZATION_CODES,'META_DEVELOPMENT_PILOT_UNAVAILABLE','META_DEVELOPMENT_PILOT_ADAPTER_UNAVAILABLE','COMPANY_CHANNEL_SOURCE_REQUIRED','COMPANY_CHANNEL_SUSPENDED','COMPANY_CHANNEL_CONTEXT_CHANGED','COMPANY_CHANNEL_IDENTITY_AMBIGUOUS','COMPANY_CHANNEL_CATALOG_REQUIRED'],outbound:{send:async(context,reply,{purpose}={})=>(await isCompany(context))?companyOutbound.send(context,reply):purpose==='KYC_CAPTURE'?kycOutbound.send(context,reply):productionMetaCustomerOutbound.send(context,reply),observeStatus:(...args)=>productionMetaCustomerOutbound.observeStatus(...args)}});
