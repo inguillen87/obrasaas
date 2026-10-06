@@ -70,6 +70,13 @@ jobs:
       - run: node scripts/verify-participants-postgres.mjs
       - run: node scripts/verify-meta-kyc-chat-postgres.mjs
       - run: node scripts/verify-field-operations-postgres.mjs
+      - name: Material catalog, authorized consumption and durable recovery
+        run: |
+          npx eslint src/lib/material-inventory.mjs 'src/app/(identity)/cuenta/material-inventory-panel.js' 'src/app/(identity)/cuenta/material-inventory-view.mjs' scripts/verify-material-inventory-*.mjs tests/production-material-inventory.test.mjs --max-warnings 0
+          node --test tests/production-material-inventory.test.mjs
+          node scripts/verify-material-inventory-postgres.mjs
+          node scripts/verify-material-inventory-boundary.mjs
+          node scripts/verify-material-inventory-ui.mjs
       - run: node scripts/verify-meta-customer-postgres.mjs
       - name: Feature-gated WhatsApp Business App coexistence and private source preservation
         run: |
@@ -171,6 +178,7 @@ jobs:
             .vercel/meta-kyc-chat-evidence/
             .vercel/mobile-identity-evidence/
             .vercel/field-operations-evidence/
+            .vercel/material-inventory-evidence/
             .vercel/field-qr-evidence/
             .vercel/meta-customer-evidence/
             .vercel/purchase-evidence/

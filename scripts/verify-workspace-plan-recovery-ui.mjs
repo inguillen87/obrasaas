@@ -100,7 +100,10 @@ async function scenario(mode,width){
  if(taskMode){
   await click(page,'Nueva tarea');await page.type('section[aria-label="Crear tarea de la obra"] input',row.title);await click(page,'Crear tarea');
  }else{
-  await click(page,'Importar PDF o imagen');await waitText(page,'Autorizo enviar este cronograma a OpenAI');await (await page.$('[data-plan-import] input[type=file]')).uploadFile(sourceFile);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');await waitText(page,'Compará cada fila con el archivo');await page.type('[data-plan-import] textarea','Revisado con la fuente sintética');await (await page.$$('[data-plan-import] input[type=checkbox]')).at(-1).click();await click(page,'Aplicar 1 tareas');
+  await click(page,'Importar PDF o imagen');await waitText(page,'Autorizo enviar este cronograma a OpenAI');await (await page.$('[data-plan-import] input[type=file]')).uploadFile(sourceFile);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');await waitText(page,'Compará cada fila con el archivo');
+  await page.waitForFunction(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Nueva tarea')?.disabled===true);
+  assert.equal(await page.$$eval('button',buttons=>buttons.find(button=>button.textContent.trim()==='Nueva tarea')?.disabled),true,'A ready plan draft prevents a new task from invalidating its reviewed baseline');
+  await page.type('[data-plan-import] textarea','Revisado con la fuente sintética');await (await page.$$('[data-plan-import] input[type=checkbox]')).at(-1).click();await click(page,'Aplicar 1 tareas');
  }
  if(mode==='task-recover-after-reload'){
   await waitText(page,'La confirmación no llegó. Comprobá el recibo');assert.equal(posts.length,1);assert.equal(applied,true);
