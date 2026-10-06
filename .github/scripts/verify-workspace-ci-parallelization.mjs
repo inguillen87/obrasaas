@@ -8,6 +8,9 @@ import yaml from 'js-yaml';
 
 export const EXPECTED_CONTRACT_SHA256='a4f886a7a8d4613e0bec8da0047105e4b5117310c3a912b78cf99fbdb0479cf8';
 export const LANES=['contracts','plans','people','field','meta','channels','business','workspace-ui'];
+const LANE_ENV_BYTES=64*1024;
+const LANE_OUTPUT_BYTES=60*1024;
+const laneEnvironmentKey=lane=>'WORKSPACE_LANE_'+lane.toUpperCase().replaceAll('-','_')+'_JSON';
 const script='.github/scripts/verify-workspace-ci-parallelization.mjs';
 const contractPath='.github/workspace-acceptance-contract.json';
 const workflowPath='.github/workflows/workspace-acceptance.yml';
@@ -118,7 +121,7 @@ export function buildWorkflow(contract){
    ]};
  }
  jobs.workspace={name:'workspace',if:'always()',needs:[...LANES],'runs-on':base.runner,'timeout-minutes':base.timeout,env:clone(base.env),steps:[...clone(setup),
-  {name:'Require every lane, artifact and exact provenance',env:{WORKSPACE_NEEDS_JSON:'${{ toJSON(needs) }}'},run:`node ${script} gate --expected-head "$GITHUB_SHA"`},
+  {name:'Require every lane, artifact and exact provenance',env:Object.fromEntries(LANES.map(lane=>[laneEnvironmentKey(lane),'${{ toJSON(needs.'+lane+') }}'])),run:`node ${script} gate --expected-head "$GITHUB_SHA"`},
   {uses:base.uploadAction,if:'always()',with:{name:'workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-index',path:'.vercel/workspace-ci-evidence/gate.json','include-hidden-files':true,'retention-days':7}}
  ]};
  return {name:base.name,on:clone(base.on),permissions:clone(base.permissions),jobs};
@@ -168,6 +171,29 @@ export function assertDependencies({packageLockBytes,requirementsBytes,contract}
 }
 function dependencies(root,contract){return assertDependencies({packageLockBytes:readFileSync(path.join(root,'package-lock.json')),requirementsBytes:readFileSync(path.join(root,'requirements.txt')),contract});}
 function clocks(env){if(!positive(env.GITHUB_RUN_ID)||!positive(env.GITHUB_RUN_ATTEMPT))deny('RUN_IDENTITY');return {runId:env.GITHUB_RUN_ID,runAttempt:env.GITHUB_RUN_ATTEMPT};}
+export function assertLaneOutputSize(provenance){
+ if(typeof provenance!=='string')deny('PROVENANCE_LIMIT');
+ const transport={result:'success',outputs:{artifactId:'9'.repeat(64),artifactDigest:'a'.repeat(64),provenance}};
+ const bytes=Buffer.byteLength(JSON.stringify(transport));
+ if(bytes>LANE_OUTPUT_BYTES)deny('LANE_OUTPUT_TRANSPORT_LIMIT');
+ return bytes;
+}
+export function readLaneNeedsEnvironment(env){
+ if(Object.hasOwn(env,'WORKSPACE_NEEDS_JSON'))deny('LEGACY_AGGREGATE_ENV_DENIED');
+ const keys=LANES.map(laneEnvironmentKey);
+ equal(Object.keys(env).filter(key=>key.startsWith('WORKSPACE_LANE_')).sort(),keys.toSorted(),'LANE_ENV_COVERAGE');
+ const needs={};let bytes=0;
+ for(const lane of LANES){
+  const value=env[laneEnvironmentKey(lane)];
+  if(typeof value!=='string'||!value||Buffer.byteLength(value)>LANE_ENV_BYTES)deny('LANE_ENV_LIMIT');
+  if(Buffer.from(value,'utf8').toString('utf8')!==value)deny('LANE_ENV_ENCODING');
+  bytes+=Buffer.byteLength(value);
+  try{needs[lane]=JSON.parse(value);}catch{deny('INVALID_LANE_ENV_JSON');}
+  exactKeys(needs[lane],['result','outputs'],'INVALID_LANE_JOB_SHAPE');
+ }
+ if(bytes>LANES.length*LANE_ENV_BYTES)deny('LANE_ENV_TOTAL_LIMIT');
+ return needs;
+}
 export function provenance({root,lane,contract,expectedHead,workflowSha256,env=process.env}){
  if(!LANES.includes(lane))deny('UNKNOWN_LANE');
  const actual=identity(root,expectedHead),clock=clocks(env),owner=contract.lanes[lane];
@@ -177,6 +203,7 @@ export function provenance({root,lane,contract,expectedHead,workflowSha256,env=p
  requireEvidence(producedNotUploaded,owner.requiredProducedEvidence,'MISSING_REQUIRED_PRODUCED_EVIDENCE');
  const record=seal({version:1,lane,head:actual,...clock,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>contract.blocks.find(block=>block.id===id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
  if(Buffer.byteLength(JSON.stringify(record))>400*1024)deny('PROVENANCE_LIMIT');
+ assertLaneOutputSize(JSON.stringify(record));
  return record;
 }
 export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttempt}){
@@ -236,6 +263,25 @@ export function selftest(workflow,contract,root=process.cwd()){
  good('yaml-parsed-and-full-baseline-equivalent',()=>equivalent(workflow,contract));
  const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedNeeds(contract,expectedHead,workflowSha256),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1'};
  good('gate-all-eight-lanes-and-45-blocks',()=>assert.equal(gate(input).commandBlocks,45));
+ const laneEnv=Object.fromEntries(LANES.map(lane=>[laneEnvironmentKey(lane),JSON.stringify(needs[lane])]));
+ good('lane-environment-preserves-exact-eight-records',()=>equal(readLaneNeedsEnvironment({...laneEnv,PATH:'controlled'}),needs,'ENV_TRANSPORT_CHANGED'));
+ good('lane-environment-still-runs-exact-gate',()=>assert.equal(gate({...input,needs:readLaneNeedsEnvironment(laneEnv)}).commandBlocks,45));
+ bad('legacy-aggregate-environment-denied','LEGACY_AGGREGATE_ENV_DENIED',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_NEEDS_JSON:JSON.stringify(needs)}));
+ const missingEnv={...laneEnv};delete missingEnv.WORKSPACE_LANE_META_JSON;
+ bad('missing-lane-environment-denied','LANE_ENV_COVERAGE',()=>readLaneNeedsEnvironment(missingEnv));
+ bad('extra-lane-environment-denied','LANE_ENV_COVERAGE',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_UNKNOWN_JSON:'{}'}));
+ bad('invalid-lane-environment-json-denied','INVALID_LANE_ENV_JSON',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:'{'}));
+ bad('empty-lane-environment-denied','LANE_ENV_LIMIT',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:''}));
+ bad('non-string-lane-environment-denied','LANE_ENV_LIMIT',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:17}));
+ bad('null-lane-job-denied','INVALID_LANE_JOB_SHAPE',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:'null'}));
+ bad('array-lane-job-denied','INVALID_LANE_JOB_SHAPE',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:'[]'}));
+ bad('extra-lane-job-field-denied','INVALID_LANE_JOB_SHAPE',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:JSON.stringify({...needs.meta,extra:true})}));
+ bad('oversized-lane-environment-denied','LANE_ENV_LIMIT',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:'x'.repeat(LANE_ENV_BYTES+1)}));
+ bad('invalid-lane-environment-unicode-denied','LANE_ENV_ENCODING',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:'"\ud800"'}));
+ good('lane-output-size-bounds-every-fixture',()=>{for(const lane of LANES)assert.ok(assertLaneOutputSize(needs[lane].outputs.provenance)<LANE_OUTPUT_BYTES);});
+ bad('oversized-output-blocked-before-github-output','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('x'.repeat(LANE_OUTPUT_BYTES)));
+ bad('escaped-output-size-uses-wire-bytes','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('"'.repeat(LANE_OUTPUT_BYTES/2)));
+ bad('non-string-output-size-denied','PROVENANCE_LIMIT',()=>assertLaneOutputSize(null));
  for(const result of ['failure','cancelled','skipped']){const n=clone(needs);n.people.result=result;bad('gate-'+result,'LANE_NOT_SUCCESS',()=>gate({...input,needs:n}));}
  let n=clone(needs);delete n.meta;bad('missing-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));
  n=clone(needs);n.unexpected=n.meta;bad('extra-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));
@@ -366,7 +412,7 @@ function main(){
  }
  if(mode==='gate'){
   identity(root,opts['expected-head']);const filename=path.join(root,'.vercel/workspace-ci-evidence/gate.json');
-  try{const report=gate({needs:JSON.parse(process.env.WORKSPACE_NEEDS_JSON||'null'),contract,expectedHead:opts['expected-head'],workflowSha256:hash(bytes),...clocks(process.env)});writeJson(filename,report);console.log(JSON.stringify({state:'PASS',lanes:8,commandBlocks:45,artifactPatterns:41,fileCount:report.fileCount}));}
+  try{const report=gate({needs:readLaneNeedsEnvironment(process.env),contract,expectedHead:opts['expected-head'],workflowSha256:hash(bytes),...clocks(process.env)});writeJson(filename,report);console.log(JSON.stringify({state:'PASS',lanes:8,commandBlocks:45,artifactPatterns:41,fileCount:report.fileCount}));}
   catch(error){writeJson(filename,{version:1,state:'FAIL',code:error.code||'GATE_FAILED'});throw error;}return;
  }
  deny('UNKNOWN_COMMAND');

@@ -644,7 +644,14 @@ jobs:
           python-version: "3.12"
       - name: Require every lane, artifact and exact provenance
         env:
-          WORKSPACE_NEEDS_JSON: ${{ toJSON(needs) }}
+          WORKSPACE_LANE_CONTRACTS_JSON: ${{ toJSON(needs.contracts) }}
+          WORKSPACE_LANE_PLANS_JSON: ${{ toJSON(needs.plans) }}
+          WORKSPACE_LANE_PEOPLE_JSON: ${{ toJSON(needs.people) }}
+          WORKSPACE_LANE_FIELD_JSON: ${{ toJSON(needs.field) }}
+          WORKSPACE_LANE_META_JSON: ${{ toJSON(needs.meta) }}
+          WORKSPACE_LANE_CHANNELS_JSON: ${{ toJSON(needs.channels) }}
+          WORKSPACE_LANE_BUSINESS_JSON: ${{ toJSON(needs.business) }}
+          WORKSPACE_LANE_WORKSPACE_UI_JSON: ${{ toJSON(needs.workspace-ui) }}
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs gate --expected-head "$GITHUB_SHA"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
