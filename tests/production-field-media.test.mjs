@@ -3,11 +3,15 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {createFieldMedia} from '../src/lib/field-media.mjs';
 import {createFieldMediaHandlers} from '../src/lib/field-operations-http.mjs';
-import {fieldMediaAnalysisConsent} from '../src/lib/field-media-privacy.mjs';
+import {fieldMediaAnalysisConsent,FIELD_MEDIA_PRIVACY_NOTICE,FIELD_MEDIA_PRIVACY_NOTICE_SHA256} from '../src/lib/field-media-privacy.mjs';
 import {WorkspaceError} from '../src/lib/workspace-policy.mjs';
 
 const scope='a'.repeat(64),revision='2026-10-05T12:00:00.000001';
 const command={operationId:'abcdefab-1234-4abc-9abc-abcdef123456',projectId:'project-a',scope,evidenceId:'evidence-a',revision,analysisConsent:fieldMediaAnalysisConsent(true)};
+test('versioned media consent digest identifies the exact UTF-8 privacy notice',()=>{
+ assert.equal(createHash('sha256').update(FIELD_MEDIA_PRIVACY_NOTICE,'utf8').digest('hex'),FIELD_MEDIA_PRIVACY_NOTICE_SHA256);
+ assert.equal(fieldMediaAnalysisConsent(true).noticeSha256,FIELD_MEDIA_PRIVACY_NOTICE_SHA256);
+});
 function fixture(kind,{revokeDuringRead=false}={}){
  const bytes=kind==='image'?Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==','base64'):Buffer.concat([Buffer.from('RIFF0000WAVE'),Buffer.alloc(40)]),contentType=kind==='image'?'image/png':'audio/wav',extension=kind==='image'?'png':'wav',pathname='obrasaas/field/v1/'+'b'.repeat(64)+'/evidence.'+extension,metadata={kind,contentType,pathname,bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),url:'https://fixture.private.blob.vercel-storage.com/'+pathname};
  const row={id:'evidence-a',title:'Synthetic '+kind,description:'Synthetic private evidence, no identity or field acceptance.',revision,metadata:{unrelated:{retain:true},fieldOperations:{version:1,kind:'EVIDENCE',taskId:'task-a',workerId:'worker-a',sectorId:'sector-a',capturedAt:'2026-10-05T12:00:00Z',recordedBy:'uploader-a',media:metadata,processing:{status:'QUEUED'},review:null}}};
