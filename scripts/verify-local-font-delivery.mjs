@@ -30,16 +30,21 @@ const html=readFileSync(path.join(root,'.next/server/app/index.html'),'utf8');
 assert.doesNotMatch(html,/fonts\.(?:googleapis|gstatic)\.com/,'Compiled page still requests Google fonts');
 const stylesheetPaths=[...new Set([...html.matchAll(/<link[^>]+href="(\/_next\/[^"?]+\.css)/g)].map(match=>match[1]))];
 const stylesheets=stylesheetPaths.map(asset=>({asset,bytes:readFileSync(path.join(root,'.next',asset.replace('/_next/','')))}));
-const faces=[...stylesheets.map(item=>item.bytes.toString()).join('\n').matchAll(/@font-face\s*\{([^}]+)\}/g)].map(match=>match[1]);
+const faces=stylesheets.flatMap(item=>[...item.bytes.toString().matchAll(/@font-face\s*\{([^}]+)\}/g)].map(match=>({stylesheet:item.asset,source:match[1]})));
 const compiledAssets=assets.map(asset=>{
-  const familyFaces=faces.filter(face=>new RegExp('font-family:[\\s\'\"]*'+asset.family+'[\\s\'\"]*;').test(face));
+  const familyFaces=faces.filter(face=>new RegExp('font-family:[\\s\'\"]*'+asset.family+'[\\s\'\"]*;').test(face.source));
   assert.equal(familyFaces.length,asset.weights.length,asset.family+' exact discrete faces');
-  assert.deepEqual(familyFaces.map(face=>Number(face.match(/font-weight:\s*(\d+)/)[1])).sort((a,b)=>a-b),asset.weights);
-  const urls=[...new Set(familyFaces.map(face=>face.match(/src:\s*url\(([^)]+)\)/)[1].replace(/["']/g,'')))];
+  assert.deepEqual(familyFaces.map(face=>Number(face.source.match(/font-weight:\s*(\d+)/)[1])).sort((a,b)=>a-b),asset.weights);
+  const urls=[...new Set(familyFaces.map(face=>{
+    const declared=face.source.match(/src:\s*url\(([^)]+)\)/)[1].replace(/["']/g,'');
+    const resolved=new URL(declared,new URL(face.stylesheet,'https://font-fixture.invalid'));
+    assert.equal(resolved.origin,'https://font-fixture.invalid');assert.equal(resolved.search,'');assert.equal(resolved.hash,'');
+    return resolved.pathname;
+  }))];
   assert.equal(urls.length,1,asset.family+' emitted binary deduplication');
   const url=urls[0];assert.ok(url.startsWith('/_next/static/media/')&&url.endsWith('.woff2'),url);
   assert.equal(digest(readFileSync(path.join(root,'.next',url.replace('/_next/','')))),asset.sha256,asset.family+' emitted bytes');
-  assert.ok(familyFaces.every(face=>/font-display:\s*swap/.test(face)),asset.family+' display strategy');
+  assert.ok(familyFaces.every(face=>/font-display:\s*swap/.test(face.source)),asset.family+' display strategy');
   return {...asset,emittedPath:url};
 });
 const nextFontManifest=JSON.parse(readFileSync(path.join(root,'.next/server/next-font-manifest.json'),'utf8'));

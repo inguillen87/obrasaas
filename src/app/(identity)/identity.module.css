@@ -52,3 +52,4 @@
 .authCard h1{margin-top:0;font-size:clamp(27px,3vw,31px)}
 @media(max-width:850px){.authFrame{max-width:620px;grid-template-columns:1fr}.authIntro{display:none}.authCard>.brand{display:inline-flex}.authCard h1{margin-top:24px}}
 @media(max-width:500px){.authFrame{border-radius:15px}.authCard{padding:24px 18px}}
+@media(max-width:760px){.shell :is(input:not([type=checkbox]):not([type=radio]):not([type=hidden]),select,textarea){font-size:16px}.shell :global(.cl-organizationSwitcherTrigger){min-height:44px;min-width:44px}.header :global(.cl-userButtonTrigger){min-height:44px;min-width:44px}}
