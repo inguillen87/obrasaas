@@ -6,7 +6,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import yaml from 'js-yaml';
 
-export const EXPECTED_CONTRACT_SHA256='a4f886a7a8d4613e0bec8da0047105e4b5117310c3a912b78cf99fbdb0479cf8';
+export const EXPECTED_CONTRACT_SHA256='605611c81627cea2c721c97145ce48d52b34cd561a06fece05609c1cf1af471f';
 export const LANES=['contracts','plans','people','field','meta','channels','business','workspace-ui'];
 const script='.github/scripts/verify-workspace-ci-parallelization.mjs';
 const contractPath='.github/workspace-acceptance-contract.json';
@@ -77,17 +77,17 @@ function validateEvidenceContract(contract){
  if(Object.values(contract.lanes).flatMap(owner=>owner.optionalArtifactPatterns).length!==3)deny('OPTIONAL_ARTIFACT_COVERAGE');
 }
 export function validateContract(contract){
- if(contract?.version!==1||contract.sourceCommit!=='b671dc697d9493fc171ed38432544d7a9d970968')deny('CONTRACT_BASE');
+ if(contract?.version!==1||contract.sourceCommit!=='61d316a8983c268d43f8af6de10df9743a46278e')deny('CONTRACT_BASE');
  equal(Object.keys(contract.lanes).sort(),[...LANES].sort(),'CONTRACT_LANES');
  const ids=contract.blocks.map(block=>block.id);
- equal(ids,Array.from({length:45},(_,i)=>i+7),'CONTRACT_BLOCKS');
+ equal(ids,Array.from({length:46},(_,i)=>i+7),'CONTRACT_BLOCKS');
  for(const block of contract.blocks){if(typeof block.step.run!=='string'||hash(block.step.run)!==block.commandSha256)deny('CONTRACT_COMMAND');}
  const assigned=Object.values(contract.lanes).flatMap(lane=>lane.blocks);
  equal([...assigned].sort((a,b)=>a-b),ids,'CONTRACT_COVERAGE');
- if(new Set(assigned).size!==45)deny('CONTRACT_DUPLICATE_BLOCK');
+ if(new Set(assigned).size!==46)deny('CONTRACT_DUPLICATE_BLOCK');
  const patterns=Object.values(contract.lanes).flatMap(lane=>lane.artifacts);
  equal([...patterns].sort(),[...contract.artifactPatterns].sort(),'CONTRACT_ARTIFACT_COVERAGE');
- if(patterns.length!==41||new Set(patterns).size!==41)deny('CONTRACT_ARTIFACT_DUPLICATE');
+ if(patterns.length!==44||new Set(patterns).size!==44)deny('CONTRACT_ARTIFACT_DUPLICATE');
  patterns.forEach(patternValid);
  validateEvidenceContract(contract);
  return contract;
@@ -125,7 +125,7 @@ export function buildWorkflow(contract){
 }
 export function equivalent(workflow,contract){
  equal(workflow,buildWorkflow(contract),'WORKFLOW_NOT_EQUIVALENT');
- return {blocks:45,artifactPatterns:41,lanes:8};
+ return {blocks:46,artifactPatterns:44,lanes:8};
 }
 function collect(root,patterns){
  const files=new Map();
@@ -220,7 +220,7 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
   records.push({lane,artifactId:job.outputs.artifactId,artifactDigest:job.outputs.artifactDigest,manifestSha256:record.manifestSha256,fileCount:record.files.length,producedNotUploaded:record.producedNotUploaded,blockIds:record.blockIds});
  }
  equal(records.flatMap(record=>record.blockIds).sort((a,b)=>a-b),contract.blocks.map(block=>block.id),'TOTAL_BLOCK_COVERAGE');
- return {version:1,state:'PASS',head:expectedHead,runId,runAttempt,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,lanes:records,commandBlocks:45,artifactPatterns:41,requiredRetainedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredRetainedEvidence).length,producedNotUploadedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredProducedEvidence).length,fileCount};
+ return {version:1,state:'PASS',head:expectedHead,runId,runAttempt,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,lanes:records,commandBlocks:46,artifactPatterns:44,requiredRetainedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredRetainedEvidence).length,producedNotUploadedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredProducedEvidence).length,fileCount};
 }
 function expectedNeeds(contract,expectedHead,workflowSha256){
  return Object.fromEntries(LANES.map((lane,i)=>{
@@ -235,7 +235,7 @@ export function selftest(workflow,contract,root=process.cwd()){
  function bad(name,code,run){assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code});}
  good('yaml-parsed-and-full-baseline-equivalent',()=>equivalent(workflow,contract));
  const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedNeeds(contract,expectedHead,workflowSha256),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1'};
- good('gate-all-eight-lanes-and-45-blocks',()=>assert.equal(gate(input).commandBlocks,45));
+ good('gate-all-eight-lanes-and-46-blocks',()=>assert.equal(gate(input).commandBlocks,46));
  for(const result of ['failure','cancelled','skipped']){const n=clone(needs);n.people.result=result;bad('gate-'+result,'LANE_NOT_SUCCESS',()=>gate({...input,needs:n}));}
  let n=clone(needs);delete n.meta;bad('missing-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));
  n=clone(needs);n.unexpected=n.meta;bad('extra-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));
@@ -312,6 +312,36 @@ export function selftest(workflow,contract,root=process.cwd()){
  bad('wrong-upload-lane-for-canonical-producer','RETAINED_EVIDENCE_NOT_OWNED',()=>validateContract(wrongLane));
  const wrongProducer=clone(contract);wrongProducer.evidenceProducers[0].producer='scripts/verify-workspace-ui.mjs';
  bad('wrong-principal-proof-producer','EVIDENCE_PRODUCER_COVERAGE',()=>validateContract(wrongProducer));
+ const overtimeProducers=contract.evidenceProducers.filter(producer=>producer.blockId===52);
+ good('overtime-block-52-three-canonical-proofs',()=>{
+  equal(overtimeProducers.map(producer=>({path:producer.path,lane:producer.lane,retained:producer.retained})),[
+   {path:'.vercel/private/field-overtime-unit-proof.json',lane:'field',retained:true},
+   {path:'.vercel/private/field-overtime-postgres-proof.json',lane:'field',retained:true},
+   {path:'.vercel/private/field-overtime-ui-proof.json',lane:'field',retained:true}
+  ],'OVERTIME_PRODUCER_CONTRACT');
+  equal(contract.lanes.field.blocks,[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
+ });
+ for(const [name,code,edit] of [
+  ['omitted','CONTRACT_BLOCKS',c=>{c.blocks=c.blocks.filter(block=>block.id!==52);}],
+  ['duplicate','CONTRACT_BLOCKS',c=>{c.blocks.push(clone(c.blocks.find(block=>block.id===52)));}],
+  ['duplicate-assignment','CONTRACT_COVERAGE',c=>{c.lanes.field.blocks.push(52);}],
+  ['foreign-lane','EVIDENCE_PRODUCER_COVERAGE',c=>{c.lanes.field.blocks=c.lanes.field.blocks.filter(id=>id!==52);c.lanes.meta.blocks.push(52);}],
+  ['changed-command','CONTRACT_COMMAND',c=>{c.blocks.find(block=>block.id===52).step.run+='\ntrue';}]
+ ]){const c=clone(contract);edit(c);bad('overtime-52-'+name,code,()=>validateContract(c));}
+ function alteredField(name,code,edit){const n=clone(needs),r=JSON.parse(n.field.outputs.provenance);edit(r);delete r.manifestSha256;n.field.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>gate({...input,needs:n}));}
+ alteredField('overtime-52-omitted-from-provenance','BLOCK_COVERAGE',r=>{r.blockIds=r.blockIds.filter(id=>id!==52);});
+ alteredField('overtime-52-duplicate-in-provenance','BLOCK_COVERAGE',r=>{r.blockIds.push(52);});
+ alteredField('overtime-52-command-digest-changed','COMMAND_DIGEST',r=>{r.commandDigests[r.blockIds.indexOf(52)]='3'.repeat(64);});
+ for(const producer of overtimeProducers){
+  const omitted=clone(contract);omitted.evidenceProducers=omitted.evidenceProducers.filter(item=>item.path!==producer.path);
+  bad('overtime-producer-omitted-'+producer.path,'EVIDENCE_PRODUCER_COVERAGE',()=>validateContract(omitted));
+  const notRetained=clone(contract);notRetained.evidenceProducers.find(item=>item.path===producer.path).retained=false;
+  bad('overtime-producer-not-retained-'+producer.path,'RETAINED_PRODUCER_COVERAGE',()=>validateContract(notRetained));
+  const foreign=clone(contract);foreign.evidenceProducers.find(item=>item.path===producer.path).lane='meta';
+  bad('overtime-producer-foreign-lane-'+producer.path,'EVIDENCE_PRODUCER_COVERAGE',()=>validateContract(foreign));
+  const colliding=clone(contract);colliding.evidenceProducers.find(item=>item.path===producer.path).path=contract.evidenceProducers[0].path;
+  bad('overtime-producer-path-collision-'+producer.path,'DUPLICATE_REQUIRED_EVIDENCE',()=>validateContract(colliding));
+ }
  const packageLf=Buffer.from('{"controlledLock":1}\n'),requirementsLf=Buffer.from('controlled-fixture==1.0\n');
  const fixtureContract={packageLockSha256:hash(packageLf),requirementsSha256:hash(requirementsLf)};
  const fixtureDependencies={packageLockBytes:packageLf,requirementsBytes:requirementsLf,contract:fixtureContract};
@@ -336,6 +366,11 @@ export function selftest(workflow,contract,root=process.cwd()){
   const retained=ownedFile(contract.lanes.people.requiredRetainedEvidence[0]);mkdirSync(path.dirname(retained),{recursive:true});writeFileSync(retained,'controlled stale retained evidence');
   bad('filesystem-preflight-stale-main-retained','STALE_EVIDENCE',()=>assertFreshEvidence({root:fixture,lane:'people',contract}));
   rmSync(retained);
+  for(const producer of overtimeProducers){
+   const target=ownedFile(producer.path);mkdirSync(path.dirname(target),{recursive:true});writeFileSync(target,'controlled stale overtime proof');
+   bad('filesystem-preflight-stale-overtime-'+producer.path,'STALE_EVIDENCE',()=>assertFreshEvidence({root:fixture,lane:'field',contract}));
+   rmSync(target);
+  }
  }finally{
   const resolved=path.resolve(fixture);assert.ok(resolved.startsWith(parent+path.sep)&&path.basename(resolved).startsWith('ci-gate-selftest-fixture-'));
   rmSync(resolved,{recursive:true,force:true});
@@ -347,13 +382,13 @@ function options(argv){const parsed={};for(let i=0;i<argv.length;i+=2){if(!argv[
 function main(){
  const [mode,...args]=process.argv.slice(2),opts=options(args),root=path.resolve(opts.root||process.cwd()),contract=loadContract(path.resolve(root,opts.contract||contractPath)),file=path.resolve(root,opts.workflow||workflowPath),bytes=readFileSync(file),workflow=yaml.load(bytes.toString('utf8'));
  equivalent(workflow,contract);dependencies(root,contract);
- if(mode==='equivalence'){if(opts['expected-head'])identity(root,opts['expected-head']);console.log(JSON.stringify({state:'PASS',commandBlocks:45,artifactPatterns:41,lanes:8}));return;}
+ if(mode==='equivalence'){if(opts['expected-head'])identity(root,opts['expected-head']);console.log(JSON.stringify({state:'PASS',commandBlocks:46,artifactPatterns:44,lanes:8}));return;}
  if(mode==='selftest'){
   const sourceHead=opts['expected-head']?identity(root,opts['expected-head']):identity(root,execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim());
    const checks=selftest(workflow,contract,root),output=path.resolve(root,opts.output||'.vercel/workspace-ci-evidence/selftest.json');writeJson(output,{version:1,state:'PASS',head:sourceHead,workflowSha256:hash(bytes),contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,checks});
   const escape=value=>value.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');
   writeFileSync(output.replace(/\.json$/,'.xml'),`<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="workspace-ci-private-design" tests="${checks.length}" failures="0">${checks.map(check=>`<testcase name="${escape(check.name)}"/>`).join('')}</testsuite>\n`);
-  console.log(JSON.stringify({state:'PASS',checks:checks.length,commandBlocks:45,artifactPatterns:41,lanes:8}));return;
+  console.log(JSON.stringify({state:'PASS',checks:checks.length,commandBlocks:46,artifactPatterns:44,lanes:8}));return;
  }
  if(mode==='preflight'){
   identity(root,opts['expected-head']);clocks(process.env);if(!LANES.includes(opts.lane))deny('UNKNOWN_LANE');
@@ -366,7 +401,7 @@ function main(){
  }
  if(mode==='gate'){
   identity(root,opts['expected-head']);const filename=path.join(root,'.vercel/workspace-ci-evidence/gate.json');
-  try{const report=gate({needs:JSON.parse(process.env.WORKSPACE_NEEDS_JSON||'null'),contract,expectedHead:opts['expected-head'],workflowSha256:hash(bytes),...clocks(process.env)});writeJson(filename,report);console.log(JSON.stringify({state:'PASS',lanes:8,commandBlocks:45,artifactPatterns:41,fileCount:report.fileCount}));}
+  try{const report=gate({needs:JSON.parse(process.env.WORKSPACE_NEEDS_JSON||'null'),contract,expectedHead:opts['expected-head'],workflowSha256:hash(bytes),...clocks(process.env)});writeJson(filename,report);console.log(JSON.stringify({state:'PASS',lanes:8,commandBlocks:46,artifactPatterns:44,fileCount:report.fileCount}));}
   catch(error){writeJson(filename,{version:1,state:'FAIL',code:error.code||'GATE_FAILED'});throw error;}return;
  }
  deny('UNKNOWN_COMMAND');
