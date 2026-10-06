@@ -151,6 +151,14 @@ try {
   checks.push({case:'offline-mobile-keyboard-targets-brand-and-no-overflow',width,...geometry});
  }
  const beforeReconnect={documents:documentCount(),posts:postCount()};
+ // Chrome 152 can reset navigator.onLine during hasTouch viewport reloads
+ // while request emulation stays offline. Establish the native offline state
+ // before observing the explicit reconnection, without hiding any requests.
+ await setOffline(true,'keyboard-offline-baseline');
+ await page.waitForFunction(()=>navigator.onLine===false,{timeout:15000});
+ assert.equal(await page.evaluate(()=>navigator.onLine),false);
+ await captureNetwork('keyboard-offline-baseline-settled');
+ assert.equal(documentCount(),beforeReconnect.documents);assert.equal(postCount(),beforeReconnect.posts);assert.ok(await page.$('#offline-title'));
  await page.evaluate(()=>{window.__onlineEvents=0;window.addEventListener('online',()=>{window.__onlineEvents++;});});
  await setOffline(false,'keyboard-reconnect');await page.waitForFunction(()=>navigator.onLine&&window.__onlineEvents===1,{timeout:15000});
  await captureNetwork('keyboard-reconnect-settled');
