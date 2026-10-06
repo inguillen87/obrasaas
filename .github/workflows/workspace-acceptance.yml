@@ -1,4 +1,4 @@
-# PRIVATE PROPOSAL: no tracked workflow change or CI run. Baseline b671dc697d9493fc171ed38432544d7a9d970968.
+# CI47 overtime: preserves the 45 reviewed CI46 blocks; source anchors 61d316a.
 name: Authorized workspace acceptance
 "on":
   push:
@@ -275,6 +275,13 @@ jobs:
         run: |
           npx eslint scripts/verify-field-qr-ui.mjs tests/production-field-qr-reader.test.mjs --max-warnings 0
           node scripts/verify-field-qr-ui.mjs
+      - name: Manual web overtime with independent approval and durable recovery
+        run: |
+          npx eslint src/lib/field-operations-policy.mjs src/lib/field-operations-store.mjs src/lib/field-operations-http.mjs src/lib/field-overtime-policy.mjs src/lib/field-overtime-store.mjs src/lib/field-shift-summary.mjs 'src/app/(identity)/cuenta/field-operations-panel.js' 'src/app/(identity)/cuenta/field-overtime-view.js' 'src/app/(identity)/cuenta/workspace-recovery-journal.mjs' src/app/api/identity/field-operations/route.js scripts/verify-field-operations-ui.mjs scripts/verify-field-overtime.mjs scripts/verify-field-overtime-postgres.mjs scripts/verify-field-overtime-ui.mjs tests/production-field-overtime-recovery.test.mjs --max-warnings 0
+          node scripts/verify-field-overtime.mjs
+          node --test tests/production-field-overtime-recovery.test.mjs
+          node scripts/verify-field-overtime-postgres.mjs
+          node scripts/verify-field-overtime-ui.mjs
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane field --expected-head "$GITHUB_SHA"
@@ -286,6 +293,9 @@ jobs:
           path: |
             .vercel/field-operations-evidence/
             .vercel/field-qr-evidence/
+            .vercel/private/field-overtime-unit-proof.json
+            .vercel/private/field-overtime-postgres-proof.json
+            .vercel/private/field-overtime-ui-proof.json
             .vercel/workspace-ci-evidence/lane-field.json
           include-hidden-files: true
           retention-days: 7

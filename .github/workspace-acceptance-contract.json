@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "sourceCommit": "b671dc697d9493fc171ed38432544d7a9d970968",
+  "sourceCommit": "61d316a8983c268d43f8af6de10df9743a46278e",
   "sourceWorkflowGitBlobSha256": "f61343f8ec83df2ca814a4fb770eed8d78b18ab2f80f95b4e9e2b84d0f5e89ed",
-  "sourceWorkflowCheckoutSha256": "dceb19f6ac2ffac107ab69702f62ca595712d65a09ba548e3fee680a1c197ab6",
+  "sourceWorkflowCheckoutSha256": "f61343f8ec83df2ca814a4fb770eed8d78b18ab2f80f95b4e9e2b84d0f5e89ed",
   "packageLockSha256": "c6592431cb6b05524e384ce663db665b1f75c08b755435532d9c74a4519e9f28",
   "requirementsSha256": "c7c242770337d501756cdde2437ad8e7cdc0e5d7d269481beac6e1f1abafb34d",
   "workflow": {
@@ -413,6 +413,14 @@
         "run": "npx eslint src/lib/identity-return-path.mjs src/lib/session-recovery.mjs 'src/app/(identity)/identity-load-guard.js' 'src/app/(identity)/cuenta/session-recovery.js' 'src/app/(identity)/cuenta/invitation-entry.js' 'src/app/(identity)/cuenta/workspace-session-request.mjs' scripts/verify-clerk-access-ui.mjs tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs\nnode --test tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs\nnode scripts/verify-clerk-access-ui.mjs\n"
       },
       "commandSha256": "1424464c9e829cf6a31725e43766d8d31fddaef18e562aa833fe54ce16ff152c"
+    },
+    {
+      "id": 52,
+      "step": {
+        "name": "Manual web overtime with independent approval and durable recovery",
+        "run": "npx eslint src/lib/field-operations-policy.mjs src/lib/field-operations-store.mjs src/lib/field-operations-http.mjs src/lib/field-overtime-policy.mjs src/lib/field-overtime-store.mjs src/lib/field-shift-summary.mjs 'src/app/(identity)/cuenta/field-operations-panel.js' 'src/app/(identity)/cuenta/field-overtime-view.js' 'src/app/(identity)/cuenta/workspace-recovery-journal.mjs' src/app/api/identity/field-operations/route.js scripts/verify-field-operations-ui.mjs scripts/verify-field-overtime.mjs scripts/verify-field-overtime-postgres.mjs scripts/verify-field-overtime-ui.mjs tests/production-field-overtime-recovery.test.mjs --max-warnings 0\nnode scripts/verify-field-overtime.mjs\nnode --test tests/production-field-overtime-recovery.test.mjs\nnode scripts/verify-field-overtime-postgres.mjs\nnode scripts/verify-field-overtime-ui.mjs\n"
+      },
+      "commandSha256": "962c908e64f2f86e5492b997dba80378ef48fb0678e59691670581b1e86f78c3"
     }
   ],
   "artifactPatterns": [
@@ -456,7 +464,10 @@
     ".vercel/meta-demo-pilot-evidence/",
     ".vercel/demo-pilot-evidence/",
     ".vercel/manual-evidence/",
-    ".vercel/onboarding-guide-evidence/"
+    ".vercel/onboarding-guide-evidence/",
+    ".vercel/private/field-overtime-unit-proof.json",
+    ".vercel/private/field-overtime-postgres-proof.json",
+    ".vercel/private/field-overtime-ui-proof.json"
   ],
   "lanes": {
     "contracts": {
@@ -539,17 +550,24 @@
       "blocks": [
         20,
         39,
-        40
+        40,
+        52
       ],
       "artifacts": [
         ".vercel/field-operations-evidence/",
-        ".vercel/field-qr-evidence/"
+        ".vercel/field-qr-evidence/",
+        ".vercel/private/field-overtime-unit-proof.json",
+        ".vercel/private/field-overtime-postgres-proof.json",
+        ".vercel/private/field-overtime-ui-proof.json"
       ],
       "optionalArtifactPatterns": [],
       "requiredRetainedEvidence": [
         ".vercel/field-operations-evidence/postgres.json",
         ".vercel/field-qr-evidence/browser.json",
-        ".vercel/field-operations-evidence/browser.json"
+        ".vercel/field-operations-evidence/browser.json",
+        ".vercel/private/field-overtime-unit-proof.json",
+        ".vercel/private/field-overtime-postgres-proof.json",
+        ".vercel/private/field-overtime-ui-proof.json"
       ],
       "requiredProducedEvidence": []
     },
@@ -876,8 +894,8 @@
       "retained": true,
       "blockId": 27,
       "lane": "channels",
-      "baselineSourceLine": 110,
-      "baselineProducerGitBlobSha256": "7574471a2dfec6afe4c9a665773916f9b2200b521d29b21e3f73c9b43845e3f7"
+      "baselineSourceLine": 114,
+      "baselineProducerGitBlobSha256": "328c9d47c1b6ca05efa65a84234ce5ff37cb375097fe54f72bf06d79c427ea8c"
     },
     {
       "producer": "scripts/verify-meta-development-pilot-boundary.mjs",
@@ -1057,7 +1075,7 @@
       "blockId": 39,
       "lane": "field",
       "baselineSourceLine": 335,
-      "baselineProducerGitBlobSha256": "ad6c7638c6e0d5920403d00b66c7abc3f722ef747fbf44dfc918404477badf1a"
+      "baselineProducerGitBlobSha256": "43defd75dd8128748755a9ff775dbfc4974349514eee3d934bb658c70cceba2f"
     },
     {
       "producer": "scripts/verify-meta-customer-coexistence-postgres.mjs",
@@ -1166,6 +1184,33 @@
       "lane": "people",
       "baselineSourceLine": 18,
       "baselineProducerGitBlobSha256": "b35f73ac5a112e5184172fa357838123a6b9c69592428c901aac00c8124b3bda"
+    },
+    {
+      "producer": "scripts/verify-field-overtime.mjs",
+      "path": ".vercel/private/field-overtime-unit-proof.json",
+      "retained": true,
+      "blockId": 52,
+      "lane": "field",
+      "baselineSourceLine": 47,
+      "baselineProducerGitBlobSha256": "28db7c644b5e07eeb3bf9af245ddc5dd01c9398fcc1ed4aa5ec7daa9b8fbf412"
+    },
+    {
+      "producer": "scripts/verify-field-overtime-postgres.mjs",
+      "path": ".vercel/private/field-overtime-postgres-proof.json",
+      "retained": true,
+      "blockId": 52,
+      "lane": "field",
+      "baselineSourceLine": 127,
+      "baselineProducerGitBlobSha256": "bd3c8a27cb9f5af6556fe25e35cb3b32f78eb7e600851fbdb6490ed9d232042b"
+    },
+    {
+      "producer": "scripts/verify-field-overtime-ui.mjs",
+      "path": ".vercel/private/field-overtime-ui-proof.json",
+      "retained": true,
+      "blockId": 52,
+      "lane": "field",
+      "baselineSourceLine": 121,
+      "baselineProducerGitBlobSha256": "47239609b69d02e2cf8737e2029d7b0ebcb2911905102fda1dde0525c200a337"
     }
   ],
   "stdoutOnlyProducers": [
