@@ -9,4 +9,5 @@ data/
 docs/
 tests/
 *.pdf
+!scripts/fixtures/plan-import-synthetic-v1.pdf
 work/
