@@ -18,6 +18,8 @@ try{
   if(url.pathname.startsWith('/api/'))calls.push(url.pathname);request.continue();});
  await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'reduce'}]);
  await page.goto(base+'/demo',{waitUntil:'networkidle2'});await page.waitForSelector('[data-demo-only="true"]');
+ await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Recorrido guiado').click());
+ await page.waitForSelector('[data-demo-count="total"]');
  assert.equal(await page.$('input,form,textarea'),null);assert.ok(await page.$('[data-brand="obrasaas-v3"]'));
  const count=type=>page.$eval(`[data-demo-count="${type}"]`,element=>Number(element.textContent));
  const click=label=>page.evaluate(text=>{const button=[...document.querySelectorAll('button')].find(node=>node.textContent.trim()===text);if(!button)throw new Error('Missing control '+text);button.click();},label);
@@ -34,8 +36,8 @@ try{
  }
  assert.equal(await count('reviewed'),1);assert.equal(await count('pending'),2);
  await click('Reiniciar demo');await page.waitForFunction(()=>document.querySelector('[data-demo-count="total"]').textContent==='0');
- await click('Añadir ejemplo a la bandeja');assert.equal(await count('total'),1);await page.reload({waitUntil:'networkidle2'});assert.equal(await count('total'),0);
- await page.goto(base+'/demo?tenantId=other&role=superadmin',{waitUntil:'networkidle2'});assert.equal(await count('total'),0);
+ await click('Añadir ejemplo a la bandeja');assert.equal(await count('total'),1);await page.reload({waitUntil:'networkidle2'});await click('Recorrido guiado');assert.equal(await count('total'),0);
+ await page.goto(base+'/demo?tenantId=other&role=superadmin',{waitUntil:'networkidle2'});await click('Recorrido guiado');assert.equal(await count('total'),0);
  const selectedView=await page.$eval('nav button[aria-pressed="true"] strong',node=>node.textContent);assert.equal(selectedView,'Operario');
  assert.deepEqual(calls,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(errors,[]);
  const denied=await fetch(base+'/api/state',{redirect:'manual'});assert.equal(denied.status,401);await denied.body?.cancel();

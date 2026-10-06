@@ -2,6 +2,7 @@
 import {useState} from 'react';
 import Link from 'next/link';
 import {ObraSaasLogo} from '../brand/brand-logo';
+import DemoExplorer from './demo-explorer';
 import styles from './demo.module.css';
 const VIEWS=[['worker','Operario','Preparar una captura'],['foreman','Encargado','Revisar lo recibido'],['director','Director','Ver el seguimiento']];
 const CASES=[
@@ -10,14 +11,17 @@ const CASES=[
  {id:'audio',label:'Nota de voz',symbol:'03',title:'Un aviso para el encargado',sample:'Texto preparado para la demo: “Faltan dos bolsas de cemento para continuar el trabajo”.',detail:'En esta pantalla no se recibe ni transcribe audio. El circuito real debe confirmar recepción, transcripción y registro; la voz no identifica por sí sola al trabajador.',type:'Aviso de ejemplo'}
 ];
 export default function DemoClient(){
+ const [screen,setScreen]=useState('explore');
  const [view,setView]=useState('worker'),[selected,setSelected]=useState('identity'),[items,setItems]=useState([]);
  const scenario=CASES.find(item=>item.id===selected),pending=items.filter(item=>item.status==='PENDING').length;
  const reviewed=items.length-pending,alreadyAdded=items.some(item=>item.id===selected);
  function addExample(){setItems(current=>current.some(item=>item.id===selected)?current:[...current,{id:selected,type:scenario.type,title:scenario.title,status:'PENDING'}]);}
  function reviewExample(id){setItems(current=>current.map(item=>item.id===id?{...item,status:'REVIEWED_EXAMPLE'}:item));}
  return <div className={styles.shell} data-demo-only="true">
-  <header className={styles.header}><Link href="/" aria-label="ObraSaaS, inicio"><ObraSaasLogo markSize={32} variant="inverse"/></Link><Link href="/sign-in" className={styles.account}>Ingresar a mi cuenta <span aria-hidden="true">↗</span></Link></header>
+  <header className={styles.header}><Link href="/" aria-label="ObraSaaS, inicio"><ObraSaasLogo markSize={38} variant="inverse"/></Link><span className={styles.demoBadge}>DEMO</span><Link href="/sign-in" className={styles.account}>Ingresar a mi cuenta <span aria-hidden="true">↗</span></Link></header>
+  {screen==='explore'?<DemoExplorer onTour={()=>{setSelected('identity');setView('worker');setScreen('tour');}}/>:<>
   <main className={styles.main}>
+   <button type="button" className={styles.backToWorkspace} onClick={()=>setScreen('explore')}>← Explorar la empresa de ejemplo</button>
    <div className={styles.intro}><div><p className={styles.eyebrow}>DEMO GUIADA</p><h1>Del aviso en campo<br/>a la revisión en obra.</h1><p className={styles.lead}>Probá el recorrido desde tres perspectivas. Cada paso está identificado como un ejemplo, no como una operación confirmada.</p></div><span className={styles.pill}>Entorno ilustrativo</span></div>
    <aside className={styles.notice} aria-label="Alcance de la demo"><strong>Sólo ejemplos ficticios.</strong> No solicita DNI, fotos, audios ni datos de empleados. No envía WhatsApp, no crea cuentas y no modifica obras. La demo se reinicia al recargar.</aside>
    <nav className={styles.views} aria-label="Perspectiva de la demostración">{VIEWS.map(([id,title,subtitle])=><button key={id} type="button" aria-pressed={view===id} onClick={()=>setView(id)}><strong>{title}</strong><span>{subtitle}</span></button>)}</nav>
@@ -38,5 +42,6 @@ export default function DemoClient(){
    <div className={styles.bottom}><p role="status" aria-live="polite">{items.length} ejemplos locales · {reviewed} revisados · 0 operaciones reales</p><button type="button" className={styles.reset} onClick={()=>{setItems([]);setSelected('identity');setView('worker');}}>Reiniciar demo</button></div>
    <footer className={styles.footer}>Cambiar de perspectiva aquí no asigna un rol de usuario. El acceso a una empresa u obra se verifica por separado.</footer>
   </main>
+  </>}
  </div>;
 }

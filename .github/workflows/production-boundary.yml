@@ -46,7 +46,7 @@ jobs:
       - name: Pilot media and KYC lint
         run: npx eslint src/lib/pilot-media.mjs src/lib/kyc-pilot-boundary.mjs src/lib/aiVision.js src/app/api/webview/kyc/route.js src/app/api/whatsapp/route.js tests/production-pilot-media.test.mjs scripts/verify-pilot-media-live.mjs
       - name: Guided demo lint
-        run: npx eslint src/app/demo src/app/page.js tests/production-guided-demo.test.mjs scripts/verify-guided-demo.mjs
+        run: npx eslint src/app/demo src/app/page.js tests/production-guided-demo.test.mjs scripts/verify-guided-demo.mjs scripts/verify-demo-company-ui.mjs
       - name: Signed session verification lint
         run: npx eslint src/lib/verified-session.mjs src/app/api/identity/session/route.js tests/production-verified-session.test.mjs
       - name: Real Meta test-number transport lint
@@ -65,6 +65,8 @@ jobs:
       - run: node scripts/verify-brand-v3-browser.mjs
       - run: node scripts/verify-access-contrast.mjs
       - run: node scripts/verify-guided-demo.mjs
+      - name: Public example company, canonical schedule and CRM navigation
+        run: node scripts/verify-demo-company-ui.mjs
       - name: Professional landing, reduced motion and keyboard navigation
         run: |
           npx eslint src/app/page.js src/app/landing-interactions.js scripts/verify-professional-landing-ui.mjs --max-warnings 0
@@ -82,6 +84,7 @@ jobs:
             .vercel/brand-v3-evidence/
             .vercel/access-contrast-evidence/
             .vercel/guided-demo-evidence/
+            .vercel/demo-company-evidence/
             .vercel/professional-landing-evidence/
           include-hidden-files: true
           retention-days: 7

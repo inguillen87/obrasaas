@@ -59,23 +59,54 @@ try{
  for(const route of ['/','/sign-in','/sign-up','/cuenta']){
   await page.goto(base+route,{waitUntil:'networkidle2'});
   await page.waitForSelector('[data-brand="obrasaas-v3"]',{timeout:15000});
-  const geometry=await page.$$eval('[data-brand="obrasaas-v3"]',nodes=>nodes.map(node=>({
-   text:node.textContent.replace(/\s/g,''),paths:[...node.querySelectorAll('path')].map(path=>path.getAttribute('d')),
-   rect:node.getBoundingClientRect().toJSON(),font:getComputedStyle(node.querySelector('strong')).fontFamily,
-   animations:[...node.querySelectorAll('path')].map(path=>getComputedStyle(path).animationName)})));
-  assert.ok(geometry.length>=(route==='/'?2:1),route);
-  for(const item of geometry){assert.equal(item.text,'ObraSaaS');assert.deepEqual(item.paths,[OBRA_SAAS_STRUCTURE_PATH,OBRA_SAAS_TRACE_PATH]);assert.ok(item.rect.width>=120&&item.rect.height>=24);assert.match(item.font,/Manrope/);assert.ok(item.animations.every(name=>name==='none'));}
   assert.equal(await page.evaluate(()=>[...document.querySelectorAll('header div,header span,main a span')].some(node=>node.childElementCount===0&&node.textContent.trim()==='OS')),false);
-  const sizes=[];
+  const sizes=[],viewports=[];
   for(const width of [320,390,768,1280]){
    await page.setViewport({width,height:950});await new Promise(resolve=>setTimeout(resolve,100));
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,route+' overflow '+width);
+   const geometry=await page.$$eval('[data-brand="obrasaas-v3"]',nodes=>nodes.map(node=>{
+    const hasIdentityClass=(element,name)=>Boolean(element&&[...element.classList].some(value=>value.startsWith('identity-module__')&&value.endsWith('__'+name)));
+    const ancestors=[];for(let current=node;current;current=current.parentElement)ancestors.push(current);
+    const hiddenAncestors=ancestors.filter(element=>getComputedStyle(element).display==='none');
+    const otherHiddenAncestor=ancestors.some(element=>{const style=getComputedStyle(element);return style.visibility==='hidden'||style.visibility==='collapse'||Number(style.opacity)===0||element.hidden||element.getAttribute('aria-hidden')==='true';});
+    const link=node.parentElement?.tagName==='A'?node.parentElement:null;
+    const container=link?.parentElement;
+    const authRoute=['/sign-in','/sign-up'].includes(location.pathname.replace(/\/$/,''));
+    const authIntro=authRoute&&container?.tagName==='ASIDE'&&hasIdentityClass(link,'brand')&&hasIdentityClass(container,'authIntro')&&hasIdentityClass(container.parentElement,'authFrame');
+    const authCard=authRoute&&container?.tagName==='SECTION'&&hasIdentityClass(link,'brand')&&hasIdentityClass(container,'authCard')&&hasIdentityClass(container.parentElement,'authFrame');
+    const variant=authIntro?'desktop-auth-intro':authCard?'mobile-auth-card':null;
+    const expectedHidden=variant==='desktop-auth-intro'?innerWidth<=850:variant==='mobile-auth-card'?innerWidth>850:false;
+    const intentionalHidden=expectedHidden&&!otherHiddenAncestor&&hiddenAncestors.length===1&&hiddenAncestors[0]===(authIntro?container:link);
+    const rect=node.getBoundingClientRect(),wordmark=getComputedStyle(node.querySelector('strong'));
+    return {text:node.textContent.replace(/\s/g,''),paths:[...node.querySelectorAll('path')].map(path=>path.getAttribute('d')),
+     rect:rect.toJSON(),font:wordmark.fontFamily,fontSize:parseFloat(wordmark.fontSize),markHeight:node.querySelector('svg')?.getBoundingClientRect().height??0,
+     linkRect:node.closest('a')?.getBoundingClientRect().toJSON()??null,
+     animations:[...node.querySelectorAll('path')].map(path=>getComputedStyle(path).animationName),
+     visible:hiddenAncestors.length===0&&!otherHiddenAncestor&&rect.width>0&&rect.height>0,
+     responsiveAuthVariant:variant,expectedHidden,intentionalHidden};
+   }));
+   const visible=geometry.filter(item=>item.visible);
+   assert.ok(visible.length>=(route==='/'?2:1),route+' '+width+' missing visible brand');
+   for(const item of geometry){
+    const label=route+' '+width+' '+(item.responsiveAuthVariant||'brand');
+    assert.equal(item.text,'ObraSaaS',label);assert.deepEqual(item.paths,[OBRA_SAAS_STRUCTURE_PATH,OBRA_SAAS_TRACE_PATH],label);
+    assert.match(item.font,/Manrope/,label);assert.ok(item.animations.every(name=>name==='none'),label+' reduced motion');
+    if(item.expectedHidden){assert.equal(item.visible,false,label+' must use its responsive counterpart');assert.equal(item.intentionalHidden,true,label+' unexpected hidden ancestor');}
+    else{
+     assert.equal(item.visible,true,label+' unexpected hidden brand');
+     assert.ok(item.rect.height>=24&&item.rect.width>0,label+' geometry');
+     if(width===1280)assert.ok(item.rect.width>=120,label+' desktop width');
+     assert.ok(item.fontSize>=18&&item.markHeight>=28,label+' readable wordmark and symbol');
+     if(item.linkRect)assert.ok(item.linkRect.width>=44&&item.linkRect.height>=44,label+' interactive target');
+    }
+   }
+   viewports.push({width,logoCount:geometry.length,visibleLogoCount:visible.length,geometry});
    if([390,1280].includes(width)&&['/','/sign-in'].includes(route))await page.screenshot({path:resolve(folder,(route==='/'?'home':'access')+'-'+width+'.png'),fullPage:route!=='/'});
    sizes.push(width);
   }
   const icons=await page.$$eval('link[rel="icon"],link[rel="apple-touch-icon"]',nodes=>nodes.map(node=>new URL(node.href).pathname));
   assert.ok(icons.includes('/icon.png'),route+' metadata icon');assert.ok(icons.includes('/apple-icon.png'),route+' Apple metadata');
-  surfaces.push({route,logoCount:geometry.length,widths:sizes,canonicalPathsMatch:true,reducedMotion:true,metadataIcons:icons});
+  surfaces.push({route,finalUrl:page.url(),logoCount:viewports[0].logoCount,widths:sizes,viewports,canonicalPathsMatch:true,reducedMotion:true,metadataIcons:icons});
  }
 
  await page.evaluate(()=>navigator.serviceWorker.ready);

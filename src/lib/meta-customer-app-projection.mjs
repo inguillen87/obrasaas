@@ -3,6 +3,10 @@ import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-crede
 import {lockMetaCustomerInboxChannel,metaCustomerContentDigest} from './meta-customer-callback.mjs';
 import {decodeSignedCustomerEvent} from './meta-customer-processing.mjs';
 import {customerJobTransaction} from './meta-customer-outbound.mjs';
+import {metaCustomerTransportReady} from './meta-customer-provider.mjs';
+import {hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
+import {readProjectWorkspaceProfile} from './whatsapp/project-workspace-profile.js';
+import {customerLifecycleRecovery} from './meta-customer-coexistence.mjs';
 
 export const META_APP_PROJECTION_PROVIDER='meta-customer-app-source-v1';
 export const META_APP_PROJECTION_PURPOSE='business-app-source';
@@ -47,7 +51,7 @@ export function splitCustomerAppChange(field,value){
 export function customerAppRecords(payload){
  const v=payload.value;
  if(!fields.has(payload.field)||!object(v))return null;
- if(payload.field==='account_update')return {records:[],lifecycle:typeof v.event==='string'&&/^[A-Za-z_]{1,80}$/.test(v.event)?v.event.toLowerCase():null};
+ if(payload.field==='account_update')return {records:[],lifecycle:typeof v.event==='string'&&/^[A-Za-z_]{1,80}$/.test(v.event)?v.event.toLowerCase():null,disconnectionReason:typeof v.disconnection_info?.reason==='string'&&/^[A-Z_]{1,80}$/.test(v.disconnection_info.reason)?v.disconnection_info.reason:null,disconnectionInitiatedBy:['USER','SYSTEM'].includes(v.disconnection_info?.initiated_by)?v.disconnection_info.initiated_by:null};
  const records=[];
  if(payload.field==='smb_app_state_sync'){
   for(const row of v.state_sync||[]){
@@ -75,19 +79,64 @@ export async function decodeCustomerAppProjection(client,row,member,project,conn
  if(!customerAppRecords(original)?.records.some(record=>metaCustomerContentDigest(record)===metaCustomerContentDigest(value.record)))throw new WorkspaceError('META_CUSTOMER_APP_SOURCE_PROOF_REQUIRED',409);
  return value;
 }
-export function createMetaCustomerAppProjection({connect,environment=process.env,now=()=>Date.now()}){
- return {async execute(context){return customerJobTransaction(connect,async client=>{
+const lifecycleOutcome=(code=null,reviewState='OBSERVED')=>({kind:'CUSTOMER_ACCOUNT_LIFECYCLE',reviewState,businessApplied:false,replySent:false,identityStatus:'NOT_APPLICABLE',...(code?{code}:{})});
+const reconnectTerminal=new Set(['RESTORED','KEPT_DISABLED','MANUAL_REVIEW_REQUIRED']);
+export function createMetaCustomerAppProjection({connect,provider,environment=process.env,now=()=>Date.now()}){
+ const locked=(context,run)=>customerJobTransaction(connect,async client=>{
   const candidate=(await client.query(`SELECT "whatsappBusinessId","phoneNumberId" FROM public."WhatsAppConnection" WHERE id=$1 AND "projectId"=$2`,[context.channelId,context.projectId])).rows[0];
   if(!candidate)throw new WorkspaceError('META_CUSTOMER_CALLBACK_SCOPE_REJECTED',403);
   const c=await lockMetaCustomerInboxChannel(client,{wabaId:candidate.whatsappBusinessId,phoneNumberId:candidate.phoneNumberId,projectId:context.projectId,writable:true});
   const event=(await client.query(`SELECT id,"projectId",provider,payload,status::text AS status,"leaseToken","leaseExpiresAt" FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-v1' FOR UPDATE`,[context.eventId,context.projectId])).rows[0];
   if(!event||event.status!=='PENDING'||event.leaseToken!==context.leaseToken||Date.parse(event.leaseExpiresAt)<=now()||event.payload.payloadDigest!==context.payloadDigest)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
-  const payload=decodeSignedCustomerEvent(event,c,environment),parsed=customerAppRecords(payload);
+  const payload=decodeSignedCustomerEvent(event,c,environment);return run(client,c,event,payload);
+ });
+ const save=async(client,c,metadata,enabled=c.enabled)=>{const result=await client.query(`UPDATE public."WhatsAppConnection" SET metadata=metadata||$3::jsonb,enabled=$4,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[c.id,c.projectId,JSON.stringify(metadata),enabled]);if(result.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_RECONNECTION_CHANGED',409);};
+ const profile=async(client,c)=>{const p=(await client.query(`SELECT p.id,p.metadata,o.metadata AS "organizationMetadata" FROM public."Project" p JOIN public."Organization" o ON o.id=p."organizationId" WHERE p.id=$1 AND p."organizationId"=$2 AND p.status='ACTIVE'`,[c.projectId,c.organizationId])).rows[0];return p?readProjectWorkspaceProfile(p.metadata,p.organizationMetadata,p.id).profile:null;};
+ return {async execute(context){const claimed=await locked(context,async(client,c,event,payload)=>{
+  const parsed=customerAppRecords(payload);
   if(!parsed)return null;
   if(parsed.lifecycle){
-   const lifecycle={event:parsed.lifecycle,sourceEventId:event.id,observedAt:new Date(now()).toISOString()},disconnected=['partner_removed','account_disconnected','account_offboarded'].includes(parsed.lifecycle);
-   await client.query(`UPDATE public."WhatsAppConnection" SET metadata=metadata||$3::jsonb,enabled=CASE WHEN $4 THEN false ELSE enabled END,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[c.id,c.projectId,JSON.stringify({customerLifecycle:lifecycle,...(c.metadata.coexistence?{coexistence:{...c.metadata.coexistence,lifecycle}}:{})}),disconnected]);
-   return {kind:'CUSTOMER_ACCOUNT_LIFECYCLE',reviewState:'OBSERVED',businessApplied:false,replySent:false,identityStatus:'NOT_APPLICABLE'};
+   const prior=c.metadata.customerLifecycle,s=c.metadata.coexistence,previousRecovery=customerLifecycleRecovery(c);
+   // Signed entry.time distinguishes repeated device-change cycles. Older
+   // callbacks cannot undo a later lifecycle already observed on this channel.
+   if(payload.providerTimestamp&&prior?.providerTimestamp&&Number(payload.providerTimestamp)<Number(prior.providerTimestamp))return lifecycleOutcome('META_CUSTOMER_LIFECYCLE_STALE');
+   if(payload.providerTimestamp&&prior?.providerTimestamp&&payload.providerTimestamp===prior.providerTimestamp&&prior.sourceEventId!==event.id){
+    const recovery={...previousRecovery,version:1,state:'MANUAL_REVIEW_REQUIRED',automatic:false,authorizationSignupId:c.metadata.customerSignupId||null,previouslyEnabled:previousRecovery?.previouslyEnabled??c.enabled===true,pausedAt:previousRecovery?.pausedAt||new Date(now()).toISOString(),reason:parsed.disconnectionReason||previousRecovery?.reason||null,initiatedBy:parsed.disconnectionInitiatedBy||previousRecovery?.initiatedBy||null,lastCode:'META_CUSTOMER_LIFECYCLE_ORDER_UNCONFIRMED'};
+    await save(client,c,{customerLifecycle:{...prior,authorizationSignupId:c.metadata.customerSignupId||null,recovery}},false);
+    return lifecycleOutcome('META_CUSTOMER_LIFECYCLE_ORDER_UNCONFIRMED','REVIEW_REQUIRED');
+   }
+   const lifecycle=prior?.sourceEventId===event.id?prior:{event:parsed.lifecycle,sourceEventId:event.id,observedAt:new Date(now()).toISOString(),providerTimestamp:payload.providerTimestamp||null,authorizationSignupId:c.metadata.customerSignupId||null,reason:parsed.disconnectionReason,initiatedBy:parsed.disconnectionInitiatedBy,...(previousRecovery?{recovery:previousRecovery}:{})};
+   const disconnected=['partner_removed','account_disconnected','account_offboarded'].includes(parsed.lifecycle);
+   if(disconnected){
+    let recovery=previousRecovery;
+     const pending=recovery&&!['RESTORED','KEPT_DISABLED'].includes(recovery.state)&&recovery.authorizationSignupId===c.metadata.customerSignupId;
+     const automatic=Boolean(s)&&parsed.lifecycle==='account_offboarded'&&(!pending||recovery.automatic!==false)&&Boolean(payload.providerTimestamp);
+     recovery={...(pending?recovery:{version:1,previouslyEnabled:c.enabled===true,activationDigest:digest(c.metadata.customerActivation||null),authorizationSignupId:c.metadata.customerSignupId||null,pausedAt:lifecycle.observedAt,pauseEventId:event.id,pauseTimestamp:payload.providerTimestamp||null}),state:automatic?'PAUSED':'MANUAL_REVIEW_REQUIRED',automatic,reason:lifecycle.reason||recovery?.reason||null,initiatedBy:lifecycle.initiatedBy||recovery?.initiatedBy||null,lastCode:parsed.lifecycle==='account_offboarded'&&!payload.providerTimestamp?'META_CUSTOMER_LIFECYCLE_ORDER_UNCONFIRMED':null};
+    await save(client,c,{customerLifecycle:{...lifecycle,recovery}},false);
+    return lifecycleOutcome();
+   }
+   if(parsed.lifecycle!=='account_reconnected'||!s){await save(client,c,{customerLifecycle:lifecycle});return lifecycleOutcome(previousRecovery&&!['RESTORED','KEPT_DISABLED'].includes(previousRecovery.state)?'META_CUSTOMER_RECONNECTION_PAUSE_REQUIRED':null,previousRecovery&&!['RESTORED','KEPT_DISABLED'].includes(previousRecovery.state)?'REVIEW_REQUIRED':'OBSERVED');}
+   const recovery=previousRecovery;
+   if(recovery?.reconnectEventId===event.id&&reconnectTerminal.has(recovery.state))return lifecycleOutcome(recovery.lastCode,recovery.state==='MANUAL_REVIEW_REQUIRED'?'REVIEW_REQUIRED':'OBSERVED');
+   if(recovery&&['RESTORED','KEPT_DISABLED'].includes(recovery.state)){
+    await save(client,c,{customerLifecycle:lifecycle});
+    return lifecycleOutcome('META_CUSTOMER_RECONNECTION_ALREADY_RECOVERED');
+   }
+   // Reconnection is not permission to accept a newly linked tenant or reverse
+   // partner removal. Only this channel's preceding offboard pause can recover.
+   if(recovery?.automatic!==true||!recovery.pauseEventId||!recovery.pauseTimestamp||!payload.providerTimestamp||Number(payload.providerTimestamp)<=Number(recovery.pauseTimestamp)){
+    await save(client,c,{customerLifecycle:{...lifecycle,recovery:{...recovery,version:1,state:'MANUAL_REVIEW_REQUIRED',automatic:false,authorizationSignupId:c.metadata.customerSignupId||null,reconnectEventId:event.id,reconnectedAt:lifecycle.observedAt,lastCode:'META_CUSTOMER_RECONNECTION_PAUSE_REQUIRED'}}},false);
+    return lifecycleOutcome('META_CUSTOMER_RECONNECTION_PAUSE_REQUIRED','REVIEW_REQUIRED');
+   }
+   const prepared=await profile(client,c),ready=provider&&metaCustomerTransportReady(provider.readiness());
+   if(!ready||!prepared?.configured||prepared.numberMode!=='BUSINESS_APP'||s.verified!==true||!Number.isFinite(Date.parse(s.verifiedAt))){
+    await save(client,c,{customerLifecycle:{...lifecycle,recovery:{...recovery,state:'REVIEW_REQUIRED',reconnectEventId:event.id,reconnectedAt:lifecycle.observedAt,leaseToken:context.leaseToken,lastCode:'META_CUSTOMER_RECONNECTION_PREPARATION_REQUIRED'}}});
+    return {reconnect:true,preparationError:true};
+   }
+   const token=decryptCustomerSecret(c.encryptedAccessToken,{organizationId:c.organizationId,projectId:c.projectId,purpose:'access-token',resourceId:c.phoneNumberId},environment);
+   const verifying={...recovery,state:'VERIFYING',reconnectEventId:event.id,reconnectedAt:lifecycle.observedAt,leaseToken:context.leaseToken,lastCode:null};
+   await save(client,c,{customerLifecycle:{...lifecycle,recovery:verifying}});
+   return {reconnect:true,channel:c,token,profileDigest:digest(prepared),recoveryDigest:metaCustomerContentDigest(verifying),grantDigest:digest([s.verified,s.verifiedAt,c.metadata.customerSignupId])};
   }
   let s=c.metadata.coexistence;
   if(!s?.verified)return {kind:'COEXISTENCE_SOURCE_REVIEW',reviewState:'REVIEW_REQUIRED',businessApplied:false,replySent:false};
@@ -112,5 +161,28 @@ export function createMetaCustomerAppProjection({connect,environment=process.env
   else if(payload.field==='smb_message_echoes')s={...s,echoes:(s.echoes||0)+inserted,lastEchoAt:observedAt};
   await client.query(`UPDATE public."WhatsAppConnection" SET metadata=metadata||$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[c.id,c.projectId,JSON.stringify({coexistence:s})]);
   return {kind:'COEXISTENCE_SOURCE',reviewState:'OBSERVED',businessApplied:false,replySent:false,receiptId:'meta_app_receipt_'+digest([event.id,event.payload.payloadDigest]),identityStatus:'NOT_APPLICABLE'};
- });}};
+ });
+ if(!claimed?.reconnect)return claimed;
+ try{
+  if(claimed.preparationError)throw new WorkspaceError('META_CUSTOMER_RECONNECTION_PREPARATION_REQUIRED',409);
+  // Existing provider methods perform only GETs: debug_token, owned phone
+  // capabilities and subscribed_apps. No signup/register/history POST occurs.
+  const c=claimed.channel,verified=await provider.inspect({token:claimed.token,wabaId:c.whatsappBusinessId,phoneNumberId:c.phoneNumberId,numberMode:'BUSINESS_APP'});
+  if(verified.phoneNumberId!==c.phoneNumberId||verified.isOnBizApp!==true||verified.platformType!=='CLOUD_API'||verified.registered!==true||!hasMetaCustomerRequiredScopes(verified.scopes)||verified.expiresAt&&(!Number.isFinite(Date.parse(verified.expiresAt))||Date.parse(verified.expiresAt)<=now()+60000))throw new WorkspaceError('META_CUSTOMER_RECONNECTION_PROVIDER_EVIDENCE_REQUIRED',409);
+  if(await provider.inspectSubscription({token:claimed.token,wabaId:c.whatsappBusinessId})!==true)throw new WorkspaceError('META_CUSTOMER_SUBSCRIPTION_UNCONFIRMED',409);
+  return await locked(context,async(client,current,event,payload)=>{
+   const s=current.metadata.coexistence,recovery=customerLifecycleRecovery(current);
+   if(payload.value?.event!=='ACCOUNT_RECONNECTED'||current.id!==c.id||current.phoneNumberId!==c.phoneNumberId||current.whatsappBusinessId!==c.whatsappBusinessId||current.encryptedAccessToken!==c.encryptedAccessToken||current.metadata.customerLifecycle?.sourceEventId!==event.id||metaCustomerContentDigest(recovery)!==claimed.recoveryDigest||digest([s.verified,s.verifiedAt,current.metadata.customerSignupId])!==claimed.grantDigest||digest(await profile(client,current))!==claimed.profileDigest||!metaCustomerTransportReady(provider.readiness()))throw new WorkspaceError('META_CUSTOMER_RECONNECTION_CHANGED',409);
+   const unchangedActivation=digest(current.metadata.customerActivation||null)===recovery.activationDigest,wasAccepted=current.metadata.customerActivation?.version===1&&current.metadata.customerActivation.state==='ACTIVE'&&typeof current.metadata.customerActivation.actorId==='string';
+   const restore=recovery.previouslyEnabled===true&&unchangedActivation&&wasAccepted;
+   const state=restore?'RESTORED':current.enabled?'MANUAL_REVIEW_REQUIRED':'KEPT_DISABLED',lastCode=restore?null:unchangedActivation?null:'META_CUSTOMER_RECONNECTION_MANUAL_OVERRIDE';
+   const settled={...recovery,state,verifiedAt:new Date(now()).toISOString(),leaseToken:null,lastCode};
+   await save(client,current,{customerSubscribed:true,customerVerification:verified,customerLifecycle:{...current.metadata.customerLifecycle,recovery:settled}},restore?true:current.enabled);
+   return lifecycleOutcome(lastCode,state==='MANUAL_REVIEW_REQUIRED'?'REVIEW_REQUIRED':'OBSERVED');
+  });
+ }catch(error){
+  await locked(context,async(client,c,event)=>{const recovery=customerLifecycleRecovery(c);if(c.metadata.customerLifecycle?.sourceEventId===event.id&&recovery?.reconnectEventId===event.id&&recovery.leaseToken===context.leaseToken)await save(client,c,{customerLifecycle:{...c.metadata.customerLifecycle,recovery:{...recovery,state:'REVIEW_REQUIRED',leaseToken:null,lastCode:error instanceof WorkspaceError?error.code:'META_CUSTOMER_RECONNECTION_UNCONFIRMED'}}});}).catch(()=>{});
+  throw error;
+ }
+ }};
 }

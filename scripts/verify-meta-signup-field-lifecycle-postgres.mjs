@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {createHmac,randomUUID} from 'node:crypto';
+import {createHash,createHmac,randomUUID} from 'node:crypto';
+import {deflateSync} from 'node:zlib';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {Client,Pool} from 'pg';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
@@ -22,6 +23,11 @@ import {createMetaCustomerInbox,createMetaCustomerCallbackHandlers,splitMetaCust
 import {createMetaFieldBridge} from '../src/lib/meta-field-bridge.mjs';
 import {createMetaCustomerOutbound,customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
 import {createMetaCustomerProcessor,createMetaCustomerJobHandlers,signMetaCustomerJob} from '../src/lib/meta-customer-processing.mjs';
+import {prepareMetaKycChallenge} from '../src/lib/meta-kyc-challenge.mjs';
+import {resolveMetaKycAuthority,META_KYC_AUTHORIZATION_CODES} from '../src/lib/meta-kyc-identity.mjs';
+import {createMetaKycBridge} from '../src/lib/meta-kyc-bridge.mjs';
+import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
+import {createParticipantChannelKycDeposit} from '../src/lib/participant-channel-kyc.mjs';
 import {OBRASAAS_META_CHANNEL} from '../src/lib/meta-channel-binding.mjs';
 
 // Check the explicitly disposable target before constructing a client or engine.
@@ -39,6 +45,14 @@ const person=tenant=>({...owner(tenant),userId:tenant.workerUserId,organizationR
 const post=(endpoint,body)=>new Request('https://obrasaas.com'+endpoint,{method:'POST',headers:{Origin:'https://obrasaas.com','Content-Type':'application/json'},body:JSON.stringify(body)});
 const query=(sql,args)=>(pool.query(sql,args));
 const scheduled=[];
+// Two complete, deterministic 1px PNG files: each new capture has different
+// bytes, rather than changing only a media ID around the rejected image.
+function capturePng(rgb){
+ const crc32=bytes=>{let crc=0xffffffff;for(const byte of bytes){crc^=byte;for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;};
+ const chunk=(type,data)=>{const name=Buffer.from(type),size=Buffer.alloc(4),crc=Buffer.alloc(4);size.writeUInt32BE(data.length);crc.writeUInt32BE(crc32(Buffer.concat([name,data])));return Buffer.concat([size,name,data,crc]);};
+ const header=Buffer.alloc(13);header.writeUInt32BE(1,0);header.writeUInt32BE(1,4);header[8]=8;header[9]=2;
+ return Buffer.concat([Buffer.from('89504e470d0a1a0a','hex'),chunk('IHDR',header),chunk('IDAT',deflateSync(Buffer.from([0,...rgb]))),chunk('IEND',Buffer.alloc(0))]);
+}
 try{
  await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;
  pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
@@ -63,7 +77,7 @@ try{
  const workspace=createWorkspaceStore({connect}),setup=createCustomerWhatsAppSetup({workspace}),roster=createSiteRegister({workspace});
  const identity=createParticipantIdentityProvider({client:clerk.client,environment:()=>environment});
  const upload=createPrivateImageUploader({get:blob.get,put:blob.put,environment:()=>environment});
- const participants=createParticipantStore({workspace,connect,identity,upload:upload.uploadImageToBlob,get:blob.get});
+ const participants=createParticipantStore({workspace,connect,identity,upload:upload.uploadImageToBlob,get:blob.get,prepareKycChat:prepareMetaKycChallenge});
  const channel=createWorkerChannelStore({workspace}),operations=createFieldOperations({workspace});
  const analyzer={analyzePhoto:async()=>{analyses++;return {success:true,status:'ANALYZED_UNREVIEWED',aiAnalysis:'Controlled synthetic analysis; human review required.',requiresHumanReview:true};},transcribeAudio:async()=>({success:false,code:'SYNTHETIC_AUDIO_NOT_REQUESTED'})};
  const media=createFieldMedia({operations,get:blob.get,put:blob.put,analyzer,environment:()=>environment});
@@ -71,7 +85,9 @@ try{
  const runtime=()=>{
   const bridge=createMetaFieldBridge({connect,environment,provider,get:blob.get,put:blob.put,analyzer});
   const outbound=createMetaCustomerOutbound({connect,resolveIdentity:resolveWorkerChannelIdentity,provider,environment});
-  const processor=createMetaCustomerProcessor({connect,dispatch:context=>bridge.execute(context),outbound,environment});
+  const deposit=createParticipantChannelKycDeposit({connect,resolveAuthority:resolveMetaKycAuthority,upload:upload.uploadImageToBlob,environment});
+  const kycBridge=createMetaKycBridge({connect,provider,deposit,environment}),kycOutbound=createMetaKycOutbound({connect,provider,environment});
+  const processor=createMetaCustomerProcessor({connect,dispatch:async context=>(await kycBridge.execute(context))||bridge.execute(context),authorizationCodes:META_KYC_AUTHORIZATION_CODES,outbound:{send:(context,reply,{purpose}={})=>purpose==='KYC_CAPTURE'?kycOutbound.send(context,reply):outbound.send(context,reply),observeStatus:(...args)=>outbound.observeStatus(...args)},environment});
   return {bridge,outbound,processor};
  };
  let engines=runtime();
@@ -153,11 +169,14 @@ try{
   const unavailable=await channel.read(tenant.person,tenant.personContext);assert.equal(unavailable.records[0].eligible,false);
   const kyc=await participants.submitKyc(tenant.person,{...tenant.personContext,operationId:randomUUID(),workerId:tenant.workerId,revision:own.revision,noticeVersion:'participant-kyc-v1',consent:true,front:lifecyclePng.toString('base64'),selfie:lifecyclePng.toString('base64')});assert.equal(kyc.participant.kyc.status,'PENDING_REVIEW');
   for(const image of kyc.participant.kyc.images)assert.deepEqual((await participants.downloadKyc(tenant.owner,{...tenant.ownerContext,workerId:tenant.workerId,imageId:image.id})).bytes,lifecyclePng);
-  await participants.save(tenant.owner,{...tenant.ownerContext,operationId:randomUUID(),action:'REVIEW_KYC',payload:{workerId:tenant.workerId,revision:kyc.participant.revision,submissionId:kyc.participant.kyc.submissionId,decision:'APPROVED',reason:'Controlled distinct reviewer checked both synthetic private images.'}});
+  const review={...tenant.ownerContext,operationId:randomUUID(),action:'REVIEW_KYC',payload:{workerId:tenant.workerId,revision:kyc.participant.revision,submissionId:kyc.participant.kyc.submissionId,decision:tenant===b?'REJECTED':'APPROVED',reason:tenant===b?'Controlled human reviewer requests a new document and selfie capture.':'Controlled distinct reviewer checked both synthetic private images.'}};
+  const reviewed=await participants.save(tenant.owner,review);assert.equal(reviewed.participant.kyc.status,review.payload.decision);
+  tenant.initialReview=review;
+  if(tenant===b){tenant.rejectedReview=review;tenant.rejectedSubmissionId=kyc.participant.kyc.submissionId;}
   await operations.save(tenant.owner,{...tenant.ownerContext,operationId:randomUUID(),action:'CONFIGURE_SITE',payload:{revision:(await operations.read(tenant.owner,tenant.ownerContext)).projectRevision,sectors:[{id:'sector-'+tenant.key,name:'Sector sintético '+tenant.key.toUpperCase(),latitude:0,longitude:0,radius:100}]}});
  }
  assert.equal(clerk.sent(),2);assert.equal(blob.puts(),4);
- checks.push('actual-roster-invitation-accepted-provider-membership-private-KYC-and-distinct-canonical-review-create-both-worker-identities');
+ checks.push('actual-roster-invitation-accepted-provider-membership-private-KYC-and-distinct-canonical-review-approve-A-and-reject-B');
  await assert.rejects(onboarding.command(b.owner,{...a.command('activate_channel',{confirmActivation:true}),scope:b.ownerContext.scope}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
  for(const tenant of lifecycleTenants){
   const activation=tenant.command('activate_channel',{confirmActivation:true});const current=await invoke(tenant,activation);
@@ -167,8 +186,12 @@ try{
  }
  checks.push('explicit-owner-activation-uses-fresh-actual-provider-app-WA2-registration-and-subscription-without-human-acceptance');
  const inbox=createMetaCustomerInbox({connect,environment}),callback=createMetaCustomerCallbackHandlers({inbox,environment,schedule:ids=>{scheduled.push(...ids);}});
+ // Monotonic seconds keep KYC choices ordered while staying inside VINCULAR's
+ // real challenge clock window (30s past tolerance, 60s future tolerance).
+ const messageEpoch=Math.floor(Date.now()/1000)-10,messageSequence=new Map();
  async function receive(tenant,message,{signature=true,from=tenant.sender}={}){
-  const value={id:'wamid.SyntheticLifecycle_'+randomUUID().replaceAll('-',''),from,timestamp:String(Math.floor(Date.now()/1000)),...(typeof message==='string'?{type:'text',text:{body:message}}:message)};
+  const sequence=(messageSequence.get(tenant.key)||0)+1;messageSequence.set(tenant.key,sequence);
+  const value={id:'wamid.SyntheticLifecycle_'+randomUUID().replaceAll('-',''),from,timestamp:String(messageEpoch+sequence),...(typeof message==='string'?{type:'text',text:{body:message}}:message)};
   const payload={object:'whatsapp_business_account',entry:[{id:tenant.wabaId,changes:[{field:'messages',value:{metadata:{phone_number_id:tenant.phoneNumberId},messages:[value]}}]}]};
   const wire=JSON.stringify(payload),headers={'Content-Type':'application/json',...(signature?{'x-hub-signature-256':'sha256='+createHmac('sha256',environment.META_APP_SECRET).update(wire).digest('hex')}:{})};
   const response=await callback.POST(new Request('https://obrasaas.com/api/meta/customer-callback',{method:'POST',headers,body:wire}));
@@ -188,13 +211,47 @@ try{
   assert.ok(!JSON.stringify((await query(`SELECT metadata FROM "Worker" WHERE id=$1`,[tenant.workerId])).rows[0]).includes(value.code));
   return value.code;
  }
+ const workerKyc=async tenant=>(await query(`SELECT metadata->'participant'->'kyc' AS kyc FROM "Worker" WHERE id=$1 AND "projectId"=$2`,[tenant.workerId,tenant.projectId])).rows[0].kyc;
+ const transportCounts=()=>({puts:blob.puts(),sends:lifecycleTenants.reduce((sum,tenant)=>sum+graph.assets.get(tenant.key).sends,0),downloads:lifecycleTenants.reduce((sum,tenant)=>sum+graph.assets.get(tenant.key).downloads,0)});
+ const deniedChallenge=async tenant=>{const own=(await channel.read(tenant.person,tenant.personContext)).records[0];assert.equal(own.eligible,false);await assert.rejects(channel.command(tenant.person,{...tenant.personContext,operationId:randomUUID(),action:'REQUEST_CHALLENGE',payload:{workerId:tenant.workerId,revision:own.revision}}),{code:'WORKER_CHANNEL_KYC_REVIEW_REQUIRED'});};
+ const rejectedKyc=await workerKyc(b),beforeKyc=transportCounts();assert.equal(rejectedKyc.status,'REJECTED');assert.equal(rejectedKyc.review.actorId,b.ownerId);
+ const rejectedSubmission=(await query(`SELECT "actorId" FROM "AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND action='participant.operation.recorded' AND metadata->>'kind'='KYC_SUBMITTED' AND metadata->>'submissionId'=$3`,[b.organizationId,b.workerId,b.rejectedSubmissionId])).rows;assert.equal(rejectedSubmission.length,1);assert.notEqual(rejectedSubmission[0].actorId,rejectedKyc.review.actorId);
+ await deniedChallenge(b);const rejectedMenu=await execute(b,'MENU');assert.equal(rejectedMenu.result.businessApplied,false);assert.equal(rejectedMenu.result.replySent,false);assert.deepEqual(transportCounts(),beforeKyc);
+ const rejectedRecord=(await participants.read(b.owner,b.ownerContext)).records.find(row=>row.id===b.workerId),prepareCommand={...b.ownerContext,operationId:randomUUID(),action:'PREPARE_KYC_CHAT',payload:{workerId:b.workerId,revision:rejectedRecord.revision}};
+ const preparedKyc=await participants.save(b.owner,prepareCommand);assert.match(preparedKyc.code,/^IDENTIDAD [A-Za-z0-9_-]{43}$/);assert.equal(preparedKyc.codeUnavailable,false);
+ const preparedReplay=await participants.save(b.owner,prepareCommand);assert.equal(preparedReplay.codeUnavailable,true);assert.equal(preparedReplay.code,undefined);assert.equal(preparedReplay.receiptId,preparedKyc.receiptId);
+ await receive(b,preparedKyc.code,{signature:false});const crossedKyc=await execute(a,preparedKyc.code);assert.equal(crossedKyc.result.code,'META_KYC_CHALLENGE_REJECTED');assert.equal(crossedKyc.result.businessApplied,false);assert.equal(crossedKyc.result.replySent,false);assert.deepEqual(transportCounts(),beforeKyc);
+ const freshFront=capturePng([31,97,157]),freshSelfie=capturePng([191,61,83]),freshFrontId='1666666666666611',freshSelfieId='1666666666666612';
+ const imageHash=bytes=>createHash('sha256').update(bytes).digest('hex');assert.notEqual(imageHash(freshFront),imageHash(freshSelfie));for(const bytes of [freshFront,freshSelfie])assert.notEqual(imageHash(bytes),imageHash(lifecyclePng));
+ graph.addMedia(b.key,freshFrontId,freshFront);graph.addMedia(b.key,freshSelfieId,freshSelfie);
+ let kycStep=await execute(b,preparedKyc.code);assert.equal(kycStep.result.kind,'KYC_CHAT');assert.equal(kycStep.result.identity.status,'LIMITED_KYC_UPLOAD');assert.equal(kycStep.result.businessApplied,false);
+ kycStep=await choose(b,kycStep,'Autorizar imágenes');kycStep=await choose(b,kycStep,'Sin lectura asistida');kycStep=await choose(b,kycStep,'Sin comparación facial');
+ kycStep=await execute(b,{type:'image',image:{id:freshFrontId,mime_type:'image/png'}});kycStep=await execute(b,{type:'image',image:{id:freshSelfieId,mime_type:'image/png'}});assert.equal(blob.puts(),beforeKyc.puts);assert.equal(graph.assets.get('b').downloads,0);
+ const submittedKyc=await choose(b,kycStep,'Guardar identidad');assert.equal(submittedKyc.result.kind,'KYC_CHAT');assert.equal(submittedKyc.result.businessApplied,true);assert.equal(submittedKyc.result.replySent,true);assert.equal(blob.puts(),beforeKyc.puts+2);assert.equal(graph.assets.get('b').downloads,2);
+ const freshKyc=await workerKyc(b);assert.equal(freshKyc.status,'PENDING_REVIEW');assert.notEqual(freshKyc.submissionId,b.rejectedSubmissionId);assert.notEqual(freshKyc.contentHash,rejectedKyc.contentHash);assert.equal(freshKyc.images.length,2);assert.equal(freshKyc.review,undefined);assert.equal(freshKyc.ocrConsent.allowed,false);assert.equal(freshKyc.biometricConsent.allowed,false);assert.equal(freshKyc.channelCapture.kind,'META_KYC_CHAT');
+ for(const [imageId,bytes] of [['document-front',freshFront],['selfie',freshSelfie]]){const image=freshKyc.images.find(value=>value.id===imageId);assert.equal(image.sha256,imageHash(bytes));assert.ok(!rejectedKyc.images.some(old=>old.url===image.url));assert.deepEqual((await participants.downloadKyc(b.owner,{...b.ownerContext,workerId:b.workerId,imageId})).bytes,bytes);}
+ await assert.rejects(participants.downloadKyc(a.owner,{...b.ownerContext,scope:a.ownerContext.scope,workerId:b.workerId,imageId:'document-front'}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
+ const freshSubmission=(await query(`SELECT "actorId",metadata FROM "AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND action='participant.operation.recorded' AND metadata->>'kind'='KYC_SUBMITTED' AND metadata->>'submissionId'=$3`,[b.organizationId,b.workerId,freshKyc.submissionId])).rows;assert.equal(freshSubmission.length,1);assert.equal(freshSubmission[0].actorId,rejectedSubmission[0].actorId);assert.equal(freshSubmission[0].metadata.permissionsGranted,false);assert.equal(freshSubmission[0].metadata.whatsAppAccessGranted,false);
+ const afterCapture=transportCounts(),captureReplay=await callback.POST(new Request('https://obrasaas.com/api/meta/customer-callback',{method:'POST',headers:submittedKyc.headers,body:submittedKyc.wire}));assert.equal(captureReplay.status,200);assert.equal((await captureReplay.json()).durable,true);assert.equal((await engines.processor.process(submittedKyc.eventId)).done,true);assert.deepEqual(transportCounts(),afterCapture);
+ const spentKyc=await execute(b,preparedKyc.code);assert.equal(spentKyc.result.code,'META_KYC_CHALLENGE_REJECTED');assert.equal(spentKyc.result.replySent,false);assert.deepEqual(transportCounts(),afterCapture);
+ const staleReview=await participants.save(b.owner,b.rejectedReview);assert.equal(staleReview.replayed,true);assert.equal(staleReview.participant.kyc.status,'PENDING_REVIEW');assert.equal(staleReview.participant.kyc.submissionId,freshKyc.submissionId);await deniedChallenge(b);
+ const pendingRecord=(await participants.read(b.owner,b.ownerContext)).records.find(row=>row.id===b.workerId);
+ await assert.rejects(participants.save(b.owner,{...b.ownerContext,operationId:randomUUID(),action:'REVIEW_KYC',payload:{workerId:b.workerId,revision:pendingRecord.revision,submissionId:b.rejectedSubmissionId,decision:'APPROVED',reason:'A previous rejected submission cannot approve this new capture.'}}),{code:'PARTICIPANT_KYC_NOT_PENDING'});
+ const approveKyc={...b.ownerContext,operationId:randomUUID(),action:'REVIEW_KYC',payload:{workerId:b.workerId,revision:pendingRecord.revision,submissionId:freshKyc.submissionId,decision:'APPROVED',reason:'Controlled distinct human reviewer read both newly captured synthetic PNG files.'}};
+ await assert.rejects(participants.save(a.owner,{...approveKyc,scope:a.ownerContext.scope}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});const approvedKyc=await participants.save(b.owner,approveKyc);assert.equal(approvedKyc.participant.kyc.status,'APPROVED');assert.notEqual((await workerKyc(b)).review.actorId,freshSubmission[0].actorId);
+ const beforeBinding=transportCounts(),approvedMenu=await execute(b,'MENU');assert.equal(approvedMenu.result.code,'WORKER_CHANNEL_BINDING_REQUIRED');assert.equal(approvedMenu.result.businessApplied,false);assert.equal(approvedMenu.result.replySent,false);assert.deepEqual(transportCounts(),beforeBinding);
+ checks.push('canonical-distinct-review-rejection-requires-new-WhatsApp-challenge-and-two-new-private-PNGs-before-a-new-human-approval');
+ checks.push('KYC-HMAC-cross-tenant-spent-challenge-and-receipt-replay-have-no-duplicate-media-or-permissions-and-old-submission-cannot-approve-new-capture');
+ checks.push('new-approved-WhatsApp-KYC-still-requires-a-fresh-single-use-VINCULAR-binding-before-field-access');
  const aCode=await requestChallenge(a),bCode=await requestChallenge(b),beforeUnsigned=(await query(`SELECT count(*)::int AS n FROM "WebhookEvent"`)).rows[0].n;
  await receive(a,aCode,{signature:false});assert.equal((await query(`SELECT count(*)::int AS n FROM "WebhookEvent"`)).rows[0].n,beforeUnsigned);
  const crossed=await execute(a,bCode);assert.equal(crossed.result.businessApplied,false);assert.equal(crossed.result.code,'WORKER_CHANNEL_CHALLENGE_REJECTED');assert.equal(graph.assets.get('a').sends,0);
  for(const [tenant,code] of [[a,aCode],[b,bCode]]){
-  const bound=await execute(tenant,code);assert.equal(bound.result.kind,'CHANNEL_BOUND');assert.equal(bound.result.replySent,true);tenant.bindingEvent=bound.eventId;
+  const sendsBeforeBinding=graph.assets.get(tenant.key).sends;
+  const bound=await execute(tenant,code);assert.equal(bound.result.kind,'CHANNEL_BOUND',JSON.stringify({tenant:tenant.key,result:bound.result}));assert.equal(bound.result.replySent,true);tenant.bindingEvent=bound.eventId;
   const state=(await query(`SELECT metadata->'participant'->'channelIdentity' AS identity FROM "Worker" WHERE id=$1`,[tenant.workerId])).rows[0].identity;assert.equal(state.binding.status,'VERIFIED');assert.equal(state.binding.proofEventId,bound.eventId);assert.equal(state.challenge.status,'CONSUMED');
-  const replay=await callback.POST(new Request('https://obrasaas.com/api/meta/customer-callback',{method:'POST',headers:bound.headers,body:bound.wire}));assert.equal(replay.status,200);assert.equal((await replay.json()).durable,true);assert.equal((await query(`SELECT count(*)::int AS n FROM "WebhookEvent" WHERE id=$1`,[bound.eventId])).rows[0].n,1);assert.equal((await engines.processor.process(bound.eventId)).done,true);assert.equal(graph.assets.get(tenant.key).sends,1);
+  assert.equal(state.binding.kycSubmissionId,(await workerKyc(tenant)).submissionId);if(tenant===b)assert.notEqual(state.binding.kycSubmissionId,b.rejectedSubmissionId);
+  const replay=await callback.POST(new Request('https://obrasaas.com/api/meta/customer-callback',{method:'POST',headers:bound.headers,body:bound.wire}));assert.equal(replay.status,200);assert.equal((await replay.json()).durable,true);assert.equal((await query(`SELECT count(*)::int AS n FROM "WebhookEvent" WHERE id=$1`,[bound.eventId])).rows[0].n,1);assert.equal((await engines.processor.process(bound.eventId)).done,true);assert.equal(graph.assets.get(tenant.key).sends,sendsBeforeBinding+1);
   assert.equal((await query(`SELECT count(*)::int AS n FROM "AuditLog" WHERE action='worker.channel.identity.recorded' AND "entityId"=$1 AND metadata->>'kind'='CHANNEL_BOUND'`,[tenant.workerId])).rows[0].n,1);
  }
  checks.push('HTTP-owner-only-code-HMAC-ACK-before-dispatch-and-real-resolver-bind-once-with-unsigned-and-cross-tenant-code-rejection');
@@ -243,18 +300,19 @@ try{
  await participants.save(a.owner,{...a.ownerContext,operationId:randomUUID(),action:'REVOKE',payload:{workerId:a.workerId,revision:record.revision,reason:'Controlled revocation after callback ACK and before worker dispatch.'}});
  const denied=await engines.processor.process(revokedInput.eventId);assert.equal(denied.businessApplied,false);assert.equal(denied.replySent,false);assert.equal(graph.assets.get('a').sends,beforeRevokedSends);
  const revoked=(await participants.read(a.owner,a.ownerContext)).records.find(row=>row.id===a.workerId);await participants.save(a.owner,{...a.ownerContext,operationId:randomUUID(),action:'RESTORE_ACCESS',payload:{workerId:a.workerId,revision:revoked.revision,reason:'Controlled restoration does not restore the previous channel proof.'}});
+ const approvedReceiptReplay=await participants.save(a.owner,a.initialReview);assert.equal(approvedReceiptReplay.replayed,true);assert.equal(approvedReceiptReplay.participant.kyc.status,'APPROVED');assert.equal((await query(`SELECT metadata->'participant'->'channelIdentity'->'binding'->>'status' AS status FROM "Worker" WHERE id=$1`,[a.workerId])).rows[0].status,'REVOKED');
  const noBinding=await execute(a,'MENU');assert.equal(noBinding.result.code,'WORKER_CHANNEL_BINDING_REQUIRED');assert.equal(noBinding.result.replySent,false);assert.equal(graph.assets.get('a').sends,beforeRevokedSends);const newCode=await requestChallenge(a);const rebound=await execute(a,newCode);assert.equal(rebound.result.kind,'CHANNEL_BOUND');assert.equal(rebound.result.replySent,true);assert.notEqual(rebound.eventId,a.bindingEvent);
  assert.equal((await engines.processor.process(revokedInput.eventId)).done,true);assert.equal(graph.assets.get('a').sends,beforeRevokedSends+1);
- checks.push('canonical-revocation-after-ACK-blocks-effect-and-send-and-restoration-requires-a-new-single-use-channel-proof');
+ checks.push('canonical-revocation-after-ACK-blocks-effect-and-send-old-APPROVED-receipt-does-not-restore-access-and-restoration-requires-a-new-single-use-channel-proof');
  const privateState=JSON.stringify((await query(`SELECT metadata FROM "AuditLog" WHERE action LIKE 'meta.field.%' OR action LIKE 'worker.channel.%'`)).rows);
- for(const content of [aCode,bCode,'Caption privada sintética del circuito signup completo.','Detalle privado sintético para comprobar persistencia y recuperación.'])assert.ok(!privateState.includes(content));
+ for(const content of [aCode,bCode,preparedKyc.code,'Caption privada sintética del circuito signup completo.','Detalle privado sintético para comprobar persistencia y recuperación.'])assert.ok(!privateState.includes(content));
  for(const tenant of lifecycleTenants){
   const view=await onboarding.read(tenant.owner,tenant.ownerContext);assert.equal(view.acceptance.roundTrip,'NOT_VERIFIED');assert.equal(view.acceptance.fieldJourney,'NOT_VERIFIED');assert.equal(view.activation.fieldJourney,'NOT_VERIFIED');assert.ok(!JSON.stringify(view).includes(tenant.token));
   const bound=(await query(`SELECT metadata->'participant'->'channelIdentity'->'binding' AS binding FROM "Worker" WHERE id=$1`,[tenant.workerId])).rows[0].binding;assert.equal(bound.organizationId,tenant.organizationId);assert.equal(bound.connectionId,tenant.channelId);
  }
  assert.equal(unexpectedNetworkCalls,0);assert.deepEqual(graph.unexpected,[]);assert.ok(scheduled.length>0);
  checks.push('private-content-stays-ciphertext-and-synthetic-transport-results-never-promote-real-Meta-or-human-acceptance');
- const report={status:'PASS',environment:'local-disposable-postgresql-full-canonical-signup-field-lifecycle',checks,canonicalServices:['workspace','customer-setup','onboarding','provider-adapter','participant-invitation-and-KYC','worker-channel-resolver','signed-callback','field-bridge','field-operations','field-media','processor','outbound','delivery-status'],tenants:2,provider:'strict-controlled-Graph-fetch-only',clerk:'controlled-Backend-API-provider-only',webIdentity:'controlled-verifier-not-real-Clerk-JWT',blob:'controlled-private-byte-store',analyzer:'controlled-synthetic-image-only',realProviderCalls:0,unexpectedNetworkCalls,productionDataTouched:false,realNumberRegistered:false,realMetaAccepted:false,humanAccepted:false};
+ const report={status:'PASS',environment:'local-disposable-postgresql-full-canonical-signup-field-lifecycle',checks,checkCount:checks.length,canonicalServices:['workspace','customer-setup','onboarding','provider-adapter','participant-invitation-and-KYC','limited-WhatsApp-KYC-challenge-bridge-deposit-outbound','worker-channel-resolver','signed-callback','field-bridge','field-operations','field-media','processor','outbound','delivery-status'],tenants:2,kycRecapture:{rejectedSubmissions:1,newPrivateImages:2,distinctNewImageBytes:true,newCanonicalReviewRequired:true,newChannelBindingRequired:true},provider:'strict-controlled-Graph-fetch-only',clerk:'controlled-Backend-API-provider-only',webIdentity:'controlled-verifier-not-real-Clerk-JWT',blob:'controlled-private-byte-store',analyzer:'controlled-synthetic-image-only',realProviderCalls:0,unexpectedNetworkCalls,productionDataTouched:false,realNumberRegistered:false,realMetaAccepted:false,humanAccepted:false};
  mkdirSync('.vercel/meta-signup-field-lifecycle-evidence',{recursive:true});writeFileSync('.vercel/meta-signup-field-lifecycle-evidence/postgres.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }finally{
  globalThis.fetch=originalFetch;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {customerWhatsAppAccessDenied,customerWhatsAppNextStep,customerWhatsAppResult} from '../src/app/(identity)/cuenta/customer-whatsapp-view.mjs';
+import {customerWhatsAppAccessDenied,customerWhatsAppNextStep,customerWhatsAppNumberModeGuidance,customerWhatsAppPersonalAppGuidance,customerWhatsAppResult} from '../src/app/(identity)/cuenta/customer-whatsapp-view.mjs';
 import {WORKSPACE_NUMBER_MODES,WORKSPACE_USE_CASES,tenantWorkspaceFromMetadata} from '../src/lib/whatsapp/tenant-workspace-policy.js';
 import {customerWhatsAppReadiness} from '../src/lib/customer-whatsapp-setup.mjs';
 import {createWorkspaceRequestLifecycle} from '../src/app/(identity)/cuenta/workspace-request-lifecycle.mjs';
@@ -57,6 +57,17 @@ test('next-step copy preserves dedicated, coexistence and existing-provider revi
  const empty=customerWhatsAppNextStep(tenantWorkspaceFromMetadata(null),context.projectId);assert.equal(empty.canConsultMeta,false);
  const dedicated=customerWhatsAppNextStep(profile(),context.projectId);assert.equal(dedicated.canConsultMeta,true);assert.match(dedicated.message,/comprobar la autorización vigente/);assert.doesNotMatch(dedicated.message,/Falta autorizar/);
  for(const numberMode of ['BUSINESS_APP','EXISTING_API']){const next=customerWhatsAppNextStep({...profile(),numberMode},context.projectId);assert.equal(next.requiresAssistance,true);assert.equal(next.canConsultMeta,true);if(numberMode==='BUSINESS_APP')assert.match(next.message,/coexistencia.*elegibilidad.*conservando tu app/);else{assert.match(next.message,/autorización adicional necesita un plan/);assert.match(next.message,/no transferimos ni desconectamos tu proveedor actual/);}}
+});
+
+test('number intake keeps personal WhatsApp out of saved modes and protects an existing app or provider',()=>{
+ assert.deepEqual(WORKSPACE_NUMBER_MODES.map(mode=>mode.key),['DEDICATED','BUSINESS_APP','EXISTING_API']);
+ for(const unknown of ['PERSONAL_APP','',null,'toString'])assert.equal(customerWhatsAppNumberModeGuidance(unknown),null);
+ assert.match(customerWhatsAppPersonalAppGuidance,/WhatsApp personal no admite coexistencia/);
+ assert.match(customerWhatsAppPersonalAppGuidance,/traslado oficial a WhatsApp Business App.*copia de seguridad/);
+ assert.match(customerWhatsAppPersonalAppGuidance,/No desinstales.*ni elimines tu cuenta/);
+ const dedicated=customerWhatsAppNumberModeGuidance('DEDICATED');assert.match(dedicated.detail,/Todavía no usa WhatsApp ni un proveedor API/);assert.match(dedicated.detail,/SMS o una llamada/);assert.match(dedicated.next,/sólo para una línea libre/);
+ const business=customerWhatsAppNumberModeGuidance('BUSINESS_APP');assert.match(business.detail,/Conservá la app y el número/);assert.match(business.detail,/QR desde la app/);assert.match(business.next,/Meta decide la elegibilidad/);assert.match(business.next,/instalarlo no garantiza/);assert.match(business.next,/SMS para alta dedicada, detenelo/);assert.doesNotMatch(business.next,/\b(7|14|30) días\b/);
+ const provider=customerWhatsAppNumberModeGuidance('EXISTING_API');assert.match(provider.next,/Todavía no ejecuta una migración ni una autorización adicional/);assert.match(provider.next,/La conexión actual se conserva/);
 });
 test('only authentication/authorization/context failures require hiding the private current view',()=>{
  for(const error of [{status:401},{status:403},{code:'WORKSPACE_CONTEXT_CHANGED'},{status:404,code:'WORKSPACE_PROJECT_UNAVAILABLE'},{code:'WORKSPACE_MEMBERSHIP_REQUIRED'}])assert.equal(customerWhatsAppAccessDenied(error),true);

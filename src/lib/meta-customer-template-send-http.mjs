@@ -1,5 +1,6 @@
 import {WorkspaceError,workspaceId,operationId,requireWorkspaceIdentity} from './workspace-policy.mjs';
 import {boundedBody} from './workspace-http.mjs';
+import {customerTemplateSendKey} from './meta-customer-template-send.mjs';
 const headers={'Cache-Control':'private, no-store, max-age=0','Vary':'Cookie, Authorization','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow'};
 export function createMetaCustomerTemplateSendHandlers({verify,service}){
  async function handle(request){
@@ -14,10 +15,11 @@ export function createMetaCustomerTemplateSendHandlers({verify,service}){
     return Response.json(await service.send(session,await boundedBody(request)),{headers});
    }
    if(request.method!=='GET')return Response.json({code:'METHOD_NOT_ALLOWED'},{status:405,headers});
-   for(const key of params.keys())if(!['projectId','scope','operationId'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('META_CUSTOMER_TEMPLATE_SEND_INVALID');
+   for(const key of params.keys())if(!['projectId','scope','operationId','templateKey'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('META_CUSTOMER_TEMPLATE_SEND_INVALID');
    const projectId=params.get('projectId'),scope=params.get('scope'),id=params.get('operationId');
-   if(!workspaceId(projectId)||!/^[a-f0-9]{64}$/.test(scope||'')||params.has('operationId')&&!operationId(id))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_SEND_INVALID');
-   return Response.json(await service.read(session,{projectId,scope,...(id?{operationId:id}:{})}),{headers});
+   const templateKey=params.get('templateKey');
+   if(!workspaceId(projectId)||!/^[a-f0-9]{64}$/.test(scope||'')||params.has('operationId')&&!operationId(id)||params.has('templateKey')&&!customerTemplateSendKey(templateKey))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_SEND_INVALID');
+   return Response.json(await service.read(session,{projectId,scope,...(id?{operationId:id}:{}),...(templateKey?{templateKey}:{})}),{headers});
   }catch(error){return Response.json({saved:false,code:error instanceof WorkspaceError?error.code:'META_CUSTOMER_TEMPLATE_SEND_UNCONFIRMED'},{status:error instanceof WorkspaceError?error.status:503,headers});}
  }
  return {GET:handle,POST:handle};

@@ -9,6 +9,16 @@ export const META_APP_IMPORT_NOTICE_SHA256=digest(META_APP_IMPORT_NOTICE);
 const types={contacts:'smb_app_state_sync',history:'history'};
 const selectedKeys=['action','operationId','projectId','scope','signupId','contactsConsent','historyConsent','noticeVersion','confirmPreserveApp'];
 const terminal=new Set(['REQUEST_ACCEPTED','REQUEST_UNKNOWN','COMPLETED','DECLINED','RECEIVING','PROVIDER_COMPLETE_OBSERVED']);
+// One authoritative lifecycle restriction for every customer channel. The
+// fallback reads an older coexistence snapshot without writing a second lane.
+export function customerLifecycleRecovery(connection){
+ const lifecycle=connection?.metadata?.customerLifecycle,stored=lifecycle?.recovery||connection?.metadata?.coexistence?.recovery;
+ if(stored)return stored;
+ // Older deployments recorded a disconnect without a recovery cursor. Keep
+ // that restriction through later observations; its prior enablement is unknown.
+ if(['partner_removed','account_disconnected','account_offboarded','account_reconnected'].includes(lifecycle?.event))return {version:1,state:'MANUAL_REVIEW_REQUIRED',automatic:false,authorizationSignupId:lifecycle.authorizationSignupId||connection.metadata.customerSignupId||null,previouslyEnabled:false,pausedAt:lifecycle.observedAt||null,pauseEventId:lifecycle.sourceEventId||null,reason:lifecycle.reason||null,initiatedBy:lifecycle.initiatedBy||null,lastCode:'META_CUSTOMER_LEGACY_LIFECYCLE_REVIEW_REQUIRED'};
+ return null;
+}
 export function customerSignupFlow(readiness,numberMode){
  const flow=readiness.flows?.[numberMode];
  if(readiness.canLaunchMeta!==true||readiness.signupVersion!=='4'||flow?.available!==true||!flow.configId)throw new WorkspaceError(numberMode==='BUSINESS_APP'?'META_CUSTOMER_COEXISTENCE_CONFIGURATION_PENDING':'META_CUSTOMER_CONFIGURATION_PENDING',503);
@@ -18,10 +28,14 @@ export function publicCustomerCoexistence(connection,readiness,time=Date.now()){
  const stored=connection?.metadata?.coexistence;
  if(!stored)return null;
  const deadline=Date.parse(stored.syncDeadlineAt),expired=Number.isFinite(deadline)&&time>deadline;
+ const recovery=customerLifecycleRecovery(connection),lifecycle=connection?.metadata?.customerLifecycle||stored.lifecycle;
+ const paused=recovery&&!['RESTORED','KEPT_DISABLED'].includes(recovery.state);
  const publicStep=value=>({state:value?.state==='REQUEST_STARTED'&&Date.parse(value.leaseExpiresAt)<=time?'REQUEST_UNKNOWN':value?.state||'NOT_SELECTED',requestId:value?.requestId||null,requestedAt:value?.requestedAt||null,observedAt:value?.observedAt||null,progress:Number.isInteger(value?.progress)?value.progress:null,records:Number.isSafeInteger(value?.records)?value.records:0});
  return {mode:'BUSINESS_APP',verified:stored.verified===true,verifiedAt:stored.verifiedAt||null,syncDeadlineAt:stored.syncDeadlineAt||null,expired,contacts:publicStep(stored.contacts),history:publicStep(stored.history),echoes:Number.isSafeInteger(stored.echoes)?stored.echoes:0,
-  canSelectImport:readiness.flows?.BUSINESS_APP?.available===true&&stored.verified===true&&!expired&&!stored.importConsent,
-  canContinueImport:readiness.flows?.BUSINESS_APP?.available===true&&stored.verified===true&&!expired&&Boolean(stored.importConsent)&&['contacts','history'].some(kind=>stored.importConsent[kind]===true&&stored[kind]?.state==='NOT_REQUESTED'),
+  lifecycle:lifecycle?{event:lifecycle.event,reason:lifecycle.reason||null,initiatedBy:lifecycle.initiatedBy||null,observedAt:lifecycle.observedAt||null}:null,
+  recovery:recovery?{state:recovery.state,previouslyEnabled:recovery.previouslyEnabled===true,pausedAt:recovery.pausedAt||null,reconnectedAt:recovery.reconnectedAt||null,verifiedAt:recovery.verifiedAt||null,reason:recovery.reason||null,initiatedBy:recovery.initiatedBy||null,lastCode:recovery.lastCode||null}:null,
+  canSelectImport:!paused&&readiness.flows?.BUSINESS_APP?.available===true&&stored.verified===true&&!expired&&!stored.importConsent,
+  canContinueImport:!paused&&readiness.flows?.BUSINESS_APP?.available===true&&stored.verified===true&&!expired&&Boolean(stored.importConsent)&&['contacts','history'].some(kind=>stored.importConsent[kind]===true&&stored[kind]?.state==='NOT_REQUESTED'),
   importSelection:stored.importConsent?{operationId:stored.importConsent.operationId,contacts:stored.importConsent.contacts,history:stored.importConsent.history}:null,
   noticeVersion:META_APP_IMPORT_NOTICE_VERSION,notice:META_APP_IMPORT_NOTICE,
   historyCompleteGuaranteed:false,identityCertified:false,operationalVerified:false};
@@ -35,6 +49,7 @@ export function createMetaCustomerCoexistence({workspace,provider,environment=pr
   const rows=(await client.query(`SELECT id,"projectId","phoneNumberId","whatsappBusinessId","encryptedAccessToken",metadata FROM public."WhatsAppConnection" WHERE "projectId"=$1 FOR UPDATE`,[project.id])).rows;
   const c=rows[0];
   if(rows.length!==1||c.metadata?.credentialFormat!=='tenant-aad-v2'||c.metadata.credentialOrganizationId!==member.organizationId||c.metadata.customerSignupId!==state.id||c.phoneNumberId!==state.phoneNumberId||c.whatsappBusinessId!==state.wabaId||c.metadata.coexistence?.verified!==true)throw new WorkspaceError('META_CUSTOMER_BINDING_INTEGRITY',409);
+  const recovery=customerLifecycleRecovery(c);if(recovery&&!['RESTORED','KEPT_DISABLED'].includes(recovery.state))throw new WorkspaceError('META_CUSTOMER_SYNC_PAUSED',409);
   return c;
  }
  async function save(client,c,coexistence){

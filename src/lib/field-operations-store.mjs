@@ -8,7 +8,7 @@ import { compareProgressMeasurementQuantities } from './progress-measurement-qua
 
 const revision = name => `to_char(${name},'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const newId = prefix => prefix+'_'+randomUUID().replaceAll('-','');
-function assertProgressContinuity(current, proposed) {
+export function assertProgressContinuity(current, proposed) {
   if(proposed.progress<current.progress)throw new WorkspaceError('FIELD_PROGRESS_REGRESSION',409);
   const approved=current.metadata?.fieldOperations?.quantity;
   if(!approved)return;

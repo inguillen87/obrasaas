@@ -51,10 +51,10 @@ async function scenario(mode,width=390){
   await request.respond({status,contentType:'application/json',body:JSON.stringify(body),headers:{'Cache-Control':'private, no-store'}});
  }catch(error){errors.push({mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Consultar disponibilidad');
- if(mode==='consent-renewal-required'){await wait(page,'necesita renovación');assert.equal(posts.length,0);assert.equal((await refs(page)).length,0);assert.ok(await page.$eval('select',element=>element.disabled));checks.push('canonical-consent-renewal-reason-is-readable-and-no-send-is-available');await context.close();return;}
+ if(mode==='consent-renewal-required'){await wait(page,'necesita renovación');assert.equal(posts.length,0);assert.equal((await refs(page)).length,0);assert.ok(await page.$eval('select[name=workerId]',element=>element.disabled));checks.push('canonical-consent-renewal-reason-is-readable-and-no-send-is-available');await context.close();return;}
  if(['empty','denied','foreign'].includes(mode)){await wait(page,mode==='empty'?'Todavía no hay un envío disponible':mode==='denied'?'No se pudo confirmar':'No se pudo comprobar');assert.equal(posts.length,0);assert.ok(!((await page.evaluate(()=>document.body.innerText)).includes('Mensaje para Persona')));checks.push(mode+'-no-private-or-send-controls');await context.close();return;}
  if(mode==='history'){await wait(page,'Envíos recientes de tu cuenta');await page.click('summary');await click(page,'Consultar este envío');await wait(page,'Meta informó entrega');assert.equal(posts.length,0);assert.equal(gets.filter(value=>value.includes('operationId')).length,1);checks.push('durable-history-delivery-read-is-GET-only');await context.close();return;}
- await wait(page,'Persona de ensayo');await page.select('select','worker-a');assert.equal(await page.$eval('button[type=submit]',button=>button.disabled),true);await page.click('input[type=checkbox]');await page.waitForFunction(()=>document.querySelector('#project').disabled,{timeout:15000});assert.equal(await page.$eval('#project',button=>button.disabled),true);
+ await wait(page,'Persona de ensayo');await page.select('select[name=workerId]','worker-a');assert.equal(await page.$eval('button[type=submit]',button=>button.disabled),true);await page.click('input[type=checkbox]');await page.waitForFunction(()=>document.querySelector('#project').disabled,{timeout:15000});assert.equal(await page.$eval('#project',button=>button.disabled),true);
  if(width!==390||mode==='accepted')await page.screenshot({path:path.join(evidence,`template-send-${width}.png`),fullPage:true});
  if(['sdk-fail','sdk-hang','identity-cancel'].includes(mode))await page.evaluate(value=>{window.__tokenMode=value==='sdk-fail'?'fail':'hang';},mode);
  await click(page,'Enviar recordatorio autorizado');
@@ -69,14 +69,60 @@ async function scenario(mode,width=390){
   if(mode==='malformed-get'){await click(page,'Comprobar envío sin repetirlo');await wait(page,'No se pudo comprobar el resultado');assert.equal((await refs(page)).length,1);assert.equal(posts.length,1);wrongRecovery=false;}
   if(mode==='recover-denied')denyRecover=true;
   await click(page,'Comprobar envío sin repetirlo');await wait(page,mode==='not-observed'?'Todavía no se observa':mode==='recover-denied'?'Cambió tu acceso':'Meta informó entrega');
-  assert.equal(posts.length,1);assert.equal((await refs(page)).length,['not-observed','recover-denied'].includes(mode)?1:0);if(mode==='recover-denied')assert.equal(await page.$('select'),null);
+  assert.equal(posts.length,1);assert.equal((await refs(page)).length,['not-observed','recover-denied'].includes(mode)?1:0);if(mode==='recover-denied')assert.equal(await page.$('select[name=workerId]'),null);
   checks.push(mode+'-same-operation-GET-recovery-no-resend');await context.close();return;
  }
  await wait(page,'Meta aceptó');assert.equal(posts.length,1);assert.equal((await refs(page)).length,0);assert.ok((await page.evaluate(()=>document.body.innerText)).includes('entrega todavía no está confirmada'));await click(page,'Consultar estado de entrega');await wait(page,'Meta informó entrega');assert.equal(posts.length,1);checks.push('reviewed-template-accepted-vs-delivered-'+width);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await context.close();
 }
+const progressKey='progress_review_notification',proposalReference={proposalId:'proposal-a',revision:'2026-10-06T03:00:00.123456'};
+const progressSnapshot=()=>({...snapshot(),template:{key:progressKey,title:'Propuesta de avance pendiente de revisión',bodyText:'Hay una propuesta de avance pendiente de revisión en Obra de ensayo. Consultá la evidencia y registrá tu decisión en ObraSaaS.',providerStatus:'APPROVED',canSend:true},records:[{workerId:'worker-a',name:'Directora habilitada',eligible:true},{workerId:'worker-b',name:'Autor de esta propuesta',eligible:true}],proposals:[{...proposalReference,title:'Hormigonado del sector norte',eligibleWorkerIds:['worker-a']},{proposalId:'proposal-b',revision:'2026-10-06T03:00:01.000001',title:'Avance propio de la directora',eligibleWorkerIds:['worker-b']}],recent:[]});
+const progressOutcome=(command,state='ACCEPTED',extra={})=>({...outcome(command,state,extra),receipt:{id:'progress-outbound-fixture',operationId:command.operationId,workerId:command.workerId,templateKey:progressKey,actionReference:{...command.actionReference}},...extra});
+async function progressScenario(mode,width=390){
+ const context=await browser.createBrowserContext(),page=await context.newPage();activePage=page;activeScenario={mode:'progress-'+mode,width};await page.setViewport({width,height:1050});page.on('pageerror',error=>errors.push({mode:'progress-'+mode,width,message:error.message}));
+ const posts=[],gets=[];let saved,wrong=true;
+ await page.setRequestInterception(true);page.on('request',async request=>{try{
+  const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw new Error('Unexpected external request');}if(url.pathname!=='/api/identity/template-send')return request.continue();assert.equal(request.headers().authorization,'Bearer active-tab-a');let body,status=200;
+  if(request.method()==='POST'){
+   const command=JSON.parse(request.postData());assert.deepEqual(Object.keys(command).sort(),['actionReference','operationId','projectId','scope','templateKey','workerId']);assert.equal(command.templateKey,progressKey);assert.deepEqual(command.actionReference,proposalReference);assert.equal(command.workerId,'worker-a');posts.push(command);saved=command;
+   if(mode==='uncertain'||mode==='corrupt-receipt'){status=503;body={code:'META_CUSTOMER_TEMPLATE_SEND_UNCONFIRMED'};}
+   else if(mode==='stale'){status=409;body={code:'META_CUSTOMER_TEMPLATE_SEND_STATE_CHANGED'};}
+   else if(mode==='duplicate'){status=409;body={code:'META_CUSTOMER_TEMPLATE_SUBJECT_ALREADY_NOTIFIED'};}
+   else body=progressOutcome(command);
+  }else{
+   gets.push(url.search);
+   if(url.searchParams.has('operationId')){
+    assert.equal(url.searchParams.get('operationId'),saved.operationId);
+    body=progressOutcome(saved,'STATUS_OBSERVED',{providerStatus:'delivered',deliveryConfirmed:true});
+    if(mode==='corrupt-receipt'&&wrong)body.receipt.actionReference={...proposalReference,proposalId:'foreign-proposal'};
+   }else{
+    assert.equal(url.searchParams.get('templateKey'),progressKey);body=progressSnapshot();
+    if(mode==='empty')body={...body,canSend:false,template:{...body.template,canSend:false},proposals:[],records:body.records.map(row=>({...row,eligible:false}))};
+    if(mode==='mixed-snapshot')body.template.key=templateKey;
+    if(mode==='history'){saved={scope,projectId:'p-a',workerId:'worker-a',templateKey:progressKey,actionReference:{...proposalReference},operationId:'01234567-89ab-4cde-8fab-0123456789ab'};body.recent=[progressOutcome(saved)];}
+   }
+  }
+  await request.respond({status,contentType:'application/json',body:JSON.stringify(body),headers:{'Cache-Control':'private, no-store'}});
+ }catch(error){errors.push({mode:'progress-'+mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
+ await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await page.select('select[name=templateKey]',progressKey);await click(page,'Consultar disponibilidad');
+ if(mode==='mixed-snapshot'){await wait(page,'No se pudo comprobar');assert.equal(posts.length,0);assert.equal(await page.$('select[name=proposalId]'),null);checks.push('progress-mixed-snapshot-is-hidden-without-send');await context.close();return;}
+ if(mode==='empty'){await wait(page,'Todavía no hay un envío disponible');assert.equal(posts.length,0);assert.ok(await page.$eval('select[name=proposalId]',element=>element.disabled));checks.push('progress-no-pending-proposal-no-send');await context.close();return;}
+ if(mode==='history'){await wait(page,'Envíos recientes de tu cuenta');await page.click('summary');await click(page,'Consultar este envío');await wait(page,'Meta informó entrega');assert.equal(posts.length,0);assert.ok((await page.evaluate(()=>document.body.innerText)).includes('no aprueba la propuesta ni modifica tareas o el Gantt'));checks.push('progress-historical-reference-GET-only-and-no-approval');await context.close();return;}
+ await wait(page,'Hormigonado del sector norte');assert.ok(await page.$eval('select[name=workerId]',element=>element.disabled));await page.select('select[name=proposalId]','proposal-a');
+ assert.deepEqual(await page.$$eval('select[name=workerId] option',options=>options.map(option=>option.value)),['','worker-a']);assert.ok(!(await page.$eval('select[name=workerId]',element=>element.textContent)).includes('Autor de esta propuesta'));
+ await page.select('select[name=workerId]','worker-a');assert.ok(await page.$eval('button[type=submit]',element=>element.disabled));await page.click('input[type=checkbox]');await page.waitForFunction(()=>document.querySelector('#project').disabled);assert.ok(await page.$eval('select[name=templateKey]',element=>element.disabled));
+ if(mode==='accepted'){assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));const targets=await page.$$eval('section button:not(:disabled), section select:not(:disabled), section label:has(input[type=checkbox])',elements=>elements.map(element=>({width:element.getBoundingClientRect().width,height:element.getBoundingClientRect().height})));assert.ok(targets.every(target=>target.height>=44&&target.width>=44));await page.screenshot({path:path.join(evidence,`progress-review-send-${width}.png`),fullPage:true});}
+ await click(page,'Enviar aviso de revisión autorizado');
+ if(['stale','duplicate'].includes(mode)){await wait(page,mode==='stale'?'Cambió la jornada, la propuesta':'ya tiene un aviso registrado');assert.equal(posts.length,1);assert.equal((await refs(page)).length,0);assert.ok(await page.$eval('button[type=submit]',element=>element.disabled));assert.ok((await page.evaluate(()=>document.body.innerText)).includes(saved.operationId));assert.deepEqual(saved.actionReference,proposalReference);checks.push('progress-'+mode+'-keeps-attempt-reference-and-requires-refresh-without-resend');await context.close();return;}
+ if(['uncertain','corrupt-receipt'].includes(mode)){await wait(page,'sin confirmar');const entries=await refs(page);assert.equal(entries.length,1);assert.equal(entries[0].templateKey,progressKey);assert.equal(entries[0].workerId,'worker-a');assert.deepEqual(entries[0].actionReference,proposalReference);assert.ok(await page.$eval('select[name=proposalId]',element=>element.disabled));
+  if(mode==='corrupt-receipt'){await click(page,'Comprobar envío sin repetirlo');await wait(page,'No se pudo comprobar el resultado');assert.equal((await refs(page)).length,1);wrong=false;}
+  await click(page,'Comprobar envío sin repetirlo');await wait(page,'Meta informó entrega');assert.equal(posts.length,1);assert.equal((await refs(page)).length,0);checks.push('progress-'+mode+'-exact-subject-GET-recovery-and-no-second-POST');
+ }else{await wait(page,'Meta aceptó');assert.equal((await refs(page)).length,0);await click(page,'Consultar estado de entrega');await wait(page,'Meta informó entrega');checks.push('progress-review-proposal-and-author-exclusion-'+width);}
+ assert.equal(posts.length,1);assert.ok((await page.evaluate(()=>document.body.innerText)).includes('no aprueba la propuesta ni modifica tareas o el Gantt'));await context.close();
+}
 function stopOwned(pid){const result=spawnSync('taskkill.exe',['/PID',String(pid),'/T','/F'],{stdio:'ignore'});if(result.status!==0){try{process.kill(pid,0);}catch(error){if(error.code==='ESRCH')return;throw error;}assert.equal(result.status,0,'Owned process cleanup failed');}}
 try{let ready=false;for(let n=0;n<100;n++){if(server.exitCode!==null)throw new Error('Fixture server exited');try{if((await fetch(origin)).ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,500));}assert.ok(ready);browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
  for(const width of [320,390,768,1280])await scenario('accepted',width);for(const mode of ['uncertain','provider-unknown','recover-sdk-fail','recover-denied','not-observed','provider-rejected','state-changed','empty','denied','foreign','sdk-fail','sdk-hang','identity-cancel','history','malformed-post','malformed-get','notice-changed','consent-renewal-required'])await scenario(mode);
+ for(const width of [320,390,768,1280])await progressScenario('accepted',width);for(const mode of ['uncertain','corrupt-receipt','stale','duplicate','empty','mixed-snapshot','history'])await progressScenario(mode);
  assert.deepEqual(errors,[]);
 }catch(error){failure=error;let snapshot=null;if(activePage&&!activePage.isClosed()){snapshot=await activePage.evaluate(()=>({text:document.body.innerText,buttons:[...document.querySelectorAll('button')].map(button=>({text:button.textContent,disabled:button.disabled}))})).catch(()=>null);await activePage.screenshot({path:path.join(evidence,'browser-failure.png'),fullPage:true}).catch(()=>{});}writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({message:error.message,scenario:activeScenario,checks,errors,snapshot,log},null,2));}
 finally{if(process.platform==='win32'){if(browser){const pid=browser.process().pid;browser.disconnect();stopOwned(pid);}stopOwned(server.pid);}else{await browser?.close();try{process.kill(-server.pid,'SIGTERM');}catch{}}

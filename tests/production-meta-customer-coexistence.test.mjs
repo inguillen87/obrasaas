@@ -2,14 +2,46 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createMetaCustomerProvider,metaCustomerReadiness} from '../src/lib/meta-customer-provider.mjs';
 import {OBRASAAS_META_CHANNEL} from '../src/lib/meta-channel-binding.mjs';
-import {customerSignupFlow,publicCustomerCoexistence} from '../src/lib/meta-customer-coexistence.mjs';
+import {customerSignupFlow,publicCustomerCoexistence,customerLifecycleRecovery} from '../src/lib/meta-customer-coexistence.mjs';
 import {splitMetaCustomerEvents,verifyMetaCustomerSignature} from '../src/lib/meta-customer-callback.mjs';
 import {customerAppRecords} from '../src/lib/meta-customer-app-projection.mjs';
 import {customerInboxSnapshot,customerInboxEventTitle} from '../src/app/(identity)/cuenta/customer-inbox-view.mjs';
 import {metaOnboardingSnapshot} from '../src/app/(identity)/cuenta/meta-onboarding-readiness-view.mjs';
-import {publicCustomerActivation} from '../src/lib/meta-customer-activation.mjs';
+import {publicCustomerActivation,customerActivationLifecycleReady} from '../src/lib/meta-customer-activation.mjs';
+import {customerChannelActive} from '../src/lib/meta-customer-outbound.mjs';
 const environment={NEXT_PUBLIC_META_APP_ID:OBRASAAS_META_CHANNEL.appId,META_APP_SECRET:'synthetic-secret-only-12345678',META_CONFIG_ID:'123456789012345',META_COEXISTENCE_CONFIG_ID:'123456789012346',META_GRAPH_API_VERSION:'v25.0',META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,24).toString('base64'),META_EMBEDDED_SIGNUP_VERSION:'4',OBRASAAS_META_SIGNUP_RELEASE:'customer-self-service-v1',OBRASAAS_META_COEXISTENCE_RELEASE:'business-app-coexistence-v1',META_CUSTOMER_VERIFY_TOKEN:'synthetic-verify-token-only-'.repeat(2)};
 const debug={is_valid:true,app_id:OBRASAAS_META_CHANNEL.appId,scopes:['whatsapp_business_management','whatsapp_business_messaging'],granular_scopes:[{scope:'whatsapp_business_management',target_ids:['8888888801']}],expires_at:0};
+test('signed account lifecycle timestamps preserve replay but distinguish another offboard cycle',()=>{
+ const envelope=(event,time)=>({object:'whatsapp_business_account',entry:[{id:'8888888801',time,changes:[{field:'account_update',value:{event}}]}]});
+ const first=splitMetaCustomerEvents(envelope('ACCOUNT_OFFBOARDED',1770000000))[0],replay=splitMetaCustomerEvents(envelope('ACCOUNT_OFFBOARDED',1770000000))[0],next=splitMetaCustomerEvents(envelope('ACCOUNT_OFFBOARDED',1770000001))[0];
+ assert.equal(first.phoneNumberId,null);assert.equal(first.payload.providerTimestamp,'1770000000');assert.equal(first.externalId,replay.externalId);assert.notEqual(first.externalId,next.externalId);assert.notEqual(first.payloadDigest,next.payloadDigest);
+ for(const time of [-1,0,'unknown','1e9',1.5,Number.MAX_SAFE_INTEGER])assert.throws(()=>splitMetaCustomerEvents(envelope('ACCOUNT_RECONNECTED',time)),{code:'META_CUSTOMER_CALLBACK_INVALID'});
+});
+test('partner removal reason and initiating party are bounded private observations',()=>{
+ const parsed=customerAppRecords({field:'account_update',value:{event:'PARTNER_REMOVED',disconnection_info:{reason:'PRIMARY_INACTIVITY',initiated_by:'SYSTEM'}}});
+ assert.equal(parsed.lifecycle,'partner_removed');assert.equal(parsed.disconnectionReason,'PRIMARY_INACTIVITY');assert.equal(parsed.disconnectionInitiatedBy,'SYSTEM');assert.deepEqual(parsed.records,[]);
+ const unsafe=customerAppRecords({field:'account_update',value:{event:'PARTNER_REMOVED',disconnection_info:{reason:'private contact +549...',initiated_by:'someone'}}});assert.equal(unsafe.disconnectionReason,null);assert.equal(unsafe.disconnectionInitiatedBy,null);
+});
+test('a pause blocks activation and import until an authentic reconnect or a different canonical grant',()=>{
+ const c={metadata:{customerSignupId:'original',customerLifecycle:{event:'account_offboarded',authorizationSignupId:'original',providerTimestamp:'10'},coexistence:{verified:true,syncDeadlineAt:'2030-01-01T00:00:00.000Z',contacts:{state:'NOT_REQUESTED'},history:{state:'NOT_REQUESTED'},recovery:{state:'PAUSED',automatic:true,authorizationSignupId:'original',previouslyEnabled:true,pauseTimestamp:'10',reason:'USER_RE_REGISTERED',initiatedBy:'USER'}}}};
+ assert.equal(customerActivationLifecycleReady(c),false);let view=publicCustomerCoexistence(c,metaCustomerReadiness(environment),0);assert.equal(view.canSelectImport,false);assert.equal(view.recovery.previouslyEnabled,true);assert.equal(view.recovery.reason,'USER_RE_REGISTERED');assert.equal(view.recovery.initiatedBy,'USER');assert.doesNotMatch(JSON.stringify(view),/authorizationSignupId|activationDigest|pauseTimestamp|leaseToken/);
+ c.metadata.customerLifecycle={event:'account_reconnected',authorizationSignupId:'original',providerTimestamp:'11'};assert.equal(customerActivationLifecycleReady(c),true);
+ c.metadata.coexistence.recovery.automatic=false;c.metadata.coexistence.recovery.state='MANUAL_REVIEW_REQUIRED';assert.equal(customerActivationLifecycleReady(c),false);c.metadata.customerSignupId='new-canonical-grant';assert.equal(customerActivationLifecycleReady(c),true);
+ c.metadata.customerSignupId='original';c.metadata.coexistence.recovery.state='KEPT_DISABLED';assert.equal(customerActivationLifecycleReady(c),true);
+});
+test('ADMIN can stop a pending automatic recovery while the paused channel is already disabled',()=>{
+ const c={enabled:false,metadata:{customerActivation:{version:1,state:'ACTIVE'},customerLifecycle:{event:'account_offboarded',recovery:{state:'PAUSED',automatic:true,previouslyEnabled:true,authorizationSignupId:'original',pauseTimestamp:'10'}},customerSignupId:'original'}};
+ for(const state of ['PAUSED','VERIFYING','REVIEW_REQUIRED']){c.metadata.customerLifecycle.recovery.state=state;assert.equal(publicCustomerActivation(c,metaCustomerReadiness(environment),{role:'ADMIN'}).canDeactivate,true);assert.equal(publicCustomerActivation(c,metaCustomerReadiness(environment),{role:'DIRECTOR'}).canDeactivate,false);assert.equal(publicCustomerActivation(c,metaCustomerReadiness(environment),{role:'ADMIN'}).canActivate,false);}
+ c.metadata.customerActivation.state='DEACTIVATED';assert.equal(publicCustomerActivation(c,metaCustomerReadiness(environment),{role:'ADMIN'}).canDeactivate,false);
+});
+test('a legacy disconnect without a recovery cursor preserves a restriction and never guesses prior enablement',()=>{
+ for(const event of ['partner_removed','account_disconnected','account_offboarded','account_reconnected']){const c={enabled:false,metadata:{customerSignupId:'existing-grant',customerLifecycle:{event,observedAt:'2026-10-01T00:00:00.000Z'}}},before=JSON.stringify(c),recovery=customerLifecycleRecovery(c);assert.equal(recovery.state,'MANUAL_REVIEW_REQUIRED');assert.equal(recovery.automatic,false);assert.equal(recovery.previouslyEnabled,false);assert.equal(customerActivationLifecycleReady(c),false);assert.equal(JSON.stringify(c),before);}
+});
+test('the canonical transport closes on the same durable restriction even if stale enabled and ACTIVE flags remain',()=>{
+ const c={enabled:true,connectionStatus:'CONNECTED',metadata:{customerSubscribed:true,customerSignupId:'existing-grant',customerVerification:{registered:true,scopes:['whatsapp_business_management','whatsapp_business_messaging'],expiresAt:null},customerActivation:{version:1,state:'ACTIVE',actorId:'owner'}}};assert.equal(customerChannelActive(c),true);
+ for(const state of ['PAUSED','VERIFYING','REVIEW_REQUIRED','MANUAL_REVIEW_REQUIRED','KEPT_DISABLED']){c.metadata.customerLifecycle={event:'account_reconnected',recovery:{state,automatic:true,previouslyEnabled:true}};assert.equal(customerChannelActive(c),false);assert.equal(publicCustomerActivation(c,metaCustomerReadiness(environment),{role:'ADMIN'}).operational,false);}
+ c.metadata.customerLifecycle.recovery.state='RESTORED';assert.equal(customerChannelActive(c),true);c.metadata.customerLifecycle={event:'partner_removed'};assert.equal(customerChannelActive(c),false);
+});
 function provider(phones){const calls=[];return {calls,value:createMetaCustomerProvider({environment,fetchImpl:async(url,options)=>{calls.push({url:new URL(url),options});return Response.json(String(url).includes('debug_token')?{data:debug}:String(url).includes('smb_app_data')?{request_id:'synthetic-sync-request'}:phones);}})};}
 test('v4, dedicated coexistence configuration and independent release are all required; session schema 3 does not enable ESv3',()=>{
  const ready=metaCustomerReadiness(environment);assert.equal(customerSignupFlow(ready,'BUSINESS_APP').featureType,'whatsapp_business_app_onboarding');

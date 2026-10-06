@@ -8,8 +8,8 @@ permissions:
 jobs:
   workspace:
     runs-on: ubuntu-latest
-    # Prior full run took 40 minutes; retain every suite plus local QR camera coverage.
-    timeout-minutes: 55
+    # The full 51-step run took 54 minutes; retain every suite and allow new UI coverage.
+    timeout-minutes: 75
     services:
       postgres:
         image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
@@ -84,7 +84,7 @@ jobs:
           npx eslint scripts/verify-meta-signup-field-lifecycle-postgres.mjs scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs tests/production-meta-signup-field-lifecycle.test.mjs
           node --test tests/production-meta-signup-field-lifecycle.test.mjs
           node scripts/verify-meta-signup-field-lifecycle-postgres.mjs
-      - name: Consented manual template send and signed status recovery
+      - name: Consented attendance and progress notices with signed status recovery
         run: |
           npx eslint src/lib/meta-customer-template-send*.mjs src/lib/worker-channel-consent-policy.mjs src/app/api/identity/template-send tests/production-meta-customer-template-send.test.mjs tests/production-template-send-view.test.mjs scripts/verify-meta-customer-template-send-postgres.mjs scripts/verify-template-send-ui.mjs
           node --test tests/production-meta-customer-template-send.test.mjs tests/production-template-send-view.test.mjs
