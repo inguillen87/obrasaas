@@ -14,7 +14,7 @@ const manifest=JSON.parse(file('public/manifest.json'));
 const publicPaths=['/manifest.json','/icon-192.svg','/icon-512.svg','/brand/obrasaas-app-icon.svg','/brand/obrasaas-app-icon-192.png','/brand/obrasaas-app-icon-512.png','/brand/obrasaas-maskable-512.png'];
 const tracked=['public/sw.js',...publicPaths.map(name=>'public'+name),'src/app/fonts/inter-latin-variable.woff2','scripts/verify-pwa-browser.mjs','tests/production-access-boundary.test.mjs','tests/production-brand-v3.test.mjs','scripts/verify-brand-v3-browser.mjs','.github/workflows/production-boundary.yml'];
 const sourceManifest=tracked.map(name=>({path:name,sha256:digest(file(name))}));
-const checks=[],screenshots=[],externalRequests=[],pageErrors=[],requests=[];
+const checks=[],screenshots=[],externalRequests=[],pageErrors=[],requests=[],networkTransitions=[];
 const state={actor:'A',authorized:true};
 const privateMarker=actor=>'PRIVATE_TENANT_'+actor+'_SENTINEL';
 const documentHtml=actor=>'<!doctype html><html lang="es"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PWA fixture</title><body><h1 id="fixture-title">Ensayo aislado</h1><p id="fixture-data">'+privateMarker(actor)+'</p></body></html>';
@@ -36,22 +36,35 @@ const server=createServer((request,response)=>{
  else {status=404;body='Controlled fixture route not found';}
  log.status=status;response.writeHead(status,{'Content-Type':contentType,'Cache-Control':cacheControl,'X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; font-src 'self'; img-src 'self'"});response.end(body);
 });
-let browser,page,origin,workerSession;
+let browser,page,origin,workerSession,browserVersion;
+const offlineMode={page:false,worker:false};
 const postCount=()=>requests.filter(request=>request.method==='POST').length;
 const documentCount=()=>requests.filter(request=>request.method==='GET'&&request.path==='/cuenta').length;
 async function json(pathname,options){return page.evaluate(async(target,init)=>{const response=await fetch(target,init);return {status:response.status,type:response.headers.get('content-type'),cache:response.headers.get('cache-control'),body:await response.json()};},pathname,options);}
 async function snapshotCaches(){return page.evaluate(async()=>{
  const result=[];for(const name of await caches.keys()){const cache=await caches.open(name);result.push({name,urls:(await cache.keys()).map(request=>new URL(request.url).pathname+new URL(request.url).search)});}return result;
 });}
-async function setOffline(offline){
+async function captureNetwork(label){
+ const observed=await page.evaluate(()=>({onLine:navigator.onLine,onlineEvents:window.__onlineEvents??null,events:window.__pwaNetworkEvents??[],documentTimeOrigin:performance.timeOrigin}));
+ networkTransitions.push({label,offlineMode:{...offlineMode},...observed,documents:documentCount(),posts:postCount()});
+}
+async function setOffline(offline,label){
+ await captureNetwork(label+'-before');
  await page.setOfflineMode(offline);
+ offlineMode.page=offline;await captureNetwork(label+'-after-page');
  await workerSession.send('Network.emulateNetworkConditions',{offline,latency:0,downloadThroughput:-1,uploadThroughput:-1});
+ offlineMode.worker=offline;await captureNetwork(label+'-after-worker');
 }
 try {
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});
  origin='http://127.0.0.1:'+server.address().port;
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
+ browserVersion=await browser.version();
  page=await browser.newPage();page.on('pageerror',error=>pageErrors.push(error.message));
+ await page.evaluateOnNewDocument(()=>{
+  window.__pwaNetworkEvents=[];
+  for(const type of ['online','offline'])window.addEventListener(type,event=>{window.__pwaNetworkEvents.push({type,onLine:navigator.onLine,trusted:event.isTrusted});});
+ });
  // The fixture and worker responses restrict requests to this origin with CSP.
  // Avoid Puppeteer's Fetch interception: it can hide controlled navigations'
  // HTTPResponse objects, which are needed to assert actual offline status/MIME.
@@ -103,7 +116,7 @@ try {
  checks.push({case:'controlled-logout-401-and-tenant-change-use-network-never-cache-private-responses',realAuthentication:false});
 
  const failedPost=await json('/api/synthetic-operation',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"operation":"explicit-synthetic-attempt"}'});assert.equal(failedPost.status,503);assert.equal(postCount(),1);
- await setOffline(true);
+ await setOffline(true,'privacy-offline');
  const offlineApi=await json('/api/identity/workspace');assert.equal(offlineApi.status,503);assert.match(offlineApi.type,/application\/json/);assert.match(offlineApi.cache,/private, no-store/);assert.equal(offlineApi.body.code,'OFFLINE_AUTH_REQUIRED');assert.doesNotMatch(JSON.stringify(offlineApi.body),/PRIVATE_.*SENTINEL/);
  checks.push({case:'offline-api-is-json-503-no-store-without-private-cache-sentinels'});
  const resourcePaths=['/_next/static/fixture.js','/_next/static/fixture.css','/_next/static/fixture.woff2','/media/private-image.png','/cuenta','/cuenta?_rsc=synthetic','/manifest.json?stale=1','/brand/obrasaas-app-icon.svg/extra','/brand/private.json'];
@@ -130,6 +143,7 @@ try {
  checks.push({case:'offline-document-is-generic-branded-503-and-only-exact-public-assets-survive'});
  for(const width of [320,390,768,1280]){
   await page.setViewport({width,height:950,hasTouch:width<768});
+  await captureNetwork('viewport-'+width);
   const geometry=await page.evaluate(()=>({overflow:document.documentElement.scrollWidth>innerWidth,brandVisible:(()=>{const rectangle=document.querySelector('.brand').getBoundingClientRect();return rectangle.top>=0&&rectangle.left>=0&&rectangle.right<=innerWidth;})(),targets:[...document.querySelectorAll('a,button')].map(element=>({text:element.textContent.trim(),width:element.getBoundingClientRect().width,height:element.getBoundingClientRect().height}))}));
   assert.equal(geometry.overflow,false);assert.equal(geometry.brandVisible,true);assert.ok(geometry.targets.every(target=>target.height>=44&&target.width>=44));
   await page.focus('#offline-retry button');await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement.getAttribute('href')),'/cuenta');await page.keyboard.down('Shift');await page.keyboard.press('Tab');await page.keyboard.up('Shift');assert.equal(await page.evaluate(()=>document.activeElement.tagName),'BUTTON');
@@ -138,7 +152,8 @@ try {
  }
  const beforeReconnect={documents:documentCount(),posts:postCount()};
  await page.evaluate(()=>{window.__onlineEvents=0;window.addEventListener('online',()=>{window.__onlineEvents++;});});
- await setOffline(false);await page.waitForFunction(()=>navigator.onLine&&window.__onlineEvents===1,{timeout:15000});
+ await setOffline(false,'keyboard-reconnect');await page.waitForFunction(()=>navigator.onLine&&window.__onlineEvents===1,{timeout:15000});
+ await captureNetwork('keyboard-reconnect-settled');
  // Observe the settled online event before the only user-initiated GET. No
  // framework, session provider or background queue runs in this isolated page.
  await new Promise(resolve=>setTimeout(resolve,500));
@@ -146,9 +161,9 @@ try {
  await Promise.all([page.waitForNavigation({waitUntil:'load'}),page.keyboard.press('Enter')]);
  assert.equal(documentCount(),beforeReconnect.documents+1);assert.equal(postCount(),1);assert.equal(page.url(),origin+target);assert.equal(await page.$eval('#fixture-data',element=>element.textContent),privateMarker('B'));
  checks.push({case:'reconnection-never-navigates-or-replays-until-one-explicit-keyboard-get',explicitGetCount:1,postCount:postCount(),invitationContextPreserved:true});
- await page.setViewport({width:390,height:950,hasTouch:true});await setOffline(true);
+ await page.setViewport({width:390,height:950,hasTouch:true});await captureNetwork('touch-viewport-390');await setOffline(true,'touch-offline');
  const touchOffline=await page.goto(origin+'/cuenta?fixture=touch',{waitUntil:'load'});assert.equal(touchOffline.status(),503);
- const beforeTouch={documents:documentCount(),posts:postCount()};await setOffline(false);
+ const beforeTouch={documents:documentCount(),posts:postCount()};await setOffline(false,'touch-reconnect');
  await page.waitForFunction(()=>navigator.onLine,{timeout:15000});assert.equal(documentCount(),beforeTouch.documents);
  await Promise.all([page.waitForNavigation({waitUntil:'load'}),page.tap('#offline-retry button')]);
  assert.equal(documentCount(),beforeTouch.documents+1);assert.equal(postCount(),beforeTouch.posts);assert.equal(await page.$eval('#fixture-data',element=>element.textContent),privateMarker('B'));
@@ -156,12 +171,13 @@ try {
  assert.equal(requests.some(request=>request.path==='/dashboard'),false);
  assert.deepEqual((await snapshotCaches()).find(cache=>cache.name==='obrasaas-public-v6').urls.sort(),[...publicPaths].sort());
  assert.deepEqual(pageErrors,[]);assert.deepEqual(externalRequests,[]);
- const proof={status:'PASS',environment:'real-chrome-service-worker-trusted-http-loopback-controlled-public-and-private-fixtures',checks,sourceManifest,screenshots,requests,externalRequests,pageErrors,actualServiceWorkerTested:true,cacheUpgradeFrom:'obrasaas-public-v5',cacheVersion:'obrasaas-public-v6',realAuthentication:false,realClerkLogin:false,realProviderCalls:0,productionDataWritten:false,physicalDeviceAccepted:false,installedHomeScreenAccepted:false,automaticRecoveryPostCount:0};
+ const proof={status:'PASS',environment:'real-chrome-service-worker-trusted-http-loopback-controlled-public-and-private-fixtures',platform:process.platform,browserVersion,checks,sourceManifest,screenshots,requests,externalRequests,pageErrors,networkTransitions,actualServiceWorkerTested:true,cacheUpgradeFrom:'obrasaas-public-v5',cacheVersion:'obrasaas-public-v6',realAuthentication:false,realClerkLogin:false,realProviderCalls:0,productionDataWritten:false,physicalDeviceAccepted:false,installedHomeScreenAccepted:false,automaticRecoveryPostCount:0};
  for(const name of ['failure.json','failure.png']){const file=path.join(output,name);if(existsSync(file))unlinkSync(file);}
  writeFileSync(path.join(output,'proof.json'),JSON.stringify(proof,null,2));
  console.log(JSON.stringify({status:'PASS',checks:checks.length,widths:[320,390,768,1280],automaticRecoveryPosts:0,providerCalls:0,evidence:path.join(output,'proof.json')}));
 } catch(error) {
- writeFileSync(path.join(output,'failure.json'),JSON.stringify({message:error.message,stack:error.stack,checks,sourceManifest,requests,externalRequests,pageErrors},null,2));
+ if(page)await captureNetwork('failure').catch(()=>{});
+ writeFileSync(path.join(output,'failure.json'),JSON.stringify({message:error.message,stack:error.stack,platform:process.platform,browserVersion,checks,sourceManifest,requests,externalRequests,pageErrors,networkTransitions},null,2));
  await page?.screenshot({path:path.join(output,'failure.png'),fullPage:true}).catch(()=>{});throw error;
 } finally {
  await browser?.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));
