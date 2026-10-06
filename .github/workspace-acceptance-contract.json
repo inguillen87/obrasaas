@@ -1,0 +1,1192 @@
+{
+  "version": 1,
+  "sourceCommit": "b671dc697d9493fc171ed38432544d7a9d970968",
+  "sourceWorkflowGitBlobSha256": "f61343f8ec83df2ca814a4fb770eed8d78b18ab2f80f95b4e9e2b84d0f5e89ed",
+  "sourceWorkflowCheckoutSha256": "dceb19f6ac2ffac107ab69702f62ca595712d65a09ba548e3fee680a1c197ab6",
+  "packageLockSha256": "c6592431cb6b05524e384ce663db665b1f75c08b755435532d9c74a4519e9f28",
+  "requirementsSha256": "c7c242770337d501756cdde2437ad8e7cdc0e5d7d269481beac6e1f1abafb34d",
+  "workflow": {
+    "name": "Authorized workspace acceptance",
+    "on": {
+      "push": {
+        "branches": [
+          "master",
+          "feat/integral-worksite-*",
+          "feat/pilot-readiness-*",
+          "feat/professional-experience-*",
+          "feat/local-font-*",
+          "hotfix/production-workspace-*",
+          "hotfix/customer-whatsapp-self-service-*",
+          "hotfix/new-constructor-onboarding-*",
+          "hotfix/field-team-journal-*",
+          "fix/whatsapp-signup-*",
+          "fix/clerk-*"
+        ]
+      },
+      "workflow_dispatch": null
+    },
+    "permissions": {
+      "contents": "read"
+    },
+    "runner": "ubuntu-latest",
+    "timeout": 75,
+    "services": {
+      "postgres": {
+        "image": "postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193",
+        "env": {
+          "POSTGRES_USER": "cutover_test",
+          "POSTGRES_PASSWORD": "cutover_test",
+          "POSTGRES_DB": "obrasaas_cutover_ci"
+        },
+        "ports": [
+          "5432:5432"
+        ],
+        "options": "--health-cmd \"pg_isready -U cutover_test -d obrasaas_cutover_ci\" --health-interval 5s --health-timeout 5s --health-retries 12"
+      }
+    },
+    "env": {
+      "NEXT_TELEMETRY_DISABLED": "1",
+      "CUTOVER_TEST_DISPOSABLE": "1",
+      "CUTOVER_TEST_DATABASE_URL": "postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci",
+      "DATABASE_URL": "postgresql://build_only:build_only@127.0.0.1:5432/build_only"
+    },
+    "uploadAction": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+  },
+  "setup": [
+    {
+      "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "with": {
+        "persist-credentials": false
+      }
+    },
+    {
+      "uses": "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+      "with": {
+        "node-version": 24,
+        "package-manager-cache": false
+      }
+    },
+    {
+      "run": "npm ci --no-audit --no-fund"
+    },
+    {
+      "uses": "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1",
+      "with": {
+        "python-version": "3.12"
+      }
+    }
+  ],
+  "blocks": [
+    {
+      "id": 7,
+      "step": {
+        "name": "Private facial assistance, protocol and real public model fixtures",
+        "run": "python -m pip install --disable-pip-version-check -r requirements.txt\npython -m unittest discover -s tests -p test_private_biometric.py\npython scripts/verify-private-biometric-models.py\nnpx eslint src/lib/private-biometric-analyzer.mjs tests/production-private-biometric.test.mjs --max-warnings 0\nnode --test tests/production-private-biometric.test.mjs tests/production-biometric-boundary.test.mjs\n"
+      },
+      "commandSha256": "55c35eb9001dcfd3c4c711346a97f4222dad91eeb2e0b0ccb73185e62ff4c714"
+    },
+    {
+      "id": 8,
+      "step": {
+        "run": "node --test tests/production-disposable-postgres-cleanup.test.mjs tests/production-site-register.test.mjs tests/production-site-photo.test.mjs tests/production-workspace*.test.mjs tests/production-customer-whatsapp-setup.test.mjs tests/production-customer-whatsapp-view.test.mjs tests/production-company-onboarding.test.mjs"
+      },
+      "commandSha256": "5efb650c0d1abd7f331762f32d5d65e383356f4f3f5790d4197ca1da7e8c2915"
+    },
+    {
+      "id": 9,
+      "step": {
+        "name": "Workspace lint",
+        "run": "npx eslint scripts/lib/disposable-postgres-cleanup.mjs tests/production-disposable-postgres-cleanup.test.mjs src/lib/workspace-*.mjs src/lib/verified-session.mjs src/app/api/identity/workspace/route.js tests/production-workspace*.test.mjs scripts/verify-workspace-postgres.mjs scripts/verify-company-onboarding-postgres.mjs scripts/verify-site-register-postgres.mjs scripts/verify-site-register-ui.mjs src/lib/site-register-*.mjs src/lib/site-photo-*.mjs src/app/api/identity/site-photo/route.js tests/production-site-photo.test.mjs tests/production-site-register.test.mjs src/app/api/identity/site-register/route.js scripts/verify-company-onboarding-ui.mjs scripts/verify-company-onboarding-readonly.mjs scripts/lib/company-schema-preflight.mjs tests/production-company-schema-preflight.test.mjs src/lib/company-onboarding-*.mjs src/app/api/identity/company-onboarding/route.js src/app/api/identity/task-creation/route.js tests/production-company-onboarding.test.mjs scripts/verify-workspace-ui.mjs scripts/verify-customer-whatsapp-ui.mjs scripts/lib/meta-template-catalog-check.mjs scripts/verify-meta-template-catalog.mjs tests/production-meta-template-catalog.test.mjs src/lib/customer-whatsapp-*.mjs src/lib/whatsapp/tenant-workspace-policy.js src/lib/whatsapp/project-workspace-profile.js src/app/api/identity/whatsapp-setup/route.js tests/production-customer-whatsapp-setup.test.mjs tests/production-customer-whatsapp-view.test.mjs 'src/app/(identity)/cuenta'"
+      },
+      "commandSha256": "8d4eadb079c37454fa7c59d8afab575726048bd58594f5f8c6df704fd61e5c7a"
+    },
+    {
+      "id": 10,
+      "step": {
+        "run": "node scripts/verify-workspace-postgres.mjs"
+      },
+      "commandSha256": "479c5b4514eea5882db5c9d77a0dc21654d446f58dbf4fc0859a1287be2b149f"
+    },
+    {
+      "id": 11,
+      "step": {
+        "name": "Safe company contact adoption and preserved historical principals",
+        "run": "npx eslint scripts/lib/company-contact-migration.mjs scripts/adopt-company-contact-schema.mjs tests/production-company-contact-migration.test.mjs --max-warnings 0\nnode --test tests/production-company-contact-migration.test.mjs\n"
+      },
+      "commandSha256": "f2e55413b4dbb2255afc58b4cba37f2b34dc720a154331986fb10586773c8f95"
+    },
+    {
+      "id": 12,
+      "step": {
+        "name": "Reviewed PDF and image plan import, atomic lot and receipt recovery",
+        "run": "npx eslint src/lib/plan-import-*.mjs src/app/api/identity/plan-import 'src/app/(identity)/cuenta/plan-import-panel.js' scripts/lib/plan-import-live-check.mjs scripts/verify-plan-import-*.mjs scripts/verify-workspace-plan-recovery-ui.mjs scripts/fixtures/generate-plan-import-fixtures.mjs tests/production-plan-import*.test.mjs --max-warnings 0\nnode --test tests/production-plan-import*.test.mjs\nnode scripts/verify-plan-import-postgres.mjs\nnode scripts/verify-plan-import-boundary.mjs\nnode scripts/verify-plan-import-ui.mjs\nnode scripts/verify-workspace-plan-recovery-ui.mjs\n"
+      },
+      "commandSha256": "db8c596d759bb8ccbb678f25c7ede1d9541ce81465e27f8d4019506a23d54032"
+    },
+    {
+      "id": 13,
+      "step": {
+        "run": "node scripts/verify-site-register-postgres.mjs"
+      },
+      "commandSha256": "68df8f18dfd48287bd7d68f64877d06cda31fb16290329d3b5158579e359ae11"
+    },
+    {
+      "id": 14,
+      "step": {
+        "run": "node --test tests/production-participant*.test.mjs tests/production-field-*.test.mjs tests/production-meta-customer*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-kyc*.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs tests/production-pilot-media.test.mjs tests/production-video-frame-extractor.test.mjs tests/production-worker-channel*.test.mjs tests/production-operations-status.test.mjs tests/production-site-purchase.test.mjs tests/production-progress-measurement-quantity.test.mjs"
+      },
+      "commandSha256": "1e802325f3266046b2977f7e7c4b7465d1639eb6fed9c73a55bb96f574efab46"
+    },
+    {
+      "id": 15,
+      "step": {
+        "run": "npx eslint src/lib/pilot-media.mjs src/lib/video-frame-extractor.mjs src/lib/meta-kyc-*.mjs tests/production-meta-kyc*.test.mjs tests/production-video-frame-extractor.test.mjs tests/production-pilot-media.test.mjs --max-warnings 0"
+      },
+      "commandSha256": "e8e4eb8950cd3674b420db33e34bdd8ccf33ec6ae6a41181b80feb81acc38708"
+    },
+    {
+      "id": 16,
+      "step": {
+        "name": "Integral worksite lint",
+        "run": "npx eslint src/lib/participant-*.mjs src/lib/field-*.mjs src/lib/meta-customer-*.mjs src/lib/whatsapp/template-review-policy.js src/lib/whatsapp/obra-intent-policy.js src/lib/whatsapp/field-worker-intent-policy.js src/lib/whatsapp/operational-proposal-decision-policy.js src/lib/site-purchase-*.mjs src/lib/operations-status.mjs src/lib/geo.js src/lib/procurement-*.js src/lib/progress-measurement-quantity.js src/app/api/identity/participants src/app/api/identity/participant-join src/app/api/identity/field-operations src/app/api/identity/field-media src/app/api/identity/field-qr src/app/api/identity/site-purchases src/app/api/identity/operations-status src/app/api/identity/meta-onboarding src/app/api/meta/customer-callback scripts/verify-participants-*.mjs scripts/verify-field-operations-*.mjs scripts/verify-meta-customer-*.mjs scripts/verify-site-purchase-*.mjs tests/production-participants.test.mjs tests/production-field-operations.test.mjs tests/production-field-qr-reprint.test.mjs tests/production-meta-customer.test.mjs tests/production-site-purchase.test.mjs"
+      },
+      "commandSha256": "c8dcc88137f3d9192c44cab4ab0a4c40c335a1f40390d1fcc4e9642ed2f7bc01"
+    },
+    {
+      "id": 17,
+      "step": {
+        "run": "npx eslint tests/production-participant-receipt-access.test.mjs tests/production-participant-invitation-email.test.mjs tests/production-participant-kyc-replay.test.mjs tests/production-participant-join-replay.test.mjs --max-warnings 0"
+      },
+      "commandSha256": "5a4ffd3ef37e041c6928dd1a40d48e68a3f9f51a180b308fb88a2f575c42ff64"
+    },
+    {
+      "id": 18,
+      "step": {
+        "run": "node scripts/verify-participants-postgres.mjs"
+      },
+      "commandSha256": "83ae1f9d1c8a01cd94506e4ff1c3e160f5f63bfa45b41789c0354a703c21c1fe"
+    },
+    {
+      "id": 19,
+      "step": {
+        "run": "node scripts/verify-meta-kyc-chat-postgres.mjs"
+      },
+      "commandSha256": "3913406595a1c0c5dbfd6c54d49da925be1c386bc2f7beafb0df4034553731b5"
+    },
+    {
+      "id": 20,
+      "step": {
+        "run": "node scripts/verify-field-operations-postgres.mjs"
+      },
+      "commandSha256": "ae90bbe3526c591a7d60b273066ae84a4a79104623404c83588acfebd95fb81a"
+    },
+    {
+      "id": 21,
+      "step": {
+        "name": "Material catalog, authorized consumption and durable recovery",
+        "run": "npx eslint src/lib/material-inventory.mjs 'src/app/(identity)/cuenta/material-inventory-panel.js' 'src/app/(identity)/cuenta/material-inventory-view.mjs' scripts/verify-material-inventory-*.mjs tests/production-material-inventory.test.mjs --max-warnings 0\nnode --test tests/production-material-inventory.test.mjs\nnode scripts/verify-material-inventory-postgres.mjs\nnode scripts/verify-material-inventory-boundary.mjs\nnode scripts/verify-material-inventory-ui.mjs\n"
+      },
+      "commandSha256": "d268d9419fd1ed2a4379daa2557ccea3ccb7bcefba67366ec64ec2eaf015d106"
+    },
+    {
+      "id": 22,
+      "step": {
+        "run": "node scripts/verify-meta-customer-postgres.mjs"
+      },
+      "commandSha256": "5bbe9b2def949630c7cd5730aa89e5d4406edbba469441299ae447fa6006ea8f"
+    },
+    {
+      "id": 23,
+      "step": {
+        "name": "Feature-gated WhatsApp Business App coexistence and private source preservation",
+        "run": "npx eslint src/lib/meta-customer-coexistence.mjs src/lib/meta-customer-app-projection.mjs scripts/verify-meta-customer-coexistence-postgres.mjs tests/production-meta-customer-coexistence.test.mjs --max-warnings 0\nnode --test tests/production-meta-customer-coexistence.test.mjs\nnode scripts/verify-meta-customer-coexistence-postgres.mjs\n"
+      },
+      "commandSha256": "8d6aaca58c1089679589a8e1bf123ed44aa7113404df1bfb90cdfcc2df9d866b"
+    },
+    {
+      "id": 24,
+      "step": {
+        "name": "Customer inbox pagination and operation recovery",
+        "run": "npx eslint scripts/verify-customer-inbox-*.mjs tests/production-customer-inbox.test.mjs\nnode --test tests/production-customer-inbox.test.mjs\nnode scripts/verify-customer-inbox-postgres.mjs\n"
+      },
+      "commandSha256": "95231b4079529db0611aa9da43248c89337f2a9df9a4be1edb05cb7fe4c48ca8"
+    },
+    {
+      "id": 25,
+      "step": {
+        "name": "Meta SDK loading and explicit recovery",
+        "run": "npx eslint 'src/app/(identity)/cuenta/meta-sdk-loader.mjs' tests/production-meta-sdk-loader.test.mjs\nnode --test tests/production-meta-sdk-loader.test.mjs\n"
+      },
+      "commandSha256": "8db7dc96f140530fdd3c44b849c166248b44866e925ef63b46d0c75f22933922"
+    },
+    {
+      "id": 26,
+      "step": {
+        "name": "Channel identity and integrated field transactions",
+        "run": "npx eslint src/lib/worker-channel-*.mjs src/lib/meta-field-*.mjs src/app/api/identity/worker-channel src/app/api/meta/customer-process scripts/verify-worker-channel-*.mjs scripts/verify-meta-field-*.mjs scripts/verify-meta-customer-processing-*.mjs scripts/verify-operations-status-ui.mjs tests/production-worker-channel*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-customer-processing.test.mjs tests/production-operations-status.test.mjs\nnode scripts/verify-worker-channel-postgres.mjs\nnode scripts/verify-meta-customer-processing-postgres.mjs\nnode scripts/verify-meta-field-bridge-postgres.mjs\n"
+      },
+      "commandSha256": "2246f0872a4c7758260174677c28555af8b066761e89244c054f975e39fc2e13"
+    },
+    {
+      "id": 27,
+      "step": {
+        "name": "Restricted own-business Meta pilot and authorization expiry",
+        "run": "npx eslint src/lib/meta-development-pilot-policy.mjs src/lib/meta-customer-provider.mjs src/lib/meta-customer-onboarding.mjs src/lib/meta-customer-activation.mjs src/lib/meta-customer-app-projection.mjs src/lib/meta-customer-outbound.mjs src/lib/meta-customer-processing-runtime.mjs src/lib/meta-customer-processing.mjs src/lib/meta-field-bridge.mjs src/lib/worker-channel-identity.mjs src/lib/company-channel-store.mjs 'src/app/(identity)/cuenta/meta-onboarding-panel.js' 'src/app/(identity)/cuenta/meta-onboarding-readiness-view.mjs' tests/production-meta-development-pilot.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs scripts/verify-meta-development-pilot-postgres.mjs scripts/verify-meta-development-pilot-boundary.mjs scripts/verify-meta-development-pilot-ui.mjs scripts/verify-meta-customer-ui.mjs --max-warnings 0\nnode --test tests/production-meta-development-pilot.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs\nnode scripts/verify-meta-development-pilot-postgres.mjs\nnode scripts/verify-meta-development-pilot-boundary.mjs\nnode scripts/verify-meta-development-pilot-ui.mjs\n"
+      },
+      "commandSha256": "880b8abe54700e2b6d5c679289b61882f5426f8a8c14eec931eae39a1a85e472"
+    },
+    {
+      "id": 28,
+      "step": {
+        "name": "Signup to participant field lifecycle",
+        "run": "npx eslint scripts/verify-meta-signup-field-lifecycle-postgres.mjs scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs tests/production-meta-signup-field-lifecycle.test.mjs\nnode --test tests/production-meta-signup-field-lifecycle.test.mjs\nnode scripts/verify-meta-signup-field-lifecycle-postgres.mjs\n"
+      },
+      "commandSha256": "9e05605bc89957bfa4712e611953a7ab22b32251b0e3ceb2cff44d8813a2ef75"
+    },
+    {
+      "id": 29,
+      "step": {
+        "name": "Corporate worksite selection and canonical shared attendance",
+        "run": "npx eslint src/lib/company-channel-*.mjs src/lib/person-worksite-journey.mjs src/app/api/identity/company-channel 'src/app/(identity)/cuenta/company-channel-panel.js' 'src/app/(identity)/cuenta/company-channel-view.mjs' scripts/lib/company-channel-*.mjs scripts/adopt-company-channel-schema.mjs scripts/verify-company-channel-*.mjs tests/production-company-channel*.test.mjs --max-warnings 0\nnode --test tests/production-company-channel*.test.mjs\nnode scripts/verify-company-channel-postgres.mjs\nnode scripts/verify-company-channel-boundary.mjs\nnode scripts/verify-company-channel-ui.mjs\n"
+      },
+      "commandSha256": "c2cbea39def0fcdf701cb80c9f5b803f87c5b458be52fb425f933b84a0b553a2"
+    },
+    {
+      "id": 30,
+      "step": {
+        "name": "Consented attendance and progress notices with signed status recovery",
+        "run": "npx eslint src/lib/meta-customer-template-send*.mjs src/lib/worker-channel-consent-policy.mjs src/app/api/identity/template-send tests/production-meta-customer-template-send.test.mjs tests/production-template-send-view.test.mjs scripts/verify-meta-customer-template-send-postgres.mjs scripts/verify-template-send-ui.mjs\nnode --test tests/production-meta-customer-template-send.test.mjs tests/production-template-send-view.test.mjs\nnode scripts/verify-meta-customer-template-send-postgres.mjs\nnode scripts/verify-template-send-ui.mjs\n"
+      },
+      "commandSha256": "bfd5a6bf6a5bfb1cf3d7f16292394b0e1a2f92d538a795b29df5ec6077397757"
+    },
+    {
+      "id": 31,
+      "step": {
+        "name": "Canonical constructor CRM ownership and receipt recovery",
+        "run": "npx eslint src/lib/constructor-crm-*.mjs src/lib/enterprise-crm-policy.mjs src/app/api/identity/constructor-crm scripts/lib/constructor-crm-*.mjs scripts/verify-constructor-crm-*.mjs scripts/adopt-constructor-crm-schema.mjs tests/production-constructor-crm*.test.mjs\nnode --test tests/production-constructor-crm*.test.mjs\nnode scripts/verify-constructor-crm-adoption-postgres.mjs\nnode scripts/verify-constructor-crm-postgres.mjs\nnode scripts/verify-constructor-crm-ui.mjs\n"
+      },
+      "commandSha256": "7094ab506405fcb631033e66a36c76656a135d55de2c41e245dc08d67b24bff0"
+    },
+    {
+      "id": 32,
+      "step": {
+        "run": "node scripts/verify-site-purchase-postgres.mjs"
+      },
+      "commandSha256": "e8dbf9ace33d5599dd2baebd476f7f6aa4bc833ee00b7315d292e01e9f38e6ed"
+    },
+    {
+      "id": 33,
+      "step": {
+        "name": "Bounded demo pilot uses canonical signed inbox and isolated credentials",
+        "run": "npx eslint src/lib/meta-cloud-protocol.mjs src/lib/meta-app-*.mjs src/lib/meta-callback-diagnostics.mjs src/lib/meta-recovery-diagnostics.mjs src/lib/meta-demo-pilot*.mjs src/app/api/identity/demo-pilot src/app/api/webhooks/whatsapp tests/production-meta-callback-diagnostics.test.mjs tests/production-meta-recovery-diagnostics.test.mjs tests/production-field-proposal-evidence.test.mjs tests/production-meta-demo-pilot.test.mjs tests/production-demo-pilot-view.test.mjs scripts/verify-meta-demo-pilot-postgres.mjs scripts/fixtures/meta-demo-pilot-fixture.mjs scripts/verify-demo-pilot-ui.mjs\nnode --test tests/production-meta-callback-diagnostics.test.mjs tests/production-meta-recovery-diagnostics.test.mjs tests/production-meta-demo-pilot.test.mjs tests/production-demo-pilot-view.test.mjs\nnode scripts/verify-meta-demo-pilot-postgres.mjs\nnode scripts/verify-demo-pilot-ui.mjs\n"
+      },
+      "commandSha256": "29eb269a4688df26bbcd76ac359b84828e88fdd5ba69d6dcdbca9ad55a313a23"
+    },
+    {
+      "id": 34,
+      "step": {
+        "name": "Public manual and contextual first-use guide",
+        "run": "npx eslint src/app/manual 'src/app/(identity)/cuenta/onboarding-guide.js' scripts/verify-manual-ui.mjs scripts/verify-onboarding-guide-ui.mjs\nnode scripts/verify-manual-ui.mjs\nnode scripts/verify-onboarding-guide-ui.mjs\n"
+      },
+      "commandSha256": "49261ae6b19c88e4dc6f907e7cb5f51e0c644b5c2be3f86b4e26271994420af9"
+    },
+    {
+      "id": 35,
+      "step": {
+        "run": "node scripts/verify-participants-ui.mjs"
+      },
+      "commandSha256": "0d58d81b81d453c4d5a853c3624d1881076001c9b5a7943c70eda18f477f41cf"
+    },
+    {
+      "id": 36,
+      "step": {
+        "run": "node scripts/verify-participant-ai-ui.mjs"
+      },
+      "commandSha256": "63d596a38aa860fab602787cd25947e24a763806af50544006a40940f1d93330"
+    },
+    {
+      "id": 37,
+      "step": {
+        "name": "Bounded private KYC photo preparation and explicit visual review",
+        "run": "npx eslint scripts/verify-mobile-identity-ui.mjs tests/production-photo-preparation.test.mjs\nnode --test tests/production-photo-preparation.test.mjs\nnode scripts/verify-mobile-identity-ui.mjs\n"
+      },
+      "commandSha256": "49c8c5d220cf3d9c5151d8d983428cf2255c78e14b333b59de9d6c5c750e3ecd"
+    },
+    {
+      "id": 38,
+      "step": {
+        "name": "Mobile participant and attendance review sources",
+        "run": "npx eslint scripts/verify-mobile-workspace-review-ui.mjs --max-warnings 0\nnode scripts/verify-mobile-workspace-review-ui.mjs\n"
+      },
+      "commandSha256": "ac93d50ba59ab5e57b73462861aaeaa6673a02951f8f9d179b0de67c0d1aa61f"
+    },
+    {
+      "id": 39,
+      "step": {
+        "run": "node scripts/verify-field-operations-ui.mjs"
+      },
+      "commandSha256": "e72ce731811ea14718fc44528663774e05ace82afc8898a5d454b67d83e13175"
+    },
+    {
+      "id": 40,
+      "step": {
+        "name": "Local QR decoding and camera cancellation",
+        "run": "npx eslint scripts/verify-field-qr-ui.mjs tests/production-field-qr-reader.test.mjs --max-warnings 0\nnode scripts/verify-field-qr-ui.mjs\n"
+      },
+      "commandSha256": "79fdbc043abb59d53aaf8b4e5d7b0cb31d625ac7cfd3768fa4e580b96a15bb86"
+    },
+    {
+      "id": 41,
+      "step": {
+        "run": "node scripts/verify-meta-customer-ui.mjs"
+      },
+      "commandSha256": "c68233d49d84e1848c554a151396a5795df6a135fb4fc024f63c0fa69715cd3a"
+    },
+    {
+      "id": 42,
+      "step": {
+        "run": "node scripts/verify-worker-channel-ui.mjs"
+      },
+      "commandSha256": "4f29aa7a443c309000b847c509b0d18bf30a4ee467a701b5aababf04310dffd5"
+    },
+    {
+      "id": 43,
+      "step": {
+        "run": "node scripts/verify-operations-status-ui.mjs"
+      },
+      "commandSha256": "fd8494663986010173e2ccce7c7e8d9b4f7cf5d28abfe7fa84969d643f720e72"
+    },
+    {
+      "id": 44,
+      "step": {
+        "run": "node scripts/verify-site-purchase-ui.mjs"
+      },
+      "commandSha256": "84979bda8d675ee9f9872deeddfcaa486bb8755845c920096974e332cb74edf0"
+    },
+    {
+      "id": 45,
+      "step": {
+        "run": "node scripts/verify-site-register-ui.mjs"
+      },
+      "commandSha256": "444144fdf00b2da5aaa4112a238aebd1afc58badcf09b5f4ec43c0545bb7da5b"
+    },
+    {
+      "id": 46,
+      "step": {
+        "run": "node scripts/verify-company-onboarding-postgres.mjs"
+      },
+      "commandSha256": "244897b3d633bbd68fcb542f7eda8e31babb5db558664f0eaf826c501608873e"
+    },
+    {
+      "id": 47,
+      "step": {
+        "run": "node scripts/verify-workspace-ui.mjs"
+      },
+      "commandSha256": "be86d13d2a1b21525306c3af4f19cdfd577ef69c5d08674df063d3af64314eea"
+    },
+    {
+      "id": 48,
+      "step": {
+        "name": "Full page receipt recovery and private inbox UX",
+        "run": "npx eslint scripts/verify-workspace-reload-ui.mjs scripts/verify-customer-inbox-ui.mjs tests/production-workspace-recovery-journal.test.mjs\nnode scripts/verify-workspace-reload-ui.mjs\nnode scripts/verify-customer-inbox-ui.mjs\n"
+      },
+      "commandSha256": "67e45378460bba45da001b6bc18e774b5c5ec02f6cce63d538cd8fe633fda78b"
+    },
+    {
+      "id": 49,
+      "step": {
+        "run": "node scripts/verify-customer-whatsapp-ui.mjs"
+      },
+      "commandSha256": "e10dd4a05f1478b546db82a0164bdc044f98c66a5fe44a3722fb2db9ac990f67"
+    },
+    {
+      "id": 50,
+      "step": {
+        "run": "node scripts/verify-company-onboarding-ui.mjs"
+      },
+      "commandSha256": "d70d33ace831602e05512f969c80cc6c8dc7d5cb3fea18c0099eab21f2538589"
+    },
+    {
+      "id": 51,
+      "step": {
+        "name": "Clerk entry, invitation navigation and expired-session recovery",
+        "run": "npx eslint src/lib/identity-return-path.mjs src/lib/session-recovery.mjs 'src/app/(identity)/identity-load-guard.js' 'src/app/(identity)/cuenta/session-recovery.js' 'src/app/(identity)/cuenta/invitation-entry.js' 'src/app/(identity)/cuenta/workspace-session-request.mjs' scripts/verify-clerk-access-ui.mjs tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs\nnode --test tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs\nnode scripts/verify-clerk-access-ui.mjs\n"
+      },
+      "commandSha256": "1424464c9e829cf6a31725e43766d8d31fddaef18e562aa833fe54ce16ff152c"
+    }
+  ],
+  "artifactPatterns": [
+    ".vercel/workspace-evidence/",
+    ".vercel/private/plan-import-postgres-validation.json",
+    ".vercel/private/plan-import-boundary-validation.json",
+    ".vercel/private/plan-import-ui-validation.json",
+    ".vercel/private/plan-import-ui-*.png",
+    ".vercel/private/workspace-plan-recovery-ui-validation.json",
+    ".vercel/private/mobile-workspace-review-ui-validation.json",
+    ".vercel/private/mobile-workspace-review-ui-*.png",
+    ".vercel/customer-whatsapp-evidence/",
+    ".vercel/company-onboarding-evidence/",
+    ".vercel/site-register-evidence/",
+    ".vercel/participants-evidence/",
+    ".vercel/private/biometric-real-model-proof.json",
+    ".vercel/meta-kyc-chat-evidence/",
+    ".vercel/mobile-identity-evidence/",
+    ".vercel/field-operations-evidence/",
+    ".vercel/material-inventory-evidence/",
+    ".vercel/field-qr-evidence/",
+    ".vercel/meta-customer-evidence/",
+    ".vercel/purchase-evidence/",
+    ".vercel/worker-channel-evidence/",
+    ".vercel/meta-field-evidence/",
+    ".vercel/private/restricted-meta-pilot-postgres-proof.json",
+    ".vercel/private/restricted-meta-pilot-boundary-proof.json",
+    ".vercel/private/restricted-meta-pilot-ui/proof.json",
+    ".vercel/private/restricted-meta-pilot-ui/active-*.png",
+    ".vercel/meta-signup-field-lifecycle-evidence/",
+    ".vercel/private/company-channel-postgres-proof.json",
+    ".vercel/private/company-channel-boundary-proof.json",
+    ".vercel/company-channel-ui-evidence/",
+    ".vercel/operations-status-evidence/",
+    ".vercel/clerk-access-evidence/",
+    ".vercel/workspace-reload-evidence/",
+    ".vercel/customer-inbox-evidence/",
+    ".vercel/template-send-evidence/",
+    ".vercel/constructor-crm-evidence/",
+    ".vercel/constructor-crm-adoption-evidence/",
+    ".vercel/meta-demo-pilot-evidence/",
+    ".vercel/demo-pilot-evidence/",
+    ".vercel/manual-evidence/",
+    ".vercel/onboarding-guide-evidence/"
+  ],
+  "lanes": {
+    "contracts": {
+      "blocks": [
+        7,
+        8,
+        9,
+        11,
+        14,
+        15,
+        16,
+        17,
+        25
+      ],
+      "artifacts": [
+        ".vercel/private/biometric-real-model-proof.json"
+      ],
+      "optionalArtifactPatterns": [],
+      "requiredRetainedEvidence": [
+        ".vercel/private/biometric-real-model-proof.json"
+      ],
+      "requiredProducedEvidence": [
+        ".vercel/workspace-ci-evidence/selftest.json",
+        ".vercel/workspace-ci-evidence/selftest.xml"
+      ]
+    },
+    "plans": {
+      "blocks": [
+        12
+      ],
+      "artifacts": [
+        ".vercel/private/plan-import-postgres-validation.json",
+        ".vercel/private/plan-import-boundary-validation.json",
+        ".vercel/private/plan-import-ui-validation.json",
+        ".vercel/private/plan-import-ui-*.png",
+        ".vercel/private/workspace-plan-recovery-ui-validation.json"
+      ],
+      "optionalArtifactPatterns": [
+        ".vercel/private/plan-import-ui-*.png"
+      ],
+      "requiredRetainedEvidence": [
+        ".vercel/private/plan-import-postgres-validation.json",
+        ".vercel/private/plan-import-boundary-validation.json",
+        ".vercel/private/plan-import-ui-validation.json",
+        ".vercel/private/workspace-plan-recovery-ui-validation.json"
+      ],
+      "requiredProducedEvidence": []
+    },
+    "people": {
+      "blocks": [
+        18,
+        19,
+        35,
+        36,
+        37,
+        38
+      ],
+      "artifacts": [
+        ".vercel/private/mobile-workspace-review-ui-validation.json",
+        ".vercel/private/mobile-workspace-review-ui-*.png",
+        ".vercel/participants-evidence/",
+        ".vercel/meta-kyc-chat-evidence/",
+        ".vercel/mobile-identity-evidence/"
+      ],
+      "optionalArtifactPatterns": [
+        ".vercel/private/mobile-workspace-review-ui-*.png"
+      ],
+      "requiredRetainedEvidence": [
+        ".vercel/private/mobile-workspace-review-ui-validation.json",
+        ".vercel/participants-evidence/postgres.json",
+        ".vercel/meta-kyc-chat-evidence/postgres.json",
+        ".vercel/mobile-identity-evidence/browser.json",
+        ".vercel/participants-evidence/browser.json"
+      ],
+      "requiredProducedEvidence": [
+        ".vercel/participant-ai-ui.json"
+      ]
+    },
+    "field": {
+      "blocks": [
+        20,
+        39,
+        40
+      ],
+      "artifacts": [
+        ".vercel/field-operations-evidence/",
+        ".vercel/field-qr-evidence/"
+      ],
+      "optionalArtifactPatterns": [],
+      "requiredRetainedEvidence": [
+        ".vercel/field-operations-evidence/postgres.json",
+        ".vercel/field-qr-evidence/browser.json",
+        ".vercel/field-operations-evidence/browser.json"
+      ],
+      "requiredProducedEvidence": []
+    },
+    "meta": {
+      "blocks": [
+        22,
+        23,
+        26,
+        28,
+        30,
+        33,
+        41,
+        42,
+        49
+      ],
+      "artifacts": [
+        ".vercel/customer-whatsapp-evidence/",
+        ".vercel/meta-customer-evidence/",
+        ".vercel/worker-channel-evidence/",
+        ".vercel/meta-field-evidence/",
+        ".vercel/meta-signup-field-lifecycle-evidence/",
+        ".vercel/template-send-evidence/",
+        ".vercel/meta-demo-pilot-evidence/",
+        ".vercel/demo-pilot-evidence/"
+      ],
+      "optionalArtifactPatterns": [],
+      "requiredRetainedEvidence": [
+        ".vercel/customer-whatsapp-evidence/proof.json",
+        ".vercel/meta-customer-evidence/postgres.json",
+        ".vercel/worker-channel-evidence/postgres.json",
+        ".vercel/meta-field-evidence/postgres.json",
+        ".vercel/meta-signup-field-lifecycle-evidence/postgres.json",
+        ".vercel/template-send-evidence/postgres.json",
+        ".vercel/meta-demo-pilot-evidence/postgres.json",
+        ".vercel/demo-pilot-evidence/browser.json",
+        ".vercel/meta-customer-evidence/coexistence-postgres.json",
+        ".vercel/template-send-evidence/browser.json",
+        ".vercel/meta-customer-evidence/browser.json",
+        ".vercel/worker-channel-evidence/browser.json"
+      ],
+      "requiredProducedEvidence": []
+    },
+    "channels": {
+      "blocks": [
+        27,
+        29
+      ],
+      "artifacts": [
+        ".vercel/private/restricted-meta-pilot-postgres-proof.json",
+        ".vercel/private/restricted-meta-pilot-boundary-proof.json",
+        ".vercel/private/restricted-meta-pilot-ui/proof.json",
+        ".vercel/private/restricted-meta-pilot-ui/active-*.png",
+        ".vercel/private/company-channel-postgres-proof.json",
+        ".vercel/private/company-channel-boundary-proof.json",
+        ".vercel/company-channel-ui-evidence/"
+      ],
+      "optionalArtifactPatterns": [
+        ".vercel/private/restricted-meta-pilot-ui/active-*.png"
+      ],
+      "requiredRetainedEvidence": [
+        ".vercel/private/restricted-meta-pilot-postgres-proof.json",
+        ".vercel/private/restricted-meta-pilot-boundary-proof.json",
+        ".vercel/private/restricted-meta-pilot-ui/proof.json",
+        ".vercel/private/company-channel-postgres-proof.json",
+        ".vercel/private/company-channel-boundary-proof.json",
+        ".vercel/company-channel-ui-evidence/proof.json"
+      ],
+      "requiredProducedEvidence": []
+    },
+    "business": {
+      "blocks": [
+        13,
+        21,
+        31,
+        32,
+        34,
+        43,
+        44,
+        45
+      ],
+      "artifacts": [
+        ".vercel/site-register-evidence/",
+        ".vercel/material-inventory-evidence/",
+        ".vercel/purchase-evidence/",
+        ".vercel/operations-status-evidence/",
+        ".vercel/constructor-crm-evidence/",
+        ".vercel/constructor-crm-adoption-evidence/",
+        ".vercel/manual-evidence/",
+        ".vercel/onboarding-guide-evidence/"
+      ],
+      "optionalArtifactPatterns": [],
+      "requiredRetainedEvidence": [
+        ".vercel/site-register-evidence/postgres.json",
+        ".vercel/material-inventory-evidence/postgres.json",
+        ".vercel/purchase-evidence/postgres.json",
+        ".vercel/operations-status-evidence/browser.json",
+        ".vercel/constructor-crm-evidence/postgres.json",
+        ".vercel/constructor-crm-adoption-evidence/postgres.json",
+        ".vercel/manual-evidence/browser.json",
+        ".vercel/onboarding-guide-evidence/browser.json",
+        ".vercel/material-inventory-evidence/boundary.json",
+        ".vercel/material-inventory-evidence/browser.json",
+        ".vercel/constructor-crm-evidence/browser.json",
+        ".vercel/purchase-evidence/browser.json",
+        ".vercel/site-register-evidence/browser.json"
+      ],
+      "requiredProducedEvidence": []
+    },
+    "workspace-ui": {
+      "blocks": [
+        10,
+        24,
+        46,
+        47,
+        48,
+        50,
+        51
+      ],
+      "artifacts": [
+        ".vercel/workspace-evidence/",
+        ".vercel/company-onboarding-evidence/",
+        ".vercel/clerk-access-evidence/",
+        ".vercel/workspace-reload-evidence/",
+        ".vercel/customer-inbox-evidence/"
+      ],
+      "optionalArtifactPatterns": [],
+      "requiredRetainedEvidence": [
+        ".vercel/workspace-evidence/postgres.json",
+        ".vercel/company-onboarding-evidence/postgres.json",
+        ".vercel/clerk-access-evidence/browser.json",
+        ".vercel/workspace-reload-evidence/browser.json",
+        ".vercel/customer-inbox-evidence/postgresql.json",
+        ".vercel/workspace-evidence/browser.json",
+        ".vercel/company-onboarding-evidence/browser.json",
+        ".vercel/customer-inbox-evidence/browser.json"
+      ],
+      "requiredProducedEvidence": []
+    }
+  },
+  "evidenceProducers": [
+    {
+      "producer": "scripts/verify-workspace-postgres.mjs",
+      "path": ".vercel/workspace-evidence/postgres.json",
+      "retained": true,
+      "blockId": 10,
+      "lane": "workspace-ui",
+      "baselineSourceLine": 134,
+      "baselineProducerGitBlobSha256": "c49525d41783f2258ea6cbf33ef3d7561f2219d703d52aebe4f860f397e97a2f"
+    },
+    {
+      "producer": "scripts/verify-plan-import-postgres.mjs",
+      "path": ".vercel/private/plan-import-postgres-validation.json",
+      "retained": true,
+      "blockId": 12,
+      "lane": "plans",
+      "baselineSourceLine": 108,
+      "baselineProducerGitBlobSha256": "2fb58d6045ca8febc2a0f874d4f0ae31a5a6087f0bdcbd3d4ec621896bebecad"
+    },
+    {
+      "producer": "scripts/verify-plan-import-boundary.mjs",
+      "path": ".vercel/private/plan-import-boundary-validation.json",
+      "retained": true,
+      "blockId": 12,
+      "lane": "plans",
+      "baselineSourceLine": 21,
+      "baselineProducerGitBlobSha256": "b40a11724d92b0bae5e41fa41c387d0fe0d9e8c4c5f76622d5e31edab5364fac"
+    },
+    {
+      "producer": "scripts/verify-plan-import-ui.mjs",
+      "path": ".vercel/private/plan-import-ui-validation.json",
+      "retained": true,
+      "blockId": 12,
+      "lane": "plans",
+      "baselineSourceLine": 76,
+      "baselineProducerGitBlobSha256": "eb8d0e635877333897a75e4c102421d6a5675f257ad769b2857abef3fe1bda18"
+    },
+    {
+      "producer": "scripts/verify-workspace-plan-recovery-ui.mjs",
+      "path": ".vercel/private/workspace-plan-recovery-ui-validation.json",
+      "retained": true,
+      "blockId": 12,
+      "lane": "plans",
+      "baselineSourceLine": 310,
+      "baselineProducerGitBlobSha256": "130074790a663e507800c5eaee53f52693bf5fde2ac489c801e9e03a428ef9d0"
+    },
+    {
+      "producer": "scripts/verify-mobile-workspace-review-ui.mjs",
+      "path": ".vercel/private/mobile-workspace-review-ui-validation.json",
+      "retained": true,
+      "blockId": 38,
+      "lane": "people",
+      "baselineSourceLine": 67,
+      "baselineProducerGitBlobSha256": "8f0a139b4a5175af418bc33ed12a583dafbc8078cde439234e284861a6fe0f2b"
+    },
+    {
+      "producer": "scripts/verify-customer-whatsapp-ui.mjs",
+      "path": ".vercel/customer-whatsapp-evidence/proof.json",
+      "retained": true,
+      "blockId": 49,
+      "lane": "meta",
+      "baselineSourceLine": 174,
+      "baselineProducerGitBlobSha256": "a36dc149a86d1cfdeb2f57219730fc67bd968e08d30de478fcbed6bdb549ef5c"
+    },
+    {
+      "producer": "scripts/verify-company-onboarding-postgres.mjs",
+      "path": ".vercel/company-onboarding-evidence/postgres.json",
+      "retained": true,
+      "blockId": 46,
+      "lane": "workspace-ui",
+      "baselineSourceLine": 150,
+      "baselineProducerGitBlobSha256": "eb3c4a2e9107451780e47ff9b3b95a7cb35cbe34911b870852b4bca6912852e2"
+    },
+    {
+      "producer": "scripts/verify-site-register-postgres.mjs",
+      "path": ".vercel/site-register-evidence/postgres.json",
+      "retained": true,
+      "blockId": 13,
+      "lane": "business",
+      "baselineSourceLine": 130,
+      "baselineProducerGitBlobSha256": "f9e8db60a67ae26f5e0f112b6026deaac71b34ba60c7a588735764a12e36d2cc"
+    },
+    {
+      "producer": "scripts/verify-participants-postgres.mjs",
+      "path": ".vercel/participants-evidence/postgres.json",
+      "retained": true,
+      "blockId": 18,
+      "lane": "people",
+      "baselineSourceLine": 379,
+      "baselineProducerGitBlobSha256": "5452ce088650de95897759063c7381703e8f45bd97d76c31607ea96b0843ece8"
+    },
+    {
+      "producer": "scripts/verify-private-biometric-models.py",
+      "path": ".vercel/private/biometric-real-model-proof.json",
+      "retained": true,
+      "blockId": 7,
+      "lane": "contracts",
+      "baselineSourceLine": 51,
+      "baselineProducerGitBlobSha256": "35df872cdad98104b0b081fa29917637dfa69cc1cf1f7e6d3df01a90bf0df967"
+    },
+    {
+      "producer": "scripts/verify-meta-kyc-chat-postgres.mjs",
+      "path": ".vercel/meta-kyc-chat-evidence/postgres.json",
+      "retained": true,
+      "blockId": 19,
+      "lane": "people",
+      "baselineSourceLine": 115,
+      "baselineProducerGitBlobSha256": "ac0009e8c1a277c11eff4a3f6d97dd18a014ae60975dfa4fcfb19f72b9863130"
+    },
+    {
+      "producer": "scripts/verify-mobile-identity-ui.mjs",
+      "path": ".vercel/mobile-identity-evidence/browser.json",
+      "retained": true,
+      "blockId": 37,
+      "lane": "people",
+      "baselineSourceLine": 158,
+      "baselineProducerGitBlobSha256": "c1534474611affcae0878341f2e88cd4299c1b2d484c6be5f0d1bb9814d94e32"
+    },
+    {
+      "producer": "scripts/verify-field-operations-postgres.mjs",
+      "path": ".vercel/field-operations-evidence/postgres.json",
+      "retained": true,
+      "blockId": 20,
+      "lane": "field",
+      "baselineSourceLine": 216,
+      "baselineProducerGitBlobSha256": "b91778574d63bc9dffb83af1b5aeb7a2666e7fb23e0d923ea79b435de7b265d8"
+    },
+    {
+      "producer": "scripts/verify-material-inventory-postgres.mjs",
+      "path": ".vercel/material-inventory-evidence/postgres.json",
+      "retained": true,
+      "blockId": 21,
+      "lane": "business",
+      "baselineSourceLine": 113,
+      "baselineProducerGitBlobSha256": "58f1870ccb71be118c805750be9f2ee267d0988c24ee63185e557880367ad5e4"
+    },
+    {
+      "producer": "scripts/verify-field-qr-ui.mjs",
+      "path": ".vercel/field-qr-evidence/browser.json",
+      "retained": true,
+      "blockId": 40,
+      "lane": "field",
+      "baselineSourceLine": 228,
+      "baselineProducerGitBlobSha256": "987fde7c73e4a083a62d08eadee16ae71c925dcbbd123ff809ba6f6607bb644d"
+    },
+    {
+      "producer": "scripts/verify-meta-customer-postgres.mjs",
+      "path": ".vercel/meta-customer-evidence/postgres.json",
+      "retained": true,
+      "blockId": 22,
+      "lane": "meta",
+      "baselineSourceLine": 218,
+      "baselineProducerGitBlobSha256": "084211c5d4970d7c23557b6fff9de8446dba4794d030b11e655cab34e757b79e"
+    },
+    {
+      "producer": "scripts/verify-site-purchase-postgres.mjs",
+      "path": ".vercel/purchase-evidence/postgres.json",
+      "retained": true,
+      "blockId": 32,
+      "lane": "business",
+      "baselineSourceLine": 140,
+      "baselineProducerGitBlobSha256": "e3d28d3e32e62698d9a855897ef6a0b18f197a0a39dc9310d2a4285b233c042b"
+    },
+    {
+      "producer": "scripts/verify-worker-channel-postgres.mjs",
+      "path": ".vercel/worker-channel-evidence/postgres.json",
+      "retained": true,
+      "blockId": 26,
+      "lane": "meta",
+      "baselineSourceLine": 81,
+      "baselineProducerGitBlobSha256": "5930f0c097f78a2499ccc5b1f37d94564d872bba8cc208e510b8ea12802dc8ee"
+    },
+    {
+      "producer": "scripts/verify-meta-field-bridge-postgres.mjs",
+      "path": ".vercel/meta-field-evidence/postgres.json",
+      "retained": true,
+      "blockId": 26,
+      "lane": "meta",
+      "baselineSourceLine": 119,
+      "baselineProducerGitBlobSha256": "bf8a578242baf1154656d090458c036eb78db64a667e5b69f39da239d62ae2ba"
+    },
+    {
+      "producer": "scripts/verify-meta-development-pilot-postgres.mjs",
+      "path": ".vercel/private/restricted-meta-pilot-postgres-proof.json",
+      "retained": true,
+      "blockId": 27,
+      "lane": "channels",
+      "baselineSourceLine": 110,
+      "baselineProducerGitBlobSha256": "7574471a2dfec6afe4c9a665773916f9b2200b521d29b21e3f73c9b43845e3f7"
+    },
+    {
+      "producer": "scripts/verify-meta-development-pilot-boundary.mjs",
+      "path": ".vercel/private/restricted-meta-pilot-boundary-proof.json",
+      "retained": true,
+      "blockId": 27,
+      "lane": "channels",
+      "baselineSourceLine": 32,
+      "baselineProducerGitBlobSha256": "162f7c339eb5f6cb3780e2b66d1f67f11734cf432c6187391e1daec247c1679b"
+    },
+    {
+      "producer": "scripts/verify-meta-development-pilot-ui.mjs",
+      "path": ".vercel/private/restricted-meta-pilot-ui/proof.json",
+      "retained": true,
+      "blockId": 27,
+      "lane": "channels",
+      "baselineSourceLine": 75,
+      "baselineProducerGitBlobSha256": "b13da3ff5d83ee8dc979dff45478ed62a336acf5db6b7ee466273d7e7d7902ac"
+    },
+    {
+      "producer": "scripts/verify-meta-signup-field-lifecycle-postgres.mjs",
+      "path": ".vercel/meta-signup-field-lifecycle-evidence/postgres.json",
+      "retained": true,
+      "blockId": 28,
+      "lane": "meta",
+      "baselineSourceLine": 316,
+      "baselineProducerGitBlobSha256": "a4bbee2631af0f2a486ddb6dd2d3d6205bc4668bb2bc133a42f1161ed6a4bbec"
+    },
+    {
+      "producer": "scripts/verify-company-channel-postgres.mjs",
+      "path": ".vercel/private/company-channel-postgres-proof.json",
+      "retained": true,
+      "blockId": 29,
+      "lane": "channels",
+      "baselineSourceLine": 158,
+      "baselineProducerGitBlobSha256": "680cccdde6e112e43b9bc988cc5048ea5899e156a193ccda5bff2fb51f80770e"
+    },
+    {
+      "producer": "scripts/verify-company-channel-boundary.mjs",
+      "path": ".vercel/private/company-channel-boundary-proof.json",
+      "retained": true,
+      "blockId": 29,
+      "lane": "channels",
+      "baselineSourceLine": 31,
+      "baselineProducerGitBlobSha256": "c6404aa5a64da4f378b1ca459cbf9771cc6824a77102a18797187f5882b30ac6"
+    },
+    {
+      "producer": "scripts/verify-company-channel-ui.mjs",
+      "path": ".vercel/company-channel-ui-evidence/proof.json",
+      "retained": true,
+      "blockId": 29,
+      "lane": "channels",
+      "baselineSourceLine": 118,
+      "baselineProducerGitBlobSha256": "d8ac9873e533b2c015d44ff8d0754ffebb9cac2c93dd34c3cc321b4ea00a8425"
+    },
+    {
+      "producer": "scripts/verify-operations-status-ui.mjs",
+      "path": ".vercel/operations-status-evidence/browser.json",
+      "retained": true,
+      "blockId": 43,
+      "lane": "business",
+      "baselineSourceLine": 39,
+      "baselineProducerGitBlobSha256": "ae6f3332e49c068988b3670cf3e4f8ab5849b901602c0dcddbd930ed75d32046"
+    },
+    {
+      "producer": "scripts/verify-clerk-access-ui.mjs",
+      "path": ".vercel/clerk-access-evidence/browser.json",
+      "retained": true,
+      "blockId": 51,
+      "lane": "workspace-ui",
+      "baselineSourceLine": 380,
+      "baselineProducerGitBlobSha256": "988cdca50be52bdfd7dcb933b8c6d9655ad53c671e4b013df32b33e5fe8978ba"
+    },
+    {
+      "producer": "scripts/verify-workspace-reload-ui.mjs",
+      "path": ".vercel/workspace-reload-evidence/browser.json",
+      "retained": true,
+      "blockId": 48,
+      "lane": "workspace-ui",
+      "baselineSourceLine": 290,
+      "baselineProducerGitBlobSha256": "8364332fcef117d7267cd74273ec9b5bf33eb39184b5491b8c771064e4599556"
+    },
+    {
+      "producer": "scripts/verify-customer-inbox-postgres.mjs",
+      "path": ".vercel/customer-inbox-evidence/postgresql.json",
+      "retained": true,
+      "blockId": 24,
+      "lane": "workspace-ui",
+      "baselineSourceLine": 48,
+      "baselineProducerGitBlobSha256": "e37ac91826f73675e489ea936cf7ff164ca0a2e343d81fcf74ccc7a8812c263f"
+    },
+    {
+      "producer": "scripts/verify-meta-customer-template-send-postgres.mjs",
+      "path": ".vercel/template-send-evidence/postgres.json",
+      "retained": true,
+      "blockId": 30,
+      "lane": "meta",
+      "baselineSourceLine": 148,
+      "baselineProducerGitBlobSha256": "b5b10e5c86c77ac0cc73e073c1cd99232ffe3b60712d77c29bb580a7a39b2092"
+    },
+    {
+      "producer": "scripts/verify-constructor-crm-postgres.mjs",
+      "path": ".vercel/constructor-crm-evidence/postgres.json",
+      "retained": true,
+      "blockId": 31,
+      "lane": "business",
+      "baselineSourceLine": 111,
+      "baselineProducerGitBlobSha256": "e7182a32f549f93f9df0a7b07dcbfa586e266e870df23cfd3a61aefc2bd28498"
+    },
+    {
+      "producer": "scripts/verify-constructor-crm-adoption-postgres.mjs",
+      "path": ".vercel/constructor-crm-adoption-evidence/postgres.json",
+      "retained": true,
+      "blockId": 31,
+      "lane": "business",
+      "baselineSourceLine": 113,
+      "baselineProducerGitBlobSha256": "9877e69b0b4716a64c5304f6bc4d78ca89d2dd2b3b27ab821582baa8eb0bf882"
+    },
+    {
+      "producer": "scripts/verify-meta-demo-pilot-postgres.mjs",
+      "path": ".vercel/meta-demo-pilot-evidence/postgres.json",
+      "retained": true,
+      "blockId": 33,
+      "lane": "meta",
+      "baselineSourceLine": 108,
+      "baselineProducerGitBlobSha256": "b3df8d8ff448cc991f84c5dd46e2aa36d3262020d2f4c57a8d760f519d56c982"
+    },
+    {
+      "producer": "scripts/verify-demo-pilot-ui.mjs",
+      "path": ".vercel/demo-pilot-evidence/browser.json",
+      "retained": true,
+      "blockId": 33,
+      "lane": "meta",
+      "baselineSourceLine": 139,
+      "baselineProducerGitBlobSha256": "6ad07eec4aa89901684b2db842d65ff7e8d61adff1cfff19bdf56ca733d9bf38"
+    },
+    {
+      "producer": "scripts/verify-manual-ui.mjs",
+      "path": ".vercel/manual-evidence/browser.json",
+      "retained": true,
+      "blockId": 34,
+      "lane": "business",
+      "baselineSourceLine": 73,
+      "baselineProducerGitBlobSha256": "99f0e85f2c3bcdc6af84acbed9d002c67dbdda04e3cae9a89d0faf48bd7404e9"
+    },
+    {
+      "producer": "scripts/verify-onboarding-guide-ui.mjs",
+      "path": ".vercel/onboarding-guide-evidence/browser.json",
+      "retained": true,
+      "blockId": 34,
+      "lane": "business",
+      "baselineSourceLine": 71,
+      "baselineProducerGitBlobSha256": "cfa3e7606ec4ddacbd9290bc508c6ccf07c6921351ffaa3c6944c06a884a6163"
+    },
+    {
+      "producer": "scripts/verify-workspace-ui.mjs",
+      "path": ".vercel/workspace-evidence/browser.json",
+      "retained": true,
+      "blockId": 47,
+      "lane": "workspace-ui",
+      "baselineSourceLine": 393,
+      "baselineProducerGitBlobSha256": "efcceb9123f6157ce55131211ea331098813b9c8e64429a235fddc945cc58350"
+    },
+    {
+      "producer": "scripts/verify-participants-ui.mjs",
+      "path": ".vercel/participants-evidence/browser.json",
+      "retained": true,
+      "blockId": 35,
+      "lane": "people",
+      "baselineSourceLine": 280,
+      "baselineProducerGitBlobSha256": "2d012df8c7202096634f958c4e38302c1c65d692dde1b8d12baefbe742b30fad"
+    },
+    {
+      "producer": "scripts/verify-field-operations-ui.mjs",
+      "path": ".vercel/field-operations-evidence/browser.json",
+      "retained": true,
+      "blockId": 39,
+      "lane": "field",
+      "baselineSourceLine": 335,
+      "baselineProducerGitBlobSha256": "ad6c7638c6e0d5920403d00b66c7abc3f722ef747fbf44dfc918404477badf1a"
+    },
+    {
+      "producer": "scripts/verify-meta-customer-coexistence-postgres.mjs",
+      "path": ".vercel/meta-customer-evidence/coexistence-postgres.json",
+      "retained": true,
+      "blockId": 23,
+      "lane": "meta",
+      "baselineSourceLine": 157,
+      "baselineProducerGitBlobSha256": "ce8139f8e15e97cd2f0aeb30ba7bc55741bde3a07610be4caedbfb4bf7d94715"
+    },
+    {
+      "producer": "scripts/verify-template-send-ui.mjs",
+      "path": ".vercel/template-send-evidence/browser.json",
+      "retained": true,
+      "blockId": 30,
+      "lane": "meta",
+      "baselineSourceLine": 131,
+      "baselineProducerGitBlobSha256": "0fabe7466981534a5a926da0e0af54c0226f2fea1dc5243c61215abcc018bab8"
+    },
+    {
+      "producer": "scripts/verify-meta-customer-ui.mjs",
+      "path": ".vercel/meta-customer-evidence/browser.json",
+      "retained": true,
+      "blockId": 41,
+      "lane": "meta",
+      "baselineSourceLine": 232,
+      "baselineProducerGitBlobSha256": "cd026dd81438967cbecaadfc49719ae13c79c23722dc6d553a0eb8db2449141e"
+    },
+    {
+      "producer": "scripts/verify-worker-channel-ui.mjs",
+      "path": ".vercel/worker-channel-evidence/browser.json",
+      "retained": true,
+      "blockId": 42,
+      "lane": "meta",
+      "baselineSourceLine": 83,
+      "baselineProducerGitBlobSha256": "fbf8821567bf4defdfb67c4f217bf02b15ac8cacf909a7b530ae2318944ab7c7"
+    },
+    {
+      "producer": "scripts/verify-material-inventory-boundary.mjs",
+      "path": ".vercel/material-inventory-evidence/boundary.json",
+      "retained": true,
+      "blockId": 21,
+      "lane": "business",
+      "baselineSourceLine": 19,
+      "baselineProducerGitBlobSha256": "b1ece839a4521cceb88006f86e91098749fac577b38336b75a1f75f4408c1065"
+    },
+    {
+      "producer": "scripts/verify-material-inventory-ui.mjs",
+      "path": ".vercel/material-inventory-evidence/browser.json",
+      "retained": true,
+      "blockId": 21,
+      "lane": "business",
+      "baselineSourceLine": 62,
+      "baselineProducerGitBlobSha256": "342ccdd39bf984f9c20c322ea786da1abc77bac9fd7b23daffeca0585cb93023"
+    },
+    {
+      "producer": "scripts/verify-constructor-crm-ui.mjs",
+      "path": ".vercel/constructor-crm-evidence/browser.json",
+      "retained": true,
+      "blockId": 31,
+      "lane": "business",
+      "baselineSourceLine": 140,
+      "baselineProducerGitBlobSha256": "1aa7013aff8efc58a3662c286e22b638befe81ecc1235f1b3316ae73f296e810"
+    },
+    {
+      "producer": "scripts/verify-site-purchase-ui.mjs",
+      "path": ".vercel/purchase-evidence/browser.json",
+      "retained": true,
+      "blockId": 44,
+      "lane": "business",
+      "baselineSourceLine": 243,
+      "baselineProducerGitBlobSha256": "60fe328ab085caa0eec2d95d5e6f17a6d907cec5038621586e3759ca75fe9e0b"
+    },
+    {
+      "producer": "scripts/verify-site-register-ui.mjs",
+      "path": ".vercel/site-register-evidence/browser.json",
+      "retained": true,
+      "blockId": 45,
+      "lane": "business",
+      "baselineSourceLine": 201,
+      "baselineProducerGitBlobSha256": "3ca8c77bb9a0f8c4e1929bbdf47d2b911e42bc4c9fdd5fff6fdd964d6d8d7a3a"
+    },
+    {
+      "producer": "scripts/verify-company-onboarding-ui.mjs",
+      "path": ".vercel/company-onboarding-evidence/browser.json",
+      "retained": true,
+      "blockId": 50,
+      "lane": "workspace-ui",
+      "baselineSourceLine": 202,
+      "baselineProducerGitBlobSha256": "2c8575ac36fcb34e351afdc0db427f284f548808df7105c4dfb545cb34befcb8"
+    },
+    {
+      "producer": "scripts/verify-customer-inbox-ui.mjs",
+      "path": ".vercel/customer-inbox-evidence/browser.json",
+      "retained": true,
+      "blockId": 48,
+      "lane": "workspace-ui",
+      "baselineSourceLine": 146,
+      "baselineProducerGitBlobSha256": "6df2f6ef6aade9209aa4bfb60e2a32bd1ea8c005e0bef624021cc6dcd6a31d7e"
+    },
+    {
+      "producer": "scripts/verify-participant-ai-ui.mjs",
+      "path": ".vercel/participant-ai-ui.json",
+      "retained": false,
+      "blockId": 36,
+      "lane": "people",
+      "baselineSourceLine": 18,
+      "baselineProducerGitBlobSha256": "b35f73ac5a112e5184172fa357838123a6b9c69592428c901aac00c8124b3bda"
+    }
+  ],
+  "stdoutOnlyProducers": [
+    {
+      "producer": "scripts/verify-meta-customer-processing-postgres.mjs",
+      "blockId": 26,
+      "lane": "meta",
+      "reason": "Inherited canonical verifier prints results only; no persistent JSON and no upload claim."
+    }
+  ],
+  "infrastructureCheck": {
+    "id": "ci-gate-selftest",
+    "lane": "contracts",
+    "producer": ".github/scripts/verify-workspace-ci-parallelization.mjs",
+    "step": {
+      "name": "CI gate helper lint and negative controls",
+      "run": "npx eslint .github/scripts/verify-workspace-ci-parallelization.mjs --max-warnings 0\nnode .github/scripts/verify-workspace-ci-parallelization.mjs selftest --expected-head \"$GITHUB_SHA\"\n"
+    },
+    "producedNotUploaded": [
+      ".vercel/workspace-ci-evidence/selftest.json",
+      ".vercel/workspace-ci-evidence/selftest.xml"
+    ]
+  }
+}
