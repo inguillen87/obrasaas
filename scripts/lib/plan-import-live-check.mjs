@@ -1,7 +1,7 @@
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {createPlanImportAnalyzer,observedPlanModel,requestedPlanModel} from '../../src/lib/plan-import-analyzer.mjs';
-import {decodePlanSource,normalizePlanRows} from '../../src/lib/plan-import-policy.mjs';
+import {createPlanImportAnalyzer,observedPlanModel,requestedPlanModel,safePlanDiagnosticModel} from '../../src/lib/plan-import-analyzer.mjs';
+import {decodePlanSource,normalizePlanRows,safePlanImportDiagnostic} from '../../src/lib/plan-import-policy.mjs';
 export const PLAN_IMPORT_LIVE_FLAG='synthetic-plan-v1';
 export const PLAN_IMPORT_LIVE_PROJECT='prj_68NErbCqCFsDVaMak81gcwsGI9pF';
 const expectedRows=[{title:'Fundaciones de prueba',startsOn:'2026-11-03',endsOn:'2026-11-06'},{title:'Estructura de prueba',startsOn:'2026-11-09',endsOn:'2026-11-12'}];
@@ -26,8 +26,8 @@ export async function verifyPlanImportLive({environment=process.env,analyzer,rea
  for(const [index,source] of sources.entries()) {
   proof.providerRequests++;
   let result;try{result=await adapter.analyze(source);}catch{fail('PLAN_IMPORT_LIVE_PROVIDER_UNCONFIRMED');}
-  if(typeof result?.model==='string'&&/^[a-z0-9.-]{1,80}$/.test(result.model)){proof.model=result.model;if(!proof.observedModels.includes(result.model))proof.observedModels.push(result.model);}
-  if(result?.success!==true||result.provider!=='openai'||result.requestedModel!==requestedPlanModel||!observedPlanModel(result.model)){proof.providerFailure={code:safeFailureCodes.has(result?.code)?result.code:'AI_RESPONSE_UNCONFIRMED',status:Number.isInteger(result?.providerStatus)&&result.providerStatus>=400&&result.providerStatus<=599?result.providerStatus:null};fail('PLAN_IMPORT_LIVE_PROVIDER_UNCONFIRMED');}
+  const model=safePlanDiagnosticModel(result?.model);if(model){proof.model=model;if(!proof.observedModels.includes(model))proof.observedModels.push(model);}
+  if(result?.success!==true||result.provider!=='openai'||result.requestedModel!==requestedPlanModel||!observedPlanModel(result.model)){const diagnostic=safePlanImportDiagnostic(result?.diagnostic);proof.providerFailure={code:safeFailureCodes.has(result?.code)?result.code:'AI_RESPONSE_UNCONFIRMED',status:Number.isInteger(result?.providerStatus)&&result.providerStatus>=400&&result.providerStatus<=599?result.providerStatus:null,...(diagnostic?{diagnostic}:{})};fail('PLAN_IMPORT_LIVE_PROVIDER_UNCONFIRMED');}
   let rows;try{rows=normalizePlanRows(result.rows,{complete:true});}catch{fail('PLAN_IMPORT_LIVE_EXTRACTION_UNCONFIRMED');}
   if(JSON.stringify(rows.map(({title,startsOn,endsOn})=>({title,startsOn,endsOn})))!==JSON.stringify(expectedRows))fail('PLAN_IMPORT_LIVE_EXTRACTION_UNCONFIRMED');
   proof.fixtures.push({contentType:expectedFiles[index].contentType,sourceSha256:source.sha256,model:result.model,requestedModel:result.requestedModel,rowCount:rows.length,resultDigest:hash(JSON.stringify(rows))});

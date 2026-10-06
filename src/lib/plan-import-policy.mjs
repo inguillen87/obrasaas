@@ -4,6 +4,7 @@ import {decodePrivateImage} from './private-image-upload.mjs';
 
 export const PLAN_IMPORT_LIMIT=3*1024*1024;
 export const PLAN_IMPORT_ROWS=50;
+export const PLAN_IMPORT_TEXT_LIMITS=Object.freeze({title:160,evidence:500,uncertainty:500,warnings:500});
 export const PLAN_IMPORT_CONSENT='plan-document-openai-v1';
 export const canImportPlan=role=>['ADMIN','DIRECTOR','SITE_MANAGER'].includes(role);
 export const canApprovePlan=role=>['ADMIN','DIRECTOR'].includes(role);
@@ -12,14 +13,31 @@ const fail=(code='PLAN_IMPORT_INPUT_INVALID',status=400)=>{throw new WorkspaceEr
 // A caller-controlled field or an error from the store cannot forge the marker.
 const sourceRejections=new WeakMap();
 export const planImportSourceRejection=error=>sourceRejections.get(error)||null;
+const rowRejections=new WeakMap();
+const rowViolations=new Set(['ROW_COUNT','ROW_KEYS','TEXT_TYPE','TEXT_REQUIRED','TEXT_LIMIT','CONTROL_CHARACTERS','DATE_FORMAT','DATE_ORDER','MISSING_DATE_UNCERTAINTY','REVIEW_REQUIRED','DUPLICATE_ROWS']);
+const rowFields=new Set(['ROWS','ROW','TEXT','TITLE','EVIDENCE','UNCERTAINTY','STARTS_ON','ENDS_ON','DATES']);
+export const planImportRowRejection=error=>rowRejections.get(error)||null;
+export function safePlanImportDiagnostic(value) {
+ if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join('|')!=='field|rowCount|violation'||!rowViolations.has(value.violation)||!rowFields.has(value.field)||!Number.isSafeInteger(value.rowCount)||value.rowCount<0||value.rowCount>192*1024)return null;
+ return {violation:value.violation,field:value.field,rowCount:value.rowCount};
+}
+const rejectRows=(violation,field='ROW',code='PLAN_IMPORT_ROWS_INVALID',status=400)=>{
+ const error=new WorkspaceError(code,status);rowRejections.set(error,Object.freeze({violation,field}));throw error;
+};
 export function planContext(input) {
  if(!input||!workspaceId(input.projectId)||!/^[a-f0-9]{64}$/.test(input.scope||''))fail();
  return {projectId:input.projectId,scope:input.scope};
 }
-export function planText(value,max=160,min=1) {
- if(typeof value!=='string'||value.trim().length<min||value.length>max||/[\u0000-\u001f\u007f<>]/.test(value))fail('PLAN_IMPORT_ROWS_INVALID');
+export function planText(value,max=PLAN_IMPORT_TEXT_LIMITS.title,min=1) {
+ if(typeof value!=='string')rejectRows('TEXT_TYPE','TEXT');
+ if(value.trim().length<min)rejectRows('TEXT_REQUIRED','TEXT');
+ if(value.length>max)rejectRows('TEXT_LIMIT','TEXT');
+ if(/[\u0000-\u001f\u007f<>]/.test(value))rejectRows('CONTROL_CHARACTERS','TEXT');
  return value.trim();
 }
+const rowText=(value,max,field)=>{
+ try{return planText(value,max);}catch(error){const diagnostic=planImportRowRejection(error);if(diagnostic)rowRejections.set(error,Object.freeze({...diagnostic,field}));throw error;}
+};
 export function decodePlanSource(bytes,contentType) {
  if(!(bytes instanceof Uint8Array)||!bytes.length||bytes.length>PLAN_IMPORT_LIMIT)fail('PLAN_IMPORT_FILE_TOO_LARGE',413);
  const b=Buffer.from(bytes),mime=String(contentType||'').split(';')[0].toLowerCase().trim();
@@ -30,18 +48,18 @@ export function decodePlanSource(bytes,contentType) {
  try {const image=decodePrivateImage(b.toString('base64'),mime);return {...image,sha256:image.digest};}catch{fail('PLAN_IMPORT_FILE_INVALID');}
 }
 export function normalizePlanRows(rows,{complete=false}={}) {
- if(!Array.isArray(rows)||!rows.length||rows.length>PLAN_IMPORT_ROWS)fail('PLAN_IMPORT_ROWS_LIMIT');
+ if(!Array.isArray(rows)||!rows.length||rows.length>PLAN_IMPORT_ROWS)rejectRows('ROW_COUNT','ROWS','PLAN_IMPORT_ROWS_LIMIT');
  const normalized=rows.map(row=>{
-  if(!row||typeof row!=='object'||Array.isArray(row)||Object.keys(row).sort().join('|')!=='endsOn|evidence|startsOn|title|uncertainty')fail('PLAN_IMPORT_ROWS_INVALID');
-  const title=planText(row.title),evidence=planText(row.evidence,500),uncertainty=row.uncertainty===''?'':planText(row.uncertainty,500);
-  const dates=[row.startsOn,row.endsOn].map(v=>v===null||v===''?null:calendarDate(v)?v:fail('PLAN_IMPORT_DATES_INVALID'));
-  if(dates.every(Boolean)&&dates[1]<dates[0])fail('PLAN_IMPORT_DATES_INVALID');
-  if(complete&&(!dates.every(Boolean)||uncertainty))fail('PLAN_IMPORT_REVIEW_REQUIRED',409);
-  if(!complete&&!dates.every(Boolean)&&!uncertainty)fail('PLAN_IMPORT_ROWS_INVALID');
+  if(!row||typeof row!=='object'||Array.isArray(row)||Object.keys(row).sort().join('|')!=='endsOn|evidence|startsOn|title|uncertainty')rejectRows('ROW_KEYS');
+  const title=rowText(row.title,PLAN_IMPORT_TEXT_LIMITS.title,'TITLE'),evidence=rowText(row.evidence,PLAN_IMPORT_TEXT_LIMITS.evidence,'EVIDENCE'),uncertainty=row.uncertainty===''?'':rowText(row.uncertainty,PLAN_IMPORT_TEXT_LIMITS.uncertainty,'UNCERTAINTY');
+  const dates=[row.startsOn,row.endsOn].map((value,index)=>value===null||value===''?null:calendarDate(value)?value:rejectRows('DATE_FORMAT',index===0?'STARTS_ON':'ENDS_ON','PLAN_IMPORT_DATES_INVALID'));
+  if(dates.every(Boolean)&&dates[1]<dates[0])rejectRows('DATE_ORDER','DATES','PLAN_IMPORT_DATES_INVALID');
+  if(complete&&(!dates.every(Boolean)||uncertainty))rejectRows('REVIEW_REQUIRED','DATES','PLAN_IMPORT_REVIEW_REQUIRED',409);
+  if(!complete&&!dates.every(Boolean)&&!uncertainty)rejectRows('MISSING_DATE_UNCERTAINTY','UNCERTAINTY');
   return {title,startsOn:dates[0],endsOn:dates[1],evidence,uncertainty};
  });
  const keys=normalized.map(r=>[r.title.toLocaleLowerCase('es-AR'),r.startsOn,r.endsOn].join('|'));
- if(new Set(keys).size!==keys.length)fail('PLAN_IMPORT_DUPLICATE_ROWS');
+ if(new Set(keys).size!==keys.length)rejectRows('DUPLICATE_ROWS','ROWS','PLAN_IMPORT_DUPLICATE_ROWS');
  return normalized;
 }
 export function normalizePlanDecision(input) {
