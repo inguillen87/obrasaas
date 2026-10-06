@@ -1,14 +1,25 @@
+# PRIVATE PROPOSAL: no tracked workflow change or CI run. Baseline b671dc697d9493fc171ed38432544d7a9d970968.
 name: Authorized workspace acceptance
-on:
+"on":
   push:
-    branches: [master, 'feat/integral-worksite-*', 'feat/pilot-readiness-*', 'feat/professional-experience-*', 'feat/local-font-*', 'hotfix/production-workspace-*', 'hotfix/customer-whatsapp-self-service-*', 'hotfix/new-constructor-onboarding-*', 'hotfix/field-team-journal-*', 'fix/whatsapp-signup-*', 'fix/clerk-*']
-  workflow_dispatch:
+    branches:
+      - master
+      - feat/integral-worksite-*
+      - feat/pilot-readiness-*
+      - feat/professional-experience-*
+      - feat/local-font-*
+      - hotfix/production-workspace-*
+      - hotfix/customer-whatsapp-self-service-*
+      - hotfix/new-constructor-onboarding-*
+      - hotfix/field-team-journal-*
+      - fix/whatsapp-signup-*
+      - fix/clerk-*
+  workflow_dispatch: null
 permissions:
   contents: read
 jobs:
-  workspace:
+  contracts:
     runs-on: ubuntu-latest
-    # The full 51-step run took 54 minutes; retain every suite and allow new UI coverage.
     timeout-minutes: 75
     services:
       postgres:
@@ -17,19 +28,23 @@ jobs:
           POSTGRES_USER: cutover_test
           POSTGRES_PASSWORD: cutover_test
           POSTGRES_DB: obrasaas_cutover_ci
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
-          --health-interval 5s --health-timeout 5s --health-retries 12
+        ports:
+          - "5432:5432"
+        options: "--health-cmd \"pg_isready -U cutover_test -d obrasaas_cutover_ci\" --health-interval 5s --health-timeout 5s --health-retries 12"
     env:
-      NEXT_TELEMETRY_DISABLED: '1'
-      CUTOVER_TEST_DISPOSABLE: '1'
+      NEXT_TELEMETRY_DISABLED: "1"
+      CUTOVER_TEST_DISPOSABLE: "1"
       CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
       DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    outputs:
+      provenance: ${{ steps.provenance.outputs.record }}
+      artifactId: ${{ steps.evidence.outputs.artifact-id }}
+      artifactDigest: ${{ steps.evidence.outputs.artifact-digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 24
@@ -37,7 +52,15 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
-          python-version: '3.12'
+          python-version: "3.12"
+      - name: Verify exact source, workflow and fresh evidence
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs preflight --lane contracts --expected-head "$GITHUB_SHA"
+      - name: Pinned Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: CI gate helper lint and negative controls
+        run: |
+          npx eslint .github/scripts/verify-workspace-ci-parallelization.mjs --max-warnings 0
+          node .github/scripts/verify-workspace-ci-parallelization.mjs selftest --expected-head "$GITHUB_SHA"
       - name: Private facial assistance, protocol and real public model fixtures
         run: |
           python -m pip install --disable-pip-version-check -r requirements.txt
@@ -48,11 +71,71 @@ jobs:
       - run: node --test tests/production-disposable-postgres-cleanup.test.mjs tests/production-site-register.test.mjs tests/production-site-photo.test.mjs tests/production-workspace*.test.mjs tests/production-customer-whatsapp-setup.test.mjs tests/production-customer-whatsapp-view.test.mjs tests/production-company-onboarding.test.mjs
       - name: Workspace lint
         run: npx eslint scripts/lib/disposable-postgres-cleanup.mjs tests/production-disposable-postgres-cleanup.test.mjs src/lib/workspace-*.mjs src/lib/verified-session.mjs src/app/api/identity/workspace/route.js tests/production-workspace*.test.mjs scripts/verify-workspace-postgres.mjs scripts/verify-company-onboarding-postgres.mjs scripts/verify-site-register-postgres.mjs scripts/verify-site-register-ui.mjs src/lib/site-register-*.mjs src/lib/site-photo-*.mjs src/app/api/identity/site-photo/route.js tests/production-site-photo.test.mjs tests/production-site-register.test.mjs src/app/api/identity/site-register/route.js scripts/verify-company-onboarding-ui.mjs scripts/verify-company-onboarding-readonly.mjs scripts/lib/company-schema-preflight.mjs tests/production-company-schema-preflight.test.mjs src/lib/company-onboarding-*.mjs src/app/api/identity/company-onboarding/route.js src/app/api/identity/task-creation/route.js tests/production-company-onboarding.test.mjs scripts/verify-workspace-ui.mjs scripts/verify-customer-whatsapp-ui.mjs scripts/lib/meta-template-catalog-check.mjs scripts/verify-meta-template-catalog.mjs tests/production-meta-template-catalog.test.mjs src/lib/customer-whatsapp-*.mjs src/lib/whatsapp/tenant-workspace-policy.js src/lib/whatsapp/project-workspace-profile.js src/app/api/identity/whatsapp-setup/route.js tests/production-customer-whatsapp-setup.test.mjs tests/production-customer-whatsapp-view.test.mjs 'src/app/(identity)/cuenta'
-      - run: node scripts/verify-workspace-postgres.mjs
       - name: Safe company contact adoption and preserved historical principals
         run: |
           npx eslint scripts/lib/company-contact-migration.mjs scripts/adopt-company-contact-schema.mjs tests/production-company-contact-migration.test.mjs --max-warnings 0
           node --test tests/production-company-contact-migration.test.mjs
+      - run: node --test tests/production-participant*.test.mjs tests/production-field-*.test.mjs tests/production-meta-customer*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-kyc*.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs tests/production-pilot-media.test.mjs tests/production-video-frame-extractor.test.mjs tests/production-worker-channel*.test.mjs tests/production-operations-status.test.mjs tests/production-site-purchase.test.mjs tests/production-progress-measurement-quantity.test.mjs
+      - run: npx eslint src/lib/pilot-media.mjs src/lib/video-frame-extractor.mjs src/lib/meta-kyc-*.mjs tests/production-meta-kyc*.test.mjs tests/production-video-frame-extractor.test.mjs tests/production-pilot-media.test.mjs --max-warnings 0
+      - name: Integral worksite lint
+        run: npx eslint src/lib/participant-*.mjs src/lib/field-*.mjs src/lib/meta-customer-*.mjs src/lib/whatsapp/template-review-policy.js src/lib/whatsapp/obra-intent-policy.js src/lib/whatsapp/field-worker-intent-policy.js src/lib/whatsapp/operational-proposal-decision-policy.js src/lib/site-purchase-*.mjs src/lib/operations-status.mjs src/lib/geo.js src/lib/procurement-*.js src/lib/progress-measurement-quantity.js src/app/api/identity/participants src/app/api/identity/participant-join src/app/api/identity/field-operations src/app/api/identity/field-media src/app/api/identity/field-qr src/app/api/identity/site-purchases src/app/api/identity/operations-status src/app/api/identity/meta-onboarding src/app/api/meta/customer-callback scripts/verify-participants-*.mjs scripts/verify-field-operations-*.mjs scripts/verify-meta-customer-*.mjs scripts/verify-site-purchase-*.mjs tests/production-participants.test.mjs tests/production-field-operations.test.mjs tests/production-field-qr-reprint.test.mjs tests/production-meta-customer.test.mjs tests/production-site-purchase.test.mjs
+      - run: npx eslint tests/production-participant-receipt-access.test.mjs tests/production-participant-invitation-email.test.mjs tests/production-participant-kyc-replay.test.mjs tests/production-participant-join-replay.test.mjs --max-warnings 0
+      - name: Meta SDK loading and explicit recovery
+        run: |
+          npx eslint 'src/app/(identity)/cuenta/meta-sdk-loader.mjs' tests/production-meta-sdk-loader.test.mjs
+          node --test tests/production-meta-sdk-loader.test.mjs
+      - name: Record bounded synthetic provenance
+        id: provenance
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane contracts --expected-head "$GITHUB_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: evidence
+        if: always()
+        with:
+          name: workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-contracts
+          path: |
+            .vercel/private/biometric-real-model-proof.json
+            .vercel/workspace-ci-evidence/lane-contracts.json
+          include-hidden-files: true
+          retention-days: 7
+  plans:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports:
+          - "5432:5432"
+        options: "--health-cmd \"pg_isready -U cutover_test -d obrasaas_cutover_ci\" --health-interval 5s --health-timeout 5s --health-retries 12"
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      CUTOVER_TEST_DISPOSABLE: "1"
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    outputs:
+      provenance: ${{ steps.provenance.outputs.record }}
+      artifactId: ${{ steps.evidence.outputs.artifact-id }}
+      artifactDigest: ${{ steps.evidence.outputs.artifact-digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - name: Verify exact source, workflow and fresh evidence
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs preflight --lane plans --expected-head "$GITHUB_SHA"
+      - name: Pinned Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
       - name: Reviewed PDF and image plan import, atomic lot and receipt recovery
         run: |
           npx eslint src/lib/plan-import-*.mjs src/app/api/identity/plan-import 'src/app/(identity)/cuenta/plan-import-panel.js' scripts/lib/plan-import-live-check.mjs scripts/verify-plan-import-*.mjs scripts/verify-workspace-plan-recovery-ui.mjs scripts/fixtures/generate-plan-import-fixtures.mjs tests/production-plan-import*.test.mjs --max-warnings 0
@@ -61,87 +144,64 @@ jobs:
           node scripts/verify-plan-import-boundary.mjs
           node scripts/verify-plan-import-ui.mjs
           node scripts/verify-workspace-plan-recovery-ui.mjs
-      - run: node scripts/verify-site-register-postgres.mjs
-      - run: node --test tests/production-participant*.test.mjs tests/production-field-*.test.mjs tests/production-meta-customer*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-kyc*.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs tests/production-pilot-media.test.mjs tests/production-video-frame-extractor.test.mjs tests/production-worker-channel*.test.mjs tests/production-operations-status.test.mjs tests/production-site-purchase.test.mjs tests/production-progress-measurement-quantity.test.mjs
-      - run: npx eslint src/lib/pilot-media.mjs src/lib/video-frame-extractor.mjs src/lib/meta-kyc-*.mjs tests/production-meta-kyc*.test.mjs tests/production-video-frame-extractor.test.mjs tests/production-pilot-media.test.mjs --max-warnings 0
-      - name: Integral worksite lint
-        run: npx eslint src/lib/participant-*.mjs src/lib/field-*.mjs src/lib/meta-customer-*.mjs src/lib/whatsapp/template-review-policy.js src/lib/whatsapp/obra-intent-policy.js src/lib/whatsapp/field-worker-intent-policy.js src/lib/whatsapp/operational-proposal-decision-policy.js src/lib/site-purchase-*.mjs src/lib/operations-status.mjs src/lib/geo.js src/lib/procurement-*.js src/lib/progress-measurement-quantity.js src/app/api/identity/participants src/app/api/identity/participant-join src/app/api/identity/field-operations src/app/api/identity/field-media src/app/api/identity/field-qr src/app/api/identity/site-purchases src/app/api/identity/operations-status src/app/api/identity/meta-onboarding src/app/api/meta/customer-callback scripts/verify-participants-*.mjs scripts/verify-field-operations-*.mjs scripts/verify-meta-customer-*.mjs scripts/verify-site-purchase-*.mjs tests/production-participants.test.mjs tests/production-field-operations.test.mjs tests/production-field-qr-reprint.test.mjs tests/production-meta-customer.test.mjs tests/production-site-purchase.test.mjs
-      - run: npx eslint tests/production-participant-receipt-access.test.mjs tests/production-participant-invitation-email.test.mjs tests/production-participant-kyc-replay.test.mjs tests/production-participant-join-replay.test.mjs --max-warnings 0
+      - name: Record bounded synthetic provenance
+        id: provenance
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane plans --expected-head "$GITHUB_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: evidence
+        if: always()
+        with:
+          name: workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-plans
+          path: |
+            .vercel/private/plan-import-postgres-validation.json
+            .vercel/private/plan-import-boundary-validation.json
+            .vercel/private/plan-import-ui-validation.json
+            .vercel/private/plan-import-ui-*.png
+            .vercel/private/workspace-plan-recovery-ui-validation.json
+            .vercel/workspace-ci-evidence/lane-plans.json
+          include-hidden-files: true
+          retention-days: 7
+  people:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports:
+          - "5432:5432"
+        options: "--health-cmd \"pg_isready -U cutover_test -d obrasaas_cutover_ci\" --health-interval 5s --health-timeout 5s --health-retries 12"
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      CUTOVER_TEST_DISPOSABLE: "1"
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    outputs:
+      provenance: ${{ steps.provenance.outputs.record }}
+      artifactId: ${{ steps.evidence.outputs.artifact-id }}
+      artifactDigest: ${{ steps.evidence.outputs.artifact-digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - name: Verify exact source, workflow and fresh evidence
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs preflight --lane people --expected-head "$GITHUB_SHA"
+      - name: Pinned Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
       - run: node scripts/verify-participants-postgres.mjs
       - run: node scripts/verify-meta-kyc-chat-postgres.mjs
-      - run: node scripts/verify-field-operations-postgres.mjs
-      - name: Material catalog, authorized consumption and durable recovery
-        run: |
-          npx eslint src/lib/material-inventory.mjs 'src/app/(identity)/cuenta/material-inventory-panel.js' 'src/app/(identity)/cuenta/material-inventory-view.mjs' scripts/verify-material-inventory-*.mjs tests/production-material-inventory.test.mjs --max-warnings 0
-          node --test tests/production-material-inventory.test.mjs
-          node scripts/verify-material-inventory-postgres.mjs
-          node scripts/verify-material-inventory-boundary.mjs
-          node scripts/verify-material-inventory-ui.mjs
-      - run: node scripts/verify-meta-customer-postgres.mjs
-      - name: Feature-gated WhatsApp Business App coexistence and private source preservation
-        run: |
-          npx eslint src/lib/meta-customer-coexistence.mjs src/lib/meta-customer-app-projection.mjs scripts/verify-meta-customer-coexistence-postgres.mjs tests/production-meta-customer-coexistence.test.mjs --max-warnings 0
-          node --test tests/production-meta-customer-coexistence.test.mjs
-          node scripts/verify-meta-customer-coexistence-postgres.mjs
-      - name: Customer inbox pagination and operation recovery
-        run: |
-          npx eslint scripts/verify-customer-inbox-*.mjs tests/production-customer-inbox.test.mjs
-          node --test tests/production-customer-inbox.test.mjs
-          node scripts/verify-customer-inbox-postgres.mjs
-      - name: Meta SDK loading and explicit recovery
-        run: |
-          npx eslint 'src/app/(identity)/cuenta/meta-sdk-loader.mjs' tests/production-meta-sdk-loader.test.mjs
-          node --test tests/production-meta-sdk-loader.test.mjs
-      - name: Channel identity and integrated field transactions
-        run: |
-          npx eslint src/lib/worker-channel-*.mjs src/lib/meta-field-*.mjs src/app/api/identity/worker-channel src/app/api/meta/customer-process scripts/verify-worker-channel-*.mjs scripts/verify-meta-field-*.mjs scripts/verify-meta-customer-processing-*.mjs scripts/verify-operations-status-ui.mjs tests/production-worker-channel*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-customer-processing.test.mjs tests/production-operations-status.test.mjs
-          node scripts/verify-worker-channel-postgres.mjs
-          node scripts/verify-meta-customer-processing-postgres.mjs
-          node scripts/verify-meta-field-bridge-postgres.mjs
-      - name: Restricted own-business Meta pilot and authorization expiry
-        run: |
-          npx eslint src/lib/meta-development-pilot-policy.mjs src/lib/meta-customer-provider.mjs src/lib/meta-customer-onboarding.mjs src/lib/meta-customer-activation.mjs src/lib/meta-customer-app-projection.mjs src/lib/meta-customer-outbound.mjs src/lib/meta-customer-processing-runtime.mjs src/lib/meta-customer-processing.mjs src/lib/meta-field-bridge.mjs src/lib/worker-channel-identity.mjs src/lib/company-channel-store.mjs 'src/app/(identity)/cuenta/meta-onboarding-panel.js' 'src/app/(identity)/cuenta/meta-onboarding-readiness-view.mjs' tests/production-meta-development-pilot.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs scripts/verify-meta-development-pilot-postgres.mjs scripts/verify-meta-development-pilot-boundary.mjs scripts/verify-meta-development-pilot-ui.mjs scripts/verify-meta-customer-ui.mjs --max-warnings 0
-          node --test tests/production-meta-development-pilot.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs
-          node scripts/verify-meta-development-pilot-postgres.mjs
-          node scripts/verify-meta-development-pilot-boundary.mjs
-          node scripts/verify-meta-development-pilot-ui.mjs
-      - name: Signup to participant field lifecycle
-        run: |
-          npx eslint scripts/verify-meta-signup-field-lifecycle-postgres.mjs scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs tests/production-meta-signup-field-lifecycle.test.mjs
-          node --test tests/production-meta-signup-field-lifecycle.test.mjs
-          node scripts/verify-meta-signup-field-lifecycle-postgres.mjs
-      - name: Corporate worksite selection and canonical shared attendance
-        run: |
-          npx eslint src/lib/company-channel-*.mjs src/lib/person-worksite-journey.mjs src/app/api/identity/company-channel 'src/app/(identity)/cuenta/company-channel-panel.js' 'src/app/(identity)/cuenta/company-channel-view.mjs' scripts/lib/company-channel-*.mjs scripts/adopt-company-channel-schema.mjs scripts/verify-company-channel-*.mjs tests/production-company-channel*.test.mjs --max-warnings 0
-          node --test tests/production-company-channel*.test.mjs
-          node scripts/verify-company-channel-postgres.mjs
-          node scripts/verify-company-channel-boundary.mjs
-          node scripts/verify-company-channel-ui.mjs
-      - name: Consented attendance and progress notices with signed status recovery
-        run: |
-          npx eslint src/lib/meta-customer-template-send*.mjs src/lib/worker-channel-consent-policy.mjs src/app/api/identity/template-send tests/production-meta-customer-template-send.test.mjs tests/production-template-send-view.test.mjs scripts/verify-meta-customer-template-send-postgres.mjs scripts/verify-template-send-ui.mjs
-          node --test tests/production-meta-customer-template-send.test.mjs tests/production-template-send-view.test.mjs
-          node scripts/verify-meta-customer-template-send-postgres.mjs
-          node scripts/verify-template-send-ui.mjs
-      - name: Canonical constructor CRM ownership and receipt recovery
-        run: |
-          npx eslint src/lib/constructor-crm-*.mjs src/lib/enterprise-crm-policy.mjs src/app/api/identity/constructor-crm scripts/lib/constructor-crm-*.mjs scripts/verify-constructor-crm-*.mjs scripts/adopt-constructor-crm-schema.mjs tests/production-constructor-crm*.test.mjs
-          node --test tests/production-constructor-crm*.test.mjs
-          node scripts/verify-constructor-crm-adoption-postgres.mjs
-          node scripts/verify-constructor-crm-postgres.mjs
-          node scripts/verify-constructor-crm-ui.mjs
-      - run: node scripts/verify-site-purchase-postgres.mjs
-      - name: Bounded demo pilot uses canonical signed inbox and isolated credentials
-        run: |
-          npx eslint src/lib/meta-cloud-protocol.mjs src/lib/meta-app-*.mjs src/lib/meta-callback-diagnostics.mjs src/lib/meta-recovery-diagnostics.mjs src/lib/meta-demo-pilot*.mjs src/app/api/identity/demo-pilot src/app/api/webhooks/whatsapp tests/production-meta-callback-diagnostics.test.mjs tests/production-meta-recovery-diagnostics.test.mjs tests/production-field-proposal-evidence.test.mjs tests/production-meta-demo-pilot.test.mjs tests/production-demo-pilot-view.test.mjs scripts/verify-meta-demo-pilot-postgres.mjs scripts/fixtures/meta-demo-pilot-fixture.mjs scripts/verify-demo-pilot-ui.mjs
-          node --test tests/production-meta-callback-diagnostics.test.mjs tests/production-meta-recovery-diagnostics.test.mjs tests/production-meta-demo-pilot.test.mjs tests/production-demo-pilot-view.test.mjs
-          node scripts/verify-meta-demo-pilot-postgres.mjs
-          node scripts/verify-demo-pilot-ui.mjs
-      - name: Public manual and contextual first-use guide
-        run: |
-          npx eslint src/app/manual 'src/app/(identity)/cuenta/onboarding-guide.js' scripts/verify-manual-ui.mjs scripts/verify-onboarding-guide-ui.mjs
-          node scripts/verify-manual-ui.mjs
-          node scripts/verify-onboarding-guide-ui.mjs
       - run: node scripts/verify-participants-ui.mjs
       - run: node scripts/verify-participant-ai-ui.mjs
       - name: Bounded private KYC photo preparation and explicit visual review
@@ -153,16 +213,373 @@ jobs:
         run: |
           npx eslint scripts/verify-mobile-workspace-review-ui.mjs --max-warnings 0
           node scripts/verify-mobile-workspace-review-ui.mjs
+      - name: Record bounded synthetic provenance
+        id: provenance
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane people --expected-head "$GITHUB_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: evidence
+        if: always()
+        with:
+          name: workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-people
+          path: |
+            .vercel/private/mobile-workspace-review-ui-validation.json
+            .vercel/private/mobile-workspace-review-ui-*.png
+            .vercel/participants-evidence/
+            .vercel/meta-kyc-chat-evidence/
+            .vercel/mobile-identity-evidence/
+            .vercel/workspace-ci-evidence/lane-people.json
+          include-hidden-files: true
+          retention-days: 7
+  field:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports:
+          - "5432:5432"
+        options: "--health-cmd \"pg_isready -U cutover_test -d obrasaas_cutover_ci\" --health-interval 5s --health-timeout 5s --health-retries 12"
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      CUTOVER_TEST_DISPOSABLE: "1"
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    outputs:
+      provenance: ${{ steps.provenance.outputs.record }}
+      artifactId: ${{ steps.evidence.outputs.artifact-id }}
+      artifactDigest: ${{ steps.evidence.outputs.artifact-digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - name: Verify exact source, workflow and fresh evidence
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs preflight --lane field --expected-head "$GITHUB_SHA"
+      - name: Pinned Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - run: node scripts/verify-field-operations-postgres.mjs
       - run: node scripts/verify-field-operations-ui.mjs
       - name: Local QR decoding and camera cancellation
         run: |
           npx eslint scripts/verify-field-qr-ui.mjs tests/production-field-qr-reader.test.mjs --max-warnings 0
           node scripts/verify-field-qr-ui.mjs
+      - name: Record bounded synthetic provenance
+        id: provenance
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane field --expected-head "$GITHUB_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: evidence
+        if: always()
+        with:
+          name: workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-field
+          path: |
+            .vercel/field-operations-evidence/
+            .vercel/field-qr-evidence/
+            .vercel/workspace-ci-evidence/lane-field.json
+          include-hidden-files: true
+          retention-days: 7
+  meta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports:
+          - "5432:5432"
+        options: "--health-cmd \"pg_isready -U cutover_test -d obrasaas_cutover_ci\" --health-interval 5s --health-timeout 5s --health-retries 12"
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      CUTOVER_TEST_DISPOSABLE: "1"
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    outputs:
+      provenance: ${{ steps.provenance.outputs.record }}
+      artifactId: ${{ steps.evidence.outputs.artifact-id }}
+      artifactDigest: ${{ steps.evidence.outputs.artifact-digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - name: Verify exact source, workflow and fresh evidence
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs preflight --lane meta --expected-head "$GITHUB_SHA"
+      - name: Pinned Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - run: node scripts/verify-meta-customer-postgres.mjs
+      - name: Feature-gated WhatsApp Business App coexistence and private source preservation
+        run: |
+          npx eslint src/lib/meta-customer-coexistence.mjs src/lib/meta-customer-app-projection.mjs scripts/verify-meta-customer-coexistence-postgres.mjs tests/production-meta-customer-coexistence.test.mjs --max-warnings 0
+          node --test tests/production-meta-customer-coexistence.test.mjs
+          node scripts/verify-meta-customer-coexistence-postgres.mjs
+      - name: Channel identity and integrated field transactions
+        run: |
+          npx eslint src/lib/worker-channel-*.mjs src/lib/meta-field-*.mjs src/app/api/identity/worker-channel src/app/api/meta/customer-process scripts/verify-worker-channel-*.mjs scripts/verify-meta-field-*.mjs scripts/verify-meta-customer-processing-*.mjs scripts/verify-operations-status-ui.mjs tests/production-worker-channel*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-customer-processing.test.mjs tests/production-operations-status.test.mjs
+          node scripts/verify-worker-channel-postgres.mjs
+          node scripts/verify-meta-customer-processing-postgres.mjs
+          node scripts/verify-meta-field-bridge-postgres.mjs
+      - name: Signup to participant field lifecycle
+        run: |
+          npx eslint scripts/verify-meta-signup-field-lifecycle-postgres.mjs scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs tests/production-meta-signup-field-lifecycle.test.mjs
+          node --test tests/production-meta-signup-field-lifecycle.test.mjs
+          node scripts/verify-meta-signup-field-lifecycle-postgres.mjs
+      - name: Consented attendance and progress notices with signed status recovery
+        run: |
+          npx eslint src/lib/meta-customer-template-send*.mjs src/lib/worker-channel-consent-policy.mjs src/app/api/identity/template-send tests/production-meta-customer-template-send.test.mjs tests/production-template-send-view.test.mjs scripts/verify-meta-customer-template-send-postgres.mjs scripts/verify-template-send-ui.mjs
+          node --test tests/production-meta-customer-template-send.test.mjs tests/production-template-send-view.test.mjs
+          node scripts/verify-meta-customer-template-send-postgres.mjs
+          node scripts/verify-template-send-ui.mjs
+      - name: Bounded demo pilot uses canonical signed inbox and isolated credentials
+        run: |
+          npx eslint src/lib/meta-cloud-protocol.mjs src/lib/meta-app-*.mjs src/lib/meta-callback-diagnostics.mjs src/lib/meta-recovery-diagnostics.mjs src/lib/meta-demo-pilot*.mjs src/app/api/identity/demo-pilot src/app/api/webhooks/whatsapp tests/production-meta-callback-diagnostics.test.mjs tests/production-meta-recovery-diagnostics.test.mjs tests/production-field-proposal-evidence.test.mjs tests/production-meta-demo-pilot.test.mjs tests/production-demo-pilot-view.test.mjs scripts/verify-meta-demo-pilot-postgres.mjs scripts/fixtures/meta-demo-pilot-fixture.mjs scripts/verify-demo-pilot-ui.mjs
+          node --test tests/production-meta-callback-diagnostics.test.mjs tests/production-meta-recovery-diagnostics.test.mjs tests/production-meta-demo-pilot.test.mjs tests/production-demo-pilot-view.test.mjs
+          node scripts/verify-meta-demo-pilot-postgres.mjs
+          node scripts/verify-demo-pilot-ui.mjs
       - run: node scripts/verify-meta-customer-ui.mjs
       - run: node scripts/verify-worker-channel-ui.mjs
+      - run: node scripts/verify-customer-whatsapp-ui.mjs
+      - name: Record bounded synthetic provenance
+        id: provenance
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane meta --expected-head "$GITHUB_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: evidence
+        if: always()
+        with:
+          name: workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-meta
+          path: |
+            .vercel/customer-whatsapp-evidence/
+            .vercel/meta-customer-evidence/
+            .vercel/worker-channel-evidence/
+            .vercel/meta-field-evidence/
+            .vercel/meta-signup-field-lifecycle-evidence/
+            .vercel/template-send-evidence/
+            .vercel/meta-demo-pilot-evidence/
+            .vercel/demo-pilot-evidence/
+            .vercel/workspace-ci-evidence/lane-meta.json
+          include-hidden-files: true
+          retention-days: 7
+  channels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports:
+          - "5432:5432"
+        options: "--health-cmd \"pg_isready -U cutover_test -d obrasaas_cutover_ci\" --health-interval 5s --health-timeout 5s --health-retries 12"
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      CUTOVER_TEST_DISPOSABLE: "1"
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    outputs:
+      provenance: ${{ steps.provenance.outputs.record }}
+      artifactId: ${{ steps.evidence.outputs.artifact-id }}
+      artifactDigest: ${{ steps.evidence.outputs.artifact-digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - name: Verify exact source, workflow and fresh evidence
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs preflight --lane channels --expected-head "$GITHUB_SHA"
+      - name: Pinned Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Restricted own-business Meta pilot and authorization expiry
+        run: |
+          npx eslint src/lib/meta-development-pilot-policy.mjs src/lib/meta-customer-provider.mjs src/lib/meta-customer-onboarding.mjs src/lib/meta-customer-activation.mjs src/lib/meta-customer-app-projection.mjs src/lib/meta-customer-outbound.mjs src/lib/meta-customer-processing-runtime.mjs src/lib/meta-customer-processing.mjs src/lib/meta-field-bridge.mjs src/lib/worker-channel-identity.mjs src/lib/company-channel-store.mjs 'src/app/(identity)/cuenta/meta-onboarding-panel.js' 'src/app/(identity)/cuenta/meta-onboarding-readiness-view.mjs' tests/production-meta-development-pilot.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs scripts/verify-meta-development-pilot-postgres.mjs scripts/verify-meta-development-pilot-boundary.mjs scripts/verify-meta-development-pilot-ui.mjs scripts/verify-meta-customer-ui.mjs --max-warnings 0
+          node --test tests/production-meta-development-pilot.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs
+          node scripts/verify-meta-development-pilot-postgres.mjs
+          node scripts/verify-meta-development-pilot-boundary.mjs
+          node scripts/verify-meta-development-pilot-ui.mjs
+      - name: Corporate worksite selection and canonical shared attendance
+        run: |
+          npx eslint src/lib/company-channel-*.mjs src/lib/person-worksite-journey.mjs src/app/api/identity/company-channel 'src/app/(identity)/cuenta/company-channel-panel.js' 'src/app/(identity)/cuenta/company-channel-view.mjs' scripts/lib/company-channel-*.mjs scripts/adopt-company-channel-schema.mjs scripts/verify-company-channel-*.mjs tests/production-company-channel*.test.mjs --max-warnings 0
+          node --test tests/production-company-channel*.test.mjs
+          node scripts/verify-company-channel-postgres.mjs
+          node scripts/verify-company-channel-boundary.mjs
+          node scripts/verify-company-channel-ui.mjs
+      - name: Record bounded synthetic provenance
+        id: provenance
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane channels --expected-head "$GITHUB_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: evidence
+        if: always()
+        with:
+          name: workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-channels
+          path: |
+            .vercel/private/restricted-meta-pilot-postgres-proof.json
+            .vercel/private/restricted-meta-pilot-boundary-proof.json
+            .vercel/private/restricted-meta-pilot-ui/proof.json
+            .vercel/private/restricted-meta-pilot-ui/active-*.png
+            .vercel/private/company-channel-postgres-proof.json
+            .vercel/private/company-channel-boundary-proof.json
+            .vercel/company-channel-ui-evidence/
+            .vercel/workspace-ci-evidence/lane-channels.json
+          include-hidden-files: true
+          retention-days: 7
+  business:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports:
+          - "5432:5432"
+        options: "--health-cmd \"pg_isready -U cutover_test -d obrasaas_cutover_ci\" --health-interval 5s --health-timeout 5s --health-retries 12"
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      CUTOVER_TEST_DISPOSABLE: "1"
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    outputs:
+      provenance: ${{ steps.provenance.outputs.record }}
+      artifactId: ${{ steps.evidence.outputs.artifact-id }}
+      artifactDigest: ${{ steps.evidence.outputs.artifact-digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - name: Verify exact source, workflow and fresh evidence
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs preflight --lane business --expected-head "$GITHUB_SHA"
+      - name: Pinned Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - run: node scripts/verify-site-register-postgres.mjs
+      - name: Material catalog, authorized consumption and durable recovery
+        run: |
+          npx eslint src/lib/material-inventory.mjs 'src/app/(identity)/cuenta/material-inventory-panel.js' 'src/app/(identity)/cuenta/material-inventory-view.mjs' scripts/verify-material-inventory-*.mjs tests/production-material-inventory.test.mjs --max-warnings 0
+          node --test tests/production-material-inventory.test.mjs
+          node scripts/verify-material-inventory-postgres.mjs
+          node scripts/verify-material-inventory-boundary.mjs
+          node scripts/verify-material-inventory-ui.mjs
+      - name: Canonical constructor CRM ownership and receipt recovery
+        run: |
+          npx eslint src/lib/constructor-crm-*.mjs src/lib/enterprise-crm-policy.mjs src/app/api/identity/constructor-crm scripts/lib/constructor-crm-*.mjs scripts/verify-constructor-crm-*.mjs scripts/adopt-constructor-crm-schema.mjs tests/production-constructor-crm*.test.mjs
+          node --test tests/production-constructor-crm*.test.mjs
+          node scripts/verify-constructor-crm-adoption-postgres.mjs
+          node scripts/verify-constructor-crm-postgres.mjs
+          node scripts/verify-constructor-crm-ui.mjs
+      - run: node scripts/verify-site-purchase-postgres.mjs
+      - name: Public manual and contextual first-use guide
+        run: |
+          npx eslint src/app/manual 'src/app/(identity)/cuenta/onboarding-guide.js' scripts/verify-manual-ui.mjs scripts/verify-onboarding-guide-ui.mjs
+          node scripts/verify-manual-ui.mjs
+          node scripts/verify-onboarding-guide-ui.mjs
       - run: node scripts/verify-operations-status-ui.mjs
       - run: node scripts/verify-site-purchase-ui.mjs
       - run: node scripts/verify-site-register-ui.mjs
+      - name: Record bounded synthetic provenance
+        id: provenance
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane business --expected-head "$GITHUB_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: evidence
+        if: always()
+        with:
+          name: workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-business
+          path: |
+            .vercel/site-register-evidence/
+            .vercel/material-inventory-evidence/
+            .vercel/purchase-evidence/
+            .vercel/operations-status-evidence/
+            .vercel/constructor-crm-evidence/
+            .vercel/constructor-crm-adoption-evidence/
+            .vercel/manual-evidence/
+            .vercel/onboarding-guide-evidence/
+            .vercel/workspace-ci-evidence/lane-business.json
+          include-hidden-files: true
+          retention-days: 7
+  workspace-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports:
+          - "5432:5432"
+        options: "--health-cmd \"pg_isready -U cutover_test -d obrasaas_cutover_ci\" --health-interval 5s --health-timeout 5s --health-retries 12"
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      CUTOVER_TEST_DISPOSABLE: "1"
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    outputs:
+      provenance: ${{ steps.provenance.outputs.record }}
+      artifactId: ${{ steps.evidence.outputs.artifact-id }}
+      artifactDigest: ${{ steps.evidence.outputs.artifact-digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - name: Verify exact source, workflow and fresh evidence
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs preflight --lane workspace-ui --expected-head "$GITHUB_SHA"
+      - name: Pinned Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - run: node scripts/verify-workspace-postgres.mjs
+      - name: Customer inbox pagination and operation recovery
+        run: |
+          npx eslint scripts/verify-customer-inbox-*.mjs tests/production-customer-inbox.test.mjs
+          node --test tests/production-customer-inbox.test.mjs
+          node scripts/verify-customer-inbox-postgres.mjs
       - run: node scripts/verify-company-onboarding-postgres.mjs
       - run: node scripts/verify-workspace-ui.mjs
       - name: Full page receipt recovery and private inbox UX
@@ -170,58 +587,69 @@ jobs:
           npx eslint scripts/verify-workspace-reload-ui.mjs scripts/verify-customer-inbox-ui.mjs tests/production-workspace-recovery-journal.test.mjs
           node scripts/verify-workspace-reload-ui.mjs
           node scripts/verify-customer-inbox-ui.mjs
-      - run: node scripts/verify-customer-whatsapp-ui.mjs
       - run: node scripts/verify-company-onboarding-ui.mjs
       - name: Clerk entry, invitation navigation and expired-session recovery
         run: |
           npx eslint src/lib/identity-return-path.mjs src/lib/session-recovery.mjs 'src/app/(identity)/identity-load-guard.js' 'src/app/(identity)/cuenta/session-recovery.js' 'src/app/(identity)/cuenta/invitation-entry.js' 'src/app/(identity)/cuenta/workspace-session-request.mjs' scripts/verify-clerk-access-ui.mjs tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs
           node --test tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs
           node scripts/verify-clerk-access-ui.mjs
+      - name: Record bounded synthetic provenance
+        id: provenance
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane workspace-ui --expected-head "$GITHUB_SHA"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        id: evidence
         if: always()
         with:
-          name: workspace-acceptance-${{ github.run_id }}
+          name: workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-workspace-ui
           path: |
             .vercel/workspace-evidence/
-            .vercel/private/plan-import-postgres-validation.json
-            .vercel/private/plan-import-boundary-validation.json
-            .vercel/private/plan-import-ui-validation.json
-            .vercel/private/plan-import-ui-*.png
-            .vercel/private/workspace-plan-recovery-ui-validation.json
-            .vercel/private/mobile-workspace-review-ui-validation.json
-            .vercel/private/mobile-workspace-review-ui-*.png
-            .vercel/customer-whatsapp-evidence/
             .vercel/company-onboarding-evidence/
-            .vercel/site-register-evidence/
-            .vercel/participants-evidence/
-            .vercel/private/biometric-real-model-proof.json
-            .vercel/meta-kyc-chat-evidence/
-            .vercel/mobile-identity-evidence/
-            .vercel/field-operations-evidence/
-            .vercel/material-inventory-evidence/
-            .vercel/field-qr-evidence/
-            .vercel/meta-customer-evidence/
-            .vercel/purchase-evidence/
-            .vercel/worker-channel-evidence/
-            .vercel/meta-field-evidence/
-            .vercel/private/restricted-meta-pilot-postgres-proof.json
-            .vercel/private/restricted-meta-pilot-boundary-proof.json
-            .vercel/private/restricted-meta-pilot-ui/proof.json
-            .vercel/private/restricted-meta-pilot-ui/active-*.png
-            .vercel/meta-signup-field-lifecycle-evidence/
-            .vercel/private/company-channel-postgres-proof.json
-            .vercel/private/company-channel-boundary-proof.json
-            .vercel/company-channel-ui-evidence/
-            .vercel/operations-status-evidence/
             .vercel/clerk-access-evidence/
             .vercel/workspace-reload-evidence/
             .vercel/customer-inbox-evidence/
-            .vercel/template-send-evidence/
-            .vercel/constructor-crm-evidence/
-            .vercel/constructor-crm-adoption-evidence/
-            .vercel/meta-demo-pilot-evidence/
-            .vercel/demo-pilot-evidence/
-            .vercel/manual-evidence/
-            .vercel/onboarding-guide-evidence/
+            .vercel/workspace-ci-evidence/lane-workspace-ui.json
+          include-hidden-files: true
+          retention-days: 7
+  workspace:
+    name: workspace
+    if: always()
+    needs:
+      - contracts
+      - plans
+      - people
+      - field
+      - meta
+      - channels
+      - business
+      - workspace-ui
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      CUTOVER_TEST_DISPOSABLE: "1"
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - name: Require every lane, artifact and exact provenance
+        env:
+          WORKSPACE_NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node .github/scripts/verify-workspace-ci-parallelization.mjs gate --expected-head "$GITHUB_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-index
+          path: .vercel/workspace-ci-evidence/gate.json
           include-hidden-files: true
           retention-days: 7
