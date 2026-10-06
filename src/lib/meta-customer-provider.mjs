@@ -7,6 +7,17 @@ import {resolveMetaTransport,readMetaJson} from './meta-whatsapp-transport.mjs';
 import {createDevelopmentPilotCapability,developmentPilotCapabilityPolicy,developmentPilotCapabilityExpiry,developmentPilotConnectionPolicy,developmentPilotPhoneMatches,assertDevelopmentPilotMember,META_DEVELOPMENT_PILOT_MODE} from './meta-development-pilot-policy.mjs';
 
 const pilotAudits=new WeakMap(),pilotInspections=new WeakMap();
+// Only fixed stage labels leave the private ownership audit. Graph responses,
+// transport errors and credential values never become public diagnostics.
+const pilotAuditCodes=new Set([
+ 'META_DEVELOPMENT_PILOT_AUDITOR_UNAVAILABLE','META_DEVELOPMENT_PILOT_AUDIT_CONFIGURATION_PENDING',
+ 'META_DEVELOPMENT_PILOT_DEBUG_REQUEST_FAILED','META_DEVELOPMENT_PILOT_DEBUG_RESPONSE_INVALID',
+ 'META_DEVELOPMENT_PILOT_AUDITOR_INVALID','META_DEVELOPMENT_PILOT_AUDITOR_APP_MISMATCH',
+ 'META_DEVELOPMENT_PILOT_AUDITOR_TYPE_UNVERIFIED','META_DEVELOPMENT_PILOT_AUDITOR_SCOPES_UNVERIFIED',
+ 'META_DEVELOPMENT_PILOT_AUDITOR_EXPIRY_UNVERIFIED','META_DEVELOPMENT_PILOT_BUSINESS_READ_FAILED',
+ 'META_DEVELOPMENT_PILOT_BUSINESS_RESPONSE_INVALID','META_DEVELOPMENT_PILOT_BUSINESS_PAGINATION_UNVERIFIED',
+ 'META_DEVELOPMENT_PILOT_UNAVAILABLE',
+]);
 export const META_CUSTOMER_INSPECTION_PHASE=Object.freeze({PRE_REGISTRATION:'PRE_REGISTRATION',OPERATIONAL:'OPERATIONAL'});
 export const metaCustomerAuthorizationReady=readiness=>readiness?.mode===META_DEVELOPMENT_PILOT_MODE?readiness.pilot?.canLaunch===true:readiness?.canLaunchMeta===true;
 export const metaCustomerScopedTransportReady=readiness=>readiness?.mode===META_DEVELOPMENT_PILOT_MODE?readiness.pilot?.canUseAttendanceTransport===true:metaCustomerTransportReady(readiness);
@@ -97,19 +108,25 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    // Independent read-only ownership auditor. Its credential is never a
    // customer transport credential and never enters an escrow or connection.
    try{
-    if(credential.error||!['app','secret','configuration','version','vault','callback','signupVersion'].every(key=>base.gates?.[key]===true))throw new WorkspaceError(code,503);
-    const auditRequest=async(path,{appToken=false}={})=>{
+     if(credential.error)throw new WorkspaceError(credential.error==='META_TRANSPORT_NOT_CONFIGURED'?'META_DEVELOPMENT_PILOT_AUDITOR_UNAVAILABLE':'META_DEVELOPMENT_PILOT_AUDIT_CONFIGURATION_PENDING',503);
+     if(!['app','secret','configuration','version','vault','callback','signupVersion'].every(key=>base.gates?.[key]===true))throw new WorkspaceError('META_DEVELOPMENT_PILOT_AUDIT_CONFIGURATION_PENDING',503);
+     const auditRequest=async(path,{appToken=false,requestCode,responseCode})=>{
      developmentPilotCapabilityPolicy(capability,environment,now());const url=new URL(`https://graph.facebook.com/${base.version}/${path}`),token=appToken?base.appId+'|'+environment.META_APP_SECRET:credential.token;
      if(!appToken)url.searchParams.set('appsecret_proof',createHmac('sha256',environment.META_APP_SECRET).update(token).digest('hex'));
-     let response;try{response=await fetchImpl(url,{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+token},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(5000)});}catch{throw new WorkspaceError(code,503);}
-     const result=await readMetaJson(response,32768).catch(()=>null);if(!response.ok||!result||typeof result!=='object'||Array.isArray(result))throw new WorkspaceError(code,503);developmentPilotCapabilityPolicy(capability,environment,now());return result;
+      let response;try{response=await fetchImpl(url,{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+token},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(5000)});}catch{throw new WorkspaceError(requestCode,503);}
+      const result=await readMetaJson(response,32768).catch(()=>null);if(!response.ok)throw new WorkspaceError(requestCode,503);if(!result||typeof result!=='object'||Array.isArray(result))throw new WorkspaceError(responseCode,503);developmentPilotCapabilityPolicy(capability,environment,now());return result;
     };
-    const debug=(await auditRequest('debug_token?'+new URLSearchParams({input_token:credential.token}),{appToken:true})).data,expiresAt=Number(debug?.expires_at);
-    if(debug?.is_valid!==true||String(debug.app_id)!==current.appId||debug.type!=='SYSTEM_USER'||!hasMetaCustomerRequiredScopes(debug.scopes)||!debug.scopes.includes('business_management')||typeof debug.expires_at!=='number'||!Number.isSafeInteger(expiresAt)||expiresAt<0||expiresAt&&expiresAt*1000<=now()+300000)throw new WorkspaceError(code,403);
-    const owned=await auditRequest(current.businessId+'/owned_whatsapp_business_accounts?'+new URLSearchParams({fields:'id',limit:'100'}));
-    if(!Array.isArray(owned.data)||owned.data.length>100||owned.paging?.next||owned.data.some(item=>!metaAssetId(String(item?.id)))||new Set(owned.data.map(item=>String(item.id))).size!==owned.data.length)throw new WorkspaceError(code,403);
+     const debug=(await auditRequest('debug_token?'+new URLSearchParams({input_token:credential.token}),{appToken:true,requestCode:'META_DEVELOPMENT_PILOT_DEBUG_REQUEST_FAILED',responseCode:'META_DEVELOPMENT_PILOT_DEBUG_RESPONSE_INVALID'})).data,expiresAt=Number(debug?.expires_at);
+     if(debug?.is_valid!==true)throw new WorkspaceError('META_DEVELOPMENT_PILOT_AUDITOR_INVALID',403);
+     if(String(debug.app_id)!==current.appId)throw new WorkspaceError('META_DEVELOPMENT_PILOT_AUDITOR_APP_MISMATCH',403);
+     if(debug.type!=='SYSTEM_USER')throw new WorkspaceError('META_DEVELOPMENT_PILOT_AUDITOR_TYPE_UNVERIFIED',403);
+     if(!hasMetaCustomerRequiredScopes(debug.scopes)||!debug.scopes.includes('business_management'))throw new WorkspaceError('META_DEVELOPMENT_PILOT_AUDITOR_SCOPES_UNVERIFIED',403);
+     if(typeof debug.expires_at!=='number'||!Number.isSafeInteger(expiresAt)||expiresAt<0||expiresAt&&expiresAt*1000<=now()+300000)throw new WorkspaceError('META_DEVELOPMENT_PILOT_AUDITOR_EXPIRY_UNVERIFIED',403);
+     const owned=await auditRequest(current.businessId+'/owned_whatsapp_business_accounts?'+new URLSearchParams({fields:'id',limit:'100'}),{requestCode:'META_DEVELOPMENT_PILOT_BUSINESS_READ_FAILED',responseCode:'META_DEVELOPMENT_PILOT_BUSINESS_RESPONSE_INVALID'});
+     if(owned.paging?.next)throw new WorkspaceError('META_DEVELOPMENT_PILOT_BUSINESS_PAGINATION_UNVERIFIED',403);
+     if(!Array.isArray(owned.data)||owned.data.length>100||owned.data.some(item=>!metaAssetId(String(item?.id)))||new Set(owned.data.map(item=>String(item.id))).size!==owned.data.length)throw new WorkspaceError('META_DEVELOPMENT_PILOT_BUSINESS_RESPONSE_INVALID',403);
     pilotAudits.set(audit,{policyDigest:current.policyDigest,expiresAt:Math.min(Date.parse(current.expiresAt),now()+60000,expiresAt?expiresAt*1000:Infinity),ownedWabas:Object.freeze(owned.data.map(item=>String(item.id)))});
-   }catch(error){code=error instanceof WorkspaceError&&error.code==='META_DEVELOPMENT_PILOT_UNAVAILABLE'?error.code:code;pilotAudits.set(audit,{policyDigest:current.policyDigest,expiresAt:0,code});}
+    }catch(error){code=error instanceof WorkspaceError&&pilotAuditCodes.has(error.code)?error.code:code;pilotAudits.set(audit,{policyDigest:current.policyDigest,expiresAt:0,code});}
    return createMetaCustomerProvider({environment,fetchImpl,now,readiness,pilotCapability:capability,pilotAudit:audit});
   },
   async forConnection({capability,connection,token}){

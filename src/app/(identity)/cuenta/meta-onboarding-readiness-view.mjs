@@ -23,6 +23,22 @@ const recoveryStates=['PAUSED','VERIFYING','REVIEW_REQUIRED','RESTORED','KEPT_DI
 const pausedStates=['PAUSED','VERIFYING','REVIEW_REQUIRED','MANUAL_REVIEW_REQUIRED'];
 const guardCodes=['META_CUSTOMER_LIFECYCLE_ORDER_UNCONFIRMED','META_CUSTOMER_LEGACY_LIFECYCLE_REVIEW_REQUIRED','META_CUSTOMER_ACTIVATION_RECONNECTION_REQUIRED','META_CUSTOMER_ACTIVATION_REAUTHORIZATION_REQUIRED','META_CUSTOMER_RECONNECTION_PAUSE_REQUIRED','META_CUSTOMER_RECONNECTION_PREPARATION_REQUIRED','META_CUSTOMER_RECONNECTION_PROVIDER_EVIDENCE_REQUIRED','META_CUSTOMER_SUBSCRIPTION_UNCONFIRMED','META_CUSTOMER_RECONNECTION_CHANGED','META_CUSTOMER_RECONNECTION_MANUAL_OVERRIDE','META_CUSTOMER_RECONNECTION_UNCONFIRMED'];
 const pilotMode=readiness=>readiness?.mode==='DEVELOPMENT_PILOT';
+const pilotReasons=Object.freeze({
+ META_DEVELOPMENT_PILOT_AUDITOR_UNAVAILABLE:'La credencial de consulta del servidor o su configuración no está disponible. Pedí al equipo de ObraSaaS que la revise.',
+ META_DEVELOPMENT_PILOT_AUDIT_CONFIGURATION_PENDING:'La configuración privada de la consulta necesita revisión del equipo de ObraSaaS.',
+ META_DEVELOPMENT_PILOT_DEBUG_REQUEST_FAILED:'No se pudo consultar la autorización del servidor en Meta. El equipo de ObraSaaS debe revisar su acceso antes de continuar.',
+ META_DEVELOPMENT_PILOT_DEBUG_RESPONSE_INVALID:'Meta no devolvió una comprobación válida de la autorización del servidor. Pedí al equipo de ObraSaaS que revise la consulta.',
+ META_DEVELOPMENT_PILOT_AUDITOR_INVALID:'Meta no confirmó como válida la autorización de consulta del servidor. El equipo de ObraSaaS debe revisarla.',
+ META_DEVELOPMENT_PILOT_AUDITOR_APP_MISMATCH:'La autorización de consulta no corresponde a la aplicación de este piloto. El equipo de ObraSaaS debe revisar la configuración.',
+ META_DEVELOPMENT_PILOT_AUDITOR_TYPE_UNVERIFIED:'No se confirmó el tipo de autorización del servidor requerido para consultar la propiedad del negocio. Pedí al equipo de ObraSaaS que lo revise.',
+ META_DEVELOPMENT_PILOT_AUDITOR_SCOPES_UNVERIFIED:'No se confirmaron todos los permisos de consulta requeridos. El equipo de ObraSaaS debe revisar la autorización del servidor.',
+ META_DEVELOPMENT_PILOT_AUDITOR_EXPIRY_UNVERIFIED:'La vigencia de la autorización del servidor no cumple las condiciones de esta consulta. El equipo de ObraSaaS debe revisarla.',
+ META_DEVELOPMENT_PILOT_BUSINESS_READ_FAILED:'No se pudo consultar la propiedad del negocio en Meta. El equipo de ObraSaaS debe revisar el acceso; este resultado no confirma que falten permisos.',
+ META_DEVELOPMENT_PILOT_BUSINESS_RESPONSE_INVALID:'La consulta de propiedad no devolvió una lista válida. Pedí al equipo de ObraSaaS que revise el resultado antes de continuar.',
+ META_DEVELOPMENT_PILOT_BUSINESS_PAGINATION_UNVERIFIED:'La consulta de propiedad quedó incompleta. El equipo de ObraSaaS debe revisarla; el piloto sigue sin habilitarse.',
+ META_DEVELOPMENT_PILOT_UNAVAILABLE:'La autorización limitada ya no está vigente para este contexto. Revisá la cuenta, empresa, obra y vencimiento con el equipo de ObraSaaS.',
+});
+export const metaOnboardingPilotReason=value=>Object.hasOwn(pilotReasons,value)?pilotReasons[value]:'No se pudo comprobar la disponibilidad del piloto. Pedí al equipo de ObraSaaS que revise la consulta.';
 export const metaOnboardingCanAuthorize=(readiness,now=Date.now())=>pilotMode(readiness)?readiness.pilot?.canLaunch===true&&Date.parse(readiness.pilot.expiresAt)>now:readiness?.canLaunchMeta===true;
 export function metaOnboardingFlow(readiness,numberMode,now=Date.now()){return pilotMode(readiness)?{available:numberMode==='DEDICATED'&&metaOnboardingCanAuthorize(readiness,now),configId:readiness.configId}:readiness?.flows?.[numberMode];}
 
@@ -45,7 +61,7 @@ function validateChannelState(result){
 
 function channelView(result,now){
  const activation=result.activation,r=result.coexistence?.recovery,l=result.coexistence?.lifecycle;
- if(pilotMode(result.readiness)){const available=metaOnboardingCanAuthorize(result.readiness,now),expired=Date.parse(result.readiness.pilot.expiresAt)<=now,active=activation?.attendanceOperational===true&&available,disabled=activation?.state==='DEACTIVATED';return {state:active?'Asistencia limitada habilitada':disabled?'Desactivado por el administrador':expired?'Autorización limitada vencida':'Piloto pendiente de habilitación',detail:'El piloto propio permite vínculo individual y asistencia en esta obra hasta su vencimiento. Identidad por chat, archivos, Flows, plantillas, avances, stock y otras obras siguen pendientes.',next:active?'Comprobá recepción, respuesta, entrega y fichajes con participantes aprobados en teléfonos reales.':!available?'La autorización limitada no está disponible. Conservamos el intento; actualizá su estado o desactivá el canal.':null,canKeepDisabled:!active&&activation?.canDeactivate===true,recovery:r||null,lifecycle:l||null,showRecovery:Boolean(r||l||disabled)};}
+  if(pilotMode(result.readiness)){const available=metaOnboardingCanAuthorize(result.readiness,now),expired=Date.parse(result.readiness.pilot.expiresAt)<=now,active=activation?.attendanceOperational===true&&available,disabled=activation?.state==='DEACTIVATED';return {state:active?'Asistencia limitada habilitada':disabled?'Desactivado por el administrador':expired?'Autorización limitada vencida':'Piloto pendiente de habilitación',detail:'El piloto propio permite vínculo individual y asistencia en esta obra hasta su vencimiento. Identidad por chat, archivos, Flows, plantillas, avances, stock y otras obras siguen pendientes.',next:active?'Comprobá recepción, respuesta, entrega y fichajes con participantes aprobados en teléfonos reales.':!available?`La autorización limitada no está disponible. ${expired?'Venció el plazo de este piloto.':metaOnboardingPilotReason(result.readiness.pilot.code)} Conservamos el intento; actualizá su estado o desactivá el canal.`:null,canKeepDisabled:!active&&activation?.canDeactivate===true,recovery:r||null,lifecycle:l||null,showRecovery:Boolean(r||l||disabled)};}
  const guarded=activation?.canActivate===false&&guardCodes.includes(activation.lastCode);
  const manual=activation?.state==='DEACTIVATED'||r?.state==='KEPT_DISABLED';
  let state=activation?.operational===true?'Canal habilitado':'Pendiente de habilitación';

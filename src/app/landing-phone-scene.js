@@ -69,8 +69,8 @@ export function LandingPhoneScene(){
  function play(){if(playing){stopMotion();setPlaying(false);return;}if(reduced||!inView||document.hidden)return;if(step>=3)setStep(1);setPlaying(true);}
  function next(){stopMotion();setPlaying(false);setStep(value=>Math.min(3,value+1));}
  const running=playing&&inView&&!reduced&&step<3;
- return <section ref={root} className={styles.scene} aria-label="Demostración ilustrativa de campo a oficina" data-landing-example="phone" data-phone-scene={example.id} data-phone-device={device} data-phone-step={shown} data-phone-playing={running?'true':'false'} data-phone-in-view={inView?'true':'false'}>
-  <div className={styles.topline}><span>CAMPO → OFICINA</span><span>Ejemplo ilustrativo</span></div>
+ return <section ref={root} className={styles.scene} aria-label="Ejemplo de WhatsApp en obra" data-landing-example="phone" data-phone-scene={example.id} data-phone-device={device} data-phone-step={shown} data-phone-playing={running?'true':'false'} data-phone-in-view={inView?'true':'false'}>
+  <div className={styles.topline}><span>Ejemplo ilustrativo</span></div>
   <div className={styles.stage}>
    <div className={styles.halo} aria-hidden="true"/>
    <div className={styles.deviceChoice} aria-label="Apariencia del teléfono">{[['iphone','iPhone'],['android','Android']].map(([value,label])=><button key={value} type="button" aria-pressed={device===value} onClick={()=>setDevice(value)}>{label}</button>)}</div>
