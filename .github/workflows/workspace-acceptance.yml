@@ -53,6 +53,14 @@ jobs:
         run: |
           npx eslint scripts/lib/company-contact-migration.mjs scripts/adopt-company-contact-schema.mjs tests/production-company-contact-migration.test.mjs --max-warnings 0
           node --test tests/production-company-contact-migration.test.mjs
+      - name: Reviewed PDF and image plan import, atomic lot and receipt recovery
+        run: |
+          npx eslint src/lib/plan-import-*.mjs src/app/api/identity/plan-import 'src/app/(identity)/cuenta/plan-import-panel.js' scripts/lib/plan-import-live-check.mjs scripts/verify-plan-import-*.mjs scripts/verify-workspace-plan-recovery-ui.mjs scripts/fixtures/generate-plan-import-fixtures.mjs tests/production-plan-import*.test.mjs --max-warnings 0
+          node --test tests/production-plan-import*.test.mjs
+          node scripts/verify-plan-import-postgres.mjs
+          node scripts/verify-plan-import-boundary.mjs
+          node scripts/verify-plan-import-ui.mjs
+          node scripts/verify-workspace-plan-recovery-ui.mjs
       - run: node scripts/verify-site-register-postgres.mjs
       - run: node --test tests/production-participant*.test.mjs tests/production-field-*.test.mjs tests/production-meta-customer*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-kyc*.test.mjs tests/production-meta-onboarding-readiness-view.test.mjs tests/production-pilot-media.test.mjs tests/production-video-frame-extractor.test.mjs tests/production-worker-channel*.test.mjs tests/production-operations-status.test.mjs tests/production-site-purchase.test.mjs tests/production-progress-measurement-quantity.test.mjs
       - run: npx eslint src/lib/pilot-media.mjs src/lib/video-frame-extractor.mjs src/lib/meta-kyc-*.mjs tests/production-meta-kyc*.test.mjs tests/production-video-frame-extractor.test.mjs tests/production-pilot-media.test.mjs --max-warnings 0
@@ -150,6 +158,11 @@ jobs:
           name: workspace-acceptance-${{ github.run_id }}
           path: |
             .vercel/workspace-evidence/
+            .vercel/private/plan-import-postgres-validation.json
+            .vercel/private/plan-import-boundary-validation.json
+            .vercel/private/plan-import-ui-validation.json
+            .vercel/private/plan-import-ui-*.png
+            .vercel/private/workspace-plan-recovery-ui-validation.json
             .vercel/customer-whatsapp-evidence/
             .vercel/company-onboarding-evidence/
             .vercel/site-register-evidence/

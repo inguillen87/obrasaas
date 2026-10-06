@@ -26,7 +26,7 @@ export function WorkspaceRecoveryPanel({scope,projects,getSessionToken,onRecover
       const message=outcome.state==='RECORDED'?'Guardado confirmado. La consulta no volvió a enviar la operación.':outcome.state==='EVENT_PROCESSED'?'El evento ya está procesado. Este estado no atribuye su procesamiento a tu intento; consultá el seguimiento en la bandeja.':outcome.state==='PARTICIPATION_REVOKED'?'La participación está revocada en esta obra y no concede acceso. Esto no acredita la entrega ni la revocación remota de su correo.':outcome.state==='PROCESSING'?'El procesamiento sigue pendiente. Volvé a consultar su recibo.':outcome.state==='INVITATION_UNCONFIRMED'?'La invitación necesita comprobarse con el proveedor desde Participantes. No se volvió a enviar.':'Todavía no se observa un recibo. Esto no demuestra que el envío se haya perdido; conservamos su referencia y no habilitamos otro envío de este módulo.';
       const display=entry.resource==='template-send'?templateSendNotice(result):message;
       setMessages(old=>({...old,[entry.operationId]:display}));setNotice(display);
-      if(outcome.state==='RECORDED')onRecovered?.(result);
+      if(outcome.state==='RECORDED')onRecovered?.(result,entry);
     } catch(error){if(error.name!=='AbortError')setNotice(error.message);}
     finally {setBusy(null);}
   }

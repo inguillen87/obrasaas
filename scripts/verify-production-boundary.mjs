@@ -50,7 +50,7 @@ try {
   for(const method of ['HEAD','OPTIONS','PUT','PATCH','DELETE']){
     const response=await fetch(base+'/api/meta/customer-callback',{method});assert.equal(response.status,401);customerCallbackChecks.push({method,result:'method-not-allowlisted',status:401});
   }
-  for(const route of ['/api/meta/customer-callback/fake','/api/meta/customer-callback-extra','/api/identity/meta-onboarding/fake','/api/identity/participants/fake']){
+  for(const route of ['/api/meta/customer-callback/fake','/api/meta/customer-callback-extra','/api/identity/meta-onboarding/fake','/api/identity/participants/fake','/api/identity/plan-import/fake','/api/identity/plan-import-extra']){
     const response=await fetch(base+route);assert.equal(response.status,401);assert.equal((await response.json()).code,'AUTHENTICATION_REQUIRED');customerCallbackChecks.push({route,result:'prefix-not-allowlisted',status:401});
   }
   for(const method of ['GET','POST']) {
@@ -67,9 +67,13 @@ try {
     ['/api/identity/field-qr',['GET']],['/api/identity/site-purchases',['GET','POST']],
     ['/api/identity/operations-status',['GET']],['/api/identity/meta-onboarding',['GET','POST']],
     ['/api/identity/demo-pilot',['GET','POST']],
+    ['/api/identity/plan-import',['GET','POST']],
   ])for(const method of methods){
     const response=await fetch(base+route,{method,headers:{'content-type':'application/json',origin:IDENTITY_ORIGIN},...(method==='POST'?{body:'{}'}:{})});
     assert.equal(response.status,401,method+' '+route);assert.equal((await response.json()).code,'SESSION_REQUIRED');assert.match(response.headers.get('cache-control'),/private, no-store/);workspaceSessionChecks.push({route,method,status:401});
+  }
+  for(const method of ['HEAD','OPTIONS','PUT','PATCH','DELETE']){
+    const response=await fetch(base+'/api/identity/plan-import',{method});assert.equal(response.status,401,method+' plan import');assert.match(response.headers.get('cache-control'),/private, no-store/);if(method!=='HEAD')assert.equal((await response.json()).code,'AUTHENTICATION_REQUIRED');workspaceSessionChecks.push({route:'/api/identity/plan-import',method,status:401,result:'method-not-allowlisted'});
   }
   for(const method of ['GET','POST']){const response=await fetch(base+'/api/meta/customer-process',{method,...(method==='POST'?{headers:{'content-type':'application/json'},body:'{}'}:{})});assert.equal(response.status,403);assert.equal((await response.json()).code,'META_CUSTOMER_JOB_SIGNATURE_REJECTED');customerCallbackChecks.push({route:'/api/meta/customer-process',method,result:'missing-job-credential-rejected',status:403});}
   for(const route of ['/dashboard','/superadmin','/calendario','/documentos','/bim','/portal']){
