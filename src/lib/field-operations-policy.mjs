@@ -3,6 +3,7 @@ import { recordKeys, siteText, siteRevision, siteQuantity, MATERIAL_UNITS } from
 import { validateReportedLocation, getDistanceMeters } from './geo.js';
 import { normalizeProgressMeasurementQuantity, parseProgressMeasurementQuantity } from './progress-measurement-quantity.js';
 import {inventoryQuantity} from './material-inventory.mjs';
+import {OVERTIME_ACTIONS,normalizeOvertimePayload} from './field-overtime-policy.mjs';
 
 // The enterprise attendance transition and conservative geofence contracts are
 // preserved from 1677ff72773c95140535603093e5cb8624d1f063. This adapter writes the
@@ -49,7 +50,8 @@ export function normalizeFieldCommand(input) {
   recordKeys(input,['operationId','projectId','scope','action','payload']);
   if(!operationId(input.operationId)||!workspaceId(input.projectId)||!/^[a-f0-9]{64}$/.test(input.scope||''))throw new WorkspaceError('FIELD_INPUT_INVALID');
   const p=input.payload;let payload;
-  if(input.action==='ADD_MATERIAL') {
+  if(OVERTIME_ACTIONS.includes(input.action))payload=normalizeOvertimePayload(input.action,p);
+  else if(input.action==='ADD_MATERIAL') {
     recordKeys(p,['revision','catalogHash','name','unit']);if(!MATERIAL_UNITS.includes(p.unit)||!/^[a-f0-9]{64}$/.test(p.catalogHash||''))throw new WorkspaceError('INVENTORY_INPUT_INVALID');
     payload={revision:siteRevision(p.revision),catalogHash:p.catalogHash,name:siteText(p.name,160,2),unit:p.unit};
   }else if(input.action==='PROPOSE_CONSUMPTION') {

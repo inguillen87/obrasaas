@@ -9,6 +9,7 @@ const prefix = WORKSPACE_RECOVERY_PREFIX;
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const id = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value);
 const PROGRESS_TEMPLATE_SEND_KEY='progress_review_notification';
+export const FIELD_OVERTIME_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_OVERTIME','PROPOSE_OVERTIME','DECIDE_OVERTIME']);
 const templateSendActionReference=value=>Boolean(value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='proposalId|revision'&&id(value.proposalId)&&typeof value.revision==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(value.revision));
 const scopeValid = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 export const RECOVERY_RESOURCES = Object.freeze({
@@ -44,21 +45,25 @@ function reference(url, options, now) {
   if(resource==='participants'&&body.action==='RECOVER_INVITATION')return null;
   if(resource==='meta-onboarding'&&(!['review_inbox','process_inbox'].includes(body.action)||!id(body.eventId)))return null;
   const progress=resource==='template-send'&&body.templateKey===PROGRESS_TEMPLATE_SEND_KEY;
+  const overtime=resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(body.action);
   if(progress&&(!id(body.workerId)||!templateSendActionReference(body.actionReference)))throw unavailable();
   return {version:1,resource,scope:body.scope,projectId:body.projectId,operationId:body.operationId.toLowerCase(),createdAt:now,
     ...(resource==='site-photo'?{reportId:body.reportId}:{}),
     ...(resource==='company-channel'?{action:body.action,connectionId:body.payload.connectionId}:{}),
     ...(resource==='meta-onboarding'?{action:body.action,eventId:body.eventId}:{}),
+    ...(overtime?{action:body.action}:{}),
     ...(progress?{templateKey:PROGRESS_TEMPLATE_SEND_KEY,workerId:body.workerId,actionReference:{proposalId:body.actionReference.proposalId,revision:body.actionReference.revision}}:{}),
   };
 }
 function valid(entry) {
   if(!entry||entry.version!==1||!Object.hasOwn(RECOVERY_RESOURCES,entry.resource)||!scopeValid(entry.scope)||!id(entry.projectId)||!uuid(entry.operationId)||!Number.isSafeInteger(entry.createdAt)||entry.createdAt<0)return false;
   const progress=entry.resource==='template-send'&&entry.templateKey===PROGRESS_TEMPLATE_SEND_KEY;
-  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action','eventId']:[]),...(progress?['templateKey','workerId','actionReference']:[])];
+  const overtime=entry.resource==='field-operations'&&entry.action!==undefined;
+  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action','eventId']:[]),...(overtime?['action']:[]),...(progress?['templateKey','workerId','actionReference']:[])];
   if(Object.keys(entry).sort().join('|')!==fields.sort().join('|'))return false;
   if(entry.resource==='company-channel'&&(!COMPANY_CHANNEL_ACTIONS.includes(entry.action)||!id(entry.connectionId)))return false;
   if(progress&&(!id(entry.workerId)||!templateSendActionReference(entry.actionReference)))return false;
+  if(overtime&&!FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action))return false;
   return (entry.resource!=='site-photo'||id(entry.reportId))&&(entry.resource!=='meta-onboarding'||['review_inbox','process_inbox'].includes(entry.action)&&id(entry.eventId));
 }
 const keyOf=entry=>prefix+entry.scope+'.'+entry.resource+'.'+entry.operationId;
@@ -79,6 +84,12 @@ export function recoveryQuery(entry) {
 export function recoveryResult(entry, result) {
   if(!valid(entry)||result?.scope!==entry.scope)return null;
   if(result.projectId!==undefined&&result.projectId!==entry.projectId)return null;
+  if(entry.resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action)){
+    if(result.projectId!==entry.projectId||result.operationId!==entry.operationId)return null;
+    if(result.state==='RECORDED'&&result.saved===true&&result.action===entry.action&&/^field_[a-f0-9]{64}$/.test(result.receiptId||''))return {state:'RECORDED',receiptId:result.receiptId};
+    if(result.state==='NOT_OBSERVED'&&result.definitive===false&&result.saved!==true&&!result.receiptId&&!result.overtime&&(result.action===undefined||result.action===entry.action))return {state:'NOT_OBSERVED'};
+    return null;
+  }
   if(entry.resource==='company-channel'){try{companyChannelOutcome(result,entry);return result.state==='RECORDED'||result.state==='REJECTED'?{state:result.state,receiptId:result.receiptId}:{state:'NOT_OBSERVED'};}catch{return null;}}
   if(entry.resource==='plan-import') {
     if(result.projectId!==entry.projectId)return null;
@@ -242,6 +253,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       if(entry.resource==='constructor-crm'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='company-channel'){if(['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='plan-import'){const outcome=recoveryResult(entry,result);if(outcome?.state==='RECORDED'||outcome?.state==='REJECTED'&&!ticket.existed)await remove(entry);return;}
+      if(entry.resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action)){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(result?.scope===entry.scope&&(result.projectId===undefined||result.projectId===entry.projectId)&&(result.saved===true||result.created===true)&&(result.receiptId||result.receipt?.id))await remove(entry);
     },
     async observe(url, result) {
