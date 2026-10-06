@@ -24,6 +24,9 @@ try {
  for(const width of widths)for(const mode of modes){
   const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});page.on('pageerror',error=>errors.push(error.message));await page.setRequestInterception(true);
   let draft=null,receipt=null;const posts=[],recoveries=[];
+  let releaseInitialRead,signalInitialRead,initialReadHeld=true;
+  const initialReadBarrier=new Promise(resolve=>{releaseInitialRead=resolve;});
+  const initialReadObserved=new Promise(resolve=>{signalInitialRead=resolve;});
   const snapshot=()=>({scope,projectId,canApprove:mode!=='manager',drafts:draft?[draft]:[],truncated:false});
   const send=(request,data,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:JSON.stringify(data)});
   page.on('request',async request=>{try{
@@ -40,10 +43,19 @@ try {
    }
    if(url.searchParams.has('operationId')){recoveries.push(url.searchParams.get('operationId'));return send(request,{state:'RECORDED',...receipt});}
    if(url.searchParams.has('draftId'))return send(request,{scope,projectId,draft});
+   if(initialReadHeld){signalInitialRead();await initialReadBarrier;initialReadHeld=false;}
    return send(request,snapshot());
   }catch(error){errors.push(error.message);if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await click(page,'Importar PDF o imagen');await wait(page,'Autorizo enviar este cronograma a OpenAI');
-  const file=await page.$('input[type=file]');await file.uploadFile(sourceFile);assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent==='Extraer borrador').disabled),true);await page.click('input[type=checkbox]');await click(page,'Extraer borrador');await wait(page,'Compará cada fila con el archivo');assert.equal(posts.length,1);assert.equal(await page.$eval('[data-task-count]',e=>e.textContent),'Tareas canónicas recibidas: 0');
+  let initialReadTimeout;try{await Promise.race([initialReadObserved,new Promise((_,reject)=>{initialReadTimeout=setTimeout(()=>reject(Error('Initial plan snapshot was not requested')),20000);})]);}finally{clearTimeout(initialReadTimeout);}
+  await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled&&[...document.querySelectorAll('button')].some(button=>button.textContent==='Procesando…'&&button.disabled));
+  assert.equal(posts.length,0);assert.equal(await page.$eval('input[type=checkbox]',element=>element.disabled),true);
+  releaseInitialRead();
+  await page.waitForFunction(()=>document.querySelector('input[type=file]')?.disabled===false&&[...document.querySelectorAll('button')].some(button=>button.textContent==='Extraer borrador'&&button.disabled));
+  const file=await page.$('input[type=file]');await file.uploadFile(sourceFile);
+  assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent==='Extraer borrador')?.disabled),true);
+  assert.equal(await page.$eval('input[type=checkbox]',element=>element.checked),false);
+  await page.click('input[type=checkbox]');await click(page,'Extraer borrador');await wait(page,'Compará cada fila con el archivo');assert.equal(posts.length,1);assert.equal(await page.$eval('[data-task-count]',e=>e.textContent),'Tareas canónicas recibidas: 0');
   const title=await page.$('fieldset input:not([type])');await title.focus();await page.keyboard.down('Control');await page.keyboard.press('KeyA');await page.keyboard.up('Control');await page.keyboard.press('Backspace');await title.type('Fundaciones corregidas');await page.type('textarea','Revisado con fuente sintética');
   if(mode==='manager'){assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].some(b=>b.textContent.startsWith('Aplicar '))),false);await wait(page,'Un administrador o director debe aprobar');}
   else if(mode==='ambiguous') {
@@ -59,7 +71,7 @@ try {
   if(mode!=='manager')assert.equal(await page.$eval('[data-task-count]',e=>e.textContent),'Tareas canónicas recibidas: 1');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Horizontal overflow '+width+' '+mode);
   const stored=await page.evaluate(()=>JSON.stringify([Object.values(localStorage),Object.values(sessionStorage)]));assert.doesNotMatch(stored,/Fundaciones|data:application|Synthetic Gantt fixture|synthetic-plan-token|startsOn/);
-  checks.push({width,mode,posts:posts.length,recoveryReads:recoveries.length});await context.close();
+  checks.push({width,mode,posts:posts.length,recoveryReads:recoveries.length,initialSnapshotBarrier:true,uploadsBeforeSnapshotReady:0});await context.close();
  }
  assert.deepEqual(errors,[]);writeFileSync(path.join(scratch,'plan-import-ui-validation.json'),JSON.stringify({validated:true,synthetic:true,realProviderCalls:false,widths,checks},null,2)+'\n');console.log(JSON.stringify({validated:true,synthetic:true,realProviderCalls:false,checks:checks.length}));
 }catch(error){console.error(JSON.stringify({log,errors,checks}));throw error;}finally{await browser?.close();server.kill();assert.ok(path.resolve(fixture).startsWith(path.resolve(scratch)+path.sep));rmSync(fixture,{recursive:true,force:true});}
