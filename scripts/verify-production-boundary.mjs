@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { randomBytes, createHash } from 'node:crypto';
+import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
 import { IDENTITY_ORIGIN, IDENTITY_PUBLIC_KEY, IDENTITY_INSTANCE } from '../src/lib/production-identity-config.mjs';
+import { LAUNCH_PUBLIC_ASSETS } from '../src/lib/legacy-access-boundary.js';
 const folder = path.resolve(process.env.PRODUCTION_BOUNDARY_OUTPUT_DIR || '.vercel/production-boundary-evidence'); mkdirSync(folder,{recursive:true});
 const port=3229, base=`http://127.0.0.1:${port}`, secret=randomBytes(32).toString('hex'),customerVerifyToken=randomBytes(32).toString('hex');
 let startup='';
@@ -26,6 +27,7 @@ async function stopServer(){if(server.exitCode!==null)return;const stopped=new P
 let browser;const checks=[];
 const publicIdentityText=['ObraSaaS, un producto de Inmovar LATAM','Ing. Marcelo Ariel Guillén Alba · Fundador','Arq. María Victoria Schiaffino · Socia','Titular: GUILLEN ALBA, MARCELO ARIEL','Nombre registrado en ARCA: GUILLEN MARCELO ARIEL'];
 const publicIdentityViewports=[];
+const launchMediaChecks=[];
 try {
   await waitForServer();
   for(const route of ['/api/state','/api/v1/calendario','/api/v1/workers','/api/v1/system/db-status','/api/realtime','/api/webview/kyc','/api/billing/webhook']){
@@ -74,6 +76,21 @@ try {
     const response=await fetch(base+route,{redirect:'manual'});assert.equal(response.status,307);assert.equal(new URL(response.headers.get('location'),base).pathname,'/sign-in');
   }
   for(const route of ['/','/manual','/sign-in','/sign-up','/bim_render.png','/cctv_render.png','/api/health']) assert.equal((await fetch(base+route)).status,200,route);
+  for(const route of LAUNCH_PUBLIC_ASSETS){
+    const response=await fetch(base+route,{redirect:'manual'});
+    assert.equal(response.status,200,'Launch media redirected or blocked: '+route);
+    assert.equal(response.headers.get('location'),null);
+    const expectedType=route.endsWith('.mp4')?'video/mp4':route.endsWith('.vtt')?'text/vtt':'image/webp';
+    assert.ok(response.headers.get('content-type')?.startsWith(expectedType),route+' content type');
+    const bytes=Buffer.from(await response.arrayBuffer()),source=readFileSync(new URL('../public'+route,import.meta.url));
+    assert.deepEqual(bytes,source,'Launch source integrity: '+route);
+    const head=await fetch(base+route,{method:'HEAD',redirect:'manual'});assert.equal(head.status,200);assert.equal(head.headers.get('location'),null);
+    assert.equal((await fetch(base+route,{method:'POST',redirect:'manual'})).status,401);
+    launchMediaChecks.push({route,status:200,headStatus:200,contentType:expectedType,bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),writeDenied:true});
+  }
+  const rangedVideo=await fetch(base+'/media/launch/obrasaas-15s.mp4',{redirect:'manual',headers:{Range:'bytes=0-127'}});
+  assert.equal(rangedVideo.status,206);assert.equal((await rangedVideo.arrayBuffer()).byteLength,128);assert.match(rangedVideo.headers.get('content-range'),/^bytes 0-127\//);
+  assert.equal((await fetch(base+'/media/launch/provenance.json',{redirect:'manual'})).status,307);
   const homeHtml=await (await fetch(base+'/',{redirect:'manual'})).text();
   const footerHtml=homeHtml.match(/<footer\b[^>]*>([\s\S]*?)<\/footer>/)?.[1];
   assert.ok(footerHtml,'The public home must serve its footer in the initial HTML');
@@ -120,6 +137,22 @@ try {
     if([320,1280].includes(width))await (await page.$('footer')).screenshot({path:path.join(folder,`public-identity-${width}.png`)});
     publicIdentityViewports.push({width,javascript:false,visible:true,withinViewport:true,textWraps:true,footerHeight,touchTargetsAtLeast44:true});
   }
+  // Keep media playback in its own disposable context: loading the landing
+  // activates its service worker, while the offline test below must seed an
+  // obsolete cache before its first activation.
+  const mediaContext=await browser.createBrowserContext(),mediaPage=await mediaContext.newPage();
+  mediaPage.on('pageerror',error=>errors.push(error.message));
+  await mediaPage.setRequestInterception(true);
+  mediaPage.on('request',request=>new URL(request.url()).origin===base?request.continue():request.abort());
+  await mediaPage.goto(base+'/',{waitUntil:'networkidle0'});
+  await mediaPage.click('button[aria-label="Reproducir presentación de ObraSaaS, 15 segundos"]');
+  await mediaPage.waitForFunction(()=>{const video=document.querySelector('[data-landing-video] video');return video?.readyState>=2&&video.videoWidth>0&&!video.paused&&video.currentTime>0;},{timeout:15000});
+  const playback=await mediaPage.$eval('[data-landing-video] video',video=>({duration:video.duration,width:video.videoWidth,height:video.videoHeight,error:video.error?.code??null}));
+  assert.ok(playback.duration>=14.8&&playback.duration<=15.3);assert.equal(playback.error,null);
+  await mediaPage.click('button[class*="videoClose"]');
+  assert.equal(await mediaPage.$eval('[data-landing-video] video',video=>video.getAttribute('src')),null);
+  await mediaContext.close();
+  launchMediaChecks.push({rangeStatus:206,playback,closedSourceReleased:true});
   await page.setJavaScriptEnabled(true);
   await page.goto(base+'/api/health');
   await page.evaluate(async()=>{
@@ -153,7 +186,7 @@ try {
   }));assert.equal(pendingCount,1);assert.deepEqual(errors,[]);
   const proof={status:'PASS',environment:'local-built-Next-production-server',realDatabase:false,syntheticCredentials:true,acceptedBusinessWrites:0,
     protectedRequests:checks,workspaceSessionChecks,customerCallbackChecks,customerCallbackDatabaseCalls:0,identityPhases:['configured-public-values-no-session-api-denials','configuration-pending-original-browser-and-offline-checks'],forgedCredentialsRejected:true,authorizedUnknownRoute:404,privateNavigationProtected:true,kycInvalidRequestsRejectedBeforeProviders:4,validImagePairCannotAutoApprove:true,
-    publicSiteAccessible:true,publicSiteIdentity:{initialHtml:true,metadataBrandRetained:true,text:publicIdentityText,viewports:publicIdentityViewports,externalBrowserRequestsBlocked:true},viewports:[320,390,768,1280],legacyCacheRemoved:true,offlinePrivateReadBlocked:true,offlineMechanism:'disposable-origin-stopped',pendingQueueRetained:true,pageErrors:errors};
+    publicSiteAccessible:true,launchMediaChecks,publicSiteIdentity:{initialHtml:true,metadataBrandRetained:true,text:publicIdentityText,viewports:publicIdentityViewports,externalBrowserRequestsBlocked:true},viewports:[320,390,768,1280],legacyCacheRemoved:true,offlinePrivateReadBlocked:true,offlineMechanism:'disposable-origin-stopped',pendingQueueRetained:true,pageErrors:errors};
   writeFileSync(path.join(folder,'proof.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
 }catch(error){writeFileSync(path.join(folder,'failure.json'),JSON.stringify({message:error.message,stack:error.stack,checks,startup},null,2));throw error;
 }finally{await browser?.close();server.kill('SIGTERM');}
