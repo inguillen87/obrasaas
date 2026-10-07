@@ -69,6 +69,11 @@ jobs:
           npx eslint src/lib/participant-kyc-chat-closure.mjs src/lib/participant-store.mjs src/lib/participant-policy.mjs src/lib/meta-kyc-challenge.mjs src/lib/meta-employee-intake.mjs scripts/verify-participant-onboarding-recovery-postgres.mjs scripts/verify-participant-kyc-chat-closure-ui.mjs --max-warnings 0
           node scripts/verify-participant-onboarding-recovery-postgres.mjs
           node scripts/verify-participant-kyc-chat-closure-ui.mjs
+      - name: Consent-bound WhatsApp invitations, canonical authority and durable delivery
+        run: |
+          npx eslint src/lib/company-entitlement.mjs src/lib/participant-onboarding-*.mjs src/lib/participant-http.mjs src/lib/meta-recovery-diagnostics.mjs src/lib/meta-customer-outbound.mjs src/lib/meta-customer-processing*.mjs src/lib/meta-customer-provider.mjs src/lib/meta-customer-templates.mjs src/app/api/identity/participants/route.js tests/production-company-entitlement.test.mjs tests/production-participant-onboarding-*.test.mjs tests/production-meta-recovery-diagnostics.test.mjs tests/fixtures/participant-onboarding-delivery-memory.mjs scripts/verify-participant-onboarding-delivery-*.mjs --max-warnings 0
+          node scripts/verify-participant-onboarding-delivery-postgres.mjs
+          node scripts/verify-participant-onboarding-delivery-ui.mjs
       - run: node scripts/verify-identity-context-ui.mjs
       - run: node scripts/verify-mapping-review-ui.mjs
       - run: npm run build
@@ -113,5 +118,6 @@ jobs:
             .vercel/pwa-evidence/
             .vercel/company-phone-evidence/
             .vercel/participant-onboarding-recovery-evidence/
+            .vercel/participant-onboarding-delivery-evidence/
           include-hidden-files: true
           retention-days: 7

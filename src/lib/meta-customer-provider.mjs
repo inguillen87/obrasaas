@@ -32,7 +32,10 @@ const injectedDemoTransportReady=readiness=>readiness?.canLaunchMeta===true&&rea
 // Deliberately limited to the adopted BODY-only, positional es_AR catalogue.
 // Meta Cloud API contract: https://www.postman.com/meta/whatsapp-business-platform/request/lwtlz1k/send-message-template-interactive
 export function customerTemplateMessage(value){
- if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join('|')!=='bodyParameters|language|name'||!/^obrasaas_[a-z0-9_]{1,200}$/.test(value.name||'')||value.language!=='es_AR'||!Array.isArray(value.bodyParameters)||value.bodyParameters.length!==1||typeof value.bodyParameters[0]!=='string'||!value.bodyParameters[0].trim()||value.bodyParameters[0].length>160||/[\u0000-\u001f\u007f<>]/.test(value.bodyParameters[0]))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_MESSAGE_INVALID');
+ if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join('|')!=='bodyParameters|language|name'||typeof value.name!=='string'||!/^obrasaas_[a-z0-9_]{1,200}$/.test(value.name)||/\s/.test(value.name)||value.language!=='es_AR'||!Array.isArray(value.bodyParameters))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_MESSAGE_INVALID');
+ const parameters=value.bodyParameters,onboarding=value.name.startsWith('obrasaas_participant_onboarding_v1_'),company=parameters[0];
+ if(typeof company!=='string'||!company.trim()||company.length>160||/[\u0000-\u001f\u007f<>]/.test(company)||
+  (onboarding?!/^obrasaas_participant_onboarding_v1_[a-f0-9]{10}_[a-f0-9]{10}$/.test(value.name)||parameters.length!==3||typeof parameters[1]!=='string'||!/^https:\/\/obrasaas\.com\/cuenta\?participar=invite_[a-f0-9]{32}$/.test(parameters[1])||/\s/.test(parameters[1])||typeof parameters[2]!=='string'||parameters[2].length!==53||!/^IDENTIDAD [A-Za-z0-9_-]{43}$/.test(parameters[2]):parameters.length!==1))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_MESSAGE_INVALID');
  return {type:'template',template:{name:value.name,language:{code:value.language},components:[{type:'body',parameters:value.bodyParameters.map(text=>({type:'text',text}))}]}};
 }
 export function customerReplyMessage(value){

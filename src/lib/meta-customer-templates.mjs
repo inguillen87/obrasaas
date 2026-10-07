@@ -1,18 +1,26 @@
-import {WorkspaceError,operationId,digest} from './workspace-policy.mjs';
+import {WorkspaceError,operationId,digest,workspaceId} from './workspace-policy.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {assertTemplateReviewDefinition,TemplateReviewError} from './whatsapp/template-review-policy.js';
 const blueprints=Object.freeze({
  open_attendance_reminder:{title:'Recordatorio de jornada abierta',text:'Tu jornada en {{1}} sigue abierta. Cuando termines, registrá la salida en ObraSaaS: https://obrasaas.com/cuenta',example:'Obra de ejemplo'},
  participant_invitation:{title:'Invitación a participar',text:'Tenés una invitación para participar en una obra de {{1}}. Abrí tu cuenta de ObraSaaS para consultar la invitación y decidir si querés aceptarla: https://obrasaas.com/cuenta',example:'Constructora de ejemplo'},
+ participant_onboarding_v1:{title:'Invitación y presentación de identidad',text:'{{1}} te invita a su equipo en ObraSaaS. Aceptá la invitación que recibiste por correo electrónico y entrá a tu cuenta: {{2}}. Para presentar tu documento y selfie, copiá y enviá {{3}} en este chat. Un responsable revisará tu identidad antes de habilitar tu acceso a la obra.',examples:['Constructora de ejemplo','https://obrasaas.com/cuenta?participar=invite_00000000000000000000000000000000','IDENTIDAD AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA']},
  field_evidence_request:{title:'Pedido de información de obra',text:'Tenés un pedido de información pendiente en {{1}}. Abrí tu cuenta de ObraSaaS para consultar el detalle y aportar la evidencia solicitada: https://obrasaas.com/cuenta',example:'Obra de ejemplo'},
  progress_review_notification:{title:'Avance pendiente de revisión',text:'Hay una propuesta de avance pendiente de revisión en {{1}}. Abrí tu cuenta de ObraSaaS para consultar la evidencia y registrar tu decisión: https://obrasaas.com/cuenta',example:'Obra de ejemplo'},
 });
 export function customerTemplateBlueprint(key){const value=blueprints[key];if(!value)throw new WorkspaceError('META_CUSTOMER_TEMPLATE_INVALID');return {title:value.title,bodyText:value.text};}
 export function buildCustomerTemplate(connection,blueprintKey){
  const blueprint=blueprints[blueprintKey];if(!blueprint)throw new WorkspaceError('META_CUSTOMER_TEMPLATE_INVALID');
- const language='es_AR',category='UTILITY',components=[{type:'BODY',text:blueprint.text,example:{body_text:[[blueprint.example]]}}];
+ const language='es_AR',category='UTILITY',components=[{type:'BODY',text:blueprint.text,example:{body_text:[blueprint.examples?[...blueprint.examples]:[blueprint.example]]}}];
  const contentSha256=digest({language,category,components}),binding=digest([connection.id,connection.whatsappBusinessId]).slice(0,10);
  return {blueprintKey,title:blueprint.title,name:`obrasaas_${blueprintKey}_${binding}_${contentSha256.slice(0,10)}`,language,category,components,contentSha256,bodyText:blueprint.text};
+}
+// Produces only the owned, versioned onboarding message. It does not establish
+// template approval, contact consent, delivery, KYC or operational permission.
+export function buildParticipantOnboardingMessage(connection,input){
+ if(!workspaceId(connection?.id)||/\s/.test(connection.id)||typeof connection.whatsappBusinessId!=='string'||!/^[1-9]\d{4,31}$/.test(connection.whatsappBusinessId)||/\D/.test(connection.whatsappBusinessId)||!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).sort().join('|')!=='code|invitationId|organizationName'||typeof input.organizationName!=='string'||!input.organizationName.trim()||input.organizationName.length>160||/[\u0000-\u001f\u007f<>]/.test(input.organizationName)||typeof input.invitationId!=='string'||input.invitationId.length!==39||!/^invite_[a-f0-9]{32}$/.test(input.invitationId)||typeof input.code!=='string'||input.code.length!==53||!/^IDENTIDAD [A-Za-z0-9_-]{43}$/.test(input.code))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_MESSAGE_INVALID');
+ const definition=buildCustomerTemplate(connection,'participant_onboarding_v1');
+ return {name:definition.name,language:definition.language,bodyParameters:[input.organizationName,'https://obrasaas.com/cuenta?participar='+input.invitationId,input.code]};
 }
 export function customerRemoteTemplateMatches(remote,definition){
  if(!remote||remote.name!==definition.name||remote.language?.replace('-','_')!==definition.language||!/^\d{5,32}$/.test(String(remote.id)))return false;

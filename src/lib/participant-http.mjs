@@ -3,7 +3,7 @@ import {boundedBody} from './workspace-http.mjs';
 import {readPrivateKycBody,PrivateImageError} from './private-image-upload.mjs';
 const headers={'Cache-Control':'private, no-store, max-age=0','Vary':'Cookie, Authorization','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow'};
 const reply=(value,status=200)=>Response.json(value,{status,headers});
-export function createParticipantHandlers({verify,store,join=false}){
+export function createParticipantHandlers({verify,store,join=false,scheduleOnboarding=()=>{}}){
  async function handle(request){try{
   const session=await verify(request.headers);if(!session.authenticated&&['IDENTITY_CONFIGURATION_PENDING','IDENTITY_PROVIDER_UNAVAILABLE'].includes(session.code))throw new WorkspaceError('IDENTITY_PROVIDER_UNAVAILABLE',503);requireWorkspaceIdentity(session);
   if(request.headers.get('sec-fetch-site')==='cross-site')throw new WorkspaceError('WORKSPACE_ORIGIN_REJECTED',403);
@@ -13,7 +13,13 @@ export function createParticipantHandlers({verify,store,join=false}){
    if(join)return reply(await store.join(session,await boundedBody(request),{accept:true}));
    // Images have their own bounded reader. The exact command contract rejects
    // mixing KYC submissions with administrative mutation payloads.
-   const body=await readPrivateKycBody(request);return reply(body.front!==undefined||body.selfie!==undefined?await store.submitKyc(session,body):await store.save(session,body));
+   const body=await readPrivateKycBody(request),result=body.front!==undefined||body.selfie!==undefined?await store.submitKyc(session,body):await store.save(session,body);
+   if(['INVITE','SEND_ONBOARDING_WHATSAPP'].includes(body.action)&&result.saved===true&&result.replayed===false&&workspaceId(body.projectId)&&workspaceId(body.payload?.workerId)&&result.participant?.id===body.payload.workerId&&['SENT','ACCEPTED'].includes(result.participant.invitation?.state)&&result.participant.onboardingDelivery?.contactAuthorized===true){
+    // The durable intent was committed by the store. This wake-up is optional;
+    // cron recovers it if the HTTP response or runtime scheduling is lost.
+    try{Promise.resolve(scheduleOnboarding({projectId:body.projectId,workerId:result.participant.id})).catch(()=>{});}catch{}
+   }
+   return reply(result);
   }
   if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
   if(join){if(params.size!==1||params.getAll('invitationId').length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return reply(await store.join(session,{invitationId:params.get('invitationId')}));}

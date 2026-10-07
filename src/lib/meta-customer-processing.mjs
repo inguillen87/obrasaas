@@ -40,7 +40,7 @@ export function createDevelopmentPilotDispatchGuard({connect,environment=process
   await assertDevelopmentPilotCommit(client,candidate,environment);return true;
  });
 }
-export function createMetaCustomerProcessor({connect,dispatch,outbound,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{},beforeDispatch=async()=>false,deferAuthorization=async()=>false,protocol=META_CUSTOMER_PROTOCOL,lockChannel=lockMetaCustomerInboxChannel,authorizationCodes=[]}){
+export function createMetaCustomerProcessor({connect,dispatch,outbound,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{},beforeDispatch=async()=>false,deferAuthorization=async()=>false,protocol=META_CUSTOMER_PROTOCOL,lockChannel=lockMetaCustomerInboxChannel,authorizationCodes=[],onboarding=null}){
  resolveMetaCloudProtocol(protocol);
  const within=run=>customerJobTransaction(connect,run);
  async function claim(eventId){return within(async client=>{
@@ -104,7 +104,8 @@ export function createMetaCustomerProcessor({connect,dispatch,outbound,environme
    const started=Date.now();
    const ids=eventIds||await within(async client=>(await client.query(`SELECT id FROM public."WebhookEvent" WHERE provider=$4 AND status='PENDING' AND ("leaseToken" IS NULL OR "leaseExpiresAt"<=$1) AND NOT (COALESCE("lastError",'')=ANY($3::text[])) AND ("lastError" IS NULL OR "updatedAt"<$1::timestamp-interval '1 minute') ORDER BY "createdAt",id LIMIT $2`,[new Date(now()),limit,META_CUSTOMER_MANUAL_RECOVERY_CODES,protocol.provider])).rows.map(row=>row.id));
    const results=[];for(const id of ids.slice(0,limit)){if(results.length&&Date.now()-started>budgetMs-180000)break;try{results.push(await this.process(id));}catch(error){results.push({eventId:id,processed:false,code:error instanceof WorkspaceError?error.code:'META_CUSTOMER_PROCESSING_UNCONFIRMED'});}}
-   return {durable:true,checked:results.length,results};
+   const delivery=eventIds===null&&onboarding?await onboarding.recover({limit:3,budgetMs:Math.max(0,budgetMs-(Date.now()-started))}):null;
+   return {durable:true,checked:results.length,results,...(delivery?{onboarding:delivery}:{})};
   },
  };
 }

@@ -7,7 +7,8 @@ import {createMetaCustomerJobHandlers,signMetaCustomerJob} from '../src/lib/meta
 import {metaRecoveryDiagnostics,reportMetaRecoveryDiagnostics,recoverWithMetaDiagnostics} from '../src/lib/meta-recovery-diagnostics.mjs';
 
 const privateValue='synthetic-private-token-phone-payload-error';
-const fields=['purpose','trigger','checked','processed','done','busy','failed','recoveryFailed','replyUncertain','replyRejected'];
+const fields=['purpose','trigger','checked','processed','done','busy','failed','recoveryFailed','replyUncertain','replyRejected','onboardingChecked','onboardingBlocked','onboardingUncertain','onboardingRejected'];
+const noOnboarding={onboardingChecked:0,onboardingBlocked:0,onboardingUncertain:0,onboardingRejected:0};
 const environment={CRON_SECRET:'synthetic-cron-secret-'.repeat(3),META_CUSTOMER_JOB_SECRET:'synthetic-job-secret-'.repeat(3)};
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 
@@ -17,7 +18,7 @@ test('cron warns for a fulfilled recovery containing an unprocessed event withou
  const recovered=await createMetaAppRecovery({customer,demo,log:(...entry)=>entries.push(entry)}).recover();
  assert.equal(recovered.durable,true);assert.equal(recovered.checked,1);assert.equal(recovered.results[0],failed);
  assert.equal(entries.length,1);
- assert.deepEqual(entries[0],['META_RECOVERY_UNCONFIRMED',{purpose:'CUSTOMER',trigger:'CRON',checked:1,processed:0,done:0,busy:0,failed:1,recoveryFailed:0,replyUncertain:0,replyRejected:0}]);
+ assert.deepEqual(entries[0],['META_RECOVERY_UNCONFIRMED',{purpose:'CUSTOMER',trigger:'CRON',checked:1,processed:0,done:0,busy:0,failed:1,recoveryFailed:0,replyUncertain:0,replyRejected:0,...noOnboarding}]);
  assert.equal(JSON.stringify(entries).includes('synthetic-private'),false);
 });
 
@@ -37,7 +38,7 @@ test('diagnostics derive fixed counts and distinguish processing, completion, oc
  Object.defineProperty(result,'unexpected',{get(){throw new Error(privateValue);}});
  const summary=metaRecoveryDiagnostics(result,{purpose:'DEMO_PILOT',trigger:'WEBHOOK',unknown:privateValue});
  assert.deepEqual(Object.keys(summary),fields);
- assert.deepEqual(summary,{purpose:'DEMO_PILOT',trigger:'WEBHOOK',checked:9,processed:5,done:1,busy:1,failed:1,recoveryFailed:0,replyUncertain:2,replyRejected:1});
+ assert.deepEqual(summary,{purpose:'DEMO_PILOT',trigger:'WEBHOOK',checked:9,processed:5,done:1,busy:1,failed:1,recoveryFailed:0,replyUncertain:2,replyRejected:1,...noOnboarding});
  assert.ok(Object.isFrozen(summary));
  assert.ok(Object.values(summary).slice(2).every(value=>Number.isInteger(value)&&value>=0));
  assert.equal(JSON.stringify(summary).includes(privateValue),false);
@@ -55,7 +56,7 @@ test('unknown purpose or trigger never becomes a log value, even with failed rec
 test('normal review, status observation, already done and busy events never create false warnings',()=>{
  const entries=[],result={durable:true,results:[{processed:true,reviewState:'REVIEW_REQUIRED',replySent:false,code:privateValue},{processed:true,kind:'message_status',replySent:false},{done:true,replySent:false},{busy:true}]};
  const summary=reportMetaRecoveryDiagnostics(result,{purpose:'CUSTOMER',trigger:'CRON',log:(...entry)=>entries.push(entry)});
- assert.deepEqual(summary,{purpose:'CUSTOMER',trigger:'CRON',checked:4,processed:2,done:1,busy:1,failed:0,recoveryFailed:0,replyUncertain:0,replyRejected:0});
+ assert.deepEqual(summary,{purpose:'CUSTOMER',trigger:'CRON',checked:4,processed:2,done:1,busy:1,failed:0,recoveryFailed:0,replyUncertain:0,replyRejected:0,...noOnboarding});
  assert.deepEqual(entries,[]);
 });
 
@@ -66,6 +67,55 @@ test('each explicit uncertain or rejected reply produces a count warning without
   assert.equal(entries.length,1);assert.equal(entries[0][1].replyUncertain,replyState==='REJECTED'?0:1);assert.equal(entries[0][1].replyRejected,replyState==='REJECTED'?1:0);
   assert.equal(JSON.stringify(entries).includes(privateValue),false);
  }
+});
+
+test('customer onboarding states have independent fixed counters without inbound events or private data',()=>{
+ const onboarding={results:[
+  {state:'BLOCKED',workerId:privateValue,code:privateValue},
+  {state:'SEND_UNKNOWN',outboundId:privateValue,phone:privateValue},
+  {state:'SEND_STARTED',authorityDigest:privateValue},
+  {state:'REJECTED',providerError:privateValue},
+  {state:'STATUS_OBSERVED',providerStatus:'failed',messageId:privateValue},
+  {state:'STATUS_OBSERVED',providerStatus:'deleted'},
+  {state:'PENDING'}, {state:'WAITING_CONFIGURATION'}, {state:'SENT'},
+  {state:'STATUS_OBSERVED',providerStatus:'read'}, {state:'CANCELED'}, {state:'NOT_REQUESTED'},
+  null,privateValue,[],{state:privateValue,replyState:'SEND_UNKNOWN'},
+ ]};
+ Object.defineProperty(onboarding,'checked',{get(){throw new Error(privateValue);}});
+ Object.defineProperty(onboarding.results[0],'unexpected',{get(){throw new Error(privateValue);}});
+ const entries=[],summary=reportMetaRecoveryDiagnostics({durable:true,results:[],onboarding},{purpose:'CUSTOMER',trigger:'CRON',log:(...entry)=>entries.push(entry)});
+ assert.deepEqual(Object.keys(summary),fields);assert.ok(Object.isFrozen(summary));
+ assert.deepEqual(summary,{purpose:'CUSTOMER',trigger:'CRON',checked:0,processed:0,done:0,busy:0,failed:0,recoveryFailed:0,replyUncertain:0,replyRejected:0,onboardingChecked:12,onboardingBlocked:1,onboardingUncertain:2,onboardingRejected:3});
+ assert.deepEqual(entries,[['META_RECOVERY_UNCONFIRMED',summary]]);assert.equal(JSON.stringify(entries).includes(privateValue),false);
+});
+
+test('onboarding warnings preserve incoming event counts when both results coexist',()=>{
+ const result={durable:true,results:[{processed:true,eventId:privateValue}],onboarding:{results:[{state:'BLOCKED',eventId:privateValue},{state:'SEND_UNKNOWN',leaseToken:privateValue}]}};
+ const summary=metaRecoveryDiagnostics(result,{purpose:'CUSTOMER',trigger:'WEBHOOK'});
+ assert.equal(summary.checked,1);assert.equal(summary.processed,1);assert.equal(summary.failed,0);assert.equal(summary.replyUncertain,0);
+ assert.equal(summary.onboardingChecked,2);assert.equal(summary.onboardingBlocked,1);assert.equal(summary.onboardingUncertain,1);
+ assert.equal(JSON.stringify(summary).includes(privateValue),false);
+});
+
+test('onboarding configuration, pending, cancellation and observed success do not create false warnings',()=>{
+ const entries=[],result={durable:true,results:[],onboarding:{checked:privateValue,results:['NOT_REQUESTED','WAITING_CONFIGURATION','PENDING','CANCELED','SENT','STATUS_OBSERVED'].map(state=>({state,providerStatus:'delivered',phone:privateValue}))}};
+ const summary=reportMetaRecoveryDiagnostics(result,{purpose:'CUSTOMER',trigger:'CRON',log:(...entry)=>entries.push(entry)});
+ assert.equal(summary.onboardingChecked,6);assert.equal(summary.onboardingBlocked,0);assert.equal(summary.onboardingUncertain,0);assert.equal(summary.onboardingRejected,0);assert.deepEqual(entries,[]);
+});
+
+test('demo diagnostics do not read customer onboarding facts from a different namespace',()=>{
+ const result={durable:true,results:[]};Object.defineProperty(result,'onboarding',{get(){throw new Error(privateValue);}});
+ const summary=metaRecoveryDiagnostics(result,{purpose:'DEMO_PILOT',trigger:'CRON'});
+ assert.equal(summary.checked,0);for(const key of Object.keys(noOnboarding))assert.equal(summary[key],0);
+});
+
+test('onboarding warning logger failures cannot repeat recovery or change its result',{timeout:1000},async()=>{
+ const result={durable:true,results:[],onboarding:{results:[{state:'BLOCKED',workerId:privateValue}]}},input={limit:1};
+ for(const log of [()=>{throw new Error(privateValue);},async()=>{throw new Error(privateValue);},()=>new Promise(()=>{})]){
+  let calls=0;const processor={recover:async received=>{calls++;assert.equal(received,input);return result;}};
+  assert.equal(await recoverWithMetaDiagnostics(processor,input,{purpose:'CUSTOMER',trigger:'WEBHOOK',log}),result);assert.equal(calls,1);
+ }
+ await tick();
 });
 
 test('webhook recovery returns the same result and input, with one invocation despite sync or async logger failures',{timeout:1000},async()=>{
@@ -85,7 +135,7 @@ test('recovery rejection preserves the original error identity while diagnostics
  const original=new Error(privateValue),entries=[],input={limit:1};let calls=0;
  const processor={recover:async received=>{calls++;assert.equal(received,input);throw original;}};
  await assert.rejects(recoverWithMetaDiagnostics(processor,input,{purpose:'DEMO_PILOT',trigger:'WEBHOOK',log:(...entry)=>{entries.push(entry);return Promise.reject(new Error(privateValue));}}),error=>error===original);
- assert.equal(calls,1);assert.deepEqual(entries,[['META_RECOVERY_UNCONFIRMED',{purpose:'DEMO_PILOT',trigger:'WEBHOOK',checked:0,processed:0,done:0,busy:0,failed:0,recoveryFailed:1,replyUncertain:0,replyRejected:0}]]);
+ assert.equal(calls,1);assert.deepEqual(entries,[['META_RECOVERY_UNCONFIRMED',{purpose:'DEMO_PILOT',trigger:'WEBHOOK',checked:0,processed:0,done:0,busy:0,failed:0,recoveryFailed:1,replyUncertain:0,replyRejected:0,...noOnboarding}]]);
  assert.equal(JSON.stringify(entries).includes(privateValue),false);await tick();
  const poisonedOptions={purpose:'CUSTOMER',trigger:'CRON'};Object.defineProperty(poisonedOptions,'unknown',{enumerable:true,get(){throw new Error('different '+privateValue);}});
  await assert.rejects(recoverWithMetaDiagnostics(processor,input,poisonedOptions),error=>error===original);
