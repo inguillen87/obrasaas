@@ -12,6 +12,7 @@ import {customerSignupFlow,createMetaCustomerCoexistence,publicCustomerCoexisten
 
 import {companyConnectionForProject,assertLegacyProjectChannel} from './company-channel-connection.mjs';
 import {companyChannelOperationalCapabilities} from './company-channel-store.mjs';
+import {companyPreparedMediaRecoveryAuthorized} from './company-channel-routing.mjs';
 import {companyPhoneContract,readCompanyPhoneDeclaration,assertCompanyPhoneMatch,companyPhoneAuthorizationContract} from './company-onboarding-policy.mjs';
 const activeStates=new Set(['PREPARED','EXCHANGE_STARTED','EXCHANGE_UNKNOWN','CREDENTIAL_STORED','VERIFYING','REVIEW_REQUIRED','LINKED_PENDING_ACCEPTANCE','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN']);
 const secretContext=(member,project,purpose,resourceId)=>({organizationId:member.organizationId,projectId:project.id,purpose,resourceId});
@@ -260,7 +261,8 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
    if(action==='prepare_existing_api_plan'){await coexistenceService.prepareExistingApiPlan(session,body);return within(session,body,false,response);}
    if(action==='process_inbox'&&processor){
     input(body,['action','operationId','projectId','scope','eventId']);if(!/^customer_webhook_[a-f0-9]{64}$/.test(body.eventId||''))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
-    await within(session,body,false,async(client,member,_scope,project)=>{await assertLegacyProjectChannel(client,member,project.id);const found=(await client.query(`SELECT e.id FROM public."WebhookEvent" e JOIN public."WhatsAppConnection" c ON c."projectId"=e."projectId" AND c.id=e.payload->>'channelId' WHERE e.id=$1 AND e."projectId"=$2 AND e.provider='meta-customer-v1'`,[body.eventId,project.id])).rows;if(found.length!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);});
+    const corporate=await within(session,body,false,async(client,member,_scope,project)=>{if(await companyPreparedMediaRecoveryAuthorized(client,member,{eventId:body.eventId,projectId:project.id,environment}))return true;await assertLegacyProjectChannel(client,member,project.id);const found=(await client.query(`SELECT e.id FROM public."WebhookEvent" e JOIN public."WhatsAppConnection" c ON c."projectId"=e."projectId" AND c.id=e.payload->>'channelId' WHERE e.id=$1 AND e."projectId"=$2 AND e.provider='meta-customer-v1'`,[body.eventId,project.id])).rows;if(found.length!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);return false;});
+    if(corporate)await workspace.integrationProject(session,body,true,async()=>{},async(client,member)=>{if(!await companyPreparedMediaRecoveryAuthorized(client,member,{eventId:body.eventId,projectId:body.projectId,environment,lock:true}))throw new WorkspaceError('COMPANY_CHANNEL_SOURCE_REQUIRED',403);});
     await processor.process(body.eventId);return within(session,body,false,response);
    }
    if(['activate_channel','deactivate_channel'].includes(action)){await activationService.command(session,body);return within(session,body,false,response);}
