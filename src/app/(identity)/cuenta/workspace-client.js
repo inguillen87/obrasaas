@@ -25,21 +25,38 @@ import {ScheduleWorkbench} from './schedule-workbench';
 import {PlanImportPanel} from './plan-import-panel';
 import {ProjectPreparationPanel} from './project-preparation-panel';
 import {PortfolioOverviewPanel} from './portfolio-overview-panel';
-import {mergeLoadedTasks} from './schedule-workbench.mjs';
+import {loadedScheduleOverview,mergeLoadedTasks} from './schedule-workbench.mjs';
 const endpoint='/api/identity/workspace';
 const messages={WORKSPACE_ORGANIZATION_REQUIRED:'Elegí una organización desde tu cuenta para consultar las obras asignadas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Tu organización activa todavía no tiene una pertenencia vigente vinculada a esta cuenta.',WORKSPACE_PROJECT_UNAVAILABLE:'Esta obra no está disponible con tus permisos actuales.',WORKSPACE_CONTEXT_CHANGED:'Cambió tu organización o tu permiso. Volvé a cargar las obras antes de continuar.',SCHEDULE_REVISION_CHANGED:'Otra persona modificó la tarea. Actualizá el cronograma antes de volver a planificar.',SCHEDULE_PERMISSION_REQUIRED:'Tu rol actual no puede modificar la planificación.',SCHEDULE_UNCHANGED:'Las fechas son iguales a las registradas. No se hizo ningún cambio.',SCHEDULE_OPERATION_CONFLICT:'Este intento ya pertenece a otra solicitud. Comprobá su recibo antes de continuar.',SESSION_REQUIRED:'Tu sesión venció. Volvé a ingresar.',SCHEDULE_DATES_INVALID:'Revisá el inicio y el fin. El fin no puede ser anterior al inicio.',SCHEDULE_REASON_REQUIRED:'Explicá brevemente el motivo del cambio.'};
 const describe=code=>messages[code]||'No se pudo confirmar la operación. No se reemplazaron los datos por ejemplos.';
 async function requestWorkspace(transport,query='',options={}){
  return transport(endpoint+query,options,async response=>{
-  const body=await response.json();if(!response.ok){const error=new Error(describe(body.code));error.code=body.code;error.status=response.status;throw error;}return body;
+  if(!response.ok){
+   const error=new Error(describe(response.status===401?'SESSION_REQUIRED':response.status===403?'WORKSPACE_PROJECT_UNAVAILABLE':null));error.status=response.status;
+   if(response.headers.get('content-type')?.includes('application/json'))try{const body=await response.json();if(typeof body?.code==='string'){error.code=body.code;error.message=describe(body.code);}}catch{}
+   throw error;
+  }
+  try{return await response.json();}catch(error){if(error.name==='AbortError'||error.name==='TimeoutError')throw error;throw new Error('No pudimos leer la respuesta de la obra. Volvé a consultar antes de continuar.');}
  });
 }
 const query=values=>'?' + new URLSearchParams(values).toString();
-export function AccountWorkspace({getSessionToken}={}){
+// This projection is read-only and deliberately omits names, phones and identity evidence.
+export function workspaceGuideObservation({account,view,loading,generation,unavailable=false,readFailed=false,schedulePending=false,channelSnapshot}){
+ const state=unavailable?'UNAVAILABLE':loading?'CONSULTING':readFailed||!account?'UNOBSERVED':'OBSERVED';
+ const result={version:1,state,generation};
+ if(state!=='OBSERVED')return result;
+ const currentView=view?.scope===account.scope&&account.projects.some(project=>project.id===view.project?.id)?view:null;
+ const overview=currentView&&!schedulePending?loadedScheduleOverview(currentView.tasks,currentView.totalTasks,currentView.nextCursor):null;
+ const channel=currentView&&channelSnapshot?.scope===account.scope&&channelSnapshot.projectId===currentView.project.id&&channelSnapshot.observedGeneration===generation?channelSnapshot:null;
+ return {...result,scope:account.scope,projectId:currentView?.project.id||null,role:account.role,projectCount:account.projects.length,projectsPartial:account.projectsTruncated===true,schedulePending:Boolean(currentView&&schedulePending),schedule:overview?{loaded:overview.loaded,total:overview.total,partial:overview.partial,missingDates:overview.missingDates,invalidDates:overview.invalidDates}:null,channel:channel&&Array.isArray(channel.records)?{ready:channel.channelReady===true,partial:channel.truncated===true,ownLinked:channel.channelReady===true&&channel.records.some(row=>row.eligible===true&&row.state==='VERIFIED'&&typeof row.binding?.id==='string'&&row.binding.id.length>0&&typeof row.binding.verifiedAt==='string'&&Number.isFinite(Date.parse(row.binding.verifiedAt))&&row.binding.revokedAt===null)}:null};
+}
+const guideAccessDenied=error=>error.status===401||error.status===403||error.code==='WORKSPACE_CONTEXT_CHANGED';
+export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
  const transport=useWorkspaceRequest(getSessionToken);
  const request=useCallback((query='',options={})=>requestWorkspace(transport,query,options),[transport]);
  const [account,setAccount]=useState(null),[view,setView]=useState(null),[loading,setLoading]=useState(true),[notice,setNotice]=useState(''),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[saving,setSaving]=useState(false),[receipt,setReceipt]=useState(null);
  const generation=useRef(0),controller=useRef(null),mounted=useRef(true);
+ const [guideUnavailable,setGuideUnavailable]=useState(false),[guideReadFailed,setGuideReadFailed]=useState(false);
  const [channelSnapshot,setChannelSnapshot]=useState(null),[observationEpoch,setObservationEpoch]=useState(0),onboardingContext=useRef(null);
  useLayoutEffect(()=>{onboardingContext.current=account&&view?{scope:account.scope,projectId:view.project.id,generation:observationEpoch,canManageIntegrations:account.canManageIntegrations===true}:null;return()=>{onboardingContext.current=null;};},[account,view,observationEpoch]);
  const channelObserved=useCallback(value=>{const context=onboardingContext.current;if(!context||value.scope!==context.scope||value.projectId!==context.projectId||value.observedGeneration!==context.generation)return;setChannelSnapshot(value.snapshot?{...value.snapshot,observedGeneration:value.observedGeneration}:null);},[]);
@@ -50,6 +67,8 @@ export function AccountWorkspace({getSessionToken}={}){
  const planReadbackPending=planReadbackMatches&&planReadback.status==='pending';
  const taskCreating=creatingTask||Object.values(modulePending).some(Boolean);
  const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft)||planReadbackPending;
+ useEffect(()=>()=>onGuideObservation?.(null),[onGuideObservation]);
+ useEffect(()=>{onGuideObservation?.(workspaceGuideObservation({account,view,loading,generation:observationEpoch,unavailable:guideUnavailable,readFailed:guideReadFailed,schedulePending:saving||Boolean(attempt)||Boolean(creatingTask)||Boolean(modulePending.plan)||Boolean(planReadbackMatches),channelSnapshot}));},[account,view,loading,observationEpoch,guideUnavailable,guideReadFailed,saving,attempt,creatingTask,modulePending.plan,planReadbackMatches,channelSnapshot,onGuideObservation]);
  const scheduleEditor=useRef(null),editingTaskId=draft?.task?.id;
  useEffect(()=>{if(editingTaskId){scheduleEditor.current?.focus({preventScroll:true});scheduleEditor.current?.scrollIntoView({block:'start',behavior:'auto'});}},[editingTaskId]);
  const participantPending=useCallback(value=>setModulePending(old=>old.participants===value?old:{...old,participants:value}),[]);
@@ -71,13 +90,13 @@ export function AccountWorkspace({getSessionToken}={}){
  const tasksChanged=useCallback(task=>{if(task?.id)setView(old=>old?{...old,tasks:old.tasks.map(t=>t.id===task.id?{...t,...task}:t)}:old);},[]);
  useEffect(()=>{
   const epoch=generation;mounted.current=true;const abort=new AbortController();controller.current=abort;const current=++epoch.current;setObservationEpoch(current);setChannelSnapshot(null);
-  request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current)setAccount(data);}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current)setNotice(error.message);}).finally(()=>{if(mounted.current&&current===generation.current){setLoading(false);setPlanReadback(null);}});
+  request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current){setAccount(data);setGuideUnavailable(false);setGuideReadFailed(false);}}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);if(guideAccessDenied(error))setGuideUnavailable(true);}}).finally(()=>{if(mounted.current&&current===generation.current){setLoading(false);setPlanReadback(null);}});
   return()=>{mounted.current=false;epoch.current++;abort.abort();controller.current?.abort();};
  },[request]);
  async function refresh(){
   if(contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
   setAccount(null);setView(null);setDraft(null);setReceipt(null);setPlanReadback(null);setNotice('');setLoading(true);
-  try{const data=await request('',{signal:abort.signal});if(mounted.current&&current===generation.current)setAccount(data);}catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current)setNotice(error.message);}finally{if(mounted.current&&current===generation.current)setLoading(false);}
+  try{const data=await request('',{signal:abort.signal});if(mounted.current&&current===generation.current){setAccount(data);setGuideUnavailable(false);setGuideReadFailed(false);}}catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);if(guideAccessDenied(error))setGuideUnavailable(true);}}finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
  async function open(projectId,append=false){
   if(!account||contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
@@ -87,7 +106,8 @@ export function AccountWorkspace({getSessionToken}={}){
    if(!mounted.current||current!==generation.current)return;
    if(data.scope!==account.scope||data.project.id!==projectId)throw new Error('La respuesta no coincide con la obra seleccionada.');
    setView(previous=>append?{...data,tasks:mergeLoadedTasks(previous?.tasks||[],data.tasks)}:data);
-  }catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);if(error.status===401||error.status===403||error.code==='WORKSPACE_CONTEXT_CHANGED'){setAccount(null);setView(null);}}}
+   setGuideReadFailed(false);
+  }catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);if(guideAccessDenied(error)){setGuideUnavailable(true);setAccount(null);setView(null);}}}
   finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
  async function readRecordedSchedule(target){
@@ -103,11 +123,13 @@ export function AccountWorkspace({getSessionToken}={}){
    if(!mounted.current||current!==generation.current)return;
    if(data.scope!==context.scope||data.project?.id!==context.projectId)throw new Error('La respuesta no coincide con la obra seleccionada.');
    setView(previous=>previous?.scope===context.scope&&previous.project.id===context.projectId?data:previous);
+   setGuideReadFailed(false);
    setPlanReadback(null);setNotice('Cronograma actualizado desde los registros de la obra. '+(context.kind==='task'?'El total incluye la tarea creada.':'El total incluye las tareas del plan aplicado.'));
   }catch(error){
    if(mounted.current&&current===generation.current){
     setPlanReadback({...context,status:'failed'});setNotice(label+' tiene un recibo confirmado, pero no pudimos actualizar el cronograma. '+(error.name==='AbortError'?'La consulta venció.':error.message)+' Volvé a consultar el cronograma para comprobar el total.');
-    if(error.status===401||error.status===403||error.code==='WORKSPACE_CONTEXT_CHANGED'){setAccount(null);setView(null);setPlanReadback(null);}
+    setGuideReadFailed(true);
+    if(guideAccessDenied(error)){setGuideUnavailable(true);setAccount(null);setView(null);setPlanReadback(null);}
    }
   }finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
@@ -120,7 +142,7 @@ export function AccountWorkspace({getSessionToken}={}){
   const current=generation.current;
   setSaving(true);setNotice('');setAttempt(payload);setRetryAllowed(false);
   try{const data=await request('',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(20000)});if(mounted.current&&current===generation.current)applySaved(data);}
-  catch(error){if(mounted.current&&current===generation.current){if(retrying){setRetryAllowed(error.requestDispatched===false);setNotice(error.message+' Conservamos el intento anterior; comprobá su recibo antes de modificar la planificación.');}else if(error.requestDispatched===false||(error.status&&error.status<500)){setAttempt(null);setNotice(error.message);}else setNotice('El servidor no confirmó el guardado. Conservamos este intento: comprobá el recibo antes de modificar o reenviar.');}}
+  catch(error){if(mounted.current&&current===generation.current){if(guideAccessDenied(error))setGuideUnavailable(true);if(retrying){setRetryAllowed(error.requestDispatched===false);setNotice(error.message+' Conservamos el intento anterior; comprobá su recibo antes de modificar la planificación.');}else if(error.requestDispatched===false||(error.status&&error.status<500)){setAttempt(null);setNotice(error.message);}else setNotice('El servidor no confirmó el guardado. Conservamos este intento: comprobá el recibo antes de modificar o reenviar.');}}
   finally{if(mounted.current&&current===generation.current)setSaving(false);}
  }
  async function save(event){
@@ -134,7 +156,7 @@ export function AccountWorkspace({getSessionToken}={}){
   if(saving||!attempt)return;const current=generation.current;setSaving(true);setRetryAllowed(false);
   try{const data=await request(query({projectId:attempt.projectId,scope:attempt.scope,operationId:attempt.operationId}),{signal:AbortSignal.timeout(15000)});
    if(mounted.current&&current===generation.current){if(data.scope!==account?.scope)throw new Error('La respuesta corresponde a otra organización.');if(data.state==='RECORDED')applySaved(data);else if(data.state==='NOT_OBSERVED'){setRetryAllowed(true);setNotice('No se observa un recibo todavía. Podés comprobar otra vez o reintentar exactamente la misma planificación; conservamos sus datos para evitar duplicados.');}else throw new Error('Todavía no se pudo comprobar el guardado. Conservamos el intento.');}
-  }catch(error){if(mounted.current&&current===generation.current)setNotice(error.message);}finally{if(mounted.current&&current===generation.current)setSaving(false);}
+  }catch(error){if(mounted.current&&current===generation.current){if(guideAccessDenied(error))setGuideUnavailable(true);setNotice(error.message);}}finally{if(mounted.current&&current===generation.current)setSaving(false);}
  }
  return <section className={styles.workspace} aria-labelledby="workspace-title" aria-busy={loading}>
   <div className={styles.heading}><div><p className={styles.eyebrow}>ESPACIO DE TRABAJO</p><h2 id="workspace-title">Mis obras</h2><p className={styles.intro}>Elegí dónde trabajar. Las tareas, el equipo y los registros quedan en la obra seleccionada.</p></div><button type="button" className={styles.refresh} onClick={refresh} disabled={contextLocked||loading} aria-describedby={contextLocked?'workspace-context-lock':undefined}><RefreshCw size={16} aria-hidden="true"/>Actualizar</button></div>

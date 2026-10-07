@@ -9,7 +9,7 @@ import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-p
 // Browser-only acceptance of the real component with intercepted synthetic API
 // responses. This is NOT proof of a production login, employee or WhatsApp event.
 assert.ok(!process.env.VERCEL && !process.env.VERCEL_ENV);
-assert.ok([undefined,'onboarding-epoch'].includes(process.env.WORKSPACE_UI_SCENARIO));
+assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial'].includes(process.env.WORKSPACE_UI_SCENARIO));
 const root=process.cwd(),evidence=path.join(root,'.vercel/workspace-evidence');
 mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/workspace-ui-')),app=path.join(fixture,'src/app'),components=path.join(app,'(identity)/cuenta');
@@ -28,7 +28,7 @@ assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.leng
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-ui-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};\n`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:16,background:'#0b1c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
-writeFileSync(path.join(app,'page.js'),`'use client';import {useState} from 'react';import {AccountWorkspace} from './(identity)/cuenta/workspace-client';import {browserRecoveryJournal} from './(identity)/cuenta/workspace-recovery-journal.mjs';const token=async()=>{if(window.__failNextToken){window.__failNextToken=false;throw new Error('private SDK diagnostic');}if(window.__holdToken)await new Promise(resolve=>{window.__resolveToken=resolve;});return 'synthetic-active-tab-A';};export default function Page(){const [visible,setVisible]=useState(true);if(typeof window!=='undefined')window.__prepareWorkspaceReference=body=>browserRecoveryJournal.prepare('/api/identity/task-creation',{method:'POST',body:JSON.stringify(body)});return <main style={{maxWidth:1000,margin:'0 auto'}}><h2 id="onboarding-guide-title">Guía de ensayo</h2><button onClick={()=>setVisible(false)}>Desmontar ensayo</button>{visible?<AccountWorkspace getSessionToken={token}/>:<p>Ensayo desmontado</p>}</main>}`);
+writeFileSync(path.join(app,'page.js'),`'use client';import {useCallback,useState} from 'react';import {OnboardingGuide} from './(identity)/cuenta/onboarding-guide';import {AccountWorkspace} from './(identity)/cuenta/workspace-client';import {browserRecoveryJournal} from './(identity)/cuenta/workspace-recovery-journal.mjs';const token=async()=>{if(window.__failNextToken){window.__failNextToken=false;throw new Error('private SDK diagnostic');}if(window.__holdToken)await new Promise(resolve=>{window.__resolveToken=resolve;});return 'synthetic-active-tab-A';};export default function Page(){const [visible,setVisible]=useState(true),[observation,setObservation]=useState(null);const observed=useCallback(value=>{window.__guideObservation=value;setObservation(value);},[]);if(typeof window!=='undefined')window.__prepareWorkspaceReference=body=>browserRecoveryJournal.prepare('/api/identity/task-creation',{method:'POST',body:JSON.stringify(body)});return <main style={{maxWidth:1000,margin:'0 auto'}}><OnboardingGuide orgId="org_fixture" orgRole="org:admin" observation={observation}/><button onClick={()=>setVisible(false)}>Desmontar ensayo</button>{visible?<AccountWorkspace getSessionToken={token} onGuideObservation={observed}/>:<p>Ensayo desmontado</p>}</main>}`);
 const port=3108,origin='http://127.0.0.1:'+port;
 const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
 let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',value=>{serverLog=(serverLog+value.toString()).slice(-20000);});
@@ -111,7 +111,7 @@ async function scenario(mode,width=390){
  }else if(mode==='unmount-token'){
   await page.waitForFunction(()=>typeof window.__resolveToken==='function');await click(page,'Desmontar ensayo');await waitText(page,'Ensayo desmontado');
   await page.evaluate(()=>{window.__holdToken=false;window.__resolveToken();});await new Promise(resolve=>setTimeout(resolve,150));
-  assert.equal(posts.length,0);checks.push('unmounted-schedule-never-dispatches-late-token-post');await context.close();return;
+  assert.equal(posts.length,0);await page.waitForFunction(()=>window.__guideObservation===null);assert.equal(await page.$eval('[data-guide-observation]',node=>node.dataset.guideObservation),'UNOBSERVED');checks.push('unmounted-schedule-never-dispatches-late-token-post');checks.push('unmounted-workspace-clears-guide-observation');await context.close();return;
  }else if(mode==='uncertain'){
   await waitText(page,'no confirmó el guardado');assert.equal(posts.length,1);
   assert.equal(await page.$$eval('button',nodes=>nodes.find(node=>node.textContent==='Actualizar').disabled),true);
@@ -393,12 +393,78 @@ async function onboardingEpochScenario(width){
   else if(url.pathname==='/api/identity/task-creation'){assert.equal(url.searchParams.get('operationId'),'11111111-1111-4111-8111-111111111111');assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(url.searchParams.get('scope'),scope);body={scope,projectId:'p-a',state:'RECORDED',saved:true,created:true,receiptId:'task-recovery-fixture',task:baseTask()};}
   else throw Error('Unexpected synthetic identity endpoint');await request.respond({status:200,contentType:'application/json',body:JSON.stringify(body)});
  }catch(error){pageErrors.push({mode,width,message:error.message});await request.abort().catch(()=>{});}});
- try{await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});assert.equal(await page.evaluate(()=>innerWidth),width);await waitText(page,'Empresa de epoch sint\u00e9tico');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');await click(page,'Consultar participantes');await page.waitForSelector('[data-onboarding-step="CHANNEL_UNOBSERVED"]');await click(page,'Consultar vinculaci\u00f3n');await page.waitForSelector('[data-onboarding-step="CHANNEL_VERIFIED"]');assert.equal(await page.$$eval('a[href^="https://wa.me/"]',els=>els.length),1);
-  await click(page,'Cargar m\u00e1s tareas');await page.waitForSelector('[data-task-id="task-second"]');await page.waitForSelector('[data-onboarding-step="CHANNEL_UNOBSERVED"]');assert.equal(channelReads,1);assert.equal(await page.$$eval('a[href^="https://wa.me/"]',els=>els.length),0);
+ try{await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});assert.equal(await page.evaluate(()=>innerWidth),width);await waitText(page,'Empresa de epoch sint\u00e9tico');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');await click(page,'Consultar participantes');await page.waitForSelector('[data-onboarding-step="CHANNEL_UNOBSERVED"]');await click(page,'Consultar vinculaci\u00f3n');await page.waitForSelector('[data-onboarding-step="CHANNEL_VERIFIED"]');assert.equal(await page.$$eval('a[href^="https://wa.me/"]',els=>els.length),1);await page.waitForFunction(()=>document.querySelector('[data-guide-observation="OBSERVED"]')?.textContent.includes('Tu vínculo personal está vigente'));assert.match(await guideStatus(page),/1 tarea cargada de 2.*Vista parcial/s);
+  await click(page,'Cargar m\u00e1s tareas');await page.waitForSelector('[data-task-id="task-second"]');await page.waitForSelector('[data-onboarding-step="CHANNEL_UNOBSERVED"]');assert.equal(channelReads,1);assert.equal(await page.$$eval('a[href^="https://wa.me/"]',els=>els.length),0);assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));assert.match(await guideStatus(page),/2 tareas cargadas de 2.*Vista completa/s);
   await page.evaluate(async body=>{await window.__prepareWorkspaceReference(body);},{scope,projectId:'p-a',operationId:'11111111-1111-4111-8111-111111111111'});await waitText(page,'Operaciones por comprobar');await click(page,'Consultar vinculaci\u00f3n');await channelGate;await click(page,'Comprobar recibo');await page.waitForFunction(()=>document.body.innerText.includes('Cronograma actualizado desde los registros'));assert.equal(workspaceReads,3);
-  const oldBody=channel();await heldChannel.respond({status:200,contentType:'application/json',body:JSON.stringify(oldBody)});heldChannel=null;await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Consultar vinculaci\u00f3n'&&!button.disabled));assert.equal(await page.$eval('[data-onboarding-step]',el=>el.dataset.onboardingStep),'CHANNEL_UNOBSERVED');assert.equal(await page.$$eval('a[href^="https://wa.me/"]',els=>els.length),0);assert.equal(channelReads,2);
+  const oldBody=channel();await heldChannel.respond({status:200,contentType:'application/json',body:JSON.stringify(oldBody)});heldChannel=null;await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Consultar vinculaci\u00f3n'&&!button.disabled));assert.equal(await page.$eval('[data-onboarding-step]',el=>el.dataset.onboardingStep),'CHANNEL_UNOBSERVED');assert.equal(await page.$$eval('a[href^="https://wa.me/"]',els=>els.length),0);assert.equal(channelReads,2);assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));
   await click(page,'Consultar vinculaci\u00f3n');await page.waitForSelector('[data-onboarding-step="CHANNEL_VERIFIED"]');assert.equal(channelReads,3);assert.equal(await page.$$eval('a[href^="https://wa.me/"]',els=>els.length),1);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(evidence,`workspace-onboarding-epoch-${width}.png`),fullPage:true});checks.push({mode,width,workspaceReads,channelReads,posts:posts.length,appendInvalidates:true,lateSnapshotRejected:true,freshExplicitReadRequired:true});
  }finally{if(heldChannel&&!heldChannel.isInterceptResolutionHandled())await heldChannel.abort().catch(()=>{});await context.close();}
+}
+
+const guideStatus=page=>page.$eval('[data-guide-observation]',node=>node.textContent);
+async function guideObservationScenario(width){
+ const mode='guide-observation',context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1100,hasTouch:width<768,isMobile:width<768});page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
+ const requests=[],posts=[];let failureStatus=null,currentScope=scope,role='SITE_MANAGER',projectReads=0;
+ await page.setRequestInterception(true);page.on('request',async request=>{try{const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('External request forbidden');}if(!url.pathname.startsWith('/api/identity/'))return request.continue();requests.push({path:url.pathname,method:request.method()});assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');if(request.method()!=='GET'){posts.push(request.postData());throw Error('Guide scenario permits GET only');}let status=200,body;
+  if(url.pathname==='/api/identity/workspace'){
+   if(!url.search)body={scope:currentScope,organizationName:'Empresa de guía sintética',role,roleLabel:role==='SITE_MANAGER'?'Jefe de obra':'Auditor',canPlanSchedule:false,canManageIntegrations:false,projects:[{id:'p-a',name:'Obra de prueba A'},{id:'p-b',name:'Obra de prueba B'}],projectsTruncated:false};
+   else{assert.equal(url.searchParams.get('scope'),currentScope);const id=url.searchParams.get('projectId');projectReads++;if(failureStatus){status=failureStatus;failureStatus=null;body={code:status===401?'SESSION_REQUIRED':status===403?'WORKSPACE_MEMBERSHIP_REQUIRED':'WORKSPACE_OPERATION_UNCONFIRMED'};}else body={scope:currentScope,project:{id,name:id==='p-a'?'Obra de prueba A':'Obra de prueba B'},canPlanSchedule:false,tasks:[{...baseTask(),id:id+'-task'+projectReads,startsOn:null,endsOn:null}],totalTasks:3,nextCursor:'guide-cursor-'+projectReads};}
+  }else if(url.pathname==='/api/identity/worker-channel')body={scope:currentScope,projectId:'p-a',channelReady:true,truncated:false,records:[{workerId:'own-worker',name:'Persona sintética',revision,state:'VERIFIED',eligible:true,binding:{id:'guide-binding',verifiedAt:'2026-10-01T12:00:00Z',revokedAt:null}}]};
+  else throw Error('Unexpected guide endpoint '+url.pathname);
+  await request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
+ }catch(error){pageErrors.push({mode,width,message:error.message});await request.abort().catch(()=>{});}});
+ try{
+  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await page.waitForFunction(()=>document.querySelector('[data-guide-observation="OBSERVED"]')?.textContent.includes('Empresa consultada'));assert.match(await guideStatus(page),/2 obras asignadas/);assert.match(await guideStatus(page),/abrí una obra/);
+  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForFunction(()=>window.__guideObservation?.schedule?.loaded===1);assert.match(await guideStatus(page),/1 tarea cargada de 3.*Vista parcial.*1 sin fechas/s);
+  await click(page,'Consultar vinculación');await page.waitForFunction(()=>window.__guideObservation?.channel?.ownLinked===true);assert.match(await guideStatus(page),/Tu vínculo personal está vigente/);
+  failureStatus=503;await click(page,'Cargar más tareas');await page.waitForSelector('[data-guide-observation="UNOBSERVED"]');assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));assert.ok(!(await guideStatus(page)).includes('1 tarea cargada'));assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),1);
+  await click(page,'Cargar más tareas');await page.waitForFunction(()=>window.__guideObservation?.schedule?.loaded===2);assert.match(await guideStatus(page),/2 tareas cargadas de 3/);assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));
+  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba B')).click());await page.waitForFunction(()=>window.__guideObservation?.projectId==='p-b'&&window.__guideObservation?.schedule?.loaded===1);assert.match(await guideStatus(page),/1 tarea cargada de 3/);assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),1);assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);
+  for(const denial of [401,403]){failureStatus=denial;await click(page,'Cargar más tareas');await page.waitForSelector('[data-guide-observation="UNAVAILABLE"]');assert.ok(!(await guideStatus(page)).includes('Empresa consultada'));assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),0);await click(page,'Actualizar');await page.waitForSelector('[data-guide-observation="OBSERVED"]');assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForFunction(()=>window.__guideObservation?.projectId==='p-a');}
+  currentScope='b'.repeat(64);role='AUDITOR';await click(page,'Actualizar');await page.waitForFunction(()=>document.querySelector('[data-guide-observation="OBSERVED"]')?.textContent.includes('acceso Auditor'));assert.equal(await page.evaluate(()=>window.__guideObservation.scope),currentScope);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.ok(!(await guideStatus(page)).includes('tareas cargadas'));assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));assert.equal(posts.length,0);await page.$eval('[data-guide-observation]',node=>{node.closest('details').open=true;});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(evidence,'workspace-guide-state-'+width+'.png'),fullPage:true});checks.push({mode,width,projectReads,requests:requests.length,posts:0,failedReadClears:true,denial401Clears:true,denial403Clears:true,projectSwitchClears:true,roleScopeRefreshClears:true});
+ }finally{await context.close();}
+}
+
+async function guideHttpDenialScenario(width,action,denial){
+ const mode=`guide-http-${action}-${denial}`,context=await browser.createBrowserContext(),page=await context.newPage();
+ await page.setViewport({width,height:1100,hasTouch:width<768,isMobile:width<768});page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
+ const requests=[],posts=[];let denyWorkspace=false,projectReads=0,receiptReads=0;
+ await page.setRequestInterception(true);page.on('request',async request=>{try{
+  const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('External request forbidden');}
+  if(!url.pathname.startsWith('/api/identity/'))return request.continue();
+  requests.push({path:url.pathname,method:request.method()});assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+  if(request.method()!=='GET'){posts.push(request.postData());throw Error('HTML denial fixture permits GET only');}
+  let body;
+  if(url.pathname==='/api/identity/workspace'){
+   if(!url.search)body={scope,organizationName:'Empresa de guía HTTP sintética',role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:false,canManageIntegrations:false,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false};
+   else{assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');projectReads++;
+    if(denyWorkspace)return request.respond({status:denial,contentType:'text/html',headers:{'Cache-Control':'no-store'},body:'<html><body>private gateway diagnostic</body></html>'});
+    body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:false,tasks:[baseTask()],totalTasks:2,nextCursor:'synthetic-guide-http-cursor'};
+   }
+  }else if(url.pathname==='/api/identity/worker-channel')body={scope,projectId:'p-a',channelReady:true,truncated:false,records:[{workerId:'own-worker',name:'Persona sintética',revision,state:'VERIFIED',eligible:true,binding:{id:'guide-http-binding',verifiedAt:'2026-10-01T12:00:00Z',revokedAt:null}}]};
+  else if(url.pathname==='/api/identity/task-creation'){
+   assert.equal(action,'readback');assert.equal(url.searchParams.get('operationId'),'11111111-1111-4111-8111-111111111111');assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(url.searchParams.get('scope'),scope);receiptReads++;
+   body={scope,projectId:'p-a',state:'RECORDED',saved:true,created:true,receiptId:'guide-http-original-receipt',task:baseTask()};
+  }else throw Error('Unexpected HTML denial endpoint '+url.pathname);
+  await request.respond({status:200,contentType:'application/json',body:JSON.stringify(body)});
+ }catch(error){pageErrors.push({mode,width,message:error.message});await request.abort().catch(()=>{});}});
+ try{
+  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de guía HTTP sintética');
+  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');
+  await click(page,'Consultar vinculación');await page.waitForFunction(()=>window.__guideObservation?.channel?.ownLinked===true);assert.match(await guideStatus(page),/Tu vínculo personal está vigente/);
+  denyWorkspace=true;
+  if(action==='append')await click(page,'Cargar más tareas');
+  else{await page.evaluate(body=>window.__prepareWorkspaceReference(body),{scope,projectId:'p-a',operationId:'11111111-1111-4111-8111-111111111111'});await waitText(page,'Operaciones por comprobar');await click(page,'Comprobar recibo');}
+  await page.waitForSelector('[data-guide-observation="UNAVAILABLE"]',{timeout:6000});
+  assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),0);assert.equal(await page.$('#worker-channel-title'),null);assert.equal(await page.$('#participant-title'),null);
+  assert.equal(await page.$$eval('button',nodes=>nodes.filter(node=>node.textContent.includes('Obra de prueba A')).length),0);
+  assert.ok(!(await guideStatus(page)).includes('Empresa consultada'));assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));
+  assert.ok(!(await text(page)).includes('private gateway diagnostic'));assert.ok(!(await text(page)).includes('Unexpected token'));
+  assert.equal(projectReads,2);assert.equal(receiptReads,action==='readback'?1:0);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.screenshot({path:path.join(evidence,`workspace-${mode}-${width}.png`),fullPage:true});
+  checks.push({mode,width,projectReads,receiptReads,posts:0,htmlDenialClearsAccount:true,htmlDenialClearsView:true,htmlDenialClearsGuideFacts:true,currentToken:true});
+ }catch(error){await page.screenshot({path:path.join(evidence,`workspace-${mode}-${width}-failure.png`),fullPage:true}).catch(()=>{});throw error;}
+ finally{await context.close();}
 }
 
 try{
@@ -413,8 +479,10 @@ try{
  }
  assert.ok(ready,'Fixture server unavailable: '+serverLog.slice(-5000));
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
- for(const width of [320,390,768,1280])await onboardingEpochScenario(width);
- if(process.env.WORKSPACE_UI_SCENARIO!=='onboarding-epoch'){
+ if(process.env.WORKSPACE_UI_SCENARIO!=='guide-http-denial')for(const width of [320,390,768,1280])await guideObservationScenario(width);
+ if([undefined,'onboarding-epoch'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])await onboardingEpochScenario(width);
+ if([undefined,'guide-http-denial'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])for(const action of ['append','readback'])for(const denial of [401,403])await guideHttpDenialScenario(width,action,denial);
+ if(!process.env.WORKSPACE_UI_SCENARIO){
  for(const width of [320,390,768,1280])await scenario('success',width);
  for(const mode of ['readonly','denied','empty','draft-cancel','sdk-unavailable','unmount-token','uncertain','rollback','not-arrived','conflict','race'])await scenario(mode);
  for(const mode of ['draft-cancel','uncertain','rollback','not-arrived'])await taskCreateScenario(mode);
@@ -425,5 +493,5 @@ try{
  assert.deepEqual(pageErrors,[]);
  const proof={status:'PASS',fullSuite:!process.env.WORKSPACE_UI_SCENARIO,focusedScenario:process.env.WORKSPACE_UI_SCENARIO||null,environment:'isolated-browser-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,pageErrors,sourceManifest,harnessSha256,productionLoginVerified:false,productionDataWritten:false,physicalWhatsAppVerified:false};
  writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
-}catch(error){writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,pageErrors,serverLog},null,2));throw error;}
+}catch(error){writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,checks,pageErrors,sourceManifest,harnessSha256,serverLog},null,2));throw error;}
 finally{await browser?.close();try{if(process.platform!=='win32')process.kill(-server.pid,'SIGTERM');else server.kill();}catch{}await new Promise(resolve=>setTimeout(resolve,500));assert.equal(path.dirname(path.resolve(fixture)),path.resolve(root,'.vercel'));rmSync(fixture,{recursive:true,force:true});}
