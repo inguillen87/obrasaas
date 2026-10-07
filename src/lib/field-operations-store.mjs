@@ -23,10 +23,16 @@ export function assertProgressContinuity(current, proposed) {
 }
 export function publicFieldEvidence(row) {
   const e=row.metadata?.fieldOperations;
+  const raw=e.processing||{status:'NOT_REQUESTED'},processing={status:raw.status};
+  for(const key of ['code','result','humanReviewRequired','analysisConsent','startedAt','expiresAt','completedAt'])if(Object.hasOwn(raw,key))processing[key]=raw[key];
+  if(raw.status==='RUNNING'){
+    const expires=Date.parse(raw.expiresAt),observed=row.readAt instanceof Date?row.readAt.getTime():NaN;
+    processing.leaseExpired=Number.isFinite(expires)&&Number.isFinite(observed)&&expires<=observed;
+  }
   return {id:row.id,title:row.title,taskId:e.taskId,workerId:e.workerId,caption:row.description||'',sectorId:e.sectorId,
     status:e.review?.decision==='APPROVE'?'APPROVED':e.review?.decision==='REJECT'?'REJECTED':'PENDING',revision:row.revision,
     capturedAt:e.capturedAt,media:{kind:e.media.kind,contentType:e.media.contentType,bytes:e.media.bytes,sha256:e.media.sha256},
-    processing:e.processing||{status:'NOT_REQUESTED'},review:e.review?{decision:e.review.decision,reason:e.review.reason,recordedAt:e.review.recordedAt}:null};
+    processing,review:e.review?{decision:e.review.decision,reason:e.review.reason,recordedAt:e.review.recordedAt}:null};
 }
 const publicEvent=row=>({id:row.id,workerId:row.workerId,recordedAt:row.recordedAt,...row.metadata.fieldOperations});
 const publicProposal=row=>({id:row.id,summary:row.summary,status:row.status==='PENDING'&&row.expired===true?'EXPIRED':row.status,statusStored:row.status,expiresAt:row.expiresAt?.toISOString()||null,revision:row.revision,
@@ -50,7 +56,7 @@ export function createFieldOperations({workspace,assertParticipant}) {
     return row;
   }
   const evidence=async(client,projectId,id,lock=false)=>{
-    const row=(await client.query(`SELECT id,title,description,metadata,${revision('"updatedAt"')} AS revision FROM public."Incident" WHERE id=$1 AND "projectId"=$2 ${lock?'FOR UPDATE':''}`,[id,projectId])).rows[0];
+    const row=(await client.query(`SELECT id,title,description,metadata,clock_timestamp() AS "readAt",${revision('"updatedAt"')} AS revision FROM public."Incident" WHERE id=$1 AND "projectId"=$2 ${lock?'FOR UPDATE':''}`,[id,projectId])).rows[0];
     if(row?.metadata?.fieldOperations?.version!==1||row.metadata.fieldOperations.kind!=='EVIDENCE')throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);return row;
   };
   const task=async(client,projectId,id,lock=false)=>{
@@ -130,7 +136,7 @@ export function createFieldOperations({workspace,assertParticipant}) {
         // Page rows, display status and total share the transaction's DB clock.
         const pending=media?`(metadata->'fieldOperations'->'review' IS NULL OR metadata->'fieldOperations'->'review'='null'::jsonb)`:`status='PENDING' AND "expiresAt">transaction_timestamp()`;
         const filtered=visible+(reviewFilter==='PENDING'?` AND ${pending}`:'');
-        const selection=media?`id,title,description,metadata,${revision('"updatedAt"')} AS revision`:`id,summary,status::text AS status,action,result,"proposedByWorkerId","expiresAt",("expiresAt"<=transaction_timestamp()) AS expired,${revision('"updatedAt"')} AS revision`;
+        const selection=media?`id,title,description,metadata,clock_timestamp() AS "readAt",${revision('"updatedAt"')} AS revision`:`id,summary,status::text AS status,action,result,"proposedByWorkerId","expiresAt",("expiresAt"<=transaction_timestamp()) AS expired,${revision('"updatedAt"')} AS revision`;
         const rows=(await client.query(`SELECT ${selection} FROM ${table} WHERE ${filtered} AND ($4::text IS NULL OR ("createdAt",id)<(SELECT "createdAt",id FROM ${table} WHERE "projectId"=$1 AND id=$4)) AND ($5::text IS NULL OR id=$5) ORDER BY "createdAt" DESC,id DESC LIMIT 101`,[...values,afterReview,reviewId])).rows;
         const total=reviewId?rows.length:(await client.query(`SELECT count(*)::int AS total FROM ${table} WHERE ${filtered}`,values)).rows[0].total;
         return {scope,projectId:context.projectId,reviewAccessStamp,reviewSection,reviewFilter,afterReview,reviewId,records:rows.slice(0,100).map(media?publicFieldEvidence:publicProposal),total,nextCursor:rows.length>100?rows[99].id:null,canReview:reviewer,canApproveProgress:canApproveProgress(member.role)};
@@ -158,7 +164,7 @@ export function createFieldOperations({workspace,assertParticipant}) {
         const access=await reviewAccess(client,member,session,context.projectId,scope),owned=access.owned.slice(0,101);
         const ids=reviewer?workers.map(w=>w.id):owned.map(w=>w.id);
         const events=(await client.query(`SELECT id,"workerId",metadata,${revision('"checkedInAt"')} AS "recordedAt" FROM public."AttendanceEntry" WHERE "projectId"=$1 AND "workerId"=ANY($2::text[]) AND metadata->'fieldOperations'->>'version'='1' ORDER BY "checkedInAt" DESC,id DESC LIMIT 101`,[context.projectId,ids])).rows;
-        const media=(await client.query(`SELECT id,title,description,metadata,${revision('"updatedAt"')} AS revision FROM public."Incident" WHERE "projectId"=$1 AND metadata->'fieldOperations'->>'kind'='EVIDENCE' AND ($2::boolean OR metadata->'fieldOperations'->>'workerId'=ANY($3::text[])) ORDER BY "createdAt" DESC,id DESC LIMIT 101`,[context.projectId,reviewer,ids])).rows;
+        const media=(await client.query(`SELECT id,title,description,metadata,clock_timestamp() AS "readAt",${revision('"updatedAt"')} AS revision FROM public."Incident" WHERE "projectId"=$1 AND metadata->'fieldOperations'->>'kind'='EVIDENCE' AND ($2::boolean OR metadata->'fieldOperations'->>'workerId'=ANY($3::text[])) ORDER BY "createdAt" DESC,id DESC LIMIT 101`,[context.projectId,reviewer,ids])).rows;
         const proposals=(await client.query(`SELECT id,summary,status::text AS status,action,result,"proposedByWorkerId","expiresAt",("expiresAt"<=clock_timestamp()) AS expired,${revision('"updatedAt"')} AS revision FROM public."OperationalProposal" WHERE "projectId"=$1 AND type='TASK_PROGRESS' AND "sourceProvider"='account-field' AND action->>'fieldOperationsVersion'='1' AND ($2::boolean OR "proposedByWorkerId"=ANY($3::text[])) ORDER BY "createdAt" DESC,id DESC LIMIT 101`,[context.projectId,reviewer,ids])).rows;
         const reports=(await client.query(`SELECT id,title,description,severity::text AS severity,metadata,${revision('"updatedAt"')} AS revision,${revision('"createdAt"')} AS "createdAt" FROM public."Incident" WHERE "projectId"=$1 AND metadata->'siteRegister'->>'version'='1' AND metadata->'siteRegister'->>'type' IN ('ISSUE','MATERIAL_REQUEST') AND ($2::boolean OR metadata->'siteRegister'->>'workerId'=ANY($3::text[])) ORDER BY "createdAt" DESC,id DESC LIMIT 101`,[context.projectId,reviewer,ids])).rows;
         const projectRevision=(await client.query(`SELECT ${revision('"updatedAt"')} AS revision FROM public."Project" WHERE id=$1 AND "organizationId"=$2`,[context.projectId,member.organizationId])).rows[0].revision;

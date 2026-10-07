@@ -8,6 +8,7 @@ import {createHash} from 'node:crypto';
 import ffmpegPath from 'ffmpeg-static';
 import {createFieldMedia} from '../src/lib/field-media.mjs';
 import {createPilotMediaAnalyzer} from '../src/lib/pilot-media.mjs';
+import {createVideoFrameExtractor} from '../src/lib/video-frame-extractor.mjs';
 import {WorkspaceError} from '../src/lib/workspace-policy.mjs';
 import {fieldMediaAnalysisConsent} from '../src/lib/field-media-privacy.mjs';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),scope='a'.repeat(64);
@@ -23,7 +24,7 @@ function fixture({bytes=video,fetchImpl,extractVideoFrames,onGet,manual=false}={
  const client={query:async(sql,args)=>{queries.push(sql);
   if(sql.includes('SELECT clock_timestamp() AS now'))return {rows:[{now:new Date()}]};
   if(sql.startsWith('SELECT id,metadata FROM public."AuditLog"'))return {rows:receipts.has(args[0])?[{id:args[0],metadata:receipts.get(args[0])}]:[]};
-  if(sql.startsWith('UPDATE public."Incident"')){row.metadata=JSON.parse(args[2]);row.revision='2026-10-05T12:00:00.'+String(++revision).padStart(6,'0');return {rows:[]};}
+  if(sql.startsWith('UPDATE public."Incident"')){row.metadata=JSON.parse(args[2]);row.revision='2026-10-05T12:00:00.'+String(++revision).padStart(6,'0');return {rows:sql.includes('RETURNING id')?[{id:row.id}]:[]};}
   if(sql.startsWith('INSERT INTO public."AuditLog"')){receipts.set(args[0],JSON.parse(args[4]));return {rows:[]};}
   if(sql.startsWith('SELECT id FROM public."Worker"'))return {rows:revoked?[]:[{id:'worker-a'}]};
   throw new Error('Unexpected SQL: '+sql);
@@ -68,4 +69,8 @@ test('an expired same-operation retry gets a new lease and an old provider respo
  const second=f.media.process({},command);await secondStarted;assert.notEqual(f.row.metadata.fieldOperations.processing.leaseId,oldLease);
  finishFirst(Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({...site,aiAnalysis:'Old superseded analysis.'})}}]}));await assert.rejects(first,{code:'FIELD_MEDIA_PROCESSING_CHANGED'});assert.equal(f.receipts.size,0);
  finishSecond(Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify({...site,aiAnalysis:'Current reserved analysis.'})}}]}));const result=await second;assert.equal(result.evidence.processing.result.aiAnalysis,'Current reserved analysis.');assert.equal(f.receipts.size,1);
+});
+test('shared cancellation interrupts actual video decoding before provider disclosure',async()=>{
+ const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10);
+ try{await assert.rejects(createVideoFrameExtractor()({buffer:video,mimeType:'video/mp4',signal:controller.signal}),{code:'FIELD_VIDEO_DECODE_TIMEOUT'});}finally{clearTimeout(timer);}
 });
