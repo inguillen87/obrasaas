@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readFileSync,existsSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readFileSync,existsSync,realpathSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
-import {spawn,execFileSync} from 'node:child_process';
+import {spawn,spawnSync,execFileSync} from 'node:child_process';
 import {planImportCommandDigest} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
 import puppeteer from 'puppeteer';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
@@ -18,7 +18,25 @@ writeFileSync(path.join(app,'layout.js'),`export default function Layout({childr
 const scope='a'.repeat(64),projectId='project-fixture';
 writeFileSync(path.join(app,'page.js'),`'use client';import {useState} from 'react';import {PlanImportPanel} from './plan-import-panel';import {WorkspaceRecoveryPanel} from './workspace-recovery-panel';const projects=[{id:'${projectId}',name:'Obra sintética'}];export default function Page(){const [tasks,setTasks]=useState([]);return <main style={{maxWidth:1000,margin:'auto'}}><PlanImportPanel projectId="${projectId}" scope="${scope}" getSessionToken={async()=> 'synthetic-plan-token'} onApplied={setTasks}/><WorkspaceRecoveryPanel scope="${scope}" projects={projects} getSessionToken={async()=> 'synthetic-plan-token'}/><p data-task-count>Tareas canónicas recibidas: {tasks.length}</p></main>}`);
 const sourceFile=path.join(fixture,'synthetic-schedule.pdf');writeFileSync(sourceFile,'%PDF-1.7\nSynthetic Gantt fixture\n%%EOF');
-const port=3138,origin='http://127.0.0.1:'+port,server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],windowsHide:true});
+const port=3138,origin='http://127.0.0.1:'+port,server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],windowsHide:true,detached:process.platform!=='win32'});
+// Next's SIGTERM handler waits for its child and writes final dev state. The
+// close event also waits for inherited stdout/stderr; kill() alone is no fence.
+const serverClosed=new Promise(resolve=>server.once('close',resolve));
+async function stopHarnessServer(){
+ let deadline;
+ try{
+  assert.ok(Number.isSafeInteger(server.pid)&&server.pid>0,'Only this owned Next tree may be stopped');
+  if(process.platform==='win32'){
+   if(server.exitCode===null&&server.signalCode===null){
+    const stopped=spawnSync('taskkill.exe',['/PID',String(server.pid),'/T','/F'],{stdio:'ignore',windowsHide:true,timeout:10000});
+    assert.equal(stopped.status,0,'The owned Next tree must stop before fixture removal');
+   }
+  }else{
+   try{process.kill(-server.pid,'SIGTERM');}catch(error){if(error.code!=='ESRCH')throw error;}
+  }
+  await Promise.race([serverClosed,new Promise((_,reject)=>{deadline=setTimeout(()=>reject(Error('PLAN_IMPORT_UI_SERVER_CLOSE_TIMEOUT')),10000);})]);
+ }finally{clearTimeout(deadline);}
+}
 let log='',browser,proof,fixtureRemoved=false;for(const stream of [server.stdout,server.stderr])stream.on('data',data=>{log=(log+data).slice(-12000);});
 const checks=[],errors=[],decisionRejectionChecks=[];const widths=[320,390,768,1280],modes=['apply','ambiguous','recover','manager'];
 const row={title:'Fundaciones sintéticas',startsOn:'2026-10-08',endsOn:'2026-10-10',evidence:'Fila 1 del archivo',uncertainty:''};
@@ -105,5 +123,5 @@ try {
   decisionRejectionChecks.push({width,mode,typedRejection:true,zeroTasksBeforeCorrection:true,newUUIDAfterRejection:true,approvalCleared:true,exactRecoveryAfterReload:mode==='decision-rejected-reload',notObservedRetained:mode==='decision-unconfirmed',tasksAfterCorrection:2,posts:posts.length,recoveryReads:recoveries.length});await context.close();
  }
  assert.deepEqual(errors,[]);proof={validated:true,synthetic:true,realProviderCalls:false,widths,checks,decisionRejectionChecks,totalCheckCount:checks.length+decisionRejectionChecks.length,...sourceProof,providerCalls:0,productionDataWritten:false,errors};
-}catch(error){console.error(JSON.stringify({log,errors,checks,decisionRejectionChecks}));throw error;}finally{await browser?.close();server.kill();assert.ok(path.resolve(fixture).startsWith(path.resolve(scratch)+path.sep));rmSync(fixture,{recursive:true,force:true});fixtureRemoved=!existsSync(fixture);}
+}catch(error){console.error(JSON.stringify({log,errors,checks,decisionRejectionChecks}));throw error;}finally{await browser?.close();await stopHarnessServer();const target=realpathSync(fixture);assert.equal(path.dirname(target),realpathSync(scratch));assert.ok(path.basename(target).startsWith('plan-ui-'));rmSync(target,{recursive:true,force:true});fixtureRemoved=!existsSync(target);}
 assert.equal(fixtureRemoved,true);proof.fixtureRemoved=fixtureRemoved;writeFileSync(path.join(scratch,'plan-import-ui-validation.json'),JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify({...proof,checks:checks.length,decisionRejectionChecks:decisionRejectionChecks.length,sourceManifest:proof.sourceManifest.length}));
