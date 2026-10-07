@@ -1,5 +1,6 @@
 import {WorkspaceError,workspaceId,operationId,digest,requireWorkspaceIdentity} from './workspace-policy.mjs';
 import {decodePrivateImage,PrivateImageError} from './private-image-upload.mjs';
+import {SITE_ROLES} from './site-register-policy.mjs';
 export const PARTICIPANT_NOTICE_VERSION='participant-kyc-v1';
 export const PARTICIPANT_NOTICE='Tu documento y fotografía se guardan en privado para que un responsable autorizado de esta empresa revise tu identidad y participación en esta obra. Las imágenes no autorizan fichajes ni aprueban tu identidad automáticamente. Podés solicitar corrección o revisión al responsable. No ingreses datos bancarios ni información médica.';
 export const PARTICIPANT_OCR_NOTICE_VERSION='participant-external-ocr-v1';
@@ -15,7 +16,14 @@ export function participantContext(input){if(!workspaceId(input.projectId)||!/^[
 export function participantCommand(input){
  participantKeys(input,['operationId','projectId','scope','action','payload']);participantContext(input);if(!operationId(input.operationId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
  const p=input.payload;let payload;
- if(input.action==='INVITE'){
+ if(input.action==='CONFIGURE_EMPLOYEE_INTAKE'){
+  participantKeys(p,['connectionId','expectedRevision','enabled','confirmed']);if(!workspaceId(p.connectionId)||!Number.isSafeInteger(p.expectedRevision)||p.expectedRevision<0||typeof p.enabled!=='boolean'||p.confirmed!==true)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p};
+ }else if(['ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE'].includes(input.action)){
+  participantKeys(p,['connectionId','applicationId','expectedRevision',...(input.action==='ADMIT_EMPLOYEE_INTAKE'?['job','permissions','confirmed']:['reason'])]);
+  if(!workspaceId(p.connectionId)||!/^customer_webhook_[a-f0-9]{64}$/.test(p.applicationId||'')||!Number.isSafeInteger(p.expectedRevision)||p.expectedRevision<1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+  if(input.action==='ADMIT_EMPLOYEE_INTAKE'){participantKeys(p.permissions,['attendance','report']);if(!Object.hasOwn(SITE_ROLES,p.job)||typeof p.permissions.attendance!=='boolean'||typeof p.permissions.report!=='boolean'||p.confirmed!==true)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p,permissions:{...p.permissions}};}
+  else payload={...p,reason:participantReason(p.reason)};
+ }else if(input.action==='INVITE'){
   participantKeys(p,['workerId','revision','email']);participantRevision(p.revision);
   if(!workspaceId(p.workerId)||typeof p.email!=='string'||p.email.length>254||! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email.trim()))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
   payload={...p,email:p.email.trim().toLowerCase()};
