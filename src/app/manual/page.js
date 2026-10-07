@@ -1,12 +1,9 @@
 import Link from 'next/link';
+import {publicPageMetadata} from '../public-site-metadata.mjs';
 import { ObraSaasLogo } from '../brand/brand-logo';
 import styles from './manual.module.css';
 
-export const metadata = {
-  title: 'Manual de inicio y WhatsApp · ObraSaaS',
-  description: 'Cómo abrir tu constructora, preparar la primera obra, incorporar al equipo y comprobar WhatsApp con permisos y revisión humana.',
-  alternates: { canonical: '/manual' },
-};
+export const metadata = publicPageMetadata('/manual');
 
 const contents = [
   ['empezar', 'Abrir la empresa'], ['equipo', 'Invitar al equipo'], ['trabajo', 'Registrar trabajo'],

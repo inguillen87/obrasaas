@@ -1,8 +1,11 @@
 import Link from 'next/link';
+import {publicPageMetadata} from './public-site-metadata.mjs';
 import {ObraSaasLogo} from './brand/brand-logo';
 import {LandingMenu,LandingMotion,LandingShowcase,LandingVideo} from './landing-interactions';
 import {LandingPhoneScene} from './landing-phone-scene';
 import styles from './page.module.css';
+
+export const metadata = publicPageMetadata('/');
 
 const questions=[
  ['¿Puedo empezar sin conectar WhatsApp?','Sí. Creá tu cuenta, abrí tu empresa y prepará la primera obra desde la web. Podés incorporar al equipo, organizar tareas y revisar registros antes de conectar el canal.'],
