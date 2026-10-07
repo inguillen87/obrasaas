@@ -5,6 +5,7 @@ import {decodeWorkerChannelProof,workerChannelCodeDigest,lockParticipantMember,a
 import {lockPersonWorksiteJourney} from './person-worksite-journey.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerJobTransaction,customerOutboundId} from './meta-customer-outbound.mjs';
+import {metaFieldConversationAction} from './meta-field-conversation.mjs';
 import {createMetaFieldBridge,readMetaFieldConversation} from './meta-field-bridge.mjs';
 import {validFieldMediaAnalysisConsent} from './field-media-privacy.mjs';
 import {siteText} from './site-register-policy.mjs';
@@ -164,7 +165,13 @@ async function selector(client,r,env){
   const nonce=digest([r.event.id,r.routeId,state.epoch,worker.id,worker.assignmentRevision,worker.channelBinding.id,'confirm']).slice(0,20),next={phase:'CONFIRM',nonce,choices:[{...choice}],expiresAt:new Date(r.now.getTime()+300000).toISOString()};return emit(result('WORKSITE_CONFIRM', {type:'interactive',body:'¿Confirmar la obra '+worker.projectName+'? La jornada y los recibos conservarán este destino.',button:'Confirmar obra',sections:[{title:'Destino',rows:[{id:'empresa:'+nonce+':0',title:'Confirmar obra'}]}]}),next,null);
  }
  if(body==='CANCELAR'&&selected){if(activeField&&!(await promptContext()))return emit(result('WORKSITE_INPUT_CONTEXT_REQUIRED',text('Respondé al mensaje del paso actual con CANCELAR. Conservamos el borrador y no cambiamos la obra.')));await client.query(`UPDATE public."Worker" SET metadata=metadata-'fieldChannelConversation',"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[selected.id,selected.projectId]);return emit(result('WORKSITE_DRAFT_CANCELLED',text('Borrador cancelado en '+selected.projectName+'. La jornada y los recibos se conservan. Escribí CAMBIAR OBRA para elegir otro destino.')));}
- if(!selected||!active||state.phase!=='SELECTED')return emit(result('WORKSITE_SELECTION_REQUIRED',text('Elegí y confirmá una obra vigente. Escribí OBRA.')));
+ // A live draft keeps its already confirmed destination only while its durable
+ // prompt still belongs to the same route epoch, person, worksite and binding.
+ // Every new input must also pass the current prompt/nonce checks below. This
+ // does not renew an expired menu or permit selecting another worksite.
+ const continuingDraft=selected&&state?.phase==='SELECTED'&&Number.isFinite(Date.parse(state.expiresAt))&&['ATTENDANCE','MEDIA','INCIDENT','MATERIAL','CONSUMPTION','PROGRESS'].includes(activeField?.purpose)&&await promptSource();
+ if(!selected||state?.phase!=='SELECTED'||!active&&!continuingDraft)return emit(result('WORKSITE_SELECTION_REQUIRED',text('Elegí y confirmá una obra vigente. Escribí OBRA.')));
+ if(!active&&continuingDraft&&metaFieldConversationAction(body)&&body!=='ESTADO')return emit(result('WORKSITE_DRAFT_PENDING',text('Conservamos el borrador de '+selected.projectName+'. Respondé al mensaje de ese paso para continuar, o con CANCELAR para descartarlo. Para otra operación, elegí y confirmá nuevamente la obra.')));
  if(activeField&&activeField.purpose!=='MENU'&&['MENU','AYUDA'].includes(body))return emit(result('WORKSITE_DRAFT_PENDING',text('Conservamos el borrador de '+selected.projectName+'. Respondé al mensaje del paso actual para continuar, o con CANCELAR para descartarlo explícitamente. ESTADO permite consultar la jornada sin borrar este paso.')));
  if(['document','nfm_reply'].includes(r.proof.value.type)||r.proof.value.interactive?.nfm_reply||['KYC','VERIFICAR'].includes(body))return emit(result('COMPANY_ADAPTER_DISABLED',text('KYC y Flow requieren los pasos habilitados en Mi cuenta. Este canal no recibe documentos de identidad ni datos bancarios. Escribí MENU para ver tus operaciones autorizadas.')));
  // Free input/location must reply to the durable prompt; an uncorrelated late

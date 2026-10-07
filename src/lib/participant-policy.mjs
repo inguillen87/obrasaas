@@ -44,6 +44,9 @@ export function participantCommand(input){
   participantKeys(p,['workerId','revision','reason']);participantRevision(p.revision);if(!workspaceId(p.workerId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p,reason:participantReason(p.reason)};
  }else if(input.action==='ASSIGN_EXISTING'){
   participantKeys(p,['workerId','revision','membershipId','reason']);participantRevision(p.revision);if(!workspaceId(p.workerId)||!workspaceId(p.membershipId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p,reason:participantReason(p.reason)};
+ }else if(input.action==='SET_FIELD_PERMISSIONS'){
+  participantKeys(p,['workerId','revision','permissions','reason']);participantRevision(p.revision);participantKeys(p.permissions,['attendance','report']);
+  if(!workspaceId(p.workerId)||typeof p.permissions.attendance!=='boolean'||typeof p.permissions.report!=='boolean')throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p,permissions:{...p.permissions},reason:participantReason(p.reason)};
  }else if(input.action==='SET_OFFICE_ROLE'){
   participantKeys(p,['membershipId','revision','role','reason']);participantRevision(p.revision);if(!workspaceId(p.membershipId)||!Object.hasOwn(OFFICE_ROLES,p.role))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p,reason:participantReason(p.reason)};
  }else if(input.action==='PREPARE_KYC_CHAT'){

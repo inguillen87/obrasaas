@@ -47,7 +47,7 @@ function reference(url, options, now) {
   // Invitation reconciliation reads the provider and finalizes the original
   // invitation's receipt; it never creates a second invitation.
   if(resource==='participants'&&body.action==='RECOVER_INVITATION')return null;
-  if(resource==='meta-onboarding'&&(body.action==='reconcile'?(!uuid(body.signupId)||!Number.isSafeInteger(body.expectedCompanyPhoneRevision)||body.expectedCompanyPhoneRevision<1||body.confirmCompanyPhoneRevision!==true):(!['review_inbox','process_inbox'].includes(body.action)||!id(body.eventId))))return null;
+  if(resource==='meta-onboarding'&&(body.action==='cancel'?(!uuid(body.signupId)||body.confirmLocalClosure!==true):body.action==='reconcile'?(!uuid(body.signupId)||!Number.isSafeInteger(body.expectedCompanyPhoneRevision)||body.expectedCompanyPhoneRevision<1||body.confirmCompanyPhoneRevision!==true):(!['review_inbox','process_inbox'].includes(body.action)||!id(body.eventId))))return null;
   const bank=resource==='participants'&&(PRIVATE_BANK_ACTIONS.includes(body.action)||body.action==='CANCEL_PENDING_PRIVATE_BANK_ACCOUNT');
   const bankAction=body.action==='CANCEL_PENDING_PRIVATE_BANK_ACCOUNT'?body.payload?.originalAction:body.action;
   if(bank&&(!PRIVATE_BANK_ACTIONS.includes(bankAction)||!id(body.payload?.workerId)))throw unavailable();
@@ -60,7 +60,7 @@ function reference(url, options, now) {
     ...(resource==='site-photo'?{reportId:body.reportId}:{}),
     ...(resource==='company-onboarding'?{action:body.action,expectedClerkOrganizationId:body.expectedClerkOrganizationId}:{}),
     ...(resource==='company-channel'?{action:body.action,connectionId:body.payload.connectionId}:{}),
-    ...(resource==='meta-onboarding'?{action:body.action,...(body.action==='reconcile'?{signupId:body.signupId}:{eventId:body.eventId})}:{}),
+    ...(resource==='meta-onboarding'?{action:body.action,...(['reconcile','cancel'].includes(body.action)?{signupId:body.signupId}:{eventId:body.eventId})}:{}),
     ...(overtime?{action:body.action}:{}),
     ...(bank?{action:bankAction,workerId:body.payload.workerId}:{}),
     ...(intake?{action:body.action,connectionId:body.payload.connectionId,...(body.action==='CONFIGURE_EMPLOYEE_INTAKE'?{}:{applicationId:body.payload.applicationId})}:{}),
@@ -74,7 +74,7 @@ function valid(entry) {
   const bank=entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(entry.action);
   const intake=entry.resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action);
   if(entry.resource==='participants'&&entry.action!==undefined&&!bank&&!intake)return false;
-  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',entry.action==='reconcile'?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(bank?['action','workerId']:[]),...(intake?['action','connectionId',...(entry.action==='CONFIGURE_EMPLOYEE_INTAKE'?[]:['applicationId'])]:[]),...(progress?['templateKey','workerId','actionReference']:[])];
+  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',['reconcile','cancel'].includes(entry.action)?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(bank?['action','workerId']:[]),...(intake?['action','connectionId',...(entry.action==='CONFIGURE_EMPLOYEE_INTAKE'?[]:['applicationId'])]:[]),...(progress?['templateKey','workerId','actionReference']:[])];
   if(Object.keys(entry).sort().join('|')!==fields.sort().join('|'))return false;
   if(entry.resource==='company-onboarding'&&(entry.action!=='declare_company_phone'||!id(entry.expectedClerkOrganizationId)))return false;
   if(entry.resource==='company-channel'&&(!COMPANY_CHANNEL_ACTIONS.includes(entry.action)||!id(entry.connectionId)))return false;
@@ -82,7 +82,7 @@ function valid(entry) {
   if(overtime&&!FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action))return false;
   if(bank&&(!PRIVATE_BANK_ACTIONS.includes(entry.action)||!id(entry.workerId)))return false;
   if(intake&&(!PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action)||!id(entry.connectionId)||entry.action!=='CONFIGURE_EMPLOYEE_INTAKE'&&!/^customer_webhook_[a-f0-9]{64}$/.test(entry.applicationId||'')))return false;
-  return (entry.resource!=='site-photo'||id(entry.reportId))&&(entry.resource!=='meta-onboarding'||(entry.action==='reconcile'?uuid(entry.signupId):['review_inbox','process_inbox'].includes(entry.action)&&id(entry.eventId)));
+  return (entry.resource!=='site-photo'||id(entry.reportId))&&(entry.resource!=='meta-onboarding'||(['reconcile','cancel'].includes(entry.action)?uuid(entry.signupId):['review_inbox','process_inbox'].includes(entry.action)&&id(entry.eventId)));
 }
 const keyOf=entry=>prefix+entry.scope+'.'+entry.resource+'.'+entry.operationId;
 export function validateWorkspaceRecoveryStoredEntry(key,raw) {
@@ -99,7 +99,7 @@ export function recoveryQuery(entry) {
   return '/api/identity/'+entry.resource+'?'+new URLSearchParams({projectId:entry.projectId,scope:entry.scope,operationId:entry.operationId,
     ...(entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(entry.action)?{detail:'private-bank-account',workerId:entry.workerId,action:entry.action}:{}),
     ...(entry.resource==='company-onboarding'?{action:entry.action,expectedClerkOrganizationId:entry.expectedClerkOrganizationId}:{}),
-    ...(entry.resource==='site-photo'?{reportId:entry.reportId}:{}),...(entry.resource==='meta-onboarding'?{action:entry.action,...(entry.action==='reconcile'?{signupId:entry.signupId}:{eventId:entry.eventId})}:{})});
+    ...(entry.resource==='site-photo'?{reportId:entry.reportId}:{}),...(entry.resource==='meta-onboarding'?{action:entry.action,...(['reconcile','cancel'].includes(entry.action)?{signupId:entry.signupId}:{eventId:entry.eventId})}:{})});
 }
 export function recoveryResult(entry, result) {
   if(!valid(entry)||result?.scope!==entry.scope)return null;
@@ -177,10 +177,21 @@ export function recoveryResult(entry, result) {
     if(result.state==='STATUS_OBSERVED'&&result.definitive===true&&result.saved===true&&['sent','delivered','read','failed','deleted'].includes(result.providerStatus)&&result.deliveryConfirmed===['delivered','read'].includes(result.providerStatus))return {state:'STATUS_OBSERVED',receiptId:receipt.id};
     return null;
   }
+  if(entry.resource==='meta-onboarding'&&entry.action==='cancel'){
+    const r=result.localModeClosure;if(r===null)return {state:'NOT_OBSERVED'};
+    const fields=['action','operationId','signupId','projectId','scope','state','saved','receiptId','phase','code','closedAt','remoteAuthorizationRevoked','remoteMutationDispatched'];
+    if(!r||Object.keys(r).sort().join('|')!==fields.sort().join('|')||r.action!=='cancel'||r.operationId!==entry.operationId||r.signupId!==entry.signupId||r.projectId!==entry.projectId||r.scope!==entry.scope||r.state!=='RECORDED'||r.saved!==true||!/^meta_mode_closure_[a-f0-9]{64}$/.test(r.receiptId||'')||r.phase!=='BEFORE_BINDING'||!['META_CUSTOMER_DEDICATED_PHONE_REQUIRED','META_CUSTOMER_EXISTING_API_REVIEW_REQUIRED'].includes(r.code)||typeof r.closedAt!=='string'||!Number.isFinite(Date.parse(r.closedAt))||r.remoteAuthorizationRevoked!==false||r.remoteMutationDispatched!==false)return null;
+    return {state:'RECORDED',receiptId:r.receiptId};
+  }
   if(entry.resource==='meta-onboarding'&&entry.action==='reconcile'){
     const receipt=result.receipt;if(receipt?.action!=='reconcile'||receipt.operationId!==entry.operationId||receipt.signupId!==entry.signupId||receipt.projectId!==entry.projectId||receipt.scope!==entry.scope)return null;
     if(receipt.state==='RECORDED'&&receipt.saved===true&&/^meta_company_phone_[a-f0-9]{64}$/.test(receipt.receiptId||'')&&Number.isSafeInteger(receipt.expectedCompanyPhoneRevision)&&receipt.expectedCompanyPhoneRevision>=1)return {state:'RECORDED',receiptId:receipt.receiptId};
     if(receipt.state==='REJECTED'){
+      if(receipt.phase==='BEFORE_BINDING'){
+        const fields=['action','operationId','signupId','projectId','scope','state','saved','definitive','receiptId','phase','code','expectedCompanyPhoneRevision'];
+        if(Object.keys(receipt).sort().join('|')!==fields.sort().join('|')||receipt.saved!==false||receipt.definitive!==true||!['META_CUSTOMER_DEDICATED_PHONE_REQUIRED','META_CUSTOMER_EXISTING_API_REVIEW_REQUIRED'].includes(receipt.code)||!/^meta_company_phone_[a-f0-9]{64}$/.test(receipt.receiptId||'')||!Number.isSafeInteger(receipt.expectedCompanyPhoneRevision)||receipt.expectedCompanyPhoneRevision<1)return null;
+        return {state:'REJECTED',receiptId:receipt.receiptId,phase:receipt.phase,code:receipt.code};
+      }
       const fields=['action','operationId','signupId','projectId','scope','state','saved','definitive','receiptId','phase','code','expectedCompanyPhoneRevision','observedCompanyPhoneRevision','effectiveCompanyPhoneRevision'];
       if(Object.keys(receipt).sort().join('|')!==fields.sort().join('|')||receipt.saved!==false||receipt.definitive!==true||receipt.phase!=='BEFORE_PROVIDER'||receipt.code!=='META_CUSTOMER_COMPANY_PHONE_CHANGED'||!/^meta_company_phone_[a-f0-9]{64}$/.test(receipt.receiptId||'')||['expectedCompanyPhoneRevision','observedCompanyPhoneRevision','effectiveCompanyPhoneRevision'].some(key=>!Number.isSafeInteger(receipt[key])||receipt[key]<1)||receipt.expectedCompanyPhoneRevision===receipt.observedCompanyPhoneRevision&&receipt.expectedCompanyPhoneRevision>receipt.effectiveCompanyPhoneRevision)return null;
       return {state:'REJECTED',receiptId:receipt.receiptId};
@@ -290,7 +301,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       const entry=ticket.entry;
       if(entry.resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action)){if(['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       // A general Meta snapshot is not a receipt for this operation.
-      if(entry.resource==='meta-onboarding'){if(entry.action==='reconcile'&&['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
+      if(entry.resource==='meta-onboarding'){if(['reconcile','cancel'].includes(entry.action)&&['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='template-send'){if(['ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='site-purchases'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='constructor-crm'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
@@ -308,7 +319,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       const entry=(await list(scope)).find(row=>row.resource===resource&&row.operationId===operationId.toLowerCase());
       if(!entry||params.get('projectId')!==entry.projectId)return;
       if(entry.resource==='company-onboarding'&&(params.get('expectedClerkOrganizationId')!==entry.expectedClerkOrganizationId||params.get('action')!==entry.action))return;
-      if(entry.resource==='meta-onboarding'&&entry.action==='reconcile'&&(params.get('action')!==entry.action||params.get('signupId')!==entry.signupId))return;
+      if(entry.resource==='meta-onboarding'&&['reconcile','cancel'].includes(entry.action)&&(params.get('action')!==entry.action||params.get('signupId')!==entry.signupId))return;
       const outcome=recoveryResult(entry,result);
       // A pre-reservation POST rejection cannot settle an earlier attempt via GET.
       if(entry.resource==='plan-import'&&outcome?.state==='REJECTED')return;

@@ -63,7 +63,12 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
  async function record(client,r,result,state,{onlyIfCurrent=false,preserveConversation=false}={}){
   await assertDevelopmentPilotCommit(client,r.connection,environment);
   const current=(await client.query(`SELECT metadata FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id])).rows[0];
-  if(!preserveConversation&&(!onlyIfCurrent||current.metadata?.fieldChannelConversation?.lastEventId===r.event.id))await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify({...current.metadata,fieldChannelConversation:conversationEnvelope(r,state)})]);
+  const writesConversation=!preserveConversation&&(!onlyIfCurrent||current.metadata?.fieldChannelConversation?.lastEventId===r.event.id);
+  if(writesConversation&&r.companyProjection&&state&&state.purpose!=='MENU'&&result.reply?.type==='text'){
+   const instruction='\nPara continuar, mantené presionado este mensaje, elegí Responder y enviá el dato, la ubicación o el archivo desde esa respuesta. Para cancelar, respondé a este mismo mensaje con CANCELAR.';
+   result={...result,reply:{...result.reply,body:result.reply.body.slice(0,4096-instruction.length)+instruction}};
+  }
+  if(writesConversation)await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify({...current.metadata,fieldChannelConversation:conversationEnvelope(r,state)})]);
   await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'meta.field.dispatched','Worker',$4,$5::jsonb)`,[receiptId(r.event.id),r.member.organizationId,r.member.actorId,r.worker.id,JSON.stringify({version:1,projectId:r.project.id,channelId:r.connection.id,channelBindingId:r.channelBinding.id,eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,businessApplied:result.businessApplied,kind:result.kind,receiptId:result.receiptId||null,encryptedResult:seal(r,'field-dispatch',receiptId(r.event.id),result)})]);
   if(r.companyProjection||r.connection.metadata?.developmentPilot){const fenced=await client.query(`UPDATE public."WebhookEvent" SET "appliedAt"=CASE WHEN $3::boolean THEN clock_timestamp() ELSE "appliedAt" END WHERE id=$1 AND status='PENDING' AND "leaseToken"=$2 AND "leaseExpiresAt">clock_timestamp()`,[r.event.id,r.event.leaseToken,result.businessApplied===true]);if(fenced.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);}
   await assertDevelopmentPilotCommit(client,r.connection,environment);

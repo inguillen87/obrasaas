@@ -74,6 +74,12 @@ jobs:
           npx eslint src/lib/company-entitlement.mjs src/lib/participant-onboarding-*.mjs src/lib/participant-http.mjs src/lib/meta-recovery-diagnostics.mjs src/lib/meta-customer-outbound.mjs src/lib/meta-customer-processing*.mjs src/lib/meta-customer-provider.mjs src/lib/meta-customer-templates.mjs src/app/api/identity/participants/route.js tests/production-company-entitlement.test.mjs tests/production-participant-onboarding-*.test.mjs tests/production-meta-recovery-diagnostics.test.mjs tests/fixtures/participant-onboarding-delivery-memory.mjs scripts/verify-participant-onboarding-delivery-*.mjs --max-warnings 0
           node scripts/verify-participant-onboarding-delivery-postgres.mjs
           node scripts/verify-participant-onboarding-delivery-ui.mjs
+      - name: Audited field permission correction and safe receipt recovery
+        run: |
+          npx eslint tests/production-participant-field-permissions.test.mjs scripts/verify-participant-field-permissions-*.mjs --max-warnings 0
+          node scripts/verify-participant-field-permissions-postgres.mjs
+          node scripts/verify-participant-field-permissions-ui.mjs
+          node scripts/verify-company-channel-postgres.mjs
       - run: node scripts/verify-identity-context-ui.mjs
       - run: node scripts/verify-mapping-review-ui.mjs
       - run: npm run build
@@ -119,5 +125,7 @@ jobs:
             .vercel/company-phone-evidence/
             .vercel/participant-onboarding-recovery-evidence/
             .vercel/participant-onboarding-delivery-evidence/
+            .vercel/participant-field-permissions-evidence/
+            .vercel/private/company-channel-postgres-proof.json
           include-hidden-files: true
           retention-days: 7

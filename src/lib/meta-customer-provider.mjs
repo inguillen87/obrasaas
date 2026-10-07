@@ -7,6 +7,7 @@ import {resolveMetaTransport,readMetaJson} from './meta-whatsapp-transport.mjs';
 import {createDevelopmentPilotCapability,developmentPilotCapabilityPolicy,developmentPilotCapabilityExpiry,developmentPilotConnectionPolicy,developmentPilotPhoneMatches,assertDevelopmentPilotMember,META_DEVELOPMENT_PILOT_MODE} from './meta-development-pilot-policy.mjs';
 
 const pilotAudits=new WeakMap(),pilotInspections=new WeakMap();
+const customerTokenDigest=token=>createHash('sha256').update(token).digest('hex');
 // Only fixed stage labels leave the private ownership audit. Graph responses,
 // transport errors and credential values never become public diagnostics.
 const pilotAuditCodes=new Set([
@@ -19,6 +20,17 @@ const pilotAuditCodes=new Set([
  'META_DEVELOPMENT_PILOT_UNAVAILABLE',
 ]);
 export const META_CUSTOMER_INSPECTION_PHASE=Object.freeze({PRE_REGISTRATION:'PRE_REGISTRATION',OPERATIONAL:'OPERATIONAL'});
+export function assertMetaCustomerPhoneMode(verified,numberMode='DEDICATED'){
+ if(numberMode==='BUSINESS_APP'){
+  if(verified?.isOnBizApp!==true||verified.platformType!=='CLOUD_API')throw new WorkspaceError('META_CUSTOMER_COEXISTENCE_PHONE_REQUIRED',409);
+  return;
+ }
+ if(numberMode!=='DEDICATED'||verified?.platformType==='ON_PREMISE')throw new WorkspaceError('META_CUSTOMER_EXISTING_API_REVIEW_REQUIRED',409);
+ if(verified?.isOnBizApp===true)throw new WorkspaceError('META_CUSTOMER_DEDICATED_PHONE_REQUIRED',409);
+ if(verified?.isOnBizApp!==false||!['CLOUD_API','NOT_APPLICABLE'].includes(verified.platformType))throw new WorkspaceError('META_CUSTOMER_PHONE_MODE_UNCONFIRMED',409);
+ if(!['PENDING','DISCONNECTED','CONNECTED'].includes(verified.phoneStatus)||verified.phoneStatus==='CONNECTED'&&verified.platformType!=='CLOUD_API')throw new WorkspaceError('META_CUSTOMER_PHONE_STATUS_UNCONFIRMED',409);
+ if(verified.registered!==(verified.phoneStatus==='CONNECTED'&&verified.platformType==='CLOUD_API'))throw new WorkspaceError('META_CUSTOMER_PHONE_STATUS_UNCONFIRMED',409);
+}
 export const metaCustomerAuthorizationReady=readiness=>readiness?.mode===META_DEVELOPMENT_PILOT_MODE?readiness.pilot?.canLaunch===true:readiness?.canLaunchMeta===true;
 export const metaCustomerScopedTransportReady=readiness=>readiness?.mode===META_DEVELOPMENT_PILOT_MODE?readiness.pilot?.canUseAttendanceTransport===true:metaCustomerTransportReady(readiness);
 export function developmentPilotUnavailableReadiness(ready,expiresAt,code='META_DEVELOPMENT_PILOT_UNAVAILABLE'){
@@ -77,7 +89,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
  // transport prerequisite while requiring v4 separately for a new code.
  // The internal DEMO composition injects a different, complete seven-gate
  // contract. It cannot inherit CUSTOMER gates or authorize a partial shape.
- let inspectedAssets=null,inspectionSequence=0;
+ let inspectedAssets=null,inspectionSequence=0;const registrationProofs=new WeakMap();
  const policy=()=>developmentPilotCapabilityPolicy(pilotCapability,environment,now());
  const scopedReady=()=>{
   const ready=readiness(environment);if(!pilotCapability)return ready;
@@ -166,10 +178,12 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    // Phone verification is not the Cloud API registration signal.
    if(pilotCapability&&!developmentPilotPhoneMatches(policy(),phone.display_phone_number))throw new WorkspaceError('META_DEVELOPMENT_PILOT_PHONE_REJECTED',403);
    const verified={expiresAt:expiresAt?new Date(expiresAt*1000).toISOString():null,scopes:[...META_CUSTOMER_REQUIRED_SCOPES],
-    phoneNumberId:String(phone.id),isOnBizApp:phone.is_on_biz_app===true,platformType:phone.platform_type||null,
-    phoneStatus:typeof phone.status==='string'?phone.status:'UNKNOWN',registered:numberMode==='BUSINESS_APP'?phone.is_on_biz_app===true&&phone.platform_type==='CLOUD_API':phone.status==='CONNECTED'&&(!pilotCapability||phone.platform_type==='CLOUD_API'),
+    phoneNumberId:String(phone.id),isOnBizApp:readiness===metaCustomerReadiness?(typeof phone.is_on_biz_app==='boolean'?phone.is_on_biz_app:null):phone.is_on_biz_app===true,platformType:phone.platform_type||null,
+    phoneStatus:typeof phone.status==='string'?phone.status:'UNKNOWN',registered:numberMode==='BUSINESS_APP'?phone.is_on_biz_app===true&&phone.platform_type==='CLOUD_API':phone.status==='CONNECTED'&&(readiness!==metaCustomerReadiness||phone.platform_type==='CLOUD_API'),
     displayPhoneNumber:typeof phone.display_phone_number==='string'?phone.display_phone_number.slice(0,64):null,
     verifiedBusinessName:typeof phone.verified_name==='string'?phone.verified_name.slice(0,160):null};
+   if(readiness===metaCustomerReadiness)assertMetaCustomerPhoneMode(verified,numberMode);
+   if(!pilotCapability&&readiness===metaCustomerReadiness)registrationProofs.set(verified,{tokenDigest:customerTokenDigest(token),wabaId,phoneNumberId:verified.phoneNumberId,numberMode,inspectionPhase,expiresAt:now()+60000});
    if(pilotCapability){if(sequence!==inspectionSequence)throw new WorkspaceError('META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED',403);inspectedAssets=Object.freeze({capability:pilotCapability,policyDigest:policy().policyDigest,wabaId,phoneNumberId:verified.phoneNumberId,inspectionPhase,registered:verified.registered,platformType:verified.platformType});pilotInspections.set(verified,inspectedAssets);}return verified;
   },
   async subscribe({token,wabaId}){
@@ -185,9 +199,19 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    const subscriptions=await request(wabaId+'/subscribed_apps',{token});
    return subscriptions.data?.some(entry=>String(entry.whatsapp_business_api_data?.id??entry.app_id??entry.id)===config().appId)===true;
   },
-  async register({token,phoneNumberId,pin}){
+  async register({token,phoneNumberId,pin,inspection}){
    pilotAdapter('register');if(pilotCapability&&(inspectedAssets?.phoneNumberId!==phoneNumberId||inspectedAssets.inspectionPhase!==META_CUSTOMER_INSPECTION_PHASE.PRE_REGISTRATION||inspectedAssets.registered!==false))throw new WorkspaceError('META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED',403);
    if(!metaAssetId(phoneNumberId)||!/^\d{6}$/.test(pin||''))throw new WorkspaceError('META_CUSTOMER_REGISTRATION_INPUT_INVALID');
+   // A stored mode or a copied inspection cannot authorize a destructive POST.
+   // Re-read immediately before dispatch; a number may have changed after the
+   // durable reservation. Already registered Cloud API numbers are preserved.
+   if(!pilotCapability&&readiness===metaCustomerReadiness)try{
+    const proof=inspection&&registrationProofs.get(inspection);
+    if(!proof||proof.numberMode!=='DEDICATED'||proof.inspectionPhase!==META_CUSTOMER_INSPECTION_PHASE.PRE_REGISTRATION||proof.phoneNumberId!==phoneNumberId||proof.tokenDigest!==customerTokenDigest(token)||proof.expiresAt<=now()||inspection.registered!==false)throw new WorkspaceError('META_CUSTOMER_REGISTRATION_INSPECTION_REQUIRED',409);
+    registrationProofs.delete(inspection);
+    const fresh=await this.inspect({token,wabaId:proof.wabaId,phoneNumberId,numberMode:'DEDICATED',inspectionPhase:META_CUSTOMER_INSPECTION_PHASE.PRE_REGISTRATION});
+    registrationProofs.delete(fresh);if(fresh.registered)return true;
+   }catch(error){throw Object.assign(error,{registrationDispatched:false});}
    const result=await request(phoneNumberId+'/register',{token,method:'POST',body:{messaging_product:'whatsapp',pin}});
    if(result.success!==true)throw new WorkspaceError('META_CUSTOMER_REGISTRATION_UNCONFIRMED',503);return true;
   },

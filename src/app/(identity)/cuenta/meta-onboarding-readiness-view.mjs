@@ -1,4 +1,10 @@
 const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
+const modeReviewCodes=['META_CUSTOMER_DEDICATED_PHONE_REQUIRED','META_CUSTOMER_EXISTING_API_REVIEW_REQUIRED'];
+export function metaOnboardingModeReview(signup){
+ const code=signup?.modeReview?.code;if(!modeReviewCodes.includes(code))return null;
+ return {canCloseLocally:signup.modeReview.canCloseLocally===true,detail:code==='META_CUSTOMER_DEDICATED_PHONE_REQUIRED'?'Meta detectó que este número usa WhatsApp Business. Elegí la modalidad que conserva la app en Preparar WhatsApp.':'Meta detectó un número con una API existente. Elegí la modalidad que conserva al proveedor actual en Preparar WhatsApp.',next:signup.modeReview.canCloseLocally?'Cerrá este intento local, corregí la modalidad en Preparar WhatsApp y guardá la preparación. Después iniciá una autorización nueva en Meta cuando ese recorrido esté disponible.':'El número y la autorización necesitan revisión asistida. No repitas el registro ni cambies al proveedor para superar este rechazo.'};
+}
+export function metaOnboardingModeClosureMatches(result,command){const r=result?.localModeClosure;return Boolean(r?.state==='RECORDED'&&r.saved===true&&r.action==='cancel'&&r.operationId===command.operationId&&r.signupId===command.signupId&&r.projectId===command.projectId&&r.scope===command.scope&&r.phase==='BEFORE_BINDING'&&r.remoteAuthorizationRevoked===false&&r.remoteMutationDispatched===false);}
 const prerequisites=[
  ['app','Aplicación de ObraSaaS'],
  ['secret','Autorización privada de la plataforma'],
@@ -107,6 +113,8 @@ export function metaOnboardingSnapshot(result,{scope,projectId}){
  if(!object(recovery)||recovery.afterResponse!==true||typeof recovery.signedJob!=='boolean'||typeof recovery.periodic!=='boolean'||recovery.intervalMinutes!==5||recovery.productionVerified!==false||r.humanAcceptance!=='NOT_VERIFIED'||r.numberRegistration!=='REQUIRES_CUSTOMER_NUMBER')throw invalid();
  if(typeof result.prepared!=='boolean'||!['DEDICATED','BUSINESS_APP','EXISTING_API',null].includes(result.numberMode)||typeof result.companyName!=='string'||typeof result.projectName!=='string')throw invalid();
  if(result.signup?.numberMode==='BUSINESS_APP'&&(result.signup.canRegister!==false||result.signup.registrationRequired!==false||result.signup.canRetryRegistration!==false))throw invalid();
+ if(result.signup?.modeReview!==undefined){const m=result.signup.modeReview;if(!exactKeys(m,['code','phase','canCloseLocally'])||!modeReviewCodes.includes(m.code)||typeof m.canCloseLocally!=='boolean'||m.phase!==(m.canCloseLocally?'BEFORE_BINDING':null)||result.signup.state!=='REVIEW_REQUIRED'||result.signup.canCancel!==m.canCloseLocally||m.canCloseLocally&&(result.connection!==null||result.signup.numberMode!=='DEDICATED'||result.signup.canRegister!==false))throw invalid();}
+ if(result.localModeClosure!==undefined&&result.localModeClosure!==null){const c=result.localModeClosure;if(!exactKeys(c,['action','operationId','signupId','projectId','scope','state','saved','receiptId','phase','code','closedAt','remoteAuthorizationRevoked','remoteMutationDispatched'])||c.action!=='cancel'||!['operationId','signupId'].every(key=>/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(c[key]||''))||c.projectId!==projectId||c.scope!==scope||c.state!=='RECORDED'||c.saved!==true||!/^meta_mode_closure_[a-f0-9]{64}$/.test(c.receiptId||'')||c.phase!=='BEFORE_BINDING'||!modeReviewCodes.includes(c.code)||!timestamp(c.closedAt)||c.closedAt===null||c.remoteAuthorizationRevoked!==false||c.remoteMutationDispatched!==false)throw invalid();}
  if(result.coexistence!==undefined&&result.coexistence!==null&&!object(result.coexistence))throw invalid();
  if(result.coexistence){const c=result.coexistence,states=['NOT_SELECTED','NOT_REQUESTED','REQUEST_STARTED','REQUEST_ACCEPTED','REQUEST_UNKNOWN','RECEIVING','PROVIDER_COMPLETE_OBSERVED','DECLINED'];if(c.mode!=='BUSINESS_APP'||c.historyCompleteGuaranteed!==false||c.identityCertified!==false||c.operationalVerified!==false||typeof c.canSelectImport!=='boolean'||typeof c.canContinueImport!=='boolean'||['contacts','history'].some(key=>!object(c[key])||!states.includes(c[key].state)||!Number.isSafeInteger(c[key].records)||c[key].records<0)||!Number.isSafeInteger(c.echoes)||c.echoes<0||c.canContinueImport&&(!object(c.importSelection)||!/^[a-f0-9-]{36}$/i.test(c.importSelection.operationId||'')||typeof c.importSelection.contacts!=='boolean'||typeof c.importSelection.history!=='boolean'))throw invalid();}
  validateChannelState(result);
@@ -114,12 +122,14 @@ export function metaOnboardingSnapshot(result,{scope,projectId}){
 }
 
 export function metaOnboardingReadinessView(result,now=Date.now()){
- const readiness=result.readiness,signup=result.signup,connection=result.connection,channel=channelView(result,now);
+ const readiness=result.readiness,signup=result.signup,connection=result.connection,channel=channelView(result,now),modeReview=metaOnboardingModeReview(signup);
  const pilot=pilotMode(readiness),configured=metaOnboardingCanAuthorize(readiness,now),coexistence=result.numberMode==='BUSINESS_APP',assisted=result.prepared&&result.numberMode!=='DEDICATED'&&readiness.flows?.[result.numberMode]?.available!==true;
  const uncertain=signup&&['EXCHANGE_STARTED','EXCHANGE_UNKNOWN','VERIFYING','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN'].includes(signup.state);
  let next=result.prepared?'Consultá las condiciones de plataforma antes de autorizar el número.':'Guardá la preparación de WhatsApp para esta empresa y obra.';
- if(!result.prepared)next='Guardá la preparación de WhatsApp para esta empresa y obra.';
- else if(channel.next)next=channel.next;
+ if(modeReview)next=modeReview.next;
+ else if(signup?.state==='CANCELLED'&&result.localModeClosure?.signupId===signup.id)next='El intento anterior quedó cerrado en ObraSaaS. Su autorización se conserva sin revocarla. Corregí y guardá la modalidad en Preparar WhatsApp antes de una autorización nueva en Meta.';
+ else if(!result.prepared)next='Guardá la preparación de WhatsApp para esta empresa y obra.';
+ else if(channel.next&&(connection||pilot&&signup))next=channel.next;
  else if(result.activation?.operational&&readiness.canUseCustomerTransport)next=configured?'El canal está habilitado. La recepción, respuesta, entrega y el recorrido con participantes necesitan una prueba real.':'El canal existente sigue habilitado. La configuración v4 pendiente afecta nuevas autorizaciones; comprobá recepción, respuesta y entrega en el canal actual.';
  else if(assisted)next=coexistence?'La coexistencia necesita la configuración v4 y habilitación de la plataforma. Meta comprobará la elegibilidad de tu número; la app actual se conserva.':'La autorización adicional de una cuenta existente necesita un plan. No se transfiere ni desconecta el proveedor actual.';
  else if(result.prepared&&!configured)next='El equipo de ObraSaaS debe completar las condiciones de plataforma pendientes. Podés continuar con tu empresa y obra desde la web.';

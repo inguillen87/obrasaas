@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import {mkdirSync,mkdtempSync,copyFileSync,readFileSync,writeFileSync,rmSync,realpathSync,existsSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import path from 'node:path';
+import {spawn,execFileSync} from 'node:child_process';
+import puppeteer from 'puppeteer';
+import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
+
+assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);const root=process.cwd(),container=path.resolve(root,'.vercel');mkdirSync(container,{recursive:true});
+const fixture=mkdtempSync(path.join(container,'participant-field-permissions-ui-')),app=path.join(fixture,'app');mkdirSync(app);
+const files=['participant-onboarding-next-step.mjs','participant-panel.js','employee-intake-panel.js','private-bank-account-panel.js','private-bank-account-panel.module.css','participant-panel.module.css','kyc-photo-preparation.js','field-media-preparation.mjs','workspace-session-request.mjs','workspace-request-lifecycle.js','workspace-request-lifecycle.mjs','workspace-recovery-journal.mjs','private-bank-account-format.mjs','company-channel-view.mjs','site-purchase-view.mjs','workspace-recovery-storage.mjs'];
+for(const name of files)copyFileSync(path.join(root,'src/app/(identity)/cuenta',name),path.join(app,name));const sha=value=>createHash('sha256').update(value).digest('hex'),sourceManifest=files.map(name=>({path:'src/app/(identity)/cuenta/'+name,sha256:sha(readFileSync(path.join(app,name)))}));
+const scope='a'.repeat(64),projectId='project-fixture',port=3128,origin='http://127.0.0.1:'+port;
+writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-participant-field-permissions-ui',private:true}));writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
+writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#eef3f9',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
+writeFileSync(path.join(app,'page.js'),`'use client';import {useCallback} from 'react';import {ParticipantPanel} from './participant-panel';export default function Page(){const token=useCallback(async()=> 'synthetic-current-org-token',[]);return <main style={{maxWidth:1000,margin:'0 auto'}}><ParticipantPanel projectId="${projectId}" scope="${scope}" getSessionToken={token}/></main>}`);
+const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],windowsHide:true});let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',data=>{serverLog=(serverLog+data.toString()).slice(-16000);});
+const closed=new Promise(resolve=>server.once('close',resolve)),errors=[],checks=[];let browser,ownedBrowser,fixtureRemoved=false;
+async function bounded(promise){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('OWNED_PROCESS_CLOSE_TIMEOUT')),10000);})]);}finally{clearTimeout(timer);}}
+async function click(page,label){await page.waitForFunction(text=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()===text&&!b.disabled),{timeout:15000},label);const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text),label);await page.evaluate(node=>{for(let p=node.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;},handle);await handle.asElement().click();await handle.dispose();}
+async function wait(page,text){await page.waitForFunction(text=>document.body.innerText.includes(text),{timeout:15000},text);}
+async function scenario(width,mode){
+ const page=await browser.newPage();await page.setViewport({width,height:1000,deviceScaleFactor:1});const posts=[],queries=[],receipts=new Map();
+ let row={id:'worker-fixture',name:'Persona de ensayo',revision:'2026-10-07T00:00:00.000001',active:true,status:mode==='revoked'?'REVOKED':'ACTIVE',self:mode==='self',accountLinked:true,canManageFieldPermissions:!['self','no-capability','revoked'].includes(mode),invitation:{id:'invite_'+'a'.repeat(32),state:'ACCEPTED',email:'person@example.invalid',expiresAt:new Date(Date.now()+86400000).toISOString(),expired:false},kycChatChallenge:null,kyc:{status:'APPROVED',images:[{id:'front',kind:'FRONT',contentType:'image/png',bytes:80},{id:'selfie',kind:'SELFIE',contentType:'image/png',bytes:80}]},permissions:{attendance:mode==='withdrawal-open',report:false}};
+ page.on('pageerror',error=>errors.push({width,mode,error:error.message}));await page.setRequestInterception(true);
+ page.on('request',async request=>{try{const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('External request forbidden');}if(url.pathname!=='/api/identity/participants')return request.continue();assert.equal(request.headers().authorization,'Bearer synthetic-current-org-token');let status=200,body;
+  if(request.method()==='POST'){const input=JSON.parse(request.postData());posts.push(input);assert.equal(input.action,'SET_FIELD_PERMISSIONS');assert.equal(input.scope,scope);assert.equal(input.projectId,projectId);assert.equal(input.payload.workerId,row.id);assert.deepEqual(input.payload.permissions,{attendance:mode!=='withdrawal-open',report:false});assert.ok(input.payload.reason.length>=8);
+   if(mode==='withdrawal-open'){status=409;body={code:'ATTENDANCE_PERSON_JOURNEY_OPEN'};}
+   else if(mode==='conflict'&&posts.length===1){row={...row,revision:'2026-10-07T00:00:00.000002'};status=409;body={code:'PARTICIPANT_REVISION_CHANGED'};}
+   else{row={...row,permissions:{...input.payload.permissions},revision:'2026-10-07T00:00:00.000003'};body={scope,projectId,saved:true,replayed:false,receiptId:'participant-'+input.operationId,participant:row};receipts.set(input.operationId,body);if(mode==='lost-ack'){status=503;body={code:'PARTICIPANT_OPERATION_UNCONFIRMED'};}}
+  }else if(url.searchParams.has('operationId')){queries.push(url.searchParams.get('operationId'));body={...receipts.get(queries.at(-1)),state:'RECORDED'};}
+  else body={scope,projectId,canManage:true,canInvite:true,canManageOfficeRoles:false,existingAccounts:[],records:[row],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE},employeeIntake:null};
+  await request.respond({status,contentType:'application/json',body:JSON.stringify(body),headers:{'Cache-Control':'no-store'}});
+ }catch(error){errors.push({width,mode,error:error.message});await request.abort().catch(()=>{});}});
+ try{
+  await page.goto(origin,{waitUntil:'networkidle0'});await click(page,'Consultar participantes');await wait(page,'Persona de ensayo');
+  if(['self','no-capability','revoked'].includes(mode)){assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Revisar permisos de campo')),false);if(mode==='self')await wait(page,'Otra persona responsable');assert.equal(posts.length,0);}
+  else{
+   await click(page,'Revisar permisos de campo');if(mode!=='withdrawal-open')await wait(page,'Quedará con acceso de consulta');await page.evaluate(()=>[...document.querySelectorAll('label')].find(l=>l.textContent.trim()==='Registrar jornada').querySelector('input').click());await page.type('textarea','Jornada autorizada con revisión humana de ensayo');await click(page,'Guardar permisos de campo');
+   if(mode==='withdrawal-open'){await wait(page,'La persona tiene una jornada abierta.');await wait(page,'registre su salida antes de retirar');assert.equal(await page.$eval('textarea',el=>el.value),'Jornada autorizada con revisión humana de ensayo');assert.equal(posts.length,1);assert.equal(queries.length,0);assert.deepEqual(row.permissions,{attendance:true,report:false});}
+   else if(mode==='lost-ack'){await wait(page,'Comprobar el mismo intento');await click(page,'Comprobar el mismo intento');await wait(page,'Permisos de campo guardados con recibo');assert.equal(posts.length,1);assert.deepEqual(queries,[posts[0].operationId]);}
+   else if(mode==='conflict'){await wait(page,'Actualizá el registro');assert.equal(await page.$eval('textarea',el=>el.value),'Jornada autorizada con revisión humana de ensayo');await click(page,'Actualizar registro conservando borrador');await click(page,'Revisé el estado vigente y quiero continuar');await click(page,'Guardar permisos de campo');await wait(page,'Permisos de campo guardados con recibo');assert.equal(posts.length,2);assert.equal(posts[1].payload.revision,'2026-10-07T00:00:00.000002');}
+   else{await wait(page,'Permisos de campo guardados con recibo');assert.equal(posts.length,1);}
+   assert.equal(await page.evaluate(()=>Boolean(document.querySelector('[data-onboarding-step="WAIT_OWN_CHANNEL"]'))),true);
+  }
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No horizontal overflow');checks.push({width,mode,posts:posts.length,receiptQueries:queries.length});
+ }finally{await page.close();}
+}
+try{
+ let ready=false;for(let i=0;i<120;i++){if(server.exitCode!==null)throw Error('Owned fixture exited: '+serverLog.slice(-2500));try{if((await fetch(origin)).ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,500));}assert.ok(ready,'Owned Next fixture ready: '+serverLog.slice(-2500));
+ browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});ownedBrowser=browser.process();
+ for(const width of [320,390,768,1440])for(const mode of ['success','lost-ack','conflict','withdrawal-open','self','no-capability','revoked'])await scenario(width,mode);assert.deepEqual(errors,[]);
+}finally{
+ if(browser){await bounded(browser.close());if(ownedBrowser?.exitCode===null&&process.platform==='win32')execFileSync('taskkill.exe',['/PID',String(ownedBrowser.pid),'/T','/F'],{stdio:'ignore',windowsHide:true,timeout:10000});}
+ if(server.exitCode===null){assert.ok(server.spawnargs.includes(fixture));if(process.platform==='win32')execFileSync('taskkill.exe',['/PID',String(server.pid),'/T','/F'],{stdio:'ignore',windowsHide:true,timeout:10000});else server.kill('SIGTERM');}await bounded(closed);
+ const target=realpathSync(fixture),base=realpathSync(container);assert.ok(target.startsWith(base+path.sep+'participant-field-permissions-ui-'));rmSync(target,{recursive:true,force:true});assert.equal(existsSync(target),false);fixtureRemoved=true;
+}
+const proof={status:'PASS',checkedAt:new Date().toISOString(),sourceManifest,harnessSha256:sha(readFileSync(new URL(import.meta.url))),checks,errors,fixtureRemoved,providerCalls:0,syntheticHTTP:true,physicalPhoneAccepted:false};const evidence=path.join(container,'participant-field-permissions-evidence');mkdirSync(evidence,{recursive:true});writeFileSync(path.join(evidence,'ui.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:'PASS',checks:checks.length,widths:[320,390,768,1440],fixtureRemoved}));

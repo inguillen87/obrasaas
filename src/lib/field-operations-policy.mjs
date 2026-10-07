@@ -54,6 +54,18 @@ export function normalizeFieldCommand(input) {
   else if(input.action==='ADD_MATERIAL') {
     recordKeys(p,['revision','catalogHash','name','unit']);if(!MATERIAL_UNITS.includes(p.unit)||!/^[a-f0-9]{64}$/.test(p.catalogHash||''))throw new WorkspaceError('INVENTORY_INPUT_INVALID');
     payload={revision:siteRevision(p.revision),catalogHash:p.catalogHash,name:siteText(p.name,160,2),unit:p.unit};
+  }else if(input.action==='PROPOSE_STOCK_ADJUSTMENT') {
+    recordKeys(p,['materialId','catalogHash','quantity','direction','source','reason']);
+    if(!/^[a-f0-9]{64}$/.test(p.catalogHash||'')||!['IN','OUT'].includes(p.direction))throw new WorkspaceError('INVENTORY_INPUT_INVALID');
+    const source=p.source;
+    if(source?.type==='RECEIPT'){recordKeys(source,['type','requestId','receiptOperationId']);if(!operationId(source.receiptOperationId)||p.direction!=='IN')throw new WorkspaceError('INVENTORY_INPUT_INVALID');}
+    else if(source?.type==='OPENING'){recordKeys(source,['type','reference']);if(p.direction!=='IN')throw new WorkspaceError('INVENTORY_INPUT_INVALID');}
+    else if(source?.type==='COUNT')recordKeys(source,['type','reference']);
+    else throw new WorkspaceError('INVENTORY_INPUT_INVALID');
+    payload={materialId:id(p.materialId),catalogHash:p.catalogHash,quantity:inventoryQuantity(p.quantity),direction:p.direction,reason:siteText(p.reason,1000,8,true),source:source.type==='RECEIPT'?{type:source.type,requestId:id(source.requestId),receiptOperationId:source.receiptOperationId.toLowerCase()}:{type:source.type,reference:siteText(source.reference,160,2)}};
+  }else if(input.action==='DECIDE_STOCK_ADJUSTMENT') {
+    recordKeys(p,['proposalId','revision','catalogHash','decision','reason']);if(!/^[a-f0-9]{64}$/.test(p.catalogHash||'')||!['APPROVE','REJECT'].includes(p.decision))throw new WorkspaceError('INVENTORY_INPUT_INVALID');
+    payload={proposalId:id(p.proposalId),revision:siteRevision(p.revision),catalogHash:p.catalogHash,decision:p.decision,reason:siteText(p.reason,1000,8,true)};
   }else if(input.action==='PROPOSE_CONSUMPTION') {
     recordKeys(p,['workerId','taskId','sectorId','materialId','catalogHash','quantity','reason']);if(p.taskId!==null&&!workspaceId(p.taskId)||!/^[a-f0-9]{64}$/.test(p.catalogHash||''))throw new WorkspaceError('INVENTORY_INPUT_INVALID');
     payload={workerId:id(p.workerId),taskId:p.taskId,sectorId:id(p.sectorId),materialId:id(p.materialId),catalogHash:p.catalogHash,quantity:inventoryQuantity(p.quantity),reason:siteText(p.reason,1000,8,true)};
