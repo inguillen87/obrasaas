@@ -21,6 +21,7 @@ async function click(page,label){await page.waitForFunction(text=>[...document.q
 async function wait(page,text){await page.waitForFunction(text=>document.body.innerText.includes(text),{timeout:15000},text);}
 async function scenario(width,mode){
  const page=await browser.newPage();await page.setViewport({width,height:1000,deviceScaleFactor:1});const posts=[],queries=[],receipts=new Map();
+  let snapshotReads=0,releaseReadback,markReadbackStarted;const readbackBarrier=mode==='success'?new Promise(resolve=>{releaseReadback=resolve;}):null,readbackStarted=mode==='success'?new Promise(resolve=>{markReadbackStarted=resolve;}):null;
  let row={id:'worker-fixture',name:'Persona de ensayo',revision:'2026-10-07T00:00:00.000001',active:true,status:mode==='revoked'?'REVOKED':'ACTIVE',self:mode==='self',accountLinked:true,canManageFieldPermissions:!['self','no-capability','revoked'].includes(mode),invitation:{id:'invite_'+'a'.repeat(32),state:'ACCEPTED',email:'person@example.invalid',expiresAt:new Date(Date.now()+86400000).toISOString(),expired:false},kycChatChallenge:null,kyc:{status:'APPROVED',images:[{id:'front',kind:'FRONT',contentType:'image/png',bytes:80},{id:'selfie',kind:'SELFIE',contentType:'image/png',bytes:80}]},permissions:{attendance:mode==='withdrawal-open',report:false}};
  page.on('pageerror',error=>errors.push({width,mode,error:error.message}));await page.setRequestInterception(true);
  page.on('request',async request=>{try{const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('External request forbidden');}if(url.pathname!=='/api/identity/participants')return request.continue();assert.equal(request.headers().authorization,'Bearer synthetic-current-org-token');let status=200,body;
@@ -29,7 +30,7 @@ async function scenario(width,mode){
    else if(mode==='conflict'&&posts.length===1){row={...row,revision:'2026-10-07T00:00:00.000002'};status=409;body={code:'PARTICIPANT_REVISION_CHANGED'};}
    else{row={...row,permissions:{...input.payload.permissions},revision:'2026-10-07T00:00:00.000003'};body={scope,projectId,saved:true,replayed:false,receiptId:'participant-'+input.operationId,participant:row};receipts.set(input.operationId,body);if(mode==='lost-ack'){status=503;body={code:'PARTICIPANT_OPERATION_UNCONFIRMED'};}}
   }else if(url.searchParams.has('operationId')){queries.push(url.searchParams.get('operationId'));body={...receipts.get(queries.at(-1)),state:'RECORDED'};}
-  else body={scope,projectId,canManage:true,canInvite:true,canManageOfficeRoles:false,existingAccounts:[],records:[row],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE},employeeIntake:null};
+   else{snapshotReads++;if(readbackBarrier&&snapshotReads===2){markReadbackStarted();await readbackBarrier;}body={scope,projectId,canManage:true,canInvite:true,canManageOfficeRoles:false,existingAccounts:[],records:[row],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE},employeeIntake:null};}
   await request.respond({status,contentType:'application/json',body:JSON.stringify(body),headers:{'Cache-Control':'no-store'}});
  }catch(error){errors.push({width,mode,error:error.message});await request.abort().catch(()=>{});}});
  try{
@@ -40,11 +41,13 @@ async function scenario(width,mode){
    if(mode==='withdrawal-open'){await wait(page,'La persona tiene una jornada abierta.');await wait(page,'registre su salida antes de retirar');assert.equal(await page.$eval('textarea',el=>el.value),'Jornada autorizada con revisión humana de ensayo');assert.equal(posts.length,1);assert.equal(queries.length,0);assert.deepEqual(row.permissions,{attendance:true,report:false});}
    else if(mode==='lost-ack'){await wait(page,'Comprobar el mismo intento');await click(page,'Comprobar el mismo intento');await wait(page,'Permisos de campo guardados con recibo');assert.equal(posts.length,1);assert.deepEqual(queries,[posts[0].operationId]);}
    else if(mode==='conflict'){await wait(page,'Actualizá el registro');assert.equal(await page.$eval('textarea',el=>el.value),'Jornada autorizada con revisión humana de ensayo');await click(page,'Actualizar registro conservando borrador');await click(page,'Revisé el estado vigente y quiero continuar');await click(page,'Guardar permisos de campo');await wait(page,'Permisos de campo guardados con recibo');assert.equal(posts.length,2);assert.equal(posts[1].payload.revision,'2026-10-07T00:00:00.000002');}
-   else{await wait(page,'Permisos de campo guardados con recibo');assert.equal(posts.length,1);}
+    else{await wait(page,'Permisos de campo guardados con recibo');assert.equal(posts.length,1);await bounded(readbackStarted);assert.equal(snapshotReads,2);assert.equal(await page.evaluate(()=>Boolean(document.querySelector('[data-onboarding-step="WAIT_OWN_CHANNEL"]'))),false,'A receipt cannot replace the held canonical participant readback');assert.ok(await page.evaluate(receipt=>document.body.innerText.includes('Recibo: '+receipt),'participant-'+posts[0].operationId));assert.equal(await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Consultar participantes').disabled),true);releaseReadback();}
+    await page.waitForFunction(()=>Boolean(document.querySelector('[data-onboarding-step="WAIT_OWN_CHANNEL"]')),{timeout:15000});
+    if(mode!=='withdrawal-open')await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Consultar participantes'&&!b.disabled),{timeout:15000});
    assert.equal(await page.evaluate(()=>Boolean(document.querySelector('[data-onboarding-step="WAIT_OWN_CHANNEL"]'))),true);
   }
-  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No horizontal overflow');checks.push({width,mode,posts:posts.length,receiptQueries:queries.length});
- }finally{await page.close();}
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No horizontal overflow');checks.push({width,mode,posts:posts.length,receiptQueries:queries.length,snapshotReads,...(mode==='success'?{heldCanonicalReadback:true}:{})});
+  }catch(error){throw new Error(`Field permissions UI ${width}/${mode}: ${error.message}`,{cause:error});}finally{releaseReadback?.();await page.close();}
 }
 try{
  let ready=false;for(let i=0;i<120;i++){if(server.exitCode!==null)throw Error('Owned fixture exited: '+serverLog.slice(-2500));try{if((await fetch(origin)).ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,500));}assert.ok(ready,'Owned Next fixture ready: '+serverLog.slice(-2500));
