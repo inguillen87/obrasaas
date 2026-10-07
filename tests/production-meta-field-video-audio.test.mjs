@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {planMetaFieldConversation,META_FIELD_MEDIA_AUTHORIZATION_VERSION,validMetaFieldMediaReference,metaFieldMediaAuthorizationValid} from '../src/lib/meta-field-conversation.mjs';
-import {metaFieldMediaContextDigest,validateMetaFieldMediaOrigin,metaFieldVideoResultText} from '../src/lib/meta-field-bridge.mjs';
+import {createMetaFieldBridge,metaFieldMediaContextDigest,inspectMetaFieldMediaOrigin,validateMetaFieldMediaOrigin,metaFieldVideoResultText} from '../src/lib/meta-field-bridge.mjs';
 import {fieldMediaAnalysisConsent,fieldVideoAnalysisConsent,FIELD_VIDEO_PRIVACY_NOTICE,FIELD_VIDEO_AUDIO_PRIVACY_NOTICE} from '../src/lib/field-media-privacy.mjs';
 import {createVoiceProgressDraft} from '../src/lib/voice-progress-draft.mjs';
-import {digest} from '../src/lib/workspace-policy.mjs';
+import {digest,WorkspaceError} from '../src/lib/workspace-policy.mjs';
 import {encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
 import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
 import {OBRASAAS_META_CHANNEL} from '../src/lib/meta-channel-binding.mjs';
@@ -122,6 +122,56 @@ test('origin rejects removed sectors/project/task, changed task revision and TTL
 test('origin cannot transfer final authorization or original reference across actors, projects, bindings or physical channels',async()=>{
  const mutations=[f=>{f.r.member.actorId='actor-other';},f=>{f.r.member.membershipId='member-other';},f=>{f.r.member.organizationId='organization-other';},f=>{f.r.project.id='project-other';},f=>{f.r.worker.id='worker-other';},f=>{f.r.channelBinding.id='binding-other';},f=>{f.r.connection.id='connection-other';},f=>{f.r.connection.phoneNumberId='150000001';},f=>{f.r.sourceProjectId='anchor-other';},f=>{f.r.proof.senderE164='+5491100002222';},f=>{f.media.mediaId='987654321';},f=>{f.media.analysisConsent=fieldVideoAnalysisConsent(true,false);},f=>{f.state.pendingFile={...f.state.pendingFile,caption:'Alterada'};},f=>{f.state.analysisConsentEventId='old-event';}];
  for(const mutate of mutations){const f=originFixture();mutate(f);assert.equal(await validOrigin(f),false);}
+});
+
+const inspectOrigin=f=>inspectMetaFieldMediaOrigin(f.client,f.r,f.media,f.state,{environment:f.environment,now:f.r.now});
+test('only authentic references classify current target removal or revision and the boolean validator remains strict',async()=>{
+ const mutations=[['WORKSPACE_TASK_UNAVAILABLE',f=>{f.data.task=null;}],['FIELD_REVISION_CHANGED',f=>{f.data.task.revision='2026-10-07T11:00:00.123457';}],['FIELD_SECTOR_UNAVAILABLE',f=>{f.data.project.metadata.fieldOperations.sectors=[];}]];
+ for(const [code,mutate] of mutations){const f=originFixture();mutate(f);assert.deepEqual(await inspectOrigin(f),{valid:false,code});assert.equal(await validOrigin(f),false);}
+});
+test('invalid signed origin, actor context, nonce, TTL, projection or durable receipt take precedence over missing targets',async()=>{
+ const mutations=[f=>{f.data.row=null;},f=>{f.data.row.payload.encryptedProof='v2.invalid';},f=>{f.r.member.actorId='actor-other';},f=>{f.state.lastEventId='foreign-event';},f=>{f.r.now=new Date(now.getTime()+900000);},f=>{f.data.projection.routeEpoch++;},f=>{f.data.observed=null;}];
+ for(const mutate of mutations){const f=originFixture();mutate(f);f.data.task=null;f.data.project.metadata.fieldOperations.sectors=[];assert.deepEqual(await inspectOrigin(f),{valid:false,code:'META_CHANNEL_MEDIA_CONTEXT_CHANGED'});assert.equal(f.queries.some(q=>q.sql.includes('FROM public."Project"')||q.sql.includes('FROM public."Task"')),false);}
+});
+
+// Exercise the actual download recovery and encrypted deterministic receipt.
+// Identity is a controlled resolver; canonical actor/KYC/lease integration is
+// checked separately by the disposable PostgreSQL harness.
+function recoveryFixture({duringDownload=()=>{},beforeResolve=()=>{}}={}){
+ const f=originFixture(),dispatches=new Map(),calls={downloads:0,puts:0,gets:0,analysis:0,resolutions:0};
+ const {r,environment}=f,preparedId='meta_field_media_'+digest(r.event.id),dispatchId='meta_field_'+digest(['meta-field-dispatch-v1',r.event.id]);
+ r.project={...f.data.project,name:'Obra sintética'};r.worker.metadata={participant:{permissions:{report:true}},fieldChannelConversation:{lastEventId:r.event.id}};
+ r.event={...r.event,status:'PENDING',leaseToken:'synthetic-lease',leaseExpiresAt:new Date(now.getTime()+180000),payload:{payloadDigest:'a'.repeat(64)},createdAt:now};
+ r.connection.encryptedAccessToken=encryptCustomerSecret('synthetic-private-token',{organizationId:r.member.organizationId,projectId:r.connection.projectId,purpose:META_CUSTOMER_PROTOCOL.credentialPurpose,resourceId:r.connection.phoneNumberId},environment);
+ const prepared={version:1,projectId:r.project.id,eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,channelBindingId:r.channelBinding.id,encryptedInput:encryptCustomerSecret(JSON.stringify({media:f.media,state:f.state}),{organizationId:r.member.organizationId,projectId:r.project.id,purpose:'field-media-prepared',resourceId:preparedId},environment)};
+ const originQuery=f.client.query;
+ const query=async(sql,args=[])=>{
+  if(['BEGIN','COMMIT','ROLLBACK'].includes(sql)||sql.startsWith('SET LOCAL'))return {rows:[],rowCount:0};
+  if(sql==='SELECT clock_timestamp() AS now')return {rows:[{now:f.r.now}],rowCount:1};
+  if(sql.includes('SELECT "eventType"'))return {rows:[{eventType:'message'}],rowCount:1};
+  if(sql.includes('FROM public."AuditLog"')&&args[0]===preparedId)return {rows:[{metadata:prepared}],rowCount:1};
+  if(sql.includes('FROM public."AuditLog"')&&args[0]===dispatchId)return {rows:dispatches.has(dispatchId)?[{metadata:dispatches.get(dispatchId)}]:[],rowCount:dispatches.has(dispatchId)?1:0};
+  if(sql.startsWith('UPDATE public."WebhookEvent"')||sql.startsWith('SELECT id FROM public."WebhookEvent"')){const current=r.event.status==='PENDING'&&r.event.leaseToken===args[1]&&new Date(r.event.leaseExpiresAt)>f.r.now;return {rows:current?[{id:r.event.id}]:[],rowCount:current?1:0};}
+  if(sql.startsWith('SELECT metadata FROM public."Worker"'))return {rows:[{metadata:structuredClone(r.worker.metadata)}],rowCount:1};
+  if(sql.startsWith('UPDATE public."Worker"')){r.worker.metadata=JSON.parse(args[2]);return {rows:[],rowCount:1};}
+  if(sql.startsWith('INSERT INTO public."AuditLog"')){assert.equal(args[0],dispatchId);assert.equal(dispatches.has(dispatchId),false);dispatches.set(dispatchId,JSON.parse(args[4]));return {rows:[],rowCount:1};}
+  return originQuery(sql,args);
+ };
+ const resolveIdentity=async(_client,{permission})=>{calls.resolutions++;beforeResolve(f,calls);if(permission&&r.worker.metadata.participant.permissions[permission]!==true)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);return {...r,project:{...r.project,metadata:structuredClone(f.data.project?.metadata)}};};
+ const bridge=createMetaFieldBridge({connect:async()=>({query,release(){}}),resolveIdentity,environment,provider:{downloadMedia:async({beforeExternal})=>{calls.downloads++;await duringDownload(f,calls);await beforeExternal();assert.fail('Business recovery must stop before media decoding');}},put:async()=>{calls.puts++;assert.fail('Unexpected private write');},get:async()=>{calls.gets++;assert.fail('Unexpected private read');},analyzer:{analyzePhoto:async()=>{calls.analysis++;assert.fail('Unexpected analysis');}}});
+ const context={eventId:r.event.id,projectId:r.sourceProjectId,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,leaseToken:r.event.leaseToken};
+ return {...f,bridge,context,dispatches,calls};
+}
+test('business changes during download close one private receipt and preserve a newer conversation exactly',async()=>{
+ for(const newer of [false,true]){
+  const f=recoveryFixture({duringDownload:async f=>{f.data.project.metadata.fieldOperations.sectors=[];if(newer)f.r.worker.metadata.fieldChannelConversation={lastEventId:'newer-event',encryptedState:'newer-private-draft',expiresAt:'2026-10-07T12:20:00.000Z'};}}),previous=newer?{lastEventId:'newer-event',encryptedState:'newer-private-draft',expiresAt:'2026-10-07T12:20:00.000Z'}:null;
+  const outcome=await f.bridge.execute(f.context);assert.equal(outcome.kind,'MEDIA_CONTEXT_REVIEW');assert.equal(outcome.code,'FIELD_SECTOR_UNAVAILABLE');assert.equal(outcome.businessApplied,false);assert.equal(outcome.replySent,false);assert.equal(f.dispatches.size,1);assert.deepEqual(f.r.worker.metadata.fieldChannelConversation,previous);assert.equal(f.calls.puts+f.calls.gets+f.calls.analysis,0);
+  const stored=[...f.dispatches.values()][0];assert.equal(stored.kind,'MEDIA_CONTEXT_REVIEW');assert.equal(stored.businessApplied,false);assert.ok(stored.encryptedResult.startsWith('v2.'));assert.equal(stored.result,undefined);assert.deepEqual(await f.bridge.execute(f.context),outcome);assert.equal(f.calls.downloads,1);assert.equal(f.dispatches.size,1);
+ }
+});
+test('recoverable target errors never close a receipt after actor, permission, lease or original integrity loss',async()=>{
+ const mutations=[['WORKER_CHANNEL_PARTICIPANT_REQUIRED',f=>{throw new WorkspaceError('WORKER_CHANNEL_PARTICIPANT_REQUIRED',403);}],['WORKER_CHANNEL_PERMISSION_REQUIRED',f=>{f.r.worker.metadata.participant.permissions.report=false;}],['META_CUSTOMER_INBOX_LEASE_CHANGED',f=>{f.r.event.leaseExpiresAt=f.r.now;}],['META_CUSTOMER_INBOX_LEASE_CHANGED',f=>{f.r.event.leaseToken='replacement-lease';}],['META_CHANNEL_MEDIA_CONTEXT_CHANGED',f=>{f.data.row.payload.encryptedProof='v2.invalid';}]];
+ for(const [code,mutate] of mutations){const f=recoveryFixture({duringDownload:async f=>{f.data.project.metadata.fieldOperations.sectors=[];},beforeResolve:(f,calls)=>{if(calls.resolutions===4)mutate(f);}});await assert.rejects(f.bridge.execute(f.context),{code});assert.equal(f.dispatches.size,0);assert.equal(f.r.worker.metadata.fieldChannelConversation.lastEventId,f.r.event.id);assert.equal(f.calls.puts+f.calls.gets+f.calls.analysis,0);}
 });
 
 function videoEvidence(){

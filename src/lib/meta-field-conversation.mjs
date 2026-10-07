@@ -33,10 +33,15 @@ export const META_FIELD_MEDIA_AUTHORIZATION_VERSION='field-channel-media-v2';
 const mediaReferenceKeys=['version','eventId','payloadDigest','contextDigest','sourceProjectId','kind','mediaId','contentType','caption','receivedAt','expiresAt','taskId','taskRevision','sectorId'];
 const mediaTypes={image:['image/jpeg','image/png','image/webp'],audio:['audio/ogg','audio/wav','audio/mpeg','audio/mp4','audio/webm'],video:['video/mp4','video/webm']};
 const canonicalDate=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
-export function validMetaFieldMediaReference(ref,{state,facts,now}={}){
+// Shape, immutable context and TTL only; this predicate grants no current access.
+export function validMetaFieldMediaReferenceContext(ref,{state,facts,now}={}){
  if(!ref||typeof ref!=='object'||Array.isArray(ref)||Object.keys(ref).sort().join('|')!==mediaReferenceKeys.slice().sort().join('|')||ref.version!==1||!['eventId','sourceProjectId','taskId','sectorId'].every(key=>workspaceId(ref[key]))||!['payloadDigest','contextDigest'].every(key=>/^[a-f0-9]{64}$/.test(ref[key]||''))||!/^\d{5,32}$/.test(ref.mediaId||'')||typeof ref.contentType!=='string'||ref.contentType.length>128||/[\x00-\x1f\x7f]/.test(ref.contentType)||!mediaTypes[ref.kind]?.includes(ref.contentType.toLowerCase().split(';')[0].trim())||typeof ref.caption!=='string'||!ref.caption.length||ref.caption.length>1000||typeof ref.taskRevision!=='string'||!canonicalDate(ref.receivedAt)||!canonicalDate(ref.expiresAt)||Date.parse(ref.expiresAt)-Date.parse(ref.receivedAt)!==900000||!(now instanceof Date)||!Number.isFinite(now.getTime())||Date.parse(ref.receivedAt)>now.getTime()||Date.parse(ref.expiresAt)<=now.getTime())return false;
  if(!state||state.mediaAuthorizationVersion!==META_FIELD_MEDIA_AUTHORIZATION_VERSION||ref.taskId!==state.taskId||ref.taskRevision!==state.taskRevision||ref.sectorId!==state.sectorId||ref.contextDigest!==facts?.mediaReferenceContext?.contextDigest||ref.sourceProjectId!==facts?.mediaReferenceContext?.sourceProjectId)return false;
- return facts.permissions?.report===true&&facts.tasks?.some(task=>task.id===ref.taskId&&task.revision===ref.taskRevision)&&facts.sectors?.some(sector=>sector.id===ref.sectorId);
+ return true;
+}
+export function validMetaFieldMediaReference(ref,context={}){
+ const {facts}=context;
+ return validMetaFieldMediaReferenceContext(ref,context)&&facts.permissions?.report===true&&facts.tasks?.some(task=>task.id===ref.taskId&&task.revision===ref.taskRevision)&&facts.sectors?.some(sector=>sector.id===ref.sectorId);
 }
 const mediaFilePrompt=state=>({state:{...state,step:'MEDIA_FILE'},reply:text('Enviá una foto de hasta 2 MiB, o audio/video de hasta 3 MiB, de esta tarea y sector. Después elegirás si querés análisis asistido. El archivo todavía no se guardará ni se enviará para análisis.')});
 function typedMediaNotice(state,eventId){const video=state.pendingFile.kind==='video';return choices({...state,step:video?'VIDEO_NOTICE':'MEDIA_TYPED_NOTICE'},eventId,(video?'Recibimos la referencia de tu video.\n'+FIELD_VIDEO_PRIVACY_NOTICE:'Recibimos la referencia de tu '+(state.pendingFile.kind==='image'?'foto':'audio')+'.\n'+FIELD_MEDIA_PRIVACY_NOTICE),[['ANALYZE',video?'Analizar cuadros':'Analizar y guardar'],['SAVE_ONLY','Sólo guardar'],['CANCEL','Cancelar']]);}

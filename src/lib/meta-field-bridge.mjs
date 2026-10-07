@@ -1,7 +1,7 @@
 import {WorkspaceError,digest} from './workspace-policy.mjs';
 import {createFieldOperations,publicFieldEvidence} from './field-operations-store.mjs';
 import {createFieldMedia,decodeFieldMedia} from './field-media.mjs';
-import {planMetaFieldConversation,META_FIELD_MEDIA_AUTHORIZATION_VERSION,validMetaFieldMediaReference,metaFieldMediaAuthorizationValid} from './meta-field-conversation.mjs';
+import {planMetaFieldConversation,META_FIELD_MEDIA_AUTHORIZATION_VERSION,validMetaFieldMediaReferenceContext,metaFieldMediaAuthorizationValid} from './meta-field-conversation.mjs';
 import {resolveWorkerChannelIdentity,decodeWorkerChannelProof} from './worker-channel-identity.mjs';
 import {META_CUSTOMER_PROTOCOL,resolveMetaCloudProtocol} from './meta-cloud-protocol.mjs';
 import {decryptCustomerSecret,encryptCustomerSecret} from './meta-customer-credentials.mjs';
@@ -20,27 +20,36 @@ const text=body=>({type:'text',body});
 export const metaFieldMediaContextDigest=r=>digest(['meta-field-media-context-v2',r.member.organizationId,r.member.actorId,r.member.membershipId,r.member.clerkUserId,r.project.id,r.worker.id,r.channelBinding.id,r.connection.id,r.connection.projectId,r.connection.phoneNumberId,r.connection.whatsappBusinessId,r.sourceProjectId||r.event.projectId,r.companyProjection?{projectId:r.companyProjection.projectId,workerId:r.companyProjection.workerId,actorId:r.companyProjection.actorId,membershipId:r.companyProjection.membershipId,assignmentRevision:r.companyProjection.assignmentRevision,bindingId:r.companyProjection.bindingId,routeId:r.companyProjection.routeId,routeEpoch:r.companyProjection.routeEpoch}:null]);
 // Integrity of an already signed, privately referenced file. This read-only
 // validator grants no access: callers must resolve current authority separately.
-export async function validateMetaFieldMediaOrigin(client,r,media,state,{environment=process.env,now=r.now,protocol=META_CUSTOMER_PROTOCOL}={}){
+export async function inspectMetaFieldMediaOrigin(client,r,media,state,{environment=process.env,now=r.now,protocol=META_CUSTOMER_PROTOCOL}={}){
  try{
   const ref=media?.sourceOrigin;
-  if(state?.version!==1||state.purpose!=='MEDIA'||state.step!=='MEDIA_AUTHORIZED'||state.mediaAuthorizationVersion!==META_FIELD_MEDIA_AUTHORIZATION_VERSION||!ref||digest(state.pendingFile)!==digest(ref)||media.taskId!==ref.taskId||media.sectorId!==ref.sectorId||media.mediaId!==ref.mediaId||media.contentType!==ref.contentType||media.caption!==ref.caption||media.kind!==ref.kind||media.analysisConsentEventId!==state.analysisConsentEventId||state.analysisConsentEventId!==r.event.id||!metaFieldMediaAuthorizationValid(r.proof.value,media,state)||digest(media.analysisConsent)!==digest(state.analysisConsent))return false;
-  const task=(await client.query(`SELECT id,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Task" WHERE id=$1 AND "projectId"=$2`,[ref.taskId,r.project.id])).rows[0];
-  const project=(await client.query(`SELECT id,metadata FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE'`,[r.project.id,r.member.organizationId])).rows[0];
-  const facts={permissions:{report:true},tasks:task?[task]:[],sectors:project?.metadata?.fieldOperations?.version===1&&Array.isArray(project.metadata.fieldOperations.sectors)?project.metadata.fieldOperations.sectors:[],mediaReferenceContext:{contextDigest:metaFieldMediaContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId}};
-  if(!validMetaFieldMediaReference(ref,{state,facts,now}))return false;
+  if(state?.version!==1||state.purpose!=='MEDIA'||state.step!=='MEDIA_AUTHORIZED'||state.mediaAuthorizationVersion!==META_FIELD_MEDIA_AUTHORIZATION_VERSION||!ref||digest(state.pendingFile)!==digest(ref)||media.taskId!==ref.taskId||media.sectorId!==ref.sectorId||media.mediaId!==ref.mediaId||media.contentType!==ref.contentType||media.caption!==ref.caption||media.kind!==ref.kind||media.analysisConsentEventId!==state.analysisConsentEventId||state.analysisConsentEventId!==r.event.id||!metaFieldMediaAuthorizationValid(r.proof.value,media,state)||digest(media.analysisConsent)!==digest(state.analysisConsent))return {valid:false,code:'META_CHANNEL_MEDIA_CONTEXT_CHANGED'};
+  const facts={mediaReferenceContext:{contextDigest:metaFieldMediaContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId}};
+  if(!validMetaFieldMediaReferenceContext(ref,{state,facts,now}))return {valid:false,code:'META_CHANNEL_MEDIA_CONTEXT_CHANGED'};
   const origin=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider=$3`,[ref.eventId,ref.sourceProjectId,protocol.provider])).rows[0];
-  if(!origin||origin.payload?.payloadDigest!==ref.payloadDigest)return false;
+  if(!origin||origin.payload?.payloadDigest!==ref.payloadDigest)return {valid:false,code:'META_CHANNEL_MEDIA_CONTEXT_CHANGED'};
   const signed=decodeWorkerChannelProof(origin,r.connection,environment,protocol),asset=signed.value?.[signed.value?.type];
-  if(signed.senderE164!==r.proof.senderE164||signed.value.type!==ref.kind||asset?.id!==ref.mediaId||asset.mime_type!==ref.contentType||siteText(asset.caption||'Evidencia enviada desde el canal verificado.',1000,1,true)!==ref.caption)return false;
+  if(signed.senderE164!==r.proof.senderE164||signed.value.type!==ref.kind||asset?.id!==ref.mediaId||asset.mime_type!==ref.contentType||siteText(asset.caption||'Evidencia enviada desde el canal verificado.',1000,1,true)!==ref.caption)return {valid:false,code:'META_CHANNEL_MEDIA_CONTEXT_CHANGED'};
   if(r.companyProjection){
-   if(signed.companyRouting?.mode!=='COMPANY')return false;
+   if(signed.companyRouting?.mode!=='COMPANY')return {valid:false,code:'META_CHANNEL_MEDIA_CONTEXT_CHANGED'};
    const projection=(await client.query(`SELECT * FROM public."WhatsAppCompanyEventRoute" WHERE "sourceEventId"=$1`,[ref.eventId])).rows[0];
-   if(projection?.kind!=='FIELD'||projection.sourceEventId!==ref.eventId||projection.payloadDigest!==ref.payloadDigest||['organizationId','connectionId','projectId','workerId','actorId','membershipId','assignmentRevision','bindingId','routeId','routeEpoch'].some(key=>projection[key]!==r.companyProjection[key]))return false;
-  }else if(signed.companyRouting?.mode==='COMPANY')return false;
+   if(projection?.kind!=='FIELD'||projection.sourceEventId!==ref.eventId||projection.payloadDigest!==ref.payloadDigest||['organizationId','connectionId','projectId','workerId','actorId','membershipId','assignmentRevision','bindingId','routeId','routeEpoch'].some(key=>projection[key]!==r.companyProjection[key]))return {valid:false,code:'META_CHANNEL_MEDIA_CONTEXT_CHANGED'};
+  }else if(signed.companyRouting?.mode==='COMPANY')return {valid:false,code:'META_CHANNEL_MEDIA_CONTEXT_CHANGED'};
   const observed=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND "entityType"='Worker' AND action='meta.field.dispatched'`,[receiptId(ref.eventId),r.member.organizationId,r.member.actorId,r.worker.id])).rows[0]?.metadata;
-  return observed?.version===1&&observed.projectId===r.project.id&&observed.channelId===r.connection.id&&observed.channelBindingId===r.channelBinding.id&&observed.eventId===ref.eventId&&observed.payloadDigest===ref.payloadDigest&&observed.kind==='CONVERSATION'&&observed.businessApplied===false;
- }catch(error){if(error instanceof WorkspaceError||error instanceof SyntaxError||error instanceof TypeError||error instanceof RangeError)return false;throw error;}
+  if(!(observed?.version===1&&observed.projectId===r.project.id&&observed.channelId===r.connection.id&&observed.channelBindingId===r.channelBinding.id&&observed.eventId===ref.eventId&&observed.payloadDigest===ref.payloadDigest&&observed.kind==='CONVERSATION'&&observed.businessApplied===false))return {valid:false,code:'META_CHANNEL_MEDIA_CONTEXT_CHANGED'};
+  // Classify current target changes only after the signed original, immutable
+  // projection, prompt nonce, consent, TTL and durable receipt prove integrity.
+  const project=(await client.query(`SELECT id,metadata FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE'`,[r.project.id,r.member.organizationId])).rows[0];
+  if(!project)return {valid:false,code:'META_CHANNEL_MEDIA_CONTEXT_CHANGED'};
+  const task=(await client.query(`SELECT id,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Task" WHERE id=$1 AND "projectId"=$2`,[ref.taskId,r.project.id])).rows[0];
+  if(!task)return {valid:false,code:'WORKSPACE_TASK_UNAVAILABLE'};
+  if(task.revision!==ref.taskRevision)return {valid:false,code:'FIELD_REVISION_CHANGED'};
+  const sectors=project.metadata?.fieldOperations?.version===1&&Array.isArray(project.metadata.fieldOperations.sectors)?project.metadata.fieldOperations.sectors:[];
+  if(!sectors.some(sector=>sector.id===ref.sectorId))return {valid:false,code:'FIELD_SECTOR_UNAVAILABLE'};
+  return {valid:true,code:null};
+ }catch(error){if(error instanceof WorkspaceError||error instanceof SyntaxError||error instanceof TypeError||error instanceof RangeError)return {valid:false,code:'META_CHANNEL_MEDIA_CONTEXT_CHANGED'};throw error;}
 }
+export async function validateMetaFieldMediaOrigin(client,r,media,state,options={}){return (await inspectMetaFieldMediaOrigin(client,r,media,state,options)).valid;}
 export function metaFieldVideoResultText(evidence,consent){
  const result=evidence?.processing?.result,visualConfirmed=result?.visual?.status==='ANALYZED_UNREVIEWED'&&result.sampling?.frameCount===4;
  const visual=visualConfirmed?'Se analizaron cuatro cuadros del video.':'El análisis de los cuadros no quedó confirmado.';
@@ -114,9 +123,25 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   return result;
  }
  const result=(r,kind,reply,extra={})=>({kind,identityStatus:'CHANNEL_VERIFIED',workerId:r.worker.id,reviewState:'OBSERVED',businessApplied:false,replySent:false,reply:attendanceOnly||r.companyProjection?{...reply,body:('Obra: '+r.project.name+'\n'+reply.body).slice(0,reply.type==='interactive'?1024:4096)}:reply,...extra});
+ const mediaContextCodes=new Set(['FIELD_SECTOR_UNAVAILABLE','WORKSPACE_TASK_UNAVAILABLE','FIELD_REVISION_CHANGED']);
+ const recoverableMediaContext=error=>error instanceof WorkspaceError&&mediaContextCodes.has(error.code);
+ const mediaContextResult=(r,code)=>result(r,'MEDIA_CONTEXT_REVIEW',text('Cambió la tarea o el sector durante la carga. No registramos esta evidencia. Escribí EVIDENCIA y elegí nuevamente la tarea y el sector actuales.'),{code});
+ async function requireMediaOrigin(client,r,media,state){if(!media.sourceOrigin)return;const checked=await inspectMetaFieldMediaOrigin(client,r,media,{...state,version:1},{environment,now:r.now,protocol});if(!checked.valid)throw new WorkspaceError(checked.code,409);}
+ async function recordMediaContext(client,r,code){
+  await commitFence(client,r);
+  const lease=(await client.query(`SELECT id FROM public."WebhookEvent" WHERE id=$1 AND status='PENDING' AND "leaseToken"=$2 AND "leaseExpiresAt">clock_timestamp()`,[r.event.id,r.event.leaseToken])).rows;
+  if(lease.length!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
+  return record(client,r,mediaContextResult(r,code),null,{onlyIfCurrent:true});
+ }
+ async function closeMediaContext(context,prepared,error){return within(async client=>{
+  const r=await resolve(client,context,'report');assertPrepared(r,prepared);const prior=await saved(client,r);if(prior)return prior;
+  try{await requireMediaOrigin(client,r,prepared.media,prepared.state);}catch(current){if(!recoverableMediaContext(current))throw current;}
+  return recordMediaContext(client,r,error.code);
+ });}
  async function prepareMedia(client,r,media,state){
   assertDevelopmentPilotAdapter(r.connection,'media');
   if(r.worker.metadata.participant.permissions.report!==true)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
+  try{await requireMediaOrigin(client,r,media,state);}catch(error){if(!recoverableMediaContext(error))throw error;return {done:await recordMediaContext(client,r,error.code)};}
   const renewed=await client.query(`UPDATE public."WebhookEvent" SET "leaseExpiresAt"=clock_timestamp()+interval '180 seconds' WHERE id=$1 AND status='PENDING' AND "leaseToken"=$2 AND "leaseExpiresAt">clock_timestamp()`,[r.event.id,r.event.leaseToken]);
   if(renewed.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
   const token=decryptCustomerSecret(r.connection.encryptedAccessToken,{organizationId:r.member.organizationId,projectId:r.connection.projectId,purpose:protocol.credentialPurpose,resourceId:r.connection.phoneNumberId},environment);
@@ -142,7 +167,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   if(plan.media){
    assertDevelopmentPilotAdapter(r.connection,'media');
    if(facts.permissions.report!==true)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
-   if(plan.media.sourceOrigin&&!await validateMetaFieldMediaOrigin(client,r,plan.media,{...plan.state,version:1},{environment,now:r.now,protocol}))throw new WorkspaceError('META_CHANNEL_MEDIA_CONTEXT_CHANGED',409);
+   await requireMediaOrigin(client,r,plan.media,plan.state);
    await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'meta.field.media.prepared','Worker',$4,$5::jsonb)`,[key,r.member.organizationId,r.member.actorId,r.worker.id,JSON.stringify({version:1,projectId:r.project.id,eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,channelBindingId:r.channelBinding.id,encryptedInput:seal(r,'field-media-prepared',key,{media:plan.media,state:plan.state})})]);
    await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify({...r.worker.metadata,fieldChannelConversation:conversationEnvelope(r,plan.state)})]);
    return prepareMedia(client,r,plan.media,plan.state);
@@ -166,22 +191,20 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   if(!provider||!put||!get||!analyzer)throw new WorkspaceError('META_CHANNEL_MEDIA_NOT_CONFIGURED',503);
   // No locks span provider I/O. Re-resolve the signed source, assignment,
   // individual KYC and binding immediately before each corporate external call.
-  const beforeExternal=async()=>{if(prepared.corporate||prepared.media.sourceOrigin)await within(async client=>{const r=await resolve(client,context,'report');assertPrepared(r,prepared);assertDevelopmentPilotAdapter(r.connection,'media');if(prepared.media.sourceOrigin&&!await validateMetaFieldMediaOrigin(client,r,prepared.media,{...prepared.state,version:1},{environment,now:r.now,protocol}))throw new WorkspaceError('META_CHANNEL_MEDIA_CONTEXT_CHANGED',409);await commitFence(client,r);});};
+  const beforeExternal=async()=>{if(prepared.corporate||prepared.media.sourceOrigin)await within(async client=>{const r=await resolve(client,context,'report');assertPrepared(r,prepared);assertDevelopmentPilotAdapter(r.connection,'media');await requireMediaOrigin(client,r,prepared.media,prepared.state);await commitFence(client,r);});};
   const external=fn=>async(...args)=>{await beforeExternal();return fn(...args);};
   let media;
   try{await beforeExternal();const downloaded=await provider.downloadMedia({token:prepared.token,phoneNumberId:prepared.phoneNumberId,mediaId:prepared.media.mediaId,limit:prepared.media.kind==='image'?2*1024*1024:3*1024*1024,...(prepared.corporate||prepared.media.sourceOrigin?{beforeExternal}:{})});
    media=decodeFieldMedia(downloaded.bytes,downloaded.contentType);if(downloaded.contentType.split(';')[0].trim()!==String(prepared.media.contentType).split(';')[0].trim()||media.kind!==prepared.media.kind)throw new WorkspaceError('META_CHANNEL_MEDIA_INTEGRITY',409);
-  }catch(error){if(!['META_CUSTOMER_MEDIA_INVALID','META_CUSTOMER_MEDIA_REJECTED','META_CUSTOMER_MEDIA_INTEGRITY','META_CHANNEL_MEDIA_INTEGRITY','FIELD_MEDIA_INVALID','FIELD_MEDIA_TOO_LARGE'].includes(error.code))throw error;
+   }catch(error){if(recoverableMediaContext(error))return closeMediaContext(context,prepared,error);if(!['META_CUSTOMER_MEDIA_INVALID','META_CUSTOMER_MEDIA_REJECTED','META_CUSTOMER_MEDIA_INTEGRITY','META_CHANNEL_MEDIA_INTEGRITY','FIELD_MEDIA_INVALID','FIELD_MEDIA_TOO_LARGE'].includes(error.code))throw error;
    return within(async client=>{const r=await resolve(client,context,'report'),prior=await saved(client,r);if(prior)return prior;return record(client,r,result(r,'MEDIA_REVIEW_REQUIRED',text('No pudimos guardar este archivo con su tamaño o formato actual. Prepará una foto de hasta 2 MiB o audio/video de hasta 3 MiB desde la web, o enviá otro archivo. Tu tarea conserva su avance.'),{code:error.code}),prepared.state,{onlyIfCurrent:true});});
   }
-  const session={userId:prepared.userId},workspace={projectOperation:async(s,input,writable,callback)=>within(async client=>{const r=await resolve(client,context,'report');assertPrepared(r,prepared);if(s!==session||s.userId!==r.member.clerkUserId||input.projectId!==r.project.id||input.scope!==r.scope||prepared.workerId!==r.worker.id)throw new WorkspaceError('META_CHANNEL_CONTEXT_CHANGED',409);await commitFence(client,r);const value=await callback(client,{...r.member,role:'AUDITOR',channelProof:{provider:protocol.provider,eventId:r.event.id,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,bindingId:r.channelBinding.id}},r.scope,r.project);await commitFence(client,r);return value;})};
+   const session={userId:prepared.userId},workspace={projectOperation:async(s,input,writable,callback)=>within(async client=>{const r=await resolve(client,context,'report');assertPrepared(r,prepared);if(s!==session||s.userId!==r.member.clerkUserId||input.projectId!==r.project.id||input.scope!==r.scope||prepared.workerId!==r.worker.id)throw new WorkspaceError('META_CHANNEL_CONTEXT_CHANGED',409);await requireMediaOrigin(client,r,prepared.media,prepared.state);await commitFence(client,r);const value=await callback(client,{...r.member,role:'AUDITOR',channelProof:{provider:protocol.provider,eventId:r.event.id,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,bindingId:r.channelBinding.id}},r.scope,r.project);await commitFence(client,r);return value;})};
   const guardedAnalyzer=Object.fromEntries(['analyzePhoto','analyzeVideo','transcribeAudio'].map(name=>[name,external((...args)=>analyzer[name](...args))]));
   const fieldOps=createFieldOperations({workspace}),service=createFieldMedia({operations:fieldOps,put:external(put),get:external(get),analyzer:guardedAnalyzer,environment:()=>environment});
   const base={projectId:prepared.projectId,scope:prepared.scope};let attached;
   try{attached=await service.attach(session,{...base,operationId:metaFieldOperationId(context.eventId,'MEDIA_ATTACH'),workerId:prepared.workerId,taskId:prepared.media.taskId,sectorId:prepared.media.sectorId,caption:prepared.media.caption,media});}
-  catch(error){if(!['FIELD_SECTOR_UNAVAILABLE','WORKSPACE_TASK_UNAVAILABLE'].includes(error.code))throw error;
-   return within(async client=>{const r=await resolve(client,context,'report'),prior=await saved(client,r);if(prior)return prior;return record(client,r,result(r,'MEDIA_CONTEXT_REVIEW',text('Cambió la tarea o el sector durante la carga. No registramos esta evidencia. Escribí EVIDENCIA y elegí nuevamente la tarea y el sector actuales.'),{code:error.code}),null,{onlyIfCurrent:true});});
-  }
+   catch(error){if(!recoverableMediaContext(error))throw error;return closeMediaContext(context,prepared,error);}
   let processed=attached;
   const consent=prepared.media.analysisConsent,analysisAllowed=validFieldMediaAnalysisConsent(consent)&&consent.allowed===true;
   if(analysisAllowed)try{processed=await service.process(session,{...base,operationId:metaFieldOperationId(context.eventId,'MEDIA_PROCESS'),evidenceId:attached.evidence.id,revision:attached.evidence.revision,analysisConsent:consent});}
