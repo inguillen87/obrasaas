@@ -4,7 +4,7 @@ import {participantOnboardingNextStep} from '../src/app/(identity)/cuenta/partic
 
 const now=Date.parse('2026-10-07T00:50:00.000Z');
 const context=()=>({scope:'a'.repeat(64),projectId:'project-a',verified:true,now});
-const participant=()=>({id:'worker-a',self:true,active:true,status:'ACTIVE',accountLinked:true,invitation:{state:'ACCEPTED'},kyc:{status:'APPROVED',images:[{id:'document-front'},{id:'selfie'}]},permissions:{attendance:true,report:true}});
+const participant=()=>({id:'worker-a',self:true,active:true,status:'ACTIVE',accountLinked:true,kycChatChallenge:null,invitation:{state:'ACCEPTED'},kyc:{status:'APPROVED',images:[{id:'document-front'},{id:'selfie'}]},permissions:{attendance:true,report:true}});
 const fixture=()=>({context:context(),snapshot:{scope:'a'.repeat(64),projectId:'project-a',canManage:false,canInvite:false,records:[participant()]},workerId:'worker-a'});
 const manager=()=>{const value=fixture();value.snapshot.canManage=true;value.snapshot.canInvite=true;value.snapshot.records[0].self=false;return value;};
 const channel=()=>({scope:'a'.repeat(64),projectId:'project-a',channelReady:true,records:[{workerId:'worker-a',eligible:true,state:'VERIFIED',challenge:null,binding:{id:'binding-a',verifiedAt:'2026-10-06T20:00:00.000Z',revokedAt:null}}]});

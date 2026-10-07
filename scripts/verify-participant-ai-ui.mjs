@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,existsSync} from 'node:fs';
 import path from 'node:path';
-import {spawn} from 'node:child_process';
+import {spawn,execFileSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
 
@@ -15,6 +15,9 @@ const scope='a'.repeat(64),projectId='project-fixture';
 writeFileSync(path.join(app,'page.js'),`'use client';import {useState} from 'react';import {ParticipantPanel} from './participant-panel';export default function Page(){const [currentScope,setCurrentScope]=useState('${scope}');return <main style={{maxWidth:1000,margin:'auto'}}><button onClick={()=>setCurrentScope('b'.repeat(64))}>Cambiar contexto sintético</button><ParticipantPanel projectId="${projectId}" scope={currentScope} getSessionToken={async()=> 'synthetic-participant-ai-token'}/></main>}`);
 const port=3124,origin='http://127.0.0.1:'+port,server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe']});
 let log='',browser;for(const stream of [server.stdout,server.stderr])stream.on('data',data=>{log=(log+data).slice(-12000);});
+const serverClosed=new Promise(resolve=>server.once('close',resolve));
+const alive=pid=>{try{process.kill(pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}};
+async function bounded(promise,label){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(label)),10000);})]);}finally{clearTimeout(timer);}}
 const checks=[],errors=[];writeFileSync(path.join(scratch,'participant-ai-ui.json'),JSON.stringify({validated:false,running:true,synthetic:true,realProviderCalls:false,checks:[]}));
 const allModes=['extract','biometric-only','recover','manual','challenge','challenge-copy','challenge-copy-failure','self'],focus=process.env.PARTICIPANT_AI_UI_FOCUS;
 assert.ok(!focus||focus==='clipboard');
@@ -29,7 +32,7 @@ try{
   page.on('console',message=>{if(/IDENTIDAD [A-Za-z0-9_-]{43}|Persona OCR|12345678/.test(message.text()))errors.push('Sensitive value appeared in a browser log');});
   const challengeMode=mode.startsWith('challenge');
   await page.evaluateOnNewDocument(failing=>{window.__clipboardWrites=[];Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__clipboardWrites.push(text);if(failing)throw new Error('Synthetic clipboard permission denial');}}});},mode==='challenge-copy-failure');
-  let row={id:'worker-fixture',name:'Persona sintética',active:true,revision:'2026-10-05T00:00:00.000001',status:challengeMode?'INVITED':'ACTIVE',self:mode==='self',accountLinked:!challengeMode,invitation:null,permissions:{attendance:false,report:false},identityCertified:false,whatsAppAccessGranted:false,kyc:{status:mode==='self'||challengeMode?'NOT_SUBMITTED':'PENDING_REVIEW',submissionId:mode==='self'||challengeMode?null:'kyc-fixture',ocrConsent:{allowed:!['manual','biometric-only'].includes(mode)},biometricConsent:{allowed:['extract','biometric-only'].includes(mode)},images:[],processing:null}};
+  let row={id:'worker-fixture',name:'Persona sintética',active:true,revision:'2026-10-05T00:00:00.000001',status:challengeMode?'INVITED':'ACTIVE',self:mode==='self',accountLinked:!challengeMode,invitation:null,kycChatChallenge:null,permissions:{attendance:false,report:false},identityCertified:false,whatsAppAccessGranted:false,kyc:{status:mode==='self'||challengeMode?'NOT_SUBMITTED':'PENDING_REVIEW',submissionId:mode==='self'||challengeMode?null:'kyc-fixture',ocrConsent:{allowed:!['manual','biometric-only'].includes(mode)},biometricConsent:{allowed:['extract','biometric-only'].includes(mode)},images:[],processing:null}};
   const posts=[],queries=[];let receipt;
   const snapshot=()=>({scope,projectId,canManage:mode!=='self',canInvite:false,canManageOfficeRoles:false,existingAccounts:[],records:[row],privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE},externalOcrNotice:{version:PARTICIPANT_OCR_NOTICE_VERSION,text:PARTICIPANT_OCR_NOTICE},privateBiometricNotice:{version:PARTICIPANT_BIOMETRIC_NOTICE_VERSION,text:PARTICIPANT_BIOMETRIC_NOTICE}});
   const send=(request,value)=>request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:JSON.stringify(value)});
@@ -57,5 +60,30 @@ try{
   const stored=await page.evaluate(()=>JSON.stringify([Object.values(localStorage),Object.values(sessionStorage)]));assert.doesNotMatch(stored,/Persona OCR|12345678|IDENTIDAD|synthetic-participant-ai-token|faceSimilarity|data:image/);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Horizontal overflow '+mode+' '+width);
   checks.push({width,mode,posts:posts.length,recoveryReads:queries.length,sensitiveStorage:false});await context.close();
  }
- assert.deepEqual(errors,[]);writeFileSync(path.join(scratch,'participant-ai-ui.json'),JSON.stringify({validated:true,fullSuite:!focus,widths,synthetic:true,realProviderCalls:false,checks},null,2));console.log(JSON.stringify({validated:true,fullSuite:!focus,checks:checks.length,synthetic:true,realProviderCalls:false}));
-}catch(error){console.error(log);throw error;}finally{await browser?.close();server.kill();assert.ok(path.resolve(fixture).startsWith(path.resolve(scratch)+path.sep));rmSync(fixture,{recursive:true,force:true});}
+ assert.deepEqual(errors,[]);
+}catch(error){console.error(log);throw error;}finally{
+ let cleanupError;
+ const ownedBrowser=browser?.process();
+ try{await bounded(browser?.close(),'OWNED_BROWSER_CLOSE_TIMEOUT');}catch{browser?.disconnect();}
+ try{
+  if(ownedBrowser&&alive(ownedBrowser.pid)){
+   if(process.platform==='win32'){try{execFileSync('taskkill.exe',['/PID',String(ownedBrowser.pid),'/T','/F'],{stdio:'ignore',timeout:10000,windowsHide:true});}catch(error){if(alive(ownedBrowser.pid))throw error;}}
+   else ownedBrowser.kill('SIGKILL');
+   for(let attempt=0;attempt<40&&alive(ownedBrowser.pid);attempt++)await new Promise(resolve=>setTimeout(resolve,50));
+  }
+  if(ownedBrowser)assert.equal(alive(ownedBrowser.pid),false,'Owned browser must close before PASS');
+ }catch(error){cleanupError=error;}
+ // These processes were spawned by this isolated harness. Windows must stop
+ // the Next worker as well as its parent before removing the private fixture.
+ if(process.platform==='win32'&&server.pid&&server.exitCode===null){assert.ok(server.spawnargs.includes(fixture));try{execFileSync('taskkill.exe',['/PID',String(server.pid),'/T','/F'],{stdio:'ignore',timeout:10000,windowsHide:true});}catch(error){if(alive(server.pid))throw error;}}
+ else server.kill();
+ await bounded(serverClosed,'OWNED_NEXT_CLOSE_TIMEOUT');
+ assert.ok(path.resolve(fixture).startsWith(path.resolve(scratch)+path.sep));rmSync(fixture,{recursive:true,force:true});
+ assert.equal(existsSync(fixture),false);
+ if(cleanupError)throw cleanupError;
+}
+writeFileSync(path.join(scratch,'participant-ai-ui.json'),JSON.stringify({validated:true,fullSuite:!focus,widths,synthetic:true,realProviderCalls:false,checks,serverClosed:true,fixtureRemoved:true},null,2));
+console.log(JSON.stringify({validated:true,fullSuite:!focus,checks:checks.length,synthetic:true,realProviderCalls:false,serverClosed:true,fixtureRemoved:true}));
+// All owned processes and the fixture were checked above; Puppeteer's Windows
+// disconnect may leave inert handles that must not keep this CLI alive.
+process.stdout.write('',()=>process.exit(0));

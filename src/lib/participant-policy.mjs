@@ -43,6 +43,8 @@ export function participantCommand(input){
   participantKeys(p,['membershipId','revision','role','reason']);participantRevision(p.revision);if(!workspaceId(p.membershipId)||!Object.hasOwn(OFFICE_ROLES,p.role))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p,reason:participantReason(p.reason)};
  }else if(input.action==='PREPARE_KYC_CHAT'){
   participantKeys(p,['workerId','revision']);participantRevision(p.revision);if(!workspaceId(p.workerId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p};
+ }else if(input.action==='CANCEL_KYC_CHAT'){
+  participantKeys(p,['workerId','revision','challengeId','reason']);participantRevision(p.revision);if(!workspaceId(p.workerId)||!/^kyc_chat_[a-f0-9]{32}$/.test(p.challengeId||''))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p,reason:participantReason(p.reason)};
  }else if(input.action==='PROCESS_KYC'){
   participantKeys(p,['workerId','revision','submissionId']);participantRevision(p.revision);
   if(!workspaceId(p.workerId)||!workspaceId(p.submissionId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p};

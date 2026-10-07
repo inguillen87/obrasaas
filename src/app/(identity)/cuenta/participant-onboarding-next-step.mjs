@@ -7,6 +7,36 @@ const scoped=(value,context)=>value?.scope===context.scope&&value?.projectId===c
 const step=(state,action,label,optionalBank=null,requestedJob=null)=>({
  state,primary:action?{action,label}:null,optionalBank,requestedJob,
 });
+
+const chatKeys=['id','status','expiresAt','conversationExpiresAt','expired','canPrepare','canCancel','blockedCode'];
+const chatOptionalKeys=['step','recoveryRequired','claimedAt','closedAt'];
+const chatStatuses=['PENDING','CLAIMED','COMPLETED','CANCELLED','CLOSED'];
+const chatSteps=['CONSENT','OCR','BIOMETRIC','FRONT','SELFIE','CONFIRM','FINALIZING'];
+const chatDate=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
+// The DB projection decides capabilities. Expiry and historical status never
+// create permission or allow a pending challenge to be overwritten.
+export function participantKycChatCapabilities(row,canManage,now){
+ const unknown={observed:false,canPrepare:false,canCancel:false,challenge:null};
+ if(!row||typeof canManage!=='boolean'||!Number.isFinite(now)||now<0)return unknown;
+ const eligible=canManage&&row.active===true&&['INVITED','ACTIVE'].includes(row.status)&&['NOT_SUBMITTED','REJECTED'].includes(row.kyc?.status);
+ const cancellable=canManage&&row.active===true&&['INVITED','ACTIVE','REVOKED'].includes(row.status)&&['NOT_SUBMITTED','REJECTED'].includes(row.kyc?.status);
+ const value=row.kycChatChallenge;
+ if(value===null)return {observed:true,canPrepare:eligible,canCancel:false,challenge:null};
+ if(!value||typeof value!=='object'||Array.isArray(value)||chatKeys.some(key=>!Object.hasOwn(value,key))||Object.keys(value).some(key=>!chatKeys.includes(key)&&!chatOptionalKeys.includes(key))||
+    !id(value.id)||!chatStatuses.includes(value.status)||!chatDate(value.expiresAt)||
+    value.conversationExpiresAt!==null&&!chatDate(value.conversationExpiresAt)||
+    typeof value.expired!=='boolean'||typeof value.canPrepare!=='boolean'||typeof value.canCancel!=='boolean'||
+    value.blockedCode!==null&&(typeof value.blockedCode!=='string'||! /^[A-Z][A-Z0-9_]{0,99}$/.test(value.blockedCode))||
+    Object.hasOwn(value,'step')&&value.step!==null&&!chatSteps.includes(value.step)||
+    Object.hasOwn(value,'recoveryRequired')&&typeof value.recoveryRequired!=='boolean'||
+    ['claimedAt','closedAt'].some(key=>Object.hasOwn(value,key)&&value[key]!==null&&!chatDate(value[key])))return unknown;
+ const pending=['PENDING','CLAIMED'].includes(value.status);
+ if(value.status==='CLAIMED'&&value.conversationExpiresAt===null||value.status==='PENDING'&&value.conversationExpiresAt!==null||
+    value.canPrepare&&value.canCancel||value.canPrepare&&pending||
+    value.canCancel&&(!pending||value.step==='FINALIZING'||value.recoveryRequired===true)||value.status==='COMPLETED'&&(value.canPrepare||value.canCancel))return unknown;
+ return {observed:true,canPrepare:eligible&&value.canPrepare,canCancel:cancellable&&value.canCancel,challenge:{...value}};
+}
+
 const consult=()=>step('CONTEXT_UNVERIFIED','CONSULT_ACCESS','Comprobar mi acceso');
 const bank=()=>({action:'CONSULT_PRIVATE_BANK',label:'Mi cuenta privada'});
 const selected=(records,key,value)=>{
@@ -48,8 +78,16 @@ export function participantOnboardingNextStep({context,snapshot,workerId=null,ap
  const row=selected(snapshot.records,'id',workerId);
  if(!row||typeof row.self!=='boolean'||typeof row.active!=='boolean')return step('PARTICIPANT_UNOBSERVED','CONSULT_PARTICIPANTS','Consultar participantes',null,requestedJob);
  const next=(state,action,label,optionalBank=null)=>step(state,action,label,optionalBank,requestedJob);
+  const chatNext=()=>{
+   const current=participantKycChatCapabilities(row,snapshot.canManage,context.now);
+   if(!current.observed)return next('KYC_CHAT_UNOBSERVED','CONSULT_PARTICIPANTS','Consultar presentación por chat');
+   if(current.canCancel)return next('KYC_CHAT_CANCELLATION','CANCEL_KYC_CHAT','Revisar cierre de presentación');
+   if(current.canPrepare)return next('KYC_CHAT_PREPARATION','PREPARE_KYC_CHAT','Preparar identidad por chat');
+   return next(current.challenge?.status==='CLAIMED'?'KYC_CHAT_IN_PROGRESS':'KYC_CHAT_PENDING','CONSULT_PARTICIPANTS','Consultar presentación por chat');
+  };
  if(!row.self&&!snapshot.canManage)return next('OTHER_PERSON',null,null);
  if(!row.active)return next('PARTICIPATION_UNAVAILABLE','CONSULT_PARTICIPANTS','Consultar participación');
+ if(!row.self&&snapshot.canManage&&['INVITED','REVOKED'].includes(row.status)){const chat=participantKycChatCapabilities(row,snapshot.canManage,context.now);if(!chat.observed||['PENDING','CLAIMED'].includes(chat.challenge?.status))return chatNext();}
  if(row.status==='REVOKED')return snapshot.canManage&&row.accountLinked===true
   ?next('RESTORE_REVIEW','RESTORE_ACCESS','Revisar reactivación')
   :snapshot.canInvite&&row.accountLinked===false
@@ -66,13 +104,13 @@ export function participantOnboardingNextStep({context,snapshot,workerId=null,ap
   if(row.invitation.expired===true||Date.parse(row.invitation.expiresAt)<=context.now)return snapshot.canInvite
    ?next('INVITATION_EXPIRED','INVITE','Revisar invitación vencida')
    :next('WAIT_ADMIN','CONSULT_PARTICIPANTS','Consultar invitación');
-  if(snapshot.canManage&&['NOT_SUBMITTED','REJECTED'].includes(row.kyc?.status))return next('KYC_CHAT_PREPARATION','PREPARE_KYC_CHAT','Preparar identidad por chat');
+  if(snapshot.canManage&&['NOT_SUBMITTED','REJECTED'].includes(row.kyc?.status))return chatNext();
   return next('WAIT_ACCOUNT','CONSULT_PARTICIPANTS','Consultar aceptación');
  }
  if(row.status!=='ACTIVE'||row.accountLinked!==true)return next('PARTICIPATION_UNOBSERVED','CONSULT_PARTICIPANTS','Consultar participación');
  if(['NOT_SUBMITTED','REJECTED'].includes(row.kyc?.status))return row.self
   ?next('OWN_IDENTITY','SUBMIT_KYC','Presentar mi identidad')
-  :next('KYC_CHAT_PREPARATION','PREPARE_KYC_CHAT','Preparar identidad por chat');
+  :chatNext();
  if(row.kyc?.status==='PENDING_ACCOUNT_CLAIM')return next('WAIT_ACCOUNT','CONSULT_PARTICIPANTS','Consultar aceptación');
  if(row.kyc?.status==='PENDING_REVIEW')return !row.self&&snapshot.canManage&&row.kyc.images?.length===2
   ?next('IDENTITY_REVIEW','REVIEW_KYC','Revisar identidad')

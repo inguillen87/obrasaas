@@ -13,6 +13,13 @@ test('participant commands reject unknown fields, roles and forged review payloa
  assert.equal(participantCommand(command).payload.email,'worker@example.invalid');
  for(const value of [{...command,role:'ADMIN'},{...command,payload:{...command.payload,tenantRole:'ADMIN'}},{...command,operationId:'bad'},{...command,scope:'b'},{...command,payload:{...command.payload,email:'bad'}},{...command,action:'REVIEW_KYC',payload:{workerId:'worker-a',revision:command.payload.revision,submissionId:'kyc-a',decision:'AUTO_APPROVE',reason:'some review'}}])assert.throws(()=>participantCommand(value),{code:'PARTICIPANT_INPUT_INVALID'});
 });
+
+test('closing a private chat draft requires its exact challenge, revision and human reason',()=>{
+ const closure={...command,action:'CANCEL_KYC_CHAT',payload:{workerId:'worker-a',revision:command.payload.revision,challengeId:'kyc_chat_'+'a'.repeat(32),reason:'The original issuer reviewed this incomplete capture.'}};
+ assert.deepEqual(participantCommand(closure).payload,closure.payload);
+ for(const payload of [{...closure.payload,challengeId:'invite_'+'a'.repeat(32)},{...closure.payload,revision:'2026-10-01'},{...closure.payload,issuerActorId:'forged'},{...closure.payload,force:true},{...closure.payload,code:'IDENTIDAD '+'b'.repeat(43)}])assert.throws(()=>participantCommand({...closure,payload}),{code:'PARTICIPANT_INPUT_INVALID'});
+ assert.throws(()=>participantCommand({...closure,payload:{...closure.payload,reason:'short'}}),{code:'PARTICIPANT_REASON_REQUIRED'});
+});
 test('KYC requires pinned privacy choice, two real image signatures and revision',()=>{
  const body={operationId:randomUUID(),projectId:'project-a',scope:'a'.repeat(64),workerId:'worker-a',revision:command.payload.revision,noticeVersion:PARTICIPANT_NOTICE_VERSION,consent:true,front:picture,selfie:picture};
  assert.equal(participantKycInput(body).front.contentType,'image/png');

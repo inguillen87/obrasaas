@@ -22,6 +22,9 @@ export async function prepareMetaKycChallenge(client,member,project,input){
  const row=(await client.query(`SELECT id,"projectId",phone,active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Worker" WHERE id=$1 AND "projectId"=$2 FOR UPDATE`,[input.workerId,project.id])).rows[0];
  if(!row?.active||row.metadata?.siteRegister?.version!==1||!['INVITED','ACTIVE'].includes(row.metadata?.participant?.status)||row.revision!==input.revision||!/^\+[1-9]\d{7,14}$/.test(row.phone||''))fail('META_KYC_CHALLENGE_PARTICIPANT_REQUIRED');
  if(['PENDING_REVIEW','PENDING_ACCOUNT_CLAIM','APPROVED'].includes(row.metadata.participant.kyc?.status))fail('PARTICIPANT_KYC_ALREADY_SUBMITTED');
+ // A new UUID or elapsed TTL must not erase a started private capture. Its
+ // original issuer must explicitly close the draft and preserve its archive.
+ if(['PENDING','CLAIMED'].includes(row.metadata.participant.kycChatChallenge?.status))fail('PARTICIPANT_KYC_CHAT_CLOSURE_REQUIRED');
  const duplicate=(await client.query(`SELECT id FROM public."Worker" WHERE "projectId"=$1 AND phone=$2 AND active=true AND id<>$3 AND metadata->'participant'->>'status' IN ('INVITED','ACTIVE') LIMIT 1`,[project.id,row.phone,row.id])).rows;
  if(duplicate.length)fail('META_KYC_CHALLENGE_AMBIGUOUS');
  const corporate=await preparedCompanyKycChallenge(client,member,project.id,row);

@@ -16,6 +16,9 @@ test('corporate INVITED preparation uses the selected Worker project and refuses
  assert.equal(f.worker.metadata.participant.kycChatChallenge.projectId,f.target.id);
  assert.equal(f.worker.metadata.participant.kycChatChallenge.companyKyc.targetProjectId,f.target.id);
  f.audits.get('invite_receipt').metadata.projectId=f.anchor.id;
+ // This case tests first issuance against the invitation receipt. Existing
+ // pending captures have a separate explicit-closure guard.
+ delete f.worker.metadata.participant.kycChatChallenge;
  const before=structuredClone(f.worker.metadata);
  await prepareMetaKycChallenge.beforeProject(client,f.issuer,{projectId:f.target.id});
  await assert.rejects(prepareMetaKycChallenge(client,f.issuer,f.target,{workerId:f.worker.id,revision:f.worker.revision,operationId:randomUUID()}),{code:'META_KYC_CHALLENGE_REVOKED'});
@@ -45,6 +48,7 @@ for(const stage of ['initial','locked'])for(const [field,code] of [['eventType',
 
 test('issuing a corporate challenge cannot overlap a live capture of the same phone on another worksite',async()=>{
  const f=await companyKycMemoryFixture(),client={query:f.query};
+ delete f.worker.metadata.participant.kycChatChallenge;
  for(const status of ['PENDING','CLAIMED']){
   f.control.competingChallenges=[{id:'worker-other',metadata:{participant:{kycChatChallenge:{status,expiresAt:new Date(f.now.getTime()+60000).toISOString(),claimedAt:f.now.toISOString()}}}}];
   await prepareMetaKycChallenge.beforeProject(client,f.issuer,{projectId:f.target.id});
