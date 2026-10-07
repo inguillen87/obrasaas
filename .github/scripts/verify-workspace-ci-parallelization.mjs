@@ -5,9 +5,9 @@ import {readFileSync,writeFileSync,mkdirSync,readdirSync,lstatSync,realpathSync,
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import yaml from 'js-yaml';
-import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
+import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='30c41fcf62fc67a92516e0192ef01f6e782d1b7f1891716ecdc37656e53ca640';
+export const EXPECTED_CONTRACT_SHA256='026afb167c71075b284830f3d11a2f6119aea9fbf8655b7f6339bf7611e22aac';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
 const BASELINE_PRODUCERS_SHA256='07d0016608332c0775f86bee6d005e60d4686d2ffe33a3065dfd9fd8e974ab20';
@@ -88,6 +88,28 @@ function proofBindings(contract,lane,files,expectedHead,readSource){return contr
 function assertProofBindings(bindings,contract,lane,files,expectedHead,readSource){
  if(!Array.isArray(bindings))deny('PROOF_BINDINGS');const specs=contract.extension.proofs.filter(p=>p.lane===lane);equal(bindings.map(b=>b?.id),specs.map(p=>p.id),'PROOF_BINDINGS');const expectedBindings=proofBindings(contract,lane,files,expectedHead,readSource);for(const [index,binding] of bindings.entries()){exactKeys(binding,['id','path','producer','kind','result','sourceRevision','harnessSha256','sourceManifestSha256','sourceReferences','proofSha256','bytes','checks'],'PROOF_BINDING_SHAPE');const expected=expectedBindings[index];if(!sha(binding.sourceManifestSha256)||binding.sourceManifestSha256!==expected.sourceManifestSha256)deny('PROOF_BINDING_SOURCE');equal(binding,expected,'PROOF_BINDING_IDENTITY');if(binding.bytes<1)deny('PROOF_BINDING_EMPTY');}
 }
+// Read producer manifests without executing PG, browsers or provider adapters.
+// Literal arrays and relative-import walks mirror the current producer rules;
+// changing a producer rule requires a corresponding reviewed selftest update.
+function currentProducerSourceFiles(spec,root){
+ const text=readFileSync(path.join(root,spec.producer),'utf8');
+ const literals=pattern=>{const rows=[...text.matchAll(pattern)];assert.equal(rows.length,1,'One literal producer array: '+spec.id);const body=rows[0][1],files=[...body.matchAll(/['"]([^'"]+)['"]/g)].map(match=>match[1]);assert.ok(files.length);assert.equal(body.replace(/['"][^'"]+['"]/g,'').replace(/[\s,]/g,''),'','Only literal producer sources');files.forEach(sourcePath);return files;};
+ const array=name=>literals(new RegExp('\\b'+name+'=\\[([^\\]]+)\\]','g'));
+ const walk=(seeds,initial=[])=>{
+  const found=new Set(initial);
+  function visit(file){if(found.has(file))return;sourcePath(file);found.add(file);if(!/\.(?:js|mjs)$/.test(file))return;for(const match of readFileSync(path.join(root,file),'utf8').matchAll(/(?:from\s*|import\s*)['"](\.[^'"]+)['"]/g)){const relative=path.posix.normalize(path.posix.join(path.posix.dirname(file),match[1])),dependency=[relative,relative+'.js',relative+'.mjs'].find(value=>{try{return lstatSync(path.join(root,value)).isFile();}catch{return false;}});assert.ok(dependency,'Resolvable producer source: '+file);visit(dependency);}}
+  seeds.forEach(visit);return [...found].sort();
+ };
+ if(spec.kind==='UNIT')return bankUnitSourceFiles(root);
+ if(spec.kind==='PG_BANK')return array('sourceFiles').sort();
+ if(spec.kind==='PG_INTAKE')return array('sourcePaths').sort();
+ if(spec.kind==='UI_BANK'){const seeds=[...text.matchAll(/\bvisit\('([^']+)'(?:,true)?\)/g)].map(match=>match[1]);assert.equal(seeds.length,3,'Exact current bank producer roots');return walk(seeds);}
+ if(spec.kind==='UI_INTAKE')return [...array('files').map(file=>'src/app/(identity)/cuenta/'+file),...literals(/\.\.\.\[([^\]]+)\]\.map\(file=>/g)].sort();
+ if(spec.kind==='UI_JOINT'||spec.kind==='UI_CAUSAL')return walk(literals(/for\(const file of \[([^\]]+)\]\)visit\(file\);/g),array('files').map(file=>'src/app/(identity)/cuenta/'+file));
+ assert.equal(spec.kind,'PG_COMPANY_KYC');assert.ok(text.includes("const sourceManifest=[...sources('src/lib'),'scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs']"),'Exact current company producer roots');
+ const files=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?files(relative+'/'+entry.name):[relative+'/'+entry.name]);
+ return [...files('src/lib'),'scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs'].sort();
+}
 function extensionSelftest(contract,root){
  const checks=[],expectedHead=contract.extension.baseHead;
  const good=(name,run)=>{run();checks.push({name,result:'PASS',boundary:'pure shadow fixture, no Git/PG/UI/provider execution'});},bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code,boundary:'pure shadow fixture'});};
@@ -104,6 +126,7 @@ function extensionSelftest(contract,root){
   }
   const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
   good(spec.id+'-complete-proof',()=>validate(proof));
+  if(spec.kind!=='UNIT')good(spec.id+'-real-current-producer-source-manifest-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
   good(spec.id+'-reordered-source-manifest',()=>{const reordered=clone(proof);reordered.sourceManifest.reverse();assert.equal(validate(reordered).sourceManifestSha256,validate(proof).sourceManifestSha256);});
   bad(spec.id+'-malformed-json','PROOF_JSON',()=>validateExtensionProof(spec,Buffer.from('{'),{expectedHead,readSource}));bad(spec.id+'-invalid-utf8','PROOF_ENCODING',()=>validateExtensionProof(spec,Buffer.from([255]),{expectedHead,readSource}));
   mutate('wrong-status','PROOF_STATUS',p=>{p.status='FAIL';});mutate('production-write','PROOF_PRODUCTION_BOUNDARY',p=>{if(spec.kind==='PG_COMPANY_KYC')p.productionDataTouched=true;else p.productionDataWritten=true;});mutate('wrong-source-head','PROOF_SOURCE_HEAD',p=>{p.sourceRevision='f'.repeat(40);});mutate('wrong-harness','PROOF_HARNESS_SOURCE',p=>{p.harnessSha256='f'.repeat(64);});mutate('missing-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.pop();});mutate('foreign-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.push({path:'src/foreign.mjs',sha256:'f'.repeat(64)});});mutate('wrong-source-hash','PROOF_SOURCE_HASH',p=>{p.sourceManifest[0].sha256='f'.repeat(64);});
@@ -123,14 +146,23 @@ function extensionSelftest(contract,root){
   if(['bank-intake-units','bank-ui','joint-ui','joint-causal','company-kyc-postgres'].includes(spec.id)){
    const allOnboardingDependencies=['src/lib/company-entitlement.mjs','src/lib/meta-customer-templates.mjs','src/lib/participant-onboarding-authority.mjs','src/lib/participant-onboarding-delivery.mjs','src/lib/participant-onboarding-intent.mjs','src/lib/participant-onboarding-policy.mjs','src/lib/whatsapp/template-review-policy.js'];
    const onboardingDependencies=spec.kind==='PG_COMPANY_KYC'?allOnboardingDependencies.filter(file=>!['src/lib/meta-customer-templates.mjs','src/lib/whatsapp/template-review-policy.js'].includes(file)):allOnboardingDependencies;
+   const voiceDependencies=['src/lib/voice-progress-draft.mjs'],currentDependencies=[...onboardingDependencies,...voiceDependencies];
    const previousCount=spec.kind==='UNIT'?86:spec.kind==='PG_COMPANY_KYC'?149:79;
-   assert.equal(spec.sourceFiles.length,previousCount+onboardingDependencies.length,'Exact canonical transitive source count: '+spec.id);
+   assert.equal(spec.sourceFiles.length,previousCount+currentDependencies.length,'Exact canonical transitive source count: '+spec.id);
+   if(spec.kind==='UNIT')good('bank-intake-units-real-current-transitive-manifest-exact',()=>equal(bankUnitSourceFiles(root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
    for(const file of onboardingDependencies){
     assert.ok(spec.sourceFiles.includes(file),'Canonical onboarding transitive source must be pinned: '+file);
     mutate('missing-transitive-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
     mutate('changed-transitive-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
    }
-   mutate('old-'+previousCount+'-source-manifest','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!onboardingDependencies.includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
+   for(const file of voiceDependencies){
+    assert.ok(spec.sourceFiles.includes(file),'Canonical voice transitive source must be pinned: '+file);
+    mutate('missing-transitive-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
+    mutate('changed-transitive-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
+   }
+   const beforeVoiceCount=previousCount+onboardingDependencies.length;
+   mutate('old-'+beforeVoiceCount+'-source-manifest-without-voice','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!voiceDependencies.includes(ref.path));assert.equal(p.sourceManifest.length,beforeVoiceCount);});
+   mutate('old-'+previousCount+'-source-manifest','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!currentDependencies.includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
   }
  }
  return checks;

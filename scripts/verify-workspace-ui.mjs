@@ -22,6 +22,7 @@ for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filte
 const phoneFormatPath='src/lib/company-phone-format.mjs';copyFileSync(path.join(root,phoneFormatPath),path.join(fixture,phoneFormatPath));assert.deepEqual(readFileSync(path.join(root,phoneFormatPath)),readFileSync(path.join(fixture,phoneFormatPath)));sourceManifest.push({path:phoneFormatPath,sha256:createHash('sha256').update(readFileSync(path.join(root,phoneFormatPath))).digest('hex')});
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
 for(const file of ["src/lib/whatsapp/tenant-workspace-policy.js","src/lib/worker-channel-consent-policy.mjs","src/lib/field-media-privacy.mjs"])sourceManifest.push({path:file,sha256:createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')});
+for(const file of ['voice-progress-draft.mjs','progress-measurement-quantity.js']){const source='src/lib/'+file,destination=path.join(fixture,source);copyFileSync(path.join(root,source),destination);assert.deepEqual(readFileSync(path.join(root,source)),readFileSync(destination));sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(destination)).digest('hex')});}
 assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-ui-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};\n`);
