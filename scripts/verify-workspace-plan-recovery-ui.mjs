@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,readFileSync} from 'node:fs';
 import path from 'node:path';
-import {spawn} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {createPlanImportHandlers} from '../src/lib/plan-import-http.mjs';
 
@@ -29,6 +29,20 @@ writeFileSync(path.join(app,'page.js'),`'use client';import {useCallback,useStat
 const sourceFile=path.join(fixture,'synthetic-schedule.pdf');writeFileSync(sourceFile,'%PDF-1.7\nSynthetic schedule fixture\n%%EOF');
 const invalidSourceFile=path.join(fixture,'invalid-schedule.pdf'),oversizedSourceFile=path.join(fixture,'oversized-schedule.pdf');writeFileSync(invalidSourceFile,'Invalid synthetic PDF bytes');writeFileSync(oversizedSourceFile,Buffer.alloc(4*1024*1024));
 const port=3179,origin='http://127.0.0.1:'+port,server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],windowsHide:true});
+const serverClosed=new Promise(resolve=>server.once('close',resolve));
+async function stopHarnessServer(){
+ let deadline;
+ try{
+  if(server.exitCode===null&&server.signalCode===null){
+   if(process.platform==='win32'){
+    // Node's Windows SIGTERM does not run Next's handler; stop only this owned tree.
+    const stopped=spawnSync('taskkill.exe',['/PID',String(server.pid),'/T','/F'],{stdio:'ignore',windowsHide:true,timeout:10000});
+    assert.equal(stopped.status,0,'The owned Next process tree must stop before fixture removal');
+   }else assert.ok(server.kill('SIGTERM'),'Next must receive its graceful shutdown signal');
+  }
+  await Promise.race([serverClosed,new Promise((_,reject)=>{deadline=setTimeout(()=>reject(new Error('WORKSPACE_PLAN_UI_SERVER_CLOSE_TIMEOUT')),10000);})]);
+ }finally{clearTimeout(deadline);}
+}
 let log='',browser;for(const stream of [server.stdout,server.stderr])stream.on('data',data=>{log=(log+data).slice(-18000);});
 const scope='a'.repeat(64),scopeB='b'.repeat(64),projectId='project-plan-A',projectB='project-plan-B';
 const row={title:'Fundaciones importadas',startsOn:'2026-10-08',endsOn:'2026-10-10',evidence:'Fila sintética 1',uncertainty:''};
@@ -307,5 +321,11 @@ async function recoveryClosureScenario(mode,width){
 try{
  for(let attempt=0;attempt<90;attempt++){try{if((await fetch(origin)).ok)break;}catch{}if(server.exitCode!==null)throw Error(log);await new Promise(resolve=>setTimeout(resolve,500));if(attempt===89)throw Error(log);}
  browser=await puppeteer.launch({headless:'shell',args:['--no-sandbox']});for(const width of widths){for(const mode of modes.filter(mode=>selectedModes.includes(mode)))await scenario(mode,width);for(const mode of closureModes.filter(mode=>selectedModes.includes(mode)))await recoveryClosureScenario(mode,width);}
- assert.deepEqual(errors,[]);writeFileSync(path.join(evidence,'workspace-plan-recovery-ui-validation.json'),JSON.stringify({validated:true,synthetic:true,checkedAt:new Date().toISOString(),fullSuite:selectedModes.length===modes.length+closureModes.length,selectedModes,realProviderCalls:false,physicalPhoneAccepted:false,widths,checks,sourceManifest,harnessSha256},null,2)+'\n');console.log(JSON.stringify({validated:true,synthetic:true,realProviderCalls:false,checks:checks.length}));
-}catch(error){console.error(JSON.stringify({log,errors,checks}));throw error;}finally{await browser?.close();server.kill();assert.ok(path.resolve(fixture).startsWith(path.resolve(evidence)+path.sep));rmSync(fixture,{recursive:true,force:true});}
+ assert.deepEqual(errors,[]);
+}catch(error){console.error(JSON.stringify({log,errors,checks}));throw error;}finally{
+ await browser?.close();await stopHarnessServer();
+ assert.ok(path.resolve(fixture).startsWith(path.resolve(evidence)+path.sep));rmSync(fixture,{recursive:true,force:true});
+}
+// A cleanup failure must exit nonzero without publishing a new successful proof.
+writeFileSync(path.join(evidence,'workspace-plan-recovery-ui-validation.json'),JSON.stringify({validated:true,synthetic:true,checkedAt:new Date().toISOString(),fullSuite:selectedModes.length===modes.length+closureModes.length,selectedModes,realProviderCalls:false,physicalPhoneAccepted:false,widths,checks,sourceManifest,harnessSha256,serverClosedBeforeFixtureRemoval:true,fixtureRemoved:true},null,2)+'\n');
+console.log(JSON.stringify({validated:true,synthetic:true,realProviderCalls:false,checks:checks.length}));

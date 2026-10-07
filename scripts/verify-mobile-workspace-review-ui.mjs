@@ -52,6 +52,15 @@ async function scenario(width,readOnly){
  }catch(error){errors.push({width,readOnly,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de revisión sintética');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de revisión sintética')).click());await waitText(page,'0 de 0 tareas');await click(page,'Consultar participantes');await waitText(page,workerB.name);await click(page,'Abrir operaciones');await waitText(page,'Sector exacto seleccionado');
  const participants='section[aria-labelledby="participant-title"]',field='section[aria-labelledby="field-title"]';
+ const personSelector=participants+' select';
+ await page.waitForFunction(selector=>Boolean(document.querySelector(selector)&&!document.querySelector(selector).disabled),{timeout:20000},personSelector);
+ await page.focus(personSelector);assert.deepEqual(await page.select(personSelector,workerB.id),[workerB.id]);
+ await page.waitForFunction(({section,workerId,name,otherName})=>{
+  const cards=[...document.querySelectorAll(section+' article')];
+  return document.querySelector(section+' select')?.value===workerId&&cards.length===1&&cards[0].textContent.includes(name)&&!cards[0].textContent.includes(otherName);
+ },{timeout:20000},{section:participants,workerId:workerB.id,name:workerB.name,otherName:workerA.name});
+ assert.equal(posts.length,0,'Selecting the exact source participant never sends a decision');
+ assert.equal(privateReads.length,0,'Selecting the source participant never fetches private images');
  if(readOnly){assert.equal(await page.$$eval(participants+' button',nodes=>nodes.some(node=>node.textContent==='Registrar revisión humana')),false);assert.equal(await page.$$eval(field+' button',nodes=>nodes.some(node=>node.textContent==='Revisar fichaje')),false);assert.equal(await page.$('[data-plan-import]'),null,'No import panel is granted without schedule capability');assert.equal(await page.$('a[href="#plan-import-title"]'),null);assert.equal(posts.length,0);assert.equal(privateReads.length,0);}
  else{
   await sourceCardButton(page,participants,workerB.name,'Consultar documento privado');await sourceCardButton(page,participants,workerB.name,'Consultar fotografía');await page.waitForFunction(selector=>document.querySelectorAll(selector+' img').length===2,{},participants);
