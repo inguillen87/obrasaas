@@ -4,6 +4,7 @@ import {copyFileSync,mkdirSync,mkdtempSync,readdirSync,readFileSync,rmSync,write
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
+import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-preparation-format.mjs';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
 
 // Actual account workspace and styles; all session/API data is local and synthetic.
@@ -35,7 +36,11 @@ async function scenario(width,readOnly){
  const respond=(request,value,status=200)=>request.respond({status,contentType:'application/json',body:JSON.stringify(value),headers:{'Cache-Control':'private, no-store'}});
  page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){assert.ok(['blob:','data:'].includes(url.protocol),'No external/provider requests');return request.continue();}if(!url.pathname.startsWith('/api/'))return request.continue();
-  assert.equal(request.headers().authorization,'Bearer synthetic-reviewer');assert.ok(['/api/identity/workspace','/api/identity/participants','/api/identity/field-operations'].includes(url.pathname),'Unexpected API '+url.pathname);
+  assert.equal(request.headers().authorization,'Bearer synthetic-reviewer');assert.ok(['/api/identity/workspace','/api/identity/participants','/api/identity/field-operations','/api/identity/project-preparation'].includes(url.pathname),'Unexpected API '+url.pathname);
+  if(url.pathname==='/api/identity/project-preparation'){
+   assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),projectId);
+   return respond(request,projectPreparationSnapshot({scope,projectId,canManage:true,revision:0,detailsDigest:'b'.repeat(64),name:'Obra de revisión sintética',clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope,projectId}));
+  }
   if(url.pathname==='/api/identity/workspace'){assert.equal(request.method(),'GET');return respond(request,url.search?{scope,project:{id:projectId,name:'Obra de revisión sintética'},canPlanSchedule:!readOnly,tasks:[],totalTasks:0,nextCursor:null}:{scope,organizationName:'Empresa de revisión sintética',role:'ADMIN',roleLabel:'Administrador',canManageIntegrations:false,projects:[{id:projectId,name:'Obra de revisión sintética'}],projectsTruncated:false});}
   if(request.method()==='POST'){
    assert.equal(readOnly,false,'Read-only capabilities never send decisions');const command=JSON.parse(request.postData());posts.push(command);assert.equal(command.scope,scope);assert.equal(command.projectId,projectId);

@@ -4,6 +4,7 @@ import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,read
 import path from 'node:path';
 import {spawn,spawnSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
+import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-preparation-format.mjs';
 import {createPlanImportHandlers} from '../src/lib/plan-import-http.mjs';
 
 // Real workspace, pagination, plan panel, transport and browser recovery state.
@@ -84,8 +85,12 @@ async function scenario(mode,width){
  const send=(request,body,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:JSON.stringify(body)});
  page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('Unexpected external request');}if(!url.pathname.startsWith('/api/'))return request.continue();
-  assert.ok(['/api/identity/workspace','/api/identity/plan-import','/api/identity/task-creation'].includes(url.pathname),'Unexpected API '+url.pathname);
+  assert.ok(['/api/identity/workspace','/api/identity/plan-import','/api/identity/task-creation','/api/identity/project-preparation'].includes(url.pathname),'Unexpected API '+url.pathname);
   const activeB=request.headers().authorization==='Bearer synthetic-workspace-plan-B';assert.equal(request.headers().authorization,'Bearer synthetic-workspace-plan-'+(activeB?'B':'A'));
+  if(url.pathname==='/api/identity/project-preparation'){
+   assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);const currentScope=activeB?scopeB:scope,currentProject=activeB?projectB:projectId;const requestedScope=url.searchParams.get('scope'),requestedProject=url.searchParams.get('projectId');assert.ok([scope,scopeB].includes(requestedScope));assert.ok([projectId,projectB].includes(requestedProject));if(requestedScope!==currentScope)return send(request,{code:'WORKSPACE_CONTEXT_CHANGED'},409);if(requestedProject!==currentProject)return send(request,{code:'WORKSPACE_PROJECT_UNAVAILABLE'},404);assert.equal(requestedScope,currentScope);assert.equal(requestedProject,currentProject);
+   return send(request,projectPreparationSnapshot({scope:currentScope,projectId:currentProject,canManage:true,revision:0,detailsDigest:'b'.repeat(64),name:activeB?'Obra del contexto B':'Obra paginada A',clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope:currentScope,projectId:currentProject}));
+  }
   if(url.pathname==='/api/identity/workspace'){
    assert.equal(request.method(),'GET','Plan readback must never POST to workspace');
    if(!url.search)return send(request,{scope:activeB?scopeB:scope,organizationName:activeB?'Empresa del contexto B':'Empresa sintética de cronogramas',role:'ADMIN',roleLabel:'Administrador',canManageIntegrations:false,projects:[{id:activeB?projectB:projectId,name:activeB?'Obra del contexto B':'Obra paginada A'}],projectsTruncated:false});
@@ -194,8 +199,12 @@ async function recoveryClosureScenario(mode,width){
  const rejectionHandlers=createPlanImportHandlers({verify:async()=>({authenticated:true,verification:'clerk-production-jwt',userId:'user_Synthetic',organizationId:'org_Synthetic',organizationRole:'org:admin'}),imports:{attach:async()=>{rejectedAttachCalls++;throw Error('Invalid source must never reach attach');}}});
  page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('Unexpected external request');}if(!url.pathname.startsWith('/api/'))return request.continue();
-  assert.ok(['/api/identity/workspace','/api/identity/plan-import'].includes(url.pathname),'Unexpected API '+url.pathname);
+  assert.ok(['/api/identity/workspace','/api/identity/plan-import','/api/identity/project-preparation'].includes(url.pathname),'Unexpected API '+url.pathname);
   const activeB=request.headers().authorization==='Bearer synthetic-workspace-plan-B';assert.equal(request.headers().authorization,'Bearer synthetic-workspace-plan-'+(activeB?'B':'A'));
+  if(url.pathname==='/api/identity/project-preparation'){
+   assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);const currentScope=activeB?scopeB:scope,currentProject=activeB?projectB:projectId;const requestedScope=url.searchParams.get('scope'),requestedProject=url.searchParams.get('projectId');assert.ok([scope,scopeB].includes(requestedScope));assert.ok([projectId,projectB].includes(requestedProject));if(requestedScope!==currentScope)return send(request,{code:'WORKSPACE_CONTEXT_CHANGED'},409);if(requestedProject!==currentProject)return send(request,{code:'WORKSPACE_PROJECT_UNAVAILABLE'},404);assert.equal(requestedScope,currentScope);assert.equal(requestedProject,currentProject);
+   return send(request,projectPreparationSnapshot({scope:currentScope,projectId:currentProject,canManage:true,revision:0,detailsDigest:'b'.repeat(64),name:activeB?'Obra del contexto B':'Obra paginada A',clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope:currentScope,projectId:currentProject}));
+  }
   if(url.pathname==='/api/identity/workspace'){
    workspaceQueries++;
    assert.equal(request.method(),'GET');

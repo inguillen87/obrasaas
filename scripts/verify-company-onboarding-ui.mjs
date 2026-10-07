@@ -4,6 +4,7 @@ import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,real
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
+import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-preparation-format.mjs';
 import {createLocalJWKSet,generateKeyPair,exportJWK,SignJWT} from 'jose';
 import {createBootstrapProfileVerifier} from '../src/lib/company-onboarding-identity.mjs';
 import {BOOTSTRAP_PROFILE_AUDIENCE} from '../src/lib/company-onboarding-policy.mjs';
@@ -95,6 +96,9 @@ async function scenario(mode,width=390){
      }
      body=!url.search?{scope,organizationName:result.companyName,roleLabel:'Administrador',role:'ADMIN',canPlanSchedule:true,canManageIntegrations:false,projects:[{id:'project-test',name:result.projectName}],projectsTruncated:false}:
        {scope,project:{id:'project-test',name:result.projectName},roleLabel:'Administrador',canPlanSchedule:true,tasks,totalTasks:tasks.length,nextCursor:null};
+   }else if(url.pathname==='/api/identity/project-preparation'){
+    assert.equal(created,true);assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'project-test');
+    body=projectPreparationSnapshot({scope,projectId:'project-test',canManage:true,revision:0,detailsDigest:'b'.repeat(64),name:result.projectName,clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope,projectId:'project-test'});
    }else if(url.pathname==='/api/identity/task-creation'){
     assert.equal(created,true);const command=JSON.parse(request.postData());taskPosts.push(command);assert.equal(command.scope,scope);assert.equal(command.projectId,'project-test');
     if(!taskReceipts.has(command.operationId)){const task={id:'new-task-'+tasks.length,title:command.title,startsOn:command.startsOn||null,endsOn:command.endsOn||null,progress:0,status:'BACKLOG',revision:'2026-10-01T13:00:00.123456'};tasks.push(task);taskReceipts.set(command.operationId,{scope,created:true,receiptId:'new-task-receipt',task});}
