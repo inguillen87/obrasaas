@@ -36,6 +36,11 @@ export function createFieldOperations({workspace,assertParticipant}) {
   const overtime=createFieldOvertime({assertWorker:worker});
   const correlated=action=>MATERIAL_INVENTORY_ACTIONS.includes(action)||OVERTIME_ACTIONS.includes(action);
   const run=(session,context,writable,callback)=>workspace.projectOperation(session,context,writable,callback,writable&&context.action==='ATTENDANCE'?lockPersonWorksiteJourney:writable&&OVERTIME_ACTIONS.includes(context.action)?(client,member)=>overtime.beforeProject(client,member,context):writable&&context.action==='DECIDE_STOCK_ADJUSTMENT'&&context.payload?.decision==='APPROVE'?async(client,member)=>{if(!canApproveProgress(member.role))throw new WorkspaceError('INVENTORY_MANAGE_REQUIRED',403);if(member.channelProof)throw new WorkspaceError('INVENTORY_ADJUSTMENT_WEB_ONLY',403);if(!await prior(client,member,fieldReceiptId(member.actorId,context.projectId,context.operationId)))await lockStockAdjustmentProposer(client,member,context.projectId,context.payload.proposalId);}:undefined);
+  async function reviewAccess(client,member,session,projectId,scope) {
+    const owned=(await client.query(`SELECT id,name,active,metadata FROM public."Worker" WHERE "projectId"=$1 AND active=true AND metadata->'participant'->>'version'='1' AND metadata->'participant'->>'clerkUserId'=$2 AND metadata->'participant'->>'status'='ACTIVE' AND metadata->'participant'->'kyc'->>'status'='APPROVED' ORDER BY id`,[projectId,session.userId])).rows;
+    const reviewAccessStamp=digest(['field-review-access-v1',scope,projectId,canReviewField(member.role),canApproveProgress(member.role),owned.map(w=>[w.id,w.metadata.participant.permissions?.report===true,w.metadata.participant.permissions?.attendance===true])]);
+    return {owned,reviewAccessStamp};
+  }
   async function worker(client,member,session,projectId,workerId,permission='report') {
     if(!workspaceId(workerId))throw new WorkspaceError('FIELD_WORKER_REQUIRED');
     if(typeof assertParticipant==='function')return assertParticipant(client,member,session,projectId,workerId,{permission,requireKyc:true});
@@ -109,10 +114,12 @@ export function createFieldOperations({workspace,assertParticipant}) {
   return {
     shift(session,context){return run(session,context,false,async(client,member,scope,project)=>({scope,...await overtime.readShift(client,member,session,project,context)}));},
     reviewPage(session,context) {
-      const {reviewSection,reviewFilter,afterReview=null,reviewId=null}=context;
-      if(!['EVIDENCE','PROGRESS'].includes(reviewSection)||!['PENDING','ALL'].includes(reviewFilter)||[afterReview,reviewId].some(value=>value!==null&&!workspaceId(value))||afterReview&&reviewId||reviewId&&reviewFilter!=='ALL')throw new WorkspaceError('FIELD_QUERY_INVALID');
+      const {reviewSection,reviewFilter,afterReview=null,reviewId=null,reviewAccessStamp:expectedAccess}=context;
+      if(!['EVIDENCE','PROGRESS'].includes(reviewSection)||!['PENDING','ALL'].includes(reviewFilter)||[afterReview,reviewId].some(value=>value!==null&&!workspaceId(value))||afterReview&&reviewId||reviewId&&reviewFilter!=='ALL'||(afterReview||reviewId||expectedAccess!==undefined)&&!/^[a-f0-9]{64}$/.test(expectedAccess||''))throw new WorkspaceError('FIELD_QUERY_INVALID');
       return run(session,context,false,async(client,member,scope)=>{
-        const reviewer=canReviewField(member.role),owned=reviewer?[]:(await client.query(`SELECT id FROM public."Worker" WHERE "projectId"=$1 AND active=true AND metadata->'participant'->>'version'='1' AND metadata->'participant'->>'clerkUserId'=$2 AND metadata->'participant'->>'status'='ACTIVE' AND metadata->'participant'->'kyc'->>'status'='APPROVED'`,[context.projectId,session.userId])).rows.map(row=>row.id);
+        const access=await reviewAccess(client,member,session,context.projectId,scope),{reviewAccessStamp}=access;
+        if(expectedAccess!==undefined&&expectedAccess!==reviewAccessStamp)throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
+        const reviewer=canReviewField(member.role),owned=access.owned.map(row=>row.id);
         const media=reviewSection==='EVIDENCE',table=media?'public."Incident"':'public."OperationalProposal"';
         const kind=media?`metadata->'fieldOperations'->>'version'='1' AND metadata->'fieldOperations'->>'kind'='EVIDENCE'`:`type='TASK_PROGRESS' AND "sourceProvider"='account-field' AND action->>'fieldOperationsVersion'='1'`;
         const owner=media?`metadata->'fieldOperations'->>'workerId'`:`"proposedByWorkerId"`;
@@ -126,7 +133,7 @@ export function createFieldOperations({workspace,assertParticipant}) {
         const selection=media?`id,title,description,metadata,${revision('"updatedAt"')} AS revision`:`id,summary,status::text AS status,action,result,"proposedByWorkerId","expiresAt",("expiresAt"<=transaction_timestamp()) AS expired,${revision('"updatedAt"')} AS revision`;
         const rows=(await client.query(`SELECT ${selection} FROM ${table} WHERE ${filtered} AND ($4::text IS NULL OR ("createdAt",id)<(SELECT "createdAt",id FROM ${table} WHERE "projectId"=$1 AND id=$4)) AND ($5::text IS NULL OR id=$5) ORDER BY "createdAt" DESC,id DESC LIMIT 101`,[...values,afterReview,reviewId])).rows;
         const total=reviewId?rows.length:(await client.query(`SELECT count(*)::int AS total FROM ${table} WHERE ${filtered}`,values)).rows[0].total;
-        return {scope,projectId:context.projectId,reviewSection,reviewFilter,afterReview,reviewId,records:rows.slice(0,100).map(media?publicFieldEvidence:publicProposal),total,nextCursor:rows.length>100?rows[99].id:null,canReview:reviewer,canApproveProgress:canApproveProgress(member.role)};
+        return {scope,projectId:context.projectId,reviewAccessStamp,reviewSection,reviewFilter,afterReview,reviewId,records:rows.slice(0,100).map(media?publicFieldEvidence:publicProposal),total,nextCursor:rows.length>100?rows[99].id:null,canReview:reviewer,canApproveProgress:canApproveProgress(member.role)};
       });
     },
     async proposalEvidence(session,context) {
@@ -148,14 +155,14 @@ export function createFieldOperations({workspace,assertParticipant}) {
       return run(session,context,false,async(client,member,scope,project)=>{
         if(member.channelProof&&context.journeyCursor!==undefined)throw new WorkspaceError('OVERTIME_WEB_ONLY',403);
         const reviewer=canReviewField(member.role),workers=(await client.query(`SELECT id,name,active,metadata FROM public."Worker" WHERE "projectId"=$1 AND active=true ORDER BY id LIMIT 101`,[context.projectId])).rows;
-        const owned=(await client.query(`SELECT id,name,active,metadata FROM public."Worker" WHERE "projectId"=$1 AND active=true AND metadata->'participant'->>'version'='1' AND metadata->'participant'->>'clerkUserId'=$2 AND metadata->'participant'->>'status'='ACTIVE' AND metadata->'participant'->'kyc'->>'status'='APPROVED' ORDER BY id LIMIT 101`,[context.projectId,session.userId])).rows;
+        const access=await reviewAccess(client,member,session,context.projectId,scope),owned=access.owned.slice(0,101);
         const ids=reviewer?workers.map(w=>w.id):owned.map(w=>w.id);
         const events=(await client.query(`SELECT id,"workerId",metadata,${revision('"checkedInAt"')} AS "recordedAt" FROM public."AttendanceEntry" WHERE "projectId"=$1 AND "workerId"=ANY($2::text[]) AND metadata->'fieldOperations'->>'version'='1' ORDER BY "checkedInAt" DESC,id DESC LIMIT 101`,[context.projectId,ids])).rows;
         const media=(await client.query(`SELECT id,title,description,metadata,${revision('"updatedAt"')} AS revision FROM public."Incident" WHERE "projectId"=$1 AND metadata->'fieldOperations'->>'kind'='EVIDENCE' AND ($2::boolean OR metadata->'fieldOperations'->>'workerId'=ANY($3::text[])) ORDER BY "createdAt" DESC,id DESC LIMIT 101`,[context.projectId,reviewer,ids])).rows;
         const proposals=(await client.query(`SELECT id,summary,status::text AS status,action,result,"proposedByWorkerId","expiresAt",("expiresAt"<=clock_timestamp()) AS expired,${revision('"updatedAt"')} AS revision FROM public."OperationalProposal" WHERE "projectId"=$1 AND type='TASK_PROGRESS' AND "sourceProvider"='account-field' AND action->>'fieldOperationsVersion'='1' AND ($2::boolean OR "proposedByWorkerId"=ANY($3::text[])) ORDER BY "createdAt" DESC,id DESC LIMIT 101`,[context.projectId,reviewer,ids])).rows;
         const reports=(await client.query(`SELECT id,title,description,severity::text AS severity,metadata,${revision('"updatedAt"')} AS revision,${revision('"createdAt"')} AS "createdAt" FROM public."Incident" WHERE "projectId"=$1 AND metadata->'siteRegister'->>'version'='1' AND metadata->'siteRegister'->>'type' IN ('ISSUE','MATERIAL_REQUEST') AND ($2::boolean OR metadata->'siteRegister'->>'workerId'=ANY($3::text[])) ORDER BY "createdAt" DESC,id DESC LIMIT 101`,[context.projectId,reviewer,ids])).rows;
         const projectRevision=(await client.query(`SELECT ${revision('"updatedAt"')} AS revision FROM public."Project" WHERE id=$1 AND "organizationId"=$2`,[context.projectId,member.organizationId])).rows[0].revision;
-        return {scope,projectId:context.projectId,projectRevision,canConfigure:canApproveProgress(member.role),canReview:reviewer,canApproveProgress:canApproveProgress(member.role),
+        return {scope,projectId:context.projectId,reviewAccessStamp:access.reviewAccessStamp,projectRevision,canConfigure:canApproveProgress(member.role),canReview:reviewer,canApproveProgress:canApproveProgress(member.role),
           ...(canApproveProgress(member.role)?{configurationRevision:project.metadata?.fieldOperations?.configRevision||null}:{}),
           selfWorkers:owned.map(w=>({id:w.id,name:w.name,canReport:w.metadata.participant.permissions?.report===true,canAttendance:w.metadata.participant.permissions?.attendance===true})),workers:(reviewer?workers:owned).map(w=>({id:w.id,name:w.name})),
           sectors:project.metadata?.fieldOperations?.sectors?.map(s=>({id:s.id,name:s.name,latitude:s.latitude,longitude:s.longitude,radius:s.radius}))||[],

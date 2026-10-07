@@ -222,8 +222,9 @@ try{
  INSERT INTO "Task"(id,"projectId",title,status,progress,"startsAt","endsAt",metadata) VALUES('task-review','p-review','Synthetic canonical measured task','BLOCKED',0,'2026-10-01','2026-10-10','{"unrelated":true}');`);
  for(const [id,user] of [['wr-a','user_Worker'],['wr-a2','user_Worker2']])await pool.query(`INSERT INTO "Worker"(id,"projectId",name,phone,role,metadata,"updatedAt") VALUES($1,'p-review',$1,$2,'WORKER',$3::jsonb,clock_timestamp())`,[id,id==='wr-a'?'+5491100004444':'+5491100005555',JSON.stringify({participant:{version:1,clerkUserId:user,status:'ACTIVE',permissions:{attendance:true,report:true},kyc:{version:1,status:'APPROVED'}}})]);
  const reviewContext=s=>({projectId:'p-review',scope:scopes[s.userId]}),reviewCommand=(s,action,payload)=>({...reviewContext(s),operationId:randomUUID(),action,payload});
- const reviewInput=(s,reviewSection,reviewFilter='PENDING',extra={})=>({...reviewContext(s),reviewSection,reviewFilter,...extra});
- const reviewPage=async(s,section,filter='PENDING',extra={})=>{const input=reviewInput(s,section,filter,extra);return fieldReviewPage(await operations.reviewPage(s,input),input);};
+ const reviewAccessStamps=new Map();
+ const reviewInput=(s,reviewSection,reviewFilter='PENDING',extra={})=>({...reviewContext(s),reviewSection,reviewFilter,...(extra.afterReview||extra.reviewId?{reviewAccessStamp:reviewAccessStamps.get(s.userId)}:{}),...extra});
+ const reviewPage=async(s,section,filter='PENDING',extra={})=>{if((extra.afterReview||extra.reviewId)&&!reviewAccessStamps.has(s.userId))await reviewPage(s,section);const input=reviewInput(s,section,filter,extra),result=fieldReviewPage(await operations.reviewPage(s,input),input);reviewAccessStamps.set(s.userId,result.reviewAccessStamp);return result;};
  const reviewEvidence={version:1,kind:'EVIDENCE',workerId:'wr-a',taskId:'task-review',sectorId:'review-sector',recordedBy:'worker',capturedAt:'2020-01-01T10:00:00.000Z',media:{kind:'image',contentType:'image/png',bytes:68,sha256:'a'.repeat(64),pathname:'synthetic-private-evidence-path',url:'https://fixture.invalid/private-evidence'},processing:{status:'QUEUED',code:null},review:null};
  const insertReviewEvidence=(id,details,createdAt='2020-01-01',projectId='p-review')=>pool.query(`INSERT INTO "Incident"(id,"projectId",title,description,metadata,"createdAt","updatedAt") VALUES($1,$2,'Synthetic review evidence','Synthetic local caption',$3::jsonb,$4::timestamp,clock_timestamp())`,[id,projectId,JSON.stringify({fieldOperations:details}),createdAt]);
  await insertReviewEvidence('review-old-pending',reviewEvidence);
@@ -296,7 +297,53 @@ try{
   for(const section of ['EVIDENCE','PROGRESS']){const empty=await reviewPage(worker,section);assert.equal(empty.total,0);assert.deepEqual(empty.records,[]);const target=section==='EVIDENCE'?'review-old-pending':oldReviewProposal.proposal.id;await assert.rejects(operations.reviewPage(worker,reviewInput(worker,section,'ALL',{reviewId:target})),{code:'FIELD_REVIEW_CURSOR_UNAVAILABLE',status:404});}
  }
  await pool.query(`UPDATE "Worker" SET active=$1,metadata=$2::jsonb WHERE id='wr-a'`,[eligibleWorker.active,JSON.stringify(eligibleWorker.metadata)]);
- reviewPaginationChecks.push('active-participant-kyc-or-account-link-revocation-immediately-removes-author-pages-and-denies-exact-record-reference');
+ reviewPaginationChecks.push('current-query-participant-kyc-or-account-link-revocation-removes-author-pages-and-denies-exact-record-reference');
+
+ // A remains in an old page while B supplies a still-visible anchor. The
+ // membership/project scope is unchanged; only canonical eligibility changed.
+ const secondEligibleWorker=(await pool.query(`SELECT active,metadata FROM "Worker" WHERE id='wr-a2'`)).rows[0];
+ const linkedSecond={...secondEligibleWorker.metadata,participant:{...secondEligibleWorker.metadata.participant,clerkUserId:worker.userId}};
+ await pool.query(`UPDATE "Worker" SET metadata=$1::jsonb WHERE id='wr-a2'`,[JSON.stringify(linkedSecond)]);
+ const oldAuthorPage=await reviewPage(worker,'EVIDENCE'),oldAuthorStamp=oldAuthorPage.reviewAccessStamp;
+ assert.equal((await operations.read(worker,reviewContext(worker))).reviewAccessStamp,oldAuthorStamp);
+ const eligibilityBefore=await readonlyReviewSnapshot();
+ await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,kyc,status}','"PENDING_REVIEW"') WHERE id='wr-a'`);
+ const revokedSnapshot=await readonlyReviewSnapshot(),currentAuthorPage=await reviewPage(worker,'EVIDENCE'),currentBase=await operations.read(worker,reviewContext(worker));
+ assert.equal(currentAuthorPage.scope,oldAuthorPage.scope);assert.notEqual(currentAuthorPage.reviewAccessStamp,oldAuthorStamp);assert.equal(currentAuthorPage.reviewAccessStamp,currentBase.reviewAccessStamp);assert.deepEqual(currentAuthorPage.records.map(row=>row.workerId),['wr-a2']);assert.deepEqual(currentBase.selfWorkers.map(row=>row.id),['wr-a2']);
+ for(const section of ['EVIDENCE','PROGRESS'])for(const extra of [{afterReview:section==='EVIDENCE'?'review-other-worker':'review-other-worker-proposal'},{reviewId:section==='EVIDENCE'?'review-old-pending':oldReviewProposal.proposal.id}])await assert.rejects(operations.reviewPage(worker,reviewInput(worker,section,extra.reviewId?'ALL':'PENDING',{...extra,reviewAccessStamp:oldAuthorStamp})),{code:'WORKSPACE_CONTEXT_CHANGED',status:409});
+ await assert.rejects(operations.reviewPage(worker,reviewInput(worker,'EVIDENCE','ALL',{reviewId:'review-old-pending'})),{code:'FIELD_REVIEW_CURSOR_UNAVAILABLE',status:404});
+ assert.equal((await reviewPage(worker,'EVIDENCE','ALL',{reviewId:'review-other-worker'})).records[0].workerId,'wr-a2');assert.deepEqual(await readonlyReviewSnapshot(),revokedSnapshot);
+ reviewPaginationChecks.push('eligibility-stamp-clears-old-two-worker-context-before-visible-other-worker-cursor-or-selected-record-recheck-with-zero-read-writes');
+
+ for(const permission of ['report','attendance']){
+  const before=(await reviewPage(worker,'EVIDENCE')).reviewAccessStamp;
+  await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,$1::text[],'false') WHERE id='wr-a2'`,[['participant','permissions',permission]]);
+  const now=await reviewPage(worker,'EVIDENCE'),base=await operations.read(worker,reviewContext(worker));assert.notEqual(now.reviewAccessStamp,before);assert.equal(base.reviewAccessStamp,now.reviewAccessStamp);assert.equal(base.selfWorkers[0][permission==='report'?'canReport':'canAttendance'],false);
+  await assert.rejects(operations.reviewPage(worker,reviewInput(worker,'EVIDENCE','PENDING',{afterReview:'review-other-worker',reviewAccessStamp:before})),{code:'WORKSPACE_CONTEXT_CHANGED',status:409});
+ }
+ reviewPaginationChecks.push('self-worker-report-and-attendance-permission-flags-change-only-opaque-review-eligibility-stamp-and-deny-stale-continuation');
+ await pool.query(`UPDATE "Worker" SET metadata=$1::jsonb WHERE id='wr-a'`,[JSON.stringify(eligibleWorker.metadata)]);
+ await pool.query(`UPDATE "Worker" SET active=$1,metadata=$2::jsonb WHERE id='wr-a2'`,[secondEligibleWorker.active,JSON.stringify(secondEligibleWorker.metadata)]);
+ await reviewPage(worker,'EVIDENCE');assert.deepEqual(await readonlyReviewSnapshot(),eligibilityBefore);
+
+ const beforeMissingStamp=await readonlyReviewSnapshot();
+ for(const section of ['EVIDENCE','PROGRESS'])for(const selector of ['afterReview','reviewId'])for(const stamp of [undefined,'bad']){
+  const input={...reviewContext(worker),reviewSection:section,reviewFilter:selector==='reviewId'?'ALL':'PENDING',[selector]:'review-old-pending',...(stamp===undefined?{}:{reviewAccessStamp:stamp})};
+  assert.throws(()=>operations.reviewPage(worker,input),{code:'FIELD_QUERY_INVALID',status:400});
+ }
+ assert.deepEqual(await readonlyReviewSnapshot(),beforeMissingStamp);
+ reviewPaginationChecks.push('missing-or-malformed-eligibility-stamp-cannot-authorize-cursor-or-exact-recheck-and-never-writes');
+
+ const beforeDisplayLimit=await readonlyReviewSnapshot();
+ await pool.query(`INSERT INTO "Worker"(id,"projectId",name,phone,role,metadata,"updatedAt") SELECT 'review-stamp-extra-'||lpad(n::text,3,'0'),'p-review','Synthetic extra eligible worker','synthetic-stamp-phone-'||n,'WORKER',$1::jsonb,clock_timestamp() FROM generate_series(1,102) AS n`,[JSON.stringify(eligibleWorker.metadata)]);
+ const boundedBase=await operations.read(worker,reviewContext(worker)),unboundedStampPage=await reviewPage(worker,'EVIDENCE');assert.equal(boundedBase.selfWorkers.length,101);assert.equal(boundedBase.selfWorkers.some(w=>w.id==='wr-a'),false);assert.equal(boundedBase.reviewAccessStamp,unboundedStampPage.reviewAccessStamp);
+ await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,permissions,report}','false') WHERE id='wr-a'`);
+ const afterBeyondDisplay=await operations.read(worker,reviewContext(worker));assert.deepEqual(afterBeyondDisplay.selfWorkers,boundedBase.selfWorkers);assert.notEqual(afterBeyondDisplay.reviewAccessStamp,boundedBase.reviewAccessStamp);
+ await assert.rejects(operations.reviewPage(worker,reviewInput(worker,'EVIDENCE','PENDING',{afterReview:'review-old-pending',reviewAccessStamp:boundedBase.reviewAccessStamp})),{code:'WORKSPACE_CONTEXT_CHANGED',status:409});
+ await pool.query(`UPDATE "Worker" SET metadata=$1::jsonb WHERE id='wr-a'`,[JSON.stringify(eligibleWorker.metadata)]);
+ await pool.query(`DELETE FROM "Worker" WHERE "projectId"='p-review' AND id LIKE 'review-stamp-extra-%'`);
+ await reviewPage(worker,'EVIDENCE');assert.deepEqual(await readonlyReviewSnapshot(),beforeDisplayLimit);
+ reviewPaginationChecks.push('eligibility-stamp-includes-own-workers-and-permissions-beyond-101-display-rows-without-expanding-base-display-or-writing-operations');
 
  for(const s of [owner,director,manager])for(const section of ['EVIDENCE','PROGRESS']){const responsible=await reviewPage(s,section);assert.equal(responsible.canReview,true);assert.equal(responsible.canApproveProgress,s!==manager);assert.ok(responsible.records.some(row=>row.workerId==='wr-a2'));}
  reviewPaginationChecks.push('admin-director-and-site-manager-see-all-project-review-records-with-current-approval-capability-and-no-worker-required');
@@ -378,7 +425,7 @@ try{
  assert.equal(boundaryRowsSelected,true);assert.equal(boundaryCountDelayed,true);assert.equal(boundaryPage.records.length,1);assert.equal(boundaryPage.records[0].status,'PENDING');assert.equal(boundaryPage.total,1);assert.equal(boundaryPage.nextCursor,null);assert.deepEqual(await clockBoundarySnapshot(),beforeClockBoundary);
  const afterClockBoundary=await operations.reviewPage(director,boundaryInput);assert.deepEqual(afterClockBoundary.records,[]);assert.equal(afterClockBoundary.total,0);assert.deepEqual(await clockBoundarySnapshot(),beforeClockBoundary);assert.deepEqual({putCount,getCount,providerCalls},reviewAdaptersBefore);
  reviewPaginationChecks.push('proposal-expiring-between-select-and-count-remains-coherent-in-one-readonly-database-clock-snapshot-and-next-transaction-excludes-it-with-zero-writes');
- assert.equal(checks.length,19);assert.equal(reviewPaginationChecks.length,22);
+ assert.equal(checks.length,19);assert.equal(reviewPaginationChecks.length,26);
  const databaseEngineVersion=(await pool.query('SHOW server_version')).rows[0].server_version;
  const sourceFiles=['src/lib/workspace-store.mjs','src/lib/workspace-policy.mjs','src/lib/field-operations-store.mjs','src/lib/field-operations-policy.mjs','src/lib/field-operations-http.mjs','src/app/api/identity/field-operations/route.js','src/app/(identity)/cuenta/field-review-page-view.mjs','src/app/(identity)/cuenta/field-operations-panel.js','tests/production-field-review-pagination.test.mjs','scripts/verify-field-operations-postgres.mjs','scripts/verify-field-operations-ui.mjs','vercel.json'];
  const sourceSha256=Object.fromEntries(sourceFiles.map(path=>[path,createHash('sha256').update(readFileSync(path)).digest('hex')]));
