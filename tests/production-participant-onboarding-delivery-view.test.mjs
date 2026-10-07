@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {participantOnboardingDeliveryView as view,participantOnboardingContactNotice as noticeView,participantOnboardingWhatsAppConsent as consent} from '../src/app/(identity)/cuenta/participant-onboarding-delivery-view.mjs';
 import {participantOnboardingNextStep as nextStep} from '../src/app/(identity)/cuenta/participant-onboarding-next-step.mjs';
+import {participantOnboardingNavigationTarget as navigationTarget} from '../src/app/(identity)/cuenta/participant-onboarding-next-step.mjs';
 
 const now=Date.parse('2026-10-07T12:00:00.000Z');
 const notice=()=>({version:'participant-onboarding-v1',sha256:'b'.repeat(64),text:'Confirmo la autorización de contacto para instrucciones de alta por WhatsApp.'});
@@ -152,4 +153,47 @@ test('authorized instructions already queued are consulted before preparing anot
   input.snapshot.records[0].onboardingDelivery.contactAuthorized=true;input.snapshot.records[0].kycChatChallenge=pendingChat();
   assert.equal(nextStep(input).primary.action,'CANCEL_KYC_CHAT','An existing challenge retains its closure authority');
  }
+});
+
+const templatePending=()=>{const input=withDelivery('BLOCKED',{code:'PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED'});input.snapshot.canInvite=true;input.snapshot.records[0].canSendOnboardingWhatsapp=false;return input;};
+test('the exact template approval blocker offers review without sending or exposing the raw receipt',()=>{
+ const input=templatePending(),before=JSON.stringify(input),result=view(input);
+ assert.equal(result.blocker,'TEMPLATE_APPROVAL_REQUIRED');assert.equal(result.label,'Plantilla de alta pendiente');assert.match(result.description,/aprobación vigente/);
+ assert.equal(result.canSend,false);assert.equal(result.providerAccepted,false);assert.equal(result.deliveryConfirmed,false);assert.equal(result.automaticResendAllowed,false);
+ assert.equal(Object.hasOwn(result,'code'),false);assert.equal(Object.hasOwn(result,'outboundId'),false);
+ assert.deepEqual(nextStep(input),{state:'ONBOARDING_TEMPLATE_REVIEW',primary:{action:'REVIEW_ONBOARDING_TEMPLATE',label:'Revisar plantilla de alta'},optionalBank:null,requestedJob:null});
+ assert.equal(JSON.stringify(input),before);
+});
+for(const code of [null,'PARTICIPANT_ONBOARDING_AUTHORIZATION_REQUIRED','PARTICIPANT_ONBOARDING_PROVIDER_CLOSED','PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED_PRIVATE','private-provider-text',42])test('other or malformed blockers do not invent template review: '+code,()=>{
+ const input=templatePending();input.snapshot.records[0].onboardingDelivery.code=code;
+ assert.equal(view(input).blocker,null);assert.notEqual(nextStep(input).primary?.action,'REVIEW_ONBOARDING_TEMPLATE');
+ if(typeof code==='string')assert.equal(JSON.stringify(view(input)).includes(code),false);
+});
+for(const state of ['WAITING_CONFIGURATION','PENDING','SEND_STARTED','SEND_UNKNOWN','SENT','STATUS_OBSERVED','REJECTED','CANCELED'])test('a template code does not replace delivery state '+state,()=>{
+ const input=withDelivery(state,{code:'PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED',...(state==='STATUS_OBSERVED'?{providerStatus:'sent'}:{})});
+ input.snapshot.canInvite=true;input.snapshot.records[0].canSendOnboardingWhatsapp=false;
+ assert.equal(view(input).blocker,null);assert.notEqual(nextStep(input).primary?.action,'REVIEW_ONBOARDING_TEMPLATE');assert.equal(view(input).automaticResendAllowed,false);
+});
+test('template guidance reads no private worker metadata and returns only static presentation',()=>{
+ const input=templatePending(),person=input.snapshot.records[0];for(const field of ['metadata','privateBankAccount','phone','clerkUserId'])Object.defineProperty(person,field,{get(){throw Error('Private field read');}});
+ for(const result of [view(input),nextStep(input)])assert.doesNotMatch(JSON.stringify(result),/customer_outbound_|PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED|IDENTIDAD |private-provider/);
+});
+test('uncertainty, chat closure, invitation and own identity precede template navigation',()=>{
+ const input=templatePending(),person=input.snapshot.records[0];input.pendingReference={scope:input.context.scope,projectId:input.context.projectId,resource:'participants',operationId:'11111111-1111-4111-8111-111111111111'};
+ assert.equal(nextStep(input).primary.action,'CONSULT_OPERATION');input.pendingReference=null;
+ for(const status of ['PENDING','CLAIMED']){person.kycChatChallenge={...pendingChat(),status,conversationExpiresAt:status==='CLAIMED'?'2026-10-07T13:00:00.000Z':null};assert.equal(nextStep(input).primary.action,'CANCEL_KYC_CHAT');person.kycChatChallenge.canCancel=false;assert.equal(nextStep(input).primary.action,'CONSULT_PARTICIPANTS');}
+ person.kycChatChallenge=null;person.invitation.state='ATTEMPTED';assert.equal(nextStep(input).primary.action,'RECOVER_INVITATION');person.invitation.state='SENT';person.invitation.expired=true;assert.equal(nextStep(input).primary.action,'INVITE');
+ person.status='ACTIVE';person.self=true;person.accountLinked=true;assert.equal(nextStep(input).primary.action,'SUBMIT_KYC');person.kyc.status='PENDING_REVIEW';assert.equal(nextStep(input).state,'WAIT_REVIEW');
+});
+test('template navigation requires active contact and verified current participation',()=>{
+ for(const patch of [{active:false},{status:'REVOKED'},{self:true,status:'ACTIVE',accountLinked:true}]){const input=templatePending();Object.assign(input.snapshot.records[0],patch);assert.notEqual(nextStep(input).primary?.action,'REVIEW_ONBOARDING_TEMPLATE');}
+ const input=templatePending();input.snapshot.records[0].onboardingDelivery.contactAuthorized=false;assert.equal(nextStep(input).primary.action,'PREPARE_KYC_CHAT');
+ input.context.verified=false;assert.equal(nextStep(input).primary.action,'CONSULT_ACCESS');input.context.verified=true;input.context.projectId='other-project';assert.equal(nextStep(input).primary.action,'CONSULT_ACCESS');
+});
+test('navigation destinations use only the current scoped context and explicit integration capability',()=>{
+ const context={scope:'a'.repeat(64),projectId:'project-a',canManageIntegrations:true},value={scope:context.scope,projectId:context.projectId,target:'meta-onboarding'};
+ assert.equal(navigationTarget(value,context),'customer-meta-title');assert.equal(navigationTarget({...value,target:'worker-channel'},context),'worker-channel-title');assert.equal(navigationTarget({...value,target:'pending-receipts'},context),'pending-receipts-title');
+ for(const current of [null,{...context,scope:'invalid'},{...context,canManageIntegrations:false},{...context,canManageIntegrations:'true'},{...context,canManageIntegrations:undefined}])assert.equal(navigationTarget(value,current),null);
+ for(const patch of [{scope:'b'.repeat(64)},{projectId:'other-project'},{target:'unobserved-template'},{target:'customer-template-workbench'}])assert.equal(navigationTarget({...value,...patch},context),null);
+ assert.equal(navigationTarget(null,context),null);assert.equal(navigationTarget(value,{...context,projectId:null}),null);
 });
