@@ -2,6 +2,7 @@ import {WorkspaceError,workspaceId,operationId,digest,requireWorkspaceIdentity} 
 import {decodePrivateImage,PrivateImageError} from './private-image-upload.mjs';
 import {privateBankNumber,privateBankType,PRIVATE_BANK_ACTIONS,PRIVATE_BANK_NOTICE_VERSION} from './participant-bank-format.mjs';
 import {SITE_ROLES} from './site-register-policy.mjs';
+import {validateParticipantOnboardingChoice} from './participant-onboarding-policy.mjs';
 export const PARTICIPANT_NOTICE_VERSION='participant-kyc-v1';
 export const PARTICIPANT_NOTICE='Tu documento y fotografía se guardan en privado para que un responsable autorizado de esta empresa revise tu identidad y participación en esta obra. Las imágenes no autorizan fichajes ni aprueban tu identidad automáticamente. Podés solicitar corrección o revisión al responsable. No ingreses datos bancarios ni información médica.';
 export const PARTICIPANT_OCR_NOTICE_VERSION='participant-external-ocr-v1';
@@ -32,9 +33,13 @@ export function participantCommand(input){
   if(input.action==='ADMIT_EMPLOYEE_INTAKE'){participantKeys(p.permissions,['attendance','report']);if(!Object.hasOwn(SITE_ROLES,p.job)||typeof p.permissions.attendance!=='boolean'||typeof p.permissions.report!=='boolean'||p.confirmed!==true)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p,permissions:{...p.permissions}};}
   else payload={...p,reason:participantReason(p.reason)};
  }else if(input.action==='INVITE'){
-  participantKeys(p,['workerId','revision','email']);participantRevision(p.revision);
+  participantKeys(p,['workerId','revision','email',...(Object.hasOwn(p,'whatsAppConsent')?['whatsAppConsent']:[])]);participantRevision(p.revision);
   if(!workspaceId(p.workerId)||typeof p.email!=='string'||p.email.length>254||! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email.trim()))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
-  payload={...p,email:p.email.trim().toLowerCase()};
+  payload={...p,email:p.email.trim().toLowerCase(),...(Object.hasOwn(p,'whatsAppConsent')?{whatsAppConsent:validateParticipantOnboardingChoice(p.whatsAppConsent)}:{})};
+ }else if(input.action==='SEND_ONBOARDING_WHATSAPP'){
+  participantKeys(p,['workerId','revision','whatsAppConsent']);participantRevision(p.revision);if(!workspaceId(p.workerId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p,whatsAppConsent:validateParticipantOnboardingChoice(p.whatsAppConsent)};
+ }else if(input.action==='REVOKE_ONBOARDING_CONTACT'){
+  participantKeys(p,['workerId','revision']);participantRevision(p.revision);if(!workspaceId(p.workerId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p};
  }else if(['REVOKE','RESTORE_ACCESS'].includes(input.action)){
   participantKeys(p,['workerId','revision','reason']);participantRevision(p.revision);if(!workspaceId(p.workerId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p,reason:participantReason(p.reason)};
  }else if(input.action==='ASSIGN_EXISTING'){

@@ -13,6 +13,13 @@ import {createMetaCustomerInboxReview} from '../src/lib/meta-customer-inbox-revi
 const url=lifecycleDisposableUrl(process.env),database='obrasaas_inbox_'+randomUUID().replaceAll('-',''),admin=new Client({connectionString:url.toString()});
 const eventId=(tenant,n)=>'customer_webhook_'+createHash('sha256').update(tenant+'_'+n).digest('hex'),asset=(prefix,tenant)=>prefix+(tenant==='a'?'1':'2'),environment=lifecycleEnvironment,checks=[];
 const sessions={a:{authenticated:true,verification:'clerk-production-jwt',userId:'user_CrmOwnerA',organizationId:'org_CrmA',organizationRole:'org:admin'},b:{authenticated:true,verification:'clerk-production-jwt',userId:'user_CrmOwnerB',organizationId:'org_CrmB',organizationRole:'org:admin'}};
+function corruptAuthenticatedPayload(encrypted){
+ const parts=encrypted.split('.'),original=Buffer.from(parts[3],'base64url');assert.equal(parts.length,4);assert.ok(original.length>0);
+ // Alter an authenticated byte. Replacing encoded suffix characters can only
+ // change ignored base64 padding bits and accidentally retain the same bytes.
+ const altered=Buffer.from(original);altered[0]^=1;assert.equal(altered.equals(original),false);
+ parts[3]=altered.toString('base64url');return parts.join('.');
+}
 let pool,created=false;
 try{
  await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:6}));await pool.query(lifecycleSchema);
@@ -27,7 +34,7 @@ try{
  const accountA=await workspace.list(sessions.a),accountB=await workspace.list(sessions.b),contextA={projectId:'project-a',scope:accountA.scope},contextB={projectId:'project-b',scope:accountB.scope};
  async function seed(tenant,n,{processed=false,corrupt=false}={}){
   const id=eventId(tenant,n),payload={type:'message',wabaId:asset('13000001',tenant),phoneNumberId:asset('12000001',tenant),value:{from:'5491100001111',type:'text',text:{body:'Texto privado sintético '+n}}};
-  const encryptedPayload=encryptCustomerSecret(JSON.stringify(payload),{organizationId:'company-'+tenant,projectId:'project-'+tenant,purpose:'webhook',resourceId:id},environment),metadata={organizationId:'company-'+tenant,channelId:'channel-'+tenant,payloadDigest:metaCustomerContentDigest(payload),encryptedPayload:corrupt?encryptedPayload.slice(0,-2)+'XX':encryptedPayload};
+  const encryptedPayload=encryptCustomerSecret(JSON.stringify(payload),{organizationId:'company-'+tenant,projectId:'project-'+tenant,purpose:'webhook',resourceId:id},environment),metadata={organizationId:'company-'+tenant,channelId:'channel-'+tenant,payloadDigest:metaCustomerContentDigest(payload),encryptedPayload:corrupt?corruptAuthenticatedPayload(encryptedPayload):encryptedPayload};
   await pool.query(`INSERT INTO "WebhookEvent"(id,"projectId",provider,"externalId","eventType",status,payload,outcome,"createdAt","updatedAt") VALUES($1,$2,'meta-customer-v1',$1,'message',$3,$4::jsonb,$5::jsonb,$6,$6)`,[id,'project-'+tenant,processed?'PROCESSED':'PENDING',JSON.stringify(metadata),processed?JSON.stringify({version:1,reviewState:'REVIEW_REQUIRED',intent:'EVIDENCE',identity:{status:'UNKNOWN'},businessApplied:false}):null,'2026-10-01T12:00:00.'+String(n).padStart(6,'0')]);return id;
  }
  for(let i=1;i<=45;i++)await seed('a',i);const foreign=await seed('b',1);
