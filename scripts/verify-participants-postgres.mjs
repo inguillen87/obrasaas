@@ -376,5 +376,78 @@ try{
   await pool.query('UPDATE "Worker" SET metadata=$2::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1',[self.id,JSON.stringify(beforeOcr)]);
   checks.push('optional-versioned-external-ocr-consent-private-extraction-receipt-replay-and-current-revocation-with-zero-real-provider-calls');
   assert.equal((await pool.query('SELECT metadata FROM "Worker" WHERE id=$1',[self.id])).rows[0].metadata.unrelated,true);assert.deepEqual((await pool.query('SELECT metadata FROM "Project" WHERE id=$1',['p-a'])).rows[0].metadata,{retain:true});
+ // Account discovery uses the canonical membership table, including accounts
+ // beyond the old first hundred. Only this disposable database is populated.
+ await pool.query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail","fullName")
+  SELECT 'discovery-user-'||lpad(n::text,3,'0'),'user_Discovery'||n,'discovery'||n||'@example.invalid',
+   CASE WHEN n=105 THEN $1 ELSE 'Cuenta discovery '||n END FROM generate_series(1,105) n;`,['Peña %_\\ cuenta final']);
+ await pool.query(`INSERT INTO "TenantMembership"(id,"organizationId","userId","tenantRole","clerkRole",status)
+  SELECT 'zz-discovery-m-'||lpad(n::text,3,'0'),'company-a','discovery-user-'||lpad(n::text,3,'0'),'AUDITOR','org:member','ACTIVE' FROM generate_series(1,105) n;`);
+ await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='DIRECTOR' WHERE id='zz-discovery-m-001'`);
+ await pool.query(`INSERT INTO "ProjectMembership"(id,"projectId","tenantMembershipId",status) VALUES('discovery-other-site','p-a2','zz-discovery-m-105','ACTIVE');
+  INSERT INTO "Worker"(id,"projectId",name,phone,metadata,"updatedAt") VALUES('discovery-roster','p-a','Ficha nueva para cuenta existente','+5491100088888','{"siteRegister":{"version":1}}',clock_timestamp());`);
+ const discoveryBefore=await acceptanceSnapshot(),discoveryPuts=putCount,discoverySends=sends;
+ const pageOne=await canonicalOnly.accounts(owner,context),baseAccounts=await canonicalOnly.read(owner,context);
+ assert.equal(pageOne.existingAccounts.length,100);assert.equal(pageOne.existingAccountsTruncated,true);assert.ok(pageOne.nextAccountCursor);
+ assert.deepEqual(baseAccounts.existingAccounts,pageOne.existingAccounts);assert.equal(baseAccounts.nextAccountCursor,pageOne.nextAccountCursor);
+ assert.ok(!pageOne.existingAccounts.some(row=>row.membershipId==='zz-discovery-m-105'));
+ checks.push('account-discovery-first-hundred-and-base-roster-use-one-canonical-bounded-query');
+ const discovered=[...pageOne.existingAccounts];let accountCursor=pageOne.nextAccountCursor,pages=1;
+ while(accountCursor){const page=await canonicalOnly.accounts(owner,{...context,afterAccount:accountCursor});assert.ok(page.existingAccounts.length<=100);assert.equal(page.accountQuery,'');discovered.push(...page.existingAccounts);accountCursor=page.nextAccountCursor;assert.ok(++pages<=4);}
+ const activeAccountIds=(await pool.query(`SELECT id FROM "TenantMembership" WHERE "organizationId"='company-a' AND status='ACTIVE' ORDER BY id`)).rows.map(row=>row.id);
+ assert.deepEqual(discovered.map(row=>row.membershipId),activeAccountIds);assert.equal(new Set(activeAccountIds).size,discovered.length);
+ checks.push('account-discovery-keyset-pages-find-the-last-company-account-without-duplicates');
+ for(const query of ['PEÑA','%_\\','discovery105@example.invalid']){const page=await canonicalOnly.accounts(owner,{...context,query});assert.deepEqual(page.existingAccounts.map(row=>row.membershipId),['zz-discovery-m-105']);assert.equal(page.nextAccountCursor,null);}
+ assert.deepEqual((await canonicalOnly.accounts(owner,{...context,query:'+5491100088888'})).existingAccounts,[]);
+ assert.deepEqual((await canonicalOnly.accounts(owner,{...context,query:'foreign@example.invalid'})).existingAccounts,[]);
+ assert.deepEqual((await canonicalOnly.accounts(owner,{...context,query:'zz-discovery-m-105'})).existingAccounts,[]);
+ checks.push('account-discovery-literal-accent-case-name-and-email-search-does-not-match-phones-other-tenants-or-membership-ids');
+ const exact=await canonicalOnly.accounts(owner,{...context,accountId:'zz-discovery-m-105'});
+ assert.equal(exact.accountId,'zz-discovery-m-105');assert.equal(exact.existingAccounts.length,1);assert.equal(exact.existingAccounts[0].canChangeRole,true);assert.equal(exact.nextAccountCursor,null);
+ const exactKeys=['canChangeRole','email','membershipId','name','revision','role','roleLabel','roleScope','self','status'];assert.deepEqual(Object.keys(exact.existingAccounts[0]).sort(),exactKeys.sort());
+ await assert.rejects(canonicalOnly.accounts(owner,{...context,accountId:'foreign-m'}),{code:'PARTICIPANT_ACCOUNT_UNAVAILABLE'});
+ await assert.rejects(canonicalOnly.accounts(owner,{...context,accountId:'missing-membership'}),{code:'PARTICIPANT_ACCOUNT_UNAVAILABLE'});
+ checks.push('account-discovery-exact-current-selection-is-tenant-scoped-and-excludes-phone-kyc-bank-and-clerk-subject');
+ await assert.rejects(canonicalOnly.accounts(owner,{...context,query:'discovery',afterAccount:pageOne.nextAccountCursor}),{code:'PARTICIPANT_ACCOUNT_CURSOR_UNAVAILABLE'});
+ await assert.rejects(canonicalOnly.accounts(owner,{...otherSiteContext,afterAccount:pageOne.nextAccountCursor}),{code:'PARTICIPANT_ACCOUNT_CURSOR_UNAVAILABLE'});
+ await assert.rejects(canonicalOnly.accounts(foreign,{projectId:'p-b',scope:other.scope,afterAccount:pageOne.nextAccountCursor}),{code:'PARTICIPANT_ACCOUNT_CURSOR_UNAVAILABLE'});
+ const secondAdmin=session('user_SecondOwner','org_A','org:admin'),secondAdminScope=(await workspace.list(secondAdmin)).scope;
+ await assert.rejects(canonicalOnly.accounts(secondAdmin,{projectId:'p-a',scope:secondAdminScope,afterAccount:pageOne.nextAccountCursor}),{code:'PARTICIPANT_ACCOUNT_CURSOR_UNAVAILABLE'});
+ checks.push('account-discovery-cursor-cannot-cross-query-worksite-actor-or-company');
+ const anchorId=pageOne.existingAccounts.at(-1).membershipId,anchorSaved=(await pool.query(`SELECT "updatedAt",status FROM "TenantMembership" WHERE id=$1`,[anchorId])).rows[0];
+ await pool.query(`UPDATE "TenantMembership" SET "updatedAt"="updatedAt"+interval '1 second' WHERE id=$1`,[anchorId]);
+ await assert.rejects(canonicalOnly.accounts(owner,{...context,afterAccount:pageOne.nextAccountCursor}),{code:'PARTICIPANT_ACCOUNT_CURSOR_UNAVAILABLE'});
+ await pool.query(`UPDATE "TenantMembership" SET "updatedAt"="updatedAt"-interval '1 second',status='DISABLED' WHERE id=$1`,[anchorId]);
+ await assert.rejects(canonicalOnly.accounts(owner,{...context,afterAccount:pageOne.nextAccountCursor}),{code:'PARTICIPANT_ACCOUNT_CURSOR_UNAVAILABLE'});
+ await pool.query(`UPDATE "TenantMembership" SET status=$2 WHERE id=$1`,[anchorId,anchorSaved.status]);
+ checks.push('account-discovery-pagination-rejects-stale-or-disabled-canonical-anchor');
+ await pool.query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE id='zz-discovery-m-105'`);
+ await assert.rejects(canonicalOnly.accounts(owner,{...context,accountId:'zz-discovery-m-105'}),{code:'PARTICIPANT_ACCOUNT_UNAVAILABLE'});
+ assert.deepEqual((await canonicalOnly.accounts(owner,{...context,query:'discovery105@example.invalid'})).existingAccounts,[]);
+ await pool.query(`UPDATE "TenantMembership" SET status='ACTIVE' WHERE id='zz-discovery-m-105'`);
+ await assert.rejects(canonicalOnly.accounts(director,{...context,scope:dir.scope}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
+ const discoveryDirector=session('user_Discovery1'),discoveryDirectorScope=(await workspace.list(discoveryDirector)).scope;
+ await assert.rejects(canonicalOnly.accounts(discoveryDirector,{...context,scope:discoveryDirectorScope}),{code:'WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED'});
+ const currentWorkerScope=(await workspace.list(workerSession)).scope;
+ await assert.rejects(canonicalOnly.accounts(workerSession,{...context,scope:currentWorkerScope}),{code:'WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED'});
+ await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='DIRECTOR' WHERE id='owner-m'`);
+ await assert.rejects(canonicalOnly.accounts(owner,context),{code:'WORKSPACE_CONTEXT_CHANGED'});
+ await assert.rejects(canonicalOnly.accounts(owner,{...context,scope:(await workspace.list(owner)).scope}),{code:'WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED'});
+ await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='ADMIN' WHERE id='owner-m'`);
+ checks.push('account-discovery-rechecks-active-selection-and-current-canonical-admin-before-each-read');
+ assert.deepEqual(await acceptanceSnapshot(),discoveryBefore);assert.equal(putCount,discoveryPuts);assert.equal(sends,discoverySends);
+ checks.push('account-discovery-get-search-pagination-and-denials-leave-canonical-data-storage-and-provider-calls-unchanged');
+ const discoveryStore=createParticipantStore({workspace,connect,identity:{...identity,verifiedEmail:async user=>user==='user_Discovery105'?'discovery105@example.invalid':identity.verifiedEmail(user)},upload:uploader.uploadImageToBlob,get});
+ const discoveryRoster=(await discoveryStore.read(owner,context)).records.find(row=>row.id==='discovery-roster');
+ const assignmentLast=command('ASSIGN_EXISTING',{workerId:discoveryRoster.id,revision:discoveryRoster.revision,membershipId:exact.accountId,reason:'Administrador asignó la cuenta vigente encontrada a esta segunda obra.'});
+ const lastAssigned=await discoveryStore.save(owner,assignmentLast);assert.equal(lastAssigned.participant.status,'ACTIVE');assert.equal(lastAssigned.participant.kyc.status,'NOT_SUBMITTED');assert.equal((await discoveryStore.save(owner,assignmentLast)).replayed,true);
+ assert.deepEqual((await pool.query(`SELECT "projectId" FROM "ProjectMembership" WHERE "tenantMembershipId"='zz-discovery-m-105' AND status='ACTIVE' ORDER BY "projectId"`)).rows.map(row=>row.projectId),['p-a','p-a2']);assert.equal(sends,discoverySends);
+ checks.push('last-discovered-account-assignment-reuses-canonical-cas-receipt-without-new-invitation-or-kyc-approval');
+ const latestLast=(await discoveryStore.accounts(owner,{...context,accountId:exact.accountId})).existingAccounts[0];
+ const roleLast=command('SET_OFFICE_ROLE',{membershipId:latestLast.membershipId,revision:latestLast.revision,role:'SITE_MANAGER',reason:'Administrador revisó el acceso de esta cuenta vigente para la empresa.'});
+ const changedLast=await discoveryStore.save(owner,roleLast);assert.equal(changedLast.account.role,'SITE_MANAGER');assert.equal((await discoveryStore.save(owner,roleLast)).replayed,true);
+ await assert.rejects(discoveryStore.save(owner,{...roleLast,operationId:randomUUID(),payload:{...roleLast.payload,role:'FINANCE'}}),{code:'PARTICIPANT_REVISION_CHANGED'});
+ assert.equal((await discoveryStore.accounts(owner,{...context,accountId:exact.accountId})).existingAccounts[0].role,'SITE_MANAGER');
+ checks.push('last-discovered-office-role-reuses-live-provider-canonical-revision-and-idempotent-decision');
  mkdirSync('.vercel/participants-evidence',{recursive:true});writeFileSync('.vercel/participants-evidence/postgres.json',JSON.stringify({validated:true,engine,synthetic:true,realEmailDelivered:false,realIdentityAccepted:false,checks},null,2));console.log(JSON.stringify({validated:true,engine,checks}));
 }finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}

@@ -7,13 +7,16 @@ import {fileURLToPath} from 'node:url';
 import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='026afb167c71075b284830f3d11a2f6119aea9fbf8655b7f6339bf7611e22aac';
+export const EXPECTED_CONTRACT_SHA256='0605a46e73d868e7e379d5de757f6d98c8cc9851e5018642d6a27d975fe7a8fe';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
 const BASELINE_PRODUCERS_SHA256='07d0016608332c0775f86bee6d005e60d4686d2ffe33a3065dfd9fd8e974ab20';
 export const LANES=['contracts','plans','people','field','meta','channels','business','workspace-ui'];
-const LANE_ENV_BYTES=64*1024;
-const LANE_OUTPUT_BYTES=60*1024;
+// Keep each serialized lane below Linux's 128 KiB per-environment-string limit.
+// Leave room for the environment key and GitHub's outer JSON formatting while
+// retaining every screenshot, source digest and proof binding in the artifact.
+const LANE_ENV_BYTES=96*1024;
+const LANE_OUTPUT_BYTES=92*1024;
 const laneEnvironmentKey=lane=>'WORKSPACE_LANE_'+lane.toUpperCase().replaceAll('-','_')+'_JSON';
 const script='.github/scripts/verify-workspace-ci-parallelization.mjs';
 const contractPath='.github/workspace-acceptance-contract.json';
@@ -111,7 +114,10 @@ function currentProducerSourceFiles(spec,root){
  return [...files('src/lib'),'scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs'].sort();
 }
 function extensionSelftest(contract,root){
- const checks=[],expectedHead=contract.extension.baseHead;
+ const checks=[],discoveryChecks=[],expectedHead=contract.extension.baseHead;
+ const discoveryBackend=['src/lib/participant-account-discovery.mjs'],discoveryUi=['src/app/(identity)/cuenta/participant-account-discovery-format.mjs','src/app/(identity)/cuenta/participant-account-discovery.js'];
+ const discoveryDependenciesFor=kind=>kind==='UI_INTAKE'?discoveryUi:['UI_BANK','UI_JOINT','UI_CAUSAL'].includes(kind)?[...discoveryBackend,...discoveryUi]:discoveryBackend;
+ const beforeDiscoveryCounts={UNIT:94,PG_BANK:12,PG_INTAKE:21,UI_BANK:87,UI_INTAKE:19,UI_JOINT:87,UI_CAUSAL:87,PG_COMPANY_KYC:155};
  const good=(name,run)=>{run();checks.push({name,result:'PASS',boundary:'pure shadow fixture, no Git/PG/UI/provider execution'});},bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code,boundary:'pure shadow fixture'});};
  // Normalize only these shadow source fixtures to Linux Git text. The actual proof validator never normalizes bytes.
  const readSource=file=>{const bytes=readFileSync(path.join(root,sourcePath(file))),text=bytes.toString('utf8');assert.ok(bytes.equals(Buffer.from(text)));return Buffer.from(text.replaceAll('\r\n','\n'));};
@@ -148,7 +154,7 @@ function extensionSelftest(contract,root){
    const onboardingDependencies=spec.kind==='PG_COMPANY_KYC'?allOnboardingDependencies.filter(file=>!['src/lib/meta-customer-templates.mjs','src/lib/whatsapp/template-review-policy.js'].includes(file)):allOnboardingDependencies;
    const voiceDependencies=['src/lib/voice-progress-draft.mjs'],currentDependencies=[...onboardingDependencies,...voiceDependencies];
    const previousCount=spec.kind==='UNIT'?86:spec.kind==='PG_COMPANY_KYC'?149:79;
-   assert.equal(spec.sourceFiles.length,previousCount+currentDependencies.length,'Exact canonical transitive source count: '+spec.id);
+   assert.equal(spec.sourceFiles.length,previousCount+currentDependencies.length+discoveryDependenciesFor(spec.kind).length,'Exact canonical transitive source count: '+spec.id);
    if(spec.kind==='UNIT')good('bank-intake-units-real-current-transitive-manifest-exact',()=>equal(bankUnitSourceFiles(root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
    for(const file of onboardingDependencies){
     assert.ok(spec.sourceFiles.includes(file),'Canonical onboarding transitive source must be pinned: '+file);
@@ -161,10 +167,22 @@ function extensionSelftest(contract,root){
     mutate('changed-transitive-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
    }
    const beforeVoiceCount=previousCount+onboardingDependencies.length;
-   mutate('old-'+beforeVoiceCount+'-source-manifest-without-voice','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!voiceDependencies.includes(ref.path));assert.equal(p.sourceManifest.length,beforeVoiceCount);});
-   mutate('old-'+previousCount+'-source-manifest','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!currentDependencies.includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
+   mutate('old-'+beforeVoiceCount+'-source-manifest-without-voice','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...voiceDependencies,...discoveryDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,beforeVoiceCount);});
+   mutate('old-'+previousCount+'-source-manifest','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...currentDependencies,...discoveryDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
   }
+  // Append discovery controls after the complete historical check sequence.
+  discoveryChecks.push(()=>{
+   const dependencies=discoveryDependenciesFor(spec.kind),previousCount=beforeDiscoveryCounts[spec.kind];
+   assert.equal(spec.sourceFiles.length,previousCount+dependencies.length,'Exact current discovery source count: '+spec.id);
+   for(const file of dependencies){
+    assert.ok(spec.sourceFiles.includes(file),'Canonical account discovery source must be pinned: '+file);
+    mutate('missing-discovery-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
+    mutate('changed-discovery-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
+   }
+   mutate('old-'+previousCount+'-source-manifest-without-discovery','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!dependencies.includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
+  });
  }
+ for(const run of discoveryChecks)run();
  return checks;
 }
 
@@ -428,7 +446,17 @@ export function selftest(workflow,contract,root=process.cwd()){
  bad('extra-lane-job-field-denied','INVALID_LANE_JOB_SHAPE',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:JSON.stringify({...needs.meta,extra:true})}));
  bad('oversized-lane-environment-denied','LANE_ENV_LIMIT',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:'x'.repeat(LANE_ENV_BYTES+1)}));
  bad('invalid-lane-environment-unicode-denied','LANE_ENV_ENCODING',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:'"\ud800"'}));
- good('lane-output-size-bounds-every-fixture',()=>{for(const lane of LANES)assert.ok(assertLaneOutputSize(needs[lane].outputs.provenance)<LANE_OUTPUT_BYTES);});
+ good('lane-output-size-bounds-every-fixture',()=>{
+  for(const lane of LANES)assert.ok(assertLaneOutputSize(needs[lane].outputs.provenance)<LANE_OUTPUT_BYTES);
+  const overhead=assertLaneOutputSize(''),boundary='x'.repeat(92*1024-overhead);
+  assert.equal(assertLaneOutputSize(boundary),92*1024);
+  assert.throws(()=>assertLaneOutputSize(boundary+'x'),error=>error.code==='LANE_OUTPUT_TRANSPORT_LIMIT');
+  assert.throws(()=>assertLaneOutputSize('ñ'.repeat(46*1024)),error=>error.code==='LANE_OUTPUT_TRANSPORT_LIMIT');
+  const padded={...laneEnv},key=laneEnvironmentKey('people');padded[key]+=' '.repeat(96*1024-Buffer.byteLength(padded[key]));
+  equal(readLaneNeedsEnvironment(padded),needs,'PADDED_LANE_ENVIRONMENT');
+  assert.ok(Buffer.byteLength(key+'='+padded[key])+1<128*1024);
+  assert.throws(()=>readLaneNeedsEnvironment({...padded,[key]:padded[key]+' '}),error=>error.code==='LANE_ENV_LIMIT');
+ });
  bad('oversized-output-blocked-before-github-output','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('x'.repeat(LANE_OUTPUT_BYTES)));
  bad('escaped-output-size-uses-wire-bytes','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('"'.repeat(LANE_OUTPUT_BYTES/2)));
  bad('non-string-output-size-denied','PROVENANCE_LIMIT',()=>assertLaneOutputSize(null));
