@@ -18,7 +18,7 @@ const fixture=mkdtempSync(path.join(privateRoot,'overtime-ui-')),app=path.join(f
 mkdirSync(components,{recursive:true});
 const sha256=value=>createHash('sha256').update(value).digest('hex'),sourceManifest=[];
 for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filter(name=>/\.(js|mjs|css)$/.test(name))){const source='src/app/(identity)/cuenta/'+file;copyFileSync(path.join(root,source),path.join(components,file));sourceManifest.push({path:source,sha256:sha256(readFileSync(path.join(components,file)))});}
-for(const source of ['src/app/(identity)/identity.module.css','src/lib/geo.js','src/lib/field-media-privacy.mjs']){const destination=path.join(fixture,source);mkdirSync(path.dirname(destination),{recursive:true});copyFileSync(path.join(root,source),destination);sourceManifest.push({path:source,sha256:sha256(readFileSync(destination))});}
+for(const source of ['src/app/(identity)/identity.module.css','src/lib/geo.js','src/lib/field-media-privacy.mjs','src/lib/voice-progress-draft.mjs','src/lib/progress-measurement-quantity.js']){const destination=path.join(fixture,source);mkdirSync(path.dirname(destination),{recursive:true});copyFileSync(path.join(root,source),destination);sourceManifest.push({path:source,sha256:sha256(readFileSync(destination))});}
 for(const source of ['src/lib/field-shift-summary.mjs','src/lib/field-overtime-policy.mjs'])sourceManifest.push({path:source,sha256:sha256(readFileSync(path.join(root,source)))});
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-field-overtime-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);

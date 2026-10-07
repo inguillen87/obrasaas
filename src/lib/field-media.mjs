@@ -6,6 +6,7 @@ import { canReviewField } from './field-operations-policy.mjs';
 import { publicFieldEvidence } from './field-operations-store.mjs';
 import { createVideoFrameExtractor } from './video-frame-extractor.mjs';
 import { validFieldMediaAnalysisConsent } from './field-media-privacy.mjs';
+import { createVoiceProgressDraft } from './voice-progress-draft.mjs';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const fieldReceiptId=(actorId,projectId,key)=>'fieldmedia_'+digest([actorId,projectId,key.toLowerCase()]);
 // Keep uploads below the Production function request-body limit, including
@@ -122,10 +123,11 @@ export function createFieldMedia({operations,put,get,analyzer,extractVideoFrames
         if(processing?.status==='RUNNING'&&new Date(processing.expiresAt).getTime()>Date.now())throw new WorkspaceError('FIELD_MEDIA_PROCESSING',409);
         if(row.revision!==input.revision&&!sameClaim)throw new WorkspaceError('FIELD_REVISION_CHANGED',409);
         if(['ANALYZED_UNREVIEWED','TRANSCRIBED_UNREVIEWED'].includes(processing?.status))throw new WorkspaceError('FIELD_MEDIA_ALREADY_PROCESSED',409);
+        const voiceTask=e.media.kind==='audio'?await operations.readTask(client,input.projectId,e.taskId):null;
         const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
         const leaseId=randomUUID(),next={...e,processing:{status:'RUNNING',operationId:input.operationId,requestDigest,actorId:member.actorId,leaseId,...(input.analysisConsent?{analysisConsent:input.analysisConsent}:{}),startedAt:now.toISOString(),expiresAt:new Date(now.getTime()+90000).toISOString()}};
         await client.query(`UPDATE public."Incident" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[row.id,input.projectId,JSON.stringify({...cleanMetadata(row.metadata),fieldOperations:next})]);
-        return {id,actorId:member.actorId,leaseId,media:e.media,caption:row.description};
+        return {id,actorId:member.actorId,leaseId,media:e.media,caption:row.description,voiceTask,evidenceRevision:row.revision};
       });
       if(claim.done)return claim.done;
       let analysis;
@@ -141,6 +143,7 @@ export function createFieldMedia({operations,put,get,analyzer,extractVideoFrames
           if(member.actorId!==claim.actorId||row.metadata.fieldOperations.processing?.leaseId!==claim.leaseId||row.metadata.fieldOperations.review)throw new WorkspaceError('FIELD_MEDIA_PROCESSING_CHANGED',409);
         });
         analysis=claim.media.kind==='video'?await analyzer.analyzeVideo({...prepared,context:claim.caption}):claim.media.kind==='audio'?await analyzer.transcribeAudio({buffer:bytes,mimeType:claim.media.contentType,language:'es'}):await analyzer.analyzePhoto({base64:bytes.toString('base64'),mimeType:claim.media.contentType,context:claim.caption});
+        if(claim.media.kind==='audio'&&analysis?.success&&analysis.status==='TRANSCRIBED_UNREVIEWED')analysis={...analysis,progressDraft:createVoiceProgressDraft({transcript:analysis.text,evidenceId:input.evidenceId,evidenceRevision:claim.evidenceRevision,mediaSha256:claim.media.sha256,transcriptSha256:sha(Buffer.from(analysis.text.trim(),'utf8')),task:claim.voiceTask})};
       }catch(error){analysis={success:false,status:'FAILED_RETRYABLE',code:/^FIELD_VIDEO_[A-Z_]+$/.test(error?.code||'')?error.code:'FIELD_MEDIA_PROVIDER_UNCONFIRMED'};}
       const processing={...(analysis?.success?{status:analysis.status,result:analysis,humanReviewRequired:true}:{status:'FAILED_RETRYABLE',code:analysis?.code||'FIELD_MEDIA_PROVIDER_UNCONFIRMED',humanReviewRequired:true}),...(input.analysisConsent?{analysisConsent:input.analysisConsent}:{})};
       return run(session,input,true,async(client,member,scope)=>{

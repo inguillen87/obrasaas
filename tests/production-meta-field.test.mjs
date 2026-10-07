@@ -6,12 +6,36 @@ import {operationId} from '../src/lib/workspace-policy.mjs';
 import {fieldTransition,FIELD_ACTIONS} from '../src/lib/field-operations-policy.mjs';
 import {FIELD_MEDIA_PRIVACY_NOTICE,FIELD_MEDIA_PRIVACY_NOTICE_SHA256,fieldMediaAnalysisConsent} from '../src/lib/field-media-privacy.mjs';
 import {createHash} from 'node:crypto';
+import {createVoiceProgressDraft} from '../src/lib/voice-progress-draft.mjs';
 const now=new Date('2026-10-01T12:00:00Z'),facts={projectName:'Synthetic obra',workerId:'worker-a',permissions:{attendance:true,report:true},sectors:[{id:'sector-a',name:'Planta baja'}],tasks:[{id:'task-a',title:'Mampostería',progress:0,revision:'2026-10-01T12:00:00.123456'}],evidence:[],proposals:[],latest:null};
 let sequence=0;
 const run=(message,state=null,extra={})=>{const result=planMetaFieldConversation({message,state,eventId:'synthetic_'+(++sequence),facts,now,...extra});if(result.state)result.state={...result.state,version:1,expiresAt:new Date(now.getTime()+900000).toISOString()};return result;};
 const say=(body,state,extra)=>run({type:'text',text:{body}},state,extra);
 const pick=(plan,index=0,extra)=>run({type:'interactive',interactive:{type:'list_reply',list_reply:{id:plan.reply.sections[0].rows[index].id}}},plan.state,extra);
 const pickValue=(plan,value,extra)=>pick(plan,plan.state.choices.findIndex(choice=>choice.value===value),extra);
+function voiceFacts(status='APPROVED',transcript='Hoy hicimos 2,5 metros cuadrados de mampostería.'){
+ const task=facts.tasks[0],e={id:'evidence-voice',title:'Audio sintético revisado',taskId:task.id,revision:'2026-10-01T12:00:00.123458',status,media:{kind:'audio',sha256:'b'.repeat(64)},processing:{status:'TRANSCRIBED_UNREVIEWED',result:{text:transcript,progressDraft:createVoiceProgressDraft({transcript,evidenceId:'evidence-voice',evidenceRevision:'2026-10-01T12:00:00.123457',mediaSha256:'b'.repeat(64),transcriptSha256:createHash('sha256').update(transcript).digest('hex'),task})}}};
+ return {...facts,evidence:[e]};
+}
+function startVoice(enhanced){const extra={facts:enhanced},task=say('AVANCE',null,extra),sector=pick(task,0,extra),source=pick(sector,0,extra),audio=pickValue(source,'VOICE',extra),review=pick(audio,0,extra);return {extra,review};}
+test('approved voice draft stays in conversation but requires review, manual measurement and final interactive confirmation',()=>{
+ const enhanced=voiceFacts(),{extra,review}=startVoice(enhanced);assert.match(review.reply.body,/Del día o adicional/);assert.match(review.reply.body,/2,5 m²/);assert.equal(review.command,undefined);assert.equal(review.state.progress,undefined);assert.equal(review.state.quantity,undefined);
+ const plain=say('sí',review.state,extra);assert.equal(plain.command,undefined);assert.equal(plain.state.step,'VOICE_REVIEW');
+ const measurement=pickValue(review,'USE',extra);assert.equal(measurement.command,undefined);assert.equal(measurement.state.progress,undefined);assert.match(measurement.reply.body,/cantidad acumulada/);
+ const reason=say('2.5 / 10 M2',measurement.state,extra),confirmation=say('Verifiqué la cantidad acumulada y la unidad.',reason.state,extra),plainSave=say('Guardar',confirmation.state,extra);assert.equal(plainSave.command,undefined);
+ const saved=pickValue(confirmation,'CONFIRM',extra);assert.deepEqual(saved.command,{action:'PROPOSE_PROGRESS',payload:{workerId:'worker-a',taskId:'task-a',revision:facts.tasks[0].revision,progress:25,quantity:'2.5000',baseline:'10.0000',unit:'M2',reason:'Verifiqué la cantidad acumulada y la unidad.',evidenceIds:['evidence-voice']}});
+});
+test('unreviewed, foreign-task or stale-context audio cannot appear as a proposal source',()=>{
+ for(const status of ['PENDING','REJECTED']){const enhanced=voiceFacts(status),extra={facts:enhanced},measurement=pick(pick(say('AVANCE',null,extra),0,extra),0,extra);assert.equal(measurement.state.step,'MEASUREMENT');}
+ const enhanced=voiceFacts();enhanced.tasks=[{...enhanced.tasks[0],revision:'2026-10-01T12:00:00.123459'}];const extra={facts:enhanced},measurement=pick(pick(say('AVANCE',null,extra),0,extra),0,extra);assert.equal(measurement.state.step,'MEASUREMENT');
+});
+test('task/evidence changes or revoked report permission block a prepared voice confirmation without a command',()=>{
+ const enhanced=voiceFacts(),{extra,review}=startVoice(enhanced),measurement=pickValue(review,'USE',extra),reason=say('2.5 / 10 M2',measurement.state,extra),confirmation=say('Verifiqué la cantidad acumulada y la unidad.',reason.state,extra);
+ for(const changed of [{...enhanced,tasks:[{...enhanced.tasks[0],revision:'2026-10-01T12:00:00.123459'}]},{...enhanced,evidence:[{...enhanced.evidence[0],status:'REJECTED'}]},{...enhanced,evidence:[{...enhanced.evidence[0],revision:'2026-10-01T12:00:00.123460'}]}]){
+  const stopped=pickValue(confirmation,'CONFIRM',{facts:changed});assert.equal(stopped.command,undefined);assert.match(stopped.reply.body,/cambió/);assert.deepEqual(stopped.state,confirmation.state);
+ }
+ const denied=pickValue(confirmation,'CONFIRM',{facts:{...enhanced,permissions:{attendance:true,report:false}}});assert.equal(denied.command,undefined);assert.equal(denied.state,null);assert.match(denied.reply.body,/permisos/);
+});
 test('stale choices, plain affirmative text and expired drafts cannot authorize a business effect',()=>{
  const menu=say('MENU'),next=pickValue(menu,'INCIDENT'),old=pickValue(menu,'INCIDENT',{state:next.state});assert.equal(old.command,undefined);assert.match(old.reply.body,/paso anterior/);
  const task=pick(next),sector=pick(task),title=say('Acceso bloqueado',sector.state),details=say('El acceso principal requiere revisión.',title.state),priority=pick(details,1),plain=say('sí',priority.state);assert.equal(plain.command,undefined);
