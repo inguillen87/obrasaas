@@ -3,7 +3,7 @@
   "sourceCommit": "61d316a8983c268d43f8af6de10df9743a46278e",
   "sourceWorkflowGitBlobSha256": "f61343f8ec83df2ca814a4fb770eed8d78b18ab2f80f95b4e9e2b84d0f5e89ed",
   "sourceWorkflowCheckoutSha256": "f61343f8ec83df2ca814a4fb770eed8d78b18ab2f80f95b4e9e2b84d0f5e89ed",
-  "packageLockSha256": "c6592431cb6b05524e384ce663db665b1f75c08b755435532d9c74a4519e9f28",
+  "packageLockSha256": "e0d817409e6259fcaa916150b97960d8b4cac5a852a108a4764adf35a3a04b0e",
   "requirementsSha256": "c7c242770337d501756cdde2437ad8e7cdc0e5d7d269481beac6e1f1abafb34d",
   "workflow": {
     "name": "Authorized workspace acceptance",
@@ -2123,6 +2123,7 @@
           "src/lib/pilot-media.mjs",
           "src/lib/plan-import-analyzer.mjs",
           "src/lib/plan-import-http.mjs",
+          "src/lib/plan-import-ooxml.mjs",
           "src/lib/plan-import-policy.mjs",
           "src/lib/plan-import-runtime.mjs",
           "src/lib/plan-import-store.mjs",
