@@ -11,6 +11,7 @@ import {createMetaCustomerActivation,publicCustomerActivation} from './meta-cust
 import {customerSignupFlow,createMetaCustomerCoexistence,publicCustomerCoexistence,customerLifecycleRecovery} from './meta-customer-coexistence.mjs';
 
 import {companyConnectionForProject,assertLegacyProjectChannel} from './company-channel-connection.mjs';
+import {companyChannelOperationalCapabilities} from './company-channel-store.mjs';
 import {companyPhoneContract,readCompanyPhoneDeclaration,assertCompanyPhoneMatch,companyPhoneAuthorizationContract} from './company-onboarding-policy.mjs';
 const activeStates=new Set(['PREPARED','EXCHANGE_STARTED','EXCHANGE_UNKNOWN','CREDENTIAL_STORED','VERIFYING','REVIEW_REQUIRED','LINKED_PENDING_ACCEPTANCE','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN']);
 const secretContext=(member,project,purpose,resourceId)=>({organizationId:member.organizationId,projectId:project.id,purpose,resourceId});
@@ -37,7 +38,11 @@ function unregisteredState(state){
  if(latest?.state==='NOT_SENT')return state.registrationResumeState==='REGISTRATION_REJECTED'?'REGISTRATION_REJECTED':'REGISTRATION_REQUIRED';
  return 'REGISTRATION_UNKNOWN';
 }
-function stateToken(state,member,project,environment){return createHmac('sha256',environment.META_APP_SECRET).update(JSON.stringify([state.id,member.actorId,member.organizationId,project.id,state.preparedRevision,state.expiresAt,state.numberMode,state.configId,state.signupVersion,...(Object.hasOwn(state,'declaredCompanyPhone')?[state.declaredCompanyPhone]:[])])).digest('base64url');}
+function stateToken(state,member,project,environment){
+ const phone=Object.hasOwn(state,'declaredCompanyPhone')?companyPhoneAuthorizationContract({declaredCompanyPhone:state.declaredCompanyPhone}):undefined;
+ const declaration=phone?['company-phone-state-v1',phone.version,phone.e164,phone.revision,phone.digest]:[];
+ return createHmac('sha256',environment.META_APP_SECRET).update(JSON.stringify([state.id,member.actorId,member.organizationId,project.id,state.preparedRevision,state.expiresAt,state.numberMode,state.configId,state.signupVersion,...declaration])).digest('base64url');
+}
 function checkToken(value,expected){if(typeof value!=='string'||value.length!==expected.length||!timingSafeEqual(Buffer.from(value),Buffer.from(expected)))throw new WorkspaceError('META_CUSTOMER_STATE_REJECTED',403);}
 function input(body,fields){if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).sort().join('|')!==fields.sort().join('|')||!operationId(body.operationId))throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');}
 export function createMetaCustomerOnboarding({workspace,provider,processor=null,environment=process.env,now=()=>Date.now(),scopedProvider=false}){
@@ -128,9 +133,10 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
   const baseActivation=publicCustomerActivation(connection,readiness,member,now(),profile.numberMode,environment),activation=phoneReviewCode?{...baseActivation,canActivate:false,lastCode:phoneReviewCode}:baseActivation,legacyBlocked=corporate&&(corporate.projectId!==project.id||['COMPANY','SUSPENDED'].includes(corporate.company.mode));
   const currentActivation=legacyBlocked?{...activation,operational:corporate.company.mode==='COMPANY'&&activation.operational,canActivate:false,canDeactivate:false}:activation;
   const currentCoexistence=publicCustomerCoexistence(connection,readiness,now()),coexistence=readiness.mode===META_DEVELOPMENT_PILOT_MODE&&currentCoexistence?{...currentCoexistence,canSelectImport:false,canContinueImport:false}:currentCoexistence;
-  return {scope,projectId:project.id,companyName:member.organizationName,projectName:project.name,readiness,...(corporate?{companyRouting:{mode:corporate.company.mode,connectionId:corporate.id,anchorProjectId:corporate.projectId,legacyActionsBlocked:corporate.projectId!==project.id||['COMPANY','SUSPENDED'].includes(corporate.company.mode),attendance:true,kyc:false,media:false,flows:false,templates:false,accepted:false}}:{}),
+  const companyCapabilities=corporate?companyChannelOperationalCapabilities(corporate,{schemaReady:true,mode:corporate.company.mode,now:(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.getTime()}):null;
+  return {scope,projectId:project.id,companyName:member.organizationName,projectName:project.name,readiness,...(corporate?{companyRouting:{mode:corporate.company.mode,connectionId:corporate.id,anchorProjectId:corporate.projectId,legacyActionsBlocked:corporate.projectId!==project.id||['COMPANY','SUSPENDED'].includes(corporate.company.mode),...companyCapabilities,accepted:false}}:{}),
    declaredCompanyPhone:declaration,companyPhoneReviewCode:phoneReviewCode,prepared:profile.configured,numberMode:profile.numberMode||null,preparedRevision:profile.revision,signup,
-   stateToken:signup?.state==='PREPARED'&&metaCustomerAuthorizationReady(readiness)?stateToken(state,member,project,environment):null,
+   stateToken:signup?.state==='PREPARED'&&!phoneReviewCode&&metaCustomerAuthorizationReady(readiness)?stateToken(state,member,project,environment):null,
    connection:connection?{recordPresent:true,displayNumber:connection.displayPhoneNumber,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,enabled:connection.enabled===true,storedStatus:connection.status,operational:currentActivation.operational}:null,
    coexistence,
    existingApiPlan:project.metadata?.metaExistingApiPlan?{state:project.metadata.metaExistingApiPlan.state,preparedAt:project.metadata.metaExistingApiPlan.preparedAt,preserveProvider:true,providerChanged:false}:null,

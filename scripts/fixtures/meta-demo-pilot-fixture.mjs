@@ -11,7 +11,7 @@ export const demoSchema=lifecycleSchema+`CREATE TABLE "PurchaseOrder"(id text PR
 export const demoSession={authenticated:true,verification:'clerk-production-jwt',userId:'user_DemoOwner',organizationId:'org_Demo',organizationRole:'org:admin'};
 export const demoParticipant={version:1,status:'ACTIVE',clerkUserId:demoSession.userId,permissions:{attendance:true,report:true},kyc:{version:1,status:'APPROVED',submissionId:'synthetic-kyc',contentHash:'synthetic-image-pair-hash',images:[{id:'document-front'},{id:'selfie'}],review:{decision:'APPROVED',actorId:'demo-reviewer',recordedAt:'2026-10-02T01:00:00Z'}}};
 export async function seedDemoPilot(pool){
- await pool.query(`INSERT INTO "Organization" VALUES('demo-org','Synthetic DEMO organization','org_Demo','{}'),('foreign-org','Other synthetic organization','org_Foreign','{}');
+ await pool.query(`INSERT INTO "Organization"(id,name,"clerkOrganizationId",metadata) VALUES('demo-org','Synthetic DEMO organization','org_Demo','{}'),('foreign-org','Other synthetic organization','org_Foreign','{}');
  INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES('demo-owner','user_DemoOwner','owner@example.invalid'),('demo-reviewer','user_DemoReviewer','reviewer@example.invalid');
  INSERT INTO "TenantMembership"(id,"userId","organizationId","tenantRole","clerkRole",status) VALUES('demo-member','demo-owner','demo-org','ADMIN','org:admin','ACTIVE'),('demo-reviewer-member','demo-reviewer','demo-org','DIRECTOR','org:member','ACTIVE');
  INSERT INTO "Project"(id,"organizationId",name,status,metadata) VALUES('demo-project','demo-org','Obra sintética de QA','ACTIVE','{}'),('foreign-project','foreign-org','Foreign synthetic worksite','ACTIVE','{}');

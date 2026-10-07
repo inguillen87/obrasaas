@@ -85,6 +85,10 @@ jobs:
         run: |
           npx eslint src/app/page.js src/app/landing-interactions.js src/app/landing-phone-scene.js scripts/verify-professional-landing-ui.mjs --max-warnings 0
           node scripts/verify-professional-landing-ui.mjs
+      - name: Corporate number declaration and uncertain receipt recovery
+        run: |
+          npx eslint src/lib/company-phone-format.mjs scripts/verify-company-phone-ui.mjs --max-warnings 0
+          node scripts/verify-company-phone-ui.mjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
@@ -102,5 +106,6 @@ jobs:
             .vercel/professional-landing-evidence/
             .vercel/local-font-evidence/
             .vercel/pwa-evidence/
+            .vercel/company-phone-evidence/
           include-hidden-files: true
           retention-days: 7
