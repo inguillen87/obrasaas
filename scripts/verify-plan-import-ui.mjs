@@ -36,6 +36,17 @@ async function stopHarnessServer(){
    try{process.kill(-server.pid,'SIGTERM');}catch(error){if(error.code!=='ESRCH')throw error;}
   }
   await Promise.race([serverClosed,new Promise((_,reject)=>{deadline=setTimeout(()=>reject(Error('PLAN_IMPORT_UI_SERVER_CLOSE_TIMEOUT')),10000);})]);
+  if(process.platform!=='win32'){
+   // A closed Next parent can leave a worker flushing .next files. Fence the
+   // same owned process group, including those workers, before deleting it.
+   try{process.kill(-server.pid,'SIGKILL');}catch(error){if(error.code!=='ESRCH')throw error;}
+   const until=Date.now()+10000;
+   for(;;){
+    try{process.kill(-server.pid,0);}catch(error){if(error.code==='ESRCH')break;throw error;}
+    assert.ok(Date.now()<until,'The owned Next process group must disappear before fixture removal');
+    await new Promise(resolve=>setTimeout(resolve,50));
+   }
+  }
  }finally{clearTimeout(deadline);}
 }
 let log='',browser,proof,fixtureRemoved=false;for(const stream of [server.stdout,server.stderr])stream.on('data',data=>{log=(log+data).slice(-12000);});
