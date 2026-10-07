@@ -11,6 +11,7 @@
   "git": {
     "deploymentEnabled": {
       "fix/field-review-pagination-20261007": false,
+      "fix/invitation-template-guidance-20261007": false,
       "fix/plan-upload-rejection-20261007": false,
       "feat/whatsapp-onboarding-delivery-20261007": false,
       "feat/pilot-operational-continuity-20261007": false,

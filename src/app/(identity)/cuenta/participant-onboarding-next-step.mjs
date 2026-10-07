@@ -4,6 +4,12 @@ const id=value=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.tes
 const scope=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value);
 const scoped=(value,context)=>value?.scope===context.scope&&value?.projectId===context.projectId;
+export function participantOnboardingNavigationTarget(value,context){
+ if(!context||!scope(context.scope)||!id(context.projectId)||!scoped(value,context))return null;
+ if(value.target==='worker-channel')return 'worker-channel-title';
+ if(value.target==='meta-onboarding'&&context.canManageIntegrations===true)return 'customer-meta-title';
+ return value.target==='pending-receipts'?'pending-receipts-title':null;
+}
 const step=(state,action,label,optionalBank=null,requestedJob=null)=>({
  state,primary:action?{action,label}:null,optionalBank,requestedJob,
 });
@@ -84,7 +90,9 @@ export function participantOnboardingNextStep({context,snapshot,workerId=null,ap
    if(current.canCancel)return next('KYC_CHAT_CANCELLATION','CANCEL_KYC_CHAT','Revisar cierre de presentación');
    const delivery=participantOnboardingDeliveryView({context,snapshot,workerId:row.id});
    if(delivery.canSend)return next('ONBOARDING_WHATSAPP_PREPARATION','SEND_ONBOARDING_WHATSAPP','Enviar instrucciones por WhatsApp');
-   if(!['PENDING','CLAIMED'].includes(current.challenge?.status)&&delivery.observed&&delivery.contactAuthorized===true&&['WAITING_CONFIGURATION','PENDING','BLOCKED'].includes(delivery.state))return next('ONBOARDING_WHATSAPP_PENDING','CONSULT_PARTICIPANTS','Consultar envío por WhatsApp');
+   if(!['PENDING','CLAIMED'].includes(current.challenge?.status)&&delivery.observed&&delivery.contactAuthorized===true&&['WAITING_CONFIGURATION','PENDING','BLOCKED'].includes(delivery.state))return delivery.blocker==='TEMPLATE_APPROVAL_REQUIRED'
+    ?next('ONBOARDING_TEMPLATE_REVIEW','REVIEW_ONBOARDING_TEMPLATE','Revisar plantilla de alta')
+    :next('ONBOARDING_WHATSAPP_PENDING','CONSULT_PARTICIPANTS','Consultar envío por WhatsApp');
    if(current.canPrepare)return next('KYC_CHAT_PREPARATION','PREPARE_KYC_CHAT','Preparar identidad por chat');
    return next(current.challenge?.status==='CLAIMED'?'KYC_CHAT_IN_PROGRESS':'KYC_CHAT_PENDING','CONSULT_PARTICIPANTS','Consultar presentación por chat');
   };
@@ -168,7 +176,7 @@ const copies={
  STATUS_OBSERVED:['Estado informado por WhatsApp','El proveedor informó un estado del mensaje. La aceptación de la cuenta y la revisión de identidad se comprueban por separado.'],
  CANCELED:['Envío cancelado','Esta solicitud no continuará enviándose. La invitación de acceso y la revisión de identidad conservan sus propios estados.'],
 };
-const unknown=()=>({observed:false,state:'UNKNOWN',label:'Estado de WhatsApp sin consultar',description:'Consultá el perfil vigente para comprobar el envío y tus permisos.',canSend:false,canRevoke:false,contactAuthorized:null,providerAccepted:false,deliveryConfirmed:false,automaticResendAllowed:false,revokeWarning:null});
+const unknown=()=>({observed:false,state:'UNKNOWN',blocker:null,label:'Estado de WhatsApp sin consultar',description:'Consultá el perfil vigente para comprobar el envío y tus permisos.',canSend:false,canRevoke:false,contactAuthorized:null,providerAccepted:false,deliveryConfirmed:false,automaticResendAllowed:false,revokeWarning:null});
 
 function participantOnboardingContactNotice(value){
  if(!object(value)||Object.keys(value).sort().join('|')!=='sha256|text|version'||typeof value.version!=='string'||!/^[a-z0-9][a-z0-9.-]{0,63}$/.test(value.version)||!hash(value.sha256)||typeof value.text!=='string'||!value.text.trim()||value.text.length>6000)return null;
@@ -202,17 +210,19 @@ function participantOnboardingDeliveryView({context,snapshot,workerId}={}){
  if(delivery===undefined||delivery===null){if(!explicitCapability||row.canSendOnboardingWhatsapp!==true)return unknown();}
  else if(!validDelivery(delivery))return unknown();
  const state=delivery?.state||'NOT_REQUESTED',copy=copies[state];
+  const blocker=state==='BLOCKED'&&delivery.code==='PARTICIPANT_ONBOARDING_TEMPLATE_APPROVAL_REQUIRED'?'TEMPLATE_APPROVAL_REQUIRED':null;
  const chat=participantKycChatCapabilities(row,snapshot.canManage,context.now);
  const validInvitation=row.status==='ACTIVE'&&row.invitation?.state==='ACCEPTED'||row.status==='INVITED'&&row.invitation?.state==='SENT'&&row.invitation.expired!==true&&Number.isFinite(Date.parse(row.invitation.expiresAt))&&Date.parse(row.invitation.expiresAt)>context.now;
  const currentPerson=row.active===true&&['INVITED','ACTIVE'].includes(row.status)&&typeof row.revision==='string'&&row.revision.length>0&&row.revision.length<=128;
  const send=snapshot.canManage===true&&row.canSendOnboardingWhatsapp===true&&currentPerson&&validInvitation&&['NOT_SUBMITTED','REJECTED'].includes(row.kyc?.status)&&chat.observed&&!['PENDING','CLAIMED'].includes(chat.challenge?.status)&&participantOnboardingContactNotice(snapshot.onboardingContactNotice)!==null&&['NOT_REQUESTED','CANCELED','REJECTED','SENT','STATUS_OBSERVED'].includes(state);
  const revoke=row.canRevokeOnboardingContact===true&&currentPerson&&(snapshot.canManage===true||row.self===true&&row.status==='ACTIVE'&&row.accountLinked===true)&&delivery?.contactAuthorized===true;
  let label=copy[0],description=copy[1];
+  if(blocker){label='Plantilla de alta pendiente';description='Falta comprobar una aprobación vigente para las instrucciones de alta. Revisá la plantilla de esta empresa; no se inicia otro envío.';}
  if(state==='STATUS_OBSERVED'&&delivery.providerStatus==='delivered'){label='Entrega informada por WhatsApp';description='WhatsApp informó la entrega del mensaje. Esto no acredita quién lo recibió, la aceptación de la cuenta ni la revisión de identidad.';}
  if(state==='STATUS_OBSERVED'&&delivery.providerStatus==='read'){label='Lectura informada por WhatsApp';description='WhatsApp informó la lectura del mensaje. Esto no acredita quién lo leyó, la aceptación de la cuenta ni la revisión de identidad.';}
  if(state==='STATUS_OBSERVED'&&['failed','deleted'].includes(delivery.providerStatus)){label='Entrega no confirmada';description='WhatsApp informó un fallo o la eliminación del mensaje. No se reenvía automáticamente; consultá el estado y la configuración.';}
  const dispatched=['SEND_STARTED','SEND_UNKNOWN','SENT','STATUS_OBSERVED'].includes(state);
- return {observed:true,state,label,description,canSend:Boolean(send),canRevoke:Boolean(revoke),contactAuthorized:delivery?.contactAuthorized??false,providerAccepted:delivery?.providerAccepted??false,deliveryConfirmed:delivery?.deliveryConfirmed??false,automaticResendAllowed:false,revokeWarning:dispatched?'Retirar la autorización detiene futuros envíos. No puede borrar ni retirar un mensaje que WhatsApp ya haya aceptado o enviado.':revoke?'Retirar la autorización impide los próximos envíos de instrucciones. La invitación de acceso y los demás permisos se conservan.':null};
+  return {observed:true,state,blocker,label,description,canSend:Boolean(send),canRevoke:Boolean(revoke),contactAuthorized:delivery?.contactAuthorized??false,providerAccepted:delivery?.providerAccepted??false,deliveryConfirmed:delivery?.deliveryConfirmed??false,automaticResendAllowed:false,revokeWarning:dispatched?'Retirar la autorización detiene futuros envíos. No puede borrar ni retirar un mensaje que WhatsApp ya haya aceptado o enviado.':revoke?'Retirar la autorización impide los próximos envíos de instrucciones. La invitación de acceso y los demás permisos se conservan.':null};
 }
 
 return {participantOnboardingContactNotice,participantOnboardingWhatsAppConsent,participantOnboardingDeliveryView};
