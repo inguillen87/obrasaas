@@ -1,9 +1,34 @@
 import {WorkspaceError,workspaceId,operationId,requireWorkspaceIdentity} from './workspace-policy.mjs';
 import {boundedBody} from './workspace-http.mjs';
-import {readPrivateKycBody,PrivateImageError} from './private-image-upload.mjs';
+import {MAX_PRIVATE_KYC_BODY_BYTES,PrivateImageError} from './private-image-upload.mjs';
+import {participantKycInput} from './participant-policy.mjs';
 import {participantAccountRequest} from './participant-account-discovery.mjs';
 const headers={'Cache-Control':'private, no-store, max-age=0','Vary':'Cookie, Authorization','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow'};
 const reply=(value,status=200)=>Response.json(value,{status,headers});
+const MAX_PARTICIPANT_DOCUMENT_BACK_BODY_BYTES=9*1024*1024;
+// Only this authenticated endpoint reads the expanded envelope. Other private
+// image readers and administrative commands retain the existing 4 MiB budget.
+export async function readParticipantKycBody(request){
+ const fail=code=>{throw new PrivateImageError(code);};
+ if(request.headers.get('content-type')?.split(';')[0].trim().toLowerCase()!=='application/json')fail('PRIVATE_IMAGE_REQUEST_INVALID');
+ const length=request.headers.get('content-length');
+ if(length!==null&&(!/^\d+$/.test(length)||Number(length)>MAX_PARTICIPANT_DOCUMENT_BACK_BODY_BYTES))fail('PRIVATE_IMAGE_TOO_LARGE');
+ if(!request.body?.getReader)fail('PRIVATE_IMAGE_REQUEST_INVALID');
+ const reader=request.body.getReader(),chunks=[];let size=0;
+ try{
+  while(true){const next=await reader.read();if(next.done)break;if(!(next.value instanceof Uint8Array))fail('PRIVATE_IMAGE_REQUEST_INVALID');size+=next.value.byteLength;if(size>MAX_PARTICIPANT_DOCUMENT_BACK_BODY_BYTES)fail('PRIVATE_IMAGE_TOO_LARGE');chunks.push(Buffer.from(next.value));}
+  const body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks)));
+  if(!body||typeof body!=='object'||Array.isArray(body))fail('PRIVATE_IMAGE_REQUEST_INVALID');
+  if(size>MAX_PRIVATE_KYC_BODY_BYTES){
+   // A partial opt-in, unknown key, wrong command or invalid image cannot obtain
+   // the larger budget, even when its consent fields appear plausible.
+   let valid=false;try{valid=participantKycInput(body).back?.bytes?.length>0;}catch{}
+   if(!valid)fail('PRIVATE_IMAGE_TOO_LARGE');
+  }
+  return body;
+ }catch(error){if(error instanceof PrivateImageError)throw error;fail('PRIVATE_IMAGE_REQUEST_INVALID');}
+ finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+}
 export function createParticipantHandlers({verify,store,join=false,scheduleOnboarding=()=>{}}){
  async function handle(request){try{
   const session=await verify(request.headers);if(!session.authenticated&&['IDENTITY_CONFIGURATION_PENDING','IDENTITY_PROVIDER_UNAVAILABLE'].includes(session.code))throw new WorkspaceError('IDENTITY_PROVIDER_UNAVAILABLE',503);requireWorkspaceIdentity(session);
@@ -14,7 +39,7 @@ export function createParticipantHandlers({verify,store,join=false,scheduleOnboa
    if(join)return reply(await store.join(session,await boundedBody(request),{accept:true}));
    // Images have their own bounded reader. The exact command contract rejects
    // mixing KYC submissions with administrative mutation payloads.
-   const body=await readPrivateKycBody(request),result=body.front!==undefined||body.selfie!==undefined?await store.submitKyc(session,body):await store.save(session,body);
+   const body=await readParticipantKycBody(request),result=['front','selfie','back','backConsent','backNoticeVersion','backNoticeSha256'].some(key=>Object.hasOwn(body,key))?await store.submitKyc(session,body):await store.save(session,body);
    if(['INVITE','SEND_ONBOARDING_WHATSAPP'].includes(body.action)&&result.saved===true&&result.replayed===false&&workspaceId(body.projectId)&&workspaceId(body.payload?.workerId)&&result.participant?.id===body.payload.workerId&&['SENT','ACCEPTED'].includes(result.participant.invitation?.state)&&result.participant.onboardingDelivery?.contactAuthorized===true){
     // The durable intent was committed by the store. This wake-up is optional;
     // cron recovers it if the HTTP response or runtime scheduling is lost.

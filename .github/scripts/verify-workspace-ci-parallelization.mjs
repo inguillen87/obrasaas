@@ -7,10 +7,16 @@ import {fileURLToPath} from 'node:url';
 import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='d41d26d6732ea8f1f7690298c589da2c8a863f89c1a52df30ae3ea91d1ac6ddd';
+export const EXPECTED_CONTRACT_SHA256='28058e49f44db142dd2f6110512910ab53465611d0919b90ee830c34860bc9ef';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
 const BASELINE_PRODUCERS_SHA256='07d0016608332c0775f86bee6d005e60d4686d2ffe33a3065dfd9fd8e974ab20';
+const PREPARATION_BASELINE_BLOCKS_SHA256='8faaf5e69185f49da4c797d21613c7a34705be074fa3890398be37a8559ca409';
+const PREPARATION_BASELINE_OWNERSHIP_SHA256='d98be6976ef7772633f5e8697fef3786855199e60dd0d522dc392b01097d602f';
+const PREPARATION_BASELINE_PRODUCERS_SHA256='da40d5dff77ff5c436d7e4a6a6b48da90197bced44dc113eebcf0f14c2468c88';
+const PREPARATION_ARTIFACTS=['.vercel/private/project-preparation-postgres-validation.json','.vercel/private/project-preparation-ui-*.json','.vercel/private/project-preparation-ui-*.png'];
+const PREPARATION_MODES=['save','recover','reload','cancel','conflict','denied'];
+const preparationDependenciesFor=kind=>['UNIT','UI_BANK','UI_JOINT','UI_CAUSAL','PG_COMPANY_KYC'].includes(kind)?['src/lib/participant-kyc-image-set.mjs',...(kind==='PG_COMPANY_KYC'?['src/lib/project-preparation-http.mjs','src/lib/project-preparation-policy.mjs','src/lib/project-preparation-store.mjs']:[])]:[];
 export const LANES=['contracts','plans','people','field','meta','channels','business','workspace-ui'];
 // Keep each serialized lane below Linux's 128 KiB per-environment-string limit.
 // Leave room for the environment key and GitHub's outer JSON formatting while
@@ -39,7 +45,9 @@ const EXTENSION_PROOFS=[
  ['intake-ui','people',55,'.vercel/private/employee-intake-ui/browser.json','UI_INTAKE'],
  ['joint-ui','people',56,'.vercel/private/participant-bank-intake-integration/current/browser.json','UI_JOINT'],
  ['joint-causal','people',56,'.vercel/private/participant-bank-intake-integration/bad-resolution/browser.json','UI_CAUSAL'],
- ['company-kyc-postgres','people',57,'.vercel/company-kyc-evidence/postgres.json','PG_COMPANY_KYC']
+ ['company-kyc-postgres','people',57,'.vercel/company-kyc-evidence/postgres.json','PG_COMPANY_KYC'],
+ ['project-preparation-postgres','business',58,'.vercel/private/project-preparation-postgres-validation.json','PG_PREPARATION'],
+ ['project-preparation-ui','business',58,'.vercel/private/project-preparation-ui-validation.json','UI_PREPARATION']
 ];
 function sourcePath(value){if(typeof value!=='string'||value.length>500||/[\\\x00-\x1f]/.test(value)||value.startsWith('/')||value.split('/').some(part=>!part||part==='.'||part==='..'))deny('UNSAFE_SOURCE_PATH');return value;}
 function gitSource(root,expectedHead){if(!head(expectedHead))deny('EXPECTED_HEAD_INVALID');const cache=new Map();return filename=>{sourcePath(filename);if(!cache.has(filename))cache.set(filename,execFileSync('git',['show',expectedHead+':'+filename],{cwd:root,maxBuffer:8*1024*1024}));return cache.get(filename);};}
@@ -47,7 +55,7 @@ function manifestDigest(references){return hash(canonical([...references].sort((
 function expectedSourceDigest(spec,readSource){if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');return manifestDigest(spec.sourceFiles.map(file=>{const bytes=readSource(file);if(!Buffer.isBuffer(bytes))deny('PROOF_SOURCE_BYTES');return {path:file,sha256:hash(bytes)};}));}
 const utf8=bytes=>{if(!Buffer.isBuffer(bytes))deny('PROOF_BYTES');const text=bytes.toString('utf8');if(!bytes.equals(Buffer.from(text)))deny('PROOF_ENCODING');return text;};
 function matrix(rows,widths,modes){if(!Array.isArray(rows))deny('PROOF_MATRIX');const keys=rows.map(row=>row&&row.width+':'+row.mode);equal(keys.toSorted(),widths.flatMap(width=>modes.map(mode=>width+':'+mode)).toSorted(),'PROOF_MATRIX');}
-function summary(spec){return spec.kind==='UNIT'?{suites:7,tests:EXPECTED_TOTAL_TESTS,recovery:7,corporateKyc:76,nextSteps:35}:spec.kind==='PG_COMPANY_KYC'?6:spec.kind==='UI_CAUSAL'?0:spec.kind==='UI_JOINT'?8:spec.kind.startsWith('UI_')?32:spec.kind==='PG_BANK'?10:8;}
+function summary(spec){return spec.kind==='PG_PREPARATION'?spec.checkNames.length:spec.kind==='UI_PREPARATION'?4*PREPARATION_MODES.length:spec.kind==='UNIT'?{suites:7,tests:EXPECTED_TOTAL_TESTS,recovery:7,corporateKyc:76,nextSteps:35}:spec.kind==='PG_COMPANY_KYC'?6:spec.kind==='UI_CAUSAL'?0:spec.kind==='UI_JOINT'?8:spec.kind.startsWith('UI_')?32:spec.kind==='PG_BANK'?10:8;}
 function validateExtension(contract){
  const extension=contract.extension;exactKeys(extension,['baseHead','baselineBlocksSha256','baselineOwnershipSha256','baselineProducersSha256','proofs'],'EXTENSION_SHAPE');
  if(extension.baseHead!=='a4b79d7a7f75427ed1d0b0e1e9b247e1188adf3f')deny('EXTENSION_BASE');
@@ -55,19 +63,33 @@ function validateExtension(contract){
  for(const spec of extension.proofs){exactKeys(spec,['id','lane','blockId','path','kind','producer','producerSha256','sourceFiles','checkNames'],'EXTENSION_PROOF_SHAPE');if(!sha(spec.producerSha256)||!Array.isArray(spec.sourceFiles)||!spec.sourceFiles.length||new Set(spec.sourceFiles).size!==spec.sourceFiles.length)deny('EXTENSION_SOURCE_CONTRACT');spec.sourceFiles.forEach(sourcePath);sourcePath(spec.producer);if(!Array.isArray(spec.checkNames))deny('EXTENSION_CHECK_NAMES');}
  for(const spec of extension.proofs){const record=contract.evidenceProducers.find(p=>p.path===spec.path);equal(record&&{producer:record.producer,path:record.path,retained:record.retained,blockId:record.blockId,lane:record.lane,producerSha256:record.producerSha256,sourceBasis:record.sourceBasis},{producer:spec.producer,path:spec.path,retained:true,blockId:spec.blockId,lane:spec.lane,producerSha256:spec.producerSha256,sourceBasis:'EXPECTED_HEAD_GIT_BYTES'},'EXTENSION_PRODUCER_CONTRACT');}
  if(hash(canonical(contract.blocks.slice(0,46)))!==extension.baselineBlocksSha256||extension.baselineBlocksSha256!==BASELINE_BLOCKS_SHA256)deny('BASELINE_BLOCKS_CHANGED');
- const newPatterns=new Set(extension.proofs.flatMap(spec=>contract.lanes[spec.lane].artifacts.filter(pattern=>matches(spec.path,pattern))));
+ const newPatterns=new Set([...PREPARATION_ARTIFACTS,...extension.proofs.flatMap(spec=>contract.lanes[spec.lane].artifacts.filter(pattern=>matches(spec.path,pattern)))]);
  const ownership=Object.fromEntries(LANES.map(lane=>[lane,{blocks:contract.lanes[lane].blocks.filter(id=>id<=52),artifacts:contract.lanes[lane].artifacts.filter(pattern=>!newPatterns.has(pattern))}]));
  if(hash(canonical(ownership))!==extension.baselineOwnershipSha256||extension.baselineOwnershipSha256!==BASELINE_OWNERSHIP_SHA256)deny('BASELINE_OWNERSHIP_CHANGED');
  if(hash(canonical(contract.evidenceProducers.filter(p=>p.blockId<=52)))!==extension.baselineProducersSha256||extension.baselineProducersSha256!==BASELINE_PRODUCERS_SHA256)deny('BASELINE_PRODUCERS_CHANGED');
+ if(hash(canonical(contract.blocks.slice(0,51)))!==PREPARATION_BASELINE_BLOCKS_SHA256)deny('PREPARATION_BASELINE_BLOCKS_CHANGED');
+ const previousOwnership=Object.fromEntries(LANES.map(lane=>[lane,{blocks:contract.lanes[lane].blocks.filter(id=>id<=57),artifacts:contract.lanes[lane].artifacts.filter(pattern=>!PREPARATION_ARTIFACTS.includes(pattern))}]));
+ if(hash(canonical(previousOwnership))!==PREPARATION_BASELINE_OWNERSHIP_SHA256)deny('PREPARATION_BASELINE_OWNERSHIP_CHANGED');
+ if(hash(canonical(contract.evidenceProducers.filter(p=>p.blockId<=57)))!==PREPARATION_BASELINE_PRODUCERS_SHA256)deny('PREPARATION_BASELINE_PRODUCERS_CHANGED');
 }
 export function validateExtensionProof(spec,bytes,{expectedHead,readSource,readEvidence}){
  if(!head(expectedHead)||typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');let proof;try{proof=JSON.parse(utf8(bytes));}catch(error){if(error.code)throw error;deny('PROOF_JSON');}if(!proof||typeof proof!=='object'||Array.isArray(proof))deny('PROOF_SHAPE');
- const expectedStatus=spec.kind==='UI_CAUSAL'?'EXPECTED_CAUSAL_FAILURE':'PASS';if(proof.status!==expectedStatus)deny('PROOF_STATUS');if((spec.kind==='PG_COMPANY_KYC'?proof.productionDataTouched:proof.productionDataWritten)!==false)deny('PROOF_PRODUCTION_BOUNDARY');
+ const expectedStatus=spec.kind==='UI_CAUSAL'?'EXPECTED_CAUSAL_FAILURE':'PASS',actualStatus=spec.kind==='PG_PREPARATION'?(proof.ok===true?'PASS':'FAIL'):spec.kind==='UI_PREPARATION'?(proof.validated===true?'PASS':'FAIL'):proof.status;if(actualStatus!==expectedStatus)deny('PROOF_STATUS');if((spec.kind==='PG_COMPANY_KYC'?proof.productionDataTouched:proof.productionDataWritten)!==false)deny('PROOF_PRODUCTION_BOUNDARY');
  const producerBytes=readSource(spec.producer);if(!Buffer.isBuffer(producerBytes)||hash(producerBytes)!==spec.producerSha256||proof.harnessSha256!==spec.producerSha256)deny('PROOF_HARNESS_SOURCE');
  if(!Array.isArray(proof.sourceManifest))deny('PROOF_SOURCE_MANIFEST');equal(proof.sourceManifest.map(r=>r?.path).toSorted(),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');
  for(const ref of proof.sourceManifest){exactKeys(ref,['path','sha256'],'PROOF_SOURCE_REFERENCE');sourcePath(ref.path);if(!sha(ref.sha256)||hash(readSource(ref.path))!==ref.sha256)deny('PROOF_SOURCE_HASH');}
  if(proof.sourceRevision!==undefined&&proof.sourceRevision!==expectedHead)deny('PROOF_SOURCE_HEAD');
- if(spec.kind==='PG_COMPANY_KYC'){
+ if(spec.kind==='PG_PREPARATION'||spec.kind==='UI_PREPARATION'){
+  if(proof.sourceRevision!==expectedHead||proof.sourceState!=='EXACT_CI_SOURCE'||proof.trackedClean!==true)deny('PROOF_SOURCE_STATE');
+  if(proof.providerCalls!==0)deny('PROOF_PROVIDER_IO');
+  if(spec.kind==='PG_PREPARATION'){
+   if(proof.databaseRemoved!==true||proof.fixture!=='disposable-local-postgres-canonical-workspace-with-synthetic-sessions')deny('PROOF_CLEANUP');equal(proof.checks,spec.checkNames,'PROOF_CHECK_NAMES');if(proof.totalCheckCount!==spec.checkNames.length)deny('PROOF_CHECK_NAMES');
+  }else{
+   if(proof.fixtureRemoved!==true)deny('PROOF_CLEANUP');if(proof.synthetic!==true||proof.realProviderCalls!==false)deny('PROOF_PROVIDER_IO');equal(proof.errors,[],'PROOF_UI_ERRORS');equal(proof.widths,[320,390,768,1280],'PROOF_MATRIX');matrix(proof.checks,proof.widths,PREPARATION_MODES);
+   if(proof.totalCheckCount!==24)deny('PROOF_MATRIX');if(proof.checks.some(c=>c.posts!==(c.mode==='cancel'?2:1)||!Number.isSafeInteger(c.recoveryReads)||c.recoveryReads<0||c.currentSessionToken!==true||c.placeholdersOnly!==true||c.tasksUnchanged!==true||c.noPayloadPersistence!==true||c.horizontalOverflow!==false))deny('PROOF_PREPARATION_GUARDS');
+  }
+ }
+ else if(spec.kind==='PG_COMPANY_KYC'){
   if(proof.databaseCreated!==false||proof.schemaRemoved!==true||proof.environment!=='schema-only-localhost-postgresql-corporate-KYC')deny('PROOF_CLEANUP');equal(proof.checks,spec.checkNames,'PROOF_CHECK_NAMES');if(proof.realProviderCalls!==0||proof.unexpectedNetworkCalls!==0||proof.realClerkLogin!==false||proof.realMetaAccepted!==false||proof.humanAccepted!==false)deny('PROOF_PROVIDER_IO');
  }
  else if(spec.kind==='PG_BANK'||spec.kind==='PG_INTAKE'){if(proof.schemaRemoved!==true)deny('PROOF_CLEANUP');equal(proof.checks,spec.checkNames,'PROOF_CHECK_NAMES');if(spec.kind==='PG_BANK'){if(proof.realProviderCalls!==0)deny('PROOF_PROVIDER_IO');}else{if(proof.providerCalls!==0||proof.unexpectedNetworkCalls!==0)deny('PROOF_PROVIDER_IO');equal(proof.sqlFailures,[],'PROOF_SQL_ERRORS');}}
@@ -106,6 +128,8 @@ function currentProducerSourceFiles(spec,root){
  if(spec.kind==='UNIT')return bankUnitSourceFiles(root);
  if(spec.kind==='PG_BANK')return array('sourceFiles').sort();
  if(spec.kind==='PG_INTAKE')return array('sourcePaths').sort();
+ if(spec.kind==='PG_PREPARATION')return array('sourcePaths').sort();
+ if(spec.kind==='UI_PREPARATION')return array('copiedFiles').map(file=>'src/app/(identity)/cuenta/'+file).sort();
  if(spec.kind==='UI_BANK'){const seeds=[...text.matchAll(/\bvisit\('([^']+)'(?:,true)?\)/g)].map(match=>match[1]);assert.equal(seeds.length,3,'Exact current bank producer roots');return walk(seeds);}
  if(spec.kind==='UI_INTAKE')return [...array('files').map(file=>'src/app/(identity)/cuenta/'+file),...literals(/\.\.\.\[([^\]]+)\]\.map\(file=>/g)].sort();
  if(spec.kind==='UI_JOINT'||spec.kind==='UI_CAUSAL')return walk(literals(/for\(const file of \[([^\]]+)\]\)visit\(file\);/g),array('files').map(file=>'src/app/(identity)/cuenta/'+file));
@@ -114,7 +138,7 @@ function currentProducerSourceFiles(spec,root){
  return [...files('src/lib'),'scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs'].sort();
 }
 function extensionSelftest(contract,root){
- const checks=[],discoveryChecks=[],videoChecks=[],expectedHead=contract.extension.baseHead;
+ const checks=[],discoveryChecks=[],videoChecks=[],preparationChecks=[],preparationProofChecks=[],expectedHead=contract.extension.baseHead;
  const discoveryBackend=['src/lib/participant-account-discovery.mjs'],discoveryUi=['src/app/(identity)/cuenta/participant-account-discovery-format.mjs','src/app/(identity)/cuenta/participant-account-discovery.js'];
  const discoveryDependenciesFor=kind=>kind==='UI_INTAKE'?discoveryUi:['UI_BANK','UI_JOINT','UI_CAUSAL'].includes(kind)?[...discoveryBackend,...discoveryUi]:discoveryBackend;
  const beforeDiscoveryCounts={UNIT:94,PG_BANK:12,PG_INTAKE:21,UI_BANK:87,UI_INTAKE:19,UI_JOINT:87,UI_CAUSAL:87,PG_COMPANY_KYC:155};
@@ -125,6 +149,7 @@ function extensionSelftest(contract,root){
  const readSource=file=>{const bytes=readFileSync(path.join(root,sourcePath(file))),text=bytes.toString('utf8');assert.ok(bytes.equals(Buffer.from(text)));return Buffer.from(text.replaceAll('\r\n','\n'));};
  const tap=names=>Buffer.from('TAP version 13\n'+names.map((name,i)=>'ok '+(i+1)+' - '+name+'\n').join('')+'1..'+names.length+'\n# tests '+names.length+'\n# pass '+names.length+'\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n');
  for(const spec of contract.extension.proofs){
+   const originalCheckCount=checks.length;
   const evidence=new Map(),base={status:spec.kind==='UI_CAUSAL'?'EXPECTED_CAUSAL_FAILURE':'PASS',productionDataWritten:false,sourceManifest:spec.sourceFiles.map(file=>({path:file,sha256:hash(readSource(file))})),harnessSha256:spec.producerSha256};
   let proof={...base};
   if(spec.kind.startsWith('PG_'))Object.assign(proof,{schemaRemoved:true,checks:[...spec.checkNames],realProviderCalls:0,providerCalls:0,unexpectedNetworkCalls:0,sqlFailures:[],...(spec.kind==='PG_COMPANY_KYC'?{productionDataTouched:false,databaseCreated:false,environment:'schema-only-localhost-postgresql-corporate-KYC',realClerkLogin:false,realMetaAccepted:false,humanAccepted:false}:{})});
@@ -132,17 +157,23 @@ function extensionSelftest(contract,root){
   else{Object.assign(proof,{errors:[],realProviderCalls:0,providerCalls:0,postgresExecuted:false,realIdentityAccepted:false,widths:[320,390,768,1280],sourceRevision:expectedHead,sourceState:'committed exact Git HEAD',trackedClean:true,dirtyTrackedPaths:[],fullSuite:true,badTransform:null,causalFailure:null});const modes=spec.kind==='UI_BANK'?['normal','invalid-cancel','lost-reload','unknown-close-reload','same-retry','stale','denied-forged','integrated']:spec.kind==='UI_INTAKE'?['success','unknown','wrong-receipt','html403','scope-switch','paging','config','invite']:['bank','intake'];proof.checks=proof.widths.flatMap(width=>modes.map(mode=>({width,mode,parentAndSiblingBlocked:true,ownRecoveryAndLocalCloseEnabled:true,noFeedbackDeadlock:true,automaticPost:false,storagePrivate:true})));
    if(spec.kind==='UI_CAUSAL'){const source='src/app/(identity)/cuenta/participant-panel.js',original=readSource(source),needle='locked={busy||Boolean(attempt)||Boolean(durableReference)||!recoveryReady||Boolean(draft)||intakePending}',replacement='locked={busy||Boolean(attempt)||Boolean(durableReference)||!recoveryReady||Boolean(draft)||intakePending||hasBankPending}';Object.assign(proof,{widths:[320],checks:[],badTransform:{source,originalSha256:hash(original),fixtureSha256:hash(Buffer.from(original.toString().replace(needle,replacement))),needle,replacement,runtimeSourceEdited:false},causalFailure:{stage:'own-bank-save',message:'own bank save must remain enabled while its own pending gates siblings (shadow fixture)',expectedFailure:true}});}
   }
-  const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
+   if(spec.kind==='PG_PREPARATION')Object.assign(proof,{ok:true,sourceRevision:expectedHead,sourceState:'EXACT_CI_SOURCE',trackedClean:true,databaseRemoved:true,fixture:'disposable-local-postgres-canonical-workspace-with-synthetic-sessions',totalCheckCount:spec.checkNames.length});
+   if(spec.kind==='UI_PREPARATION')Object.assign(proof,{validated:true,synthetic:true,realProviderCalls:false,sourceState:'EXACT_CI_SOURCE',fixtureRemoved:true,totalCheckCount:24,checks:proof.widths.flatMap(width=>PREPARATION_MODES.map(mode=>({width,mode,posts:mode==='cancel'?2:1,recoveryReads:0,currentSessionToken:true,placeholdersOnly:true,tasksUnchanged:true,noPayloadPersistence:true,horizontalOverflow:false})))});
+   const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
   good(spec.id+'-complete-proof',()=>validate(proof));
   if(spec.kind!=='UNIT')good(spec.id+'-real-current-producer-source-manifest-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
   good(spec.id+'-reordered-source-manifest',()=>{const reordered=clone(proof);reordered.sourceManifest.reverse();assert.equal(validate(reordered).sourceManifestSha256,validate(proof).sourceManifestSha256);});
   bad(spec.id+'-malformed-json','PROOF_JSON',()=>validateExtensionProof(spec,Buffer.from('{'),{expectedHead,readSource}));bad(spec.id+'-invalid-utf8','PROOF_ENCODING',()=>validateExtensionProof(spec,Buffer.from([255]),{expectedHead,readSource}));
-  mutate('wrong-status','PROOF_STATUS',p=>{p.status='FAIL';});mutate('production-write','PROOF_PRODUCTION_BOUNDARY',p=>{if(spec.kind==='PG_COMPANY_KYC')p.productionDataTouched=true;else p.productionDataWritten=true;});mutate('wrong-source-head','PROOF_SOURCE_HEAD',p=>{p.sourceRevision='f'.repeat(40);});mutate('wrong-harness','PROOF_HARNESS_SOURCE',p=>{p.harnessSha256='f'.repeat(64);});mutate('missing-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.pop();});mutate('foreign-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.push({path:'src/foreign.mjs',sha256:'f'.repeat(64)});});mutate('wrong-source-hash','PROOF_SOURCE_HASH',p=>{p.sourceManifest[0].sha256='f'.repeat(64);});
-  if(spec.kind.startsWith('PG_')){mutate('cleanup-failure','PROOF_CLEANUP',p=>{p.schemaRemoved=false;});mutate('missing-check','PROOF_CHECK_NAMES',p=>{p.checks.pop();});mutate('provider-call','PROOF_PROVIDER_IO',p=>{p.realProviderCalls=1;p.providerCalls=1;});}
+   mutate('wrong-status','PROOF_STATUS',p=>{if(spec.kind==='PG_PREPARATION')p.ok=false;else if(spec.kind==='UI_PREPARATION')p.validated=false;else p.status='FAIL';});mutate('production-write','PROOF_PRODUCTION_BOUNDARY',p=>{if(spec.kind==='PG_COMPANY_KYC')p.productionDataTouched=true;else p.productionDataWritten=true;});mutate('wrong-source-head','PROOF_SOURCE_HEAD',p=>{p.sourceRevision='f'.repeat(40);});mutate('wrong-harness','PROOF_HARNESS_SOURCE',p=>{p.harnessSha256='f'.repeat(64);});mutate('missing-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.pop();});mutate('foreign-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.push({path:'src/foreign.mjs',sha256:'f'.repeat(64)});});mutate('wrong-source-hash','PROOF_SOURCE_HASH',p=>{p.sourceManifest[0].sha256='f'.repeat(64);});
+   if(spec.kind.startsWith('PG_')){mutate('cleanup-failure','PROOF_CLEANUP',p=>{if(spec.kind==='PG_PREPARATION')p.databaseRemoved=false;else p.schemaRemoved=false;});mutate('missing-check','PROOF_CHECK_NAMES',p=>{p.checks.pop();});mutate('provider-call','PROOF_PROVIDER_IO',p=>{p.realProviderCalls=1;p.providerCalls=1;});}
   if(spec.kind==='PG_COMPANY_KYC'){
    mutate('database-created','PROOF_CLEANUP',p=>{p.databaseCreated=true;});mutate('wrong-engine','PROOF_CLEANUP',p=>{p.environment='database-created-fixture';});mutate('network-call','PROOF_PROVIDER_IO',p=>{p.unexpectedNetworkCalls=1;});mutate('network-array-is-not-zero','PROOF_PROVIDER_IO',p=>{p.unexpectedNetworkCalls=[];});for(const key of ['realClerkLogin','realMetaAccepted','humanAccepted'])mutate('accepted-'+key,'PROOF_PROVIDER_IO',p=>{p[key]=true;});
   }
-  if(['UI_BANK','UI_INTAKE','UI_JOINT'].includes(spec.kind)){mutate('partial-matrix','PROOF_MATRIX',p=>{p.checks.pop();});mutate('duplicate-matrix','PROOF_MATRIX',p=>{p.checks[0]=p.checks[1];});mutate('ui-error','PROOF_UI_ERRORS',p=>{p.errors=['shadow error'];});}
+   if(['UI_BANK','UI_INTAKE','UI_JOINT','UI_PREPARATION'].includes(spec.kind)){mutate('partial-matrix','PROOF_MATRIX',p=>{p.checks.pop();});mutate('duplicate-matrix','PROOF_MATRIX',p=>{p.checks[0]=p.checks[1];});mutate('ui-error','PROOF_UI_ERRORS',p=>{p.errors=['shadow error'];});}
+   if(spec.kind==='PG_PREPARATION'||spec.kind==='UI_PREPARATION'){
+    mutate('dirty-tracked','PROOF_SOURCE_STATE',p=>{p.trackedClean=false;});mutate('uncommitted-source','PROOF_SOURCE_STATE',p=>{p.sourceState='LOCAL_REVIEW_SOURCE';});mutate('missing-head','PROOF_SOURCE_STATE',p=>{delete p.sourceRevision;});mutate('wrong-total',spec.kind==='UI_PREPARATION'?'PROOF_MATRIX':'PROOF_CHECK_NAMES',p=>{p.totalCheckCount=0;});
+    if(spec.kind==='UI_PREPARATION'){mutate('fixture-not-removed','PROOF_CLEANUP',p=>{p.fixtureRemoved=false;});mutate('provider-call','PROOF_PROVIDER_IO',p=>{p.providerCalls=1;});mutate('private-payload-stored','PROOF_PREPARATION_GUARDS',p=>{p.checks[0].noPayloadPersistence=false;});mutate('tasks-mutated','PROOF_PREPARATION_GUARDS',p=>{p.checks[0].tasksUnchanged=false;});}
+   }
   if(spec.kind==='UI_JOINT'){mutate('dirty-tracked','PROOF_SOURCE_STATE',p=>{p.trackedClean=false;});mutate('uncommitted-source','PROOF_SOURCE_STATE',p=>{p.sourceState='uncommitted';});mutate('null-head','PROOF_SOURCE_HEAD',p=>{p.sourceRevision=null;});for(const key of ['parentAndSiblingBlocked','ownRecoveryAndLocalCloseEnabled','noFeedbackDeadlock','storagePrivate'])mutate('missing-'+key,'PROOF_JOINT_GUARDS',p=>{p.checks[0][key]=false;});mutate('auto-post','PROOF_JOINT_GUARDS',p=>{p.checks[0].automaticPost=true;});}
   if(spec.kind==='UI_CAUSAL'){mutate('wrong-stage','PROOF_CAUSAL_FAILURE',p=>{p.causalFailure.stage='unrelated';});mutate('runtime-mutated','PROOF_CAUSAL_TRANSFORM',p=>{p.badTransform.runtimeSourceEdited=true;});mutate('wrong-fixture-hash','PROOF_CAUSAL_TRANSFORM',p=>{p.badTransform.fixtureSha256='f'.repeat(64);});}
   if(spec.kind==='UNIT'){mutate('missing-suite','PROOF_UNIT_SUITES',p=>{p.suites.pop();});mutate('changed-tap-digest','PROOF_TAP_DIGEST',p=>{p.suites[4].tap.sha256='f'.repeat(64);});for(const names of [RECOVERY_CASES.slice(0,6),[...RECOVERY_CASES,'extra shadow case'],[...RECOVERY_CASES.slice(0,6),'wrong case']]){const bytes=tap(names),filename=proof.suites[4].tap.path,original=evidence.get(filename);evidence.set(filename,bytes);mutate('recovery-exact7-'+names.length+'-'+names.at(-1),'PROOF_UNIT_RESULTS',p=>{p.suites[4].tap={path:filename,bytes:bytes.length,sha256:hash(bytes)};});evidence.set(filename,original);}for(const key of ['fail','cancelled','skipped','todo']){const filename=proof.suites[4].tap.path,original=evidence.get(filename),bytes=Buffer.from(original.toString().replace('# '+key+' 0','# '+key+' 1'));evidence.set(filename,bytes);mutate('recovery-'+key,'PROOF_UNIT_RESULTS',p=>{p.suites[4].tap={path:filename,bytes:bytes.length,sha256:hash(bytes)};});evidence.set(filename,original);}}
@@ -154,7 +185,7 @@ function extensionSelftest(contract,root){
   if(['bank-intake-units','bank-ui','joint-ui','joint-causal','company-kyc-postgres'].includes(spec.id)){
    const allOnboardingDependencies=['src/lib/company-entitlement.mjs','src/lib/meta-customer-templates.mjs','src/lib/participant-onboarding-authority.mjs','src/lib/participant-onboarding-delivery.mjs','src/lib/participant-onboarding-intent.mjs','src/lib/participant-onboarding-policy.mjs','src/lib/whatsapp/template-review-policy.js'];
    const onboardingDependencies=spec.kind==='PG_COMPANY_KYC'?allOnboardingDependencies.filter(file=>!['src/lib/meta-customer-templates.mjs','src/lib/whatsapp/template-review-policy.js'].includes(file)):allOnboardingDependencies;
-   const voiceDependencies=['src/lib/voice-progress-draft.mjs'],videoDependencies=videoDependenciesFor(spec.kind),currentDependencies=[...onboardingDependencies,...voiceDependencies,...videoDependencies];
+    const voiceDependencies=['src/lib/voice-progress-draft.mjs'],videoDependencies=videoDependenciesFor(spec.kind),preparationDependencies=preparationDependenciesFor(spec.kind),currentDependencies=[...onboardingDependencies,...voiceDependencies,...videoDependencies,...preparationDependencies];
    const previousCount=spec.kind==='UNIT'?86:spec.kind==='PG_COMPANY_KYC'?149:79;
    assert.equal(spec.sourceFiles.length,previousCount+currentDependencies.length+discoveryDependenciesFor(spec.kind).length,'Exact canonical transitive source count: '+spec.id);
    if(spec.kind==='UNIT')good('bank-intake-units-real-current-transitive-manifest-exact',()=>equal(bankUnitSourceFiles(root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
@@ -169,34 +200,38 @@ function extensionSelftest(contract,root){
     mutate('changed-transitive-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
    }
    const beforeVoiceCount=previousCount+onboardingDependencies.length;
-   mutate('old-'+beforeVoiceCount+'-source-manifest-without-voice','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...voiceDependencies,...discoveryDependenciesFor(spec.kind),...videoDependencies].includes(ref.path));assert.equal(p.sourceManifest.length,beforeVoiceCount);});
+    mutate('old-'+beforeVoiceCount+'-source-manifest-without-voice','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...voiceDependencies,...discoveryDependenciesFor(spec.kind),...videoDependencies,...preparationDependencies].includes(ref.path));assert.equal(p.sourceManifest.length,beforeVoiceCount);});
    mutate('old-'+previousCount+'-source-manifest','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...currentDependencies,...discoveryDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
   }
   // Append discovery controls after the complete historical check sequence.
-  discoveryChecks.push(()=>{
-   const dependencies=discoveryDependenciesFor(spec.kind),previousCount=beforeDiscoveryCounts[spec.kind],videoDependencies=videoDependenciesFor(spec.kind);
-   assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+videoDependencies.length,'Exact current discovery source count: '+spec.id);
+   if(!['PG_PREPARATION','UI_PREPARATION'].includes(spec.kind))discoveryChecks.push(()=>{
+    const dependencies=discoveryDependenciesFor(spec.kind),previousCount=beforeDiscoveryCounts[spec.kind],videoDependencies=videoDependenciesFor(spec.kind),preparationDependencies=preparationDependenciesFor(spec.kind);
+    assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+videoDependencies.length+preparationDependencies.length,'Exact current discovery source count: '+spec.id);
    for(const file of dependencies){
     assert.ok(spec.sourceFiles.includes(file),'Canonical account discovery source must be pinned: '+file);
     mutate('missing-discovery-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
     mutate('changed-discovery-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
    }
-   mutate('old-'+previousCount+'-source-manifest-without-discovery','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...videoDependencies].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
+    mutate('old-'+previousCount+'-source-manifest-without-discovery','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...videoDependencies,...preparationDependencies].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
   });
   // Append only the extractor's causal controls after all 553 historical checks.
   if(videoDependenciesFor(spec.kind).length)videoChecks.push(()=>{
-   const dependencies=videoDependenciesFor(spec.kind),previousCount=beforeVideoCounts[spec.kind];
-   assert.equal(spec.sourceFiles.length,previousCount+dependencies.length,'Exact current video source count: '+spec.id);
+   const dependencies=videoDependenciesFor(spec.kind),previousCount=beforeVideoCounts[spec.kind],preparationDependencies=preparationDependenciesFor(spec.kind);
+   assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+preparationDependencies.length,'Exact current video source count: '+spec.id);
    for(const file of dependencies){
     assert.ok(spec.sourceFiles.includes(file),'Canonical contextual video source must be pinned: '+file);
     mutate('missing-video-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
     mutate('changed-video-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
    }
-   mutate('old-'+previousCount+'-source-manifest-without-video','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!dependencies.includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
+   mutate('old-'+previousCount+'-source-manifest-without-video','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...preparationDependencies].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
   });
+   if(preparationDependenciesFor(spec.kind).length)preparationChecks.push(()=>{for(const file of preparationDependenciesFor(spec.kind)){assert.ok(spec.sourceFiles.includes(file),'Current KYC/preparation source must be pinned: '+file);mutate('missing-kyc-preparation-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});mutate('changed-kyc-preparation-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});}});
+   if(['PG_PREPARATION','UI_PREPARATION'].includes(spec.kind))preparationProofChecks.push(...checks.splice(originalCheckCount));
  }
  for(const run of discoveryChecks)run();
  for(const run of videoChecks)run();
+ for(const run of preparationChecks)run();
+ checks.push(...preparationProofChecks);
  return checks;
 }
 
@@ -253,20 +288,20 @@ function validateEvidenceContract(contract){
   for(const filename of owner.requiredProducedEvidence){cleanPath(filename);if(owner.artifacts.some(pattern=>matches(filename,pattern)))deny('PRODUCED_EVIDENCE_IS_UPLOAD_OWNED');}
   if(owner.artifacts.filter(pattern=>!owner.optionalArtifactPatterns.includes(pattern)).some(pattern=>!owner.requiredRetainedEvidence.some(filename=>matches(filename,pattern))))deny('MANDATORY_PATTERN_WITHOUT_MAIN_PROOF');
  }
- if(Object.values(contract.lanes).flatMap(owner=>owner.optionalArtifactPatterns).length!==3)deny('OPTIONAL_ARTIFACT_COVERAGE');
+ if(Object.values(contract.lanes).flatMap(owner=>owner.optionalArtifactPatterns).length!==5)deny('OPTIONAL_ARTIFACT_COVERAGE');
 }
 export function validateContract(contract){
  if(contract?.version!==2||contract.sourceCommit!=='61d316a8983c268d43f8af6de10df9743a46278e')deny('CONTRACT_BASE');
  equal(Object.keys(contract.lanes).sort(),[...LANES].sort(),'CONTRACT_LANES');
  const ids=contract.blocks.map(block=>block.id);
- equal(ids,Array.from({length:51},(_,i)=>i+7),'CONTRACT_BLOCKS');
+ equal(ids,Array.from({length:52},(_,i)=>i+7),'CONTRACT_BLOCKS');
  for(const block of contract.blocks){if(typeof block.step.run!=='string'||hash(block.step.run)!==block.commandSha256)deny('CONTRACT_COMMAND');}
  const assigned=Object.values(contract.lanes).flatMap(lane=>lane.blocks);
  equal([...assigned].sort((a,b)=>a-b),ids,'CONTRACT_COVERAGE');
- if(new Set(assigned).size!==51)deny('CONTRACT_DUPLICATE_BLOCK');
+ if(new Set(assigned).size!==52)deny('CONTRACT_DUPLICATE_BLOCK');
  const patterns=Object.values(contract.lanes).flatMap(lane=>lane.artifacts);
  equal([...patterns].sort(),[...contract.artifactPatterns].sort(),'CONTRACT_ARTIFACT_COVERAGE');
- if(patterns.length!==51||new Set(patterns).size!==51)deny('CONTRACT_ARTIFACT_DUPLICATE');
+ if(patterns.length!==54||new Set(patterns).size!==54)deny('CONTRACT_ARTIFACT_DUPLICATE');
  patterns.forEach(patternValid);
  validateEvidenceContract(contract);validateExtension(contract);
  return contract;
@@ -304,7 +339,7 @@ export function buildWorkflow(contract){
 }
 export function equivalent(workflow,contract){
  equal(workflow,buildWorkflow(contract),'WORKFLOW_NOT_EQUIVALENT');
- return {blocks:51,artifactPatterns:51,lanes:8};
+ return {blocks:52,artifactPatterns:54,lanes:8};
 }
 function collect(root,patterns){
  const files=new Map();
@@ -426,7 +461,7 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
   records.push({lane,artifactId:job.outputs.artifactId,artifactDigest:job.outputs.artifactDigest,manifestSha256:record.manifestSha256,fileCount:record.files.length,producedNotUploaded:record.producedNotUploaded,blockIds:record.blockIds,proofBindings:record.proofBindings});
  }
  equal(records.flatMap(record=>record.blockIds).sort((a,b)=>a-b),contract.blocks.map(block=>block.id),'TOTAL_BLOCK_COVERAGE');
- return {version:1,state:'PASS',head:expectedHead,runId,runAttempt,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,lanes:records,commandBlocks:51,artifactPatterns:51,requiredRetainedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredRetainedEvidence).length,producedNotUploadedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredProducedEvidence).length,fileCount};
+ return {version:1,state:'PASS',head:expectedHead,runId,runAttempt,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,lanes:records,commandBlocks:52,artifactPatterns:54,requiredRetainedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredRetainedEvidence).length,producedNotUploadedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredProducedEvidence).length,fileCount};
 }
 function expectedNeeds(contract,expectedHead,workflowSha256,readSource){
  return Object.fromEntries(LANES.map((lane,i)=>{
@@ -443,11 +478,11 @@ export function selftest(workflow,contract,root=process.cwd()){
  const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
  const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedNeeds(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};
  bad('gate-source-resolver-required','PROOF_SOURCE_RESOLVER',()=>gate({...input,readSource:undefined}));
- good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(gate(input).commandBlocks,51);});
- good('gate-all-eight-lanes-and-additive-KYC-57',()=>assert.equal(gate(input).commandBlocks,51));
+ good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(gate(input).commandBlocks,52);});
+ good('gate-all-eight-lanes-and-additive-KYC-57',()=>assert.equal(gate(input).commandBlocks,52));
  const laneEnv=Object.fromEntries(LANES.map(lane=>[laneEnvironmentKey(lane),JSON.stringify(needs[lane])]));
  good('lane-environment-preserves-exact-eight-records',()=>equal(readLaneNeedsEnvironment({...laneEnv,PATH:'controlled'}),needs,'ENV_TRANSPORT_CHANGED'));
- good('lane-environment-still-runs-exact-gate',()=>assert.equal(gate({...input,needs:readLaneNeedsEnvironment(laneEnv)}).commandBlocks,51));
+ good('lane-environment-still-runs-exact-gate',()=>assert.equal(gate({...input,needs:readLaneNeedsEnvironment(laneEnv)}).commandBlocks,52));
  bad('legacy-aggregate-environment-denied','LEGACY_AGGREGATE_ENV_DENIED',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_NEEDS_JSON:JSON.stringify(needs)}));
  const missingEnv={...laneEnv};delete missingEnv.WORKSPACE_LANE_META_JSON;
  bad('missing-lane-environment-denied','LANE_ENV_COVERAGE',()=>readLaneNeedsEnvironment(missingEnv));
@@ -644,13 +679,13 @@ function options(argv){const parsed={};for(let i=0;i<argv.length;i+=2){if(!argv[
 function main(){
  const [mode,...args]=process.argv.slice(2),opts=options(args),root=path.resolve(opts.root||process.cwd()),contract=loadContract(path.resolve(root,opts.contract||contractPath)),file=path.resolve(root,opts.workflow||workflowPath),bytes=readFileSync(file),workflow=yaml.load(bytes.toString('utf8'));
  equivalent(workflow,contract);dependencies(root,contract);
- if(mode==='equivalence'){if(opts['expected-head'])identity(root,opts['expected-head']);console.log(JSON.stringify({state:'PASS',commandBlocks:51,artifactPatterns:51,lanes:8}));return;}
+ if(mode==='equivalence'){if(opts['expected-head'])identity(root,opts['expected-head']);console.log(JSON.stringify({state:'PASS',commandBlocks:52,artifactPatterns:54,lanes:8}));return;}
  if(mode==='selftest'){
   const sourceHead=opts['expected-head']?identity(root,opts['expected-head']):identity(root,execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim());
    const checks=selftest(workflow,contract,root),output=path.resolve(root,opts.output||'.vercel/workspace-ci-evidence/selftest.json');writeJson(output,{version:1,state:'PASS',head:sourceHead,workflowSha256:hash(bytes),contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,checks});
   const escape=value=>value.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');
   writeFileSync(output.replace(/\.json$/,'.xml'),`<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="workspace-ci-private-design" tests="${checks.length}" failures="0">${checks.map(check=>`<testcase name="${escape(check.name)}"/>`).join('')}</testsuite>\n`);
-  console.log(JSON.stringify({state:'PASS',checks:checks.length,commandBlocks:51,artifactPatterns:51,lanes:8}));return;
+  console.log(JSON.stringify({state:'PASS',checks:checks.length,commandBlocks:52,artifactPatterns:54,lanes:8}));return;
  }
  if(mode==='preflight'){
   identity(root,opts['expected-head']);clocks(process.env);if(!LANES.includes(opts.lane))deny('UNKNOWN_LANE');
@@ -663,7 +698,7 @@ function main(){
  }
  if(mode==='gate'){
   identity(root,opts['expected-head']);const filename=path.join(root,'.vercel/workspace-ci-evidence/gate.json');
-  try{const report=gate({needs:readLaneNeedsEnvironment(process.env),contract,expectedHead:opts['expected-head'],workflowSha256:hash(bytes),...clocks(process.env),readSource:gitSource(root,opts['expected-head'])});writeJson(filename,report);console.log(JSON.stringify({state:'PASS',lanes:8,commandBlocks:51,artifactPatterns:51,fileCount:report.fileCount}));}
+  try{const report=gate({needs:readLaneNeedsEnvironment(process.env),contract,expectedHead:opts['expected-head'],workflowSha256:hash(bytes),...clocks(process.env),readSource:gitSource(root,opts['expected-head'])});writeJson(filename,report);console.log(JSON.stringify({state:'PASS',lanes:8,commandBlocks:52,artifactPatterns:54,fileCount:report.fileCount}));}
   catch(error){writeJson(filename,{version:1,state:'FAIL',code:error.code||'GATE_FAILED'});throw error;}return;
  }
  deny('UNKNOWN_COMMAND');

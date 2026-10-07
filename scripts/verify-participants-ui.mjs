@@ -4,24 +4,25 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {spawn,execFileSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
-import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,OFFICE_ROLES} from '../src/lib/participant-policy.mjs';
+import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256,OFFICE_ROLES} from '../src/lib/participant-policy.mjs';
 import {SITE_ROLES} from '../src/lib/site-register-policy.mjs';
 import {EMPLOYEE_INTAKE_NOTICE,EMPLOYEE_INTAKE_NOTICE_VERSION} from '../src/lib/meta-kyc-conversation.mjs';
 import {PRIVATE_BANK_NOTICE,PRIVATE_BANK_NOTICE_VERSION} from '../src/app/(identity)/cuenta/private-bank-account-format.mjs';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 assert.ok([undefined,'identity-validation','onboarding-recovery'].includes(process.env.PARTICIPANTS_UI_SUITE));
 const widths=[320,390,768,1280],focusedScenario=process.env.PARTICIPANTS_UI_SCENARIO||null,localReadModes=['local-read-cancel-restart'];
+const backModes=['back-submit','back-withdraw','back-review','back-malformed','back-superseded'];
 const safetyModes=['journal-failure','durable-secondary'];
 const accountModes=['accounts-pagination','accounts-literal','accounts-selected-503','accounts-selected-403','accounts-selected-409','accounts-save-revision','accounts-save-denial','accounts-late-search','accounts-late-selection'];
 const accessModes=['review-load-html-401','review-load-html-403','review-load-project-404','review-load-crossed','review-post-json-403','review-post-crossed-target','review-post-html-401','self-post-project-404','invite-post-json-403','invite-post-html-401','invite-post-context-409','review-receipt-denied','review-receipt-crossed','review-exact-retry','invite-provider-denied','actor-change-pending','late-private-image','late-private-file','join-post-json-403','join-post-html-401','join-post-project-404'];
-assert.ok(!focusedScenario||accessModes.includes(focusedScenario)||localReadModes.includes(focusedScenario)||safetyModes.includes(focusedScenario)||accountModes.includes(focusedScenario));
+assert.ok(!focusedScenario||accessModes.includes(focusedScenario)||localReadModes.includes(focusedScenario)||safetyModes.includes(focusedScenario)||accountModes.includes(focusedScenario)||backModes.includes(focusedScenario));
 assert.ok(!process.env.PARTICIPANTS_UI_WIDTH||focusedScenario,'A single width requires a focused scenario');
 const selectedWidths=process.env.PARTICIPANTS_UI_WIDTH?[Number(process.env.PARTICIPANTS_UI_WIDTH)]:widths;assert.ok(selectedWidths.every(width=>widths.includes(width)));
 const root=process.cwd(),evidence=path.resolve(root,process.env.PARTICIPANTS_UI_EVIDENCE_DIR||'.vercel/participants-evidence');assert.ok(evidence.startsWith(root+path.sep));mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/participants-ui-')),app=path.join(fixture,'app');mkdirSync(app);
 const copiedFiles=['participant-onboarding-next-step.mjs','participant-panel.js','participant-account-discovery.js','participant-account-discovery-format.mjs','employee-intake-panel.js', 'private-bank-account-panel.js', 'private-bank-account-panel.module.css','participant-panel.module.css','kyc-photo-preparation.js','field-media-preparation.mjs','workspace-session-request.mjs','workspace-request-lifecycle.js','workspace-request-lifecycle.mjs','workspace-recovery-journal.mjs', 'private-bank-account-format.mjs','company-channel-view.mjs','site-purchase-view.mjs','workspace-recovery-storage.mjs'];
 for(const name of copiedFiles)copyFileSync(path.join(root,'src/app/(identity)/cuenta',name),path.join(app,name));
-const sha256=bytes=>createHash('sha256').update(bytes).digest('hex'),sourceManifest=[...copiedFiles.map(name=>({path:'src/app/(identity)/cuenta/'+name,sha256:sha256(readFileSync(path.join(app,name)))})),...['participant-policy.mjs','workspace-policy.mjs','private-image-upload.mjs','site-register-policy.mjs','meta-kyc-conversation.mjs'].map(name=>({path:'src/lib/'+name,sha256:sha256(readFileSync(path.join(root,'src/lib',name)))}))];
+const sha256=bytes=>createHash('sha256').update(bytes).digest('hex'),sourceManifest=[...copiedFiles.map(name=>({path:'src/app/(identity)/cuenta/'+name,sha256:sha256(readFileSync(path.join(app,name)))})),...['participant-policy.mjs','participant-kyc-image-set.mjs','workspace-policy.mjs','private-image-upload.mjs','site-register-policy.mjs','meta-kyc-conversation.mjs'].map(name=>({path:'src/lib/'+name,sha256:sha256(readFileSync(path.join(root,'src/lib',name)))}))];
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-participants-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#eef3f9',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
@@ -164,6 +165,57 @@ try{
   }else if(mode.startsWith('review-load')){denyRead=false;await click(page,'Consultar participantes');await wait(page,'Persona de ensayo');assert.equal((await page.$$('img')).length,0);}
  }
  assert.deepEqual(errors,[]);await noOverflow(page);await page.screenshot({path:path.join(evidence,`access-${mode}-${width}.png`),fullPage:true});accessObservations.push({width,mode,stage:'completed',postActions:posts.map(row=>row.action||'JOIN'),receiptQueries,storage:await privateStorage(page,0)});checks.push(`access-${mode}-private-state-and-receipt-reference-${width}`);await context.close();
+}
+async function documentBackScenario(width,mode){
+ const context=await browser.createBrowserContext(),page=await context.newPage();activePage=page;activeScenario={width,mode};
+ await page.setViewport({width,height:1100,isMobile:width<768,hasTouch:width<768});page.on('pageerror',error=>errors.push({width,mode,error:error.message}));await page.setRequestInterception(true);
+ await page.evaluateOnNewDocument(()=>{window.__privateUrls=[];window.__revokedPrivateUrls=[];const create=URL.createObjectURL.bind(URL),revoke=URL.revokeObjectURL.bind(URL);URL.createObjectURL=value=>{const url=create(value);window.__privateUrls.push(url);return url;};URL.revokeObjectURL=url=>{window.__revokedPrivateUrls.push(url);return revoke(url);};});
+ const reviewing=['back-review','back-malformed'].includes(mode),withBack=['back-submit','back-superseded'].includes(mode),backNotice={version:PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,sha256:PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256,text:PARTICIPANT_DOCUMENT_BACK_NOTICE};
+ const reviewImages=[{id:'document-front',kind:'DOCUMENT_FRONT'},{id:'selfie',kind:'SELFIE'},{id:'document-back',kind:'DOCUMENT_BACK'}].map(image=>({...image,contentType:'image/png',bytes:picture.length}));
+ let row={id:'worker-fixture',name:'Persona de ensayo',active:true,revision:'2026-10-01T11:00:00.000001',status:'ACTIVE',self:!reviewing,accountLinked:true,invitation:null,kycChatChallenge:null,permissions:{attendance:false,report:false},identityCertified:false,whatsAppAccessGranted:false,kyc:{status:reviewing?'PENDING_REVIEW':'NOT_SUBMITTED',submissionId:reviewing?'kyc-fixture':null,submittedAt:null,review:null,images:reviewing?reviewImages:[],...(reviewing?{documentBackConsent:{allowed:mode!=='back-malformed',noticeVersion:backNotice.version,noticeSha256:backNotice.sha256}}:{})}};
+ const posts=[],queries=[],downloads=[],receipts=new Map();
+ page.on('request',async request=>{try{
+  const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('External request forbidden');}if(url.pathname!=='/api/identity/participants')return request.continue();assert.match(request.headers().authorization||'',/^Bearer synthetic-active-org-A-/);
+  let body,status=200;
+  if(request.method()==='POST'){
+   const input=JSON.parse(request.postData());posts.push(input);assert.equal(input.projectId,projectId);assert.equal(input.scope,scope);
+   if(reviewing){assert.equal(input.action,'REVIEW_KYC');assert.deepEqual(downloads,['document-front','selfie','document-back']);assert.equal(input.payload.submissionId,row.kyc.submissionId);row={...row,kyc:{...row.kyc,status:'APPROVED',review:{decision:'APPROVED',reason:input.payload.reason,recordedAt:'2026-10-07T12:00:00.000Z'}}};}
+   else{
+    for(const kind of ['front','selfie'])assert.deepEqual(Buffer.from(input[kind].split(',').at(-1),'base64'),picture);
+    if(withBack){assert.equal(input.backConsent,true);assert.equal(input.backNoticeVersion,backNotice.version);assert.equal(input.backNoticeSha256,backNotice.sha256);assert.deepEqual(Buffer.from(input.back.split(',').at(-1),'base64'),picture);}
+    else for(const key of ['back','backConsent','backNoticeVersion','backNoticeSha256'])assert.equal(Object.hasOwn(input,key),false);
+    row={...row,kyc:{status:'PENDING_REVIEW',submissionId:'kyc-fixture',submittedAt:'2026-10-07T12:00:00.000Z',review:null,images:reviewImages.slice(0,withBack?3:2),...(withBack?{documentBackConsent:{allowed:true,noticeVersion:backNotice.version,noticeSha256:backNotice.sha256}}:{})}};
+   }
+   const receiptId='participant-'+input.operationId;
+   if(mode==='back-superseded'){
+    const originalSubmissionId=row.kyc.submissionId;row={...row,revision:'2026-10-07T12:00:00.000003',kyc:{...row.kyc,submissionId:'kyc-newer-two-image',images:reviewImages.slice(0,2)}};delete row.kyc.documentBackConsent;
+    receipts.set(input.operationId,{scope,saved:true,replayed:false,receiptId,participant:row,kycSubmissionReceipt:{receiptId,submissionId:originalSubmissionId,superseded:true,documentBackConsentRecorded:true,documentBackNoticeVersion:backNotice.version,documentBackNoticeSha256:backNotice.sha256,identityCertified:false,permissionsGranted:false,whatsAppAccessGranted:false}});
+   }else receipts.set(input.operationId,{scope,saved:true,replayed:false,receiptId,participant:row});status=503;body={code:'PARTICIPANT_OPERATION_UNCONFIRMED'};
+  }else if(url.searchParams.has('imageId')){const imageId=url.searchParams.get('imageId');assert.ok(reviewImages.some(image=>image.id===imageId));downloads.push(imageId);await request.respond({status:200,contentType:'image/png',body:picture});return;}
+  else if(url.searchParams.has('operationId')){const op=url.searchParams.get('operationId');queries.push(op);body={state:'RECORDED',...receipts.get(op)};}
+  else body={scope,projectId,canManage:reviewing,canInvite:reviewing,canManageOfficeRoles:false,existingAccounts:[],records:[row],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE},documentBackNotice:backNotice};
+  await request.respond({status,contentType:'application/json',body:JSON.stringify(body)});
+ }catch(error){errors.push({width,mode,error:error.message});await request.abort().catch(()=>{});}});
+ await page.goto(origin,{waitUntil:'networkidle0'});await click(page,'Consultar participantes');await wait(page,'Persona de ensayo');
+ if(mode==='back-malformed'){
+  assert.equal(await page.$$eval('button',all=>all.filter(button=>button.textContent.trim()==='Registrar revisión humana'&&!button.disabled).length),0);assert.equal(posts.length,0);checks.push({width,mode,malformedBackNeverOffersReview:true});
+ }else{
+  if(reviewing){
+   const enabled=()=>page.$$eval('button',all=>all.some(button=>button.textContent.trim()==='Registrar revisión humana'&&!button.disabled));
+   assert.equal(await enabled(),false);await click(page,'Consultar documento privado');await click(page,'Consultar fotografía');assert.equal(await enabled(),false);await click(page,'Consultar dorso privado');await click(page,'Registrar revisión humana');await page.type('textarea','Revisión humana sintética de las tres imágenes.');await noOverflow(page);await page.screenshot({path:path.join(evidence,`${mode}-form-${width}.png`),fullPage:true});await click(page,'Guardar decisión');
+  }else{
+   await click(page,'Presentar mi identidad');
+   const prepare=async title=>{const selector='fieldset[aria-label="'+title+'"]';await (await page.$(selector+' input[type=file]')).uploadFile(picturePath);await page.waitForSelector(selector+' img');await page.$eval(selector+' input[type=checkbox]',input=>input.click());const button=await page.$$(selector+' button');for(const handle of button)if((await handle.evaluate(node=>node.textContent)).startsWith('Usar ')){await handle.click();break;}await page.waitForFunction(title=>[...document.querySelectorAll('fieldset')].find(field=>field.getAttribute('aria-label')===title)?.textContent.includes('Imagen revisada y lista'),{},title);};
+   await prepare('Frente del documento');await prepare('Fotografía del rostro');
+   await page.evaluate(()=>{const label=[...document.querySelectorAll('label')].find(label=>label.textContent.includes('Leí el aviso del dorso'));label.closest('details').open=true;label.querySelector('input').click();});await page.waitForSelector('fieldset[aria-label="Dorso del documento"]');await prepare('Dorso del documento');
+   const backUrl=await page.$eval('fieldset[aria-label="Dorso del documento"] img',image=>image.src);
+   if(mode==='back-withdraw'){await page.evaluate(()=>[...document.querySelectorAll('label')].find(label=>label.textContent.includes('Leí el aviso del dorso')).querySelector('input').click());await page.waitForFunction(()=>!document.querySelector('fieldset[aria-label="Dorso del documento"]'));assert.ok((await page.evaluate(()=>window.__revokedPrivateUrls)).includes(backUrl));}
+   await page.evaluate(()=>[...document.querySelectorAll('label')].find(label=>label.textContent.includes('Leí el aviso y autorizo la presentación')).querySelector('input').click());await privateStorage(page,0);await noOverflow(page);await page.screenshot({path:path.join(evidence,`${mode}-form-${width}.png`),fullPage:true});await click(page,'Presentar para revisión');
+  }
+  await wait(page,'El resultado quedó sin confirmar');await privateStorage(page,1);assert.equal(posts.length,1);await click(page,'Comprobar el mismo intento');await wait(page,mode==='back-superseded'?'El recibo original quedó confirmado. Hay una presentación más reciente':'Operación guardada con recibo');await privateStorage(page,0);assert.equal(posts.length,1);assert.equal(queries.at(-1),posts[0].operationId);if(mode==='back-superseded'){assert.equal(row.kyc.images.length,2);assert.equal(row.kyc.documentBackConsent,undefined);assert.deepEqual(row.permissions,{attendance:false,report:false});assert.equal(row.identityCertified,false);assert.equal(row.whatsAppAccessGranted,false);assert.equal(receipts.get(posts[0].operationId).kycSubmissionReceipt.submissionId,'kyc-fixture');}
+  checks.push({width,mode,posts:posts.length,receiptQueries:queries.length,downloads,backOptional:true,privatePayloadPersisted:false,manualReviewOnly:true,realIdentityAccepted:false});
+ }
+ await noOverflow(page);await page.screenshot({path:path.join(evidence,`${mode}-${width}.png`),fullPage:true});assert.deepEqual(errors,[]);await context.close();activePage=null;
 }
 async function scenario(width,mode){const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1050});page.on('pageerror',error=>errors.push({width,mode,error:error.message}));await page.setRequestInterception(true);
  await page.evaluateOnNewDocument(()=>{window.__privateUrls=[];window.__revokedPrivateUrls=[];const create=URL.createObjectURL.bind(URL),revoke=URL.revokeObjectURL.bind(URL);URL.createObjectURL=value=>{const url=create(value);window.__privateUrls.push(url);return url;};URL.revokeObjectURL=url=>{window.__revokedPrivateUrls.push(url);return revoke(url);};});
@@ -349,7 +401,7 @@ async function accountDiscoveryScenario(width,mode){
 }
 
 try{let ready=false;for(let count=0;count<120;count++){if(server.exitCode!==null)throw new Error('Fixture exited');try{if((await fetch(origin)).ok){ready=true;break;}}catch{}await new Promise(done=>setTimeout(done,500));}assert.ok(ready);browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
- if(focusedScenario){for(const width of selectedWidths)await (accountModes.includes(focusedScenario)?accountDiscoveryScenario(width,focusedScenario):safetyModes.includes(focusedScenario)?safetyScenario(width,focusedScenario):accessScenario(width,focusedScenario));}else{for(const width of widths)for(const mode of safetyModes)await safetyScenario(width,mode);for(const width of widths)for(const mode of ['selection','closed-unknown','own-bank'])await nextStepScenario(width,mode);
+ if(focusedScenario){for(const width of selectedWidths)await (backModes.includes(focusedScenario)?documentBackScenario(width,focusedScenario):accountModes.includes(focusedScenario)?accountDiscoveryScenario(width,focusedScenario):safetyModes.includes(focusedScenario)?safetyScenario(width,focusedScenario):accessScenario(width,focusedScenario));}else{for(const width of widths)for(const mode of safetyModes)await safetyScenario(width,mode);for(const width of widths)for(const mode of ['selection','closed-unknown','own-bank'])await nextStepScenario(width,mode);
  if(!process.env.PARTICIPANTS_UI_SUITE){for(const width of [320,390,768,1280])for(const mode of ['owner','self','review','join','office'])await scenario(width,mode);for(const mode of ['uncertain','uncertain-provider','conflict','conflict-paged','denied','join-uncertain','join-token-reject','assign','self-slow','review-new-submission','review-conflict-new-submission','review-conflict-same-submission','office-uncertain','office-conflict','token-hang','token-reject','identity-cancel','request-cancel'])await scenario(390,mode);}
  if(process.env.PARTICIPANTS_UI_SUITE!=='onboarding-recovery')for(const width of [320,390,768,1280])for(const mode of ['review-denial-401','review-denial-403','review-denial-409','review-recovery-denial-401','review-recovery-denial-403','review-recovery-denial-409','review-recovery-not-observed-denial-403','self-attendance-conflict'])await scenario(width,mode);checks.push('all-participant-list-mutation-receipt-self-service-and-private-image-requests-use-fresh-active-bearer-despite-other-tab-cookie');assert.deepEqual(errors,[]);
  for(const width of [320,390,768,1280])for(const mode of ['join-reload','join-reload-denial-401','join-reload-denial-403','join-reload-denial-409','join-pending-recovery','join-missing-receipt','join-other-invitation'])await scenario(width,mode);assert.deepEqual(errors,[]);

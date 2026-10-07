@@ -461,6 +461,14 @@
         "run": "npx eslint src/lib/company-channel-kyc.mjs src/lib/meta-kyc-*.mjs src/lib/participant-channel-kyc.mjs scripts/verify-company-channel-kyc-postgres.mjs tests/fixtures/company-kyc-memory.mjs tests/production-company-channel-kyc.test.mjs --max-warnings 0\nnode scripts/verify-company-channel-kyc-postgres.mjs\n"
       },
       "commandSha256": "4b646bfcf6456e87b2d5534786a5ce74eaf379442349c109f5fb8467b9c677f2"
+    },
+    {
+      "id": 58,
+      "commandSha256": "78a170b30319630a7b57fdd93e4e3a8eab8f287203d661affd807ccea5cf7c00",
+      "step": {
+        "name": "Canonical project preparation, planned slots and uncertain receipt recovery",
+        "run": "npx eslint src/lib/project-preparation-*.mjs src/app/api/identity/project-preparation 'src/app/(identity)/cuenta/project-preparation-panel.js' 'src/app/(identity)/cuenta/project-preparation-format.mjs' scripts/verify-project-preparation-*.mjs tests/production-project-preparation.test.mjs tests/production-participant-document-back.test.mjs --max-warnings 0\nnode --test tests/production-project-preparation.test.mjs\nnode scripts/verify-project-preparation-postgres.mjs\nnode scripts/verify-project-preparation-ui.mjs\n"
+      }
     }
   ],
   "artifactPatterns": [
@@ -514,7 +522,10 @@
     ".vercel/private/employee-intake-ui/",
     ".vercel/private/participant-bank-intake-integration/current/browser.json",
     ".vercel/private/participant-bank-intake-integration/bad-resolution/browser.json",
-    ".vercel/company-kyc-evidence/"
+    ".vercel/company-kyc-evidence/",
+    ".vercel/private/project-preparation-postgres-validation.json",
+    ".vercel/private/project-preparation-ui-*.json",
+    ".vercel/private/project-preparation-ui-*.png"
   ],
   "lanes": {
     "contracts": {
@@ -713,7 +724,8 @@
         34,
         43,
         44,
-        45
+        45,
+        58
       ],
       "artifacts": [
         ".vercel/site-register-evidence/",
@@ -723,9 +735,15 @@
         ".vercel/constructor-crm-evidence/",
         ".vercel/constructor-crm-adoption-evidence/",
         ".vercel/manual-evidence/",
-        ".vercel/onboarding-guide-evidence/"
+        ".vercel/onboarding-guide-evidence/",
+        ".vercel/private/project-preparation-postgres-validation.json",
+        ".vercel/private/project-preparation-ui-*.json",
+        ".vercel/private/project-preparation-ui-*.png"
       ],
-      "optionalArtifactPatterns": [],
+      "optionalArtifactPatterns": [
+        ".vercel/private/project-preparation-ui-*.json",
+        ".vercel/private/project-preparation-ui-*.png"
+      ],
       "requiredRetainedEvidence": [
         ".vercel/site-register-evidence/postgres.json",
         ".vercel/material-inventory-evidence/postgres.json",
@@ -739,7 +757,9 @@
         ".vercel/material-inventory-evidence/browser.json",
         ".vercel/constructor-crm-evidence/browser.json",
         ".vercel/purchase-evidence/browser.json",
-        ".vercel/site-register-evidence/browser.json"
+        ".vercel/site-register-evidence/browser.json",
+        ".vercel/private/project-preparation-postgres-validation.json",
+        ".vercel/private/project-preparation-ui-validation.json"
       ],
       "requiredProducedEvidence": []
     },
@@ -1358,6 +1378,26 @@
       "sourceLine": 139,
       "producerSha256": "9570ad78bb0a4c8a65ee5360624461c3aa49550a9152e27adce8a94ea520e86c",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
+    },
+    {
+      "producer": "scripts/verify-project-preparation-postgres.mjs",
+      "path": ".vercel/private/project-preparation-postgres-validation.json",
+      "retained": true,
+      "blockId": 58,
+      "lane": "business",
+      "sourceLine": 73,
+      "producerSha256": "f9cb6908a4062fbfaed2eba92e6e46b6cfe5672d9466a69d650468e85d461294",
+      "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
+    },
+    {
+      "producer": "scripts/verify-project-preparation-ui.mjs",
+      "path": ".vercel/private/project-preparation-ui-validation.json",
+      "retained": true,
+      "blockId": 58,
+      "lane": "business",
+      "sourceLine": 55,
+      "producerSha256": "04030e76b8ce12bde95f098b6c9b3a2b0c4b8785cd662baae12f469ce140d842",
+      "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     }
   ],
   "stdoutOnlyProducers": [
@@ -1453,6 +1493,7 @@
           "src/lib/participant-channel-kyc.mjs",
           "src/lib/participant-http.mjs",
           "src/lib/participant-kyc-chat-closure.mjs",
+          "src/lib/participant-kyc-image-set.mjs",
           "src/lib/participant-onboarding-authority.mjs",
           "src/lib/participant-onboarding-delivery.mjs",
           "src/lib/participant-onboarding-intent.mjs",
@@ -1646,6 +1687,7 @@
           "src/lib/participant-channel-kyc.mjs",
           "src/lib/participant-http.mjs",
           "src/lib/participant-kyc-chat-closure.mjs",
+          "src/lib/participant-kyc-image-set.mjs",
           "src/lib/participant-onboarding-authority.mjs",
           "src/lib/participant-onboarding-delivery.mjs",
           "src/lib/participant-onboarding-intent.mjs",
@@ -1782,6 +1824,7 @@
           "src/lib/participant-channel-kyc.mjs",
           "src/lib/participant-http.mjs",
           "src/lib/participant-kyc-chat-closure.mjs",
+          "src/lib/participant-kyc-image-set.mjs",
           "src/lib/participant-onboarding-authority.mjs",
           "src/lib/participant-onboarding-delivery.mjs",
           "src/lib/participant-onboarding-intent.mjs",
@@ -1885,6 +1928,7 @@
           "src/lib/participant-channel-kyc.mjs",
           "src/lib/participant-http.mjs",
           "src/lib/participant-kyc-chat-closure.mjs",
+          "src/lib/participant-kyc-image-set.mjs",
           "src/lib/participant-onboarding-authority.mjs",
           "src/lib/participant-onboarding-delivery.mjs",
           "src/lib/participant-onboarding-intent.mjs",
@@ -2027,6 +2071,7 @@
           "src/lib/participant-http.mjs",
           "src/lib/participant-identity-provider.mjs",
           "src/lib/participant-kyc-chat-closure.mjs",
+          "src/lib/participant-kyc-image-set.mjs",
           "src/lib/participant-onboarding-authority.mjs",
           "src/lib/participant-onboarding-delivery.mjs",
           "src/lib/participant-onboarding-intent.mjs",
@@ -2050,6 +2095,9 @@
           "src/lib/procurement-quantity.js",
           "src/lib/production-identity-config.mjs",
           "src/lib/progress-measurement-quantity.js",
+          "src/lib/project-preparation-http.mjs",
+          "src/lib/project-preparation-policy.mjs",
+          "src/lib/project-preparation-store.mjs",
           "src/lib/realtime.js",
           "src/lib/session-recovery.mjs",
           "src/lib/site-photo-http.mjs",
@@ -2091,6 +2139,72 @@
           "canonical-current-revocation-denies-new-corporate-field-use-with-no-IO-or-business-write",
           "canonical-acceptance-before-original-IDENTIDAD-keeps-TTL-and-unit-once-own-capture-distinct-review-and-VINCULAR"
         ]
+      },
+      {
+        "id": "project-preparation-postgres",
+        "lane": "business",
+        "blockId": 58,
+        "path": ".vercel/private/project-preparation-postgres-validation.json",
+        "kind": "PG_PREPARATION",
+        "producer": "scripts/verify-project-preparation-postgres.mjs",
+        "producerSha256": "f9cb6908a4062fbfaed2eba92e6e46b6cfe5672d9466a69d650468e85d461294",
+        "sourceFiles": [
+          "scripts/lib/disposable-postgres-cleanup.mjs",
+          "src/app/(identity)/cuenta/project-preparation-format.mjs",
+          "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
+          "src/app/(identity)/cuenta/workspace-recovery-storage.mjs",
+          "src/app/api/identity/project-preparation/route.js",
+          "src/lib/project-preparation-http.mjs",
+          "src/lib/project-preparation-policy.mjs",
+          "src/lib/project-preparation-store.mjs",
+          "src/lib/site-register-policy.mjs",
+          "src/lib/workspace-http.mjs",
+          "src/lib/workspace-policy.mjs",
+          "src/lib/workspace-store.mjs"
+        ],
+        "checkNames": [
+          "existing-project-updated-only-preparation-namespace-general-details-and-one-audit-under-concurrent-same-uuid",
+          "same-operation-change-and-stale-independent-preparation-revision-denied",
+          "general-project-details-digest-prevents-silent-overwrite",
+          "canonical-current-membership-role-actor-project-tenant-and-scope-boundaries",
+          "original-receipt-does-not-bypass-current-canonical-membership",
+          "changed-canonical-role-requires-new-scope-project-assignment-and-module-permission-for-receipt-recovery",
+          "two-different-concurrent-preparations-cannot-both-overwrite-the-same-revision",
+          "old-receipt-confirms-original-save-with-current-project-snapshot",
+          "cancel-tombstone-commits-before-delayed-save-and-permanently-fences-that-uuid",
+          "cancellation-waits-for-inflight-save-lock-and-reports-recorded-if-save-commits-first",
+          "audit-failure-rolls-back-general-details-and-namespace-with-no-receipt",
+          "failed-commit-cannot-claim-save-or-cancellation",
+          "lost-ack-reload-recovers-only-exact-currently-authorized-receipt-without-second-post",
+          "tampered-receipt-uuid-cannot-settle-a-reference",
+          "all-original-tasks-workers-memberships-accounts-and-material-rows-preserved-after-every-path"
+        ]
+      },
+      {
+        "id": "project-preparation-ui",
+        "lane": "business",
+        "blockId": 58,
+        "path": ".vercel/private/project-preparation-ui-validation.json",
+        "kind": "UI_PREPARATION",
+        "producer": "scripts/verify-project-preparation-ui.mjs",
+        "producerSha256": "04030e76b8ce12bde95f098b6c9b3a2b0c4b8785cd662baae12f469ce140d842",
+        "sourceFiles": [
+          "src/app/(identity)/cuenta/company-channel-view.mjs",
+          "src/app/(identity)/cuenta/private-bank-account-format.mjs",
+          "src/app/(identity)/cuenta/project-preparation-format.mjs",
+          "src/app/(identity)/cuenta/project-preparation-panel.js",
+          "src/app/(identity)/cuenta/project-preparation-panel.module.css",
+          "src/app/(identity)/cuenta/site-purchase-view.mjs",
+          "src/app/(identity)/cuenta/template-send-view.mjs",
+          "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
+          "src/app/(identity)/cuenta/workspace-recovery-panel.js",
+          "src/app/(identity)/cuenta/workspace-recovery-storage.mjs",
+          "src/app/(identity)/cuenta/workspace-request-lifecycle.js",
+          "src/app/(identity)/cuenta/workspace-request-lifecycle.mjs",
+          "src/app/(identity)/cuenta/workspace-session-request.mjs",
+          "src/app/(identity)/cuenta/workspace.module.css"
+        ],
+        "checkNames": []
       }
     ]
   }

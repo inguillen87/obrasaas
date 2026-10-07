@@ -1,3 +1,20 @@
+export function participantKycHistoricalReceipt(value,command){
+ const r=value?.kycSubmissionReceipt;
+ return Boolean(r&&typeof r==='object'&&!Array.isArray(r)&&Object.keys(r).sort().join('|')==='documentBackConsentRecorded|documentBackNoticeSha256|documentBackNoticeVersion|identityCertified|permissionsGranted|receiptId|submissionId|superseded|whatsAppAccessGranted'&&r.receiptId===value.receiptId&&typeof r.submissionId==='string'&&/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(r.submissionId)&&r.submissionId!==value.participant?.kyc?.submissionId&&r.superseded===true&&r.documentBackConsentRecorded===true&&r.documentBackNoticeVersion===command.backNoticeVersion&&r.documentBackNoticeSha256===command.backNoticeSha256&&r.identityCertified===false&&r.permissionsGranted===false&&r.whatsAppAccessGranted===false);
+}
+// Presentation only: permission and private evidence are rechecked by the store.
+export function participantDocumentBackNotice(value){
+ if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join('|')!=='sha256|text|version'||value.version!=='participant-kyc-document-back-v1'||!/^[a-f0-9]{64}$/.test(value.sha256||'')||typeof value.text!=='string'||!value.text.trim()||value.text.length>6000)return null;
+ return {version:value.version,sha256:value.sha256,text:value.text};
+}
+export function participantKycReviewImages(k){
+ if(!Array.isArray(k?.images))return false;
+ const back=k.documentBackConsent!==undefined||k.images.some(image=>image?.id==='document-back'||image?.kind==='DOCUMENT_BACK')||k.images.length===3;
+ if(!back)return k.images.length===2;
+ const c=k.documentBackConsent;
+ return k.images.length===3&&c?.allowed===true&&c.noticeVersion==='participant-kyc-document-back-v1'&&/^[a-f0-9]{64}$/.test(c.noticeSha256||'')&&[['document-front','DOCUMENT_FRONT'],['selfie','SELFIE'],['document-back','DOCUMENT_BACK']].every(([id,kind])=>k.images.filter(image=>image?.id===id&&image.kind===kind).length===1)&&k.images.every(image=>Number.isSafeInteger(image.bytes)&&image.bytes>0&&image.bytes<=2*1024*1024&&['image/png','image/jpeg','image/webp'].includes(image.contentType));
+}
+
 // Presentation only. Existing server commands must revalidate authority.
 // Callers supply the current verified scope and clock; this module does no IO.
 const id=value=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value);
@@ -123,7 +140,7 @@ export function participantOnboardingNextStep({context,snapshot,workerId=null,ap
   ?next('OWN_IDENTITY','SUBMIT_KYC','Presentar mi identidad')
   :chatNext();
  if(row.kyc?.status==='PENDING_ACCOUNT_CLAIM')return next('WAIT_ACCOUNT','CONSULT_PARTICIPANTS','Consultar aceptación');
- if(row.kyc?.status==='PENDING_REVIEW')return !row.self&&snapshot.canManage&&row.kyc.images?.length===2
+ if(row.kyc?.status==='PENDING_REVIEW')return !row.self&&snapshot.canManage&&participantKycReviewImages(row.kyc)
   ?next('IDENTITY_REVIEW','REVIEW_KYC','Revisar identidad')
   :next('WAIT_REVIEW','CONSULT_PARTICIPANTS','Consultar revisión');
  if(row.kyc?.status!=='APPROVED')return next('IDENTITY_UNOBSERVED','CONSULT_PARTICIPANTS','Consultar identidad');

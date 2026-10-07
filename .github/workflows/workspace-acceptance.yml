@@ -1,4 +1,4 @@
-# Additive bank/intake and corporate KYC CI: preserves all 46 prior blocks and 44 artifact patterns.
+# Additive KYC and project preparation CI: preserves all 51 prior blocks and artifact patterns.
 name: Authorized workspace acceptance
 "on":
   push:
@@ -552,6 +552,12 @@ jobs:
       - run: node scripts/verify-operations-status-ui.mjs
       - run: node scripts/verify-site-purchase-ui.mjs
       - run: node scripts/verify-site-register-ui.mjs
+      - name: Canonical project preparation, planned slots and uncertain receipt recovery
+        run: |
+          npx eslint src/lib/project-preparation-*.mjs src/app/api/identity/project-preparation 'src/app/(identity)/cuenta/project-preparation-panel.js' 'src/app/(identity)/cuenta/project-preparation-format.mjs' scripts/verify-project-preparation-*.mjs tests/production-project-preparation.test.mjs tests/production-participant-document-back.test.mjs --max-warnings 0
+          node --test tests/production-project-preparation.test.mjs
+          node scripts/verify-project-preparation-postgres.mjs
+          node scripts/verify-project-preparation-ui.mjs
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane business --expected-head "$GITHUB_SHA"
@@ -569,6 +575,9 @@ jobs:
             .vercel/constructor-crm-adoption-evidence/
             .vercel/manual-evidence/
             .vercel/onboarding-guide-evidence/
+            .vercel/private/project-preparation-postgres-validation.json
+            .vercel/private/project-preparation-ui-*.json
+            .vercel/private/project-preparation-ui-*.png
             .vercel/workspace-ci-evidence/lane-business.json
           include-hidden-files: true
           retention-days: 7

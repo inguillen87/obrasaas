@@ -8,7 +8,7 @@ export const KYC_ORIGINAL_LIMITS={maxOriginalBytes:20*1024*1024,maxPixels:24_000
 const size=bytes=>bytes>=1024*1024?(bytes/1024/1024).toFixed(2)+' MiB':Math.ceil(bytes/1024)+' KiB';
 
 export function KycPhotoPreparation({kind,disabled,onChange}){
- const documentPhoto=kind==='front',title=documentPhoto?'Frente del documento':'Fotografía del rostro';
+ const documentPhoto=kind==='front'||kind==='back',title=kind==='back'?'Dorso del documento':kind==='front'?'Frente del documento':'Fotografía del rostro';
  const [photo,setPhoto]=useState(null),[phase,setPhase]=useState('EMPTY'),[reviewed,setReviewed]=useState(false),[notice,setNotice]=useState('');
  const original=useRef(null),generation=useRef(0),controller=useRef(null),acceptance=useRef(null),useButton=useRef(null),urls=useRef(new Set()),alive=useRef(true);
  const revoke=()=>{urls.current.forEach(url=>URL.revokeObjectURL(url));urls.current.clear();};
@@ -38,7 +38,7 @@ export function KycPhotoPreparation({kind,disabled,onChange}){
  }
  return <fieldset className={styles.photo} aria-label={title}>
   <legend>{title}</legend>
-  <p>{documentPhoto?'Fotografiá el frente completo, con luz pareja y sin reflejos. Revisá que se lean los datos.':'Mirando a la cámara, con luz de frente y el rostro completo. Esta foto se presenta para revisión humana.'}</p>
+  <p>{documentPhoto?'Fotografiá el '+(kind==='back'?'dorso':'frente')+' completo, con luz pareja y sin reflejos. Revisá que se lean los datos.':'Mirando a la cámara, con luz de frente y el rostro completo. Esta foto se presenta para revisión humana.'}</p>
   <label>Tomar o elegir una fotografía<input disabled={disabled||phase==='USING'} type="file" accept="image/jpeg,image/png,image/webp" capture={documentPhoto?'environment':'user'} onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)prepare(file);}}/></label>
   <p className={styles.photoHint}>JPEG, PNG o WebP. Original hasta 20 MiB y 24 megapíxeles. La imagen a enviar será de hasta 1 MiB; el original se conserva.</p>
   <p role="status" aria-live="polite">{notice|| (phase==='PREPARING'?'Preparando una copia en este teléfono…':phase==='USING'?'Leyendo la copia revisada… Todavía no se presentó.':phase==='ACCEPTED'?'Imagen revisada y lista para presentar.':'')}</p>

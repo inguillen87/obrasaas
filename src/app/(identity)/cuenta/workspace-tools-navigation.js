@@ -7,6 +7,7 @@ const tool=(id,label)=>({id,label});
 const destinations={
  schedule:tool('schedule-title','Tareas y cronograma'),
  plan:tool('plan-import-title','Importación de cronograma'),
+ projectPreparation:tool('project-preparation-title','Preparación de la obra'),
  register:tool('site-register-title','Incidencias y materiales'),
  field:tool('field-title','Jornada, evidencia y avance'),
  participants:tool('participant-title','Participantes y permisos'),
@@ -46,7 +47,7 @@ export function WorkspaceToolsNavigation({canManageIntegrations=false,canImportP
  // These links neither grant permissions nor hide/unmount a form.
  const groups=[
   {id:'work',label:'Trabajo en obra',icon:HardHat,tools:[destinations.schedule,destinations.field,destinations.inventory,...(canManageIntegrations?[destinations.register,destinations.purchase]:[])]},
-  {id:'people',label:'Equipo y acceso',icon:UsersRound,tools:[...(canManageIntegrations?[tool('site-register-title','Fichas del equipo')]:[]),destinations.participants,destinations.channel]},
+  {id:'people',label:'Equipo y acceso',icon:UsersRound,tools:[...(['ADMIN','DIRECTOR'].includes(role)?[destinations.projectPreparation]:[]),...(canManageIntegrations?[tool('site-register-title','Fichas del equipo')]:[]),destinations.participants,destinations.channel]},
   ...((role==='ADMIN'||canManageIntegrations)?[{id:'whatsapp',label:'WhatsApp de la empresa',icon:MessageCircle,tools:[destinations.companyChannel,...(canManageIntegrations?[destinations.preparation,destinations.meta,destinations.inbox,destinations.template]:[])]}]:[]),
   ...((role==='ADMIN'||canManageIntegrations)?[{id:'management',label:'Administración y seguimiento',icon:BriefcaseBusiness,tools:[...(role==='ADMIN'?[destinations.crm,destinations.demo]:[]),...(canManageIntegrations?[tool('operation-status-title','Pendientes y actividad')]:[])]}]:[]),
  ];
