@@ -1326,7 +1326,7 @@
       "blockId": 55,
       "lane": "people",
       "sourceLine": 54,
-      "producerSha256": "e0d9ff386c61991f6f586be332de2d3760d3c11cf85052a887d67876aa56e23c",
+      "producerSha256": "7d9206b0c340d6e76f3614991f4675b2e2feefb34ed510b3dd7526d9f16619e9",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     },
     {

@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='d38e025df92e37f03b69e853bb9eb34aa15ba1af22ec38f674aafe67ad336999';
+export const EXPECTED_CONTRACT_SHA256='3b3a1f8e647ec1dbe34c8fc98a38c8812d319441e166a1739c21d588cf4b776b';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
 const BASELINE_PRODUCERS_SHA256='07d0016608332c0775f86bee6d005e60d4686d2ffe33a3065dfd9fd8e974ab20';
