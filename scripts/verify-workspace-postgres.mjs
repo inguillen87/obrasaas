@@ -1,11 +1,36 @@
 import assert from 'node:assert/strict';
-import {randomUUID} from 'node:crypto';
-import {mkdirSync,writeFileSync} from 'node:fs';
+import {randomUUID,createHash} from 'node:crypto';
+import {mkdirSync,writeFileSync,readFileSync,realpathSync,existsSync} from 'node:fs';
+import {execFileSync} from 'node:child_process';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {Pool,Client} from 'pg';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createWorkspaceHandlers} from '../src/lib/workspace-http.mjs';
 import {createCustomerWhatsAppSetup} from '../src/lib/customer-whatsapp-setup.mjs';
+
+const sourcePaths=['scripts/lib/disposable-postgres-cleanup.mjs','src/lib/workspace-store.mjs','src/lib/workspace-http.mjs','src/lib/customer-whatsapp-setup.mjs'];
+const sourceRoot=realpathSync(process.cwd()),hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+function sourceFiles(){
+ const found=new Set();function visit(file){
+  if(found.has(file))return;assert.ok(!path.isAbsolute(file)&&!file.split('/').some(part=>!part||part==='.'||part==='..'));
+  const absolute=path.join(sourceRoot,file);assert.ok(realpathSync(absolute).startsWith(sourceRoot+path.sep));found.add(file);
+  if(!/\.(?:js|mjs)$/.test(file))return;
+  for(const match of readFileSync(absolute,'utf8').matchAll(/(?:from\s*|import\s*)['"](\.[^'"]+)['"]/g)){
+   const relative=path.posix.normalize(path.posix.join(path.posix.dirname(file),match[1])),dependency=[relative,relative+'.js',relative+'.mjs'].find(value=>existsSync(path.join(sourceRoot,value)));
+   assert.ok(dependency,'Resolvable workspace PostgreSQL dependency '+file);visit(dependency);
+  }
+ }
+ sourcePaths.forEach(visit);return [...found].sort();
+}
+function sourceIdentity(){
+ const sourceRevision=execFileSync('git',['rev-parse','HEAD'],{cwd:sourceRoot,encoding:'utf8'}).trim();assert.match(sourceRevision,/^[a-f0-9]{40}$/);
+ const dirtyTrackedPaths=execFileSync('git',['diff','--name-only','HEAD','--'],{cwd:sourceRoot,encoding:'utf8'}).trim().split(/\r?\n/).filter(Boolean);
+ if(process.env.GITHUB_SHA){assert.equal(sourceRevision,process.env.GITHUB_SHA);assert.deepEqual(dirtyTrackedPaths,[],'Exact clean CI source required');}
+ return {sourceRevision,trackedClean:dirtyTrackedPaths.length===0,sourceState:dirtyTrackedPaths.length?'LOCAL_REVIEW_SOURCE':'EXACT_CI_SOURCE',dirtyTrackedPaths};
+}
+const identityBefore=sourceIdentity(),sourceManifest=sourceFiles().map(file=>({path:file,sha256:hash(readFileSync(path.join(sourceRoot,file)))})),harnessSha256=hash(readFileSync(fileURLToPath(import.meta.url)));
 
 // This script never connects to Neon/production and never receives provider secrets.
 const source=process.env.CUTOVER_TEST_DATABASE_URL;
@@ -17,7 +42,7 @@ assert.equal(url.pathname,'/obrasaas_cutover_ci');assert.equal(url.search,'');as
 const name='obrasaas_ws_'+randomUUID().replaceAll('-','');
 assert.match(name,/^obrasaas_ws_[a-f0-9]{32}$/);
 const admin=new Client({connectionString:source,connectionTimeoutMillis:5000});
-let created=false,pool;const checks=[];
+let created=false,pool,result,databaseRemoved=false;const checks=[];
 const identify=(user,org='org_A',role='org:member')=>({authenticated:true,verification:'clerk-production-jwt',userId:user,organizationId:org,organizationRole:role});
 const owner=identify('user_Owner','org_A','org:admin'),manager=identify('user_Manager'),viewer=identify('user_Viewer'),foreign=identify('user_Foreign','org_B','org:admin');
 try{
@@ -42,6 +67,29 @@ try{
   const own=await store.list(owner),manage=await store.list(manager),view=await store.list(viewer),other=await store.list(foreign);
   assert.deepEqual(own.projects.map(p=>p.id),['p-a','p-a2']);assert.deepEqual(manage.projects.map(p=>p.id),['p-a']);assert.deepEqual(view.projects.map(p=>p.id),['p-a']);assert.deepEqual(other.projects.map(p=>p.id),['p-b']);
   assert.equal(view.canPlanSchedule,false);assert.equal(manage.canPlanSchedule,true);checks.push('canonical-company-and-project-scope');
+  const beforeOverview=(await pool.query(`SELECT (SELECT count(*) FROM "AuditLog")::int AS audit,(SELECT count(*) FROM "Task")::int AS tasks`)).rows[0];
+  const ownOverview=await store.overview(owner,{scope:own.scope}),assignedOverview=await store.overview(manager,{scope:manage.scope}),foreignOverview=await store.overview(foreign,{scope:other.scope});
+  assert.deepEqual(ownOverview.projects.map(p=>p.id),['p-a','p-a2']);assert.deepEqual(assignedOverview.projects.map(p=>p.id),['p-a']);assert.deepEqual(foreignOverview.projects.map(p=>p.id),['p-b']);
+  assert.deepEqual(ownOverview.projects[0],{id:'p-a',name:'Synthetic worksite A',status:'ACTIVE',totalTasks:1,completedTasks:0,inProgressTasks:1,blockedTasks:0,unscheduledTasks:0,nextEndsOn:'2026-10-05'});
+  assert.deepEqual(ownOverview.projects[1],{id:'p-a2',name:'Synthetic worksite A2',status:'ACTIVE',totalTasks:0,completedTasks:0,inProgressTasks:0,blockedTasks:0,unscheduledTasks:0,nextEndsOn:null});
+  assert.deepEqual((await pool.query(`SELECT (SELECT count(*) FROM "AuditLog")::int AS audit,(SELECT count(*) FROM "Task")::int AS tasks`)).rows[0],beforeOverview);
+  checks.push('portfolio-uses-canonical-company-and-assignment-without-writes-or-private-projection');
+  for(const cursor of ['p-b','p-a2','p-archived'])await assert.rejects(store.overview(manager,{scope:manage.scope,afterProject:cursor}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
+  await assert.rejects(store.overview(owner,{scope:other.scope}),{code:'WORKSPACE_CONTEXT_CHANGED'});
+  await pool.query(`UPDATE "ProjectMembership" SET status='DISABLED' WHERE id='pm-manager'`);
+  assert.deepEqual((await store.overview(manager,{scope:manage.scope})).projects,[]);await assert.rejects(store.overview(manager,{scope:manage.scope,afterProject:'p-a'}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
+  await pool.query(`UPDATE "ProjectMembership" SET status='ACTIVE' WHERE id='pm-manager'`);
+  checks.push('portfolio-revoked-assignment-and-foreign-cursor-denied');
+  await pool.query(`INSERT INTO "Task" VALUES ('summary-blocked','p-a','Synthetic blocked task','BLOCKED',0,NULL,NULL,CURRENT_TIMESTAMP,'{}'),('summary-done','p-a','Synthetic completed task','DONE',100,'2026-01-01','2026-01-02',CURRENT_TIMESTAMP,'{}'),('summary-inconsistent','p-a','Synthetic incomplete done task','DONE',75,NULL,'2026-10-04',CURRENT_TIMESTAMP,'{}')`);
+  const summary=(await store.overview(owner,{scope:own.scope})).projects[0];assert.equal(summary.totalTasks,4);assert.equal(summary.completedTasks,1);assert.equal(summary.inProgressTasks,1);assert.equal(summary.blockedTasks,1);assert.equal(summary.unscheduledTasks,2);assert.equal(summary.nextEndsOn,'2026-10-04');
+  await pool.query(`DELETE FROM "Task" WHERE id IN ('summary-blocked','summary-done','summary-inconsistent')`);
+  checks.push('portfolio-counts-approved-task-state-without-average-or-false-completion');
+  await pool.query(`INSERT INTO "Project"(id,"organizationId",name,status) SELECT 'portfolio-'||lpad(n::text,3,'0'),'company-a','Synthetic portfolio worksite '||n,'ACTIVE' FROM generate_series(1,105) n`);
+  const portfolioFirst=await store.overview(owner,{scope:own.scope}),portfolioSecond=await store.overview(owner,{scope:own.scope,afterProject:portfolioFirst.nextCursor}),portfolioThird=await store.overview(owner,{scope:own.scope,afterProject:portfolioSecond.nextCursor});
+  assert.equal(portfolioFirst.projects.length,50);assert.equal(portfolioSecond.projects.length,50);assert.equal(portfolioThird.projects.length,7);assert.equal(portfolioThird.nextCursor,null);
+  const portfolioIds=[...portfolioFirst.projects,...portfolioSecond.projects,...portfolioThird.projects].map(p=>p.id);assert.equal(new Set(portfolioIds).size,107);assert.deepEqual([...portfolioIds].sort(),portfolioIds);assert.ok(!portfolioIds.includes('p-b'));assert.ok(!portfolioIds.includes('p-archived'));
+  await pool.query(`DELETE FROM "Project" WHERE id LIKE 'portfolio-%'`);
+  checks.push('portfolio-pages-over-one-hundred-works-without-foreign-or-archived-rows');
   await assert.rejects(store.list(identify('user_Owner','org_Internal','org:admin')),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
   await assert.rejects(store.list({...manager,organizationRole:'org:admin'}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
   await assert.rejects(store.list(identify('user_Unknown')),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
@@ -130,6 +178,14 @@ try{
   await assert.rejects(setup.read(owner,context),{code:'WORKSPACE_INTEGRITY'});
   await pool.query(`UPDATE "Project" SET metadata=$1::jsonb WHERE id='p-a'`,[JSON.stringify(metadataBefore)]);
   checks.push('invalid-prior-preparation-fails-without-replacing-it');
-  const result={status:'PASS',environment:'local-disposable-postgresql',checks,productionDataTouched:false,providerCalls:0,physicalWhatsAppTested:false};
-  mkdirSync('.vercel/workspace-evidence',{recursive:true});writeFileSync('.vercel/workspace-evidence/postgres.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
-}finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${name}"`);}finally{await admin.end();}}
+  result={status:'PASS',environment:'local-disposable-postgresql',checks,productionDataTouched:false,providerCalls:0,physicalWhatsAppTested:false};
+}finally{try{
+ await closeDisposablePool(pool);
+ if(created){await admin.query(`DROP DATABASE "${name}"`);assert.equal((await admin.query('SELECT datname FROM pg_database WHERE datname=$1',[name])).rows.length,0,'Disposable database removed');databaseRemoved=true;}
+}finally{await admin.end();}}
+assert.equal(databaseRemoved,true,'No PASS before confirmed cleanup and connection closure');
+assert.deepEqual(sourceIdentity(),identityBefore,'Source identity stable during PostgreSQL proof');
+for(const item of sourceManifest)assert.equal(hash(readFileSync(path.join(sourceRoot,item.path))),item.sha256,'Source stable during PostgreSQL proof');
+assert.equal(hash(readFileSync(fileURLToPath(import.meta.url))),harnessSha256);
+Object.assign(result,identityBefore,{sourceManifest,harnessSha256,databaseRemoved,connectionClosed:true,totalCheckCount:checks.length});
+mkdirSync('.vercel/workspace-evidence',{recursive:true});writeFileSync('.vercel/workspace-evidence/postgres.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));

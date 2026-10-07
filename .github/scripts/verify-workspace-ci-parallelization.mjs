@@ -6,8 +6,9 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
+import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='28058e49f44db142dd2f6110512910ab53465611d0919b90ee830c34860bc9ef';
+export const EXPECTED_CONTRACT_SHA256='98c177604a2842e6b3df0758089f9687ff7413a3deb943e2ff8ff76bc4beadec';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
 const BASELINE_PRODUCERS_SHA256='07d0016608332c0775f86bee6d005e60d4686d2ffe33a3065dfd9fd8e974ab20';
@@ -16,6 +17,15 @@ const PREPARATION_BASELINE_OWNERSHIP_SHA256='d98be6976ef7772633f5e8697fef3786855
 const PREPARATION_BASELINE_PRODUCERS_SHA256='da40d5dff77ff5c436d7e4a6a6b48da90197bced44dc113eebcf0f14c2468c88';
 const PREPARATION_ARTIFACTS=['.vercel/private/project-preparation-postgres-validation.json','.vercel/private/project-preparation-ui-*.json','.vercel/private/project-preparation-ui-*.png'];
 const PREPARATION_MODES=['save','recover','reload','cancel','conflict','denied'];
+const PORTFOLIO_BASELINE_BLOCKS_SHA256='fdb9d500f6e96981887bc1f7e74d55875c870239c198296466d4a362f63d68d7';
+const PORTFOLIO_BASELINE_OWNERSHIP_SHA256='81608969b6edbf08690ea31011d6c526f65bfae91468933e496f0cc52be5fab4';
+const PORTFOLIO_BASELINE_PRODUCERS_SHA256='50711f4c69686d081e8a3b3fa6bdb764f4f447cbb79c1e92574b7d2f902fd37b';
+const PORTFOLIO_BLOCK_DIGEST='87166cb8289ff7e7380bdb6b1954746b65c26a1955d4b3985f312c7fdeccf8f0';
+const PORTFOLIO_ARTIFACTS=['.vercel/portfolio-overview-contract-evidence/','.vercel/private/portfolio-overview-ui-validation.json','.vercel/private/portfolio-*.png'];
+const PORTFOLIO_MODES=['success','pagination','503','401','403','409','503-html','401-html','403-html','409-html','invalid-json','wrong-scope','wrong-role','stale','unmount','locked','dark'];
+const PORTFOLIO_PG_BASELINE_PRODUCER={producer:'scripts/verify-workspace-postgres.mjs',path:'.vercel/workspace-evidence/postgres.json',retained:true,blockId:10,lane:'workspace-ui',baselineSourceLine:134,baselineProducerGitBlobSha256:'c49525d41783f2258ea6cbf33ef3d7561f2219d703d52aebe4f860f397e97a2f'};
+const isPortfolio=spec=>['PORTFOLIO_UNIT','UI_PORTFOLIO','PG_PORTFOLIO'].includes(spec.kind);
+const isPortfolioEvidence=filename=>PORTFOLIO_ARTIFACTS.some(pattern=>matches(filename,pattern));
 const preparationDependenciesFor=kind=>['UNIT','UI_BANK','UI_JOINT','UI_CAUSAL','PG_COMPANY_KYC'].includes(kind)?['src/lib/participant-kyc-image-set.mjs',...(kind==='PG_COMPANY_KYC'?['src/lib/project-preparation-http.mjs','src/lib/project-preparation-policy.mjs','src/lib/project-preparation-store.mjs']:[])]:[];
 export const LANES=['contracts','plans','people','field','meta','channels','business','workspace-ui'];
 // Keep each serialized lane below Linux's 128 KiB per-environment-string limit.
@@ -47,7 +57,10 @@ const EXTENSION_PROOFS=[
  ['joint-causal','people',56,'.vercel/private/participant-bank-intake-integration/bad-resolution/browser.json','UI_CAUSAL'],
  ['company-kyc-postgres','people',57,'.vercel/company-kyc-evidence/postgres.json','PG_COMPANY_KYC'],
  ['project-preparation-postgres','business',58,'.vercel/private/project-preparation-postgres-validation.json','PG_PREPARATION'],
- ['project-preparation-ui','business',58,'.vercel/private/project-preparation-ui-validation.json','UI_PREPARATION']
+ ['project-preparation-ui','business',58,'.vercel/private/project-preparation-ui-validation.json','UI_PREPARATION'],
+ ['portfolio-units','workspace-ui',59,'.vercel/portfolio-overview-contract-evidence/proof.json','PORTFOLIO_UNIT'],
+ ['portfolio-ui','workspace-ui',59,'.vercel/private/portfolio-overview-ui-validation.json','UI_PORTFOLIO'],
+ ['portfolio-postgres','workspace-ui',10,'.vercel/workspace-evidence/postgres.json','PG_PORTFOLIO']
 ];
 function sourcePath(value){if(typeof value!=='string'||value.length>500||/[\\\x00-\x1f]/.test(value)||value.startsWith('/')||value.split('/').some(part=>!part||part==='.'||part==='..'))deny('UNSAFE_SOURCE_PATH');return value;}
 function gitSource(root,expectedHead){if(!head(expectedHead))deny('EXPECTED_HEAD_INVALID');const cache=new Map();return filename=>{sourcePath(filename);if(!cache.has(filename))cache.set(filename,execFileSync('git',['show',expectedHead+':'+filename],{cwd:root,maxBuffer:8*1024*1024}));return cache.get(filename);};}
@@ -55,31 +68,55 @@ function manifestDigest(references){return hash(canonical([...references].sort((
 function expectedSourceDigest(spec,readSource){if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');return manifestDigest(spec.sourceFiles.map(file=>{const bytes=readSource(file);if(!Buffer.isBuffer(bytes))deny('PROOF_SOURCE_BYTES');return {path:file,sha256:hash(bytes)};}));}
 const utf8=bytes=>{if(!Buffer.isBuffer(bytes))deny('PROOF_BYTES');const text=bytes.toString('utf8');if(!bytes.equals(Buffer.from(text)))deny('PROOF_ENCODING');return text;};
 function matrix(rows,widths,modes){if(!Array.isArray(rows))deny('PROOF_MATRIX');const keys=rows.map(row=>row&&row.width+':'+row.mode);equal(keys.toSorted(),widths.flatMap(width=>modes.map(mode=>width+':'+mode)).toSorted(),'PROOF_MATRIX');}
-function summary(spec){return spec.kind==='PG_PREPARATION'?spec.checkNames.length:spec.kind==='UI_PREPARATION'?4*PREPARATION_MODES.length:spec.kind==='UNIT'?{suites:7,tests:EXPECTED_TOTAL_TESTS,recovery:7,corporateKyc:76,nextSteps:35}:spec.kind==='PG_COMPANY_KYC'?6:spec.kind==='UI_CAUSAL'?0:spec.kind==='UI_JOINT'?8:spec.kind.startsWith('UI_')?32:spec.kind==='PG_BANK'?10:8;}
+function summary(spec){return spec.kind==='PORTFOLIO_UNIT'?PORTFOLIO_TESTS:spec.kind==='UI_PORTFOLIO'?4*PORTFOLIO_MODES.length:spec.kind==='PG_PORTFOLIO'?spec.checkNames.length:spec.kind==='PG_PREPARATION'?spec.checkNames.length:spec.kind==='UI_PREPARATION'?4*PREPARATION_MODES.length:spec.kind==='UNIT'?{suites:7,tests:EXPECTED_TOTAL_TESTS,recovery:7,corporateKyc:76,nextSteps:35}:spec.kind==='PG_COMPANY_KYC'?6:spec.kind==='UI_CAUSAL'?0:spec.kind==='UI_JOINT'?8:spec.kind.startsWith('UI_')?32:spec.kind==='PG_BANK'?10:8;}
 function validateExtension(contract){
  const extension=contract.extension;exactKeys(extension,['baseHead','baselineBlocksSha256','baselineOwnershipSha256','baselineProducersSha256','proofs'],'EXTENSION_SHAPE');
  if(extension.baseHead!=='a4b79d7a7f75427ed1d0b0e1e9b247e1188adf3f')deny('EXTENSION_BASE');
  equal(extension.proofs.map(p=>[p.id,p.lane,p.blockId,p.path,p.kind]),EXTENSION_PROOFS,'EXTENSION_PROOF_COVERAGE');
  for(const spec of extension.proofs){exactKeys(spec,['id','lane','blockId','path','kind','producer','producerSha256','sourceFiles','checkNames'],'EXTENSION_PROOF_SHAPE');if(!sha(spec.producerSha256)||!Array.isArray(spec.sourceFiles)||!spec.sourceFiles.length||new Set(spec.sourceFiles).size!==spec.sourceFiles.length)deny('EXTENSION_SOURCE_CONTRACT');spec.sourceFiles.forEach(sourcePath);sourcePath(spec.producer);if(!Array.isArray(spec.checkNames))deny('EXTENSION_CHECK_NAMES');}
- for(const spec of extension.proofs){const record=contract.evidenceProducers.find(p=>p.path===spec.path);equal(record&&{producer:record.producer,path:record.path,retained:record.retained,blockId:record.blockId,lane:record.lane,producerSha256:record.producerSha256,sourceBasis:record.sourceBasis},{producer:spec.producer,path:spec.path,retained:true,blockId:spec.blockId,lane:spec.lane,producerSha256:spec.producerSha256,sourceBasis:'EXPECTED_HEAD_GIT_BYTES'},'EXTENSION_PRODUCER_CONTRACT');}
+ for(const spec of extension.proofs){const record=contract.evidenceProducers.find(p=>p.path===spec.path);if(spec.kind==='PG_PORTFOLIO'){equal(record,PORTFOLIO_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}equal(record&&{producer:record.producer,path:record.path,retained:record.retained,blockId:record.blockId,lane:record.lane,producerSha256:record.producerSha256,sourceBasis:record.sourceBasis},{producer:spec.producer,path:spec.path,retained:true,blockId:spec.blockId,lane:spec.lane,producerSha256:spec.producerSha256,sourceBasis:'EXPECTED_HEAD_GIT_BYTES'},'EXTENSION_PRODUCER_CONTRACT');}
  if(hash(canonical(contract.blocks.slice(0,46)))!==extension.baselineBlocksSha256||extension.baselineBlocksSha256!==BASELINE_BLOCKS_SHA256)deny('BASELINE_BLOCKS_CHANGED');
- const newPatterns=new Set([...PREPARATION_ARTIFACTS,...extension.proofs.flatMap(spec=>contract.lanes[spec.lane].artifacts.filter(pattern=>matches(spec.path,pattern)))]);
+ const newPatterns=new Set([...PREPARATION_ARTIFACTS,...PORTFOLIO_ARTIFACTS,...extension.proofs.filter(spec=>spec.kind!=='PG_PORTFOLIO').flatMap(spec=>contract.lanes[spec.lane].artifacts.filter(pattern=>matches(spec.path,pattern)))]);
  const ownership=Object.fromEntries(LANES.map(lane=>[lane,{blocks:contract.lanes[lane].blocks.filter(id=>id<=52),artifacts:contract.lanes[lane].artifacts.filter(pattern=>!newPatterns.has(pattern))}]));
  if(hash(canonical(ownership))!==extension.baselineOwnershipSha256||extension.baselineOwnershipSha256!==BASELINE_OWNERSHIP_SHA256)deny('BASELINE_OWNERSHIP_CHANGED');
  if(hash(canonical(contract.evidenceProducers.filter(p=>p.blockId<=52)))!==extension.baselineProducersSha256||extension.baselineProducersSha256!==BASELINE_PRODUCERS_SHA256)deny('BASELINE_PRODUCERS_CHANGED');
  if(hash(canonical(contract.blocks.slice(0,51)))!==PREPARATION_BASELINE_BLOCKS_SHA256)deny('PREPARATION_BASELINE_BLOCKS_CHANGED');
- const previousOwnership=Object.fromEntries(LANES.map(lane=>[lane,{blocks:contract.lanes[lane].blocks.filter(id=>id<=57),artifacts:contract.lanes[lane].artifacts.filter(pattern=>!PREPARATION_ARTIFACTS.includes(pattern))}]));
+ const previousOwnership=Object.fromEntries(LANES.map(lane=>[lane,{blocks:contract.lanes[lane].blocks.filter(id=>id<=57),artifacts:contract.lanes[lane].artifacts.filter(pattern=>!PREPARATION_ARTIFACTS.includes(pattern)&&!PORTFOLIO_ARTIFACTS.includes(pattern))}]));
  if(hash(canonical(previousOwnership))!==PREPARATION_BASELINE_OWNERSHIP_SHA256)deny('PREPARATION_BASELINE_OWNERSHIP_CHANGED');
  if(hash(canonical(contract.evidenceProducers.filter(p=>p.blockId<=57)))!==PREPARATION_BASELINE_PRODUCERS_SHA256)deny('PREPARATION_BASELINE_PRODUCERS_CHANGED');
+ if(hash(canonical(contract.blocks.slice(0,52)))!==PORTFOLIO_BASELINE_BLOCKS_SHA256)deny('PORTFOLIO_BASELINE_BLOCKS_CHANGED');
+ const portfolioPreviousOwnership=Object.fromEntries(LANES.map(lane=>[lane,{blocks:contract.lanes[lane].blocks.filter(id=>id<=58),artifacts:contract.lanes[lane].artifacts.filter(pattern=>!PORTFOLIO_ARTIFACTS.includes(pattern))}]));
+ if(hash(canonical(portfolioPreviousOwnership))!==PORTFOLIO_BASELINE_OWNERSHIP_SHA256)deny('PORTFOLIO_BASELINE_OWNERSHIP_CHANGED');
+ if(hash(canonical(contract.evidenceProducers.filter(p=>p.blockId<=58)))!==PORTFOLIO_BASELINE_PRODUCERS_SHA256)deny('PORTFOLIO_BASELINE_PRODUCERS_CHANGED');
+ if(contract.blocks.at(-1).commandSha256!==PORTFOLIO_BLOCK_DIGEST)deny('PORTFOLIO_BLOCK_COMMAND');
+}
+function validatePortfolioProof(spec,proof,{expectedHead,readEvidence}){
+ if(proof.sourceRevision!==expectedHead)deny('PROOF_SOURCE_STATE');
+ if(proof.providerCalls!==0)deny('PROOF_PROVIDER_IO');
+ if(spec.kind==='PORTFOLIO_UNIT'){
+  if(proof.sourceState!=='committed exact Git HEAD'||proof.trackedClean!==true||proof.postgresExecuted!==false)deny('PROOF_SOURCE_STATE');
+  const suite=proof.suite;exactKeys(suite,['file','exitCode','tests','pass','fail','cancelled','skipped','todo','caseNames','tap'],'PROOF_UNIT_SUITE_SHAPE');exactKeys(suite.tap,['path','bytes','sha256'],'PROOF_UNIT_TAP_SHAPE');
+  if(suite.file!==PORTFOLIO_TEST_FILE||suite.exitCode!==0||suite.tap.path!=='.vercel/portfolio-overview-contract-evidence/suite.tap')deny('PROOF_UNIT_EXECUTION');
+  if(typeof readEvidence!=='function')deny('PROOF_TAP_RESOLVER');const tap=readEvidence(suite.tap.path);if(!Buffer.isBuffer(tap)||tap.length!==suite.tap.bytes||hash(tap)!==suite.tap.sha256)deny('PROOF_TAP_DIGEST');
+  let parsed;try{parsed=parseTap(tap,{expectedTests:PORTFOLIO_TESTS});}catch{deny('PROOF_UNIT_RESULTS');}equal(parsed,Object.fromEntries(['tests','pass','fail','cancelled','skipped','todo','caseNames'].map(k=>[k,suite[k]])),'PROOF_UNIT_RESULTS');
+ }else if(spec.kind==='UI_PORTFOLIO'){
+  if(proof.fixtureRemoved!==true)deny('PROOF_CLEANUP');equal(proof.errors,[],'PROOF_UI_ERRORS');equal(proof.widths,[320,390,768,1280],'PROOF_MATRIX');matrix(proof.checks,proof.widths,PORTFOLIO_MODES);
+  if(proof.checks.some(c=>c.providerCalls!==0||c.mutations!==0||c.horizontalOverflow!==false||c.reads!==(['pagination','503','401','403','409','503-html','401-html','403-html','409-html','invalid-json'].includes(c.mode)?2:1)))deny('PROOF_PORTFOLIO_GUARDS');
+ }else{
+  if(proof.sourceState!=='EXACT_CI_SOURCE'||proof.trackedClean!==true)deny('PROOF_SOURCE_STATE');equal(proof.dirtyTrackedPaths,[],'PROOF_SOURCE_STATE');
+  if(proof.environment!=='local-disposable-postgresql'||proof.databaseRemoved!==true||proof.connectionClosed!==true)deny('PROOF_CLEANUP');
+  equal(proof.checks,spec.checkNames,'PROOF_CHECK_NAMES');if(proof.totalCheckCount!==spec.checkNames.length)deny('PROOF_CHECK_NAMES');if(proof.physicalWhatsAppTested!==false)deny('PROOF_PROVIDER_IO');
+ }
 }
 export function validateExtensionProof(spec,bytes,{expectedHead,readSource,readEvidence}){
  if(!head(expectedHead)||typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');let proof;try{proof=JSON.parse(utf8(bytes));}catch(error){if(error.code)throw error;deny('PROOF_JSON');}if(!proof||typeof proof!=='object'||Array.isArray(proof))deny('PROOF_SHAPE');
- const expectedStatus=spec.kind==='UI_CAUSAL'?'EXPECTED_CAUSAL_FAILURE':'PASS',actualStatus=spec.kind==='PG_PREPARATION'?(proof.ok===true?'PASS':'FAIL'):spec.kind==='UI_PREPARATION'?(proof.validated===true?'PASS':'FAIL'):proof.status;if(actualStatus!==expectedStatus)deny('PROOF_STATUS');if((spec.kind==='PG_COMPANY_KYC'?proof.productionDataTouched:proof.productionDataWritten)!==false)deny('PROOF_PRODUCTION_BOUNDARY');
+ const expectedStatus=spec.kind==='UI_CAUSAL'?'EXPECTED_CAUSAL_FAILURE':'PASS',actualStatus=spec.kind==='UI_PORTFOLIO'?(proof.state==='PASS_LOCAL_UI_NOT_RELEASE_ACCEPTANCE'?'PASS':'FAIL'):spec.kind==='PG_PREPARATION'?(proof.ok===true?'PASS':'FAIL'):spec.kind==='UI_PREPARATION'?(proof.validated===true?'PASS':'FAIL'):proof.status;if(actualStatus!==expectedStatus)deny('PROOF_STATUS');if((['PG_COMPANY_KYC','PG_PORTFOLIO'].includes(spec.kind)?proof.productionDataTouched:proof.productionDataWritten)!==false)deny('PROOF_PRODUCTION_BOUNDARY');
  const producerBytes=readSource(spec.producer);if(!Buffer.isBuffer(producerBytes)||hash(producerBytes)!==spec.producerSha256||proof.harnessSha256!==spec.producerSha256)deny('PROOF_HARNESS_SOURCE');
  if(!Array.isArray(proof.sourceManifest))deny('PROOF_SOURCE_MANIFEST');equal(proof.sourceManifest.map(r=>r?.path).toSorted(),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');
  for(const ref of proof.sourceManifest){exactKeys(ref,['path','sha256'],'PROOF_SOURCE_REFERENCE');sourcePath(ref.path);if(!sha(ref.sha256)||hash(readSource(ref.path))!==ref.sha256)deny('PROOF_SOURCE_HASH');}
  if(proof.sourceRevision!==undefined&&proof.sourceRevision!==expectedHead)deny('PROOF_SOURCE_HEAD');
- if(spec.kind==='PG_PREPARATION'||spec.kind==='UI_PREPARATION'){
+ if(isPortfolio(spec)){validatePortfolioProof(spec,proof,{expectedHead,readEvidence});}
+ else if(spec.kind==='PG_PREPARATION'||spec.kind==='UI_PREPARATION'){
   if(proof.sourceRevision!==expectedHead||proof.sourceState!=='EXACT_CI_SOURCE'||proof.trackedClean!==true)deny('PROOF_SOURCE_STATE');
   if(proof.providerCalls!==0)deny('PROOF_PROVIDER_IO');
   if(spec.kind==='PG_PREPARATION'){
@@ -126,6 +163,9 @@ function currentProducerSourceFiles(spec,root){
   seeds.forEach(visit);return [...found].sort();
  };
  if(spec.kind==='UNIT')return bankUnitSourceFiles(root);
+ if(spec.kind==='PORTFOLIO_UNIT')return portfolioUnitSourceFiles(root);
+ if(spec.kind==='UI_PORTFOLIO')return array('files').map(file=>'src/app/(identity)/cuenta/'+file).sort();
+ if(spec.kind==='PG_PORTFOLIO')return walk(array('sourcePaths'));
  if(spec.kind==='PG_BANK')return array('sourceFiles').sort();
  if(spec.kind==='PG_INTAKE')return array('sourcePaths').sort();
  if(spec.kind==='PG_PREPARATION')return array('sourcePaths').sort();
@@ -148,7 +188,7 @@ function extensionSelftest(contract,root){
  // Normalize only these shadow source fixtures to Linux Git text. The actual proof validator never normalizes bytes.
  const readSource=file=>{const bytes=readFileSync(path.join(root,sourcePath(file))),text=bytes.toString('utf8');assert.ok(bytes.equals(Buffer.from(text)));return Buffer.from(text.replaceAll('\r\n','\n'));};
  const tap=names=>Buffer.from('TAP version 13\n'+names.map((name,i)=>'ok '+(i+1)+' - '+name+'\n').join('')+'1..'+names.length+'\n# tests '+names.length+'\n# pass '+names.length+'\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n');
- for(const spec of contract.extension.proofs){
+ for(const spec of contract.extension.proofs.filter(spec=>!isPortfolio(spec))){
    const originalCheckCount=checks.length;
   const evidence=new Map(),base={status:spec.kind==='UI_CAUSAL'?'EXPECTED_CAUSAL_FAILURE':'PASS',productionDataWritten:false,sourceManifest:spec.sourceFiles.map(file=>({path:file,sha256:hash(readSource(file))})),harnessSha256:spec.producerSha256};
   let proof={...base};
@@ -288,20 +328,20 @@ function validateEvidenceContract(contract){
   for(const filename of owner.requiredProducedEvidence){cleanPath(filename);if(owner.artifacts.some(pattern=>matches(filename,pattern)))deny('PRODUCED_EVIDENCE_IS_UPLOAD_OWNED');}
   if(owner.artifacts.filter(pattern=>!owner.optionalArtifactPatterns.includes(pattern)).some(pattern=>!owner.requiredRetainedEvidence.some(filename=>matches(filename,pattern))))deny('MANDATORY_PATTERN_WITHOUT_MAIN_PROOF');
  }
- if(Object.values(contract.lanes).flatMap(owner=>owner.optionalArtifactPatterns).length!==5)deny('OPTIONAL_ARTIFACT_COVERAGE');
+ if(Object.values(contract.lanes).flatMap(owner=>owner.optionalArtifactPatterns).length!==6)deny('OPTIONAL_ARTIFACT_COVERAGE');
 }
 export function validateContract(contract){
  if(contract?.version!==2||contract.sourceCommit!=='61d316a8983c268d43f8af6de10df9743a46278e')deny('CONTRACT_BASE');
  equal(Object.keys(contract.lanes).sort(),[...LANES].sort(),'CONTRACT_LANES');
  const ids=contract.blocks.map(block=>block.id);
- equal(ids,Array.from({length:52},(_,i)=>i+7),'CONTRACT_BLOCKS');
+ equal(ids,Array.from({length:53},(_,i)=>i+7),'CONTRACT_BLOCKS');
  for(const block of contract.blocks){if(typeof block.step.run!=='string'||hash(block.step.run)!==block.commandSha256)deny('CONTRACT_COMMAND');}
  const assigned=Object.values(contract.lanes).flatMap(lane=>lane.blocks);
  equal([...assigned].sort((a,b)=>a-b),ids,'CONTRACT_COVERAGE');
- if(new Set(assigned).size!==52)deny('CONTRACT_DUPLICATE_BLOCK');
+ if(new Set(assigned).size!==53)deny('CONTRACT_DUPLICATE_BLOCK');
  const patterns=Object.values(contract.lanes).flatMap(lane=>lane.artifacts);
  equal([...patterns].sort(),[...contract.artifactPatterns].sort(),'CONTRACT_ARTIFACT_COVERAGE');
- if(patterns.length!==54||new Set(patterns).size!==54)deny('CONTRACT_ARTIFACT_DUPLICATE');
+ if(patterns.length!==57||new Set(patterns).size!==57)deny('CONTRACT_ARTIFACT_DUPLICATE');
  patterns.forEach(patternValid);
  validateEvidenceContract(contract);validateExtension(contract);
  return contract;
@@ -339,7 +379,7 @@ export function buildWorkflow(contract){
 }
 export function equivalent(workflow,contract){
  equal(workflow,buildWorkflow(contract),'WORKFLOW_NOT_EQUIVALENT');
- return {blocks:52,artifactPatterns:54,lanes:8};
+ return {blocks:53,artifactPatterns:57,lanes:8};
 }
 function collect(root,patterns){
  const files=new Map();
@@ -461,7 +501,7 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
   records.push({lane,artifactId:job.outputs.artifactId,artifactDigest:job.outputs.artifactDigest,manifestSha256:record.manifestSha256,fileCount:record.files.length,producedNotUploaded:record.producedNotUploaded,blockIds:record.blockIds,proofBindings:record.proofBindings});
  }
  equal(records.flatMap(record=>record.blockIds).sort((a,b)=>a-b),contract.blocks.map(block=>block.id),'TOTAL_BLOCK_COVERAGE');
- return {version:1,state:'PASS',head:expectedHead,runId,runAttempt,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,lanes:records,commandBlocks:52,artifactPatterns:54,requiredRetainedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredRetainedEvidence).length,producedNotUploadedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredProducedEvidence).length,fileCount};
+ return {version:1,state:'PASS',head:expectedHead,runId,runAttempt,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,lanes:records,commandBlocks:53,artifactPatterns:57,requiredRetainedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredRetainedEvidence).length,producedNotUploadedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredProducedEvidence).length,fileCount};
 }
 function expectedNeeds(contract,expectedHead,workflowSha256,readSource){
  return Object.fromEntries(LANES.map((lane,i)=>{
@@ -478,11 +518,11 @@ export function selftest(workflow,contract,root=process.cwd()){
  const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
  const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedNeeds(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};
  bad('gate-source-resolver-required','PROOF_SOURCE_RESOLVER',()=>gate({...input,readSource:undefined}));
- good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(gate(input).commandBlocks,52);});
- good('gate-all-eight-lanes-and-additive-KYC-57',()=>assert.equal(gate(input).commandBlocks,52));
+ good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(gate(input).commandBlocks,53);});
+ good('gate-all-eight-lanes-and-additive-KYC-57',()=>assert.equal(gate(input).commandBlocks,53));
  const laneEnv=Object.fromEntries(LANES.map(lane=>[laneEnvironmentKey(lane),JSON.stringify(needs[lane])]));
  good('lane-environment-preserves-exact-eight-records',()=>equal(readLaneNeedsEnvironment({...laneEnv,PATH:'controlled'}),needs,'ENV_TRANSPORT_CHANGED'));
- good('lane-environment-still-runs-exact-gate',()=>assert.equal(gate({...input,needs:readLaneNeedsEnvironment(laneEnv)}).commandBlocks,52));
+ good('lane-environment-still-runs-exact-gate',()=>assert.equal(gate({...input,needs:readLaneNeedsEnvironment(laneEnv)}).commandBlocks,53));
  bad('legacy-aggregate-environment-denied','LEGACY_AGGREGATE_ENV_DENIED',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_NEEDS_JSON:JSON.stringify(needs)}));
  const missingEnv={...laneEnv};delete missingEnv.WORKSPACE_LANE_META_JSON;
  bad('missing-lane-environment-denied','LANE_ENV_COVERAGE',()=>readLaneNeedsEnvironment(missingEnv));
@@ -548,13 +588,13 @@ export function selftest(workflow,contract,root=process.cwd()){
   ['changed-upload-path',w=>{w.jobs.channels.steps.at(-1).with.path+='.vercel/private/**\n';}]
  ]){const w=clone(original);edit(w);bad(name,'WORKFLOW_NOT_EQUIVALENT',()=>equivalent(w,contract));}
  good('all-three-optional-PNG-patterns-absent',()=>assert.equal(gate(input).state,'PASS'));
- for(const lane of LANES)for(const pattern of contract.lanes[lane].optionalArtifactPatterns){
+ for(const lane of LANES)for(const pattern of contract.lanes[lane].optionalArtifactPatterns.filter(pattern=>!PORTFOLIO_ARTIFACTS.includes(pattern))){
   const n=clone(needs),r=JSON.parse(n[lane].outputs.provenance);
   r.files.push({path:pattern.replaceAll('*','fixture'),sha256:'4'.repeat(64),bytes:128});
   delete r.manifestSha256;n[lane].outputs.provenance=JSON.stringify(seal(r));
   good('optional-PNG-present-'+lane,()=>assert.equal(gate({...input,needs:n}).state,'PASS'));
  }
- for(const lane of LANES)for(const filename of contract.lanes[lane].requiredRetainedEvidence){
+ for(const lane of LANES)for(const filename of contract.lanes[lane].requiredRetainedEvidence.filter(filename=>!isPortfolioEvidence(filename))){
   const n=clone(needs),r=JSON.parse(n[lane].outputs.provenance);
   r.files=r.files.filter(file=>file.path!==filename);
   if(!r.files.length){const owned=contract.lanes[lane].artifacts.find(pattern=>pattern.endsWith('/'));if(owned)r.files.push({path:owned+'diagnostic.json',sha256:'4'.repeat(64),bytes:128});}
@@ -650,7 +690,7 @@ export function selftest(workflow,contract,root=process.cwd()){
   const resolved=path.resolve(fixture);assert.ok(resolved.startsWith(parent+path.sep)&&path.basename(resolved).startsWith('ci-gate-selftest-fixture-'));
   rmSync(resolved,{recursive:true,force:true});
  }
-  for(const spec of contract.extension.proofs){
+  for(const spec of contract.extension.proofs.filter(spec=>!isPortfolio(spec))){
    for(const [name,code,edit] of [
     ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
     ['binding-head','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceRevision='f'.repeat(40);}],
@@ -670,22 +710,92 @@ export function selftest(workflow,contract,root=process.cwd()){
   ]){const c=clone(contract);edit(c);bad('extension-block-'+id+'-'+name,code,()=>validateContract(c));}
   const changedBaseline=clone(contract);changedBaseline.blocks[0].step.run+='\ntrue';changedBaseline.blocks[0].commandSha256=hash(changedBaseline.blocks[0].step.run);bad('old-block-changed-with-recomputed-digest','BASELINE_BLOCKS_CHANGED',()=>validateContract(changedBaseline));
   const freshFixture=mkdtempSync(path.join(parent,'ci-bank-intake-selftest-fixture-'));
-  try{for(const spec of contract.extension.proofs){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
+  try{for(const spec of contract.extension.proofs.filter(spec=>!isPortfolio(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
   finally{const resolved=path.resolve(freshFixture);assert.ok(path.dirname(resolved)===path.resolve(parent)&&path.basename(resolved).startsWith('ci-bank-intake-selftest-fixture-'));rmSync(resolved,{recursive:true,force:true});}
-  checks.push(...extensionSelftest(contract,root));return checks;
+  checks.push(...extensionSelftest(contract,root));checks.push(...portfolioSelftest(workflow,contract,root));return checks;
+}
+function portfolioSelftest(workflow,contract,root){
+ const checks=[],expectedHead=contract.extension.baseHead,specs=contract.extension.proofs.filter(isPortfolio);
+ const good=(name,run)=>{run();checks.push({name,result:'PASS',boundary:'pure portfolio shadow fixture; no Git/PG/UI/provider execution'});};
+ const bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code,boundary:'pure portfolio shadow fixture'});};
+ // These shadow bytes model a Linux checkout. Real proof bytes are never normalized.
+ const readSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
+ const tap=names=>Buffer.from('TAP version 13\n'+names.map((name,i)=>'ok '+(i+1)+' - '+name+'\n').join('')+'1..'+names.length+'\n# tests '+names.length+'\n# pass '+names.length+'\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n');
+ for(const spec of specs){
+  const evidence=new Map(),proof={status:'PASS',sourceRevision:expectedHead,sourceManifest:spec.sourceFiles.map(file=>({path:file,sha256:hash(readSource(file))})),harnessSha256:spec.producerSha256,providerCalls:0,productionDataWritten:false};
+  if(spec.kind==='PORTFOLIO_UNIT'){
+   const bytes=tap(Array.from({length:PORTFOLIO_TESTS},(_,i)=>'portfolio shadow case '+i)),filename='.vercel/portfolio-overview-contract-evidence/suite.tap';evidence.set(filename,bytes);
+   Object.assign(proof,{sourceState:'committed exact Git HEAD',trackedClean:true,postgresExecuted:false,suite:{file:PORTFOLIO_TEST_FILE,exitCode:0,...parseTap(bytes),tap:{path:filename,bytes:bytes.length,sha256:hash(bytes)}}});
+  }else if(spec.kind==='UI_PORTFOLIO')Object.assign(proof,{state:'PASS_LOCAL_UI_NOT_RELEASE_ACCEPTANCE',fixtureRemoved:true,errors:[],widths:[320,390,768,1280],checks:[320,390,768,1280].flatMap(width=>PORTFOLIO_MODES.map(mode=>({width,mode,reads:['pagination','503','401','403','409','503-html','401-html','403-html','409-html','invalid-json'].includes(mode)?2:1,providerCalls:0,mutations:0,horizontalOverflow:false})))});
+  else Object.assign(proof,{sourceState:'EXACT_CI_SOURCE',trackedClean:true,dirtyTrackedPaths:[],productionDataTouched:false,environment:'local-disposable-postgresql',databaseRemoved:true,connectionClosed:true,physicalWhatsAppTested:false,checks:[...spec.checkNames],totalCheckCount:spec.checkNames.length});
+  const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource,readEvidence:file=>evidence.get(file)});
+  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
+  good(spec.id+'-complete-native-proof',()=>assert.equal(validate(proof).checks,summary(spec)));
+  good(spec.id+'-current-source-closure-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
+  good(spec.id+'-manifest-order-independent',()=>{const value=clone(proof);value.sourceManifest.reverse();assert.equal(validate(value).sourceManifestSha256,validate(proof).sourceManifestSha256);});
+  mutate('wrong-status','PROOF_STATUS',p=>{if(spec.kind==='UI_PORTFOLIO')p.state='PASS';else p.status='FAIL';});
+  mutate('wrong-head','PROOF_SOURCE_HEAD',p=>{p.sourceRevision='f'.repeat(40);});mutate('missing-head','PROOF_SOURCE_STATE',p=>{delete p.sourceRevision;});
+  mutate('wrong-producer','PROOF_HARNESS_SOURCE',p=>{p.harnessSha256='f'.repeat(64);});mutate('provider-IO','PROOF_PROVIDER_IO',p=>{p.providerCalls=1;});
+  mutate('production-written','PROOF_PRODUCTION_BOUNDARY',p=>{if(spec.kind==='PG_PORTFOLIO')p.productionDataTouched=true;else p.productionDataWritten=true;});
+  for(const file of spec.sourceFiles){
+   mutate('source-omitted-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
+   mutate('source-hash-altered-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
+  }
+  mutate('source-duplicate','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.push(clone(p.sourceManifest[0]));});
+  if(spec.kind==='PORTFOLIO_UNIT'){
+   mutate('dirty-source','PROOF_SOURCE_STATE',p=>{p.trackedClean=false;});mutate('local-uncommitted','PROOF_SOURCE_STATE',p=>{p.sourceState='LOCAL_REVIEW_SOURCE';});mutate('PG-executed','PROOF_SOURCE_STATE',p=>{p.postgresExecuted=true;});
+   mutate('wrong-suite','PROOF_UNIT_EXECUTION',p=>{p.suite.file='tests/production-workspace.test.mjs';});mutate('nonzero-exit','PROOF_UNIT_EXECUTION',p=>{p.suite.exitCode=1;});mutate('tap-digest','PROOF_TAP_DIGEST',p=>{p.suite.tap.sha256='f'.repeat(64);});
+   const filename=proof.suite.tap.path,original=evidence.get(filename);
+   for(const size of [16,18]){const bytes=tap(Array.from({length:size},(_,i)=>'changed shadow case '+i));evidence.set(filename,bytes);mutate('exact-count-'+size,'PROOF_UNIT_RESULTS',p=>{p.suite={file:PORTFOLIO_TEST_FILE,exitCode:0,...parseTap(bytes),tap:{path:filename,bytes:bytes.length,sha256:hash(bytes)}};});}
+   for(const key of ['fail','cancelled','skipped','todo']){const bytes=Buffer.from(original.toString().replace('# '+key+' 0','# '+key+' 1'));evidence.set(filename,bytes);mutate('tap-'+key,'PROOF_UNIT_RESULTS',p=>{p.suite.tap={path:filename,bytes:bytes.length,sha256:hash(bytes)};});}
+   evidence.set(filename,original);mutate('declared-result-altered','PROOF_UNIT_RESULTS',p=>{p.suite.caseNames[0]='different assertion';});
+  }else if(spec.kind==='UI_PORTFOLIO'){
+   mutate('partial-matrix','PROOF_MATRIX',p=>{p.checks.pop();});mutate('duplicate-matrix','PROOF_MATRIX',p=>{p.checks[0]=clone(p.checks[1]);});mutate('wrong-width','PROOF_MATRIX',p=>{p.widths[0]=321;});mutate('ui-error','PROOF_UI_ERRORS',p=>{p.errors=['shadow UI failure'];});mutate('fixture-retained','PROOF_CLEANUP',p=>{p.fixtureRemoved=false;});
+   for(const [key,value] of [['providerCalls',1],['mutations',1],['horizontalOverflow',true],['reads',0]])mutate('row-'+key,'PROOF_PORTFOLIO_GUARDS',p=>{p.checks[0][key]=value;});
+   mutate('HTML-denial-modes-omitted','PROOF_MATRIX',p=>{p.checks=p.checks.filter(c=>!['401-html','403-html','409-html'].includes(c.mode));});
+  }else{
+   good('portfolio-postgres-existing-seventeen-SQL-checks-exact',()=>equal([...readFileSync(path.join(root,spec.producer),'utf8').matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),spec.checkNames,'PROOF_CHECK_NAMES'));
+   mutate('database-not-removed','PROOF_CLEANUP',p=>{p.databaseRemoved=false;});mutate('connection-not-closed','PROOF_CLEANUP',p=>{p.connectionClosed=false;});mutate('foreign-fixture','PROOF_CLEANUP',p=>{p.environment='external-postgresql';});
+   mutate('dirty-source','PROOF_SOURCE_STATE',p=>{p.trackedClean=false;});mutate('dirty-path','PROOF_SOURCE_STATE',p=>{p.dirtyTrackedPaths=['src/lib/workspace-store.mjs'];});mutate('local-proof','PROOF_SOURCE_STATE',p=>{p.sourceState='LOCAL_REVIEW_SOURCE';});mutate('wrong-total','PROOF_CHECK_NAMES',p=>{p.totalCheckCount=0;});mutate('omitted-check','PROOF_CHECK_NAMES',p=>{p.checks.pop();});mutate('duplicated-check','PROOF_CHECK_NAMES',p=>{p.checks[0]=p.checks[1];});mutate('claims-physical-acceptance','PROOF_PROVIDER_IO',p=>{p.physicalWhatsAppTested=true;});
+  }
+ }
+ const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
+ for(const spec of specs){
+  for(const [name,code,edit] of [
+   ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
+   ['binding-head','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceRevision='f'.repeat(40);}],
+   ['binding-source','PROOF_BINDING_SOURCE',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceManifestSha256='f'.repeat(64);}],
+   ['binding-proof','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).proofSha256='f'.repeat(64);}],
+   ['binding-harness','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).harnessSha256='f'.repeat(64);}],
+   ['binding-checks','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).checks=0;}],
+   ['evidence-omitted','MISSING_REQUIRED_RETAINED_EVIDENCE',r=>{r.files=r.files.filter(f=>f.path!==spec.path);}]
+  ]){const value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance);edit(record);delete record.manifestSha256;value[spec.lane].outputs.provenance=JSON.stringify(seal(record));bad(spec.id+'-'+name,code,()=>gate({...input,needs:value}));}
+  bad(spec.id+'-current-Git-source-altered','PROOF_BINDING_SOURCE',()=>gate({...input,readSource:file=>file===spec.sourceFiles.at(-1)?Buffer.concat([readSource(file),Buffer.from('changed shadow source')]):readSource(file)}));
+ }
+ for(const [name,code,edit] of [
+  ['block-omitted','CONTRACT_BLOCKS',c=>{c.blocks.pop();}],['block-duplicated','CONTRACT_BLOCKS',c=>{c.blocks.push(clone(c.blocks.at(-1)));}],
+  ['command-changed','CONTRACT_COMMAND',c=>{c.blocks.at(-1).step.run+='\ntrue';}],
+  ['command-resealed','PORTFOLIO_BLOCK_COMMAND',c=>{c.blocks.at(-1).step.run+='\ntrue';c.blocks.at(-1).commandSha256=hash(c.blocks.at(-1).step.run);}],
+  ['baseline-58-command-resealed','PORTFOLIO_BASELINE_BLOCKS_CHANGED',c=>{const b=c.blocks.find(b=>b.id===58);b.step.run+='\ntrue';b.commandSha256=hash(b.step.run);}]
+ ]){const value=clone(contract);edit(value);bad('portfolio-'+name,code,()=>validateContract(value));}
+ for(const spec of specs){const value=clone(contract);value.extension.proofs=value.extension.proofs.filter(p=>p.id!==spec.id);bad(spec.id+'-contract-binding-omitted','EXTENSION_PROOF_COVERAGE',()=>validateContract(value));}
+ const parent=path.resolve(root,'.vercel/workspace-ci-evidence'),fixture=mkdtempSync(path.join(parent,'ci-portfolio-selftest-fixture-'));
+ try{for(const spec of specs){const target=path.join(fixture,spec.path);mkdirSync(path.dirname(target),{recursive:true});writeFileSync(target,'stale portfolio shadow proof');bad(spec.id+'-stale-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:fixture,lane:spec.lane,contract}));rmSync(target);}}
+ finally{const resolved=path.resolve(fixture);assert.ok(path.dirname(resolved)===parent&&path.basename(resolved).startsWith('ci-portfolio-selftest-fixture-'));rmSync(resolved,{recursive:true,force:true});}
+ return checks;
 }
 function writeJson(filename,value){mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,JSON.stringify(value,null,2)+'\n');}
 function options(argv){const parsed={};for(let i=0;i<argv.length;i+=2){if(!argv[i]?.startsWith('--')||!argv[i+1])deny('CLI_ARGUMENT');parsed[argv[i].slice(2)]=argv[i+1];}return parsed;}
 function main(){
  const [mode,...args]=process.argv.slice(2),opts=options(args),root=path.resolve(opts.root||process.cwd()),contract=loadContract(path.resolve(root,opts.contract||contractPath)),file=path.resolve(root,opts.workflow||workflowPath),bytes=readFileSync(file),workflow=yaml.load(bytes.toString('utf8'));
  equivalent(workflow,contract);dependencies(root,contract);
- if(mode==='equivalence'){if(opts['expected-head'])identity(root,opts['expected-head']);console.log(JSON.stringify({state:'PASS',commandBlocks:52,artifactPatterns:54,lanes:8}));return;}
+ if(mode==='equivalence'){if(opts['expected-head'])identity(root,opts['expected-head']);console.log(JSON.stringify({state:'PASS',commandBlocks:53,artifactPatterns:57,lanes:8}));return;}
  if(mode==='selftest'){
   const sourceHead=opts['expected-head']?identity(root,opts['expected-head']):identity(root,execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim());
    const checks=selftest(workflow,contract,root),output=path.resolve(root,opts.output||'.vercel/workspace-ci-evidence/selftest.json');writeJson(output,{version:1,state:'PASS',head:sourceHead,workflowSha256:hash(bytes),contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,checks});
   const escape=value=>value.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');
   writeFileSync(output.replace(/\.json$/,'.xml'),`<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="workspace-ci-private-design" tests="${checks.length}" failures="0">${checks.map(check=>`<testcase name="${escape(check.name)}"/>`).join('')}</testsuite>\n`);
-  console.log(JSON.stringify({state:'PASS',checks:checks.length,commandBlocks:52,artifactPatterns:54,lanes:8}));return;
+  console.log(JSON.stringify({state:'PASS',checks:checks.length,commandBlocks:53,artifactPatterns:57,lanes:8}));return;
  }
  if(mode==='preflight'){
   identity(root,opts['expected-head']);clocks(process.env);if(!LANES.includes(opts.lane))deny('UNKNOWN_LANE');
@@ -698,7 +808,7 @@ function main(){
  }
  if(mode==='gate'){
   identity(root,opts['expected-head']);const filename=path.join(root,'.vercel/workspace-ci-evidence/gate.json');
-  try{const report=gate({needs:readLaneNeedsEnvironment(process.env),contract,expectedHead:opts['expected-head'],workflowSha256:hash(bytes),...clocks(process.env),readSource:gitSource(root,opts['expected-head'])});writeJson(filename,report);console.log(JSON.stringify({state:'PASS',lanes:8,commandBlocks:52,artifactPatterns:54,fileCount:report.fileCount}));}
+  try{const report=gate({needs:readLaneNeedsEnvironment(process.env),contract,expectedHead:opts['expected-head'],workflowSha256:hash(bytes),...clocks(process.env),readSource:gitSource(root,opts['expected-head'])});writeJson(filename,report);console.log(JSON.stringify({state:'PASS',lanes:8,commandBlocks:53,artifactPatterns:57,fileCount:report.fileCount}));}
   catch(error){writeJson(filename,{version:1,state:'FAIL',code:error.code||'GATE_FAILED'});throw error;}return;
  }
  deny('UNKNOWN_COMMAND');

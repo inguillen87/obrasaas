@@ -157,6 +157,43 @@ export function createWorkspaceStore({ connect }) {
         return { scope, organizationName: member.organizationName, role: member.role, roleLabel: WORKSPACE_ROLES[member.role], canPlanSchedule: managesSchedule(member.role), canManageIntegrations: ['ADMIN','DIRECTOR'].includes(member.role), projects: result.rows.slice(0,100), projectsTruncated: result.rows.length>100 };
       });
     },
+    // A portfolio is a read of the current canonical organization, not an
+    // invitation to another company's workspace or an external supervisor grant.
+    async overview(session, { scope: expected, afterProject = null }) {
+      if (!/^[a-f0-9]{64}$/.test(expected || '')) throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED', 409);
+      if (afterProject !== null && !workspaceId(afterProject)) throw new WorkspaceError('WORKSPACE_CURSOR_INVALID');
+      return transaction(session, false, async (client, member, scope) => {
+        checkScope(scope, expected);
+        if (afterProject !== null) await project(client, member, afterProject);
+        const result = await client.query(`WITH authorized AS (
+          SELECT p.id,p.name,p.status::text AS status FROM public."Project" p
+          WHERE p."organizationId"=$1 AND p.status='ACTIVE' AND ($2::boolean OR EXISTS
+            (SELECT 1 FROM public."ProjectMembership" pm WHERE pm."projectId"=p.id
+              AND pm."tenantMembershipId"=$3 AND pm.status='ACTIVE'))
+            AND ($4::text IS NULL OR p.id>$4) ORDER BY p.id LIMIT 51
+        ) SELECT p.id,p.name,p.status,counts.* FROM authorized p
+          CROSS JOIN LATERAL (
+            SELECT count(*)::int AS "totalTasks",
+              count(*) FILTER (WHERE t.status='DONE' AND t.progress=100)::int AS "completedTasks",
+              count(*) FILTER (WHERE t.status='IN_PROGRESS')::int AS "inProgressTasks",
+              count(*) FILTER (WHERE t.status='BLOCKED')::int AS "blockedTasks",
+              count(*) FILTER (WHERE t."startsAt" IS NULL OR t."endsAt" IS NULL)::int AS "unscheduledTasks",
+              to_char(min(t."endsAt") FILTER (WHERE t.status<>'DONE' OR t.progress<100),'YYYY-MM-DD') AS "nextEndsOn"
+            FROM public."Task" t WHERE t."projectId"=p.id
+          ) counts ORDER BY p.id`, [member.organizationId, portfolioAccess(member.role), member.membershipId, afterProject]);
+        const rows = result.rows.slice(0, 50);
+        // Only aggregate facts are projected. No participant, private document,
+        // bank account, provider credential or unapproved evidence is read.
+        const projects = rows.map(row => ({
+          id: row.id, name: row.name, status: row.status,
+          totalTasks: row.totalTasks, completedTasks: row.completedTasks,
+          inProgressTasks: row.inProgressTasks, blockedTasks: row.blockedTasks,
+          unscheduledTasks: row.unscheduledTasks, nextEndsOn: row.nextEndsOn
+        }));
+        return { scope, organizationName: member.organizationName, role: member.role,
+          projects, nextCursor: result.rows.length > 50 ? projects.at(-1).id : null };
+      });
+    },
     async read(session, { projectId, scope: expected, afterTask = null }) {
       if (afterTask !== null && !workspaceId(afterTask)) throw new WorkspaceError('WORKSPACE_CURSOR_INVALID');
       return transaction(session, false, async (client, member, scope) => {

@@ -469,6 +469,14 @@
         "name": "Canonical project preparation, planned slots and uncertain receipt recovery",
         "run": "npx eslint src/lib/project-preparation-*.mjs src/app/api/identity/project-preparation 'src/app/(identity)/cuenta/project-preparation-panel.js' 'src/app/(identity)/cuenta/project-preparation-format.mjs' scripts/verify-project-preparation-*.mjs tests/production-project-preparation.test.mjs tests/production-participant-document-back.test.mjs --max-warnings 0\nnode --test tests/production-project-preparation.test.mjs\nnode scripts/verify-project-preparation-postgres.mjs\nnode scripts/verify-project-preparation-ui.mjs\n"
       }
+    },
+    {
+      "id": 59,
+      "step": {
+        "name": "Canonical authorized portfolio, private source-bound contracts and responsive recovery",
+        "run": "npx eslint scripts/verify-portfolio-overview-contracts.mjs scripts/verify-portfolio-overview-ui.mjs scripts/verify-workspace-postgres.mjs tests/production-portfolio-overview.test.mjs --max-warnings 0\nnode scripts/verify-portfolio-overview-contracts.mjs --expected-head \"$GITHUB_SHA\"\nnode scripts/verify-portfolio-overview-ui.mjs\n"
+      },
+      "commandSha256": "87166cb8289ff7e7380bdb6b1954746b65c26a1955d4b3985f312c7fdeccf8f0"
     }
   ],
   "artifactPatterns": [
@@ -525,7 +533,10 @@
     ".vercel/company-kyc-evidence/",
     ".vercel/private/project-preparation-postgres-validation.json",
     ".vercel/private/project-preparation-ui-*.json",
-    ".vercel/private/project-preparation-ui-*.png"
+    ".vercel/private/project-preparation-ui-*.png",
+    ".vercel/portfolio-overview-contract-evidence/",
+    ".vercel/private/portfolio-overview-ui-validation.json",
+    ".vercel/private/portfolio-*.png"
   ],
   "lanes": {
     "contracts": {
@@ -771,16 +782,22 @@
         47,
         48,
         50,
-        51
+        51,
+        59
       ],
       "artifacts": [
         ".vercel/workspace-evidence/",
         ".vercel/company-onboarding-evidence/",
         ".vercel/clerk-access-evidence/",
         ".vercel/workspace-reload-evidence/",
-        ".vercel/customer-inbox-evidence/"
+        ".vercel/customer-inbox-evidence/",
+        ".vercel/portfolio-overview-contract-evidence/",
+        ".vercel/private/portfolio-overview-ui-validation.json",
+        ".vercel/private/portfolio-*.png"
       ],
-      "optionalArtifactPatterns": [],
+      "optionalArtifactPatterns": [
+        ".vercel/private/portfolio-*.png"
+      ],
       "requiredRetainedEvidence": [
         ".vercel/workspace-evidence/postgres.json",
         ".vercel/company-onboarding-evidence/postgres.json",
@@ -789,7 +806,9 @@
         ".vercel/customer-inbox-evidence/postgresql.json",
         ".vercel/workspace-evidence/browser.json",
         ".vercel/company-onboarding-evidence/browser.json",
-        ".vercel/customer-inbox-evidence/browser.json"
+        ".vercel/customer-inbox-evidence/browser.json",
+        ".vercel/portfolio-overview-contract-evidence/proof.json",
+        ".vercel/private/portfolio-overview-ui-validation.json"
       ],
       "requiredProducedEvidence": []
     }
@@ -1397,6 +1416,26 @@
       "lane": "business",
       "sourceLine": 55,
       "producerSha256": "04030e76b8ce12bde95f098b6c9b3a2b0c4b8785cd662baae12f469ce140d842",
+      "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
+    },
+    {
+      "producer": "scripts/verify-portfolio-overview-contracts.mjs",
+      "path": ".vercel/portfolio-overview-contract-evidence/proof.json",
+      "retained": true,
+      "blockId": 59,
+      "lane": "workspace-ui",
+      "sourceLine": 50,
+      "producerSha256": "24efa3666be22468951d2b5450d8b57cf5191449709b49e950f69d4cb4d96d0b",
+      "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
+    },
+    {
+      "producer": "scripts/verify-portfolio-overview-ui.mjs",
+      "path": ".vercel/private/portfolio-overview-ui-validation.json",
+      "retained": true,
+      "blockId": 59,
+      "lane": "workspace-ui",
+      "sourceLine": 84,
+      "producerSha256": "99169d6eda91765fa5dbf55b37ccf3653974d070d2211a44fcb9c6a0990c2a49",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     }
   ],
@@ -2205,6 +2244,88 @@
           "src/app/(identity)/cuenta/workspace.module.css"
         ],
         "checkNames": []
+      },
+      {
+        "id": "portfolio-units",
+        "lane": "workspace-ui",
+        "blockId": 59,
+        "path": ".vercel/portfolio-overview-contract-evidence/proof.json",
+        "kind": "PORTFOLIO_UNIT",
+        "producer": "scripts/verify-portfolio-overview-contracts.mjs",
+        "producerSha256": "24efa3666be22468951d2b5450d8b57cf5191449709b49e950f69d4cb4d96d0b",
+        "sourceFiles": [
+          "scripts/verify-participant-bank-intake-contracts.mjs",
+          "src/app/(identity)/cuenta/portfolio-overview-view.mjs",
+          "src/lib/workspace-http.mjs",
+          "src/lib/workspace-policy.mjs",
+          "src/lib/workspace-store.mjs",
+          "tests/production-portfolio-overview.test.mjs"
+        ],
+        "checkNames": []
+      },
+      {
+        "id": "portfolio-ui",
+        "lane": "workspace-ui",
+        "blockId": 59,
+        "path": ".vercel/private/portfolio-overview-ui-validation.json",
+        "kind": "UI_PORTFOLIO",
+        "producer": "scripts/verify-portfolio-overview-ui.mjs",
+        "producerSha256": "99169d6eda91765fa5dbf55b37ccf3653974d070d2211a44fcb9c6a0990c2a49",
+        "sourceFiles": [
+          "src/app/(identity)/cuenta/company-channel-view.mjs",
+          "src/app/(identity)/cuenta/portfolio-overview-panel.js",
+          "src/app/(identity)/cuenta/portfolio-overview-panel.module.css",
+          "src/app/(identity)/cuenta/portfolio-overview-view.mjs",
+          "src/app/(identity)/cuenta/private-bank-account-format.mjs",
+          "src/app/(identity)/cuenta/site-purchase-view.mjs",
+          "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
+          "src/app/(identity)/cuenta/workspace-recovery-storage.mjs",
+          "src/app/(identity)/cuenta/workspace-request-lifecycle.js",
+          "src/app/(identity)/cuenta/workspace-request-lifecycle.mjs",
+          "src/app/(identity)/cuenta/workspace-session-request.mjs"
+        ],
+        "checkNames": []
+      },
+      {
+        "id": "portfolio-postgres",
+        "lane": "workspace-ui",
+        "blockId": 10,
+        "path": ".vercel/workspace-evidence/postgres.json",
+        "kind": "PG_PORTFOLIO",
+        "producer": "scripts/verify-workspace-postgres.mjs",
+        "producerSha256": "6e7daa88301272555c835467ba67c9ea9e042ef300898a5b0fef35094e0023d0",
+        "sourceFiles": [
+          "scripts/lib/disposable-postgres-cleanup.mjs",
+          "src/lib/company-channel-connection.mjs",
+          "src/lib/company-channel-schema.mjs",
+          "src/lib/company-onboarding-policy.mjs",
+          "src/lib/company-phone-format.mjs",
+          "src/lib/customer-whatsapp-setup.mjs",
+          "src/lib/whatsapp/project-workspace-profile.js",
+          "src/lib/whatsapp/tenant-workspace-policy.js",
+          "src/lib/workspace-http.mjs",
+          "src/lib/workspace-policy.mjs",
+          "src/lib/workspace-store.mjs"
+        ],
+        "checkNames": [
+          "canonical-company-and-project-scope",
+          "portfolio-uses-canonical-company-and-assignment-without-writes-or-private-projection",
+          "portfolio-revoked-assignment-and-foreign-cursor-denied",
+          "portfolio-counts-approved-task-state-without-average-or-false-completion",
+          "portfolio-pages-over-one-hundred-works-without-foreign-or-archived-rows",
+          "cross-tenant-archived-and-stale-identity-denied",
+          "one-durable-receipt-under-concurrent-retries-no-progress-side-effects",
+          "conflict-and-receipt-isolation",
+          "audit-failure-rolls-back-schedule",
+          "lost-commit-acknowledgement-recovers-without-a-second-write",
+          "revocation-before-lock-prevents-the-write",
+          "concurrent-revocation-serializes-after-authorized-commit",
+          "bounded-canonical-pagination-without-dropped-or-foreign-tasks",
+          "customer-preparation-is-scoped-persistent-idempotent-and-preserves-other-metadata",
+          "customer-preparation-recovery-does-not-revert-a-later-selection",
+          "stored-connected-status-is-not-template-or-roundtrip-acceptance",
+          "invalid-prior-preparation-fails-without-replacing-it"
+        ]
       }
     ]
   }

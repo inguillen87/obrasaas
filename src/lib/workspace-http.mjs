@@ -28,6 +28,11 @@ export function createWorkspaceHandlers({verify,store}){
         return reply(await store.schedule(session,await boundedBody(request)));
       }
       if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
+      if(params.has('portfolio')){
+        for(const key of params.keys())if(!['portfolio','scope','afterProject'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('WORKSPACE_QUERY_INVALID');
+        if(params.get('portfolio')!=='1'||!/^[a-f0-9]{64}$/.test(params.get('scope')||'')||params.has('afterProject')&&!workspaceId(params.get('afterProject')))throw new WorkspaceError('WORKSPACE_QUERY_INVALID');
+        return reply(await store.overview(session,{scope:params.get('scope'),afterProject:params.get('afterProject')}));
+      }
       for(const key of params.keys())if(!['projectId','scope','afterTask','operationId'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('WORKSPACE_QUERY_INVALID');
       if(!params.size)return reply(await store.list(session));
       const projectId=params.get('projectId'),scope=params.get('scope');
