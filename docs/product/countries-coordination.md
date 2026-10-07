@@ -12,13 +12,16 @@ Las capacidades siguientes son declaraciones y documentación de los proveedores
 
 | Referencia | Capacidad documentada | Aplicación al diseño de ObraSaaS |
 | --- | --- | --- |
+| [Smartwebs Architecturals](https://smartwebs.com/architecturals/) | Solicitudes con planos y fotos; revisión, comentarios y votación del comité; condiciones, vencimientos y cartas de decisión | Expediente arquitectónico por lote/obra con presentación completa, responsable y decisión descargable |
+| [TownSq Architectural Review](https://www.townsq.io/solutions/business-features/business-architectural-review) | Formularios configurables, seguimiento y votación; comentarios privados o compartidos; medición del tiempo de cierre | Requisitos del barrio configurables, observaciones con alcance explícito y seguimiento de demoras de revisión |
+| [AppFolio HOA](https://www.appfolio.com/markets/hoa/management) | Presentación de imágenes y planos al comité, comunicación en el expediente y portal móvil de proveedores con notas y fotos | Autoservicio para presentar documentación y responder observaciones sin exigir una licencia completa de operación a cada colaborador |
 | [Oracle Aconex](https://help.aconex.com/aconex-essentials/system-neutrality-oracle-aconex/) | Espacio privado de cada organización y control de la distribución de información | Compartir un expediente por obra y versión; pagar el sistema no concede acceso a toda la constructora |
 | [Procore para propietarios](https://www.procore.com/owners) | Supervisión de una cartera de proyectos y colaboración con contratistas | Resumen con pendientes, responsables y acceso a la evidencia autorizada de cada obra |
 | [Sine by Honeywell](https://www.sine.co/) | Documentación de contratistas, inducciones, permisos, vigencias y trazabilidad de acceso | Requisitos previos, revisión y revocación de habilitaciones; una identidad aprobada no equivale a autorización de ingreso |
 | [PlanRadar SiteView](https://help.planradar.com/en/siteview/) | Registro visual de obra y comparación entre fechas | Evidencia vinculada a sector y fecha; la ayuda del producto aclara que no predice automáticamente el avance |
 | [TranquiPass](https://www.tranquipass.com/) y [Simple Solutions](https://www.simplesolutions.com.ar/acceso.html) | Gestión de barrios, portería, roles, QR o preautorizaciones por WhatsApp | Integrar la coordinación técnica con la portería existente y reducir la doble carga |
 
-La colaboración entre organizaciones, la IA y WhatsApp ya aparecen en el mercado. La diferenciación propuesta combina requisitos locales de obra, expediente compartido, importación de las planillas existentes y captura simple de evidencia. Su valor debe demostrarse en el piloto; no se presenta como una invención exclusiva.
+La aprobación arquitectónica de comunidades tiene competidores directos, además de los referentes de construcción y acceso. Las páginas de Smartwebs, TownSq y AppFolio no acreditan por sí solas el recorrido completo entre supervisión del country y operación privada de una constructora, ni permiten concluir que esos productos carezcan de él. La colaboración entre organizaciones, la IA y WhatsApp ya aparecen en el mercado. La diferenciación propuesta combina requisitos locales de obra, expediente compartido, importación de las planillas existentes y captura simple de evidencia. Su valor debe demostrarse en el piloto; no se presenta como una invención exclusiva.
 
 ## Reglas de producto de la segunda etapa
 
@@ -28,6 +31,9 @@ La colaboración entre organizaciones, la IA y WhatsApp ya aparecen en el mercad
 4. Identidad, rol en la constructora, revisión documental y permiso para ingresar al barrio son estados separados. OCR o IA propone datos y señala faltantes; una propuesta no habilita acceso ni certifica documentos.
 5. WhatsApp y la web consultan los mismos registros. Mensaje, captura, revisión, decisión y recibo deben poder correlacionarse sin ejecutar un segundo comando ante una respuesta perdida.
 6. La administración conserva su sistema de expensas, residentes y barreras. El primer alcance entrega supervisión de obras y coordinación con portería; no promete una integración física sin prueba real.
+7. El expediente distingue presentado, observado, aprobado con condiciones, rechazado y vencido. El responsable responde cada observación sobre una versión concreta; el country conserva su decisión técnica y la constructora conserva la aprobación operativa de tareas y cantidades.
+8. La supervisión incluye inspecciones por hitos, evidencia y pendientes de subsanación. El estado de una ART o seguro requiere revisión documental y, cuando exista integración, comprobación con el emisor; leer la fecha por OCR no acredita cobertura vigente.
+9. El piloto contempla colaboraciones básicas por invitación para presentar documentación, sin obligar a cada contratista a contratar el plan Pro. Los planes de operación privada y de supervisión del country son ofertas separadas, con precios y disposición a pagar todavía pendientes de validación.
 
 ## Estado y reutilización
 

@@ -258,7 +258,7 @@ async function recoveryClosureScenario(mode,width){
  if(!legacyMode){
   await click(page,'Importar PDF, imagen o Excel');await (await page.$('[data-plan-import] input[type=file]')).uploadFile(mode==='invalid-source'?invalidSourceFile:mode==='oversized-source'?oversizedSourceFile:sourceFile);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');
   if(correctionMode){
-   await waitText(page,mode==='invalid-source'?'El archivo fue rechazado antes de reservar un borrador':'El PDF debe pesar hasta 3 MB');assert.equal(posts.length,mode==='invalid-source'?1:0);assert.equal(rejectedAttachCalls,0);assert.deepEqual(await browserReferences(page),[]);
+   await waitText(page,mode==='invalid-source'?'El archivo fue rechazado antes de reservar un borrador':'El PDF o Excel debe pesar hasta 3 MB');assert.equal(posts.length,mode==='invalid-source'?1:0);assert.equal(rejectedAttachCalls,0);assert.deepEqual(await browserReferences(page),[]);
    await (await page.$('[data-plan-import] input[type=file]')).uploadFile(sourceFile);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');await waitText(page,'Compará cada fila con el archivo');
    assert.equal(posts.length,mode==='invalid-source'?2:1);if(mode==='invalid-source')assert.notEqual(posts[0].operationId,posts[1].operationId);assert.deepEqual(await browserReferences(page),[]);await assertCount(page,150);
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks.push({mode,width,posts:posts.length,rejectedAttachCalls,durableJournal:true,explicitCorrection:true});await context.close();return;
