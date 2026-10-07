@@ -77,7 +77,7 @@ export function createMetaCustomerProcessor({connect,dispatch,outbound,environme
      if(error instanceof WorkspaceError&&(authorizationObservations.has(error.code)||authorizationCodes.includes(error.code)))result=await observe(context,error.code);else throw error;
     }
     if(!result)result=await observe(context);
-    if(result.reply){let reply;try{reply=await outbound.send(context,result.reply,{purpose:result.kind==='KYC_CHAT'?'KYC_CAPTURE':'FIELD'});}catch(error){if(error instanceof WorkspaceError&&(error.code==='META_CUSTOMER_REPLY_WINDOW_CLOSED'||authorizationObservations.has(error.code)||authorizationCodes.includes(error.code)))reply={replySent:false,state:error.code};else throw error;}result={...result,replySent:reply.replySent,replyState:reply.state};}
+    if(result.reply){let reply;try{reply=await outbound.send(context,result.reply,{purpose:result.kind==='EMPLOYEE_INTAKE'?'EMPLOYEE_INTAKE':result.kind==='KYC_CHAT'?'KYC_CAPTURE':'FIELD'});}catch(error){if(error instanceof WorkspaceError&&(error.code==='META_CUSTOMER_REPLY_WINDOW_CLOSED'||authorizationObservations.has(error.code)||authorizationCodes.includes(error.code)))reply={replySent:false,state:error.code};else throw error;}result={...result,replySent:reply.replySent,replyState:reply.state};}
     return finish(context,result);
    }catch(error){
     await within(client=>client.query(`UPDATE public."WebhookEvent" SET "lastError"=$3,"leaseToken"=NULL,"leaseExpiresAt"=NULL,"updatedAt"=clock_timestamp() WHERE id=$1 AND "leaseToken"=$2 AND status='PENDING'`,[context.eventId,context.leaseToken,error instanceof WorkspaceError?error.code:'META_CUSTOMER_PROCESSING_UNCONFIRMED'])).catch(()=>{});throw error;

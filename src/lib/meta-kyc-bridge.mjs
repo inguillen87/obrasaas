@@ -5,10 +5,12 @@ import {metaKycOperationId} from './meta-kyc-challenge.mjs';
 import {resolveMetaKycAuthority,metaKycDispatchReceiptId,metaKycConversationEnvelope,sealMetaKycValue} from './meta-kyc-identity.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {decodePrivateImage,MAX_PRIVATE_IMAGE_BYTES} from './private-image-upload.mjs';
+import {createEmployeeIntakeBridge} from './meta-employee-intake.mjs';
 
 const text=body=>({type:'text',body});
 const replyResult=(reply,extra={})=>({kind:'KYC_CHAT',identityStatus:'LIMITED_KYC_UPLOAD',reviewState:'OBSERVED',businessApplied:false,replySent:false,reply,...extra});
 export function createMetaKycBridge({connect,provider,deposit,environment=process.env,resolveAuthority=resolveMetaKycAuthority}){
+ const intake=createEmployeeIntakeBridge({connect,environment});
  const within=run=>customerJobTransaction(connect,run),resolve=(client,context,options={})=>resolveAuthority(client,context,{...options,environment});
  async function record(client,r,result,state,transition=null,{preserveConversation=false}={}){
   const current=(await client.query(`SELECT metadata FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id])).rows[0];
@@ -34,7 +36,7 @@ export function createMetaKycBridge({connect,provider,deposit,environment=proces
   const transition=plan.cancelled?{status:'CANCELLED',cancelledEventId:r.event.id}:r.challenge.status==='PENDING'?{status:'CLAIMED',claimedAt:r.now.toISOString(),claimedEventId:r.event.id}:null;
   return {result:await record(client,r,replyResult(plan.reply),plan.state,transition,{preserveConversation:plan.preserveConversation===true})};
  });}
- return {async execute(context){
+ return {executeIntake:context=>intake.execute(context),async execute(context){
   let prepared;try{prepared=await prepare(context);}catch(error){if(error.code==='META_KYC_NOT_APPLICABLE')return null;throw error;}
   if(prepared.result)return prepared.result;
   const authorized=await within(client=>resolve(client,context,{deposit:true})),state=authorized.state;

@@ -17,7 +17,7 @@ export function createParticipantHandlers({verify,store,join=false}){
   }
   if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
   if(join){if(params.size!==1||params.getAll('invitationId').length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return reply(await store.join(session,{invitationId:params.get('invitationId')}));}
-  for(const key of params.keys())if(!['projectId','scope','after','operationId','workerId','imageId','detail','action'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+  for(const key of params.keys())if(!['projectId','scope','after','intakeAfter','operationId','workerId','imageId','detail','action'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
   const context={projectId:params.get('projectId'),scope:params.get('scope')};if(!workspaceId(context.projectId)||!/^[a-f0-9]{64}$/.test(context.scope||''))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
   if(params.has('detail')||params.has('action')){
    const checking=params.has('operationId'),keys=checking?['projectId','scope','detail','workerId','operationId','action']:['projectId','scope','detail','workerId'];
@@ -26,8 +26,9 @@ export function createParticipantHandlers({verify,store,join=false}){
    return reply(checking?await store.privateBankStatus(session,input):await store.privateBankRead(session,input));
   }
   if(params.has('imageId')||params.has('workerId')){if(params.has('operationId')||params.has('after')||params.size!==4)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');const value=await store.downloadKyc(session,{...context,workerId:params.get('workerId'),imageId:params.get('imageId')});return new Response(value.bytes,{headers:{...headers,'Content-Type':value.contentType,'Content-Disposition':'attachment; filename="identity-review.'+(value.contentType==='image/png'?'png':value.contentType==='image/webp'?'webp':'jpg')+'"'}});}
-  if(params.has('operationId')){if(params.has('after')||!operationId(params.get('operationId')))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return reply(await store.status(session,{...context,operationId:params.get('operationId')}));}
-  return reply(await store.read(session,{...context,after:params.get('after')}));
+  if(params.has('operationId')){if(params.has('after')||params.has('intakeAfter')||!operationId(params.get('operationId')))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return reply(await store.status(session,{...context,operationId:params.get('operationId')}));}
+  if(params.has('intakeAfter')&&!/^customer_webhook_[a-f0-9]{64}$/.test(params.get('intakeAfter')))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+  return reply(await store.read(session,{...context,after:params.get('after'),...(params.has('intakeAfter')?{intakeAfter:params.get('intakeAfter')}:{})}));
  }catch(error){const known=error instanceof WorkspaceError||error instanceof PrivateImageError;return reply({saved:false,identityCertified:false,code:known?error.code:'PARTICIPANT_OPERATION_UNCONFIRMED'},error instanceof WorkspaceError?error.status:error instanceof PrivateImageError?(error.code==='PRIVATE_IMAGE_TOO_LARGE'?413:400):503);}}
  return {GET:handle,POST:handle};
 }
