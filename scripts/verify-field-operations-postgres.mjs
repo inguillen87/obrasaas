@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import {randomUUID} from 'node:crypto';
-import {mkdirSync,writeFileSync} from 'node:fs';
+import {randomUUID,createHash} from 'node:crypto';
+import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
 import {Client,Pool} from 'pg';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
@@ -8,13 +8,14 @@ import {createFieldOperations} from '../src/lib/field-operations-store.mjs';
 import {createFieldMedia,decodeFieldMedia} from '../src/lib/field-media.mjs';
 import {fieldMediaAnalysisConsent} from '../src/lib/field-media-privacy.mjs';
 import {createSiteRegister} from '../src/lib/site-register-store.mjs';
-import {createFieldQrHandler} from '../src/lib/field-operations-http.mjs';
+import {createFieldQrHandler,createFieldHandlers} from '../src/lib/field-operations-http.mjs';
 import {digest} from '../src/lib/workspace-policy.mjs';
+import {fieldReviewPage} from '../src/app/(identity)/cuenta/field-review-page-view.mjs';
 import QRCode from 'qrcode';
 const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'http://not-configured');
 assert.equal(process.env.CUTOVER_TEST_DISPOSABLE,'1');assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);assert.ok(['127.0.0.1','localhost'].includes(url.hostname));assert.equal(url.pathname,'/obrasaas_cutover_ci');assert.equal(url.search,'');
 const database='obrasaas_field_'+randomUUID().replaceAll('-','');assert.match(database,/^obrasaas_field_[a-f0-9]{32}$/);
-const admin=new Client({connectionString:url.toString()});let pool,created=false;const checks=[];
+const admin=new Client({connectionString:url.toString()});let pool,created=false,proof;const checks=[],reviewPaginationChecks=[];
 const session=(user,organization='org_A',role='org:member')=>({authenticated:true,verification:'clerk-production-jwt',userId:user,organizationId:organization,organizationRole:role});
 const owner=session('user_Owner','org_A','org:admin'),director=session('user_Director'),manager=session('user_Manager'),worker=session('user_Worker'),otherWorker=session('user_Worker2'),foreign=session('user_Foreign','org_B','org:admin');
 try{
@@ -212,6 +213,175 @@ try{
  assert.equal((await qr(director)).status,403);assert.equal(qrPayloads.length,beforeRevocation);await pool.query(`UPDATE "TenantMembership" SET status='ACTIVE' WHERE id='director-m'`);
  assert.equal((await qr(director)).status,200);assert.equal(qrPayloads.at(-1).token,currentToken);
  checks.push('current-canonical-membership-revocation-denies-durable-qr-despite-a-formerly-valid-session-and-scope');
+
+ // Additive pagination controls use another canonical project and workers, so
+ // the original field/media/attendance checks and their counts remain intact.
+ const reviewAdaptersBefore={putCount,getCount,providerCalls};
+ await pool.query(`INSERT INTO "Project"(id,"organizationId",name,status,metadata) VALUES('p-review','company-a','Synthetic review pagination','ACTIVE','{"unrelated":true}'),('p-review-other','company-a','Synthetic other project','ACTIVE','{}');
+ INSERT INTO "ProjectMembership" VALUES('manager-review-p','p-review','manager-m','ACTIVE'),('worker-review-p','p-review','worker-m','ACTIVE'),('worker2-review-p','p-review','worker2-m','ACTIVE');
+ INSERT INTO "Task"(id,"projectId",title,status,progress,"startsAt","endsAt",metadata) VALUES('task-review','p-review','Synthetic canonical measured task','BLOCKED',0,'2026-10-01','2026-10-10','{"unrelated":true}');`);
+ for(const [id,user] of [['wr-a','user_Worker'],['wr-a2','user_Worker2']])await pool.query(`INSERT INTO "Worker"(id,"projectId",name,phone,role,metadata,"updatedAt") VALUES($1,'p-review',$1,$2,'WORKER',$3::jsonb,clock_timestamp())`,[id,id==='wr-a'?'+5491100004444':'+5491100005555',JSON.stringify({participant:{version:1,clerkUserId:user,status:'ACTIVE',permissions:{attendance:true,report:true},kyc:{version:1,status:'APPROVED'}}})]);
+ const reviewContext=s=>({projectId:'p-review',scope:scopes[s.userId]}),reviewCommand=(s,action,payload)=>({...reviewContext(s),operationId:randomUUID(),action,payload});
+ const reviewInput=(s,reviewSection,reviewFilter='PENDING',extra={})=>({...reviewContext(s),reviewSection,reviewFilter,...extra});
+ const reviewPage=async(s,section,filter='PENDING',extra={})=>{const input=reviewInput(s,section,filter,extra);return fieldReviewPage(await operations.reviewPage(s,input),input);};
+ const reviewEvidence={version:1,kind:'EVIDENCE',workerId:'wr-a',taskId:'task-review',sectorId:'review-sector',recordedBy:'worker',capturedAt:'2020-01-01T10:00:00.000Z',media:{kind:'image',contentType:'image/png',bytes:68,sha256:'a'.repeat(64),pathname:'synthetic-private-evidence-path',url:'https://fixture.invalid/private-evidence'},processing:{status:'QUEUED',code:null},review:null};
+ const insertReviewEvidence=(id,details,createdAt='2020-01-01',projectId='p-review')=>pool.query(`INSERT INTO "Incident"(id,"projectId",title,description,metadata,"createdAt","updatedAt") VALUES($1,$2,'Synthetic review evidence','Synthetic local caption',$3::jsonb,$4::timestamp,clock_timestamp())`,[id,projectId,JSON.stringify({fieldOperations:details}),createdAt]);
+ await insertReviewEvidence('review-old-pending',reviewEvidence);
+ await insertReviewEvidence('review-approved-source',{...reviewEvidence,review:{decision:'APPROVE',reason:'Synthetic source approved before proposal',recordedAt:'2020-01-01T11:00:00.000Z'}});
+ const initialReviewTask=(await workspace.read(owner,reviewContext(owner))).tasks[0];
+ const oldReviewProposal=await operations.save(worker,reviewCommand(worker,'PROPOSE_PROGRESS',{workerId:'wr-a',taskId:'task-review',revision:initialReviewTask.revision,progress:25,quantity:'2.5999',baseline:'10',unit:'M2',reason:'Synthetic precise measured work for old proposal.',evidenceIds:['review-approved-source']}));
+ await pool.query(`UPDATE "OperationalProposal" SET "createdAt"='2020-01-01' WHERE id=$1`,[oldReviewProposal.proposal.id]);
+ await pool.query(`INSERT INTO "Incident"(id,"projectId",title,description,metadata,"createdAt","updatedAt") SELECT 'review-resolved-'||lpad(n::text,4,'0'),"projectId",title,description,metadata,'2021-01-01',clock_timestamp() FROM "Incident" CROSS JOIN generate_series(1,101) AS n WHERE id='review-approved-source'`);
+ await pool.query(`INSERT INTO "OperationalProposal"(id,"projectId","proposedByWorkerId","sourceProvider","sourceExternalId",type,status,summary,action,precondition,"expiresAt","createdAt","updatedAt") SELECT 'review-applied-'||lpad(n::text,4,'0'),"projectId","proposedByWorkerId",'account-field','review-applied-'||n,'TASK_PROGRESS','APPLIED',summary,action,precondition,"expiresAt",'2021-01-01',clock_timestamp() FROM "OperationalProposal" CROSS JOIN generate_series(1,101) AS n WHERE id=$1`,[oldReviewProposal.proposal.id]);
+ const oldReviewRead=await operations.read(director,reviewContext(director));assert.equal(oldReviewRead.evidence.some(row=>row.id==='review-old-pending'),false);assert.equal(oldReviewRead.proposals.some(row=>row.id===oldReviewProposal.proposal.id),false);assert.equal(oldReviewRead.truncated,true);
+ const oldEvidencePage=await reviewPage(director,'EVIDENCE'),oldProgressPage=await reviewPage(director,'PROGRESS');assert.deepEqual(oldEvidencePage.records.map(row=>row.id),['review-old-pending']);assert.deepEqual(oldProgressPage.records.map(row=>row.id),[oldReviewProposal.proposal.id]);assert.equal(oldEvidencePage.total,1);assert.equal(oldProgressPage.total,1);
+ reviewPaginationChecks.push('pending-evidence-and-proposal-older-than-101-resolved-rows-remain-actionable-in-canonical-review-pages');
+
+ const readonlyReviewSnapshot=async()=>(await pool.query(`SELECT (SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM "Incident" i WHERE "projectId"='p-review') AS evidence,(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM "OperationalProposal" p WHERE "projectId"='p-review') AS proposals,(SELECT to_jsonb(t) FROM "Task" t WHERE id='task-review') AS task,(SELECT count(*)::int FROM "AuditLog") AS audits`)).rows;
+ const beforeReviewReads=await readonlyReviewSnapshot();
+ for(const section of ['EVIDENCE','PROGRESS']){
+  const all=await reviewPage(director,section,'ALL');assert.equal(all.records.length,100);assert.equal(all.nextCursor,all.records.at(-1).id);assert.equal(all.total,section==='EVIDENCE'?103:102);
+  const exact=await reviewPage(director,section,'ALL',{reviewId:section==='EVIDENCE'?'review-old-pending':oldReviewProposal.proposal.id});assert.equal(exact.records.length,1);assert.equal(exact.total,1);assert.equal(exact.nextCursor,null);
+ }
+ const safeEvidence=oldEvidencePage.records[0];assert.deepEqual(Object.keys(safeEvidence.media).sort(),['bytes','contentType','kind','sha256']);assert.equal('recordedBy' in safeEvidence,false);assert.equal(JSON.stringify(oldEvidencePage).includes('synthetic-private-evidence-path'),false);assert.equal(JSON.stringify(oldEvidencePage).includes('fixture.invalid'),false);assert.deepEqual(await readonlyReviewSnapshot(),beforeReviewReads);
+ reviewPaginationChecks.push('bounded-all-and-exact-old-record-pages-are-readonly-and-exclude-private-media-path-url-and-actor-metadata');
+
+ await pool.query(`INSERT INTO "Incident"(id,"projectId",title,description,metadata,"createdAt","updatedAt") SELECT 'review-pending-'||lpad(n::text,4,'0'),"projectId",title,description,metadata,'2022-01-01',clock_timestamp() FROM "Incident" CROSS JOIN generate_series(1,201) AS n WHERE id='review-old-pending'`);
+ await pool.query(`INSERT INTO "OperationalProposal"(id,"projectId","proposedByWorkerId","sourceProvider","sourceExternalId",type,status,summary,action,precondition,"expiresAt","createdAt","updatedAt") SELECT 'review-pending-proposal-'||lpad(n::text,4,'0'),"projectId","proposedByWorkerId",'account-field','review-pending-proposal-'||n,'TASK_PROGRESS','PENDING',summary,jsonb_set(action,'{taskId}','"synthetic-pagination-task"'),precondition,"expiresAt",'2022-01-01',clock_timestamp() FROM "OperationalProposal" CROSS JOIN generate_series(1,201) AS n WHERE id=$1`,[oldReviewProposal.proposal.id]);
+ const expectedEvidenceIds=[...Array.from({length:201},(_,n)=>'review-pending-'+String(n+1).padStart(4,'0')).reverse(),'review-old-pending'];
+ const expectedProposalIds=[...Array.from({length:201},(_,n)=>'review-pending-proposal-'+String(n+1).padStart(4,'0')).reverse(),oldReviewProposal.proposal.id];
+ const firstEvidencePage=await reviewPage(director,'EVIDENCE');assert.equal(firstEvidencePage.total,202);assert.deepEqual(firstEvidencePage.records.map(row=>row.id),expectedEvidenceIds.slice(0,100));
+ const firstProgressPage=await reviewPage(director,'PROGRESS');assert.equal(firstProgressPage.total,202);assert.deepEqual(firstProgressPage.records.map(row=>row.id),expectedProposalIds.slice(0,100));
+ await insertReviewEvidence('review-inserted-newer',reviewEvidence,'2023-01-01');
+ await pool.query(`INSERT INTO "OperationalProposal"(id,"projectId","proposedByWorkerId","sourceProvider","sourceExternalId",type,status,summary,action,precondition,"expiresAt","createdAt","updatedAt") SELECT 'review-inserted-proposal',"projectId","proposedByWorkerId",'account-field','review-inserted-proposal','TASK_PROGRESS','PENDING',summary,jsonb_set(action,'{taskId}','"synthetic-pagination-task"'),precondition,"expiresAt",'2023-01-01',clock_timestamp() FROM "OperationalProposal" WHERE id=$1`,[oldReviewProposal.proposal.id]);
+ const pagesAfter=async(s,section,first)=>{const result=[...first.records];let cursor=first.nextCursor;while(cursor){const next=await reviewPage(s,section,'PENDING',{afterReview:cursor});result.push(...next.records);cursor=next.nextCursor;}return result;};
+ assert.deepEqual((await pagesAfter(director,'EVIDENCE',firstEvidencePage)).map(row=>row.id),expectedEvidenceIds);assert.deepEqual((await pagesAfter(director,'PROGRESS',firstProgressPage)).map(row=>row.id),expectedProposalIds);
+ reviewPaginationChecks.push('over-200-pending-evidence-keyset-pages-have-no-duplicates-or-missing-tied-timestamp-rows-after-newer-insert');
+ reviewPaginationChecks.push('over-200-pending-progress-keyset-pages-have-no-duplicates-or-missing-tied-timestamp-rows-after-newer-insert');
+
+ await pool.query(`UPDATE "Incident" SET metadata=jsonb_set(metadata,'{fieldOperations,review}',$2::jsonb),"updatedAt"=clock_timestamp() WHERE id=$1`,[firstEvidencePage.nextCursor,JSON.stringify({decision:'APPROVE',reason:'Synthetic concurrent review',recordedAt:new Date().toISOString()})]);
+ await pool.query(`UPDATE "OperationalProposal" SET status='APPLIED',"updatedAt"=clock_timestamp() WHERE id=$1`,[firstProgressPage.nextCursor]);
+ assert.deepEqual((await pagesAfter(director,'EVIDENCE',firstEvidencePage)).map(row=>row.id),expectedEvidenceIds);assert.deepEqual((await pagesAfter(director,'PROGRESS',firstProgressPage)).map(row=>row.id),expectedProposalIds);
+ reviewPaginationChecks.push('cursor-remains-valid-after-concurrent-human-evidence-and-progress-decisions-change-its-pending-status');
+
+ await insertReviewEvidence('review-running',{...reviewEvidence,processing:{status:'RUNNING',operationId:randomUUID(),expiresAt:'2000-01-01T00:00:00.000Z'}},'2024-01-01');
+ const running=(await reviewPage(director,'EVIDENCE')).records.find(row=>row.id==='review-running'),beforeRunning=await readonlyReviewSnapshot();assert.equal(running.status,'PENDING');assert.equal(running.review,null);
+ await assert.rejects(operations.save(director,reviewCommand(director,'REVIEW_EVIDENCE',{evidenceId:running.id,revision:running.revision,decision:'APPROVE',reason:'Synthetic running processing must not auto approve.'})),{code:'FIELD_MEDIA_PROCESSING'});assert.deepEqual(await readonlyReviewSnapshot(),beforeRunning);
+ reviewPaginationChecks.push('running-media-is-human-pending-and-cannot-be-auto-approved-even-after-its-processing-lease-expired');
+
+ await pool.query(`INSERT INTO "OperationalProposal"(id,"projectId","proposedByWorkerId","sourceProvider","sourceExternalId",type,status,summary,action,precondition,"expiresAt","createdAt","updatedAt") SELECT 'review-expired',"projectId","proposedByWorkerId",'account-field','review-expired','TASK_PROGRESS','PENDING',summary,action,precondition,clock_timestamp()-interval '1 second','2024-01-01',clock_timestamp() FROM "OperationalProposal" WHERE id=$1`,[oldReviewProposal.proposal.id]);
+ const beforeExpiryRead=await readonlyReviewSnapshot();assert.equal((await reviewPage(director,'PROGRESS')).records.some(row=>row.id==='review-expired'),false);const expiredReview=await reviewPage(director,'PROGRESS','ALL',{reviewId:'review-expired'});assert.equal(expiredReview.records[0].status,'EXPIRED');assert.equal(expiredReview.records[0].statusStored,'PENDING');assert.deepEqual(await readonlyReviewSnapshot(),beforeExpiryRead);
+ reviewPaginationChecks.push('database-clock-expired-progress-is-excluded-from-pending-but-exact-all-shows-it-without-expiry-writes');
+
+ await insertReviewEvidence('review-other-worker',{...reviewEvidence,workerId:'wr-a2',recordedBy:'worker2'},'2025-01-01');
+ await pool.query(`INSERT INTO "OperationalProposal"(id,"projectId","proposedByWorkerId","sourceProvider","sourceExternalId",type,status,summary,action,precondition,"expiresAt","createdAt","updatedAt") SELECT 'review-other-worker-proposal',"projectId",'wr-a2','account-field','review-other-worker-proposal','TASK_PROGRESS','PENDING',summary,jsonb_set(jsonb_set(action,'{workerId}','"wr-a2"'),'{taskId}','"synthetic-pagination-task"'),precondition,"expiresAt",'2025-01-01',clock_timestamp() FROM "OperationalProposal" WHERE id=$1`,[oldReviewProposal.proposal.id]);
+ for(const section of ['EVIDENCE','PROGRESS']){
+  const own=await reviewPage(worker,section);assert.ok(own.records.every(row=>row.workerId==='wr-a'));assert.equal(own.canReview,false);assert.equal(own.canApproveProgress,false);
+  const theirs=await reviewPage(otherWorker,section);assert.deepEqual(theirs.records.map(row=>row.workerId),['wr-a2']);assert.equal(theirs.total,1);
+ }
+ reviewPaginationChecks.push('auditor-author-sees-only-active-kyc-approved-account-linked-own-worker-records-in-both-sections');
+ await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='FINANCE' WHERE id='worker-m'`);const financeScope=(await workspace.list(worker)).scope;
+ for(const section of ['EVIDENCE','PROGRESS']){const finance=await operations.reviewPage(worker,{...reviewInput(worker,section),scope:financeScope});assert.ok(finance.records.every(row=>row.workerId==='wr-a'));assert.equal(finance.canReview,false);assert.equal(finance.canApproveProgress,false);}
+ await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='AUDITOR' WHERE id='worker-m'`);
+ reviewPaginationChecks.push('finance-role-does-not-gain-review-or-progress-approval-and-keeps-only-its-own-field-history');
+
+ const eligibleWorker=(await pool.query(`SELECT active,metadata FROM "Worker" WHERE id='wr-a'`)).rows[0];
+ for(const change of [
+  {active:false,metadata:eligibleWorker.metadata},
+  {active:true,metadata:{participant:{...eligibleWorker.metadata.participant,status:'REVOKED'}}},
+  {active:true,metadata:{participant:{...eligibleWorker.metadata.participant,kyc:{version:1,status:'PENDING_REVIEW'}}}},
+  {active:true,metadata:{participant:{...eligibleWorker.metadata.participant,clerkUserId:'user_Worker2'}}},
+ ]){
+  await pool.query(`UPDATE "Worker" SET active=$1,metadata=$2::jsonb WHERE id='wr-a'`,[change.active,JSON.stringify(change.metadata)]);
+  for(const section of ['EVIDENCE','PROGRESS']){const empty=await reviewPage(worker,section);assert.equal(empty.total,0);assert.deepEqual(empty.records,[]);const target=section==='EVIDENCE'?'review-old-pending':oldReviewProposal.proposal.id;await assert.rejects(operations.reviewPage(worker,reviewInput(worker,section,'ALL',{reviewId:target})),{code:'FIELD_REVIEW_CURSOR_UNAVAILABLE',status:404});}
+ }
+ await pool.query(`UPDATE "Worker" SET active=$1,metadata=$2::jsonb WHERE id='wr-a'`,[eligibleWorker.active,JSON.stringify(eligibleWorker.metadata)]);
+ reviewPaginationChecks.push('active-participant-kyc-or-account-link-revocation-immediately-removes-author-pages-and-denies-exact-record-reference');
+
+ for(const s of [owner,director,manager])for(const section of ['EVIDENCE','PROGRESS']){const responsible=await reviewPage(s,section);assert.equal(responsible.canReview,true);assert.equal(responsible.canApproveProgress,s!==manager);assert.ok(responsible.records.some(row=>row.workerId==='wr-a2'));}
+ reviewPaginationChecks.push('admin-director-and-site-manager-see-all-project-review-records-with-current-approval-capability-and-no-worker-required');
+ const beforeContextDenials=await readonlyReviewSnapshot();
+ for(const section of ['EVIDENCE','PROGRESS']){
+  await assert.rejects(operations.reviewPage(worker,{...reviewInput(worker,section),scope:scopes[director.userId]}),{code:'WORKSPACE_CONTEXT_CHANGED',status:409});
+  await assert.rejects(operations.reviewPage(foreign,{...reviewInput(foreign,section),scope:scopes[foreign.userId]}),{code:'WORKSPACE_PROJECT_UNAVAILABLE',status:404});
+  await assert.rejects(operations.reviewPage(director,{...reviewInput(director,section),projectId:'p-b'}),{code:'WORKSPACE_PROJECT_UNAVAILABLE',status:404});
+  await assert.rejects(operations.reviewPage(worker,{...reviewInput(worker,section),projectId:'p-review-other'}),{code:'WORKSPACE_PROJECT_UNAVAILABLE',status:404});
+ }
+ assert.deepEqual(await readonlyReviewSnapshot(),beforeContextDenials);
+ reviewPaginationChecks.push('stale-actor-scope-cross-company-and-unassigned-project-denials-use-canonical-current-project-guard-with-zero-writes');
+ await pool.query(`UPDATE "ProjectMembership" SET status='REVOKED' WHERE id='worker-review-p'`);await assert.rejects(operations.reviewPage(worker,reviewInput(worker,'EVIDENCE')),{code:'WORKSPACE_PROJECT_UNAVAILABLE',status:404});await pool.query(`UPDATE "ProjectMembership" SET status='ACTIVE' WHERE id='worker-review-p'`);
+ await pool.query(`UPDATE "TenantMembership" SET status='REVOKED' WHERE id='director-m'`);await assert.rejects(operations.reviewPage(director,reviewInput(director,'PROGRESS')),{code:'WORKSPACE_MEMBERSHIP_REQUIRED',status:403});await pool.query(`UPDATE "TenantMembership" SET status='ACTIVE' WHERE id='director-m'`);
+ await pool.query(`UPDATE "Project" SET status='ARCHIVED' WHERE id='p-review'`);await assert.rejects(operations.reviewPage(owner,reviewInput(owner,'EVIDENCE')),{code:'WORKSPACE_PROJECT_UNAVAILABLE',status:404});await pool.query(`UPDATE "Project" SET status='ACTIVE' WHERE id='p-review'`);
+ reviewPaginationChecks.push('project-assignment-membership-and-project-status-revocation-deny-formerly-authorized-review-pages');
+
+ await insertReviewEvidence('review-foreign-project',reviewEvidence,'2026-01-01','p-review-other');
+ await insertReviewEvidence('review-wrong-kind',{...reviewEvidence,kind:'REPORT'},'2026-01-01');
+ await insertReviewEvidence('review-wrong-version',{...reviewEvidence,version:0},'2026-01-01');
+ await pool.query(`INSERT INTO "OperationalProposal"(id,"projectId","proposedByWorkerId","sourceProvider","sourceExternalId",type,status,summary,action,precondition,"expiresAt","createdAt","updatedAt") SELECT 'review-foreign-proposal','p-review-other',"proposedByWorkerId",'account-field','review-foreign-proposal','TASK_PROGRESS','PENDING',summary,action,precondition,"expiresAt",'2026-01-01',clock_timestamp() FROM "OperationalProposal" WHERE id=$1`,[oldReviewProposal.proposal.id]);
+ await pool.query(`INSERT INTO "OperationalProposal"(id,"projectId","proposedByWorkerId","sourceProvider","sourceExternalId",type,status,summary,action,precondition,"expiresAt","createdAt","updatedAt") SELECT 'review-other-engine',"projectId","proposedByWorkerId",'other-engine','review-other-engine','TASK_PROGRESS','PENDING',summary,action,precondition,"expiresAt",'2026-01-01',clock_timestamp() FROM "OperationalProposal" WHERE id=$1`,[oldReviewProposal.proposal.id]);
+ const beforeCursorDenials=await readonlyReviewSnapshot();
+ for(const section of ['EVIDENCE','PROGRESS'])for(const selector of ['afterReview','reviewId']){
+  const filter=selector==='reviewId'?'ALL':'PENDING';
+  for(const id of section==='EVIDENCE'?['unknown-evidence','review-foreign-project','review-wrong-kind','review-wrong-version']:['unknown-proposal','review-foreign-proposal','review-other-engine','review-old-pending'])await assert.rejects(operations.reviewPage(director,reviewInput(director,section,filter,{[selector]:id})),{code:'FIELD_REVIEW_CURSOR_UNAVAILABLE',status:404});
+  await assert.rejects(operations.reviewPage(worker,reviewInput(worker,section,filter,{[selector]:section==='EVIDENCE'?'review-other-worker':'review-other-worker-proposal'})),{code:'FIELD_REVIEW_CURSOR_UNAVAILABLE',status:404});
+ }
+ assert.deepEqual(await readonlyReviewSnapshot(),beforeCursorDenials);
+ reviewPaginationChecks.push('unknown-cross-project-other-owner-other-section-kind-version-and-engine-cursors-and-exact-targets-fail-private-404');
+ const fieldHttp=createFieldHandlers({verify:async()=>director,operations}),reviewRequest=input=>new Request('https://obrasaas.com/api/identity/field-operations?'+new URLSearchParams(input));
+ for(const input of [{...reviewInput(director,'EVIDENCE'),afterReview:'review-old-pending',reviewId:'review-other-worker'}, {...reviewInput(director,'EVIDENCE'),reviewId:'review-old-pending'}, {...reviewInput(director,'EVIDENCE'),operationId:randomUUID()}]){const response=await fieldHttp.GET(reviewRequest(input));assert.equal(response.status,400);assert.equal((await response.json()).code,'FIELD_QUERY_INVALID');}
+ const httpPending=await fieldHttp.GET(reviewRequest(reviewInput(director,'PROGRESS')));assert.equal(httpPending.status,200);fieldReviewPage(await httpPending.json(),reviewInput(director,'PROGRESS'));assert.equal(httpPending.headers.get('cache-control'),'private, no-store, max-age=0');
+ reviewPaginationChecks.push('real-http-dispatch-validates-exclusive-review-query-and-returns-private-canonical-page');
+
+ const oldActionableEvidence=(await reviewPage(director,'EVIDENCE','ALL',{reviewId:'review-old-pending'})).records[0],beforeDeniedEvidence=await readonlyReviewSnapshot();
+ await assert.rejects(operations.save(worker,reviewCommand(worker,'REVIEW_EVIDENCE',{evidenceId:oldActionableEvidence.id,revision:oldActionableEvidence.revision,decision:'APPROVE',reason:'Synthetic author cannot decide evidence.'})),{code:'FIELD_PERMISSION_REQUIRED',status:403});assert.deepEqual(await readonlyReviewSnapshot(),beforeDeniedEvidence);
+ const oldEvidenceApproved=await operations.save(director,reviewCommand(director,'REVIEW_EVIDENCE',{evidenceId:oldActionableEvidence.id,revision:oldActionableEvidence.revision,decision:'APPROVE',reason:'Synthetic human review of old paginated evidence.'}));assert.equal(oldEvidenceApproved.evidence.status,'APPROVED');assert.equal((await reviewPage(director,'EVIDENCE','ALL',{reviewId:oldActionableEvidence.id})).records[0].status,'APPROVED');assert.equal((await workspace.read(owner,reviewContext(owner))).tasks[0].progress,0);
+ reviewPaginationChecks.push('old-evidence-exact-page-uses-existing-human-review-engine-and-author-denial-never-changes-task');
+ const oldActionableProposal=(await reviewPage(director,'PROGRESS','ALL',{reviewId:oldReviewProposal.proposal.id})).records[0],oldProposalDecision=reviewCommand(director,'DECIDE_PROGRESS',{proposalId:oldActionableProposal.id,revision:oldActionableProposal.revision,decision:'APPROVE',reason:'Synthetic director approves old exact measured advance.'}),beforeDeniedProgress=await readonlyReviewSnapshot();
+ await assert.rejects(operations.save(manager,{...oldProposalDecision,...reviewContext(manager),operationId:randomUUID()}),{code:'FIELD_PROGRESS_PERMISSION_REQUIRED',status:403});assert.deepEqual(await readonlyReviewSnapshot(),beforeDeniedProgress);
+ reviewPaginationChecks.push('site-manager-can-read-old-progress-but-current-capability-denies-decision-with-zero-canonical-writes');
+ await assert.rejects(createFieldOperations({workspace:failApprovalWorkspace}).save(director,oldProposalDecision),{code:'WORKSPACE_OPERATION_UNCONFIRMED',status:503});assert.deepEqual(await readonlyReviewSnapshot(),beforeDeniedProgress);assert.equal((await reviewPage(director,'PROGRESS','ALL',{reviewId:oldActionableProposal.id})).records[0].status,'PENDING');
+ reviewPaginationChecks.push('old-proposal-approval-audit-failure-rolls-back-task-measurement-proposal-and-receipt-through-existing-engine');
+ await assert.rejects(ambiguous.save(director,oldProposalDecision),{code:'WORKSPACE_OPERATION_UNCONFIRMED',status:503});
+ const recoveredReviewDecision=await operations.status(director,{...reviewContext(director),operationId:oldProposalDecision.operationId});assert.equal(recoveredReviewDecision.saved,true);assert.equal(recoveredReviewDecision.task.progress,25);
+ const beforeReviewReplay=await readonlyReviewSnapshot(),oldReviewReplay=await operations.save(director,oldProposalDecision);assert.equal(oldReviewReplay.replayed,true);assert.equal(oldReviewReplay.task.progress,25);assert.deepEqual(await readonlyReviewSnapshot(),beforeReviewReplay);assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "AuditLog" WHERE id=$1`,[recoveredReviewDecision.receiptId])).rows[0].n,1);
+ const persistedReviewTask=(await pool.query(`SELECT progress,status,metadata,"startsAt","endsAt" FROM "Task" WHERE id='task-review'`)).rows[0];assert.equal(persistedReviewTask.metadata.fieldOperations.quantity.executed,'2.5999');assert.equal(persistedReviewTask.metadata.fieldOperations.quantity.baseline,'10.0000');assert.equal(persistedReviewTask.metadata.unrelated,true);assert.equal(persistedReviewTask.status,'BLOCKED');assert.equal(persistedReviewTask.startsAt.toISOString().slice(0,10),'2026-10-01');assert.equal(persistedReviewTask.endsAt.toISOString().slice(0,10),'2026-10-10');assert.equal((await reviewPage(director,'PROGRESS','ALL',{reviewId:oldActionableProposal.id})).records[0].status,'APPLIED');
+ reviewPaginationChecks.push('old-quantity-approval-lost-ack-get-and-exact-replay-update-canonical-task-once-preserving-four-decimals-dates-metadata-and-independent-blocker');
+ const taskBeforeRejectedReview=(await workspace.read(owner,reviewContext(owner))).tasks[0],nextReviewProposal=await operations.save(worker,reviewCommand(worker,'PROPOSE_PROGRESS',{workerId:'wr-a',taskId:'task-review',revision:taskBeforeRejectedReview.revision,progress:30,quantity:'3',baseline:'10',unit:'M2',reason:'Synthetic follow up advance needs human review.',evidenceIds:['review-approved-source']}));
+ const selectedForRejection=(await reviewPage(director,'PROGRESS','ALL',{reviewId:nextReviewProposal.proposal.id})).records[0];await operations.save(director,reviewCommand(director,'DECIDE_PROGRESS',{proposalId:selectedForRejection.id,revision:selectedForRejection.revision,decision:'REJECT',reason:'Synthetic reviewer rejected additional measured work.'}));assert.deepEqual((await workspace.read(owner,reviewContext(owner))).tasks[0],taskBeforeRejectedReview);assert.equal((await reviewPage(director,'PROGRESS','ALL',{reviewId:selectedForRejection.id})).records[0].status,'REJECTED');
+ reviewPaginationChecks.push('exact-selected-proposal-rejection-preserves-approved-task-and-remains-in-all-history');
+ await reviewPage(director,'EVIDENCE');await reviewPage(director,'PROGRESS');assert.deepEqual({putCount,getCount,providerCalls},reviewAdaptersBefore);
+ reviewPaginationChecks.push('review-page-navigation-and-decisions-use-no-media-storage-or-ai-provider-calls');
+ // A real readonly transaction crosses this proposal's deadline between its
+ // rows query and count query. Both must describe the same transaction snapshot.
+ await pool.query(`INSERT INTO "Project"(id,"organizationId",name,status,metadata) VALUES('p-review-clock','company-a','Synthetic review clock boundary','ACTIVE','{}');
+ INSERT INTO "Worker"(id,"projectId",name,phone,role,metadata,"updatedAt") SELECT 'wr-clock','p-review-clock','Synthetic clock author','+5491100006666',role,metadata,clock_timestamp() FROM "Worker" WHERE id='wr-a';
+ INSERT INTO "Task"(id,"projectId",title,status,progress,metadata) VALUES('task-review-clock','p-review-clock','Synthetic clock task','BACKLOG',0,'{}');`);
+ await pool.query(`INSERT INTO "OperationalProposal"(id,"projectId","proposedByWorkerId","sourceProvider","sourceExternalId",type,status,summary,action,precondition,"expiresAt","updatedAt") SELECT 'review-clock-proposal','p-review-clock','wr-clock','account-field','review-clock-proposal','TASK_PROGRESS','PENDING',summary,jsonb_set(jsonb_set(action,'{workerId}','"wr-clock"'),'{taskId}','"task-review-clock"'),precondition,clock_timestamp()+interval '4 seconds',clock_timestamp() FROM "OperationalProposal" WHERE id=$1`,[oldReviewProposal.proposal.id]);
+ const clockBoundarySnapshot=async()=>(await pool.query(`SELECT (SELECT to_jsonb(p) FROM "OperationalProposal" p WHERE id='review-clock-proposal') AS proposal,(SELECT to_jsonb(t) FROM "Task" t WHERE id='task-review-clock') AS task,(SELECT count(*)::int FROM "AuditLog") AS audits`)).rows;
+ const beforeClockBoundary=await clockBoundarySnapshot();let boundaryRowsSelected=false,boundaryCountDelayed=false,boundaryExpiresAt,boundaryTransactionAt;
+ const clockBoundaryWorkspace=createWorkspaceStore({connect:async()=>{
+  const client=await pool.connect();return {release:bad=>client.release(bad),query:async(sql,args)=>{
+   if(args?.[0]==='p-review-clock'&&sql.startsWith('SELECT count(*)::int AS total FROM public."OperationalProposal"')){
+    assert.equal(boundaryRowsSelected,true);
+    await client.query(`SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM ($1::timestamptz-clock_timestamp())))+0.1)`,[boundaryExpiresAt.toISOString()]);
+    const afterWait=(await client.query('SELECT clock_timestamp() AS now,transaction_timestamp() AS snapshot')).rows[0];assert.ok(afterWait.now>=boundaryExpiresAt);assert.equal(afterWait.snapshot.toISOString(),boundaryTransactionAt.toISOString());boundaryCountDelayed=true;
+   }
+   const result=await client.query(sql,args);
+   if(args?.[0]==='p-review-clock'&&sql.startsWith('SELECT id,summary,status::text')&&sql.includes('LIMIT 101')){
+    assert.deepEqual(result.rows.map(row=>row.id),['review-clock-proposal']);assert.equal(result.rows[0].expired,false);boundaryExpiresAt=result.rows[0].expiresAt;
+    const beforeWait=(await client.query('SELECT clock_timestamp() AS now,transaction_timestamp() AS snapshot')).rows[0];assert.ok(boundaryExpiresAt>beforeWait.now);boundaryTransactionAt=beforeWait.snapshot;boundaryRowsSelected=true;
+   }
+   return result;
+  }};
+ }});
+ const boundaryInput={...reviewInput(director,'PROGRESS'),projectId:'p-review-clock'},boundaryPage=fieldReviewPage(await createFieldOperations({workspace:clockBoundaryWorkspace}).reviewPage(director,boundaryInput),boundaryInput);
+ assert.equal(boundaryRowsSelected,true);assert.equal(boundaryCountDelayed,true);assert.equal(boundaryPage.records.length,1);assert.equal(boundaryPage.records[0].status,'PENDING');assert.equal(boundaryPage.total,1);assert.equal(boundaryPage.nextCursor,null);assert.deepEqual(await clockBoundarySnapshot(),beforeClockBoundary);
+ const afterClockBoundary=await operations.reviewPage(director,boundaryInput);assert.deepEqual(afterClockBoundary.records,[]);assert.equal(afterClockBoundary.total,0);assert.deepEqual(await clockBoundarySnapshot(),beforeClockBoundary);assert.deepEqual({putCount,getCount,providerCalls},reviewAdaptersBefore);
+ reviewPaginationChecks.push('proposal-expiring-between-select-and-count-remains-coherent-in-one-readonly-database-clock-snapshot-and-next-transaction-excludes-it-with-zero-writes');
+ assert.equal(checks.length,19);assert.equal(reviewPaginationChecks.length,22);
  const databaseEngineVersion=(await pool.query('SHOW server_version')).rows[0].server_version;
- const proof={status:'PASS',environment:'disposable-local-postgresql'+databaseEngineVersion.split('.')[0],databaseEngineVersion,checks,productionDataWritten:false,providerCalls:0,mediaAdapters:'synthetic-isolated-objects-and-responses',physicalAttendanceAccepted:false,whatsAppTested:false};mkdirSync('.vercel/field-operations-evidence',{recursive:true});writeFileSync('.vercel/field-operations-evidence/postgres.json',JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
+ const sourceFiles=['src/lib/workspace-store.mjs','src/lib/workspace-policy.mjs','src/lib/field-operations-store.mjs','src/lib/field-operations-policy.mjs','src/lib/field-operations-http.mjs','src/app/api/identity/field-operations/route.js','src/app/(identity)/cuenta/field-review-page-view.mjs','src/app/(identity)/cuenta/field-operations-panel.js','tests/production-field-review-pagination.test.mjs','scripts/verify-field-operations-postgres.mjs','scripts/verify-field-operations-ui.mjs','vercel.json'];
+ const sourceSha256=Object.fromEntries(sourceFiles.map(path=>[path,createHash('sha256').update(readFileSync(path)).digest('hex')]));
+ proof={status:'PASS',environment:'disposable-local-postgresql'+databaseEngineVersion.split('.')[0],databaseEngineVersion,checks,reviewPaginationChecks,checkCount:checks.length,reviewPaginationCheckCount:reviewPaginationChecks.length,totalChecks:checks.length+reviewPaginationChecks.length,sourceSha256,productionDataWritten:false,providerCalls:0,reviewPaginationProviderCalls:0,mediaAdapters:'synthetic-isolated-objects-and-responses',physicalAttendanceAccepted:false,whatsAppTested:false};
 }finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}
+proof.databaseRemoved=true;mkdirSync('.vercel/field-operations-evidence',{recursive:true});writeFileSync('.vercel/field-operations-evidence/postgres.json',JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));

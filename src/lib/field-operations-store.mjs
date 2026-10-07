@@ -108,6 +108,27 @@ export function createFieldOperations({workspace,assertParticipant}) {
   const latest=async(client,projectId,workerId)=>(await client.query(`SELECT id,"workerId",metadata,${revision('"checkedInAt"')} AS "recordedAt" FROM public."AttendanceEntry" WHERE "projectId"=$1 AND "workerId"=$2 AND metadata->'fieldOperations'->>'version'='1' ORDER BY (metadata->'fieldOperations'->>'sequence')::int DESC,id DESC LIMIT 1`,[projectId,workerId])).rows[0]||null;
   return {
     shift(session,context){return run(session,context,false,async(client,member,scope,project)=>({scope,...await overtime.readShift(client,member,session,project,context)}));},
+    reviewPage(session,context) {
+      const {reviewSection,reviewFilter,afterReview=null,reviewId=null}=context;
+      if(!['EVIDENCE','PROGRESS'].includes(reviewSection)||!['PENDING','ALL'].includes(reviewFilter)||[afterReview,reviewId].some(value=>value!==null&&!workspaceId(value))||afterReview&&reviewId||reviewId&&reviewFilter!=='ALL')throw new WorkspaceError('FIELD_QUERY_INVALID');
+      return run(session,context,false,async(client,member,scope)=>{
+        const reviewer=canReviewField(member.role),owned=reviewer?[]:(await client.query(`SELECT id FROM public."Worker" WHERE "projectId"=$1 AND active=true AND metadata->'participant'->>'version'='1' AND metadata->'participant'->>'clerkUserId'=$2 AND metadata->'participant'->>'status'='ACTIVE' AND metadata->'participant'->'kyc'->>'status'='APPROVED'`,[context.projectId,session.userId])).rows.map(row=>row.id);
+        const media=reviewSection==='EVIDENCE',table=media?'public."Incident"':'public."OperationalProposal"';
+        const kind=media?`metadata->'fieldOperations'->>'version'='1' AND metadata->'fieldOperations'->>'kind'='EVIDENCE'`:`type='TASK_PROGRESS' AND "sourceProvider"='account-field' AND action->>'fieldOperationsVersion'='1'`;
+        const owner=media?`metadata->'fieldOperations'->>'workerId'`:`"proposedByWorkerId"`;
+        const visible=`"projectId"=$1 AND ${kind} AND ($2::boolean OR ${owner}=ANY($3::text[]))`,values=[context.projectId,reviewer,owned];
+        // A cursor is a canonical row reference, not a trusted client timestamp.
+        // It remains usable when its decision changes between page requests.
+        if(afterReview||reviewId){const found=(await client.query(`SELECT id FROM ${table} WHERE ${visible} AND id=$4`,[...values,afterReview||reviewId])).rows;if(found.length!==1)throw new WorkspaceError('FIELD_REVIEW_CURSOR_UNAVAILABLE',404);}
+        // Page rows, display status and total share the transaction's DB clock.
+        const pending=media?`(metadata->'fieldOperations'->'review' IS NULL OR metadata->'fieldOperations'->'review'='null'::jsonb)`:`status='PENDING' AND "expiresAt">transaction_timestamp()`;
+        const filtered=visible+(reviewFilter==='PENDING'?` AND ${pending}`:'');
+        const selection=media?`id,title,description,metadata,${revision('"updatedAt"')} AS revision`:`id,summary,status::text AS status,action,result,"proposedByWorkerId","expiresAt",("expiresAt"<=transaction_timestamp()) AS expired,${revision('"updatedAt"')} AS revision`;
+        const rows=(await client.query(`SELECT ${selection} FROM ${table} WHERE ${filtered} AND ($4::text IS NULL OR ("createdAt",id)<(SELECT "createdAt",id FROM ${table} WHERE "projectId"=$1 AND id=$4)) AND ($5::text IS NULL OR id=$5) ORDER BY "createdAt" DESC,id DESC LIMIT 101`,[...values,afterReview,reviewId])).rows;
+        const total=reviewId?rows.length:(await client.query(`SELECT count(*)::int AS total FROM ${table} WHERE ${filtered}`,values)).rows[0].total;
+        return {scope,projectId:context.projectId,reviewSection,reviewFilter,afterReview,reviewId,records:rows.slice(0,100).map(media?publicFieldEvidence:publicProposal),total,nextCursor:rows.length>100?rows[99].id:null,canReview:reviewer,canApproveProgress:canApproveProgress(member.role)};
+      });
+    },
     async proposalEvidence(session,context) {
       if(!workspaceId(context.proposalId))throw new WorkspaceError('FIELD_QUERY_INVALID');
       return run(session,context,false,async(client,member,scope)=>{
