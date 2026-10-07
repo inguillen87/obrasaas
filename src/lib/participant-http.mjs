@@ -1,6 +1,7 @@
 import {WorkspaceError,workspaceId,operationId,requireWorkspaceIdentity} from './workspace-policy.mjs';
 import {boundedBody} from './workspace-http.mjs';
 import {readPrivateKycBody,PrivateImageError} from './private-image-upload.mjs';
+import {participantAccountRequest} from './participant-account-discovery.mjs';
 const headers={'Cache-Control':'private, no-store, max-age=0','Vary':'Cookie, Authorization','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow'};
 const reply=(value,status=200)=>Response.json(value,{status,headers});
 export function createParticipantHandlers({verify,store,join=false,scheduleOnboarding=()=>{}}){
@@ -23,8 +24,14 @@ export function createParticipantHandlers({verify,store,join=false,scheduleOnboa
   }
   if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
   if(join){if(params.size!==1||params.getAll('invitationId').length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return reply(await store.join(session,{invitationId:params.get('invitationId')}));}
-  for(const key of params.keys())if(!['projectId','scope','after','intakeAfter','operationId','workerId','imageId','detail','action'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+  for(const key of params.keys())if(!['projectId','scope','after','intakeAfter','operationId','workerId','imageId','detail','action','query','afterAccount','accountId'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
   const context={projectId:params.get('projectId'),scope:params.get('scope')};if(!workspaceId(context.projectId)||!/^[a-f0-9]{64}$/.test(context.scope||''))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+  if(params.get('detail')==='existing-accounts'){
+   if([...params.keys()].some(key=>!['projectId','scope','detail','query','afterAccount','accountId'].includes(key)))throw new WorkspaceError('PARTICIPANT_ACCOUNT_QUERY_INVALID');
+   const input={...context,...Object.fromEntries(['query','afterAccount','accountId'].filter(key=>params.has(key)).map(key=>[key,params.get(key)]))};
+   participantAccountRequest(input);return reply(await store.accounts(session,input));
+  }
+  if(['query','afterAccount','accountId'].some(key=>params.has(key)))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
   if(params.has('detail')||params.has('action')){
    const checking=params.has('operationId'),keys=checking?['projectId','scope','detail','workerId','operationId','action']:['projectId','scope','detail','workerId'];
    if(params.get('detail')!=='private-bank-account'||params.size!==keys.length||keys.some(key=>!params.has(key))||!workspaceId(params.get('workerId'))||checking&&!operationId(params.get('operationId')))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
