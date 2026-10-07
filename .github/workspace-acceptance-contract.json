@@ -1285,8 +1285,8 @@
       "retained": true,
       "blockId": 53,
       "lane": "contracts",
-      "sourceLine": 43,
-      "producerSha256": "902d93a08e98c357a81dac3d2dfca56cc5c6f3d3d50b56d81798301d5273f7d4",
+      "sourceLine": 57,
+      "producerSha256": "82dc14261a7e8a8ed58238076b956b4516371a66f302634a971027ec47e0ee20",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     },
     {
@@ -1316,7 +1316,7 @@
       "blockId": 55,
       "lane": "people",
       "sourceLine": 87,
-      "producerSha256": "8f1d0a81c79660aa1f2719dcb380e514ed0921788816f0ad9619975a5d972f33",
+      "producerSha256": "157b7e15a6bb3da14134b74ea9a878023c256b82b43cfaa8b3f91f30ccadfd9a",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     },
     {
@@ -1326,7 +1326,7 @@
       "blockId": 55,
       "lane": "people",
       "sourceLine": 54,
-      "producerSha256": "c043074e576861741ad348a86fdbb591e7a548c369f43db80968c1b10acb9bec",
+      "producerSha256": "e0d9ff386c61991f6f586be332de2d3760d3c11cf85052a887d67876aa56e23c",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     },
     {
@@ -1336,7 +1336,7 @@
       "blockId": 56,
       "lane": "people",
       "sourceLine": 73,
-      "producerSha256": "afdb6bb74db29862722f3795d14594e519336056b30bb772e2d435884d1795c1",
+      "producerSha256": "b4383eb99ec6f14ac28e9f7f011272b40495d6083593e844b6303ff46e0af4df",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     },
     {
@@ -1346,7 +1346,7 @@
       "blockId": 56,
       "lane": "people",
       "sourceLine": 73,
-      "producerSha256": "afdb6bb74db29862722f3795d14594e519336056b30bb772e2d435884d1795c1",
+      "producerSha256": "b4383eb99ec6f14ac28e9f7f011272b40495d6083593e844b6303ff46e0af4df",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     },
     {
@@ -1355,8 +1355,8 @@
       "retained": true,
       "blockId": 57,
       "lane": "people",
-      "sourceLine": 109,
-      "producerSha256": "7b8c61da962c4259369f46e1a7028d9e726d090061e4064b32a305a4db14a151",
+      "sourceLine": 139,
+      "producerSha256": "9570ad78bb0a4c8a65ee5360624461c3aa49550a9152e27adce8a94ea520e86c",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     }
   ],
@@ -1394,7 +1394,7 @@
         "path": ".vercel/participant-bank-intake-contract-evidence/proof.json",
         "kind": "UNIT",
         "producer": "scripts/verify-participant-bank-intake-contracts.mjs",
-        "producerSha256": "902d93a08e98c357a81dac3d2dfca56cc5c6f3d3d50b56d81798301d5273f7d4",
+        "producerSha256": "82dc14261a7e8a8ed58238076b956b4516371a66f302634a971027ec47e0ee20",
         "sourceFiles": [
           "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
           "src/app/(identity)/cuenta/company-channel-view.mjs",
@@ -1568,12 +1568,13 @@
         "path": ".vercel/private-bank-evidence/proof.json",
         "kind": "UI_BANK",
         "producer": "scripts/verify-private-bank-account-ui.mjs",
-        "producerSha256": "8f1d0a81c79660aa1f2719dcb380e514ed0921788816f0ad9619975a5d972f33",
+        "producerSha256": "157b7e15a6bb3da14134b74ea9a878023c256b82b43cfaa8b3f91f30ccadfd9a",
         "sourceFiles": [
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/employee-intake-panel.js",
           "src/app/(identity)/cuenta/field-media-preparation.mjs",
           "src/app/(identity)/cuenta/kyc-photo-preparation.js",
+          "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
           "src/app/(identity)/cuenta/participant-panel.js",
           "src/app/(identity)/cuenta/participant-panel.module.css",
           "src/app/(identity)/cuenta/private-bank-account-format.mjs",
@@ -1657,26 +1658,27 @@
         "path": ".vercel/private/employee-intake-ui/browser.json",
         "kind": "UI_INTAKE",
         "producer": "scripts/verify-employee-intake-ui.mjs",
-        "producerSha256": "c043074e576861741ad348a86fdbb591e7a548c369f43db80968c1b10acb9bec",
+        "producerSha256": "e0d9ff386c61991f6f586be332de2d3760d3c11cf85052a887d67876aa56e23c",
         "sourceFiles": [
-          "src/app/(identity)/cuenta/participant-panel.js",
+          "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/employee-intake-panel.js",
+          "src/app/(identity)/cuenta/field-media-preparation.mjs",
+          "src/app/(identity)/cuenta/kyc-photo-preparation.js",
+          "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
+          "src/app/(identity)/cuenta/participant-panel.js",
+          "src/app/(identity)/cuenta/participant-panel.module.css",
+          "src/app/(identity)/cuenta/private-bank-account-format.mjs",
           "src/app/(identity)/cuenta/private-bank-account-panel.js",
           "src/app/(identity)/cuenta/private-bank-account-panel.module.css",
-          "src/app/(identity)/cuenta/private-bank-account-format.mjs",
-          "src/app/(identity)/cuenta/participant-panel.module.css",
-          "src/app/(identity)/cuenta/kyc-photo-preparation.js",
-          "src/app/(identity)/cuenta/field-media-preparation.mjs",
-          "src/app/(identity)/cuenta/workspace-session-request.mjs",
+          "src/app/(identity)/cuenta/site-purchase-view.mjs",
+          "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
+          "src/app/(identity)/cuenta/workspace-recovery-storage.mjs",
           "src/app/(identity)/cuenta/workspace-request-lifecycle.js",
           "src/app/(identity)/cuenta/workspace-request-lifecycle.mjs",
-          "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
-          "src/app/(identity)/cuenta/company-channel-view.mjs",
-          "src/app/(identity)/cuenta/site-purchase-view.mjs",
-          "src/app/(identity)/cuenta/workspace-recovery-storage.mjs",
-          "src/lib/site-register-policy.mjs",
+          "src/app/(identity)/cuenta/workspace-session-request.mjs",
+          "src/lib/meta-kyc-conversation.mjs",
           "src/lib/participant-policy.mjs",
-          "src/lib/meta-kyc-conversation.mjs"
+          "src/lib/site-register-policy.mjs"
         ],
         "checkNames": []
       },
@@ -1687,12 +1689,13 @@
         "path": ".vercel/private/participant-bank-intake-integration/current/browser.json",
         "kind": "UI_JOINT",
         "producer": "scripts/verify-participant-bank-intake-ui.mjs",
-        "producerSha256": "afdb6bb74db29862722f3795d14594e519336056b30bb772e2d435884d1795c1",
+        "producerSha256": "b4383eb99ec6f14ac28e9f7f011272b40495d6083593e844b6303ff46e0af4df",
         "sourceFiles": [
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/employee-intake-panel.js",
           "src/app/(identity)/cuenta/field-media-preparation.mjs",
           "src/app/(identity)/cuenta/kyc-photo-preparation.js",
+          "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
           "src/app/(identity)/cuenta/participant-panel.js",
           "src/app/(identity)/cuenta/participant-panel.module.css",
           "src/app/(identity)/cuenta/private-bank-account-format.mjs",
@@ -1776,12 +1779,13 @@
         "path": ".vercel/private/participant-bank-intake-integration/bad-resolution/browser.json",
         "kind": "UI_CAUSAL",
         "producer": "scripts/verify-participant-bank-intake-ui.mjs",
-        "producerSha256": "afdb6bb74db29862722f3795d14594e519336056b30bb772e2d435884d1795c1",
+        "producerSha256": "b4383eb99ec6f14ac28e9f7f011272b40495d6083593e844b6303ff46e0af4df",
         "sourceFiles": [
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/employee-intake-panel.js",
           "src/app/(identity)/cuenta/field-media-preparation.mjs",
           "src/app/(identity)/cuenta/kyc-photo-preparation.js",
+          "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
           "src/app/(identity)/cuenta/participant-panel.js",
           "src/app/(identity)/cuenta/participant-panel.module.css",
           "src/app/(identity)/cuenta/private-bank-account-format.mjs",
@@ -1865,7 +1869,7 @@
         "path": ".vercel/company-kyc-evidence/postgres.json",
         "kind": "PG_COMPANY_KYC",
         "producer": "scripts/verify-company-channel-kyc-postgres.mjs",
-        "producerSha256": "7b8c61da962c4259369f46e1a7028d9e726d090061e4064b32a305a4db14a151",
+        "producerSha256": "9570ad78bb0a4c8a65ee5360624461c3aa49550a9152e27adce8a94ea520e86c",
         "sourceFiles": [
           "src/lib/afipValidator.js",
           "src/lib/aiVision.js",
@@ -2020,7 +2024,8 @@
           "signed-callback-and-durable-A-prompt-required-no-guest-FIELD-route-or-cross-phone-target",
           "A-source-and-secret-AAD-with-B-capture-one-submission-two-private-images-and-lost-commit-recovery",
           "canonical-Clerk-invitation-acceptance-adopts-original-capture-other-reviewer-and-own-signed-VINCULAR",
-          "canonical-current-revocation-denies-new-corporate-field-use-with-no-IO-or-business-write"
+          "canonical-current-revocation-denies-new-corporate-field-use-with-no-IO-or-business-write",
+          "canonical-acceptance-before-original-IDENTIDAD-keeps-TTL-and-unit-once-own-capture-distinct-review-and-VINCULAR"
         ]
       }
     ]
