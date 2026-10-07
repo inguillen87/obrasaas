@@ -12,8 +12,11 @@ const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
 const BASELINE_PRODUCERS_SHA256='07d0016608332c0775f86bee6d005e60d4686d2ffe33a3065dfd9fd8e974ab20';
 export const LANES=['contracts','plans','people','field','meta','channels','business','workspace-ui'];
-const LANE_ENV_BYTES=64*1024;
-const LANE_OUTPUT_BYTES=60*1024;
+// Keep each serialized lane below Linux's 128 KiB per-environment-string limit.
+// Leave room for the environment key and GitHub's outer JSON formatting while
+// retaining every screenshot, source digest and proof binding in the artifact.
+const LANE_ENV_BYTES=96*1024;
+const LANE_OUTPUT_BYTES=92*1024;
 const laneEnvironmentKey=lane=>'WORKSPACE_LANE_'+lane.toUpperCase().replaceAll('-','_')+'_JSON';
 const script='.github/scripts/verify-workspace-ci-parallelization.mjs';
 const contractPath='.github/workspace-acceptance-contract.json';
@@ -443,7 +446,17 @@ export function selftest(workflow,contract,root=process.cwd()){
  bad('extra-lane-job-field-denied','INVALID_LANE_JOB_SHAPE',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:JSON.stringify({...needs.meta,extra:true})}));
  bad('oversized-lane-environment-denied','LANE_ENV_LIMIT',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:'x'.repeat(LANE_ENV_BYTES+1)}));
  bad('invalid-lane-environment-unicode-denied','LANE_ENV_ENCODING',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:'"\ud800"'}));
- good('lane-output-size-bounds-every-fixture',()=>{for(const lane of LANES)assert.ok(assertLaneOutputSize(needs[lane].outputs.provenance)<LANE_OUTPUT_BYTES);});
+ good('lane-output-size-bounds-every-fixture',()=>{
+  for(const lane of LANES)assert.ok(assertLaneOutputSize(needs[lane].outputs.provenance)<LANE_OUTPUT_BYTES);
+  const overhead=assertLaneOutputSize(''),boundary='x'.repeat(92*1024-overhead);
+  assert.equal(assertLaneOutputSize(boundary),92*1024);
+  assert.throws(()=>assertLaneOutputSize(boundary+'x'),error=>error.code==='LANE_OUTPUT_TRANSPORT_LIMIT');
+  assert.throws(()=>assertLaneOutputSize('ñ'.repeat(46*1024)),error=>error.code==='LANE_OUTPUT_TRANSPORT_LIMIT');
+  const padded={...laneEnv},key=laneEnvironmentKey('people');padded[key]+=' '.repeat(96*1024-Buffer.byteLength(padded[key]));
+  equal(readLaneNeedsEnvironment(padded),needs,'PADDED_LANE_ENVIRONMENT');
+  assert.ok(Buffer.byteLength(key+'='+padded[key])+1<128*1024);
+  assert.throws(()=>readLaneNeedsEnvironment({...padded,[key]:padded[key]+' '}),error=>error.code==='LANE_ENV_LIMIT');
+ });
  bad('oversized-output-blocked-before-github-output','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('x'.repeat(LANE_OUTPUT_BYTES)));
  bad('escaped-output-size-uses-wire-bytes','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('"'.repeat(LANE_OUTPUT_BYTES/2)));
  bad('non-string-output-size-denied','PROVENANCE_LIMIT',()=>assertLaneOutputSize(null));
