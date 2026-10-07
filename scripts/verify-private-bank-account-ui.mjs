@@ -78,7 +78,7 @@ async function scenario(mode,width){
    }
   }
  }
- await privacy(page);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.deepEqual(external,[]);assert.equal(f.counts.remote,0);checks.push({mode,width,postCount:posts.length,bankWrites:f.counts.writes,realProviderCalls:0});await context.close();
+ if(mode==='integrated'){assert.equal(await page.$eval('[data-onboarding-optional]',el=>el.getAttribute('data-onboarding-optional')),'private-bank');const progress=await page.$eval('[data-onboarding-step]',el=>el.innerText);assert.ok(!progress.includes(syntheticBankNumber)&&!progress.includes('0001'));}await privacy(page);assert.equal(await page.evaluate(()=>innerWidth),width);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);assert.deepEqual(external,[]);assert.equal(f.counts.remote,0);checks.push({mode,width,postCount:posts.length,bankWrites:f.counts.writes,realProviderCalls:0});await context.close();
 }
 try{
  let ready=false;for(let i=0;i<80;i++){try{if((await fetch(origin)).ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,500));}assert.ok(ready,log);

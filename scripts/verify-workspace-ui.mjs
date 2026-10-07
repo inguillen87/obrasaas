@@ -8,6 +8,7 @@ import puppeteer from 'puppeteer';
 // Browser-only acceptance of the real component with intercepted synthetic API
 // responses. This is NOT proof of a production login, employee or WhatsApp event.
 assert.ok(!process.env.VERCEL && !process.env.VERCEL_ENV);
+assert.ok([undefined,'onboarding-epoch'].includes(process.env.WORKSPACE_UI_SCENARIO));
 const root=process.cwd(),evidence=path.join(root,'.vercel/workspace-evidence');
 mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/workspace-ui-')),app=path.join(fixture,'src/app'),components=path.join(app,'(identity)/cuenta');
@@ -25,7 +26,7 @@ assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.leng
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-ui-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};\n`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:16,background:'#0b1c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
-writeFileSync(path.join(app,'page.js'),`'use client';import {useState} from 'react';import {AccountWorkspace} from './(identity)/cuenta/workspace-client';const token=async()=>{if(window.__failNextToken){window.__failNextToken=false;throw new Error('private SDK diagnostic');}if(window.__holdToken)await new Promise(resolve=>{window.__resolveToken=resolve;});return 'synthetic-active-tab-A';};export default function Page(){const [visible,setVisible]=useState(true);return <main style={{maxWidth:1000,margin:'0 auto'}}><h2 id="onboarding-guide-title">Guía de ensayo</h2><button onClick={()=>setVisible(false)}>Desmontar ensayo</button>{visible?<AccountWorkspace getSessionToken={token}/>:<p>Ensayo desmontado</p>}</main>}`);
+writeFileSync(path.join(app,'page.js'),`'use client';import {useState} from 'react';import {AccountWorkspace} from './(identity)/cuenta/workspace-client';import {browserRecoveryJournal} from './(identity)/cuenta/workspace-recovery-journal.mjs';const token=async()=>{if(window.__failNextToken){window.__failNextToken=false;throw new Error('private SDK diagnostic');}if(window.__holdToken)await new Promise(resolve=>{window.__resolveToken=resolve;});return 'synthetic-active-tab-A';};export default function Page(){const [visible,setVisible]=useState(true);if(typeof window!=='undefined')window.__prepareWorkspaceReference=body=>browserRecoveryJournal.prepare('/api/identity/task-creation',{method:'POST',body:JSON.stringify(body)});return <main style={{maxWidth:1000,margin:'0 auto'}}><h2 id="onboarding-guide-title">Guía de ensayo</h2><button onClick={()=>setVisible(false)}>Desmontar ensayo</button>{visible?<AccountWorkspace getSessionToken={token}/>:<p>Ensayo desmontado</p>}</main>}`);
 const port=3108,origin='http://127.0.0.1:'+port;
 const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
 let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',value=>{serverLog=(serverLog+value.toString()).slice(-20000);});
@@ -371,6 +372,26 @@ async function stalePaginationScenario(){
  }catch(error){await page.screenshot({path:path.join(evidence,'workspace-workbench-stale-page-failure-390.png'),fullPage:false}).catch(()=>{});throw error;}
  finally{if(heldPage.request&&!heldPage.request.isInterceptResolutionHandled())await heldPage.request.abort().catch(()=>{});await context.close();}
 }
+
+async function onboardingEpochScenario(width){
+ const mode='onboarding-epoch',context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1100,hasTouch:width<768,isMobile:width<768});page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
+ const posts=[],queries=[];let workspaceReads=0,channelReads=0,heldChannel;let channelStarted;const channelGate=new Promise(resolve=>{channelStarted=resolve;});
+ const participant={id:'worker-self',name:'Persona propia',active:true,revision,status:'ACTIVE',self:true,accountLinked:true,invitation:null,permissions:{attendance:true,report:true},kyc:{status:'APPROVED',submissionId:null,images:[]}},channel=()=>({scope,projectId:'p-a',channelReady:true,records:[{workerId:participant.id,name:participant.name,phone:'+15550001001',connectionNumber:'+15550002002',revision,state:'VERIFIED',eligible:true,challenge:null,binding:{id:'binding-'+channelReads,verifiedAt:'2026-10-01T12:00:00.000Z',revokedAt:null}}]});
+ await page.setRequestInterception(true);page.on('request',async request=>{try{const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('External request forbidden');}if(!url.pathname.startsWith('/api/identity/'))return request.continue();assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');if(request.method()==='POST'){posts.push(request.postData());throw Error('Onboarding epoch scenario permits GET only');}queries.push({path:url.pathname,query:url.search});let body;
+  if(url.pathname==='/api/identity/workspace'){if(!url.search)body={scope,organizationName:'Empresa de epoch sint\u00e9tico',role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:false,canManageIntegrations:false,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false};else{assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');workspaceReads++;body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:false,tasks:[baseTask(),...(workspaceReads>1?[{...baseTask(),id:'task-second',title:'Segunda tarea can\u00f3nica'}]:[])],totalTasks:2,nextCursor:workspaceReads===1?'synthetic-task-cursor':null};}}
+  else if(url.pathname==='/api/identity/participants')body={scope,projectId:'p-a',canManage:false,canInvite:false,canManageOfficeRoles:false,existingAccounts:[],records:[participant],privacyNotice:{version:'fixture-notice',text:'Ensayo sin documentos'}};
+  else if(url.pathname==='/api/identity/worker-channel'){assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');channelReads++;if(channelReads===2){heldChannel=request;channelStarted();return;}body=channel();}
+  else if(url.pathname==='/api/identity/task-creation'){assert.equal(url.searchParams.get('operationId'),'11111111-1111-4111-8111-111111111111');assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(url.searchParams.get('scope'),scope);body={scope,projectId:'p-a',state:'RECORDED',saved:true,created:true,receiptId:'task-recovery-fixture',task:baseTask()};}
+  else throw Error('Unexpected synthetic identity endpoint');await request.respond({status:200,contentType:'application/json',body:JSON.stringify(body)});
+ }catch(error){pageErrors.push({mode,width,message:error.message});await request.abort().catch(()=>{});}});
+ try{await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});assert.equal(await page.evaluate(()=>innerWidth),width);await waitText(page,'Empresa de epoch sint\u00e9tico');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');await click(page,'Consultar participantes');await page.waitForSelector('[data-onboarding-step="CHANNEL_UNOBSERVED"]');await click(page,'Consultar vinculaci\u00f3n');await page.waitForSelector('[data-onboarding-step="CHANNEL_VERIFIED"]');assert.equal(await page.$$eval('a[href^="https://wa.me/"]',els=>els.length),1);
+  await click(page,'Cargar m\u00e1s tareas');await page.waitForSelector('[data-task-id="task-second"]');await page.waitForSelector('[data-onboarding-step="CHANNEL_UNOBSERVED"]');assert.equal(channelReads,1);assert.equal(await page.$$eval('a[href^="https://wa.me/"]',els=>els.length),0);
+  await page.evaluate(async body=>{await window.__prepareWorkspaceReference(body);},{scope,projectId:'p-a',operationId:'11111111-1111-4111-8111-111111111111'});await waitText(page,'Operaciones por comprobar');await click(page,'Consultar vinculaci\u00f3n');await channelGate;await click(page,'Comprobar recibo');await page.waitForFunction(()=>document.body.innerText.includes('Cronograma actualizado desde los registros'));assert.equal(workspaceReads,3);
+  const oldBody=channel();await heldChannel.respond({status:200,contentType:'application/json',body:JSON.stringify(oldBody)});heldChannel=null;await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Consultar vinculaci\u00f3n'&&!button.disabled));assert.equal(await page.$eval('[data-onboarding-step]',el=>el.dataset.onboardingStep),'CHANNEL_UNOBSERVED');assert.equal(await page.$$eval('a[href^="https://wa.me/"]',els=>els.length),0);assert.equal(channelReads,2);
+  await click(page,'Consultar vinculaci\u00f3n');await page.waitForSelector('[data-onboarding-step="CHANNEL_VERIFIED"]');assert.equal(channelReads,3);assert.equal(await page.$$eval('a[href^="https://wa.me/"]',els=>els.length),1);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(evidence,`workspace-onboarding-epoch-${width}.png`),fullPage:true});checks.push({mode,width,workspaceReads,channelReads,posts:posts.length,appendInvalidates:true,lateSnapshotRejected:true,freshExplicitReadRequired:true});
+ }finally{if(heldChannel&&!heldChannel.isInterceptResolutionHandled())await heldChannel.abort().catch(()=>{});await context.close();}
+}
+
 try{
  let ready=false;
  for(let i=0;i<120;i++){
@@ -383,14 +404,17 @@ try{
  }
  assert.ok(ready,'Fixture server unavailable: '+serverLog.slice(-5000));
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
+ for(const width of [320,390,768,1280])await onboardingEpochScenario(width);
+ if(process.env.WORKSPACE_UI_SCENARIO!=='onboarding-epoch'){
  for(const width of [320,390,768,1280])await scenario('success',width);
  for(const mode of ['readonly','denied','empty','draft-cancel','sdk-unavailable','unmount-token','uncertain','rollback','not-arrived','conflict','race'])await scenario(mode);
  for(const mode of ['draft-cancel','uncertain','rollback','not-arrived'])await taskCreateScenario(mode);
  for(const width of [320,390,768,1280])for(const role of ['ADMIN','AUDITOR'])await navigationScenario(role,width);
  for(const width of [320,390,768,1280])await workbenchScenario(width);
  await stalePaginationScenario();
+ }
  assert.deepEqual(pageErrors,[]);
- const proof={status:'PASS',environment:'isolated-browser-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,pageErrors,sourceManifest,harnessSha256,productionLoginVerified:false,productionDataWritten:false,physicalWhatsAppVerified:false};
+ const proof={status:'PASS',fullSuite:!process.env.WORKSPACE_UI_SCENARIO,focusedScenario:process.env.WORKSPACE_UI_SCENARIO||null,environment:'isolated-browser-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,pageErrors,sourceManifest,harnessSha256,productionLoginVerified:false,productionDataWritten:false,physicalWhatsAppVerified:false};
  writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
 }catch(error){writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,pageErrors,serverLog},null,2));throw error;}
 finally{await browser?.close();try{if(process.platform!=='win32')process.kill(-server.pid,'SIGTERM');else server.kill();}catch{}await new Promise(resolve=>setTimeout(resolve,500));assert.equal(path.dirname(path.resolve(fixture)),path.resolve(root,'.vercel'));rmSync(fixture,{recursive:true,force:true});}

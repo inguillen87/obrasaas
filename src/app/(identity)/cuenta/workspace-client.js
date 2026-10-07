@@ -1,5 +1,5 @@
 'use client';
-import {useCallback,useEffect,useRef,useState} from 'react';
+import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {Building2,FolderKanban,LoaderCircle,RefreshCw,Check,ArrowUpRight,LockKeyhole} from 'lucide-react';
 import styles from './workspace.module.css';
 import {useWorkspaceRequest} from './workspace-request-lifecycle';
@@ -37,6 +37,10 @@ export function AccountWorkspace({getSessionToken}={}){
  const request=useCallback((query='',options={})=>requestWorkspace(transport,query,options),[transport]);
  const [account,setAccount]=useState(null),[view,setView]=useState(null),[loading,setLoading]=useState(true),[notice,setNotice]=useState(''),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[saving,setSaving]=useState(false),[receipt,setReceipt]=useState(null);
  const generation=useRef(0),controller=useRef(null),mounted=useRef(true);
+ const [channelSnapshot,setChannelSnapshot]=useState(null),[observationEpoch,setObservationEpoch]=useState(0),onboardingContext=useRef(null);
+ useLayoutEffect(()=>{onboardingContext.current=account&&view?{scope:account.scope,projectId:view.project.id,generation:observationEpoch}:null;return()=>{onboardingContext.current=null;};},[account,view,observationEpoch]);
+ const channelObserved=useCallback(value=>{const context=onboardingContext.current;if(!context||value.scope!==context.scope||value.projectId!==context.projectId||value.observedGeneration!==context.generation)return;setChannelSnapshot(value.snapshot?{...value.snapshot,observedGeneration:value.observedGeneration}:null);},[]);
+ const navigateOnboarding=useCallback(value=>{const context=onboardingContext.current;if(!context||value.scope!==context.scope||value.projectId!==context.projectId)return;const id=value.target==='worker-channel'?'worker-channel-title':'pending-receipts-title',target=document.getElementById(id);if(!target)return;target.setAttribute('tabindex','-1');target.focus({preventScroll:true});target.scrollIntoView({block:'start',behavior:'auto'});},[]);
  const [creatingTask,setTaskCreating]=useState(false),[modulePending,setModulePending]=useState({});
  const [planReadback,setPlanReadback]=useState(null);
  const planReadbackMatches=Boolean(planReadback&&planReadback.scope===account?.scope&&planReadback.projectId===view?.project.id);
@@ -61,17 +65,17 @@ export function AccountWorkspace({getSessionToken}={}){
  const planPending=useCallback(value=>setModulePending(old=>old.plan===value?old:{...old,plan:value}),[]);
  const tasksChanged=useCallback(task=>{if(task?.id)setView(old=>old?{...old,tasks:old.tasks.map(t=>t.id===task.id?{...t,...task}:t)}:old);},[]);
  useEffect(()=>{
-  const epoch=generation;mounted.current=true;const abort=new AbortController();controller.current=abort;const current=++epoch.current;
+  const epoch=generation;mounted.current=true;const abort=new AbortController();controller.current=abort;const current=++epoch.current;setObservationEpoch(current);setChannelSnapshot(null);
   request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current)setAccount(data);}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current)setNotice(error.message);}).finally(()=>{if(mounted.current&&current===generation.current){setLoading(false);setPlanReadback(null);}});
   return()=>{mounted.current=false;epoch.current++;abort.abort();controller.current?.abort();};
  },[request]);
  async function refresh(){
-  if(contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;
+  if(contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
   setAccount(null);setView(null);setDraft(null);setReceipt(null);setPlanReadback(null);setNotice('');setLoading(true);
   try{const data=await request('',{signal:abort.signal});if(mounted.current&&current===generation.current)setAccount(data);}catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current)setNotice(error.message);}finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
  async function open(projectId,append=false){
-  if(!account||contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;
+  if(!account||contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
   const cursor=append?view?.nextCursor:null;setPlanReadback(null);setNotice('');setLoading(true);if(!append){setView(null);setDraft(null);setReceipt(null);}
   try{
    const data=await request(query({projectId,scope:account.scope,...(cursor?{afterTask:cursor}:{})}),{signal:abort.signal});
@@ -83,7 +87,7 @@ export function AccountWorkspace({getSessionToken}={}){
  }
  async function readRecordedSchedule(target){
   if(!mounted.current||target.scope!==account?.scope||target.projectId!==view?.project.id)return;
-  controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;
+  controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
   const context={scope:target.scope,projectId:target.projectId,generation:current,kind:target.kind==='task'?'task':'plan'};
   const label=context.kind==='task'?'La tarea':'El plan';
   setPlanReadback({...context,status:'pending'});setLoading(true);setNotice(label+' tiene un recibo confirmado. Consultando el cronograma actualizado…');
@@ -156,8 +160,8 @@ export function AccountWorkspace({getSessionToken}={}){
    {receipt&&<div className={styles.receipt}><strong>Cambio confirmado</strong><span>{receipt.after.startsOn} → {receipt.after.endsOn}</span><small>Recibo: {receipt.id}</small></div>}
   </section>}
   {view&&account?.canManageIntegrations&&<SiteRegisterPanel key={`register:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={registerPending}/> }
-  {view&&<ParticipantPanel key={`participants:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={participantPending}/> }
-  {view&&<WorkerChannelPanel key={`channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={channelPending}/> }
+  {view&&<ParticipantPanel key={`participants:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={participantPending} channelSnapshot={channelSnapshot?.scope===account.scope&&channelSnapshot.projectId===view.project.id&&channelSnapshot.observedGeneration===observationEpoch?channelSnapshot:null} onNavigate={navigateOnboarding}/> }
+  {view&&<WorkerChannelPanel key={`channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={channelPending} observationEpoch={observationEpoch} onSnapshot={channelObserved}/> }
   {view&&(account?.role==='ADMIN'||account?.canManageIntegrations)&&<CompanyChannelPanel key={`company-channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={companyChannelPending} locked={saving||Boolean(attempt)||Boolean(draft)||creatingTask||planReadbackPending||Object.entries(modulePending).some(([key,value])=>key!=='companyChannel'&&value)}/> }
   {view&&account?.role==='ADMIN'&&<DemoPilotPanel key={`demo:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={demoPending}/> }
   {view&&<FieldOperationsPanel key={`field:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} tasks={view.tasks} onPending={fieldPending} onTasksChanged={tasksChanged}/> }

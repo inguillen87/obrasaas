@@ -69,8 +69,8 @@ function PrivateBankAccountInner({scope,projectId,workerId,getSessionToken,onPen
  }
  async function cancelPending(){if(!attempt||!cancelAllowed||!cancelConfirmed||busy||locked)return;const command={scope,projectId,operationId:attempt.operationId,action:'CANCEL_PENDING_PRIVATE_BANK_ACCOUNT',payload:{workerId,originalAction:attempt.action,confirmed:true}};await send({ref:attempt,body:JSON.stringify(command)},{cancel:true});}
  const disabled=busy||locked||!ready||Boolean(attempt);
- return <section className={styles.panel} aria-label="Mi cuenta bancaria privada" aria-busy={busy} data-private-bank-account>
-  <div className={styles.heading}><h4>Mi cuenta bancaria privada</h4><button type="button" disabled={busy} onClick={open?close:load}>{open?'Cerrar cuenta privada':'Consultar mi cuenta privada'}</button></div>
+ return <section className={styles.panel} aria-label="Mi cuenta bancaria privada" data-onboarding-optional="private-bank" aria-busy={busy} data-private-bank-account data-bank-owner={workerId}>
+  <div className={styles.heading}><h4 tabIndex={-1}>Mi cuenta bancaria privada</h4><button type="button" disabled={busy} onClick={open?close:load}>{open?'Cerrar cuenta privada':'Consultar mi cuenta privada'}</button></div>
   <p>Declaración personal para esta obra. No verifica titularidad ni habilita pagos; los datos bancarios por WhatsApp están cerrados.</p><p role="status" aria-live="polite">{notice}</p>
   {!open&&attempt&&<p>Hay una referencia pendiente. Cerrar la consulta conserva su recuperación.</p>}
   {open&&<><button type="button" disabled={busy} onClick={load}>Actualizar referencia privada</button>{!ready&&<p>Hay otra operación de Participantes pendiente o no se pudo comprobar el almacenamiento. Guardar queda bloqueado.</p>}
