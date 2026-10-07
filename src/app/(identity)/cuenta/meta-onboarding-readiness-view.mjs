@@ -89,6 +89,10 @@ function channelView(result,now){
 export function metaOnboardingSnapshot(result,{scope,projectId}){
  if(!object(result))throw invalid();
  if(result.scope!==scope||result.projectId!==projectId)throw Object.assign(new Error('La respuesta pertenece a otra obra.'),{code:'WORKSPACE_CONTEXT_CHANGED'});
+ if(result.companyRouting!==undefined){
+  const c=result.companyRouting;
+  if(!exactKeys(c,['mode','connectionId','anchorProjectId','legacyActionsBlocked','attendance','kyc','media','flows','templates','accepted'])||!['PROJECT_ONLY','PREPARED','COMPANY','SUSPENDED'].includes(c.mode)||!['connectionId','anchorProjectId'].every(key=>typeof c[key]==='string'&&/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(c[key]))||typeof c.legacyActionsBlocked!=='boolean'||c.accepted!==false||typeof c.media!=='boolean'||c.attendance!==c.media||c.kyc!==c.media||c.flows!==false||c.templates!==false||c.media&&c.mode!=='COMPANY')throw invalid();
+ }
  const r=result.readiness,keys=prerequisites.map(([key])=>key);
  if(!object(r)||!object(r.gates)||Object.keys(r.gates).sort().join('|')!==keys.slice().sort().join('|')||keys.some(key=>typeof r.gates[key]!=='boolean')||typeof r.canLaunchMeta!=='boolean'||r.canLaunchMeta!==keys.every(key=>r.gates[key])||r.operational!==false||r.signupVersion!=='4')throw invalid();
  if(typeof r.canUseCustomerTransport!=='boolean'||r.canUseCustomerTransport!==keys.filter(key=>key!=='signupVersion').every(key=>r.gates[key]))throw invalid();

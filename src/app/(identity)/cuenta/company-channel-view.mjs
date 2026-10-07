@@ -23,8 +23,8 @@ function identity(value,expected){
  if(!id(value.organization?.id)||!text(value.organization.name)||!id(value.actor?.id)||!text(value.actor.role))fail();
  if(expected.organizationId&&value.organization.id!==expected.organizationId||expected.actorId&&value.actor.id!==expected.actorId)fail();
 }
-function operationalCapabilities(value,allowed){
- if(!value||Object.keys(value).sort().join('|')!=='attendance|flows|kyc|media|templates'||typeof value.attendance!=='boolean'||typeof value.media!=='boolean'||value.attendance!==value.media||['kyc','flows','templates'].some(key=>value[key]!==false)||!allowed&&value.media)fail();
+function operationalCapabilities(value,allowed,{allowLegacyKyc=false}={}){
+ if(!value||Object.keys(value).sort().join('|')!=='attendance|flows|kyc|media|templates'||typeof value.attendance!=='boolean'||typeof value.media!=='boolean'||value.attendance!==value.media||(value.kyc!==value.media&&!(allowLegacyKyc&&value.kyc===false))||['flows','templates'].some(key=>value[key]!==false)||!allowed&&value.media)fail();
  return value.media;
 }
 function channel(value,{schemaReady=true,requireCapabilities=false}={}){
@@ -32,7 +32,7 @@ function channel(value,{schemaReady=true,requireCapabilities=false}={}){
  if(Object.keys(value).some(key=>!['id','anchorProjectId','anchorName','displayPhoneNumber','mode','revision','assignments','capabilities'].includes(key)))fail();
  // Older durable receipts may omit support. They resolve the operation only;
  // a fresh snapshot is still required before presenting current operations.
- if(requireCapabilities||value.capabilities!==undefined)operationalCapabilities(value.capabilities,schemaReady&&value.mode==='COMPANY');
+ if(requireCapabilities||value.capabilities!==undefined)operationalCapabilities(value.capabilities,schemaReady&&value.mode==='COMPANY',{allowLegacyKyc:!requireCapabilities});
  for(const assignment of value.assignments)if(!id(assignment?.projectId)||!text(assignment.projectName)||!['ACTIVE','REVOKED'].includes(assignment.status)||!revision(assignment.revision)||Object.keys(assignment).sort().join('|')!=='projectId|projectName|revision|status')fail();
  if(new Set(value.assignments.map(row=>row.projectId)).size!==value.assignments.length)fail();
  return value;
