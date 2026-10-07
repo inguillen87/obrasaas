@@ -187,6 +187,108 @@ test('deposit revalidates each image source projection rather than accepting the
 import assert from 'node:assert/strict';
 import {companyKycProjectionContract,companyKycProjectionDigest,companyKycProjectionId,companyKycProjectLockIds,companyKycSecretContext} from '../src/lib/company-channel-kyc.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
+test('a committed acceptance with lost ACK is recovered without changing the code, TTL or transition',async()=>{
+ const f=await companyKycMemoryFixture(),operationId=randomUUID();f.control.loseJoinCommit=true;
+ await assert.rejects(f.join(operationId),{code:'PARTICIPANT_OPERATION_UNCONFIRMED'});
+ const metadata=structuredClone(f.worker.metadata),audits=structuredClone([...f.audits.values()]);assert.equal(metadata.participant.status,'ACTIVE');assert.equal(audits.filter(a=>a.action==='participant.kyc_chat.account_bound').length,1);
+ const recovered=await f.join(operationId);assert.equal(recovered.replayed,true);assert.deepEqual(f.worker.metadata,metadata);assert.deepEqual([...f.audits.values()],audits);assert.equal((await f.bridge.execute(f.receive(f.code))).kind,'KYC_CHAT');assert.equal(f.controls.sends,0);
+});
+
+for(const stage of ['transition-receipt','worker-write'])test('acceptance '+stage+' failure rolls back its JOIN receipt and metadata',async()=>{
+ const f=await companyKycMemoryFixture(),before=structuredClone(f.worker.metadata),audits=structuredClone([...f.audits.values()]);let observed=false;
+ f.control.hook=async sql=>{if(stage==='transition-receipt'&&sql.includes("'participant.kyc_chat.account_bound'")||stage==='worker-write'&&sql.startsWith('UPDATE public."Worker"')){observed=true;throw new Error('SYNTHETIC_WRITE_DENIED');}};
+ await assert.rejects(f.join(),{code:'PARTICIPANT_OPERATION_UNCONFIRMED'});assert.equal(observed,true);assert.deepEqual(f.worker.metadata,before);assert.deepEqual([...f.audits.values()],audits);assert.equal(f.controls.sends,0);assert.ok(f.control.rollbacks>0);
+});
+
+test('pending acceptance preserves explicit intake permissions and unrelated private metadata',async()=>{
+ const f=await companyKycMemoryFixture(),permissions={attendance:false,report:false},applicationId='customer_webhook_'+'d'.repeat(64),personReceiptId='synthetic_person_receipt',receiptId='synthetic_admission_receipt';
+ f.worker.metadata.employeeIntakeAdmission={version:1,projectId:f.target.id,workerId:f.worker.id,permissions,receiptId,actorId:f.issuer.actorId,applicationId,personReceiptId};
+ f.worker.metadata.privateBankAccount={version:1,opaqueSynthetic:'preserved'};f.worker.metadata.channelSettings={synthetic:'preserved'};
+ f.audits.set(receiptId,{id:receiptId,organizationId:f.target.organizationId,actorId:f.issuer.actorId,entityType:'WebhookEvent',entityId:applicationId,action:'participant.operation.recorded',metadata:{kind:'ADMIT_EMPLOYEE_INTAKE',workerId:f.worker.id,projectId:f.target.id,personReceiptId,approvedPermissionsDigest:metaCustomerContentDigest(permissions)}});
+ const bank=structuredClone(f.worker.metadata.privateBankAccount),settings=structuredClone(f.worker.metadata.channelSettings);
+ await f.join();assert.deepEqual(f.worker.metadata.participant.permissions,permissions);assert.deepEqual(f.worker.metadata.privateBankAccount,bank);assert.deepEqual(f.worker.metadata.channelSettings,settings);
+ await f.toConfirmation();await f.choose('Guardar identidad');assert.equal(f.worker.metadata.participant.kyc.status,'PENDING_REVIEW');assert.deepEqual(f.worker.metadata.participant.permissions,permissions);
+});
+import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
+test('canonical acceptance before IDENTIDAD binds only the own account and receipt-derived issuer trail without renewing the challenge',async()=>{
+ const f=await companyKycMemoryFixture(),before=structuredClone(f.worker.metadata.participant.kycChatChallenge),originalAudits=structuredClone([...f.audits.values()]);
+ const accepted=await f.join(),after=f.worker.metadata.participant.kycChatChallenge,restored={...after,participantClerkUserId:before.participantClerkUserId,companyKyc:{...after.companyKyc,issuerAuthorityDigest:before.companyKyc.issuerAuthorityDigest}};
+ assert.equal(accepted.saved,true);assert.deepEqual(restored,before);assert.equal(after.participantClerkUserId,f.member.clerkUserId);assert.notEqual(after.companyKyc.issuerAuthorityDigest,before.companyKyc.issuerAuthorityDigest);
+ const transitions=[...f.audits.values()].filter(a=>a.action==='participant.kyc_chat.account_bound');assert.equal(transitions.length,1);const t=transitions[0];
+ assert.equal(t.actorId,f.member.actorId);assert.equal(t.entityId,f.worker.id);assert.equal(t.metadata.projectId,f.target.id);assert.equal(t.metadata.acceptanceReceiptId,accepted.receiptId);assert.equal(t.metadata.challengeId,before.id);assert.equal(t.metadata.beforeIssuerAuthorityDigest,before.companyKyc.issuerAuthorityDigest);assert.equal(t.metadata.afterIssuerAuthorityDigest,after.companyKyc.issuerAuthorityDigest);assert.notEqual(t.metadata.beforeChallengeDigest,t.metadata.afterChallengeDigest);
+ for(const a of originalAudits)assert.deepEqual(f.audits.get(a.id),a);
+ assert.equal(f.worker.metadata.participant.kyc.status,'NOT_SUBMITTED');assert.equal(t.metadata.identityCertified,false);assert.equal(t.metadata.permissionsGranted,false);assert.equal(f.controls.sends,0);assert.equal(f.blob.puts(),0);
+ await f.toConfirmation();const saved=await f.choose('Guardar identidad');assert.equal(saved.result.businessApplied,true);assert.equal(f.worker.metadata.participant.kyc.status,'PENDING_REVIEW');
+ const captures=[...f.audits.values()].filter(a=>a.metadata.kind==='KYC_SUBMITTED');assert.equal(captures.length,1);assert.equal(captures[0].actorId,f.member.actorId);assert.equal(captures[0].metadata.channelCapture.capturedParticipantClerkUserId,f.member.clerkUserId);assert.equal(captures[0].metadata.channelCapture.accountClaimRequired,false);assert.equal(captures[0].metadata.channelCapture.invitationId,null);
+ assert.equal([...f.audits.values()].filter(a=>a.action==='participant.kyc_chat.account_bound').length,1);
+});
+
+test('acceptance replay with the same or another UUID retains the first transition and original expiry',async()=>{
+ const f=await companyKycMemoryFixture(),op=randomUUID(),first=await f.join(op),after=structuredClone(f.worker.metadata),audits=structuredClone([...f.audits.values()]);
+ for(const operationId of [op,randomUUID()]){const value=await f.join(operationId);assert.equal(value.replayed,true);assert.equal(value.receiptId,first.receiptId);assert.deepEqual(f.worker.metadata,after);assert.deepEqual([...f.audits.values()],audits);}
+ assert.equal(f.controls.sends,0);assert.equal(f.blob.puts(),0);
+});
+
+for(const order of ['issuer-first','own-first'])test('pending acceptance retains principals and journey locks before ordered A/B projects: '+order,async()=>{
+ const f=await companyKycMemoryFixture();if(order==='own-first')f.member.actorId='actor-before-issuer';
+ const start=f.control.sql.length;await f.join();const sql=f.control.sql.slice(start),firstProject=sql.findIndex(q=>q.includes('FROM public."Project"')&&q.includes('FOR UPDATE')),worker=sql.findIndex(q=>q.includes('FROM public."Worker"')&&q.includes('FOR UPDATE'));
+ const firstIssuer=sql.findIndex(q=>q.includes('FROM public."PlatformUser"')&&q.includes('WHERE id=$1 FOR SHARE')),own=sql.findIndex(q=>q.includes('FROM public."PlatformUser"')&&q.includes('WHERE id=$1 FOR UPDATE'));
+ assert.ok(firstProject>firstIssuer&&firstProject>own);assert.ok(worker>firstProject);assert.ok(sql.slice(0,firstProject).some(q=>q.startsWith('SELECT pg_advisory')));
+ assert.equal(order==='issuer-first'?firstIssuer<own:own<firstIssuer,true);
+});
+
+for(const [label,mutate,code] of [
+ ['issuer revocation',f=>{f.controls.issuerActive=false;},'META_KYC_CHALLENGE_REVOKED'],
+ ['issuer demotion',f=>{f.issuer.role='SITE_MANAGER';},'META_KYC_CHALLENGE_REVOKED'],
+ ['issuer revoke/restore audit with equal timestamps',f=>{f.control.trail.push('canonical_revoke_restore');},'META_KYC_COMPANY_AUTHORITY_CHANGED'],
+ ['owner suspension',f=>{f.owner.mode='SUSPENDED';},'META_KYC_COMPANY_AUTHORITY_CHANGED'],
+ ['assignment version',f=>{f.owner.assignmentRevision++;},'META_KYC_COMPANY_AUTHORITY_CHANGED'],
+ ['assignment revoked',f=>{f.control.assignment=false;},'META_KYC_COMPANY_AUTHORITY_CHANGED'],
+ ['grant changed',f=>{f.connection.metadata.customerVerification.scopes=[];},'META_KYC_COMPANY_AUTHORITY_CHANGED'],
+ ['pilot substituted',f=>{f.connection.metadata.developmentPilot={};},'META_KYC_COMPANY_AUTHORITY_CHANGED'],
+ ['own membership disabled',f=>{f.controls.workerMembershipActive=false;},'PARTICIPANT_MEMBERSHIP_REVIEW_REQUIRED'],
+ ['own PM disabled',f=>{f.controls.projectAssignmentActive=false;},'PARTICIPANT_MEMBERSHIP_REVIEW_REQUIRED'],
+ ['own role changed',f=>{f.member.role='DIRECTOR';},'PARTICIPANT_MEMBERSHIP_REVIEW_REQUIRED'],
+ ['invitation receipt missing',f=>{f.audits.delete('invite_receipt');},'META_KYC_CHALLENGE_REVOKED'],
+ ['prepared receipt missing',f=>{for(const [id,a] of f.audits)if(a.action==='participant.kyc_chat.prepared')f.audits.delete(id);},'META_KYC_CHALLENGE_REVOKED'],
+ ['prepared outer receipt missing',f=>{for(const [id,a] of f.audits)if(a.metadata.kind==='PREPARE_KYC_CHAT')f.audits.delete(id);},'META_KYC_CHALLENGE_REVOKED'],
+ ['foreign original target',f=>{f.worker.metadata.participant.kycChatChallenge.projectId=f.anchor.id;},'META_KYC_CHALLENGE_REVOKED'],
+ ['wrong current phone',f=>{f.worker.phone='+19999999999';},'META_KYC_CHALLENGE_REVOKED'],
+ ['pre-existing conversation',f=>{f.worker.metadata.participant.kycChatConversation={version:1};},'META_KYC_CHALLENGE_REVOKED']
+])test('pending acceptance '+label+' cannot refresh authority and rolls back before IO',async()=>{
+ const f=await companyKycMemoryFixture();mutate(f);const metadata=structuredClone(f.worker.metadata),audits=structuredClone([...f.audits.values()]);
+ await assert.rejects(f.join(),{code});assert.deepEqual(f.worker.metadata,metadata);assert.deepEqual([...f.audits.values()],audits);assert.equal(f.controls.sends,0);assert.equal(f.control.graph,0);assert.equal(f.blob.puts(),0);
+});
+
+for(const type of ['projection','dispatch','capture'])test('PENDING metadata cannot hide an existing '+type+' receipt',async()=>{
+ const f=await companyKycMemoryFixture(),c=f.worker.metadata.participant.kycChatChallenge;
+ f.audits.set('existing_source',{id:'existing_source',organizationId:f.target.organizationId,entityId:f.worker.id,entityType:'Worker',actorId:f.issuer.actorId,action:type==='projection'?'participant.kyc_chat.projected':type==='dispatch'?'participant.kyc_chat.dispatched':'participant.operation.recorded',metadata:{challengeId:c.id,kind:type==='capture'?'KYC_SUBMITTED':null,channelCapture:{challengeId:c.id}}});
+ const before=structuredClone(f.worker.metadata),audits=structuredClone([...f.audits.values()]);
+ await assert.rejects(f.join(),{code:'META_KYC_COMPANY_AUTHORITY_CHANGED'});assert.deepEqual(f.worker.metadata,before);assert.deepEqual([...f.audits.values()],audits);assert.equal(f.controls.sends,0);
+});
+
+for(const cause of ['grant','challenge','invitation','invalid-clock'])test('pending acceptance final '+cause+' clock after writes rolls back both receipts and account linkage',async()=>{
+ const f=await companyKycMemoryFixture({grantLifetimeMs:cause==='grant'?90000:null}),before=structuredClone(f.worker.metadata),audits=structuredClone([...f.audits.values()]);let final=false;
+ f.control.hook=async sql=>{if(sql==='SELECT clock_timestamp() AS now'&&[...f.audits.values()].some(a=>a.action==='participant.kyc_chat.account_bound')){final=true;if(cause==='invalid-clock')f.now.setTime(NaN);else if(cause==='grant')f.now.setTime(f.now.getTime()+120000);else if(cause==='invitation'){f.now.setTime(Date.parse(before.participant.invitation.expiresAt)+1);}else f.now.setTime(Date.parse(before.participant.kycChatChallenge.expiresAt)+1);}};
+ await assert.rejects(f.join(),error=>['META_KYC_CHALLENGE_REVOKED','META_KYC_CHALLENGE_EXPIRED'].includes(error.code));assert.equal(final,true);assert.deepEqual(f.worker.metadata,before);assert.deepEqual([...f.audits.values()],audits);assert.ok(f.control.rollbacks>0);assert.equal(f.controls.sends,0);assert.equal(f.blob.puts(),0);
+});
+
+test('a second trail mutation after the JOIN receipt cannot be treated as canonical acceptance',async()=>{
+ const f=await companyKycMemoryFixture(),before=structuredClone(f.worker.metadata),audits=structuredClone([...f.audits.values()]);
+ f.control.hook=async(sql,args)=>{if(sql.startsWith('INSERT INTO public."AuditLog"')&&args.length===6&&JSON.parse(args[5]).kind==='INVITATION_ACCEPTED')f.control.trail.push('unrelated_canonical_change');};
+ await assert.rejects(f.join(),{code:'META_KYC_COMPANY_AUTHORITY_CHANGED'});assert.deepEqual(f.worker.metadata,before);assert.deepEqual([...f.audits.values()],audits);assert.equal(f.controls.sends,0);
+});
+
+test('partial CLAIMED acceptance does not rewrite or silently cancel its original capture authority',async()=>{
+ const f=await companyKycMemoryFixture();await f.execute(f.code);const challenge=structuredClone(f.worker.metadata.participant.kycChatChallenge),conversation=structuredClone(f.worker.metadata.participant.kycChatConversation),projections=structuredClone([...f.audits.values()].filter(a=>a.action==='participant.kyc_chat.projected'));
+ assert.equal(challenge.status,'CLAIMED');assert.equal((await f.join()).saved,true);assert.deepEqual(f.worker.metadata.participant.kycChatChallenge,challenge);assert.deepEqual(f.worker.metadata.participant.kycChatConversation,conversation);assert.deepEqual([...f.audits.values()].filter(a=>a.action==='participant.kyc_chat.projected'),projections);assert.equal([...f.audits.values()].filter(a=>a.action==='participant.kyc_chat.account_bound').length,0);
+ await assert.rejects(f.bridge.execute(f.receive(f.code)),{code:'META_KYC_CHALLENGE_REVOKED'});
+});
+
+test('completed capture before acceptance still adopts the exact original receipt and preserves its issuer actor',async()=>{
+ const f=await companyKycMemoryFixture();await f.toConfirmation();await f.choose('Guardar identidad');const submitted=[...f.audits.values()].find(a=>a.metadata.kind==='KYC_SUBMITTED'),before=structuredClone(submitted),capture=structuredClone(f.worker.metadata.participant.kyc.channelCapture);
+ const accepted=await f.join(),p=f.worker.metadata.participant;assert.equal(p.kyc.status,'PENDING_REVIEW');assert.equal(p.kyc.channelCapture.receiptId,capture.receiptId);assert.equal(p.kyc.channelCapture.acceptanceReceiptId,accepted.receiptId);assert.equal(p.kyc.channelCapture.claimedActorId,f.member.actorId);assert.deepEqual(f.audits.get(submitted.id),before);assert.equal([...f.audits.values()].filter(a=>a.action==='participant.kyc_chat.account_bound').length,0);
+});
 
 const projection=()=>({version:1,kind:'COMPANY_KYC_CAPTURE',sourceEventId:'customer_webhook_'+'a'.repeat(64),payloadDigest:'b'.repeat(64),organizationId:'org_synthetic',connectionId:'connection_a',anchorProjectId:'project_a',targetProjectId:'project_b',workerId:'worker_b',challengeId:'kyc_chat_synthetic',ownerRevision:3,assignmentRevision:7,grantDigest:'c'.repeat(64),issuerActorId:'issuer_synthetic',issuerMembershipId:'membership_issuer',authorityDigest:'d'.repeat(64),participantActorId:null,participantMembershipId:null,participantClerkUserId:null});
 const environment={META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,7).toString('base64')};
