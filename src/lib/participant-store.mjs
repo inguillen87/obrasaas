@@ -7,6 +7,7 @@ import {PRIVATE_BANK_ACTIONS} from './participant-bank-format.mjs';
 import {PRIVATE_BANK_RECEIPT_KIND,readPrivateBankAccount,privateBankStatus,savePrivateBankAccount} from './participant-bank-account.mjs';
 import {normalizeDniExtraction} from './pilot-media.mjs';
 import {adoptParticipantChannelKyc} from './participant-channel-kyc.mjs';
+import {preparePendingCompanyKycAcceptance,lockPendingCompanyKycAcceptanceProjects,bindPendingCompanyKycAcceptance,fencePendingCompanyKycAcceptance} from './company-channel-kyc.mjs';
 const columns=`id,name,active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
 const id=prefix=>prefix+'_'+randomUUID().replaceAll('-','');
 const metadata=row=>row.metadata&&typeof row.metadata==='object'&&!Array.isArray(row.metadata)?structuredClone(row.metadata):{};
@@ -168,6 +169,15 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
   if(!found||found.entityType!=='Worker'||found.entityId!==row.id||found.metadata?.version!==1||found.metadata.projectId!==row.projectId||found.metadata.kind!=='INVITATION_ACCEPTED'||found.metadata.invitationId!==invite?.id||invite.state!=='ACCEPTED')throw new WorkspaceError('PARTICIPANT_RECEIPT_INVALID',409);
   return {invitationId:invite.id,projectId:row.projectId,projectName:row.projectName,organizationName:row.organizationName,participantName:row.name,state:'ACTIVE',canAccept:false,saved:true,joined:true,replayed:true,receiptId:found.id,identityCertified:false,whatsAppAccessGranted:false};
  }
+ async function joinIdentity(client,row,session,primaryEmail,email){
+  let user=(await client.query(`SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE "clerkUserId"=$1 FOR UPDATE`,[session.userId])).rows[0];
+  const clash=(await client.query(`SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE lower("primaryEmail")=lower($1) OR lower("primaryEmail")=lower($2)`,[primaryEmail,email])).rows;if(!user&&clash.some(item=>item.clerkUserId!==session.userId))throw new WorkspaceError('PARTICIPANT_IDENTITY_CONFLICT',409);
+  if(!user){user={id:id('user')};await client.query(`INSERT INTO public."PlatformUser"(id,"clerkUserId","primaryEmail","systemRole","updatedAt") VALUES($1,$2,$3,'TENANT_USER',clock_timestamp())`,[user.id,session.userId,primaryEmail]);}
+  let member=(await client.query(`SELECT id,status,"tenantRole"::text AS role FROM public."TenantMembership" WHERE "organizationId"=$1 AND "userId"=$2 FOR UPDATE`,[row.organizationId,user.id])).rows[0];
+  if(member&&(member.status!=='ACTIVE'||member.role!=='AUDITOR'))throw new WorkspaceError('PARTICIPANT_MEMBERSHIP_REVIEW_REQUIRED',409);
+  if(!member){member={id:id('member')};await client.query(`INSERT INTO public."TenantMembership"(id,"organizationId","userId","clerkRole","tenantRole",status,"updatedAt") VALUES($1,$2,$3,'org:member','AUDITOR','ACTIVE',clock_timestamp())`,[member.id,row.organizationId,user.id]);}
+  return {user,member};
+ }
  return {
   read(session,context){participantContext(context);if(context.after!==undefined&&context.after!==null&&!workspaceId(context.after)||context.intakeAfter&&!/^customer_webhook_[a-f0-9]{64}$/.test(context.intakeAfter))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return run(session,context,false,async(client,member,scope)=>{
    const manage=participantManager(member.role);const records=(await client.query(`SELECT ${columns} FROM public."Worker" WHERE "projectId"=$1 AND ($2::boolean OR (metadata->'participant'->>'clerkUserId'=$3 AND metadata->'participant'->>'status'='ACTIVE' AND active=true)) AND ($4::text IS NULL OR id>$4) ORDER BY id LIMIT 101`,[context.projectId,manage,session.userId,context.after||null])).rows;
@@ -288,26 +298,25 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
    if(!accept)return joinTransaction(session,false,async client=>{const row=await invitedWorker(client,session,input.invitationId),current=row.metadata.participant.invitation;if(current.email!==email||current.providerId!==provider.id)throw new WorkspaceError('PARTICIPANT_EMAIL_MISMATCH',403);if(row.metadata.participant.status==='ACTIVE')return acceptedInvitation(client,session,row);if(row.metadata.participant.status!=='INVITED'||current.state!=='SENT'||!Number.isFinite(Date.parse(current.expiresAt))||Date.parse(current.expiresAt)<Date.now())throw new WorkspaceError('PARTICIPANT_INVITATION_EXPIRED',410);return {invitationId:invite.id,projectName:row.projectName,organizationName:row.organizationName,participantName:row.name,state:row.metadata.participant.status,canAccept:true};});
    return joinTransaction(session,true,async client=>{
     for(const lock of [...new Set(['participant-user:'+session.userId,'participant-email:'+primaryEmail,'participant-email:'+email])].sort())await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[lock]);
+    const discovered=await invitedWorker(client,session,input.invitationId),pending=await preparePendingCompanyKycAcceptance(client,{row:discovered,clerkUserId:session.userId});
+    const pendingIdentity=pending?await joinIdentity(client,discovered,session,primaryEmail,email):null;
+    if(pending)await lockPendingCompanyKycAcceptanceProjects(client,{actorId:pendingIdentity.user.id,membershipId:pendingIdentity.member.id});
     // Match the workspace lock order: canonical identity and membership before
     // the project/worker. Joining another worksite cannot deadlock a field write.
-    await client.query(`SELECT id FROM public."PlatformUser" WHERE "clerkUserId"=$1 FOR UPDATE`,[session.userId]);
-    await client.query(`SELECT m.id FROM public."TenantMembership" m JOIN public."PlatformUser" u ON u.id=m."userId" JOIN public."Organization" o ON o.id=m."organizationId" WHERE u."clerkUserId"=$1 AND o."clerkOrganizationId"=$2 FOR UPDATE OF m`,[session.userId,session.organizationId]);
+    if(!pending){await client.query(`SELECT id FROM public."PlatformUser" WHERE "clerkUserId"=$1 FOR UPDATE`,[session.userId]);
+    await client.query(`SELECT m.id FROM public."TenantMembership" m JOIN public."PlatformUser" u ON u.id=m."userId" JOIN public."Organization" o ON o.id=m."organizationId" WHERE u."clerkUserId"=$1 AND o."clerkOrganizationId"=$2 FOR UPDATE OF m`,[session.userId,session.organizationId]);}
     const row=await invitedWorker(client,session,input.invitationId,true),m=metadata(row),part=m.participant;
     if(part.invitation.email!==email||part.invitation.providerId!==provider.id)throw new WorkspaceError('PARTICIPANT_EMAIL_MISMATCH',403);
     if(part.status==='ACTIVE'){if(part.clerkUserId!==session.userId)throw new WorkspaceError('PARTICIPANT_IDENTITY_CONFLICT',409);return acceptedInvitation(client,session,row);}
     if(part.status!=='INVITED'||part.invitation.state!=='SENT'||Date.parse(part.invitation.expiresAt)<Date.now())throw new WorkspaceError('PARTICIPANT_INVITATION_EXPIRED',410);
-    let user=(await client.query(`SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE "clerkUserId"=$1 FOR UPDATE`,[session.userId])).rows[0];
-    const clash=(await client.query(`SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE lower("primaryEmail")=lower($1) OR lower("primaryEmail")=lower($2)`,[primaryEmail,email])).rows;if(!user&&clash.some(item=>item.clerkUserId!==session.userId))throw new WorkspaceError('PARTICIPANT_IDENTITY_CONFLICT',409);
-    if(!user){user={id:id('user')};await client.query(`INSERT INTO public."PlatformUser"(id,"clerkUserId","primaryEmail","systemRole","updatedAt") VALUES($1,$2,$3,'TENANT_USER',clock_timestamp())`,[user.id,session.userId,primaryEmail]);}
-    let member=(await client.query(`SELECT id,status,"tenantRole"::text AS role FROM public."TenantMembership" WHERE "organizationId"=$1 AND "userId"=$2 FOR UPDATE`,[row.organizationId,user.id])).rows[0];
-    if(member&&(member.status!=='ACTIVE'||member.role!=='AUDITOR'))throw new WorkspaceError('PARTICIPANT_MEMBERSHIP_REVIEW_REQUIRED',409);
-    if(!member){member={id:id('member')};await client.query(`INSERT INTO public."TenantMembership"(id,"organizationId","userId","clerkRole","tenantRole",status,"updatedAt") VALUES($1,$2,$3,'org:member','AUDITOR','ACTIVE',clock_timestamp())`,[member.id,row.organizationId,user.id]);}
+    const {user,member}=pendingIdentity||await joinIdentity(client,row,session,primaryEmail,email);
     const projectMember=(await client.query(`SELECT id,status FROM public."ProjectMembership" WHERE "projectId"=$1 AND "tenantMembershipId"=$2 FOR UPDATE`,[row.projectId,member.id])).rows[0];if(projectMember?.status==='DISABLED')throw new WorkspaceError('PARTICIPANT_MEMBERSHIP_REVIEW_REQUIRED',409);
     if(!projectMember)await client.query(`INSERT INTO public."ProjectMembership"(id,"projectId","tenantMembershipId",status,"updatedAt") VALUES($1,$2,$3,'ACTIVE',clock_timestamp())`,[id('projectmember'),row.projectId,member.id]);
     const duplicate=(await client.query(`SELECT id FROM public."Worker" WHERE "projectId"=$1 AND id<>$2 AND metadata->'participant'->>'clerkUserId'=$3 AND metadata->'participant'->>'status'='ACTIVE'`,[row.projectId,row.id,session.userId])).rows;if(duplicate.length)throw new WorkspaceError('PARTICIPANT_IDENTITY_CONFLICT',409);
     const key=participantReceiptId(user.id,row.projectId,input.operationId),memberContext={organizationId:row.organizationId,actorId:user.id};part.status='ACTIVE';part.clerkUserId=session.userId;part.permissions=await employeeIntakeAcceptedPermissions(client,row,{organizationId:memberContext.organizationId,projectId:row.projectId});part.invitation.state='ACCEPTED';part.acceptanceReceiptId=key;
     await adoptParticipantChannelKyc(client,{row,participant:part,invitationId:input.invitationId,actorId:user.id,clerkUserId:session.userId,acceptanceReceiptId:key});
-    await writeWorker(client,row.projectId,row,m);await record(client,memberContext,key,row.projectId,row.id,digest([row.id,input.invitationId,session.userId,email]),{kind:'INVITATION_ACCEPTED',invitationId:input.invitationId,identityCertified:false,whatsAppAccessGranted:false});return {saved:true,replayed:false,joined:true,projectId:row.projectId,receiptId:key};
+    if(pending){await record(client,memberContext,key,row.projectId,row.id,digest([row.id,input.invitationId,session.userId,email]),{kind:'INVITATION_ACCEPTED',invitationId:input.invitationId,identityCertified:false,whatsAppAccessGranted:false});await bindPendingCompanyKycAcceptance(client,{row,participant:part,actorId:user.id,clerkUserId:session.userId,acceptanceReceiptId:key});}
+    await writeWorker(client,row.projectId,row,m);if(!pending)await record(client,memberContext,key,row.projectId,row.id,digest([row.id,input.invitationId,session.userId,email]),{kind:'INVITATION_ACCEPTED',invitationId:input.invitationId,identityCertified:false,whatsAppAccessGranted:false});if(pending)await fencePendingCompanyKycAcceptance(client);return {saved:true,replayed:false,joined:true,projectId:row.projectId,receiptId:key};
    });
   },
    async submitKyc(session,body){const input=participantKycInput(body),fingerprint=digest([input.projectId,input.scope,input.workerId,input.revision,input.noticeVersion,input.front.digest,input.selfie.digest,...(input.ocrNoticeVersion?[input.ocrNoticeVersion,input.ocrConsent]:[]),...(input.biometricNoticeVersion?[input.biometricNoticeVersion,input.biometricConsent]:[])]);
