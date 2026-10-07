@@ -258,7 +258,7 @@ async function recoveryClosureScenario(mode,width){
  }
  if(!legacyMode&&!expiryMode)await waitText(page,'La confirmación no llegó.');await waitText(page,'Intento pendiente de comprobación');if(expiryMode)await waitText(page,'El intento quedó registrado.');const reference=(await browserReferences(page)).find(entry=>entry.resource==='plan-import');assert.ok(reference);assert.equal(reference.operationId,legacyMode?legacyId:posts.at(-1).operationId);assert.equal(reference.projectId,projectId);assert.equal(reference.scope,scope);
  const referenceFields=['createdAt','operationId','projectId','resource','scope','version'];
- assert.deepEqual(Object.keys(reference).sort(),[...referenceFields,...(decisionMode?['action','draftId','expectedRevision','inputDigest']:[])].sort(),'Only the exact upload/legacy or typed decision reference schema may persist');
+ assert.deepEqual(Object.keys(reference).sort(),[...referenceFields,...(decisionMode?['action','draftId','expectedRevision','inputDigest']:legacyMode?[]:['action','inputDigest'])].sort(),'Only the exact legacy, typed upload or typed decision reference schema may persist');
  assert.equal(reference.version,1);assert.equal(reference.resource,'plan-import');assert.ok(Number.isSafeInteger(reference.createdAt)&&reference.createdAt>=0);
  if(decisionMode){
   const command=JSON.parse(posts.find(post=>post.action==='APPLY').payload);
@@ -268,6 +268,9 @@ async function recoveryClosureScenario(mode,width){
   assert.match(reference.inputDigest,/^[a-f0-9]{64}$/);
   const canonicalCommand={action:command.action,draftId:command.draftId,expectedRevision:command.expectedRevision,operationId:command.operationId.toLowerCase(),projectId:command.projectId,reason:command.reason,rows:command.rows.map(value=>{assert.deepEqual(Object.keys(value).sort(),['endsOn','evidence','startsOn','title','uncertainty']);return {endsOn:value.endsOn,evidence:value.evidence,startsOn:value.startsOn,title:value.title,uncertainty:value.uncertainty};}),scope:command.scope};
   assert.equal(reference.inputDigest,createHash('sha256').update(JSON.stringify(['plan-import-command-v1',canonicalCommand])).digest('hex'),'The persisted digest must identify the exact captured APPLY command without storing its contents');
+ }else if(!legacyMode){
+  assert.equal(reference.action,'UPLOAD');assert.match(reference.inputDigest,/^[a-f0-9]{64}$/);const source=readFileSync(sourceFile);
+  assert.equal(reference.inputDigest,createHash('sha256').update(JSON.stringify(['plan-import-upload-command-v1',{action:'UPLOAD',consent:'plan-document-openai-v1',operationId:posts.at(-1).operationId.toLowerCase(),projectId,scope,source:{bytes:source.length,contentType:'application/pdf',sha256:createHash('sha256').update(source).digest('hex')}}])).digest('hex'),'The upload reference binds the exact selected file bytes, MIME, consent and command context');
  }
  assert.doesNotMatch(JSON.stringify(reference),/Fundaciones|synthetic-workspace-plan|Synthetic schedule fixture|Revisado con la fuente sintética|rows|reason|evidence|title|uncertainty|filename|synthetic-schedule\.pdf|sourceAvailable|token|authorization/i);
  assert.equal(await page.evaluate(({scope,projectId})=>sessionStorage.getItem('obrasaas-plan-attempt-v1:'+scope+':'+projectId),{scope,projectId}),null,'Legacy reference is removed only after the IDB commit');
