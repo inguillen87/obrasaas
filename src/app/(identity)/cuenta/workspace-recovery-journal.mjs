@@ -14,6 +14,12 @@ export const FIELD_OVERTIME_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_OVERTIME'
 export const PARTICIPANT_INTAKE_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_EMPLOYEE_INTAKE','ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE']);
 const templateSendActionReference=value=>Boolean(value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='proposalId|revision'&&id(value.proposalId)&&typeof value.revision==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(value.revision));
 const scopeValid = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+const planDecisionCodes=Object.freeze(['PLAN_IMPORT_ROWS_LIMIT','PLAN_IMPORT_ROWS_INVALID','PLAN_IMPORT_DATES_INVALID','PLAN_IMPORT_DUPLICATE_ROWS','PLAN_IMPORT_REVIEW_REQUIRED','PLAN_IMPORT_REVISION_CHANGED','PLAN_IMPORT_SCHEDULE_CHANGED','PLAN_IMPORT_SOURCE_ALREADY_APPLIED','PLAN_IMPORT_SCHEDULE_TOO_LARGE']);
+const canonicalPlanCommand=value=>Array.isArray(value)?value.map(canonicalPlanCommand):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonicalPlanCommand(value[key])])):value;
+export async function planImportCommandDigest(body){
+ const bytes=new TextEncoder().encode(JSON.stringify(['plan-import-command-v1',canonicalPlanCommand({...body,operationId:body.operationId.toLowerCase()})]));
+ return [...new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+}
 export const RECOVERY_RESOURCES = Object.freeze({
   workspace:'Planificación', 'task-creation':'Nueva tarea', 'site-register':'Registro de obra',
   'site-photo':'Fotografía privada', participants:'Participantes e identidad',
@@ -34,7 +40,7 @@ function resourceOf(url) {
   const found = /^\/api\/identity\/([a-z-]+)(?:\?.*)?$/.exec(url);
   return found && Object.hasOwn(RECOVERY_RESOURCES,found[1]) ? found[1] : null;
 }
-function reference(url, options, now) {
+async function reference(url, options, now) {
   if(options?.method?.toUpperCase()!=='POST')return null;
   const resource=resourceOf(url);if(!resource||url.includes('?'))return null;
   let body;
@@ -54,6 +60,8 @@ function reference(url, options, now) {
   const progress=resource==='template-send'&&body.templateKey===PROGRESS_TEMPLATE_SEND_KEY;
   const overtime=resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(body.action);
   const intake=resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(body.action);
+  const plan=resource==='plan-import'&&typeof options.body==='string'&&['EDIT','APPLY','REJECT'].includes(body.action)&&id(body.draftId)&&Number.isSafeInteger(body.expectedRevision)&&body.expectedRevision>=1;
+  let inputDigest;if(plan)try{inputDigest=await planImportCommandDigest(body);}catch{throw unavailable();}
   if(intake&&(!id(body.payload?.connectionId)||body.action!=='CONFIGURE_EMPLOYEE_INTAKE'&&!/^customer_webhook_[a-f0-9]{64}$/.test(body.payload?.applicationId||'')))throw unavailable();
   if(progress&&(!id(body.workerId)||!templateSendActionReference(body.actionReference)))throw unavailable();
   return {version:1,resource,scope:body.scope,projectId:body.projectId,operationId:body.operationId.toLowerCase(),createdAt:now,
@@ -65,6 +73,7 @@ function reference(url, options, now) {
     ...(bank?{action:bankAction,workerId:body.payload.workerId}:{}),
     ...(intake?{action:body.action,connectionId:body.payload.connectionId,...(body.action==='CONFIGURE_EMPLOYEE_INTAKE'?{}:{applicationId:body.payload.applicationId})}:{}),
     ...(progress?{templateKey:PROGRESS_TEMPLATE_SEND_KEY,workerId:body.workerId,actionReference:{proposalId:body.actionReference.proposalId,revision:body.actionReference.revision}}:{}),
+    ...(plan?{action:body.action,draftId:body.draftId,expectedRevision:body.expectedRevision,inputDigest}:{}),
   };
 }
 function valid(entry) {
@@ -73,12 +82,14 @@ function valid(entry) {
   const overtime=entry.resource==='field-operations'&&entry.action!==undefined;
   const bank=entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(entry.action);
   const intake=entry.resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action);
+  const plan=entry.resource==='plan-import'&&entry.action!==undefined;
   if(entry.resource==='participants'&&entry.action!==undefined&&!bank&&!intake)return false;
-  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',['reconcile','cancel'].includes(entry.action)?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(bank?['action','workerId']:[]),...(intake?['action','connectionId',...(entry.action==='CONFIGURE_EMPLOYEE_INTAKE'?[]:['applicationId'])]:[]),...(progress?['templateKey','workerId','actionReference']:[])];
+  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',['reconcile','cancel'].includes(entry.action)?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(bank?['action','workerId']:[]),...(intake?['action','connectionId',...(entry.action==='CONFIGURE_EMPLOYEE_INTAKE'?[]:['applicationId'])]:[]),...(progress?['templateKey','workerId','actionReference']:[]),...(plan?['action','draftId','expectedRevision','inputDigest']:[])];
   if(Object.keys(entry).sort().join('|')!==fields.sort().join('|'))return false;
   if(entry.resource==='company-onboarding'&&(entry.action!=='declare_company_phone'||!id(entry.expectedClerkOrganizationId)))return false;
   if(entry.resource==='company-channel'&&(!COMPANY_CHANNEL_ACTIONS.includes(entry.action)||!id(entry.connectionId)))return false;
   if(progress&&(!id(entry.workerId)||!templateSendActionReference(entry.actionReference)))return false;
+  if(plan&&(!['EDIT','APPLY','REJECT'].includes(entry.action)||!id(entry.draftId)||!Number.isSafeInteger(entry.expectedRevision)||entry.expectedRevision<1||!/^[a-f0-9]{64}$/.test(entry.inputDigest||'')))return false;
   if(overtime&&!FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action))return false;
   if(bank&&(!PRIVATE_BANK_ACTIONS.includes(entry.action)||!id(entry.workerId)))return false;
   if(intake&&(!PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action)||!id(entry.connectionId)||entry.action!=='CONFIGURE_EMPLOYEE_INTAKE'&&!/^customer_webhook_[a-f0-9]{64}$/.test(entry.applicationId||'')))return false;
@@ -125,6 +136,10 @@ export function recoveryResult(entry, result) {
   if(entry.resource==='company-channel'){try{companyChannelOutcome(result,entry);return result.state==='RECORDED'||result.state==='REJECTED'?{state:result.state,receiptId:result.receiptId}:{state:'NOT_OBSERVED'};}catch{return null;}}
   if(entry.resource==='plan-import') {
     if(result.projectId!==entry.projectId)return null;
+    if(result.state==='REJECTED'&&result.phase==='PRE_DECISION'){
+      if(Object.keys(result).sort().join('|')!=='action|code|definitive|draftId|expectedRevision|inputDigest|operationId|phase|projectId|receiptId|recordedAt|replayed|saved|scope|state|taskEffects|taskSnapshots|tasks'||result.operationId!==entry.operationId||result.saved!==false||result.definitive!==true||result.taskEffects!==false||!planDecisionCodes.includes(result.code)||!/^plan_receipt_[a-f0-9]{64}$/.test(result.receiptId||'')||!['EDIT','APPLY','REJECT'].includes(result.action)||!id(result.draftId)||!Number.isSafeInteger(result.expectedRevision)||result.expectedRevision<1||!/^[a-f0-9]{64}$/.test(result.inputDigest||'')||typeof result.replayed!=='boolean'||typeof result.recordedAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(result.recordedAt)||!Number.isFinite(Date.parse(result.recordedAt))||!Array.isArray(result.tasks)||result.tasks.length||!Array.isArray(result.taskSnapshots)||result.taskSnapshots.length||entry.action!==undefined&&(result.action!==entry.action||result.draftId!==entry.draftId||result.expectedRevision!==entry.expectedRevision||result.inputDigest!==entry.inputDigest))return null;
+      return {state:'REJECTED',phase:'PRE_DECISION',receiptId:result.receiptId,code:result.code};
+    }
     if(result.state==='EXPIRED'){
       const draft=result.draft,expiry=draft?.processingExpiresAt;
       if(Object.keys(result).sort().join('|')!=='definitive|draft|operationId|projectId|saved|scope|state'||result.operationId!==entry.operationId||result.saved!==false||result.definitive!==true||!id(draft?.id)||!Number.isSafeInteger(draft.revision)||draft.revision<1||!Array.isArray(draft.rows)||!['UPLOADING','PROCESSING'].includes(draft.status)||draft.processingExpired!==true||typeof expiry!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(expiry)||!Number.isFinite(Date.parse(expiry))||new Date(expiry).toISOString()!==expiry||Date.parse(expiry)>Date.now())return null;
@@ -267,11 +282,11 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       try{if(legacyStorage.getItem(key)===raw)legacyStorage.removeItem(key);}catch{/* The committed canonical reference remains available. */}
     },
     async prepare(url, options, {notifyConflict=true} = {}) {
-      const entry=reference(url,options,now());if(!entry)return null;
+      const entry=await reference(url,options,now());if(!entry)return null;
       const reserve=()=>access('readwrite',entry.scope,s=>{
       if(options.signal?.aborted)throw Object.assign(new DOMException('La consulta se canceló.','AbortError'),{requestDispatched:false});
       const current=readEntries(s,entry.scope),existing=current.find(row=>keyOf(row)===keyOf(entry));
-      if(existing){if(existing.projectId!==entry.projectId||existing.reportId!==entry.reportId||existing.eventId!==entry.eventId||existing.action!==entry.action||existing.connectionId!==entry.connectionId||existing.expectedClerkOrganizationId!==entry.expectedClerkOrganizationId||existing.signupId!==entry.signupId||existing.templateKey!==entry.templateKey||existing.workerId!==entry.workerId||existing.actionReference?.proposalId!==entry.actionReference?.proposalId||existing.actionReference?.revision!==entry.actionReference?.revision)throw failure('WORKSPACE_RECOVERY_CONFLICT','Este identificador corresponde a otro intento. Comprobá el recibo antes de continuar.');return {entry:existing,existed:true};}
+      if(existing){if(existing.projectId!==entry.projectId||existing.reportId!==entry.reportId||existing.eventId!==entry.eventId||existing.action!==entry.action||existing.draftId!==entry.draftId||existing.expectedRevision!==entry.expectedRevision||existing.inputDigest!==entry.inputDigest||existing.connectionId!==entry.connectionId||existing.expectedClerkOrganizationId!==entry.expectedClerkOrganizationId||existing.signupId!==entry.signupId||existing.templateKey!==entry.templateKey||existing.workerId!==entry.workerId||existing.actionReference?.proposalId!==entry.actionReference?.proposalId||existing.actionReference?.revision!==entry.actionReference?.revision)throw failure('WORKSPACE_RECOVERY_CONFLICT','Este identificador corresponde a otro intento. Comprobá el recibo antes de continuar.');return {entry:existing,existed:true};}
       const pending=current.find(row=>row.resource===entry.resource&&(['company-channel','company-onboarding'].includes(entry.resource)||row.projectId===entry.projectId)&&(entry.resource!=='meta-onboarding'||entry.action==='reconcile'||row.eventId===entry.eventId));
       let resolution=false;
       if(entry.resource==='participants'&&typeof options.body==='string'){try{resolution=JSON.parse(options.body).action==='REVOKE';}catch{ /* The server rejects malformed commands. */ }}
@@ -308,7 +323,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       if(entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(entry.action)){if(['RECORDED','REJECTED','CANCELLED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='company-onboarding'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='company-channel'){if(['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
-      if(entry.resource==='plan-import'){const outcome=recoveryResult(entry,result);if(outcome?.state==='RECORDED'||outcome?.state==='REJECTED'&&!ticket.existed)await remove(entry);return;}
+      if(entry.resource==='plan-import'){const outcome=recoveryResult(entry,result);if(outcome?.state==='RECORDED'||outcome?.state==='REJECTED'&&(outcome.phase==='PRE_DECISION'||!ticket.existed))await remove(entry);return;}
       if(entry.resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action)){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(result?.scope===entry.scope&&(result.projectId===undefined||result.projectId===entry.projectId)&&(result.saved===true||result.created===true)&&(result.receiptId||result.receipt?.id))await remove(entry);
     },
@@ -322,7 +337,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       if(entry.resource==='meta-onboarding'&&['reconcile','cancel'].includes(entry.action)&&(params.get('action')!==entry.action||params.get('signupId')!==entry.signupId))return;
       const outcome=recoveryResult(entry,result);
       // A pre-reservation POST rejection cannot settle an earlier attempt via GET.
-      if(entry.resource==='plan-import'&&outcome?.state==='REJECTED')return;
+      if(entry.resource==='plan-import'&&outcome?.state==='REJECTED'&&outcome.phase!=='PRE_DECISION')return;
       if(['RECORDED','EXPIRED','EVENT_PROCESSED','PARTICIPATION_REVOKED','ACCEPTED','STATUS_OBSERVED','REJECTED','CANCELLED'].includes(outcome?.state))await remove(entry);
     },
   };
