@@ -55,7 +55,16 @@ function mediaFixture({target='project-b',corporate=true,analyze=false,mediaId='
   else if(sql.includes('FROM public."AttendanceEntry"')){assert.equal(args[0],target);value=rows(attendance);}
   else if(sql.includes('FROM public."OperationalProposal"')){assert.equal(args[0],target);value=rows([]);}
   else if(sql.startsWith('INSERT INTO public."Incident"')){assert.equal(args[1],target);incidents.set(args[0],{id:args[0],projectId:args[1],title:args[2],description:args[3],metadata:JSON.parse(args[5]),revision:'2026-10-06T10:00:00.000001'});value={rows:[],rowCount:1};}
-  else if(sql.startsWith('UPDATE public."Incident"')){assert.equal(args[1],target);incidents.get(args[0]).metadata=JSON.parse(args[2]);value={rows:[],rowCount:1};}
+  else if(sql.startsWith('UPDATE public."Incident"')){
+   assert.equal(args[1],target);const incident=incidents.get(args[0]),guarded=sql.includes('RETURNING id');let matched=Boolean(incident&&incident.projectId===args[1]);
+   if(guarded){
+    assert.equal(args.length,7);
+    for(const predicate of ['id=$1 AND "projectId"=$2',"metadata->'fieldOperations'->'processing'->>'status'='RUNNING'","metadata->'fieldOperations'->'processing'->>'actorId'=$4","metadata->'fieldOperations'->'processing'->>'operationId'=$5","metadata->'fieldOperations'->'processing'->>'requestDigest'=$6","metadata->'fieldOperations'->'processing'->>'leaseId'=$7","(metadata->'fieldOperations'->'processing'->>'expiresAt')::timestamptz>clock_timestamp()","(metadata->'fieldOperations'->'review' IS NULL OR metadata->'fieldOperations'->'review'='null'::jsonb)"])assert.ok(sql.includes(predicate),'Controlled DB requires the actual conditional SQL: '+predicate);
+    const evidence=incident?.metadata.fieldOperations,processing=evidence?.processing,expiresAt=Date.parse(processing?.expiresAt),databaseNow=new Date().getTime();
+    matched=matched&&processing?.status==='RUNNING'&&processing.actorId===args[3]&&processing.operationId===args[4]&&processing.requestDigest===args[5]&&processing.leaseId===args[6]&&Number.isFinite(expiresAt)&&expiresAt>databaseNow&&(evidence.review===undefined||evidence.review===null);
+   }
+   if(matched)incident.metadata=JSON.parse(args[2]);value=guarded?rows(matched?[{id:incident.id}]:[]):{rows:[],rowCount:matched?1:0};
+  }
   else if(sql.includes('FROM public."Incident"')){if(sql.includes('"projectId"=$1')){assert.equal(args[0],target);value=rows(sql.includes("kind'='EVIDENCE'")?[...incidents.values()]:[]);}else{assert.equal(args[1],target);value=rows(incidents.has(args[0])?[incidents.get(args[0])]:[]);}}
   else throw Error('Unexpected controlled SQL: '+sql);
   await afterQuery(sql,args,{event,worker,connection,projection,audits,incidents});

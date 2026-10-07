@@ -19,7 +19,7 @@ function fixture(kind,{revokeDuringRead=false,transcript='Synthetic unreviewed a
  const client={query:async(sql,args)=>{queries.push(sql);
   if(sql==='SELECT clock_timestamp() AS now')return {rows:[{now:new Date()}]};
   if(sql.startsWith('SELECT id,metadata FROM public."AuditLog"'))return {rows:receipts.has(args[0])?[{id:args[0],metadata:receipts.get(args[0])}]:[]};
-  if(sql.startsWith('UPDATE public."Incident"')){row.metadata=JSON.parse(args[2]);row.revision='2026-10-05T12:00:00.'+String(++version).padStart(6,'0');return {rows:[]};}
+  if(sql.startsWith('UPDATE public."Incident"')){row.metadata=JSON.parse(args[2]);row.revision='2026-10-05T12:00:00.'+String(++version).padStart(6,'0');return {rows:sql.includes('RETURNING id')?[{id:row.id}]:[]};}
   if(sql.startsWith('INSERT INTO public."AuditLog"')){assert.equal(receipts.has(args[0]),false);receipts.set(args[0],JSON.parse(args[4]));return {rows:[]};}
   assert.fail('Unexpected SQL: '+sql);
  }};

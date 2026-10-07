@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import { WorkspaceError, workspaceId, operationId, digest } from './workspace-policy.mjs';
 import { siteText, siteRevision, recordKeys, cleanMetadata } from './site-register-policy.mjs';
 import { assertPrivateImageConfigured, decodePrivateImage } from './private-image-upload.mjs';
@@ -12,6 +13,13 @@ const fieldReceiptId=(actorId,projectId,key)=>'fieldmedia_'+digest([actorId,proj
 // Keep uploads below the Production function request-body limit, including
 // multipart overhead. Larger/direct uploads need a separately verified adapter.
 export const FIELD_MEDIA_LIMIT = 3*1024*1024;
+export const FIELD_MEDIA_PROCESS_TIMEOUT_MS=80000;
+function processBudget(timeoutMs){
+  const controller=new AbortController(),deadline=performance.now()+timeoutMs;
+  const expire=()=>controller.abort(new WorkspaceError('FIELD_MEDIA_PROCESSING_DEADLINE',503));
+  const timer=setTimeout(expire,timeoutMs);timer.unref?.();
+  return {signal:controller.signal,check(){if(performance.now()>=deadline&&!controller.signal.aborted)expire();if(controller.signal.aborted)throw controller.signal.reason;},close(){clearTimeout(timer);}};
+}
 export function decodeFieldMedia(bytes,contentType) {
   if(!(bytes instanceof Uint8Array)||!bytes.length||bytes.length>FIELD_MEDIA_LIMIT)throw new WorkspaceError('FIELD_MEDIA_TOO_LARGE',413);
   const b=Buffer.from(bytes),mime=String(contentType||'').toLowerCase().split(';')[0];
@@ -51,26 +59,36 @@ function validMediaReceipt(stored,media) {
   if(url.protocol!=='https:'||!/^[-a-z0-9]+\.private\.blob\.vercel-storage\.com$/.test(url.hostname)||url.username||url.password||url.port||url.search||url.hash||url.pathname!=='/'+media.pathname||blob.pathname!==media.pathname||(stored.blob&&blob.size!==media.bytes))throw new WorkspaceError('FIELD_MEDIA_STORAGE_UNCONFIRMED',503);
   return url.toString();
 }
-export function createFieldMedia({operations,put,get,analyzer,extractVideoFrames=createVideoFrameExtractor(),environment=()=>process.env}) {
+export function createFieldMedia({operations,put,get,analyzer,extractVideoFrames=createVideoFrameExtractor(),environment=()=>process.env,processTimeoutMs=FIELD_MEDIA_PROCESS_TIMEOUT_MS}) {
+  if(!Number.isInteger(processTimeoutMs)||processTimeoutMs<1||processTimeoutMs>FIELD_MEDIA_PROCESS_TIMEOUT_MS)throw new TypeError('Invalid field media processing budget');
   const run=operations.mediaTransaction;
   const prior=async(client,member,id)=>(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='field.media.recorded'`,[id,member.organizationId,member.actorId])).rows[0];
   const saveReceipt=async(client,member,input,id,requestDigest,outcome)=>{
     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'field.media.recorded','Incident',$4,$5::jsonb)`,[id,member.organizationId,member.actorId,outcome.evidence.id,JSON.stringify({version:1,projectId:input.projectId,requestDigest,...(member.channelProof?{channelProof:member.channelProof}:{}),outcome})]);
     return {saved:true,replayed:false,receiptId:id,...outcome};
   };
-  async function storedBytes(media) {
-    const stored=await get(media.pathname,{access:'private',useCache:false,abortSignal:AbortSignal.timeout(20000)});
+  async function storedBytes(media,{signal}={}) {
+    const abortSignal=signal?AbortSignal.any([signal,AbortSignal.timeout(20000)]):AbortSignal.timeout(20000);abortSignal.throwIfAborted();
+    const stored=await get(media.pathname,{access:'private',useCache:false,abortSignal});
     try{
       if(!stored||stored.statusCode!==200||stored.blob?.contentType?.split(';')[0]!==media.contentType)throw new WorkspaceError('FIELD_MEDIA_STORAGE_UNCONFIRMED',503);
-      validMediaReceipt(stored,media);const reader=stored.stream.getReader(),chunks=[];let count=0;
-      try{while(true){const item=await reader.read();if(item.done)break;count+=item.value.byteLength;if(count>media.bytes)throw new WorkspaceError('FIELD_MEDIA_INTEGRITY',503);chunks.push(Buffer.from(item.value));}
+      validMediaReceipt(stored,media);const reader=stored.stream.getReader(),chunks=[],cancel=()=>{void reader.cancel().catch(()=>{});};let count=0;
+      abortSignal.addEventListener('abort',cancel,{once:true});
+      try{while(true){abortSignal.throwIfAborted();const item=await reader.read();abortSignal.throwIfAborted();if(item.done)break;count+=item.value.byteLength;if(count>media.bytes)throw new WorkspaceError('FIELD_MEDIA_INTEGRITY',503);chunks.push(Buffer.from(item.value));}
         const bytes=Buffer.concat(chunks);if(bytes.length!==media.bytes||sha(bytes)!==media.sha256)throw new WorkspaceError('FIELD_MEDIA_INTEGRITY',503);return {bytes,url:stored.blob.url};
-      }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+      }finally{abortSignal.removeEventListener('abort',cancel);await reader.cancel().catch(()=>{});reader.releaseLock();}
     }catch(error){await stored?.stream?.cancel?.().catch(()=>{});throw error;}
   }
   function scopeInput(input){if(!workspaceId(input.projectId)||!operationId(input.operationId)||!/^[a-f0-9]{64}$/.test(input.scope||''))throw new WorkspaceError('FIELD_MEDIA_INPUT_INVALID');}
   async function ownsEvidence(client,member,session,input,row) {
     if(!canReviewField(member.role))await operations.assertWorker(client,member,session,input.projectId,row.metadata.fieldOperations.workerId);
+  }
+  async function currentClaim(client,member,input,row,claim,requestDigest){
+    const processing=row.metadata.fieldOperations.processing;
+    if(member.actorId!==claim.actorId||processing?.actorId!==claim.actorId||processing.operationId!==input.operationId||processing.requestDigest!==requestDigest||processing.leaseId!==claim.leaseId||processing.status!=='RUNNING'||row.metadata.fieldOperations.review)throw new WorkspaceError('FIELD_MEDIA_PROCESSING_CHANGED',409);
+    const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now,expiresAt=Date.parse(processing.expiresAt);
+    if(!Number.isFinite(expiresAt)||expiresAt<=now.getTime())throw new WorkspaceError('FIELD_MEDIA_PROCESSING_EXPIRED',409);
+    return now;
   }
   return {
     async attach(session,body) {
@@ -113,47 +131,61 @@ export function createFieldMedia({operations,put,get,analyzer,extractVideoFrames
       if(!validFieldMediaAnalysisConsent(body.analysisConsent)||!body.analysisConsent.allowed)throw new WorkspaceError('FIELD_MEDIA_ANALYSIS_CONSENT_REQUIRED',400);
       const input={...body,operationId:body.operationId.toLowerCase()};
       if(!workspaceId(input.evidenceId))throw new WorkspaceError('FIELD_MEDIA_INPUT_INVALID');
-      const requestDigest=digest(['PROCESS',input]),claim=await run(session,input,true,async(client,member,scope)=>{
+      const requestDigest=digest(['PROCESS',input]),budget=processBudget(processTimeoutMs);
+      try{
+      const claim=await run(session,input,true,async(client,member,scope)=>{
         const id=fieldReceiptId(member.actorId,input.projectId,input.operationId),previous=await prior(client,member,id);
         if(previous){if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);const current=await operations.readEvidence(client,input.projectId,input.evidenceId);await ownsEvidence(client,member,session,input,current);return {done:{scope,saved:true,replayed:true,receiptId:id,...previous.metadata.outcome}};}
         const row=await operations.readEvidence(client,input.projectId,input.evidenceId,true);await ownsEvidence(client,member,session,input,row);
         const e=row.metadata.fieldOperations,processing=e.processing;
         if(e.review)throw new WorkspaceError('FIELD_ALREADY_REVIEWED',409);
+        const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
         const sameClaim=processing?.status==='RUNNING'&&processing.operationId===input.operationId&&processing.requestDigest===requestDigest&&processing.actorId===member.actorId;
-        if(processing?.status==='RUNNING'&&new Date(processing.expiresAt).getTime()>Date.now())throw new WorkspaceError('FIELD_MEDIA_PROCESSING',409);
+        if(processing?.status==='RUNNING'){
+          const expiresAt=Date.parse(processing.expiresAt);if(!Number.isFinite(expiresAt))throw new WorkspaceError('FIELD_MEDIA_PROCESSING_CHANGED',409);
+          if(expiresAt>now.getTime())throw new WorkspaceError('FIELD_MEDIA_PROCESSING',409);
+        }
         if(row.revision!==input.revision&&!sameClaim)throw new WorkspaceError('FIELD_REVISION_CHANGED',409);
         if(['ANALYZED_UNREVIEWED','TRANSCRIBED_UNREVIEWED'].includes(processing?.status))throw new WorkspaceError('FIELD_MEDIA_ALREADY_PROCESSED',409);
         const voiceTask=e.media.kind==='audio'?await operations.readTask(client,input.projectId,e.taskId):null;
-        const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
+        budget.check();
         const leaseId=randomUUID(),next={...e,processing:{status:'RUNNING',operationId:input.operationId,requestDigest,actorId:member.actorId,leaseId,...(input.analysisConsent?{analysisConsent:input.analysisConsent}:{}),startedAt:now.toISOString(),expiresAt:new Date(now.getTime()+90000).toISOString()}};
         await client.query(`UPDATE public."Incident" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[row.id,input.projectId,JSON.stringify({...cleanMetadata(row.metadata),fieldOperations:next})]);
         return {id,actorId:member.actorId,leaseId,media:e.media,caption:row.description,voiceTask,evidenceRevision:row.revision};
       });
       if(claim.done)return claim.done;
+      let fenceError;
+      const fence=async()=>{budget.check();try{await run(session,input,true,async(client,member)=>{
+        const row=await operations.readEvidence(client,input.projectId,input.evidenceId,true);await ownsEvidence(client,member,session,input,row);
+        await currentClaim(client,member,input,row,claim,requestDigest);budget.check();
+      });}catch(error){fenceError=error;throw error;}};
+      await fence();
       let analysis;
       try{
-        const {bytes}=await storedBytes(claim.media);
-        const prepared=claim.media.kind==='video'?await extractVideoFrames({buffer:bytes,mimeType:claim.media.contentType}):null;
+        const {bytes}=await storedBytes(claim.media,{signal:budget.signal});budget.check();
+        const prepared=claim.media.kind==='video'?await extractVideoFrames({buffer:bytes,mimeType:claim.media.contentType,signal:budget.signal}):null;budget.check();
         if(prepared&&prepared.sampling.sourceSha256!==claim.media.sha256)throw new WorkspaceError('FIELD_MEDIA_INTEGRITY',503);
         // Decoding/storage may take time. Recheck current access and reservation
         // before sending a copy outside this workspace.
         // The canonical worker guard takes FOR SHARE, so its short permission
         // transaction must permit row locks even though it writes no records.
-        await run(session,input,true,async(client,member)=>{const row=await operations.readEvidence(client,input.projectId,input.evidenceId);await ownsEvidence(client,member,session,input,row);
-          if(member.actorId!==claim.actorId||row.metadata.fieldOperations.processing?.leaseId!==claim.leaseId||row.metadata.fieldOperations.review)throw new WorkspaceError('FIELD_MEDIA_PROCESSING_CHANGED',409);
-        });
-        analysis=claim.media.kind==='video'?await analyzer.analyzeVideo({...prepared,context:claim.caption}):claim.media.kind==='audio'?await analyzer.transcribeAudio({buffer:bytes,mimeType:claim.media.contentType,language:'es'}):await analyzer.analyzePhoto({base64:bytes.toString('base64'),mimeType:claim.media.contentType,context:claim.caption});
+        await fence();
+        analysis=claim.media.kind==='video'?await analyzer.analyzeVideo({...prepared,context:claim.caption,signal:budget.signal}):claim.media.kind==='audio'?await analyzer.transcribeAudio({buffer:bytes,mimeType:claim.media.contentType,language:'es',signal:budget.signal}):await analyzer.analyzePhoto({base64:bytes.toString('base64'),mimeType:claim.media.contentType,context:claim.caption,signal:budget.signal});budget.check();
         if(claim.media.kind==='audio'&&analysis?.success&&analysis.status==='TRANSCRIBED_UNREVIEWED')analysis={...analysis,progressDraft:createVoiceProgressDraft({transcript:analysis.text,evidenceId:input.evidenceId,evidenceRevision:claim.evidenceRevision,mediaSha256:claim.media.sha256,transcriptSha256:sha(Buffer.from(analysis.text.trim(),'utf8')),task:claim.voiceTask})};
-      }catch(error){analysis={success:false,status:'FAILED_RETRYABLE',code:/^FIELD_VIDEO_[A-Z_]+$/.test(error?.code||'')?error.code:'FIELD_MEDIA_PROVIDER_UNCONFIRMED'};}
+      }catch(error){budget.check();if(error===fenceError)throw error;analysis={success:false,status:'FAILED_RETRYABLE',code:/^FIELD_VIDEO_[A-Z_]+$/.test(error?.code||'')?error.code:'FIELD_MEDIA_PROVIDER_UNCONFIRMED'};}
       const processing={...(analysis?.success?{status:analysis.status,result:analysis,humanReviewRequired:true}:{status:'FAILED_RETRYABLE',code:analysis?.code||'FIELD_MEDIA_PROVIDER_UNCONFIRMED',humanReviewRequired:true}),...(input.analysisConsent?{analysisConsent:input.analysisConsent}:{})};
-      return run(session,input,true,async(client,member,scope)=>{
+      return await run(session,input,true,async(client,member,scope)=>{
         const row=await operations.readEvidence(client,input.projectId,input.evidenceId,true);await ownsEvidence(client,member,session,input,row);
         const previous=await prior(client,member,claim.id);if(previous)return {scope,saved:true,replayed:true,receiptId:claim.id,...previous.metadata.outcome};
-        if(member.actorId!==claim.actorId||row.metadata.fieldOperations.processing?.operationId!==input.operationId||row.metadata.fieldOperations.processing.leaseId!==claim.leaseId||row.metadata.fieldOperations.processing.status!=='RUNNING'||row.metadata.fieldOperations.review)throw new WorkspaceError('FIELD_MEDIA_PROCESSING_CHANGED',409);
-        const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.toISOString(),metadata={...cleanMetadata(row.metadata),fieldOperations:{...row.metadata.fieldOperations,processing:{...processing,completedAt:now}}};
-        await client.query(`UPDATE public."Incident" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[row.id,input.projectId,JSON.stringify(metadata)]);
-        return {scope,...await saveReceipt(client,member,input,claim.id,requestDigest,{kind:'EVIDENCE_PROCESSING',evidence:publicFieldEvidence(await operations.readEvidence(client,input.projectId,row.id))})};
+        const now=(await currentClaim(client,member,input,row,claim,requestDigest)).toISOString();budget.check();
+        const metadata={...cleanMetadata(row.metadata),fieldOperations:{...row.metadata.fieldOperations,processing:{...processing,completedAt:now}}};
+        const updated=await client.query(`UPDATE public."Incident" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2 AND metadata->'fieldOperations'->'processing'->>'status'='RUNNING' AND metadata->'fieldOperations'->'processing'->>'actorId'=$4 AND metadata->'fieldOperations'->'processing'->>'operationId'=$5 AND metadata->'fieldOperations'->'processing'->>'requestDigest'=$6 AND metadata->'fieldOperations'->'processing'->>'leaseId'=$7 AND (metadata->'fieldOperations'->'processing'->>'expiresAt')::timestamptz>clock_timestamp() AND (metadata->'fieldOperations'->'review' IS NULL OR metadata->'fieldOperations'->'review'='null'::jsonb) RETURNING id`,[row.id,input.projectId,JSON.stringify(metadata),claim.actorId,input.operationId,requestDigest,claim.leaseId]);
+        if(updated.rows.length!==1||updated.rows[0].id!==row.id)throw new WorkspaceError('FIELD_MEDIA_PROCESSING_CHANGED',409);
+        budget.check();
+        const result={scope,...await saveReceipt(client,member,input,claim.id,requestDigest,{kind:'EVIDENCE_PROCESSING',evidence:publicFieldEvidence(await operations.readEvidence(client,input.projectId,row.id))})};
+        budget.check();return result;
       });
+      }finally{budget.close();}
     },
     status(session,input) {
       scopeInput(input);return run(session,input,false,async(client,member,scope)=>{
@@ -163,8 +195,16 @@ export function createFieldMedia({operations,put,get,analyzer,extractVideoFrames
           if(owned.length!==1)throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);
         }
         if(!row){
-          const processing=(await client.query(`SELECT metadata->'fieldOperations'->'processing' AS processing FROM public."Incident" WHERE "projectId"=$1 AND metadata->'fieldOperations'->'processing'->>'operationId'=$2 AND metadata->'fieldOperations'->'processing'->>'actorId'=$3 LIMIT 1`,[input.projectId,input.operationId,member.actorId])).rows[0]?.processing;
-          if(processing?.status==='RUNNING')return {scope,state:'PROCESSING',definitive:false,expiresAt:processing.expiresAt,retryAfterExpiration:true};
+          const pending=(await client.query(`SELECT id,metadata->'fieldOperations'->'processing' AS processing FROM public."Incident" WHERE "projectId"=$1 AND metadata->'fieldOperations'->'processing'->>'operationId'=$2 AND metadata->'fieldOperations'->'processing'->>'actorId'=$3 LIMIT 1`,[input.projectId,input.operationId,member.actorId])).rows[0];
+          if(pending?.processing?.status==='RUNNING'){
+            const current=await operations.readEvidence(client,input.projectId,pending.id);
+            if(!canReviewField(member.role)){
+              const owned=(await client.query(`SELECT id FROM public."Worker" WHERE id=$1 AND "projectId"=$2 AND active=true AND metadata->'participant'->>'version'='1' AND metadata->'participant'->>'clerkUserId'=$3 AND metadata->'participant'->>'status'='ACTIVE' AND metadata->'participant'->'permissions'->>'report'='true' AND metadata->'participant'->'kyc'->>'status'='APPROVED'`,[current.metadata.fieldOperations.workerId,input.projectId,session.userId])).rows;
+              if(owned.length!==1)throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);
+            }
+            const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now,expiresAt=Date.parse(pending.processing.expiresAt);
+            return {scope,state:'PROCESSING',definitive:false,expiresAt:pending.processing.expiresAt,leaseExpired:Number.isFinite(expiresAt)&&expiresAt<=now.getTime(),retryAfterExpiration:true};
+          }
         }
         return row?{scope,state:'RECORDED',saved:true,replayed:true,receiptId:id,...row.metadata.outcome}:{scope,state:'NOT_OBSERVED',definitive:false};
       });

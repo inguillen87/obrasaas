@@ -23,13 +23,14 @@ export function normalizeSitePhoto(raw){
   phase,aiAnalysis:description,isIncident:raw.isIncident,incidentSeverity:['Ninguna','Baja','Media','Crítica'].includes(raw.incidentSeverity)?raw.incidentSeverity:null,
   confidence:score(raw.confidence),estimatedProgressPercentage:null,actionRecommendation:text(raw.actionRecommendation,2000)};
 }
-async function jsonBounded(response){
+async function jsonBounded(response,signal){
  if(!response.ok){await response.body?.cancel?.().catch(()=>{});return null;}
  const reader=response.body?.getReader();if(!reader)return null;
- let size=0;const chunks=[];
- try{while(true){const item=await reader.read();if(item.done)break;size+=item.value.byteLength;if(size>65536)return null;chunks.push(Buffer.from(item.value));}
+ let size=0;const chunks=[],cancel=()=>{void reader.cancel().catch(()=>{});};
+ signal.addEventListener('abort',cancel,{once:true});
+ try{while(true){signal.throwIfAborted();const item=await reader.read();signal.throwIfAborted();if(item.done)break;size+=item.value.byteLength;if(size>65536)return null;chunks.push(Buffer.from(item.value));}
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
- }catch{return null;}finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+ }catch{return null;}finally{signal.removeEventListener('abort',cancel);await reader.cancel().catch(()=>{});reader.releaseLock();}
 }
 export function createPilotMediaAnalyzer({environment=()=>process.env,fetchImpl=fetch,timeoutMs=20000}={}){
  if(typeof fetchImpl!=='function'||typeof environment!=='function'||!Number.isInteger(timeoutMs)||timeoutMs<1||timeoutMs>60000)throw new Error('Invalid media adapter');
@@ -52,27 +53,29 @@ export function createPilotMediaAnalyzer({environment=()=>process.env,fetchImpl=
   try{
    const content=[{type:'text',text:kind==='dni'?'Extraer campos legibles; la revisión humana es independiente.':(text(input.context,2000)||'Revisar evidencia de obra sin contexto adicional.')}];
    for(const image of images){if(kind==='video')content.push({type:'text',text:`Cuadro extraído cerca de ${image.capturedAtSeconds} segundos del video (posición de búsqueda solicitada; puede variar por la tasa de cuadros).`});content.push({type:'image_url',image_url:{url:`data:${image.contentType};base64,${image.bytes.toString('base64')}`}});}
-   const response=await fetchImpl('https://api.openai.com/v1/chat/completions',{method:'POST',redirect:'error',signal:AbortSignal.timeout(timeoutMs),headers:{Authorization:'Bearer '+key(),'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-4o',messages:[{role:'system',content:prompt},{role:'user',content}],response_format:{type:'json_object'},temperature:0.1,max_tokens:1000})});
+   const signal=input?.signal?AbortSignal.any([input.signal,AbortSignal.timeout(timeoutMs)]):AbortSignal.timeout(timeoutMs);signal.throwIfAborted();
+   const response=await fetchImpl('https://api.openai.com/v1/chat/completions',{method:'POST',redirect:'error',signal,headers:{Authorization:'Bearer '+key(),'Content-Type':'application/json'},body:JSON.stringify({model:'gpt-4o',messages:[{role:'system',content:prompt},{role:'user',content}],response_format:{type:'json_object'},temperature:0.1,max_tokens:1000})});
    if(!response.ok){const providerStatus=response.status;await response.body?.cancel?.().catch(()=>{});return {...failure('AI_PROVIDER_REQUEST_REJECTED'),providerStatus};}
-   const data=await jsonBounded(response),choice=data?.choices?.[0];
+   const data=await jsonBounded(response,signal),choice=data?.choices?.[0];
    if(choice?.finish_reason!=='stop'||choice?.message?.refusal)return failure('AI_RESPONSE_UNCONFIRMED');
    let value;try{value=JSON.parse(choice.message.content);}catch{return failure('AI_RESPONSE_INVALID');}
    const result=kind==='dni'?normalizeDniExtraction(value):normalizeSitePhoto(value);
    return {...result,provider:'openai',providerModel:'gpt-4o',...(sampling?{analysisScope:'SAMPLED_VIDEO_FRAMES',sampling}:{})};
   }catch{return failure('AI_REQUEST_UNCONFIRMED');}
  }
- async function audio({buffer,mimeType='audio/ogg',language='es'}={}){
+  async function audio({buffer,mimeType='audio/ogg',language='es',signal:externalSignal}={}){
   if(!key())return failure('AI_PROVIDER_NOT_CONFIGURED');
   const mime=typeof mimeType==='string'?mimeType.split(';')[0].trim().toLowerCase():'';
   if(!(buffer instanceof Uint8Array)||!buffer.byteLength||buffer.byteLength>MAX_AUDIO_BYTES||!AUDIO_TYPES[mime]||!['es','en'].includes(language))return failure('MEDIA_AUDIO_INVALID');
   const configured=environment().OPENAI_TRANSCRIPTION_MODEL,model=configured===undefined?'gpt-transcribe':configured;
   if(typeof model!=='string'||!/^gpt-transcribe(?:-[A-Za-z0-9.-]+)?$|^whisper-1$|^gpt-4o(?:-mini)?-transcribe(?:-[A-Za-z0-9.-]+)?$/.test(model))return failure('AUDIO_MODEL_CONFIGURATION_INVALID');
   try{
-   const form=new FormData();form.append('file',new Blob([buffer],{type:mime}),'worksite-note.'+AUDIO_TYPES[mime]);form.append('model',model);form.append('language',language);form.append('response_format','json');
+    const form=new FormData();form.append('file',new Blob([buffer],{type:mime}),'worksite-note.'+AUDIO_TYPES[mime]);form.append('model',model);form.append(/^gpt-transcribe(?:-|$)/.test(model)?'languages[]':'language',language);form.append('response_format','json');
    form.append('prompt','Notas de obra en Argentina: revoque, cañería, cerámica, metros cuadrados, cemento, capataz.');
-   const response=await fetchImpl('https://api.openai.com/v1/audio/transcriptions',{method:'POST',headers:{Authorization:'Bearer '+key()},body:form,redirect:'error',signal:AbortSignal.timeout(timeoutMs)});
+    const signal=externalSignal?AbortSignal.any([externalSignal,AbortSignal.timeout(timeoutMs)]):AbortSignal.timeout(timeoutMs);signal.throwIfAborted();
+    const response=await fetchImpl('https://api.openai.com/v1/audio/transcriptions',{method:'POST',headers:{Authorization:'Bearer '+key()},body:form,redirect:'error',signal});
    if(!response.ok){const providerStatus=response.status;await response.body?.cancel?.().catch(()=>{});return {...failure('AUDIO_PROVIDER_REQUEST_REJECTED'),providerStatus};}
-   const data=await jsonBounded(response),transcript=text(data?.text,32000);
+    const data=await jsonBounded(response,signal),transcript=text(data?.text,32000);
    if(Array.isArray(data?.languages)&&data.languages.length===0)return failure('AUDIO_TRANSCRIPTION_UNCONFIRMED');
    return transcript?{success:true,status:'TRANSCRIBED_UNREVIEWED',text:transcript,speakerVerified:false,identityVerified:false,attendanceRegistered:false,requiresHumanReview:true,provider:'openai',providerModel:model}:failure('AUDIO_TRANSCRIPTION_UNCONFIRMED');
   }catch{return failure('AUDIO_REQUEST_UNCONFIRMED');}

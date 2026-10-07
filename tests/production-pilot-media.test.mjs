@@ -55,7 +55,7 @@ test('biometric helper cannot fabricate a match or liveness even with a vision k
 for(const [mime,suffix] of [['audio/ogg; codecs=opus','.ogg'],['audio/mpeg','.mp3'],['audio/mp4','.m4a'],['audio/wav','.wav'],['audio/webm','.webm']])
  test('transcription file type is preserved '+mime,async()=>{
   const {client,calls}=harness({audio:true,raw:{text:'Faltan dos bolsas de cemento.'}});const result=await client.transcribeAudio({buffer:Buffer.from('synthetic audio'),mimeType:mime});
-  assert.equal(result.success,true);assert.equal(result.speakerVerified,false);assert.equal(result.attendanceRegistered,false);assert.ok(calls[0].options.body.get('file').name.endsWith(suffix));assert.equal(calls[0].options.body.get('language'),'es');
+  assert.equal(result.success,true);assert.equal(result.speakerVerified,false);assert.equal(result.attendanceRegistered,false);assert.ok(calls[0].options.body.get('file').name.endsWith(suffix));assert.deepEqual(calls[0].options.body.getAll('languages[]'),['es']);assert.equal(calls[0].options.body.has('language'),false);
  });
 for(const input of [{buffer:Buffer.alloc(0)},{buffer:'not bytes'},{buffer:new Uint8Array(16*1024*1024+1)},{buffer:Buffer.from('x'),mimeType:'video/executable'}])
  test('invalid audio refused without provider calls '+String(input.mimeType||typeof input.buffer),async()=>{const {client,calls}=harness();assert.equal((await client.transcribeAudio(input)).success,false);assert.equal(calls.length,0);});
@@ -121,4 +121,9 @@ test('configured transcription model is explicit and invalid configuration fails
 });
 test('an explicitly undetected language cannot turn provider text into confirmed speech',async()=>{
  const result=await harness({audio:true,raw:{text:'Potential silence hallucination.',languages:[]}}).client.transcribeAudio({buffer:Buffer.from('unit')});assert.equal(result.success,false);assert.equal(result.code,'AUDIO_TRANSCRIPTION_UNCONFIRMED');
+});
+for(const [model,key]of [['gpt-transcribe','languages[]'],['gpt-transcribe-fixture-variant','languages[]'],['whisper-1','language'],['gpt-4o-transcribe','language'],['gpt-4o-mini-transcribe','language']])test('transcription context has exactly one family-specific language field: '+model,async()=>{
+ let sent;const analyzer=createPilotMediaAnalyzer({environment:()=>({...env,OPENAI_TRANSCRIPTION_MODEL:model}),fetchImpl:async(_url,{body})=>{sent=body;return Response.json({text:'Nota sintética.',languages:[{code:'es'}]});}});
+ assert.equal((await analyzer.transcribeAudio({buffer:Buffer.from('synthetic fixture'),mimeType:'audio/wav',language:'es'})).success,true);
+ assert.deepEqual([...sent.keys()].sort(),['file','model',key,'response_format','prompt'].sort());assert.deepEqual(sent.getAll(key),['es']);assert.equal(sent.has(key==='language'?'languages[]':'language'),false);assert.equal(sent.get('model'),model);assert.match(sent.get('prompt'),/Notas de obra en Argentina/);
 });
