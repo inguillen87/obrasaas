@@ -17,8 +17,14 @@ export function createParticipantHandlers({verify,store,join=false}){
   }
   if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
   if(join){if(params.size!==1||params.getAll('invitationId').length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return reply(await store.join(session,{invitationId:params.get('invitationId')}));}
-  for(const key of params.keys())if(!['projectId','scope','after','operationId','workerId','imageId'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+  for(const key of params.keys())if(!['projectId','scope','after','operationId','workerId','imageId','detail','action'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
   const context={projectId:params.get('projectId'),scope:params.get('scope')};if(!workspaceId(context.projectId)||!/^[a-f0-9]{64}$/.test(context.scope||''))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+  if(params.has('detail')||params.has('action')){
+   const checking=params.has('operationId'),keys=checking?['projectId','scope','detail','workerId','operationId','action']:['projectId','scope','detail','workerId'];
+   if(params.get('detail')!=='private-bank-account'||params.size!==keys.length||keys.some(key=>!params.has(key))||!workspaceId(params.get('workerId'))||checking&&!operationId(params.get('operationId')))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+   const input={...context,workerId:params.get('workerId'),...(checking?{operationId:params.get('operationId').toLowerCase(),action:params.get('action')}:{})};
+   return reply(checking?await store.privateBankStatus(session,input):await store.privateBankRead(session,input));
+  }
   if(params.has('imageId')||params.has('workerId')){if(params.has('operationId')||params.has('after')||params.size!==4)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');const value=await store.downloadKyc(session,{...context,workerId:params.get('workerId'),imageId:params.get('imageId')});return new Response(value.bytes,{headers:{...headers,'Content-Type':value.contentType,'Content-Disposition':'attachment; filename="identity-review.'+(value.contentType==='image/png'?'png':value.contentType==='image/webp'?'webp':'jpg')+'"'}});}
   if(params.has('operationId')){if(params.has('after')||!operationId(params.get('operationId')))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return reply(await store.status(session,{...context,operationId:params.get('operationId')}));}
   return reply(await store.read(session,{...context,after:params.get('after')}));

@@ -1,4 +1,5 @@
 import {createBrowserRecoveryStorage} from './workspace-recovery-storage.mjs';
+import {PRIVATE_BANK_ACTIONS,validatePrivateBankOutcome} from './private-bank-account-format.mjs';
 import {purchaseOutcome} from './site-purchase-view.mjs';
 import {companyChannelOutcome,COMPANY_CHANNEL_ACTIONS} from './company-channel-view.mjs';
 
@@ -46,6 +47,9 @@ function reference(url, options, now) {
   // invitation's receipt; it never creates a second invitation.
   if(resource==='participants'&&body.action==='RECOVER_INVITATION')return null;
   if(resource==='meta-onboarding'&&(body.action==='reconcile'?(!uuid(body.signupId)||!Number.isSafeInteger(body.expectedCompanyPhoneRevision)||body.expectedCompanyPhoneRevision<1||body.confirmCompanyPhoneRevision!==true):(!['review_inbox','process_inbox'].includes(body.action)||!id(body.eventId))))return null;
+  const bank=resource==='participants'&&(PRIVATE_BANK_ACTIONS.includes(body.action)||body.action==='CANCEL_PENDING_PRIVATE_BANK_ACCOUNT');
+  const bankAction=body.action==='CANCEL_PENDING_PRIVATE_BANK_ACCOUNT'?body.payload?.originalAction:body.action;
+  if(bank&&(!PRIVATE_BANK_ACTIONS.includes(bankAction)||!id(body.payload?.workerId)))throw unavailable();
   const progress=resource==='template-send'&&body.templateKey===PROGRESS_TEMPLATE_SEND_KEY;
   const overtime=resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(body.action);
   if(progress&&(!id(body.workerId)||!templateSendActionReference(body.actionReference)))throw unavailable();
@@ -55,6 +59,7 @@ function reference(url, options, now) {
     ...(resource==='company-channel'?{action:body.action,connectionId:body.payload.connectionId}:{}),
     ...(resource==='meta-onboarding'?{action:body.action,...(body.action==='reconcile'?{signupId:body.signupId}:{eventId:body.eventId})}:{}),
     ...(overtime?{action:body.action}:{}),
+    ...(bank?{action:bankAction,workerId:body.payload.workerId}:{}),
     ...(progress?{templateKey:PROGRESS_TEMPLATE_SEND_KEY,workerId:body.workerId,actionReference:{proposalId:body.actionReference.proposalId,revision:body.actionReference.revision}}:{}),
   };
 }
@@ -62,12 +67,14 @@ function valid(entry) {
   if(!entry||entry.version!==1||!Object.hasOwn(RECOVERY_RESOURCES,entry.resource)||!scopeValid(entry.scope)||!id(entry.projectId)||!uuid(entry.operationId)||!Number.isSafeInteger(entry.createdAt)||entry.createdAt<0)return false;
   const progress=entry.resource==='template-send'&&entry.templateKey===PROGRESS_TEMPLATE_SEND_KEY;
   const overtime=entry.resource==='field-operations'&&entry.action!==undefined;
-  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',entry.action==='reconcile'?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(progress?['templateKey','workerId','actionReference']:[])];
+  const bank=entry.resource==='participants'&&entry.action!==undefined;
+  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',entry.action==='reconcile'?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(bank?['action','workerId']:[]),...(progress?['templateKey','workerId','actionReference']:[])];
   if(Object.keys(entry).sort().join('|')!==fields.sort().join('|'))return false;
   if(entry.resource==='company-onboarding'&&(entry.action!=='declare_company_phone'||!id(entry.expectedClerkOrganizationId)))return false;
   if(entry.resource==='company-channel'&&(!COMPANY_CHANNEL_ACTIONS.includes(entry.action)||!id(entry.connectionId)))return false;
   if(progress&&(!id(entry.workerId)||!templateSendActionReference(entry.actionReference)))return false;
   if(overtime&&!FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action))return false;
+  if(bank&&(!PRIVATE_BANK_ACTIONS.includes(entry.action)||!id(entry.workerId)))return false;
   return (entry.resource!=='site-photo'||id(entry.reportId))&&(entry.resource!=='meta-onboarding'||(entry.action==='reconcile'?uuid(entry.signupId):['review_inbox','process_inbox'].includes(entry.action)&&id(entry.eventId)));
 }
 const keyOf=entry=>prefix+entry.scope+'.'+entry.resource+'.'+entry.operationId;
@@ -83,12 +90,14 @@ export function validateWorkspaceRecoveryStoredEntry(key,raw) {
 export function recoveryQuery(entry) {
   if(!valid(entry))throw new TypeError('Invalid receipt reference');
   return '/api/identity/'+entry.resource+'?'+new URLSearchParams({projectId:entry.projectId,scope:entry.scope,operationId:entry.operationId,
+    ...(entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(entry.action)?{detail:'private-bank-account',workerId:entry.workerId,action:entry.action}:{}),
     ...(entry.resource==='company-onboarding'?{action:entry.action,expectedClerkOrganizationId:entry.expectedClerkOrganizationId}:{}),
     ...(entry.resource==='site-photo'?{reportId:entry.reportId}:{}),...(entry.resource==='meta-onboarding'?{action:entry.action,...(entry.action==='reconcile'?{signupId:entry.signupId}:{eventId:entry.eventId})}:{})});
 }
 export function recoveryResult(entry, result) {
   if(!valid(entry)||result?.scope!==entry.scope)return null;
   if(result.projectId!==undefined&&result.projectId!==entry.projectId)return null;
+  if(entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(entry.action)){try{validatePrivateBankOutcome(result,entry);return {state:result.state,...(result.receipt?{receiptId:result.receipt.id}:{})};}catch{return null;}}
   if(entry.resource==='company-onboarding'){
     if(result.projectId!==entry.projectId||result.operationId!==entry.operationId||result.action!==entry.action||result.expectedClerkOrganizationId!==entry.expectedClerkOrganizationId)return null;
     if(result.state==='RECORDED'&&result.saved===true&&/^company_phone_[a-f0-9]{64}$/.test(result.receipt?.id||'')&&Number.isSafeInteger(result.receipt.savedRevision)&&result.receipt.savedRevision>=1&&typeof result.savedDeclarationIsCurrent==='boolean'&&id(result.organizationId)&&result.currentCompany?.organizationId===result.organizationId&&result.currentCompany?.expectedClerkOrganizationId===entry.expectedClerkOrganizationId)return {state:'RECORDED',receiptId:result.receipt.id};
@@ -263,7 +272,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       if(!ticket)return;
       if(error){
         const rejected=ticket.entry.resource==='plan-import'&&recoveryResult(ticket.entry,error.result)?.state==='REJECTED'&&error.code===error.result.code&&error.status===({PLAN_IMPORT_FILE_INVALID:400,PLAN_IMPORT_FILE_TOO_LARGE:413})[error.code];
-        if(!ticket.existed&&(error.requestDispatched===false||rejected||!['plan-import','company-channel','company-onboarding'].includes(ticket.entry.resource)&&!(ticket.entry.resource==='meta-onboarding'&&ticket.entry.action==='reconcile')&&error.status>=400&&error.status<500))await remove(ticket.entry);return;
+        if(!ticket.existed&&(error.requestDispatched===false||rejected||!['plan-import','company-channel','company-onboarding'].includes(ticket.entry.resource)&&!(ticket.entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(ticket.entry.action))&&!(ticket.entry.resource==='meta-onboarding'&&ticket.entry.action==='reconcile')&&error.status>=400&&error.status<500))await remove(ticket.entry);return;
       }
       const entry=ticket.entry;
       // A general Meta snapshot is not a receipt for this operation.
@@ -271,6 +280,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       if(entry.resource==='template-send'){if(['ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='site-purchases'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='constructor-crm'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
+      if(entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(entry.action)){if(['RECORDED','REJECTED','CANCELLED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='company-onboarding'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='company-channel'){if(['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='plan-import'){const outcome=recoveryResult(entry,result);if(outcome?.state==='RECORDED'||outcome?.state==='REJECTED'&&!ticket.existed)await remove(entry);return;}
@@ -288,7 +298,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       const outcome=recoveryResult(entry,result);
       // A pre-reservation POST rejection cannot settle an earlier attempt via GET.
       if(entry.resource==='plan-import'&&outcome?.state==='REJECTED')return;
-      if(['RECORDED','EXPIRED','EVENT_PROCESSED','PARTICIPATION_REVOKED','ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(outcome?.state))await remove(entry);
+      if(['RECORDED','EXPIRED','EVENT_PROCESSED','PARTICIPATION_REVOKED','ACCEPTED','STATUS_OBSERVED','REJECTED','CANCELLED'].includes(outcome?.state))await remove(entry);
     },
   };
   return api;

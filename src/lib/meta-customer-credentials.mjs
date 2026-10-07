@@ -1,4 +1,4 @@
-import {createCipheriv,createDecipheriv,randomBytes,createHash} from 'node:crypto';
+import {createCipheriv,createDecipheriv,randomBytes,createHash,createHmac,hkdfSync} from 'node:crypto';
 import {WorkspaceError} from './workspace-policy.mjs';
 
 // Enterprise AES-256-GCM credential format, strengthened with tenant/asset AAD.
@@ -24,3 +24,10 @@ export function decryptCustomerSecret(value,context,environment=process.env){
  }catch{throw new WorkspaceError('META_CUSTOMER_CREDENTIAL_SCOPE_REJECTED',409);}
 }
 export const customerSecretDigest=value=>createHash('sha256').update(value).digest('hex');
+
+// A contextual commitment protects low-entropy private declarations in receipts.
+export function customerContextCommitment(value,context,environment=process.env){
+ if(typeof value!=='string'||value.length>262144)throw new WorkspaceError('META_CUSTOMER_SECRET_INVALID');
+ const derived=hkdfSync('sha256',key(environment),aad(context),Buffer.from('obrasaas-private-commitment-v1'),32);
+ return createHmac('sha256',derived).update(value,'utf8').digest('hex');
+}

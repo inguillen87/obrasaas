@@ -2,6 +2,8 @@ import {randomUUID,createHash} from 'node:crypto';
 import {WorkspaceError,workspaceId,operationId,digest,requireWorkspaceIdentity,WORKSPACE_ROLES} from './workspace-policy.mjs';
 import {participantManager,participantCommand,participantContext,participantKycInput,participantReceiptId,PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION,assertOwnParticipant,participantKeys,OFFICE_ROLES} from './participant-policy.mjs';
 import {invalidateWorkerChannelIdentity} from './worker-channel-identity.mjs';
+import {PRIVATE_BANK_ACTIONS} from './participant-bank-format.mjs';
+import {PRIVATE_BANK_RECEIPT_KIND,readPrivateBankAccount,privateBankStatus,savePrivateBankAccount} from './participant-bank-account.mjs';
 import {normalizeDniExtraction} from './pilot-media.mjs';
 import {adoptParticipantChannelKyc} from './participant-channel-kyc.mjs';
 const columns=`id,name,active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
@@ -26,7 +28,7 @@ async function ownKycReplayOutcome(client,member,session,input,found,fingerprint
 }
 function requireManager(member){if(!participantManager(member.role))throw new WorkspaceError('PARTICIPANT_MANAGE_REQUIRED',403);}
 function matchProvider(invitation,result){if(!result||result.invitationId!==invitation.id||result.email!==invitation.email||result.role!=='org:member'||!/^orginv_[A-Za-z0-9]+$/.test(result.id||'')||!['pending','accepted'].includes(result.state)||!Number.isFinite(Date.parse(result.expiresAt)))throw new WorkspaceError('PARTICIPANT_INVITATION_UNCONFIRMED',503);}
-export function createParticipantStore({workspace,connect,identity,upload,get,analyzer,prepareKycChat,assessBiometrics}){
+export function createParticipantStore({workspace,connect,identity,upload,get,analyzer,prepareKycChat,assessBiometrics,environment=process.env}){
  const run=(session,input,writable,callback)=>workspace.projectOperation(session,input,writable,callback);
  const organizationRun=(session,input,writable,callback)=>workspace.organizationOperation(session,input,writable,callback);
  async function privateKycBytes(image){
@@ -171,7 +173,11 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
    const accounts=member.role==='ADMIN'?(await client.query(`SELECT ${accountColumns} FROM public."TenantMembership" tm JOIN public."PlatformUser" u ON u.id=tm."userId" WHERE tm."organizationId"=$1 AND tm.status='ACTIVE' ORDER BY tm.id LIMIT 101`,[member.organizationId])).rows:[];
     return {scope,projectId:context.projectId,canManage:manage,canInvite:member.role==='ADMIN'&&session.organizationRole==='org:admin',canManageOfficeRoles:member.role==='ADMIN',officeRoles:OFFICE_ROLES,existingAccounts:accounts.slice(0,100).map(row=>publicAccount(row,member.actorId)),existingAccountsTruncated:accounts.length>100,records:records.slice(0,100).map(row=>publicParticipant(row,row.metadata?.participant?.clerkUserId===session.userId,manage)),nextCursor:records.length>100?records[99].id:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE,sha256:digest(PARTICIPANT_NOTICE)},externalOcrNotice:{version:PARTICIPANT_OCR_NOTICE_VERSION,text:PARTICIPANT_OCR_NOTICE},privateBiometricNotice:{version:PARTICIPANT_BIOMETRIC_NOTICE_VERSION,text:PARTICIPANT_BIOMETRIC_NOTICE},noAutomaticKycApproval:true};
   });},
-  async save(session,body){const input=participantCommand(body),requestDigest=digest(input),context={projectId:input.projectId,scope:input.scope},p=input.payload;
+  privateBankRead(session,input){participantContext(input);return run(session,input,false,(client,member,scope)=>readPrivateBankAccount(client,member,session,input,scope,{environment}));},
+  privateBankStatus(session,input){participantContext(input);return run(session,input,false,(client,member,scope)=>privateBankStatus(client,member,session,input,scope));},
+  async save(session,body){const input=participantCommand(body),context={projectId:input.projectId,scope:input.scope},p=input.payload;
+   if(PRIVATE_BANK_ACTIONS.includes(input.action)||input.action==='CANCEL_PENDING_PRIVATE_BANK_ACCOUNT')return run(session,context,true,(client,member,scope)=>savePrivateBankAccount(client,member,session,input,scope,{environment}));
+   const requestDigest=digest(input);
    if(input.action==='SET_OFFICE_ROLE')return setOfficeRole(session,input,requestDigest);
    if(input.action==='PROCESS_KYC')return processKyc(session,input);
    if(input.action==='PREPARE_KYC_CHAT')return run(session,input,true,async(client,member,scope,project)=>{
@@ -247,6 +253,7 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
   status(session,context){participantContext(context);if(!operationId(context.operationId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return run(session,context,false,async(client,member,scope)=>{
    const found=await receipt(client,member,participantReceiptId(member.actorId,context.projectId,context.operationId));if(found){
     if(found.metadata?.projectId!==context.projectId)throw new WorkspaceError('PARTICIPANT_RECEIPT_INVALID',409);
+    if(found.metadata.kind===PRIVATE_BANK_RECEIPT_KIND)return privateBankStatus(client,member,session,{...context,operationId:context.operationId.toLowerCase(),workerId:found.entityId,action:found.metadata.bankAction},scope);
      if(found.metadata.kind==='PROCESS_KYC')return {scope,state:'RECORDED',...await ocrOutcome(client,member,session,{...context,workerId:found.entityId,submissionId:found.metadata.submissionId},found)};
      if(found.metadata.kind==='PREPARE_KYC_CHAT'){requireManager(member);const row=await worker(client,context.projectId,found.entityId);if(!row.active||!['INVITED','ACTIVE'].includes(row.metadata?.participant?.status))throw new WorkspaceError('PARTICIPANT_ACCESS_REQUIRED',403);return {scope,state:'RECORDED',...await currentOutcome(client,context.projectId,found,true),kind:'PREPARE_KYC_CHAT',codeUnavailable:true,expiresAt:found.metadata.expiresAt};}
     if(found.entityType==='TenantMembership'&&found.metadata.kind==='OFFICE_ROLE_CHANGED'){if(member.role!=='ADMIN')throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);}
