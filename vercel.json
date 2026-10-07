@@ -10,6 +10,7 @@
   "crons": [{"path":"/api/meta/customer-process","schedule":"*/5 * * * *"}],
   "git": {
     "deploymentEnabled": {
+      "fix/plan-upload-rejection-20261007": false,
       "feat/whatsapp-onboarding-delivery-20261007": false,
       "feat/pilot-operational-continuity-20261007": false,
       "hotfix/*": false,
