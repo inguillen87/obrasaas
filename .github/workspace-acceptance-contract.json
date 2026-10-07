@@ -1325,7 +1325,7 @@
       "blockId": 53,
       "lane": "contracts",
       "sourceLine": 57,
-      "producerSha256": "82dc14261a7e8a8ed58238076b956b4516371a66f302634a971027ec47e0ee20",
+      "producerSha256": "7066bea65970f0a8e959af59cb9ef7ded715b259aab9d58f3eeb7e2a514a736a",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     },
     {
@@ -1395,7 +1395,7 @@
       "blockId": 57,
       "lane": "people",
       "sourceLine": 139,
-      "producerSha256": "9570ad78bb0a4c8a65ee5360624461c3aa49550a9152e27adce8a94ea520e86c",
+      "producerSha256": "ca2aa4d683d9e2aa61557497354bb772fba96b0b9ba496262da73ccbb473ffd5",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     },
     {
@@ -1473,7 +1473,7 @@
         "path": ".vercel/participant-bank-intake-contract-evidence/proof.json",
         "kind": "UNIT",
         "producer": "scripts/verify-participant-bank-intake-contracts.mjs",
-        "producerSha256": "82dc14261a7e8a8ed58238076b956b4516371a66f302634a971027ec47e0ee20",
+        "producerSha256": "7066bea65970f0a8e959af59cb9ef7ded715b259aab9d58f3eeb7e2a514a736a",
         "sourceFiles": [
           "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
           "src/app/(identity)/cuenta/company-channel-view.mjs",
@@ -2006,7 +2006,7 @@
         "path": ".vercel/company-kyc-evidence/postgres.json",
         "kind": "PG_COMPANY_KYC",
         "producer": "scripts/verify-company-channel-kyc-postgres.mjs",
-        "producerSha256": "9570ad78bb0a4c8a65ee5360624461c3aa49550a9152e27adce8a94ea520e86c",
+        "producerSha256": "ca2aa4d683d9e2aa61557497354bb772fba96b0b9ba496262da73ccbb473ffd5",
         "sourceFiles": [
           "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
           "src/lib/afipValidator.js",
@@ -2176,7 +2176,11 @@
           "A-source-and-secret-AAD-with-B-capture-one-submission-two-private-images-and-lost-commit-recovery",
           "canonical-Clerk-invitation-acceptance-adopts-original-capture-other-reviewer-and-own-signed-VINCULAR",
           "canonical-current-revocation-denies-new-corporate-field-use-with-no-IO-or-business-write",
-          "canonical-acceptance-before-original-IDENTIDAD-keeps-TTL-and-unit-once-own-capture-distinct-review-and-VINCULAR"
+          "canonical-acceptance-before-original-IDENTIDAD-keeps-TTL-and-unit-once-own-capture-distinct-review-and-VINCULAR",
+          "schema2-corporate-dorso-consent-and-three-images-require-immutable-A-source-B-target-with-no-FIELD-or-auto-grants",
+          "schema2-corporate-incomplete-receipt-denies-and-lost-ACK-recovers-before-second-Graph-CDN-Blob",
+          "schema2-corporate-canonical-Clerk-claim-adopts-three-original-images-and-private-back-download-before-distinct-human-review",
+          "schema2-corporate-revocation-denies-private-dorso-with-original-capture-receipt-immutable"
         ]
       },
       {

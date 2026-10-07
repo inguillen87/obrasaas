@@ -20,10 +20,10 @@ export const EXPECTED_SUITE_COUNTS=Object.freeze({
  'tests/production-employee-intake.test.mjs':65,
  'tests/production-employee-intake-recovery.test.mjs':4,
  'tests/production-participant-bank-intake-recovery.test.mjs':7,
- 'tests/production-company-channel-kyc.test.mjs':76,
- 'tests/production-participant-onboarding-next-step.test.mjs':35
+ 'tests/production-company-channel-kyc.test.mjs':80,
+ 'tests/production-participant-onboarding-next-step.test.mjs':37
 });
-export const EXPECTED_TOTAL_TESTS=218;
+export const EXPECTED_TOTAL_TESTS=224;
 export const RECOVERY_CASES=[
  ...['bank','intake'].flatMap(kind=>['lost-response','http403'].map(failure=>kind+' '+failure+' persists its typed reference across reload and rejects the sibling receipt before exact GET recovery')),
  ...['bank','intake'].map(kind=>kind+' nonterminal and cross-context responses retain unknown and never use the generic participant fallback'),

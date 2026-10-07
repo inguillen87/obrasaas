@@ -8,18 +8,18 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='98c177604a2842e6b3df0758089f9687ff7413a3deb943e2ff8ff76bc4beadec';
+export const EXPECTED_CONTRACT_SHA256='819844fc653f5866d95de2fca0091d9969b76e11c85987ff3231e357cc797e9d';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
 const BASELINE_PRODUCERS_SHA256='07d0016608332c0775f86bee6d005e60d4686d2ffe33a3065dfd9fd8e974ab20';
 const PREPARATION_BASELINE_BLOCKS_SHA256='8faaf5e69185f49da4c797d21613c7a34705be074fa3890398be37a8559ca409';
 const PREPARATION_BASELINE_OWNERSHIP_SHA256='d98be6976ef7772633f5e8697fef3786855199e60dd0d522dc392b01097d602f';
-const PREPARATION_BASELINE_PRODUCERS_SHA256='da40d5dff77ff5c436d7e4a6a6b48da90197bced44dc113eebcf0f14c2468c88';
+const PREPARATION_BASELINE_PRODUCERS_SHA256='a314f2640330bd4bc0615e0b13a7393dc8f8e8d94d4cdb74a728a1785d31a9c8';
 const PREPARATION_ARTIFACTS=['.vercel/private/project-preparation-postgres-validation.json','.vercel/private/project-preparation-ui-*.json','.vercel/private/project-preparation-ui-*.png'];
 const PREPARATION_MODES=['save','recover','reload','cancel','conflict','denied'];
 const PORTFOLIO_BASELINE_BLOCKS_SHA256='fdb9d500f6e96981887bc1f7e74d55875c870239c198296466d4a362f63d68d7';
 const PORTFOLIO_BASELINE_OWNERSHIP_SHA256='81608969b6edbf08690ea31011d6c526f65bfae91468933e496f0cc52be5fab4';
-const PORTFOLIO_BASELINE_PRODUCERS_SHA256='50711f4c69686d081e8a3b3fa6bdb764f4f447cbb79c1e92574b7d2f902fd37b';
+const PORTFOLIO_BASELINE_PRODUCERS_SHA256='f727810f0b923c95623fab858aa72da8ecccb21edded6278b972872aeb7a411e';
 const PORTFOLIO_BLOCK_DIGEST='87166cb8289ff7e7380bdb6b1954746b65c26a1955d4b3985f312c7fdeccf8f0';
 const PORTFOLIO_ARTIFACTS=['.vercel/portfolio-overview-contract-evidence/','.vercel/private/portfolio-overview-ui-validation.json','.vercel/private/portfolio-*.png'];
 const PORTFOLIO_MODES=['success','pagination','503','401','403','409','503-html','401-html','403-html','409-html','invalid-json','wrong-scope','wrong-role','stale','unmount','locked','dark'];
@@ -68,7 +68,7 @@ function manifestDigest(references){return hash(canonical([...references].sort((
 function expectedSourceDigest(spec,readSource){if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');return manifestDigest(spec.sourceFiles.map(file=>{const bytes=readSource(file);if(!Buffer.isBuffer(bytes))deny('PROOF_SOURCE_BYTES');return {path:file,sha256:hash(bytes)};}));}
 const utf8=bytes=>{if(!Buffer.isBuffer(bytes))deny('PROOF_BYTES');const text=bytes.toString('utf8');if(!bytes.equals(Buffer.from(text)))deny('PROOF_ENCODING');return text;};
 function matrix(rows,widths,modes){if(!Array.isArray(rows))deny('PROOF_MATRIX');const keys=rows.map(row=>row&&row.width+':'+row.mode);equal(keys.toSorted(),widths.flatMap(width=>modes.map(mode=>width+':'+mode)).toSorted(),'PROOF_MATRIX');}
-function summary(spec){return spec.kind==='PORTFOLIO_UNIT'?PORTFOLIO_TESTS:spec.kind==='UI_PORTFOLIO'?4*PORTFOLIO_MODES.length:spec.kind==='PG_PORTFOLIO'?spec.checkNames.length:spec.kind==='PG_PREPARATION'?spec.checkNames.length:spec.kind==='UI_PREPARATION'?4*PREPARATION_MODES.length:spec.kind==='UNIT'?{suites:7,tests:EXPECTED_TOTAL_TESTS,recovery:7,corporateKyc:76,nextSteps:35}:spec.kind==='PG_COMPANY_KYC'?6:spec.kind==='UI_CAUSAL'?0:spec.kind==='UI_JOINT'?8:spec.kind.startsWith('UI_')?32:spec.kind==='PG_BANK'?10:8;}
+function summary(spec){return spec.kind==='PORTFOLIO_UNIT'?PORTFOLIO_TESTS:spec.kind==='UI_PORTFOLIO'?4*PORTFOLIO_MODES.length:spec.kind==='PG_PORTFOLIO'?spec.checkNames.length:spec.kind==='PG_PREPARATION'?spec.checkNames.length:spec.kind==='UI_PREPARATION'?4*PREPARATION_MODES.length:spec.kind==='UNIT'?{suites:7,tests:EXPECTED_TOTAL_TESTS,recovery:7,corporateKyc:EXPECTED_SUITE_COUNTS['tests/production-company-channel-kyc.test.mjs'],nextSteps:EXPECTED_SUITE_COUNTS['tests/production-participant-onboarding-next-step.test.mjs']}:spec.kind==='PG_COMPANY_KYC'?spec.checkNames.length:spec.kind==='UI_CAUSAL'?0:spec.kind==='UI_JOINT'?8:spec.kind.startsWith('UI_')?32:spec.kind==='PG_BANK'?10:8;}
 function validateExtension(contract){
  const extension=contract.extension;exactKeys(extension,['baseHead','baselineBlocksSha256','baselineOwnershipSha256','baselineProducersSha256','proofs'],'EXTENSION_SHAPE');
  if(extension.baseHead!=='a4b79d7a7f75427ed1d0b0e1e9b247e1188adf3f')deny('EXTENSION_BASE');
@@ -177,7 +177,7 @@ function currentProducerSourceFiles(spec,root){
  const files=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?files(relative+'/'+entry.name):[relative+'/'+entry.name]);
  return [...files('src/lib'),'scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs'].sort();
 }
-function extensionSelftest(contract,root){
+function extensionSelftest(contract,root,currentCompanyChecks=[]){
  const checks=[],discoveryChecks=[],videoChecks=[],preparationChecks=[],preparationProofChecks=[],expectedHead=contract.extension.baseHead;
  const discoveryBackend=['src/lib/participant-account-discovery.mjs'],discoveryUi=['src/app/(identity)/cuenta/participant-account-discovery-format.mjs','src/app/(identity)/cuenta/participant-account-discovery.js'];
  const discoveryDependenciesFor=kind=>kind==='UI_INTAKE'?discoveryUi:['UI_BANK','UI_JOINT','UI_CAUSAL'].includes(kind)?[...discoveryBackend,...discoveryUi]:discoveryBackend;
@@ -217,11 +217,28 @@ function extensionSelftest(contract,root){
   if(spec.kind==='UI_JOINT'){mutate('dirty-tracked','PROOF_SOURCE_STATE',p=>{p.trackedClean=false;});mutate('uncommitted-source','PROOF_SOURCE_STATE',p=>{p.sourceState='uncommitted';});mutate('null-head','PROOF_SOURCE_HEAD',p=>{p.sourceRevision=null;});for(const key of ['parentAndSiblingBlocked','ownRecoveryAndLocalCloseEnabled','noFeedbackDeadlock','storagePrivate'])mutate('missing-'+key,'PROOF_JOINT_GUARDS',p=>{p.checks[0][key]=false;});mutate('auto-post','PROOF_JOINT_GUARDS',p=>{p.checks[0].automaticPost=true;});}
   if(spec.kind==='UI_CAUSAL'){mutate('wrong-stage','PROOF_CAUSAL_FAILURE',p=>{p.causalFailure.stage='unrelated';});mutate('runtime-mutated','PROOF_CAUSAL_TRANSFORM',p=>{p.badTransform.runtimeSourceEdited=true;});mutate('wrong-fixture-hash','PROOF_CAUSAL_TRANSFORM',p=>{p.badTransform.fixtureSha256='f'.repeat(64);});}
   if(spec.kind==='UNIT'){mutate('missing-suite','PROOF_UNIT_SUITES',p=>{p.suites.pop();});mutate('changed-tap-digest','PROOF_TAP_DIGEST',p=>{p.suites[4].tap.sha256='f'.repeat(64);});for(const names of [RECOVERY_CASES.slice(0,6),[...RECOVERY_CASES,'extra shadow case'],[...RECOVERY_CASES.slice(0,6),'wrong case']]){const bytes=tap(names),filename=proof.suites[4].tap.path,original=evidence.get(filename);evidence.set(filename,bytes);mutate('recovery-exact7-'+names.length+'-'+names.at(-1),'PROOF_UNIT_RESULTS',p=>{p.suites[4].tap={path:filename,bytes:bytes.length,sha256:hash(bytes)};});evidence.set(filename,original);}for(const key of ['fail','cancelled','skipped','todo']){const filename=proof.suites[4].tap.path,original=evidence.get(filename),bytes=Buffer.from(original.toString().replace('# '+key+' 0','# '+key+' 1'));evidence.set(filename,bytes);mutate('recovery-'+key,'PROOF_UNIT_RESULTS',p=>{p.suites[4].tap={path:filename,bytes:bytes.length,sha256:hash(bytes)};});evidence.set(filename,original);}}
-  if(spec.kind==='UNIT')for(const [file,count] of Object.entries(EXPECTED_SUITE_COUNTS)){
+  const historicalSuiteCounts={...EXPECTED_SUITE_COUNTS,'tests/production-company-channel-kyc.test.mjs':76,'tests/production-participant-onboarding-next-step.test.mjs':35};
+  if(spec.kind==='UNIT')for(const [file,count] of Object.entries(historicalSuiteCounts)){
    const index=TEST_SUITES.indexOf(file),filename=proof.suites[index].tap.path,original=evidence.get(filename);
    for(const size of [count-1,count+1]){const bytes=tap(Array.from({length:size},(_,i)=>'shadow exact suite '+i));evidence.set(filename,bytes);mutate('exact-suite-count-'+file+'-'+size,'PROOF_UNIT_RESULTS',p=>{p.suites[index]={file,exitCode:0,...parseTap(bytes),tap:{path:filename,bytes:bytes.length,sha256:hash(bytes)}};});}
    evidence.set(filename,original);
   }
+  // Append current schema2 controls after the entire historical and portfolio sequence.
+  if(spec.kind==='UNIT')currentCompanyChecks.push(()=>{
+   const start=checks.length;
+   for(const [file,previous] of [['tests/production-company-channel-kyc.test.mjs',76],['tests/production-participant-onboarding-next-step.test.mjs',35]]){
+    const count=EXPECTED_SUITE_COUNTS[file],index=TEST_SUITES.indexOf(file),filename=proof.suites[index].tap.path,original=evidence.get(filename);
+    for(const size of [previous,count-1,count+1]){const bytes=tap(Array.from({length:size},(_,i)=>'current schema2 suite '+i));evidence.set(filename,bytes);mutate('current-suite-count-'+file+'-'+size,'PROOF_UNIT_RESULTS',p=>{p.suites[index]={file,exitCode:0,...parseTap(bytes),tap:{path:filename,bytes:bytes.length,sha256:hash(bytes)}};});}
+    evidence.set(filename,original);
+   }
+   return checks.splice(start);
+  });
+  if(spec.kind==='PG_COMPANY_KYC')currentCompanyChecks.push(()=>{
+   const start=checks.length;
+   good('company-kyc-postgres-current-ten-SQL-checks-exact',()=>{assert.equal(spec.checkNames.length,10);equal([...readFileSync(path.join(root,spec.producer),'utf8').matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),spec.checkNames,'PROOF_CHECK_NAMES');});
+   mutate('legacy-six-checks','PROOF_CHECK_NAMES',p=>{p.checks=spec.checkNames.slice(0,6);});
+   return checks.splice(start);
+  });
   if(['bank-intake-units','bank-ui','joint-ui','joint-causal','company-kyc-postgres'].includes(spec.id)){
    const allOnboardingDependencies=['src/lib/company-entitlement.mjs','src/lib/meta-customer-templates.mjs','src/lib/participant-onboarding-authority.mjs','src/lib/participant-onboarding-delivery.mjs','src/lib/participant-onboarding-intent.mjs','src/lib/participant-onboarding-policy.mjs','src/lib/whatsapp/template-review-policy.js'];
    const onboardingDependencies=spec.kind==='PG_COMPANY_KYC'?allOnboardingDependencies.filter(file=>!['src/lib/meta-customer-templates.mjs','src/lib/whatsapp/template-review-policy.js'].includes(file)):allOnboardingDependencies;
@@ -712,7 +729,7 @@ export function selftest(workflow,contract,root=process.cwd()){
   const freshFixture=mkdtempSync(path.join(parent,'ci-bank-intake-selftest-fixture-'));
   try{for(const spec of contract.extension.proofs.filter(spec=>!isPortfolio(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
   finally{const resolved=path.resolve(freshFixture);assert.ok(path.dirname(resolved)===path.resolve(parent)&&path.basename(resolved).startsWith('ci-bank-intake-selftest-fixture-'));rmSync(resolved,{recursive:true,force:true});}
-  checks.push(...extensionSelftest(contract,root));checks.push(...portfolioSelftest(workflow,contract,root));return checks;
+  const currentCompanyChecks=[];checks.push(...extensionSelftest(contract,root,currentCompanyChecks));checks.push(...portfolioSelftest(workflow,contract,root));for(const run of currentCompanyChecks)checks.push(...run());return checks;
 }
 function portfolioSelftest(workflow,contract,root){
  const checks=[],expectedHead=contract.extension.baseHead,specs=contract.extension.proofs.filter(isPortfolio);

@@ -88,6 +88,18 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
  const projectPreparationPending=useCallback(value=>setModulePending(old=>old.projectPreparation===value?old:{...old,projectPreparation:value}),[]);
  const projectPrepared=useCallback(result=>{setAccount(previous=>previous?.scope===result.scope?{...previous,projects:previous.projects.map(project=>project.id===result.projectId?{...project,name:result.name}:project)}:previous);setView(previous=>previous?.scope===result.scope&&previous.project.id===result.projectId?{...previous,project:{...previous.project,name:result.name}}:previous);},[]);
  const tasksChanged=useCallback(task=>{if(task?.id)setView(old=>old?{...old,tasks:old.tasks.map(t=>t.id===task.id?{...t,...task}:t)}:old);},[]);
+ const portfolioAccessRejected=useCallback(()=>{
+  if(!mounted.current)return;
+  controller.current?.abort();const current=++generation.current;
+  onboardingContext.current=null;setObservationEpoch(current);setChannelSnapshot(null);
+  setGuideUnavailable(true);setGuideReadFailed(true);setLoading(false);setSaving(false);
+  setAccount(null);setView(null);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);
+  // The transport journal retains unresolved receipt references. Clear the
+  // revoked view and its in-memory controls without deleting those references
+  // or resending a command; refresh and receipt recovery stay explicit.
+  setAttempt(null);setRetryAllowed(false);setTaskCreating(false);setModulePending({});
+  setNotice('Tu acceso cambió. Actualizá las obras antes de continuar.');
+ },[]);
  useEffect(()=>{
   const epoch=generation;mounted.current=true;const abort=new AbortController();controller.current=abort;const current=++epoch.current;setObservationEpoch(current);setChannelSnapshot(null);
   request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current){setAccount(data);setGuideUnavailable(false);setGuideReadFailed(false);}}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);if(guideAccessDenied(error))setGuideUnavailable(true);}}).finally(()=>{if(mounted.current&&current===generation.current){setLoading(false);setPlanReadback(null);}});
@@ -139,9 +151,9 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
   setView(previous=>({...previous,tasks:previous.tasks.map(task=>task.id===data.task.id?data.task:task)}));setReceipt(data.receipt);setAttempt(null);setRetryAllowed(false);setDraft(null);setNotice('Planificación guardada con recibo. El avance ejecutado no fue modificado.');
  }
  async function sendAttempt(payload,retrying=false){
-  const current=generation.current;
+  const current=generation.current,abort=new AbortController();controller.current=abort;
   setSaving(true);setNotice('');setAttempt(payload);setRetryAllowed(false);
-  try{const data=await request('',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.timeout(20000)});if(mounted.current&&current===generation.current)applySaved(data);}
+  try{const data=await request('',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.any([abort.signal,AbortSignal.timeout(20000)])});if(mounted.current&&current===generation.current)applySaved(data);}
   catch(error){if(mounted.current&&current===generation.current){if(guideAccessDenied(error))setGuideUnavailable(true);if(retrying){setRetryAllowed(error.requestDispatched===false);setNotice(error.message+' Conservamos el intento anterior; comprobá su recibo antes de modificar la planificación.');}else if(error.requestDispatched===false||(error.status&&error.status<500)){setAttempt(null);setNotice(error.message);}else setNotice('El servidor no confirmó el guardado. Conservamos este intento: comprobá el recibo antes de modificar o reenviar.');}}
   finally{if(mounted.current&&current===generation.current)setSaving(false);}
  }
@@ -153,8 +165,8 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
   if(saving||!attempt||!retryAllowed)return;await sendAttempt(attempt,true);
  }
  async function recover(){
-  if(saving||!attempt)return;const current=generation.current;setSaving(true);setRetryAllowed(false);
-  try{const data=await request(query({projectId:attempt.projectId,scope:attempt.scope,operationId:attempt.operationId}),{signal:AbortSignal.timeout(15000)});
+  if(saving||!attempt)return;const current=generation.current,abort=new AbortController();controller.current=abort;setSaving(true);setRetryAllowed(false);
+  try{const data=await request(query({projectId:attempt.projectId,scope:attempt.scope,operationId:attempt.operationId}),{signal:AbortSignal.any([abort.signal,AbortSignal.timeout(15000)])});
    if(mounted.current&&current===generation.current){if(data.scope!==account?.scope)throw new Error('La respuesta corresponde a otra organización.');if(data.state==='RECORDED')applySaved(data);else if(data.state==='NOT_OBSERVED'){setRetryAllowed(true);setNotice('No se observa un recibo todavía. Podés comprobar otra vez o reintentar exactamente la misma planificación; conservamos sus datos para evitar duplicados.');}else throw new Error('Todavía no se pudo comprobar el guardado. Conservamos el intento.');}
   }catch(error){if(mounted.current&&current===generation.current){if(guideAccessDenied(error))setGuideUnavailable(true);setNotice(error.message);}}finally{if(mounted.current&&current===generation.current)setSaving(false);}
  }
@@ -169,7 +181,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
    {!account.projects.length&&!loading&&<div className={styles.empty}><FolderKanban size={25} aria-hidden="true"/><strong>No hay obras activas asignadas a tu cuenta.</strong><p>Pedile al responsable que revise tu pertenencia y la obra asignada. Podés volver a actualizar cuando confirme el acceso.</p></div>}
    {account.projects.length>0&&<div className={styles.projectCollection}><div className={styles.collectionHeading}><h3>Obras disponibles</h3><span>{account.projects.length}{account.projectsTruncated?' mostradas':account.projects.length===1?' asignada':' asignadas'}</span></div><div className={styles.projects}>{account.projects.map(project=><button key={project.id} type="button" onClick={()=>open(project.id)} disabled={contextLocked} aria-pressed={view?.project.id===project.id}><span className={styles.projectName}><FolderKanban size={18} aria-hidden="true"/><span>{project.name}</span></span><small>{view?.project.id===project.id?<><Check size={14} aria-hidden="true"/>Seleccionada</>:<>Abrir obra<ArrowUpRight size={14} aria-hidden="true"/></>}</small></button>)}</div></div>}
    {account.projectsTruncated&&<p>Se muestran las primeras 100 obras autorizadas.</p>}
-   <PortfolioOverviewPanel key={`portfolio:${account.scope}`} scope={account.scope} role={account.role} getSessionToken={getSessionToken} locked={contextLocked||loading} onOpenProject={projectId=>open(projectId)} onAccessRejected={()=>{controller.current?.abort();generation.current++;setAccount(null);setView(null);setNotice('Tu acceso cambió. Actualizá las obras antes de continuar.');}}/>
+   <PortfolioOverviewPanel key={`portfolio:${account.scope}`} scope={account.scope} role={account.role} getSessionToken={getSessionToken} locked={contextLocked||loading} onOpenProject={projectId=>open(projectId)} onAccessRejected={portfolioAccessRejected}/>
    {account.projects.length>0&&!view&&!loading&&<div className={styles.startState}><strong>Abrí una obra para empezar</strong><p>Consultá el cronograma, registrá el trabajo y accedé a las herramientas disponibles para tu rol.</p></div>}
   </>}
   {view&&<div className={styles.workbench}><WorkspaceToolsNavigation role={account?.role} canManageIntegrations={account?.canManageIntegrations} canImportPlan={view.canPlanSchedule} pending={modulePending} schedulePending={saving||Boolean(attempt)||Boolean(draft)||creatingTask} scheduleEditing={Boolean(draft)}/><div className={styles.modules}>

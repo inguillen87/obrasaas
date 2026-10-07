@@ -8,11 +8,14 @@ La proyección incluye nombre, total de tareas, tareas completadas (estado DONE 
 
 La pantalla requiere una consulta explícita. Una nueva consulta o el cambio de contexto retira las tarjetas anteriores. La instancia se desmonta al cambiar scope/rol y aborta las peticiones antiguas. HTTP 401/403/409 invalida el acceso también cuando el servidor devuelve HTML; una respuesta 200 que no sea JSON válido muestra un error de reconsulta. Un error no habilita datos del contexto anterior. La navegación a una obra sigue pasando por la lectura canónica.
 
+Si el rechazo del resumen coincide con una lectura de obra o una planificación pendiente, se cancelan las peticiones del contexto anterior y se retiran sus datos y observaciones. La guía informa acceso no disponible y «Actualizar» permite consultar explícitamente la cuenta. Una respuesta o un token tardío no puede restaurar el contexto ni despachar una planificación. Los recibos pendientes permanecen en el journal para su recuperación con permisos vigentes; la pantalla no reenvía comandos.
+
 ## Validación local
 
 - 17 contratos focales y 62 pruebas existentes de workspace: 79 pasaron.
 - PostgreSQL desechable: 17 grupos (13 existentes y 4 nuevos), con paginación de 107 obras, exclusión de otras organizaciones/obras archivadas y revocación de asignaciones.
 - UI real del componente: 68 casos, 17 escenarios y cuatro anchos (320, 390, 768, 1280), incluidos errores HTTP con HTML, cambio de contexto, respuesta tardía, teclado y modo oscuro.
+- Integración real con Mi cuenta: 48 casos adicionales (401/403/409, lectura pendiente con HTML/JSON, planificación ya enviada y token retenido, cuatro anchos). Se comprobó el bloqueo original antes de corregirlo, cero POST tardíos, un único POST cuando ya fue enviado, conservación de referencias y reconsulta explícita con otro scope.
 - Revisión independiente: hallazgo de clasificación de HTTP corregido; sin hallazgos materiales pendientes en el alcance revisado.
 
 Estas pruebas son locales y sintéticas. Faltan CI del código final, despliegue y aceptación humana. Esta sección no concede supervisión de otras empresas a administraciones de barrios/countries; esa colaboración requiere una autorización explícita adicional.
