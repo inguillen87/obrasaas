@@ -1,6 +1,8 @@
 import {normalizeProgressMeasurementQuantity} from './progress-measurement-quantity.js';
+import {fieldVideoAudioAnalysisAllowed} from './field-media-privacy.mjs';
 
 export const VOICE_PROGRESS_DRAFT_VERSION='voice-progress-draft-v1';
+export const VIDEO_AUDIO_RESULT_VERSION='field-video-audio-result-v1';
 export const UNKNOWN_VOICE_VALUE='DESCONOCIDO';
 export const voiceProgressUnitLabel=value=>({M:'m',M2:'m²',M3:'m³',KG:'kg',T:'toneladas',L:'litros',UNIT:'unidades',HOUR:'horas',DAY:'días',LOT:'lotes'}[value]||'Sin identificar');
 export const voiceQuantityScopeLabel=value=>({ACUMULADA:'Acumulada hasta el momento',DELTA:'Del día o adicional'}[value]||'Por confirmar');
@@ -54,9 +56,20 @@ export function createVoiceProgressDraft({transcript,evidenceId,evidenceRevision
   activity,quantity,unit,quantitySemantics,quantityQuote,baseline:null,progress:null,uncertainties};
 }
 
+export function voiceTranscriptForEvidence(evidence){
+ const result=evidence?.processing?.result;
+ if(evidence?.media?.kind==='audio'&&evidence.processing?.status==='TRANSCRIBED_UNREVIEWED')return typeof result?.text==='string'&&result.text.trim()&&result.text.length<=32000?result.text.trim():null;
+ if(evidence?.media?.kind!=='video'||!['ANALYZED_UNREVIEWED','TRANSCRIBED_UNREVIEWED'].includes(evidence.processing?.status)||!fieldVideoAudioAnalysisAllowed(evidence.processing?.analysisConsent))return null;
+ const a=result?.videoAudio,t=a?.transcription,x=a?.extraction,v=a?.visualSource,s=result?.sampling,m=evidence.media;
+ if(!hash(t?.inputAudioSha256)||t.inputAudioSha256!==x?.pcm?.sha256)return null;
+ if(a?.version!==VIDEO_AUDIO_RESULT_VERSION||a.status!=='TRANSCRIBED_UNREVIEWED'||t?.status!=='TRANSCRIBED_UNREVIEWED'||t.provider!=='openai'||typeof t.providerModel!=='string'||!/^gpt-transcribe(?:-[A-Za-z0-9.-]+)?$|^whisper-1$|^gpt-4o(?:-mini)?-transcribe(?:-[A-Za-z0-9.-]+)?$/.test(t.providerModel)||t.speakerVerified!==false||t.identityVerified!==false||t.attendanceRegistered!==false||t.requiresHumanReview!==true||!hash(t.transcriptSha256)||typeof t.text!=='string'||!t.text.trim()||t.text!==t.text.trim()||t.text.length>32000||/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(t.text)||x?.version!=='server-video-audio-v1'||x.sourceSha256!==m.sha256||x.sourceBytes!==m.bytes||x.sourceContentType!==m.contentType||x.sourceStream?.ordinal!==0||x.wordTimestampsAvailable!==false||x.sourceVideoFullDecodeVerified!==false||x.nativeEnergy?.allChannelsDigitalZero!==false||x.pcm?.sampleRate!==16000||x.pcm.channels!==1||x.pcm.bitsPerSample!==16||!Number.isSafeInteger(x.pcm.sampleCount)||x.pcm.sampleCount<1||x.pcm.sampleCount>640000||!Number.isSafeInteger(x.pcm.nonzeroSamples)||x.pcm.nonzeroSamples<1||x.pcm.nonzeroSamples>x.pcm.sampleCount||x.inputOrigin?.authority!=='FFMPEG_DEFAULT_INPUT_START_NORMALIZATION'||x.inputOrigin.audioOnlyRebaseApplied!==false||x.timing?.timestampAuthority!=='DECODED_AUDIO_FRAME_PTS_AFTER_FFMPEG_INPUT_NORMALIZATION'||v?.version!=='server-video-frames-v1'||v.decoded!==true||v.frameCount!==4||v.sourceSha256!==m.sha256||v.sourceBytes!==m.bytes||v.sourceContentType!==m.contentType||s?.version!==v.version||s.sourceSha256!==m.sha256||s.sourceBytes!==m.bytes||s.sourceContentType!==m.contentType||s.frameCount!==4||s.audioAnalyzed!==false)return null;
+ return t.text;
+}
 export function voiceProgressDraftForEvidence(evidence,task){
  const draft=evidence?.processing?.result?.progressDraft,unknown=UNKNOWN_VOICE_VALUE;
- if(!id(evidence?.id)||evidence?.media?.kind!=='audio'||evidence.processing?.status!=='TRANSCRIBED_UNREVIEWED'||draft?.version!==VOICE_PROGRESS_DRAFT_VERSION||draft.status!=='DRAFT_UNREVIEWED'||draft.humanReviewRequired!==true||draft.baseline!==null||draft.progress!==null||draft.source?.evidenceId!==evidence.id||draft.source.mediaSha256!==evidence.media.sha256||!revision(draft.source.evidenceRevision)||!hash(draft.source.transcriptSha256)||draft.task?.id!==evidence.taskId||draft.task.id!==task?.id||!revision(draft.task.revision)||draft.task.selection!=='HUMAN_SELECTED_CONTEXT'||typeof draft.task.title!=='string'||typeof draft.activity!=='string'||draft.activity.length>240||!['ACUMULADA','DELTA',unknown].includes(draft.quantitySemantics)||!Array.isArray(draft.uncertainties)||draft.uncertainties.some(value=>typeof value!=='string')||typeof draft.quantityQuote!=='string')return null;
+ const transcript=voiceTranscriptForEvidence(evidence);
+ if(!id(evidence?.id)||!transcript||draft?.version!==VOICE_PROGRESS_DRAFT_VERSION||draft.status!=='DRAFT_UNREVIEWED'||draft.humanReviewRequired!==true||draft.baseline!==null||draft.progress!==null||draft.source?.evidenceId!==evidence.id||draft.source.mediaSha256!==evidence.media.sha256||!revision(draft.source.evidenceRevision)||!hash(draft.source.transcriptSha256)||draft.task?.id!==evidence.taskId||draft.task.id!==task?.id||!revision(draft.task.revision)||draft.task.selection!=='HUMAN_SELECTED_CONTEXT'||typeof draft.task.title!=='string'||typeof draft.activity!=='string'||draft.activity.length>240||!['ACUMULADA','DELTA',unknown].includes(draft.quantitySemantics)||!Array.isArray(draft.uncertainties)||draft.uncertainties.some(value=>typeof value!=='string')||typeof draft.quantityQuote!=='string')return null;
+ if(evidence.media.kind==='video'&&(draft.source.transcriptSha256!==evidence.processing.result.videoAudio.transcription.transcriptSha256||draft.quantityQuote!==unknown&&!transcript.includes(draft.quantityQuote)))return null;
  if(draft.quantity===unknown){if(draft.unit!==unknown||draft.quantitySemantics!==unknown)return null;}
  else {try{if(normalizeProgressMeasurementQuantity(draft.quantity)!==draft.quantity||!Object.values(units).includes(draft.unit))return null;}catch{return null;}}
  return draft;
@@ -66,11 +79,11 @@ export function prepareVoiceProgressDraft(evidence,task,workerId){
  const interpretation=voiceProgressDraftForEvidence(evidence,task);
  if(!interpretation||evidence.status!=='APPROVED'||!revision(evidence.revision)||!id(workerId))throw new Error('El audio necesita una revisión aprobada antes de preparar el avance.');
  if(interpretation.task.revision!==task.revision)throw new Error('La tarea cambió desde la transcripción. Revisá el audio con la tarea vigente y prepará la medición manual.');
- return {payload:{workerId,taskId:task.id,progress:'',quantity:interpretation.quantitySemantics==='ACUMULADA'&&interpretation.quantity!==UNKNOWN_VOICE_VALUE?interpretation.quantity:'',baseline:'',unit:interpretation.unit===UNKNOWN_VOICE_VALUE?'':interpretation.unit,reason:('Nota de audio revisada: '+evidence.processing.result.text).slice(0,1000),evidenceIds:[evidence.id]},
-  sourceVoice:{evidenceId:evidence.id,evidenceRevision:evidence.revision,taskId:task.id,taskRevision:task.revision,mediaSha256:evidence.media.sha256,transcriptSha256:interpretation.source.transcriptSha256,quantitySemantics:interpretation.quantitySemantics,confirmed:false}};
+ return {payload:{workerId,taskId:task.id,progress:'',quantity:interpretation.quantitySemantics==='ACUMULADA'&&interpretation.quantity!==UNKNOWN_VOICE_VALUE?interpretation.quantity:'',baseline:'',unit:interpretation.unit===UNKNOWN_VOICE_VALUE?'':interpretation.unit,reason:((evidence.media.kind==='video'?'Audio del video revisado: ':'Nota de audio revisada: ')+voiceTranscriptForEvidence(evidence)).slice(0,1000),evidenceIds:[evidence.id]},
+  sourceVoice:{evidenceId:evidence.id,evidenceRevision:evidence.revision,taskId:task.id,taskRevision:task.revision,mediaSha256:evidence.media.sha256,transcriptSha256:interpretation.source.transcriptSha256,quantitySemantics:interpretation.quantitySemantics,...(evidence.media.kind==='video'?{mediaKind:'video'}:{}),confirmed:false}};
 }
 
 export function voiceProgressDraftReady(source,evidence,task,evidenceIds=[source?.evidenceId]){
  const draft=voiceProgressDraftForEvidence(evidence,task);
- return Boolean(source?.confirmed===true&&source.invalidated!==true&&Array.isArray(evidenceIds)&&evidenceIds.includes(source.evidenceId)&&draft&&evidence.status==='APPROVED'&&source.evidenceId===evidence.id&&source.evidenceRevision===evidence.revision&&source.taskId===task.id&&source.taskRevision===task.revision&&draft.task.revision===task.revision&&source.mediaSha256===evidence.media.sha256&&source.transcriptSha256===draft.source.transcriptSha256);
+ return Boolean(source?.confirmed===true&&source.invalidated!==true&&Array.isArray(evidenceIds)&&evidenceIds.includes(source.evidenceId)&&draft&&evidence.status==='APPROVED'&&(evidence.media.kind!=='video'||source.mediaKind==='video')&&source.evidenceId===evidence.id&&source.evidenceRevision===evidence.revision&&source.taskId===task.id&&source.taskRevision===task.revision&&draft.task.revision===task.revision&&source.mediaSha256===evidence.media.sha256&&source.transcriptSha256===draft.source.transcriptSha256);
 }

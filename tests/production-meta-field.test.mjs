@@ -13,6 +13,9 @@ const run=(message,state=null,extra={})=>{const result=planMetaFieldConversation
 const say=(body,state,extra)=>run({type:'text',text:{body}},state,extra);
 const pick=(plan,index=0,extra)=>run({type:'interactive',interactive:{type:'list_reply',list_reply:{id:plan.reply.sections[0].rows[index].id}}},plan.state,extra);
 const pickValue=(plan,value,extra)=>pick(plan,plan.state.choices.findIndex(choice=>choice.value===value),extra);
+// A persisted, markerless v1 selection keeps its original notice-before-file
+// journey. New EVIDENCIA entries are exercised separately with real file type.
+function legacyMediaNotice(){return run({type:'interactive',interactive:{type:'list_reply',list_reply:{id:'obra:'+'a'.repeat(20)+':0'}}},{version:1,purpose:'MEDIA',step:'SECTOR',taskId:facts.tasks[0].id,taskRevision:facts.tasks[0].revision,nonce:'a'.repeat(20),choices:[{value:'sector-a',title:'Planta baja'}],expiresAt:new Date(now.getTime()+900000).toISOString()});}
 function voiceFacts(status='APPROVED',transcript='Hoy hicimos 2,5 metros cuadrados de mampostería.'){
  const task=facts.tasks[0],e={id:'evidence-voice',title:'Audio sintético revisado',taskId:task.id,revision:'2026-10-01T12:00:00.123458',status,media:{kind:'audio',sha256:'b'.repeat(64)},processing:{status:'TRANSCRIBED_UNREVIEWED',result:{text:transcript,progressDraft:createVoiceProgressDraft({transcript,evidenceId:'evidence-voice',evidenceRevision:'2026-10-01T12:00:00.123457',mediaSha256:'b'.repeat(64),transcriptSha256:createHash('sha256').update(transcript).digest('hex'),task})}}};
  return {...facts,evidence:[e]};
@@ -77,15 +80,15 @@ test('quantitative proposal binds the selected task revision and approved eviden
  const enhanced={...facts,evidence:[{id:'evidence-a',title:'Foto revisada',taskId:'task-a',status:'APPROVED'}]},task=say('AVANCE',null,{facts:enhanced}),sector=pick(task,0,{facts:enhanced}),measurement=pick(sector,0,{facts:enhanced}),evidence=say('2.5 / 10 M2',measurement.state,{facts:enhanced}),reason=pick(evidence,0,{facts:enhanced}),confirmation=say('Medí el área ejecutada en el sector.',reason.state,{facts:enhanced}),saved=pick(confirmation,0,{facts:enhanced});
  assert.equal(saved.command.action,'PROPOSE_PROGRESS');assert.equal(saved.command.payload.progress,25);assert.equal(saved.command.payload.quantity,'2.5000');assert.equal(saved.command.payload.revision,facts.tasks[0].revision);assert.deepEqual(saved.command.payload.evidenceIds,['evidence-a']);
 });
-test('media is attached only after canonical task and sector selection, never from webhook URLs',()=>{
- const task=say('EVIDENCIA'),sector=pick(task),notice=pick(sector),pending=pickValue(notice,'ANALYZE'),result=run({type:'image',image:{id:'123456789012345',mime_type:'image/jpeg',caption:'Trabajo del sector',url:'https://evil.invalid/private'}},pending.state);
+test('legacy v1 media is attached only after canonical task and sector selection, never from webhook URLs',()=>{
+ const notice=legacyMediaNotice(),pending=pickValue(notice,'ANALYZE'),result=run({type:'image',image:{id:'123456789012345',mime_type:'image/jpeg',caption:'Trabajo del sector',url:'https://evil.invalid/private'}},pending.state);
  assert.equal(result.media.mediaId,'123456789012345');assert.equal(result.media.taskId,'task-a');assert.equal(result.media.sectorId,'sector-a');assert.equal(result.media.url,undefined);
  const unsolicited=run({type:'image',image:{id:'123456789012345'}});assert.equal(unsolicited.media,undefined);
 });
-test('versioned optional media analysis requires a current interactive choice for image, audio and video',()=>{
+test('legacy v1 optional media analysis requires a current interactive choice for image, audio and video',()=>{
  assert.equal(createHash('sha256').update(FIELD_MEDIA_PRIVACY_NOTICE).digest('hex'),FIELD_MEDIA_PRIVACY_NOTICE_SHA256);
  for(const kind of ['image','audio','video'])for(const allowed of [false,true]){
-  const task=say('EVIDENCIA'),sector=pick(task),notice=pick(sector);assert.match(notice.reply.body,/OpenAI.*cuatro cuadros/);assert.match(notice.reply.body,/sin audio/);
+  const notice=legacyMediaNotice();assert.match(notice.reply.body,/OpenAI.*cuatro cuadros/);assert.match(notice.reply.body,/sin audio/);
   const plain=say('sí',notice.state);assert.equal(plain.media,undefined);assert.equal(plain.state.step,'MEDIA_NOTICE');
   const pending=pickValue(notice,allowed?'ANALYZE':'SAVE_ONLY'),uploaded=run({type:kind,[kind]:{id:'123456789012345',mime_type:kind==='image'?'image/jpeg':kind==='audio'?'audio/ogg':'video/mp4'}},pending.state);
   assert.deepEqual(uploaded.media.analysisConsent,fieldMediaAnalysisConsent(allowed));assert.ok(uploaded.media.analysisConsentEventId);assert.equal(uploaded.media.taskId,'task-a');assert.equal(uploaded.media.sectorId,'sector-a');

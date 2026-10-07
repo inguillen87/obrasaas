@@ -5,8 +5,8 @@ import {decodeWorkerChannelProof,workerChannelCodeDigest,lockParticipantMember,a
 import {lockPersonWorksiteJourney} from './person-worksite-journey.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerJobTransaction,customerOutboundId} from './meta-customer-outbound.mjs';
-import {metaFieldConversationAction} from './meta-field-conversation.mjs';
-import {createMetaFieldBridge,readMetaFieldConversation} from './meta-field-bridge.mjs';
+import {metaFieldConversationAction,META_FIELD_MEDIA_AUTHORIZATION_VERSION} from './meta-field-conversation.mjs';
+import {createMetaFieldBridge,readMetaFieldConversation,validateMetaFieldMediaOrigin} from './meta-field-bridge.mjs';
 import {validFieldMediaAnalysisConsent} from './field-media-privacy.mjs';
 import {siteText} from './site-register-policy.mjs';
 import {companyConnectionForProject} from './company-channel-connection.mjs';
@@ -30,7 +30,7 @@ export async function companyPreparedMediaRecovery(client,context,{environment=p
   const connection=(await client.query(`SELECT c.*,p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c.id=$1 AND c."projectId"=$2 AND p."organizationId"=$3`,[context.channelId,context.projectId,event.payload.organizationId])).rows[0];
   if(!connection||connection.metadata?.developmentPilot)return false;
   const proof=decodeWorkerChannelProof(event,connection,environment),asset=proof.value?.[proof.value?.type];
-  if(proof.companyRouting?.mode!=='COMPANY'||proof.companyRouting.contract!==COMPANY_CHANNEL_SCHEMA_CONTRACT||!['image','audio','video'].includes(proof.value.type)||!/^\d{5,32}$/.test(asset?.id||'')||typeof asset.mime_type!=='string'||typeof proof.value.context?.id!=='string'||!await companyChannelSchemaReady(client))return false;
+  if(proof.companyRouting?.mode!=='COMPANY'||proof.companyRouting.contract!==COMPANY_CHANNEL_SCHEMA_CONTRACT||!(['image','audio','video'].includes(proof.value.type)&&/^\d{5,32}$/.test(asset?.id||'')&&typeof asset.mime_type==='string'||proof.value.type==='interactive')||typeof proof.value.context?.id!=='string'||!await companyChannelSchemaReady(client))return false;
   const owner=(await client.query(`SELECT "anchorProjectId" FROM public."WhatsAppCompanyChannel" WHERE "connectionId"=$1 AND "organizationId"=$2`,[connection.id,connection.organizationId])).rows[0];
   const projection=(await client.query(`SELECT * FROM public."WhatsAppCompanyEventRoute" WHERE "sourceEventId"=$1`,[event.id])).rows[0];
   if(owner?.anchorProjectId!==connection.projectId||projection?.kind!=='FIELD'||projection.sourceEventId!==event.id||projection.payloadDigest!==context.payloadDigest||projection.connectionId!==connection.id||projection.organizationId!==connection.organizationId||!workspaceId(projection.routeId)||!Number.isInteger(projection.routeEpoch)||projection.routeEpoch<1||!Number.isInteger(projection.assignmentRevision)||projection.assignmentRevision<1)return false;
@@ -47,7 +47,12 @@ export async function companyPreparedMediaRecovery(client,context,{environment=p
   const key='meta_field_media_'+digest(event.id),prepared=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND "entityType"='Worker' AND action='meta.field.media.prepared'`,[key,member.organizationId,member.actorId,worker.id])).rows[0]?.metadata;
   if(prepared?.version!==1||prepared.projectId!==projection.projectId||prepared.eventId!==event.id||prepared.payloadDigest!==context.payloadDigest||prepared.channelBindingId!==projection.bindingId)return false;
   const {media,state}=JSON.parse(decryptCustomerSecret(prepared.encryptedInput,{organizationId:member.organizationId,projectId:projection.projectId,purpose:'field-media-prepared',resourceId:key},environment));
-  if(state?.version!==1||state.purpose!=='MEDIA'||state.step!=='MEDIA'||state.bindingId!==binding.id||!workspaceId(state.taskId)||!workspaceId(state.sectorId)||!workspaceId(state.analysisConsentEventId)||!validFieldMediaAnalysisConsent(state.analysisConsent)||media?.kind!==proof.value.type||media.mediaId!==asset.id||media.contentType!==asset.mime_type||media.caption!==siteText(asset.caption||'Evidencia enviada desde el canal verificado.',1000,1,true)||media.taskId!==state.taskId||media.sectorId!==state.sectorId||media.analysisConsentEventId!==state.analysisConsentEventId||!validFieldMediaAnalysisConsent(media.analysisConsent)||digest(media.analysisConsent)!==digest(state.analysisConsent))return false;
+  if(state?.version!==1||state.purpose!=='MEDIA'||state.bindingId!==binding.id||!workspaceId(state.taskId)||!workspaceId(state.sectorId)||!workspaceId(state.analysisConsentEventId)||!validFieldMediaAnalysisConsent(state.analysisConsent)||media?.taskId!==state.taskId||media.sectorId!==state.sectorId||media.analysisConsentEventId!==state.analysisConsentEventId||!validFieldMediaAnalysisConsent(media.analysisConsent)||digest(media.analysisConsent)!==digest(state.analysisConsent))return false;
+  if(state.mediaAuthorizationVersion===META_FIELD_MEDIA_AUTHORIZATION_VERSION){
+   const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
+   const r={member,project:{id:projection.projectId},worker,connection,event,proof,sourceProjectId:event.projectId,companyProjection:projection,channelBinding:binding,now};
+   if(proof.value.type!=='interactive'||!await validateMetaFieldMediaOrigin(client,r,media,state,{environment,now}))return false;
+  }else if(state.mediaAuthorizationVersion!==undefined||state.step!=='MEDIA'||media.kind!==proof.value.type||media.mediaId!==asset?.id||media.contentType!==asset?.mime_type||media.caption!==siteText(asset?.caption||'Evidencia enviada desde el canal verificado.',1000,1,true)||media.sourceOrigin!==undefined)return false;
   const prompt=(await client.query(`SELECT * FROM public."WhatsAppCompanyEventRoute" WHERE "sourceEventId"=$1`,[state.lastEventId])).rows[0];
   if(prompt?.kind!=='FIELD'||prompt.organizationId!==projection.organizationId||prompt.connectionId!==projection.connectionId||['routeId','routeEpoch','projectId','workerId','actorId','membershipId','assignmentRevision','bindingId'].some(key=>prompt[key]!==projection[key]))return false;
   const outbound=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1'`,[customerOutboundId(state.lastEventId),connection.projectId])).rows[0];

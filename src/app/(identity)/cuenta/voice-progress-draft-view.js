@@ -5,7 +5,7 @@ export function VoiceProgressDraftView({evidence,task,disabled,canPrepare,onPrep
  const draft=voiceProgressDraftForEvidence(evidence,task);if(!draft)return null;
  const changed=draft.task.revision!==task.revision;
  return <div className={styles.localReview} data-voice-progress-draft>
-  <h4>Borrador desde el audio</h4>
+  <h4>{evidence.media.kind==='video'?'Borrador desde el audio del video':'Borrador desde el audio'}</h4>
   <p>Revisá la transcripción contra el original. Se reconocen expresiones explícitas; los datos dudosos quedan por confirmar.</p>
   <p>Tarea elegida al registrar: <strong>{draft.task.title}</strong>. Confirmá que la actividad corresponde a esta tarea.</p>
   <p>Actividad mencionada: {draft.activity===UNKNOWN_VOICE_VALUE?'Sin identificar':draft.activity}</p>

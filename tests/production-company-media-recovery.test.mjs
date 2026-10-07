@@ -5,6 +5,80 @@ import {createMetaCustomerProcessor,META_CUSTOMER_PREPARED_MEDIA_RECOVERY_CODE} 
 import {companyPreparedMediaRecovery,companyPreparedMediaRecoveryAuthorized} from '../src/lib/company-channel-routing.mjs';
 import {readMetaCustomerInboxReceipt} from '../src/lib/meta-customer-inbox-review.mjs';
 import {companyMediaRecoveryMemory} from './fixtures/company-media-recovery-memory.mjs';
+import {digest} from '../src/lib/workspace-policy.mjs';
+import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
+import {encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
+import {OBRASAAS_META_CHANNEL} from '../src/lib/meta-channel-binding.mjs';
+import {decodeWorkerChannelProof} from '../src/lib/worker-channel-identity.mjs';
+import {planMetaFieldConversation,META_FIELD_MEDIA_AUTHORIZATION_VERSION} from '../src/lib/meta-field-conversation.mjs';
+import {metaFieldMediaContextDigest} from '../src/lib/meta-field-bridge.mjs';
+
+// The reference-first planner is exercised against real sealed synthetic
+// webhook proofs. SQL remains read-only; no file or provider is accessed.
+function finalVideoAuthorizationMemory({audioAllowed=true}={}){
+ const f=companyMediaRecoveryMemory(),routing=f.event.payload.companyRouting;
+ const sign=(label,value)=>{
+  const payload={wabaId:f.connection.whatsappBusinessId,phoneNumberId:f.connection.phoneNumberId,field:'messages',type:'message',value:{id:'wamid.SyntheticFinalMedia'+label,from:'5491100001111',timestamp:String(f.time/1000),...value}},payloadDigest=metaCustomerContentDigest(payload),externalId=digest([payload.wabaId,payload.phoneNumberId,'message',payload.value.id]),id='customer_webhook_'+externalId,aad={organizationId:'org-a',projectId:'project-a',resourceId:id};
+  return {id,externalId,provider:'meta-customer-v1',eventType:'message',projectId:'project-a',status:'PENDING',leaseToken:null,leaseExpiresAt:null,attempts:0,lastError:null,createdAt:new Date(f.time),payload:{version:1,signatureVerified:true,signatureScheme:'meta-hmac-sha256-v1',organizationId:'org-a',channelId:'channel-a',payloadDigest,companyRouting:routing,encryptedPayload:encryptCustomerSecret(JSON.stringify(payload),{...aad,purpose:'webhook'},f.environment),encryptedProof:encryptCustomerSecret(JSON.stringify({scheme:'meta-hmac-sha256-v1',appId:OBRASAAS_META_CHANNEL.appId,organizationId:'org-a',channelId:'channel-a',payloadDigest,companyRouting:routing}),{...aad,purpose:'webhook-proof'},f.environment)}};
+ };
+ const origin=sign('Original',{type:'video',video:{id:'123456789',mime_type:'video/mp4',caption:'Video original sintético de esta tarea.'}});
+ const member={actorId:f.worker.actorId,membershipId:f.worker.membershipId,organizationId:f.worker.organizationId,clerkUserId:f.worker.clerkUserId},r={member,project:{id:'project-b'},worker:f.worker,connection:f.connection,event:f.event,sourceProjectId:'project-a',companyProjection:f.projection,channelBinding:f.binding};
+ const task={id:'task-b',title:'Tarea de ensayo',revision:'2026-10-06T12:00:00.000001'},facts={permissions:{report:true},tasks:[task],sectors:[{id:'sector-b'}],mediaReferenceContext:{eventId:origin.id,payloadDigest:origin.payload.payloadDigest,contextDigest:metaFieldMediaContextDigest(r),sourceProjectId:'project-a'}};
+ const initial={version:1,purpose:'MEDIA',step:'MEDIA_FILE',taskId:task.id,taskRevision:task.revision,sectorId:'sector-b',bindingId:f.binding.id,mediaAuthorizationVersion:META_FIELD_MEDIA_AUTHORIZATION_VERSION,expiresAt:new Date(f.time+900000).toISOString()};
+ const first=planMetaFieldConversation({message:decodeWorkerChannelProof(origin,f.connection,f.environment).value,state:initial,eventId:origin.id,facts,now:new Date(f.time)});
+ assert.equal(first.media,undefined);assert.equal(first.state.step,'VIDEO_NOTICE');
+ const choose=(state,index)=>({type:'interactive',interactive:{type:'list_reply',list_reply:{id:'obra:'+state.nonce+':'+index}}});
+ const second=planMetaFieldConversation({message:choose(first.state,0),state:{...first.state,version:1,lastEventId:origin.id},eventId:f.promptProjection.sourceEventId,facts,now:new Date(f.time)});
+ assert.equal(second.media,undefined);assert.equal(second.state.step,'VIDEO_AUDIO_NOTICE');
+ const final=sign('Authorize',{...choose(second.state,audioAllowed?0:1),context:{id:f.outbound.outcome.messageId}});
+ const authorized=planMetaFieldConversation({message:decodeWorkerChannelProof(final,f.connection,f.environment).value,state:{...second.state,version:1,bindingId:f.binding.id,lastEventId:f.promptProjection.sourceEventId},eventId:final.id,facts,now:new Date(f.time)});
+ assert.ok(authorized.media);assert.equal(authorized.state.step,'MEDIA_AUTHORIZED');assert.equal(authorized.media.analysisConsent.videoAudio.allowed,audioAllowed);
+ const previousId=f.event.id;f.events.delete(previousId);Object.assign(f.event,final);f.events.set(final.id,f.event);f.events.set(origin.id,origin);f.projection.sourceEventId=final.id;f.projection.payloadDigest=final.payload.payloadDigest;
+ const key='meta_field_media_'+digest(final.id);f.prepared={version:1,projectId:'project-b',eventId:final.id,payloadDigest:final.payload.payloadDigest,channelBindingId:f.binding.id};
+ f.input={media:authorized.media,state:authorized.state};f.sealFinal=()=>{f.prepared.encryptedInput=encryptCustomerSecret(JSON.stringify(f.input),{organizationId:'org-a',projectId:'project-b',purpose:'field-media-prepared',resourceId:key},f.environment);};f.sealFinal();
+ f.origin=origin;f.originProjection={...f.projection,sourceEventId:origin.id,payloadDigest:origin.payload.payloadDigest};f.task=task;f.projectMetadata={fieldOperations:{version:1,sectors:[{id:'sector-b'}]}};
+ f.dispatched={version:1,projectId:'project-b',channelId:'channel-a',channelBindingId:f.binding.id,eventId:origin.id,payloadDigest:origin.payload.payloadDigest,kind:'CONVERSATION',businessApplied:false};
+ const oldQuery=f.client.query;f.client={...f.client,async query(sql,args){
+  const rows=value=>({rows:structuredClone(value),rowCount:value.length});
+  if(sql.includes('FROM public."Task"')){assert.deepEqual(args,['task-b','project-b']);return rows(f.task?[f.task]:[]);}
+  if(sql.startsWith('SELECT id,metadata FROM public."Project"')){assert.deepEqual(args,['project-b','org-a']);return rows(f.projectActive?[{id:'project-b',metadata:f.projectMetadata}]:[]);}
+  if(sql.includes('FROM public."WhatsAppCompanyEventRoute"')&&args[0]===origin.id)return rows(f.originProjection?[f.originProjection]:[]);
+  if(sql.includes("action='meta.field.dispatched'")){assert.deepEqual(args,['meta_field_'+digest(['meta-field-dispatch-v1',origin.id]),'org-a','person-a','worker-b']);return rows(f.dispatched?[{metadata:f.dispatched}]:[]);}
+  if(sql.includes("action='meta.field.media.prepared'")){assert.deepEqual(args,[key,'org-a','person-a','worker-b']);return rows(f.prepared?[{metadata:f.prepared}]:[]);}
+  return oldQuery(sql,args);
+ }};
+ return f;
+}
+
+for(const audioAllowed of [true,false])test('reference-first final video authorization recovers exactly the chosen audio scope without downloads or writes: '+audioAllowed,async()=>{
+ const f=finalVideoAuthorizationMemory({audioAllowed});assert.equal(await validate(f),true);assert.equal(f.trace.some(sql=>/^(INSERT|UPDATE|DELETE)/.test(sql)),false);assert.equal(f.input.media.analysisConsentEventId,f.event.id);assert.notEqual(f.input.media.sourceOrigin.eventId,f.event.id);
+});
+
+for(const [name,change]of [
+ ['expired original reference',f=>{f.clock+=900000;}],
+ ['current task revision changed',f=>{f.task.revision='2026-10-06T12:00:00.000002';}],
+ ['current task removed',f=>{f.task=null;}],
+ ['current sector removed',f=>{f.projectMetadata.fieldOperations.sectors=[];}],
+ ['original file signature altered',f=>{f.origin.payload.encryptedProof=f.origin.payload.encryptedProof.slice(0,-3)+'bad';}],
+ ['original file digest altered',f=>{f.origin.payload.payloadDigest='f'.repeat(64);}],
+ ['original projection missing',f=>{f.originProjection=null;}],
+ ['original projection belongs to other worksite',f=>{f.originProjection.projectId='project-other';}],
+ ['original projection belongs to other worker',f=>{f.originProjection.workerId='worker-other';}],
+ ['original projection binding changed',f=>{f.originProjection.bindingId='binding-other';}],
+ ['original projection epoch changed',f=>{f.originProjection.routeEpoch++;}],
+ ['file receipt missing',f=>{f.dispatched=null;}],
+ ['file receipt already applied business',f=>{f.dispatched.businessApplied=true;}],
+ ['file receipt belongs to other project',f=>{f.dispatched.projectId='project-other';}],
+ ['file receipt belongs to other binding',f=>{f.dispatched.channelBindingId='binding-other';}],
+ ['sealed reference media substitution',f=>{f.input.media.sourceOrigin.mediaId='999999999';f.sealFinal();}],
+ ['sealed context substitution',f=>{f.input.media.sourceOrigin.contextDigest='e'.repeat(64);f.input.state.pendingFile.contextDigest='e'.repeat(64);f.sealFinal();}],
+ ['wrong final consent event',f=>{f.input.media.analysisConsentEventId=f.origin.id;f.input.state.analysisConsentEventId=f.origin.id;f.sealFinal();}],
+ ['scope differs from final signed button',f=>{f.input.media.analysisConsent.videoAudio.allowed=false;f.input.state.analysisConsent.videoAudio.allowed=false;f.sealFinal();}],
+ ['authorization step substitution',f=>{f.input.state.mediaAuthorizationStep='VIDEO_NOTICE';f.sealFinal();}],
+ ['missing v2 marker never falls back to legacy',f=>{delete f.input.state.mediaAuthorizationVersion;f.sealFinal();}],
+ ['unconfirmed prior prompt',f=>{f.outbound.outcome.state='SEND_UNKNOWN';}],
+ ['prior prompt context changed',f=>{f.outbound.outcome.messageId='wamid.OtherPrompt';}],
+])test('reference-first reservation recovery refuses '+name,async()=>{const f=finalVideoAuthorizationMemory();change(f);assert.equal(await validate(f),false);});
 
 const validate=f=>companyPreparedMediaRecovery(f.client,f.claim(),{environment:f.environment});
 function processor(f,options={}){return createMetaCustomerProcessor({connect:f.connect,environment:f.environment,now:()=>f.clock,lockChannel:async()=>f.connection,deferAuthorization:(client,context)=>companyPreparedMediaRecovery(client,context,{environment:f.environment}),dispatch:async()=>{assert.equal(f.open,0);throw new WorkspaceError('WORKER_CHANNEL_PARTICIPANT_REQUIRED',403);},...options});}
@@ -76,6 +150,13 @@ test('prepared media with a committed receipt preserves businessApplied when lat
 
 const admin={role:'ADMIN',organizationId:'org-a',actorId:'admin-a'};
 async function pending(f){await processor(f).process(f.event.id);return f;}
+test('reference-first retry affordance resolves the current authorized person again after a real processor deferral',async()=>{
+ const f=await pending(finalVideoAuthorizationMemory());assert.equal(f.event.lastError,META_CUSTOMER_PREPARED_MEDIA_RECOVERY_CODE);assert.equal(f.event.leaseToken,null);
+ assert.equal(await companyPreparedMediaRecoveryAuthorized(f.client,admin,{eventId:f.event.id,projectId:'project-b',environment:f.environment}),true);
+ f.worker.metadata.participant.permissions.report=false;
+ assert.equal(await companyPreparedMediaRecoveryAuthorized(f.client,admin,{eventId:f.event.id,projectId:'project-b',environment:f.environment}),false);
+ assert.equal(f.event.status,'PENDING');assert.equal(f.event.outcome.businessApplied,false);
+});
 test('the existing web action is observable only for current ADMIN of B with approved individual identity, report permission, binding, assignment and active owner',async()=>{
  const f=await pending(companyMediaRecoveryMemory());assert.equal(await companyPreparedMediaRecoveryAuthorized(f.client,admin,{eventId:f.event.id,projectId:'project-b',environment:f.environment}),true);
  assert.equal(f.trace.some(q=>/FOR (UPDATE|SHARE)/.test(q)&&q.includes('"Worker"')),false,'The affordance is a read-only snapshot');

@@ -1,13 +1,15 @@
 import {WorkspaceError,digest} from './workspace-policy.mjs';
 import {createFieldOperations,publicFieldEvidence} from './field-operations-store.mjs';
 import {createFieldMedia,decodeFieldMedia} from './field-media.mjs';
-import {planMetaFieldConversation} from './meta-field-conversation.mjs';
-import {resolveWorkerChannelIdentity} from './worker-channel-identity.mjs';
+import {planMetaFieldConversation,META_FIELD_MEDIA_AUTHORIZATION_VERSION,validMetaFieldMediaReference,metaFieldMediaAuthorizationValid} from './meta-field-conversation.mjs';
+import {resolveWorkerChannelIdentity,decodeWorkerChannelProof} from './worker-channel-identity.mjs';
 import {META_CUSTOMER_PROTOCOL,resolveMetaCloudProtocol} from './meta-cloud-protocol.mjs';
 import {decryptCustomerSecret,encryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerJobTransaction} from './meta-customer-outbound.mjs';
-import {validFieldMediaAnalysisConsent} from './field-media-privacy.mjs';
+import {validFieldMediaAnalysisConsent,FIELD_VIDEO_PRIVACY_NOTICE_VERSION,fieldVideoAudioAnalysisAllowed} from './field-media-privacy.mjs';
+import {voiceTranscriptForEvidence} from './voice-progress-draft.mjs';
 import {assertDevelopmentPilotCommit,assertDevelopmentPilotAdapter} from './meta-development-pilot-policy.mjs';
+import {siteText} from './site-register-policy.mjs';
 
 export function metaFieldOperationId(eventId,purpose){const h=digest(['meta-field-operation-v1',eventId,purpose]);return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;}
 const receiptId=eventId=>'meta_field_'+digest(['meta-field-dispatch-v1',eventId]);
@@ -15,6 +17,43 @@ const permissionFor=action=>action==='ATTENDANCE'?'attendance':'report';
 const safeErrors=new Set(['INVENTORY_QUANTITY_INVALID','INVENTORY_CATALOG_CHANGED','INVENTORY_MATERIAL_UNAVAILABLE','SITE_INPUT_INVALID','SITE_QUANTITY_INVALID','FIELD_QUANTITY_INVALID','FIELD_QUANTITY_PROGRESS_MISMATCH','FIELD_PROGRESS_REGRESSION','FIELD_PROGRESS_REVIEW_PENDING','FIELD_BASELINE_CHANGED','FIELD_REVISION_CHANGED','WORKSPACE_TASK_UNAVAILABLE','FIELD_SECTOR_UNAVAILABLE','ATTENDANCE_REVISION_CHANGED','ATTENDANCE_PERSON_JOURNEY_OPEN','ATTENDANCE_SHIFT_ALREADY_OPEN','ATTENDANCE_SHIFT_NOT_OPEN','ATTENDANCE_BREAK_ALREADY_OPEN','ATTENDANCE_BREAK_NOT_OPEN','ATTENDANCE_BREAK_OPEN','ATTENDANCE_LOCATION_STALE','ATTENDANCE_LOCATION_INVALID','FIELD_EVIDENCE_NOT_APPROVED']);
 const explanation=code=>({ATTENDANCE_PERSON_JOURNEY_OPEN:'Tenés una jornada pendiente de cierre. Contactá al responsable.',ATTENDANCE_SHIFT_ALREADY_OPEN:'Ya tenés una jornada abierta.',ATTENDANCE_SHIFT_NOT_OPEN:'Primero registrá una entrada.',ATTENDANCE_BREAK_ALREADY_OPEN:'Tu pausa ya está abierta.',ATTENDANCE_BREAK_NOT_OPEN:'No hay una pausa abierta.',ATTENDANCE_BREAK_OPEN:'Cerrá la pausa antes de registrar la salida.',ATTENDANCE_LOCATION_STALE:'La ubicación venció. Volvé a empezar y compartí una ubicación actual.',FIELD_PROGRESS_REVIEW_PENDING:'Esta tarea ya tiene una propuesta pendiente.',FIELD_EVIDENCE_NOT_APPROVED:'La evidencia requiere revisión del responsable.',FIELD_PROGRESS_REGRESSION:'El avance propuesto no puede ser menor al ya aprobado.'}[code]||'Revisá los datos y el estado actual de la obra antes de volver a intentar.');
 const text=body=>({type:'text',body});
+export const metaFieldMediaContextDigest=r=>digest(['meta-field-media-context-v2',r.member.organizationId,r.member.actorId,r.member.membershipId,r.member.clerkUserId,r.project.id,r.worker.id,r.channelBinding.id,r.connection.id,r.connection.projectId,r.connection.phoneNumberId,r.connection.whatsappBusinessId,r.sourceProjectId||r.event.projectId,r.companyProjection?{projectId:r.companyProjection.projectId,workerId:r.companyProjection.workerId,actorId:r.companyProjection.actorId,membershipId:r.companyProjection.membershipId,assignmentRevision:r.companyProjection.assignmentRevision,bindingId:r.companyProjection.bindingId,routeId:r.companyProjection.routeId,routeEpoch:r.companyProjection.routeEpoch}:null]);
+// Integrity of an already signed, privately referenced file. This read-only
+// validator grants no access: callers must resolve current authority separately.
+export async function validateMetaFieldMediaOrigin(client,r,media,state,{environment=process.env,now=r.now,protocol=META_CUSTOMER_PROTOCOL}={}){
+ try{
+  const ref=media?.sourceOrigin;
+  if(state?.version!==1||state.purpose!=='MEDIA'||state.step!=='MEDIA_AUTHORIZED'||state.mediaAuthorizationVersion!==META_FIELD_MEDIA_AUTHORIZATION_VERSION||!ref||digest(state.pendingFile)!==digest(ref)||media.taskId!==ref.taskId||media.sectorId!==ref.sectorId||media.mediaId!==ref.mediaId||media.contentType!==ref.contentType||media.caption!==ref.caption||media.kind!==ref.kind||media.analysisConsentEventId!==state.analysisConsentEventId||state.analysisConsentEventId!==r.event.id||!metaFieldMediaAuthorizationValid(r.proof.value,media,state)||digest(media.analysisConsent)!==digest(state.analysisConsent))return false;
+  const task=(await client.query(`SELECT id,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Task" WHERE id=$1 AND "projectId"=$2`,[ref.taskId,r.project.id])).rows[0];
+  const project=(await client.query(`SELECT id,metadata FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE'`,[r.project.id,r.member.organizationId])).rows[0];
+  const facts={permissions:{report:true},tasks:task?[task]:[],sectors:project?.metadata?.fieldOperations?.version===1&&Array.isArray(project.metadata.fieldOperations.sectors)?project.metadata.fieldOperations.sectors:[],mediaReferenceContext:{contextDigest:metaFieldMediaContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId}};
+  if(!validMetaFieldMediaReference(ref,{state,facts,now}))return false;
+  const origin=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider=$3`,[ref.eventId,ref.sourceProjectId,protocol.provider])).rows[0];
+  if(!origin||origin.payload?.payloadDigest!==ref.payloadDigest)return false;
+  const signed=decodeWorkerChannelProof(origin,r.connection,environment,protocol),asset=signed.value?.[signed.value?.type];
+  if(signed.senderE164!==r.proof.senderE164||signed.value.type!==ref.kind||asset?.id!==ref.mediaId||asset.mime_type!==ref.contentType||siteText(asset.caption||'Evidencia enviada desde el canal verificado.',1000,1,true)!==ref.caption)return false;
+  if(r.companyProjection){
+   if(signed.companyRouting?.mode!=='COMPANY')return false;
+   const projection=(await client.query(`SELECT * FROM public."WhatsAppCompanyEventRoute" WHERE "sourceEventId"=$1`,[ref.eventId])).rows[0];
+   if(projection?.kind!=='FIELD'||projection.sourceEventId!==ref.eventId||projection.payloadDigest!==ref.payloadDigest||['organizationId','connectionId','projectId','workerId','actorId','membershipId','assignmentRevision','bindingId','routeId','routeEpoch'].some(key=>projection[key]!==r.companyProjection[key]))return false;
+  }else if(signed.companyRouting?.mode==='COMPANY')return false;
+  const observed=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND "entityType"='Worker' AND action='meta.field.dispatched'`,[receiptId(ref.eventId),r.member.organizationId,r.member.actorId,r.worker.id])).rows[0]?.metadata;
+  return observed?.version===1&&observed.projectId===r.project.id&&observed.channelId===r.connection.id&&observed.channelBindingId===r.channelBinding.id&&observed.eventId===ref.eventId&&observed.payloadDigest===ref.payloadDigest&&observed.kind==='CONVERSATION'&&observed.businessApplied===false;
+ }catch(error){if(error instanceof WorkspaceError||error instanceof SyntaxError||error instanceof TypeError||error instanceof RangeError)return false;throw error;}
+}
+export function metaFieldVideoResultText(evidence,consent){
+ const result=evidence?.processing?.result,visualConfirmed=result?.visual?.status==='ANALYZED_UNREVIEWED'&&result.sampling?.frameCount===4;
+ const visual=visualConfirmed?'Se analizaron cuatro cuadros del video.':'El análisis de los cuadros no quedó confirmado.';
+ let audio='No autorizaste transcribir su audio.';
+ if(fieldVideoAudioAnalysisAllowed(consent)){
+  const status=result?.videoAudio?.version==='field-video-audio-result-v1'?result.videoAudio.status:null;
+  if(status==='TRANSCRIBED_UNREVIEWED'&&voiceTranscriptForEvidence(evidence))audio='La transcripción del audio quedó guardada para revisión. No verifica identidad ni registra asistencia.'+(result.progressDraft?' Después de que otro responsable apruebe la evidencia, escribí AVANCE para revisar el borrador y completar tu medición acumulada.':'');
+  else if(status==='NO_AUDIO_TRACK')audio='No se encontró una pista de audio; no se envió audio para transcripción.';
+  else if(status==='DIGITAL_SILENCE')audio='La extracción informó silencio digital; no se transcribió el audio.';
+  else audio='La transcripción no quedó confirmada. El original sigue disponible para revisión en la web.';
+ }
+ return visual+' '+audio+' Otro responsable autorizado debe revisar el video original en la web antes de aprobar avances. La tarea conserva su avance.';
+}
 export function readMetaFieldConversation(r,environment=process.env){
  const envelope=r.worker.metadata.fieldChannelConversation;if(!envelope)return null;if(envelope.version!==1||envelope.bindingId!==r.channelBinding.id)return null;
  let value;try{value=JSON.parse(decryptCustomerSecret(envelope.encryptedState,{organizationId:r.member.organizationId,projectId:r.project.id,purpose:'field-conversation',resourceId:r.worker.id},environment));}catch{throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);}
@@ -96,13 +135,14 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   if(stale||!Number.isSafeInteger(messageAt)||messageAt>r.now.getTime()+60000||r.now.getTime()-messageAt>=86400000)return {done:await record(client,r,result(r,'STALE_CONVERSATION',text('Este mensaje pertenece a un paso anterior. Conservamos el borrador más reciente. Escribí MENU para empezar de nuevo.'),{code:'META_CHANNEL_STALE_MESSAGE'}),state,{onlyIfCurrent:true})};
   const {session,service}=operations(client,r),data=await service.read(session,{projectId:r.project.id,scope:r.scope}),tasks=(await client.query(`SELECT id,title,progress,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Task" WHERE "projectId"=$1 ORDER BY "createdAt",id LIMIT 101`,[r.project.id])).rows;
   const latest=data.attendance.filter(e=>e.workerId===r.worker.id).sort((a,b)=>b.sequence-a.sequence)[0]||null;
-  const limited=attendanceOnly||Boolean(r.connection.metadata?.developmentPilot),facts={projectName:r.project.name,workerId:r.worker.id,permissions:limited?{attendance:r.worker.metadata.participant.permissions.attendance,report:false}:r.worker.metadata.participant.permissions,attendanceOnly:limited,tasks,sectors:data.sectors,evidence:data.evidence,proposals:data.proposals,inventory:data.inventory,latest};
+  const limited=attendanceOnly||Boolean(r.connection.metadata?.developmentPilot),facts={projectName:r.project.name,workerId:r.worker.id,permissions:limited?{attendance:r.worker.metadata.participant.permissions.attendance,report:false}:r.worker.metadata.participant.permissions,attendanceOnly:limited,tasks,sectors:data.sectors,evidence:data.evidence,proposals:data.proposals,inventory:data.inventory,latest,mediaReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaFieldMediaContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId}};
   let plan;
   try{plan=planMetaFieldConversation({message:r.proof.value,state,eventId:r.event.id,facts,now:r.now});}
   catch(error){if(!safeErrors.has(error.code))throw error;return {done:await record(client,r,result(r,'INPUT_REVIEW',text(explanation(error.code)+' Escribí CANCELAR para volver al menú.'),{code:error.code}),state)};}
   if(plan.media){
    assertDevelopmentPilotAdapter(r.connection,'media');
    if(facts.permissions.report!==true)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
+   if(plan.media.sourceOrigin&&!await validateMetaFieldMediaOrigin(client,r,plan.media,{...plan.state,version:1},{environment,now:r.now,protocol}))throw new WorkspaceError('META_CHANNEL_MEDIA_CONTEXT_CHANGED',409);
    await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'meta.field.media.prepared','Worker',$4,$5::jsonb)`,[key,r.member.organizationId,r.member.actorId,r.worker.id,JSON.stringify({version:1,projectId:r.project.id,eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,channelBindingId:r.channelBinding.id,encryptedInput:seal(r,'field-media-prepared',key,{media:plan.media,state:plan.state})})]);
    await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify({...r.worker.metadata,fieldChannelConversation:conversationEnvelope(r,plan.state)})]);
    return prepareMedia(client,r,plan.media,plan.state);
@@ -126,10 +166,10 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   if(!provider||!put||!get||!analyzer)throw new WorkspaceError('META_CHANNEL_MEDIA_NOT_CONFIGURED',503);
   // No locks span provider I/O. Re-resolve the signed source, assignment,
   // individual KYC and binding immediately before each corporate external call.
-  const beforeExternal=async()=>{if(prepared.corporate)await within(async client=>{const r=await resolve(client,context,'report');assertPrepared(r,prepared);assertDevelopmentPilotAdapter(r.connection,'media');await commitFence(client,r);});};
+  const beforeExternal=async()=>{if(prepared.corporate||prepared.media.sourceOrigin)await within(async client=>{const r=await resolve(client,context,'report');assertPrepared(r,prepared);assertDevelopmentPilotAdapter(r.connection,'media');if(prepared.media.sourceOrigin&&!await validateMetaFieldMediaOrigin(client,r,prepared.media,{...prepared.state,version:1},{environment,now:r.now,protocol}))throw new WorkspaceError('META_CHANNEL_MEDIA_CONTEXT_CHANGED',409);await commitFence(client,r);});};
   const external=fn=>async(...args)=>{await beforeExternal();return fn(...args);};
   let media;
-  try{await beforeExternal();const downloaded=await provider.downloadMedia({token:prepared.token,phoneNumberId:prepared.phoneNumberId,mediaId:prepared.media.mediaId,limit:prepared.media.kind==='image'?2*1024*1024:3*1024*1024,...(prepared.corporate?{beforeExternal}:{})});
+  try{await beforeExternal();const downloaded=await provider.downloadMedia({token:prepared.token,phoneNumberId:prepared.phoneNumberId,mediaId:prepared.media.mediaId,limit:prepared.media.kind==='image'?2*1024*1024:3*1024*1024,...(prepared.corporate||prepared.media.sourceOrigin?{beforeExternal}:{})});
    media=decodeFieldMedia(downloaded.bytes,downloaded.contentType);if(downloaded.contentType.split(';')[0].trim()!==String(prepared.media.contentType).split(';')[0].trim()||media.kind!==prepared.media.kind)throw new WorkspaceError('META_CHANNEL_MEDIA_INTEGRITY',409);
   }catch(error){if(!['META_CUSTOMER_MEDIA_INVALID','META_CUSTOMER_MEDIA_REJECTED','META_CUSTOMER_MEDIA_INTEGRITY','META_CHANNEL_MEDIA_INTEGRITY','FIELD_MEDIA_INVALID','FIELD_MEDIA_TOO_LARGE'].includes(error.code))throw error;
    return within(async client=>{const r=await resolve(client,context,'report'),prior=await saved(client,r);if(prior)return prior;return record(client,r,result(r,'MEDIA_REVIEW_REQUIRED',text('No pudimos guardar este archivo con su tamaño o formato actual. Prepará una foto de hasta 2 MiB o audio/video de hasta 3 MiB desde la web, o enviá otro archivo. Tu tarea conserva su avance.'),{code:error.code}),prepared.state,{onlyIfCurrent:true});});
@@ -147,6 +187,6 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   if(analysisAllowed)try{processed=await service.process(session,{...base,operationId:metaFieldOperationId(context.eventId,'MEDIA_PROCESS'),evidenceId:attached.evidence.id,revision:attached.evidence.revision,analysisConsent:consent});}
   catch(error){if(!['FIELD_ALREADY_REVIEWED','FIELD_MEDIA_ALREADY_PROCESSED'].includes(error.code))throw error;processed={...attached,evidence:publicFieldEvidence(await workspace.projectOperation(session,base,false,client=>fieldOps.readEvidence(client,prepared.projectId,attached.evidence.id)))};}
   return within(async client=>{const r=await resolve(client,context,'report'),prior=await saved(client,r);if(prior)return prior;
-   return record(client,r,result(r,'EVIDENCE',text('Evidencia guardada en privado. '+(processed.evidence.review?'El archivo ya tiene una revisión humana registrada; consultala desde la web.':!analysisAllowed?'No se envió a OpenAI. El responsable puede revisarlo manualmente desde la web.':processed.evidence.processing.status==='FAILED_RETRYABLE'?'El procesamiento necesita otro intento desde la web.':media.kind==='video'?'Se analizaron cuatro cuadros sin audio. El responsable debe revisar el video original antes de aprobar avances.':media.kind==='audio'&&processed.evidence.processing.result?.progressDraft?'Se preparó un borrador desde la transcripción. Otra persona debe revisar y aprobar el audio en la web. Después, escribí AVANCE para revisar el borrador y completar la medición acumulada.':'El responsable debe revisar el archivo antes de aprobar avances.')+' Escribí MENU para continuar.'),{businessApplied:true,receiptId:attached.receiptId,reviewState:'RECORDED'}),null,{onlyIfCurrent:true});});
+   return record(client,r,result(r,'EVIDENCE',text('Evidencia guardada en privado. '+(processed.evidence.review?'El archivo ya tiene una revisión humana registrada; consultala desde la web.':!analysisAllowed?'No se envió a OpenAI. El responsable puede revisarlo manualmente desde la web.':media.kind==='video'&&consent.noticeVersion===FIELD_VIDEO_PRIVACY_NOTICE_VERSION?metaFieldVideoResultText(processed.evidence,consent):processed.evidence.processing.status==='FAILED_RETRYABLE'?'El procesamiento necesita otro intento desde la web.':media.kind==='video'?'Se analizaron cuatro cuadros sin audio. El responsable debe revisar el video original antes de aprobar avances.':media.kind==='audio'&&processed.evidence.processing.result?.progressDraft?'Se preparó un borrador desde la transcripción. Otra persona debe revisar y aprobar el audio en la web. Después, escribí AVANCE para revisar el borrador y completar la medición acumulada.':'El responsable debe revisar el archivo antes de aprobar avances.')+' Escribí MENU para continuar.'),{businessApplied:true,receiptId:attached.receiptId,reviewState:'RECORDED'}),null,{onlyIfCurrent:true});});
  }};
 }
