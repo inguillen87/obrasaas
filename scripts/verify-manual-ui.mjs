@@ -13,6 +13,7 @@ mkdirSync(path.join(app, 'brand'));
 for (const file of ['page.js', 'manual.module.css']) copyFileSync(path.join(root, 'src/app/manual', file), path.join(app, 'manual', file));
 for (const file of ['brand-logo.js', 'brand-logo.module.css', 'brand-geometry.js']) copyFileSync(path.join(root, 'src/app/brand', file), path.join(app, 'brand', file));
 copyFileSync(path.join(root,'src/app/globals.css'),path.join(app,'globals.css'));
+copyFileSync(path.join(root,'src/app/public-site-metadata.mjs'),path.join(app,'public-site-metadata.mjs'));
 writeFileSync(path.join(fixture, 'package.json'), JSON.stringify({name:'actual-public-manual-ui', private:true}));
 writeFileSync(path.join(fixture, 'next.config.mjs'), `export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app, 'layout.js'), `import './globals.css';export default function Layout({children}) { return <html lang="es"><body style={{margin:0,fontFamily:'Arial'}}>{children}</body></html> }`);
