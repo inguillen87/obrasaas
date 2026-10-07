@@ -264,7 +264,7 @@ const closedSupport=()=>({attendance:false,kyc:false,media:false,flows:false,tem
 function activeCustomer(){return {enabled:true,connectionStatus:'CONNECTED',metadata:{customerSubscribed:true,customerActivation:{version:1,state:'ACTIVE',actorId:'owner'},customerVerification:{registered:true,scopes:['whatsapp_business_management','whatsapp_business_messaging'],expiresAt:null}}};}
 const supportClock=Date.parse('2026-10-06T12:00:00.000Z');
 test('company operational support requires canonical activation, COMPANY, valid database time and no development pilot',()=>{
- const c=activeCustomer(),options={schemaReady:true,mode:'COMPANY',now:supportClock};assert.deepEqual(companyChannelOperationalCapabilities(c,options),{...closedSupport(),attendance:true,media:true});
+ const c=activeCustomer(),options={schemaReady:true,mode:'COMPANY',now:supportClock};assert.deepEqual(companyChannelOperationalCapabilities(c,options),{...closedSupport(),attendance:true,kyc:true,media:true});
  for(const change of [{schemaReady:false},{mode:'PROJECT_ONLY'},{mode:'PREPARED'},{mode:'SUSPENDED'},{now:NaN},{now:undefined}])assert.deepEqual(companyChannelOperationalCapabilities(c,{...options,...change}),closedSupport());
  for(const mutate of [r=>r.enabled=false,r=>r.connectionStatus='DISCONNECTED',r=>r.metadata.developmentPilot={},r=>r.metadata.customerSubscribed=false,r=>r.metadata.customerActivation.state='DEACTIVATED',r=>r.metadata.customerVerification.registered=false,r=>r.metadata.customerVerification.scopes=[],r=>r.metadata.customerVerification.expiresAt=new Date(supportClock+60000).toISOString(),r=>r.metadata.customerVerification.expiresAt='malformed',r=>r.metadata.customerLifecycle={recovery:{version:1,state:'VERIFYING'}}]){const copy=structuredClone(c);mutate(copy);assert.deepEqual(companyChannelOperationalCapabilities(copy,options),closedSupport());}
 });
@@ -290,7 +290,7 @@ function companyReadFixture({ready=true,connections=[]}={}){
 test('canonical company snapshot whitelists channel and assignments while summarizing only visible operational support',async()=>{
  const base={...activeCustomer(),id:'connection-a',anchorProjectId:'project-a',anchorName:'Obra A',displayPhoneNumber:'+54 11 0000 0000',mode:'COMPANY',revision:3,encryptedAccessToken:'private-cipher',actorId:'private-actor',phone:'private-individual',metadata:{...activeCustomer().metadata,token:'private-token'}},closed={...base,id:'connection-b',mode:'SUSPENDED'};
  const f=companyReadFixture({connections:[closed,base]}),value=await f.store.read({}, {scope:'a'.repeat(64),projectId:'project-a'});
- assert.deepEqual(value.capabilities,{...closedSupport(),attendance:true,media:true});assert.deepEqual(value.channels[0].capabilities,closedSupport());assert.equal(value.channels[1].capabilities.media,true);
+ assert.deepEqual(value.capabilities,{...closedSupport(),attendance:true,kyc:true,media:true});assert.deepEqual(value.channels[0].capabilities,closedSupport());assert.equal(value.channels[1].capabilities.media,true);
  assert.deepEqual(Object.keys(value.channels[1]).sort(),['anchorName','anchorProjectId','assignments','capabilities','displayPhoneNumber','id','mode','revision']);assert.deepEqual(Object.keys(value.channels[1].assignments[0]).sort(),['projectId','projectName','revision','status']);
  for(const marker of ['private-cipher','private-actor','private-individual','private-token','private-assignment'])assert.equal(JSON.stringify(value).includes(marker),false);
  assert.equal(f.queries.filter(r=>r.sql==='SELECT clock_timestamp() AS now').length,1);

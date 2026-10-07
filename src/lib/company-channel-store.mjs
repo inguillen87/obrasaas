@@ -14,7 +14,7 @@ function command(body){
  return {...body,operationId:body.operationId.toLowerCase()};
 }
 const identity=(member)=>({organization:{id:member.organizationId,name:member.organizationName},actor:{id:member.actorId,role:member.role}});
-const capabilities=operational=>({attendance:operational,kyc:false,media:operational,flows:false,templates:false});
+const capabilities=operational=>({attendance:operational,kyc:operational,media:operational,flows:false,templates:false});
 // Support describes the channel, never a participant's individual permission.
 // Callers supply the canonical database clock used for this read.
 export function companyChannelOperationalCapabilities(connection,{schemaReady=false,mode=connection?.company?.mode,now}={}){

@@ -1,8 +1,9 @@
 import {randomUUID} from 'node:crypto';
 import {WorkspaceError,digest,operationId,workspaceId} from './workspace-policy.mjs';
-import {decodePrivateImage,PrivateImageError} from './private-image-upload.mjs';
+import {decodePrivateImage,PrivateImageError,createPrivateImageUploader} from './private-image-upload.mjs';
 import {participantKeys,participantReceiptId,PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION} from './participant-policy.mjs';
 import {metaKycOperationId} from './meta-kyc-challenge.mjs';
+import {fenceCompanyKycAuthority} from './company-channel-kyc.mjs';
 import {invalidateWorkerChannelIdentity} from './worker-channel-identity.mjs';
 
 const fail=(code,status=409)=>{throw new WorkspaceError(code,status);};
@@ -33,6 +34,19 @@ async function priorReceipt(client,r,key,fingerprint){
  return safeResult(found,true);
 }
 
+const guardedUploaders=new WeakSet();
+export function createParticipantChannelKycUploader({put,get,environment=()=>process.env}){
+ const legacy=createPrivateImageUploader({put,get,environment});
+ const upload=async(value,filename,type,beforeExternal=null)=>{
+  if(beforeExternal===null)return legacy.uploadImageToBlob(value,filename,type);
+  if(typeof beforeExternal!=='function')fail('META_KYC_COMPANY_ADAPTER_UNAVAILABLE',503);
+  let denied=null;
+  const guarded=operation=>async(...args)=>{try{await beforeExternal();}catch(error){denied=error;throw error;}return operation(...args);};
+  const uploader=createPrivateImageUploader({put:guarded(put),get:guarded(get),environment});
+  try{return await uploader.uploadImageToBlob(value,filename,type);}catch(error){if(denied)throw denied;throw error;}
+ };
+ guardedUploaders.add(upload);return upload;
+}
 // This adapter has no public HTTP route. Only a pinned signed-channel resolver
 // can grant limited deposit authority; caller-supplied worker IDs are rejected.
 export function createParticipantChannelKycDeposit({connect,resolveAuthority,upload,environment=process.env}){
@@ -45,11 +59,13 @@ export function createParticipantChannelKycDeposit({connect,resolveAuthority,upl
    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[key]);
    const prior=await priorReceipt(client,r,key,fingerprint);if(prior)return {done:prior};
    if(['PENDING_REVIEW','PENDING_ACCOUNT_CLAIM','APPROVED'].includes(r.worker.metadata.participant.kyc?.status))fail('PARTICIPANT_KYC_ALREADY_SUBMITTED');
-   return {authorityDigest,key,fingerprint,organizationId:r.member.organizationId,projectId:r.project.id,workerId:r.worker.id,revision:r.worker.revision};
+   if(r.companyKyc&&!guardedUploaders.has(upload))fail('META_KYC_COMPANY_ADAPTER_UNAVAILABLE',503);
+   return {corporate:Boolean(r.companyKyc),authorityDigest,key,fingerprint,organizationId:r.member.organizationId,projectId:r.project.id,workerId:r.worker.id,revision:r.worker.revision};
   });
   if(prepare.done)return prepare.done;
+  const beforeExternal=prepare.corporate?()=>transaction(async client=>{const r=await resolveAuthority(client,context,{deposit:true,environment});if(!r.companyKyc||authority(r,input)!==prepare.authorityDigest)fail('META_KYC_COMPANY_AUTHORITY_CHANGED');}):null;
   const images=[];
-  for(const [kind,image] of [['DOCUMENT_FRONT',input.front],['SELFIE',input.selfie]]){let url;try{url=await upload(image.bytes.toString('base64'),'participant-kyc-'+digest([prepare.organizationId,prepare.projectId,prepare.workerId,input.operationId,kind]),image.contentType);}catch{fail('PARTICIPANT_PRIVATE_STORAGE_UNCONFIRMED',503);}images.push({id:kind==='SELFIE'?'selfie':'document-front',kind,url,contentType:image.contentType,bytes:image.bytes.length,sha256:image.digest});}
+  for(const [kind,image] of [['DOCUMENT_FRONT',input.front],['SELFIE',input.selfie]]){let url;try{url=await upload(image.bytes.toString('base64'),'participant-kyc-'+digest([prepare.organizationId,prepare.projectId,prepare.workerId,input.operationId,kind]),image.contentType,...(beforeExternal?[beforeExternal]:[]));}catch(error){if(beforeExternal&&error instanceof WorkspaceError)throw error;fail('PARTICIPANT_PRIVATE_STORAGE_UNCONFIRMED',503);}images.push({id:kind==='SELFIE'?'selfie':'document-front',kind,url,contentType:image.contentType,bytes:image.bytes.length,sha256:image.digest});}
   return transaction(async client=>{
    const r=await resolveAuthority(client,context,{deposit:true,environment});if(authority(r,input)!==prepare.authorityDigest)fail('META_KYC_CHALLENGE_REVOKED');
    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[prepare.key]);
@@ -63,6 +79,7 @@ export function createParticipantChannelKycDeposit({connect,resolveAuthority,upl
    await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify(m)]);
    const details={version:1,projectId:r.project.id,requestDigest:prepare.fingerprint,kind:'KYC_SUBMITTED',submissionId,contentHash,status,noticeVersion:input.noticeVersion,ocrConsentRecorded:input.ocrConsent,ocrNoticeVersion:input.ocrNoticeVersion,ocrNoticeSha256:digest(PARTICIPANT_OCR_NOTICE),biometricConsentRecorded:input.biometricConsent,biometricNoticeVersion:input.biometricNoticeVersion,biometricNoticeSha256:input.biometricNoticeVersion?digest(PARTICIPANT_BIOMETRIC_NOTICE):null,channelCapture,identityCertified:false,permissionsGranted:false,whatsAppAccessGranted:false};
    await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.operation.recorded','Worker',$4,$5::jsonb)`,[prepare.key,r.member.organizationId,r.member.actorId,r.worker.id,JSON.stringify(details)]);
+   await fenceCompanyKycAuthority(client,r,context);
    return safeResult({id:prepare.key,metadata:details},false);
   });
  }};

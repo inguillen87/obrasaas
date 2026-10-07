@@ -30,7 +30,7 @@ async function ownKycReplayOutcome(client,member,session,input,found,fingerprint
 function requireManager(member){if(!participantManager(member.role))throw new WorkspaceError('PARTICIPANT_MANAGE_REQUIRED',403);}
 function matchProvider(invitation,result){if(!result||result.invitationId!==invitation.id||result.email!==invitation.email||result.role!=='org:member'||!/^orginv_[A-Za-z0-9]+$/.test(result.id||'')||!['pending','accepted'].includes(result.state)||!Number.isFinite(Date.parse(result.expiresAt)))throw new WorkspaceError('PARTICIPANT_INVITATION_UNCONFIRMED',503);}
 export function createParticipantStore({workspace,connect,identity,upload,get,analyzer,prepareKycChat,assessBiometrics,environment=process.env}){
- const run=(session,input,writable,callback)=>workspace.projectOperation(session,input,writable,callback);
+ const run=(session,input,writable,callback,beforeProject)=>workspace.projectOperation(session,input,writable,callback,beforeProject);
  const organizationRun=(session,input,writable,callback)=>workspace.organizationOperation(session,input,writable,callback);
  async function privateKycBytes(image){
   let result;try{const url=new URL(image.url);if(url.protocol!=='https:'||! /^[a-z0-9-]+\.private\.blob\.vercel-storage\.com$/.test(url.hostname)||url.port||url.search||url.hash||url.username||url.password||! /^\/obrasaas\/legacy-images\/v1\/[a-f0-9]{64}\/image\.(png|jpg|webp)$/.test(url.pathname)||!Number.isInteger(image.bytes)||image.bytes<1||image.bytes>2*1024*1024||!['image/png','image/jpeg','image/webp'].includes(image.contentType)||!/^[a-f0-9]{64}$/.test(image.sha256||''))throw new Error();result=await get(url.pathname.slice(1),{access:'private',useCache:false,abortSignal:AbortSignal.timeout(15000)});if(result?.statusCode!==200||result.blob?.url!==image.url||result.blob.size!==image.bytes||result.blob.contentType?.split(';')[0]!==image.contentType)throw new Error();}catch{await result?.stream?.cancel?.().catch(()=>{});throw new WorkspaceError('PARTICIPANT_PRIVATE_STORAGE_UNCONFIRMED',503);}
@@ -189,8 +189,10 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
     const prior=await receipt(client,member,key);if(prior){if(prior.metadata.requestDigest!==requestDigest||prior.entityId!==row.id||prior.metadata.kind!=='PREPARE_KYC_CHAT')throw new WorkspaceError('PARTICIPANT_OPERATION_CONFLICT',409);return {scope,...await currentOutcome(client,input.projectId,prior,true),kind:'PREPARE_KYC_CHAT',codeUnavailable:true,expiresAt:prior.metadata.expiresAt};}
     const value=await prepareKycChat(client,member,project,{operationId:input.operationId,...p});
     await record(client,member,key,input.projectId,row.id,requestDigest,{kind:'PREPARE_KYC_CHAT',challengeReceiptId:value.receiptId,expiresAt:value.expiresAt,identityCertified:false,permissionsGranted:false});
-    return {scope,...value,receiptId:key,participant:publicParticipant(await worker(client,input.projectId,row.id))};
-   });
+    const participant=publicParticipant(await worker(client,input.projectId,row.id));
+    if(typeof prepareKycChat.afterWrite==='function')await prepareKycChat.afterWrite(client,member,project.id);
+    return {scope,...value,receiptId:key,participant};
+   },typeof prepareKycChat?.beforeProject==='function'?(client,member)=>prepareKycChat.beforeProject(client,member,input):undefined);
    const recorded=await run(session,context,false,async(client,member,scope)=>{requireManager(member);const prior=await receipt(client,member,participantReceiptId(member.actorId,input.projectId,input.operationId));if(!prior)return null;if(prior.metadata.requestDigest!==requestDigest)throw new WorkspaceError('PARTICIPANT_OPERATION_CONFLICT',409);return {scope,...await currentOutcome(client,input.projectId,prior,true)};});if(recorded)return recorded;
    let restoration=null;
    if(input.action==='RESTORE_ACCESS'){

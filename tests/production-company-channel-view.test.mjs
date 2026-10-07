@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {companyChannelSnapshot,companyChannelOutcome,companyChannelCommand,companyChannelCanAct} from '../src/app/(identity)/cuenta/company-channel-view.mjs';
 const expected={scope:'a'.repeat(64),projectId:'project-a',operationId:'11111111-1111-4111-8111-111111111111',action:'PREPARE',connectionId:'connection-a',organizationId:'org_Test',actorId:'user_AdminA'};
-const support=(active=false)=>({attendance:active,kyc:false,media:active,flows:false,templates:false});
+const support=(active=false)=>({attendance:active,kyc:active,media:active,flows:false,templates:false});
 const channel=()=>({id:'connection-a',anchorProjectId:'project-a',anchorName:'Obra A',displayPhoneNumber:null,mode:'PROJECT_ONLY',revision:1,assignments:[],capabilities:support()});
 const identity=()=>({organization:{id:'org_Test',name:'Empresa de ensayo'},actor:{id:'user_AdminA',role:'ADMIN'}});
 const snapshot=()=>({...identity(),scope:expected.scope,projectId:expected.projectId,schemaReady:true,canManage:true,channels:[channel()],projects:[{id:'project-a',name:'Obra A'},{id:'project-b',name:'Obra B'}],truncated:false,accepted:false,capabilities:support()});
@@ -24,7 +24,7 @@ test('full support is per active COMPANY channel and its exact summary never gra
  assert.throws(()=>companyChannelSnapshot({...base,capabilities:support()},expected));
  assert.throws(()=>companyChannelSnapshot({...snapshot(),capabilities:support(true)},expected));
  const inactive={...active,capabilities:support()};assert.equal(companyChannelSnapshot({...snapshot(),channels:[inactive]},expected).capabilities.media,false);
- for(const change of [{attendance:false},{media:false},{kyc:true},{flows:true},{templates:true},{stock:true},{media:'true'}])assert.throws(()=>companyChannelSnapshot({...base,channels:[{...active,capabilities:{...active.capabilities,...change}}]},expected));
+ for(const change of [{attendance:false},{media:false},{kyc:false},{flows:true},{templates:true},{stock:true},{media:'true'}])assert.throws(()=>companyChannelSnapshot({...base,channels:[{...active,capabilities:{...active.capabilities,...change}}]},expected));
  for(const key of ['metadata','encryptedAccessToken','actorId','phone'])assert.throws(()=>companyChannelSnapshot({...base,channels:[{...active,[key]:'private'}]},expected));
  const missing={...active};delete missing.capabilities;assert.throws(()=>companyChannelSnapshot({...base,channels:[missing]},expected));
 });
