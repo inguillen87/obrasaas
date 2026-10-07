@@ -257,7 +257,19 @@ async function recoveryClosureScenario(mode,width){
   if(decisionMode){await waitText(page,'Compará cada fila con el archivo');await page.type('[data-plan-import] textarea','Revisado con la fuente sintética');await (await page.$$('[data-plan-import] input[type=checkbox]')).at(-1).click();await click(page,'Aplicar 1 tareas');}
  }
  if(!legacyMode&&!expiryMode)await waitText(page,'La confirmación no llegó.');await waitText(page,'Intento pendiente de comprobación');if(expiryMode)await waitText(page,'El intento quedó registrado.');const reference=(await browserReferences(page)).find(entry=>entry.resource==='plan-import');assert.ok(reference);assert.equal(reference.operationId,legacyMode?legacyId:posts.at(-1).operationId);assert.equal(reference.projectId,projectId);assert.equal(reference.scope,scope);
- assert.deepEqual(Object.keys(reference).sort(),['createdAt','operationId','projectId','resource','scope','version']);
+ const referenceFields=['createdAt','operationId','projectId','resource','scope','version'];
+ assert.deepEqual(Object.keys(reference).sort(),[...referenceFields,...(decisionMode?['action','draftId','expectedRevision','inputDigest']:[])].sort(),'Only the exact upload/legacy or typed decision reference schema may persist');
+ assert.equal(reference.version,1);assert.equal(reference.resource,'plan-import');assert.ok(Number.isSafeInteger(reference.createdAt)&&reference.createdAt>=0);
+ if(decisionMode){
+  const command=JSON.parse(posts.find(post=>post.action==='APPLY').payload);
+  assert.deepEqual(Object.keys(command).sort(),['action','draftId','expectedRevision','operationId','projectId','reason','rows','scope']);
+  assert.equal(reference.action,command.action);assert.equal(reference.action,'APPLY');assert.equal(reference.draftId,command.draftId);assert.equal(reference.draftId,'draft-plan-A');
+  assert.equal(reference.expectedRevision,command.expectedRevision);assert.ok(Number.isSafeInteger(reference.expectedRevision)&&reference.expectedRevision===3);assert.equal(reference.operationId,command.operationId.toLowerCase());
+  assert.match(reference.inputDigest,/^[a-f0-9]{64}$/);
+  const canonicalCommand={action:command.action,draftId:command.draftId,expectedRevision:command.expectedRevision,operationId:command.operationId.toLowerCase(),projectId:command.projectId,reason:command.reason,rows:command.rows.map(value=>{assert.deepEqual(Object.keys(value).sort(),['endsOn','evidence','startsOn','title','uncertainty']);return {endsOn:value.endsOn,evidence:value.evidence,startsOn:value.startsOn,title:value.title,uncertainty:value.uncertainty};}),scope:command.scope};
+  assert.equal(reference.inputDigest,createHash('sha256').update(JSON.stringify(['plan-import-command-v1',canonicalCommand])).digest('hex'),'The persisted digest must identify the exact captured APPLY command without storing its contents');
+ }
+ assert.doesNotMatch(JSON.stringify(reference),/Fundaciones|synthetic-workspace-plan|Synthetic schedule fixture|Revisado con la fuente sintética|rows|reason|evidence|title|uncertainty|filename|synthetic-schedule\.pdf|sourceAvailable|token|authorization/i);
  assert.equal(await page.evaluate(({scope,projectId})=>sessionStorage.getItem('obrasaas-plan-attempt-v1:'+scope+':'+projectId),{scope,projectId}),null,'Legacy reference is removed only after the IDB commit');
  // Clearing session storage and reloading must retain the only durable reference.
  if(mode!=='global-same-mount'&&!explicitRetryMode&&!closeAfterCheck){await page.evaluate(()=>sessionStorage.clear());await page.reload({waitUntil:'networkidle0'});await waitText(page,'Empresa sintética de cronogramas');await openProject(page);await assertCount(page,applied?151:150);await waitText(page,'Intento pendiente de comprobación');}
@@ -315,7 +327,7 @@ async function recoveryClosureScenario(mode,width){
  }
  assert.equal(posts.length,expectedPosts,'Only explicit initial POSTs may occur during all recovery, draft queries, close, permissions and reload actions');
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Horizontal overflow '+mode+' '+width);
- const stored=JSON.stringify(await browserReferences(page))+await page.evaluate(()=>JSON.stringify([Object.values(localStorage),Object.values(sessionStorage)]));assert.doesNotMatch(stored,/Fundaciones|synthetic-workspace-plan|Synthetic schedule fixture|rows|reason|draftId|sourceAvailable/);
+ const stored=JSON.stringify(await browserReferences(page))+await page.evaluate(()=>JSON.stringify([Object.values(localStorage),Object.values(sessionStorage)]));assert.doesNotMatch(stored,/Fundaciones|synthetic-workspace-plan|Synthetic schedule fixture|Revisado con la fuente sintética|rows|reason|evidence|title|uncertainty|filename|synthetic-schedule\.pdf|sourceAvailable|token|authorization/i);
  checks.push({mode,width,applications:posts.filter(post=>post.action==='APPLY').length,posts:posts.length,recoveryReads:recoveryReads.length,durableJournal:true});await context.close();
 }
 try{

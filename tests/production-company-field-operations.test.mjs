@@ -178,9 +178,15 @@ test('corporate full operations ESTADO records current ledger without replacing 
  assert.deepEqual(f.worker.metadata,before);assert.deepEqual(f.io,[]);assert.equal([...f.audits.values()].filter(r=>r.action==='meta.field.dispatched').length,1);
 });
 
+test('stale corporate reply preserves the current prompt without inviting a reply to the rejection',async()=>{
+ const f=mediaFixture(),draft={purpose:'INCIDENT',step:'INCIDENT_DESCRIPTION',title:'Fixture incident',lastEventId:'newer-field-event',lastMessageTimestamp:String(Math.floor(Date.now()/1000)+1),lastReceivedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+60000).toISOString(),bindingId:'binding-project-b'};
+ f.worker.metadata.fieldChannelConversation={version:1,...draft,encryptedState:encryptCustomerSecret(JSON.stringify(draft),{organizationId:'organization-a',projectId:'project-b',purpose:'field-conversation',resourceId:f.worker.id},environment)};
+ const before=structuredClone(f.worker.metadata);f.audits.clear();f.message.type='text';f.message.text={body:'Detalle del paso anterior'};
+ const outcome=await f.bridge.execute(f.context);assert.equal(outcome.kind,'STALE_CONVERSATION');assert.doesNotMatch(outcome.reply.body,/mantené presionado este mensaje|respondé a este mismo mensaje/);assert.deepEqual(f.worker.metadata,before);assert.deepEqual(f.io,[]);
+});
 // Real encrypted signed envelopes, canonical KYC/binding checks and selector
 // correlation. Stop at delegation, before any field engine/provider operation.
-function routingFixture(message,{promptChange=()=>{},workerChange=()=>{},requestChange=()=>{},membership=true,assigned=true}={}){
+function routingFixture(message,{promptChange=()=>{},workerChange=()=>{},requestChange=()=>{},membership=true,assigned=true,routeExpiresIn=120000,fieldExpiresIn=120000,fieldPurpose='MEDIA',routePhase='SELECTED'}={}){
  const member={actorId:'actor-a',membershipId:'membership-a',organizationId:'organization-a',clerkUserId:'user_Fixture',role:'AUDITOR',clerkRole:'org:member',organizationMetadata:{}};
  const connection={id:'connection-a',projectId:'project-a',organizationId:member.organizationId,phoneNumberId:'120000001',whatsappBusinessId:'130000001',enabled:true,connectionStatus:'CONNECTED',encryptedAccessToken:'v2.synthetic-not-used',metadata:{credentialFormat:'tenant-aad-v2',credentialOrganizationId:member.organizationId,customerSubscribed:true,customerVerification:{registered:true,expiresAt:null,scopes:['whatsapp_business_management','whatsapp_business_messaging']},customerActivation:{version:1,state:'ACTIVE',actorId:'other-admin'}}};
  const seal=(value,purpose,id,projectId='project-a')=>encryptCustomerSecret(JSON.stringify(value),{organizationId:member.organizationId,projectId,purpose,resourceId:id},environment);
@@ -191,8 +197,8 @@ function routingFixture(message,{promptChange=()=>{},workerChange=()=>{},request
  const origin=event('origin12345678',{type:'text',text:{body:'VINCULAR '+'a'.repeat(43)}}),current=event('current12345678',message),binding={version:1,id:'binding-b',status:'VERIFIED',workerId:'worker-b',projectId:'project-b',organizationId:member.organizationId,actorId:member.actorId,membershipId:member.membershipId,clerkUserId:member.clerkUserId,senderE164:'+5491100001111',connectionId:connection.id,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,kycSubmissionId:'kyc-b',kycReviewedAt:'2026-10-01T10:00:00Z',proofEventId:origin.id,proofExternalId:origin.externalId,proofPayloadDigest:origin.payload.payloadDigest};
  const worker={id:'worker-b',projectId:'project-b',phone:binding.senderE164,active:true,actorId:member.actorId,membershipId:member.membershipId,clerkUserId:member.clerkUserId,organizationId:member.organizationId,assignmentRevision:2,projectName:'Obra B',metadata:{participant:{version:1,status:'ACTIVE',clerkUserId:member.clerkUserId,permissions:{attendance:false,report:true},kyc:{version:1,status:'APPROVED',submissionId:'kyc-b',contentHash:'fixture-kyc-content',images:[{id:'document-front'},{id:'selfie'}],review:{decision:'APPROVED',actorId:'other-reviewer',recordedAt:binding.kycReviewedAt}},channelIdentity:{binding}}}};
  const routeId='company_route_'+digest([member.organizationId,connection.id,importSenderHmac(connection)]),promptId='customer_webhook_'+digest('durable-field-prompt'),nonce='1'.repeat(20);
- const route={id:routeId,epoch:4,actorId:member.actorId,membershipId:member.membershipId,projectId:worker.projectId,workerId:worker.id,assignmentRevision:2,bindingId:binding.id,encryptedState:seal({phase:'SELECTED',expiresAt:new Date(Date.now()+120000).toISOString()},'company-route',routeId)};
- const state={purpose:'MEDIA',step:'MEDIA',taskId:'task-b',sectorId:'sector-b',nonce,choices:[{value:'MEDIA',title:'Enviar evidencia'}],lastEventId:promptId,lastMessageTimestamp:'1',lastReceivedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+120000).toISOString(),bindingId:binding.id};
+ const route={id:routeId,epoch:4,actorId:member.actorId,membershipId:member.membershipId,projectId:worker.projectId,workerId:worker.id,assignmentRevision:2,bindingId:binding.id,encryptedState:seal({phase:routePhase,expiresAt:new Date(Date.now()+routeExpiresIn).toISOString()},'company-route',routeId)};
+ const state={purpose:fieldPurpose,step:'MEDIA',taskId:'task-b',sectorId:'sector-b',nonce,choices:[{value:'MEDIA',title:'Enviar evidencia'}],lastEventId:promptId,lastMessageTimestamp:'1',lastReceivedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+fieldExpiresIn).toISOString(),bindingId:binding.id};
  worker.metadata.fieldChannelConversation={version:1,...state,encryptedState:seal(state,'field-conversation',worker.id,worker.projectId)};
  workerChange(worker);
  const prompt={routeId,routeEpoch:route.epoch,workerId:worker.id,projectId:worker.projectId,bindingId:binding.id,actorId:member.actorId,membershipId:member.membershipId};promptChange(prompt);
@@ -249,6 +255,26 @@ for(const [name,message,options] of [
 for(const type of ['image','audio','video','location','text','interactive'])test('signed corporate current '+type+' delegates only frozen B source',async()=>{
  const message={type,context:{id:'wamid.currentprompt123456'},...(type==='text'?{text:{body:'INCIDENCIA'}}:type==='interactive'?{interactive:{list_reply:{id:'obra:'+'1'.repeat(20)+':0'}}}:{[type]:{id:'fixture-media',mime_type:type==='image'?'image/png':type==='audio'?'audio/ogg':'video/mp4',latitude:0,longitude:0}})},f=routingFixture(message);
  await assert.rejects(f.bridge.execute(f.context),{code:'CONTROLLED_FIELD_DELEGATION'});assert.equal(f.projection().kind,'FIELD');assert.equal(f.projection().projectId,'project-b');assert.equal(f.projection().workerId,'worker-b');assert.equal(f.io(),0);
+});
+for(const type of ['image','audio','video','location','text','interactive'])test('live correlated corporate '+type+' draft continues after worksite selection expires',async()=>{
+ const message={type,context:{id:'wamid.currentprompt123456'},...(type==='text'?{text:{body:'Detalle del paso actual'}}:type==='interactive'?{interactive:{list_reply:{id:'obra:'+'1'.repeat(20)+':0'}}}:{[type]:{id:'fixture-media',mime_type:type==='image'?'image/png':type==='audio'?'audio/ogg':'video/mp4',latitude:0,longitude:0}})},f=routingFixture(message,{routeExpiresIn:-1000});
+ const before=structuredClone(f.worker.metadata);
+ await assert.rejects(f.bridge.execute(f.context),{code:'CONTROLLED_FIELD_DELEGATION'});
+ assert.equal(f.projection().kind,'FIELD');assert.equal(f.projection().projectId,'project-b');assert.equal(f.projection().workerId,'worker-b');assert.deepEqual(f.worker.metadata,before);assert.equal(f.io(),0);
+});
+for(const [name,options] of [
+ ['expired field draft',{fieldExpiresIn:-1000}],['menu rather than active draft',{fieldPurpose:'MENU'}],['unknown purpose',{fieldPurpose:'UNKNOWN'}],['unconfirmed worksite',{routePhase:'CONFIRM'}],['changed prompt epoch',{promptChange:p=>p.routeEpoch--}],
+])test('expired worksite cannot be renewed from '+name,async()=>{
+ const f=routingFixture({type:'image',context:{id:'wamid.currentprompt123456'},image:{id:'fixture-media',mime_type:'image/png'}},{routeExpiresIn:-1000,...options}),before=structuredClone(f.worker.metadata),outcome=await f.bridge.execute(f.context);
+ assert.equal(outcome.kind,'WORKSITE_SELECTION_REQUIRED');assert.equal(outcome.businessApplied,false);assert.equal(f.projection().kind,'SELECTION');assert.equal(f.projection().projectId,null);assert.deepEqual(f.worker.metadata,before);assert.equal(f.io(),0);
+});
+for(const body of ['ENTRADA','PAUSA','VOLVER','SALIDA','TAREAS','EVIDENCIA','INCIDENCIA','MATERIALES','CONSUMO','AVANCE'])test('expired selection preserves live draft rather than starting '+body,async()=>{
+ const f=routingFixture({type:'text',context:{id:'wamid.currentprompt123456'},text:{body}},{routeExpiresIn:-1000}),before=structuredClone(f.worker.metadata),outcome=await f.bridge.execute(f.context);
+ assert.equal(outcome.kind,'WORKSITE_DRAFT_PENDING');assert.equal(outcome.businessApplied,false);assert.equal(f.projection().kind,'SELECTION');assert.deepEqual(f.worker.metadata,before);assert.equal(f.io(),0);
+});
+for(const message of [{type:'image',image:{id:'fixture-media',mime_type:'image/png'}},{type:'audio',context:{id:'wamid.otherprompt123456'},audio:{id:'fixture-media',mime_type:'audio/ogg'}},{type:'interactive',interactive:{list_reply:{id:'obra:'+'2'.repeat(20)+':0'}}}])test('live draft does not renew expired worksite for uncorrelated '+message.type,async()=>{
+ const f=routingFixture(message,{routeExpiresIn:-1000}),before=structuredClone(f.worker.metadata),outcome=await f.bridge.execute(f.context);
+ assert.equal(outcome.kind,'WORKSITE_INPUT_CONTEXT_REQUIRED');assert.equal(outcome.businessApplied,false);assert.equal(f.projection().kind,'SELECTION');assert.equal(f.projection().projectId,null);assert.deepEqual(f.worker.metadata,before);assert.equal(f.io(),0);
 });
 for(const [name,options] of [
  ['membership revoked',{membership:false}],['project assignment revoked',{assigned:false}],['worker inactive',{workerChange:w=>w.active=false}],

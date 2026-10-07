@@ -67,7 +67,7 @@ export const lifecycleSchema=`
 `;
 
 export function createControlledLifecycleGraph(environment=lifecycleEnvironment){
- const assets=new Map(lifecycleTenants.map(tenant=>[tenant.key,{...tenant,registered:false,subscribed:false,subscriptionOverride:null,exchanges:0,registrations:0,subscriptions:0,sends:0,downloads:0,registerResponseLost:false,registerRejectedOnce:false,registerPendingOnce:false,sendResponseLost:false}]));
+ const assets=new Map(lifecycleTenants.map(tenant=>[tenant.key,{...tenant,registered:false,subscribed:false,subscriptionOverride:null,exchanges:0,registrations:0,phoneInspections:0,subscriptions:0,sends:0,downloads:0,registerResponseLost:false,registerRejectedOnce:false,registerPendingOnce:false,sendResponseLost:false}]));
  const media=new Map(lifecycleTenants.map(tenant=>[tenant.mediaId,{assetKey:tenant.key,bytes:lifecyclePng,pathname:'/whatsapp_business/attachments/synthetic-'+tenant.key+'.png'}]));
  function addMedia(assetKey,mediaId,bytes){
   assert.ok(assets.has(assetKey));assert.match(mediaId,/^\d+$/);assert.ok(!media.has(mediaId));assert.ok(Buffer.isBuffer(bytes));assert.ok(bytes.length>8&&bytes.length<=2*1024*1024);assert.equal(bytes.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
@@ -100,7 +100,13 @@ export function createControlledLifecycleGraph(environment=lifecycleEnvironment)
    const asset=[...assets.values()].find(value=>bearer==='Bearer '+value.token);assert.ok(asset);
    assert.equal(url.searchParams.get('appsecret_proof'),createHmac('sha256',environment.META_APP_SECRET).update(asset.token).digest('hex'));
    await beforeRequest(asset,endpoint,body);
-   if(endpoint===asset.wabaId+'/phone_numbers'&&method==='GET')return Response.json({data:[{id:asset.phoneNumberId,display_phone_number:asset.displayNumber,verified_name:'Synthetic company '+asset.key,code_verification_status:'VERIFIED',status:asset.registered?'CONNECTED':'PENDING'}]});
+   if(endpoint===asset.wabaId+'/phone_numbers'&&method==='GET'){
+    assert.deepEqual(url.searchParams.get('fields')?.split(',').sort(),['id','display_phone_number','verified_name','code_verification_status','status','is_on_biz_app','platform_type'].sort());asset.phoneInspections++;
+    // These controlled assets are dedicated numbers. Code verification alone
+    // never proves Cloud API registration; only the observed register outcome
+    // changes their platform/status from provisioning to connected.
+    return Response.json({data:[{id:asset.phoneNumberId,display_phone_number:asset.displayNumber,verified_name:'Synthetic company '+asset.key,code_verification_status:'VERIFIED',is_on_biz_app:false,platform_type:asset.registered?'CLOUD_API':'NOT_APPLICABLE',status:asset.registered?'CONNECTED':'PENDING'}]});
+   }
    if(endpoint===asset.wabaId+'/subscribed_apps'){
     if(method==='POST'){assert.equal(body.override_callback_uri,'https://obrasaas.com/api/meta/customer-callback');assert.equal(body.verify_token,environment.META_CUSTOMER_VERIFY_TOKEN);asset.subscribed=true;asset.subscriptionOverride=body.override_callback_uri;asset.subscriptions++;return Response.json({success:true});}
     assert.equal(method,'GET');return Response.json({data:asset.subscribed?[{whatsapp_business_api_data:{id:environment.NEXT_PUBLIC_META_APP_ID},override_callback_uri:asset.subscriptionOverride}]:[]});

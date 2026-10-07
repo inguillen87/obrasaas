@@ -119,6 +119,7 @@ export function participantOnboardingNextStep({context,snapshot,workerId=null,ap
   ?next('IDENTITY_REVIEW','REVIEW_KYC','Revisar identidad')
   :next('WAIT_REVIEW','CONSULT_PARTICIPANTS','Consultar revisión');
  if(row.kyc?.status!=='APPROVED')return next('IDENTITY_UNOBSERVED','CONSULT_PARTICIPANTS','Consultar identidad');
+ if(!row.self&&row.canManageFieldPermissions===true&&row.permissions?.attendance===false&&row.permissions?.report===false)return next('FIELD_PERMISSIONS_REVIEW','SET_FIELD_PERMISSIONS','Revisar permisos de campo');
  if(!row.self)return next('WAIT_OWN_CHANNEL','CONSULT_PARTICIPANTS','Consultar participación');
  // Bank eligibility uses only own approved participation. Binding, field
  // permissions and declaration state are not bank prerequisites or inputs.

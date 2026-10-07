@@ -109,6 +109,7 @@ try{
  checks.push('controlled-web-session-canonical-dedicated-preparation-and-signup-do-not-grant-acceptance');
  graph.setBeforeRequest(async(asset,endpoint,body)=>{
   if(endpoint===asset.phoneNumberId+'/register'){
+   assert.ok(asset.phoneInspections>=3,'Signup inspection and both pre-registration inspections must precede the controlled register POST');
    const stored=(await query(`SELECT metadata->'metaSignup' AS signup FROM "Project" WHERE id=$1`,[asset.projectId])).rows[0].signup;
    const connection=(await query(`SELECT "encryptedPin" FROM "WhatsAppConnection" WHERE "projectId"=$1`,[asset.projectId])).rows[0];
    assert.equal(stored.state,'REGISTRATION_STARTED');assert.ok(connection.encryptedPin.startsWith('v2.'));assert.ok(!JSON.stringify(stored).includes(body.pin));
@@ -135,6 +136,7 @@ try{
  graph.assets.get('a').registerResponseLost=true;
  const aRegistration=a.command('register_number',{signupId:a.start.signup.id,pin:'731902',confirmRegistration:true});
  const aRegistered=await invoke(a,aRegistration);assert.equal(aRegistered.signup.state,'LINKED_PENDING_ACCEPTANCE');assert.equal(aRegistered.connection.enabled,false);
+ assert.equal(graph.assets.get('a').phoneInspections,4,'Signup, reservation, fresh dispatch check, and read-only lost-response recovery inspect the actual controlled Graph modality');
  await invoke(a,aRegistration);assert.equal(graph.assets.get('a').registrations,1);a.expectedRegistrations=1;
  checks.push('real-Graph-adapter-escrows-tenant-AAD-credential-and-PIN-before-one-register-and-recovers-lost-response-readonly');
  graph.assets.get('b').registerRejectedOnce=true;
