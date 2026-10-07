@@ -1,6 +1,7 @@
 import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {WorkspaceError,workspaceId,operationId,digest,WORKSPACE_ROLES} from './workspace-policy.mjs';
 import {participantRevision,participantReason} from './participant-policy.mjs';
+import {assertApprovedParticipantKyc} from './participant-approved-identity.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {metaCustomerContentDigest} from './meta-customer-callback.mjs';
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
@@ -50,10 +51,7 @@ export async function approvedParticipant(client,row,member,{permission=null,req
  if(permission&&!['attendance','report'].includes(permission))fault('WORKER_CHANNEL_INPUT_INVALID',400);
  if(requireKyc&&(permission?p.permissions?.[permission]!==true:p.permissions?.attendance!==true&&p.permissions?.report!==true))fault('WORKER_CHANNEL_PERMISSION_REQUIRED');
  if(!requireKyc)return p;
- const k=p.kyc;if(k?.version!==1||k.status!=='APPROVED'||k.review?.decision!=='APPROVED'||!workspaceId(k.submissionId)||!workspaceId(k.review.actorId)||k.review.actorId===member.actorId||!Number.isFinite(Date.parse(k.review.recordedAt))||!Array.isArray(k.images)||k.images.length!==2)fault('WORKER_CHANNEL_KYC_REVIEW_REQUIRED');
- const reviews=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "actorId"=$2 AND "entityId"=$3 AND action='participant.operation.recorded' AND metadata->>'projectId'=$4 AND metadata->>'kind'='REVIEW_KYC' AND metadata->>'submissionId'=$5 AND metadata->>'decision'='APPROVED'`,[member.organizationId,k.review.actorId,row.id,row.projectId,k.submissionId])).rows;
- const submissions=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "actorId"=$2 AND "entityId"=$3 AND action='participant.operation.recorded' AND metadata->>'projectId'=$4 AND metadata->>'kind'='KYC_SUBMITTED' AND metadata->>'submissionId'=$5`,[member.organizationId,member.actorId,row.id,row.projectId,k.submissionId])).rows;
- if(reviews.length!==1||submissions.length!==1||submissions[0].metadata.contentHash!==k.contentHash)fault('WORKER_CHANNEL_KYC_REVIEW_REQUIRED');return p;
+ return assertApprovedParticipantKyc(client,row,member,{code:'WORKER_CHANNEL_KYC_REVIEW_REQUIRED'});
 }
 export async function assignment(client,member,projectId,lock=false){const rows=(await client.query(`SELECT id FROM public."ProjectMembership" WHERE "projectId"=$1 AND "tenantMembershipId"=$2 AND status='ACTIVE' ${lock?'FOR SHARE':''}`,[projectId,member.membershipId])).rows;if(rows.length!==1)fault('WORKER_CHANNEL_PARTICIPANT_REQUIRED');}
 async function ownParticipant(client,member,{clerkUserId,projectId,workerId,permission=null,lock=false,requireKyc=true,revoke=false}){await assignment(client,member,projectId,lock);const row=await worker(client,projectId,workerId,lock);if(revoke){if(row.metadata?.participant?.version!==1||row.metadata.participant.clerkUserId!==clerkUserId)fault('WORKER_CHANNEL_PARTICIPANT_REQUIRED');}else await approvedParticipant(client,row,{...member,clerkUserId},{permission,requireKyc});return row;}

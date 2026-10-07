@@ -3,13 +3,14 @@ import {decodeSignedCustomerEvent} from './meta-customer-processing.mjs';
 import {customerChannelActive,assertCustomerReplyWindow} from './meta-customer-outbound.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {metaKycChallengeDigest} from './meta-kyc-challenge.mjs';
+import {resolveCompanyKycAuthority,companyKycSecretContext,assertCompanyKycPrompt,assertCompanyKycImageSources,fenceCompanyKycAuthority,COMPANY_KYC_AUTHORIZATION_CODES} from './company-channel-kyc.mjs';
 import {META_KYC_CONVERSATION_TTL_MS} from './meta-kyc-conversation.mjs';
 
-export const META_KYC_AUTHORIZATION_CODES=Object.freeze(['META_KYC_CHALLENGE_REJECTED','META_KYC_CHALLENGE_EXPIRED','META_KYC_CHALLENGE_REVOKED','META_KYC_MESSAGE_OUT_OF_ORDER','META_KYC_CONVERSATION_LIMIT','META_KYC_DEPOSIT_REQUIRED']);
+export const META_KYC_AUTHORIZATION_CODES=Object.freeze(['META_KYC_CHALLENGE_REJECTED','META_KYC_CHALLENGE_EXPIRED','META_KYC_CHALLENGE_REVOKED','META_KYC_MESSAGE_OUT_OF_ORDER','META_KYC_CONVERSATION_LIMIT','META_KYC_DEPOSIT_REQUIRED',...COMPANY_KYC_AUTHORIZATION_CODES]);
 const fail=code=>{throw new WorkspaceError(code,409);};
 const eventId=value=>/^customer_webhook_[a-f0-9]{64}$/.test(value||'');
 export const metaKycDispatchReceiptId=value=>'meta_kyc_dispatch_'+digest(['meta-kyc-dispatch-v1',value]);
-const secretContext=(r,purpose,resourceId)=>({organizationId:r.project.organizationId,projectId:r.project.id,purpose,resourceId});
+const secretContext=(r,purpose,resourceId)=>r.companyKyc?companyKycSecretContext(r.companyKyc,purpose,resourceId):({organizationId:r.project.organizationId,projectId:r.project.id,purpose,resourceId});
 export const sealMetaKycValue=(r,purpose,resourceId,value,environment)=>encryptCustomerSecret(JSON.stringify(value),secretContext(r,purpose,resourceId),environment);
 export function readMetaKycValue(r,purpose,resourceId,value,environment){try{return JSON.parse(decryptCustomerSecret(value,secretContext(r,purpose,resourceId),environment));}catch{fail('META_KYC_CHALLENGE_REJECTED');}}
 export function readMetaKycConversation(r,environment){
@@ -29,13 +30,15 @@ export function metaKycConversationEnvelope(r,state,environment){
 // CHANNEL_VERIFIED. Field and VINCULAR resolvers never use this function.
 export async function resolveMetaKycAuthority(client,context,{deposit=false,outbound=false,environment=process.env}={}){
  if(!eventId(context?.eventId))fail('META_KYC_CHALLENGE_REJECTED');
- const initial=(await client.query(`SELECT id,"projectId",provider,status::text AS status,payload,"leaseToken","leaseExpiresAt","createdAt" FROM public."WebhookEvent" WHERE id=$1`,[context.eventId])).rows[0];
+ const initial=(await client.query(`SELECT id,"projectId",provider,"eventType","externalId",status::text AS status,payload,"leaseToken","leaseExpiresAt","createdAt" FROM public."WebhookEvent" WHERE id=$1`,[context.eventId])).rows[0];
  if(!initial||initial.projectId!==context.projectId||initial.payload?.channelId!==context.channelId)fail('META_KYC_CHALLENGE_REJECTED');
  const firstChannel=(await client.query(`SELECT c.*,p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c.id=$1 AND c."projectId"=$2 AND p.status='ACTIVE'`,[context.channelId,context.projectId])).rows[0];
  if(!firstChannel)fail('META_KYC_CHALLENGE_REVOKED');
  const payload=decodeSignedCustomerEvent(initial,firstChannel,environment);
  if(payload.type!=='message')fail('META_KYC_NOT_APPLICABLE');
  const senderE164='+'+payload.value?.from,code=payload.value?.type==='text'?payload.value.text?.body?.trim():null,codeDigest=metaKycChallengeDigest(code);
+ const corporate=await resolveCompanyKycAuthority(client,context,{initial,firstChannel,payload,codeDigest,environment});
+ if(corporate)return finishMetaKycAuthority(client,context,corporate,{deposit,outbound,environment});
  const candidates=(await client.query(`SELECT w.id,w."projectId",w.phone,w.active,w.metadata FROM public."Worker" w JOIN public."Project" p ON p.id=w."projectId" WHERE w."projectId"=$1 AND p."organizationId"=$2 AND w.phone=$3 AND w.metadata->'participant'->'kycChatChallenge'->>'connectionId'=$4 AND (${codeDigest?"w.metadata->'participant'->'kycChatChallenge'->>'codeDigest'=$5":"w.metadata->'participant'->'kycChatChallenge'->>'status' IN ('CLAIMED','COMPLETED','CANCELLED')"})`,codeDigest?[context.projectId,firstChannel.organizationId,senderE164,context.channelId,codeDigest]:[context.projectId,firstChannel.organizationId,senderE164,context.channelId])).rows;
  if(candidates.length!==1)fail(codeDigest||code?.startsWith('IDENTIDAD')?'META_KYC_CHALLENGE_REJECTED':'META_KYC_NOT_APPLICABLE');
  const candidate=candidates[0],p0=candidate.metadata?.participant,c0=p0?.kycChatChallenge;
@@ -73,6 +76,11 @@ export async function resolveMetaKycAuthority(client,context,{deposit=false,outb
  if(challenge.status==='PENDING'){if(!codeDigest||codeDigest!==challenge.codeDigest||deposit||outbound)fail('META_KYC_CHALLENGE_REJECTED');}
  else if(!['CLAIMED','COMPLETED'].includes(challenge.status)&&!(challenge.status==='CANCELLED'&&challenge.cancelledEventId===event.id)||codeDigest&&challenge.claimedEventId!==event.id)fail('META_KYC_CHALLENGE_REJECTED');
  const r={kind:'LIMITED_KYC_UPLOAD',member,issuer,project,worker,challenge,connection:{...connection,organizationId:project.organizationId},event,payload:finalPayload,now,source:{kind:'META_KYC_CHAT',eventId:event.id,payloadDigest:context.payloadDigest,challengeId:challenge.id,connectionId:connection.id,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,senderE164}};
+ return finishMetaKycAuthority(client,context,r,{deposit,outbound,environment});
+}
+async function finishMetaKycAuthority(client,context,r,{deposit,outbound,environment}){
+ const {event,project,worker,challenge,payload:finalPayload,now}=r;
+ if(r.companyKyc&&challenge.status==='PENDING'&&(deposit||outbound))fail('META_KYC_CHALLENGE_REJECTED');
  r.state=readMetaKycConversation(r,environment);
  const prior=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "entityId"=$3 AND action='participant.kyc_chat.dispatched'`,[metaKycDispatchReceiptId(event.id),project.organizationId,worker.id])).rows[0];
  if(prior){if(prior.metadata.payloadDigest!==context.payloadDigest||prior.metadata.challengeId!==challenge.id)fail('META_KYC_CHALLENGE_REJECTED');r.recorded=readMetaKycValue(r,'kyc-chat-dispatch',metaKycDispatchReceiptId(event.id),prior.metadata.encryptedResult,environment);if(r.recorded?.kind!=='KYC_CHAT'||r.recorded.identityStatus!=='LIMITED_KYC_UPLOAD'||prior.metadata.replyDigest!==digest(r.recorded.reply))fail('META_KYC_CHALLENGE_REJECTED');}
@@ -81,5 +89,8 @@ export async function resolveMetaKycAuthority(client,context,{deposit=false,outb
  if(challenge.status==='CLAIMED'&&(!Number.isFinite(Date.parse(challenge.claimedAt))||Date.parse(challenge.claimedAt)+META_KYC_CONVERSATION_TTL_MS<=now.getTime()))fail('META_KYC_CHALLENGE_EXPIRED');
  if(deposit&&(!r.state||r.state.step!=='FINALIZING'||r.state.confirmationEventId!==event.id||r.state.consent!==true||!r.state.front||!r.state.selfie))fail('META_KYC_DEPOSIT_REQUIRED');
  if(outbound&&!r.recorded?.reply)fail('META_KYC_CHALLENGE_REJECTED');
+ assertCompanyKycPrompt(r);
+ if(deposit)await assertCompanyKycImageSources(client,r,environment);
+ await fenceCompanyKycAuthority(client,r,context);
  return r;
 }

@@ -9,6 +9,8 @@ import {encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
 import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
 import {OBRASAAS_META_CHANNEL} from '../src/lib/meta-channel-binding.mjs';
 import {digest} from '../src/lib/workspace-policy.mjs';
+import {adoptParticipantChannelKyc} from '../src/lib/participant-channel-kyc.mjs';
+import {participantReceiptId} from '../src/lib/participant-policy.mjs';
 const session={authenticated:true,verification:'clerk-production-jwt',userId:'user_Fixture',organizationId:'org_Fixture',organizationRole:'org:member'},scope='a'.repeat(64);
 const input={operationId:randomUUID(),projectId:'project-fixture',scope,action:'REQUEST_CHALLENGE',payload:{workerId:'worker-fixture',revision:'2026-10-01T11:00:00.000001'}};
 const env={META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,6).toString('base64')};
@@ -91,4 +93,62 @@ test('own participant resolution reuses assignment, permission and audited separ
  for(const setup of [{review:false},{submission:false},{change:row=>{row.metadata.participant.kyc.status='PENDING_REVIEW';}},{change:row=>{row.metadata.participant.kyc.review.actorId='person-canonical';}}]){const f=ownFixture(setup);await assert.rejects(resolveOwnWorkerParticipant(f.client,f.member,options),{code:'WORKER_CHANNEL_KYC_REVIEW_REQUIRED'});}
  const mismatch=ownFixture();await assert.rejects(resolveOwnWorkerParticipant(mismatch.client,mismatch.member,{...options,clerkUserId:'user_Other'}),{code:'WORKER_CHANNEL_PARTICIPANT_REQUIRED'});assert.equal(mismatch.queries.length,0);
  const readonly=ownFixture();await resolveOwnWorkerParticipant(readonly.client,readonly.member,{...options,lock:false});assert.ok(readonly.queries.every(sql=>!/FOR (UPDATE|SHARE)/.test(sql)));
+});
+
+async function adoptedCaptureFixture(){
+ const f=ownFixture(),p=f.row.metadata.participant,invitationId='invite_'+'1'.repeat(32),acceptanceReceiptId=participantReceiptId(f.member.actorId,f.row.projectId,randomUUID()),captureReceiptId=participantReceiptId('issuer-canonical',f.row.projectId,randomUUID());
+ f.row.organizationId=f.member.organizationId;p.invitation={id:invitationId,state:'ACCEPTED',email:'worker@example.invalid'};p.acceptanceReceiptId=acceptanceReceiptId;
+ const capture={version:1,kind:'META_KYC_CHAT',receiptId:captureReceiptId,sourceDigest:'a'.repeat(64),challengeId:'challenge-canonical',invitationId,capturedParticipantClerkUserId:null,accountClaimRequired:true};
+ p.kyc={...p.kyc,status:'PENDING_ACCOUNT_CLAIM',channelCapture:capture};delete p.kyc.review;
+ const audits=[{id:captureReceiptId,organizationId:f.member.organizationId,actorId:'issuer-canonical',action:'participant.operation.recorded',entityType:'Worker',entityId:f.row.id,metadata:{version:1,projectId:f.row.projectId,kind:'KYC_SUBMITTED',status:'PENDING_ACCOUNT_CLAIM',submissionId:p.kyc.submissionId,contentHash:p.kyc.contentHash,channelCapture:structuredClone(capture)}}];
+ const client={query:async(sql,args=[])=>{
+  if(sql.includes('FROM public."ProjectMembership"'))return {rows:[{id:'pm-fixture'}]};
+  if(sql.includes('FROM public."Worker"'))return {rows:[f.row]};
+  if(sql==='SELECT clock_timestamp() AS now')return {rows:[{now:new Date('2026-10-01T11:30:00Z')}]};
+  if(sql.startsWith('INSERT INTO public."AuditLog"')){audits.push({id:args[0],organizationId:args[1],actorId:args[2],action:'participant.kyc_chat.adopted',entityType:'Worker',entityId:args[3],metadata:JSON.parse(args[4])});return {rowCount:1,rows:[]};}
+  if(sql.includes('FROM public."AuditLog"')){
+   let rows;
+   if(sql.includes('id=ANY'))rows=audits.filter(a=>a.organizationId===args[0]&&a.entityId===args[1]&&(args[2].includes(a.id)||a.action==='participant.operation.recorded'&&a.metadata.projectId===args[3]&&a.metadata.kind==='KYC_SUBMITTED'&&a.metadata.submissionId===args[4]));
+   else if(sql.includes('WHERE id=$1'))rows=audits.filter(a=>a.id===args[0]&&a.organizationId===args[1]&&a.action==='participant.operation.recorded');
+   else rows=audits.filter(a=>a.organizationId===args[0]&&a.actorId===args[1]&&a.entityId===args[2]&&a.action==='participant.operation.recorded'&&a.metadata.projectId===args[3]&&a.metadata.submissionId===args[4]&&a.metadata.kind===(sql.includes("kind'='REVIEW_KYC'")?'REVIEW_KYC':'KYC_SUBMITTED'));
+   return {rows:structuredClone(rows)};
+  }
+  throw Error('Unexpected adopted-capture fixture query');
+ }};
+ const origin=JSON.stringify(audits[0]);assert.equal(await adoptParticipantChannelKyc(client,{row:f.row,participant:p,invitationId,actorId:f.member.actorId,clerkUserId:f.member.clerkUserId,acceptanceReceiptId}),true);
+ audits.push({id:acceptanceReceiptId,organizationId:f.member.organizationId,actorId:f.member.actorId,action:'participant.operation.recorded',entityType:'Worker',entityId:f.row.id,metadata:{version:1,projectId:f.row.projectId,kind:'INVITATION_ACCEPTED',invitationId,requestDigest:digest([f.row.id,invitationId,f.member.clerkUserId,p.invitation.email])}});
+ p.kyc={...p.kyc,status:'APPROVED',review:{decision:'APPROVED',actorId:'reviewer-canonical',recordedAt:'2026-10-01T12:00:00Z'}};
+ audits.push({id:'review-fixture',organizationId:f.member.organizationId,actorId:'reviewer-canonical',action:'participant.operation.recorded',entityType:'Worker',entityId:f.row.id,metadata:{version:1,projectId:f.row.projectId,kind:'REVIEW_KYC',submissionId:p.kyc.submissionId,decision:'APPROVED'}});
+ return {...f,client,audits,origin,options:{clerkUserId:f.member.clerkUserId,projectId:f.row.projectId,workerId:f.row.id,permission:'attendance',lock:true}};
+}
+
+test('canonical pre-account capture adoption enables own binding guard after separate human review without rewriting origin actor',async()=>{
+ const f=await adoptedCaptureFixture();assert.equal(await resolveOwnWorkerParticipant(f.client,f.member,f.options),f.row);assert.equal(JSON.stringify(f.audits[0]),f.origin);assert.equal(f.audits[0].actorId,'issuer-canonical');assert.equal(f.row.metadata.participant.kyc.channelCapture.claimedActorId,f.member.actorId);
+});
+
+test('adopted KYC rejects missing, duplicate, foreign or copied canonical receipts',async t=>{
+ const cases=[
+  ['capture missing',f=>f.audits.splice(0,1)],['adoption missing',f=>f.audits.splice(1,1)],['acceptance missing',f=>f.audits.splice(2,1)],
+  ['duplicate submission',f=>f.audits.push({...structuredClone(f.audits[0]),id:'participant_'+'b'.repeat(64)})],['duplicate acceptance',f=>f.audits.push(structuredClone(f.audits[2]))],['duplicate adoption',f=>f.audits.push(structuredClone(f.audits[1]))],
+  ['capture foreign organization',f=>{f.audits[0].organizationId='foreign-company';}],['acceptance foreign organization',f=>{f.audits[2].organizationId='foreign-company';}],['adoption foreign organization',f=>{f.audits[1].organizationId='foreign-company';}],
+  ['capture foreign worker',f=>{f.audits[0].entityId='other-worker';}],['acceptance foreign worker',f=>{f.audits[2].entityId='other-worker';}],['adoption foreign worker',f=>{f.audits[1].entityId='other-worker';}],
+  ['capture foreign project',f=>{f.audits[0].metadata.projectId='other-project';}],['acceptance foreign project',f=>{f.audits[2].metadata.projectId='other-project';}],['adoption foreign project',f=>{f.audits[1].metadata.projectId='other-project';}],
+  ['capture copied action',f=>{f.audits[0].action='worker.channel.identity.recorded';}],['acceptance copied action',f=>{f.audits[2].action='participant.kyc_chat.adopted';}],['adoption copied action',f=>{f.audits[1].action='participant.operation.recorded';}],
+  ['capture wrong entity type',f=>{f.audits[0].entityType='TenantMembership';}],['acceptance wrong actor',f=>{f.audits[2].actorId='other-person';}],['adoption wrong actor',f=>{f.audits[1].actorId='other-person';}],
+  ['capture stale submission',f=>{f.audits[0].metadata.submissionId='old-submission';}],['adoption stale submission',f=>{f.audits[1].metadata.submissionId='old-submission';}],['capture changed content',f=>{f.audits[0].metadata.contentHash='b'.repeat(64);}],['adoption changed content',f=>{f.audits[1].metadata.contentHash='b'.repeat(64);}],
+  ['capture not pre-account',f=>{f.audits[0].metadata.status='PENDING_REVIEW';}],['capture unrelated invitation',f=>{f.audits[0].metadata.channelCapture.invitationId='invite_'+'2'.repeat(32);}],['acceptance unrelated invitation',f=>{f.audits[2].metadata.invitationId='invite_'+'2'.repeat(32);}],
+  ['acceptance wrong Clerk digest',f=>{const p=f.row.metadata.participant;f.audits[2].metadata.requestDigest=digest([f.row.id,p.invitation.id,'user_Other',p.invitation.email]);}],['adoption wrong capture reference',f=>{f.audits[1].metadata.captureReceiptId='participant_'+'b'.repeat(64);}],['adoption wrong acceptance reference',f=>{f.audits[1].metadata.acceptanceReceiptId='participant_'+'b'.repeat(64);}],
+ ];
+ for(const [label,change] of cases)await t.test(label,async()=>{const f=await adoptedCaptureFixture();change(f);await assert.rejects(resolveOwnWorkerParticipant(f.client,f.member,f.options),{code:'WORKER_CHANNEL_KYC_REVIEW_REQUIRED'});});
+});
+
+test('adopted KYC remains tied to current individual invitation, claim and distinct review',async t=>{
+ const cases=[
+  ['unadopted presentation',p=>{delete p.kyc.channelCapture;}],['claim still required',p=>{p.kyc.channelCapture.accountClaimRequired=true;}],['wrong claimed actor',p=>{p.kyc.channelCapture.claimedActorId='other-person';}],['wrong claimed Clerk account',p=>{p.kyc.channelCapture.claimedClerkUserId='user_Other';}],
+  ['wrong participant acceptance',p=>{p.acceptanceReceiptId='participant_'+'b'.repeat(64);}],['wrong claim acceptance',p=>{p.kyc.channelCapture.acceptanceReceiptId='participant_'+'b'.repeat(64);}],['wrong current invitation',p=>{p.invitation.id='invite_'+'2'.repeat(32);}],['invitation revoked',p=>{p.invitation.state='REVOKED';}],['invitation absent',p=>{p.invitation=null;}],['wrong current email',p=>{p.invitation.email='other@example.invalid';}],
+  ['malformed claim time',p=>{p.kyc.channelCapture.claimedAt='not-a-date';}],['review predates claim',p=>{p.kyc.channelCapture.claimedAt='2026-10-01T12:30:00Z';}],['changed challenge',p=>{p.kyc.channelCapture.challengeId='other-challenge';}],['changed signed source',p=>{p.kyc.channelCapture.sourceDigest='b'.repeat(64);}],['unknown capture field',p=>{p.kyc.channelCapture.actorOverride='other-person';}],['captured account injected',p=>{p.kyc.channelCapture.capturedParticipantClerkUserId='user_Other';}],['self review',p=>{p.kyc.review.actorId='person-canonical';}],['not approved',p=>{p.kyc.status='PENDING_REVIEW';}],
+ ];
+ for(const [label,change] of cases)await t.test(label,async()=>{const f=await adoptedCaptureFixture();change(f.row.metadata.participant);await assert.rejects(resolveOwnWorkerParticipant(f.client,f.member,f.options),{code:'WORKER_CHANNEL_KYC_REVIEW_REQUIRED'});});
+ const revoked=await adoptedCaptureFixture();revoked.row.metadata.participant.status='REVOKED';await assert.rejects(resolveOwnWorkerParticipant(revoked.client,revoked.member,revoked.options),{code:'WORKER_CHANNEL_PARTICIPANT_REQUIRED'});
+ const reassigned=await adoptedCaptureFixture();reassigned.row.metadata.participant.clerkUserId='user_Other';await assert.rejects(resolveOwnWorkerParticipant(reassigned.client,reassigned.member,reassigned.options),{code:'WORKER_CHANNEL_PARTICIPANT_REQUIRED'});
 });

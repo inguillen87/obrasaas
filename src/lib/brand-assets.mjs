@@ -1,5 +1,6 @@
-// Approved v3 image paths; no wildcard routing.
+// Approved v3 identity and public sharing image; no wildcard routing.
 export const BRAND_PUBLIC_ASSETS = Object.freeze([
+  "/brand/obrasaas-social-v1.png",
   "/brand/obrasaas-app-icon-1024.png",
   "/brand/obrasaas-app-icon-192.png",
   "/brand/obrasaas-app-icon-512.png",

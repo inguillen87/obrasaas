@@ -2,6 +2,7 @@ import {normalizeTenantWorkspace,WORKSPACE_NUMBER_MODES,WORKSPACE_USE_CASES,Tena
 import {readProjectWorkspaceProfile,projectWorkspaceMetadata} from './whatsapp/project-workspace-profile.js';
 import {WorkspaceError,operationId,digest} from './workspace-policy.mjs';
 import {companyConnectionForProject,assertLegacyProjectChannel} from './company-channel-connection.mjs';
+import {readCompanyPhoneDeclaration} from './company-onboarding-policy.mjs';
 const publicError=error=>{if(error instanceof TenantWorkspaceError)throw new WorkspaceError(error.code,error.status);throw error;};
 const same=(current,command)=>['assistantName','numberMode','initialProjectId'].every(key=>current[key]===command[key])&&JSON.stringify(current.useCases)===JSON.stringify(command.useCases);
 const receiptId=(member,projectId,id)=>'wa_preparation_'+digest([member.actorId,projectId,id.toLowerCase()]);
@@ -22,14 +23,17 @@ export function customerWhatsAppReadiness(profile,connection){
   };
 }
 export function createCustomerWhatsAppSetup({workspace}){
-  async function response(client,member,scope,project){
+  async function response(client,member,scope,project,session){
     const {profile,profileSource}=readProjectWorkspaceProfile(project.metadata,project.organizationMetadata,project.id);
     const rows=await client.query(`SELECT id,"displayPhoneNumber",enabled,"connectionStatus"::text AS status
       FROM public."WhatsAppConnection" WHERE "projectId"=$1`,[project.id]);
     if(rows.rows.length>1)throw new WorkspaceError('WHATSAPP_PREPARATION_INTEGRITY',409);
     const corporate=await companyConnectionForProject(client,member.organizationId,project.id),found=corporate?{...corporate,status:corporate.connectionStatus}:rows.rows[0];
     const connection=found?{recordPresent:true,displayNumber:found.displayPhoneNumber||null,storedStatus:found.status,enabled:found.enabled===true}:null;
+    const company=(await client.query(`SELECT id,name,"clerkOrganizationId",metadata,to_char("trialEndsAt",'YYYY-MM-DD') AS "trialEndsOn" FROM public."Organization" WHERE id=$1`,[member.organizationId])).rows[0];
+    if(!company)throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
     return {scope,projectId:project.id,projectName:project.name,companyName:member.organizationName,
+      currentCompany:{organizationId:company.id,companyName:company.name,expectedClerkOrganizationId:company.clerkOrganizationId,canDeclarePhone:member.role==='ADMIN'&&session.organizationRole==='org:admin',phoneDeclaration:readCompanyPhoneDeclaration(company.metadata),trial:{endsOn:company.trialEndsOn||null}},
       profile,profileSource,connection,...(corporate?{companyRouting:{mode:corporate.company.mode,connectionId:corporate.id,anchorProjectId:corporate.projectId,legacyActionsBlocked:corporate.projectId!==project.id||['COMPANY','SUSPENDED'].includes(corporate.company.mode),accepted:false}}:{}),readiness:customerWhatsAppReadiness(profile,connection),
       options:{numberModes:WORKSPACE_NUMBER_MODES,useCases:WORKSPACE_USE_CASES}};
   }
@@ -42,7 +46,7 @@ export function createCustomerWhatsAppSetup({workspace}){
     try{return await workspace.integrationProject(session,context,writable,async (...args)=>{try{if(writable)await assertLegacyProjectChannel(args[0],args[1],args[3].id);return await run(...args);}catch(error){return publicError(error);}});}catch(error){return publicError(error);}
   }
   return {
-    read(session,context){return within(session,context,false,(client,member,scope,project)=>response(client,member,scope,project));},
+    read(session,context){return within(session,context,false,(client,member,scope,project)=>response(client,member,scope,project,session));},
     async save(session,input){
       if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).sort().join('|')!=='operationId|profile|projectId|scope'||!operationId(input.operationId))throw new WorkspaceError('WHATSAPP_PREPARATION_INVALID');
       let command;try{command=normalizeTenantWorkspace(input.profile);}catch(error){return publicError(error);}
@@ -52,7 +56,7 @@ export function createCustomerWhatsAppSetup({workspace}){
         const previous=await findReceipt(client,member,id);
         if(previous){
           if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('WHATSAPP_PREPARATION_OPERATION_CONFLICT',409);
-          const current=await response(client,member,scope,project);
+          const current=await response(client,member,scope,project,session);
           return {...current,saved:true,replayed:true,receipt:{id,savedRevision:previous.metadata.revision},savedProfileIsCurrent:current.profile.revision===previous.metadata.revision};
         }
         const {profile:current}=readProjectWorkspaceProfile(project.metadata,project.organizationMetadata,project.id);
@@ -71,14 +75,14 @@ export function createCustomerWhatsAppSetup({workspace}){
           VALUES ($1,$2,$3,'project.whatsapp_workspace.prepared.self_service','Project',$4,$5::jsonb)`,
           [id,member.organizationId,member.actorId,project.id,JSON.stringify({requestDigest,projectId:project.id,revision:stored.revision,
             numberMode:command.numberMode,useCases:command.useCases,ownership:'CUSTOMER',automationActivated:false,unchanged})]);
-        return {...await response(client,member,scope,project),saved:true,replayed:false,unchanged,savedProfileIsCurrent:true,receipt:{id,savedRevision:stored.revision}};
+        return {...await response(client,member,scope,project,session),saved:true,replayed:false,unchanged,savedProfileIsCurrent:true,receipt:{id,savedRevision:stored.revision}};
       });
     },
     status(session,context){
       if(!operationId(context.operationId))throw new WorkspaceError('WHATSAPP_PREPARATION_INVALID');
       return within(session,context,false,async(client,member,scope,project)=>{
         const found=await findReceipt(client,member,receiptId(member,project.id,context.operationId));
-        const current=await response(client,member,scope,project);
+        const current=await response(client,member,scope,project,session);
         return found?{...current,state:'RECORDED',saved:true,receipt:{id:found.id,savedRevision:found.metadata.revision},savedProfileIsCurrent:current.profile.revision===found.metadata.revision}
           :{...current,state:'NOT_OBSERVED',definitive:false};
       });

@@ -9,6 +9,7 @@ const root=process.cwd(),privateFolder=path.join(root,'.vercel/private');mkdirSy
 const fixture=mkdtempSync(path.join(privateFolder,'restricted-meta-pilot-built-boundary-')),manifest=[];
 function copied(relative){const target=path.join(fixture,relative);mkdirSync(path.dirname(target),{recursive:true});copyFileSync(path.join(root,relative),target);manifest.push({path:relative,sha256:createHash('sha256').update(readFileSync(target)).digest('hex')});}
 copied('src/proxy.js');for(const endpoint of ['identity/meta-onboarding','identity/worker-channel','meta/customer-callback','meta/customer-process'])copied('src/app/api/'+endpoint+'/route.js');
+copied('src/app/(identity)/cuenta/private-bank-account-format.mjs');
 // Compile the actual transitive runtime against installed dependencies, with no
 // .env files, business database, provider credentials or copied client screens.
 cpSync(path.join(root,'src/lib'),path.join(fixture,'src/lib'),{recursive:true});

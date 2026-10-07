@@ -21,7 +21,7 @@ const identity=(userId,organizationId='org_A',organizationRole='org:member')=>({
 const owner=identity('user_Owner','org_A','org:admin'),director=identity('user_Director'),worker=identity('user_Worker'),foreign=identity('user_Foreign','org_B','org:admin');
 try{
  await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));await pool.query(lifecycleSchema);
- await pool.query(`INSERT INTO "Organization" VALUES('company-a','Synthetic A','org_A','{}'),('company-b','Synthetic B','org_B','{}');
+ await pool.query(`INSERT INTO "Organization"(id,name,"clerkOrganizationId",metadata) VALUES('company-a','Synthetic A','org_A','{}'),('company-b','Synthetic B','org_B','{}');
  INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES('owner','user_Owner','owner@example.invalid'),('director','user_Director','director@example.invalid'),('worker','user_Worker','worker@example.invalid'),('foreign','user_Foreign','foreign@example.invalid');
  INSERT INTO "TenantMembership"(id,"userId","organizationId","tenantRole","clerkRole",status) VALUES('owner-m','owner','company-a','ADMIN','org:admin','ACTIVE'),('director-m','director','company-a','DIRECTOR','org:member','ACTIVE'),('worker-m','worker','company-a','AUDITOR','org:member','ACTIVE'),('foreign-m','foreign','company-b','ADMIN','org:admin','ACTIVE');
  INSERT INTO "Project"(id,"organizationId",name,status,metadata) VALUES('p-a','company-a','Synthetic A','ACTIVE','{"unrelated":{"keep":true},"metaSignup":{"preserved":true}}'),('p-b','company-b','Synthetic B','ACTIVE','{}');

@@ -48,7 +48,7 @@ export const lifecycleSchema=`
  CREATE TYPE "OperationalProposalStatus" AS ENUM('PENDING','APPLIED','REJECTED','EXPIRED','INVALIDATED');
  CREATE TYPE "WhatsAppConnectionStatus" AS ENUM('PENDING','CONNECTED','ERROR','DISABLED');
  CREATE TYPE "WebhookStatus" AS ENUM('PENDING','PROCESSED','FAILED');
- CREATE TABLE "Organization"(id text PRIMARY KEY,name text,"clerkOrganizationId" text UNIQUE,metadata jsonb);
+ CREATE TABLE "Organization"(id text PRIMARY KEY,name text,"clerkOrganizationId" text UNIQUE,metadata jsonb,"trialEndsAt" timestamp);
  CREATE TABLE "PlatformUser"(id text PRIMARY KEY,"clerkUserId" text UNIQUE,"primaryEmail" text UNIQUE NOT NULL,"fullName" text,"systemRole" "SystemRole" DEFAULT 'TENANT_USER',"updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP);
  CREATE TABLE "TenantMembership"(id text PRIMARY KEY,"userId" text REFERENCES "PlatformUser","organizationId" text REFERENCES "Organization","tenantRole" "TenantRole","clerkRole" text,status "MembershipStatus","updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP,UNIQUE("organizationId","userId"));
  CREATE TABLE "Project"(id text PRIMARY KEY,"organizationId" text REFERENCES "Organization",name text,status text,metadata jsonb,"updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP);

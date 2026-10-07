@@ -1,5 +1,6 @@
 import "./globals.css";
 import localFont from "next/font/local";
+import { PUBLIC_SITE_ORIGIN, publicPageMetadata } from "./public-site-metadata.mjs";
 
 // Keep the public family names: canonical and legacy styles already use them.
 // Discrete faces preserve the weights previously requested from Google Fonts.
@@ -43,29 +44,15 @@ const outfit = localFont({
 });
 
 export const metadata = {
-  title: "ObraSaaS — Gestión y seguimiento de obras",
-  description: "Organizá participantes, jornadas, evidencias privadas, tareas y materiales de cada obra. Revisá identidades y propuestas de avance con permisos y recibos de operación.",
-  manifest: "/manifest.json",
-  metadataBase: new URL("https://obrasaas.com"),
-  openGraph: {
-    title: "ObraSaaS — Gestión y seguimiento de obras",
-    description: "Planificación, actividad de campo, evidencias privadas y decisiones autorizadas para constructoras.",
-    url: "https://obrasaas.com",
-    siteName: "ObraSaaS",
-    locale: "es_AR",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "ObraSaaS — Gestión y seguimiento de obras",
-    description: "Organizá tu equipo y seguí cada obra con tareas, materiales, evidencias y revisiones autorizadas.",
-  },
-  keywords: ["control de obra", "software construcción", "SaaS constructoras", "gestión de obras Argentina", "libro de obra digital", "UOCRA", "ART", "certificaciones digitales", "WhatsApp obra"],
-  robots: { index: true, follow: true },
+  ...publicPageMetadata('/'),
+  applicationName: 'ObraSaaS',
+  manifest: '/manifest.json',
+  metadataBase: new URL(PUBLIC_SITE_ORIGIN),
+  keywords: ['gestión de obras', 'software para constructoras', 'jornadas de obra', 'materiales de obra', 'planificación de obras'],
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
-    title: "ObraSaaS",
+    statusBarStyle: 'black-translucent',
+    title: 'ObraSaaS',
   },
 };
 

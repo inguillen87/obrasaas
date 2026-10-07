@@ -23,21 +23,28 @@ function identity(value,expected){
  if(!id(value.organization?.id)||!text(value.organization.name)||!id(value.actor?.id)||!text(value.actor.role))fail();
  if(expected.organizationId&&value.organization.id!==expected.organizationId||expected.actorId&&value.actor.id!==expected.actorId)fail();
 }
-function channel(value){
+function operationalCapabilities(value,allowed,{allowLegacyKyc=false}={}){
+ if(!value||Object.keys(value).sort().join('|')!=='attendance|flows|kyc|media|templates'||typeof value.attendance!=='boolean'||typeof value.media!=='boolean'||value.attendance!==value.media||(value.kyc!==value.media&&!(allowLegacyKyc&&value.kyc===false))||['flows','templates'].some(key=>value[key]!==false)||!allowed&&value.media)fail();
+ return value.media;
+}
+function channel(value,{schemaReady=true,requireCapabilities=false}={}){
  if(!id(value?.id)||!id(value.anchorProjectId)||!text(value.anchorName)||value.displayPhoneNumber!==null&&!text(value.displayPhoneNumber)||!Object.hasOwn(COMPANY_CHANNEL_MODES,value.mode)||!revision(value.revision)||!Array.isArray(value.assignments)||value.assignments.length>100)fail();
- for(const assignment of value.assignments)if(!id(assignment?.projectId)||!text(assignment.projectName)||!['ACTIVE','REVOKED'].includes(assignment.status)||!revision(assignment.revision))fail();
+ if(Object.keys(value).some(key=>!['id','anchorProjectId','anchorName','displayPhoneNumber','mode','revision','assignments','capabilities'].includes(key)))fail();
+ // Older durable receipts may omit support. They resolve the operation only;
+ // a fresh snapshot is still required before presenting current operations.
+ if(requireCapabilities||value.capabilities!==undefined)operationalCapabilities(value.capabilities,schemaReady&&value.mode==='COMPANY',{allowLegacyKyc:!requireCapabilities});
+ for(const assignment of value.assignments)if(!id(assignment?.projectId)||!text(assignment.projectName)||!['ACTIVE','REVOKED'].includes(assignment.status)||!revision(assignment.revision)||Object.keys(assignment).sort().join('|')!=='projectId|projectName|revision|status')fail();
  if(new Set(value.assignments.map(row=>row.projectId)).size!==value.assignments.length)fail();
  return value;
 }
 export function companyChannelSnapshot(value,expected){
  context(value,expected);identity(value,expected);
  if(typeof value.schemaReady!=='boolean'||typeof value.canManage!=='boolean'||value.canManage&&value.actor.role!=='ADMIN'||typeof value.truncated!=='boolean'||value.accepted!==false||!Array.isArray(value.channels)||value.channels.length>100||!Array.isArray(value.projects)||value.projects.length>100)fail();
- for(const item of value.channels)channel(item);
+ for(const item of value.channels)channel(item,{schemaReady:value.schemaReady,requireCapabilities:true});
  if(!value.schemaReady&&value.channels.some(item=>item.mode!=='PROJECT_ONLY'||item.revision!==0||item.assignments.length))fail();
  for(const project of value.projects)if(!id(project?.id)||!text(project.name))fail();
  if(new Set(value.channels.map(row=>row.id)).size!==value.channels.length||new Set(value.projects.map(row=>row.id)).size!==value.projects.length)fail();
- const capabilities=value.capabilities;
- if(!capabilities||Object.keys(capabilities).sort().join('|')!=='attendance|flows|kyc|media|templates'||typeof capabilities.attendance!=='boolean'||['kyc','media','flows','templates'].some(key=>capabilities[key]!==false)||!value.schemaReady&&capabilities.attendance)fail();
+ if(operationalCapabilities(value.capabilities,value.schemaReady)!==value.channels.some(item=>item.capabilities.media))fail();
  return value;
 }
 export function companyChannelCanAct(snapshot,item,action){

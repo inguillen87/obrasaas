@@ -1,4 +1,4 @@
-# CI47 overtime: preserves the 45 reviewed CI46 blocks; source anchors 61d316a.
+# Additive bank/intake and corporate KYC CI: preserves all 46 prior blocks and 44 artifact patterns.
 name: Authorized workspace acceptance
 "on":
   push:
@@ -84,6 +84,10 @@ jobs:
         run: |
           npx eslint 'src/app/(identity)/cuenta/meta-sdk-loader.mjs' tests/production-meta-sdk-loader.test.mjs
           node --test tests/production-meta-sdk-loader.test.mjs
+      - name: Private bank, employee intake and corporate KYC unit contracts and typed recovery
+        run: |
+          npx eslint src/lib/participant-bank-*.mjs src/lib/participant-approved-identity.mjs src/lib/meta-employee-intake.mjs 'src/app/(identity)/cuenta/private-bank-account-*.mjs' 'src/app/(identity)/cuenta/private-bank-account-panel.js' 'src/app/(identity)/cuenta/employee-intake-panel.js' scripts/verify-participant-bank-intake-contracts.mjs scripts/verify-private-bank-account-postgres.mjs scripts/verify-employee-intake-postgres.mjs scripts/verify-private-bank-account-ui.mjs scripts/verify-employee-intake-ui.mjs scripts/verify-participant-bank-intake-ui.mjs tests/production-participant-private-bank.test.mjs tests/production-private-bank-recovery.test.mjs tests/production-employee-intake.test.mjs tests/production-employee-intake-recovery.test.mjs tests/production-participant-bank-intake-recovery.test.mjs tests/fixtures/private-bank-fixture.mjs tests/fixtures/employee-intake-memory.mjs src/lib/company-channel-kyc.mjs 'src/app/(identity)/cuenta/participant-onboarding-next-step.mjs' tests/production-company-channel-kyc.test.mjs tests/production-participant-onboarding-next-step.test.mjs tests/fixtures/company-kyc-memory.mjs --max-warnings 0
+          node scripts/verify-participant-bank-intake-contracts.mjs --expected-head "$GITHUB_SHA"
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane contracts --expected-head "$GITHUB_SHA"
@@ -94,6 +98,7 @@ jobs:
           name: workspace-acceptance-${{ github.run_id }}-${{ github.run_attempt }}-contracts
           path: |
             .vercel/private/biometric-real-model-proof.json
+            .vercel/participant-bank-intake-contract-evidence/
             .vercel/workspace-ci-evidence/lane-contracts.json
           include-hidden-files: true
           retention-days: 7
@@ -213,6 +218,22 @@ jobs:
         run: |
           npx eslint scripts/verify-mobile-workspace-review-ui.mjs --max-warnings 0
           node scripts/verify-mobile-workspace-review-ui.mjs
+      - name: Schema-only private bank and employee intake PostgreSQL acceptance
+        run: |
+          node scripts/verify-private-bank-account-postgres.mjs
+          node scripts/verify-employee-intake-postgres.mjs
+      - name: Private bank and employee intake author UI at four widths
+        run: |
+          node scripts/verify-private-bank-account-ui.mjs
+          node scripts/verify-employee-intake-ui.mjs
+      - name: Joint sibling pending recovery and causal deadlock control
+        run: |
+          node scripts/verify-participant-bank-intake-ui.mjs
+          node scripts/verify-participant-bank-intake-ui.mjs --bad-resolution --width=320 --case=bank
+      - name: Schema-only corporate KYC A-to-B PostgreSQL acceptance
+        run: |
+          npx eslint src/lib/company-channel-kyc.mjs src/lib/meta-kyc-*.mjs src/lib/participant-channel-kyc.mjs scripts/verify-company-channel-kyc-postgres.mjs tests/fixtures/company-kyc-memory.mjs tests/production-company-channel-kyc.test.mjs --max-warnings 0
+          node scripts/verify-company-channel-kyc-postgres.mjs
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane people --expected-head "$GITHUB_SHA"
@@ -227,6 +248,12 @@ jobs:
             .vercel/participants-evidence/
             .vercel/meta-kyc-chat-evidence/
             .vercel/mobile-identity-evidence/
+            .vercel/private-bank-evidence/
+            .vercel/private/employee-intake-postgres.json
+            .vercel/private/employee-intake-ui/
+            .vercel/private/participant-bank-intake-integration/current/browser.json
+            .vercel/private/participant-bank-intake-integration/bad-resolution/browser.json
+            .vercel/company-kyc-evidence/
             .vercel/workspace-ci-evidence/lane-people.json
           include-hidden-files: true
           retention-days: 7

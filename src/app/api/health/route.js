@@ -1,4 +1,5 @@
 import { identityConfig, sessionIdentityConfig } from '../../../lib/production-identity-config.mjs';
+import { observeMetaRelease } from '../../../lib/meta-release-observation.mjs';
 export const dynamic = 'force-dynamic';
 export function GET() {
   const revision = process.env.VERCEL_GIT_COMMIT_SHA;
@@ -7,6 +8,6 @@ export function GET() {
     databaseChecked: false, workspaceAccess: 'signed-organization-and-canonical-membership-required',
     identityAuthentication: sessionIdentityConfig().configured ? 'public-session-verification-configured' : 'configuration-incomplete',
     identityManagement: identityConfig().configured ? 'configuration-present' : 'configuration-incomplete',
-    identityProviderVerifiedByThisCheck: false },
+    identityProviderVerifiedByThisCheck: false, metaRelease: observeMetaRelease() },
     { headers: { 'Cache-Control': 'private, no-store, max-age=0', 'X-Content-Type-Options': 'nosniff' } });
 }

@@ -4,13 +4,16 @@ import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import {customerInboxAccessDenied,customerInboxSnapshot,mergeCustomerInboxPages,customerInboxGroups,customerInboxSummary,customerInboxStage,customerInboxReply,customerInboxIdentity,customerInboxEventTitle,customerInboxReceipt} from './customer-inbox-view.mjs';
 import styles from './customer-inbox-panel.module.css';
 const endpoint='/api/identity/meta-onboarding';
+const mediaRecoveryCode='META_CUSTOMER_PREPARED_MEDIA_AUTHORIZATION_REQUIRED';
 const decisions={OBSERVED:'Tomar conocimiento',REFER_TO_PARTICIPANTS:'Revisar participantes e identidad',REFER_TO_FIELD:'Revisar con el responsable de la obra'};
 const errors={SESSION_REQUIRED:'Tu sesión terminó. Volvé a ingresar.',WORKSPACE_CONTEXT_CHANGED:'Cambió el contexto de la obra. Volvé a consultarla desde tu cuenta.',WORKSPACE_PROJECT_UNAVAILABLE:'La obra ya no está disponible con tu acceso actual. Volvé a consultar cuando se restablezca.',WORKSPACE_MEMBERSHIP_REQUIRED:'La pertenencia a esta empresa no está vigente.',WORKSPACE_INTEGRATION_PERMISSION_REQUIRED:'Tu acceso no permite consultar esta bandeja privada.',META_CUSTOMER_INBOX_REVISION_CHANGED:'El evento cambió. Actualizá la bandeja y revisá su estado antes de iniciar otra decisión.',META_CUSTOMER_INBOX_ALREADY_REVIEWED:'Este evento ya tiene un seguimiento. Consultá el estado vigente.',META_CUSTOMER_INBOX_BUSY:'El evento se está procesando. Comprobá su estado cuando termine.',META_CUSTOMER_INBOX_PAYLOAD_UNVERIFIED:'No se pudo comprobar el contenido privado. Requiere revisar el almacenamiento.',META_CUSTOMER_INBOX_CURSOR_UNAVAILABLE:'La página dejó de estar disponible. Actualizá la bandeja desde los eventos recientes.'};
 const date=value=>{const d=new Date(value);return value&&!Number.isNaN(d.getTime())?d.toLocaleString('es-AR'):'Fecha no disponible';};
-export function CustomerInboxPanel({projectId,scope,getSessionToken,onPending}){
- const request=useWorkspaceRequest(getSessionToken),mounted=useRef(true),pendingCallback=useRef(onPending);
+export function CustomerInboxPanel(props){return <CustomerInboxScope key={props.scope+':'+props.projectId} {...props}/>;}
+function CustomerInboxScope({projectId,scope,getSessionToken,onPending}){
+ const request=useWorkspaceRequest(getSessionToken),mounted=useRef(true),pendingCallback=useRef(onPending),attemptRAM=useRef(null);
  const [opened,setOpened]=useState(false),[data,setData]=useState(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[selected,setSelected]=useState(''),[filter,setFilter]=useState('ALL'),[query,setQuery]=useState(''),[decision,setDecision]=useState({}),[attempt,setAttempt]=useState(null),[stale,setStale]=useState(false);
- useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+ const [retryAllowed,setRetryAllowed]=useState(false);
+ useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;attemptRAM.current=null;};},[]);
  useEffect(()=>{pendingCallback.current=onPending;},[onPending]);
  const dirty=Object.values(decision).some(Boolean);
  useEffect(()=>{pendingCallback.current?.(busy||Boolean(attempt)||dirty);return()=>pendingCallback.current?.(false);},[busy,attempt,dirty]);
@@ -26,6 +29,7 @@ export function CustomerInboxPanel({projectId,scope,getSessionToken,onPending}){
    if(retainedError)throw retainedError;return result;
   }
   function hideDenied(error){
+   setRetryAllowed(false);
    if(!customerInboxAccessDenied(error))return false;
    setData(null);setSelected('');setDecision({});setQuery('');setFilter('ALL');setStale(true);
    setAttempt(previous=>previous?{action:previous.action,operationId:previous.operationId,projectId:previous.projectId,scope:previous.scope,eventId:previous.eventId}:null);
@@ -37,25 +41,36 @@ export function CustomerInboxPanel({projectId,scope,getSessionToken,onPending}){
    catch(error){if(mounted.current){setStale(true);hideDenied(error);setNotice(error.message);}}finally{if(mounted.current)setBusy(false);}
  }
  async function verifyAttempt(command){
+  setRetryAllowed(false);
    const value=await api(endpoint+'?'+new URLSearchParams({projectId,scope,action:command.action,eventId:command.eventId,operationId:command.operationId}),{requestTimeoutMs:15000},value=>{customerInboxReceipt(value,command,{projectId,scope});customerInboxSnapshot(value,{projectId,scope});return value;});
   const receipt=customerInboxReceipt(value,command,{projectId,scope});if(!mounted.current)return false;
-  if(receipt.state==='NOT_OBSERVED'){setNotice('Todavía no se observa el resultado confirmado. El intento se conserva y no se vuelve a enviar automáticamente.');return false;}
+  if(receipt.state==='NOT_OBSERVED'){
+   const snapshot=customerInboxSnapshot(value,{projectId,scope}),item=snapshot.items.find(item=>item.id===command.eventId),ram=attemptRAM.current;
+   const retry=command.action==='process_inbox'&&ram&&ram.body.action===command.action&&ram.body.operationId===command.operationId&&ram.body.eventId===command.eventId&&ram.body.projectId===projectId&&ram.body.scope===scope&&value.receipt.actorOperationVerified===false&&value.receipt.definitive===false&&value.receipt.eventStatus==='PENDING'&&item?.status==='PENDING'&&item.payloadVerified&&item.canProcess&&item.processingCode===mediaRecoveryCode&&!['SEND_STARTED','SEND_UNKNOWN'].includes(item.replyState);
+   setData(snapshot);setStale(false);setRetryAllowed(retry===true);setNotice(retry?'La reserva conserva este evento y tu acceso actual permite recuperarlo. Podés solicitar el mismo intento explícitamente; no se reenvía una respuesta incierta.':'Todavía no se observa el resultado confirmado. El intento se conserva y no se vuelve a enviar automáticamente.');return false;
+  }
+  attemptRAM.current=null;setRetryAllowed(false);
   setAttempt(null);setDecision({});setData(customerInboxSnapshot(value,{projectId,scope}));setSelected('');setStale(false);
   setNotice(receipt.state==='RECORDED'?'Seguimiento comprobado con su recibo. No aprueba avances ni modifica acciones de campo.':'El evento está procesado. Se comprobó su estado actual; esto no atribuye el resultado al identificador de tu solicitud.');return true;
  }
  async function command(action,item){
   if(busy||attempt||stale)return;const body={action,operationId:crypto.randomUUID(),projectId,scope,eventId:item.id,...(action==='review_inbox'?{expectedRevision:item.revision,decision:decision[item.id]}:{})};
-  setAttempt(body);setBusy(true);setNotice('');let postResponse=false;
-   try{await api(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),requestTimeoutMs:55000},value=>customerInboxSnapshot(value,{projectId,scope}));postResponse=true;if(mounted.current)await verifyAttempt(body);}
+  const serialized=JSON.stringify(body);attemptRAM.current={body:Object.freeze({...body}),serialized};setAttempt(body);await dispatchAttempt(body,serialized);
+ }
+ async function dispatchAttempt(body,serialized){
+  setRetryAllowed(false);setBusy(true);setNotice('');let postResponse=false;
+   try{await api(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:serialized,requestTimeoutMs:55000},value=>customerInboxSnapshot(value,{projectId,scope}));postResponse=true;if(mounted.current)await verifyAttempt(body);}
    catch(error){if(mounted.current){const denied=hideDenied(error);if(!postResponse&&!error.retainAttempt&&(error.requestDispatched===false||error.status&&error.status<500)){setAttempt(null);if(error.code==='META_CUSTOMER_INBOX_REVISION_CHANGED'||error.code==='META_CUSTOMER_INBOX_ALREADY_REVIEWED'){setDecision({});setStale(true);}setNotice(error.message);}else setNotice((denied?error.message+' ':'')+'El resultado quedó sin confirmar. Comprobá este mismo intento; no se vuelve a procesar ni se envía otra respuesta automáticamente.');}}finally{if(mounted.current)setBusy(false);}
  }
+ async function retry(){const ram=attemptRAM.current;if(busy||!retryAllowed||!attempt||!ram||ram.body.projectId!==projectId||ram.body.scope!==scope||ram.body.operationId!==attempt.operationId||ram.body.eventId!==attempt.eventId||ram.body.action!=='process_inbox')return;await dispatchAttempt(ram.body,ram.serialized);}
+ function closeAttempt(){attemptRAM.current=null;setRetryAllowed(false);setAttempt(null);setData(null);setOpened(false);setDecision({});setNotice('Cerraste esta consulta. La referencia sigue en Operaciones por comprobar; no se declaró perdida ni se reenvió.');}
   async function recover(){if(!attempt||busy)return;setBusy(true);try{await verifyAttempt(attempt);}catch(error){if(mounted.current){setNotice(error.message);hideDenied(error);}}finally{if(mounted.current)setBusy(false);}}
  const groups=customerInboxGroups(data?.items||[],{filter,query}),current=groups.find(group=>group.key===selected),summary=customerInboxSummary(data?.items||[]),locked=busy||Boolean(attempt),messages=current?[...current.items].reverse():[];
  return <section className={styles.panel} aria-labelledby="customer-inbox-title">
   <div className={styles.heading}><div><p className={styles.eyebrow}>EQUIPO Y SEGUIMIENTO</p><h3 id="customer-inbox-title">Bandeja privada de WhatsApp</h3></div><button type="button" disabled={locked||dirty} onClick={()=>load()}>{opened?'Actualizar bandeja':'Abrir bandeja de mensajes'}</button></div>
   <p className={styles.intro}>Consultá lo recibido en esta obra y registrá el seguimiento del equipo. El teléfono agrupa mensajes; la identidad y los permisos se comprueban por separado.</p>
   <p role="status" aria-live="polite" className={styles.notice}>{notice}</p>
-   {attempt&&<div className={styles.actions}><button type="button" disabled={busy} onClick={recover}>Comprobar este mismo intento</button>{!data&&<button type="button" disabled={busy} onClick={()=>{setAttempt(null);setNotice('Cerraste esta consulta. La referencia sigue en Operaciones por comprobar; no se declaró perdida ni se reenvió.');}}>Cerrar consulta y conservar referencia</button>}<p className={styles.note}>La comprobación consulta el resultado guardado. No reenvía mensajes.</p></div>}
+   {attempt&&<div className={styles.actions}><button type="button" disabled={busy} onClick={recover}>Comprobar este mismo intento</button>{retryAllowed&&<button type="button" disabled={busy} onClick={retry}>Recuperar este mismo evento reservado</button>}<button type="button" disabled={busy} onClick={closeAttempt}>Cerrar consulta y conservar referencia</button><p className={styles.note}>La comprobación consulta el resultado guardado. La recuperación explícita conserva el identificador original y vuelve a comprobar los permisos.</p></div>}
   {opened&&data&&<>
    <div className={styles.context}><strong>{data.companyName}</strong><span>{data.projectName}</span></div>
    {!data.connectionPresent&&<p className={styles.empty}>Esta obra todavía no tiene una conexión cliente vinculada. La preparación y autorización se realizan en la sección de conexión.</p>}

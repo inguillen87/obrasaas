@@ -10,7 +10,7 @@ import {parseProcurementQuantity,formatProcurementQuantity,subtractProcurementQu
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),output=path.resolve(root,'.vercel/material-inventory-evidence');mkdirSync(output,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/inventory-ui-')),app=path.join(fixture,'app');mkdirSync(app);
-const files=['material-inventory-panel.js','material-inventory-panel.module.css','material-inventory-view.mjs','site-purchase-panel.js','site-purchase-panel.module.css','site-purchase-view.mjs','workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','workspace-recovery-journal.mjs','company-channel-view.mjs','workspace-recovery-storage.mjs','workspace-recovery-panel.js','workspace.module.css','template-send-view.mjs'];
+const files=['material-inventory-panel.js','material-inventory-panel.module.css','material-inventory-view.mjs','site-purchase-panel.js','site-purchase-panel.module.css','site-purchase-view.mjs','workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','workspace-recovery-journal.mjs', 'private-bank-account-format.mjs','company-channel-view.mjs','workspace-recovery-storage.mjs','workspace-recovery-panel.js','workspace.module.css','template-send-view.mjs'];
 for(const file of files)copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
 const sourceManifest=files.map(file=>({path:'src/app/(identity)/cuenta/'+file,sha256:createHash('sha256').update(readFileSync(path.join(app,file))).digest('hex')}));
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({private:true,name:'controlled-inventory-ui'}));

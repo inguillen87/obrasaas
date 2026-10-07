@@ -7,6 +7,7 @@ import {META_APP_PROJECTION_PROVIDER,decodeCustomerAppProjection} from './meta-c
 import {companyChannelSchemaReady} from './company-channel-schema.mjs';
 import {decodeWorkerChannelProof} from './worker-channel-identity.mjs';
 import {assertLegacyProjectChannel} from './company-channel-connection.mjs';
+import {companyPreparedMediaRecoveryAuthorized} from './company-channel-routing.mjs';
 const revision=`to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const text=value=>typeof value==='string'?value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g,' ').slice(0,4096):'';
 const phoneForView=value=>typeof value==='string'&&/^[1-9]\d{7,14}$/.test(value)?value:null;
@@ -107,14 +108,20 @@ async function readCompanyInbox(client,member,project,c,environment,after){
    const record=data?.record,m=record?.data||{},contact=record?.kind==='contact';items.push({...publicItem(row,null),kind:contact?'APP_CONTACT':data?.field==='history'?'APP_HISTORY':'APP_ECHO',source:'WHATSAPP_BUSINESS_APP',sourceEventId:data?.sourceEventId||null,sourceTimestamp:record?.timestamp||null,from:phoneForView(contact?m.contact?.phone_number:m.sourceThreadId||m.to||m.from),body:contact?text(m.contact?.full_name||m.contact?.first_name):text(m.text?.body||m[m.type]?.caption),payloadVerified:Boolean(data),canProcess:false,canReview:false,identityStatus:'NOT_APPLICABLE',businessApplied:false,replySent:false});continue;
   }
   let payload=null;try{if(row.routeKind){if(row.routeDigest!==row.payload.payloadDigest)throw new Error();decodeWorkerChannelProof(row,{...c,organizationId:member.organizationId},environment);}payload=decode(row,member,project,c,environment);}catch{}
-  const item=publicItem(row,payload),reply=replyByEvent.get(row.id);items.push({...item,...(row.routeKind?{source:'COMPANY_WHATSAPP',workerId:row.routedWorkerId,body:row.routeKind==='BINDING'?'':item.body}:{}),...(row.routeKind||c.companyMode!=='PREPARED'?{canProcess:false,canReview:false}:{}),...(reply?{replyState:reply.state,replySent:['SENT','STATUS_OBSERVED'].includes(reply.state)&&!['failed','deleted'].includes(reply.providerStatus),providerReplyStatus:reply.providerStatus||null}:{})});
+  const item=publicItem(row,payload),reply=replyByEvent.get(row.id),canRecover=row.routeKind==='FIELD'&&payload&&item.canProcess&&await companyPreparedMediaRecoveryAuthorized(client,member,{eventId:row.id,projectId:project.id,environment});items.push({...item,...(row.routeKind?{source:'COMPANY_WHATSAPP',workerId:row.routedWorkerId,body:row.routeKind==='BINDING'?'':item.body}:{}),...(row.routeKind||c.companyMode!=='PREPARED'?{canProcess:canRecover===true,canReview:false}:{}),...(reply?{replyState:reply.state,replySent:['SENT','STATUS_OBSERVED'].includes(reply.state)&&!['failed','deleted'].includes(reply.providerStatus),providerReplyStatus:reply.providerStatus||null}:{})});
  }
  return {items,truncated:rows.length>20,nextCursor:rows.length>20?rows[19].id:null,canSend:false,businessApplied:items.some(i=>i.businessApplied),channelIdentityVerified:items.some(i=>['VERIFIED','CHANNEL_VERIFIED'].includes(i.identityStatus))};
 }
 export async function readMetaCustomerInboxReceipt(client,member,project,connection,environment,request){
  if(!request||!operationId(request.operationId)||!eventId(request.eventId)||!['process_inbox','review_inbox'].includes(request.action))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
  if(!connection||connection.metadata?.credentialFormat!=='tenant-aad-v2'||connection.metadata?.credentialOrganizationId!==member.organizationId)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);
- const row=(await client.query(`SELECT id,status::text AS status,payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-v1' AND payload->>'channelId'=$3`,[request.eventId,project.id,connection.id])).rows[0];if(!row)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);
+ const companyConnection=connection.company||connection.companyMode&&connection.companyMode!=='PROJECT_ONLY';
+ const routed=companyConnection?(await client.query(`SELECT "projectId" FROM public."WhatsAppCompanyEventRoute" WHERE "sourceEventId"=$1 AND "organizationId"=$2 AND "connectionId"=$3 AND kind='FIELD'`,[request.eventId,member.organizationId,connection.id])).rows[0]:null;
+ if(routed&&routed.projectId!==project.id)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);
+ const corporate=Boolean(routed);
+ if(corporate&&request.action!=='process_inbox')throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);
+ const row=corporate?(await client.query(`SELECT e.* FROM public."WebhookEvent" e JOIN public."WhatsAppCompanyEventRoute" er ON er."sourceEventId"=e.id WHERE e.id=$1 AND e."projectId"=$2 AND e.provider='meta-customer-v1' AND e.payload->>'channelId'=$3 AND er.kind='FIELD' AND er."organizationId"=$4 AND er."connectionId"=$3 AND er."projectId"=$5 AND er."payloadDigest"=e.payload->>'payloadDigest'`,[request.eventId,connection.projectId,connection.id,member.organizationId,project.id])).rows[0]:(await client.query(`SELECT id,status::text AS status,payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-v1' AND payload->>'channelId'=$3`,[request.eventId,project.id,connection.id])).rows[0];if(!row)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);
+ if(corporate)decodeWorkerChannelProof(row,{...connection,organizationId:member.organizationId},environment);
  decode(row,member,project,connection,environment);
  const context={operationId:request.operationId,eventId:row.id,action:request.action,definitive:false};
  if(request.action==='review_inbox'){

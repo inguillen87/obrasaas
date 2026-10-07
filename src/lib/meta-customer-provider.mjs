@@ -84,9 +84,10 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
  };
  const config=(signupRequired=false)=>{const ready=scopedReady(),transportReady=pilotCapability?ready.pilot?.canUseAttendanceTransport===true:readiness===metaCustomerReadiness?metaCustomerTransportReady(ready):injectedDemoTransportReady(ready);if(!transportReady||signupRequired&&!metaCustomerAuthorizationReady(ready))throw new WorkspaceError(pilotCapability?ready.pilot.code:ready.launchCode,503);return ready;};
  const pilotAdapter=adapter=>{if(pilotCapability&&!['inspect','subscribe','register','reply'].includes(adapter))throw new WorkspaceError('META_DEVELOPMENT_PILOT_ADAPTER_UNAVAILABLE',409);};
- async function request(path,{token,method='GET',body,appToken=false}={}){
+ async function request(path,{token,method='GET',body,appToken=false,beforeExternal}={}){
   const ready=config(),url=new URL(`https://graph.facebook.com/${ready.version}/${path}`);
   if(token&&!appToken)url.searchParams.set('appsecret_proof',createHmac('sha256',environment.META_APP_SECRET).update(token).digest('hex'));
+  if(beforeExternal)await beforeExternal();
   let response;try{response=await fetchImpl(url,{method,headers:{Accept:'application/json',...(token?{Authorization:`Bearer ${token}`}:{}) ,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store',redirect:'error',signal:AbortSignal.timeout(15000)});}catch{throw new WorkspaceError('META_CUSTOMER_PROVIDER_UNCONFIRMED',503);}
   const payload=await response.json().catch(()=>null);
   if(!response.ok)throw new WorkspaceError(response.status>=500||[408,425,429].includes(response.status)?'META_CUSTOMER_PROVIDER_UNCONFIRMED':'META_CUSTOMER_PROVIDER_REJECTED',response.status>=500||[408,425,429].includes(response.status)?503:409);
@@ -238,17 +239,20 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    if(!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(id||''))throw new WorkspaceError('META_CUSTOMER_SEND_UNCONFIRMED',503);
    return {messageId:id};
   },
-  async downloadMedia({token,phoneNumberId,mediaId,limit=3*1024*1024}){
+  async downloadMedia({token,phoneNumberId,mediaId,limit=3*1024*1024,beforeExternal}){
    pilotAdapter('media');
-   if(!metaAssetId(phoneNumberId)||!metaAssetId(mediaId)||!Number.isSafeInteger(limit)||limit<=0||limit>3*1024*1024)throw new WorkspaceError('META_CUSTOMER_MEDIA_INVALID');
+   if(!metaAssetId(phoneNumberId)||!metaAssetId(mediaId)||!Number.isSafeInteger(limit)||limit<=0||limit>3*1024*1024||beforeExternal!==undefined&&typeof beforeExternal!=='function')throw new WorkspaceError('META_CUSTOMER_MEDIA_INVALID');
    // The URL originates exclusively from an authorized Graph lookup scoped to
    // this customer's phone. Webhook URLs are never download inputs.
-   const item=await request(mediaId+'?'+new URLSearchParams({phone_number_id:phoneNumberId}),{token});
+   const item=await request(mediaId+'?'+new URLSearchParams({phone_number_id:phoneNumberId}),{token,beforeExternal});
    let url;try{url=new URL(item.url);}catch{throw new WorkspaceError('META_CUSTOMER_MEDIA_UNCONFIRMED',503);}
    const mime=typeof item.mime_type==='string'?item.mime_type.toLowerCase().split(';')[0].trim():'';
    if(String(item.id)!==mediaId||!Number.isSafeInteger(item.file_size)||item.file_size<=0||item.file_size>limit||!['image/jpeg','image/png','image/webp','audio/ogg','audio/mpeg','audio/mp4','audio/wav','audio/webm','video/mp4','video/webm'].includes(mime)||url.protocol!=='https:'||url.hostname!=='lookaside.fbsbx.com'||url.username||url.password||url.port||url.hash||!url.pathname.startsWith('/whatsapp_business/attachments/'))throw new WorkspaceError('META_CUSTOMER_MEDIA_REJECTED',409);
    const expected=/^[a-f0-9]{64}$/i.test(item.sha256||'')?item.sha256.toLowerCase():/^[A-Za-z0-9+/]{43}=$/.test(item.sha256||'')?Buffer.from(item.sha256,'base64').toString('hex'):null;
    if(!expected)throw new WorkspaceError('META_CUSTOMER_MEDIA_UNCONFIRMED',503);
+   // Revalidate the canonical source after the asynchronous Graph lookup.
+   // A denied guard must retain its error and prevent the attachment GET.
+   if(beforeExternal)await beforeExternal();
    let response;try{response=await fetchImpl(url,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000)});}catch{throw new WorkspaceError('META_CUSTOMER_MEDIA_UNCONFIRMED',503);}
    if(!response.ok||!response.body||response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()!==mime)throw new WorkspaceError('META_CUSTOMER_MEDIA_UNCONFIRMED',503);
    const length=response.headers.get('content-length');if(length!==null&&(!/^\d+$/.test(length)||Number(length)!==item.file_size))throw new WorkspaceError('META_CUSTOMER_MEDIA_INTEGRITY',409);

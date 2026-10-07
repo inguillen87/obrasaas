@@ -28,7 +28,7 @@ function Attachment({kind}){
 }
 
 export function LandingPhoneScene(){
- const [selected,setSelected]=useState(0),[device,setDevice]=useState('iphone'),[step,setStep]=useState(1),[playing,setPlaying]=useState(false),[inView,setInView]=useState(false);
+ const [selected,setSelected]=useState(3),[device,setDevice]=useState('iphone'),[step,setStep]=useState(1),[playing,setPlaying]=useState(false),[inView,setInView]=useState(false);
  const [root,animate]=useAnimate(),controls=useRef([]),lastEntrance=useRef(''),visible=useRef(false),started=useRef(false),reduced=useSyncExternalStore(subscribeMotion,motionSnapshot,serverMotion),example=examples[selected];
  const shown=reduced?3:step;
  // Cancelling the scoped WAAPI animations restores the fully readable CSS state.

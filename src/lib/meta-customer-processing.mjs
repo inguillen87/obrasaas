@@ -11,6 +11,8 @@ import {lockDevelopmentPilotIssuer,assertDevelopmentPilotCommit} from './meta-de
 
 const validEvent=id=>/^customer_webhook_[a-f0-9]{64}$/.test(id||'');
 export const META_CUSTOMER_PROOF_REVIEW_CODES=Object.freeze(['WORKER_CHANNEL_SIGNED_PROOF_REQUIRED','WORKER_CHANNEL_PROOF_INTEGRITY','META_CUSTOMER_EVENT_PROOF_REQUIRED','META_CUSTOMER_INBOX_PAYLOAD_UNVERIFIED']);
+export const META_CUSTOMER_PREPARED_MEDIA_RECOVERY_CODE='META_CUSTOMER_PREPARED_MEDIA_AUTHORIZATION_REQUIRED';
+export const META_CUSTOMER_MANUAL_RECOVERY_CODES=Object.freeze([...META_CUSTOMER_PROOF_REVIEW_CODES,META_CUSTOMER_PREPARED_MEDIA_RECOVERY_CODE]);
 const authorizationObservations=new Set(['WORKER_CHANNEL_BINDING_REQUIRED','WORKER_CHANNEL_PARTICIPANT_REQUIRED','WORKER_CHANNEL_KYC_REVIEW_REQUIRED','WORKER_CHANNEL_PERMISSION_REQUIRED','WORKER_CHANNEL_CUSTOMER_ACTIVATION_REQUIRED','WORKER_CHANNEL_CUSTOMER_CONNECTION_REQUIRED','WORKER_CHANNEL_CHALLENGE_REJECTED','WORKER_CHANNEL_CHALLENGE_EXPIRED','WORKER_CHANNEL_CHALLENGE_USED','META_CUSTOMER_CHANNEL_ACCEPTANCE_REQUIRED','META_CHANNEL_MESSAGE_NOT_SUPPORTED','META_CHANNEL_INPUT_REVIEW_REQUIRED']);
 export function decodeSignedCloudEvent(event,channel,environment,protocol=META_CUSTOMER_PROTOCOL){
  resolveMetaCloudProtocol(protocol);
@@ -38,7 +40,7 @@ export function createDevelopmentPilotDispatchGuard({connect,environment=process
   await assertDevelopmentPilotCommit(client,candidate,environment);return true;
  });
 }
-export function createMetaCustomerProcessor({connect,dispatch,outbound,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{},beforeDispatch=async()=>false,protocol=META_CUSTOMER_PROTOCOL,lockChannel=lockMetaCustomerInboxChannel,authorizationCodes=[]}){
+export function createMetaCustomerProcessor({connect,dispatch,outbound,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{},beforeDispatch=async()=>false,deferAuthorization=async()=>false,protocol=META_CUSTOMER_PROTOCOL,lockChannel=lockMetaCustomerInboxChannel,authorizationCodes=[]}){
  resolveMetaCloudProtocol(protocol);
  const within=run=>customerJobTransaction(connect,run);
  async function claim(eventId){return within(async client=>{
@@ -65,6 +67,19 @@ export function createMetaCustomerProcessor({connect,dispatch,outbound,environme
   if(written.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
   return {eventId:context.eventId,processed:true,...outcome};
  });}
+ async function deferPrepared(context,code,previous=null){return within(async client=>{
+  // This callback proves an already sealed reservation, never current access.
+  // The exact source lease and CAS live in this transaction; retry must still
+  // traverse the canonical authorization and outbound reservation guards.
+  const event=(await client.query(`SELECT id,"projectId",provider,payload,status::text AS status,"leaseToken","leaseExpiresAt" FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider=$3 FOR UPDATE`,[context.eventId,context.projectId,protocol.provider])).rows[0];
+  const clock=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
+  if(!event||event.status!=='PENDING'||event.leaseToken!==context.leaseToken||event.payload?.channelId!==context.channelId||event.payload?.payloadDigest!==context.payloadDigest||!Number.isFinite(Date.parse(event.leaseExpiresAt))||Date.parse(event.leaseExpiresAt)<=clock.getTime())throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
+  if(await deferAuthorization(client,Object.freeze({...context}),code)!==true)return null;
+  const outcome=safeOutcome({...previous,kind:previous?.kind||'MEDIA_PREPARED',reviewState:'RECOVERY_REQUIRED',code,replySent:false,identityStatus:'RECOVERY_NOT_AUTHORIZED'});
+  const written=await client.query(`UPDATE public."WebhookEvent" SET outcome=$4::jsonb,"lastError"=$5,"leaseToken"=NULL,"leaseExpiresAt"=NULL,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2 AND provider=$6 AND status='PENDING' AND "leaseToken"=$3 AND "leaseExpiresAt">clock_timestamp() AND payload->>'channelId'=$7 AND payload->>'payloadDigest'=$8`,[context.eventId,context.projectId,context.leaseToken,JSON.stringify(outcome),META_CUSTOMER_PREPARED_MEDIA_RECOVERY_CODE,protocol.provider,context.channelId,context.payloadDigest]);
+  if(written.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
+  return {eventId:context.eventId,processed:false,recoveryPending:true,...outcome};
+ });}
  return {
   async process(eventId){
    if(!metaCloudEventMatches(protocol,eventId))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
@@ -74,10 +89,10 @@ export function createMetaCustomerProcessor({connect,dispatch,outbound,environme
     try{context.developmentPilot=await beforeDispatch(context)===true;result=await dispatch(context);}catch(error){
      // Authorization failures are durable observations, never invitations to
      // guess a recipient, imitate a web session, or run a fallback engine.
-     if(error instanceof WorkspaceError&&(authorizationObservations.has(error.code)||authorizationCodes.includes(error.code)))result=await observe(context,error.code);else throw error;
+     if(error instanceof WorkspaceError&&(authorizationObservations.has(error.code)||authorizationCodes.includes(error.code))){const deferred=await deferPrepared(context,error.code);if(deferred)return deferred;result=await observe(context,error.code);}else throw error;
     }
     if(!result)result=await observe(context);
-    if(result.reply){let reply;try{reply=await outbound.send(context,result.reply,{purpose:result.kind==='KYC_CHAT'?'KYC_CAPTURE':'FIELD'});}catch(error){if(error instanceof WorkspaceError&&(error.code==='META_CUSTOMER_REPLY_WINDOW_CLOSED'||authorizationObservations.has(error.code)||authorizationCodes.includes(error.code)))reply={replySent:false,state:error.code};else throw error;}result={...result,replySent:reply.replySent,replyState:reply.state};}
+    if(result.reply){let reply;try{reply=await outbound.send(context,result.reply,{purpose:result.kind==='EMPLOYEE_INTAKE'?'EMPLOYEE_INTAKE':result.kind==='KYC_CHAT'?'KYC_CAPTURE':'FIELD'});}catch(error){if(error instanceof WorkspaceError&&(error.code==='META_CUSTOMER_REPLY_WINDOW_CLOSED'||authorizationObservations.has(error.code)||authorizationCodes.includes(error.code))){const deferred=await deferPrepared(context,error.code,result);if(deferred)return deferred;reply={replySent:false,state:error.code};}else throw error;}result={...result,replySent:reply.replySent,replyState:reply.state};}
     return finish(context,result);
    }catch(error){
     await within(client=>client.query(`UPDATE public."WebhookEvent" SET "lastError"=$3,"leaseToken"=NULL,"leaseExpiresAt"=NULL,"updatedAt"=clock_timestamp() WHERE id=$1 AND "leaseToken"=$2 AND status='PENDING'`,[context.eventId,context.leaseToken,error instanceof WorkspaceError?error.code:'META_CUSTOMER_PROCESSING_UNCONFIRMED'])).catch(()=>{});throw error;
@@ -87,7 +102,7 @@ export function createMetaCustomerProcessor({connect,dispatch,outbound,environme
    if(!Number.isInteger(limit)||limit<1||limit>20||eventIds!==null&&(!Array.isArray(eventIds)||eventIds.length>20||eventIds.some(id=>!metaCloudEventMatches(protocol,id))))throw new WorkspaceError('META_CUSTOMER_JOB_INPUT_INVALID');
    if(!Number.isInteger(budgetMs)||budgetMs<180000||budgetMs>240000)throw new WorkspaceError('META_CUSTOMER_JOB_INPUT_INVALID');
    const started=Date.now();
-   const ids=eventIds||await within(async client=>(await client.query(`SELECT id FROM public."WebhookEvent" WHERE provider=$4 AND status='PENDING' AND ("leaseToken" IS NULL OR "leaseExpiresAt"<=$1) AND NOT (COALESCE("lastError",'')=ANY($3::text[])) AND ("lastError" IS NULL OR "updatedAt"<$1::timestamp-interval '1 minute') ORDER BY "createdAt",id LIMIT $2`,[new Date(now()),limit,META_CUSTOMER_PROOF_REVIEW_CODES,protocol.provider])).rows.map(row=>row.id));
+   const ids=eventIds||await within(async client=>(await client.query(`SELECT id FROM public."WebhookEvent" WHERE provider=$4 AND status='PENDING' AND ("leaseToken" IS NULL OR "leaseExpiresAt"<=$1) AND NOT (COALESCE("lastError",'')=ANY($3::text[])) AND ("lastError" IS NULL OR "updatedAt"<$1::timestamp-interval '1 minute') ORDER BY "createdAt",id LIMIT $2`,[new Date(now()),limit,META_CUSTOMER_MANUAL_RECOVERY_CODES,protocol.provider])).rows.map(row=>row.id));
    const results=[];for(const id of ids.slice(0,limit)){if(results.length&&Date.now()-started>budgetMs-180000)break;try{results.push(await this.process(id));}catch(error){results.push({eventId:id,processed:false,code:error instanceof WorkspaceError?error.code:'META_CUSTOMER_PROCESSING_UNCONFIRMED'});}}
    return {durable:true,checked:results.length,results};
   },

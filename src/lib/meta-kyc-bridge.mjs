@@ -5,10 +5,13 @@ import {metaKycOperationId} from './meta-kyc-challenge.mjs';
 import {resolveMetaKycAuthority,metaKycDispatchReceiptId,metaKycConversationEnvelope,sealMetaKycValue} from './meta-kyc-identity.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {decodePrivateImage,MAX_PRIVATE_IMAGE_BYTES} from './private-image-upload.mjs';
+import {companyKycProjectionDigest,fenceCompanyKycAuthority} from './company-channel-kyc.mjs';
+import {createEmployeeIntakeBridge} from './meta-employee-intake.mjs';
 
 const text=body=>({type:'text',body});
 const replyResult=(reply,extra={})=>({kind:'KYC_CHAT',identityStatus:'LIMITED_KYC_UPLOAD',reviewState:'OBSERVED',businessApplied:false,replySent:false,reply,...extra});
 export function createMetaKycBridge({connect,provider,deposit,environment=process.env,resolveAuthority=resolveMetaKycAuthority}){
+ const intake=createEmployeeIntakeBridge({connect,environment});
  const within=run=>customerJobTransaction(connect,run),resolve=(client,context,options={})=>resolveAuthority(client,context,{...options,environment});
  async function record(client,r,result,state,transition=null,{preserveConversation=false}={}){
   const current=(await client.query(`SELECT metadata FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id])).rows[0];
@@ -18,30 +21,33 @@ export function createMetaKycBridge({connect,provider,deposit,environment=proces
   await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify(metadata)]);
   const id=metaKycDispatchReceiptId(r.event.id);
   await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.kyc_chat.dispatched','Worker',$4,$5::jsonb)`,[id,r.project.organizationId,r.member.actorId,r.worker.id,JSON.stringify({version:1,projectId:r.project.id,challengeId:r.challenge.id,payloadDigest:r.event.payload.payloadDigest,replyDigest:digest(result.reply),encryptedResult:sealMetaKycValue(r,'kyc-chat-dispatch',id,result,environment),identityCertified:false,permissionsGranted:false})]);
+  await fenceCompanyKycAuthority(client,r,{eventId:r.event.id,projectId:r.connection.projectId,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,leaseToken:r.event.leaseToken});
   return result;
  }
  async function prepare(context){return within(async client=>{
   const r=await resolve(client,context);if(r.recorded)return {result:r.recorded};
-  if(r.state?.step==='FINALIZING'&&r.state.confirmationEventId===r.event.id){await resolve(client,context,{deposit:true});await client.query(`UPDATE public."WebhookEvent" SET "leaseExpiresAt"=clock_timestamp()+interval '180 seconds' WHERE id=$1 AND "leaseToken"=$2`,[r.event.id,context.leaseToken]);return {deposit:true};}
+  if(r.state?.step==='FINALIZING'&&r.state.confirmationEventId===r.event.id){await resolve(client,context,{deposit:true});if(!r.companyKyc)await client.query(`UPDATE public."WebhookEvent" SET "leaseExpiresAt"=clock_timestamp()+interval '180 seconds' WHERE id=$1 AND "leaseToken"=$2`,[r.event.id,context.leaseToken]);return {deposit:true};}
   if(['COMPLETED','CANCELLED'].includes(r.challenge.status))throw new WorkspaceError('META_KYC_NOT_APPLICABLE',409);
   const plan=r.challenge.status==='PENDING'?beginMetaKycConversation(r.event.id):planMetaKycConversation({message:r.payload.value,state:r.state,eventId:r.event.id});
   if(plan.deposit){
    const metadata={...r.worker.metadata,participant:{...r.worker.metadata.participant,kycChatConversation:metaKycConversationEnvelope(r,plan.state,environment)}};
    await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify(metadata)]);
-   await client.query(`UPDATE public."WebhookEvent" SET "leaseExpiresAt"=clock_timestamp()+interval '180 seconds' WHERE id=$1 AND "leaseToken"=$2`,[r.event.id,context.leaseToken]);
+   if(!r.companyKyc)await client.query(`UPDATE public."WebhookEvent" SET "leaseExpiresAt"=clock_timestamp()+interval '180 seconds' WHERE id=$1 AND "leaseToken"=$2`,[r.event.id,context.leaseToken]);
+   await fenceCompanyKycAuthority(client,r,context);
    return {deposit:true};
   }
   const transition=plan.cancelled?{status:'CANCELLED',cancelledEventId:r.event.id}:r.challenge.status==='PENDING'?{status:'CLAIMED',claimedAt:r.now.toISOString(),claimedEventId:r.event.id}:null;
   return {result:await record(client,r,replyResult(plan.reply),plan.state,transition,{preserveConversation:plan.preserveConversation===true})};
  });}
- return {async execute(context){
+ return {executeIntake:context=>intake.execute(context),async execute(context){
   let prepared;try{prepared=await prepare(context);}catch(error){if(error.code==='META_KYC_NOT_APPLICABLE')return null;throw error;}
   if(prepared.result)return prepared.result;
   const authorized=await within(client=>resolve(client,context,{deposit:true})),state=authorized.state;
-  const token=decryptCustomerSecret(authorized.connection.encryptedAccessToken,{organizationId:authorized.project.organizationId,projectId:authorized.project.id,purpose:'access-token',resourceId:authorized.connection.phoneNumberId},environment);
+  const token=decryptCustomerSecret(authorized.connection.encryptedAccessToken,{organizationId:authorized.project.organizationId,projectId:authorized.companyKyc?authorized.connection.projectId:authorized.project.id,purpose:'access-token',resourceId:authorized.connection.phoneNumberId},environment);
+  const beforeExternal=authorized.companyKyc?()=>within(async client=>{const current=await resolve(client,context,{deposit:true});if(!current.companyKyc||companyKycProjectionDigest(current.companyKyc)!==companyKycProjectionDigest(authorized.companyKyc))throw new WorkspaceError('META_KYC_COMPANY_AUTHORITY_CHANGED',409);}):undefined;
   const images={};
   try{for(const key of ['front','selfie']){
-   const reference=state[key],downloaded=await provider.downloadMedia({token,phoneNumberId:authorized.connection.phoneNumberId,mediaId:reference.mediaId,limit:MAX_PRIVATE_IMAGE_BYTES});
+   const reference=state[key],downloaded=await provider.downloadMedia({token,phoneNumberId:authorized.connection.phoneNumberId,mediaId:reference.mediaId,limit:MAX_PRIVATE_IMAGE_BYTES,...(beforeExternal?{beforeExternal}:{})});
    const contentType=downloaded.contentType?.split(';')[0].trim(),encoded='data:'+contentType+';base64,'+Buffer.from(downloaded.bytes).toString('base64');
    if(contentType!==reference.contentType)throw new WorkspaceError('META_KYC_MEDIA_INTEGRITY',409);decodePrivateImage(encoded,contentType);images[key]=encoded;
   }}catch(error){

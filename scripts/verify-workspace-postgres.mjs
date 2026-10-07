@@ -24,7 +24,7 @@ try{
   await admin.connect();await admin.query(`CREATE DATABASE "${name}"`);created=true;
   url.pathname='/'+name;pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8,connectionTimeoutMillis:5000}));
   await pool.query(`
-    CREATE TABLE "Organization" (id text PRIMARY KEY,name text NOT NULL,"clerkOrganizationId" text UNIQUE,metadata jsonb);
+    CREATE TABLE "Organization" (id text PRIMARY KEY,name text NOT NULL,"clerkOrganizationId" text UNIQUE,metadata jsonb,"trialEndsAt" timestamp);
     CREATE TABLE "PlatformUser" (id text PRIMARY KEY,"clerkUserId" text UNIQUE NOT NULL);
     CREATE TABLE "TenantMembership" (id text PRIMARY KEY,"organizationId" text REFERENCES "Organization", "userId" text REFERENCES "PlatformUser", "tenantRole" text NOT NULL,"clerkRole" text NOT NULL,status text NOT NULL,UNIQUE("organizationId","userId"));
     CREATE TABLE "Project" (id text PRIMARY KEY,"organizationId" text REFERENCES "Organization",name text NOT NULL,status text NOT NULL,metadata jsonb,"updatedAt" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP);
