@@ -315,7 +315,7 @@ export async function fencePendingCompanyKycAcceptance(client){
 }
 export async function assertCompanyKycImageSources(client,r,environment){
  if(!r.companyKyc)return;
- for(const reference of [r.state?.front,r.state?.selfie]){
+ for(const reference of [r.state?.front,r.state?.selfie,...(r.challenge.captureImageSetVersion===2?[r.state?.back]:[])]){
   if(!reference||!event(reference.eventId))fail('META_KYC_DEPOSIT_REQUIRED');
   const p=await readProjection(client,reference.eventId,r.project.organizationId);
   const rows=(await client.query('SELECT * FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2',[reference.eventId,r.connection.projectId])).rows;

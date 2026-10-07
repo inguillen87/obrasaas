@@ -12,7 +12,7 @@ export function participantKycReviewImages(k){
  const back=k.documentBackConsent!==undefined||k.images.some(image=>image?.id==='document-back'||image?.kind==='DOCUMENT_BACK')||k.images.length===3;
  if(!back)return k.images.length===2;
  const c=k.documentBackConsent;
- return k.images.length===3&&c?.allowed===true&&c.noticeVersion==='participant-kyc-document-back-v1'&&/^[a-f0-9]{64}$/.test(c.noticeSha256||'')&&[['document-front','DOCUMENT_FRONT'],['selfie','SELFIE'],['document-back','DOCUMENT_BACK']].every(([id,kind])=>k.images.filter(image=>image?.id===id&&image.kind===kind).length===1)&&k.images.every(image=>Number.isSafeInteger(image.bytes)&&image.bytes>0&&image.bytes<=2*1024*1024&&['image/png','image/jpeg','image/webp'].includes(image.contentType));
+ return k.images.length===3&&c?.allowed===true&&['participant-kyc-document-back-v1','participant-kyc-document-back-whatsapp-v1'].includes(c.noticeVersion)&&/^[a-f0-9]{64}$/.test(c.noticeSha256||'')&&[['document-front','DOCUMENT_FRONT'],['selfie','SELFIE'],['document-back','DOCUMENT_BACK']].every(([id,kind])=>k.images.filter(image=>image?.id===id&&image.kind===kind).length===1)&&k.images.every(image=>Number.isSafeInteger(image.bytes)&&image.bytes>0&&image.bytes<=2*1024*1024&&['image/png','image/jpeg','image/webp'].includes(image.contentType));
 }
 
 // Presentation only. Existing server commands must revalidate authority.
@@ -34,7 +34,7 @@ const step=(state,action,label,optionalBank=null,requestedJob=null)=>({
 const chatKeys=['id','status','expiresAt','conversationExpiresAt','expired','canPrepare','canCancel','blockedCode'];
 const chatOptionalKeys=['step','recoveryRequired','claimedAt','closedAt'];
 const chatStatuses=['PENDING','CLAIMED','COMPLETED','CANCELLED','CLOSED'];
-const chatSteps=['CONSENT','OCR','BIOMETRIC','FRONT','SELFIE','CONFIRM','FINALIZING'];
+const chatSteps=['CONSENT','BACK_CONSENT','BACK','OCR','BIOMETRIC','FRONT','SELFIE','CONFIRM','FINALIZING'];
 const chatDate=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
 // The DB projection decides capabilities. Expiry and historical status never
 // create permission or allow a pending challenge to be overwritten.

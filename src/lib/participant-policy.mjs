@@ -4,6 +4,7 @@ import {privateBankNumber,privateBankType,PRIVATE_BANK_ACTIONS,PRIVATE_BANK_NOTI
 import {SITE_ROLES} from './site-register-policy.mjs';
 import {validateParticipantOnboardingChoice} from './participant-onboarding-policy.mjs';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256} from './participant-kyc-image-set.mjs';
+export {PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_SHA256} from './participant-kyc-image-set.mjs';
 export {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256,participantKycImageSet} from './participant-kyc-image-set.mjs';
 const backKeys=['back','backConsent','backNoticeVersion','backNoticeSha256'];
 const hasBackChoice=input=>backKeys.some(key=>Object.hasOwn(input||{},key));

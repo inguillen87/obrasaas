@@ -20,7 +20,7 @@ export function createMetaKycBridge({connect,provider,deposit,environment=proces
   const metadata={...current.metadata,participant:{...current.metadata.participant,kycChatChallenge:challenge,kycChatConversation:preserveConversation?current.metadata.participant.kycChatConversation:metaKycConversationEnvelope(r,state,environment)}};
   await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify(metadata)]);
   const id=metaKycDispatchReceiptId(r.event.id);
-  await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.kyc_chat.dispatched','Worker',$4,$5::jsonb)`,[id,r.project.organizationId,r.member.actorId,r.worker.id,JSON.stringify({version:1,projectId:r.project.id,challengeId:r.challenge.id,payloadDigest:r.event.payload.payloadDigest,replyDigest:digest(result.reply),encryptedResult:sealMetaKycValue(r,'kyc-chat-dispatch',id,result,environment),identityCertified:false,permissionsGranted:false})]);
+  await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.kyc_chat.dispatched','Worker',$4,$5::jsonb)`,[id,r.project.organizationId,r.member.actorId,r.worker.id,JSON.stringify({version:1,projectId:r.project.id,challengeId:r.challenge.id,payloadDigest:r.event.payload.payloadDigest,...(r.challenge.captureImageSetVersion===2?{captureImageSetVersion:2}:{}),replyDigest:digest(result.reply),encryptedResult:sealMetaKycValue(r,'kyc-chat-dispatch',id,result,environment),identityCertified:false,permissionsGranted:false})]);
   await fenceCompanyKycAuthority(client,r,{eventId:r.event.id,projectId:r.connection.projectId,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,leaseToken:r.event.leaseToken});
   return result;
  }
@@ -28,7 +28,7 @@ export function createMetaKycBridge({connect,provider,deposit,environment=proces
   const r=await resolve(client,context);if(r.recorded)return {result:r.recorded};
   if(r.state?.step==='FINALIZING'&&r.state.confirmationEventId===r.event.id){await resolve(client,context,{deposit:true});if(!r.companyKyc)await client.query(`UPDATE public."WebhookEvent" SET "leaseExpiresAt"=clock_timestamp()+interval '180 seconds' WHERE id=$1 AND "leaseToken"=$2`,[r.event.id,context.leaseToken]);return {deposit:true};}
   if(['COMPLETED','CANCELLED'].includes(r.challenge.status))throw new WorkspaceError('META_KYC_NOT_APPLICABLE',409);
-  const plan=r.challenge.status==='PENDING'?beginMetaKycConversation(r.event.id):planMetaKycConversation({message:r.payload.value,state:r.state,eventId:r.event.id});
+  const plan=r.challenge.status==='PENDING'?beginMetaKycConversation(r.event.id,{captureImageSetVersion:r.challenge.captureImageSetVersion}):planMetaKycConversation({message:r.payload.value,state:r.state,eventId:r.event.id});
   if(plan.deposit){
    const metadata={...r.worker.metadata,participant:{...r.worker.metadata.participant,kycChatConversation:metaKycConversationEnvelope(r,plan.state,environment)}};
    await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify(metadata)]);
@@ -43,22 +43,27 @@ export function createMetaKycBridge({connect,provider,deposit,environment=proces
   let prepared;try{prepared=await prepare(context);}catch(error){if(error.code==='META_KYC_NOT_APPLICABLE')return null;throw error;}
   if(prepared.result)return prepared.result;
   const authorized=await within(client=>resolve(client,context,{deposit:true})),state=authorized.state;
+  // A committed deposit is recovered with current signed authority before I/O.
+  let outcome;
+  if(state.captureImageSetVersion===2){if(typeof deposit.recover!=='function')throw new WorkspaceError('PARTICIPANT_CHANNEL_ADAPTER_INVALID',503);outcome=await deposit.recover(context);}
+  if(!outcome){
   const token=decryptCustomerSecret(authorized.connection.encryptedAccessToken,{organizationId:authorized.project.organizationId,projectId:authorized.companyKyc?authorized.connection.projectId:authorized.project.id,purpose:'access-token',resourceId:authorized.connection.phoneNumberId},environment);
-  const beforeExternal=authorized.companyKyc?()=>within(async client=>{const current=await resolve(client,context,{deposit:true});if(!current.companyKyc||companyKycProjectionDigest(current.companyKyc)!==companyKycProjectionDigest(authorized.companyKyc))throw new WorkspaceError('META_KYC_COMPANY_AUTHORITY_CHANGED',409);}):undefined;
+  const beforeExternal=authorized.companyKyc||state.captureImageSetVersion===2?()=>within(async client=>{const current=await resolve(client,context,{deposit:true});if(authorized.companyKyc&&(!current.companyKyc||companyKycProjectionDigest(current.companyKyc)!==companyKycProjectionDigest(authorized.companyKyc))||digest(current.state)!==digest(state))throw new WorkspaceError('META_KYC_COMPANY_AUTHORITY_CHANGED',409);}):undefined;
   const images={};
-  try{for(const key of ['front','selfie']){
+  try{for(const key of ['front','selfie',...(state.captureImageSetVersion===2?['back']:[])]){
    const reference=state[key],downloaded=await provider.downloadMedia({token,phoneNumberId:authorized.connection.phoneNumberId,mediaId:reference.mediaId,limit:MAX_PRIVATE_IMAGE_BYTES,...(beforeExternal?{beforeExternal}:{})});
    const contentType=downloaded.contentType?.split(';')[0].trim(),encoded='data:'+contentType+';base64,'+Buffer.from(downloaded.bytes).toString('base64');
    if(contentType!==reference.contentType)throw new WorkspaceError('META_KYC_MEDIA_INTEGRITY',409);decodePrivateImage(encoded,contentType);images[key]=encoded;
   }}catch(error){
    if(!['META_KYC_MEDIA_INTEGRITY','META_CUSTOMER_MEDIA_REJECTED','META_CUSTOMER_PROVIDER_REJECTED','PRIVATE_IMAGE_INVALID','PRIVATE_IMAGE_TOO_LARGE','PRIVATE_IMAGE_TYPE_MISMATCH'].includes(error.code))throw error;
-   return within(async client=>{const r=await resolve(client,context,{deposit:true});if(r.recorded)return r.recorded;return record(client,r,replyResult(text('No pudimos validar las imágenes. No se presentó la identidad. Volvé a enviar el frente del documento como imagen nítida de hasta 2 MB; después pediremos una selfie nueva. Escribí CANCELAR para terminar.')),{...r.state,step:'FRONT',front:null,selfie:null,confirmationEventId:null});});
+   return within(async client=>{const r=await resolve(client,context,{deposit:true});if(r.recorded)return r.recorded;return record(client,r,replyResult(text('No pudimos validar las imágenes. No se presentó la identidad. Volvé a enviar el frente del documento como imagen nítida de hasta 2 MB; '+(r.state.captureImageSetVersion===2?'después pediremos el dorso y una selfie nueva.':'después pediremos una selfie nueva.')+' Escribí CANCELAR para terminar.')),{...r.state,step:'FRONT',front:null,selfie:null,...(r.state.captureImageSetVersion===2?{back:null}:{}),confirmationEventId:null});});
   }
-  const outcome=await deposit.deposit(context,{operationId:metaKycOperationId(context.eventId),noticeVersion:state.noticeVersion,noticeSha256:state.noticeSha256,consent:state.consent,ocrConsent:state.ocrConsent,ocrNoticeVersion:state.ocrNoticeVersion,biometricConsent:state.biometricConsent,biometricNoticeVersion:state.biometricNoticeVersion,...images});
+  outcome=await deposit.deposit(context,{operationId:metaKycOperationId(context.eventId),noticeVersion:state.noticeVersion,noticeSha256:state.noticeSha256,consent:state.consent,ocrConsent:state.ocrConsent,ocrNoticeVersion:state.ocrNoticeVersion,biometricConsent:state.biometricConsent,biometricNoticeVersion:state.biometricNoticeVersion,...(state.captureImageSetVersion===2?{captureImageSetVersion:2,backConsent:state.backConsent,backNoticeVersion:state.backNoticeVersion,backNoticeSha256:state.backNoticeSha256}:{}),...images});
+  }
   return within(async client=>{
    const r=await resolve(client,context,{deposit:true});if(r.recorded)return r.recorded;
    const invited=r.worker.metadata.participant.status==='INVITED';
-   const result=replyResult(text(invited?'Documento y selfie presentados en privado. Falta la aceptación verificada de la cuenta antes de la revisión y la vinculación operativa. No habilitamos permisos.':'Documento y selfie presentados en privado. Un responsable debe revisar tu identidad antes de vincular WhatsApp. No habilitamos permisos.'),{businessApplied:true,receiptId:outcome.receiptId||null,reviewState:'RECORDED'});
+   const result=replyResult(text(outcome.superseded?'El recibo original quedó confirmado. Existe una presentación más reciente; el responsable debe consultar su estado vigente. No habilitamos permisos.':invited?''+(state.captureImageSetVersion===2?'Frente, dorso y selfie':'Documento y selfie')+' presentados en privado. Falta la aceptación verificada de la cuenta antes de la revisión y la vinculación operativa. No habilitamos permisos.':''+(state.captureImageSetVersion===2?'Frente, dorso y selfie':'Documento y selfie')+' presentados en privado. Un responsable debe revisar tu identidad antes de vincular WhatsApp. No habilitamos permisos.'),{businessApplied:true,receiptId:outcome.receiptId||null,reviewState:'RECORDED'});
    return record(client,r,result,r.state,{status:'COMPLETED',completedAt:r.now.toISOString(),completionEventId:r.event.id});
   });
  }};

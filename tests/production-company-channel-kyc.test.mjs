@@ -324,3 +324,13 @@ test('corporate KYC envelopes decrypt only with credential anchor A even when th
  for(const mutation of [{projectId:p.targetProjectId},{organizationId:'org_other'},{resourceId:'challenge_other'},{purpose:'kyc-chat-dispatch'}])assert.throws(()=>decryptCustomerSecret(cipher,{...context,...mutation},environment));
  assert.throws(()=>companyKycSecretContext({...p,anchorProjectId:null},'kyc-chat-conversation',p.challengeId));
 });
+
+for(const active of [false,true])test('corporate schema2 authenticates all three image source projections: '+active,async()=>{
+ const f=await companyKycMemoryFixture({active,captureImageSetVersion:2});await f.toConfirmation();const result=await f.choose('Guardar identidad'),k=f.worker.metadata.participant.kyc;assert.equal(result.result.businessApplied,true);assert.equal(k.images.length,3);assert.equal(k.documentBackConsent.allowed,true);assert.equal(f.blob.puts(),3);assert.equal(f.control.graph,3);assert.equal(f.control.cdn,3);assert.equal(k.review,undefined);assert.equal(k.processing,undefined);
+});
+test('corporate schema2 back projection from another target is refused before Graph and Blob',async()=>{
+ const f=await companyKycMemoryFixture({captureImageSetVersion:2});await f.toConfirmation();const source=f.state().back.eventId,row=[...f.audits.values()].find(a=>a.action==='participant.kyc_chat.projected'&&a.metadata.sourceEventId===source);row.metadata.targetProjectId='project-other';const s=f.state(),context=f.receive({type:'interactive',interactive:{list_reply:{id:'kyc:'+s.nonce+':0'}}});await assert.rejects(f.bridge.execute(context));assert.equal(f.control.graph,0);assert.equal(f.control.cdn,0);assert.equal(f.blob.puts(),0);
+});
+test('corporate schema2 recovered committed receipt needs no second Graph/CDN/Blob I/O',async()=>{
+ const f=await companyKycMemoryFixture({captureImageSetVersion:2});await f.toConfirmation();f.control.loseDepositCommit=true;const s=f.state(),context=f.receive({type:'interactive',interactive:{list_reply:{id:'kyc:'+s.nonce+':0'}}});await assert.rejects(f.bridge.execute(context));const counts=[f.control.graph,f.control.cdn,f.blob.puts()];const result=await f.bridge.execute(context);assert.equal(result.businessApplied,true);assert.deepEqual([f.control.graph,f.control.cdn,f.blob.puts()],counts);
+});

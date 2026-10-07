@@ -12,7 +12,7 @@ const instant=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))
 const stable=value=>Array.isArray(value)?value.map(stable):object(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
 const fingerprint=value=>digest(stable(value));
 const statuses=['PENDING','CLAIMED','COMPLETED','CANCELLED','CLOSED'];
-const steps=['CONSENT','OCR','BIOMETRIC','FRONT','SELFIE','CONFIRM','FINALIZING'];
+const steps=['CONSENT','BACK_CONSENT','BACK','OCR','BIOMETRIC','FRONT','SELFIE','CONFIRM','FINALIZING'];
 const submitted=part=>!object(part?.kyc)||part.kyc.version!==1||!['NOT_SUBMITTED','REJECTED'].includes(part.kyc.status)||part.kyc.channelCapture?.challengeId===part.kycChatChallenge?.id;
 const prepared=new WeakMap();
 
@@ -40,7 +40,7 @@ function conversation(row,environment){
  if(!object(envelope)||envelope.version!==1||envelope.challengeId!==challenge.id||!event(challenge.claimedEventId)||!instant(challenge.claimedAt)||!event(envelope.lastEventId)||!Number.isSafeInteger(envelope.lastMessageTimestamp)||envelope.lastMessageTimestamp<1||!instant(envelope.expiresAt)||Date.parse(envelope.expiresAt)!==Date.parse(challenge.claimedAt)+META_KYC_CONVERSATION_TTL_MS)fail();
  let state;
  try{state=JSON.parse(decryptCustomerSecret(envelope.encryptedState,{organizationId:row.organizationId,projectId:anchorProjectId,purpose:'kyc-chat-conversation',resourceId:challenge.id},environment));}catch{fail();}
- if(!object(state)||state.version!==1||!steps.includes(state.step)||state.challengeId!==challenge.id||state.lastEventId!==envelope.lastEventId||state.lastMessageTimestamp!==envelope.lastMessageTimestamp||state.expiresAt!==envelope.expiresAt)fail();
+ if(!object(state)||state.version!==1||state.captureImageSetVersion!==challenge.captureImageSetVersion||!steps.includes(state.step)||state.challengeId!==challenge.id||state.lastEventId!==envelope.lastEventId||state.lastMessageTimestamp!==envelope.lastMessageTimestamp||state.expiresAt!==envelope.expiresAt)fail();
  if(state.step==='FINALIZING'||state.confirmationEventId!=null||challenge.confirmationEventId!=null||challenge.completionEventId!=null||challenge.completedAt!=null)fail('PARTICIPANT_KYC_CHAT_CONFIRMATION_PENDING');
  return state;
 }
