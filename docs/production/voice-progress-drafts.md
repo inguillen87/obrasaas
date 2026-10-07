@@ -26,3 +26,5 @@ node scripts/verify-field-operations-ui.mjs
 ```
 
 El foco de UI tiene once escenarios en cuatro anchos. También se ejecutan de forma aditiva en el harness de campo existente, sin crear una lane paralela. El lint de Production incluye el helper y su prueba; el contrato inmutable de Workspace CI conserva sus bloques anteriores.
+
+El runner existente `scripts/verify-field-operations-postgres.mjs` añade cuatro controles de voz a sus 45 controles previos. Usa otra tarea y un participante sintéticos con storage y transcriptor falsos: procesamiento y replay, revisión independiente y KYC, propuesta sin modificar la tarea y rechazo por cambio de versión, decisión independiente con CAS y replay. Sólo admite PostgreSQL local marcado como desechable; crea una base aleatoria y elimina esa misma base al terminar. No debe ejecutarse con una conexión de producción ni se usa para acreditar al proveedor.
