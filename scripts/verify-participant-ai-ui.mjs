@@ -62,21 +62,25 @@ try{
  }
  assert.deepEqual(errors,[]);
 }catch(error){console.error(log);throw error;}finally{
+ let cleanupError;
  const ownedBrowser=browser?.process();
  try{await bounded(browser?.close(),'OWNED_BROWSER_CLOSE_TIMEOUT');}catch{browser?.disconnect();}
- if(ownedBrowser&&alive(ownedBrowser.pid)){
-  if(process.platform==='win32')execFileSync('taskkill.exe',['/PID',String(ownedBrowser.pid),'/T','/F'],{stdio:'ignore',timeout:10000,windowsHide:true});
-  else ownedBrowser.kill('SIGKILL');
-  for(let attempt=0;attempt<40&&alive(ownedBrowser.pid);attempt++)await new Promise(resolve=>setTimeout(resolve,50));
- }
- if(ownedBrowser)assert.equal(alive(ownedBrowser.pid),false,'Owned browser must close before PASS');
+ try{
+  if(ownedBrowser&&alive(ownedBrowser.pid)){
+   if(process.platform==='win32'){try{execFileSync('taskkill.exe',['/PID',String(ownedBrowser.pid),'/T','/F'],{stdio:'ignore',timeout:10000,windowsHide:true});}catch(error){if(alive(ownedBrowser.pid))throw error;}}
+   else ownedBrowser.kill('SIGKILL');
+   for(let attempt=0;attempt<40&&alive(ownedBrowser.pid);attempt++)await new Promise(resolve=>setTimeout(resolve,50));
+  }
+  if(ownedBrowser)assert.equal(alive(ownedBrowser.pid),false,'Owned browser must close before PASS');
+ }catch(error){cleanupError=error;}
  // These processes were spawned by this isolated harness. Windows must stop
  // the Next worker as well as its parent before removing the private fixture.
- if(process.platform==='win32'&&server.pid&&server.exitCode===null){assert.ok(server.spawnargs.includes(fixture));execFileSync('taskkill.exe',['/PID',String(server.pid),'/T','/F'],{stdio:'ignore',timeout:10000});}
+ if(process.platform==='win32'&&server.pid&&server.exitCode===null){assert.ok(server.spawnargs.includes(fixture));try{execFileSync('taskkill.exe',['/PID',String(server.pid),'/T','/F'],{stdio:'ignore',timeout:10000,windowsHide:true});}catch(error){if(alive(server.pid))throw error;}}
  else server.kill();
  await bounded(serverClosed,'OWNED_NEXT_CLOSE_TIMEOUT');
  assert.ok(path.resolve(fixture).startsWith(path.resolve(scratch)+path.sep));rmSync(fixture,{recursive:true,force:true});
  assert.equal(existsSync(fixture),false);
+ if(cleanupError)throw cleanupError;
 }
 writeFileSync(path.join(scratch,'participant-ai-ui.json'),JSON.stringify({validated:true,fullSuite:!focus,widths,synthetic:true,realProviderCalls:false,checks,serverClosed:true,fixtureRemoved:true},null,2));
 console.log(JSON.stringify({validated:true,fullSuite:!focus,checks:checks.length,synthetic:true,realProviderCalls:false,serverClosed:true,fixtureRemoved:true}));
