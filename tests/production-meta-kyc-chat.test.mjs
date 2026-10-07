@@ -20,9 +20,18 @@ test('challenge preparation rejects an unauthorized manager before querying a wo
 });
 test('manager creates a phone-scoped expiring challenge, stores no plain code, and replay cannot reveal it',async()=>{
  const f=kycMemoryFixture(),input={operationId:randomUUID(),workerId:f.worker.id,revision:f.worker.revision};f.worker.metadata.participant.invitation.expiresAt=new Date(f.now.getTime()+3600000).toISOString();
+ delete f.worker.metadata.participant.kycChatChallenge;
  // Exact project DTO from workspace.projectOperation has no organizationId.
  const result=await prepareMetaKycChallenge({query:f.query},f.issuer,{id:f.project.id,name:f.project.name,metadata:{}},input);assert.match(result.code,/^IDENTIDAD [A-Za-z0-9_-]{43}$/);assert.equal(result.expiresAt,f.worker.metadata.participant.invitation.expiresAt);assert.equal(f.worker.metadata.participant.kycChatChallenge.senderE164,f.worker.phone);assert.ok(!JSON.stringify([...f.audits.values(),f.worker.metadata]).includes(result.code));
  const replay=await prepareMetaKycChallenge({query:f.query},f.issuer,f.project,input);assert.equal(replay.codeUnavailable,true);assert.equal(replay.code,undefined);assert.deepEqual(f.worker.metadata.participant.permissions,{attendance:false,report:false});
+});
+
+for(const status of ['PENDING','CLAIMED'])for(const expired of [false,true])test(`new preparation cannot overwrite an ${expired?'expired':'live'} ${status} capture with another UUID`,async()=>{
+ const f=kycMemoryFixture();f.worker.metadata.participant.kycChatChallenge.status=status;
+ if(expired)f.worker.metadata.participant.kycChatChallenge.expiresAt=new Date(f.now.getTime()-1).toISOString();
+ const before=JSON.stringify(f.worker.metadata),audits=JSON.stringify([...f.audits]);
+ await assert.rejects(prepareMetaKycChallenge({query:f.query},f.issuer,f.project,{operationId:randomUUID(),workerId:f.worker.id,revision:f.worker.revision}),{code:'PARTICIPANT_KYC_CHAT_CLOSURE_REQUIRED'});
+ assert.equal(JSON.stringify(f.worker.metadata),before);assert.equal(JSON.stringify([...f.audits]),audits);
 });
 test('conversation pins both notices, requires fresh explicit consent, OCR choice and confirmation before deposit',()=>{
  let plan=beginMetaKycConversation('event-1');customerReplyMessage(plan.reply);assert.equal(plan.state.consent,false);assert.match(plan.state.noticeSha256,/^[a-f0-9]{64}$/);

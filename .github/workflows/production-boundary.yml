@@ -64,6 +64,11 @@ jobs:
       - run: node scripts/verify-link-rehearsal-postgres.mjs
       - run: node scripts/verify-link-report-ui.mjs
       - run: node scripts/verify-identity-context-postgres.mjs
+      - name: Participant chat recovery, private archive and intake-first routing
+        run: |
+          npx eslint src/lib/participant-kyc-chat-closure.mjs src/lib/participant-store.mjs src/lib/participant-policy.mjs src/lib/meta-kyc-challenge.mjs src/lib/meta-employee-intake.mjs scripts/verify-participant-onboarding-recovery-postgres.mjs scripts/verify-participant-kyc-chat-closure-ui.mjs --max-warnings 0
+          node scripts/verify-participant-onboarding-recovery-postgres.mjs
+          node scripts/verify-participant-kyc-chat-closure-ui.mjs
       - run: node scripts/verify-identity-context-ui.mjs
       - run: node scripts/verify-mapping-review-ui.mjs
       - run: npm run build
@@ -107,5 +112,6 @@ jobs:
             .vercel/local-font-evidence/
             .vercel/pwa-evidence/
             .vercel/company-phone-evidence/
+            .vercel/participant-onboarding-recovery-evidence/
           include-hidden-files: true
           retention-days: 7

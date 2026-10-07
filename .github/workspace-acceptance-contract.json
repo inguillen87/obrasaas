@@ -1449,6 +1449,7 @@
           "src/lib/participant-bank-vault.mjs",
           "src/lib/participant-channel-kyc.mjs",
           "src/lib/participant-http.mjs",
+          "src/lib/participant-kyc-chat-closure.mjs",
           "src/lib/participant-policy.mjs",
           "src/lib/participant-store.mjs",
           "src/lib/person-worksite-journey.mjs",

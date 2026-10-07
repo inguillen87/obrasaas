@@ -11,6 +11,7 @@ import {SITE_ROLES} from './site-register-policy.mjs';
 import {createSiteRegister} from './site-register-store.mjs';
 import {participantReceiptId} from './participant-policy.mjs';
 import {META_CUSTOMER_PROTOCOL} from './meta-cloud-protocol.mjs';
+import {companyKycProjectionContract,companyKycProjectionId,companyKycProjectionDigest} from './company-channel-kyc.mjs';
 
 export const EMPLOYEE_INTAKE_ACTIONS=Object.freeze(['CONFIGURE_EMPLOYEE_INTAKE','ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE']);
 export const EMPLOYEE_INTAKE_AUTHORIZATION_CODES=Object.freeze(['EMPLOYEE_INTAKE_DISABLED','EMPLOYEE_INTAKE_REVOKED','EMPLOYEE_INTAKE_EXPIRED','EMPLOYEE_INTAKE_INTEGRITY','EMPLOYEE_INTAKE_MESSAGE_OUT_OF_ORDER','EMPLOYEE_INTAKE_CONTEXT_REQUIRED']);
@@ -32,15 +33,36 @@ async function writeState(client,anchor,connection,state,environment){
  const envelope={version:1,applicationId:anchor.id,organizationId:connection.organizationId,connectionId:connection.id,senderKey:state.senderKey,revision:state.revision,status:state.status,lastEventId:state.lastEventId,encryptedState:seal(connection,'employee-intake',anchor.id,state,environment)};
  const updated=await client.query(`UPDATE public."WebhookEvent" SET payload=jsonb_set(payload,'{employeeIntake}',$2::jsonb),"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$3 AND provider='meta-customer-v1'`,[anchor.id,JSON.stringify(envelope),connection.projectId]);if(updated.rowCount!==1)fail('EMPLOYEE_INTAKE_INTEGRITY');anchor.payload={...anchor.payload,[namespace]:envelope};
 }
-async function currentPolicy(client,connection,now,{enabled=true,expected=null}={}){
+async function currentPolicy(client,connection,now,{enabled=true,expected=null,lock=true}={}){
  const p=connection.metadata?.employeeIntakePolicy;
  if(!p||p.version!==1||typeof p.enabled!=='boolean'||!Number.isSafeInteger(p.revision)||p.revision<1)fail('EMPLOYEE_INTAKE_DISABLED');
  if(enabled&&p.enabled!==true)fail('EMPLOYEE_INTAKE_DISABLED');
  if(connection.metadata?.developmentPilot||connection.company?.mode!=='COMPANY'||!customerChannelActive(connection,now.getTime())||p.grantDigest!==grant(connection)||p.ownerRevision!==connection.company.revision)fail('EMPLOYEE_INTAKE_REVOKED');
  const issued=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityType"='WhatsAppConnection' AND "entityId"=$4 AND action='participant.operation.recorded'`,[p.receiptId,connection.organizationId,p.issuerActorId,connection.id])).rows[0];
  if(issued?.metadata?.kind!=='CONFIGURE_EMPLOYEE_INTAKE'||issued.metadata.intakePolicyDigest!==durableDigest(p))fail('EMPLOYEE_INTAKE_REVOKED');
- const issuer=(await client.query(`SELECT u.id AS "actorId",tm.id AS "membershipId",tm."tenantRole"::text AS role,to_char(tm."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."PlatformUser" u JOIN public."TenantMembership" tm ON tm."userId"=u.id WHERE u.id=$1 AND tm.id=$2 AND tm."organizationId"=$3 AND tm.status='ACTIVE' FOR SHARE OF u,tm`,[p.issuerActorId,p.issuerMembershipId,connection.organizationId])).rows[0];
+ const issuer=(await client.query(`SELECT u.id AS "actorId",tm.id AS "membershipId",tm."tenantRole"::text AS role,to_char(tm."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."PlatformUser" u JOIN public."TenantMembership" tm ON tm."userId"=u.id WHERE u.id=$1 AND tm.id=$2 AND tm."organizationId"=$3 AND tm.status='ACTIVE' ${lock?'FOR SHARE OF u,tm':''}`,[p.issuerActorId,p.issuerMembershipId,connection.organizationId])).rows[0];
  if(!issuer||issuer.role!=='ADMIN'||issuer.revision!==p.issuerRevision||await issuerTrail(client,connection.organizationId,issuer.membershipId)!==p.issuerTrail||expected&&expected!==durableDigest(p))fail('EMPLOYEE_INTAKE_REVOKED');return {policy:p,issuer};
+}
+
+async function isCompanyKycReplyIntent(client,connection,message,environment){
+ const choice=message.interactive?.list_reply?.id||message.interactive?.button_reply?.id;
+ const invalid=()=>{if(typeof choice==='string'&&choice.startsWith('kyc:'))fail('META_KYC_COMPANY_CONTEXT_REQUIRED');return false;};
+ const replyId=message.context?.id;if(typeof replyId!=='string'||!replyId)return invalid();
+ const rows=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-outbound-v1' AND payload->>'channelId'=$2 AND outcome->>'messageId'=$3`,[connection.projectId,connection.id,replyId])).rows;
+ if(rows.length!==1)return invalid();
+ const row=rows[0];let prepared;
+ try{prepared=JSON.parse(decryptCustomerSecret(row.payload.encryptedPayload,context(connection,'outbound',row.id),environment));}catch{fail('EMPLOYEE_INTAKE_INTEGRITY');}
+ if(!prepared||typeof prepared!=='object'||Array.isArray(prepared))fail('EMPLOYEE_INTAKE_INTEGRITY');
+ if(prepared.channelPurpose!=='KYC_CAPTURE')return invalid();
+ if(prepared.version!==1||!eventId(prepared.eventId)||row.id!==customerOutboundId(prepared.eventId)||digest(prepared)!==row.payload.requestDigest||prepared.organizationId!==connection.organizationId||prepared.channelId!==connection.id||prepared.to!==message.from||!['SENT','STATUS_OBSERVED'].includes(row.outcome?.state)||['failed','deleted'].includes(row.outcome?.providerStatus)||row.outcome.messageId!==replyId)fail('META_KYC_COMPANY_CONTEXT_REQUIRED');
+ const projected=(await client.query(`SELECT id,"actorId","entityId",metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND action='participant.kyc_chat.projected' AND "entityType"='Worker'`,[companyKycProjectionId(prepared.eventId),connection.organizationId])).rows;
+ if(projected.length!==1)fail('META_KYC_COMPANY_CONTEXT_REQUIRED');
+ const projection=companyKycProjectionContract(projected[0].metadata,{sourceEventId:prepared.eventId,organizationId:connection.organizationId,connectionId:connection.id,anchorProjectId:connection.projectId});
+ if(projected[0].actorId!==(projection.participantActorId||projection.issuerActorId)||projected[0].entityId!==projection.workerId||prepared.companyKycDigest!==companyKycProjectionDigest(projection)||prepared.targetProjectId!==projection.targetProjectId||prepared.challengeId!==projection.challengeId||prepared.payloadDigest!==projection.payloadDigest)fail('META_KYC_COMPANY_CONTEXT_REQUIRED');
+ // Read-only routing intent, never authority. The following KYC bridge must
+ // revalidate the signed source, principals, grant, assignment, nonce and lease
+ // before writing its own projection. This classifier performs no mutation.
+ return true;
 }
 
 // Limited signed intake authority: never a participant, Clerk actor or FIELD route.
@@ -59,6 +81,7 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  // limited request never captures those commands or private image messages.
  const command=message.type==='text'?message.text?.body?.trim().toUpperCase():'';
  if(!initial.payload.employeeIntakeDispatch&&(message.type==='image'||/^(IDENTIDAD|VINCULAR)(?:\s|$)/.test(command)))return null;
+ if(!initial.payload.employeeIntakeDispatch&&await isCompanyKycReplyIntent(client,raw,message,environment))return null;
  if(!hello&&!anchors.length&&!initial.payload.employeeIntakeDispatch)return null;
  // This lookup grants no authority. Every new message from a linked sender
  // must reach FIELD's complete identity/assignment/permission resolver, even
@@ -128,7 +151,7 @@ export async function readEmployeeIntake(client,member,projectId,environment=pro
  if(member.role!=='ADMIN')return null;
  const connection=await companyConnectionForProject(client,member.organizationId,projectId);if(!connection||connection.company.mode!=='COMPANY'||connection.metadata?.developmentPilot)return {available:false,records:[],nextCursor:null};
  const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now,policy=connection.metadata?.employeeIntakePolicy;
- let enabled=false;try{await currentPolicy(client,connection,now);enabled=true;}catch(error){if(!(error instanceof WorkspaceError)||!['EMPLOYEE_INTAKE_DISABLED','EMPLOYEE_INTAKE_REVOKED'].includes(error.code))throw error;}
+ let enabled=false;try{await currentPolicy(client,connection,now,{lock:false});enabled=true;}catch(error){if(!(error instanceof WorkspaceError)||!['EMPLOYEE_INTAKE_DISABLED','EMPLOYEE_INTAKE_REVOKED'].includes(error.code))throw error;}
  if(after){const found=(await client.query(`SELECT id FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-v1' AND payload->'employeeIntake'->>'connectionId'=$3`,[after,connection.projectId,connection.id])).rows;if(found.length!==1)fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');}
  const rows=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-v1' AND payload->'employeeIntake'->>'connectionId'=$2 AND payload->'employeeIntake'->>'status' IN ('WAITING_RESPONSIBLE','ADMITTED') AND ($3::text IS NULL OR id>$3) ORDER BY id LIMIT 101`,[connection.projectId,connection.id,after])).rows;
  const records=rows.slice(0,100).map(row=>{const s=readState(row,connection,environment);if(s.consent!==true||!s.name||!Object.hasOwn(SITE_ROLES,s.job)||typeof s.email!=='string'||!Number.isFinite(Date.parse(s.submittedAt)))fail('EMPLOYEE_INTAKE_INTEGRITY');return {id:row.id,revision:s.revision,status:s.status,name:s.name,job:s.job,jobLabel:SITE_ROLES[s.job],email:s.email,phone:s.sender,submittedAt:s.submittedAt,workerId:s.admission?.workerId||null,destinationProjectId:s.admission?.projectId||null,permissions:s.admission?.permissions||null,receiptId:s.admission?.receiptId||null};});
