@@ -11,6 +11,7 @@
   "git": {
     "deploymentEnabled": {
       "feat/whatsapp-onboarding-delivery-20261007": false,
+      "feat/pilot-operational-continuity-20261007": false,
       "hotfix/*": false,
       "operations/*": false
     }
