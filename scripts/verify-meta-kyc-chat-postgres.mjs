@@ -81,14 +81,26 @@ try{
  async function execute(t,message,options){const input=await receive(t,message,options),result=await processor.process(input.eventId);return {...input,result,reply:graph.messages.get(customerOutboundId(input.eventId))?.body};}
  const choose=async(t,last,title)=>{const row=last.reply?.interactive?.action.sections.flatMap(x=>x.rows).find(x=>x.title===title);assert.ok(row,'Missing KYC choice '+title);return execute(t,{type:'interactive',interactive:{type:'list_reply',list_reply:{id:row.id,title:row.title}}});};
  const counts=()=>({puts:blob.puts(),sends:tenants.reduce((n,t)=>n+graph.assets.get(t.key).sends,0),downloads:tenants.reduce((n,t)=>n+graph.assets.get(t.key).downloads,0)});
+ const assertPendingPreserved=async t=>{
+  const beforeWorker=await worker(t),beforeAudits=(await query(`SELECT * FROM "AuditLog" ORDER BY id`)).rows,beforeCounts=counts(),beforeNetwork=unexpectedNetworkCalls;
+  await assert.rejects(challenge(t),{code:'PARTICIPANT_KYC_CHAT_CLOSURE_REQUIRED'});
+  assert.deepEqual(await worker(t),beforeWorker);assert.deepEqual((await query(`SELECT * FROM "AuditLog" ORDER BY id`)).rows,beforeAudits);assert.deepEqual(counts(),beforeCounts);assert.equal(unexpectedNetworkCalls,beforeNetwork);assert.deepEqual(graph.unexpected,[]);
+ };
+ const resetIndependentPendingFixture=async t=>{
+  const p=(await worker(t)).metadata.participant;assert.equal(p.kycChatChallenge.status,'PENDING');assert.equal(p.kyc.status,'NOT_SUBMITTED');assert.equal(p.kycChatConversation,null);assert.equal(p.kycChatChallenge.claimedEventId,undefined);assert.equal(p.kycChatChallenge.claimedAt,undefined);
+  // Independent negative fixtures only, NOT a production cancellation. This
+  // verifier calls prepare directly without canonical outer PREPARE receipts;
+  // the integrated closure verifier tests real cancellation and archival.
+  await mutate(t,m=>{delete m.participant.kycChatChallenge;});
+ };
  const initial=await challenge(a);assert.match(initial.code,/^IDENTIDAD [A-Za-z0-9_-]{43}$/);assert.equal(initial.codeUnavailable,false);
  const originalAudit=JSON.stringify((await query(`SELECT metadata FROM "AuditLog"`)).rows);assert.ok(!originalAudit.includes(initial.code));assert.equal((await worker(a)).metadata.participant.permissions.attendance,false);
  const baseline=counts();await receive(a,initial.code,{signature:false});assert.deepEqual(counts(),baseline);
  const outsider=await execute(a,initial.code,{from:'5491100009999'});assert.equal(outsider.result.businessApplied,false);assert.equal(outsider.result.replySent,false);assert.deepEqual(counts(),baseline);
  const cross=await execute(b,initial.code);assert.equal(cross.result.businessApplied,false);assert.equal(cross.result.replySent,false);assert.deepEqual(counts(),baseline);
  checks.push('unsigned-wrong-phone-and-cross-tenant-WABA-cannot-start-KYC-or-send');
- await mutate(a,m=>{m.participant.kycChatChallenge.expiresAt=new Date(Date.now()-1000).toISOString();});const expired=await execute(a,initial.code);assert.equal(expired.result.code,'META_KYC_CHALLENGE_EXPIRED');assert.deepEqual(counts(),baseline);
- const revoked=await challenge(a);await query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE id=$1`,['owner-member-a']);assert.equal((await execute(a,revoked.code)).result.code,'META_KYC_CHALLENGE_REVOKED');assert.deepEqual(counts(),baseline);await query(`UPDATE "TenantMembership" SET status='ACTIVE' WHERE id=$1`,['owner-member-a']);
+ await mutate(a,m=>{m.participant.kycChatChallenge.expiresAt=new Date(Date.now()-1000).toISOString();});const expired=await execute(a,initial.code);assert.equal(expired.result.code,'META_KYC_CHALLENGE_EXPIRED');assert.deepEqual(counts(),baseline);await assertPendingPreserved(a);await resetIndependentPendingFixture(a);
+ const revoked=await challenge(a);await query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE id=$1`,['owner-member-a']);assert.equal((await execute(a,revoked.code)).result.code,'META_KYC_CHALLENGE_REVOKED');assert.deepEqual(counts(),baseline);await assertPendingPreserved(a);await query(`UPDATE "TenantMembership" SET status='ACTIVE' WHERE id=$1`,['owner-member-a']);await assertPendingPreserved(a);await resetIndependentPendingFixture(a);
  checks.push('expired-and-revoked-challenge-have-zero-result-media-download-Blob-upload-and-send');
  const cancelledCode=await challenge(a),started=await execute(a,cancelledCode.code),lastTs=readMetaKycConversation({project:{id:a.projectId,organizationId:a.organizationId},worker:await worker(a),challenge:(await worker(a)).metadata.participant.kycChatChallenge},environment).lastMessageTimestamp;
  const stale=await execute(a,'ESTADO',{timestamp:lastTs});assert.equal(stale.result.code,'META_KYC_MESSAGE_OUT_OF_ORDER');assert.equal((await worker(a)).metadata.participant.kyc.status,'NOT_SUBMITTED');
