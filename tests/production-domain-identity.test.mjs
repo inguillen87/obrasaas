@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { identityConfig, identityRoute, accountAccess, IDENTITY_ORIGIN, IDENTITY_PUBLIC_KEY, IDENTITY_INSTANCE } from '../src/lib/production-identity-config.mjs';
 import { authorizeLegacyService } from '../src/lib/legacy-access-boundary.js';
+import { PUBLIC_SITE_ORIGIN, publicPageMetadata } from '../src/app/public-site-metadata.mjs';
 const configured=()=>({NEXT_PUBLIC_APP_URL:IDENTITY_ORIGIN,NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:IDENTITY_PUBLIC_KEY,
   CLERK_SECRET_KEY:'sk_live_unit_only_synthetic_value_12345',CLERK_EXPECTED_INSTANCE_ID:IDENTITY_INSTANCE,
   CLERK_AUTHORIZED_PARTIES:IDENTITY_ORIGIN});
@@ -54,7 +55,12 @@ test('auth routes do not collect passwords locally or assert business approval',
 });
 test('owned-domain metadata and SDK provider stay scoped',()=>{
   const layout=readFileSync(new URL('../src/app/layout.js',import.meta.url),'utf8');
-  assert.ok(layout.includes('https://obrasaas.com'));assert.ok(!layout.includes('https://obrasaas.vercel.app'));
+  assert.equal(PUBLIC_SITE_ORIGIN,IDENTITY_ORIGIN);
+  assert.match(layout,/import \{ PUBLIC_SITE_ORIGIN, publicPageMetadata \} from "\.\/public-site-metadata\.mjs"/);
+  assert.match(layout,/metadataBase: new URL\(PUBLIC_SITE_ORIGIN\)/);
+  assert.equal(new URL(publicPageMetadata('/').alternates.canonical).origin,IDENTITY_ORIGIN);
+  assert.equal(new URL(publicPageMetadata('/').openGraph.images[0].url).origin,IDENTITY_ORIGIN);
+  assert.ok(!layout.includes('https://obrasaas.vercel.app'));
   assert.ok(!layout.includes('ClerkProvider'));
   const provider=readFileSync(new URL('../src/app/(identity)/layout.js',import.meta.url),'utf8');
   assert.ok(provider.includes('if (!setup.configured) return <AccessNotice />'));

@@ -1954,6 +1954,7 @@
           "src/lib/meta-kyc-identity.mjs",
           "src/lib/meta-kyc-outbound.mjs",
           "src/lib/meta-recovery-diagnostics.mjs",
+          "src/lib/meta-release-observation.mjs",
           "src/lib/meta-test-dispatch.mjs",
           "src/lib/meta-test-recipient-binding.mjs",
           "src/lib/meta-webhook-scope.mjs",

@@ -97,5 +97,5 @@ test('build invokes the Clerk gate before existing independent probes', () => {
   const checks = pkg.scripts.prebuild.split(' && ');
   assert.equal(checks.shift(), 'node scripts/verify-clerk-access-readonly.mjs');
   assert.deepEqual(checks, ['node scripts/verify-constructor-crm-readonly.mjs', 'node scripts/verify-private-storage-live.mjs', 'node scripts/verify-pilot-media-live.mjs', 'node scripts/verify-plan-import-live.mjs',
-    'node scripts/verify-meta-test-number.mjs', 'node scripts/verify-meta-template-catalog.mjs', 'node scripts/verify-company-onboarding-readonly.mjs']);
+    'node scripts/verify-meta-test-number.mjs', 'node scripts/verify-meta-template-catalog.mjs', 'node scripts/verify-company-onboarding-readonly.mjs', 'node scripts/verify-meta-release-closed-build.mjs']);
 });
