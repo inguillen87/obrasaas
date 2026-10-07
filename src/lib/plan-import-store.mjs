@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {WorkspaceError,digest,operationId,workspaceId} from './workspace-policy.mjs';
-import {canImportPlan,canApprovePlan,planContext,decodePlanSource,normalizePlanRows,normalizePlanDecision,planDecisionDigest,planImportRowRejection,PLAN_IMPORT_CONSENT} from './plan-import-policy.mjs';
+import {canImportPlan,canApprovePlan,planContext,decodePlanSource,normalizePlanRows,normalizePlanDecision,planDecisionDigest,planImportRowRejection,PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,isPlanSourceConsent,validatePlanSourceRows} from './plan-import-policy.mjs';
+import {PLAN_OOXML_TYPES,validatePlanOoxml,safePlanOoxmlAnalysis} from './plan-import-ooxml.mjs';
 import {assertPrivateImageConfigured} from './private-image-upload.mjs';
 
 const fail=(code,status=409)=>{throw new WorkspaceError(code,status);};
@@ -24,7 +25,7 @@ function decisionInput(body) {
  }
 }
 const leaseExpiry=m=>{const value=m.lease?.expiresAt;return typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value?value:null;};
-const publicDraft=row=>{const m=row.metadata,expiry=leaseExpiry(m);return {id:row.id,revision:m.revision,status:m.status,existingTaskCount:m.existingTaskCount,source:{contentType:m.source.contentType,bytes:m.source.bytes,sha256:m.source.sha256},rows:m.rows||[],warnings:m.warnings||[],failure:m.failure||null,createdAt:m.createdAt,updatedAt:m.updatedAt,processingExpired:Boolean(pending(m.status)&&expiry&&Date.parse(expiry)<=Date.now()),...(pending(m.status)?{processingExpiresAt:expiry}:{}),decision:m.decision||null,sourceAvailable:m.sourceConfirmed===true};};
+const publicDraft=row=>{const m=row.metadata,expiry=leaseExpiry(m),spreadsheet=m.analysis?.provider==='local-ooxml'?safePlanOoxmlAnalysis(m.analysis.spreadsheet):null;return {id:row.id,revision:m.revision,status:m.status,existingTaskCount:m.existingTaskCount,source:{contentType:m.source.contentType,bytes:m.source.bytes,sha256:m.source.sha256},rows:m.rows||[],warnings:m.warnings||[],...(spreadsheet?{spreadsheet:{...spreadsheet,reviewed:m.analysis.reviewed===true}}:{}),failure:m.failure||null,createdAt:m.createdAt,updatedAt:m.updatedAt,processingExpired:Boolean(pending(m.status)&&expiry&&Date.parse(expiry)<=Date.now()),...(pending(m.status)?{processingExpiresAt:expiry}:{}),decision:m.decision||null,sourceAvailable:m.sourceConfirmed===true};};
 const taskColumns=`id,title,status::text AS status,progress,to_char("startsAt",'YYYY-MM-DD') AS "startsOn",to_char("endsAt",'YYYY-MM-DD') AS "endsOn",to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
 export function createPlanImport({workspace,put,get,analyzer,environment=()=>process.env}) {
  if(typeof workspace?.projectOperation!=='function'||typeof put!=='function'||typeof get!=='function'||typeof analyzer?.analyze!=='function')throw new TypeError('Explicit plan import adapters required');
@@ -98,8 +99,10 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
    await run(session,context,false,async(client,member)=>{permission(member);await draft(client,member,context.projectId,context.draftId);});return file;
   },
   async attach(session,input) {
-   planContext(input);if(!operationId(input.operationId)||input.consent!==PLAN_IMPORT_CONSENT)fail('PLAN_IMPORT_CONSENT_REQUIRED',400);
-   const sourceFile=decodePlanSource(input.source?.bytes,input.source?.contentType),requestDigest=digest([input.projectId,input.scope,input.consent,sourceFile.sha256]),inputDigest=uploadInputDigest(input,sourceFile),lease=randomUUID();
+   planContext(input);if(!operationId(input.operationId)||![PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT].includes(input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED',400);
+   const sourceFile=decodePlanSource(input.source?.bytes,input.source?.contentType);if(!isPlanSourceConsent(sourceFile.contentType,input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED',400);
+   if(PLAN_OOXML_TYPES[sourceFile.contentType])await validatePlanOoxml(sourceFile.bytes,sourceFile.contentType);
+   const requestDigest=digest([input.projectId,input.scope,input.consent,sourceFile.sha256]),inputDigest=uploadInputDigest(input,sourceFile),lease=randomUUID();
    const reservation=await run(session,input,true,async(client,member,scope)=>{
     permission(member);const id=draftKey(member.actorId,input.projectId,input.operationId);
     const previous=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='plan.import.draft'`,[id,member.organizationId,member.actorId])).rows[0];
@@ -125,21 +128,23 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
     }confirmed=true;
     await run(session,input,true,async(client,member)=>{permission(member);const row=await draft(client,member,input.projectId,reservation.id,true);ownedLease(row,lease);await update(client,row,{status:'PROCESSING',sourceConfirmed:true},lease);});
     // Provider and private storage IO run outside the canonical transaction.
-    extraction=await analyzer.analyze(sourceFile);
-    if(extraction?.success===true)extraction={success:true,rows:normalizePlanRows(extraction.rows),warnings:Array.isArray(extraction.warnings)?extraction.warnings.slice(0,20):[],provider:extraction.provider,model:extraction.model,requestedModel:extraction.requestedModel};
+    extraction=await analyzer.analyze(sourceFile,{profile:input.consent===PLAN_IMPORT_CYP_CONSENT?'CYP_PARTIDAS':'MONTHLY_RUBROS'});
+    if(extraction?.success===true){const spreadsheet=PLAN_OOXML_TYPES[sourceFile.contentType]?safePlanOoxmlAnalysis(extraction.spreadsheet):null;if(PLAN_OOXML_TYPES[sourceFile.contentType]&&(extraction.provider!=='local-ooxml'||!spreadsheet||(spreadsheet.version===2)!==(input.consent===PLAN_IMPORT_CYP_CONSENT)))fail('PLAN_IMPORT_FILE_INVALID',400);const extractedRows=normalizePlanRows(extraction.rows);validatePlanSourceRows(extractedRows,spreadsheet,extractedRows);if(spreadsheet&&spreadsheet.rowCount!==extractedRows.length)fail('PLAN_IMPORT_FILE_INVALID',400);extraction={success:true,rows:extractedRows,warnings:Array.isArray(extraction.warnings)?extraction.warnings.slice(0,20):[],provider:extraction.provider,model:extraction.model,requestedModel:extraction.requestedModel,...(spreadsheet?{spreadsheet}:{})};}
    }catch(error){if(error instanceof WorkspaceError&&['WORKSPACE_CONTEXT_CHANGED','WORKSPACE_MEMBERSHIP_REQUIRED','WORKSPACE_PROJECT_UNAVAILABLE','PLAN_IMPORT_PERMISSION_REQUIRED'].includes(error.code))throw error;extraction={success:false,code:confirmed?'AI_REQUEST_UNCONFIRMED':'PLAN_IMPORT_STORAGE_UNCONFIRMED'};}
    return run(session,input,true,async(client,member,scope)=>{
     permission(member);const row=await draft(client,member,input.projectId,reservation.id,true);ownedLease(row,lease);
-    const saved=await update(client,row,extraction?.success===true?{status:'READY',sourceConfirmed:true,rows:extraction.rows,extractedRows:extraction.rows,warnings:extraction.warnings,analysis:{provider:extraction.provider,model:extraction.model,requestedModel:extraction.requestedModel,reviewed:false},lease:null}:{status:'FAILED',sourceConfirmed:confirmed,failure:/^[A-Z_]{1,80}$/.test(extraction?.code||'')?extraction.code:'AI_RESPONSE_UNCONFIRMED',lease:null},lease);
+    const saved=await update(client,row,extraction?.success===true?{status:'READY',sourceConfirmed:true,rows:extraction.rows,extractedRows:extraction.rows,warnings:extraction.warnings,analysis:{provider:extraction.provider,model:extraction.model,requestedModel:extraction.requestedModel,reviewed:false,...(extraction.spreadsheet?{spreadsheet:extraction.spreadsheet}:{})},lease:null}:{status:'FAILED',sourceConfirmed:confirmed,failure:/^[A-Z_]{1,80}$/.test(extraction?.code||'')?extraction.code:'AI_RESPONSE_UNCONFIRMED',lease:null},lease);
     return {scope,projectId:input.projectId,saved:true,replayed:false,draft:publicDraft(saved)};
    });
   },
-  async decide(session,body) {
+  async decide(session,body,{requestBytes=0}={}) {
    const normalized=decisionInput(body),{input,inputDigest}=normalized;
    // Preserve normalized v1 fingerprints for all existing successful receipts.
    const requestDigest=normalized.rejection?digest(['plan-import-rejected-decision-v1',inputDigest]):planDecisionDigest(input);
    return run(session,input,true,async(client,member,scope)=>{
-    permission(member,input.action!=='EDIT');const previous=await receipt(client,member,input.projectId,input.operationId);
+    permission(member,input.action!=='EDIT');
+    if(requestBytes>256*1024){const largeDraft=await draft(client,member,input.projectId,input.draftId);if(largeDraft.metadata.consent?.version!==PLAN_IMPORT_CYP_CONSENT||largeDraft.metadata.analysis?.spreadsheet?.version!==2||!safePlanOoxmlAnalysis(largeDraft.metadata.analysis.spreadsheet))fail('PLAN_IMPORT_INPUT_INVALID',413);}
+    const previous=await receipt(client,member,input.projectId,input.operationId);
     if(await uploadReceipt(client,member,input.projectId,input.operationId))fail('PLAN_IMPORT_OPERATION_CONFLICT');
     if(previous){if(previous.metadata.requestDigest!==requestDigest||previous.metadata.outcome?.state==='REJECTED'&&previous.metadata.inputDigest!==inputDigest)fail('PLAN_IMPORT_OPERATION_CONFLICT');return {scope,projectId:input.projectId,replayed:true,...await receiptOutcome(client,input.projectId,previous)};}
     const id=receiptKey(member.actorId,input.projectId,input.operationId),taskSnapshots=[];
@@ -148,7 +153,12 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
     if(!rejection)try{
      row=await draft(client,member,input.projectId,input.draftId,true);
      if(row.metadata.revision!==input.expectedRevision||row.metadata.status!=='READY')fail('PLAN_IMPORT_REVISION_CHANGED');
+     if((row.metadata.analysis?.spreadsheet?.version===2)!==(row.metadata.consent?.version===PLAN_IMPORT_CYP_CONSENT)||row.metadata.analysis?.spreadsheet?.version===2&&!PLAN_OOXML_TYPES[row.metadata.source.contentType])fail('PLAN_IMPORT_REVIEW_REQUIRED');
+     if(input.rows)validatePlanSourceRows(input.rows,row.metadata.analysis?.spreadsheet,row.metadata.extractedRows,{complete:input.action==='APPLY'});
      if(input.action==='APPLY'){
+      // jsonb may reorder object keys; compare reviewed values canonically.
+      // Keep command/receipt fingerprints unchanged for existing operations.
+      if(PLAN_OOXML_TYPES[row.metadata.source.contentType]&&(row.metadata.analysis?.provider!=='local-ooxml'||row.metadata.analysis.reviewed!==true||!safePlanOoxmlAnalysis(row.metadata.analysis.spreadsheet)||digest(canonical(input.rows))!==digest(canonical(row.metadata.rows))))fail('PLAN_IMPORT_REVIEW_REQUIRED');
       await assertSourceUnused(client,member,input.projectId,row.metadata.source.sha256);
       if((await baseline(client,input.projectId)).hash!==row.metadata.baseline)fail('PLAN_IMPORT_SCHEDULE_CHANGED');
      }
@@ -160,14 +170,20 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
     }
     const m=row.metadata;
     if(input.action==='APPLY') {
-     for(const [index,item] of input.rows.entries()) {
+     if(m.analysis?.spreadsheet?.version===2){
+      const records=input.rows.map((item,index)=>({id:'task_'+randomUUID().replaceAll('-',''),title:item.title,startsOn:item.startsOn,endsOn:item.endsOn,metadata:{source:'authorized-plan-import',planImport:{version:1,draftId:row.id,receiptId:id,sourceSha256:m.source.sha256,row:index+1,evidence:item.evidence,profile:'CYP_PARTIDAS',code:item.code,parentCode:item.parentCode,groups:m.analysis.spreadsheet.groups.filter(group=>item.code.startsWith(group.code+'.')).map(group=>({code:group.code,parentCode:group.parentCode,title:group.title}))}}}));
+      const parameters=[],values=records.map(record=>{const offset=parameters.length;parameters.push(record.id,input.projectId,record.title,record.startsOn,record.endsOn,JSON.stringify(record.metadata));return `($${offset+1},$${offset+2},$${offset+3},'BACKLOG',0,$${offset+4}::date,$${offset+5}::date,$${offset+6}::jsonb,clock_timestamp())`;});
+      const created=(await client.query(`INSERT INTO public."Task"(id,"projectId",title,status,progress,"startsAt","endsAt",metadata,"updatedAt") VALUES ${values.join(',')} RETURNING ${taskColumns}`,parameters)).rows;
+      const byId=new Map(created.map(task=>[task.id,task]));if(created.length!==records.length||byId.size!==records.length)fail('PLAN_IMPORT_RECEIPT_INTEGRITY',503);
+      for(const record of records){if(!byId.has(record.id))fail('PLAN_IMPORT_RECEIPT_INTEGRITY',503);taskSnapshots.push(byId.get(record.id));}
+     }else for(const [index,item] of input.rows.entries()) {
       const taskId='task_'+randomUUID().replaceAll('-','');
       await client.query(`INSERT INTO public."Task"(id,"projectId",title,status,progress,"startsAt","endsAt",metadata,"updatedAt") VALUES($1,$2,$3,'BACKLOG',0,$4::date,$5::date,$6::jsonb,clock_timestamp())`,[taskId,input.projectId,item.title,item.startsOn,item.endsOn,JSON.stringify({source:'authorized-plan-import',planImport:{version:1,draftId:row.id,receiptId:id,sourceSha256:m.source.sha256,row:index+1,evidence:item.evidence}})]);
       taskSnapshots.push((await client.query(`SELECT ${taskColumns} FROM public."Task" WHERE id=$1 AND "projectId"=$2`,[taskId,input.projectId])).rows[0]);
      }
     }
     const recordedAt=new Date().toISOString(),decision={action:input.action,actorId:member.actorId,reason:input.reason,recordedAt,receiptId:id};
-    const saved=await update(client,row,{status:input.action==='APPLY'?'APPLIED':input.action==='REJECT'?'REJECTED':'READY',...(input.rows?{rows:input.rows}:{}),...(input.action==='EDIT'?{}:{decision})});
+    const saved=await update(client,row,{status:input.action==='APPLY'?'APPLIED':input.action==='REJECT'?'REJECTED':'READY',...(input.rows?{rows:input.rows}:{}),...(input.action==='EDIT'&&m.analysis?.provider==='local-ooxml'?{analysis:{...m.analysis,reviewed:true}}:{}),...(input.action==='EDIT'?{}:{decision})});
     const outcome={action:input.action,draft:publicDraft(saved),taskSnapshots,recordedAt};
     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'plan.import.decision','Project',$4,$5::jsonb)`,[id,member.organizationId,member.actorId,input.projectId,JSON.stringify({version:1,projectId:input.projectId,requestDigest,inputDigest,sourceSha256:m.source.sha256,beforeRevision:m.revision,beforeRows:m.rows,reviewedRows:input.rows,reason:input.reason,outcome})]);
     return {scope,projectId:input.projectId,saved:true,replayed:false,receiptId:id,...outcome,tasks:taskSnapshots};

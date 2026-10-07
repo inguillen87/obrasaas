@@ -1,13 +1,13 @@
 .panel{margin-block:1rem;padding:1rem;border:1px solid #3f5870;border-radius:12px;background:#101f30;color:#e5eef8;min-width:0;color-scheme:dark}
 .panel button{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;min-height:44px;padding:.6rem .8rem;border:1px solid #54708a;border-radius:8px;background:#183149;color:#edf5fb;font-weight:600;cursor:pointer}
 .panel button:disabled{opacity:.5;cursor:default}
-.panel button:focus-visible,.panel input:focus-visible,.panel textarea:focus-visible{outline:3px solid #f7b94d;outline-offset:3px}
+.panel button:focus-visible,.panel input:focus-visible,.panel textarea:focus-visible,.panel select:focus-visible{outline:3px solid #f7b94d;outline-offset:3px}
 .heading{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem}
 .heading h4,.heading h5{display:flex;gap:.5rem;align-items:center;margin:0}
 .heading p{margin:.4rem 0}
 .upload,.draft{display:grid;gap:.75rem;margin-top:.75rem}
 .panel label{display:grid;gap:.4rem;font-size:.9rem;font-weight:600}
-.panel input,.panel textarea{padding:.6rem;border:1px solid #54708a;border-radius:6px;background:#091626;color:#edf5fb;max-width:100%;min-width:0;width:100%;font:inherit}
+.panel input,.panel textarea,.panel select{padding:.6rem;border:1px solid #54708a;border-radius:6px;background:#091626;color:#edf5fb;max-width:100%;min-width:0;width:100%;font:inherit;box-sizing:border-box}
 .panel small,.evidence{color:#b9cadb;font-size:.8rem;overflow-wrap:anywhere}
 .panel input[type=file]{font-size:.85rem}
 .checkbox{display:flex!important;align-items:flex-start;gap:.6rem!important}
@@ -30,3 +30,7 @@
 .receipt,.recovery{padding:.8rem;background:#122e29;color:#c1ece0;border:1px solid #497f71;border-radius:8px;font-size:.85rem;overflow-wrap:anywhere}
 .recovery button{margin:.4rem .4rem 0 0}
 @media(max-width:540px){.panel{padding:.8rem}.heading{flex-wrap:wrap}.dates{grid-template-columns:1fr}.actions button,.upload>button{width:100%}}
+
+.panel select{min-height:44px}
+
+.hierarchy{min-width:0;display:grid;gap:12px;margin:16px 0}.hierarchy ul{padding-left:20px;overflow-wrap:anywhere}.hierarchy li{margin:8px 0}.pagination{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.pagination span{flex:1;min-width:130px}.original{white-space:pre-wrap;overflow-wrap:anywhere}.distribution{padding-left:24px;overflow-wrap:anywhere}.hierarchy select{max-width:100%;min-width:0}
