@@ -31,14 +31,16 @@ test('portfolio query cannot mutate an existing workspace command',async()=>{
 });
 test('overview keeps a read-only canonical transaction and bounds projection without private fields',async()=>{
  const queries=[],rows=Array.from({length:51},(_,i)=>({...row(i+1),extra:'MUST_NOT_PROJECT'}));
- const store=createWorkspaceStore({connect:async()=>({query:async(sql,args)=>{queries.push({sql,args});if(sql.includes('FROM public."PlatformUser"'))return {rows:[member]};if(sql.startsWith('WITH authorized')){assert.deepEqual(args,['company-a',false,'membership-a',null]);return {rows};}return {rows:[]};},release:()=>{}})});
+ const store=createWorkspaceStore({connect:async()=>({query:async(sql,args)=>{queries.push({sql,args});if(sql.includes('FROM public."PlatformUser"'))return {rows:[member]};if(sql.includes('FROM public."Project" p')&&!sql.includes('CROSS JOIN LATERAL')){assert.deepEqual(args,['company-a',false,'membership-a',null]);return {rows};}if(sql.includes('CROSS JOIN LATERAL')){assert.deepEqual(args,['company-a',rows.map(row=>row.id)]);return {rows};}return {rows:[]};},release:()=>{}})});
  const result=await store.overview(session,{scope});assert.equal(result.projects.length,50);assert.equal(result.nextCursor,'p-050');assert.equal(result.projects[0].extra,undefined);assert.equal(portfolioOverviewMatches(result,{scope,role:'AUDITOR'}),true);
  assert.ok(queries.some(q=>q.sql==='BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY'));assert.equal(queries.at(-1).sql,'ROLLBACK');assert.ok(!queries.some(q=>/^(INSERT|UPDATE|DELETE|COMMIT)\b/.test(q.sql)));
- assert.ok(!queries.some(q=>/"Worker"|"AuditLog"|"WhatsAppConnection"|obrasaas_app_state/.test(q.sql)));
+ assert.ok(!queries.some(q=>/"WhatsAppConnection"|obrasaas_app_state/.test(q.sql)));
+ assert.ok(queries.filter(q=>q.sql.includes('"Worker"')).every(q=>!q.sql.includes('SELECT metadata')&&!q.sql.includes('phone')));
+ assert.ok(queries.filter(q=>q.sql.includes('"AuditLog"')).every(q=>q.sql.includes("'INVITATION_ACCEPTED'")&&!q.sql.includes('SELECT metadata')));
 });
 test('scope and disabled canonical membership deny before any task read',async()=>{
  for(const identityRows of [[],[member]]){const queries=[],store=createWorkspaceStore({connect:async()=>({query:async sql=>{queries.push(sql);return {rows:sql.includes('FROM public."PlatformUser"')?identityRows:[]};},release:()=>{}})});
-  await assert.rejects(store.overview(session,{scope:'f'.repeat(64)}),{code:identityRows.length?'WORKSPACE_CONTEXT_CHANGED':'WORKSPACE_MEMBERSHIP_REQUIRED'});assert.ok(!queries.some(q=>q.startsWith('WITH authorized')));
+  await assert.rejects(store.overview(session,{scope:'f'.repeat(64)}),{code:identityRows.length?'WORKSPACE_CONTEXT_CHANGED':'WORKSPACE_MEMBERSHIP_REQUIRED'});assert.ok(!queries.some(q=>q.includes('FROM public."Task"')));
  }
 });
 test('strict view rejects response from another organization or role and invalid aggregate counts',()=>{

@@ -4,6 +4,7 @@ import {privateBankNumber,privateBankType,PRIVATE_BANK_ACTIONS,PRIVATE_BANK_NOTI
 import {SITE_ROLES} from './site-register-policy.mjs';
 import {validateParticipantOnboardingChoice} from './participant-onboarding-policy.mjs';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256} from './participant-kyc-image-set.mjs';
+import {assertApprovedParticipantKyc} from './participant-approved-identity.mjs';
 export {PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_SHA256} from './participant-kyc-image-set.mjs';
 export {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256,participantKycImageSet} from './participant-kyc-image-set.mjs';
 const backKeys=['back','backConsent','backNoticeVersion','backNoticeSha256'];
@@ -95,6 +96,6 @@ export async function assertFieldParticipant(client,member,session,projectId,wor
  if(!['attendance','report'].includes(permission))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
  const row=await assertOwnParticipant(client,member,session,projectId,workerId,{lock}),participant=row.metadata.participant;
  if(participant.permissions?.[permission]!==true)throw new WorkspaceError('PARTICIPANT_ACCESS_REQUIRED',403);
- if(requireKyc&&participant.kyc?.status!=='APPROVED')throw new WorkspaceError('PARTICIPANT_KYC_REVIEW_REQUIRED',403);
+ if(requireKyc)await assertApprovedParticipantKyc(client,{...row,projectId},{...member,clerkUserId:session.userId});
  return row;
 }

@@ -10,7 +10,7 @@ import {createProjectPreparationHandlers} from '../src/lib/project-preparation-h
 import {projectPreparationOutcome} from '../src/app/(identity)/cuenta/project-preparation-format.mjs';
 import {createWorkspaceRecoveryJournal,recoveryQuery,recoveryResult} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
 
-const sourcePaths=['src/lib/project-preparation-policy.mjs','src/lib/project-preparation-store.mjs','src/lib/project-preparation-http.mjs','src/lib/workspace-store.mjs','src/lib/workspace-policy.mjs','src/lib/workspace-http.mjs','src/lib/site-register-policy.mjs','src/app/api/identity/project-preparation/route.js','src/app/(identity)/cuenta/project-preparation-format.mjs','src/app/(identity)/cuenta/workspace-recovery-journal.mjs','src/app/(identity)/cuenta/workspace-recovery-storage.mjs','scripts/lib/disposable-postgres-cleanup.mjs'];
+const sourcePaths=['src/lib/project-preparation-policy.mjs','src/lib/project-preparation-store.mjs','src/lib/project-preparation-http.mjs','src/lib/workspace-store.mjs','src/lib/workspace-policy.mjs','src/lib/workspace-http.mjs','src/lib/participant-admission.mjs','src/lib/participant-approved-identity.mjs','src/lib/participant-kyc-image-set.mjs','src/lib/site-register-policy.mjs','src/app/api/identity/project-preparation/route.js','src/app/(identity)/cuenta/project-preparation-format.mjs','src/app/(identity)/cuenta/workspace-recovery-journal.mjs','src/app/(identity)/cuenta/workspace-recovery-storage.mjs','scripts/lib/disposable-postgres-cleanup.mjs'];
 const hashFile=path=>createHash('sha256').update(readFileSync(path)).digest('hex'),manifest=sourcePaths.map(path=>({path,sha256:hashFile(path)})),harnessSha256=hashFile('scripts/verify-project-preparation-postgres.mjs');
 const sourceRevision=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),trackedClean=execFileSync('git',['status','--porcelain','--untracked-files=no'],{encoding:'utf8'}).trim()==='';if(process.env.CI==='true')assert.equal(trackedClean,true);
 const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'https://unconfigured.invalid');assert.equal(process.env.CUTOVER_TEST_DISPOSABLE,'1');assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV&&!process.env.VERCEL_TARGET_ENV);assert.ok(['postgres:','postgresql:'].includes(url.protocol));assert.ok(['127.0.0.1','localhost'].includes(url.hostname));assert.ok(['','5432','6549'].includes(url.port));assert.equal(url.pathname,'/obrasaas_cutover_ci');assert.equal(url.search,'');assert.equal(url.hash,'');
@@ -29,7 +29,7 @@ try{
  CREATE TABLE "ProjectMembership"(id text PRIMARY KEY,"projectId" text REFERENCES "Project","tenantMembershipId" text REFERENCES "TenantMembership",status text);
  CREATE TABLE "Task"(id text PRIMARY KEY,"projectId" text REFERENCES "Project",title text,status text,progress int,"startsAt" timestamp,"endsAt" timestamp,metadata jsonb,"updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP);
  CREATE TABLE "AuditLog"(id text PRIMARY KEY,"organizationId" text REFERENCES "Organization","actorId" text REFERENCES "PlatformUser",action text,"entityType" text,"entityId" text,metadata jsonb,"createdAt" timestamp DEFAULT CURRENT_TIMESTAMP);
- CREATE TABLE "Worker"(id text PRIMARY KEY,"projectId" text,metadata jsonb);
+ CREATE TABLE "Worker"(id text PRIMARY KEY,"projectId" text,metadata jsonb,active boolean NOT NULL DEFAULT true);
  CREATE TABLE "Material"(id text PRIMARY KEY,"projectId" text,quantity int);
  INSERT INTO "Organization" VALUES('company-a','Synthetic A','org_A','{}'),('company-b','Synthetic B','org_B','{}');
  INSERT INTO "PlatformUser" VALUES('owner','user_Owner'),('director','user_Director'),('manager','user_Manager'),('foreign','user_Foreign');
@@ -37,7 +37,7 @@ try{
  INSERT INTO "Project"(id,"organizationId",name,status,metadata) VALUES('p-a','company-a','Synthetic existing pilot','ACTIVE','{"siteRegister":{"revision":9},"companyChannel":{"revision":3},"foreignNamespace":{"nested":[1,2,3]}}'),('p-b','company-b','Foreign synthetic','ACTIVE','{}'),('p-archived','company-a','Archived synthetic','ARCHIVED','{}');
  INSERT INTO "ProjectMembership" VALUES('pm-manager','p-a','m-manager','ACTIVE');
  INSERT INTO "Task"(id,"projectId",title,status,progress,metadata) VALUES('t-trees','p-a','Retirar tres árboles, raíces y volquetes','PENDING',0,'{"preserve":true}'),('t-fence','p-a','Cerco de obra','PENDING',0,'{}'),('t-demolition','p-a','Demolición','PENDING',0,'{}');
- INSERT INTO "Worker" VALUES('w-existing','p-a','{"preserve":true}');INSERT INTO "Material" VALUES('material-a','p-a',12);
+ INSERT INTO "Worker"(id,"projectId",metadata) VALUES('w-existing','p-a','{"preserve":true}');INSERT INTO "Material" VALUES('material-a','p-a',12);
  `);
  const workspace=createWorkspaceStore({connect:()=>pool.connect()}),store=createProjectPreparation({workspace}),scopes={};for(const s of [owner,director,manager,foreign])scopes[s.userId]=(await workspace.list(s)).scope;
  const context=(s=owner,projectId='p-a')=>({projectId,scope:scopes[s.userId]});

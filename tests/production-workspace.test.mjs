@@ -66,7 +66,7 @@ test('real planning receipt recovery confirms recorded writes and leaves absent 
   if(sql.includes('FROM public."PlatformUser"'))return {rows:[actor]};
   if(sql.includes('FROM public."ProjectMembership"'))return {rows:[{id:'project-member-a'}]};
   if(sql.includes('FROM public."Project"'))return {rows:[{id:'project-a',name:'Synthetic worksite',status:'ACTIVE'}]};
-  if(sql.includes('FROM public."AuditLog"')){assert.deepEqual(values,[receiptId,actor.actorId,actor.organizationId]);return {rows:recorded?[{id:receiptId,entityId:savedTask.id,recordedAt:savedTask.revision,metadata:{projectId:'project-a',before:{startsOn:null,endsOn:null},after:{startsOn:savedTask.startsOn,endsOn:savedTask.endsOn}}}]:[]};}
+  if(sql.includes('FROM public."AuditLog"')){if(sql.includes("'INVITATION_ACCEPTED'")){assert.deepEqual(values,[actor.organizationId,actor.actorId,actor.membershipId]);return {rows:[]};}assert.deepEqual(values,[receiptId,actor.actorId,actor.organizationId]);return {rows:recorded?[{id:receiptId,entityId:savedTask.id,recordedAt:savedTask.revision,metadata:{projectId:'project-a',before:{startsOn:null,endsOn:null},after:{startsOn:savedTask.startsOn,endsOn:savedTask.endsOn}}}]:[]};}
   if(sql.includes('FROM public."Task"'))return {rows:[savedTask]};
   return {rows:[]};
  },release:()=>{}})});

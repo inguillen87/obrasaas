@@ -4,6 +4,10 @@ import {Client,Pool} from 'pg';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
+import {createFieldOperations} from '../src/lib/field-operations-store.mjs';
+import {createSiteRegister} from '../src/lib/site-register-store.mjs';
+import {createPlanImport} from '../src/lib/plan-import-store.mjs';
+import {createSitePurchases} from '../src/lib/site-purchase-store.mjs';
 import {createParticipantStore} from '../src/lib/participant-store.mjs';
 import {createParticipantIdentityProvider} from '../src/lib/participant-identity-provider.mjs';
 import {IDENTITY_PUBLIC_KEY,IDENTITY_INSTANCE,IDENTITY_ORIGIN} from '../src/lib/production-identity-config.mjs';
@@ -19,7 +23,7 @@ const admin=new Client({connectionString:url.toString()});let pool,created=false
 const session=(user,organization='org_A',role='org:member')=>({authenticated:true,verification:'clerk-production-jwt',userId:user,organizationId:organization,organizationRole:role});
 const owner=session('user_Owner','org_A','org:admin'),director=session('user_Director'),foreign=session('user_Foreign','org_B','org:admin'),workerSession=session('user_Worker');
 const providerInvitations=new Map();let sends=0,loseSend=false,putCount=0,failAudit=false,loseCommit=false,revokeProvider=false;
-let membershipProofHook=null;
+let membershipProofHook=null,operationalReads=0;
 const identity={verifiedEmail:async user=>({user_Worker:'worker@example.invalid',user_Wrong:'wrong@example.invalid',user_Second:'second@example.invalid',user_Third:'third@example.invalid',user_Director:'director@example.invalid'})[user],createInvitation:async input=>{sends++;const result={id:'orginv_'+sends,email:input.email,role:'org:member',state:'pending',expiresAt:new Date(Date.now()+7*86400000).toISOString(),invitationId:input.invitationId};providerInvitations.set(input.invitationId,result);if(loseSend)throw new Error('Synthetic lost provider acknowledgement');return result;},findInvitation:async input=>providerInvitations.get(input.invitationId)||null,verifyMembership:async({userId,organizationId})=>{if(revokeProvider)throw new WorkspaceError('PARTICIPANT_PROVIDER_MEMBERSHIP_REQUIRED',403);if(membershipProofHook){const hook=membershipProofHook;membershipProofHook=null;await hook();}return {userId,organizationId,role:userId==='user_Owner'?'org:admin':'org:member'};}};
 const picture='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==',objects=new Map();
 const get=async path=>{const item=objects.get(path);if(!item)return null;return {statusCode:200,blob:{url:'https://fixture.private.blob.vercel-storage.com/'+path,pathname:path,size:item.bytes.length,contentType:item.contentType},stream:new ReadableStream({start(controller){controller.enqueue(item.bytes);controller.close();}})};};
@@ -34,15 +38,17 @@ try{
   CREATE TABLE "TenantMembership"(id text PRIMARY KEY,"organizationId" text REFERENCES "Organization","userId" text REFERENCES "PlatformUser","tenantRole" "TenantRole","clerkRole" text,status "MembershipStatus","updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP,UNIQUE("organizationId","userId"));
   CREATE TABLE "Project"(id text PRIMARY KEY,"organizationId" text REFERENCES "Organization",name text,status text,metadata jsonb,"updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP);
   CREATE TABLE "ProjectMembership"(id text PRIMARY KEY,"projectId" text REFERENCES "Project","tenantMembershipId" text REFERENCES "TenantMembership",status "MembershipStatus","updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP,UNIQUE("projectId","tenantMembershipId"));
+  CREATE TABLE "Task"(id text PRIMARY KEY,"projectId" text REFERENCES "Project",title text,status text,progress integer,"startsAt" timestamp,"endsAt" timestamp,"updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP);
   CREATE TABLE "Worker"(id text PRIMARY KEY,"projectId" text REFERENCES "Project",name text NOT NULL,phone text NOT NULL,role text,active boolean DEFAULT true,metadata jsonb,"createdAt" timestamp DEFAULT CURRENT_TIMESTAMP,"updatedAt" timestamp NOT NULL,UNIQUE("projectId",phone));
   CREATE TABLE "AuditLog"(id text PRIMARY KEY,"organizationId" text REFERENCES "Organization","actorId" text REFERENCES "PlatformUser",action text NOT NULL,"entityType" text,"entityId" text,metadata jsonb,"createdAt" timestamp DEFAULT CURRENT_TIMESTAMP);
   INSERT INTO "Organization" VALUES('company-a','Synthetic A','org_A','{}'),('company-b','Synthetic B','org_B','{}');
   INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES('owner','user_Owner','owner@example.invalid'),('director','user_Director','director@example.invalid'),('foreign','user_Foreign','foreign@example.invalid');
   INSERT INTO "TenantMembership"(id,"organizationId","userId","tenantRole","clerkRole",status) VALUES('owner-m','company-a','owner','ADMIN','org:admin','ACTIVE'),('director-m','company-a','director','DIRECTOR','org:member','ACTIVE'),('foreign-m','company-b','foreign','ADMIN','org:admin','ACTIVE');
   INSERT INTO "Project"(id,"organizationId",name,status,metadata) VALUES('p-a','company-a','Synthetic A','ACTIVE','{"retain":true}'),('p-a2','company-a','Synthetic A2','ACTIVE','{}'),('p-b','company-b','Synthetic B','ACTIVE','{}');
+  INSERT INTO "Task"(id,"projectId",title,status,progress) VALUES('admission-task-a','p-a','Synthetic private task A','BACKLOG',0),('admission-task-a2','p-a2','Synthetic private task A2','BACKLOG',0);
   INSERT INTO "Worker"(id,"projectId",name,phone,metadata,"updatedAt") VALUES('worker-a','p-a','Synthetic worker','+5491100001111','{"siteRegister":{"version":1},"unrelated":true}',CURRENT_TIMESTAMP),('worker-second','p-a','Second fixture','+5491100002222','{"siteRegister":{"version":1}}',CURRENT_TIMESTAMP),('worker-third','p-a','Third fixture','+5491100003333','{"siteRegister":{"version":1}}',CURRENT_TIMESTAMP);
  `);
- const connect=async()=>{const client=await pool.connect();return {release:broken=>client.release(broken),query:async(sql,args)=>{if(failAudit&&sql.startsWith('INSERT INTO public."AuditLog"'))throw new Error('Synthetic audit rejection');const result=await client.query(sql,args);if(loseCommit&&sql==='COMMIT')throw new Error('Synthetic lost commit acknowledgement');return result;}};};
+ const connect=async()=>{const client=await pool.connect();return {release:broken=>client.release(broken),query:async(sql,args)=>{if(/public\."(Task|Incident|AttendanceEntry|OperationalProposal)"/.test(sql))operationalReads++;if(failAudit&&sql.startsWith('INSERT INTO public."AuditLog"'))throw new Error('Synthetic audit rejection');const result=await client.query(sql,args);if(loseCommit&&sql==='COMMIT')throw new Error('Synthetic lost commit acknowledgement');return result;}};};
  const workspace=createWorkspaceStore({connect}),store=createParticipantStore({workspace,connect,identity,upload:uploader.uploadImageToBlob,get});const own=await workspace.list(owner),dir=await workspace.list(director),other=await workspace.list(foreign),context={projectId:'p-a',scope:own.scope};
  const command=(action,payload,extra={})=>({...context,operationId:randomUUID(),action,payload,...extra});
  let rows=await store.read(owner,context);const first=rows.records.find(row=>row.id==='worker-a');assert.equal(first.status,'NOT_INVITED');assert.equal((await pool.query('SELECT count(*)::int AS n FROM "TenantMembership"')).rows[0].n,3);
@@ -107,7 +113,7 @@ try{
  const pending=(await store.read(owner,context)).records.find(row=>row.id===self.id);assert.equal((await store.downloadKyc(owner,{...context,workerId:self.id,imageId:'document-front'})).bytes.toString('base64'),picture);
  await assert.rejects(store.downloadKyc(foreign,{projectId:'p-a',scope:other.scope,workerId:self.id,imageId:'selfie'}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
  await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='DIRECTOR' WHERE "userId"=(SELECT id FROM "PlatformUser" WHERE "clerkUserId"=$1)`,['user_Worker']);const selfReviewScope=(await workspace.list(workerSession)).scope;
- await assert.rejects(store.save(workerSession,command('REVIEW_KYC',{workerId:self.id,revision:pending.revision,submissionId:pending.kyc.submissionId,decision:'APPROVED',reason:'A responsible cannot approve their own identity.'},{scope:selfReviewScope})),{code:'PARTICIPANT_SELF_REVIEW_REJECTED'});
+ await assert.rejects(store.save(workerSession,command('REVIEW_KYC',{workerId:self.id,revision:pending.revision,submissionId:pending.kyc.submissionId,decision:'APPROVED',reason:'A responsible cannot approve their own identity.'},{scope:selfReviewScope})),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
  await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='AUDITOR' WHERE "userId"=(SELECT id FROM "PlatformUser" WHERE "clerkUserId"=$1)`,['user_Worker']);
  const approvalInput=command('REVIEW_KYC',{workerId:self.id,revision:pending.revision,submissionId:pending.kyc.submissionId,decision:'APPROVED',reason:'Synthetic responsible reviewed both private images.'},{scope:dir.scope});
  const approved=await store.save(director,approvalInput);assert.equal(approved.participant.kyc.status,'APPROVED');assert.equal(approved.participant.identityCertified,false);
@@ -191,12 +197,12 @@ try{
  await assert.rejects(store.read(workerSession,{projectId:'p-a3',scope:managerWorkspace.scope}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
  const directorChange=await officeCommand('DIRECTOR');loseCommit=true;await assert.rejects(store.save(owner,directorChange),{code:'WORKSPACE_OPERATION_UNCONFIRMED'});loseCommit=false;
  const officeRecovery=await store.status(owner,{...context,operationId:directorChange.operationId});assert.equal(officeRecovery.state,'RECORDED');assert.equal(officeRecovery.account.membershipId,workerMembership);assert.equal(officeRecovery.account.role,'DIRECTOR');assert.equal((await store.save(owner,directorChange)).replayed,true);
- const directorWorkspace=await workspace.list(workerSession);assert.deepEqual(directorWorkspace.projects.map(value=>value.id),['p-a','p-a2','p-a3']);assert.equal(directorWorkspace.canPlanSchedule,true);
- const linkedDirector=(await store.read(owner,context)).records.find(value=>value.id===self.id);const revokedDirector=await store.save(owner,command('REVOKE',{workerId:self.id,revision:linkedDirector.revision,reason:'Participation in field was explicitly revoked without changing office role.'}));assert.equal(revokedDirector.participant.status,'REVOKED');assert.deepEqual((await workspace.list(workerSession)).projects.map(value=>value.id),['p-a','p-a2','p-a3']);await assert.rejects(workspace.projectOperation(workerSession,{projectId:'p-a',scope:directorWorkspace.scope},false,(client,member)=>assertFieldParticipant(client,member,workerSession,'p-a',self.id)),{code:'PARTICIPANT_ACCESS_REQUIRED'});
+ const directorWorkspace=await workspace.list(workerSession);assert.deepEqual(directorWorkspace.projects.map(value=>value.id),['p-a','p-a2']);await assert.rejects(workspace.read(workerSession,{projectId:'p-a3',scope:directorWorkspace.scope}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});assert.equal(directorWorkspace.canPlanSchedule,true);
+ const linkedDirector=(await store.read(owner,context)).records.find(value=>value.id===self.id);const revokedDirector=await store.save(owner,command('REVOKE',{workerId:self.id,revision:linkedDirector.revision,reason:'Participation in field was explicitly revoked without changing office role.'}));assert.equal(revokedDirector.participant.status,'REVOKED');assert.deepEqual((await workspace.list(workerSession)).projects.map(value=>value.id),['p-a','p-a2']);await assert.rejects(workspace.projectOperation(workerSession,{projectId:'p-a',scope:directorWorkspace.scope},false,(client,member)=>assertFieldParticipant(client,member,workerSession,'p-a',self.id)),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
  await store.save(owner,command('RESTORE_ACCESS',{workerId:self.id,revision:revokedDirector.participant.revision,reason:'Field participation was explicitly reviewed and restored.'}));
  checks.push('canonical-company-role-concurrent-replay-conflict-scope-revocation-and-lost-commit-recovery-keep-roster-separate');
  for(const role of ['FINANCE','AUDITOR']){await store.save(owner,await officeCommand(role));const currentWorkspace=await workspace.list(workerSession);assert.equal(currentWorkspace.role,role);assert.equal(currentWorkspace.canPlanSchedule,false);assert.deepEqual(currentWorkspace.projects.map(value=>value.id),['p-a','p-a2']);await assert.rejects(store.read(workerSession,{projectId:'p-a3',scope:currentWorkspace.scope}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});await assert.rejects(workspace.createTask(workerSession,{operationId:randomUUID(),projectId:'p-a',scope:currentWorkspace.scope,title:'Unauthorized schedule mutation',startsOn:'',endsOn:''}),{code:'SCHEDULE_PERMISSION_REQUIRED'});}
- checks.push('director-has-company-portfolio-site-manager-only-assigned-planning-and-finance-auditor-assigned-read-only');
+ checks.push('office-director-has-company-portfolio-participant-director-requires-own-assignment-and-approval-finance-auditor-assigned-read-only');
  const disabledTarget=await officeCommand('SITE_MANAGER');membershipProofHook=()=>pool.query(`UPDATE "TenantMembership" SET status='DISABLED',"updatedAt"=clock_timestamp() WHERE id=$1`,[workerMembership]);await assert.rejects(store.save(owner,disabledTarget),{code:'PARTICIPANT_OFFICE_ROLE_PROTECTED'});assert.equal((await pool.query(`SELECT "tenantRole"::text AS role,status::text AS status FROM "TenantMembership" WHERE id=$1`,[workerMembership])).rows[0].role,'AUDITOR');await assert.rejects(workspace.list(workerSession),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});await pool.query(`UPDATE "TenantMembership" SET status='ACTIVE',"updatedAt"=clock_timestamp() WHERE id=$1`,[workerMembership]);
  checks.push('provider-preflight-cannot-bypass-canonical-membership-revocation-before-office-role-commit');
  // Receipt ownership does not preserve the old company role. These actors keep
@@ -294,8 +300,89 @@ try{
   }
   checks.push('secondary-email-provider-preflight-revalidates-changed-or-revoked-canonical-invitation-before-commit');
   const secondaryMembership=(await workspace.list(secondarySession)),secondaryCurrent=(await store.read(secondarySession,{projectId:'p-a',scope:secondaryMembership.scope})).records[0];assert.equal(secondaryCurrent.kyc.status,'NOT_SUBMITTED');assert.equal(secondaryMembership.role,'AUDITOR');assert.equal(secondaryMembership.canPlanSchedule,false);assert.equal(secondaryMembership.canManageIntegrations,false);
+  // Regression: a real accepted JOIN is not operational admission. Both works
+  // belong to the same canonical account, but neither KYC has a human approval.
+  await assert.rejects(workspace.read(secondarySession,{projectId:'p-a',scope:secondaryMembership.scope}),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
+  await assert.rejects(workspace.read(secondarySession,{projectId:'p-a2',scope:secondaryMembership.scope}),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
+  const pendingPortfolio=await workspace.overview(secondarySession,{scope:secondaryMembership.scope});assert.deepEqual(pendingPortfolio.projects,[]);
+  checks.push('real-join-two-works-pending-kyc-denies-tasks-and-portfolio-before-human-review');
   await assert.rejects(workspace.projectOperation(secondarySession,{projectId:'p-a',scope:secondaryMembership.scope},false,(client,member)=>assertFieldParticipant(client,member,secondarySession,'p-a',secondaryInvite.workerId,{requireKyc:true})),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
   checks.push('secondary-email-selection-does-not-approve-kyc-or-expand-canonical-office-and-field-permissions');
+  // Real JOIN, private synthetic adapters and independent human review.
+  const admissionContext={projectId:'p-a',scope:secondaryMembership.scope};
+  const forbiddenAdmission=async()=>assert.fail('No provider or analyzer I/O');
+  const fieldAdmission=createFieldOperations({workspace}),registerAdmission=createSiteRegister({workspace}),planAdmission=createPlanImport({workspace,put:forbiddenAdmission,get:forbiddenAdmission,analyzer:{analyze:forbiddenAdmission}}),purchaseAdmission=createSitePurchases({workspace});
+  const deniedReads=operationalReads;
+  await assert.rejects(fieldAdmission.read(secondarySession,admissionContext),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
+  await assert.rejects(planAdmission.read(secondarySession,admissionContext),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});assert.equal(operationalReads,deniedReads);
+  const admissionBody={...admissionContext,operationId:randomUUID(),workerId:secondaryCurrent.id,revision:secondaryCurrent.revision,noticeVersion:PARTICIPANT_NOTICE_VERSION,consent:true,front:picture,selfie:picture};
+  const admissionSaved=await store.submitKyc(secondarySession,admissionBody),admissionPending=(await store.read(secondarySession,admissionContext)).records.find(r=>r.id===secondaryCurrent.id);
+  assert.equal(admissionPending.kyc.status,'PENDING_REVIEW');assert.equal((await store.status(secondarySession,{...admissionContext,operationId:admissionBody.operationId})).receiptId,admissionSaved.receiptId);
+  assert.equal((await store.downloadKyc(secondarySession,{...admissionContext,workerId:secondaryCurrent.id,imageId:'selfie'})).bytes.toString('base64'),picture);
+  const privatePuts=putCount;assert.equal((await store.submitKyc(secondarySession,admissionBody)).receiptId,admissionSaved.receiptId);assert.equal(putCount,privatePuts);
+  const admissionMembershipId=(await pool.query(`SELECT id FROM "TenantMembership" WHERE "userId"=(SELECT id FROM "PlatformUser" WHERE "clerkUserId"=$1)`,[secondaryUser])).rows[0].id;
+  await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='DIRECTOR' WHERE id=$1`,[admissionMembershipId]);
+  const admissionDirectorScope=(await workspace.list(secondarySession)).scope,admissionDirectorContext={projectId:'p-a',scope:admissionDirectorScope};
+  const ownOnly=await store.read(secondarySession,admissionDirectorContext);assert.deepEqual(ownOnly.records.map(r=>r.id),[secondaryCurrent.id]);assert.equal(ownOnly.canManage,false);assert.equal(ownOnly.employeeIntake,null);assert.deepEqual(ownOnly.existingAccounts,[]);
+  const deniedDirectorReads=operationalReads;
+  for(const call of [()=>workspace.read(secondarySession,admissionDirectorContext),()=>fieldAdmission.read(secondarySession,admissionDirectorContext),()=>registerAdmission.read(secondarySession,{...admissionDirectorContext,section:'MATERIALS'}),()=>planAdmission.read(secondarySession,admissionDirectorContext),()=>purchaseAdmission.list(secondarySession,admissionDirectorContext)])await assert.rejects(call(),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
+  assert.equal(operationalReads,deniedDirectorReads);
+  await assert.rejects(store.downloadKyc(secondarySession,{...admissionDirectorContext,workerId:self.id,imageId:'selfie'}),{code:'PARTICIPANT_ACCESS_REQUIRED'});
+  await assert.rejects(store.save(secondarySession,command('REVIEW_KYC',{workerId:secondaryCurrent.id,revision:admissionPending.revision,submissionId:admissionPending.kyc.submissionId,decision:'APPROVED',reason:'Pending director cannot approve own identity.'},{scope:admissionDirectorScope})),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
+  checks.push('pending-participant-director-has-own-private-kyc-receipt-download-only-and-no-field-materials-plan-purchase-or-other-legajo');
+  // Approval admits that work; it does not promote the canonical office role.
+  const beforeAdmissionRole=(await pool.query(`SELECT "tenantRole"::text role FROM "TenantMembership" WHERE id=$1`,[admissionMembershipId])).rows[0].role;
+  const independentAdmission=await store.save(owner,command('REVIEW_KYC',{workerId:secondaryCurrent.id,revision:admissionPending.revision,submissionId:admissionPending.kyc.submissionId,decision:'APPROVED',reason:'Independent responsible reviewed both synthetic private images before operational admission.'}));
+  assert.equal((await pool.query(`SELECT "tenantRole"::text role FROM "TenantMembership" WHERE id=$1`,[admissionMembershipId])).rows[0].role,beforeAdmissionRole);assert.equal(independentAdmission.participant.identityCertified,false);assert.deepEqual(independentAdmission.participant.permissions,admissionPending.permissions);
+  assert.equal((await workspace.read(secondarySession,admissionDirectorContext)).tasks[0].id,'admission-task-a');
+  await assert.rejects(workspace.read(secondarySession,{projectId:'p-a2',scope:admissionDirectorScope}),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
+  assert.deepEqual((await workspace.overview(secondarySession,{scope:admissionDirectorScope})).projects.map(r=>r.id),['p-a']);
+  const admittedRead=await store.read(secondarySession,admissionDirectorContext);assert.equal(admittedRead.canManage,true);assert.ok(admittedRead.records.some(r=>r.id!==secondaryCurrent.id));
+  const primaryContext={projectId:'p-a',scope:(await workspace.list(session(primaryUser))).scope},primarySelf=(await store.read(session(primaryUser),primaryContext)).records.find(r=>r.id===primaryInvite.workerId);
+  await store.submitKyc(session(primaryUser),{...primaryContext,operationId:randomUUID(),workerId:primarySelf.id,revision:primarySelf.revision,noticeVersion:PARTICIPANT_NOTICE_VERSION,consent:true,front:picture,selfie:picture});
+  const primaryPending=(await store.read(secondarySession,admissionDirectorContext)).records.find(r=>r.id===primarySelf.id);
+  const admittedReview=await store.save(secondarySession,{...admissionDirectorContext,operationId:randomUUID(),action:'REVIEW_KYC',payload:{workerId:primarySelf.id,revision:primaryPending.revision,submissionId:primaryPending.kyc.submissionId,decision:'APPROVED',reason:'Admitted responsible reviewed a different participant in the same assigned work.'}});assert.equal(admittedReview.participant.kyc.status,'APPROVED');
+  checks.push('independent-human-approval-admits-only-work-a-keeps-role-permissions-and-allows-legitimate-director-review-in-that-work');
+  const admissionReviewMetadata=(await pool.query(`SELECT metadata FROM "AuditLog" WHERE id=$1`,[independentAdmission.receiptId])).rows[0].metadata;
+  await pool.query(`DELETE FROM "AuditLog" WHERE id=$1`,[independentAdmission.receiptId]);await assert.rejects(workspace.read(secondarySession,admissionDirectorContext),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
+  await pool.query(`INSERT INTO "AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,'company-a','owner','participant.operation.recorded','Worker',$2,$3::jsonb)`,[independentAdmission.receiptId,secondaryCurrent.id,JSON.stringify(admissionReviewMetadata)]);
+  const approvedAdmissionMetadata=(await pool.query(`SELECT metadata FROM "Worker" WHERE id=$1`,[secondaryCurrent.id])).rows[0].metadata;
+  for(const state of ['REJECTED','PENDING_REVIEW']){await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,kyc,status}',to_jsonb($2::text)) WHERE id=$1`,[secondaryCurrent.id,state]);await assert.rejects(workspace.read(secondarySession,admissionDirectorContext),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});}
+  await pool.query(`UPDATE "Worker" SET metadata=jsonb_set($2::jsonb,'{participant,status}','"REVOKED"'::jsonb) WHERE id=$1`,[secondaryCurrent.id,JSON.stringify(approvedAdmissionMetadata)]);await assert.rejects(workspace.read(secondarySession,admissionDirectorContext),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});await assert.rejects(store.status(secondarySession,{...admissionDirectorContext,operationId:admissionBody.operationId}),{code:'PARTICIPANT_ACCESS_REQUIRED'});
+  await pool.query(`UPDATE "Worker" SET metadata=$2::jsonb WHERE id=$1`,[secondaryCurrent.id,JSON.stringify(approvedAdmissionMetadata)]);
+  await pool.query(`UPDATE "ProjectMembership" SET status='DISABLED' WHERE "projectId"='p-a2' AND "tenantMembershipId"=$1`,[admissionMembershipId]);await assert.rejects(workspace.read(secondarySession,{projectId:'p-a2',scope:admissionDirectorScope}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});assert.deepEqual((await workspace.list(secondarySession)).projects.map(r=>r.id),['p-a']);
+  await pool.query(`UPDATE "ProjectMembership" SET status='ACTIVE' WHERE "projectId"='p-a2' AND "tenantMembershipId"=$1`,[admissionMembershipId]);
+  const admissionWorkerB=(await store.read(secondarySession,{projectId:'p-a2',scope:admissionDirectorScope})).records[0],admissionWorkerBMetadata=(await pool.query(`SELECT metadata FROM "Worker" WHERE id=$1`,[admissionWorkerB.id])).rows[0].metadata;
+  await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,clerkUserId}','"user_Unlinked"'::jsonb) WHERE id=$1`,[admissionWorkerB.id]);await assert.rejects(workspace.read(secondarySession,{projectId:'p-a2',scope:admissionDirectorScope}),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});await pool.query(`UPDATE "Worker" SET metadata=$2::jsonb WHERE id=$1`,[admissionWorkerB.id,JSON.stringify(admissionWorkerBMetadata)]);
+  checks.push('current-review-receipt-rejection-revocation-own-worker-and-assignment-remain-required-after-approval-a-never-admits-b');
+  await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='AUDITOR' WHERE id=$1`,[admissionMembershipId]);
+  // A new cross-work binding serializes against an already authorized office
+  // operation. All transactions are real; identity and images stay synthetic.
+  await pool.query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES('admission-office','user_AdmissionOffice','admission-office@example.invalid');INSERT INTO "TenantMembership"(id,"organizationId","userId","tenantRole","clerkRole",status) VALUES('admission-office-m','company-a','admission-office','DIRECTOR','org:member','ACTIVE');INSERT INTO "Worker"(id,"projectId",name,phone,metadata,"updatedAt") VALUES('admission-office-worker','p-a2','Synthetic new office participation','+5491100008989','{"siteRegister":{"version":1}}',clock_timestamp())`);
+  const admissionOffice=session('user_AdmissionOffice'),officeBefore=await workspace.list(admissionOffice),officeA={projectId:'p-a',scope:officeBefore.scope};
+  let releaseOffice,enteredOffice,startedPrelock,assignmentSettled=false;
+  const officeRelease=new Promise(resolve=>{releaseOffice=resolve;}),officeEntered=new Promise(resolve=>{enteredOffice=resolve;}),prelockStarted=new Promise(resolve=>{startedPrelock=resolve;});
+  const officeOperation=workspace.projectOperation(admissionOffice,officeA,true,async(client,member)=>{assert.equal(member.participantBound,false);enteredOffice();await officeRelease;return (await client.query(`SELECT id FROM "Task" WHERE "projectId"='p-a'`)).rows;});
+  await officeEntered;
+  const raceConnect=async()=>{const client=await pool.connect();return {release:broken=>client.release(broken),query:(sql,args)=>{const query=client.query(sql,args);if(sql.includes('FROM public."PlatformUser" WHERE "clerkUserId"=$1 FOR UPDATE')&&args[0]==='user_AdmissionOffice')startedPrelock();return query;}};};
+  const raceIdentity={...identity,verifiedEmail:async user=>user==='user_AdmissionOffice'?'admission-office@example.invalid':identity.verifiedEmail(user)};
+  const assignWorkspace=createWorkspaceStore({connect:raceConnect}),assignStore=createParticipantStore({workspace:assignWorkspace,connect:raceConnect,identity:raceIdentity}),officeBContext={projectId:'p-a2',scope:own.scope},officeRoster=(await store.read(owner,officeBContext)).records.find(r=>r.id==='admission-office-worker');
+  const assigning=assignStore.save(owner,{...officeBContext,operationId:randomUUID(),action:'ASSIGN_EXISTING',payload:{workerId:officeRoster.id,revision:officeRoster.revision,membershipId:'admission-office-m',reason:'Synthetic reviewed account linked to another worksite during an office operation.'}}).then(value=>{assignmentSettled=true;return {value};},error=>{assignmentSettled=true;return {error};});
+  let sawBlockingLock=false;
+  try{
+   await prelockStarted;
+   for(let poll=0;poll<30;poll++){
+    const waiting=(await pool.query(`SELECT pid,pg_blocking_pids(pid) AS blockers FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid() AND query LIKE '%PlatformUser%' AND query LIKE '%FOR UPDATE%'`)).rows;
+    if(waiting.some(row=>row.blockers.length>0)){sawBlockingLock=true;break;}
+    await new Promise(resolve=>setTimeout(resolve,25));
+   }
+   assert.equal(assignmentSettled,false);
+  }finally{releaseOffice();}
+  const completedOffice=await officeOperation,assignedOffice=await assigning;if(assignedOffice.error)throw assignedOffice.error;
+  assert.equal(sawBlockingLock,true);assert.ok(completedOffice.some(row=>row.id==='admission-task-a'));assert.equal(assignedOffice.value.participant.kyc.status,'NOT_SUBMITTED');
+  const officeAfter=await workspace.list(admissionOffice);assert.equal(officeAfter.role,'DIRECTOR');assert.deepEqual(officeAfter.projects.map(r=>r.id),['p-a2']);
+  await assert.rejects(workspace.read(admissionOffice,{...officeA,scope:officeAfter.scope}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});await assert.rejects(workspace.read(admissionOffice,{projectId:'p-a2',scope:officeAfter.scope}),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});assert.deepEqual((await workspace.overview(admissionOffice,{scope:officeAfter.scope})).projects,[]);
+  checks.push('new-cross-work-assign-existing-locks-account-before-project-serializes-office-operation-and-fresh-access-requires-own-approved-assignment');
  // Own KYC POST recovery has the same current participation boundary as GET
  // recovery and downloads, even when the company office assignment stays active.
  // PostgreSQL transactions are real; these preaccepted actors and image storage
@@ -479,10 +566,12 @@ try{
  backReadHook=()=>pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,kyc,documentBackConsent,allowed}','false'::jsonb),"updatedAt"=clock_timestamp() WHERE id='worker-document-back'`);await assert.rejects(backStore.downloadKyc(backSession,backImageContext),{code:'PARTICIPANT_KYC_EVIDENCE_UNCONFIRMED'});await pool.query(`UPDATE "Worker" SET metadata=jsonb_set(metadata,'{participant,kyc,documentBackConsent,allowed}','true'::jsonb),"updatedAt"=clock_timestamp() WHERE id='worker-document-back'`);
  checks.push('document-back-service-download-verifies-controlled-private-bytes-tenant-boundary-receipt-and-consent-after-storage-io');
  const beforeBackReview=(await backStore.read(owner,backManagerContext)).records[0],backReview={...backManagerContext,operationId:randomUUID(),action:'REVIEW_KYC',payload:{workerId:backSelf.id,revision:beforeBackReview.revision,submissionId:backRaw.submissionId,decision:'APPROVED',reason:'Another authorized account manually reviewed all three synthetic private images.'}};
- await assert.rejects(backStore.save(backSession,{...backReview,scope:backContext.scope}),{code:'PARTICIPANT_MANAGE_REQUIRED'});
+ await assert.rejects(backStore.save(backSession,{...backReview,scope:backContext.scope}),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
  backReads=[];await backStore.save(owner,{...backManagerContext,operationId:randomUUID(),action:'PROCESS_KYC',payload:{workerId:backSelf.id,revision:beforeBackReview.revision,submissionId:backRaw.submissionId}});assert.equal(backOcrCalls,1);assert.equal(backBiometricCalls,1);assert.equal(backReads.length,2);assert.equal(backReads.includes(backPath),false);assert.deepEqual(backReads,backRaw.images.slice(0,2).map(image=>new URL(image.url).pathname.slice(1)));assert.equal((await backStore.read(owner,backManagerContext)).records[0].kyc.status,'PENDING_REVIEW');
  checks.push('document-back-remains-human-only-while-optional-ocr-and-biometric-service-consume-exact-front-and-selfie');
  backReview.payload.revision=(await backStore.read(owner,backManagerContext)).records[0].revision;const backReviewed=await backStore.save(owner,backReview);assert.equal(backReviewed.participant.kyc.status,'APPROVED');assert.equal(backReviewed.participant.identityCertified,false);assert.deepEqual(backReviewed.participant.permissions,{attendance:false,report:false});
+ // Admission does not promote the participant into a reviewer after approval.
+ await assert.rejects(backStore.save(backSession,{...backReview,scope:backContext.scope}),{code:'PARTICIPANT_MANAGE_REQUIRED'});
  await workspace.projectOperation(backSession,backContext,false,async(client,member)=>{const row=(await client.query(`SELECT id,"projectId",active,metadata FROM public."Worker" WHERE id=$1`,[backSelf.id])).rows[0];await assertApprovedParticipantKyc(client,row,{...member,clerkUserId:backSession.userId});});
  await pool.query(`UPDATE "AuditLog" SET metadata=metadata-'documentBackConsentRecorded' WHERE id=$1`,[backSaved.receiptId]);await assert.rejects(backStore.status(backSession,{...backContext,operationId:backBody.operationId}),{code:'PARTICIPANT_KYC_EVIDENCE_UNCONFIRMED'});await assert.rejects(workspace.projectOperation(backSession,backContext,false,async(client,member)=>{const row=(await client.query(`SELECT id,"projectId",active,metadata FROM public."Worker" WHERE id=$1`,[backSelf.id])).rows[0];await assertApprovedParticipantKyc(client,row,{...member,clerkUserId:backSession.userId});}),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});await pool.query(`UPDATE "AuditLog" SET metadata=$2::jsonb WHERE id=$1`,[backSaved.receiptId,JSON.stringify(backReceipt)]);
  checks.push('document-back-human-approval-by-another-account-requires-original-three-image-consent-receipt-for-approved-identity-authority');

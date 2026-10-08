@@ -1,5 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { WorkspaceError, WORKSPACE_ROLES, workspaceId, operationId, requireWorkspaceIdentity, scopeStamp, checkScope, calendarDate, digest, portfolioAccess, managesSchedule, validateScheduleChange, scheduleReceiptId, scheduleRequestDigest } from './workspace-policy.mjs';
+import {participantAccountBound,participantProjectAdmitted} from './participant-admission.mjs';
+
+const identityPurpose=Symbol('participant-own-identity');
+// Server-only composition: the purpose cannot be serialized or supplied by HTTP.
+export function participantIdentityOperation(workspace,session,context,writable,callback,beforeProject){
+  return workspace.projectOperation(session,context,writable,callback,beforeProject,identityPurpose);
+}
 
 const taskColumns = `t.id, t.title, t.status::text AS status, t.progress,
   to_char(t."startsAt", 'YYYY-MM-DD') AS "startsOn", to_char(t."endsAt", 'YYYY-MM-DD') AS "endsOn",
@@ -18,14 +25,14 @@ export function createWorkspaceStore({ connect }) {
       await client.query("SET LOCAL statement_timeout = '6000ms'");
       await client.query("SET LOCAL lock_timeout = '2500ms'");
       const result = await client.query(`SELECT u.id AS "actorId", m.id AS "membershipId", m."tenantRole"::text AS role,
-        o.id AS "organizationId", o.name AS "organizationName"
+        o.id AS "organizationId", o.name AS "organizationName", u."clerkUserId", m."clerkRole"
         FROM public."PlatformUser" u JOIN public."TenantMembership" m ON m."userId"=u.id
         JOIN public."Organization" o ON o.id=m."organizationId"
         WHERE u."clerkUserId"=$1 AND o."clerkOrganizationId"=$2 AND m."clerkRole"=$3
           AND m.status='ACTIVE' AND COALESCE(o.metadata->'internal','false'::jsonb) <> 'true'::jsonb
         ${writable ? 'FOR SHARE OF u,m,o' : ''}`, [session.userId, session.organizationId, session.organizationRole]);
       if (result.rows.length !== 1 || !Object.hasOwn(WORKSPACE_ROLES, result.rows[0].role)) throw new WorkspaceError('WORKSPACE_MEMBERSHIP_REQUIRED', 403);
-      const membership = result.rows[0], scope = scopeStamp(session, membership);
+      const membership = {...result.rows[0],clerkUserId:session.userId,clerkRole:session.organizationRole}, scope = scopeStamp(session, membership);
       const value = await callback(client, membership, scope);
       await client.query(writable ? 'COMMIT' : 'ROLLBACK');
       return value;
@@ -35,16 +42,20 @@ export function createWorkspaceStore({ connect }) {
       throw new WorkspaceError('WORKSPACE_OPERATION_UNCONFIRMED', 503);
     } finally { client?.release(broken); }
   }
-  async function project(client, membership, id, lock = false) {
+  async function project(client, membership, id, lock = false, identityOnly = false) {
     if (!workspaceId(id)) throw new WorkspaceError('WORKSPACE_PROJECT_INVALID');
     const result = await client.query(`SELECT id,name,status::text AS status FROM public."Project"
       WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE' ${lock ? 'FOR SHARE' : ''}`, [id, membership.organizationId]);
     if (result.rows.length !== 1) throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE', 404);
-    if (!portfolioAccess(membership.role)) {
+    membership.participantBound=await participantAccountBound(client,membership)||membership.participantBound===true;
+    if (!portfolioAccess(membership.role)||membership.participantBound) {
       const access = await client.query(`SELECT id FROM public."ProjectMembership" WHERE "projectId"=$1
         AND "tenantMembershipId"=$2 AND status='ACTIVE' ${lock ? 'FOR SHARE' : ''}`, [id, membership.membershipId]);
       if (access.rows.length !== 1) throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE', 404);
     }
+    const admitted=await participantProjectAdmitted(client,membership,id,{lock});
+    if(!admitted&&!identityOnly)throw new WorkspaceError('PARTICIPANT_KYC_REVIEW_REQUIRED',403);
+    membership.identityOnly=!admitted;
     return result.rows[0];
   }
   async function task(client, projectId, taskId, lock = false) {
@@ -79,21 +90,31 @@ export function createWorkspaceStore({ connect }) {
     },
     // Operational modules share canonical membership and project revocation.
     // The module must enforce its own action-level permission inside the callback.
-    async projectOperation(session, {projectId, scope: expected}, writable, callback, beforeProject) {
-      if (typeof callback !== 'function' || typeof writable !== 'boolean' || beforeProject !== undefined && typeof beforeProject !== 'function') throw new TypeError('Explicit project transaction required');
+    async projectOperation(session, {projectId, scope: expected}, writable, callback, beforeProject, purpose) {
+      if (typeof callback !== 'function' || typeof writable !== 'boolean' || beforeProject !== undefined && typeof beforeProject !== 'function' || purpose!==undefined&&purpose!==identityPurpose) throw new TypeError('Explicit project transaction required');
       if (!/^[a-f0-9]{64}$/.test(expected || '')) throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
       return transaction(session,writable,async(client,member,scope)=>{
         checkScope(scope,expected);
-        if (beforeProject) await beforeProject(client, Object.freeze({...member}), scope);
-        await project(client,member,projectId);
+        if(beforeProject){
+          member.participantBound=await participantAccountBound(client,member);
+          if(!await participantProjectAdmitted(client,member,projectId)&&purpose!==identityPurpose)throw new WorkspaceError('PARTICIPANT_KYC_REVIEW_REQUIRED',403);
+          await beforeProject(client,Object.freeze({...member}),scope);
+        }
+        await project(client,member,projectId,false,purpose===identityPurpose);
         const selected=await client.query(`SELECT p.id,p.name,p.metadata,o.metadata AS "organizationMetadata"
           FROM public."Project" p JOIN public."Organization" o ON o.id=p."organizationId"
           WHERE p.id=$1 AND p."organizationId"=$2 AND p.status='ACTIVE' ${writable?'FOR UPDATE OF p':''}`,[projectId,member.organizationId]);
         if(selected.rows.length!==1)throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);
+        if(writable)member.participantBound=await participantAccountBound(client,member)||member.participantBound===true;
         // Lock order matches access revocation: project first, assignment second.
-        if(writable&&!portfolioAccess(member.role)) {
+        if(writable&&(!portfolioAccess(member.role)||member.participantBound)) {
           const assigned=await client.query(`SELECT id FROM public."ProjectMembership" WHERE "projectId"=$1 AND "tenantMembershipId"=$2 AND status='ACTIVE' FOR SHARE`,[projectId,member.membershipId]);
           if(assigned.rows.length!==1)throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);
+        }
+        if(writable){
+          const admitted=await participantProjectAdmitted(client,member,projectId,{lock:true});
+          if(!admitted&&purpose!==identityPurpose)throw new WorkspaceError('PARTICIPANT_KYC_REVIEW_REQUIRED',403);
+          member.identityOnly=!admitted;
         }
         return callback(client,member,scope,selected.rows[0]);
       });
@@ -108,13 +129,25 @@ export function createWorkspaceStore({ connect }) {
         if (!['ADMIN','DIRECTOR'].includes(member.role)) throw new WorkspaceError('WORKSPACE_INTEGRATION_PERMISSION_REQUIRED',403);
         // Internal compositions may lock the recipient membership before the
         // project. Their return value never replaces canonical actor or scope.
-        if (beforeProject) await beforeProject(client, Object.freeze({...member}), scope);
+        if(beforeProject){
+          member.participantBound=await participantAccountBound(client,member);
+          if(!await participantProjectAdmitted(client,member,projectId))throw new WorkspaceError('PARTICIPANT_KYC_REVIEW_REQUIRED',403);
+          await beforeProject(client,Object.freeze({...member}),scope);
+        }
         await project(client, member, projectId);
         // Recheck and lock directly: avoid two concurrent SHARE->UPDATE upgrades.
         const selected=await client.query(`SELECT p.id,p.name,p.metadata,o.metadata AS "organizationMetadata"
           FROM public."Project" p JOIN public."Organization" o ON o.id=p."organizationId"
           WHERE p.id=$1 AND p."organizationId"=$2 AND p.status='ACTIVE' ${writable?'FOR UPDATE OF p':''}`,[projectId,member.organizationId]);
         if(selected.rows.length!==1)throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);
+        if(writable){
+          member.participantBound=await participantAccountBound(client,member)||member.participantBound===true;
+          if(member.participantBound){
+            const assigned=await client.query(`SELECT id FROM public."ProjectMembership" WHERE "projectId"=$1 AND "tenantMembershipId"=$2 AND status='ACTIVE' FOR SHARE`,[projectId,member.membershipId]);
+            if(assigned.rows.length!==1)throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);
+          }
+          if(!await participantProjectAdmitted(client,member,projectId,{lock:true}))throw new WorkspaceError('PARTICIPANT_KYC_REVIEW_REQUIRED',403);
+        }
         return callback(client,member,scope,selected.rows[0]);
       });
     },
@@ -150,10 +183,11 @@ export function createWorkspaceStore({ connect }) {
     },
     async list(session) {
       return transaction(session, false, async (client, member, scope) => {
+        member.participantBound=await participantAccountBound(client,member);
         const result = await client.query(`SELECT p.id,p.name,p.status::text AS status FROM public."Project" p
           WHERE p."organizationId"=$1 AND p.status='ACTIVE' AND ($2::boolean OR EXISTS
           (SELECT 1 FROM public."ProjectMembership" pm WHERE pm."projectId"=p.id AND pm."tenantMembershipId"=$3 AND pm.status='ACTIVE'))
-          ORDER BY p.id LIMIT 101`, [member.organizationId, portfolioAccess(member.role), member.membershipId]);
+          ORDER BY p.id LIMIT 101`, [member.organizationId, portfolioAccess(member.role)&&!member.participantBound, member.membershipId]);
         return { scope, organizationName: member.organizationName, role: member.role, roleLabel: WORKSPACE_ROLES[member.role], canPlanSchedule: managesSchedule(member.role), canManageIntegrations: ['ADMIN','DIRECTOR'].includes(member.role), projects: result.rows.slice(0,100), projectsTruncated: result.rows.length>100 };
       });
     },
@@ -165,14 +199,26 @@ export function createWorkspaceStore({ connect }) {
       return transaction(session, false, async (client, member, scope) => {
         checkScope(scope, expected);
         if (afterProject !== null) await project(client, member, afterProject);
-        const result = await client.query(`WITH authorized AS (
-          SELECT p.id,p.name,p.status::text AS status FROM public."Project" p
-          WHERE p."organizationId"=$1 AND p.status='ACTIVE' AND ($2::boolean OR EXISTS
-            (SELECT 1 FROM public."ProjectMembership" pm WHERE pm."projectId"=p.id
-              AND pm."tenantMembershipId"=$3 AND pm.status='ACTIVE'))
-            AND ($4::text IS NULL OR p.id>$4) ORDER BY p.id LIMIT 51
-        ) SELECT p.id,p.name,p.status,counts.* FROM authorized p
-          CROSS JOIN LATERAL (
+        member.participantBound=await participantAccountBound(client,member);
+        const admitted=[];let anchor=afterProject,complete=false;
+        // Scan identity-only candidates first. No Task is queried for a pending
+        // work. The public cursor remains the last admitted item, not a hidden one.
+        for(let batch=0;batch<100 && admitted.length<51;batch++){
+          const candidates=(await client.query(`SELECT p.id,p.name,p.status::text AS status FROM public."Project" p
+            WHERE p."organizationId"=$1 AND p.status='ACTIVE' AND ($2::boolean OR EXISTS
+              (SELECT 1 FROM public."ProjectMembership" pm WHERE pm."projectId"=p.id
+                AND pm."tenantMembershipId"=$3 AND pm.status='ACTIVE'))
+              AND ($4::text IS NULL OR p.id>$4) ORDER BY p.id LIMIT 51`,[member.organizationId,portfolioAccess(member.role)&&!member.participantBound,member.membershipId,anchor])).rows;
+          for(const candidate of candidates){
+            if(await participantProjectAdmitted(client,member,candidate.id))admitted.push(candidate);
+            if(admitted.length===51)break;
+          }
+          if(candidates.length<51){complete=true;break;}
+          anchor=candidates.at(-1).id;
+        }
+        if(!complete&&admitted.length<51)throw new WorkspaceError('WORKSPACE_OPERATION_UNCONFIRMED',503);
+        const result=admitted.length?await client.query(`SELECT p.id,p.name,p.status::text AS status,counts.*
+          FROM public."Project" p CROSS JOIN LATERAL (
             SELECT count(*)::int AS "totalTasks",
               count(*) FILTER (WHERE t.status='DONE' AND t.progress=100)::int AS "completedTasks",
               count(*) FILTER (WHERE t.status='IN_PROGRESS')::int AS "inProgressTasks",
@@ -180,7 +226,8 @@ export function createWorkspaceStore({ connect }) {
               count(*) FILTER (WHERE t."startsAt" IS NULL OR t."endsAt" IS NULL)::int AS "unscheduledTasks",
               to_char(min(t."endsAt") FILTER (WHERE t.status<>'DONE' OR t.progress<100),'YYYY-MM-DD') AS "nextEndsOn"
             FROM public."Task" t WHERE t."projectId"=p.id
-          ) counts ORDER BY p.id`, [member.organizationId, portfolioAccess(member.role), member.membershipId, afterProject]);
+          ) counts WHERE p."organizationId"=$1 AND p.id=ANY($2::text[]) AND p.status='ACTIVE'
+          ORDER BY p.id`,[member.organizationId,admitted.map(row=>row.id)]):{rows:[]};
         const rows = result.rows.slice(0, 50);
         // Only aggregate facts are projected. No participant, private document,
         // bank account, provider credential or unapproved evidence is read.

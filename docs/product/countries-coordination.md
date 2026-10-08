@@ -20,8 +20,14 @@ Las capacidades siguientes son declaraciones y documentación de los proveedores
 | [Sine by Honeywell](https://www.sine.co/blog/sine-raises-the-bar-for-contractor-and-compliance-management/) | Documentación de contratistas, inducciones, permisos, vigencias y trazabilidad de acceso | Requisitos previos, revisión y revocación de habilitaciones; una identidad aprobada no equivale a autorización de ingreso |
 | [PlanRadar SiteView](https://help.planradar.com/en/siteview/) | Registro visual de obra y comparación entre fechas | Evidencia vinculada a sector y fecha; la ayuda del producto aclara que no predice automáticamente el avance |
 | [TranquiPass](https://www.tranquipass.com/control-art-trabajadores-barrio) y [Simple Solutions](https://www.simplesolutions.com.ar/acceso.html) | Gestión de barrios, portería, roles, QR o preautorizaciones por WhatsApp | Integrar la coordinación técnica con la portería existente y reducir la doble carga |
+| [NetKey Hardlock](https://netkey.com.ar/hardlock) | Etapas, documentación, responsables, inspecciones y accesos de obreros y proveedores en las obras del barrio; también publica WhatsApp/QR e IA administrativa | La supervisión de obras del barrio ya tiene competencia local; demostrar privacidad y continuidad de la operación independiente |
+| [SmartOn](https://smarton.com.ar/sistema.html) | Padrón de obras, cuadrillas por lote, ART y seguros, WhatsApp y portal de proveedores; declara suspensión ante vencimientos | Separar vigencia documental, revisión e ingreso; no adoptar promesas de validación automática sin comprobar el método y el emisor |
 
 La aprobación arquitectónica de comunidades tiene competidores directos, además de los referentes de construcción y acceso. Las páginas de Smartwebs, TownSq y AppFolio no acreditan por sí solas el recorrido completo entre supervisión del country y operación privada de una constructora, ni permiten concluir que esos productos carezcan de él. La colaboración entre organizaciones, la IA y WhatsApp ya aparecen en el mercado. La diferenciación propuesta combina requisitos locales de obra, expediente compartido, importación de las planillas existentes y captura simple de evidencia. Su valor debe demostrarse en el piloto; no se presenta como una invención exclusiva.
+
+NetKey y SmartOn describen funciones de obras dentro del barrio, no sólo acceso de visitantes. Sus páginas no detallan toda la separación de costos, nómina y documentación privada de una constructora independiente. Ese límite de información no demuestra que carezcan de esas capacidades. No se verificaron precios comparables, precisión biométrica, contraste de pólizas ni interoperabilidad con nuestras integraciones.
+
+[TownSq publica](https://www.townsq.io/pricing) Architectural Request and Review como adicional de USD 20 por mes y por comunidad al corte. Es evidencia de que existe ese modelo de contratación, no un precio total comparable ni una prueba de disposición a pagar en Argentina. [Smartwebs](https://smartwebs.com/pricing/) ofrece cotización, usuarios ilimitados y condiciones de implementación; esto tampoco acredita cómo trata comercialmente a cada contratista externo. El precio local y quién contrata se validarán mediante una oferta concreta en el piloto.
 
 ## Reglas de producto de la segunda etapa
 
@@ -46,3 +52,15 @@ Se reutilizarán la autorización canónica por organización/obra, los recibos,
 Antes de cobrar el abono propuesto, acordar el alcance con una administración, arquitectura, portería y dos constructoras independientes. Medir tiempo de revisión, pedidos repetidos, rechazos o errores de acceso y esfuerzo de soporte. La renovación paga será una señal comercial; una entrevista interesada o una demo no acredita demanda contratada.
 
 La aceptación técnica debe demostrar que una obra no compartida es inaccesible, un permiso revocado invalida consultas y descargas, cada rol ve sólo su alcance, los documentos privados permanecen aislados y una respuesta tardía no restaura acceso. Después se requiere un ensayo con los participantes reales. Implementado, probado, publicado y aceptado se registran por separado.
+
+## Orden de implementación derivado de la comparación
+
+| Prioridad | Entrega dentro del alcance propuesto | Evidencia para aceptarla |
+| --- | --- | --- |
+| 1. Privacidad entre organizaciones | Vínculo explícito country-obra, permisos por destinatario y revocación | Dos constructoras conservan sus obras privadas; revocar bloquea lecturas, descargas y respuestas tardías |
+| 2. Expediente del barrio | Requisitos configurables, versiones, observaciones y decisión humana | Sustituir un documento no arrastra su aprobación anterior; cada decisión identifica versión, autor y motivo |
+| 3. Coordinación con portería | Consulta mínima de habilitación, horarios y vigencias | Identidad, revisión de ART y autorización de ingreso producen estados separados; no se expone el legajo privado |
+| 4. Evidencia de obra compartida | Selección de fotos, audio e informes, conservando la operación interna | La IA propone; la decisión autorizada de la constructora gobierna tareas y materiales; el country sólo ve lo compartido |
+| 5. Validación comercial | Piloto con administración, oficina técnica, portería y dos constructoras | Uso efectivo, tiempos medidos y decisión del comprador ante una oferta y precio explícitos |
+
+El abono de supervisión sería el pago del country o de su representante a ObraSaaS por este espacio de trabajo. El plan operativo de la constructora es una contratación distinta. Ambos son propuestas: no existe aceptación comercial acreditada. Medir dos semanas del proceso habitual y cuatro del piloto permite comparar minutos de revisión y pedidos repetidos sobre expedientes equivalentes; se debe registrar también esfuerzo de soporte y casos incompletos. Una mejora medida no reemplaza la decisión real de contratar o renovar.

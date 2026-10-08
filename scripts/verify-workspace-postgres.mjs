@@ -54,6 +54,9 @@ try{
     CREATE TABLE "TenantMembership" (id text PRIMARY KEY,"organizationId" text REFERENCES "Organization", "userId" text REFERENCES "PlatformUser", "tenantRole" text NOT NULL,"clerkRole" text NOT NULL,status text NOT NULL,UNIQUE("organizationId","userId"));
     CREATE TABLE "Project" (id text PRIMARY KEY,"organizationId" text REFERENCES "Organization",name text NOT NULL,status text NOT NULL,metadata jsonb,"updatedAt" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP);
     CREATE TABLE "ProjectMembership" (id text PRIMARY KEY,"projectId" text REFERENCES "Project","tenantMembershipId" text REFERENCES "TenantMembership",status text NOT NULL,UNIQUE("projectId","tenantMembershipId"));
+    -- No linked participants in this office fixture; the canonical table still
+    -- exists so admission checks use the same production model.
+    CREATE TABLE "Worker" (id text PRIMARY KEY,"projectId" text REFERENCES "Project",name text NOT NULL,phone text NOT NULL,role text,active boolean NOT NULL DEFAULT true,metadata jsonb,"updatedAt" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE("projectId",phone));
     CREATE TABLE "Task" (id text PRIMARY KEY,"projectId" text REFERENCES "Project",title text NOT NULL,status text NOT NULL,progress integer NOT NULL,"startsAt" timestamp,"endsAt" timestamp,"updatedAt" timestamp NOT NULL,metadata jsonb);
     CREATE TABLE "AuditLog" (id text PRIMARY KEY,"organizationId" text REFERENCES "Organization","actorId" text REFERENCES "PlatformUser",action text NOT NULL,"entityType" text NOT NULL,"entityId" text,metadata jsonb,"createdAt" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP);
     INSERT INTO "Organization" VALUES ('company-a','Synthetic company A','org_A','{}'),('company-b','Synthetic company B','org_B','{}'),('internal','Internal fixture','org_Internal','{"internal":true}');

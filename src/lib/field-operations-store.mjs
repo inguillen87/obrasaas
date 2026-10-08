@@ -9,6 +9,7 @@ import {MATERIAL_INVENTORY_ACTIONS,applyInventoryFieldAction,readInventory,readC
 import {lockPersonWorksiteJourney,assertPersonWorksiteJourney} from './person-worksite-journey.mjs';
 import {OVERTIME_ACTIONS,canDecideOvertime} from './field-overtime-policy.mjs';
 import {createFieldOvertime} from './field-overtime-store.mjs';
+import {assertApprovedParticipantKyc} from './participant-approved-identity.mjs';
 
 const revision = name => `to_char(${name},'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const newId = prefix => prefix+'_'+randomUUID().replaceAll('-','');
@@ -52,7 +53,7 @@ export function createFieldOperations({workspace,assertParticipant}) {
     if(typeof assertParticipant==='function')return assertParticipant(client,member,session,projectId,workerId,{permission,requireKyc:true});
     const row=(await client.query(`SELECT id,name,active,metadata FROM public."Worker" WHERE id=$1 AND "projectId"=$2 FOR SHARE`,[workerId,projectId])).rows[0],p=row?.metadata?.participant;
     if(!row?.active||p?.version!==1||p.status!=='ACTIVE'||p.clerkUserId!==session.userId||p.permissions?.[permission]!==true)throw new WorkspaceError('FIELD_PARTICIPANT_REQUIRED',403);
-    if(p.kyc?.status!=='APPROVED')throw new WorkspaceError('FIELD_KYC_REVIEW_REQUIRED',403);
+    await assertApprovedParticipantKyc(client,{...row,projectId},{...member,clerkUserId:session.userId},{code:'FIELD_KYC_REVIEW_REQUIRED'});
     return row;
   }
   const evidence=async(client,projectId,id,lock=false)=>{
@@ -79,8 +80,9 @@ export function createFieldOperations({workspace,assertParticipant}) {
       const workerId=receipt.metadata.outcome.event?.workerId||receipt.metadata.outcome.proposal?.workerId||receipt.metadata.outcome.report?.workerId||receipt.metadata.outcome.consumption?.workerId||receipt.metadata.outcome.overtime?.workerId,permission=['ATTENDANCE','PROPOSE_OVERTIME'].includes(action)?'attendance':'report';
       // The project lock serializes writable replay against participant changes.
       // Read-only recovery keeps its snapshot without trying to lock the worker.
-      const owned=(await client.query(`SELECT id FROM public."Worker" WHERE id=$1 AND "projectId"=$2 AND active=true AND metadata->'participant'->>'version'='1' AND metadata->'participant'->>'clerkUserId'=$3 AND metadata->'participant'->>'status'='ACTIVE' AND metadata->'participant'->'kyc'->>'status'='APPROVED' AND metadata->'participant'->'permissions'->>$4='true'`,[workerId,projectId,session.userId,permission])).rows;
+      const owned=(await client.query(`SELECT id,active,metadata FROM public."Worker" WHERE id=$1 AND "projectId"=$2 AND active=true AND metadata->'participant'->>'version'='1' AND metadata->'participant'->>'clerkUserId'=$3 AND metadata->'participant'->>'status'='ACTIVE' AND metadata->'participant'->'kyc'->>'status'='APPROVED' AND metadata->'participant'->'permissions'->>$4='true'`,[workerId,projectId,session.userId,permission])).rows;
       if(owned.length!==1)throw new WorkspaceError('FIELD_PARTICIPANT_REQUIRED',403);
+      await assertApprovedParticipantKyc(client,{...owned[0],projectId},{...member,clerkUserId:session.userId},{code:'FIELD_KYC_REVIEW_REQUIRED'});
     }
   }
   async function recoveredOutcome(client,projectId,receipt) {

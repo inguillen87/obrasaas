@@ -1,4 +1,4 @@
-# Additive KYC and project preparation CI: preserves all 51 prior blocks and artifact patterns.
+# Additive private identity CI: preserves all 53 prior blocks and 57 artifact patterns.
 name: Authorized workspace acceptance
 "on":
   push:
@@ -644,6 +644,10 @@ jobs:
           npx eslint scripts/verify-portfolio-overview-contracts.mjs scripts/verify-portfolio-overview-ui.mjs scripts/verify-workspace-postgres.mjs tests/production-portfolio-overview.test.mjs --max-warnings 0
           node scripts/verify-portfolio-overview-contracts.mjs --expected-head "$GITHUB_SHA"
           node scripts/verify-portfolio-overview-ui.mjs
+      - name: Own private identity before admission and explicit authorized workspace refresh
+        run: |
+          npx eslint src/lib/participant-admission.mjs tests/production-participant-admission.test.mjs tests/production-workspace-identity-only.test.mjs scripts/verify-workspace-identity-only-ui.mjs scripts/fixtures/canonical-participant-kyc.mjs tests/production-field-canonical-kyc.test.mjs tests/production-company-field-operations.test.mjs --max-warnings 0
+          node scripts/verify-workspace-identity-only-ui.mjs --expected-head "$GITHUB_SHA"
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane workspace-ui --expected-head "$GITHUB_SHA"
@@ -661,6 +665,7 @@ jobs:
             .vercel/portfolio-overview-contract-evidence/
             .vercel/private/portfolio-overview-ui-validation.json
             .vercel/private/portfolio-*.png
+            .vercel/workspace-identity-only-evidence/
             .vercel/workspace-ci-evidence/lane-workspace-ui.json
           include-hidden-files: true
           retention-days: 7

@@ -28,7 +28,7 @@ import {PortfolioOverviewPanel} from './portfolio-overview-panel';
 import {loadedScheduleOverview,mergeLoadedTasks} from './schedule-workbench.mjs';
 const endpoint='/api/identity/workspace';
 const messages={WORKSPACE_ORGANIZATION_REQUIRED:'Elegí una organización desde tu cuenta para consultar las obras asignadas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Tu organización activa todavía no tiene una pertenencia vigente vinculada a esta cuenta.',WORKSPACE_PROJECT_UNAVAILABLE:'Esta obra no está disponible con tus permisos actuales.',WORKSPACE_CONTEXT_CHANGED:'Cambió tu organización o tu permiso. Volvé a cargar las obras antes de continuar.',SCHEDULE_REVISION_CHANGED:'Otra persona modificó la tarea. Actualizá el cronograma antes de volver a planificar.',SCHEDULE_PERMISSION_REQUIRED:'Tu rol actual no puede modificar la planificación.',SCHEDULE_UNCHANGED:'Las fechas son iguales a las registradas. No se hizo ningún cambio.',SCHEDULE_OPERATION_CONFLICT:'Este intento ya pertenece a otra solicitud. Comprobá su recibo antes de continuar.',SESSION_REQUIRED:'Tu sesión venció. Volvé a ingresar.',SCHEDULE_DATES_INVALID:'Revisá el inicio y el fin. El fin no puede ser anterior al inicio.',SCHEDULE_REASON_REQUIRED:'Explicá brevemente el motivo del cambio.'};
-const describe=code=>messages[code]||'No se pudo confirmar la operación. No se reemplazaron los datos por ejemplos.';
+const describe=code=>code==='PARTICIPANT_KYC_REVIEW_REQUIRED'?'Tu identidad necesita una revisión vigente para habilitar esta obra. Podés presentar o consultar tu documentación privada.':messages[code]||'No se pudo confirmar la operación. No se reemplazaron los datos por ejemplos.';
 async function requestWorkspace(transport,query='',options={}){
  return transport(endpoint+query,options,async response=>{
   if(!response.ok){
@@ -51,12 +51,22 @@ export function workspaceGuideObservation({account,view,loading,generation,unava
  return {...result,scope:account.scope,projectId:currentView?.project.id||null,role:account.role,projectCount:account.projects.length,projectsPartial:account.projectsTruncated===true,schedulePending:Boolean(currentView&&schedulePending),schedule:overview?{loaded:overview.loaded,total:overview.total,partial:overview.partial,missingDates:overview.missingDates,invalidDates:overview.invalidDates}:null,channel:channel&&Array.isArray(channel.records)?{ready:channel.channelReady===true,partial:channel.truncated===true,ownLinked:channel.channelReady===true&&channel.records.some(row=>row.eligible===true&&row.state==='VERIFIED'&&typeof row.binding?.id==='string'&&row.binding.id.length>0&&typeof row.binding.verifiedAt==='string'&&Number.isFinite(Date.parse(row.binding.verifiedAt))&&row.binding.revokedAt===null)}:null};
 }
 const guideAccessDenied=error=>error.status===401||error.status===403||error.code==='WORKSPACE_CONTEXT_CHANGED';
+// Only the exact server denial for a project in the observed account can open
+// identity self-service. It never carries an operational view or task data.
+function workspaceIdentityOnlyProject(error,account,projectId){
+ if(error?.status!==403||error.code!=='PARTICIPANT_KYC_REVIEW_REQUIRED'||!/^[a-f0-9]{64}$/.test(account?.scope||'')||!Array.isArray(account.projects))return null;
+ const candidates=account.projects.filter(project=>project?.id===projectId);
+ if(candidates.length!==1||typeof candidates[0].name!=='string')return null;
+ return {scope:account.scope,projectId:candidates[0].id,name:candidates[0].name};
+}
 export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
  const transport=useWorkspaceRequest(getSessionToken);
  const request=useCallback((query='',options={})=>requestWorkspace(transport,query,options),[transport]);
  const [account,setAccount]=useState(null),[view,setView]=useState(null),[loading,setLoading]=useState(true),[notice,setNotice]=useState(''),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[saving,setSaving]=useState(false),[receipt,setReceipt]=useState(null);
  const generation=useRef(0),controller=useRef(null),mounted=useRef(true);
  const [guideUnavailable,setGuideUnavailable]=useState(false),[guideReadFailed,setGuideReadFailed]=useState(false);
+ const [identityProject,setIdentityProject]=useState(null);
+ const identitySelection=identityProject&&account&&identityProject.scope===account.scope&&!view&&account.projects.some(project=>project.id===identityProject.projectId)?identityProject:null;
  const [channelSnapshot,setChannelSnapshot]=useState(null),[observationEpoch,setObservationEpoch]=useState(0),onboardingContext=useRef(null);
  useLayoutEffect(()=>{onboardingContext.current=account&&view?{scope:account.scope,projectId:view.project.id,generation:observationEpoch,canManageIntegrations:account.canManageIntegrations===true}:null;return()=>{onboardingContext.current=null;};},[account,view,observationEpoch]);
  const channelObserved=useCallback(value=>{const context=onboardingContext.current;if(!context||value.scope!==context.scope||value.projectId!==context.projectId||value.observedGeneration!==context.generation)return;setChannelSnapshot(value.snapshot?{...value.snapshot,observedGeneration:value.observedGeneration}:null);},[]);
@@ -93,33 +103,43 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
   controller.current?.abort();const current=++generation.current;
   onboardingContext.current=null;setObservationEpoch(current);setChannelSnapshot(null);
   setGuideUnavailable(true);setGuideReadFailed(true);setLoading(false);setSaving(false);
-  setAccount(null);setView(null);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);
+  setAccount(null);setView(null);setIdentityProject(null);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);
   // The transport journal retains unresolved receipt references. Clear the
   // revoked view and its in-memory controls without deleting those references
   // or resending a command; refresh and receipt recovery stay explicit.
   setAttempt(null);setRetryAllowed(false);setTaskCreating(false);setModulePending({});
   setNotice('Tu acceso cambió. Actualizá las obras antes de continuar.');
  },[]);
+ function restrictProject(error,projectId){
+  const identity=workspaceIdentityOnlyProject(error,account,projectId);
+  onboardingContext.current=null;setChannelSnapshot(null);setView(null);setIdentityProject(identity);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);
+  // Recovery references remain in the durable journal. Clear revoked controls
+  // without repeating a command or trusting tasks contained in an old receipt.
+  setAttempt(null);setRetryAllowed(false);setTaskCreating(false);setModulePending({});
+  setGuideUnavailable(!identity);setGuideReadFailed(!identity);
+  if(!identity)setAccount(null);
+ }
  useEffect(()=>{
   const epoch=generation;mounted.current=true;const abort=new AbortController();controller.current=abort;const current=++epoch.current;setObservationEpoch(current);setChannelSnapshot(null);
+  setAccount(null);setView(null);setIdentityProject(null);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);setAttempt(null);setRetryAllowed(false);setTaskCreating(false);setModulePending({});setNotice('');setLoading(true);
   request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current){setAccount(data);setGuideUnavailable(false);setGuideReadFailed(false);}}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);if(guideAccessDenied(error))setGuideUnavailable(true);}}).finally(()=>{if(mounted.current&&current===generation.current){setLoading(false);setPlanReadback(null);}});
   return()=>{mounted.current=false;epoch.current++;abort.abort();controller.current?.abort();};
  },[request]);
  async function refresh(){
   if(contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
-  setAccount(null);setView(null);setDraft(null);setReceipt(null);setPlanReadback(null);setNotice('');setLoading(true);
+  setAccount(null);setView(null);setIdentityProject(null);setDraft(null);setReceipt(null);setPlanReadback(null);setNotice('');setLoading(true);
   try{const data=await request('',{signal:abort.signal});if(mounted.current&&current===generation.current){setAccount(data);setGuideUnavailable(false);setGuideReadFailed(false);}}catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);if(guideAccessDenied(error))setGuideUnavailable(true);}}finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
  async function open(projectId,append=false){
-  if(!account||contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
-  const cursor=append?view?.nextCursor:null;setPlanReadback(null);setNotice('');setLoading(true);if(!append){setView(null);setDraft(null);setReceipt(null);}
+  if(!account||contextLocked||!account.projects.some(project=>project.id===projectId))return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
+  const cursor=append?view?.nextCursor:null;setIdentityProject(null);setPlanReadback(null);setNotice('');setLoading(true);if(!append){setView(null);setDraft(null);setReceipt(null);}
   try{
    const data=await request(query({projectId,scope:account.scope,...(cursor?{afterTask:cursor}:{})}),{signal:abort.signal});
    if(!mounted.current||current!==generation.current)return;
    if(data.scope!==account.scope||data.project.id!==projectId)throw new Error('La respuesta no coincide con la obra seleccionada.');
    setView(previous=>append?{...data,tasks:mergeLoadedTasks(previous?.tasks||[],data.tasks)}:data);
    setGuideReadFailed(false);
-  }catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);if(guideAccessDenied(error)){setGuideUnavailable(true);setAccount(null);setView(null);}}}
+  }catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);if(guideAccessDenied(error))restrictProject(error,projectId);}}
   finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
  async function readRecordedSchedule(target){
@@ -141,7 +161,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
    if(mounted.current&&current===generation.current){
     setPlanReadback({...context,status:'failed'});setNotice(label+' tiene un recibo confirmado, pero no pudimos actualizar el cronograma. '+(error.name==='AbortError'?'La consulta venció.':error.message)+' Volvé a consultar el cronograma para comprobar el total.');
     setGuideReadFailed(true);
-    if(guideAccessDenied(error)){setGuideUnavailable(true);setAccount(null);setView(null);setPlanReadback(null);}
+    if(guideAccessDenied(error))restrictProject(error,context.projectId);
    }
   }finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
@@ -154,7 +174,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
   const current=generation.current,abort=new AbortController();controller.current=abort;
   setSaving(true);setNotice('');setAttempt(payload);setRetryAllowed(false);
   try{const data=await request('',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.any([abort.signal,AbortSignal.timeout(20000)])});if(mounted.current&&current===generation.current)applySaved(data);}
-  catch(error){if(mounted.current&&current===generation.current){if(guideAccessDenied(error))setGuideUnavailable(true);if(retrying){setRetryAllowed(error.requestDispatched===false);setNotice(error.message+' Conservamos el intento anterior; comprobá su recibo antes de modificar la planificación.');}else if(error.requestDispatched===false||(error.status&&error.status<500)){setAttempt(null);setNotice(error.message);}else setNotice('El servidor no confirmó el guardado. Conservamos este intento: comprobá el recibo antes de modificar o reenviar.');}}
+  catch(error){if(mounted.current&&current===generation.current){if(guideAccessDenied(error)){restrictProject(error,payload.projectId);setNotice(error.message);}else if(retrying){setRetryAllowed(error.requestDispatched===false);setNotice(error.message+' Conservamos el intento anterior; comprobá su recibo antes de modificar la planificación.');}else if(error.requestDispatched===false||(error.status&&error.status<500)){setAttempt(null);setNotice(error.message);}else setNotice('El servidor no confirmó el guardado. Conservamos este intento: comprobá el recibo antes de modificar o reenviar.');}}
   finally{if(mounted.current&&current===generation.current)setSaving(false);}
  }
  async function save(event){
@@ -168,7 +188,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
   if(saving||!attempt)return;const current=generation.current,abort=new AbortController();controller.current=abort;setSaving(true);setRetryAllowed(false);
   try{const data=await request(query({projectId:attempt.projectId,scope:attempt.scope,operationId:attempt.operationId}),{signal:AbortSignal.any([abort.signal,AbortSignal.timeout(15000)])});
    if(mounted.current&&current===generation.current){if(data.scope!==account?.scope)throw new Error('La respuesta corresponde a otra organización.');if(data.state==='RECORDED')applySaved(data);else if(data.state==='NOT_OBSERVED'){setRetryAllowed(true);setNotice('No se observa un recibo todavía. Podés comprobar otra vez o reintentar exactamente la misma planificación; conservamos sus datos para evitar duplicados.');}else throw new Error('Todavía no se pudo comprobar el guardado. Conservamos el intento.');}
-  }catch(error){if(mounted.current&&current===generation.current){if(guideAccessDenied(error))setGuideUnavailable(true);setNotice(error.message);}}finally{if(mounted.current&&current===generation.current)setSaving(false);}
+  }catch(error){if(mounted.current&&current===generation.current){if(guideAccessDenied(error))restrictProject(error,attempt.projectId);setNotice(error.message);}}finally{if(mounted.current&&current===generation.current)setSaving(false);}
  }
  return <section className={styles.workspace} aria-labelledby="workspace-title" aria-busy={loading}>
   <div className={styles.heading}><div><p className={styles.eyebrow}>ESPACIO DE TRABAJO</p><h2 id="workspace-title">Mis obras</h2><p className={styles.intro}>Elegí dónde trabajar. Las tareas, el equipo y los registros quedan en la obra seleccionada.</p></div><button type="button" className={styles.refresh} onClick={refresh} disabled={contextLocked||loading} aria-describedby={contextLocked?'workspace-context-lock':undefined}><RefreshCw size={16} aria-hidden="true"/>Actualizar</button></div>
@@ -176,14 +196,15 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
   {planReadbackMatches&&planReadback.status==='failed'&&<button type="button" disabled={loading||contextLocked} onClick={()=>readRecordedSchedule(planReadback)}>Volver a consultar el cronograma</button>}
   {loading&&<p className={styles.loading}><LoaderCircle size={18} className={styles.spinner} aria-hidden="true"/>Consultando registros autorizados…</p>}
   {contextLocked&&<p className={styles.contextLock} id="workspace-context-lock"><LockKeyhole size={16} aria-hidden="true"/><span>Hay una acción en curso. Completala, cancelá el borrador o comprobá su resultado antes de actualizar o cambiar de obra.</span></p>}
-  {account&&<><div className={styles.context}><div className={styles.company}><Building2 size={22} aria-hidden="true"/><div><span>Empresa</span><strong>{account.organizationName}</strong></div></div><dl className={styles.contextDetails}><div><dt>Tu acceso</dt><dd>{account.roleLabel}</dd></div><div><dt>Obra activa</dt><dd>{view?.project.name||'Sin seleccionar'}</dd></div></dl></div>
-   <WorkspaceRecoveryPanel key={account.scope} scope={account.scope} projects={account.projects} getSessionToken={getSessionToken} onRecovered={(result,reference)=>{if(reference?.resource==='project-preparation'&&result.scope===reference.scope&&result.projectId===reference.projectId&&['RECORDED','CANCELLED'].includes(result.state)){setPreparationRecovery(result);if(result.state==='RECORDED')projectPrepared(result);}else if(reference?.resource==='plan-import'&&result.scope===reference.scope&&result.projectId===reference.projectId&&result.saved===true&&result.receiptId&&result.action==='APPLY'&&result.draft?.status==='APPLIED')readRecordedSchedule({scope:reference.scope,projectId:reference.projectId,kind:'plan'});else if(result.created===true&&result.task&&reference?.resource==='task-creation')readRecordedSchedule({scope:reference.scope,projectId:reference.projectId,kind:'task'});else if(result.task)tasksChanged(result.task);}}/>
+  {account&&<><div className={styles.context}><div className={styles.company}><Building2 size={22} aria-hidden="true"/><div><span>Empresa</span><strong>{account.organizationName}</strong></div></div><dl className={styles.contextDetails}><div><dt>Tu acceso</dt><dd>{identitySelection?'Presentación privada de identidad':account.roleLabel}</dd></div><div><dt>Obra activa</dt><dd>{view?.project.name||identitySelection?.name||'Sin seleccionar'}</dd></div></dl></div>
+   {!identitySelection&&<WorkspaceRecoveryPanel key={account.scope} scope={account.scope} projects={account.projects} getSessionToken={getSessionToken} onRecovered={(result,reference)=>{if(reference?.resource==='project-preparation'&&result.scope===reference.scope&&result.projectId===reference.projectId&&['RECORDED','CANCELLED'].includes(result.state)){setPreparationRecovery(result);if(result.state==='RECORDED')projectPrepared(result);}else if(reference?.resource==='plan-import'&&result.scope===reference.scope&&result.projectId===reference.projectId&&result.saved===true&&result.receiptId&&result.action==='APPLY'&&result.draft?.status==='APPLIED')readRecordedSchedule({scope:reference.scope,projectId:reference.projectId,kind:'plan'});else if(result.created===true&&result.task&&reference?.resource==='task-creation')readRecordedSchedule({scope:reference.scope,projectId:reference.projectId,kind:'task'});else if(result.task)tasksChanged(result.task);}}/>}
    {!account.projects.length&&!loading&&<div className={styles.empty}><FolderKanban size={25} aria-hidden="true"/><strong>No hay obras activas asignadas a tu cuenta.</strong><p>Pedile al responsable que revise tu pertenencia y la obra asignada. Podés volver a actualizar cuando confirme el acceso.</p></div>}
-   {account.projects.length>0&&<div className={styles.projectCollection}><div className={styles.collectionHeading}><h3>Obras disponibles</h3><span>{account.projects.length}{account.projectsTruncated?' mostradas':account.projects.length===1?' asignada':' asignadas'}</span></div><div className={styles.projects}>{account.projects.map(project=><button key={project.id} type="button" onClick={()=>open(project.id)} disabled={contextLocked} aria-pressed={view?.project.id===project.id}><span className={styles.projectName}><FolderKanban size={18} aria-hidden="true"/><span>{project.name}</span></span><small>{view?.project.id===project.id?<><Check size={14} aria-hidden="true"/>Seleccionada</>:<>Abrir obra<ArrowUpRight size={14} aria-hidden="true"/></>}</small></button>)}</div></div>}
+   {account.projects.length>0&&<div className={styles.projectCollection}><div className={styles.collectionHeading}><h3>Obras disponibles</h3><span>{account.projects.length}{account.projectsTruncated?' mostradas':account.projects.length===1?' asignada':' asignadas'}</span></div><div className={styles.projects}>{account.projects.map(project=><button key={project.id} type="button" onClick={()=>open(project.id)} disabled={contextLocked} aria-pressed={(view?.project.id||identitySelection?.projectId)===project.id}><span className={styles.projectName}><FolderKanban size={18} aria-hidden="true"/><span>{project.name}</span></span><small>{(view?.project.id||identitySelection?.projectId)===project.id?<><Check size={14} aria-hidden="true"/>Seleccionada</>:<>Abrir obra<ArrowUpRight size={14} aria-hidden="true"/></>}</small></button>)}</div></div>}
    {account.projectsTruncated&&<p>Se muestran las primeras 100 obras autorizadas.</p>}
-   <PortfolioOverviewPanel key={`portfolio:${account.scope}`} scope={account.scope} role={account.role} getSessionToken={getSessionToken} locked={contextLocked||loading} onOpenProject={projectId=>open(projectId)} onAccessRejected={portfolioAccessRejected}/>
-   {account.projects.length>0&&!view&&!loading&&<div className={styles.startState}><strong>Abrí una obra para empezar</strong><p>Consultá el cronograma, registrá el trabajo y accedé a las herramientas disponibles para tu rol.</p></div>}
+   {!identitySelection&&<PortfolioOverviewPanel key={`portfolio:${account.scope}`} scope={account.scope} role={account.role} getSessionToken={getSessionToken} locked={contextLocked||loading} onOpenProject={projectId=>open(projectId)} onAccessRejected={portfolioAccessRejected}/>}
+   {account.projects.length>0&&!view&&!identitySelection&&!loading&&<div className={styles.startState}><strong>Abrí una obra para empezar</strong><p>Consultá el cronograma, registrá el trabajo y accedé a las herramientas disponibles para tu rol.</p></div>}
   </>}
+  {identitySelection&&<><section className={styles.startState} aria-labelledby="identity-access-title"><h3 id="identity-access-title">Identidad y habilitación de obra</h3><p>Tu acceso requiere una revisión humana vigente. Podés presentar o consultar tu documentación privada para esta obra. Después de la aprobación, comprobá la habilitación para abrir las tareas y los registros.</p><button type="button" disabled={contextLocked||loading} onClick={()=>open(identitySelection.projectId)}>Comprobar habilitación de obra</button></section><ParticipantPanel key={`identity-only:${identitySelection.scope}:${identitySelection.projectId}`} presentation="own-identity" projectId={identitySelection.projectId} scope={identitySelection.scope} getSessionToken={getSessionToken} onPending={participantPending}/></>}
   {view&&<div className={styles.workbench}><WorkspaceToolsNavigation role={account?.role} canManageIntegrations={account?.canManageIntegrations} canImportPlan={view.canPlanSchedule} pending={modulePending} schedulePending={saving||Boolean(attempt)||Boolean(draft)||creatingTask} scheduleEditing={Boolean(draft)}/><div className={styles.modules}>
   {view&&<section aria-labelledby="schedule-title" className={styles.schedule}>
    <div className={styles.heading}><div><p className={styles.eyebrow}>CRONOGRAMA REGISTRADO</p><h3 id="schedule-title">{view.project.name}</h3></div><span>{view.tasks.length} de {view.totalTasks} tareas</span></div>
