@@ -91,10 +91,14 @@ async function identityOnly(page){
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Horizontal overflow');
 }
 function newState(mode='pending'){
- return {mode,approved:false,denialStatus:403,denialCode:'PARTICIPANT_KYC_REVIEW_REQUIRED',denialType:'application/json',requests:[],posts:[],receiptQueries:[],receipts:new Map(),held:[],row:{id:'worker-fixture',name:'Persona de ensayo',active:true,revision,status:'ACTIVE',self:true,accountLinked:true,invitation:null,kycChatChallenge:null,permissions:{attendance:false,report:false},identityCertified:false,whatsAppAccessGranted:false,kyc:{status:'NOT_SUBMITTED',submissionId:null,submittedAt:null,review:null,images:[]}}};
+ return {mode,approved:false,denialStatus:403,denialCode:'PARTICIPANT_KYC_REVIEW_REQUIRED',denialType:'application/json',requests:[],posts:[],receiptQueries:[],receipts:new Map(),held:[],channelPosts:[],channelReceiptQueries:[],channelReceipts:new Map(),channelRows:new Map(),channelHold:null,channelLoseReply:false,channelDenied:null,channelApprovedDto:false,row:{id:'worker-fixture',name:'Persona de ensayo',active:true,revision,status:'ACTIVE',self:true,accountLinked:true,invitation:null,kycChatChallenge:null,permissions:{attendance:false,report:false},identityCertified:false,whatsAppAccessGranted:false,kyc:{status:'NOT_SUBMITTED',submissionId:null,submittedAt:null,review:null,images:[]}}};
 }
-async function createPage(width,current){
- const context=await browser.createBrowserContext(),page=await context.newPage();active={width,current,page};
+function ownChannel(current,projectId){
+ if(!current.channelRows.has(projectId))current.channelRows.set(projectId,{workerId:projectId==='p-a'?'worker-fixture':'worker-second',name:projectId==='p-a'?'Titular propio WhatsApp A':'Titular propio WhatsApp A2',revision,phone:'+5491100001111',state:'REVIEW_REQUIRED',eligible:false,connectionNumber:null,challenge:null,binding:{id:'binding-synthetic',verifiedAt:'2026-10-07T12:00:00Z',revokedAt:null},templateConsent:{granted:false,canGrant:false,canRevoke:true,state:'REVIEW_REQUIRED'},identityCertified:false});
+ return current.channelRows.get(projectId);
+}
+async function createPage(width,current,sharedContext=null){
+ const context=sharedContext||await browser.createBrowserContext(),page=await context.newPage();active={width,current,page};
  await page.setViewport({width,height:1050});page.on('pageerror',error=>pageErrors.push({width,mode:current.mode,error:error.message}));
  page.on('dialog',async dialog=>{assert.equal(dialog.type(),'beforeunload');current.acceptedReloadWarning=true;await dialog.accept();});
  await page.setRequestInterception(true);
@@ -110,6 +114,23 @@ async function createPage(width,current){
    const projectId=url.searchParams.get('projectId')||payload?.projectId;
    if(url.searchParams.has('scope'))assert.equal(url.searchParams.get('scope'),scope,'Crossed active organization');
    current.requests.push({path:url.pathname,method:request.method(),actor,projectId,operationId:url.searchParams.get('operationId')});
+   if(url.pathname==='/api/identity/worker-channel'){
+    assert.equal(actor,'A');assert.ok(['p-a','p-a2'].includes(projectId));
+    if(current.channelDenied)return answer(request,current.channelDenied.status,{code:current.channelDenied.code});
+    const row=ownChannel(current,projectId),operationId=url.searchParams.get('operationId');
+    if(request.method()==='GET'){
+     if(operationId){current.channelReceiptQueries.push(operationId);return answer(request,200,current.channelReceipts.get(operationId)||{scope,projectId,state:'NOT_OBSERVED',saved:false,definitive:false,codeReturnedByStatus:false});}
+     if(current.channelHold==='read'&&projectId==='p-a')await new Promise(resolve=>current.held.push(resolve));
+     const record=current.channelApprovedDto?{...row,state:'VERIFIED',eligible:true,connectionNumber:'+5491100002222',challenge:{id:'unexpected-code',expiresAt:new Date(Date.now()+300000).toISOString(),expired:false},templateConsent:{...row.templateConsent,granted:true,canGrant:true}}:row;
+     return answer(request,200,{scope,projectId,channelReady:current.channelApprovedDto,records:[record],truncated:false,codeReturnedByStatus:false});
+    }
+    assert.equal(request.method(),'POST');assert.deepEqual(Object.keys(payload).sort(),['action','operationId','payload','projectId','scope']);assert.equal(payload.scope,scope);assert.ok(['REVOKE_TEMPLATE_MESSAGES','UNLINK'].includes(payload.action));assert.equal(payload.payload.workerId,row.workerId);assert.equal(payload.payload.revision,row.revision);assert.match(payload.operationId,/^[a-f0-9-]{36}$/);
+    assert.deepEqual(Object.keys(payload.payload).sort(),payload.action==='UNLINK'?['reason','revision','workerId']:['revision','workerId']);if(payload.action==='UNLINK')assert.ok(payload.payload.reason.length>=8);
+    current.channelPosts.push(payload);row.revision='2026-10-01T11:00:00.000002';row.templateConsent={...row.templateConsent,canRevoke:false,state:'REVOKED',granted:false};if(payload.action==='UNLINK'){row.state='UNLINKED';row.binding={...row.binding,revokedAt:'2026-10-07T12:10:00Z'};}
+    const result={scope,projectId,state:'RECORDED',saved:true,replayed:false,receiptId:'worker_channel_'+sha256(payload.operationId),kind:payload.action,participant:{...row}};current.channelReceipts.set(payload.operationId,{...result,replayed:true});
+    if(current.channelHold==='post')await new Promise(resolve=>current.held.push(resolve));
+    return current.channelLoseReply?answer(request,503,{code:'CONTROLLED_RESPONSE_LOST'}):answer(request,200,result);
+   }
    if(url.pathname==='/api/identity/workspace'){
     assert.equal(request.method(),'GET');
     if(!projectId)return answer(request,200,{scope,organizationName:'Empresa de ensayo '+actor,role:current.mode==='bootstrap'?'ADMIN':current.mode==='director'?'DIRECTOR':'AUDITOR',roleLabel:current.mode==='bootstrap'?'Administrador':current.mode==='director'?'Director':'Consulta',canManageIntegrations:false,projects:actor==='A'?[{id:'p-a',name:'Obra A',status:'ACTIVE'},{id:'p-a2',name:'Obra A2',status:'ACTIVE'}]:[{id:'p-b',name:'Obra B',status:'ACTIVE'}]});
@@ -212,11 +233,109 @@ async function tokenHeld(width){
  assert.equal(current.requests.filter(row=>row.projectId==='p-a').length,0);assert.equal(await page.$('#identity-access-title'),null);
  await click(page,'Obra B');await waitText(page,'Tarea operativa p-b');checks.push({name:'token-held-prior-company-never-dispatches-after-context-change',width});await context.close();
 }
+async function privacySurface(page){
+ await identityOnly(page);await page.evaluate(()=>{const summary=[...document.querySelectorAll('summary')].find(node=>node.textContent==='Mi WhatsApp y mis avisos');assertSummary(summary);function assertSummary(node){if(!node)throw Error('Own privacy section missing');node.parentElement.open=true;}});
+ await page.waitForSelector('#worker-channel-title');
+}
+async function restrictedChannel(page,{loaded=true}={}){
+ await identityOnly(page);
+ const text=await page.$eval('[aria-labelledby="worker-channel-title"]',node=>node.innerText);
+ const paragraphContrasts=await page.$eval('[aria-labelledby="worker-channel-title"]',panel=>{
+  const luminance=color=>{const rgb=color.match(/[\d.]+/g).slice(0,3).map(value=>Number(value)/255).map(value=>value<=.04045?value/12.92:((value+.055)/1.055)**2.4);return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};
+  return [...panel.querySelectorAll('p')].filter(node=>node.textContent.trim()).map(node=>{const foreground=luminance(getComputedStyle(node).color);let background=node;while(background.parentElement&&getComputedStyle(background).backgroundColor==='rgba(0, 0, 0, 0)')background=background.parentElement;const surface=luminance(getComputedStyle(background).backgroundColor);return {text:node.textContent.slice(0,50),ratio:(Math.max(foreground,surface)+.05)/(Math.min(foreground,surface)+.05)};});
+ });
+ for(const paragraph of paragraphContrasts)assert.ok(paragraph.ratio>=4.5,'Own privacy paragraph unreadable: '+paragraph.text+' contrast='+paragraph.ratio);
+ assert.ok(await page.$eval('summary',node=>node.getBoundingClientRect().height>=44),'Own privacy disclosure needs a44px touch target');
+ for(const forbidden of ['Generar código','Generar otro código','Revisar autorización de avisos','Guardar autorización','Continuar en WhatsApp','Copiar MENU','VINCULAR '])assert.ok(!text.includes(forbidden),'Activation action visible in own privacy: '+forbidden);
+ assert.equal(await page.$('[aria-labelledby="worker-channel-title"] a[href*="wa.me"]'),null);assert.equal(await page.$('[aria-labelledby="worker-channel-title"] code'),null);
+ if(loaded){const ids=await page.$$eval('[data-worker-channel]',nodes=>nodes.map(node=>node.getAttribute('data-worker-channel')));assert.deepEqual(ids,['worker-fixture']);assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Other worker'));}
+}
+async function startPrivacy(width,status='PENDING_REVIEW'){
+ const current=newState('privacy-'+status);current.row.kyc={...current.row.kyc,status};
+ const value=await createPage(width,current);await click(value.page,'Obra A');await privacySurface(value.page);return {current,...value};
+}
+async function withdraw(page,action){
+ if(action==='REVOKE_TEMPLATE_MESSAGES')return click(page,'Retirar autorización de avisos');
+ await click(page,'Desvincular mi WhatsApp');await page.type('[aria-labelledby="worker-channel-title"] textarea','Retiro mi vínculo de esta obra.');await click(page,'Confirmar desvinculación');
+}
+async function privacyWithdrawal(width,status,action,{reload=false}={}){
+ const {current,context,page}=await startPrivacy(width,status);current.channelLoseReply=reload;
+ await click(page,'Consultar vinculación');await waitText(page,'Titular propio WhatsApp A');await restrictedChannel(page);assert.equal(ownChannel(current,'p-a').eligible,false);assert.equal(ownChannel(current,'p-a').templateConsent.canGrant,false);
+ await withdraw(page,action);
+ if(reload){
+  await waitText(page,'La operación necesita un comprobante');assert.equal(current.channelPosts.length,1);safeReferences(await references(page),1);
+  await page.reload({waitUntil:'networkidle0'});await waitText(page,'Empresa de ensayo A');await click(page,'Obra A');await privacySurface(page);await waitText(page,'La operación necesita un comprobante');
+  assert.equal(current.channelPosts.length,1);assert.deepEqual(current.channelReceiptQueries,[]);safeReferences(await references(page),1);
+  await click(page,'Consultar resultado pendiente');await waitText(page,'Recibo confirmado');assert.deepEqual(current.channelReceiptQueries,[current.channelPosts[0].operationId]);safeReferences(await references(page),0);
+  await click(page,'Consultar vinculación');await waitText(page,'Titular propio WhatsApp A');
+ }else await waitText(page,action==='UNLINK'?'WhatsApp desvinculado.':'Autorización retirada.');
+ await restrictedChannel(page);assert.equal(current.channelPosts.length,1);assert.equal(current.channelPosts[0].action,action);assert.ok(!current.requests.some(row=>!['/api/identity/workspace','/api/identity/worker-channel'].includes(row.path)));
+ const screenshot=path.join(evidence,'privacy-'+status+'-'+action+'-'+width+(reload?'-reload':'')+'.png');await page.screenshot({path:screenshot,fullPage:true});screenshots.push(path.relative(root,screenshot).split(path.sep).join('/'));
+ checks.push({name:reload?'own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST':'own-private-withdrawal-without-KYC-admission',width,status,action,reload,posts:current.channelPosts.length,receiptGets:current.channelReceiptQueries.length,...(reload?{sameOperationId:true,durableReference:true}:{})});await context.close();
+}
+async function privacyLateApproved(width){
+ const {current,context,page}=await startPrivacy(width);current.channelHold='read';await click(page,'Consultar vinculación');for(let i=0;!current.held.length&&i<100;i++)await pause(20);assert.equal(current.held.length,1);
+ current.channelApprovedDto=true;current.held.shift()();await waitText(page,'Titular propio WhatsApp A');await restrictedChannel(page);assert.equal(current.channelPosts.length,0);assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,1);
+ checks.push({name:'late-approved-channel-DTO-never-exposes-codes-grant-chat-or-workspace',width});await context.close();
+}
+async function privacyLateContext(width,company){
+ const {current,context,page}=await startPrivacy(width);current.channelHold='read';await click(page,'Consultar vinculación');for(let i=0;!current.held.length&&i<100;i++)await pause(20);assert.equal(current.held.length,1);
+ if(company){await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');await click(page,'Obra B');await waitText(page,'Tarea operativa p-b');}
+ else{await click(page,'Obra A2');await privacySurface(page);await click(page,'Consultar vinculación');await waitText(page,'Titular propio WhatsApp A2');}
+ current.held.shift()();await pause(150);assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Titular propio WhatsApp A\n'));assert.equal(current.channelPosts.length,0);
+ const ids=await page.$$eval('[data-worker-channel]',nodes=>nodes.map(node=>node.getAttribute('data-worker-channel')));assert.deepEqual(ids,company?[]:['worker-second']);
+ checks.push({name:company?'late-channel-read-cannot-cross-account':'late-channel-read-cannot-cross-project',width});await context.close();
+}
+async function privacyHeldToken(width){
+ const {current,context,page}=await startPrivacy(width);await click(page,'Consultar vinculación');await waitText(page,'Titular propio WhatsApp A');await page.evaluate(()=>{window.__tokenMode='hold';});await withdraw(page,'REVOKE_TEMPLATE_MESSAGES');await page.waitForFunction(()=>typeof window.__releaseToken==='function');assert.equal(current.channelPosts.length,0);
+ await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');await page.evaluate(()=>window.__releaseToken());await pause(150);assert.equal(current.channelPosts.length,0);safeReferences(await references(page),0);assert.equal(await page.$('#identity-access-title'),null);
+ checks.push({name:'withdrawal-held-token-cancels-before-POST-on-account-change',width});await context.close();
+}
+async function privacyLatePost(width){
+ const {current,context,page}=await startPrivacy(width);await click(page,'Consultar vinculación');await waitText(page,'Titular propio WhatsApp A');current.channelHold='post';await withdraw(page,'REVOKE_TEMPLATE_MESSAGES');for(let i=0;!current.held.length&&i<100;i++)await pause(20);assert.equal(current.held.length,1);assert.equal(current.channelPosts.length,1);
+ await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');current.held.shift()();await pause(150);safeReferences(await references(page),1);assert.equal(await page.$('[data-worker-channel]'),null);
+ await click(page,'Contexto A');await waitText(page,'Empresa de ensayo A');await click(page,'Obra A');await privacySurface(page);await waitText(page,'La operación necesita un comprobante');assert.deepEqual(current.channelReceiptQueries,[]);
+ await click(page,'Consultar resultado pendiente');await waitText(page,'Recibo confirmado');assert.deepEqual(current.channelReceiptQueries,[current.channelPosts[0].operationId]);assert.equal(current.channelPosts.length,1);safeReferences(await references(page),0);
+ checks.push({name:'dispatched-withdrawal-account-change-keeps-durable-receipt-without-rePOST',width});await context.close();
+}
+async function privacyAccessDenied(width,status,code){
+ const {current,context,page}=await startPrivacy(width);await click(page,'Consultar vinculación');await waitText(page,'Titular propio WhatsApp A');current.channelDenied={status,code};await click(page,'Consultar vinculación');await page.waitForFunction(()=>document.querySelector('[data-worker-channel]')===null);
+ await restrictedChannel(page,{loaded:false});assert.equal(await page.$('[aria-labelledby="worker-channel-title"] form'),null);assert.equal(current.channelPosts.length,0);checks.push({name:'revoked-private-channel-assignment-or-membership-hides-current-records',width,status,code});await context.close();
+}
+async function privacyPostDenied(width){
+ const {current,context,page}=await startPrivacy(width);await click(page,'Consultar vinculación');await waitText(page,'Titular propio WhatsApp A');current.channelDenied={status:404,code:'WORKSPACE_PROJECT_UNAVAILABLE'};await withdraw(page,'REVOKE_TEMPLATE_MESSAGES');await waitText(page,'La operación necesita un comprobante');await page.waitForFunction(()=>document.querySelector('[data-worker-channel]')===null);safeReferences(await references(page),1);
+ const ref=(await references(page)).a[0];assert.equal(current.channelPosts.length,0);current.channelDenied=null;await click(page,'Consultar resultado pendiente');await waitText(page,'Todavía no aparece el comprobante');assert.deepEqual(current.channelReceiptQueries,[ref.operationId]);safeReferences(await references(page),1);assert.equal(current.channelPosts.length,0);
+ await restrictedChannel(page,{loaded:false});checks.push({name:'canonical-project-404-after-withdrawal-dispatch-keeps-UUID-and-receipt-reference',width,sameOperationId:true,durableReference:true,receiptGets:current.channelReceiptQueries.length});await context.close();
+}
+async function privacyReferenceDenied(width){
+ const {current,context,page}=await startPrivacy(width);await click(page,'Consultar vinculación');await waitText(page,'Titular propio WhatsApp A');
+ const second=await createPage(width,current,context);await click(second.page,'Obra A');await privacySurface(second.page);await click(second.page,'Consultar vinculación');await waitText(second.page,'Titular propio WhatsApp A');
+ current.channelLoseReply=true;await withdraw(second.page,'REVOKE_TEMPLATE_MESSAGES');await waitText(second.page,'La operación necesita un comprobante');assert.equal(current.channelPosts.length,1);safeReferences(await references(page),1);
+ await second.page.close();active={width,current,page};await page.evaluate(()=>window.dispatchEvent(new Event('obrasaas:pending-receipts')));await waitText(page,'La operación necesita un comprobante');assert.ok(await page.$('[data-worker-channel]'));
+ current.channelDenied={status:404,code:'WORKSPACE_PROJECT_UNAVAILABLE'};await click(page,'Consultar resultado pendiente');await page.waitForFunction(()=>document.querySelector('[data-worker-channel]')===null);safeReferences(await references(page),1);await restrictedChannel(page,{loaded:false});
+ const operationId=current.channelPosts[0].operationId;assert.deepEqual(current.requests.filter(row=>row.path==='/api/identity/worker-channel'&&row.operationId).map(row=>row.operationId),[operationId]);assert.equal(current.channelPosts.length,1);
+ current.channelDenied=null;await click(page,'Consultar resultado pendiente');await waitText(page,'Recibo confirmado');safeReferences(await references(page),0);assert.deepEqual(current.channelReceiptQueries,[operationId]);assert.equal(current.channelPosts.length,1);assert.deepEqual(current.requests.filter(row=>row.path==='/api/identity/worker-channel'&&row.operationId).map(row=>row.operationId),[operationId,operationId]);
+ checks.push({name:'canonical-reference-GET-404-hides-loaded-record-and-retains-original-cross-tab-UUID',width,sameOperationId:true,durableReference:true,posts:1,receiptGets:2});await context.close();
+}
+async function privateApprovalNavigation(width){
+ const {current,context,page}=await startPrivacy(width);await click(page,'Consultar mi identidad');await waitText(page,'Pendiente de revisión humana');
+ current.row={...current.row,permissions:{attendance:true,report:true},kyc:{...current.row.kyc,status:'APPROVED'}};await click(page,'Consultar mi identidad');await waitText(page,'Aprobado por un responsable');await identityOnly(page);
+ assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,1);assert.equal(current.channelPosts.length,0);
+ await click(page,'Consultar mi vínculo');await identityOnly(page);assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,2,'Own approval callback did not query canonical workspace');
+ current.approved=true;await click(page,'Comprobar habilitación de obra');await waitText(page,'Tarea operativa p-a');assert.equal(await page.$('#identity-access-title'),null);assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,3);assert.equal(current.channelPosts.length,0);
+ checks.push({name:'own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace',width});await context.close();
+}
 try{
  let ready=false;for(let attempt=0;attempt<120;attempt++){if(server.exitCode!==null)throw Error('Fixture exited: '+serverLog);let response;try{response=await fetch(origin);}catch{}await response?.body?.cancel();if(response?.ok){ready=true;break;}if(response?.status>=500)throw Error('Fixture compilation failed: '+serverLog);await pause(500);}assert.ok(ready,'Fixture unavailable: '+serverLog);
  browser=await puppeteer.launch({headless:true,protocolTimeout:30000,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
  for(const width of [320,390,768,1280]){
   await privateFlow(width);await denial(width);await denial(width,{type:'text/html'});await revocation(width);await lateResponse(width,false);await lateResponse(width,true);await tokenHeld(width);
+  for(const status of ['PENDING_REVIEW','REJECTED'])for(const action of ['REVOKE_TEMPLATE_MESSAGES','UNLINK'])await privacyWithdrawal(width,status,action);
+  for(const action of ['REVOKE_TEMPLATE_MESSAGES','UNLINK'])await privacyWithdrawal(width,action==='UNLINK'?'REJECTED':'PENDING_REVIEW',action,{reload:true});
+  await privacyLateApproved(width);await privacyLateContext(width,false);await privacyLateContext(width,true);await privacyHeldToken(width);await privacyLatePost(width);
+  for(const [status,code]of [[403,'WORKSPACE_PROJECT_UNAVAILABLE'],[403,'WORKSPACE_MEMBERSHIP_REQUIRED'],[404,'WORKSPACE_PROJECT_UNAVAILABLE']])await privacyAccessDenied(width,status,code);
+  await privacyPostDenied(width);await privacyReferenceDenied(width);
+  await privateApprovalNavigation(width);
  }
  await privateFlow(390,{reload:true});await privateFlow(390,{director:true});await revocation(390,{ownDenied:true});await administratorBootstrap();
  for(const status of [401,409,500])await denial(390,{status,code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});

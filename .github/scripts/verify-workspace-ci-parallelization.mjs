@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='d7908fb3a81de028af3724362fb147f51dc6e55d79f587dd7e5c88218e78c9e1';
+export const EXPECTED_CONTRACT_SHA256='15bdcb88d335e4cd95cbfb45063d8ec5cea93580854ce77fb90704b6bee23294';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
 const BASELINE_PRODUCERS_SHA256='07d0016608332c0775f86bee6d005e60d4686d2ffe33a3065dfd9fd8e974ab20';
@@ -37,6 +37,112 @@ const FIELD_PG_BASELINE_PRODUCER={producer:'scripts/verify-field-operations-post
 const OVERTIME_PG_BASELINE_PRODUCER={producer:'scripts/verify-field-overtime-postgres.mjs',path:'.vercel/private/field-overtime-postgres-proof.json',retained:true,blockId:52,lane:'field',baselineSourceLine:127,baselineProducerGitBlobSha256:'bd3c8a27cb9f5af6556fe25e35cb3b32f78eb7e600851fbdb6490ed9d232042b'};
 const FIELD_CHECK_GROUPS=[['checks','checkCount',19],['reviewPaginationChecks','reviewPaginationCheckCount',26],['voiceProgressChecks','voiceProgressCheckCount',4],['mediaLeaseChecks','mediaLeaseCheckCount',6],['videoAudioChecks','videoAudioCheckCount',8],['canonicalOwnFieldChecks','canonicalOwnFieldCheckCount',3]];
 const FIELD_CANONICAL_CHECKS=['administrator-own-post-replay-read-only-receipt-and-media-review-decision-corrupt-denied-with-zero-database-or-private-provider-effects','administrator-own-post-replay-read-only-receipt-and-media-submission-content-digest-corrupt-denied-with-zero-database-or-private-provider-effects','administrator-own-complete-independent-kyc-admits-field-save-and-exact-read-only-recovery-with-no-repeat-effects'];
+const IDENTITY_ONLY_CHECK_COUNT=103;
+const identityPrivacyChecks=width=>[
+ {
+  "name": "own-private-withdrawal-without-KYC-admission",
+  "status": "PENDING_REVIEW",
+  "action": "REVOKE_TEMPLATE_MESSAGES",
+  "reload": false,
+  "posts": 1,
+  "receiptGets": 0
+ },
+ {
+  "name": "own-private-withdrawal-without-KYC-admission",
+  "status": "PENDING_REVIEW",
+  "action": "UNLINK",
+  "reload": false,
+  "posts": 1,
+  "receiptGets": 0
+ },
+ {
+  "name": "own-private-withdrawal-without-KYC-admission",
+  "status": "REJECTED",
+  "action": "REVOKE_TEMPLATE_MESSAGES",
+  "reload": false,
+  "posts": 1,
+  "receiptGets": 0
+ },
+ {
+  "name": "own-private-withdrawal-without-KYC-admission",
+  "status": "REJECTED",
+  "action": "UNLINK",
+  "reload": false,
+  "posts": 1,
+  "receiptGets": 0
+ },
+ {
+  "name": "own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST",
+  "status": "PENDING_REVIEW",
+  "action": "REVOKE_TEMPLATE_MESSAGES",
+  "reload": true,
+  "posts": 1,
+  "receiptGets": 1,
+  "sameOperationId": true,
+  "durableReference": true
+ },
+ {
+  "name": "own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST",
+  "status": "REJECTED",
+  "action": "UNLINK",
+  "reload": true,
+  "posts": 1,
+  "receiptGets": 1,
+  "sameOperationId": true,
+  "durableReference": true
+ },
+ {
+  "name": "late-approved-channel-DTO-never-exposes-codes-grant-chat-or-workspace"
+ },
+ {
+  "name": "late-channel-read-cannot-cross-project"
+ },
+ {
+  "name": "late-channel-read-cannot-cross-account"
+ },
+ {
+  "name": "withdrawal-held-token-cancels-before-POST-on-account-change"
+ },
+ {
+  "name": "dispatched-withdrawal-account-change-keeps-durable-receipt-without-rePOST"
+ },
+ {
+  "name": "revoked-private-channel-assignment-or-membership-hides-current-records",
+  "status": 403,
+  "code": "WORKSPACE_PROJECT_UNAVAILABLE"
+ },
+ {
+  "name": "revoked-private-channel-assignment-or-membership-hides-current-records",
+  "status": 403,
+  "code": "WORKSPACE_MEMBERSHIP_REQUIRED"
+ },
+ {
+  "name": "revoked-private-channel-assignment-or-membership-hides-current-records",
+  "status": 404,
+  "code": "WORKSPACE_PROJECT_UNAVAILABLE"
+ },
+ {
+  "name": "canonical-project-404-after-withdrawal-dispatch-keeps-UUID-and-receipt-reference",
+  "sameOperationId": true,
+  "durableReference": true,
+  "receiptGets": 1
+ },
+ {
+  "name": "canonical-reference-GET-404-hides-loaded-record-and-retains-original-cross-tab-UUID",
+  "sameOperationId": true,
+  "durableReference": true,
+  "posts": 1,
+  "receiptGets": 2
+ },
+ {
+  "name": "own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace"
+ }
+].map(row=>({...row,width}));
+const identityScreenshotNames=[...[320,390,768,1280].flatMap(width=>[
+ 'identity-private-'+width+'.png','identity-approved-'+width+'.png',
+ ...['PENDING_REVIEW','REJECTED'].flatMap(status=>['REVOKE_TEMPLATE_MESSAGES','UNLINK'].map(action=>'privacy-'+status+'-'+action+'-'+width+'.png')),
+ ...['REVOKE_TEMPLATE_MESSAGES','UNLINK'].map(action=>'privacy-'+(action==='UNLINK'?'REJECTED':'PENDING_REVIEW')+'-'+action+'-'+width+'-reload.png')
+]),'identity-private-390-reload.png','identity-approved-390-reload.png','identity-private-390-director.png','identity-approved-390-director.png'];
 export const IDENTITY_ONLY_CHECKS=[
  ...[320,390,768,1280].flatMap(width=>[
   {name:'private-identity-submission-uncertain-receipt-and-explicit-approval-refresh',width,reload:false,director:false,posts:1,receiptGets:1},
@@ -45,7 +151,8 @@ export const IDENTITY_ONLY_CHECKS=[
   {name:'revoked-workspace-hides-loaded-tasks-and-only-own-private-read-remains',width,ownDenied:false},
   {name:'late-prior-project-denial-cannot-replace-authorized-project',width},
   {name:'late-prior-company-response-cannot-restore-private-context',width},
-  {name:'token-held-prior-company-never-dispatches-after-context-change',width}
+  {name:'token-held-prior-company-never-dispatches-after-context-change',width},
+  ...identityPrivacyChecks(width)
  ]),
  {name:'private-identity-submission-uncertain-receipt-and-explicit-approval-refresh',width:390,reload:true,director:false,posts:1,receiptGets:1},
  {name:'private-identity-submission-uncertain-receipt-and-explicit-approval-refresh',width:390,reload:false,director:true,posts:1,receiptGets:1},
@@ -102,7 +209,7 @@ function manifestDigest(references){return hash(canonical([...references].sort((
 function expectedSourceDigest(spec,readSource){if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');return manifestDigest(spec.sourceFiles.map(file=>{const bytes=readSource(file);if(!Buffer.isBuffer(bytes))deny('PROOF_SOURCE_BYTES');return {path:file,sha256:hash(bytes)};}));}
 const utf8=bytes=>{if(!Buffer.isBuffer(bytes))deny('PROOF_BYTES');const text=bytes.toString('utf8');if(!bytes.equals(Buffer.from(text)))deny('PROOF_ENCODING');return text;};
 function matrix(rows,widths,modes){if(!Array.isArray(rows))deny('PROOF_MATRIX');const keys=rows.map(row=>row&&row.width+':'+row.mode);equal(keys.toSorted(),widths.flatMap(width=>modes.map(mode=>width+':'+mode)).toSorted(),'PROOF_MATRIX');}
-function summary(spec){return isCanonicalField(spec)?spec.checkNames.length:isIdentity(spec)?35:spec.kind==='PORTFOLIO_UNIT'?PORTFOLIO_TESTS:spec.kind==='UI_PORTFOLIO'?4*PORTFOLIO_MODES.length:spec.kind==='PG_PORTFOLIO'?spec.checkNames.length:spec.kind==='PG_PREPARATION'?spec.checkNames.length:spec.kind==='UI_PREPARATION'?4*PREPARATION_MODES.length:spec.kind==='UNIT'?{suites:7,tests:EXPECTED_TOTAL_TESTS,recovery:7,corporateKyc:EXPECTED_SUITE_COUNTS['tests/production-company-channel-kyc.test.mjs'],nextSteps:EXPECTED_SUITE_COUNTS['tests/production-participant-onboarding-next-step.test.mjs']}:spec.kind==='PG_COMPANY_KYC'?spec.checkNames.length:spec.kind==='UI_CAUSAL'?0:spec.kind==='UI_JOINT'?8:spec.kind.startsWith('UI_')?32:spec.kind==='PG_BANK'?10:8;}
+function summary(spec){return isCanonicalField(spec)?spec.checkNames.length:isIdentity(spec)?IDENTITY_ONLY_CHECK_COUNT:spec.kind==='PORTFOLIO_UNIT'?PORTFOLIO_TESTS:spec.kind==='UI_PORTFOLIO'?4*PORTFOLIO_MODES.length:spec.kind==='PG_PORTFOLIO'?spec.checkNames.length:spec.kind==='PG_PREPARATION'?spec.checkNames.length:spec.kind==='UI_PREPARATION'?4*PREPARATION_MODES.length:spec.kind==='UNIT'?{suites:7,tests:EXPECTED_TOTAL_TESTS,recovery:7,corporateKyc:EXPECTED_SUITE_COUNTS['tests/production-company-channel-kyc.test.mjs'],nextSteps:EXPECTED_SUITE_COUNTS['tests/production-participant-onboarding-next-step.test.mjs']}:spec.kind==='PG_COMPANY_KYC'?spec.checkNames.length:spec.kind==='UI_CAUSAL'?0:spec.kind==='UI_JOINT'?8:spec.kind.startsWith('UI_')?32:spec.kind==='PG_BANK'?10:8;}
 function validateExtension(contract){
  const extension=contract.extension;exactKeys(extension,['baseHead','baselineBlocksSha256','baselineOwnershipSha256','baselineProducersSha256','proofs'],'EXTENSION_SHAPE');
  if(extension.baseHead!=='a4b79d7a7f75427ed1d0b0e1e9b247e1188adf3f')deny('EXTENSION_BASE');
@@ -171,9 +278,9 @@ function validateIdentityProof(spec,proof,expectedHead){
  if(proof.realProviderCalls!==0||proof.postgresExecuted!==false||proof.realClerkLogin!==false||proof.realEmailDelivery!==false||proof.physicalWhatsAppVerified!==false)deny('PROOF_PROVIDER_IO');
  if(proof.fixtureRemoved!==true||proof.browserClosed!==true||proof.serverStopped!==true)deny('PROOF_CLEANUP');
  equal(proof.pageErrors,[],'PROOF_UI_ERRORS');equal(proof.requestErrors,[],'PROOF_UI_ERRORS');
- equal(proof.widths,[320,390,768,1280],'PROOF_MATRIX');if(proof.totalCheckCount!==35)deny('PROOF_MATRIX');equal(proof.checks,IDENTITY_ONLY_CHECKS,'PROOF_IDENTITY_CHECKS');equal(proof.checks.map(canonical),spec.checkNames,'PROOF_IDENTITY_CHECKS');
+ equal(proof.widths,[320,390,768,1280],'PROOF_MATRIX');if(proof.totalCheckCount!==IDENTITY_ONLY_CHECK_COUNT)deny('PROOF_MATRIX');equal(proof.checks,IDENTITY_ONLY_CHECKS,'PROOF_IDENTITY_CHECKS');equal(proof.checks.map(canonical),spec.checkNames,'PROOF_IDENTITY_CHECKS');
  if(proof.actualPageReloadTested!==true||proof.nativeIndexedDbReceiptReferencesTested!==true||proof.automaticRecoveryPostCount!==0)deny('PROOF_IDENTITY_RECOVERY');
- equal(proof.screenshots,[...[320,390,768,1280].flatMap(width=>['identity-private-'+width+'.png','identity-approved-'+width+'.png']),'identity-private-390-reload.png','identity-approved-390-reload.png','identity-private-390-director.png','identity-approved-390-director.png'].map(name=>IDENTITY_ARTIFACTS[0]+name),'PROOF_IDENTITY_SCREENSHOTS');
+ equal(proof.screenshots,identityScreenshotNames.map(name=>IDENTITY_ARTIFACTS[0]+name),'PROOF_IDENTITY_SCREENSHOTS');
 }
 function validatePortfolioProof(spec,proof,{expectedHead,readEvidence}){
  if(proof.sourceRevision!==expectedHead)deny('PROOF_SOURCE_STATE');
@@ -895,10 +1002,10 @@ function identitySelftest(workflow,contract,root){
  const bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name:'identity-only-ui-'+name,result:'PASS',expectedDenial:code,boundary:'pure identity shadow fixture'});};
  // Shadow fixtures model Linux Git bytes. The native validator compares exact Git bytes.
  const readSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
- const proof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',sourceRevision:expectedHead,sourceState:'EXACT_CI_SOURCE',trackedClean:true,dirtyTrackedPaths:[],widths:[320,390,768,1280],totalCheckCount:35,checks:clone(IDENTITY_ONLY_CHECKS),sourceManifest:spec.sourceFiles.map(file=>({path:file,sha256:hash(readSource(file))})),harnessSha256:spec.producerSha256,pageErrors:[],requestErrors:[],screenshots:[...[320,390,768,1280].flatMap(width=>['identity-private-'+width+'.png','identity-approved-'+width+'.png']),'identity-private-390-reload.png','identity-approved-390-reload.png','identity-private-390-director.png','identity-approved-390-director.png'].map(name=>IDENTITY_ARTIFACTS[0]+name),actualPageReloadTested:true,nativeIndexedDbReceiptReferencesTested:true,automaticRecoveryPostCount:0,postgresExecuted:false,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,physicalWhatsAppVerified:false,fixtureRemoved:true,browserClosed:true,serverStopped:true};
+ const proof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',sourceRevision:expectedHead,sourceState:'EXACT_CI_SOURCE',trackedClean:true,dirtyTrackedPaths:[],widths:[320,390,768,1280],totalCheckCount:IDENTITY_ONLY_CHECK_COUNT,checks:clone(IDENTITY_ONLY_CHECKS),sourceManifest:spec.sourceFiles.map(file=>({path:file,sha256:hash(readSource(file))})),harnessSha256:spec.producerSha256,pageErrors:[],requestErrors:[],screenshots:identityScreenshotNames.map(name=>IDENTITY_ARTIFACTS[0]+name),actualPageReloadTested:true,nativeIndexedDbReceiptReferencesTested:true,automaticRecoveryPostCount:0,postgresExecuted:false,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,physicalWhatsAppVerified:false,fixtureRemoved:true,browserClosed:true,serverStopped:true};
  const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource});
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(name,code,()=>validate(value));};
- good('complete-35-exact-source-proof',()=>assert.equal(validate(proof).checks,35));
+ good('complete-103-exact-source-proof',()=>assert.equal(validate(proof).checks,IDENTITY_ONLY_CHECK_COUNT));
  good('current-source-closure-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
  good('manifest-order-independent',()=>{const value=clone(proof);value.sourceManifest.reverse();assert.equal(validate(value).sourceManifestSha256,validate(proof).sourceManifestSha256);});
  bad('malformed-json','PROOF_JSON',()=>validateExtensionProof(spec,Buffer.from('{'),{expectedHead,readSource}));bad('invalid-utf8','PROOF_ENCODING',()=>validateExtensionProof(spec,Buffer.from([255]),{expectedHead,readSource}));
@@ -921,6 +1028,7 @@ function identitySelftest(workflow,contract,root){
  for(const key of ['actualPageReloadTested','nativeIndexedDbReceiptReferencesTested'])mutate('recovery-'+key,'PROOF_IDENTITY_RECOVERY',p=>{p[key]=false;});
  mutate('recovery-automatic-post','PROOF_IDENTITY_RECOVERY',p=>{p.automaticRecoveryPostCount=1;});
  mutate('screenshot-omitted','PROOF_IDENTITY_SCREENSHOTS',p=>{p.screenshots.pop();});mutate('screenshot-foreign','PROOF_IDENTITY_SCREENSHOTS',p=>{p.screenshots[0]='.vercel/foreign.png';});
+ for(const [index,name] of identityScreenshotNames.entries()){mutate('screenshot-'+index+'-omitted','PROOF_IDENTITY_SCREENSHOTS',p=>{p.screenshots.splice(index,1);});mutate('screenshot-'+index+'-altered','PROOF_IDENTITY_SCREENSHOTS',p=>{p.screenshots[index]='.vercel/foreign-'+name;});}
  mutate('extra-proof-key','PROOF_IDENTITY_SHAPE',p=>{p.humanAccepted=true;});
  for(const file of spec.sourceFiles){
   mutate('source-omitted-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
@@ -929,7 +1037,7 @@ function identitySelftest(workflow,contract,root){
  mutate('source-duplicate','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.push(clone(p.sourceManifest[0]));});mutate('source-foreign','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.push({path:'src/foreign.mjs',sha256:'f'.repeat(64)});});
  mutate('source-path-unsafe','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest[0].path='../private';});mutate('source-reference-extra-key','PROOF_SOURCE_REFERENCE',p=>{p.sourceManifest[0].ignored=true;});
  const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
- good('gate-binds-35-checks',()=>assert.equal(gate(input).lanes.find(lane=>lane.lane==='workspace-ui').proofBindings.find(binding=>binding.id===spec.id).checks,35));
+ good('gate-binds-103-checks',()=>assert.equal(gate(input).lanes.find(lane=>lane.lane==='workspace-ui').proofBindings.find(binding=>binding.id===spec.id).checks,IDENTITY_ONLY_CHECK_COUNT));
  for(const [name,code,edit] of [
   ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
   ['binding-head','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceRevision='f'.repeat(40);}],
