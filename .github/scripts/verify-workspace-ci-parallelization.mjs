@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='240cf511d756b8e59b4440f458ad36f49a5c1ab9cde1fc1582b5a5aa2fbe276d';
+export const EXPECTED_CONTRACT_SHA256='d7908fb3a81de028af3724362fb147f51dc6e55d79f587dd7e5c88218e78c9e1';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
 const BASELINE_PRODUCERS_SHA256='07d0016608332c0775f86bee6d005e60d4686d2ffe33a3065dfd9fd8e974ab20';
@@ -29,6 +29,7 @@ const IDENTITY_BASELINE_OWNERSHIP_SHA256='78694a31aa081eaa44e2680a7b84512b9fc00a
 const IDENTITY_BASELINE_PRODUCERS_SHA256='c84dfb43d147837ae604682617817be2b0463fc7178b2fac340a845acc21b516';
 const IDENTITY_BLOCK_DIGEST='238695242b62319edb2feb2ff7b8e8dbf59c844292784e11cdbb18c70cd5d5b8';
 const PREPARATION_PG_BASELINE_PRODUCER={"producer":"scripts/verify-project-preparation-postgres.mjs","path":".vercel/private/project-preparation-postgres-validation.json","retained":true,"blockId":58,"lane":"business","sourceLine":73,"producerSha256":"f9cb6908a4062fbfaed2eba92e6e46b6cfe5672d9466a69d650468e85d461294","sourceBasis":"EXPECTED_HEAD_GIT_BYTES"};
+const COMPANY_KYC_PG_BASELINE_PRODUCER={"producer":"scripts/verify-company-channel-kyc-postgres.mjs","path":".vercel/company-kyc-evidence/postgres.json","retained":true,"blockId":57,"lane":"people","sourceLine":139,"producerSha256":"ca2aa4d683d9e2aa61557497354bb772fba96b0b9ba496262da73ccbb473ffd5","sourceBasis":"EXPECTED_HEAD_GIT_BYTES"};
 const identityDependenciesFor=kind=>['UNIT','UI_BANK','UI_JOINT','UI_CAUSAL','PG_COMPANY_KYC'].includes(kind)?['src/lib/participant-admission.mjs']:[];
 const isIdentity=spec=>spec.kind==='UI_IDENTITY_ONLY';
 const isCanonicalField=spec=>['PG_FIELD','PG_OVERTIME'].includes(spec.kind);
@@ -107,7 +108,7 @@ function validateExtension(contract){
  if(extension.baseHead!=='a4b79d7a7f75427ed1d0b0e1e9b247e1188adf3f')deny('EXTENSION_BASE');
  equal(extension.proofs.map(p=>[p.id,p.lane,p.blockId,p.path,p.kind]),EXTENSION_PROOFS,'EXTENSION_PROOF_COVERAGE');
  for(const spec of extension.proofs){exactKeys(spec,['id','lane','blockId','path','kind','producer','producerSha256','sourceFiles','checkNames'],'EXTENSION_PROOF_SHAPE');if(!sha(spec.producerSha256)||!Array.isArray(spec.sourceFiles)||!spec.sourceFiles.length||new Set(spec.sourceFiles).size!==spec.sourceFiles.length)deny('EXTENSION_SOURCE_CONTRACT');spec.sourceFiles.forEach(sourcePath);sourcePath(spec.producer);if(!Array.isArray(spec.checkNames))deny('EXTENSION_CHECK_NAMES');}
- for(const spec of extension.proofs){const record=contract.evidenceProducers.find(p=>p.path===spec.path);if(spec.kind==='PG_FIELD'||spec.kind==='PG_OVERTIME'){equal(record,spec.kind==='PG_FIELD'?FIELD_PG_BASELINE_PRODUCER:OVERTIME_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_PORTFOLIO'){equal(record,PORTFOLIO_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_PREPARATION'){equal(record,PREPARATION_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}equal(record&&{producer:record.producer,path:record.path,retained:record.retained,blockId:record.blockId,lane:record.lane,producerSha256:record.producerSha256,sourceBasis:record.sourceBasis},{producer:spec.producer,path:spec.path,retained:true,blockId:spec.blockId,lane:spec.lane,producerSha256:spec.producerSha256,sourceBasis:'EXPECTED_HEAD_GIT_BYTES'},'EXTENSION_PRODUCER_CONTRACT');}
+ for(const spec of extension.proofs){const record=contract.evidenceProducers.find(p=>p.path===spec.path);if(spec.kind==='PG_FIELD'||spec.kind==='PG_OVERTIME'){equal(record,spec.kind==='PG_FIELD'?FIELD_PG_BASELINE_PRODUCER:OVERTIME_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_PORTFOLIO'){equal(record,PORTFOLIO_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_PREPARATION'){equal(record,PREPARATION_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_COMPANY_KYC'){equal(record,COMPANY_KYC_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}equal(record&&{producer:record.producer,path:record.path,retained:record.retained,blockId:record.blockId,lane:record.lane,producerSha256:record.producerSha256,sourceBasis:record.sourceBasis},{producer:spec.producer,path:spec.path,retained:true,blockId:spec.blockId,lane:spec.lane,producerSha256:spec.producerSha256,sourceBasis:'EXPECTED_HEAD_GIT_BYTES'},'EXTENSION_PRODUCER_CONTRACT');}
  if(hash(canonical(contract.blocks.slice(0,46)))!==extension.baselineBlocksSha256||extension.baselineBlocksSha256!==BASELINE_BLOCKS_SHA256)deny('BASELINE_BLOCKS_CHANGED');
  const newPatterns=new Set([...PREPARATION_ARTIFACTS,...PORTFOLIO_ARTIFACTS,...extension.proofs.filter(spec=>spec.kind!=='PG_PORTFOLIO'&&!isCanonicalField(spec)).flatMap(spec=>contract.lanes[spec.lane].artifacts.filter(pattern=>matches(spec.path,pattern)))]);
  const ownership=Object.fromEntries(LANES.map(lane=>[lane,{blocks:contract.lanes[lane].blocks.filter(id=>id<=52),artifacts:contract.lanes[lane].artifacts.filter(pattern=>!newPatterns.has(pattern))}]));
@@ -324,6 +325,8 @@ function extensionSelftest(contract,root,currentCompanyChecks=[]){
   });
   if(spec.kind==='PG_COMPANY_KYC')currentCompanyChecks.push(()=>{
    const start=checks.length;
+   const staleSpec={...spec,producerSha256:COMPANY_KYC_PG_BASELINE_PRODUCER.producerSha256};bad('company-kyc-postgres-historical-pin-cannot-certify-current-harness','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(staleSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:staleSpec.producerSha256})),{expectedHead,readSource}));
+   const changed=clone(contract);changed.evidenceProducers.find(record=>record.path===spec.path).producerSha256=spec.producerSha256;bad('company-kyc-postgres-historical-record-cannot-be-overwritten','EXTENSION_PRODUCER_CONTRACT',()=>validateContract(changed));
    good('company-kyc-postgres-current-ten-SQL-checks-exact',()=>{assert.equal(spec.checkNames.length,10);equal([...readFileSync(path.join(root,spec.producer),'utf8').matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),spec.checkNames,'PROOF_CHECK_NAMES');});
    mutate('legacy-six-checks','PROOF_CHECK_NAMES',p=>{p.checks=spec.checkNames.slice(0,6);});
    for(const file of planImportDependenciesFor(spec.kind)){

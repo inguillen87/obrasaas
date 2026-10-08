@@ -45,14 +45,14 @@ async function fixture(options={}){
  };
  const client={query},row=()=>({...f.worker,revision:revision(f.worker.revision),organizationId:f.target.organizationId});
  const input=()=>({operationId:randomUUID(),projectId:f.target.id,scope:'a'.repeat(64),action:'CANCEL_KYC_CHAT',payload:{workerId:f.worker.id,revision:revision(f.worker.revision),challengeId:f.worker.metadata.participant.kycChatChallenge.id,reason:'Cerrar la captura parcial explícitamente'}});
- async function run(command=input(),{member=f.issuer,writeOuter=true,afterOuter=null}={}){
+ async function run(command=input(),{member=f.issuer,afterProjectMember=member,afterWriteMember=afterProjectMember,writeOuter=true,afterOuter=null}={}){
   const snapshot=structuredClone({worker:f.worker,audits:[...f.audits]});
   try{
    await cancelParticipantKycChat.beforeProject(client,member,command);
-   const value=await cancelParticipantKycChat(client,member,f.target,{operationId:command.operationId,...command.payload},{environment:f.environment});
+   const value=await cancelParticipantKycChat(client,afterProjectMember,f.target,{operationId:command.operationId,...command.payload},{environment:f.environment});
    if(writeOuter&&!f.audits.has(value.closureReceiptId))f.audits.set(value.closureReceiptId,{id:value.closureReceiptId,organizationId:member.organizationId,actorId:member.actorId,entityType:'Worker',entityId:f.worker.id,action:'participant.operation.recorded',metadata:{version:1,projectId:f.target.id,requestDigest:digest(command),kind:'CANCEL_KYC_CHAT',closureReceiptId:value.receiptId,challengeId:value.challengeId}});
    if(afterOuter)await afterOuter(value);
-   await cancelParticipantKycChat.afterWrite(client,member,command);return value;
+   await cancelParticipantKycChat.afterWrite(client,afterWriteMember,command);return value;
   }catch(error){Object.assign(f.worker,snapshot.worker);f.audits.clear();for(const [id,a] of snapshot.audits)f.audits.set(id,a);throw error;}
  }
  const sealState=(value,contextProject=f.anchor.id)=>{
@@ -64,6 +64,28 @@ async function fixture(options={}){
 }
 const projection=f=>publicParticipantKycChat(f.row(),{now:new Date(f.now),member:f.issuer,canManage:true,environment:f.environment});
 const archives=f=>[...f.audits.values()].filter(a=>a.action==='participant.kyc_chat.closed');
+
+for(const stage of ['afterProject','afterWrite'])for(const direction of ['absent-to-false','false-to-absent'])test('closure '+stage+' permits identityOnly '+direction+' projection without changing canonical authority',async()=>{
+ const f=await fixture(),before=structuredClone(f.worker.metadata),calls=f.io();
+ const member={...f.issuer,participantBound:false},projected={...member};
+ if(direction==='absent-to-false')projected.identityOnly=false;else member.identityOnly=false;
+ const result=await f.run(f.input(),{member,...(stage==='afterProject'?{afterProjectMember:projected}:{afterWriteMember:projected})});
+ assert.equal(result.saved,true);assert.equal(archives(f).length,1);assert.deepEqual(archives(f)[0].metadata.challenge,before.participant.kycChatChallenge);assert.deepEqual(f.io(),calls);
+});
+
+for(const stage of ['afterProject','afterWrite'])for(const [claim,value] of [
+ ['actorId','other-manager'],['membershipId','other-member'],['organizationId','other-organization'],['role','DIRECTOR'],['clerkUserId','user_OtherManager'],['clerkRole','org:director'],['organizationName','Another organization name'],['participantBound',true],['unrecognizedProjection','changed']
+])test('closure '+stage+' rejects changed '+claim+' without relaxing the original member fingerprint',async()=>{
+ const f=await fixture(),before=structuredClone(f.worker.metadata),audits=structuredClone([...f.audits]),calls=f.io(),member={...f.issuer,identityOnly:false,participantBound:false},changed={...member,[claim]:value};
+ await assert.rejects(f.run(f.input(),{member,...(stage==='afterProject'?{afterProjectMember:changed}:{afterWriteMember:changed})}),{code:'WORKSPACE_CONTEXT_CHANGED'});
+ assert.deepEqual(f.worker.metadata,before);assert.deepEqual([...f.audits],audits);assert.deepEqual(f.io(),calls);
+});
+
+for(const stage of ['beforeProject','afterProject','afterWrite'])test('closure '+stage+' refuses identityOnly true as an operational KYC admission denial',async()=>{
+ const f=await fixture(),before=structuredClone(f.worker.metadata),audits=structuredClone([...f.audits]),calls=f.io(),member={...f.issuer,identityOnly:false,participantBound:false},pending={...member,identityOnly:true};
+ await assert.rejects(f.run(f.input(),stage==='beforeProject'?{member:pending}:stage==='afterProject'?{member,afterProjectMember:pending}:{member,afterWriteMember:pending}),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
+ assert.deepEqual(f.worker.metadata,before);assert.deepEqual([...f.audits],audits);assert.deepEqual(f.io(),calls);
+});
 
 test('lost untouched PENDING code is explicitly closed without renewing, deleting metadata or delivering anything',async()=>{
  const f=await fixture(),before=structuredClone(f.worker.metadata),prior=structuredClone([...f.audits]),calls=f.io();

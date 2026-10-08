@@ -3,7 +3,7 @@
   "sourceCommit": "61d316a8983c268d43f8af6de10df9743a46278e",
   "sourceWorkflowGitBlobSha256": "f61343f8ec83df2ca814a4fb770eed8d78b18ab2f80f95b4e9e2b84d0f5e89ed",
   "sourceWorkflowCheckoutSha256": "f61343f8ec83df2ca814a4fb770eed8d78b18ab2f80f95b4e9e2b84d0f5e89ed",
-  "packageLockSha256": "e0d817409e6259fcaa916150b97960d8b4cac5a852a108a4764adf35a3a04b0e",
+  "packageLockSha256": "dfa3ff3914547f35828a0b697e6007c6cf856546be86bf8a7810cdce59e60449",
   "requirementsSha256": "c7c242770337d501756cdde2437ad8e7cdc0e5d7d269481beac6e1f1abafb34d",
   "workflow": {
     "name": "Authorized workspace acceptance",
@@ -2032,7 +2032,7 @@
         "path": ".vercel/company-kyc-evidence/postgres.json",
         "kind": "PG_COMPANY_KYC",
         "producer": "scripts/verify-company-channel-kyc-postgres.mjs",
-        "producerSha256": "ca2aa4d683d9e2aa61557497354bb772fba96b0b9ba496262da73ccbb473ffd5",
+        "producerSha256": "a7a963281dad8f1759810c758135e76b821d44757c55c9f75e6226ed202c9e34",
         "sourceFiles": [
           "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
           "src/lib/afipValidator.js",

@@ -28,6 +28,7 @@ try{
  CREATE TABLE "TenantMembership"(id text PRIMARY KEY,"organizationId" text REFERENCES "Organization","userId" text REFERENCES "PlatformUser","tenantRole" text,"clerkRole" text,status text);
  CREATE TABLE "Project"(id text PRIMARY KEY,"organizationId" text REFERENCES "Organization",name text,status text,metadata jsonb,"updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP);
  CREATE TABLE "ProjectMembership"(id text PRIMARY KEY,"projectId" text REFERENCES "Project","tenantMembershipId" text REFERENCES "TenantMembership",status text);
+ CREATE TABLE "Worker"(id text PRIMARY KEY,"projectId" text REFERENCES "Project",active boolean NOT NULL DEFAULT true,metadata jsonb NOT NULL DEFAULT '{}');
  CREATE TABLE "AuditLog"(id text PRIMARY KEY,"organizationId" text REFERENCES "Organization","actorId" text REFERENCES "PlatformUser",action text,"entityType" text,"entityId" text,metadata jsonb,"createdAt" timestamp DEFAULT CURRENT_TIMESTAMP);
  CREATE TYPE "CrmStage" AS ENUM('NEW','CONTACTED','QUALIFIED','DEMO','PROPOSAL','TRIAL','WON','LOST');
  CREATE TABLE "CrmAccount"(id text NOT NULL,"organizationId" text,name text NOT NULL,"contactName" text,email text,phone text,segment text,source text,stage "CrmStage" NOT NULL DEFAULT 'NEW',"estimatedSeats" integer,"estimatedMonthlyValue" decimal(12,2),"nextFollowUpAt" timestamp(3),notes text,"createdAt" timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"updatedAt" timestamp(3) NOT NULL,CONSTRAINT "CrmAccount_pkey" PRIMARY KEY(id));
