@@ -83,6 +83,10 @@ jobs:
       - run: node scripts/verify-identity-context-ui.mjs
       - run: node scripts/verify-mapping-review-ui.mjs
       - run: npm run build
+      - name: Public legal pages, canonical sharing and exact access boundary
+        run: |
+          npx eslint src/lib/legacy-access-boundary.js src/app/public-site-metadata.mjs src/app/page.js src/app/legal/legal-page.js src/app/privacidad/page.js src/app/terminos/page.js src/app/eliminacion-datos/page.js tests/production-public-sharing-metadata.test.mjs scripts/verify-public-sharing-ui.mjs --max-warnings 0
+          node scripts/verify-public-sharing-ui.mjs
       - name: Local font delivery and Linux preloads
         run: |
           npx eslint scripts/verify-local-font-delivery.mjs --max-warnings 0
@@ -120,6 +124,7 @@ jobs:
             .vercel/guided-demo-evidence/
             .vercel/demo-company-evidence/
             .vercel/professional-landing-evidence/
+            .vercel/public-sharing-evidence/
             .vercel/local-font-evidence/
             .vercel/pwa-evidence/
             .vercel/company-phone-evidence/

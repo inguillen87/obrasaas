@@ -20,6 +20,18 @@ const pages = Object.freeze({
     title: 'Demo ObraSaaS | Una obra de ejemplo',
     description: 'Explorá una empresa y una obra de ejemplo: cronograma, materiales, incidencias, equipo y clientes. Los datos son ilustrativos.',
   },
+  '/privacidad': {
+    title: 'Política de privacidad | ObraSaaS',
+    description: 'Conocé qué datos utiliza ObraSaaS, sus finalidades, proveedores y autorizaciones. Consultá cómo ejercer tus derechos sobre tus datos personales.',
+  },
+  '/terminos': {
+    title: 'Términos de uso | ObraSaaS',
+    description: 'Consultá las condiciones de uso de ObraSaaS, el alcance de los permisos y registros, la revisión humana y los requisitos de servicios externos.',
+  },
+  '/eliminacion-datos': {
+    title: 'Eliminación de datos | ObraSaaS',
+    description: 'Solicitá por correo la eliminación de tus datos en ObraSaaS. Conocé los datos mínimos necesarios, la verificación y el seguimiento manual del pedido.',
+  },
 });
 
 export const PUBLIC_SITE_PATHS = Object.freeze(Object.keys(pages));

@@ -18,7 +18,7 @@ export function authorizeLegacyService(request, environment = process.env) {
   return !INSECURE_KEYS.has(credential) && exactSecretMatch(credential, secret);
 }
 
-const PUBLIC_PAGES = new Set(['/', '/demo', '/manual', '/sign-in', '/sign-up', '/pricing', '/poster', '/api-docs']);
+const PUBLIC_PAGES = new Set(['/', '/demo', '/manual', '/privacidad', '/terminos', '/eliminacion-datos', '/sign-in', '/sign-up', '/pricing', '/poster', '/api-docs']);
 export const LAUNCH_PUBLIC_ASSETS = Object.freeze([
   '/media/launch/obra-vista-amplia.webp',
   '/media/launch/obra-registro-evidencia.webp',
