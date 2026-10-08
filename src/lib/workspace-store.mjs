@@ -69,6 +69,17 @@ export function createWorkspaceStore({ connect }) {
     return result.rows[0] || null;
   }
   return {
+    // Commercial account reads are independent of project admission. Expired
+    // trials must still be inspectable by the current company administrator.
+    async companyRead(session, {scope: expected}, callback) {
+      if(typeof callback!=='function')throw new TypeError('Explicit company read required');
+      if(!/^[a-f0-9]{64}$/.test(expected||''))throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
+      return transaction(session,false,async(client,member,scope)=>{
+        checkScope(scope,expected);
+        if(member.role!=='ADMIN'||session.organizationRole!=='org:admin')throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);
+        return callback(client,member,scope);
+      });
+    },
     // Company role changes lock the target membership without first locking a
     // project. Field transactions acquire their own membership before project.
     async organizationOperation(session, {projectId, scope: expected}, writable, callback, allowArchivedProject=false) {

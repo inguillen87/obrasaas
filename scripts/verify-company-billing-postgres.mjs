@@ -1,0 +1,81 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {Client,Pool} from 'pg';
+import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
+import {createCompanyBilling} from '../src/lib/company-billing.mjs';
+import {scopeStamp} from '../src/lib/workspace-policy.mjs';
+import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
+
+const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'https://not-configured.invalid');
+assert.equal(process.env.CUTOVER_TEST_DISPOSABLE,'1');
+assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV&&!process.env.VERCEL_TARGET_ENV);
+assert.ok(['127.0.0.1','localhost'].includes(url.hostname));assert.equal(url.pathname,'/obrasaas_cutover_ci');assert.equal(url.search,'');assert.equal(url.hash,'');
+const database='obrasaas_billing_'+randomUUID().replaceAll('-','');assert.match(database,/^obrasaas_billing_[a-f0-9]{32}$/);
+const admin=new Client({connectionString:url.toString(),connectionTimeoutMillis:5000}),checks=[],statements=[];
+let created=false,pool,removed=false;
+const session=(user,org='A',role='org:admin')=>({authenticated:true,verification:'clerk-production-jwt',userId:'user_'+user,organizationId:'org_'+org,organizationRole:role});
+const member=(user,org='a',role='ADMIN')=>({actorId:user,membershipId:'membership-'+user,organizationId:'company-'+org,role});
+const owner=session('Owner'),foreign=session('Foreign','B'),ownerMember=member('Owner'),foreignMember=member('Foreign','b');
+const scope=scopeStamp(owner,ownerMember),foreignScope=scopeStamp(foreign,foreignMember);
+try{
+ await admin.connect();
+ assert.deepEqual((await admin.query('SELECT current_database() AS db')).rows[0],{db:'obrasaas_cutover_ci'});
+ await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;
+ pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:6,connectionTimeoutMillis:5000}));
+ // No Project, Worker, Task or provider tables exist. A commercial read must
+ // succeed without creating a fictional worksite or reading operational KYC.
+ await pool.query(`CREATE TABLE "Organization"(id text PRIMARY KEY,name text NOT NULL,"clerkOrganizationId" text UNIQUE,metadata jsonb,"subscriptionPlan" text NOT NULL,"subscriptionStatus" text NOT NULL,"trialEndsAt" timestamp);
+  CREATE TABLE "PlatformUser"(id text PRIMARY KEY,"clerkUserId" text UNIQUE);
+  CREATE TABLE "TenantMembership"(id text PRIMARY KEY,"userId" text REFERENCES "PlatformUser","organizationId" text REFERENCES "Organization","clerkRole" text NOT NULL,"tenantRole" text NOT NULL,status text NOT NULL);
+  INSERT INTO "Organization" VALUES('company-a','Synthetic company A','org_A','{"private":"not-returned"}','TRIAL','TRIALING',CURRENT_TIMESTAMP+interval '15 days'),('company-b','Synthetic company B','org_B','{}','PRO','ACTIVE',NULL),('company-i','Internal','org_I','{"internal":true}','ENTERPRISE','ACTIVE',NULL);
+  INSERT INTO "PlatformUser" VALUES('Owner','user_Owner'),('Foreign','user_Foreign'),('Director','user_Director'),('Member','user_Member');
+  INSERT INTO "TenantMembership" VALUES('membership-Owner','Owner','company-a','org:admin','ADMIN','ACTIVE'),('membership-Foreign','Foreign','company-b','org:admin','ADMIN','ACTIVE'),('membership-Director','Director','company-a','org:admin','DIRECTOR','ACTIVE'),('membership-Member','Member','company-a','org:member','ADMIN','ACTIVE'),('membership-Internal','Owner','company-i','org:admin','ADMIN','ACTIVE');`);
+ const before=(await pool.query('SELECT * FROM "Organization" ORDER BY id')).rows;
+ const workspace=createWorkspaceStore({connect:async()=>{const client=await pool.connect();return {query:async(...args)=>{statements.push(args[0]);return client.query(...args);},release:broken=>client.release(broken)};}});
+ const store=createCompanyBilling({workspace}),read=()=>store.read(owner,{scope});
+ const own=await read(),other=await store.read(foreign,{scope:foreignScope});
+ assert.equal(own.organization.id,'company-a');assert.equal(own.subscription.plan,'TRIAL');assert.equal(own.subscription.entitlement.basis,'CURRENT_TRIAL');assert.equal(other.organization.id,'company-b');assert.equal(other.subscription.plan,'PRO');assert.equal(other.billing.paymentEvidence,'UNOBSERVED');
+ assert.equal(JSON.stringify(own).includes('not-returned'),false);
+ assert.deepEqual((await pool.query('SELECT * FROM "Organization" ORDER BY id')).rows,before);
+ assert.equal(statements.some(sql=>/public\."(Project|Worker|Task)"/.test(sql)),false);
+ assert.ok(statements.filter(sql=>sql==='BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY').length>=2);
+ checks.push('own-canonical-subscription-without-operational-tables-or-writes');
+ await assert.rejects(store.read(owner,{scope:foreignScope}),{code:'WORKSPACE_CONTEXT_CHANGED'});
+ await assert.rejects(store.read(foreign,{scope}),{code:'WORKSPACE_CONTEXT_CHANGED'});
+ await assert.rejects(store.read(session('Director'),{scope:scopeStamp(session('Director'),member('Director','a','DIRECTOR'))}),{code:'WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED'});
+ await assert.rejects(store.read(session('Member','A','org:member'),{scope:scopeStamp(session('Member','A','org:member'),member('Member'))}),{code:'WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED'});
+ await assert.rejects(store.read(session('Owner','I'),{scope:scopeStamp(session('Owner','I'),{...member('Owner','i'),membershipId:'membership-Internal'})}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
+ await assert.rejects(store.read(session('Unknown'),{scope}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
+ checks.push('foreign-scope-both-admin-roles-and-internal-org-isolation');
+ await pool.query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE id='membership-Owner'`);
+ await assert.rejects(read(),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
+ await pool.query(`UPDATE "TenantMembership" SET status='ACTIVE',"tenantRole"='DIRECTOR' WHERE id='membership-Owner'`);
+ await assert.rejects(read(),{code:'WORKSPACE_CONTEXT_CHANGED'});
+ await pool.query(`UPDATE "TenantMembership" SET "tenantRole"='ADMIN' WHERE id='membership-Owner'`);
+ checks.push('membership-revocation-and-role-change-take-effect-on-next-read');
+ await assert.rejects(workspace.companyRead(owner,{scope},client=>client.query(`UPDATE "Organization" SET "subscriptionStatus"='ACTIVE' WHERE id='company-a'`)),{code:'WORKSPACE_OPERATION_UNCONFIRMED'});
+ assert.deepEqual((await pool.query('SELECT * FROM "Organization" ORDER BY id')).rows,before);
+ checks.push('database-read-only-transaction-prevents-subscription-write');
+ await pool.query(`UPDATE "Organization" SET "trialEndsAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE id='company-a'`);
+ const expired=await read();assert.equal(expired.subscription.entitlement.reasonCode,'COMPANY_ENTITLEMENT_TRIAL_EXPIRED');assert.equal(expired.subscription.status,'TRIALING');
+ await pool.query(`UPDATE "Organization" SET "subscriptionPlan"='PRO',"subscriptionStatus"='SUSPENDED' WHERE id='company-a'`);
+ const suspended=await read();assert.equal(suspended.subscription.entitlement.reasonCode,'COMPANY_ENTITLEMENT_SUSPENDED');
+ assert.equal(suspended.subscription.trialEndsAt,expired.subscription.trialEndsAt);
+ checks.push('expired-and-suspended-status-remain-readable-without-trial-extension');
+ const concurrent=await Promise.all(Array.from({length:12},(_,index)=>store.read(index%2?owner:foreign,{scope:index%2?scope:foreignScope})));
+ concurrent.forEach((value,index)=>assert.equal(value.organization.id,index%2?'company-a':'company-b'));
+ checks.push('concurrent-tenants-never-share-subscription-state');
+ await pool.query(`UPDATE "Organization" SET "subscriptionStatus"='unknown' WHERE id='company-a'`);
+ await assert.rejects(read(),{code:'COMPANY_BILLING_UNOBSERVED'});
+ checks.push('unsupported-canonical-status-is-unobserved');
+}finally{
+ await closeDisposablePool(pool);
+ if(created){await admin.query(`DROP DATABASE "${database}"`);removed=true;}
+ await admin.end();
+}
+assert.equal(removed,true);
+mkdirSync('.vercel/private/company-billing-evidence',{recursive:true});
+const proof={status:'PASS',checks,databaseRemoved:removed,synthetic:true,production:false,providerAcceptance:false,humanAcceptance:false};
+writeFileSync('.vercel/private/company-billing-evidence/postgres.json',JSON.stringify(proof,null,2)+'\n');
+console.log(JSON.stringify(proof));

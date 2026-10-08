@@ -1,0 +1,32 @@
+.panel{margin-top:24px;min-width:0;padding:24px;border:1px solid #dce4e8;border-radius:18px;background:#fff;color:#193344;text-align:left;overflow-wrap:anywhere}
+.heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.heading>div{min-width:0;flex:1 1 250px}
+.heading h3{display:flex;align-items:center;gap:9px;margin:0;font-size:1.15rem;line-height:1.4}
+.heading h3 svg{flex-shrink:0;color:#526c7a}
+.heading p{margin:7px 0 0;color:#526570;line-height:1.55;font-size:.88rem}
+.heading button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;max-width:100%;padding:10px 14px;border:1px solid #ccd9df;border-radius:10px;background:#fff;color:#234657;font:inherit;font-size:.86rem;font-weight:650;cursor:pointer;white-space:normal}
+.heading button svg{flex-shrink:0}
+.heading button:hover:not(:disabled){background:#f1f7f8;border-color:#7f9eac}
+.heading button:disabled{opacity:.6;cursor:wait}
+.heading button:focus-visible{outline:3px solid #3c8aaa;outline-offset:3px}
+.live:empty{display:none}
+.live p{margin:16px 0 0;font-size:.88rem;line-height:1.6;color:#526570}
+.live .notice{padding:12px 14px;border-left:3px solid #b66b25;border-radius:5px;background:#fff8ef;color:#644a2c}
+.body{margin-top:20px;padding-top:20px;border-top:1px solid #e4eaed}
+.summary{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px}
+.summary>div{min-width:0}
+.company{margin:0 0 5px;color:#526570;font-size:.88rem;line-height:1.5}
+.plan{margin:0;font-size:1.5rem;line-height:1.25;font-weight:700;letter-spacing:-.03em}
+.positive,.attention{max-width:100%;padding:7px 11px;border-radius:7px;font-size:.78rem;font-weight:650;line-height:1.5}
+.positive{background:#e8f4ec;color:#245b3a}
+.attention{background:#fff1dc;color:#80521c}
+.description{margin:16px 0;color:#405b6b;line-height:1.6;font-size:.9rem}
+.expiry{margin:0 0 18px;padding:13px 15px;background:#f6f8f9;border-radius:10px}
+.expiry div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:center}
+.expiry dt{font-size:.83rem;line-height:1.5;color:#526570}
+.expiry dd{margin:0;font-size:.88rem;font-weight:650;line-height:1.6;color:#294958}
+.payment{padding-top:16px;border-top:1px solid #e4eaed}
+.payment strong{font-size:.88rem;font-weight:650;line-height:1.6}
+.payment p{margin:4px 0 0;font-size:.84rem;line-height:1.6;color:#526570}
+.observed{margin:16px 0 0;font-size:.75rem;line-height:1.55;color:#647984}
+@media(max-width:650px){.panel{padding:17px;border-radius:14px}.heading{gap:14px}.heading>div{flex-basis:100%}.heading button{width:100%}.expiry div{grid-template-columns:minmax(0,1fr);gap:5px}.plan{font-size:1.35rem}.summary{align-items:flex-start}}
