@@ -4,6 +4,7 @@ import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,read
 import path from 'node:path';
 import {spawn,spawnSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
+import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-preparation-format.mjs';
 import {createPlanImportHandlers} from '../src/lib/plan-import-http.mjs';
 
 // Real workspace, pagination, plan panel, transport and browser recovery state.
@@ -21,7 +22,7 @@ for(const source of ['src/lib/geo.js','src/lib/field-media-privacy.mjs','src/lib
  sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(destination)).digest('hex')});
 }
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
-for(const source of ['src/lib/plan-import-http.mjs','src/lib/plan-import-policy.mjs','src/lib/plan-import-store.mjs','src/lib/workspace-policy.mjs','src/lib/private-image-upload.mjs'])sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(path.join(root,source))).digest('hex')});
+for(const source of ['src/lib/plan-import-http.mjs','src/lib/plan-import-policy.mjs','src/lib/plan-import-store.mjs','src/lib/plan-import-ooxml.mjs','src/lib/workspace-policy.mjs','src/lib/private-image-upload.mjs','package.json','package-lock.json'])sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(path.join(root,source))).digest('hex')});
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-plan-recovery-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,fontFamily:'Arial'}}>{children}</body></html>}`);
@@ -84,8 +85,12 @@ async function scenario(mode,width){
  const send=(request,body,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:JSON.stringify(body)});
  page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('Unexpected external request');}if(!url.pathname.startsWith('/api/'))return request.continue();
-  assert.ok(['/api/identity/workspace','/api/identity/plan-import','/api/identity/task-creation'].includes(url.pathname),'Unexpected API '+url.pathname);
+  assert.ok(['/api/identity/workspace','/api/identity/plan-import','/api/identity/task-creation','/api/identity/project-preparation'].includes(url.pathname),'Unexpected API '+url.pathname);
   const activeB=request.headers().authorization==='Bearer synthetic-workspace-plan-B';assert.equal(request.headers().authorization,'Bearer synthetic-workspace-plan-'+(activeB?'B':'A'));
+  if(url.pathname==='/api/identity/project-preparation'){
+   assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);const currentScope=activeB?scopeB:scope,currentProject=activeB?projectB:projectId;const requestedScope=url.searchParams.get('scope'),requestedProject=url.searchParams.get('projectId');assert.ok([scope,scopeB].includes(requestedScope));assert.ok([projectId,projectB].includes(requestedProject));if(requestedScope!==currentScope)return send(request,{code:'WORKSPACE_CONTEXT_CHANGED'},409);if(requestedProject!==currentProject)return send(request,{code:'WORKSPACE_PROJECT_UNAVAILABLE'},404);assert.equal(requestedScope,currentScope);assert.equal(requestedProject,currentProject);
+   return send(request,projectPreparationSnapshot({scope:currentScope,projectId:currentProject,canManage:true,revision:0,detailsDigest:'b'.repeat(64),name:activeB?'Obra del contexto B':'Obra paginada A',clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope:currentScope,projectId:currentProject}));
+  }
   if(url.pathname==='/api/identity/workspace'){
    assert.equal(request.method(),'GET','Plan readback must never POST to workspace');
    if(!url.search)return send(request,{scope:activeB?scopeB:scope,organizationName:activeB?'Empresa del contexto B':'Empresa sintética de cronogramas',role:'ADMIN',roleLabel:'Administrador',canManageIntegrations:false,projects:[{id:activeB?projectB:projectId,name:activeB?'Obra del contexto B':'Obra paginada A'}],projectsTruncated:false});
@@ -132,7 +137,7 @@ async function scenario(mode,width){
  if(taskMode){
   await click(page,'Nueva tarea');await page.type('section[aria-label="Crear tarea de la obra"] input',row.title);await click(page,'Crear tarea');
  }else{
-  await click(page,'Importar PDF o imagen');await waitText(page,'Autorizo enviar este cronograma a OpenAI');await (await page.$('[data-plan-import] input[type=file]')).uploadFile(sourceFile);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');await waitText(page,'Compará cada fila con el archivo');
+  await click(page,'Importar PDF, imagen o Excel');await waitText(page,'Autorizo enviar este cronograma a OpenAI');await (await page.$('[data-plan-import] input[type=file]')).uploadFile(sourceFile);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');await waitText(page,'Compará cada fila con el archivo');
   await page.waitForFunction(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Nueva tarea')?.disabled===true);
   assert.equal(await page.$$eval('button',buttons=>buttons.find(button=>button.textContent.trim()==='Nueva tarea')?.disabled),true,'A ready plan draft prevents a new task from invalidating its reviewed baseline');
   await assertPlanBlockingNavigation(page,posts);
@@ -194,8 +199,12 @@ async function recoveryClosureScenario(mode,width){
  const rejectionHandlers=createPlanImportHandlers({verify:async()=>({authenticated:true,verification:'clerk-production-jwt',userId:'user_Synthetic',organizationId:'org_Synthetic',organizationRole:'org:admin'}),imports:{attach:async()=>{rejectedAttachCalls++;throw Error('Invalid source must never reach attach');}}});
  page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('Unexpected external request');}if(!url.pathname.startsWith('/api/'))return request.continue();
-  assert.ok(['/api/identity/workspace','/api/identity/plan-import'].includes(url.pathname),'Unexpected API '+url.pathname);
+  assert.ok(['/api/identity/workspace','/api/identity/plan-import','/api/identity/project-preparation'].includes(url.pathname),'Unexpected API '+url.pathname);
   const activeB=request.headers().authorization==='Bearer synthetic-workspace-plan-B';assert.equal(request.headers().authorization,'Bearer synthetic-workspace-plan-'+(activeB?'B':'A'));
+  if(url.pathname==='/api/identity/project-preparation'){
+   assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);const currentScope=activeB?scopeB:scope,currentProject=activeB?projectB:projectId;const requestedScope=url.searchParams.get('scope'),requestedProject=url.searchParams.get('projectId');assert.ok([scope,scopeB].includes(requestedScope));assert.ok([projectId,projectB].includes(requestedProject));if(requestedScope!==currentScope)return send(request,{code:'WORKSPACE_CONTEXT_CHANGED'},409);if(requestedProject!==currentProject)return send(request,{code:'WORKSPACE_PROJECT_UNAVAILABLE'},404);assert.equal(requestedScope,currentScope);assert.equal(requestedProject,currentProject);
+   return send(request,projectPreparationSnapshot({scope:currentScope,projectId:currentProject,canManage:true,revision:0,detailsDigest:'b'.repeat(64),name:activeB?'Obra del contexto B':'Obra paginada A',clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope:currentScope,projectId:currentProject}));
+  }
   if(url.pathname==='/api/identity/workspace'){
    workspaceQueries++;
    assert.equal(request.method(),'GET');
@@ -247,9 +256,9 @@ async function recoveryClosureScenario(mode,width){
  if(legacyMode){await page.evaluate(({scope,projectId,operationId})=>sessionStorage.setItem('obrasaas-plan-attempt-v1:'+scope+':'+projectId,JSON.stringify({scope,projectId,operationId,kind:'UPLOAD'})),{scope,projectId,operationId:legacyId});}
  await openProject(page);await assertCount(page,150);
  if(!legacyMode){
-  await click(page,'Importar PDF o imagen');await (await page.$('[data-plan-import] input[type=file]')).uploadFile(mode==='invalid-source'?invalidSourceFile:mode==='oversized-source'?oversizedSourceFile:sourceFile);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');
+  await click(page,'Importar PDF, imagen o Excel');await (await page.$('[data-plan-import] input[type=file]')).uploadFile(mode==='invalid-source'?invalidSourceFile:mode==='oversized-source'?oversizedSourceFile:sourceFile);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');
   if(correctionMode){
-   await waitText(page,mode==='invalid-source'?'El archivo fue rechazado antes de reservar un borrador':'El PDF debe pesar hasta 3 MB');assert.equal(posts.length,mode==='invalid-source'?1:0);assert.equal(rejectedAttachCalls,0);assert.deepEqual(await browserReferences(page),[]);
+   await waitText(page,mode==='invalid-source'?'El archivo fue rechazado antes de reservar un borrador':'El PDF o Excel debe pesar hasta 3 MB');assert.equal(posts.length,mode==='invalid-source'?1:0);assert.equal(rejectedAttachCalls,0);assert.deepEqual(await browserReferences(page),[]);
    await (await page.$('[data-plan-import] input[type=file]')).uploadFile(sourceFile);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');await waitText(page,'Compará cada fila con el archivo');
    assert.equal(posts.length,mode==='invalid-source'?2:1);if(mode==='invalid-source')assert.notEqual(posts[0].operationId,posts[1].operationId);assert.deepEqual(await browserReferences(page),[]);await assertCount(page,150);
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks.push({mode,width,posts:posts.length,rejectedAttachCalls,durableJournal:true,explicitCorrection:true});await context.close();return;
@@ -283,7 +292,7 @@ async function recoveryClosureScenario(mode,width){
   await click(page,'Comprobar resultado');await page.waitForNetworkIdle({idleTime:100,timeout:10000});assert.deepEqual(await browserReferences(page),[reference]);assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false,'PROCESSING permits only another GET');
   for(const invalid of ['foreign','malformed','future']){invalidExpiry=invalid;await click(page,'Comprobar resultado');await page.waitForNetworkIdle({idleTime:100,timeout:10000});assert.deepEqual(await browserReferences(page),[reference]);assert.equal(posts.length,1);}
   const readsBeforeExpiry=workspaceQueries;leaseExpired=true;
-  if(globalMode){await page.evaluate(()=>[...document.querySelectorAll('[data-plan-import] button')].find(button=>button.textContent==='Cerrar').click());await click(page,'Comprobar recibo');await waitText(page,'Venció el plazo de la extracción.');await click(page,'Importar PDF o imagen');}else{await click(page,'Comprobar resultado');await waitText(page,'Venció el plazo de este intento.');}
+  if(globalMode){await page.evaluate(()=>[...document.querySelectorAll('[data-plan-import] button')].find(button=>button.textContent==='Cerrar').click());await click(page,'Comprobar recibo');await waitText(page,'Venció el plazo de la extracción.');await click(page,'Importar PDF, imagen o Excel');}else{await click(page,'Comprobar resultado');await waitText(page,'Venció el plazo de este intento.');}
   await page.waitForFunction(()=>document.querySelector('[data-plan-import] input[type=file]')&&!document.querySelector('[data-plan-import] input[type=file]').disabled);assert.deepEqual(await browserReferences(page),[]);assert.equal(posts.length,1);assert.equal(workspaceQueries,readsBeforeExpiry,'Expiry never claims APPLY or refreshes canonical tasks');await assertCount(page,150);
   assert.equal(await page.$eval('[data-plan-import] input[type=file]',input=>input.value),'');assert.equal(await page.$eval('[data-plan-import] input[type=checkbox]',input=>input.checked),false);assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.find(button=>button.textContent==='Extraer borrador').disabled),true);
   await (await page.$('[data-plan-import] input[type=file]')).uploadFile(sourceFile);assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.find(button=>button.textContent==='Extraer borrador').disabled),true);await page.click('[data-plan-import] input[type=checkbox]');await click(page,'Extraer borrador');await waitText(page,'Compará cada fila con el archivo');assert.equal(posts.length,2);assert.notEqual(posts[0].operationId,posts[1].operationId);assert.deepEqual(await browserReferences(page),[]);await assertCount(page,150);
@@ -299,7 +308,7 @@ async function recoveryClosureScenario(mode,width){
  if(closeAfterCheck){
   await click(page,'Comprobar resultado');await waitText(page,'Esto no confirma que el envío se haya perdido');await page.waitForFunction(()=>[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent==='Reintentar los mismos datos'&&!button.disabled));assert.equal(posts.length,1);
   await page.evaluate(()=>[...document.querySelectorAll('[data-plan-import] button')].find(button=>button.textContent==='Cerrar').click());await page.waitForFunction(()=>[...document.querySelectorAll('button')].find(button=>button.textContent==='Actualizar')?.disabled===false);assert.deepEqual(await browserReferences(page),[reference]);
-  await click(page,'Importar PDF o imagen');await click(page,'Comprobar resultado');await waitText(page,'Esto no confirma que el envío se haya perdido');assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false);assert.equal(await page.$('[data-plan-import] input[type=file]'),null);
+  await click(page,'Importar PDF, imagen o Excel');await click(page,'Comprobar resultado');await waitText(page,'Esto no confirma que el envío se haya perdido');assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false);assert.equal(await page.$('[data-plan-import] input[type=file]'),null);
   await page.evaluate(()=>[...document.querySelectorAll('[data-plan-import] button')].find(button=>button.textContent==='Cerrar').click());await click(page,'Cambiar contexto del ensayo');await waitText(page,'Empresa del contexto B');await openProject(page,projectB);await assertCount(page,7,7);assert.ok(!await page.evaluate(id=>document.body.innerText.includes(id),reference.operationId));assert.deepEqual(await browserReferences(page),[reference]);
   await page.reload({waitUntil:'networkidle0'});await waitText(page,'Empresa sintética de cronogramas');await openProject(page);await click(page,'Comprobar resultado');await waitText(page,'Esto no confirma que el envío se haya perdido');assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false);assert.equal(posts.length,1);assert.deepEqual(await browserReferences(page),[reference]);
   checks.push({mode,width,posts:posts.length,recoveryReads:recoveryReads.length,durableJournal:true,ramDiscardedOnClose:true});await context.close();return;
@@ -312,7 +321,7 @@ async function recoveryClosureScenario(mode,width){
   await waitText(page,'El total incluye las tareas del plan aplicado');await assertCount(page,151);assert.equal(posts.length,2);
   if(legacyConflict){
    await page.waitForFunction(id=>[...document.querySelectorAll('code')].some(element=>element.textContent===id),{},legacyId);const legacyReference=(await browserReferences(page))[0];assert.equal(legacyReference.operationId,legacyId);assert.equal(await page.evaluate(({scope,projectId})=>sessionStorage.getItem('obrasaas-plan-attempt-v1:'+scope+':'+projectId),{scope,projectId}),null);
-   await click(page,'Importar PDF o imagen');await waitText(page,'Intento pendiente de comprobación');assert.equal(await page.$('[data-plan-import] input[type=file]'),null);await click(page,'Comprobar resultado');await waitText(page,'Esto no confirma que el envío se haya perdido');assert.deepEqual(await browserReferences(page),[legacyReference]);
+   await click(page,'Importar PDF, imagen o Excel');await waitText(page,'Intento pendiente de comprobación');assert.equal(await page.$('[data-plan-import] input[type=file]'),null);await click(page,'Comprobar resultado');await waitText(page,'Esto no confirma que el envío se haya perdido');assert.deepEqual(await browserReferences(page),[legacyReference]);
   }else{assert.equal((await browserReferences(page)).length,0);assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent.startsWith('Aplicar ')&&!button.disabled)),false,'Global recovery must invalidate the old READY review in the mounted plan panel');}
  }else{
   denyRead=true;await click(page,'Comprobar resultado');await waitText(page,'Tu permiso actual no autoriza esta acción.');assert.deepEqual(await browserReferences(page),[reference]);
@@ -321,7 +330,7 @@ async function recoveryClosureScenario(mode,width){
   if(draft){await page.evaluate(()=>[...document.querySelectorAll('[data-plan-import] button')].find(button=>button.textContent.includes('· 2026-10-06')).click());await waitText(page,'La consulta no repite la IA ni resuelve el intento pendiente');assert.deepEqual(await browserReferences(page),[reference]);}
   await page.evaluate(()=>[...document.querySelectorAll('[data-plan-import] button')].find(button=>button.textContent==='Cerrar').click());
   await page.waitForFunction(()=>[...document.querySelectorAll('button')].find(button=>button.textContent==='Actualizar')?.disabled===false);assert.deepEqual(await browserReferences(page),[reference]);
-  await click(page,'Importar PDF o imagen');await waitText(page,'Intento pendiente de comprobación');assert.equal(await page.$('[data-plan-import] input[type=file]'),null);assert.equal(posts.length,expectedPosts);assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false,'Closing discards the RAM command while retaining its durable GET reference');
+  await click(page,'Importar PDF, imagen o Excel');await waitText(page,'Intento pendiente de comprobación');assert.equal(await page.$('[data-plan-import] input[type=file]'),null);assert.equal(posts.length,expectedPosts);assert.equal(await page.$$eval('[data-plan-import] button',buttons=>buttons.some(button=>button.textContent==='Reintentar los mismos datos')),false,'Closing discards the RAM command while retaining its durable GET reference');
   if(mode==='decision-context-409'){
    await page.evaluate(()=>[...document.querySelectorAll('[data-plan-import] button')].find(button=>button.textContent==='Cerrar').click());await click(page,'Cambiar contexto del ensayo');await waitText(page,'Empresa del contexto B');await openProject(page,projectB);await assertCount(page,7,7);assert.ok(!await page.evaluate(id=>document.body.innerText.includes(id),reference.operationId));assert.deepEqual(await browserReferences(page),[reference]);
    await page.reload({waitUntil:'networkidle0'});await waitText(page,'Empresa sintética de cronogramas');await openProject(page);await assertCount(page,151);await waitText(page,'Intento pendiente de comprobación');

@@ -17,7 +17,7 @@ function fixture({role='SITE_MANAGER',concurrent=false,change='REVOKED'}={}){
  const body={operationId,projectId,scope,workerId:'worker-fixture',revision:'2026-10-01T00:00:00.000001',noticeVersion:PARTICIPANT_NOTICE_VERSION,consent:true,front:picture,selfie:picture};
  const input=participantKycInput(body),requestDigest=digest([input.projectId,input.scope,input.workerId,input.revision,input.noticeVersion,input.front.digest,input.selfie.digest]);
  const recorded={id:participantReceiptId(member.actorId,projectId,operationId),organizationId:member.organizationId,entityType:'Worker',entityId:body.workerId,metadata:{version:1,projectId,kind:'KYC_SUBMITTED',requestDigest}};
- const row={id:body.workerId,name:'Synthetic participant',active:true,revision:body.revision,metadata:{participant:{version:1,status:'ACTIVE',clerkUserId:session.userId,permissions:{attendance:true,report:false},invitation:null,kyc:{status:'NOT_SUBMITTED',submissionId:null,images:[]}}}};
+ const row={id:body.workerId,projectId,name:'Synthetic participant',active:true,revision:body.revision,metadata:{participant:{version:1,status:'ACTIVE',clerkUserId:session.userId,permissions:{attendance:true,report:false},invitation:null,kyc:{status:'NOT_SUBMITTED',submissionId:null,images:[]}}}};
  const counts={sql:[],symbolicUploads:0,realProviderRequests:0,businessWrites:0},project={id:projectId,name:'Synthetic project',status:'ACTIVE',metadata:{},organizationMetadata:{}};
  let visibleReceipt=!concurrent;
  function changeCurrent(){
@@ -35,7 +35,7 @@ function fixture({role='SITE_MANAGER',concurrent=false,change='REVOKED'}={}){
   if(sql.includes('FROM public."ProjectMembership"')){assert.deepEqual(args,[projectId,member.membershipId]);return {rows:[{id:'project-membership-fixture'}]};}
   if(sql.includes('SELECT p.id,p.name,p.metadata,o.metadata')){assert.deepEqual(args,[projectId,member.organizationId]);return {rows:[project]};}
   if(sql.includes('FROM public."AuditLog"')){assert.deepEqual(args,[recorded.id,member.organizationId,member.actorId]);return {rows:visibleReceipt?[recorded]:[]};}
-  if(sql.includes('FROM public."Worker"')){assert.deepEqual(args,[row.id,projectId]);return {rows:[structuredClone(row)]};}
+  if(sql.includes('FROM public."Worker"')){if(sql.includes('JOIN public."Project"'))assert.deepEqual(args,[member.organizationId,session.userId]);else if(sql.includes('WHERE "projectId"=$1'))assert.deepEqual(args,[projectId,session.userId]);else assert.deepEqual(args,[row.id,projectId]);return {rows:[structuredClone(row)]};}
   if(sql.includes('SELECT m.id FROM public."TenantMembership"')){assert.deepEqual(args,[member.membershipId,member.organizationId,session.userId,projectId]);return {rows:[{id:member.membershipId}]};}
   assert.fail('Unexpected canonical SQL: '+sql);
  }});

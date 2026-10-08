@@ -21,6 +21,7 @@ function fixture({rows=Array.from({length:103},(_,i)=>account(i+1)),role='ADMIN'
   if(sql.includes('FROM public."ProjectMembership"'))return {rows:state.assigned?[{id:'assignment'}]:[]};
   if(sql.includes('FROM public."Project"'))return {rows:state.activeProject&&args[1]===member.organizationId?[{id:args[0],name:'Synthetic project',metadata:{},organizationMetadata:{}}]:[]};
   if(sql.includes('FROM public."Worker"'))return {rows:[]};
+  if(sql.includes('FROM public."AuditLog"')){assert.match(sql,/SELECT id FROM/);assert.match(sql,/'INVITATION_ACCEPTED'/);assert.deepEqual(args,[member.organizationId,member.actorId,member.membershipId]);return {rows:[]};}
   if(sql.includes('to_regclass'))return {rows:[{present:false}]};
   if(sql.includes('FROM public."WhatsAppConnection"'))return {rows:[]};
   assert.ok(sql.includes('FROM public."TenantMembership" tm'),'Unexpected read '+sql);

@@ -11,8 +11,11 @@ const event=value=>typeof value==='string'&&/^customer_webhook_[a-f0-9]{64}$/.te
 const instant=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
 const stable=value=>Array.isArray(value)?value.map(stable):object(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
 const fingerprint=value=>digest(stable(value));
+// Opening the project adds identityOnly:false to an admitted membership. Its
+// absence is equivalent; every other claim and admission flag remains exact.
+const memberFingerprint=value=>fingerprint({...value,identityOnly:value.identityOnly===true});
 const statuses=['PENDING','CLAIMED','COMPLETED','CANCELLED','CLOSED'];
-const steps=['CONSENT','OCR','BIOMETRIC','FRONT','SELFIE','CONFIRM','FINALIZING'];
+const steps=['CONSENT','BACK_CONSENT','BACK','OCR','BIOMETRIC','FRONT','SELFIE','CONFIRM','FINALIZING'];
 const submitted=part=>!object(part?.kyc)||part.kyc.version!==1||!['NOT_SUBMITTED','REJECTED'].includes(part.kyc.status)||part.kyc.channelCapture?.challengeId===part.kycChatChallenge?.id;
 const prepared=new WeakMap();
 
@@ -40,7 +43,7 @@ function conversation(row,environment){
  if(!object(envelope)||envelope.version!==1||envelope.challengeId!==challenge.id||!event(challenge.claimedEventId)||!instant(challenge.claimedAt)||!event(envelope.lastEventId)||!Number.isSafeInteger(envelope.lastMessageTimestamp)||envelope.lastMessageTimestamp<1||!instant(envelope.expiresAt)||Date.parse(envelope.expiresAt)!==Date.parse(challenge.claimedAt)+META_KYC_CONVERSATION_TTL_MS)fail();
  let state;
  try{state=JSON.parse(decryptCustomerSecret(envelope.encryptedState,{organizationId:row.organizationId,projectId:anchorProjectId,purpose:'kyc-chat-conversation',resourceId:challenge.id},environment));}catch{fail();}
- if(!object(state)||state.version!==1||!steps.includes(state.step)||state.challengeId!==challenge.id||state.lastEventId!==envelope.lastEventId||state.lastMessageTimestamp!==envelope.lastMessageTimestamp||state.expiresAt!==envelope.expiresAt)fail();
+ if(!object(state)||state.version!==1||state.captureImageSetVersion!==challenge.captureImageSetVersion||!steps.includes(state.step)||state.challengeId!==challenge.id||state.lastEventId!==envelope.lastEventId||state.lastMessageTimestamp!==envelope.lastMessageTimestamp||state.expiresAt!==envelope.expiresAt)fail();
  if(state.step==='FINALIZING'||state.confirmationEventId!=null||challenge.confirmationEventId!=null||challenge.completionEventId!=null||challenge.completedAt!=null)fail('PARTICIPANT_KYC_CHAT_CONFIRMATION_PENDING');
  return state;
 }
@@ -64,6 +67,7 @@ export function publicParticipantKycChat(row,{now,member,canManage=false,environ
 
 function command(member,projectId,input){
  const p=input?.payload||input;
+ if(member?.identityOnly===true)fail('PARTICIPANT_KYC_REVIEW_REQUIRED',403);
  if(!participantManager(member?.role)||!workspaceId(member.actorId)||!workspaceId(member.membershipId)||!workspaceId(member.organizationId))fail('PARTICIPANT_MANAGE_REQUIRED',403);
  if(!workspaceId(projectId)||!workspaceId(p?.workerId)||!operationId(input?.operationId)||!/^kyc_chat_[a-f0-9]{32}$/.test(p?.challengeId||''))fail('PARTICIPANT_INPUT_INVALID',400);
  participantRevision(p.revision);const reason=participantReason(p.reason),key=participantReceiptId(member.actorId,projectId,input.operationId),value={workerId:p.workerId,revision:p.revision,challengeId:p.challengeId,reason};
@@ -164,7 +168,7 @@ async function localAuthority(client,r,row){
 
 export async function cancelParticipantKycChat(client,member,project,input,{environment=process.env}={}){
  const p=command(member,project?.id,input),r=prepared.get(client);
- if(!r||r.projectId!==project.id||project.organizationId!==undefined&&project.organizationId!==member.organizationId||r.command.requestDigest!==p.requestDigest||fingerprint(r.member)!==fingerprint(member))fail('WORKSPACE_CONTEXT_CHANGED');
+ if(!r||r.projectId!==project.id||project.organizationId!==undefined&&project.organizationId!==member.organizationId||r.command.requestDigest!==p.requestDigest||memberFingerprint(r.member)!==memberFingerprint(member))fail('WORKSPACE_CONTEXT_CHANGED');
  await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[p.closureReceiptId]);
  const row=await worker(client,member,project.id,p.workerId,true);
  if(r.recorded){
@@ -195,7 +199,7 @@ export async function cancelParticipantKycChat(client,member,project,input,{envi
 
 async function afterWrite(client,member,input){
  const r=prepared.get(client);if(!r?.updated&&!r?.recorded)fail('PARTICIPANT_KYC_CHAT_INTEGRITY');
- const p=command(member,r.projectId,input);if(p.requestDigest!==r.command.requestDigest||fingerprint(member)!==fingerprint(r.member))fail('WORKSPACE_CONTEXT_CHANGED');
+ const p=command(member,r.projectId,input);if(p.requestDigest!==r.command.requestDigest||memberFingerprint(member)!==memberFingerprint(r.member))fail('WORKSPACE_CONTEXT_CHANGED');
  const receipts=(await client.query('SELECT id,"actorId","entityType","entityId",metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND action=\'participant.operation.recorded\'',[p.closureReceiptId,member.organizationId])).rows;
  if(receipts.length!==1||receipts[0].actorId!==member.actorId||receipts[0].entityType!=='Worker'||receipts[0].entityId!==p.workerId||receipts[0].metadata?.version!==1||receipts[0].metadata.projectId!==r.projectId||receipts[0].metadata.kind!=='CANCEL_KYC_CHAT'||receipts[0].metadata.closureReceiptId!==p.receiptId||receipts[0].metadata.challengeId!==p.challengeId||receipts[0].metadata.requestDigest!==r.outerRequestDigest)fail('PARTICIPANT_RECEIPT_INVALID');
  const rows=(await client.query('SELECT metadata,clock_timestamp() AS now FROM public."Worker" WHERE id=$1 AND "projectId"=$2',[p.workerId,r.projectId])).rows;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {participantOnboardingNextStep} from '../src/app/(identity)/cuenta/participant-onboarding-next-step.mjs';
+import {participantOnboardingNextStep,participantKycChatCapabilities} from '../src/app/(identity)/cuenta/participant-onboarding-next-step.mjs';
 
 const now=Date.parse('2026-10-07T00:50:00.000Z');
 const context=()=>({scope:'a'.repeat(64),projectId:'project-a',verified:true,now});
@@ -130,4 +130,9 @@ test('the helper has no mutation, percentage, secret or readiness authority in i
   const before=JSON.stringify(input);const result=participantOnboardingNextStep(input);assert.equal(JSON.stringify(input),before);
   assert.ok(result.primary===null||result.primary.label.length<40);assert.equal(Object.hasOwn(result,'percent'),false);assert.equal(Object.hasOwn(result,'authorizedJob'),false);assert.equal(Object.hasOwn(result,'saved'),false);
  }
+});
+
+for(const state of ['BACK_CONSENT','BACK'])test('current WhatsApp '+state+' capture exposes only its observed cancellation capability',()=>{
+ const value=manager(),row=value.snapshot.records[0];row.status='INVITED';row.kyc={status:'NOT_SUBMITTED',images:[]};row.kycChatChallenge={id:'challenge-a',status:'CLAIMED',expiresAt:'2026-10-07T01:30:00.000Z',conversationExpiresAt:'2026-10-07T01:00:00.000Z',expired:false,canPrepare:false,canCancel:true,blockedCode:null,step:state,recoveryRequired:false};
+ const capability=participantKycChatCapabilities(row,true,now);assert.equal(capability.observed,true);assert.equal(capability.canPrepare,false);assert.equal(capability.canCancel,true);row.kycChatChallenge.canCancel=false;assert.equal(participantKycChatCapabilities(row,true,now).canCancel,false);assert.equal(participantKycChatCapabilities(row,false,now).canCancel,false);assert.equal(row.permissions.attendance,true);
 });

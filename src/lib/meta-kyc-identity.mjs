@@ -80,16 +80,31 @@ export async function resolveMetaKycAuthority(client,context,{deposit=false,outb
 }
 async function finishMetaKycAuthority(client,context,r,{deposit,outbound,environment}){
  const {event,project,worker,challenge,payload:finalPayload,now}=r;
+ if(challenge.captureImageSetVersion!==undefined&&challenge.captureImageSetVersion!==2)fail('META_KYC_CHALLENGE_REJECTED');
+ if(challenge.captureImageSetVersion===2){
+  const prepared=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "actorId"=$2 AND "entityType"='Worker' AND "entityId"=$3 AND action='participant.kyc_chat.prepared' AND metadata->>'challengeId'=$4`,[project.organizationId,challenge.issuerActorId,worker.id,challenge.id])).rows;
+  if(prepared.length!==1||prepared[0].metadata?.version!==1||prepared[0].metadata.projectId!==project.id||prepared[0].metadata.captureImageSetVersion!==2||prepared[0].metadata.expiresAt!==challenge.expiresAt||!/^[a-f0-9]{64}$/.test(prepared[0].metadata.requestDigest||''))fail('META_KYC_CHALLENGE_REJECTED');
+ }
+
  if(r.companyKyc&&challenge.status==='PENDING'&&(deposit||outbound))fail('META_KYC_CHALLENGE_REJECTED');
  r.state=readMetaKycConversation(r,environment);
+ if(r.state&&r.state.captureImageSetVersion!==challenge.captureImageSetVersion)fail('META_KYC_CHALLENGE_REJECTED');
  const prior=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "entityId"=$3 AND action='participant.kyc_chat.dispatched'`,[metaKycDispatchReceiptId(event.id),project.organizationId,worker.id])).rows[0];
  if(prior){if(prior.metadata.payloadDigest!==context.payloadDigest||prior.metadata.challengeId!==challenge.id)fail('META_KYC_CHALLENGE_REJECTED');r.recorded=readMetaKycValue(r,'kyc-chat-dispatch',metaKycDispatchReceiptId(event.id),prior.metadata.encryptedResult,environment);if(r.recorded?.kind!=='KYC_CHAT'||r.recorded.identityStatus!=='LIMITED_KYC_UPLOAD'||prior.metadata.replyDigest!==digest(r.recorded.reply))fail('META_KYC_CHALLENGE_REJECTED');}
  if((!r.recorded||outbound)&&r.state&&r.state.lastEventId!==event.id&&Number(finalPayload.value.timestamp)<=r.state.lastMessageTimestamp)fail('META_KYC_MESSAGE_OUT_OF_ORDER');
  if(!r.recorded&&challenge.messageCount>=40&&!(r.state?.step==='FINALIZING'&&r.state.confirmationEventId===event.id))fail('META_KYC_CONVERSATION_LIMIT');
  if(challenge.status==='CLAIMED'&&(!Number.isFinite(Date.parse(challenge.claimedAt))||Date.parse(challenge.claimedAt)+META_KYC_CONVERSATION_TTL_MS<=now.getTime()))fail('META_KYC_CHALLENGE_EXPIRED');
- if(deposit&&(!r.state||r.state.step!=='FINALIZING'||r.state.confirmationEventId!==event.id||r.state.consent!==true||!r.state.front||!r.state.selfie))fail('META_KYC_DEPOSIT_REQUIRED');
+ if(deposit&&(!r.state||r.state.step!=='FINALIZING'||r.state.confirmationEventId!==event.id||r.state.consent!==true||!r.state.front||!r.state.selfie||challenge.captureImageSetVersion===2&&(!r.state.back||r.state.backConsent!==true)))fail('META_KYC_DEPOSIT_REQUIRED');
  if(outbound&&!r.recorded?.reply)fail('META_KYC_CHALLENGE_REJECTED');
  assertCompanyKycPrompt(r);
+ if(deposit&&challenge.captureImageSetVersion===2&&!r.companyKyc)for(const reference of [r.state.front,r.state.selfie,r.state.back]){
+  if(!eventId(reference?.eventId))fail('META_KYC_DEPOSIT_REQUIRED');
+  const rows=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2`,[reference.eventId,r.connection.projectId])).rows;
+  if(rows.length!==1||rows[0].payload?.channelId!==r.connection.id)fail('META_KYC_CHALLENGE_REJECTED');
+  const image=decodeSignedCustomerEvent(rows[0],r.connection,environment),id=metaKycDispatchReceiptId(reference.eventId),sources=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "entityId"=$3 AND action='participant.kyc_chat.dispatched'`,[id,project.organizationId,worker.id])).rows,m=sources[0]?.metadata;
+  if(image.type!=='message'||image.value.type!=='image'||image.value.image?.id!==reference.mediaId||image.value.image?.mime_type!==reference.contentType||'+'+image.value.from!==worker.phone||sources.length!==1||m.challengeId!==challenge.id||m.captureImageSetVersion!==2||m.payloadDigest!==rows[0].payload.payloadDigest)fail('META_KYC_CHALLENGE_REJECTED');
+  const result=readMetaKycValue(r,'kyc-chat-dispatch',id,m.encryptedResult,environment);if(result?.kind!=='KYC_CHAT'||result.identityStatus!=='LIMITED_KYC_UPLOAD'||m.replyDigest!==digest(result.reply))fail('META_KYC_CHALLENGE_REJECTED');
+ }
  if(deposit)await assertCompanyKycImageSources(client,r,environment);
  await fenceCompanyKycAuthority(client,r,context);
  return r;

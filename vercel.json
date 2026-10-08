@@ -10,6 +10,9 @@
   "crons": [{"path":"/api/meta/customer-process","schedule":"*/5 * * * *"}],
   "git": {
     "deploymentEnabled": {
+      "feat/video-audio-context-20261007": false,
+      "feat/kyc-whatsapp-document-back-20261007": false,
+      "feat/kyc-document-back-20261007": false,
       "feat/voice-progress-drafts-20261007": false,
       "fix/field-review-pagination-20261007": false,
       "fix/invitation-template-guidance-20261007": false,

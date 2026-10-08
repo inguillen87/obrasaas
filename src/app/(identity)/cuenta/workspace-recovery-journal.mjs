@@ -14,6 +14,16 @@ export const FIELD_OVERTIME_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_OVERTIME'
 export const PARTICIPANT_INTAKE_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_EMPLOYEE_INTAKE','ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE']);
 const templateSendActionReference=value=>Boolean(value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='proposalId|revision'&&id(value.proposalId)&&typeof value.revision==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(value.revision));
 const scopeValid = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+export const PROJECT_PREPARATION_SNAPSHOT_KEYS=Object.freeze(['scope','projectId','canManage','revision','detailsDigest','name','clientName','address','teams','slots','startStatus','declarationOnly']);
+export function projectPreparationReceiptOutcome(value,reference){
+ const exact=fields=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')===[...fields].sort().join('|');
+ if(!scopeValid(value?.scope)||value.scope!==reference?.scope||value.projectId!==reference?.projectId||!id(value.projectId)||value.operationId!==reference?.operationId||!uuid(value.operationId)||value.action!=='SAVE_PREPARATION')return null;
+ if(value.state==='NOT_OBSERVED')return exact(['scope','projectId','operationId','action','state','saved','definitive'])&&value.saved===false&&value.definitive===false?{state:'NOT_OBSERVED'}:null;
+ if(value.state==='CANCELLED')return exact(['scope','projectId','operationId','action','state','saved','definitive','receiptId','projectUpdated'])&&value.saved===false&&value.definitive===true&&value.projectUpdated===false&&/^project_preparation_[a-f0-9]{64}$/.test(value.receiptId||'')?{state:'CANCELLED',receiptId:value.receiptId}:null;
+ const fields=['state','saved','replayed','receiptId','operationId','action','savedRevision','savedPreparationIsCurrent'];
+ if(!exact([...PROJECT_PREPARATION_SNAPSHOT_KEYS,...fields])||value.state!=='RECORDED'||value.saved!==true||typeof value.replayed!=='boolean'||!/^project_preparation_[a-f0-9]{64}$/.test(value.receiptId||'')||!Number.isSafeInteger(value.revision)||value.revision<1||value.revision>2147483647||!Number.isSafeInteger(value.savedRevision)||value.savedRevision<1||value.savedRevision>value.revision||typeof value.savedPreparationIsCurrent!=='boolean'||value.savedPreparationIsCurrent!==(value.savedRevision===value.revision)||value.canManage!==true||!scopeValid(value.detailsDigest)||typeof value.name!=='string'||typeof value.clientName!=='string'||typeof value.address!=='string'||!Array.isArray(value.teams)||value.teams.length>20||!Array.isArray(value.slots)||value.slots.length>50||value.startStatus!=='TO_CONFIRM'||value.declarationOnly!==true)return null;
+ return {state:'RECORDED',receiptId:value.receiptId};
+}
 const planDecisionCodes=Object.freeze(['PLAN_IMPORT_ROWS_LIMIT','PLAN_IMPORT_ROWS_INVALID','PLAN_IMPORT_DATES_INVALID','PLAN_IMPORT_DUPLICATE_ROWS','PLAN_IMPORT_REVIEW_REQUIRED','PLAN_IMPORT_REVISION_CHANGED','PLAN_IMPORT_SCHEDULE_CHANGED','PLAN_IMPORT_SOURCE_ALREADY_APPLIED','PLAN_IMPORT_SCHEDULE_TOO_LARGE']);
 const planUploadCodes=Object.freeze(['PLAN_IMPORT_SOURCE_ALREADY_APPLIED','PLAN_IMPORT_SCHEDULE_TOO_LARGE']);
 const sha256=async bytes=>[...new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
@@ -23,7 +33,8 @@ export async function planImportCommandDigest(body){
  return [...new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
 }
 export async function planImportUploadDigest({scope,projectId,operationId,consent,source}){
- if(!scopeValid(scope)||!id(projectId)||!uuid(operationId)||consent!=='plan-document-openai-v1'||!source||!Number.isSafeInteger(source.bytes)||source.bytes<1||source.bytes>3*1024*1024||!['application/pdf','image/png','image/jpeg','image/webp'].includes(source.contentType)||!/^[a-f0-9]{64}$/.test(source.sha256||''))throw unavailable();
+ const spreadsheet=['application/vnd.ms-excel.sheet.macroenabled.12','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(source?.contentType);
+ if(!scopeValid(scope)||!id(projectId)||!uuid(operationId)||!(spreadsheet?['plan-spreadsheet-monthly-rubros-v1','plan-spreadsheet-cyp-partidas-v2'].includes(consent):consent==='plan-document-openai-v1')||!source||!Number.isSafeInteger(source.bytes)||source.bytes<1||source.bytes>3*1024*1024||!['application/pdf','image/png','image/jpeg','image/webp','application/vnd.ms-excel.sheet.macroenabled.12','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(source.contentType)||!/^[a-f0-9]{64}$/.test(source.sha256||''))throw unavailable();
  return sha256(new TextEncoder().encode(JSON.stringify(['plan-import-upload-command-v1',{action:'UPLOAD',consent,operationId:operationId.toLowerCase(),projectId,scope,source:{bytes:source.bytes,contentType:source.contentType,sha256:source.sha256}}])));
 }
 export async function planImportUploadFormDigest(form){
@@ -41,6 +52,7 @@ export const RECOVERY_RESOURCES = Object.freeze({
   'constructor-crm':'Cliente u oportunidad de la empresa',
   'demo-pilot':'Preparación y vinculación del piloto DEMO',
   'plan-import':'Importación de cronograma',
+  'project-preparation':'Preparación de la obra',
   'company-channel':'Canal de la empresa y obras',
   'company-onboarding':'Número declarado de la empresa',
 });
@@ -58,6 +70,7 @@ async function reference(url, options, now) {
   if(typeof options.body==='string'){try{body=JSON.parse(options.body);}catch{return null;}}
   else if(typeof options.body?.get==='function') body=Object.fromEntries(['operationId','projectId','scope','action','reportId','eventId'].map(key=>[key,options.body.get(key)]));
   if(!body||!uuid(body.operationId)||!id(body.projectId)||!scopeValid(body.scope))return null;
+  if(resource==='project-preparation'&&!['SAVE_PREPARATION','CANCEL_PENDING_PREPARATION'].includes(body.action))throw unavailable();
   if(resource==='company-onboarding'&&(body.action!=='declare_company_phone'||!id(body.expectedClerkOrganizationId)))throw unavailable();
   if(resource==='site-photo'&&!id(body.reportId))return null;
   if(resource==='company-channel'&&(!COMPANY_CHANNEL_ACTIONS.includes(body.action)||!id(body.payload?.connectionId)))throw unavailable();
@@ -87,6 +100,7 @@ async function reference(url, options, now) {
     ...(progress?{templateKey:PROGRESS_TEMPLATE_SEND_KEY,workerId:body.workerId,actionReference:{proposalId:body.actionReference.proposalId,revision:body.actionReference.revision}}:{}),
     ...(plan?{action:body.action,draftId:body.draftId,expectedRevision:body.expectedRevision,inputDigest}:{}),
     ...(planUpload?{action:'UPLOAD',inputDigest}:{}),
+    ...(resource==='project-preparation'?{action:'SAVE_PREPARATION'}:{}),
   };
 }
 function valid(entry) {
@@ -97,8 +111,10 @@ function valid(entry) {
   const intake=entry.resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action);
   const plan=entry.resource==='plan-import'&&entry.action!==undefined;
   const planUpload=plan&&entry.action==='UPLOAD';
+  const preparation=entry.resource==='project-preparation';
   if(entry.resource==='participants'&&entry.action!==undefined&&!bank&&!intake)return false;
-  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',['reconcile','cancel'].includes(entry.action)?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(bank?['action','workerId']:[]),...(intake?['action','connectionId',...(entry.action==='CONFIGURE_EMPLOYEE_INTAKE'?[]:['applicationId'])]:[]),...(progress?['templateKey','workerId','actionReference']:[]),...(planUpload?['action','inputDigest']:plan?['action','draftId','expectedRevision','inputDigest']:[])];
+  if(preparation&&entry.action!=='SAVE_PREPARATION')return false;
+  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',['reconcile','cancel'].includes(entry.action)?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(bank?['action','workerId']:[]),...(intake?['action','connectionId',...(entry.action==='CONFIGURE_EMPLOYEE_INTAKE'?[]:['applicationId'])]:[]),...(progress?['templateKey','workerId','actionReference']:[]),...(planUpload?['action','inputDigest']:plan?['action','draftId','expectedRevision','inputDigest']:[]),...(preparation?['action']:[])];
   if(Object.keys(entry).sort().join('|')!==fields.sort().join('|'))return false;
   if(entry.resource==='company-onboarding'&&(entry.action!=='declare_company_phone'||!id(entry.expectedClerkOrganizationId)))return false;
   if(entry.resource==='company-channel'&&(!COMPANY_CHANNEL_ACTIONS.includes(entry.action)||!id(entry.connectionId)))return false;
@@ -149,6 +165,7 @@ export function recoveryResult(entry, result) {
     return null;
   }
   if(entry.resource==='company-channel'){try{companyChannelOutcome(result,entry);return result.state==='RECORDED'||result.state==='REJECTED'?{state:result.state,receiptId:result.receiptId}:{state:'NOT_OBSERVED'};}catch{return null;}}
+  if(entry.resource==='project-preparation')return projectPreparationReceiptOutcome(result,entry);
   if(entry.resource==='plan-import') {
     if(result.projectId!==entry.projectId)return null;
     if(result.state==='REJECTED'&&result.proof==='AUDITED_UPLOAD'){
@@ -338,6 +355,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       if(entry.resource==='meta-onboarding'){if(['reconcile','cancel'].includes(entry.action)&&['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='template-send'){if(['ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='site-purchases'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
+      if(entry.resource==='project-preparation'){if(['RECORDED','CANCELLED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='constructor-crm'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(entry.action)){if(['RECORDED','REJECTED','CANCELLED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='company-onboarding'){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}

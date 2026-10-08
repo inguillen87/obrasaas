@@ -22,7 +22,12 @@ const rows=value=>({rows:value,rowCount:value.length});
 function mediaFixture({target='project-b',corporate=true,analyze=false,mediaId='media-fixture',providerFactory=null,beforeQuery=()=>{},afterQuery=()=>{},beforeResolve=()=>{},onIO=()=>{}}={}){
  const member={organizationId:'organization-a',actorId:'actor-a',membershipId:'membership-a',clerkUserId:'user_Fixture',role:'ADMIN'};
  const project={id:target,name:'Target '+target,metadata:{fieldOperations:{sectors:[{id:'sector-a',name:'Sector A'}]}}};
- const worker={id:'worker-'+target,projectId:target,name:'Fixture',active:true,metadata:{preserve:true,participant:{version:1,status:'ACTIVE',clerkUserId:member.clerkUserId,permissions:{attendance:false,report:true},kyc:{status:'APPROVED'}}}};
+ const kycImages=[{id:'document-front',kind:'DOCUMENT_FRONT',sha256:'a'.repeat(64),bytes:png.length,contentType:'image/png'},{id:'selfie',kind:'SELFIE',sha256:'b'.repeat(64),bytes:png.length,contentType:'image/png'}];
+ const kyc={version:1,status:'APPROVED',submissionId:'kyc-'+target,contentHash:digest(kycImages.map(image=>[image.kind,image.sha256,image.bytes,image.contentType])),images:kycImages,review:{decision:'APPROVED',actorId:'independent-reviewer',recordedAt:'2026-10-06T10:00:00.000Z'}};
+ const worker={id:'worker-'+target,projectId:target,name:'Fixture',active:true,metadata:{preserve:true,participant:{version:1,status:'ACTIVE',clerkUserId:member.clerkUserId,permissions:{attendance:false,report:true},kyc}}};
+ // Identity proofs are pre-existing fixture data, separate from receipts written
+ // by the operation so the original I/O, dispatch and lease counters stay exact.
+ const kycProofs=[{id:'review-'+target,actorId:kyc.review.actorId,entityId:worker.id,metadata:{version:1,kind:'REVIEW_KYC',projectId:target,submissionId:kyc.submissionId,decision:'APPROVED'}},{id:'submit-'+target,actorId:member.actorId,entityId:worker.id,metadata:{version:1,kind:'KYC_SUBMITTED',projectId:target,submissionId:kyc.submissionId,contentHash:kyc.contentHash}}];
  const connection={id:'connection-a',projectId:'project-a',phoneNumberId:'120000001',whatsappBusinessId:'130000001',metadata:{},encryptedAccessToken:encryptCustomerSecret('synthetic-anchor-token',{organizationId:member.organizationId,projectId:'project-a',purpose:'access-token',resourceId:'120000001'},environment)};
  const event={id:'customer_webhook_'+digest(['fixture',target]),projectId:'project-a',status:'PENDING',leaseToken:'fixture-source-lease',leaseExpiresAt:new Date(Date.now()+120000),createdAt:new Date(),payload:{payloadDigest:digest('signed-source-fixture')}};
  const context={eventId:event.id,projectId:event.projectId,channelId:connection.id,payloadDigest:event.payload.payloadDigest,leaseToken:event.leaseToken};
@@ -46,6 +51,10 @@ function mediaFixture({target='project-b',corporate=true,analyze=false,mediaId='
   else if(sql.startsWith('UPDATE public."WebhookEvent" SET "leaseExpiresAt"')){const valid=event.status==='PENDING'&&Date.parse(event.leaseExpiresAt)>Date.now();if(valid)event.leaseExpiresAt=new Date(Date.now()+180000);value={rows:[],rowCount:valid?1:0};}
   else if(sql.startsWith('UPDATE public."WebhookEvent" SET "appliedAt"'))value={rows:[],rowCount:Date.parse(event.leaseExpiresAt)>Date.now()?1:0};
   else if(sql.includes('FROM public."WebhookEvent"')&&sql.includes('"leaseExpiresAt">clock_timestamp()'))value=rows(Date.parse(event.leaseExpiresAt)>Date.now()?[{id:event.id}]:[]);
+  else if(sql.includes('FROM public."AuditLog"')&&(sql.includes("'REVIEW_KYC'")||sql.includes("'KYC_SUBMITTED'"))){
+   const kind=sql.includes("'REVIEW_KYC'")?'REVIEW_KYC':'KYC_SUBMITTED';
+   value=rows(kycProofs.filter(proof=>args[0]===member.organizationId&&proof.actorId===args[1]&&proof.entityId===args[2]&&proof.metadata.projectId===args[3]&&proof.metadata.submissionId===args[4]&&proof.metadata.kind===kind&&(kind!=='REVIEW_KYC'||proof.metadata.decision==='APPROVED')));
+  }
   else if(sql.includes('FROM public."AuditLog"')){const found=audits.get(args[0]);value=rows(found&&sql.includes("'"+found.action+"'")?[found]:[]);}
   else if(sql.startsWith('INSERT INTO public."AuditLog"')){const action=/VALUES\(\$1,\$2,\$3,'([^']+)'/.exec(sql)[1];assert.ok(!audits.has(args[0]),'Unique receipt');audits.set(args[0],{id:args[0],action,entityId:args[3],metadata:JSON.parse(args[4])});value={rows:[],rowCount:1};}
   else if(sql.startsWith('UPDATE public."Worker"')){assert.equal(args[1],target);worker.metadata=JSON.parse(args[2]);value={rows:[],rowCount:1};}

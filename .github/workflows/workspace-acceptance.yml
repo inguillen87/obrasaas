@@ -1,4 +1,4 @@
-# Additive bank/intake and corporate KYC CI: preserves all 46 prior blocks and 44 artifact patterns.
+# Additive private identity CI: preserves all 53 prior blocks and 57 artifact patterns.
 name: Authorized workspace acceptance
 "on":
   push:
@@ -552,6 +552,12 @@ jobs:
       - run: node scripts/verify-operations-status-ui.mjs
       - run: node scripts/verify-site-purchase-ui.mjs
       - run: node scripts/verify-site-register-ui.mjs
+      - name: Canonical project preparation, planned slots and uncertain receipt recovery
+        run: |
+          npx eslint src/lib/project-preparation-*.mjs src/app/api/identity/project-preparation 'src/app/(identity)/cuenta/project-preparation-panel.js' 'src/app/(identity)/cuenta/project-preparation-format.mjs' scripts/verify-project-preparation-*.mjs tests/production-project-preparation.test.mjs tests/production-participant-document-back.test.mjs --max-warnings 0
+          node --test tests/production-project-preparation.test.mjs
+          node scripts/verify-project-preparation-postgres.mjs
+          node scripts/verify-project-preparation-ui.mjs
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane business --expected-head "$GITHUB_SHA"
@@ -569,6 +575,9 @@ jobs:
             .vercel/constructor-crm-adoption-evidence/
             .vercel/manual-evidence/
             .vercel/onboarding-guide-evidence/
+            .vercel/private/project-preparation-postgres-validation.json
+            .vercel/private/project-preparation-ui-*.json
+            .vercel/private/project-preparation-ui-*.png
             .vercel/workspace-ci-evidence/lane-business.json
           include-hidden-files: true
           retention-days: 7
@@ -630,6 +639,15 @@ jobs:
           npx eslint src/lib/identity-return-path.mjs src/lib/session-recovery.mjs 'src/app/(identity)/identity-load-guard.js' 'src/app/(identity)/cuenta/session-recovery.js' 'src/app/(identity)/cuenta/invitation-entry.js' 'src/app/(identity)/cuenta/workspace-session-request.mjs' scripts/verify-clerk-access-ui.mjs tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs
           node --test tests/production-identity-return-path.test.mjs tests/production-session-recovery.test.mjs tests/production-workspace-session-request.test.mjs
           node scripts/verify-clerk-access-ui.mjs
+      - name: Canonical authorized portfolio, private source-bound contracts and responsive recovery
+        run: |
+          npx eslint scripts/verify-portfolio-overview-contracts.mjs scripts/verify-portfolio-overview-ui.mjs scripts/verify-workspace-postgres.mjs tests/production-portfolio-overview.test.mjs --max-warnings 0
+          node scripts/verify-portfolio-overview-contracts.mjs --expected-head "$GITHUB_SHA"
+          node scripts/verify-portfolio-overview-ui.mjs
+      - name: Own private identity before admission and explicit authorized workspace refresh
+        run: |
+          npx eslint src/lib/participant-admission.mjs tests/production-participant-admission.test.mjs tests/production-workspace-identity-only.test.mjs scripts/verify-workspace-identity-only-ui.mjs scripts/fixtures/canonical-participant-kyc.mjs tests/production-field-canonical-kyc.test.mjs tests/production-company-field-operations.test.mjs --max-warnings 0
+          node scripts/verify-workspace-identity-only-ui.mjs --expected-head "$GITHUB_SHA"
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane workspace-ui --expected-head "$GITHUB_SHA"
@@ -644,6 +662,10 @@ jobs:
             .vercel/clerk-access-evidence/
             .vercel/workspace-reload-evidence/
             .vercel/customer-inbox-evidence/
+            .vercel/portfolio-overview-contract-evidence/
+            .vercel/private/portfolio-overview-ui-validation.json
+            .vercel/private/portfolio-*.png
+            .vercel/workspace-identity-only-evidence/
             .vercel/workspace-ci-evidence/lane-workspace-ui.json
           include-hidden-files: true
           retention-days: 7

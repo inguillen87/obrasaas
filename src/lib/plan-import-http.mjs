@@ -3,11 +3,11 @@ import {planContext,boundedPlanMultipart,planImportSourceRejection} from './plan
 const headers={'Cache-Control':'private, no-store, max-age=0','Vary':'Cookie, Authorization','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow'};
 const reply=(body,status=200)=>Response.json(body,{status,headers});
 async function boundedDecision(request) {
- const length=request.headers.get('content-length'),limit=256*1024;
+ const length=request.headers.get('content-length'),limit=1024*1024;
  if(request.headers.get('content-type')?.split(';')[0].trim()!=='application/json'||request.headers.has('content-encoding'))throw new WorkspaceError('PLAN_IMPORT_INPUT_INVALID');
  if(length!==null&&(!/^\d+$/.test(length)||Number(length)>limit))throw new WorkspaceError('PLAN_IMPORT_INPUT_INVALID',413);
  const reader=request.body?.getReader();if(!reader)throw new WorkspaceError('PLAN_IMPORT_INPUT_INVALID');let size=0;const chunks=[];
- try{while(true){const item=await reader.read();if(item.done)break;size+=item.value.byteLength;if(size>limit)throw new WorkspaceError('PLAN_IMPORT_INPUT_INVALID',413);chunks.push(Buffer.from(item.value));}return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks)));}
+ try{while(true){const item=await reader.read();if(item.done)break;size+=item.value.byteLength;if(size>limit)throw new WorkspaceError('PLAN_IMPORT_INPUT_INVALID',413);chunks.push(Buffer.from(item.value));}const body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks)));if(size>256*1024&&(!Array.isArray(body?.rows)||!body.rows.length||body.rows.some(row=>typeof row?.code!=='string'||typeof row?.parentCode!=='string')))throw new WorkspaceError('PLAN_IMPORT_INPUT_INVALID',413);return {body,requestBytes:size};}
  catch(error){if(error instanceof WorkspaceError)throw error;throw new WorkspaceError('PLAN_IMPORT_INPUT_INVALID');}finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
 }
 export function createPlanImportHandlers({verify,imports}) {
@@ -15,7 +15,7 @@ export function createPlanImportHandlers({verify,imports}) {
   const session=await verify(request.headers);if(!session.authenticated&&['IDENTITY_CONFIGURATION_PENDING','IDENTITY_PROVIDER_UNAVAILABLE'].includes(session.code))throw new WorkspaceError('IDENTITY_PROVIDER_UNAVAILABLE',503);requireWorkspaceIdentity(session);
   if(request.headers.get('sec-fetch-site')==='cross-site'||request.method==='POST'&&request.headers.get('origin')!=='https://obrasaas.com')throw new WorkspaceError('WORKSPACE_ORIGIN_REJECTED',403);
   const params=new URL(request.url).searchParams;
-  if(request.method==='POST'){if(params.size)throw new WorkspaceError('PLAN_IMPORT_INPUT_INVALID');return reply(request.headers.get('content-type')?.startsWith('multipart/form-data;')?await imports.attach(session,await boundedPlanMultipart(request)):await imports.decide(session,await boundedDecision(request)));}
+  if(request.method==='POST'){if(params.size)throw new WorkspaceError('PLAN_IMPORT_INPUT_INVALID');if(request.headers.get('content-type')?.startsWith('multipart/form-data;'))return reply(await imports.attach(session,await boundedPlanMultipart(request)));const decision=await boundedDecision(request);return reply(await imports.decide(session,decision.body,{requestBytes:decision.requestBytes}));}
   if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
   for(const key of params.keys())if(!['projectId','scope','draftId','operationId','source'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('PLAN_IMPORT_INPUT_INVALID');
   const context=planContext(Object.fromEntries(params));

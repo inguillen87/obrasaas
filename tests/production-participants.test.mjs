@@ -38,7 +38,7 @@ test('personal identity presentation reuses canonical ownership and does not req
  assert.equal(await assertOwnParticipant(f.client,f.member,f.ownSession,'project-a','worker-a'),f.row);assert.deepEqual(f.row,before);
  await assert.rejects(assertFieldParticipant(f.client,f.member,f.ownSession,'project-a','worker-a',{permission:'report'}),{code:'PARTICIPANT_ACCESS_REQUIRED'});
  await assert.rejects(assertFieldParticipant(f.client,f.member,f.ownSession,'project-a','worker-a',{permission:'attendance',requireKyc:true}),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
- f.row.metadata.participant.kyc.status='APPROVED';assert.equal(await assertFieldParticipant(f.client,f.member,f.ownSession,'project-a','worker-a',{permission:'attendance',requireKyc:true}),f.row);
+ f.row.metadata.participant.kyc.status='APPROVED';await assert.rejects(assertFieldParticipant(f.client,f.member,f.ownSession,'project-a','worker-a',{permission:'attendance',requireKyc:true}),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
  await assert.rejects(assertFieldParticipant(f.client,f.member,f.ownSession,'project-a','worker-a',{permission:'report',requireKyc:true}),{code:'PARTICIPANT_ACCESS_REQUIRED'});
 });
 test('personal identity ownership rejects revoked, inactive, foreign and unconfirmed canonical memberships',async()=>{

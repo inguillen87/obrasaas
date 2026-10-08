@@ -1,4 +1,5 @@
 import {WorkspaceError,workspaceId,digest} from './workspace-policy.mjs';
+import {participantKycImageSet} from './participant-kyc-image-set.mjs';
 async function adoptedKycSubmission(client,row,member,p,reject){
  const k=p.kyc,c=k.channelCapture,invite=p.invitation;
  // Pre-account capture remains attributed to its original issuer. Only the
@@ -10,14 +11,15 @@ async function adoptedKycSubmission(client,row,member,p,reject){
  if(proofs.length!==3||captures.length!==1||accepts.length!==1||adoptions.length!==1)reject();
  const capture=captures[0],accept=accepts[0],adoption=adoptions[0],initial={...c,accountClaimRequired:true};for(const key of ['claimedAt','claimedActorId','claimedClerkUserId','acceptanceReceiptId'])delete initial[key];
  const scoped=a=>a.action===(a.id===c.acceptanceReceiptId+'_kyc'?'participant.kyc_chat.adopted':'participant.operation.recorded')&&a.entityType==='Worker'&&a.entityId===row.id&&a.metadata?.version===1&&a.metadata.projectId===row.projectId;
+ if(!participantKycImageSet(k,{receipt:capture.metadata,projectId:row.projectId}))reject();
  if(!scoped(capture)||!workspaceId(capture.actorId)||capture.metadata.kind!=='KYC_SUBMITTED'||capture.metadata.status!=='PENDING_ACCOUNT_CLAIM'||capture.metadata.submissionId!==k.submissionId||capture.metadata.contentHash!==k.contentHash||!capture.metadata.channelCapture||digest(capture.metadata.channelCapture)!==digest(initial)||!scoped(accept)||accept.actorId!==member.actorId||accept.metadata.kind!=='INVITATION_ACCEPTED'||accept.metadata.invitationId!==invite.id||accept.metadata.requestDigest!==digest([row.id,invite.id,member.clerkUserId,invite.email])||!scoped(adoption)||adoption.actorId!==member.actorId||adoption.metadata.submissionId!==k.submissionId||adoption.metadata.contentHash!==k.contentHash||adoption.metadata.captureReceiptId!==c.receiptId||adoption.metadata.acceptanceReceiptId!==c.acceptanceReceiptId)reject();
 }
 export async function assertApprovedParticipantKyc(client,row,member,{code='PARTICIPANT_KYC_REVIEW_REQUIRED'}={}){
  const reject=()=>{throw new WorkspaceError(code,403);},p=row.metadata?.participant;
  if(!row.active||p?.version!==1||p.status!=='ACTIVE'||p.clerkUserId!==member.clerkUserId)reject();
- const k=p.kyc;if(k?.version!==1||k.status!=='APPROVED'||k.review?.decision!=='APPROVED'||!workspaceId(k.submissionId)||!workspaceId(k.review.actorId)||k.review.actorId===member.actorId||!Number.isFinite(Date.parse(k.review.recordedAt))||!Array.isArray(k.images)||k.images.length!==2)reject();
+ const k=p.kyc;if(k?.version!==1||k.status!=='APPROVED'||k.review?.decision!=='APPROVED'||!workspaceId(k.submissionId)||!workspaceId(k.review.actorId)||k.review.actorId===member.actorId||!Number.isFinite(Date.parse(k.review.recordedAt))||!participantKycImageSet(k))reject();
  const reviews=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "actorId"=$2 AND "entityId"=$3 AND action='participant.operation.recorded' AND metadata->>'projectId'=$4 AND metadata->>'kind'='REVIEW_KYC' AND metadata->>'submissionId'=$5 AND metadata->>'decision'='APPROVED'`,[member.organizationId,k.review.actorId,row.id,row.projectId,k.submissionId])).rows;
  if(reviews.length!==1)reject();
  if(k.channelCapture!==undefined&&k.channelCapture?.invitationId!==null)await adoptedKycSubmission(client,row,member,p,reject);
- else {const submissions=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "actorId"=$2 AND "entityId"=$3 AND action='participant.operation.recorded' AND metadata->>'projectId'=$4 AND metadata->>'kind'='KYC_SUBMITTED' AND metadata->>'submissionId'=$5`,[member.organizationId,member.actorId,row.id,row.projectId,k.submissionId])).rows;if(submissions.length!==1||submissions[0].metadata.contentHash!==k.contentHash)reject();}return p;
+ else {const submissions=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "actorId"=$2 AND "entityId"=$3 AND action='participant.operation.recorded' AND metadata->>'projectId'=$4 AND metadata->>'kind'='KYC_SUBMITTED' AND metadata->>'submissionId'=$5`,[member.organizationId,member.actorId,row.id,row.projectId,k.submissionId])).rows;if(submissions.length!==1||submissions[0].metadata.contentHash!==k.contentHash||!participantKycImageSet(k,{receipt:submissions[0].metadata,projectId:row.projectId}))reject();}return p;
 }

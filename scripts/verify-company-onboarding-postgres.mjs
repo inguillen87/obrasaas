@@ -25,7 +25,7 @@ try{
   CREATE TABLE "ProjectMembership"(id text PRIMARY KEY,"projectId" text REFERENCES "Project","tenantMembershipId" text REFERENCES "TenantMembership",status "MembershipStatus" NOT NULL,"updatedAt" timestamp NOT NULL,UNIQUE("projectId","tenantMembershipId"));
   CREATE TABLE "Task"(id text PRIMARY KEY,"projectId" text NOT NULL REFERENCES "Project",title text NOT NULL,status "TaskStatus" NOT NULL DEFAULT 'BACKLOG',progress integer NOT NULL DEFAULT 0,"startsAt" timestamp,"endsAt" timestamp,metadata jsonb,"updatedAt" timestamp NOT NULL);
   CREATE TABLE "AuditLog"(id text PRIMARY KEY,"organizationId" text REFERENCES "Organization","actorId" text REFERENCES "PlatformUser",action text NOT NULL,"entityType" text NOT NULL,"entityId" text,metadata jsonb,"createdAt" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP);
-  CREATE TABLE "Worker"(id text PRIMARY KEY,"projectId" text REFERENCES "Project");
+  CREATE TABLE "Worker"(id text PRIMARY KEY,"projectId" text REFERENCES "Project",active boolean NOT NULL DEFAULT true,metadata jsonb NOT NULL DEFAULT '{}');
   CREATE TABLE "WhatsAppConnection"(id text PRIMARY KEY,"projectId" text REFERENCES "Project");
  `);
  const migrationClient=await pool.connect();let adoption;
