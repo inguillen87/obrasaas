@@ -49,5 +49,12 @@ test('workspace route uses the reviewed verifier and store rather than a client 
  const file=readFileSync(new URL('../src/app/api/identity/workspace/route.js',import.meta.url),'utf8');
  assert.match(file,/verifyWorkspaceSession/);assert.match(file,/productionWorkspace/);assert.match(file,/createWorkspaceHandlers/);assert.doesNotMatch(file,/getAppState|saveAppState|defaultAppState/);
  const proxy=readFileSync(new URL('../src/proxy.js',import.meta.url),'utf8');assert.match(proxy,/verifiedWorkspaceRoutes/);assert.doesNotMatch(proxy,/path\.startsWith\('\/api\/identity/);
- const ui=readFileSync(new URL('../src/app/(identity)/cuenta/workspace-identity.js',import.meta.url),'utf8');assert.match(ui,/key=\{`\$\{userId\}:\$\{orgId/);assert.doesNotMatch(ui,/localStorage|sessionStorage/);
+ const ui=readFileSync(new URL('../src/app/(identity)/cuenta/workspace-identity.js',import.meta.url),'utf8');
+ const contextFields=ui.match(/\bconst\s+contextKey\s*=\s*JSON\.stringify\(\s*\[([^\]]*)\]\s*\)/);
+ assert.ok(contextFields,'The remount key must bind the complete authenticated context');
+ assert.deepEqual(contextFields[1].split(',').map(field=>field.trim()),['isLoaded','isSignedIn','userId','orgId','sessionId','orgRole']);
+ const workspaces=[...ui.matchAll(/<AccountWorkspace\b([^>]*)\/>/g)];assert.equal(workspaces.length,2,'Admin and member workspace branches must both be keyed');
+ for(const [,attributes] of workspaces){assert.match(attributes,/\bkey=\{contextKey\}/);assert.match(attributes,/\bgetSessionToken=\{sessionToken\}/);}
+ assert.match(ui,/<CompanyBootstrapPanel\b[^>]*\bkey=\{contextKey\}/);
+ assert.doesNotMatch(ui,/localStorage|sessionStorage/);
 });
