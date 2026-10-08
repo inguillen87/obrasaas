@@ -270,7 +270,11 @@ try {
     await delay(250);
   }
   assert.ok(ready,'The local fixture did not become ready');
-  browser = await puppeteer.launch({headless:true,args:['--disable-background-networking','--disable-component-update','--disable-domain-reliability','--disable-sync','--metrics-recording-only','--no-first-run','--disable-features=MediaRouter']});
+  // Ubuntu Actions restricts Chromium user namespaces. Only this disposable,
+  // secret-free CI browser uses the existing repository's Linux runner flags;
+  // the user's browser and local runs keep their default sandbox protections.
+  const runnerArgs = process.env.GITHUB_ACTIONS === 'true' && process.platform === 'linux' ? ['--no-sandbox','--disable-setuid-sandbox'] : [];
+  browser = await puppeteer.launch({headless:true,args:[...runnerArgs,'--disable-background-networking','--disable-component-update','--disable-domain-reliability','--disable-sync','--metrics-recording-only','--no-first-run','--disable-features=MediaRouter']});
   for (const width of [320,390,768,1280]) await viewportScenario(width);
   for (const kind of ['401-html','403-html','503','unreadable','wrong-scope','wrong-version']) await errorScenario(kind);
   for (const kind of ['scope','unmount','token-getter']) await lateScenario(kind);
