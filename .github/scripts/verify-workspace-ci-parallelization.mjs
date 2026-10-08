@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='15bdcb88d335e4cd95cbfb45063d8ec5cea93580854ce77fb90704b6bee23294';
+export const EXPECTED_CONTRACT_SHA256='60e8df3b97d8d1f9ee60a408f9fb56367c8c8c0c7411d80ff0f05b8d24a0f262';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
 const BASELINE_PRODUCERS_SHA256='07d0016608332c0775f86bee6d005e60d4686d2ffe33a3065dfd9fd8e974ab20';
@@ -375,12 +375,13 @@ export function currentProducerSourceFiles(spec,root){
  return [...files('src/lib'),'scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs'].sort();
 }
 function extensionSelftest(contract,root,currentCompanyChecks=[]){
- const checks=[],discoveryChecks=[],videoChecks=[],preparationChecks=[],preparationProofChecks=[],identityClosureChecks=[],expectedHead=contract.extension.baseHead;
+ const checks=[],discoveryChecks=[],videoChecks=[],preparationChecks=[],preparationProofChecks=[],identityClosureChecks=[],billingClosureChecks=[],expectedHead=contract.extension.baseHead;
  const discoveryBackend=['src/lib/participant-account-discovery.mjs'],discoveryUi=['src/app/(identity)/cuenta/participant-account-discovery-format.mjs','src/app/(identity)/cuenta/participant-account-discovery.js'];
  const discoveryDependenciesFor=kind=>kind==='UI_INTAKE'?discoveryUi:['UI_BANK','UI_JOINT','UI_CAUSAL'].includes(kind)?[...discoveryBackend,...discoveryUi]:discoveryBackend;
  const beforeDiscoveryCounts={UNIT:94,PG_BANK:12,PG_INTAKE:21,UI_BANK:87,UI_INTAKE:19,UI_JOINT:87,UI_CAUSAL:87,PG_COMPANY_KYC:155};
  const videoDependenciesFor=kind=>['UNIT','UI_BANK','UI_JOINT','UI_CAUSAL','PG_COMPANY_KYC'].includes(kind)?['src/lib/video-audio-extractor.mjs']:[];
  const beforeVideoCounts={UNIT:95,UI_BANK:90,UI_JOINT:90,UI_CAUSAL:90,PG_COMPANY_KYC:156};
+ const companyBillingDependenciesFor=kind=>kind==='PG_COMPANY_KYC'?['src/lib/company-billing-http.mjs','src/lib/company-billing.mjs','src/lib/retired-billing.mjs']:[];
  const good=(name,run)=>{run();checks.push({name,result:'PASS',boundary:'pure shadow fixture, no Git/PG/UI/provider execution'});},bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code,boundary:'pure shadow fixture'});};
  // Normalize only these shadow source fixtures to Linux Git text. The actual proof validator never normalizes bytes.
  const readSource=file=>{const bytes=readFileSync(path.join(root,sourcePath(file))),text=bytes.toString('utf8');assert.ok(bytes.equals(Buffer.from(text)));return Buffer.from(text.replaceAll('\r\n','\n'));};
@@ -445,7 +446,7 @@ function extensionSelftest(contract,root,currentCompanyChecks=[]){
   if(['bank-intake-units','bank-ui','joint-ui','joint-causal','company-kyc-postgres'].includes(spec.id)){
    const allOnboardingDependencies=['src/lib/company-entitlement.mjs','src/lib/meta-customer-templates.mjs','src/lib/participant-onboarding-authority.mjs','src/lib/participant-onboarding-delivery.mjs','src/lib/participant-onboarding-intent.mjs','src/lib/participant-onboarding-policy.mjs','src/lib/whatsapp/template-review-policy.js'];
    const onboardingDependencies=spec.kind==='PG_COMPANY_KYC'?allOnboardingDependencies.filter(file=>!['src/lib/meta-customer-templates.mjs','src/lib/whatsapp/template-review-policy.js'].includes(file)):allOnboardingDependencies;
-    const voiceDependencies=['src/lib/voice-progress-draft.mjs'],videoDependencies=videoDependenciesFor(spec.kind),preparationDependencies=preparationDependenciesFor(spec.kind),planImportDependencies=planImportDependenciesFor(spec.kind),currentDependencies=[...onboardingDependencies,...voiceDependencies,...videoDependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind)];
+    const voiceDependencies=['src/lib/voice-progress-draft.mjs'],videoDependencies=videoDependenciesFor(spec.kind),preparationDependencies=preparationDependenciesFor(spec.kind),planImportDependencies=planImportDependenciesFor(spec.kind),currentDependencies=[...onboardingDependencies,...voiceDependencies,...videoDependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind),...companyBillingDependenciesFor(spec.kind)];
    const previousCount=spec.kind==='UNIT'?86:spec.kind==='PG_COMPANY_KYC'?149:79;
    assert.equal(spec.sourceFiles.length,previousCount+currentDependencies.length+discoveryDependenciesFor(spec.kind).length,'Exact canonical transitive source count: '+spec.id);
    if(spec.kind==='UNIT')good('bank-intake-units-real-current-transitive-manifest-exact',()=>equal(bankUnitSourceFiles(root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
@@ -460,33 +461,38 @@ function extensionSelftest(contract,root,currentCompanyChecks=[]){
     mutate('changed-transitive-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
    }
    const beforeVoiceCount=previousCount+onboardingDependencies.length;
-    mutate('old-'+beforeVoiceCount+'-source-manifest-without-voice','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...voiceDependencies,...discoveryDependenciesFor(spec.kind),...videoDependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,beforeVoiceCount);});
+    mutate('old-'+beforeVoiceCount+'-source-manifest-without-voice','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...voiceDependencies,...discoveryDependenciesFor(spec.kind),...videoDependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind),...companyBillingDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,beforeVoiceCount);});
    mutate('old-'+previousCount+'-source-manifest','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...currentDependencies,...discoveryDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
   }
   // Append discovery controls after the complete historical check sequence.
    if(!['PG_PREPARATION','UI_PREPARATION'].includes(spec.kind))discoveryChecks.push(()=>{
     const dependencies=discoveryDependenciesFor(spec.kind),previousCount=beforeDiscoveryCounts[spec.kind],videoDependencies=videoDependenciesFor(spec.kind),preparationDependencies=preparationDependenciesFor(spec.kind),planImportDependencies=planImportDependenciesFor(spec.kind);
-    assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+videoDependencies.length+preparationDependencies.length+planImportDependencies.length+identityDependenciesFor(spec.kind).length,'Exact current discovery source count: '+spec.id);
+    assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+videoDependencies.length+preparationDependencies.length+planImportDependencies.length+identityDependenciesFor(spec.kind).length+companyBillingDependenciesFor(spec.kind).length,'Exact current discovery source count: '+spec.id);
    for(const file of dependencies){
     assert.ok(spec.sourceFiles.includes(file),'Canonical account discovery source must be pinned: '+file);
     mutate('missing-discovery-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
     mutate('changed-discovery-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
    }
-    mutate('old-'+previousCount+'-source-manifest-without-discovery','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...videoDependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
+    mutate('old-'+previousCount+'-source-manifest-without-discovery','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...videoDependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind),...companyBillingDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
   });
   // Append only the extractor's causal controls after all 553 historical checks.
   if(videoDependenciesFor(spec.kind).length)videoChecks.push(()=>{
    const dependencies=videoDependenciesFor(spec.kind),previousCount=beforeVideoCounts[spec.kind],preparationDependencies=preparationDependenciesFor(spec.kind),planImportDependencies=planImportDependenciesFor(spec.kind);
-   assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+preparationDependencies.length+planImportDependencies.length+identityDependenciesFor(spec.kind).length,'Exact current video source count: '+spec.id);
+   assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+preparationDependencies.length+planImportDependencies.length+identityDependenciesFor(spec.kind).length+companyBillingDependenciesFor(spec.kind).length,'Exact current video source count: '+spec.id);
    for(const file of dependencies){
     assert.ok(spec.sourceFiles.includes(file),'Canonical contextual video source must be pinned: '+file);
     mutate('missing-video-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
     mutate('changed-video-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
    }
-   mutate('old-'+previousCount+'-source-manifest-without-video','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
+   mutate('old-'+previousCount+'-source-manifest-without-video','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind),...companyBillingDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
   });
    if(preparationDependenciesFor(spec.kind).length)preparationChecks.push(()=>{for(const file of preparationDependenciesFor(spec.kind)){assert.ok(spec.sourceFiles.includes(file),'Current KYC/preparation source must be pinned: '+file);mutate('missing-kyc-preparation-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});mutate('changed-kyc-preparation-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});}});
    if(identityDependenciesFor(spec.kind).length)identityClosureChecks.push(()=>{for(const file of identityDependenciesFor(spec.kind)){assert.ok(spec.sourceFiles.includes(file),'Current participant admission source must be pinned: '+file);mutate('missing-admission-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});mutate('changed-admission-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});}});
+   if(companyBillingDependenciesFor(spec.kind).length)billingClosureChecks.push(()=>{
+    const dependencies=companyBillingDependenciesFor(spec.kind);
+    for(const file of dependencies){assert.ok(spec.sourceFiles.includes(file),'Current company billing source must be pinned: '+file);mutate('missing-company-billing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});mutate('changed-company-billing-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});}
+    mutate('old-163-source-manifest-without-company-billing','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!dependencies.includes(ref.path));assert.equal(p.sourceManifest.length,163);});
+   });
    if(spec.kind==='PG_PREPARATION')identityClosureChecks.push(()=>{
     good('project-preparation-existing-fifteen-SQL-checks-exact',()=>equal([...readFileSync(path.join(root,spec.producer),'utf8').matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),spec.checkNames,'PROOF_CHECK_NAMES'));
     for(const file of ['src/lib/participant-admission.mjs','src/lib/participant-approved-identity.mjs','src/lib/participant-kyc-image-set.mjs']){assert.ok(spec.sourceFiles.includes(file),'Current project preparation admission dependency must be pinned: '+file);mutate('missing-admission-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});mutate('changed-admission-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});}
@@ -500,6 +506,7 @@ function extensionSelftest(contract,root,currentCompanyChecks=[]){
  for(const run of preparationChecks)run();
  checks.push(...preparationProofChecks);
  for(const run of identityClosureChecks)run();
+ for(const run of billingClosureChecks)run();
  return checks;
 }
 

@@ -17,8 +17,9 @@ for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filte
  const source='src/app/(identity)/cuenta/'+file;copyFileSync(path.join(root,source),path.join(components,file));
  sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(path.join(components,file))).digest('hex')});
 }
-for(const source of ['src/lib/geo.js','src/lib/field-media-privacy.mjs','src/lib/voice-progress-draft.mjs','src/lib/progress-measurement-quantity.js','src/lib/worker-channel-consent-policy.mjs','src/lib/whatsapp/tenant-workspace-policy.js','src/lib/company-phone-format.mjs']){
+for(const source of ['src/lib/geo.js','src/lib/field-media-privacy.mjs','src/lib/voice-progress-draft.mjs','src/lib/progress-measurement-quantity.js','src/lib/worker-channel-consent-policy.mjs','src/lib/whatsapp/tenant-workspace-policy.js','src/lib/company-phone-format.mjs','src/lib/company-entitlement.mjs']){
  const destination=path.join(fixture,source);mkdirSync(path.dirname(destination),{recursive:true});copyFileSync(path.join(root,source),destination);
+  if(source==='src/lib/company-entitlement.mjs')assert.deepEqual(readFileSync(path.join(root,source)),readFileSync(destination));
  sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(destination)).digest('hex')});
 }
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');

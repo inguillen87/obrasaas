@@ -30,6 +30,7 @@ const mediaPrivacyPath='src/lib/field-media-privacy.mjs';copy(path.join(root,med
 for(const file of ['voice-progress-draft.mjs','progress-measurement-quantity.js']){const source='src/lib/'+file;copy(path.join(root,source),path.join(dir,source));sourcePaths.push(source);copiedSourcePaths.add(source);}
 const authIntroPath='src/app/(identity)/auth-intro.js';copy(path.join(root,authIntroPath),path.join(dir,authIntroPath));sourcePaths.push(authIntroPath);copiedSourcePaths.add(authIntroPath);
 const phoneFormatPath='src/lib/company-phone-format.mjs';copy(path.join(root,phoneFormatPath),path.join(dir,phoneFormatPath));sourcePaths.push(phoneFormatPath);copiedSourcePaths.add(phoneFormatPath);
+const entitlementPath='src/lib/company-entitlement.mjs';copy(path.join(root,entitlementPath),path.join(dir,entitlementPath));sourcePaths.push(entitlementPath);copiedSourcePaths.add(entitlementPath);
 const sourceManifest=sourcePaths.map(file=>{const bytes=readFileSync(path.join(root,file));if(copiedSourcePaths.has(file)||file.startsWith('src/app/(identity)/cuenta/'))assert.deepEqual(bytes,readFileSync(path.join(dir,file)));return {path:file,sha256:createHash('sha256').update(bytes).digest('hex')};});
 assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');

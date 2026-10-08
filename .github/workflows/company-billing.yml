@@ -1,0 +1,53 @@
+name: Canonical company plan and retired billing
+on:
+  push:
+    branches: [master, 'hotfix/production-workspace-company-plan-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      CUTOVER_TEST_DISPOSABLE: '1'
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Canonical plan contracts and closed legacy payment paths
+        run: node --test tests/production-company-billing.test.mjs tests/production-company-billing-view.test.mjs tests/production-company-entitlement.test.mjs
+      - name: Affected source lint
+        run: npx eslint src/lib/company-billing*.mjs src/lib/retired-billing.mjs src/lib/mercadopago.js src/lib/workspace-store.mjs src/proxy.js src/app/api/identity/company-billing/route.js src/app/api/billing scripts/verify-company-billing-*.mjs tests/production-company-billing*.test.mjs 'src/app/(identity)/cuenta/company-billing-panel.js' 'src/app/(identity)/cuenta/company-billing-view.mjs' 'src/app/(identity)/cuenta/workspace-client.js' --max-warnings 0
+      - name: PostgreSQL isolation with no operational tables
+        run: node scripts/verify-company-billing-postgres.mjs
+      - name: Responsive real component and stale access controls
+        run: node scripts/verify-company-billing-ui.mjs
+      - name: Preserve exact checked-out source
+        run: git diff --exit-code HEAD --
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: canonical-company-billing-${{ github.sha }}-${{ github.run_attempt }}
+          path: .vercel/private/company-billing-evidence/
+          include-hidden-files: true
+          if-no-files-found: error

@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { authorizeLegacyService, legacyBoundaryKind, privateLegacyHeaders, unauthorizedLegacyResponse } from './lib/legacy-access-boundary.js';
 import { identityRoute, IDENTITY_ORIGIN } from './lib/production-identity-config.mjs';
+const companyBillingRoute=(path,method)=>path==='/api/identity/company-billing'&&['GET','POST'].includes(method);
 const verifiedWorkspaceRoutes=new Set(['/api/identity/workspace','/api/identity/whatsapp-setup','/api/identity/site-register','/api/identity/site-photo','/api/identity/company-onboarding','/api/identity/company-channel','/api/identity/task-creation','/api/identity/site-purchases','/api/identity/participants','/api/identity/participant-join','/api/identity/worker-channel','/api/identity/field-operations','/api/identity/field-media','/api/identity/field-qr','/api/identity/meta-onboarding','/api/identity/operations-status','/api/identity/template-send','/api/identity/constructor-crm','/api/identity/demo-pilot','/api/identity/plan-import','/api/identity/project-preparation']);
 
 export async function proxy(request) {
   const path = request.nextUrl.pathname;
-  const workspaceRoute=verifiedWorkspaceRoutes.has(path)&&(!['/api/identity/plan-import','/api/identity/project-preparation'].includes(path)||['GET','POST'].includes(request.method));
+  const workspaceRoute=companyBillingRoute(path,request.method)||(verifiedWorkspaceRoutes.has(path)&&(!['/api/identity/plan-import','/api/identity/project-preparation'].includes(path)||['GET','POST'].includes(request.method)));
   if (identityRoute(path) || workspaceRoute) {
     if (process.env.VERCEL_ENV === 'production' && request.nextUrl.origin !== IDENTITY_ORIGIN) {
       const destination = new URL(path, IDENTITY_ORIGIN);
