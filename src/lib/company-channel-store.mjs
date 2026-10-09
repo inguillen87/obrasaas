@@ -69,7 +69,7 @@ export function createCompanyChannelStore({workspace,ownConnection=null,environm
    },Boolean(context.operationId));
   },
   async command(session,body){
-   if(['CONNECT_OWN_NUMBER','ACTIVATE_OWN_NUMBER'].includes(body?.action)){if(!ownConnection)fail('META_OWN_COMPANY_CONFIGURATION_PENDING',503);return ownConnection.command(session,body);}
+   if(['CONNECT_OWN_NUMBER','ACTIVATE_OWN_NUMBER','RECOVER_CONNECT_OWN_NUMBER'].includes(body?.action)){if(!ownConnection)fail('META_OWN_COMPANY_CONFIGURATION_PENDING',503);return ownConnection.command(session,body);}
    const input=command(body),fingerprint=digest(input);
    return workspace.organizationOperation(session,input,true,async(client,member,scope)=>{
     const prior=await previous(client,member,input.projectId,input.operationId);if(prior){if(prior.metadata.requestDigest!==fingerprint)fail('COMPANY_CHANNEL_OPERATION_CONFLICT');return publicReceipt(prior,member,scope);}

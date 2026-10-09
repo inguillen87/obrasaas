@@ -18,13 +18,19 @@ const grantDigest=grant=>digest(Object.fromEntries(runtimeKeys.filter(key=>key!=
 const asset=value=>typeof value==='string'&&/^[1-9]\d{4,31}$/.test(value);
 const timestamp=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
 const fail=()=>{throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);};
+// Reconstruct only a source revision. The current, server-validated policy
+// supplies every authority field and the unchanged authorization window.
+export function ownCompanyPolicySourceDigest(policy,sourceHead){
+ if(!/^[a-f0-9]{40}$/.test(sourceHead||'')||!policy||keys.some(key=>!Object.hasOwn(policy,key)))fail();
+ return digest(Object.fromEntries(keys.map(key=>[key,key==='sourceHead'?sourceHead:policy[key]])));
+}
 // A deployment must explicitly review this exact, private configuration. The
 // ordinary customer release and the development pilot cannot mint this grant.
 export function readOwnCompanyPolicy(environment=process.env,now=Date.now()){
  if(environment.VERCEL_ENV!=='production')return null;
  let value;try{value=JSON.parse(environment.OBRASAAS_META_OWN_COMPANY_POLICY);}catch{return null;}
  if(environment.OBRASAAS_META_OWN_COMPANY_RELEASE!=='own-company-number-v1'||!value||Array.isArray(value)||Object.keys(value).sort().join('|')!==keys.slice().sort().join('|')||value.version!==1||!/^[a-f0-9]{40}$/.test(value.sourceHead||'')||value.sourceHead!==environment.VERCEL_GIT_COMMIT_SHA||['organizationId','actorId','projectId'].some(key=>!workspaceId(value[key]))||!/^user_[A-Za-z0-9]+$/.test(value.clerkUserId||'')||!/^org_[A-Za-z0-9]+$/.test(value.clerkOrganizationId||'')||['appId','businessId','wabaId','phoneNumberId'].some(key=>!asset(value[key]))||value.appId!==OBRASAAS_META_CHANNEL.appId||value.appId!==environment.NEXT_PUBLIC_META_APP_ID||value.wabaId===OBRASAAS_META_CHANNEL.wabaId||value.phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId||!/^\+[1-9]\d{7,14}$/.test(value.expectedPhoneE164||'')||!Number.isSafeInteger(value.companyPhoneRevision)||value.companyPhoneRevision<1||!timestamp(value.issuedAt)||!timestamp(value.expiresAt)||Date.parse(value.issuedAt)>now||Date.parse(value.expiresAt)<=now||Date.parse(value.expiresAt)<=Date.parse(value.issuedAt)||Date.parse(value.expiresAt)-Date.parse(value.issuedAt)>META_OWN_COMPANY_TTL_MS)return null;
- const policyDigest=digest(Object.fromEntries(keys.map(key=>[key,value[key]])));
+ const policyDigest=ownCompanyPolicySourceDigest(value,value.sourceHead);
  if(policyDigest!==environment.OBRASAAS_META_OWN_COMPANY_POLICY_REVIEW_SHA256)return null;
  return Object.freeze({...value,policyDigest});
 }

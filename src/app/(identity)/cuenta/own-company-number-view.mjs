@@ -71,7 +71,7 @@ export function ownCompanyNumberOutcome(value,expected,{post=false}={}){
   if(post||value.saved!==false||value.definitive!==false||!shape(value,['actor','definitive','operationId','organization','projectId','saved','scope','state']))fail();
   return value;
  }
- const keys=['organization','actor','scope','projectId','operationId','action','state','saved','definitive','receiptId','replayed','channel','accepted','roundTrip',...(Object.hasOwn(value,'code')?['code']:[]),...(Object.hasOwn(value,'providerObservation')?['providerObservation']:[]),...(Object.hasOwn(value,'recovery')?['recovery']:[])];
+ const keys=['organization','actor','scope','projectId','operationId','action','state','saved','definitive','receiptId','replayed','channel','accepted','roundTrip',...(Object.hasOwn(value,'code')?['code']:[]),...(Object.hasOwn(value,'providerObservation')?['providerObservation']:[]),...(Object.hasOwn(value,'recovery')?['recovery']:[]),...(Object.hasOwn(value,'connectRecovery')?['connectRecovery']:[])];
  if(!shape(value,keys)||!OWN_COMPANY_ACTIONS.includes(value.action)||expected.action&&value.action!==expected.action||!id(value.receiptId)||typeof value.replayed!=='boolean'||value.accepted!==false||value.roundTrip!=='NOT_VERIFIED'||Object.hasOwn(value,'code')&&(typeof value.code!=='string'||!/^(META_OWN_COMPANY|COMPANY_CHANNEL)_[A-Z_]{1,80}$/.test(value.code)))fail();
  const terminal=['RECORDED','REJECTED'].includes(value.state);
  if(!Object.hasOwn(OWN_COMPANY_STATES,value.state)||value.definitive!==terminal||value.saved!==(value.state==='RECORDED')||value.state==='REJECTED'&&!value.code)fail();
@@ -80,5 +80,13 @@ export function ownCompanyNumberOutcome(value,expected,{post=false}={}){
   const observation=value.providerObservation;if(post||terminal||!shape(observation,['registered','subscribed','readOnly'])||typeof observation.registered!=='boolean'||typeof observation.subscribed!=='boolean'||observation.readOnly!==true)fail();
  }
  if(Object.hasOwn(value,'recovery')&&(post||terminal||value.recovery!=='EXPLICIT_REVIEW_REQUIRED'))fail();
+ if(Object.hasOwn(value,'connectRecovery')){
+  const r=value.connectRecovery;if(post||value.state!=='VERIFYING'||value.action!=='CONNECT_OWN_NUMBER'||value.channel!==null||!shape(r,['version','receiptId','requestDigest','reservationId','policySourceHead','companyPhoneRevision','wabaId','phoneNumberId','expiresAt'])||r.version!==1||r.receiptId!==value.receiptId||!/^company_own_[a-f0-9]{64}$/.test(r.receiptId)||!/^[a-f0-9]{64}$/.test(r.requestDigest||'')||!uuid(r.reservationId)||!(r.policySourceHead===null||/^[a-f0-9]{40}$/.test(r.policySourceHead||''))||!revision(r.companyPhoneRevision)||r.companyPhoneRevision<1||!asset(r.wabaId)||!asset(r.phoneNumberId)||typeof r.expiresAt!=='string'||!Number.isFinite(Date.parse(r.expiresAt)))fail();
+ }
  return value;
+}
+export function ownCompanyNumberRecoveryCommand(outcome,{originalSourceHead,confirmRecovery},expected,{now=Date.now()}={}){
+ ownCompanyNumberOutcome(outcome,expected);const r=outcome.connectRecovery;
+ if(!r||Date.parse(r.expiresAt)<=now||confirmRecovery!==true||!/^[a-f0-9]{40}$/.test(originalSourceHead||'')||r.policySourceHead!==null&&r.policySourceHead!==originalSourceHead)throw Object.assign(new Error(ownCompanyNumberExplain('META_OWN_COMPANY_INPUT_INVALID')),{code:'META_OWN_COMPANY_INPUT_INVALID',requestDispatched:false});
+ return {action:'RECOVER_CONNECT_OWN_NUMBER',scope:outcome.scope,projectId:outcome.projectId,operationId:outcome.operationId,payload:{connectionId:null,revision:0,companyPhoneRevision:r.companyPhoneRevision,wabaId:r.wabaId,phoneNumberId:r.phoneNumberId,confirmOwnBusiness:true,confirmReplacement:false,originalReceiptId:r.receiptId,originalRequestDigest:r.requestDigest,reservationId:r.reservationId,originalSourceHead,confirmRecovery:true}};
 }

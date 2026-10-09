@@ -75,7 +75,8 @@ async function reference(url, options, now) {
   if(resource==='project-preparation'&&!['SAVE_PREPARATION','CANCEL_PENDING_PREPARATION'].includes(body.action))throw unavailable();
   if(resource==='company-onboarding'&&(body.action!=='declare_company_phone'||!id(body.expectedClerkOrganizationId)))throw unavailable();
   if(resource==='site-photo'&&!id(body.reportId))return null;
-  if(resource==='company-channel'&&!channelReferenceValid(body.action,body.payload?.connectionId))throw unavailable();
+  const channelAction=body.action==='RECOVER_CONNECT_OWN_NUMBER'&&body.payload?.connectionId===null&&body.payload?.confirmRecovery===true?'CONNECT_OWN_NUMBER':body.action;
+  if(resource==='company-channel'&&!channelReferenceValid(channelAction,body.payload?.connectionId))throw unavailable();
   // Invitation reconciliation reads the provider and finalizes the original
   // invitation's receipt; it never creates a second invitation.
   if(resource==='participants'&&body.action==='RECOVER_INVITATION')return null;
@@ -94,7 +95,7 @@ async function reference(url, options, now) {
   return {version:1,resource,scope:body.scope,projectId:body.projectId,operationId:body.operationId.toLowerCase(),createdAt:now,
     ...(resource==='site-photo'?{reportId:body.reportId}:{}),
     ...(resource==='company-onboarding'?{action:body.action,expectedClerkOrganizationId:body.expectedClerkOrganizationId}:{}),
-    ...(resource==='company-channel'?{action:body.action,connectionId:body.payload.connectionId}:{}),
+    ...(resource==='company-channel'?{action:channelAction,connectionId:body.payload.connectionId}:{}),
     ...(resource==='meta-onboarding'?{action:body.action,...(['reconcile','cancel'].includes(body.action)?{signupId:body.signupId}:{eventId:body.eventId})}:{}),
     ...(overtime?{action:body.action}:{}),
     ...(bank?{action:bankAction,workerId:body.payload.workerId}:{}),
