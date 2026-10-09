@@ -20,6 +20,7 @@ export const EMPLOYEE_INTAKE_AUTHORIZATION_CODES=Object.freeze(['EMPLOYEE_INTAKE
 const fail=(code,status=409)=>{throw new WorkspaceError(code,status);};
 const eventId=value=>/^customer_webhook_[a-f0-9]{64}$/.test(value||'');
 const namespace='employeeIntake';
+const outboundAuthorities=new WeakMap();
 const context=(connection,purpose,resourceId)=>({organizationId:connection.organizationId,projectId:connection.projectId,purpose,resourceId});
 const seal=(connection,purpose,id,value,environment)=>encryptCustomerSecret(JSON.stringify(value),context(connection,purpose,id),environment);
 function unseal(connection,purpose,id,value,environment){try{return JSON.parse(decryptCustomerSecret(value,context(connection,purpose,id),environment));}catch{fail('EMPLOYEE_INTAKE_INTEGRITY');}}
@@ -41,7 +42,7 @@ async function currentPolicy(client,connection,now,{enabled=true,expected=null,l
  if(enabled&&p.enabled!==true)fail('EMPLOYEE_INTAKE_DISABLED');
  if(connection.metadata?.developmentPilot||connection.company?.mode!=='COMPANY'||!customerChannelActive(connection,now.getTime(),{environment})||p.grantDigest!==grant(connection)||p.ownerRevision!==connection.company.revision)fail('EMPLOYEE_INTAKE_REVOKED');
  await lockOwnCompanyIssuer(client,connection,{environment,now:now.getTime(),lock});
- const issued=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityType"='WhatsAppConnection' AND "entityId"=$4 AND action='participant.operation.recorded'`,[p.receiptId,connection.organizationId,p.issuerActorId,connection.id])).rows[0];
+ const issued=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityType"='WhatsAppConnection' AND "entityId"=$4 AND action='participant.operation.recorded' ${lock?'FOR SHARE':''}`,[p.receiptId,connection.organizationId,p.issuerActorId,connection.id])).rows[0];
  if(issued?.metadata?.kind!=='CONFIGURE_EMPLOYEE_INTAKE'||issued.metadata.intakePolicyDigest!==durableDigest(p))fail('EMPLOYEE_INTAKE_REVOKED');
  const issuer=(await client.query(`SELECT u.id AS "actorId",tm.id AS "membershipId",tm."tenantRole"::text AS role,to_char(tm."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."PlatformUser" u JOIN public."TenantMembership" tm ON tm."userId"=u.id WHERE u.id=$1 AND tm.id=$2 AND tm."organizationId"=$3 AND tm.status='ACTIVE' ${lock?'FOR SHARE OF u,tm':''}`,[p.issuerActorId,p.issuerMembershipId,connection.organizationId])).rows[0];
  if(!issuer||issuer.role!=='ADMIN'||issuer.revision!==p.issuerRevision||await issuerTrail(client,connection.organizationId,issuer.membershipId)!==p.issuerTrail||expected&&expected!==durableDigest(p))fail('EMPLOYEE_INTAKE_REVOKED');return {policy:p,issuer};
@@ -133,7 +134,38 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  if(!r.recorded&&state?.messageCount>=40)fail('EMPLOYEE_INTAKE_EXPIRED');
  if(outbound&&(!r.recorded||state?.lastEventId!==event.id))fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');
  if(r.recorded?.reactiveOnboarding){const p=r.recorded.reactiveOnboarding,a=await reactiveOnboardingAuthority(client,r,reactive,{environment,proof:p.kind==='KYC_START'?p:null});if(!a||p.authorityDigest!==a.authorityDigest||p.eventId!==event.id||p.applicationId!==anchor.id||durableDigest(state.reactiveOnboarding)!==durableDigest(p)||Date.parse(p.expiresAt)<=a.now.getTime())fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');}
+ if(outbound&&!r.recorded.reactiveOnboarding){
+  const transactionId=(await client.query('SELECT pg_current_xact_id()::text AS "intakeTransactionId"')).rows[0]?.intakeTransactionId;
+  if(typeof transactionId!=='string'||!/^\d{1,20}$/.test(transactionId))fail('EMPLOYEE_INTAKE_INTEGRITY');
+  const notAfter=Math.min(Date.parse(event.leaseExpiresAt),Number(finalPayload.value.timestamp)*1000+24*3600000,state&&!['WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(state.status)?Date.parse(state.expiresAt):Infinity);
+  outboundAuthorities.set(r,{client,transactionId,notAfter,requestDigest:durableDigest(request),channelDigest:outboundChannelDigest(connection),eventPayloadDigest:durableDigest(event.payload),anchorPayloadDigest:durableDigest(anchor.payload),policyDigest:durableDigest(policy),replyDigest:durableDigest(r.recorded.reply)});
+ }
  return r;
+}
+function outboundChannelDigest(c){return durableDigest({id:c.id,projectId:c.projectId,organizationId:c.organizationId,phoneNumberId:c.phoneNumberId,whatsappBusinessId:c.whatsappBusinessId,enabled:c.enabled,connectionStatus:c.connectionStatus,encryptedAccessToken:c.encryptedAccessToken,displayPhoneNumber:c.displayPhoneNumber,metadata:c.metadata,company:c.company});}
+export const hasEmployeeIntakeOutboundAuthority=(client,r)=>outboundAuthorities.get(r)?.client===client;
+export function employeeIntakeOutboundDeadline(client,r){const proof=outboundAuthorities.get(r);if(!proof||proof.client!==client||!Number.isSafeInteger(proof.notAfter))fail('EMPLOYEE_INTAKE_INTEGRITY');return proof.notAfter;}
+export const releaseEmployeeIntakeOutboundAuthority=r=>outboundAuthorities.delete(r);
+// The complete signed/nonce/authority resolver already owns the canonical
+// locks. Recheck its exact current rows and clock without repeating discovery,
+// schema catalog queries, decryption or the full planner on every Graph await.
+export async function fenceEmployeeIntakeOutboundAuthority(client,r,request){
+ const proof=outboundAuthorities.get(r);
+ if(!proof||proof.client!==client||proof.requestDigest!==durableDigest(request)||proof.policyDigest!==durableDigest(r.policy)||proof.replyDigest!==durableDigest(r.recorded?.reply)||proof.channelDigest!==outboundChannelDigest(r.connection))fail('EMPLOYEE_INTAKE_INTEGRITY');
+ const rows=(await client.query(`SELECT e.*,clock_timestamp() AS "intakeNow",pg_current_xact_id()::text AS "intakeTransactionId",anchor.payload AS "intakeAnchorPayload",to_jsonb(c) AS "intakeConnection",cc."connectionId" AS "intakeOwnerConnectionId",cc."anchorProjectId" AS "intakeAnchorProjectId",cc.mode AS "intakeMode",cc.revision AS "intakeOwnerRevision",assignment.revision AS "intakeAssignmentRevision",tm."tenantRole"::text AS "intakeIssuerRole",to_char(tm."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "intakeIssuerRevision",receipt.metadata AS "intakePolicyReceipt",COALESCE((SELECT jsonb_agg(jsonb_build_object('id',trail.id,'metadata',trail.metadata) ORDER BY trail.id) FROM public."AuditLog" trail WHERE trail."organizationId"=$5 AND trail."entityType"='TenantMembership' AND trail."entityId"=$6 AND trail.action='participant.operation.recorded'),'[]'::jsonb) AS "intakeIssuerTrail"
+  FROM public."WebhookEvent" e JOIN public."WebhookEvent" anchor ON anchor.id=$4 AND anchor."projectId"=e."projectId"
+  JOIN public."WhatsAppConnection" c ON c.id=$3 AND c."projectId"=e."projectId" JOIN public."Project" p ON p.id=c."projectId" AND p."organizationId"=$5 AND p.status='ACTIVE'
+  JOIN public."WhatsAppCompanyChannel" cc ON cc."connectionId"=c.id AND cc."organizationId"=$5 AND cc.mode='COMPANY'
+  JOIN public."WhatsAppChannelProjectAssignment" assignment ON assignment."connectionId"=c.id AND assignment."organizationId"=$5 AND assignment."projectId"=p.id AND assignment.status='ACTIVE'
+  JOIN public."TenantMembership" tm ON tm.id=$6 AND tm."organizationId"=$5 AND tm."userId"=$7 AND tm.status='ACTIVE' JOIN public."PlatformUser" u ON u.id=tm."userId"
+  JOIN public."AuditLog" receipt ON receipt.id=$8 AND receipt."organizationId"=$5 AND receipt."actorId"=u.id AND receipt."entityType"='WhatsAppConnection' AND receipt."entityId"=c.id AND receipt.action='participant.operation.recorded'
+  WHERE e.id=$1 AND e."projectId"=$2 AND e.provider='meta-customer-v1' AND e."eventType"='message' FOR UPDATE OF e,anchor FOR SHARE OF c,p,cc,assignment,tm,u,receipt`,[r.event.id,r.connection.projectId,r.connection.id,r.anchor.id,r.connection.organizationId,r.policy.issuerMembershipId,r.policy.issuerActorId,r.policy.receiptId])).rows;
+ if(rows.length!==1)fail('EMPLOYEE_INTAKE_REVOKED');const row=rows[0],now=row.intakeNow;
+ if(!(now instanceof Date)||!Number.isFinite(now.getTime())||row.intakeTransactionId!==proof.transactionId)fail('EMPLOYEE_INTAKE_INTEGRITY');
+ if(row.status!=='PENDING'||row.leaseToken!==request.leaseToken||!Number.isFinite(Date.parse(row.leaseExpiresAt))||Date.parse(row.leaseExpiresAt)<=now.getTime()||row.projectId!==request.projectId||row.payload?.channelId!==request.channelId||row.payload.payloadDigest!==request.payloadDigest)fail('META_CUSTOMER_INBOX_LEASE_CHANGED');
+ const current={...row.intakeConnection,organizationId:r.connection.organizationId,company:{connectionId:row.intakeOwnerConnectionId,anchorProjectId:row.intakeAnchorProjectId,mode:row.intakeMode,revision:row.intakeOwnerRevision,assignmentRevision:row.intakeAssignmentRevision,targetProjectId:r.project.id,organizationId:r.connection.organizationId}};
+ if(outboundChannelDigest(current)!==proof.channelDigest||durableDigest(row.payload)!==proof.eventPayloadDigest||durableDigest(row.intakeAnchorPayload)!==proof.anchorPayloadDigest||row.intakeIssuerRole!=='ADMIN'||row.intakeIssuerRevision!==r.policy.issuerRevision||row.intakePolicyReceipt?.kind!=='CONFIGURE_EMPLOYEE_INTAKE'||row.intakePolicyReceipt.intakePolicyDigest!==proof.policyDigest||durableDigest(row.intakeIssuerTrail)!==r.policy.issuerTrail)fail('EMPLOYEE_INTAKE_REVOKED');
+ if(r.state&&!['WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(r.state.status)&&Date.parse(r.state.expiresAt)<=now.getTime())fail('EMPLOYEE_INTAKE_EXPIRED');assertCustomerReplyWindow(r.payload,now.getTime());return now;
 }
 function currentAnchorState(connection,anchors,environment){return anchors.length===1?readState(anchors[0],connection,environment):null;}
 
