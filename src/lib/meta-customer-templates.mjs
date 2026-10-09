@@ -1,6 +1,6 @@
 import {WorkspaceError,operationId,digest,workspaceId} from './workspace-policy.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
-import {assertTemplateReviewDefinition,TemplateReviewError} from './whatsapp/template-review-policy.mjs';
+import {assertTemplateReviewDefinition,TemplateReviewError} from './whatsapp/template-review-policy.js';
 const blueprints=Object.freeze({
  open_attendance_reminder:{title:'Recordatorio de jornada abierta',text:'Tu jornada en {{1}} sigue abierta. Cuando termines, registrá la salida en ObraSaaS: https://obrasaas.com/cuenta',example:'Obra de ejemplo'},
  participant_invitation:{title:'Invitación a participar',text:'Tenés una invitación para participar en una obra de {{1}}. Abrí tu cuenta de ObraSaaS para consultar la invitación y decidir si querés aceptarla: https://obrasaas.com/cuenta',example:'Constructora de ejemplo'},

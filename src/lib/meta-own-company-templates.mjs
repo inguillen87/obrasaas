@@ -1,11 +1,11 @@
 import {WorkspaceError,workspaceId,operationId,digest} from './workspace-policy.mjs';
 import {buildCustomerTemplate,customerRemoteTemplateMatches,publicCustomerTemplateWorkbench} from './meta-customer-templates.mjs';
-import {assertTemplateReviewDefinition,TemplateReviewError} from './whatsapp/template-review-policy.mjs';
+import {assertTemplateReviewDefinition,TemplateReviewError} from './whatsapp/template-review-policy.js';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {requireCompanyChannelSchema} from './company-channel-schema.mjs';
-import {ownCompanyConnectionPolicy,ownCompanyCapabilityKind,lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
+import {ownCompanyConnectionPolicy,ownCompanyCapabilityKind,lockOwnCompanyIssuer,OWN_TEMPLATE_ACTIONS} from './meta-own-company-policy.mjs';
 
-export const OWN_TEMPLATE_ACTIONS=Object.freeze(['PREPARE_OWN_TEMPLATE','SUBMIT_OWN_TEMPLATE','RECOVER_OWN_TEMPLATE']);
+export {OWN_TEMPLATE_ACTIONS};
 const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')===keys.slice().sort().join('|');
 const fail=(code='META_OWN_TEMPLATE_CONTEXT_CHANGED',status=409)=>{throw new WorkspaceError(code,status);};
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);

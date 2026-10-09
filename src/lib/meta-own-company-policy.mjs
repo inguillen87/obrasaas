@@ -5,6 +5,8 @@ import {customerSecretDigest} from './meta-customer-credentials.mjs';
 
 export const META_OWN_COMPANY_MODE='OWN_COMPANY';
 export const META_OWN_COMPANY_TTL_MS=4*60*60*1000;
+// Routing the management command must not load the template/provider graph.
+export const OWN_TEMPLATE_ACTIONS=Object.freeze(['PREPARE_OWN_TEMPLATE','SUBMIT_OWN_TEMPLATE','RECOVER_OWN_TEMPLATE']);
 // Confirmed runtime denials are observations or manual prepared-media recovery.
 // Ownership/provider timeouts remain transient; never classify by a prefix.
 export const META_OWN_COMPANY_AUTHORIZATION_CODES=Object.freeze(['META_OWN_COMPANY_UNAVAILABLE','META_OWN_COMPANY_CONFIGURATION_PENDING','META_OWN_COMPANY_OWNER_UNVERIFIED','META_OWN_COMPANY_TOKEN_REJECTED','META_OWN_COMPANY_CREDENTIAL_REJECTED','META_OWN_COMPANY_ASSET_REJECTED','META_OWN_COMPANY_PHONE_REJECTED','META_OWN_COMPANY_ADAPTER_UNAVAILABLE']);

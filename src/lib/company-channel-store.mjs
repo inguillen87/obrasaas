@@ -4,8 +4,7 @@ import {assertWorkerCustomerConnection} from './worker-channel-identity.mjs';
 import {META_KYC_CONVERSATION_TTL_MS} from './meta-kyc-conversation.mjs';
 import {customerLifecycleRecovery} from './meta-customer-coexistence.mjs';
 import {customerChannelActive} from './meta-customer-outbound.mjs';
-import {lockOwnCompanyIssuer,revokeOwnCompanyRuntimeGrant} from './meta-own-company-policy.mjs';
-import {OWN_TEMPLATE_ACTIONS} from './meta-own-company-templates.mjs';
+import {lockOwnCompanyIssuer,revokeOwnCompanyRuntimeGrant,OWN_TEMPLATE_ACTIONS} from './meta-own-company-policy.mjs';
 
 export const COMPANY_CHANNEL_ACTIONS=Object.freeze(['PREPARE','ASSIGN','REVOKE','ACTIVATE','SUSPEND']);
 const fail=(code,status=409)=>{throw new WorkspaceError(code,status);};

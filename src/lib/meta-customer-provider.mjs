@@ -7,7 +7,6 @@ import {resolveMetaTransport,readMetaJson} from './meta-whatsapp-transport.mjs';
 import {createDevelopmentPilotCapability,developmentPilotCapabilityPolicy,developmentPilotCapabilityExpiry,developmentPilotConnectionPolicy,developmentPilotPhoneMatches,assertDevelopmentPilotMember,META_DEVELOPMENT_PILOT_MODE} from './meta-development-pilot-policy.mjs';
 import {createOwnCompanyCapability,ownCompanyCapabilityPolicy,ownCompanyCapabilityKind,ownCompanyTransportPolicy,ownCompanyConnectionPolicy,META_OWN_COMPANY_MODE} from './meta-own-company-policy.mjs';
 import {normalizeCompanyPhone} from './company-onboarding-policy.mjs';
-import {buildCustomerTemplate} from './meta-customer-templates.mjs';
 
 const pilotAudits=new WeakMap(),pilotInspections=new WeakMap();
 const ownAudits=new WeakMap(),ownInspections=new WeakMap();
@@ -157,6 +156,9 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
  return {
   readiness:scopedReady,
    async forOwnTemplateAdministration({capability,connection,token,beforeExternal,context,blueprintKey}){
+    // The catalogue is needed only for this explicit management action. Keep
+    // read-only transport/release inspection free of the template UI graph.
+    const {buildCustomerTemplate}=await import('./meta-customer-templates.mjs');
     const current=ownCompanyTransportPolicy(capability,environment,now()),canonical=ownCompanyConnectionPolicy(connection,environment,now());
     if(ownCompanyCapabilityKind(capability)!=='RUNTIME'||current.grantDigest!==canonical?.grantDigest||current.connectionId!==connection.id||current.tokenDigest!==customerTokenDigest(token||'')||context?.member?.role!=='ADMIN'||context.member.actorId!==current.actorId||context.member.organizationId!==current.organizationId||context.session?.userId!==current.clerkUserId||context.session.organizationId!==current.clerkOrganizationId||context.session.organizationRole!=='org:admin'||context.project?.id!==current.projectId||typeof beforeExternal!=='function')throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);
     const administration=Object.freeze({}),definition=buildCustomerTemplate(connection,blueprintKey);ownTemplateAdministrations.set(administration,{capability,definition});
