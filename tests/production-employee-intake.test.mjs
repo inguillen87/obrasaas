@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {employeeIntakeFixture} from './fixtures/employee-intake-memory.mjs';
 import {employeeIntakeAcceptedPermissions,resolveEmployeeIntakeAuthority,employeeIntakeOutcome,readEmployeeIntake} from '../src/lib/meta-employee-intake.mjs';
-import {customerJobTransaction} from '../src/lib/meta-customer-outbound.mjs';
+import {customerJobTransaction,customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
+import {encryptCustomerSecret,decryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
+import {digest} from '../src/lib/workspace-policy.mjs';
 import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
 import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
 import {randomUUID} from 'node:crypto';
@@ -40,8 +42,31 @@ test('deactivated intake denies admission but permits a current administrator to
 test('challenge, binding and image messages stay outside guest authority after a request',async()=>{
  const f=employeeIntakeFixture();await f.submit();for(const message of ['IDENTIDAD synthetic-code','VINCULAR synthetic-code',{type:'image',image:{id:'150000011',mime_type:'image/png'}}]){const c=f.receive(message);assert.equal(await customerJobTransaction(f.connect,client=>resolveEmployeeIntakeAuthority(client,c,{environment:f.environment})),null);}assert.equal(f.workers.size,0);
 });
-test('free text and exact choice require a reply to the confirmed preceding prompt',async()=>{
- const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');await f.execute('Forged name',{reply:false});assert.equal(f.state().step,'NAME');await f.execute('Persona Sintética');const s=f.state();await f.execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':0'}}},{reply:false});assert.equal(f.state().step,'JOB');assert.equal(f.state().consent,false);
+test('same-second free text and exact choice require a reply to the confirmed preceding prompt',async()=>{
+ const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');await f.execute('Ambiguous name',{reply:false,timestamp:f.state().lastMessageTimestamp});assert.equal(f.state().step,'NAME');await f.execute('Persona Sintética');const s=f.state();await f.execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':0'}}},{reply:false});assert.equal(f.state().step,'JOB');assert.equal(f.state().consent,false);
+});
+const currentPrompt=f=>f.outbounds.get(customerOutboundId(f.state().lastEventId));
+const freshTimestamp=f=>Math.max(f.state().lastMessageTimestamp,Math.floor(Date.parse(currentPrompt(f).outcome.completedAt)/1000))+1;
+test('fresh signed plain name and email fill only unverified drafts, explicit choices and human admission still required',async()=>{
+ const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');await f.execute('Persona Sintética',{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'JOB');assert.equal(f.state().name,'Persona Sintética');await f.choose('WORKER');await f.execute('Person@example.invalid',{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'CONFIRM');assert.equal(f.state().email,'person@example.invalid');assert.equal(f.state().consent,false);assert.equal(f.workers.size,0);assert.equal(f.controls.providerCalls,0);
+ const s=f.state();await f.execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':0'}}},{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'CONFIRM');assert.equal(f.state().consent,false);await f.choose('CONFIRM');assert.equal(f.state().step,'WAITING_RESPONSIBLE');assert.equal(f.workers.size,0);assert.equal(f.controls.providerCalls,0);
+});
+for(const context of [{id:'wamid.Wrong'}, {}, null, {id:''}, {id:1}])test('present incorrect or malformed context cannot use plain-text fallback '+JSON.stringify(context),async()=>{
+ const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');await f.execute({type:'text',text:{body:'Persona Sintética'},context},{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'NAME');assert.equal(f.state().name,null);assert.equal(f.workers.size,0);
+});
+for(const [name,change] of [
+ ['unknown send',p=>{p.outcome.state='SEND_UNKNOWN';}],['rejected send',p=>{p.outcome.state='REJECTED';}],['failed status',p=>{p.outcome.providerStatus='failed';}],['deleted status',p=>{p.outcome.providerStatus='deleted';}],['missing send time',p=>{delete p.outcome.completedAt;p.outcome.state='STATUS_OBSERVED';}],['invalid send time',p=>{p.outcome.completedAt='invalid';}],['send time after inbound',p=>{p.outcome.completedAt=new Date(Date.now()+60000).toISOString();}],['wrong application',p=>{p.payload.applicationId='other';}],['wrong channel',p=>{p.payload.channelId='other';}],['wrong organization',p=>{p.payload.organizationId='other';}],['wrong preceding event',p=>{p.payload.eventId='other';}],['non-intake reservation',p=>{p.payload.employeeIntake=false;}]
+])test(name+' denies plain draft advancement',async()=>{
+ const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');const timestamp=freshTimestamp(f);change(currentPrompt(f));await f.execute('Persona Sintética',{reply:false,timestamp});assert.equal(f.state().step,'NAME');assert.equal(f.state().name,null);assert.equal(f.workers.size,0);assert.equal(f.controls.providerCalls,0);
+});
+for(const field of ['channelPurpose','applicationId','organizationId','channelId','to','eventId'])test('sealed prompt '+field+' mismatch denies plain draft advancement',async()=>{
+ const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');const p=currentPrompt(f),aad={organizationId:f.connection.organizationId,projectId:f.connection.projectId,purpose:'outbound',resourceId:p.id},prepared=JSON.parse(decryptCustomerSecret(p.payload.encryptedPayload,aad,f.environment));prepared[field]='other';p.payload.encryptedPayload=encryptCustomerSecret(JSON.stringify(prepared),aad,f.environment);p.payload.requestDigest=digest(prepared);await f.execute('Persona Sintética',{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'NAME');assert.equal(f.workers.size,0);
+});
+test('corrupt sealed prompt rolls back draft and does not send or grant',async()=>{
+ const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');const p=currentPrompt(f),timestamp=freshTimestamp(f),before=f.state();p.payload.requestDigest='0'.repeat(64);await assert.rejects(f.execute('Persona Sintética',{reply:false,timestamp}),{code:'EMPLOYEE_INTAKE_INTEGRITY'});assert.deepEqual(f.state(),before);assert.equal(f.controls.sends,1);assert.equal(f.workers.size,0);
+});
+test('concurrent fresh draft texts and source replay cannot skip role selection or duplicate a transition',async()=>{
+ const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');const timestamp=freshTimestamp(f),a=f.receive('Persona Uno',{reply:false,timestamp}),b=f.receive('Persona Dos',{reply:false,timestamp});const first=await Promise.all([f.bridge.execute(a),f.bridge.execute(b)]);assert.equal(f.state().step,'JOB');assert.equal(f.state().name,'Persona Uno');assert.equal(f.state().consent,false);const before=f.state();assert.deepEqual(await f.bridge.execute(a),first[0]);assert.deepEqual(f.state(),before);assert.equal(f.workers.size,0);
 });
 test('unconfirmed outbound prompt cannot collect a name and an unknown send is never sent again',async()=>{
  const f=employeeIntakeFixture();await f.configure();f.controls.loseSendAck=true;const {context,result}=await f.execute('HOLA');assert.equal(f.controls.sends,1);const replay=await f.outbound.send(context,result.reply,{purpose:'EMPLOYEE_INTAKE'});assert.equal(replay.state,'SEND_UNKNOWN');assert.equal(f.controls.sends,1);await f.execute('Persona Sintética');assert.equal(f.state().step,'NAME');
