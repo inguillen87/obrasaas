@@ -1,3 +1,4 @@
+// Explicit ESM keeps guarded Node CLI imports silent before their output marker.
 const ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,189}$/;
 const NAME = /^[a-z0-9_]{1,512}$/;
 const HASH = /^[a-f0-9]{64}$/;

@@ -1,6 +1,6 @@
 import {WorkspaceError,workspaceId,operationId,digest} from './workspace-policy.mjs';
 import {buildCustomerTemplate,customerRemoteTemplateMatches,publicCustomerTemplateWorkbench} from './meta-customer-templates.mjs';
-import {assertTemplateReviewDefinition,TemplateReviewError} from './whatsapp/template-review-policy.js';
+import {assertTemplateReviewDefinition,TemplateReviewError} from './whatsapp/template-review-policy.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {requireCompanyChannelSchema} from './company-channel-schema.mjs';
 import {ownCompanyConnectionPolicy,ownCompanyCapabilityKind,lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
