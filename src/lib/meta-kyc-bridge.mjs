@@ -1,4 +1,5 @@
 import {WorkspaceError,digest} from './workspace-policy.mjs';
+import {lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
 import {customerJobTransaction} from './meta-customer-outbound.mjs';
 import {beginMetaKycConversation,planMetaKycConversation} from './meta-kyc-conversation.mjs';
 import {metaKycOperationId} from './meta-kyc-challenge.mjs';
@@ -48,17 +49,20 @@ export function createMetaKycBridge({connect,provider,deposit,environment=proces
   if(state.captureImageSetVersion===2){if(typeof deposit.recover!=='function')throw new WorkspaceError('PARTICIPANT_CHANNEL_ADAPTER_INVALID',503);outcome=await deposit.recover(context);}
   if(!outcome){
   const token=decryptCustomerSecret(authorized.connection.encryptedAccessToken,{organizationId:authorized.project.organizationId,projectId:authorized.companyKyc?authorized.connection.projectId:authorized.project.id,purpose:'access-token',resourceId:authorized.connection.phoneNumberId},environment);
-  const beforeExternal=authorized.companyKyc||state.captureImageSetVersion===2?()=>within(async client=>{const current=await resolve(client,context,{deposit:true});if(authorized.companyKyc&&(!current.companyKyc||companyKycProjectionDigest(current.companyKyc)!==companyKycProjectionDigest(authorized.companyKyc))||digest(current.state)!==digest(state))throw new WorkspaceError('META_KYC_COMPANY_AUTHORITY_CHANGED',409);}):undefined;
+   const ownCompanyCapability=await within(client=>lockOwnCompanyIssuer(client,authorized.connection,{environment}));
+   const scopedProvider=authorized.connection.metadata?.ownCompany?await provider.forConnection({capability:ownCompanyCapability,connection:authorized.connection,token}):provider;
+   const beforeExternal=authorized.companyKyc||authorized.connection.metadata?.ownCompany||state.captureImageSetVersion===2?()=>within(async client=>{const current=await resolve(client,context,{deposit:true});await lockOwnCompanyIssuer(client,current.connection,{environment});if(authorized.companyKyc&&(!current.companyKyc||companyKycProjectionDigest(current.companyKyc)!==companyKycProjectionDigest(authorized.companyKyc))||digest(current.state)!==digest(state))throw new WorkspaceError('META_KYC_COMPANY_AUTHORITY_CHANGED',409);}):undefined;
   const images={};
   try{for(const key of ['front','selfie',...(state.captureImageSetVersion===2?['back']:[])]){
-   const reference=state[key],downloaded=await provider.downloadMedia({token,phoneNumberId:authorized.connection.phoneNumberId,mediaId:reference.mediaId,limit:MAX_PRIVATE_IMAGE_BYTES,...(beforeExternal?{beforeExternal}:{})});
+    const reference=state[key],downloaded=await scopedProvider.downloadMedia({token,phoneNumberId:authorized.connection.phoneNumberId,mediaId:reference.mediaId,limit:MAX_PRIVATE_IMAGE_BYTES,...(beforeExternal?{beforeExternal}:{})});
    const contentType=downloaded.contentType?.split(';')[0].trim(),encoded='data:'+contentType+';base64,'+Buffer.from(downloaded.bytes).toString('base64');
    if(contentType!==reference.contentType)throw new WorkspaceError('META_KYC_MEDIA_INTEGRITY',409);decodePrivateImage(encoded,contentType);images[key]=encoded;
   }}catch(error){
    if(!['META_KYC_MEDIA_INTEGRITY','META_CUSTOMER_MEDIA_REJECTED','META_CUSTOMER_PROVIDER_REJECTED','PRIVATE_IMAGE_INVALID','PRIVATE_IMAGE_TOO_LARGE','PRIVATE_IMAGE_TYPE_MISMATCH'].includes(error.code))throw error;
    return within(async client=>{const r=await resolve(client,context,{deposit:true});if(r.recorded)return r.recorded;return record(client,r,replyResult(text('No pudimos validar las imágenes. No se presentó la identidad. Volvé a enviar el frente del documento como imagen nítida de hasta 2 MB; '+(r.state.captureImageSetVersion===2?'después pediremos el dorso y una selfie nueva.':'después pediremos una selfie nueva.')+' Escribí CANCELAR para terminar.')),{...r.state,step:'FRONT',front:null,selfie:null,...(r.state.captureImageSetVersion===2?{back:null}:{}),confirmationEventId:null});});
   }
-  outcome=await deposit.deposit(context,{operationId:metaKycOperationId(context.eventId),noticeVersion:state.noticeVersion,noticeSha256:state.noticeSha256,consent:state.consent,ocrConsent:state.ocrConsent,ocrNoticeVersion:state.ocrNoticeVersion,biometricConsent:state.biometricConsent,biometricNoticeVersion:state.biometricNoticeVersion,...(state.captureImageSetVersion===2?{captureImageSetVersion:2,backConsent:state.backConsent,backNoticeVersion:state.backNoticeVersion,backNoticeSha256:state.backNoticeSha256}:{}),...images});
+   if(beforeExternal)await beforeExternal();
+   outcome=await deposit.deposit(context,{operationId:metaKycOperationId(context.eventId),noticeVersion:state.noticeVersion,noticeSha256:state.noticeSha256,consent:state.consent,ocrConsent:state.ocrConsent,ocrNoticeVersion:state.ocrNoticeVersion,biometricConsent:state.biometricConsent,biometricNoticeVersion:state.biometricNoticeVersion,...(state.captureImageSetVersion===2?{captureImageSetVersion:2,backConsent:state.backConsent,backNoticeVersion:state.backNoticeVersion,backNoticeSha256:state.backNoticeSha256}:{}),...images});
   }
   return within(async client=>{
    const r=await resolve(client,context,{deposit:true});if(r.recorded)return r.recorded;

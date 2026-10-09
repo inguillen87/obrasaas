@@ -6,6 +6,7 @@ import {metaKycChallengeDigest} from './meta-kyc-challenge.mjs';
 import {resolveCompanyKycAuthority,companyKycSecretContext,assertCompanyKycPrompt,assertCompanyKycImageSources,fenceCompanyKycAuthority,COMPANY_KYC_AUTHORIZATION_CODES} from './company-channel-kyc.mjs';
 import {META_KYC_CONVERSATION_TTL_MS} from './meta-kyc-conversation.mjs';
 import {resolveReactiveKycStart} from './meta-employee-intake.mjs';
+import {lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
 
 export const META_KYC_AUTHORIZATION_CODES=Object.freeze(['META_KYC_CHALLENGE_REJECTED','META_KYC_CHALLENGE_EXPIRED','META_KYC_CHALLENGE_REVOKED','META_KYC_MESSAGE_OUT_OF_ORDER','META_KYC_CONVERSATION_LIMIT','META_KYC_DEPOSIT_REQUIRED',...COMPANY_KYC_AUTHORIZATION_CODES]);
 const fail=code=>{throw new WorkspaceError(code,409);};
@@ -35,6 +36,7 @@ export async function resolveMetaKycAuthority(client,context,{deposit=false,outb
  if(!initial||initial.projectId!==context.projectId||initial.payload?.channelId!==context.channelId)fail('META_KYC_CHALLENGE_REJECTED');
  const firstChannel=(await client.query(`SELECT c.*,p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c.id=$1 AND c."projectId"=$2 AND p.status='ACTIVE'`,[context.channelId,context.projectId])).rows[0];
  if(!firstChannel)fail('META_KYC_CHALLENGE_REVOKED');
+ await lockOwnCompanyIssuer(client,firstChannel,{environment});
  const payload=decodeSignedCustomerEvent(initial,firstChannel,environment);
  if(payload.type!=='message')fail('META_KYC_NOT_APPLICABLE');
  const reactiveStart=await resolveReactiveKycStart(client,initial,firstChannel,payload,{environment});

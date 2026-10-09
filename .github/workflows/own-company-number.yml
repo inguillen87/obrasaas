@@ -1,0 +1,54 @@
+name: Own company WhatsApp connection
+on:
+  push:
+    branches: [master, 'feat/integral-worksite-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      CUTOVER_TEST_DISPOSABLE: '1'
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Own number contracts and durable browser recovery
+        run: node --test tests/production-own-company-number*.test.mjs tests/production-company-channel*.test.mjs tests/production-workspace-recovery*.test.mjs tests/production-customer-whatsapp-view.test.mjs
+      - name: Affected transport, authorization and user interface lint
+        run: npx eslint src/lib/meta-own-company-*.mjs src/lib/company-channel-*.mjs src/lib/meta-customer-provider.mjs src/lib/meta-customer-outbound.mjs src/lib/meta-field-bridge.mjs src/lib/meta-kyc-bridge.mjs src/lib/meta-kyc-identity.mjs src/lib/meta-kyc-outbound.mjs src/lib/meta-employee-intake.mjs src/lib/worker-channel-identity.mjs 'src/app/(identity)/cuenta' src/app/api/identity/company-channel scripts/verify-own-company-number-*.mjs tests/production-own-company-number*.test.mjs tests/fixtures/own-company-meta.mjs --max-warnings 0
+      - name: Canonical own-company provider lifecycle in disposable PostgreSQL
+        run: node scripts/verify-own-company-number-postgres.mjs
+      - name: Responsive actual components and uncertain receipt recovery
+        run: node scripts/verify-own-company-number-ui.mjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: own-company-number-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .vercel/private/own-company-number-postgres-proof.json
+            .vercel/own-company-number-ui-evidence/
+          include-hidden-files: true
+          retention-days: 7

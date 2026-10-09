@@ -6,9 +6,11 @@ import {hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
 import {META_CUSTOMER_PROTOCOL,resolveMetaCloudProtocol} from './meta-cloud-protocol.mjs';
 import {customerLifecycleRecovery} from './meta-customer-coexistence.mjs';
 import {assertDevelopmentPilotAttendance} from './meta-development-pilot-policy.mjs';
+import {ownCompanyConnectionPolicy,lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
 
 export const customerOutboundId=eventId=>'customer_outbound_'+digest(['meta-customer-reply-v1',eventId]);
 export function customerChannelActive(connection,now=Date.now(),{pilotAttendance=false,environment=process.env}={}){
+ if(connection?.metadata?.ownCompany){try{ownCompanyConnectionPolicy(connection,environment,now);}catch{return false;}}
  if(connection?.metadata?.developmentPilot){if(!pilotAttendance)return false;try{assertDevelopmentPilotAttendance(connection,environment,now);}catch{return false;}}
  const verified=connection?.metadata?.customerVerification,activation=connection?.metadata?.customerActivation;
  const recovery=customerLifecycleRecovery(connection);if(recovery&&recovery.state!=='RESTORED')return false;
@@ -73,7 +75,8 @@ export function createMetaCustomerOutbound({connect,resolveIdentity,provider,env
    const {to,replyTo}=assertCustomerReplyWindow(payload,now()),id=customerOutboundId(event.id),request={version:1,eventId:event.id,payloadDigest:context.payloadDigest,channelId:connection.id,organizationId:member.organizationId,to,replyTo,message:reply,...(protocol!==META_CUSTOMER_PROTOCOL?{channelPurpose:protocol.purpose}:{}),...(sourceContext?{targetProjectId:resolved.companyProjection?.projectId||null,sourceRouteId:resolved.companyProjection?.sourceEventId}: {})};
    const reservation=await reserveCustomerOutbound(client,{id,projectId:sourceContext?event.projectId:project.id,organizationId:member.organizationId,actorId:member.actorId,request,environment,now:now()});if(reservation.done)return reservation;
    const token=decryptCustomerSecret(connection.encryptedAccessToken,{organizationId:member.organizationId,projectId:sourceContext?connection.projectId:project.id,purpose:protocol.credentialPurpose,resourceId:connection.phoneNumberId},environment);
-   return {...reservation,token,phoneNumberId:connection.phoneNumberId,to,replyTo,connection,developmentPilotCapability:resolved.developmentPilotCapability};
+   const ownCompanyCapability=await lockOwnCompanyIssuer(client,connection,{environment,now:now()});
+   return {...reservation,token,phoneNumberId:connection.phoneNumberId,to,replyTo,connection,developmentPilotCapability:resolved.developmentPilotCapability,ownCompanyCapability};
   });
  }
  return {
@@ -82,7 +85,7 @@ export function createMetaCustomerOutbound({connect,resolveIdentity,provider,env
    // No retry may send an existing reservation, including after this hook,
    // a crashed worker, a timed-out POST or a lost database commit response.
    await afterReserve();let scopedProvider=provider;
-   if(reserved.connection?.metadata?.developmentPilot)scopedProvider=await provider.forConnection({capability:reserved.developmentPilotCapability,connection:reserved.connection,token:reserved.token});
+   if(reserved.connection?.metadata?.developmentPilot||reserved.connection?.metadata?.ownCompany)scopedProvider=await provider.forConnection({capability:reserved.ownCompanyCapability||reserved.developmentPilotCapability,connection:reserved.connection,token:reserved.token});
    await reserve(context,reply);let state='SEND_UNKNOWN',result=null;
    try{result=await scopedProvider.sendReply({...reserved,message:reply,correlationId:reserved.id});state='SENT';}catch(error){if(error instanceof WorkspaceError&&error.code==='META_CUSTOMER_PROVIDER_REJECTED')state='REJECTED';}
    const completed=await within(client=>completeCustomerOutbound(client,{...reserved,projectId:context.projectId,state,messageId:result?.messageId||null,now:now()}));

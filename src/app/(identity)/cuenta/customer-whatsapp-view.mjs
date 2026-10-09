@@ -51,6 +51,8 @@ export function customerWhatsAppResult(result,context,{kind='snapshot',command}=
  return result;
 }
 export function customerWhatsAppNextStep(profile,projectId){
+ const canConsultMeta=profile.configured&&profile.initialProjectId===projectId;
+ if(canConsultMeta&&profile.numberMode==='BUSINESS_APP')return {message:'Preparación guardada. Consultá la disponibilidad de coexistencia y la elegibilidad en Meta, conservando tu app.',canConsultMeta:true,requiresAssistance:false};
  const state=workspaceAuthorizationState(profile,projectId);
- return {message:state.allowed?'Preparación guardada. Consultá la conexión Meta para comprobar la autorización vigente, la recepción y la respuesta.':state.message,canConsultMeta:profile.configured&&profile.initialProjectId===projectId,requiresAssistance:state.code==='WORKSPACE_ASSISTED_ONBOARDING'};
+ return {message:state.allowed?'Preparación guardada. Consultá la conexión Meta para comprobar la autorización vigente, la recepción y la respuesta.':state.message,canConsultMeta,requiresAssistance:state.code==='WORKSPACE_ASSISTED_ONBOARDING'};
 }

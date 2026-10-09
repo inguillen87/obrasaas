@@ -3,6 +3,7 @@ import {WorkspaceError,digest,workspaceId,operationId as validOperationId} from 
 import {decodeSignedCustomerEvent} from './meta-customer-processing.mjs';
 import {metaCustomerContentDigest as durableDigest} from './meta-customer-callback.mjs';
 import {customerChannelActive,customerJobTransaction,customerOutboundId,assertCustomerReplyWindow} from './meta-customer-outbound.mjs';
+import {lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
 import {companyConnectionForProject} from './company-channel-connection.mjs';
 import {COMPANY_CHANNEL_SCHEMA_CONTRACT} from './company-channel-schema.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-credentials.mjs';
@@ -75,7 +76,7 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  const initial=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE id=$1`,[request.eventId])).rows[0];
  if(!initial||initial.provider!=='meta-customer-v1'||initial.eventType!=='message')return null;
  const raw=(await client.query(`SELECT c.*,p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c.id=$1 AND c."projectId"=$2 AND p.status='ACTIVE'`,[initial.payload?.channelId,initial.projectId])).rows[0];
- if(!raw)fail('EMPLOYEE_INTAKE_REVOKED');const payload=decodeSignedCustomerEvent(initial,raw,environment);if(payload.type!=='message')return null;
+ if(!raw)fail('EMPLOYEE_INTAKE_REVOKED');await lockOwnCompanyIssuer(client,raw,{environment});const payload=decodeSignedCustomerEvent(initial,raw,environment);if(payload.type!=='message')return null;
  const signed=JSON.parse(decryptCustomerSecret(initial.payload.encryptedProof,context(raw,META_CUSTOMER_PROTOCOL.proofPurpose,initial.id),environment));
  if(!signed.companyRouting){if(raw.metadata?.companyRoutingVersion===1)fail('EMPLOYEE_INTAKE_REVOKED');return null;}
  const message=payload.value,sender='+'+message.from,key=senderKey(raw,sender,environment);
