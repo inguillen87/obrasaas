@@ -16,6 +16,28 @@ export const FIELD_OVERTIME_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_OVERTIME'
 export const PARTICIPANT_INTAKE_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_EMPLOYEE_INTAKE','ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE']);
 const templateSendActionReference=value=>Boolean(value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='proposalId|revision'&&id(value.proposalId)&&typeof value.revision==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(value.revision));
 const scopeValid = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+// Inline to preserve the static copy graph of existing recovery harnesses.
+// This validates a receipt, never a project name supplied as an access claim.
+export function projectCreationReceiptOutcome(value,reference){
+ const exact=(row,fields)=>row&&typeof row==='object'&&!Array.isArray(row)&&Object.keys(row).sort().join('|')===[...fields].sort().join('|');
+ if(!value||!scopeValid(value.scope)||value.scope!==reference?.scope||!id(value.projectId)||value.projectId!==reference?.projectId||!uuid(value.operationId)||value.operationId!==value.operationId.toLowerCase()||value.operationId!==reference?.operationId||value.action!=='CREATE_PROJECT')return null;
+ const base=['scope','projectId','operationId','action','state','saved','created','definitive'];
+ if(value.state==='NOT_OBSERVED')return exact(value,base)&&value.saved===false&&value.created===false&&value.definitive===false?{state:'NOT_OBSERVED'}:null;
+ const name=value.newProject?.name;
+ if(!exact(value,[...base,'receiptId','replayed','newProject'])||value.state!=='RECORDED'||value.saved!==true||value.created!==true||value.definitive!==true||!/^project_creation_[a-f0-9]{64}$/.test(value.receiptId||'')||typeof value.replayed!=='boolean'||!exact(value.newProject,['id','name','status'])||!id(value.newProject.id)||value.newProject.id===value.projectId||typeof name!=='string'||name.length<2||name.length>120||name!==name.trim().normalize('NFC')||/[\u0000-\u001f\u007f<>\u202a-\u202e\u2066-\u2069]/.test(name)||/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(name)||!['PLANNING','ACTIVE','PAUSED','COMPLETED','ARCHIVED'].includes(value.newProject.status))return null;
+ return {state:'RECORDED',receiptId:value.receiptId};
+}
+export function officeReviewReceiptOutcome(value,reference){
+ if(!value||typeof value!=='object'||Array.isArray(value)||value.scope!==reference.scope||value.projectId!==reference.projectId||value.operationId!==reference.operationId)return null;
+ const exact=fields=>Object.keys(value).sort().join('|')===[...fields].sort().join('|');
+ if(value.state==='NOT_OBSERVED')return exact(['scope','projectId','operationId','action','state','saved','definitive'])&&value.action===null&&value.saved===false&&value.definitive===false?{state:'NOT_OBSERVED'}:null;
+ if(value.action!==reference.action||typeof value.replayed!=='boolean'||!/^office_review_[a-f0-9]{64}(?:_recorded)?$/.test(value.receiptId||''))return null;
+ if(!exact(['scope','projectId','operationId','action','state','saved','definitive','receiptId','replayed',...(value.invitationId!==undefined?['invitationId']:[])]))return null;
+ if(value.invitationId!==undefined&&!/^office_invite_[a-f0-9]{32}$/.test(value.invitationId))return null;
+ if(value.state==='RECORDED'&&value.saved===true&&value.definitive===true)return {state:'RECORDED',receiptId:value.receiptId};
+ if(value.state==='INVITATION_UNCONFIRMED'&&reference.action==='INVITE_AUDITOR'&&value.invitationId&&value.saved===false&&value.definitive===false)return {state:'INVITATION_UNCONFIRMED'};
+ return null;
+}
 export const PROJECT_PREPARATION_SNAPSHOT_KEYS=Object.freeze(['scope','projectId','canManage','revision','detailsDigest','name','clientName','address','teams','slots','startStatus','declarationOnly']);
 export function projectPreparationReceiptOutcome(value,reference){
  const exact=fields=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')===[...fields].sort().join('|');
@@ -45,6 +67,8 @@ export async function planImportUploadFormDigest(form){
  return planImportUploadDigest({scope:form.get('scope'),projectId:form.get('projectId'),operationId:form.get('operationId'),consent:form.get('consent'),source});
 }
 export const RECOVERY_RESOURCES = Object.freeze({
+  'project-creation':'Alta de otra obra',
+  'office-review':'Acceso de oficina y eventos seleccionados',
   workspace:'Planificación', 'task-creation':'Nueva tarea', 'site-register':'Registro de obra',
   'site-photo':'Fotografía privada', participants:'Participantes e identidad',
   'field-operations':'Operación de campo', 'field-media':'Evidencia privada',
@@ -72,6 +96,9 @@ async function reference(url, options, now) {
   if(typeof options.body==='string'){try{body=JSON.parse(options.body);}catch{return null;}}
   else if(typeof options.body?.get==='function') body=Object.fromEntries(['operationId','projectId','scope','action','reportId','eventId'].map(key=>[key,options.body.get(key)]));
   if(!body||!uuid(body.operationId)||!id(body.projectId)||!scopeValid(body.scope))return null;
+  if(resource==='project-creation'&&body.action!=='CREATE_PROJECT')throw unavailable();
+  if(resource==='office-review'&&body.action==='RECOVER_INVITATION')return null;
+  if(resource==='office-review'&&!['INVITE_AUDITOR','REVOKE_AUDITOR','SELECT_EVENT'].includes(body.action))throw unavailable();
   if(resource==='project-preparation'&&!['SAVE_PREPARATION','CANCEL_PENDING_PREPARATION'].includes(body.action))throw unavailable();
   if(resource==='company-onboarding'&&(body.action!=='declare_company_phone'||!id(body.expectedClerkOrganizationId)))throw unavailable();
   if(resource==='site-photo'&&!id(body.reportId))return null;
@@ -93,6 +120,8 @@ async function reference(url, options, now) {
   if(intake&&(!id(body.payload?.connectionId)||body.action!=='CONFIGURE_EMPLOYEE_INTAKE'&&!/^customer_webhook_[a-f0-9]{64}$/.test(body.payload?.applicationId||'')))throw unavailable();
   if(progress&&(!id(body.workerId)||!templateSendActionReference(body.actionReference)))throw unavailable();
   return {version:1,resource,scope:body.scope,projectId:body.projectId,operationId:body.operationId.toLowerCase(),createdAt:now,
+    ...(resource==='project-creation'?{action:'CREATE_PROJECT'}:{}),
+    ...(resource==='office-review'?{action:body.action}:{}),
     ...(resource==='site-photo'?{reportId:body.reportId}:{}),
     ...(resource==='company-onboarding'?{action:body.action,expectedClerkOrganizationId:body.expectedClerkOrganizationId}:{}),
     ...(resource==='company-channel'?{action:channelAction,connectionId:body.payload.connectionId}:{}),
@@ -115,9 +144,15 @@ function valid(entry) {
   const plan=entry.resource==='plan-import'&&entry.action!==undefined;
   const planUpload=plan&&entry.action==='UPLOAD';
   const preparation=entry.resource==='project-preparation';
+  const office=entry.resource==='office-review';
+  const creation=entry.resource==='project-creation';
+  if(creation&&entry.action!=='CREATE_PROJECT')return false;
+  if(office&&!['INVITE_AUDITOR','REVOKE_AUDITOR','SELECT_EVENT'].includes(entry.action))return false;
   if(entry.resource==='participants'&&entry.action!==undefined&&!bank&&!intake)return false;
   if(preparation&&entry.action!=='SAVE_PREPARATION')return false;
   const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',['reconcile','cancel'].includes(entry.action)?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(bank?['action','workerId']:[]),...(intake?['action','connectionId',...(entry.action==='CONFIGURE_EMPLOYEE_INTAKE'?[]:['applicationId'])]:[]),...(progress?['templateKey','workerId','actionReference']:[]),...(planUpload?['action','inputDigest']:plan?['action','draftId','expectedRevision','inputDigest']:[]),...(preparation?['action']:[])];
+  if(office)fields.push('action');
+  if(creation)fields.push('action');
   if(Object.keys(entry).sort().join('|')!==fields.sort().join('|'))return false;
   if(entry.resource==='company-onboarding'&&(entry.action!=='declare_company_phone'||!id(entry.expectedClerkOrganizationId)))return false;
   if(entry.resource==='company-channel'&&!channelReferenceValid(entry.action,entry.connectionId))return false;
@@ -149,6 +184,8 @@ export function recoveryQuery(entry) {
 export function recoveryResult(entry, result) {
   if(!valid(entry)||result?.scope!==entry.scope)return null;
   if(result.projectId!==undefined&&result.projectId!==entry.projectId)return null;
+  if(entry.resource==='office-review')return officeReviewReceiptOutcome(result,entry);
+  if(entry.resource==='project-creation')return projectCreationReceiptOutcome(result,entry);
   if(entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(entry.action)){try{validatePrivateBankOutcome(result,entry);return {state:result.state,...(result.receipt?{receiptId:result.receipt.id}:{})};}catch{return null;}}
   if(entry.resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action)){
     const exact=result.projectId===entry.projectId&&result.operationId===entry.operationId&&result.action===entry.action&&result.connectionId===entry.connectionId&&result.applicationId===(entry.applicationId||null)&&/^participant_[a-f0-9]{64}$/.test(result.receiptId||'')&&result.permissionsGranted===false;
@@ -326,7 +363,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       if(options.signal?.aborted)throw Object.assign(new DOMException('La consulta se canceló.','AbortError'),{requestDispatched:false});
       const current=readEntries(s,entry.scope),existing=current.find(row=>keyOf(row)===keyOf(entry));
       if(existing){if(existing.projectId!==entry.projectId||existing.reportId!==entry.reportId||existing.eventId!==entry.eventId||existing.action!==entry.action||existing.draftId!==entry.draftId||existing.expectedRevision!==entry.expectedRevision||existing.inputDigest!==entry.inputDigest||existing.connectionId!==entry.connectionId||existing.expectedClerkOrganizationId!==entry.expectedClerkOrganizationId||existing.signupId!==entry.signupId||existing.templateKey!==entry.templateKey||existing.workerId!==entry.workerId||existing.actionReference?.proposalId!==entry.actionReference?.proposalId||existing.actionReference?.revision!==entry.actionReference?.revision)throw failure('WORKSPACE_RECOVERY_CONFLICT','Este identificador corresponde a otro intento. Comprobá el recibo antes de continuar.');return {entry:existing,existed:true};}
-      const pending=current.find(row=>row.resource===entry.resource&&(['company-channel','company-onboarding'].includes(entry.resource)||row.projectId===entry.projectId)&&(entry.resource!=='meta-onboarding'||entry.action==='reconcile'||row.eventId===entry.eventId));
+      const pending=current.find(row=>row.resource===entry.resource&&(['company-channel','company-onboarding','project-creation'].includes(entry.resource)||row.projectId===entry.projectId)&&(entry.resource!=='meta-onboarding'||entry.action==='reconcile'||row.eventId===entry.eventId));
       let resolution=false;
       if(entry.resource==='participants'&&typeof options.body==='string'){try{resolution=JSON.parse(options.body).action==='REVOKE';}catch{ /* The server rejects malformed commands. */ }}
       if(pending&&!resolution)throw failure('WORKSPACE_RECOVERY_REQUIRED','Hay un envío anterior sin confirmar en este módulo. Comprobá su recibo en Operaciones por comprobar antes de iniciar otro.');
@@ -349,10 +386,12 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
     async settle(ticket, result, error) {
       if(!ticket)return;
       if(error){
+        if(['office-review','project-creation'].includes(ticket.entry.resource)&&error.requestDispatched!==false)return;
         const rejected=ticket.entry.resource==='plan-import'&&recoveryResult(ticket.entry,error.result)?.state==='REJECTED'&&error.code===error.result.code&&error.status===({PLAN_IMPORT_FILE_INVALID:400,PLAN_IMPORT_FILE_TOO_LARGE:413})[error.code];
         if(!ticket.existed&&(error.requestDispatched===false||rejected||!['plan-import','company-channel','company-onboarding'].includes(ticket.entry.resource)&&!(ticket.entry.resource==='participants'&&(PRIVATE_BANK_ACTIONS.includes(ticket.entry.action)||PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(ticket.entry.action)))&&!(ticket.entry.resource==='meta-onboarding'&&ticket.entry.action==='reconcile')&&error.status>=400&&error.status<500))await remove(ticket.entry);return;
       }
       const entry=ticket.entry;
+      if(['office-review','project-creation'].includes(entry.resource)){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action)){if(['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       // A general Meta snapshot is not a receipt for this operation.
       if(entry.resource==='meta-onboarding'){if(['reconcile','cancel'].includes(entry.action)&&['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}

@@ -11,7 +11,8 @@ export function createParticipantIdentityProvider({client,environment=()=>proces
  const trustedClient=async()=>{if(!identityConfig(environment()).configured)throw unavailable();try{return await client();}catch{throw unavailable();}};
  return {
   async createInvitation({organizationId,inviterUserId,email,invitationId}){
-   const api=await trustedClient();try{return normalizedInvitation(await api.organizations.createOrganizationInvitation({organizationId,inviterUserId,emailAddress:email,role:'org:member',expiresInDays:7,redirectUrl:'https://obrasaas.com/cuenta?participar='+invitationId,publicMetadata:{obrasaasInvitationId:invitationId}}),organizationId);}catch{throw unavailable();}
+   const office=/^office_invite_[a-f0-9]{32}$/.test(invitationId||'');
+   const api=await trustedClient();try{return normalizedInvitation(await api.organizations.createOrganizationInvitation({organizationId,inviterUserId,emailAddress:email,role:'org:member',expiresInDays:7,redirectUrl:'https://obrasaas.com/cuenta?'+(office?'oficina=':'participar=')+invitationId,publicMetadata:{obrasaasInvitationId:invitationId}}),organizationId);}catch{throw unavailable();}
   },
   async findInvitation({organizationId,invitationId}){
    const api=await trustedClient();try{

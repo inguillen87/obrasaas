@@ -36,7 +36,9 @@ test('overview keeps a read-only canonical transaction and bounds projection wit
  assert.ok(queries.some(q=>q.sql==='BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY'));assert.equal(queries.at(-1).sql,'ROLLBACK');assert.ok(!queries.some(q=>/^(INSERT|UPDATE|DELETE|COMMIT)\b/.test(q.sql)));
  assert.ok(!queries.some(q=>/"WhatsAppConnection"|obrasaas_app_state/.test(q.sql)));
  assert.ok(queries.filter(q=>q.sql.includes('"Worker"')).every(q=>!q.sql.includes('SELECT metadata')&&!q.sql.includes('phone')));
- assert.ok(queries.filter(q=>q.sql.includes('"AuditLog"')).every(q=>q.sql.includes("'INVITATION_ACCEPTED'")&&!q.sql.includes('SELECT metadata')));
+ // Canonical office admission adds only an EXISTS boolean to membership;
+ // portfolio reads still never load invitation/document metadata as a DTO.
+ assert.ok(queries.filter(q=>q.sql.includes('"AuditLog"')).every(q=>!q.sql.includes('SELECT metadata')&&(q.sql.includes("'INVITATION_ACCEPTED'")||q.sql.includes('EXISTS(SELECT 1 FROM public."AuditLog" a WHERE a."organizationId"=o.id AND a."actorId"=u.id')&&q.sql.includes("a.action='office.review.accepted' AND a.metadata->>'membershipId'=m.id) AS \"officeReviewOnly\""))));
 });
 test('scope and disabled canonical membership deny before any task read',async()=>{
  for(const identityRows of [[],[member]]){const queries=[],store=createWorkspaceStore({connect:async()=>({query:async sql=>{queries.push(sql);return {rows:sql.includes('FROM public."PlatformUser"')?identityRows:[]};},release:()=>{}})});
