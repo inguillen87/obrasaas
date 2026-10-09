@@ -1,6 +1,7 @@
-import {WorkspaceError,workspaceId,digest} from './workspace-policy.mjs';
+import {WorkspaceError,workspaceId,operationId,digest} from './workspace-policy.mjs';
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
 import {companyPhoneContract,normalizeCompanyPhone} from './company-onboarding-policy.mjs';
+import {customerSecretDigest} from './meta-customer-credentials.mjs';
 
 export const META_OWN_COMPANY_MODE='OWN_COMPANY';
 export const META_OWN_COMPANY_TTL_MS=4*60*60*1000;
@@ -8,6 +9,12 @@ export const META_OWN_COMPANY_TTL_MS=4*60*60*1000;
 // Ownership/provider timeouts remain transient; never classify by a prefix.
 export const META_OWN_COMPANY_AUTHORIZATION_CODES=Object.freeze(['META_OWN_COMPANY_UNAVAILABLE','META_OWN_COMPANY_CONFIGURATION_PENDING','META_OWN_COMPANY_OWNER_UNVERIFIED','META_OWN_COMPANY_TOKEN_REJECTED','META_OWN_COMPANY_CREDENTIAL_REJECTED','META_OWN_COMPANY_ASSET_REJECTED','META_OWN_COMPANY_PHONE_REJECTED','META_OWN_COMPANY_ADAPTER_UNAVAILABLE']);
 const capabilities=new WeakMap(),keys=['version','sourceHead','organizationId','actorId','clerkUserId','clerkOrganizationId','projectId','appId','businessId','wabaId','phoneNumberId','expectedPhoneE164','companyPhoneRevision','issuedAt','expiresAt'];
+const runtimeCapabilities=new WeakMap();
+const runtimeKeys=['version','mode','state','grantId','grantDigest','connectionId','organizationId','actorId','clerkUserId','clerkOrganizationId','projectId','appId','businessId','wabaId','phoneNumberId','expectedPhoneE164','companyPhoneRevision','credentialFormat','credentialCommitment','tokenDigest','systemUserId','tokenExpiresAt','dataAccessExpiresAt','validUntil','issuedAt','origin'];
+const originKeys=['version','receiptId','operationId','sourceHead','policyDigest','issuedAt','expiresAt','channelRevision'];
+const sameKeys=(value,list)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')===list.slice().sort().join('|');
+const commitment=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
+const grantDigest=grant=>digest(Object.fromEntries(runtimeKeys.filter(key=>key!=='grantDigest').map(key=>[key,key==='origin'?Object.fromEntries(originKeys.map(name=>[name,grant.origin[name]])):grant[key]])));
 const asset=value=>typeof value==='string'&&/^[1-9]\d{4,31}$/.test(value);
 const timestamp=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
 const fail=()=>{throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);};
@@ -32,7 +39,40 @@ export function createOwnCompanyCapability(context,environment=process.env,now=D
 export function ownCompanyCapabilityPolicy(capability,environment=process.env,now=Date.now()){
  const original=capabilities.get(capability),current=readOwnCompanyPolicy(environment,now);if(!original||!current||original.policyDigest!==current.policyDigest)fail();return current;
 }
+export function ownCompanyCapabilityKind(capability){return capabilities.has(capability)?'ADMIN':runtimeCapabilities.has(capability)?'RUNTIME':null;}
+// A runtime capability is minted only by the canonical database/audit resolver.
+// Its short request lease never extends the finite provider credential lifetime.
+export function ownCompanyTransportPolicy(capability,environment=process.env,now=Date.now()){
+ if(capabilities.has(capability))return ownCompanyCapabilityPolicy(capability,environment,now);
+ const current=runtimeCapabilities.get(capability);
+ if(!current||environment.VERCEL_ENV!=='production'||environment.NEXT_PUBLIC_META_APP_ID!==current.policy.appId||current.leaseExpiresAt<=now||Date.parse(current.policy.expiresAt)<=now)fail();
+ return current.policy;
+}
+// Only ACTIVATE, after original OPERATIONAL provider inspection, persists this
+// grant and its identical origin receipt in the same transaction. The source
+// SHA records that authorization; it is not a fence on subsequent deployments.
+export function createOwnCompanyRuntimeGrant({capability,connection,receiptId,operationId:operation,channelRevision,providerAuthority},environment=process.env,now=Date.now()){
+ const policy=ownCompanyCapabilityPolicy(capability,environment,now),a=providerAuthority;
+ if(!connection||!workspaceId(connection.id)||connection.projectId!==policy.projectId||connection.organizationId!==undefined&&connection.organizationId!==policy.organizationId||connection.phoneNumberId!==policy.phoneNumberId||connection.whatsappBusinessId!==policy.wabaId||normalizeCompanyPhone(connection.displayPhoneNumber,true)!==policy.expectedPhoneE164||connection.metadata?.credentialFormat!=='tenant-aad-v2'||connection.metadata.credentialOrganizationId!==policy.organizationId||typeof connection.encryptedAccessToken!=='string'||!connection.encryptedAccessToken.startsWith('v2.')||receiptId!=='company_own_'+digest([policy.organizationId,policy.actorId,policy.projectId,operation])||!operationId(operation)||!Number.isSafeInteger(channelRevision)||channelRevision<1||!sameKeys(a,['tokenDigest','systemUserId','tokenExpiresAt','dataAccessExpiresAt','checkedAt'])||!commitment(a.tokenDigest)||!asset(a.systemUserId)||!timestamp(a.tokenExpiresAt)||!(a.dataAccessExpiresAt===null||timestamp(a.dataAccessExpiresAt))||!timestamp(a.checkedAt)||Date.parse(a.checkedAt)>now||Date.parse(a.checkedAt)<now-60000)fail();
+ const validUntil=new Date(Math.min(Date.parse(a.tokenExpiresAt),a.dataAccessExpiresAt===null?Infinity:Date.parse(a.dataAccessExpiresAt))).toISOString();
+ if(Date.parse(validUntil)<=now+300000||Date.parse(validUntil)<Date.parse(policy.expiresAt))fail();
+ const grant={version:2,mode:META_OWN_COMPANY_MODE,state:'ACTIVE',grantId:'own_runtime_'+digest([policy.organizationId,connection.id,receiptId]),connectionId:connection.id,...Object.fromEntries(['organizationId','actorId','clerkUserId','clerkOrganizationId','projectId','appId','businessId','wabaId','phoneNumberId','expectedPhoneE164','companyPhoneRevision'].map(key=>[key,policy[key]])),credentialFormat:'tenant-aad-v2',credentialCommitment:customerSecretDigest(connection.encryptedAccessToken),tokenDigest:a.tokenDigest,systemUserId:a.systemUserId,tokenExpiresAt:a.tokenExpiresAt,dataAccessExpiresAt:a.dataAccessExpiresAt,validUntil,issuedAt:new Date(now).toISOString(),origin:{version:1,receiptId,operationId:operation,sourceHead:policy.sourceHead,policyDigest:policy.policyDigest,issuedAt:policy.issuedAt,expiresAt:policy.expiresAt,channelRevision}};
+ return Object.freeze({...grant,grantDigest:grantDigest(grant)});
+}
+function runtimeConnectionPolicy(connection,environment,now){
+ const grant=connection.metadata.ownCompanyRuntime,proof=connection.metadata.ownCompany,origin=grant?.origin;
+ if(environment.VERCEL_ENV!=='production'||!sameKeys(grant,runtimeKeys)||grant.version!==2||grant.mode!==META_OWN_COMPANY_MODE||grant.state!=='ACTIVE'||!sameKeys(origin,originKeys)||origin.version!==1||!/^company_own_[a-f0-9]{64}$/.test(origin.receiptId||'')||!operationId(origin.operationId)||!/^[a-f0-9]{40}$/.test(origin.sourceHead||'')||!commitment(origin.policyDigest)||!timestamp(origin.issuedAt)||!timestamp(origin.expiresAt)||Date.parse(origin.expiresAt)<=Date.parse(origin.issuedAt)||Date.parse(origin.expiresAt)-Date.parse(origin.issuedAt)>META_OWN_COMPANY_TTL_MS||!Number.isSafeInteger(origin.channelRevision)||origin.channelRevision<1||['connectionId','organizationId','actorId','projectId'].some(key=>!workspaceId(grant[key]))||!/^user_[A-Za-z0-9]+$/.test(grant.clerkUserId||'')||!/^org_[A-Za-z0-9]+$/.test(grant.clerkOrganizationId||'')||['appId','businessId','wabaId','phoneNumberId','systemUserId'].some(key=>!asset(grant[key]))||grant.appId!==OBRASAAS_META_CHANNEL.appId||grant.appId!==environment.NEXT_PUBLIC_META_APP_ID||grant.wabaId===OBRASAAS_META_CHANNEL.wabaId||grant.phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId||!/^\+[1-9]\d{7,14}$/.test(grant.expectedPhoneE164||'')||!Number.isSafeInteger(grant.companyPhoneRevision)||grant.companyPhoneRevision<1||grant.credentialFormat!=='tenant-aad-v2'||!commitment(grant.credentialCommitment)||!commitment(grant.tokenDigest)||!commitment(grant.grantDigest)||grant.grantDigest!==grantDigest(grant)||grant.grantId!=='own_runtime_'+digest([grant.organizationId,grant.connectionId,origin.receiptId])||origin.receiptId!=='company_own_'+digest([grant.organizationId,grant.actorId,grant.projectId,origin.operationId])||!timestamp(grant.issuedAt)||Date.parse(grant.issuedAt)>now||Date.parse(grant.issuedAt)<Date.parse(origin.issuedAt)||Date.parse(grant.issuedAt)>=Date.parse(origin.expiresAt)||!timestamp(grant.tokenExpiresAt)||!(grant.dataAccessExpiresAt===null||timestamp(grant.dataAccessExpiresAt))||!timestamp(grant.validUntil)||Date.parse(grant.validUntil)!==Math.min(Date.parse(grant.tokenExpiresAt),grant.dataAccessExpiresAt===null?Infinity:Date.parse(grant.dataAccessExpiresAt))||Date.parse(grant.validUntil)<=now||Date.parse(grant.validUntil)<Date.parse(origin.expiresAt))fail();
+ const declared=connection.metadata.declaredCompanyPhone;
+ if(!proof||proof.version!==1||proof.mode!==META_OWN_COMPANY_MODE||proof.ownerVerified!==true||proof.policyDigest!==origin.policyDigest||proof.expiresAt!==origin.expiresAt||!timestamp(proof.verifiedAt)||Date.parse(proof.verifiedAt)>Date.parse(grant.issuedAt)||['actorId','organizationId','projectId','appId','businessId','wabaId','phoneNumberId','companyPhoneRevision'].some(key=>proof[key]!==grant[key])||connection.id!==grant.connectionId||connection.projectId!==grant.projectId||connection.organizationId!==undefined&&connection.organizationId!==grant.organizationId||connection.metadata.credentialOrganizationId!==grant.organizationId||connection.metadata.credentialFormat!==grant.credentialFormat||typeof connection.encryptedAccessToken!=='string'||!connection.encryptedAccessToken.startsWith('v2.')||customerSecretDigest(connection.encryptedAccessToken)!==grant.credentialCommitment||connection.whatsappBusinessId!==grant.wabaId||connection.phoneNumberId!==grant.phoneNumberId||normalizeCompanyPhone(connection.displayPhoneNumber,true)!==grant.expectedPhoneE164||declared?.e164!==grant.expectedPhoneE164||declared.revision!==grant.companyPhoneRevision||connection.metadata.developmentPilot||connection.enabled!==true||connection.connectionStatus!=='CONNECTED'||connection.metadata.customerSubscribed!==true||connection.metadata.customerActivation?.state!=='ACTIVE')fail();
+ return Object.freeze({...grant,policyDigest:grant.grantDigest,expiresAt:grant.validUntil});
+}
+export function revokeOwnCompanyRuntimeGrant(connection,{member,projectId,receiptId,operationId:operation,now=Date.now()}){
+ const grant=connection?.metadata?.ownCompanyRuntime;if(!grant)return null;
+ if(member?.role!=='ADMIN'||member.organizationId!==connection.metadata.credentialOrganizationId||!workspaceId(member.actorId)||!workspaceId(projectId)||!operationId(operation)||receiptId!=='company_channel_'+digest([member.organizationId,member.actorId,projectId,operation]))fail();
+ return {...grant,state:'REVOKED',revocation:{version:1,actorId:member.actorId,projectId,receiptId,operationId:operation,revokedAt:new Date(now).toISOString()}};
+}
 export function ownCompanyConnectionPolicy(connection,environment=process.env,now=Date.now()){
+ if(connection?.metadata&&Object.hasOwn(connection.metadata,'ownCompanyRuntime'))return runtimeConnectionPolicy(connection,environment,now);
  const proof=connection?.metadata?.ownCompany;if(!proof)return null;
  const policy=readOwnCompanyPolicy(environment,now);
  if(!policy||proof.version!==1||proof.mode!==META_OWN_COMPANY_MODE||proof.policyDigest!==policy.policyDigest||proof.ownerVerified!==true||proof.actorId!==policy.actorId||proof.organizationId!==policy.organizationId||proof.projectId!==policy.projectId||proof.appId!==policy.appId||proof.businessId!==policy.businessId||proof.wabaId!==policy.wabaId||proof.phoneNumberId!==policy.phoneNumberId||proof.companyPhoneRevision!==policy.companyPhoneRevision||proof.expiresAt!==policy.expiresAt||!timestamp(proof.verifiedAt)||Date.parse(proof.verifiedAt)>now||connection.projectId!==policy.projectId||connection.organizationId!==undefined&&connection.organizationId!==policy.organizationId||connection.metadata.credentialOrganizationId!==policy.organizationId||connection.whatsappBusinessId!==policy.wabaId||connection.phoneNumberId!==policy.phoneNumberId||connection.metadata.developmentPilot||normalizeCompanyPhone(connection.displayPhoneNumber,true)!==policy.expectedPhoneE164)fail();
@@ -41,9 +81,21 @@ export function ownCompanyConnectionPolicy(connection,environment=process.env,no
 // Runtime callers use the canonical connection and current issuer membership,
 // never a serialized company boolean or an actor supplied by a webhook.
 export async function lockOwnCompanyIssuer(client,connection,{environment=process.env,now=Date.now(),lock=true}={}){
- if(!connection?.metadata?.ownCompany)return null;
+ if(!connection?.metadata?.ownCompany&&!Object.hasOwn(connection?.metadata||{},'ownCompanyRuntime'))return null;
  const policy=ownCompanyConnectionPolicy(connection,environment,now);
  const rows=(await client.query(`SELECT u.id AS "actorId",tm."organizationId",tm."tenantRole"::text AS role,o.metadata AS "organizationMetadata" FROM public."PlatformUser" u JOIN public."TenantMembership" tm ON tm."userId"=u.id JOIN public."Organization" o ON o.id=tm."organizationId" JOIN public."Project" p ON p."organizationId"=o.id AND p.id=$4 WHERE u.id=$1 AND u."clerkUserId"=$2 AND tm."organizationId"=$3 AND tm.status='ACTIVE' AND tm."tenantRole"::text='ADMIN' AND tm."clerkRole"='org:admin' AND o."clerkOrganizationId"=$5 AND p.status='ACTIVE' AND COALESCE(o.metadata->'internal','false'::jsonb)<>'true'::jsonb ${lock?'FOR SHARE OF u,tm,o,p':''}`,[policy.actorId,policy.clerkUserId,policy.organizationId,policy.projectId,policy.clerkOrganizationId])).rows;
  if(rows.length!==1)fail();const row=rows[0];
+ if(Object.hasOwn(connection.metadata,'ownCompanyRuntime')){
+  if(!memberMatches(policy,{member:row,session:{userId:policy.clerkUserId,organizationId:policy.clerkOrganizationId,organizationRole:'org:admin'},project:{id:policy.projectId,organizationId:policy.organizationId,organizationMetadata:row.organizationMetadata}}))fail();
+  const current=(await client.query(`SELECT c.*,p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c.id=$1 AND c."projectId"=$2 AND p."organizationId"=$3 ${lock?'FOR SHARE OF c,p':''}`,[policy.connectionId,policy.projectId,policy.organizationId])).rows;
+  if(current.length!==1||current[0].encryptedAccessToken!==connection.encryptedAccessToken||ownCompanyConnectionPolicy(current[0],environment,now).grantDigest!==policy.grantDigest)fail();
+  const receipt=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='company.own.number.recorded' AND "entityType"='WhatsAppConnection' AND "entityId"=$4 ${lock?'FOR SHARE':''}`,[policy.origin.receiptId,policy.organizationId,policy.actorId,policy.connectionId])).rows;
+  const audit=receipt[0]?.metadata;
+  if(receipt.length!==1||audit?.state!=='RECORDED'||audit.action!=='ACTIVATE_OWN_NUMBER'||audit.projectId!==policy.projectId||audit.operationId!==policy.origin.operationId||audit.connectionId!==policy.connectionId||audit.policyDigest!==policy.origin.policyDigest||!sameKeys(audit.runtimeGrant,runtimeKeys)||grantDigest(audit.runtimeGrant)!==policy.grantDigest||audit.runtimeGrant.grantDigest!==policy.grantDigest)fail();
+  const capability=Object.freeze({});runtimeCapabilities.set(capability,{policy,leaseExpiresAt:Math.min(now+60000,Date.parse(policy.expiresAt))});return capability;
+ }
  return createOwnCompanyCapability({member:row,session:{userId:policy.clerkUserId,organizationId:policy.clerkOrganizationId,organizationRole:'org:admin'},project:{id:policy.projectId,organizationId:policy.organizationId,organizationMetadata:row.organizationMetadata}},environment,now);
+}
+export async function fenceOwnCompanyRuntime(client,connection,options){
+ const capability=await lockOwnCompanyIssuer(client,connection,options);if(ownCompanyCapabilityKind(capability)!=='RUNTIME')fail();return capability;
 }

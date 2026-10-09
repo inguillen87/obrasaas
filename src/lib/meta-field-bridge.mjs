@@ -9,6 +9,7 @@ import {customerJobTransaction} from './meta-customer-outbound.mjs';
 import {validFieldMediaAnalysisConsent,FIELD_VIDEO_PRIVACY_NOTICE_VERSION,fieldVideoAudioAnalysisAllowed} from './field-media-privacy.mjs';
 import {voiceTranscriptForEvidence} from './voice-progress-draft.mjs';
 import {assertDevelopmentPilotCommit,assertDevelopmentPilotAdapter} from './meta-development-pilot-policy.mjs';
+import {lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
 import {siteText} from './site-register-policy.mjs';
 
 export function metaFieldOperationId(eventId,purpose){const h=digest(['meta-field-operation-v1',eventId,purpose]);return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;}
@@ -191,10 +192,11 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   if(!provider||!put||!get||!analyzer)throw new WorkspaceError('META_CHANNEL_MEDIA_NOT_CONFIGURED',503);
   // No locks span provider I/O. Re-resolve the signed source, assignment,
   // individual KYC and binding immediately before each corporate external call.
-  const beforeExternal=async()=>{if(prepared.corporate||prepared.media.sourceOrigin)await within(async client=>{const r=await resolve(client,context,'report');assertPrepared(r,prepared);assertDevelopmentPilotAdapter(r.connection,'media');await requireMediaOrigin(client,r,prepared.media,prepared.state);await commitFence(client,r);});};
+  const own=prepared.connection?.metadata?.ownCompany||Object.hasOwn(prepared.connection?.metadata||{},'ownCompanyRuntime');
+  const beforeExternal=async()=>{if(prepared.corporate||prepared.media.sourceOrigin||own)await within(async client=>{const r=await resolve(client,context,'report');assertPrepared(r,prepared);if(own)await lockOwnCompanyIssuer(client,prepared.connection,{environment});assertDevelopmentPilotAdapter(r.connection,'media');await requireMediaOrigin(client,r,prepared.media,prepared.state);await commitFence(client,r);});};
   const external=fn=>async(...args)=>{await beforeExternal();return fn(...args);};
   let media;
-   const scopedProvider=prepared.connection?.metadata?.ownCompany?await provider.forConnection({capability:prepared.ownCompanyCapability,connection:prepared.connection,token:prepared.token}):provider;
+   const scopedProvider=own?await provider.forConnection({capability:prepared.ownCompanyCapability,connection:prepared.connection,token:prepared.token,beforeExternal}):provider;
    try{await beforeExternal();const downloaded=await scopedProvider.downloadMedia({token:prepared.token,phoneNumberId:prepared.phoneNumberId,mediaId:prepared.media.mediaId,limit:prepared.media.kind==='image'?2*1024*1024:3*1024*1024,...(prepared.corporate||prepared.media.sourceOrigin?{beforeExternal}:{})});
    media=decodeFieldMedia(downloaded.bytes,downloaded.contentType);if(downloaded.contentType.split(';')[0].trim()!==String(prepared.media.contentType).split(';')[0].trim()||media.kind!==prepared.media.kind)throw new WorkspaceError('META_CHANNEL_MEDIA_INTEGRITY',409);
    }catch(error){if(recoverableMediaContext(error))return closeMediaContext(context,prepared,error);if(!['META_CUSTOMER_MEDIA_INVALID','META_CUSTOMER_MEDIA_REJECTED','META_CUSTOMER_MEDIA_INTEGRITY','META_CHANNEL_MEDIA_INTEGRITY','FIELD_MEDIA_INVALID','FIELD_MEDIA_TOO_LARGE'].includes(error.code))throw error;

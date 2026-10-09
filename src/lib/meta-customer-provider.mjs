@@ -5,7 +5,7 @@ import {customerVaultConfigured} from './meta-customer-credentials.mjs';
 import {META_CUSTOMER_REQUIRED_SCOPES,hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
 import {resolveMetaTransport,readMetaJson} from './meta-whatsapp-transport.mjs';
 import {createDevelopmentPilotCapability,developmentPilotCapabilityPolicy,developmentPilotCapabilityExpiry,developmentPilotConnectionPolicy,developmentPilotPhoneMatches,assertDevelopmentPilotMember,META_DEVELOPMENT_PILOT_MODE} from './meta-development-pilot-policy.mjs';
-import {createOwnCompanyCapability,ownCompanyCapabilityPolicy,ownCompanyConnectionPolicy,META_OWN_COMPANY_MODE} from './meta-own-company-policy.mjs';
+import {createOwnCompanyCapability,ownCompanyCapabilityPolicy,ownCompanyCapabilityKind,ownCompanyTransportPolicy,ownCompanyConnectionPolicy,META_OWN_COMPANY_MODE} from './meta-own-company-policy.mjs';
 import {normalizeCompanyPhone} from './company-onboarding-policy.mjs';
 
 const pilotAudits=new WeakMap(),pilotInspections=new WeakMap();
@@ -13,8 +13,11 @@ const ownAudits=new WeakMap(),ownInspections=new WeakMap();
 const ownScopes=['business_management',...META_CUSTOMER_REQUIRED_SCOPES];
 function ownTokenVerified(debug,policy,now){
  const scopes=debug?.scopes,grants=debug?.granular_scopes;
- return debug?.is_valid===true&&String(debug.app_id)===policy.appId&&debug.type==='SYSTEM_USER'&&metaAssetId(String(debug.user_id))&&Array.isArray(scopes)&&[3,4].includes(scopes.length)&&new Set(scopes).size===scopes.length&&ownScopes.every(scope=>scopes.includes(scope))&&scopes.every(scope=>ownScopes.includes(scope)||scope==='public_profile')&&Number.isSafeInteger(debug.expires_at)&&debug.expires_at*1000>now+300000&&debug.expires_at*1000>=Date.parse(policy.expiresAt)&&Number.isSafeInteger(debug.data_access_expires_at)&&debug.data_access_expires_at>=0&&(!debug.data_access_expires_at||debug.data_access_expires_at*1000>=Date.parse(policy.expiresAt))&&Array.isArray(grants)&&grants.length===3&&new Set(grants.map(grant=>grant?.scope)).size===3&&ownScopes.every(scope=>grants.some(grant=>grant.scope===scope&&Array.isArray(grant.target_ids)&&grant.target_ids.every(id=>metaAssetId(String(id)))&&(!grant.target_ids.length||grant.target_ids.map(String).includes(policy.wabaId))));
+ return debug?.is_valid===true&&String(debug.app_id)===policy.appId&&debug.type==='SYSTEM_USER'&&metaAssetId(String(debug.user_id))&&Array.isArray(scopes)&&[3,4].includes(scopes.length)&&new Set(scopes).size===scopes.length&&ownScopes.every(scope=>scopes.includes(scope))&&scopes.every(scope=>ownScopes.includes(scope)||scope==='public_profile')&&Number.isSafeInteger(debug.expires_at)&&Number.isFinite(new Date(debug.expires_at*1000).getTime())&&debug.expires_at*1000>now+300000&&debug.expires_at*1000>=Date.parse(policy.expiresAt)&&Number.isSafeInteger(debug.data_access_expires_at)&&debug.data_access_expires_at>=0&&(!debug.data_access_expires_at||Number.isFinite(new Date(debug.data_access_expires_at*1000).getTime())&&debug.data_access_expires_at*1000>=Date.parse(policy.expiresAt))&&Array.isArray(grants)&&grants.length===3&&new Set(grants.map(grant=>grant?.scope)).size===3&&ownScopes.every(scope=>grants.some(grant=>grant.scope===scope&&Array.isArray(grant.target_ids)&&grant.target_ids.every(id=>metaAssetId(String(id)))&&(!grant.target_ids.length||grant.target_ids.map(String).includes(policy.wabaId))));
 }
+const ownTokenExpiry=debug=>new Date(debug.expires_at*1000).toISOString();
+const ownDataAccessExpiry=debug=>debug.data_access_expires_at?new Date(debug.data_access_expires_at*1000).toISOString():null;
+const ownRuntimeTokenMatches=(debug,current)=>String(debug.user_id)===current.systemUserId&&ownTokenExpiry(debug)===current.tokenExpiresAt&&ownDataAccessExpiry(debug)===current.dataAccessExpiresAt;
 const customerTokenDigest=token=>createHash('sha256').update(token).digest('hex');
 // Only fixed stage labels leave the private ownership audit. Graph responses,
 // transport errors and credential values never become public diagnostics.
@@ -91,7 +94,7 @@ export function metaCustomerReadiness(environment=process.env){
   humanAcceptance:'NOT_VERIFIED',numberRegistration:'REQUIRES_CUSTOMER_NUMBER',signupVersion:'4',
   flows:{DEDICATED:{available,configId:gates.configuration?configId:null},BUSINESS_APP:{available:coexistence,configId:coexistence?coexistenceConfig:null,featureType:'whatsapp_business_app_onboarding'},EXISTING_API:{available:false,configId:null,requiresSharePlan:true}}};
 }
-export function createMetaCustomerProvider({environment=process.env,fetchImpl=fetch,now=()=>Date.now(),readiness=metaCustomerReadiness,pilotCapability=null,pilotAudit=null,ownCapability=null,ownAudit=null}={}){
+export function createMetaCustomerProvider({environment=process.env,fetchImpl=fetch,now=()=>Date.now(),readiness=metaCustomerReadiness,pilotCapability=null,pilotAudit=null,ownCapability=null,ownAudit=null,ownFence=null}={}){
  // Embedded Signup versions govern new authorization flows. They do not
  // revoke previously granted customer transport. Retain every existing
  // transport prerequisite while requiring v4 separately for a new code.
@@ -101,7 +104,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
  const policy=()=>developmentPilotCapabilityPolicy(pilotCapability,environment,now());
  const scopedReady=()=>{
    const ready=readiness(environment);
-   if(ownCapability){let current;try{current=ownCompanyCapabilityPolicy(ownCapability,environment,now());}catch{return {...ready,mode:META_OWN_COMPANY_MODE,ownCompany:{available:false,code:'META_OWN_COMPANY_UNAVAILABLE'}};}
+   if(ownCapability){let current;try{current=ownCompanyTransportPolicy(ownCapability,environment,now());}catch{return {...ready,mode:META_OWN_COMPANY_MODE,ownCompany:{available:false,code:'META_OWN_COMPANY_UNAVAILABLE'}};}
     const audit=ownAudits.get(ownAudit),available=audit?.policyDigest===current.policyDigest&&audit.expiresAt>now()&&['app','secret','version','vault','callback'].every(key=>ready.gates?.[key]===true);
     return {...ready,mode:META_OWN_COMPANY_MODE,ownCompany:{available,expiresAt:current.expiresAt,code:available?'META_OWN_COMPANY_AVAILABLE':'META_OWN_COMPANY_OWNER_UNVERIFIED'}};}
    if(!pilotCapability)return ready;
@@ -110,17 +113,41 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
   return {...ready,mode:META_DEVELOPMENT_PILOT_MODE,pilot:{canLaunch:available,canUseAttendanceTransport:available,expiresAt:current.expiresAt,ownBusinessOnly:true,ownerReadbackReady:available,code:available?'META_DEVELOPMENT_PILOT_AVAILABLE':audit?.code||'META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED',capabilities:{attendance:available,binding:available,kyc:false,media:false,flows:false,templates:false,progress:false,stock:false,company:false}}};
  };
   const config=(signupRequired=false)=>{const ready=scopedReady(),transportReady=ownCapability?ready.ownCompany?.available===true:pilotCapability?ready.pilot?.canUseAttendanceTransport===true:readiness===metaCustomerReadiness?metaCustomerTransportReady(ready):injectedDemoTransportReady(ready);if(!transportReady||signupRequired&&(ownCapability||!metaCustomerAuthorizationReady(ready)))throw new WorkspaceError(ownCapability?ready.ownCompany.code:pilotCapability?ready.pilot.code:ready.launchCode,503);return ready;};
-  const pilotAdapter=adapter=>{if(ownCapability&&!['inspect','subscribe','register','reply','media'].includes(adapter))throw new WorkspaceError('META_OWN_COMPANY_ADAPTER_UNAVAILABLE',409);if(pilotCapability&&!['inspect','subscribe','register','reply'].includes(adapter))throw new WorkspaceError('META_DEVELOPMENT_PILOT_ADAPTER_UNAVAILABLE',409);};
+  const pilotAdapter=adapter=>{if(ownCapability&&!(ownCompanyCapabilityKind(ownCapability)==='RUNTIME'?['inspect','reply','media']:['inspect','subscribe','register','reply','media']).includes(adapter))throw new WorkspaceError('META_OWN_COMPANY_ADAPTER_UNAVAILABLE',409);if(pilotCapability&&!['inspect','subscribe','register','reply'].includes(adapter))throw new WorkspaceError('META_DEVELOPMENT_PILOT_ADAPTER_UNAVAILABLE',409);};
+  const ownBoundary=async()=>{if(ownCapability){if(ownCompanyCapabilityKind(ownCapability)==='RUNTIME'){if(typeof ownFence!=='function')throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);await ownFence();}config();}};
  async function request(path,{token,method='GET',body,appToken=false,beforeExternal}={}){
   const ready=config(),url=new URL(`https://graph.facebook.com/${ready.version}/${path}`);
    if(ownCapability&&!appToken&&customerTokenDigest(token||'')!==ownAudits.get(ownAudit)?.tokenDigest)throw new WorkspaceError('META_OWN_COMPANY_CREDENTIAL_REJECTED',403);
   if(token&&!appToken)url.searchParams.set('appsecret_proof',createHmac('sha256',environment.META_APP_SECRET).update(token).digest('hex'));
   if(beforeExternal)await beforeExternal();
-  if(ownCapability)config();
+  await ownBoundary();
   let response;try{response=await fetchImpl(url,{method,headers:{Accept:'application/json',...(token?{Authorization:`Bearer ${token}`}:{}) ,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store',redirect:'error',signal:AbortSignal.timeout(15000)});}catch{throw new WorkspaceError('META_CUSTOMER_PROVIDER_UNCONFIRMED',503);}
   const payload=await response.json().catch(()=>null);
   if(!response.ok)throw new WorkspaceError(response.status>=500||[408,425,429].includes(response.status)?'META_CUSTOMER_PROVIDER_UNCONFIRMED':'META_CUSTOMER_PROVIDER_REJECTED',response.status>=500||[408,425,429].includes(response.status)?503:409);
-  if(!payload||typeof payload!=='object')throw new WorkspaceError('META_CUSTOMER_PROVIDER_UNCONFIRMED',503);return payload;
+  if(!payload||typeof payload!=='object')throw new WorkspaceError('META_CUSTOMER_PROVIDER_UNCONFIRMED',503);await ownBoundary();return payload;
+ }
+ // Runtime grants enter only through forConnection, after the canonical row
+ // and credential commitments match. Public administrative import stays 4h.
+ async function auditOwnCapability(capability,token,fence=null){
+  const current=ownCompanyTransportPolicy(capability,environment,now()),runtime=ownCompanyCapabilityKind(capability)==='RUNTIME',base=metaCustomerReadiness(environment);
+  if(readiness!==metaCustomerReadiness||!['app','secret','version','vault','callback'].every(key=>base.gates[key]===true)||typeof token!=='string'||token.trim()!==token||token.length<20||token.length>8192)throw new WorkspaceError('META_OWN_COMPANY_CONFIGURATION_PENDING',503);
+  if(runtime&&customerTokenDigest(token)!==current.tokenDigest)throw new WorkspaceError('META_OWN_COMPANY_CREDENTIAL_REJECTED',403);
+  if(runtime&&typeof fence!=='function')throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);
+  const boundary=async()=>{if(runtime)await fence();ownCompanyTransportPolicy(capability,environment,now());};
+  const auditRequest=async(path,appToken=false)=>{
+   await boundary();const credential=appToken?current.appId+'|'+environment.META_APP_SECRET:token,url=new URL(`https://graph.facebook.com/${base.version}/${path}`);
+   if(!appToken)url.searchParams.set('appsecret_proof',createHmac('sha256',environment.META_APP_SECRET).update(token).digest('hex'));
+   let response;try{response=await fetchImpl(url,{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+credential},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(5000)});}catch{throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNCONFIRMED',503);}
+   const result=await readMetaJson(response,32768).catch(()=>null);if(!response.ok||!result||typeof result!=='object'||Array.isArray(result))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNCONFIRMED',503);await boundary();return result;
+  };
+  const debug=(await auditRequest('debug_token?'+new URLSearchParams({input_token:token}),true)).data;
+  if(!ownTokenVerified(debug,current,now())||runtime&&!ownRuntimeTokenMatches(debug,current))throw new WorkspaceError('META_OWN_COMPANY_TOKEN_REJECTED',403);
+  for(const [edge,expected] of [['system_users',String(debug.user_id)],['owned_apps',current.appId],['owned_whatsapp_business_accounts',current.wabaId]]){
+   const result=await auditRequest(current.businessId+'/'+edge+'?'+new URLSearchParams({fields:'id',limit:'100'}));
+   if(result.paging?.next||!Array.isArray(result.data)||result.data.length>100||result.data.some(item=>!metaAssetId(String(item?.id)))||new Set(result.data.map(item=>String(item.id))).size!==result.data.length||!result.data.some(item=>String(item.id)===expected))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);
+  }
+  const audit=Object.freeze({});ownAudits.set(audit,{policyDigest:current.policyDigest,tokenDigest:customerTokenDigest(token),systemUserId:String(debug.user_id),tokenExpiresAt:ownTokenExpiry(debug),dataAccessExpiresAt:ownDataAccessExpiry(debug),expiresAt:Math.min(Date.parse(current.expiresAt),debug.expires_at*1000,debug.data_access_expires_at?debug.data_access_expires_at*1000:Infinity,now()+60000)});
+  return createMetaCustomerProvider({environment,fetchImpl,now,readiness,ownCapability:capability,ownAudit:audit,ownFence:runtime?fence:null});
  }
  return {
   readiness:scopedReady,
@@ -128,27 +155,17 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
     const capability=createOwnCompanyCapability(context,environment,now());return this.forOwnCapability({capability,token});
    },
    async forOwnCapability({capability,token}){
-    const current=ownCompanyCapabilityPolicy(capability,environment,now()),base=metaCustomerReadiness(environment);
-    if(readiness!==metaCustomerReadiness||!['app','secret','version','vault','callback'].every(key=>base.gates[key]===true)||typeof token!=='string'||token.trim()!==token||token.length<20||token.length>8192)throw new WorkspaceError('META_OWN_COMPANY_CONFIGURATION_PENDING',503);
-    const auditRequest=async(path,appToken=false)=>{
-     ownCompanyCapabilityPolicy(capability,environment,now());const credential=appToken?current.appId+'|'+environment.META_APP_SECRET:token,url=new URL(`https://graph.facebook.com/${base.version}/${path}`);
-     if(!appToken)url.searchParams.set('appsecret_proof',createHmac('sha256',environment.META_APP_SECRET).update(token).digest('hex'));
-     let response;try{response=await fetchImpl(url,{method:'GET',headers:{Accept:'application/json',Authorization:'Bearer '+credential},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(5000)});}catch{throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNCONFIRMED',503);}
-     const result=await readMetaJson(response,32768).catch(()=>null);if(!response.ok||!result||typeof result!=='object'||Array.isArray(result))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNCONFIRMED',503);ownCompanyCapabilityPolicy(capability,environment,now());return result;
-    };
-    const debug=(await auditRequest('debug_token?'+new URLSearchParams({input_token:token}),true)).data;
-    if(!ownTokenVerified(debug,current,now()))throw new WorkspaceError('META_OWN_COMPANY_TOKEN_REJECTED',403);
-    for(const [edge,expected] of [['system_users',String(debug.user_id)],['owned_apps',current.appId],['owned_whatsapp_business_accounts',current.wabaId]]){
-     const result=await auditRequest(current.businessId+'/'+edge+'?'+new URLSearchParams({fields:'id',limit:'100'}));
-     if(result.paging?.next||!Array.isArray(result.data)||result.data.length>100||result.data.some(item=>!metaAssetId(String(item?.id)))||new Set(result.data.map(item=>String(item.id))).size!==result.data.length||!result.data.some(item=>String(item.id)===expected))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);
-    }
-    const audit=Object.freeze({});ownAudits.set(audit,{policyDigest:current.policyDigest,tokenDigest:customerTokenDigest(token),systemUserId:String(debug.user_id),expiresAt:Math.min(Date.parse(current.expiresAt),debug.expires_at*1000,now()+60000)});
-    return createMetaCustomerProvider({environment,fetchImpl,now,readiness,ownCapability:capability,ownAudit:audit});
+    ownCompanyCapabilityPolicy(capability,environment,now());return auditOwnCapability(capability,token);
    },
    ownProvenance(verified){
     const current=ownCompanyCapabilityPolicy(ownCapability,environment,now()),proof=ownInspections.get(verified);
     if(!proof||proof!==inspectedAssets||proof.capability!==ownCapability)throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);
     return {version:1,mode:META_OWN_COMPANY_MODE,policyDigest:current.policyDigest,actorId:current.actorId,organizationId:current.organizationId,projectId:current.projectId,appId:current.appId,businessId:current.businessId,wabaId:current.wabaId,phoneNumberId:current.phoneNumberId,companyPhoneRevision:current.companyPhoneRevision,expiresAt:current.expiresAt,ownerVerified:true,verifiedAt:new Date(now()).toISOString()};
+   },
+   ownOperationalAuthority(verified){
+    ownCompanyCapabilityPolicy(ownCapability,environment,now());config();const proof=ownInspections.get(verified),audit=ownAudits.get(ownAudit);
+    if(!proof||proof!==inspectedAssets||proof.capability!==ownCapability||proof.inspectionPhase!==META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL||proof.registered!==true||proof.platformType!=='CLOUD_API'||proof.tokenDigest!==audit?.tokenDigest||proof.systemUserId!==audit.systemUserId||Date.parse(proof.checkedAt)<now()-60000)throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);
+    return {tokenDigest:proof.tokenDigest,systemUserId:proof.systemUserId,tokenExpiresAt:proof.tokenExpiresAt,dataAccessExpiresAt:proof.dataAccessExpiresAt,checkedAt:proof.checkedAt};
    },
   assertWorkspace(context){if(pilotCapability){const current=assertDevelopmentPilotMember(pilotCapability,context,environment,now()),stored=context.project.metadata?.metaSignup?.developmentPilot;if(stored&&stored.policyDigest!==current.policyDigest)throw new WorkspaceError('META_DEVELOPMENT_PILOT_UNAVAILABLE',403);return current;}return null;},
   pilotReference(){if(!pilotCapability)return null;const current=policy();return {mode:META_DEVELOPMENT_PILOT_MODE,policyDigest:current.policyDigest,expiresAt:current.expiresAt};},
@@ -185,8 +202,14 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
     }catch(error){code=error instanceof WorkspaceError&&pilotAuditCodes.has(error.code)?error.code:code;pilotAudits.set(audit,{policyDigest:current.policyDigest,expiresAt:0,code});}
    return createMetaCustomerProvider({environment,fetchImpl,now,readiness,pilotCapability:capability,pilotAudit:audit});
   },
-  async forConnection({capability,connection,token}){
-    if(connection?.metadata?.ownCompany){const current=ownCompanyCapabilityPolicy(capability,environment,now());ownCompanyConnectionPolicy(connection,environment,now());if(current.policyDigest!==connection.metadata.ownCompany.policyDigest)throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);const scoped=await this.forOwnCapability({capability,token});await scoped.inspect({token,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,numberMode:'DEDICATED'});return scoped;}
+  async forConnection({capability,connection,token,beforeExternal}){
+    if(connection?.metadata&&(connection.metadata.ownCompany||Object.hasOwn(connection.metadata,'ownCompanyRuntime'))){
+     const current=ownCompanyTransportPolicy(capability,environment,now()),canonical=ownCompanyConnectionPolicy(connection,environment,now()),runtime=Object.hasOwn(connection.metadata,'ownCompanyRuntime');
+     if(current.policyDigest!==canonical?.policyDigest||ownCompanyCapabilityKind(capability)!==(runtime?'RUNTIME':'ADMIN')||runtime&&(current.connectionId!==connection.id||current.grantDigest!==canonical.grantDigest||current.tokenDigest!==customerTokenDigest(token||'')))throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);
+     if(runtime&&typeof beforeExternal!=='function')throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);
+     const scoped=await auditOwnCapability(capability,token,runtime?beforeExternal:null),verified=await scoped.inspect({token,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,numberMode:'DEDICATED'});
+     if(runtime&&(verified.registered!==true||verified.platformType!=='CLOUD_API'||await scoped.inspectSubscription({token,wabaId:connection.whatsappBusinessId})!==true))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);return scoped;
+    }
    if(!connection?.metadata?.developmentPilot)return this;
    const current=developmentPilotCapabilityPolicy(capability,environment,now());developmentPilotConnectionPolicy(connection,environment,now());
    const scoped=await this.forWorkspace({member:{actorId:current.actorId,organizationId:current.organizationId,role:'ADMIN'},session:{userId:current.clerkUserId,organizationId:current.clerkOrganizationId,organizationRole:'org:admin'},project:{id:current.projectId,organizationId:current.organizationId}});
@@ -203,13 +226,14 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    const sequence=++inspectionSequence;inspectedAssets=null;
    if(!Object.values(META_CUSTOMER_INSPECTION_PHASE).includes(inspectionPhase))throw new WorkspaceError('META_CUSTOMER_INSPECTION_PHASE_INVALID');
    pilotAdapter('inspect');if(pilotCapability&&(numberMode!=='DEDICATED'||!pilotAudits.get(pilotAudit)?.ownedWabas?.includes(wabaId)))throw new WorkspaceError('META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED',403);
-    const ownPolicy=ownCapability?ownCompanyCapabilityPolicy(ownCapability,environment,now()):null;
+    const ownPolicy=ownCapability?ownCompanyTransportPolicy(ownCapability,environment,now()):null;
     if(ownPolicy&&(numberMode!=='DEDICATED'||wabaId!==ownPolicy.wabaId||phoneNumberId!==ownPolicy.phoneNumberId))throw new WorkspaceError('META_OWN_COMPANY_ASSET_REJECTED',403);
+    if(ownPolicy&&customerTokenDigest(token||'')!==ownAudits.get(ownAudit)?.tokenDigest)throw new WorkspaceError('META_OWN_COMPANY_CREDENTIAL_REJECTED',403);
    const ready=config();const result=await request('debug_token?'+new URLSearchParams({input_token:token}),{token:ready.appId+'|'+environment.META_APP_SECRET,appToken:true});
    const data=result.data;
    if(data?.is_valid!==true||String(data.app_id)!==ready.appId||!hasMetaCustomerRequiredScopes(data.scopes))throw new WorkspaceError('META_CUSTOMER_TOKEN_SCOPE_REJECTED',403);
    const expiresAt=Number(data.expires_at);if(pilotCapability&&typeof data.expires_at!=='number'||!Number.isSafeInteger(expiresAt)||expiresAt<0||expiresAt&&expiresAt*1000<=now()+300000)throw new WorkspaceError('META_CUSTOMER_TOKEN_EXPIRED',409);
-    if(ownPolicy&&(!ownTokenVerified(data,ownPolicy,now())||String(data.user_id)!==ownAudits.get(ownAudit)?.systemUserId))throw new WorkspaceError('META_OWN_COMPANY_TOKEN_REJECTED',403);
+    if(ownPolicy&&(!ownTokenVerified(data,ownPolicy,now())||String(data.user_id)!==ownAudits.get(ownAudit)?.systemUserId||ownCompanyCapabilityKind(ownCapability)==='RUNTIME'&&!ownRuntimeTokenMatches(data,ownPolicy)))throw new WorkspaceError('META_OWN_COMPANY_TOKEN_REJECTED',403);
    const scopes=data.granular_scopes;
     if(!ownPolicy&&(!Array.isArray(scopes)||!scopes.some(scope=>scope.scope==='whatsapp_business_management'&&Array.isArray(scope.target_ids)&&scope.target_ids.map(String).includes(wabaId))))throw new WorkspaceError('META_CUSTOMER_WABA_SCOPE_REJECTED',403);
    const phones=await request(wabaId+'/phone_numbers?'+new URLSearchParams({fields:'id,display_phone_number,verified_name,code_verification_status,status,is_on_biz_app,platform_type',limit:'100'}),{token});
@@ -218,6 +242,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    const eligible=numberMode==='BUSINESS_APP'?phones.data.filter(item=>item.is_on_biz_app===true&&item.platform_type==='CLOUD_API'):phones.data;
    const phone=phoneNumberId?eligible.find(item=>String(item.id)===phoneNumberId):numberMode==='BUSINESS_APP'&&eligible.length===1?eligible[0]:null;
    if(!phone||!metaAssetId(String(phone.id)))throw new WorkspaceError(numberMode==='BUSINESS_APP'?'META_CUSTOMER_COEXISTENCE_PHONE_REQUIRED':'META_CUSTOMER_PHONE_WABA_MISMATCH',403);
+   if(ownCompanyCapabilityKind(ownCapability)==='RUNTIME'&&phone.code_verification_status!=='VERIFIED')throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);
    if(numberMode==='BUSINESS_APP'&&eligible.length!==1)throw new WorkspaceError('META_CUSTOMER_PHONE_SELECTION_REQUIRED',409);
    if(pilotCapability&&(phone.is_on_biz_app!==false||!['CLOUD_API','NOT_APPLICABLE'].includes(phone.platform_type)||phone.platform_type==='NOT_APPLICABLE'&&phone.status==='CONNECTED'||inspectionPhase===META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL&&(phone.platform_type!=='CLOUD_API'||phone.status!=='CONNECTED')))throw new WorkspaceError('META_DEVELOPMENT_PILOT_DEDICATED_UNVERIFIED',403);
    // Phone verification is not the Cloud API registration signal.
@@ -228,8 +253,8 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
     displayPhoneNumber:typeof phone.display_phone_number==='string'?phone.display_phone_number.slice(0,64):null,
     verifiedBusinessName:typeof phone.verified_name==='string'?phone.verified_name.slice(0,160):null};
    if(readiness===metaCustomerReadiness)assertMetaCustomerPhoneMode(verified,numberMode);
-    if(ownPolicy){if(sequence!==inspectionSequence||normalizeCompanyPhone(verified.displayPhoneNumber,true)!==ownPolicy.expectedPhoneE164)throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);inspectedAssets=Object.freeze({capability:ownCapability,wabaId,phoneNumberId,inspectionPhase,registered:verified.registered,platformType:verified.platformType});ownInspections.set(verified,inspectedAssets);}
-   if(!pilotCapability&&readiness===metaCustomerReadiness)registrationProofs.set(verified,{tokenDigest:customerTokenDigest(token),wabaId,phoneNumberId:verified.phoneNumberId,numberMode,inspectionPhase,expiresAt:now()+60000});
+    if(ownPolicy){if(sequence!==inspectionSequence||normalizeCompanyPhone(verified.displayPhoneNumber,true)!==ownPolicy.expectedPhoneE164)throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);inspectedAssets=Object.freeze({capability:ownCapability,wabaId,phoneNumberId,inspectionPhase,registered:verified.registered,platformType:verified.platformType,tokenDigest:customerTokenDigest(token),systemUserId:String(data.user_id),tokenExpiresAt:ownTokenExpiry(data),dataAccessExpiresAt:ownDataAccessExpiry(data),checkedAt:new Date(now()).toISOString()});ownInspections.set(verified,inspectedAssets);}
+   if(!pilotCapability&&ownCompanyCapabilityKind(ownCapability)!=='RUNTIME'&&readiness===metaCustomerReadiness)registrationProofs.set(verified,{tokenDigest:customerTokenDigest(token),wabaId,phoneNumberId:verified.phoneNumberId,numberMode,inspectionPhase,expiresAt:now()+60000});
    if(pilotCapability){if(sequence!==inspectionSequence)throw new WorkspaceError('META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED',403);inspectedAssets=Object.freeze({capability:pilotCapability,policyDigest:policy().policyDigest,wabaId,phoneNumberId:verified.phoneNumberId,inspectionPhase,registered:verified.registered,platformType:verified.platformType});pilotInspections.set(verified,inspectedAssets);}return verified;
   },
   async subscribe({token,wabaId,beforeExternal}){
@@ -298,11 +323,11 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    // Re-read the exact owned content; POST acceptance is not template approval.
    return result;
   },
-  async sendReply({token,phoneNumberId,to,message,correlationId,replyTo}){
+  async sendReply({token,phoneNumberId,to,message,correlationId,replyTo,beforeExternal}){
    pilotAdapter('reply');if(pilotCapability&&(inspectedAssets?.phoneNumberId!==phoneNumberId||inspectedAssets.inspectionPhase!==META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL||inspectedAssets.registered!==true||inspectedAssets.platformType!=='CLOUD_API'))throw new WorkspaceError('META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED',403);
     if(ownCapability&&(inspectedAssets?.phoneNumberId!==phoneNumberId||inspectedAssets.inspectionPhase!==META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL||inspectedAssets.registered!==true||inspectedAssets.platformType!=='CLOUD_API'))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);
    if(!metaAssetId(phoneNumberId)||!/^[1-9]\d{7,14}$/.test(to||'')||!/^customer_outbound_[a-f0-9]{64}$/.test(correlationId||'')||!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(replyTo||''))throw new WorkspaceError('META_CUSTOMER_REPLY_INVALID');
-   const result=await request(phoneNumberId+'/messages',{token,method:'POST',body:{messaging_product:'whatsapp',recipient_type:'individual',to,...customerReplyMessage(message),context:{message_id:replyTo},biz_opaque_callback_data:correlationId}});
+   const result=await request(phoneNumberId+'/messages',{token,method:'POST',body:{messaging_product:'whatsapp',recipient_type:'individual',to,...customerReplyMessage(message),context:{message_id:replyTo},biz_opaque_callback_data:correlationId},beforeExternal});
    const id=result.messages?.length===1?result.messages[0].id:null;
    if(!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(id||''))throw new WorkspaceError('META_CUSTOMER_SEND_UNCONFIRMED',503);
    return {messageId:id};
@@ -330,14 +355,15 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    // Revalidate the canonical source after the asynchronous Graph lookup.
    // A denied guard must retain its error and prevent the attachment GET.
    if(beforeExternal)await beforeExternal();
-   if(ownCapability)config();
+   await ownBoundary();
    let response;try{response=await fetchImpl(url,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000)});}catch{throw new WorkspaceError('META_CUSTOMER_MEDIA_UNCONFIRMED',503);}
+   await ownBoundary();
    if(!response.ok||!response.body||response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()!==mime)throw new WorkspaceError('META_CUSTOMER_MEDIA_UNCONFIRMED',503);
    const length=response.headers.get('content-length');if(length!==null&&(!/^\d+$/.test(length)||Number(length)!==item.file_size))throw new WorkspaceError('META_CUSTOMER_MEDIA_INTEGRITY',409);
    const reader=response.body.getReader(),parts=[];let size=0;
-   try{while(true){const part=await reader.read();if(part.done)break;size+=part.value.byteLength;if(size>limit||size>item.file_size)throw new WorkspaceError('META_CUSTOMER_MEDIA_INTEGRITY',409);parts.push(Buffer.from(part.value));}
+   try{while(true){const part=await reader.read();if(ownCapability)config();if(part.done)break;size+=part.value.byteLength;if(size>limit||size>item.file_size)throw new WorkspaceError('META_CUSTOMER_MEDIA_INTEGRITY',409);parts.push(Buffer.from(part.value));}
     const bytes=Buffer.concat(parts,size);if(size!==item.file_size||createHash('sha256').update(bytes).digest('hex')!==expected)throw new WorkspaceError('META_CUSTOMER_MEDIA_INTEGRITY',409);return {bytes,contentType:mime,sha256:expected};
-   }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
+   }finally{await reader.cancel().catch(()=>{});reader.releaseLock();await ownBoundary();}
   },
  };
 }

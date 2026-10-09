@@ -9,7 +9,7 @@ export const OWN_COMPANY_ACTIONS=Object.freeze(['CONNECT_OWN_NUMBER','ACTIVATE_O
 export const OWN_COMPANY_STATES=Object.freeze({VERIFYING:'Verificación en curso',PROVIDER_STARTED:'Activación en curso',PROVIDER_UNKNOWN:'Resultado por comprobar',RECORDED:'Configuración registrada',REJECTED:'Decisión rechazada',NOT_OBSERVED:'Resultado todavía no observado'});
 const messages={
  META_OWN_COMPANY_CONFIGURATION_PENDING:'La conexión del número propio todavía no está habilitada en este entorno. El responsable debe revisar su preparación.',
- META_OWN_COMPANY_UNAVAILABLE:'La autorización del número propio no está vigente. Consultá con el responsable para renovarla.',
+ META_OWN_COMPANY_UNAVAILABLE:'La ventana para configurar el número no está vigente. El responsable debe revisar una nueva autorización de configuración.',
  META_OWN_COMPANY_ADMIN_REQUIRED:'Sólo un administrador con acceso vigente puede configurar este número.',
  META_OWN_COMPANY_OWNER_UNVERIFIED:'No se pudo comprobar que este número pertenece a la empresa. Revisá su titularidad en Meta.',
  META_OWN_COMPANY_TOKEN_REJECTED:'Meta no autorizó la consulta. El responsable debe revisar el acceso de la empresa.',
@@ -43,8 +43,12 @@ function channel(value,expected){
 }
 export function ownCompanyNumberSnapshot(value,expected){
  context(value,expected);identity(value,expected);
- if(!shape(value,['organization','actor','scope','projectId','readOnly','canManage','mode','companyPhoneRevision','wabaId','phoneNumberId','displayPhoneNumber','verifiedBusinessName','registered','subscribed','expiresAt','channel','connectionMatchesAssets','connectionOwnVerified','accepted','roundTrip'])||value.readOnly!==true||value.canManage!==true||value.mode!=='OWN_COMPANY'||!revision(value.companyPhoneRevision)||value.companyPhoneRevision<1||!asset(value.wabaId)||!asset(value.phoneNumberId)||!text(value.displayPhoneNumber)||value.verifiedBusinessName!==null&&!text(value.verifiedBusinessName)||typeof value.registered!=='boolean'||typeof value.subscribed!=='boolean'||typeof value.connectionMatchesAssets!=='boolean'||typeof value.connectionOwnVerified!=='boolean'||value.channel===null&&value.connectionMatchesAssets||value.connectionOwnVerified&&!value.connectionMatchesAssets||typeof value.expiresAt!=='string'||!Number.isFinite(Date.parse(value.expiresAt))||value.accepted!==false||value.roundTrip!=='NOT_VERIFIED')fail();
+ if(!shape(value,['organization','actor','scope','projectId','readOnly','canManage','mode','companyPhoneRevision','wabaId','phoneNumberId','displayPhoneNumber','verifiedBusinessName','registered','subscribed','expiresAt','channel','connectionMatchesAssets','connectionOwnVerified','accepted','roundTrip',...(Object.hasOwn(value,'operationalGrant')?['operationalGrant']:[])])||value.readOnly!==true||value.canManage!==true||value.mode!=='OWN_COMPANY'||!revision(value.companyPhoneRevision)||value.companyPhoneRevision<1||!asset(value.wabaId)||!asset(value.phoneNumberId)||!text(value.displayPhoneNumber)||value.verifiedBusinessName!==null&&!text(value.verifiedBusinessName)||typeof value.registered!=='boolean'||typeof value.subscribed!=='boolean'||typeof value.connectionMatchesAssets!=='boolean'||typeof value.connectionOwnVerified!=='boolean'||value.channel===null&&value.connectionMatchesAssets||value.connectionOwnVerified&&!value.connectionMatchesAssets||typeof value.expiresAt!=='string'||!Number.isFinite(Date.parse(value.expiresAt))||value.accepted!==false||value.roundTrip!=='NOT_VERIFIED')fail();
  if(value.channel!==null)channel(value.channel,expected);
+ if(Object.hasOwn(value,'operationalGrant')){
+  const grant=value.operationalGrant;
+  if(!shape(grant,['version','state','credentialExpiresAt','roundTrip','fieldJourney'])||grant.version!==2||!['ACTIVE','REVOKED','EXPIRED','UNAVAILABLE'].includes(grant.state)||!(grant.credentialExpiresAt===null||typeof grant.credentialExpiresAt==='string'&&Number.isFinite(Date.parse(grant.credentialExpiresAt))&&new Date(grant.credentialExpiresAt).toISOString()===grant.credentialExpiresAt)||grant.roundTrip!=='NOT_VERIFIED'||grant.fieldJourney!=='NOT_VERIFIED'||!value.channel||grant.state==='ACTIVE'&&(!value.connectionOwnVerified||!value.channel.enabled||value.channel.connectionStatus!=='CONNECTED'||!value.registered||!value.subscribed||!grant.credentialExpiresAt))fail();
+ }
  return value;
 }
 export const ownCompanyNumberFresh=(snapshot,now=Date.now())=>Boolean(snapshot?.canManage&&Date.parse(snapshot.expiresAt)>now);

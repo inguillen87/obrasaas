@@ -36,9 +36,9 @@ jobs:
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
       - name: Own number contracts and durable browser recovery
-        run: node --test tests/production-own-company-number*.test.mjs tests/production-company-channel*.test.mjs tests/production-workspace-recovery*.test.mjs tests/production-customer-whatsapp-view.test.mjs
+        run: node --test tests/production-own-company-number*.test.mjs tests/production-own-company-runtime*.test.mjs tests/production-company-channel*.test.mjs tests/production-workspace-recovery*.test.mjs tests/production-customer-whatsapp-view.test.mjs
       - name: Affected transport, authorization and user interface lint
-        run: npx eslint src/lib/meta-own-company-*.mjs src/lib/company-channel-*.mjs src/lib/meta-customer-provider.mjs src/lib/meta-customer-outbound.mjs src/lib/meta-field-bridge.mjs src/lib/meta-kyc-bridge.mjs src/lib/meta-kyc-identity.mjs src/lib/meta-kyc-outbound.mjs src/lib/meta-employee-intake.mjs src/lib/worker-channel-identity.mjs 'src/app/(identity)/cuenta' src/app/api/identity/company-channel scripts/verify-own-company-number-*.mjs tests/production-own-company-number*.test.mjs tests/fixtures/own-company-meta.mjs --max-warnings 0
+        run: npx eslint src/lib/meta-own-company-*.mjs src/lib/company-channel-*.mjs src/lib/meta-customer-provider.mjs src/lib/meta-customer-outbound.mjs src/lib/meta-field-bridge.mjs src/lib/meta-kyc-bridge.mjs src/lib/meta-kyc-identity.mjs src/lib/meta-kyc-outbound.mjs src/lib/meta-employee-intake.mjs src/lib/worker-channel-identity.mjs 'src/app/(identity)/cuenta' src/app/api/identity/company-channel scripts/verify-own-company-number-*.mjs tests/production-own-company-number*.test.mjs tests/production-own-company-runtime*.test.mjs tests/fixtures/own-company-meta.mjs tests/fixtures/own-company-runtime.mjs --max-warnings 0
       - name: Canonical own-company provider lifecycle in disposable PostgreSQL
         run: node scripts/verify-own-company-number-postgres.mjs
       - name: Responsive actual components and uncertain receipt recovery
