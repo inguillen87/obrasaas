@@ -60,6 +60,49 @@ test('direct requests without a field permission explain the next step without a
   const result=say(body,null,{facts:{...facts,permissions}});assert.equal(result.state,null);assert.equal(result.command,undefined);assert.equal(result.media,undefined);assert.match(result.reply.body,/responsable.*permisos/);
  }
 });
+
+test('HOLA reads current journey and permissions with no draft or from a menu',()=>{
+ const working={...facts,latest:{id:'attendance-a',eventType:'CHECK_IN',phase:'WORKING',verificationStatus:'REVIEW_REQUIRED'}},oldMenu=say('MENU');
+ for(const state of [null,oldMenu.state]){
+  const greeting=planMetaFieldConversation({message:{type:'text',text:{body:'  hOlA  '}},state,eventId:'hello-current-menu',facts:working,now});
+  assert.deepEqual(greeting.state.choices.filter(choice=>choice.value.startsWith('ATTEND_')).map(choice=>choice.value),['ATTEND_PAUSE','ATTEND_OUT']);
+  assert.equal(greeting.state.step,'MENU');assert.equal(greeting.command,undefined);assert.equal(greeting.media,undefined);assert.equal(greeting.preserveConversation,undefined);
+ }
+ const reportOnly=say('HOLA',null,{facts:{...facts,permissions:{attendance:false,report:true}}});assert.ok(reportOnly.state.choices.every(choice=>!choice.value.startsWith('ATTEND_')));assert.ok(reportOnly.state.choices.some(choice=>choice.value==='MEDIA'));
+ const pilot=say('HOLA',null,{facts:{...facts,attendanceOnly:true,permissions:{attendance:true,report:false}}});assert.deepEqual(pilot.state.choices.map(choice=>choice.value),['ATTEND_IN','STATUS']);
+});
+test('HOLA preserves exact live attendance, media and material drafts then accepts only their original nonce',()=>{
+ for(const body of ['ENTRADA','EVIDENCIA','MATERIALES']){
+  const initial=say(body),state=Object.freeze({...initial.state,lastEventId:'durable-original-event',lastReceivedAt:'2026-10-01T11:59:59.900Z',lastMessageTimestamp:1790855999,expiresAt:'2026-10-01T12:01:00.000Z',choices:Object.freeze(initial.state.choices.map(choice=>Object.freeze({...choice})))}),before=JSON.stringify(state);
+  const greeting=planMetaFieldConversation({message:{type:'text',text:{body:'HOLA'}},state,eventId:'later-hello-event',facts,now});
+  assert.equal(greeting.state,state);assert.equal(JSON.stringify(state),before);assert.equal(greeting.preserveConversation,true);assert.equal(greeting.command,undefined);assert.equal(greeting.media,undefined);assert.match(greeting.reply.body,/mensaje original/);
+  const wrong=planMetaFieldConversation({message:{type:'interactive',interactive:{type:'list_reply',list_reply:{id:'obra:'+'f'.repeat(20)+':0'}}},state:greeting.state,eventId:'wrong-choice',facts,now});assert.equal(wrong.state,state);assert.equal(wrong.command,undefined);assert.equal(wrong.media,undefined);assert.match(wrong.reply.body,/paso anterior/);
+  const continued=planMetaFieldConversation({message:{type:'interactive',interactive:{type:'list_reply',list_reply:{id:initial.reply.sections[0].rows[0].id}}},state:greeting.state,eventId:'original-choice-after-hello',facts,now});
+  assert.equal(continued.state.step,body==='ENTRADA'?'LOCATION_NOTICE':'SECTOR');assert.equal(continued.command,undefined);assert.equal(continued.media,undefined);
+ }
+});
+test('HOLA does not grant a revoked draft permission or replace its durable state',()=>{
+ for(const [body,permissions] of [['ENTRADA',{attendance:false,report:true}],['EVIDENCIA',{attendance:true,report:false}],['MATERIALES',{attendance:true,report:false}]]){
+  const initial=say(body),state=Object.freeze({...initial.state,lastEventId:'durable-before-revocation'}),changed={...facts,permissions};
+  const greeting=planMetaFieldConversation({message:{type:'text',text:{body:'HOLA'}},state,eventId:'hello-after-permission-change',facts:changed,now});
+  assert.equal(greeting.state,state);assert.equal(greeting.preserveConversation,true);assert.equal(greeting.command,undefined);assert.equal(greeting.media,undefined);assert.match(greeting.reply.body,/permisos/);assert.doesNotMatch(greeting.reply.body,/para continuar/);
+  const denied=planMetaFieldConversation({message:{type:'interactive',interactive:{type:'list_reply',list_reply:{id:initial.reply.sections[0].rows[0].id}}},state:greeting.state,eventId:'old-choice-after-revocation',facts:changed,now});assert.equal(denied.state,null);assert.equal(denied.command,undefined);assert.equal(denied.media,undefined);
+ }
+});
+test('HOLA preserves an exact material quantity step until the original draft is continued or explicitly cancelled',()=>{
+ const task=say('MATERIALES'),sector=pick(task,0),name=pick(sector),amount=say('Cemento',name.state),state=Object.freeze({...amount.state,lastEventId:'original-material-prompt'}),before=JSON.stringify(state);
+ const hello=planMetaFieldConversation({message:{type:'text',text:{body:'HOLA'}},state,eventId:'hello-material-quantity',facts,now});
+ assert.equal(hello.state,state);assert.equal(JSON.stringify(state),before);assert.equal(hello.preserveConversation,true);assert.equal(hello.command,undefined);assert.equal(hello.media,undefined);
+ const unit=say('002.500',hello.state),reason=pick(unit,6),confirmation=say('Para la mezcla de la obra.',reason.state),saved=pick(confirmation);
+ assert.equal(saved.command.action,'REQUEST_MATERIAL');assert.equal(saved.command.payload.name,'Cemento');assert.equal(saved.command.payload.quantity,'2.5');assert.equal(saved.command.payload.unit,'bolsa');
+ const cancelled=say('CANCELAR',state);assert.equal(cancelled.state.purpose,'MENU');assert.equal(cancelled.command,undefined);assert.equal(cancelled.media,undefined);
+});
+test('HOLA cannot renew an expired draft or authorize its old choice',()=>{
+ const initial=say('ENTRADA'),expired=Object.freeze({...initial.state,expiresAt:now.toISOString(),lastEventId:'expired-original-event'}),before=JSON.stringify(expired);
+ const greeting=planMetaFieldConversation({message:{type:'text',text:{body:'HOLA'}},state:expired,eventId:'hello-after-expiry',facts,now});
+ assert.equal(JSON.stringify(expired),before);assert.notEqual(greeting.state,expired);assert.equal(greeting.state.step,'MENU');assert.equal(greeting.preserveConversation,undefined);assert.equal(greeting.command,undefined);assert.equal(greeting.media,undefined);
+ const stale=planMetaFieldConversation({message:{type:'interactive',interactive:{type:'list_reply',list_reply:{id:initial.reply.sections[0].rows[0].id}}},state:{...greeting.state,version:1,expiresAt:'2026-10-01T12:15:00.000Z'},eventId:'old-expired-choice',facts,now});assert.equal(stale.command,undefined);assert.equal(stale.media,undefined);assert.match(stale.reply.body,/paso anterior/);
+});
 test('menus expose only current capabilities while retaining help and task/status reads',()=>{
  const reportOnly=say('MENU',null,{facts:{...facts,permissions:{attendance:false,report:true}}});
  assert.deepEqual(reportOnly.state.choices.map(choice=>choice.value),['TASKS','MEDIA','INCIDENT','MATERIAL','PROGRESS','STATUS']);

@@ -177,11 +177,11 @@ async function selector(client,r,env){
  const continuingDraft=selected&&state?.phase==='SELECTED'&&Number.isFinite(Date.parse(state.expiresAt))&&['ATTENDANCE','MEDIA','INCIDENT','MATERIAL','CONSUMPTION','PROGRESS'].includes(activeField?.purpose)&&await promptSource();
  if(!selected||state?.phase!=='SELECTED'||!active&&!continuingDraft)return emit(result('WORKSITE_SELECTION_REQUIRED',text('Elegí y confirmá una obra vigente. Escribí OBRA.')));
  if(!active&&continuingDraft&&metaFieldConversationAction(body)&&body!=='ESTADO')return emit(result('WORKSITE_DRAFT_PENDING',text('Conservamos el borrador de '+selected.projectName+'. Respondé al mensaje de ese paso para continuar, o con CANCELAR para descartarlo. Para otra operación, elegí y confirmá nuevamente la obra.')));
- if(activeField&&activeField.purpose!=='MENU'&&['MENU','AYUDA'].includes(body))return emit(result('WORKSITE_DRAFT_PENDING',text('Conservamos el borrador de '+selected.projectName+'. Respondé al mensaje del paso actual para continuar, o con CANCELAR para descartarlo explícitamente. ESTADO permite consultar la jornada sin borrar este paso.')));
+ if(activeField&&activeField.purpose!=='MENU'&&['MENU','AYUDA','HOLA'].includes(body))return emit(result('WORKSITE_DRAFT_PENDING',text('Conservamos el borrador de '+selected.projectName+'. Respondé al mensaje del paso actual para continuar, o con CANCELAR para descartarlo explícitamente. ESTADO permite consultar la jornada sin borrar este paso.')));
  if(['document','nfm_reply'].includes(r.proof.value.type)||r.proof.value.interactive?.nfm_reply||['KYC','VERIFICAR'].includes(body))return emit(result('COMPANY_ADAPTER_DISABLED',text('KYC y Flow requieren los pasos habilitados en Mi cuenta. Este canal no recibe documentos de identidad ni datos bancarios. Escribí MENU para ver tus operaciones autorizadas.')));
  // Free input/location must reply to the durable prompt; an uncorrelated late
  // message cannot be assigned by phone, current selection or provider time.
- if(!['MENU','AYUDA','ESTADO'].includes(body)){
+ if(!['MENU','AYUDA','ESTADO','HOLA'].includes(body)){
   const fieldChoice=/^obra:([a-f0-9]{20}):(\d{1,2})$/.exec(id||'');
   if(id?(!fieldChoice||fieldChoice[1]!==activeField?.nonce||!activeField?.choices?.[Number(fieldChoice[2])]||!(await promptSource())):!(await promptContext()))return emit(result('WORKSITE_INPUT_CONTEXT_REQUIRED',text('Escribí MENU y elegí una acción vigente de la obra confirmada, o respondé al mensaje de su paso actual. Conservamos el borrador y no aplicamos operaciones.')));
  }
