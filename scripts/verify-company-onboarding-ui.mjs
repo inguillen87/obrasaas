@@ -98,6 +98,9 @@ async function scenario(mode,width=390){
      }
      body=!url.search?{scope,organizationName:result.companyName,roleLabel:'Administrador',role:'ADMIN',canPlanSchedule:true,canManageIntegrations:false,projects:[{id:'project-test',name:result.projectName}],projectsTruncated:false}:
        {scope,project:{id:'project-test',name:result.projectName},roleLabel:'Administrador',canPlanSchedule:true,tasks,totalTasks:tasks.length,nextCursor:null};
+   }else if(['/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname)){
+    assert.equal(created,true);assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'project-test');
+    body=url.pathname==='/api/identity/project-creation'?{scope,projectId:'project-test',canCreate:true}:{scope,projectId:'project-test',canManage:true,channels:[],invitations:[],candidates:[],truncated:false,candidatesLimited:false};
    }else if(url.pathname==='/api/identity/project-preparation'){
     assert.equal(created,true);assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'project-test');
     body=projectPreparationSnapshot({scope,projectId:'project-test',canManage:true,revision:0,detailsDigest:'b'.repeat(64),name:result.projectName,clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope,projectId:'project-test'});
