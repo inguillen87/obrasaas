@@ -24,6 +24,46 @@ test('production provider audits SYSTEM_USER/business-owned app, WABA and user w
  await assert.rejects(base.sendReply({token,phoneNumberId:f.policy.phoneNumberId,to:'5491100001111',replyTo:'wamid.syntheticincoming12345',correlationId:'customer_outbound_'+'b'.repeat(64),message:{type:'text',body:'Synthetic reply'}}),e=>e.code==='META_CUSTOMER_CONFIGURATION_PENDING');
  await assert.rejects(scoped.templates({token,wabaId:f.policy.wabaId}),e=>e.code==='META_OWN_COMPANY_ADAPTER_UNAVAILABLE');
 });
+
+test('OWN omitted granular targets retain complete ADMIN ownership and exact phone inspection',async()=>{
+ const f=ownCompanyFixture(),token=f.environment.META_OWN_COMPANY_ACCESS_TOKEN;
+ for(const grant of f.debug.granular_scopes)delete grant.target_ids;
+ const scoped=await provider(f).forOwnCapability({capability:createOwnCompanyCapability(f.context,f.environment,f.time),token});
+ const verified=await scoped.inspect({token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId});
+ assert.ok(scoped.ownProvenance(verified));assert.ok(scoped.ownOperationalAuthority(verified));
+ for(const edge of ['system_users','owned_apps','owned_whatsapp_business_accounts'])assert.ok(f.calls.some(call=>call.path===f.policy.businessId+'/'+edge));
+ assert.ok(f.calls.some(call=>call.path===f.policy.wabaId+'/phone_numbers'));assert.equal(metaCustomerReadiness(f.environment).canLaunchMeta,false);assert.ok(f.calls.every(call=>call.method==='GET'));
+});
+
+for(const [name,mutate] of [
+ ...['system_users','owned_apps','owned_whatsapp_business_accounts'].map(edge=>['missing '+edge,f=>f.state.missingEdge=edge]),
+ ...['system_users','owned_apps','owned_whatsapp_business_accounts'].map(edge=>['incomplete '+edge,f=>f.state.pagingEdge=edge]),
+ ['foreign system user',f=>f.debug.user_id='990000001'],
+])test('OWN omission still rejects '+name+' before capability-backed effects',async()=>{
+ const f=ownCompanyFixture();for(const grant of f.debug.granular_scopes)delete grant.target_ids;mutate(f);
+ await assert.rejects(provider(f).forOwnCompany(f.context),{code:'META_OWN_COMPANY_OWNER_UNVERIFIED'});assert.ok(f.calls.every(call=>call.method==='GET'));assert.ok(!f.calls.some(call=>call.path.endsWith('/phone_numbers')));
+});
+
+for(const [name,mutate] of [['foreign phone',f=>f.phone.id='990000001'],['different declared number',f=>f.phone.display_phone_number='+5491100000001']])test('OWN omission cannot mint authority for '+name,async()=>{
+ const f=ownCompanyFixture(),token=f.environment.META_OWN_COMPANY_ACCESS_TOKEN;for(const grant of f.debug.granular_scopes)delete grant.target_ids;
+ const scoped=await provider(f).forOwnCompany(f.context);mutate(f);
+ await assert.rejects(scoped.inspect({token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId}));assert.throws(()=>scoped.ownOperationalAuthority({}));assert.ok(f.calls.every(call=>call.method==='GET'));
+});
+
+for(const [name,targets] of [['null',null],['object',{}],['string','230000001'],['duplicate',['230000001','230000001']],['invalid',['not-an-id']],['foreign',['990000001']]])test('OWN provided granular targets reject '+name+' rather than treating it as omission',async()=>{
+ const f=ownCompanyFixture();for(const grant of f.debug.granular_scopes)delete grant.target_ids;f.debug.granular_scopes[1].target_ids=targets;
+ await assert.rejects(provider(f).forOwnCompany(f.context),{code:'META_OWN_COMPANY_TOKEN_REJECTED'});assert.equal(f.calls.length,1);assert.ok(f.calls.every(call=>call.method==='GET'));
+});
+
+test('OWN target omission does not relax exact granular scopes or complete phone enumeration',async()=>{
+ for(const change of [f=>f.debug.granular_scopes.pop(),f=>f.debug.granular_scopes[2].scope='business_management',f=>f.debug.granular_scopes.push({scope:'ads_read'}),f=>f.debug.granular_scopes[2].scope='ads_read']){
+  const f=ownCompanyFixture();for(const grant of f.debug.granular_scopes)delete grant.target_ids;change(f);
+  await assert.rejects(provider(f).forOwnCompany(f.context),{code:'META_OWN_COMPANY_TOKEN_REJECTED'});assert.equal(f.calls.length,1);
+ }
+ const f=ownCompanyFixture(),token=f.environment.META_OWN_COMPANY_ACCESS_TOKEN;for(const grant of f.debug.granular_scopes)delete grant.target_ids;
+ const fetchImpl=f.fetchImpl;f.fetchImpl=async(url,options)=>{const response=await fetchImpl(url,options);return new URL(url).pathname.endsWith('/phone_numbers')?Response.json({...await response.json(),paging:{next:'https://graph.facebook.com/synthetic-next'}}):response;};
+ const scoped=await provider(f).forOwnCompany(f.context);await assert.rejects(scoped.inspect({token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId}),{code:'META_CUSTOMER_PHONE_SELECTION_REQUIRED'});assert.throws(()=>scoped.ownOperationalAuthority({}));assert.ok(f.calls.every(call=>call.method==='GET'));
+});
 test('own import requires its dedicated token without global fallback; runtime remains bound to the vaulted token after import configuration removal',async()=>{
  const f=ownCompanyFixture(),globals={META_WHATSAPP_ACCESS_TOKEN:f.environment.META_WHATSAPP_ACCESS_TOKEN,WHATSAPP_TOKEN:f.environment.WHATSAPP_TOKEN},base=provider(f),token=f.environment.META_OWN_COMPANY_ACCESS_TOKEN,scoped=await base.forOwnCompany(f.context),verified=await scoped.inspect({token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId}),connection={id:'channel-own',projectId:f.policy.projectId,organizationId:f.policy.organizationId,whatsappBusinessId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId,displayPhoneNumber:f.policy.expectedPhoneE164,metadata:{credentialOrganizationId:f.policy.organizationId,ownCompany:scoped.ownProvenance(verified)}},cap=createOwnCompanyCapability(f.context,f.environment,f.time);
  delete f.environment.META_OWN_COMPANY_ACCESS_TOKEN;const calls=f.calls.length;await assert.rejects(base.forOwnCompany(f.context),e=>e.code==='META_OWN_COMPANY_CONFIGURATION_PENDING');assert.equal(f.calls.length,calls);
