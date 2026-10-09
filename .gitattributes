@@ -11,3 +11,4 @@
 /src/app/fonts/*.json text eol=lf
 /src/app/fonts/README.md text eol=lf
 /src/app/fonts/*.woff2 -text
+/.github/workspace-acceptance-contract.json text eol=lf
