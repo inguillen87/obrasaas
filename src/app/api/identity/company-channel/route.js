@@ -4,9 +4,11 @@ import {createCompanyChannelStore} from '../../../../lib/company-channel-store.m
 import {createCompanyChannelHandlers} from '../../../../lib/company-channel-http.mjs';
 import {createOwnCompanyConnection} from '../../../../lib/meta-own-company-connection.mjs';
 import {createMetaCustomerProvider} from '../../../../lib/meta-customer-provider.mjs';
+import {createOwnCompanyTemplates} from '../../../../lib/meta-own-company-templates.mjs';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 const ownConnection=createOwnCompanyConnection({workspace:productionWorkspace,provider:createMetaCustomerProvider()});
-const handlers=createCompanyChannelHandlers({verify:verifyWorkspaceSession,store:createCompanyChannelStore({workspace:productionWorkspace,ownConnection})});
+const ownTemplates=createOwnCompanyTemplates({workspace:productionWorkspace,provider:createMetaCustomerProvider()});
+const handlers=createCompanyChannelHandlers({verify:verifyWorkspaceSession,store:createCompanyChannelStore({workspace:productionWorkspace,ownConnection,ownTemplates})});
 export const GET=handlers.GET;
 export const POST=handlers.POST;

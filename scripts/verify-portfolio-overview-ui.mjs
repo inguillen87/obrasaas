@@ -7,7 +7,7 @@ import puppeteer from 'puppeteer';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),scratch=path.join(root,'.vercel/private');mkdirSync(scratch,{recursive:true});
 const fixture=mkdtempSync(path.join(scratch,'portfolio-ui-')),app=path.join(fixture,'app');mkdirSync(app);
-const files=['portfolio-overview-panel.js','portfolio-overview-panel.module.css','portfolio-overview-view.mjs','workspace-session-request.mjs','workspace-request-lifecycle.js','workspace-request-lifecycle.mjs','workspace-recovery-journal.mjs','own-company-number-view.mjs','private-bank-account-format.mjs','site-purchase-view.mjs','company-channel-view.mjs','workspace-recovery-storage.mjs'];
+const files=['portfolio-overview-panel.js','portfolio-overview-panel.module.css','portfolio-overview-view.mjs','workspace-session-request.mjs','workspace-request-lifecycle.js','workspace-request-lifecycle.mjs','workspace-recovery-journal.mjs','own-company-number-view.mjs','own-company-templates-view.mjs','private-bank-account-format.mjs','site-purchase-view.mjs','company-channel-view.mjs','workspace-recovery-storage.mjs'];
 const sha=file=>createHash('sha256').update(readFileSync(file)).digest('hex');
 const sourceManifest=files.map(name=>({path:'src/app/(identity)/cuenta/'+name,sha256:sha(path.join(root,'src/app/(identity)/cuenta',name))}));
 for(const name of files)copyFileSync(path.join(root,'src/app/(identity)/cuenta',name),path.join(app,name));

@@ -3,7 +3,7 @@ import {useEffect,useRef,useState} from 'react';
 import {Building2,MessageCircle,ShieldCheck,RefreshCw,TriangleAlert} from 'lucide-react';
 import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import {browserRecoveryJournal,RECOVERY_EVENT,recoveryResult} from './workspace-recovery-journal.mjs';
-import {COMPANY_CHANNEL_MODES,companyChannelSnapshot,companyChannelOutcome,companyChannelCommand,companyChannelCanAct,companyChannelExplain,companyChannelAccessDenied} from './company-channel-view.mjs';
+import {COMPANY_CHANNEL_ACTIONS,COMPANY_CHANNEL_MODES,companyChannelSnapshot,companyChannelOutcome,companyChannelCommand,companyChannelCanAct,companyChannelExplain,companyChannelAccessDenied} from './company-channel-view.mjs';
 import {OWN_COMPANY_ACTIONS,ownCompanyNumberOutcome} from './own-company-number-view.mjs';
 import styles from './company-channel-panel.module.css';
 const endpoint='/api/identity/company-channel';
@@ -15,7 +15,7 @@ function CompanyChannelInner({projectId,scope,getSessionToken,onPending,locked=f
  const [opened,setOpened]=useState(false),[busy,setBusy]=useState(false),[data,setData]=useState(null),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[recoveryReady,setRecoveryReady]=useState(false),[retryAllowed,setRetryAllowed]=useState(false),[needsRead,setNeedsRead]=useState(true),[notice,setNotice]=useState(''),[receipt,setReceipt]=useState(null);
  const alive=useRef(true),epoch=useRef(0),controller=useRef(null),editor=useRef(null),reference=useRef(null),payload=useRef(null),localRequest=useRef(false),refreshReferences=useRef(async()=>{});
  useEffect(()=>{alive.current=true;const generation=epoch;return()=>{alive.current=false;generation.current++;controller.current?.abort();payload.current=null;};},[]);
- useEffect(()=>{onPending?.(busy||Boolean(draft)||opened&&(!recoveryReady||Boolean(attempt)));return()=>onPending?.(false);},[busy,draft,opened,recoveryReady,attempt,onPending]);
+ useEffect(()=>{onPending?.(busy||Boolean(draft)||opened&&(!recoveryReady||COMPANY_CHANNEL_ACTIONS.includes(attempt?.action)));return()=>onPending?.(false);},[busy,draft,opened,recoveryReady,attempt,onPending]);
  const draftAction=draft?.action;
  useEffect(()=>{if(draftAction){editor.current?.focus({preventScroll:true});editor.current?.scrollIntoView({block:'start',behavior:'auto'});}},[draftAction]);
  useEffect(()=>{
@@ -28,7 +28,7 @@ function CompanyChannelInner({projectId,scope,getSessionToken,onPending,locked=f
     if(reference.current)setNotice(entry?'Hay otra referencia pendiente. Consultala antes de una nueva decisión.':'El intento fue comprobado desde Operaciones por comprobar. Consultá el canal vigente antes de otra decisión.');
    }
    reference.current=entry||null;setAttempt(entry||null);setRecoveryReady(true);
-   if(initial&&entry&&!OWN_COMPANY_ACTIONS.includes(entry.action)){setOpened(true);setNotice('Hay un intento pendiente de comprobación en este navegador. La consulta no vuelve a enviarlo.');}
+   if(initial&&entry&&COMPANY_CHANNEL_ACTIONS.includes(entry.action)){setOpened(true);setNotice('Hay un intento pendiente de comprobación en este navegador. La consulta no vuelve a enviarlo.');}
   }catch(error){if(active&&n===sequence){setRecoveryReady(false);setNotice(error.message);}}};
   refreshReferences.current=read;
   const refresh=()=>{if(!initializing)void read();},visible=()=>{if(document.visibilityState==='visible')refresh();};let channel;

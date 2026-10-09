@@ -10,6 +10,7 @@ import {normalizeCompanyPhone} from './company-onboarding-policy.mjs';
 
 const pilotAudits=new WeakMap(),pilotInspections=new WeakMap();
 const ownAudits=new WeakMap(),ownInspections=new WeakMap();
+const ownTemplateAdministrations=new WeakMap();
 const ownScopes=['business_management',...META_CUSTOMER_REQUIRED_SCOPES];
 function ownTokenVerified(debug,policy,now){
  const scopes=debug?.scopes,grants=debug?.granular_scopes;
@@ -96,7 +97,7 @@ export function metaCustomerReadiness(environment=process.env){
   humanAcceptance:'NOT_VERIFIED',numberRegistration:'REQUIRES_CUSTOMER_NUMBER',signupVersion:'4',
   flows:{DEDICATED:{available,configId:gates.configuration?configId:null},BUSINESS_APP:{available:coexistence,configId:coexistence?coexistenceConfig:null,featureType:'whatsapp_business_app_onboarding'},EXISTING_API:{available:false,configId:null,requiresSharePlan:true}}};
 }
-export function createMetaCustomerProvider({environment=process.env,fetchImpl=fetch,now=()=>Date.now(),readiness=metaCustomerReadiness,pilotCapability=null,pilotAudit=null,ownCapability=null,ownAudit=null,ownFence=null}={}){
+export function createMetaCustomerProvider({environment=process.env,fetchImpl=fetch,now=()=>Date.now(),readiness=metaCustomerReadiness,pilotCapability=null,pilotAudit=null,ownCapability=null,ownAudit=null,ownFence=null,ownTemplateAdministration=null}={}){
  // Embedded Signup versions govern new authorization flows. They do not
  // revoke previously granted customer transport. Retain every existing
  // transport prerequisite while requiring v4 separately for a new code.
@@ -115,7 +116,8 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
   return {...ready,mode:META_DEVELOPMENT_PILOT_MODE,pilot:{canLaunch:available,canUseAttendanceTransport:available,expiresAt:current.expiresAt,ownBusinessOnly:true,ownerReadbackReady:available,code:available?'META_DEVELOPMENT_PILOT_AVAILABLE':audit?.code||'META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED',capabilities:{attendance:available,binding:available,kyc:false,media:false,flows:false,templates:false,progress:false,stock:false,company:false}}};
  };
   const config=(signupRequired=false)=>{const ready=scopedReady(),transportReady=ownCapability?ready.ownCompany?.available===true:pilotCapability?ready.pilot?.canUseAttendanceTransport===true:readiness===metaCustomerReadiness?metaCustomerTransportReady(ready):injectedDemoTransportReady(ready);if(!transportReady||signupRequired&&(ownCapability||!metaCustomerAuthorizationReady(ready)))throw new WorkspaceError(ownCapability?ready.ownCompany.code:pilotCapability?ready.pilot.code:ready.launchCode,503);return ready;};
-  const pilotAdapter=adapter=>{if(ownCapability&&!(ownCompanyCapabilityKind(ownCapability)==='RUNTIME'?['inspect','reply','media']:['inspect','subscribe','register','reply','media']).includes(adapter))throw new WorkspaceError('META_OWN_COMPANY_ADAPTER_UNAVAILABLE',409);if(pilotCapability&&!['inspect','subscribe','register','reply'].includes(adapter))throw new WorkspaceError('META_DEVELOPMENT_PILOT_ADAPTER_UNAVAILABLE',409);};
+  const pilotAdapter=adapter=>{if(ownCapability){const runtime=ownCompanyCapabilityKind(ownCapability)==='RUNTIME',administration=ownTemplateAdministrations.get(ownTemplateAdministration);if(!(runtime?['inspect','reply','media',...(administration?.capability===ownCapability?['templates','template-create']:[])]:['inspect','subscribe','register','reply','media']).includes(adapter))throw new WorkspaceError('META_OWN_COMPANY_ADAPTER_UNAVAILABLE',409);}if(pilotCapability&&!['inspect','subscribe','register','reply'].includes(adapter))throw new WorkspaceError('META_DEVELOPMENT_PILOT_ADAPTER_UNAVAILABLE',409);};
+  const ownTemplateDefinition=(wabaId,name,definition=null)=>{if(!ownCapability)return;const administration=ownTemplateAdministrations.get(ownTemplateAdministration),current=ownCompanyTransportPolicy(ownCapability,environment,now());if(!administration||administration.capability!==ownCapability||wabaId!==current.wabaId)throw new WorkspaceError('META_OWN_COMPANY_ASSET_REJECTED',403);const expected=administration.definition;if(name!==expected.name||definition&&JSON.stringify(definition)!==JSON.stringify(expected))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_VERSION_REVIEW',409);};
   const ownBoundary=async()=>{if(ownCapability){if(ownCompanyCapabilityKind(ownCapability)==='RUNTIME'){if(typeof ownFence!=='function')throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);await ownFence();}config();}};
  async function request(path,{token,method='GET',body,appToken=false,beforeExternal}={}){
   const ready=config(),url=new URL(`https://graph.facebook.com/${ready.version}/${path}`);
@@ -130,7 +132,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
  }
  // Runtime grants enter only through forConnection, after the canonical row
  // and credential commitments match. Public administrative import stays 4h.
- async function auditOwnCapability(capability,token,fence=null){
+ async function auditOwnCapability(capability,token,fence=null,templateAdministration=null){
   const current=ownCompanyTransportPolicy(capability,environment,now()),runtime=ownCompanyCapabilityKind(capability)==='RUNTIME',base=metaCustomerReadiness(environment);
   if(readiness!==metaCustomerReadiness||!['app','secret','version','vault','callback'].every(key=>base.gates[key]===true)||typeof token!=='string'||token.trim()!==token||token.length<20||token.length>8192)throw new WorkspaceError('META_OWN_COMPANY_CONFIGURATION_PENDING',503);
   if(runtime&&customerTokenDigest(token)!==current.tokenDigest)throw new WorkspaceError('META_OWN_COMPANY_CREDENTIAL_REJECTED',403);
@@ -149,10 +151,20 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    if(result.paging?.next||!Array.isArray(result.data)||result.data.length>100||result.data.some(item=>!metaAssetId(String(item?.id)))||new Set(result.data.map(item=>String(item.id))).size!==result.data.length||!result.data.some(item=>String(item.id)===expected))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);
   }
   const audit=Object.freeze({});ownAudits.set(audit,{policyDigest:current.policyDigest,tokenDigest:customerTokenDigest(token),systemUserId:String(debug.user_id),tokenExpiresAt:ownTokenExpiry(debug),dataAccessExpiresAt:ownDataAccessExpiry(debug),expiresAt:Math.min(Date.parse(current.expiresAt),debug.expires_at*1000,debug.data_access_expires_at?debug.data_access_expires_at*1000:Infinity,now()+60000)});
-  return createMetaCustomerProvider({environment,fetchImpl,now,readiness,ownCapability:capability,ownAudit:audit,ownFence:runtime?fence:null});
+  return createMetaCustomerProvider({environment,fetchImpl,now,readiness,ownCapability:capability,ownAudit:audit,ownFence:runtime?fence:null,ownTemplateAdministration:templateAdministration});
  }
  return {
   readiness:scopedReady,
+   async forOwnTemplateAdministration({capability,connection,token,beforeExternal,context,blueprintKey}){
+    // The catalogue is needed only for this explicit management action. Keep
+    // read-only transport/release inspection free of the template UI graph.
+    const {buildCustomerTemplate}=await import('./meta-customer-templates.mjs');
+    const current=ownCompanyTransportPolicy(capability,environment,now()),canonical=ownCompanyConnectionPolicy(connection,environment,now());
+    if(ownCompanyCapabilityKind(capability)!=='RUNTIME'||current.grantDigest!==canonical?.grantDigest||current.connectionId!==connection.id||current.tokenDigest!==customerTokenDigest(token||'')||context?.member?.role!=='ADMIN'||context.member.actorId!==current.actorId||context.member.organizationId!==current.organizationId||context.session?.userId!==current.clerkUserId||context.session.organizationId!==current.clerkOrganizationId||context.session.organizationRole!=='org:admin'||context.project?.id!==current.projectId||typeof beforeExternal!=='function')throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);
+    const administration=Object.freeze({}),definition=buildCustomerTemplate(connection,blueprintKey);ownTemplateAdministrations.set(administration,{capability,definition});
+    const scoped=await auditOwnCapability(capability,token,beforeExternal,administration),verified=await scoped.inspect({token,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,numberMode:'DEDICATED'});
+    if(verified.registered!==true||verified.platformType!=='CLOUD_API'||await scoped.inspectSubscription({token,wabaId:connection.whatsappBusinessId})!==true)throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);return scoped;
+   },
    async forOwnCompany(context,{token=environment.META_OWN_COMPANY_ACCESS_TOKEN}={}){
     const capability=createOwnCompanyCapability(context,environment,now());return this.forOwnCapability({capability,token});
    },
@@ -300,6 +312,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
   },
   async templates({token,wabaId}){
    pilotAdapter('templates');
+   if(ownCapability)throw new WorkspaceError('META_OWN_COMPANY_ADAPTER_UNAVAILABLE',409);
    const templates=[];let path=wabaId+'/message_templates?fields=id,name,status,language,category&limit=100';
    for(let page=0;page<10;page++){
     const result=await request(path,{token});if(!Array.isArray(result.data))throw new WorkspaceError('META_CUSTOMER_CATALOG_UNCONFIRMED',503);
@@ -313,13 +326,14 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
   },
   async findTemplate({token,wabaId,name}){
    pilotAdapter('templates');
+   ownTemplateDefinition(wabaId,name);
    if(!metaAssetId(wabaId)||!/^[a-z0-9_]{1,512}$/.test(name||''))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_INVALID');
    const result=await request(wabaId+'/message_templates?'+new URLSearchParams({name,fields:'id,name,status,language,category,components',limit:'100'}),{token});
    if(!Array.isArray(result.data)||result.paging?.next)throw new WorkspaceError('META_CUSTOMER_TEMPLATE_LOOKUP_UNCONFIRMED',503);
    const exact=result.data.filter(item=>item.name===name);if(exact.length>1)throw new WorkspaceError('META_CUSTOMER_TEMPLATE_IDENTITY_CONFLICT',409);return exact[0]||null;
   },
   async createTemplate({token,wabaId,definition}){
-   pilotAdapter('templates');
+   pilotAdapter('template-create');ownTemplateDefinition(wabaId,definition?.name,definition);
    const result=await request(wabaId+'/message_templates',{token,method:'POST',body:{name:definition.name,language:definition.language,category:definition.category,components:definition.components}});
    if(!metaAssetId(String(result.id)))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_SUBMISSION_UNCONFIRMED',503);
    // Re-read the exact owned content; POST acceptance is not template approval.
@@ -335,7 +349,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    return {messageId:id};
   },
   async sendTemplate({token,phoneNumberId,to,message,correlationId}){
-   pilotAdapter('templates');
+   pilotAdapter('template-send');
    if(!metaAssetId(phoneNumberId)||!/^[1-9]\d{7,14}$/.test(to||'')||!/^customer_outbound_[a-f0-9]{64}$/.test(correlationId||''))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_MESSAGE_INVALID');
    const result=await request(phoneNumberId+'/messages',{token,method:'POST',body:{messaging_product:'whatsapp',recipient_type:'individual',to,...customerTemplateMessage(message),biz_opaque_callback_data:correlationId}});
    const id=result.messages?.length===1?result.messages[0].id:null;

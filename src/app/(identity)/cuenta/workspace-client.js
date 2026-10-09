@@ -14,6 +14,7 @@ import {FieldOperationsPanel} from './field-operations-panel';
 import {WorkerChannelPanel} from './worker-channel-panel';
 import {CompanyChannelPanel} from './company-channel-panel';
 import {OwnCompanyNumberPanel} from './own-company-number-panel';
+import {OwnCompanyTemplatesPanel} from './own-company-templates-panel';
 import {CompanyBillingPanel} from './company-billing-panel';
 import {MetaOnboardingPanel} from './meta-onboarding-panel';
 import {OperationsStatusPanel} from './operations-status-panel';
@@ -93,6 +94,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
  const channelPending=useCallback(value=>setModulePending(old=>old.channel===value?old:{...old,channel:value}),[]);
  const companyChannelPending=useCallback(value=>setModulePending(old=>old.companyChannel===value?old:{...old,companyChannel:value}),[]);
  const ownCompanyNumberPending=useCallback(value=>setModulePending(old=>old.ownCompanyNumber===value?old:{...old,ownCompanyNumber:value}),[]);
+ const ownCompanyTemplatesPending=useCallback(value=>setModulePending(old=>old.ownCompanyTemplates===value?old:{...old,ownCompanyTemplates:value}),[]);
  const purchasePending=useCallback(value=>setModulePending(old=>old.purchase===value?old:{...old,purchase:value}),[]);
  const inventoryPending=useCallback(value=>setModulePending(old=>old.inventory===value?old:{...old,inventory:value}),[]);
  const metaPending=useCallback(value=>setModulePending(old=>old.meta===value?old:{...old,meta:value}),[]);
@@ -243,6 +245,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
   {view&&<ParticipantPanel key={`participants:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={participantPending} channelSnapshot={channelSnapshot?.scope===account.scope&&channelSnapshot.projectId===view.project.id&&channelSnapshot.observedGeneration===observationEpoch?channelSnapshot:null} onNavigate={navigateOnboarding}/> }
   {view&&<WorkerChannelPanel key={`channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={channelPending} observationEpoch={observationEpoch} onSnapshot={channelObserved}/> }
   {view&&account?.role==='ADMIN'&&<OwnCompanyNumberPanel key={`own-company-number:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={ownCompanyNumberPending} locked={saving||Boolean(attempt)||Boolean(draft)||creatingTask||planReadbackPending||Object.entries(modulePending).some(([key,value])=>key!=='ownCompanyNumber'&&value)}/> }
+  {view&&account?.role==='ADMIN'&&<OwnCompanyTemplatesPanel key={`own-company-templates:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={ownCompanyTemplatesPending} locked={saving||Boolean(attempt)||Boolean(draft)||creatingTask||planReadbackPending||Object.entries(modulePending).some(([key,value])=>key!=='ownCompanyTemplates'&&value)}/> }
   {view&&(account?.role==='ADMIN'||account?.canManageIntegrations)&&<CompanyChannelPanel key={`company-channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={companyChannelPending} locked={saving||Boolean(attempt)||Boolean(draft)||creatingTask||planReadbackPending||Object.entries(modulePending).some(([key,value])=>key!=='companyChannel'&&value)}/> }
   {view&&account?.role==='ADMIN'&&<DemoPilotPanel key={`demo:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={demoPending}/> }
   {view&&<FieldOperationsPanel key={`field:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} tasks={view.tasks} onPending={fieldPending} onTasksChanged={tasksChanged}/> }
