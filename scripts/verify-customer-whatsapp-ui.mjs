@@ -153,7 +153,16 @@ async function scenario(mode,width=390,numberMode='DEDICATED'){
  if(receipt&&mode!=='denied-absent'){
   assert.equal(await page.$eval('a[href="#customer-meta-title"]',link=>link.textContent),'Consultar autorización y conexión en Meta');
   if(numberMode==='DEDICATED'){assert.ok((await page.evaluate(()=>document.body.innerText)).includes('comprobar la autorización vigente'));assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Falta autorizar en Meta'));assert.ok(!(await page.$eval('[role="status"]',node=>node.innerText)).includes('todavía no quedó conectado'));}
-  else assert.ok((await page.evaluate(()=>document.body.innerText)).includes('no inicies un alta dedicada'));
+  else if(numberMode==='BUSINESS_APP'){
+   const nextStep=await page.$eval('section[aria-labelledby="wa-connection-progress"] > p',node=>node.innerText);
+   assert.match(nextStep,/Consultá la disponibilidad de coexistencia y la elegibilidad en Meta, conservando tu app/);
+   assert.doesNotMatch(nextStep,/no inicies un alta dedicada|coexistencia (disponible|habilitada|rechazada)|necesita (ayuda|asistencia)/);
+  }else{
+   assert.equal(numberMode,'EXISTING_API');
+   const nextStep=await page.$eval('section[aria-labelledby="wa-connection-progress"] > p',node=>node.innerText);
+   assert.match(nextStep,/no inicies un alta dedicada/);
+   assert.match(nextStep,/no transferimos ni desconectamos tu proveedor actual/);
+  }
   await page.focus('a[href="#customer-meta-title"]');await page.keyboard.press('Enter');await page.waitForFunction(()=>location.hash==='#customer-meta-title');
  }
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(external,[]);
