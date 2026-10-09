@@ -5,6 +5,7 @@ import {META_KYC_CONVERSATION_TTL_MS} from './meta-kyc-conversation.mjs';
 import {customerLifecycleRecovery} from './meta-customer-coexistence.mjs';
 import {customerChannelActive} from './meta-customer-outbound.mjs';
 import {lockOwnCompanyIssuer,revokeOwnCompanyRuntimeGrant} from './meta-own-company-policy.mjs';
+import {OWN_TEMPLATE_ACTIONS} from './meta-own-company-templates.mjs';
 
 export const COMPANY_CHANNEL_ACTIONS=Object.freeze(['PREPARE','ASSIGN','REVOKE','ACTIVATE','SUSPEND']);
 const fail=(code,status=409)=>{throw new WorkspaceError(code,status);};
@@ -56,11 +57,13 @@ export async function assertCompanyChannelNoPending(client,c){
  const flows=flowTable&&(await client.query(`SELECT EXISTS(SELECT 1 FROM public."WhatsAppFlowSession" WHERE "organizationId"=$1 AND "projectId"=$2 AND "phoneNumberId"=$3 AND "consumedAt" IS NULL AND "deliveryRejectedAt" IS NULL AND "expiresAt" AT TIME ZONE 'UTC'>clock_timestamp()) AS pending`,[c.metadata?.credentialOrganizationId,c.projectId,c.phoneNumberId])).rows[0].pending;
  if(events||sessions||flows)fail('COMPANY_CHANNEL_LEGACY_PENDING');
 }
-export function createCompanyChannelStore({workspace,ownConnection=null,environment=process.env}){
+export function createCompanyChannelStore({workspace,ownConnection=null,ownTemplates=null,environment=process.env}){
  return {
   async read(session,context){
+   if(context.discovery==='OWN_TEMPLATES'){if(!ownTemplates)fail('META_OWN_COMPANY_CONFIGURATION_PENDING',503);return ownTemplates.read(session,context);}
    if(context.discovery==='OWN_NUMBER'){if(!ownConnection)fail('META_OWN_COMPANY_CONFIGURATION_PENDING',503);return ownConnection.discover(session,context);}
    if(context.operationId&&ownConnection){const own=await ownConnection.read(session,context);if(own)return own;}
+   if(context.operationId&&ownTemplates){const own=await ownTemplates.readReceipt(session,context);if(own)return own;}
    if(!workspaceId(context.projectId)||!/^[a-f0-9]{64}$/.test(context.scope||'')||context.operationId!==undefined&&!operationId(context.operationId))fail('COMPANY_CHANNEL_INPUT_INVALID',400);
    return workspace.organizationOperation(session,context,false,async(client,member,scope)=>{
     if(context.operationId){const row=await previous(client,member,context.projectId,context.operationId.toLowerCase());return row?publicReceipt(row,member,scope):{...identity(member),scope,projectId:context.projectId,operationId:context.operationId.toLowerCase(),state:'NOT_OBSERVED',saved:false,definitive:false};}
@@ -69,6 +72,7 @@ export function createCompanyChannelStore({workspace,ownConnection=null,environm
    },Boolean(context.operationId));
   },
   async command(session,body){
+   if(OWN_TEMPLATE_ACTIONS.includes(body?.action)){if(!ownTemplates)fail('META_OWN_COMPANY_CONFIGURATION_PENDING',503);return ownTemplates.command(session,body);}
    if(['CONNECT_OWN_NUMBER','ACTIVATE_OWN_NUMBER','RECOVER_CONNECT_OWN_NUMBER'].includes(body?.action)){if(!ownConnection)fail('META_OWN_COMPANY_CONFIGURATION_PENDING',503);return ownConnection.command(session,body);}
    const input=command(body),fingerprint=digest(input);
    return workspace.organizationOperation(session,input,true,async(client,member,scope)=>{

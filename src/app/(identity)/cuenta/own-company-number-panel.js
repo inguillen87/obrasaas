@@ -15,7 +15,7 @@ function OwnCompanyNumberInner({projectId,scope,getSessionToken,onPending,locked
  const [connectRecovery,setConnectRecovery]=useState(null),[originalSourceHead,setOriginalSourceHead]=useState(''),[confirmRecovery,setConfirmRecovery]=useState(false);
  const alive=useRef(true),epoch=useRef(0),controller=useRef(null),editor=useRef(null),reference=useRef(null),attemptContext=useRef(null),localRequest=useRef(false),refreshReferences=useRef(async()=>{});
  useEffect(()=>{alive.current=true;const generation=epoch;return()=>{alive.current=false;generation.current++;controller.current?.abort();attemptContext.current=null;};},[]);
- useEffect(()=>{onPending?.(busy||Boolean(draft)||opened&&(!recoveryReady||Boolean(attempt)));return()=>onPending?.(false);},[busy,draft,opened,recoveryReady,attempt,onPending]);
+ useEffect(()=>{onPending?.(busy||Boolean(draft)||opened&&(!recoveryReady||OWN_COMPANY_ACTIONS.includes(attempt?.action)));return()=>onPending?.(false);},[busy,draft,opened,recoveryReady,attempt,onPending]);
  const draftAction=draft?.action;
  useEffect(()=>{if(draftAction){editor.current?.focus({preventScroll:true});editor.current?.scrollIntoView({block:'start',behavior:'auto'});}},[draftAction]);
  useEffect(()=>{

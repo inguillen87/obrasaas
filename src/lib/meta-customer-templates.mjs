@@ -8,9 +8,9 @@ const blueprints=Object.freeze({
  field_evidence_request:{title:'Pedido de información de obra',text:'Tenés un pedido de información pendiente en {{1}}. Abrí tu cuenta de ObraSaaS para consultar el detalle y aportar la evidencia solicitada: https://obrasaas.com/cuenta',example:'Obra de ejemplo'},
  progress_review_notification:{title:'Avance pendiente de revisión',text:'Hay una propuesta de avance pendiente de revisión en {{1}}. Abrí tu cuenta de ObraSaaS para consultar la evidencia y registrar tu decisión: https://obrasaas.com/cuenta',example:'Obra de ejemplo'},
 });
-export function customerTemplateBlueprint(key){const value=blueprints[key];if(!value)throw new WorkspaceError('META_CUSTOMER_TEMPLATE_INVALID');return {title:value.title,bodyText:value.text};}
+export function customerTemplateBlueprint(key){if(!Object.hasOwn(blueprints,key))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_INVALID');const value=blueprints[key];return {title:value.title,bodyText:value.text};}
 export function buildCustomerTemplate(connection,blueprintKey){
- const blueprint=blueprints[blueprintKey];if(!blueprint)throw new WorkspaceError('META_CUSTOMER_TEMPLATE_INVALID');
+ if(!Object.hasOwn(blueprints,blueprintKey))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_INVALID');const blueprint=blueprints[blueprintKey];
  const language='es_AR',category='UTILITY',components=[{type:'BODY',text:blueprint.text,example:{body_text:[blueprint.examples?[...blueprint.examples]:[blueprint.example]]}}];
  const contentSha256=digest({language,category,components}),binding=digest([connection.id,connection.whatsappBusinessId]).slice(0,10);
  return {blueprintKey,title:blueprint.title,name:`obrasaas_${blueprintKey}_${binding}_${contentSha256.slice(0,10)}`,language,category,components,contentSha256,bodyText:blueprint.text};
