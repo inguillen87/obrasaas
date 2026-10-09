@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='a1619c8b6c1cd284463f4cde24056a06584df7688a9e4cb58b8042ae98df910f';
+export const EXPECTED_CONTRACT_SHA256='84e4b106909fb5b274927e5d9ca758ebcf77e59d7dadfb2a7b96e7ad3effb740';
 const POSTGRES_SERVICE_IMAGE='public.ecr.aws/docker/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -65,13 +65,18 @@ const ownCompanyDependenciesFor=kind=>({
  UI_IDENTITY_ONLY:['src/app/(identity)/cuenta/own-company-number-panel.js','src/app/(identity)/cuenta/own-company-number-view.mjs']
  }[kind]||[]);
 const ownTemplateDependenciesFor=kind=>({
+ UI_INTAKE:['src/app/(identity)/cuenta/own-company-templates-view.mjs'],
+ UI_JOINT:['src/app/(identity)/cuenta/own-company-templates-view.mjs'],
+ UI_CAUSAL:['src/app/(identity)/cuenta/own-company-templates-view.mjs'],
+ UI_PREPARATION:['src/app/(identity)/cuenta/own-company-templates-view.mjs'],
+ UI_PORTFOLIO:['src/app/(identity)/cuenta/own-company-templates-view.mjs'],
  UNIT:['src/app/(identity)/cuenta/own-company-templates-view.mjs'],
  UI_BANK:['src/app/(identity)/cuenta/own-company-templates-view.mjs'],
  PG_COMPANY_KYC:['src/lib/meta-own-company-templates.mjs'],
  UI_IDENTITY_ONLY:['src/app/(identity)/cuenta/own-company-templates-panel.js','src/app/(identity)/cuenta/own-company-templates-view.mjs']
  }[kind]||[]);
 const currentOwnDependenciesFor=kind=>[...ownCompanyDependenciesFor(kind),...ownTemplateDependenciesFor(kind)];
-const OWN_TEMPLATE_SOURCE_COUNTS={UNIT:104,UI_BANK:100,PG_COMPANY_KYC:170,UI_IDENTITY_ONLY:102};
+const OWN_TEMPLATE_SOURCE_COUNTS={UNIT:104,UI_BANK:100,PG_COMPANY_KYC:170,UI_IDENTITY_ONLY:102,UI_INTAKE:24,UI_JOINT:100,UI_CAUSAL:100,UI_PREPARATION:16,UI_PORTFOLIO:13};
 const isIdentity=spec=>spec.kind==='UI_IDENTITY_ONLY';
 const isCanonicalField=spec=>['PG_FIELD','PG_OVERTIME'].includes(spec.kind);
 const FIELD_PG_BASELINE_PRODUCER={producer:'scripts/verify-field-operations-postgres.mjs',path:'.vercel/field-operations-evidence/postgres.json',retained:true,blockId:20,lane:'field',baselineSourceLine:216,baselineProducerGitBlobSha256:'b91778574d63bc9dffb83af1b5aeb7a2666e7fb23e0d923ea79b435de7b265d8'};
