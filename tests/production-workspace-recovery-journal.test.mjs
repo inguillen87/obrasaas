@@ -8,6 +8,28 @@ function storage(seed=[]) {const rows=new Map(seed);return {get length(){return 
 const command=(extra={})=>({method:'POST',body:JSON.stringify({operationId,scope,projectId:'p-a',reason:'Private medical text',front:'data:image/png;base64,secret',location:{lat:12},pin:'123456',token:'private-token',...extra})});
 const journal=s=>createWorkspaceRecoveryJournal({getStorage:()=>s,now:()=>123456});
 
+test('own-number creation retains a null connection reference without private setup fields and blocks another channel write',async()=>{
+ const s=storage(),j=journal(s),ticket=await j.prepare('/api/identity/company-channel',command({action:'CONNECT_OWN_NUMBER',payload:{connectionId:null,revision:0,wabaId:'778899442',phoneNumberId:'887799443',confirmOwnBusiness:true,securityPin:'654321'}}));
+ assert.equal(ticket.entry.connectionId,null);assert.equal(ticket.entry.action,'CONNECT_OWN_NUMBER');
+ const persisted=JSON.stringify([...s.rows]);for(const value of ['887799443','778899442','654321','wabaId','securityPin','Private medical'])assert.equal(persisted.includes(value),false,value);
+ const fresh=journal(storage(s.rows));assert.equal((await fresh.list(scope))[0].connectionId,null);
+ await assert.rejects(j.prepare('/api/identity/company-channel',command({operationId:secondId,projectId:'p-b',action:'PREPARE',payload:{connectionId:'legacy-channel'}})),error=>error.code==='WORKSPACE_RECOVERY_REQUIRED');
+ await assert.rejects(j.prepare('/api/identity/company-channel',command({operationId:secondId,action:'ACTIVATE_OWN_NUMBER',payload:{connectionId:null}})),error=>error.code==='WORKSPACE_RECOVERY_STORAGE_UNAVAILABLE');
+});
+
+test('own-number provider uncertainty survives reload and readonly inspection until the exact terminal receipt',async()=>{
+ const s=storage(),j=journal(s),ticket=await j.prepare('/api/identity/company-channel',command({action:'ACTIVATE_OWN_NUMBER',payload:{connectionId:'own-channel'}}));
+ const base={organization:{id:'org-a',name:'Synthetic company'},actor:{id:'actor-a',role:'ADMIN'},scope,projectId:'p-a',operationId,action:'ACTIVATE_OWN_NUMBER',receiptId:'company_own_'+'c'.repeat(64),replayed:false,channel:{id:'own-channel',anchorProjectId:'p-a',revision:2,mode:'PREPARED',displayPhoneNumber:'+541100000000',connectionStatus:'PENDING',enabled:false},accepted:false,roundTrip:'NOT_VERIFIED'};
+ for(const state of ['VERIFYING','PROVIDER_STARTED','PROVIDER_UNKNOWN']){
+  const pending={...base,state,saved:false,definitive:false};assert.deepEqual(recoveryResult(ticket.entry,pending),{state});await j.settle(ticket,pending);assert.equal((await j.list(scope)).length,1);
+ }
+ const current=journal(storage(s.rows)),entry=(await current.list(scope))[0],query=recoveryQuery(entry);
+ await current.observe(query,{...base,state:'PROVIDER_UNKNOWN',saved:false,definitive:false,providerObservation:{registered:true,subscribed:true,readOnly:true},recovery:'EXPLICIT_REVIEW_REQUIRED'});assert.equal((await current.list(scope)).length,1);
+ const terminal={...base,state:'RECORDED',saved:true,definitive:true,channel:{...base.channel,connectionStatus:'CONNECTED',enabled:true}};
+ assert.equal(recoveryResult(entry,{...terminal,scope:other}),null);assert.equal(recoveryResult(entry,{...terminal,operationId:secondId}),null);assert.equal(recoveryResult(entry,{...terminal,channel:{...terminal.channel,id:'foreign-channel'}}),null);
+ await current.observe(query,terminal);assert.equal((await current.list(scope)).length,0);
+});
+
 test('stores only receipt references before dispatch, survives a new page instance and never stores private bodies',async()=>{
  const s=storage(),j=journal(s);let calls=0;
  const transport=createWorkspaceRequestLifecycle(async()=>'private-jwt',{journal:j,fetchImpl:async(url)=>{calls++;assert.equal((await j.list(scope)).length,1);assert.equal(url,'/api/identity/participants');throw new TypeError('Lost ack');}});

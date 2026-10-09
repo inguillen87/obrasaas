@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {ownCompanyNumberSnapshot,ownCompanyNumberCanAct,ownCompanyNumberFresh} from '../src/app/(identity)/cuenta/own-company-number-view.mjs';
+const time=Date.parse('2026-10-09T12:00:00.000Z'),expected={scope:'a'.repeat(64),projectId:'project-a',organizationId:'org_Test',actorId:'user_AdminA'};
+const snapshot=()=>({organization:{id:expected.organizationId,name:'Empresa sintética'},actor:{id:expected.actorId,role:'ADMIN'},scope:expected.scope,projectId:expected.projectId,readOnly:true,canManage:true,mode:'OWN_COMPANY',companyPhoneRevision:1,wabaId:'230000001',phoneNumberId:'220000001',displayPhoneNumber:'+5491100009999',verifiedBusinessName:'Empresa sintética',registered:true,subscribed:true,expiresAt:new Date(time+3600000).toISOString(),channel:{id:'own-channel',anchorProjectId:expected.projectId,revision:4,mode:'COMPANY',displayPhoneNumber:'+5491100009999',connectionStatus:'CONNECTED',enabled:true},connectionMatchesAssets:true,connectionOwnVerified:true,operationalGrant:{version:2,state:'ACTIVE',credentialExpiresAt:new Date(time+24*3600000).toISOString(),roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'},accepted:false,roundTrip:'NOT_VERIFIED'});
+test('snapshot distinguishes finite operational credential from a setup window without granting a new configuration after expiry',()=>{
+ const value=ownCompanyNumberSnapshot(snapshot(),expected);assert.notEqual(value.expiresAt,value.operationalGrant.credentialExpiresAt);assert.equal(ownCompanyNumberFresh(value,time+5*3600000),false);assert.equal(ownCompanyNumberCanAct(value,'ACTIVATE_OWN_NUMBER',time+5*3600000),false);assert.equal(value.operationalGrant.roundTrip,'NOT_VERIFIED');assert.equal(value.operationalGrant.fieldJourney,'NOT_VERIFIED');
+});
+test('operational snapshot excludes private proofs and refuses claims of acceptance, missing credential expiry or contradictory activation',()=>{
+ const value=snapshot();for(const grant of [{...value.operationalGrant,token:'private'},{...value.operationalGrant,grantDigest:'a'.repeat(64)},{...value.operationalGrant,state:'READY'},{...value.operationalGrant,credentialExpiresAt:null},{...value.operationalGrant,credentialExpiresAt:'never'},{...value.operationalGrant,roundTrip:'VERIFIED'},{...value.operationalGrant,fieldJourney:'VERIFIED'}])assert.throws(()=>ownCompanyNumberSnapshot({...value,operationalGrant:grant},expected));
+ for(const patch of [{connectionOwnVerified:false},{channel:{...value.channel,enabled:false}},{registered:false},{subscribed:false}])assert.throws(()=>ownCompanyNumberSnapshot({...value,...patch},expected));
+});
+test('revoked or expired operational states stay visible without authorizing runtime or bypassing a new setup review',()=>{
+ const value=snapshot();for(const state of ['REVOKED','EXPIRED','UNAVAILABLE']){const next={...value,connectionOwnVerified:false,channel:{...value.channel,mode:'SUSPENDED',enabled:false},operationalGrant:{...value.operationalGrant,state}};assert.equal(ownCompanyNumberSnapshot(next,expected).operationalGrant.state,state);assert.equal(ownCompanyNumberCanAct(next,'ACTIVATE_OWN_NUMBER',time),false);}
+});

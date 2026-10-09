@@ -10,6 +10,7 @@ import {createMetaFieldBridge,readMetaFieldConversation,validateMetaFieldMediaOr
 import {validFieldMediaAnalysisConsent} from './field-media-privacy.mjs';
 import {siteText} from './site-register-policy.mjs';
 import {companyConnectionForProject} from './company-channel-connection.mjs';
+import {lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
 
 const fault=(code,status=403)=>{throw new WorkspaceError(code,status);};
 const text=body=>({type:'text',body});
@@ -94,6 +95,7 @@ export async function companyPreparedMediaRecoveryAuthorized(client,admin,{event
 export async function resolveCompanyEnvelope(client,{eventId,environment=process.env,context=null}){
  const initial=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE id=$1`,[eventId])).rows[0];if(!initial||initial.provider!=='meta-customer-v1'||initial.eventType!=='message')return null;
  const raw=(await client.query(`SELECT c.*,p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c.id=$1 AND c."projectId"=$2 AND p."organizationId"=$3`,[initial.payload?.channelId,initial.projectId,initial.payload?.organizationId])).rows[0];if(!raw)fault('WORKER_CHANNEL_SIGNED_PROOF_REQUIRED');
+ const ownCompanyCapability=await lockOwnCompanyIssuer(client,raw,{environment});
  const proof0=decodeWorkerChannelProof(initial,raw,environment),code=workerChannelCodeDigest(proof0.value.type==='text'?proof0.value.text?.body:null),ready=await companyChannelSchemaReady(client);
  if(!ready){if(proof0.companyRouting||raw.metadata?.companyRoutingVersion===1)fault('COMPANY_CHANNEL_CATALOG_REQUIRED',409);return null;}
  const owner0=(await client.query(`SELECT * FROM public."WhatsAppCompanyChannel" WHERE "connectionId"=$1 AND "organizationId"=$2 AND "anchorProjectId"=$3`,[raw.id,raw.organizationId,raw.projectId])).rows[0];
@@ -113,7 +115,7 @@ export async function resolveCompanyEnvelope(client,{eventId,environment=process
  const projects=new Map();for(const id of [...new Set([raw.projectId,...candidates.map(w=>w.projectId)])].sort()){const p=(await client.query(`SELECT id,name,"organizationId",status::text AS status,metadata FROM public."Project" WHERE id=$1 AND "organizationId"=$2 FOR UPDATE`,[id,member.organizationId])).rows[0];if(!p||id!==raw.projectId&&p.status!=='ACTIVE')fault('COMPANY_CHANNEL_CONTEXT_CHANGED',409);projects.set(id,p);}
  const workers=[];for(const candidate of candidates){await assignment(client,member,candidate.projectId,true);const w=(await client.query(`SELECT *,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Worker" WHERE id=$1 AND "projectId"=$2 FOR UPDATE`,[candidate.id,candidate.projectId])).rows[0];try{await approvedParticipant(client,w,member,{permission:null});workers.push({...w,assignmentRevision:candidate.assignmentRevision,projectName:projects.get(candidate.projectId).name});}catch(error){if(!(error instanceof WorkspaceError)||prior0||code)throw error;}}
  if(!workers.length)fault('WORKER_CHANNEL_BINDING_REQUIRED');
- const connection=(await client.query(`SELECT * FROM public."WhatsAppConnection" WHERE id=$1 AND "projectId"=$2 FOR SHARE`,[raw.id,raw.projectId])).rows[0];connection.organizationId=member.organizationId;assertWorkerCustomerConnection(connection,member.organizationId,connection.projectId,Date.now(),{operational:!code});
+ const connection=(await client.query(`SELECT * FROM public."WhatsAppConnection" WHERE id=$1 AND "projectId"=$2 FOR SHARE`,[raw.id,raw.projectId])).rows[0];connection.organizationId=member.organizationId;assertWorkerCustomerConnection(connection,member.organizationId,connection.projectId,Date.now(),{operational:!code,environment});
  const owner=(await client.query(`SELECT * FROM public."WhatsAppCompanyChannel" WHERE "connectionId"=$1 AND "organizationId"=$2 FOR SHARE`,[connection.id,member.organizationId])).rows[0];if(owner?.anchorProjectId!==connection.projectId||owner.mode!==owner0.mode||owner.revision!==owner0.revision)fault('COMPANY_CHANNEL_CONTEXT_CHANGED',409);
  for(const w of workers){const a=(await client.query(`SELECT revision FROM public."WhatsAppChannelProjectAssignment" WHERE "connectionId"=$1 AND "organizationId"=$2 AND "projectId"=$3 AND status='ACTIVE' FOR SHARE`,[connection.id,member.organizationId,w.projectId])).rows[0];if(a?.revision!==w.assignmentRevision)fault('COMPANY_CHANNEL_CONTEXT_CHANGED',409);if(!code)w.channelBinding=await signedBinding(client,w,member,connection,environment,{lockProof:true});}
  const senderHmac=senderKey(connection,proof0.senderE164,environment),routeId='company_route_'+digest([member.organizationId,connection.id,senderHmac]),route=(await client.query(`SELECT * FROM public."WhatsAppCompanyRoute" WHERE id=$1 FOR UPDATE`,[routeId])).rows[0];
@@ -121,7 +123,7 @@ export async function resolveCompanyEnvelope(client,{eventId,environment=process
  const event=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 FOR UPDATE`,[eventId,connection.projectId])).rows[0],proof=decodeWorkerChannelProof(event,connection,environment),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
  if(context)sourceLease(event,context,now);if(event.payload.payloadDigest!==initial.payload.payloadDigest||proof.senderE164!==proof0.senderE164)fault('WORKER_CHANNEL_PROOF_INTEGRITY',409);
  const projection=(await client.query(`SELECT * FROM public."WhatsAppCompanyEventRoute" WHERE "sourceEventId"=$1 FOR UPDATE`,[eventId])).rows[0];if(projection&&(projection.payloadDigest!==event.payload.payloadDigest||projection.connectionId!==connection.id||projection.organizationId!==member.organizationId||projection.actorId!==member.actorId||projection.membershipId!==member.membershipId))fault('COMPANY_CHANNEL_SOURCE_REQUIRED');
- return {member,projects,workers,connection,owner,route,routeId,senderHmac,event,proof,projection,now,code};
+ return {member,projects,workers,connection,owner,route,routeId,senderHmac,event,proof,projection,now,code,ownCompanyCapability};
 }
 async function reserve(client,r,kind,worker=null){
  if(r.projection)return r.projection;
@@ -194,5 +196,5 @@ export function createCompanyChannelBridge({connect,environment=process.env,prov
 export async function resolveCompanyOutboundIdentity(client,options){
  const projection=(await client.query(`SELECT kind FROM public."WhatsAppCompanyEventRoute" WHERE "sourceEventId"=$1`,[options.eventId])).rows[0];if(projection?.kind==='FIELD'||projection?.kind==='BINDING')return resolveWorkerChannelIdentity(client,{...options,companyRouting:true});
  const r=await resolveCompanyEnvelope(client,options);if(!r)fault('COMPANY_CHANNEL_SOURCE_REQUIRED');
- if(!r.projection?.encryptedResult)fault('COMPANY_CHANNEL_SOURCE_REQUIRED');return {kind:'CHANNEL_VERIFIED',member:r.member,project:r.projects.get(r.connection.projectId),connection:r.connection,event:r.event,proof:r.proof,sourceProjectId:r.connection.projectId,companyProjection:r.projection};
+ if(!r.projection?.encryptedResult)fault('COMPANY_CHANNEL_SOURCE_REQUIRED');return {kind:'CHANNEL_VERIFIED',member:r.member,project:r.projects.get(r.connection.projectId),connection:r.connection,event:r.event,proof:r.proof,sourceProjectId:r.connection.projectId,companyProjection:r.projection,ownCompanyCapability:r.ownCompanyCapability};
 }

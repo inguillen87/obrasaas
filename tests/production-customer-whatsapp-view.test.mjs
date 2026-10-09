@@ -56,7 +56,8 @@ test('a malformed dispatched POST and malformed recovery GET preserve the exact 
 test('next-step copy preserves dedicated, coexistence and existing-provider review without launch approval',()=>{
  const empty=customerWhatsAppNextStep(tenantWorkspaceFromMetadata(null),context.projectId);assert.equal(empty.canConsultMeta,false);
  const dedicated=customerWhatsAppNextStep(profile(),context.projectId);assert.equal(dedicated.canConsultMeta,true);assert.match(dedicated.message,/comprobar la autorización vigente/);assert.doesNotMatch(dedicated.message,/Falta autorizar/);
- for(const numberMode of ['BUSINESS_APP','EXISTING_API']){const next=customerWhatsAppNextStep({...profile(),numberMode},context.projectId);assert.equal(next.requiresAssistance,true);assert.equal(next.canConsultMeta,true);if(numberMode==='BUSINESS_APP')assert.match(next.message,/coexistencia.*elegibilidad.*conservando tu app/);else{assert.match(next.message,/autorización adicional necesita un plan/);assert.match(next.message,/no transferimos ni desconectamos tu proveedor actual/);}}
+ const business=customerWhatsAppNextStep({...profile(),numberMode:'BUSINESS_APP'},context.projectId);assert.equal(business.requiresAssistance,false);assert.equal(business.canConsultMeta,true);assert.match(business.message,/Consultá la disponibilidad de coexistencia.*elegibilidad.*conservando tu app/);assert.doesNotMatch(business.message,/coexistencia (disponible|habilitada|rechazada)|necesita (ayuda|asistencia)/);
+ const provider=customerWhatsAppNextStep({...profile(),numberMode:'EXISTING_API'},context.projectId);assert.equal(provider.requiresAssistance,true);assert.equal(provider.canConsultMeta,true);assert.match(provider.message,/autorización adicional necesita un plan/);assert.match(provider.message,/no transferimos ni desconectamos tu proveedor actual/);
 });
 
 test('number intake keeps personal WhatsApp out of saved modes and protects an existing app or provider',()=>{

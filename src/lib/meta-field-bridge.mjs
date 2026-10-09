@@ -9,6 +9,7 @@ import {customerJobTransaction} from './meta-customer-outbound.mjs';
 import {validFieldMediaAnalysisConsent,FIELD_VIDEO_PRIVACY_NOTICE_VERSION,fieldVideoAudioAnalysisAllowed} from './field-media-privacy.mjs';
 import {voiceTranscriptForEvidence} from './voice-progress-draft.mjs';
 import {assertDevelopmentPilotCommit,assertDevelopmentPilotAdapter} from './meta-development-pilot-policy.mjs';
+import {lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
 import {siteText} from './site-register-policy.mjs';
 
 export function metaFieldOperationId(eventId,purpose){const h=digest(['meta-field-operation-v1',eventId,purpose]);return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;}
@@ -145,7 +146,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   const renewed=await client.query(`UPDATE public."WebhookEvent" SET "leaseExpiresAt"=clock_timestamp()+interval '180 seconds' WHERE id=$1 AND status='PENDING' AND "leaseToken"=$2 AND "leaseExpiresAt">clock_timestamp()`,[r.event.id,r.event.leaseToken]);
   if(renewed.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
   const token=decryptCustomerSecret(r.connection.encryptedAccessToken,{organizationId:r.member.organizationId,projectId:r.connection.projectId,purpose:protocol.credentialPurpose,resourceId:r.connection.phoneNumberId},environment);
-  return {media,state,token,phoneNumberId:r.connection.phoneNumberId,userId:r.member.clerkUserId,scope:r.scope,workerId:r.worker.id,projectId:r.project.id,corporate:Boolean(r.companyProjection),identityDigest:mediaIdentity(r)};
+  return {media,state,token,phoneNumberId:r.connection.phoneNumberId,connection:r.connection,ownCompanyCapability:r.ownCompanyCapability,userId:r.member.clerkUserId,scope:r.scope,workerId:r.worker.id,projectId:r.project.id,corporate:Boolean(r.companyProjection),identityDigest:mediaIdentity(r)};
  }
  async function prepare(client,context){
   const type=(await client.query(`SELECT "eventType" FROM public."WebhookEvent" WHERE id=$1 AND provider=$2`,[context.eventId,protocol.provider])).rows[0];if(type?.eventType!=='message')return null;
@@ -191,10 +192,12 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   if(!provider||!put||!get||!analyzer)throw new WorkspaceError('META_CHANNEL_MEDIA_NOT_CONFIGURED',503);
   // No locks span provider I/O. Re-resolve the signed source, assignment,
   // individual KYC and binding immediately before each corporate external call.
-  const beforeExternal=async()=>{if(prepared.corporate||prepared.media.sourceOrigin)await within(async client=>{const r=await resolve(client,context,'report');assertPrepared(r,prepared);assertDevelopmentPilotAdapter(r.connection,'media');await requireMediaOrigin(client,r,prepared.media,prepared.state);await commitFence(client,r);});};
+  const own=prepared.connection?.metadata?.ownCompany||Object.hasOwn(prepared.connection?.metadata||{},'ownCompanyRuntime');
+  const beforeExternal=async()=>{if(prepared.corporate||prepared.media.sourceOrigin||own)await within(async client=>{const r=await resolve(client,context,'report');assertPrepared(r,prepared);if(own)await lockOwnCompanyIssuer(client,prepared.connection,{environment});assertDevelopmentPilotAdapter(r.connection,'media');await requireMediaOrigin(client,r,prepared.media,prepared.state);await commitFence(client,r);});};
   const external=fn=>async(...args)=>{await beforeExternal();return fn(...args);};
   let media;
-  try{await beforeExternal();const downloaded=await provider.downloadMedia({token:prepared.token,phoneNumberId:prepared.phoneNumberId,mediaId:prepared.media.mediaId,limit:prepared.media.kind==='image'?2*1024*1024:3*1024*1024,...(prepared.corporate||prepared.media.sourceOrigin?{beforeExternal}:{})});
+   const scopedProvider=own?await provider.forConnection({capability:prepared.ownCompanyCapability,connection:prepared.connection,token:prepared.token,beforeExternal}):provider;
+   try{await beforeExternal();const downloaded=await scopedProvider.downloadMedia({token:prepared.token,phoneNumberId:prepared.phoneNumberId,mediaId:prepared.media.mediaId,limit:prepared.media.kind==='image'?2*1024*1024:3*1024*1024,...(prepared.corporate||prepared.media.sourceOrigin?{beforeExternal}:{})});
    media=decodeFieldMedia(downloaded.bytes,downloaded.contentType);if(downloaded.contentType.split(';')[0].trim()!==String(prepared.media.contentType).split(';')[0].trim()||media.kind!==prepared.media.kind)throw new WorkspaceError('META_CHANNEL_MEDIA_INTEGRITY',409);
    }catch(error){if(recoverableMediaContext(error))return closeMediaContext(context,prepared,error);if(!['META_CUSTOMER_MEDIA_INVALID','META_CUSTOMER_MEDIA_REJECTED','META_CUSTOMER_MEDIA_INTEGRITY','META_CHANNEL_MEDIA_INTEGRITY','FIELD_MEDIA_INVALID','FIELD_MEDIA_TOO_LARGE'].includes(error.code))throw error;
    return within(async client=>{const r=await resolve(client,context,'report'),prior=await saved(client,r);if(prior)return prior;return record(client,r,result(r,'MEDIA_REVIEW_REQUIRED',text('No pudimos guardar este archivo con su tamaño o formato actual. Prepará una foto de hasta 2 MiB o audio/video de hasta 3 MiB desde la web, o enviá otro archivo. Tu tarea conserva su avance.'),{code:error.code}),prepared.state,{onlyIfCurrent:true});});

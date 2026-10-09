@@ -11,10 +11,10 @@ assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=realpathSync(process.cwd()),parent=path.join(root,'.vercel'),evidence=path.join(parent,'customer-whatsapp-evidence');mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/customer-whatsapp-ui-')),app=path.join(fixture,'app'),account=path.join(app,'(identity)/cuenta');mkdirSync(account,{recursive:true});
 for(const name of ['customer-whatsapp-panel.js','customer-whatsapp-panel.module.css','customer-whatsapp-view.mjs','company-bootstrap-panel.js','company-bootstrap-panel.module.css'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',name),path.join(account,name));
-for(const dependency of ['workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','workspace-recovery-journal.mjs', 'private-bank-account-format.mjs','company-channel-view.mjs','site-purchase-view.mjs','workspace-recovery-storage.mjs','private-workspace-download.js'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',dependency),path.join(account,dependency));
+for(const dependency of ['workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','workspace-recovery-journal.mjs','own-company-number-view.mjs', 'private-bank-account-format.mjs','company-channel-view.mjs','site-purchase-view.mjs','workspace-recovery-storage.mjs','private-workspace-download.js'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',dependency),path.join(account,dependency));
 mkdirSync(path.join(fixture,'lib/whatsapp'),{recursive:true});copyFileSync(path.join(root,'src/lib/whatsapp/tenant-workspace-policy.js'),path.join(fixture,'lib/whatsapp/tenant-workspace-policy.js'));
 copyFileSync(path.join(root,'src/lib/company-phone-format.mjs'),path.join(fixture,'lib/company-phone-format.mjs'));
-const sourceManifest=[...['customer-whatsapp-panel.js','customer-whatsapp-panel.module.css','customer-whatsapp-view.mjs','company-bootstrap-panel.js','company-bootstrap-panel.module.css','workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','workspace-recovery-journal.mjs', 'private-bank-account-format.mjs','company-channel-view.mjs','site-purchase-view.mjs','workspace-recovery-storage.mjs','private-workspace-download.js'].map(file=>'src/app/(identity)/cuenta/'+file),'src/lib/whatsapp/tenant-workspace-policy.js','src/lib/company-phone-format.mjs','src/lib/customer-whatsapp-setup.mjs','src/lib/whatsapp/project-workspace-profile.js','src/lib/workspace-policy.mjs'].map(file=>({path:file,sha256:createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')}));
+const sourceManifest=[...['customer-whatsapp-panel.js','customer-whatsapp-panel.module.css','customer-whatsapp-view.mjs','company-bootstrap-panel.js','company-bootstrap-panel.module.css','workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','workspace-recovery-journal.mjs','own-company-number-view.mjs', 'private-bank-account-format.mjs','company-channel-view.mjs','site-purchase-view.mjs','workspace-recovery-storage.mjs','private-workspace-download.js'].map(file=>'src/app/(identity)/cuenta/'+file),'src/lib/whatsapp/tenant-workspace-policy.js','src/lib/company-phone-format.mjs','src/lib/customer-whatsapp-setup.mjs','src/lib/whatsapp/project-workspace-profile.js','src/lib/workspace-policy.mjs'].map(file=>({path:file,sha256:createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')}));
 for(const item of sourceManifest){const copied=item.path.startsWith('src/app/')?path.join(account,path.basename(item.path)):item.path==='src/lib/whatsapp/tenant-workspace-policy.js'?path.join(fixture,'lib/whatsapp/tenant-workspace-policy.js'):item.path==='src/lib/company-phone-format.mjs'?path.join(fixture,'lib/company-phone-format.mjs'):null;if(copied)assert.deepEqual(readFileSync(path.join(root,item.path)),readFileSync(copied));}
 const focusedScenario=process.env.WHATSAPP_UI_SCENARIO||null;
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'customer-whatsapp-fixture',private:true}));
@@ -153,7 +153,16 @@ async function scenario(mode,width=390,numberMode='DEDICATED'){
  if(receipt&&mode!=='denied-absent'){
   assert.equal(await page.$eval('a[href="#customer-meta-title"]',link=>link.textContent),'Consultar autorización y conexión en Meta');
   if(numberMode==='DEDICATED'){assert.ok((await page.evaluate(()=>document.body.innerText)).includes('comprobar la autorización vigente'));assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Falta autorizar en Meta'));assert.ok(!(await page.$eval('[role="status"]',node=>node.innerText)).includes('todavía no quedó conectado'));}
-  else assert.ok((await page.evaluate(()=>document.body.innerText)).includes('no inicies un alta dedicada'));
+  else if(numberMode==='BUSINESS_APP'){
+   const nextStep=await page.$eval('section[aria-labelledby="wa-connection-progress"] > p',node=>node.innerText);
+   assert.match(nextStep,/Consultá la disponibilidad de coexistencia y la elegibilidad en Meta, conservando tu app/);
+   assert.doesNotMatch(nextStep,/no inicies un alta dedicada|coexistencia (disponible|habilitada|rechazada)|necesita (ayuda|asistencia)/);
+  }else{
+   assert.equal(numberMode,'EXISTING_API');
+   const nextStep=await page.$eval('section[aria-labelledby="wa-connection-progress"] > p',node=>node.innerText);
+   assert.match(nextStep,/no inicies un alta dedicada/);
+   assert.match(nextStep,/no transferimos ni desconectamos tu proveedor actual/);
+  }
   await page.focus('a[href="#customer-meta-title"]');await page.keyboard.press('Enter');await page.waitForFunction(()=>location.hash==='#customer-meta-title');
  }
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(external,[]);

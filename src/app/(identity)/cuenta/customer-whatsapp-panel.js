@@ -101,7 +101,8 @@ function CustomerWhatsAppPreparation({projectId,scope,onPending,getSessionToken}
    </section>}
    <form onSubmit={save}>
     <h4 id="wa-assistant-preparation-title" tabIndex={-1}>Preparar el asistente de esta obra</h4>
-    <label className={styles.field}>Nombre del asistente<input maxLength={70} required autoComplete="off" value={draft.assistantName} disabled={locked} onChange={event=>setDraft({...draft,assistantName:event.target.value})}/></label>
+    <label className={styles.field}>Nombre del asistente en ObraSaaS<input maxLength={70} required autoComplete="off" aria-describedby="wa-assistant-name-guidance" value={draft.assistantName} disabled={locked} onChange={event=>setDraft({...draft,assistantName:event.target.value})}/></label>
+    <p id="wa-assistant-name-guidance" className={styles.note}>El nombre y logo visibles en WhatsApp se configuran por separado en Meta. Meta revisa el nombre.</p>
     <fieldset disabled={locked} className={styles.modes} aria-describedby="wa-personal-app-guidance"><legend>¿Dónde usás hoy este número?</legend>{currentData.options.numberModes.map(mode=>{const guidance=customerWhatsAppNumberModeGuidance(mode.key);return <label key={mode.key}><input type="radio" name="number-mode" value={mode.key} checked={draft.numberMode===mode.key} required onChange={()=>setDraft({...draft,numberMode:mode.key})}/><span><strong>{guidance.title}</strong><small>{guidance.detail}</small></span></label>;})}</fieldset>
     <p id="wa-personal-app-guidance" className={styles.note}>{customerWhatsAppPersonalAppGuidance}</p>
     {selectedModeGuidance&&<p className={styles.next} data-number-mode-guidance={draft.numberMode} aria-live="polite">{selectedModeGuidance.next}</p>}

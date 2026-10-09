@@ -4,9 +4,10 @@ import {Building2,MessageCircle,ShieldCheck,RefreshCw,TriangleAlert} from 'lucid
 import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import {browserRecoveryJournal,RECOVERY_EVENT,recoveryResult} from './workspace-recovery-journal.mjs';
 import {COMPANY_CHANNEL_MODES,companyChannelSnapshot,companyChannelOutcome,companyChannelCommand,companyChannelCanAct,companyChannelExplain,companyChannelAccessDenied} from './company-channel-view.mjs';
+import {OWN_COMPANY_ACTIONS,ownCompanyNumberOutcome} from './own-company-number-view.mjs';
 import styles from './company-channel-panel.module.css';
 const endpoint='/api/identity/company-channel';
-const actionLabels={PREPARE:'Preparar canal',ASSIGN:'Asignar obra',REVOKE:'Revocar obra',ACTIVATE:'Activar canal de empresa',SUSPEND:'Suspender canal de empresa'};
+const actionLabels={PREPARE:'Preparar canal',ASSIGN:'Asignar obra',REVOKE:'Revocar obra',ACTIVATE:'Activar canal de empresa',SUSPEND:'Suspender canal de empresa',CONNECT_OWN_NUMBER:'Conectar número propio',ACTIVATE_OWN_NUMBER:'Activar número propio'};
 const referenceOf=command=>({version:1,resource:'company-channel',scope:command.scope,projectId:command.projectId,operationId:command.operationId,action:command.action,connectionId:command.payload.connectionId,createdAt:Date.now()});
 export function CompanyChannelPanel(props){return <CompanyChannelInner key={props.scope+':'+props.projectId} {...props}/>;}
 function CompanyChannelInner({projectId,scope,getSessionToken,onPending,locked=false}){
@@ -27,7 +28,7 @@ function CompanyChannelInner({projectId,scope,getSessionToken,onPending,locked=f
     if(reference.current)setNotice(entry?'Hay otra referencia pendiente. Consultala antes de una nueva decisión.':'El intento fue comprobado desde Operaciones por comprobar. Consultá el canal vigente antes de otra decisión.');
    }
    reference.current=entry||null;setAttempt(entry||null);setRecoveryReady(true);
-   if(initial&&entry){setOpened(true);setNotice('Hay un intento pendiente de comprobación en este navegador. La consulta no vuelve a enviarlo.');}
+   if(initial&&entry&&!OWN_COMPANY_ACTIONS.includes(entry.action)){setOpened(true);setNotice('Hay un intento pendiente de comprobación en este navegador. La consulta no vuelve a enviarlo.');}
   }catch(error){if(active&&n===sequence){setRecoveryReady(false);setNotice(error.message);}}};
   refreshReferences.current=read;
   const refresh=()=>{if(!initializing)void read();},visible=()=>{if(document.visibilityState==='visible')refresh();};let channel;
@@ -91,7 +92,8 @@ function CompanyChannelInner({projectId,scope,getSessionToken,onPending,locked=f
   if(busy||localRequest.current||!attempt)return;const n=++epoch.current,ref=attempt;localRequest.current=true;setBusy(true);setRetryAllowed(false);setNotice('');
   try{
    const snapshot=payload.current;
-   const result=await request({scope:ref.scope,projectId:ref.projectId,operationId:ref.operationId},{requestTimeoutMs:15000},value=>companyChannelOutcome(value,{...expected(),scope:ref.scope,projectId:ref.projectId,operationId:ref.operationId,action:ref.action,connectionId:ref.connectionId}));
+   const validate=OWN_COMPANY_ACTIONS.includes(ref.action)?ownCompanyNumberOutcome:companyChannelOutcome;
+   const result=await request({scope:ref.scope,projectId:ref.projectId,operationId:ref.operationId},{requestTimeoutMs:15000},value=>validate(value,{...expected(),scope:ref.scope,projectId:ref.projectId,operationId:ref.operationId,action:ref.action,connectionId:ref.connectionId}));
    const outcome=recoveryResult(ref,result);if(!outcome)throw new Error('La respuesta no confirma este intento. Conservamos su referencia.');
    if(alive.current&&epoch.current===n){
     if(['RECORDED','REJECTED'].includes(outcome.state))await finish(result,n);

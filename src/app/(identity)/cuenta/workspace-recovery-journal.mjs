@@ -2,6 +2,7 @@ import {createBrowserRecoveryStorage} from './workspace-recovery-storage.mjs';
 import {PRIVATE_BANK_ACTIONS,validatePrivateBankOutcome} from './private-bank-account-format.mjs';
 import {purchaseOutcome} from './site-purchase-view.mjs';
 import {companyChannelOutcome,COMPANY_CHANNEL_ACTIONS} from './company-channel-view.mjs';
+import {ownCompanyNumberOutcome,OWN_COMPANY_ACTIONS} from './own-company-number-view.mjs';
 
 // Receipt references only. Never persist commands, tokens, files, location or messages.
 export const RECOVERY_EVENT = 'obrasaas:pending-receipts';
@@ -9,6 +10,7 @@ export const WORKSPACE_RECOVERY_PREFIX = 'obrasaas.pending-receipt.v1.';
 const prefix = WORKSPACE_RECOVERY_PREFIX;
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const id = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value);
+const channelReferenceValid=(action,connectionId)=>OWN_COMPANY_ACTIONS.includes(action)?(id(connectionId)||action==='CONNECT_OWN_NUMBER'&&connectionId===null):COMPANY_CHANNEL_ACTIONS.includes(action)&&id(connectionId);
 const PROGRESS_TEMPLATE_SEND_KEY='progress_review_notification';
 export const FIELD_OVERTIME_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_OVERTIME','PROPOSE_OVERTIME','DECIDE_OVERTIME']);
 export const PARTICIPANT_INTAKE_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_EMPLOYEE_INTAKE','ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE']);
@@ -73,7 +75,7 @@ async function reference(url, options, now) {
   if(resource==='project-preparation'&&!['SAVE_PREPARATION','CANCEL_PENDING_PREPARATION'].includes(body.action))throw unavailable();
   if(resource==='company-onboarding'&&(body.action!=='declare_company_phone'||!id(body.expectedClerkOrganizationId)))throw unavailable();
   if(resource==='site-photo'&&!id(body.reportId))return null;
-  if(resource==='company-channel'&&(!COMPANY_CHANNEL_ACTIONS.includes(body.action)||!id(body.payload?.connectionId)))throw unavailable();
+  if(resource==='company-channel'&&!channelReferenceValid(body.action,body.payload?.connectionId))throw unavailable();
   // Invitation reconciliation reads the provider and finalizes the original
   // invitation's receipt; it never creates a second invitation.
   if(resource==='participants'&&body.action==='RECOVER_INVITATION')return null;
@@ -117,7 +119,7 @@ function valid(entry) {
   const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',['reconcile','cancel'].includes(entry.action)?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(bank?['action','workerId']:[]),...(intake?['action','connectionId',...(entry.action==='CONFIGURE_EMPLOYEE_INTAKE'?[]:['applicationId'])]:[]),...(progress?['templateKey','workerId','actionReference']:[]),...(planUpload?['action','inputDigest']:plan?['action','draftId','expectedRevision','inputDigest']:[]),...(preparation?['action']:[])];
   if(Object.keys(entry).sort().join('|')!==fields.sort().join('|'))return false;
   if(entry.resource==='company-onboarding'&&(entry.action!=='declare_company_phone'||!id(entry.expectedClerkOrganizationId)))return false;
-  if(entry.resource==='company-channel'&&(!COMPANY_CHANNEL_ACTIONS.includes(entry.action)||!id(entry.connectionId)))return false;
+  if(entry.resource==='company-channel'&&!channelReferenceValid(entry.action,entry.connectionId))return false;
   if(progress&&(!id(entry.workerId)||!templateSendActionReference(entry.actionReference)))return false;
   if(planUpload&&!/^[a-f0-9]{64}$/.test(entry.inputDigest||''))return false;
   if(plan&&!planUpload&&(!['EDIT','APPLY','REJECT'].includes(entry.action)||!id(entry.draftId)||!Number.isSafeInteger(entry.expectedRevision)||entry.expectedRevision<1||!/^[a-f0-9]{64}$/.test(entry.inputDigest||'')))return false;
@@ -164,7 +166,7 @@ export function recoveryResult(entry, result) {
     if(result.state==='NOT_OBSERVED'&&result.definitive===false&&result.saved!==true&&!result.receiptId&&!result.overtime&&(result.action===undefined||result.action===entry.action))return {state:'NOT_OBSERVED'};
     return null;
   }
-  if(entry.resource==='company-channel'){try{companyChannelOutcome(result,entry);return result.state==='RECORDED'||result.state==='REJECTED'?{state:result.state,receiptId:result.receiptId}:{state:'NOT_OBSERVED'};}catch{return null;}}
+  if(entry.resource==='company-channel'){try{(OWN_COMPANY_ACTIONS.includes(entry.action)?ownCompanyNumberOutcome:companyChannelOutcome)(result,entry);return result.state==='RECORDED'||result.state==='REJECTED'?{state:result.state,receiptId:result.receiptId}:{state:result.state};}catch{return null;}}
   if(entry.resource==='project-preparation')return projectPreparationReceiptOutcome(result,entry);
   if(entry.resource==='plan-import') {
     if(result.projectId!==entry.projectId)return null;

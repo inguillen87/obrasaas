@@ -12,6 +12,7 @@ import {META_CUSTOMER_PROTOCOL,resolveMetaCloudProtocol,metaCloudEventMatches} f
 import {companyConnectionForProject} from './company-channel-connection.mjs';
 import {lockPersonWorksiteJourney} from './person-worksite-journey.mjs';
 import {lockDevelopmentPilotIssuer,assertDevelopmentPilotAttendance,assertDevelopmentPilotAdapter,assertDevelopmentPilotCommit} from './meta-development-pilot-policy.mjs';
+import {lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
 
 export const WORKER_CHANNEL_TTL_MS=300000;
 const sha=value=>createHash('sha256').update(value).digest('hex');
@@ -157,6 +158,7 @@ export async function resolveWorkerChannelIdentity(client,{eventId,permission=nu
  if(!workspaceId(eventId)||permission!==null&&!['attendance','report'].includes(permission))fault('WORKER_CHANNEL_INPUT_INVALID',400);
  const initial=(await client.query(`SELECT id,"projectId",provider,"externalId","eventType",status::text AS status,payload,outcome,"createdAt" FROM public."WebhookEvent" WHERE id=$1`,[eventId])).rows[0];if(!initial||initial.provider!==protocol.provider||!metaCloudEventMatches(protocol,initial.id))fault('WORKER_CHANNEL_SIGNED_PROOF_REQUIRED');
  const c0=await connection(client,initial.payload?.organizationId,initial.projectId),pilotTime=c0.metadata?.developmentPilot?(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.getTime():Date.now(),developmentPilotCapability=await lockDevelopmentPilotIssuer(client,c0,{environment,now:pilotTime}),proof0=decodeProof(initial,c0,environment,protocol),code=proof0.value.type==='text'?proof0.value.text?.body:null,codeDigest=workerChannelCodeDigest(code),claim=claimChallenge&&Boolean(codeDigest);
+ const ownCompanyCapability=await lockOwnCompanyIssuer(client,c0,{environment,now:pilotTime});
  if(developmentPilotCapability){assertDevelopmentPilotAdapter(c0,permission==='report'?'progress':claim?'binding':'attendance');if(!['text','interactive','location'].includes(proof0.value.type))fault('META_DEVELOPMENT_PILOT_ADAPTER_UNAVAILABLE',409);}
  let projection=null;if(companyRouting){projection=(await client.query(`SELECT * FROM public."WhatsAppCompanyEventRoute" WHERE "sourceEventId"=$1 AND kind IN ('BINDING','FIELD')`,[eventId])).rows[0];if(!projection||projection.organizationId!==initial.payload.organizationId||projection.connectionId!==c0.id||projection.payloadDigest!==initial.payload.payloadDigest)fault('COMPANY_CHANNEL_SOURCE_REQUIRED');}else if(proof0.companyRouting?.mode==='COMPANY'||c0.metadata?.companyRoutingVersion===1)fault('COMPANY_CHANNEL_SOURCE_REQUIRED');
  const targetProjectId=projection?.projectId||initial.projectId;
@@ -172,5 +174,5 @@ export async function resolveWorkerChannelIdentity(client,{eventId,permission=nu
   const m=metadata(row),binding={...challenge,id:'channel_binding_'+randomUUID().replaceAll('-',''),status:'VERIFIED',proofEventId:event.id,proofExternalId:event.externalId,proofPayloadDigest:event.payload.payloadDigest,verifiedAt:now.toISOString()};delete binding.codeDigest;delete binding.requestedAt;delete binding.expiresAt;m.participant.channelIdentity={version:1,challenge:{...challenge,status:'CONSUMED',proofEventId:event.id,consumedAt:now.toISOString()},binding};const after=await writeWorker(client,row,m);await record(client,member,'worker_channel_event_'+digest([event.id,row.id]),row.id,{projectId:project.id,kind:'CHANNEL_BOUND',bindingId:binding.id,challengeId:challenge.id,proofEventId:event.id,proofExternalId:event.externalId,proofPayloadDigest:event.payload.payloadDigest,identityCertified:false});return {kind:'CHANNEL_BOUND',replayed:false,member,project,worker:after,connection:c,event,proof,sourceProjectId:initial.projectId,companyProjection:projection,channelBinding:binding};
  }
  const binding=await signedBinding(client,row,member,c,environment,{protocol,decodeProof});
- return {kind:'CHANNEL_VERIFIED',member,project,worker:row,connection:c,event,proof,sourceProjectId:initial.projectId,companyProjection:projection,channelBinding:binding,developmentPilotCapability};
+  return {kind:'CHANNEL_VERIFIED',member,project,worker:row,connection:c,event,proof,sourceProjectId:initial.projectId,companyProjection:projection,channelBinding:binding,developmentPilotCapability,ownCompanyCapability};
 }

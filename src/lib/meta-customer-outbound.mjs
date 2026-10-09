@@ -6,9 +6,11 @@ import {hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
 import {META_CUSTOMER_PROTOCOL,resolveMetaCloudProtocol} from './meta-cloud-protocol.mjs';
 import {customerLifecycleRecovery} from './meta-customer-coexistence.mjs';
 import {assertDevelopmentPilotAttendance} from './meta-development-pilot-policy.mjs';
+import {ownCompanyConnectionPolicy,lockOwnCompanyIssuer,ownCompanyCapabilityKind,fenceOwnCompanyRuntime} from './meta-own-company-policy.mjs';
 
 export const customerOutboundId=eventId=>'customer_outbound_'+digest(['meta-customer-reply-v1',eventId]);
 export function customerChannelActive(connection,now=Date.now(),{pilotAttendance=false,environment=process.env}={}){
+ if(connection?.metadata?.ownCompany||Object.hasOwn(connection?.metadata||{},'ownCompanyRuntime')){try{ownCompanyConnectionPolicy(connection,environment,now);}catch{return false;}}
  if(connection?.metadata?.developmentPilot){if(!pilotAttendance)return false;try{assertDevelopmentPilotAttendance(connection,environment,now);}catch{return false;}}
  const verified=connection?.metadata?.customerVerification,activation=connection?.metadata?.customerActivation;
  const recovery=customerLifecycleRecovery(connection);if(recovery&&recovery.state!=='RESTORED')return false;
@@ -61,9 +63,9 @@ export async function completeCustomerOutbound(client,{id,projectId,leaseToken,s
 export function createMetaCustomerOutbound({connect,resolveIdentity,provider,environment=process.env,now=()=>Date.now(),afterReserve=async()=>{},protocol=META_CUSTOMER_PROTOCOL,channelActive=customerChannelActive,sourceContext=false}){
  resolveMetaCloudProtocol(protocol);
  const within=run=>customerJobTransaction(connect,run);
- async function reserve(context,reply){
+ async function reserve(context,reply,lockedClient=null){
   customerReplyMessage(reply);
-  return within(async client=>{
+  const run=async client=>{
    // Canonical resolver owns U/TM -> Project -> PM -> Worker -> Channel ->
    // Event locking and revalidates signed evidence, participation and KYC.
    const resolved=await resolveIdentity(client,{eventId:context.eventId,permission:null,claimChallenge:false,environment});
@@ -73,18 +75,34 @@ export function createMetaCustomerOutbound({connect,resolveIdentity,provider,env
    const {to,replyTo}=assertCustomerReplyWindow(payload,now()),id=customerOutboundId(event.id),request={version:1,eventId:event.id,payloadDigest:context.payloadDigest,channelId:connection.id,organizationId:member.organizationId,to,replyTo,message:reply,...(protocol!==META_CUSTOMER_PROTOCOL?{channelPurpose:protocol.purpose}:{}),...(sourceContext?{targetProjectId:resolved.companyProjection?.projectId||null,sourceRouteId:resolved.companyProjection?.sourceEventId}: {})};
    const reservation=await reserveCustomerOutbound(client,{id,projectId:sourceContext?event.projectId:project.id,organizationId:member.organizationId,actorId:member.actorId,request,environment,now:now()});if(reservation.done)return reservation;
    const token=decryptCustomerSecret(connection.encryptedAccessToken,{organizationId:member.organizationId,projectId:sourceContext?connection.projectId:project.id,purpose:protocol.credentialPurpose,resourceId:connection.phoneNumberId},environment);
-   return {...reservation,token,phoneNumberId:connection.phoneNumberId,to,replyTo,connection,developmentPilotCapability:resolved.developmentPilotCapability};
-  });
+   const ownCompanyCapability=await lockOwnCompanyIssuer(client,connection,{environment,now:now()});
+   return {...reservation,token,phoneNumberId:connection.phoneNumberId,to,replyTo,connection,developmentPilotCapability:resolved.developmentPilotCapability,ownCompanyCapability};
+  };return lockedClient?run(lockedClient):within(run);
  }
  return {
   async send(context,reply){
    const reserved=await reserve(context,reply);if(reserved.done)return reserved.done;
    // No retry may send an existing reservation, including after this hook,
    // a crashed worker, a timed-out POST or a lost database commit response.
-   await afterReserve();let scopedProvider=provider;
-   if(reserved.connection?.metadata?.developmentPilot)scopedProvider=await provider.forConnection({capability:reserved.developmentPilotCapability,connection:reserved.connection,token:reserved.token});
-   await reserve(context,reply);let state='SEND_UNKNOWN',result=null;
-   try{result=await scopedProvider.sendReply({...reserved,message:reply,correlationId:reserved.id});state='SENT';}catch(error){if(error instanceof WorkspaceError&&error.code==='META_CUSTOMER_PROVIDER_REJECTED')state='REJECTED';}
+   await afterReserve();let state='SEND_UNKNOWN',result=null;
+   const send=async scopedProvider=>{try{result=await scopedProvider.sendReply({...reserved,message:reply,correlationId:reserved.id});state='SENT';}catch(error){if(error instanceof WorkspaceError&&error.code==='META_CUSTOMER_PROVIDER_REJECTED')state='REJECTED';}};
+   if(ownCompanyCapabilityKind(reserved.ownCompanyCapability)==='RUNTIME'){
+    // Hold the canonical credential/issuer/audit SHARE locks through the single
+    // POST. Provider awaits also invoke this same fresh fence; a new grant does
+    // not authorize the captured token or reservation from the previous grant.
+    await within(async client=>{
+     // Revalidate with the same transaction: canonical resolvers acquire
+     // Project UPDATE before the OWN SHARE fence, without a second connection.
+     await reserve(context,reply,client);
+     const beforeExternal=async()=>{await reserve(context,reply,client);return fenceOwnCompanyRuntime(client,reserved.connection,{environment,now:now()});};await beforeExternal();
+     const scopedProvider=await provider.forConnection({capability:reserved.ownCompanyCapability,connection:reserved.connection,token:reserved.token,beforeExternal});
+     await beforeExternal();await send(scopedProvider);
+    });
+   }else{
+    let scopedProvider=provider;
+    if(reserved.connection?.metadata?.developmentPilot||reserved.connection?.metadata?.ownCompany||Object.hasOwn(reserved.connection?.metadata||{},'ownCompanyRuntime'))scopedProvider=await provider.forConnection({capability:reserved.ownCompanyCapability||reserved.developmentPilotCapability,connection:reserved.connection,token:reserved.token});
+    await reserve(context,reply);await send(scopedProvider);
+   }
    const completed=await within(client=>completeCustomerOutbound(client,{...reserved,projectId:context.projectId,state,messageId:result?.messageId||null,now:now()}));
    const {payload:privatePayload,...resultPublic}=completed;void privatePayload;return resultPublic;
   },
