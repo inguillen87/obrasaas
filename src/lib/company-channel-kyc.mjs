@@ -112,6 +112,9 @@ function checkedTime(r,context,now,event=r.event){
  checkedLease(event,context,now);
  if(!customerChannelActive(r.connection,now.getTime())||r.connection.metadata?.developmentPilot)fail('META_KYC_CHALLENGE_REVOKED');
  if(!Number.isFinite(Date.parse(r.challenge.expiresAt))||Date.parse(r.challenge.expiresAt)<=now.getTime()||r.challenge.claimedAt!==undefined&&(!Number.isFinite(Date.parse(r.challenge.claimedAt))||Date.parse(r.challenge.claimedAt)+META_KYC_CONVERSATION_TTL_MS<=now.getTime()))fail('META_KYC_CHALLENGE_EXPIRED');
+ // The reactive start button has its own shorter deadline. Retain it through
+ // every resolve, claim commit, pre-send and outbound replay final clock.
+ if(r.reactiveStartExpiresAt!==undefined&&(!Number.isFinite(Date.parse(r.reactiveStartExpiresAt))||Date.parse(r.reactiveStartExpiresAt)<=now.getTime()))fail('META_KYC_CHALLENGE_EXPIRED');
  const part=r.worker.metadata.participant;
  if(part.status==='INVITED'&&(!Number.isFinite(Date.parse(part.invitation.expiresAt))||Date.parse(part.invitation.expiresAt)<=now.getTime()))fail('META_KYC_CHALLENGE_REVOKED');
  assertCustomerReplyWindow(r.payload,now.getTime());

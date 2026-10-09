@@ -5,6 +5,7 @@ import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-crede
 import {metaKycChallengeDigest} from './meta-kyc-challenge.mjs';
 import {resolveCompanyKycAuthority,companyKycSecretContext,assertCompanyKycPrompt,assertCompanyKycImageSources,fenceCompanyKycAuthority,COMPANY_KYC_AUTHORIZATION_CODES} from './company-channel-kyc.mjs';
 import {META_KYC_CONVERSATION_TTL_MS} from './meta-kyc-conversation.mjs';
+import {resolveReactiveKycStart} from './meta-employee-intake.mjs';
 
 export const META_KYC_AUTHORIZATION_CODES=Object.freeze(['META_KYC_CHALLENGE_REJECTED','META_KYC_CHALLENGE_EXPIRED','META_KYC_CHALLENGE_REVOKED','META_KYC_MESSAGE_OUT_OF_ORDER','META_KYC_CONVERSATION_LIMIT','META_KYC_DEPOSIT_REQUIRED',...COMPANY_KYC_AUTHORIZATION_CODES]);
 const fail=code=>{throw new WorkspaceError(code,409);};
@@ -36,9 +37,11 @@ export async function resolveMetaKycAuthority(client,context,{deposit=false,outb
  if(!firstChannel)fail('META_KYC_CHALLENGE_REVOKED');
  const payload=decodeSignedCustomerEvent(initial,firstChannel,environment);
  if(payload.type!=='message')fail('META_KYC_NOT_APPLICABLE');
- const senderE164='+'+payload.value?.from,code=payload.value?.type==='text'?payload.value.text?.body?.trim():null,codeDigest=metaKycChallengeDigest(code);
+ const reactiveStart=await resolveReactiveKycStart(client,initial,firstChannel,payload,{environment});
+ const senderE164='+'+payload.value?.from,code=payload.value?.type==='text'?payload.value.text?.body?.trim():null,codeDigest=reactiveStart?.codeDigest||metaKycChallengeDigest(code);
  const corporate=await resolveCompanyKycAuthority(client,context,{initial,firstChannel,payload,codeDigest,environment});
- if(corporate)return finishMetaKycAuthority(client,context,corporate,{deposit,outbound,environment});
+ if(corporate){if(reactiveStart){if(corporate.challenge.id!==reactiveStart.challengeId||corporate.worker.id!==reactiveStart.workerId||corporate.project.id!==reactiveStart.targetProjectId)fail('META_KYC_CHALLENGE_REJECTED');corporate.reactiveStartExpiresAt=reactiveStart.expiresAt;}return finishMetaKycAuthority(client,context,corporate,{deposit,outbound,environment});}
+ if(reactiveStart)fail('META_KYC_CHALLENGE_REJECTED');
  const candidates=(await client.query(`SELECT w.id,w."projectId",w.phone,w.active,w.metadata FROM public."Worker" w JOIN public."Project" p ON p.id=w."projectId" WHERE w."projectId"=$1 AND p."organizationId"=$2 AND w.phone=$3 AND w.metadata->'participant'->'kycChatChallenge'->>'connectionId'=$4 AND (${codeDigest?"w.metadata->'participant'->'kycChatChallenge'->>'codeDigest'=$5":"w.metadata->'participant'->'kycChatChallenge'->>'status' IN ('CLAIMED','COMPLETED','CANCELLED')"})`,codeDigest?[context.projectId,firstChannel.organizationId,senderE164,context.channelId,codeDigest]:[context.projectId,firstChannel.organizationId,senderE164,context.channelId])).rows;
  if(candidates.length!==1)fail(codeDigest||code?.startsWith('IDENTIDAD')?'META_KYC_CHALLENGE_REJECTED':'META_KYC_NOT_APPLICABLE');
  const candidate=candidates[0],p0=candidate.metadata?.participant,c0=p0?.kycChatChallenge;

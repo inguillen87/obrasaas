@@ -12,6 +12,7 @@ import {createSiteRegister} from './site-register-store.mjs';
 import {participantReceiptId} from './participant-policy.mjs';
 import {META_CUSTOMER_PROTOCOL} from './meta-cloud-protocol.mjs';
 import {companyKycProjectionContract,companyKycProjectionId,companyKycProjectionDigest} from './company-channel-kyc.mjs';
+import {prelockReactiveOnboarding,planReactiveOnboarding,reactiveOnboardingAuthority,decodeReactiveStart,authorizeReactiveKycStart} from './participant-onboarding-reactive.mjs';
 
 export const EMPLOYEE_INTAKE_ACTIONS=Object.freeze(['CONFIGURE_EMPLOYEE_INTAKE','ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE']);
 export const EMPLOYEE_INTAKE_AUTHORIZATION_CODES=Object.freeze(['EMPLOYEE_INTAKE_DISABLED','EMPLOYEE_INTAKE_REVOKED','EMPLOYEE_INTAKE_EXPIRED','EMPLOYEE_INTAKE_INTEGRITY','EMPLOYEE_INTAKE_MESSAGE_OUT_OF_ORDER','EMPLOYEE_INTAKE_CONTEXT_REQUIRED']);
@@ -46,6 +47,9 @@ async function currentPolicy(client,connection,now,{enabled=true,expected=null,l
 
 async function isCompanyKycReplyIntent(client,connection,message,environment){
  const choice=message.interactive?.list_reply?.id||message.interactive?.button_reply?.id;
+ // This discriminates routing only. The KYC resolver validates the encrypted
+ // reactive source, current invitation/consent, SENT context and nonce.
+ if(typeof choice==='string'&&choice.startsWith('kyc-start:'))return true;
  const invalid=()=>{if(typeof choice==='string'&&choice.startsWith('kyc:'))fail('META_KYC_COMPANY_CONTEXT_REQUIRED');return false;};
  const replyId=message.context?.id;if(typeof replyId!=='string'||!replyId)return invalid();
  const rows=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-outbound-v1' AND payload->>'channelId'=$2 AND outcome->>'messageId'=$3`,[connection.projectId,connection.id,replyId])).rows;
@@ -93,6 +97,8 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  if(!signed.companyRouting||signed.companyRouting.mode!=='COMPANY'||signed.companyRouting.contract!==COMPANY_CHANNEL_SCHEMA_CONTRACT||proof&&durableDigest(proof)!==durableDigest(signed.companyRouting))fail('EMPLOYEE_INTAKE_REVOKED');
  const member0=raw.metadata?.employeeIntakePolicy;
  if(!member0)fail('EMPLOYEE_INTAKE_DISABLED');
+ const reactivePref=currentAnchorState(raw,anchors,environment);
+ const reactive=await prelockReactiveOnboarding(client,raw,reactivePref);
  // Lock issuer before project/channel/event, matching canonical principal order.
  const pre=(await client.query(`SELECT tm.id FROM public."TenantMembership" tm JOIN public."PlatformUser" u ON u.id=tm."userId" WHERE tm.id=$1 AND tm."organizationId"=$2 AND tm.status='ACTIVE' FOR SHARE OF u,tm`,[member0.issuerMembershipId,raw.organizationId])).rows;if(pre.length!==1)fail('EMPLOYEE_INTAKE_REVOKED');
  const project=(await client.query(`SELECT id,name,"organizationId" FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE' FOR UPDATE`,[raw.projectId,raw.organizationId])).rows[0];if(!project)fail('EMPLOYEE_INTAKE_REVOKED');
@@ -114,7 +120,7 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
   await writeState(client,anchor,connection,{...state,revision:state.revision+1,step:'CANCELLED',status:'CANCELLED',cancelReason:Date.parse(state.expiresAt)<=now.getTime()?'EXPIRED':'POLICY_CHANGED'},environment);anchor=event;state=null;
  }
  if(state&&(state.sender!==sender||state.senderKey!==key||state.policyDigest!==durableDigest(policy)))fail('EMPLOYEE_INTAKE_REVOKED');
- const r={kind:'LIMITED_PARTICIPANT_INTAKE',member:{...issuer,organizationId:connection.organizationId},project,connection,event,anchor,payload:finalPayload,now,state,sender,key,policy};
+ const r={kind:'LIMITED_PARTICIPANT_INTAKE',member:{...issuer,organizationId:connection.organizationId},project,connection,event,anchor,payload:finalPayload,now,state,sender,key,policy,reactive};
  const dispatch=event.payload.employeeIntakeDispatch;
  if(dispatch){if(dispatch.version!==1||dispatch.payloadDigest!==request.payloadDigest||dispatch.policyDigest!==durableDigest(policy)||dispatch.applicationId!==anchor.id)fail('EMPLOYEE_INTAKE_INTEGRITY');r.recorded=unseal(connection,'employee-intake-dispatch',event.id,dispatch.encryptedResult,environment);if(r.recorded.kind!=='EMPLOYEE_INTAKE'||r.recorded.identityStatus!=='LIMITED_PARTICIPANT_INTAKE'||digest(r.recorded.reply)!==dispatch.replyDigest)fail('EMPLOYEE_INTAKE_INTEGRITY');}
  // Meta timestamps have second precision. Equal seconds are legitimate; the
@@ -122,28 +128,59 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  if(state&&!r.recorded&&state.lastEventId!==event.id&&Number(message.timestamp)<state.lastMessageTimestamp)fail('EMPLOYEE_INTAKE_MESSAGE_OUT_OF_ORDER');
  if(state&&!['WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(state.status)&&Date.parse(state.expiresAt)<=now.getTime())fail('EMPLOYEE_INTAKE_EXPIRED');
  if(!r.recorded&&state?.messageCount>=40)fail('EMPLOYEE_INTAKE_EXPIRED');
- if(outbound&&(!r.recorded||state?.lastEventId!==event.id))fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');return r;
+ if(outbound&&(!r.recorded||state?.lastEventId!==event.id))fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');
+ if(r.recorded?.reactiveOnboarding){const p=r.recorded.reactiveOnboarding,a=await reactiveOnboardingAuthority(client,r,reactive,{environment,proof:p.kind==='KYC_START'?p:null});if(!a||p.authorityDigest!==a.authorityDigest||p.eventId!==event.id||p.applicationId!==anchor.id||durableDigest(state.reactiveOnboarding)!==durableDigest(p)||Date.parse(p.expiresAt)<=a.now.getTime())fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');}
+ return r;
+}
+function currentAnchorState(connection,anchors,environment){return anchors.length===1?readState(anchors[0],connection,environment):null;}
+
+export async function resolveReactiveKycStart(client,initial,connection,payload,{environment=process.env}={}){
+ const message=payload.value,choice=message?.interactive?.list_reply?.id||message?.interactive?.button_reply?.id;
+ if(typeof choice!=='string'||!choice.startsWith('kyc-start:'))return null;
+ if(!/^kyc-start:[a-f0-9]{40}$/.test(choice)||!message.context?.id)fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');
+ const rows=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-outbound-v1' AND payload->>'channelId'=$2 AND outcome->>'messageId'=$3`,[connection.projectId,connection.id,message.context.id])).rows;
+ if(rows.length!==1)fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');
+ const request=unseal(connection,'outbound',rows[0].id,rows[0].payload?.encryptedPayload,environment);
+ if(!eventId(request?.eventId))fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');
+ const sources=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-v1'`,[request.eventId,connection.projectId])).rows;
+ if(sources.length!==1||sources[0].payload.channelId!==connection.id)fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');
+ const source=sources[0],signed=decodeSignedCustomerEvent(source,connection,environment);
+ if(signed.type!=='message'||signed.value.from!==message.from)fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');
+ const proof=decodeReactiveStart(rows[0],source,connection,message,environment);
+ const anchors=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-v1'`,[proof.applicationId,connection.projectId])).rows;
+ if(anchors.length!==1)fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');
+ const discovered=readState(anchors[0],connection,environment),pref=await prelockReactiveOnboarding(client,connection,discovered);
+ const current=await companyConnectionForProject(client,connection.organizationId,proof.intent.targetProjectId,true),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
+ if(!current||current.id!==connection.id||current.projectId!==connection.projectId||current.metadata?.developmentPilot)fail('EMPLOYEE_INTAKE_REVOKED');
+ const locked=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 FOR UPDATE`,[proof.applicationId,connection.projectId])).rows;
+ if(locked.length!==1)fail('EMPLOYEE_INTAKE_INTEGRITY');
+ const state=readState(locked[0],current,environment),policy=await currentPolicy(client,current,now);
+ if(state.sender!=='+'+message.from||state.policyDigest!==durableDigest(policy.policy)||source.payload.employeeIntakeDispatch.policyDigest!==durableDigest(policy.policy))fail('EMPLOYEE_INTAKE_REVOKED');
+ assertCustomerReplyWindow(payload,now.getTime());
+ return authorizeReactiveKycStart(client,{state,anchor:locked[0],project:{id:current.projectId,organizationId:current.organizationId},connection:current,sender:'+'+message.from,event:initial,payload,now},pref,proof,{environment});
 }
 export function createEmployeeIntakeBridge({connect,environment=process.env,resolveAuthority=resolveEmployeeIntakeAuthority}){
  return {async execute(request){return customerJobTransaction(connect,async client=>{
   const r=await resolveAuthority(client,request,{environment});if(!r)return null;if(r.recorded)return r.recorded;
   let promptConfirmed=false;
   if(r.state){const previous=(await client.query(`SELECT outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1'`,[customerOutboundId(r.state.lastEventId),r.project.id])).rows[0];promptConfirmed=['SENT','STATUS_OBSERVED'].includes(previous?.outcome?.state)&&!['failed','deleted'].includes(previous?.outcome?.providerStatus)&&typeof previous?.outcome?.messageId==='string'&&r.payload.value.context?.id===previous.outcome.messageId;}
-  const plan=r.state?planEmployeeIntakeConversation({message:r.payload.value,state:r.state,eventId:r.event.id,promptConfirmed}):beginEmployeeIntakeConversation(r.event.id);
+  const reactivePlan=await planReactiveOnboarding(client,r,r.reactive,{environment,promptConfirmed});
+  const plan=reactivePlan||(r.state?planEmployeeIntakeConversation({message:r.payload.value,state:r.state,eventId:r.event.id,promptConfirmed}):beginEmployeeIntakeConversation(r.event.id));
   const state={...plan.state,applicationId:r.anchor.id,organizationId:r.connection.organizationId,connectionId:r.connection.id,sender:r.sender,senderKey:r.key,policyDigest:durableDigest(r.policy),revision:(r.state?.revision||0)+1,status:plan.state.step,lastEventId:r.event.id,lastMessageTimestamp:Number(r.payload.value.timestamp),messageCount:(r.state?.messageCount||0)+1,expiresAt:r.state?.expiresAt||new Date(r.now.getTime()+META_KYC_CONVERSATION_TTL_MS).toISOString(),createdAt:r.state?.createdAt||r.now.toISOString(),...(plan.state.consent===true?{submittedAt:r.state?.submittedAt||r.now.toISOString()}: {})};
   await writeState(client,r.anchor,r.connection,state,environment);
-  const result={kind:'EMPLOYEE_INTAKE',identityStatus:'LIMITED_PARTICIPANT_INTAKE',reviewState:'OBSERVED',businessApplied:false,replySent:false,reply:plan.reply};
+  const result={kind:'EMPLOYEE_INTAKE',identityStatus:'LIMITED_PARTICIPANT_INTAKE',reviewState:'OBSERVED',businessApplied:false,replySent:false,reply:plan.reply,...(plan.reactiveOnboarding?{reactiveOnboarding:plan.reactiveOnboarding}:{})};
   const dispatch={version:1,applicationId:r.anchor.id,payloadDigest:r.event.payload.payloadDigest,policyDigest:durableDigest(r.policy),replyDigest:digest(result.reply),encryptedResult:seal(r.connection,'employee-intake-dispatch',r.event.id,result,environment)};
   const updated=await client.query(`UPDATE public."WebhookEvent" SET payload=jsonb_set(payload,'{employeeIntakeDispatch}',$2::jsonb),"updatedAt"=clock_timestamp() WHERE id=$1 AND "leaseToken"=$3 AND status='PENDING' AND "leaseExpiresAt">clock_timestamp()`,[r.event.id,JSON.stringify(dispatch),request.leaseToken]);if(updated.rowCount!==1)fail('META_CUSTOMER_INBOX_LEASE_CHANGED');
   // The locked policy is unchanged, but its grant/reply window and the source
   // lease may expire during SQL. Fence the completed draft and dispatch in this
   // same transaction with a fresh DB clock before the caller may commit.
+  if(plan.reactiveOnboarding){r.state=state;const a=await reactiveOnboardingAuthority(client,r,r.reactive,{environment,proof:plan.reactiveOnboarding.kind==='KYC_START'?plan.reactiveOnboarding:null});if(!a||a.authorityDigest!==plan.reactiveOnboarding.authorityDigest||Date.parse(plan.reactiveOnboarding.expiresAt)<=a.now.getTime())fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');}
   const policyNow=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
   await currentPolicy(client,r.connection,policyNow,{expected:durableDigest(r.policy)});
   const fenced=(await client.query(`SELECT id,clock_timestamp() AS now FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND "leaseToken"=$3 AND status='PENDING' AND "leaseExpiresAt">clock_timestamp()`,[r.event.id,r.project.id,request.leaseToken])).rows;if(fenced.length!==1||!(fenced[0].now instanceof Date)||!Number.isFinite(fenced[0].now.getTime()))fail('META_CUSTOMER_INBOX_LEASE_CHANGED');
   // No await follows this last DB clock: expiry during policy reads must also
   // roll back the private draft and dispatch before the transaction can commit.
-  if(!customerChannelActive(r.connection,fenced[0].now.getTime()))fail('EMPLOYEE_INTAKE_REVOKED');assertCustomerReplyWindow(r.payload,fenced[0].now.getTime());return result;
+  if(!customerChannelActive(r.connection,fenced[0].now.getTime()))fail('EMPLOYEE_INTAKE_REVOKED');if(plan.reactiveOnboarding&&Date.parse(plan.reactiveOnboarding.expiresAt)<=fenced[0].now.getTime())fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');assertCustomerReplyWindow(r.payload,fenced[0].now.getTime());return result;
  });}};
 }
 
