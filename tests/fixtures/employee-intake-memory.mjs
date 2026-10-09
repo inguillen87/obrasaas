@@ -22,6 +22,14 @@ export function employeeIntakeFixture(){
  const jsonb=value=>Array.isArray(value)?value.map(jsonb):value&&typeof value==='object'&&!(value instanceof Date)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,jsonb(value[key])])):value;
  const result=rows=>({rows:structuredClone(rows.map(row=>({...row,...(row.metadata?{metadata:jsonb(row.metadata)}:{}),...(row.payload?{payload:jsonb(row.payload)}:{})}))),rowCount:rows.length});
  const query=async(sql,args=[])=>{
+  if(sql==='SELECT pg_current_xact_id()::text AS "intakeTransactionId"')return result([{intakeTransactionId:controls.intakeTransactionId||'1'}]);
+  if(sql.includes('AS "intakeNow"')){
+   await controls.beforeCompactIntakeFence?.();
+   const e=events.get(args[0]),anchor=events.get(args[3]),receipt=audits.get(args[7]);
+   if(!e||!anchor||!receipt||!controls.active||!controls.assignment||controls.mode!=='COMPANY'||!controls.issuerActive)return result([]);
+   await controls.beforeIssuerTrail?.();
+   return result([{...e,intakeNow:new Date(now),intakeTransactionId:controls.intakeTransactionId||'1',intakeAnchorPayload:anchor.payload,intakeConnection:connection,intakeOwnerConnectionId:connection.id,intakeAnchorProjectId:project.id,intakeMode:controls.mode,intakeOwnerRevision:controls.ownerRevision,intakeAssignmentRevision:1,intakeIssuerRole:controls.issuerRole,intakeIssuerRevision:member.revision,intakePolicyReceipt:receipt.metadata,intakeIssuerTrail:[...audits.values()].filter(a=>a.organizationId===project.organizationId&&a.entityType==='TenantMembership'&&a.entityId===member.membershipId&&a.action==='participant.operation.recorded').sort((a,b)=>a.id.localeCompare(b.id)).map(({id,metadata})=>({id,metadata}))}]);
+  }
   if(sql.startsWith('SET LOCAL')||sql.startsWith('SELECT pg_advisory'))return result([]);
   if(sql==='SELECT clock_timestamp() AS now')return result([{now:new Date(now)}]);
   if(sql.includes("to_regclass('public.\"WhatsAppCompanySchema\"')"))return result([{present:true}]);
