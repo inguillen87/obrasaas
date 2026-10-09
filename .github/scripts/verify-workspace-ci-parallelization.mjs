@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='d25f6f63b88400450ccecfae1e4d9410777010d0cd9018e570e79ee7533a8df0';
+export const EXPECTED_CONTRACT_SHA256='84e4b106909fb5b274927e5d9ca758ebcf77e59d7dadfb2a7b96e7ad3effb740';
 const POSTGRES_SERVICE_IMAGE='public.ecr.aws/docker/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -64,6 +64,19 @@ const ownCompanyDependenciesFor=kind=>({
  UI_PORTFOLIO:['src/app/(identity)/cuenta/own-company-number-view.mjs'],
  UI_IDENTITY_ONLY:['src/app/(identity)/cuenta/own-company-number-panel.js','src/app/(identity)/cuenta/own-company-number-view.mjs']
  }[kind]||[]);
+const ownTemplateDependenciesFor=kind=>({
+ UI_INTAKE:['src/app/(identity)/cuenta/own-company-templates-view.mjs'],
+ UI_JOINT:['src/app/(identity)/cuenta/own-company-templates-view.mjs'],
+ UI_CAUSAL:['src/app/(identity)/cuenta/own-company-templates-view.mjs'],
+ UI_PREPARATION:['src/app/(identity)/cuenta/own-company-templates-view.mjs'],
+ UI_PORTFOLIO:['src/app/(identity)/cuenta/own-company-templates-view.mjs'],
+ UNIT:['src/app/(identity)/cuenta/own-company-templates-view.mjs'],
+ UI_BANK:['src/app/(identity)/cuenta/own-company-templates-view.mjs'],
+ PG_COMPANY_KYC:['src/lib/meta-own-company-templates.mjs'],
+ UI_IDENTITY_ONLY:['src/app/(identity)/cuenta/own-company-templates-panel.js','src/app/(identity)/cuenta/own-company-templates-view.mjs']
+ }[kind]||[]);
+const currentOwnDependenciesFor=kind=>[...ownCompanyDependenciesFor(kind),...ownTemplateDependenciesFor(kind)];
+const OWN_TEMPLATE_SOURCE_COUNTS={UNIT:104,UI_BANK:100,PG_COMPANY_KYC:170,UI_IDENTITY_ONLY:102,UI_INTAKE:24,UI_JOINT:100,UI_CAUSAL:100,UI_PREPARATION:16,UI_PORTFOLIO:13};
 const isIdentity=spec=>spec.kind==='UI_IDENTITY_ONLY';
 const isCanonicalField=spec=>['PG_FIELD','PG_OVERTIME'].includes(spec.kind);
 const FIELD_PG_BASELINE_PRODUCER={producer:'scripts/verify-field-operations-postgres.mjs',path:'.vercel/field-operations-evidence/postgres.json',retained:true,blockId:20,lane:'field',baselineSourceLine:216,baselineProducerGitBlobSha256:'b91778574d63bc9dffb83af1b5aeb7a2666e7fb23e0d923ea79b435de7b265d8'};
@@ -410,7 +423,22 @@ export function currentProducerSourceFiles(spec,root){
  const files=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?files(relative+'/'+entry.name):[relative+'/'+entry.name]);
  return [...files('src/lib'),'scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs'].sort();
 }
-function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinuityChecks=[],currentReactiveChecks=[]){
+function ownTemplateClosureSelftest(spec,proof,root,validate){
+ const dependencies=ownTemplateDependenciesFor(spec.kind);if(!dependencies.length)return [];
+ const checks=[],prefix=spec.id+'-own-template-';
+ const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure shadow fixture, no Git/PG/UI/provider execution'});};
+ const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure shadow fixture'});};
+ good('current-exact-count-and-real-producer-closure',()=>{assert.equal(spec.sourceFiles.length,OWN_TEMPLATE_SOURCE_COUNTS[spec.kind]);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
+ for(const file of dependencies){
+  good('current-source-pinned-'+file,()=>assert.ok(spec.sourceFiles.includes(file)));
+  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
+  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
+  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-own-template-source.mjs';assert.equal(p.sourceManifest.length,OWN_TEMPLATE_SOURCE_COUNTS[spec.kind]);});
+ }
+ mutate('previous-manifest-cannot-certify-current-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!dependencies.includes(ref.path));assert.equal(p.sourceManifest.length,OWN_TEMPLATE_SOURCE_COUNTS[spec.kind]-dependencies.length);});
+ return checks;
+}
+function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinuityChecks=[],currentReactiveChecks=[],currentTemplateChecks=[]){
  const checks=[],discoveryChecks=[],videoChecks=[],preparationChecks=[],preparationProofChecks=[],identityClosureChecks=[],billingClosureChecks=[],expectedHead=contract.extension.baseHead;
  const discoveryBackend=['src/lib/participant-account-discovery.mjs'],discoveryUi=['src/app/(identity)/cuenta/participant-account-discovery-format.mjs','src/app/(identity)/cuenta/participant-account-discovery.js'];
  const discoveryDependenciesFor=kind=>kind==='UI_INTAKE'?discoveryUi:['UI_BANK','UI_JOINT','UI_CAUSAL'].includes(kind)?[...discoveryBackend,...discoveryUi]:discoveryBackend;
@@ -435,6 +463,7 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
    if(spec.kind==='UI_PREPARATION')Object.assign(proof,{validated:true,synthetic:true,realProviderCalls:false,sourceState:'EXACT_CI_SOURCE',fixtureRemoved:true,totalCheckCount:24,checks:proof.widths.flatMap(width=>PREPARATION_MODES.map(mode=>({width,mode,posts:mode==='cancel'?2:1,recoveryReads:0,currentSessionToken:true,placeholdersOnly:true,tasksUnchanged:true,noPayloadPersistence:true,horizontalOverflow:false})))});
    const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
   good(spec.id+'-complete-proof',()=>validate(proof));
+  if(ownTemplateDependenciesFor(spec.kind).length)currentTemplateChecks.push(()=>ownTemplateClosureSelftest(spec,proof,root,validate));
   if(spec.kind!=='UNIT')good(spec.id+'-real-current-producer-source-manifest-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
   good(spec.id+'-reordered-source-manifest',()=>{const reordered=clone(proof);reordered.sourceManifest.reverse();assert.equal(validate(reordered).sourceManifestSha256,validate(proof).sourceManifestSha256);});
   bad(spec.id+'-malformed-json','PROOF_JSON',()=>validateExtensionProof(spec,Buffer.from('{'),{expectedHead,readSource}));bad(spec.id+'-invalid-utf8','PROOF_ENCODING',()=>validateExtensionProof(spec,Buffer.from([255]),{expectedHead,readSource}));
@@ -485,7 +514,7 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
   if(['bank-intake-units','bank-ui','joint-ui','joint-causal','company-kyc-postgres'].includes(spec.id)){
    const allOnboardingDependencies=['src/lib/company-entitlement.mjs','src/lib/meta-customer-templates.mjs','src/lib/participant-onboarding-authority.mjs','src/lib/participant-onboarding-delivery.mjs','src/lib/participant-onboarding-intent.mjs','src/lib/participant-onboarding-policy.mjs','src/lib/whatsapp/template-review-policy.js'];
    const onboardingDependencies=spec.kind==='PG_COMPANY_KYC'?allOnboardingDependencies.filter(file=>!['src/lib/meta-customer-templates.mjs','src/lib/whatsapp/template-review-policy.js'].includes(file)):allOnboardingDependencies;
-    const voiceDependencies=['src/lib/voice-progress-draft.mjs'],videoDependencies=videoDependenciesFor(spec.kind),preparationDependencies=preparationDependenciesFor(spec.kind),planImportDependencies=planImportDependenciesFor(spec.kind),currentDependencies=[...onboardingDependencies,...voiceDependencies,...videoDependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind),...companyBillingDependenciesFor(spec.kind),...intakeContinuityDependenciesFor(spec.kind),...reactiveIdentityDependenciesFor(spec.kind),...ownCompanyDependenciesFor(spec.kind)];
+    const voiceDependencies=['src/lib/voice-progress-draft.mjs'],videoDependencies=videoDependenciesFor(spec.kind),preparationDependencies=preparationDependenciesFor(spec.kind),planImportDependencies=planImportDependenciesFor(spec.kind),currentDependencies=[...onboardingDependencies,...voiceDependencies,...videoDependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind),...companyBillingDependenciesFor(spec.kind),...intakeContinuityDependenciesFor(spec.kind),...reactiveIdentityDependenciesFor(spec.kind),...currentOwnDependenciesFor(spec.kind)];
    const previousCount=spec.kind==='UNIT'?86:spec.kind==='PG_COMPANY_KYC'?149:79;
    assert.equal(spec.sourceFiles.length,previousCount+currentDependencies.length+discoveryDependenciesFor(spec.kind).length,'Exact canonical transitive source count: '+spec.id);
    if(spec.kind==='UNIT')good('bank-intake-units-real-current-transitive-manifest-exact',()=>equal(bankUnitSourceFiles(root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
@@ -500,37 +529,37 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
     mutate('changed-transitive-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
    }
    const beforeVoiceCount=previousCount+onboardingDependencies.length;
-    mutate('old-'+beforeVoiceCount+'-source-manifest-without-voice','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...voiceDependencies,...discoveryDependenciesFor(spec.kind),...videoDependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind),...companyBillingDependenciesFor(spec.kind),...intakeContinuityDependenciesFor(spec.kind),...reactiveIdentityDependenciesFor(spec.kind),...ownCompanyDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,beforeVoiceCount);});
+    mutate('old-'+beforeVoiceCount+'-source-manifest-without-voice','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...voiceDependencies,...discoveryDependenciesFor(spec.kind),...videoDependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind),...companyBillingDependenciesFor(spec.kind),...intakeContinuityDependenciesFor(spec.kind),...reactiveIdentityDependenciesFor(spec.kind),...currentOwnDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,beforeVoiceCount);});
    mutate('old-'+previousCount+'-source-manifest','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...currentDependencies,...discoveryDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
   }
   // Append discovery controls after the complete historical check sequence.
    if(!['PG_PREPARATION','UI_PREPARATION'].includes(spec.kind))discoveryChecks.push(()=>{
     const dependencies=discoveryDependenciesFor(spec.kind),previousCount=beforeDiscoveryCounts[spec.kind],videoDependencies=videoDependenciesFor(spec.kind),preparationDependencies=preparationDependenciesFor(spec.kind),planImportDependencies=planImportDependenciesFor(spec.kind);
-    assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+videoDependencies.length+preparationDependencies.length+planImportDependencies.length+identityDependenciesFor(spec.kind).length+companyBillingDependenciesFor(spec.kind).length+intakeContinuityDependenciesFor(spec.kind).length+reactiveIdentityDependenciesFor(spec.kind).length+ownCompanyDependenciesFor(spec.kind).length,'Exact current discovery source count: '+spec.id);
+    assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+videoDependencies.length+preparationDependencies.length+planImportDependencies.length+identityDependenciesFor(spec.kind).length+companyBillingDependenciesFor(spec.kind).length+intakeContinuityDependenciesFor(spec.kind).length+reactiveIdentityDependenciesFor(spec.kind).length+currentOwnDependenciesFor(spec.kind).length,'Exact current discovery source count: '+spec.id);
    for(const file of dependencies){
     assert.ok(spec.sourceFiles.includes(file),'Canonical account discovery source must be pinned: '+file);
     mutate('missing-discovery-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
     mutate('changed-discovery-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
    }
-    mutate('old-'+previousCount+'-source-manifest-without-discovery','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...videoDependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind),...companyBillingDependenciesFor(spec.kind),...intakeContinuityDependenciesFor(spec.kind),...reactiveIdentityDependenciesFor(spec.kind),...ownCompanyDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
+    mutate('old-'+previousCount+'-source-manifest-without-discovery','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...videoDependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind),...companyBillingDependenciesFor(spec.kind),...intakeContinuityDependenciesFor(spec.kind),...reactiveIdentityDependenciesFor(spec.kind),...currentOwnDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
   });
   // Append only the extractor's causal controls after all 553 historical checks.
   if(videoDependenciesFor(spec.kind).length)videoChecks.push(()=>{
    const dependencies=videoDependenciesFor(spec.kind),previousCount=beforeVideoCounts[spec.kind],preparationDependencies=preparationDependenciesFor(spec.kind),planImportDependencies=planImportDependenciesFor(spec.kind);
-   assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+preparationDependencies.length+planImportDependencies.length+identityDependenciesFor(spec.kind).length+companyBillingDependenciesFor(spec.kind).length+intakeContinuityDependenciesFor(spec.kind).length+reactiveIdentityDependenciesFor(spec.kind).length+ownCompanyDependenciesFor(spec.kind).length,'Exact current video source count: '+spec.id);
+   assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+preparationDependencies.length+planImportDependencies.length+identityDependenciesFor(spec.kind).length+companyBillingDependenciesFor(spec.kind).length+intakeContinuityDependenciesFor(spec.kind).length+reactiveIdentityDependenciesFor(spec.kind).length+currentOwnDependenciesFor(spec.kind).length,'Exact current video source count: '+spec.id);
    for(const file of dependencies){
     assert.ok(spec.sourceFiles.includes(file),'Canonical contextual video source must be pinned: '+file);
     mutate('missing-video-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
     mutate('changed-video-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
    }
-   mutate('old-'+previousCount+'-source-manifest-without-video','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind),...companyBillingDependenciesFor(spec.kind),...intakeContinuityDependenciesFor(spec.kind),...reactiveIdentityDependenciesFor(spec.kind),...ownCompanyDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
+   mutate('old-'+previousCount+'-source-manifest-without-video','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...preparationDependencies,...planImportDependencies,...identityDependenciesFor(spec.kind),...companyBillingDependenciesFor(spec.kind),...intakeContinuityDependenciesFor(spec.kind),...reactiveIdentityDependenciesFor(spec.kind),...currentOwnDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
   });
    if(preparationDependenciesFor(spec.kind).length)preparationChecks.push(()=>{for(const file of preparationDependenciesFor(spec.kind)){assert.ok(spec.sourceFiles.includes(file),'Current KYC/preparation source must be pinned: '+file);mutate('missing-kyc-preparation-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});mutate('changed-kyc-preparation-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});}});
    if(identityDependenciesFor(spec.kind).length)identityClosureChecks.push(()=>{for(const file of identityDependenciesFor(spec.kind)){assert.ok(spec.sourceFiles.includes(file),'Current participant admission source must be pinned: '+file);mutate('missing-admission-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});mutate('changed-admission-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});}});
    if(companyBillingDependenciesFor(spec.kind).length)billingClosureChecks.push(()=>{
     const dependencies=companyBillingDependenciesFor(spec.kind);
     for(const file of dependencies){assert.ok(spec.sourceFiles.includes(file),'Current company billing source must be pinned: '+file);mutate('missing-company-billing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});mutate('changed-company-billing-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});}
-    mutate('old-163-source-manifest-without-company-billing','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...reactiveIdentityDependenciesFor(spec.kind),...ownCompanyDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,163);});
+    mutate('old-163-source-manifest-without-company-billing','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...reactiveIdentityDependenciesFor(spec.kind),...currentOwnDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,163);});
    });
    if(spec.kind==='PG_PREPARATION')identityClosureChecks.push(()=>{
     good('project-preparation-existing-fifteen-SQL-checks-exact',()=>equal([...readFileSync(path.join(root,spec.producer),'utf8').matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),spec.checkNames,'PROOF_CHECK_NAMES'));
@@ -548,11 +577,11 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
   if(reactiveIdentityDependenciesFor(spec.kind).length)currentReactiveChecks.push(()=>{
    const start=checks.length,previous=REACTIVE_SOURCE_COUNTS[spec.kind]-1;
    good(spec.id+'-reactive-source-name-required',()=>assert.ok(spec.sourceFiles.includes(REACTIVE_IDENTITY_SOURCE)));
-   good(spec.id+'-reactive-source-count-and-closure-exact',()=>{assert.equal(spec.sourceFiles.length,REACTIVE_SOURCE_COUNTS[spec.kind]+ownCompanyDependenciesFor(spec.kind).length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
+   good(spec.id+'-reactive-source-count-and-closure-exact',()=>{assert.equal(spec.sourceFiles.length,REACTIVE_SOURCE_COUNTS[spec.kind]+currentOwnDependenciesFor(spec.kind).length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
    mutate('missing-reactive-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==REACTIVE_IDENTITY_SOURCE);});
    mutate('changed-reactive-source-hash','PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===REACTIVE_IDENTITY_SOURCE).sha256='f'.repeat(64);});
-   mutate('historical-'+previous+'-source-manifest-without-reactive','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![REACTIVE_IDENTITY_SOURCE,...ownCompanyDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previous);});
-   mutate('same-count-foreign-reactive-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===REACTIVE_IDENTITY_SOURCE).path='src/lib/foreign-reactive.mjs';assert.equal(p.sourceManifest.length,REACTIVE_SOURCE_COUNTS[spec.kind]+ownCompanyDependenciesFor(spec.kind).length);});
+   mutate('historical-'+previous+'-source-manifest-without-reactive','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![REACTIVE_IDENTITY_SOURCE,...currentOwnDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previous);});
+   mutate('same-count-foreign-reactive-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===REACTIVE_IDENTITY_SOURCE).path='src/lib/foreign-reactive.mjs';assert.equal(p.sourceManifest.length,REACTIVE_SOURCE_COUNTS[spec.kind]+currentOwnDependenciesFor(spec.kind).length);});
    return checks.splice(start);
   });
   // Keep all historical controls above intact; append the new continuation
@@ -564,8 +593,8 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
     mutate('missing-intake-continuity-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
     mutate('changed-intake-continuity-hash','PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
     const previousCount=spec.kind==='UI_INTAKE'?21:93;
-    good(spec.id+'-current-intake-continuity-source-count-exact',()=>assert.equal(spec.sourceFiles.length,previousCount+1+reactiveIdentityDependenciesFor(spec.kind).length+ownCompanyDependenciesFor(spec.kind).length));
-    mutate('old-'+previousCount+'-source-manifest-without-intake-continuity','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![file,...reactiveIdentityDependenciesFor(spec.kind),...ownCompanyDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
+    good(spec.id+'-current-intake-continuity-source-count-exact',()=>assert.equal(spec.sourceFiles.length,previousCount+1+reactiveIdentityDependenciesFor(spec.kind).length+currentOwnDependenciesFor(spec.kind).length));
+    mutate('old-'+previousCount+'-source-manifest-without-intake-continuity','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![file,...reactiveIdentityDependenciesFor(spec.kind),...currentOwnDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
    }
    if(Object.hasOwn(INTAKE_CONTINUITY_BASELINE_PRODUCERS,spec.kind)){
     const staleSpec={...spec,producerSha256:INTAKE_CONTINUITY_BASELINE_PRODUCERS[spec.kind].producerSha256};
@@ -1060,7 +1089,7 @@ export function selftest(workflow,contract,root=process.cwd()){
   const freshFixture=mkdtempSync(path.join(parent,'ci-bank-intake-selftest-fixture-'));
   try{for(const spec of contract.extension.proofs.filter(spec=>!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
   finally{const resolved=path.resolve(freshFixture);assert.ok(path.dirname(resolved)===path.resolve(parent)&&path.basename(resolved).startsWith('ci-bank-intake-selftest-fixture-'));rmSync(resolved,{recursive:true,force:true});}
-  const currentCompanyChecks=[],currentContinuityChecks=[],currentReactiveChecks=[];checks.push(...extensionSelftest(contract,root,currentCompanyChecks,currentContinuityChecks,currentReactiveChecks));checks.push(...portfolioSelftest(workflow,contract,root));for(const run of currentCompanyChecks)checks.push(...run());checks.push(...identitySelftest(workflow,contract,root,currentContinuityChecks));checks.push(...canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks));for(const run of currentContinuityChecks)checks.push(...run());for(const run of currentReactiveChecks)checks.push(...run());
+ const currentCompanyChecks=[],currentContinuityChecks=[],currentReactiveChecks=[],currentTemplateChecks=[];checks.push(...extensionSelftest(contract,root,currentCompanyChecks,currentContinuityChecks,currentReactiveChecks,currentTemplateChecks));checks.push(...portfolioSelftest(workflow,contract,root));for(const run of currentCompanyChecks)checks.push(...run());checks.push(...identitySelftest(workflow,contract,root,currentContinuityChecks,currentTemplateChecks));checks.push(...canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks));for(const run of currentContinuityChecks)checks.push(...run());for(const run of currentReactiveChecks)checks.push(...run());for(const run of currentTemplateChecks)checks.push(...run());
   for(const [name,image] of [
    ['foreign-registry',POSTGRES_SERVICE_IMAGE.replace('public.ecr.aws','foreign.invalid')],
    ['changed-digest',POSTGRES_SERVICE_IMAGE.replace(/sha256:[a-f0-9]{64}$/,'sha256:'+'0'.repeat(64))],
@@ -1130,7 +1159,7 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[])
  }
  return checks;
 }
-function identitySelftest(workflow,contract,root,currentContinuityChecks=[]){
+function identitySelftest(workflow,contract,root,currentContinuityChecks=[],currentTemplateChecks=[]){
  const checks=[],expectedHead=contract.extension.baseHead,spec=contract.extension.proofs.find(isIdentity);
  const good=(name,run)=>{run();checks.push({name:'identity-only-ui-'+name,result:'PASS',boundary:'pure identity shadow fixture; no Git/PG/UI/provider execution'});};
  const bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name:'identity-only-ui-'+name,result:'PASS',expectedDenial:code,boundary:'pure identity shadow fixture'});};
@@ -1138,6 +1167,7 @@ function identitySelftest(workflow,contract,root,currentContinuityChecks=[]){
  const readSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
  const proof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',sourceRevision:expectedHead,sourceState:'EXACT_CI_SOURCE',trackedClean:true,dirtyTrackedPaths:[],widths:[320,390,768,1280],totalCheckCount:IDENTITY_ONLY_CHECK_COUNT,checks:clone(IDENTITY_ONLY_CHECKS),sourceManifest:spec.sourceFiles.map(file=>({path:file,sha256:hash(readSource(file))})),harnessSha256:spec.producerSha256,pageErrors:[],requestErrors:[],screenshots:identityScreenshotNames.map(name=>IDENTITY_ARTIFACTS[0]+name),actualPageReloadTested:true,nativeIndexedDbReceiptReferencesTested:true,automaticRecoveryPostCount:0,postgresExecuted:false,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,physicalWhatsAppVerified:false,fixtureRemoved:true,browserClosed:true,serverStopped:true};
  const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource});
+ currentTemplateChecks.push(()=>ownTemplateClosureSelftest(spec,proof,root,validate));
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(name,code,()=>validate(value));};
  good('complete-103-exact-source-proof',()=>assert.equal(validate(proof).checks,IDENTITY_ONLY_CHECK_COUNT));
  good('current-source-closure-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
@@ -1199,10 +1229,10 @@ function identitySelftest(workflow,contract,root,currentContinuityChecks=[]){
  currentContinuityChecks.push(()=>{
   const start=checks.length;
   good('current-intake-continuity-source-pinned',()=>assert.ok(spec.sourceFiles.includes(INTAKE_CONTINUITY_SOURCE)));
-  good('current-intake-continuity-source-count-exact',()=>assert.equal(spec.sourceFiles.length,98+ownCompanyDependenciesFor(spec.kind).length));
+  good('current-intake-continuity-source-count-exact',()=>assert.equal(spec.sourceFiles.length,98+currentOwnDependenciesFor(spec.kind).length));
   mutate('missing-intake-continuity-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==INTAKE_CONTINUITY_SOURCE);});
   mutate('changed-intake-continuity-hash','PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===INTAKE_CONTINUITY_SOURCE).sha256='f'.repeat(64);});
-  mutate('old-97-source-manifest-without-intake-continuity','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![INTAKE_CONTINUITY_SOURCE,...ownCompanyDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,97);});
+  mutate('old-97-source-manifest-without-intake-continuity','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![INTAKE_CONTINUITY_SOURCE,...currentOwnDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,97);});
   return checks.splice(start);
  });
  return checks;

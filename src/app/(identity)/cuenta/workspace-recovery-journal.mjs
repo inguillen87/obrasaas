@@ -3,6 +3,7 @@ import {PRIVATE_BANK_ACTIONS,validatePrivateBankOutcome} from './private-bank-ac
 import {purchaseOutcome} from './site-purchase-view.mjs';
 import {companyChannelOutcome,COMPANY_CHANNEL_ACTIONS} from './company-channel-view.mjs';
 import {ownCompanyNumberOutcome,OWN_COMPANY_ACTIONS} from './own-company-number-view.mjs';
+import {ownTemplatesOutcome,OWN_TEMPLATE_ACTIONS} from './own-company-templates-view.mjs';
 
 // Receipt references only. Never persist commands, tokens, files, location or messages.
 export const RECOVERY_EVENT = 'obrasaas:pending-receipts';
@@ -10,7 +11,7 @@ export const WORKSPACE_RECOVERY_PREFIX = 'obrasaas.pending-receipt.v1.';
 const prefix = WORKSPACE_RECOVERY_PREFIX;
 const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 const id = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value);
-const channelReferenceValid=(action,connectionId)=>OWN_COMPANY_ACTIONS.includes(action)?(id(connectionId)||action==='CONNECT_OWN_NUMBER'&&connectionId===null):COMPANY_CHANNEL_ACTIONS.includes(action)&&id(connectionId);
+const channelReferenceValid=(action,connectionId)=>OWN_COMPANY_ACTIONS.includes(action)?(id(connectionId)||action==='CONNECT_OWN_NUMBER'&&connectionId===null):[...COMPANY_CHANNEL_ACTIONS,...OWN_TEMPLATE_ACTIONS].includes(action)&&id(connectionId);
 const PROGRESS_TEMPLATE_SEND_KEY='progress_review_notification';
 export const FIELD_OVERTIME_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_OVERTIME','PROPOSE_OVERTIME','DECIDE_OVERTIME']);
 export const PARTICIPANT_INTAKE_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_EMPLOYEE_INTAKE','ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE']);
@@ -75,7 +76,7 @@ async function reference(url, options, now) {
   if(resource==='project-preparation'&&!['SAVE_PREPARATION','CANCEL_PENDING_PREPARATION'].includes(body.action))throw unavailable();
   if(resource==='company-onboarding'&&(body.action!=='declare_company_phone'||!id(body.expectedClerkOrganizationId)))throw unavailable();
   if(resource==='site-photo'&&!id(body.reportId))return null;
-  const channelAction=body.action==='RECOVER_CONNECT_OWN_NUMBER'&&body.payload?.connectionId===null&&body.payload?.confirmRecovery===true?'CONNECT_OWN_NUMBER':body.action;
+  const channelAction=body.action==='RECOVER_CONNECT_OWN_NUMBER'&&body.payload?.connectionId===null&&body.payload?.confirmRecovery===true?'CONNECT_OWN_NUMBER':body.action==='RECOVER_OWN_TEMPLATE'&&['SUBMIT_OWN_TEMPLATE','RECOVER_OWN_TEMPLATE'].includes(body.payload?.recoveryOf)?body.payload.recoveryOf:body.action;
   if(resource==='company-channel'&&!channelReferenceValid(channelAction,body.payload?.connectionId))throw unavailable();
   // Invitation reconciliation reads the provider and finalizes the original
   // invitation's receipt; it never creates a second invitation.
@@ -167,7 +168,7 @@ export function recoveryResult(entry, result) {
     if(result.state==='NOT_OBSERVED'&&result.definitive===false&&result.saved!==true&&!result.receiptId&&!result.overtime&&(result.action===undefined||result.action===entry.action))return {state:'NOT_OBSERVED'};
     return null;
   }
-  if(entry.resource==='company-channel'){try{(OWN_COMPANY_ACTIONS.includes(entry.action)?ownCompanyNumberOutcome:companyChannelOutcome)(result,entry);return result.state==='RECORDED'||result.state==='REJECTED'?{state:result.state,receiptId:result.receiptId}:{state:result.state};}catch{return null;}}
+  if(entry.resource==='company-channel'){try{(OWN_COMPANY_ACTIONS.includes(entry.action)?ownCompanyNumberOutcome:OWN_TEMPLATE_ACTIONS.includes(entry.action)?ownTemplatesOutcome:companyChannelOutcome)(result,entry);return result.state==='RECORDED'||result.state==='REJECTED'?{state:result.state,receiptId:result.receiptId}:{state:result.state};}catch{return null;}}
   if(entry.resource==='project-preparation')return projectPreparationReceiptOutcome(result,entry);
   if(entry.resource==='plan-import') {
     if(result.projectId!==entry.projectId)return null;
