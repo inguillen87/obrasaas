@@ -1641,7 +1641,7 @@
         "path": ".vercel/private/employee-intake-postgres.json",
         "kind": "PG_INTAKE",
         "producer": "scripts/verify-employee-intake-postgres.mjs",
-        "producerSha256": "a2ac3da85d42558c97fc0fdb43b28df99c6b9d6feee4f0890654d11251447a86",
+        "producerSha256": "dc1a8979a1e9370e00fada520cdb4908a69754f9e737e75276d8751bfa2b8e16",
         "sourceFiles": [
           "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
           "scripts/lib/company-channel-disposable-fixture.mjs",
@@ -1671,6 +1671,8 @@
           "actual-signed-callback-processor-context-consent-encrypted-durable-original-source",
           "source-replay-no-second-send-and-private-inbox-tenant-denial",
           "real-PG-concurrent-canonical-add-person-A-credential-B-destination-one-receipt",
+          "real-PG-focused-admission-worker-beyond-page-100-marker-one-plus-one-readonly-mismatch-404",
+          "real-PG-focused-current-consent-outbox-delivery-projection-without-resend-or-grant",
           "real-PG-existing-assignment-and-restore-preserve-reviewed-permissions",
           "exact-stale-decision-terminal-receipt-without-second-person",
           "role-ABA-identical-stamp-receipt-shape-invalidates-old-policy",
@@ -1778,7 +1780,8 @@
           "src/lib/workspace-http.mjs",
           "src/lib/workspace-policy.mjs",
           "src/lib/workspace-store.mjs",
-          "tests/fixtures/private-bank-fixture.mjs"
+          "tests/fixtures/private-bank-fixture.mjs",
+          "src/app/(identity)/cuenta/employee-intake-continuity.mjs"
         ],
         "checkNames": []
       },
@@ -1789,7 +1792,7 @@
         "path": ".vercel/private/employee-intake-ui/browser.json",
         "kind": "UI_INTAKE",
         "producer": "scripts/verify-employee-intake-ui.mjs",
-        "producerSha256": "ff80525919b69eff1209146c36388e2c4eb88d9cf19cf9ea9d46bace9d0a9584",
+        "producerSha256": "ad02417fef053a1c80972571d66a125c52d678898ba6a5bb48970271279b6c59",
         "sourceFiles": [
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/employee-intake-panel.js",
@@ -1811,7 +1814,8 @@
           "src/app/(identity)/cuenta/workspace-session-request.mjs",
           "src/lib/meta-kyc-conversation.mjs",
           "src/lib/participant-policy.mjs",
-          "src/lib/site-register-policy.mjs"
+          "src/lib/site-register-policy.mjs",
+          "src/app/(identity)/cuenta/employee-intake-continuity.mjs"
         ],
         "checkNames": []
       },
@@ -1822,7 +1826,7 @@
         "path": ".vercel/private/participant-bank-intake-integration/current/browser.json",
         "kind": "UI_JOINT",
         "producer": "scripts/verify-participant-bank-intake-ui.mjs",
-        "producerSha256": "2fa7ebd95079638a1753e9156617c317b688601c8cfa82a5da8a9b044b070c5f",
+        "producerSha256": "152477beb4822e31989db6aeb7153a575d985eefab6a64473dfe7119b5d28b10",
         "sourceFiles": [
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/employee-intake-panel.js",
@@ -1916,7 +1920,8 @@
           "src/lib/workspace-http.mjs",
           "src/lib/workspace-policy.mjs",
           "src/lib/workspace-store.mjs",
-          "tests/fixtures/private-bank-fixture.mjs"
+          "tests/fixtures/private-bank-fixture.mjs",
+          "src/app/(identity)/cuenta/employee-intake-continuity.mjs"
         ],
         "checkNames": []
       },
@@ -1927,7 +1932,7 @@
         "path": ".vercel/private/participant-bank-intake-integration/bad-resolution/browser.json",
         "kind": "UI_CAUSAL",
         "producer": "scripts/verify-participant-bank-intake-ui.mjs",
-        "producerSha256": "2fa7ebd95079638a1753e9156617c317b688601c8cfa82a5da8a9b044b070c5f",
+        "producerSha256": "152477beb4822e31989db6aeb7153a575d985eefab6a64473dfe7119b5d28b10",
         "sourceFiles": [
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/employee-intake-panel.js",
@@ -2021,7 +2026,8 @@
           "src/lib/workspace-http.mjs",
           "src/lib/workspace-policy.mjs",
           "src/lib/workspace-store.mjs",
-          "tests/fixtures/private-bank-fixture.mjs"
+          "tests/fixtures/private-bank-fixture.mjs",
+          "src/app/(identity)/cuenta/employee-intake-continuity.mjs"
         ],
         "checkNames": []
       },
@@ -2476,7 +2482,8 @@
           "src/lib/site-register-policy.mjs",
           "src/lib/voice-progress-draft.mjs",
           "src/lib/whatsapp/tenant-workspace-policy.js",
-          "src/lib/workspace-policy.mjs"
+          "src/lib/workspace-policy.mjs",
+          "src/app/(identity)/cuenta/employee-intake-continuity.mjs"
         ],
         "checkNames": [
           "{\"director\":false,\"name\":\"private-identity-submission-uncertain-receipt-and-explicit-approval-refresh\",\"posts\":1,\"receiptGets\":1,\"reload\":false,\"width\":320}",

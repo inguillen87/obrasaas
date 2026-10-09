@@ -91,7 +91,16 @@ async function finishMetaKycAuthority(client,context,r,{deposit,outbound,environ
  if(r.state&&r.state.captureImageSetVersion!==challenge.captureImageSetVersion)fail('META_KYC_CHALLENGE_REJECTED');
  const prior=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "entityId"=$3 AND action='participant.kyc_chat.dispatched'`,[metaKycDispatchReceiptId(event.id),project.organizationId,worker.id])).rows[0];
  if(prior){if(prior.metadata.payloadDigest!==context.payloadDigest||prior.metadata.challengeId!==challenge.id)fail('META_KYC_CHALLENGE_REJECTED');r.recorded=readMetaKycValue(r,'kyc-chat-dispatch',metaKycDispatchReceiptId(event.id),prior.metadata.encryptedResult,environment);if(r.recorded?.kind!=='KYC_CHAT'||r.recorded.identityStatus!=='LIMITED_KYC_UPLOAD'||prior.metadata.replyDigest!==digest(r.recorded.reply))fail('META_KYC_CHALLENGE_REJECTED');}
- if((!r.recorded||outbound)&&r.state&&r.state.lastEventId!==event.id&&Number(finalPayload.value.timestamp)<=r.state.lastMessageTimestamp)fail('META_KYC_MESSAGE_OUT_OF_ORDER');
+ if((!r.recorded||outbound)&&r.state&&r.state.lastEventId!==event.id){
+  const timestamp=Number(finalPayload.value.timestamp);
+  if(timestamp<r.state.lastMessageTimestamp)fail('META_KYC_MESSAGE_OUT_OF_ORDER');
+  // Meta timestamps have second precision. Equal seconds require the current
+  // confirmed corporate prompt, never timestamps or an old dispatch alone.
+  if(timestamp===r.state.lastMessageTimestamp){
+   if(!r.companyKyc||r.recorded||!r.prompt||r.state.lastEventId!==r.prompt.sourceEventId)fail('META_KYC_MESSAGE_OUT_OF_ORDER');
+   assertCompanyKycPrompt(r);
+  }
+ }
  if(!r.recorded&&challenge.messageCount>=40&&!(r.state?.step==='FINALIZING'&&r.state.confirmationEventId===event.id))fail('META_KYC_CONVERSATION_LIMIT');
  if(challenge.status==='CLAIMED'&&(!Number.isFinite(Date.parse(challenge.claimedAt))||Date.parse(challenge.claimedAt)+META_KYC_CONVERSATION_TTL_MS<=now.getTime()))fail('META_KYC_CHALLENGE_EXPIRED');
  if(deposit&&(!r.state||r.state.step!=='FINALIZING'||r.state.confirmationEventId!==event.id||r.state.consent!==true||!r.state.front||!r.state.selfie||challenge.captureImageSetVersion===2&&(!r.state.back||r.state.backConsent!==true)))fail('META_KYC_DEPOSIT_REQUIRED');
