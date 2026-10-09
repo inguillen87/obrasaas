@@ -17,12 +17,12 @@ function intakePrompt(state,eventId){
  return {state,reply:intakeText(descriptions[state.step]||'Escribí ESTADO para consultar tu solicitud.')};
 }
 export function beginEmployeeIntakeConversation(eventId){return intakePrompt({version:1,step:'NAME',noticeVersion:EMPLOYEE_INTAKE_NOTICE_VERSION,noticeSha256:digest(EMPLOYEE_INTAKE_NOTICE),consent:false,name:null,job:null,email:null},eventId);}
-export function planEmployeeIntakeConversation({message,state,eventId,promptConfirmed=false}){
+export function planEmployeeIntakeConversation({message,state,eventId,promptConfirmed=false,draftTextConfirmed=false}){
  if(state?.version!==1||!['NAME','JOB','EMAIL','CONFIRM','WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(state.step))throw new WorkspaceError('EMPLOYEE_INTAKE_INTEGRITY',409);
  const body=message.type==='text'?message.text?.body?.trim():null;
  if(['WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(state.step))return intakePrompt(state,eventId);
  if(body?.toUpperCase()==='CANCELAR')return intakePrompt({...state,step:'CANCELLED',consent:false},eventId);
- if(['HOLA','ESTADO','AYUDA'].includes(body?.toUpperCase())||!promptConfirmed)return intakePrompt(state,eventId);
+ if(['HOLA','ESTADO','AYUDA'].includes(body?.toUpperCase())||!(promptConfirmed||draftTextConfirmed&&message.type==='text'&&['NAME','EMAIL'].includes(state.step)))return intakePrompt(state,eventId);
  const next={...state};delete next.nonce;delete next.choices;
  if(state.step==='NAME'){
   try{return intakePrompt({...next,name:siteText(body,100,2),step:'JOB'},eventId);}catch{return intakePrompt(state,eventId);}

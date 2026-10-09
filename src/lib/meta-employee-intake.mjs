@@ -123,8 +123,9 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  const r={kind:'LIMITED_PARTICIPANT_INTAKE',member:{...issuer,organizationId:connection.organizationId},project,connection,event,anchor,payload:finalPayload,now,state,sender,key,policy,reactive};
  const dispatch=event.payload.employeeIntakeDispatch;
  if(dispatch){if(dispatch.version!==1||dispatch.payloadDigest!==request.payloadDigest||dispatch.policyDigest!==durableDigest(policy)||dispatch.applicationId!==anchor.id)fail('EMPLOYEE_INTAKE_INTEGRITY');r.recorded=unseal(connection,'employee-intake-dispatch',event.id,dispatch.encryptedResult,environment);if(r.recorded.kind!=='EMPLOYEE_INTAKE'||r.recorded.identityStatus!=='LIMITED_PARTICIPANT_INTAKE'||digest(r.recorded.reply)!==dispatch.replyDigest)fail('EMPLOYEE_INTAKE_INTEGRITY');}
- // Meta timestamps have second precision. Equal seconds are legitimate; the
- // exact preceding prompt receipt/nonce supplies causality for every advance.
+ // Meta timestamps have second precision. Equal seconds are legitimate when
+ // the exact prompt is cited. Later plain NAME/EMAIL drafts have a separate
+ // confirmed-outbox time fence; consent and authority never use that fallback.
  if(state&&!r.recorded&&state.lastEventId!==event.id&&Number(message.timestamp)<state.lastMessageTimestamp)fail('EMPLOYEE_INTAKE_MESSAGE_OUT_OF_ORDER');
  if(state&&!['WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(state.status)&&Date.parse(state.expiresAt)<=now.getTime())fail('EMPLOYEE_INTAKE_EXPIRED');
  if(!r.recorded&&state?.messageCount>=40)fail('EMPLOYEE_INTAKE_EXPIRED');
@@ -159,13 +160,30 @@ export async function resolveReactiveKycStart(client,initial,connection,payload,
  assertCustomerReplyWindow(payload,now.getTime());
  return authorizeReactiveKycStart(client,{state,anchor:locked[0],project:{id:current.projectId,organizationId:current.organizationId},connection:current,sender:'+'+message.from,event:initial,payload,now},pref,proof,{environment});
 }
+function freshDraftText(r,previous,environment){
+ const message=r.payload.value;
+ // A later plain message can fill only an unverified name/email draft. It is
+ // never evidence of consent, a role, identity, account ownership or access.
+ // A supplied but incorrect/malformed context must not fall back to time.
+ if(!['NAME','EMAIL'].includes(r.state?.step)||message.type!=='text'||Object.hasOwn(message,'context'))return false;
+ if(!['SENT','STATUS_OBSERVED'].includes(previous?.outcome?.state)||['failed','deleted'].includes(previous?.outcome?.providerStatus)||typeof previous?.outcome?.messageId!=='string'||!previous.outcome.messageId)return false;
+ const timestamp=Number(message.timestamp),lastTimestamp=r.state.lastMessageTimestamp,completedAt=Date.parse(previous.outcome.completedAt);
+ // Meta timestamps have second precision. Ambiguous same-second messages and
+ // status-only receipts without a confirmed send time still require Responder.
+ if(!Number.isSafeInteger(timestamp)||!Number.isSafeInteger(lastTimestamp)||typeof previous.outcome.completedAt!=='string'||!Number.isFinite(completedAt)||timestamp<=lastTimestamp||timestamp<=Math.floor(completedAt/1000))return false;
+ const expectedId=customerOutboundId(r.state.lastEventId),p=previous.payload;
+ if(previous.id!==expectedId||p?.version!==1||p.eventId!==r.state.lastEventId||p.channelId!==r.connection.id||p.organizationId!==r.connection.organizationId||p.applicationId!==r.anchor.id||p.employeeIntake!==true)return false;
+ const prepared=unseal(r.connection,'outbound',previous.id,p.encryptedPayload,environment);
+ if(!prepared||typeof prepared!=='object'||Array.isArray(prepared)||digest(prepared)!==p.requestDigest)fail('EMPLOYEE_INTAKE_INTEGRITY');
+ return prepared.version===1&&prepared.eventId===r.state.lastEventId&&prepared.channelPurpose==='EMPLOYEE_INTAKE'&&prepared.applicationId===r.anchor.id&&prepared.organizationId===r.connection.organizationId&&prepared.channelId===r.connection.id&&prepared.to===message.from;
+}
 export function createEmployeeIntakeBridge({connect,environment=process.env,resolveAuthority=resolveEmployeeIntakeAuthority}){
  return {async execute(request){return customerJobTransaction(connect,async client=>{
   const r=await resolveAuthority(client,request,{environment});if(!r)return null;if(r.recorded)return r.recorded;
-  let promptConfirmed=false;
-  if(r.state){const previous=(await client.query(`SELECT outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1'`,[customerOutboundId(r.state.lastEventId),r.project.id])).rows[0];promptConfirmed=['SENT','STATUS_OBSERVED'].includes(previous?.outcome?.state)&&!['failed','deleted'].includes(previous?.outcome?.providerStatus)&&typeof previous?.outcome?.messageId==='string'&&r.payload.value.context?.id===previous.outcome.messageId;}
+  let promptConfirmed=false,draftTextConfirmed=false;
+  if(r.state){const previous=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1'`,[customerOutboundId(r.state.lastEventId),r.project.id])).rows[0];promptConfirmed=['SENT','STATUS_OBSERVED'].includes(previous?.outcome?.state)&&!['failed','deleted'].includes(previous?.outcome?.providerStatus)&&typeof previous?.outcome?.messageId==='string'&&r.payload.value.context?.id===previous.outcome.messageId;draftTextConfirmed=freshDraftText(r,previous,environment);}
   const reactivePlan=await planReactiveOnboarding(client,r,r.reactive,{environment,promptConfirmed});
-  const plan=reactivePlan||(r.state?planEmployeeIntakeConversation({message:r.payload.value,state:r.state,eventId:r.event.id,promptConfirmed}):beginEmployeeIntakeConversation(r.event.id));
+  const plan=reactivePlan||(r.state?planEmployeeIntakeConversation({message:r.payload.value,state:r.state,eventId:r.event.id,promptConfirmed,draftTextConfirmed}):beginEmployeeIntakeConversation(r.event.id));
   const state={...plan.state,applicationId:r.anchor.id,organizationId:r.connection.organizationId,connectionId:r.connection.id,sender:r.sender,senderKey:r.key,policyDigest:durableDigest(r.policy),revision:(r.state?.revision||0)+1,status:plan.state.step,lastEventId:r.event.id,lastMessageTimestamp:Number(r.payload.value.timestamp),messageCount:(r.state?.messageCount||0)+1,expiresAt:r.state?.expiresAt||new Date(r.now.getTime()+META_KYC_CONVERSATION_TTL_MS).toISOString(),createdAt:r.state?.createdAt||r.now.toISOString(),...(plan.state.consent===true?{submittedAt:r.state?.submittedAt||r.now.toISOString()}: {})};
   await writeState(client,r.anchor,r.connection,state,environment);
   const result={kind:'EMPLOYEE_INTAKE',identityStatus:'LIMITED_PARTICIPANT_INTAKE',reviewState:'OBSERVED',businessApplied:false,replySent:false,reply:plan.reply,...(plan.reactiveOnboarding?{reactiveOnboarding:plan.reactiveOnboarding}:{})};

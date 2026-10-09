@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {calendarDay, formatCalendarDay, loadedScheduleOverview, mergeLoadedTasks, planningState, registeredProgress, selectLoadedTasks, taskStatusLabel} from '../src/app/(identity)/cuenta/schedule-workbench.mjs';
+import {calendarDay, formatCalendarDay, loadedScheduleOverview, mergeLoadedTasks, planningState, registeredProgress, scheduleCalendar, scheduledBar, selectLoadedTasks, taskStatusLabel} from '../src/app/(identity)/cuenta/schedule-workbench.mjs';
 
 const task = (id, extra = {}) => ({id, title: 'Tarea ' + id, status: 'BACKLOG', progress: 0, startsOn: null, endsOn: null, revision: '2026-10-02T22:00:00.000001', ...extra});
 const tasks = [task('c', {title: 'Mampostería · sector norte', status: 'IN_PROGRESS', progress: 37, startsOn: '2026-10-07', endsOn: '2026-10-15'}), task('a', {title: 'Acopio de materiales', status: 'BLOCKED'}), task('b', {title: 'Hormigón', status: 'DONE', progress: 100, startsOn: '2026-10-01', endsOn: '2026-10-03'}), task('d', {startsOn: '2026-10-05', endsOn: '2026-10-01', progress: 101, status: 'unknown'})];
@@ -66,4 +66,73 @@ test('a late cursor snapshot cannot roll back a confirmed task, including micros
  for (const revision of [undefined, null, '2026-10-02T22:00:00.999', '2026-10-02T22:00:00.999999Z', '2026-02-29T22:00:00.999999']) assert.equal(mergeLoadedTasks([confirmed], [{...stale, revision}])[0], confirmed);
  const later = {...confirmed, revision: '2026-10-02T22:00:00.000003', progress: 80};
  assert.equal(mergeLoadedTasks([confirmed], [later])[0], later);
+});
+
+const range = (start, lastDay) => ({start: calendarDay(start), end: calendarDay(lastDay) + 86400000});
+test('day zoom includes the leap day and both planned endpoints on a shared UTC axis', () => {
+ const calendar = scheduleCalendar(range('2028-02-28', '2028-03-02'), 'DAYS');
+ assert.deepEqual(calendar.cells.map(cell => cell.startsOn), ['2028-02-28', '2028-02-29', '2028-03-01', '2028-03-02']);
+ assert.equal(calendar.width, 4 * 44); assert.equal(calendar.pages, 1);
+ assert.deepEqual(calendar.cells.map(cell => cell.width), [25, 25, 25, 25]);
+ const leap = task('leap', {startsOn: '2028-02-29', endsOn: '2028-02-29', progress: 37});
+ assert.deepEqual(scheduledBar(leap, calendar), {left: 25, width: 25, continuesBefore: false, continuesAfter: false});
+ const full = task('full', {startsOn: '2028-02-28', endsOn: '2028-03-02'});
+ assert.equal(scheduledBar(full, calendar).width, 100);
+ assert.equal(scheduleCalendar(range('2026-02-28', '2026-03-01'), 'DAYS').cells.length, 2);
+});
+test('week zoom starts on Monday, including a week crossing the year boundary', () => {
+ const calendar = scheduleCalendar(range('2026-12-31', '2027-01-02'), 'WEEKS');
+ assert.equal(calendar.startsOn, '2026-12-28'); assert.equal(calendar.endsOn, '2027-01-03');
+ assert.equal(calendar.cells.length, 1); assert.equal(calendar.width, 7 * 14);
+ assert.match(calendar.cells[0].description, /2026.*2027/);
+ const bar = scheduledBar(task('year', {startsOn: '2026-12-31', endsOn: '2027-01-02'}), calendar);
+ assert.equal(bar.left, 3 / 7 * 100); assert.equal(bar.width, 3 / 7 * 100);
+});
+test('month zoom uses real month lengths rather than equal ordinal slices', () => {
+ const calendar = scheduleCalendar(range('2028-01-31', '2028-03-01'), 'MONTHS');
+ assert.deepEqual(calendar.cells.map(cell => cell.startsOn), ['2028-01-01', '2028-02-01', '2028-03-01']);
+ assert.deepEqual(calendar.cells.map(cell => (cell.end - cell.start) / 86400000), [31, 29, 31]);
+ assert.equal(calendar.width, 91 * 4);
+ assert.equal(calendar.cells[1].width, 29 / 91 * 100);
+ const bar = scheduledBar(task('months', {startsOn: '2028-01-31', endsOn: '2028-03-01'}), calendar);
+ assert.equal(bar.left, 30 / 91 * 100); assert.equal(bar.width, 31 / 91 * 100);
+ assert.deepEqual(scheduleCalendar(range('2026-12-31', '2027-01-01'), 'MONTHS').cells.map(cell => cell.startsOn), ['2026-12-01', '2027-01-01']);
+});
+test('long calendar spans have bounded windows that can reach every planned day', () => {
+ const long = range('2000-01-01', '2100-12-31');
+ for (const [scale, limit] of [['DAYS', 28], ['WEEKS', 12], ['MONTHS', 12]]) {
+  const first = scheduleCalendar(long, scale), last = scheduleCalendar(long, scale, Number.MAX_SAFE_INTEGER);
+  assert.ok(first.pages > 1); assert.equal(first.cells.length, limit); assert.ok(last.cells.length <= limit);
+  assert.equal(last.page, last.pages - 1); assert.ok(last.end >= long.end);
+  assert.equal(scheduleCalendar(long, scale, -1).page, 0);
+  assert.equal(scheduleCalendar(long, scale, NaN).page, 0);
+  const before = scheduleCalendar(long, scale, last.page - 1);
+  assert.equal(before.end, last.start);
+  const spanning = scheduledBar(task('span', {startsOn: '2000-01-01', endsOn: '2100-12-31'}), first);
+  assert.equal(spanning.continuesBefore, false); assert.equal(spanning.continuesAfter, true);
+  const finalDay = scheduledBar(task('last-day', {startsOn: '2100-12-31', endsOn: '2100-12-31'}), last);
+  assert.ok(finalDay && finalDay.width > 0);
+ }
+ assert.equal(scheduleCalendar(long, 'toString').scale, 'WEEKS');
+});
+test('missing, impossible, reversed and out-of-window dates never acquire a planned bar', () => {
+ const calendar = scheduleCalendar(range('2026-10-01', '2026-10-28'), 'DAYS');
+ for (const row of [task('missing'), task('incomplete', {startsOn: '2026-10-02'}), task('impossible', {startsOn: '2026-02-29', endsOn: '2026-10-02'}), task('reversed', {startsOn: '2026-10-03', endsOn: '2026-10-02'}), task('outside', {startsOn: '2026-11-01', endsOn: '2026-11-02'})]) assert.equal(scheduledBar(row, calendar), null);
+ for (const value of [null, {}, {start: NaN, end: 0}, {start: 2, end: 3}, {start: calendar.end, end: calendar.start}, {start: calendar.start, end: calendar.start}]) assert.equal(scheduleCalendar(value), null);
+ assert.equal(scheduledBar(tasks[0], null), null);
+ const crossing = scheduledBar(task('crossing', {startsOn: '2026-09-30', endsOn: '2026-10-29'}), calendar);
+ assert.deepEqual(crossing, {left: 0, width: 100, continuesBefore: true, continuesAfter: true});
+});
+test('a large partial loaded set supplies dates without inventing overall progress or mutating tasks', () => {
+ const loaded = Array.from({length: 240}, (_, index) => task(String(index), {startsOn: '2028-01-31', endsOn: '2028-03-01', progress: index % 101}));
+ const snapshot = structuredClone(loaded), overview = loadedScheduleOverview(loaded, 300, 'more');
+ const calendar = scheduleCalendar(overview.range, 'MONTHS');
+ assert.equal(overview.partial, true); assert.equal(overview.loaded, 240); assert.equal(overview.total, 300);
+ assert.equal(Object.hasOwn(overview, 'progress'), false);
+ const filtered = selectLoadedTasks(loaded, {search: 'Tarea 23'});
+ for (const row of filtered) assert.equal(scheduledBar(row, calendar).width, 31 / 91 * 100);
+ assert.deepEqual(loaded, snapshot);
+ const changed = {...loaded[0], progress: 90};
+ assert.deepEqual(scheduledBar(changed, calendar), scheduledBar(loaded[0], calendar));
+ assert.equal(loaded[0].progress, 0);
 });

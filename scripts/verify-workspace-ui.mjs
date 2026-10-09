@@ -9,7 +9,7 @@ import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-p
 // Browser-only acceptance of the real component with intercepted synthetic API
 // responses. This is NOT proof of a production login, employee or WhatsApp event.
 assert.ok(!process.env.VERCEL && !process.env.VERCEL_ENV);
-assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race'].includes(process.env.WORKSPACE_UI_SCENARIO));
+assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume'].includes(process.env.WORKSPACE_UI_SCENARIO));
 const root=process.cwd(),evidence=path.join(root,'.vercel/workspace-evidence');
 mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/workspace-ui-')),app=path.join(fixture,'src/app'),components=path.join(app,'(identity)/cuenta');
@@ -95,7 +95,7 @@ async function scenario(mode,width=390){
  await waitText(page,'Mampostería');
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Horizontal overflow at '+width);
  assert.ok((await text(page)).includes('37 %'));
- if(mode==='readonly'){assert.equal(await page.$$eval('button',nodes=>nodes.filter(node=>node.textContent==='Planificar fechas').length),0);checks.push('read-only-role-has-no-schedule-write-control');await context.close();return;}
+  if(mode==='readonly'){assert.equal(await page.$$eval('button',nodes=>nodes.filter(node=>node.textContent==='Planificar fechas').length),0);checks.push('read-only-role-has-no-schedule-write-control');const before=requests.length;await click(page,'Meses');await page.waitForFunction(()=>document.querySelector('[data-gantt-scroll]').dataset.ganttScale==='MONTHS');assert.equal(requests.length,before);assert.equal(posts.length,0);checks.push('read-only-gantt-zoom-is-local-without-business-write-'+width);await context.close();return;}
  if(mode==='success')await page.screenshot({path:path.join(evidence,`workspace-${width}.png`),fullPage:true});
  await fill(page);assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')).every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input,form textarea')].every(e=>!e.disabled)));
  if(mode==='sdk-unavailable')await page.evaluate(()=>{window.__failNextToken=true;});
@@ -209,7 +209,7 @@ const workbenchTasks=()=>[
  {...baseTask(),id:'wb-finished',title:'Acabado de fachada',status:'DONE',progress:100,startsOn:'2026-10-01',endsOn:'2026-10-04'},
  {...baseTask(),id:'wb-invalid-dates',title:'Instalación eléctrica',status:'BLOCKED',progress:30,startsOn:'2026-10-09',endsOn:'2026-10-03'},
  {...baseTask(),id:'wb-unknown-status',title:'Revisión de estructura',status:'PAUSED_LEGACY',progress:45,startsOn:null,endsOn:null},
- {...baseTask(),id:'wb-invalid-progress',title:'Avance pendiente de revisión',progress:140,startsOn:'2026-10-11',endsOn:'2026-10-13'},
+ {...baseTask(),id:'wb-invalid-progress',title:'Avance pendiente de revisión',progress:140,startsOn:'2026-10-11',endsOn:'2028-03-02'},
 ];
 const workbenchTaskIds=page=>page.$$eval('[data-schedule-workbench] [data-task-id]',elements=>elements.map(element=>element.dataset.taskId));
 async function waitWorkbenchTasks(page,expected){await page.waitForFunction(ids=>JSON.stringify([...document.querySelectorAll('[data-schedule-workbench] [data-task-id]')].map(element=>element.dataset.taskId))===JSON.stringify(ids),{timeout:15000},expected);}
@@ -259,8 +259,51 @@ async function workbenchScenario(width){
   await (await page.$('[data-schedule-workbench]')).screenshot({path:path.join(evidence,'workspace-workbench-'+width+'.png')});
   checks.push('workbench-partial-loaded-summary-and-accessible-controls-'+width);
 
+   phase='shared-calendar-and-zoom';
+   const timeline='[data-gantt-scroll]';
+   assert.equal(await page.$eval(timeline,element=>element.dataset.ganttScale),'WEEKS');
+   assert.equal(await page.$eval('[data-gantt-axis] time',element=>element.dateTime),'2026-09-28');
+   assert.equal(await page.$$eval('[data-gantt-task-id]',elements=>elements.length),6);
+   assert.match(await page.$eval('[data-schedule-gantt]',element=>element.innerText),/Vista parcial: sólo tareas cargadas/);
+   for(const id of ['wb-mamp-b','wb-invalid-dates','wb-unknown-status'])assert.equal(await page.$(`[data-gantt-task-id="${id}"] [data-gantt-planned]`),null);
+   const geometry=await page.$eval('[data-gantt-task-id="wb-mamp-a"] [data-gantt-planned]',element=>({left:element.offsetLeft,width:element.getBoundingClientRect().width,lane:element.parentElement.getBoundingClientRect().width}));
+   assert.ok(Math.abs(geometry.left/geometry.lane-7/84)<.002);assert.ok(Math.abs(geometry.width/geometry.lane-5/84)<.002);
+   await click(page,'Días');await page.waitForFunction(()=>document.querySelector('[data-gantt-scroll]').dataset.ganttScale==='DAYS');
+   assert.equal(await page.$eval('[data-gantt-axis] time',element=>element.dateTime),'2026-10-01');
+   assert.equal(await page.$$eval('[data-gantt-axis] time',elements=>elements.length),28);
+   await page.evaluate(()=>[...document.querySelectorAll('[data-schedule-gantt] button')].find(button=>button.textContent==='Meses').focus());await page.keyboard.press('Enter');
+   await page.waitForFunction(()=>document.querySelector('[data-gantt-scroll]').dataset.ganttScale==='MONTHS');
+   assert.equal(await page.$eval('[data-schedule-gantt] button[aria-pressed=true]',element=>element.textContent),'Meses');
+   assert.equal(await page.$$eval('[data-gantt-axis] time',elements=>elements.length),12);
+   await page.click('button[aria-label="Intervalo siguiente del Gantt"]');await waitText(page,'Intervalo 2 de 2');
+   assert.equal(await page.$eval('[data-gantt-axis] time',element=>element.dateTime),'2027-10-01');
+   const monthCells=await page.$$eval('[data-gantt-axis] time',elements=>elements.map(element=>({date:element.dateTime,width:element.parentElement.getBoundingClientRect().width})));
+   const feb=monthCells.find(cell=>cell.date==='2028-02-01'),jan=monthCells.find(cell=>cell.date==='2028-01-01');assert.ok(feb&&jan);assert.ok(Math.abs(feb.width/jan.width-29/31)<.002);
+   assert.equal(await page.$('[data-gantt-task-id="wb-mamp-a"] [data-gantt-planned]'),null);
+   assert.match(await page.$eval('[data-gantt-task-id="wb-mamp-a"]',element=>element.innerText),/Fuera de este intervalo/);
+   await page.click('button[aria-label="Intervalo anterior del Gantt"]');await click(page,'Semanas');
+   await page.waitForFunction(()=>document.querySelector('[data-gantt-scroll]').dataset.ganttScale==='WEEKS');
+   await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'reduce'}]);
+   assert.equal(await page.$eval('[data-schedule-gantt] button',element=>getComputedStyle(element).transitionDuration),'0s');
+   assertLocalControls();checks.push('gantt-real-calendar-pointer-keyboard-zoom-leap-month-and-bounded-windows-'+width);
+
+   phase='contained-horizontal-pointer-and-keyboard';
+   await page.focus(timeline);await page.keyboard.press('ArrowRight');await page.waitForFunction(()=>document.querySelector('[data-gantt-scroll]').scrollLeft>0);
+   assert.ok(await page.$eval(timeline,element=>element===document.activeElement&&getComputedStyle(element).outlineStyle!=='none'));
+   const stickyBefore=await page.$eval('[data-gantt-task-id="wb-mamp-a"]>div',element=>element.getBoundingClientRect().left);
+   await page.keyboard.press('End');const atEnd=await page.$eval(timeline,element=>({left:element.scrollLeft,max:element.scrollWidth-element.clientWidth}));assert.ok(Math.abs(atEnd.left-atEnd.max)<=1);
+   const stickyAfter=await page.$eval('[data-gantt-task-id="wb-mamp-a"]>div',element=>element.getBoundingClientRect().left);assert.ok(Math.abs(stickyBefore-stickyAfter)<=1);
+   await page.keyboard.press('Home');assert.equal(await page.$eval(timeline,element=>element.scrollLeft),0);
+   const box=await (await page.$(timeline)).boundingBox();await page.mouse.move(box.x+box.width-12,box.y+35);await page.mouse.wheel({deltaX:240});await page.waitForFunction(()=>document.querySelector('[data-gantt-scroll]').scrollLeft>0);
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Gantt page overflow at '+width);
+   assert.ok(await page.$eval(timeline,element=>element.scrollWidth>element.clientWidth&&getComputedStyle(element).overflowX==='auto'));
+   await page.focus(timeline);await page.keyboard.press('Home');
+   await (await page.$('[data-schedule-gantt]')).screenshot({path:path.join(evidence,'workspace-gantt-'+width+'.png')});
+   assertLocalControls();checks.push('gantt-contained-pointer-scroll-keyboard-focus-sticky-labels-reduced-motion-'+width);
+
   phase='accent-and-combined-filters';await searchWorkbench(page,'mamposteria');await waitWorkbenchTasks(page,['wb-mamp-a','wb-mamp-b']);
   await page.select(workbenchControl.status,'IN_PROGRESS');await page.select(workbenchControl.planning,'VALID');await waitWorkbenchTasks(page,['wb-mamp-a']);
+   assert.deepEqual(await page.$$eval('[data-gantt-task-id]',elements=>elements.map(element=>element.dataset.ganttTaskId)),['wb-mamp-a']);
   await page.select(workbenchControl.order,'START_ASC');assertLocalControls();await waitText(page,'Mostrando 1 de 6 tareas cargadas');
   checks.push('workbench-accent-insensitive-search-combined-filters-no-requests-'+width);
 
@@ -299,6 +342,7 @@ async function workbenchScenario(width){
   assert.equal(requests.length,initialRequests+1);assert.equal(new URL(origin+requests.at(-1).path+requests.at(-1).query).searchParams.get('afterTask'),'controlled-page-2');assert.equal(posts.length,0);
   assert.equal(await page.$eval(workbenchControl.search,element=>element.value),'mamposteria');for(const [control,value] of [['status','IN_PROGRESS'],['planning','VALID'],['order','START_ASC']])assert.equal(await page.$eval(workbenchControl[control],element=>element.value),value);
   await waitText(page,'Mostrando 2 de 8 tareas cargadas');assert.equal(await page.$$eval('[data-task-id="wb-mamp-a"]',elements=>elements.length),1);assert.match(await page.$eval('[data-task-id="wb-mamp-a"]',element=>element.innerText),/41 %/);
+   assert.match(await page.$eval('[data-gantt-task-id="wb-mamp-a"]',element=>element.innerText),/41 % registrado/);
   await click(page,'Limpiar filtros');assert.equal((await workbenchTaskIds(page)).length,8);assert.equal(new Set(await workbenchTaskIds(page)).size,8);assert.equal(requests.length,initialRequests+1);
   checks.push('workbench-pagination-keeps-filters-and-merges-canonical-task-id-'+width);
 
@@ -307,6 +351,7 @@ async function workbenchScenario(width){
   assert.equal(requests.length,initialRequests+2);assert.equal(new URL(origin+requests.at(-1).path+requests.at(-1).query).searchParams.get('projectId'),'p-b');assert.equal(posts.length,0);assert.equal(await page.$eval(workbenchControl.search,element=>element.value),'');
   for(const [control,value] of [['status','ALL'],['planning','ALL'],['order','REGISTERED']])assert.equal(await page.$eval(workbenchControl[control],element=>element.value),value);
   await waitText(page,'Mostrando 1 de 1 tareas cargadas');assert.match(await page.$eval('#schedule-overview-title',element=>element.parentElement.innerText),/parcial/i);
+   assert.equal(await page.$eval('[data-gantt-scroll]',element=>element.dataset.ganttScale),'WEEKS');assert.match(await page.$eval('[data-schedule-gantt]',element=>element.innerText),/Vista parcial/);
   assert.equal(await page.$$eval('button',elements=>elements.filter(element=>element.textContent.trim()==='Cargar más tareas').length),0);
   const partialResult=await page.$eval('[data-schedule-workbench] [role="status"]',element=>element.innerText);assert.ok(!partialResult.includes('Podés cargar más'));assert.ok(partialResult.includes('Actualizá la consulta y volvé a abrir la obra para comprobar el total.'));
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Final workbench overflow at '+width);
@@ -317,6 +362,63 @@ async function workbenchScenario(width){
   await page.screenshot({path:path.join(evidence,'workspace-workbench-failure-'+width+'.png'),fullPage:false}).catch(()=>{});
   writeFileSync(path.join(evidence,'workspace-workbench-failure-'+width+'.json'),JSON.stringify({status:'FAILED',phase,width,message:error.message,requests,postCount:posts.length,body:await text(page).catch(()=>null)},null,2));throw error;
  }finally{await context.close();}
+}
+async function ganttVolumeScenario(width){
+ const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000,hasTouch:width<768});
+ const mode='gantt-volume',requests=[],posts=[];page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
+ const tasks=Array.from({length:240},(_,index)=>({...baseTask(),id:'volume-'+String(index).padStart(3,'0'),title:'Partida revisada '+(index+1),progress:index%101,startsOn:'2000-01-01',endsOn:'2100-12-31'}));
+ await page.setRequestInterception(true);
+ page.on('request',async request=>{
+  try{
+   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
+   if(!url.pathname.startsWith('/api/'))return request.continue();
+   requests.push({method:request.method(),path:url.pathname,query:url.search});
+   if(request.method()!=='GET'){posts.push(request.postData());throw new Error('Gantt volume navigation must not mutate a business record');}
+   assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+   let body;
+   if(!url.search)body={scope,organizationName:'Empresa de volumen sintético',role:'AUDITOR',roleLabel:'Auditor',canPlanSchedule:false,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false};
+   else{
+    assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(url.searchParams.get('scope'),scope);
+    const cursor=url.searchParams.get('afterTask');assert.ok([null,'volume-page-2','volume-page-3'].includes(cursor));
+    const start=cursor==='volume-page-2'?100:cursor==='volume-page-3'?200:0;
+    body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:false,tasks:tasks.slice(start,start+100),totalTasks:300,nextCursor:start===0?'volume-page-2':start===100?'volume-page-3':null};
+   }
+   await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
+  }catch(error){pageErrors.push({mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
+ });
+ try{
+  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de volumen sintético');
+  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());
+  await waitText(page,'Mostrando 100 de 100 tareas cargadas');
+  await click(page,'Cargar más tareas');await waitText(page,'Mostrando 200 de 200 tareas cargadas');
+  await click(page,'Cargar más tareas');await waitText(page,'Mostrando 240 de 240 tareas cargadas');
+  assert.equal(requests.length,4);assert.equal(posts.length,0);
+  assert.equal(await page.$$eval('[data-gantt-task-id]',elements=>elements.length),240);
+  assert.equal(await page.$$eval('[data-task-id]',elements=>elements.length),240);
+  assert.match(await page.$eval('[data-schedule-gantt]',element=>element.innerText),/Vista parcial: sólo tareas cargadas/);
+  assert.match(await page.$eval('#schedule-overview-title',element=>element.parentElement.innerText),/Resumen parcial/);
+  assert.match(await page.$eval('[data-schedule-workbench]',element=>element.innerText),/240 de 300 tareas cargadas/);
+  assert.equal(await page.$$eval('button',elements=>elements.filter(element=>element.textContent==='Planificar fechas').length),0);
+  for(const [label,scale,maxCells] of [['Días','DAYS',28],['Semanas','WEEKS',12],['Meses','MONTHS',12]]){
+   await click(page,label);await page.waitForFunction(expected=>document.querySelector('[data-gantt-scroll]').dataset.ganttScale===expected,{},scale);
+   assert.equal(await page.$$eval('[data-gantt-axis] time',elements=>elements.length),maxCells);
+   assert.equal(await page.$$eval('[data-gantt-planned]',elements=>elements.length),240);
+   assert.ok(await page.$eval('[data-gantt-scroll]',element=>element.scrollWidth<=1800&&element.clientHeight<=480));
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Volume Gantt page overflow at '+width);
+  }
+  await waitText(page,'Intervalo 1 de 101');await page.click('button[aria-label="Intervalo siguiente del Gantt"]');await waitText(page,'Intervalo 2 de 101');
+  assert.equal(await page.$eval('[data-gantt-axis] time',element=>element.dateTime),'2001-01-01');
+  assert.match(await page.$eval('[data-gantt-task-id="volume-239"]',element=>element.innerText),/37 % registrado/);
+  assert.equal(await page.$eval('[data-gantt-task-id="volume-239"] [data-gantt-planned]',element=>element.dataset.continuesBefore),'true');
+  assert.equal(await page.$eval('[data-gantt-task-id="volume-239"] [data-gantt-planned]',element=>element.dataset.continuesAfter),'true');
+  await page.$eval('[data-gantt-scroll]',element=>{element.scrollTop=element.scrollHeight;});
+  const last=await page.$eval('[data-gantt-task-id="volume-239"]',element=>({bottom:element.getBoundingClientRect().bottom,top:element.closest('[data-gantt-scroll]').getBoundingClientRect().top,height:element.closest('[data-gantt-scroll]').clientHeight}));
+  assert.ok(last.bottom<=last.top+last.height+2);
+  await (await page.$('[data-schedule-gantt]')).screenshot({path:path.join(evidence,'workspace-gantt-volume-'+width+'.png')});
+  assert.equal(requests.length,4);assert.equal(posts.length,0);
+  checks.push('gantt-240-paginated-rows-century-bounded-axis-all-zooms-contained-scroll-partial-readonly-'+width);
+ }catch(error){await page.screenshot({path:path.join(evidence,'workspace-gantt-volume-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}
+ finally{await context.close();}
 }
 async function taskCreateScenario(mode){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width:390,height:1000});page.on('pageerror',error=>pageErrors.push({mode:'taskcreate-'+mode,width:390,message:error.message}));
@@ -545,13 +647,17 @@ try{
  if([undefined,'onboarding-epoch'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])await onboardingEpochScenario(width);
  if([undefined,'guide-http-denial'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])for(const action of ['append','readback'])for(const denial of [401,403])await guideHttpDenialScenario(width,action,denial);
  if([undefined,'portfolio-access-race'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])for(const denial of [401,403,409]){for(const format of ['html','json'])await portfolioAccessRaceScenario(width,denial,format);for(const action of ['schedule','token'])await portfolioAccessRaceScenario(width,denial,'json',action);}
+  if([undefined,'workbench'].includes(process.env.WORKSPACE_UI_SCENARIO)){
+   for(const width of [320,390,768,1280])await workbenchScenario(width);
+   await stalePaginationScenario();
+   if(process.env.WORKSPACE_UI_SCENARIO==='workbench')for(const width of [320,390])await scenario('readonly',width);
+  }
+  if([undefined,'gantt-volume'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])await ganttVolumeScenario(width);
  if(!process.env.WORKSPACE_UI_SCENARIO){
  for(const width of [320,390,768,1280])await scenario('success',width);
  for(const mode of ['readonly','denied','empty','draft-cancel','sdk-unavailable','unmount-token','uncertain','rollback','not-arrived','conflict','race'])await scenario(mode);
  for(const mode of ['draft-cancel','uncertain','rollback','not-arrived'])await taskCreateScenario(mode);
  for(const width of [320,390,768,1280])for(const role of ['ADMIN','AUDITOR'])await navigationScenario(role,width);
- for(const width of [320,390,768,1280])await workbenchScenario(width);
- await stalePaginationScenario();
  }
  assert.deepEqual(pageErrors,[]);
  const proof={status:'PASS',fullSuite:!process.env.WORKSPACE_UI_SCENARIO,focusedScenario:process.env.WORKSPACE_UI_SCENARIO||null,environment:'isolated-browser-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,pageErrors,sourceManifest,harnessSha256,productionLoginVerified:false,productionDataWritten:false,physicalWhatsAppVerified:false};

@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='4cde98de9d1deded0956f981ddb9f2f5a049c5bf53f2ad6894f19429ec37d958';
+export const EXPECTED_CONTRACT_SHA256='c80470394f06445a2d6f40d26eaa0ef570624e782356ff0da835c4f0ed48ce53';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
 const BASELINE_PRODUCERS_SHA256='07d0016608332c0775f86bee6d005e60d4686d2ffe33a3065dfd9fd8e974ab20';
@@ -30,6 +30,7 @@ const INTAKE_CONTINUITY_BASELINE_PRODUCERS={
  UI_JOINT:{producer:'scripts/verify-participant-bank-intake-ui.mjs',path:'.vercel/private/participant-bank-intake-integration/current/browser.json',retained:true,blockId:56,lane:'people',sourceLine:73,producerSha256:'2fa7ebd95079638a1753e9156617c317b688601c8cfa82a5da8a9b044b070c5f',sourceBasis:'EXPECTED_HEAD_GIT_BYTES'},
  UI_CAUSAL:{producer:'scripts/verify-participant-bank-intake-ui.mjs',path:'.vercel/private/participant-bank-intake-integration/bad-resolution/browser.json',retained:true,blockId:56,lane:'people',sourceLine:73,producerSha256:'2fa7ebd95079638a1753e9156617c317b688601c8cfa82a5da8a9b044b070c5f',sourceBasis:'EXPECTED_HEAD_GIT_BYTES'}
 };
+const INTAKE_PLAIN_TEXT_UNIT_BASELINE_PRODUCER={producer:'scripts/verify-participant-bank-intake-contracts.mjs',path:'.vercel/participant-bank-intake-contract-evidence/proof.json',retained:true,blockId:53,lane:'contracts',sourceLine:57,producerSha256:'7066bea65970f0a8e959af59cb9ef7ded715b259aab9d58f3eeb7e2a514a736a',sourceBasis:'EXPECTED_HEAD_GIT_BYTES'};
 const PORTFOLIO_BASELINE_BLOCKS_SHA256='fdb9d500f6e96981887bc1f7e74d55875c870239c198296466d4a362f63d68d7';
 const PORTFOLIO_BASELINE_OWNERSHIP_SHA256='81608969b6edbf08690ea31011d6c526f65bfae91468933e496f0cc52be5fab4';
 const PORTFOLIO_BASELINE_PRODUCERS_SHA256='f727810f0b923c95623fab858aa72da8ecccb21edded6278b972872aeb7a411e';
@@ -231,7 +232,7 @@ function validateExtension(contract){
  if(extension.baseHead!=='a4b79d7a7f75427ed1d0b0e1e9b247e1188adf3f')deny('EXTENSION_BASE');
  equal(extension.proofs.map(p=>[p.id,p.lane,p.blockId,p.path,p.kind]),EXTENSION_PROOFS,'EXTENSION_PROOF_COVERAGE');
  for(const spec of extension.proofs){exactKeys(spec,['id','lane','blockId','path','kind','producer','producerSha256','sourceFiles','checkNames'],'EXTENSION_PROOF_SHAPE');if(!sha(spec.producerSha256)||!Array.isArray(spec.sourceFiles)||!spec.sourceFiles.length||new Set(spec.sourceFiles).size!==spec.sourceFiles.length)deny('EXTENSION_SOURCE_CONTRACT');spec.sourceFiles.forEach(sourcePath);sourcePath(spec.producer);if(!Array.isArray(spec.checkNames))deny('EXTENSION_CHECK_NAMES');}
- for(const spec of extension.proofs){const record=contract.evidenceProducers.find(p=>p.path===spec.path);if(Object.hasOwn(INTAKE_CONTINUITY_BASELINE_PRODUCERS,spec.kind)){equal(record,INTAKE_CONTINUITY_BASELINE_PRODUCERS[spec.kind],'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_FIELD'||spec.kind==='PG_OVERTIME'){equal(record,spec.kind==='PG_FIELD'?FIELD_PG_BASELINE_PRODUCER:OVERTIME_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_PORTFOLIO'){equal(record,PORTFOLIO_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_PREPARATION'){equal(record,PREPARATION_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_COMPANY_KYC'){equal(record,COMPANY_KYC_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}equal(record&&{producer:record.producer,path:record.path,retained:record.retained,blockId:record.blockId,lane:record.lane,producerSha256:record.producerSha256,sourceBasis:record.sourceBasis},{producer:spec.producer,path:spec.path,retained:true,blockId:spec.blockId,lane:spec.lane,producerSha256:spec.producerSha256,sourceBasis:'EXPECTED_HEAD_GIT_BYTES'},'EXTENSION_PRODUCER_CONTRACT');}
+ for(const spec of extension.proofs){const record=contract.evidenceProducers.find(p=>p.path===spec.path);if(spec.kind==='UNIT'){equal(record,INTAKE_PLAIN_TEXT_UNIT_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(Object.hasOwn(INTAKE_CONTINUITY_BASELINE_PRODUCERS,spec.kind)){equal(record,INTAKE_CONTINUITY_BASELINE_PRODUCERS[spec.kind],'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_FIELD'||spec.kind==='PG_OVERTIME'){equal(record,spec.kind==='PG_FIELD'?FIELD_PG_BASELINE_PRODUCER:OVERTIME_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_PORTFOLIO'){equal(record,PORTFOLIO_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_PREPARATION'){equal(record,PREPARATION_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_COMPANY_KYC'){equal(record,COMPANY_KYC_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}equal(record&&{producer:record.producer,path:record.path,retained:record.retained,blockId:record.blockId,lane:record.lane,producerSha256:record.producerSha256,sourceBasis:record.sourceBasis},{producer:spec.producer,path:spec.path,retained:true,blockId:spec.blockId,lane:spec.lane,producerSha256:spec.producerSha256,sourceBasis:'EXPECTED_HEAD_GIT_BYTES'},'EXTENSION_PRODUCER_CONTRACT');}
  if(hash(canonical(contract.blocks.slice(0,46)))!==extension.baselineBlocksSha256||extension.baselineBlocksSha256!==BASELINE_BLOCKS_SHA256)deny('BASELINE_BLOCKS_CHANGED');
  const newPatterns=new Set([...PREPARATION_ARTIFACTS,...PORTFOLIO_ARTIFACTS,...extension.proofs.filter(spec=>spec.kind!=='PG_PORTFOLIO'&&!isCanonicalField(spec)).flatMap(spec=>contract.lanes[spec.lane].artifacts.filter(pattern=>matches(spec.path,pattern)))]);
  const ownership=Object.fromEntries(LANES.map(lane=>[lane,{blocks:contract.lanes[lane].blocks.filter(id=>id<=52),artifacts:contract.lanes[lane].artifacts.filter(pattern=>!newPatterns.has(pattern))}]));
@@ -443,6 +444,9 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
   // Append current schema2 controls after the entire historical and portfolio sequence.
   if(spec.kind==='UNIT')currentCompanyChecks.push(()=>{
    const start=checks.length;
+   const staleSpec={...spec,producerSha256:INTAKE_PLAIN_TEXT_UNIT_BASELINE_PRODUCER.producerSha256};bad('bank-intake-units-historical-pin-cannot-certify-current-plain-text-harness','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(staleSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:staleSpec.producerSha256})),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}));
+   const changed=clone(contract);changed.evidenceProducers.find(record=>record.path===spec.path).producerSha256=spec.producerSha256;bad('bank-intake-units-historical-record-cannot-be-overwritten','EXTENSION_PRODUCER_CONTRACT',()=>validateContract(changed));
+   const intakeIndex=TEST_SUITES.indexOf('tests/production-employee-intake.test.mjs'),intakePath=proof.suites[intakeIndex].tap.path,intakeOriginal=evidence.get(intakePath),legacyIntakeTap=tap(Array.from({length:65},(_,i)=>'historical employee intake suite '+i));evidence.set(intakePath,legacyIntakeTap);mutate('plain-text-intake-legacy-sixty-five-tests','PROOF_UNIT_RESULTS',p=>{p.suites[intakeIndex]={file:TEST_SUITES[intakeIndex],exitCode:0,...parseTap(legacyIntakeTap),tap:{path:intakePath,bytes:legacyIntakeTap.length,sha256:hash(legacyIntakeTap)}};});evidence.set(intakePath,intakeOriginal);
    for(const [file,previous] of [['tests/production-company-channel-kyc.test.mjs',76],['tests/production-participant-onboarding-next-step.test.mjs',35]]){
     const count=EXPECTED_SUITE_COUNTS[file],index=TEST_SUITES.indexOf(file),filename=proof.suites[index].tap.path,original=evidence.get(filename);
     for(const size of [previous,count-1,count+1]){const bytes=tap(Array.from({length:size},(_,i)=>'current schema2 suite '+i));evidence.set(filename,bytes);mutate('current-suite-count-'+file+'-'+size,'PROOF_UNIT_RESULTS',p=>{p.suites[index]={file,exitCode:0,...parseTap(bytes),tap:{path:filename,bytes:bytes.length,sha256:hash(bytes)}};});}
@@ -578,11 +582,13 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
     }
    }
    if(spec.kind==='PG_INTAKE'){
-    good('intake-postgres-current-ten-SQL-checks-exact',()=>{assert.equal(spec.checkNames.length,10);equal([...readFileSync(path.join(root,spec.producer),'utf8').matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),spec.checkNames,'PROOF_CHECK_NAMES');});
-    mutate('legacy-eight-checks','PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(name=>!name.startsWith('real-PG-focused-'));assert.equal(p.checks.length,8);});
-    mutate('ten-checks-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[4]=p.checks[3];assert.equal(p.checks.length,10);});
-    mutate('ten-checks-wrong-name','PROOF_CHECK_NAMES',p=>{p.checks[4]='foreign focused check';assert.equal(p.checks.length,10);});
-    mutate('ten-checks-wrong-order','PROOF_CHECK_NAMES',p=>{[p.checks[4],p.checks[5]]=[p.checks[5],p.checks[4]];});
+    const plainTextCheck='real-PG-signed-plain-name-email-current-sealed-outbox-time-fence-no-person-or-grant';
+    good('intake-postgres-current-eleven-SQL-checks-exact',()=>{assert.equal(spec.checkNames.length,11);equal([...readFileSync(path.join(root,spec.producer),'utf8').matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),spec.checkNames,'PROOF_CHECK_NAMES');});
+    mutate('legacy-eight-checks','PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(name=>!name.startsWith('real-PG-focused-')&&name!==plainTextCheck);assert.equal(p.checks.length,8);});
+    mutate('legacy-ten-checks-without-plain-text-causal-fence','PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(name=>name!==plainTextCheck);assert.equal(p.checks.length,10);});
+    mutate('eleven-checks-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[4]=p.checks[3];assert.equal(p.checks.length,11);});
+    mutate('eleven-checks-wrong-name','PROOF_CHECK_NAMES',p=>{p.checks[4]='foreign focused check';assert.equal(p.checks.length,11);});
+    mutate('eleven-checks-wrong-order','PROOF_CHECK_NAMES',p=>{[p.checks[4],p.checks[5]]=[p.checks[5],p.checks[4]];});
    }
    return checks.splice(start);
   });

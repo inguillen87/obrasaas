@@ -1,8 +1,44 @@
 'use client';
-import {useMemo, useState} from 'react';
+import {useMemo, useRef, useState} from 'react';
 import {Search, CalendarDays, CircleCheck, Clock3, TriangleAlert, ListFilter} from 'lucide-react';
-import {calendarDay, formatCalendarDay, loadedScheduleOverview, planningState, registeredProgress, selectLoadedTasks, taskStatus, taskStatusLabel} from './schedule-workbench.mjs';
+import {calendarDay, formatCalendarDay, loadedScheduleOverview, planningState, registeredProgress, scheduleCalendar, scheduledBar, selectLoadedTasks, taskStatus, taskStatusLabel} from './schedule-workbench.mjs';
 import styles from './schedule-workbench.module.css';
+
+function ScheduleTimeline({tasks, range, partial}) {
+ const [scale, setScale] = useState('WEEKS'), [page, setPage] = useState(0);
+ const scroll = useRef(null);
+ const calendar = useMemo(() => scheduleCalendar(range, scale, page), [range, scale, page]);
+ const move = nextPage => {setPage(nextPage); scroll.current?.scrollTo({left: 0});};
+ const zoom = nextScale => {setScale(nextScale); move(0);};
+ const navigate = event => {
+  if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {event.preventDefault(); event.currentTarget.scrollBy({left: event.key === 'ArrowRight' ? 160 : -160});}
+  if (event.key === 'Home' || event.key === 'End') {event.preventDefault(); event.currentTarget.scrollTo({left: event.key === 'Home' ? 0 : event.currentTarget.scrollWidth});}
+ };
+ return <section className={styles.gantt} aria-labelledby="schedule-gantt-title" data-schedule-gantt>
+  <div className={styles.ganttHeading}><h4 id="schedule-gantt-title">Gantt de la obra</h4><div className={styles.zoom} role="group" aria-label="Escala del Gantt">{[['DAYS', 'Días'], ['WEEKS', 'Semanas'], ['MONTHS', 'Meses']].map(([value, label]) => <button key={value} type="button" aria-pressed={scale === value} disabled={!calendar} onClick={() => zoom(value)}>{label}</button>)}</div></div>
+  <p className={styles.ganttContext}>{partial ? 'Vista parcial: sólo tareas cargadas. ' : 'Tareas registradas de esta obra. '}Los filtros también se aplican al Gantt. <span className={styles.plannedLegend}>Barra amarilla: fechas previstas.</span> <span className={styles.progressLegend}>Avance verde: porcentaje registrado de cada tarea.</span></p>
+  {calendar ? <>
+   <div className={styles.calendarNavigation}><button type="button" aria-label="Intervalo anterior del Gantt" disabled={calendar.page === 0} onClick={() => move(calendar.page - 1)}>Anterior</button><p aria-live="polite" data-gantt-window><strong>{formatCalendarDay(calendar.startsOn)} — {formatCalendarDay(calendar.endsOn)}</strong><span>Intervalo {calendar.page + 1} de {calendar.pages}</span></p><button type="button" aria-label="Intervalo siguiente del Gantt" disabled={calendar.page + 1 === calendar.pages} onClick={() => move(calendar.page + 1)}>Siguiente</button></div>
+   <p id="schedule-gantt-help" className={styles.ganttHelp}>Deslizá el calendario para recorrerlo. Con el teclado, enfocá el Gantt y usá las flechas izquierda y derecha; Inicio y Fin recorren el intervalo. Las fechas y la edición siguen disponibles en la lista.</p>
+   <div className={styles.ganttScroll} ref={scroll} tabIndex={0} role="region" aria-label="Gantt de tareas cargadas" aria-describedby="schedule-gantt-help" onKeyDown={navigate} data-gantt-scroll data-gantt-scale={calendar.scale}>
+    <div className={styles.ganttCanvas} style={{'--gantt-axis-width': calendar.width + 'px'}}>
+     <div className={styles.ganttHeader}><div className={styles.ganttLabelHeader}>Tarea y avance registrado</div><div className={styles.ganttAxis} aria-label="Calendario de fechas previstas" data-gantt-axis>{calendar.cells.map(cell => <span className={styles.calendarCell} key={cell.start} style={{left: cell.left + '%', width: cell.width + '%'}} title={cell.description}><time dateTime={cell.startsOn}>{cell.label}</time></span>)}</div></div>
+     <div className={styles.ganttRows}>
+      <div className={styles.calendarLines} aria-hidden="true">{calendar.cells.slice(1).map(cell => <span key={cell.start} style={{left: cell.left + '%'}}/>)}</div>
+      {tasks.map(task => {
+       const state = planningState(task), progress = registeredProgress(task.progress), bar = scheduledBar(task, calendar);
+       return <div className={styles.ganttRow} key={task.id} data-gantt-task-id={task.id}>
+        <div className={styles.ganttLabel}><strong title={task.title}>{task.title}</strong><span>{progress === null ? 'Avance por revisar' : `${progress} % registrado`}</span>{progress !== null && <div className={styles.ganttProgress} aria-hidden="true"><span style={{width: progress + '%'}}/></div>}</div>
+        <div className={styles.ganttLane}>{bar ? <div className={styles.plannedBar} role="img" aria-label={`${task.title}: prevista del ${formatCalendarDay(task.startsOn)} al ${formatCalendarDay(task.endsOn)}`} style={{left: bar.left + '%', width: bar.width + '%'}} data-gantt-planned data-continues-before={bar.continuesBefore} data-continues-after={bar.continuesAfter}/> : <span className={styles.unplanned}>{state === 'VALID' ? 'Fuera de este intervalo' : state === 'MISSING' ? 'Sin fechas planificadas' : 'Fechas para revisar'}</span>}<span className={styles.srOnly}>{state === 'VALID' ? `Fechas previstas: ${formatCalendarDay(task.startsOn)} hasta ${formatCalendarDay(task.endsOn)}.` : ''} {taskStatusLabel(task.status)}.</span></div>
+       </div>;
+      })}
+     </div>
+    </div>
+   </div>
+  </> : <p className={styles.ganttHelp}>Las tareas necesitan fechas previstas válidas para ubicarse en el calendario. Podés consultarlas y revisar sus fechas en la lista.</p>}
+ </section>;
+}
 
 export function ScheduleWorkbench({tasks, totalTasks, nextCursor, canPlan, locked, onPlan}) {
  const [search, setSearch] = useState(''), [status, setStatus] = useState('ALL'), [planning, setPlanning] = useState('ALL'), [order, setOrder] = useState('REGISTERED');
@@ -33,6 +69,7 @@ export function ScheduleWorkbench({tasks, totalTasks, nextCursor, canPlan, locke
    </div>
    <p className={styles.result} role="status" aria-live="polite">Mostrando {visible.length} de {tasks.length} tareas cargadas.{overview.partial && (nextCursor ? ' Podés cargar más tareas para ampliar la búsqueda.' : ' Actualizá la consulta y volvé a abrir la obra para comprobar el total.')}</p>
    {overview.range && <div className={styles.range}><span>Escala de fechas previstas</span><strong>{formatCalendarDay(new Date(overview.range.start).toISOString().slice(0, 10))} — {formatCalendarDay(new Date(overview.range.end - 86400000).toISOString().slice(0, 10))}</strong><small>Considera las tareas cargadas con fechas válidas.</small></div>}
+   {tasks.length > 0 && <ScheduleTimeline tasks={visible} range={overview.range} partial={overview.partial}/>}
    {!tasks.length && <p className={styles.empty}>Esta obra todavía no tiene tareas registradas. Empezá por cargar la primera tarea.</p>}
    {tasks.length > 0 && !visible.length && <div className={styles.empty}><strong>No hay coincidencias entre las tareas cargadas.</strong><p>Revisá la búsqueda o usá «Limpiar filtros» para volver a verlas.{overview.partial && (nextCursor ? ' También podés cargar más tareas.' : ' Actualizá la consulta y volvé a abrir la obra para comprobar el total.')}</p></div>}
    <div className={styles.tasks}>{visible.map(task => {
