@@ -46,6 +46,12 @@ export function ownCompanyCapabilityPolicy(capability,environment=process.env,no
  const original=capabilities.get(capability),current=readOwnCompanyPolicy(environment,now);if(!original||!current||original.policyDigest!==current.policyDigest)fail();return current;
 }
 export function ownCompanyCapabilityKind(capability){return capabilities.has(capability)?'ADMIN':runtimeCapabilities.has(capability)?'RUNTIME':null;}
+// A transport may tighten its sealed lease to the source authority deadline.
+// This helper can neither extend a capability nor create authority from data.
+export function restrictOwnCompanyRuntimeCapability(capability,notAfter,now=Date.now()){
+ const current=runtimeCapabilities.get(capability);if(!current||!Number.isSafeInteger(notAfter)||notAfter<=now)fail();
+ const bounded=Object.freeze({});runtimeCapabilities.set(bounded,{policy:current.policy,leaseExpiresAt:Math.min(current.leaseExpiresAt,notAfter)});return bounded;
+}
 // A runtime capability is minted only by the canonical database/audit resolver.
 // Its short request lease never extends the finite provider credential lifetime.
 export function ownCompanyTransportPolicy(capability,environment=process.env,now=Date.now()){
@@ -104,4 +110,20 @@ export async function lockOwnCompanyIssuer(client,connection,{environment=proces
 }
 export async function fenceOwnCompanyRuntime(client,connection,options){
  const capability=await lockOwnCompanyIssuer(client,connection,options);if(ownCompanyCapabilityKind(capability)!=='RUNTIME')fail();return capability;
+}
+// One fresh canonical statement for external boundaries in an already locked
+// transaction. This does not cache or extend a captured transport capability.
+export async function compactOwnCompanyRuntimeFence(client,connection,{environment=process.env,now=Date.now(),notAfter}={}){
+ const expected=ownCompanyConnectionPolicy(connection,environment,now);if(!expected?.grantDigest)fail();
+ const rows=(await client.query(`SELECT c.*,p."organizationId",u.id AS "runtimeActorId",tm."tenantRole"::text AS "runtimeRole",o.metadata AS "runtimeOrganizationMetadata",a.metadata AS "runtimeAudit",clock_timestamp() AS "runtimeNow"
+  FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId"
+  JOIN public."Organization" o ON o.id=p."organizationId" JOIN public."PlatformUser" u ON u.id=$4 AND u."clerkUserId"=$5
+  JOIN public."TenantMembership" tm ON tm."userId"=u.id AND tm."organizationId"=o.id AND tm.status='ACTIVE' AND tm."tenantRole"::text='ADMIN' AND tm."clerkRole"='org:admin'
+  JOIN public."AuditLog" a ON a.id=$7 AND a."organizationId"=o.id AND a."actorId"=u.id AND a.action='company.own.number.recorded' AND a."entityType"='WhatsAppConnection' AND a."entityId"=c.id
+  WHERE c.id=$1 AND c."projectId"=$2 AND p."organizationId"=$3 AND p.status='ACTIVE' AND o."clerkOrganizationId"=$6 AND COALESCE(o.metadata->'internal','false'::jsonb)<>'true'::jsonb FOR SHARE OF c,p,o,u,tm,a`,[expected.connectionId,expected.projectId,expected.organizationId,expected.actorId,expected.clerkUserId,expected.clerkOrganizationId,expected.origin.receiptId])).rows;
+ if(rows.length!==1)fail();const row=rows[0],time=row.runtimeNow;
+ if(!(time instanceof Date)||!Number.isFinite(time.getTime())||row.encryptedAccessToken!==connection.encryptedAccessToken)fail();
+ const policy=ownCompanyConnectionPolicy(row,environment,time.getTime()),audit=row.runtimeAudit;
+ if(policy.grantDigest!==expected.grantDigest||!memberMatches(policy,{member:{actorId:row.runtimeActorId,organizationId:row.organizationId,role:row.runtimeRole},session:{userId:policy.clerkUserId,organizationId:policy.clerkOrganizationId,organizationRole:'org:admin'},project:{id:policy.projectId,organizationId:policy.organizationId,organizationMetadata:row.runtimeOrganizationMetadata}})||audit?.state!=='RECORDED'||audit.action!=='ACTIVATE_OWN_NUMBER'||audit.projectId!==policy.projectId||audit.operationId!==policy.origin.operationId||audit.connectionId!==policy.connectionId||audit.policyDigest!==policy.origin.policyDigest||!sameKeys(audit.runtimeGrant,runtimeKeys)||grantDigest(audit.runtimeGrant)!==policy.grantDigest||audit.runtimeGrant.grantDigest!==policy.grantDigest)fail();
+ const capability=Object.freeze({});runtimeCapabilities.set(capability,{policy,leaseExpiresAt:Math.min(time.getTime()+60000,Date.parse(policy.expiresAt))});return notAfter===undefined?capability:restrictOwnCompanyRuntimeCapability(capability,notAfter,time.getTime());
 }
