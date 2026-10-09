@@ -20,7 +20,7 @@ export function createMetaKycOutbound({connect,provider,environment=process.env,
   const reserved=await within(async client=>{
    const r=await inspect(client,context,reply,purpose),{to,replyTo}=assertCustomerReplyWindow(r.payload,r.now.getTime()),id=customerOutboundId(r.event.id);
    const intake=purpose==='EMPLOYEE_INTAKE',identity=intake?{applicationId:r.anchor.id}:{challengeId:r.challenge.id};
-   const request={version:1,eventId:r.event.id,payloadDigest:context.payloadDigest,channelId:r.connection.id,organizationId:r.project.organizationId,to,replyTo,message:reply,channelPurpose:purpose,...identity,...(r.companyKyc?{targetProjectId:r.project.id,companyKycDigest:companyKycProjectionDigest(r.companyKyc)}:{})};
+   const request={version:1,eventId:r.event.id,payloadDigest:context.payloadDigest,channelId:r.connection.id,organizationId:r.project.organizationId,to,replyTo,message:reply,channelPurpose:purpose,...identity,...(r.recorded?.reactiveOnboarding?{reactiveOnboarding:r.recorded.reactiveOnboarding}:{}),...(r.companyKyc?{targetProjectId:r.project.id,companyKycDigest:companyKycProjectionDigest(r.companyKyc)}:{})};
    const reservation=await reserveCustomerOutbound(client,{id,projectId:r.connection.projectId,organizationId:r.project.organizationId,actorId:r.member.actorId,request,payloadFields:{...(intake?{employeeIntake:true}:{kycCapture:true}),...identity},environment,now:r.now.getTime()});if(reservation.done)return reservation;
    await fenceCompanyKycAuthority(client,r,context);
    const token=decryptCustomerSecret(r.connection.encryptedAccessToken,{organizationId:r.project.organizationId,projectId:r.companyKyc?r.connection.projectId:r.project.id,purpose:'access-token',resourceId:r.connection.phoneNumberId},environment);

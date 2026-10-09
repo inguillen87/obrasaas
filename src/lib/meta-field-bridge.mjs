@@ -184,7 +184,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   }
   // Corporate status is a canonical ledger read. Its receipt cannot replace
   // the active prompt or discard a draft that still requires explicit cancel.
-  return {done:await record(client,r,result(r,'CONVERSATION',plan.reply),plan.state,{preserveConversation:(limited||Boolean(r.companyProjection))&&r.proof.value.type==='text'&&r.proof.value.text?.body?.trim().toUpperCase()==='ESTADO'})};
+  return {done:await record(client,r,result(r,'CONVERSATION',plan.reply),plan.state,{preserveConversation:plan.preserveConversation===true||((limited||Boolean(r.companyProjection))&&r.proof.value.type==='text'&&r.proof.value.text?.body?.trim().toUpperCase()==='ESTADO')})};
  }
  return {async execute(context){
   const prepared=await within(client=>prepare(client,context));if(!prepared)return null;if(prepared.done)return prepared.done;

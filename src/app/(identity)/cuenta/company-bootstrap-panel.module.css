@@ -2,4 +2,6 @@
 @media(max-width:800px){.fields{grid-template-columns:1fr}.taskRow{grid-template-columns:1fr 1fr}.taskRow>label:first-child,.taskRow>button{grid-column:1/-1}.sectionTitle{align-items:flex-start;flex-direction:column}}
 @media(max-width:420px){.panel{padding:16px}.taskRow{grid-template-columns:1fr;padding:12px}.created dl{grid-template-columns:1fr}.created dd{margin-bottom:12px}.actions button,.created button{width:100%}}
 
+.created summary{min-height:44px;box-sizing:border-box;padding-block:10px;font-size:16px;line-height:1.5;font-weight:650;cursor:pointer}.created summary:focus-visible{outline:3px solid #f4c78f;outline-offset:3px}
+
 .nextStep{margin:16px 0;padding:16px;border:1px solid #57758c;border-radius:10px;background:#193447;display:flex;flex-wrap:wrap;gap:12px}.nextStep p{flex-basis:100%;margin:0;font-size:14px;line-height:1.65}.nextStep a{display:inline-flex;align-items:center;min-height:44px;box-sizing:border-box;padding:12px 16px;border:1px solid #edb774;border-radius:8px;background:#edb774;color:#102331;font-size:16px;font-weight:700;text-decoration:none;overflow-wrap:anywhere}.nextStep a:focus-visible{outline:3px solid #f4c78f;outline-offset:3px}@media(max-width:420px){.nextStep a,.nextStep button{width:100%}}
