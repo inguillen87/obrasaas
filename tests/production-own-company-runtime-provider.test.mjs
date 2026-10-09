@@ -9,9 +9,10 @@ import {ownCompanyFixture} from './fixtures/own-company-meta.mjs';
 
 const operation='11111111-1111-4111-8111-111111111111',mediaId='270000001';
 const reply=f=>({token:f.token,phoneNumberId:f.policy.phoneNumberId,to:'5491100001111',replyTo:'wamid.syntheticincoming12345',correlationId:'customer_outbound_'+'b'.repeat(64),message:{type:'text',body:'Synthetic canonical runtime reply'}});
-async function fixture({dataAccessHours=null}={}){
+async function fixture({dataAccessHours=null,omittedTargets=false}={}){
  const f=ownCompanyFixture({time:Date.parse('2026-10-09T12:00:00.000Z')});
  f.token=f.environment.META_OWN_COMPANY_ACCESS_TOKEN;f.debug.expires_at=(f.time+48*3600000)/1000;f.debug.data_access_expires_at=dataAccessHours===null?0:(f.time+dataAccessHours*3600000)/1000;
+ if(omittedTargets)for(const grant of f.debug.granular_scopes)delete grant.target_ids;
  const bytes=Buffer.from('synthetic bounded own-company media'),sha256=createHash('sha256').update(bytes).digest('hex');
  f.media={bytes,sha256,afterMetadata:null,afterAttachment:null,afterChunk:null};
  const fetchImpl=async(url,options={})=>{
@@ -51,6 +52,18 @@ test('runtime v2 uses its canonical receipt/vault after administrative expiry an
  assert.deepEqual({META_WHATSAPP_ACCESS_TOKEN:f.environment.META_WHATSAPP_ACCESS_TOKEN,WHATSAPP_TOKEN:f.environment.WHATSAPP_TOKEN},globals);assert.equal(f.calls.filter(call=>call.method==='POST').length,1);assert.equal(f.calls.filter(call=>call.method==='POST')[0].path,f.policy.phoneNumberId+'/messages');
  assert.ok(f.calls.some(call=>call.path.endsWith('/system_users')));assert.ok(f.calls.some(call=>call.path.endsWith('/owned_apps')));assert.ok(f.calls.some(call=>call.path.endsWith('/owned_whatsapp_business_accounts')));
  await assert.rejects(f.base.forOwnCompany(f.context),error=>error.code==='META_OWN_COMPANY_UNAVAILABLE');
+});
+
+test('runtime omitted granular targets still require the current canonical grant, all owned edges and phone before one reply',async()=>{
+ const f=await fixture({omittedTargets:true});f.afterAdministrativeExpiry();const scoped=await f.runtime();
+ for(const edge of ['system_users','owned_apps','owned_whatsapp_business_accounts'])assert.ok(f.calls.some(call=>call.path===f.policy.businessId+'/'+edge));
+ assert.ok(f.calls.some(call=>call.path===f.policy.wabaId+'/phone_numbers'));assert.ok(await scoped.sendReply(reply(f)));assert.equal(f.calls.filter(call=>call.method==='POST').length,1);
+ f.calls.length=0;f.canonical.receipt=false;await assert.rejects(f.runtime(),{code:'META_OWN_COMPANY_UNAVAILABLE'});assert.equal(f.calls.length,0);
+});
+
+for(const edge of ['system_users','owned_apps','owned_whatsapp_business_accounts'])for(const signal of ['missingEdge','pagingEdge'])test('runtime omission rejects '+signal+' '+edge+' without a reply POST',async()=>{
+ const f=await fixture({omittedTargets:true});f.afterAdministrativeExpiry();f.state[signal]=edge;
+ await assert.rejects(f.runtime(),{code:'META_OWN_COMPANY_OWNER_UNVERIFIED'});assert.equal(f.calls.filter(call=>call.method==='POST').length,0);
 });
 test('operational authority derives finite debug expiry from the original ADMIN inspection rather than caller fields',async()=>{
  const f=await fixture({dataAccessHours:36}),authority=f.admin.ownOperationalAuthority(f.inspection);
