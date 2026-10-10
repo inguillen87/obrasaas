@@ -3,22 +3,30 @@ import {useEffect, useRef, useState, useSyncExternalStore} from 'react';
 import Link from 'next/link';
 import styles from './onboarding-guide.module.css';
 
-const targetIds = ['organization-context','company-bootstrap-heading','workspace-title','project-preparation-title','schedule-title','site-register-title','participant-title','inventory-title','field-title','customer-whatsapp-title','worker-channel-title','company-channel-title','customer-meta-title','constructor-crm-title'];
+const targetIds = ['organization-context','company-bootstrap-heading','workspace-title','workspace-refresh','project-preparation-title','schedule-title','site-register-title','participant-title','inventory-title','field-title','customer-whatsapp-title','worker-channel-title','company-channel-title','customer-meta-title','constructor-crm-title'];
 function subscribeTargets(callback) {
  const observer = new MutationObserver(callback);
- observer.observe(document.body, {childList:true, subtree:true, attributes:true, attributeFilter:['hidden','style','aria-hidden']});
+ observer.observe(document.body, {childList:true, subtree:true, attributes:true, attributeFilter:['hidden','style','aria-hidden','disabled']});
  window.addEventListener('resize', callback);
  return () => { observer.disconnect(); window.removeEventListener('resize', callback); };
 }
-const readTargets = () => targetIds.filter(id => document.getElementById(id)?.getClientRects().length).join('|');
+const readTargets = () => targetIds.filter(id => {const element=document.getElementById(id);return element?.getClientRects().length&&(id!=='workspace-refresh'||!element.disabled);}).join('|');
 const noTargets = () => '';
+const accessNotices={
+ SESSION_REQUIRED:{title:'Sesión por verificar',text:'Esta consulta no pudo confirmar tu sesión. Usá Actualizar en Mis obras. Si el aviso continúa, volvé a ingresar con tu cuenta.'},
+ WORKSPACE_MEMBERSHIP_REQUIRED:{title:'Permisos por consultar',text:'Esta consulta no confirmó tu acceso vigente a la empresa. Si el responsable ya lo habilitó, usá Actualizar en Mis obras. Si continúa el rechazo, pedile que revise tu acceso.'},
+ WORKSPACE_PROJECT_UNAVAILABLE:{title:'Acceso a la obra por consultar',text:'Esta consulta no confirmó tu acceso a la obra. Usá Actualizar en Mis obras para consultar los permisos y las obras disponibles.'},
+ WORKSPACE_CONTEXT_CHANGED:{title:'Tu contexto cambió',text:'Cambió la organización o el acceso durante la consulta. Usá Actualizar en Mis obras antes de continuar.'},
+ PARTICIPANT_KYC_REVIEW_REQUIRED:{title:'Revisión de identidad pendiente',text:'La identidad de tu participación de campo requiere una revisión vigente. Podés presentar o consultar la documentación privada de la obra. Esto no solicita otra invitación ni cambia tu rol de oficina.'}
+};
+const safeAccessReason=value=>typeof value==='string'&&Object.hasOwn(accessNotices,value)?value:null;
 
 // A visible destination is useful for navigation, but only a current authorized
 // workspace response can supply this summary. None of these labels grants access.
 export function onboardingGuideSummary(observation) {
  const pending={state:'UNOBSERVED',company:'Empresa: todavía no consultada en esta sesión.',schedule:'Cronograma: abrí una obra para consultar sus tareas.',whatsapp:'WhatsApp: vínculo personal todavía no consultado. La configuración del canal no confirma entrega real.'};
  if(!observation||observation.version!==1||!Number.isSafeInteger(observation.generation)||observation.generation<0)return pending;
- if(observation.state==='UNAVAILABLE')return {...pending,state:'UNAVAILABLE',company:'Acceso sin confirmar. Revisá Organización activa y el aviso de Mis obras. Si aceptaste una invitación, el administrador debe confirmar tu rol en ObraSaaS.',schedule:'Cronograma: la consulta anterior ya no confirma el estado actual.',whatsapp:'WhatsApp: la consulta anterior ya no confirma el vínculo actual.'};
+ if(observation.state==='UNAVAILABLE'){const accessReason=safeAccessReason(observation.accessReason);return {...pending,state:'UNAVAILABLE',accessReason,company:accessReason?accessNotices[accessReason].text:'Esta consulta no confirmó tu acceso. Usá Actualizar en Mis obras y revisá su aviso antes de continuar.',schedule:'Cronograma: la consulta anterior ya no confirma el estado actual.',whatsapp:'WhatsApp: la consulta anterior ya no confirma el vínculo actual.'};}
  if(observation.state==='CONSULTING')return {...pending,state:'CONSULTING',company:'Consultando los registros autorizados de la empresa…',schedule:'Cronograma: esperando la consulta actual.',whatsapp:'WhatsApp: esperando la consulta actual.'};
  const roles={ADMIN:'Administrador',DIRECTOR:'Director de obra',SITE_MANAGER:'Jefe de obra',FINANCE:'Administración',AUDITOR:'Auditor'};
  const count=value=>Number.isSafeInteger(value)&&value>=0;
@@ -29,7 +37,7 @@ export function onboardingGuideSummary(observation) {
  if(observation.schedulePending)scheduleText='Cronograma: hay una operación o consulta pendiente. Comprobá su resultado antes de confirmar el total.';
  else if(schedule)scheduleText=`Cronograma consultado: ${schedule.loaded} ${schedule.loaded===1?'tarea cargada':'tareas cargadas'}${schedule.total===null?' (total sin confirmar)':` de ${schedule.total}`}. ${schedule.partial?'Vista parcial: cargá más antes de evaluar toda la obra.':'Vista completa de esta consulta.'} ${schedule.missingDates} sin fechas; ${schedule.invalidDates} con fechas por revisar. Tener tareas sin fechas puede corresponder a una preobra; no confirma inicio ni avance.`;
  const whatsapp=channel?`WhatsApp consultado: ${channel.ready?'canal disponible para vinculación':'canal pendiente de habilitación'}. ${channel.ownLinked?'Tu vínculo personal está vigente en esta consulta.':'No se observa un vínculo personal vigente en los registros consultados.'}${channel.partial?' La lista consultada es parcial.':''} El consentimiento para avisos se decide aparte; esto no confirma envío ni entrega real.`:pending.whatsapp;
- return {state:'OBSERVED',company:`Empresa consultada con acceso ${roles[observation.role]}: ${observation.projectCount} ${observation.projectCount===1?'obra':'obras'} ${observation.projectsPartial?(observation.projectCount===1?'mostrada':'mostradas')+' (lista parcial)':observation.projectCount===1?'asignada':'asignadas'}${observation.projectCount===0?'; pedile al responsable que revise tu asignación':''}. Esta consulta no es un comprobante de alta.`,schedule:scheduleText,whatsapp};
+ return {state:'OBSERVED',...(observation.accessReason==='PARTICIPANT_KYC_REVIEW_REQUIRED'?{accessReason:observation.accessReason}:{}),company:`Empresa consultada con acceso ${roles[observation.role]}: ${observation.projectCount} ${observation.projectCount===1?'obra':'obras'} ${observation.projectsPartial?(observation.projectCount===1?'mostrada':'mostradas')+' (lista parcial)':observation.projectCount===1?'asignada':'asignadas'}${observation.projectCount===0?'; pedile al responsable que revise tu asignación':''}. Esta consulta no es un comprobante de alta.`,schedule:scheduleText,whatsapp};
 }
 
 const steps = [
@@ -46,11 +54,13 @@ const steps = [
 ];
 
 export function OnboardingGuide({orgId=null, orgRole=null, observation=null}) {
- const [opened,setOpened] = useState(true), [index,setIndex] = useState(0), [reviewed,setReviewed] = useState([]), [notice,setNotice] = useState('');
+ const [opened,setOpened] = useState(true), [index,setIndex] = useState(()=>orgId?1:0), [reviewed,setReviewed] = useState([]), [notice,setNotice] = useState('');
  const title = useRef(null), moveFocus = useRef(false), choices = useRef(null);
  const available = new Set(useSyncExternalStore(subscribeTargets, readTargets, noTargets).split('|'));
  const step = steps[index], administrator = orgRole === 'org:admin';
  const summary=onboardingGuideSummary(observation);
+ const accessNotice=orgId&&available.has('workspace-title')&&(summary.state!=='OBSERVED'||summary.accessReason)?summary.state==='CONSULTING'?{title:'Consultando tu acceso',text:'Esperá la consulta actual. Los datos anteriores no confirman tus permisos vigentes.'}:summary.accessReason?accessNotices[summary.accessReason]:{title:summary.state==='UNAVAILABLE'?'Acceso por actualizar':'Comprobá tu acceso',text:summary.state==='UNAVAILABLE'?summary.company:'Mis obras todavía no confirmó tu acceso en esta sesión. Usá Actualizar para consultar las obras disponibles.'}:null;
+ const workspaceStep=step.key==='company'&&available.has('workspace-title');
  const teamRegister = step.key==='team'&&available.has('site-register-title');
  let target = step.target, dependency = step.dependency;
  if(step.key==='company') {
@@ -65,7 +75,7 @@ export function OnboardingGuide({orgId=null, orgRole=null, observation=null}) {
  function change(next){moveFocus.current=true;if(choices.current)choices.current.open=false;setNotice('');setIndex(next);}
  function go(destination=target){
   const element=destination&&document.getElementById(destination);
-  if(!element?.getClientRects().length){setNotice(dependency);return;}
+  if(!element?.getClientRects().length||element.disabled){setNotice(destination==='workspace-refresh'?'Esperá o resolvé la acción pendiente en Mis obras antes de actualizar.':dependency);return;}
   const temporary=!element.hasAttribute('tabindex');
   if(temporary){element.setAttribute('tabindex','-1');element.addEventListener('blur',()=>element.removeAttribute('tabindex'),{once:true});}
   element.scrollIntoView({behavior:'auto',block:'start'});element.focus({preventScroll:true});
@@ -74,10 +84,11 @@ export function OnboardingGuide({orgId=null, orgRole=null, observation=null}) {
   <div className={styles.heading}><div><p className={styles.eyebrow}>ACOMPAÑAMIENTO DE INICIO</p><h2 id="onboarding-guide-title" tabIndex={-1}>Tu primera obra, paso a paso</h2></div><button type="button" aria-expanded={opened} aria-controls="onboarding-guide-content" onClick={()=>setOpened(value=>!value)}>{opened?'Ocultar guía':'Abrir guía'}</button></div>
   {opened&&<div id="onboarding-guide-content">
    <p className={styles.intro}>Te acompañamos sin guardar datos ni enviar mensajes.</p>
+    {accessNotice&&<div className={styles.accessNotice} data-guide-access={summary.state} data-guide-access-reason={summary.accessReason||'UNCONFIRMED'} role="status" aria-live="polite"><strong>{accessNotice.title}</strong><p>{accessNotice.text}</p><button type="button" disabled={!available.has('workspace-refresh')||summary.state==='CONSULTING'} onClick={()=>go('workspace-refresh')}>Ir a Mis obras para actualizar</button></div>}
    <div><details className={styles.choices}><summary>{({OBSERVED:'Ver datos consultados',CONSULTING:'Consulta en curso',UNAVAILABLE:'Acceso por actualizar',UNOBSERVED:'Ver qué falta consultar'})[summary.state]}</summary><div data-guide-observation={summary.state} role="status" aria-live="polite"><p>{summary.company}</p><p>{summary.schedule}</p><p>{summary.whatsapp}</p></div></details></div>
-   <details className={styles.choices} ref={choices}><summary>Elegir otro paso</summary><nav aria-label="Pasos de inicio" className={styles.steps}>{steps.map((item,position)=><button type="button" key={item.key} aria-current={position===index?'step':undefined} onClick={()=>change(position)}><span>{position+1}</span>{item.title}{reviewed.includes(item.key)&&<small>Revisado por vos</small>}</button>)}</nav></details>
-   <div className={styles.current}><p className={styles.position}>Paso {index+1} de {steps.length}</p><h3 ref={title} tabIndex={-1}>{step.title}</h3><p>{step.key==='company'&&available.has('workspace-title')?'Mis obras está disponible en esta pantalla. Abrí una obra y consultá su información antes de continuar.':teamRegister?'Primero abrí Equipo, incidencias y materiales → Abrir registro → Agregar persona para guardar la ficha. Después, en Participantes y revisión de identidad, asigná los permisos y enviá la invitación al correo correcto. El invitado ingresa con su cuenta y acepta la participación en esa obra.':step.text}</p>
-    <details key={step.key}><summary>Qué revisar en este paso</summary><p>{step.detail}</p><label className={styles.review}><input type="checkbox" checked={reviewed.includes(step.key)} onChange={event=>setReviewed(previous=>event.target.checked?[...previous,step.key]:previous.filter(key=>key!==step.key))}/><span>Revisado por vos <small>Marca personal; no confirma guardado, permisos ni aceptación del proveedor.</small></span></label></details>
+    <details className={styles.choices} ref={choices}><summary>Elegir otro paso</summary><nav aria-label="Pasos de inicio" className={styles.steps}>{steps.map((item,position)=><button type="button" key={item.key} aria-current={position===index?'step':undefined} onClick={()=>change(position)}><span>{position+1}</span>{item.key==='company'&&orgId&&available.has('workspace-title')?'Comprobar acceso y abrir obra':item.title}{reviewed.includes(item.key)&&<small>Revisado por vos</small>}</button>)}</nav></details>
+    <div className={styles.current}><p className={styles.position}>Paso {index+1} de {steps.length}</p><h3 ref={title} tabIndex={-1}>{workspaceStep?summary.state==='OBSERVED'?'Abrí una obra':'Comprobá tu acceso':step.title}</h3><p>{workspaceStep?summary.state==='OBSERVED'?'Mis obras muestra el acceso de esta consulta. Elegí una obra disponible para consultar su información.':'Tu organización está seleccionada. En Mis obras, usá Actualizar para comprobar tu acceso actual antes de abrir una obra.':teamRegister?'Primero abrí Equipo, incidencias y materiales → Abrir registro → Agregar persona para guardar la ficha. Después, en Participantes y revisión de identidad, asigná los permisos y enviá la invitación al correo correcto. El invitado ingresa con su cuenta y acepta la participación en esa obra.':step.text}</p>
+    <details key={step.key}><summary>Qué revisar en este paso</summary><p>{workspaceStep?'Consultá tu acceso vigente y las obras disponibles. Si el responsable ya confirmó tu rol, usá Actualizar antes de pedir otra revisión. El acceso de oficina y la identidad necesaria para tu participación de campo se consultan por separado.':step.detail}</p><label className={styles.review}><input type="checkbox" checked={reviewed.includes(step.key)} onChange={event=>setReviewed(previous=>event.target.checked?[...previous,step.key]:previous.filter(key=>key!==step.key))}/><span>Revisado por vos <small>Marca personal; no confirma guardado, permisos ni aceptación del proveedor.</small></span></label></details>
     {!canGo&&<p className={styles.dependency}>{dependency}</p>}
     <div className={styles.actions}><button type="button" className={styles.primary} disabled={!canGo} onClick={()=>go()}>Ir a este paso</button>{teamRegister&&available.has('participant-title')&&<a href="#participant-title" onClick={event=>{event.preventDefault();go('participant-title');}}>Invitaciones y permisos</a>}{step.key==='whatsapp'&&['company-channel-title','customer-meta-title'].filter(id=>available.has(id)).map(id=><a key={id} href={'#'+id} onClick={event=>{event.preventDefault();go(id);}}>{id==='company-channel-title'?'Canal de la empresa':'Conexión y permisos Meta'}</a>)}{!canGo&&available.has('workspace-title')&&<button type="button" onClick={()=>go('workspace-title')}>Consultar Mis obras</button>}<Link href={'/manual#'+step.manual}>Leer el paso en el manual</Link></div>
    </div>

@@ -1,6 +1,10 @@
 # Presentación de identidad desde el teléfono
 
-El participante activo puede tomar o elegir el frente del documento y una fotografía del rostro. La cámara sugerida es la trasera para el documento y la frontal para el rostro; el navegador y el dispositivo determinan si ofrecen captura directa. La persona debe revisar la orientación y legibilidad de cada imagen, elegir **Usar imagen revisada**, leer el aviso y dar su consentimiento antes de presentar. La aprobación sigue a cargo de otra persona autorizada. No se realiza reconocimiento biométrico, prueba de vida ni aprobación automática.
+Desde la web, el participante activo presenta el frente del documento y una fotografía del rostro; puede agregar el dorso con su aviso y consentimiento específicos. La cámara sugerida es la trasera para el documento y la frontal para el rostro; el navegador y el dispositivo determinan si ofrecen captura directa. La persona revisa cada imagen, elige **Usar imagen revisada**, lee los avisos correspondientes y da su consentimiento antes de presentar. Otro responsable autorizado consulta todas las imágenes del conjunto y registra su decisión; el titular no puede aprobar su propia presentación.
+
+La lectura asistida y la comparación facial privada son opcionales y requieren autorizaciones independientes. Presentar imágenes no ejecuta esos análisis ni aprueba la identidad. Las señales obtenidas no acreditan prueba de vida, autenticidad documental ni identidad civil. El dorso no se envía a OpenAI ni se usa para comparación facial.
+
+Los nuevos desafíos de WhatsApp requieren frente, dorso y selfie, con autorización independiente del dorso y confirmación final. El participante escribe desde su propio teléfono registrado al WhatsApp receptor de la empresa. Las presentaciones y desafíos históricos conservan sus requisitos originales de dos imágenes cuando corresponda; no se agrega un dorso retroactivo ni se reemplaza un código ya preparado.
 
 ## Preparación y límites
 
@@ -8,7 +12,7 @@ La presentación usa el motor existente `field-media-preparation.mjs`, con un l�
 
 Si el original ya está dentro de 1 MiB y no se gira, se conserva su contenido exacto. Una foto mayor o girada se prepara como copia JPEG, con orientación aplicada y lado máximo de 2.560 píxeles. La pantalla informa los bytes de la copia y del original y la reducción real. La persona puede conservar el original mediante un enlace local; no se sobrescribe. Comprimir no garantiza que un documento se lea bien: la revisión visual explícita sigue siendo necesaria.
 
-El límite local de 1 MiB mantiene dos imágenes en un cuerpo JSON inferior a 4 MiB. El servidor conserva sus límites existentes: **2 MiB por imagen privada y 4 MiB por cuerpo KYC**. Esta mejora no eleva esos límites ni altera permisos, consentimiento, almacenamiento privado o revisión humana.
+La web prepara copias de hasta **1 MiB por imagen**. El servidor admite hasta **2 MiB por imagen privada** y mantiene el presupuesto normal de **4 MiB por cuerpo KYC**. El endpoint de participantes admite hasta **9 MiB** sólo para una presentación válida con dorso y su consentimiento completo; no amplía el presupuesto de otros endpoints. Estos límites no cambian permisos, almacenamiento privado ni revisión humana.
 
 ## Privacidad y recuperación
 
