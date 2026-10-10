@@ -1457,7 +1457,7 @@
       "blockId": 60,
       "lane": "workspace-ui",
       "sourceLine": 240,
-      "producerSha256": "25d5417391bf8f9a7841c5a59584610cd77b55c52af14cbb02aa72bbaae61b10",
+      "producerSha256": "0eb77c47d3dec3bace879aa9301b39c32f12dfa4467ba8985df4ae3d5898cbe1",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     }
   ],
@@ -2476,7 +2476,7 @@
         "path": ".vercel/workspace-identity-only-evidence/browser.json",
         "kind": "UI_IDENTITY_ONLY",
         "producer": "scripts/verify-workspace-identity-only-ui.mjs",
-        "producerSha256": "25d5417391bf8f9a7841c5a59584610cd77b55c52af14cbb02aa72bbaae61b10",
+        "producerSha256": "0eb77c47d3dec3bace879aa9301b39c32f12dfa4467ba8985df4ae3d5898cbe1",
         "sourceFiles": [
           "src/app/(identity)/cuenta/company-billing-panel.js",
           "src/app/(identity)/cuenta/company-billing-panel.module.css",
