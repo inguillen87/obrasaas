@@ -5,10 +5,12 @@ import {metaKycChallengeDigest,metaKycOperationId,prepareMetaKycChallenge} from 
 import {beginMetaKycConversation,planMetaKycConversation} from '../src/lib/meta-kyc-conversation.mjs';
 import {resolveMetaKycAuthority,metaKycDispatchReceiptId} from '../src/lib/meta-kyc-identity.mjs';
 import {kycMemoryFixture} from './fixtures/meta-kyc-chat-memory.mjs';
-import {customerReplyMessage} from '../src/lib/meta-customer-provider.mjs';
+import {customerReplyMessage,createMetaCustomerProvider} from '../src/lib/meta-customer-provider.mjs';
+import {createMetaKycBridge} from '../src/lib/meta-kyc-bridge.mjs';
 import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
-import {randomUUID} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {PARTICIPANT_BIOMETRIC_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
+import {lifecyclePng} from '../scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs';
 
 test('challenge has 256 bits, exact grammar and deterministic event-bound deposit UUID',()=>{
  const code='IDENTIDAD '+Buffer.alloc(32,17).toString('base64url');assert.match(metaKycChallengeDigest(code),/^[a-f0-9]{64}$/);
@@ -66,6 +68,36 @@ test('independent optional face comparison notice is pinned in chat and no proce
 });
 test('invalid provider image bytes reset to front capture with zero private uploads or canonical submission',async()=>{
  const f=kycMemoryFixture();await f.toConfirmation();f.controls.badMedia=true;const result=await f.choose('Guardar identidad');assert.equal(result.result.businessApplied,false);assert.equal(f.state().step,'FRONT');assert.equal(f.blob.puts(),0);assert.equal(f.worker.metadata.participant.kyc.status,'NOT_SUBMITTED');
+});
+for(const invalidImage of ['front','back','selfie'])for(const mismatch of ['content-length','stream-size','sha256'])test(`provider ${mismatch} mismatch on ${invalidImage} recovers capture before any private deposit`,async()=>{
+ const f=kycMemoryFixture({active:true,captureImageSetVersion:2}),ids={front:'150000021',back:'150000022',selfie:'150000023'},freshIds={front:'150000031',back:'150000032',selfie:'150000033'},knownIds=new Set([...Object.values(ids),...Object.values(freshIds)]),requests=[];
+ const imageHash=createHash('sha256').update(lifecyclePng).digest('hex');let invalid=true,integrityErrors=0,deposits=0;
+ const realProvider=createMetaCustomerProvider({environment:f.environment,fetchImpl:async input=>{
+  const url=new URL(input),mediaId=url.pathname.split('/').at(-1);assert.ok(knownIds.has(mediaId));requests.push({host:url.hostname,mediaId});
+  const damaged=invalid&&mediaId===ids[invalidImage];
+  if(url.hostname==='graph.facebook.com'){
+   assert.equal(url.pathname,'/v25.0/'+mediaId);assert.equal(url.searchParams.get('phone_number_id'),f.connection.phoneNumberId);
+   return Response.json({id:mediaId,mime_type:'image/png',file_size:lifecyclePng.length,sha256:imageHash,url:'https://lookaside.fbsbx.com/whatsapp_business/attachments/'+mediaId});
+  }
+  assert.equal(url.hostname,'lookaside.fbsbx.com');assert.equal(url.pathname,'/whatsapp_business/attachments/'+mediaId);
+  const bytes=damaged&&mismatch==='stream-size'?lifecyclePng.subarray(0,-1):damaged&&mismatch==='sha256'?Buffer.from(lifecyclePng):lifecyclePng;
+  if(damaged&&mismatch==='sha256')bytes[bytes.length-1]^=1;
+  return new Response(bytes,{headers:{'content-type':'image/png',...(damaged&&mismatch==='content-length'?{'content-length':String(lifecyclePng.length+1)}:{})}});
+ }});
+ const provider={downloadMedia:async input=>{try{return await realProvider.downloadMedia(input);}catch(error){assert.equal(error.code,'META_CUSTOMER_MEDIA_INTEGRITY');integrityErrors++;throw error;}}};
+ const bridge=createMetaKycBridge({connect:f.connect,environment:f.environment,provider,deposit:{recover:context=>f.deposit.recover(context),deposit:(...args)=>{deposits++;return f.deposit.deposit(...args);}}});
+ const execute=async message=>{const context=f.receive(message),result=await bridge.execute(context);if(result?.reply)await f.outbound.send(context,result.reply);return {context,result};};
+ const choose=title=>{const state=f.state(),index=state.choices.findIndex(row=>row.title===title);assert.ok(index>=0,title);return execute({type:'interactive',interactive:{list_reply:{id:'kyc:'+state.nonce+':'+index}}});};
+ const image=mediaId=>execute({type:'image',image:{id:mediaId,mime_type:'image/png'}});
+ await execute(f.code);await choose('Autorizar imágenes');await choose('Autorizar dorso');await choose('Sin lectura asistida');await choose('Sin comparación facial');for(const key of ['front','back','selfie'])await image(ids[key]);
+ const before=f.state(),permissions=structuredClone(f.worker.metadata.participant.permissions),failed=await choose('Guardar identidad');
+ assert.equal(integrityErrors,1);assert.equal(requests.filter(request=>request.mediaId===ids[invalidImage]).length,2);assert.equal(failed.result.businessApplied,false);assert.equal(f.blob.puts(),0);assert.equal(deposits,0);assert.equal(f.worker.metadata.participant.kyc.status,'NOT_SUBMITTED');
+ assert.equal([...f.audits.values()].filter(row=>row.metadata.kind==='KYC_SUBMITTED').length,0);assert.equal(f.state().step,'FRONT');assert.equal(f.state().confirmationEventId,null);for(const key of ['front','back','selfie'])assert.equal(f.state()[key],null);
+ for(const key of ['consent','backConsent','noticeVersion','noticeSha256','backNoticeVersion','backNoticeSha256','ocrConsent','biometricConsent'])assert.equal(f.state()[key],before[key]);
+ const requestCount=requests.length;assert.deepEqual(await bridge.execute(failed.context),failed.result);assert.equal(requests.length,requestCount);assert.equal(f.blob.puts(),0);assert.equal(deposits,0);
+ invalid=false;for(const key of ['front','back','selfie'])await image(freshIds[key]);const saved=await choose('Guardar identidad'),part=f.worker.metadata.participant;
+ assert.equal(saved.result.businessApplied,true);assert.equal(deposits,1);assert.equal(f.blob.puts(),3);assert.equal(part.kyc.status,'PENDING_REVIEW');assert.equal(part.kyc.images.length,3);assert.equal(part.kyc.review,undefined);assert.equal(part.channelIdentity,undefined);assert.deepEqual(part.permissions,permissions);assert.equal(part.kycChatChallenge.status,'COMPLETED');
+ const receipts=[...f.audits.values()].filter(row=>row.metadata.kind==='KYC_SUBMITTED');assert.equal(receipts.length,1);assert.equal(receipts[0].metadata.identityCertified,false);assert.equal(receipts[0].metadata.permissionsGranted,false);assert.equal(receipts[0].metadata.whatsAppAccessGranted,false);
 });
 test('cancel makes the code one-use and leaves no submission or private upload',async()=>{
  const f=kycMemoryFixture();await f.execute(f.code);await f.execute('CANCELAR');assert.equal(f.worker.metadata.participant.kycChatChallenge.status,'CANCELLED');assert.equal(f.state(),null);await assert.rejects(f.bridge.execute(f.receive(f.code)),{code:'META_KYC_CHALLENGE_REJECTED'});assert.equal(f.blob.puts(),0);assert.equal(f.controls.downloads,0);
