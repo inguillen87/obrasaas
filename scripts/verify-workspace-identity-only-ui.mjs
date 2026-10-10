@@ -57,7 +57,7 @@ import {AccountWorkspace} from './(identity)/cuenta/workspace-client';
 import {browserRecoveryJournal} from './(identity)/cuenta/workspace-recovery-journal.mjs';
 export default function Page(){
  const [context,setContext]=useState('A');
- const token=useCallback(async()=>{const captured=context;if(window.__tokenMode==='hold'){window.__tokenMode='normal';await new Promise(resolve=>{window.__releaseToken=resolve;});}return 'synthetic-current-'+captured;},[context]);
+ const token=useCallback(async()=>{const captured=context;if(window.__tokenMode==='hold'){window.__tokenMode='normal';await new Promise((resolve,reject)=>{window.__releaseToken=resolve;window.__rejectToken=()=>reject(new Error('CONTROLLED_OLD_TOKEN_REJECTION'));});}return 'synthetic-current-'+captured;},[context]);
  useEffect(()=>{window.__references=scope=>browserRecoveryJournal.list(scope);return()=>{delete window.__references;};},[]);
  return <main style={{maxWidth:1000,margin:'0 auto'}}><div><button onClick={()=>setContext('A')}>Contexto A</button><button onClick={()=>setContext('B')}>Contexto B</button></div><AccountWorkspace key={context} getSessionToken={token}/></main>;
 }`);
@@ -134,10 +134,10 @@ async function createPage(width,current,sharedContext=null){
    if(url.pathname==='/api/identity/workspace'){
     assert.equal(request.method(),'GET');
     if(!projectId)return answer(request,200,{scope,organizationName:'Empresa de ensayo '+actor,role:current.mode==='bootstrap'?'ADMIN':current.mode==='director'?'DIRECTOR':'AUDITOR',roleLabel:current.mode==='bootstrap'?'Administrador':current.mode==='director'?'Director':'Consulta',canManageIntegrations:false,projects:actor==='A'?[{id:'p-a',name:'Obra A',status:'ACTIVE'},{id:'p-a2',name:'Obra A2',status:'ACTIVE'}]:[{id:'p-b',name:'Obra B',status:'ACTIVE'}]});
-    if(current.mode==='late-project'&&projectId==='p-a'||current.mode==='late-company'&&actor==='A'){
+    if(current.mode==='late-project'&&projectId==='p-a'||current.mode==='late-company'&&actor==='A'||current.holdWorkspaceProject===projectId){
      await new Promise(resolve=>current.held.push(resolve));
     }
-    if(actor==='B'||projectId==='p-a2'&&current.mode==='late-project'||current.approved&&projectId==='p-a'){
+    if(actor==='B'||projectId==='p-a2'&&current.mode==='late-project'||current.approved&&projectId==='p-a'||current.approvedProjects?.includes(projectId)){
      const task={id:'t-'+projectId,title:'Tarea operativa '+projectId,status:'IN_PROGRESS',progress:37,startsOn:'2026-10-01',endsOn:'2026-10-05',revision};
      return answer(request,200,{scope,project:{id:projectId,name:actor==='B'?'Obra B':projectId==='p-a2'?'Obra A2':'Obra A',status:'ACTIVE'},roleLabel:'Consulta',canPlanSchedule:false,tasks:[task],totalTasks:current.mode==='revoke'?2:1,nextCursor:current.mode==='revoke'?task.id:null});
     }
@@ -145,7 +145,7 @@ async function createPage(width,current,sharedContext=null){
    }
    if(url.pathname==='/api/identity/participants'){
     assert.equal(scope,scopeA);assert.ok(['p-a','p-a2'].includes(projectId));
-    if(projectId==='p-a2'){assert.equal(request.method(),'GET');assert.equal(url.searchParams.has('operationId'),false);return answer(request,200,{scope,projectId,canManage:false,canInvite:false,canManageOfficeRoles:false,existingAccounts:[],records:[{...current.row,id:'worker-second',name:'Perfil propio de segunda obra',kyc:{status:'NOT_SUBMITTED',submissionId:null,images:[]}}],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE}});}
+    if(projectId==='p-a2'){assert.equal(request.method(),'GET');assert.equal(url.searchParams.has('operationId'),false);return answer(request,200,{scope,projectId,canManage:false,canInvite:false,canManageOfficeRoles:false,existingAccounts:[],records:[{...current.row,id:'worker-second',name:'Perfil propio de segunda obra',kyc:current.secondKycApproved?current.row.kyc:{status:'NOT_SUBMITTED',submissionId:null,images:[]}}],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE}});}
     if(current.mode==='revoked-own')return answer(request,403,{code:'PARTICIPANT_ACCESS_REQUIRED'});
     if(request.method()==='POST'){
      assert.equal(payload.action,undefined);assert.equal(payload.scope,scopeA);assert.equal(payload.workerId,'worker-fixture');assert.equal(payload.consent,true);assert.match(payload.front,/^data:image\/png;base64,/);assert.match(payload.selfie,/^data:image\/png;base64,/);
@@ -317,13 +317,64 @@ async function privacyReferenceDenied(width){
  current.channelDenied=null;await click(page,'Consultar resultado pendiente');await waitText(page,'Recibo confirmado');safeReferences(await references(page),0);assert.deepEqual(current.channelReceiptQueries,[operationId]);assert.equal(current.channelPosts.length,1);assert.deepEqual(current.requests.filter(row=>row.path==='/api/identity/worker-channel'&&row.operationId).map(row=>row.operationId),[operationId,operationId]);
  checks.push({name:'canonical-reference-GET-404-hides-loaded-record-and-retains-original-cross-tab-UUID',width,sameOperationId:true,durableReference:true,posts:1,receiptGets:2});await context.close();
 }
+async function focusedOwnChannel(page,current){
+ await page.waitForFunction(()=>document.activeElement?.id==='worker-channel-title');
+ const position=await page.$eval('#worker-channel-title',node=>{const rect=node.getBoundingClientRect();return {top:rect.top,bottom:rect.bottom,height:rect.height,visible:node.getClientRects().length>0,viewport:innerHeight};});
+ assert.ok(position.visible&&position.height>0&&position.top<position.viewport&&position.bottom>0,'Own WhatsApp heading is not visible after canonical approval');
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ assert.equal(current.requests.filter(row=>row.path==='/api/identity/worker-channel').length,0,'Navigation must not read or activate the channel automatically');
+ assert.equal(current.channelPosts.length,0);assert.equal(current.posts.length,0);
+}
+async function privateApprovalFocus(width){
+ const {current,context,page}=await startPrivacy(width);
+ current.row={...current.row,permissions:{attendance:true,report:true},kyc:{...current.row.kyc,status:'APPROVED'}};
+ await click(page,'Consultar mi identidad');await waitText(page,'Aprobado por un responsable');await identityOnly(page);
+ current.approved=true;await click(page,'Consultar mi vínculo');await waitText(page,'Tarea operativa p-a');await focusedOwnChannel(page,current);
+ assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,2,'Own channel navigation requires exactly one fresh canonical project GET');
+ await click(page,'Consultar participantes');await waitText(page,'Aprobado por un responsable');await settled(page);
+ assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','A consumed focus ticket must not repeat when the participant panel is consulted');
+ assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,2);
+ assert.equal(current.requests.filter(row=>row.path==='/api/identity/worker-channel').length,0);assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);
+ await context.close();
+}
+async function approvalTokenNavigationRace(width,outcome){
+ const {current,context,page}=await startPrivacy(width);
+ current.row={...current.row,permissions:{attendance:true,report:true},kyc:{...current.row.kyc,status:'APPROVED'}};
+ await click(page,'Consultar mi identidad');await waitText(page,'Aprobado por un responsable');current.approved=true;
+ await page.evaluate(()=>{window.__tokenMode='hold';});await click(page,'Consultar mi vínculo');await page.waitForFunction(()=>typeof window.__releaseToken==='function');
+ assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId==='p-a').length,1,'The old held token dispatched a workspace GET prematurely');
+ await click(page,'Obra A2');await identityOnly(page);current.secondKycApproved=true;
+ await click(page,'Consultar mi identidad');await waitText(page,'Aprobado por un responsable');
+ current.approvedProjects=['p-a2'];current.holdWorkspaceProject='p-a2';await click(page,'Consultar mi vínculo');
+ for(let attempt=0;!current.held.length&&attempt<100;attempt++)await pause(20);assert.equal(current.held.length,1,'The current canonical project GET was not held');
+ await page.evaluate(mode=>mode==='reject'?window.__rejectToken():window.__releaseToken(),outcome);
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId==='p-a').length,1,'An aborted old token must not dispatch a project read');
+ assert.equal(await page.$('#schedule-title'),null,'Current project is still awaiting its canonical GET');
+ const releaseCurrent=current.held.shift();
+ if(outcome==='refresh'){
+  current.holdWorkspaceProject=null;
+  await click(page,'Obra A');await waitText(page,'Tarea operativa p-a');releaseCurrent();
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await settled(page);
+  assert.equal(await page.$eval('#schedule-title',node=>node.textContent),'Obra A');assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','Manual selection must cancel the previous focus request');
+  await click(page,'Actualizar');await waitText(page,'Empresa de ensayo A');await click(page,'Obra A');await waitText(page,'Tarea operativa p-a');
+  assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','A refreshed manual selection must not restore the consumed focus request');
+  assert.equal(current.requests.filter(row=>row.path==='/api/identity/worker-channel').length,0);assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);
+ }else{
+  releaseCurrent();await waitText(page,'Tarea operativa p-a2');await focusedOwnChannel(page,current);
+  assert.equal(await page.$eval('#schedule-title',node=>node.textContent),'Obra A2');assert.equal(await page.$('#identity-access-title'),null);
+ }
+ await context.close();
+}
 async function privateApprovalNavigation(width){
  const {current,context,page}=await startPrivacy(width);await click(page,'Consultar mi identidad');await waitText(page,'Pendiente de revisión humana');
  current.row={...current.row,permissions:{attendance:true,report:true},kyc:{...current.row.kyc,status:'APPROVED'}};await click(page,'Consultar mi identidad');await waitText(page,'Aprobado por un responsable');await identityOnly(page);
  assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,1);assert.equal(current.channelPosts.length,0);
  await click(page,'Consultar mi vínculo');await identityOnly(page);assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,2,'Own approval callback did not query canonical workspace');
  current.approved=true;await click(page,'Comprobar habilitación de obra');await waitText(page,'Tarea operativa p-a');assert.equal(await page.$('#identity-access-title'),null);assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,3);assert.equal(current.channelPosts.length,0);
- checks.push({name:'own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace',width});await context.close();
+ assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','Manual canonical refresh must not request the onboarding focus');
+ await context.close();await privateApprovalFocus(width);for(const outcome of ['resolve','reject','refresh'])await approvalTokenNavigationRace(width,outcome);
+ checks.push({name:'own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace',width});
 }
 try{
  let ready=false;for(let attempt=0;attempt<120;attempt++){if(server.exitCode!==null)throw Error('Fixture exited: '+serverLog);let response;try{response=await fetch(origin);}catch{}await response?.body?.cancel();if(response?.ok){ready=true;break;}if(response?.status>=500)throw Error('Fixture compilation failed: '+serverLog);await pause(500);}assert.ok(ready,'Fixture unavailable: '+serverLog);

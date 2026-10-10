@@ -85,7 +85,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,initialProj
  const transport=useWorkspaceRequest(getSessionToken);
  const request=useCallback((query='',options={})=>requestWorkspace(transport,query,options),[transport]);
  const [account,setAccount]=useState(null),[view,setView]=useState(null),[loading,setLoading]=useState(true),[notice,setNotice]=useState(''),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[saving,setSaving]=useState(false),[receipt,setReceipt]=useState(null);
- const generation=useRef(0),controller=useRef(null),mounted=useRef(true);
+ const generation=useRef(0),controller=useRef(null),mounted=useRef(true),identityNavigation=useRef(null),identityNavigationEpoch=useRef(0);
  // Capture once per Clerk context. A query parameter can only suggest a read.
  const initialProjectHint=useRef({projectId:initialProjectId,consumed:false,listGeneration:null});
  const [guideUnavailable,setGuideUnavailable]=useState(false),[guideReadFailed,setGuideReadFailed]=useState(false),[guideAccessReason,setGuideAccessReason]=useState(null);
@@ -96,13 +96,27 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,initialProj
  const [channelSnapshot,setChannelSnapshot]=useState(null),[observationEpoch,setObservationEpoch]=useState(0),onboardingContext=useRef(null);
  useLayoutEffect(()=>{onboardingContext.current=account&&view?{scope:account.scope,projectId:view.project.id,generation:observationEpoch,canManageIntegrations:account.canManageIntegrations===true}:null;return()=>{onboardingContext.current=null;};},[account,view,observationEpoch]);
  const channelObserved=useCallback(value=>{const context=onboardingContext.current;if(!context||value.scope!==context.scope||value.projectId!==context.projectId||value.observedGeneration!==context.generation)return;setChannelSnapshot(value.snapshot?{...value.snapshot,observedGeneration:value.observedGeneration}:null);},[]);
- const navigateOnboarding=useCallback(value=>{const id=participantOnboardingNavigationTarget(value,onboardingContext.current);if(!id)return;const target=document.getElementById(id);if(!target?.getClientRects().length)return;target.setAttribute('tabindex','-1');target.focus({preventScroll:true});target.scrollIntoView({block:'start',behavior:'auto'});},[]);
+ const navigateOnboarding=useCallback(value=>{identityNavigation.current=null;identityNavigationEpoch.current++;const id=participantOnboardingNavigationTarget(value,onboardingContext.current);if(!id)return;const target=document.getElementById(id);if(!target?.getClientRects().length)return;target.setAttribute('tabindex','-1');target.focus({preventScroll:true});target.scrollIntoView({block:'start',behavior:'auto'});},[]);
  const [creatingTask,setTaskCreating]=useState(false),[modulePending,setModulePending]=useState({});
  const [planReadback,setPlanReadback]=useState(null),[preparationRecovery,setPreparationRecovery]=useState(null),[creationRecovery,setCreationRecovery]=useState(null);
  const planReadbackMatches=Boolean(planReadback&&planReadback.scope===account?.scope&&planReadback.projectId===view?.project.id);
  const planReadbackPending=planReadbackMatches&&planReadback.status==='pending';
  const taskCreating=creatingTask||Object.values(modulePending).some(Boolean);
  const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft)||planReadbackPending;
+ useLayoutEffect(()=>{
+  const ticket=identityNavigation.current;
+  if(!ticket)return;
+  const context=onboardingContext.current;
+  if(!mounted.current||ticket.generation!==generation.current||ticket.generation!==observationEpoch||context?.generation!==ticket.generation||ticket.scope!==account?.scope||ticket.scope!==view?.scope||ticket.projectId!==view?.project.id||contextLocked){identityNavigation.current=null;identityNavigationEpoch.current++;return;}
+  if(loading)return;
+  // The canonical project GET already succeeded. Consume once, without reading the channel.
+  identityNavigation.current=null;identityNavigationEpoch.current++;
+  const id=participantOnboardingNavigationTarget(ticket,context);
+  if(id!=='worker-channel-title')return;
+  const target=document.getElementById(id);
+  if(!target?.getClientRects().length)return;
+  target.setAttribute('tabindex','-1');target.focus({preventScroll:true});target.scrollIntoView({block:'start',behavior:'auto'});
+ },[account,view,loading,observationEpoch,contextLocked]);
  useEffect(()=>()=>onGuideObservation?.(null),[onGuideObservation]);
  useEffect(()=>{onGuideObservation?.(workspaceGuideObservation({account,view,officeProject:officeSelection,loading,generation:observationEpoch,unavailable:guideUnavailable,readFailed:guideReadFailed,accessReason:guideAccessReason,schedulePending:saving||Boolean(attempt)||Boolean(creatingTask)||Boolean(modulePending.plan)||Boolean(planReadbackMatches),channelSnapshot}));},[account,view,officeSelection,loading,observationEpoch,guideUnavailable,guideReadFailed,guideAccessReason,saving,attempt,creatingTask,modulePending.plan,planReadbackMatches,channelSnapshot,onGuideObservation]);
  const scheduleEditor=useRef(null),editingTaskId=draft?.task?.id;
@@ -134,6 +148,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,initialProj
  const projectPrepared=useCallback(result=>{setAccount(previous=>previous?.scope===result.scope?{...previous,projects:previous.projects.map(project=>project.id===result.projectId?{...project,name:result.name}:project)}:previous);setView(previous=>previous?.scope===result.scope&&previous.project.id===result.projectId?{...previous,project:{...previous.project,name:result.name}}:previous);},[]);
  const tasksChanged=useCallback((task,context)=>{if(mounted.current&&task?.id)setView(old=>old&&context&&old.scope===context.scope&&old.project.id===context.projectId?{...old,tasks:updateLoadedTask(old.tasks,task)}:old);},[]);
  const portfolioAccessRejected=useCallback(()=>{
+  identityNavigation.current=null;identityNavigationEpoch.current++;
   if(!mounted.current)return;
   controller.current?.abort();const current=++generation.current;
   onboardingContext.current=null;setObservationEpoch(current);setChannelSnapshot(null);
@@ -146,6 +161,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,initialProj
   setNotice('Tu acceso cambió. Actualizá las obras antes de continuar.');
  },[]);
  const restrictProject=useCallback((error,projectId)=>{
+  identityNavigation.current=null;identityNavigationEpoch.current++;
   const identity=workspaceIdentityOnlyProject(error,account,projectId);
    setGuideAccessReason(workspaceGuideAccessReason(error));
   onboardingContext.current=null;setChannelSnapshot(null);setView(null);setIdentityProject(identity);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);
@@ -156,17 +172,22 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,initialProj
   if(!identity)setAccount(null);
  },[account]);
  useEffect(()=>{
-  const epoch=generation;mounted.current=true;const abort=new AbortController();controller.current=abort;const current=++epoch.current;setObservationEpoch(current);setChannelSnapshot(null);
+  const epoch=generation,navigation=identityNavigation,navigationEpoch=identityNavigationEpoch;
+  navigation.current=null;navigationEpoch.current++;mounted.current=true;const abort=new AbortController();controller.current=abort;const current=++epoch.current;setObservationEpoch(current);setChannelSnapshot(null);
   setAccount(null);setView(null);setIdentityProject(null);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);setAttempt(null);setRetryAllowed(false);setTaskCreating(false);setModulePending({});setNotice('');setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);setLoading(true);
   request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current){const confirmed=confirmedWorkspaceAccount(data);initialProjectHint.current.listGeneration=current;setAccount(confirmed);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);}}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}).finally(()=>{if(mounted.current&&current===generation.current){setLoading(false);setPlanReadback(null);}});
-  return()=>{mounted.current=false;epoch.current++;abort.abort();controller.current?.abort();};
+  return()=>{navigation.current=null;navigationEpoch.current++;mounted.current=false;epoch.current++;abort.abort();controller.current?.abort();};
  },[request]);
  async function refresh(){
+  identityNavigation.current=null;identityNavigationEpoch.current++;
   if(contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
   setAccount(null);setView(null);setIdentityProject(null);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setNotice('');setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);setLoading(true);
   try{const data=await request('',{signal:abort.signal});if(mounted.current&&current===generation.current){const confirmed=confirmedWorkspaceAccount(data);initialProjectHint.current.listGeneration=current;setAccount(confirmed);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);}}catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
- const open=useCallback(async(projectId,append=false)=>{
+ const open=useCallback(async(projectId,append=false,navigation=null)=>{
+  identityNavigation.current=null;identityNavigationEpoch.current++;
+  const navigationEpoch=identityNavigationEpoch.current;
+  if(navigation&&(append||participantOnboardingNavigationTarget(navigation,{scope:account?.scope,projectId,canManageIntegrations:false})!=='worker-channel-title'))return;
   if(account?.officeReviewOnly===true){if(contextLocked)return;const selected=account.projects.find(project=>project.id===projectId);if(selected){initialProjectHint.current.consumed=true;setView(null);setIdentityProject(null);setOfficeProject({scope:account.scope,projectId,name:selected.name});}return;}
   if(!account||contextLocked||!account.projects.some(project=>project.id===projectId))return;initialProjectHint.current.consumed=true;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
   const cursor=append?view?.nextCursor:null;setIdentityProject(null);setPlanReadback(null);setNotice('');setGuideAccessReason(null);setLoading(true);if(!append){setView(null);setDraft(null);setReceipt(null);}
@@ -174,9 +195,10 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,initialProj
    const data=await request(query({projectId,scope:account.scope,...(cursor?{afterTask:cursor}:{})}),{signal:abort.signal});
    if(!mounted.current||current!==generation.current)return;
    if(data.scope!==account.scope||data.project.id!==projectId)throw new Error('La respuesta no coincide con la obra seleccionada.');
+   if(navigation&&navigationEpoch===identityNavigationEpoch.current)identityNavigation.current={scope:account.scope,projectId,generation:current,target:'worker-channel'};
    setView(previous=>append?{...data,tasks:mergeLoadedTasks(previous?.tasks||[],data.tasks)}:data);
    setGuideReadFailed(false);
-  }catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);if(guideAccessDenied(error))restrictProject(error,projectId);}}
+  }catch(error){if(mounted.current&&current===generation.current){identityNavigation.current=null;identityNavigationEpoch.current++;}if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);if(guideAccessDenied(error))restrictProject(error,projectId);}}
   finally{if(mounted.current&&current===generation.current)setLoading(false);}
  },[account,contextLocked,request,restrictProject,view?.nextCursor]);
  useEffect(()=>{
@@ -189,6 +211,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,initialProj
   void open(hint.projectId);
  },[account,contextLocked,loading,open]);
  async function readRecordedSchedule(target){
+  identityNavigation.current=null;identityNavigationEpoch.current++;
   if(!mounted.current||target.scope!==account?.scope||target.projectId!==view?.project.id)return;
   controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
   const context={scope:target.scope,projectId:target.projectId,generation:current,kind:target.kind==='task'?'task':'plan'};
@@ -251,7 +274,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,initialProj
    {!identitySelection&&account.officeReviewOnly!==true&&<PortfolioOverviewPanel key={`portfolio:${account.scope}`} scope={account.scope} role={account.role} getSessionToken={getSessionToken} locked={contextLocked||loading} onOpenProject={projectId=>open(projectId)} onAccessRejected={portfolioAccessRejected}/>}
    {account.projects.length>0&&!view&&!identitySelection&&!officeSelection&&!loading&&<div className={styles.startState}><strong>Abrí una obra para empezar</strong><p>{account.officeReviewOnly===true?'Consultá sólo los eventos de lectura que el administrador seleccionó.':'Consultá el cronograma, registrá el trabajo y accedé a las herramientas disponibles para tu rol.'}</p></div>}
   </>}
-  {identitySelection&&<><section className={styles.startState} aria-labelledby="identity-access-title"><h3 id="identity-access-title">Identidad y habilitación de obra</h3><p>Tu acceso requiere una revisión humana vigente. Podés presentar o consultar tu documentación privada para esta obra. Después de la aprobación, comprobá la habilitación para abrir las tareas y los registros.</p><button type="button" disabled={contextLocked||loading} onClick={()=>open(identitySelection.projectId)}>Comprobar habilitación de obra</button></section><ParticipantPanel key={`identity-only:${identitySelection.scope}:${identitySelection.projectId}`} presentation="own-identity" projectId={identitySelection.projectId} scope={identitySelection.scope} getSessionToken={getSessionToken} onPending={participantPending} onNavigate={value=>{if(mounted.current&&generation.current===observationEpoch&&value.scope===identitySelection.scope&&value.projectId===identitySelection.projectId)open(identitySelection.projectId);}}/><details style={{marginTop:'1rem'}}><summary style={{minHeight:44,paddingBlock:'.6rem',cursor:'pointer',fontSize:16,fontWeight:700}}>Mi WhatsApp y mis avisos</summary><WorkerChannelPanel key={`identity-channel:${identitySelection.scope}:${identitySelection.projectId}`} presentation="own-privacy" projectId={identitySelection.projectId} scope={identitySelection.scope} getSessionToken={getSessionToken} onPending={channelPending} observationEpoch={observationEpoch}/></details></>}
+  {identitySelection&&<><section className={styles.startState} aria-labelledby="identity-access-title"><h3 id="identity-access-title">Identidad y habilitación de obra</h3><p>Tu acceso requiere una revisión humana vigente. Podés presentar o consultar tu documentación privada para esta obra. Después de la aprobación, comprobá la habilitación para abrir las tareas y los registros.</p><button type="button" disabled={contextLocked||loading} onClick={()=>open(identitySelection.projectId)}>Comprobar habilitación de obra</button></section><ParticipantPanel key={`identity-only:${identitySelection.scope}:${identitySelection.projectId}`} presentation="own-identity" projectId={identitySelection.projectId} scope={identitySelection.scope} getSessionToken={getSessionToken} onPending={participantPending} onNavigate={value=>{if(mounted.current&&generation.current===observationEpoch&&participantOnboardingNavigationTarget(value,{scope:identitySelection.scope,projectId:identitySelection.projectId,canManageIntegrations:false})==='worker-channel-title')void open(identitySelection.projectId,false,value);}}/><details style={{marginTop:'1rem'}}><summary style={{minHeight:44,paddingBlock:'.6rem',cursor:'pointer',fontSize:16,fontWeight:700}}>Mi WhatsApp y mis avisos</summary><WorkerChannelPanel key={`identity-channel:${identitySelection.scope}:${identitySelection.projectId}`} presentation="own-privacy" projectId={identitySelection.projectId} scope={identitySelection.scope} getSessionToken={getSessionToken} onPending={channelPending} observationEpoch={observationEpoch}/></details></>}
   {view&&<div className={styles.workbench}><WorkspaceToolsNavigation role={account?.role} canManageIntegrations={account?.canManageIntegrations} canImportPlan={view.canPlanSchedule} pending={modulePending} schedulePending={saving||Boolean(attempt)||Boolean(draft)||creatingTask} scheduleEditing={Boolean(draft)}/><div className={styles.modules}>
   {view&&<section aria-labelledby="schedule-title" className={styles.schedule}>
    <div className={styles.heading}><div><p className={styles.eyebrow}>CRONOGRAMA REGISTRADO</p><h3 id="schedule-title">{view.project.name}</h3></div><span>{view.tasks.length} de {view.totalTasks} tareas</span></div>
