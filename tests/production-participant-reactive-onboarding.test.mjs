@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {digest} from '../src/lib/workspace-policy.mjs';
 import {encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
 import {customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
+import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
 import {decodeReactiveStart,prelockReactiveOnboarding} from '../src/lib/participant-onboarding-reactive.mjs';
 import {fenceCompanyKycAuthority} from '../src/lib/company-channel-kyc.mjs';
 
@@ -66,6 +67,58 @@ for(const status of ['BLOCKED','PENDING','SEND_STARTED','SEND_UNKNOWN','SENT','S
  const state={status:'ADMITTED',admission:{workerId:'worker-a',projectId:'project-b'}};
  const value=await prelockReactiveOnboarding({query:async(statement)=>{sql.push(statement);return {rows:[{id:'worker-a',projectId:'project-b',metadata:{participant:{status:'INVITED',onboardingDelivery:{state:status}}}}]};}},{organizationId:'org-a'},state);
  assert.equal(value,null);assert.equal(sql.length,1);assert.doesNotMatch(sql[0],/FOR (?:SHARE|UPDATE)|INSERT|UPDATE/);
+});
+
+function activeDiscoveryFixture(){
+ const intent={organizationId:'org-a',targetProjectId:'project-b',workerId:'worker-a',invitationId:'invite_'+'1'.repeat(32),issuerActorId:'owner',issuerMembershipId:'owner-m',consentReceiptId:'contact-receipt'};
+ const participant={status:'ACTIVE',clerkUserId:'user_Person',acceptanceReceiptId:'accepted-receipt',invitation:{state:'ACCEPTED'},onboardingDelivery:{version:1,...intent,state:'WAITING_CONFIGURATION'}};
+ const state={status:'ADMITTED',admission:{workerId:'worker-a',projectId:'project-b'}};
+ const connection={organizationId:'org-a',metadata:{employeeIntakePolicy:{issuerActorId:'owner',issuerMembershipId:'owner-m'}}};
+ const calls=[];let ownRows=[{actorId:'person',membershipId:'person-m'}],ownClerk='user_Person';
+ const client={async query(sql,args){
+  calls.push({sql,args});
+  if(sql.startsWith('SELECT w.id,w."projectId",w.metadata'))return {rows:[{id:'worker-a',projectId:'project-b',metadata:{participant}}]};
+  if(sql.startsWith('SELECT u.id AS "actorId",tm.id AS "membershipId"'))return {rows:ownRows};
+  if(sql.startsWith('SELECT id,"clerkUserId" FROM public."PlatformUser"'))return {rows:[{id:args[0],clerkUserId:args[0]==='person'?ownClerk:'user_Owner'}]};
+  if(sql.startsWith('SELECT id AS "membershipId"'))return {rows:[{membershipId:args[0],actorId:args[1],organizationId:'org-a',role:args[1]==='owner'?'ADMIN':'AUDITOR',clerkRole:args[1]==='owner'?'org:admin':'org:member'}]};
+  if(sql.startsWith('SELECT pg_advisory_xact_lock'))return {rows:[]};
+  if(sql.includes('to_regclass'))return {rows:[{present:false}]};
+  throw Error('Unexpected synthetic discovery SQL');
+ }};
+ return {participant,state,connection,intent,calls,client,setOwnRows:value=>{ownRows=value;},setOwnClerk:value=>{ownClerk=value;}};
+}
+
+test('accepted reactive discovery locks both canonical accounts before projects without rewriting identity or access',async()=>{
+ const f=activeDiscoveryFixture(),before=structuredClone(f.participant);
+ assert.deepEqual(await prelockReactiveOnboarding(f.client,f.connection,f.state),{intent:f.intent,admissionDigest:metaCustomerContentDigest(f.state.admission)});
+ const accountLocks=f.calls.filter(c=>c.sql.startsWith('SELECT id,"clerkUserId"')).map(c=>c.args[0]);
+ assert.deepEqual(accountLocks,['owner','person']);
+ const journeyLocks=f.calls.filter(c=>c.sql.startsWith('SELECT pg_advisory_xact_lock'));
+ assert.deepEqual(journeyLocks.map(c=>c.args[0]),['owner','person'].map(actorId=>'person-worksite-journey-v1:'+digest(['org-a',actorId])));
+ const schemaIndex=f.calls.findIndex(c=>c.sql.includes('to_regclass'));
+ assert.ok(f.calls.indexOf(journeyLocks[1])<schemaIndex);
+ assert.deepEqual(f.participant,before);assert.ok(f.calls.every(c=>c.sql.startsWith('SELECT ')));
+});
+
+for(const [label,mutate] of [
+ ['missing linked account',f=>{delete f.participant.clerkUserId;}],
+ ['pending provider acceptance',f=>{f.participant.invitation.state='SENT';}],
+ ['missing acceptance receipt',f=>{delete f.participant.acceptanceReceiptId;}],
+ ['invalid linked account',f=>{f.participant.clerkUserId='foreign user';}],
+])test('accepted discovery fails closed for '+label,async()=>{
+ const f=activeDiscoveryFixture();mutate(f);
+ await assert.rejects(prelockReactiveOnboarding(f.client,f.connection,f.state),{code:'EMPLOYEE_INTAKE_INTEGRITY'});
+ assert.equal(f.calls.length,1);
+});
+
+for(const [label,mutate] of [
+ ['revoked own membership',f=>f.setOwnRows([])],
+ ['ambiguous own membership',f=>f.setOwnRows([{actorId:'person',membershipId:'person-m'},{actorId:'person',membershipId:'other-m'}])],
+ ['changed own linked account',f=>f.setOwnClerk('user_Other')],
+])test('accepted discovery denies '+label+' without a new challenge or account write',async()=>{
+ const f=activeDiscoveryFixture();mutate(f);
+ await assert.rejects(prelockReactiveOnboarding(f.client,f.connection,f.state),{code:'EMPLOYEE_INTAKE_REVOKED'});
+ assert.ok(f.calls.every(c=>c.sql.startsWith('SELECT ')));assert.ok(!f.calls.some(c=>c.sql.startsWith('SELECT pg_advisory_xact_lock')));
 });
 
 for(const deadline of ['2026-10-09T05:00:00Z','2026-10-09T04:59:59Z','invalid'])test('final corporate fence rejects expired or invalid reactive start deadline '+deadline,async()=>{

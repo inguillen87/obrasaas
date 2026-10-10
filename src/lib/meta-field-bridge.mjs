@@ -1,7 +1,7 @@
-import {WorkspaceError,digest} from './workspace-policy.mjs';
+import {WorkspaceError,digest,workspaceId} from './workspace-policy.mjs';
 import {createFieldOperations,publicFieldEvidence} from './field-operations-store.mjs';
 import {createFieldMedia,decodeFieldMedia} from './field-media.mjs';
-import {planMetaFieldConversation,META_FIELD_MEDIA_AUTHORIZATION_VERSION,validMetaFieldMediaReferenceContext,metaFieldMediaAuthorizationValid} from './meta-field-conversation.mjs';
+import {planMetaFieldConversation,metaFieldConversationAction,META_FIELD_MEDIA_AUTHORIZATION_VERSION,validMetaFieldMediaReferenceContext,metaFieldMediaAuthorizationValid} from './meta-field-conversation.mjs';
 import {resolveWorkerChannelIdentity,decodeWorkerChannelProof} from './worker-channel-identity.mjs';
 import {META_CUSTOMER_PROTOCOL,resolveMetaCloudProtocol} from './meta-cloud-protocol.mjs';
 import {decryptCustomerSecret,encryptCustomerSecret} from './meta-customer-credentials.mjs';
@@ -159,11 +159,13 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   const state=conversation(r),messageAt=Number(r.proof.value.timestamp)*1000;
   const stale=state&&(Number(r.proof.value.timestamp)<Number(state.lastMessageTimestamp)||Number(r.proof.value.timestamp)===Number(state.lastMessageTimestamp)&&new Date(r.event.createdAt).getTime()<Date.parse(state.lastReceivedAt));
   if(stale||!Number.isSafeInteger(messageAt)||messageAt>r.now.getTime()+60000||r.now.getTime()-messageAt>=86400000)return {done:await record(client,r,result(r,'STALE_CONVERSATION',text('Este mensaje pertenece a un paso anterior. Conservamos el borrador más reciente. Escribí MENU para empezar de nuevo.'),{code:'META_CHANNEL_STALE_MESSAGE'}),state,{onlyIfCurrent:true})};
-  const {session,service}=operations(client,r),data=await service.read(session,{projectId:r.project.id,scope:r.scope}),tasks=(await client.query(`SELECT id,title,progress,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Task" WHERE "projectId"=$1 ORDER BY "createdAt",id LIMIT 101`,[r.project.id])).rows;
+  const {session,service}=operations(client,r),data=await service.read(session,{projectId:r.project.id,scope:r.scope});
+  const action=r.proof.value.type==='text'?metaFieldConversationAction(r.proof.value.text?.body):null;
+  const activeState=state?.version===1&&Date.parse(state.expiresAt)>r.now.getTime()&&(!action||r.proof.value.text?.body?.trim().toUpperCase()==='HOLA'&&state.purpose!=='MENU')?state:null;
   const latest=data.attendance.filter(e=>e.workerId===r.worker.id).sort((a,b)=>b.sequence-a.sequence)[0]||null;
-  const limited=attendanceOnly||Boolean(r.connection.metadata?.developmentPilot),facts={projectName:r.project.name,workerId:r.worker.id,permissions:limited?{attendance:r.worker.metadata.participant.permissions.attendance,report:false}:r.worker.metadata.participant.permissions,attendanceOnly:limited,tasks,sectors:data.sectors,evidence:data.evidence,proposals:data.proposals,inventory:data.inventory,latest,mediaReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaFieldMediaContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId}};
+  const limited=attendanceOnly||Boolean(r.connection.metadata?.developmentPilot),facts={projectName:r.project.name,workerId:r.worker.id,permissions:limited?{attendance:r.worker.metadata.participant.permissions.attendance,report:false}:r.worker.metadata.participant.permissions,attendanceOnly:limited,sectors:data.sectors,evidence:data.evidence,proposals:data.proposals,inventory:data.inventory,latest,mediaReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaFieldMediaContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId}};
   let plan;
-  try{plan=planMetaFieldConversation({message:r.proof.value,state,eventId:r.event.id,facts,now:r.now});}
+  try{Object.assign(facts,await readMetaFieldTaskCatalog(client,{projectId:r.project.id,state:activeState||{purpose:action},message:r.proof.value}));plan=planMetaFieldConversation({message:r.proof.value,state,eventId:r.event.id,facts,now:r.now});}
   catch(error){if(!safeErrors.has(error.code))throw error;return {done:await record(client,r,result(r,'INPUT_REVIEW',text(explanation(error.code)+' Escribí CANCELAR para volver al menú.'),{code:error.code}),state)};}
   if(plan.media){
    assertDevelopmentPilotAdapter(r.connection,'media');
@@ -215,4 +217,59 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   return within(async client=>{const r=await resolve(client,context,'report'),prior=await saved(client,r);if(prior)return prior;
    return record(client,r,result(r,'EVIDENCE',text('Evidencia guardada en privado. '+(processed.evidence.review?'El archivo ya tiene una revisión humana registrada; consultala desde la web.':!analysisAllowed?'No se envió a OpenAI. El responsable puede revisarlo manualmente desde la web.':media.kind==='video'&&consent.noticeVersion===FIELD_VIDEO_PRIVACY_NOTICE_VERSION?metaFieldVideoResultText(processed.evidence,consent):processed.evidence.processing.status==='FAILED_RETRYABLE'?'El procesamiento necesita otro intento desde la web.':media.kind==='video'?'Se analizaron cuatro cuadros sin audio. El responsable debe revisar el video original antes de aprobar avances.':media.kind==='audio'&&processed.evidence.processing.result?.progressDraft?'Se preparó un borrador desde la transcripción. Otra persona debe revisar y aprobar el audio en la web. Después, escribí AVANCE para revisar el borrador y completar la medición acumulada.':'El responsable debe revisar el archivo antes de aprobar avances.')+' Escribí MENU para continuar.'),{businessApplied:true,receiptId:attached.receiptId,reviewState:'RECORDED'}),null,{onlyIfCurrent:true});});
  }};
+}
+
+
+const optionalPurposes=new Set(['INCIDENT','MATERIAL','CONSUMPTION']);
+const taskColumns=`id,title,progress,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision,to_char("createdAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt"`;
+const unavailable=()=>{throw new WorkspaceError('WORKSPACE_TASK_UNAVAILABLE',404);};
+function validCursor(value){
+ if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join('|')!=='createdAt|id'||!workspaceId(value.id)||typeof value.createdAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(value.createdAt)||value.createdAt.startsWith('0000-'))return false;
+ const parsed=new Date(value.createdAt+'Z');
+ return Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,19)===value.createdAt.slice(0,19);
+}
+function selectedChoice(state,message){
+ const selection=message?.type==='interactive'?(message.interactive?.type==='list_reply'?message.interactive.list_reply?.id:message.interactive?.type==='button_reply'?message.interactive.button_reply?.id:null):null;
+ const match=/^obra:([a-f0-9]{20}):(\d{1,2})$/.exec(selection||'');
+ return match&&match[1]===state?.nonce&&Array.isArray(state?.choices)?state.choices[Number(match[2])]?.value:null;
+}
+const cursor=row=>({id:row.id,createdAt:row.createdAt});
+const publicTask=({id,title,progress,revision})=>({id,title,progress,revision});
+
+// Identity, live permissions and conversation TTL are checked by the signed
+// bridge before this bounded catalog read. A cursor never grants project access.
+export async function readMetaFieldTaskCatalog(client,{projectId,state,message}){
+ if(!workspaceId(projectId))unavailable();
+ const choice=selectedChoice(state,message),purpose=state?.step==='MENU'?choice||state.purpose:state?.purpose,size=optionalPurposes.has(purpose)?7:8,taskState=state?.step==='TASK',page=taskState?state.taskPage:null;
+ let anchor=null,direction='FIRST';
+ if(page){
+  if(typeof page.hasPrevious!=='boolean'||typeof page.hasNext!=='boolean')unavailable();
+  const empty=page.first===null&&page.last===null&&!page.hasPrevious&&!page.hasNext;
+  if(!empty&&(!validCursor(page.first)||!validCursor(page.last)))unavailable();
+  if(!empty){
+   const owned=(await client.query(`SELECT id,to_char("createdAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt" FROM public."Task" WHERE "projectId"=$1 AND id=ANY($2::text[])`,[projectId,[page.first.id,page.last.id]])).rows;
+   if(![page.first,page.last].every(value=>owned.some(row=>row.id===value.id&&row.createdAt===value.createdAt)))unavailable();
+   direction=choice==='NEXT_TASKS'?'AFTER':choice==='PREVIOUS_TASKS'?'BEFORE':'INCLUSIVE';
+   anchor=direction==='AFTER'?page.last:page.first;
+  }
+ }
+ const predicate=direction==='FIRST'?'':` AND ("createdAt",id) ${direction==='AFTER'?'>':direction==='BEFORE'?'<':'>='} ($2::timestamp,$3::text)`;
+ const parameters=anchor?[projectId,anchor.createdAt,anchor.id,size+1]:[projectId,size+1],limit=anchor?'$4':'$2';
+ const found=(await client.query(`SELECT ${taskColumns} FROM public."Task" WHERE "projectId"=$1${predicate} ORDER BY "createdAt" ${direction==='BEFORE'?'DESC':'ASC'},id ${direction==='BEFORE'?'DESC':'ASC'} LIMIT ${limit}`,parameters)).rows;
+ const rows=found.slice(0,size);if(direction==='BEFORE')rows.reverse();
+ let taskPage={first:null,last:null,hasPrevious:false,hasNext:false};
+ if(rows.length){
+  const first=cursor(rows[0]),last=cursor(rows.at(-1)),bounds=(await client.query(`SELECT EXISTS(SELECT 1 FROM public."Task" WHERE "projectId"=$1 AND ("createdAt",id)<($2::timestamp,$3::text)) AS "hasPrevious",EXISTS(SELECT 1 FROM public."Task" WHERE "projectId"=$1 AND ("createdAt",id)>($4::timestamp,$5::text)) AS "hasNext"`,[projectId,first.createdAt,first.id,last.createdAt,last.id])).rows[0];
+  taskPage={first,last,hasPrevious:bounds.hasPrevious,hasNext:bounds.hasNext};
+ }
+ const tasks=rows.map(publicTask);
+ const selected=taskState?choice:null,selectedIds=[state?.taskId,...(selected&&!['NONE','NEXT_TASKS','PREVIOUS_TASKS'].includes(selected)?[selected]:[])].filter(value=>value!==undefined&&value!==null);
+ for(const selectedId of new Set(selectedIds)){
+  if(!workspaceId(selectedId))unavailable();
+  if(!tasks.some(task=>task.id===selectedId)){
+   const current=(await client.query(`SELECT ${taskColumns} FROM public."Task" WHERE "projectId"=$1 AND id=$2`,[projectId,selectedId])).rows[0];
+   if(current)tasks.push(publicTask(current));
+  }
+ }
+ return {tasks,taskPage};
 }

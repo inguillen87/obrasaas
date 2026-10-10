@@ -12,17 +12,26 @@ export const metaFieldConversationAction=body=>typeof body==='string'?aliases[bo
 const attendanceEvents={ATTEND_IN:'CHECK_IN',ATTEND_PAUSE:'BREAK_START',ATTEND_RESUME:'BREAK_END',ATTEND_OUT:'CHECK_OUT'};
 const journeyExplanation={ATTENDANCE_SHIFT_ALREADY_OPEN:'Ya tenés una jornada abierta.',ATTENDANCE_SHIFT_NOT_OPEN:'Primero registrá una entrada.',ATTENDANCE_BREAK_ALREADY_OPEN:'Tu pausa ya está abierta. Registrá el regreso de pausa para continuar.',ATTENDANCE_BREAK_NOT_OPEN:'No hay una pausa abierta.',ATTENDANCE_BREAK_OPEN:'Registrá el regreso de pausa antes de la salida.'};
 const text=body=>({type:'text',body});
-const permits=(purpose,facts)=>purpose==='ATTENDANCE'?facts.permissions.attendance===true:facts.permissions.report===true;
+const permits=(purpose,facts)=>purpose==='TASKS'||(purpose==='ATTENDANCE'?facts.permissions.attendance===true:facts.permissions.report===true);
 const denied=purpose=>({state:null,reply:text((purpose==='ATTENDANCE'?'Tu participación no tiene habilitado el registro de jornada.':'Tu participación no tiene habilitado el envío de reportes, evidencia o propuestas de avance.')+' Pedí al responsable que revise tus permisos en Mi cuenta. Escribí MENU para consultar las opciones disponibles.')});
 function journeyError(action,facts){try{fieldTransition(attendanceEvents[action],facts.latest);return null;}catch(error){if(!Object.hasOwn(journeyExplanation,error.code))throw error;return error.code;}}
 const availableMenu=facts=>menuOptions.filter(([action])=>(!facts.attendanceOnly||action.startsWith('ATTEND_')||action==='STATUS')).filter(([action])=>action.startsWith('ATTEND_')?permits('ATTENDANCE',facts)&&!journeyError(action,facts):action==='CONSUMPTION'?permits('REPORT',facts)&&Boolean(facts.inventory?.materials?.some(m=>m.active)):['MEDIA','INCIDENT','MATERIAL','PROGRESS'].includes(action)?permits('REPORT',facts):true);
 const progressHint='Usá el formato 25% o 2.5 / 10 M2. La base debe ser mayor que cero y la cantidad no puede superarla. Usá punto, hasta 4 decimales y hasta 14 cifras enteras, sin ceros a la izquierda. El borrador se conserva. Escribí CANCELAR para volver al menú.';
 const inputHints={INCIDENT_TITLE:'Escribí un título de 3 a 160 caracteres.',INCIDENT_DESCRIPTION:'Escribí un detalle de 8 a 2000 caracteres.',MATERIAL_NAME:'Escribí el nombre del material de 2 a 160 caracteres.',MATERIAL_QUANTITY:'Escribí una cantidad mayor que cero, por ejemplo 12 o 2.5. Usá punto, hasta 3 decimales y hasta 9 cifras enteras.',MEDIA:'Volvé a enviar la foto, audio o video con una descripción de hasta 1000 caracteres.',MEDIA_FILE:'Volvé a enviar la foto, audio o video con una descripción de hasta 1000 caracteres.'};
-function choices(state,eventId,body,rows){const nonce=digest([eventId,state.step]).slice(0,20);return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body,button:'Elegir',sections:[{title:'Opciones',rows:rows.map(([,title],i)=>({id:'obra:'+nonce+':'+i,title:title.slice(0,24)}))}]}};}
-const taskChoices=(tasks,optional=false)=>[...(optional?[['NONE','Sin tarea asociada']]:[]),...tasks.slice(0,optional?9:10).map(t=>[t.id,t.title])];
-const sectorChoices=sectors=>sectors.slice(0,10).map(s=>[s.id,s.name]);
-function chooseSector(state,eventId,facts){if(!facts.sectors.length)return {state:null,reply:text('Un responsable debe configurar los sectores de la obra antes de continuar. Podés hacerlo desde Mi cuenta.')};return choices({...state,step:'SECTOR'},eventId,'Elegí el sector donde estás trabajando.',sectorChoices(facts.sectors));}
-function chooseTask(state,eventId,facts){const optional=['INCIDENT','MATERIAL','CONSUMPTION'].includes(state.purpose);if(!facts.tasks.length&&!optional)return {state:null,reply:text('La obra todavía no tiene tareas. Pedí al responsable que cree la tarea desde Mi cuenta.')};return choices({...state,step:'TASK'},eventId,'Elegí la tarea. Para más tareas, usá Mi cuenta.',taskChoices(facts.tasks,optional));}
+function choices(state,eventId,body,rows){const nonce=digest([eventId,state.step]).slice(0,20);return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body,button:'Elegir',sections:[{title:'Opciones',rows:rows.map(([,title,description],i)=>({id:'obra:'+nonce+':'+i,title:title.slice(0,24),...(description?{description:description.slice(0,72)}:{})}))}]}};}
+function chooseSector(state,eventId,facts){
+ if(!facts.sectors.length)return {state:null,reply:text('Un responsable debe configurar los sectores de la obra antes de continuar. Podés hacerlo desde Mi cuenta.')};
+ const offset=Math.min(state.sectorOffset||0,Math.floor((facts.sectors.length-1)/8)*8),rows=facts.sectors.slice(offset,offset+8).map(s=>[s.id,s.name]);
+ if(offset>0)rows.push(['PREVIOUS_SECTORS','Sectores anteriores']);if(offset+8<facts.sectors.length)rows.push(['NEXT_SECTORS','Más sectores']);
+ return choices({...state,step:'SECTOR',sectorOffset:offset},eventId,'Elegí el sector donde estás trabajando.',rows);
+}
+function chooseTask(state,eventId,facts,detail=''){
+ const optional=['INCIDENT','MATERIAL','CONSUMPTION'].includes(state.purpose),limit=optional?7:8,page=facts.taskPage||{hasPrevious:false,hasNext:false},tasks=facts.tasks.slice(0,limit);
+ if(!tasks.length&&!optional)return {state:null,reply:text('No hay tareas disponibles en esta página. Escribí TAREAS para consultar la obra desde el inicio.')};
+ const rows=[...(optional?[['NONE','Sin tarea asociada']]:[]),...tasks.map(t=>[t.id,t.title,t.title+' · '+t.progress+'%'])];
+ if(page.hasPrevious)rows.push(['PREVIOUS_TASKS','Tareas anteriores']);if(page.hasNext)rows.push(['NEXT_TASKS','Más tareas']);
+ return choices({...state,step:'TASK',taskPage:page},eventId,detail||(state.purpose==='TASKS'?'Tareas de '+facts.projectName+'\nElegí una para consultar su avance, o recorré las páginas.':'Elegí la tarea de este registro. Podés recorrer todas las páginas.'),rows);
+}
 function consumptionMaterials(state,eventId,facts){const materials=facts.inventory?.materials?.filter(m=>m.active)||[];if(!materials.length)return {state:null,reply:text('El responsable debe configurar el catálogo antes de proponer consumo. El stock no cambió.')};const offset=state.materialOffset||0,rows=materials.slice(offset,offset+8).map(m=>[m.id,m.name+' · '+m.unit]);if(offset>0)rows.push(['PREVIOUS','Materiales anteriores']);if(offset+8<materials.length)rows.push(['NEXT','Más materiales']);return choices({...state,step:'CONSUMPTION_MATERIAL',materialOffset:offset},eventId,'Elegí el material del catálogo. La propuesta requiere revisión antes de descontar stock.',rows);}
 function confirm(state,eventId,body){return choices({...state,step:'CONFIRM'},eventId,body,[['CONFIRM','Guardar'],['CANCEL','Cancelar']]);}
 const voiceEvidence=(state,facts)=>facts.evidence.filter(e=>e.taskId===state.taskId&&e.status==='APPROVED'&&voiceProgressDraftForEvidence(e,facts.tasks.find(t=>t.id===state.taskId))?.task.revision===facts.tasks.find(t=>t.id===state.taskId)?.revision);
@@ -58,7 +67,7 @@ export function metaFieldMediaAuthorizationValid(message,media,state){
 function authorizeMedia(state,eventId,consent){const ref=state.pendingFile;return {state:{...state,step:'MEDIA_AUTHORIZED',mediaAuthorizationStep:state.step,analysisConsent:consent,analysisConsentEventId:eventId},media:{taskId:ref.taskId,sectorId:ref.sectorId,mediaId:ref.mediaId,caption:ref.caption,contentType:ref.contentType,kind:ref.kind,analysisConsent:consent,analysisConsentEventId:eventId,sourceOrigin:ref}};}
 function start(action,eventId,facts){
  if(action==='MENU')return choices({step:'MENU',purpose:'MENU'},eventId,'ObraSaaS · '+facts.projectName+'\nElegí una acción disponible para tu participación. CANCELAR vuelve al menú.',availableMenu(facts));
- if(action==='TASKS')return {state:null,reply:text(facts.tasks.length?'Tareas de '+facts.projectName+'\n'+facts.tasks.slice(0,15).map(t=>t.title.slice(0,160)+' · '+t.progress+'%').join('\n')+'\n'+(facts.tasks.length>15?'Consultá todas las tareas en Mi cuenta.\n':'')+'El avance cambia sólo tras aprobación del responsable.':'La obra todavía no tiene tareas.')};
+ if(action==='TASKS')return chooseTask({purpose:'TASKS'},eventId,facts);
  if(action==='STATUS'){const e=facts.latest;return {state:null,reply:text('Obra: '+facts.projectName+'\nJornada: '+(!e||e.eventType==='CHECK_OUT'?'cerrada':e.phase==='ON_BREAK'?'en pausa':'en curso')+'\nEvidencias pendientes: '+facts.evidence.filter(e=>e.status==='PENDING').length+'\nPropuestas pendientes: '+facts.proposals.filter(p=>p.status==='PENDING').length+'\nConsultá los recibos y las revisiones en Mi cuenta.')};}
  if(attendanceEvents[action]){if(!permits('ATTENDANCE',facts))return denied('ATTENDANCE');const error=journeyError(action,facts);if(error)return choices({step:'MENU',purpose:'MENU'},eventId,journeyExplanation[error]+' No registramos otro fichaje. Elegí una acción disponible.',availableMenu(facts));return chooseSector({purpose:'ATTENDANCE',eventType:attendanceEvents[action],expectedEventId:facts.latest?.id||null},eventId,facts);}
  if(!permits('REPORT',facts))return denied('REPORT');
@@ -100,10 +109,13 @@ function planConversation({message,state,eventId,facts,now}){
  if(s.step==='MENU')return selected?start(selected,eventId,facts):start('MENU',eventId,facts);
  if(s.step==='TASK'){
   if(!selected)return {state:active,reply:text('Elegí una tarea en el menú anterior, o escribí CANCELAR.')};
+  if(['NEXT_TASKS','PREVIOUS_TASKS'].includes(selected))return chooseTask(s,eventId,facts);
   s.taskId=selected==='NONE'?null:selected;const task=facts.tasks.find(t=>t.id===s.taskId);if(s.taskId&&!task)throw new WorkspaceError('WORKSPACE_TASK_UNAVAILABLE',404);s.taskRevision=task?.revision||null;
+  if(s.purpose==='TASKS'){delete s.taskId;delete s.taskRevision;return chooseTask(s,eventId,facts,task.title+'\nAvance aprobado: '+task.progress+'%.\nEl avance cambia sólo después de la revisión del responsable. Elegí otra tarea o escribí MENU.');}
   return chooseSector(s,eventId,facts);
  }
  if(s.step==='SECTOR'){
+  if(['NEXT_SECTORS','PREVIOUS_SECTORS'].includes(selected))return chooseSector({...s,sectorOffset:Math.max(0,(s.sectorOffset||0)+(selected==='NEXT_SECTORS'?8:-8))},eventId,facts);
   if(!selected||!facts.sectors.some(x=>x.id===selected))return {state:active,reply:text('Elegí un sector en el menú anterior, o escribí CANCELAR.')};s.sectorId=selected;
   if(s.purpose==='ATTENDANCE'){
    if(['BREAK_START','BREAK_END'].includes(s.eventType))return confirm(s,eventId,s.eventType==='BREAK_START'?'¿Guardar el inicio de pausa?':'¿Guardar el regreso de pausa?');
