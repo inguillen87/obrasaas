@@ -4,6 +4,7 @@ import {purchaseOutcome} from './site-purchase-view.mjs';
 import {companyChannelOutcome,COMPANY_CHANNEL_ACTIONS} from './company-channel-view.mjs';
 import {ownCompanyNumberOutcome,OWN_COMPANY_ACTIONS} from './own-company-number-view.mjs';
 import {ownTemplatesOutcome,OWN_TEMPLATE_ACTIONS} from './own-company-templates-view.mjs';
+import {PARTICIPANT_OFFICE_ASSIGN_ACTION,participantOfficeReceiptOutcome,participantOfficePrecommitRejected} from './participant-office-account-view.mjs';
 
 // Receipt references only. Never persist commands, tokens, files, location or messages.
 export const RECOVERY_EVENT = 'obrasaas:pending-receipts';
@@ -115,6 +116,7 @@ async function reference(url, options, now) {
   const progress=resource==='template-send'&&body.templateKey===PROGRESS_TEMPLATE_SEND_KEY;
   const overtime=resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(body.action);
   const intake=resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(body.action);
+  const officeAccount=resource==='participants'&&body.action===PARTICIPANT_OFFICE_ASSIGN_ACTION;
   const plan=resource==='plan-import'&&typeof options.body==='string'&&['EDIT','APPLY','REJECT'].includes(body.action)&&id(body.draftId)&&Number.isSafeInteger(body.expectedRevision)&&body.expectedRevision>=1;
   const planUpload=resource==='plan-import'&&typeof options.body?.get==='function';
   let inputDigest;try{if(plan)inputDigest=await planImportCommandDigest(body);else if(planUpload)inputDigest=await planImportUploadFormDigest(options.body);}catch{throw unavailable();}
@@ -130,6 +132,7 @@ async function reference(url, options, now) {
     ...(overtime?{action:body.action}:{}),
     ...(bank?{action:bankAction,workerId:body.payload.workerId}:{}),
     ...(intake?{action:body.action,connectionId:body.payload.connectionId,...(body.action==='CONFIGURE_EMPLOYEE_INTAKE'?{}:{applicationId:body.payload.applicationId})}:{}),
+    ...(officeAccount?{action:PARTICIPANT_OFFICE_ASSIGN_ACTION}:{}),
     ...(progress?{templateKey:PROGRESS_TEMPLATE_SEND_KEY,workerId:body.workerId,actionReference:{proposalId:body.actionReference.proposalId,revision:body.actionReference.revision}}:{}),
     ...(plan?{action:body.action,draftId:body.draftId,expectedRevision:body.expectedRevision,inputDigest}:{}),
     ...(planUpload?{action:'UPLOAD',inputDigest}:{}),
@@ -142,6 +145,7 @@ function valid(entry) {
   const overtime=entry.resource==='field-operations'&&entry.action!==undefined;
   const bank=entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(entry.action);
   const intake=entry.resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action);
+  const officeAccount=entry.resource==='participants'&&entry.action===PARTICIPANT_OFFICE_ASSIGN_ACTION;
   const plan=entry.resource==='plan-import'&&entry.action!==undefined;
   const planUpload=plan&&entry.action==='UPLOAD';
   const preparation=entry.resource==='project-preparation';
@@ -149,10 +153,11 @@ function valid(entry) {
   const creation=entry.resource==='project-creation';
   if(creation&&entry.action!=='CREATE_PROJECT')return false;
   if(office&&!['INVITE_AUDITOR','REVOKE_AUDITOR','SELECT_EVENT'].includes(entry.action))return false;
-  if(entry.resource==='participants'&&entry.action!==undefined&&!bank&&!intake)return false;
+  if(entry.resource==='participants'&&entry.action!==undefined&&!bank&&!intake&&!officeAccount)return false;
   if(preparation&&entry.action!=='SAVE_PREPARATION')return false;
   const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',['reconcile','cancel'].includes(entry.action)?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(bank?['action','workerId']:[]),...(intake?['action','connectionId',...(entry.action==='CONFIGURE_EMPLOYEE_INTAKE'?[]:['applicationId'])]:[]),...(progress?['templateKey','workerId','actionReference']:[]),...(planUpload?['action','inputDigest']:plan?['action','draftId','expectedRevision','inputDigest']:[]),...(preparation?['action']:[])];
   if(office)fields.push('action');
+  if(officeAccount)fields.push('action');
   if(creation)fields.push('action');
   if(Object.keys(entry).sort().join('|')!==fields.sort().join('|'))return false;
   if(entry.resource==='company-onboarding'&&(entry.action!=='declare_company_phone'||!id(entry.expectedClerkOrganizationId)))return false;
@@ -179,6 +184,7 @@ export function recoveryQuery(entry) {
   if(!valid(entry))throw new TypeError('Invalid receipt reference');
   return '/api/identity/'+entry.resource+'?'+new URLSearchParams({projectId:entry.projectId,scope:entry.scope,operationId:entry.operationId,
     ...(entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(entry.action)?{detail:'private-bank-account',workerId:entry.workerId,action:entry.action}:{}),
+    ...(entry.resource==='participants'&&entry.action===PARTICIPANT_OFFICE_ASSIGN_ACTION?{action:entry.action}:{}),
     ...(entry.resource==='company-onboarding'?{action:entry.action,expectedClerkOrganizationId:entry.expectedClerkOrganizationId}:{}),
     ...(entry.resource==='site-photo'?{reportId:entry.reportId}:{}),...(entry.resource==='meta-onboarding'?{action:entry.action,...(['reconcile','cancel'].includes(entry.action)?{signupId:entry.signupId}:{eventId:entry.eventId})}:{})});
 }
@@ -188,6 +194,7 @@ export function recoveryResult(entry, result) {
   if(entry.resource==='office-review')return officeReviewReceiptOutcome(result,entry);
   if(entry.resource==='project-creation')return projectCreationReceiptOutcome(result,entry);
   if(entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(entry.action)){try{validatePrivateBankOutcome(result,entry);return {state:result.state,...(result.receipt?{receiptId:result.receipt.id}:{})};}catch{return null;}}
+  if(entry.resource==='participants'&&entry.action===PARTICIPANT_OFFICE_ASSIGN_ACTION)return participantOfficeReceiptOutcome(result,entry);
   if(entry.resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action)){
     const exact=result.projectId===entry.projectId&&result.operationId===entry.operationId&&result.action===entry.action&&result.connectionId===entry.connectionId&&result.applicationId===(entry.applicationId||null)&&/^participant_[a-f0-9]{64}$/.test(result.receiptId||'')&&result.permissionsGranted===false;
     if(exact&&result.state==='RECORDED'&&result.saved===true)return {state:'RECORDED',receiptId:result.receiptId};
@@ -387,6 +394,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
     async settle(ticket, result, error) {
       if(!ticket)return;
       if(error){
+        if(ticket.entry.resource==='participants'&&ticket.entry.action===PARTICIPANT_OFFICE_ASSIGN_ACTION){if(!ticket.existed&&(error.requestDispatched===false||participantOfficePrecommitRejected(error)))await remove(ticket.entry);return;}
         if(['office-review','project-creation'].includes(ticket.entry.resource)&&error.requestDispatched!==false)return;
         const rejected=ticket.entry.resource==='plan-import'&&recoveryResult(ticket.entry,error.result)?.state==='REJECTED'&&error.code===error.result.code&&error.status===({PLAN_IMPORT_FILE_INVALID:400,PLAN_IMPORT_FILE_TOO_LARGE:413})[error.code];
         if(!ticket.existed&&(error.requestDispatched===false||rejected||!['plan-import','company-channel','company-onboarding'].includes(ticket.entry.resource)&&!(ticket.entry.resource==='participants'&&(PRIVATE_BANK_ACTIONS.includes(ticket.entry.action)||PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(ticket.entry.action)))&&!(ticket.entry.resource==='meta-onboarding'&&ticket.entry.action==='reconcile')&&error.status>=400&&error.status<500))await remove(ticket.entry);return;
@@ -394,6 +402,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       const entry=ticket.entry;
       if(['office-review','project-creation'].includes(entry.resource)){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action)){if(['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
+      if(entry.resource==='participants'&&entry.action===PARTICIPANT_OFFICE_ASSIGN_ACTION){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       // A general Meta snapshot is not a receipt for this operation.
       if(entry.resource==='meta-onboarding'){if(['reconcile','cancel'].includes(entry.action)&&['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='template-send'){if(['ACCEPTED','STATUS_OBSERVED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
@@ -414,6 +423,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       const entry=(await list(scope)).find(row=>row.resource===resource&&row.operationId===operationId.toLowerCase());
       if(!entry||params.get('projectId')!==entry.projectId)return;
       if(entry.resource==='company-onboarding'&&(params.get('expectedClerkOrganizationId')!==entry.expectedClerkOrganizationId||params.get('action')!==entry.action))return;
+      if(entry.resource==='participants'&&entry.action===PARTICIPANT_OFFICE_ASSIGN_ACTION&&params.get('action')!==entry.action)return;
       if(entry.resource==='meta-onboarding'&&['reconcile','cancel'].includes(entry.action)&&(params.get('action')!==entry.action||params.get('signupId')!==entry.signupId))return;
       const outcome=recoveryResult(entry,result);
       // A pre-reservation POST rejection cannot settle an earlier attempt via GET.

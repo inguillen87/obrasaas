@@ -35,6 +35,11 @@ jobs:
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
       - run: node --test tests/production-*.test.mjs
+      - name: Verified office admission and canonical role boundaries
+        run: |
+          npx eslint src/lib/participant-verified-office.mjs src/lib/participant-identity-provider.mjs src/lib/participant-http.mjs src/lib/participant-policy.mjs src/lib/participant-store.mjs tests/production-verified-office-onboarding.test.mjs tests/production-participant-office-account-view.test.mjs scripts/verify-verified-office-onboarding-postgres.mjs scripts/verify-participant-office-account-ui.mjs --max-warnings 0
+          node scripts/verify-verified-office-onboarding-postgres.mjs
+          node scripts/verify-participant-office-account-ui.mjs
       - name: Company principal separation and schema adoption lint
         run: npx eslint scripts/lib/company-contact-migration.mjs scripts/adopt-company-contact-schema.mjs tests/production-company-contact-migration.test.mjs --max-warnings 0
       - name: Affected lint
@@ -135,6 +140,7 @@ jobs:
             .vercel/participant-onboarding-recovery-evidence/
             .vercel/participant-onboarding-delivery-evidence/
             .vercel/participant-field-permissions-evidence/
+            .vercel/verified-office-onboarding-evidence/
             .vercel/private/company-channel-postgres-proof.json
             .vercel/private/reactive-onboarding-postgres-*.json
           include-hidden-files: true

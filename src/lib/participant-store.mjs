@@ -17,6 +17,7 @@ import {PARTICIPANT_ONBOARDING_NOTICE,PARTICIPANT_ONBOARDING_NOTICE_VERSION,PART
 import {readParticipantOnboardingStatuses} from './participant-onboarding-delivery.mjs';
 import {lockPersonWorksiteJourney,assertPersonWorksiteJourney} from './person-worksite-journey.mjs';
 import {PARTICIPANT_ACCOUNT_PAGE_SIZE,participantAccountRequest,participantAccountCursor,parseParticipantAccountCursor,participantAccountSearchPredicate} from './participant-account-discovery.mjs';
+import {VERIFIED_OFFICE_ACTION,participantVerifiedOfficeRequest,assertVerifiedOfficeIssuer,participantVerifiedOfficeProof,assertNewVerifiedOfficeTarget,createNewVerifiedOfficeAccount,participantOfficeAssignmentRequestDigest,participantOfficeAssignmentReceipt} from './participant-verified-office.mjs';
 const columns=`id,name,active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
 const id=prefix=>prefix+'_'+randomUUID().replaceAll('-','');
 const metadata=row=>row.metadata&&typeof row.metadata==='object'&&!Array.isArray(row.metadata)?structuredClone(row.metadata):{};
@@ -63,6 +64,40 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
  const run=(session,input,writable,callback,beforeProject)=>workspace.projectOperation(session,input,writable,callback,beforeProject);
  const runIdentity=(session,input,writable,callback,beforeProject)=>participantIdentityOperation(workspace,session,input,writable,callback,beforeProject);
  const organizationRun=(session,input,writable,callback)=>workspace.organizationOperation(session,input,writable,callback);
+ async function verifiedOfficeProvider(context,session){
+  if(typeof identity?.findVerifiedOfficeAccount!=='function')throw new WorkspaceError('PARTICIPANT_IDENTITY_PROVIDER_UNAVAILABLE',503);
+  const value=await identity.findVerifiedOfficeAccount({organizationId:session.organizationId,email:context.email});
+  if(!value||!['READY','NOT_READY','BLOCKED'].includes(value.state)||value.state==='READY'&&(value.code!==null||value.account?.email!==context.email)||value.state!=='READY'&&(typeof value.code!=='string'||value.account!==null))throw new WorkspaceError('PARTICIPANT_IDENTITY_PROVIDER_UNAVAILABLE',503);
+  return value;
+ }
+ async function officeAssignmentOutcome(client,member,input,found,replayed){
+  const officeAssignmentReceipt=participantOfficeAssignmentReceipt(found,input);let current;
+  try{current=await account(client,member.organizationId,found.entityId);}catch(error){if(error instanceof WorkspaceError)throw new WorkspaceError('PARTICIPANT_OFFICE_RECEIPT_INVALID',409);throw error;}
+  if(current.clerkUserId!==officeAssignmentReceipt.clerkUserId)throw new WorkspaceError('PARTICIPANT_OFFICE_RECEIPT_INVALID',409);
+  return {saved:true,replayed,receiptId:found.id,account:publicAccount(current,member.actorId),officeAssignmentReceipt};
+ }
+ async function assignVerifiedOffice(session,input){
+  const p=input.payload,requestDigest=participantOfficeAssignmentRequestDigest(input);
+  const original=await organizationRun(session,input,false,async(client,member,scope)=>{
+   assertVerifiedOfficeIssuer(member,session);const found=await receipt(client,member,participantReceiptId(member.actorId,input.projectId,input.operationId));
+   if(found){if(found.metadata?.requestDigest!==requestDigest)throw new WorkspaceError('PARTICIPANT_OPERATION_CONFLICT',409);return {done:{scope,...await officeAssignmentOutcome(client,member,input,found,true)}};}
+   return {member};
+  });
+  if(original.done)return original.done;
+  const observed=await verifiedOfficeProvider({email:p.email},session);
+  if(observed.state!=='READY')throw new WorkspaceError(observed.code,observed.state==='NOT_READY'?403:409);
+  const proof=observed.account;
+  if(proof.clerkUserId!==p.clerkUserId||participantVerifiedOfficeProof(proof,original.member,session,input)!==p.expectedProofDigest)throw new WorkspaceError('PARTICIPANT_OFFICE_PROOF_CHANGED',409);
+  return organizationRun(session,input,true,async(client,member,scope)=>{
+   assertVerifiedOfficeIssuer(member,session);const key=participantReceiptId(member.actorId,input.projectId,input.operationId);
+   await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[key]);
+   const prior=await receipt(client,member,key);if(prior){if(prior.metadata?.requestDigest!==requestDigest)throw new WorkspaceError('PARTICIPANT_OPERATION_CONFLICT',409);return {scope,...await officeAssignmentOutcome(client,member,input,prior,true)};}
+   if(participantVerifiedOfficeProof(proof,member,session,input)!==p.expectedProofDigest)throw new WorkspaceError('PARTICIPANT_OFFICE_PROOF_CHANGED',409);
+   const created=await createNewVerifiedOfficeAccount(client,member,session,input,proof),recordedAt=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now.toISOString();
+   await record(client,member,key,input.projectId,created.membershipId,requestDigest,{kind:'VERIFIED_OFFICE_ASSIGNED',scope,operationId:input.operationId,targetClerkUserId:proof.clerkUserId,email:proof.email,role:p.role,assignedProjectId:created.assignedProjectId,recordedAt,proofDigest:p.expectedProofDigest,reason:p.reason,providerProof:{membershipId:proof.providerMembershipId,membershipUpdatedAt:proof.providerMembershipUpdatedAt,userUpdatedAt:proof.userUpdatedAt,emailAddressId:proof.emailAddressId,primaryEmailAddressId:proof.primaryEmailAddressId,clerkRole:proof.clerkRole},identityCertified:false,fieldPermissionsGranted:false},'TenantMembership');
+   return {scope,...await officeAssignmentOutcome(client,member,input,await receipt(client,member,key),false)};
+  });
+ }
  const fieldTargets=new WeakMap();
  async function resolvedFieldPermissions(client,row,context){
   const original=await employeeIntakeAcceptedPermissions(client,row,context),decision=row.metadata?.participant?.fieldPermissionDecision;if(!decision)return original;
@@ -240,7 +275,31 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
   });},
   privateBankRead(session,input){participantContext(input);return run(session,input,false,(client,member,scope)=>readPrivateBankAccount(client,member,session,input,scope,{environment}));},
   privateBankStatus(session,input){participantContext(input);return run(session,input,false,(client,member,scope)=>privateBankStatus(client,member,session,input,scope));},
+  async verifiedOfficeAccount(session,input){
+   const context=participantVerifiedOfficeRequest(input);
+   await organizationRun(session,context,false,async(_client,member)=>assertVerifiedOfficeIssuer(member,session));
+   const observed=await verifiedOfficeProvider(context,session);
+   return organizationRun(session,context,false,async(client,member,scope)=>{
+    assertVerifiedOfficeIssuer(member,session);let value={version:1,email:context.email,state:observed.state,code:observed.code,account:null};
+    if(observed.state==='READY'){
+     const proofDigest=participantVerifiedOfficeProof(observed.account,member,session,context);
+     try{await assertNewVerifiedOfficeTarget(client,member,session,observed.account);value={...value,account:{clerkUserId:observed.account.clerkUserId,name:observed.account.name,email:observed.account.email,clerkRole:observed.account.clerkRole,proofDigest}};}
+     catch(error){if(!(error instanceof WorkspaceError)||!['PARTICIPANT_OFFICE_ACCOUNT_EXISTS','PARTICIPANT_OFFICE_TARGET_PROTECTED','PARTICIPANT_OFFICE_ACCOUNT_FIELD_BOUND','PARTICIPANT_OFFICE_ACCOUNT_RESTRICTED','PARTICIPANT_OFFICE_HISTORY_UNCONFIRMED','PARTICIPANT_IDENTITY_CONFLICT'].includes(error.code))throw error;value={...value,state:'BLOCKED',code:error.code};}
+    }
+    return {scope,projectId:context.projectId,verifiedOfficeAccount:value};
+   });
+  },
+  officeAssignmentStatus(session,input){
+   participantKeys(input,['projectId','scope','operationId','action']);participantContext(input);
+   if(!operationId(input.operationId)||input.action!==VERIFIED_OFFICE_ACTION)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+   input={...input,operationId:input.operationId.toLowerCase()};
+   return organizationRun(session,input,false,async(client,member,scope)=>{
+    assertVerifiedOfficeIssuer(member,session);const found=await receipt(client,member,participantReceiptId(member.actorId,input.projectId,input.operationId));
+    return found?{scope,state:'RECORDED',...await officeAssignmentOutcome(client,member,input,found,true)}:{scope,state:'NOT_OBSERVED',definitive:false};
+   });
+  },
   async save(session,body){const input=participantCommand(body),context={projectId:input.projectId,scope:input.scope},p=input.payload;
+   if(input.action===VERIFIED_OFFICE_ACTION)return assignVerifiedOffice(session,input);
    if(PRIVATE_BANK_ACTIONS.includes(input.action)||input.action==='CANCEL_PENDING_PRIVATE_BANK_ACCOUNT')return run(session,context,true,(client,member,scope)=>savePrivateBankAccount(client,member,session,input,scope,{environment}));
    if(EMPLOYEE_INTAKE_ACTIONS.includes(input.action))return run(session,context,true,(client,member,scope,project)=>saveEmployeeIntake(client,member,scope,project,session,input,environment));
    const requestDigest=input.action==='SET_FIELD_PERMISSIONS'?digest([input.operationId,input.projectId,input.scope,input.action,p.workerId,p.revision,p.permissions.attendance,p.permissions.report,p.reason]):digest(input);

@@ -18,7 +18,7 @@ const noTargets = () => '';
 export function onboardingGuideSummary(observation) {
  const pending={state:'UNOBSERVED',company:'Empresa: todavía no consultada en esta sesión.',schedule:'Cronograma: abrí una obra para consultar sus tareas.',whatsapp:'WhatsApp: vínculo personal todavía no consultado. La configuración del canal no confirma entrega real.'};
  if(!observation||observation.version!==1||!Number.isSafeInteger(observation.generation)||observation.generation<0)return pending;
- if(observation.state==='UNAVAILABLE')return {...pending,state:'UNAVAILABLE',company:'Acceso sin confirmar: cambió tu sesión, organización o permiso. Actualizá Mis obras antes de continuar.',schedule:'Cronograma: la consulta anterior ya no confirma el estado actual.',whatsapp:'WhatsApp: la consulta anterior ya no confirma el vínculo actual.'};
+ if(observation.state==='UNAVAILABLE')return {...pending,state:'UNAVAILABLE',company:'Acceso sin confirmar. Revisá Organización activa y el aviso de Mis obras. Si aceptaste una invitación, el administrador debe confirmar tu rol en ObraSaaS.',schedule:'Cronograma: la consulta anterior ya no confirma el estado actual.',whatsapp:'WhatsApp: la consulta anterior ya no confirma el vínculo actual.'};
  if(observation.state==='CONSULTING')return {...pending,state:'CONSULTING',company:'Consultando los registros autorizados de la empresa…',schedule:'Cronograma: esperando la consulta actual.',whatsapp:'WhatsApp: esperando la consulta actual.'};
  const roles={ADMIN:'Administrador',DIRECTOR:'Director de obra',SITE_MANAGER:'Jefe de obra',FINANCE:'Administración',AUDITOR:'Auditor'};
  const count=value=>Number.isSafeInteger(value)&&value>=0;
