@@ -5,6 +5,7 @@ import {SITE_ROLES} from './site-register-policy.mjs';
 import {validateParticipantOnboardingChoice} from './participant-onboarding-policy.mjs';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256} from './participant-kyc-image-set.mjs';
 import {assertApprovedParticipantKyc} from './participant-approved-identity.mjs';
+import {VERIFIED_OFFICE_ACTION,participantVerifiedOfficeEmail} from './participant-verified-office.mjs';
 export {PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_SHA256} from './participant-kyc-image-set.mjs';
 export {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256,participantKycImageSet} from './participant-kyc-image-set.mjs';
 const backKeys=['back','backConsent','backNoticeVersion','backNoticeSha256'];
@@ -57,6 +58,10 @@ export function participantCommand(input){
  }else if(input.action==='SET_FIELD_PERMISSIONS'){
   participantKeys(p,['workerId','revision','permissions','reason']);participantRevision(p.revision);participantKeys(p.permissions,['attendance','report']);
   if(!workspaceId(p.workerId)||typeof p.permissions.attendance!=='boolean'||typeof p.permissions.report!=='boolean')throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p,permissions:{...p.permissions},reason:participantReason(p.reason)};
+ }else if(input.action===VERIFIED_OFFICE_ACTION){
+  participantKeys(p,['email','clerkUserId','expectedProofDigest','role','reason','confirmOfficePermissions']);
+  if(! /^user_[A-Za-z0-9]+$/.test(p.clerkUserId||'')||! /^[a-f0-9]{64}$/.test(p.expectedProofDigest||'')||!Object.hasOwn(OFFICE_ROLES,p.role)||p.confirmOfficePermissions!==true)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+  payload={...p,email:participantVerifiedOfficeEmail(p.email),reason:participantReason(p.reason)};
  }else if(input.action==='SET_OFFICE_ROLE'){
   participantKeys(p,['membershipId','revision','role','reason']);participantRevision(p.revision);if(!workspaceId(p.membershipId)||!Object.hasOwn(OFFICE_ROLES,p.role))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p,reason:participantReason(p.reason)};
  }else if(input.action==='PREPARE_KYC_CHAT'){

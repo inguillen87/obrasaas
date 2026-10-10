@@ -12,7 +12,7 @@ assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=realpathSync(process.cwd()),parent=path.join(root,'.vercel'),evidence=path.join(parent,'customer-inbox-evidence');mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(parent,'customer-inbox-ui-')),app=path.join(fixture,'app');mkdirSync(app);
 const source=path.join(root,'src/app/(identity)/cuenta');
-const copiedFiles=readdirSync(source).filter(file=>/^workspace-.*\.(?:js|mjs)$/.test(file)||['customer-inbox-panel.js','customer-inbox-panel.module.css','customer-inbox-view.mjs','company-channel-view.mjs','own-company-number-view.mjs','own-company-templates-view.mjs','private-bank-account-format.mjs','site-purchase-view.mjs'].includes(file));
+const copiedFiles=readdirSync(source).filter(file=>/^workspace-.*\.(?:js|mjs)$/.test(file)||['customer-inbox-panel.js','customer-inbox-panel.module.css','customer-inbox-view.mjs','company-channel-view.mjs','own-company-number-view.mjs','own-company-templates-view.mjs','private-bank-account-format.mjs','site-purchase-view.mjs','participant-office-account-view.mjs'].includes(file));
 const sourceManifest=copiedFiles.map(file=>{copyFileSync(path.join(source,file),path.join(app,file));assert.deepEqual(readFileSync(path.join(source,file)),readFileSync(path.join(app,file)));return {path:'src/app/(identity)/cuenta/'+file,sha256:createHash('sha256').update(readFileSync(path.join(source,file))).digest('hex')};});
 const focusedScenario=process.env.CUSTOMER_INBOX_SCENARIO||null;
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'synthetic-customer-inbox-ui',private:true}));

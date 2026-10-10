@@ -3,6 +3,7 @@ import {boundedBody} from './workspace-http.mjs';
 import {MAX_PRIVATE_KYC_BODY_BYTES,PrivateImageError} from './private-image-upload.mjs';
 import {participantKycInput} from './participant-policy.mjs';
 import {participantAccountRequest} from './participant-account-discovery.mjs';
+import {VERIFIED_OFFICE_ACTION,participantVerifiedOfficeRequest} from './participant-verified-office.mjs';
 const headers={'Cache-Control':'private, no-store, max-age=0','Vary':'Cookie, Authorization','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow'};
 const reply=(value,status=200)=>Response.json(value,{status,headers});
 const MAX_PARTICIPANT_DOCUMENT_BACK_BODY_BYTES=9*1024*1024;
@@ -49,8 +50,17 @@ export function createParticipantHandlers({verify,store,join=false,scheduleOnboa
   }
   if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
   if(join){if(params.size!==1||params.getAll('invitationId').length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return reply(await store.join(session,{invitationId:params.get('invitationId')}));}
-  for(const key of params.keys())if(!['projectId','scope','after','intakeAfter','operationId','workerId','intakeId','imageId','detail','action','query','afterAccount','accountId'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+  for(const key of params.keys())if(!['projectId','scope','after','intakeAfter','operationId','workerId','intakeId','imageId','detail','action','query','afterAccount','accountId','email'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
   const context={projectId:params.get('projectId'),scope:params.get('scope')};if(!workspaceId(context.projectId)||!/^[a-f0-9]{64}$/.test(context.scope||''))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+  if(params.get('detail')==='verified-office-account'){
+   const keys=['projectId','scope','detail','email'];if(params.size!==keys.length||keys.some(key=>!params.has(key)))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+   const input=participantVerifiedOfficeRequest({...context,email:params.get('email')});return reply(await store.verifiedOfficeAccount(session,input));
+  }
+  if(params.has('email'))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+  if(params.get('action')===VERIFIED_OFFICE_ACTION){
+   const keys=['projectId','scope','operationId','action'];if(params.size!==keys.length||keys.some(key=>!params.has(key))||!operationId(params.get('operationId')))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+   return reply(await store.officeAssignmentStatus(session,{...context,operationId:params.get('operationId').toLowerCase(),action:VERIFIED_OFFICE_ACTION}));
+  }
   if(params.get('detail')==='existing-accounts'){
    if([...params.keys()].some(key=>!['projectId','scope','detail','query','afterAccount','accountId'].includes(key)))throw new WorkspaceError('PARTICIPANT_ACCOUNT_QUERY_INVALID');
    const input={...context,...Object.fromEntries(['query','afterAccount','accountId'].filter(key=>params.has(key)).map(key=>[key,params.get(key)]))};
