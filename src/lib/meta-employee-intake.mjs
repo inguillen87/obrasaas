@@ -14,6 +14,7 @@ import {participantReceiptId} from './participant-policy.mjs';
 import {META_CUSTOMER_PROTOCOL} from './meta-cloud-protocol.mjs';
 import {companyKycProjectionContract,companyKycProjectionId,companyKycProjectionDigest} from './company-channel-kyc.mjs';
 import {prelockReactiveOnboarding,planReactiveOnboarding,reactiveOnboardingAuthority,decodeReactiveStart,authorizeReactiveKycStart} from './participant-onboarding-reactive.mjs';
+import {assertEmployeeIntakeChannelContinuity} from './employee-intake-channel-continuity.mjs';
 
 export const EMPLOYEE_INTAKE_ACTIONS=Object.freeze(['CONFIGURE_EMPLOYEE_INTAKE','ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE']);
 export const EMPLOYEE_INTAKE_AUTHORIZATION_CODES=Object.freeze(['EMPLOYEE_INTAKE_DISABLED','EMPLOYEE_INTAKE_REVOKED','EMPLOYEE_INTAKE_EXPIRED','EMPLOYEE_INTAKE_INTEGRITY','EMPLOYEE_INTAKE_MESSAGE_OUT_OF_ORDER','EMPLOYEE_INTAKE_CONTEXT_REQUIRED']);
@@ -40,12 +41,13 @@ async function currentPolicy(client,connection,now,{enabled=true,expected=null,l
  const p=connection.metadata?.employeeIntakePolicy;
  if(!p||p.version!==1||typeof p.enabled!=='boolean'||!Number.isSafeInteger(p.revision)||p.revision<1)fail('EMPLOYEE_INTAKE_DISABLED');
  if(enabled&&p.enabled!==true)fail('EMPLOYEE_INTAKE_DISABLED');
- if(connection.metadata?.developmentPilot||connection.company?.mode!=='COMPANY'||!customerChannelActive(connection,now.getTime(),{environment})||p.grantDigest!==grant(connection)||p.ownerRevision!==connection.company.revision)fail('EMPLOYEE_INTAKE_REVOKED');
+ if(connection.metadata?.developmentPilot||connection.company?.mode!=='COMPANY'||!customerChannelActive(connection,now.getTime(),{environment})||p.grantDigest!==grant(connection))fail('EMPLOYEE_INTAKE_REVOKED');
  await lockOwnCompanyIssuer(client,connection,{environment,now:now.getTime(),lock});
  const issued=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityType"='WhatsAppConnection' AND "entityId"=$4 AND action='participant.operation.recorded' ${lock?'FOR SHARE':''}`,[p.receiptId,connection.organizationId,p.issuerActorId,connection.id])).rows[0];
  if(issued?.metadata?.kind!=='CONFIGURE_EMPLOYEE_INTAKE'||issued.metadata.intakePolicyDigest!==durableDigest(p))fail('EMPLOYEE_INTAKE_REVOKED');
  const issuer=(await client.query(`SELECT u.id AS "actorId",tm.id AS "membershipId",tm."tenantRole"::text AS role,to_char(tm."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."PlatformUser" u JOIN public."TenantMembership" tm ON tm."userId"=u.id WHERE u.id=$1 AND tm.id=$2 AND tm."organizationId"=$3 AND tm.status='ACTIVE' ${lock?'FOR SHARE OF u,tm':''}`,[p.issuerActorId,p.issuerMembershipId,connection.organizationId])).rows[0];
- if(!issuer||issuer.role!=='ADMIN'||issuer.revision!==p.issuerRevision||await issuerTrail(client,connection.organizationId,issuer.membershipId)!==p.issuerTrail||expected&&expected!==durableDigest(p))fail('EMPLOYEE_INTAKE_REVOKED');return {policy:p,issuer};
+ if(!issuer||issuer.role!=='ADMIN'||issuer.revision!==p.issuerRevision||await issuerTrail(client,connection.organizationId,issuer.membershipId)!==p.issuerTrail||expected&&expected!==durableDigest(p))fail('EMPLOYEE_INTAKE_REVOKED');
+ await assertEmployeeIntakeChannelContinuity(client,connection,p,{lock});return {policy:p,issuer};
 }
 
 async function isCompanyKycReplyIntent(client,connection,message,environment){
