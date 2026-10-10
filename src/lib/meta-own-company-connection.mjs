@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {WorkspaceError,workspaceId,operationId,digest} from './workspace-policy.mjs';
-import {createOwnCompanyCapability,ownCompanyCapabilityPolicy,ownCompanyConnectionPolicy,ownCompanyPolicySourceDigest,createOwnCompanyRuntimeGrant,lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
+import {createOwnCompanyCapability,readOwnCompanyPolicy,ownCompanyCapabilityPolicy,ownCompanyConnectionPolicy,ownCompanyPolicySourceDigest,createOwnCompanyRuntimeGrant,lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
 import {requireCompanyChannelSchema} from './company-channel-schema.mjs';
 import {assertCompanyChannelNoPending} from './company-channel-store.mjs';
 import {companyPhoneContract,assertCompanyPhoneMatch} from './company-onboarding-policy.mjs';
@@ -49,6 +49,16 @@ export function createOwnCompanyConnection({workspace,provider,environment=proce
  }
  const channelDto=c=>c?{id:c.id,anchorProjectId:c.projectId,revision:c.revision,mode:c.mode,displayPhoneNumber:c.displayPhoneNumber,connectionStatus:c.connectionStatus,enabled:c.enabled}:null;
  async function snapshot(session,context){return within(session,context,false,async(client,member,scope)=>{const auth=await authority(client,member,session,context);await requireCompanyChannelSchema(client);return {...auth,member,scope,connection:await channel(client,member,context.projectId)};});}
+ async function storedRuntimeSnapshot(session,context){return within(session,context,false,async(client,member,scope)=>{
+  if(member.role!=='ADMIN')fail('META_OWN_COMPANY_ADMIN_REQUIRED',403);
+  await requireCompanyChannelSchema(client);const connection=await channel(client,member,context.projectId);
+  if(connection?.metadata?.ownCompanyRuntime?.version!==2||connection.mode!=='COMPANY')fail('META_OWN_COMPANY_UNAVAILABLE',403);
+  const policy=ownCompanyConnectionPolicy(connection,environment,now());
+  if(!policy||policy.actorId!==member.actorId||policy.organizationId!==member.organizationId||policy.projectId!==context.projectId||policy.clerkUserId!==session.userId||policy.clerkOrganizationId!==session.organizationId)fail('META_OWN_COMPANY_UNAVAILABLE',403);
+  await lockOwnCompanyIssuer(client,connection,{environment,now:now(),lock:false});
+  const observedAt=new Date(now()).toISOString();ownCompanyConnectionPolicy(connection,environment,Date.parse(observedAt));
+  return {version:1,kind:'OWN_COMPANY_STORED_RUNTIME',organization:{id:member.organizationId,name:member.organizationName},actor:{id:member.actorId,role:member.role},scope,projectId:context.projectId,readOnly:true,canManage:false,mode:'OWN_COMPANY',evidenceOrigin:'STORED_CANONICAL_RUNTIME',observedAt,configurationAuthorization:{state:'NOT_CURRENT'},channel:channelDto(connection),operationalGrant:{version:2,state:'ACTIVE',credentialExpiresAt:policy.validUntil,roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'},accepted:false,roundTrip:'NOT_VERIFIED'};
+ });}
  function fingerprint(input,member){const {securityPin,...safe}=input.payload;return digest({...input,payload:{...safe,...(Object.hasOwn(input.payload,'securityPin')?{securityPinCommitment:securityPin===null?null:customerContextCommitment(securityPin,{organizationId:member.organizationId,projectId:input.projectId,purpose:'own-number-pin',resourceId:input.operationId},environment)}:{})}});}
  async function sourceProvider(s,token=environment.META_OWN_COMPANY_ACCESS_TOKEN){const scoped=await provider.forOwnCapability({capability:s.capability,token}),verified=await scoped.inspect({token,wabaId:s.policy.wabaId,phoneNumberId:s.policy.phoneNumberId,numberMode:'DEDICATED',inspectionPhase:META_CUSTOMER_INSPECTION_PHASE.PRE_REGISTRATION});assertCompanyPhoneMatch(s.declared,s.project.organizationMetadata,verified.displayPhoneNumber);return {scoped,verified,token};}
  async function current(session,input,run){return within(session,input,true,async(client,member,scope)=>{const auth=await authority(client,member,session,input,true);await requireCompanyChannelSchema(client);return run(client,member,scope,auth);});}
@@ -88,7 +98,13 @@ export function createOwnCompanyConnection({workspace,provider,environment=proce
  }
  return {
   async discover(session,context){
-   const s=await snapshot(session,context),{scoped,verified,token}=await sourceProvider(s),subscribed=await scoped.inspectSubscription({token,wabaId:s.policy.wabaId});
+   let s;try{s=await snapshot(session,context);}catch(error){
+    // Only a non-current setup policy admits durable v2 state observation.
+    // Provider failures and a current policy for another actor remain denials.
+    if(error?.code!=='META_OWN_COMPANY_UNAVAILABLE'||readOwnCompanyPolicy(environment,now())!==null)throw error;
+    return storedRuntimeSnapshot(session,context);
+   }
+   const {scoped,verified,token}=await sourceProvider(s),subscribed=await scoped.inspectSubscription({token,wabaId:s.policy.wabaId});
     const latest=await snapshot(session,context);ownCompanyCapabilityPolicy(s.capability,environment,now());
     let connectionOwnVerified=false;try{connectionOwnVerified=Boolean(ownCompanyConnectionPolicy(latest.connection,environment,now()));if(Object.hasOwn(latest.connection?.metadata||{},'ownCompanyRuntime'))await current(session,context,client=>lockOwnCompanyIssuer(client,latest.connection,{environment,now:now()}));}catch{connectionOwnVerified=false;}
     const runtime=latest.connection?.metadata?.ownCompanyRuntime,credentialExpiresAt=typeof runtime?.validUntil==='string'&&Number.isFinite(Date.parse(runtime.validUntil))&&new Date(runtime.validUntil).toISOString()===runtime.validUntil?runtime.validUntil:null;
