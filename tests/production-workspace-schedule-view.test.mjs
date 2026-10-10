@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {calendarDay, formatCalendarDay, loadedScheduleOverview, mergeLoadedTasks, planningState, registeredProgress, scheduleCalendar, scheduledBar, selectLoadedTasks, taskStatusLabel} from '../src/app/(identity)/cuenta/schedule-workbench.mjs';
+import {calendarDay, formatCalendarDay, loadedScheduleOverview, mergeLoadedTasks, planningState, refreshLoadedTasks, registeredProgress, scheduleCalendar, scheduledBar, selectLoadedTasks, taskStatusLabel, updateLoadedTask} from '../src/app/(identity)/cuenta/schedule-workbench.mjs';
 
 const task = (id, extra = {}) => ({id, title: 'Tarea ' + id, status: 'BACKLOG', progress: 0, startsOn: null, endsOn: null, revision: '2026-10-02T22:00:00.000001', ...extra});
 const tasks = [task('c', {title: 'Mampostería · sector norte', status: 'IN_PROGRESS', progress: 37, startsOn: '2026-10-07', endsOn: '2026-10-15'}), task('a', {title: 'Acopio de materiales', status: 'BLOCKED'}), task('b', {title: 'Hormigón', status: 'DONE', progress: 100, startsOn: '2026-10-01', endsOn: '2026-10-03'}), task('d', {startsOn: '2026-10-05', endsOn: '2026-10-01', progress: 101, status: 'unknown'})];
@@ -66,6 +66,47 @@ test('a late cursor snapshot cannot roll back a confirmed task, including micros
  for (const revision of [undefined, null, '2026-10-02T22:00:00.999', '2026-10-02T22:00:00.999999Z', '2026-02-29T22:00:00.999999']) assert.equal(mergeLoadedTasks([confirmed], [{...stale, revision}])[0], confirmed);
  const later = {...confirmed, revision: '2026-10-02T22:00:00.000003', progress: 80};
  assert.equal(mergeLoadedTasks([confirmed], [later])[0], later);
+});
+
+test('a delayed full readback retains newer approvals while using only the returned page membership and order', () => {
+ const before = task('same', {revision: '2026-10-02T22:00:00.000001', progress: 37, startsOn: '2026-10-02', endsOn: '2026-10-04'});
+ const current = updateLoadedTask([before, task('previous-page')], {id: 'same', revision: '2026-10-02T22:00:00.000002', progress: 50, status: 'IN_PROGRESS'});
+ const incoming = [task('new-first'), before];
+ const refreshed = refreshLoadedTasks(current, incoming);
+ assert.deepEqual(refreshed.map(row => row.id), ['new-first', 'same']);
+ assert.equal(refreshed[1], current[0]); assert.equal(refreshed[1].progress, 50);
+ assert.equal(refreshed[1].startsOn, before.startsOn); assert.equal(refreshed[1].endsOn, before.endsOn);
+ assert.equal(before.progress, 37); assert.equal(incoming[1], before);
+});
+
+test('a delayed partial decision callback cannot undo a newer GET and never inserts tasks outside the loaded page', () => {
+ const current = [task('same', {revision: '2026-10-02T22:00:00.000002', progress: 70, startsOn: '2026-10-02', endsOn: '2026-10-04'})];
+ for (const revision of ['2026-10-02T22:00:00.000001', undefined, '2026-10-02T22:00:00.999', '2026-02-29T22:00:00.999999']) {
+  assert.equal(updateLoadedTask(current, {id: 'same', revision, progress: 50})[0], current[0]);
+ }
+ assert.deepEqual(updateLoadedTask(current, task('outside')), current);
+ const updated = updateLoadedTask(current, {id: 'same', revision: '2026-10-02T22:00:00.000003', progress: 80});
+ assert.equal(updated[0].progress, 80); assert.equal(updated[0].startsOn, current[0].startsOn); assert.equal(updated[0].endsOn, current[0].endsOn);
+ assert.equal(current[0].progress, 70);
+});
+
+test('full readbacks accept later canonical rows and equal revisions without retaining rows omitted by the server', () => {
+ const current = [task('same', {revision: '2026-10-02T22:00:00.000002', progress: 50}), task('omitted')];
+ const later = task('same', {revision: '2026-10-02T22:00:00.000003', progress: 70});
+ assert.deepEqual(refreshLoadedTasks(current, [later]), [later]);
+ const equal = {...current[0], startsOn: '2026-10-02', endsOn: '2026-10-04'};
+ assert.equal(refreshLoadedTasks(current, [equal])[0], equal);
+ assert.equal(updateLoadedTask(current, {id: 'same', revision: current[0].revision, progress: 50})[0].progress, 50);
+ assert.deepEqual(refreshLoadedTasks(current, []), []);
+});
+
+test('a complete approved task carries current planning dates past a delayed earlier planning reply', () => {
+ const original = task('same', {revision: '2026-10-02T22:00:00.000001', progress: 37, startsOn: '2026-10-01', endsOn: '2026-10-05'});
+ const planned = {...original, revision: '2026-10-02T22:00:00.000002', startsOn: '2026-10-07', endsOn: '2026-10-15'};
+ const approved = {...planned, revision: '2026-10-02T22:00:00.000003', progress: 50};
+ const afterApproval = updateLoadedTask([original], approved), afterDelayedPlanning = updateLoadedTask(afterApproval, planned);
+ assert.deepEqual(afterDelayedPlanning[0], approved); assert.equal(afterDelayedPlanning[0], afterApproval[0]);
+ assert.equal(original.startsOn, '2026-10-01'); assert.equal(planned.progress, 37);
 });
 
 const range = (start, lastDay) => ({start: calendarDay(start), end: calendarDay(lastDay) + 86400000});

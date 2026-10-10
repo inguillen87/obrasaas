@@ -9,7 +9,7 @@ import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-p
 // Browser-only acceptance of the real component with intercepted synthetic API
 // responses. This is NOT proof of a production login, employee or WhatsApp event.
 assert.ok(!process.env.VERCEL && !process.env.VERCEL_ENV);
-assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume'].includes(process.env.WORKSPACE_UI_SCENARIO));
+assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume','confirmed-progress'].includes(process.env.WORKSPACE_UI_SCENARIO));
 const root=process.cwd(),evidence=path.join(root,'.vercel/workspace-evidence');
 mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/workspace-ui-')),app=path.join(fixture,'src/app'),components=path.join(app,'(identity)/cuenta');
@@ -457,6 +457,82 @@ async function taskCreateScenario(mode){
  const createdProgress=await page.$eval('[data-task-id="new-task"]',element=>({text:element.innerText.replace(/\s+/g,' '),bars:[...element.querySelectorAll('[role="progressbar"]')].map(bar=>bar.getAttribute('aria-valuenow'))}));assert.ok(createdProgress.text.includes('Avance registrado: 0 %'));assert.deepEqual(createdProgress.bars,['0']);
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await context.close();
 }
+async function confirmedProgressScenario(mode,width){
+ const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
+ page.on('pageerror',error=>pageErrors.push({mode:'confirmed-progress-'+mode,width,message:error.message}));
+ const planningMode=mode==='planning',beforeRevision='2026-10-02T09:00:00.000001',afterRevision='2026-10-02T09:00:00.000010',latestRevision='2026-10-02T09:00:00.000020';
+ const original={...baseTask(),revision:beforeRevision},created={id:'new-task',title:'Tarea de ensayo concurrente',status:'BACKLOG',progress:0,startsOn:null,endsOn:null,revision:beforeRevision};
+ const proposal={id:'proposal-a',taskId:original.id,workerId:'worker-a',summary:'Avance medido sintético',status:'PENDING',revision:planningMode?'2026-10-02T09:00:00.000011':'2026-10-02T09:00:00.000005',progress:50,quantity:null,baseline:null,unit:null,reason:'Medición sintética revisada.',evidenceIds:['evidence-a']};
+ const field={scope,projectId:'p-a',projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals:planningMode?[]:[proposal],evidence:[{id:'evidence-a',taskId:original.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Fuente sintética de la medición.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};
+ const posts=[];let creation=null,heldReadback=null,heldDecision=null,heldPlanning=null,readbackCount=0;
+ let readbackStarted,decisionStarted,planningStarted;const readbackReady=new Promise(resolve=>{readbackStarted=resolve;}),decisionReady=new Promise(resolve=>{decisionStarted=resolve;}),planningReady=new Promise(resolve=>{planningStarted=resolve;});
+ const respond=(request,body)=>request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
+ await page.setRequestInterception(true);
+ page.on('request',async request=>{
+  try{
+   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
+   if(!['/api/identity/workspace','/api/identity/task-creation','/api/identity/field-operations'].includes(url.pathname))return request.continue();
+   assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+   if(url.pathname==='/api/identity/workspace'){
+    if(request.method()==='POST'){
+     assert.ok(planningMode);const input=JSON.parse(request.postData());posts.push({path:url.pathname,input});assert.equal(input.scope,scope);assert.equal(input.projectId,'p-a');assert.equal(input.taskId,original.id);assert.equal(input.expectedRevision,beforeRevision);assert.equal(input.startsOn,'2026-10-07');assert.equal(input.endsOn,'2026-10-15');
+     const task={...original,startsOn:input.startsOn,endsOn:input.endsOn,revision:afterRevision};
+     heldPlanning={request,outcome:{scope,saved:true,replayed:false,task,receipt:{id:'workspace_schedule_'+ 'd'.repeat(64),taskId:original.id,recordedAt:afterRevision,before:{startsOn:original.startsOn,endsOn:original.endsOn},after:{startsOn:task.startsOn,endsOn:task.endsOn}}}};
+     // The worker creates this proposal after the planning transaction committed,
+     // using the current r1 task even though the director's r1 reply is retained.
+     field.proposals=[{...proposal,taskRevision:afterRevision}];planningStarted();return;
+    }
+    if(!url.search)return respond(request,{scope,organizationName:'Empresa de ensayo concurrente',role:'DIRECTOR',roleLabel:'Director de obra',canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false});
+    assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');
+    if(creation&&!url.searchParams.has('afterTask')){heldReadback=request;readbackCount++;readbackStarted();return;}
+    const tasks=url.searchParams.has('afterTask')?[{...created,id:'tail-task',title:'Última tarea autorizada'}]:[original];
+    return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks,totalTasks:creation?3:1,nextCursor:null});
+   }
+   if(request.method()==='GET')return respond(request,field);
+   const input=JSON.parse(request.postData());posts.push({path:url.pathname,input});assert.equal(input.scope,scope);assert.equal(input.projectId,'p-a');
+   if(url.pathname==='/api/identity/task-creation'){
+    assert.equal(input.title,created.title);creation={scope,created:true,replayed:false,receiptId:'workspace_new_task_'+input.operationId,task:created};return respond(request,creation);
+   }
+   assert.equal(input.action,'DECIDE_PROGRESS');assert.equal(input.payload.proposalId,proposal.id);assert.equal(input.payload.revision,proposal.revision);assert.equal(input.payload.decision,'APPROVE');
+   field.proposals=[{...proposal,status:'APPLIED',revision:planningMode?latestRevision:afterRevision}];
+   const task={...(planningMode?heldPlanning.outcome.task:original),status:'IN_PROGRESS',progress:50,revision:planningMode?latestRevision:afterRevision};
+   const outcome={scope,saved:true,replayed:false,receiptId:'field_'+ 'c'.repeat(64),kind:'PROGRESS_DECISION',proposal:field.proposals[0],task};
+   heldDecision={request,outcome};decisionStarted();if(mode!=='callback')return respond(request,outcome);
+  }catch(error){pageErrors.push({mode:'confirmed-progress-'+mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
+ });
+ try{
+  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo concurrente');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');
+  if(planningMode){await fill(page);await click(page,'Confirmar planificación');await planningReady;}
+  await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label="Operaciones de campo"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');
+  if(!planningMode){await click(page,'Nueva tarea');await page.type('section[aria-label="Crear tarea de la obra"] form input:not([type="date"])',created.title);await click(page,'Crear tarea');await readbackReady;}
+  await click(page,'Decidir propuesta');await page.type('section[aria-labelledby="field-title"] form textarea','Aprobación sintética independiente.');await click(page,'Guardar con recibo');await decisionReady;
+  if(planningMode){
+   await page.waitForFunction(()=>document.querySelector('[data-task-id="task-a"] [role="progressbar"]').getAttribute('aria-valuenow')==='50');
+   await respond(heldPlanning.request,heldPlanning.outcome);await waitText(page,'Cambio confirmado');
+   assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),50);
+   assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),['2026-10-07','2026-10-15']);
+   assert.equal(posts.length,2);assert.equal(readbackCount,0);assert.ok((await text(page)).includes('1 de 1 tareas cargadas'));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+   await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,`workspace-confirmed-progress-planning-${width}.png`)});
+   checks.push('schedule-delayed-planning-reply-keeps-current-dates-and-progress-'+width);return;
+  }
+  const readbackTask=mode==='readback'?original:{...original,revision:latestRevision,progress:70};
+  if(mode==='readback')await page.waitForFunction(()=>document.querySelector('[data-task-id="task-a"] [role="progressbar"]').getAttribute('aria-valuenow')==='50');
+  await respond(heldReadback,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[readbackTask,created],totalTasks:3,nextCursor:created.id});
+  await waitText(page,'Cronograma actualizado desde los registros de la obra.');
+  if(mode==='callback'){await respond(heldDecision.request,heldDecision.outcome);await waitText(page,'Decisión guardada.');}
+  await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Cargar más tareas'&&!button.disabled));
+  const expected=mode==='readback'?50:70;
+  assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),expected);
+  assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),[original.startsOn,original.endsOn]);
+  assert.ok((await text(page)).includes('2 de 3 tareas cargadas'));assert.equal(readbackCount,1);assert.equal(posts.length,2);
+  await click(page,'Cargar más tareas');await page.waitForSelector('[data-task-id="tail-task"]');assert.ok((await text(page)).includes('3 de 3 tareas cargadas'));
+  assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),expected);assert.equal(posts.length,2);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,`workspace-confirmed-progress-${mode}-${width}.png`)});
+  checks.push((mode==='readback'?'schedule-delayed-readback-keeps-confirmed-progress-':'schedule-delayed-decision-callback-keeps-newer-get-')+width);
+ }catch(error){await page.screenshot({path:path.join(evidence,`workspace-confirmed-progress-${mode}-failure-${width}.png`),fullPage:false}).catch(()=>{});throw error;}
+ finally{for(const request of [heldReadback,heldDecision?.request,heldPlanning?.request])if(request&&!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});await context.close();}
+}
 async function stalePaginationScenario(){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width:390,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode:'stale-pagination',width:390,message:error.message}));
@@ -659,6 +735,7 @@ try{
    if(process.env.WORKSPACE_UI_SCENARIO==='workbench')for(const width of [320,390])await scenario('readonly',width);
   }
   if([undefined,'gantt-volume'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])await ganttVolumeScenario(width);
+ if([undefined,'confirmed-progress'].includes(process.env.WORKSPACE_UI_SCENARIO)){for(const width of [390,1280])for(const mode of ['readback','callback','planning'])await confirmedProgressScenario(mode,width);if(process.env.WORKSPACE_UI_SCENARIO==='confirmed-progress')await stalePaginationScenario();}
  if(!process.env.WORKSPACE_UI_SCENARIO){
  for(const width of [320,390,768,1280])await scenario('success',width);
  for(const mode of ['readonly','denied','empty','draft-cancel','sdk-unavailable','unmount-token','uncertain','rollback','not-arrived','conflict','race'])await scenario(mode);

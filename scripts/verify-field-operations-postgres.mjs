@@ -126,6 +126,10 @@ try{
  const failApprovalWorkspace=createWorkspaceStore({connect:async()=>{const c=await pool.connect();return {release:bad=>c.release(bad),query:(sql,args)=>{if(sql.startsWith('INSERT INTO public."AuditLog"'))throw new Error('Synthetic audit failure');return c.query(sql,args);}};}});
  await assert.rejects(createFieldOperations({workspace:failApprovalWorkspace}).save(director,decision),{code:'WORKSPACE_OPERATION_UNCONFIRMED'});assert.equal((await workspace.read(owner,context(owner))).tasks[0].progress,0);assert.equal((await read(owner)).proposals[0].status,'PENDING');
  const decisions=await Promise.all([operations.save(director,decision),operations.save(director,decision)]);assert.equal(decisions.filter(r=>!r.replayed).length,1);assert.equal(decisions[0].task.progress,25);
+ const decisionTask=(await workspace.read(owner,context(owner))).tasks[0];for(const result of decisions)assert.deepEqual(result.task,decisionTask);
+ assert.equal(decisionTask.startsOn,'2026-10-01');assert.equal(decisionTask.endsOn,'2026-10-10');
+ const originalDecisionSnapshot=(await pool.query('SELECT metadata FROM "AuditLog" WHERE id=$1',[decisions[0].receiptId])).rows[0].metadata.outcome.task;
+ assert.deepEqual(originalDecisionSnapshot,decisionTask);
  const persisted=(await pool.query('SELECT progress,status,metadata,"startsAt","endsAt" FROM "Task" WHERE id=$1',['task-a'])).rows[0];assert.equal(persisted.metadata.unrelated,true);assert.equal(persisted.metadata.fieldOperations.quantity.executed,'2.5000');assert.equal(persisted.startsAt.toISOString().slice(0,10),'2026-10-01');
  checks.push('quantity-proposal-does-not-change-task-until-authorized-concurrent-approval-and-preserves-gantt-dates');
  const exactTask=(await workspace.read(owner,context(owner))).tasks[0],exact=await operations.save(worker,command(worker,'PROPOSE_PROGRESS',{...propose.payload,revision:exactTask.revision,progress:25,quantity:'2.59'}));
@@ -140,10 +144,25 @@ try{
  const currentTask=(await workspace.read(owner,context(owner))).tasks[0],second=await operations.save(worker,command(worker,'PROPOSE_PROGRESS',{...propose.payload,revision:currentTask.revision,progress:30,quantity:'3'}));
  await operations.save(director,command(director,'DECIDE_PROGRESS',{proposalId:second.proposal.id,revision:second.proposal.revision,decision:'REJECT',reason:'The extra quantity lacks an adequate foundation.'}));assert.equal((await workspace.read(owner,context(owner))).tasks[0].progress,25);checks.push('maker-checker-task-approval-audit-rollback-and-rejection-never-changes-approved-progress');
  await pool.query(`UPDATE "Task" SET status='BLOCKED',"updatedAt"=clock_timestamp() WHERE id='task-a'`);const blockedTask=(await workspace.read(owner,context(owner))).tasks[0];
- const later=await operations.save(worker,command(worker,'PROPOSE_PROGRESS',{...propose.payload,revision:blockedTask.revision,progress:50,quantity:'5'}));
- await operations.save(director,command(director,'DECIDE_PROGRESS',{proposalId:later.proposal.id,revision:later.proposal.revision,decision:'APPROVE',reason:'Measured work does not remove the independent task blocker.'}));
+ const planned=await workspace.schedule(director,{...context(director),operationId:randomUUID(),taskId:blockedTask.id,expectedRevision:blockedTask.revision,startsOn:'2026-10-07',endsOn:'2026-10-15',reason:'Synthetic authorized planning before the next measured proposal.'});
+ const later=await operations.save(worker,command(worker,'PROPOSE_PROGRESS',{...propose.payload,revision:planned.task.revision,progress:50,quantity:'5'}));
+ const laterDecision=await operations.save(director,command(director,'DECIDE_PROGRESS',{proposalId:later.proposal.id,revision:later.proposal.revision,decision:'APPROVE',reason:'Measured work does not remove the independent task blocker.'}));
+ assert.ok(laterDecision.task.revision>planned.task.revision);assert.equal(laterDecision.task.startsOn,'2026-10-07');assert.equal(laterDecision.task.endsOn,'2026-10-15');
+ assert.deepEqual(laterDecision.task,(await workspace.read(owner,context(owner))).tasks[0]);
  const recovered=(await operations.status(director,{...context(director),operationId:decision.operationId}));assert.equal(recovered.task.progress,50);assert.equal(recovered.task.status,'BLOCKED');assert.equal(recovered.decisionTaskSnapshot.progress,25);
- assert.equal((await operations.save(director,decision)).task.progress,50);assert.equal((await workspace.read(owner,context(owner))).tasks[0].status,'BLOCKED');checks.push('old-approval-recovery-returns-current-task-and-never-clears-an-independent-blocker');
+ assert.deepEqual(recovered.task,laterDecision.task);assert.deepEqual(recovered.decisionTaskSnapshot,originalDecisionSnapshot);
+ assert.deepEqual((await pool.query('SELECT metadata FROM "AuditLog" WHERE id=$1',[decisions[0].receiptId])).rows[0].metadata.outcome.task,originalDecisionSnapshot);
+ assert.equal((await operations.save(director,decision)).task.progress,50);assert.equal((await workspace.read(owner,context(owner))).tasks[0].status,'BLOCKED');
+ // Reconstruct an old receipt shape only inside this disposable synthetic database.
+ const {startsOn:legacyStartsOn,endsOn:legacyEndsOn,...legacyDecisionSnapshot}=originalDecisionSnapshot;
+ assert.equal(legacyStartsOn,'2026-10-01');assert.equal(legacyEndsOn,'2026-10-10');assert.equal(Object.keys(legacyDecisionSnapshot).length,5);
+ await pool.query(`UPDATE "AuditLog" SET metadata=jsonb_set(metadata,'{outcome,task}',$2::jsonb) WHERE id=$1`,[decisions[0].receiptId,JSON.stringify(legacyDecisionSnapshot)]);
+ const legacyReceiptMetadata=(await pool.query('SELECT metadata FROM "AuditLog" WHERE id=$1',[decisions[0].receiptId])).rows[0].metadata;
+ for(const result of [await operations.status(director,{...context(director),operationId:decision.operationId}),await operations.save(director,decision)]){
+  assert.equal(result.replayed,true);assert.deepEqual(result.task,laterDecision.task);assert.deepEqual(result.decisionTaskSnapshot,legacyDecisionSnapshot);
+ }
+ assert.deepEqual((await pool.query('SELECT metadata FROM "AuditLog" WHERE id=$1',[decisions[0].receiptId])).rows[0].metadata,legacyReceiptMetadata);
+ checks.push('old-approval-recovery-returns-current-task-and-never-clears-an-independent-blocker');
  const expiryTask=(await workspace.read(owner,context(owner))).tasks[0],expiringCommand=command(worker,'PROPOSE_PROGRESS',{...propose.payload,revision:expiryTask.revision,progress:60,quantity:'6'}),expiring=await operations.save(worker,expiringCommand);
  assert.ok(expiring.proposal.expiresAt);assert.equal(expiring.proposal.statusStored,'PENDING');
  await pool.query(`UPDATE "OperationalProposal" SET "expiresAt"=clock_timestamp()-interval '1 second' WHERE id=$1`,[expiring.proposal.id]);

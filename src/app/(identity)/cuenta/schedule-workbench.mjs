@@ -25,6 +25,7 @@ export const formatCalendarDay = value => {
 };
 const searchable = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es-AR').trim();
 const canonicalRevision = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{6}$/.test(value) && calendarDay(value.slice(0, 10)) !== null;
+const acceptsTaskRevision = (existing, incoming) => canonicalRevision(incoming.revision) && (!canonicalRevision(existing.revision) || incoming.revision >= existing.revision);
 export function mergeLoadedTasks(current, incoming) {
  // A locally created task can reappear in a later cursor page. A page started
  // before a confirmed change must not replace the newer task with its old
@@ -32,9 +33,23 @@ export function mergeLoadedTasks(current, incoming) {
  const merged = new Map(current.map(task => [task.id, task]));
  for (const task of incoming) {
   const existing = merged.get(task.id);
-  if (!existing || canonicalRevision(task.revision) && (!canonicalRevision(existing.revision) || task.revision >= existing.revision)) merged.set(task.id, task);
+  if (!existing || acceptsTaskRevision(existing, task)) merged.set(task.id, task);
  }
  return [...merged.values()];
+}
+export function refreshLoadedTasks(current, incoming) {
+ // A full readback owns the page membership and order. Only a newer revision
+ // of a task on that page survives a response captured before its approval.
+ const existing = new Map(current.map(task => [task.id, task]));
+ return incoming.map(task => {
+  const previous = existing.get(task.id);
+  return previous && !acceptsTaskRevision(previous, task) ? previous : task;
+ });
+}
+export function updateLoadedTask(current, incoming) {
+ // New task replies include planning dates; legacy callbacks may omit them.
+ // Merge a current revision into an already loaded task without adding cursor rows.
+ return current.map(task => task.id === incoming.id && acceptsTaskRevision(task, incoming) ? {...task, ...incoming} : task);
 }
 export function selectLoadedTasks(tasks, {search = '', status = 'ALL', planning = 'ALL', order = 'REGISTERED'} = {}) {
  const terms = searchable(search).split(/\s+/).filter(Boolean);
