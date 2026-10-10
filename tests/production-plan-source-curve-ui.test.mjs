@@ -7,6 +7,8 @@ import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {loadBindings,transform} from 'next/dist/build/swc/index.js';
 import {formatSourceCurveDecimal,planSourceCurveView,sourceCurveKeyboardIndex} from '../src/app/(identity)/cuenta/plan-source-curve.mjs';
+import {extractCypCurveOoxml} from '../src/lib/plan-import-ooxml.mjs';
+import {cypCurveFixture} from './fixtures/plan-import-cyp-curve-synthetic.mjs';
 
 await loadBindings();
 const require=createRequire(import.meta.url),reactUrl=pathToFileURL(require.resolve('react')).href;
@@ -140,7 +142,7 @@ const useState=initial=>{const index=stateCursor++;if(!(index in states))states[
 const useRef=initial=>{const index=refCursor++;return refs[index]??(refs[index]={current:initial});};
 const useEffect=()=>{},useCallback=value=>value;
 const FileUp=()=>null,FileCheck2=()=>null,Download=()=>null,TriangleAlert=()=>null,PlanSourceCurve=()=>React.createElement('div',{'data-source-curve':true});
-const useWorkspaceRequest=()=>async(url,options,consume)=>{const next=queue.shift();if(!next)throw new Error('Unexpected request in private panel test');if(next.error)throw next.error;return consume({ok:(next.status??200)<400,status:next.status??200,json:async()=>{if(next.jsonError)throw next.jsonError;return next.wait?await next.wait:next.data;},blob:async()=>new Blob(['synthetic'])});};
+const useWorkspaceRequest=()=>async(url,options,consume)=>{const next=queue.shift();if(!next)throw new Error('Unexpected request in private panel test');if(next.error)throw next.error;return consume({ok:(next.status??200)<400,status:next.status??200,json:async()=>{if(next.jsonError)throw next.jsonError;return next.wait?await next.wait:next.data;},blob:async()=>next.blobWait?await next.blobWait:new Blob(['synthetic'])});};
 const browserRecoveryJournal={list:async()=>[],migratePlanImportAttempt:async()=>{}},RECOVERY_EVENT='synthetic-recovery',recoveryResult=(reference,data)=>data?.draft?{state:'RECORDED'}:null,planImportCommandDigest=async()=>"a".repeat(64),planImportUploadFormDigest=async()=>"b".repeat(64);
 `;
 const panelCompiled=await transform(panelHooks+panelSource+`
@@ -166,6 +168,51 @@ const assertPrivateCleared=()=>{
  const tree=panel.render(panelContext);assert.equal(elements(tree,node=>node.type==='fieldset').length,0);assert.equal(elements(tree,node=>typeof node.type==='function'&&node.type.name==='PlanSourceCurve').length,0);
  return current;
 };
+
+let cypSourcePromise;
+async function cypPrivateDraft(){
+ cypSourcePromise??=extractCypCurveOoxml(cypCurveFixture(),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+ const extraction=structuredClone(await cypSourcePromise);return {...privateDraft(),rows:extraction.rows,spreadsheet:{...extraction.spreadsheet,reviewed:false}};
+}
+
+test('CyP component preserves exact source decimals and empty initial base under an explicit profile, with physical-task counts',async()=>{
+ const draft=await cypPrivateDraft(),value=draft.spreadsheet.curve,before=structuredClone(value),props={profile:'CYP_PARTIDAS_CURVE',sourceRowCount:190,selectedRowCount:3};
+ const view=planSourceCurveView(value,{profile:props.profile});assert.deepEqual(view.periods,value.periods);assert.deepEqual(view.initialCumulative,{sourceCell:'Plan de trabajo!I236',cachedValue:null,hasFormula:false});assert.throws(()=>planSourceCurveView(value));
+ const markup=html(value,props);assert.match(markup,/190 partidas físicas/);assert.match(markup,/Tareas elegidas: 3/);assert.match(markup,/costos adicionales/);assert.match(markup,/Plan de trabajo!I233/);assert.match(markup,/Curva de Inversion!L34/);assert.match(markup,/12\.345\.678\.901\.234\.567\.890,1234500/);assert.match(markup,/Acumulado inicial[^<]*<\/dt><dd>Sin dato/);
+ assert.deepEqual(polyline(markup),polyline(html(value,{...props,selectedRowCount:190})));assert.deepEqual(value,before);
+ const mixed=structuredClone(value);mixed.periods[0].monthlyAmount.sourceCell='Curva de Inversion!A32';assert.throws(()=>planSourceCurveView(mixed,{profile:props.profile}));assert.match(html(mixed,props),/No se puede mostrar/);
+});
+
+test('CyP profile remains a separate ADMIN/DIRECTOR opt-in with explicit financial consent and physical row review',async()=>{
+ panel.reset();panel.render(panelContext);panel.seed({open:true,file:new File(['synthetic'],'source.xlsx',{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),canApprove:false,recoveryReady:true});
+ let tree=panel.render(panelContext),option=elements(tree,node=>node.type==='option'&&node.props.value==='CYP_PARTIDAS_CURVE')[0];assert.equal(option.props.disabled,true);
+ panel.seed({canApprove:true});tree=panel.render(panelContext);option=elements(tree,node=>node.type==='option'&&node.props.value==='CYP_PARTIDAS_CURVE')[0];assert.equal(option.props.disabled,false);
+ const select=elements(tree,node=>node.type==='select')[0];select.props.onChange({target:{value:'CYP_PARTIDAS_CURVE'}});tree=panel.render(panelContext);const text=textContent(tree);assert.match(text,/curva completa de inversión prevista de CyP/);assert.match(text,/no se recalculan fórmulas/);assert.equal(panel.snapshot().consent,false);
+ const draft=await cypPrivateDraft();tree=await openPanel(draft);const component=elements(tree,node=>typeof node.type==='function'&&node.type.name==='PlanSourceCurve')[0];assert.equal(component.props.profile,'CYP_PARTIDAS_CURVE');assert.equal(elements(tree,node=>node.type==='fieldset').length,20);assert.match(textContent(tree),/Código original: A\.1\.1\.1/);assert.doesNotMatch(textContent(tree),/Rubro original: /);
+});
+
+test('CyP panel purges financial RAM and listings on downgrade and blocks late private results while preserving recovery references',async()=>{
+ const value=await cypPrivateDraft();let tree=await openPanel(value);panel.respond({error:new Error('Synthetic lost confirmation')});await panelButton(tree,'Guardar correcciones').props.onClick();const pending=structuredClone(panel.snapshot().attempt);
+ tree=panel.render(panelContext);let resolve;const wait=new Promise(done=>{resolve=done;});panel.respond({wait});const late=elements(tree,node=>node.type==='button'&&Array.isArray(node.props.children)&&node.props.children.includes(' tareas'))[0].props.onClick();
+ panel.respond({data:{...panelContext,canApprove:false,drafts:[value],truncated:false}});await panelButton(tree,'Consultar borradores registrados').props.onClick();assertPrivateCleared();assert.deepEqual(panel.snapshot().drafts,[]);
+ resolve({...panelContext,draft:value});await late;const current=assertPrivateCleared();assert.deepEqual(current.attempt,pending);assert.deepEqual(panel.references()[2].current,pending);assert.equal(panel.references()[4].current,null);
+});
+
+test('financial pending/failed drafts remain private after reload, reject stale reads and remove private file/listings on downgrade',async()=>{
+ for(const status of ['UPLOADING','PROCESSING','FAILED']){
+  const value={...privateDraft(),status,rows:[],financialSource:true};delete value.spreadsheet;let tree=await openPanel(value);assert.equal(panel.references()[5].current,true);assert.equal(elements(tree,node=>typeof node.type==='function'&&node.type.name==='PlanSourceCurve').length,0);
+  const reference={version:1,resource:'plan-import',scope:panelContext.scope,projectId:panelContext.projectId,operationId:'01234567-89ab-4cde-8fab-0123456789ab',createdAt:Date.now(),action:'UPLOAD',inputDigest:'a'.repeat(64)};panel.seed({attempt:reference});panel.references()[2].current=reference;tree=panel.render(panelContext);
+  let resolve;const wait=new Promise(done=>{resolve=done;});panel.respond({wait});const late=elements(tree,node=>node.type==='button'&&Array.isArray(node.props.children)&&node.props.children.includes(' tareas'))[0].props.onClick();
+  panel.respond({data:{...panelContext,canApprove:false,drafts:[value],truncated:false}});await panelButton(tree,'Consultar borradores registrados').props.onClick();assertPrivateCleared();assert.deepEqual(panel.snapshot().drafts,[]);
+  resolve({...panelContext,draft:value});await late;assertPrivateCleared();
+ }
+});
+
+test('a failed financial source download cannot create a file URL after a current permission denial',async()=>{
+ const value={...privateDraft(),status:'FAILED',rows:[],financialSource:true};delete value.spreadsheet;const tree=await openPanel(value);let resolve;const blobWait=new Promise(done=>{resolve=done;});panel.respond({blobWait});const late=panelButton(tree,'Descargar fuente').props.onClick();
+ panel.respond({status:403,data:{code:'PLAN_IMPORT_PERMISSION_REQUIRED'}});await elements(tree,node=>node.type==='button'&&Array.isArray(node.props.children)&&node.props.children.includes(' tareas'))[0].props.onClick();assertPrivateCleared();
+ let urls=0;const original=URL.createObjectURL;URL.createObjectURL=()=>{urls++;throw new Error('No stale file URL may be created');};try{resolve(new Blob(['synthetic financial source']));await late;assert.equal(urls,0);assertPrivateCleared();}finally{URL.createObjectURL=original;}
+});
 
 test('real private panel download denial drops private data and exact retry RAM while retaining pending receipt references',async()=>{
  let tree=await openPanel(privateDraft());panel.respond({error:Object.assign(new Error('Synthetic lost confirmation'),{status:503})});await panelButton(tree,'Guardar correcciones').props.onClick();

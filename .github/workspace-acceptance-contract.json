@@ -2226,6 +2226,7 @@
           "src/lib/person-worksite-journey.mjs",
           "src/lib/pilot-media.mjs",
           "src/lib/plan-import-analyzer.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
           "src/lib/plan-import-http.mjs",
           "src/lib/plan-import-monthly-curve.mjs",
           "src/lib/plan-import-ooxml.mjs",
@@ -3000,7 +3001,8 @@
     "commandSha256": "221070ce4bf11abbbbd9dc8c4a1c23d43e704698e67dad055038f28e3e4f48fa",
     "sourceDependencies": {
       "PG_COMPANY_KYC": [
-        "src/lib/plan-import-monthly-curve.mjs"
+        "src/lib/plan-import-monthly-curve.mjs",
+        "src/lib/plan-import-cyp-curve.mjs"
       ],
       "UI_IDENTITY_ONLY": [
         "src/app/(identity)/cuenta/plan-source-curve.js",

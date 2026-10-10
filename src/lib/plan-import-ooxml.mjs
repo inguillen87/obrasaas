@@ -5,6 +5,8 @@ import path from 'node:path';
 import {WorkspaceError} from './workspace-policy.mjs';
 import {safeMonthlyCurveAnalysis,PLAN_MONTHLY_CURVE_PROFILE} from './plan-import-monthly-curve.mjs';
 export {safeMonthlyCurveAnalysis,PLAN_MONTHLY_CURVE_CONSENT} from './plan-import-monthly-curve.mjs';
+import {safeCypCurveAnalysis,safeCypCurveCache,PLAN_CYP_CURVE_PROFILE} from './plan-import-cyp-curve.mjs';
+export {PLAN_CYP_CURVE_CONSENT} from './plan-import-cyp-curve.mjs';
 
 export const PLAN_OOXML_TYPES=Object.freeze({
  'application/vnd.ms-excel.sheet.macroenabled.12':'xlsm',
@@ -155,6 +157,7 @@ export async function extractMonthlyPlanOoxml(bytes,contentType,{rowLimit=50}={}
 }
 
 export function safePlanOoxmlAnalysis(value) {
+ if(value?.version===4)return safeCypCurveAnalysis(value,safeCypPlanAnalysis);
  if(value?.version===3)return safeMonthlyCurveAnalysis(value);
  if(value?.version===2)return safeCypPlanAnalysis(value);
  const keys=['version','profile','worksheet','level','rowCount','detailRowsExcluded','periodOrdinals','weeklyStatus','weeklyFormulaErrors','usesCachedValues','formulasRecalculated','macrosExecuted','quantityImported','dependenciesImported','progressImported'];
@@ -233,5 +236,45 @@ export async function extractCypPlanOoxml(bytes,contentType) {
   const spreadsheet={version:2,profile:'CYP_PARTIDAS',worksheet:'Plan de trabajo',level:'PARTIDA',rowCount:rows.length,groups,items,budgetCodeCount:original.size,excludedBudgetLeafCount,excludedBudgetGroupingCount:extra.length-excludedBudgetLeafCount,periodOrdinals:Array.from({length:12},(_,i)=>i+1),weeksPerPeriod:4,duplicateViewExcluded:true,hiddenSheetsIgnored:true,externalReferencesIgnored:true,usesCachedValues:true,formulasRecalculated:false,macrosExecuted:false,quantityImported:false,dependenciesImported:false,progressImported:false};
   if(!safeCypPlanAnalysis(spreadsheet))fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');
   return {rows,spreadsheet,warnings:[`Se extrajeron ${rows.length} partidas del alcance A/B, con ${groups.length} agrupadores conservados sólo como jerarquía. ${excludedBudgetLeafCount} conceptos adicionales de costos quedan excluidos; la vista física no se duplica.`,'El eje contiene 12 meses y 48 semanas ordinales: no son fechas calendario ni predecesoras. Guardá la revisión humana antes de aplicar.', 'La curva y los porcentajes son distribución prevista, no avance ejecutado ni certificación. Se conservan cachés sin recalcular; no se ejecutan macros ni se abren enlaces externos o copias ocultas.',`Revisión de fuente: ${items.filter(i=>i.missingUnit||i.missingQuantity).length} partidas con unidad/cantidad pendiente y ${rows.filter(r=>r.title.length>160).length} descripciones que requieren título abreviado. No se completan automáticamente.`]};
+ }catch(error){if(error instanceof WorkspaceError)throw error;fail();}finally{book?.close();}
+}
+
+// Keep the physical v2 profile unchanged. This explicit financial profile reads
+// source caches and their declared roles; no workbook formula is evaluated.
+export async function extractCypCurveOoxml(bytes,contentType){
+ const original=await extractCypPlanOoxml(bytes,contentType);let book;
+ try{
+  book=await workbook(bytes,contentType);const plan=await book.sheet('Plan de trabajo'),budget=await book.sheet('CyP Integral completo'),investment=await book.sheet('Curva de Inversion');
+  const lastCode=(cells,col)=>Math.max(...[...cells.entries()].filter(([address,c])=>new RegExp('^'+col+'[1-9]\\d*$').test(address)&&typeof c.value==='string'&&/^[ABHI](?:\.\d{1,3})*$/.test(c.value)).map(([address])=>Number(address.slice(col.length))));
+  const footer=(cells,col,after,label)=>{
+   const matches=[...cells.entries()].filter(([address,c])=>new RegExp('^'+col+'[1-9]\\d*$').test(address)&&Number(address.slice(col.length))>after&&text(c.value)===label);
+   if(matches.length!==1)fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');safeValue(cells,matches[0][0]);return Number(matches[0][0].slice(col.length));
+  };
+  const totalRow=footer(plan,'B',lastCode(plan,'A'),'TOTAL PRESUPUESTO'),budgetTotalRow=footer(budget,'C',lastCode(budget,'B'),'TOTAL PRESUPUESTO');
+  const formula=(cells,address,expected)=>{const c=cell(cells,address);safeValue(cells,address);if(!c?.hasFormula||String(c.formula||'').replace(/^\+/, '').replaceAll('$','')!==expected)fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');};
+  formula(plan,'B'+totalRow,`'CyP Integral completo'!C${budgetTotalRow}`);
+  formula(plan,'I'+totalRow,`'CyP Integral completo'!O${budgetTotalRow}`);
+  const roles=['CERTIFICADO SEMANAL ($)','CERTIFICACION MENSUAL ($)','CERTIFICACION ACUMULADA ($)','CERTIFICACION MENSUAL(%)','CERTIFICACION ACUMULADA (%)'];
+  for(const [i,label] of roles.entries())if(text(safeValue(plan,'D'+(totalRow+i+1))).replaceAll(' ','')!==label.replaceAll(' ',''))fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');
+  const cached=(cells,sheet,address,{required=false}={})=>{
+   const c=cell(cells,address),v=safeValue(cells,address);
+   if(c&&c.type!=='n'||c?.hasFormula&&/\|/.test(c.formula||'')||required&&(v===null||v==='')||v===''||v!==null&&typeof v!=='string')fail('PLAN_IMPORT_SPREADSHEET_FORMULA_INVALID');
+   return {sourceCell:`${sheet}!${address}`,cachedValue:v,hasFormula:Boolean(c?.hasFormula)};
+  };
+  // Inspect the declared source caches as well as the chart caches. Stale chart
+  // values cannot conceal an error/missing result in their referenced source.
+  const sourceCache=(cells,sheet,address,{ratio=false}={})=>{const value=cached(cells,sheet,address,{required:true});if(!safeCypCurveCache(value,`${sheet}!${address}`,{required:true,ratio}))fail('PLAN_IMPORT_SPREADSHEET_FORMULA_INVALID');};
+  sourceCache(budget,'CyP Integral completo','O'+budgetTotalRow);
+  const periods=Array.from({length:12},(_,i)=>{
+   const col=column(i),planCol=column(9+i*4);
+   if(text(safeValue(investment,col+'30'))!=='MES '+(i+1))fail('PLAN_IMPORT_SPREADSHEET_PERIODS_INVALID');
+   for(let field=0;field<4;field++){formula(investment,col+(31+field),`'Plan de trabajo'!${planCol}${totalRow+2+field}`);sourceCache(plan,'Plan de trabajo',planCol+(totalRow+2+field),{ratio:field>=2});}
+   formula(plan,planCol+(totalRow+4),`${planCol}${totalRow+2}/I${totalRow}`);
+   return {ordinal:i+1,headerCell:`Curva de Inversion!${col}30`,monthlyAmount:cached(investment,'Curva de Inversion',col+'31'),cumulativeAmount:cached(investment,'Curva de Inversion',col+'32'),monthlyPercentage:cached(investment,'Curva de Inversion',col+'33'),cumulativePercentage:cached(investment,'Curva de Inversion',col+'34')};
+  });
+  const curve={kind:'PLANNED_MONETARY_INVESTMENT',currency:null,calendarStart:null,total:cached(plan,'Plan de trabajo','I'+totalRow,{required:true}),initialCumulative:cached(plan,'Plan de trabajo','I'+(totalRow+3)),periods};
+  const spreadsheet={...original.spreadsheet,version:4,profile:PLAN_CYP_CURVE_PROFILE,curve};
+  if(!safePlanOoxmlAnalysis(spreadsheet))fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');
+  return {...original,spreadsheet,warnings:[...original.warnings,'La inversión prevista conserva la curva completa y la base presupuestaria originales. Los costos adicionales excluidos como tareas no se descuentan de esa curva. Excluir o renombrar partidas no recalcula importes; moneda y fechas siguen por confirmar.']};
  }catch(error){if(error instanceof WorkspaceError)throw error;fail();}finally{book?.close();}
 }
