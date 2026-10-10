@@ -28,6 +28,7 @@ try{
  await pool.query(`CREATE TABLE "Organization"(id text PRIMARY KEY,name text NOT NULL,"clerkOrganizationId" text UNIQUE,metadata jsonb,"subscriptionPlan" text NOT NULL,"subscriptionStatus" text NOT NULL,"trialEndsAt" timestamp);
   CREATE TABLE "PlatformUser"(id text PRIMARY KEY,"clerkUserId" text UNIQUE);
   CREATE TABLE "TenantMembership"(id text PRIMARY KEY,"userId" text REFERENCES "PlatformUser","organizationId" text REFERENCES "Organization","clerkRole" text NOT NULL,"tenantRole" text NOT NULL,status text NOT NULL);
+  CREATE TABLE "AuditLog"(id text PRIMARY KEY,"organizationId" text REFERENCES "Organization","actorId" text REFERENCES "PlatformUser",action text NOT NULL,"entityType" text NOT NULL,"entityId" text,metadata jsonb,"createdAt" timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP);
   INSERT INTO "Organization" VALUES('company-a','Synthetic company A','org_A','{"private":"not-returned"}','TRIAL','TRIALING',CURRENT_TIMESTAMP+interval '15 days'),('company-b','Synthetic company B','org_B','{}','PRO','ACTIVE',NULL),('company-i','Internal','org_I','{"internal":true}','ENTERPRISE','ACTIVE',NULL);
   INSERT INTO "PlatformUser" VALUES('Owner','user_Owner'),('Foreign','user_Foreign'),('Director','user_Director'),('Member','user_Member');
   INSERT INTO "TenantMembership" VALUES('membership-Owner','Owner','company-a','org:admin','ADMIN','ACTIVE'),('membership-Foreign','Foreign','company-b','org:admin','ADMIN','ACTIVE'),('membership-Director','Director','company-a','org:admin','DIRECTOR','ACTIVE'),('membership-Member','Member','company-a','org:member','ADMIN','ACTIVE'),('membership-Internal','Owner','company-i','org:admin','ADMIN','ACTIVE');`);
@@ -48,6 +49,19 @@ try{
  await assert.rejects(store.read(session('Owner','I'),{scope:scopeStamp(session('Owner','I'),{...member('Owner','i'),membershipId:'membership-Internal'})}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
  await assert.rejects(store.read(session('Unknown'),{scope}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
  checks.push('foreign-scope-both-admin-roles-and-internal-org-isolation');
+  // Canonical invitation history remains an access restriction even if the
+  // membership currently carries ADMIN. It does not require operational tables.
+  await pool.query(`INSERT INTO "AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES('limited-office-history','company-a','Owner','office.review.accepted','Project','absent-project',$1::jsonb)`,[JSON.stringify({version:1,kind:'OFFICE_AUDITOR_INVITATION_ACCEPTED',membershipId:'membership-Owner'})]);
+  const officeHistory=(await pool.query('SELECT * FROM "AuditLog" ORDER BY id')).rows,deniedStatements=statements.length;
+  await assert.rejects(read(),{code:'OFFICE_REVIEW_ONLY'});
+  assert.equal(statements.slice(deniedStatements).some(sql=>sql.includes('"subscriptionPlan"')),false,'Limited office access must stop before the subscription read');
+  assert.equal((await store.read(foreign,{scope:foreignScope})).organization.id,'company-b');
+  assert.deepEqual((await pool.query('SELECT * FROM "AuditLog" ORDER BY id')).rows,officeHistory);
+  assert.deepEqual((await pool.query('SELECT * FROM "Organization" ORDER BY id')).rows,before);
+  assert.equal(statements.some(sql=>/public\."(Project|Worker|Task)"/.test(sql)),false);
+  await pool.query(`DELETE FROM "AuditLog" WHERE id='limited-office-history'`);
+  assert.equal((await read()).organization.id,'company-a');
+  checks.push('limited-office-history-denies-borrowed-ADMIN-before-billing-without-operational-tables-or-writes');
  await pool.query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE id='membership-Owner'`);
  await assert.rejects(read(),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
  await pool.query(`UPDATE "TenantMembership" SET status='ACTIVE',"tenantRole"='DIRECTOR' WHERE id='membership-Owner'`);

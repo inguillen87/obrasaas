@@ -4,6 +4,7 @@ const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3
 const asset=value=>typeof value==='string'&&/^\d{5,32}$/.test(value);
 const text=value=>typeof value==='string'&&value.length>0&&value.length<=512;
 const revision=value=>Number.isInteger(value)&&value>=0&&value<=2147483647;
+const timestamp=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
 const shape=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')===keys.slice().sort().join('|');
 export const OWN_COMPANY_ACTIONS=Object.freeze(['CONNECT_OWN_NUMBER','ACTIVATE_OWN_NUMBER']);
 export const OWN_COMPANY_STATES=Object.freeze({VERIFYING:'Verificación en curso',PROVIDER_STARTED:'Activación en curso',PROVIDER_UNKNOWN:'Resultado por comprobar',RECORDED:'Configuración registrada',REJECTED:'Decisión rechazada',NOT_OBSERVED:'Resultado todavía no observado'});
@@ -43,6 +44,13 @@ function channel(value,expected){
 }
 export function ownCompanyNumberSnapshot(value,expected){
  context(value,expected);identity(value,expected);
+ if(value.kind==='OWN_COMPANY_STORED_RUNTIME'){
+  if(!shape(value,['version','kind','organization','actor','scope','projectId','readOnly','canManage','mode','evidenceOrigin','observedAt','configurationAuthorization','channel','operationalGrant','accepted','roundTrip'])||value.version!==1||value.readOnly!==true||value.canManage!==false||value.mode!=='OWN_COMPANY'||value.evidenceOrigin!=='STORED_CANONICAL_RUNTIME'||!timestamp(value.observedAt)||!shape(value.configurationAuthorization,['state'])||value.configurationAuthorization.state!=='NOT_CURRENT'||value.accepted!==false||value.roundTrip!=='NOT_VERIFIED')fail();
+  channel(value.channel,expected);
+  const grant=value.operationalGrant;
+  if(value.channel.mode!=='COMPANY'||value.channel.enabled!==true||value.channel.connectionStatus!=='CONNECTED'||!text(value.channel.displayPhoneNumber)||!shape(grant,['version','state','credentialExpiresAt','roundTrip','fieldJourney'])||grant.version!==2||grant.state!=='ACTIVE'||!timestamp(grant.credentialExpiresAt)||Date.parse(grant.credentialExpiresAt)<=Date.parse(value.observedAt)||grant.roundTrip!=='NOT_VERIFIED'||grant.fieldJourney!=='NOT_VERIFIED')fail();
+  return value;
+ }
  if(!shape(value,['organization','actor','scope','projectId','readOnly','canManage','mode','companyPhoneRevision','wabaId','phoneNumberId','displayPhoneNumber','verifiedBusinessName','registered','subscribed','expiresAt','channel','connectionMatchesAssets','connectionOwnVerified','accepted','roundTrip',...(Object.hasOwn(value,'operationalGrant')?['operationalGrant']:[])])||value.readOnly!==true||value.canManage!==true||value.mode!=='OWN_COMPANY'||!revision(value.companyPhoneRevision)||value.companyPhoneRevision<1||!asset(value.wabaId)||!asset(value.phoneNumberId)||!text(value.displayPhoneNumber)||value.verifiedBusinessName!==null&&!text(value.verifiedBusinessName)||typeof value.registered!=='boolean'||typeof value.subscribed!=='boolean'||typeof value.connectionMatchesAssets!=='boolean'||typeof value.connectionOwnVerified!=='boolean'||value.channel===null&&value.connectionMatchesAssets||value.connectionOwnVerified&&!value.connectionMatchesAssets||typeof value.expiresAt!=='string'||!Number.isFinite(Date.parse(value.expiresAt))||value.accepted!==false||value.roundTrip!=='NOT_VERIFIED')fail();
  if(value.channel!==null)channel(value.channel,expected);
  if(Object.hasOwn(value,'operationalGrant')){
@@ -51,7 +59,7 @@ export function ownCompanyNumberSnapshot(value,expected){
  }
  return value;
 }
-export const ownCompanyNumberFresh=(snapshot,now=Date.now())=>Boolean(snapshot?.canManage&&Date.parse(snapshot.expiresAt)>now);
+export const ownCompanyNumberFresh=(snapshot,now=Date.now())=>Boolean(snapshot?.kind!=='OWN_COMPANY_STORED_RUNTIME'&&snapshot?.canManage&&Date.parse(snapshot.expiresAt)>now);
 export function ownCompanyNumberCanAct(snapshot,action,now=Date.now()){
  if(!ownCompanyNumberFresh(snapshot,now)||!OWN_COMPANY_ACTIONS.includes(action)||(snapshot.channel?.revision||0)>2147483645)return false;
  if(action==='CONNECT_OWN_NUMBER')return snapshot.channel===null||snapshot.connectionMatchesAssets&&!snapshot.connectionOwnVerified&&!snapshot.channel.enabled&&['PROJECT_ONLY','PREPARED','SUSPENDED'].includes(snapshot.channel.mode)||!snapshot.connectionMatchesAssets&&snapshot.channel.mode==='SUSPENDED';
