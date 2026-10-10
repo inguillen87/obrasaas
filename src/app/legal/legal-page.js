@@ -2,8 +2,8 @@ import Link from 'next/link';
 import { ObraSaasLogo } from '../brand/brand-logo';
 import styles from './legal.module.css';
 
-export const LEGAL_CONTACT_EMAIL = 'guillen.marce@gmail.com';
-export const LEGAL_UPDATED_DATE = '8 de octubre de 2026';
+export const LEGAL_CONTACT_EMAIL = 'info@obrasaas.com';
+export const LEGAL_UPDATED_DATE = '10 de octubre de 2026';
 
 const documents = [
   ['/privacidad', 'Privacidad'],
@@ -54,7 +54,7 @@ export function LegalPage({ pathname, title, description, contents, children }) 
           <p className={styles.eyebrow}>INFORMACIÓN DEL SERVICIO</p>
           <h1 id="legal-title">{title}</h1>
           <p className={styles.lead}>{description}</p>
-          <p className={styles.updated}>Última actualización: <time dateTime="2026-10-08">{LEGAL_UPDATED_DATE}</time></p>
+          <p className={styles.updated}>Última actualización: <time dateTime="2026-10-10">{LEGAL_UPDATED_DATE}</time></p>
           <nav className={styles.documents} aria-label="Información legal">
             {documents.map(([href, label]) => (
               <Link key={href} href={href} aria-current={href === pathname ? 'page' : undefined}>{label}</Link>
