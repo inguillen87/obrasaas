@@ -263,7 +263,8 @@ try {
  const monthlyBefore=await projectState('p-monthly-curve'),monthlyDraft=(await monthlyImporter.attach(owner,monthlyInput)).draft;
  assert.equal(monthlyDraft.status,'READY');assert.equal(monthlyDraft.rows.length,23);assert.equal(monthlyDraft.spreadsheet.version,3);assert.equal(monthlyDraft.spreadsheet.profile,'MONTHLY_RUBROS_CURVE');assert.ok(monthlyDraft.rows.every(row=>row.startsOn===null&&row.endsOn===null&&row.uncertainty));
  assert.deepEqual((await projectState('p-monthly-curve')).tasks,monthlyBefore.tasks);assert.equal(monthlyAnalyses,1);assert.equal(forbiddenProviderCalls,0);
- const monthlyOriginal=structuredClone(monthlyDraft.spreadsheet),monthlyOriginalRows=structuredClone(monthlyDraft.rows);
+ const {reviewed:monthlyReviewed,...monthlySourceAnalysis}=monthlyDraft.spreadsheet;assert.equal(monthlyReviewed,false);
+ const monthlyOriginal=structuredClone(monthlySourceAnalysis),monthlyOriginalRows=structuredClone(monthlyDraft.rows);
  const monthlyAudit=(await pool.query('SELECT metadata FROM "AuditLog" WHERE id=$1',[monthlyDraft.id])).rows[0].metadata;
  assert.equal(monthlyAudit.consent.version,PLAN_IMPORT_MONTHLY_CURVE_CONSENT);assert.deepEqual(monthlyAudit.extractedRows,monthlyOriginalRows);assert.deepEqual(monthlyAudit.analysis.spreadsheet,monthlyOriginal);
  assert.deepEqual((await monthlyImporter.source(owner,{...monthlyContext(),draftId:monthlyDraft.id})).bytes,monthlySource.bytes);
