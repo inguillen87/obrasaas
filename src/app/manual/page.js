@@ -56,6 +56,7 @@ export default function ManualPage() {
           <section id="equipo" className={styles.section} aria-labelledby="equipo-title">
             <p className={styles.eyebrow}>02 · PERSONAS Y ACCESO</p><h2 id="equipo-title">Invitar al equipo y revisar su identidad</h2>
             <p>Para incorporar una nueva cuenta de oficina, la persona acepta la invitación de Clerk y verifica su correo. El administrador usa <strong>Incorporar cuenta aceptada en Clerk</strong>, consulta la cuenta, elige el rol y confirma su alcance. Esta incorporación no requiere ficha de campo, teléfono ni presentación de identidad de operario y no concede permisos de jornada o reportes. Dirección alcanza todas las obras de la empresa; los demás roles de oficina se asignan a la obra elegida.</p>
+            <details className={styles.details}><summary>Acceso limitado para revisar WhatsApp</summary><p>En <strong>Revisión de oficina sin documentos</strong>, el administrador invita al revisor con acceso de lectura y fecha de vencimiento. El revisor acepta la invitación de Clerk con su correo verificado, selecciona esa organización y acepta la invitación de oficina. Después actualiza Mis obras y abre la obra asignada.</p><p>El administrador puede compartir saludos seleccionados y, por separado, la configuración guardada de la conexión con cada invitación aceptada. El revisor consulta <strong>Revisión de conexión y eventos</strong>, sin teléfono, credenciales, documentos ni acciones de envío. Actualizar comprueba la vigencia del acceso y del registro; no consulta el estado actual de la conexión en Meta.</p><p>Retirar la configuración conserva el acceso a los saludos compartidos. Revocar el acceso, su vencimiento o un cambio del canal impiden nuevas consultas. Este recorrido no exige identidad de operario ni habilita jornada o reportes.</p></details>
             <ol className={styles.stepsList}>
               <li>Para el personal de obra, el responsable guarda la ficha en <strong>Equipo, incidencias y materiales → Abrir registro → Agregar persona</strong>. Una ficha o un teléfono declarado no crean acceso por sí solos.</li>
               <li>Después, en <strong>Participantes y revisión de identidad</strong>, asigna los permisos de jornada o reportes que correspondan y envía la invitación al correo correcto. Si el envío queda pendiente, consulta su resultado antes de volver a invitar.</li>
@@ -174,7 +175,7 @@ export default function ManualPage() {
           </section>
         </div>
       </div>
-      <footer className={styles.footer}><p>Guía revisada el 7 de octubre de 2026 · ObraSaaS, un producto desarrollado por Inmovar LATAM.</p><div><Link href="/cuenta">Ir a Mi cuenta</Link><a href="#manual-title">Volver al inicio del manual</a></div></footer>
+      <footer className={styles.footer}><p>Guía revisada el 10 de octubre de 2026 · ObraSaaS, un producto desarrollado por Inmovar LATAM.</p><div><Link href="/cuenta">Ir a Mi cuenta</Link><a href="#manual-title">Volver al inicio del manual</a></div></footer>
     </main>
   </div>;
 }

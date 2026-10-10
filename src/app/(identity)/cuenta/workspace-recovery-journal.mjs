@@ -100,7 +100,7 @@ async function reference(url, options, now) {
   if(!body||!uuid(body.operationId)||!id(body.projectId)||!scopeValid(body.scope))return null;
   if(resource==='project-creation'&&body.action!=='CREATE_PROJECT')throw unavailable();
   if(resource==='office-review'&&body.action==='RECOVER_INVITATION')return null;
-  if(resource==='office-review'&&!['INVITE_AUDITOR','REVOKE_AUDITOR','SELECT_EVENT'].includes(body.action))throw unavailable();
+  if(resource==='office-review'&&!['INVITE_AUDITOR','REVOKE_AUDITOR','SELECT_EVENT','SHARE_CONNECTION','WITHDRAW_CONNECTION'].includes(body.action))throw unavailable();
   if(resource==='project-preparation'&&!['SAVE_PREPARATION','CANCEL_PENDING_PREPARATION'].includes(body.action))throw unavailable();
   if(resource==='company-onboarding'&&(body.action!=='declare_company_phone'||!id(body.expectedClerkOrganizationId)))throw unavailable();
   if(resource==='site-photo'&&!id(body.reportId))return null;
@@ -152,7 +152,7 @@ function valid(entry) {
   const office=entry.resource==='office-review';
   const creation=entry.resource==='project-creation';
   if(creation&&entry.action!=='CREATE_PROJECT')return false;
-  if(office&&!['INVITE_AUDITOR','REVOKE_AUDITOR','SELECT_EVENT'].includes(entry.action))return false;
+  if(office&&!['INVITE_AUDITOR','REVOKE_AUDITOR','SELECT_EVENT','SHARE_CONNECTION','WITHDRAW_CONNECTION'].includes(entry.action))return false;
   if(entry.resource==='participants'&&entry.action!==undefined&&!bank&&!intake&&!officeAccount)return false;
   if(preparation&&entry.action!=='SAVE_PREPARATION')return false;
   const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',['reconcile','cancel'].includes(entry.action)?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(bank?['action','workerId']:[]),...(intake?['action','connectionId',...(entry.action==='CONFIGURE_EMPLOYEE_INTAKE'?[]:['applicationId'])]:[]),...(progress?['templateKey','workerId','actionReference']:[]),...(planUpload?['action','inputDigest']:plan?['action','draftId','expectedRevision','inputDigest']:[]),...(preparation?['action']:[])];

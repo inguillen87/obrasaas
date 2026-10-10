@@ -1,6 +1,6 @@
 import {WorkspaceError,workspaceId,operationId,digest} from './workspace-policy.mjs';
 
-export const OFFICE_REVIEW_ACTIONS=Object.freeze(['INVITE_AUDITOR','REVOKE_AUDITOR','SELECT_EVENT']);
+export const OFFICE_REVIEW_ACTIONS=Object.freeze(['INVITE_AUDITOR','REVOKE_AUDITOR','SELECT_EVENT','SHARE_CONNECTION','WITHDRAW_CONNECTION']);
 export const officeInvitationId=value=>typeof value==='string'&&/^office_invite_[a-f0-9]{32}$/.test(value);
 export const officeEventId=value=>typeof value==='string'&&/^customer_webhook_[a-f0-9]{64}$/.test(value);
 export const officeReceiptId=(member,projectId,key)=>'office_review_'+digest([member.organizationId,member.actorId,projectId,key.toLowerCase()]);
@@ -13,14 +13,24 @@ export function officeCommand(body){
  if(body.action==='INVITE_AUDITOR'){
   officeKeys(p,['email','connectionId','expiresAt','confirmReadOnly']);
   if(typeof p.email!=='string'||p.email!==p.email.trim().toLowerCase()||p.email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)||!workspaceId(p.connectionId)||p.confirmReadOnly!==true||!validInstant(p.expiresAt))throw new WorkspaceError('OFFICE_REVIEW_INPUT_INVALID');
- }else if(body.action==='REVOKE_AUDITOR'){
+ }else if(['REVOKE_AUDITOR','WITHDRAW_CONNECTION'].includes(body.action)){
   officeKeys(p,['invitationId','reason']);if(!officeInvitationId(p.invitationId)||typeof p.reason!=='string'||p.reason.trim().length<8||p.reason.length>400)throw new WorkspaceError('OFFICE_REVIEW_INPUT_INVALID');
+ }else if(body.action==='SHARE_CONNECTION'){
+  officeKeys(p,['invitationId','connectionId','confirmReadOnlyConfiguration']);
+  if(!officeInvitationId(p.invitationId)||!workspaceId(p.connectionId)||p.confirmReadOnlyConfiguration!==true)throw new WorkspaceError('OFFICE_REVIEW_INPUT_INVALID');
  }else {
   officeKeys(p,['connectionId','eventId','confirmNoPersonalData']);if(!workspaceId(p.connectionId)||!officeEventId(p.eventId)||p.confirmNoPersonalData!==true)throw new WorkspaceError('OFFICE_REVIEW_INPUT_INVALID');
  }
  return {...body,operationId:body.operationId.toLowerCase(),payload:{...p}};
 }
 export const validInstant=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
+// A closed observation of persisted configuration. Asset IDs and credentials
+// never enter this DTO; the timestamp is the explicit administrator selection.
+export function officeConnectionProjection(row,observedAt){
+ if(!workspaceId(row?.organizationId)||!workspaceId(row.id)||typeof row.whatsappBusinessId!=='string'||!/^\d{5,40}$/.test(row.whatsappBusinessId)||typeof row.phoneNumberId!=='string'||!/^\d{5,40}$/.test(row.phoneNumberId)||row.connectionStatus!=='CONNECTED'||row.enabled!==true||row.mode!=='COMPANY'||!Number.isSafeInteger(row.channelRevision)||row.channelRevision<1||!Number.isSafeInteger(row.assignmentRevision)||row.assignmentRevision<1||!validInstant(observedAt))throw new WorkspaceError('OFFICE_REVIEW_SOURCE_CHANGED');
+ const ref=(kind,value)=>'office_'+kind+'_'+digest(['office-review-connection-v1',kind,row.organizationId,value]);
+ return {version:1,connectionRef:ref('connection',row.id),wabaRef:ref('waba',row.whatsappBusinessId),phoneNumberRef:ref('phone',row.phoneNumberId),connectionStatus:'CONNECTED',enabled:true,mode:'COMPANY',channelRevision:row.channelRevision,assignmentRevision:row.assignmentRevision,observedAt,evidenceOrigin:'STORED_AUTHORIZED_CONNECTION'};
+}
 export function requireOfficeAdministrator(member,session){if(member.role!=='ADMIN'||session.organizationRole!=='org:admin')throw new WorkspaceError('OFFICE_REVIEW_ADMIN_REQUIRED',403);}
 export function assertOfficeGrant(grant,{member,projectId,connectionId,channelRevision,assignmentRevision,now,revoked=false}){
  if(!Number.isFinite(now))throw new WorkspaceError('OFFICE_REVIEW_ACCESS_REQUIRED',403);

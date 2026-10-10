@@ -54,16 +54,18 @@ export function workspaceGuideAccessReason(error){
  return null;
 }
 // This projection is read-only and deliberately omits names, phones and identity evidence.
-export function workspaceGuideObservation({account,view,loading,generation,unavailable=false,readFailed=false,accessReason=null,schedulePending=false,channelSnapshot}){
+export function workspaceGuideObservation({account,view,officeProject,loading,generation,unavailable=false,readFailed=false,accessReason=null,schedulePending=false,channelSnapshot}){
  const state=loading?'CONSULTING':unavailable?'UNAVAILABLE':readFailed||!account?'UNOBSERVED':'OBSERVED';
  const reason=guideAccessReasons.includes(accessReason)?accessReason:null;
  const showReason=(state==='UNAVAILABLE'&&reason)||(state==='OBSERVED'&&reason==='PARTICIPANT_KYC_REVIEW_REQUIRED');
  const result={version:1,state,generation,...(showReason?{accessReason:reason}:{})};
  if(state!=='OBSERVED')return result;
- const currentView=view?.scope===account.scope&&account.projects.some(project=>project.id===view.project?.id)?view:null;
+ const officeReviewOnly=account.officeReviewOnly===true;
+ const currentOffice=officeReviewOnly&&officeProject?.scope===account.scope&&account.projects.some(project=>project.id===officeProject.projectId)?officeProject:null;
+ const currentView=!officeReviewOnly&&view?.scope===account.scope&&account.projects.some(project=>project.id===view.project?.id)?view:null;
  const overview=currentView&&!schedulePending?loadedScheduleOverview(currentView.tasks,currentView.totalTasks,currentView.nextCursor):null;
  const channel=currentView&&channelSnapshot?.scope===account.scope&&channelSnapshot.projectId===currentView.project.id&&channelSnapshot.observedGeneration===generation?channelSnapshot:null;
- return {...result,scope:account.scope,projectId:currentView?.project.id||null,role:account.role,projectCount:account.projects.length,projectsPartial:account.projectsTruncated===true,schedulePending:Boolean(currentView&&schedulePending),schedule:overview?{loaded:overview.loaded,total:overview.total,partial:overview.partial,missingDates:overview.missingDates,invalidDates:overview.invalidDates}:null,channel:channel&&Array.isArray(channel.records)?{ready:channel.channelReady===true,partial:channel.truncated===true,ownLinked:channel.channelReady===true&&channel.records.some(row=>row.eligible===true&&row.state==='VERIFIED'&&typeof row.binding?.id==='string'&&row.binding.id.length>0&&typeof row.binding.verifiedAt==='string'&&Number.isFinite(Date.parse(row.binding.verifiedAt))&&row.binding.revokedAt===null)}:null};
+ return {...result,scope:account.scope,projectId:currentOffice?.projectId||currentView?.project.id||null,role:account.role,officeReviewOnly,projectCount:account.projects.length,projectsPartial:account.projectsTruncated===true,schedulePending:Boolean(currentView&&schedulePending),schedule:overview?{loaded:overview.loaded,total:overview.total,partial:overview.partial,missingDates:overview.missingDates,invalidDates:overview.invalidDates}:null,channel:channel&&Array.isArray(channel.records)?{ready:channel.channelReady===true,partial:channel.truncated===true,ownLinked:channel.channelReady===true&&channel.records.some(row=>row.eligible===true&&row.state==='VERIFIED'&&typeof row.binding?.id==='string'&&row.binding.id.length>0&&typeof row.binding.verifiedAt==='string'&&Number.isFinite(Date.parse(row.binding.verifiedAt))&&row.binding.revokedAt===null)}:null};
 }
 const guideAccessDenied=error=>error.status===401||error.status===403||error.code==='WORKSPACE_CONTEXT_CHANGED';
 // Only the exact server denial for a project in the observed account can open
@@ -95,7 +97,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
  const taskCreating=creatingTask||Object.values(modulePending).some(Boolean);
  const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft)||planReadbackPending;
  useEffect(()=>()=>onGuideObservation?.(null),[onGuideObservation]);
- useEffect(()=>{onGuideObservation?.(workspaceGuideObservation({account,view,loading,generation:observationEpoch,unavailable:guideUnavailable,readFailed:guideReadFailed,accessReason:guideAccessReason,schedulePending:saving||Boolean(attempt)||Boolean(creatingTask)||Boolean(modulePending.plan)||Boolean(planReadbackMatches),channelSnapshot}));},[account,view,loading,observationEpoch,guideUnavailable,guideReadFailed,guideAccessReason,saving,attempt,creatingTask,modulePending.plan,planReadbackMatches,channelSnapshot,onGuideObservation]);
+ useEffect(()=>{onGuideObservation?.(workspaceGuideObservation({account,view,officeProject:officeSelection,loading,generation:observationEpoch,unavailable:guideUnavailable,readFailed:guideReadFailed,accessReason:guideAccessReason,schedulePending:saving||Boolean(attempt)||Boolean(creatingTask)||Boolean(modulePending.plan)||Boolean(planReadbackMatches),channelSnapshot}));},[account,view,officeSelection,loading,observationEpoch,guideUnavailable,guideReadFailed,guideAccessReason,saving,attempt,creatingTask,modulePending.plan,planReadbackMatches,channelSnapshot,onGuideObservation]);
  const scheduleEditor=useRef(null),editingTaskId=draft?.task?.id;
  useEffect(()=>{if(editingTaskId){scheduleEditor.current?.focus({preventScroll:true});scheduleEditor.current?.scrollIntoView({block:'start',behavior:'auto'});}},[editingTaskId]);
  const participantPending=useCallback(value=>setModulePending(old=>old.participants===value?old:{...old,participants:value}),[]);
