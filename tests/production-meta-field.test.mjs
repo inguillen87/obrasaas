@@ -55,6 +55,24 @@ test('WhatsApp location needs explicit notice acceptance and remains unmeasured 
  assert.equal(saved.command.action,'ATTENDANCE');assert.equal(saved.command.payload.location.accuracy,null);assert.equal(saved.command.payload.qrToken,null);assert.equal(saved.command.payload.location.noticeVersion,'field-location-v1');
  const unsolicited=run({type:'location',timestamp:String(now.getTime()/1000),location:{latitude:0,longitude:0}});assert.equal(unsolicited.command,undefined);
 });
+for(const [body,taskChoice] of [
+ ['ENTRADA',null],
+ ['EVIDENCIA','task-a'],
+ ['MATERIALES','NONE']
+])test(body+' without configured sectors directs the worker to an administrator or director',()=>{
+ const extra={facts:{...facts,sectors:[]}};
+ const initial=say(body,null,extra);
+ const result=taskChoice?pickValue(initial,taskChoice,extra):initial;
+ assert.equal(result.state,null);
+ assert.equal(result.command,undefined);
+ assert.equal(result.media,undefined);
+ assert.equal(result.reply.type,'text');
+ assert.match(result.reply.body,/Pedí al administrador o director/);
+ assert.match(result.reply.body,/al menos un sector.*Mi cuenta/);
+ assert.match(result.reply.body,/volvé a iniciar este registro/);
+ assert.doesNotMatch(result.reply.body,/Podés hacerlo/);
+});
+
 test('direct requests without a field permission explain the next step without a business effect',()=>{
  for(const [body,permissions] of [['ENTRADA',{attendance:false,report:true}],['INCIDENCIA',{attendance:true,report:false}]]){
   const result=say(body,null,{facts:{...facts,permissions}});assert.equal(result.state,null);assert.equal(result.command,undefined);assert.equal(result.media,undefined);assert.match(result.reply.body,/responsable.*permisos/);
