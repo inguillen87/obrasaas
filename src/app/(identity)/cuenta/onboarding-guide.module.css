@@ -8,6 +8,10 @@
 .guide button:disabled{background:#1a2a3c;color:#aec0d3;border-color:#53697f;cursor:not-allowed}
 .guide button:focus-visible,.guide a:focus-visible,.guide summary:focus-visible,.guide input:focus-visible,.current h3:focus,.heading h2:focus{outline:3px solid #f4b049;outline-offset:4px}
 .intro{color:#d0deed;font-size:.9rem;margin:18px 0 14px}
+.accessNotice{margin:0 0 14px;padding:14px;border:1px solid #ac936a;border-left:3px solid #efb45d;border-radius:8px;background:#203347;color:#f0e6d6}
+.accessNotice strong{display:block;font-size:.95rem}
+.accessNotice p{margin:8px 0 12px;font-size:.88rem}
+.accessNotice button{max-width:100%;text-align:left}
 .choices{font-size:.85rem}.choices>summary{cursor:pointer;min-height:44px;padding:10px 0;color:#cde2fa;font-weight:600}.choices[open]{margin-bottom:12px}
 .steps{display:flex;gap:8px;flex-wrap:wrap}
 .steps button{display:flex;align-items:center;gap:8px;text-align:left;flex-wrap:wrap;font-size:.78rem;padding:8px 10px}

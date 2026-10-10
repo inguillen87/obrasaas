@@ -46,10 +46,19 @@ async function requestWorkspace(transport,query='',options={}){
  });
 }
 const query=values=>'?' + new URLSearchParams(values).toString();
+const guideAccessReasons=['SESSION_REQUIRED','WORKSPACE_MEMBERSHIP_REQUIRED','WORKSPACE_PROJECT_UNAVAILABLE','WORKSPACE_CONTEXT_CHANGED','PARTICIPANT_KYC_REVIEW_REQUIRED'];
+export function workspaceGuideAccessReason(error){
+ if(error?.status===401)return 'SESSION_REQUIRED';
+ if(error?.code==='WORKSPACE_CONTEXT_CHANGED')return 'WORKSPACE_CONTEXT_CHANGED';
+ if(error?.status===403)return ['WORKSPACE_MEMBERSHIP_REQUIRED','PARTICIPANT_KYC_REVIEW_REQUIRED'].includes(error.code)?error.code:'WORKSPACE_PROJECT_UNAVAILABLE';
+ return null;
+}
 // This projection is read-only and deliberately omits names, phones and identity evidence.
-export function workspaceGuideObservation({account,view,loading,generation,unavailable=false,readFailed=false,schedulePending=false,channelSnapshot}){
- const state=unavailable?'UNAVAILABLE':loading?'CONSULTING':readFailed||!account?'UNOBSERVED':'OBSERVED';
- const result={version:1,state,generation};
+export function workspaceGuideObservation({account,view,loading,generation,unavailable=false,readFailed=false,accessReason=null,schedulePending=false,channelSnapshot}){
+ const state=loading?'CONSULTING':unavailable?'UNAVAILABLE':readFailed||!account?'UNOBSERVED':'OBSERVED';
+ const reason=guideAccessReasons.includes(accessReason)?accessReason:null;
+ const showReason=(state==='UNAVAILABLE'&&reason)||(state==='OBSERVED'&&reason==='PARTICIPANT_KYC_REVIEW_REQUIRED');
+ const result={version:1,state,generation,...(showReason?{accessReason:reason}:{})};
  if(state!=='OBSERVED')return result;
  const currentView=view?.scope===account.scope&&account.projects.some(project=>project.id===view.project?.id)?view:null;
  const overview=currentView&&!schedulePending?loadedScheduleOverview(currentView.tasks,currentView.totalTasks,currentView.nextCursor):null;
@@ -70,7 +79,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
  const request=useCallback((query='',options={})=>requestWorkspace(transport,query,options),[transport]);
  const [account,setAccount]=useState(null),[view,setView]=useState(null),[loading,setLoading]=useState(true),[notice,setNotice]=useState(''),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[saving,setSaving]=useState(false),[receipt,setReceipt]=useState(null);
  const generation=useRef(0),controller=useRef(null),mounted=useRef(true);
- const [guideUnavailable,setGuideUnavailable]=useState(false),[guideReadFailed,setGuideReadFailed]=useState(false);
+ const [guideUnavailable,setGuideUnavailable]=useState(false),[guideReadFailed,setGuideReadFailed]=useState(false),[guideAccessReason,setGuideAccessReason]=useState(null);
  const [identityProject,setIdentityProject]=useState(null);
  const [officeProject,setOfficeProject]=useState(null);
  const officeSelection=account?.officeReviewOnly===true&&officeProject?.scope===account.scope&&account.projects.some(project=>project.id===officeProject.projectId)?officeProject:null;
@@ -86,7 +95,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
  const taskCreating=creatingTask||Object.values(modulePending).some(Boolean);
  const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft)||planReadbackPending;
  useEffect(()=>()=>onGuideObservation?.(null),[onGuideObservation]);
- useEffect(()=>{onGuideObservation?.(workspaceGuideObservation({account,view,loading,generation:observationEpoch,unavailable:guideUnavailable,readFailed:guideReadFailed,schedulePending:saving||Boolean(attempt)||Boolean(creatingTask)||Boolean(modulePending.plan)||Boolean(planReadbackMatches),channelSnapshot}));},[account,view,loading,observationEpoch,guideUnavailable,guideReadFailed,saving,attempt,creatingTask,modulePending.plan,planReadbackMatches,channelSnapshot,onGuideObservation]);
+ useEffect(()=>{onGuideObservation?.(workspaceGuideObservation({account,view,loading,generation:observationEpoch,unavailable:guideUnavailable,readFailed:guideReadFailed,accessReason:guideAccessReason,schedulePending:saving||Boolean(attempt)||Boolean(creatingTask)||Boolean(modulePending.plan)||Boolean(planReadbackMatches),channelSnapshot}));},[account,view,loading,observationEpoch,guideUnavailable,guideReadFailed,guideAccessReason,saving,attempt,creatingTask,modulePending.plan,planReadbackMatches,channelSnapshot,onGuideObservation]);
  const scheduleEditor=useRef(null),editingTaskId=draft?.task?.id;
  useEffect(()=>{if(editingTaskId){scheduleEditor.current?.focus({preventScroll:true});scheduleEditor.current?.scrollIntoView({block:'start',behavior:'auto'});}},[editingTaskId]);
  const participantPending=useCallback(value=>setModulePending(old=>old.participants===value?old:{...old,participants:value}),[]);
@@ -119,7 +128,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
   if(!mounted.current)return;
   controller.current?.abort();const current=++generation.current;
   onboardingContext.current=null;setObservationEpoch(current);setChannelSnapshot(null);
-  setGuideUnavailable(true);setGuideReadFailed(true);setLoading(false);setSaving(false);
+  setGuideUnavailable(true);setGuideReadFailed(true);setGuideAccessReason(null);setLoading(false);setSaving(false);
   setAccount(null);setView(null);setIdentityProject(null);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);
   // The transport journal retains unresolved receipt references. Clear the
   // revoked view and its in-memory controls without deleting those references
@@ -129,6 +138,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
  },[]);
  function restrictProject(error,projectId){
   const identity=workspaceIdentityOnlyProject(error,account,projectId);
+   setGuideAccessReason(workspaceGuideAccessReason(error));
   onboardingContext.current=null;setChannelSnapshot(null);setView(null);setIdentityProject(identity);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);
   // Recovery references remain in the durable journal. Clear revoked controls
   // without repeating a command or trusting tasks contained in an old receipt.
@@ -138,19 +148,19 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
  }
  useEffect(()=>{
   const epoch=generation;mounted.current=true;const abort=new AbortController();controller.current=abort;const current=++epoch.current;setObservationEpoch(current);setChannelSnapshot(null);
-  setAccount(null);setView(null);setIdentityProject(null);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);setAttempt(null);setRetryAllowed(false);setTaskCreating(false);setModulePending({});setNotice('');setLoading(true);
-  request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current){setAccount(data);setGuideUnavailable(false);setGuideReadFailed(false);}}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);if(guideAccessDenied(error))setGuideUnavailable(true);}}).finally(()=>{if(mounted.current&&current===generation.current){setLoading(false);setPlanReadback(null);}});
+  setAccount(null);setView(null);setIdentityProject(null);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);setAttempt(null);setRetryAllowed(false);setTaskCreating(false);setModulePending({});setNotice('');setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);setLoading(true);
+  request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current){setAccount(data);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);}}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}).finally(()=>{if(mounted.current&&current===generation.current){setLoading(false);setPlanReadback(null);}});
   return()=>{mounted.current=false;epoch.current++;abort.abort();controller.current?.abort();};
  },[request]);
  async function refresh(){
   if(contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
-  setAccount(null);setView(null);setIdentityProject(null);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setNotice('');setLoading(true);
-  try{const data=await request('',{signal:abort.signal});if(mounted.current&&current===generation.current){setAccount(data);setGuideUnavailable(false);setGuideReadFailed(false);}}catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);if(guideAccessDenied(error))setGuideUnavailable(true);}}finally{if(mounted.current&&current===generation.current)setLoading(false);}
+  setAccount(null);setView(null);setIdentityProject(null);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setNotice('');setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);setLoading(true);
+  try{const data=await request('',{signal:abort.signal});if(mounted.current&&current===generation.current){setAccount(data);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);}}catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
  async function open(projectId,append=false){
   if(account?.officeReviewOnly===true){if(contextLocked)return;const selected=account.projects.find(project=>project.id===projectId);if(selected){setView(null);setIdentityProject(null);setOfficeProject({scope:account.scope,projectId,name:selected.name});}return;}
   if(!account||contextLocked||!account.projects.some(project=>project.id===projectId))return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
-  const cursor=append?view?.nextCursor:null;setIdentityProject(null);setPlanReadback(null);setNotice('');setLoading(true);if(!append){setView(null);setDraft(null);setReceipt(null);}
+  const cursor=append?view?.nextCursor:null;setIdentityProject(null);setPlanReadback(null);setNotice('');setGuideAccessReason(null);setLoading(true);if(!append){setView(null);setDraft(null);setReceipt(null);}
   try{
    const data=await request(query({projectId,scope:account.scope,...(cursor?{afterTask:cursor}:{})}),{signal:abort.signal});
    if(!mounted.current||current!==generation.current)return;
@@ -209,7 +219,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
   }catch(error){if(mounted.current&&current===generation.current){if(guideAccessDenied(error))restrictProject(error,attempt.projectId);setNotice(error.message);}}finally{if(mounted.current&&current===generation.current)setSaving(false);}
  }
  return <section className={styles.workspace} aria-labelledby="workspace-title" aria-busy={loading}>
-  <div className={styles.heading}><div><p className={styles.eyebrow}>ESPACIO DE TRABAJO</p><h2 id="workspace-title">Mis obras</h2><p className={styles.intro}>Elegí dónde trabajar. Las tareas, el equipo y los registros quedan en la obra seleccionada.</p></div><button type="button" className={styles.refresh} onClick={refresh} disabled={contextLocked||loading} aria-describedby={contextLocked?'workspace-context-lock':undefined}><RefreshCw size={16} aria-hidden="true"/>Actualizar</button></div>
+  <div className={styles.heading}><div><p className={styles.eyebrow}>ESPACIO DE TRABAJO</p><h2 id="workspace-title">Mis obras</h2><p className={styles.intro}>Elegí dónde trabajar. Las tareas, el equipo y los registros quedan en la obra seleccionada.</p></div><button id="workspace-refresh" type="button" className={styles.refresh} onClick={refresh} disabled={contextLocked||loading} aria-describedby={contextLocked?'workspace-context-lock':undefined}><RefreshCw size={16} aria-hidden="true"/>Actualizar</button></div>
   <div role="status" aria-live="polite" className={notice?styles.notice:styles.silent}>{notice}</div>
   {planReadbackMatches&&planReadback.status==='failed'&&<button type="button" disabled={loading||contextLocked} onClick={()=>readRecordedSchedule(planReadback)}>Volver a consultar el cronograma</button>}
   {loading&&<p className={styles.loading}><LoaderCircle size={18} className={styles.spinner} aria-hidden="true"/>Consultando registros autorizados…</p>}
