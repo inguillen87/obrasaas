@@ -27,9 +27,10 @@ function operationalCapabilities(value,allowed,{allowLegacyKyc=false}={}){
  if(!value||Object.keys(value).sort().join('|')!=='attendance|flows|kyc|media|templates'||typeof value.attendance!=='boolean'||typeof value.media!=='boolean'||value.attendance!==value.media||(value.kyc!==value.media&&!(allowLegacyKyc&&value.kyc===false))||['flows','templates'].some(key=>value[key]!==false)||!allowed&&value.media)fail();
  return value.media;
 }
-function channel(value,{schemaReady=true,requireCapabilities=false}={}){
+function channel(value,{schemaReady=true,requireCapabilities=false,requireActivationRequirement=false}={}){
  if(!id(value?.id)||!id(value.anchorProjectId)||!text(value.anchorName)||value.displayPhoneNumber!==null&&!text(value.displayPhoneNumber)||!Object.hasOwn(COMPANY_CHANNEL_MODES,value.mode)||!revision(value.revision)||!Array.isArray(value.assignments)||value.assignments.length>100)fail();
- if(Object.keys(value).some(key=>!['id','anchorProjectId','anchorName','displayPhoneNumber','mode','revision','assignments','capabilities'].includes(key)))fail();
+ if(Object.keys(value).some(key=>!['id','anchorProjectId','anchorName','displayPhoneNumber','mode','revision','assignments','capabilities','activationRequirement'].includes(key)))fail();
+ if((requireActivationRequirement||value.activationRequirement!==undefined)&&value.activationRequirement!==null&&value.activationRequirement!=='OWN_NUMBER')fail();
  // Older durable receipts may omit support. They resolve the operation only;
  // a fresh snapshot is still required before presenting current operations.
  if(requireCapabilities||value.capabilities!==undefined)operationalCapabilities(value.capabilities,schemaReady&&value.mode==='COMPANY',{allowLegacyKyc:!requireCapabilities});
@@ -40,7 +41,7 @@ function channel(value,{schemaReady=true,requireCapabilities=false}={}){
 export function companyChannelSnapshot(value,expected){
  context(value,expected);identity(value,expected);
  if(typeof value.schemaReady!=='boolean'||typeof value.canManage!=='boolean'||value.canManage&&value.actor.role!=='ADMIN'||typeof value.truncated!=='boolean'||value.accepted!==false||!Array.isArray(value.channels)||value.channels.length>100||!Array.isArray(value.projects)||value.projects.length>100)fail();
- for(const item of value.channels)channel(item,{schemaReady:value.schemaReady,requireCapabilities:true});
+ for(const item of value.channels)channel(item,{schemaReady:value.schemaReady,requireCapabilities:true,requireActivationRequirement:true});
  if(!value.schemaReady&&value.channels.some(item=>item.mode!=='PROJECT_ONLY'||item.revision!==0||item.assignments.length))fail();
  for(const project of value.projects)if(!id(project?.id)||!text(project.name))fail();
  if(new Set(value.channels.map(row=>row.id)).size!==value.channels.length||new Set(value.projects.map(row=>row.id)).size!==value.projects.length)fail();
@@ -50,7 +51,7 @@ export function companyChannelSnapshot(value,expected){
 export function companyChannelCanAct(snapshot,item,action){
  if(!snapshot?.schemaReady||!snapshot.canManage||!item||!revision(item.revision)||item.revision>=2147483647||!COMPANY_CHANNEL_ACTIONS.includes(action)||snapshot.truncated&&['ASSIGN','ACTIVATE'].includes(action))return false;
  if(action==='PREPARE')return item.mode==='PROJECT_ONLY';
- if(action==='ACTIVATE')return ['PREPARED','SUSPENDED'].includes(item.mode);
+ if(action==='ACTIVATE')return item.activationRequirement===null&&['PREPARED','SUSPENDED'].includes(item.mode);
  if(action==='SUSPEND')return item.mode==='COMPANY';
  return ['PREPARED','COMPANY','SUSPENDED'].includes(item.mode);
 }
