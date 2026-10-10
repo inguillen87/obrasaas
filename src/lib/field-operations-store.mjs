@@ -61,7 +61,7 @@ export function createFieldOperations({workspace,assertParticipant}) {
     if(row?.metadata?.fieldOperations?.version!==1||row.metadata.fieldOperations.kind!=='EVIDENCE')throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);return row;
   };
   const task=async(client,projectId,id,lock=false)=>{
-    const row=(await client.query(`SELECT id,title,progress,status::text AS status,metadata,${revision('"updatedAt"')} AS revision FROM public."Task" WHERE id=$1 AND "projectId"=$2 ${lock?'FOR UPDATE':''}`,[id,projectId])).rows[0];
+    const row=(await client.query(`SELECT id,title,progress,status::text AS status,metadata,to_char("startsAt",'YYYY-MM-DD') AS "startsOn",to_char("endsAt",'YYYY-MM-DD') AS "endsOn",${revision('"updatedAt"')} AS revision FROM public."Task" WHERE id=$1 AND "projectId"=$2 ${lock?'FOR UPDATE':''}`,[id,projectId])).rows[0];
     if(!row)throw new WorkspaceError('WORKSPACE_TASK_UNAVAILABLE',404);return row;
   };
   const proposal=async(client,projectId,id,lock=false)=>{

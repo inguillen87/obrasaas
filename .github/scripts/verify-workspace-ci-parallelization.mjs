@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='3d1fdcf82b93c3914eef07a83c03559eff8328547b3a8a7731475fc62ff9a7ae';
+export const EXPECTED_CONTRACT_SHA256='0d821666d5dcbaa8990436d85d892ac2ce57f5478ebcfdacf8b11625cd268a40';
 const POSTGRES_SERVICE_IMAGE='public.ecr.aws/docker/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -1244,6 +1244,8 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[])
    mutate('source-hash-altered-'+file,'PROOF_SOURCE_HASH',p=>{if(spec.kind==='PG_FIELD'){for(const key of Object.keys(sets)){const source=key==='fixture'?p.participantKycFixture.sourceSha256:p[key];if(Object.hasOwn(source,file))source[file]='f'.repeat(64);}}else p.sourceManifest.find(ref=>ref.file===file).sha256='f'.repeat(64);});
   }
   if(spec.kind==='PG_FIELD'){
+   const beforeScheduleProgressSpec={...spec,producerSha256:'9fae027d39730ad59d89567e23b79998551ff7782490de5b6684980d41f6f430'};
+   bad(spec.id+'-pre-schedule-progress-pin-cannot-certify-current-harness','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(beforeScheduleProgressSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:beforeScheduleProgressSpec.producerSha256})),{expectedHead,readSource}));
    mutate('legacy63-total','PROOF_CHECK_NAMES',p=>{p.totalChecks=63;});mutate('cleanup','PROOF_CLEANUP',p=>{p.databaseRemoved=false;});mutate('external-engine','PROOF_CLEANUP',p=>{p.environment='external-postgresql';});
    for(const [group,countKey] of FIELD_CHECK_GROUPS){mutate('group-omitted-'+group,'PROOF_CHECK_NAMES',p=>{delete p[group];});mutate('group-short-'+group,'PROOF_CHECK_NAMES',p=>{p[group].pop();});mutate('group-count-'+countKey,'PROOF_CHECK_NAMES',p=>{p[countKey]--;});mutate('group-name-'+group,'PROOF_CHECK_NAMES',p=>{p[group][0]='changed control';});}
    for(const key of ['reviewPaginationProviderCalls','voiceProgressProviderCalls','mediaLeaseProviderCalls','videoAudioProviderCalls'])mutate('provider-'+key,'PROOF_PROVIDER_IO',p=>{p[key]=1;});

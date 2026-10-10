@@ -2692,7 +2692,7 @@
         "path": ".vercel/field-operations-evidence/postgres.json",
         "kind": "PG_FIELD",
         "producer": "scripts/verify-field-operations-postgres.mjs",
-        "producerSha256": "9fae027d39730ad59d89567e23b79998551ff7782490de5b6684980d41f6f430",
+        "producerSha256": "d3f099602fcd23fe5fcf7d5cb5aeefc46d87e9889fd6c832a3e7405f2e838a4c",
         "sourceFiles": [
           "scripts/fixtures/canonical-participant-kyc.mjs",
           "scripts/verify-field-operations-postgres.mjs",
