@@ -1,6 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {WorkspaceError,digest,operationId,workspaceId} from './workspace-policy.mjs';
-import {canImportPlan,canApprovePlan,planContext,decodePlanSource,normalizePlanRows,normalizePlanDecision,planDecisionDigest,planImportRowRejection,PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,isPlanSourceConsent,validatePlanSourceRows} from './plan-import-policy.mjs';
+import {canImportPlan,canApprovePlan,planContext,decodePlanSource,normalizePlanRows,normalizePlanDecision,planDecisionDigest,planImportRowRejection,PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,isPlanSourceConsent,validatePlanSourceRows} from './plan-import-policy.mjs';
 import {PLAN_OOXML_TYPES,validatePlanOoxml,safePlanOoxmlAnalysis} from './plan-import-ooxml.mjs';
 import {assertPrivateImageConfigured} from './private-image-upload.mjs';
 
@@ -8,6 +8,10 @@ const fail=(code,status=409)=>{throw new WorkspaceError(code,status);};
 const draftKey=(actor,project,operation)=>'plan_draft_'+digest([actor,project,operation.toLowerCase()]);
 const receiptKey=(actor,project,operation)=>'plan_receipt_'+digest([actor,project,operation.toLowerCase()]);
 const pending=status=>['UPLOADING','PROCESSING'].includes(status);
+const sourceProfile=consent=>consent===PLAN_IMPORT_CYP_CONSENT?'CYP_PARTIDAS':consent===PLAN_IMPORT_MONTHLY_CURVE_CONSENT?'MONTHLY_RUBROS_CURVE':'MONTHLY_RUBROS';
+const sourceProfileMatches=(spreadsheet,consent)=>spreadsheet?.profile===sourceProfile(consent)&&(spreadsheet.version===2)===(consent===PLAN_IMPORT_CYP_CONSENT)&&(spreadsheet.version===3)===(consent===PLAN_IMPORT_MONTHLY_CURVE_CONSENT);
+const privateCurve=row=>row?.metadata?.consent?.version===PLAN_IMPORT_MONTHLY_CURVE_CONSENT||row?.metadata?.sourceConsent===PLAN_IMPORT_MONTHLY_CURVE_CONSENT||row?.metadata?.analysis?.spreadsheet?.version===3||row?.metadata?.outcome?.draft?.spreadsheet?.version===3;
+const curveAccess=(member,row)=>{if(privateCurve(row)&&!canApprovePlan(member.role))fail('PLAN_IMPORT_PERMISSION_REQUIRED',403);};
 const decisionRejections=new Set(['PLAN_IMPORT_ROWS_LIMIT','PLAN_IMPORT_ROWS_INVALID','PLAN_IMPORT_DATES_INVALID','PLAN_IMPORT_DUPLICATE_ROWS','PLAN_IMPORT_REVIEW_REQUIRED','PLAN_IMPORT_REVISION_CHANGED','PLAN_IMPORT_SCHEDULE_CHANGED','PLAN_IMPORT_SOURCE_ALREADY_APPLIED','PLAN_IMPORT_SCHEDULE_TOO_LARGE']);
 const uploadRejections=new Set(['PLAN_IMPORT_SOURCE_ALREADY_APPLIED','PLAN_IMPORT_SCHEDULE_TOO_LARGE']);
 const uploadInputDigest=(input,source)=>digest(['plan-import-upload-command-v1',{action:'UPLOAD',consent:input.consent,operationId:input.operationId.toLowerCase(),projectId:input.projectId,scope:input.scope,source:{bytes:source.bytes.length,contentType:source.contentType,sha256:source.sha256}}]);
@@ -42,7 +46,7 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
  const draft=async(client,member,projectId,id,lock=false)=>{
   if(!workspaceId(id))fail('PLAN_IMPORT_DRAFT_UNAVAILABLE',404);
   const row=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "entityId"=$3 AND action='plan.import.draft' ${lock?'FOR UPDATE':''}`,[id,member.organizationId,projectId])).rows[0];
-  if(row?.metadata?.version!==1||row.metadata.projectId!==projectId)fail('PLAN_IMPORT_DRAFT_UNAVAILABLE',404);return row;
+  if(row?.metadata?.version!==1||row.metadata.projectId!==projectId)fail('PLAN_IMPORT_DRAFT_UNAVAILABLE',404);curveAccess(member,row);return row;
  };
  async function update(client,row,patch,lease) {
   const metadata={...row.metadata,...patch,revision:row.metadata.revision+1,updatedAt:new Date().toISOString()};
@@ -59,8 +63,8 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
   }finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
  }
  const ownedLease=(row,lease)=>{if(row.metadata.lease?.token!==lease||!pending(row.metadata.status))fail('PLAN_IMPORT_REVISION_CHANGED');const expiry=leaseExpiry(row.metadata);if(!expiry)fail('PLAN_IMPORT_LEASE_INVALID');if(Date.parse(expiry)<=Date.now())fail('PLAN_IMPORT_PROCESSING_EXPIRED');};
- const receipt=async(client,member,projectId,key)=>(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND action='plan.import.decision'`,[receiptKey(member.actorId,projectId,key),member.organizationId,member.actorId,projectId])).rows[0];
- const uploadReceipt=async(client,member,projectId,key)=>(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND action='plan.import.upload'`,[receiptKey(member.actorId,projectId,key),member.organizationId,member.actorId,projectId])).rows[0];
+ const receipt=async(client,member,projectId,key)=>{const row=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND action='plan.import.decision'`,[receiptKey(member.actorId,projectId,key),member.organizationId,member.actorId,projectId])).rows[0];curveAccess(member,row);return row;};
+ const uploadReceipt=async(client,member,projectId,key)=>{const row=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND action='plan.import.upload'`,[receiptKey(member.actorId,projectId,key),member.organizationId,member.actorId,projectId])).rows[0];curveAccess(member,row);return row;};
  const uploadOutcome=(member,projectId,row,operation)=>{
   const m=row.metadata,o=m?.outcome;
   if(row.id!==receiptKey(member.actorId,projectId,operation)||m?.version!==1||m.projectId!==projectId||!o||Object.keys(o).sort().join('|')!=='action|code|definitive|inputDigest|operationId|phase|proof|recordedAt|reservationStarted|saved|state|taskEffects|taskSnapshots'||o.state!=='REJECTED'||o.saved!==false||o.definitive!==true||o.phase!=='PRE_RESERVATION'||o.proof!=='AUDITED_UPLOAD'||o.reservationStarted!==false||o.taskEffects!==false||o.action!=='UPLOAD'||!uploadRejections.has(o.code)||!operationId(o.operationId)||o.operationId!==operation.toLowerCase()||o.inputDigest!==m.inputDigest||m.requestDigest!==m.inputDigest||!/^[a-f0-9]{64}$/.test(o.inputDigest)||typeof o.recordedAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(o.recordedAt)||!Number.isFinite(Date.parse(o.recordedAt))||new Date(o.recordedAt).toISOString()!==o.recordedAt||!Array.isArray(o.taskSnapshots)||o.taskSnapshots.length)fail('PLAN_IMPORT_RECEIPT_INTEGRITY',503);
@@ -85,10 +89,10 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
     if(context.operationId){if(!operationId(context.operationId))fail('PLAN_IMPORT_INPUT_INVALID',400);const recorded=await receipt(client,member,context.projectId,context.operationId);if(recorded)return {scope,projectId:context.projectId,state:'RECORDED',...await receiptOutcome(client,context.projectId,recorded)};
      const prior=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND action='plan.import.draft'`,[draftKey(member.actorId,context.projectId,context.operationId),member.organizationId,member.actorId,context.projectId])).rows[0];
      if(!prior){const rejected=await uploadReceipt(client,member,context.projectId,context.operationId);if(rejected)return {scope,projectId:context.projectId,...uploadOutcome(member,context.projectId,rejected,context.operationId)};return {scope,projectId:context.projectId,state:'NOT_OBSERVED',definitive:false};}
-     const found=publicDraft(prior);return found.processingExpired?{scope,projectId:context.projectId,operationId:context.operationId.toLowerCase(),state:'EXPIRED',saved:false,definitive:true,draft:found}:{scope,projectId:context.projectId,state:'RECORDED',draft:found};
+     curveAccess(member,prior);const found=publicDraft(prior);return found.processingExpired?{scope,projectId:context.projectId,operationId:context.operationId.toLowerCase(),state:'EXPIRED',saved:false,definitive:true,draft:found}:{scope,projectId:context.projectId,state:'RECORDED',draft:found};
     }
     if(context.draftId)return {scope,projectId:context.projectId,draft:publicDraft(await draft(client,member,context.projectId,context.draftId))};
-    const records=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND action='plan.import.draft' ORDER BY "createdAt" DESC,id DESC LIMIT 21`,[member.organizationId,context.projectId])).rows;
+    const records=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND action='plan.import.draft' ${canApprovePlan(member.role)?'':"AND COALESCE(metadata->'consent'->>'version','') <> 'plan-spreadsheet-monthly-curve-v3' AND COALESCE(metadata->'analysis'->'spreadsheet'->>'version','') <> '3'"} ORDER BY "createdAt" DESC,id DESC LIMIT 21`,[member.organizationId,context.projectId])).rows.filter(row=>canApprovePlan(member.role)||!privateCurve(row));
     return {scope,projectId:context.projectId,canApprove:canApprovePlan(member.role),drafts:records.slice(0,20).map(publicDraft),truncated:records.length>20};
    });
   },
@@ -99,12 +103,12 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
    await run(session,context,false,async(client,member)=>{permission(member);await draft(client,member,context.projectId,context.draftId);});return file;
   },
   async attach(session,input) {
-   planContext(input);if(!operationId(input.operationId)||![PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT].includes(input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED',400);
+   planContext(input);if(!operationId(input.operationId)||![PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT].includes(input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED',400);
    const sourceFile=decodePlanSource(input.source?.bytes,input.source?.contentType);if(!isPlanSourceConsent(sourceFile.contentType,input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED',400);
    if(PLAN_OOXML_TYPES[sourceFile.contentType])await validatePlanOoxml(sourceFile.bytes,sourceFile.contentType);
    const requestDigest=digest([input.projectId,input.scope,input.consent,sourceFile.sha256]),inputDigest=uploadInputDigest(input,sourceFile),lease=randomUUID();
    const reservation=await run(session,input,true,async(client,member,scope)=>{
-    permission(member);const id=draftKey(member.actorId,input.projectId,input.operationId);
+    permission(member,input.consent===PLAN_IMPORT_MONTHLY_CURVE_CONSENT);const id=draftKey(member.actorId,input.projectId,input.operationId);
     const previous=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='plan.import.draft'`,[id,member.organizationId,member.actorId])).rows[0];
     if(previous){if(previous.metadata.requestDigest!==requestDigest)fail('PLAN_IMPORT_OPERATION_CONFLICT');return {done:{scope,projectId:input.projectId,saved:true,replayed:true,draft:publicDraft(previous)}};}
     const rejected=await uploadReceipt(client,member,input.projectId,input.operationId);if(rejected){if(rejected.metadata.inputDigest!==inputDigest)fail('PLAN_IMPORT_OPERATION_CONFLICT');return {done:{scope,projectId:input.projectId,...uploadOutcome(member,input.projectId,rejected,input.operationId)}};}
@@ -112,7 +116,7 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
     let schedule;try{await assertSourceUnused(client,member,input.projectId,sourceFile.sha256);schedule=await baseline(client,input.projectId);}catch(error){
      if(!(error instanceof WorkspaceError)||!uploadRejections.has(error.code))throw error;
      const id=receiptKey(member.actorId,input.projectId,input.operationId),outcome={state:'REJECTED',saved:false,definitive:true,reservationStarted:false,phase:'PRE_RESERVATION',proof:'AUDITED_UPLOAD',taskEffects:false,code:error.code,operationId:input.operationId.toLowerCase(),action:'UPLOAD',inputDigest,taskSnapshots:[],recordedAt:new Date().toISOString()};
-     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'plan.import.upload','Project',$4,$5::jsonb)`,[id,member.organizationId,member.actorId,input.projectId,JSON.stringify({version:1,projectId:input.projectId,requestDigest:inputDigest,inputDigest,outcome})]);return {done:{scope,projectId:input.projectId,replayed:false,receiptId:id,...outcome,tasks:[]}};
+     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'plan.import.upload','Project',$4,$5::jsonb)`,[id,member.organizationId,member.actorId,input.projectId,JSON.stringify({version:1,projectId:input.projectId,requestDigest:inputDigest,inputDigest,...(input.consent===PLAN_IMPORT_MONTHLY_CURVE_CONSENT?{sourceConsent:input.consent}:{}),outcome})]);return {done:{scope,projectId:input.projectId,replayed:false,receiptId:id,...outcome,tasks:[]}};
     }
     const now=new Date().toISOString(),source={contentType:sourceFile.contentType,bytes:sourceFile.bytes.length,sha256:sourceFile.sha256,pathname:`obrasaas/plan-import/v1/${digest([member.organizationId,input.projectId,member.actorId,input.operationId.toLowerCase(),sourceFile.sha256])}/cronograma.${sourceFile.extension}`};
     const metadata={version:1,projectId:input.projectId,requestDigest,baseline:schedule.hash,existingTaskCount:schedule.count,revision:1,status:'UPLOADING',source,sourceConfirmed:false,consent:{version:input.consent,actorId:member.actorId,recordedAt:now},lease:{token:lease,expiresAt:new Date(Date.now()+10*60000).toISOString()},createdAt:now,updatedAt:now};
@@ -126,13 +130,13 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
      try{await put(reservation.source.pathname,sourceFile.bytes,{access:'private',contentType:sourceFile.contentType,addRandomSuffix:false,allowOverwrite:false,cacheControlMaxAge:60,abortSignal:AbortSignal.timeout(20000)});}catch{/* Confirm the deterministic object after uncertain delivery; never overwrite. */}
      await storedSource(reservation.source);
     }confirmed=true;
-    await run(session,input,true,async(client,member)=>{permission(member);const row=await draft(client,member,input.projectId,reservation.id,true);ownedLease(row,lease);await update(client,row,{status:'PROCESSING',sourceConfirmed:true},lease);});
+    await run(session,input,true,async(client,member)=>{permission(member,input.consent===PLAN_IMPORT_MONTHLY_CURVE_CONSENT);const row=await draft(client,member,input.projectId,reservation.id,true);ownedLease(row,lease);await update(client,row,{status:'PROCESSING',sourceConfirmed:true},lease);});
     // Provider and private storage IO run outside the canonical transaction.
-    extraction=await analyzer.analyze(sourceFile,{profile:input.consent===PLAN_IMPORT_CYP_CONSENT?'CYP_PARTIDAS':'MONTHLY_RUBROS'});
-    if(extraction?.success===true){const spreadsheet=PLAN_OOXML_TYPES[sourceFile.contentType]?safePlanOoxmlAnalysis(extraction.spreadsheet):null;if(PLAN_OOXML_TYPES[sourceFile.contentType]&&(extraction.provider!=='local-ooxml'||!spreadsheet||(spreadsheet.version===2)!==(input.consent===PLAN_IMPORT_CYP_CONSENT)))fail('PLAN_IMPORT_FILE_INVALID',400);const extractedRows=normalizePlanRows(extraction.rows);validatePlanSourceRows(extractedRows,spreadsheet,extractedRows);if(spreadsheet&&spreadsheet.rowCount!==extractedRows.length)fail('PLAN_IMPORT_FILE_INVALID',400);extraction={success:true,rows:extractedRows,warnings:Array.isArray(extraction.warnings)?extraction.warnings.slice(0,20):[],provider:extraction.provider,model:extraction.model,requestedModel:extraction.requestedModel,...(spreadsheet?{spreadsheet}:{})};}
+    extraction=await analyzer.analyze(sourceFile,{profile:sourceProfile(input.consent)});
+    if(extraction?.success===true){const spreadsheet=PLAN_OOXML_TYPES[sourceFile.contentType]?safePlanOoxmlAnalysis(extraction.spreadsheet):null;if(PLAN_OOXML_TYPES[sourceFile.contentType]&&(extraction.provider!=='local-ooxml'||!spreadsheet||!sourceProfileMatches(spreadsheet,input.consent)))fail('PLAN_IMPORT_FILE_INVALID',400);const extractedRows=normalizePlanRows(extraction.rows);validatePlanSourceRows(extractedRows,spreadsheet,extractedRows);if(spreadsheet&&spreadsheet.rowCount!==extractedRows.length)fail('PLAN_IMPORT_FILE_INVALID',400);extraction={success:true,rows:extractedRows,warnings:Array.isArray(extraction.warnings)?extraction.warnings.slice(0,20):[],provider:extraction.provider,model:extraction.model,requestedModel:extraction.requestedModel,...(spreadsheet?{spreadsheet}:{})};}
    }catch(error){if(error instanceof WorkspaceError&&['WORKSPACE_CONTEXT_CHANGED','WORKSPACE_MEMBERSHIP_REQUIRED','WORKSPACE_PROJECT_UNAVAILABLE','PLAN_IMPORT_PERMISSION_REQUIRED'].includes(error.code))throw error;extraction={success:false,code:confirmed?'AI_REQUEST_UNCONFIRMED':'PLAN_IMPORT_STORAGE_UNCONFIRMED'};}
    return run(session,input,true,async(client,member,scope)=>{
-    permission(member);const row=await draft(client,member,input.projectId,reservation.id,true);ownedLease(row,lease);
+    permission(member,input.consent===PLAN_IMPORT_MONTHLY_CURVE_CONSENT);const row=await draft(client,member,input.projectId,reservation.id,true);ownedLease(row,lease);
     const saved=await update(client,row,extraction?.success===true?{status:'READY',sourceConfirmed:true,rows:extraction.rows,extractedRows:extraction.rows,warnings:extraction.warnings,analysis:{provider:extraction.provider,model:extraction.model,requestedModel:extraction.requestedModel,reviewed:false,...(extraction.spreadsheet?{spreadsheet:extraction.spreadsheet}:{})},lease:null}:{status:'FAILED',sourceConfirmed:confirmed,failure:/^[A-Z_]{1,80}$/.test(extraction?.code||'')?extraction.code:'AI_RESPONSE_UNCONFIRMED',lease:null},lease);
     return {scope,projectId:input.projectId,saved:true,replayed:false,draft:publicDraft(saved)};
    });
@@ -143,6 +147,8 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
    const requestDigest=normalized.rejection?digest(['plan-import-rejected-decision-v1',inputDigest]):planDecisionDigest(input);
    return run(session,input,true,async(client,member,scope)=>{
     permission(member,input.action!=='EDIT');
+    // Financial drafts stay private even for typed rejections and retries.
+    if(!canApprovePlan(member.role))await draft(client,member,input.projectId,input.draftId);
     if(requestBytes>256*1024){const largeDraft=await draft(client,member,input.projectId,input.draftId);if(largeDraft.metadata.consent?.version!==PLAN_IMPORT_CYP_CONSENT||largeDraft.metadata.analysis?.spreadsheet?.version!==2||!safePlanOoxmlAnalysis(largeDraft.metadata.analysis.spreadsheet))fail('PLAN_IMPORT_INPUT_INVALID',413);}
     const previous=await receipt(client,member,input.projectId,input.operationId);
     if(await uploadReceipt(client,member,input.projectId,input.operationId))fail('PLAN_IMPORT_OPERATION_CONFLICT');
@@ -153,7 +159,7 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
     if(!rejection)try{
      row=await draft(client,member,input.projectId,input.draftId,true);
      if(row.metadata.revision!==input.expectedRevision||row.metadata.status!=='READY')fail('PLAN_IMPORT_REVISION_CHANGED');
-     if((row.metadata.analysis?.spreadsheet?.version===2)!==(row.metadata.consent?.version===PLAN_IMPORT_CYP_CONSENT)||row.metadata.analysis?.spreadsheet?.version===2&&!PLAN_OOXML_TYPES[row.metadata.source.contentType])fail('PLAN_IMPORT_REVIEW_REQUIRED');
+     if(PLAN_OOXML_TYPES[row.metadata.source.contentType]&&!sourceProfileMatches(row.metadata.analysis?.spreadsheet,row.metadata.consent?.version)||[2,3].includes(row.metadata.analysis?.spreadsheet?.version)&&!PLAN_OOXML_TYPES[row.metadata.source.contentType])fail('PLAN_IMPORT_REVIEW_REQUIRED');
      if(input.rows)validatePlanSourceRows(input.rows,row.metadata.analysis?.spreadsheet,row.metadata.extractedRows,{complete:input.action==='APPLY'});
      if(input.action==='APPLY'){
       // jsonb may reorder object keys; compare reviewed values canonically.
@@ -164,8 +170,12 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
      }
     }catch(error){if(!(error instanceof WorkspaceError)||!decisionRejections.has(error.code))throw error;rejection=error;}
     if(rejection){
+     // Row diagnostics may be detected before the draft is loaded. Resolve its
+     // privacy classification without changing the legacy rejection outcome.
+     const rejectedDraft=row||(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "entityId"=$3 AND action='plan.import.draft'`,[input.draftId,member.organizationId,input.projectId])).rows[0];
+     curveAccess(member,rejectedDraft);
      const outcome={state:'REJECTED',saved:false,definitive:true,phase:'PRE_DECISION',taskEffects:false,code:rejection.code,operationId:input.operationId,action:input.action,draftId:input.draftId,expectedRevision:input.expectedRevision,inputDigest,taskSnapshots:[],recordedAt:new Date().toISOString()};
-     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'plan.import.decision','Project',$4,$5::jsonb)`,[id,member.organizationId,member.actorId,input.projectId,JSON.stringify({version:1,projectId:input.projectId,requestDigest,inputDigest,outcome})]);
+     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'plan.import.decision','Project',$4,$5::jsonb)`,[id,member.organizationId,member.actorId,input.projectId,JSON.stringify({version:1,projectId:input.projectId,requestDigest,inputDigest,...(privateCurve(rejectedDraft)?{sourceConsent:PLAN_IMPORT_MONTHLY_CURVE_CONSENT}:{}),outcome})]);
      return {scope,projectId:input.projectId,replayed:false,receiptId:id,...outcome,tasks:[]};
     }
     const m=row.metadata;
@@ -178,14 +188,14 @@ export function createPlanImport({workspace,put,get,analyzer,environment=()=>pro
       for(const record of records){if(!byId.has(record.id))fail('PLAN_IMPORT_RECEIPT_INTEGRITY',503);taskSnapshots.push(byId.get(record.id));}
      }else for(const [index,item] of input.rows.entries()) {
       const taskId='task_'+randomUUID().replaceAll('-','');
-      await client.query(`INSERT INTO public."Task"(id,"projectId",title,status,progress,"startsAt","endsAt",metadata,"updatedAt") VALUES($1,$2,$3,'BACKLOG',0,$4::date,$5::date,$6::jsonb,clock_timestamp())`,[taskId,input.projectId,item.title,item.startsOn,item.endsOn,JSON.stringify({source:'authorized-plan-import',planImport:{version:1,draftId:row.id,receiptId:id,sourceSha256:m.source.sha256,row:index+1,evidence:item.evidence}})]);
+      await client.query(`INSERT INTO public."Task"(id,"projectId",title,status,progress,"startsAt","endsAt",metadata,"updatedAt") VALUES($1,$2,$3,'BACKLOG',0,$4::date,$5::date,$6::jsonb,clock_timestamp())`,[taskId,input.projectId,item.title,item.startsOn,item.endsOn,JSON.stringify({source:'authorized-plan-import',planImport:{version:m.analysis?.spreadsheet?.version===3?3:1,draftId:row.id,receiptId:id,sourceSha256:m.source.sha256,row:index+1,evidence:item.evidence,...(m.analysis?.spreadsheet?.version===3?{profile:'MONTHLY_RUBROS_CURVE',sourceRowId:item.sourceRowId}:{})}})]);
       taskSnapshots.push((await client.query(`SELECT ${taskColumns} FROM public."Task" WHERE id=$1 AND "projectId"=$2`,[taskId,input.projectId])).rows[0]);
      }
     }
     const recordedAt=new Date().toISOString(),decision={action:input.action,actorId:member.actorId,reason:input.reason,recordedAt,receiptId:id};
     const saved=await update(client,row,{status:input.action==='APPLY'?'APPLIED':input.action==='REJECT'?'REJECTED':'READY',...(input.rows?{rows:input.rows}:{}),...(input.action==='EDIT'&&m.analysis?.provider==='local-ooxml'?{analysis:{...m.analysis,reviewed:true}}:{}),...(input.action==='EDIT'?{}:{decision})});
     const outcome={action:input.action,draft:publicDraft(saved),taskSnapshots,recordedAt};
-    await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'plan.import.decision','Project',$4,$5::jsonb)`,[id,member.organizationId,member.actorId,input.projectId,JSON.stringify({version:1,projectId:input.projectId,requestDigest,inputDigest,sourceSha256:m.source.sha256,beforeRevision:m.revision,beforeRows:m.rows,reviewedRows:input.rows,reason:input.reason,outcome})]);
+    await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'plan.import.decision','Project',$4,$5::jsonb)`,[id,member.organizationId,member.actorId,input.projectId,JSON.stringify({version:1,projectId:input.projectId,requestDigest,inputDigest,sourceSha256:m.source.sha256,...(m.consent.version===PLAN_IMPORT_MONTHLY_CURVE_CONSENT?{sourceConsent:m.consent.version}:{}),beforeRevision:m.revision,beforeRows:m.rows,reviewedRows:input.rows,reason:input.reason,outcome})]);
     return {scope,projectId:input.projectId,saved:true,replayed:false,receiptId:id,...outcome,tasks:taskSnapshots};
    });
   }

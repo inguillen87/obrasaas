@@ -3,6 +3,8 @@ import {SaxesParser} from 'saxes';
 import {crc32} from 'node:zlib';
 import path from 'node:path';
 import {WorkspaceError} from './workspace-policy.mjs';
+import {safeMonthlyCurveAnalysis,PLAN_MONTHLY_CURVE_PROFILE} from './plan-import-monthly-curve.mjs';
+export {safeMonthlyCurveAnalysis,PLAN_MONTHLY_CURVE_CONSENT} from './plan-import-monthly-curve.mjs';
 
 export const PLAN_OOXML_TYPES=Object.freeze({
  'application/vnd.ms-excel.sheet.macroenabled.12':'xlsm',
@@ -153,10 +155,36 @@ export async function extractMonthlyPlanOoxml(bytes,contentType,{rowLimit=50}={}
 }
 
 export function safePlanOoxmlAnalysis(value) {
+ if(value?.version===3)return safeMonthlyCurveAnalysis(value);
  if(value?.version===2)return safeCypPlanAnalysis(value);
  const keys=['version','profile','worksheet','level','rowCount','detailRowsExcluded','periodOrdinals','weeklyStatus','weeklyFormulaErrors','usesCachedValues','formulasRecalculated','macrosExecuted','quantityImported','dependenciesImported','progressImported'];
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join('|')!==keys.sort().join('|')||value.version!==1||value.profile!=='MONTHLY_RUBROS'||value.worksheet!=='Plan y curva Meses'||value.level!=='RUBRO'||!Number.isSafeInteger(value.rowCount)||value.rowCount<1||value.rowCount>50||!Number.isSafeInteger(value.detailRowsExcluded)||value.detailRowsExcluded<0||value.detailRowsExcluded>PLAN_OOXML_LIMITS.cells||!Array.isArray(value.periodOrdinals)||!value.periodOrdinals.length||value.periodOrdinals.length>PLAN_OOXML_LIMITS.periods||value.periodOrdinals.some((v,i)=>v!==i+1)||!['ABSENT','FORMULA_ERRORS','NOT_SELECTED'].includes(value.weeklyStatus)||!Number.isSafeInteger(value.weeklyFormulaErrors)||value.weeklyFormulaErrors<0||value.weeklyFormulaErrors>PLAN_OOXML_LIMITS.cells||(value.weeklyStatus==='FORMULA_ERRORS')!==(value.weeklyFormulaErrors>0)||value.usesCachedValues!==true||['formulasRecalculated','macrosExecuted','quantityImported','dependenciesImported','progressImported'].some(k=>value[k]!==false))return null;
  return {...value,periodOrdinals:[...value.periodOrdinals]};
+}
+
+// Opt-in v3 extends the unchanged grouped v1 extraction with source financial
+// caches. Its second bounded package pass reads only the selected visible view.
+export async function extractMonthlyCurveOoxml(bytes,contentType,{rowLimit=50}={}) {
+ const original=await extractMonthlyPlanOoxml(bytes,contentType,{rowLimit});let book;
+ try {
+  book=await workbook(bytes,contentType);const monthly=await book.sheet('Plan y curva Meses'),count=original.rows.length,periods=original.spreadsheet.periodOrdinals;
+  const cached=(address,{required=false}={})=>{
+   const c=cell(monthly,address),v=safeValue(monthly,address);
+   if(c&&c.type!=='n'||c?.hasFormula&&/\|/.test(c.formula||'')||required&&(v===null||v==='')||v===''||v!==null&&typeof v!=='string')fail('PLAN_IMPORT_SPREADSHEET_FORMULA_INVALID');
+   return {sourceCell:`Plan y curva Meses!${address}`,cachedValue:v,hasFormula:Boolean(c?.hasFormula)};
+  };
+  const footer=label=>{
+   const matches=[...monthly.entries()].filter(([address,c])=>Number(address.replace(/^[A-Z]+/,''))>11+2*(count-1)&&text(c.value)===label);
+   if(matches.length!==1)fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');
+   safeValue(monthly,matches[0][0]);return Number(matches[0][0].replace(/^[A-Z]+/,''));
+  };
+  const totalRow=footer('TOTAL'),monthlyRow=footer('IMPORTE TOTAL MENSUAL'),cumulativeRow=footer('IMPORTE TOTAL ACUMULADO'),percentageRow=footer('PORCENTAJE MENSUAL'),cumulativePercentageRow=footer('PORCENTAJE ACUMULADO');
+  const items=original.rows.map((row,i)=>{const sourceRow=10+i*2;return {sourceRowId:`Plan y curva Meses!A${sourceRow}`,sourceTitle:row.title,sourceRange:`Plan y curva Meses!A${sourceRow}:${column(5+periods.length)}${sourceRow+1}`,budget:cached('E'+sourceRow,{required:true}),ordinalDistribution:periods.map((_,p)=>cached(column(6+p)+(sourceRow+1)))};});
+  const curve={kind:'PLANNED_MONETARY_INVESTMENT',currency:null,calendarStart:null,total:cached('E'+totalRow,{required:true}),initialCumulative:cached('F'+cumulativeRow),periods:periods.map((ordinal,i)=>{const col=column(6+i);return {ordinal,headerCell:`Plan y curva Meses!${col}9`,monthlyAmount:cached(col+monthlyRow),cumulativeAmount:cached(col+cumulativeRow),monthlyPercentage:cached(col+percentageRow),cumulativePercentage:cached(col+cumulativePercentageRow)};})};
+  const spreadsheet={...original.spreadsheet,version:3,profile:PLAN_MONTHLY_CURVE_PROFILE,items,curve};
+  if(!safeMonthlyCurveAnalysis(spreadsheet))fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');
+  return {rows:original.rows.map((row,i)=>({sourceRowId:items[i].sourceRowId,...row})),spreadsheet,warnings:[...original.warnings,'Se conserva la curva monetaria prevista completa del archivo original. Excluir tareas no recalcula esa curva; confirmar moneda y alcance. No contiene ejecución ni pagos acreditados.']};
+ }catch(error){if(error instanceof WorkspaceError)throw error;fail();}finally{book?.close();}
 }
 
 const cypCode=value=>typeof value==='string'&&/^[AB](?:\.1(?:\.\d{1,3}){0,2})?$/.test(value);

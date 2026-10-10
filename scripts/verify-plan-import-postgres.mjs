@@ -7,13 +7,14 @@ import {Client,Pool} from 'pg';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createPlanImport} from '../src/lib/plan-import-store.mjs';
-import {decodePlanSource,PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT} from '../src/lib/plan-import-policy.mjs';
+import {decodePlanSource,PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT} from '../src/lib/plan-import-policy.mjs';
 import {createPlanImportAnalyzer} from '../src/lib/plan-import-analyzer.mjs';
 import {ooxmlFixture,ooxmlFixtureParts,zipOoxmlFixture,cypFixture} from '../tests/fixtures/plan-import-ooxml-synthetic.mjs';
+import {monthlyCurveFixture} from '../tests/fixtures/plan-import-monthly-curve-synthetic.mjs';
 import {createPlanImportHandlers} from '../src/lib/plan-import-http.mjs';
 import {createWorkspaceRecoveryJournal,recoveryQuery,recoveryResult} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
 const hashFile=path=>createHash('sha256').update(readFileSync(path)).digest('hex');
-const sourcePaths=[...readdirSync('src/lib').filter(path=>path.endsWith('.mjs')).map(path=>'src/lib/'+path),'scripts/lib/disposable-postgres-cleanup.mjs','tests/fixtures/plan-import-ooxml-synthetic.mjs','package.json','package-lock.json','src/app/(identity)/cuenta/workspace-recovery-journal.mjs','src/app/(identity)/cuenta/own-company-number-view.mjs','src/app/(identity)/cuenta/workspace-recovery-storage.mjs','src/app/(identity)/cuenta/private-bank-account-format.mjs','src/app/(identity)/cuenta/site-purchase-view.mjs','src/app/(identity)/cuenta/company-channel-view.mjs'].sort();
+const sourcePaths=[...readdirSync('src/lib').filter(path=>path.endsWith('.mjs')).map(path=>'src/lib/'+path),'scripts/lib/disposable-postgres-cleanup.mjs','tests/fixtures/plan-import-ooxml-synthetic.mjs','tests/fixtures/plan-import-monthly-curve-synthetic.mjs','package.json','package-lock.json','src/app/(identity)/cuenta/workspace-recovery-journal.mjs','src/app/(identity)/cuenta/own-company-number-view.mjs','src/app/(identity)/cuenta/workspace-recovery-storage.mjs','src/app/(identity)/cuenta/private-bank-account-format.mjs','src/app/(identity)/cuenta/site-purchase-view.mjs','src/app/(identity)/cuenta/company-channel-view.mjs'].sort();
 const trackedClean=execFileSync('git',['status','--porcelain','--untracked-files=no'],{encoding:'utf8'}).trim()==='';
 if(process.env.CI==='true')assert.equal(trackedClean,true,'CI proof requires committed clean source');
 const sourceProof={sourceRevision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),sourceTree:execFileSync('git',['rev-parse','HEAD^{tree}'],{encoding:'utf8'}).trim(),sourceState:process.env.CI==='true'?'EXACT_CI_SOURCE':'LOCAL_REVIEW_SOURCE',trackedClean,harnessSha256:hashFile('scripts/verify-plan-import-postgres.mjs'),sourceManifest:sourcePaths.map(path=>({path,sha256:hashFile(path)}))};
@@ -21,7 +22,7 @@ const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'https://unconfigured.i
 assert.equal(process.env.CUTOVER_TEST_DISPOSABLE,'1');assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV&&!process.env.VERCEL_TARGET_ENV);
 assert.ok(['postgres:','postgresql:'].includes(url.protocol));assert.ok(['127.0.0.1','localhost'].includes(url.hostname));assert.ok(['','5432','6549'].includes(url.port));assert.equal(url.pathname,'/obrasaas_cutover_ci');assert.equal(url.search,'');assert.equal(url.hash,'');
 const database='obrasaas_plan_'+randomUUID().replaceAll('-','');assert.match(database,/^obrasaas_plan_[a-f0-9]{32}$/);
-const admin=new Client({connectionString:url.toString(),connectionTimeoutMillis:5000});let pool,created=false,proof,databaseRemoved=false;const checks=[],decisionRejectionChecks=[],uploadRejectionChecks=[],spreadsheetChecks=[],cypChecks=[];
+const admin=new Client({connectionString:url.toString(),connectionTimeoutMillis:5000});let pool,created=false,proof,databaseRemoved=false;const checks=[],decisionRejectionChecks=[],uploadRejectionChecks=[],spreadsheetChecks=[],cypChecks=[],monthlyCurveChecks=[];
 const session=(user,organization='org_A',role='org:member')=>({authenticated:true,verification:'clerk-production-jwt',userId:user,organizationId:organization,organizationRole:role});
 const owner=session('user_Owner','org_A','org:admin'),director=session('user_Director'),manager=session('user_Manager'),foreign=session('user_Foreign','org_B','org:admin');
 const source=decodePlanSource(Buffer.from('%PDF-1.7\nSynthetic bounded Gantt fixture\n%%EOF'),'application/pdf');
@@ -249,7 +250,115 @@ try {
  cypChecks.push('v2-only-partida-tasks-group-metadata-no-cost-duplicates-existing-project-preserved-source-guard');
  const cypReadsBeforeRevocation=reads;await pool.query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE id='m-director'`);try{await assert.rejects(cypImporter.read(director,{...context(director),projectId:'p-cyp',operationId:cypApply.operationId}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});await assert.rejects(cypImporter.decide(director,cypApply),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});await assert.rejects(cypImporter.source(director,{...context(director),projectId:'p-cyp',draftId:cypDraft.id}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});}finally{await pool.query(`UPDATE "TenantMembership" SET status='ACTIVE' WHERE id='m-director'`);}assert.equal(reads,cypReadsBeforeRevocation);assert.equal(forbiddenProviderCalls,0);
  cypChecks.push('v2-receipt-replay-download-current-authority-revocation-zero-private-reads');
- assert.equal(checks.length,20);assert.equal(decisionRejectionChecks.length,7);assert.equal(uploadRejectionChecks.length,16);assert.equal(spreadsheetChecks.length,6);assert.equal(cypChecks.length,8);
- proof={ok:true,fixture:'disposable-local-postgres-synthetic-sessions-and-provider-adapters',checks,decisionRejectionChecks,uploadRejectionChecks,spreadsheetChecks,cypChecks,totalCheckCount:checks.length+decisionRejectionChecks.length+uploadRejectionChecks.length+spreadsheetChecks.length+cypChecks.length,...sourceProof,providerCalls:0,productionDataWritten:false};
+ // Opt-in financial v3 uses the same canonical Project transaction, private
+ // source and receipts. The generated workbook contains no customer data.
+ await pool.query('INSERT INTO "Project"(id,"organizationId",name,status,metadata) VALUES($1,$2,$3,$4,$5::jsonb)', ['p-monthly-curve','company-a','Synthetic financial monthly curve','ACTIVE',JSON.stringify({sentinel:'monthly-unchanged'})]);
+ for(const [id,membership] of [['pm-manager-monthly','m-manager'],['pm-director-monthly','m-director']])await pool.query('INSERT INTO "ProjectMembership"(id,"projectId","tenantMembershipId",status) VALUES($1,$2,$3,$4)',[id,'p-monthly-curve',membership,'ACTIVE']);
+ await pool.query('INSERT INTO "Task"(id,"projectId",title,status,progress,"startsAt","endsAt",metadata,"updatedAt") VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,clock_timestamp())',['monthly-existing','p-monthly-curve','Existing synthetic monthly task','IN_PROGRESS',37,'2026-09-01','2026-09-30',JSON.stringify({sentinel:'monthly-task-unchanged'})]);
+ const monthlyContext=(actor=owner)=>({...context(actor),projectId:'p-monthly-curve'});
+ let monthlyAnalyses=0;
+ const monthlyImporter=createPlanImport({workspace,put,get,environment,analyzer:{analyze:async(file,options)=>{monthlyAnalyses++;return localAnalyzer.analyze(file,options);}}});
+ const monthlySource=decodePlanSource(monthlyCurveFixture({rubros:23,details:90,type:'xlsx'}),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+ const monthlyInput={...monthlyContext(),operationId:randomUUID(),consent:PLAN_IMPORT_MONTHLY_CURVE_CONSENT,source:monthlySource};
+ const monthlyBefore=await projectState('p-monthly-curve'),monthlyDraft=(await monthlyImporter.attach(owner,monthlyInput)).draft;
+ assert.equal(monthlyDraft.status,'READY');assert.equal(monthlyDraft.rows.length,23);assert.equal(monthlyDraft.spreadsheet.version,3);assert.equal(monthlyDraft.spreadsheet.profile,'MONTHLY_RUBROS_CURVE');assert.ok(monthlyDraft.rows.every(row=>row.startsOn===null&&row.endsOn===null&&row.uncertainty));
+ assert.deepEqual((await projectState('p-monthly-curve')).tasks,monthlyBefore.tasks);assert.equal(monthlyAnalyses,1);assert.equal(forbiddenProviderCalls,0);
+ const {reviewed:monthlyReviewed,...monthlySourceAnalysis}=monthlyDraft.spreadsheet;assert.equal(monthlyReviewed,false);
+ const monthlyOriginal=structuredClone(monthlySourceAnalysis),monthlyOriginalRows=structuredClone(monthlyDraft.rows);
+ const monthlyAudit=(await pool.query('SELECT metadata FROM "AuditLog" WHERE id=$1',[monthlyDraft.id])).rows[0].metadata;
+ assert.equal(monthlyAudit.consent.version,PLAN_IMPORT_MONTHLY_CURVE_CONSENT);assert.deepEqual(monthlyAudit.extractedRows,monthlyOriginalRows);assert.deepEqual(monthlyAudit.analysis.spreadsheet,monthlyOriginal);
+ assert.deepEqual((await monthlyImporter.source(owner,{...monthlyContext(),draftId:monthlyDraft.id})).bytes,monthlySource.bytes);
+ monthlyCurveChecks.push('v3-private-original23-source-row-ids-exact-decimal-caches-null-dates-no-ai-no-task-writes');
+
+ const monthlyRows=monthlyDraft.rows.map(row=>({...row,startsOn:'2026-11-01',endsOn:'2026-11-30',uncertainty:''}));
+ const monthlyDecision=(current,action='EDIT',selected=monthlyRows,actor=director)=>({...decision(current,actor,action),projectId:'p-monthly-curve',rows:action==='REJECT'?null:selected});
+ const beforeMonthlyDeniedIO=[puts,reads,monthlyAnalyses],beforeMonthlyDenied=await projectState('p-monthly-curve');
+ await assert.rejects(monthlyImporter.attach(manager,{...monthlyInput,...monthlyContext(manager),operationId:randomUUID()}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
+ await assert.rejects(monthlyImporter.read(manager,{...monthlyContext(manager),draftId:monthlyDraft.id}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
+ await assert.rejects(monthlyImporter.source(manager,{...monthlyContext(manager),draftId:monthlyDraft.id}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
+ for(const action of ['EDIT','APPLY','REJECT'])await assert.rejects(monthlyImporter.decide(manager,monthlyDecision(monthlyDraft,action,monthlyRows,manager)),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
+ await assert.rejects(monthlyImporter.decide(manager,monthlyDecision(monthlyDraft,'EDIT',monthlyRows.map((row,i)=>i?row:{...row,budget:'forged'}),manager)),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
+ const managerMonthlyList=await monthlyImporter.read(manager,monthlyContext(manager));assert.equal(managerMonthlyList.drafts.length,0);assert.equal(managerMonthlyList.truncated,false);assert.doesNotMatch(JSON.stringify(managerMonthlyList),/cachedValue|PLANNED_MONETARY_INVESTMENT|budget/);
+ assert.deepEqual([puts,reads,monthlyAnalyses],beforeMonthlyDeniedIO);assert.deepEqual(await projectState('p-monthly-curve'),beforeMonthlyDenied);
+ monthlyCurveChecks.push('v3-site-manager-denied-attach-read-source-decisions-malformed-decision-list-before-private-io-or-writes');
+
+ const monthlyNullDecision=monthlyDecision(monthlyDraft,'APPLY',monthlyOriginalRows);
+ assert.equal((await monthlyImporter.decide(director,monthlyNullDecision)).code,'PLAN_IMPORT_REVIEW_REQUIRED');
+ assert.equal((await monthlyImporter.decide(director,monthlyDecision(monthlyDraft,'APPLY'))).code,'PLAN_IMPORT_REVIEW_REQUIRED');
+ for(const patch of [{sourceRowId:'Plan y curva Meses!A9999'},{evidence:'Invented source reference'},{budget:'123.45'},{actualProgress:100}]){
+  const forged=monthlyRows.map((row,i)=>i?row:{...row,...patch});assert.equal((await monthlyImporter.decide(director,monthlyDecision(monthlyDraft,'EDIT',forged))).code,'PLAN_IMPORT_ROWS_INVALID');
+ }
+ assert.deepEqual((await projectState('p-monthly-curve')).tasks,monthlyBefore.tasks);
+ assert.deepEqual((await pool.query('SELECT metadata FROM "AuditLog" WHERE id=$1',[monthlyDraft.id])).rows[0].metadata.extractedRows,monthlyOriginalRows);
+ monthlyCurveChecks.push('v3-null-dates-unsaved-review-source-row-evidence-and-extra-financial-forgery-have-zero-task-effects');
+
+ const monthlyRetained=monthlyRows.slice(2).reverse(),monthlyEditCommand=monthlyDecision(monthlyDraft,'EDIT',monthlyRetained),monthlyEdited=(await monthlyImporter.decide(director,monthlyEditCommand)).draft;
+ assert.equal(monthlyEdited.rows.length,21);assert.equal(monthlyEdited.spreadsheet.rowCount,23);assert.equal(monthlyEdited.spreadsheet.reviewed,true);
+ assert.deepEqual(monthlyEdited.spreadsheet.items,monthlyOriginal.items);assert.deepEqual(monthlyEdited.spreadsheet.curve,monthlyOriginal.curve);
+ const monthlyEditedAudit=(await pool.query('SELECT metadata FROM "AuditLog" WHERE id=$1',[monthlyDraft.id])).rows[0].metadata;
+ assert.deepEqual(monthlyEditedAudit.extractedRows,monthlyOriginalRows);assert.deepEqual(monthlyEditedAudit.analysis.spreadsheet,monthlyOriginal);
+ monthlyCurveChecks.push('v3-explicit-exclusion-and-reorder-preserve-all23-source-rubros-and-the-complete-original-curve');
+
+ let monthlyTaskAttempts=0,monthlyReceiptAttempts=0;
+ const monthlyRollbackWorkspace=createWorkspaceStore({connect:async()=>{const client=await pool.connect();return {release:bad=>client.release(bad),query:async(sql,args)=>{if(sql.startsWith('INSERT INTO public."Task"'))monthlyTaskAttempts+=args.length/6;if(sql.startsWith('INSERT INTO public."AuditLog"')&&sql.includes("'plan.import.decision'")){monthlyReceiptAttempts++;throw Error('Synthetic v3 final receipt insertion failure');}return client.query(sql,args);}};}});
+ const monthlyRollbackImporter=createPlanImport({workspace:monthlyRollbackWorkspace,put,get,environment,analyzer:localAnalyzer}),monthlyBeforeRollback=await projectState('p-monthly-curve');
+ await assert.rejects(monthlyRollbackImporter.decide(director,monthlyDecision(monthlyEdited,'APPLY',monthlyRetained)),{code:'WORKSPACE_OPERATION_UNCONFIRMED'});
+ assert.equal(monthlyTaskAttempts,21);assert.equal(monthlyReceiptAttempts,1);assert.deepEqual(await projectState('p-monthly-curve'),monthlyBeforeRollback);
+ monthlyCurveChecks.push('v3-final-receipt-failure-rolls-back-the-whole21-retained-task-batch-and-draft');
+
+ const monthlyApply=monthlyDecision(monthlyEdited,'APPLY',monthlyRetained),monthlyResults=await Promise.all([monthlyImporter.decide(director,monthlyApply),monthlyImporter.decide(director,monthlyApply)]);
+ assert.equal(monthlyResults.filter(result=>!result.replayed).length,1);assert.equal(monthlyResults[0].receiptId,monthlyResults[1].receiptId);assert.equal(monthlyResults[0].tasks.length,21);
+ const monthlyApplied=monthlyResults[0],monthlyState=await projectState('p-monthly-curve'),monthlyCreated=monthlyState.tasks.filter(task=>task.id!=='monthly-existing');
+ assert.equal(monthlyState.tasks.length,22);assert.deepEqual(monthlyState.tasks.filter(task=>task.id==='monthly-existing'),monthlyBefore.tasks);assert.equal(monthlyState.project.sentinel,'monthly-unchanged');
+ assert.deepEqual(new Set(monthlyCreated.map(task=>task.metadata.planImport.sourceRowId)),new Set(monthlyRetained.map(row=>row.sourceRowId)));
+ const monthlyByTitle=new Map(monthlyRetained.map(row=>[row.title,row.sourceRowId]));
+ for(const task of monthlyCreated){assert.equal(task.status,'BACKLOG');assert.equal(task.progress,0);assert.equal(task.metadata.planImport.sourceRowId,monthlyByTitle.get(task.title));assert.equal(task.metadata.planImport.version,3);assert.equal(task.metadata.planImport.sourceSha256,monthlySource.sha256);assert.equal(task.metadata.planImport.profile,'MONTHLY_RUBROS_CURVE');assert.deepEqual(Object.keys(task.metadata.planImport).sort(),['draftId','evidence','profile','receiptId','row','sourceRowId','sourceSha256','version'].sort());assert.doesNotMatch(JSON.stringify(task.metadata),/cachedValue|monthlyAmount|cumulativeAmount|budget|actualProgress/);}
+ assert.deepEqual(monthlyApplied.draft.spreadsheet.items,monthlyOriginal.items);assert.deepEqual(monthlyApplied.draft.spreadsheet.curve,monthlyOriginal.curve);
+ monthlyCurveChecks.push('v3-concurrent-apply-one-atomic21-lot-stable-original-source-row-ids-no-financial-task-metadata');
+
+ await pool.query('UPDATE "Task" SET progress=81,"updatedAt"=clock_timestamp() WHERE id=$1',[monthlyCreated[0].id]);
+ const monthlyAfterProgress=await projectState('p-monthly-curve'),monthlyBeforeRecoveryIO=[puts,reads,monthlyAnalyses];
+ const monthlyRecovered=await monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyApply.operationId});
+ assert.equal(monthlyRecovered.taskSnapshots.find(task=>task.id===monthlyCreated[0].id).progress,0);assert.equal(monthlyRecovered.tasks.find(task=>task.id===monthlyCreated[0].id).progress,81);assert.deepEqual(monthlyRecovered.draft.spreadsheet.curve,monthlyOriginal.curve);
+ const monthlyReplay=await monthlyImporter.decide(director,monthlyApply);assert.equal(monthlyReplay.replayed,true);assert.equal(monthlyReplay.receiptId,monthlyApplied.receiptId);
+ await assert.rejects(monthlyImporter.decide(director,{...monthlyApply,reason:'Changed reason with the same operation UUID'}),{code:'PLAN_IMPORT_OPERATION_CONFLICT'});
+ assert.deepEqual(await projectState('p-monthly-curve'),monthlyAfterProgress);assert.deepEqual([puts,reads,monthlyAnalyses],monthlyBeforeRecoveryIO);
+ monthlyCurveChecks.push('v3-exact-get-and-replay-preserve-snapshot-current-task-progress-and-original-curve-separately');
+
+ const monthlyDuplicate={...monthlyInput,...monthlyContext(director),operationId:randomUUID()},monthlyDuplicateResult=await monthlyImporter.attach(director,monthlyDuplicate);
+ assert.equal(monthlyDuplicateResult.code,'PLAN_IMPORT_SOURCE_ALREADY_APPLIED');assert.equal(monthlyDuplicateResult.reservationStarted,false);
+ const monthlyPrivacyBefore=await projectState('p-monthly-curve'),monthlyPrivacyIO=[puts,reads,monthlyAnalyses];
+ await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['SITE_MANAGER','m-director']);
+ try{
+  await assert.rejects(monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyApply.operationId}),{code:'WORKSPACE_CONTEXT_CHANGED'});
+  scopes[director.userId]=(await workspace.list(director)).scope;
+  for(const operationId of [monthlyApply.operationId,monthlyEditCommand.operationId,monthlyNullDecision.operationId,monthlyDuplicate.operationId])await assert.rejects(monthlyImporter.read(director,{...monthlyContext(director),operationId}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
+  await assert.rejects(monthlyImporter.read(director,{...monthlyContext(director),draftId:monthlyDraft.id}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
+  await assert.rejects(monthlyImporter.source(director,{...monthlyContext(director),draftId:monthlyDraft.id}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
+  await assert.rejects(monthlyImporter.decide(director,{...monthlyApply,...monthlyContext(director)}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
+  await assert.rejects(monthlyImporter.attach(director,{...monthlyDuplicate,...monthlyContext(director)}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
+  assert.equal((await monthlyImporter.read(director,monthlyContext(director))).drafts.length,0);
+ }finally{await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['DIRECTOR','m-director']);scopes[director.userId]=(await workspace.list(director)).scope;}
+ assert.deepEqual(await projectState('p-monthly-curve'),monthlyPrivacyBefore);assert.deepEqual([puts,reads,monthlyAnalyses],monthlyPrivacyIO);
+ assert.equal((await monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyApply.operationId})).receiptId,monthlyApplied.receiptId);
+ assert.equal((await monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyNullDecision.operationId})).code,'PLAN_IMPORT_REVIEW_REQUIRED');
+ assert.equal((await monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyDuplicate.operationId})).receiptId,monthlyDuplicateResult.receiptId);
+ monthlyCurveChecks.push('v3-current-role-gates-success-edit-typed-rejection-upload-rejection-source-list-and-replay-restore-receipts');
+
+ const monthlyRevokedDownload=createPlanImport({workspace,put,environment,analyzer:localAnalyzer,get:async(...args)=>{const result=await get(...args);await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['SITE_MANAGER','m-director']);return result;}});
+ try{await assert.rejects(monthlyRevokedDownload.source(director,{...monthlyContext(director),draftId:monthlyDraft.id}),{code:'WORKSPACE_CONTEXT_CHANGED'});}finally{await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['DIRECTOR','m-director']);}
+ assert.deepEqual((await monthlyImporter.source(director,{...monthlyContext(director),draftId:monthlyDraft.id})).bytes,monthlySource.bytes);
+ assert.deepEqual(await projectState('p-monthly-curve'),monthlyPrivacyBefore);
+ monthlyCurveChecks.push('v3-source-download-checks-canonical-role-again-after-private-io-before-delivery');
+
+ const monthlyLateInput={...monthlyInput,...monthlyContext(director),operationId:randomUUID(),source:decodePlanSource(monthlyCurveFixture({rubros:4,type:'xlsx'}),monthlySource.contentType)};
+ const monthlyLateImporter=createPlanImport({workspace,put,get,environment,analyzer:{analyze:async(file,options)=>{const result=await localAnalyzer.analyze(file,options);await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['SITE_MANAGER','m-director']);return result;}}});
+ try{await assert.rejects(monthlyLateImporter.attach(director,monthlyLateInput),{code:'WORKSPACE_CONTEXT_CHANGED'});await assert.rejects(monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyLateInput.operationId}),{code:'WORKSPACE_CONTEXT_CHANGED'});scopes[director.userId]=(await workspace.list(director)).scope;await assert.rejects(monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyLateInput.operationId}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});}finally{await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['DIRECTOR','m-director']);scopes[director.userId]=(await workspace.list(director)).scope;}
+ const monthlyLateDraft=(await monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyLateInput.operationId})).draft;
+ assert.equal(monthlyLateDraft.status,'PROCESSING');assert.equal(monthlyLateDraft.sourceAvailable,true);assert.deepEqual((await projectState('p-monthly-curve')).tasks,monthlyAfterProgress.tasks);assert.equal(forbiddenProviderCalls,0);
+ monthlyCurveChecks.push('v3-role-downgrade-during-local-analysis-blocks-financial-finalization-and-restored-role-only-reads-pending');
+
+ assert.equal(checks.length,20);assert.equal(decisionRejectionChecks.length,7);assert.equal(uploadRejectionChecks.length,16);assert.equal(spreadsheetChecks.length,6);assert.equal(cypChecks.length,8);assert.equal(monthlyCurveChecks.length,10);
+ proof={ok:true,fixture:'disposable-local-postgres-synthetic-sessions-and-provider-adapters',checks,decisionRejectionChecks,uploadRejectionChecks,spreadsheetChecks,cypChecks,monthlyCurveChecks,monthlyCurveFixtureSha256:monthlySource.sha256,totalCheckCount:checks.length+decisionRejectionChecks.length+uploadRejectionChecks.length+spreadsheetChecks.length+cypChecks.length+monthlyCurveChecks.length,...sourceProof,providerCalls:0,productionDataWritten:false};
 }finally{await closeDisposablePool(pool);if(created){await admin.query(`DROP DATABASE "${database}"`);databaseRemoved=(await admin.query('SELECT count(*)::int n FROM pg_database WHERE datname=$1',[database])).rows[0].n===0;}await admin.end();}
 assert.equal(databaseRemoved,true);proof.databaseRemoved=databaseRemoved;mkdirSync('.vercel/private',{recursive:true});writeFileSync('.vercel/private/plan-import-postgres-validation.json',JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify({...proof,sourceManifest:proof.sourceManifest.length,notClaimed:['real Clerk session','live OpenAI extraction','real private Blob','publication','Victoria acceptance']}));
