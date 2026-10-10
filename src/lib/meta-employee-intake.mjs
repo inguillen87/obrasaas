@@ -3,7 +3,7 @@ import {WorkspaceError,digest,workspaceId,operationId as validOperationId} from 
 import {decodeSignedCustomerEvent} from './meta-customer-processing.mjs';
 import {metaCustomerContentDigest as durableDigest} from './meta-customer-callback.mjs';
 import {customerChannelActive,customerJobTransaction,customerOutboundId,assertCustomerReplyWindow} from './meta-customer-outbound.mjs';
-import {lockOwnCompanyIssuer,ownCompanyTransportPolicy} from './meta-own-company-policy.mjs';
+import {lockOwnCompanyIssuer,ownCompanyConnectionPolicy} from './meta-own-company-policy.mjs';
 import {companyConnectionForProject} from './company-channel-connection.mjs';
 import {COMPANY_CHANNEL_SCHEMA_CONTRACT} from './company-channel-schema.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-credentials.mjs';
@@ -109,12 +109,12 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  if(!initial||initial.provider!=='meta-customer-v1'||initial.eventType!=='message')return null;
  const raw=(await client.query(`SELECT c.*,p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c.id=$1 AND c."projectId"=$2 AND p.status='ACTIVE'`,[initial.payload?.channelId,initial.projectId])).rows[0];
  if(!raw)fail('EMPLOYEE_INTAKE_REVOKED');
- // Discovery validates no-lock snapshots and supplies only principal IDs.
- // Discard its capability: only a fresh full locked resolver can authorize.
- const discoveryCapability=await lockOwnCompanyIssuer(client,raw,{environment,lock:false});
+ // Pure snapshot discovery supplies IDs only, without minting a capability.
+ // currentPolicy performs the full locked OWN resolver after the sorted union.
+ const discoveryPolicy=ownCompanyConnectionPolicy(raw,environment);
  let ownDiscovery=null;
- if(discoveryCapability){
-  const discoveryPolicy=ownCompanyTransportPolicy(discoveryCapability,environment),refs=(await client.query(`SELECT tm.id AS "membershipId",u.id AS "actorId",u."clerkUserId" FROM public."TenantMembership" tm JOIN public."PlatformUser" u ON u.id=tm."userId" WHERE u.id=$1 AND u."clerkUserId"=$2 AND tm."organizationId"=$3 AND tm.status='ACTIVE'`,[discoveryPolicy.actorId,discoveryPolicy.clerkUserId,raw.organizationId])).rows;
+ if(discoveryPolicy){
+  const refs=(await client.query(`SELECT tm.id AS "membershipId",u.id AS "actorId",u."clerkUserId" FROM public."TenantMembership" tm JOIN public."PlatformUser" u ON u.id=tm."userId" WHERE u.id=$1 AND u."clerkUserId"=$2 AND tm."organizationId"=$3 AND tm.status='ACTIVE'`,[discoveryPolicy.actorId,discoveryPolicy.clerkUserId,raw.organizationId])).rows;
   if(refs.length!==1||!workspaceId(refs[0].membershipId))fail('EMPLOYEE_INTAKE_REVOKED');
   ownDiscovery={ref:refs[0],policyDigest:discoveryPolicy.policyDigest,channelDigest:ownIntakeDiscoveryDigest(raw)};
  }
@@ -142,13 +142,13 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  if(!member0)fail('EMPLOYEE_INTAKE_DISABLED');
  const reactivePref=currentAnchorState(raw,anchors,environment);
  const reactive=await prelockReactiveOnboarding(client,raw,reactivePref,{principalRefs:ownDiscovery?[ownDiscovery.ref]:[]});
- if(ownDiscovery)await assertOwnIntakeDiscovery(client,raw,ownDiscovery,{environment});
+ if(ownDiscovery)assertOwnIntakeDiscovery(raw,ownDiscovery,{environment});
  // Lock issuer before project/channel/event, matching canonical principal order.
  const pre=(await client.query(`SELECT tm.id FROM public."TenantMembership" tm JOIN public."PlatformUser" u ON u.id=tm."userId" WHERE tm.id=$1 AND tm."organizationId"=$2 AND tm.status='ACTIVE' FOR SHARE OF u,tm`,[member0.issuerMembershipId,raw.organizationId])).rows;if(pre.length!==1)fail('EMPLOYEE_INTAKE_REVOKED');
  const project=(await client.query(`SELECT id,name,"organizationId" FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE' FOR UPDATE`,[raw.projectId,raw.organizationId])).rows[0];if(!project)fail('EMPLOYEE_INTAKE_REVOKED');
  const connection=await companyConnectionForProject(client,raw.organizationId,raw.projectId,true),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
  if(!connection||connection.id!==raw.id||connection.company.mode!=='COMPANY'||connection.metadata?.developmentPilot||signed.companyRouting.revision!==connection.company.revision)fail('EMPLOYEE_INTAKE_REVOKED');
- if(ownDiscovery)await assertOwnIntakeDiscovery(client,connection,ownDiscovery,{environment});else if(connection.metadata?.ownCompany||Object.hasOwn(connection.metadata||{},'ownCompanyRuntime'))fail('EMPLOYEE_INTAKE_REVOKED');
+ if(ownDiscovery)assertOwnIntakeDiscovery(connection,ownDiscovery,{environment});else if(connection.metadata?.ownCompany||Object.hasOwn(connection.metadata||{},'ownCompanyRuntime'))fail('EMPLOYEE_INTAKE_REVOKED');
  const {policy,issuer}=await currentPolicy(client,connection,now,{environment});
  const event=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 FOR UPDATE`,[request.eventId,project.id])).rows[0];
  if(!event||event.status!=='PENDING'||event.leaseToken!==request.leaseToken||!Number.isFinite(Date.parse(event.leaseExpiresAt))||Date.parse(event.leaseExpiresAt)<=now.getTime()||event.projectId!==request.projectId||event.payload?.channelId!==request.channelId||event.payload.payloadDigest!==request.payloadDigest)fail('META_CUSTOMER_INBOX_LEASE_CHANGED');
@@ -186,14 +186,13 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  return r;
 }
 function ownIntakeDiscoveryDigest(c){return durableDigest({id:c.id,projectId:c.projectId,organizationId:c.organizationId,phoneNumberId:c.phoneNumberId,whatsappBusinessId:c.whatsappBusinessId,enabled:c.enabled,connectionStatus:c.connectionStatus,encryptedAccessToken:c.encryptedAccessToken,displayPhoneNumber:c.displayPhoneNumber,metadata:c.metadata});}
-async function assertOwnIntakeDiscovery(client,connection,pin,{environment}){
+function assertOwnIntakeDiscovery(connection,pin,{environment}){
  if(ownIntakeDiscoveryDigest(connection)!==pin.channelDigest)fail('EMPLOYEE_INTAKE_REVOKED');
  // All referenced U/TM rows were acquired as one sorted union before P/C.
- // Use the pinned snapshot, so no later channel change discovers a new actor.
- const capability=await lockOwnCompanyIssuer(client,connection,{environment});
- if(!capability||ownCompanyTransportPolicy(capability,environment).policyDigest!==pin.policyDigest)fail('EMPLOYEE_INTAKE_REVOKED');
- const rows=(await client.query(`SELECT tm.id FROM public."TenantMembership" tm JOIN public."PlatformUser" u ON u.id=tm."userId" WHERE tm.id=$1 AND u.id=$2 AND u."clerkUserId"=$3 AND tm."organizationId"=$4 AND tm.status='ACTIVE' FOR SHARE OF u,tm`,[pin.ref.membershipId,pin.ref.actorId,pin.ref.clerkUserId,connection.organizationId])).rows;
- if(rows.length!==1)fail('EMPLOYEE_INTAKE_REVOKED');
+ // Pin the fresh channel to those IDs. currentPolicy below still verifies the
+ // full current OWN grant, canonical issuer and activation receipt under locks.
+ const policy=ownCompanyConnectionPolicy(connection,environment);
+ if(!policy||policy.policyDigest!==pin.policyDigest||policy.actorId!==pin.ref.actorId||policy.clerkUserId!==pin.ref.clerkUserId||policy.organizationId!==connection.organizationId)fail('EMPLOYEE_INTAKE_REVOKED');
 }
 
 function outboundChannelDigest(c){return durableDigest({id:c.id,projectId:c.projectId,organizationId:c.organizationId,phoneNumberId:c.phoneNumberId,whatsappBusinessId:c.whatsappBusinessId,enabled:c.enabled,connectionStatus:c.connectionStatus,encryptedAccessToken:c.encryptedAccessToken,displayPhoneNumber:c.displayPhoneNumber,metadata:c.metadata,company:c.company});}
