@@ -12,6 +12,8 @@ const destinations={
  field:tool('field-title','Jornada, evidencia y avance'),
  participants:tool('participant-title','Participantes y permisos'),
  channel:tool('worker-channel-title','Mi número y autorización de avisos'),
+ ownCompanyNumber:tool('own-company-number-title','Número propio de la empresa'),
+ ownCompanyTemplates:tool('own-company-templates-title','Plantillas de nuestro WhatsApp'),
  companyChannel:tool('company-channel-title','Canal y obras de la empresa'),
  purchase:tool('purchase-title','Compras'),
  inventory:tool('inventory-title','Inventario y consumo'),
@@ -48,7 +50,7 @@ export function WorkspaceToolsNavigation({canManageIntegrations=false,canImportP
  const groups=[
   {id:'work',label:'Trabajo en obra',icon:HardHat,tools:[destinations.schedule,destinations.field,destinations.inventory,...(canManageIntegrations?[destinations.register,destinations.purchase]:[])]},
   {id:'people',label:'Equipo y acceso',icon:UsersRound,tools:[...(['ADMIN','DIRECTOR'].includes(role)?[destinations.projectPreparation]:[]),...(canManageIntegrations?[tool('site-register-title','Fichas del equipo')]:[]),destinations.participants,destinations.channel]},
-  ...((role==='ADMIN'||canManageIntegrations)?[{id:'whatsapp',label:'WhatsApp de la empresa',icon:MessageCircle,tools:[destinations.companyChannel,...(canManageIntegrations?[destinations.preparation,destinations.meta,destinations.inbox,destinations.template]:[])]}]:[]),
+  ...((role==='ADMIN'||canManageIntegrations)?[{id:'whatsapp',label:'WhatsApp de la empresa',icon:MessageCircle,tools:[...(role==='ADMIN'?[destinations.ownCompanyNumber,destinations.ownCompanyTemplates]:[]),destinations.companyChannel,...(canManageIntegrations?[destinations.preparation,destinations.meta,destinations.inbox,destinations.template]:[])]}]:[]),
   ...((role==='ADMIN'||canManageIntegrations)?[{id:'management',label:'Administración y seguimiento',icon:BriefcaseBusiness,tools:[...(role==='ADMIN'?[destinations.crm,destinations.demo]:[]),...(canManageIntegrations?[tool('operation-status-title','Pendientes y actividad')]:[])]}]:[]),
  ];
  const visible=new Set(groups.flatMap(group=>group.tools.map(item=>item.id)));

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { identityInvitationId, identityAccountReturnPath, identitySignInPath, identitySignUpPath, identityHasPendingInvitation } from '../src/lib/identity-return-path.mjs';
+import { identityInvitationId, identityAccountReturnPath, identitySignInPath, identitySignUpPath, identityHasPendingInvitation, identityWorkspaceProjectHint } from '../src/lib/identity-return-path.mjs';
 
 const invitationId = 'invite_0123456789abcdef0123456789abcdef';
 const routes = [identityAccountReturnPath, identitySignInPath, identitySignUpPath];
@@ -108,4 +108,33 @@ test('complete, missing and attacker-selected status use the normal independentl
   }
   assert.equal(identityHasPendingInvitation(new URLSearchParams('redirect_url=https://foreign.example&ticket=synthetic-ticket&status=sign_in')), false);
   assert.equal(identityHasPendingInvitation(Object.create({ __clerk_status: 'sign_in', __clerk_ticket: 'synthetic-ticket' })), false);
+});
+
+test('workspace hints reject duplicate, foreign, delimited and inherited project context', () => {
+  const projectId = 'project-pilot_20261010';
+  for (const query of [{ obra: projectId }, new URLSearchParams({ obra: projectId })]) assert.equal(identityWorkspaceProjectHint(query), projectId);
+  for (const query of [
+    undefined, null, {}, 'https://foreign.example', { obra: 1 }, { obra: { value: projectId } },
+    Object.create({ obra: projectId }), { obra: [projectId, projectId] },
+    new URLSearchParams('obra=' + projectId + '&obra=' + projectId),
+    ...['', 'a'.repeat(129), '_project', '-project', '//foreign.example', 'https://foreign.example',
+      'javascript:alert(1)', projectId + '&role=ADMIN', projectId + '?scope=admin',
+      projectId + '#fragment', projectId + '/../../admin', projectId + '\\evil',
+      projectId + '\n', projectId + '\r', projectId + '\u2028', ' ' + projectId,
+      projectId + ' ', 'project%2Fadmin'].map(obra => ({ obra })),
+  ]) assert.equal(identityWorkspaceProjectHint(query), '');
+});
+
+test('a project hint cannot expand authentication return context or carry authority', () => {
+  const projectId = 'project-pilot_20261010';
+  const query = new URLSearchParams({ participar: invitationId, obra: projectId, scope: 'admin',
+    role: 'ADMIN', canManage: 'true', canSend: 'true', token: 'synthetic-session-token',
+    redirect_url: 'https://foreign.example' });
+  assert.equal(identityWorkspaceProjectHint(query), projectId);
+  routes.forEach((route, index) => {
+    const destination = route(query);
+    assert.equal(destination, paths[index] + '?participar=' + invitationId);
+    assert.deepEqual([...new URL(destination, 'https://obrasaas.com').searchParams.keys()], ['participar']);
+  });
+  assert.equal(identityWorkspaceProjectHint(new URLSearchParams(identityAccountReturnPath(query).split('?')[1])), '');
 });

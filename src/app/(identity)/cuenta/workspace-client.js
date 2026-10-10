@@ -46,6 +46,11 @@ async function requestWorkspace(transport,query='',options={}){
  });
 }
 const query=values=>'?' + new URLSearchParams(values).toString();
+function confirmedWorkspaceAccount(data){
+ const projects=data?.projects;
+ if(!Array.isArray(projects)||projects.some(project=>!project||typeof project.id!=='string'||!project.id.length||typeof project.name!=='string')||new Set(projects.map(project=>project.id)).size!==projects.length)throw new Error('No pudimos confirmar la lista de obras. Actualizá para volver a consultar antes de elegir una obra.');
+ return data;
+}
 const guideAccessReasons=['SESSION_REQUIRED','WORKSPACE_MEMBERSHIP_REQUIRED','WORKSPACE_PROJECT_UNAVAILABLE','WORKSPACE_CONTEXT_CHANGED','PARTICIPANT_KYC_REVIEW_REQUIRED'];
 export function workspaceGuideAccessReason(error){
  if(error?.status===401)return 'SESSION_REQUIRED';
@@ -76,11 +81,13 @@ function workspaceIdentityOnlyProject(error,account,projectId){
  if(candidates.length!==1||typeof candidates[0].name!=='string')return null;
  return {scope:account.scope,projectId:candidates[0].id,name:candidates[0].name};
 }
-export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
+export function AccountWorkspace({getSessionToken,onGuideObservation,initialProjectId=''}={}){
  const transport=useWorkspaceRequest(getSessionToken);
  const request=useCallback((query='',options={})=>requestWorkspace(transport,query,options),[transport]);
  const [account,setAccount]=useState(null),[view,setView]=useState(null),[loading,setLoading]=useState(true),[notice,setNotice]=useState(''),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[saving,setSaving]=useState(false),[receipt,setReceipt]=useState(null);
  const generation=useRef(0),controller=useRef(null),mounted=useRef(true);
+ // Capture once per Clerk context. A query parameter can only suggest a read.
+ const initialProjectHint=useRef({projectId:initialProjectId,consumed:false,listGeneration:null});
  const [guideUnavailable,setGuideUnavailable]=useState(false),[guideReadFailed,setGuideReadFailed]=useState(false),[guideAccessReason,setGuideAccessReason]=useState(null);
  const [identityProject,setIdentityProject]=useState(null);
  const [officeProject,setOfficeProject]=useState(null);
@@ -138,7 +145,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
   setAttempt(null);setRetryAllowed(false);setTaskCreating(false);setModulePending({});
   setNotice('Tu acceso cambió. Actualizá las obras antes de continuar.');
  },[]);
- function restrictProject(error,projectId){
+ const restrictProject=useCallback((error,projectId)=>{
   const identity=workspaceIdentityOnlyProject(error,account,projectId);
    setGuideAccessReason(workspaceGuideAccessReason(error));
   onboardingContext.current=null;setChannelSnapshot(null);setView(null);setIdentityProject(identity);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);
@@ -147,21 +154,21 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
   setAttempt(null);setRetryAllowed(false);setTaskCreating(false);setModulePending({});
   setGuideUnavailable(!identity);setGuideReadFailed(!identity);
   if(!identity)setAccount(null);
- }
+ },[account]);
  useEffect(()=>{
   const epoch=generation;mounted.current=true;const abort=new AbortController();controller.current=abort;const current=++epoch.current;setObservationEpoch(current);setChannelSnapshot(null);
   setAccount(null);setView(null);setIdentityProject(null);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);setAttempt(null);setRetryAllowed(false);setTaskCreating(false);setModulePending({});setNotice('');setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);setLoading(true);
-  request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current){setAccount(data);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);}}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}).finally(()=>{if(mounted.current&&current===generation.current){setLoading(false);setPlanReadback(null);}});
+  request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current){const confirmed=confirmedWorkspaceAccount(data);initialProjectHint.current.listGeneration=current;setAccount(confirmed);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);}}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}).finally(()=>{if(mounted.current&&current===generation.current){setLoading(false);setPlanReadback(null);}});
   return()=>{mounted.current=false;epoch.current++;abort.abort();controller.current?.abort();};
  },[request]);
  async function refresh(){
   if(contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
   setAccount(null);setView(null);setIdentityProject(null);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setNotice('');setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);setLoading(true);
-  try{const data=await request('',{signal:abort.signal});if(mounted.current&&current===generation.current){setAccount(data);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);}}catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}finally{if(mounted.current&&current===generation.current)setLoading(false);}
+  try{const data=await request('',{signal:abort.signal});if(mounted.current&&current===generation.current){const confirmed=confirmedWorkspaceAccount(data);initialProjectHint.current.listGeneration=current;setAccount(confirmed);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);}}catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
- async function open(projectId,append=false){
-  if(account?.officeReviewOnly===true){if(contextLocked)return;const selected=account.projects.find(project=>project.id===projectId);if(selected){setView(null);setIdentityProject(null);setOfficeProject({scope:account.scope,projectId,name:selected.name});}return;}
-  if(!account||contextLocked||!account.projects.some(project=>project.id===projectId))return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
+ const open=useCallback(async(projectId,append=false)=>{
+  if(account?.officeReviewOnly===true){if(contextLocked)return;const selected=account.projects.find(project=>project.id===projectId);if(selected){initialProjectHint.current.consumed=true;setView(null);setIdentityProject(null);setOfficeProject({scope:account.scope,projectId,name:selected.name});}return;}
+  if(!account||contextLocked||!account.projects.some(project=>project.id===projectId))return;initialProjectHint.current.consumed=true;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
   const cursor=append?view?.nextCursor:null;setIdentityProject(null);setPlanReadback(null);setNotice('');setGuideAccessReason(null);setLoading(true);if(!append){setView(null);setDraft(null);setReceipt(null);}
   try{
    const data=await request(query({projectId,scope:account.scope,...(cursor?{afterTask:cursor}:{})}),{signal:abort.signal});
@@ -171,7 +178,16 @@ export function AccountWorkspace({getSessionToken,onGuideObservation}={}){
    setGuideReadFailed(false);
   }catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);if(guideAccessDenied(error))restrictProject(error,projectId);}}
   finally{if(mounted.current&&current===generation.current)setLoading(false);}
- }
+ },[account,contextLocked,request,restrictProject,view?.nextCursor]);
+ useEffect(()=>{
+  const hint=initialProjectHint.current;
+  if(hint.consumed||!hint.projectId||!account||loading||contextLocked)return;
+  // No implicit retry or later refresh may reopen the query-selected work.
+  hint.consumed=true;
+  if(!mounted.current||hint.listGeneration!==generation.current||account.officeReviewOnly===true||!Array.isArray(account.projects)||account.projects.filter(project=>project?.id===hint.projectId).length!==1)return;
+  // The ordinary GET still decides current access and private-only KYC state.
+  void open(hint.projectId);
+ },[account,contextLocked,loading,open]);
  async function readRecordedSchedule(target){
   if(!mounted.current||target.scope!==account?.scope||target.projectId!==view?.project.id)return;
   controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
