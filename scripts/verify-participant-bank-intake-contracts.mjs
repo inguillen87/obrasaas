@@ -12,7 +12,8 @@ export const TEST_SUITES=[
  'tests/production-employee-intake-recovery.test.mjs',
  'tests/production-participant-bank-intake-recovery.test.mjs',
  'tests/production-company-channel-kyc.test.mjs',
- 'tests/production-participant-onboarding-next-step.test.mjs'
+ 'tests/production-participant-onboarding-next-step.test.mjs',
+ 'tests/production-employee-intake-assignment-continuity.test.mjs'
 ];
 export const EXPECTED_SUITE_COUNTS=Object.freeze({
  'tests/production-participant-private-bank.test.mjs':20,
@@ -21,9 +22,10 @@ export const EXPECTED_SUITE_COUNTS=Object.freeze({
  'tests/production-employee-intake-recovery.test.mjs':4,
  'tests/production-participant-bank-intake-recovery.test.mjs':7,
  'tests/production-company-channel-kyc.test.mjs':80,
- 'tests/production-participant-onboarding-next-step.test.mjs':37
+ 'tests/production-participant-onboarding-next-step.test.mjs':37,
+ 'tests/production-employee-intake-assignment-continuity.test.mjs':25
 });
-export const EXPECTED_TOTAL_TESTS=250;
+export const EXPECTED_TOTAL_TESTS=275;
 export const RECOVERY_CASES=[
  ...['bank','intake'].flatMap(kind=>['lost-response','http403'].map(failure=>kind+' '+failure+' persists its typed reference across reload and rejects the sibling receipt before exact GET recovery')),
  ...['bank','intake'].map(kind=>kind+' nonterminal and cross-context responses retain unknown and never use the generic participant fallback'),
@@ -52,7 +54,7 @@ function main(){
   let bytes;try{bytes=execFileSync(process.execPath,['--test','--test-reporter=tap',file],{cwd:root,timeout:120000,maxBuffer:8*1024*1024});}catch(error){if(Buffer.isBuffer(error.stdout))writeFileSync(path.join(out,'failed-'+index+'.tap'),error.stdout,{flag:'wx'});throw error;}
   const parsed=parseTap(bytes,{recovery:file===TEST_SUITES[4],expectedTests:EXPECTED_SUITE_COUNTS[file]??null}),tapPath=out+'/suite-'+index+'.tap';writeFileSync(tapPath,bytes,{flag:'wx'});suites.push({file,exitCode:0,...parsed,tap:{path:tapPath,bytes:bytes.length,sha256:hash(bytes)}});
  }
- assert.equal(suites.reduce((total,suite)=>total+suite.tests,0),EXPECTED_TOTAL_TESTS,'Exact seven-suite total');
+ assert.equal(suites.reduce((total,suite)=>total+suite.tests,0),EXPECTED_TOTAL_TESTS,'Exact canonical suite total');
  identity(root,sourceRevision);for(const item of sourceManifest)assert.equal(hash(readFileSync(path.join(root,item.path))),item.sha256,'Source stable during unit proof');assert.equal(hash(readFileSync(fileURLToPath(import.meta.url))),harnessSha256);
  const proof={version:1,status:'PASS',sourceRevision,sourceState:'committed exact Git HEAD',trackedClean:true,sourceManifest,harnessSha256,suites,postgresExecuted:false,productionDataWritten:false,coverageBoundary:'canonical unit assertions with synthetic fixtures; no database, UI or provider acceptance'};writeFileSync(path.join(out,'proof.json'),JSON.stringify(proof,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:'PASS',sourceRevision,suites:suites.length,recoveryChecks:7,tests:suites.reduce((n,s)=>n+s.tests,0)}));
  }catch(error){writeFileSync(path.join(out,'failure.json'),JSON.stringify({status:'FAIL',sourceRevision,message:error.message,suites},null,2)+'\n',{flag:'wx'});throw error;}
