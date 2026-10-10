@@ -129,9 +129,11 @@ test('issuer revocation or owner revision change during a lookup aborts before a
  for(const change of [f=>f.controls.issuerActive=false,f=>f.owner.revision++]){const f=await fixture();await f.send(f.body('PREPARE_OWN_TEMPLATE'));f.state.afterLookup=()=>change(f);await assert.rejects(f.send(f.body('SUBMIT_OWN_TEMPLATE')));assert.equal(f.postCount(),0);assert.equal(f.connection.metadata.ownCompanyTemplateDrafts[blueprintKey].state,'SUBMISSION_STARTED');}
 });
 
-test('UI command and durable journal preserve original UUID/createdAt for explicit recovery and require exact receipt before clearing',async()=>{
+test('UI command and durable journal preserve original UUID/createdAt for explicit recovery and require exact receipt before clearing',async(t)=>{
  const f=await fixture();await f.send(f.body('PREPARE_OWN_TEMPLATE'));const snapshot=await f.service.read(f.context.session,{scope,projectId:f.connection.projectId}),expected={scope,projectId:f.connection.projectId};
+ let viewNow=f.time;t.mock.method(Date,'now',()=>viewNow);
  assert.throws(()=>ownTemplateCommand(snapshot,{action:'SUBMIT_OWN_TEMPLATE',blueprintKey},expected));
+ viewNow=Date.parse(snapshot.validUntil);assert.throws(()=>ownTemplateCommand(snapshot,{action:'SUBMIT_OWN_TEMPLATE',blueprintKey,confirmed:true},expected));viewNow=f.time;
  const command={...ownTemplateCommand(snapshot,{action:'SUBMIT_OWN_TEMPLATE',blueprintKey,confirmed:true},expected),operationId:randomUUID()},storage=new Map(),adapter={get length(){return storage.size;},key:index=>[...storage.keys()][index],getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},journal=createWorkspaceRecoveryJournal({getStorage:()=>adapter,now:()=>1234});
  const ticket=await journal.prepare('/api/identity/company-channel',{method:'POST',body:JSON.stringify(command)});await journal.settle(ticket,null,new Error('Lost POST ACK'));const original=structuredClone(ticket.entry);
  const recovery=f.body('RECOVER_OWN_TEMPLATE',command.operationId,'SUBMIT_OWN_TEMPLATE'),again=await journal.prepare('/api/identity/company-channel',{method:'POST',body:JSON.stringify(recovery)});assert.deepEqual(again.entry,original);assert.equal(again.entry.createdAt,1234);assert.ok(recoveryQuery(original).includes('operationId='+command.operationId));
