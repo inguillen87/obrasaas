@@ -29,6 +29,28 @@ async function fixture(){
   if(['BEGIN','COMMIT','ROLLBACK'].includes(sql))return empty;
   if(sql.includes('FROM public."WhatsAppConnection" c JOIN public."Project" p')&&sql.includes('p."organizationId"=$3'))return {rows:[structuredClone(f.connection)]};
   if(sql.includes('FROM public."PlatformUser" u JOIN public."TenantMembership"')&&sql.includes('tm."clerkRole"=\'org:admin\''))return {rows:own.issuerActive?[{...f.member,organizationMetadata:structuredClone(own.organizationMetadata)}]:[]};
+  // The OWN and intake issuers are the same real fixture principal. Discovery
+  // and the ordered union project its exact IDs; neither creates an account.
+  if(sql===`SELECT tm.id AS "membershipId",u.id AS "actorId",u."clerkUserId" FROM public."TenantMembership" tm JOIN public."PlatformUser" u ON u.id=tm."userId" WHERE u.id=$1 AND u."clerkUserId"=$2 AND tm."organizationId"=$3 AND tm.status='ACTIVE'`){
+   assert.deepEqual(args,[f.member.actorId,f.session.userId,f.project.organizationId]);
+   return {rows:own.issuerActive&&f.controls.issuerActive?[{membershipId:f.member.membershipId,actorId:f.member.actorId,clerkUserId:f.session.userId}]:[]};
+  }
+  if(sql==='SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE id=$1 FOR SHARE'){
+   assert.deepEqual(args,[f.member.actorId]);
+   return {rows:[{id:f.member.actorId,clerkUserId:f.session.userId}]};
+  }
+  if(sql===`SELECT id AS "membershipId","userId" AS "actorId","organizationId","tenantRole"::text AS role,"clerkRole" FROM public."TenantMembership" WHERE id=$1 AND "userId"=$2 AND "organizationId"=$3 AND status='ACTIVE' FOR SHARE`){
+   assert.deepEqual(args,[f.member.membershipId,f.member.actorId,f.project.organizationId]);
+   return {rows:own.issuerActive&&f.controls.issuerActive?[{membershipId:f.member.membershipId,actorId:f.member.actorId,organizationId:f.project.organizationId,role:f.controls.issuerRole,clerkRole:f.session.organizationRole}]:[]};
+  }
+  if(sql===`SELECT id FROM public."Organization" WHERE id=$1 AND COALESCE(metadata->'internal','false'::jsonb)<>'true'::jsonb FOR SHARE`){
+   assert.deepEqual(args,[f.project.organizationId]);
+   return {rows:own.organizationMetadata.internal!==true?[{id:f.project.organizationId}]:[]};
+  }
+  if(sql===`SELECT tm.id FROM public."TenantMembership" tm JOIN public."PlatformUser" u ON u.id=tm."userId" WHERE tm.id=$1 AND u.id=$2 AND u."clerkUserId"=$3 AND tm."organizationId"=$4 AND tm.status='ACTIVE' FOR SHARE OF u,tm`){
+   assert.deepEqual(args,[f.member.membershipId,f.member.actorId,f.session.userId,f.project.organizationId]);
+   return {rows:own.issuerActive&&f.controls.issuerActive?[{id:f.member.membershipId}]:[]};
+  }
   if(sql.includes('FROM public."AuditLog"')&&args[0]===receiptId)return {rows:own.receiptPresent?[structuredClone(receipt)]:[]};
   return f.query(sql,args);
  };

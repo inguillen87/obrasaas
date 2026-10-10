@@ -1,9 +1,10 @@
 import {randomBytes} from 'node:crypto';
 import {WorkspaceError,digest,workspaceId} from './workspace-policy.mjs';
 import {metaCustomerContentDigest as durableDigest} from './meta-customer-callback.mjs';
-import {prepareCompanyKycProjects} from './company-channel-kyc.mjs';
+import {prepareCompanyKycProjects,companyKycGrantDigest} from './company-channel-kyc.mjs';
 import {lockPersonWorksiteJourney} from './person-worksite-journey.mjs';
-import {resolveParticipantOnboardingAuthority} from './participant-onboarding-authority.mjs';
+import {resolveParticipantOnboardingAuthority,resolveParticipantReactiveKycStatusAuthority} from './participant-onboarding-authority.mjs';
+import {assignment} from './worker-channel-identity.mjs';
 import {participantOnboardingIntent,participantOnboardingOutboundId,PARTICIPANT_ONBOARDING_NOTICE_VERSION,PARTICIPANT_ONBOARDING_NOTICE_SHA256} from './participant-onboarding-policy.mjs';
 import {prepareMetaKycChallenge,metaKycOperationId,metaKycChallengeDigest} from './meta-kyc-challenge.mjs';
 import {participantReceiptId} from './participant-policy.mjs';
@@ -14,6 +15,7 @@ const fail=(code='EMPLOYEE_INTAKE_CONTEXT_REQUIRED')=>{throw new WorkspaceError(
 const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const eventId=value=>/^customer_webhook_[a-f0-9]{64}$/.test(value||'');
 const ttl=30*60*1000;
+const reactiveStatusPrelocks=new WeakMap();
 const revision=`to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
 const unseal=(connection,purpose,id,value,environment)=>{try{return JSON.parse(decryptCustomerSecret(value,{organizationId:connection.organizationId,projectId:connection.projectId,purpose,resourceId:id},environment));}catch{fail('EMPLOYEE_INTAKE_INTEGRITY');}};
 function participantAccountState(part){
@@ -27,17 +29,38 @@ async function canonicalAuthority(client,intent,options){
 
 // Discovery supplies IDs for lock ordering only. Re-read and authorize after
 // these locks; an admitted intake is never a participant principal or session.
-export async function prelockReactiveOnboarding(client,connection,state){
- if(state?.status!=='ADMITTED'||!workspaceId(state.admission?.workerId)||!workspaceId(state.admission?.projectId))return null;
+async function lockReactivePrincipalUnion(client,connection,refs,{lockOrganization=false}={}){
+ const distinct=new Map();
+ for(const ref of refs){
+  if(!object(ref)||Object.keys(ref).some(key=>!['actorId','membershipId','clerkUserId'].includes(key))||!workspaceId(ref.actorId)||!workspaceId(ref.membershipId)||ref.clerkUserId!==undefined&&!/^user_[A-Za-z0-9]+$/.test(ref.clerkUserId))fail('EMPLOYEE_INTAKE_INTEGRITY');
+  const previous=distinct.get(ref.actorId);
+  // Never silently replace an old issuer membership with a newer account.
+  if(previous&&(previous.membershipId!==ref.membershipId||previous.clerkUserId&&ref.clerkUserId&&previous.clerkUserId!==ref.clerkUserId))fail('EMPLOYEE_INTAKE_REVOKED');
+  distinct.set(ref.actorId,{...previous,...ref});
+ }
+ const members=[];
+ for(const ref of [...distinct.values()].sort((a,b)=>a.actorId.localeCompare(b.actorId))){
+  const users=(await client.query('SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE id=$1 FOR SHARE',[ref.actorId])).rows;
+  const found=(await client.query(`SELECT id AS "membershipId","userId" AS "actorId","organizationId","tenantRole"::text AS role,"clerkRole" FROM public."TenantMembership" WHERE id=$1 AND "userId"=$2 AND "organizationId"=$3 AND status='ACTIVE' FOR SHARE`,[ref.membershipId,ref.actorId,connection.organizationId])).rows;
+  if(users.length!==1||found.length!==1||!/^user_[A-Za-z0-9]+$/.test(users[0].clerkUserId||'')||ref.clerkUserId&&users[0].clerkUserId!==ref.clerkUserId)fail('EMPLOYEE_INTAKE_REVOKED');
+  members.push({...found[0],clerkUserId:users[0].clerkUserId});
+ }
+ if(lockOrganization){const org=(await client.query(`SELECT id FROM public."Organization" WHERE id=$1 AND COALESCE(metadata->'internal','false'::jsonb)<>'true'::jsonb FOR SHARE`,[connection.organizationId])).rows;if(org.length!==1)fail('EMPLOYEE_INTAKE_REVOKED');}
+ return members;
+}
+
+export async function prelockReactiveOnboarding(client,connection,state,{principalRefs=[]}={}){
+ if(!Array.isArray(principalRefs))fail('EMPLOYEE_INTAKE_INTEGRITY');
+ if(state?.status!=='ADMITTED'||!workspaceId(state.admission?.workerId)||!workspaceId(state.admission?.projectId)){if(principalRefs.length)await lockReactivePrincipalUnion(client,connection,[...principalRefs,{actorId:connection.metadata?.employeeIntakePolicy?.issuerActorId,membershipId:connection.metadata?.employeeIntakePolicy?.issuerMembershipId}],{lockOrganization:true});return null;}
  const rows=(await client.query(`SELECT w.id,w."projectId",w.metadata FROM public."Worker" w JOIN public."Project" p ON p.id=w."projectId" WHERE w.id=$1 AND w."projectId"=$2 AND p."organizationId"=$3`,[state.admission.workerId,state.admission.projectId,connection.organizationId])).rows;
- if(rows.length!==1)return null;
+ if(rows.length!==1){if(principalRefs.length)await lockReactivePrincipalUnion(client,connection,[...principalRefs,{actorId:connection.metadata?.employeeIntakePolicy?.issuerActorId,membershipId:connection.metadata?.employeeIntakePolicy?.issuerMembershipId}],{lockOrganization:true});return null;}
  const p=rows[0].metadata?.participant,d=p?.onboardingDelivery;
  const reactive=state.reactiveOnboarding;
- if(!['INVITED','ACTIVE'].includes(p?.status)||!d||!(d.state==='WAITING_CONFIGURATION'||d.state==='CANCELED'&&d.code==='PARTICIPANT_ONBOARDING_REACTIVE_HANDOFF'&&reactive?.kind==='KYC_START'))return null;
+ if(!['INVITED','ACTIVE'].includes(p?.status)||!d||!(d.state==='WAITING_CONFIGURATION'||d.state==='CANCELED'&&d.code==='PARTICIPANT_ONBOARDING_REACTIVE_HANDOFF'&&reactive?.kind==='KYC_START')){if(principalRefs.length)await lockReactivePrincipalUnion(client,connection,[...principalRefs,{actorId:connection.metadata?.employeeIntakePolicy?.issuerActorId,membershipId:connection.metadata?.employeeIntakePolicy?.issuerMembershipId}],{lockOrganization:true});return null;}
  if(!participantAccountState(p))fail('EMPLOYEE_INTAKE_INTEGRITY');
  const intent=participantOnboardingIntent(d),policy=connection.metadata?.employeeIntakePolicy;
  if(intent.organizationId!==connection.organizationId||intent.workerId!==rows[0].id||intent.targetProjectId!==rows[0].projectId||!workspaceId(policy?.issuerActorId)||!workspaceId(policy?.issuerMembershipId))fail('EMPLOYEE_INTAKE_INTEGRITY');
- const refs=[{actorId:policy.issuerActorId,membershipId:policy.issuerMembershipId},{actorId:intent.issuerActorId,membershipId:intent.issuerMembershipId}];
+ const refs=[...principalRefs,{actorId:policy.issuerActorId,membershipId:policy.issuerMembershipId},{actorId:intent.issuerActorId,membershipId:intent.issuerMembershipId}];
  // An accepted participant has a canonical account. Discover its IDs before
  // acquiring sorted journey locks; discovery itself grants no authority.
  if(p.status==='ACTIVE'){
@@ -45,30 +68,46 @@ export async function prelockReactiveOnboarding(client,connection,state){
   if(own.length!==1||!workspaceId(own[0].actorId)||!workspaceId(own[0].membershipId))fail('EMPLOYEE_INTAKE_REVOKED');
   refs.push({...own[0],clerkUserId:p.clerkUserId});
  }
- const members=[];
- for(const ref of [...new Map(refs.map(value=>[value.actorId,value])).values()].sort((a,b)=>a.actorId.localeCompare(b.actorId))){
-  const users=(await client.query('SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE id=$1 FOR SHARE',[ref.actorId])).rows;
-  const found=(await client.query(`SELECT id AS "membershipId","userId" AS "actorId","organizationId","tenantRole"::text AS role,"clerkRole" FROM public."TenantMembership" WHERE id=$1 AND "userId"=$2 AND "organizationId"=$3 AND status='ACTIVE' FOR SHARE`,[ref.membershipId,ref.actorId,connection.organizationId])).rows;
-  if(users.length!==1||found.length!==1||!/^user_[A-Za-z0-9]+$/.test(users[0].clerkUserId||'')||ref.clerkUserId&&users[0].clerkUserId!==ref.clerkUserId)fail('EMPLOYEE_INTAKE_REVOKED');
-  members.push({...found[0],clerkUserId:users[0].clerkUserId});
- }
+ const members=await lockReactivePrincipalUnion(client,connection,refs,{lockOrganization:Boolean(principalRefs.length)});
  for(const member of members)await lockPersonWorksiteJourney(client,member);
  const issuer=members.find(member=>member.actorId===intent.issuerActorId&&member.membershipId===intent.issuerMembershipId);
  if(!issuer)fail('EMPLOYEE_INTAKE_REVOKED');
  // Locks sorted A/B before the intake resolver takes its legacy anchor lock.
- await prepareCompanyKycProjects(client,issuer,{projectId:intent.targetProjectId});
- return {intent,admissionDigest:durableDigest(state.admission)};
+ const pref={intent,admissionDigest:durableDigest(state.admission)};
+ const statusCompleted=reactive?.kind==='KYC_START'&&p.kycChatChallenge?.status==='COMPLETED';
+ const beforeChannel=statusCompleted?async()=>{
+  const own=p.status==='ACTIVE'?members.find(member=>member.clerkUserId===p.clerkUserId):null;
+  if(p.status==='ACTIVE'&&!own)fail('EMPLOYEE_INTAKE_REVOKED');
+  if(own)await assignment(client,own,intent.targetProjectId,true);
+  // This branch needs Worker/PM before the intake resolver locks C/Event.
+  const locked=(await client.query(`SELECT id,"projectId",active,metadata FROM public."Worker" WHERE id=$1 AND "projectId"=$2 FOR UPDATE`,[intent.workerId,intent.targetProjectId])).rows;
+  const lp=locked[0]?.metadata?.participant;
+  if(locked.length!==1||!locked[0].active||lp?.status!==p.status||(lp.clerkUserId||null)!==(p.clerkUserId||null)||lp.kycChatChallenge?.id!==p.kycChatChallenge.id||lp.kycChatChallenge.status!=='COMPLETED')fail('EMPLOYEE_INTAKE_REVOKED');
+  reactiveStatusPrelocks.set(pref,{client,account:{status:lp.status,clerkUserId:lp.clerkUserId||null,own}});
+ }:null;
+ // Canonical helper still locks sorted A/B, then rechecks the same channel.
+ // Only this internal completed-reader callback runs between P and C.
+ await prepareCompanyKycProjects(client,issuer,{projectId:intent.targetProjectId},{beforeChannel,expectedConnection:statusCompleted||principalRefs.length?{id:connection.id,projectId:connection.projectId,organizationId:connection.organizationId,grantDigest:companyKycGrantDigest(connection)}:null});
+ if(statusCompleted&&!reactiveStatusPrelocks.has(pref))fail('EMPLOYEE_INTAKE_REVOKED');
+ return pref;
 }
 
-async function admittedWorker(client,r,pref){
+async function admittedWorkerCurrent(client,r,pref){
  const a=r.state?.admission,rows=(await client.query(`SELECT id,"projectId",phone,active,metadata,${revision} FROM public."Worker" WHERE id=$1 AND "projectId"=$2 FOR UPDATE`,[pref.intent.workerId,pref.intent.targetProjectId])).rows;
  const worker=rows[0],part=worker?.metadata?.participant;
  const accountState=participantAccountState(part),permissions=part?.permissions;
- if(rows.length!==1||r.state.status!=='ADMITTED'||r.state.consent!==true||a?.version!==1||a.applicationId!==r.anchor.id||a.workerId!==worker.id||a.projectId!==worker.projectId||durableDigest(a)!==pref.admissionDigest||durableDigest(worker.metadata?.employeeIntakeAdmission)!==pref.admissionDigest||!worker.active||worker.phone!==r.sender||part?.version!==1||!accountState||part.invitation.email!==a.email||part.kyc?.version!==1||part.kyc.status!=='NOT_SUBMITTED'||part.kyc.channelCapture||part.kyc.submissionId||!object(permissions)||Object.keys(permissions).sort().join('|')!=='attendance|report'||typeof permissions.attendance!=='boolean'||typeof permissions.report!=='boolean'||accountState==='INVITED'&&(permissions.attendance!==false||permissions.report!==false))fail('EMPLOYEE_INTAKE_INTEGRITY');
+ if(rows.length!==1||r.state.status!=='ADMITTED'||r.state.consent!==true||a?.version!==1||a.applicationId!==r.anchor.id||a.workerId!==worker.id||a.projectId!==worker.projectId||durableDigest(a)!==pref.admissionDigest||durableDigest(worker.metadata?.employeeIntakeAdmission)!==pref.admissionDigest||!worker.active||worker.phone!==r.sender||part?.version!==1||!accountState||part.invitation.email!==a.email||part.kyc?.version!==1||!object(permissions)||Object.keys(permissions).sort().join('|')!=='attendance|report'||typeof permissions.attendance!=='boolean'||typeof permissions.report!=='boolean'||accountState==='INVITED'&&(permissions.attendance!==false||permissions.report!==false))fail('EMPLOYEE_INTAKE_INTEGRITY');
  const found=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityType"='WebhookEvent' AND "entityId"=$4 AND action='participant.operation.recorded' FOR SHARE`,[a.receiptId,r.connection.organizationId,a.actorId,r.anchor.id])).rows;
  const m=found[0]?.metadata;
  if(found.length!==1||m?.version!==1||m.kind!=='ADMIT_EMPLOYEE_INTAKE'||m.projectId!==worker.projectId||m.connectionId!==r.connection.id||m.applicationId!==r.anchor.id||m.workerId!==worker.id||m.personReceiptId!==a.personReceiptId||m.permissionsGranted!==false||m.approvedPermissionsDigest!==durableDigest(a.permissions)||Object.keys(a.permissions||{}).sort().join('|')!=='attendance|report'||typeof a.permissions.attendance!=='boolean'||typeof a.permissions.report!=='boolean')fail('EMPLOYEE_INTAKE_INTEGRITY');
  if(durableDigest(participantOnboardingIntent(part.onboardingDelivery))!==durableDigest(pref.intent))fail();
+ return worker;
+}
+
+async function admittedWorker(client,r,pref){
+ const worker=await admittedWorkerCurrent(client,r,pref),k=worker.metadata.participant.kyc;
+ // Preparation/capture keeps the original NOT_SUBMITTED guard intact.
+ if(k.status!=='NOT_SUBMITTED'||k.channelCapture||k.submissionId)fail('EMPLOYEE_INTAKE_INTEGRITY');
  return worker;
 }
 
@@ -97,6 +136,70 @@ export async function reactiveOnboardingAuthority(client,r,pref,{environment=pro
  return authority;
 }
 
+const reactiveKycStatusReplies={
+ PENDING_ACCOUNT_CLAIM:'Tu presentación quedó registrada en privado. Falta aceptar la invitación con tu propia cuenta antes de la revisión. Consultá la invitación recibida y Mi cuenta. Esto no habilita actividad por WhatsApp.',
+ PENDING_REVIEW:'Tu presentación está completa y pendiente de revisión independiente. Todavía no habilita actividad por WhatsApp. Consultá el estado en Mi cuenta.',
+ REJECTED:'La revisión de esta presentación no fue aprobada. Consultá Mi cuenta y al responsable para revisar el próximo paso. Este chat no inicia otra presentación.',
+ APPROVED:'La revisión de tu identidad fue aprobada. Este mensaje no concede permisos ni vincula WhatsApp. Consultá Mi cuenta para comprobar tus permisos y completar la vinculación propia cuando corresponda.',
+};
+const reactiveStatusFences=new WeakMap();
+const currentMemberProjection=m=>m?{actorId:m.actorId,membershipId:m.membershipId,clerkUserId:m.clerkUserId,role:m.role,clerkRole:m.clerkRole,revision:m.revision,userRevision:m.userRevision}:null;
+const currentWorkerProjection=w=>({id:w.id,projectId:w.projectId,name:w.name,phone:w.phone,active:w.active,metadata:w.metadata,revision:w.revision});
+const currentOrganizationProjection=o=>({id:o.id,name:o.name,metadata:o.metadata,subscriptionPlan:o.subscriptionPlan,subscriptionStatus:o.subscriptionStatus,trialEndsAt:o.trialEndsAt===null?null:new Date(o.trialEndsAt).toISOString()});
+export async function reactiveParticipantStatusAuthority(client,r,pref,{environment=process.env,proof=null}={}){
+ const pre=reactiveStatusPrelocks.get(pref);
+ if(!pre||pre.client!==client)fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');
+ const origin=r.state?.reactiveOnboarding;
+ if(origin?.kind!=='KYC_START')fail();
+ const worker=await admittedWorkerCurrent(client,r,pref),p=worker.metadata.participant;
+ if(p.status!==pre.account.status||(p.clerkUserId||null)!==pre.account.clerkUserId)fail('EMPLOYEE_INTAKE_REVOKED');
+ await assertReactiveStartConsent(client,worker,r.connection,origin,r.now);
+ let a;try{a=await resolveParticipantReactiveKycStatusAuthority(client,pref.intent,{environment,origin,account:pre.account,expected:proof?{authorityDigest:proof.authorityDigest}:null});}catch(error){if(error instanceof WorkspaceError)fail('EMPLOYEE_INTAKE_REVOKED');throw error;}
+ if(a.connection.id!==r.connection.id||a.connection.projectId!==r.project.id||a.worker.id!==worker.id||a.worker.phone!==r.sender||a.connection.metadata?.developmentPilot||!Object.hasOwn(reactiveKycStatusReplies,a.status))fail('EMPLOYEE_INTAKE_REVOKED');
+ const org=(await client.query(`SELECT "trialEndsAt" FROM public."Organization" WHERE id=$1 FOR SHARE`,[pref.intent.organizationId])).rows;
+ if(org.length!==1)fail('EMPLOYEE_INTAKE_REVOKED');
+ a.reactiveExpiresAt=Math.min(a.now.getTime()+ttl,a.worker.metadata.participant.status==='INVITED'?Date.parse(a.worker.metadata.participant.invitation.expiresAt):Infinity,a.entitlement.basis==='CURRENT_TRIAL'?new Date(org[0].trialEndsAt).getTime():Infinity);
+ if(!Number.isFinite(a.reactiveExpiresAt)||a.reactiveExpiresAt<=a.now.getTime())fail('EMPLOYEE_INTAKE_REVOKED');
+ assertCustomerReplyWindow(r.payload,a.now.getTime());
+ if(proof&&(!object(proof)||Object.keys(proof).sort().join('|')!=='applicationId|authorityDigest|eventId|expiresAt|kind|status|version'||proof.version!==1||proof.kind!=='KYC_NEXT_STEP'||proof.eventId!==r.event.id||proof.applicationId!==r.anchor.id||proof.status!==a.status||proof.authorityDigest!==a.authorityDigest||!Number.isFinite(Date.parse(proof.expiresAt))||Date.parse(proof.expiresAt)<=a.now.getTime()||Date.parse(proof.expiresAt)>a.reactiveExpiresAt))fail();
+ return a;
+}
+export async function assertReactiveParticipantStatusResult(client,r,pref,result,{environment=process.env}={}){
+ const a=await reactiveParticipantStatusAuthority(client,r,pref,{environment,proof:result?.reactiveKycStatus});
+ if(!result?.reactiveKycStatus||digest(result.reply)!==digest({type:'text',body:reactiveKycStatusReplies[a.status]}))fail();
+ reactiveStatusFences.set(r,{client,pref,worker:currentWorkerProjection(a.worker),organization:currentOrganizationProjection(a.organization),project:a.project,member:currentMemberProjection(a.member),own:currentMemberProjection(a.own),proofDigest:digest(result.reactiveKycStatus),replyDigest:digest(result.reply)});
+ return a;
+}
+// Only the complete resolver above can register this in-memory authority for
+// the same client/TX. Its supporting receipts/events remain SHARE locked; the
+// canonical Worker/PM/Organization locks serialize review, revoke and edits.
+export async function fenceReactiveParticipantStatusResult(client,r,pref,result){
+ const f=reactiveStatusFences.get(r);
+ if(!f||f.client!==client||f.pref!==pref||f.proofDigest!==digest(result?.reactiveKycStatus)||f.replyDigest!==digest(result?.reply))fail();
+ const rows=(await client.query(`SELECT w.id,w."projectId",w.name,w.phone,w.active,w.metadata,to_char(w."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision,
+ to_jsonb(o) AS "statusOrganization",jsonb_build_object('id',p.id,'name',p.name,'organizationId',p."organizationId",'metadata',p.metadata) AS "statusProject",
+ jsonb_build_object('actorId',u.id,'membershipId',tm.id,'clerkUserId',u."clerkUserId",'role',tm."tenantRole"::text,'clerkRole',tm."clerkRole",'revision',to_char(tm."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US'),'userRevision',to_char(u."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US')) AS "statusMember",
+ CASE WHEN own.id IS NULL THEN NULL ELSE jsonb_build_object('actorId',ou.id,'membershipId',own.id,'clerkUserId',ou."clerkUserId",'role',own."tenantRole"::text,'clerkRole',own."clerkRole",'revision',to_char(own."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US'),'userRevision',to_char(ou."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US')) END AS "statusOwn",clock_timestamp() AS "reactiveStatusNow"
+ FROM public."Worker" w JOIN public."Project" p ON p.id=w."projectId" AND p."organizationId"=$3 AND p.status='ACTIVE'
+ JOIN public."Organization" o ON o.id=p."organizationId" JOIN public."TenantMembership" tm ON tm.id=$4 AND tm."organizationId"=o.id AND tm."userId"=$5 AND tm.status='ACTIVE' JOIN public."PlatformUser" u ON u.id=tm."userId"
+ LEFT JOIN public."TenantMembership" own ON own.id=$6 AND own."organizationId"=o.id AND own."userId"=$7 AND own.status='ACTIVE' LEFT JOIN public."PlatformUser" ou ON ou.id=own."userId"
+ WHERE w.id=$1 AND w."projectId"=$2 AND w.active=true AND ($6::text IS NULL OR (own.id IS NOT NULL AND EXISTS(SELECT 1 FROM public."ProjectMembership" pm WHERE pm."projectId"=p.id AND pm."tenantMembershipId"=own.id AND pm.status='ACTIVE')))
+ FOR UPDATE OF w FOR SHARE OF p,o,tm,u`,[f.worker.id,f.worker.projectId,r.connection.organizationId,f.member.membershipId,f.member.actorId,f.own?.membershipId||null,f.own?.actorId||null])).rows;
+ const row=rows[0],now=row?.reactiveStatusNow;
+ if(rows.length!==1||!(now instanceof Date)||!Number.isFinite(now.getTime())||digest(currentWorkerProjection(row))!==digest(f.worker)||digest(currentOrganizationProjection(row.statusOrganization))!==digest(f.organization)||digest(row.statusProject)!==digest(f.project)||digest(row.statusMember)!==digest(f.member)||digest(row.statusOwn)!==digest(f.own))fail('EMPLOYEE_INTAKE_REVOKED');
+ if(Date.parse(result.reactiveKycStatus.expiresAt)<=now.getTime())fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');
+ assertCustomerReplyWindow(r.payload,now.getTime());return now;
+}
+async function planReactiveParticipantStatus(client,r,pref,{environment}){
+ if(!pref)fail('EMPLOYEE_INTAKE_REVOKED');
+ // Incomplete capture stays exclusively in the original capture planner.
+ // A completion racing this discovery waits for a fresh signed message.
+ if(!reactiveStatusPrelocks.has(pref))return null;
+ const a=await reactiveParticipantStatusAuthority(client,r,pref,{environment});
+ const proof={version:1,kind:'KYC_NEXT_STEP',eventId:r.event.id,applicationId:r.anchor.id,status:a.status,authorityDigest:a.authorityDigest,expiresAt:new Date(a.reactiveExpiresAt).toISOString()};
+ return {state:r.state,reactiveKycStatus:proof,reply:{type:'text',body:reactiveKycStatusReplies[a.status]}};
+}
+
 function offer(authority,r){
  const expiresAt=new Date(authority.reactiveExpiresAt).toISOString();
  const proof={version:1,kind:'PRESENT_IDENTITY',eventId:r.event.id,applicationId:r.anchor.id,nonce:randomBytes(20).toString('hex'),expiresAt,intent:participantOnboardingIntent(authority.worker.metadata.participant.onboardingDelivery),authorityDigest:authority.authorityDigest,admissionReceiptId:r.state.admission.receiptId};
@@ -107,11 +210,12 @@ function offer(authority,r){
 // The two buttons are reactive replies to signed customer messages. No
 // template, account acceptance, grant, activation or KYC decision is produced.
 export async function planReactiveOnboarding(client,r,pref,{environment=process.env,promptConfirmed=false}={}){
- if(!pref)return null;
  const choice=r.payload.value.interactive?.list_reply?.id||r.payload.value.interactive?.button_reply?.id;
- const previous=r.state.reactiveOnboarding;
- if(previous?.kind==='KYC_START')return null;
+ const previous=r.state?.reactiveOnboarding;
  const text=r.payload.value.type==='text'?r.payload.value.text?.body?.trim().toLocaleUpperCase('es'):null;
+ if(previous?.kind==='KYC_START'&&['HOLA','ESTADO'].includes(text))return planReactiveParticipantStatus(client,r,pref,{environment});
+ if(!pref)return null;
+ if(previous?.kind==='KYC_START')return null;
  if(!choice?.startsWith('intake-kyc:')&&!['HOLA','ESTADO','MENU','MENÚ'].includes(text))return null;
  const authority=await reactiveOnboardingAuthority(client,r,pref,{environment});
  if(!choice?.startsWith('intake-kyc:'))return offer(authority,r);

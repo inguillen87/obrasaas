@@ -4,8 +4,9 @@ import {digest} from '../src/lib/workspace-policy.mjs';
 import {encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
 import {customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
 import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
-import {decodeReactiveStart,prelockReactiveOnboarding} from '../src/lib/participant-onboarding-reactive.mjs';
+import {decodeReactiveStart,prelockReactiveOnboarding,reactiveParticipantStatusAuthority,planReactiveOnboarding,fenceReactiveParticipantStatusResult} from '../src/lib/participant-onboarding-reactive.mjs';
 import {fenceCompanyKycAuthority} from '../src/lib/company-channel-kyc.mjs';
+import {COMPANY_CHANNEL_SCHEMA_CONTRACT} from '../src/lib/company-channel-schema.mjs';
 
 function fixture(){
  const environment={META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,31).toString('base64')};
@@ -73,7 +74,7 @@ function activeDiscoveryFixture(){
  const intent={organizationId:'org-a',targetProjectId:'project-b',workerId:'worker-a',invitationId:'invite_'+'1'.repeat(32),issuerActorId:'owner',issuerMembershipId:'owner-m',consentReceiptId:'contact-receipt'};
  const participant={status:'ACTIVE',clerkUserId:'user_Person',acceptanceReceiptId:'accepted-receipt',invitation:{state:'ACCEPTED'},onboardingDelivery:{version:1,...intent,state:'WAITING_CONFIGURATION'}};
  const state={status:'ADMITTED',admission:{workerId:'worker-a',projectId:'project-b'}};
- const connection={organizationId:'org-a',metadata:{employeeIntakePolicy:{issuerActorId:'owner',issuerMembershipId:'owner-m'}}};
+ const connection={id:'channel-a',projectId:'project-a',organizationId:'org-a',whatsappBusinessId:'130000001',phoneNumberId:'120000001',enabled:true,connectionStatus:'CONNECTED',encryptedAccessToken:'synthetic-opaque-cipher',displayPhoneNumber:null,metadata:{employeeIntakePolicy:{issuerActorId:'owner',issuerMembershipId:'owner-m'}}};
  const calls=[];let ownRows=[{actorId:'person',membershipId:'person-m'}],ownClerk='user_Person';
  const client={async query(sql,args){
   calls.push({sql,args});
@@ -126,4 +127,90 @@ for(const deadline of ['2026-10-09T05:00:00Z','2026-10-09T04:59:59Z','invalid'])
  const r={companyKyc:{version:1},event,connection:{id:'channel-a',projectId:'project-a',enabled:true,connectionStatus:'CONNECTED',metadata:{customerSubscribed:true,customerActivation:{version:1,state:'ACTIVE',actorId:'owner'},customerVerification:{registered:true,scopes:['whatsapp_business_management','whatsapp_business_messaging'],expiresAt:null}}},challenge:{expiresAt:'2026-10-10T05:00:00Z'},worker:{metadata:{participant:{status:'INVITED',invitation:{expiresAt:'2026-10-10T05:00:00Z'}}}},payload:{type:'message',value:{id:'wamid.SyntheticReactiveMessage',from:'15550001001',timestamp:String(now.getTime()/1000)}},reactiveStartExpiresAt:deadline};
  const context={eventId:event.id,projectId:event.projectId,channelId:'channel-a',leaseToken:event.leaseToken,payloadDigest:event.payload.payloadDigest};let queries=0;
  await assert.rejects(fenceCompanyKycAuthority({query:async(sql)=>{queries++;assert.ok(sql.startsWith('SELECT '));return {rows:[{...event,now}]};}},r,context),{code:'META_KYC_CHALLENGE_EXPIRED'});assert.equal(queries,1);
+});
+
+function companyPresentDiscoveryFixture(){
+ const f=activeDiscoveryFixture(),original=f.client.query,owner={connectionId:'channel-a',anchorProjectId:'project-a',mode:'COMPANY',revision:2,assignmentRevision:3},channel={...f.connection};
+ const rows=value=>({rows:value}),fingerprint=digest({columns:[],keys:[],indexes:[],triggers:[]});
+ f.client.query=async(sql,args)=>{
+  if(sql.startsWith('SELECT id FROM public."Organization"')){f.calls.push({sql,args});return {rows:[{id:'org-a'}]};}
+  let result;
+  if(sql.includes('to_regclass'))result=rows([{present:true}]);
+  else if(sql.includes('information_schema.columns'))result=sql.includes("column_name='catalogFingerprint'")?rows([{count:1}]):rows([]);
+  else if(sql.includes('FROM public."WhatsAppCompanySchema"'))result=rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:fingerprint}]);
+  else if(sql.startsWith('SELECT conname,convalidated'))result=rows(args[0].map(conname=>({conname,convalidated:true})));
+  else if(sql.includes('pg_get_indexdef'))result=rows([]);
+  else if(sql.startsWith('SELECT c.relname,i.indisvalid'))result=rows(args[0].map(relname=>({relname,indisvalid:true,indisready:true,indisunique:true})));
+  else if(sql.startsWith('SELECT tgname'))result=rows(args[0].map(tgname=>({tgname,tgenabled:'O'})));
+  else if(sql.includes('FROM pg_constraint')||sql.includes('FROM pg_index')||sql.includes('FROM pg_trigger'))result=rows([]);
+  else if(sql.includes('FROM public."WhatsAppCompanyChannel"'))result=rows([owner]);
+  else if(sql.includes('FROM public."WhatsAppConnection"'))result=rows([channel]);
+  else if(sql.startsWith('SELECT id FROM public."Project"'))result=rows([{id:args[0]}]);
+  else if(sql.startsWith('SELECT id,"clerkUserId",to_char'))result=rows([{id:args[0],clerkUserId:args[0]==='person'?'user_Person':'user_Owner',revision:'2026-10-09T00:00:00.000000'}]);
+  else if(sql.startsWith('SELECT id AS "membershipId"')&&sql.includes('WHERE "userId"=$1'))result=rows([{actorId:args[0],membershipId:args[2],organizationId:args[1],role:'ADMIN',clerkRole:'org:admin',revision:'2026-10-09T00:00:00.000000'}]);
+  else return original(sql,args);
+  f.calls.push({sql,args});return result;
+ };
+ return f;
+}
+
+test('a caller-created status context cannot bypass the signed prelock capability',async()=>{
+ const calls=[],client={query:async sql=>{calls.push(sql);throw Error('unexpected status SQL');}},r={state:{reactiveOnboarding:{kind:'KYC_START'}}},pref={intent:{workerId:'worker-a'},admissionDigest:'a'.repeat(64)};
+ await assert.rejects(reactiveParticipantStatusAuthority(client,r,pref),{code:'EMPLOYEE_INTAKE_CONTEXT_REQUIRED'});assert.deepEqual(calls,[]);
+});
+test('missing canonical discovery cannot turn an admitted status query into a new preparation',async()=>{
+ let queries=0;const client={query:async()=>{queries++;throw Error('unexpected SQL');}},state={step:'ADMITTED',status:'ADMITTED',reactiveOnboarding:{kind:'KYC_START'}},r={state,payload:{value:{type:'text',text:{body:'ESTADO'}}}};
+ await assert.rejects(planReactiveOnboarding(client,r,null),{code:'EMPLOYEE_INTAKE_REVOKED'});assert.equal(queries,0);assert.equal(state.reactiveOnboarding.kind,'KYC_START');
+});
+test('completed status discovery locks the own assignment and Worker before any channel or event',async()=>{
+ const f=companyPresentDiscoveryFixture();f.state.reactiveOnboarding={kind:'KYC_START'};f.participant.kycChatChallenge={id:'kyc_chat_'+'2'.repeat(32),status:'COMPLETED'};
+ const original=f.client.query;f.client.query=async(sql,args)=>{
+  if(sql.startsWith('SELECT id FROM public."ProjectMembership"')){f.calls.push({sql,args});return {rows:[{id:'assignment-a'}]};}
+  if(sql.startsWith('SELECT id,"projectId",active,metadata')){f.calls.push({sql,args});return {rows:[{id:'worker-a',projectId:'project-b',active:true,metadata:{participant:f.participant}}]};}
+  return original(sql,args);
+ };
+ const pref=await prelockReactiveOnboarding(f.client,f.connection,f.state);
+ assert.deepEqual(pref,{intent:f.intent,admissionDigest:metaCustomerContentDigest(f.state.admission)});
+ const own=f.calls.findIndex(call=>call.sql.startsWith('SELECT id,"clerkUserId"')&&call.args[0]==='person'),assignment=f.calls.findIndex(call=>call.sql.startsWith('SELECT id FROM public."ProjectMembership"')),worker=f.calls.findIndex(call=>call.sql.startsWith('SELECT id,"projectId",active,metadata'));
+ const projects=f.calls.map((call,index)=>({call,index})).filter(({call})=>call.sql.startsWith('SELECT id FROM public."Project"')&&call.sql.includes('FOR UPDATE')),channel=f.calls.findIndex(call=>call.sql.includes('FROM public."WhatsAppConnection"')&&call.sql.includes('FOR SHARE'));
+ assert.deepEqual(projects.map(({call})=>call.args[0]),['project-a','project-b']);assert.ok(own>=0&&projects.every(({index})=>index>own&&index<assignment)&&assignment>own&&worker>assignment&&channel>worker);assert.match(f.calls[worker].sql,/FOR UPDATE/);assert.ok(f.calls.every(call=>call.sql.startsWith('SELECT ')));
+});
+test('a changed current account during completed prelock is denied without capture or a later principal lock',async()=>{
+ const f=companyPresentDiscoveryFixture();f.state.reactiveOnboarding={kind:'KYC_START'};f.participant.kycChatChallenge={id:'kyc_chat_'+'2'.repeat(32),status:'COMPLETED'};
+ const original=f.client.query;f.client.query=async(sql,args)=>{
+  if(sql.startsWith('SELECT id FROM public."ProjectMembership"')){f.calls.push({sql,args});return {rows:[{id:'assignment-a'}]};}
+  if(sql.startsWith('SELECT id,"projectId",active,metadata')){f.calls.push({sql,args});return {rows:[{id:'worker-a',projectId:'project-b',active:true,metadata:{participant:{...f.participant,clerkUserId:'user_Other'}}}]};}
+  return original(sql,args);
+ };
+ await assert.rejects(prelockReactiveOnboarding(f.client,f.connection,f.state),{code:'EMPLOYEE_INTAKE_REVOKED'});
+ assert.ok(f.calls.every(call=>call.sql.startsWith('SELECT ')));const worker=f.calls.findIndex(call=>call.sql.startsWith('SELECT id,"projectId",active,metadata'));assert.ok(worker>=0);assert.equal(f.calls.length,worker+1);
+});
+test('an incomplete capture stays outside the status reader and retains its original handoff',async()=>{
+ const f=activeDiscoveryFixture();f.state.reactiveOnboarding={kind:'KYC_START'};f.participant.onboardingDelivery={...f.participant.onboardingDelivery,state:'CANCELED',code:'PARTICIPANT_ONBOARDING_REACTIVE_HANDOFF'};f.participant.kycChatChallenge={id:'kyc_chat_'+'2'.repeat(32),status:'CLAIMED'};
+ const pref=await prelockReactiveOnboarding(f.client,f.connection,f.state),before=f.calls.length;
+ const plan=await planReactiveOnboarding(f.client,{state:f.state,payload:{value:{type:'text',text:{body:'HOLA'}}}},pref);
+ assert.equal(plan,null);assert.equal(f.calls.length,before);assert.equal(f.state.reactiveOnboarding.kind,'KYC_START');assert.equal(f.participant.kycChatChallenge.status,'CLAIMED');
+});
+test('runtime-intake-own principal union rejects conflicting membership IDs before any lock',async()=>{
+ let queries=0;const client={query:async()=>{queries++;throw Error('unexpected SQL');}},connection={organizationId:'org-a',metadata:{employeeIntakePolicy:{issuerActorId:'owner',issuerMembershipId:'owner-m'}}};
+ await assert.rejects(prelockReactiveOnboarding(client,connection,null,{principalRefs:[{actorId:'owner',membershipId:'different-m',clerkUserId:'user_Owner'}]}),{code:'EMPLOYEE_INTAKE_REVOKED'});assert.equal(queries,0);
+});
+test('a distinct runtime principal joins the same sorted union before completed status P-PM-W-C',async()=>{
+ const f=companyPresentDiscoveryFixture();f.state.reactiveOnboarding={kind:'KYC_START'};f.participant.kycChatChallenge={id:'kyc_chat_'+'2'.repeat(32),status:'COMPLETED'};const original=f.client.query;
+ f.client.query=async(sql,args)=>{
+  if(sql==='SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE id=$1 FOR SHARE'&&args[0]==='aaa-runtime'){f.calls.push({sql,args});return {rows:[{id:'aaa-runtime',clerkUserId:'user_Runtime'}]};}
+  if(sql.startsWith('SELECT id AS "membershipId"')&&args[1]==='aaa-runtime'){f.calls.push({sql,args});return {rows:[{actorId:'aaa-runtime',membershipId:'runtime-m',organizationId:'org-a',role:'ADMIN',clerkRole:'org:admin'}]};}
+  if(sql.startsWith('SELECT id FROM public."ProjectMembership"')){f.calls.push({sql,args});return {rows:[{id:'assignment-a'}]};}
+  if(sql.startsWith('SELECT id,"projectId",active,metadata')){f.calls.push({sql,args});return {rows:[{id:'worker-a',projectId:'project-b',active:true,metadata:{participant:f.participant}}]};}return original(sql,args);
+ };
+ await prelockReactiveOnboarding(f.client,f.connection,f.state,{principalRefs:[{actorId:'aaa-runtime',membershipId:'runtime-m',clerkUserId:'user_Runtime'}]});
+ const principals=f.calls.filter(q=>q.sql==='SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE id=$1 FOR SHARE');assert.deepEqual(principals.map(q=>q.args[0]),['aaa-runtime','owner','person']);const p=f.calls.findIndex(q=>q.sql.startsWith('SELECT id FROM public."Project"')&&q.sql.includes('FOR UPDATE'));assert.ok(principals.every(q=>f.calls.indexOf(q)<p));
+});
+test('caller-created status reply cannot use the compact fence without full current authority',async()=>{
+ let queries=0;const client={query:async()=>{queries++;throw Error('unexpected SQL');}};await assert.rejects(fenceReactiveParticipantStatusResult(client,{}, {},{reactiveKycStatus:{status:'APPROVED'}}),{code:'EMPLOYEE_INTAKE_CONTEXT_REQUIRED'});assert.equal(queries,0);
+});
+test('target reassigned to another connection or anchor is rejected before any Project lock',async()=>{
+ const f=companyPresentDiscoveryFixture();f.state.reactiveOnboarding={kind:'KYC_START'};f.participant.kycChatChallenge={id:'kyc_chat_'+'2'.repeat(32),status:'COMPLETED'};const original=f.client.query;
+ f.client.query=async(sql,args)=>{if(sql.includes('FROM public."WhatsAppConnection"')){f.calls.push({sql,args});return {rows:[{...f.connection,id:'channel-other',projectId:'project-other'}]};}return original(sql,args);};
+ await assert.rejects(prelockReactiveOnboarding(f.client,f.connection,f.state),{code:'META_KYC_COMPANY_AUTHORITY_CHANGED'});assert.ok(!f.calls.some(q=>q.sql.includes('FROM public."Project"')&&q.sql.includes('FOR UPDATE')));assert.ok(!f.calls.some(q=>q.sql.includes('FROM public."WhatsAppConnection"')&&q.sql.includes('FOR SHARE')));
 });

@@ -55,9 +55,14 @@ async function trail(client,organizationId,workerId,membershipIds){
  if(rows.length>1000)fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
  return rows.map(r=>r.id);
 }
-export async function prepareCompanyKycProjects(client,member,input){
+export async function prepareCompanyKycProjects(client,member,input,{beforeChannel=null,expectedConnection=null}={}){
+ // Internal composition hook only; request data cannot supply a function.
+ // Default capture/preparation retains its exact prior lock/read behavior.
+ if(beforeChannel!==null&&typeof beforeChannel!=='function')fail('META_KYC_COMPANY_ADAPTER_UNAVAILABLE');
+ if(expectedConnection!==null&&(!expectedConnection||Object.keys(expectedConnection).sort().join('|')!=='grantDigest|id|organizationId|projectId'||![expectedConnection.id,expectedConnection.organizationId,expectedConnection.projectId].every(workspaceId)||!hash(expectedConnection.grantDigest)))fail('META_KYC_COMPANY_ADAPTER_UNAVAILABLE');
  preparedChannels.set(client,null);
  const discovered=await companyConnectionForProject(client,member.organizationId,input.projectId);
+ if(expectedConnection&&(!discovered||discovered.id!==expectedConnection.id||discovered.projectId!==expectedConnection.projectId||discovered.organizationId!==expectedConnection.organizationId||companyKycGrantDigest(discovered)!==expectedConnection.grantDigest))fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
  if(!discovered)return;
  if(discovered.company.mode!=='COMPANY'||discovered.metadata?.developmentPilot)fail('META_KYC_COMPANY_ADAPTER_UNAVAILABLE');
  const issuer=await principal(client,{actorId:member.actorId,membershipId:member.membershipId,organizationId:member.organizationId});
@@ -67,6 +72,7 @@ export async function prepareCompanyKycProjects(client,member,input){
   const rows=(await client.query('SELECT id FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status=\'ACTIVE\' FOR UPDATE',[id,member.organizationId])).rows;
   if(rows.length!==1)fail('META_KYC_CHALLENGE_REVOKED');
  }
+ if(beforeChannel)await beforeChannel();
  const channel=await companyConnectionForProject(client,member.organizationId,input.projectId,true);
  if(!channel||channel.company.mode!=='COMPANY'||companyKycGrantDigest(channel)!==companyKycGrantDigest(discovered))fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
  preparedChannels.set(client,{channel,issuer});
