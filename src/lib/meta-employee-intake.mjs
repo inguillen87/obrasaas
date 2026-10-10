@@ -266,6 +266,54 @@ export function createEmployeeIntakeBridge({connect,environment=process.env,reso
  });}};
 }
 
+// ADD_PERSON receipts prove roster provenance, not a person's identity or the
+// original contact fields. The explicit choice binds the current reviewed row.
+function existingIntakeWorkerCandidate(member,projectId,state,rows,receipts,previous,selection=null){
+ const unavailable={conflict:rows.length>0,candidate:null,source:null};
+ if(rows.length!==1)return unavailable;
+ const row=rows[0],m=row.metadata,r=m?.siteRegister;
+ if(!workspaceId(row.id)||row.projectId!==projectId||row.active!==true||typeof row.name!=='string'||!row.name.trim()||typeof row.phone!=='string'||!/^\+[1-9]\d{7,14}$/.test(row.phone)||row.phone.slice(1)!==state.sender.slice(1)||typeof row.revision!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(row.revision)||!m||typeof m!=='object'||Array.isArray(m)||Object.hasOwn(m,'participant')||Object.hasOwn(m,'employeeIntakeAdmission')||Object.hasOwn(m,'kyc')||r?.version!==1||Object.keys(r).sort().join('|')!=='channelVerified|identityStatus|job|source|version'||r.identityStatus!=='UNVERIFIED'||r.channelVerified!==false||r.source!=='responsible-entry'||!Object.hasOwn(SITE_ROLES,r.job)||row.role!==SITE_ROLES[r.job])return unavailable;
+ if(receipts.length!==1)return unavailable;
+ const receipt=receipts[0],a=receipt.metadata,d=a?.details;
+ if(typeof receipt.id!=='string'||!/^site_[a-f0-9]{64}$/.test(receipt.id)||receipt.organizationId!==member.organizationId||!workspaceId(receipt.actorId)||receipt.action!=='site.register.changed'||receipt.entityType!=='PERSON'||receipt.entityId!==row.id||a?.version!==1||Object.keys(a).sort().join('|')!=='command|details|entityId|kind|projectId|requestDigest|version'||a.projectId!==projectId||a.command!=='ADD_PERSON'||a.kind!=='PERSON'||a.entityId!==row.id||typeof a.requestDigest!=='string'||!/^[a-f0-9]{64}$/.test(a.requestDigest)||!d||Object.keys(d).sort().join('|')!=='channelVerified|job|loginAccessGranted'||d.job!==r.job||d.channelVerified!==false||d.loginAccessGranted!==false)return unavailable;
+ // A stripped metadata object cannot erase a prior canonical participation.
+ // Standalone contact consent is preserved and supplies no account authority.
+ if(previous.length)return unavailable;
+ const snapshotDigest=durableDigest({id:row.id,projectId:row.projectId,name:row.name,phone:row.phone,role:row.role,active:row.active,metadata:m,revision:row.revision});
+ const choice={workerId:row.id,revision:row.revision,registrationReceiptId:receipt.id,snapshotDigest};
+ if(selection&&(Object.keys(choice).some(key=>selection[key]!==choice[key])))return unavailable;
+ return {conflict:true,candidate:{...choice,name:row.name,phone:row.phone,job:r.job,jobLabel:SITE_ROLES[r.job]},source:{version:1,kind:'EXISTING',...choice}};
+}
+async function existingIntakeWorker(client,member,projectId,state,{selection=null,lock=false}={}){
+ const rows=(await client.query(`SELECT id,"projectId",name,phone,role,active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Worker" WHERE "projectId"=$1 AND regexp_replace(phone,'[^0-9]','','g')=$2 ORDER BY id LIMIT 2 ${lock?'FOR UPDATE':''}`,[projectId,state.sender.slice(1)])).rows;
+ if(rows.length!==1)return {conflict:rows.length>0,candidate:null,source:null};
+ const receipts=(await client.query(`SELECT id,"organizationId","actorId",action,"entityType","entityId",metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityType"='PERSON' AND "entityId"=$2 AND action='site.register.changed' AND metadata->>'command'='ADD_PERSON' ORDER BY id LIMIT 2 ${lock?'FOR SHARE':''}`,[member.organizationId,rows[0].id])).rows;
+ const previous=(await client.query(`SELECT id FROM public."AuditLog" WHERE "organizationId"=$1 AND (("entityType"='Worker' AND "entityId"=$2 AND (action IN ('participant.invitation.attempted','worker.channel.identity.recorded','participant.onboarding.reactive_handoff') OR action LIKE 'participant.kyc_chat.%' OR (action='participant.operation.recorded' AND COALESCE(metadata->>'kind','')<>'REVOKE_ONBOARDING_CONTACT'))) OR (action='participant.operation.recorded' AND metadata->>'kind'='ADMIT_EMPLOYEE_INTAKE' AND metadata->>'workerId'=$2)) LIMIT 1`,[member.organizationId,rows[0].id])).rows;
+ return existingIntakeWorkerCandidate(member,projectId,state,rows,receipts,previous,selection);
+}
+
+// The inbox reads at most 100 applications. Three page-wide queries return at
+// most 200 matching rows, 400 creation receipts and 200 history markers. Reads
+// only offer a choice; admission rechecks the exact snapshot under row locks.
+async function existingIntakeWorkerPage(client,member,projectId,states){
+ const senders=[...new Set(states.filter(s=>s.status==='WAITING_RESPONSIBLE').map(s=>s.sender.slice(1)))];
+ if(!senders.length)return new Map();
+ const rows=(await client.query(`SELECT id,"projectId",name,phone,role,active,metadata,revision FROM (SELECT id,"projectId",name,phone,role,active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision,row_number() OVER (PARTITION BY regexp_replace(phone,'[^0-9]','','g') ORDER BY id) AS position FROM public."Worker" WHERE "projectId"=$1 AND regexp_replace(phone,'[^0-9]','','g')=ANY($2::text[])) current_roster WHERE position<=2 ORDER BY id`,[projectId,senders])).rows;
+ const ids=rows.map(row=>row.id);
+ let receipts=[],previous=[];
+ if(ids.length){
+  receipts=(await client.query(`SELECT id,"organizationId","actorId",action,"entityType","entityId",metadata FROM (SELECT id,"organizationId","actorId",action,"entityType","entityId",metadata,row_number() OVER (PARTITION BY "entityId" ORDER BY id) AS position FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityType"='PERSON' AND "entityId"=ANY($2::text[]) AND action='site.register.changed' AND metadata->>'command'='ADD_PERSON') roster_receipts WHERE position<=2 ORDER BY id`,[member.organizationId,ids])).rows;
+  previous=(await client.query(`SELECT "workerId" FROM (SELECT "entityId" AS "workerId" FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityType"='Worker' AND "entityId"=ANY($2::text[]) AND (action IN ('participant.invitation.attempted','worker.channel.identity.recorded','participant.onboarding.reactive_handoff') OR action LIKE 'participant.kyc_chat.%' OR (action='participant.operation.recorded' AND COALESCE(metadata->>'kind','')<>'REVOKE_ONBOARDING_CONTACT')) UNION SELECT metadata->>'workerId' AS "workerId" FROM public."AuditLog" WHERE "organizationId"=$1 AND action='participant.operation.recorded' AND metadata->>'kind'='ADMIT_EMPLOYEE_INTAKE' AND metadata->>'workerId'=ANY($2::text[])) prior_participation`,[member.organizationId,ids])).rows;
+ }
+ const candidates=new Map();
+ for(const state of states)if(state.status==='WAITING_RESPONSIBLE'){
+  const matching=rows.filter(row=>typeof row.phone==='string'&&row.phone.replace(/[^0-9]/g,'')===state.sender.slice(1));
+  const workerId=matching.length===1?matching[0].id:null;
+  candidates.set(state.applicationId,existingIntakeWorkerCandidate(member,projectId,state,matching,receipts.filter(r=>r.entityId===workerId),previous.filter(r=>r.workerId===workerId)));
+ }
+ return candidates;
+}
+
 export async function readEmployeeIntake(client,member,projectId,environment=process.env,after=null,focus=null){
  if(focus!==null&&(!focus||typeof focus!=='object'||Array.isArray(focus)||Object.keys(focus).sort().join('|')!=='intakeId|workerId'||!workspaceId(focus.workerId)||!eventId(focus.intakeId)||after!==null))fail('PARTICIPANT_INPUT_INVALID',400);
  if(member.role!=='ADMIN'){if(focus)fail('PARTICIPANT_INVITE_REQUIRED',403);return null;}
@@ -278,7 +326,10 @@ export async function readEmployeeIntake(client,member,projectId,environment=pro
  // organization/project assignment supplies the channel and its credential AAD.
  const rows=(await client.query(focus?`SELECT * FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-v1' AND payload->'employeeIntake'->>'connectionId'=$2 AND id=$3 AND payload->'employeeIntake'->>'status'='ADMITTED' LIMIT 2`:`SELECT * FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-v1' AND payload->'employeeIntake'->>'connectionId'=$2 AND payload->'employeeIntake'->>'status' IN ('WAITING_RESPONSIBLE','ADMITTED') AND ($3::text IS NULL OR id>$3) ORDER BY id LIMIT 101`,[connection.projectId,connection.id,focus?focus.intakeId:after])).rows;
  if(focus&&(rows.length!==1||rows[0].id!==focus.intakeId))fail('PARTICIPANT_INTAKE_UNAVAILABLE',404);
- const records=rows.slice(0,100).map(row=>{const s=readState(row,connection,environment);if(s.consent!==true||!s.name||!Object.hasOwn(SITE_ROLES,s.job)||typeof s.email!=='string'||!Number.isFinite(Date.parse(s.submittedAt)))fail('EMPLOYEE_INTAKE_INTEGRITY');if(focus&&(s.status!=='ADMITTED'||s.admission?.version!==1||s.admission.applicationId!==focus.intakeId||s.admission.workerId!==focus.workerId||s.admission.projectId!==projectId))fail('PARTICIPANT_INTAKE_UNAVAILABLE',404);return {id:row.id,revision:s.revision,status:s.status,name:s.name,job:s.job,jobLabel:SITE_ROLES[s.job],email:s.email,phone:s.sender,submittedAt:s.submittedAt,workerId:s.admission?.workerId||null,destinationProjectId:s.admission?.projectId||null,permissions:s.admission?.permissions||null,receiptId:s.admission?.receiptId||null};});
+ const page=rows.slice(0,100).map(row=>({row,state:readState(row,connection,environment)}));
+ for(const {state:s} of page){if(s.consent!==true||!s.name||!Object.hasOwn(SITE_ROLES,s.job)||typeof s.email!=='string'||!Number.isFinite(Date.parse(s.submittedAt)))fail('EMPLOYEE_INTAKE_INTEGRITY');if(focus&&(s.status!=='ADMITTED'||s.admission?.version!==1||s.admission.applicationId!==focus.intakeId||s.admission.workerId!==focus.workerId||s.admission.projectId!==projectId))fail('PARTICIPANT_INTAKE_UNAVAILABLE',404);}
+ const candidates=await existingIntakeWorkerPage(client,member,projectId,page.map(item=>item.state));
+ const records=page.map(({row,state:s})=>{const existing=candidates.get(row.id);return {id:row.id,revision:s.revision,status:s.status,name:s.name,job:s.job,jobLabel:SITE_ROLES[s.job],email:s.email,phone:s.sender,submittedAt:s.submittedAt,workerId:s.admission?.workerId||null,destinationProjectId:s.admission?.projectId||null,permissions:s.admission?.permissions||null,receiptId:s.admission?.receiptId||null,...(existing?{existingWorker:existing.candidate,existingWorkerConflict:existing.conflict}:{})};});
  return {available:authorityReady&&customerChannelActive(connection,now.getTime(),{environment}),connectionId:connection.id,revision:policy?.revision||0,enabled,canConfigure:member.role==='ADMIN',roles:SITE_ROLES,notice:{version:EMPLOYEE_INTAKE_NOTICE_VERSION,text:EMPLOYEE_INTAKE_NOTICE},records,nextCursor:rows.length>100?rows[99].id:null};
 }
 export function employeeIntakeOutcome(found,scope,operationId){
@@ -293,7 +344,7 @@ export async function saveEmployeeIntake(client,member,scope,project,session,inp
  const connection=await companyConnectionForProject(client,member.organizationId,project.id,true),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
  if(!connection||connection.id!==input.payload.connectionId||connection.company.mode!=='COMPANY'||connection.metadata?.developmentPilot||!customerChannelActive(connection,now.getTime(),{environment}))fail('EMPLOYEE_INTAKE_REVOKED');
  await lockOwnCompanyIssuer(client,connection,{environment,now:now.getTime()});
- const p=input.payload;let workerId=null,personReceiptId=null,intakePolicyDigest=null,approvedPermissionsDigest=null;
+ const p=input.payload;let workerId=null,personReceiptId=null,intakePolicyDigest=null,approvedPermissionsDigest=null,rosterSource=null;
  const rejectStale=async()=>{const details={version:1,kind:input.action,projectId:project.id,operationId:input.operationId,requestDigest:fingerprint,applicationId:p.applicationId||null,connectionId:connection.id,state:'REJECTED',code:'EMPLOYEE_INTAKE_REVISION_CHANGED',permissionsGranted:false};await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.operation.recorded',$4,$5,$6::jsonb)`,[key,member.organizationId,member.actorId,input.action==='CONFIGURE_EMPLOYEE_INTAKE'?'WhatsAppConnection':'WebhookEvent',p.applicationId||connection.id,JSON.stringify(details)]);return employeeIntakeOutcome({id:key,metadata:details},scope,input.operationId);};
  if(input.action==='CONFIGURE_EMPLOYEE_INTAKE'){
   const current=connection.metadata?.employeeIntakePolicy;if((current?.revision||0)!==p.expectedRevision)return rejectStale();
@@ -307,20 +358,21 @@ export async function saveEmployeeIntake(client,member,scope,project,session,inp
   if(state.revision!==p.expectedRevision||state.status!=='WAITING_RESPONSIBLE'||state.consent!==true)return rejectStale();
   if(input.action==='ADMIT_EMPLOYEE_INTAKE'&&state.policyDigest!==durableDigest(policy))return rejectStale();
   if(input.action==='ADMIT_EMPLOYEE_INTAKE'){
-   const register=createSiteRegister({workspace:{integrationProject:async(_session,_context,_writable,run)=>run(client,member,scope,project)}});
-   const person=await register.save(session,{operationId:input.operationId,projectId:project.id,scope,action:'ADD_PERSON',payload:{name:state.name,phone:state.sender,job:p.job}});workerId=person.person.id;personReceiptId=person.receiptId;
-   const admission={version:1,applicationId:anchor.id,projectId:project.id,workerId,actorId:member.actorId,receiptId:key,personReceiptId,permissions:p.permissions,email:state.email,approvedAt:now.toISOString()};
+   if(p.existingWorker){const existing=await existingIntakeWorker(client,member,project.id,state,{selection:p.existingWorker,lock:true});if(!existing.candidate||existing.candidate.job!==p.job)return rejectStale();workerId=existing.candidate.workerId;personReceiptId=existing.candidate.registrationReceiptId;rosterSource=existing.source;}
+   else{const register=createSiteRegister({workspace:{integrationProject:async(_session,_context,_writable,run)=>run(client,member,scope,project)}});const person=await register.save(session,{operationId:input.operationId,projectId:project.id,scope,action:'ADD_PERSON',payload:{name:state.name,phone:state.sender,job:p.job}});workerId=person.person.id;personReceiptId=person.receiptId;}
+   const admission={version:1,applicationId:anchor.id,projectId:project.id,workerId,actorId:member.actorId,receiptId:key,personReceiptId,permissions:p.permissions,email:state.email,approvedAt:now.toISOString(),...(rosterSource?{rosterSource}:{})};
    approvedPermissionsDigest=durableDigest(p.permissions);
    await client.query(`UPDATE public."Worker" SET metadata=jsonb_set(metadata,'{employeeIntakeAdmission}',$3::jsonb),"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[workerId,project.id,JSON.stringify(admission)]);state.admission=admission;state.step='ADMITTED';state.status='ADMITTED';
   }else{state.step='REJECTED';state.status='REJECTED';state.decision={actorId:member.actorId,receiptId:key,reason:p.reason,recordedAt:now.toISOString()};}
   state.revision++;await writeState(client,anchor,connection,state,environment);
  }
- const details={version:1,kind:input.action,projectId:project.id,operationId:input.operationId,requestDigest:fingerprint,applicationId:p.applicationId||null,connectionId:connection.id,workerId,personReceiptId,intakePolicyDigest,approvedPermissionsDigest,permissionsGranted:false};
+ const details={version:1,kind:input.action,projectId:project.id,operationId:input.operationId,requestDigest:fingerprint,applicationId:p.applicationId||null,connectionId:connection.id,workerId,personReceiptId,intakePolicyDigest,approvedPermissionsDigest,permissionsGranted:false,...(rosterSource?{rosterSource}:{})};
  await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.operation.recorded',$4,$5,$6::jsonb)`,[key,member.organizationId,member.actorId,input.action==='CONFIGURE_EMPLOYEE_INTAKE'?'WhatsAppConnection':'WebhookEvent',p.applicationId||connection.id,JSON.stringify(details)]);return employeeIntakeOutcome({id:key,metadata:details},scope,input.operationId);
 }
 export async function employeeIntakeAcceptedPermissions(client,row,{organizationId,projectId}={}){
  const a=row.metadata?.employeeIntakeAdmission;if(!a)return {attendance:true,report:true};
  if(!workspaceId(organizationId)||!workspaceId(projectId)||a.version!==1||a.projectId!==projectId||a.workerId!==row.id||typeof a.permissions?.attendance!=='boolean'||typeof a.permissions?.report!=='boolean'||Object.keys(a.permissions).sort().join('|')!=='attendance|report')fail('EMPLOYEE_INTAKE_INTEGRITY');
+ if(Object.hasOwn(a,'rosterSource')){const source=a.rosterSource;if(!source||typeof source!=='object'||Array.isArray(source)||Object.keys(source).sort().join('|')!=='kind|registrationReceiptId|revision|snapshotDigest|version|workerId'||source.version!==1||source.kind!=='EXISTING'||source.workerId!==row.id||source.registrationReceiptId!==a.personReceiptId||typeof source.registrationReceiptId!=='string'||!/^site_[a-f0-9]{64}$/.test(source.registrationReceiptId)||typeof source.revision!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(source.revision)||typeof source.snapshotDigest!=='string'||!/^[a-f0-9]{64}$/.test(source.snapshotDigest))fail('EMPLOYEE_INTAKE_INTEGRITY');}
  const found=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityType"='WebhookEvent' AND "entityId"=$4 AND action='participant.operation.recorded'`,[a.receiptId,organizationId,a.actorId,a.applicationId])).rows[0];
- if(found?.metadata?.kind!=='ADMIT_EMPLOYEE_INTAKE'||found.metadata.workerId!==row.id||found.metadata.projectId!==projectId||found.metadata.personReceiptId!==a.personReceiptId||found.metadata.approvedPermissionsDigest!==durableDigest(a.permissions))fail('EMPLOYEE_INTAKE_INTEGRITY');return {...a.permissions};
+ if(found?.metadata?.kind!=='ADMIT_EMPLOYEE_INTAKE'||found.metadata.workerId!==row.id||found.metadata.projectId!==projectId||found.metadata.personReceiptId!==a.personReceiptId||found.metadata.approvedPermissionsDigest!==durableDigest(a.permissions)||Object.hasOwn(a,'rosterSource')!==Object.hasOwn(found.metadata,'rosterSource')||Object.hasOwn(a,'rosterSource')&&durableDigest(a.rosterSource)!==durableDigest(found.metadata.rosterSource))fail('EMPLOYEE_INTAKE_INTEGRITY');return {...a.permissions};
 }

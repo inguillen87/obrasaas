@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='d8ecbbcf2593042139406c1f41f19a67cd71535e9c371748af0930c1c42d709e';
+export const EXPECTED_CONTRACT_SHA256='ee8859f4615cc19123795b8eaf729d1bd47e7a2458cbc0b4b9542a17b58ee1a2';
 const POSTGRES_SERVICE_IMAGE='public.ecr.aws/docker/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -18,9 +18,12 @@ const PREPARATION_BASELINE_OWNERSHIP_SHA256='d98be6976ef7772633f5e8697fef3786855
 const PREPARATION_BASELINE_PRODUCERS_SHA256='a314f2640330bd4bc0615e0b13a7393dc8f8e8d94d4cdb74a728a1785d31a9c8';
 const PREPARATION_ARTIFACTS=['.vercel/private/project-preparation-postgres-validation.json','.vercel/private/project-preparation-ui-*.json','.vercel/private/project-preparation-ui-*.png'];
 const PREPARATION_MODES=['save','recover','reload','cancel','conflict','denied'];
-const INTAKE_UI_MODES=['success','unknown','wrong-receipt','html403','scope-switch','paging','config','invite','paged-worker','continuation-crossed','continuation-denied','continuation-existing','continuation-missing','continuation-missing-refresh','continuation-missing-confirm'];
+const INTAKE_UI_MODES=['success','unknown','wrong-receipt','html403','scope-switch','paging','config','invite','paged-worker','continuation-crossed','continuation-denied','continuation-existing','continuation-missing','continuation-missing-refresh','continuation-missing-confirm','existing-profile','existing-profile-unknown','existing-profile-blocked','existing-profile-invalid','existing-profile-stale'];
 const INTAKE_UI_FOCUSED_404_MODES=['continuation-missing','continuation-missing-refresh','continuation-missing-confirm'];
-const intakeUiExpectedPosts=mode=>mode==='invite'?0:['paged-worker','continuation-missing-refresh','continuation-missing-confirm'].includes(mode)?2:1;
+const INTAKE_UI_EXISTING_BLOCKED_MODES=['existing-profile-blocked','existing-profile-invalid'];
+const INTAKE_UI_EXISTING_SELECTION_MODES=['existing-profile','existing-profile-unknown','existing-profile-stale'];
+const intakeUiExpectedPosts=mode=>['invite',...INTAKE_UI_EXISTING_BLOCKED_MODES].includes(mode)?0:['paged-worker','continuation-missing-refresh','continuation-missing-confirm'].includes(mode)?2:1;
+const intakeUiExistingGuards=mode=>({...(INTAKE_UI_EXISTING_BLOCKED_MODES.includes(mode)?{unsafeSelectionBlocked:true}:{}),...(INTAKE_UI_EXISTING_SELECTION_MODES.includes(mode)?{explicitCurrentProfileSelection:true,profileUnselectedInitially:true,currentJobPreserved:true}:{}),...(mode==='existing-profile-stale'?{staleSelectionRejected:true}:{})});
 const INTAKE_CONTINUITY_SOURCE='src/app/(identity)/cuenta/employee-intake-continuity.mjs';
 const intakeContinuityDependenciesFor=kind=>['UI_BANK','UI_INTAKE','UI_JOINT','UI_CAUSAL'].includes(kind)?[INTAKE_CONTINUITY_SOURCE]:[];
 // Historical producer receipts remain immutable. Current proof pins below are
@@ -394,6 +397,7 @@ export function validateExtensionProof(spec,bytes,{expectedHead,readSource,readE
   if(spec.kind==='UI_BANK'){if(proof.sourceRevision!==expectedHead||proof.fullSuite!==true)deny('PROOF_SOURCE_STATE');equal(proof.widths,[320,390,768,1280],'PROOF_MATRIX');matrix(proof.checks,proof.widths,['normal','invalid-cancel','lost-reload','unknown-close-reload','same-retry','stale','denied-forged','integrated']);}
   if(spec.kind==='UI_INTAKE'){
    equal(proof.widths,[320,390,768,1280],'PROOF_MATRIX');matrix(proof.checks,proof.widths,INTAKE_UI_MODES);
+   if(proof.checks.some(row=>Object.keys(intakeUiExistingGuards(row.mode)).some(key=>row[key]!==true)))deny('PROOF_INTAKE_GUARDS');
    if(proof.checks.some(row=>row.posts!==intakeUiExpectedPosts(row.mode)||row.mode==='invite'&&row.canonicalInvitationPrepared!==true||row.mode==='scope-switch'&&row.scopeIsolated!==true||!['invite','scope-switch'].includes(row.mode)&&(row.privateStored!==false||row.automaticPost!==false)||row.mode==='paged-worker'&&['canonicalInvitationConfirmed','focusRetainedAfterInvite','focusedRefresh','fullListExplicit'].some(key=>row[key]!==true)||INTAKE_UI_FOCUSED_404_MODES.includes(row.mode)&&(row.focused404Cleared!==true||row.explicitListReconsulted!==true||row.confirmedReceiptRetained!==(row.mode!=='continuation-missing'))))deny('PROOF_INTAKE_GUARDS');
   }
   if(spec.kind==='UI_JOINT'||spec.kind==='UI_CAUSAL'){
@@ -470,7 +474,7 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
   let proof={...base};
   if(spec.kind.startsWith('PG_'))Object.assign(proof,{schemaRemoved:true,checks:[...spec.checkNames],realProviderCalls:0,providerCalls:0,unexpectedNetworkCalls:0,sqlFailures:[],...(spec.kind==='PG_COMPANY_KYC'?{productionDataTouched:false,databaseCreated:false,environment:'schema-only-localhost-postgresql-corporate-KYC',realClerkLogin:false,realMetaAccepted:false,humanAccepted:false}:{})});
   else if(spec.kind==='UNIT'){Object.assign(proof,{sourceRevision:expectedHead,sourceState:'committed exact Git HEAD',trackedClean:true,postgresExecuted:false,suites:TEST_SUITES.map((file,index)=>{const bytes=tap(index===4?RECOVERY_CASES:Array.from({length:EXPECTED_SUITE_COUNTS[file]||1},(_,i)=>'shadow fixture '+index+' case '+i)),filename='.vercel/participant-bank-intake-contract-evidence/suite-'+index+'.tap';evidence.set(filename,bytes);return {file,exitCode:0,...parseTap(bytes,{recovery:index===4,expectedTests:EXPECTED_SUITE_COUNTS[file]??null}),tap:{path:filename,bytes:bytes.length,sha256:hash(bytes)}};})});}
-  else{Object.assign(proof,{errors:[],realProviderCalls:0,providerCalls:0,postgresExecuted:false,realIdentityAccepted:false,widths:[320,390,768,1280],sourceRevision:expectedHead,sourceState:'committed exact Git HEAD',trackedClean:true,dirtyTrackedPaths:[],fullSuite:true,badTransform:null,causalFailure:null});const modes=spec.kind==='UI_BANK'?['normal','invalid-cancel','lost-reload','unknown-close-reload','same-retry','stale','denied-forged','integrated']:spec.kind==='UI_INTAKE'?INTAKE_UI_MODES:['bank','intake'];proof.checks=proof.widths.flatMap(width=>modes.map(mode=>({width,mode,parentAndSiblingBlocked:true,ownRecoveryAndLocalCloseEnabled:true,noFeedbackDeadlock:true,automaticPost:false,storagePrivate:true,...(spec.kind==='UI_INTAKE'?{posts:intakeUiExpectedPosts(mode),privateStored:false,canonicalInvitationPrepared:true,scopeIsolated:true,canonicalInvitationConfirmed:true,focusRetainedAfterInvite:true,focusedRefresh:true,fullListExplicit:true,...(INTAKE_UI_FOCUSED_404_MODES.includes(mode)?{focused404Cleared:true,explicitListReconsulted:true,confirmedReceiptRetained:mode!=='continuation-missing'}:{})}:{})})));
+  else{Object.assign(proof,{errors:[],realProviderCalls:0,providerCalls:0,postgresExecuted:false,realIdentityAccepted:false,widths:[320,390,768,1280],sourceRevision:expectedHead,sourceState:'committed exact Git HEAD',trackedClean:true,dirtyTrackedPaths:[],fullSuite:true,badTransform:null,causalFailure:null});const modes=spec.kind==='UI_BANK'?['normal','invalid-cancel','lost-reload','unknown-close-reload','same-retry','stale','denied-forged','integrated']:spec.kind==='UI_INTAKE'?INTAKE_UI_MODES:['bank','intake'];proof.checks=proof.widths.flatMap(width=>modes.map(mode=>({width,mode,parentAndSiblingBlocked:true,ownRecoveryAndLocalCloseEnabled:true,noFeedbackDeadlock:true,automaticPost:false,storagePrivate:true,...(spec.kind==='UI_INTAKE'?{posts:intakeUiExpectedPosts(mode),...intakeUiExistingGuards(mode),privateStored:false,canonicalInvitationPrepared:true,scopeIsolated:true,canonicalInvitationConfirmed:true,focusRetainedAfterInvite:true,focusedRefresh:true,fullListExplicit:true,...(INTAKE_UI_FOCUSED_404_MODES.includes(mode)?{focused404Cleared:true,explicitListReconsulted:true,confirmedReceiptRetained:mode!=='continuation-missing'}:{})}:{})})));
    if(spec.kind==='UI_CAUSAL'){const source='src/app/(identity)/cuenta/participant-panel.js',original=readSource(source),needle='locked={busy||Boolean(attempt)||Boolean(durableReference)||!recoveryReady||Boolean(draft)||intakePending}',replacement='locked={busy||Boolean(attempt)||Boolean(durableReference)||!recoveryReady||Boolean(draft)||intakePending||hasBankPending}';Object.assign(proof,{widths:[320],checks:[],badTransform:{source,originalSha256:hash(original),fixtureSha256:hash(Buffer.from(original.toString().replace(needle,replacement))),needle,replacement,runtimeSourceEdited:false},causalFailure:{stage:'own-bank-save',message:'own bank save must remain enabled while its own pending gates siblings (shadow fixture)',expectedFailure:true}});}
   }
    if(spec.kind==='PG_PREPARATION')Object.assign(proof,{ok:true,sourceRevision:expectedHead,sourceState:'EXACT_CI_SOURCE',trackedClean:true,databaseRemoved:true,fixture:'disposable-local-postgres-canonical-workspace-with-synthetic-sessions',totalCheckCount:spec.checkNames.length});
@@ -617,17 +621,22 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
     bad(spec.id+'-historical-record-cannot-be-overwritten','EXTENSION_PRODUCER_CONTRACT',()=>validateContract(changed));
    }
    if(spec.kind==='UI_INTAKE'){
-    good('intake-ui-current-fifteen-producer-modes-exact',()=>{const match=readFileSync(path.join(root,spec.producer),'utf8').match(/\bmodes=\[([^\]]+)\]/);assert.ok(match);equal([...match[1].matchAll(/'([^']+)'/g)].map(value=>value[1]),INTAKE_UI_MODES,'PROOF_MATRIX');});
-    good('intake-ui-current-sixty-check-binding-exact',()=>assert.equal(validate(proof).checks,60));
+    good('intake-ui-current-twenty-producer-modes-exact',()=>{const match=readFileSync(path.join(root,spec.producer),'utf8').match(/\bmodes=\[([^\]]+)\]/);assert.ok(match);equal([...match[1].matchAll(/'([^']+)'/g)].map(value=>value[1]),INTAKE_UI_MODES,'PROOF_MATRIX');});
+    good('intake-ui-current-eighty-check-binding-exact',()=>assert.equal(validate(proof).checks,80));
     mutate('legacy-thirty-two-matrix','PROOF_MATRIX',p=>{p.checks=p.checks.filter(row=>INTAKE_UI_MODES.slice(0,8).includes(row.mode));assert.equal(p.checks.length,32);});
     mutate('legacy-forty-eight-matrix','PROOF_MATRIX',p=>{p.checks=p.checks.filter(row=>INTAKE_UI_MODES.slice(0,12).includes(row.mode));assert.equal(p.checks.length,48);});
-    mutate('sixty-wrong-mode','PROOF_MATRIX',p=>{p.checks.find(row=>row.mode==='paged-worker').mode='foreign-mode';assert.equal(p.checks.length,60);});
+    mutate('legacy-sixty-matrix-without-existing-profile','PROOF_MATRIX',p=>{p.checks=p.checks.filter(row=>INTAKE_UI_MODES.slice(0,15).includes(row.mode));assert.equal(p.checks.length,60);});
+    mutate('eighty-wrong-mode','PROOF_MATRIX',p=>{p.checks.find(row=>row.mode==='paged-worker').mode='foreign-mode';assert.equal(p.checks.length,80);});
     for(const key of ['canonicalInvitationConfirmed','focusRetainedAfterInvite','focusedRefresh','fullListExplicit']){
      mutate('paged-worker-'+key+'-missing','PROOF_INTAKE_GUARDS',p=>{delete p.checks.find(row=>row.mode==='paged-worker')[key];});
      mutate('paged-worker-'+key+'-false','PROOF_INTAKE_GUARDS',p=>{p.checks.find(row=>row.mode==='paged-worker')[key]=false;});
     }
     for(const mode of INTAKE_UI_MODES){
      mutate(mode+'-unexpected-post-count','PROOF_INTAKE_GUARDS',p=>{p.checks.find(row=>row.mode===mode).posts++;});
+     for(const key of Object.keys(intakeUiExistingGuards(mode))){
+      mutate(mode+'-'+key+'-missing','PROOF_INTAKE_GUARDS',p=>{delete p.checks.find(row=>row.mode===mode)[key];});
+      mutate(mode+'-'+key+'-false','PROOF_INTAKE_GUARDS',p=>{p.checks.find(row=>row.mode===mode)[key]=false;});
+     }
      if(!['invite','scope-switch'].includes(mode)){
       mutate(mode+'-private-stored','PROOF_INTAKE_GUARDS',p=>{p.checks.find(row=>row.mode===mode).privateStored=true;});
       mutate(mode+'-automatic-post','PROOF_INTAKE_GUARDS',p=>{p.checks.find(row=>row.mode===mode).automaticPost=true;});
@@ -647,20 +656,24 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
    if(spec.kind==='PG_INTAKE'){
     const plainTextCheck='real-PG-signed-plain-name-email-current-sealed-outbox-time-fence-no-person-or-grant';
     const additions=['real-PG-canonical-additive-ASSIGN-retains-policy-digest-and-WAITING-signed-consent-bytes',...['nonnumeric','overflow','maximum-ten-digits'].map(name=>'real-PG-additive-proof-'+name+'-revision-fails-closed-without-SQL-cast-error'),'real-PG-additive-proof-missing-confirmed-baseline-denies-unchanged-WAITING','real-PG-additive-proof-duplicate-revision-denies-unchanged-WAITING','real-PG-old-signed-routing-revision-remains-rejected-after-only-addition','real-PG-canonical-SUSPEND-ACTIVATE-never-revives-policy-or-WAITING-consent','real-PG-canonical-REVOKE-ASSIGN-never-revives-policy-or-WAITING-consent','real-PG-anchor-REVOKE-denies-WAITING-admission-with-destination-still-ACTIVE'];
-    const legacy=names=>names.filter(name=>!additions.includes(name));
-    good('intake-postgres-current-twenty-one-SQL-checks-exact',()=>{
+    const existingAdditions=["real-PG-existing-roster-candidate-current-snapshot-readonly-no-selection","real-PG-create-with-existing-contact-keeps-duplicate-denial","real-PG-existing-choice-snapshot-or-current-row-change-terminal-rejection","real-PG-existing-choice-registration-provenance-missing-foreign-duplicate-denial","real-PG-existing-choice-normalized-contact-ambiguity-denies-without-SQL-error","real-PG-existing-choice-stripped-participation-and-prior-admission-ledger-denial","real-PG-existing-choice-current-eligibility-markers-deny-preserving-source-consent","real-PG-existing-choice-preserves-roster-signed-consent-one-receipt-no-grant","real-PG-existing-choice-different-operations-one-admission-one-rejection","real-PG-existing-choice-audit-failure-rolls-back-worker-and-intake","real-PG-existing-choice-committed-ACK-loss-readback-without-write-repeat","real-PG-existing-roster-provenance-tamper-denies-accepted-permissions"];
+    const legacy=names=>names.filter(name=>!additions.includes(name)&&!existingAdditions.includes(name));
+    good('intake-postgres-current-thirty-three-SQL-checks-exact',()=>{
      let source=readFileSync(path.join(root,spec.producer),'utf8');
      const loop="checks.push('real-PG-additive-proof-'+name+'-revision-fails-closed-without-SQL-cast-error');";
      assert.equal(source.split(loop).length,2);source=source.replace(loop,additions.slice(1,4).map(name=>"checks.push('"+name+"');").join(''));
-     assert.equal(spec.checkNames.length,21);equal([...source.matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),spec.checkNames,'PROOF_CHECK_NAMES');assert.equal(legacy(spec.checkNames).length,11);assert.equal(additions.length,10);
+     assert.equal(spec.checkNames.length,33);equal([...source.matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),spec.checkNames,'PROOF_CHECK_NAMES');assert.equal(legacy(spec.checkNames).length,11);assert.equal(additions.length,10);assert.equal(existingAdditions.length,12);
     });
     mutate('legacy-eight-checks','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks).filter(name=>!name.startsWith('real-PG-focused-')&&name!==plainTextCheck);assert.equal(p.checks.length,8);});
     mutate('legacy-ten-checks-without-plain-text-causal-fence','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks).filter(name=>name!==plainTextCheck);assert.equal(p.checks.length,10);});
     mutate('eleven-checks-duplicate','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks);p.checks[4]=p.checks[3];assert.equal(p.checks.length,11);});
     mutate('eleven-checks-wrong-name','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks);p.checks[4]='foreign focused check';assert.equal(p.checks.length,11);});
     mutate('eleven-checks-wrong-order','PROOF_CHECK_NAMES',p=>{p.checks=legacy(p.checks);[p.checks[4],p.checks[5]]=[p.checks[5],p.checks[4]];});
-    for(const name of additions)mutate('current-addition-omitted-'+name,'PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(value=>value!==name);assert.equal(p.checks.length,20);});
-    mutate('current-addition-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(additions[1])]=additions[0];assert.equal(p.checks.length,21);});
+    mutate('legacy-twenty-one-checks-without-existing-profile','PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(value=>!existingAdditions.includes(value));assert.equal(p.checks.length,21);});
+    for(const name of [...additions,...existingAdditions])mutate('current-addition-omitted-'+name,'PROOF_CHECK_NAMES',p=>{p.checks=p.checks.filter(value=>value!==name);assert.equal(p.checks.length,32);});
+    mutate('current-addition-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(additions[1])]=additions[0];assert.equal(p.checks.length,33);});
+    mutate('existing-addition-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[p.checks.indexOf(existingAdditions[1])]=existingAdditions[0];assert.equal(p.checks.length,33);});
+    mutate('existing-addition-wrong-order','PROOF_CHECK_NAMES',p=>{const index=p.checks.indexOf(existingAdditions[1]);[p.checks[index],p.checks[index+1]]=[p.checks[index+1],p.checks[index]];});
     mutate('current-addition-wrong-order','PROOF_CHECK_NAMES',p=>{const index=p.checks.indexOf(additions[1]);[p.checks[index],p.checks[index+1]]=[p.checks[index+1],p.checks[index]];});
    }
    return checks.splice(start);

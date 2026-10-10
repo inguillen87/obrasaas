@@ -35,9 +35,12 @@ export function participantCommand(input){
  }else if(input.action==='CONFIGURE_EMPLOYEE_INTAKE'){
   participantKeys(p,['connectionId','expectedRevision','enabled','confirmed']);if(!workspaceId(p.connectionId)||!Number.isSafeInteger(p.expectedRevision)||p.expectedRevision<0||typeof p.enabled!=='boolean'||p.confirmed!==true)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p};
  }else if(['ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE'].includes(input.action)){
-  participantKeys(p,['connectionId','applicationId','expectedRevision',...(input.action==='ADMIT_EMPLOYEE_INTAKE'?['job','permissions','confirmed']:['reason'])]);
+  const existingChoice=input.action==='ADMIT_EMPLOYEE_INTAKE'&&Object.hasOwn(p||{},'existingWorker');
+  participantKeys(p,['connectionId','applicationId','expectedRevision',...(input.action==='ADMIT_EMPLOYEE_INTAKE'?['job','permissions','confirmed',...(existingChoice?['existingWorker']:[])]:['reason'])]);
   if(!workspaceId(p.connectionId)||!/^customer_webhook_[a-f0-9]{64}$/.test(p.applicationId||'')||!Number.isSafeInteger(p.expectedRevision)||p.expectedRevision<1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
-  if(input.action==='ADMIT_EMPLOYEE_INTAKE'){participantKeys(p.permissions,['attendance','report']);if(!Object.hasOwn(SITE_ROLES,p.job)||typeof p.permissions.attendance!=='boolean'||typeof p.permissions.report!=='boolean'||p.confirmed!==true)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');payload={...p,permissions:{...p.permissions}};}
+  if(input.action==='ADMIT_EMPLOYEE_INTAKE'){participantKeys(p.permissions,['attendance','report']);if(!Object.hasOwn(SITE_ROLES,p.job)||typeof p.permissions.attendance!=='boolean'||typeof p.permissions.report!=='boolean'||p.confirmed!==true)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+   if(existingChoice){participantKeys(p.existingWorker,['workerId','revision','registrationReceiptId','snapshotDigest']);participantRevision(p.existingWorker.revision);if(!workspaceId(p.existingWorker.workerId)||typeof p.existingWorker.registrationReceiptId!=='string'||!/^site_[a-f0-9]{64}$/.test(p.existingWorker.registrationReceiptId)||typeof p.existingWorker.snapshotDigest!=='string'||!/^[a-f0-9]{64}$/.test(p.existingWorker.snapshotDigest))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');}
+   payload={...p,permissions:{...p.permissions},...(existingChoice?{existingWorker:{...p.existingWorker}}:{})};}
   else payload={...p,reason:participantReason(p.reason)};
  }else if(input.action==='INVITE'){
   participantKeys(p,['workerId','revision','email',...(Object.hasOwn(p,'whatsAppConsent')?['whatsAppConsent']:[])]);participantRevision(p.revision);

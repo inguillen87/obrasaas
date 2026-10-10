@@ -5,6 +5,13 @@ const id=value=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.tes
 const applicationId=value=>typeof value==='string'&&/^customer_webhook_[a-f0-9]{64}$/.test(value);
 const contextValid=value=>value&&typeof value.scope==='string'&&/^[a-f0-9]{64}$/.test(value.scope)&&id(value.projectId);
 
+// Only the selected current roster snapshot travels in the admission command.
+// Contact details remain in the private read and never enter recovery storage.
+export function employeeIntakeExistingWorkerChoice(value){
+ if(!id(value?.workerId)||typeof value.revision!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(value.revision)||typeof value.registrationReceiptId!=='string'||!/^site_[a-f0-9]{64}$/.test(value.registrationReceiptId)||typeof value.snapshotDigest!=='string'||!/^[a-f0-9]{64}$/.test(value.snapshotDigest))return null;
+ return {workerId:value.workerId,revision:value.revision,registrationReceiptId:value.registrationReceiptId,snapshotDigest:value.snapshotDigest};
+}
+
 // A confirmed admission is a reference to a private, current server read.
 // It never contains contact details or authorizes an invitation or field access.
 export function employeeIntakeAdmissionContinuation(reference,value){
