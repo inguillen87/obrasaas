@@ -9,7 +9,7 @@ import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-p
 // Browser-only acceptance of the real component with intercepted synthetic API
 // responses. This is NOT proof of a production login, employee or WhatsApp event.
 assert.ok(!process.env.VERCEL && !process.env.VERCEL_ENV);
-assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume','confirmed-progress'].includes(process.env.WORKSPACE_UI_SCENARIO));
+assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume','confirmed-progress','confirmed-progress-planning'].includes(process.env.WORKSPACE_UI_SCENARIO));
 const root=process.cwd(),evidence=path.join(root,'.vercel/workspace-evidence');
 mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/workspace-ui-')),app=path.join(fixture,'src/app'),components=path.join(app,'(identity)/cuenta');
@@ -40,11 +40,16 @@ const baseTask=()=>({id:'task-a',title:'Mampostería · sector norte',status:'IN
 const text=page=>page.evaluate(()=>document.body.innerText);
 async function click(page,label){const handle=await page.evaluateHandle(name=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===name),label);const element=handle.asElement();assert.ok(element,'Missing button '+label);await element.click();await handle.dispose();}
 async function waitText(page,value){await page.waitForFunction(expected=>document.body.innerText.includes(expected),{timeout:15000},value);}
-async function fill(page){
- await click(page,'Planificar fechas');
- await page.$eval('input[type="date"]',(element)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(element,'2026-10-07');element.dispatchEvent(new Event('input',{bubbles:true}));element.dispatchEvent(new Event('change',{bubbles:true}));});
- await page.$$eval('input[type="date"]',elements=>{const element=elements[1];Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(element,'2026-10-15');element.dispatchEvent(new Event('input',{bubbles:true}));element.dispatchEvent(new Event('change',{bubbles:true}));});
- await page.type('textarea','Reprogramación revisada en reunión de obra.');
+async function fill(page,taskId='task-a'){
+ await page.waitForFunction(id=>{const button=[...document.querySelectorAll('[data-task-id]')].find(element=>element.dataset.taskId===id)?.querySelector('button');return button?.disabled===false&&button.getClientRects().length;},{timeout:15000},taskId);
+ const handle=await page.evaluateHandle(id=>[...document.querySelectorAll('[data-task-id]')].find(element=>element.dataset.taskId===id)?.querySelector('button'),taskId);
+ const button=handle.asElement();assert.ok(button,'Missing planning button for '+taskId);assert.equal(await button.evaluate(element=>element.textContent.trim()),'Planificar fechas');await button.click();await handle.dispose();
+ const editor='form[aria-labelledby="schedule-edit-title"]';
+ await page.waitForFunction(selector=>{const form=document.querySelector(selector),dates=[...(form?.querySelectorAll('input[type="date"]')||[])];return Boolean(form?.getClientRects().length)&&dates.length===2&&dates.every(element=>!element.disabled&&element.getClientRects().length);},{timeout:15000},editor);
+ assert.equal(await page.$$eval(editor+' input[type="date"]',elements=>elements.length),2);
+ await page.$eval(editor+' input[type="date"]',(element)=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(element,'2026-10-07');element.dispatchEvent(new Event('input',{bubbles:true}));element.dispatchEvent(new Event('change',{bubbles:true}));});
+ await page.$$eval(editor+' input[type="date"]',elements=>{const element=elements[1];Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(element,'2026-10-15');element.dispatchEvent(new Event('input',{bubbles:true}));element.dispatchEvent(new Event('change',{bubbles:true}));});
+ await page.type(editor+' textarea','Reprogramación revisada en reunión de obra.');
 }
 async function scenario(mode,width=390){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
@@ -464,13 +469,17 @@ async function confirmedProgressScenario(mode,width){
  const original={...baseTask(),revision:beforeRevision},created={id:'new-task',title:'Tarea de ensayo concurrente',status:'BACKLOG',progress:0,startsOn:null,endsOn:null,revision:beforeRevision};
  const proposal={id:'proposal-a',taskId:original.id,workerId:'worker-a',summary:'Avance medido sintético',status:'PENDING',revision:planningMode?'2026-10-02T09:00:00.000011':'2026-10-02T09:00:00.000005',progress:50,quantity:null,baseline:null,unit:null,reason:'Medición sintética revisada.',evidenceIds:['evidence-a']};
  const field={scope,projectId:'p-a',projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals:planningMode?[]:[proposal],evidence:[{id:'evidence-a',taskId:original.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Fuente sintética de la medición.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};
- const posts=[];let creation=null,heldReadback=null,heldDecision=null,heldPlanning=null,readbackCount=0;
+ const posts=[];let creation=null,heldReadback=null,heldDecision=null,heldPlanning=null,readbackCount=0,preparationReads=0;
  let readbackStarted,decisionStarted,planningStarted;const readbackReady=new Promise(resolve=>{readbackStarted=resolve;}),decisionReady=new Promise(resolve=>{decisionStarted=resolve;}),planningReady=new Promise(resolve=>{planningStarted=resolve;});
  const respond=(request,body)=>request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
  await page.setRequestInterception(true);
  page.on('request',async request=>{
   try{
    const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
+   if(url.pathname==='/api/identity/project-preparation'){
+    assert.equal(request.method(),'GET');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(++preparationReads,1);
+    return respond(request,projectPreparationSnapshot({scope,projectId:'p-a',canManage:true,revision:0,detailsDigest:'b'.repeat(64),name:'Obra de prueba A',clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope,projectId:'p-a'}));
+   }
    if(!['/api/identity/workspace','/api/identity/task-creation','/api/identity/field-operations'].includes(url.pathname))return request.continue();
    assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
    if(url.pathname==='/api/identity/workspace'){
@@ -502,6 +511,7 @@ async function confirmedProgressScenario(mode,width){
  });
  try{
   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo concurrente');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');
+  await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="project-preparation-title"]')?.getAttribute('aria-busy')==='false',{timeout:15000});assert.equal(preparationReads,1);
   if(planningMode){await fill(page);await click(page,'Confirmar planificación');await planningReady;}
   await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label="Operaciones de campo"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');
   if(!planningMode){await click(page,'Nueva tarea');await page.type('section[aria-label="Crear tarea de la obra"] form input:not([type="date"])',created.title);await click(page,'Crear tarea');await readbackReady;}
@@ -735,7 +745,7 @@ try{
    if(process.env.WORKSPACE_UI_SCENARIO==='workbench')for(const width of [320,390])await scenario('readonly',width);
   }
   if([undefined,'gantt-volume'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])await ganttVolumeScenario(width);
- if([undefined,'confirmed-progress'].includes(process.env.WORKSPACE_UI_SCENARIO)){for(const width of [390,1280])for(const mode of ['readback','callback','planning'])await confirmedProgressScenario(mode,width);if(process.env.WORKSPACE_UI_SCENARIO==='confirmed-progress')await stalePaginationScenario();}
+ if([undefined,'confirmed-progress','confirmed-progress-planning'].includes(process.env.WORKSPACE_UI_SCENARIO)){const progressModes=process.env.WORKSPACE_UI_SCENARIO==='confirmed-progress-planning'?['planning']:['readback','callback','planning'];for(const width of [390,1280])for(const mode of progressModes)await confirmedProgressScenario(mode,width);if(process.env.WORKSPACE_UI_SCENARIO==='confirmed-progress')await stalePaginationScenario();}
  if(!process.env.WORKSPACE_UI_SCENARIO){
  for(const width of [320,390,768,1280])await scenario('success',width);
  for(const mode of ['readonly','denied','empty','draft-cancel','sdk-unavailable','unmount-token','uncertain','rollback','not-arrived','conflict','race'])await scenario(mode);
