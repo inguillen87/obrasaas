@@ -5,6 +5,18 @@ import {browserRecoveryJournal,RECOVERY_EVENT,recoveryResult} from './workspace-
 import {OWN_TEMPLATE_ACTIONS,ownTemplatesSnapshot,ownTemplatesOutcome,ownTemplateCommand} from './own-company-templates-view.mjs';
 import styles from './company-channel-panel.module.css';
 const endpoint='/api/identity/company-channel';
+const templateReadErrors={
+ META_OWN_TEMPLATE_CHANNEL_REQUIRED:'No pudimos confirmar el canal propio de esta obra. Consultá Número propio de la empresa y Canal y obras de la empresa antes de preparar plantillas.',
+ META_OWN_TEMPLATE_RUNTIME_REQUIRED:'No se confirmó una autorización operativa vigente para gestionar las plantillas. Consultá Número propio de la empresa con el administrador que autorizó el canal.',
+ META_OWN_TEMPLATE_ADMIN_REQUIRED:'No pudimos confirmar la autorización para administrar las plantillas de este canal. El administrador que autorizó el canal debe revisar Número propio de la empresa desde la obra de origen.',
+};
+function templateErrorMessage(status,code,method){
+ const fallback=status===403?'Tu acceso no permite administrar las plantillas de este canal.':'No se pudo confirmar esta operación. Conservamos la referencia para comprobarla.';
+ if(method==='POST')return fallback;
+ if(status===401)return 'Volvé a ingresar para confirmar tu sesión antes de consultar las plantillas.';
+ if(status===403&&typeof code==='string'&&Object.hasOwn(templateReadErrors,code))return templateReadErrors[code];
+ return status===403?fallback+' Volvé a consultar cuando se restablezca.':fallback;
+}
 const referenceOf=body=>({version:1,resource:'company-channel',scope:body.scope,projectId:body.projectId,operationId:body.operationId,action:body.action,connectionId:body.payload.connectionId,createdAt:Date.now()});
 export function OwnCompanyTemplatesPanel(props){return <Templates key={props.scope+':'+props.projectId} {...props}/>;}
 function Templates({scope,projectId,getSessionToken,onPending,locked=false}){
@@ -24,7 +36,7 @@ function Templates({scope,projectId,getSessionToken,onPending,locked=false}){
  const expected=()=>({scope,projectId,...(data?{organizationId:data.organization.id,actorId:data.actor.id}:{})});
  async function request(params,options,validate){
   let retained;const result=await transport(endpoint+(options.method==='POST'?'':'?'+new URLSearchParams({scope,projectId,...params})),options,async response=>{
-   if(!response.ok){let body;try{body=await response.json();}catch{/* Status still denies the operation. */}const error=Object.assign(new Error(response.status===403?'Tu acceso no permite administrar las plantillas de este canal.':'No se pudo confirmar esta operación. Conservamos la referencia para comprobarla.'),{status:response.status,code:body?.code});if(options.method==='POST'){retained=error;return null;}throw error;}
+   if(!response.ok){let body;try{body=await response.json();}catch{/* Status still denies the operation. */}const error=Object.assign(new Error(templateErrorMessage(response.status,body?.code,options.method)),{status:response.status,code:body?.code});if(options.method==='POST'){retained=error;return null;}throw error;}
    try{return validate(await response.json());}catch(error){if(options.method==='POST'){retained=error;return null;}throw error;}
   });if(retained)throw retained;return result;
  }
