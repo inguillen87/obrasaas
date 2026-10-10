@@ -1837,7 +1837,7 @@
         "path": ".vercel/private/employee-intake-ui/browser.json",
         "kind": "UI_INTAKE",
         "producer": "scripts/verify-employee-intake-ui.mjs",
-        "producerSha256": "ea8716067877da723066af226a48ac84ad67ade13040721eb9cd86a4859c13a0",
+        "producerSha256": "d9a8147257df27b7db0a19fa44dcc998b90b685862bdd7c35c70785ee86dda6c",
         "sourceFiles": [
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/employee-intake-continuity.mjs",
