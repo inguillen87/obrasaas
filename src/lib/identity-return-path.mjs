@@ -17,6 +17,13 @@ export function identityInvitationId(searchParams) {
   const value = singleQueryValue(searchParams, 'participar');
   return value.length === 39 && /^invite_[a-f0-9]{32}$/.test(value) ? value : '';
 }
+// An untrusted local navigation hint, never membership, scope or permission.
+// Authentication return paths intentionally retain only canonical invitations.
+export function identityWorkspaceProjectHint(searchParams) {
+  const value = singleQueryValue(searchParams, 'obra');
+  if (value.length < 1 || value.length > 128 || !/^[A-Za-z0-9]/.test(value) || /[^A-Za-z0-9_-]/.test(value)) return '';
+  return value;
+}
 export function identityOfficeInvitationId(searchParams){
  const value=singleQueryValue(searchParams,'oficina');
  return /^office_invite_[a-f0-9]{32}$/.test(value)?value:'';
