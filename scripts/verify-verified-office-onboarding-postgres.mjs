@@ -116,7 +116,7 @@ try{
  checks.push('new-SITE_MANAGER-FINANCE-and-AUDITOR-remain-assigned-project-only-without-participant-management-or-integration-permission');
 
  for(const result of [{state:'NOT_READY',code:'PARTICIPANT_PROVIDER_MEMBERSHIP_REQUIRED',account:null},{state:'BLOCKED',code:'PARTICIPANT_VERIFIED_EMAIL_REQUIRED',account:null}]){
-  const account=candidate('Unready'+result.state),body=await command(account),before=await snapshot();candidates.set(account.email,result);
+  const account=candidate('Unready'+result.state.replaceAll('_','')),body=await command(account),before=await snapshot();candidates.set(account.email,result);
   await assert.rejects(store.save(owner,body),{code:result.code});assert.deepEqual(await snapshot(),before);
  }
  const changed=candidate('ProofChanged'),changedBody=await command(changed),beforeChanged=await snapshot();candidates.get(changed.email).account.userUpdatedAt++;
