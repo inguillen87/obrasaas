@@ -3,7 +3,13 @@ import {WorkspaceError,operationId,workspaceId,WORKSPACE_ROLES,portfolioAccess,d
 import {IDENTITY_ISSUER} from './production-identity-config.mjs';
 import {requireNewCompanyAdmin,normalizeCompanyOnboarding,bootstrapReceiptId,bootstrapRequestDigest,validProfileEmail,readCompanyPhoneDeclaration,normalizeCompanyPhoneCommand,companyPhoneReceiptId} from './company-onboarding-policy.mjs';
 const identifier=prefix=>prefix+'_'+randomUUID().replaceAll('-','');
-const canonicalCompany=async(client,session,lock=false)=>(await client.query(`SELECT id,name,metadata,to_char("trialEndsAt",'YYYY-MM-DD') AS "trialEndsOn" FROM public."Organization" WHERE "clerkOrganizationId"=$1 ${lock?'FOR UPDATE':''}`,[session.organizationId])).rows[0];
+const trialUtcIso=value=>value instanceof Date&&Number.isFinite(value.getTime())?value.toISOString():null;
+// Match the existing company-billing contract: canonical timestamp values store UTC.
+// AT TIME ZONE supplies the instant before pg returns a Date; no host zone is inferred.
+const canonicalCompany=async(client,session,lock=false)=>(await client.query(`SELECT id,name,metadata,
+ to_char("trialEndsAt",'YYYY-MM-DD') AS "trialEndsOn",
+ "trialEndsAt" AT TIME ZONE 'UTC' AS "trialEndsAtUtc"
+ FROM public."Organization" WHERE "clerkOrganizationId"=$1 ${lock?'FOR UPDATE':''}`,[session.organizationId])).rows[0];
 export function createCompanyOnboardingStore({connect}){
  async function transaction(session,writable,run){
   requireNewCompanyAdmin(session);let client,broken=false;
@@ -41,7 +47,7 @@ export function createCompanyOnboardingStore({connect}){
   const projects=(await client.query(`SELECT id FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE' ${lock?'FOR SHARE':''}`,[context.projectId,org.id])).rows;
   if(projects.length!==1)throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);
  }
- const currentCompany=(org,member)=>({organizationId:org.id,companyName:org.name,expectedClerkOrganizationId:null,canDeclarePhone:member.role==='ADMIN',phoneDeclaration:member.role==='ADMIN'?readCompanyPhoneDeclaration(org.metadata):null,trial:{endsOn:org.trialEndsOn||null}});
+ const currentCompany=(org,member)=>({organizationId:org.id,companyName:org.name,expectedClerkOrganizationId:null,canDeclarePhone:member.role==='ADMIN',phoneDeclaration:member.role==='ADMIN'?readCompanyPhoneDeclaration(org.metadata):null,trial:{endsOn:org.trialEndsOn||null,endsAt:trialUtcIso(org.trialEndsAtUtc)}});
  const current=(org,member,session)=>({...currentCompany(org,member),expectedClerkOrganizationId:session.organizationId});
  async function phoneReceipt(client,org,member,id){
   const row=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='company.phone.declared' AND "entityType"='Organization' AND "entityId"=$2`,[id,org.id,member.actorId])).rows[0];
