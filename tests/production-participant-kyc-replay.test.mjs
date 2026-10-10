@@ -18,7 +18,7 @@ function fixture({role='SITE_MANAGER',concurrent=false,change='REVOKED'}={}){
  const input=participantKycInput(body),requestDigest=digest([input.projectId,input.scope,input.workerId,input.revision,input.noticeVersion,input.front.digest,input.selfie.digest]);
  const recorded={id:participantReceiptId(member.actorId,projectId,operationId),organizationId:member.organizationId,entityType:'Worker',entityId:body.workerId,metadata:{version:1,projectId,kind:'KYC_SUBMITTED',requestDigest}};
  const row={id:body.workerId,projectId,name:'Synthetic participant',active:true,revision:body.revision,metadata:{participant:{version:1,status:'ACTIVE',clerkUserId:session.userId,permissions:{attendance:true,report:false},invitation:null,kyc:{status:'NOT_SUBMITTED',submissionId:null,images:[]}}}};
- const counts={sql:[],symbolicUploads:0,realProviderRequests:0,businessWrites:0},project={id:projectId,name:'Synthetic project',status:'ACTIVE',metadata:{},organizationMetadata:{}};
+ const counts={sql:[],receiptReads:0,symbolicUploads:0,realProviderRequests:0,businessWrites:0},project={id:projectId,name:'Synthetic project',status:'ACTIVE',metadata:{},organizationMetadata:{}};
  let visibleReceipt=!concurrent;
  function changeCurrent(){
   row.revision='2026-10-01T00:00:00.000002';
@@ -34,7 +34,7 @@ function fixture({role='SITE_MANAGER',concurrent=false,change='REVOKED'}={}){
   if(sql.includes('SELECT id,name,status::text AS status FROM public."Project"')){assert.deepEqual(args,[projectId,member.organizationId]);return {rows:[project]};}
   if(sql.includes('FROM public."ProjectMembership"')){assert.deepEqual(args,[projectId,member.membershipId]);return {rows:[{id:'project-membership-fixture'}]};}
   if(sql.includes('SELECT p.id,p.name,p.metadata,o.metadata')){assert.deepEqual(args,[projectId,member.organizationId]);return {rows:[project]};}
-  if(sql.includes('FROM public."AuditLog"')){assert.deepEqual(args,[recorded.id,member.organizationId,member.actorId]);return {rows:visibleReceipt?[recorded]:[]};}
+  if(sql.includes('FROM public."AuditLog"')){assert.deepEqual(args,[recorded.id,member.organizationId,member.actorId]);counts.receiptReads++;return {rows:visibleReceipt?[recorded]:[]};}
   if(sql.includes('FROM public."Worker"')){if(sql.includes('JOIN public."Project"'))assert.deepEqual(args,[member.organizationId,session.userId]);else if(sql.includes('WHERE "projectId"=$1'))assert.deepEqual(args,[projectId,session.userId]);else assert.deepEqual(args,[row.id,projectId]);return {rows:[structuredClone(row)]};}
   if(sql.includes('SELECT m.id FROM public."TenantMembership"')){assert.deepEqual(args,[member.membershipId,member.organizationId,session.userId,projectId]);return {rows:[{id:member.membershipId}]};}
   assert.fail('Unexpected canonical SQL: '+sql);
@@ -68,7 +68,7 @@ for(const concurrent of [false,true])for(const change of ['REVOKED','INACTIVE'])
 });
 
 for(const concurrent of [false,true])test(`${concurrent?'concurrent':'cached'} active owned receipt stays recoverable after revision and KYC-state changes`,async()=>{
- const f=fixture({concurrent,change:'ACTIVE'}),response=await f.post(),result=await response.json();privateHeaders(response);assert.equal(response.status,200);assert.equal(result.saved,true);assert.equal(result.replayed,true);assert.equal(result.receiptId,f.recorded.id);assert.equal(result.participant.revision,'2026-10-01T00:00:00.000002');assert.equal(result.participant.kyc.status,'APPROVED');assert.equal(result.participant.permissions.report,false);assert.equal(result.participant.kyc.images.length,2);assert.equal(JSON.stringify(result).includes('.private.blob.'),false);assert.equal(f.counts.symbolicUploads,concurrent?2:0);assert.equal(f.counts.businessWrites,0);assert.equal(f.counts.realProviderRequests,0);
+ const f=fixture({concurrent,change:'ACTIVE'}),response=await f.post(),result=await response.json();privateHeaders(response);assert.equal(response.status,200);assert.equal(result.saved,true);assert.equal(result.replayed,true);assert.equal(result.receiptId,f.recorded.id);assert.equal(result.participant.revision,'2026-10-01T00:00:00.000002');assert.equal(result.participant.kyc.status,'APPROVED');assert.equal(result.participant.permissions.report,false);assert.equal(result.participant.kyc.images.length,2);assert.equal(JSON.stringify(result).includes('.private.blob.'),false);assert.ok(f.counts.receiptReads>0);assert.equal(f.counts.symbolicUploads,concurrent?2:0);assert.equal(f.counts.businessWrites,0);assert.equal(f.counts.realProviderRequests,0);
 });
 
 for(const concurrent of [false,true])for(const corrupt of ['entity','entity-type','kind','project'])test(`${concurrent?'concurrent':'cached'} KYC replay rejects a canonical receipt with wrong ${corrupt}`,async()=>{
@@ -77,8 +77,8 @@ for(const concurrent of [false,true])for(const corrupt of ['entity','entity-type
 });
 
 test('a role change rejects the old scope before looking up an own KYC receipt',async()=>{
- const f=fixture({change:'ACTIVE'});f.member.role='FINANCE';const response=await f.post(),result=await response.json();privateHeaders(response);assert.equal(response.status,409);assert.equal(result.code,'WORKSPACE_CONTEXT_CHANGED');assert.equal(f.counts.sql.some(sql=>sql.includes('FROM public."AuditLog"')),false);assert.equal(f.counts.symbolicUploads,0);
+ const f=fixture({change:'ACTIVE'});f.member.role='FINANCE';const response=await f.post(),result=await response.json();privateHeaders(response);assert.equal(response.status,409);assert.equal(result.code,'WORKSPACE_CONTEXT_CHANGED');assert.equal(f.counts.receiptReads,0);assert.equal(f.counts.symbolicUploads,0);
 });
 test('a client supplied foreign scope cannot read a correlated own receipt',async()=>{
- const f=fixture({change:'ACTIVE'}),response=await f.post({...f.body,scope:'f'.repeat(64)}),result=await response.json();privateHeaders(response);assert.equal(response.status,409);assert.equal(result.code,'WORKSPACE_CONTEXT_CHANGED');assert.equal(f.counts.sql.some(sql=>sql.includes('FROM public."AuditLog"')),false);assert.equal(f.counts.symbolicUploads,0);
+ const f=fixture({change:'ACTIVE'}),response=await f.post({...f.body,scope:'f'.repeat(64)}),result=await response.json();privateHeaders(response);assert.equal(response.status,409);assert.equal(result.code,'WORKSPACE_CONTEXT_CHANGED');assert.equal(f.counts.receiptReads,0);assert.equal(f.counts.symbolicUploads,0);
 });

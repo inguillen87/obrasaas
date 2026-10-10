@@ -7,6 +7,7 @@ import {identityAccountReturnPath,identitySignInPath} from '../../../lib/identit
 import {AccountWorkspace} from './workspace-client';
 import {CompanyBootstrapPanel} from './company-bootstrap-panel';
 import {ParticipantSelfServicePanel} from './participant-panel';
+import {OfficeJoinPanel} from './office-review-panel';
 import {OnboardingGuide} from './onboarding-guide';
 import styles from './workspace.module.css';
 import identityStyles from '../identity.module.css';
@@ -26,6 +27,7 @@ export function WorkspaceIdentityPanel(){
  return <>
   <OnboardingGuide key={`guide:${contextKey}`} orgId={orgId} orgRole={orgRole} observation={guideObservation?.contextKey===contextKey?guideObservation.value:null}/>
   <ParticipantSelfServicePanel key={`join:${userId}:${orgId||'personal'}:${sessionId}:${orgRole||'personal'}:${returnPath}`} getSessionToken={sessionToken}/>
+  <OfficeJoinPanel key={`office:${contextKey}:${returnPath}`} getSessionToken={sessionToken}/>
   <div id="organization-context" tabIndex={-1} className={styles.context}><span>Organización activa</span><OrganizationSwitcher afterSelectOrganizationUrl={returnPath} afterSelectPersonalUrl={returnPath} afterLeaveOrganizationUrl={returnPath} afterCreateOrganizationUrl={returnPath}/><a href="#onboarding-guide-title" className={identityStyles.home}>Volver a la guía</a></div>
   {!orgId?<section><h2>Seleccioná o creá tu organización</h2><p>Usá el selector de organización para crear la identidad de tu constructora en Clerk. Después se habilitará el alta de empresa y primera obra, sin importar datos ajenos.</p></section>:
    orgRole==='org:admin'?<CompanyBootstrapPanel key={contextKey} organizationId={orgId} organizationName={organization?.id===orgId?organization.name:''} getSessionToken={sessionToken} getProfileToken={profileToken}><AccountWorkspace key={contextKey} getSessionToken={sessionToken} onGuideObservation={observeGuide}/></CompanyBootstrapPanel>:

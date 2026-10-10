@@ -7,11 +7,16 @@ import puppeteer from 'puppeteer';
 
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV,'Guided onboarding fixture is local only');
 const root=process.cwd(),parent=path.resolve(root,'.vercel'),evidence=path.join(parent,'onboarding-guide-evidence');mkdirSync(evidence,{recursive:true});
-const sourceManifest=['workspace-identity.js','workspace.module.css','onboarding-guide.js','onboarding-guide.module.css'].map(file=>({path:'src/app/(identity)/cuenta/'+file,sha256:createHash('sha256').update(readFileSync(path.join(root,'src/app/(identity)/cuenta',file))).digest('hex')}));
+const accountSourceFiles=['workspace-identity.js','workspace.module.css','onboarding-guide.js','onboarding-guide.module.css',
+ 'office-review-panel.js','office-review-panel.module.css','office-review-view.mjs',
+ 'workspace-request-lifecycle.js','workspace-request-lifecycle.mjs','workspace-session-request.mjs',
+ 'workspace-recovery-journal.mjs','workspace-recovery-storage.mjs','private-bank-account-format.mjs',
+ 'site-purchase-view.mjs','company-channel-view.mjs','own-company-number-view.mjs','own-company-templates-view.mjs'];
+const sourceManifest=accountSourceFiles.map(file=>({path:'src/app/(identity)/cuenta/'+file,sha256:createHash('sha256').update(readFileSync(path.join(root,'src/app/(identity)/cuenta',file))).digest('hex')}));
 for(const file of ['src/app/(identity)/identity.module.css','src/app/(identity)/identity-load-guard.js','src/lib/identity-return-path.mjs','src/app/globals.css'])sourceManifest.push({path:file,sha256:createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')});
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
 const fixture=mkdtempSync(path.join(parent,'onboarding-guide-ui-')),app=path.join(fixture,'app'),account=path.join(app,'(identity)','cuenta');mkdirSync(account,{recursive:true});mkdirSync(path.join(fixture,'lib'));
-for(const file of ['workspace-identity.js','workspace.module.css','onboarding-guide.js','onboarding-guide.module.css'])copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(account,file));
+for(const file of accountSourceFiles)copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(account,file));
 copyFileSync(path.join(root,'src/app/(identity)/identity.module.css'),path.join(app,'(identity)','identity.module.css'));
 copyFileSync(path.join(root,'src/app/(identity)/identity-load-guard.js'),path.join(app,'(identity)','identity-load-guard.js'));
 copyFileSync(path.join(root,'src/lib/identity-return-path.mjs'),path.join(fixture,'lib','identity-return-path.mjs'));

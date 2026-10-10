@@ -25,7 +25,9 @@ export function createWorkspaceStore({ connect }) {
       await client.query("SET LOCAL statement_timeout = '6000ms'");
       await client.query("SET LOCAL lock_timeout = '2500ms'");
       const result = await client.query(`SELECT u.id AS "actorId", m.id AS "membershipId", m."tenantRole"::text AS role,
-        o.id AS "organizationId", o.name AS "organizationName", u."clerkUserId", m."clerkRole"
+        o.id AS "organizationId", o.name AS "organizationName", u."clerkUserId", m."clerkRole",
+        EXISTS(SELECT 1 FROM public."AuditLog" a WHERE a."organizationId"=o.id AND a."actorId"=u.id
+          AND a.action='office.review.accepted' AND a.metadata->>'membershipId'=m.id) AS "officeReviewOnly"
         FROM public."PlatformUser" u JOIN public."TenantMembership" m ON m."userId"=u.id
         JOIN public."Organization" o ON o.id=m."organizationId"
         WHERE u."clerkUserId"=$1 AND o."clerkOrganizationId"=$2 AND m."clerkRole"=$3
@@ -44,6 +46,7 @@ export function createWorkspaceStore({ connect }) {
   }
   async function project(client, membership, id, lock = false, identityOnly = false) {
     if (!workspaceId(id)) throw new WorkspaceError('WORKSPACE_PROJECT_INVALID');
+    if(membership.officeReviewOnly===true)throw new WorkspaceError('OFFICE_REVIEW_ONLY',403);
     const result = await client.query(`SELECT id,name,status::text AS status FROM public."Project"
       WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE' ${lock ? 'FOR SHARE' : ''}`, [id, membership.organizationId]);
     if (result.rows.length !== 1) throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE', 404);
@@ -69,6 +72,19 @@ export function createWorkspaceStore({ connect }) {
     return result.rows[0] || null;
   }
   return {
+    // Separate read-only composition. Office acceptance never enables ordinary
+    // project modules, participant evidence, integrationProject or inbox writes.
+    async officeReviewRead(session,{projectId,scope:expected},callback){
+      if(typeof callback!=='function')throw new TypeError('Explicit office read required');
+      if(!workspaceId(projectId)||!/^[a-f0-9]{64}$/.test(expected||''))throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
+      return transaction(session,false,async(client,member,scope)=>{
+        checkScope(scope,expected);
+        if(member.officeReviewOnly!==true||member.role!=='AUDITOR'||session.organizationRole!=='org:member'||await participantAccountBound(client,member))throw new WorkspaceError('OFFICE_REVIEW_ACCESS_REQUIRED',403);
+        const rows=(await client.query(`SELECT p.id,p.name FROM public."Project" p JOIN public."ProjectMembership" pm ON pm."projectId"=p.id WHERE p.id=$1 AND p."organizationId"=$2 AND p.status='ACTIVE' AND pm."tenantMembershipId"=$3 AND pm.status='ACTIVE'`,[projectId,member.organizationId,member.membershipId])).rows;
+        if(rows.length!==1)throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);
+        return callback(client,member,scope,rows[0]);
+      });
+    },
     // Commercial account reads are independent of project admission. Expired
     // trials must still be inspectable by the current company administrator.
     async companyRead(session, {scope: expected}, callback) {
@@ -76,6 +92,7 @@ export function createWorkspaceStore({ connect }) {
       if(!/^[a-f0-9]{64}$/.test(expected||''))throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
       return transaction(session,false,async(client,member,scope)=>{
         checkScope(scope,expected);
+        if(member.officeReviewOnly===true)throw new WorkspaceError('OFFICE_REVIEW_ONLY',403);
         if(member.role!=='ADMIN'||session.organizationRole!=='org:admin')throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);
         return callback(client,member,scope);
       });
@@ -87,6 +104,7 @@ export function createWorkspaceStore({ connect }) {
       if(!/^[a-f0-9]{64}$/.test(expected||''))throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
       return transaction(session,writable,async(client,member,scope)=>{
         checkScope(scope,expected);
+        if(member.officeReviewOnly===true)throw new WorkspaceError('OFFICE_REVIEW_ONLY',403);
         if(member.role!=='ADMIN')throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);
         // Internal receipt lookup only. A current canonical administrator may
         // recover an operation from an archived origin in their organization.
@@ -106,6 +124,7 @@ export function createWorkspaceStore({ connect }) {
       if (!/^[a-f0-9]{64}$/.test(expected || '')) throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
       return transaction(session,writable,async(client,member,scope)=>{
         checkScope(scope,expected);
+        if(member.officeReviewOnly===true)throw new WorkspaceError('OFFICE_REVIEW_ONLY',403);
         if(beforeProject){
           member.participantBound=await participantAccountBound(client,member);
           if(!await participantProjectAdmitted(client,member,projectId)&&purpose!==identityPurpose)throw new WorkspaceError('PARTICIPANT_KYC_REVIEW_REQUIRED',403);
@@ -137,6 +156,7 @@ export function createWorkspaceStore({ connect }) {
       if (!/^[a-f0-9]{64}$/.test(expected || '')) throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
       return transaction(session, writable, async (client, member, scope) => {
         checkScope(scope, expected);
+        if(member.officeReviewOnly===true)throw new WorkspaceError('OFFICE_REVIEW_ONLY',403);
         if (!['ADMIN','DIRECTOR'].includes(member.role)) throw new WorkspaceError('WORKSPACE_INTEGRATION_PERMISSION_REQUIRED',403);
         // Internal compositions may lock the recipient membership before the
         // project. Their return value never replaces canonical actor or scope.
@@ -198,8 +218,8 @@ export function createWorkspaceStore({ connect }) {
         const result = await client.query(`SELECT p.id,p.name,p.status::text AS status FROM public."Project" p
           WHERE p."organizationId"=$1 AND p.status='ACTIVE' AND ($2::boolean OR EXISTS
           (SELECT 1 FROM public."ProjectMembership" pm WHERE pm."projectId"=p.id AND pm."tenantMembershipId"=$3 AND pm.status='ACTIVE'))
-          ORDER BY p.id LIMIT 101`, [member.organizationId, portfolioAccess(member.role)&&!member.participantBound, member.membershipId]);
-        return { scope, organizationName: member.organizationName, role: member.role, roleLabel: WORKSPACE_ROLES[member.role], canPlanSchedule: managesSchedule(member.role), canManageIntegrations: ['ADMIN','DIRECTOR'].includes(member.role), projects: result.rows.slice(0,100), projectsTruncated: result.rows.length>100 };
+          ORDER BY p.id LIMIT 101`, [member.organizationId, member.officeReviewOnly!==true&&portfolioAccess(member.role)&&!member.participantBound, member.membershipId]);
+        return { scope, organizationName: member.organizationName, role: member.role, roleLabel: WORKSPACE_ROLES[member.role], ...(member.officeReviewOnly===true?{officeReviewOnly:true}:{}), canPlanSchedule: member.officeReviewOnly!==true&&managesSchedule(member.role), canManageIntegrations: member.officeReviewOnly!==true&&['ADMIN','DIRECTOR'].includes(member.role), projects: result.rows.slice(0,100), projectsTruncated: result.rows.length>100 };
       });
     },
     // A portfolio is a read of the current canonical organization, not an
@@ -209,6 +229,7 @@ export function createWorkspaceStore({ connect }) {
       if (afterProject !== null && !workspaceId(afterProject)) throw new WorkspaceError('WORKSPACE_CURSOR_INVALID');
       return transaction(session, false, async (client, member, scope) => {
         checkScope(scope, expected);
+        if(member.officeReviewOnly===true)throw new WorkspaceError('OFFICE_REVIEW_ONLY',403);
         if (afterProject !== null) await project(client, member, afterProject);
         member.participantBound=await participantAccountBound(client,member);
         const admitted=[];let anchor=afterProject,complete=false;

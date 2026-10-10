@@ -17,6 +17,10 @@ export function identityInvitationId(searchParams) {
   const value = singleQueryValue(searchParams, 'participar');
   return value.length === 39 && /^invite_[a-f0-9]{32}$/.test(value) ? value : '';
 }
+export function identityOfficeInvitationId(searchParams){
+ const value=singleQueryValue(searchParams,'oficina');
+ return /^office_invite_[a-f0-9]{32}$/.test(value)?value:'';
+}
 
 // A pending ticket selects Clerk's own UI on the original request URL. It never
 // grants a session or membership, and the ticket is not returned or forwarded.
@@ -29,6 +33,8 @@ export function identityHasPendingInvitation(searchParams) {
 
 function invitationPath(path, searchParams) {
   const invitationId = identityInvitationId(searchParams);
+  const officeId=identityOfficeInvitationId(searchParams);
+  if(officeId)return invitationId?path:`${path}?oficina=${officeId}`;
   return invitationId ? `${path}?participar=${invitationId}` : path;
 }
 

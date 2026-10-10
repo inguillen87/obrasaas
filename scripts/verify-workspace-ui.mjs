@@ -17,6 +17,7 @@ mkdirSync(components,{recursive:true});mkdirSync(path.join(fixture,'src/lib'),{r
 mkdirSync(path.join(fixture,'src/lib/whatsapp'),{recursive:true});copyFileSync(path.join(root,'src/lib/whatsapp/tenant-workspace-policy.js'),path.join(fixture,'src/lib/whatsapp/tenant-workspace-policy.js'));
 const sourceManifest=[];
 const entitlementPath='src/lib/company-entitlement.mjs';copyFileSync(path.join(root,entitlementPath),path.join(fixture,entitlementPath));assert.deepEqual(readFileSync(path.join(root,entitlementPath)),readFileSync(path.join(fixture,entitlementPath)));sourceManifest.push({path:entitlementPath,sha256:createHash('sha256').update(readFileSync(path.join(fixture,entitlementPath))).digest('hex')});
+const officeIdentityPath='src/lib/identity-return-path.mjs';copyFileSync(path.join(root,officeIdentityPath),path.join(fixture,officeIdentityPath));assert.deepEqual(readFileSync(path.join(root,officeIdentityPath)),readFileSync(path.join(fixture,officeIdentityPath)));sourceManifest.push({path:officeIdentityPath,sha256:createHash('sha256').update(readFileSync(path.join(fixture,officeIdentityPath))).digest('hex')});
 copyFileSync(path.join(root,'src/lib/geo.js'),path.join(fixture,'src/lib/geo.js'));
 copyFileSync(path.join(root,'src/lib/field-media-privacy.mjs'),path.join(fixture,'src/lib/field-media-privacy.mjs'));
 sourceManifest.push({path:'src/lib/geo.js',sha256:createHash('sha256').update(readFileSync(path.join(fixture,'src/lib/geo.js'))).digest('hex')});
@@ -152,6 +153,11 @@ async function navigationScenario(role,width){
    requests.push({method:request.method(),path:url.pathname,query:url.search});
    if(request.method()!=='GET'){posts.push(request.postData());throw new Error('Navigation must not mutate a business record');}
    assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+   if(['/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname)){
+    assert.equal(administrator,true);assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');
+    const body=url.pathname==='/api/identity/project-creation'?{scope,projectId:'p-a',canCreate:true}:{scope,projectId:'p-a',canManage:true,channels:[],invitations:[],candidates:[],truncated:false,candidatesLimited:false};
+    await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});return;
+   }
    if(url.pathname==='/api/identity/project-preparation'){
     assert.equal(administrator,true);assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(++preparationReads,1);
     const body=projectPreparationSnapshot({scope,projectId:'p-a',canManage:true,revision:0,detailsDigest:'b'.repeat(64),name:'Obra de prueba A',clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope,projectId:'p-a'});

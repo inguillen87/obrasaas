@@ -1,6 +1,7 @@
 import {EMPLOYEE_INTAKE_ACTIONS,readEmployeeIntake,saveEmployeeIntake,employeeIntakeOutcome,employeeIntakeAcceptedPermissions} from './meta-employee-intake.mjs';
 import {participantIdentityOperation} from './workspace-store.mjs';
 import {randomUUID,createHash} from 'node:crypto';
+import {joinCanonicalInvitedAccount as joinIdentity} from './canonical-invited-account.mjs';
 import {WorkspaceError,workspaceId,operationId,digest,requireWorkspaceIdentity,WORKSPACE_ROLES} from './workspace-policy.mjs';
 import {participantManager,participantCommand,participantContext,participantKycInput,participantReceiptId,PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION,assertOwnParticipant,participantKeys,OFFICE_ROLES} from './participant-policy.mjs';
 import {participantKycImageSet,participantKycHasDocumentBack,participantKycReceiptHasDocumentBack,participantKycDocumentBackReceipt,participantKycHistoricalBackReceipt,PARTICIPANT_DOCUMENT_BACK_NOTICE,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256} from './participant-kyc-image-set.mjs';
@@ -215,15 +216,6 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
   const found=typeof part.acceptanceReceiptId==='string'?await receipt(client,member,part.acceptanceReceiptId):null;
   if(!found||found.entityType!=='Worker'||found.entityId!==row.id||found.metadata?.version!==1||found.metadata.projectId!==row.projectId||found.metadata.kind!=='INVITATION_ACCEPTED'||found.metadata.invitationId!==invite?.id||invite.state!=='ACCEPTED')throw new WorkspaceError('PARTICIPANT_RECEIPT_INVALID',409);
   return {invitationId:invite.id,projectId:row.projectId,projectName:row.projectName,organizationName:row.organizationName,participantName:row.name,state:'ACTIVE',canAccept:false,saved:true,joined:true,replayed:true,receiptId:found.id,identityCertified:false,whatsAppAccessGranted:false};
- }
- async function joinIdentity(client,row,session,primaryEmail,email){
-  let user=(await client.query(`SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE "clerkUserId"=$1 FOR UPDATE`,[session.userId])).rows[0];
-  const clash=(await client.query(`SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE lower("primaryEmail")=lower($1) OR lower("primaryEmail")=lower($2)`,[primaryEmail,email])).rows;if(!user&&clash.some(item=>item.clerkUserId!==session.userId))throw new WorkspaceError('PARTICIPANT_IDENTITY_CONFLICT',409);
-  if(!user){user={id:id('user')};await client.query(`INSERT INTO public."PlatformUser"(id,"clerkUserId","primaryEmail","systemRole","updatedAt") VALUES($1,$2,$3,'TENANT_USER',clock_timestamp())`,[user.id,session.userId,primaryEmail]);}
-  let member=(await client.query(`SELECT id,status,"tenantRole"::text AS role FROM public."TenantMembership" WHERE "organizationId"=$1 AND "userId"=$2 FOR UPDATE`,[row.organizationId,user.id])).rows[0];
-  if(member&&(member.status!=='ACTIVE'||member.role!=='AUDITOR'))throw new WorkspaceError('PARTICIPANT_MEMBERSHIP_REVIEW_REQUIRED',409);
-  if(!member){member={id:id('member')};await client.query(`INSERT INTO public."TenantMembership"(id,"organizationId","userId","clerkRole","tenantRole",status,"updatedAt") VALUES($1,$2,$3,'org:member','AUDITOR','ACTIVE',clock_timestamp())`,[member.id,row.organizationId,user.id]);}
-  return {user,member};
  }
  return {
   accounts(session,context){const request=participantAccountRequest(context);return run(session,context,false,async(client,member,scope)=>{

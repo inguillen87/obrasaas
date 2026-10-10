@@ -22,6 +22,7 @@ const mediaPrivacyPath='src/lib/field-media-privacy.mjs';copyFileSync(path.join(
 for(const file of ['voice-progress-draft.mjs','progress-measurement-quantity.js']){const source='src/lib/'+file;copyFileSync(path.join(root,source),path.join(dir,source));sourcePaths.push(source);copiedSourcePaths.add(source);}
 const phoneFormatPath='src/lib/company-phone-format.mjs';copyFileSync(path.join(root,phoneFormatPath),path.join(dir,phoneFormatPath));sourcePaths.push(phoneFormatPath);copiedSourcePaths.add(phoneFormatPath);
 const entitlementPath='src/lib/company-entitlement.mjs';copyFileSync(path.join(root,entitlementPath),path.join(dir,entitlementPath));sourcePaths.push(entitlementPath);copiedSourcePaths.add(entitlementPath);
+const officeIdentityPath='src/lib/identity-return-path.mjs';copyFileSync(path.join(root,officeIdentityPath),path.join(dir,officeIdentityPath));sourcePaths.push(officeIdentityPath);copiedSourcePaths.add(officeIdentityPath);
 const sourceManifest=sourcePaths.map(file=>{const bytes=readFileSync(path.join(root,file));if(copiedSourcePaths.has(file)||file.startsWith('src/app/(identity)/cuenta/'))assert.deepEqual(bytes,readFileSync(path.join(dir,file)));return {path:file,sha256:createHash('sha256').update(bytes).digest('hex')};});
 assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
@@ -97,6 +98,9 @@ async function scenario(mode,width=390){
      }
      body=!url.search?{scope,organizationName:result.companyName,roleLabel:'Administrador',role:'ADMIN',canPlanSchedule:true,canManageIntegrations:false,projects:[{id:'project-test',name:result.projectName}],projectsTruncated:false}:
        {scope,project:{id:'project-test',name:result.projectName},roleLabel:'Administrador',canPlanSchedule:true,tasks,totalTasks:tasks.length,nextCursor:null};
+   }else if(['/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname)){
+    assert.equal(created,true);assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'project-test');
+    body=url.pathname==='/api/identity/project-creation'?{scope,projectId:'project-test',canCreate:true}:{scope,projectId:'project-test',canManage:true,channels:[],invitations:[],candidates:[],truncated:false,candidatesLimited:false};
    }else if(url.pathname==='/api/identity/project-preparation'){
     assert.equal(created,true);assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'project-test');
     body=projectPreparationSnapshot({scope,projectId:'project-test',canManage:true,revision:0,detailsDigest:'b'.repeat(64),name:result.projectName,clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope,projectId:'project-test'});
