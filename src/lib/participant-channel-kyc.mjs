@@ -69,9 +69,9 @@ export function createParticipantChannelKycDeposit({connect,resolveAuthority,upl
   const r=await resolveAuthority(client,context,{deposit:true,environment}),input=sealedInput(r),authorityDigest=authority(r,input),key=participantReceiptId(r.member.actorId,r.project.id,input.operationId);
   await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[key]);
   const found=(await client.query(`SELECT id,"entityType","entityId",metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='participant.operation.recorded'`,[key,r.member.organizationId,r.member.actorId])).rows[0];
-  if(!found){await fenceCompanyKycAuthority(client,r,context);return null;}
+  if(!found){await fenceCompanyKycAuthority(client,r,context,{environment});return null;}
   if(!/^[a-f0-9]{64}$/.test(found.metadata?.contentHash||''))fail('PARTICIPANT_RECEIPT_INVALID');
-  const result=await priorReceipt(client,r,key,channelFingerprint(authorityDigest,found.metadata.contentHash,input),found);await fenceCompanyKycAuthority(client,r,context);return result;
+  const result=await priorReceipt(client,r,key,channelFingerprint(authorityDigest,found.metadata.contentHash,input),found);await fenceCompanyKycAuthority(client,r,context,{environment});return result;
  });},async deposit(context,body){
   const input=depositInput(body),contentHash=digest([['DOCUMENT_FRONT',input.front.digest,input.front.bytes.length,input.front.contentType],['SELFIE',input.selfie.digest,input.selfie.bytes.length,input.selfie.contentType],...(input.back?[['DOCUMENT_BACK',input.back.digest,input.back.bytes.length,input.back.contentType]]:[])]);
   const prepare=await transaction(async client=>{
@@ -100,7 +100,7 @@ export function createParticipantChannelKycDeposit({connect,resolveAuthority,upl
    await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify(m)]);
    const details={version:1,projectId:r.project.id,requestDigest:prepare.fingerprint,kind:'KYC_SUBMITTED',submissionId,contentHash,status,noticeVersion:input.noticeVersion,...(input.back?{captureImageSetVersion:2,documentBackConsentRecorded:true,documentBackNoticeVersion:input.backNoticeVersion,documentBackNoticeSha256:input.backNoticeSha256}:{}),ocrConsentRecorded:input.ocrConsent,ocrNoticeVersion:input.ocrNoticeVersion,ocrNoticeSha256:digest(PARTICIPANT_OCR_NOTICE),biometricConsentRecorded:input.biometricConsent,biometricNoticeVersion:input.biometricNoticeVersion,biometricNoticeSha256:input.biometricNoticeVersion?digest(PARTICIPANT_BIOMETRIC_NOTICE):null,channelCapture,identityCertified:false,permissionsGranted:false,whatsAppAccessGranted:false};
    await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.operation.recorded','Worker',$4,$5::jsonb)`,[prepare.key,r.member.organizationId,r.member.actorId,r.worker.id,JSON.stringify(details)]);
-   await fenceCompanyKycAuthority(client,r,context);
+   await fenceCompanyKycAuthority(client,r,context,{environment});
    return safeResult({id:prepare.key,metadata:details},false);
   });
  }};
