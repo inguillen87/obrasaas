@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {WorkspaceError, workspaceId, operationId, calendarDate, digest} from './workspace-policy.mjs';
 import {decodePrivateImage} from './private-image-upload.mjs';
-import {PLAN_OOXML_TYPES,PLAN_OOXML_CONSENT,PLAN_CYP_CONSENT,PLAN_MONTHLY_CURVE_CONSENT,PLAN_CYP_ROWS,validatePlanOoxml,safePlanOoxmlAnalysis} from './plan-import-ooxml.mjs';
+import {PLAN_OOXML_TYPES,PLAN_OOXML_CONSENT,PLAN_CYP_CONSENT,PLAN_MONTHLY_CURVE_CONSENT,PLAN_CYP_CURVE_CONSENT,PLAN_CYP_ROWS,validatePlanOoxml,safePlanOoxmlAnalysis} from './plan-import-ooxml.mjs';
 
 export const PLAN_IMPORT_LIMIT=3*1024*1024;
 export const PLAN_IMPORT_ROWS=50;
@@ -10,8 +10,9 @@ export const PLAN_IMPORT_CONSENT='plan-document-openai-v1';
 export const PLAN_IMPORT_SPREADSHEET_CONSENT=PLAN_OOXML_CONSENT;
 export const PLAN_IMPORT_CYP_CONSENT=PLAN_CYP_CONSENT;
 export const PLAN_IMPORT_MONTHLY_CURVE_CONSENT=PLAN_MONTHLY_CURVE_CONSENT;
+export const PLAN_IMPORT_CYP_CURVE_CONSENT=PLAN_CYP_CURVE_CONSENT;
 export const planSourceConsent=contentType=>PLAN_OOXML_TYPES[contentType]?PLAN_IMPORT_SPREADSHEET_CONSENT:PLAN_IMPORT_CONSENT;
-export const isPlanSourceConsent=(contentType,consent)=>PLAN_OOXML_TYPES[contentType]?[PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT].includes(consent):consent===PLAN_IMPORT_CONSENT;
+export const isPlanSourceConsent=(contentType,consent)=>PLAN_OOXML_TYPES[contentType]?[PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT].includes(consent):consent===PLAN_IMPORT_CONSENT;
 export const canImportPlan=role=>['ADMIN','DIRECTOR','SITE_MANAGER'].includes(role);
 export const canApprovePlan=role=>['ADMIN','DIRECTOR'].includes(role);
 const fail=(code='PLAN_IMPORT_INPUT_INVALID',status=400)=>{throw new WorkspaceError(code,status);};
@@ -96,7 +97,7 @@ export function validatePlanSourceRows(rows,analysis,original,{complete=false}={
   }
   return rows;
  }
- const cyp=analysis?.version===2;
+ const cyp=[2,4].includes(analysis?.version);
  if(!cyp){if(rows.some(row=>Object.hasOwn(row,'code')||Object.hasOwn(row,'sourceRowId'))||rows.length>PLAN_IMPORT_ROWS)fail('PLAN_IMPORT_ROWS_INVALID');return rows;}
  const safe=safePlanOoxmlAnalysis(analysis);
  if(!safe||!Array.isArray(original)||original.length!==safe.rowCount)fail('PLAN_IMPORT_REVIEW_REQUIRED',409);
@@ -121,7 +122,7 @@ export async function boundedPlanMultipart(request) {
   if([...form.keys()].sort().join('|')!==keys.sort().join('|'))fail();
   const file=form.get('file');if(!file||typeof file==='string')fail();
   const input=Object.fromEntries(keys.filter(k=>k!=='file').map(k=>[k,form.get(k)]));
-  if(!operationId(input.operationId)||![PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT].includes(input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED');planContext(input);
+  if(!operationId(input.operationId)||![PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT].includes(input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED');planContext(input);
   const bytes=new Uint8Array(await file.arrayBuffer());let source;
   try{source=decodePlanSource(bytes,file.type);if(!isPlanSourceConsent(source.contentType,input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED');if(PLAN_OOXML_TYPES[source.contentType])await validatePlanOoxml(source.bytes,source.contentType);}catch(error){
    if(error instanceof WorkspaceError&&['PLAN_IMPORT_FILE_INVALID','PLAN_IMPORT_FILE_TOO_LARGE'].includes(error.code))sourceRejections.set(error,{scope:input.scope,projectId:input.projectId,operationId:input.operationId.toLowerCase()});

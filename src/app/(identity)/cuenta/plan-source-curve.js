@@ -6,9 +6,9 @@ import styles from './plan-source-curve.module.css';
 const columns=[['monthlyAmount','Importe mensual previsto'],['cumulativeAmount','Importe acumulado previsto'],['monthlyPercentage','Porcentaje mensual previsto'],['cumulativePercentage','Porcentaje acumulado previsto']];
 const label=(cell,percentage=false)=>formatSourceCurveDecimal(cell.cachedValue,{percentage});
 
-export function PlanSourceCurve({curve,status,sourceRowCount,selectedRowCount}){
+export function PlanSourceCurve({curve,status,sourceRowCount,selectedRowCount,profile='MONTHLY_RUBROS_CURVE'}){
  const id=useId(),controls=useRef([]),[selected,setSelected]=useState(0);
- let view;try{view=planSourceCurveView(curve);}catch{return <p className={styles.unavailable} role="status">No se puede mostrar la curva prevista: faltan valores originales válidos del archivo.</p>;}
+ let view;try{view=planSourceCurveView(curve,{profile});}catch{return <p className={styles.unavailable} role="status">No se puede mostrar la curva prevista: faltan valores originales válidos del archivo.</p>;}
  if(!view)return null;
  const index=Math.min(selected,view.periods.length-1),period=view.periods[index],point=view.points[index];
  const counts=Number.isSafeInteger(sourceRowCount)&&sourceRowCount>0&&Number.isSafeInteger(selectedRowCount)&&selectedRowCount>=0&&selectedRowCount<=sourceRowCount;
@@ -21,7 +21,8 @@ export function PlanSourceCurve({curve,status,sourceRowCount,selectedRowCount}){
  return <section className={styles.panel} aria-labelledby={`${id}-heading`}>
   <div className={styles.heading}><h5 id={`${id}-heading`}>Inversión prevista del archivo</h5><span className={styles.currency}>Moneda por confirmar</span></div>
   <p className={styles.context}>Fuente completa del archivo. Se muestran los valores guardados, sin recalcular fórmulas. Los meses son ordinales, sin fechas calendario.</p>
-  {counts&&<p className={styles.context}>Fuente original: {sourceRowCount} {sourceRowCount===1?'rubro':'rubros'}. Tareas elegidas: {selectedRowCount}. La selección de tareas no recalcula esta curva.</p>}
+  {counts&&<p className={styles.context}>Fuente original: {sourceRowCount} {profile==='CYP_PARTIDAS_CURVE'?(sourceRowCount===1?'partida física':'partidas físicas'):(sourceRowCount===1?'rubro':'rubros')}. Tareas elegidas: {selectedRowCount}. La selección de tareas no recalcula esta curva.</p>}
+  {profile==='CYP_PARTIDAS_CURVE'&&<p className={styles.context}>La curva conserva el presupuesto completo del archivo, incluidos sus costos adicionales. Esos costos no se convierten en tareas físicas.</p>}
   {status==='APPLIED'&&<p className={styles.context}>Esta curva conserva la previsión del archivo original del plan aplicado.</p>}
   <dl className={styles.totals}><div><dt>Total previsto del archivo</dt><dd>{label(view.total)}</dd></div><div><dt>Acumulado inicial, antes del mes 1</dt><dd>{label(view.initialCumulative)}</dd></div></dl>
   <div className={styles.chart}>

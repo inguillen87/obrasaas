@@ -23,7 +23,7 @@ for(const source of ['src/lib/geo.js','src/lib/field-media-privacy.mjs','src/lib
  sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(destination)).digest('hex')});
 }
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
-for(const source of ['src/lib/plan-import-http.mjs','src/lib/plan-import-policy.mjs','src/lib/plan-import-store.mjs','src/lib/plan-import-ooxml.mjs','src/lib/plan-import-monthly-curve.mjs','src/lib/workspace-policy.mjs','src/lib/private-image-upload.mjs','package.json','package-lock.json'])sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(path.join(root,source))).digest('hex')});
+for(const source of ['src/lib/plan-import-http.mjs','src/lib/plan-import-policy.mjs','src/lib/plan-import-store.mjs','src/lib/plan-import-ooxml.mjs','src/lib/plan-import-monthly-curve.mjs','src/lib/plan-import-cyp-curve.mjs','src/lib/workspace-policy.mjs','src/lib/private-image-upload.mjs','package.json','package-lock.json'])sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(path.join(root,source))).digest('hex')});
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-plan-recovery-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,fontFamily:'Arial'}}>{children}</body></html>}`);
