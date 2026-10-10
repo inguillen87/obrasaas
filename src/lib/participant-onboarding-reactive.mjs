@@ -144,6 +144,7 @@ const reactiveKycStatusReplies={
 };
 const reactiveStatusFences=new WeakMap();
 const currentMemberProjection=m=>m?{actorId:m.actorId,membershipId:m.membershipId,clerkUserId:m.clerkUserId,role:m.role,clerkRole:m.clerkRole,revision:m.revision,userRevision:m.userRevision}:null;
+const currentProjectProjection=p=>p?{id:p.id,name:p.name,organizationId:p.organizationId,metadata:p.metadata}:null;
 const currentWorkerProjection=w=>({id:w.id,projectId:w.projectId,name:w.name,phone:w.phone,active:w.active,metadata:w.metadata,revision:w.revision});
 const currentOrganizationProjection=o=>({id:o.id,name:o.name,metadata:o.metadata,subscriptionPlan:o.subscriptionPlan,subscriptionStatus:o.subscriptionStatus,trialEndsAt:o.trialEndsAt===null?null:new Date(o.trialEndsAt).toISOString()});
 export async function reactiveParticipantStatusAuthority(client,r,pref,{environment=process.env,proof=null}={}){
@@ -167,7 +168,7 @@ export async function reactiveParticipantStatusAuthority(client,r,pref,{environm
 export async function assertReactiveParticipantStatusResult(client,r,pref,result,{environment=process.env}={}){
  const a=await reactiveParticipantStatusAuthority(client,r,pref,{environment,proof:result?.reactiveKycStatus});
  if(!result?.reactiveKycStatus||digest(result.reply)!==digest({type:'text',body:reactiveKycStatusReplies[a.status]}))fail();
- reactiveStatusFences.set(r,{client,pref,worker:currentWorkerProjection(a.worker),organization:currentOrganizationProjection(a.organization),project:a.project,member:currentMemberProjection(a.member),own:currentMemberProjection(a.own),proofDigest:digest(result.reactiveKycStatus),replyDigest:digest(result.reply)});
+ reactiveStatusFences.set(r,{client,pref,worker:currentWorkerProjection(a.worker),organization:currentOrganizationProjection(a.organization),project:currentProjectProjection(a.project),member:currentMemberProjection(a.member),own:currentMemberProjection(a.own),proofDigest:digest(result.reactiveKycStatus),replyDigest:digest(result.reply)});
  return a;
 }
 // Only the complete resolver above can register this in-memory authority for
@@ -186,7 +187,7 @@ export async function fenceReactiveParticipantStatusResult(client,r,pref,result)
  WHERE w.id=$1 AND w."projectId"=$2 AND w.active=true AND ($6::text IS NULL OR (own.id IS NOT NULL AND EXISTS(SELECT 1 FROM public."ProjectMembership" pm WHERE pm."projectId"=p.id AND pm."tenantMembershipId"=own.id AND pm.status='ACTIVE')))
  FOR UPDATE OF w FOR SHARE OF p,o,tm,u`,[f.worker.id,f.worker.projectId,r.connection.organizationId,f.member.membershipId,f.member.actorId,f.own?.membershipId||null,f.own?.actorId||null])).rows;
  const row=rows[0],now=row?.reactiveStatusNow;
- if(rows.length!==1||!(now instanceof Date)||!Number.isFinite(now.getTime())||digest(currentWorkerProjection(row))!==digest(f.worker)||digest(currentOrganizationProjection(row.statusOrganization))!==digest(f.organization)||digest(row.statusProject)!==digest(f.project)||digest(row.statusMember)!==digest(f.member)||digest(row.statusOwn)!==digest(f.own))fail('EMPLOYEE_INTAKE_REVOKED');
+ if(rows.length!==1||!(now instanceof Date)||!Number.isFinite(now.getTime())||digest(currentWorkerProjection(row))!==digest(f.worker)||digest(currentOrganizationProjection(row.statusOrganization))!==digest(f.organization)||digest(currentProjectProjection(row.statusProject))!==digest(f.project)||digest(currentMemberProjection(row.statusMember))!==digest(f.member)||digest(currentMemberProjection(row.statusOwn))!==digest(f.own))fail('EMPLOYEE_INTAKE_REVOKED');
  if(Date.parse(result.reactiveKycStatus.expiresAt)<=now.getTime())fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');
  assertCustomerReplyWindow(r.payload,now.getTime());return now;
 }
