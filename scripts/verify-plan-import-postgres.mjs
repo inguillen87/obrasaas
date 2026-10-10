@@ -330,13 +330,15 @@ try {
  const monthlyPrivacyBefore=await projectState('p-monthly-curve'),monthlyPrivacyIO=[puts,reads,monthlyAnalyses];
  await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['SITE_MANAGER','m-director']);
  try{
+  await assert.rejects(monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyApply.operationId}),{code:'WORKSPACE_CONTEXT_CHANGED'});
+  scopes[director.userId]=(await workspace.list(director)).scope;
   for(const operationId of [monthlyApply.operationId,monthlyEditCommand.operationId,monthlyNullDecision.operationId,monthlyDuplicate.operationId])await assert.rejects(monthlyImporter.read(director,{...monthlyContext(director),operationId}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
   await assert.rejects(monthlyImporter.read(director,{...monthlyContext(director),draftId:monthlyDraft.id}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
   await assert.rejects(monthlyImporter.source(director,{...monthlyContext(director),draftId:monthlyDraft.id}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
-  await assert.rejects(monthlyImporter.decide(director,monthlyApply),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
-  await assert.rejects(monthlyImporter.attach(director,monthlyDuplicate),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
+  await assert.rejects(monthlyImporter.decide(director,{...monthlyApply,...monthlyContext(director)}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
+  await assert.rejects(monthlyImporter.attach(director,{...monthlyDuplicate,...monthlyContext(director)}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
   assert.equal((await monthlyImporter.read(director,monthlyContext(director))).drafts.length,0);
- }finally{await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['DIRECTOR','m-director']);}
+ }finally{await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['DIRECTOR','m-director']);scopes[director.userId]=(await workspace.list(director)).scope;}
  assert.deepEqual(await projectState('p-monthly-curve'),monthlyPrivacyBefore);assert.deepEqual([puts,reads,monthlyAnalyses],monthlyPrivacyIO);
  assert.equal((await monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyApply.operationId})).receiptId,monthlyApplied.receiptId);
  assert.equal((await monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyNullDecision.operationId})).code,'PLAN_IMPORT_REVIEW_REQUIRED');
@@ -344,14 +346,14 @@ try {
  monthlyCurveChecks.push('v3-current-role-gates-success-edit-typed-rejection-upload-rejection-source-list-and-replay-restore-receipts');
 
  const monthlyRevokedDownload=createPlanImport({workspace,put,environment,analyzer:localAnalyzer,get:async(...args)=>{const result=await get(...args);await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['SITE_MANAGER','m-director']);return result;}});
- try{await assert.rejects(monthlyRevokedDownload.source(director,{...monthlyContext(director),draftId:monthlyDraft.id}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});}finally{await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['DIRECTOR','m-director']);}
+ try{await assert.rejects(monthlyRevokedDownload.source(director,{...monthlyContext(director),draftId:monthlyDraft.id}),{code:'WORKSPACE_CONTEXT_CHANGED'});}finally{await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['DIRECTOR','m-director']);}
  assert.deepEqual((await monthlyImporter.source(director,{...monthlyContext(director),draftId:monthlyDraft.id})).bytes,monthlySource.bytes);
  assert.deepEqual(await projectState('p-monthly-curve'),monthlyPrivacyBefore);
  monthlyCurveChecks.push('v3-source-download-checks-canonical-role-again-after-private-io-before-delivery');
 
  const monthlyLateInput={...monthlyInput,...monthlyContext(director),operationId:randomUUID(),source:decodePlanSource(monthlyCurveFixture({rubros:4,type:'xlsx'}),monthlySource.contentType)};
  const monthlyLateImporter=createPlanImport({workspace,put,get,environment,analyzer:{analyze:async(file,options)=>{const result=await localAnalyzer.analyze(file,options);await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['SITE_MANAGER','m-director']);return result;}}});
- try{await assert.rejects(monthlyLateImporter.attach(director,monthlyLateInput),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});await assert.rejects(monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyLateInput.operationId}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});}finally{await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['DIRECTOR','m-director']);}
+ try{await assert.rejects(monthlyLateImporter.attach(director,monthlyLateInput),{code:'WORKSPACE_CONTEXT_CHANGED'});await assert.rejects(monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyLateInput.operationId}),{code:'WORKSPACE_CONTEXT_CHANGED'});scopes[director.userId]=(await workspace.list(director)).scope;await assert.rejects(monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyLateInput.operationId}),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});}finally{await pool.query('UPDATE "TenantMembership" SET "tenantRole"=$1 WHERE id=$2',['DIRECTOR','m-director']);scopes[director.userId]=(await workspace.list(director)).scope;}
  const monthlyLateDraft=(await monthlyImporter.read(director,{...monthlyContext(director),operationId:monthlyLateInput.operationId})).draft;
  assert.equal(monthlyLateDraft.status,'PROCESSING');assert.equal(monthlyLateDraft.sourceAvailable,true);assert.deepEqual((await projectState('p-monthly-curve')).tasks,monthlyAfterProgress.tasks);assert.equal(forbiddenProviderCalls,0);
  monthlyCurveChecks.push('v3-role-downgrade-during-local-analysis-blocks-financial-finalization-and-restored-role-only-reads-pending');
