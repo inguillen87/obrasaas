@@ -3,11 +3,29 @@ import assert from 'node:assert/strict';
 import {companyChannelSnapshot,companyChannelOutcome,companyChannelCommand,companyChannelCanAct} from '../src/app/(identity)/cuenta/company-channel-view.mjs';
 const expected={scope:'a'.repeat(64),projectId:'project-a',operationId:'11111111-1111-4111-8111-111111111111',action:'PREPARE',connectionId:'connection-a',organizationId:'org_Test',actorId:'user_AdminA'};
 const support=(active=false)=>({attendance:active,kyc:active,media:active,flows:false,templates:false});
-const channel=()=>({id:'connection-a',anchorProjectId:'project-a',anchorName:'Obra A',displayPhoneNumber:null,mode:'PROJECT_ONLY',revision:1,assignments:[],capabilities:support()});
+const channel=()=>({id:'connection-a',anchorProjectId:'project-a',anchorName:'Obra A',displayPhoneNumber:null,mode:'PROJECT_ONLY',revision:1,assignments:[],activationRequirement:null,capabilities:support()});
 const identity=()=>({organization:{id:'org_Test',name:'Empresa de ensayo'},actor:{id:'user_AdminA',role:'ADMIN'}});
 const snapshot=()=>({...identity(),scope:expected.scope,projectId:expected.projectId,schemaReady:true,canManage:true,channels:[channel()],projects:[{id:'project-a',name:'Obra A'},{id:'project-b',name:'Obra B'}],truncated:false,accepted:false,capabilities:support()});
 const absent=()=>({...identity(),scope:expected.scope,projectId:expected.projectId,operationId:expected.operationId,state:'NOT_OBSERVED',saved:false,definitive:false});
 const recorded=()=>({...identity(),scope:expected.scope,projectId:expected.projectId,operationId:expected.operationId,action:'PREPARE',state:'RECORDED',saved:true,definitive:true,receiptId:'company_channel_'+'b'.repeat(64),replayed:false,channel:{...channel(),mode:'PREPARED',revision:2}});
+test('fresh OWN activation prerequisite blocks a command while ready and ordinary channels retain organization management',()=>{
+ const base=snapshot(),ready={...channel(),mode:'PREPARED',activationRequirement:null};base.channels=[ready];
+ assert.equal(companyChannelSnapshot(base,expected).channels[0].activationRequirement,null);
+ assert.equal(companyChannelCanAct(base,ready,'ACTIVATE'),true);
+ const elsewhere={...ready,anchorProjectId:'project-b',anchorName:'Obra B'};assert.equal(companyChannelCanAct(base,elsewhere,'ACTIVATE'),true);
+ for(const mode of ['PREPARED','SUSPENDED']){
+  const blocked={...ready,mode,activationRequirement:'OWN_NUMBER'},current={...base,channels:[blocked]};
+  assert.equal(companyChannelSnapshot(current,expected).channels[0].activationRequirement,'OWN_NUMBER');
+  assert.equal(companyChannelCanAct(current,blocked,'ACTIVATE'),false);
+  assert.equal(companyChannelCanAct(current,blocked,'ASSIGN'),true);
+  assert.throws(()=>companyChannelCommand(current,{action:'ACTIVATE',connectionId:blocked.id,revision:blocked.revision},expected));
+ }
+ for(const activationRequirement of [undefined,true,false,'RUNTIME','OWN_ORIGIN',{}])assert.throws(()=>companyChannelSnapshot({...base,channels:[{...ready,activationRequirement}]},expected));
+ const historical=recorded();delete historical.channel.activationRequirement;assert.equal(companyChannelOutcome(historical,expected).state,'RECORDED');
+ assert.throws(()=>companyChannelSnapshot({...base,channels:[historical.channel]},expected));
+ assert.equal(companyChannelCanAct(base,historical.channel,'ACTIVATE'),false);
+});
+
 test('canonical context and current actor are required before presenting an actionable snapshot',()=>{assert.equal(companyChannelSnapshot(snapshot(),expected).canManage,true);for(const change of [{scope:'c'.repeat(64)},{projectId:'project-b'},{organization:{id:'org_Foreign',name:'Otra empresa'}},{actor:{id:'user_Other',role:'ADMIN'}},{actor:{id:'user_AdminA',role:'DIRECTOR'},canManage:true}])assert.throws(()=>companyChannelSnapshot({...snapshot(),...change},expected));assert.equal(companyChannelSnapshot({...snapshot(),canManage:false,actor:{id:'user_AdminA',role:'DIRECTOR'}},expected).canManage,false);});
 test('schema, capability and catalog bounds fail closed without claiming acceptance',()=>{const base=snapshot();for(const change of [{schemaReady:false},{accepted:true},{capabilities:{...base.capabilities,media:true}},{channels:Array.from({length:101},(_,i)=>({...channel(),id:'channel-'+i}))},{projects:[...base.projects,base.projects[0]]}])assert.throws(()=>companyChannelSnapshot({...base,...change},expected));const missing={...base,schemaReady:false,channels:[{...channel(),revision:0}],capabilities:{...base.capabilities,attendance:false}};assert.equal(companyChannelSnapshot(missing,expected).schemaReady,false);assert.equal(companyChannelCanAct(missing,missing.channels[0],'PREPARE'),false);assert.throws(()=>companyChannelSnapshot({...missing,channels:[{...missing.channels[0],mode:'COMPANY'}]},expected));});
 test('truncation blocks assignment and activation while explicit suspension remains available',()=>{const base={...snapshot(),truncated:true},item={...channel(),mode:'PREPARED'};assert.equal(companyChannelCanAct(base,item,'ASSIGN'),false);assert.equal(companyChannelCanAct(base,item,'ACTIVATE'),false);assert.equal(companyChannelCanAct(base,{...item,mode:'COMPANY'},'SUSPEND'),true);});
