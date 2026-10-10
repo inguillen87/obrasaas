@@ -27,6 +27,13 @@ export function companyKycProjectionContract(value,expected={}){
  return Object.freeze({...value});
 }
 export const companyKycProjectionTuple=value=>{const p=companyKycProjectionContract(value);return projectionKeys.map(key=>p[key]);};
+// Capture receipts hash the writer's source object, including its projection.
+// JSONB changes object key order. Restore that original writer order only when
+// reconstructing a source; validate the entire stored projection first.
+export function companyKycProjectionSource(value,expected={}){
+ const p=companyKycProjectionContract(value,expected);
+ return Object.freeze(Object.fromEntries(projectionKeys.map(key=>[key,p[key]])));
+}
 export const companyKycProjectionDigest=value=>digest(companyKycProjectionTuple(value));
 export function companyKycProjectionId(sourceEventId){if(!event(sourceEventId))fail();return 'company_kyc_projection_'+digest(['company-kyc-projection-v1',sourceEventId]);}
 export function companyKycProjectLockIds(anchorProjectId,targetProjectId){

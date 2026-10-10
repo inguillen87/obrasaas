@@ -1,7 +1,7 @@
 import {WorkspaceError,workspaceId,digest} from './workspace-policy.mjs';
 import {participantKycInitialChannelCapture,participantKycImageSet} from './participant-kyc-image-set.mjs';
 import {assertApprovedParticipantKyc} from './participant-approved-identity.mjs';
-import {companyKycGrantDigest,companyKycProjectionId,companyKycProjectionContract,companyKycSecretContext} from './company-channel-kyc.mjs';
+import {companyKycGrantDigest,companyKycProjectionId,companyKycProjectionSource,companyKycSecretContext} from './company-channel-kyc.mjs';
 import {decodeSignedCustomerEvent} from './meta-customer-processing.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {metaKycChallengeDigest} from './meta-kyc-challenge.mjs';
@@ -48,7 +48,7 @@ export async function readCurrentReactiveKyc(client,{intent,member,own,project,w
  if(payload.type!=='message'||payload.value.type!=='interactive'||'+'+payload.value.from!==worker.phone)fail();
  const projections=(await client.query(`SELECT id,"actorId","entityId",metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "entityType"='Worker' AND "entityId"=$3 AND action='participant.kyc_chat.projected' FOR SHARE`,[companyKycProjectionId(c.completionEventId),intent.organizationId,worker.id])).rows;
  if(projections.length!==1||projections[0].actorId!==captureActor||projections[0].entityId!==worker.id)fail();
- const projection=companyKycProjectionContract(projections[0].metadata,{sourceEventId:sourceEvent.id,payloadDigest:sourceEvent.payload.payloadDigest,organizationId:intent.organizationId,connectionId:connection.id,anchorProjectId:connection.projectId,targetProjectId:project.id,workerId:worker.id,challengeId:c.id,ownerRevision:connection.company.revision,assignmentRevision:connection.company.assignmentRevision,grantDigest:companyKycGrantDigest(connection),issuerActorId:member.actorId,issuerMembershipId:member.membershipId,participantActorId:originalOwn?own.actorId:null,participantMembershipId:originalOwn?own.membershipId:null,participantClerkUserId:originalOwn?own.clerkUserId:null});
+ const projection=companyKycProjectionSource(projections[0].metadata,{sourceEventId:sourceEvent.id,payloadDigest:sourceEvent.payload.payloadDigest,organizationId:intent.organizationId,connectionId:connection.id,anchorProjectId:connection.projectId,targetProjectId:project.id,workerId:worker.id,challengeId:c.id,ownerRevision:connection.company.revision,assignmentRevision:connection.company.assignmentRevision,grantDigest:companyKycGrantDigest(connection),issuerActorId:member.actorId,issuerMembershipId:member.membershipId,participantActorId:originalOwn?own.actorId:null,participantMembershipId:originalOwn?own.membershipId:null,participantClerkUserId:originalOwn?own.clerkUserId:null});
  const source={kind:'META_KYC_CHAT',eventId:sourceEvent.id,payloadDigest:sourceEvent.payload.payloadDigest,challengeId:c.id,connectionId:connection.id,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,senderE164:worker.phone,companyKyc:projection};
  if(initial.sourceDigest!==digest(source))fail();
  const dispatchId='meta_kyc_dispatch_'+digest(['meta-kyc-dispatch-v1',sourceEvent.id]),dispatches=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityType"='Worker' AND "entityId"=$4 AND action='participant.kyc_chat.dispatched' FOR SHARE`,[dispatchId,intent.organizationId,captureActor,worker.id])).rows,dm=dispatches[0]?.metadata;
