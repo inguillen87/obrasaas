@@ -5,6 +5,7 @@ import {participantAccountBound} from './participant-admission.mjs';
 import {decodeSignedCustomerEvent} from './meta-customer-processing.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerOutboundId} from './meta-customer-outbound.mjs';
+import {assertEmployeeIntakeReplyContinuity} from './meta-employee-intake.mjs';
 import {officeCommand,officeKeys,officeContext,officeInvitationId,officeReceiptId,requireOfficeAdministrator,assertOfficeGrant,officeEventProjection} from './office-review-policy.mjs';
 
 const fail=(code,status=409)=>{throw new WorkspaceError(code,status);};
@@ -30,7 +31,12 @@ async function replyProjection(client,c,source,environment){
  if(rows.length>1)fail('OFFICE_REVIEW_SOURCE_CHANGED');
  if(!rows.length)return {replyState:'NOT_OBSERVED',deliveryStatus:null};
  const r=rows[0];let request;try{request=JSON.parse(decryptCustomerSecret(r.payload.encryptedPayload,{organizationId:c.organizationId,projectId:c.projectId,purpose:'outbound',resourceId:r.id},environment));}catch{fail('OFFICE_REVIEW_SOURCE_CHANGED');}
- if(r.id!==customerOutboundId(source.row.id)||r.payload.version!==1||r.payload.organizationId!==c.organizationId||r.payload.channelId!==c.id||r.payload.eventId!==source.row.id||r.payload.requestDigest!==digest(request)||request.version!==1||request.organizationId!==c.organizationId||request.channelId!==c.id||request.eventId!==source.row.id||request.payloadDigest!==source.row.payload.payloadDigest||request.replyTo!==source.payload.value.id||request.to!==source.payload.value.from||request.channelPurpose!=='EMPLOYEE_INTAKE'||request.applicationId!==source.row.id)fail('OFFICE_REVIEW_SOURCE_CHANGED');
+ if(r.id!==customerOutboundId(source.row.id)||r.payload.version!==1||r.payload.organizationId!==c.organizationId||r.payload.channelId!==c.id||r.payload.eventId!==source.row.id||r.payload.requestDigest!==digest(request)||request.version!==1||request.organizationId!==c.organizationId||request.channelId!==c.id||request.eventId!==source.row.id||request.payloadDigest!==source.row.payload.payloadDigest||request.replyTo!==source.payload.value.id||request.to!==source.payload.value.from||request.channelPurpose!=='EMPLOYEE_INTAKE')fail('OFFICE_REVIEW_SOURCE_CHANGED');
+ if(source.row.payload.employeeIntakeDispatch&&source.row.payload.employeeIntakeDispatch.applicationId!==request.applicationId)fail('OFFICE_REVIEW_SOURCE_CHANGED');
+ if(request.applicationId!==source.row.id){
+  if(r.payload.employeeIntake!==true||r.payload.applicationId!==request.applicationId)fail('OFFICE_REVIEW_SOURCE_CHANGED');
+  try{await assertEmployeeIntakeReplyContinuity(client,c,source.row,request,{environment});}catch(error){if(error instanceof WorkspaceError)fail('OFFICE_REVIEW_SOURCE_CHANGED');throw error;}
+ }
  const state=['PREPARED','SEND_STARTED','SEND_UNKNOWN','SENT','STATUS_OBSERVED','REJECTED'].includes(r.outcome?.state)?r.outcome.state:'UNCONFIRMED';
  // The ordinary callback already checks signed status/recipient/message ID.
  // This DTO reports the stored observation and never claims physical reading.

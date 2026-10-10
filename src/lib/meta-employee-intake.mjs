@@ -50,6 +50,34 @@ async function currentPolicy(client,connection,now,{enabled=true,expected=null,l
  await assertEmployeeIntakeChannelContinuity(client,connection,p,{lock});return {policy:p,issuer};
 }
 
+// A historical observation has no inbox lease or sending authority. Its sealed
+// outbox request must connect the selected dispatch to the original signed
+// application, whose policy is still current. Later messages may advance that
+// application, so lastEventId is checked against its envelope, not this greeting.
+export async function assertEmployeeIntakeReplyContinuity(client,officeConnection,source,request,{environment=process.env}={}){
+ const dispatch=source.payload?.employeeIntakeDispatch;
+ if(!eventId(request.applicationId)||request.applicationId===source.id||dispatch?.version!==1||dispatch.applicationId!==request.applicationId||dispatch.payloadDigest!==source.payload.payloadDigest||!/^[a-f0-9]{64}$/.test(dispatch.policyDigest||'')||!/^[a-f0-9]{64}$/.test(dispatch.replyDigest||''))fail('EMPLOYEE_INTAKE_INTEGRITY');
+ const connection=await companyConnectionForProject(client,officeConnection.organizationId,officeConnection.projectId,false);
+ if(!connection||connection.id!==officeConnection.id||connection.projectId!==officeConnection.projectId||connection.company.revision!==officeConnection.channelRevision)fail('EMPLOYEE_INTAKE_REVOKED');
+ const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
+ const {policy}=await currentPolicy(client,connection,now,{lock:false,expected:dispatch.policyDigest,environment});
+ const signedGreeting=row=>{
+  const payload=decodeSignedCustomerEvent(row,connection,environment),proof=unseal(connection,'webhook-proof',row.id,row.payload.encryptedProof,environment),routing=proof.companyRouting;
+  if(row.projectId!==connection.projectId||row.provider!=='meta-customer-v1'||payload.type!=='message'||payload.value?.type!=='text'||typeof payload.value.text?.body!=='string'||payload.value.text.body.trim().toUpperCase()!=='HOLA'||!Number.isSafeInteger(Number(payload.value.timestamp))||Number(payload.value.timestamp)<=0||routing?.mode!=='COMPANY'||routing.contract!==COMPANY_CHANNEL_SCHEMA_CONTRACT||!Number.isSafeInteger(routing.revision)||routing.revision<policy.ownerRevision||routing.revision>connection.company.revision||!row.payload.companyRouting||durableDigest(routing)!==durableDigest(row.payload.companyRouting))fail('EMPLOYEE_INTAKE_INTEGRITY');
+  return payload;
+ };
+ const payload=signedGreeting(source);
+ if(request.version!==1||request.organizationId!==connection.organizationId||request.channelId!==connection.id||request.eventId!==source.id||request.payloadDigest!==source.payload.payloadDigest||request.to!==payload.value.from||request.replyTo!==payload.value.id||request.channelPurpose!=='EMPLOYEE_INTAKE'||digest(request.message)!==dispatch.replyDigest)fail('EMPLOYEE_INTAKE_INTEGRITY');
+ const recorded=unseal(connection,'employee-intake-dispatch',source.id,dispatch.encryptedResult,environment);
+ if(recorded.kind!=='EMPLOYEE_INTAKE'||recorded.identityStatus!=='LIMITED_PARTICIPANT_INTAKE'||recorded.businessApplied!==false||recorded.replySent!==false||digest(recorded.reply)!==dispatch.replyDigest)fail('EMPLOYEE_INTAKE_INTEGRITY');
+ const anchors=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-v1'`,[request.applicationId,connection.projectId])).rows;
+ if(anchors.length!==1)fail('EMPLOYEE_INTAKE_INTEGRITY');
+ const anchor=anchors[0],original=signedGreeting(anchor),state=readState(anchor,connection,environment),initial=anchor.payload.employeeIntakeDispatch;
+ if(anchor.id!==request.applicationId||original.value.from!==payload.value.from||state.sender!=='+'+payload.value.from||state.senderKey!==senderKey(connection,state.sender,environment)||state.policyDigest!==dispatch.policyDigest||!Number.isSafeInteger(state.messageCount)||state.messageCount<2||state.revision<2||!Number.isFinite(state.lastMessageTimestamp)||state.lastMessageTimestamp<Number(payload.value.timestamp)||Number(original.value.timestamp)>Number(payload.value.timestamp)||initial?.version!==1||initial.applicationId!==anchor.id||initial.payloadDigest!==anchor.payload.payloadDigest||initial.policyDigest!==dispatch.policyDigest)fail('EMPLOYEE_INTAKE_INTEGRITY');
+ const begun=unseal(connection,'employee-intake-dispatch',anchor.id,initial.encryptedResult,environment);
+ if(begun.kind!=='EMPLOYEE_INTAKE'||begun.identityStatus!=='LIMITED_PARTICIPANT_INTAKE'||digest(begun.reply)!==initial.replyDigest)fail('EMPLOYEE_INTAKE_INTEGRITY');
+}
+
 async function isCompanyKycReplyIntent(client,connection,message,environment){
  const choice=message.interactive?.list_reply?.id||message.interactive?.button_reply?.id;
  // This discriminates routing only. The KYC resolver validates the encrypted
