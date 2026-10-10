@@ -46,6 +46,11 @@ async function requestWorkspace(transport,query='',options={}){
  });
 }
 const query=values=>'?' + new URLSearchParams(values).toString();
+function confirmedWorkspaceAccount(data){
+ const projects=data?.projects;
+ if(!Array.isArray(projects)||projects.some(project=>!project||typeof project.id!=='string'||!project.id.length||typeof project.name!=='string')||new Set(projects.map(project=>project.id)).size!==projects.length)throw new Error('No pudimos confirmar la lista de obras. Actualizá para volver a consultar antes de elegir una obra.');
+ return data;
+}
 const guideAccessReasons=['SESSION_REQUIRED','WORKSPACE_MEMBERSHIP_REQUIRED','WORKSPACE_PROJECT_UNAVAILABLE','WORKSPACE_CONTEXT_CHANGED','PARTICIPANT_KYC_REVIEW_REQUIRED'];
 export function workspaceGuideAccessReason(error){
  if(error?.status===401)return 'SESSION_REQUIRED';
@@ -153,13 +158,13 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,initialProj
  useEffect(()=>{
   const epoch=generation;mounted.current=true;const abort=new AbortController();controller.current=abort;const current=++epoch.current;setObservationEpoch(current);setChannelSnapshot(null);
   setAccount(null);setView(null);setIdentityProject(null);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);setAttempt(null);setRetryAllowed(false);setTaskCreating(false);setModulePending({});setNotice('');setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);setLoading(true);
-  request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current){initialProjectHint.current.listGeneration=current;setAccount(data);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);}}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}).finally(()=>{if(mounted.current&&current===generation.current){setLoading(false);setPlanReadback(null);}});
+  request('',{signal:abort.signal}).then(data=>{if(mounted.current&&current===generation.current){const confirmed=confirmedWorkspaceAccount(data);initialProjectHint.current.listGeneration=current;setAccount(confirmed);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);}}).catch(error=>{if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}).finally(()=>{if(mounted.current&&current===generation.current){setLoading(false);setPlanReadback(null);}});
   return()=>{mounted.current=false;epoch.current++;abort.abort();controller.current?.abort();};
  },[request]);
  async function refresh(){
   if(contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
   setAccount(null);setView(null);setIdentityProject(null);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setNotice('');setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);setLoading(true);
-  try{const data=await request('',{signal:abort.signal});if(mounted.current&&current===generation.current){initialProjectHint.current.listGeneration=current;setAccount(data);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);}}catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}finally{if(mounted.current&&current===generation.current)setLoading(false);}
+  try{const data=await request('',{signal:abort.signal});if(mounted.current&&current===generation.current){const confirmed=confirmedWorkspaceAccount(data);initialProjectHint.current.listGeneration=current;setAccount(confirmed);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);}}catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
  const open=useCallback(async(projectId,append=false)=>{
   if(account?.officeReviewOnly===true){if(contextLocked)return;const selected=account.projects.find(project=>project.id===projectId);if(selected){initialProjectHint.current.consumed=true;setView(null);setIdentityProject(null);setOfficeProject({scope:account.scope,projectId,name:selected.name});}return;}

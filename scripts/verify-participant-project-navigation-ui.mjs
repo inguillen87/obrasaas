@@ -216,7 +216,8 @@ async function rejectedHints(width){
  const cases=[['absent','?scope='+scopeB+'&role=ADMIN&projectId=p-a2'],['duplicate','?obra=p-a2&obra=p-a2'],['unknown','?obra=p-unknown&scope='+scopeB+'&role=ADMIN'],['foreign-current-organization','?obra=p-b&scope='+scopeB+'&canManage=true'],['malformed','?obra=https%3A%2F%2Fexample.invalid%2Fcuenta'],['ambiguous-current-list','?obra=p-a2']];
  for(const [name,query] of cases){
   const current=newState('hint-rejected-'+name,{ambiguous:name==='ambiguous-current-list'}),{context,page}=await createPage(width,current,'/cuenta'+query);
-  await waitText(page,'Empresa de ensayo A');await settled(page);await uiTurn(page);await noProject(page);await noExtraAuthority(page);await noOverflow(page);
+  await waitText(page,name==='ambiguous-current-list'?'No pudimos confirmar la lista de obras':'Empresa de ensayo A');await settled(page);await uiTurn(page);await noProject(page);await noExtraAuthority(page);await noOverflow(page);
+  if(name==='ambiguous-current-list')assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Empresa de ensayo A'),'An ambiguous list mounted its account');
   assert.equal(projectRequests(current).length,0,'Rejected hint triggered a project GET: '+name);assert.equal(listRequests(current).length,1);assert.equal(current.posts.length,0);unchanged(current);
   scenarioSummaries.push({name:current.name,width,requests:current.requests,syntheticExplicitJoinPosts:0,identityAndPermissionsUnchanged:true});await context.close();
  }
@@ -229,6 +230,10 @@ async function failedListRefresh(width){
  assert.deepEqual(projectRequests(current).map(row=>row.projectId),[targetProjectId]);assert.equal(listRequests(current).length,2);
  await click(page,'Actualizar');await waitText(page,'Empresa de ensayo A');await settled(page);await uiTurn(page);await noProject(page);
  assert.deepEqual(projectRequests(current).map(row=>row.projectId),[targetProjectId]);assert.equal(listRequests(current).length,3);assert.equal(current.posts.length,0);
+ current.ambiguous=true;await click(page,'Actualizar');await waitText(page,'No pudimos confirmar la lista de obras');await settled(page);await noProject(page);await noExtraAuthority(page);
+ assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Empresa de ensayo A'));assert.equal(listRequests(current).length,4);assert.equal(projectRequests(current).length,1);
+ current.ambiguous=false;await click(page,'Actualizar');await waitText(page,'Empresa de ensayo A');await settled(page);await uiTurn(page);await noProject(page);
+ assert.equal(listRequests(current).length,5);assert.equal(projectRequests(current).length,1,'Recovery must not reopen a consumed hint');assert.equal(current.posts.length,0);
  await noOverflow(page);recordCheck(width,current,'failed-first-list-needs-explicit-refresh-before-single-canonical-open');await context.close();
 }
 async function lateContext(width){
