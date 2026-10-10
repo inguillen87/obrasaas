@@ -179,7 +179,7 @@ async function navigationScenario(role,width){
  await page.waitForSelector('nav[aria-labelledby="workspace-tools-title"]');
  const nav='nav[aria-labelledby="workspace-tools-title"]';
  if(administrator){await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="project-preparation-title"]')?.getAttribute('aria-busy')==='false');assert.equal(preparationReads,1);}else{assert.equal(preparationReads,0);assert.equal(await page.$('section[aria-labelledby="project-preparation-title"]'),null);}
- const expected=['onboarding-guide-title','schedule-title','field-title','inventory-title','participant-title','worker-channel-title',...(administrator?['project-preparation-title','site-register-title','purchase-title','company-channel-title','customer-whatsapp-title','customer-meta-title','customer-inbox-title','template-send-title','constructor-crm-title','demo-pilot-title','operation-status-title']:[])];
+ const expected=['onboarding-guide-title','schedule-title','field-title','inventory-title','participant-title','worker-channel-title',...(administrator?['project-preparation-title','site-register-title','purchase-title','own-company-number-title','own-company-templates-title','company-channel-title','customer-whatsapp-title','customer-meta-title','customer-inbox-title','template-send-title','constructor-crm-title','demo-pilot-title','operation-status-title']:[])];
  const anchors=await page.$$eval(nav+' a',elements=>elements.map(element=>element.hash.slice(1)));
  assert.deepEqual([...new Set(anchors)].sort(),expected.sort());
  assert.equal(await page.$eval(nav,element=>[...element.querySelectorAll('a')].every(link=>document.getElementById(link.hash.slice(1)))),true);
