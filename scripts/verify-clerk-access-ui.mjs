@@ -194,7 +194,14 @@ async function invitationFlow(width) {
   assert.equal(new URL(page.url()).pathname + new URL(page.url()).search, returnPath);
   await click(page, 'Consultar mi invitación'); await wait(page, 'Participante sintético');
   await wait(page, 'Recibo: participant_fixture_acceptance');
-  assert.ok(await page.$('a[href="/cuenta"]'), 'Confirmed acceptance exposes the existing account entry');
+  const expectedAccountPath = '/cuenta?' + new URLSearchParams({participar:invitation,obra:'project-fixture'}).toString();
+  const accountEntry = await page.$('a[href="' + expectedAccountPath + '"]');
+  assert.ok(accountEntry, 'Confirmed acceptance preserves the current invitation and project hint');
+  const destination = new URL(await accountEntry.evaluate(node => node.getAttribute('href')), origin);
+  await accountEntry.dispose();
+  assert.equal(destination.origin, origin);assert.equal(destination.pathname, '/cuenta');
+  assert.deepEqual([...destination.searchParams.entries()], [['participar',invitation],['obra','project-fixture']]);
+  assert.equal(destination.hash, '');
   assert.equal(record.businessReads.find(row => row.path === '/api/identity/participant-join')?.currentContext, 'B');
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await page.screenshot({path:path.join(output, `invitation-${width}.png`),fullPage:true});
