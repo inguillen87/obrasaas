@@ -35,6 +35,12 @@ jobs:
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
       - run: node --test tests/production-*.test.mjs
+      - name: Selected office-review connection and auditor guide
+        run: |
+          npx eslint src/lib/office-review-*.mjs "src/app/(identity)/cuenta/office-review-panel.js" "src/app/(identity)/cuenta/office-review-view.mjs" "src/app/(identity)/cuenta/onboarding-guide.js" "src/app/(identity)/cuenta/workspace-client.js" "src/app/(identity)/cuenta/workspace-recovery-journal.mjs" scripts/verify-office-review-*.mjs scripts/verify-onboarding-guide-ui.mjs tests/production-office-review*.test.mjs tests/production-workspace-guide-observation.test.mjs --max-warnings 0
+          node scripts/verify-office-review-postgres.mjs
+          node scripts/verify-office-review-ui.mjs
+          node scripts/verify-onboarding-guide-ui.mjs
       - name: Verified office admission and canonical role boundaries
         run: |
           npx eslint src/lib/participant-verified-office.mjs src/lib/participant-identity-provider.mjs src/lib/participant-http.mjs src/lib/participant-policy.mjs src/lib/participant-store.mjs tests/production-verified-office-onboarding.test.mjs tests/production-participant-office-account-view.test.mjs scripts/verify-verified-office-onboarding-postgres.mjs scripts/verify-participant-office-account-ui.mjs --max-warnings 0
@@ -141,6 +147,8 @@ jobs:
             .vercel/participant-onboarding-delivery-evidence/
             .vercel/participant-field-permissions-evidence/
             .vercel/verified-office-onboarding-evidence/
+            .vercel/office-review-evidence/
+            .vercel/onboarding-guide-evidence/
             .vercel/private/company-channel-postgres-proof.json
             .vercel/private/reactive-onboarding-postgres-*.json
           include-hidden-files: true

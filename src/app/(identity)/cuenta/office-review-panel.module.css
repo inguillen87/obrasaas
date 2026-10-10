@@ -8,5 +8,8 @@
 .panel a{display:inline-flex;align-items:center;padding:.6rem;color:#f7fafc}
 .panel li{min-width:0;flex-wrap:wrap}
 .panel small,.panel code{overflow-wrap:anywhere}
+.snapshot{min-width:0;margin:1rem 0;padding:1rem;border:1px solid #6684a1;border-radius:10px}
+.snapshot dl{display:grid;grid-template-columns:minmax(8rem,1fr) minmax(0,2fr);gap:.6rem 1rem}
+.snapshot dt{font-weight:600}.snapshot dd{margin:0;overflow-wrap:anywhere}
 .panel :is(input,select,button,a):focus-visible{outline:3px solid #f0b65e;outline-offset:3px}
-@media(max-width:600px){.panel form{padding:.75rem}.panel button{white-space:normal}}
+@media(max-width:600px){.panel form,.snapshot{padding:.75rem}.panel button{white-space:normal}.snapshot dl{grid-template-columns:minmax(0,1fr);gap:.35rem}.snapshot dd{margin-bottom:.6rem}}

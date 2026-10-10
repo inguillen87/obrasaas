@@ -6,7 +6,7 @@ import {decodeSignedCustomerEvent} from './meta-customer-processing.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerOutboundId} from './meta-customer-outbound.mjs';
 import {assertEmployeeIntakeReplyContinuity} from './meta-employee-intake.mjs';
-import {officeCommand,officeKeys,officeContext,officeInvitationId,officeReceiptId,requireOfficeAdministrator,assertOfficeGrant,officeEventProjection} from './office-review-policy.mjs';
+import {officeCommand,officeKeys,officeContext,officeInvitationId,officeReceiptId,requireOfficeAdministrator,assertOfficeGrant,officeEventProjection,officeConnectionProjection,validInstant} from './office-review-policy.mjs';
 
 const fail=(code,status=409)=>{throw new WorkspaceError(code,status);};
 const id=prefix=>prefix+'_'+randomUUID().replaceAll('-','');
@@ -16,7 +16,7 @@ async function receipt(client,member,key){return (await client.query(`SELECT id,
 async function insertAudit(client,member,key,action,entityId,metadata){await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,$4,'Project',$5,$6::jsonb)`,[key,member.organizationId,member.actorId,action,entityId,JSON.stringify(metadata)]);}
 const outcome=(row,scope,replayed=true)=>({scope,projectId:row.entityId,operationId:row.metadata.operationId,action:row.metadata.action,state:row.metadata.state,saved:row.metadata.state==='RECORDED',definitive:row.metadata.state==='RECORDED',receiptId:row.id,replayed,...(row.metadata.invitationId?{invitationId:row.metadata.invitationId}:{} )});
 async function channel(client,member,projectId,connectionId){
- const rows=(await client.query(`SELECT c.id,c."projectId",c."whatsappBusinessId",c."phoneNumberId",c.metadata,cc.revision AS "channelRevision",a.revision AS "assignmentRevision" FROM public."WhatsAppConnection" c JOIN public."WhatsAppCompanyChannel" cc ON cc."connectionId"=c.id AND cc."anchorProjectId"=c."projectId" JOIN public."WhatsAppChannelProjectAssignment" a ON a."connectionId"=cc."connectionId" AND a."organizationId"=cc."organizationId" JOIN public."Project" p ON p.id=c."projectId" AND p."organizationId"=cc."organizationId" WHERE cc."organizationId"=$1 AND a."projectId"=$2 AND a.status='ACTIVE' AND cc.mode='COMPANY' AND c.id=$3 AND c.enabled=true AND c."connectionStatus"='CONNECTED' AND p.status='ACTIVE'`,[member.organizationId,projectId,connectionId])).rows;
+ const rows=(await client.query(`SELECT c.id,c."projectId",c."whatsappBusinessId",c."phoneNumberId",c.metadata,c.enabled,c."connectionStatus",cc.mode,cc.revision AS "channelRevision",a.revision AS "assignmentRevision" FROM public."WhatsAppConnection" c JOIN public."WhatsAppCompanyChannel" cc ON cc."connectionId"=c.id AND cc."anchorProjectId"=c."projectId" JOIN public."WhatsAppChannelProjectAssignment" a ON a."connectionId"=cc."connectionId" AND a."organizationId"=cc."organizationId" JOIN public."Project" p ON p.id=c."projectId" AND p."organizationId"=cc."organizationId" WHERE cc."organizationId"=$1 AND a."projectId"=$2 AND a.status='ACTIVE' AND cc.mode='COMPANY' AND c.id=$3 AND c.enabled=true AND c."connectionStatus"='CONNECTED' AND p.status='ACTIVE'`,[member.organizationId,projectId,connectionId])).rows;
  if(rows.length!==1||rows[0].metadata?.credentialFormat!=='tenant-aad-v2'||rows[0].metadata.credentialOrganizationId!==member.organizationId||rows[0].metadata.developmentPilot)fail('OFFICE_REVIEW_CHANNEL_REQUIRED',403);
  return {...rows[0],organizationId:member.organizationId};
 }
@@ -43,6 +43,19 @@ async function replyProjection(client,c,source,environment){
  return {replyState:state,deliveryStatus:state==='STATUS_OBSERVED'&&['sent','delivered','read','failed','deleted'].includes(r.outcome.providerStatus)?r.outcome.providerStatus:null};
 }
 function matchInvitation(invite,result){if(!result||result.invitationId!==invite.invitationId||result.email!==invite.email||result.role!=='org:member'||!/^orginv_[A-Za-z0-9]+$/.test(result.id||'')||!['pending','accepted'].includes(result.state)||!Number.isFinite(Date.parse(result.expiresAt)))fail('OFFICE_REVIEW_INVITATION_UNCONFIRMED',503);}
+
+async function connectionSelection(client,organizationId,projectId,invitationId){
+ const rows=(await client.query(`SELECT id,"actorId",action,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND action IN ('office.review.connection.shared','office.review.connection.withdrawn') AND metadata->>'invitationId'=$3 ORDER BY (metadata->>'selectionRevision')::bigint DESC,id DESC LIMIT 2`,[organizationId,projectId,invitationId])).rows;
+ for(const row of rows){const m=row.metadata;if(m?.version!==1||m.invitationId!==invitationId||!Number.isSafeInteger(m.selectionRevision)||m.selectionRevision<1||m.selectionRevision>10000||!validInstant(m.observedAt)||!m.selectedBy||m.selectedBy!==row.actorId||!['office.review.connection.shared','office.review.connection.withdrawn'].includes(row.action)||m.kind!==(row.action==='office.review.connection.shared'?'OFFICE_REVIEW_CONNECTION_SHARED':'OFFICE_REVIEW_CONNECTION_WITHDRAWN'))fail('OFFICE_REVIEW_SOURCE_CHANGED');}
+ if(rows.length&&rows[0].metadata.selectionRevision!==((rows[1]?.metadata.selectionRevision||0)+1))fail('OFFICE_REVIEW_SOURCE_CHANGED');
+ return rows[0]||null;
+}
+function configurationSnapshot(selection,grant,invite,c){
+ if(!selection||selection.action==='office.review.connection.withdrawn')return null;
+ const m=selection.metadata,g=grant.metadata;
+ if(m.grantReceiptId!==grant.id||m.originReceiptId!==invite.id||m.membershipId!==g.membershipId||m.clerkUserId!==g.clerkUserId||m.connectionId!==c.id||m.channelRevision!==c.channelRevision||m.assignmentRevision!==c.assignmentRevision||m.expiresAt!==g.expiresAt)fail('OFFICE_REVIEW_SOURCE_CHANGED');
+ const projection=officeConnectionProjection(c,m.observedAt);if(m.connectionDigest!==digest(projection))fail('OFFICE_REVIEW_SOURCE_CHANGED');return projection;
+}
 
 export function createOfficeReviewStore({workspace,connect,identity,environment=process.env}){
  const admin=(session,context,writable,callback)=>workspace.organizationOperation(session,context,writable,async(client,member,scope)=>{requireOfficeAdministrator(member,session);if(writable){const selected=(await client.query(`SELECT id FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE' FOR UPDATE`,[context.projectId,member.organizationId])).rows;if(selected.length!==1)fail('WORKSPACE_PROJECT_UNAVAILABLE',404);}return callback(client,member,scope);});
@@ -73,6 +86,15 @@ export function createOfficeReviewStore({workspace,connect,identity,environment=
   if(await participantAccountBound(client,member))fail('OFFICE_REVIEW_FIELD_ACCOUNT_REJECTED',403);
   return {saved:true,joined:true,state:'RECORDED',canAccept:false,projectId:row.projectId,receiptId:found.id,invitationId:row.metadata.invitationId,expiresAt:found.metadata.expiresAt,readOnly:true};
  }
+ async function configurationGrant(client,row,c){
+  const rows=(await client.query(`SELECT a.id,a.metadata,u.id AS "actorId",tm.id AS "membershipId",tm."tenantRole"::text AS role,tm."clerkRole",u."clerkUserId" FROM public."AuditLog" a JOIN public."PlatformUser" u ON u.id=a."actorId" JOIN public."TenantMembership" tm ON tm.id=a.metadata->>'membershipId' AND tm."userId"=u.id AND tm."organizationId"=a."organizationId" JOIN public."ProjectMembership" pm ON pm."tenantMembershipId"=tm.id AND pm."projectId"=a."entityId" WHERE a.action=$1 AND a."organizationId"=$2 AND a."entityId"=$3 AND a.metadata->>'invitationId'=$4 AND tm.status='ACTIVE' AND pm.status='ACTIVE'`,[accepted,row.organizationId,row.projectId,row.metadata.invitationId])).rows;
+  if(rows.length!==1||row.metadata.state!=='SENT')fail('OFFICE_REVIEW_ACCEPTED_ACCESS_REQUIRED',403);
+  const grant=rows[0],m=grant.metadata,member={...grant,organizationId:row.organizationId};
+  if(m.originReceiptId!==row.id||m.issuerId!==row.actorId||m.expiresAt!==row.metadata.expiresAt||m.connectionId!==row.metadata.connectionId)fail('OFFICE_REVIEW_SOURCE_CHANGED');
+  assertOfficeGrant(m,{member,projectId:row.projectId,connectionId:c.id,channelRevision:c.channelRevision,assignmentRevision:c.assignmentRevision,now:(await dbNow(client)).getTime()});
+  if(await participantAccountBound(client,member))fail('OFFICE_REVIEW_FIELD_ACCOUNT_REJECTED',403);
+  return grant;
+ }
  async function finalizeInvitation(session,input,expected,result){
   matchInvitation(expected.metadata,result);
   return admin(session,input,true,async(client,member,scope)=>{
@@ -94,7 +116,13 @@ export function createOfficeReviewStore({workspace,connect,identity,environment=
    const connections=(await client.query(`SELECT c.id FROM public."WhatsAppConnection" c JOIN public."WhatsAppCompanyChannel" cc ON cc."connectionId"=c.id JOIN public."WhatsAppChannelProjectAssignment" a ON a."connectionId"=c.id AND a."organizationId"=cc."organizationId" WHERE cc."organizationId"=$1 AND a."projectId"=$2 AND a.status='ACTIVE' AND cc.mode='COMPANY' AND c.enabled=true AND c."connectionStatus"='CONNECTED' ORDER BY c.id LIMIT 2`,[member.organizationId,input.projectId])).rows;
    const candidates=[];let candidatesLimited=false;
    if(connections.length===1){const c=await channel(client,member,input.projectId,connections[0].id),sources=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-v1' AND payload->>'channelId'=$2 ORDER BY "createdAt" DESC,id DESC LIMIT 21`,[c.projectId,c.id])).rows;candidatesLimited=sources.length>20;for(const source of sources.slice(0,20)){try{candidates.push({...officeEventProjection(source,decodeSignedCustomerEvent(source,c,environment)),connectionId:c.id});}catch(error){if(!(error instanceof WorkspaceError))throw error;}}}
-   return {scope,projectId:input.projectId,canManage:true,channels:connections.length===1?[{id:connections[0].id}]:[],candidates,candidatesLimited,invitations:rows.slice(0,100).map(r=>({id:r.metadata.invitationId,email:r.metadata.email,state:r.revoked?'REVOKED':r.metadata.state,expiresAt:r.metadata.expiresAt,connectionId:r.metadata.connectionId,operationId:r.metadata.operationId})),truncated:rows.length>100};
+   const invitations=[];
+   for(const r of rows.slice(0,100)){
+    const selected=await connectionSelection(client,member.organizationId,input.projectId,r.metadata.invitationId);let canShareConnection=false;
+    if(!r.revoked&&connections.length===1&&connections[0].id===r.metadata.connectionId){try{const invite=await invitation(client,session,r.metadata.invitationId),c=await channel(client,member,input.projectId,r.metadata.connectionId);await configurationGrant(client,invite,c);canShareConnection=true;}catch(error){if(!(error instanceof WorkspaceError))throw error;}}
+    invitations.push({id:r.metadata.invitationId,email:r.metadata.email,state:r.revoked?'REVOKED':r.metadata.state,expiresAt:r.metadata.expiresAt,connectionId:r.metadata.connectionId,operationId:r.metadata.operationId,canShareConnection,connectionShared:selected?.action==='office.review.connection.shared'});
+   }
+   return {scope,projectId:input.projectId,canManage:true,channels:connections.length===1?[{id:connections[0].id}]:[],candidates,candidatesLimited,invitations,truncated:rows.length>100};
   });},
   async status(session,input){officeContext(input);if(!operationId(input.operationId))fail('OFFICE_REVIEW_INPUT_INVALID',400);return admin(session,input,false,async(client,member,scope)=>{
    const key=officeReceiptId(member,input.projectId,input.operationId),found=await receipt(client,member,key+'_recorded')||await receipt(client,member,key);
@@ -126,6 +154,18 @@ export function createOfficeReviewStore({workspace,connect,identity,environment=
      const invite=await invitation(client,session,p.invitationId,true,true);if(invite.projectId!==input.projectId)fail('OFFICE_REVIEW_OPERATION_CONFLICT');
      await insertAudit(client,member,key+'_revoked','office.review.revoked',input.projectId,{version:1,invitationId:p.invitationId,reason:p.reason.trim()});
      await client.query(`UPDATE public."ProjectMembership" pm SET status='DISABLED',"updatedAt"=clock_timestamp() FROM public."AuditLog" a WHERE a.action=$1 AND a."organizationId"=$2 AND a."entityId"=$3 AND a.metadata->>'invitationId'=$4 AND pm."projectId"=a."entityId" AND pm."tenantMembershipId"=a.metadata->>'membershipId'`,[accepted,member.organizationId,input.projectId,p.invitationId]);
+    }else if(['SHARE_CONNECTION','WITHDRAW_CONNECTION'].includes(input.action)){
+     const invite=await invitation(client,session,p.invitationId,true,input.action==='WITHDRAW_CONNECTION');if(invite.projectId!==input.projectId)fail('OFFICE_REVIEW_OPERATION_CONFLICT');
+     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['office-review-connection:'+member.organizationId+':'+input.projectId+':'+p.invitationId]);
+     const priorSelection=await connectionSelection(client,member.organizationId,input.projectId,p.invitationId),selectionRevision=(priorSelection?.metadata.selectionRevision||0)+1;if(selectionRevision>10000)fail('OFFICE_REVIEW_SELECTION_LIMIT');
+     const observedAt=(await dbNow(client)).toISOString(),base={version:1,invitationId:p.invitationId,selectionRevision,observedAt,selectedBy:member.actorId};
+     if(input.action==='SHARE_CONNECTION'){
+      if(invite.metadata.connectionId!==p.connectionId)fail('OFFICE_REVIEW_OPERATION_CONFLICT');
+      const c=await channel(client,member,input.projectId,p.connectionId),grant=await configurationGrant(client,invite,c),projection=officeConnectionProjection(c,observedAt);
+      await insertAudit(client,member,key+'_connection','office.review.connection.shared',input.projectId,{...base,kind:'OFFICE_REVIEW_CONNECTION_SHARED',grantReceiptId:grant.id,originReceiptId:invite.id,membershipId:grant.metadata.membershipId,clerkUserId:grant.metadata.clerkUserId,connectionId:c.id,channelRevision:c.channelRevision,assignmentRevision:c.assignmentRevision,connectionDigest:digest(projection),expiresAt:grant.metadata.expiresAt});
+     }else{
+      await insertAudit(client,member,key+'_connection','office.review.connection.withdrawn',input.projectId,{...base,kind:'OFFICE_REVIEW_CONNECTION_WITHDRAWN',reason:p.reason.trim()});
+     }
     }else{
      const c=await channel(client,member,input.projectId,p.connectionId),source=await event(client,c,p.eventId,environment);
      const selections=(await client.query(`SELECT id FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND action='office.review.event.selected'`,[member.organizationId,input.projectId])).rows;if(selections.length>=20)fail('OFFICE_REVIEW_SELECTION_LIMIT');
@@ -169,9 +209,11 @@ export function createOfficeReviewStore({workspace,connect,identity,environment=
    const grant=grants[0],row=await invitation(client,session,grant.metadata.invitationId),c=await channel(client,member,project.id,grant.metadata.connectionId);
    if(row.id!==grant.metadata.originReceiptId||row.actorId!==grant.metadata.issuerId||row.metadata.connectionId!==grant.metadata.connectionId||row.metadata.expiresAt!==grant.metadata.expiresAt||row.metadata.state!=='SENT')fail('OFFICE_REVIEW_SOURCE_CHANGED');
    assertOfficeGrant(grant.metadata,{member,projectId:project.id,connectionId:c.id,channelRevision:c.channelRevision,assignmentRevision:c.assignmentRevision,now:(await dbNow(client)).getTime()});
+   const selection=await connectionSelection(client,member.organizationId,project.id,grant.metadata.invitationId),connection=configurationSnapshot(selection,grant,row,c);
+   if(connection){const selectors=(await client.query(`SELECT id FROM public."TenantMembership" WHERE "organizationId"=$1 AND "userId"=$2 AND status='ACTIVE' AND "tenantRole"='ADMIN' AND "clerkRole"='org:admin'`,[member.organizationId,selection.metadata.selectedBy])).rows;if(selectors.length!==1)fail('OFFICE_REVIEW_SOURCE_CHANGED');}
    const selected=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND action='office.review.event.selected' ORDER BY "createdAt",id LIMIT 21`,[member.organizationId,project.id])).rows;if(selected.length>20)fail('OFFICE_REVIEW_SELECTION_LIMIT');
    const items=[];for(const entry of selected){const m=entry.metadata;if(m.connectionId!==c.id||m.channelRevision!==c.channelRevision||m.assignmentRevision!==c.assignmentRevision)fail('OFFICE_REVIEW_SOURCE_CHANGED');const source=await event(client,c,m.eventId,environment);if(source.row.payload.payloadDigest!==m.payloadDigest)fail('OFFICE_REVIEW_SOURCE_CHANGED');items.push({...source.projection,...await replyProjection(client,c,source,environment)});}
-   return {scope,projectId:project.id,projectName:project.name,readOnly:true,expiresAt:grant.metadata.expiresAt,items,canSend:false,canManage:false};
+   return {scope,projectId:project.id,projectName:project.name,readOnly:true,expiresAt:grant.metadata.expiresAt,connection,canObserveConfiguration:connection!==null,items,canSend:false,canManage:false};
   });},
  };
 }

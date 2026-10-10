@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createOfficeReviewStore} from '../src/lib/office-review-store.mjs';
 import {createOfficeReviewHandlers} from '../src/lib/office-review-http.mjs';
-import {officeCommand,officeEventProjection,assertOfficeGrant,officeReceiptId} from '../src/lib/office-review-policy.mjs';
+import {officeCommand,officeEventProjection,officeConnectionProjection,assertOfficeGrant,officeReceiptId} from '../src/lib/office-review-policy.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {WorkspaceError,digest,checkScope,scopeStamp} from '../src/lib/workspace-policy.mjs';
 import {encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
@@ -10,13 +10,14 @@ import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
 import {customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
 import {OBRASAAS_META_CHANNEL} from '../src/lib/meta-channel-binding.mjs';
 import {identityAccountReturnPath,identityOfficeInvitationId} from '../src/lib/identity-return-path.mjs';
-import {officeReviewSnapshot,officeEventLabels} from '../src/app/(identity)/cuenta/office-review-view.mjs';
+import {officeReviewSnapshot,officeAdminSnapshot,officeEventLabels} from '../src/app/(identity)/cuenta/office-review-view.mjs';
 import {createWorkspaceRecoveryJournal,officeReviewReceiptOutcome,recoveryQuery} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
 
 const owner={authenticated:true,verification:'clerk-production-jwt',userId:'user_Owner',organizationId:'org_Clerk',organizationRole:'org:admin'},reviewer={...owner,userId:'user_Reviewer',organizationRole:'org:member'};
 const scope='a'.repeat(64),projectId='review-project',op='12345678-1234-4234-8234-123456789012',inviteId='office_invite_'+'b'.repeat(32);
 const member={actorId:'owner',membershipId:'membership-owner',organizationId:'org-company',clerkUserId:owner.userId,clerkRole:'org:admin',role:'ADMIN'};
 const reviewMember={actorId:'reviewer',membershipId:'membership-reviewer',organizationId:member.organizationId,clerkUserId:reviewer.userId,clerkRole:'org:member',role:'AUDITOR'};
+const reviewerB={...reviewer,userId:'user_ReviewerB'},reviewMemberB={...reviewMember,actorId:'reviewer-b',membershipId:'membership-reviewer-b',clerkUserId:reviewerB.userId};
 const context={scope,projectId},command=(action='INVITE_AUDITOR',payload={email:'reviewer@example.invalid',connectionId:'channel-a',expiresAt:'2027-10-08T00:00:00.000Z',confirmReadOnly:true},operationId=op)=>({...context,action,payload,operationId});
 const grant={version:1,kind:'OFFICE_AUDITOR_INVITATION_ACCEPTED',invitationId:inviteId,membershipId:reviewMember.membershipId,projectId,organizationId:member.organizationId,clerkUserId:reviewer.userId,connectionId:'channel-a',channelRevision:5,assignmentRevision:2,issuerId:'owner',expiresAt:'2027-10-08T00:00:00.000Z'};
 const environment={META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,31).toString('base64')};
@@ -26,8 +27,9 @@ function signedEvent(payload=eventPayload){const aad={organizationId:member.orga
 // Controlled durable transactions and identity transport; no real Clerk/DB.
 // Reconciliation tests run the production store and signed-vault decoder.
 function fixture({role='ADMIN',providerLost=false,fieldBound=false,acceptedProvider=true}={}){
- const audit=new Map(),queries=[],providerCalls=[],users=new Map([['user_Reviewer',{id:'reviewer',clerkUserId:'user_Reviewer'}]]),members=new Map([['reviewer',{id:'membership-reviewer',status:'ACTIVE',role:'AUDITOR',clerkRole:'org:member'}]]),assignments=new Map();
+ const audit=new Map(),queries=[],providerCalls=[],users=new Map([[reviewer.userId,{id:reviewMember.actorId,clerkUserId:reviewer.userId}],[reviewerB.userId,{id:reviewMemberB.actorId,clerkUserId:reviewerB.userId}]]),members=new Map([[reviewMember.actorId,{...reviewMember,id:reviewMember.membershipId,status:'ACTIVE'}],[reviewMemberB.actorId,{...reviewMemberB,id:reviewMemberB.membershipId,status:'ACTIVE'}]]),assignments=new Map();
  let currentAdmin={...member},currentRole=role,connected=true,issuerActive=true,now=new Date('2026-10-09T00:00:00.000Z'),eventRow=signedEvent(),outboundRows=[],providerRow=null,commitFailure=null;
+ let currentConnection={id:'channel-a',projectId:'anchor-project',organizationId:member.organizationId,whatsappBusinessId:'70000001',phoneNumberId:'70000002',enabled:true,connectionStatus:'CONNECTED',mode:'COMPANY',metadata:{credentialFormat:'tenant-aad-v2',credentialOrganizationId:member.organizationId,phoneNumber:'+5491100001111',accessToken:'synthetic-private-token',employeeIntakePolicy:{private:'hidden'}},channelRevision:5,assignmentRevision:2};
  const cloneAudit=()=>new Map([...audit].map(([key,value])=>[key,structuredClone(value)]));
  async function connect(){let before;
   return {release(){},async query(sql,args=[]){queries.push({sql,args});
@@ -45,20 +47,24 @@ function fixture({role='ADMIN',providerLost=false,fieldBound=false,acceptedProvi
    if(sql.includes('FROM public."Worker"'))return {rows:fieldBound?[{id:'field-worker'}]:[]};
    if(sql.includes('FROM public."PlatformUser" WHERE "clerkUserId"'))return {rows:users.has(args[0])?[users.get(args[0])]:[]};
    if(sql.includes('FROM public."PlatformUser" WHERE lower'))return {rows:[]};
+   if(sql.includes('FROM public."TenantMembership" WHERE "organizationId"')&&sql.includes("\"tenantRole\"='ADMIN'"))return {rows:args[0]===member.organizationId&&((args[1]===member.actorId&&issuerActive)||(args[1]===currentAdmin.actorId&&currentRole==='ADMIN'&&args[1]!==member.actorId))?[{id:currentAdmin.membershipId}]:[]};
    if(sql.includes('FROM public."TenantMembership" WHERE "organizationId"'))return {rows:members.has(args[1])?[members.get(args[1])]:[]};
    if(sql.includes('SELECT tm.id FROM public."TenantMembership"'))return {rows:issuerActive?[{id:'membership-owner'}]:[]};
-   if(sql.includes('FROM public."WhatsAppConnection"'))return {rows:connected?[{id:'channel-a',projectId:'anchor-project',whatsappBusinessId:'70000001',phoneNumberId:'70000002',metadata:{credentialFormat:'tenant-aad-v2',credentialOrganizationId:member.organizationId},channelRevision:5,assignmentRevision:2}]:[]};
+   if(sql.includes('FROM public."WhatsAppConnection"'))return {rows:connected&&args[0]===currentConnection.organizationId&&args[1]===projectId&&(args.length<3||args[2]===currentConnection.id)?[structuredClone(currentConnection)]:[]};
    if(sql.includes('FROM public."WebhookEvent"'))return {rows:sql.includes('meta-customer-outbound-v1')?structuredClone(outboundRows):eventRow?[structuredClone(eventRow)]:[]};
    if(sql.includes('FROM public."ProjectMembership"'))return {rows:assignments.has(args[1])?[{id:'pm-a',status:assignments.get(args[1])}]:[]};
-   if(sql.includes('FROM public."Project"'))return {rows:[{id:projectId,name:'Review project'}]};
+   if(sql.includes('FROM public."Project"'))return {rows:args[0]===projectId&&args[1]===member.organizationId?[{id:projectId,name:'Review project'}]:[]};
    if(sql.includes('FROM public."AuditLog"')){
     const all=[...audit.values()];
     if(sql.includes("'INVITATION_ACCEPTED'"))return {rows:[]};
     if(sql.includes('WHERE id=$1 AND'))return {rows:all.filter(r=>r.id===args[0]&&r.organizationId===args[1]&&r.actorId===args[2]&&['office.review.recorded','office.review.invitation.attempted'].includes(r.action))};
+    if(sql.startsWith('SELECT a.metadata,a.id,EXISTS'))return {rows:all.filter(r=>r.organizationId===args[0]&&r.entityId===args[1]&&r.action===args[2]).map(r=>({...r,revoked:all.some(x=>x.action==='office.review.revoked'&&x.organizationId===r.organizationId&&x.metadata.invitationId===r.metadata.invitationId)}))};
     if(sql.includes('FROM public."AuditLog" a JOIN public."Project"'))return {rows:all.filter(r=>r.action===args[0]&&r.metadata.invitationId===args[1]&&args[2]===owner.organizationId).map(r=>({...r,projectId:r.entityId,projectName:'Review project',organizationName:'Synthetic company'}))};
-    if(sql.includes('FROM public."AuditLog" a JOIN public."PlatformUser"'))return {rows:all.filter(r=>r.action===args[0]&&r.organizationId===args[1]&&r.entityId===args[2]&&r.metadata.invitationId===args[3]&&r.metadata.clerkUserId===args[4]&&assignments.get('membership-reviewer')==='ACTIVE').map(r=>({...r,...reviewMember}))};
+    if(sql.includes('FROM public."AuditLog" a JOIN public."PlatformUser"'))return {rows:all.filter(r=>r.action===args[0]&&r.organizationId===args[1]&&r.entityId===args[2]&&r.metadata.invitationId===args[3]&&(args.length===4||r.metadata.clerkUserId===args[4])&&assignments.get(r.metadata.membershipId)==='ACTIVE').map(r=>({...members.get(r.actorId),...r,membershipId:members.get(r.actorId)?.id,actorId:r.actorId}))};
     if(sql.includes("action='office.review.revoked'"))return {rows:all.filter(r=>r.action==='office.review.revoked'&&r.organizationId===args[0]&&r.metadata.invitationId===args[1])};
     if(sql.includes("action='office.review.event.selected'"))return {rows:all.filter(r=>r.action==='office.review.event.selected'&&r.organizationId===args[0]&&r.entityId===args[1])};
+    if(sql.includes('office.review.connection.shared')||sql.includes('office.review.connection.withdrawn'))return {rows:all.filter(r=>['office.review.connection.shared','office.review.connection.withdrawn'].includes(r.action)&&r.organizationId===args[0]&&r.entityId===args[1]&&r.metadata.invitationId===args[2]).sort((a,b)=>b.metadata.selectionRevision-a.metadata.selectionRevision).slice(0,2)};
+    if(sql.includes('action=$1')&&sql.includes("metadata->>'invitationId'")&&!sql.includes('metadata.membershipId'))return {rows:all.filter(r=>r.action===args[0]&&r.organizationId===args[1]&&r.entityId===args[2]&&r.metadata.invitationId===args[3])};
     if(sql.includes('action=$1'))return {rows:all.filter(r=>r.action===args[0]&&r.organizationId===args[1]&&r.actorId===args[2]&&r.entityId===args[3]&&r.metadata.membershipId===args[4])};
     if(sql.includes('a.action=$3'))return {rows:all.filter(r=>r.organizationId===args[0]&&r.entityId===args[1]&&r.action===args[2]&&r.metadata.email===args[3])};
     throw new Error('Unhandled audit query');
@@ -66,10 +72,10 @@ function fixture({role='ADMIN',providerLost=false,fieldBound=false,acceptedProvi
    throw new Error('Unhandled fixture query: '+sql);
   }};
  }
- const workspace={async organizationOperation(_session,ctx,writable,callback){checkScope(scope,ctx.scope);const client=await connect();await client.query(writable?'BEGIN':'BEGIN READ ONLY');try{const result=await callback(client,{...currentAdmin,role:currentRole},scope);await client.query(writable?'COMMIT':'ROLLBACK');return result;}catch(error){await client.query('ROLLBACK');throw error;}},async officeReviewRead(_session,ctx,callback){checkScope(scope,ctx.scope);if(assignments.get('membership-reviewer')!=='ACTIVE')throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);const client=await connect();await client.query('BEGIN READ ONLY');try{return await callback(client,reviewMember,scope,{id:projectId,name:'Review project'});}finally{await client.query('ROLLBACK');}}};
+ const workspace={async organizationOperation(_session,ctx,writable,callback){checkScope(scope,ctx.scope);const client=await connect();await client.query(writable?'BEGIN':'BEGIN READ ONLY');try{const result=await callback(client,{...currentAdmin,role:currentRole},scope);await client.query(writable?'COMMIT':'ROLLBACK');return result;}catch(error){await client.query('ROLLBACK');throw error;}},async officeReviewRead(session,ctx,callback){checkScope(scope,ctx.scope);const user=users.get(session.userId),entry=user&&members.get(user.id);if(session.organizationId!==owner.organizationId||ctx.projectId!==projectId||!entry||assignments.get(entry.id)!=='ACTIVE')throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);const client=await connect();await client.query('BEGIN READ ONLY');try{return await callback(client,{...entry,membershipId:entry.id,actorId:user.id},scope,{id:projectId,name:'Review project'});}finally{await client.query('ROLLBACK');}}};
  const identity={async createInvitation(input){providerCalls.push('create');assert.ok([...audit.values()].some(r=>r.action==='office.review.invitation.attempted'),'Attempt committed before transport');assert.equal(queries.at(-1).sql,'COMMIT');providerRow={id:'orginv_Test',invitationId:input.invitationId,email:input.email,role:'org:member',state:acceptedProvider?'accepted':'pending',expiresAt:'2026-10-16T00:00:00.000Z'};if(providerLost)throw new WorkspaceError('PARTICIPANT_IDENTITY_PROVIDER_UNAVAILABLE',503);return providerRow;},async findInvitation(){providerCalls.push('find');return providerRow;},async verifiedEmail(){providerCalls.push('email');return 'reviewer@example.invalid';},async verifyMembership(){providerCalls.push('member');return {userId:reviewer.userId,organizationId:reviewer.organizationId,role:'org:member'};}};
  const store=createOfficeReviewStore({workspace,connect,identity,environment});
- return {store,audit,queries,providerCalls,identity,setRole:v=>{currentRole=v;},setAdmin:v=>{currentAdmin={...member,...v};},setIssuer:v=>{issuerActive=v;},setConnected:v=>{connected=v;},setNow:v=>{now=new Date(v);},setEvent:v=>{eventRow=v;},setOutbound:v=>{outboundRows=v;},setCommitFailure:v=>{commitFailure=v;},setMemberRole:v=>{members.get('reviewer').clerkRole=v;},invite:()=>store.command(owner,command())};
+ return {store,audit,queries,providerCalls,identity,assignments,setRole:v=>{currentRole=v;},setAdmin:v=>{currentAdmin={...member,...v};},setIssuer:v=>{issuerActive=v;},setConnected:v=>{connected=v;},setConnection:v=>{currentConnection={...currentConnection,...v};},setNow:v=>{now=new Date(v);},setEvent:v=>{eventRow=v;},setOutbound:v=>{outboundRows=v;},setCommitFailure:v=>{commitFailure=v;},setMemberRole:v=>{members.get('reviewer').clerkRole=v;},invite:()=>store.command(owner,command()),addAcceptedReviewer(invite,actor=reviewMemberB){const source=[...audit.values()].find(r=>r.action==='office.review.accepted');if(!source)throw new Error('Primary grant must be accepted before adding another controlled reviewer');const origin=[...audit.values()].find(r=>r.action==='office.review.invitation.attempted'&&r.metadata.invitationId===invite.invitationId),otherId='office_invite_'+'d'.repeat(32),otherOrigin={...structuredClone(origin),id:'other-office-origin',metadata:{...structuredClone(origin.metadata),invitationId:otherId,email:'reviewer-b@example.invalid'}},otherGrant={...structuredClone(source),id:'other-office-grant',actorId:actor.actorId,metadata:{...structuredClone(source.metadata),invitationId:otherId,membershipId:actor.membershipId,clerkUserId:actor.clerkUserId,originReceiptId:otherOrigin.id}};audit.set(otherOrigin.id,otherOrigin);audit.set(otherGrant.id,otherGrant);assignments.set(actor.membershipId,'ACTIVE');return {invitationId:otherId,origin:otherOrigin,grant:otherGrant};}};
 }
 
 test('strict command accepts only the server-scoped read-only office contract',()=>{assert.equal(officeCommand(command()).action,'INVITE_AUDITOR');for(const edit of [c=>{c.tenantId='other';},c=>{c.payload.role='ADMIN';},c=>{c.payload.confirmReadOnly=false;},c=>{c.payload.expiresAt='never';},c=>{c.action='SEND_MESSAGE';}]){const value=command();edit(value);assert.throws(()=>officeCommand(value),{code:'OFFICE_REVIEW_INPUT_INVALID'});}});
@@ -108,4 +114,149 @@ function signedOutbound(patch={}){
 test('outbound observation shares only correlated states and rejects foreign/digest/recipient/purpose links',async()=>{
  const f=fixture(),invite=await f.invite();await f.store.join(reviewer,{invitationId:invite.invitationId,operationId:op},{accept:true});await f.store.command(owner,command('SELECT_EVENT',{connectionId:'channel-a',eventId,confirmNoPersonalData:true},'52345678-1234-4234-8234-123456789012'));f.setOutbound([signedOutbound()]);const read=await f.store.review(reviewer,context);assert.equal(read.items[0].replyState,'STATUS_OBSERVED');assert.equal(read.items[0].deliveryStatus,'delivered');assert.doesNotMatch(JSON.stringify(read),/Private intake|5491100001111|wamid|cipher|status.private/);
  for(const patch of [{eventId:'other'},{to:'5491100009999'},{replyTo:'wamid.other'},{channelPurpose:'KYC_CAPTURE'},{applicationId:'other'},{organizationId:'other'},{channelId:'other'},{payloadDigest:'f'.repeat(64)}]){f.setOutbound([signedOutbound(patch)]);await assert.rejects(f.store.review(reviewer,context),{code:'OFFICE_REVIEW_SOURCE_CHANGED'});}const invalid=signedOutbound();invalid.payload.requestDigest='f'.repeat(64);f.setOutbound([invalid]);await assert.rejects(f.store.review(reviewer,context),{code:'OFFICE_REVIEW_SOURCE_CHANGED'});
+});
+
+const shareOperation='72345678-1234-4234-8234-123456789012',withdrawOperation='82345678-1234-4234-8234-123456789012';
+const shareCommand=invitationId=>command('SHARE_CONNECTION',{invitationId,connectionId:'channel-a',confirmReadOnlyConfiguration:true},shareOperation);
+const withdrawCommand=invitationId=>command('WITHDRAW_CONNECTION',{invitationId,reason:'Finalizó la revisión de configuración'},withdrawOperation);
+const connectionSelection=f=>[...f.audit.values()].find(row=>row.action==='office.review.connection.shared');
+async function acceptedFixture(){const f=fixture(),invite=await f.invite();await f.store.join(reviewer,{invitationId:invite.invitationId,operationId:op},{accept:true});return {...f,invite};}
+
+test('pure connection projection exposes only opaque organization-bound references and saved configuration facts',()=>{
+ const observedAt='2026-10-09T00:00:00.000Z',source={organizationId:member.organizationId,id:'channel-a',whatsappBusinessId:'70000001',phoneNumberId:'70000002',connectionStatus:'CONNECTED',enabled:true,mode:'COMPANY',channelRevision:5,assignmentRevision:2,metadata:{privateToken:'synthetic-private-token',phone:'+5491100001111'},encryptedAccessToken:'synthetic-private-cipher'},value=officeConnectionProjection(source,observedAt);
+ assert.deepEqual(Object.keys(value).sort(),['version','connectionRef','wabaRef','phoneNumberRef','connectionStatus','enabled','mode','channelRevision','assignmentRevision','observedAt','evidenceOrigin'].sort());
+ assert.equal(value.observedAt,observedAt);assert.equal(value.evidenceOrigin,'STORED_AUTHORIZED_CONNECTION');assert.doesNotMatch(JSON.stringify(value),/channel-a|70000001|70000002|5491100001111|synthetic-private|metadata|encrypted/);
+ assert.notEqual(officeConnectionProjection({...source,organizationId:'other-company'},observedAt).connectionRef,value.connectionRef);assert.notEqual(officeConnectionProjection({...source,organizationId:'other-company'},observedAt).wabaRef,value.wabaRef);assert.notEqual(officeConnectionProjection({...source,organizationId:'other-company'},observedAt).phoneNumberRef,value.phoneNumberRef);
+ for(const patch of [{organizationId:''},{id:''},{whatsappBusinessId:''},{phoneNumberId:''},{connectionStatus:'DISCONNECTED'},{enabled:false},{mode:'PROJECT'},{channelRevision:0},{channelRevision:NaN},{assignmentRevision:0},{assignmentRevision:1.5}])assert.throws(()=>officeConnectionProjection({...source,...patch},observedAt));
+ for(const time of ['never','2026-10-09','2026-10-09T00:00:00+00:00'])assert.throws(()=>officeConnectionProjection(source,time));
+});
+
+test('configuration commands require exact invitation and explicit read-only confirmation',()=>{
+ assert.equal(officeCommand(shareCommand(inviteId)).action,'SHARE_CONNECTION');
+ assert.equal(officeCommand(withdrawCommand(inviteId)).action,'WITHDRAW_CONNECTION');
+ for(const edit of [c=>delete c.payload.invitationId,c=>{c.payload.invitationId='all';},c=>{c.payload.confirmReadOnlyConfiguration=false;},c=>{c.payload.confirmReadOnlyConfiguration='true';},c=>{c.payload.canManage=true;},c=>{c.payload.connectionId='';},c=>{c.payload.configuration={};}]){const input=shareCommand(inviteId);edit(input);assert.throws(()=>officeCommand(input),{code:'OFFICE_REVIEW_INPUT_INVALID'});}
+ for(const edit of [c=>{c.payload.reason='corto';},c=>{c.payload.reason='x'.repeat(401);},c=>{c.payload.connectionId='channel-a';},c=>{c.payload.invitationId='other';}]){const input=withdrawCommand(inviteId);edit(input);assert.throws(()=>officeCommand(input),{code:'OFFICE_REVIEW_INPUT_INVALID'});}
+});
+
+test('existing accepted auditors receive no configuration until their invitation is selected',async()=>{
+ const f=await acceptedFixture(),value=await f.store.review(reviewer,context);
+ assert.equal(value.connection,null);assert.equal(value.canObserveConfiguration,false);
+ assert.equal(value.readOnly,true);assert.equal(value.canSend,false);assert.equal(value.canManage,false);
+ assert.equal([...f.audit.values()].some(row=>row.action.startsWith('office.review.connection.')),false);
+ officeReviewSnapshot(value,context);
+});
+
+test('ADMIN shares only a closed stored projection with one exact accepted invitation',async()=>{
+ const f=await acceptedFixture(),other=f.addAcceptedReviewer(f.invite),calls=[...f.providerCalls],grants=structuredClone([...f.audit.values()].filter(row=>row.action==='office.review.accepted')),assignmentBefore=[...f.assignments],queryStart=f.queries.length;
+ const saved=await f.store.command(owner,shareCommand(f.invite.invitationId));
+ assert.equal(saved.state,'RECORDED');assert.equal(saved.action,'SHARE_CONNECTION');
+ const value=await f.store.review(reviewer,context),hidden=await f.store.review(reviewerB,context),projection=value.connection;
+ assert.equal(value.canObserveConfiguration,true);assert.equal(value.canSend,false);assert.equal(value.canManage,false);
+ assert.equal(hidden.connection,null);assert.equal(hidden.canObserveConfiguration,false);assert.notEqual(other.invitationId,f.invite.invitationId);
+ assert.deepEqual(Object.keys(projection).sort(),['version','connectionRef','wabaRef','phoneNumberRef','connectionStatus','enabled','mode','channelRevision','assignmentRevision','observedAt','evidenceOrigin'].sort());
+ assert.equal(projection.version,1);assert.match(projection.connectionRef,/^office_connection_[a-f0-9]{64}$/);assert.match(projection.wabaRef,/^office_waba_[a-f0-9]{64}$/);assert.match(projection.phoneNumberRef,/^office_phone_[a-f0-9]{64}$/);
+ assert.equal(projection.connectionStatus,'CONNECTED');assert.equal(projection.enabled,true);assert.equal(projection.mode,'COMPANY');assert.equal(projection.channelRevision,5);assert.equal(projection.assignmentRevision,2);assert.equal(projection.observedAt,'2026-10-09T00:00:00.000Z');assert.equal(projection.evidenceOrigin,'STORED_AUTHORIZED_CONNECTION');
+ assert.doesNotMatch(JSON.stringify(value),/channel-a|70000001|70000002|5491100001111|synthetic-private-token|phoneNumberId|whatsappBusinessId|metadata|employeeIntakePolicy|encrypted|accessToken/);
+ assert.deepEqual(f.providerCalls,calls);assert.deepEqual([...f.assignments],assignmentBefore);assert.deepEqual([...f.audit.values()].filter(row=>row.action==='office.review.accepted'),grants);
+ assert.ok(f.queries.slice(queryStart).filter(q=>/^(INSERT|UPDATE|DELETE)/.test(q.sql)).every(q=>q.sql.startsWith('INSERT INTO public."AuditLog"')));
+ const selection=connectionSelection(f),grantRow=grants.find(row=>row.metadata.invitationId===f.invite.invitationId);
+ assert.equal(selection.organizationId,member.organizationId);assert.equal(selection.entityId,projectId);assert.equal(selection.metadata.kind,'OFFICE_REVIEW_CONNECTION_SHARED');assert.equal(selection.metadata.invitationId,f.invite.invitationId);assert.equal(selection.metadata.grantReceiptId,grantRow.id);assert.equal(selection.metadata.originReceiptId,grantRow.metadata.originReceiptId);assert.equal(selection.metadata.membershipId,reviewMember.membershipId);assert.equal(selection.metadata.clerkUserId,reviewer.userId);assert.equal(selection.metadata.connectionDigest,digest(projection));assert.equal(selection.metadata.expiresAt,grantRow.metadata.expiresAt);assert.equal(selection.metadata.selectionRevision,1);assert.equal(selection.metadata.selectedBy,member.actorId);
+ officeReviewSnapshot(value,context);
+});
+
+test('withdrawal removes only configuration while keeping the same read-only event grant',async()=>{
+ const f=await acceptedFixture();await f.store.command(owner,shareCommand(f.invite.invitationId));await f.store.command(owner,command('SELECT_EVENT',{connectionId:'channel-a',eventId,confirmNoPersonalData:true},'92345678-1234-4234-8234-123456789012'));
+ const calls=[...f.providerCalls],assignments=[...f.assignments];await f.store.command(owner,withdrawCommand(f.invite.invitationId));
+ const value=await f.store.review(reviewer,context);assert.equal(value.connection,null);assert.equal(value.canObserveConfiguration,false);assert.equal(value.items.length,1);assert.equal(value.canSend,false);assert.equal(value.canManage,false);assert.deepEqual([...f.assignments],assignments);assert.deepEqual(f.providerCalls,calls);
+ const withdrawal=[...f.audit.values()].find(row=>row.action==='office.review.connection.withdrawn');assert.equal(withdrawal.metadata.invitationId,f.invite.invitationId);assert.equal(withdrawal.metadata.selectionRevision,2);
+ const reshared=await f.store.command(owner,{...shareCommand(f.invite.invitationId),operationId:'a2345678-1234-4234-8234-123456789012'});assert.equal(reshared.state,'RECORDED');assert.equal((await f.store.review(reviewer,context)).canObserveConfiguration,true);assert.deepEqual([...f.audit.values()].filter(row=>row.action==='office.review.connection.shared').map(row=>row.metadata.selectionRevision),[1,3]);
+});
+
+test('withdrawing one shared invitation preserves the independent selection of another auditor',async()=>{
+ const f=await acceptedFixture(),other=f.addAcceptedReviewer(f.invite);await f.store.command(owner,shareCommand(f.invite.invitationId));await f.store.command(owner,{...shareCommand(other.invitationId),operationId:'b2345678-1234-4234-8234-123456789012'});assert.equal((await f.store.review(reviewerB,context)).canObserveConfiguration,true);
+ await f.store.command(owner,withdrawCommand(other.invitationId));const kept=await f.store.review(reviewer,context),withdrawn=await f.store.review(reviewerB,context);assert.equal(kept.canObserveConfiguration,true);assert.equal(withdrawn.connection,null);assert.equal(withdrawn.canObserveConfiguration,false);assert.equal(kept.canSend,false);assert.equal(kept.canManage,false);
+});
+
+test('sharing requires an accepted grant and the current ADMIN session before any configuration audit',async()=>{
+ const f=fixture(),invite=await f.invite();await assert.rejects(f.store.command(owner,shareCommand(invite.invitationId)),error=>error.status===403||error.status===404);
+ await f.store.join(reviewer,{invitationId:invite.invitationId,operationId:op},{accept:true});f.setRole('AUDITOR');await assert.rejects(f.store.command(reviewer,shareCommand(invite.invitationId)),{code:'OFFICE_REVIEW_ADMIN_REQUIRED'});f.setRole('ADMIN');await assert.rejects(f.store.command({...owner,organizationRole:'org:member'},shareCommand(invite.invitationId)),{code:'OFFICE_REVIEW_ADMIN_REQUIRED'});
+ assert.equal(connectionSelection(f),undefined);
+});
+
+test('share commands cannot cross invitation, organization, project, scope or connection',async()=>{
+ for(const change of [
+  input=>{input.payload.invitationId=inviteId;},input=>{input.projectId='other-project';},input=>{input.scope='f'.repeat(64);},input=>{input.payload.connectionId='other-channel';},
+ ]){const f=await acceptedFixture(),input=shareCommand(f.invite.invitationId);change(input);await assert.rejects(f.store.command(owner,input));assert.equal(connectionSelection(f),undefined);}
+ const f=await acceptedFixture();await assert.rejects(f.store.command({...owner,organizationId:'org_Other'},shareCommand(f.invite.invitationId)));assert.equal(connectionSelection(f),undefined);
+});
+
+for(const [name,change] of [
+ ['expired grant',f=>f.setNow('2028-01-01')],['demoted issuer',f=>f.setIssuer(false)],['suspended channel',f=>f.setConnected(false)],['changed channel revision',f=>f.setConnection({channelRevision:6})],['changed assignment revision',f=>f.setConnection({assignmentRevision:3})],['changed stored organization',f=>f.setConnection({organizationId:'other-company'})],
+])test(name+' denies sharing the stored configuration',async()=>{const f=await acceptedFixture();change(f);await assert.rejects(f.store.command(owner,shareCommand(f.invite.invitationId)));assert.equal(connectionSelection(f),undefined);});
+
+test('the same share receipt never creates another selection, and UUID payload reuse conflicts',async()=>{
+ const f=await acceptedFixture(),input=shareCommand(f.invite.invitationId),saved=await f.store.command(owner,input),replay=await f.store.command(owner,input);
+ assert.equal(replay.receiptId,saved.receiptId);assert.equal(replay.replayed,true);assert.equal([...f.audit.values()].filter(row=>row.action==='office.review.connection.shared').length,1);
+ const other=f.addAcceptedReviewer(f.invite);await assert.rejects(f.store.command(owner,{...input,payload:{...input.payload,invitationId:other.invitationId}}),{code:'OFFICE_REVIEW_OPERATION_CONFLICT'});assert.equal((await f.store.review(reviewerB,context)).connection,null);
+});
+
+test('lost share COMMIT recovers through its receipt without duplicating an invitation or selection',async()=>{
+ for(const mode of ['persisted','rollback']){const f=await acceptedFixture(),input=shareCommand(f.invite.invitationId),calls=[...f.providerCalls];f.setCommitFailure(mode);await assert.rejects(f.store.command(owner,input));const status=await f.store.status(owner,{...context,operationId:shareOperation});assert.equal(status.state,mode==='persisted'?'RECORDED':'NOT_OBSERVED');const recovered=await f.store.command(owner,input);assert.equal(recovered.state,'RECORDED');assert.equal([...f.audit.values()].filter(row=>row.action==='office.review.connection.shared').length,1);assert.deepEqual(f.providerCalls,calls);}
+});
+
+test('configuration GET reads no provider and keeps the original saved observation time',async()=>{
+ const f=await acceptedFixture();await f.store.command(owner,shareCommand(f.invite.invitationId));const calls=[...f.providerCalls],start=f.queries.length;f.setNow('2026-10-10T00:00:00.000Z');const value=await f.store.review(reviewer,context);
+ assert.equal(value.connection.observedAt,'2026-10-09T00:00:00.000Z');assert.deepEqual(f.providerCalls,calls);assert.ok(f.queries.slice(start).every(q=>/^(SELECT|BEGIN READ ONLY|ROLLBACK)/.test(q.sql)));assert.ok(f.queries.slice(start).every(q=>!/FOR (SHARE|UPDATE)|pg_advisory/.test(q.sql)));
+ for(const session of [{...reviewer,userId:'user_Other'},{...reviewer,organizationId:'org_Other'}])await assert.rejects(f.store.review(session,context));
+ for(const input of [{...context,projectId:'other-project'},{...context,scope:'f'.repeat(64)}])await assert.rejects(f.store.review(reviewer,input));
+});
+
+for(const [name,patch] of [
+ ['grant receipt',{grantReceiptId:'other-grant'}],['origin receipt',{originReceiptId:'other-origin'}],['membership',{membershipId:'other-membership'}],['Clerk user',{clerkUserId:'user_Other'}],['connection',{connectionId:'other-channel'}],['channel revision',{channelRevision:6}],['assignment revision',{assignmentRevision:3}],['digest',{connectionDigest:'f'.repeat(64)}],['observation time',{observedAt:'2026-10-08T00:00:00.000Z'}],['expiry',{expiresAt:'2027-10-09T00:00:00.000Z'}],['selection revision',{selectionRevision:0}],['issuer',{selectedBy:'other-issuer'}],
+])test('tampered shared '+name+' cannot produce a configuration DTO',async()=>{const f=await acceptedFixture();await f.store.command(owner,shareCommand(f.invite.invitationId));Object.assign(connectionSelection(f).metadata,patch);await assert.rejects(f.store.review(reviewer,context),{code:'OFFICE_REVIEW_SOURCE_CHANGED'});});
+
+test('a selection transplanted to another accepted invitation cannot expose the original auditor configuration',async()=>{
+ const f=await acceptedFixture(),other=f.addAcceptedReviewer(f.invite);await f.store.command(owner,shareCommand(f.invite.invitationId));connectionSelection(f).metadata.invitationId=other.invitationId;
+ assert.equal((await f.store.review(reviewer,context)).connection,null);await assert.rejects(f.store.review(reviewerB,context),{code:'OFFICE_REVIEW_SOURCE_CHANGED'});
+});
+
+for(const [name,patch] of [['WABA asset',{whatsappBusinessId:'70000999'}],['phone asset',{phoneNumberId:'70000999'}],['enabled status',{enabled:false}],['connection status',{connectionStatus:'DISCONNECTED'}],['company mode',{mode:'PROJECT'}]])test('changed stored '+name+' denies the shared configuration',async()=>{const f=await acceptedFixture();await f.store.command(owner,shareCommand(f.invite.invitationId));f.setConnection(patch);await assert.rejects(f.store.review(reviewer,context));});
+
+test('foreign selection rows do not turn into a project-wide configuration permission',async()=>{
+ for(const field of ['organizationId','entityId']){const f=await acceptedFixture();await f.store.command(owner,shareCommand(f.invite.invitationId));connectionSelection(f)[field]='other';const value=await f.store.review(reviewer,context);assert.equal(value.connection,null);assert.equal(value.canObserveConfiguration,false);}
+});
+
+test('ADMIN read exposes sharing eligibility only after acceptance and selection state only for its invitation',async()=>{
+ const f=fixture(),invite=await f.invite(),pending=await f.store.read(owner,context);officeAdminSnapshot(pending,context);assert.equal(pending.invitations[0].canShareConnection,false);assert.equal(pending.invitations[0].connectionShared,false);
+ await f.store.join(reviewer,{invitationId:invite.invitationId,operationId:op},{accept:true});const other=f.addAcceptedReviewer(invite);await f.store.command(owner,shareCommand(invite.invitationId));const shared=await f.store.read(owner,context);officeAdminSnapshot(shared,context);
+ const exact=shared.invitations.find(row=>row.id===invite.invitationId),otherRow=shared.invitations.find(row=>row.id===other.invitationId);assert.equal(exact.canShareConnection,true);assert.equal(exact.connectionShared,true);assert.equal(otherRow.canShareConnection,true);assert.equal(otherRow.connectionShared,false);
+ await f.store.command(owner,withdrawCommand(invite.invitationId));const withdrawn=await f.store.read(owner,context);assert.equal(withdrawn.invitations.find(row=>row.id===invite.invitationId).connectionShared,false);
+});
+
+test('share selections serialize on exact organization, project and invitation before persisting metadata',async()=>{
+ const f=await acceptedFixture(),start=f.queries.length;await f.store.command(owner,shareCommand(f.invite.invitationId));const queries=f.queries.slice(start),lock=queries.findIndex(q=>q.sql.includes('pg_advisory_xact_lock')&&q.args[0]==='office-review-connection:'+member.organizationId+':'+projectId+':'+f.invite.invitationId),insert=queries.findIndex(q=>q.sql.startsWith('INSERT INTO public."AuditLog"')&&q.args[3]==='office.review.connection.shared');
+ assert.ok(lock>=0&&insert>lock);assert.ok(queries.some(q=>q.sql.includes('FOR UPDATE OF a')&&q.args[1]===f.invite.invitationId));
+});
+
+for(const [name,change] of [
+ ['missing initial revision',f=>{connectionSelection(f).metadata.selectionRevision=2;}],
+ ['revision above bounded maximum',f=>{connectionSelection(f).metadata.selectionRevision=10001;}],
+ ['duplicate revision',f=>{const copy=structuredClone(connectionSelection(f));copy.id='duplicated-selection';f.audit.set(copy.id,copy);}],
+ ['mismatched audit kind',f=>{connectionSelection(f).metadata.kind='OFFICE_REVIEW_CONNECTION_WITHDRAWN';}],
+])test(name+' denies shared configuration instead of guessing selection history',async()=>{const f=await acceptedFixture();await f.store.command(owner,shareCommand(f.invite.invitationId));change(f);await assert.rejects(f.store.review(reviewer,context),{code:'OFFICE_REVIEW_SOURCE_CHANGED'});});
+
+test('a selection cannot change its stored issuer to revive after that administrator loses authority',async()=>{
+ const f=await acceptedFixture(),newAdmin={...owner,userId:'user_NewOwner'};f.setAdmin({actorId:'new-owner',membershipId:'new-owner-member',clerkUserId:newAdmin.userId});await f.store.command(newAdmin,shareCommand(f.invite.invitationId));f.setRole('AUDITOR');await assert.rejects(f.store.review(reviewer,context),{code:'OFFICE_REVIEW_SOURCE_CHANGED'});
+ connectionSelection(f).metadata.selectedBy=member.actorId;await assert.rejects(f.store.review(reviewer,context),{code:'OFFICE_REVIEW_SOURCE_CHANGED'});
+});
+
+test('shared configuration HTTP GET is private and rejects query-selected invitations before storage',async()=>{
+ const f=await acceptedFixture();await f.store.command(owner,shareCommand(f.invite.invitationId));const api=createOfficeReviewHandlers({verify:async()=>reviewer,store:f.store}),url='?projectId='+projectId+'&scope='+scope+'&view=review';const response=await api.GET(request('GET',null,url));assert.equal(response.status,200);assert.match(response.headers.get('cache-control'),/private.*no-store/);assert.match(response.headers.get('vary'),/Cookie, Authorization/);assert.equal(response.headers.get('referrer-policy'),'no-referrer');officeReviewSnapshot(await response.json(),context);
+ const start=f.queries.length;for(const suffix of ['&invitationId='+f.invite.invitationId,'&connectionId=channel-a','&view=review'])assert.equal((await api.GET(request('GET',null,url+suffix))).status,400);assert.equal(f.queries.length,start);
+});
+
+test('share and withdrawal journal recovery stores only coordinates and accepts only the matching receipt',async()=>{
+ for(const input of [shareCommand(inviteId),withdrawCommand(inviteId)]){const storage=new Map(),adapter={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k),key:i=>[...storage.keys()][i],get length(){return storage.size;}},journal=createWorkspaceRecoveryJournal({getStorage:()=>adapter,now:()=>1234}),ticket=await journal.prepare('/api/identity/office-review',{method:'POST',body:JSON.stringify(input)});
+  assert.equal(ticket.entry.action,input.action);assert.doesNotMatch([...storage.values()].join(''),/office_invite_|channel-a|confirmReadOnlyConfiguration|Finalizó|payload/);await journal.settle(ticket,null,Object.assign(new Error('lost response'),{status:503}));assert.equal((await journal.list(scope)).length,1);const outcome={...context,operationId:input.operationId,action:input.action,state:'RECORDED',saved:true,definitive:true,receiptId:officeReceiptId(member,projectId,input.operationId),replayed:true};assert.equal(officeReviewReceiptOutcome(outcome,ticket.entry).state,'RECORDED');assert.equal(officeReviewReceiptOutcome({...outcome,action:input.action==='SHARE_CONNECTION'?'WITHDRAW_CONNECTION':'SHARE_CONNECTION'},ticket.entry),null);assert.equal(officeReviewReceiptOutcome({...outcome,scope:'f'.repeat(64)},ticket.entry),null);await journal.settle(ticket,outcome);assert.equal((await journal.list(scope)).length,0);
+ }
 });

@@ -11,7 +11,7 @@ async function actualModule(file,imports=''){
  const result=await transform(imports+source,{filename:file,jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});
  return import('data:text/javascript;base64,'+Buffer.from(result.code).toString('base64'));
 }
-const {onboardingGuideSummary:summary}=await actualModule('onboarding-guide.js');
+const {onboardingGuideSummary:summary,onboardingGuideSteps:steps}=await actualModule('onboarding-guide.js');
 const scheduleUrl=new URL('../src/app/(identity)/cuenta/schedule-workbench.mjs',import.meta.url).href;
 const {workspaceGuideObservation:observe,workspaceGuideAccessReason:reason}=await actualModule('workspace-client.js',`import {loadedScheduleOverview} from ${JSON.stringify(scheduleUrl)};\n`);
 const scope='a'.repeat(64),projectId='p-a';
@@ -26,7 +26,7 @@ test('current canonical response produces partial schedule and personal binding 
  assert.match(labels.schedule,/2 tareas cargadas de 3/);assert.match(labels.schedule,/Vista parcial/);assert.match(labels.schedule,/1 sin fechas; 1 con fechas por revisar/);
  assert.match(labels.whatsapp,/Tu vínculo personal está vigente/);assert.match(labels.whatsapp,/no confirma envío ni entrega real/);
  assert.ok(!JSON.stringify(observed).includes('binding-a'));assert.ok(!JSON.stringify(observed).includes('verifiedAt'));
- assert.deepEqual(Object.keys(observed).sort(),['version','state','generation','scope','projectId','role','projectCount','projectsPartial','schedulePending','schedule','channel'].sort());
+ assert.deepEqual(Object.keys(observed).sort(),['version','state','generation','scope','projectId','role','officeReviewOnly','projectCount','projectsPartial','schedulePending','schedule','channel'].sort());
 });
 for(const flag of ['unavailable','loading','readFailed'])test(flag+' suppresses all earlier company/project/channel facts',()=>{
  const observed=observe(input({[flag]:true})),labels=summary(observed);
@@ -70,6 +70,43 @@ test('field identity review keeps only its own safe reason without an operationa
  assert.equal(current.accessReason,'PARTICIPANT_KYC_REVIEW_REQUIRED');assert.equal(summary(current).accessReason,current.accessReason);
  assert.equal(current.projectId,null);assert.equal(current.channel,null);assert.equal(current.schedule,null);
  assert.equal(observe(input({view:null,accessReason:'SESSION_REQUIRED'})).accessReason,undefined);
+});
+test('limited office access uses its assigned selection and excludes ordinary operational facts and private fields',()=>{
+ const observed=observe(input({account:{...account(),role:'AUDITOR',officeReviewOnly:true,name:'private-company',email:'private@example.test',canSend:false,canManage:false},officeProject:{scope,projectId,name:'private-project',invitationId:'private-invitation'},schedulePending:true})),labels=summary(observed);
+ assert.equal(observed.officeReviewOnly,true);assert.equal(observed.projectId,projectId);
+ assert.equal(observed.schedule,null);assert.equal(observed.channel,null);assert.equal(observed.schedulePending,false);
+ assert.equal(labels.state,'OBSERVED');assert.equal(labels.officeReviewOnly,true);assert.match(labels.company,/Acceso de oficina consultado: 2 obras asignadas/);
+ assert.match(labels.office,/Obra seleccionada.*Revisión de conexión y eventos.*administrador/);assert.match(labels.office,/configuración guardada.*compartida con esta invitación/);assert.match(labels.office,/no consulta el estado actual en Meta/);assert.equal(labels.schedule,null);assert.equal(labels.whatsapp,null);
+ assert.ok(!JSON.stringify(observed).includes('private'));assert.ok(!JSON.stringify(observed).includes('binding-a'));
+ assert.deepEqual(steps(observed).map(step=>step.target),['organization-context','workspace-refresh','workspace-title','office-review-title']);
+ assert.ok(!JSON.stringify(steps(observed)).includes('participant-title'));assert.ok(!JSON.stringify(steps(observed)).includes('field-title'));
+});
+test('an ordinary Auditor retains the ten-step journey and is never classified by role alone',()=>{
+ for(const officeReviewOnly of [undefined,false,'true',1]){
+  const observed=observe(input({account:{...account(),role:'AUDITOR',officeReviewOnly},officeProject:{scope,projectId:'p-b'}}));
+  assert.equal(observed.officeReviewOnly,false);assert.equal(observed.projectId,projectId);assert.notEqual(summary(observed).officeReviewOnly,true);assert.equal(steps(observed).length,10);
+  assert.match(summary(observed).schedule,/2 tareas cargadas/);
+ }
+});
+test('a limited office selection must match both the current scope and an assigned project',()=>{
+ for(const officeProject of [undefined,null,{scope:'b'.repeat(64),projectId},{scope,projectId:'p-unassigned'},{scope,project:{id:projectId}}]){
+  const observed=observe(input({account:{...account(),role:'AUDITOR',officeReviewOnly:true},officeProject}));
+  assert.equal(observed.projectId,null);assert.equal(observed.schedule,null);assert.equal(observed.channel,null);assert.match(summary(observed).office,/Abrí una obra asignada/);
+ }
+});
+test('revalidation and denial discard office mode, selection and all office facts until a fresh account is observed',()=>{
+ for(const extra of [{loading:true},{unavailable:true,accessReason:'WORKSPACE_PROJECT_UNAVAILABLE'},{readFailed:true},{account:null}]){
+  const observed=observe(input({account:{...account(),role:'AUDITOR',officeReviewOnly:true},officeProject:{scope,projectId},...extra}));
+  assert.equal(observed.officeReviewOnly,undefined);assert.equal(observed.projectId,undefined);assert.notEqual(summary(observed).officeReviewOnly,true);assert.equal(steps(observed).length,10);
+  assert.ok(!JSON.stringify(summary(observed)).includes('Acceso de oficina consultado'));
+ }
+ const restored=observe(input({account:{...account(),role:'AUDITOR',officeReviewOnly:true},officeProject:{scope,projectId}}));assert.equal(steps(restored).length,4);
+});
+test('malformed office summaries cannot route a broad role or ordinary task data into the limited journey',()=>{
+ const observed=observe(input({account:{...account(),role:'AUDITOR',officeReviewOnly:true},officeProject:{scope,projectId}}));
+ for(const extra of [{officeReviewOnly:'true'},{role:'ADMIN'},{schedule:view().tasks},{schedulePending:true},{channel:{ready:false,ownLinked:false,partial:false}},{scope:'invalid'},{projectId:'../other'}]){
+  const invalid={...observed,...extra};assert.equal(summary(invalid).state,'UNOBSERVED');assert.equal(steps(invalid).length,10);
+ }
 });
 for(const mismatch of ['scope','projectId','observedGeneration'])test('channel '+mismatch+' mismatch cannot confirm a personal binding',()=>{
  const channel=snapshot();channel[mismatch]={scope:'b'.repeat(64),projectId:'p-b',observedGeneration:1}[mismatch];
