@@ -353,10 +353,12 @@ async function approvalTokenNavigationRace(width,outcome){
  assert.equal(await page.$('#schedule-title'),null,'Current project is still awaiting its canonical GET');
  const releaseCurrent=current.held.shift();
  if(outcome==='refresh'){
-  await click(page,'Actualizar');await waitText(page,'Empresa de ensayo A');current.holdWorkspaceProject=null;
+  current.holdWorkspaceProject=null;
   await click(page,'Obra A');await waitText(page,'Tarea operativa p-a');releaseCurrent();
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await settled(page);
-  assert.equal(await page.$eval('#schedule-title',node=>node.textContent),'Obra A');assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','Refresh/manual selection must cancel the previous focus request');
+  assert.equal(await page.$eval('#schedule-title',node=>node.textContent),'Obra A');assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','Manual selection must cancel the previous focus request');
+  await click(page,'Actualizar');await waitText(page,'Empresa de ensayo A');await click(page,'Obra A');await waitText(page,'Tarea operativa p-a');
+  assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','A refreshed manual selection must not restore the consumed focus request');
   assert.equal(current.requests.filter(row=>row.path==='/api/identity/worker-channel').length,0);assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);
  }else{
   releaseCurrent();await waitText(page,'Tarea operativa p-a2');await focusedOwnChannel(page,current);
@@ -372,7 +374,7 @@ async function privateApprovalNavigation(width){
  current.approved=true;await click(page,'Comprobar habilitación de obra');await waitText(page,'Tarea operativa p-a');assert.equal(await page.$('#identity-access-title'),null);assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,3);assert.equal(current.channelPosts.length,0);
  assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','Manual canonical refresh must not request the onboarding focus');
  await context.close();await privateApprovalFocus(width);for(const outcome of ['resolve','reject','refresh'])await approvalTokenNavigationRace(width,outcome);
- checks.push({name:'own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace',width,channelFocusAfterCanonicalGet:true,focusConsumedOnce:true,oldHeldTokenOutcomes:['resolve','reject'],refreshCancelsFocus:true,automaticChannelGets:0,automaticChannelPosts:0});
+ checks.push({name:'own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace',width});
 }
 try{
  let ready=false;for(let attempt=0;attempt<120;attempt++){if(server.exitCode!==null)throw Error('Fixture exited: '+serverLog);let response;try{response=await fetch(origin);}catch{}await response?.body?.cancel();if(response?.ok){ready=true;break;}if(response?.status>=500)throw Error('Fixture compilation failed: '+serverLog);await pause(500);}assert.ok(ready,'Fixture unavailable: '+serverLog);
