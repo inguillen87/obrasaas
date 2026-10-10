@@ -231,12 +231,12 @@ export function assertCompanyKycPrompt(r){
   if(!match||match[1]!==r.state.nonce||!r.state.choices?.[Number(match[2])]||!row)fail('META_KYC_COMPANY_CONTEXT_REQUIRED');
  }
 }
-export async function fencePreparedCompanyKycChallenge(client,member,projectId){
+export async function fencePreparedCompanyKycChallenge(client,member,projectId,{environment=process.env}={}){
  const prepared=preparedChannels.get(client);
  if(!prepared)return;
  const rows=(await client.query('SELECT id,metadata FROM public."Worker" WHERE "projectId"=$1 AND metadata->\'participant\'->\'kycChatChallenge\'->>\'issuerActorId\'=$2 AND metadata->\'participant\'->\'kycChatChallenge\'->>\'connectionId\'=$3',[projectId,member.actorId,prepared.channel.id])).rows;
  const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
- if(!(now instanceof Date)||!Number.isFinite(now.getTime())||!customerChannelActive(prepared.channel,now.getTime())||prepared.channel.metadata?.developmentPilot)fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
+ if(!(now instanceof Date)||!Number.isFinite(now.getTime())||!customerChannelActive(prepared.channel,now.getTime(),{environment})||prepared.channel.metadata?.developmentPilot)fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
  // Locked Project/Worker/issuer rows prevent revocation; time is checked last.
  const current=rows.find(row=>row.id===prepared.workerId),p=current?.metadata?.participant,c=p?.kycChatChallenge;
  if(!c||!Number.isFinite(Date.parse(c.expiresAt))||Date.parse(c.expiresAt)<=now.getTime()||p.status==='INVITED'&&(!Number.isFinite(Date.parse(p.invitation?.expiresAt))||Date.parse(p.invitation.expiresAt)<=now.getTime()))fail('META_KYC_CHALLENGE_EXPIRED');

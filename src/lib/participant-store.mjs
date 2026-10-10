@@ -347,10 +347,10 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
     const key=participantReceiptId(member.actorId,input.projectId,input.operationId);await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[key]);
     const row=await worker(client,input.projectId,p.workerId,true);if(!row.active||!['INVITED','ACTIVE'].includes(row.metadata?.participant?.status))throw new WorkspaceError('PARTICIPANT_ACCESS_REQUIRED',403);
     const prior=await receipt(client,member,key);if(prior){if(prior.metadata.requestDigest!==requestDigest||prior.entityId!==row.id||prior.metadata.kind!=='PREPARE_KYC_CHAT')throw new WorkspaceError('PARTICIPANT_OPERATION_CONFLICT',409);return {scope,...await currentOutcome(client,input.projectId,prior,true),kind:'PREPARE_KYC_CHAT',codeUnavailable:true,expiresAt:prior.metadata.expiresAt};}
-    const value=await prepareKycChat(client,member,project,{operationId:input.operationId,...p});
+    const value=await prepareKycChat(client,member,project,{operationId:input.operationId,...p},{environment});
     await record(client,member,key,input.projectId,row.id,requestDigest,{kind:'PREPARE_KYC_CHAT',challengeReceiptId:value.receiptId,expiresAt:value.expiresAt,identityCertified:false,permissionsGranted:false});
     const participant=publicParticipant(await worker(client,input.projectId,row.id));
-    if(typeof prepareKycChat.afterWrite==='function')await prepareKycChat.afterWrite(client,member,project.id);
+    if(typeof prepareKycChat.afterWrite==='function')await prepareKycChat.afterWrite(client,member,project.id,{environment});
     return {scope,...value,receiptId:key,participant};
    },typeof prepareKycChat?.beforeProject==='function'?(client,member)=>prepareKycChat.beforeProject(client,member,input):undefined);
    const recorded=await run(session,context,false,async(client,member,scope)=>{requireManager(member);const prior=await receipt(client,member,participantReceiptId(member.actorId,input.projectId,input.operationId));if(!prior)return null;if(prior.metadata.requestDigest!==requestDigest)throw new WorkspaceError('PARTICIPANT_OPERATION_CONFLICT',409);return {scope,...await currentOutcome(client,input.projectId,prior,true)};});if(recorded)return recorded;
