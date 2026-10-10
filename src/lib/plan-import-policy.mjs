@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {WorkspaceError, workspaceId, operationId, calendarDate, digest} from './workspace-policy.mjs';
 import {decodePrivateImage} from './private-image-upload.mjs';
-import {PLAN_OOXML_TYPES,PLAN_OOXML_CONSENT,PLAN_CYP_CONSENT,PLAN_CYP_ROWS,validatePlanOoxml,safePlanOoxmlAnalysis} from './plan-import-ooxml.mjs';
+import {PLAN_OOXML_TYPES,PLAN_OOXML_CONSENT,PLAN_CYP_CONSENT,PLAN_MONTHLY_CURVE_CONSENT,PLAN_CYP_ROWS,validatePlanOoxml,safePlanOoxmlAnalysis} from './plan-import-ooxml.mjs';
 
 export const PLAN_IMPORT_LIMIT=3*1024*1024;
 export const PLAN_IMPORT_ROWS=50;
@@ -9,8 +9,9 @@ export const PLAN_IMPORT_TEXT_LIMITS=Object.freeze({title:160,evidence:500,uncer
 export const PLAN_IMPORT_CONSENT='plan-document-openai-v1';
 export const PLAN_IMPORT_SPREADSHEET_CONSENT=PLAN_OOXML_CONSENT;
 export const PLAN_IMPORT_CYP_CONSENT=PLAN_CYP_CONSENT;
+export const PLAN_IMPORT_MONTHLY_CURVE_CONSENT=PLAN_MONTHLY_CURVE_CONSENT;
 export const planSourceConsent=contentType=>PLAN_OOXML_TYPES[contentType]?PLAN_IMPORT_SPREADSHEET_CONSENT:PLAN_IMPORT_CONSENT;
-export const isPlanSourceConsent=(contentType,consent)=>PLAN_OOXML_TYPES[contentType]?[PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT].includes(consent):consent===PLAN_IMPORT_CONSENT;
+export const isPlanSourceConsent=(contentType,consent)=>PLAN_OOXML_TYPES[contentType]?[PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT].includes(consent):consent===PLAN_IMPORT_CONSENT;
 export const canImportPlan=role=>['ADMIN','DIRECTOR','SITE_MANAGER'].includes(role);
 export const canApprovePlan=role=>['ADMIN','DIRECTOR'].includes(role);
 const fail=(code='PLAN_IMPORT_INPUT_INVALID',status=400)=>{throw new WorkspaceError(code,status);};
@@ -58,18 +59,20 @@ export function decodePlanSource(bytes,contentType) {
 }
 export function normalizePlanRows(rows,{complete=false}={}) {
  const cyp=Array.isArray(rows)&&Object.hasOwn(rows[0]||{},'code');
+ const monthlyCurve=Array.isArray(rows)&&Object.hasOwn(rows[0]||{},'sourceRowId');
  if(!Array.isArray(rows)||!rows.length||rows.length>(cyp?PLAN_CYP_ROWS:PLAN_IMPORT_ROWS))rejectRows('ROW_COUNT','ROWS','PLAN_IMPORT_ROWS_LIMIT');
  const normalized=rows.map(row=>{
-  if(!row||typeof row!=='object'||Array.isArray(row)||Object.keys(row).sort().join('|')!==(cyp?'code|endsOn|evidence|parentCode|sourceIssueReviewed|startsOn|title|uncertainty':'endsOn|evidence|startsOn|title|uncertainty'))rejectRows('ROW_KEYS');
+  if(!row||typeof row!=='object'||Array.isArray(row)||Object.keys(row).sort().join('|')!==(cyp?'code|endsOn|evidence|parentCode|sourceIssueReviewed|startsOn|title|uncertainty':monthlyCurve?'endsOn|evidence|sourceRowId|startsOn|title|uncertainty':'endsOn|evidence|startsOn|title|uncertainty'))rejectRows('ROW_KEYS');
   if(cyp&&(!/^[AB]\.1\.\d{1,3}\.\d{1,3}$/.test(row.code||'')||row.parentCode!==row.code.slice(0,row.code.lastIndexOf('.'))||typeof row.sourceIssueReviewed!=='boolean'))rejectRows('ROW_KEYS');
+  if(monthlyCurve&&!/^Plan y curva Meses!A[1-9]\d{0,5}$/.test(row.sourceRowId||''))rejectRows('ROW_KEYS');
   const title=rowText(row.title,cyp&&!complete?500:PLAN_IMPORT_TEXT_LIMITS.title,'TITLE'),evidence=rowText(row.evidence,PLAN_IMPORT_TEXT_LIMITS.evidence,'EVIDENCE'),uncertainty=row.uncertainty===''?'':rowText(row.uncertainty,PLAN_IMPORT_TEXT_LIMITS.uncertainty,'UNCERTAINTY');
   const dates=[row.startsOn,row.endsOn].map((value,index)=>value===null||value===''?null:calendarDate(value)?value:rejectRows('DATE_FORMAT',index===0?'STARTS_ON':'ENDS_ON','PLAN_IMPORT_DATES_INVALID'));
   if(dates.every(Boolean)&&dates[1]<dates[0])rejectRows('DATE_ORDER','DATES','PLAN_IMPORT_DATES_INVALID');
   if(complete&&(!dates.every(Boolean)||uncertainty))rejectRows('REVIEW_REQUIRED','DATES','PLAN_IMPORT_REVIEW_REQUIRED',409);
   if(!complete&&!dates.every(Boolean)&&!uncertainty)rejectRows('MISSING_DATE_UNCERTAINTY','UNCERTAINTY');
-  return {...(cyp?{code:row.code,parentCode:row.parentCode,sourceIssueReviewed:row.sourceIssueReviewed}:{}),title,startsOn:dates[0],endsOn:dates[1],evidence,uncertainty};
+  return {...(cyp?{code:row.code,parentCode:row.parentCode,sourceIssueReviewed:row.sourceIssueReviewed}:monthlyCurve?{sourceRowId:row.sourceRowId}:{}),title,startsOn:dates[0],endsOn:dates[1],evidence,uncertainty};
  });
- const keys=normalized.map(r=>cyp?r.code:[r.title.toLocaleLowerCase('es-AR'),r.startsOn,r.endsOn].join('|'));
+ const keys=normalized.map(r=>cyp?r.code:monthlyCurve?r.sourceRowId:[r.title.toLocaleLowerCase('es-AR'),r.startsOn,r.endsOn].join('|'));
  if(new Set(keys).size!==keys.length)rejectRows('DUPLICATE_ROWS','ROWS','PLAN_IMPORT_DUPLICATE_ROWS');
  return normalized;
 }
@@ -83,8 +86,18 @@ export function normalizePlanDecision(input) {
 // Match every retained partida to the immutable extraction. EDIT may shorten its
 // title, add calendar dates or explicitly exclude it, but cannot relabel a code.
 export function validatePlanSourceRows(rows,analysis,original,{complete=false}={}) {
+ if(analysis?.version===3){
+  const safe=safePlanOoxmlAnalysis(analysis);
+  if(!safe||!Array.isArray(original)||original.length!==safe.rowCount)fail('PLAN_IMPORT_REVIEW_REQUIRED',409);
+  const originals=new Map(original.map(row=>[row.sourceRowId,row])),items=new Map(safe.items.map(item=>[item.sourceRowId,item]));
+  if(originals.size!==original.length||items.size!==safe.rowCount)fail('PLAN_IMPORT_REVIEW_REQUIRED',409);
+  for(const row of rows){const source=originals.get(row.sourceRowId),item=items.get(row.sourceRowId);
+   if(!source||!item||Object.hasOwn(row,'code')||row.evidence!==source.evidence||source.title!==item.sourceTitle.trim())fail('PLAN_IMPORT_ROWS_INVALID');
+  }
+  return rows;
+ }
  const cyp=analysis?.version===2;
- if(!cyp){if(rows.some(row=>Object.hasOwn(row,'code'))||rows.length>PLAN_IMPORT_ROWS)fail('PLAN_IMPORT_ROWS_INVALID');return rows;}
+ if(!cyp){if(rows.some(row=>Object.hasOwn(row,'code')||Object.hasOwn(row,'sourceRowId'))||rows.length>PLAN_IMPORT_ROWS)fail('PLAN_IMPORT_ROWS_INVALID');return rows;}
  const safe=safePlanOoxmlAnalysis(analysis);
  if(!safe||!Array.isArray(original)||original.length!==safe.rowCount)fail('PLAN_IMPORT_REVIEW_REQUIRED',409);
  const originals=new Map(original.map(row=>[row.code,row])),items=new Map(safe.items.map(item=>[item.code,item]));
@@ -95,7 +108,7 @@ export function validatePlanSourceRows(rows,analysis,original,{complete=false}={
  return rows;
 }
 export function planDecisionDigest(input) {
- return digest(['plan-import-decision-v1',input.projectId,input.scope,input.operationId,input.draftId,input.expectedRevision,input.action,input.reason,input.rows===null?null:input.rows.map(row=>[row.title,row.startsOn,row.endsOn,row.evidence,row.uncertainty,...(Object.hasOwn(row,'code')?[row.code,row.parentCode,row.sourceIssueReviewed]:[])])]);
+ return digest(['plan-import-decision-v1',input.projectId,input.scope,input.operationId,input.draftId,input.expectedRevision,input.action,input.reason,input.rows===null?null:input.rows.map(row=>[row.title,row.startsOn,row.endsOn,row.evidence,row.uncertainty,...(Object.hasOwn(row,'code')?[row.code,row.parentCode,row.sourceIssueReviewed]:Object.hasOwn(row,'sourceRowId')?[row.sourceRowId]:[])])]);
 }
 export async function boundedPlanMultipart(request) {
  const mime=request.headers.get('content-type'),limit=PLAN_IMPORT_LIMIT+65536,length=request.headers.get('content-length');
@@ -108,7 +121,7 @@ export async function boundedPlanMultipart(request) {
   if([...form.keys()].sort().join('|')!==keys.sort().join('|'))fail();
   const file=form.get('file');if(!file||typeof file==='string')fail();
   const input=Object.fromEntries(keys.filter(k=>k!=='file').map(k=>[k,form.get(k)]));
-  if(!operationId(input.operationId)||![PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT].includes(input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED');planContext(input);
+  if(!operationId(input.operationId)||![PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT].includes(input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED');planContext(input);
   const bytes=new Uint8Array(await file.arrayBuffer());let source;
   try{source=decodePlanSource(bytes,file.type);if(!isPlanSourceConsent(source.contentType,input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED');if(PLAN_OOXML_TYPES[source.contentType])await validatePlanOoxml(source.bytes,source.contentType);}catch(error){
    if(error instanceof WorkspaceError&&['PLAN_IMPORT_FILE_INVALID','PLAN_IMPORT_FILE_TOO_LARGE'].includes(error.code))sourceRejections.set(error,{scope:input.scope,projectId:input.projectId,operationId:input.operationId.toLowerCase()});
