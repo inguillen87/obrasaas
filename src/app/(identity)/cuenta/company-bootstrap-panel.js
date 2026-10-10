@@ -99,17 +99,36 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
     {!tasks.length&&<p className={styles.empty}>El cronograma empezará vacío. Podrás agregar tareas después, sin etapas o porcentajes inventados.</p>}
     {tasks.map((task,index)=><div key={task.key} className={styles.taskRow}><label>Tarea {index+1}<input required minLength={2} maxLength={160} value={task.title} disabled={locked} onChange={event=>editTask(index,'title',event.target.value)}/></label><label>Inicio previsto<input type="date" value={task.startsOn} disabled={locked} onChange={event=>editTask(index,'startsOn',event.target.value)}/></label><label>Fin previsto<input type="date" min={task.startsOn||undefined} value={task.endsOn} disabled={locked} onChange={event=>editTask(index,'endsOn',event.target.value)}/></label><button type="button" disabled={locked} onClick={()=>setTasks(tasks.filter((_,i)=>i!==index))} aria-label={`Quitar tarea ${index+1}`}>Quitar</button></div>)}
    </section>
-   <label className={styles.confirmation}><input type="checkbox" checked={confirmed} required disabled={locked} onChange={event=>setConfirmed(event.target.checked)}/><span>Confirmo que quiero crear una empresa nueva para esta organización. No se importarán empleados, mensajes, gastos ni obras de otras empresas.</span></label>
+   <p id="company-trial-notice" className={styles.caption}>Al crear la empresa empieza una prueba de 15 días desde el alta. Después podés consultar su fecha y hora de vencimiento en esta cuenta. Recuperar un alta existente no reinicia la prueba.</p>
+   <label className={styles.confirmation}><input type="checkbox" checked={confirmed} required disabled={locked} aria-describedby="company-trial-notice" onChange={event=>setConfirmed(event.target.checked)}/><span>Confirmo que quiero crear una empresa nueva para esta organización. No se importarán empleados, mensajes, gastos ni obras de otras empresas.</span></label>
    <p className={styles.caption}>Se comprobarán tu sesión de administrador y el correo verificado por Clerk. El nombre declarado no acredita una verificación legal de la empresa. El formulario no se conserva al recargar: se consultará el alta existente y no se reenviará automáticamente.</p>
-   <div className={styles.actions}>{attempt?<><button type="button" disabled={busy} onClick={recover}>Comprobar creación</button>{canRetry&&<button type="button" disabled={busy} onClick={retry}>Reenviar mismo intento</button>}</>:<button className={styles.primary} type="submit" disabled={busy||!confirmed}>Crear empresa y primera obra</button>}</div>
+   <div className={styles.actions}>{attempt?<><button type="button" disabled={busy} onClick={recover}>Comprobar creación</button>{canRetry&&<button type="button" disabled={busy} onClick={retry}>Reenviar mismo intento</button>}</>:<button className={styles.primary} type="submit" disabled={busy||!confirmed} aria-describedby="company-trial-notice">Crear empresa y primera obra</button>}</div>
   </form>}
   {stage==='created'&&receipt&&<><CompanyTrialExpiry company={currentCompany}/><div className={styles.created}><h3>El espacio está creado</h3><dl><dt>Empresa</dt><dd>{receipt.companyName}</dd><dt>Primera obra</dt><dd>{receipt.projectName}</dd><dt>Tareas iniciales</dt><dd>{receipt.initialTaskCount}</dd></dl><p>Sin empleados, movimientos económicos ni mensajes de ejemplo. El número y la autorización de Meta se completan por separado.</p><small>Recibo: {receipt.receiptId}</small><button type="button" className={styles.primary} onClick={()=>setStage('ready')}>Entrar a mi obra</button></div></>}
  </section>;
 }
 
+const trialExpiryFormatter=new Intl.DateTimeFormat('es-AR',{
+ timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit',
+ hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',
+});
+function exactCompanyTrialLabel(value){
+ // Only accept the additive server DTO: an exact ISO UTC instant with milliseconds.
+ if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value))return null;
+ const instant=new Date(value);
+ if(!Number.isFinite(instant.getTime())||instant.toISOString()!==value)return null;
+ return `${trialExpiryFormatter.format(instant)} (hora de Argentina)`;
+}
+function legacyCompanyTrialDate(value){
+ // Validate the calendar only; the legacy date never supplies an invented expiry time.
+ if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return null;
+ const day=new Date(value+'T00:00:00.000Z');
+ return Number.isFinite(day.getTime())&&day.toISOString().slice(0,10)===value?value.split('-').reverse().join('/'):null;
+}
 export function CompanyTrialExpiry({company}){
- const endsOn=company?.trial?.endsOn;
- return company?<p style={{lineHeight:1.6,overflowWrap:'anywhere'}}>Prueba: {typeof endsOn==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(endsOn)?`vencimiento registrado ${endsOn.split('-').reverse().join('/')}.`:'sin vencimiento registrado.'} Esta fecha no confirma un plan pago.</p>:null;
+ const exactLabel=exactCompanyTrialLabel(company?.trial?.endsAt),legacyDate=legacyCompanyTrialDate(company?.trial?.endsOn);
+ const expiry=exactLabel?`vencimiento registrado ${exactLabel}.`:legacyDate?`vencimiento registrado ${legacyDate}; la hora exacta no está confirmada.`:'sin vencimiento exacto confirmado.';
+ return company?<p style={{lineHeight:1.6,overflowWrap:'anywhere'}}>Prueba: {expiry} Esta fecha no confirma un plan pago.</p>:null;
 }
 export function CompanyPhoneDeclarationForm({company,projectId,scope,getSessionToken,onPending,nextStep=null}){
  const sessionRequest=useWorkspaceRequest(getSessionToken),mounted=useRef(true),active=useRef(null);

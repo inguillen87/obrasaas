@@ -4,6 +4,7 @@ import {mkdirSync,writeFileSync} from 'node:fs';
 import {Client,Pool} from 'pg';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createCompanyOnboardingStore} from '../src/lib/company-onboarding-store.mjs';
+import {createCompanyBilling} from '../src/lib/company-billing.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {executeCompanyContactAdoption} from './lib/company-contact-migration.mjs';
 const url=new URL(process.env.CUTOVER_TEST_DATABASE_URL||'https://not-configured.invalid');
@@ -175,6 +176,43 @@ try{
  await pool.query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE "organizationId"=$1 AND "userId"=(SELECT id FROM "PlatformUser" WHERE "clerkUserId"=$2)`,[results[0].organizationId,first.userId]);await assert.rejects(store.phoneStatus(first,phoneContext),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});await assert.rejects(store.declarePhone(first,lostPhone),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});await pool.query(`UPDATE "TenantMembership" SET status='ACTIVE' WHERE "organizationId"=$1 AND "userId"=(SELECT id FROM "PlatformUser" WHERE "clerkUserId"=$2)`,[results[0].organizationId,first.userId]);assert.equal((await store.phoneStatus(first,{...phoneContext,operationId:lostPhone.operationId})).state,'RECORDED');assert.deepEqual(await trialWindow(results[0].organizationId),firstTrial);
  checks.push('company-phone-conflict-cross-company-actor-revocation-rollback-and-lost-commit-recovery-never-enable-channel-or-extend-trial');
  const phoneNew=identity('PhoneNew'),phoneNewInput={...command(phoneNew),companyPhone:'+12025550123'},phoneNewRows=await Promise.all([store.create(phoneNew,phoneNewInput,proof(phoneNew)),store.create(phoneNew,phoneNewInput,proof(phoneNew))]);assert.equal(phoneNewRows.filter(row=>!row.replayed).length,1);assert.equal(phoneNewRows[0].currentCompany.phoneDeclaration.receiptId,phoneNewRows[0].receiptId);assert.equal((await store.create(phoneNew,phoneNewInput,proof(phoneNew))).replayed,true);assert.equal((await trialWindow(phoneNewRows[0].organizationId)).durationSeconds,15*24*60*60);await assert.rejects(store.create(phoneNew,{...phoneNewInput,companyPhone:'+12025550124'},proof(phoneNew)),{code:'COMPANY_CREATION_OPERATION_CONFLICT'});checks.push('new-company-phone-is-atomic-with-bootstrap-receipt-and-exact-fifteen-day-trial');
+ // Reading a timestamp-without-zone as an instant must not depend on either
+ // the PostgreSQL connection zone or the JavaScript host zone. Both public
+ // DTOs must describe the stored value, including historical fourteen-day trials.
+ const nonUtcPool=trackDisposablePool(new Pool({connectionString:url.toString(),max:2,options:'-c timezone=Pacific/Auckland'}));
+ const originalTimezone=process.env.TZ;
+ try{
+  process.env.TZ='Pacific/Honolulu';
+  assert.equal(new Date('2026-10-21T01:57:51.718Z').getTimezoneOffset(),600);
+  assert.equal((await nonUtcPool.query("SELECT current_setting('TimeZone') AS zone")).rows[0].zone,'Pacific/Auckland');
+  const alternateStore=createCompanyOnboardingStore({connect:()=>nonUtcPool.connect()});
+  const alternateWorkspace=createWorkspaceStore({connect:()=>nonUtcPool.connect()});
+  const alternateBilling=createCompanyBilling({workspace:alternateWorkspace});
+  const storedTrial=async organizationId=>(await pool.query(`SELECT to_char("trialEndsAt",'YYYY-MM-DD') AS "endsOn",to_char("trialEndsAt",'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "endsAt" FROM "Organization" WHERE id=$1`,[organizationId])).rows[0];
+  for(const [actor,organizationId,originalWindow]of [[first,results[0].organizationId,firstTrial],[second,companyB.organizationId,existingTrial]]){
+   const expected=await storedTrial(organizationId),onboarding=await alternateStore.status(actor);
+   const portfolio=await alternateWorkspace.list(actor),billing=await alternateBilling.read(actor,{scope:portfolio.scope});
+   assert.deepEqual(onboarding.currentCompany.trial,expected);
+   assert.equal(onboarding.currentCompany.trial.endsAt,billing.subscription.trialEndsAt);
+   assert.deepEqual(await trialWindow(organizationId),originalWindow);
+  }
+  assert.equal((await alternateStore.phoneStatus(first,phoneContext)).currentCompany.trial.endsAt,(await storedTrial(results[0].organizationId)).endsAt);
+  checks.push('exact-stored-trial-agrees-with-canonical-billing-and-phone-recovery-in-different-database-and-host-zones-without-rewriting-fifteen-or-fourteen-days');
+  // An older record without an expiry remains unknown; recovery cannot invent
+  // a date, extend a trial or turn the missing value into payment evidence.
+  await pool.query('UPDATE "Organization" SET "trialEndsAt"=NULL WHERE id=$1',[companyB.organizationId]);
+  try{
+   const withoutExpiry=await alternateStore.status(second),billing=await alternateBilling.read(second,{scope:listB.scope});
+   assert.deepEqual(withoutExpiry.currentCompany.trial,{endsOn:null,endsAt:null});
+   assert.equal(billing.subscription.trialEndsAt,null);assert.equal(billing.subscription.entitlement.allowed,false);
+   assert.equal(billing.billing.paymentEvidence,'UNOBSERVED');
+  }finally{await pool.query('UPDATE "Organization" SET "trialEndsAt"=$2::timestamp WHERE id=$1',[companyB.organizationId,existingTrial.trialEndsAt]);}
+  assert.deepEqual(await trialWindow(companyB.organizationId),existingTrial);
+  checks.push('null-historical-trial-remains-unconfirmed-in-both-dtos-and-does-not-grant-entitlement');
+ }finally{
+  if(originalTimezone===undefined)delete process.env.TZ;else process.env.TZ=originalTimezone;
+  await closeDisposablePool(nonUtcPool);
+ }
  const report={status:'PASS',environment:'disposable-local-postgresql',databaseServerVersion:(await pool.query('SHOW server_version')).rows[0].server_version,checks,realCustomer:false,productionDataWritten:false,clerkApiCalls:0,metaApiCalls:0,whatsAppConnected:false};
  mkdirSync('.vercel/company-onboarding-evidence',{recursive:true});writeFileSync('.vercel/company-onboarding-evidence/postgres.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${db}"`);}finally{await admin.end();}}
