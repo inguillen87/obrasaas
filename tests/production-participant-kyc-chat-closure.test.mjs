@@ -249,3 +249,23 @@ for(const cause of ['missing','foreign-project','foreign-worker','wrong-digest',
  if(cause==='missing')f.audits.delete(a.id);if(cause==='foreign-project')a.metadata.projectId=f.anchor.id;if(cause==='foreign-worker')a.entityId='worker_other';if(cause==='wrong-digest')a.metadata.requestDigest='bad';if(cause==='later-restore'||cause==='later-accept')f.audits.set('later_lifecycle',{...structuredClone(a),id:'later_lifecycle',createdAt:new Date(a.createdAt.getTime()+1000),metadata:{...a.metadata,kind:cause==='later-restore'?'RESTORE_ACCESS':'INVITATION_ACCEPTED'}});if(cause==='own-membership-disabled')f.controls.workerMembershipActive=false;if(cause==='finalizing')f.sealState({...f.state(),step:'FINALIZING',confirmationEventId:'customer_webhook_'+'a'.repeat(64)});
  const before=structuredClone(f.worker.metadata),audits=structuredClone([...f.audits]);await assert.rejects(f.run(),error=>['PARTICIPANT_KYC_CHAT_INTEGRITY','PARTICIPANT_ACCESS_REQUIRED','PARTICIPANT_KYC_CHAT_CONFIRMATION_PENDING'].includes(error.code));assert.deepEqual(f.worker.metadata,before);assert.deepEqual([...f.audits],audits);
 });
+
+
+// Signed capture, followed by an explicitly modelled canonical review result.
+// This does not claim actual reviewer acceptance or PostgreSQL race validation.
+test('rejected completed WhatsApp capture can prepare a new code while its completed capture stays non-cancellable',async()=>{
+ const f=await fixture({captureImageSetVersion:2});await f.join();await f.toConfirmation();await f.choose('Guardar identidad');
+ const p=f.worker.metadata.participant;assert.equal(p.kyc.status,'PENDING_REVIEW');assert.equal(p.kycChatChallenge.status,'COMPLETED');
+ p.kyc={...p.kyc,status:'REJECTED',review:{decision:'REJECTED',reason:'Synthetic request for clearer images',actorId:f.issuer.actorId,recordedAt:f.now.toISOString()}};
+ const before=structuredClone(f.worker.metadata),audits=structuredClone([...f.audits]),calls=f.io(),view=projection(f);
+ assert.equal(view.status,'COMPLETED');assert.equal(view.canPrepare,true);assert.equal(view.canCancel,false);
+ const manager={...f.issuer,actorId:'manager-b',membershipId:'manager-member-b',role:'DIRECTOR'};
+ const other=publicParticipantKycChat(f.row(),{now:new Date(f.now),member:manager,canManage:true,environment:f.environment});
+ assert.equal(other.canPrepare,true);assert.equal(other.canCancel,false);
+ await assert.rejects(f.run(),{code:'PARTICIPANT_KYC_ALREADY_SUBMITTED'});
+ assert.deepEqual(f.worker.metadata,before);assert.deepEqual([...f.audits],audits);assert.deepEqual(f.io(),calls);
+ const original=f.row();
+ const cases=[['not manager',(_row,o)=>o.canManage=false],['employee',(_row,o)=>o.member.role='EMPLOYEE'],['other tenant',(_row,o)=>o.member.organizationId='company-other'],['inactive',row=>row.active=false],['revoked',row=>row.metadata.participant.status='REVOKED'],['wrong KYC version',row=>row.metadata.participant.kyc.version=2],['foreign project',row=>row.metadata.participant.kycChatChallenge.projectId='project-other'],['foreign challenge tenant',row=>row.metadata.participant.kycChatChallenge.organizationId='company-other'],...['NOT_SUBMITTED','PENDING_ACCOUNT_CLAIM','PENDING_REVIEW','APPROVED'].map(status=>[status,row=>row.metadata.participant.kyc.status=status]),...['PENDING','CLAIMED'].map(status=>[status,row=>row.metadata.participant.kycChatChallenge.status=status])];
+ for(const[name,mutate]of cases){const row=structuredClone(original),options={now:new Date(f.now),member:{...f.issuer},canManage:true,environment:f.environment};mutate(row,options);assert.equal(publicParticipantKycChat(row,options).canPrepare,false,name);}
+ assert.deepEqual(f.worker.metadata,before);assert.deepEqual([...f.audits],audits);assert.deepEqual(f.io(),calls);
+});
