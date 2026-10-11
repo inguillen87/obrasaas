@@ -33,8 +33,9 @@ export function employeeIntakeFixture(){
   }
   if(sql.startsWith('SET LOCAL')||sql.startsWith('SELECT pg_advisory'))return result([]);
   if(sql==='SELECT clock_timestamp() AS now')return result([{now:new Date(now)}]);
-  if(sql.includes("to_regclass('public.\"WhatsAppCompanySchema\"')"))return result([{present:true}]);
+  if(sql.includes("to_regclass('public.\"WhatsAppCompanySchema\"')"))return result([{present:true,count:1}]);
   if(sql.includes("table_name='WhatsAppCompanySchema'"))return result([{count:1}]);
+  if(sql.startsWith('SELECT version,contract,"catalogFingerprint",'))return result([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:digest({columns:[],keys:[],indexes:[],triggers:[]}),catalog:args[0].map(conname=>({conname,convalidated:true})),indexes:args[1].map(relname=>({relname,indisvalid:true,indisready:true,indisunique:true})),triggers:args[2].map(tgname=>({tgname,tgenabled:'O'}))}]);
   if(sql.includes('FROM public."WhatsAppCompanySchema"'))return result([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:digest({columns:[],keys:[],indexes:[],triggers:[]})}]);
   if(sql.includes('FROM pg_constraint')&&sql.includes('conname=ANY'))return result(args[0].map(conname=>({conname,convalidated:true})));
   if(sql.includes('FROM pg_index')&&sql.includes('c.relname=ANY'))return result(args[0].map(relname=>({relname,indisvalid:true,indisready:true,indisunique:true})));

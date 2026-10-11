@@ -135,9 +135,10 @@ function companyPresentDiscoveryFixture(){
  f.client.query=async(sql,args)=>{
   if(sql.startsWith('SELECT id FROM public."Organization"')){f.calls.push({sql,args});return {rows:[{id:'org-a'}]};}
   let result;
-  if(sql.includes('to_regclass'))result=rows([{present:true}]);
+  if(sql.includes('to_regclass'))result=rows([{present:true,count:1}]);
   else if(sql.startsWith('SELECT\n  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('))result=rows([{columns:[],keys:[],indexes:[],triggers:[]}]);
   else if(sql.includes('information_schema.columns'))result=sql.includes("column_name='catalogFingerprint'")?rows([{count:1}]):rows([]);
+  else if(sql.startsWith('SELECT version,contract,"catalogFingerprint",'))result=rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:fingerprint,catalog:args[0].map(conname=>({conname,convalidated:true})),indexes:args[1].map(relname=>({relname,indisvalid:true,indisready:true,indisunique:true})),triggers:args[2].map(tgname=>({tgname,tgenabled:'O'}))}]);
   else if(sql.includes('FROM public."WhatsAppCompanySchema"'))result=rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:fingerprint}]);
   else if(sql.startsWith('SELECT conname,convalidated'))result=rows(args[0].map(conname=>({conname,convalidated:true})));
   else if(sql.includes('pg_get_indexdef'))result=rows([]);

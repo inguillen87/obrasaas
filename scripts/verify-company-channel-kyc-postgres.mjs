@@ -36,6 +36,21 @@ async function historicalCompanyChannelCatalogFingerprint(client){
  return digest({columns,keys,indexes,triggers});
 }
 
+// Independent pre-batch guard oracle. The schema, names, predicates and six
+// reads stay identical; the fingerprint uses the four-query oracle above.
+const historicalSchemaConstraints=['company_channel_anchor_fk','company_channel_tenant_fk','company_assignment_channel_fk','company_assignment_project_fk','company_route_member_fk','company_route_assignment_fk','company_route_worker_fk','company_route_pm_fk','company_route_shape','company_event_member_fk','company_event_channel_fk','company_event_route_fk','company_event_assignment_fk','company_event_worker_fk','company_event_pm_fk','company_event_shape'];
+async function historicalCompanyChannelSchemaReady(client) {
+ const present=(await client.query(`SELECT to_regclass('public."WhatsAppCompanySchema"') IS NOT NULL AS present`)).rows[0]?.present;
+ if(!present)return false;
+ const shape=(await client.query(`SELECT count(*)::int AS count FROM information_schema.columns WHERE table_schema='public' AND table_name='WhatsAppCompanySchema' AND column_name='catalogFingerprint'`)).rows[0];if(shape?.count!==1)return false;
+ const marker=(await client.query(`SELECT version,contract,"catalogFingerprint" FROM public."WhatsAppCompanySchema" WHERE id=1`)).rows[0];
+ if(marker?.version!==1||marker.contract!==COMPANY_CHANNEL_SCHEMA_CONTRACT)return false;
+ const catalog=(await client.query(`SELECT conname,convalidated FROM pg_constraint WHERE connamespace='public'::regnamespace AND conname=ANY($1::text[])`,[historicalSchemaConstraints])).rows;
+ const indexes=(await client.query(`SELECT c.relname,i.indisvalid,i.indisready,i.indisunique FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relnamespace='public'::regnamespace AND c.relname=ANY($1::text[])`,[['company_waba_owner_key','company_assignment_active_project_key']])).rows;
+ const triggers=(await client.query(`SELECT tgname,tgenabled FROM pg_trigger WHERE tgname=ANY($1::text[]) AND NOT tgisinternal`,[['company_event_immutable','company_channel_immutable','company_seed_legacy']])).rows;
+ return catalog.length===historicalSchemaConstraints.length&&catalog.every(row=>row.convalidated)&&indexes.length===2&&indexes.every(row=>row.indisvalid&&row.indisready&&row.indisunique)&&triggers.length===3&&triggers.every(row=>row.tgenabled==='O')&&marker.catalogFingerprint===await historicalCompanyChannelCatalogFingerprint(client);
+}
+
 // Root-run, schema-only disposable verification. Never creates/drops a database.
 // The adapter substitutes only the canonical public SQL namespace so all actual
 // runtime queries and catalog guards operate inside this random fixture schema.
@@ -47,7 +62,7 @@ const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),root=process.c
 const sources=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(entry=>entry.isDirectory()?sources(relative+'/'+entry.name):[relative+'/'+entry.name]);
 const sourceManifest=[...sources('src/lib'),'scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs'].map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
 const admin=new Client({connectionString:url.toString()}),environment={...lifecycleEnvironment},a={...lifecycleTenants[0],anchorProjectId:'project-a',projectId:'project-target-b',channelId:'company-kyc-channel-a',workerId:'company-kyc-worker-b',invitationId:'invite_'+'a'.repeat(32),providerInvitationId:'orginv_CompanyKycA'},b={...lifecycleTenants[1],projectId:'project-foreign',channelId:'company-kyc-channel-foreign'},graph=createControlledLifecycleGraph(environment),blob=createControlledLifecycleBlob(),clerk=createControlledLifecycleClerk(),checks=[];
-let pool,created=false,passed=false,sequence=0,lastReplyId=null,networkCalls=0,loseDepositCommit=false,catalogFingerprintEquivalence=null;
+let pool,created=false,passed=false,sequence=0,lastReplyId=null,networkCalls=0,loseDepositCommit=false,catalogFingerprintEquivalence=null,schemaReadinessEquivalence=null;
 const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{networkCalls++;throw Error('CORPORATE_KYC_UNCONTROLLED_NETWORK_REJECTED');};
 const query=async(sql,args=[])=>{const client=await pool.connect();try{return await client.query(sqlInSchema(sql),args);}finally{client.release();}};
 const connect=async()=>{const client=await pool.connect();let deposited=false;return {release:broken=>client.release(broken),query:async(sql,args=[])=>{const result=await client.query(sqlInSchema(sql),args);if(sql.startsWith('INSERT INTO public."AuditLog"')&&sql.includes("'participant.operation.recorded'"))deposited=true;if(sql==='COMMIT'&&deposited&&loseDepositCommit){loseDepositCommit=false;throw Error('SYNTHETIC_COMPANY_KYC_COMMIT_ACK_LOST');}return result;}};};
@@ -75,6 +90,35 @@ try{
   assert.equal(historicalStatements,4);assert.equal(batchStatements,1);assert.equal(batch,historical,'Batched catalog fingerprint must preserve the four historical PostgreSQL queries');assert.equal(markerBefore.catalogFingerprint,historical,'Do not reseal the existing marker to accept a changed digest');
   const markerAfter=(await catalogClient.query(`SELECT version,contract,"catalogFingerprint" FROM public."WhatsAppCompanySchema" WHERE id=1`)).rows[0];assert.deepEqual(markerAfter,markerBefore);
   catalogFingerprintEquivalence={historicalStatements,batchStatements,nonEmptyCatalog:true,fingerprint:historical,markerUnchanged:true,statementSnapshot:'one-query-batch-compared-with-four-historical-queries'};
+  const observeReadiness=async()=>{
+   let historicalQueries=0,batchQueries=0;
+   const historicalReady=await historicalCompanyChannelSchemaReady({query:(sql,args)=>{historicalQueries++;assert.match(sql,/^SELECT\s/);return catalogClient.query(sql,args);}});
+   const batchReady=await companyChannelSchemaReady({query:(sql,args)=>{batchQueries++;assert.match(sql,/^SELECT\s/);return catalogClient.query(sql,args);}});
+   assert.equal(batchReady,historicalReady,'Batched readiness must preserve the six historical guards and fingerprint');return {historicalReady,batchReady,historicalQueries,batchQueries};
+  };
+  const positive=await observeReadiness();assert.deepEqual(positive,{historicalReady:true,batchReady:true,historicalQueries:10,batchQueries:3});
+  const negatives=[];
+  const rejectCatalog=async(name,changes,expectedQueries)=>{
+   await catalogClient.query('BEGIN');
+   try{
+    for(const [sql,args] of changes)await catalogClient.query(sql,args);
+    const observed=await observeReadiness();assert.equal(observed.historicalReady,false,name);assert.equal(observed.batchReady,false,name);assert.equal(observed.batchQueries,expectedQueries,name);negatives.push({name,...observed});
+   }finally{await catalogClient.query('ROLLBACK');}
+   assert.deepEqual((await catalogClient.query(`SELECT version,contract,"catalogFingerprint" FROM public."WhatsAppCompanySchema" WHERE id=1`)).rows[0],markerBefore,'Each negative probe must restore the existing marker without resealing');
+   const restored=await observeReadiness();assert.deepEqual(restored,positive,'Each negative probe must restore the original adopted catalog');
+  };
+  await rejectCatalog('marker-table-absent',[[`ALTER TABLE public."WhatsAppCompanySchema" RENAME TO "WhatsAppCompanySchema_probe"`]],1);
+  await rejectCatalog('fingerprint-column-absent',[[`ALTER TABLE public."WhatsAppCompanySchema" RENAME COLUMN "catalogFingerprint" TO "catalogFingerprint_probe"`]],1);
+  await rejectCatalog('marker-row-absent',[[`DELETE FROM public."WhatsAppCompanySchema" WHERE id=1`]],2);
+  await rejectCatalog('marker-contract-mismatch',[[`UPDATE public."WhatsAppCompanySchema" SET contract=$1 WHERE id=1`,['synthetic-incompatible-contract']]],2);
+  await rejectCatalog('required-constraint-absent',[[`ALTER TABLE public."WhatsAppCompanyEventRoute" DROP CONSTRAINT "company_event_worker_fk"`]],2);
+  await rejectCatalog('required-constraint-not-validated',[[`ALTER TABLE public."WhatsAppCompanyEventRoute" DROP CONSTRAINT "company_event_worker_fk"`],[`ALTER TABLE public."WhatsAppCompanyEventRoute" ADD CONSTRAINT "company_event_worker_fk" FOREIGN KEY("workerId","projectId") REFERENCES public."Worker"(id,"projectId") ON DELETE RESTRICT NOT VALID`]],2);
+  await rejectCatalog('required-index-absent',[[`DROP INDEX public."company_waba_owner_key"`]],2);
+  await rejectCatalog('same-name-index-not-unique',[[`DROP INDEX public."company_waba_owner_key"`],[`CREATE INDEX "company_waba_owner_key" ON public."WhatsAppConnection"("whatsappBusinessId") WHERE "whatsappBusinessId" IS NOT NULL`]],2);
+  await rejectCatalog('required-trigger-disabled',[[`ALTER TABLE public."WhatsAppCompanyEventRoute" DISABLE TRIGGER "company_event_immutable"`]],2);
+  await rejectCatalog('marker-fingerprint-mismatch',[[`UPDATE public."WhatsAppCompanySchema" SET "catalogFingerprint"=$1 WHERE id=1`,['0'.repeat(64)]]],3);
+  await rejectCatalog('same-name-validated-constraint-definition-drift',[[`ALTER TABLE public."WhatsAppCompanyEventRoute" DROP CONSTRAINT "company_event_worker_fk"`],[`ALTER TABLE public."WhatsAppCompanyEventRoute" ADD CONSTRAINT "company_event_worker_fk" FOREIGN KEY("workerId","projectId") REFERENCES public."Worker"(id,"projectId") ON DELETE CASCADE`]],3);
+  schemaReadinessEquivalence={positive,negativeGuards:negatives,markerUnchanged:true,probeTransactions:'BEGIN/ROLLBACK in the existing disposable schema only',cachedAuthorization:false};
  }finally{catalogClient.release();}
  await query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES('company-kyc-person',$1,$2),('company-kyc-reviewer','user_CompanyKycReviewer','reviewer@example.invalid')`,[a.workerUserId,a.workerEmail]);
  await query(`INSERT INTO "TenantMembership"(id,"userId","organizationId","tenantRole","clerkRole",status) VALUES('company-kyc-person-member','company-kyc-person',$1,'AUDITOR','org:member','ACTIVE'),('company-kyc-reviewer-member','company-kyc-reviewer',$1,'DIRECTOR','org:member','ACTIVE')`,[a.organizationId]);
@@ -97,7 +141,7 @@ try{
  const prepareInput={projectId:a.projectId,scope:ownerScope,operationId:randomUUID(),action:'PREPARE_KYC_CHAT',payload:{workerId:a.workerId,revision:(await worker()).revision}},prepared=await participant.save(ownerSession,prepareInput);
  await legacyChallenge(a.workerId);
  assert.match(prepared.code,/^IDENTIDAD [A-Za-z0-9_-]{43}$/);assert.equal((await participant.save(ownerSession,prepareInput)).codeUnavailable,true);assert.equal((await worker()).metadata.participant.clerkUserId,null);
- assert.ok(catalogFingerprintEquivalence?.markerUnchanged);checks.push('canonical-manager-prepares-B-with-original-A-channel-and-replay-never-reveals-a-new-code');
+ assert.ok(catalogFingerprintEquivalence?.markerUnchanged);assert.ok(schemaReadinessEquivalence?.markerUnchanged);checks.push('canonical-manager-prepares-B-with-original-A-channel-and-replay-never-reveals-a-new-code');
  const provider=createMetaCustomerProvider({environment,fetchImpl:graph.fetchImpl}),upload=createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment}),deposit=createParticipantChannelKycDeposit({connect,resolveAuthority:resolveMetaKycAuthority,upload,environment}),bridge=createMetaKycBridge({connect,provider,deposit,environment}),outbound=createMetaKycOutbound({connect,provider,environment}),company=createCompanyChannelBridge({connect,provider,put:blob.put,get:blob.get,environment,analyzer:async()=>{throw Error('CORPORATE_KYC_UNREQUESTED_ANALYSIS');}}),companyOutbound=createMetaCustomerOutbound({connect,provider,environment,sourceContext:true,resolveIdentity:resolveCompanyOutboundIdentity});
  const processor=createMetaCustomerProcessor({connect,environment,authorizationCodes:[...META_KYC_AUTHORIZATION_CODES,'COMPANY_CHANNEL_SOURCE_REQUIRED'],dispatch:async context=>(await bridge.execute(context))||company.execute(context),outbound:{send:(context,reply,{purpose}={})=>purpose==='KYC_CAPTURE'?outbound.send(context,reply):companyOutbound.send(context,reply),observeStatus:(...args)=>companyOutbound.observeStatus(...args)}}),callback=createMetaCustomerCallbackHandlers({inbox:createMetaCustomerInbox({connect,environment}),environment,schedule:()=>{}});
  async function receive(message,{tenant=a,contextId=lastReplyId,signed=true,from=tenant.sender}={}){
@@ -185,5 +229,5 @@ try{
  globalThis.fetch=originalFetch;try{await pool?.end();if(created){await admin.query('DROP SCHEMA "'+schema+'" CASCADE');assert.equal((await admin.query('SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname=$1) AS present',[schema])).rows[0].present,false);}}finally{await admin.end();}
 }
 assert.equal(passed,true);
-const proof={status:'PASS',checks,catalogFingerprintEquivalence,sourceManifest,harnessSha256,environment:'schema-only-localhost-postgresql-corporate-KYC',databaseCreated:false,schemaRemoved:true,realProviderCalls:0,unexpectedNetworkCalls:networkCalls,productionDataTouched:false,realClerkLogin:false,realMetaAccepted:false,humanAccepted:false};
+const proof={status:'PASS',checks,catalogFingerprintEquivalence,schemaReadinessEquivalence,sourceManifest,harnessSha256,environment:'schema-only-localhost-postgresql-corporate-KYC',databaseCreated:false,schemaRemoved:true,realProviderCalls:0,unexpectedNetworkCalls:networkCalls,productionDataTouched:false,realClerkLogin:false,realMetaAccepted:false,humanAccepted:false};
 mkdirSync('.vercel/company-kyc-evidence',{recursive:true});writeFileSync('.vercel/company-kyc-evidence/postgres.json',JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));

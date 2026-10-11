@@ -32,9 +32,10 @@ function fixture({company=true,active=false}={}){
  const client={async query(sql,args=[]){
   controls.queries.push({sql,args:structuredClone(args)});if(controls.hook)await controls.hook(sql,args);
   assert.ok(!/^(INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE)\b/i.test(sql),'authority must not write');
-  if(sql.includes('to_regclass'))return rows([{present:sql.includes('WhatsAppCompanySchema')?controls.schema:controls.partialSchema}]);
+  if(sql.includes('to_regclass'))return rows([{present:sql.includes('WhatsAppCompanySchema')?controls.schema:controls.partialSchema,count:1}]);
   if(sql.startsWith('SELECT\n  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('))return rows([{columns:[],keys:[],indexes:[],triggers:[]}]);
   if(sql.includes('information_schema.columns'))return rows(sql.includes("column_name='catalogFingerprint'")?[{count:1}]:[]);
+  if(sql.startsWith('SELECT version,contract,"catalogFingerprint",'))return rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint,catalog:args[0].map(conname=>({conname,convalidated:true})),indexes:args[1].map(relname=>({relname,indisvalid:true,indisready:true,indisunique:true})),triggers:args[2].map(tgname=>({tgname,tgenabled:'O'}))}]);
   if(sql.includes('FROM public."WhatsAppCompanySchema"'))return rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint}]);
   if(sql.startsWith('SELECT conname,convalidated'))return rows(args[0].map(conname=>({conname,convalidated:true})));
   if(sql.includes('pg_get_indexdef'))return rows([]);

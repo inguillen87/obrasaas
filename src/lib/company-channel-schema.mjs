@@ -84,14 +84,16 @@ export async function companyChannelCatalogFingerprint(client){
  return digest({columns:catalog.columns,keys:catalog.keys,indexes:catalog.indexes,triggers:catalog.triggers});
 }
 export async function companyChannelSchemaReady(client) {
- const present=(await client.query(`SELECT to_regclass('public."WhatsAppCompanySchema"') IS NOT NULL AS present`)).rows[0]?.present;
- if(!present)return false;
- const shape=(await client.query(`SELECT count(*)::int AS count FROM information_schema.columns WHERE table_schema='public' AND table_name='WhatsAppCompanySchema' AND column_name='catalogFingerprint'`)).rows[0];if(shape?.count!==1)return false;
- const marker=(await client.query(`SELECT version,contract,"catalogFingerprint" FROM public."WhatsAppCompanySchema" WHERE id=1`)).rows[0];
+ const shape=(await client.query(`SELECT to_regclass('public."WhatsAppCompanySchema"') IS NOT NULL AS present,
+  (SELECT count(*)::int FROM information_schema.columns WHERE table_schema='public' AND table_name='WhatsAppCompanySchema' AND column_name='catalogFingerprint') AS count`)).rows[0];
+ if(!shape?.present||shape.count!==1)return false;
+ const marker=(await client.query(`SELECT version,contract,"catalogFingerprint",
+  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('conname',conname,'convalidated',convalidated) ORDER BY conname),'[]'::json) FROM pg_constraint WHERE connamespace='public'::regnamespace AND conname=ANY($1::text[])) AS catalog,
+  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('relname',c.relname,'indisvalid',i.indisvalid,'indisready',i.indisready,'indisunique',i.indisunique) ORDER BY c.relname),'[]'::json) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relnamespace='public'::regnamespace AND c.relname=ANY($2::text[])) AS indexes,
+  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('tgname',tgname,'tgenabled',tgenabled) ORDER BY tgname),'[]'::json) FROM pg_trigger WHERE tgname=ANY($3::text[]) AND NOT tgisinternal) AS triggers
+  FROM public."WhatsAppCompanySchema" WHERE id=1`,[constraints,['company_waba_owner_key','company_assignment_active_project_key'],['company_event_immutable','company_channel_immutable','company_seed_legacy']])).rows[0];
  if(marker?.version!==1||marker.contract!==COMPANY_CHANNEL_SCHEMA_CONTRACT)return false;
- const catalog=(await client.query(`SELECT conname,convalidated FROM pg_constraint WHERE connamespace='public'::regnamespace AND conname=ANY($1::text[])`,[constraints])).rows;
- const indexes=(await client.query(`SELECT c.relname,i.indisvalid,i.indisready,i.indisunique FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relnamespace='public'::regnamespace AND c.relname=ANY($1::text[])`,[['company_waba_owner_key','company_assignment_active_project_key']])).rows;
- const triggers=(await client.query(`SELECT tgname,tgenabled FROM pg_trigger WHERE tgname=ANY($1::text[]) AND NOT tgisinternal`,[['company_event_immutable','company_channel_immutable','company_seed_legacy']])).rows;
+ const {catalog,indexes,triggers}=marker;
  return catalog.length===constraints.length&&catalog.every(row=>row.convalidated)&&indexes.length===2&&indexes.every(row=>row.indisvalid&&row.indisready&&row.indisunique)&&triggers.length===3&&triggers.every(row=>row.tgenabled==='O')&&marker.catalogFingerprint===await companyChannelCatalogFingerprint(client);
 }
 export async function requireCompanyChannelSchema(client) {if(!await companyChannelSchemaReady(client))throw new WorkspaceError('COMPANY_CHANNEL_CATALOG_REQUIRED',409);}

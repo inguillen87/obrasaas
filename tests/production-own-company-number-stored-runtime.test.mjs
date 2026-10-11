@@ -36,9 +36,10 @@ async function storedFixture({expired=true}={}){
   }else if(sql.includes("metadata->>'projectId'=$4")){
    // New command UUIDs cannot replay the original activation receipt.
    result=rows([]);
-  }else if(sql.includes('to_regclass'))result=rows([{present:f.schemaReady}]);
+  }else if(sql.includes('to_regclass'))result=rows([{present:f.schemaReady,count:1}]);
   else if(sql.startsWith('SELECT\n  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('))result=rows([{columns:[],keys:[],indexes:[],triggers:[]}]);
   else if(sql.includes('information_schema.columns'))result=rows(sql.includes("column_name='catalogFingerprint'")?[{count:1}]:[]);
+  else if(sql.startsWith('SELECT version,contract,"catalogFingerprint",'))result=rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:digest({columns:[],keys:[],indexes:[],triggers:[]}),catalog:args[0].map(conname=>({conname,convalidated:true})),indexes:args[1].map(relname=>({relname,indisvalid:true,indisready:true,indisunique:true})),triggers:args[2].map(tgname=>({tgname,tgenabled:'O'}))}]);
   else if(sql.includes('FROM public."WhatsAppCompanySchema"'))result=rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:digest({columns:[],keys:[],indexes:[],triggers:[]})}]);
   else if(sql.includes('FROM pg_constraint WHERE'))result=rows(args[0].map(conname=>({conname,convalidated:true})));
   else if(sql.includes('FROM pg_index i JOIN pg_class c')&&!sql.includes('pg_get_indexdef'))result=rows(args[0].map(relname=>({relname,indisvalid:true,indisready:true,indisunique:true})));

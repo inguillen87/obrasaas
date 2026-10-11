@@ -18,9 +18,10 @@ async function fixture(options={}){
  const originalQuery=f.client.query.bind(f.client),rows=value=>({rows:value,rowCount:value.length});
  f.client.query=async(sqlText,args=[])=>{
   sql.push({sql:sqlText,args});
-  if(sqlText.includes("to_regclass('public.\"WhatsAppCompanySchema\"')"))return rows([{present:true}]);
+  if(sqlText.includes("to_regclass('public.\"WhatsAppCompanySchema\"')"))return rows([{present:true,count:1}]);
   if(sqlText.startsWith('SELECT\n  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('))return rows([{columns:[],keys:[],indexes:[],triggers:[]}]);
   if(sqlText.includes('information_schema.columns'))return rows(sqlText.includes("column_name='catalogFingerprint'")?[{count:1}]:[]);
+  if(sqlText.startsWith('SELECT version,contract,"catalogFingerprint",'))return rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:digest({columns:[],keys:[],indexes:[],triggers:[]}),catalog:args[0].map(conname=>({conname,convalidated:true})),indexes:args[1].map(relname=>({relname,indisvalid:true,indisready:true,indisunique:true})),triggers:args[2].map(tgname=>({tgname,tgenabled:'O'}))}]);
   if(sqlText.includes('FROM public."WhatsAppCompanySchema"'))return rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:digest({columns:[],keys:[],indexes:[],triggers:[]})}]);
   if(sqlText.includes('FROM pg_constraint')&&sqlText.includes('conname=ANY'))return rows(args[0].map(conname=>({conname,convalidated:true})));
   if(sqlText.includes('FROM pg_index')&&sqlText.includes('c.relname=ANY'))return rows(args[0].map(relname=>({relname,indisvalid:true,indisready:true,indisunique:true})));
