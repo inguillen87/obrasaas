@@ -12,6 +12,7 @@ import {normalizeDniExtraction} from './pilot-media.mjs';
 import {adoptParticipantChannelKyc} from './participant-channel-kyc.mjs';
 import {preparePendingCompanyKycAcceptance,lockPendingCompanyKycAcceptanceProjects,bindPendingCompanyKycAcceptance,fencePendingCompanyKycAcceptance} from './company-channel-kyc.mjs';
 import {cancelParticipantKycChat,publicParticipantKycChat} from './participant-kyc-chat-closure.mjs';
+import {publicParticipantKycChatAttempt} from './participant-kyc-chat-attempt.mjs';
 import {authorizeParticipantOnboarding} from './participant-onboarding-intent.mjs';
 import {PARTICIPANT_ONBOARDING_NOTICE,PARTICIPANT_ONBOARDING_NOTICE_VERSION,PARTICIPANT_ONBOARDING_NOTICE_SHA256,publicParticipantOnboarding,participantOnboardingCapabilities} from './participant-onboarding-policy.mjs';
 import {readParticipantOnboardingStatuses} from './participant-onboarding-delivery.mjs';
@@ -60,7 +61,7 @@ async function ownKycReplayOutcome(client,member,session,input,found,fingerprint
 const canManageParticipants=member=>member.identityOnly!==true&&participantManager(member.role);
 function requireManager(member){if(member.identityOnly===true)throw new WorkspaceError('PARTICIPANT_KYC_REVIEW_REQUIRED',403);if(!canManageParticipants(member))throw new WorkspaceError('PARTICIPANT_MANAGE_REQUIRED',403);}
 function matchProvider(invitation,result){if(!result||result.invitationId!==invitation.id||result.email!==invitation.email||result.role!=='org:member'||!/^orginv_[A-Za-z0-9]+$/.test(result.id||'')||!['pending','accepted'].includes(result.state)||!Number.isFinite(Date.parse(result.expiresAt)))throw new WorkspaceError('PARTICIPANT_INVITATION_UNCONFIRMED',503);}
-export function createParticipantStore({workspace,connect,identity,upload,get,analyzer,prepareKycChat,assessBiometrics,environment=process.env}){
+export function createParticipantStore({workspace,connect,identity,upload,get,analyzer,prepareKycChat,readKycChatAttempt=null,assessBiometrics,environment=process.env}){
  const run=(session,input,writable,callback,beforeProject)=>workspace.projectOperation(session,input,writable,callback,beforeProject);
  const runIdentity=(session,input,writable,callback,beforeProject)=>participantIdentityOperation(workspace,session,input,writable,callback,beforeProject);
  const organizationRun=(session,input,writable,callback)=>workspace.organizationOperation(session,input,writable,callback);
@@ -253,6 +254,14 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
   return {invitationId:invite.id,projectId:row.projectId,projectName:row.projectName,organizationName:row.organizationName,participantName:row.name,state:'ACTIVE',canAccept:false,saved:true,joined:true,replayed:true,receiptId:found.id,identityCertified:false,whatsAppAccessGranted:false};
  }
  return {
+  kycChatAttempt(session,context){participantContext(context);if(Object.keys(context).sort().join('|')!=='challengeId|projectId|scope|workerId'||!workspaceId(context.workerId)||!/^kyc_chat_[a-f0-9]{32}$/.test(context.challengeId||''))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return runIdentity(session,context,false,async(client,member,scope)=>{
+   if(!canManageParticipants(member))await assertOwnParticipant(client,member,session,context.projectId,context.workerId);
+   const rows=(await client.query(`SELECT ${columns},phone FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[context.workerId,context.projectId])).rows;
+   if(rows.length!==1)throw new WorkspaceError('PARTICIPANT_UNAVAILABLE',404);
+   if(rows[0].metadata?.participant?.kycChatChallenge?.id!==context.challengeId)throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
+   const attempt=readKycChatAttempt===null?{version:1,state:'UNAVAILABLE'}:await readKycChatAttempt({client,member,projectId:context.projectId,row:rows[0],environment});
+   return {detail:'kyc-chat-attempt',scope,projectId:context.projectId,workerId:context.workerId,challengeId:context.challengeId,kycChatAttempt:publicParticipantKycChatAttempt(attempt)};
+  });},
   accounts(session,context){const request=participantAccountRequest(context);return run(session,context,false,async(client,member,scope)=>{
    if(member.role!=='ADMIN')throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);
    return {detail:'existing-accounts',scope,projectId:context.projectId,canManage:true,canInvite:session.organizationRole==='org:admin',canManageOfficeRoles:true,...await accountPage(client,member,context,scope,request)};
