@@ -182,7 +182,7 @@ async function documentBackScenario(width,mode){
   let body,status=200;
   if(request.method()==='POST'){
    const input=JSON.parse(request.postData());posts.push(input);assert.equal(input.projectId,projectId);assert.equal(input.scope,scope);
-   if(reviewing){assert.equal(input.action,'REVIEW_KYC');assert.deepEqual(downloads,['document-front','selfie','document-back']);assert.equal(input.payload.submissionId,row.kyc.submissionId);row={...row,kyc:{...row.kyc,status:'APPROVED',review:{decision:'APPROVED',reason:input.payload.reason,recordedAt:'2026-10-07T12:00:00.000Z'}}};}
+   if(reviewing){assert.equal(input.action,'REVIEW_KYC');assert.deepEqual(downloads,['document-front','selfie','document-back']);assert.equal(input.payload.submissionId,row.kyc.submissionId);assert.equal(input.payload.decision,'APPROVED');assert.equal(input.payload.reason,'Revisión humana sintética de las tres imágenes.');row={...row,kyc:{...row.kyc,status:'APPROVED',review:{decision:'APPROVED',reason:input.payload.reason,recordedAt:'2026-10-07T12:00:00.000Z'}}};}
    else{
     for(const kind of ['front','selfie'])assert.deepEqual(Buffer.from(input[kind].split(',').at(-1),'base64'),picture);
     if(withBack){assert.equal(input.backConsent,true);assert.equal(input.backNoticeVersion,backNotice.version);assert.equal(input.backNoticeSha256,backNotice.sha256);assert.deepEqual(Buffer.from(input.back.split(',').at(-1),'base64'),picture);}
@@ -203,9 +203,40 @@ async function documentBackScenario(width,mode){
  if(mode==='back-malformed'){
   assert.equal(await page.$$eval('button',all=>all.filter(button=>button.textContent.trim()==='Registrar revisión humana'&&!button.disabled).length),0);assert.equal(posts.length,0);checks.push({width,mode,malformedBackNeverOffersReview:true});
  }else{
+  let privateImageRendering;
   if(reviewing){
-   const enabled=()=>page.$$eval('button',all=>all.some(button=>button.textContent.trim()==='Registrar revisión humana'&&!button.disabled));
-   assert.equal(await enabled(),false);await click(page,'Consultar documento privado');await click(page,'Consultar fotografía');assert.equal(await enabled(),false);await click(page,'Consultar dorso privado');await click(page,'Registrar revisión humana');await page.type('textarea','Revisión humana sintética de las tres imágenes.');await noOverflow(page);await page.screenshot({path:path.join(evidence,`${mode}-form-${width}.png`),fullPage:true});await click(page,'Guardar decisión');
+   const review=await page.$('[data-participant-profile] [data-onboarding-primary]');
+   assert.ok(review,'Pending independent review has one primary action');
+   assert.equal(await page.$$eval('[data-onboarding-primary]',all=>all.length),1);
+   assert.equal(await review.evaluate(button=>button.textContent.trim()),'Registrar revisión humana');
+   assert.equal(await review.evaluate(button=>button.disabled),true);assert.equal(posts.length,0);
+   await click(page,'Consultar documento privado');await click(page,'Consultar fotografía');
+   assert.equal(await review.evaluate(button=>button.isConnected&&button.disabled),true,'Two of three images keep the same review action blocked');assert.equal(posts.length,0);
+   await click(page,'Consultar dorso privado');
+   await page.waitForFunction(()=>document.querySelector('[data-participant-profile] [data-onboarding-primary]')?.disabled===false&&document.querySelectorAll('[data-participant-profile] img').length===3);
+   assert.deepEqual(downloads,['document-front','selfie','document-back']);
+   assert.equal(await review.evaluate(button=>button.isConnected&&!button.disabled),true,'The third image enables the existing action for this presentation');
+   await page.waitForFunction(()=>{const images=[...document.querySelectorAll('[data-participant-profile] img')];return images.length===3&&images.every(image=>{const rect=image.getBoundingClientRect();return image.complete&&image.naturalWidth>0&&image.naturalHeight>0&&rect.width>0&&rect.height>0;});});
+   privateImageRendering=await page.$eval('[data-participant-profile]',profile=>({images:[...profile.querySelectorAll('img')].map(image=>{const rect=image.getBoundingClientRect();return {currentSrc:image.currentSrc,complete:image.complete,naturalWidth:image.naturalWidth,naturalHeight:image.naturalHeight,renderedWidth:rect.width,renderedHeight:rect.height,visibility:getComputedStyle(image).visibility};}),allocatedUrls:[...window.__privateUrls]}));
+   assert.equal(privateImageRendering.images.length,3);assert.equal(privateImageRendering.allocatedUrls.length,3);assert.equal(new Set(privateImageRendering.allocatedUrls).size,3);
+   assert.deepEqual(privateImageRendering.images.map(image=>image.currentSrc),privateImageRendering.allocatedUrls,'Rendered images use the actual object URLs allocated by these three private downloads');
+   for(const image of privateImageRendering.images){const actualPrivateImageURL=new URL(image.currentSrc);assert.equal(actualPrivateImageURL.protocol,'blob:');assert.equal(actualPrivateImageURL.origin,origin);assert.equal(image.complete,true);assert.ok(image.naturalWidth>0&&image.naturalHeight>0);assert.ok(image.renderedWidth>0&&image.renderedHeight>0);assert.equal(image.visibility,'visible');}
+   const order=await page.$eval('[data-participant-profile]',profile=>{
+    const primary=profile.querySelector('[data-onboarding-primary]'),images=[...profile.querySelectorAll('img')],options=[...profile.querySelectorAll('summary')].filter(summary=>['Más opciones de este perfil','Cuenta existente y revisión'].includes(summary.textContent.trim()));
+    return {primaryCount:profile.querySelectorAll('[data-onboarding-primary]').length,reviewCount:[...profile.querySelectorAll('button')].filter(button=>button.textContent.trim()==='Registrar revisión humana').length,imageCount:images.length,optionsCount:options.length,afterImages:images.every(image=>Boolean(image.compareDocumentPosition(primary)&Node.DOCUMENT_POSITION_FOLLOWING)),beforeOptions:options.every(summary=>Boolean(primary.compareDocumentPosition(summary)&Node.DOCUMENT_POSITION_FOLLOWING))};
+   });
+   assert.deepEqual(order,{primaryCount:1,reviewCount:1,imageCount:3,optionsCount:2,afterImages:true,beforeOptions:true});assert.equal(posts.length,0);
+   await noOverflow(page);await page.screenshot({path:path.join(evidence,`${mode}-images-${width}.png`),fullPage:true});
+   assert.equal(await review.evaluate(button=>document.activeElement===button),false,'Consulting an image does not automatically focus review');
+   const imageControl=await page.evaluateHandle(()=>[...document.querySelectorAll('[data-participant-profile] button')].find(button=>button.textContent.trim()==='Consultar dorso privado'));
+   await imageControl.asElement().focus();await page.keyboard.press('Tab');
+   assert.equal(await review.evaluate(button=>document.activeElement===button),true,'Tab continues from the final image to review');
+   const geometry=await review.evaluate(button=>({height:button.getBoundingClientRect().height,font:parseFloat(getComputedStyle(button).fontSize)}));assert.ok(geometry.height>=44&&geometry.font>=16);
+   await page.keyboard.press('Enter');await imageControl.dispose();await review.dispose();
+   await page.waitForFunction(()=>document.activeElement?.tagName==='H4'&&document.activeElement.textContent.trim()==='Decisión del responsable');
+   assert.equal(posts.length,0,'Opening review is not a saved decision');
+   await click(page,'Guardar decisión');assert.equal(await page.$eval('form textarea',input=>input.validity.valueMissing),true);assert.equal(posts.length,0,'A review without its human reason is not sent');
+   await page.select('form select','APPROVED');await page.type('form textarea','Revisión humana sintética de las tres imágenes.');await noOverflow(page);await page.screenshot({path:path.join(evidence,`${mode}-form-${width}.png`),fullPage:true});await click(page,'Guardar decisión');
   }else{
    await click(page,'Presentar mi identidad');
    const prepare=async title=>{const selector='fieldset[aria-label="'+title+'"]';await (await page.$(selector+' input[type=file]')).uploadFile(picturePath);await page.waitForSelector(selector+' img');await page.$eval(selector+' input[type=checkbox]',input=>input.click());const button=await page.$$(selector+' button');for(const handle of button)if((await handle.evaluate(node=>node.textContent)).startsWith('Usar ')){await handle.click();break;}await page.waitForFunction(title=>[...document.querySelectorAll('fieldset')].find(field=>field.getAttribute('aria-label')===title)?.textContent.includes('Imagen revisada y lista'),{},title);};
@@ -216,7 +247,7 @@ async function documentBackScenario(width,mode){
    await page.evaluate(()=>[...document.querySelectorAll('label')].find(label=>label.textContent.includes('Leí el aviso y autorizo la presentación')).querySelector('input').click());await privateStorage(page,0);await noOverflow(page);await page.screenshot({path:path.join(evidence,`${mode}-form-${width}.png`),fullPage:true});await click(page,'Presentar para revisión');
   }
   await wait(page,'El resultado quedó sin confirmar');await privateStorage(page,1);assert.equal(posts.length,1);await click(page,'Comprobar el mismo intento');await wait(page,mode==='back-superseded'?'El recibo original quedó confirmado. Hay una presentación más reciente':'Operación guardada con recibo');await privateStorage(page,0);assert.equal(posts.length,1);assert.equal(queries.at(-1),posts[0].operationId);if(mode==='back-superseded'){assert.equal(row.kyc.images.length,2);assert.equal(row.kyc.documentBackConsent,undefined);assert.deepEqual(row.permissions,{attendance:false,report:false});assert.equal(row.identityCertified,false);assert.equal(row.whatsAppAccessGranted,false);assert.equal(receipts.get(posts[0].operationId).kycSubmissionReceipt.submissionId,'kyc-fixture');}
-  checks.push({width,mode,posts:posts.length,receiptQueries:queries.length,downloads,backOptional:true,privatePayloadPersisted:false,manualReviewOnly:true,realIdentityAccepted:false});
+  checks.push({width,mode,posts:posts.length,receiptQueries:queries.length,downloads,...(reviewing?{singleReviewAfterImagesBeforeOptions:true,privateImageRendering,reviewKeyboardContinuity:true,reviewOpenedWithoutPost:true,emptyReviewReasonNotSent:true}:{}),backOptional:true,privatePayloadPersisted:false,manualReviewOnly:true,realIdentityAccepted:false});
  }
  await noOverflow(page);await page.screenshot({path:path.join(evidence,`${mode}-${width}.png`),fullPage:true});assert.deepEqual(errors,[]);await context.close();activePage=null;
 }
