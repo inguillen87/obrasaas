@@ -78,6 +78,35 @@ async function phoneSceneChecks(browser){
   assert.deepEqual(apiRequests,[]);assert.deepEqual(mediaRequests,[]);assert.deepEqual(await page.evaluate(()=>window.__landingPermissionCalls),[]);assert.deepEqual(errors,[]);assert.deepEqual(mutations,[]);checks.push({phone:'no-api-no-audio-no-permission-request'});
  }catch(error){await page.screenshot({path:path.join(output,'phone-failure-390.png'),fullPage:true}).catch(()=>{});throw error;}finally{await page.close();}
 }
+async function motionPreferenceChecks(browser){
+ for(const width of [390,1280]){
+  const page=await browser.newPage(),apiRequests=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.setViewport({width,height:1000});await page.setBypassServiceWorker(true);await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'no-preference'}]);
+  await page.evaluateOnNewDocument(()=>{
+   const nativeAnimate=Element.prototype.animate;window.__landingPreferenceAnimations=[];
+   Element.prototype.animate=function(keyframes,options){const target=this.closest('[data-landing-transition],[data-landing-example="worksite"] figure');if(target)window.__landingPreferenceAnimations.push({kind:target.dataset.landingTransition||'showcase'});return nativeAnimate.call(this,keyframes,options);};
+  });
+  await page.setRequestInterception(true);page.on('request',request=>{const url=new URL(request.url());if(url.origin!==origin&&!['data:','blob:'].includes(url.protocol)){blockedExternal.push(url.origin);void request.abort();return;}if(url.pathname.startsWith('/api/')){apiRequests.push(url.pathname);void request.abort();return;}if(url.pathname.endsWith('.mp4'))unsolicitedVideo.push(url.pathname);if(!['GET','HEAD','OPTIONS'].includes(request.method())){mutations.push({method:request.method(),path:url.pathname});void request.abort();}else void request.continue();});
+  const renderedImage=filename=>wait(page,name=>{const image=document.querySelector('[data-landing-example="worksite"] img');return image?.getAttribute('src').endsWith(name)&&image.complete&&image.naturalWidth>0&&image.naturalHeight>0;},filename);
+  const settledPreference=async value=>{await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value}]);await wait(page,reduce=>matchMedia('(prefers-reduced-motion: reduce)').matches===reduce,value==='reduce');await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));};
+  try{
+   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await wait(page,()=>document.querySelector('[data-landing-transition="brand"]').dataset.landingTransitionState==='finished');
+   assert.ok(await page.evaluate(()=>window.__landingPreferenceAnimations.some(animation=>animation.kind==='brand')),'Native normal-motion positive control missing '+width);
+   assert.equal(await page.$eval('[data-landing-transition="receipt"]',node=>node.dataset.landingTransitionState),'idle','Receipt must begin outside the viewport');
+   await settledPreference('reduce');await page.evaluate(()=>{window.__landingPreferenceAnimations=[];});
+   await page.$eval('[data-landing-transition="receipt"]',node=>node.scrollIntoView({block:'center'}));await page.click('[data-landing-example="worksite"] button[aria-label="Cada parte, con evidencia"]');await renderedImage('obra-registro-evidencia.webp');
+   await new Promise(resolve=>setTimeout(resolve,650));
+   const reducedState=await page.evaluate(()=>{const receipt=document.querySelector('[data-landing-transition="receipt"]'),figure=document.querySelector('[data-landing-example="worksite"] figure');return {animations:window.__landingPreferenceAnimations,receiptOpacity:getComputedStyle(receipt).opacity,receiptTransform:getComputedStyle(receipt).transform,figureOpacity:getComputedStyle(figure).opacity,active:[receipt,figure].reduce((count,node)=>count+node.getAnimations({subtree:true}).filter(animation=>animation.playState==='running').length,0)};});
+   assert.deepEqual(reducedState.animations,[],'A new native transition started after enabling reduced motion '+width);assert.equal(reducedState.receiptOpacity,'1');assert.equal(reducedState.receiptTransform,'none');assert.equal(reducedState.figureOpacity,'1');assert.equal(reducedState.active,0);
+   await settledPreference('no-preference');await page.click('[data-landing-example="worksite"] button[aria-label="Materiales y seguimiento"]');
+   await wait(page,()=>window.__landingPreferenceAnimations.some(animation=>animation.kind==='showcase')&&document.querySelector('[data-landing-example="worksite"] figure').getAnimations({subtree:true}).some(animation=>animation.playState==='running'));
+   const callsBeforePause=await page.evaluate(()=>window.__landingPreferenceAnimations.length);await settledPreference('reduce');await renderedImage('obra-entrega-materiales.webp');
+   await wait(page,()=>{const receipt=document.querySelector('[data-landing-transition="receipt"]'),figure=document.querySelector('[data-landing-example="worksite"] figure');return [receipt,figure].every(node=>node.getAnimations({subtree:true}).every(animation=>animation.playState!=='running'))&&getComputedStyle(figure).opacity==='1'&&getComputedStyle(receipt).transform==='none';});
+   assert.equal(await page.evaluate(()=>window.__landingPreferenceAnimations.length),callsBeforePause,'Reducing motion during a fade must stop it without a replacement transition');assert.deepEqual(apiRequests,[]);
+   checks.push({width,liveReducedMotion:true,normalNativeMotionObserved:true,transitionCallsWhileReduced:reducedState.animations.length,receiptAndShowcaseStatic:true,restoredNormalMotionObserved:true,activeFadeStoppedWithoutReplacement:true,apiRequests:0});
+  }finally{await page.close();}
+ }
+}
 try{
  let ready=false;for(let i=0;i<90;i++){try{if((await fetch(origin)).ok){ready=true;break;}}catch{}if(server.exitCode!==null)throw Error(log);await new Promise(resolve=>setTimeout(resolve,500));}assert.ok(ready,'Landing server did not start');
  const raw=await(await fetch(origin)).text();assert.ok(raw.includes('data-phone-scene="journey"'),'SSR must show the same workday example as hydration');assert.ok(raw.includes('Tu obra,')&&raw.includes('bien organizada.'),'Main content missing from server HTML');for(const value of legal)assert.ok(raw.includes(value.replace('Titular: ','').replace('Nombre registrado en ARCA: ','')),'Public identity text missing from server HTML');assert.equal(readFileSync(path.join(root,'src/app/page.js'),'utf8').includes('use client'),false,'The full page must remain a Server Component');
@@ -114,6 +143,8 @@ try{
  corruptVideo=true;await mediaPage.click('[data-landing-video] button[aria-label^="Reproducir presentación"]');await wait(mediaPage,()=>document.querySelector('[data-landing-video] [role=status]')?.textContent.includes('No pudimos'));assert.equal(await mediaPage.$eval('[data-landing-video] video',node=>node.getAttribute('src')),null);assert.ok(await mediaPage.$('[data-landing-video] button[aria-label^="Reproducir presentación"]'));assert.equal(await mediaPage.$eval('[data-landing-video] [role=status] a',node=>node.getAttribute('href')),'/demo');await mediaPage.screenshot({path:path.join(output,'video-recovery-390.png'),fullPage:false});await mediaPage.close();
  assert.deepEqual(errors,[]);assert.deepEqual(mutations,[]);checks.push({videoLifecycle:true,noSourceOnLoad:true,noAutoplay:true,decoded,pausedOnActualBackgroundTab:true,noResumeOnReturningTab:true,pausedOnPagehideEvent:true,closeRestoresPoster:true,syntheticDecodeFailureRestoresPosterAndRetry:true,videoRequests});
  await phoneSceneChecks(browser);
+  await motionPreferenceChecks(browser);
+  assert.deepEqual(errors,[]);assert.deepEqual(mutations,[]);assert.deepEqual(unsolicitedVideo,[]);
  const proof={status:'PASS',environment:'isolated-next-server-with-exact-landing-brand-global-layout-sources',widths,checks,errors,mutations,unsolicitedVideoRequests:unsolicitedVideo,blockedExternalOrigins:[...new Set(blockedExternal)],rawServerHtmlBytes:Buffer.byteLength(raw),sourceManifest,mediaManifest,harnessSha256,productionWritten:false,providerWrites:0,authenticatedUserTested:false,physicalMobileAccepted:false};writeFileSync(path.join(output,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:proof.status,checks:checks.length,widths,ssrWithoutJavascript:true,reducedMotion:true,videoLifecycle:true,providerWrites:0}));
 }catch(error){writeFileSync(path.join(output,'failure.json'),JSON.stringify({message:error.message,stack:error.stack,checks,errors,mutations,log},null,2));console.error(log);throw error;}
 finally{await browser?.close();server.kill();const resolved=path.resolve(fixture);assert.ok(resolved.startsWith(path.resolve(parent)+path.sep)&&path.basename(resolved).startsWith('professional-landing-ui-'));rmSync(resolved,{recursive:true,force:true});}
