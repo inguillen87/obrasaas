@@ -15,7 +15,7 @@ before(async()=>{
  const require=createRequire(import.meta.url),reactUrl=pathToFileURL(require.resolve('react')).href,lucideUrl=pathToFileURL(require.resolve('lucide-react')).href;
  const source=readFileSync(new URL('../src/app/(identity)/cuenta/workspace-tools-navigation.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
  // Preserve the real hook, icons, navigation policy and JSX. Only CSS class names are stubbed.
- const imports=`import React,{useSyncExternalStore} from ${JSON.stringify(reactUrl)};\nimport lucide from ${JSON.stringify(lucideUrl)};\nconst {HardHat,UsersRound,MessageCircle,BriefcaseBusiness,ArrowUpRight,ArrowUp,Clock3}=lucide;\nconst styles=new Proxy({}, {get:(_target,key)=>String(key)});\n`;
+ const imports=`import React,{useState,useSyncExternalStore} from ${JSON.stringify(reactUrl)};\nimport lucide from ${JSON.stringify(lucideUrl)};\nconst {HardHat,UsersRound,MessageCircle,BriefcaseBusiness,ArrowUpRight,ArrowUp,Clock3}=lucide;\nconst styles=new Proxy({}, {get:(_target,key)=>String(key)});\n`;
  const compiled=await transform(imports+source,{filename:'workspace-tools-navigation.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});
  fixtureDirectory=mkdtempSync(path.join(tmpdir(),'obrasaas-workspace-tools-navigation-'));
  const compiledPath=path.join(fixtureDirectory,'workspace-tools-navigation.mjs');writeFileSync(compiledPath,compiled.code);
