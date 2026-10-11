@@ -252,3 +252,37 @@ test('only correlated durable pre-provider rejection releases manual Meta review
  assert.deepEqual(recoveryResult(entry,result),{state:'REJECTED',receiptId:result.receipt.receiptId});const settled=method==='POST'?j:journal(storage(s.rows));if(method==='POST')await settled.settle(ticket,result);else await settled.observe(recoveryQuery(entry),result);assert.equal((await settled.list(scope)).length,0);assert.ok(!JSON.stringify([...s.rows]).includes('companyPhone'));
  }
 });
+
+
+const attendanceRecoveryOptions=(patch={})=>({method:'POST',body:JSON.stringify({operationId,projectId:'p-a',scope,action:'ATTENDANCE',payload:{workerId:'worker-a',eventType:'CHECK_OUT',expectedEventId:'arrival-a',sectorId:'sector-a',qrToken:'d'.repeat(64),location:{latitude:0,longitude:0,accuracy:5,capturedAt:'2026-10-11T10:00:00.000Z',noticeVersion:'field-location-v1'}},...patch})});
+const attendanceRecoveryError=()=>Object.assign(new Error('Actual rejected attendance'),{status:409,code:'ATTENDANCE_REVISION_CHANGED',attendanceRevisionRejected:true});
+async function consumeAttendanceRecovery(response){
+ const body=await response.json();if(response.ok)return body;
+ throw Object.assign(new Error('Observed attendance response'),{status:response.status,code:body?.code,attendanceRevisionRejected:response.status===409&&response.headers.get('content-type')?.includes('application/json')&&body?.saved===false&&!Array.isArray(body)&&Object.keys(body).sort().join('|')==='code|saved'&&body.code==='ATTENDANCE_REVISION_CHANGED'});
+}
+test('an actual exact attendance rejection after lost ACK releases only that same in-memory retry and permits a reviewed new UUID',async()=>{
+ const s=storage(),j=journal(s),history=await j.prepare('/api/identity/field-media',command({projectId:'historical-project',operationId:secondId})),options=attendanceRecoveryOptions();let calls=0;
+ const runtime=createWorkspaceRequestLifecycle(async()=>'controlled-participant',{journal:j,fetchImpl:async(_url,input)=>{calls++;assert.equal(input.body,options.body);if(calls===1)throw new TypeError('Controlled lost response');return Response.json({saved:false,code:'ATTENDANCE_REVISION_CHANGED'},{status:409});}});
+ await assert.rejects(runtime.request('/api/identity/field-operations',options,consumeAttendanceRecovery),TypeError);assert.equal((await j.list(scope)).length,2);
+ const persisted=JSON.stringify([...s.rows]);for(const text of ['worker-a','arrival-a','sector-a','dddddddd','latitude','capturedAt'])assert.equal(persisted.includes(text),false,text);
+ await assert.rejects(runtime.request('/api/identity/field-operations',options,consumeAttendanceRecovery),error=>error.attendanceRevisionRejected===true);assert.equal(calls,2);assert.deepEqual(await j.list(scope),[history.entry]);
+ const revised=JSON.parse(options.body);revised.operationId='01234567-89ab-4cde-8fab-0123456789ad';revised.payload.expectedEventId='return-a';const next=await j.prepare('/api/identity/field-operations',{method:'POST',body:JSON.stringify(revised)});assert.equal(next.existed,false);assert.notEqual(next.entry.operationId,operationId);assert.deepEqual((await j.list(scope)).find(row=>row.operationId===history.entry.operationId),history.entry);runtime.abort();
+});
+test('attendance cannot release an uncertain historical reference from an invented error, a changed command or another HTTP response',async()=>{
+ for(const mode of ['invented','changed-command','wrong-code','wrong-shape','wrong-status','wrong-content-type','oversized','reloaded']){
+  const s=storage(),j=journal(s),options=attendanceRecoveryOptions(),original=await j.prepare('/api/identity/field-operations',options);await j.settle(original,null,new TypeError('Controlled uncertainty'));const current=mode==='reloaded'?journal(storage(s.rows)):j;
+  const changed=JSON.parse(options.body);if(mode==='changed-command')changed.payload.expectedEventId='other-arrival';const attempted=mode==='changed-command'?{method:'POST',body:JSON.stringify(changed)}:options,ticket=await current.prepare('/api/identity/field-operations',attempted);assert.equal(ticket.existed,true);
+  if(mode!=='invented'){
+   const text=mode==='oversized'?JSON.stringify({saved:false,code:'ATTENDANCE_REVISION_CHANGED',padding:'x'.repeat(5000)}):JSON.stringify(mode==='wrong-shape'?{saved:false,code:'ATTENDANCE_REVISION_CHANGED',receiptId:'invented'}:{saved:false,code:mode==='wrong-code'?'FIELD_REVISION_CHANGED':'ATTENDANCE_REVISION_CHANGED'});
+   await current.captureResponse(ticket,'/api/identity/field-operations',attempted,new Response(text,{status:mode==='wrong-status'?500:409,headers:{'content-type':mode==='wrong-content-type'?'text/html':'application/json'}}));
+  }
+  await current.settle(ticket,null,attendanceRecoveryError());assert.equal((await current.list(scope)).length,1,mode);await assert.rejects(current.prepare('/api/identity/field-operations',attendanceRecoveryOptions({operationId:secondId})),error=>error.code==='WORKSPACE_RECOVERY_REQUIRED',mode);
+ }
+});
+test('attendance rejection must belong to its active response capture and cannot survive cancellation or settle a sibling ticket',async()=>{
+ for(const mode of ['inactive','aborted','wrong-ticket']){
+  const s=storage(),j=journal(s),options=attendanceRecoveryOptions(),original=await j.prepare('/api/identity/field-operations',options);await j.settle(original,null,new TypeError('Controlled uncertainty'));const ticket=await j.prepare('/api/identity/field-operations',options),controller=new AbortController();if(mode==='aborted')controller.abort();
+  await j.captureResponse(ticket,'/api/identity/field-operations',options,Response.json({saved:false,code:'ATTENDANCE_REVISION_CHANGED'},{status:409}),{signal:controller.signal,isActive:()=>mode!=='inactive'});
+  const settled=mode==='wrong-ticket'?await j.prepare('/api/identity/field-operations',options):ticket;await j.settle(settled,null,attendanceRecoveryError());assert.equal((await j.list(scope)).length,1,mode);
+ }
+});

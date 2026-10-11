@@ -19,18 +19,23 @@ export function WorkspaceIdentityPanel(){
  const sessionToken=useCallback(()=>getToken({skipCache:true}),[getToken]);
  const profileToken=useCallback(()=>getToken({template:'obrasaas-bootstrap-v1',skipCache:true}),[getToken]);
  const contextKey=JSON.stringify([isLoaded,isSignedIn,userId,orgId,sessionId,orgRole]);
- const currentContext=useRef(null),[guideObservation,setGuideObservation]=useState(null);
+ const currentContext=useRef(null),[guideObservation,setGuideObservation]=useState(null),[companyContext,setCompanyContext]=useState(null);
  useLayoutEffect(()=>{currentContext.current=contextKey;return()=>{currentContext.current=null;};},[contextKey]);
  const observeGuide=useCallback(value=>{if(currentContext.current===contextKey)setGuideObservation({contextKey,value});},[contextKey]);
+ const observeCompany=useCallback(value=>{
+  if(currentContext.current!==contextKey)return;
+  const current=value&&typeof value.name==='string'&&value.name.trim()&&typeof value.scope==='string'&&/^[a-f0-9]{64}$/.test(value.scope)&&Number.isSafeInteger(value.generation)&&value.generation>0?value:null;
+  setCompanyContext(previous=>previous?.contextKey===contextKey&&previous.value?.name===current?.name&&previous.value?.scope===current?.scope&&previous.value?.generation===current?.generation?previous:{contextKey,value:current});
+ },[contextKey]);
  if(!isLoaded)return <IdentityLoadingNotice/>;
  if(!isSignedIn)return <section role="alert"><p>La sesión terminó. Volvé a ingresar antes de consultar una obra.</p><Link href={identitySignInPath(params)} className={identityStyles.home}>Volver a ingresar</Link></section>;
  return <>
   <OnboardingGuide key={`guide:${contextKey}`} orgId={orgId} orgRole={orgRole} observation={guideObservation?.contextKey===contextKey?guideObservation.value:null}/>
   <ParticipantSelfServicePanel key={`join:${userId}:${orgId||'personal'}:${sessionId}:${orgRole||'personal'}:${returnPath}`} getSessionToken={sessionToken}/>
   <OfficeJoinPanel key={`office:${contextKey}:${returnPath}`} getSessionToken={sessionToken}/>
-  <div id="organization-context" tabIndex={-1} className={styles.context}><span>Organización activa</span><OrganizationSwitcher afterSelectOrganizationUrl={returnPath} afterSelectPersonalUrl={returnPath} afterLeaveOrganizationUrl={returnPath} afterCreateOrganizationUrl={returnPath}/><a href="#onboarding-guide-title" className={identityStyles.home}>Volver a la guía</a></div>
-  {!orgId?<section><h2>Seleccioná o creá tu organización</h2><p>Usá el selector de organización para crear la identidad de tu constructora en Clerk. Después se habilitará el alta de empresa y primera obra, sin importar datos ajenos.</p></section>:
-   orgRole==='org:admin'?<CompanyBootstrapPanel key={contextKey} organizationId={orgId} organizationName={organization?.id===orgId?organization.name:''} getSessionToken={sessionToken} getProfileToken={profileToken}><AccountWorkspace key={contextKey} getSessionToken={sessionToken} onGuideObservation={observeGuide} initialProjectId={initialProjectId}/></CompanyBootstrapPanel>:
-   <AccountWorkspace key={contextKey} getSessionToken={sessionToken} onGuideObservation={observeGuide} initialProjectId={initialProjectId}/>}
+  <div id="organization-context" tabIndex={-1} className={styles.context}><div style={{minWidth:0,flex:1}}><span>Espacio de trabajo</span><p className={styles.caption} style={{margin:'0.35rem 0',overflowWrap:'anywhere'}}>Elegí tu espacio de trabajo. Su nombre puede ser distinto al de la empresa.</p>{companyContext?.contextKey===contextKey&&companyContext.value&&<div className={styles.company}><div><span>Empresa de trabajo</span><strong data-workspace-company-name>{companyContext.value.name}</strong></div></div>}</div><OrganizationSwitcher afterSelectOrganizationUrl={returnPath} afterSelectPersonalUrl={returnPath} afterLeaveOrganizationUrl={returnPath} afterCreateOrganizationUrl={returnPath}/><a href="#onboarding-guide-title" className={identityStyles.home}>Volver a la guía</a></div>
+  {!orgId?<section><h2>Seleccioná o creá tu organización</h2><p>Usá el selector para crear el espacio de tu constructora. Después podrás dar de alta la empresa y su primera obra.</p></section>:
+   orgRole==='org:admin'?<CompanyBootstrapPanel key={contextKey} organizationId={orgId} organizationName={organization?.id===orgId?organization.name:''} getSessionToken={sessionToken} getProfileToken={profileToken}><AccountWorkspace key={contextKey} getSessionToken={sessionToken} onGuideObservation={observeGuide} onCompanyContext={observeCompany} initialProjectId={initialProjectId}/></CompanyBootstrapPanel>:
+   <AccountWorkspace key={contextKey} getSessionToken={sessionToken} onGuideObservation={observeGuide} onCompanyContext={observeCompany} initialProjectId={initialProjectId}/>}
  </>;
 }

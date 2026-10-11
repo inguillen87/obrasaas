@@ -86,7 +86,7 @@ function workspaceIdentityOnlyProject(error,account,projectId){
  if(candidates.length!==1||typeof candidates[0].name!=='string')return null;
  return {scope:account.scope,projectId:candidates[0].id,name:candidates[0].name};
 }
-export function AccountWorkspace({getSessionToken,onGuideObservation,initialProjectId=''}={}){
+export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyContext,initialProjectId=''}={}){
  const transport=useWorkspaceRequest(getSessionToken);
  const request=useCallback((query='',options={})=>requestWorkspace(transport,query,options),[transport]);
  const [account,setAccount]=useState(null),[view,setView]=useState(null),[loading,setLoading]=useState(true),[notice,setNotice]=useState(''),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[saving,setSaving]=useState(false),[receipt,setReceipt]=useState(null);
@@ -122,6 +122,14 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,initialProj
   if(!target?.getClientRects().length)return;
   target.setAttribute('tabindex','-1');target.focus({preventScroll:true});target.scrollIntoView({block:'start',behavior:'auto'});
  },[account,view,loading,observationEpoch,contextLocked]);
+ // Only the accepted list GET of this exact generation supplies the selector label.
+ // A project read, denial, failed read or unmount cannot restore an older list name.
+ useLayoutEffect(()=>()=>onCompanyContext?.(null),[onCompanyContext]);
+ useLayoutEffect(()=>{
+  const current=initialProjectHint.current.listGeneration===observationEpoch&&observationEpoch===generation.current;
+  const valid=mounted.current&&current&&!loading&&!guideUnavailable&&!guideReadFailed&&!guideAccessReason&&typeof account?.scope==='string'&&/^[a-f0-9]{64}$/.test(account.scope)&&typeof account.organizationName==='string'&&account.organizationName.trim()&&Number.isSafeInteger(observationEpoch)&&observationEpoch>0;
+  onCompanyContext?.(valid?{name:account.organizationName,scope:account.scope,generation:observationEpoch}:null);
+ },[account,loading,observationEpoch,guideUnavailable,guideReadFailed,guideAccessReason,onCompanyContext]);
  useEffect(()=>()=>onGuideObservation?.(null),[onGuideObservation]);
  useEffect(()=>{onGuideObservation?.(workspaceGuideObservation({account,view,officeProject:officeSelection,loading,generation:observationEpoch,unavailable:guideUnavailable,readFailed:guideReadFailed,accessReason:guideAccessReason,schedulePending:saving||Boolean(attempt)||Boolean(creatingTask)||Boolean(modulePending.plan)||Boolean(planReadbackMatches),channelSnapshot}));},[account,view,officeSelection,loading,observationEpoch,guideUnavailable,guideReadFailed,guideAccessReason,saving,attempt,creatingTask,modulePending.plan,planReadbackMatches,channelSnapshot,onGuideObservation]);
  const scheduleEditor=useRef(null),editingTaskId=draft?.task?.id;

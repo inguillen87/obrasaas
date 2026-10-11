@@ -319,8 +319,21 @@ async function rejectedScheduleIdentity(url,options,entry){
   let inputDigest;try{inputDigest=await sha256(new TextEncoder().encode(JSON.stringify(['schedule-rejection-command-v1',entry.scope,entry.projectId,entry.operationId,body.taskId,body.expectedRevision,body.startsOn,body.endsOn,body.reason])));}catch{throw unavailable();}
   return {inputDigest};
 }
+// An attendance retry may release only its original in-memory command after
+// the current transport captured its exact definitive revision rejection.
+// Neither QR nor coordinates enter persistent recovery storage.
+async function rejectedAttendanceIdentity(url,options,entry){
+  if(url!=='/api/identity/field-operations'||options?.method!=='POST'||entry?.resource!=='field-operations'||typeof options.body!=='string')return null;
+  let body;try{body=JSON.parse(options.body);}catch{return null;}
+  const p=body?.payload;
+  if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).sort().join('|')!=='action|operationId|payload|projectId|scope'||body.action!=='ATTENDANCE'||body.scope!==entry.scope||body.projectId!==entry.projectId||!uuid(body.operationId)||body.operationId.toLowerCase()!==entry.operationId||!p||typeof p!=='object'||Array.isArray(p)||Object.keys(p).sort().join('|')!=='eventType|expectedEventId|location|qrToken|sectorId|workerId'||!['CHECK_IN','BREAK_START','BREAK_END','CHECK_OUT'].includes(p.eventType)||!id(p.workerId)||!id(p.sectorId)||p.expectedEventId!==null&&!id(p.expectedEventId)||p.qrToken!==null&&!/^[a-f0-9]{64}$/.test(p.qrToken))return null;
+  const point=p.location;
+  if(point!==null&&(!point||typeof point!=='object'||Array.isArray(point)||Object.keys(point).sort().join('|')!=='accuracy|capturedAt|latitude|longitude|noticeVersion'||![point.latitude,point.longitude,point.accuracy].every(value=>typeof value==='number'&&Number.isFinite(value))||typeof point.capturedAt!=='string'||point.noticeVersion!=='field-location-v1'))return null;
+  let inputDigest;try{inputDigest=await sha256(new TextEncoder().encode(JSON.stringify(['attendance-rejection-command-v1',entry.scope,entry.projectId,entry.operationId,p.workerId,p.eventType,p.expectedEventId,p.sectorId,p.qrToken,point===null?null:[point.latitude,point.longitude,point.accuracy,point.capturedAt,point.noticeVersion]])));}catch{throw unavailable();}
+  return {inputDigest};
+}
 export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.now,notify=()=>{},withLock}) {
-  const scheduleTickets=new WeakMap(),scheduleReferences=new Map();
+  const scheduleTickets=new WeakMap(),scheduleReferences=new Map(),attendanceTickets=new WeakMap(),attendanceReferences=new Map();
   // getStorage is retained only for controlled in-memory tests. The browser uses
   // one transactional adapter; receipt policy remains in this factory.
   const storageOperation=withStorage||((mode,scope,callback,signal)=>{
@@ -356,7 +369,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
         if(!Object.keys(entry).every(field=>field==='actionReference'?entry[field]?.proposalId===stored[field]?.proposalId&&entry[field]?.revision===stored[field]?.revision:entry[field]===stored[field]))return false;
         s.removeItem(key);return true;
       });
-      if(removed){scheduleReferences.delete(keyOf(entry));notify();}return removed;
+      if(removed){scheduleReferences.delete(keyOf(entry));attendanceReferences.delete(keyOf(entry));notify();}return removed;
     } catch { return false; }
   }
   const api = {
@@ -378,7 +391,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
     },
     async prepare(url, options, {notifyConflict=true} = {}) {
       const entry=await reference(url,options,now());if(!entry)return null;
-      const scheduleIdentity=await rejectedScheduleIdentity(url,options,entry);
+      const scheduleIdentity=await rejectedScheduleIdentity(url,options,entry),attendanceIdentity=await rejectedAttendanceIdentity(url,options,entry);
       const reserve=()=>access('readwrite',entry.scope,s=>{
       if(options.signal?.aborted)throw Object.assign(new DOMException('La consulta se canceló.','AbortError'),{requestDispatched:false});
       const current=readEntries(s,entry.scope),existing=current.find(row=>keyOf(row)===keyOf(entry));
@@ -406,14 +419,19 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
         if(!ticket.existed){original={entry:{...ticket.entry},identity:scheduleIdentity};scheduleReferences.set(key,original);}
         if(original&&sameScheduleEntry(ticket.entry,original.entry)&&original.identity.inputDigest===scheduleIdentity.inputDigest)scheduleTickets.set(ticket,{...original,rejected:false});
       }
+      if(attendanceIdentity){
+        const key=keyOf(ticket.entry);let original=attendanceReferences.get(key);
+        if(!ticket.existed){original={entry:{...ticket.entry},identity:attendanceIdentity};attendanceReferences.set(key,original);}
+        if(original&&sameScheduleEntry(ticket.entry,original.entry)&&original.identity.inputDigest===attendanceIdentity.inputDigest)attendanceTickets.set(ticket,{...original,rejected:false});
+      }
       if(!ticket.existed)notify();return ticket;
     },
     async captureResponse(ticket,url,options,response,{signal,isActive=()=>true}={}){
-      const prepared=scheduleTickets.get(ticket);
+      const prepared=scheduleTickets.get(ticket)||attendanceTickets.get(ticket),attendance=attendanceTickets.has(ticket);
       if(!prepared||response?.status!==409||!response.headers.get('content-type')?.includes('application/json')||signal?.aborted||!isActive())return;
       let reader,onAbort;
       try{
-        const current=await rejectedScheduleIdentity(url,options,prepared.entry);
+        const current=await (attendance?rejectedAttendanceIdentity:rejectedScheduleIdentity)(url,options,prepared.entry);
         if(!current||current.inputDigest!==prepared.identity.inputDigest||signal?.aborted||!isActive())return;
         reader=response.clone().body?.getReader();if(!reader)return;
         let rejectAbort;const aborted=new Promise((_,reject)=>{rejectAbort=reject;});
@@ -422,14 +440,15 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
         const decoder=new TextDecoder('utf-8',{fatal:true});let text='',bytes=0;
         while(true){const part=await Promise.race([reader.read(),aborted]);if(part.done)break;bytes+=part.value.byteLength;if(bytes>4096)return;text+=decoder.decode(part.value,{stream:true});}
         text+=decoder.decode();const body=JSON.parse(text);
-        if(!signal?.aborted&&isActive()&&body&&typeof body==='object'&&!Array.isArray(body)&&Object.keys(body).sort().join('|')==='code|saved'&&body.saved===false&&body.code==='SCHEDULE_REVISION_CHANGED')prepared.rejected=true;
+        if(!signal?.aborted&&isActive()&&body&&typeof body==='object'&&!Array.isArray(body)&&Object.keys(body).sort().join('|')==='code|saved'&&body.saved===false&&body.code===(attendance?'ATTENDANCE_REVISION_CHANGED':'SCHEDULE_REVISION_CHANGED'))prepared.rejected=true;
       }catch{/* An unreadable, oversized or interrupted response supplies no proof. */}
       finally{if(onAbort)signal?.removeEventListener('abort',onAbort);if(reader){reader.cancel().catch(()=>{});try{reader.releaseLock();}catch{}}}
     },
     async settle(ticket, result, error) {
       if(!ticket)return;
-      const schedule=scheduleTickets.get(ticket);scheduleTickets.delete(ticket);
+      const schedule=scheduleTickets.get(ticket),attendance=attendanceTickets.get(ticket);scheduleTickets.delete(ticket);attendanceTickets.delete(ticket);
       if(error){
+        if(attendance?.rejected===true&&ticket.entry.resource==='field-operations'&&sameScheduleEntry(ticket.entry,attendance.entry)&&error.status===409&&error.code==='ATTENDANCE_REVISION_CHANGED'&&error.attendanceRevisionRejected===true&&error.requestDispatched!==false){await remove(attendance.entry);return;}
         if(schedule?.rejected===true&&ticket.entry.resource==='workspace'&&sameScheduleEntry(ticket.entry,schedule.entry)&&error.status===409&&error.code==='SCHEDULE_REVISION_CHANGED'&&error.scheduleRevisionRejected===true&&error.requestDispatched!==false){await remove(schedule.entry);return;}
         if(ticket.entry.resource==='participants'&&ticket.entry.action===PARTICIPANT_OFFICE_ASSIGN_ACTION){if(!ticket.existed&&(error.requestDispatched===false||participantOfficePrecommitRejected(error)))await remove(ticket.entry);return;}
         if(['office-review','project-creation'].includes(ticket.entry.resource)&&error.requestDispatched!==false)return;

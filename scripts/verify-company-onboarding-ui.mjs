@@ -23,11 +23,30 @@ for(const file of ['voice-progress-draft.mjs','progress-measurement-quantity.js'
 const phoneFormatPath='src/lib/company-phone-format.mjs';copyFileSync(path.join(root,phoneFormatPath),path.join(dir,phoneFormatPath));sourcePaths.push(phoneFormatPath);copiedSourcePaths.add(phoneFormatPath);
 const entitlementPath='src/lib/company-entitlement.mjs';copyFileSync(path.join(root,entitlementPath),path.join(dir,entitlementPath));sourcePaths.push(entitlementPath);copiedSourcePaths.add(entitlementPath);
 const officeIdentityPath='src/lib/identity-return-path.mjs';copyFileSync(path.join(root,officeIdentityPath),path.join(dir,officeIdentityPath));sourcePaths.push(officeIdentityPath);copiedSourcePaths.add(officeIdentityPath);
+for(const file of ['src/app/(identity)/identity.module.css','src/app/(identity)/identity-load-guard.js']){copyFileSync(path.join(root,file),path.join(dir,file));sourcePaths.push(file);copiedSourcePaths.add(file);}
 const sourceManifest=sourcePaths.map(file=>{const bytes=readFileSync(path.join(root,file));if(copiedSourcePaths.has(file)||file.startsWith('src/app/(identity)/cuenta/'))assert.deepEqual(bytes,readFileSync(path.join(dir,file)));return {path:file,sha256:createHash('sha256').update(bytes).digest('hex')};});
 assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
 writeFileSync(path.join(dir,'package.json'),JSON.stringify({name:'synthetic-company-onboarding-ui',private:true}));
-writeFileSync(path.join(dir,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
+writeFileSync(path.join(dir,'next.config.mjs'),`import path from 'node:path';export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}},webpack(config){config.resolve.alias['@clerk/nextjs']=path.resolve(${JSON.stringify(dir)},'clerk-selector-fixture.js');return config;}};`);
+// Only identity-provider inputs are controlled; the selector wrapper and workspace are actual copied source.
+writeFileSync(path.join(dir,'clerk-selector-fixture.js'),`'use client';
+import {createContext,useCallback,useContext,useState} from 'react';
+const Context=createContext(null),names={org_SelectorA:'Espacio personal A',org_SelectorB:'Espacio personal B'};
+export function FixtureProvider({children}){
+ const [orgId,setOrgId]=useState('org_SelectorA'),[serial,setSerial]=useState(1);
+ const getToken=useCallback(async()=> 'synthetic-selector-'+orgId.slice(-1)+'-'+serial,[orgId,serial]);
+ const value={auth:{isLoaded:true,isSignedIn:true,userId:'user_SelectorSynthetic',sessionId:'session_Selector_'+serial,orgId,orgRole:'org:member',getToken},organization:{id:orgId,name:names[orgId]},choose:setOrgId};
+ return <Context.Provider value={value}>{children}<button type="button" data-fixture-session-change onClick={()=>setSerial(previous=>previous+1)}>Cambiar sesión de ensayo</button></Context.Provider>;
+}
+export function useAuth(){return useContext(Context).auth;}
+export function useOrganization(){return {organization:useContext(Context).organization};}
+export function OrganizationSwitcher(){const value=useContext(Context);return <select aria-label="Elegir espacio de trabajo" data-fixture-organization value={value.auth.orgId} onChange={event=>value.choose(event.target.value)} style={{minHeight:44,maxWidth:'100%'}}>{Object.entries(names).map(([id,name])=><option key={id} value={id}>{name}</option>)}</select>;}
+export function SignIn(){return null;}
+export function UserButton(){return null;}
+`);
+mkdirSync(path.join(app,'selector'),{recursive:true});
+writeFileSync(path.join(app,'selector/page.js'),`'use client';import {Suspense} from 'react';import {FixtureProvider} from '../../../clerk-selector-fixture';import {WorkspaceIdentityPanel} from '../(identity)/cuenta/workspace-identity';export default function Page(){return <FixtureProvider><main style={{maxWidth:1120,margin:'0 auto',color:'#eef4ff'}}><Suspense fallback={<p>Cargando ensayo de acceso</p>}><WorkspaceIdentityPanel/></Suspense></main></FixtureProvider>}`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#081c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
 writeFileSync(path.join(app,'page.js'),`'use client';import {useState} from 'react';import {CompanyBootstrapPanel} from './(identity)/cuenta/company-bootstrap-panel';import {AccountWorkspace} from './(identity)/cuenta/workspace-client';const session=async()=>{if(window.__sessionHung)return new Promise(resolve=>{window.__releaseSession=()=>resolve('synthetic-session-token');});return 'synthetic-session-token';};const profile=async()=>{window.__profileReads=(window.__profileReads||0)+1;if(window.__profileUnavailable)throw new Error('fixture');if(window.__profileHung)return new Promise(resolve=>{window.__releaseProfile=()=>resolve('synthetic-profile-token');});return window.__profileTokens?.[Math.min(window.__profileReads-1,1)]||'synthetic-profile-token-'+window.__profileReads;};export default function Page(){const [visible,setVisible]=useState(true),[organization,setOrganization]=useState('org_BootstrapA');if(typeof window!=='undefined'){window.__unmountBootstrap=()=>setVisible(false);window.__changeContext=()=>{window.__sessionHung=false;window.__profileHung=false;setOrganization('org_BootstrapB');};}return <main style={{maxWidth:1120,margin:'0 auto'}}>{visible?<CompanyBootstrapPanel key={organization} organizationId={organization} organizationName="" getSessionToken={session} getProfileToken={profile}><AccountWorkspace getSessionToken={session}/></CompanyBootstrapPanel>:<p>Componente desmontado en ensayo controlado</p>}</main>}`);
 const origin='http://127.0.0.1:3110';
@@ -194,6 +213,70 @@ async function scenario(mode,width=390){
   if(mode==='empty'){const beforeReturn=posts.length;await page.reload({waitUntil:'networkidle0'});await wait(page,'Alta confirmada');await wait(page,'Mis obras');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+result.receiptId);assert.equal(posts.length,beforeReturn);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled));await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra inicial de ensayo')).click());await canonicalCreatedTask(page,taskReceipts.get(taskPosts[0].operationId).task);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,2);checks.push(`ordinary-return-keeps-workspace-open-and-original-receipt-consultable-${width}`);}
  checks.push(`${mode}-company-to-workspace-${width}`);await context.close();
 }
+async function companySelectorContext(width){
+ const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
+ const endpoint='/api/identity/workspace',reads=[],writes=[],unexpected=[],held=[],late=[];
+ const names={A:'Constructora A & socios <b>ensayo</b>',B:'Constructora B de ensayo'};
+ const snapshot=letter=>({scope:letter.toLowerCase().repeat(64),organizationName:names[letter],role:'DIRECTOR',roleLabel:'Director de obra',canPlanSchedule:true,canManageIntegrations:false,projects:[],projectsTruncated:false});
+ let next=null;
+ const match=(request,token)=>{const url=new URL(request.url());return url.origin===origin&&url.pathname===endpoint&&url.search===''&&request.method()==='GET'&&request.headers().authorization==='Bearer '+token;};
+ const observed=(token,status=200)=>page.waitForResponse(response=>match(response.request(),token)&&response.status()===status,{timeout:20000});
+ const received=(token)=>page.waitForRequest(request=>match(request,token),{timeout:20000});
+ const absent=async()=>{assert.equal(await page.$$eval('[data-workspace-company-name]',nodes=>nodes.length),0,'No older company label during an unconfirmed context/read');};
+ const ready=async(letter)=>{
+  await page.waitForFunction(name=>document.querySelector('[data-workspace-company-name]')?.textContent===name&&document.querySelector('#workspace-refresh')?.disabled===false,{timeout:20000},names[letter]);
+  assert.deepEqual(await page.$$eval('[data-workspace-company-name]',nodes=>nodes.map(node=>node.textContent)),[names[letter]]);
+  assert.equal(await page.$$eval('[data-workspace-company-name] b',nodes=>nodes.length),0,'Canonical name is escaped React text');
+  assert.ok((await page.$eval('#organization-context',node=>node.innerText)).includes('Empresa de trabajo'));
+  assert.equal(await page.$eval('[data-fixture-organization]',node=>node.selectedOptions[0].textContent),'Espacio personal '+letter);
+  assert.equal(await page.$eval('[aria-labelledby="workspace-title"]',node=>node.innerText.includes('Director de obra')),true,'An existing non-admin membership uses the real workspace branch');
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ };
+ const arm=(token,status=200)=>{assert.equal(next,null);next={token,status,hold:true};return received(token);};
+ const release=async(request,allowAborted=false)=>{
+  const item=held.find(row=>row.request===request);assert.ok(item,'The real GET must have reached interception');
+  if(allowAborted&&request.failure()?.errorText==='net::ERR_ABORTED'){late.push('old-context-request-aborted');return;}
+  try{await request.respond({status:item.status,contentType:'application/json',body:JSON.stringify(item.body)});if(allowAborted)late.push('old-context-response-released');}
+  catch(error){if(!allowAborted||request.failure()?.errorText!=='net::ERR_ABORTED')throw error;late.push('old-context-request-aborted');}
+ };
+ const confirm=async(promise,letter)=>{assert.deepEqual(await (await promise).json(),snapshot(letter));await ready(letter);};
+ await page.setRequestInterception(true);
+ page.on('pageerror',error=>errors.push(error.message));
+ page.on('request',request=>{
+  const url=new URL(request.url());if(url.origin!==origin){unexpected.push(request.url());void request.abort();return;}
+  if(!url.pathname.startsWith('/api/')){void request.continue();return;}
+  if(request.method()!=='GET')writes.push({path:url.pathname,method:request.method()});
+  const token=request.headers().authorization?.replace(/^Bearer /,'');
+  if(url.pathname!==endpoint||url.search!==''||request.method()!=='GET'||!/^synthetic-selector-[AB]-[12]$/.test(token||'')){unexpected.push({path:url.pathname,search:url.search,method:request.method()});void request.respond({status:500,contentType:'application/json',body:'{"saved":false,"code":"UNEXPECTED_SYNTHETIC_REQUEST"}'});return;}
+  reads.push(token);const step=next;next=null;if(step&&token!==step.token){unexpected.push({code:'READ_TOKEN_MISMATCH',path:url.pathname});void request.respond({status:500,contentType:'application/json',body:'{"saved":false,"code":"UNEXPECTED_SYNTHETIC_CONTEXT"}'});return;}
+  const letter=token.split('-')[2],status=step?.status||200,body=status===200?snapshot(letter):{saved:false,code:status===401?'SESSION_REQUIRED':status===403?'WORKSPACE_MEMBERSHIP_REQUIRED':'IDENTITY_PROVIDER_UNAVAILABLE'};
+  if(step?.hold){held.push({request,status,body});return;}
+  void request.respond({status,contentType:'application/json',body:JSON.stringify(body)});
+ });
+ try{
+  const initial=observed('synthetic-selector-A-1');await page.goto(origin+'/selector',{waitUntil:'domcontentloaded'});await confirm(initial,'A');
+  const selectorText=await page.$eval('#organization-context',node=>node.innerText);
+  assert.ok(selectorText.includes('Elegí tu espacio de trabajo. Su nombre puede ser distinto al de la empresa.'));assert.ok(!selectorText.includes('Clerk'));
+  // Hold an actual refresh, change the organization manually, then release the earlier request only after B is current.
+  const oldRead=arm('synthetic-selector-A-1');await page.click('#workspace-refresh');const oldRequest=await oldRead;await absent();
+  const newRead=arm('synthetic-selector-B-1'),newResponse=observed('synthetic-selector-B-1');await page.select('[data-fixture-organization]','org_SelectorB');const newRequest=await newRead;await absent();await release(newRequest);await confirm(newResponse,'B');
+  await release(oldRequest,true);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await ready('B');assert.equal(late.length,1);
+  // Same organization, changed session: the old label is absent while its new GET is pending.
+  const sessionRead=arm('synthetic-selector-B-2'),sessionResponse=observed('synthetic-selector-B-2');await page.click('[data-fixture-session-change]');const sessionRequest=await sessionRead;await absent();await release(sessionRequest);await confirm(sessionResponse,'B');
+  // A full reload starts with no restored label; the controlled provider returns A only through a fresh list GET.
+  const reloadRead=arm('synthetic-selector-A-1'),reloadResponse=observed('synthetic-selector-A-1');await page.reload({waitUntil:'domcontentloaded'});const reloadRequest=await reloadRead;await absent();await release(reloadRequest);await confirm(reloadResponse,'A');
+  for(const status of [401,403,503]){
+   const failedRead=arm('synthetic-selector-A-1',status),failedResponse=observed('synthetic-selector-A-1',status);await page.click('#workspace-refresh');const failedRequest=await failedRead;await absent();await release(failedRequest);
+   const response=await failedResponse;assert.deepEqual(await response.json(),{saved:false,code:status===401?'SESSION_REQUIRED':status===403?'WORKSPACE_MEMBERSHIP_REQUIRED':'IDENTITY_PROVIDER_UNAVAILABLE'});
+   await page.waitForFunction(()=>document.querySelector('#workspace-refresh')?.disabled===false,{timeout:20000});await absent();
+   assert.ok((await page.$eval('[aria-labelledby="workspace-title"] [role="status"]',node=>node.innerText)).trim(),'Failed GET has visible feedback');
+   const recovered=observed('synthetic-selector-A-1');await page.click('#workspace-refresh');await confirm(recovered,'A');
+  }
+  assert.deepEqual(reads,['synthetic-selector-A-1','synthetic-selector-A-1','synthetic-selector-B-1','synthetic-selector-B-2',...Array(7).fill('synthetic-selector-A-1')]);
+  assert.equal(next,null);assert.deepEqual(writes,[]);assert.deepEqual(unexpected,[]);assert.equal(await page.$$eval('[data-workspace-company-name]',nodes=>nodes.length),1);
+  checks.push(`company-selector-canonical-context-existing-member-late-session-reload-denials-readonly-${width}`);
+ }finally{await context.close();}
+}
 try{
  let ready=false;
  for(let i=0;i<120;i++){
@@ -207,7 +290,8 @@ try{
  assert.ok(ready,'Fixture server unavailable: '+log.slice(-5000));
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
  if(!process.env.COMPANY_ONBOARDING_UI_SUITE){for(const width of [320,390,768,1280])await scenario('empty',width);await scenario('planned',390);await scenario('uncertain');await scenario('no-arrival');await scenario('rollback');await scenario('denied');
- for(const mode of ['expired-profile','profile-retry-unavailable','retry-not-authorized','initial-sdk-hung','session-hung','profile-hung','late-session-context','late-session-unmount','late-profile-unmount'])await scenario(mode);}
+ for(const mode of ['expired-profile','profile-retry-unavailable','retry-not-authorized','initial-sdk-hung','session-hung','profile-hung','late-session-context','late-session-unmount','late-profile-unmount'])await scenario(mode);
+ for(const width of [320,390,768,1280])await companySelectorContext(width);}
  for(const width of [320,390,768,1280])for(const mode of ['reload-committed','reload-not-committed','reload-denied','reload-other-actor','reload-missing-receipt'])await scenario(mode,width);
  assert.deepEqual(errors,[]);const proof={status:'PASS',environment:'actual-ui-with-intercepted-synthetic-services',checks,sourceManifest,harnessSha256,widths:[320,390,768,1280],errors,profileExpiryVerification:'real-RS256-verifier-with-disposable-local-key-and-controlled-clock',sdkDeadlines:'controlled-accelerated-clock',realClerkLogin:false,physicalWhatsApp:false,productionDataWritten:false};
  rmSync(path.join(output,'browser-failure.json'),{force:true});writeFileSync(path.join(output,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
