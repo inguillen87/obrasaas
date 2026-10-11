@@ -157,9 +157,10 @@ export async function reactiveParticipantStatusAuthority(client,r,pref,{environm
  await assertReactiveStartConsent(client,worker,r.connection,origin,r.now);
  let a;try{a=await resolveParticipantReactiveKycStatusAuthority(client,pref.intent,{environment,origin,account:pre.account,expected:proof?{authorityDigest:proof.authorityDigest}:null});}catch(error){if(error instanceof WorkspaceError)fail('EMPLOYEE_INTAKE_REVOKED');throw error;}
  if(a.connection.id!==r.connection.id||a.connection.projectId!==r.project.id||a.worker.id!==worker.id||a.worker.phone!==r.sender||a.connection.metadata?.developmentPilot||!Object.hasOwn(reactiveKycStatusReplies,a.status))fail('EMPLOYEE_INTAKE_REVOKED');
- const org=(await client.query(`SELECT "trialEndsAt" FROM public."Organization" WHERE id=$1 FOR SHARE`,[pref.intent.organizationId])).rows;
- if(org.length!==1)fail('EMPLOYEE_INTAKE_REVOKED');
- a.reactiveExpiresAt=Math.min(a.now.getTime()+ttl,a.worker.metadata.participant.status==='INVITED'?Date.parse(a.worker.metadata.participant.invitation.expiresAt):Infinity,a.entitlement.basis==='CURRENT_TRIAL'?new Date(org[0].trialEndsAt).getTime():Infinity);
+ // The canonical resolver holds this exact Organization FOR SHARE in the
+ // same transaction. Reuse its locked tuple; the final DB clock is unchanged.
+ if(!a.organization||a.organization.id!==pref.intent.organizationId)fail('EMPLOYEE_INTAKE_REVOKED');
+ a.reactiveExpiresAt=Math.min(a.now.getTime()+ttl,a.worker.metadata.participant.status==='INVITED'?Date.parse(a.worker.metadata.participant.invitation.expiresAt):Infinity,a.entitlement.basis==='CURRENT_TRIAL'?new Date(a.organization.trialEndsAt).getTime():Infinity);
  if(!Number.isFinite(a.reactiveExpiresAt)||a.reactiveExpiresAt<=a.now.getTime())fail('EMPLOYEE_INTAKE_REVOKED');
  assertCustomerReplyWindow(r.payload,a.now.getTime());
  if(proof&&(!object(proof)||Object.keys(proof).sort().join('|')!=='applicationId|authorityDigest|eventId|expiresAt|kind|status|version'||proof.version!==1||proof.kind!=='KYC_NEXT_STEP'||proof.eventId!==r.event.id||proof.applicationId!==r.anchor.id||proof.status!==a.status||proof.authorityDigest!==a.authorityDigest||!Number.isFinite(Date.parse(proof.expiresAt))||Date.parse(proof.expiresAt)<=a.now.getTime()||Date.parse(proof.expiresAt)>a.reactiveExpiresAt))fail();
