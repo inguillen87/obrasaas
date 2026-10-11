@@ -85,25 +85,88 @@ async function motionPreferenceChecks(browser){
   await page.evaluateOnNewDocument(()=>{
    const nativeAnimate=Element.prototype.animate;window.__landingPreferenceAnimations=[];
    Element.prototype.animate=function(keyframes,options){const target=this.closest('[data-landing-transition],[data-landing-example="worksite"] figure');if(target)window.__landingPreferenceAnimations.push({kind:target.dataset.landingTransition||'showcase'});return nativeAnimate.call(this,keyframes,options);};
+   // Read actual rendered values before hydration; do not drive or replace Motion.
+   const selectors={brand:'[data-landing-transition="brand"]',receipt:'[data-landing-transition="receipt"]',showcase:'[data-landing-example="worksite"] figure'},nodes=new WeakMap(),phases=[],preferenceChanges=[];
+   let nextNode=0,frame=0,current=null;
+   const read=kind=>{
+    const node=document.querySelector(selectors[kind]);if(!node)return null;
+    if(!nodes.has(node))nodes.set(node,++nextNode);
+    const style=getComputedStyle(node),matrix=new DOMMatrixReadOnly(style.transform==='none'?undefined:style.transform);
+    return {time:performance.now(),node:nodes.get(node),source:node.querySelector('img')?.getAttribute('src')||null,opacity:Number(style.opacity),transform:style.transform,matrix:Array.from(matrix.toFloat64Array()),x:matrix.m41,y:matrix.m42,identity:matrix.isIdentity,inlineOpacity:node.style.opacity,inlineTransform:node.style.transform};
+   };
+   const record=()=>{
+    if(!current)return;
+    current.frames++;
+    for(const kind of Object.keys(selectors)){
+     const state=read(kind),target=current.targets[kind];if(!state){target.missingFrames++;continue;}
+     target.frames++;if(!target.first)target.first=state;
+     const signature=JSON.stringify([state.node,state.source,state.opacity,state.transform,state.matrix,state.inlineOpacity,state.inlineTransform]);
+     if(signature!==target.signature){if(target.samples.length<180)target.samples.push(state);else current.limitReached=true;target.signature=signature;}
+     target.last=state;
+    }
+   };
+   const tick=()=>{
+    if(!current)return;
+    if(current.frames>=1800||performance.now()-current.startedAt>=30000){current.limitReached=true;current.endedAt=performance.now();frame=0;return;}
+    current.rafFrames++;record();frame=requestAnimationFrame(tick);
+   };
+   const stop=()=>{cancelAnimationFrame(frame);frame=0;if(current){record();current.endedAt=performance.now();}return current;};
+   const start=name=>{
+    stop();if(phases.length>=4)throw Error('DOM observation phase bound exceeded');
+    current={name,startedAt:performance.now(),endedAt:null,frames:0,rafFrames:0,limitReached:false,targets:Object.fromEntries(Object.keys(selectors).map(kind=>[kind,{frames:0,missingFrames:0,first:null,last:null,samples:[],signature:null}]))};
+    phases.push(current);record();frame=requestAnimationFrame(tick);return current;
+   };
+   const preference=matchMedia('(prefers-reduced-motion: reduce)');
+   preference.addEventListener('change',event=>{
+    if(preferenceChanges.length>=8){if(current)current.limitReached=true;return;}
+    preferenceChanges.push({time:performance.now(),reduced:event.matches,phase:current?.name||null,brand:read('brand'),receipt:read('receipt'),showcase:read('showcase')});
+   });
+   window.__landingMotionDOM={phases,preferenceChanges,read,start,stop};start('normal');
   });
   await page.setRequestInterception(true);page.on('request',request=>{const url=new URL(request.url());if(url.origin!==origin&&!['data:','blob:'].includes(url.protocol)){blockedExternal.push(url.origin);void request.abort();return;}if(url.pathname.startsWith('/api/')){apiRequests.push(url.pathname);void request.abort();return;}if(url.pathname.endsWith('.mp4'))unsolicitedVideo.push(url.pathname);if(!['GET','HEAD','OPTIONS'].includes(request.method())){mutations.push({method:request.method(),path:url.pathname});void request.abort();}else void request.continue();});
   const renderedImage=filename=>wait(page,name=>{const image=document.querySelector('[data-landing-example="worksite"] img');return image?.getAttribute('src').endsWith(name)&&image.complete&&image.naturalWidth>0&&image.naturalHeight>0;},filename);
   const settledPreference=async value=>{await page.emulateMediaFeatures([{name:'prefers-reduced-motion',value}]);await wait(page,reduce=>matchMedia('(prefers-reduced-motion: reduce)').matches===reduce,value==='reduce');await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));};
+  const stopObservation=()=>page.evaluate(()=>window.__landingMotionDOM.stop());
+  const startObservation=name=>page.evaluate(name=>window.__landingMotionDOM.start(name),name);
+  const bounded=phase=>{assert.equal(phase.limitReached,false,'DOM observation bound exceeded '+width+' '+phase.name);assert.ok(phase.rafFrames>1,'DOM observation requires multiple rAF frames '+width+' '+phase.name);};
+  const finalState=state=>state?.opacity===1&&state.transform==='none'&&state.identity;
+  const intermediate=(state,min)=>state&&state.opacity>min&&state.opacity<.999;
+  const progressed=(samples,min,translated=false)=>samples.some((sample,index)=>intermediate(sample,min)&&samples.slice(0,index).some(previous=>previous.node===sample.node&&intermediate(previous,min)&&sample.opacity>previous.opacity+.0001&&(!translated||previous.x>sample.x+.01)));
+  const assertStatic=(phase,kind,expectedNode)=>{
+   const target=phase.targets[kind];assert.equal(target.missingFrames,0,'Static DOM target disappeared '+width+' '+kind);assert.ok(target.frames>1&&target.first&&target.last,'Missing static DOM observations '+width+' '+kind);
+   for(const state of [...target.samples,target.last]){assert.ok(finalState(state),'Reduced DOM state moved '+width+' '+kind);if(expectedNode)assert.equal(state.node,expectedNode,'Reduced motion replaced the observed figure');assert.equal(state.inlineOpacity,target.first.inlineOpacity,'Reduced inline opacity changed '+width+' '+kind);assert.equal(state.inlineTransform,target.first.inlineTransform,'Reduced inline transform changed '+width+' '+kind);}
+  };
   try{
    await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await wait(page,()=>document.querySelector('[data-landing-transition="brand"]').dataset.landingTransitionState==='finished');
-   assert.ok(await page.evaluate(()=>window.__landingPreferenceAnimations.some(animation=>animation.kind==='brand')),'Native normal-motion positive control missing '+width);
+   const normalDOM=await stopObservation();bounded(normalDOM);
+   const brand=normalDOM.targets.brand;assert.equal(brand.last?.node,brand.first?.node,'Normal brand target changed during observation '+width);assert.ok(brand.samples.some(sample=>intermediate(sample,.899)&&sample.x>.01),'Normal brand intermediate DOM state missing '+width);assert.ok(progressed(brand.samples,.899,true),'Normal brand DOM progression missing '+width);assert.ok(finalState(brand.last),'Normal brand did not reach its final DOM state '+width);
+   const normalNativeCalls=await page.evaluate(()=>window.__landingPreferenceAnimations);
    assert.equal(await page.$eval('[data-landing-transition="receipt"]',node=>node.dataset.landingTransitionState),'idle','Receipt must begin outside the viewport');
-   await settledPreference('reduce');await page.evaluate(()=>{window.__landingPreferenceAnimations=[];});
+   await settledPreference('reduce');await page.evaluate(()=>{window.__landingPreferenceAnimations=[];});await startObservation('reduced');
    await page.$eval('[data-landing-transition="receipt"]',node=>node.scrollIntoView({block:'center'}));await page.click('[data-landing-example="worksite"] button[aria-label="Cada parte, con evidencia"]');await renderedImage('obra-registro-evidencia.webp');
    await new Promise(resolve=>setTimeout(resolve,650));
+   const reducedDOM=await stopObservation();bounded(reducedDOM);assertStatic(reducedDOM,'receipt');assertStatic(reducedDOM,'showcase');
    const reducedState=await page.evaluate(()=>{const receipt=document.querySelector('[data-landing-transition="receipt"]'),figure=document.querySelector('[data-landing-example="worksite"] figure');return {animations:window.__landingPreferenceAnimations,receiptOpacity:getComputedStyle(receipt).opacity,receiptTransform:getComputedStyle(receipt).transform,figureOpacity:getComputedStyle(figure).opacity,active:[receipt,figure].reduce((count,node)=>count+node.getAnimations({subtree:true}).filter(animation=>animation.playState==='running').length,0)};});
    assert.deepEqual(reducedState.animations,[],'A new native transition started after enabling reduced motion '+width);assert.equal(reducedState.receiptOpacity,'1');assert.equal(reducedState.receiptTransform,'none');assert.equal(reducedState.figureOpacity,'1');assert.equal(reducedState.active,0);
-   await settledPreference('no-preference');await page.click('[data-landing-example="worksite"] button[aria-label="Materiales y seguimiento"]');
-   await wait(page,()=>window.__landingPreferenceAnimations.some(animation=>animation.kind==='showcase')&&document.querySelector('[data-landing-example="worksite"] figure').getAnimations({subtree:true}).some(animation=>animation.playState==='running'));
-   const callsBeforePause=await page.evaluate(()=>window.__landingPreferenceAnimations.length);await settledPreference('reduce');await renderedImage('obra-entrega-materiales.webp');
+   await settledPreference('no-preference');await startObservation('restored');await page.click('[data-landing-example="worksite"] button[aria-label="Materiales y seguimiento"]');
+   await page.waitForFunction(()=>{
+    const observer=window.__landingMotionDOM,state=observer.read('showcase'),samples=observer.phases.at(-1).targets.showcase.samples.filter(sample=>sample.node===state?.node&&sample.source?.endsWith('obra-entrega-materiales.webp'));
+    return state?.source?.endsWith('obra-entrega-materiales.webp')&&state.opacity>.84001&&state.opacity<.999&&samples.some((sample,index)=>sample.opacity>.84001&&sample.opacity<.999&&samples.slice(0,index).some(previous=>previous.opacity>.84001&&previous.opacity<.999&&sample.opacity>previous.opacity+.0001));
+   },{polling:'raf',timeout:30000});
+   const pauseObservation=await page.evaluate(()=>({figure:window.__landingMotionDOM.read('showcase'),nativeCalls:window.__landingPreferenceAnimations.length,preferenceEvents:window.__landingMotionDOM.preferenceChanges.length}));
+   assert.ok(intermediate(pauseObservation.figure,.84001),'Showcase fade already ended before reducing motion '+width);
+   const callsBeforePause=pauseObservation.nativeCalls;await settledPreference('reduce');await renderedImage('obra-entrega-materiales.webp');
+   const changedDuringFade=await page.evaluate(index=>window.__landingMotionDOM.preferenceChanges.slice(index),pauseObservation.preferenceEvents);
+   assert.equal(changedDuringFade.length,1,'Expected one real reduced-motion change during the fade '+width);assert.equal(changedDuringFade[0].reduced,true);assert.equal(changedDuringFade[0].phase,'restored');assert.equal(changedDuringFade[0].showcase?.node,pauseObservation.figure.node);assert.ok(changedDuringFade[0].showcase?.source?.endsWith('obra-entrega-materiales.webp'));assert.ok(intermediate(changedDuringFade[0].showcase,.84001),'Reduced-motion event arrived after the actual showcase fade '+width);
    await wait(page,()=>{const receipt=document.querySelector('[data-landing-transition="receipt"]'),figure=document.querySelector('[data-landing-example="worksite"] figure');return [receipt,figure].every(node=>node.getAnimations({subtree:true}).every(animation=>animation.playState!=='running'))&&getComputedStyle(figure).opacity==='1'&&getComputedStyle(receipt).transform==='none';});
+   const restoredDOM=await stopObservation();bounded(restoredDOM);
+   const restoredSamples=restoredDOM.targets.showcase.samples.filter(sample=>sample.node===pauseObservation.figure.node&&sample.source?.endsWith('obra-entrega-materiales.webp'));
+   assert.ok(progressed(restoredSamples,.84001),'Restored showcase DOM progression missing '+width);assert.ok(finalState(restoredDOM.targets.showcase.last),'Reduced showcase did not reach its final DOM state '+width);
+   await startObservation('stopped');await new Promise(resolve=>setTimeout(resolve,650));
+   const stoppedDOM=await stopObservation();bounded(stoppedDOM);assertStatic(stoppedDOM,'receipt');assertStatic(stoppedDOM,'showcase',pauseObservation.figure.node);
    assert.equal(await page.evaluate(()=>window.__landingPreferenceAnimations.length),callsBeforePause,'Reducing motion during a fade must stop it without a replacement transition');assert.deepEqual(apiRequests,[]);
-   checks.push({width,liveReducedMotion:true,normalNativeMotionObserved:true,transitionCallsWhileReduced:reducedState.animations.length,receiptAndShowcaseStatic:true,restoredNormalMotionObserved:true,activeFadeStoppedWithoutReplacement:true,apiRequests:0});
+   const finalNativeActive=await page.evaluate(()=>['[data-landing-transition="receipt"]','[data-landing-example="worksite"] figure'].reduce((count,selector)=>count+document.querySelector(selector).getAnimations({subtree:true}).filter(animation=>animation.playState==='running').length,0));assert.equal(finalNativeActive,0);
+   checks.push({width,liveReducedMotion:true,normalDOMMotionObserved:true,normalNativeCalls,transitionCallsWhileReduced:reducedState.animations.length,receiptAndShowcaseStatic:true,restoredNormalMotionObserved:true,reducedPreferenceEventDuringActualFade:true,activeFadeStoppedWithoutReplacement:true,finalNativeActive,domObservation:{normal:normalDOM,reduced:reducedDOM,restored:restoredDOM,stopped:stoppedDOM,pauseObservation,changedDuringFade},apiRequests:0});
   }finally{await page.close();}
  }
 }
