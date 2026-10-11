@@ -137,11 +137,24 @@ export async function reactiveOnboardingAuthority(client,r,pref,{environment=pro
 }
 
 const reactiveKycStatusReplies={
+ PENDING_ACCOUNT_CLAIM:'Tu presentación quedó registrada en privado. Falta aceptar la invitación recibida por correo con tu propia cuenta. Después ingresá a https://obrasaas.com/cuenta para continuar. La empresa debe revisar tu identidad antes de habilitarte.',
+ PENDING_REVIEW:'Tu presentación está completa y pendiente de revisión independiente. Consultá el estado en https://obrasaas.com/cuenta. Todavía no habilita actividad por WhatsApp.',
+ REJECTED:'La revisión de esta presentación no fue aprobada. Consultá https://obrasaas.com/cuenta y contactá al responsable para revisar el próximo paso. Este chat no inicia otra presentación.',
+ APPROVED:'La revisión de tu identidad fue aprobada. Este mensaje no concede permisos ni vincula WhatsApp. Ingresá a https://obrasaas.com/cuenta para comprobar tus permisos y, si están habilitados, abrí «Vincular mi número y autorizar avisos».',
+};
+const legacyReactiveKycStatusReplies={
  PENDING_ACCOUNT_CLAIM:'Tu presentación quedó registrada en privado. Falta aceptar la invitación con tu propia cuenta antes de la revisión. Consultá la invitación recibida y Mi cuenta. Esto no habilita actividad por WhatsApp.',
  PENDING_REVIEW:'Tu presentación está completa y pendiente de revisión independiente. Todavía no habilita actividad por WhatsApp. Consultá el estado en Mi cuenta.',
  REJECTED:'La revisión de esta presentación no fue aprobada. Consultá Mi cuenta y al responsable para revisar el próximo paso. Este chat no inicia otra presentación.',
  APPROVED:'La revisión de tu identidad fue aprobada. Este mensaje no concede permisos ni vincula WhatsApp. Consultá Mi cuenta para comprobar tus permisos y completar la vinculación propia cuando corresponda.',
 };
+// Presentation only: exact old text remains recoverable on its original sealed
+// result; neither text variant supplies account, identity or channel authority.
+export function reactiveParticipantStatusReply(status,recordedReply=null){
+ if(!Object.hasOwn(reactiveKycStatusReplies,status))fail();
+ const legacy={type:'text',body:legacyReactiveKycStatusReplies[status]};
+ return recordedReply&&digest(recordedReply)===digest(legacy)?legacy:{type:'text',body:reactiveKycStatusReplies[status]};
+}
 const reactiveStatusFences=new WeakMap();
 const currentMemberProjection=m=>m?{actorId:m.actorId,membershipId:m.membershipId,clerkUserId:m.clerkUserId,role:m.role,clerkRole:m.clerkRole,revision:m.revision,userRevision:m.userRevision}:null;
 const currentProjectProjection=p=>p?{id:p.id,name:p.name,organizationId:p.organizationId,metadata:p.metadata}:null;
@@ -168,7 +181,7 @@ export async function reactiveParticipantStatusAuthority(client,r,pref,{environm
 }
 export async function assertReactiveParticipantStatusResult(client,r,pref,result,{environment=process.env}={}){
  const a=await reactiveParticipantStatusAuthority(client,r,pref,{environment,proof:result?.reactiveKycStatus});
- if(!result?.reactiveKycStatus||digest(result.reply)!==digest({type:'text',body:reactiveKycStatusReplies[a.status]}))fail();
+ if(!result?.reactiveKycStatus||digest(result.reply)!==digest(reactiveParticipantStatusReply(a.status,result.reply)))fail();
  reactiveStatusFences.set(r,{client,pref,worker:currentWorkerProjection(a.worker),organization:currentOrganizationProjection(a.organization),project:currentProjectProjection(a.project),member:currentMemberProjection(a.member),own:currentMemberProjection(a.own),proofDigest:digest(result.reactiveKycStatus),replyDigest:digest(result.reply)});
  return a;
 }
@@ -213,7 +226,7 @@ async function planReactiveParticipantStatus(client,r,pref,{environment}){
  if(!reactiveStatusPrelocks.has(pref))return null;
  const a=await reactiveParticipantStatusAuthority(client,r,pref,{environment});
  const proof={version:1,kind:'KYC_NEXT_STEP',eventId:r.event.id,applicationId:r.anchor.id,status:a.status,authorityDigest:a.authorityDigest,expiresAt:new Date(a.reactiveExpiresAt).toISOString()};
- return {state:r.state,reactiveKycStatus:proof,reply:{type:'text',body:reactiveKycStatusReplies[a.status]}};
+ return {state:r.state,reactiveKycStatus:proof,reply:reactiveParticipantStatusReply(a.status)};
 }
 
 function offer(authority,r){
@@ -229,7 +242,7 @@ export async function planReactiveOnboarding(client,r,pref,{environment=process.
  const choice=r.payload.value.interactive?.list_reply?.id||r.payload.value.interactive?.button_reply?.id;
  const previous=r.state?.reactiveOnboarding;
  const text=r.payload.value.type==='text'?r.payload.value.text?.body?.trim().toLocaleUpperCase('es'):null;
- if(previous?.kind==='KYC_START'&&['HOLA','ESTADO'].includes(text))return planReactiveParticipantStatus(client,r,pref,{environment});
+ if(previous?.kind==='KYC_START'&&['HOLA','ESTADO','MENU','MENÚ'].includes(text))return planReactiveParticipantStatus(client,r,pref,{environment});
  if(!pref)return null;
  if(previous?.kind==='KYC_START')return null;
  if(!choice?.startsWith('intake-kyc:')&&!['HOLA','ESTADO','MENU','MENÚ'].includes(text))return null;

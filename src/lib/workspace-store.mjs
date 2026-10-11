@@ -285,6 +285,16 @@ export function createWorkspaceStore({ connect }) {
         return { scope, project: selected, roleLabel: WORKSPACE_ROLES[member.role], canPlanSchedule: managesSchedule(member.role), tasks: rows, totalTasks: counts.rows[0].total, nextCursor: result.rows.length>100 ? rows.at(-1).id : null };
       });
     },
+    // Directed read retains ordinary project admission and canonical membership.
+    // It does not alter the loaded page or authorize a schedule write.
+    async readTask(session, { projectId, scope: expected, taskId }) {
+      if (!workspaceId(taskId)) throw new WorkspaceError('WORKSPACE_QUERY_INVALID');
+      return transaction(session, false, async (client, member, scope) => {
+        checkScope(scope, expected);
+        const selected = await project(client, member, projectId);
+        return { scope, project: selected, canPlanSchedule: managesSchedule(member.role), task: await task(client, projectId, taskId) };
+      });
+    },
     async schedule(session, body) {
       const input = validateScheduleChange(body);
       return transaction(session, true, async (client, member, scope) => {

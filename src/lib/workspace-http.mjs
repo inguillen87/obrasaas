@@ -33,13 +33,17 @@ export function createWorkspaceHandlers({verify,store}){
         if(params.get('portfolio')!=='1'||!/^[a-f0-9]{64}$/.test(params.get('scope')||'')||params.has('afterProject')&&!workspaceId(params.get('afterProject')))throw new WorkspaceError('WORKSPACE_QUERY_INVALID');
         return reply(await store.overview(session,{scope:params.get('scope'),afterProject:params.get('afterProject')}));
       }
-      for(const key of params.keys())if(!['projectId','scope','afterTask','operationId'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('WORKSPACE_QUERY_INVALID');
+      for(const key of params.keys())if(!['projectId','scope','afterTask','operationId','taskId'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('WORKSPACE_QUERY_INVALID');
       if(!params.size)return reply(await store.list(session));
       const projectId=params.get('projectId'),scope=params.get('scope');
       if(!workspaceId(projectId)||!/^[a-f0-9]{64}$/.test(scope||''))throw new WorkspaceError('WORKSPACE_QUERY_INVALID');
       if(params.has('operationId')){
-        if(params.has('afterTask')||!operationId(params.get('operationId')))throw new WorkspaceError('WORKSPACE_QUERY_INVALID');
+        if(params.has('afterTask')||params.has('taskId')||!operationId(params.get('operationId')))throw new WorkspaceError('WORKSPACE_QUERY_INVALID');
         return reply(await store.status(session,{projectId,scope,operationId:params.get('operationId')}));
+      }
+      if(params.has('taskId')){
+        if(params.has('afterTask')||!workspaceId(params.get('taskId')))throw new WorkspaceError('WORKSPACE_QUERY_INVALID');
+        return reply(await store.readTask(session,{projectId,scope,taskId:params.get('taskId')}));
       }
       return reply(await store.read(session,{projectId,scope,afterTask:params.get('afterTask')}));
     }catch(error){return reply({code:error instanceof WorkspaceError?error.code:'WORKSPACE_OPERATION_UNCONFIRMED',saved:false},error instanceof WorkspaceError?error.status:503);}

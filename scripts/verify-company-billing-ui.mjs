@@ -158,24 +158,46 @@ async function consultTrial(state) {
   assert.ok(rendered.includes('Comprobante de pago: no consultado.'));
   assert.ok(rendered.includes('El pago en línea está pendiente de activación.'));
 }
+async function assertPlanSupport(state,visible,{keyboard=false}={}) {
+  const links = await state.page.$$eval('section a',nodes => nodes.map(node => ({href:node.getAttribute('href'),text:node.textContent.trim(),height:node.getBoundingClientRect().height,width:node.getBoundingClientRect().width,support:node.hasAttribute('data-company-plan-support')})));
+  if (!visible) {assert.deepEqual(links,[],'Unobserved, denied or changed company access must not expose a contracting action');return;}
+  assert.equal(links.length,1,'One evident contracting action must accompany the canonical plan');
+  assert.equal(links[0].support,true);assert.equal(links[0].href,'mailto:info@obrasaas.com','Contracting contact must not carry company, identity, card or authorization data');
+  assert.equal(links[0].text,'Consultar planes por correo');assert.ok(links[0].height >= 44 && links[0].width >= 44,'Contracting action must remain usable at the requested viewport');
+  const text = await panelText(state.page);
+  assert.ok(text.includes('Abre un borrador para que lo revises y envíes.'));
+  assert.ok(text.includes('El pago y la activación se confirman por separado.'));
+  if (keyboard) {
+    const requestsBefore = state.requests.length;
+    await state.page.focus('[data-company-plan-support]');
+    await state.page.keyboard.down('Shift');
+    try {await state.page.keyboard.press('Tab');}
+    finally {await state.page.keyboard.up('Shift');}
+    assert.equal(await state.page.evaluate(() => document.activeElement?.tagName),'BUTTON','The native previous keyboard action remains the manual plan query');
+    await state.page.keyboard.press('Tab');
+    assert.equal(await state.page.evaluate(() => document.activeElement?.hasAttribute('data-company-plan-support')),true,'The contracting action must be reachable with the keyboard');
+    assert.equal(state.requests.length,requestsBefore,'Keyboard navigation must not initiate a payment or company read');
+  }
+}
 async function viewportScenario(width) {
   const state = await makePage('viewport-'+width,width);
   try {
-    const initial = await assertLayout(state.page,width);await consultTrial(state);
+    const initial = await assertLayout(state.page,width);await assertPlanSupport(state,false);await consultTrial(state);
+    await assertPlanSupport(state,true,{keyboard:true});
     const consulted = await assertLayout(state.page,width);
     const screenshot = path.join(imageDirectory,'trial-'+width+'.png');await state.page.screenshot({path:screenshot,fullPage:true});
     state.setKind('expired');await click(state.page,'Actualizar plan');await waitText(state.page,'Prueba finalizada');
-    const expired = await assertLayout(state.page,width);assert.ok(!(await panelText(state.page)).includes('La prueba está vigente'));
+    const expired = await assertLayout(state.page,width);assert.ok(!(await panelText(state.page)).includes('La prueba está vigente'));await assertPlanSupport(state,true,{keyboard:true});
     state.setKind('active-pro');await click(state.page,'Actualizar plan');await waitText(state.page,'Suscripción activa');
     const active = await assertLayout(state.page,width), rendered = await panelText(state.page);
     assert.ok(rendered.includes('Hay una suscripción vigente registrada'));
     assert.ok(rendered.includes('Comprobante de pago: no consultado.'));
     assert.ok(!/pago (confirmado|aprobado|realizado)|pagado|cobrado/i.test(rendered));
-    assert.ok(!rendered.includes('Vencimiento registrado de la prueba'));
+    assert.ok(!rendered.includes('Vencimiento registrado de la prueba'));await assertPlanSupport(state,true,{keyboard:true});
     assert.equal(state.requests.length,3);assert.ok(state.requests.every(request => request.method === 'GET'));
     await state.page.reload({waitUntil:'networkidle0'});await waitText(state.page,'Consultar plan');await delay(150);
     assert.equal(state.requests.length,3,'Reload must not repeat a read or initiate payment');
-    assert.ok(!(await panelText(state.page)).includes('Suscripción activa'));
+    assert.ok(!(await panelText(state.page)).includes('Suscripción activa'));await assertPlanSupport(state,false);
     checks.push({check:'manual-trial-expiry-active-plan-reload-and-responsive-layout',width,initial,consulted,expired,active,screenshot:path.relative(root,screenshot).split(path.sep).join('/'),apiRequests:3});
   } finally {await state.context.close();}
 }
@@ -186,7 +208,7 @@ async function errorScenario(kind) {
     await state.page.waitForFunction(() => {const section = document.querySelector('section');return section?.getAttribute('aria-busy') === 'false' && section.querySelector('[role="status"]')?.innerText.trim().length > 0;},{timeout:12000});
     const rendered = await panelText(state.page);
     assert.ok(!rendered.includes('Empresa sintética A') && !rendered.includes('Prueba gratuita') && !rendered.includes('09/10/2026'),'A denial or unreadable response must erase the old company subscription');
-    assert.ok(!rendered.includes('CONTROLLED PRIVATE') && !rendered.includes('unreadable controlled'));
+    assert.ok(!rendered.includes('CONTROLLED PRIVATE') && !rendered.includes('unreadable controlled'));await assertPlanSupport(state,false);
     if (kind.endsWith('html')) assert.ok(rendered.includes('No se pudo confirmar tu acceso'));
     if (kind === 'wrong-scope') assert.ok(rendered.includes('empresa correcta'));
     assert.equal(state.requests.length,2);
@@ -197,7 +219,7 @@ async function holdRefresh(state) {
   await state.page.evaluate(() => {window.__holdBillingJson = true;window.__heldJsonEntered = false;});
   state.setKind('expired');await click(state.page,'Actualizar plan');
   await state.page.waitForFunction(() => window.__heldJsonEntered === true && typeof window.__releaseBillingJson === 'function',{timeout:12000});
-  assert.ok(!(await panelText(state.page)).includes('Empresa sintética A'),'Refreshing must hide the old snapshot');
+  assert.ok(!(await panelText(state.page)).includes('Empresa sintética A'),'Refreshing must hide the old snapshot');await assertPlanSupport(state,false);
 }
 async function lateScenario(kind) {
   const state = await makePage('late-'+kind);
@@ -206,11 +228,11 @@ async function lateScenario(kind) {
     await state.page.evaluate(() => {window.__holdBillingJson = false;});
     if (kind === 'scope') {
       await state.page.evaluate(() => window.__switchScope());await waitText(state.page,'Contexto sintético B');await waitText(state.page,'Consultar plan');
-      assert.ok(!(await panelText(state.page)).includes('Empresa sintética A'));
+      assert.ok(!(await panelText(state.page)).includes('Empresa sintética A'));await assertPlanSupport(state,false);
       state.setKind('active-enterprise');await click(state.page,'Consultar plan');await waitText(state.page,'Empresa sintética B');
     } else if (kind === 'token-getter') {
       await state.page.evaluate(() => window.__changeTokenGetter());await waitText(state.page,'Consultar plan');
-      assert.ok(!(await panelText(state.page)).includes('Prueba gratuita'));
+      assert.ok(!(await panelText(state.page)).includes('Prueba gratuita'));await assertPlanSupport(state,false);
       state.setKind('active-enterprise');await click(state.page,'Consultar plan');await waitText(state.page,'Enterprise');
       assert.equal(state.requests.at(-1).tokenGetterGeneration,1,'The newest read must acquire the new getter token');
     } else {
@@ -220,11 +242,11 @@ async function lateScenario(kind) {
     if (kind === 'unmount') {
       assert.equal(await state.page.$('section'),null);
       await state.page.evaluate(() => window.__showBilling());await waitText(state.page,'Consultar plan');
-      assert.ok(!(await panelText(state.page)).includes('Prueba finalizada'));
+      assert.ok(!(await panelText(state.page)).includes('Prueba finalizada'));await assertPlanSupport(state,false);
       assert.equal(state.requests.length,2,'Remount must not dispatch a request automatically');
     } else {
       const rendered = await panelText(state.page);assert.ok(rendered.includes('Enterprise') && rendered.includes('Suscripción activa'));
-      assert.ok(!rendered.includes('Prueba finalizada') && !rendered.includes('09/10/2026'));
+      assert.ok(!rendered.includes('Prueba finalizada') && !rendered.includes('09/10/2026'));await assertPlanSupport(state,true);
       assert.equal(state.requests.length,3);
       if (kind === 'scope') assert.equal(state.requests.at(-1).scope,scopeB);
     }
@@ -235,7 +257,7 @@ async function getterSnapshotScenario() {
   const state = await makePage('token-getter-existing-snapshot');
   try {
     await consultTrial(state);await state.page.evaluate(() => window.__changeTokenGetter());await waitText(state.page,'Consultar plan');
-    assert.ok(!(await panelText(state.page)).includes('Empresa sintética A'));
+    assert.ok(!(await panelText(state.page)).includes('Empresa sintética A'));await assertPlanSupport(state,false);
     assert.equal(state.requests.length,1,'Changing access must not automatically refresh or pay');
     checks.push({check:'same-scope-token-getter-change-immediately-hides-existing-snapshot',apiRequests:1});
   } finally {await state.context.close();}

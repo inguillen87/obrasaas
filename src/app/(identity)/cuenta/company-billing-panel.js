@@ -53,7 +53,10 @@ function CompanyBillingContent({scope,getSessionToken}) {
       <div className={styles.summary}><div><p className={styles.company}>{view.companyName}</p><p className={styles.plan}>{view.planLabel}</p></div><span className={view.tone==='positive'?styles.positive:styles.attention}>{view.statusLabel}</span></div>
       <p className={styles.description}>{view.entitlementLabel}</p>
       {view.trialExpiryLabel&&<dl className={styles.expiry}><div><dt>Vencimiento registrado de la prueba</dt><dd>{view.trialExpiryLabel}</dd></div></dl>}
-      <div className={styles.payment}><strong>{view.checkoutLabel}</strong><p>{view.paymentLabel}</p></div>
+      <div className={styles.payment}><strong>{view.checkoutLabel}</strong><p>{view.paymentLabel}</p>
+        <a className={styles.support} data-company-plan-support href="mailto:info@obrasaas.com">Consultar planes por correo</a>
+        <p>Abre un borrador para que lo revises y envíes. El pago y la activación se confirman por separado.</p>
+      </div>
       <p className={styles.observed}>Última consulta: {view.observedAtLabel}</p>
     </div>}
   </section>;

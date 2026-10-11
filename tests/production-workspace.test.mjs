@@ -40,7 +40,7 @@ test('database TLS cannot be weakened by URL parameters',()=>{
 });
 function http({identity=session,fail=null}={}){
  const calls=[];const action=name=>async(...args)=>{calls.push({name,args});if(fail)throw fail;return {scope,saved:name==='schedule'};};
- return {calls,handlers:createWorkspaceHandlers({verify:async()=>identity,store:Object.fromEntries(['list','read','schedule','status'].map(name=>[name,action(name)]))})};
+ return {calls,handlers:createWorkspaceHandlers({verify:async()=>identity,store:Object.fromEntries(['list','read','readTask','schedule','status'].map(name=>[name,action(name)]))})};
 }
 const request=(method='GET',body=null,extra={},query='')=>new Request('https://obrasaas.com/api/identity/workspace'+query,{method,headers:{...(method==='POST'?{'content-type':'application/json',origin:'https://obrasaas.com'}:{}),...extra},...(body!==null?{body:typeof body==='string'?body:JSON.stringify(body)}:{})});
 test('anonymous denial happens before body or database access',async()=>{const h=http({identity:{authenticated:false}});const result=await h.handlers.POST(request('POST','{'));assert.equal(result.status,401);assert.equal(h.calls.length,0);});
@@ -84,4 +84,42 @@ test('workspace never reads global state, rotates Meta credentials or disables T
  assert.doesNotMatch(files,/getAppState|saveAppState|obrasaas_app_state|rejectUnauthorized:\s*false|META_WHATSAPP_ACCESS_TOKEN|CLERK_SECRET_KEY/);
  const store=readFileSync(new URL('../src/lib/workspace-store.mjs',import.meta.url),'utf8');
  assert.match(store,/FOR SHARE OF u,m,o/);assert.match(store,/FOR UPDATE OF t/);assert.match(store,/task.schedule.reviewed/);assert.doesNotMatch(store,/UPDATE public\."Task" SET progress|UPDATE public\."Worker"/);
+});
+
+test('directed task HTTP read passes only canonical scope/project/task and keeps legacy reads',async()=>{
+ const h=http(),query='?'+new URLSearchParams({projectId:'project-a',scope,taskId:'task-after-page-one'});
+ const response=await h.handlers.GET(request('GET',null,{},query));
+ assert.equal(response.status,200);assert.match(response.headers.get('cache-control'),/no-store/);
+ assert.deepEqual(h.calls,[{name:'readTask',args:[session,{projectId:'project-a',scope,taskId:'task-after-page-one'}]}]);
+ const legacy=http();await legacy.handlers.GET(request('GET',null,{},'?'+new URLSearchParams({projectId:'project-a',scope})));
+ assert.equal(legacy.calls[0].name,'read');assert.deepEqual(legacy.calls[0].args[1],{projectId:'project-a',scope,afterTask:null});
+});
+test('directed task query rejects ambiguous cursors, operations, duplicate IDs and unknown fields before the store',async()=>{
+ const base='?'+new URLSearchParams({projectId:'project-a',scope,taskId:'task-a'});
+ for(const query of [base+'&afterTask=task-before',base+'&operationId='+change().operationId,base+'&taskId=task-b',base+'&tenantId=other',base.replace('task-a','..%2Fforeign'),base.replace('task-a','')]){
+  const h=http();assert.equal((await h.handlers.GET(request('GET',null,{},query))).status,400);assert.equal(h.calls.length,0);
+ }
+});
+test('directed real-store task read binds canonical organization/project, preserves admission and never writes',async()=>{
+ const actor={...member,actorId:'actor-a',organizationName:'Synthetic organization'};
+ const current={id:'task-after-page-one',title:'Synthetic later-page task',status:'IN_PROGRESS',progress:37,startsOn:'2026-10-02',endsOn:'2026-10-06',revision:'2026-10-01T12:00:00.123456'};
+ const calls=[];let assigned=true,available=true,projectAvailable=true;
+ const store=createWorkspaceStore({connect:async()=>({query:async(sql,values)=>{
+  calls.push({sql,values});
+  if(sql.includes('FROM public."PlatformUser"'))return {rows:[actor]};
+  if(sql.includes('FROM public."Worker"')||sql.includes('participant.operation.recorded'))return {rows:[]};
+  if(sql.includes('FROM public."ProjectMembership"'))return {rows:assigned?[{id:'assigned-a'}]:[]};
+  if(sql.includes('FROM public."Project"')){assert.deepEqual(values,['project-a',actor.organizationId]);return {rows:projectAvailable?[{id:'project-a',name:'Synthetic worksite',status:'ACTIVE'}]:[]};}
+  if(sql.includes('FROM public."Task"')){assert.deepEqual(values,[current.id,'project-a']);return {rows:available?[current]:[]};}
+  return {rows:[]};
+ },release:()=>{}})});
+ const result=await store.readTask(session,{projectId:'project-a',scope,taskId:current.id});
+ assert.deepEqual(result,{scope,project:{id:'project-a',name:'Synthetic worksite',status:'ACTIVE'},canPlanSchedule:true,task:current});
+ assert.equal(calls.filter(row=>row.sql.includes('FROM public."Task"')).length,1);
+ assert.ok(calls.some(row=>row.sql==='BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY'));assert.ok(!calls.some(row=>/^(INSERT|UPDATE|DELETE|COMMIT)\b/.test(row.sql)));
+ calls.length=0;assigned=false;await assert.rejects(store.readTask(session,{projectId:'project-a',scope,taskId:current.id}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});assert.ok(!calls.some(row=>row.sql.includes('FROM public."Task"')));
+ assigned=true;projectAvailable=false;calls.length=0;await assert.rejects(store.readTask(session,{projectId:'project-a',scope,taskId:current.id}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});assert.ok(!calls.some(row=>row.sql.includes('FROM public."Task"')));
+ projectAvailable=true;available=false;await assert.rejects(store.readTask(session,{projectId:'project-a',scope,taskId:current.id}),{code:'WORKSPACE_TASK_UNAVAILABLE'});
+ calls.length=0;await assert.rejects(store.readTask(session,{projectId:'project-a',scope:'b'.repeat(64),taskId:current.id}),{code:'WORKSPACE_CONTEXT_CHANGED'});assert.ok(!calls.some(row=>row.sql.includes('FROM public."Task"')));
+ calls.length=0;await assert.rejects(store.readTask(session,{projectId:'project-a',scope,taskId:'../other'}),{code:'WORKSPACE_QUERY_INVALID'});assert.equal(calls.length,0);
 });

@@ -28,7 +28,12 @@ export function createWorkspaceRequestLifecycle(getSessionToken, {fetchImpl,jour
           const finish = (callback,value) => { controller.signal.removeEventListener('abort',aborted); callback(value); };
           if(controller.signal.aborted) { aborted(); return; }
           controller.signal.addEventListener('abort',aborted,{once:true});
-          Promise.resolve().then(() => controller.signal.aborted ? undefined : consume(response)).then(value => finish(resolve,value),error => finish(reject,error));
+          Promise.resolve().then(async() => {
+            if(controller.signal.aborted)return;
+            // Capture only this actual HTTP response inside the same deadline.
+            await journal?.captureResponse?.(ticket,url,options,response,{signal:controller.signal,isActive:()=>active});
+            if(!controller.signal.aborted)return consume(response);
+          }).then(value => finish(resolve,value),error => finish(reject,error));
         });
         if (controller.signal.aborted || !active) throw new DOMException('La consulta se canceló.', 'AbortError');
         await journal?.settle(ticket,result);

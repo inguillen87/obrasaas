@@ -4,7 +4,8 @@ import {digest} from '../src/lib/workspace-policy.mjs';
 import {encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
 import {customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
 import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
-import {decodeReactiveStart,prelockReactiveOnboarding,reactiveParticipantStatusAuthority,planReactiveOnboarding,fenceReactiveParticipantStatusResult,reactiveParticipantStatusFenceRead,assertReactiveParticipantStatusFenceRead} from '../src/lib/participant-onboarding-reactive.mjs';
+import {decodeReactiveStart,prelockReactiveOnboarding,reactiveParticipantStatusAuthority,planReactiveOnboarding,fenceReactiveParticipantStatusResult,reactiveParticipantStatusFenceRead,assertReactiveParticipantStatusFenceRead,reactiveParticipantStatusReply} from '../src/lib/participant-onboarding-reactive.mjs';
+import {customerReplyMessage} from '../src/lib/meta-customer-provider.mjs';
 import {fenceCompanyKycAuthority} from '../src/lib/company-channel-kyc.mjs';
 import {COMPANY_CHANNEL_SCHEMA_CONTRACT} from '../src/lib/company-channel-schema.mjs';
 
@@ -160,9 +161,31 @@ test('a caller-created status context cannot bypass the signed prelock capabilit
  const calls=[],client={query:async sql=>{calls.push(sql);throw Error('unexpected status SQL');}},r={state:{reactiveOnboarding:{kind:'KYC_START'}}},pref={intent:{workerId:'worker-a'},admissionDigest:'a'.repeat(64)};
  await assert.rejects(reactiveParticipantStatusAuthority(client,r,pref),{code:'EMPLOYEE_INTAKE_CONTEXT_REQUIRED'});assert.deepEqual(calls,[]);
 });
-test('missing canonical discovery cannot turn an admitted status query into a new preparation',async()=>{
- let queries=0;const client={query:async()=>{queries++;throw Error('unexpected SQL');}},state={step:'ADMITTED',status:'ADMITTED',reactiveOnboarding:{kind:'KYC_START'}},r={state,payload:{value:{type:'text',text:{body:'ESTADO'}}}};
- await assert.rejects(planReactiveOnboarding(client,r,null),{code:'EMPLOYEE_INTAKE_REVOKED'});assert.equal(queries,0);assert.equal(state.reactiveOnboarding.kind,'KYC_START');
+test('every completed-onboarding alias requires canonical discovery without a new preparation or reply',async()=>{
+ for(const body of ['HOLA','ESTADO','MENU','MENÚ','  menú  ']){
+  let queries=0;const client={query:async()=>{queries++;throw Error('unexpected SQL');}},state={step:'ADMITTED',status:'ADMITTED',reactiveOnboarding:{kind:'KYC_START'}},before=structuredClone(state),r={state,payload:{value:{type:'text',text:{body}}}};
+  await assert.rejects(planReactiveOnboarding(client,r,null),{code:'EMPLOYEE_INTAKE_REVOKED'});assert.equal(queries,0);assert.deepEqual(state,before);
+ }
+});
+test('actual status replies give a public account next step without treating capture or review as operational access',()=>{
+ for(const status of ['PENDING_ACCOUNT_CLAIM','PENDING_REVIEW','REJECTED','APPROVED']){
+  const reply=reactiveParticipantStatusReply(status);customerReplyMessage(reply);
+  assert.deepEqual(Object.keys(reply).sort(),['body','type']);assert.equal(reply.type,'text');
+  const links=reply.body.match(/https:\/\/[^\s]+/g)?.map(link=>link.replace(/[.,;]+$/,''));assert.deepEqual(links,['https://obrasaas.com/cuenta']);
+  assert.doesNotMatch(reply.body,/IDENTIDAD |VINCULAR |user_|worker-|invite_|@|\?[a-z]|habilitado para trabajar|acceso habilitado/);
+  if(status==='PENDING_ACCOUNT_CLAIM'){assert.match(reply.body,/Falta aceptar la invitación recibida por correo/);assert.match(reply.body,/revisar tu identidad antes de habilitarte/);assert.doesNotMatch(reply.body,/identidad fue aprobada|Vincular mi número/);}
+  if(status==='PENDING_REVIEW'){assert.match(reply.body,/pendiente de revisión independiente/);assert.match(reply.body,/no habilita actividad/);assert.doesNotMatch(reply.body,/identidad fue aprobada|Vincular mi número/);}
+  if(status==='REJECTED'){assert.match(reply.body,/no fue aprobada/);assert.match(reply.body,/contactá al responsable/);assert.match(reply.body,/no inicia otra presentación/);}
+  if(status==='APPROVED'){assert.match(reply.body,/identidad fue aprobada/);assert.match(reply.body,/no concede permisos ni vincula/);assert.match(reply.body,/si están habilitados/);assert.match(reply.body,/Vincular mi número y autorizar avisos/);}
+ }
+ for(const invalid of ['ACTIVE','COMPLETED','REVOKED','__proto__',null,undefined,{}])assert.throws(()=>reactiveParticipantStatusReply(invalid),{code:'EMPLOYEE_INTAKE_CONTEXT_REQUIRED'});
+});
+test('an exact old sealed status reply remains recoverable only for the same status and DTO',()=>{
+ const original={type:'text',body:'La revisión de tu identidad fue aprobada. Este mensaje no concede permisos ni vincula WhatsApp. Consultá Mi cuenta para comprobar tus permisos y completar la vinculación propia cuando corresponda.'};
+ assert.deepEqual(reactiveParticipantStatusReply('APPROVED',original),original);
+ assert.deepEqual(reactiveParticipantStatusReply('PENDING_REVIEW',original),reactiveParticipantStatusReply('PENDING_REVIEW'));
+ for(const changed of [{...original,body:original.body+' altered'},{...original,workerId:'untrusted'},{type:'interactive',body:original.body}])assert.deepEqual(reactiveParticipantStatusReply('APPROVED',changed),reactiveParticipantStatusReply('APPROVED'));
+ assert.match(reactiveParticipantStatusReply('APPROVED').body,/https:\/\/obrasaas\.com\/cuenta/);
 });
 test('completed status discovery locks the own assignment and Worker before any channel or event',async()=>{
  const f=companyPresentDiscoveryFixture();f.state.reactiveOnboarding={kind:'KYC_START'};f.participant.kycChatChallenge={id:'kyc_chat_'+'2'.repeat(32),status:'COMPLETED'};
@@ -190,8 +213,8 @@ test('a changed current account during completed prelock is denied without captu
 test('an incomplete capture stays outside the status reader and retains its original handoff',async()=>{
  const f=activeDiscoveryFixture();f.state.reactiveOnboarding={kind:'KYC_START'};f.participant.onboardingDelivery={...f.participant.onboardingDelivery,state:'CANCELED',code:'PARTICIPANT_ONBOARDING_REACTIVE_HANDOFF'};f.participant.kycChatChallenge={id:'kyc_chat_'+'2'.repeat(32),status:'CLAIMED'};
  const pref=await prelockReactiveOnboarding(f.client,f.connection,f.state),before=f.calls.length;
- const plan=await planReactiveOnboarding(f.client,{state:f.state,payload:{value:{type:'text',text:{body:'HOLA'}}}},pref);
- assert.equal(plan,null);assert.equal(f.calls.length,before);assert.equal(f.state.reactiveOnboarding.kind,'KYC_START');assert.equal(f.participant.kycChatChallenge.status,'CLAIMED');
+ for(const body of ['HOLA','ESTADO','MENU','MENÚ'])assert.equal(await planReactiveOnboarding(f.client,{state:f.state,payload:{value:{type:'text',text:{body}}}},pref),null);
+ assert.equal(f.calls.length,before);assert.equal(f.state.reactiveOnboarding.kind,'KYC_START');assert.equal(f.participant.kycChatChallenge.status,'CLAIMED');
 });
 test('runtime-intake-own principal union rejects conflicting membership IDs before any lock',async()=>{
  let queries=0;const client={query:async()=>{queries++;throw Error('unexpected SQL');}},connection={organizationId:'org-a',metadata:{employeeIntakePolicy:{issuerActorId:'owner',issuerMembershipId:'owner-m'}}};
