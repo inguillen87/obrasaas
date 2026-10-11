@@ -9,7 +9,7 @@ import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-p
 // Browser-only acceptance of the real component with intercepted synthetic API
 // responses. This is NOT proof of a production login, employee or WhatsApp event.
 assert.ok(!process.env.VERCEL && !process.env.VERCEL_ENV);
-assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume','confirmed-progress','confirmed-progress-planning'].includes(process.env.WORKSPACE_UI_SCENARIO));
+assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume','confirmed-progress','confirmed-progress-planning','confirmed-progress-unloaded','confirmed-progress-snapshots'].includes(process.env.WORKSPACE_UI_SCENARIO));
 const root=process.cwd(),evidence=path.join(root,'.vercel/workspace-evidence');
 mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/workspace-ui-')),app=path.join(fixture,'src/app'),components=path.join(app,'(identity)/cuenta');
@@ -543,6 +543,153 @@ async function confirmedProgressScenario(mode,width){
  }catch(error){await page.screenshot({path:path.join(evidence,`workspace-confirmed-progress-${mode}-failure-${width}.png`),fullPage:false}).catch(()=>{});throw error;}
  finally{for(const request of [heldReadback,heldDecision?.request,heldPlanning?.request])if(request&&!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});await context.close();}
 }
+async function unloadedConfirmedProgressScenario(width,decision){
+ const mode='confirmed-progress-unloaded-'+decision.toLowerCase(),context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
+ page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
+ const beforeRevision='2026-10-02T09:00:00.000001',afterRevision='2026-10-02T09:00:00.000010',currentRevision='2026-10-02T09:00:00.000020',cursor='unloaded-progress-cursor';
+ const original={...baseTask(),revision:beforeRevision},outside={id:'task-outside',title:'Demolición de portería',status:'BACKLOG',progress:0,startsOn:'2026-10-06',endsOn:'2026-10-12',revision:beforeRevision};
+ const proposal={id:'proposal-outside',taskId:outside.id,workerId:'worker-a',summary:'Medición de la tarea de otra página',status:'PENDING',revision:'2026-10-02T09:00:00.000005',progress:25,quantity:null,baseline:null,unit:null,reason:'Medición sintética de otro participante.',evidenceIds:['evidence-outside']};
+ const field={scope,projectId:'p-a',projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals:[proposal],evidence:[{id:'evidence-outside',taskId:outside.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Fuente revisada de otro participante.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};
+ const posts=[],scheduleReads=[],receiptQueries=[];let recorded=null,currentTask=null,preparationReads=0;
+ const respond=(request,body,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
+ await page.setRequestInterception(true);
+ page.on('request',async request=>{
+  try{
+   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
+   if(url.pathname==='/api/identity/project-preparation'){
+    assert.equal(request.method(),'GET');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(++preparationReads,1);
+    return respond(request,projectPreparationSnapshot({scope,projectId:'p-a',canManage:true,revision:0,detailsDigest:'b'.repeat(64),name:'Obra de prueba A',clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope,projectId:'p-a'}));
+   }
+   if(!['/api/identity/workspace','/api/identity/task-creation','/api/identity/field-operations'].includes(url.pathname))return request.continue();
+   assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+   if(url.pathname==='/api/identity/workspace'){
+    assert.equal(request.method(),'GET','A progress decision does not replan or create a task');
+    if(!url.search)return respond(request,{scope,organizationName:'Empresa de ensayo paginada',role:'DIRECTOR',roleLabel:'Director de obra',canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false});
+    assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');scheduleReads.push([...url.searchParams]);
+    if(url.searchParams.has('afterTask')){assert.equal(decision,'APPROVE');assert.equal(url.searchParams.get('afterTask'),cursor);assert.ok(currentTask);return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[currentTask],totalTasks:2,nextCursor:null});}
+    assert.equal(scheduleReads.length,1,'The approval and navigation never fetch the schedule automatically');return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[original],totalTasks:2,nextCursor:cursor});
+   }
+   assert.equal(url.pathname,'/api/identity/field-operations','No task-creation command may be issued');
+   if(request.method()==='GET'){
+    assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('operationId')?['operationId','projectId','scope']:['projectId','scope']);
+    if(url.searchParams.has('operationId')){receiptQueries.push(url.searchParams.get('operationId'));assert.ok(recorded);assert.equal(receiptQueries.at(-1),posts[0].operationId);assert.equal(recorded.proposal.progress,25);assert.equal(recorded.task.progress,25);assert.equal(currentTask.progress,50);return respond(request,{state:'RECORDED',...recorded,replayed:true,task:currentTask,decisionTaskSnapshot:recorded.task});}
+    return respond(request,field);
+   }
+   assert.equal(request.method(),'POST');assert.equal(url.search,'');const input=JSON.parse(request.postData());posts.push(input);assert.equal(posts.length,1);assert.equal(input.scope,scope);assert.equal(input.projectId,'p-a');assert.equal(input.action,'DECIDE_PROGRESS');assert.equal(input.payload.proposalId,proposal.id);assert.equal(input.payload.revision,proposal.revision);assert.equal(input.payload.decision,decision);assert.equal(input.payload.reason,'Decisión sintética de otra cuenta responsable.');assert.match(input.operationId,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+   field.proposals=[{...proposal,status:decision==='APPROVE'?'APPLIED':'REJECTED',revision:afterRevision}];
+   const task=decision==='APPROVE'?{...outside,status:'IN_PROGRESS',progress:25,revision:afterRevision}:outside;
+   // Rejection deliberately returns the unchanged task too: the UI must not infer approval from its presence.
+   recorded={scope,saved:true,replayed:false,receiptId:'field_'+ 'c'.repeat(64),kind:'PROGRESS_DECISION',proposal:field.proposals[0],task};
+   // An independent later decision and planning are already canonical when the old receipt is read.
+   // recoveredOutcome returns the current task and keeps the original receipt snapshot separately.
+   currentTask=decision==='APPROVE'?{...outside,status:'BLOCKED',progress:50,revision:currentRevision,startsOn:'2026-10-09',endsOn:'2026-10-16'}:outside;
+   return decision==='APPROVE'?respond(request,{code:'FIELD_OPERATION_UNCONFIRMED'},503):respond(request,recorded);
+  }catch(error){pageErrors.push({mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
+ });
+ try{
+  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo paginada');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');
+  await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="project-preparation-title"]')?.getAttribute('aria-busy')==='false',{timeout:15000});assert.equal(preparationReads,1);
+  assert.equal((await page.$$('[data-task-id="task-outside"]')).length,0);assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),original.progress);
+  await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label="Operaciones de campo"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');assert.equal(posts.length,0);assert.equal(scheduleReads.length,1);
+  await click(page,'Decidir propuesta');await page.waitForSelector('section[aria-labelledby="field-title"] form');await page.select('section[aria-labelledby="field-title"] form select',decision);await page.type('section[aria-labelledby="field-title"] form textarea','Decisión sintética de otra cuenta responsable.');assert.equal(posts.length,0);await click(page,'Guardar con recibo');
+  if(decision==='APPROVE'){await waitText(page,'El resultado quedó sin confirmar.');assert.equal((await page.$$('[data-confirmed-progress]')).length,0);assert.equal(posts.length,1);await click(page,'Comprobar guardado');await waitText(page,'Avance aprobado con recibo.');assert.deepEqual(receiptQueries,[posts[0].operationId]);}
+  else await waitText(page,'La propuesta fue rechazada.');
+  assert.equal(posts.length,1);assert.equal(scheduleReads.length,1);assert.equal((await page.$$('[data-task-id="task-outside"]')).length,0);assert.ok((await text(page)).includes('1 de 2 tareas cargadas'));
+  assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),original.progress);assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),[original.startsOn,original.endsOn]);
+  assert.equal(await page.$eval('section[aria-labelledby="field-title"] details code',element=>element.textContent),recorded.receiptId);
+  if(decision==='APPROVE'){
+   const resultText=await page.$eval('[data-confirmed-progress="task-outside"]',element=>element.textContent);assert.ok(resultText.includes('Demolición de portería')&&resultText.includes('25% de avance aprobado en este recibo')&&resultText.includes('Falta cargar esta tarea'));assert.ok(!resultText.includes('50%'));assert.equal(recorded.proposal.status,'APPLIED');assert.equal(recorded.proposal.progress,25);
+   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Ver en el cronograma'&&!button.disabled)&&document.getElementById('schedule-load-more')?.disabled===false);assert.ok(await page.$eval('[data-confirmed-progress="task-outside"] button',element=>element.getBoundingClientRect().height>=44));await page.focus('[data-confirmed-progress="task-outside"] button');await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>document.activeElement?.id),'schedule-load-more');assert.equal(scheduleReads.length,1);
+   await (await page.$('section[aria-labelledby="field-title"]')).screenshot({path:path.join(evidence,'workspace-unloaded-progress-receipt-'+width+'.png')});
+   await page.keyboard.press('Enter');await page.waitForSelector('[data-task-id="task-outside"]');assert.equal(scheduleReads.length,2);assert.ok((await text(page)).includes('2 de 2 tareas cargadas'));
+   assert.equal(await page.$eval('[data-task-id="task-outside"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),50);assert.deepEqual(await page.$$eval('[data-task-id="task-outside"] time',elements=>elements.map(element=>element.dateTime)),[currentTask.startsOn,currentTask.endsOn]);assert.equal(await page.$eval('[data-task-id="task-outside"] [data-status]',element=>element.dataset.status),'BLOCKED');assert.deepEqual([recorded.task.startsOn,recorded.task.endsOn],[outside.startsOn,outside.endsOn]);assert.notDeepEqual([currentTask.startsOn,currentTask.endsOn],[recorded.task.startsOn,recorded.task.endsOn]);assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),[original.startsOn,original.endsOn]);assert.ok((await page.$eval('[data-confirmed-progress="task-outside"]',element=>element.textContent)).includes('25% de avance aprobado en este recibo'));assert.ok(!(await page.$eval('[data-confirmed-progress="task-outside"]',element=>element.textContent)).includes('50%'));
+   await waitText(page,'Esta tarea está cargada en el cronograma.');await page.focus('[data-confirmed-progress="task-outside"] button');await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-outside');assert.equal(scheduleReads.length,2);assert.equal(posts.length,1);
+  }else{assert.equal((await page.$$('[data-confirmed-progress]')).length,0);assert.equal(await page.$$eval('button',buttons=>buttons.filter(button=>button.textContent==='Ver en el cronograma').length),0);const fieldText=await page.$eval('section[aria-labelledby="field-title"]',element=>element.innerText);assert.ok(!fieldText.includes('avance aprobado en este recibo')&&!fieldText.includes('Avance aprobado con recibo.'));assert.deepEqual(receiptQueries,[]);}
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,mode+'-'+width+'.png')});
+  checks.push((decision==='APPROVE'?'schedule-unloaded-progress-recovers-same-uuid-historical-25-current-50-and-loads-explicit-cursor-':'schedule-rejected-progress-with-task-does-not-claim-approval-')+width);
+ }catch(error){await page.screenshot({path:path.join(evidence,mode+'-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}
+ finally{await context.close();}
+}
+async function receiptSnapshotCoverageScenario(width,mode){
+ const cases=mode==='invalid-snapshot'?['explicit-null','malformed-progress']:['historical-snapshot'];
+ for(const kind of cases)await loadedReceiptSnapshotScenario(width,mode,kind);
+ checks.push((mode==='invalid-snapshot'?'schedule-explicit-null-and-malformed-receipt-never-fall-back-to-valid-current-task-':'schedule-loaded-recovered-receipt-25-keeps-current-50-blocker-dates-without-snapshot-write-')+width);
+}
+async function loadedReceiptSnapshotScenario(width,mode,snapshotCase){
+ const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
+ page.on('pageerror',error=>pageErrors.push({mode:'confirmed-progress-snapshots-'+mode,width,message:error.message}));
+ const beforeRevision='2026-10-02T09:00:00.000001',decisionRevision='2026-10-02T09:00:00.000010',currentRevision='2026-10-02T09:00:00.000020';
+ const original={...baseTask(),status:'BACKLOG',progress:0,revision:beforeRevision},untouched={...baseTask(),id:'task-untouched',title:'Tarea sin decisión nueva',revision:beforeRevision};
+ const historicalTask={...original,status:'IN_PROGRESS',progress:25,revision:decisionRevision},currentTask={...original,status:'BLOCKED',progress:50,startsOn:'2026-10-09',endsOn:'2026-10-16',revision:currentRevision};
+ const cases=[snapshotCase];
+ const proposals=cases.map((kind,index)=>({id:'proposal-snapshot-'+index,taskId:original.id,workerId:'worker-a',summary:'Medición sintética '+kind,status:'PENDING',revision:'2026-10-02T09:00:00.00000'+(index+5),progress:25,quantity:null,baseline:null,unit:null,reason:'Fuente sintética revisada por otra cuenta.',evidenceIds:['evidence-a']}));
+ const field={scope,projectId:'p-a',projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals,evidence:[{id:'evidence-a',taskId:original.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Evidencia para contrastar el recibo histórico.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};
+ const posts=[],receiptQueries=[],scheduleReads=[];let recorded=null,heldRefresh=null,holdNextRefresh=false,preparationReads=0;
+ const respond=(request,body,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
+ await page.setRequestInterception(true);
+ page.on('request',async request=>{
+  try{
+   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
+   if(url.pathname==='/api/identity/project-preparation'){
+    assert.equal(request.method(),'GET');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(++preparationReads,1);
+    return respond(request,projectPreparationSnapshot({scope,projectId:'p-a',canManage:true,revision:0,detailsDigest:'b'.repeat(64),name:'Obra de prueba A',clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope,projectId:'p-a'}));
+   }
+   if(!['/api/identity/workspace','/api/identity/task-creation','/api/identity/field-operations'].includes(url.pathname))return request.continue();
+   assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+   if(url.pathname==='/api/identity/workspace'){
+    assert.equal(request.method(),'GET','Recovery must not write dates or create schedule rows');
+    if(!url.search)return respond(request,{scope,organizationName:'Empresa de ensayo de snapshots',role:'DIRECTOR',roleLabel:'Director de obra',canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false});
+    assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');scheduleReads.push([...url.searchParams]);assert.equal(scheduleReads.length,1,'The loaded task changes only through the confirmed callback, without a schedule GET');
+    return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[original,untouched],totalTasks:2,nextCursor:null});
+   }
+   assert.equal(url.pathname,'/api/identity/field-operations','No task creation command may be issued');
+   if(request.method()==='GET'){
+    assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('operationId')?['operationId','projectId','scope']:['projectId','scope']);
+    if(url.searchParams.has('operationId')){
+     assert.ok(recorded);const operationId=url.searchParams.get('operationId');assert.equal(operationId,recorded.input.operationId);receiptQueries.push(operationId);
+     const snapshot=recorded.kind==='explicit-null'?null:recorded.kind==='malformed-progress'?{...historicalTask,progress:'25'}:historicalTask;
+     const recovery={state:'RECORDED',...recorded.outcome,replayed:true,task:currentTask,decisionTaskSnapshot:snapshot};assert.ok(Object.hasOwn(recovery,'decisionTaskSnapshot'));assert.equal(recovery.task.progress,50);assert.equal(recovery.task.status,'BLOCKED');holdNextRefresh=true;return respond(request,recovery);
+    }
+    if(holdNextRefresh){assert.equal(heldRefresh,null);holdNextRefresh=false;heldRefresh=request;return;}
+    return respond(request,field);
+   }
+   assert.equal(request.method(),'POST');assert.equal(url.search,'');const input=JSON.parse(request.postData()),index=posts.length,proposal=proposals[index];assert.ok(proposal);posts.push(input);
+   assert.equal(input.scope,scope);assert.equal(input.projectId,'p-a');assert.equal(input.action,'DECIDE_PROGRESS');assert.equal(input.payload.proposalId,proposal.id);assert.equal(input.payload.revision,proposal.revision);assert.equal(input.payload.decision,'APPROVE');assert.equal(input.payload.reason,'Decisión sintética '+cases[index]+'.');assert.match(input.operationId,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+   field.proposals=field.proposals.map(row=>row.id===proposal.id?{...row,status:'APPLIED',revision:decisionRevision}:row);
+   const outcome={scope,saved:true,replayed:false,receiptId:'field_'+(index===0?'c':'d').repeat(64),kind:'PROGRESS_DECISION',proposal:field.proposals.find(row=>row.id===proposal.id),task:historicalTask};recorded={input,kind:cases[index],outcome};
+   return respond(request,{code:'FIELD_OPERATION_UNCONFIRMED'},503);
+  }catch(error){pageErrors.push({mode:'confirmed-progress-snapshots-'+mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
+ });
+ const assertCurrentSchedule=async()=>{
+  assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),50);assert.equal(await page.$eval('[data-task-id="task-a"] [data-status]',element=>element.dataset.status),'BLOCKED');assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),[currentTask.startsOn,currentTask.endsOn]);
+  assert.equal(await page.$eval('[data-task-id="task-untouched"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),untouched.progress);assert.deepEqual(await page.$$eval('[data-task-id="task-untouched"] time',elements=>elements.map(element=>element.dateTime)),[untouched.startsOn,untouched.endsOn]);assert.equal(await page.$$eval('[data-task-id]',elements=>elements.length),2);
+  const gantt=await page.$eval('[data-gantt-task-id="task-a"]',(element,dates)=>{const format=new Intl.DateTimeFormat('es-AR',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});return {text:element.innerText,planned:element.querySelector('[data-gantt-planned]')?.getAttribute('aria-label'),dates:dates.map(value=>format.format(new Date(value+'T00:00:00Z')))};},[currentTask.startsOn,currentTask.endsOn]);
+  assert.ok(gantt.text.includes('50 % registrado')&&gantt.text.includes('Bloqueada'));assert.ok(gantt.dates.every(value=>gantt.planned?.includes(value)));assert.equal(scheduleReads.length,1);assert.ok((await text(page)).includes('2 de 2 tareas cargadas'));
+  const trace=await page.evaluate(()=>window.__loadedReceiptTrace);assert.ok(trace.length>0);assert.ok(trace.some(row=>row.progress===50));assert.ok(trace.every(row=>row.progress!==25),'The receipt snapshot must never be written to the already loaded schedule');
+ };
+ try{
+  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo de snapshots');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="project-preparation-title"]')?.getAttribute('aria-busy')==='false',{timeout:15000});assert.equal(preparationReads,1);
+  assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),0);assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),[original.startsOn,original.endsOn]);
+  await page.evaluate(()=>{window.__loadedReceiptTrace=[];window.__loadedReceiptObserver=new MutationObserver(()=>{const row=document.querySelector('[data-task-id="task-a"]');if(row)window.__loadedReceiptTrace.push({progress:Number(row.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')),dates:[...row.querySelectorAll('time')].map(time=>time.dateTime)});});window.__loadedReceiptObserver.observe(document.querySelector('section[aria-labelledby="schedule-title"]'),{subtree:true,childList:true,attributes:true});});
+  await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label="Operaciones de campo"]');await click(page,'Avance');
+  for(const [index,kind] of cases.entries()){
+   await page.waitForSelector('[data-field-proposal="proposal-snapshot-'+index+'"] button');await page.$eval('[data-field-proposal="proposal-snapshot-'+index+'"] button',element=>element.click());await page.waitForSelector('section[aria-labelledby="field-title"] form');await page.select('section[aria-labelledby="field-title"] form select','APPROVE');await page.type('section[aria-labelledby="field-title"] form textarea','Decisión sintética '+kind+'.');await click(page,'Guardar con recibo');
+   await waitText(page,'El resultado quedó sin confirmar.');assert.equal(posts.length,index+1);assert.equal((await page.$$('[data-confirmed-progress]')).length,0);await click(page,'Comprobar guardado');await waitText(page,mode==='invalid-snapshot'?'Decisión guardada con recibo. Consultá el estado de la propuesta.':'Avance aprobado con recibo.');
+   await page.waitForFunction(()=>document.querySelector('[data-task-id="task-a"] [role="progressbar"]')?.getAttribute('aria-valuenow')==='50');for(let i=0;i<80&&!heldRefresh;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.ok(heldRefresh,'Hold the field refresh to observe the schedule callback separately');await assertCurrentSchedule();assert.deepEqual(receiptQueries,posts.map(input=>input.operationId));assert.equal(posts.length,index+1);assert.equal(new Set(posts.map(input=>input.operationId)).size,posts.length);
+   assert.equal(await page.$eval('section[aria-labelledby="field-title"] details code',element=>element.textContent),recorded.outcome.receiptId);
+   if(mode==='invalid-snapshot'){
+    assert.equal((await page.$$('[data-confirmed-progress]')).length,0);assert.equal(await page.$$eval('button',elements=>elements.filter(element=>element.textContent==='Ver en el cronograma').length),0);const fieldText=await page.$eval('section[aria-labelledby="field-title"]',element=>element.innerText);assert.ok(!fieldText.includes('avance aprobado en este recibo')&&!fieldText.includes('Avance aprobado con recibo.'));
+   }else{
+    const receiptText=await page.$eval('[data-confirmed-progress="task-a"]',element=>element.textContent);assert.ok(receiptText.includes('25% de avance aprobado en este recibo')&&!receiptText.includes('50%')&&receiptText.includes('Esta tarea está cargada en el cronograma.'));assert.ok(await page.$eval('[data-confirmed-progress="task-a"] button',element=>element.disabled));
+   }
+   const refresh=heldRefresh;heldRefresh=null;await respond(refresh,field);await page.waitForFunction(()=>document.querySelector('nav[aria-label="Operaciones de campo"] button')?.disabled===false);await assertCurrentSchedule();assert.equal(posts.length,index+1);
+   if(mode==='loaded-current'){await page.focus('[data-confirmed-progress="task-a"] button');await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-a');assert.equal(scheduleReads.length,1);assert.equal(posts.length,1);assert.ok((await page.$eval('[data-confirmed-progress="task-a"]',element=>element.textContent)).includes('25% de avance aprobado en este recibo'));}
+   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await (await page.$('section[aria-labelledby="field-title"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+kind+'-'+width+'.png')});
+  }
+  await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+snapshotCase+'-schedule-'+width+'.png')});
+ }catch(error){await page.screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}
+ finally{if(heldRefresh&&!heldRefresh.isInterceptResolutionHandled())await heldRefresh.abort().catch(()=>{});await page.evaluate(()=>window.__loadedReceiptObserver?.disconnect()).catch(()=>{});await context.close();}
+}
 async function stalePaginationScenario(){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width:390,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode:'stale-pagination',width:390,message:error.message}));
@@ -746,6 +893,8 @@ try{
   }
   if([undefined,'gantt-volume'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])await ganttVolumeScenario(width);
  if([undefined,'confirmed-progress','confirmed-progress-planning'].includes(process.env.WORKSPACE_UI_SCENARIO)){const progressModes=process.env.WORKSPACE_UI_SCENARIO==='confirmed-progress-planning'?['planning']:['readback','callback','planning'];for(const width of [390,1280])for(const mode of progressModes)await confirmedProgressScenario(mode,width);if(process.env.WORKSPACE_UI_SCENARIO==='confirmed-progress')await stalePaginationScenario();}
+ if([undefined,'confirmed-progress','confirmed-progress-unloaded'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])for(const decision of ['APPROVE','REJECT'])await unloadedConfirmedProgressScenario(width,decision);
+ if([undefined,'confirmed-progress','confirmed-progress-snapshots'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])for(const mode of ['loaded-current','invalid-snapshot'])await receiptSnapshotCoverageScenario(width,mode);
  if(!process.env.WORKSPACE_UI_SCENARIO){
  for(const width of [320,390,768,1280])await scenario('success',width);
  for(const mode of ['readonly','denied','empty','draft-cancel','sdk-unavailable','unmount-token','uncertain','rollback','not-arrived','conflict','race'])await scenario(mode);
