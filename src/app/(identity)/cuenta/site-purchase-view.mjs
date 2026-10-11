@@ -8,8 +8,24 @@ const date=value=>typeof value==='string'&&value.length<=40&&Number.isFinite(Dat
 const fail=()=>{throw Object.assign(new Error('El resultado no permite confirmar esta compra. Conservamos su referencia.'),{code:'PURCHASE_RESULT_UNCONFIRMED'});};
 function context(value,expected){if(value?.scope!==expected.scope||value.projectId!==expected.projectId)throw Object.assign(new Error('La respuesta no corresponde a esta obra. Volvé a consultar con tu acceso vigente.'),{code:'WORKSPACE_CONTEXT_CHANGED'});}
 export const purchaseAccessDenied=error=>[401,403].includes(error?.status)||['WORKSPACE_CONTEXT_CHANGED','WORKSPACE_PROJECT_UNAVAILABLE'].includes(error?.code);
+const origins={'responsible-entry':'Registro de obra','participant-field':'Registro del participante','participant-whatsapp':'WhatsApp','participant-whatsapp-demo':'WhatsApp de demostración'};
+function requestContextValid(value){
+ if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join('|')!=='origin|requestedAt|taskId|taskTitle|workerId|workerName')return false;
+ if(value.workerId!==null&&!id(value.workerId)||value.taskId!==null&&!id(value.taskId))return false;
+ if(value.workerName!==null&&(!value.workerId||!text(value.workerName,160,1)||!value.workerName.trim())||value.taskTitle!==null&&(!value.taskId||!text(value.taskTitle,200,1)||!value.taskTitle.trim()))return false;
+ return (value.requestedAt===null||/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(value.requestedAt)&&date(value.requestedAt))&&(value.origin===null||Object.hasOwn(origins,value.origin));
+}
+export function siteRequestContextLines(value){
+ if(!requestContextValid(value))return [{label:'Contexto del pedido',value:'No disponible en este registro.'}];
+ const recorded=value.requestedAt;
+ return [{label:'Solicitante',value:value.workerId?value.workerName||'Nombre no disponible · '+value.workerId:'Sin participante vinculado'},
+  {label:'Tarea',value:value.taskId?value.taskTitle||'Tarea no disponible · '+value.taskId:'Sin tarea vinculada'},
+  {label:'Origen',value:origins[value.origin]||'No disponible'},
+  {label:'Registrado',value:recorded?recorded.slice(8,10)+'/'+recorded.slice(5,7)+'/'+recorded.slice(0,4)+' · '+recorded.slice(11,19)+' (hora del registro)':'Hora no disponible'}];
+}
 export function purchaseRecord(value){
  if(!value||!id(value.id)||!text(value.material,160,2)||!quantity(value.requestedQuantity)||!text(value.unit,40,1)||!text(value.sector,120,1)||!['OPEN','ACKNOWLEDGED','RESOLVED','REJECTED'].includes(value.requestState)||!text(value.revision,32,26)||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(value.revision))fail();
+ if(value.context!==undefined&&!requestContextValid(value.context))fail();
  const order=value.order;
  if(order!==null){
   if(!order||!['DRAFT','APPROVED','REJECTED','PARTIAL','RECEIVED','CANCELLED'].includes(order.state)||!text(order.supplier,160,2)||!quantity(order.quantity)||!money(order.unitPrice)||!money(order.total,true)||!['ARS','USD'].includes(order.currency)||!text(order.reference,100,2)||!quantity(order.received,true)||!Array.isArray(order.receipts)||order.receipts.length>100)fail();

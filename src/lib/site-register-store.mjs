@@ -20,6 +20,24 @@ export function publicSiteReport(row) {
     review:details.review ? {decision:details.review.decision,reason:details.review.reason,recordedAt:details.review.recordedAt}:null };
 }
 const publicReport=publicSiteReport;
+// Display context only: references retain their original IDs; labels are current,
+// and may be absent. This reader does not certify identity or grant access.
+export async function siteReportContexts(client,member,projectId,rows) {
+  if(!workspaceId(member?.organizationId)||!workspaceId(projectId)||!Array.isArray(rows)||rows.length>100)throw new WorkspaceError('SITE_RECORD_CONTEXT_INVALID',409);
+  const contexts=rows.map(row=>{
+    const s=row.metadata?.siteRegister;
+    if(s?.version!==1||[s.workerId,s.taskId].some(value=>value!=null&&!workspaceId(value)))throw new WorkspaceError('SITE_RECORD_CONTEXT_INVALID',409);
+    return {workerId:s.workerId||null,workerName:null,taskId:s.taskId||null,taskTitle:null,
+      requestedAt:typeof row.createdAt==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(row.createdAt)?row.createdAt:null,
+      origin:['responsible-entry','participant-field','participant-whatsapp','participant-whatsapp-demo'].includes(s.source)?s.source:null};
+  });
+  const workerIds=[...new Set(contexts.map(c=>c.workerId).filter(Boolean))],taskIds=[...new Set(contexts.map(c=>c.taskId).filter(Boolean))];
+  const names=workerIds.length?(await client.query(`SELECT w.id,w.name FROM public."Worker" w JOIN public."Project" p ON p.id=w."projectId" AND p."organizationId"=$2 WHERE w."projectId"=$1 AND w.id=ANY($3::text[])`,[projectId,member.organizationId,workerIds])).rows:[];
+  const titles=taskIds.length?(await client.query(`SELECT t.id,t.title FROM public."Task" t JOIN public."Project" p ON p.id=t."projectId" AND p."organizationId"=$2 WHERE t."projectId"=$1 AND t.id=ANY($3::text[])`,[projectId,member.organizationId,taskIds])).rows:[];
+  const label=(value,max)=>typeof value==='string'&&value.trim().length>0&&value.length<=max?value:null;
+  const workers=new Map(names.map(row=>[row.id,label(row.name,160)])),tasks=new Map(titles.map(row=>[row.id,label(row.title,200)]));
+  return contexts.map(c=>({...c,workerName:workers.get(c.workerId)||null,taskTitle:tasks.get(c.taskId)||null}));
+}
 // Both office entry and participant self-service use the same worksite register.
 export async function insertSiteReport(client,{id,projectId,actorId,type,title,description,severity,sector,material=null,quantity=null,unit=null,origin='responsible-entry',workerId=null,taskId=null,evidenceIds=[]}) {
   const metadata={siteRegister:{version:1,type,state:'OPEN',sector,submittedBy:actorId,
@@ -40,11 +58,11 @@ export function createSiteRegister({ workspace }) {
   };
   const findReceipt = async (client, member, id) => (await client.query(`SELECT id,metadata FROM public."AuditLog"
     WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='site.register.changed'`,[id,member.organizationId,member.actorId])).rows[0];
-  async function outcome(client,projectId,receipt,replayed) {
+  async function outcome(client,member,projectId,receipt,replayed) {
     const meta=receipt.metadata;if(meta?.projectId!==projectId)throw new WorkspaceError('SITE_RECEIPT_INTEGRITY',409);
     const result={saved:true,replayed,receiptId:receipt.id,kind:meta.kind};
     if(meta.kind==='PERSON')result.person=publicWorker(await readWorker(client,projectId,meta.entityId));
-    else if(meta.kind==='REPORT')result.report=publicReport(await readReport(client,projectId,meta.entityId));
+    else if(meta.kind==='REPORT'){const row=await readReport(client,projectId,meta.entityId);result.report=publicReport(row);if(row.metadata?.siteRegister?.type==='MATERIAL_REQUEST')result.report.context=(await siteReportContexts(client,member,projectId,[row]))[0];}
     else throw new WorkspaceError('SITE_RECEIPT_INTEGRITY',409);
     return result;
   }
@@ -59,10 +77,12 @@ export function createSiteRegister({ workspace }) {
           total=(await client.query('SELECT count(*)::int AS n FROM public."Worker" WHERE "projectId"=$1',[context.projectId])).rows[0].n;
         }else{
           const type=section==='ISSUES'?'ISSUE':'MATERIAL_REQUEST';
-          rows=(await client.query(`SELECT ${reportSelect} FROM public."Incident" WHERE "projectId"=$1 AND metadata->'siteRegister'->>'type'=$2 AND ($3::text IS NULL OR id>$3) ORDER BY id LIMIT 101`,[context.projectId,type,after])).rows.map(publicReport);
+          rows=(await client.query(`SELECT ${reportSelect} FROM public."Incident" WHERE "projectId"=$1 AND metadata->'siteRegister'->>'type'=$2 AND ($3::text IS NULL OR id>$3) ORDER BY id LIMIT 101`,[context.projectId,type,after])).rows;
           total=(await client.query(`SELECT count(*)::int AS n FROM public."Incident" WHERE "projectId"=$1 AND metadata->'siteRegister'->>'type'=$2`,[context.projectId,type])).rows[0].n;
         }
-        return {scope,projectId:context.projectId,section,records:rows.slice(0,100),total,nextCursor:rows.length>100?rows[99].id:null,
+        const visible=rows.slice(0,100),contexts=section==='MATERIALS'?await siteReportContexts(client,member,context.projectId,visible):null;
+        const records=section==='PEOPLE'?visible:visible.map((row,index)=>({...publicReport(row),...(contexts?{context:contexts[index]}:{})}));
+        return {scope,projectId:context.projectId,section,records,total,nextCursor:rows.length>100?rows[99].id:null,
           canManage:true,roles:SITE_ROLES,units:MATERIAL_UNITS,workerSelfServiceEnabled:false};
       });
     },
@@ -71,7 +91,7 @@ export function createSiteRegister({ workspace }) {
       return run(session,command,true,async(client,member,scope)=>{
         const id=siteOperationId(member.actorId,command),requestDigest=siteCommandDigest(command),p=command.payload;
         const previous=await findReceipt(client,member,id);
-        if(previous){if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('SITE_OPERATION_CONFLICT',409);return {scope,...await outcome(client,command.projectId,previous,true)};}
+        if(previous){if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('SITE_OPERATION_CONFLICT',409);return {scope,...await outcome(client,member,command.projectId,previous,true)};}
         let kind,entityId,audit;
         if(command.action==='ADD_PERSON'){
           const duplicate=await client.query(`SELECT id FROM public."Worker" WHERE "projectId"=$1 AND regexp_replace(phone,'[^0-9]','','g')=$2 LIMIT 1`,[command.projectId,p.phone.slice(1)]);
@@ -111,14 +131,14 @@ export function createSiteRegister({ workspace }) {
           JSON.stringify({version:1,projectId:command.projectId,command:command.action,requestDigest,kind,entityId,details:audit})]);
         const recorded=await findReceipt(client,member,id);
         if(!recorded)throw new WorkspaceError('SITE_WRITE_UNCONFIRMED',503);
-        return {scope,...await outcome(client,command.projectId,recorded,false)};
+        return {scope,...await outcome(client,member,command.projectId,recorded,false)};
       });
     },
     status(session,context){
       if(!operationId(context.operationId))throw new WorkspaceError('SITE_INPUT_INVALID');
       return run(session,context,false,async(client,member,scope)=>{
         const receipt=await findReceipt(client,member,siteOperationId(member.actorId,context));
-        return receipt?{scope,state:'RECORDED',...await outcome(client,context.projectId,receipt,true)}:{scope,state:'NOT_OBSERVED',definitive:false};
+        return receipt?{scope,state:'RECORDED',...await outcome(client,member,context.projectId,receipt,true)}:{scope,state:'NOT_OBSERVED',definitive:false};
       });
     },
   };

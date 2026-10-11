@@ -68,7 +68,7 @@ test('HTTP rejects cross-origin and duplicate queries before touching the store'
 });
 
 import {createSitePurchases} from '../src/lib/site-purchase-store.mjs';
-import {purchaseRecord,purchaseSnapshot,purchaseOutcome,purchaseRecordedOutcome,purchaseCanContinue} from '../src/app/(identity)/cuenta/site-purchase-view.mjs';
+import {purchaseRecord,purchaseSnapshot,purchaseOutcome,purchaseRecordedOutcome,purchaseCanContinue,siteRequestContextLines} from '../src/app/(identity)/cuenta/site-purchase-view.mjs';
 import {createWorkspaceRecoveryJournal,recoveryQuery,recoveryResult} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
 import {createWorkspaceRequestLifecycle} from '../src/app/(identity)/cuenta/workspace-request-lifecycle.mjs';
 function purchaseResultFixture(input=draft()){
@@ -129,4 +129,28 @@ test('purchase directed GET rejects ambiguous or invalid keys before the canonic
  let calls=0;const h=createSitePurchaseHandlers({verify:async()=>({authenticated:true,verification:'clerk-production-jwt',userId:'user_Test',organizationId:'org_Test',organizationRole:'org:admin'}),store:{list:async(_session,context)=>{calls++;assert.equal(context.requestId,'request-a');return {scope,projectId:context.projectId,records:[],total:0,nextCursor:null};},status:()=>{throw new Error('Unexpected receipt read');}}});
  for(const extra of ['requestId=../x','requestId=request-a&after=request-b','requestId=request-a&operationId='+randomUUID(),'requestId=request-a&requestId=request-a']){const response=await h.GET(new Request('https://obrasaas.com/api/identity/site-purchases?'+new URLSearchParams({scope,projectId:'project-a'})+'&'+extra));assert.equal(response.status,400);assert.match(response.headers.get('cache-control'),/no-store/);}
  assert.equal(calls,0);const response=await h.GET(new Request('https://obrasaas.com/api/identity/site-purchases?'+new URLSearchParams({scope,projectId:'project-a',requestId:'request-a'})));assert.equal(response.status,200);assert.equal(calls,1);
+});
+
+import {siteReportContexts} from '../src/lib/site-register-store.mjs';
+test('material request labels use one bounded canonical lookup per referenced entity and keep source metadata unchanged',async()=>{
+ const rows=[{createdAt:'2026-10-01T08:23:12.123456',metadata:{siteRegister:{version:1,workerId:'worker-a',taskId:'task-a',source:'participant-whatsapp'}}},{createdAt:'2026-10-01T08:24:12.123456',metadata:{siteRegister:{version:1,workerId:'worker-a',taskId:'task-missing',source:'participant-whatsapp'}}}],before=structuredClone(rows),calls=[];
+ const client={query:async(sql,params)=>{calls.push({sql,params});assert.equal(params[0],'project-a');assert.equal(params[1],'company-a');assert.match(sql,/p\."organizationId"=\$2/);assert.match(sql,/"projectId"=\$1/);if(sql.includes('FROM public."Worker"')){assert.deepEqual(params[2],['worker-a']);return {rows:[{id:'worker-a',name:'Persona de la ficha vigente'}]};}assert.ok(sql.includes('FROM public."Task"'));assert.deepEqual(params[2],['task-a','task-missing']);return {rows:[{id:'task-a',title:'Tarea de esta obra'}]};}};
+ const details=await siteReportContexts(client,{organizationId:'company-a'},'project-a',rows);assert.equal(calls.length,2);assert.deepEqual(rows,before);assert.equal(details[0].workerName,'Persona de la ficha vigente');assert.equal(details[0].taskTitle,'Tarea de esta obra');assert.equal(details[1].taskId,'task-missing');assert.equal(details[1].taskTitle,null);assert.deepEqual(Object.keys(details[0]).sort(),['origin','requestedAt','taskId','taskTitle','workerId','workerName']);
+ const noRefs=await siteReportContexts({query:()=>{throw new Error('No label SQL without references');}},{organizationId:'company-a'},'project-a',[{metadata:{siteRegister:{version:1,source:'responsible-entry'}}}]);assert.deepEqual(noRefs[0],{workerId:null,workerName:null,taskId:null,taskTitle:null,requestedAt:null,origin:'responsible-entry'});
+ const unknown=await siteReportContexts({query:()=>{throw new Error('No refs');}},{organizationId:'company-a'},'project-a',[{metadata:{siteRegister:{version:1,source:'account-field'}}}]);assert.equal(unknown[0].origin,null);assert.ok(siteRequestContextLines(unknown[0]).some(line=>line.label==='Origen'&&line.value==='No disponible'));
+ await assert.rejects(siteReportContexts(client,{organizationId:'company-a'},'project-a',[{metadata:{siteRegister:{version:1,workerId:'../foreign'}}}]),{code:'SITE_RECORD_CONTEXT_INVALID'});assert.equal(calls.length,2);
+});
+test('public purchase context rejects enrichment that cannot match a source reference and reports missing labels truthfully',()=>{
+ const input=draft(),result=purchaseResultFixture(input);result.record.context={workerId:'worker-missing',workerName:null,taskId:'task-missing',taskTitle:null,requestedAt:'2026-10-01T08:23:12.123456',origin:'participant-whatsapp'};assert.equal(purchaseOutcome(result,input),result);assert.ok(siteRequestContextLines(result.record.context).some(line=>line.value==='Nombre no disponible · worker-missing'));assert.ok(siteRequestContextLines(result.record.context).some(line=>line.value==='Tarea no disponible · task-missing'));
+ for(const patch of [{workerId:null,workerName:'Unproven name'},{taskId:null,taskTitle:'Unproven title'},{origin:'invented-provider'},{requestedAt:'yesterday'},{phone:'+5491100001111'}])assert.throws(()=>purchaseOutcome({...result,record:{...result.record,context:{...result.record.context,...patch}}},input),{code:'PURCHASE_RESULT_UNCONFIRMED'});
+ const old=purchaseResultFixture(input);assert.equal(purchaseOutcome(old,input),old);assert.deepEqual(siteRequestContextLines(undefined),[{label:'Contexto del pedido',value:'No disponible en este registro.'}]);
+});
+test('malformed context cannot acknowledge a purchase POST and its authentic GET clears only the same pending reference',async()=>{
+ const values=new Map(),storage={get length(){return values.size;},key:i=>[...values.keys()][i]||null,getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,String(v)),removeItem:k=>values.delete(k)};
+ const journal=createWorkspaceRecoveryJournal({getStorage:()=>storage,withLock:(_name,_signal,callback)=>callback()}),input=draft(),recorded=purchaseResultFixture(input),methods=[];
+ recorded.record.context={workerId:'worker-a',workerName:'Ficha de ensayo',taskId:'task-a',taskTitle:'Tarea de ensayo',requestedAt:'2026-10-01T08:23:12.123456',origin:'participant-whatsapp'};
+ const lifecycle=createWorkspaceRequestLifecycle(async()=>'synthetic-token',{journal,fetchImpl:async(_url,options)=>{methods.push(options.method||'GET');return Response.json(options.method==='POST'?{...recorded,record:{...recorded.record,context:{...recorded.record.context,workerId:null}}}:recorded);}});
+ await assert.rejects(lifecycle.request('/api/identity/site-purchases',{method:'POST',body:JSON.stringify(input)},async response=>purchaseRecordedOutcome(await response.json(),input)),{code:'PURCHASE_RESULT_UNCONFIRMED'});
+ const [entry]=await journal.list(scope);assert.equal(entry.operationId,input.operationId);assert.deepEqual(Object.keys(entry).sort(),['createdAt','operationId','projectId','resource','scope','version']);assert.deepEqual(methods,['POST']);assert.ok(!JSON.stringify(entry).includes('Ficha de ensayo'));
+ assert.equal((await lifecycle.request(recoveryQuery(entry),{},async response=>purchaseOutcome(await response.json(),entry))).receipt.id,recorded.receipt.id);assert.deepEqual(methods,['POST','GET']);assert.equal((await journal.list(scope)).length,0);lifecycle.abort();
 });
