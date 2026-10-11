@@ -227,6 +227,7 @@ function routingFixture(message,{promptChange=()=>{},workerChange=()=>{},request
   if(sql==='BEGIN'||sql==='COMMIT'||sql==='ROLLBACK'||sql.startsWith('SET LOCAL')||sql.startsWith('SELECT pg_advisory'))return rows([]);
   if(sql==='SELECT clock_timestamp() AS now')return rows([{now:new Date()}]);
   if(sql.includes('to_regclass'))return rows([{present:true}]);
+  if(sql.startsWith('SELECT\n  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('))return rows([{columns:[],keys:[],indexes:[],triggers:[]}]);
   if(sql.includes('count(*)::int AS count FROM information_schema.columns'))return rows([{count:1}]);
   if(sql.includes('FROM public."WhatsAppCompanySchema"'))return rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:digest({columns:[],keys:[],indexes:[],triggers:[]})}]);
   if(sql.includes('SELECT conname,convalidated'))return rows(args[0].map(conname=>({conname,convalidated:true})));
@@ -317,6 +318,7 @@ function companyReadFixture({ready=true,connections=[]}={}){
  const query=async(sql,args=[])=>{
   queries.push({sql,args});if(sql==='SELECT clock_timestamp() AS now')return rows([{now:new Date(supportClock)}]);
   if(sql.includes('to_regclass'))return rows([{present:ready}]);
+  if(sql.startsWith('SELECT\n  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('))return rows([{columns:[],keys:[],indexes:[],triggers:[]}]);
   if(sql.includes('count(*)::int AS count FROM information_schema.columns'))return rows([{count:1}]);
   if(sql.includes('FROM public."WhatsAppCompanySchema"'))return rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:digest({columns:[],keys:[],indexes:[],triggers:[]})}]);
   if(sql.includes('SELECT conname,convalidated'))return rows(args[0].map(conname=>({conname,convalidated:true})));

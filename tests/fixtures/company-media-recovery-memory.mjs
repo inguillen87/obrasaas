@@ -45,6 +45,7 @@ export function companyMediaRecoveryMemory(){
   else if(sql.startsWith('SET LOCAL'))result=rows([]);
   else if(sql==='SELECT clock_timestamp() AS now')result=rows([{now:new Date(clock)}]);
   else if(sql.startsWith('SELECT to_regclass'))result=rows([{present:fixture.schemaReady}]);
+  else if(sql.startsWith('SELECT\n  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('))result=rows([{columns:[],keys:[],indexes:[],triggers:[]}]);
   else if(sql.includes('FROM information_schema.columns'))result=rows(sql.includes("column_name='catalogFingerprint'")?[{count:1}]:[]);
   else if(sql.includes('FROM public."WhatsAppCompanySchema"'))result=rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:digest({columns:[],keys:[],indexes:[],triggers:[]})}]);
   else if(sql.includes('FROM pg_constraint')&&sql.includes('conname=ANY'))result=rows(args[0].map(conname=>({conname,convalidated:true})));

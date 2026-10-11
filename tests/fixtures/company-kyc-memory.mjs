@@ -35,6 +35,7 @@ export async function companyKycMemoryFixture({active=false,grantLifetimeMs=null
  const query=async(sql,args=[])=>{
   control.sql.push(sql);if(control.hook)await control.hook(sql,args);
   if(sql.includes('to_regclass'))return rows([{present:control.schema}]);
+  if(sql.startsWith('SELECT\n  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('))return rows([{columns:[],keys:[],indexes:[],triggers:[]}]);
   if(sql.includes('information_schema.columns'))return sql.includes("column_name='catalogFingerprint'")?rows([{count:1}]):rows([]);
   if(sql.includes('FROM public."WhatsAppCompanySchema"'))return rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint}]);
   if(sql.startsWith('SELECT conname,convalidated'))return rows(args[0].map(conname=>({conname,convalidated:true})));

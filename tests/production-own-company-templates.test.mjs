@@ -19,6 +19,7 @@ async function fixture(options={}){
  f.client.query=async(sqlText,args=[])=>{
   sql.push({sql:sqlText,args});
   if(sqlText.includes("to_regclass('public.\"WhatsAppCompanySchema\"')"))return rows([{present:true}]);
+  if(sqlText.startsWith('SELECT\n  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('))return rows([{columns:[],keys:[],indexes:[],triggers:[]}]);
   if(sqlText.includes('information_schema.columns'))return rows(sqlText.includes("column_name='catalogFingerprint'")?[{count:1}]:[]);
   if(sqlText.includes('FROM public."WhatsAppCompanySchema"'))return rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:digest({columns:[],keys:[],indexes:[],triggers:[]})}]);
   if(sqlText.includes('FROM pg_constraint')&&sqlText.includes('conname=ANY'))return rows(args[0].map(conname=>({conname,convalidated:true})));

@@ -37,6 +37,7 @@ async function storedFixture({expired=true}={}){
    // New command UUIDs cannot replay the original activation receipt.
    result=rows([]);
   }else if(sql.includes('to_regclass'))result=rows([{present:f.schemaReady}]);
+  else if(sql.startsWith('SELECT\n  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('))result=rows([{columns:[],keys:[],indexes:[],triggers:[]}]);
   else if(sql.includes('information_schema.columns'))result=rows(sql.includes("column_name='catalogFingerprint'")?[{count:1}]:[]);
   else if(sql.includes('FROM public."WhatsAppCompanySchema"'))result=rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:digest({columns:[],keys:[],indexes:[],triggers:[]})}]);
   else if(sql.includes('FROM pg_constraint WHERE'))result=rows(args[0].map(conname=>({conname,convalidated:true})));

@@ -136,6 +136,7 @@ function companyPresentDiscoveryFixture(){
   if(sql.startsWith('SELECT id FROM public."Organization"')){f.calls.push({sql,args});return {rows:[{id:'org-a'}]};}
   let result;
   if(sql.includes('to_regclass'))result=rows([{present:true}]);
+  else if(sql.startsWith('SELECT\n  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('))result=rows([{columns:[],keys:[],indexes:[],triggers:[]}]);
   else if(sql.includes('information_schema.columns'))result=sql.includes("column_name='catalogFingerprint'")?rows([{count:1}]):rows([]);
   else if(sql.includes('FROM public."WhatsAppCompanySchema"'))result=rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:fingerprint}]);
   else if(sql.startsWith('SELECT conname,convalidated'))result=rows(args[0].map(conname=>({conname,convalidated:true})));
@@ -173,7 +174,7 @@ test('completed status discovery locks the own assignment and Worker before any 
  assert.deepEqual(pref,{intent:f.intent,admissionDigest:metaCustomerContentDigest(f.state.admission)});
  const own=f.calls.findIndex(call=>call.sql.startsWith('SELECT id,"clerkUserId"')&&call.args[0]==='person'),assignment=f.calls.findIndex(call=>call.sql.startsWith('SELECT id FROM public."ProjectMembership"')),worker=f.calls.findIndex(call=>call.sql.startsWith('SELECT id,"projectId",active,metadata'));
  const projects=f.calls.map((call,index)=>({call,index})).filter(({call})=>call.sql.startsWith('SELECT id FROM public."Project"')&&call.sql.includes('FOR UPDATE')),channel=f.calls.findIndex(call=>call.sql.includes('FROM public."WhatsAppConnection"')&&call.sql.includes('FOR SHARE'));
- assert.deepEqual(projects.map(({call})=>call.args[0]),['project-a','project-b']);assert.ok(own>=0&&projects.every(({index})=>index>own&&index<assignment)&&assignment>own&&worker>assignment&&channel>worker);assert.match(f.calls[worker].sql,/FOR UPDATE/);assert.ok(f.calls.every(call=>call.sql.startsWith('SELECT ')));
+ assert.deepEqual(projects.map(({call})=>call.args[0]),['project-a','project-b']);assert.ok(own>=0&&projects.every(({index})=>index>own&&index<assignment)&&assignment>own&&worker>assignment&&channel>worker);assert.match(f.calls[worker].sql,/FOR UPDATE/);assert.ok(f.calls.every(call=>/^SELECT\s/.test(call.sql)));
 });
 test('a changed current account during completed prelock is denied without capture or a later principal lock',async()=>{
  const f=companyPresentDiscoveryFixture();f.state.reactiveOnboarding={kind:'KYC_START'};f.participant.kycChatChallenge={id:'kyc_chat_'+'2'.repeat(32),status:'COMPLETED'};
@@ -183,7 +184,7 @@ test('a changed current account during completed prelock is denied without captu
   return original(sql,args);
  };
  await assert.rejects(prelockReactiveOnboarding(f.client,f.connection,f.state),{code:'EMPLOYEE_INTAKE_REVOKED'});
- assert.ok(f.calls.every(call=>call.sql.startsWith('SELECT ')));const worker=f.calls.findIndex(call=>call.sql.startsWith('SELECT id,"projectId",active,metadata'));assert.ok(worker>=0);assert.equal(f.calls.length,worker+1);
+ assert.ok(f.calls.every(call=>/^SELECT\s/.test(call.sql)));const worker=f.calls.findIndex(call=>call.sql.startsWith('SELECT id,"projectId",active,metadata'));assert.ok(worker>=0);assert.equal(f.calls.length,worker+1);
 });
 test('an incomplete capture stays outside the status reader and retains its original handoff',async()=>{
  const f=activeDiscoveryFixture();f.state.reactiveOnboarding={kind:'KYC_START'};f.participant.onboardingDelivery={...f.participant.onboardingDelivery,state:'CANCELED',code:'PARTICIPANT_ONBOARDING_REACTIVE_HANDOFF'};f.participant.kycChatChallenge={id:'kyc_chat_'+'2'.repeat(32),status:'CLAIMED'};
