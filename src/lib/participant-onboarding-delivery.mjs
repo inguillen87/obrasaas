@@ -80,7 +80,7 @@ export function createParticipantOnboardingDelivery({connect,provider,environmen
      if(template.stamp!==inspect.template.stamp)fail('PARTICIPANT_ONBOARDING_TEMPLATE_CHANGED');
      const stored=await event(client,inspect.id,r.connection.projectId);
      if(stored){if(stored.outcome?.state!=='ONBOARDING_PENDING')return {done:await projectStatus(client,intent,{state:stored.outcome?.state||'SEND_UNKNOWN',providerStatus:stored.outcome?.providerStatus||null,nextCheckAt:null})};return {id:stored.id,request:decode(stored,r,intent,environment),template};}
-     const operationId=metaKycOperationId(inspect.id),prepared=await prepareChallenge(client,r.member,r.project,{workerId:r.worker.id,revision:r.worker.revision,operationId});
+     const operationId=metaKycOperationId(inspect.id),prepared=await prepareChallenge(client,r.member,r.project,{workerId:r.worker.id,revision:r.worker.revision,operationId},{environment});
      if(!prepared.code||prepared.codeUnavailable)fail();
      const updated=await worker(client,intent.targetProjectId,intent.workerId),challenge=updated?.metadata?.participant?.kycChatChallenge;
      if(!challenge||challenge.status!=='PENDING'||challenge.codeDigest!==metaKycChallengeDigest(prepared.code))fail();
