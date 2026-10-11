@@ -93,8 +93,8 @@ export async function companyChannelSchemaReady(client) {
   (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('conname',conname,'convalidated',convalidated) ORDER BY conname),'[]'::json) FROM pg_constraint WHERE connamespace='public'::regnamespace AND conname=ANY($2::text[])) AS catalog,
   (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('relname',c.relname,'indisvalid',i.indisvalid,'indisready',i.indisready,'indisunique',i.indisunique) ORDER BY c.relname),'[]'::json) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relnamespace='public'::regnamespace AND c.relname=ANY($3::text[])) AS indexes,
   (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('tgname',tgname,'tgenabled',tgenabled) ORDER BY tgname),'[]'::json) FROM pg_trigger WHERE tgname=ANY($4::text[]) AND NOT tgisinternal) AS triggers,
-  JSON_BUILD_OBJECT('columns',current_catalog.columns,'keys',current_catalog.keys,'indexes',current_catalog.indexes,'triggers',current_catalog.triggers) AS "currentCatalog"
-  FROM public."WhatsAppCompanySchema" CROSS JOIN LATERAL (${catalogSelect}) AS current_catalog WHERE id=1`,[catalogTables,constraints,['company_waba_owner_key','company_assignment_active_project_key'],['company_event_immutable','company_channel_immutable','company_seed_legacy']])).rows[0];
+  JSON_BUILD_OBJECT('columns',catalog_snapshot.columns,'keys',catalog_snapshot.keys,'indexes',catalog_snapshot.indexes,'triggers',catalog_snapshot.triggers) AS "currentCatalog"
+  FROM public."WhatsAppCompanySchema" CROSS JOIN LATERAL (${catalogSelect}) AS catalog_snapshot WHERE id=1`,[catalogTables,constraints,['company_waba_owner_key','company_assignment_active_project_key'],['company_event_immutable','company_channel_immutable','company_seed_legacy']])).rows[0];
  if(marker?.version!==1||marker.contract!==COMPANY_CHANNEL_SCHEMA_CONTRACT)return false;
  const {catalog,indexes,triggers,currentCatalog}=marker;
  return catalog.length===constraints.length&&catalog.every(row=>row.convalidated)&&indexes.length===2&&indexes.every(row=>row.indisvalid&&row.indisready&&row.indisunique)&&triggers.length===3&&triggers.every(row=>row.tgenabled==='O')&&marker.catalogFingerprint===catalogDigest(currentCatalog);
