@@ -56,7 +56,7 @@ export function participantKycChatCapabilities(row,canManage,now){
  const pending=['PENDING','CLAIMED'].includes(value.status);
  if(value.status==='CLAIMED'&&value.conversationExpiresAt===null||value.status==='PENDING'&&value.conversationExpiresAt!==null||
     value.canPrepare&&value.canCancel||value.canPrepare&&pending||
-    value.canCancel&&(!pending||value.step==='FINALIZING'||value.recoveryRequired===true)||value.status==='COMPLETED'&&(value.canPrepare||value.canCancel))return unknown;
+    value.canCancel&&(!pending||value.step==='FINALIZING'||value.recoveryRequired===true)||value.status==='COMPLETED'&&(value.canCancel||value.canPrepare&&row.kyc?.status!=='REJECTED'))return unknown;
  return {observed:true,canPrepare:eligible&&value.canPrepare,canCancel:cancellable&&value.canCancel,challenge:{...value}};
 }
 

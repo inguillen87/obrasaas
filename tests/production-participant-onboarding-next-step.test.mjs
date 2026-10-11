@@ -136,3 +136,16 @@ for(const state of ['BACK_CONSENT','BACK'])test('current WhatsApp '+state+' capt
  const value=manager(),row=value.snapshot.records[0];row.status='INVITED';row.kyc={status:'NOT_SUBMITTED',images:[]};row.kycChatChallenge={id:'challenge-a',status:'CLAIMED',expiresAt:'2026-10-07T01:30:00.000Z',conversationExpiresAt:'2026-10-07T01:00:00.000Z',expired:false,canPrepare:false,canCancel:true,blockedCode:null,step:state,recoveryRequired:false};
  const capability=participantKycChatCapabilities(row,true,now);assert.equal(capability.observed,true);assert.equal(capability.canPrepare,false);assert.equal(capability.canCancel,true);row.kycChatChallenge.canCancel=false;assert.equal(participantKycChatCapabilities(row,true,now).canCancel,false);assert.equal(participantKycChatCapabilities(row,false,now).canCancel,false);assert.equal(row.permissions.attendance,true);
 });
+
+
+test('observed rejected completed KYC offers a fresh explicit manager preparation without cancellation, bank or field approval',()=>{
+ const input=manager(),row=input.snapshot.records[0];row.kyc.status='REJECTED';
+ const completed={id:'challenge-a',status:'COMPLETED',expiresAt:'2026-10-07T01:30:00.000Z',conversationExpiresAt:null,expired:false,canPrepare:true,canCancel:false,blockedCode:'PARTICIPANT_KYC_ALREADY_SUBMITTED',step:null,recoveryRequired:false};row.kycChatChallenge={...completed};
+ const before=JSON.stringify(input),value=participantKycChatCapabilities(row,true,now);assert.equal(value.observed,true);assert.equal(value.canPrepare,true);assert.equal(value.canCancel,false);assert.equal(action(input),'PREPARE_KYC_CHAT');assert.equal(participantOnboardingNextStep(input).optionalBank,null);assert.equal(JSON.stringify(input),before);
+ row.self=true;assert.equal(action(input),'SUBMIT_KYC');row.self=false;input.snapshot.canManage=false;input.snapshot.canInvite=false;assert.equal(participantKycChatCapabilities(row,false,now).canPrepare,false);assert.equal(participantOnboardingNextStep(input).primary,null);
+ input.snapshot.canManage=true;input.snapshot.canInvite=true;input.snapshot.scope='b'.repeat(64);assert.equal(action(input),'CONSULT_ACCESS');input.snapshot.scope=input.context.scope;
+ for(const status of ['NOT_SUBMITTED','PENDING_ACCOUNT_CLAIM','PENDING_REVIEW','APPROVED']){row.kyc.status=status;row.kycChatChallenge={...completed};assert.equal(participantKycChatCapabilities(row,true,now).canPrepare,false,status);}
+ row.kyc.status='REJECTED';row.kycChatChallenge={...completed,canPrepare:false,canCancel:true};assert.equal(participantKycChatCapabilities(row,true,now).observed,false);
+ for(const status of ['PENDING','CLAIMED']){row.kycChatChallenge={...completed,status,...(status==='CLAIMED'?{conversationExpiresAt:'2026-10-07T01:00:00.000Z'}:{})};assert.equal(participantKycChatCapabilities(row,true,now).observed,false,status);}
+ row.kycChatChallenge={...completed};row.active=false;assert.equal(participantKycChatCapabilities(row,true,now).canPrepare,false);row.active=true;row.status='REVOKED';assert.equal(participantKycChatCapabilities(row,true,now).canPrepare,false);
+});
