@@ -18,7 +18,7 @@ export async function prepareMetaKycChallenge(client,member,project,input,{envir
  if(canonicalProject.length!==1)fail('WORKSPACE_PROJECT_UNAVAILABLE',404);
  const key='meta_kyc_challenge_'+digest([member.actorId,project.id,input.operationId]),requestDigest=digest([project.id,input.workerId,input.revision]);
  const previous=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND action='participant.kyc_chat.prepared'`,[key,member.organizationId,member.actorId])).rows[0];
- if(previous){if(previous.metadata.requestDigest!==requestDigest)fail('PARTICIPANT_OPERATION_CONFLICT');return {saved:true,kind:'PREPARE_KYC_CHAT',receiptId:key,codeUnavailable:true,expiresAt:previous.metadata.expiresAt};}
+ if(previous){if(previous.metadata.requestDigest!==requestDigest)fail('PARTICIPANT_OPERATION_CONFLICT');return {saved:true,kind:'PREPARE_KYC_CHAT',receiptId:key,codeUnavailable:true,expiresAt:previous.metadata.expiresAt,...(/^kyc_chat_[a-f0-9]{32}$/.test(previous.metadata.challengeId||'')?{challengeId:previous.metadata.challengeId}:{})};}
  const row=(await client.query(`SELECT id,"projectId",phone,active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Worker" WHERE id=$1 AND "projectId"=$2 FOR UPDATE`,[input.workerId,project.id])).rows[0];
  if(!row?.active||row.metadata?.siteRegister?.version!==1||!['INVITED','ACTIVE'].includes(row.metadata?.participant?.status)||row.revision!==input.revision||!/^\+[1-9]\d{7,14}$/.test(row.phone||''))fail('META_KYC_CHALLENGE_PARTICIPANT_REQUIRED');
  if(['PENDING_REVIEW','PENDING_ACCOUNT_CLAIM','APPROVED'].includes(row.metadata.participant.kyc?.status))fail('PARTICIPANT_KYC_ALREADY_SUBMITTED');
@@ -38,7 +38,7 @@ export async function prepareMetaKycChallenge(client,member,project,input,{envir
  await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[row.id,project.id,JSON.stringify(metadata)]);
  await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.kyc_chat.prepared','Worker',$4,$5::jsonb)`,[key,member.organizationId,member.actorId,row.id,JSON.stringify({version:1,projectId:project.id,requestDigest,captureImageSetVersion:2,challengeId:challenge.id,expiresAt:challenge.expiresAt,identityCertified:false,permissionsGranted:false})]);
  await fencePreparedCompanyKycChallenge(client,member,project.id,{environment});
- return {saved:true,kind:'PREPARE_KYC_CHAT',receiptId:key,captureImageSetVersion:2,code,codeUnavailable:false,expiresAt:challenge.expiresAt};
+ return {saved:true,kind:'PREPARE_KYC_CHAT',receiptId:key,challengeId:challenge.id,captureImageSetVersion:2,code,codeUnavailable:false,expiresAt:challenge.expiresAt};
 }
 
 Object.defineProperties(prepareMetaKycChallenge,{beforeProject:{value:prepareCompanyKycProjects},afterWrite:{value:fencePreparedCompanyKycChallenge}});
