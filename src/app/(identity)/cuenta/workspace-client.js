@@ -31,15 +31,15 @@ import {PortfolioOverviewPanel} from './portfolio-overview-panel';
 import {OfficeReviewPanel,OfficeReviewAdminPanel} from './office-review-panel';
 import {ProjectCreationPanel} from './project-creation-panel';
 import {projectCreationReceiptOutcome} from './workspace-recovery-journal.mjs';
-import {loadedScheduleOverview,mergeLoadedTasks,refreshLoadedTasks,updateLoadedTask} from './schedule-workbench.mjs';
+import {calendarDay,loadedScheduleOverview,mergeLoadedTasks,refreshLoadedTasks,updateLoadedTask} from './schedule-workbench.mjs';
 const endpoint='/api/identity/workspace';
-const messages={WORKSPACE_ORGANIZATION_REQUIRED:'Elegí una organización desde tu cuenta para consultar las obras asignadas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Todavía no podemos confirmar tu pertenencia vigente a esta empresa en ObraSaaS. Si ya aceptaste la invitación, pedile al administrador que habilite tu rol desde Permisos de las cuentas en la empresa. Cuando lo confirme, usá Actualizar en Mis obras.',WORKSPACE_PROJECT_UNAVAILABLE:'Esta obra no está disponible con tus permisos actuales.',WORKSPACE_CONTEXT_CHANGED:'Cambió tu organización o tu permiso. Volvé a cargar las obras antes de continuar.',SCHEDULE_REVISION_CHANGED:'Otra persona modificó la tarea. Actualizá el cronograma antes de volver a planificar.',SCHEDULE_PERMISSION_REQUIRED:'Tu rol actual no puede modificar la planificación.',SCHEDULE_UNCHANGED:'Las fechas son iguales a las registradas. No se hizo ningún cambio.',SCHEDULE_OPERATION_CONFLICT:'Este intento ya pertenece a otra solicitud. Comprobá su recibo antes de continuar.',SESSION_REQUIRED:'Tu sesión venció. Volvé a ingresar.',SCHEDULE_DATES_INVALID:'Revisá el inicio y el fin. El fin no puede ser anterior al inicio.',SCHEDULE_REASON_REQUIRED:'Explicá brevemente el motivo del cambio.'};
+const messages={WORKSPACE_ORGANIZATION_REQUIRED:'Elegí una organización desde tu cuenta para consultar las obras asignadas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Todavía no podemos confirmar tu pertenencia vigente a esta empresa en ObraSaaS. Si ya aceptaste la invitación, pedile al administrador que habilite tu rol desde Permisos de las cuentas en la empresa. Cuando lo confirme, usá Actualizar en Mis obras.',WORKSPACE_PROJECT_UNAVAILABLE:'Esta obra no está disponible con tus permisos actuales.',WORKSPACE_CONTEXT_CHANGED:'Cambió tu organización o tu permiso. Volvé a cargar las obras antes de continuar.',SCHEDULE_REVISION_CHANGED:'Otra persona modificó la tarea. Consultá su revisión actual sin descartar tus fechas ni el motivo.',SCHEDULE_PERMISSION_REQUIRED:'Tu rol actual no puede modificar la planificación.',SCHEDULE_UNCHANGED:'Las fechas son iguales a las registradas. No se hizo ningún cambio.',SCHEDULE_OPERATION_CONFLICT:'Este intento ya pertenece a otra solicitud. Comprobá su recibo antes de continuar.',SESSION_REQUIRED:'Tu sesión venció. Volvé a ingresar.',SCHEDULE_DATES_INVALID:'Revisá el inicio y el fin. El fin no puede ser anterior al inicio.',SCHEDULE_REASON_REQUIRED:'Explicá brevemente el motivo del cambio.'};
 const describe=code=>code==='PARTICIPANT_KYC_REVIEW_REQUIRED'?'Tu identidad necesita una revisión vigente para habilitar esta obra. Podés presentar o consultar tu documentación privada.':messages[code]||'No se pudo confirmar la operación. No se reemplazaron los datos por ejemplos.';
 async function requestWorkspace(transport,query='',options={}){
  return transport(endpoint+query,options,async response=>{
   if(!response.ok){
    const error=new Error(describe(response.status===401?'SESSION_REQUIRED':response.status===403?'WORKSPACE_PROJECT_UNAVAILABLE':null));error.status=response.status;
-   if(response.headers.get('content-type')?.includes('application/json'))try{const body=await response.json();if(typeof body?.code==='string'){error.code=body.code;error.message=describe(body.code);}}catch{}
+   if(response.headers.get('content-type')?.includes('application/json'))try{const body=await response.json();if(typeof body?.code==='string'){error.code=body.code;error.message=describe(body.code);error.scheduleRevisionRejected=response.status===409&&options.method==='POST'&&query===''&&body.saved===false&&!Array.isArray(body)&&Object.keys(body).sort().join('|')==='code|saved'&&body.code==='SCHEDULE_REVISION_CHANGED';}}catch{}
    throw error;
   }
   try{return await response.json();}catch(error){if(error.name==='AbortError'||error.name==='TimeoutError')throw error;throw new Error('No pudimos leer la respuesta de la obra. Volvé a consultar antes de continuar.');}
@@ -50,6 +50,11 @@ function confirmedWorkspaceAccount(data){
  const projects=data?.projects;
  if(!Array.isArray(projects)||projects.some(project=>!project||typeof project.id!=='string'||!project.id.length||typeof project.name!=='string')||new Set(projects.map(project=>project.id)).size!==projects.length)throw new Error('No pudimos confirmar la lista de obras. Actualizá para volver a consultar antes de elegir una obra.');
  return data;
+}
+function consultedScheduleTask(data,context) {
+ const value=data?.task,revision=value?.revision;
+ if(!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).sort().join('|')!=='canPlanSchedule|project|scope|task'||data.scope!==context.scope||data.project?.id!==context.projectId||data.project.status!=='ACTIVE'||typeof data.project.name!=='string'||typeof data.canPlanSchedule!=='boolean'||!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join('|')!=='endsOn|id|progress|revision|startsOn|status|title'||value.id!==context.taskId||typeof value.title!=='string'||!value.title.trim()||typeof value.status!=='string'||!value.status.trim()||typeof value.progress!=='number'||!Number.isFinite(value.progress)||value.progress<0||value.progress>100||typeof revision!=='string'||!/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{6}$/.test(revision)||calendarDay(revision.slice(0,10))===null||revision<=context.revision||(value.startsOn!==null&&calendarDay(value.startsOn)===null)||(value.endsOn!==null&&calendarDay(value.endsOn)===null))throw new Error('No pudimos confirmar una revisión actual de esta tarea en la misma obra. Conservamos tu borrador.');
+ return {task:value,canPlan:data.canPlanSchedule};
 }
 const guideAccessReasons=['SESSION_REQUIRED','WORKSPACE_MEMBERSHIP_REQUIRED','WORKSPACE_PROJECT_UNAVAILABLE','WORKSPACE_CONTEXT_CHANGED','PARTICIPANT_KYC_REVIEW_REQUIRED'];
 export function workspaceGuideAccessReason(error){
@@ -244,16 +249,38 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,initialProj
   if(data.scope!==account?.scope||data.task?.id!==draft?.task.id||data.saved!==true||!data.receipt?.id||data.receipt.taskId!==draft.task.id)throw new Error('No se pudo correlacionar el recibo con esta tarea.');
   setView(previous=>previous?.scope===data.scope&&previous.project.id===view?.project.id?{...previous,tasks:updateLoadedTask(previous.tasks,data.task)}:previous);setReceipt(data.receipt);setAttempt(null);setRetryAllowed(false);setDraft(null);setNotice('Planificación guardada con recibo. El avance ejecutado no fue modificado.');
  }
+  async function consultScheduleRevision(){
+   if(saving||attempt||!draft?.conflict||!account||!view)return;
+   const current=generation.current,before=draft.conflict.before,context={scope:account.scope,projectId:view.project.id,taskId:draft.task.id,revision:before.revision},abort=new AbortController();controller.current=abort;
+   setSaving(true);setNotice('');setDraft(old=>old?.task.id===context.taskId?{...old,conflict:{...old.conflict,state:'loading',snapshot:null,reviewed:false,error:null}}:old);
+   try{
+    const data=await request(query({scope:context.scope,projectId:context.projectId,taskId:context.taskId}),{signal:AbortSignal.any([abort.signal,AbortSignal.timeout(15000)])});
+    if(!mounted.current||current!==generation.current)return;
+    const confirmed=consultedScheduleTask(data,context);
+    setDraft(old=>old?.task.id===context.taskId&&old.conflict?.before.revision===context.revision?{...old,conflict:{...old.conflict,state:confirmed.canPlan?'ready':'unavailable',snapshot:confirmed.task,reviewed:false,error:confirmed.canPlan?null:'Tu acceso actual permite consultar esta tarea, pero no volver a confirmar la planificación.'}}:old);
+    setView(previous=>previous?.scope===context.scope&&previous.project.id===context.projectId?{...previous,canPlanSchedule:confirmed.canPlan,tasks:updateLoadedTask(previous.tasks,confirmed.task)}:previous);
+    setNotice(confirmed.canPlan?'Revisión consultada. Revisá las fechas registradas y tu borrador antes de volver a confirmar.':'Tu acceso actual no permite confirmar esta planificación. Conservamos tu borrador para que puedas revisarlo o cancelarlo.');
+   }catch(error){
+    if(mounted.current&&current===generation.current){
+     if(guideAccessDenied(error)){restrictProject(error,context.projectId);setNotice(error.message);}
+     else{
+      const missing=error.status===404&&error.code==='WORKSPACE_TASK_UNAVAILABLE';
+      const message=missing?'Esta tarea ya no está disponible en la obra. Conservamos tus fechas y el motivo; no podés confirmar sin una revisión vigente.':'No pudimos consultar una revisión actual de esta tarea. Conservamos tus fechas y el motivo. Volvé a consultar o cancelá el borrador.';
+      setDraft(old=>old?.task.id===context.taskId&&old.conflict?.before.revision===context.revision?{...old,conflict:{...old.conflict,state:missing?'missing':'failed',snapshot:null,reviewed:false,error:message}}:old);setNotice(message);
+     }
+    }
+   }finally{if(mounted.current&&current===generation.current)setSaving(false);}
+  }
  async function sendAttempt(payload,retrying=false){
   const current=generation.current,abort=new AbortController();controller.current=abort;
   setSaving(true);setNotice('');setAttempt(payload);setRetryAllowed(false);
   try{const data=await request('',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:AbortSignal.any([abort.signal,AbortSignal.timeout(20000)])});if(mounted.current&&current===generation.current)applySaved(data);}
-  catch(error){if(mounted.current&&current===generation.current){if(guideAccessDenied(error)){restrictProject(error,payload.projectId);setNotice(error.message);}else if(retrying){setRetryAllowed(error.requestDispatched===false);setNotice(error.message+' Conservamos el intento anterior; comprobá su recibo antes de modificar la planificación.');}else if(error.requestDispatched===false||(error.status&&error.status<500)){setAttempt(null);setNotice(error.message);}else setNotice('El servidor no confirmó el guardado. Conservamos este intento: comprobá el recibo antes de modificar o reenviar.');}}
+  catch(error){if(mounted.current&&current===generation.current){if(guideAccessDenied(error)){restrictProject(error,payload.projectId);setNotice(error.message);}else if(error.scheduleRevisionRejected===true&&payload.scope===account?.scope&&payload.projectId===view?.project.id&&payload.taskId===draft?.task.id&&payload.expectedRevision===(draft.conflict?.snapshot?.revision||draft.task.revision)){setAttempt(null);setDraft(old=>old?.task.id===payload.taskId?{...old,conflict:{state:'required',before:old.conflict?.snapshot||old.task,snapshot:null,reviewed:false,error:null}}:old);setNotice(error.message+' Conservamos el borrador. La consulta no vuelve a enviar la planificación.');}else if(retrying){setRetryAllowed(error.requestDispatched===false);setNotice(error.message+' Conservamos el intento anterior; comprobá su recibo antes de modificar la planificación.');}else if(error.requestDispatched===false||(error.status&&error.status<500)){setAttempt(null);setNotice(error.message);}else setNotice('El servidor no confirmó el guardado. Conservamos este intento: comprobá el recibo antes de modificar o reenviar.');}}
   finally{if(mounted.current&&current===generation.current)setSaving(false);}
  }
  async function save(event){
-  event.preventDefault();if(saving||attempt||!draft||!view)return;
-  await sendAttempt({operationId:crypto.randomUUID(),projectId:view.project.id,taskId:draft.task.id,scope:account.scope,expectedRevision:draft.task.revision,startsOn:draft.startsOn,endsOn:draft.endsOn,reason:draft.reason});
+  event.preventDefault();if(saving||attempt||!draft||!view||draft.conflict&&(draft.conflict.state!=='ready'||draft.conflict.reviewed!==true))return;
+  await sendAttempt({operationId:crypto.randomUUID(),projectId:view.project.id,taskId:draft.task.id,scope:account.scope,expectedRevision:draft.conflict?.snapshot?.revision||draft.task.revision,startsOn:draft.startsOn,endsOn:draft.endsOn,reason:draft.reason});
  }
  async function retry(){
   if(saving||!attempt||!retryAllowed)return;await sendAttempt(attempt,true);
@@ -289,9 +316,10 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,initialProj
    {view.nextCursor&&<button id="schedule-load-more" type="button" disabled={loading||contextLocked} onClick={()=>open(view.project.id,true)}>Cargar más tareas</button>}
    {!view.canPlanSchedule&&<p className={styles.caption}>Tu rol permite consultar este cronograma, no modificarlo.</p>}
    {draft&&<form onSubmit={save} className={styles.form} aria-labelledby="schedule-edit-title"><h4 id="schedule-edit-title" ref={scheduleEditor} tabIndex={-1}>Planificar: {draft.task.title}</h4><p>Revisá las fechas previstas y explicá el motivo. El cambio no certifica avance ni registra horas trabajadas.</p>
+    {draft.conflict&&<section data-schedule-conflict aria-labelledby="schedule-conflict-title" style={{border:'1px solid #967b4d',borderRadius:10,padding:'1rem',marginBlock:'1rem',overflowWrap:'anywhere'}}><h5 id="schedule-conflict-title" style={{margin:'0 0 .5rem',fontSize:16}}>La tarea cambió antes de guardar</h5><p>Tus fechas y el motivo siguen en el borrador. Consultar no vuelve a enviar la planificación.</p>{draft.conflict.error&&<p role="status">{draft.conflict.error}</p>}{draft.conflict.snapshot&&<><dl><dt>Tarea consultada</dt><dd>{draft.conflict.snapshot.title}</dd><dt>Fechas registradas en esta consulta</dt><dd>{draft.conflict.snapshot.startsOn||'Sin inicio'} → {draft.conflict.snapshot.endsOn||'Sin fin'}</dd><dt>Revisión consultada</dt><dd data-schedule-consulted-revision style={{marginInlineStart:0,fontFamily:'monospace'}}>{draft.conflict.snapshot.revision}</dd></dl>{draft.conflict.state==='ready'&&<label style={{flexDirection:'row',alignItems:'center',minHeight:44,gap:12}}><input type="checkbox" style={{width:20,height:20,padding:0,flex:'0 0 auto'}} checked={draft.conflict.reviewed===true} disabled={saving||Boolean(attempt)} onChange={event=>setDraft({...draft,conflict:{...draft.conflict,reviewed:event.target.checked}})}/><span>Revisé la planificación consultada y quiero volver a confirmar mi borrador.</span></label>}</>}<button type="button" disabled={saving||Boolean(attempt)} onClick={consultScheduleRevision}>{saving?'Consultando revisión…':'Consultar revisión actual'}</button></section>}
     <div className={styles.dates}><label>Inicio previsto<input type="date" required value={draft.startsOn} disabled={saving||Boolean(attempt)} onChange={event=>setDraft({...draft,startsOn:event.target.value})}/></label><label>Fin previsto<input type="date" required min={draft.startsOn||undefined} value={draft.endsOn} disabled={saving||Boolean(attempt)} onChange={event=>setDraft({...draft,endsOn:event.target.value})}/></label></div>
     <label>Motivo del cambio<textarea required minLength={8} maxLength={800} rows={3} value={draft.reason} disabled={saving||Boolean(attempt)} onChange={event=>setDraft({...draft,reason:event.target.value})}/></label>
-    <div className={styles.actions}>{attempt?<><button type="button" disabled={saving} onClick={recover}>{saving?'Comprobando…':'Comprobar guardado'}</button>{retryAllowed&&<button type="button" disabled={saving} onClick={retry}>Reintentar la misma planificación</button>}</>:<><button className={styles.primary} type="submit" disabled={saving}>Confirmar planificación</button><button type="button" disabled={saving} onClick={()=>setDraft(null)}>Cancelar</button></>}</div>
+    <div className={styles.actions}>{attempt?<><button type="button" disabled={saving} onClick={recover}>{saving?'Comprobando…':'Comprobar guardado'}</button>{retryAllowed&&<button type="button" disabled={saving} onClick={retry}>Reintentar la misma planificación</button>}</>:<><button className={styles.primary} type="submit" disabled={saving||Boolean(draft.conflict&&(draft.conflict.state!=='ready'||draft.conflict.reviewed!==true))}>Confirmar planificación</button><button type="button" disabled={saving} onClick={()=>setDraft(null)}>Cancelar</button></>}</div>
    </form>}
    {receipt&&<div className={styles.receipt}><strong>Cambio confirmado</strong><span>{receipt.after.startsOn} → {receipt.after.endsOn}</span><small>Recibo: {receipt.id}</small></div>}
   </section>}

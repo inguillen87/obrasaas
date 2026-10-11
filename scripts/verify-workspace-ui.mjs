@@ -30,7 +30,7 @@ assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.leng
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-ui-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};\n`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:16,background:'#0b1c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
-writeFileSync(path.join(app,'page.js'),`'use client';import {useCallback,useState} from 'react';import {OnboardingGuide} from './(identity)/cuenta/onboarding-guide';import {AccountWorkspace} from './(identity)/cuenta/workspace-client';import {browserRecoveryJournal} from './(identity)/cuenta/workspace-recovery-journal.mjs';const token=async()=>{if(window.__failNextToken){window.__failNextToken=false;throw new Error('private SDK diagnostic');}if(window.__holdToken)await new Promise(resolve=>{window.__resolveToken=resolve;});return 'synthetic-active-tab-A';};export default function Page(){const [visible,setVisible]=useState(true),[observation,setObservation]=useState(null);const observed=useCallback(value=>{window.__guideObservation=value;setObservation(value);},[]);if(typeof window!=='undefined')window.__prepareWorkspaceReference=body=>browserRecoveryJournal.prepare('/api/identity/task-creation',{method:'POST',body:JSON.stringify(body)});return <main style={{maxWidth:1000,margin:'0 auto'}}><OnboardingGuide orgId="org_fixture" orgRole="org:admin" observation={observation}/><button onClick={()=>setVisible(false)}>Desmontar ensayo</button>{visible?<AccountWorkspace getSessionToken={token} onGuideObservation={observed}/>:<p>Ensayo desmontado</p>}</main>}`);
+writeFileSync(path.join(app,'page.js'),`'use client';import {useCallback,useState} from 'react';import {OnboardingGuide} from './(identity)/cuenta/onboarding-guide';import {AccountWorkspace} from './(identity)/cuenta/workspace-client';import {browserRecoveryJournal} from './(identity)/cuenta/workspace-recovery-journal.mjs';const token=async()=>{if(window.__failNextToken){window.__failNextToken=false;throw new Error('private SDK diagnostic');}if(window.__holdToken)await new Promise(resolve=>{window.__resolveToken=resolve;});return 'synthetic-active-tab-A';};export default function Page(){const [visible,setVisible]=useState(true),[observation,setObservation]=useState(null);const observed=useCallback(value=>{window.__guideObservation=value;setObservation(value);},[]);if(typeof window!=='undefined')window.__prepareWorkspaceReference=body=>browserRecoveryJournal.prepare('/api/identity/task-creation',{method:'POST',body:JSON.stringify(body)});if(typeof window!=='undefined')window.__workspaceReferences=value=>browserRecoveryJournal.list(value);return <main style={{maxWidth:1000,margin:'0 auto'}}><OnboardingGuide orgId="org_fixture" orgRole="org:admin" observation={observation}/><button onClick={()=>setVisible(false)}>Desmontar ensayo</button>{visible?<AccountWorkspace getSessionToken={token} onGuideObservation={observed}/>:<p>Ensayo desmontado</p>}</main>}`);
 const port=3108,origin='http://127.0.0.1:'+port;
 const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
 let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',value=>{serverLog=(serverLog+value.toString()).slice(-20000);});
@@ -145,6 +145,86 @@ async function scenario(mode,width=390){
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'Overflow after edit at '+width);
  assert.ok(requests.every(request=>['GET','POST'].includes(request.method)));
  await context.close();
+}
+async function scheduleConflictScenario(mode,width=390){
+ const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
+ page.on('pageerror',error=>pageErrors.push({mode:'schedule-conflict-'+mode,width,message:error.message}));
+ const project={id:'p-a',name:'Obra de conflicto sintética',status:'ACTIVE'},target={...baseTask(),id:'task-z',title:'Tarea de segunda página'};
+ const firstRevision='2026-10-01T10:00:00.123456',secondRevision='2026-10-02T10:00:00.123456';
+ let currentTask={...target,title:'Título vigente de la tarea consultada',startsOn:'2026-10-02',endsOn:'2026-10-06',revision:firstRevision,...(mode==='get-failed'?{status:'EN_PROCESO',progress:37.5}:{})};
+ const posts=[],directedReads=[],receiptReads=[];let applications=0;
+ await page.setRequestInterception(true);
+ page.on('request',async request=>{
+  try{
+   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
+   if(url.pathname!=='/api/identity/workspace')return request.continue();
+   assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');let body,status=200;
+   if(request.method()==='POST'){
+    const p=JSON.parse(request.postData());posts.push(p);assert.equal(p.scope,scope);assert.equal(p.projectId,project.id);assert.equal(p.taskId,target.id);
+    assert.equal(p.startsOn,'2026-10-07');assert.equal(p.endsOn,'2026-10-15');assert.equal(p.reason,'Reprogramación revisada en reunión de obra.');
+    assert.deepEqual(Object.keys(p).sort(),['operationId','projectId','taskId','scope','expectedRevision','startsOn','endsOn','reason'].sort());
+    if(mode==='retry-conflict'&&posts.length===1){assert.equal(p.expectedRevision,revision);status=503;body={code:'WORKSPACE_OPERATION_UNCONFIRMED',saved:false};}
+    else if(posts.length===(mode==='retry-conflict'?2:1)){assert.equal(p.expectedRevision,revision);status=409;body={code:'SCHEDULE_REVISION_CHANGED',saved:false};}
+    else if(mode==='changed-again'&&posts.length===2){assert.equal(p.expectedRevision,firstRevision);currentTask={...currentTask,startsOn:'2026-10-03',endsOn:'2026-10-08',revision:secondRevision};status=409;body={code:'SCHEDULE_REVISION_CHANGED',saved:false};}
+    else{assert.equal(p.expectedRevision,currentTask.revision);applications++;body={scope,saved:true,replayed:false,task:{...currentTask,startsOn:p.startsOn,endsOn:p.endsOn,revision:'2026-10-03T10:00:00.123456'},receipt:{id:'workspace_schedule_'+'b'.repeat(64),taskId:target.id,recordedAt:'2026-10-03T10:00:00.123456',before:{startsOn:currentTask.startsOn,endsOn:currentTask.endsOn},after:{startsOn:p.startsOn,endsOn:p.endsOn}}};}
+   }else if(url.searchParams.has('taskId')){
+    assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope','taskId']);assert.equal(url.searchParams.get('projectId'),project.id);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('taskId'),target.id);directedReads.push(url.search);
+    if(mode==='get-failed'&&directedReads.length===1){status=503;body={saved:false,code:'WORKSPACE_OPERATION_UNCONFIRMED'};}
+    else if(mode==='missing'){status=404;body={saved:false,code:'WORKSPACE_TASK_UNAVAILABLE'};}
+    else if(mode==='denied-401'||mode==='denied-403'){status=mode==='denied-401'?401:403;body={saved:false,code:status===401?'SESSION_REQUIRED':'WORKSPACE_PROJECT_UNAVAILABLE'};}
+    else body={scope:mode==='foreign-scope'?'b'.repeat(64):scope,project:mode==='foreign-project'?{...project,id:'p-foreign'}:project,canPlanSchedule:mode!=='read-only',task:mode==='foreign-task'?{...currentTask,id:'task-foreign'}:currentTask};
+   }else if(url.searchParams.has('operationId')){
+    receiptReads.push(url.search);assert.equal(mode,'retry-conflict');assert.equal(url.searchParams.get('operationId'),posts[0].operationId);body={scope,state:'NOT_OBSERVED',definitive:false};
+   }else if(url.searchParams.get('portfolio')==='1')body={scope,organizationName:'Empresa sintética de conflicto',role:'SITE_MANAGER',projects:[],nextCursor:null};
+   else if(!url.search)body={scope,organizationName:'Empresa sintética de conflicto',role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:true,canManageIntegrations:false,projects:[project],projectsTruncated:false};
+   else{assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),project.id);body={scope,project,canPlanSchedule:true,tasks:url.searchParams.has('afterTask')?[target]:[baseTask()],totalTasks:2,nextCursor:url.searchParams.has('afterTask')?null:'task-a'};}
+   await request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
+  }catch(error){pageErrors.push({mode:'schedule-conflict-'+mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
+ });
+ await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,project.name);await click(page,project.name+'Abrir obra');
+ await waitText(page,'Mampostería');await click(page,'Cargar más tareas');await waitText(page,target.title);await fill(page,target.id);
+ const marker={operationId:'22222222-2222-4222-8222-222222222222',projectId:project.id,scope,title:'Histórico sintético que no debe borrarse',startsOn:'',endsOn:''};
+ await page.evaluate(body=>window.__prepareWorkspaceReference(body),marker);
+ const references=()=>page.evaluate(value=>window.__workspaceReferences(value),scope),history=await references();assert.equal(history.length,1);assert.equal(history[0].operationId,marker.operationId);
+ const editor='form[aria-labelledby="schedule-edit-title"]';
+ const preserved=async()=>{assert.deepEqual(await page.$$eval(editor+' input[type="date"]',nodes=>nodes.map(node=>node.value)),['2026-10-07','2026-10-15']);assert.equal(await page.$eval(editor+' textarea',node=>node.value),'Reprogramación revisada en reunión de obra.');assert.equal(await page.$eval('#workspace-refresh',node=>node.disabled),true);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));};
+ await click(page,'Confirmar planificación');
+ if(mode==='retry-conflict'){
+  await waitText(page,'no confirmó el guardado');assert.equal(posts.length,1);assert.equal((await references()).length,2);
+  await click(page,'Comprobar guardado');await waitText(page,'No se observa un recibo todavía');assert.equal(receiptReads.length,1);await click(page,'Reintentar la misma planificación');await waitText(page,'La tarea cambió antes de guardar');assert.equal(posts.length,2);assert.deepEqual(posts[1],posts[0]);assert.equal(await page.$$eval(editor+' button',nodes=>nodes.some(node=>node.textContent==='Comprobar guardado')),false);
+ }else await waitText(page,'La tarea cambió antes de guardar');
+ const rejectedPosts=posts.length;assert.equal(applications,0);await preserved();assert.deepEqual(await references(),history);assert.equal(await page.$eval(editor+' button[type="submit"]',node=>node.disabled),true);assert.equal(directedReads.length,0);
+ if(mode==='unmount-token'){
+  await page.evaluate(()=>{window.__holdToken=true;});await click(page,'Consultar revisión actual');await page.waitForFunction(()=>typeof window.__resolveToken==='function');await click(page,'Desmontar ensayo');await waitText(page,'Ensayo desmontado');await page.evaluate(()=>{window.__holdToken=false;window.__resolveToken();});await page.waitForFunction(()=>window.__guideObservation===null);assert.equal(directedReads.length,0);assert.equal(posts.length,rejectedPosts);assert.deepEqual(await references(),history);checks.push('schedule-conflict-unmounted-token-cannot-query-or-restore-draft-'+width);await context.close();return;
+ }
+ async function consult(expectedStatus=200,expectedRevision=firstRevision){
+  const pending=page.waitForResponse(response=>{const url=new URL(response.url());return url.origin===origin&&url.pathname==='/api/identity/workspace'&&response.request().method()==='GET'&&url.searchParams.get('projectId')===project.id&&url.searchParams.get('scope')===scope&&url.searchParams.get('taskId')===target.id&&url.searchParams.size===3;},{timeout:15000});
+  await click(page,'Consultar revisión actual');const response=await pending;assert.equal(response.status(),expectedStatus);
+  if(expectedStatus===401||expectedStatus===403){await page.waitForFunction(selector=>!document.querySelector(selector),{},editor);return;}
+  if(expectedStatus===200&&!mode.startsWith('foreign-')&&mode!=='read-only')await page.waitForFunction(value=>document.querySelector('[data-schedule-consulted-revision]')?.textContent===value,{timeout:15000},expectedRevision);
+  else await page.waitForFunction(()=>document.querySelector('[data-schedule-conflict] [role="status"]')?.textContent.length>0);
+  await page.waitForFunction(()=>[...document.querySelectorAll('[data-schedule-conflict] button')].some(node=>node.textContent==='Consultar revisión actual'&&!node.disabled));assert.equal(posts.length,rejectedPosts);assert.deepEqual(await references(),history);
+ }
+ const status=mode==='get-failed'?503:mode==='missing'?404:mode==='denied-401'?401:mode==='denied-403'?403:200;
+ await consult(status);
+ if(mode==='denied-401'||mode==='denied-403'){assert.ok(!(await text(page)).includes(target.title));assert.ok(!(await text(page)).includes('Reprogramación revisada en reunión de obra.'));assert.equal(applications,0);assert.deepEqual(await references(),history);checks.push('schedule-conflict-'+mode+'-hides-private-draft-without-clearing-history-'+width);await context.close();return;}
+ await preserved();
+ if(mode==='missing'||mode.startsWith('foreign-')||mode==='read-only'){
+  assert.equal(await page.$eval(editor+' button[type="submit"]',node=>node.disabled),true);assert.equal(await page.$(editor+' input[type="checkbox"]'),null);assert.equal(applications,0);
+  if(mode.startsWith('foreign-'))assert.ok(!(await text(page)).includes('Título vigente de la tarea consultada'));
+  await click(page,'Cancelar');await page.waitForFunction(selector=>!document.querySelector(selector),{},editor);assert.equal(posts.length,rejectedPosts);assert.deepEqual(await references(),history);checks.push('schedule-conflict-'+mode+'-keeps-draft-blocks-post-and-allows-explicit-cancel-'+width);await context.close();return;
+ }
+ if(mode==='get-failed'){assert.equal(await page.$eval(editor+' button[type="submit"]',node=>node.disabled),true);await consult();await preserved();}
+ assert.equal(await page.$eval(editor+' input[type="checkbox"]',node=>node.checked),false);assert.equal(await page.$eval(editor+' button[type="submit"]',node=>node.disabled),true);assert.ok((await page.$eval('[data-schedule-conflict]',node=>node.innerText)).includes('2026-10-02 → 2026-10-06'));
+ await page.click(editor+' input[type="checkbox"]');await page.waitForFunction(selector=>!document.querySelector(selector+' button[type="submit"]').disabled,{},editor);await click(page,'Confirmar planificación');
+ if(mode==='changed-again'){
+  await waitText(page,'La tarea cambió antes de guardar');await page.waitForFunction(()=>!document.querySelector('[data-schedule-consulted-revision]'));assert.equal(posts.length,2);assert.equal(posts[1].expectedRevision,firstRevision);assert.notEqual(posts[1].operationId,posts[0].operationId);assert.equal(applications,0);await preserved();assert.equal(await page.$(editor+' input[type="checkbox"]'),null);assert.deepEqual(await references(),history);
+  const before=posts.length;const pending=page.waitForResponse(response=>{const url=new URL(response.url());return url.origin===origin&&url.pathname==='/api/identity/workspace'&&response.request().method()==='GET'&&url.searchParams.get('projectId')===project.id&&url.searchParams.get('scope')===scope&&url.searchParams.get('taskId')===target.id;},{timeout:15000});
+  await click(page,'Consultar revisión actual');assert.equal((await pending).status(),200);await page.waitForFunction(value=>document.querySelector('[data-schedule-consulted-revision]')?.textContent===value,{},secondRevision);await page.waitForFunction(()=>[...document.querySelectorAll('[data-schedule-conflict] button')].some(node=>node.textContent==='Consultar revisión actual'&&!node.disabled));assert.equal(posts.length,before);await preserved();assert.equal(await page.$eval(editor+' input[type="checkbox"]',node=>node.checked),false);assert.equal(await page.$eval(editor+' button[type="submit"]',node=>node.disabled),true);
+  await page.click(editor+' input[type="checkbox"]');await page.waitForFunction(selector=>!document.querySelector(selector+' button[type="submit"]').disabled,{},editor);await click(page,'Confirmar planificación');
+ }
+ await waitText(page,'Cambio confirmado');assert.equal(applications,1);assert.equal(posts.length,mode==='changed-again'||mode==='retry-conflict'?3:2);assert.equal(posts.at(-1).expectedRevision,mode==='changed-again'?secondRevision:firstRevision);assert.notEqual(posts.at(-1).operationId,posts[0].operationId);assert.deepEqual(await references(),history);assert.equal(await page.$(editor),null);const targetProgress=await page.$eval('[data-task-id="task-z"]',node=>({text:node.innerText,bars:[...node.querySelectorAll('[role="progressbar"]')].map(bar=>Number(bar.getAttribute('aria-valuenow')))}));if(mode==='get-failed'){assert.deepEqual(targetProgress.bars,[]);assert.ok(targetProgress.text.includes('Requiere revisión'));}else assert.deepEqual(targetProgress.bars,[currentTask.progress]);assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',node=>Number(node.getAttribute('aria-valuenow'))),37);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ checks.push('schedule-conflict-'+mode+'-later-page-directed-get-preserves-draft-requires-new-review-and-keeps-history-'+width);await context.close();
 }
 async function navigationScenario(role,width){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
@@ -896,6 +976,8 @@ try{
  if([undefined,'confirmed-progress','confirmed-progress-unloaded'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])for(const decision of ['APPROVE','REJECT'])await unloadedConfirmedProgressScenario(width,decision);
  if([undefined,'confirmed-progress','confirmed-progress-snapshots'].includes(process.env.WORKSPACE_UI_SCENARIO))for(const width of [320,390,768,1280])for(const mode of ['loaded-current','invalid-snapshot'])await receiptSnapshotCoverageScenario(width,mode);
  if(!process.env.WORKSPACE_UI_SCENARIO){
+  for(const width of [320,390,768,1280])for(const mode of ['changed-again','get-failed','missing','denied-401','denied-403'])await scheduleConflictScenario(mode,width);
+  for(const mode of ['foreign-project','foreign-scope','foreign-task','read-only','unmount-token','retry-conflict'])await scheduleConflictScenario(mode,390);
  for(const width of [320,390,768,1280])await scenario('success',width);
  for(const mode of ['readonly','denied','empty','draft-cancel','sdk-unavailable','unmount-token','uncertain','rollback','not-arrived','conflict','race'])await scenario(mode);
  for(const mode of ['draft-cancel','uncertain','rollback','not-arrived'])await taskCreateScenario(mode);

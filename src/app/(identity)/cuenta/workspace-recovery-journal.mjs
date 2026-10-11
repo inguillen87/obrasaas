@@ -309,7 +309,18 @@ export function recoveryResult(entry, result) {
   if(entry.resource==='participants'&&result.state==='INVITATION_UNCONFIRMED'&&result.participant?.status==='REVOKED')return {state:'PARTICIPATION_REVOKED'};
   return ['NOT_OBSERVED','PROCESSING','INVITATION_UNCONFIRMED'].includes(result.state)?{state:result.state}:null;
 }
+const sameScheduleEntry=(a,b)=>Object.keys(a).length===Object.keys(b).length&&Object.keys(a).every(key=>a[key]===b[key]);
+// Ephemeral only: bind the exact in-flight schedule command to its own ticket.
+// Persisted references remain unchanged and never contain dates or reasons.
+async function rejectedScheduleIdentity(url,options,entry){
+  if(url!=='/api/identity/workspace'||options?.method!=='POST'||entry?.resource!=='workspace'||typeof options.body!=='string')return null;
+  let body;try{body=JSON.parse(options.body);}catch{return null;}
+  if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).sort().join('|')!=='endsOn|expectedRevision|operationId|projectId|reason|scope|startsOn|taskId'||body.scope!==entry.scope||body.projectId!==entry.projectId||!uuid(body.operationId)||body.operationId.toLowerCase()!==entry.operationId||!id(body.taskId)||typeof body.expectedRevision!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(body.expectedRevision)||typeof body.startsOn!=='string'||typeof body.endsOn!=='string'||typeof body.reason!=='string')return null;
+  let inputDigest;try{inputDigest=await sha256(new TextEncoder().encode(JSON.stringify(['schedule-rejection-command-v1',entry.scope,entry.projectId,entry.operationId,body.taskId,body.expectedRevision,body.startsOn,body.endsOn,body.reason])));}catch{throw unavailable();}
+  return {inputDigest};
+}
 export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.now,notify=()=>{},withLock}) {
+  const scheduleTickets=new WeakMap(),scheduleReferences=new Map();
   // getStorage is retained only for controlled in-memory tests. The browser uses
   // one transactional adapter; receipt policy remains in this factory.
   const storageOperation=withStorage||((mode,scope,callback,signal)=>{
@@ -345,7 +356,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
         if(!Object.keys(entry).every(field=>field==='actionReference'?entry[field]?.proposalId===stored[field]?.proposalId&&entry[field]?.revision===stored[field]?.revision:entry[field]===stored[field]))return false;
         s.removeItem(key);return true;
       });
-      if(removed)notify();return removed;
+      if(removed){scheduleReferences.delete(keyOf(entry));notify();}return removed;
     } catch { return false; }
   }
   const api = {
@@ -367,6 +378,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
     },
     async prepare(url, options, {notifyConflict=true} = {}) {
       const entry=await reference(url,options,now());if(!entry)return null;
+      const scheduleIdentity=await rejectedScheduleIdentity(url,options,entry);
       const reserve=()=>access('readwrite',entry.scope,s=>{
       if(options.signal?.aborted)throw Object.assign(new DOMException('La consulta se canceló.','AbortError'),{requestDispatched:false});
       const current=readEntries(s,entry.scope),existing=current.find(row=>keyOf(row)===keyOf(entry));
@@ -389,11 +401,36 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
         if(error?.code==='WORKSPACE_RECOVERY_REQUIRED'&&notifyConflict)notify();
         throw Object.assign(error,{requestDispatched:false});
       }
+      if(scheduleIdentity){
+        const key=keyOf(ticket.entry);let original=scheduleReferences.get(key);
+        if(!ticket.existed){original={entry:{...ticket.entry},identity:scheduleIdentity};scheduleReferences.set(key,original);}
+        if(original&&sameScheduleEntry(ticket.entry,original.entry)&&original.identity.inputDigest===scheduleIdentity.inputDigest)scheduleTickets.set(ticket,{...original,rejected:false});
+      }
       if(!ticket.existed)notify();return ticket;
+    },
+    async captureResponse(ticket,url,options,response,{signal,isActive=()=>true}={}){
+      const prepared=scheduleTickets.get(ticket);
+      if(!prepared||response?.status!==409||!response.headers.get('content-type')?.includes('application/json')||signal?.aborted||!isActive())return;
+      let reader,onAbort;
+      try{
+        const current=await rejectedScheduleIdentity(url,options,prepared.entry);
+        if(!current||current.inputDigest!==prepared.identity.inputDigest||signal?.aborted||!isActive())return;
+        reader=response.clone().body?.getReader();if(!reader)return;
+        let rejectAbort;const aborted=new Promise((_,reject)=>{rejectAbort=reject;});
+        onAbort=()=>{rejectAbort(new DOMException('La consulta se canceló.','AbortError'));reader.cancel().catch(()=>{});response.body?.cancel().catch(()=>{});};
+        signal?.addEventListener('abort',onAbort,{once:true});if(signal?.aborted){reader.cancel().catch(()=>{});response.body?.cancel().catch(()=>{});return;}
+        const decoder=new TextDecoder('utf-8',{fatal:true});let text='',bytes=0;
+        while(true){const part=await Promise.race([reader.read(),aborted]);if(part.done)break;bytes+=part.value.byteLength;if(bytes>4096)return;text+=decoder.decode(part.value,{stream:true});}
+        text+=decoder.decode();const body=JSON.parse(text);
+        if(!signal?.aborted&&isActive()&&body&&typeof body==='object'&&!Array.isArray(body)&&Object.keys(body).sort().join('|')==='code|saved'&&body.saved===false&&body.code==='SCHEDULE_REVISION_CHANGED')prepared.rejected=true;
+      }catch{/* An unreadable, oversized or interrupted response supplies no proof. */}
+      finally{if(onAbort)signal?.removeEventListener('abort',onAbort);if(reader){reader.cancel().catch(()=>{});try{reader.releaseLock();}catch{}}}
     },
     async settle(ticket, result, error) {
       if(!ticket)return;
+      const schedule=scheduleTickets.get(ticket);scheduleTickets.delete(ticket);
       if(error){
+        if(schedule?.rejected===true&&ticket.entry.resource==='workspace'&&sameScheduleEntry(ticket.entry,schedule.entry)&&error.status===409&&error.code==='SCHEDULE_REVISION_CHANGED'&&error.scheduleRevisionRejected===true&&error.requestDispatched!==false){await remove(schedule.entry);return;}
         if(ticket.entry.resource==='participants'&&ticket.entry.action===PARTICIPANT_OFFICE_ASSIGN_ACTION){if(!ticket.existed&&(error.requestDispatched===false||participantOfficePrecommitRejected(error)))await remove(ticket.entry);return;}
         if(['office-review','project-creation'].includes(ticket.entry.resource)&&error.requestDispatched!==false)return;
         const rejected=ticket.entry.resource==='plan-import'&&recoveryResult(ticket.entry,error.result)?.state==='REJECTED'&&error.code===error.result.code&&error.status===({PLAN_IMPORT_FILE_INVALID:400,PLAN_IMPORT_FILE_TOO_LARGE:413})[error.code];

@@ -170,7 +170,7 @@ test('revocation or lease expiry during a provider await cannot commit a callbac
 });
 test('ADMITTED plus verified binding cedes every new operational message even after intake OFF, without granting FIELD authority',async()=>{
  const f=employeeIntakeFixture(),s=await f.submit(),input=f.command('ADMIT_EMPLOYEE_INTAKE',{applicationId:s.applicationId,expectedRevision:s.revision,job:'WORKER',permissions:{attendance:false,report:true},confirmed:true});await f.store.save(f.session,input);f.controls.bound=true;await f.configure(false);const sent=f.controls.sends;
- for(const message of ['HOLA','MENU','ENTRADA',{type:'interactive',interactive:{button_reply:{id:'field:entry'}}},{type:'audio',audio:{id:'150000011',mime_type:'audio/ogg'}}]){const c=f.receive(message);assert.equal(await f.bridge.execute(c),null);}
+ for(const message of ['HOLA','MENU','MENÚ','  menú  ','ESTADO','ENTRADA',{type:'interactive',interactive:{button_reply:{id:'field:entry'}}},{type:'audio',audio:{id:'150000011',mime_type:'audio/ogg'}}]){const c=f.receive(message);assert.equal(await f.bridge.execute(c),null);}
  assert.equal(f.state().status,'ADMITTED');assert.equal(f.workers.size,1);assert.equal(f.controls.sends,sent);assert.equal(f.controls.providerCalls,0);
  const original=f.events.get(s.lastEventId),context={eventId:original.id,projectId:original.projectId,channelId:f.connection.id,payloadDigest:original.payload.payloadDigest,leaseToken:original.leaseToken};await assert.rejects(f.bridge.execute(context),{code:'EMPLOYEE_INTAKE_DISABLED'});assert.equal(f.controls.sends,sent);
 });
