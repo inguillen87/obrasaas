@@ -4,6 +4,7 @@ import {WorkspaceError,operationId,digest} from './workspace-policy.mjs';
 import {companyConnectionForProject,assertLegacyProjectChannel} from './company-channel-connection.mjs';
 import {readCompanyPhoneDeclaration} from './company-onboarding-policy.mjs';
 const publicError=error=>{if(error instanceof TenantWorkspaceError)throw new WorkspaceError(error.code,error.status);throw error;};
+const pendingCredentialStates=new Set(['CREDENTIAL_STORED','VERIFYING','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN']);
 const same=(current,command)=>['assistantName','numberMode','initialProjectId'].every(key=>current[key]===command[key])&&JSON.stringify(current.useCases)===JSON.stringify(command.useCases);
 const receiptId=(member,projectId,id)=>'wa_preparation_'+digest([member.actorId,projectId,id.toLowerCase()]);
 export function customerWhatsAppReadiness(profile,connection){
@@ -63,6 +64,7 @@ export function createCustomerWhatsAppSetup({workspace}){
         if(current.revision!==command.expectedRevision)throw new WorkspaceError('WORKSPACE_CONFLICT',409);
         if(current.revision>=Number.MAX_SAFE_INTEGER)throw new WorkspaceError('WORKSPACE_INTEGRITY',409);
         const unchanged=current.configured&&same(current,command);
+        if(!unchanged&&pendingCredentialStates.has(project.metadata?.metaSignup?.state))throw new WorkspaceError('WHATSAPP_PREPARATION_AUTHORIZATION_PENDING',409);
         const stored={schemaVersion:2,assistantName:command.assistantName,numberMode:command.numberMode,initialProjectId:project.id,
           useCases:command.useCases,mode:'REVIEW_REQUIRED',ownership:'CUSTOMER',revision:current.revision+(unchanged?0:1),updatedAt:unchanged?current.updatedAt:new Date().toISOString()};
         if(!unchanged){
