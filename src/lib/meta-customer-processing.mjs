@@ -26,7 +26,7 @@ export function decodeSignedCloudEvent(event,channel,environment,protocol=META_C
  }catch{throw new WorkspaceError('META_CUSTOMER_EVENT_PROOF_REQUIRED',409);}
 }
 export const decodeSignedCustomerEvent=(event,channel,environment)=>decodeSignedCloudEvent(event,channel,environment,META_CUSTOMER_PROTOCOL);
-const safeOutcome=result=>({version:1,classifierVersion:'enterprise-1677ff7-obra-intent-v1',intent:result.intent||null,reviewState:result.reviewState||'REVIEW_REQUIRED',businessApplied:result.businessApplied===true,replySent:result.replySent===true,kind:typeof result.kind==='string'?result.kind.slice(0,64):null,receiptId:typeof result.receiptId==='string'?result.receiptId.slice(0,160):null,replyState:result.replyState||null,code:result.code||null,identity:{status:result.identityStatus||'NOT_CHECKED',workerId:result.workerId||null}});
+const safeOutcome=result=>({version:1,classifierVersion:'enterprise-1677ff7-obra-intent-v1',intent:result.intent||null,reviewState:result.reviewState||'REVIEW_REQUIRED',businessApplied:result.businessApplied===true,replySent:result.replySent===true,kind:typeof result.kind==='string'?result.kind.slice(0,64):null,receiptId:typeof result.receiptId==='string'?result.receiptId.slice(0,160):null,replyState:result.replyState||null,...(result.replyWindowClosed===true?{replyWindowClosed:true}:{}),code:result.code||null,identity:{status:result.identityStatus||'NOT_CHECKED',workerId:result.workerId||null}});
 export function createDevelopmentPilotDispatchGuard({connect,environment=process.env}){
  return context=>customerJobTransaction(connect,async client=>{
   const candidate=(await client.query(`SELECT c.*,p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c.id=$1 AND c."projectId"=$2`,[context.channelId,context.projectId])).rows[0];
@@ -40,7 +40,7 @@ export function createDevelopmentPilotDispatchGuard({connect,environment=process
   await assertDevelopmentPilotCommit(client,candidate,environment);return true;
  });
 }
-export function createMetaCustomerProcessor({connect,dispatch,outbound,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{},beforeDispatch=async()=>false,deferAuthorization=async()=>false,protocol=META_CUSTOMER_PROTOCOL,lockChannel=lockMetaCustomerInboxChannel,authorizationCodes=[],onboarding=null}){
+export function createMetaCustomerProcessor({connect,dispatch,outbound,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{},beforeDispatch=async()=>false,deferAuthorization=async()=>false,protocol=META_CUSTOMER_PROTOCOL,lockChannel=lockMetaCustomerInboxChannel,authorizationCodes=[],onboarding=null,rejectedKyc=null}){
  resolveMetaCloudProtocol(protocol);
  const within=run=>customerJobTransaction(connect,run);
  async function claim(eventId){return within(async client=>{
@@ -86,13 +86,13 @@ export function createMetaCustomerProcessor({connect,dispatch,outbound,environme
    const context=await claim(eventId);if(context.done||context.busy)return context;await afterClaim();
    try{
     let result;
-    try{context.developmentPilot=await beforeDispatch(context)===true;result=await dispatch(context);}catch(error){
+    try{context.developmentPilot=await beforeDispatch(context)===true;if(!context.developmentPilot&&protocol===META_CUSTOMER_PROTOCOL&&rejectedKyc!==null)result=await rejectedKyc(context,{recoverOnly:true});if(!result)result=await dispatch(context);}catch(error){
      // Authorization failures are durable observations, never invitations to
      // guess a recipient, imitate a web session, or run a fallback engine.
-     if(error instanceof WorkspaceError&&(authorizationObservations.has(error.code)||authorizationCodes.includes(error.code))){const deferred=await deferPrepared(context,error.code);if(deferred)return deferred;result=await observe(context,error.code);}else throw error;
+     if(error instanceof WorkspaceError&&(authorizationObservations.has(error.code)||authorizationCodes.includes(error.code))){const deferred=await deferPrepared(context,error.code);if(deferred)return deferred;if(!context.developmentPilot&&protocol===META_CUSTOMER_PROTOCOL&&error.code==='META_KYC_CHALLENGE_REJECTED'&&rejectedKyc!==null)result=await rejectedKyc(context,{code:error.code});if(!result)result=await observe(context,error.code);}else throw error;
     }
     if(!result)result=await observe(context);
-    if(result.reply){let reply;try{reply=await outbound.send(context,result.reply,{purpose:result.kind==='EMPLOYEE_INTAKE'?'EMPLOYEE_INTAKE':result.kind==='KYC_CHAT'?'KYC_CAPTURE':'FIELD'});}catch(error){if(error instanceof WorkspaceError&&(error.code==='META_CUSTOMER_REPLY_WINDOW_CLOSED'||authorizationObservations.has(error.code)||authorizationCodes.includes(error.code))){const deferred=await deferPrepared(context,error.code,result);if(deferred)return deferred;reply={replySent:false,state:error.code};}else throw error;}result={...result,replySent:reply.replySent,replyState:reply.state};}
+    if(result.reply){let reply;try{reply=await outbound.send(context,result.reply,{purpose:result.kind==='EMPLOYEE_INTAKE'?'EMPLOYEE_INTAKE':result.kind==='KYC_CHAT'?'KYC_CAPTURE':result.kind==='KYC_REJECTION'?'KYC_REJECTION':'FIELD'});}catch(error){if(error instanceof WorkspaceError&&(error.code==='META_CUSTOMER_REPLY_WINDOW_CLOSED'||authorizationObservations.has(error.code)||authorizationCodes.includes(error.code))){const deferred=await deferPrepared(context,error.code,result);if(deferred)return deferred;reply={replySent:false,state:error.code};}else throw error;}result={...result,replySent:reply.replySent,replyState:reply.state};}
     return finish(context,result);
    }catch(error){
     await within(client=>client.query(`UPDATE public."WebhookEvent" SET "lastError"=$3,"leaseToken"=NULL,"leaseExpiresAt"=NULL,"updatedAt"=clock_timestamp() WHERE id=$1 AND "leaseToken"=$2 AND status='PENDING'`,[context.eventId,context.leaseToken,error instanceof WorkspaceError?error.code:'META_CUSTOMER_PROCESSING_UNCONFIRMED'])).catch(()=>{});throw error;
