@@ -209,7 +209,15 @@ async function scenario(mode,width=390){
   await check('Importar mis contactos');await check('Solicitar el historial');await check('Confirmo esta selección');await click(page,'Guardar selección de importación');await wait(page,'Continuar solicitudes no enviadas');assert.ok((await page.evaluate(()=>document.body.innerText)).includes('Resultado incierto · no se repite'));
   await click(page,'Continuar solicitudes no enviadas');await wait(page,'Solicitud aceptada · esperando datos');assert.deepEqual(posts.map(p=>p.action),['begin','complete','start_app_sync','continue_app_sync']);assert.equal(posts[2].operationId,posts[3].operationId);assert.equal(posts.filter(p=>p.action==='register_number').length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks.push('coexistence-v4-options-waba-only-exact-event-no-PIN-explicit-import-cancel-and-safe-continuation-'+width);
  }
- else if(mode==='existing-api'){await wait(page,'Guardar plan sin cambiar proveedor');await click(page,'Guardar plan sin cambiar proveedor');await wait(page,'El proveedor sigue sin cambios');assert.deepEqual(posts.map(p=>p.action),['prepare_existing_api_plan']);checks.push('existing-api-assisted-durable-plan-without-migration');}
+  else if(mode==='existing-api'){
+   await wait(page,'Guardar plan sin cambiar proveedor');await click(page,'Guardar plan sin cambiar proveedor');
+   const reviewBlock=await page.waitForSelector('[data-existing-api-review-next-step]',{visible:true,timeout:20000});
+   const review=await reviewBlock.evaluate(node=>({text:node.innerText,mailto:node.querySelector('a[href^="mailto:"]')?.getAttribute('href')}));await reviewBlock.dispose();
+   assert.ok(review.text.includes('Plan guardado. La autorización sigue pendiente de revisión.'));
+   assert.equal(review.mailto,'mailto:info@obrasaas.com?subject=Revisi%C3%B3n%20de%20WhatsApp%20existente');
+   assert.equal(current.existingApiPlan.state,'ADDITIONAL_AUTHORIZATION_REVIEW_REQUIRED');assert.equal(current.existingApiPlan.preserveProvider,true);assert.equal(current.existingApiPlan.providerChanged,false);
+   assert.deepEqual(posts.map(p=>p.action),['prepare_existing_api_plan']);checks.push('existing-api-assisted-durable-plan-without-migration');
+  }
  else if(mode==='imported-inbox'){await click(page,'Abrir bandeja de mensajes');await wait(page,'1 eventos consultados');const h=await page.evaluateHandle(()=>[...document.querySelectorAll('button')].find(b=>b.querySelector('strong')?.textContent==='Remitente +5491112345678'));await h.asElement().click();await h.dispose();await wait(page,'Historia sintética privada');await wait(page,'no ejecuta acciones ni abre una ventana');assert.equal(await page.$('article button'),null);assert.equal(posts.length,0);await click(page,'Cambiar empresa');await click(page,'Ver conexión');await wait(page,'Constructora de ensayo B');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Historia sintética privada'));checks.push('imported-inbox-source-no-actions-private-company-switch-'+width);}
  else if(mode==='inbox'){
   assert.equal(await page.$('#customer-private-inbox'),null);await click(page,'Abrir bandeja de mensajes');await wait(page,'1 eventos consultados');
