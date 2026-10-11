@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='ecdaa5d9754bee447a73fcdc86f898a5f83f7e3cf60325a2ab4d6676f18a6e95';
+export const EXPECTED_CONTRACT_SHA256='451a7fb6da3dbcbba39f17a4a2f80502193936a95a63f313e897e56bdac98b9c';
 const POSTGRES_SERVICE_IMAGE='public.ecr.aws/docker/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -35,6 +35,7 @@ const INTAKE_CONTINUITY_BASELINE_PRODUCERS={
  UI_CAUSAL:{producer:'scripts/verify-participant-bank-intake-ui.mjs',path:'.vercel/private/participant-bank-intake-integration/bad-resolution/browser.json',retained:true,blockId:56,lane:'people',sourceLine:73,producerSha256:'2fa7ebd95079638a1753e9156617c317b688601c8cfa82a5da8a9b044b070c5f',sourceBasis:'EXPECTED_HEAD_GIT_BYTES'}
 };
 const INTAKE_PLAIN_TEXT_UNIT_BASELINE_PRODUCER={producer:'scripts/verify-participant-bank-intake-contracts.mjs',path:'.vercel/participant-bank-intake-contract-evidence/proof.json',retained:true,blockId:53,lane:'contracts',sourceLine:57,producerSha256:'7066bea65970f0a8e959af59cb9ef7ded715b259aab9d58f3eeb7e2a514a736a',sourceBasis:'EXPECTED_HEAD_GIT_BYTES'};
+const KYC_RETRY_PREVIOUS_UNIT_PRODUCER_SHA256='b14443033c1e66c2baaa0048b13961216d46dc01ecc9916819e482fe239ddace';
 const PORTFOLIO_BASELINE_BLOCKS_SHA256='fdb9d500f6e96981887bc1f7e74d55875c870239c198296466d4a362f63d68d7';
 const PORTFOLIO_BASELINE_OWNERSHIP_SHA256='81608969b6edbf08690ea31011d6c526f65bfae91468933e496f0cc52be5fab4';
 const PORTFOLIO_BASELINE_PRODUCERS_SHA256='f727810f0b923c95623fab858aa72da8ecccb21edded6278b972872aeb7a411e';
@@ -631,6 +632,7 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
   if(spec.kind==='UNIT')currentCompanyChecks.push(()=>{
    const start=checks.length;
    const staleSpec={...spec,producerSha256:INTAKE_PLAIN_TEXT_UNIT_BASELINE_PRODUCER.producerSha256};bad('bank-intake-units-historical-pin-cannot-certify-current-plain-text-harness','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(staleSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:staleSpec.producerSha256})),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}));
+   const previousSpec={...spec,producerSha256:KYC_RETRY_PREVIOUS_UNIT_PRODUCER_SHA256};bad('bank-intake-units-previous-current-pin-cannot-certify-rejected-retry-count','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(previousSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:previousSpec.producerSha256})),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}));
    const changed=clone(contract);changed.evidenceProducers.find(record=>record.path===spec.path).producerSha256=spec.producerSha256;bad('bank-intake-units-historical-record-cannot-be-overwritten','EXTENSION_PRODUCER_CONTRACT',()=>validateContract(changed));
    const intakeIndex=TEST_SUITES.indexOf('tests/production-employee-intake.test.mjs'),intakePath=proof.suites[intakeIndex].tap.path,intakeOriginal=evidence.get(intakePath),legacyIntakeTap=tap(Array.from({length:65},(_,i)=>'historical employee intake suite '+i));evidence.set(intakePath,legacyIntakeTap);mutate('plain-text-intake-legacy-sixty-five-tests','PROOF_UNIT_RESULTS',p=>{p.suites[intakeIndex]={file:TEST_SUITES[intakeIndex],exitCode:0,...parseTap(legacyIntakeTap),tap:{path:intakePath,bytes:legacyIntakeTap.length,sha256:hash(legacyIntakeTap)}};});evidence.set(intakePath,intakeOriginal);
    for(const [file,previous] of [['tests/production-company-channel-kyc.test.mjs',76],['tests/production-participant-onboarding-next-step.test.mjs',35]]){
