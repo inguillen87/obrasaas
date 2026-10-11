@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='6e53edffa60646c16652e2f600d3923bd1a81eb7217927936afbec5cc514bb90';
+export const EXPECTED_CONTRACT_SHA256='ecdaa5d9754bee447a73fcdc86f898a5f83f7e3cf60325a2ab4d6676f18a6e95';
 const POSTGRES_SERVICE_IMAGE='public.ecr.aws/docker/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -97,7 +97,23 @@ const OWN_TEMPLATE_SOURCE_COUNTS={UNIT:107,UI_BANK:102,PG_COMPANY_KYC:180,UI_IDE
 // Current KYC status closure is additive. The previous CURRENT counts and all
 // historical producer records remain immutable; actual closures corroborate it.
 const CURRENT_KYC_STATUS_BASE_COUNTS={"UNIT":109,"UI_BANK":104,"UI_JOINT":104,"UI_CAUSAL":104,"PG_COMPANY_KYC":183,"PG_FIELD":99,"PG_OVERTIME":84,"PG_INTAKE":23};
-const currentKycStatusDependenciesFor=kind=>({"UNIT":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_BANK":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_JOINT":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_CAUSAL":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_COMPANY_KYC":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_FIELD":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_OVERTIME":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_INTAKE":["src/lib/company-channel-kyc.mjs","src/lib/participant-onboarding-authority.mjs","src/lib/participant-onboarding-current-kyc.mjs","src/lib/participant-onboarding-reactive.mjs"]}[kind]||[]);
+// These additions follow the reviewed producers' current imports. Historical
+// counts and producer receipts above stay frozen; omission is still rejected.
+const KYC_ATTEMPT_BACKEND_SOURCE='src/lib/participant-kyc-chat-attempt.mjs';
+const KYC_ATTEMPT_CLIENT_SOURCES=['src/app/(identity)/cuenta/participant-kyc-chat-attempt-panel.js','src/app/(identity)/cuenta/participant-kyc-chat-attempt-view.mjs'];
+const currentKycFeedbackDependenciesFor=kind=>({
+ UNIT:[KYC_ATTEMPT_BACKEND_SOURCE],
+ UI_BANK:[...KYC_ATTEMPT_CLIENT_SOURCES,KYC_ATTEMPT_BACKEND_SOURCE],
+ UI_INTAKE:KYC_ATTEMPT_CLIENT_SOURCES,
+ UI_JOINT:[...KYC_ATTEMPT_CLIENT_SOURCES,KYC_ATTEMPT_BACKEND_SOURCE],
+ UI_CAUSAL:[...KYC_ATTEMPT_CLIENT_SOURCES,KYC_ATTEMPT_BACKEND_SOURCE],
+ PG_COMPANY_KYC:['src/lib/meta-kyc-rejection-policy.mjs','src/lib/meta-kyc-rejection.mjs',KYC_ATTEMPT_BACKEND_SOURCE],
+ UI_IDENTITY_ONLY:KYC_ATTEMPT_CLIENT_SOURCES,
+ PG_FIELD:[KYC_ATTEMPT_BACKEND_SOURCE],PG_OVERTIME:[KYC_ATTEMPT_BACKEND_SOURCE]
+ }[kind]||[]);
+const CURRENT_KYC_FEEDBACK_ONLY_BASE_COUNTS={UI_INTAKE:25,UI_IDENTITY_ONLY:114};
+const KYC_FEEDBACK_PREVIOUS_PRODUCER_PINS={UI_INTAKE:'07dd870b22df1ea2ae54cb13498bb868bf38f3e26047a0fab6f20c884afa1020',UI_JOINT:'814263fb2ce01f977e404f5e330e2e89aee102d5ad2f20a7c4468608420c94de',UI_CAUSAL:'814263fb2ce01f977e404f5e330e2e89aee102d5ad2f20a7c4468608420c94de'};
+const currentKycStatusDependenciesFor=kind=>[...({"UNIT":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_BANK":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_JOINT":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_CAUSAL":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_COMPANY_KYC":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_FIELD":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_OVERTIME":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_INTAKE":["src/lib/company-channel-kyc.mjs","src/lib/participant-onboarding-authority.mjs","src/lib/participant-onboarding-current-kyc.mjs","src/lib/participant-onboarding-reactive.mjs"]}[kind]||[]),...currentKycFeedbackDependenciesFor(kind)];
 // Additive v3/v4 sources do not replace the historical counts or producer records.
 const MONTHLY_CURVE_DEPENDENCIES={PG_COMPANY_KYC:['src/lib/plan-import-monthly-curve.mjs','src/lib/plan-import-cyp-curve.mjs'],UI_IDENTITY_ONLY:['src/app/(identity)/cuenta/plan-source-curve.js','src/app/(identity)/cuenta/plan-source-curve.mjs','src/app/(identity)/cuenta/plan-source-curve.module.css']};
 const monthlyCurveDependenciesFor=kind=>MONTHLY_CURVE_DEPENDENCIES[kind]||[];
@@ -475,6 +491,7 @@ export function currentProducerSourceFiles(spec,root){
 }
 function currentKycStatusClosureSelftest(spec,proof,root,validate){
  const dependencies=currentKycStatusDependenciesFor(spec.kind);if(!dependencies.length)return [];
+ const previousCount=CURRENT_KYC_STATUS_BASE_COUNTS[spec.kind]??CURRENT_KYC_FEEDBACK_ONLY_BASE_COUNTS[spec.kind];assert.ok(Number.isSafeInteger(previousCount));
  const checks=[],prefix=spec.id+'-current-kyc-status-';
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure CURRENT source fixture; no PG/UI/provider execution'});};
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',boundary:'pure adversarial CURRENT source fixture'});};
@@ -490,14 +507,14 @@ function currentKycStatusClosureSelftest(spec,proof,root,validate){
   }
   assert.ok(changed>0,'CURRENT source exists in shadow manifest: '+file);
  };
- good('exact-additive-count-and-producer-closure',()=>{assert.equal(spec.sourceFiles.length,CURRENT_KYC_STATUS_BASE_COUNTS[spec.kind]+dependencies.length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
+ good('exact-additive-count-and-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
  for(const file of dependencies){
   good('source-pinned-'+file,()=>assert.ok(spec.sourceFiles.includes(file)));
   mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{remove:true}));
   mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',value=>rewrite(value,file,{changedHash:true}));
   mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{replacement:'src/lib/foreign-current-kyc-source.mjs'}));
  }
- mutate('previous-current-manifest-cannot-certify-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of dependencies)rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,CURRENT_KYC_STATUS_BASE_COUNTS[spec.kind]);});
+ mutate('previous-current-manifest-cannot-certify-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of dependencies)rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,previousCount);});
  return checks;
 }
 function ownTemplateClosureSelftest(spec,proof,root,validate){
@@ -725,6 +742,10 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
     bad(spec.id+'-historical-pin-cannot-certify-current-continuity-harness','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(staleSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:staleSpec.producerSha256})),{expectedHead,readSource}));
     const changed=clone(contract);changed.evidenceProducers.find(record=>record.path===spec.path).producerSha256=spec.producerSha256;
     bad(spec.id+'-historical-record-cannot-be-overwritten','EXTENSION_PRODUCER_CONTRACT',()=>validateContract(changed));
+   }
+   if(Object.hasOwn(KYC_FEEDBACK_PREVIOUS_PRODUCER_PINS,spec.kind)){
+    const staleSpec={...spec,producerSha256:KYC_FEEDBACK_PREVIOUS_PRODUCER_PINS[spec.kind]};
+    bad(spec.id+'-previous-current-pin-cannot-certify-KYC-feedback-harness','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(staleSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:staleSpec.producerSha256})),{expectedHead,readSource}));
    }
    if(spec.kind==='UI_INTAKE'){
     good('intake-ui-current-twenty-producer-modes-exact',()=>{const match=readFileSync(path.join(root,spec.producer),'utf8').match(/\bmodes=\[([^\]]+)\]/);assert.ok(match);equal([...match[1].matchAll(/'([^']+)'/g)].map(value=>value[1]),INTAKE_UI_MODES,'PROOF_MATRIX');});
@@ -1232,7 +1253,7 @@ export function selftest(workflow,contract,root=process.cwd()){
   const freshFixture=mkdtempSync(path.join(parent,'ci-bank-intake-selftest-fixture-'));
   try{for(const spec of contract.extension.proofs.filter(spec=>!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
   finally{const resolved=path.resolve(freshFixture);assert.ok(path.dirname(resolved)===path.resolve(parent)&&path.basename(resolved).startsWith('ci-bank-intake-selftest-fixture-'));rmSync(resolved,{recursive:true,force:true});}
- const currentCompanyChecks=[],currentContinuityChecks=[],currentReactiveChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[],currentKycStatusChecks=[];checks.push(...extensionSelftest(contract,root,currentCompanyChecks,currentContinuityChecks,currentReactiveChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks));checks.push(...portfolioSelftest(workflow,contract,root));for(const run of currentCompanyChecks)checks.push(...run());checks.push(...identitySelftest(workflow,contract,root,currentContinuityChecks,currentTemplateChecks,currentMonthlyChecks));checks.push(...canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks,currentKycStatusChecks));for(const run of currentContinuityChecks)checks.push(...run());for(const run of currentReactiveChecks)checks.push(...run());for(const run of currentTemplateChecks)checks.push(...run());
+ const currentCompanyChecks=[],currentContinuityChecks=[],currentReactiveChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[],currentKycStatusChecks=[];checks.push(...extensionSelftest(contract,root,currentCompanyChecks,currentContinuityChecks,currentReactiveChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks));checks.push(...portfolioSelftest(workflow,contract,root));for(const run of currentCompanyChecks)checks.push(...run());checks.push(...identitySelftest(workflow,contract,root,currentContinuityChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks));checks.push(...canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks,currentKycStatusChecks));for(const run of currentContinuityChecks)checks.push(...run());for(const run of currentReactiveChecks)checks.push(...run());for(const run of currentTemplateChecks)checks.push(...run());
   for(const [name,image] of [
    ['foreign-registry',POSTGRES_SERVICE_IMAGE.replace('public.ecr.aws','foreign.invalid')],
    ['changed-digest',POSTGRES_SERVICE_IMAGE.replace(/sha256:[a-f0-9]{64}$/,'sha256:'+'0'.repeat(64))],
@@ -1308,7 +1329,7 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],
  }
  return checks;
 }
-function identitySelftest(workflow,contract,root,currentContinuityChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[]){
+function identitySelftest(workflow,contract,root,currentContinuityChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[],currentKycStatusChecks=[]){
  const checks=[],expectedHead=contract.extension.baseHead,spec=contract.extension.proofs.find(isIdentity);
  const good=(name,run)=>{run();checks.push({name:'identity-only-ui-'+name,result:'PASS',boundary:'pure identity shadow fixture; no Git/PG/UI/provider execution'});};
  const bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name:'identity-only-ui-'+name,result:'PASS',expectedDenial:code,boundary:'pure identity shadow fixture'});};
@@ -1318,6 +1339,7 @@ function identitySelftest(workflow,contract,root,currentContinuityChecks=[],curr
  const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource});
  currentTemplateChecks.push(()=>ownTemplateClosureSelftest(spec,proof,root,validate));
  currentMonthlyChecks.push(()=>monthlyCurveClosureSelftest(spec,proof,root,validate));
+ currentKycStatusChecks.push(()=>currentKycStatusClosureSelftest(spec,proof,root,validate));
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(name,code,()=>validate(value));};
  good('complete-103-exact-source-proof',()=>assert.equal(validate(proof).checks,IDENTITY_ONLY_CHECK_COUNT));
  good('current-source-closure-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
@@ -1379,10 +1401,10 @@ function identitySelftest(workflow,contract,root,currentContinuityChecks=[],curr
  currentContinuityChecks.push(()=>{
   const start=checks.length;
   good('current-intake-continuity-source-pinned',()=>assert.ok(spec.sourceFiles.includes(INTAKE_CONTINUITY_SOURCE)));
-  good('current-intake-continuity-source-count-exact',()=>assert.equal(spec.sourceFiles.length,98+currentOwnDependenciesFor(spec.kind).length+reviewerDependenciesFor(spec.kind).length+intakeAssignmentDependenciesFor(spec.kind).length+monthlyCurveDependenciesFor(spec.kind).length+officeAccountDependenciesFor(spec.kind).length));
+  good('current-intake-continuity-source-count-exact',()=>assert.equal(spec.sourceFiles.length,98+currentOwnDependenciesFor(spec.kind).length+reviewerDependenciesFor(spec.kind).length+intakeAssignmentDependenciesFor(spec.kind).length+monthlyCurveDependenciesFor(spec.kind).length+officeAccountDependenciesFor(spec.kind).length+currentKycStatusDependenciesFor(spec.kind).length));
   mutate('missing-intake-continuity-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==INTAKE_CONTINUITY_SOURCE);});
   mutate('changed-intake-continuity-hash','PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===INTAKE_CONTINUITY_SOURCE).sha256='f'.repeat(64);});
-  mutate('old-97-source-manifest-without-intake-continuity','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![INTAKE_CONTINUITY_SOURCE,...currentOwnDependenciesFor(spec.kind),...reviewerDependenciesFor(spec.kind),...intakeAssignmentDependenciesFor(spec.kind),...monthlyCurveDependenciesFor(spec.kind),...officeAccountDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,97);});
+  mutate('old-97-source-manifest-without-intake-continuity','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![INTAKE_CONTINUITY_SOURCE,...currentOwnDependenciesFor(spec.kind),...reviewerDependenciesFor(spec.kind),...intakeAssignmentDependenciesFor(spec.kind),...monthlyCurveDependenciesFor(spec.kind),...officeAccountDependenciesFor(spec.kind),...currentKycStatusDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,97);});
   return checks.splice(start);
  });
  return checks;
