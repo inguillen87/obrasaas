@@ -1495,7 +1495,7 @@
         "path": ".vercel/participant-bank-intake-contract-evidence/proof.json",
         "kind": "UNIT",
         "producer": "scripts/verify-participant-bank-intake-contracts.mjs",
-        "producerSha256": "b14443033c1e66c2baaa0048b13961216d46dc01ecc9916819e482fe239ddace",
+        "producerSha256": "a024c6a26dcdfaf01719e51ee450ffe4e0a36b2ba04cb28a95d2eaa4a62e0a75",
         "sourceFiles": [
           "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
           "src/app/(identity)/cuenta/company-channel-view.mjs",
