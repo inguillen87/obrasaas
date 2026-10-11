@@ -24,6 +24,18 @@ import {digest} from '../src/lib/workspace-policy.mjs';
 import {participantKycImageSet} from '../src/lib/participant-kyc-image-set.mjs';
 import {assertApprovedParticipantKyc} from '../src/lib/participant-approved-identity.mjs';
 
+// Independent compatibility oracle: keep the four historical catalog queries
+// verbatim. Do not reseal the existing fixture marker to make the batch pass.
+async function historicalCompanyChannelCatalogFingerprint(client){
+ const tables=['WhatsAppCompanyChannel','WhatsAppChannelProjectAssignment','WhatsAppCompanyRoute','WhatsAppCompanyEventRoute'];
+ const columns=(await client.query(`SELECT table_name,column_name,data_type,is_nullable,column_default FROM information_schema.columns WHERE table_schema='public' AND table_name=ANY($1::text[]) ORDER BY table_name,ordinal_position`,[tables])).rows;
+ const keys=(await client.query(`SELECT r.relname,c.conname,c.contype,c.convalidated,pg_get_constraintdef(c.oid) AS definition FROM pg_constraint c JOIN pg_class r ON r.oid=c.conrelid WHERE c.connamespace='public'::regnamespace AND (c.conname LIKE 'company_%' OR r.relname=ANY($1::text[])) ORDER BY r.relname,c.conname`,[tables])).rows;
+ const indexes=(await client.query(`SELECT c.relname,i.indisvalid,i.indisready,i.indisunique,pg_get_indexdef(c.oid) AS definition FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid JOIN pg_class r ON r.oid=i.indrelid WHERE c.relnamespace='public'::regnamespace AND (c.relname LIKE 'company_%' OR r.relname=ANY($1::text[])) ORDER BY c.relname`,[tables])).rows;
+ const triggers=(await client.query(`SELECT r.relname,t.tgname,t.tgenabled,pg_get_triggerdef(t.oid) AS definition,pg_get_functiondef(t.tgfoid) AS function FROM pg_trigger t JOIN pg_class r ON r.oid=t.tgrelid WHERE r.relnamespace='public'::regnamespace AND NOT t.tgisinternal AND t.tgname LIKE 'company_%' ORDER BY r.relname,t.tgname`)).rows;
+ assert.ok(columns.length>0&&keys.length>0&&indexes.length>0&&triggers.length>0,'Fingerprint compatibility must use the actual non-empty adopted PostgreSQL catalog');
+ return digest({columns,keys,indexes,triggers});
+}
+
 // Root-run, schema-only disposable verification. Never creates/drops a database.
 // The adapter substitutes only the canonical public SQL namespace so all actual
 // runtime queries and catalog guards operate inside this random fixture schema.
@@ -35,7 +47,7 @@ const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),root=process.c
 const sources=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(entry=>entry.isDirectory()?sources(relative+'/'+entry.name):[relative+'/'+entry.name]);
 const sourceManifest=[...sources('src/lib'),'scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs'].map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
 const admin=new Client({connectionString:url.toString()}),environment={...lifecycleEnvironment},a={...lifecycleTenants[0],anchorProjectId:'project-a',projectId:'project-target-b',channelId:'company-kyc-channel-a',workerId:'company-kyc-worker-b',invitationId:'invite_'+'a'.repeat(32),providerInvitationId:'orginv_CompanyKycA'},b={...lifecycleTenants[1],projectId:'project-foreign',channelId:'company-kyc-channel-foreign'},graph=createControlledLifecycleGraph(environment),blob=createControlledLifecycleBlob(),clerk=createControlledLifecycleClerk(),checks=[];
-let pool,created=false,passed=false,sequence=0,lastReplyId=null,networkCalls=0,loseDepositCommit=false;
+let pool,created=false,passed=false,sequence=0,lastReplyId=null,networkCalls=0,loseDepositCommit=false,catalogFingerprintEquivalence=null;
 const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{networkCalls++;throw Error('CORPORATE_KYC_UNCONTROLLED_NETWORK_REJECTED');};
 const query=async(sql,args=[])=>{const client=await pool.connect();try{return await client.query(sqlInSchema(sql),args);}finally{client.release();}};
 const connect=async()=>{const client=await pool.connect();let deposited=false;return {release:broken=>client.release(broken),query:async(sql,args=[])=>{const result=await client.query(sqlInSchema(sql),args);if(sql.startsWith('INSERT INTO public."AuditLog"')&&sql.includes("'participant.operation.recorded'"))deposited=true;if(sql==='COMMIT'&&deposited&&loseDepositCommit){loseDepositCommit=false;throw Error('SYNTHETIC_COMPANY_KYC_COMMIT_ACK_LOST');}return result;}};};
@@ -54,7 +66,16 @@ try{
  await query(COMPANY_CHANNEL_SCHEMA_SQL);
  await query(`UPDATE "WhatsAppCompanyChannel" SET mode='COMPANY',revision=2 WHERE "connectionId"=$1`,[a.channelId]);
  await query(`INSERT INTO "WhatsAppChannelProjectAssignment"("connectionId","organizationId","projectId",status) VALUES($1,$2,$3,'ACTIVE')`,[a.channelId,a.organizationId,a.projectId]);
- const catalogClient=await connect();try{const fingerprint=await companyChannelCatalogFingerprint(catalogClient);await catalogClient.query(`INSERT INTO public."WhatsAppCompanySchema" VALUES(1,1,$1,$2)`,[COMPANY_CHANNEL_SCHEMA_CONTRACT,fingerprint]);assert.equal(await companyChannelSchemaReady(catalogClient),true);}finally{catalogClient.release();}
+ const catalogClient=await connect();try{
+  const fingerprint=await companyChannelCatalogFingerprint(catalogClient);await catalogClient.query(`INSERT INTO public."WhatsAppCompanySchema" VALUES(1,1,$1,$2)`,[COMPANY_CHANNEL_SCHEMA_CONTRACT,fingerprint]);assert.equal(await companyChannelSchemaReady(catalogClient),true);
+  const markerBefore=(await catalogClient.query(`SELECT version,contract,"catalogFingerprint" FROM public."WhatsAppCompanySchema" WHERE id=1`)).rows[0];
+  let historicalStatements=0,batchStatements=0;
+  const historical=await historicalCompanyChannelCatalogFingerprint({query:(sql,args)=>{historicalStatements++;assert.match(sql,/^SELECT\s/);return catalogClient.query(sql,args);}});
+  const batch=await companyChannelCatalogFingerprint({query:(sql,args)=>{batchStatements++;assert.match(sql,/^SELECT\s/);return catalogClient.query(sql,args);}});
+  assert.equal(historicalStatements,4);assert.equal(batchStatements,1);assert.equal(batch,historical,'Batched catalog fingerprint must preserve the four historical PostgreSQL queries');assert.equal(markerBefore.catalogFingerprint,historical,'Do not reseal the existing marker to accept a changed digest');
+  const markerAfter=(await catalogClient.query(`SELECT version,contract,"catalogFingerprint" FROM public."WhatsAppCompanySchema" WHERE id=1`)).rows[0];assert.deepEqual(markerAfter,markerBefore);
+  catalogFingerprintEquivalence={historicalStatements,batchStatements,nonEmptyCatalog:true,fingerprint:historical,markerUnchanged:true,statementSnapshot:'one-query-batch-compared-with-four-historical-queries'};
+ }finally{catalogClient.release();}
  await query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES('company-kyc-person',$1,$2),('company-kyc-reviewer','user_CompanyKycReviewer','reviewer@example.invalid')`,[a.workerUserId,a.workerEmail]);
  await query(`INSERT INTO "TenantMembership"(id,"userId","organizationId","tenantRole","clerkRole",status) VALUES('company-kyc-person-member','company-kyc-person',$1,'AUDITOR','org:member','ACTIVE'),('company-kyc-reviewer-member','company-kyc-reviewer',$1,'DIRECTOR','org:member','ACTIVE')`,[a.organizationId]);
  await query(`INSERT INTO "ProjectMembership"(id,"projectId","tenantMembershipId",status) VALUES('company-kyc-pm',$1,'company-kyc-person-member','ACTIVE')`,[a.projectId]);
@@ -76,7 +97,7 @@ try{
  const prepareInput={projectId:a.projectId,scope:ownerScope,operationId:randomUUID(),action:'PREPARE_KYC_CHAT',payload:{workerId:a.workerId,revision:(await worker()).revision}},prepared=await participant.save(ownerSession,prepareInput);
  await legacyChallenge(a.workerId);
  assert.match(prepared.code,/^IDENTIDAD [A-Za-z0-9_-]{43}$/);assert.equal((await participant.save(ownerSession,prepareInput)).codeUnavailable,true);assert.equal((await worker()).metadata.participant.clerkUserId,null);
- checks.push('canonical-manager-prepares-B-with-original-A-channel-and-replay-never-reveals-a-new-code');
+ assert.ok(catalogFingerprintEquivalence?.markerUnchanged);checks.push('canonical-manager-prepares-B-with-original-A-channel-and-replay-never-reveals-a-new-code');
  const provider=createMetaCustomerProvider({environment,fetchImpl:graph.fetchImpl}),upload=createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment}),deposit=createParticipantChannelKycDeposit({connect,resolveAuthority:resolveMetaKycAuthority,upload,environment}),bridge=createMetaKycBridge({connect,provider,deposit,environment}),outbound=createMetaKycOutbound({connect,provider,environment}),company=createCompanyChannelBridge({connect,provider,put:blob.put,get:blob.get,environment,analyzer:async()=>{throw Error('CORPORATE_KYC_UNREQUESTED_ANALYSIS');}}),companyOutbound=createMetaCustomerOutbound({connect,provider,environment,sourceContext:true,resolveIdentity:resolveCompanyOutboundIdentity});
  const processor=createMetaCustomerProcessor({connect,environment,authorizationCodes:[...META_KYC_AUTHORIZATION_CODES,'COMPANY_CHANNEL_SOURCE_REQUIRED'],dispatch:async context=>(await bridge.execute(context))||company.execute(context),outbound:{send:(context,reply,{purpose}={})=>purpose==='KYC_CAPTURE'?outbound.send(context,reply):companyOutbound.send(context,reply),observeStatus:(...args)=>companyOutbound.observeStatus(...args)}}),callback=createMetaCustomerCallbackHandlers({inbox:createMetaCustomerInbox({connect,environment}),environment,schedule:()=>{}});
  async function receive(message,{tenant=a,contextId=lastReplyId,signed=true,from=tenant.sender}={}){
@@ -164,5 +185,5 @@ try{
  globalThis.fetch=originalFetch;try{await pool?.end();if(created){await admin.query('DROP SCHEMA "'+schema+'" CASCADE');assert.equal((await admin.query('SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname=$1) AS present',[schema])).rows[0].present,false);}}finally{await admin.end();}
 }
 assert.equal(passed,true);
-const proof={status:'PASS',checks,sourceManifest,harnessSha256,environment:'schema-only-localhost-postgresql-corporate-KYC',databaseCreated:false,schemaRemoved:true,realProviderCalls:0,unexpectedNetworkCalls:networkCalls,productionDataTouched:false,realClerkLogin:false,realMetaAccepted:false,humanAccepted:false};
+const proof={status:'PASS',checks,catalogFingerprintEquivalence,sourceManifest,harnessSha256,environment:'schema-only-localhost-postgresql-corporate-KYC',databaseCreated:false,schemaRemoved:true,realProviderCalls:0,unexpectedNetworkCalls:networkCalls,productionDataTouched:false,realClerkLogin:false,realMetaAccepted:false,humanAccepted:false};
 mkdirSync('.vercel/company-kyc-evidence',{recursive:true});writeFileSync('.vercel/company-kyc-evidence/postgres.json',JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
