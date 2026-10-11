@@ -225,8 +225,8 @@ export async function fenceEmployeeIntakeOutboundAuthority(client,r,request){
   // Keep fresh predicates, FOR clauses and the complete issuer trail in one
   // statement snapshot. This is not discovery and does not mint authority.
   const statusSql=status.sql.replace(/\$(\d+)/g,(_match,position)=>'$'+(Number(position)+read.values.length));
-  rows=(await client.query(`SELECT intake.*,to_jsonb(status)-'reactiveStatusNow' AS "intakeReactiveStatus",status."reactiveStatusNow" AS "reactiveStatusNow"
-   FROM (${read.sql}) intake CROSS JOIN (${statusSql}) status`,[...read.values,...status.values])).rows;
+  rows=(await client.query(`SELECT intake.*,to_jsonb(reactive_status_row)-'reactiveStatusNow' AS "intakeReactiveStatus",reactive_status_row."reactiveStatusNow" AS "reactiveStatusNow"
+   FROM (${read.sql}) intake CROSS JOIN (${statusSql}) reactive_status_row`,[...read.values,...status.values])).rows;
   statusRows=rows.map(row=>({...row.intakeReactiveStatus,reactiveStatusNow:row.reactiveStatusNow}));
   statusNow=assertReactiveParticipantStatusFenceRead(client,r,r.reactive,r.recorded,statusRows);
  }else rows=(await client.query(read.sql,read.values)).rows;
