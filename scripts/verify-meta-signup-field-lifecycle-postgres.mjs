@@ -59,6 +59,9 @@ try{
  await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;
  pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));
  await query(lifecycleSchema);
+ // Keep shared lifecycleSchema unchanged; only this BEGIN-producing fixture needs the columns.
+ await query(`ALTER TABLE "Organization" ADD COLUMN "subscriptionPlan" text NOT NULL DEFAULT 'TRIAL',ADD COLUMN "subscriptionStatus" text NOT NULL DEFAULT 'TRIALING';
+  ALTER TABLE "Organization" ALTER COLUMN "trialEndsAt" SET DEFAULT ((clock_timestamp() AT TIME ZONE 'UTC')+interval '15 days');`);
  for(const tenant of lifecycleTenants){
   await query(`INSERT INTO "Organization"(id,name,"clerkOrganizationId",metadata) VALUES($1,$2,$3,'{}');`,[tenant.organizationId,'Synthetic company '+tenant.key,tenant.clerkOrganizationId]);
   await query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES($1,$2,$3);`,[tenant.ownerId,tenant.ownerUserId,'owner-'+tenant.key+'@example.invalid']);

@@ -12,13 +12,15 @@ function fixture({declaration=stored(),display='+12025550123',hook=null,verified
  const company={companyPhoneDeclaration:declaration};if(declaration===null)delete company.companyPhoneDeclaration;
  const project={id:'p-a',name:'Synthetic worksite',metadata:{whatsappWorkspace:{schemaVersion:2,assistantName:'Asistente',numberMode:'DEDICATED',initialProjectId:'p-a',useCases:['FIELD_REPORTS'],revision:1,updatedAt:'2026-10-06T12:00:00.000Z',ownership:'CUSTOMER',mode:'REVIEW_REQUIRED'}},organizationMetadata:company};
  const member={actorId:'actor-a',membershipId:'membership-a',organizationId:'company-a',organizationName:'Synthetic company',role:'ADMIN'};
+ const commercial={id:member.organizationId,subscriptionPlan:'TRIAL',subscriptionStatus:'TRIALING',trialEndsAt:new Date('2026-10-21T12:00:00Z')};let observedAt=new Date('2026-10-06T12:00:00Z'),commercialReads=0;
  const calls={exchange:0,subscribe:0,register:0,bind:0,inspect:0},audits=new Map();let connection=null,registered=false,inspectionHook=hook;
  const query=async(sql,args=[])=>{
   if(sql.includes('to_regclass'))return {rows:[{present:false}]};
+  if(sql.startsWith('SELECT id,"subscriptionPlan"')){assert.deepEqual(args,['company-a']);assert.match(sql,/FOR SHARE/);assert.match(sql,/AT TIME ZONE 'UTC'/);commercialReads++;return {rows:[{...commercial}]};}
   if(sql.startsWith('SELECT metadata FROM public."Organization"')){assert.deepEqual(args,['company-a']);assert.match(sql,/FOR SHARE/);return {rows:[{metadata:company}]};}
   if(sql.startsWith('UPDATE public."Project"')){project.metadata=JSON.parse(args[2]);return {rows:[],rowCount:1};}
   if(sql.startsWith('INSERT INTO public."AuditLog"')){audits.set(args[0],{metadata:JSON.parse(args.at(-1))});return {rows:[],rowCount:1};}
-  if(sql.startsWith('SELECT clock_timestamp()'))return {rows:[{now:new Date('2026-10-06T12:00:00Z')}]};
+  if(sql.startsWith('SELECT clock_timestamp()'))return {rows:[{now:observedAt}]};
   if(sql.startsWith('SELECT id,metadata FROM public."AuditLog"'))return {rows:audits.has(args[0])?[{id:args[0],...audits.get(args[0])}]:[]};
   if(sql.startsWith('SELECT metadata FROM public."AuditLog"'))return {rows:audits.has(args[0])?[audits.get(args[0])]:[]};
   if(sql.startsWith('INSERT INTO public."WhatsAppConnection"')){calls.bind++;connection={id:args[0],projectId:args[1],phoneNumberId:args[2],whatsappBusinessId:args[3],displayPhoneNumber:args[4],enabled:false,status:'PENDING',connectionStatus:'PENDING',encryptedAccessToken:args[5],metadata:JSON.parse(args[7])};return {rows:[],rowCount:1};}
@@ -32,7 +34,7 @@ function fixture({declaration=stored(),display='+12025550123',hook=null,verified
  const command=(action,extra={})=>({action,scope,projectId:project.id,operationId:randomUUID(),...extra});
  const begin=()=>service.command(session,command('begin',{preparedRevision:1}));
  const complete=start=>service.command(session,command('complete',{signupId:start.signup.id,stateToken:start.stateToken,code:'synthetic-code-only',wabaId:'98765432101234',phoneNumberId:'98765432105678'}));
- return {service,project,company,calls,begin,complete,command,get connection(){return connection;},setHook:callback=>{inspectionHook=callback;}};
+ return {service,project,company,commercial,audits,calls,begin,complete,command,get commercialReads(){return commercialReads;},setDbTime:value=>{observedAt=new Date(value);},get connection(){return connection;},setHook:callback=>{inspectionHook=callback;}};
 }
 for(const display of ['+12025550124',null,'+1 invalid'])test('fresh declaration mismatch cannot bind subscribe register or activate '+display,async()=>{const f=fixture({display}),start=await f.begin();await assert.rejects(f.complete(start),{code:display===null||display.includes('invalid')?'META_CUSTOMER_COMPANY_PHONE_UNCONFIRMED':'META_CUSTOMER_COMPANY_PHONE_MISMATCH'});assert.equal(f.calls.bind,0);assert.equal(f.calls.subscribe,0);assert.equal(f.calls.register,0);assert.equal(f.project.metadata.metaSignup.state,'REVIEW_REQUIRED');assert.ok(f.project.metadata.metaSignup.encryptedToken);assert.equal(f.calls.exchange,1);await assert.rejects(f.service.command(session,f.command('reconcile',{signupId:start.signup.id})));assert.equal(f.calls.exchange,1);});
 test('declaration changed during fresh inspect blocks binding while retaining escrow',async()=>{const f=fixture({hook:company=>{company.companyPhoneDeclaration={...company.companyPhoneDeclaration,revision:2};}}),start=await f.begin();await assert.rejects(f.complete(start),{code:'META_CUSTOMER_COMPANY_PHONE_CHANGED'});assert.equal(f.calls.bind,0);assert.equal(f.calls.subscribe,0);assert.ok(f.project.metadata.metaSignup.encryptedToken);});
@@ -76,4 +78,35 @@ test('non-advanced revision rejection resolves one UUID and a fresh explicitly r
 test('provider leases and malformed declarations never become definitive rejection from a stale request',async()=>{
  for(const state of ['VERIFYING','REGISTRATION_STARTED','REGISTRATION_VERIFYING']){const f=fixture(),start=await f.begin();await f.complete(start);f.project.metadata.metaSignup={...f.project.metadata.metaSignup,state,verificationLeaseExpiresAt:'2026-10-05T12:00:00Z',registrationLeaseExpiresAt:'2026-10-05T12:00:00Z'};f.company.companyPhoneDeclaration={...stored(),revision:2};const body=f.command('reconcile',{signupId:start.signup.id,expectedCompanyPhoneRevision:1,confirmCompanyPhoneRevision:true}),calls={...f.calls};await assert.rejects(f.service.command(session,body),{code:'META_CUSTOMER_COMPANY_PHONE_CHANGED'});assert.equal((await f.service.read(session,body)).receipt.state,'NOT_OBSERVED');assert.deepEqual(f.calls,calls);}
  const f=fixture(),start=await f.begin();await f.complete(start);f.company.companyPhoneDeclaration={malformed:true};const body=f.command('reconcile',{signupId:start.signup.id,expectedCompanyPhoneRevision:1,confirmCompanyPhoneRevision:true});await assert.rejects(f.service.command(session,body),{code:'COMPANY_PHONE_INTEGRITY'});assert.equal((await f.service.read(session,body)).receipt.state,'NOT_OBSERVED');
+});
+
+// Exercise the public service with a DB clock distinct from its application clock.
+test('new customer BEGIN denies exact trial expiry before writes or provider I/O',async()=>{
+ const f=fixture(),before=structuredClone(f.project.metadata);f.setDbTime(f.commercial.trialEndsAt);
+ await assert.rejects(f.begin(),{code:'COMPANY_ENTITLEMENT_TRIAL_EXPIRED'});
+ assert.deepEqual(f.project.metadata,before);assert.equal(f.audits.size,0);assert.deepEqual(f.calls,{exchange:0,subscribe:0,register:0,bind:0,inspect:0});
+});
+test('exact customer BEGIN replay survives trial expiry without a new receipt or TTL',async()=>{
+ const f=fixture(),body=f.command('begin',{preparedRevision:1}),start=await f.service.command(session,body),before=structuredClone(f.project.metadata),audits=[...f.audits],reads=f.commercialReads;
+ f.setDbTime(f.commercial.trialEndsAt);const replay=await f.service.command(session,body);
+ assert.equal(replay.signup.id,start.signup.id);assert.equal(replay.signup.expiresAt,start.signup.expiresAt);assert.deepEqual(f.project.metadata,before);assert.deepEqual([...f.audits],audits);assert.equal(f.commercialReads,reads);
+ await assert.rejects(f.begin(),{code:'META_CUSTOMER_ATTEMPT_ALREADY_ACTIVE'});assert.equal(f.commercialReads,reads);
+});
+for(const state of ['FAILED','EXPIRED','CANCELLED'])test('old '+state+' receipt cannot authorize a new customer BEGIN',async()=>{
+ const f=fixture(),body=f.command('begin',{preparedRevision:1}),start=await f.service.command(session,body);f.project.metadata.metaSignup.state=state;f.setDbTime(f.commercial.trialEndsAt);
+ const before=structuredClone(f.project.metadata),audits=[...f.audits],calls={...f.calls};await assert.rejects(f.begin(),{code:'COMPANY_ENTITLEMENT_TRIAL_EXPIRED'});
+ assert.deepEqual(f.project.metadata,before);assert.deepEqual([...f.audits],audits);assert.deepEqual(f.calls,calls);
+ const replay=await f.service.command(session,body);assert.equal(replay.signup.id,start.signup.id);assert.equal(replay.signup.state,state);assert.deepEqual(f.project.metadata,before);assert.deepEqual([...f.audits],audits);
+});
+test('canonically ACTIVE PRO allows a new customer BEGIN without payment evidence',async()=>{
+ const f=fixture();Object.assign(f.commercial,{subscriptionPlan:'PRO',subscriptionStatus:'ACTIVE',trialEndsAt:null});f.setDbTime('2026-10-22T12:00:00Z');const start=await f.begin();
+ assert.equal(start.signup.state,'PREPARED');assert.equal(start.connection,null);assert.equal(start.acceptance.roundTrip,'NOT_VERIFIED');assert.equal(Object.hasOwn(start,'paymentEvidence'),false);assert.equal(f.calls.exchange,0);
+});
+
+test('new customer BEGIN rejects a noncanonical company or unavailable DB clock before writes',async()=>{
+ for(const invalid of ['company','clock']){
+  const f=fixture(),before=structuredClone(f.project.metadata);if(invalid==='company')f.commercial.id='company-b';else f.setDbTime(NaN);
+  await assert.rejects(f.begin(),{code:invalid==='company'?'COMPANY_ENTITLEMENT_UNOBSERVED':'COMPANY_ENTITLEMENT_CLOCK_UNAVAILABLE'});
+  assert.deepEqual(f.project.metadata,before);assert.equal(f.audits.size,0);assert.deepEqual(f.calls,{exchange:0,subscribe:0,register:0,bind:0,inspect:0});
+ }
 });

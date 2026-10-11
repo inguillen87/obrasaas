@@ -50,9 +50,12 @@ try{
   INSERT INTO "Organization"(id,name,"clerkOrganizationId",metadata) VALUES ('company-a','Synthetic company A','org_A','{}'),('company-b','Synthetic company B','org_B','{}');
   INSERT INTO "PlatformUser" VALUES ('owner','user_Owner'),('foreign','user_Foreign'),('colleague','user_Colleague');
   INSERT INTO "TenantMembership" VALUES ('m-owner','company-a','owner','ADMIN','org:admin','ACTIVE'),('m-foreign','company-b','foreign','ADMIN','org:admin','ACTIVE'),('m-colleague','company-a','colleague','DIRECTOR','org:admin','ACTIVE');
-  INSERT INTO "Project"(id,"organizationId",name,status,metadata) SELECT 'p-'||i,'company-a','Synthetic worksite '||i,'ACTIVE','{}'::jsonb FROM generate_series(1,22)i;
+  INSERT INTO "Project"(id,"organizationId",name,status,metadata) SELECT 'p-'||i,'company-a','Synthetic worksite '||i,'ACTIVE','{}'::jsonb FROM generate_series(1,23)i;
   INSERT INTO "Project"(id,"organizationId",name,status,metadata) VALUES('p-b','company-b','Synthetic worksite B','ACTIVE','{}');`);
  await pool.query(`UPDATE "Project" SET metadata=jsonb_build_object('unrelated',true,'whatsappWorkspace',jsonb_build_object('schemaVersion',2,'assistantName','Synthetic assistant','numberMode','DEDICATED','initialProjectId',id,'useCases',jsonb_build_array('FIELD_REPORTS'),'revision',1,'mode','REVIEW_REQUIRED','ownership','CUSTOMER','updatedAt','2026-10-01T00:00:00.000Z'))`);
+ // Canonical commercial columns are local to this disposable producer.
+ await pool.query(`ALTER TABLE "Organization" ADD COLUMN "subscriptionPlan" text NOT NULL DEFAULT 'TRIAL',ADD COLUMN "subscriptionStatus" text NOT NULL DEFAULT 'TRIALING';
+  UPDATE "Organization" SET "trialEndsAt"=(clock_timestamp() AT TIME ZONE 'UTC')+interval '15 days';`);
  const workspace=createWorkspaceStore({connect:()=>pool.connect()}),service=createMetaCustomerOnboarding({workspace,provider,environment,now:()=>clock}),preparation=createCustomerWhatsAppSetup({workspace});
  const scope=(await workspace.list(owner)).scope,otherScope=(await workspace.list(foreign)).scope,colleagueScope=(await workspace.list(colleague)).scope;
  const context=projectId=>({projectId,scope}),command=(projectId,action,extra={})=>({...context(projectId),action,operationId:randomUUID(),...extra});
@@ -286,6 +289,64 @@ try{
  const phoneModeReads=inspections;assert.deepEqual((await service.command(owner,phoneModeReview)).receipt,phoneModeRecovered.receipt);await assert.rejects(service.command(owner,{...phoneModeReview,expectedCompanyPhoneRevision:3}),{code:'META_CUSTOMER_OPERATION_CONFLICT'});await assert.rejects(service.read(colleague,{...phoneModeReview,scope:colleagueScope}),{code:'META_CUSTOMER_SESSION_UNAVAILABLE'});assert.equal(inspections,phoneModeReads);
  const phoneModeAudit=(await pool.query(`SELECT metadata FROM "AuditLog" WHERE id=$1`,[phoneModeRecovered.receipt.receiptId])).rows[0].metadata;assert.equal(phoneModeAudit.source.encryptedToken,phoneModeOriginal.encryptedToken);assert.ok(!JSON.stringify(phoneModeRecovered).includes('encryptedToken'));assert.ok(!JSON.stringify(phoneModeAudit).includes(token));const brokenAudit={...phoneModeAudit,source:{...phoneModeAudit.source,registrationOperationId:randomUUID()}};await pool.query(`UPDATE "AuditLog" SET metadata=$2::jsonb WHERE id=$1`,[phoneModeRecovered.receipt.receiptId,JSON.stringify(brokenAudit)]);await assert.rejects(service.read(owner,phoneModeReview),{code:'COMPANY_PHONE_INTEGRITY'});await pool.query(`UPDATE "AuditLog" SET metadata=$2::jsonb WHERE id=$1`,[phoneModeRecovered.receipt.receiptId,JSON.stringify(phoneModeAudit)]);
  const closedPhoneMode=await service.command(owner,command('p-21','cancel',{signupId:phoneModeAttempt.signup.id,confirmLocalClosure:true}));assert.equal(closedPhoneMode.signup.state,'CANCELLED');assert.deepEqual([exchanges,subscriptions,registrations],phoneModeBefore);assert.equal(inspections,phoneModeReads);assert.deepEqual((await service.read(owner,phoneModeReview)).receipt,phoneModeRecovered.receipt);const phoneModeFinal=(await pool.query(`SELECT metadata->'metaSignup' AS state FROM "Project" WHERE id='p-21'`)).rows[0].state;assert.equal(phoneModeFinal.encryptedToken,phoneModeOriginal.encryptedToken);assert.deepEqual(phoneModeFinal.declaredCompanyPhone,phoneModeOriginal.declaredCompanyPhone);assert.equal(phoneModeFinal.expiresAt,phoneModeOriginal.expiresAt);const freshPhoneMode=await preparation.save(owner,{...context('p-21'),operationId:randomUUID(),profile:{assistantName:'Synthetic historical recovery',numberMode:'BUSINESS_APP',initialProjectId:'p-21',useCases:['FIELD_REPORTS'],expectedRevision:1,confirmOwnership:true}});assert.equal(freshPhoneMode.profile.revision,2);const phoneModeNext=await service.command(owner,command('p-21','begin',{preparedRevision:2}));assert.notEqual(phoneModeNext.signup.id,phoneModeAttempt.signup.id);const historicalPhoneMode=await service.read(owner,phoneModeReview);assert.deepEqual(historicalPhoneMode.receipt,phoneModeRecovered.receipt);assert.equal(historicalPhoneMode.signup.id,phoneModeNext.signup.id);assert.equal(historicalPhoneMode.signup.state,'PREPARED');assert.equal(historicalPhoneMode.signup.numberMode,'BUSINESS_APP');await assert.rejects(service.command(owner,phoneModeReview),{code:'META_CUSTOMER_SESSION_UNAVAILABLE'});await assert.rejects(service.read(colleague,{...phoneModeReview,scope:colleagueScope}),{code:'META_CUSTOMER_SESSION_UNAVAILABLE'});assert.deepEqual([exchanges,subscriptions,registrations],phoneModeBefore);assert.equal(inspections,phoneModeReads);checks.push('historical-phone-mode-rejection-GET-after-new-signup-recovers-prior-ACK-with-owned-audit-source-and-never-mutates-current-attempt');inspectionModePatch={};await pool.query(`UPDATE "Organization" SET metadata=metadata-'companyPhoneDeclaration' WHERE id='company-a'`);checks.push('confirmed-prebinding-mode-rejection-settles-exact-phone-review-before-local-close-with-encrypted-source-proof-no-phone-correction-no-provider-replay-and-unknown-status-remains-uncertain');
+ // The only new worksite is p-23; all original p-1..p-22 scenarios stay intact.
+ const commercialSnapshot=async()=>({project:(await pool.query(`SELECT metadata FROM "Project" WHERE id='p-23'`)).rows[0].metadata,audits:(await pool.query(`SELECT id,metadata FROM "AuditLog" WHERE "entityType"='Project' AND "entityId"='p-23' ORDER BY id`)).rows,connections:(await pool.query(`SELECT * FROM "WhatsAppConnection" WHERE "projectId"='p-23' ORDER BY id`)).rows});
+ const commercialIO=()=>[exchanges,subscriptions,registrations,inspections];
+ const pristineCommercial=await commercialSnapshot(),pristineIO=commercialIO();
+ let waitingPid=null,waitingOutcome=null,blockedWhileLive=false,expiredWhileBlocked=false;
+ const waitingService=createMetaCustomerOnboarding({workspace:createWorkspaceStore({connect:async()=>{const client=await pool.connect();waitingPid=client.processID;return client;}}),provider,environment,now:()=>clock});
+ const commercialLocker=await pool.connect();
+ try{
+  await commercialLocker.query(`UPDATE "Organization" SET "subscriptionPlan"='TRIAL',"subscriptionStatus"='TRIALING',"trialEndsAt"=(clock_timestamp() AT TIME ZONE 'UTC')+interval '500 milliseconds' WHERE id='company-a'`);
+  await commercialLocker.query('BEGIN');await commercialLocker.query(`SELECT id FROM "Organization" WHERE id='company-a' FOR UPDATE`);
+  waitingOutcome=waitingService.command(owner,command('p-23','begin',{preparedRevision:1})).then(value=>({value}),error=>({error}));
+  const deadline=Date.now()+1500;
+  while(Date.now()<deadline){
+   if(Number.isInteger(waitingPid)){
+    const observation=(await pool.query(`SELECT $1::int=ANY(pg_blocking_pids($2::int)) AS blocked,clock_timestamp()<("trialEndsAt" AT TIME ZONE 'UTC') AS live FROM "Organization" WHERE id='company-a'`,[commercialLocker.processID,waitingPid])).rows[0];
+    if(observation.blocked&&observation.live)blockedWhileLive=true;
+    if(observation.blocked&&!observation.live){assert.equal(blockedWhileLive,true,'The exact waiter must be observed blocked before expiry');expiredWhileBlocked=true;break;}
+   }
+   await new Promise(resolve=>setTimeout(resolve,10));
+  }
+  assert.equal(expiredWhileBlocked,true,'Trial must expire while this exact PID still waits for the synthetic fixture lock');
+  await commercialLocker.query('COMMIT');const outcome=await waitingOutcome;assert.equal(outcome.error?.code,'COMPANY_ENTITLEMENT_TRIAL_EXPIRED');assert.equal(outcome.value,undefined);
+ }finally{await commercialLocker.query('ROLLBACK').catch(()=>{});commercialLocker.release();if(waitingOutcome)await waitingOutcome;}
+ assert.deepEqual(await commercialSnapshot(),pristineCommercial);assert.deepEqual(commercialIO(),pristineIO);checks.push('new-CUSTOMER-BEGIN-trial-expires-during-observed-exact-Organization-lock-wait-fresh-DB-clock-denies-before-write-or-provider');
+ for(const status of ['PAST_DUE','CANCELED','SUSPENDED']){
+  await pool.query(`UPDATE "Organization" SET "subscriptionPlan"='PRO',"subscriptionStatus"=$1 WHERE id='company-a'`,[status]);
+  await assert.rejects(begin('p-23'),{code:'COMPANY_ENTITLEMENT_'+status});assert.deepEqual(await commercialSnapshot(),pristineCommercial);assert.deepEqual(commercialIO(),pristineIO);
+ }
+ await pool.query(`UPDATE "Organization" SET "subscriptionPlan"='TRIAL',"subscriptionStatus"='TRIALING',"trialEndsAt"=NULL WHERE id='company-a'`);
+ await assert.rejects(begin('p-23'),{code:'COMPANY_ENTITLEMENT_TRIAL_EXPIRY_UNAVAILABLE'});assert.deepEqual(await commercialSnapshot(),pristineCommercial);assert.deepEqual(commercialIO(),pristineIO);checks.push('new-CUSTOMER-BEGIN-canonical-denied-or-unobserved-trial-preserves-preparation-and-receipts-zero-provider');
+ await pool.query(`UPDATE "Organization" SET "subscriptionPlan"='PRO',"subscriptionStatus"='ACTIVE',"trialEndsAt"=NULL WHERE id='company-a'`);
+ const commercialBegin=command('p-23','begin',{preparedRevision:1}),commercialStart=await service.command(owner,commercialBegin),commercialPrepared=await commercialSnapshot(),commercialPreparedIO=commercialIO();
+ assert.equal(commercialStart.signup.state,'PREPARED');assert.equal(commercialStart.acceptance.roundTrip,'NOT_VERIFIED');assert.equal(Object.hasOwn(commercialStart,'paymentEvidence'),false);
+ await pool.query(`UPDATE "Organization" SET "subscriptionPlan"='TRIAL',"subscriptionStatus"='TRIALING',"trialEndsAt"=(clock_timestamp() AT TIME ZONE 'UTC')-interval '1 second' WHERE id='company-a'`);
+ const commercialReplay=await service.command(owner,commercialBegin);assert.equal(commercialReplay.signup.id,commercialStart.signup.id);assert.equal(commercialReplay.signup.expiresAt,commercialStart.signup.expiresAt);
+ await assert.rejects(service.command(owner,{...commercialBegin,preparedRevision:2}),{code:'META_CUSTOMER_PREPARATION_CHANGED'});
+ await assert.rejects(service.command(colleague,{...commercialBegin,scope:colleagueScope}),{code:'META_CUSTOMER_SESSION_UNAVAILABLE'});
+ await assert.rejects(begin('p-23'),{code:'META_CUSTOMER_ATTEMPT_ALREADY_ACTIVE'});assert.deepEqual(await commercialSnapshot(),commercialPrepared);assert.deepEqual(commercialIO(),commercialPreparedIO);checks.push('ACTIVE-PRO-is-canonical-plan-not-payment-exact-BEGIN-replay-after-expiry-preserves-TTL-receipt-actor-revision-and-active-attempt-guards');
+ for(const state of ['FAILED','EXPIRED','CANCELLED']){
+  // Controlled historical states test receipt classification, not a provider outcome.
+  await pool.query(`UPDATE "Project" SET metadata=jsonb_set(metadata,'{metaSignup,state}',to_jsonb($1::text)) WHERE id='p-23'`,[state]);const terminal=await commercialSnapshot();
+  await assert.rejects(begin('p-23'),{code:'COMPANY_ENTITLEMENT_TRIAL_EXPIRED'});assert.deepEqual(await commercialSnapshot(),terminal);
+  const terminalReplay=await service.command(owner,commercialBegin);assert.equal(terminalReplay.signup.id,commercialStart.signup.id);assert.equal(terminalReplay.signup.state,state);assert.deepEqual(await commercialSnapshot(),terminal);assert.deepEqual(commercialIO(),commercialPreparedIO);
+ }
+ checks.push('FAILED-EXPIRED-CANCELLED-current-historical-receipt-does-not-exempt-new-UUID-exact-original-replay-remains-terminal');
+ await pool.query(`UPDATE "Project" SET metadata=$1::jsonb WHERE id='p-23'`,[JSON.stringify(commercialPrepared.project)]);
+ const registeredBeforeCommercial=registered;
+ try{
+  registered=false;exchangeFails=true;await assert.rejects(service.command(owner,complete('p-23',commercialStart,23)),{code:'META_CUSTOMER_EXCHANGE_UNCONFIRMED'});exchangeFails=false;
+  const restartedCommercial=await service.command(owner,command('p-23','restart_authorization',{signupId:commercialStart.signup.id,preparedRevision:1,confirmFreshAuthorization:true,reason:'Fresh authorization to recover a confirmed synthetic exchange failure.'}));assert.notEqual(restartedCommercial.signup.id,commercialStart.signup.id);
+  const continuedCommercial=await service.command(owner,{...complete('p-23',restartedCommercial,23),code:'synthetic-code-23-restarted'});assert.equal(continuedCommercial.signup.state,'REGISTRATION_REQUIRED');
+  const registeredCommercial=await service.command(owner,command('p-23','register_number',{signupId:restartedCommercial.signup.id,pin:'523146',confirmRegistration:true}));assert.equal(registeredCommercial.signup.state,'LINKED_PENDING_ACCEPTANCE');
+  assert.equal((await service.command(owner,command('p-23','reconcile',{signupId:restartedCommercial.signup.id}))).signup.state,'LINKED_PENDING_ACCEPTANCE');
+  const activatedCommercial=await service.command(owner,command('p-23','activate_channel',{confirmActivation:true}));assert.equal(activatedCommercial.activation.operational,true);assert.equal(activatedCommercial.acceptance.roundTrip,'NOT_VERIFIED');
+  await service.command(owner,command('p-23','deactivate_channel',{confirmActivation:true}));
+ }finally{registered=registeredBeforeCommercial;exchangeFails=false;}
+ checks.push('trial-expiry-does-not-revoke-started-exchange-restart-registration-reconciliation-activation-or-explicit-deactivation');
+ await pool.query(`UPDATE "Organization" SET "subscriptionPlan"='TRIAL',"subscriptionStatus"='TRIALING',"trialEndsAt"=(clock_timestamp() AT TIME ZONE 'UTC')+interval '15 days' WHERE id='company-a'`);
  const beforeRevocation=exchanges,revoked=await begin('p-6');await pool.query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE id='m-owner'`);await assert.rejects(service.command(owner,complete('p-6',revoked,6)),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});assert.equal(exchanges,beforeRevocation);checks.push('membership-revocation-wins-before-remote-exchange');
  const result={status:'PASS',environment:'local-disposable-postgresql',checks,realProviderCalls:0,physicalNumberTested:false,productionDataTouched:false};mkdirSync('.vercel/meta-customer-evidence',{recursive:true});writeFileSync('.vercel/meta-customer-evidence/postgres.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
 }finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}

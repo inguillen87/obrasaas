@@ -14,6 +14,8 @@ import {companyConnectionForProject,assertLegacyProjectChannel} from './company-
 import {companyChannelOperationalCapabilities} from './company-channel-store.mjs';
 import {companyPreparedMediaRecoveryAuthorized} from './company-channel-routing.mjs';
 import {companyPhoneContract,readCompanyPhoneDeclaration,assertCompanyPhoneMatch,companyPhoneAuthorizationContract} from './company-onboarding-policy.mjs';
+import {companyWhatsappOnboardingEntitlement} from './company-entitlement.mjs';
+import {META_OWN_COMPANY_MODE} from './meta-own-company-policy.mjs';
 const activeStates=new Set(['PREPARED','EXCHANGE_STARTED','EXCHANGE_UNKNOWN','CREDENTIAL_STORED','VERIFYING','REVIEW_REQUIRED','LINKED_PENDING_ACCEPTANCE','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN']);
 const phoneModeReviewCodes=new Set(['META_CUSTOMER_DEDICATED_PHONE_REQUIRED','META_CUSTOMER_EXISTING_API_REVIEW_REQUIRED','META_CUSTOMER_PHONE_MODE_UNCONFIRMED','META_CUSTOMER_PHONE_STATUS_UNCONFIRMED']);
 const localModeRejectionCodes=new Set(['META_CUSTOMER_DEDICATED_PHONE_REQUIRED','META_CUSTOMER_EXISTING_API_REVIEW_REQUIRED']);
@@ -359,6 +361,17 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
     const existing=await client.query(`SELECT id,"whatsappBusinessId","phoneNumberId","encryptedAccessToken",metadata FROM public."WhatsAppConnection" WHERE "projectId"=$1 FOR UPDATE`,[project.id]);
     if(existing.rows.length&&(profile.numberMode!=='BUSINESS_APP'||existing.rows.length!==1||existing.rows[0].metadata?.credentialFormat!=='tenant-aad-v2'||existing.rows[0].metadata.credentialOrganizationId!==member.organizationId))throw new WorkspaceError('META_CUSTOMER_EXISTING_CONNECTION_REVIEW',409);
     const c=existing.rows[0],signupFlow=flow(profile.numberMode),declaration=companyPhoneContract(project.organizationMetadata);
+    // Gate only a new ordinary CUSTOMER attempt. Exact replay and existing
+    // connections retain their own authorization; OWN/pilot modes stay scoped.
+    if(!c&&![META_OWN_COMPANY_MODE,META_DEVELOPMENT_PILOT_MODE].includes(provider.readiness().mode)){
+     const companies=(await client.query(`SELECT id,"subscriptionPlan"::text AS "subscriptionPlan","subscriptionStatus"::text AS "subscriptionStatus",
+      "trialEndsAt" AT TIME ZONE 'UTC' AS "trialEndsAt" FROM public."Organization" WHERE id=$1 FOR SHARE`,[member.organizationId])).rows;
+     if(companies.length!==1||companies[0].id!==member.organizationId)throw new WorkspaceError('COMPANY_ENTITLEMENT_UNOBSERVED',503);
+     // Read the canonical DB clock after all prior lock waits in this transaction.
+     const observedAt=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
+     const entitlement=companyWhatsappOnboardingEntitlement(companies[0],{now:observedAt});
+     if(!entitlement.allowed)throw new WorkspaceError(entitlement.reasonCode,403);
+    }
     await sealLegacyLifecycle(client,project,c);
     if(previous){const history=project.metadata.metaSignupHistory||[];if(!Array.isArray(history)||history.length>=20)throw new WorkspaceError('META_CUSTOMER_RESTART_REVIEW_REQUIRED',409);if(!history.some(entry=>entry.id===previous.id&&entry.localModeClosure))project.metadata={...project.metadata,metaSignupHistory:[...history,{id:previous.id,state:previous.state,codeDigest:previous.codeDigest,wabaId:previous.wabaId,phoneNumberId:previous.phoneNumberId,actorId:previous.actorId,createdAt:previous.createdAt,restartedAt:new Date(now()).toISOString(),remoteAuthorizationRevoked:false}]};}
     await save(client,member,project,{version:1,id:randomUUID(),actorId:member.actorId,organizationId:member.organizationId,preparedRevision:profile.revision,operationId:body.operationId,startRequestDigest:digest(body),...signupFlow,...(declaration?{declaredCompanyPhone:declaration}:{}),...(c?{existingConnection:{id:c.id,wabaId:c.whatsappBusinessId,phoneNumberId:c.phoneNumberId,tokenDigest:digest(c.encryptedAccessToken)}}:{}),state:'PREPARED',createdAt:new Date(now()).toISOString(),expiresAt:new Date(now()+15*60000).toISOString()},body.operationId);
