@@ -106,9 +106,9 @@ function ParticipantPanelInner({projectId,scope,onPending,getSessionToken,channe
  const [chatChallenge,setChatChallenge]=useState(null),[bankPending,setBankPending]=useState({}),[intakePending,setIntakePending]=useState(false);
  useEffect(()=>{if(!data)return;const timer=setInterval(()=>{const now=Date.now();setClock(now);if(Number.isFinite(now))setChatChallenge(value=>value?.code&&Number.isFinite(Date.parse(value.expiresAt))&&now>=Date.parse(value.expiresAt)?{...value,code:undefined,expired:true}:value);},1000);return()=>clearInterval(timer);},[data]);
  const onBankPending=useCallback((workerId,value)=>setBankPending(prior=>prior[workerId]===value?prior:{...prior,[workerId]:value}),[]),hasBankPending=Object.values(bankPending).some(Boolean);
- const alive=useRef(true),sequence=useRef(0),fileSequence=useRef(0),urls=useRef([]),fileRead=useRef(null),committedFileTarget=useRef(null);
+ const alive=useRef(true),sequence=useRef(0),fileSequence=useRef(0),urls=useRef([]),fileRead=useRef(null),committedFileTarget=useRef(null),committedDraft=useRef(null);
  useLayoutEffect(()=>{alive.current=true;const allocatedUrls=urls.current,localSequence=fileSequence,accountRead=accountRequest.current;return()=>{alive.current=false;profileFocus.current=null;localSequence.current++;fileRead.current?.cancel(null);accountRead.epoch++;accountRead.controller?.abort();allocatedUrls.forEach(url=>URL.revokeObjectURL(url));};},[]);
- useLayoutEffect(()=>{const target=localPhotoTarget(projectId,scope,draft);committedFileTarget.current=target;if(fileRead.current&&fileRead.current.target!==target){fileSequence.current++;fileRead.current.cancel(null);}},[projectId,scope,draft]);
+ useLayoutEffect(()=>{committedDraft.current=draft;const target=localPhotoTarget(projectId,scope,draft);committedFileTarget.current=target;if(fileRead.current&&fileRead.current.target!==target){fileSequence.current++;fileRead.current.cancel(null);}},[projectId,scope,draft]);
  useEffect(()=>{onPending?.(busy||!consultationClosed&&Boolean(attempt)||Boolean(draft)||hasBankPending||intakePending);return()=>onPending?.(false);},[busy,attempt,draft,consultationClosed,hasBankPending,intakePending,onPending]);
  useEffect(()=>{let current=true;const read=async()=>{try{const refs=await browserRecoveryJournal.list(scope);if(current){setDurableReference(refs.find(ref=>ref.projectId===projectId&&ref.resource==='participants'&&!PRIVATE_BANK_ACTIONS.includes(ref.action)&&!PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(ref.action))||null);setRecoveryReady(true);}}catch{if(current){setRecoveryReady(false);setNotice('No se pudieron comprobar las referencias pendientes. Consultá tu acceso antes de guardar.');}}};read();window.addEventListener(RECOVERY_EVENT,read);window.addEventListener('focus',read);return()=>{current=false;window.removeEventListener(RECOVERY_EVENT,read);window.removeEventListener('focus',read);};},[projectId,scope]);
  useEffect(()=>{if(editingKey){editor.current?.focus({preventScroll:true});editor.current?.scrollIntoView({block:'nearest',behavior:'auto'});}},[editingKey]);
@@ -164,7 +164,8 @@ function ParticipantPanelInner({projectId,scope,onPending,getSessionToken,channe
  }
  async function load(append=false,fullList=false){
   if(busy||attempt||hasBankPending||intakePending)return;
-  setBusy(true);const current=++sequence.current,accountDraft=draft&&revisionReview&&['ASSIGN_EXISTING','SET_OFFICE_ROLE'].includes(draft.action);
+  const reviewDraft=draft&&revisionReview?draft:null;if(reviewDraft)setRevisionReview({state:'STALE'});
+  setBusy(true);const current=++sequence.current,accountDraft=reviewDraft&&['ASSIGN_EXISTING','SET_OFFICE_ROLE'].includes(reviewDraft.action);
   try{
    const query=!append&&!fullList&&data?.participantFocus?{projectId,scope,...data.participantFocus}:{projectId,scope,...(append&&data?.nextCursor?{after:data.nextCursor}:{})};
    const value=await api(query,{},endpoint,false,value=>scoped(value,true));
@@ -177,7 +178,7 @@ function ParticipantPanelInner({projectId,scope,onPending,getSessionToken,channe
    if(fullList)setSelectedId(value.records.find(row=>row.active)?.id||value.records[0]?.id||null);
    setAccountSelection(account?{account,verified:participantAccountSelectionAllowed(draft.action,account,fresh),confirmed:false}:null);
    if(append)setSelectedId(draft?.payload.workerId||value.records.find(row=>row.active)?.id||value.records[0]?.id||null);
-   if(draft&&revisionReview){setRevisionReview({state:'LOADED',...refreshedDraft(draft,fresh,account)});if(draft.action==='REVIEW_KYC'){urls.current.forEach(url=>URL.revokeObjectURL(url));urls.current.length=0;setImages({});}setNotice('Consultamos el estado vigente. Tu borrador se conserva; revisá el cambio antes de continuar.');}
+   if(reviewDraft&&committedDraft.current===reviewDraft){setRevisionReview({state:'LOADED',...refreshedDraft(reviewDraft,fresh,account)});if(reviewDraft.action==='REVIEW_KYC'){urls.current.forEach(url=>URL.revokeObjectURL(url));urls.current.length=0;setImages({});}setNotice('Consultamos el estado vigente. Tu borrador se conserva; revisá el cambio antes de continuar.');}
   }catch(error){
    if(!alive.current||current!==sequence.current)return;
    if(hideUnavailableFocus(error)|| (accountDraft?hideAccountDenied(error):hideDenied(error))){setNotice(error.message);return;}
