@@ -88,11 +88,11 @@ try {
  browser=await puppeteer.launch({headless:true,args:['--no-sandbox']});
  for(const width of widths)for(const mode of modes){
   const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});page.on('pageerror',error=>errors.push(error.message));await page.setRequestInterception(true);
-  let draft=null,receipt=null;const posts=[],recoveries=[];
+  let draft=null,receipt=null,secondaryDraft=null;const posts=[],recoveries=[],draftReads=[];
   let releaseInitialRead,signalInitialRead,initialReadHeld=true;
   const initialReadBarrier=new Promise(resolve=>{releaseInitialRead=resolve;});
   const initialReadObserved=new Promise(resolve=>{signalInitialRead=resolve;});
-  const snapshot=()=>({scope,projectId,canApprove:mode!=='manager',drafts:draft?[draft]:[],truncated:false});
+  const snapshot=()=>({scope,projectId,canApprove:mode!=='manager',drafts:[draft,secondaryDraft].filter(Boolean),truncated:false});
   const send=(request,data,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:JSON.stringify(data)});
   page.on('request',async request=>{try{
    const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('Unexpected external request');}if(url.pathname!=='/api/identity/plan-import')return request.continue();
@@ -103,11 +103,11 @@ try {
      draft={id:'plan-fixture',revision:3,status:'READY',existingTaskCount:0,source:{contentType:'application/pdf',bytes:39,sha256:'b'.repeat(64)},sourceAvailable:true,rows:mode==='ambiguous'?[{...row,startsOn:null,endsOn:null,uncertainty:'Año ausente; revisar con la fuente'}]:[row],warnings:[],failure:null,createdAt:'2026-10-06T00:00:00Z',updatedAt:'2026-10-06T00:00:00Z',decision:null};return send(request,{scope,projectId,saved:true,replayed:false,draft});
     }
     const body=JSON.parse(request.postData());posts.push(body);assert.equal(body.projectId,projectId);assert.equal(body.scope,scope);assert.equal(body.expectedRevision,draft.revision);assert.equal(body.draftId,draft.id);assert.equal(body.action,'APPLY');assert.equal(body.rows.length,1);assert.equal(body.rows[0].title,'Fundaciones corregidas');
-    draft={...draft,revision:4,status:'APPLIED',rows:body.rows};receipt={scope,projectId,saved:true,replayed:false,action:'APPLY',receiptId:'receipt-fixture',draft,tasks:[{id:'task-fixture',title:body.rows[0].title,status:'BACKLOG',progress:0,startsOn:body.rows[0].startsOn,endsOn:body.rows[0].endsOn,revision:'2026-10-06T00:00:00.000001'}]};
+    draft={...draft,revision:4,status:'APPLIED',rows:body.rows,decision:{action:'APPLY',actorId:'plan-reviewer-synthetic',reason:body.reason,recordedAt:'2026-10-06T00:00:00Z',receiptId:'receipt-fixture'}};receipt={scope,projectId,saved:true,replayed:false,action:'APPLY',receiptId:'receipt-fixture',draft,tasks:[{id:'task-fixture',title:body.rows[0].title,status:'BACKLOG',progress:0,startsOn:body.rows[0].startsOn,endsOn:body.rows[0].endsOn,revision:'2026-10-06T00:00:00.000001'}]};
     if(mode==='recover')return send(request,{saved:false,code:'PLAN_IMPORT_UNCONFIRMED'},503);return send(request,receipt);
    }
    if(url.searchParams.has('operationId')){recoveries.push(url.searchParams.get('operationId'));return send(request,{state:'RECORDED',...receipt});}
-   if(url.searchParams.has('draftId'))return send(request,{scope,projectId,draft});
+   if(url.searchParams.has('draftId')){assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),projectId);const id=url.searchParams.get('draftId'),selected=[draft,secondaryDraft].find(value=>value?.id===id);assert.ok(selected,'Unknown synthetic plan draft');draftReads.push(id);return send(request,{scope,projectId,draft:selected});}
    if(initialReadHeld){signalInitialRead();await initialReadBarrier;initialReadHeld=false;}
    return send(request,snapshot());
   }catch(error){errors.push(error.message);if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
@@ -134,9 +134,24 @@ try {
    if(mode==='recover'){await wait(page,'Intento pendiente de comprobación');await click(page,'Comprobar resultado');await wait(page,'1 tareas aplicadas con recibo');assert.equal(recoveries.length,1);}else await wait(page,'1 tareas aplicadas con recibo');assert.equal(posts.length,2);
   }
   if(mode!=='manager')assert.equal(await page.$eval('[data-task-count]',e=>e.textContent),'Tareas canónicas recibidas: 1');
+  if(mode==='apply'){
+   // Consulting another authorized draft must not attribute A's decision receipt to B.
+   await wait(page,'Recibo confirmado: receipt-fixture');assert.deepEqual(await browserReferences(page),[]);
+   const appliedReceiptSnapshot=JSON.stringify(receipt),postCount=posts.length;
+   secondaryDraft={...draft,id:'plan-second-fixture',revision:3,status:'READY',existingTaskCount:1,source:{...draft.source,sha256:'c'.repeat(64)},rows:[{...row,title:'Estructura sintética pendiente'}],createdAt:'2026-10-07T00:00:00Z',updatedAt:'2026-10-07T00:00:00Z',decision:null};
+   await click(page,'Cerrar');await click(page,'Importar PDF, imagen o Excel');await click(page,'Para revisar · 2026-10-07 · 1 tareas');
+   await wait(page,'Fuente SHA-256: '+'c'.repeat(64));assert.equal(await page.$eval('fieldset input:not([type])',e=>e.value),'Estructura sintética pendiente');
+   assert.equal(await page.$eval('[data-plan-import]',e=>e.innerText.includes('Recibo confirmado:')),false);assert.equal(posts.length,postCount);assert.equal(await page.$eval('[data-task-count]',e=>e.textContent),'Tareas canónicas recibidas: 1');
+   await click(page,'Aplicado · 2026-10-06 · 1 tareas');await wait(page,'Fuente SHA-256: '+'b'.repeat(64));await wait(page,'Recibo confirmado: receipt-fixture');
+   assert.equal(await page.$('fieldset'),null);assert.equal(await page.$eval('[data-plan-import]',e=>e.innerText.includes('Estructura sintética pendiente')),false);
+   const sameDecisionRead=page.waitForResponse(response=>{const url=new URL(response.url());return url.origin===origin&&url.pathname==='/api/identity/plan-import'&&url.searchParams.get('scope')===scope&&url.searchParams.get('projectId')===projectId&&url.searchParams.get('draftId')==='plan-fixture'&&response.request().method()==='GET'&&response.status()===200;});
+   await click(page,'Aplicado · 2026-10-06 · 1 tareas');const sameDecisionResult=await (await sameDecisionRead).json();assert.equal(sameDecisionResult.draft.id,'plan-fixture');assert.equal(sameDecisionResult.draft.decision.receiptId,'receipt-fixture');
+   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Aplicado · 2026-10-06 · 1 tareas'&&!button.disabled));await wait(page,'Recibo confirmado: receipt-fixture');
+   assert.deepEqual(draftReads,['plan-second-fixture','plan-fixture','plan-fixture']);assert.equal(posts.length,postCount);assert.equal(recoveries.length,0);assert.equal(JSON.stringify(receipt),appliedReceiptSnapshot);assert.deepEqual(await browserReferences(page),[]);assert.equal(await page.$eval('[data-task-count]',e=>e.textContent),'Tareas canónicas recibidas: 1');
+  }
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Horizontal overflow '+width+' '+mode);
   const stored=await page.evaluate(()=>JSON.stringify([Object.values(localStorage),Object.values(sessionStorage)]));assert.doesNotMatch(stored,/Fundaciones|data:application|Synthetic Gantt fixture|synthetic-plan-token|startsOn/);
-  checks.push({width,mode,posts:posts.length,recoveryReads:recoveries.length,initialSnapshotBarrier:true,uploadsBeforeSnapshotReady:0});await context.close();
+  checks.push({width,mode,posts:posts.length,recoveryReads:recoveries.length,initialSnapshotBarrier:true,uploadsBeforeSnapshotReady:0,...(mode==='apply'?{draftReceiptContext:{consultedOtherReadyDraft:true,otherDraftReceiptAbsent:true,appliedDraftReceiptRestored:true,sameDecisionReceiptRetained:true,draftReads:3,additionalPosts:0,canonicalTasksUnchanged:true,journalEmpty:true}}:{})});await context.close();
  }
  for(const width of widths)for(const mode of ['decision-rejected','decision-rejected-reload','decision-unconfirmed']){
   const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});page.on('pageerror',error=>errors.push(error.message));await page.setRequestInterception(true);

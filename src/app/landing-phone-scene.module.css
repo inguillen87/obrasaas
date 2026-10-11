@@ -22,3 +22,5 @@
 @media(max-width:620px){.scenarios{font-size:10px}}
 
 @media(max-width:620px){.deviceChoice button,.scenarios button,.playback button,.transcript summary{font-size:14px}}
+
+@media(max-width:380px){.scenarios{grid-template-columns:repeat(2,minmax(0,1fr))}}

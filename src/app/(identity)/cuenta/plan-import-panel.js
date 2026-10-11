@@ -49,7 +49,7 @@ export function PlanImportPanel({projectId,scope,getSessionToken,onPending,onApp
    return data;
   }catch(error){if(mounted.current&&([401,403].includes(error.status)||['WORKSPACE_CONTEXT_CHANGED','WORKSPACE_MEMBERSHIP_REQUIRED','WORKSPACE_PROJECT_UNAVAILABLE','SESSION_REQUIRED'].includes(error.code)))invalidatePrivate();throw error;}
  },[transport,projectId,scope,invalidatePrivate]);
- const select=useCallback(value=>{privateView.current=financialDraft(value);setDraft(value);setRows(value.rows.map(row=>({...row})));setApproved(false);setReason('');setGroupFilter('');setRowPage(0);},[]);
+ const select=useCallback(value=>{privateView.current=financialDraft(value);setDraft(value);setRows(value.rows.map(row=>({...row})));setReceipt(value.decision?.receiptId||null);setApproved(false);setReason('');setGroupFilter('');setRowPage(0);},[]);
  const refresh=useCallback(async()=>{const data=await request();if(mounted.current){if(data.canApprove!==true)invalidatePrivate();const visible=data.canApprove===true?data.drafts:data.drafts.filter(value=>!financialDraft(value));privateListed.current=visible.some(financialDraft);setDrafts(visible);setCanApprove(data.canApprove===true);if(data.truncated)setMessage('Se muestran los 20 borradores más recientes. La referencia de un intento permite consultar su resultado.');}},[request,invalidatePrivate]);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;attemptPayload.current=null;};},[]);
  useEffect(()=>{onPending?.(busy||open&&(!recoveryReady||Boolean(attempt)||draft?.status==='READY'));return()=>onPending?.(false);},[busy,recoveryReady,open,attempt,draft,onPending]);
