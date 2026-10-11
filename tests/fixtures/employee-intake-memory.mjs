@@ -32,6 +32,7 @@ export function employeeIntakeFixture(){
    return result([{...e,intakeNow:new Date(now),intakeTransactionId:controls.intakeTransactionId||'1',intakeAnchorPayload:anchor.payload,intakeConnection:connection,intakeOwnerConnectionId:connection.id,intakeAnchorProjectId:project.id,intakeMode:controls.mode,intakeOwnerRevision:controls.ownerRevision,intakeAssignmentRevision:1,intakeIssuerRole:controls.issuerRole,intakeIssuerRevision:member.revision,intakePolicyReceipt:receipt.metadata,intakeIssuerTrail:[...audits.values()].filter(a=>a.organizationId===project.organizationId&&a.entityType==='TenantMembership'&&a.entityId===member.membershipId&&a.action==='participant.operation.recorded').sort((a,b)=>a.id.localeCompare(b.id)).map(({id,metadata})=>({id,metadata}))}]);
   }
   if(sql.startsWith('SET LOCAL')||sql.startsWith('SELECT pg_advisory'))return result([]);
+  if(sql==='SELECT clock_timestamp() AS now,pg_current_xact_id()::text AS "intakeTransactionId"')return result([{now:new Date(now),intakeTransactionId:controls.intakeTransactionId||'1'}]);
   if(sql==='SELECT clock_timestamp() AS now')return result([{now:new Date(now)}]);
   if(sql.includes("to_regclass('public.\"WhatsAppCompanySchema\"')"))return result([{present:true,count:1}]);
   if(sql.includes("table_name='WhatsAppCompanySchema'"))return result([{count:1}]);

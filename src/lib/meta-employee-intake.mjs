@@ -13,7 +13,7 @@ import {createSiteRegister} from './site-register-store.mjs';
 import {participantReceiptId} from './participant-policy.mjs';
 import {META_CUSTOMER_PROTOCOL} from './meta-cloud-protocol.mjs';
 import {companyKycProjectionContract,companyKycProjectionId,companyKycProjectionDigest} from './company-channel-kyc.mjs';
-import {prelockReactiveOnboarding,planReactiveOnboarding,reactiveOnboardingAuthority,decodeReactiveStart,authorizeReactiveKycStart,assertReactiveParticipantStatusResult,fenceReactiveParticipantStatusResult} from './participant-onboarding-reactive.mjs';
+import {prelockReactiveOnboarding,planReactiveOnboarding,reactiveOnboardingAuthority,decodeReactiveStart,authorizeReactiveKycStart,assertReactiveParticipantStatusResult,reactiveParticipantStatusFenceRead,assertReactiveParticipantStatusFenceRead} from './participant-onboarding-reactive.mjs';
 import {assertEmployeeIntakeChannelContinuity} from './employee-intake-channel-continuity.mjs';
 
 export const EMPLOYEE_INTAKE_ACTIONS=Object.freeze(['CONFIGURE_EMPLOYEE_INTAKE','ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE']);
@@ -146,7 +146,7 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  // Lock issuer before project/channel/event, matching canonical principal order.
  const pre=(await client.query(`SELECT tm.id FROM public."TenantMembership" tm JOIN public."PlatformUser" u ON u.id=tm."userId" WHERE tm.id=$1 AND tm."organizationId"=$2 AND tm.status='ACTIVE' FOR SHARE OF u,tm`,[member0.issuerMembershipId,raw.organizationId])).rows;if(pre.length!==1)fail('EMPLOYEE_INTAKE_REVOKED');
  const project=(await client.query(`SELECT id,name,"organizationId" FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE' FOR UPDATE`,[raw.projectId,raw.organizationId])).rows[0];if(!project)fail('EMPLOYEE_INTAKE_REVOKED');
- const connection=await companyConnectionForProject(client,raw.organizationId,raw.projectId,true),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
+ const connection=await companyConnectionForProject(client,raw.organizationId,raw.projectId,true),authorityClock=(await client.query(outbound?'SELECT clock_timestamp() AS now,pg_current_xact_id()::text AS "intakeTransactionId"':'SELECT clock_timestamp() AS now')).rows[0],now=authorityClock.now;
  if(!connection||connection.id!==raw.id||connection.company.mode!=='COMPANY'||connection.metadata?.developmentPilot||signed.companyRouting.revision!==connection.company.revision)fail('EMPLOYEE_INTAKE_REVOKED');
  if(ownDiscovery)assertOwnIntakeDiscovery(connection,ownDiscovery,{environment});else if(connection.metadata?.ownCompany||Object.hasOwn(connection.metadata||{},'ownCompanyRuntime'))fail('EMPLOYEE_INTAKE_REVOKED');
  const {policy,issuer}=await currentPolicy(client,connection,now,{environment});
@@ -178,7 +178,7 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  if(r.recorded?.reactiveOnboarding){const p=r.recorded.reactiveOnboarding,a=await reactiveOnboardingAuthority(client,r,reactive,{environment,proof:p.kind==='KYC_START'?p:null});if(!a||p.authorityDigest!==a.authorityDigest||p.eventId!==event.id||p.applicationId!==anchor.id||durableDigest(state.reactiveOnboarding)!==durableDigest(p)||Date.parse(p.expiresAt)<=a.now.getTime())fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');}
  if(r.recorded?.reactiveKycStatus)await assertReactiveParticipantStatusResult(client,r,reactive,r.recorded,{environment});
  if(outbound&&!r.recorded.reactiveOnboarding){
-  const transactionId=(await client.query('SELECT pg_current_xact_id()::text AS "intakeTransactionId"')).rows[0]?.intakeTransactionId;
+  const transactionId=authorityClock.intakeTransactionId;
   if(typeof transactionId!=='string'||!/^\d{1,20}$/.test(transactionId))fail('EMPLOYEE_INTAKE_INTEGRITY');
   const notAfter=Math.min(r.recorded?.reactiveKycStatus?Date.parse(r.recorded.reactiveKycStatus.expiresAt):Infinity,Date.parse(event.leaseExpiresAt),Number(finalPayload.value.timestamp)*1000+24*3600000,state&&!['WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(state.status)?Date.parse(state.expiresAt):Infinity);
   outboundAuthorities.set(r,{client,environment,transactionId,notAfter,requestDigest:durableDigest(request),channelDigest:outboundChannelDigest(connection),eventPayloadDigest:durableDigest(event.payload),anchorPayloadDigest:durableDigest(anchor.payload),policyDigest:durableDigest(policy),replyDigest:durableDigest(r.recorded.reply)});
@@ -202,23 +202,40 @@ export const releaseEmployeeIntakeOutboundAuthority=r=>outboundAuthorities.delet
 // The complete signed/nonce/authority resolver already owns the canonical
 // locks. Recheck its exact current rows and clock without repeating discovery,
 // schema catalog queries, decryption or the full planner on every Graph await.
-export async function fenceEmployeeIntakeOutboundAuthority(client,r,request){
- const proof=outboundAuthorities.get(r);
- if(!proof||proof.client!==client||proof.requestDigest!==durableDigest(request)||proof.policyDigest!==durableDigest(r.policy)||proof.replyDigest!==durableDigest(r.recorded?.reply)||proof.channelDigest!==outboundChannelDigest(r.connection))fail('EMPLOYEE_INTAKE_INTEGRITY');
- // The full status resolver owns these rows in this exact transaction.
- // Recheck its sealed current projection and clock, not its entire discovery
- // and decryption graph on every individual Graph boundary.
- if(r.recorded?.reactiveKycStatus)await fenceReactiveParticipantStatusResult(client,r,r.reactive,r.recorded);
- const rows=(await client.query(`SELECT e.*,clock_timestamp() AS "intakeNow",pg_current_xact_id()::text AS "intakeTransactionId",anchor.payload AS "intakeAnchorPayload",to_jsonb(c) AS "intakeConnection",cc."connectionId" AS "intakeOwnerConnectionId",cc."anchorProjectId" AS "intakeAnchorProjectId",cc.mode AS "intakeMode",cc.revision AS "intakeOwnerRevision",assignment.revision AS "intakeAssignmentRevision",tm."tenantRole"::text AS "intakeIssuerRole",to_char(tm."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "intakeIssuerRevision",receipt.metadata AS "intakePolicyReceipt",COALESCE((SELECT jsonb_agg(jsonb_build_object('id',trail.id,'metadata',trail.metadata) ORDER BY trail.id) FROM public."AuditLog" trail WHERE trail."organizationId"=$5 AND trail."entityType"='TenantMembership' AND trail."entityId"=$6 AND trail.action='participant.operation.recorded'),'[]'::jsonb) AS "intakeIssuerTrail"
+function employeeIntakeOutboundFenceRead(r){
+ return {sql:`SELECT e.*,clock_timestamp() AS "intakeNow",pg_current_xact_id()::text AS "intakeTransactionId",anchor.payload AS "intakeAnchorPayload",to_jsonb(c) AS "intakeConnection",cc."connectionId" AS "intakeOwnerConnectionId",cc."anchorProjectId" AS "intakeAnchorProjectId",cc.mode AS "intakeMode",cc.revision AS "intakeOwnerRevision",assignment.revision AS "intakeAssignmentRevision",tm."tenantRole"::text AS "intakeIssuerRole",to_char(tm."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "intakeIssuerRevision",receipt.metadata AS "intakePolicyReceipt",COALESCE((SELECT jsonb_agg(jsonb_build_object('id',trail.id,'metadata',trail.metadata) ORDER BY trail.id) FROM public."AuditLog" trail WHERE trail."organizationId"=$5 AND trail."entityType"='TenantMembership' AND trail."entityId"=$6 AND trail.action='participant.operation.recorded'),'[]'::jsonb) AS "intakeIssuerTrail"
   FROM public."WebhookEvent" e JOIN public."WebhookEvent" anchor ON anchor.id=$4 AND anchor."projectId"=e."projectId"
   JOIN public."WhatsAppConnection" c ON c.id=$3 AND c."projectId"=e."projectId" JOIN public."Project" p ON p.id=c."projectId" AND p."organizationId"=$5 AND p.status='ACTIVE'
   JOIN public."WhatsAppCompanyChannel" cc ON cc."connectionId"=c.id AND cc."organizationId"=$5 AND cc.mode='COMPANY'
   JOIN public."WhatsAppChannelProjectAssignment" assignment ON assignment."connectionId"=c.id AND assignment."organizationId"=$5 AND assignment."projectId"=p.id AND assignment.status='ACTIVE'
   JOIN public."TenantMembership" tm ON tm.id=$6 AND tm."organizationId"=$5 AND tm."userId"=$7 AND tm.status='ACTIVE' JOIN public."PlatformUser" u ON u.id=tm."userId"
   JOIN public."AuditLog" receipt ON receipt.id=$8 AND receipt."organizationId"=$5 AND receipt."actorId"=u.id AND receipt."entityType"='WhatsAppConnection' AND receipt."entityId"=c.id AND receipt.action='participant.operation.recorded'
-  WHERE e.id=$1 AND e."projectId"=$2 AND e.provider='meta-customer-v1' AND e."eventType"='message' FOR UPDATE OF e,anchor FOR SHARE OF c,p,cc,assignment,tm,u,receipt`,[r.event.id,r.connection.projectId,r.connection.id,r.anchor.id,r.connection.organizationId,r.policy.issuerMembershipId,r.policy.issuerActorId,r.policy.receiptId])).rows;
- if(rows.length!==1)fail('EMPLOYEE_INTAKE_REVOKED');const row=rows[0],now=row.intakeNow;
- if(!(now instanceof Date)||!Number.isFinite(now.getTime())||row.intakeTransactionId!==proof.transactionId)fail('EMPLOYEE_INTAKE_INTEGRITY');
+  WHERE e.id=$1 AND e."projectId"=$2 AND e.provider='meta-customer-v1' AND e."eventType"='message' FOR UPDATE OF e,anchor FOR SHARE OF c,p,cc,assignment,tm,u,receipt`,values:[r.event.id,r.connection.projectId,r.connection.id,r.anchor.id,r.connection.organizationId,r.policy.issuerMembershipId,r.policy.issuerActorId,r.policy.receiptId]};
+}
+export async function fenceEmployeeIntakeOutboundAuthority(client,r,request){
+ const proof=outboundAuthorities.get(r);
+ if(!proof||proof.client!==client||proof.requestDigest!==durableDigest(request)||proof.policyDigest!==durableDigest(r.policy)||proof.replyDigest!==durableDigest(r.recorded?.reply)||proof.channelDigest!==outboundChannelDigest(r.connection))fail('EMPLOYEE_INTAKE_INTEGRITY');
+ // The full status resolver owns these rows in this exact transaction.
+ // Recheck its sealed current projection and clock, not its entire discovery
+ // and decryption graph on every individual Graph boundary.
+ const read=employeeIntakeOutboundFenceRead(r);let rows,statusRows,statusNow=null;
+ if(r.recorded?.reactiveKycStatus){
+  const status=reactiveParticipantStatusFenceRead(client,r,r.reactive,r.recorded);
+  // Both exact principal/row sets are already locked by the complete resolver.
+  // Keep fresh predicates, FOR clauses and the complete issuer trail in one
+  // statement snapshot. This is not discovery and does not mint authority.
+  const statusSql=status.sql.replace(/\$(\d+)/g,(_match,position)=>'$'+(Number(position)+read.values.length));
+  rows=(await client.query(`SELECT intake.*,to_jsonb(status)-'reactiveStatusNow' AS "intakeReactiveStatus",status."reactiveStatusNow" AS "reactiveStatusNow"
+   FROM (${read.sql}) intake CROSS JOIN (${statusSql}) status`,[...read.values,...status.values])).rows;
+  statusRows=rows.map(row=>({...row.intakeReactiveStatus,reactiveStatusNow:row.reactiveStatusNow}));
+  statusNow=assertReactiveParticipantStatusFenceRead(client,r,r.reactive,r.recorded,statusRows);
+ }else rows=(await client.query(read.sql,read.values)).rows;
+ if(rows.length!==1)fail('EMPLOYEE_INTAKE_REVOKED');const row=rows[0],intakeNow=row.intakeNow;
+ if(!(intakeNow instanceof Date)||!Number.isFinite(intakeNow.getTime())||row.intakeTransactionId!==proof.transactionId)fail('EMPLOYEE_INTAKE_INTEGRITY');
+ // Each original clock is checked independently. Use the later one for both
+ // deadline validators so executor order cannot select an older lease clock.
+ const now=statusNow&&statusNow.getTime()>intakeNow.getTime()?statusNow:intakeNow;
+ if(statusNow&&statusNow.getTime()<now.getTime())assertReactiveParticipantStatusFenceRead(client,r,r.reactive,r.recorded,statusRows.map(value=>({...value,reactiveStatusNow:now})));
  if(row.status!=='PENDING'||row.leaseToken!==request.leaseToken||!Number.isFinite(Date.parse(row.leaseExpiresAt))||Date.parse(row.leaseExpiresAt)<=now.getTime()||row.projectId!==request.projectId||row.payload?.channelId!==request.channelId||row.payload.payloadDigest!==request.payloadDigest)fail('META_CUSTOMER_INBOX_LEASE_CHANGED');
  const current={...row.intakeConnection,organizationId:r.connection.organizationId,company:{connectionId:row.intakeOwnerConnectionId,anchorProjectId:row.intakeAnchorProjectId,mode:row.intakeMode,revision:row.intakeOwnerRevision,assignmentRevision:row.intakeAssignmentRevision,targetProjectId:r.project.id,organizationId:r.connection.organizationId}};
  if(outboundChannelDigest(current)!==proof.channelDigest||durableDigest(row.payload)!==proof.eventPayloadDigest||durableDigest(row.intakeAnchorPayload)!==proof.anchorPayloadDigest||row.intakeIssuerRole!=='ADMIN'||row.intakeIssuerRevision!==r.policy.issuerRevision||row.intakePolicyReceipt?.kind!=='CONFIGURE_EMPLOYEE_INTAKE'||row.intakePolicyReceipt.intakePolicyDigest!==proof.policyDigest||durableDigest(row.intakeIssuerTrail)!==r.policy.issuerTrail)fail('EMPLOYEE_INTAKE_REVOKED');

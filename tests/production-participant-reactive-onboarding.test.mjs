@@ -4,7 +4,7 @@ import {digest} from '../src/lib/workspace-policy.mjs';
 import {encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
 import {customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
 import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
-import {decodeReactiveStart,prelockReactiveOnboarding,reactiveParticipantStatusAuthority,planReactiveOnboarding,fenceReactiveParticipantStatusResult} from '../src/lib/participant-onboarding-reactive.mjs';
+import {decodeReactiveStart,prelockReactiveOnboarding,reactiveParticipantStatusAuthority,planReactiveOnboarding,fenceReactiveParticipantStatusResult,reactiveParticipantStatusFenceRead,assertReactiveParticipantStatusFenceRead} from '../src/lib/participant-onboarding-reactive.mjs';
 import {fenceCompanyKycAuthority} from '../src/lib/company-channel-kyc.mjs';
 import {COMPANY_CHANNEL_SCHEMA_CONTRACT} from '../src/lib/company-channel-schema.mjs';
 
@@ -209,7 +209,7 @@ test('a distinct runtime principal joins the same sorted union before completed 
  const principals=f.calls.filter(q=>q.sql==='SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE id=$1 FOR SHARE');assert.deepEqual(principals.map(q=>q.args[0]),['aaa-runtime','owner','person']);const p=f.calls.findIndex(q=>q.sql.startsWith('SELECT id FROM public."Project"')&&q.sql.includes('FOR UPDATE'));assert.ok(principals.every(q=>f.calls.indexOf(q)<p));
 });
 test('caller-created status reply cannot use the compact fence without full current authority',async()=>{
- let queries=0;const client={query:async()=>{queries++;throw Error('unexpected SQL');}};await assert.rejects(fenceReactiveParticipantStatusResult(client,{}, {},{reactiveKycStatus:{status:'APPROVED'}}),{code:'EMPLOYEE_INTAKE_CONTEXT_REQUIRED'});assert.equal(queries,0);
+ let queries=0;const client={query:async()=>{queries++;throw Error('unexpected SQL');}},r={},pref={},result={reactiveKycStatus:{status:'APPROVED'}};await assert.rejects(fenceReactiveParticipantStatusResult(client,r,pref,result),{code:'EMPLOYEE_INTAKE_CONTEXT_REQUIRED'});assert.throws(()=>reactiveParticipantStatusFenceRead(client,r,pref,result),{code:'EMPLOYEE_INTAKE_CONTEXT_REQUIRED'});assert.throws(()=>assertReactiveParticipantStatusFenceRead(client,r,pref,result,[{active:true,reactiveStatusNow:new Date()}]),{code:'EMPLOYEE_INTAKE_CONTEXT_REQUIRED'});assert.equal(queries,0);
 });
 test('target reassigned to another connection or anchor is rejected before any Project lock',async()=>{
  const f=companyPresentDiscoveryFixture();f.state.reactiveOnboarding={kind:'KYC_START'};f.participant.kycChatChallenge={id:'kyc_chat_'+'2'.repeat(32),status:'COMPLETED'};const original=f.client.query;

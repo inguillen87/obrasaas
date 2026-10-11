@@ -174,10 +174,16 @@ export async function assertReactiveParticipantStatusResult(client,r,pref,result
 // Only the complete resolver above can register this in-memory authority for
 // the same client/TX. Its supporting receipts/events remain SHARE locked; the
 // canonical Worker/PM/Organization locks serialize review, revoke and edits.
-export async function fenceReactiveParticipantStatusResult(client,r,pref,result){
+function currentReactiveParticipantStatusFence(client,r,pref,result){
  const f=reactiveStatusFences.get(r);
  if(!f||f.client!==client||f.pref!==pref||f.proofDigest!==digest(result?.reactiveKycStatus)||f.replyDigest!==digest(result?.reply))fail();
- const rows=(await client.query(`SELECT w.id,w."projectId",w.name,w.phone,w.active,w.metadata,to_char(w."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision,
+ return f;
+}
+// Internal composition only: the full resolver registers the WeakMap proof.
+// Neither a supplied SQL result nor these read helpers can register authority.
+export function reactiveParticipantStatusFenceRead(client,r,pref,result){
+ const f=currentReactiveParticipantStatusFence(client,r,pref,result);
+ return {sql:`SELECT w.id,w."projectId",w.name,w.phone,w.active,w.metadata,to_char(w."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision,
  to_jsonb(o) AS "statusOrganization",jsonb_build_object('id',p.id,'name',p.name,'organizationId',p."organizationId",'metadata',p.metadata) AS "statusProject",
  jsonb_build_object('actorId',u.id,'membershipId',tm.id,'clerkUserId',u."clerkUserId",'role',tm."tenantRole"::text,'clerkRole',tm."clerkRole",'revision',to_char(tm."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US'),'userRevision',to_char(u."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US')) AS "statusMember",
  CASE WHEN own.id IS NULL THEN NULL ELSE jsonb_build_object('actorId',ou.id,'membershipId',own.id,'clerkUserId',ou."clerkUserId",'role',own."tenantRole"::text,'clerkRole',own."clerkRole",'revision',to_char(own."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US'),'userRevision',to_char(ou."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US')) END AS "statusOwn",clock_timestamp() AS "reactiveStatusNow"
@@ -185,12 +191,20 @@ export async function fenceReactiveParticipantStatusResult(client,r,pref,result)
  JOIN public."Organization" o ON o.id=p."organizationId" JOIN public."TenantMembership" tm ON tm.id=$4 AND tm."organizationId"=o.id AND tm."userId"=$5 AND tm.status='ACTIVE' JOIN public."PlatformUser" u ON u.id=tm."userId"
  LEFT JOIN public."TenantMembership" own ON own.id=$6 AND own."organizationId"=o.id AND own."userId"=$7 AND own.status='ACTIVE' LEFT JOIN public."PlatformUser" ou ON ou.id=own."userId"
  WHERE w.id=$1 AND w."projectId"=$2 AND w.active=true AND ($6::text IS NULL OR (own.id IS NOT NULL AND EXISTS(SELECT 1 FROM public."ProjectMembership" pm WHERE pm."projectId"=p.id AND pm."tenantMembershipId"=own.id AND pm.status='ACTIVE')))
- FOR UPDATE OF w FOR SHARE OF p,o,tm,u`,[f.worker.id,f.worker.projectId,r.connection.organizationId,f.member.membershipId,f.member.actorId,f.own?.membershipId||null,f.own?.actorId||null])).rows;
+ FOR UPDATE OF w FOR SHARE OF p,o,tm,u`,values:[f.worker.id,f.worker.projectId,r.connection.organizationId,f.member.membershipId,f.member.actorId,f.own?.membershipId||null,f.own?.actorId||null]};
+}
+export function assertReactiveParticipantStatusFenceRead(client,r,pref,result,rows){
+ const f=currentReactiveParticipantStatusFence(client,r,pref,result);
  const row=rows[0],now=row?.reactiveStatusNow;
  if(rows.length!==1||!(now instanceof Date)||!Number.isFinite(now.getTime())||digest(currentWorkerProjection(row))!==digest(f.worker)||digest(currentOrganizationProjection(row.statusOrganization))!==digest(f.organization)||digest(currentProjectProjection(row.statusProject))!==digest(f.project)||digest(currentMemberProjection(row.statusMember))!==digest(f.member)||digest(currentMemberProjection(row.statusOwn))!==digest(f.own))fail('EMPLOYEE_INTAKE_REVOKED');
  if(Date.parse(result.reactiveKycStatus.expiresAt)<=now.getTime())fail('EMPLOYEE_INTAKE_CONTEXT_REQUIRED');
  assertCustomerReplyWindow(r.payload,now.getTime());return now;
 }
+export async function fenceReactiveParticipantStatusResult(client,r,pref,result){
+ const read=reactiveParticipantStatusFenceRead(client,r,pref,result);
+ return assertReactiveParticipantStatusFenceRead(client,r,pref,result,(await client.query(read.sql,read.values)).rows);
+}
+
 async function planReactiveParticipantStatus(client,r,pref,{environment}){
  if(!pref)fail('EMPLOYEE_INTAKE_REVOKED');
  // Incomplete capture stays exclusively in the original capture planner.
