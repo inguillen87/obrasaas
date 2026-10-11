@@ -1,5 +1,5 @@
 'use client';
-import {useEffect, useRef, useState, useSyncExternalStore} from 'react';
+import {useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore} from 'react';
 import Link from 'next/link';
 import styles from './onboarding-guide.module.css';
 
@@ -71,12 +71,15 @@ export function onboardingGuideSteps(observation) {
 
 export function OnboardingGuide({orgId=null,orgRole=null,observation=null}) {
  const summary=onboardingGuideSummary(observation),officeReviewOnly=summary.officeReviewOnly===true;
- return <OnboardingGuideFlow key={officeReviewOnly?'office':'workspace'} orgId={orgId} orgRole={orgRole} summary={summary} guideSteps={officeReviewOnly?officeSteps:steps} officeReviewOnly={officeReviewOnly}/>;
+ const compactStart=Boolean(orgId&&summary.state==='OBSERVED'&&!summary.accessReason&&!officeReviewOnly&&observation.projectId);
+ return <OnboardingGuideFlow key={officeReviewOnly?'office':'workspace'} orgId={orgId} orgRole={orgRole} summary={summary} guideSteps={officeReviewOnly?officeSteps:steps} officeReviewOnly={officeReviewOnly} compactStart={compactStart}/>;
 }
 
-function OnboardingGuideFlow({orgId,orgRole,summary,guideSteps,officeReviewOnly}) {
- const [opened,setOpened] = useState(true), [index,setIndex] = useState(()=>orgId?1:0), [reviewed,setReviewed] = useState([]), [notice,setNotice] = useState('');
- const title = useRef(null), moveFocus = useRef(false), choices = useRef(null);
+function OnboardingGuideFlow({orgId,orgRole,summary,guideSteps,officeReviewOnly,compactStart}) {
+ const [opened,setOpened] = useState(null), [index,setIndex] = useState(()=>orgId?1:0), [reviewed,setReviewed] = useState([]), [notice,setNotice] = useState(''), [noticeFocusVersion,setNoticeFocusVersion] = useState(0);
+ const expanded=opened??!compactStart;
+ const preserveGuide=()=>{if(opened===null&&expanded)setOpened(true);};
+ const title = useRef(null), moveFocus = useRef(false), choices = useRef(null), noticeNode = useRef(null), noticeRequest = useRef(null), mounted = useRef(false);
  const available = new Set(useSyncExternalStore(subscribeTargets, readTargets, noTargets).split('|'));
  const step = guideSteps[index], administrator = orgRole === 'org:admin';
  const accessNotice=orgId&&available.has('workspace-title')&&(summary.state!=='OBSERVED'||summary.accessReason)?summary.state==='CONSULTING'?{title:'Consultando tu acceso',text:'Esperá la consulta actual. Los datos anteriores no confirman tus permisos vigentes.'}:summary.accessReason?accessNotices[summary.accessReason]:{title:summary.state==='UNAVAILABLE'?'Acceso por actualizar':'Comprobá tu acceso',text:summary.state==='UNAVAILABLE'?summary.company:'Mis obras todavía no confirmó tu acceso en esta sesión. Usá Actualizar para consultar las obras disponibles.'}:null;
@@ -94,31 +97,44 @@ function OnboardingGuideFlow({orgId,orgRole,summary,guideSteps,officeReviewOnly}
  if(step.key==='whatsapp'&&!available.has(target)&&available.has('worker-channel-title')) target='worker-channel-title';
  if(teamRegister) target='site-register-title';
  const canGo=Boolean(target&&available.has(target));
+ // Only an explicitly rejected navigation requests focus after its notice is committed.
+ useLayoutEffect(()=>{mounted.current=true;return()=>{mounted.current=false;noticeRequest.current=null;};},[orgId,orgRole,officeReviewOnly]);
+ useLayoutEffect(()=>{
+  const request=noticeRequest.current;noticeRequest.current=null;
+  const node=noticeNode.current;
+  if(mounted.current&&request?.context===JSON.stringify([orgId,orgRole,officeReviewOnly])&&request.message===notice&&node?.isConnected&&node.getClientRects().length)node.focus({preventScroll:true});
+ },[noticeFocusVersion,notice,orgId,orgRole,officeReviewOnly]);
  useEffect(()=>{if(moveFocus.current){title.current?.focus();moveFocus.current=false;}},[index]);
- function change(next){moveFocus.current=true;if(choices.current)choices.current.open=false;setNotice('');setIndex(next);}
+ function change(next){noticeRequest.current=null;moveFocus.current=true;if(choices.current)choices.current.open=false;setNotice('');setIndex(next);}
  function go(destination=target){
+  noticeRequest.current=null;if(!mounted.current)return;
   const element=destination&&document.getElementById(destination);
-  if(!element?.getClientRects().length||element.disabled){setNotice(destination==='workspace-refresh'?'Esperá o resolvé la acción pendiente en Mis obras antes de actualizar.':dependency);return;}
+  if(!element?.getClientRects().length||element.disabled){
+   const message=destination==='workspace-refresh'?'Esperá o resolvé la acción pendiente en Mis obras antes de actualizar.':dependency;
+   noticeRequest.current={context:JSON.stringify([orgId,orgRole,officeReviewOnly]),message};
+   setNotice(message);setNoticeFocusVersion(value=>value+1);return;
+  }
   const temporary=!element.hasAttribute('tabindex');
   if(temporary){element.setAttribute('tabindex','-1');element.addEventListener('blur',()=>element.removeAttribute('tabindex'),{once:true});}
   element.scrollIntoView({behavior:'auto',block:'start'});element.focus({preventScroll:true});
  }
- return <section className={styles.guide} aria-labelledby="onboarding-guide-title">
-  <div className={styles.heading}><div><p className={styles.eyebrow}>ACOMPAÑAMIENTO DE INICIO</p><h2 id="onboarding-guide-title" tabIndex={-1}>{officeReviewOnly?'Tu revisión de oficina, paso a paso':'Tu primera obra, paso a paso'}</h2></div><button type="button" aria-expanded={opened} aria-controls="onboarding-guide-content" onClick={()=>setOpened(value=>!value)}>{opened?'Ocultar guía':'Abrir guía'}</button></div>
-  {opened&&<div id="onboarding-guide-content">
+ function goWhatsAppShortcut(event){event.preventDefault();const destination=event.currentTarget.hash.slice(1);if(['own-company-number-title','own-company-templates-title','company-channel-title','customer-meta-title'].includes(destination))go(destination);}
+ return <section className={styles.guide} aria-labelledby="onboarding-guide-title" data-guide-compact={compactStart&&!expanded?'true':undefined} onFocusCapture={preserveGuide} onPointerDownCapture={preserveGuide}>
+  <div className={styles.heading}><div><p className={styles.eyebrow}>ACOMPAÑAMIENTO DE INICIO</p><h2 id="onboarding-guide-title" tabIndex={-1}>{compactStart&&!expanded?'Guía de tu obra':officeReviewOnly?'Tu revisión de oficina, paso a paso':'Tu primera obra, paso a paso'}</h2></div><button type="button" aria-expanded={expanded} aria-controls="onboarding-guide-content" onClick={()=>setOpened(!expanded)}>{expanded?'Ocultar guía':'Abrir guía'}</button></div>
+  {accessNotice&&<div className={styles.accessNotice} data-guide-access={summary.state} data-guide-access-reason={summary.accessReason||'UNCONFIRMED'} role="status" aria-live="polite"><strong>{accessNotice.title}</strong><p>{accessNotice.text}</p><button type="button" disabled={!available.has('workspace-refresh')||summary.state==='CONSULTING'} onClick={()=>go('workspace-refresh')}>Ir a Mis obras para actualizar</button>{available.has('office-join-title')&&<><p>Si tu invitación de oficina sigue pendiente, aceptá el enlace de Clerk con el correo invitado verificado, seleccioná la organización y consultá esa misma invitación.</p><button type="button" onClick={()=>go('office-join-title')}>Consultar mi invitación de oficina</button></>}</div>}
+  {expanded&&<div id="onboarding-guide-content">
    <p className={styles.intro}>{intro}</p>
    <div className={styles.actions}><button type="button" disabled={!available.has('organization-context')} onClick={()=>go('organization-context')}>Elegir empresa</button></div>
-    {accessNotice&&<div className={styles.accessNotice} data-guide-access={summary.state} data-guide-access-reason={summary.accessReason||'UNCONFIRMED'} role="status" aria-live="polite"><strong>{accessNotice.title}</strong><p>{accessNotice.text}</p><button type="button" disabled={!available.has('workspace-refresh')||summary.state==='CONSULTING'} onClick={()=>go('workspace-refresh')}>Ir a Mis obras para actualizar</button>{available.has('office-join-title')&&<><p>Si tu invitación de oficina sigue pendiente, aceptá el enlace de Clerk con el correo invitado verificado, seleccioná la organización y consultá esa misma invitación.</p><button type="button" onClick={()=>go('office-join-title')}>Consultar mi invitación de oficina</button></>}</div>}
    <div><details className={styles.choices}><summary>{({OBSERVED:'Ver datos consultados',CONSULTING:'Consulta en curso',UNAVAILABLE:'Acceso por actualizar',UNOBSERVED:'Ver qué falta consultar'})[summary.state]}</summary><div data-guide-observation={summary.state} data-guide-mode={officeReviewOnly?'office-review':'workspace'} role="status" aria-live="polite"><p>{summary.company}</p>{summary.office&&<p>{summary.office}</p>}{summary.schedule&&<p>{summary.schedule}</p>}{summary.whatsapp&&<p>{summary.whatsapp}</p>}</div></details></div>
     <details className={styles.choices} ref={choices}><summary>Elegir otro paso</summary><nav aria-label="Pasos de inicio" className={styles.steps}>{guideSteps.map((item,position)=><button type="button" key={item.key} aria-current={position===index?'step':undefined} onClick={()=>change(position)}><span>{position+1}</span>{item.key==='company'&&orgId&&available.has('workspace-title')?'Comprobar acceso y abrir obra':item.title}{reviewed.includes(item.key)&&<small>Revisado por vos</small>}</button>)}</nav></details>
     <div className={styles.current}><p className={styles.position}>Paso {index+1} de {guideSteps.length}</p><h3 ref={title} tabIndex={-1}>{workspaceStep?summary.state==='OBSERVED'?'Abrí una obra':'Comprobá tu acceso':step.title}</h3><p>{workspaceStep?summary.state==='OBSERVED'?'Mis obras muestra el acceso de esta consulta. Elegí una obra disponible para consultar su información.':'Tu organización está seleccionada. En Mis obras, usá Actualizar para comprobar tu acceso actual antes de abrir una obra.':teamRegister?'Primero abrí Equipo, incidencias y materiales → Abrir registro → Agregar persona para guardar la ficha. Después, en Participantes y revisión de identidad, asigná los permisos y enviá la invitación al correo correcto. El invitado ingresa con su cuenta y acepta la participación en esa obra.':step.text}</p>
     <details key={step.key}><summary>Qué revisar en este paso</summary><p>{workspaceStep?'Consultá tu acceso vigente y las obras disponibles. Si el responsable ya confirmó tu rol, usá Actualizar antes de pedir otra revisión. El acceso de oficina y la identidad necesaria para tu participación de campo se consultan por separado.':step.detail}</p><label className={styles.review}><input type="checkbox" checked={reviewed.includes(step.key)} onChange={event=>setReviewed(previous=>event.target.checked?[...previous,step.key]:previous.filter(key=>key!==step.key))}/><span>Revisado por vos <small>Marca personal; no confirma guardado, permisos ni aceptación del proveedor.</small></span></label></details>
     {!canGo&&<p className={styles.dependency}>{dependency}</p>}
-    <div className={styles.actions}><button type="button" className={styles.primary} disabled={!canGo} onClick={()=>go()}>Ir a este paso</button>{teamRegister&&available.has('participant-title')&&<a href="#participant-title" onClick={event=>{event.preventDefault();go('participant-title');}}>Invitaciones y permisos</a>}{step.key==='whatsapp'&&['own-company-number-title','own-company-templates-title'].filter(id=>available.has(id)).map(id=><a key={id} href={'#'+id} onClick={event=>{event.preventDefault();go(id);}}>{id==='own-company-number-title'?'Número propio de la empresa':'Plantillas de nuestro WhatsApp'}</a>)}{step.key==='whatsapp'&&['company-channel-title','customer-meta-title'].filter(id=>available.has(id)).map(id=><a key={id} href={'#'+id} onClick={event=>{event.preventDefault();go(id);}}>{id==='company-channel-title'?'Canal de la empresa':'Conexión y permisos Meta'}</a>)}{!canGo&&available.has('workspace-title')&&<button type="button" onClick={()=>go('workspace-title')}>Consultar Mis obras</button>}<Link href={'/manual#'+step.manual}>Leer el paso en el manual</Link></div>
+    <div className={styles.actions}><button type="button" className={styles.primary} disabled={!canGo} onClick={()=>go()}>Ir a este paso</button>{teamRegister&&available.has('participant-title')&&<a href="#participant-title" onClick={event=>{event.preventDefault();go('participant-title');}}>Invitaciones y permisos</a>}{step.key==='whatsapp'&&['own-company-number-title','own-company-templates-title'].filter(id=>available.has(id)).map(id=><a key={id} href={'#'+id} onClick={goWhatsAppShortcut}>{id==='own-company-number-title'?'Número propio de la empresa':'Plantillas de nuestro WhatsApp'}</a>)}{step.key==='whatsapp'&&['company-channel-title','customer-meta-title'].filter(id=>available.has(id)).map(id=><a key={id} href={'#'+id} onClick={goWhatsAppShortcut}>{id==='company-channel-title'?'Canal de la empresa':'Conexión y permisos Meta'}</a>)}{!canGo&&available.has('workspace-title')&&<button type="button" onClick={()=>go('workspace-title')}>Consultar Mis obras</button>}<Link href={'/manual#'+step.manual}>Leer el paso en el manual</Link></div>
    </div>
-   <p className={styles.notice} role="status" aria-live="polite">{notice}</p>
    <div className={styles.navigation}><button type="button" disabled={index===0} onClick={()=>change(index-1)}>Anterior</button><span>{reviewed.length} de {guideSteps.length} pasos revisados por vos</span>{index<guideSteps.length-1?<button type="button" onClick={()=>change(index+1)}>Siguiente</button>:<button type="button" onClick={()=>change(0)}>Volver al primer paso</button>}</div>
    <p className={styles.privacy}>Las marcas no se guardan. Al cambiar de cuenta u organización, empiezan de nuevo.</p>
   </div>}
+  <p ref={noticeNode} tabIndex={-1} className={styles.notice} role="status" aria-live="polite">{notice}</p>
  </section>;
 }

@@ -1,5 +1,5 @@
 'use client';
-import {useSyncExternalStore} from 'react';
+import {useState,useSyncExternalStore} from 'react';
 import {HardHat,UsersRound,MessageCircle,BriefcaseBusiness,ArrowUpRight,ArrowUp,Clock3} from 'lucide-react';
 import styles from './workspace-tools-navigation.module.css';
 
@@ -44,7 +44,7 @@ function ToolLink({destination,active}){
 }
 
 export function WorkspaceToolsNavigation({canManageIntegrations=false,canImportPlan=false,role,pending={},schedulePending=false,scheduleEditing=false}){
- const active=useSyncExternalStore(subscribeFragment,currentFragment,serverFragment);
+ const active=useSyncExternalStore(subscribeFragment,currentFragment,serverFragment),[groupsOpened,setGroupsOpened]=useState(false);
  // Visibility follows the same canonical account capabilities as the mounted panels.
  // These links neither grant permissions nor hide/unmount a form.
  const groups=[
@@ -59,7 +59,8 @@ export function WorkspaceToolsNavigation({canManageIntegrations=false,canImportP
  const outstanding=[...(schedulePending?[scheduleEditing?tool('schedule-edit-title','Planificación pendiente'):destinations.schedule]:[]),...Object.entries(pending).filter(([,value])=>value===true).map(([key])=>destinations[key]).filter(item=>item&&visible.has(item.id))];
  return <nav className={styles.navigation} aria-labelledby="workspace-tools-title">
   <div className={styles.heading}><p className={styles.eyebrow}>NAVEGACIÓN</p><h3 id="workspace-tools-title">Herramientas de esta obra</h3><p className={styles.intro}>Todo el trabajo, en el mismo contexto.</p></div>
-  <div className={styles.groups}>{groups.map(group=>{const Icon=group.icon;return <details className={styles.group} key={group.id} open={group.id==='work'}><summary><Icon size={17} aria-hidden="true"/><span>{group.label}<small>{group.tools.length} herramientas</small></span></summary><div className={styles.links}>{group.tools.map(item=><ToolLink key={item.id} destination={item} active={active}/>)}</div></details>;})}</div>
+  <button type="button" className={styles.toggle} aria-expanded={groupsOpened} aria-controls="workspace-tool-groups" onClick={()=>setGroupsOpened(value=>!value)}>{groupsOpened?'Ocultar herramientas':'Ver herramientas'}</button>
+  <div id="workspace-tool-groups" className={styles.groups} data-expanded={groupsOpened?'true':'false'} onFocusCapture={()=>setGroupsOpened(true)}>{groups.map(group=>{const Icon=group.icon;return <details className={styles.group} key={group.id} open={group.id==='work'}><summary><Icon size={17} aria-hidden="true"/><span>{group.label}<small>{group.tools.length} herramientas</small></span></summary><div className={styles.links}>{group.tools.map(item=><ToolLink key={item.id} destination={item} active={active}/>)}</div></details>;})}</div>
   {outstanding.length>0&&<div className={styles.pending} role="status" aria-live="polite"><strong><Clock3 size={16} aria-hidden="true"/>Acciones en curso</strong><p>Antes de actualizar la lista o cambiar de obra, completá la acción o comprobá el resultado en:</p><div className={styles.links}>{outstanding.map(item=><ToolLink key={item.id} destination={item} active={active}/>)}</div></div>}
   <a className={styles.guide} href="#onboarding-guide-title" onClick={event=>focusDestination(event,'onboarding-guide-title')}><ArrowUp size={15} aria-hidden="true"/><span>Volver a la guía</span></a>
  </nav>;
