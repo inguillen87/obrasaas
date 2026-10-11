@@ -1,9 +1,13 @@
 'use client';
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useRef,useState,useSyncExternalStore} from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import {LazyMotion,domAnimation,m,useAnimationControls,useInView,useReducedMotion} from 'framer-motion';
+import {LazyMotion,domAnimation,m,useAnimationControls,useInView} from 'framer-motion';
 import styles from './page.module.css';
+
+const subscribeMotion=notify=>{const query=window.matchMedia('(prefers-reduced-motion: reduce)');query.addEventListener('change',notify);return()=>query.removeEventListener('change',notify);};
+const motionSnapshot=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const serverMotion=()=>null;
 
 export function LandingMenu(){
  const menu=useRef(null);
@@ -13,7 +17,7 @@ export function LandingMenu(){
 }
 
 export function LandingMotion({children,className,kind='settle'}){
- const reduced=useReducedMotion(),controls=useAnimationControls(),element=useRef(null),started=useRef(false),[finished,setFinished]=useState(false);
+ const reduced=useSyncExternalStore(subscribeMotion,motionSnapshot,serverMotion),controls=useAnimationControls(),element=useRef(null),started=useRef(false),[finished,setFinished]=useState(false);
  const seen=useInView(element,{once:true,amount:.55}),trigger=kind==='receipt'?seen:true;
  useEffect(()=>{
   if(reduced===true){controls.stop();controls.set({opacity:1,x:0,y:0});return;}
@@ -34,8 +38,8 @@ const showcaseImages=[
  {src:'/media/launch/obra-entrega-materiales.webp',title:'Materiales y seguimiento',alt:'Imagen ilustrativa de materiales para la obra'},
 ];
 export function LandingShowcase(){
- const [selected,setSelected]=useState(0),reduced=useReducedMotion(),current=showcaseImages[selected];
- return <div className={styles.showcase} data-landing-example="worksite"><div className={styles.showcaseTop}><span>REGISTROS DE CADA OBRA</span><span className={styles.exampleLabel}>Ejemplo ilustrativo</span></div><LazyMotion features={domAnimation} strict><m.figure key={current.src} initial={false} animate={reduced?{opacity:1}:{opacity:[.84,1]}} transition={{duration:.28}} className={styles.showcaseImage}><Image src={current.src} alt={current.alt} width={941} height={1672} unoptimized loading={selected===0?'eager':'lazy'} sizes="(max-width: 620px) 100vw, 48vw"/><figcaption><span>OBRASAAS</span><strong>{current.title}</strong></figcaption></m.figure></LazyMotion><div className={styles.showcaseControls} aria-label="Imágenes de presentación">{showcaseImages.map((item,index)=><button key={item.src} type="button" aria-pressed={selected===index} aria-label={item.title} onClick={()=>setSelected(index)}><span aria-hidden="true">0{index+1}</span><span>{item.title}</span></button>)}</div><LandingMotion kind="receipt"><Link href="/demo" className={styles.showcaseLink}><span>Explorá <strong>Torre Palermo Soho</strong><small>Empresa y obra de ejemplo</small></span><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 18 18 6M6 6h12v12" stroke="currentColor" strokeWidth="1.5"/></svg></Link></LandingMotion></div>;
+ const [selected,setSelected]=useState(0),reduced=useSyncExternalStore(subscribeMotion,motionSnapshot,serverMotion),current=showcaseImages[selected];
+ return <div className={styles.showcase} data-landing-example="worksite"><div className={styles.showcaseTop}><span>REGISTROS DE CADA OBRA</span><span className={styles.exampleLabel}>Ejemplo ilustrativo</span></div><LazyMotion features={domAnimation} strict><m.figure key={current.src} initial={false} animate={reduced===false?{opacity:[.84,1]}:{opacity:1}} transition={{duration:reduced===false?0.28:0}} className={styles.showcaseImage}><Image src={current.src} alt={current.alt} width={941} height={1672} unoptimized loading={selected===0?'eager':'lazy'} sizes="(max-width: 620px) 100vw, 48vw"/><figcaption><span>OBRASAAS</span><strong>{current.title}</strong></figcaption></m.figure></LazyMotion><div className={styles.showcaseControls} aria-label="Imágenes de presentación">{showcaseImages.map((item,index)=><button key={item.src} type="button" aria-pressed={selected===index} aria-label={item.title} onClick={()=>setSelected(index)}><span aria-hidden="true">0{index+1}</span><span>{item.title}</span></button>)}</div><LandingMotion kind="receipt"><Link href="/demo" className={styles.showcaseLink}><span>Explorá <strong>Torre Palermo Soho</strong><small>Empresa y obra de ejemplo</small></span><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 18 18 6M6 6h12v12" stroke="currentColor" strokeWidth="1.5"/></svg></Link></LandingMotion></div>;
 }
 export function LandingVideo(){
  const video=useRef(null),attempt=useRef(0),[started,setStarted]=useState(false),[error,setError]=useState('');

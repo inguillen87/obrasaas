@@ -14,8 +14,8 @@ const team=[['Administrador','Administra la empresa, participantes y permisos.']
 function RecordDetails({label='Ver detalle',children}){return <details className={styles.recordDetails}><summary>{label}<ArrowUpRight size={16} aria-hidden="true"/></summary><div>{children}</div></details>;}
 export default function DemoExplorer({onTour}){
  const [section,setSection]=useState('overview'),[stage,setStage]=useState('ALL');
- const heading=useRef(null),first=useRef(true);
- useEffect(()=>{if(first.current){first.current=false;return;}heading.current?.focus();},[section]);
+ const heading=useRef(null),previousSection=useRef(section);
+ useEffect(()=>{if(previousSection.current===section)return;previousSection.current=section;heading.current?.focus();},[section]);
  const label=sections.find(([id])=>id===section)[1],opportunities=DEMO_OPPORTUNITIES.filter(record=>stage==='ALL'||record.stage===stage);
  return <main className={styles.workspace} data-demo-explorer>
   <aside className={styles.sidebar} aria-label="Empresa de ejemplo"><div className={styles.company}><span className={styles.companyIcon}><Building2 size={23} aria-hidden="true"/></span><div><strong>{DEMO_COMPANY.name}</strong><span>Empresa de ejemplo</span></div></div><div className={styles.worksite}><span>OBRA</span><strong>{DEMO_COMPANY.project}</strong><small>{DEMO_COMPANY.location}</small></div><nav className={styles.workspaceNav} aria-label="Módulos de la demo">{sections.map(([id,title,Icon])=><button type="button" key={id} aria-current={section===id?'page':undefined} onClick={()=>setSection(id)}><Icon size={18} aria-hidden="true"/>{title}{section===id&&<span className={styles.navMarker} aria-hidden="true"/>}</button>)}</nav><button type="button" className={styles.tourLink} onClick={onTour}><Play size={17} aria-hidden="true"/>Recorrido guiado<ArrowUpRight size={16} aria-hidden="true"/></button><p className={styles.sidebarNote}>Datos ficticios. Navegación y filtros locales; sin operaciones reales.</p></aside>

@@ -4,7 +4,7 @@ import {mkdirSync,writeFileSync} from 'node:fs';
 import {Client,Pool} from 'pg';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
-import {createSiteRegister} from '../src/lib/site-register-store.mjs';
+import {createSiteRegister,insertSiteReport} from '../src/lib/site-register-store.mjs';
 import {createSitePurchases} from '../src/lib/site-purchase-store.mjs';
 import {createOperationsStatus} from '../src/lib/operations-status.mjs';
 import {META_CUSTOMER_PROOF_REVIEW_CODES} from '../src/lib/meta-customer-processing.mjs';
@@ -131,6 +131,22 @@ try {
  const replayAgain=await store.save(owner,last);assert.equal(replayAgain.replayed,true);assert.deepEqual(replayAgain.receipt,recoveredAgain.receipt);assert.deepEqual((await pool.query('SELECT (SELECT count(*)::int FROM "AuditLog") AS audit,(SELECT count(*)::int FROM "Incident") AS incident')).rows[0],countsBefore);
  checks.push('lost-response-purchase-status-and-exact-replay-keep-one-durable-correlated-receipt-without-second-delivery');
 
+ // Context fixtures now include only the display columns actually read. A null
+ // name and a missing Task row must keep their original references visible.
+ await pool.query(`ALTER TABLE "Worker" ADD COLUMN name text;CREATE TABLE "Task"(id text PRIMARY KEY,"projectId" text REFERENCES "Project",title text);INSERT INTO "Project" VALUES('p-sibling','company-a','Sibling synthetic site','ACTIVE','{}',CURRENT_TIMESTAMP);INSERT INTO "Worker"(id,"projectId",active,metadata,name) VALUES('request-worker-a','p-a',true,'{}','Operaria de ensayo'),('request-worker-foreign','p-b',true,'{}','Foreign label never exposed'),('request-worker-sibling','p-sibling',true,'{}','Sibling label never exposed'),('request-worker-unnamed','p-a',true,'{}',NULL);INSERT INTO "Task" VALUES('request-task-a','p-a','Cerco de ensayo'),('request-task-foreign','p-b','Foreign task never exposed'),('request-task-sibling','p-sibling','Sibling task never exposed');`);
+ const makeContextRequest=(id,workerId,taskId)=>workspace.integrationProject(owner,context,true,async(client,member)=>insertSiteReport(client,{id,projectId:context.projectId,actorId:member.actorId,type:'MATERIAL_REQUEST',title:'Pedido contextual de ensayo',description:'Solicitud sintética para probar su atribución visible.',severity:'INFO',sector:'Sector de ensayo',material:'Pedido contextual de ensayo',quantity:'2',unit:'bolsa',origin:'participant-whatsapp',workerId,taskId}));
+ const contextual=await makeContextRequest('context-request-a','request-worker-a','request-task-a');await makeContextRequest('context-request-foreign','request-worker-foreign','request-task-foreign');await makeContextRequest('context-request-sibling','request-worker-sibling','request-task-sibling');await makeContextRequest('context-request-missing','request-worker-unnamed','request-task-missing');
+ const beforeContext=(await pool.query('SELECT metadata FROM "Incident" WHERE id=$1',[contextual.id])).rows[0].metadata.siteRegister;
+ const purchaseContexts=await store.list(owner,context),registerContexts=await register.read(owner,{...context,section:'MATERIALS'}),contextualRow=purchaseContexts.records.find(row=>row.id===contextual.id);
+ assert.deepEqual(contextualRow.context,{workerId:'request-worker-a',workerName:'Operaria de ensayo',taskId:'request-task-a',taskTitle:'Cerco de ensayo',requestedAt:contextual.createdAt,origin:'participant-whatsapp'});assert.deepEqual(registerContexts.records.find(row=>row.id===contextual.id).context,contextualRow.context);
+ for(const id of ['context-request-foreign','context-request-sibling','context-request-missing']){const row=purchaseContexts.records.find(record=>record.id===id);assert.equal(row.context.workerName,null);assert.equal(row.context.taskTitle,null);assert.ok(row.context.workerId);assert.ok(row.context.taskId);assert.deepEqual(registerContexts.records.find(record=>record.id===id).context,row.context);}
+ assert.ok(!JSON.stringify(purchaseContexts).includes('label never exposed'));assert.ok(!JSON.stringify(purchaseContexts).includes('task never exposed'));assert.equal((await store.list(owner,{...context,requestId:contextual.id})).records[0].context.workerName,'Operaria de ensayo');
+ checks.push('material-request-context-keeps-original-references-and-resolves-labels-only-in-its-canonical-organization-and-project');
+ const contextualDraft=input('DRAFT_ORDER',{requestId:contextual.id,revision:contextual.revision,supplier:'Proveedor contextual de ensayo',quantity:'2',unitPrice:'50',currency:'ARS',reference:'Cotización contextual 01',reason:'Cotización del pedido contextual de este ensayo.'}),contextSaved=await store.save(owner,contextualDraft);
+ assert.deepEqual(contextSaved.record.context,contextualRow.context);assert.deepEqual((await pool.query('SELECT metadata FROM "Incident" WHERE id=$1',[contextual.id])).rows[0].metadata.siteRegister,beforeContext);assert.deepEqual((await store.save(owner,contextualDraft)).receipt,contextSaved.receipt);
+ await pool.query(`UPDATE "Worker" SET name='Ficha vigente renombrada' WHERE id='request-worker-a';UPDATE "Task" SET title='Tarea vigente renombrada' WHERE id='request-task-a';`);
+ const currentContext=await store.status(owner,{...context,operationId:contextualDraft.operationId});assert.deepEqual(currentContext.receipt,contextSaved.receipt);assert.equal(currentContext.record.context.workerName,'Ficha vigente renombrada');assert.equal(currentContext.record.context.taskTitle,'Tarea vigente renombrada');assert.equal(currentContext.record.context.requestedAt,contextual.createdAt);assert.deepEqual((await pool.query('SELECT metadata FROM "Incident" WHERE id=$1',[contextual.id])).rows[0].metadata.siteRegister,beforeContext);
+ checks.push('purchase-context-and-current-labels-survive-save-status-and-exact-replay-with-original-request-and-receipt-unchanged');
  await pool.query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE id='owner-m'`);
  await assert.rejects(store.list(owner,context),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});
  await assert.rejects(store.status(owner,{...context,operationId:last.operationId}),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});

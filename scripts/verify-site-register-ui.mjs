@@ -75,7 +75,7 @@ async function scenario(width,mode='normal'){
      person={id:'person-1',name:p.name,phone:p.phone,job:p.job,roleLabel:SITE_ROLES[p.job],active:true,editable:true,revision:revision(),identityVerified:false,whatsappAccessGranted:false,loginAccessGranted:false};records.PEOPLE.push(person);
     }else if(input.action==='SET_PERSON_ACTIVE'){person=records.PEOPLE.find(row=>row.id===p.personId);assert.equal(p.revision,person.revision);Object.assign(person,{active:p.active,revision:revision()});}
     else if(input.action==='REPORT_ISSUE'||input.action==='REQUEST_MATERIAL'){
-     const material=input.action==='REQUEST_MATERIAL';report={id:'report-'+counter,title:material?p.material:p.title,details:p.details,sector:p.sector,type:material?'MATERIAL_REQUEST':'ISSUE',quantity:p.quantity||null,unit:p.unit||null,severity:p.severity||'INFO',state:'OPEN',revision:revision(),review:null};records[material?'MATERIALS':'ISSUES'].push(report);
+     const material=input.action==='REQUEST_MATERIAL';report={id:'report-'+counter,title:material?p.material:p.title,details:p.details,sector:p.sector,type:material?'MATERIAL_REQUEST':'ISSUE',quantity:p.quantity||null,unit:p.unit||null,severity:p.severity||'INFO',state:'OPEN',revision:revision(),review:null,...(material?{context:{workerId:null,workerName:null,taskId:null,taskTitle:null,requestedAt:'2026-10-01T08:23:12.123456',origin:'responsible-entry'}}:{})};records[material?'MATERIALS':'ISSUES'].push(report);
     }else if(input.action==='REVIEW_REPORT'){report=[...records.ISSUES,...records.MATERIALS].find(row=>row.id===p.reportId);assert.equal(report.revision,p.revision);Object.assign(report,{state:p.decision,revision:revision(),review:{decision:p.decision,reason:p.reason}});}
     else throw new Error('Unexpected mutation '+input.action);
     body={scope,saved:true,receiptId,kind:person?'PERSON':'REPORT',...(person?{person}:{report})};receipts.set(input.operationId,body);
@@ -104,7 +104,7 @@ async function scenario(width,mode='normal'){
  await click(page,'Dar de baja en esta obra');await fill(page,'Motivo','Terminó la participación en esta obra de ensayo.');await click(page,'Guardar registro');await wait(page,'Inactivo');assert.equal(posts.length,2);
  await click(page,'Pedidos de materiales');await wait(page,'Solicitar material');await click(page,'Solicitar material');
  await fill(page,'Material','Cemento de ensayo');await fill(page,'Cantidad','12.5');await fill(page,'Sector','Planta baja');await fill(page,'Detalle','Pedido para la etapa inicial de la obra.');await click(page,'Guardar registro');await wait(page,'Cemento de ensayo');await wait(page,'Recibo confirmado');
- await click(page,'Gestionar registro');await fill(page,'Motivo','Se asignó al responsable para seguimiento.');await click(page,'Guardar registro');await wait(page,'En seguimiento');
+ assert.ok(await page.$eval('article [aria-label="Contexto del pedido"]',node=>node.innerText.includes('Sin participante vinculado')&&node.innerText.includes('Registro de obra')));const beforeReview=posts.length;await click(page,'Gestionar registro');assert.ok(await page.$eval('form [aria-label="Contexto del pedido"]',node=>node.innerText.includes('Sin tarea vinculada')&&node.innerText.includes('01/10/2026')));assert.equal(posts.length,beforeReview);await fill(page,'Motivo','Se asignó al responsable para seguimiento.');await click(page,'Guardar registro');await wait(page,'En seguimiento');
  await click(page,'Gestionar registro');await fill(page,'Motivo','Se resolvió administrativamente este pedido.');await click(page,'Guardar registro');await wait(page,'Resuelto');
  assert.ok((await page.evaluate(()=>document.body.innerText)).includes('no es una orden de compra'));
  await page.screenshot({path:path.join(output,`materials-${width}.png`),fullPage:true});
@@ -115,7 +115,7 @@ async function scenario(width,mode='normal'){
  if(mode.startsWith('photo-')){await retryUnobserved(page,posts,7);assert.equal(photoAttempts,2);assert.equal(statusChecks,1);assert.equal(records.ISSUES[0].photos.length,1);checks.push(mode+'-retries-exact-private-image-command-once');await context.close();return;}
  await wait(page,'Fotografía privada adjunta');await wait(page,'Descargar foto');
  await click(page,'Descargar foto 1 · 1 KB');assert.deepEqual(await downloaded(downloadPath,'obrasaas-foto.png'),picture);assert.equal(posts.length,7);checks.push(`private-photo-active-tab-bearer-download-exact-bytes-${width}`);
- checks.push(`roster-issue-material-lifecycle-${width}`);await context.close();
+ checks.push(`roster-issue-material-lifecycle-${width}`);checks.push(`material-request-context-missing-participant-and-office-origin-${width}`);await context.close();
 }
 // Photo/access cases start with an authorized report: no repeated roster/material writes.
 async function photoScenario(width,mode='large'){
