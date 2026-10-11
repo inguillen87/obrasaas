@@ -22,7 +22,7 @@ export function createMetaKycBridge({connect,provider,deposit,environment=proces
   await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify(metadata)]);
   const id=metaKycDispatchReceiptId(r.event.id);
   await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.kyc_chat.dispatched','Worker',$4,$5::jsonb)`,[id,r.project.organizationId,r.member.actorId,r.worker.id,JSON.stringify({version:1,projectId:r.project.id,challengeId:r.challenge.id,payloadDigest:r.event.payload.payloadDigest,...(r.challenge.captureImageSetVersion===2?{captureImageSetVersion:2}:{}),replyDigest:digest(result.reply),encryptedResult:sealMetaKycValue(r,'kyc-chat-dispatch',id,result,environment),identityCertified:false,permissionsGranted:false})]);
-  await fenceCompanyKycAuthority(client,r,{eventId:r.event.id,projectId:r.connection.projectId,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,leaseToken:r.event.leaseToken});
+  await fenceCompanyKycAuthority(client,r,{eventId:r.event.id,projectId:r.connection.projectId,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,leaseToken:r.event.leaseToken},{environment});
   return result;
  }
  async function prepare(context){return within(async client=>{
@@ -34,7 +34,7 @@ export function createMetaKycBridge({connect,provider,deposit,environment=proces
    const metadata={...r.worker.metadata,participant:{...r.worker.metadata.participant,kycChatConversation:metaKycConversationEnvelope(r,plan.state,environment)}};
    await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify(metadata)]);
    if(!r.companyKyc)await client.query(`UPDATE public."WebhookEvent" SET "leaseExpiresAt"=clock_timestamp()+interval '180 seconds' WHERE id=$1 AND "leaseToken"=$2`,[r.event.id,context.leaseToken]);
-   await fenceCompanyKycAuthority(client,r,context);
+   await fenceCompanyKycAuthority(client,r,context,{environment});
    return {deposit:true};
   }
   const transition=plan.cancelled?{status:'CANCELLED',cancelledEventId:r.event.id}:r.challenge.status==='PENDING'?{status:'CLAIMED',claimedAt:r.now.toISOString(),claimedEventId:r.event.id}:null;

@@ -11,7 +11,7 @@ const fail=(code,status=409)=>{throw new WorkspaceError(code,status);};
 
 // Called ONLY inside the canonical manager-authorized participant transaction.
 // No delivery, account creation, operational permission or KYC approval occurs.
-export async function prepareMetaKycChallenge(client,member,project,input){
+export async function prepareMetaKycChallenge(client,member,project,input,{environment=process.env}={}){
  if(!['ADMIN','DIRECTOR'].includes(member?.role)||!workspaceId(member.actorId)||!workspaceId(member.membershipId)||!workspaceId(member.organizationId))fail('PARTICIPANT_MANAGE_REQUIRED',403);
  if(!workspaceId(project?.id)||project.organizationId!==undefined&&project.organizationId!==member.organizationId||!workspaceId(input?.workerId)||!operationId(input.operationId)||typeof input.revision!=='string')fail('META_KYC_CHALLENGE_INPUT_INVALID',400);
  const canonicalProject=(await client.query(`SELECT id FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status='ACTIVE' FOR UPDATE`,[project.id,member.organizationId])).rows;
@@ -31,13 +31,13 @@ export async function prepareMetaKycChallenge(client,member,project,input){
  const channels=corporate?[corporate.channel]:(await client.query(`SELECT id,"projectId","whatsappBusinessId","phoneNumberId","connectionStatus"::text AS "connectionStatus",enabled,metadata FROM public."WhatsAppConnection" WHERE "projectId"=$1 FOR SHARE`,[project.id])).rows;
  const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now,channel=channels[0];
  if(row.metadata.participant.status==='INVITED'&&(row.metadata.participant.invitation?.state!=='SENT'||!row.metadata.participant.invitation.id||!Number.isFinite(Date.parse(row.metadata.participant.invitation.expiresAt))||Date.parse(row.metadata.participant.invitation.expiresAt)<=now.getTime()))fail('META_KYC_CHALLENGE_PARTICIPANT_REQUIRED');
- if(channels.length!==1||!customerChannelActive(channel,now.getTime())||channel.whatsappBusinessId===OBRASAAS_META_CHANNEL.wabaId||channel.phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId||channel.metadata?.credentialOrganizationId!==member.organizationId)fail('WORKER_CHANNEL_CUSTOMER_CONNECTION_REQUIRED',403);
+ if(channels.length!==1||!customerChannelActive(channel,now.getTime(),{environment})||channel.whatsappBusinessId===OBRASAAS_META_CHANNEL.wabaId||channel.phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId||channel.metadata?.credentialOrganizationId!==member.organizationId)fail('WORKER_CHANNEL_CUSTOMER_CONNECTION_REQUIRED',403);
  const expiresAt=new Date(Math.min(now.getTime()+META_KYC_CHALLENGE_TTL_MS,row.metadata.participant.status==='INVITED'?Date.parse(row.metadata.participant.invitation.expiresAt):Infinity)).toISOString();
  const code='IDENTIDAD '+randomBytes(32).toString('base64url'),challenge={version:1,captureImageSetVersion:2,id:'kyc_chat_'+randomUUID().replaceAll('-',''),status:'PENDING',codeDigest:metaKycChallengeDigest(code),organizationId:member.organizationId,projectId:project.id,workerId:row.id,senderE164:row.phone,connectionId:channel.id,wabaId:channel.whatsappBusinessId,phoneNumberId:channel.phoneNumberId,issuerActorId:member.actorId,issuerMembershipId:member.membershipId,participantClerkUserId:row.metadata.participant.clerkUserId||null,invitationId:row.metadata.participant.invitation?.id||null,createdAt:now.toISOString(),expiresAt,...(corporate?{companyKyc:corporate.descriptor}:{})};
  const metadata={...row.metadata,participant:{...row.metadata.participant,kycChatChallenge:challenge,kycChatConversation:null}};
  await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[row.id,project.id,JSON.stringify(metadata)]);
  await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.kyc_chat.prepared','Worker',$4,$5::jsonb)`,[key,member.organizationId,member.actorId,row.id,JSON.stringify({version:1,projectId:project.id,requestDigest,captureImageSetVersion:2,challengeId:challenge.id,expiresAt:challenge.expiresAt,identityCertified:false,permissionsGranted:false})]);
- await fencePreparedCompanyKycChallenge(client,member,project.id);
+ await fencePreparedCompanyKycChallenge(client,member,project.id,{environment});
  return {saved:true,kind:'PREPARE_KYC_CHAT',receiptId:key,captureImageSetVersion:2,code,codeUnavailable:false,expiresAt:challenge.expiresAt};
 }
 

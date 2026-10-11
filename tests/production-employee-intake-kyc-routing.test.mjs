@@ -29,7 +29,7 @@ const externalUnchanged=f=>{assert.equal(f.control.graph,0);assert.equal(f.contr
 
 test('canonical intake reader revalidates the same policy in a read-only SQL boundary without locking writes',async()=>{
  const f=employeeIntakeFixture();await f.submit();const before=structuredClone([...f.events]),auditBefore=structuredClone([...f.audits]),sql=[];
- const client={query:async(statement,args)=>{assert.match(statement,/^SELECT /);assert.doesNotMatch(statement,/FOR (?:SHARE|UPDATE)/);sql.push(statement);return f.query(statement,args);}};
+ const client={query:async(statement,args)=>{assert.match(statement,/^SELECT\s/);assert.doesNotMatch(statement,/FOR (?:SHARE|UPDATE)/);sql.push(statement);return f.query(statement,args);}};
  const observed=await readEmployeeIntake(client,f.member,f.target.id,f.environment);assert.equal(observed.enabled,true);assert.equal(observed.records.length,1);assert.ok(sql.some(statement=>statement.includes('JOIN public."TenantMembership"')));
  f.controls.issuerActive=false;assert.equal((await readEmployeeIntake(client,f.member,f.target.id,f.environment)).enabled,false);
  assert.deepEqual([...f.events],before);assert.deepEqual([...f.audits],auditBefore);assert.equal(f.controls.providerCalls,0);
@@ -40,7 +40,7 @@ test('ADMITTED intake classifies a sealed KYC reply without writes before the ca
  const workerBefore=structuredClone(f.worker.metadata),auditsBefore=[...f.audits],sqlStart=f.control.sql.length;
  assert.equal(await f.bridge.executeIntake(input),null);
  assert.deepEqual(f.worker.metadata,workerBefore);assert.deepEqual([...f.audits],auditsBefore);assert.deepEqual(f.events.get(f.applicationId).payload,before);
- assert.ok(f.control.sql.slice(sqlStart).every(sql=>/^(?:BEGIN|SET |SELECT |COMMIT)/.test(sql)));externalUnchanged(f);
+ assert.ok(f.control.sql.slice(sqlStart).every(sql=>/^(?:BEGIN|SET |SELECT\s|COMMIT)/.test(sql)));externalUnchanged(f);
  const result=await f.bridge.execute(input);
  assert.equal(result.kind,'KYC_CHAT');assert.equal(result.identityStatus,'LIMITED_KYC_UPLOAD');assert.equal(f.state().step,'OCR');assert.equal(f.state().consent,true);
  assert.deepEqual(f.events.get(f.applicationId).payload,before);assert.equal(f.events.get(input.eventId).payload.employeeIntakeDispatch,undefined);

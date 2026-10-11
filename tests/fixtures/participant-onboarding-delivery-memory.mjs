@@ -50,7 +50,8 @@ export function onboardingDeliveryFixture(options={}){
   if(expected?.challengeId&&c?.status!=='PENDING')throw new WorkspaceError('PARTICIPANT_ONBOARDING_CHALLENGE_REQUIRED',409);
   return {member:clone(f.member),project:clone(f.project),worker:clone(f.worker),connection:clone(f.connection),now:new Date(f.now),authorityDigest:f.authority};
  };
- f.prepareChallenge=async()=>{
+ f.prepareChallenge=async(...args)=>{
+  assert.equal(args[4]?.environment,f.environment);
   f.prepares++;const code='IDENTIDAD '+'a'.repeat(43);assert.ok(!['PENDING','CLAIMED'].includes(f.worker.metadata.participant.kycChatChallenge?.status));
   const c={version:1,id:'kyc_chat_'+'3'.repeat(32),status:'PENDING',codeDigest:metaKycChallengeDigest(code),connectionId:f.connection.id,senderE164:f.worker.phone,expiresAt:new Date(f.now.getTime()+86400000).toISOString()};f.worker.metadata.participant.kycChatChallenge=c;
   return {code,codeUnavailable:false,expiresAt:c.expiresAt,receiptId:'meta_kyc_challenge_'+'4'.repeat(64)};

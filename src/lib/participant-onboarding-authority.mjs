@@ -7,6 +7,7 @@ import {companyChannelSchemaReady} from './company-channel-schema.mjs';
 import {assertWorkerCustomerConnection} from './worker-channel-identity.mjs';
 import {customerChannelActive} from './meta-customer-outbound.mjs';
 import {lockPersonWorksiteJourney} from './person-worksite-journey.mjs';
+import {readCurrentReactiveKyc} from './participant-onboarding-current-kyc.mjs';
 
 const PURPOSE='PARTICIPANT_ONBOARDING';
 const fail=(code='PARTICIPANT_ONBOARDING_AUTHORITY_CHANGED',status=409)=>{throw new WorkspaceError(code,status);};
@@ -108,7 +109,7 @@ async function kycRetryAuthority(client,intent,worker){
  * It cannot accept a Clerk invitation, approve KYC, activate a channel or grant
  * operational messages. Re-run with the pinned digest immediately before send.
  */
-export async function resolveParticipantOnboardingAuthority(client,intent,{environment=process.env,expected=null}={}){
+async function resolveParticipantAuthority(client,intent,{environment=process.env,expected=null}={},{origin=null,account=null}={}){
  checkedInput(intent,expected);
  const member=await principal(client,intent.organizationId,{actorId:intent.issuerActorId,membershipId:intent.issuerMembershipId});
  if(!['ADMIN','DIRECTOR'].includes(member.role))fail('PARTICIPANT_MANAGE_REQUIRED',403);
@@ -119,7 +120,13 @@ export async function resolveParticipantOnboardingAuthority(client,intent,{envir
  // Discovery supplies only a possible own-account lock, never authorization.
  const discovered=(await client.query(`SELECT id,"projectId",metadata FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[intent.workerId,intent.targetProjectId])).rows;
  if(discovered.length!==1)fail('PARTICIPANT_ONBOARDING_PARTICIPANT_REQUIRED',403);
- const own=discovered[0].metadata?.participant?.status==='ACTIVE'?await principal(client,intent.organizationId,{clerkUserId:discovered[0].metadata.participant.clerkUserId}):null;
+ const discoveredPart=discovered[0].metadata?.participant;
+ if(origin&&(discoveredPart?.status!==account.status||(discoveredPart.clerkUserId||null)!==account.clerkUserId))fail('PARTICIPANT_ONBOARDING_PARTICIPANT_REQUIRED',403);
+ // Reactive status may re-lock only the exact principal already discovered
+ // and locked before Project by the signed adapter. No target TM discovery
+ // from a newer Worker account is allowed after Project/channel/event locks.
+ const own=origin?(account.own?await principal(client,intent.organizationId,{actorId:account.own.actorId,membershipId:account.own.membershipId}):null):discoveredPart?.status==='ACTIVE'?await principal(client,intent.organizationId,{clerkUserId:discoveredPart.clerkUserId}):null;
+ if(origin&&own&&own.clerkUserId!==account.clerkUserId)fail('PARTICIPANT_ONBOARDING_PARTICIPANT_REQUIRED',403);
  await lockPersonWorksiteJourney(client,member);
  // This canonical preflight discovers A, then locks sorted A/B before Worker B.
  // Do not call preparedCompanyKycChallenge: the owned PENDING code is allowed.
@@ -129,12 +136,14 @@ export async function resolveParticipantOnboardingAuthority(client,intent,{envir
  const project=projects[0],rows=(await client.query(`SELECT id,"projectId",name,phone,active,metadata,${revision} FROM public."Worker" WHERE id=$1 AND "projectId"=$2 FOR UPDATE`,[intent.workerId,project.id])).rows;
  const worker=rows[0],p=worker?.metadata?.participant,i=p?.invitation;
  if(rows.length!==1||!worker.active||worker.metadata?.siteRegister?.version!==1||p?.version!==1||!['INVITED','ACTIVE'].includes(p.status)||!/^\+[1-9]\d{7,14}$/.test(worker.phone||'')||!i||i.id!==intent.invitationId||i.createdBy!==member.actorId||!/^orginv_[A-Za-z0-9]+$/.test(i.providerId||'')||(p.status==='INVITED'?i.state!=='SENT':i.state!=='ACCEPTED'))fail('PARTICIPANT_ONBOARDING_PARTICIPANT_REQUIRED',403);
- const kycAuthority=await kycRetryAuthority(client,intent,worker);
+ if(origin&&(p.status!==account.status||(p.clerkUserId||null)!==account.clerkUserId))fail('PARTICIPANT_ONBOARDING_PARTICIPANT_REQUIRED',403);
+ let kycAuthority=origin?null:await kycRetryAuthority(client,intent,worker);
  const proof=await participationProof(client,intent,worker,own),authorization=await consent(client,intent,worker);
  const connection=await projectConnection(client,intent.organizationId,project.id);
  if(connection.company)await assertCompanyKycInvitation(client,worker,intent.organizationId);
  const duplicate=(await client.query(connection.company?`SELECT w.id FROM public."Worker" w JOIN public."Project" p ON p.id=w."projectId" JOIN public."WhatsAppChannelProjectAssignment" a ON a."projectId"=p.id AND a."organizationId"=p."organizationId" WHERE a."connectionId"=$1 AND a."organizationId"=$2 AND a.status='ACTIVE' AND p.status='ACTIVE' AND w.active=true AND w.phone=$3 AND w.id<>$4 AND w.metadata->'participant'->>'status' IN ('INVITED','ACTIVE') LIMIT 1`:`SELECT id FROM public."Worker" WHERE "projectId"=$1 AND phone=$2 AND id<>$3 AND active=true AND metadata->'participant'->>'status' IN ('INVITED','ACTIVE') LIMIT 1`,connection.company?[connection.id,intent.organizationId,worker.phone,worker.id]:[project.id,worker.phone,worker.id])).rows;
  if(duplicate.length)fail('PARTICIPANT_ONBOARDING_RECIPIENT_AMBIGUOUS',409);
+ if(origin)kycAuthority=await readCurrentReactiveKyc(client,{intent,member,own,project,worker,connection,origin,environment});
  await challengeReceipt(client,intent,worker,expected);
  const trail=(await client.query(`SELECT id FROM public."AuditLog" WHERE "organizationId"=$1 AND action='participant.operation.recorded' AND (("entityType"='Worker' AND "entityId"=$2 AND metadata->>'kind' IN ('REVOKE','RESTORE_ACCESS','EXISTING_ACCOUNT_ASSIGNED','INVITATION_ACCEPTED','INVITATION_SENT')) OR ("entityType"='TenantMembership' AND "entityId"=ANY($3::text[]) AND metadata->>'kind'='OFFICE_ROLE_CHANGED')) ORDER BY id LIMIT 1001`,[intent.organizationId,worker.id,[member.membershipId,...(own?[own.membershipId]:[])]] )).rows;
  if(trail.length>1000)fail();
@@ -145,10 +154,23 @@ export async function resolveParticipantOnboardingAuthority(client,intent,{envir
  if(!entitlement.allowed)fail(entitlement.reasonCode,403);
  if(!(now instanceof Date)||!Number.isFinite(now.getTime())||p.status==='INVITED'&&(!timestamp(i.expiresAt)||Date.parse(i.expiresAt)<=now.getTime())||Date.parse(authorization.recordedAt)>now.getTime())fail('PARTICIPANT_ONBOARDING_INVITATION_EXPIRED',410);
  if(kycAuthority.review&&Date.parse(kycAuthority.review.recordedAt)>now.getTime())fail('PARTICIPANT_ONBOARDING_KYC_REJECTION_REQUIRED',409);
+ if(origin&&[kycAuthority.submittedAt,kycAuthority.completedAt,kycAuthority.adoptedAt,kycAuthority.reviewedAt].filter(Boolean).some(value=>Date.parse(value)>now.getTime()))fail();
  assertWorkerCustomerConnection(connection,intent.organizationId,project.id,now.getTime(),{operational:true,environment});
  if(!customerChannelActive(connection,now.getTime(),{environment}))fail('PARTICIPANT_ONBOARDING_CHANNEL_REQUIRED',403);
- checkedChallenge(worker,member,connection,expected,now);
- const authorityDigest=digest(['participant-onboarding-authority-v1',stable({intent,member,projectId:project.id,worker:{id:worker.id,phone:worker.phone,status:p.status,clerkUserId:p.clerkUserId||null,invitation:i,kycAuthority},proof,consent:authorization,connection:{id:connection.id,anchorProjectId:connection.projectId,targetProjectId:project.id,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,grantDigest:companyKycGrantDigest(connection),ownerRevision:connection.company?.revision||null,assignmentRevision:connection.company?.assignmentRevision||null,projectOnlyOwner:connection.projectOnlyOwner||null},subscription:{plan:organization.subscriptionPlan,status:organization.subscriptionStatus,trialEndsAt:organization.trialEndsAt instanceof Date?organization.trialEndsAt.toISOString():organization.trialEndsAt},trail:trail.map(row=>row.id)})]);
+ if(!origin)checkedChallenge(worker,member,connection,expected,now);
+ const authorityDigest=digest([origin?'participant-reactive-kyc-status-authority-v1':'participant-onboarding-authority-v1',stable({intent,member,projectId:project.id,worker:{id:worker.id,phone:worker.phone,status:p.status,clerkUserId:p.clerkUserId||null,invitation:i,kycAuthority},proof,consent:authorization,connection:{id:connection.id,anchorProjectId:connection.projectId,targetProjectId:project.id,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,grantDigest:companyKycGrantDigest(connection),ownerRevision:connection.company?.revision||null,assignmentRevision:connection.company?.assignmentRevision||null,projectOnlyOwner:connection.projectOnlyOwner||null},subscription:{plan:organization.subscriptionPlan,status:organization.subscriptionStatus,trialEndsAt:organization.trialEndsAt instanceof Date?organization.trialEndsAt.toISOString():organization.trialEndsAt},trail:trail.map(row=>row.id)})]);
  if(expected&&expected.authorityDigest!==authorityDigest)fail();
- return {member,project,worker,connection,now,entitlement,authorityDigest,company:Boolean(connection.company)};
+ return {member,project,worker,connection,now,entitlement,authorityDigest,company:Boolean(connection.company),...(origin?{own,organization,status:kycAuthority.status}:{})};
+}
+
+export async function resolveParticipantOnboardingAuthority(client,intent,{environment=process.env,expected=null}={}){
+ return resolveParticipantAuthority(client,intent,{environment,expected});
+}
+
+// Internal reactive READ purpose only. It cannot mint/reopen a challenge. The
+// caller pins the account already locked before Project by the signed adapter.
+export async function resolveParticipantReactiveKycStatusAuthority(client,intent,{environment=process.env,expected=null,origin,account}={}){
+ const originKeys=['version','kind','eventId','applicationId','nonce','expiresAt','intent','authorityDigest','admissionReceiptId','challengeId','challengeReceiptId','exteriorReceiptId','handoffReceiptId','code'];
+ if(!object(origin)||Object.keys(origin).sort().join('|')!==originKeys.sort().join('|')||origin.version!==1||origin.kind!=='KYC_START'||!hash(origin.authorityDigest)||!timestamp(origin.expiresAt)||!object(account)||Object.keys(account).sort().join('|')!=='clerkUserId|own|status'||!['INVITED','ACTIVE'].includes(account.status)||account.status==='INVITED'&&(account.clerkUserId!==null||account.own!==null)||account.status==='ACTIVE'&&(!/^user_[A-Za-z0-9]+$/.test(account.clerkUserId||'')||!workspaceId(account.own?.actorId)||!workspaceId(account.own?.membershipId)||account.own.clerkUserId!==account.clerkUserId)||expected?.challengeId!==undefined)fail('PARTICIPANT_ONBOARDING_INPUT_INVALID',400);
+ return resolveParticipantAuthority(client,intent,{environment,expected},{origin,account});
 }

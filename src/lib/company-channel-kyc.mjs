@@ -27,6 +27,13 @@ export function companyKycProjectionContract(value,expected={}){
  return Object.freeze({...value});
 }
 export const companyKycProjectionTuple=value=>{const p=companyKycProjectionContract(value);return projectionKeys.map(key=>p[key]);};
+// Capture receipts hash the writer's source object, including its projection.
+// JSONB changes object key order. Restore that original writer order only when
+// reconstructing a source; validate the entire stored projection first.
+export function companyKycProjectionSource(value,expected={}){
+ const p=companyKycProjectionContract(value,expected);
+ return Object.freeze(Object.fromEntries(projectionKeys.map(key=>[key,p[key]])));
+}
 export const companyKycProjectionDigest=value=>digest(companyKycProjectionTuple(value));
 export function companyKycProjectionId(sourceEventId){if(!event(sourceEventId))fail();return 'company_kyc_projection_'+digest(['company-kyc-projection-v1',sourceEventId]);}
 export function companyKycProjectLockIds(anchorProjectId,targetProjectId){
@@ -55,9 +62,14 @@ async function trail(client,organizationId,workerId,membershipIds){
  if(rows.length>1000)fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
  return rows.map(r=>r.id);
 }
-export async function prepareCompanyKycProjects(client,member,input){
+export async function prepareCompanyKycProjects(client,member,input,{beforeChannel=null,expectedConnection=null}={}){
+ // Internal composition hook only; request data cannot supply a function.
+ // Default capture/preparation retains its exact prior lock/read behavior.
+ if(beforeChannel!==null&&typeof beforeChannel!=='function')fail('META_KYC_COMPANY_ADAPTER_UNAVAILABLE');
+ if(expectedConnection!==null&&(!expectedConnection||Object.keys(expectedConnection).sort().join('|')!=='grantDigest|id|organizationId|projectId'||![expectedConnection.id,expectedConnection.organizationId,expectedConnection.projectId].every(workspaceId)||!hash(expectedConnection.grantDigest)))fail('META_KYC_COMPANY_ADAPTER_UNAVAILABLE');
  preparedChannels.set(client,null);
  const discovered=await companyConnectionForProject(client,member.organizationId,input.projectId);
+ if(expectedConnection&&(!discovered||discovered.id!==expectedConnection.id||discovered.projectId!==expectedConnection.projectId||discovered.organizationId!==expectedConnection.organizationId||companyKycGrantDigest(discovered)!==expectedConnection.grantDigest))fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
  if(!discovered)return;
  if(discovered.company.mode!=='COMPANY'||discovered.metadata?.developmentPilot)fail('META_KYC_COMPANY_ADAPTER_UNAVAILABLE');
  const issuer=await principal(client,{actorId:member.actorId,membershipId:member.membershipId,organizationId:member.organizationId});
@@ -67,6 +79,7 @@ export async function prepareCompanyKycProjects(client,member,input){
   const rows=(await client.query('SELECT id FROM public."Project" WHERE id=$1 AND "organizationId"=$2 AND status=\'ACTIVE\' FOR UPDATE',[id,member.organizationId])).rows;
   if(rows.length!==1)fail('META_KYC_CHALLENGE_REVOKED');
  }
+ if(beforeChannel)await beforeChannel();
  const channel=await companyConnectionForProject(client,member.organizationId,input.projectId,true);
  if(!channel||channel.company.mode!=='COMPANY'||companyKycGrantDigest(channel)!==companyKycGrantDigest(discovered))fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
  preparedChannels.set(client,{channel,issuer});
@@ -107,10 +120,10 @@ async function readProjection(client,sourceEventId,organizationId){
 function checkedLease(event,context,now){
  if(!event||event.projectId!==context.projectId||event.payload?.channelId!==context.channelId||event.payload.payloadDigest!==context.payloadDigest||event.status!=='PENDING'||event.leaseToken!==context.leaseToken||!Number.isFinite(Date.parse(event.leaseExpiresAt))||Date.parse(event.leaseExpiresAt)<=now.getTime())fail('META_CUSTOMER_INBOX_LEASE_CHANGED');
 }
-function checkedTime(r,context,now,event=r.event){
+function checkedTime(r,context,now,event=r.event,environment=process.env){
  if(!(now instanceof Date)||!Number.isFinite(now.getTime()))fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
  checkedLease(event,context,now);
- if(!customerChannelActive(r.connection,now.getTime())||r.connection.metadata?.developmentPilot)fail('META_KYC_CHALLENGE_REVOKED');
+ if(!customerChannelActive(r.connection,now.getTime(),{environment})||r.connection.metadata?.developmentPilot)fail('META_KYC_CHALLENGE_REVOKED');
  if(!Number.isFinite(Date.parse(r.challenge.expiresAt))||Date.parse(r.challenge.expiresAt)<=now.getTime()||r.challenge.claimedAt!==undefined&&(!Number.isFinite(Date.parse(r.challenge.claimedAt))||Date.parse(r.challenge.claimedAt)+META_KYC_CONVERSATION_TTL_MS<=now.getTime()))fail('META_KYC_CHALLENGE_EXPIRED');
  // The reactive start button has its own shorter deadline. Retain it through
  // every resolve, claim commit, pre-send and outbound replay final clock.
@@ -119,12 +132,12 @@ function checkedTime(r,context,now,event=r.event){
  if(part.status==='INVITED'&&(!Number.isFinite(Date.parse(part.invitation.expiresAt))||Date.parse(part.invitation.expiresAt)<=now.getTime()))fail('META_KYC_CHALLENGE_REVOKED');
  assertCustomerReplyWindow(r.payload,now.getTime());
 }
-export async function fenceCompanyKycAuthority(client,r,context){
+export async function fenceCompanyKycAuthority(client,r,context,{environment=process.env}={}){
  if(!r.companyKyc)return;
  const rows=(await client.query('SELECT id,"projectId",payload,status::text AS status,"leaseToken","leaseExpiresAt",clock_timestamp() AS now FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND status=\'PENDING\' AND "leaseToken"=$3 FOR UPDATE',[r.event.id,r.connection.projectId,context.leaseToken])).rows;
  if(rows.length!==1)fail('META_CUSTOMER_INBOX_LEASE_CHANGED');
  // All current actor/assignment/grant rows are held. No await follows this clock.
- checkedTime(r,context,rows[0].now,rows[0]);
+ checkedTime(r,context,rows[0].now,rows[0],environment);
 }
 export async function resolveCompanyKycAuthority(client,context,{initial,firstChannel,payload,codeDigest,environment}){
  const proof=corporateKycSignedProof(initial,firstChannel,environment);
@@ -196,7 +209,7 @@ export async function resolveCompanyKycAuthority(client,context,{initial,firstCh
  if(challenge.status==='PENDING'){if(!codeDigest||codeDigest!==challenge.codeDigest)fail('META_KYC_CHALLENGE_REJECTED');}
  else if(!['CLAIMED','COMPLETED'].includes(challenge.status)&&!(challenge.status==='CANCELLED'&&challenge.cancelledEventId===event.id)||codeDigest&&challenge.claimedEventId!==event.id)fail('META_KYC_CHALLENGE_REJECTED');
  const r={kind:'LIMITED_KYC_UPLOAD',member,issuer,project:projects.get(candidate.projectId),worker,challenge,connection,event,payload:finalPayload,now,prompt,source:{kind:'META_KYC_CHAT',eventId:event.id,payloadDigest:context.payloadDigest,challengeId:challenge.id,connectionId:connection.id,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,senderE164:worker.phone}};
- checkedTime(r,context,now);
+ checkedTime(r,context,now,r.event,environment);
  const projection=companyKycProjectionContract({version:1,kind:COMPANY_KYC_PROJECTION_KIND,sourceEventId:event.id,payloadDigest:context.payloadDigest,organizationId:firstChannel.organizationId,connectionId:connection.id,anchorProjectId:connection.projectId,targetProjectId:r.project.id,workerId:worker.id,challengeId:challenge.id,ownerRevision:connection.company.revision,assignmentRevision:connection.company.assignmentRevision,grantDigest:d0.grantDigest,issuerActorId:issuer.actorId,issuerMembershipId:issuer.membershipId,authorityDigest,participantActorId:part.status==='ACTIVE'?member.actorId:null,participantMembershipId:part.status==='ACTIVE'?member.membershipId:null,participantClerkUserId:part.status==='ACTIVE'?member.clerkUserId:null});
  if(pinned){
   const current={...projection,sourceEventId:pinned.sourceEventId,payloadDigest:pinned.payloadDigest};
@@ -218,12 +231,12 @@ export function assertCompanyKycPrompt(r){
   if(!match||match[1]!==r.state.nonce||!r.state.choices?.[Number(match[2])]||!row)fail('META_KYC_COMPANY_CONTEXT_REQUIRED');
  }
 }
-export async function fencePreparedCompanyKycChallenge(client,member,projectId){
+export async function fencePreparedCompanyKycChallenge(client,member,projectId,{environment=process.env}={}){
  const prepared=preparedChannels.get(client);
  if(!prepared)return;
  const rows=(await client.query('SELECT id,metadata FROM public."Worker" WHERE "projectId"=$1 AND metadata->\'participant\'->\'kycChatChallenge\'->>\'issuerActorId\'=$2 AND metadata->\'participant\'->\'kycChatChallenge\'->>\'connectionId\'=$3',[projectId,member.actorId,prepared.channel.id])).rows;
  const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
- if(!(now instanceof Date)||!Number.isFinite(now.getTime())||!customerChannelActive(prepared.channel,now.getTime())||prepared.channel.metadata?.developmentPilot)fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
+ if(!(now instanceof Date)||!Number.isFinite(now.getTime())||!customerChannelActive(prepared.channel,now.getTime(),{environment})||prepared.channel.metadata?.developmentPilot)fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
  // Locked Project/Worker/issuer rows prevent revocation; time is checked last.
  const current=rows.find(row=>row.id===prepared.workerId),p=current?.metadata?.participant,c=p?.kycChatChallenge;
  if(!c||!Number.isFinite(Date.parse(c.expiresAt))||Date.parse(c.expiresAt)<=now.getTime()||p.status==='INVITED'&&(!Number.isFinite(Date.parse(p.invitation?.expiresAt))||Date.parse(p.invitation.expiresAt)<=now.getTime()))fail('META_KYC_CHALLENGE_EXPIRED');
@@ -306,13 +319,13 @@ export async function bindPendingCompanyKycAcceptance(client,{row,participant,ac
  participant.kycChatChallenge=updated;r.updated=updated;
  return true;
 }
-export async function fencePendingCompanyKycAcceptance(client){
+export async function fencePendingCompanyKycAcceptance(client,{environment=process.env}={}){
  const r=pendingAcceptances.get(client);if(!r)return;
  if(!r.updated)fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
  const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
  // Principal, source, project, assignment, connection and worker locks remain
  // held; this last clock is after all writes and no await follows its checks.
- if(!(now instanceof Date)||!Number.isFinite(now.getTime())||!customerChannelActive(r.channel,now.getTime())||r.channel.metadata?.developmentPilot)fail('META_KYC_CHALLENGE_REVOKED');
+ if(!(now instanceof Date)||!Number.isFinite(now.getTime())||!customerChannelActive(r.channel,now.getTime(),{environment})||r.channel.metadata?.developmentPilot)fail('META_KYC_CHALLENGE_REVOKED');
  if(!Number.isFinite(Date.parse(r.updated.expiresAt))||Date.parse(r.updated.expiresAt)<=now.getTime()||!Number.isFinite(Date.parse(r.row.metadata.participant.invitation.expiresAt))||Date.parse(r.row.metadata.participant.invitation.expiresAt)<=now.getTime())fail('META_KYC_CHALLENGE_EXPIRED');
  pendingAcceptances.delete(client);
 }

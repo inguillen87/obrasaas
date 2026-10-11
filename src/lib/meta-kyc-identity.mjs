@@ -72,7 +72,7 @@ export async function resolveMetaKycAuthority(client,context,{deposit=false,outb
  const challenge=worker?.metadata?.participant?.kycChatChallenge,part=worker?.metadata?.participant;
  const connection=(await client.query(`SELECT *,"connectionStatus"::text AS "connectionStatus" FROM public."WhatsAppConnection" WHERE id=$1 AND "projectId"=$2 FOR SHARE`,[context.channelId,project.id])).rows[0];
  const event=(await client.query(`SELECT id,"projectId",provider,status::text AS status,payload,"leaseToken","leaseExpiresAt","createdAt" FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 FOR UPDATE`,[context.eventId,project.id])).rows[0],now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
- if(!worker?.active||part?.status!==p0.status||part?.clerkUserId!==p0.clerkUserId||challenge?.id!==c0.id||challenge.version!==1||challenge.organizationId!==project.organizationId||challenge.projectId!==project.id||challenge.workerId!==worker.id||worker.phone!==senderE164||challenge.senderE164!==senderE164||challenge.connectionId!==connection?.id||challenge.wabaId!==connection?.whatsappBusinessId||challenge.phoneNumberId!==connection?.phoneNumberId||challenge.issuerActorId!==issuer.actorId||challenge.issuerMembershipId!==issuer.membershipId||connection?.metadata?.credentialOrganizationId!==project.organizationId||!customerChannelActive(connection,now.getTime()))fail('META_KYC_CHALLENGE_REVOKED');
+ if(!worker?.active||part?.status!==p0.status||part?.clerkUserId!==p0.clerkUserId||challenge?.id!==c0.id||challenge.version!==1||challenge.organizationId!==project.organizationId||challenge.projectId!==project.id||challenge.workerId!==worker.id||worker.phone!==senderE164||challenge.senderE164!==senderE164||challenge.connectionId!==connection?.id||challenge.wabaId!==connection?.whatsappBusinessId||challenge.phoneNumberId!==connection?.phoneNumberId||challenge.issuerActorId!==issuer.actorId||challenge.issuerMembershipId!==issuer.membershipId||connection?.metadata?.credentialOrganizationId!==project.organizationId||!customerChannelActive(connection,now.getTime(),{environment}))fail('META_KYC_CHALLENGE_REVOKED');
  if(!event||event.leaseToken!==context.leaseToken||event.status!=='PENDING'||Date.parse(event.leaseExpiresAt)<=now.getTime()||event.payload.payloadDigest!==context.payloadDigest)fail('META_CUSTOMER_INBOX_LEASE_CHANGED');
  if(Date.parse(challenge.expiresAt)<=now.getTime()||!Number.isFinite(Date.parse(challenge.expiresAt)))fail('META_KYC_CHALLENGE_EXPIRED');
  if(part.version!==1||worker.metadata?.siteRegister?.version!==1||part.status==='INVITED'&&(part.invitation?.id!==challenge.invitationId||part.invitation?.state!=='SENT'||!Number.isFinite(Date.parse(part.invitation?.expiresAt))||Date.parse(part.invitation.expiresAt)<=now.getTime()))fail('META_KYC_CHALLENGE_REVOKED');
@@ -120,6 +120,6 @@ async function finishMetaKycAuthority(client,context,r,{deposit,outbound,environ
   const result=readMetaKycValue(r,'kyc-chat-dispatch',id,m.encryptedResult,environment);if(result?.kind!=='KYC_CHAT'||result.identityStatus!=='LIMITED_KYC_UPLOAD'||m.replyDigest!==digest(result.reply))fail('META_KYC_CHALLENGE_REJECTED');
  }
  if(deposit)await assertCompanyKycImageSources(client,r,environment);
- await fenceCompanyKycAuthority(client,r,context);
+ await fenceCompanyKycAuthority(client,r,context,{environment});
  return r;
 }
