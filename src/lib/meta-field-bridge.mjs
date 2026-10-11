@@ -15,7 +15,7 @@ import {siteText} from './site-register-policy.mjs';
 export function metaFieldOperationId(eventId,purpose){const h=digest(['meta-field-operation-v1',eventId,purpose]);return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;}
 const receiptId=eventId=>'meta_field_'+digest(['meta-field-dispatch-v1',eventId]);
 const permissionFor=action=>action==='ATTENDANCE'?'attendance':'report';
-const safeErrors=new Set(['INVENTORY_QUANTITY_INVALID','INVENTORY_CATALOG_CHANGED','INVENTORY_MATERIAL_UNAVAILABLE','SITE_INPUT_INVALID','SITE_QUANTITY_INVALID','FIELD_QUANTITY_INVALID','FIELD_QUANTITY_PROGRESS_MISMATCH','FIELD_PROGRESS_REGRESSION','FIELD_PROGRESS_REVIEW_PENDING','FIELD_BASELINE_CHANGED','FIELD_REVISION_CHANGED','WORKSPACE_TASK_UNAVAILABLE','FIELD_SECTOR_UNAVAILABLE','ATTENDANCE_REVISION_CHANGED','ATTENDANCE_PERSON_JOURNEY_OPEN','ATTENDANCE_SHIFT_ALREADY_OPEN','ATTENDANCE_SHIFT_NOT_OPEN','ATTENDANCE_BREAK_ALREADY_OPEN','ATTENDANCE_BREAK_NOT_OPEN','ATTENDANCE_BREAK_OPEN','ATTENDANCE_LOCATION_STALE','ATTENDANCE_LOCATION_INVALID','FIELD_EVIDENCE_NOT_APPROVED']);
+const safeErrors=new Set(['INVENTORY_QUANTITY_INVALID','INVENTORY_CATALOG_CHANGED','INVENTORY_MATERIAL_UNAVAILABLE','SITE_INPUT_INVALID','SITE_QUANTITY_INVALID','FIELD_QUANTITY_INVALID','FIELD_QUANTITY_PROGRESS_MISMATCH','FIELD_PROGRESS_REGRESSION','FIELD_PROGRESS_REVIEW_PENDING','FIELD_BASELINE_CHANGED','FIELD_REVISION_CHANGED','WORKSPACE_TASK_UNAVAILABLE','FIELD_SECTOR_UNAVAILABLE','ATTENDANCE_REVISION_CHANGED','ATTENDANCE_PERSON_JOURNEY_OPEN','ATTENDANCE_SHIFT_ALREADY_OPEN','ATTENDANCE_SHIFT_NOT_OPEN','ATTENDANCE_BREAK_ALREADY_OPEN','ATTENDANCE_BREAK_NOT_OPEN','ATTENDANCE_BREAK_OPEN','ATTENDANCE_LOCATION_STALE','ATTENDANCE_LOCATION_INVALID','FIELD_EVIDENCE_NOT_APPROVED','FIELD_EVIDENCE_UNAVAILABLE']);
 const explanation=code=>({ATTENDANCE_PERSON_JOURNEY_OPEN:'Tenés una jornada pendiente de cierre. Contactá al responsable.',ATTENDANCE_SHIFT_ALREADY_OPEN:'Ya tenés una jornada abierta.',ATTENDANCE_SHIFT_NOT_OPEN:'Primero registrá una entrada.',ATTENDANCE_BREAK_ALREADY_OPEN:'Tu pausa ya está abierta.',ATTENDANCE_BREAK_NOT_OPEN:'No hay una pausa abierta.',ATTENDANCE_BREAK_OPEN:'Cerrá la pausa antes de registrar la salida.',ATTENDANCE_LOCATION_STALE:'La ubicación venció. Volvé a empezar y compartí una ubicación actual.',FIELD_PROGRESS_REVIEW_PENDING:'Esta tarea ya tiene una propuesta pendiente.',FIELD_EVIDENCE_NOT_APPROVED:'La evidencia requiere revisión del responsable.',FIELD_PROGRESS_REGRESSION:'El avance propuesto no puede ser menor al ya aprobado.'}[code]||'Revisá los datos y el estado actual de la obra antes de volver a intentar.');
 const text=body=>({type:'text',body});
 export const metaFieldMediaContextDigest=r=>digest(['meta-field-media-context-v2',r.member.organizationId,r.member.actorId,r.member.membershipId,r.member.clerkUserId,r.project.id,r.worker.id,r.channelBinding.id,r.connection.id,r.connection.projectId,r.connection.phoneNumberId,r.connection.whatsappBusinessId,r.sourceProjectId||r.event.projectId,r.companyProjection?{projectId:r.companyProjection.projectId,workerId:r.companyProjection.workerId,actorId:r.companyProjection.actorId,membershipId:r.companyProjection.membershipId,assignmentRevision:r.companyProjection.assignmentRevision,bindingId:r.companyProjection.bindingId,routeId:r.companyProjection.routeId,routeEpoch:r.companyProjection.routeEpoch}:null]);
@@ -165,7 +165,11 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   const latest=data.attendance.filter(e=>e.workerId===r.worker.id).sort((a,b)=>b.sequence-a.sequence)[0]||null;
   const limited=attendanceOnly||Boolean(r.connection.metadata?.developmentPilot),facts={projectName:r.project.name,workerId:r.worker.id,permissions:limited?{attendance:r.worker.metadata.participant.permissions.attendance,report:false}:r.worker.metadata.participant.permissions,attendanceOnly:limited,sectors:data.sectors,evidence:data.evidence,proposals:data.proposals,inventory:data.inventory,latest,mediaReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaFieldMediaContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId}};
   let plan;
-  try{Object.assign(facts,await readMetaFieldTaskCatalog(client,{projectId:r.project.id,state:activeState||{purpose:action},message:r.proof.value}));plan=planMetaFieldConversation({message:r.proof.value,state,eventId:r.event.id,facts,now:r.now});}
+  try{
+   Object.assign(facts,await readMetaFieldTaskCatalog(client,{projectId:r.project.id,state:activeState||{purpose:action},message:r.proof.value}));
+   if(facts.permissions.report===true&&activeState?.purpose==='PROGRESS'&&activeState.taskId)Object.assign(facts,await readMetaFieldEvidenceCatalog(client,{organizationId:r.member.organizationId,projectId:r.project.id,workerId:r.worker.id,actorId:r.member.actorId,state:activeState,message:r.proof.value,tasks:facts.tasks}));
+   plan=planMetaFieldConversation({message:r.proof.value,state,eventId:r.event.id,facts,now:r.now});
+  }
   catch(error){if(!safeErrors.has(error.code))throw error;return {done:await record(client,r,result(r,'INPUT_REVIEW',text(explanation(error.code)+' Escribí CANCELAR para volver al menú.'),{code:error.code}),state)};}
   if(plan.media){
    assertDevelopmentPilotAdapter(r.connection,'media');
@@ -272,4 +276,51 @@ export async function readMetaFieldTaskCatalog(client,{projectId,state,message})
   }
  }
  return {tasks,taskPage};
+}
+
+// Internal signed-bridge catalog, called only after live identity, binding, TTL,
+// report permission and canonical task reads. IDs are row references, not grants.
+// Web review pagination and the general 100-row activity feed keep their contracts.
+export async function readMetaFieldEvidenceCatalog(client,{organizationId,projectId,workerId,actorId,state,message,tasks}){
+ const unavailable=()=>{throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);};
+ if([organizationId,projectId,workerId,actorId,state?.taskId].some(value=>!workspaceId(value))||!tasks?.some(task=>task.id===state.taskId)||state.evidenceIds!==undefined&&!Array.isArray(state.evidenceIds))unavailable();
+ const choice=selectedChoice(state,message),voice=state.step==='VOICE_EVIDENCE'||state.step==='PROGRESS_SOURCE'&&choice==='VOICE',size=voice?7:8;
+ const paging=['VOICE_EVIDENCE','PROGRESS_EVIDENCE'].includes(state.step),page=paging?state.evidencePage:null;
+ const field=`i.metadata->'fieldOperations'`,from=`public."Incident" i JOIN public."Project" p ON p.id=i."projectId" JOIN public."Task" t ON t."projectId"=i."projectId" AND t.id=$2`;
+ const visible=`i."projectId"=$1 AND p."organizationId"=$5 AND ${field}->>'version'='1' AND ${field}->>'kind'='EVIDENCE' AND ${field}->>'taskId'=$2 AND ${field}->>'workerId'=$3 AND ${field}->>'recordedBy'=$4`;
+ const approved=visible+` AND ${field}->'review'->>'decision'='APPROVE'`,values=[projectId,state.taskId,workerId,actorId,organizationId];
+ let anchor=null,direction='FIRST';
+ if(page){
+  if(typeof page.hasPrevious!=='boolean'||typeof page.hasNext!=='boolean'||(page.first===null)!==(page.last===null)||page.first===null&&(page.hasPrevious||page.hasNext)||page.first!==null&&(!workspaceId(page.first)||!workspaceId(page.last)))unavailable();
+  if(page.first!==null){
+   // An anchor still belongs to the same task/author/tenant if its review changed.
+   const anchors=(await client.query(`SELECT i.id FROM ${from} WHERE ${visible} AND i.id=ANY($6::text[])`,[...values,[page.first,page.last]])).rows;
+   if(![page.first,page.last].every(id=>anchors.some(row=>row.id===id)))unavailable();
+   direction=choice==='NEXT_EVIDENCE'?'AFTER':choice==='PREVIOUS_EVIDENCE'?'BEFORE':'INCLUSIVE';anchor=direction==='AFTER'?page.last:page.first;
+  }
+ }
+ const reference=`(SELECT "createdAt",id FROM public."Incident" WHERE "projectId"=$1 AND id=$6)`;
+ const predicate=anchor?` AND (i."createdAt",i.id) ${direction==='AFTER'?'<':direction==='BEFORE'?'>':'<='} ${reference}`:'';
+ const columns=`i.id,i.title,i.description,i.metadata,clock_timestamp() AS "readAt",to_char(i."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
+ const found=(await client.query(`SELECT ${columns} FROM ${from} WHERE ${approved}${predicate} ORDER BY i."createdAt" ${direction==='BEFORE'?'ASC':'DESC'},i.id ${direction==='BEFORE'?'ASC':'DESC'} LIMIT ${size+1}`,anchor?[...values,anchor]:values)).rows;
+ const rows=found.slice(0,size);if(direction==='BEFORE')rows.reverse();
+ let evidencePage={first:null,last:null,hasPrevious:false,hasNext:false};
+ const first=rows[0]?.id||anchor,last=rows.at(-1)?.id||anchor;
+ if(first){
+  const bounds=(await client.query(`SELECT EXISTS(SELECT 1 FROM ${from} WHERE ${approved} AND (i."createdAt",i.id)>(SELECT "createdAt",id FROM public."Incident" WHERE "projectId"=$1 AND id=$6)) AS "hasPrevious",EXISTS(SELECT 1 FROM ${from} WHERE ${approved} AND (i."createdAt",i.id)<(SELECT "createdAt",id FROM public."Incident" WHERE "projectId"=$1 AND id=$7)) AS "hasNext"`,[...values,first,last])).rows[0];
+  evidencePage={first,last,hasPrevious:bounds.hasPrevious,hasNext:bounds.hasNext};
+ }
+ const pagedEvidence=rows.map(publicFieldEvidence),evidence=pagedEvidence.slice();
+ // Re-read selections and retained voice/progress links independently of the
+ // page. SHARE locks keep that attribution/review current through final command
+ // persistence in this transaction; the canonical save and commit fence still run.
+ const selected=paging&&choice&&!['NEXT_EVIDENCE','PREVIOUS_EVIDENCE','MANUAL'].includes(choice)?[choice]:[];
+ const retained=[...(state.evidenceIds||[]),state.sourceVoice?.evidenceId,state.voiceCandidate?.evidenceId,...selected].filter(value=>value!==undefined&&value!==null);
+ if(retained.length>12||retained.some(value=>!workspaceId(value)))unavailable();
+ for(const id of new Set(retained)){
+  const row=(await client.query(`SELECT ${columns} FROM ${from} WHERE ${approved} AND i.id=$6 FOR SHARE OF i`,[...values,id])).rows[0];
+  const index=evidence.findIndex(value=>value.id===id);if(index!==-1)evidence.splice(index,1);
+  if(row)evidence.push(publicFieldEvidence(row));
+ }
+ return {evidence,pagedEvidence,evidencePage};
 }
