@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createWorkspaceRecoveryJournal,recoveryQuery,recoveryResult,validateWorkspaceRecoveryStoredEntry,WORKSPACE_RECOVERY_PREFIX} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
+import {createWorkspaceRecoveryJournal,recoveryQuery,recoveryResult,validateWorkspaceRecoveryStoredEntry,WORKSPACE_RECOVERY_PREFIX,wasCompanyPhoneRevisionRejected} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
 import {createWorkspaceRequestLifecycle} from '../src/app/(identity)/cuenta/workspace-request-lifecycle.mjs';
 const scope='a'.repeat(64),other='b'.repeat(64),operationId='01234567-89ab-4cde-8fab-0123456789ab';
 const secondId='01234567-89ab-4cde-8fab-0123456789ac';
@@ -284,5 +284,85 @@ test('attendance rejection must belong to its active response capture and cannot
   const s=storage(),j=journal(s),options=attendanceRecoveryOptions(),original=await j.prepare('/api/identity/field-operations',options);await j.settle(original,null,new TypeError('Controlled uncertainty'));const ticket=await j.prepare('/api/identity/field-operations',options),controller=new AbortController();if(mode==='aborted')controller.abort();
   await j.captureResponse(ticket,'/api/identity/field-operations',options,Response.json({saved:false,code:'ATTENDANCE_REVISION_CHANGED'},{status:409}),{signal:controller.signal,isActive:()=>mode!=='inactive'});
   const settled=mode==='wrong-ticket'?await j.prepare('/api/identity/field-operations',options):ticket;await j.settle(settled,null,attendanceRecoveryError());assert.equal((await j.list(scope)).length,1,mode);
+ }
+});
+
+// Separate from companyPhoneBody: the older helper deliberately carries extra
+// private fields and must not acquire canonical-response rejection authority.
+const phone409Url='/api/identity/company-onboarding';
+const phone409Options=(patch={})=>({method:'POST',body:JSON.stringify({action:'declare_company_phone',operationId,projectId:'p-a',scope,expectedClerkOrganizationId:'org_A',companyPhone:'+12025550123',expectedRevision:1,confirmDeclaration:true,...patch})});
+const phone409Error=()=>Object.assign(new Error('Observed company phone conflict'),{status:409,code:'COMPANY_PHONE_CONFLICT'});
+const phone409Response=()=>Response.json({created:false,code:'COMPANY_PHONE_CONFLICT'},{status:409});
+const phone409Observation=()=>({signal:new AbortController().signal,isActive:()=>true});
+async function consumePhone409(response){const body=await response.json();if(response.ok)return body;throw Object.assign(new Error('Actual company phone response'),{status:response.status,code:body?.code});}
+
+test('a current canonical company phone POST conflict releases only its new ticket and permits a reviewed new UUID',async()=>{
+ const s=storage(),j=journal(s),history=await j.prepare('/api/identity/field-media',command({operationId:secondId,projectId:'historical-project'})),otherCompany=await j.prepare(phone409Url,phone409Options({scope:other,projectId:'other-project',expectedClerkOrganizationId:'org_B',operationId:secondId})),options=phone409Options();let calls=0,observed;
+ const preserved=[...s.rows],runtime=createWorkspaceRequestLifecycle(async()=>'controlled-current-company',{journal:j,fetchImpl:async(url,input)=>{calls++;assert.equal(url,phone409Url);assert.equal(input.body,options.body);const pending=(await j.list(scope)).find(entry=>entry.resource==='company-onboarding');assert.deepEqual(Object.keys(pending).sort(),['action','createdAt','expectedClerkOrganizationId','operationId','projectId','resource','scope','version']);for(const text of ['12025550123','inputDigest','expectedRevision','controlled-current-company'])assert.equal(JSON.stringify([...s.rows]).includes(text),false,text);return phone409Response();}});
+ await assert.rejects(runtime.request(phone409Url,options,consumePhone409),error=>{observed=error;return error.status===409&&error.code==='COMPANY_PHONE_CONFLICT';});
+ assert.equal(await wasCompanyPhoneRevisionRejected(observed,phone409Url,options),true);assert.equal(await wasCompanyPhoneRevisionRejected(observed,phone409Url,phone409Options({companyPhone:'+12025550124'})),false);assert.equal(calls,1);assert.deepEqual([...s.rows],preserved);assert.deepEqual(await j.list(scope),[history.entry]);assert.deepEqual(await j.list(other),[otherCompany.entry]);
+ const revised=phone409Options({operationId:'01234567-89ab-4cde-8fab-0123456789ad',expectedRevision:2}),next=await j.prepare(phone409Url,revised);assert.equal(next.existed,false);assert.notEqual(next.entry.operationId,operationId);assert.equal(await wasCompanyPhoneRevisionRejected(observed,phone409Url,revised),false);assert.equal(calls,1);runtime.abort();
+});
+
+test('company phone requires exact observed HTTP shape status MIME endpoint and the complete current command digest',async()=>{
+ const modes=['invented-error','consumer-flag','code-only','created-true','saved-shape','extra-key','array','incomplete','invalid-utf8','oversized','wrong-code','status-401','status-403','status-503','wrong-mime','misleading-mime','redirected','response-url','response-origin','no-signal','no-active','wrong-endpoint','query','GET','action','scope','project','uuid','clerk-org','revision','phone','confirm','extra-command'];
+ for(const mode of modes){
+  const s=storage(),j=journal(s),options=phone409Options(),ticket=await j.prepare(phone409Url,options),before=[...s.rows],changed=JSON.parse(options.body);let url=phone409Url,input=options;
+  const patches={action:{action:'create_company'},scope:{scope:other},project:{projectId:'p-b'},uuid:{operationId:secondId},'clerk-org':{expectedClerkOrganizationId:'org_B'},revision:{expectedRevision:2},phone:{companyPhone:'+12025550124'},confirm:{confirmDeclaration:false},'extra-command':{extra:'not-canonical'}};
+  if(patches[mode]){Object.assign(changed,patches[mode]);input={method:'POST',body:JSON.stringify(changed)};}if(mode==='wrong-endpoint')url='/api/identity/whatsapp-setup';if(mode==='query')url+='?scope='+scope;if(mode==='GET')input={...options,method:'GET'};
+  if(!['invented-error','consumer-flag'].includes(mode)){
+   let value={created:false,code:'COMPANY_PHONE_CONFLICT'};if(mode==='code-only')value={code:value.code};if(mode==='created-true')value.created=true;if(mode==='saved-shape')value={saved:false,code:value.code};if(mode==='extra-key')value.receiptId='invented';if(mode==='array')value=[value];if(mode==='wrong-code')value.code='COMPANY_PHONE_OPERATION_CONFLICT';
+   const text=mode==='incomplete'?'{"created":false':mode==='invalid-utf8'?new Uint8Array([0xff]):mode==='oversized'?' '.repeat(4097)+JSON.stringify(value):JSON.stringify(value),status=mode.startsWith('status-')?Number(mode.slice(7)):409;
+   const response=new Response(text,{status,headers:{'content-type':mode==='wrong-mime'?'text/html':mode==='misleading-mime'?'text/html; application/json':'application/json'}}),observation=phone409Observation();if(mode==='redirected')Object.defineProperty(response,'redirected',{value:true});if(mode==='response-url'||mode==='response-origin')Object.defineProperty(response,'url',{value:mode==='response-origin'?'https://other.invalid/api/identity/company-onboarding':'https://obrasaas.com/api/identity/whatsapp-setup'});if(mode==='no-signal')delete observation.signal;if(mode==='no-active')delete observation.isActive;await j.captureResponse(ticket,url,input,response,observation);
+  }
+  const error=phone409Error();if(mode==='consumer-flag')error.companyPhoneRevisionRejected=true;await j.settle(ticket,null,error);assert.equal(await wasCompanyPhoneRevisionRejected(error,phone409Url,options),false,mode);assert.deepEqual([...s.rows],before,mode);await assert.rejects(j.prepare(phone409Url,phone409Options({operationId:secondId})),{code:'WORKSPACE_RECOVERY_REQUIRED'},mode);
+ }
+ const s=storage(),j=journal(s),legacy=companyPhoneBody(),ticket=await j.prepare(phone409Url,legacy),before=[...s.rows],error=phone409Error();await j.captureResponse(ticket,phone409Url,legacy,phone409Response(),phone409Observation());await j.settle(ticket,null,error);assert.deepEqual([...s.rows],before);assert.equal(await wasCompanyPhoneRevisionRejected(error,phone409Url,legacy),false);
+});
+
+test('a company phone conflict cannot settle another ticket a changed durable entry or an inactive observation',async()=>{
+ for(const mode of ['foreign-ticket','changed-entry','inactive-before','inactive-after','aborted-before','aborted-after','repeat-settle','cleanup-failed']){
+  const s=storage(),j=journal(s),options=phone409Options(),ticket=await j.prepare(phone409Url,options),controller=new AbortController();let active=mode!=='inactive-before';if(mode==='aborted-before')controller.abort();
+  if(mode==='changed-entry'){const key=s.key(0);s.setItem(key,JSON.stringify({...ticket.entry,expectedClerkOrganizationId:'org_B'}));}const before=[...s.rows];
+  await j.captureResponse(ticket,phone409Url,options,phone409Response(),{signal:controller.signal,isActive:()=>active});if(mode==='inactive-after')active=false;if(mode==='aborted-after')controller.abort();
+  const settled=mode==='foreign-ticket'?{entry:{...ticket.entry},existed:false}:ticket,error=phone409Error();if(mode==='repeat-settle')await j.settle(ticket,null,new TypeError('Earlier uncertain consumption'));if(mode==='cleanup-failed')s.removeItem=()=>{throw new Error('Controlled cleanup failure');};
+  await j.settle(settled,null,error);assert.equal(await wasCompanyPhoneRevisionRejected(error,phone409Url,options),false,mode);assert.deepEqual([...s.rows],before,mode);
+ }
+});
+
+test('an older company phone uncertainty survives a later exact POST conflict and every absent denied or failed GET',async()=>{
+ for(const mode of ['lost-response','status-401','status-403','status-503','reload']){
+  const s=storage(),j=journal(s),options=phone409Options();let calls=0,original;
+  const first=createWorkspaceRequestLifecycle(async()=>'controlled',{journal:j,fetchImpl:async()=>{calls++;if(['lost-response','reload'].includes(mode))throw new TypeError('Controlled lost response');return Response.json({created:false,code:'COMPANY_PHONE_CONFLICT'},{status:Number(mode.slice(7))});}});
+  await assert.rejects(first.request(phone409Url,options,consumePhone409),error=>{original=error;return true;});assert.equal(await wasCompanyPhoneRevisionRejected(original,phone409Url,options),false,mode);const before=[...s.rows];first.abort();
+  const current=mode==='reload'?journal(storage(s.rows)):j,runtime=createWorkspaceRequestLifecycle(async()=>'controlled',{journal:current,fetchImpl:async()=>{calls++;return phone409Response();}});let retried;
+  await assert.rejects(runtime.request(phone409Url,options,consumePhone409),error=>{retried=error;return error.status===409;});assert.equal(await wasCompanyPhoneRevisionRejected(retried,phone409Url,options),false,mode);assert.equal(calls,2);assert.deepEqual(await current.list(scope),await j.list(scope));assert.deepEqual([...s.rows],before,mode);runtime.abort();
+ }
+ for(const status of [200,401,403,409,503]){
+  const s=storage(),j=journal(s),ticket=await j.prepare(phone409Url,phone409Options()),before=[...s.rows],absent=companyPhoneOutcome(ticket.entry,{state:'NOT_OBSERVED',saved:false,definitive:false,receipt:undefined}),runtime=createWorkspaceRequestLifecycle(async()=>'controlled',{journal:j,fetchImpl:async()=>status===200?Response.json(absent):Response.json({created:false,code:'COMPANY_PHONE_CONFLICT'},{status})});
+  if(status===200)assert.equal((await runtime.request(recoveryQuery(ticket.entry),{},consumePhone409)).state,'NOT_OBSERVED');else await assert.rejects(runtime.request(recoveryQuery(ticket.entry),{},consumePhone409),error=>error.status===status);assert.deepEqual([...s.rows],before);runtime.abort();
+ }
+});
+
+test('a hanging company phone rejection body is cancelled on both native branches without consumption or reference removal',async()=>{
+ for(const mode of ['abort','deadline']){
+  const s=storage(),j=journal(s),options=phone409Options(),entered=deferred(),cancelled=deferred();let cloneCalls=0,cloneCancelled=0,originalCancelled=0,sourceCancelled=0,consumeCalls=0;
+  const runtime=createWorkspaceRequestLifecycle(async()=>'controlled',{journal:j,fetchImpl:async()=>{
+   const response=new Response(new ReadableStream({start(controller){controller.enqueue(new TextEncoder().encode('{"created":false,"code":"COMPANY_PHONE_CONFLICT"'));},cancel(){sourceCancelled++;cancelled.resolve();}}),{status:409,headers:{'content-type':'application/json'}}),nativeClone=response.clone.bind(response);
+   response.clone=()=>{cloneCalls++;const cloned=nativeClone(),nativeCancel=response.body.cancel.bind(response.body),getReader=cloned.body.getReader.bind(cloned.body);response.body.cancel=(...args)=>{originalCancelled++;return nativeCancel(...args);};cloned.body.getReader=()=>{const reader=getReader(),cancel=reader.cancel.bind(reader);reader.cancel=(...args)=>{cloneCancelled++;return cancel(...args);};entered.resolve();return reader;};return cloned;};return response;
+  }});
+  try{
+   const pending=runtime.request(phone409Url,{...options,requestTimeoutMs:mode==='deadline'?1000:20000},response=>{consumeCalls++;return consumePhone409(response);}),rejection=assert.rejects(pending,error=>error.name==='AbortError');await Promise.race([entered.promise,rejection.then(()=>{throw new Error('Native clone was not observed before termination');})]);if(mode==='abort')runtime.abort();await rejection;
+   let cancelDeadline;try{await Promise.race([cancelled.promise,new Promise((_,reject)=>{cancelDeadline=setTimeout(()=>reject(new Error('Native response branches were not cancelled')),1000);})]);}finally{clearTimeout(cancelDeadline);}
+   assert.equal(cloneCalls,1);assert.ok(cloneCancelled>=1);assert.ok(originalCancelled>=1);assert.equal(sourceCancelled,1);assert.equal(consumeCalls,0);assert.equal((await j.list(scope)).length,1);
+  }finally{runtime.abort();}
+ }
+});
+
+test('cancellation after a complete company phone capture or during removal commit conserves the reference',async()=>{
+ for(const phase of ['consume','removal']){
+  const entered=deferred(),release=deferred(),store=transactionalMemory(async({rows,staged})=>{if(phase==='removal'&&staged.size<rows.size){entered.resolve();await release.promise;}}),j=createWorkspaceRecoveryJournal({withStorage:store.withStorage}),options=phone409Options();let consumed=0,observed;
+  const runtime=createWorkspaceRequestLifecycle(async()=>'controlled',{journal:j,fetchImpl:async()=>phone409Response()}),pending=runtime.request(phone409Url,options,async response=>{consumed++;if(phase==='consume'){entered.resolve();await release.promise;}return consumePhone409(response);});await entered.promise;const before=[...store.rows];runtime.abort();release.resolve();
+  await assert.rejects(pending,error=>{observed=error;return phase==='consume'?error.name==='AbortError':error.status===409;});assert.equal(await wasCompanyPhoneRevisionRejected(observed,phone409Url,options),false);assert.equal(consumed,1);assert.deepEqual([...store.rows],before);assert.equal((await j.list(scope)).length,1);
  }
 });

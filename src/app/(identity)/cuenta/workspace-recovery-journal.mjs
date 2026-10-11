@@ -332,8 +332,23 @@ async function rejectedAttendanceIdentity(url,options,entry){
   let inputDigest;try{inputDigest=await sha256(new TextEncoder().encode(JSON.stringify(['attendance-rejection-command-v1',entry.scope,entry.projectId,entry.operationId,p.workerId,p.eventType,p.expectedEventId,p.sectorId,p.qrToken,point===null?null:[point.latitude,point.longitude,point.accuracy,point.capturedAt,point.noticeVersion]])));}catch{throw unavailable();}
   return {inputDigest};
 }
+// A current company-phone rejection binds only a newly reserved command.
+// No number, command digest or expected revision enters persistent references.
+async function rejectedCompanyPhoneIdentity(url,options,entry){
+  if(url!=='/api/identity/company-onboarding'||options?.method!=='POST'||entry?.resource!=='company-onboarding'||typeof options.body!=='string')return null;
+  let body;try{body=JSON.parse(options.body);}catch{return null;}
+  if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).sort().join('|')!=='action|companyPhone|confirmDeclaration|expectedClerkOrganizationId|expectedRevision|operationId|projectId|scope'||body.action!=='declare_company_phone'||body.action!==entry.action||body.scope!==entry.scope||body.projectId!==entry.projectId||!uuid(body.operationId)||body.operationId.toLowerCase()!==entry.operationId||body.expectedClerkOrganizationId!==entry.expectedClerkOrganizationId||!id(body.expectedClerkOrganizationId)||typeof body.companyPhone!=='string'||!/^\+[1-9]\d{7,14}$/.test(body.companyPhone)||!Number.isSafeInteger(body.expectedRevision)||body.expectedRevision<0||body.expectedRevision>=Number.MAX_SAFE_INTEGER||body.confirmDeclaration!==true)return null;
+  let inputDigest;try{inputDigest=await sha256(new TextEncoder().encode(JSON.stringify(['company-phone-rejection-command-v1',body.action,entry.scope,entry.projectId,entry.operationId,body.expectedClerkOrganizationId,body.expectedRevision,body.companyPhone,body.confirmDeclaration])));}catch{throw unavailable();}
+  return {inputDigest};
+}
+const companyPhoneRejectedErrors=new WeakMap();
+export async function wasCompanyPhoneRevisionRejected(error,url,options){
+  const proof=error&&typeof error==='object'?companyPhoneRejectedErrors.get(error):null;if(!proof)return false;
+  try{const current=await rejectedCompanyPhoneIdentity(url,options,proof.entry);return Boolean(current&&current.inputDigest===proof.identity.inputDigest);}catch{return false;}
+}
 export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.now,notify=()=>{},withLock}) {
   const scheduleTickets=new WeakMap(),scheduleReferences=new Map(),attendanceTickets=new WeakMap(),attendanceReferences=new Map();
+  const companyPhoneTickets=new WeakMap();
   // getStorage is retained only for controlled in-memory tests. The browser uses
   // one transactional adapter; receipt policy remains in this factory.
   const storageOperation=withStorage||((mode,scope,callback,signal)=>{
@@ -361,14 +376,16 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
     if(!scopeValid(scope))return [];
     return access('readonly',scope,s=>readEntries(s,scope));
   }
-  async function remove(entry) {
+  async function remove(entry,observation) {
     try {
+      if(observation&&(observation.signal?.aborted||!observation.isActive()))return false;
       const removed=await access('readwrite',entry.scope,s=>{
         const key=keyOf(entry),raw=s.getItem(key);if(raw===null)return false;
         const stored=validateWorkspaceRecoveryStoredEntry(key,raw);
         if(!Object.keys(entry).every(field=>field==='actionReference'?entry[field]?.proposalId===stored[field]?.proposalId&&entry[field]?.revision===stored[field]?.revision:entry[field]===stored[field]))return false;
+        if(observation&&(observation.signal?.aborted||!observation.isActive()))return false;
         s.removeItem(key);return true;
-      });
+      },observation?.signal);
       if(removed){scheduleReferences.delete(keyOf(entry));attendanceReferences.delete(keyOf(entry));notify();}return removed;
     } catch { return false; }
   }
@@ -392,6 +409,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
     async prepare(url, options, {notifyConflict=true} = {}) {
       const entry=await reference(url,options,now());if(!entry)return null;
       const scheduleIdentity=await rejectedScheduleIdentity(url,options,entry),attendanceIdentity=await rejectedAttendanceIdentity(url,options,entry);
+      const companyPhoneIdentity=await rejectedCompanyPhoneIdentity(url,options,entry);
       const reserve=()=>access('readwrite',entry.scope,s=>{
       if(options.signal?.aborted)throw Object.assign(new DOMException('La consulta se canceló.','AbortError'),{requestDispatched:false});
       const current=readEntries(s,entry.scope),existing=current.find(row=>keyOf(row)===keyOf(entry));
@@ -424,14 +442,20 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
         if(!ticket.existed){original={entry:{...ticket.entry},identity:attendanceIdentity};attendanceReferences.set(key,original);}
         if(original&&sameScheduleEntry(ticket.entry,original.entry)&&original.identity.inputDigest===attendanceIdentity.inputDigest)attendanceTickets.set(ticket,{...original,rejected:false});
       }
+      if(companyPhoneIdentity&&!ticket.existed)companyPhoneTickets.set(ticket,{entry:{...ticket.entry},identity:companyPhoneIdentity,rejected:false});
       if(!ticket.existed)notify();return ticket;
     },
-    async captureResponse(ticket,url,options,response,{signal,isActive=()=>true}={}){
-      const prepared=scheduleTickets.get(ticket)||attendanceTickets.get(ticket),attendance=attendanceTickets.has(ticket);
+    async captureResponse(ticket,url,options,response,observation={}){
+      const {signal,isActive=()=>true}=observation;
+      const companyPhone=companyPhoneTickets.has(ticket),prepared=companyPhoneTickets.get(ticket)||scheduleTickets.get(ticket)||attendanceTickets.get(ticket),attendance=attendanceTickets.has(ticket);
+      if(companyPhone){
+        if(!signal||typeof observation.isActive!=='function'||response?.redirected===true||response?.headers.get('content-type')?.split(';',1)[0].trim().toLowerCase()!=='application/json')return;
+        try{if(response.url){const received=new URL(response.url);if(!globalThis.location||received.origin!==globalThis.location.origin||received.pathname!==url||received.search||received.hash)return;}}catch{return;}
+      }
       if(!prepared||response?.status!==409||!response.headers.get('content-type')?.includes('application/json')||signal?.aborted||!isActive())return;
       let reader,onAbort;
       try{
-        const current=await (attendance?rejectedAttendanceIdentity:rejectedScheduleIdentity)(url,options,prepared.entry);
+        const current=await (companyPhone?rejectedCompanyPhoneIdentity:attendance?rejectedAttendanceIdentity:rejectedScheduleIdentity)(url,options,prepared.entry);
         if(!current||current.inputDigest!==prepared.identity.inputDigest||signal?.aborted||!isActive())return;
         reader=response.clone().body?.getReader();if(!reader)return;
         let rejectAbort;const aborted=new Promise((_,reject)=>{rejectAbort=reject;});
@@ -440,14 +464,20 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
         const decoder=new TextDecoder('utf-8',{fatal:true});let text='',bytes=0;
         while(true){const part=await Promise.race([reader.read(),aborted]);if(part.done)break;bytes+=part.value.byteLength;if(bytes>4096)return;text+=decoder.decode(part.value,{stream:true});}
         text+=decoder.decode();const body=JSON.parse(text);
-        if(!signal?.aborted&&isActive()&&body&&typeof body==='object'&&!Array.isArray(body)&&Object.keys(body).sort().join('|')==='code|saved'&&body.saved===false&&body.code===(attendance?'ATTENDANCE_REVISION_CHANGED':'SCHEDULE_REVISION_CHANGED'))prepared.rejected=true;
+        if(companyPhone){
+          if(!signal?.aborted&&isActive()&&body&&typeof body==='object'&&!Array.isArray(body)&&Object.keys(body).sort().join('|')==='code|created'&&body.created===false&&body.code==='COMPANY_PHONE_CONFLICT'){prepared.rejected=true;prepared.observation={signal,isActive};}
+        }else if(!signal?.aborted&&isActive()&&body&&typeof body==='object'&&!Array.isArray(body)&&Object.keys(body).sort().join('|')==='code|saved'&&body.saved===false&&body.code===(attendance?'ATTENDANCE_REVISION_CHANGED':'SCHEDULE_REVISION_CHANGED'))prepared.rejected=true;
       }catch{/* An unreadable, oversized or interrupted response supplies no proof. */}
       finally{if(onAbort)signal?.removeEventListener('abort',onAbort);if(reader){reader.cancel().catch(()=>{});try{reader.releaseLock();}catch{}}}
     },
     async settle(ticket, result, error) {
       if(!ticket)return;
       const schedule=scheduleTickets.get(ticket),attendance=attendanceTickets.get(ticket);scheduleTickets.delete(ticket);attendanceTickets.delete(ticket);
+      const companyPhone=companyPhoneTickets.get(ticket);companyPhoneTickets.delete(ticket);
       if(error){
+        if(companyPhone?.rejected===true&&!ticket.existed&&ticket.entry.resource==='company-onboarding'&&sameScheduleEntry(ticket.entry,companyPhone.entry)&&error.status===409&&error.code==='COMPANY_PHONE_CONFLICT'&&error.requestDispatched!==false&&!companyPhone.observation.signal?.aborted&&companyPhone.observation.isActive()){
+          if(await remove(companyPhone.entry,companyPhone.observation)&&!companyPhone.observation.signal?.aborted&&companyPhone.observation.isActive())companyPhoneRejectedErrors.set(error,{entry:companyPhone.entry,identity:companyPhone.identity});return;
+        }
         if(attendance?.rejected===true&&ticket.entry.resource==='field-operations'&&sameScheduleEntry(ticket.entry,attendance.entry)&&error.status===409&&error.code==='ATTENDANCE_REVISION_CHANGED'&&error.attendanceRevisionRejected===true&&error.requestDispatched!==false){await remove(attendance.entry);return;}
         if(schedule?.rejected===true&&ticket.entry.resource==='workspace'&&sameScheduleEntry(ticket.entry,schedule.entry)&&error.status===409&&error.code==='SCHEDULE_REVISION_CHANGED'&&error.scheduleRevisionRejected===true&&error.requestDispatched!==false){await remove(schedule.entry);return;}
         if(ticket.entry.resource==='participants'&&ticket.entry.action===PARTICIPANT_OFFICE_ASSIGN_ACTION){if(!ticket.existed&&(error.requestDispatched===false||participantOfficePrecommitRejected(error)))await remove(ticket.entry);return;}
