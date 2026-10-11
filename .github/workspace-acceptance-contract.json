@@ -2114,7 +2114,7 @@
         "path": ".vercel/company-kyc-evidence/postgres.json",
         "kind": "PG_COMPANY_KYC",
         "producer": "scripts/verify-company-channel-kyc-postgres.mjs",
-        "producerSha256": "349d7efdac0468a25e5c1495a825d4e47caf60663446f54be72591fdc866f4c4",
+        "producerSha256": "16b162181c10751f219140725fed55c56a5042bbf1e8e1b4ae938933713ce747",
         "sourceFiles": [
           "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
           "src/lib/afipValidator.js",

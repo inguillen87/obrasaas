@@ -137,8 +137,8 @@ function companyPresentDiscoveryFixture(){
   let result;
   if(sql.includes('to_regclass'))result=rows([{present:true,count:1}]);
   else if(sql.startsWith('SELECT\n  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('))result=rows([{columns:[],keys:[],indexes:[],triggers:[]}]);
+  else if(sql.startsWith('SELECT version,contract,"catalogFingerprint",'))result=rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:fingerprint,currentCatalog:{columns:[],keys:[],indexes:[],triggers:[]},catalog:args[1].map(conname=>({conname,convalidated:true})),indexes:args[2].map(relname=>({relname,indisvalid:true,indisready:true,indisunique:true})),triggers:args[3].map(tgname=>({tgname,tgenabled:'O'}))}]);
   else if(sql.includes('information_schema.columns'))result=sql.includes("column_name='catalogFingerprint'")?rows([{count:1}]):rows([]);
-  else if(sql.startsWith('SELECT version,contract,"catalogFingerprint",'))result=rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:fingerprint,catalog:args[0].map(conname=>({conname,convalidated:true})),indexes:args[1].map(relname=>({relname,indisvalid:true,indisready:true,indisunique:true})),triggers:args[2].map(tgname=>({tgname,tgenabled:'O'}))}]);
   else if(sql.includes('FROM public."WhatsAppCompanySchema"'))result=rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:fingerprint}]);
   else if(sql.startsWith('SELECT conname,convalidated'))result=rows(args[0].map(conname=>({conname,convalidated:true})));
   else if(sql.includes('pg_get_indexdef'))result=rows([]);

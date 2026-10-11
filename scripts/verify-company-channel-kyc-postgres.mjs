@@ -96,7 +96,7 @@ try{
    const batchReady=await companyChannelSchemaReady({query:(sql,args)=>{batchQueries++;assert.match(sql,/^SELECT\s/);return catalogClient.query(sql,args);}});
    assert.equal(batchReady,historicalReady,'Batched readiness must preserve the six historical guards and fingerprint');return {historicalReady,batchReady,historicalQueries,batchQueries};
   };
-  const positive=await observeReadiness();assert.deepEqual(positive,{historicalReady:true,batchReady:true,historicalQueries:10,batchQueries:3});
+  const positive=await observeReadiness();assert.deepEqual(positive,{historicalReady:true,batchReady:true,historicalQueries:10,batchQueries:2});
   const negatives=[];
   const rejectCatalog=async(name,changes,expectedQueries)=>{
    await catalogClient.query('BEGIN');
@@ -116,9 +116,9 @@ try{
   await rejectCatalog('required-index-absent',[[`DROP INDEX public."company_waba_owner_key"`]],2);
   await rejectCatalog('same-name-index-not-unique',[[`DROP INDEX public."company_waba_owner_key"`],[`CREATE INDEX "company_waba_owner_key" ON public."WhatsAppConnection"("whatsappBusinessId") WHERE "whatsappBusinessId" IS NOT NULL`]],2);
   await rejectCatalog('required-trigger-disabled',[[`ALTER TABLE public."WhatsAppCompanyEventRoute" DISABLE TRIGGER "company_event_immutable"`]],2);
-  await rejectCatalog('marker-fingerprint-mismatch',[[`UPDATE public."WhatsAppCompanySchema" SET "catalogFingerprint"=$1 WHERE id=1`,['0'.repeat(64)]]],3);
-  await rejectCatalog('same-name-validated-constraint-definition-drift',[[`ALTER TABLE public."WhatsAppCompanyEventRoute" DROP CONSTRAINT "company_event_worker_fk"`],[`ALTER TABLE public."WhatsAppCompanyEventRoute" ADD CONSTRAINT "company_event_worker_fk" FOREIGN KEY("workerId","projectId") REFERENCES public."Worker"(id,"projectId") ON DELETE CASCADE`]],3);
-  schemaReadinessEquivalence={positive,negativeGuards:negatives,markerUnchanged:true,probeTransactions:'BEGIN/ROLLBACK in the existing disposable schema only',cachedAuthorization:false};
+  await rejectCatalog('marker-fingerprint-mismatch',[[`UPDATE public."WhatsAppCompanySchema" SET "catalogFingerprint"=$1 WHERE id=1`,['0'.repeat(64)]]],2);
+  await rejectCatalog('same-name-validated-constraint-definition-drift',[[`ALTER TABLE public."WhatsAppCompanyEventRoute" DROP CONSTRAINT "company_event_worker_fk"`],[`ALTER TABLE public."WhatsAppCompanyEventRoute" ADD CONSTRAINT "company_event_worker_fk" FOREIGN KEY("workerId","projectId") REFERENCES public."Worker"(id,"projectId") ON DELETE CASCADE`]],2);
+  schemaReadinessEquivalence={positive,negativeGuards:negatives,markerUnchanged:true,probeTransactions:'BEGIN/ROLLBACK in the existing disposable schema only',cachedAuthorization:false,markerAndFingerprintSnapshot:'same SELECT; fresh on every invocation'};
  }finally{catalogClient.release();}
  await query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES('company-kyc-person',$1,$2),('company-kyc-reviewer','user_CompanyKycReviewer','reviewer@example.invalid')`,[a.workerUserId,a.workerEmail]);
  await query(`INSERT INTO "TenantMembership"(id,"userId","organizationId","tenantRole","clerkRole",status) VALUES('company-kyc-person-member','company-kyc-person',$1,'AUDITOR','org:member','ACTIVE'),('company-kyc-reviewer-member','company-kyc-reviewer',$1,'DIRECTOR','org:member','ACTIVE')`,[a.organizationId]);
