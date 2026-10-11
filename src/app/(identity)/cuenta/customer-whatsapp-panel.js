@@ -47,6 +47,7 @@ function CustomerWhatsAppPreparation({projectId,scope,onPending,getSessionToken}
  async function load(preserveDraft=false){
   if(busy||currentAttempt||dirty&&!preserveDraft)return;
   const alive=()=>mounted.current;
+  if(preserveDraft){setReviewed(false);setRevisionReview({previousRevision:currentData.profile.revision,currentRevision:null,profile:null});}
   setOpened(true);setBusy(true);setMessage('');const abort=new AbortController();active.current=abort;
   try{const result=await api(sessionRequest,endpoint+'?'+new URLSearchParams({projectId,scope}),{signal:abort.signal},result=>valid(result));if(alive()){
    accept(result,!preserveDraft);setReviewed(false);setRevisionReview(preserveDraft?{previousRevision:currentData.profile.revision,currentRevision:result.profile.revision,profile:result.profile}:null);

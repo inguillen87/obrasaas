@@ -15,7 +15,8 @@ export function ProjectPreparationPanel({projectId,scope,getSessionToken,onPendi
  const [snapshot,setSnapshot]=useState(null),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[busy,setBusy]=useState(true),[message,setMessage]=useState(''),[notObserved,setNotObserved]=useState(false),[cancelConfirmed,setCancelConfirmed]=useState(false),[stale,setStale]=useState(false);
  const mounted=useRef(true),epoch=useRef(0),inFlight=useRef(false);
  const context={scope,projectId};
- useEffect(()=>{onPending?.(busy||Boolean(draft)||Boolean(attempt));return()=>onPending?.(false);},[busy,draft,attempt,onPending]);
+ const pending=busy||Boolean(draft)||Boolean(attempt);
+ useEffect(()=>{onPending?.(pending);return()=>onPending?.(false);},[pending,onPending]);
  async function send(url,options={}){return request(url,{requestTimeoutMs:20000,...options},async response=>{const value=await response.json();if(!response.ok)throw Object.assign(new Error(describe(value.code)),{code:value.code,status:response.status});return value;});}
  useEffect(()=>{
   mounted.current=true;const generation=epoch,current=++generation.current;
