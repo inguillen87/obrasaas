@@ -169,7 +169,10 @@ async function assertPlanSupport(state,visible,{keyboard=false}={}) {
   assert.ok(text.includes('El pago y la activación se confirman por separado.'));
   if (keyboard) {
     const requestsBefore = state.requests.length;
-    await state.page.focus('[data-company-plan-support]');await state.page.keyboard.press('Shift+Tab');
+    await state.page.focus('[data-company-plan-support]');
+    await state.page.keyboard.down('Shift');
+    try {await state.page.keyboard.press('Tab');}
+    finally {await state.page.keyboard.up('Shift');}
     assert.equal(await state.page.evaluate(() => document.activeElement?.tagName),'BUTTON','The native previous keyboard action remains the manual plan query');
     await state.page.keyboard.press('Tab');
     assert.equal(await state.page.evaluate(() => document.activeElement?.hasAttribute('data-company-plan-support')),true,'The contracting action must be reachable with the keyboard');
