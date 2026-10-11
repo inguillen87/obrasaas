@@ -18,7 +18,7 @@ function PortfolioOverviewContent({scope,role,getSessionToken,onOpenProject,onAc
     controller.current?.abort();const abort=new AbortController();controller.current=abort;
     const current=++generation.current,prior=latest.current,cursor=append?prior?.nextCursor:null;
     if(append&&!cursor)return;
-    setExpanded(true);setSnapshot(null);setNotice('');setLoading(true);
+    latest.current=null;setExpanded(true);setSnapshot(null);setNotice('');setLoading(true);
     try{
       const params=new URLSearchParams({portfolio:'1',scope,...(cursor?{afterProject:cursor}:{})});
       const value=await request('/api/identity/workspace?'+params,{signal:abort.signal},async response=>{
@@ -35,6 +35,10 @@ function PortfolioOverviewContent({scope,role,getSessionToken,onOpenProject,onAc
       if(error.name!=='AbortError'&&mounted.current&&current===generation.current){latest.current=null;setSnapshot(null);setNotice(error.message);if([401,403,409].includes(error.status))onAccessRejected?.();}
     }finally{if(mounted.current&&current===generation.current)setLoading(false);}
   },[locked,loading,request,scope,role,onAccessRejected]);
+  const openProject=project=>{
+    if(!mounted.current||locked||loading||!snapshot||snapshot!==latest.current||!snapshot.projects.includes(project))return;
+    onOpenProject?.(project.id,{scope,role,project});
+  };
   return <section className={styles.panel} aria-labelledby="portfolio-overview-title" aria-busy={loading}>
     <div className={styles.heading}><div><h3 id="portfolio-overview-title"><Layers3 size={19} aria-hidden="true"/>Resumen de obras</h3><p>Revisá la planificación y los bloqueos de las obras disponibles para tu cuenta.</p></div><button type="button" disabled={locked||loading} onClick={()=>consult()}><RefreshCw size={16} aria-hidden="true"/>{expanded?'Actualizar resumen':'Consultar resumen'}</button></div>
     {expanded&&<div className={styles.body}>
@@ -45,7 +49,7 @@ function PortfolioOverviewContent({scope,role,getSessionToken,onOpenProject,onAc
           <h4>{project.name}</h4>
           <dl><div><dt>Tareas completadas</dt><dd>{project.completedTasks} de {project.totalTasks}</dd></div><div><dt>En ejecución</dt><dd>{project.inProgressTasks}</dd></div><div className={project.blockedTasks?styles.attention:undefined}><dt>Bloqueadas</dt><dd>{project.blockedTasks}</dd></div><div className={project.unscheduledTasks?styles.attention:undefined}><dt>Por planificar</dt><dd>{project.unscheduledTasks}</dd></div></dl>
           <p className={styles.date}>Próximo fin previsto<strong>{portfolioDateLabel(project.nextEndsOn)}</strong></p>
-          <button type="button" disabled={locked||loading} onClick={()=>onOpenProject?.(project.id)}>Abrir {project.name}<ArrowUpRight size={16} aria-hidden="true"/></button>
+          <button type="button" disabled={locked||loading} onClick={()=>openProject(project)}>Abrir {project.name}<ArrowUpRight size={16} aria-hidden="true"/></button>
         </article>)}</div>
         {snapshot.nextCursor&&<button className={styles.more} type="button" disabled={locked||loading} onClick={()=>consult(true)}>Consultar más obras</button>}
       </>}

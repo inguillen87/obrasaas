@@ -28,6 +28,7 @@ import {ScheduleWorkbench} from './schedule-workbench';
 import {PlanImportPanel} from './plan-import-panel';
 import {ProjectPreparationPanel} from './project-preparation-panel';
 import {PortfolioOverviewPanel} from './portfolio-overview-panel';
+import {portfolioOverviewMatches} from './portfolio-overview-view.mjs';
 import {OfficeReviewPanel,OfficeReviewAdminPanel} from './office-review-panel';
 import {ProjectCreationPanel} from './project-creation-panel';
 import {projectCreationReceiptOutcome} from './workspace-recovery-journal.mjs';
@@ -86,7 +87,7 @@ function workspaceIdentityOnlyProject(error,account,projectId){
  if(candidates.length!==1||typeof candidates[0].name!=='string')return null;
  return {scope:account.scope,projectId:candidates[0].id,name:candidates[0].name};
 }
-export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyContext,initialProjectId=''}={}){
+export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyContext,onContextPending,initialProjectId=''}={}){
  const transport=useWorkspaceRequest(getSessionToken);
  const request=useCallback((query='',options={})=>requestWorkspace(transport,query,options),[transport]);
  const [account,setAccount]=useState(null),[view,setView]=useState(null),[loading,setLoading]=useState(true),[notice,setNotice]=useState(''),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[saving,setSaving]=useState(false),[receipt,setReceipt]=useState(null);
@@ -108,6 +109,14 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
  const planReadbackPending=planReadbackMatches&&planReadback.status==='pending';
  const taskCreating=creatingTask||Object.values(modulePending).some(Boolean);
  const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft)||planReadbackPending;
+ // Publish before paint so the global organization selector respects this lock.
+ useLayoutEffect(()=>()=>onContextPending?.(false),[onContextPending]);
+ useLayoutEffect(()=>{onContextPending?.(contextLocked);},[contextLocked,onContextPending]);
+ const portfolioContext=useRef(null);
+ useLayoutEffect(()=>{
+  portfolioContext.current=mounted.current&&account&&!loading&&!contextLocked?{account,generation:observationEpoch}:null;
+  return()=>{portfolioContext.current=null;};
+ },[account,loading,contextLocked,observationEpoch]);
  useLayoutEffect(()=>{
   const ticket=identityNavigation.current;
   if(!ticket)return;
@@ -202,17 +211,28 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
   setAccount(null);setView(null);setIdentityProject(null);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setNotice('');setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);setLoading(true);
   try{const data=await request('',{signal:abort.signal});if(mounted.current&&current===generation.current){const confirmed=confirmedWorkspaceAccount(data);initialProjectHint.current.listGeneration=current;setAccount(confirmed);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);}}catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
- const open=useCallback(async(projectId,append=false,navigation=null)=>{
+ const open=useCallback(async(projectId,append=false,navigation=null,portfolioSelection=null)=>{
+  const currentPortfolio=portfolioContext.current;
+  // A current validated summary card may request a read beyond the initial list.
+  // The ordinary authenticated project GET remains the authority for access/data.
+  const fromPortfolio=Boolean(portfolioSelection&&!append&&!navigation&&account&&account.officeReviewOnly!==true&&currentPortfolio?.account===account&&currentPortfolio.generation===generation.current&&portfolioSelection.scope===account.scope&&portfolioSelection.role===account.role&&portfolioSelection.project?.id===projectId&&portfolioOverviewMatches({scope:portfolioSelection.scope,organizationName:account.organizationName,role:portfolioSelection.role,projects:[portfolioSelection.project],nextCursor:null},{scope:account.scope,role:account.role}));
+  if(portfolioSelection&&!fromPortfolio)return;
   identityNavigation.current=null;identityNavigationEpoch.current++;
   const navigationEpoch=identityNavigationEpoch.current;
   if(navigation&&(append||participantOnboardingNavigationTarget(navigation,{scope:account?.scope,projectId,canManageIntegrations:false})!=='worker-channel-title'))return;
   if(account?.officeReviewOnly===true){if(contextLocked)return;const selected=account.projects.find(project=>project.id===projectId);if(selected){initialProjectHint.current.consumed=true;setView(null);setIdentityProject(null);setOfficeProject({scope:account.scope,projectId,name:selected.name});}return;}
-  if(!account||contextLocked||!account.projects.some(project=>project.id===projectId))return;initialProjectHint.current.consumed=true;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
+  if(!account||contextLocked||!fromPortfolio&&!account.projects.some(project=>project.id===projectId))return;initialProjectHint.current.consumed=true;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
   const cursor=append?view?.nextCursor:null;setIdentityProject(null);setPlanReadback(null);setNotice('');setGuideAccessReason(null);setLoading(true);if(!append){setView(null);setDraft(null);setReceipt(null);}
   try{
    const data=await request(query({projectId,scope:account.scope,...(cursor?{afterTask:cursor}:{})}),{signal:abort.signal});
    if(!mounted.current||current!==generation.current)return;
    if(data.scope!==account.scope||data.project.id!==projectId)throw new Error('La respuesta no coincide con la obra seleccionada.');
+   if(fromPortfolio){
+    if(data.project.status!=='ACTIVE'||typeof data.project.name!=='string'||!data.project.name.trim())throw new Error('No pudimos confirmar la obra activa. Volvé a consultar antes de continuar.');
+    const confirmedProject={id:data.project.id,name:data.project.name,status:data.project.status};
+    // Promote only the fresh canonical project, never the summary's label/counts.
+    setAccount(previous=>previous===account?{...previous,projects:[...previous.projects.filter(project=>project.id!==projectId),confirmedProject].sort((a,b)=>a.id.localeCompare(b.id))}:previous);
+   }
    if(navigation&&navigationEpoch===identityNavigationEpoch.current)identityNavigation.current={scope:account.scope,projectId,generation:current,target:'worker-channel'};
    setView(previous=>append?{...data,tasks:mergeLoadedTasks(previous?.tasks||[],data.tasks)}:data);
    setGuideReadFailed(false);
@@ -310,8 +330,8 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
    {!identitySelection&&account.officeReviewOnly!==true&&<WorkspaceRecoveryPanel key={account.scope} scope={account.scope} projects={account.projects} getSessionToken={getSessionToken} onRecovered={(result,reference)=>{if(reference?.resource==='project-creation'&&projectCreationReceiptOutcome(result,reference)?.state==='RECORDED'){setCreationRecovery(result);projectCreated(result);}else if(reference?.resource==='project-preparation'&&result.scope===reference.scope&&result.projectId===reference.projectId&&['RECORDED','CANCELLED'].includes(result.state)){setPreparationRecovery(result);if(result.state==='RECORDED')projectPrepared(result);}else if(reference?.resource==='plan-import'&&result.scope===reference.scope&&result.projectId===reference.projectId&&result.saved===true&&result.receiptId&&result.action==='APPLY'&&result.draft?.status==='APPLIED')readRecordedSchedule({scope:reference.scope,projectId:reference.projectId,kind:'plan'});else if(result.created===true&&result.task&&reference?.resource==='task-creation')readRecordedSchedule({scope:reference.scope,projectId:reference.projectId,kind:'task'});else if(result.task)tasksChanged(result.task,reference);}}/>}
    {!account.projects.length&&!loading&&<div className={styles.empty}><FolderKanban size={25} aria-hidden="true"/><strong>No hay obras activas asignadas a tu cuenta.</strong><p>Pedile al responsable que revise tu pertenencia y la obra asignada. Podés volver a actualizar cuando confirme el acceso.</p></div>}
    {account.projects.length>0&&<div className={styles.projectCollection}><div className={styles.collectionHeading}><h3>Obras disponibles</h3><span>{account.projects.length}{account.projectsTruncated?' mostradas':account.projects.length===1?' asignada':' asignadas'}</span></div><div className={styles.projects}>{account.projects.map(project=><button key={project.id} type="button" onClick={()=>open(project.id)} disabled={contextLocked} aria-pressed={(view?.project.id||identitySelection?.projectId||officeSelection?.projectId)===project.id}><span className={styles.projectName}><FolderKanban size={18} aria-hidden="true"/><span>{project.name}</span></span><small>{(view?.project.id||identitySelection?.projectId||officeSelection?.projectId)===project.id?<><Check size={14} aria-hidden="true"/>Seleccionada</>:<>Abrir obra<ArrowUpRight size={14} aria-hidden="true"/></>}</small></button>)}</div></div>}
-   {account.projectsTruncated&&<p>Se muestran las primeras 100 obras autorizadas.</p>}
-   {!identitySelection&&account.officeReviewOnly!==true&&<PortfolioOverviewPanel key={`portfolio:${account.scope}`} scope={account.scope} role={account.role} getSessionToken={getSessionToken} locked={contextLocked||loading} onOpenProject={projectId=>open(projectId)} onAccessRejected={portfolioAccessRejected}/>}
+   {account.projectsTruncated&&<p>{account.projects.length>100?'La lista incluye las primeras 100 obras y las que abriste desde el resumen.':'Se muestran las primeras 100 obras autorizadas.'}</p>}
+   {!identitySelection&&account.officeReviewOnly!==true&&<PortfolioOverviewPanel key={`portfolio:${account.scope}`} scope={account.scope} role={account.role} getSessionToken={getSessionToken} locked={contextLocked||loading} onOpenProject={(projectId,selection)=>open(projectId,false,null,selection)} onAccessRejected={portfolioAccessRejected}/>}
    {account.projects.length>0&&!view&&!identitySelection&&!officeSelection&&!loading&&<div className={styles.startState}><strong>Abrí una obra para empezar</strong><p>{account.officeReviewOnly===true?'Consultá sólo los eventos de lectura que el administrador seleccionó.':'Consultá el cronograma, registrá el trabajo y accedé a las herramientas disponibles para tu rol.'}</p></div>}
   </>}
   {identitySelection&&<><section className={styles.startState} aria-labelledby="identity-access-title"><h3 id="identity-access-title">Identidad y habilitación de obra</h3><p>Tu acceso requiere una revisión humana vigente. Podés presentar o consultar tu documentación privada para esta obra. Después de la aprobación, comprobá la habilitación para abrir las tareas y los registros.</p><button type="button" disabled={contextLocked||loading} onClick={()=>open(identitySelection.projectId)}>Comprobar habilitación de obra</button></section><ParticipantPanel key={`identity-only:${identitySelection.scope}:${identitySelection.projectId}`} presentation="own-identity" projectId={identitySelection.projectId} scope={identitySelection.scope} getSessionToken={getSessionToken} onPending={participantPending} onNavigate={value=>{if(mounted.current&&generation.current===observationEpoch&&participantOnboardingNavigationTarget(value,{scope:identitySelection.scope,projectId:identitySelection.projectId,canManageIntegrations:false})==='worker-channel-title')void open(identitySelection.projectId,false,value);}}/><details style={{marginTop:'1rem'}}><summary style={{minHeight:44,paddingBlock:'.6rem',cursor:'pointer',fontSize:16,fontWeight:700}}>Mi WhatsApp y mis avisos</summary><WorkerChannelPanel key={`identity-channel:${identitySelection.scope}:${identitySelection.projectId}`} presentation="own-privacy" projectId={identitySelection.projectId} scope={identitySelection.scope} getSessionToken={getSessionToken} onPending={channelPending} observationEpoch={observationEpoch}/></details></>}

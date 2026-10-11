@@ -147,7 +147,7 @@ const browserRecoveryJournal={list:async()=>[],migratePlanImportAttempt:async()=
 `;
 const panelCompiled=await transform(panelHooks+panelSource+`
 export const reset=()=>{states=[];refs=[];queue=[];};export const respond=value=>queue.push(value);export const seed=value=>{for(const [key,item] of Object.entries(value)){const index=stateNames.indexOf(key);if(index<0)throw new Error('Unknown panel state');states[index]=item;}};
-export const snapshot=()=>Object.fromEntries(stateNames.map((name,index)=>[name,states[index]]));export const references=()=>refs;
+export const snapshot=()=>Object.fromEntries(stateNames.map((name,index)=>[name,states[index]]));export const references=()=>refs;export const queued=()=>queue.length;
 export const render=props=>{stateCursor=0;refCursor=0;return PlanImportPanel(props);};
 `,{filename:'plan-import-panel.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});
 const panel=await import('data:text/javascript;base64,'+Buffer.from(panelCompiled.code).toString('base64'));
@@ -162,6 +162,18 @@ async function openPanel(value,{canApprove=true,drafts=[value]}={}){
  panel.seed({recoveryReady:true,reason:'Revisión sintética del archivo',receipt:'receipt-synthetic',file:new File(['synthetic'],'source-synthetic.xlsx',{type:value.source.contentType}),consent:true,approved:true});
  tree=panel.render(panelContext);elements(tree,node=>node.type==='input'&&node.props.type==='file')[0].props.ref.current={value:'source-synthetic.xlsx'};
  return tree;
+}
+// Saved-draft reads now require an explicit choice before discarding local corrections.
+// Keep this helper synchronous so adversarial queued reads start before later responses.
+function consultSavedDraft(tree){
+ const before=panel.snapshot(),queuedBefore=panel.queued();
+ const saved=elements(tree,node=>node.type==='button'&&Array.isArray(node.props.children)&&node.props.children.includes(' tareas'))[0];
+ assert.ok(saved,'Expected saved draft control');const request=saved.props.onClick();
+ const current=panel.snapshot();if(!current.draftConsultTarget)return request;
+ assert.equal(panel.queued(),queuedBefore,'Opening the choice must not consume a response');
+ for(const field of ['draft','rows','reason','attempt'])assert.equal(current[field],before[field],`Choice preserves ${field}`);
+ const choice=panel.render(panelContext);panelButton(choice,'Conservar correcciones');
+ return panelButton(choice,'Descartar correcciones y consultar').props.onClick();
 }
 const assertPrivateCleared=()=>{
  const current=panel.snapshot();assert.equal(current.draft,null);assert.deepEqual(current.rows,[]);assert.equal(current.file,null);assert.equal(current.receipt,null);assert.equal(current.reason,'');assert.equal(current.consent,false);assert.equal(current.approved,false);assert.equal(current.spreadsheetSelection,'');assert.equal(current.retryAllowed,false);
@@ -193,7 +205,7 @@ test('CyP profile remains a separate ADMIN/DIRECTOR opt-in with explicit financi
 
 test('CyP panel purges financial RAM and listings on downgrade and blocks late private results while preserving recovery references',async()=>{
  const value=await cypPrivateDraft();let tree=await openPanel(value);panel.respond({error:new Error('Synthetic lost confirmation')});await panelButton(tree,'Guardar correcciones').props.onClick();const pending=structuredClone(panel.snapshot().attempt);
- tree=panel.render(panelContext);let resolve;const wait=new Promise(done=>{resolve=done;});panel.respond({wait});const late=elements(tree,node=>node.type==='button'&&Array.isArray(node.props.children)&&node.props.children.includes(' tareas'))[0].props.onClick();
+ tree=panel.render(panelContext);let resolve;const wait=new Promise(done=>{resolve=done;});panel.respond({wait});const late=consultSavedDraft(tree);
  panel.respond({data:{...panelContext,canApprove:false,drafts:[value],truncated:false}});await panelButton(tree,'Consultar borradores registrados').props.onClick();assertPrivateCleared();assert.deepEqual(panel.snapshot().drafts,[]);
  resolve({...panelContext,draft:value});await late;const current=assertPrivateCleared();assert.deepEqual(current.attempt,pending);assert.deepEqual(panel.references()[2].current,pending);assert.equal(panel.references()[4].current,null);
 });
@@ -202,7 +214,7 @@ test('financial pending/failed drafts remain private after reload, reject stale 
  for(const status of ['UPLOADING','PROCESSING','FAILED']){
   const value={...privateDraft(),status,rows:[],financialSource:true};delete value.spreadsheet;let tree=await openPanel(value);assert.equal(panel.references()[5].current,true);assert.equal(elements(tree,node=>typeof node.type==='function'&&node.type.name==='PlanSourceCurve').length,0);
   const reference={version:1,resource:'plan-import',scope:panelContext.scope,projectId:panelContext.projectId,operationId:'01234567-89ab-4cde-8fab-0123456789ab',createdAt:Date.now(),action:'UPLOAD',inputDigest:'a'.repeat(64)};panel.seed({attempt:reference});panel.references()[2].current=reference;tree=panel.render(panelContext);
-  let resolve;const wait=new Promise(done=>{resolve=done;});panel.respond({wait});const late=elements(tree,node=>node.type==='button'&&Array.isArray(node.props.children)&&node.props.children.includes(' tareas'))[0].props.onClick();
+  let resolve;const wait=new Promise(done=>{resolve=done;});panel.respond({wait});const late=consultSavedDraft(tree);
   panel.respond({data:{...panelContext,canApprove:false,drafts:[value],truncated:false}});await panelButton(tree,'Consultar borradores registrados').props.onClick();assertPrivateCleared();assert.deepEqual(panel.snapshot().drafts,[]);
   resolve({...panelContext,draft:value});await late;assertPrivateCleared();
  }
@@ -210,7 +222,7 @@ test('financial pending/failed drafts remain private after reload, reject stale 
 
 test('a failed financial source download cannot create a file URL after a current permission denial',async()=>{
  const value={...privateDraft(),status:'FAILED',rows:[],financialSource:true};delete value.spreadsheet;const tree=await openPanel(value);let resolve;const blobWait=new Promise(done=>{resolve=done;});panel.respond({blobWait});const late=panelButton(tree,'Descargar fuente').props.onClick();
- panel.respond({status:403,data:{code:'PLAN_IMPORT_PERMISSION_REQUIRED'}});await elements(tree,node=>node.type==='button'&&Array.isArray(node.props.children)&&node.props.children.includes(' tareas'))[0].props.onClick();assertPrivateCleared();
+ panel.respond({status:403,data:{code:'PLAN_IMPORT_PERMISSION_REQUIRED'}});await consultSavedDraft(tree);assertPrivateCleared();
  let urls=0;const original=URL.createObjectURL;URL.createObjectURL=()=>{urls++;throw new Error('No stale file URL may be created');};try{resolve(new Blob(['synthetic financial source']));await late;assert.equal(urls,0);assertPrivateCleared();}finally{URL.createObjectURL=original;}
 });
 
@@ -237,13 +249,13 @@ test('real legacy panel preserves its source and corrections on denial while pri
 
 test('real private panel rejects crossed response context and clears monetary draft without accepting the response',async()=>{
  const tree=await openPanel(privateDraft());panel.respond({data:{...panelContext,scope:'e'.repeat(64),draft:privateDraft()}});
- const saved=elements(tree,node=>node.type==='button'&&Array.isArray(node.props.children)&&node.props.children.includes(' tareas'))[0];await saved.props.onClick();
+ await consultSavedDraft(tree);
  assertPrivateCleared();assert.match(panel.snapshot().message,/La respuesta no corresponde a esta obra/);
 });
 
 test('late private draft response cannot repopulate the panel after a known permission denial',async()=>{
  const tree=await openPanel(privateDraft());let resolve;const wait=new Promise(done=>{resolve=done;});panel.respond({wait});
- const saved=elements(tree,node=>node.type==='button'&&Array.isArray(node.props.children)&&node.props.children.includes(' tareas'))[0],late=saved.props.onClick();
+ const late=consultSavedDraft(tree);
  panel.respond({status:403,data:{code:'PLAN_IMPORT_PERMISSION_REQUIRED'}});await panelButton(tree,'Descargar fuente').props.onClick();assertPrivateCleared();
  resolve({...panelContext,draft:privateDraft()});await late;assertPrivateCleared();
 });
@@ -266,6 +278,6 @@ test('private download clears monetary content on a 403 with an unreadable denia
 
 test('private draft read clears monetary content on a 401 with an unreadable body without treating it as a receipt',async()=>{
  let tree=await openPanel(privateDraft());panel.respond({error:new Error('Synthetic lost confirmation')});await panelButton(tree,'Guardar correcciones').props.onClick();const pending=structuredClone(panel.snapshot().attempt);
- tree=panel.render(panelContext);panel.respond({status:401,jsonError:new SyntaxError('Synthetic empty authentication response')});const saved=elements(tree,node=>node.type==='button'&&Array.isArray(node.props.children)&&node.props.children.includes(' tareas'))[0];await saved.props.onClick();
+ tree=panel.render(panelContext);panel.respond({status:401,jsonError:new SyntaxError('Synthetic empty authentication response')});await consultSavedDraft(tree);
  const current=assertPrivateCleared();assert.deepEqual(current.attempt,pending);assert.deepEqual(panel.references()[2].current,pending);assert.match(current.message,/Tu sesión terminó\. Volvé a ingresar/);assert.doesNotMatch(current.message,/SyntaxError|authentication/);
 });

@@ -1,7 +1,7 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {workspaceActiveToken} from './workspace-session-request.mjs';
-import {browserRecoveryJournal,RECOVERY_EVENT} from './workspace-recovery-journal.mjs';
+import {browserRecoveryJournal,RECOVERY_EVENT,wasCompanyPhoneRevisionRejected} from './workspace-recovery-journal.mjs';
 import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import styles from './company-bootstrap-panel.module.css';
 import {companyPhoneE164} from '../../../lib/company-phone-format.mjs';
@@ -164,11 +164,11 @@ export function CompanyPhoneDeclarationForm({company,projectId,scope,getSessionT
  async function send(body){
   if(busy)return;setBusy(true);setCanRetry(false);setNotice('');
   try{const value=await request('POST',body,body);if(!mounted.current)return;if(value.state!=='RECORDED')throw new Error('No se recibió el recibo.');setSnapshot(value.currentCompany);setPhone(value.currentCompany.phoneDeclaration?.e164||'');setAttempt(null);setConfirmed(false);setFresh(true);finishEditing();setNotice(value.savedDeclarationIsCurrent?'Número declarado, sin verificar. La conexión se autoriza por separado en Meta.':'Recibo recuperado; una declaración posterior ya cambió el número.');}
-  catch(error){if(mounted.current){denied(error);setNotice(error.message+' Conservamos la referencia; no se reenvía automáticamente.');if(error.code==='COMPANY_PHONE_CONFLICT')setFresh(false);}}
+  catch(error){const rejected=await wasCompanyPhoneRevisionRejected(error,endpoint,{method:'POST',body:JSON.stringify(body)});if(mounted.current){if(rejected){setAttempt(null);setFresh(false);setConfirmed(false);setNotice('La declaración cambió. Conservamos tu número escrito. Consultá la declaración vigente y volvé a confirmarlo antes de guardar.');}else{denied(error);setNotice(error.message+' Conservamos la referencia; no se reenvía automáticamente.');if(error.code==='COMPANY_PHONE_CONFLICT')setFresh(false);}}}
   finally{if(mounted.current)setBusy(false);}
  }
  async function consult(){
-  if(busy)return;setBusy(true);setCanRetry(false);
+  if(busy)return;setBusy(true);setCanRetry(false);setFresh(false);setConfirmed(false);
   try{const value=await request('GET',null,attempt);if(!mounted.current)return;setSnapshot(value.currentCompany);setHidden(false);setFresh(true);setConfirmed(false);
    if(attempt&&value.state==='RECORDED'){setAttempt(null);setPhone(value.currentCompany.phoneDeclaration?.e164||'');finishEditing();setNotice(value.savedDeclarationIsCurrent?'Recibo confirmado. El número permanece sin verificar.':'Recibo confirmado; se muestra una declaración posterior.');}
    else if(attempt){setCanRetry(Boolean(attempt.companyPhone)&&value.currentCompany.canDeclarePhone===true&&(value.currentCompany.phoneDeclaration?.revision||0)===attempt.expectedRevision);setNotice('Todavía no se observa este recibo. La consulta no declara perdido el guardado ni reenvía datos.');}

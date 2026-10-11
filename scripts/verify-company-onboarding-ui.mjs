@@ -34,10 +34,11 @@ writeFileSync(path.join(dir,'clerk-selector-fixture.js'),`'use client';
 import {createContext,useCallback,useContext,useState} from 'react';
 const Context=createContext(null),names={org_SelectorA:'Espacio personal A',org_SelectorB:'Espacio personal B'};
 export function FixtureProvider({children}){
- const [orgId,setOrgId]=useState('org_SelectorA'),[serial,setSerial]=useState(1);
+ const [orgId,setOrgId]=useState('org_SelectorA'),[serial,setSerial]=useState(1),[visible,setVisible]=useState(true),[signedIn,setSignedIn]=useState(true);
  const getToken=useCallback(async()=> 'synthetic-selector-'+orgId.slice(-1)+'-'+serial,[orgId,serial]);
- const value={auth:{isLoaded:true,isSignedIn:true,userId:'user_SelectorSynthetic',sessionId:'session_Selector_'+serial,orgId,orgRole:'org:member',getToken},organization:{id:orgId,name:names[orgId]},choose:setOrgId};
- return <Context.Provider value={value}>{children}<button type="button" data-fixture-session-change onClick={()=>setSerial(previous=>previous+1)}>Cambiar sesión de ensayo</button></Context.Provider>;
+ const value={auth:{isLoaded:true,isSignedIn:signedIn,userId:'user_SelectorSynthetic',sessionId:'session_Selector_'+serial,orgId,orgRole:'org:member',getToken},organization:{id:orgId,name:names[orgId]},choose:setOrgId};
+ if(typeof window!=='undefined'){window.__forceSelectorOrganization=setOrgId;window.__endSelectorSession=()=>setSignedIn(false);window.__unmountSelector=()=>setVisible(false);}
+ return <Context.Provider value={value}>{visible?children:<p>Selector desmontado en ensayo</p>}<button type="button" data-fixture-session-change onClick={()=>setSerial(previous=>previous+1)}>Cambiar sesión de ensayo</button></Context.Provider>;
 }
 export function useAuth(){return useContext(Context).auth;}
 export function useOrganization(){return {organization:useContext(Context).organization};}
@@ -49,10 +50,12 @@ mkdirSync(path.join(app,'selector'),{recursive:true});
 writeFileSync(path.join(app,'selector/page.js'),`'use client';import {Suspense} from 'react';import {FixtureProvider} from '../../../clerk-selector-fixture';import {WorkspaceIdentityPanel} from '../(identity)/cuenta/workspace-identity';export default function Page(){return <FixtureProvider><main style={{maxWidth:1120,margin:'0 auto',color:'#eef4ff'}}><Suspense fallback={<p>Cargando ensayo de acceso</p>}><WorkspaceIdentityPanel/></Suspense></main></FixtureProvider>}`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#081c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
 writeFileSync(path.join(app,'page.js'),`'use client';import {useState} from 'react';import {CompanyBootstrapPanel} from './(identity)/cuenta/company-bootstrap-panel';import {AccountWorkspace} from './(identity)/cuenta/workspace-client';const session=async()=>{if(window.__sessionHung)return new Promise(resolve=>{window.__releaseSession=()=>resolve('synthetic-session-token');});return 'synthetic-session-token';};const profile=async()=>{window.__profileReads=(window.__profileReads||0)+1;if(window.__profileUnavailable)throw new Error('fixture');if(window.__profileHung)return new Promise(resolve=>{window.__releaseProfile=()=>resolve('synthetic-profile-token');});return window.__profileTokens?.[Math.min(window.__profileReads-1,1)]||'synthetic-profile-token-'+window.__profileReads;};export default function Page(){const [visible,setVisible]=useState(true),[organization,setOrganization]=useState('org_BootstrapA');if(typeof window!=='undefined'){window.__unmountBootstrap=()=>setVisible(false);window.__changeContext=()=>{window.__sessionHung=false;window.__profileHung=false;setOrganization('org_BootstrapB');};}return <main style={{maxWidth:1120,margin:'0 auto'}}>{visible?<CompanyBootstrapPanel key={organization} organizationId={organization} organizationName="" getSessionToken={session} getProfileToken={profile}><AccountWorkspace getSessionToken={session}/></CompanyBootstrapPanel>:<p>Componente desmontado en ensayo controlado</p>}</main>}`);
+mkdirSync(path.join(app,'portfolio101'),{recursive:true});
+writeFileSync(path.join(app,'portfolio101/page.js'),`'use client';import {useCallback,useState} from 'react';import {AccountWorkspace} from '../(identity)/cuenta/workspace-client';export default function Page(){const [visible,setVisible]=useState(true),[context,setContext]=useState('A');const token=useCallback(async()=> 'synthetic-portfolio-'+context+'-'+(window.__portfolioTokenEpoch||1),[context]);const observed=useCallback(value=>{window.__portfolioGuide=value;},[]);if(typeof window!=='undefined'){window.__changePortfolioContext=()=>setContext('B');window.__unmountPortfolio=()=>setVisible(false);}return <main style={{maxWidth:1120,margin:'0 auto'}}>{visible?<AccountWorkspace getSessionToken={token} onGuideObservation={observed}/>:<p>Portfolio desmontado en ensayo</p>}</main>}`);
 const origin='http://127.0.0.1:3110';
 const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',dir,'--webpack','--hostname','127.0.0.1','--port','3110'],{env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
 let log='';for(const stream of [server.stdout,server.stderr])stream.on('data',value=>{log=(log+value).slice(-16000);});
-let browser;const checks=[],errors=[];
+let browser;const checks=[],errors=[],portfolioIntegrationChecks=[],organizationLockChecks=[];
 const click=async(page,label)=>{const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===text),label);assert.ok(handle.asElement(),'Missing button '+label);await handle.asElement().click();await handle.dispose();};
 const wait=(page,text)=>page.waitForFunction(value=>document.body.innerText.includes(value),{timeout:20000},text);
 async function canonicalCreatedTask(page,task){
@@ -277,6 +280,177 @@ async function companySelectorContext(width){
   checks.push(`company-selector-canonical-context-existing-member-late-session-reload-denials-readonly-${width}`);
  }finally{await context.close();}
 }
+const organizationLockModes=['cancel','save','external-organization','external-session','denied401','denied403','stale-observation','unmount'];
+async function organizationDraftProtection(mode,width){
+ const context=await browser.createBrowserContext(),page=await context.newPage(),reads=[],posts=[],unexpected=[],late=[];
+ const names={A:'Empresa de planificación A',B:'Empresa de planificación B'},reason='Reprogramar el ingreso de materiales',draftDates={startsOn:'2026-10-12',endsOn:'2026-10-16'};
+ const scope=letter=>letter.toLowerCase().repeat(64),project=letter=>({id:'selector-project-'+letter,name:'Obra de planificación '+letter,status:'ACTIVE'});
+ const tasks={A:{id:'selector-task-A',title:'Actividad de planificación A',startsOn:'2026-10-02',endsOn:'2026-10-06',status:'BACKLOG',progress:0,revision:'2026-10-01T12:00:00.123456'},B:{id:'selector-task-B',title:'Actividad de planificación B',startsOn:'2026-10-03',endsOn:'2026-10-07',status:'BACKLOG',progress:0,revision:'2026-10-01T12:00:00.123456'}};
+ let held=null,resolvePost;const postStarted=new Promise(resolve=>{resolvePost=resolve;});
+ const respond=(request,body,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:JSON.stringify(body)});
+ const tick=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ const unlocked=async letter=>{
+  await page.waitForFunction(id=>document.querySelector('[data-fixture-organization]')?.value===id&&document.querySelector('#workspace-refresh')?.disabled===false&&!document.querySelector('#organization-context-lock'),{timeout:20000},'org_Selector'+letter);
+  assert.equal(await page.$$eval('[data-fixture-organization]',nodes=>nodes.length),1);assert.equal(await page.$$eval('#organization-context-lock',nodes=>nodes.length),0);
+ };
+ const ready=async letter=>{await page.waitForFunction(name=>document.querySelector('[data-workspace-company-name]')?.textContent===name,{timeout:20000},names[letter]);await unlocked(letter);};
+ const locked=async()=>{
+  await page.waitForSelector('#organization-context-lock');assert.equal(await page.$$eval('[data-fixture-organization]',nodes=>nodes.length),0);
+  assert.ok((await page.$eval('#organization-context-lock',node=>node.innerText)).includes('cancelá el borrador o comprobá su resultado'));
+  assert.equal(await page.$eval('#workspace-refresh',node=>node.disabled),true);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ };
+ const openWork=async letter=>{
+  await page.evaluate(id=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes(id)&&!node.disabled).click(),project(letter).name);
+  await wait(page,tasks[letter].title);await page.waitForFunction(id=>document.querySelector('article[data-task-id="'+id+'"] button')?.disabled===false,{timeout:20000},tasks[letter].id);
+ };
+ const edit=async(letter,text=reason)=>{
+  await page.click('article[data-task-id="'+tasks[letter].id+'"] button');await page.waitForSelector('form[aria-labelledby="schedule-edit-title"]');
+  for(const [index,value]of [draftDates.startsOn,draftDates.endsOn].entries()){await page.$$eval('form[aria-labelledby="schedule-edit-title"] input[type="date"]',(inputs,change)=>{const input=inputs[change.index];Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,change.value);input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));},{index,value});await tick();}
+  await page.type('form[aria-labelledby="schedule-edit-title"] textarea',text);await locked();
+  assert.deepEqual(await page.$$eval('form[aria-labelledby="schedule-edit-title"] input[type="date"]',inputs=>inputs.map(input=>input.value)),[draftDates.startsOn,draftDates.endsOn]);
+  assert.equal(await page.$eval('form[aria-labelledby="schedule-edit-title"] textarea',node=>node.value),text);
+ };
+ const captureObservation=()=>page.evaluate(()=>{
+  const node=document.querySelector('[aria-labelledby="workspace-title"]'),key=Object.keys(node||{}).find(name=>name.startsWith('__reactFiber$'));
+  let fiber=node?.[key];while(fiber&&typeof fiber.memoizedProps?.onContextPending!=='function')fiber=fiber.return;
+  if(!fiber)throw new Error('Actual workspace pending observer unavailable');window.__oldWorkspacePending=fiber.memoizedProps.onContextPending;
+ });
+ const oldObservation=async value=>{await page.evaluate(pending=>window.__oldWorkspacePending(pending),value);await tick();};
+ const releaseOld=async()=>{
+  assert.ok(held);if(held.request.failure()?.errorText==='net::ERR_ABORTED'){late.push('old-request-aborted');return;}
+  try{await respond(held.request,held.body);late.push('old-response-released');}catch(error){if(held.request.failure()?.errorText!=='net::ERR_ABORTED')throw error;late.push('old-request-aborted');}
+  await tick();
+ };
+ const submit=async()=>{
+  await click(page,'Confirmar planificación');let timeout;try{await Promise.race([postStarted,new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Planning POST was not observed')),20000);})]);}finally{clearTimeout(timeout);}
+ };
+ await page.setViewport({width,height:1000});page.on('pageerror',error=>errors.push({mode:'organization-lock-'+mode,width,message:error.message}));await page.setRequestInterception(true);
+ page.on('request',async request=>{try{
+  const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();unexpected.push(url.hostname);return request.abort();}
+  if(!url.pathname.startsWith('/api/'))return request.continue();
+  const token=request.headers().authorization;assert.match(token||'',/^Bearer synthetic-selector-[AB]-[12]$/);const letter=token.split('-')[2];
+  if(url.pathname==='/api/identity/project-preparation'){
+   assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope(letter));assert.equal(url.searchParams.get('projectId'),project(letter).id);
+   return respond(request,projectPreparationSnapshot({scope:scope(letter),projectId:project(letter).id,canManage:true,revision:0,detailsDigest:'d'.repeat(64),name:project(letter).name,clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope:scope(letter),projectId:project(letter).id}));
+  }
+  assert.equal(url.pathname,'/api/identity/workspace');
+  if(request.method()==='POST'){
+   assert.equal(url.search,'');const input=JSON.parse(request.postData());posts.push(input);assert.equal(letter,'A');assert.equal(input.scope,scope('A'));assert.equal(input.projectId,project('A').id);assert.equal(input.taskId,tasks.A.id);assert.equal(input.expectedRevision,tasks.A.revision);assert.equal(input.reason,reason);assert.equal(input.startsOn,draftDates.startsOn);assert.equal(input.endsOn,draftDates.endsOn);
+   const after={...tasks.A,startsOn:input.startsOn,endsOn:input.endsOn,revision:'2026-10-11T12:00:00.123456'},body={scope:scope('A'),saved:true,replayed:false,task:after,receipt:{id:'workspace_schedule_'+'e'.repeat(64),taskId:tasks.A.id,recordedAt:after.revision,before:{startsOn:tasks.A.startsOn,endsOn:tasks.A.endsOn},after:draftDates}};
+   if(['external-organization','external-session','unmount'].includes(mode)){held={request,body};resolvePost();return;}
+   resolvePost();if(mode==='denied401'||mode==='denied403')return respond(request,{saved:false,code:mode==='denied401'?'SESSION_REQUIRED':'WORKSPACE_PROJECT_UNAVAILABLE'},mode==='denied401'?401:403);
+   assert.equal(mode,'save');tasks.A=after;return respond(request,body);
+  }
+  assert.equal(request.method(),'GET');reads.push({query:url.search,token});
+  if(!url.search)return respond(request,{scope:scope(letter),organizationName:names[letter],role:'DIRECTOR',roleLabel:'Director de obra',canPlanSchedule:true,canManageIntegrations:true,projects:[project(letter)],projectsTruncated:false});
+  assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope(letter));assert.equal(url.searchParams.get('projectId'),project(letter).id);
+  return respond(request,{scope:scope(letter),project:project(letter),roleLabel:'Director de obra',canPlanSchedule:true,tasks:[tasks[letter]],totalTasks:1,nextCursor:null});
+ }catch(error){errors.push({mode:'organization-lock-'+mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
+ try{
+  await page.goto(origin+'/selector',{waitUntil:'networkidle0'});await ready('A');await openWork('A');await captureObservation();await edit('A');
+  assert.equal(posts.length,0);if(mode==='cancel'||mode==='save')await page.screenshot({path:path.join(output,'organization-draft-lock-'+mode+'-'+width+'.png'),fullPage:true});
+  if(mode==='cancel'){
+   await click(page,'Cancelar');await unlocked('A');assert.equal(await page.$$eval('form[aria-labelledby="schedule-edit-title"]',nodes=>nodes.length),0);
+   await page.select('[data-fixture-organization]','org_SelectorB');await ready('B');assert.equal(posts.length,0);
+  }else if(mode==='save'){
+   await submit();await wait(page,'Planificación guardada con recibo');await unlocked('A');assert.equal(posts.length,1);
+   await page.select('[data-fixture-organization]','org_SelectorB');await ready('B');assert.equal(await page.$$eval('article[data-task-id]',nodes=>nodes.length),0);assert.equal(posts.length,1);
+  }else if(mode==='denied401'||mode==='denied403'){
+   await submit();await page.waitForFunction(()=>document.querySelector('[data-fixture-organization]')&&document.querySelector('#workspace-refresh')?.disabled===false,{timeout:20000});
+   assert.equal(await page.$$eval('article[data-task-id],form[aria-labelledby="schedule-edit-title"],[data-workspace-company-name]',nodes=>nodes.length),0);assert.equal(posts.length,1);await oldObservation(false);assert.equal(await page.$$eval('#organization-context-lock',nodes=>nodes.length),0);
+  }else if(mode==='stale-observation'){
+   await page.evaluate(()=>window.__forceSelectorOrganization('org_SelectorB'));await ready('B');await oldObservation(true);await ready('B');
+   await openWork('B');await edit('B','Borrador del contexto B conservado');await oldObservation(false);await locked();assert.equal(await page.$eval('form[aria-labelledby="schedule-edit-title"] textarea',node=>node.value),'Borrador del contexto B conservado');
+   await click(page,'Cancelar');await unlocked('B');await page.select('[data-fixture-organization]','org_SelectorA');await ready('A');
+   await openWork('A');await edit('A','Nuevo borrador A con la misma clave');await oldObservation(false);await locked();assert.equal(await page.$eval('form[aria-labelledby="schedule-edit-title"] textarea',node=>node.value),'Nuevo borrador A con la misma clave');await click(page,'Cancelar');await unlocked('A');assert.equal(posts.length,0);
+  }else{
+   await submit();await locked();assert.equal(posts.length,1);
+   if(mode==='unmount'){await page.evaluate(()=>window.__unmountSelector());await wait(page,'Selector desmontado en ensayo');await releaseOld();await oldObservation(false);assert.equal(await page.$$eval('[aria-labelledby="workspace-title"],#organization-context',nodes=>nodes.length),0);}
+   else if(mode==='external-organization'){await page.evaluate(()=>window.__forceSelectorOrganization('org_SelectorB'));await ready('B');await releaseOld();await oldObservation(true);await ready('B');assert.equal(await page.$$eval('article[data-task-id],form[aria-labelledby="schedule-edit-title"]',nodes=>nodes.length),0);}
+   else{
+    assert.equal(mode,'external-session');await page.click('[data-fixture-session-change]');await ready('A');await releaseOld();assert.equal(await page.$$eval('form[aria-labelledby="schedule-edit-title"]',nodes=>nodes.length),0);
+    await openWork('A');await edit('A','Edición posterior al cambio de sesión');await oldObservation(false);await locked();assert.equal(await page.$eval('form[aria-labelledby="schedule-edit-title"] textarea',node=>node.value),'Edición posterior al cambio de sesión');
+    await page.evaluate(()=>window.__endSelectorSession());await wait(page,'La sesión terminó');await oldObservation(true);assert.equal(await page.$$eval('[aria-labelledby="workspace-title"],#organization-context,article[data-task-id]',nodes=>nodes.length),0);
+   }
+   assert.equal(late.length,1);assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Planificación guardada con recibo'));assert.equal(posts.length,1);
+  }
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(unexpected,[]);
+  organizationLockChecks.push({mode,width,actualParentAndWorkspace:true,syntheticClerkOnly:true,selectorUnavailableWhilePending:true,draftBeforeSubmitPreserved:true,postCount:posts.length,externalContextStillInvalidates:['external-organization','external-session','unmount'].includes(mode)?true:null,staleObservationRejected:['external-organization','external-session','stale-observation','unmount'].includes(mode)?true:null,lateResponses:late.length,horizontalOverflow:false,providerCalls:0});
+ }finally{await context.close();}
+}
+const portfolioIntegrationModes=['success','401','403','404','503','retry503','wrong-scope','wrong-project','wrong-status','stale-context','stale-project','stale-callback','refresh-callback','reconsult-callback','locked','unmount'];
+async function portfolioThirdPage(mode,width){
+ const context=await browser.createBrowserContext(),page=await context.newPage(),reads=[],writes=[],unexpected=[],held=[];
+ const scope='a'.repeat(64),otherScope='b'.repeat(64),projectId='p-101';let project101Reads=0;
+ const listed=n=>({id:'p-'+String(n).padStart(3,'0'),name:'Obra listada '+n,status:'ACTIVE'});
+ const summarized=n=>({...listed(n),name:'Resumen obra '+n,totalTasks:2,completedTasks:0,inProgressTasks:0,blockedTasks:0,unscheduledTasks:2,nextEndsOn:null});
+ const task=(id,title)=>({id,title,status:'BACKLOG',progress:0,startsOn:null,endsOn:null,revision:'2026-10-01T12:00:00.123456'});
+ const projectBody=(id,append=false)=>({scope,project:{id,name:'Obra canónica '+Number(id.slice(2)),status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:true,tasks:[task(id===projectId?(append?'task-101-b':'task-101-a'):'task-001','Actividad canónica '+(id===projectId?(append?'101 segunda':'101 primera'):'001'))],totalTasks:id===projectId?2:1,nextCursor:id===projectId&&!append?'task-101-a':null});
+ const respond=(request,body,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:JSON.stringify(body)});
+ const releaseHeld=async()=>{assert.equal(held.length,1);const {request,body}=held[0];if(request.failure()?.errorText==='net::ERR_ABORTED')return;try{await respond(request,body);}catch(error){if(request.failure()?.errorText!=='net::ERR_ABORTED')throw error;}};
+ const absent=async()=>{assert.equal(await page.$$eval('article[data-task-id]',nodes=>nodes.length),0);assert.equal(await page.$$eval('button[aria-pressed]',nodes=>nodes.filter(node=>node.textContent.includes('Obra canónica 101')).length),0);};
+ const saveCallback=async()=>page.evaluate(()=>{const button=[...document.querySelectorAll('[aria-labelledby="portfolio-overview-title"] button')].find(node=>node.textContent==='Abrir Resumen obra 101'),key=Object.keys(button||{}).find(name=>name.startsWith('__reactProps$'));if(typeof button?.[key]?.onClick!=='function')throw new Error('Portfolio React handler unavailable');window.__savedPortfolioClick=button[key].onClick;});
+ const tick=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ await page.setViewport({width,height:1000});await page.evaluateOnNewDocument(()=>{const uuid=crypto.randomUUID.bind(crypto);window.__portfolioIssuedIds=[];crypto.randomUUID=()=>{const id=uuid();window.__portfolioIssuedIds.push(id);return id;};});
+ page.on('pageerror',error=>errors.push({mode:'portfolio101-'+mode,width,message:error.message}));await page.setRequestInterception(true);
+ page.on('request',async request=>{try{
+  const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();unexpected.push(url.hostname);return request.abort();}
+  if(!url.pathname.startsWith('/api/'))return request.continue();
+  if(request.method()!=='GET')writes.push({method:request.method(),path:url.pathname});
+  assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.method(),'GET');const authorization=request.headers().authorization;assert.match(authorization,/^Bearer synthetic-portfolio-[AB]-[12]$/);reads.push({query:url.search,authorization});
+  const letter=authorization.includes('-B-')?'B':'A',currentScope=letter==='B'?otherScope:scope;
+  if(!url.search){return respond(request,{scope:currentScope,organizationName:'Empresa de cartera '+letter,role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:true,canManageIntegrations:false,projects:Array.from({length:100},(_,i)=>listed(i+1)),projectsTruncated:true});}
+  assert.equal(url.searchParams.get('scope'),currentScope);
+  if(url.searchParams.has('portfolio')){
+   assert.equal(letter,'A');assert.equal(url.searchParams.get('portfolio'),'1');assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('afterProject')?['afterProject','portfolio','scope']:['portfolio','scope']);
+   const cursor=url.searchParams.get('afterProject');assert.ok([null,'p-050','p-100'].includes(cursor));const start=cursor===null?1:cursor==='p-050'?51:101,end=Math.min(start+49,101);
+   return respond(request,{scope,organizationName:'Empresa de cartera A',role:'SITE_MANAGER',projects:Array.from({length:end-start+1},(_,i)=>summarized(start+i)),nextCursor:end<101?'p-'+String(end).padStart(3,'0'):null});
+  }
+  assert.equal(letter,'A');const id=url.searchParams.get('projectId');assert.ok([projectId,'p-001'].includes(id));assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('afterTask')?['afterTask','projectId','scope']:['projectId','scope']);
+  if(id===projectId)project101Reads++;
+  const append=url.searchParams.has('afterTask');if(append)assert.equal(url.searchParams.get('afterTask'),'task-101-a');let body=projectBody(id,append);
+  if(id===projectId){
+   if(['stale-context','stale-project','unmount'].includes(mode)){held.push({request,body});return;}
+   if(['401','403','404','503'].includes(mode)||mode==='retry503'&&project101Reads===1){const status=mode==='retry503'?503:Number(mode);return respond(request,{saved:false,code:status===401?'SESSION_REQUIRED':status===403||status===404?'WORKSPACE_PROJECT_UNAVAILABLE':'WORKSPACE_OPERATION_UNCONFIRMED'},status);}
+   if(mode==='wrong-scope')body={...body,scope:otherScope};if(mode==='wrong-project')body={...body,project:{...body.project,id:'p-102'}};if(mode==='wrong-status')body={...body,project:{...body.project,status:'ARCHIVED'}};
+  }
+  return respond(request,body);
+ }catch(error){errors.push({mode:'portfolio101-'+mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
+ try{
+  await page.goto(origin+'/portfolio101',{waitUntil:'networkidle0'});await wait(page,'Empresa de cartera A');assert.equal(reads.length,1);assert.equal(await page.$$eval('button[aria-pressed]',nodes=>nodes.filter(node=>node.textContent.includes('Obra listada')).length),100);assert.equal(project101Reads,0);
+  await click(page,'Consultar resumen');await wait(page,'50 obras consultadas');await click(page,'Consultar más obras');await wait(page,'100 obras consultadas');await click(page,'Consultar más obras');await wait(page,'101 obras consultadas');
+  assert.equal(reads.filter(row=>row.query.includes('portfolio=1')).length,3);assert.equal(project101Reads,0,'Summary never opens a project automatically');await saveCallback();
+  assert.equal(await page.$$eval('button[aria-pressed]',nodes=>nodes.filter(node=>node.textContent.includes('Resumen obra 101')).length),0,'Summary label never authorizes an operational selector');
+  const handle=await page.evaluateHandle(()=>[...document.querySelectorAll('[aria-labelledby="portfolio-overview-title"] button')].find(node=>node.textContent==='Abrir Resumen obra 101')),button=handle.asElement();assert.ok(button);assert.ok(await button.evaluate(node=>node.getBoundingClientRect().height>=44));await button.focus();
+  if(['stale-callback','refresh-callback','reconsult-callback'].includes(mode)){
+   if(mode==='reconsult-callback'){await page.evaluate(()=>{[...document.querySelectorAll('[aria-labelledby="portfolio-overview-title"] button')].find(node=>node.textContent==='Actualizar resumen').click();window.__savedPortfolioClick();});await wait(page,'50 obras consultadas');assert.equal(project101Reads,0);}else if(mode==='stale-callback'){await page.evaluate(()=>window.__changePortfolioContext());await wait(page,'Empresa de cartera B');}else{await page.click('#workspace-refresh');await page.waitForFunction(()=>document.querySelector('#workspace-refresh')?.disabled===false&&!document.querySelector('[aria-labelledby="portfolio-overview-title"] article'));}
+   await page.evaluate(()=>window.__savedPortfolioClick());await tick();assert.equal(project101Reads,0);await absent();assert.equal(reads.filter(row=>row.query.includes('portfolio=1')).length,mode==='reconsult-callback'?4:3);
+  }else if(mode==='locked'){
+   await page.evaluate(()=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes('Obra listada 1')&&!node.textContent.includes('Obra listada 10')).click());await wait(page,'Actividad canónica 001');
+   await page.evaluate(()=>document.querySelector('article[data-task-id="task-001"] button').click());await page.type('form[aria-labelledby="schedule-edit-title"] textarea','Borrador de navegación conservado');
+   assert.equal(await button.evaluate(node=>node.disabled),true);await page.evaluate(()=>window.__savedPortfolioClick());await tick();assert.equal(project101Reads,0);assert.equal(await page.$eval('form[aria-labelledby="schedule-edit-title"] textarea',node=>node.value),'Borrador de navegación conservado');
+   await click(page,'Cancelar');await click(page,'Abrir Resumen obra 101');await wait(page,'Actividad canónica 101 primera');assert.equal(project101Reads,1);
+  }else{
+   await page.keyboard.press('Enter');
+   if(['stale-context','stale-project','unmount'].includes(mode)){
+    for(let i=0;i<800&&!held.length;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.equal(held.length,1);await absent();
+    if(mode==='stale-context'){await page.evaluate(()=>window.__changePortfolioContext());await wait(page,'Empresa de cartera B');}
+    else if(mode==='unmount'){await page.evaluate(()=>window.__unmountPortfolio());await wait(page,'Portfolio desmontado');}
+    else{await page.evaluate(()=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes('Obra listada 1')&&!node.textContent.includes('Obra listada 10')).click());await wait(page,'Actividad canónica 001');}
+    await releaseHeld();await tick();assert.equal(project101Reads,1);assert.equal(await page.$$eval('article[data-task-id="task-101-a"]',nodes=>nodes.length),0);assert.equal(await page.$$eval('button[aria-pressed]',nodes=>nodes.filter(node=>node.textContent.includes('Obra canónica 101')).length),0);if(mode==='stale-project'){await page.waitForFunction(()=>window.__portfolioGuide?.projectId==='p-001');assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),'p-001');}else assert.equal(await page.evaluate(()=>window.__portfolioGuide?.projectId||null),null);
+   }else if(['401','403','404','503','retry503','wrong-scope','wrong-project','wrong-status'].includes(mode)){
+    await page.waitForFunction(()=>{const node=document.querySelector('[aria-labelledby="workspace-title"] > [role="status"]');return Boolean(node?.textContent.trim())&&document.querySelector('#workspace-refresh')?.disabled===false;});await absent();assert.equal(project101Reads,1);await tick();assert.equal(project101Reads,1,'No automatic retry after denial/error');
+    if(mode==='retry503'){await page.evaluate(()=>{window.__portfolioTokenEpoch=2;});await click(page,'Abrir Resumen obra 101');await wait(page,'Actividad canónica 101 primera');assert.equal(project101Reads,2);assert.equal(reads.at(-1).authorization,'Bearer synthetic-portfolio-A-2');}
+    else if(['401','403'].includes(mode))assert.equal(await page.$$eval('[aria-labelledby="portfolio-overview-title"]',nodes=>nodes.length),0,'Authorization denial clears the account summary');
+   }else{
+    await wait(page,'Actividad canónica 101 primera');await page.waitForFunction(id=>window.__portfolioGuide?.projectId===id,{},projectId);assert.equal(project101Reads,1);assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),projectId);assert.equal(await page.$eval('button[aria-pressed="true"]',node=>node.textContent.includes('Obra canónica 101')),true);assert.ok((await page.$eval('[aria-labelledby="schedule-title"]',node=>node.innerText)).includes('1 de 2 tareas'));
+    await click(page,'Cargar más tareas');await wait(page,'Actividad canónica 101 segunda');assert.equal(project101Reads,2);assert.equal(await page.$$eval('article[data-task-id]',nodes=>nodes.length),2);assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),projectId);
+   }
+  }
+  await handle.dispose();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(writes,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(await page.evaluate(()=>window.__portfolioIssuedIds),[]);assert.deepEqual(await page.evaluate(()=>[Object.keys(localStorage),Object.keys(sessionStorage)]),[[],[]]);
+  portfolioIntegrationChecks.push({mode,width,project101Reads,thirdPage:true,authenticatedGetOnly:true,canonicalViewOnly:true,currentContextOnly:true,selectionAfterCanonicalRead:true,automaticRetry:false,uuidIssued:0,mutations:0,providerCalls:0,horizontalOverflow:false});
+ }finally{await context.close();}
+}
 try{
  let ready=false;
  for(let i=0;i<120;i++){
@@ -291,9 +465,13 @@ try{
  browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
  if(!process.env.COMPANY_ONBOARDING_UI_SUITE){for(const width of [320,390,768,1280])await scenario('empty',width);await scenario('planned',390);await scenario('uncertain');await scenario('no-arrival');await scenario('rollback');await scenario('denied');
  for(const mode of ['expired-profile','profile-retry-unavailable','retry-not-authorized','initial-sdk-hung','session-hung','profile-hung','late-session-context','late-session-unmount','late-profile-unmount'])await scenario(mode);
- for(const width of [320,390,768,1280])await companySelectorContext(width);}
+ for(const width of [320,390,768,1280])await companySelectorContext(width);
+for(const width of [320,390,768,1280])for(const mode of portfolioIntegrationModes)await portfolioThirdPage(mode,width);
+for(const width of [320,390,768,1280])for(const mode of organizationLockModes)await organizationDraftProtection(mode,width);}
  for(const width of [320,390,768,1280])for(const mode of ['reload-committed','reload-not-committed','reload-denied','reload-other-actor','reload-missing-receipt'])await scenario(mode,width);
- assert.deepEqual(errors,[]);const proof={status:'PASS',environment:'actual-ui-with-intercepted-synthetic-services',checks,sourceManifest,harnessSha256,widths:[320,390,768,1280],errors,profileExpiryVerification:'real-RS256-verifier-with-disposable-local-key-and-controlled-clock',sdkDeadlines:'controlled-accelerated-clock',realClerkLogin:false,physicalWhatsApp:false,productionDataWritten:false};
+ if(!process.env.COMPANY_ONBOARDING_UI_SUITE){assert.equal(portfolioIntegrationChecks.length,64);assert.equal(new Set(portfolioIntegrationChecks.map(row=>row.mode+':'+row.width)).size,64);for(const row of portfolioIntegrationChecks)assert.equal(row.project101Reads,['success','retry503'].includes(row.mode)?2:['stale-callback','refresh-callback','reconsult-callback'].includes(row.mode)?0:1);}
+ if(!process.env.COMPANY_ONBOARDING_UI_SUITE){assert.equal(organizationLockChecks.length,32);assert.equal(new Set(organizationLockChecks.map(row=>row.mode+':'+row.width)).size,32);for(const row of organizationLockChecks)assert.equal(row.postCount,['cancel','stale-observation'].includes(row.mode)?0:1);}
+ assert.deepEqual(errors,[]);const proof={status:'PASS',environment:'actual-ui-with-intercepted-synthetic-services',checks,portfolioIntegration:{modes:portfolioIntegrationModes,widths:[320,390,768,1280],checks:portfolioIntegrationChecks,executed:!process.env.COMPANY_ONBOARDING_UI_SUITE},organizationDraftProtection:{modes:organizationLockModes,widths:[320,390,768,1280],checks:organizationLockChecks,executed:!process.env.COMPANY_ONBOARDING_UI_SUITE},sourceManifest,harnessSha256,widths:[320,390,768,1280],errors,profileExpiryVerification:'real-RS256-verifier-with-disposable-local-key-and-controlled-clock',sdkDeadlines:'controlled-accelerated-clock',realClerkLogin:false,physicalWhatsApp:false,productionDataWritten:false};
  rmSync(path.join(output,'browser-failure.json'),{force:true});writeFileSync(path.join(output,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
 }catch(error){writeFileSync(path.join(output,'browser-failure.json'),JSON.stringify({message:error.message,errors,log},null,2));throw error;}
 finally{await browser?.close();try{if(process.platform!=='win32')process.kill(-server.pid,'SIGTERM');else server.kill();}catch{}await new Promise(done=>setTimeout(done,500));const resolved=realpathSync(dir);assert.equal(path.dirname(resolved),realpathSync(parent));assert.ok(path.basename(resolved).startsWith('company-bootstrap-ui-'));rmSync(resolved,{recursive:true,force:true});}
