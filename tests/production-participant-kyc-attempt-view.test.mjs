@@ -44,3 +44,57 @@ test('signed UTC time renders Argentina consistently across process zones',()=>{
   for(const tz of ['UTC','America/Argentina/Buenos_Aires','Pacific/Kiritimati']){process.env.TZ=tz;assert.match(participantKycChatAttemptDate('2026-10-10T21:25:15.000Z'),/10\/10\/2026.*18:25:15 \(hora de Argentina\)/);}
  }finally{if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous;}
 });
+const reply=(state,recordedAt='2026-10-10T21:25:18.000Z')=>({version:1,state,recordedAt});
+test('Meta API acceptance is separate from delivery and cannot approve participant identity',()=>{
+ const view=participantKycChatAttemptView(result({replyDelivery:reply('API_ACCEPTED')}),context);
+ assert.equal(view.replyDelivery.state,'API_ACCEPTED');
+ assert.equal(view.replyDelivery.response.description,'Meta aceptó la respuesta; todavía no hay comprobación de entrega.');
+ assert.equal(view.replyDelivery.delivery.confirmed,false);assert.equal(view.replyDelivery.delivery.label,'Entrega sin comprobar');
+ assert.equal(view.replyDelivery.dateSource,'SERVER');assert.equal(view.replyDelivery.recordedAt,'2026-10-10T21:25:18.000Z');
+ assert.doesNotMatch(view.replyDelivery.response.description,/identidad aprobada|permiso concedido|entrega comprobada/i);
+});
+test('only correlated DELIVERED and READ states assert receipt or reading with WhatsApp-reported time',()=>{
+ for(const [state,label] of [['DELIVERED','Entrega comprobada'],['READ','Lectura comprobada']]){
+  const view=participantKycChatAttemptView(result({replyDelivery:reply(state,'2026-10-10T21:26:20.000Z')}),context);
+  assert.equal(view.replyDelivery.delivery.confirmed,true);assert.equal(view.replyDelivery.delivery.label,label);
+  assert.equal(view.replyDelivery.dateSource,'WHATSAPP');assert.equal(view.replyDelivery.recordedAt,'2026-10-10T21:26:20.000Z');
+  assert.notEqual(view.replyDelivery.recordedAt,view.receivedAt);
+ }
+});
+test('pending, unknown, rejected, failed and closed states remain distinct without a resend action',()=>{
+ const labels=new Set();
+ for(const state of ['RESERVED','SEND_UNKNOWN','API_REJECTED','FAILED','WINDOW_CLOSED','UNAVAILABLE','NOT_OBSERVED']){
+  const value=reply(state,['WINDOW_CLOSED','UNAVAILABLE','NOT_OBSERVED'].includes(state)?null:undefined),view=participantKycChatAttemptView(result({replyDelivery:value}),context);
+  labels.add(view.replyDelivery.response.label);assert.equal(view.replyDelivery.delivery.confirmed,false);
+  assert.doesNotMatch(JSON.stringify(view.replyDelivery),/reenviar|consentimiento|identidad aprobada|permiso concedido/i);
+  assert.equal(Object.hasOwn(view.replyDelivery,'canResend'),false);assert.equal(Object.hasOwn(view.replyDelivery,'canSend'),false);
+  if(state==='FAILED'){assert.equal(view.replyDelivery.delivery.label,'Fallo de entrega comprobado');assert.equal(view.replyDelivery.dateSource,'WHATSAPP');}
+  if(['WINDOW_CLOSED','UNAVAILABLE','NOT_OBSERVED'].includes(state))assert.equal(view.replyDelivery.recordedAt,null);
+ }
+ assert.equal(labels.size,7);
+});
+test('legacy absence never derives reply or delivery from processing completion or replySent fields',()=>{
+ for(const processingState of ['PENDING','PROCESSED']){
+  const view=participantKycChatAttemptView(result({processingState,replySent:true,replyState:'DELIVERED',messageId:'private-provider-id'}),context);
+  assert.equal(view.replyDelivery.state,'NOT_OBSERVED');assert.equal(view.replyDelivery.delivery.confirmed,false);assert.equal(view.replyDelivery.recordedAt,null);
+  assert.doesNotMatch(JSON.stringify(view),/private-provider-id|replySent|replyState|messageId/);
+ }
+ for(const state of ['NOT_OBSERVED','UNAVAILABLE']){
+  const view=participantKycChatAttemptView(result({state}),context);assert.equal(view.replyDelivery.delivery.confirmed,false);assert.equal(view.replyDelivery.recordedAt,null);
+  assert.throws(()=>participantKycChatAttemptView(result({state,replyDelivery:reply('READ')}),context),{code:'WORKSPACE_CONTEXT_CHANGED'});
+ }
+});
+test('ambiguous same-second attempts cannot claim an identified outbound response',()=>{
+ const view=participantKycChatAttemptView(result({sameSecond:true,replyDelivery:reply('UNAVAILABLE',null)}),context);
+ assert.match(view.description,/No pudimos separar/);assert.equal(view.replyDelivery.state,'UNAVAILABLE');assert.equal(view.replyDelivery.delivery.confirmed,false);
+ for(const state of ['RESERVED','API_ACCEPTED','DELIVERED','READ','FAILED'])assert.throws(()=>participantKycChatAttemptView(result({sameSecond:true,replyDelivery:reply(state)}),context),{code:'WORKSPACE_CONTEXT_CHANGED'});
+});
+test('malformed outbound state, timestamp, version and private extensions fail closed',()=>{
+ for(const value of [null,[],reply('SENT'),reply('STATUS_OBSERVED'),{...reply('READ'),version:2},{...reply('READ'),code:'IDENTIDAD private'}, {...reply('API_ACCEPTED'),phone:'+5491199999999'}, {version:1,state:'READ'},reply('READ','invalid'),reply('READ','2026-02-31T12:00:00.000Z'),reply('READ','2026-10-10T18:26:20-03:00'),reply('READ','2026-10-10T21:26:20Z'),reply('READ',null),reply('UNAVAILABLE','2026-10-10T21:26:20.000Z')])assert.throws(()=>participantKycChatAttemptView(result({replyDelivery:value}),context),{code:'WORKSPACE_CONTEXT_CHANGED',status:409});
+});
+test('matching absent scope or participant IDs cannot substitute for an authorized diagnostic context',()=>{
+ for(const [key,value] of [['scope',undefined],['scope','bad'],['projectId',undefined],['workerId',undefined],['workerId','../worker']]){
+  assert.throws(()=>participantKycChatAttemptView({...result(),[key]:value},{...context,[key]:value}),{code:'WORKSPACE_CONTEXT_CHANGED',status:409});
+ }
+ for(const receivedAt of ['2026-02-31T12:00:00.000Z','2026-10-10T18:25:15-03:00'])assert.throws(()=>participantKycChatAttemptView(result({receivedAt}),context),{code:'WORKSPACE_CONTEXT_CHANGED'});
+});

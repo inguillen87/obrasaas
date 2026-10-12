@@ -147,6 +147,9 @@ export async function resolveCompanyKycAuthority(client,context,{initial,firstCh
  const existing=await projectionRow(client,initial.id,firstChannel.organizationId);
  if(existing.length)pinned=await readProjection(client,initial.id,firstChannel.organizationId);
  else if(!codeDigest){
+  // A signed code attempt is not a FIELD or worksite selection request. The
+  // existing fixed rejection adapter proves current channel authority again.
+  if(payload.value?.type==='text'&&typeof payload.value.text?.body==='string'&&/^IDENTIDAD(?:\s|$)/i.test(payload.value.text.body.trim()))fail('META_KYC_CHALLENGE_REJECTED');
   const replyId=payload.value.context?.id;
   if(typeof replyId!=='string'){
    if(selection?.startsWith('kyc:'))fail('META_KYC_COMPANY_CONTEXT_REQUIRED');

@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {kycReplyFeedbackUiOptions,KYC_REPLY_FEEDBACK_UI_VERSION} from '../scripts/verify-kyc-reply-feedback-ui.mjs';
+const repoRoot=fileURLToPath(new URL('../',import.meta.url)),head='a'.repeat(40),options=(args=[],environment={})=>kycReplyFeedbackUiOptions(args,{repoRoot,environment});
+test('KYC DOM fixture accepts only its own evidence directory and a full matching event SHA',()=>{assert.equal(KYC_REPLY_FEEDBACK_UI_VERSION,'kyc-reply-feedback-ui-v1');assert.equal(options().target,null);assert.equal(options(['.vercel/private/kyc-reply-feedback-evidence/browser.json']).target,path.join(repoRoot,'.vercel/private/kyc-reply-feedback-evidence/browser.json'));assert.equal(options(['--expected-head',head],{GITHUB_SHA:head}).expectedHead,head);});
+test('hosted application environments cannot launch the synthetic KYC browser fixture',()=>{for(const key of ['VERCEL','VERCEL_ENV','VERCEL_TARGET_ENV'])assert.throws(()=>options([],{[key]:'production'}),{code:'KYC_REPLY_UI_FIXTURE_REJECTED'});});
+test('foreign output paths traversal and unexpected arguments are rejected before process creation',()=>{for(const args of [['browser.json'],['.vercel/private/kyc-reply-feedback-evidence/../foreign.json'],['.vercel/private/kyc-reply-feedback-evidence'],['.vercel/private/kyc-reply-feedback-evidence/browser.html'],['--unknown'],['a','b'],['--expected-head',head,'out','extra']])assert.throws(()=>options(args),{code:'KYC_REPLY_UI_FIXTURE_REJECTED'});});
+test('abbreviated foreign event and malformed expected commits cannot be labelled as exact CI source',()=>{for(const args of [['--expected-head','abc123'],['--expected-head','not-a-commit'],['--expected-head']])assert.throws(()=>options(args),{code:'KYC_REPLY_UI_FIXTURE_REJECTED'});assert.throws(()=>options(['--expected-head',head],{GITHUB_SHA:'b'.repeat(40)}),{code:'KYC_REPLY_UI_FIXTURE_REJECTED'});});
