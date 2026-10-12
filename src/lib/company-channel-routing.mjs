@@ -176,11 +176,11 @@ async function selector(client,r,env){
  // prompt still belongs to the same route epoch, person, worksite and binding.
  // Every new input must also pass the current prompt/nonce checks below. This
  // does not renew an expired menu or permit selecting another worksite.
- const continuingDraft=selected&&state?.phase==='SELECTED'&&Number.isFinite(Date.parse(state.expiresAt))&&['ATTENDANCE','MEDIA','INCIDENT','MATERIAL','CONSUMPTION','PROGRESS'].includes(activeField?.purpose)&&await promptSource();
+ const continuingDraft=selected&&state?.phase==='SELECTED'&&Number.isFinite(Date.parse(state.expiresAt))&&['ATTENDANCE','MEDIA','INCIDENT','MATERIAL','CONSUMPTION','PROGRESS','PLAN_IMPORT'].includes(activeField?.purpose)&&await promptSource();
  if(!selected||state?.phase!=='SELECTED'||!active&&!continuingDraft)return emit(result('WORKSITE_SELECTION_REQUIRED',text('Elegí y confirmá una obra vigente. Escribí OBRA.')));
  if(!active&&continuingDraft&&metaFieldConversationAction(body)&&body!=='ESTADO')return emit(result('WORKSITE_DRAFT_PENDING',text('Conservamos el borrador de '+selected.projectName+'. Respondé al mensaje de ese paso para continuar, o con CANCELAR para descartarlo. Para otra operación, elegí y confirmá nuevamente la obra.')));
  if(activeField&&activeField.purpose!=='MENU'&&['MENU','AYUDA','HOLA'].includes(body))return emit(result('WORKSITE_DRAFT_PENDING',text('Conservamos el borrador de '+selected.projectName+'. Respondé al mensaje del paso actual para continuar, o con CANCELAR para descartarlo explícitamente. ESTADO permite consultar la jornada sin borrar este paso.')));
- if(['document','nfm_reply'].includes(r.proof.value.type)||r.proof.value.interactive?.nfm_reply||['KYC','VERIFICAR'].includes(body))return emit(result('COMPANY_ADAPTER_DISABLED',text('KYC y Flow requieren los pasos habilitados en Mi cuenta. Este canal no recibe documentos de identidad ni datos bancarios. Escribí MENU para ver tus operaciones autorizadas.')));
+ if(r.proof.value.type==='document'&&!(activeField?.purpose==='PLAN_IMPORT'&&activeField.step==='PLAN_IMPORT_FILE')||r.proof.value.type==='nfm_reply'||r.proof.value.interactive?.nfm_reply||['KYC','VERIFICAR'].includes(body))return emit(result('COMPANY_ADAPTER_DISABLED',text('KYC y Flow requieren los pasos habilitados en Mi cuenta. Los archivos de cronograma se reciben sólo después de elegir Importar cronograma y responder a su mensaje vigente. Escribí MENU para ver tus operaciones autorizadas.')));
  // Free input/location must reply to the durable prompt; an uncorrelated late
  // message cannot be assigned by phone, current selection or provider time.
  if(!['MENU','AYUDA','ESTADO','HOLA'].includes(body)){
@@ -189,8 +189,8 @@ async function selector(client,r,env){
  }
  await reserve(client,r,'FIELD',selected);return {delegate:true};
 }
-export function createCompanyChannelBridge({connect,environment=process.env,provider,put,get,analyzer}){
- const within=run=>customerJobTransaction(connect,run),field=createMetaFieldBridge({connect,environment,provider,put,get,analyzer,resolveIdentity:(client,options)=>resolveWorkerChannelIdentity(client,{...options,companyRouting:true})});
+export function createCompanyChannelBridge({connect,environment=process.env,provider,put,get,analyzer,planAnalyzer}){
+ const within=run=>customerJobTransaction(connect,run),field=createMetaFieldBridge({connect,environment,provider,put,get,analyzer,planAnalyzer,resolveIdentity:(client,options)=>resolveWorkerChannelIdentity(client,{...options,companyRouting:true})});
  return {async execute(context){const prepared=await within(async client=>{const r=await resolveCompanyEnvelope(client,{eventId:context.eventId,environment,context});return r?selector(client,r,environment):null;});if(!prepared)return null;if(prepared.done)return prepared.done;const value=await field.execute(context);await within(async client=>{const r=await resolveCompanyEnvelope(client,{eventId:context.eventId,environment,context});if(!r)fault('COMPANY_CHANNEL_SOURCE_REQUIRED');await recordResult(client,r,value,environment);});return value;}};
 }
 export async function resolveCompanyOutboundIdentity(client,options){

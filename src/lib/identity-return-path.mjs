@@ -18,11 +18,19 @@ export function identityInvitationId(searchParams) {
   return value.length === 39 && /^invite_[a-f0-9]{32}$/.test(value) ? value : '';
 }
 // An untrusted local navigation hint, never membership, scope or permission.
-// Authentication return paths intentionally retain only canonical invitations.
+// This does not grant access to the suggested project.
 export function identityWorkspaceProjectHint(searchParams) {
   const value = singleQueryValue(searchParams, 'obra');
   if (value.length < 1 || value.length > 128 || !/^[A-Za-z0-9]/.test(value) || /[^A-Za-z0-9_-]/.test(value)) return '';
   return value;
+}
+const hasQueryParameter=(searchParams,name)=>typeof searchParams?.getAll==='function'?searchParams.getAll(name).length>0:Boolean(searchParams&&typeof searchParams==='object'&&Object.hasOwn(searchParams,name));
+// The draft ID is meaningful only beside one canonical project ID. Invitation
+// parameters take priority, including ambiguous or malformed invitations.
+export function identityWorkspacePlanHint(searchParams) {
+ if(hasQueryParameter(searchParams,'participar')||hasQueryParameter(searchParams,'oficina')||!identityWorkspaceProjectHint(searchParams))return '';
+ const value=singleQueryValue(searchParams,'plan');
+ return value.length===75&&/^plan_draft_[a-f0-9]{64}$/.test(value)?value:'';
 }
 export function identityOfficeInvitationId(searchParams){
  const value=singleQueryValue(searchParams,'oficina');
@@ -42,7 +50,9 @@ function invitationPath(path, searchParams) {
   const invitationId = identityInvitationId(searchParams);
   const officeId=identityOfficeInvitationId(searchParams);
   if(officeId)return invitationId?path:`${path}?oficina=${officeId}`;
-  return invitationId ? `${path}?participar=${invitationId}` : path;
+  if(invitationId)return `${path}?participar=${invitationId}`;
+  const planId=identityWorkspacePlanHint(searchParams);
+  return planId?`${path}?${new URLSearchParams({obra:identityWorkspaceProjectHint(searchParams),plan:planId})}`:path;
 }
 
 export const identityAccountReturnPath = searchParams => invitationPath('/cuenta', searchParams);

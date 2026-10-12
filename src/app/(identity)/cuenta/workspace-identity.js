@@ -3,7 +3,7 @@ import {useCallback,useLayoutEffect,useRef,useState} from 'react';
 import {useAuth,useOrganization,OrganizationSwitcher} from '@clerk/nextjs';
 import {useSearchParams} from 'next/navigation';
 import Link from 'next/link';
-import {identityAccountReturnPath,identitySignInPath,identityWorkspaceProjectHint} from '../../../lib/identity-return-path.mjs';
+import {identityAccountReturnPath,identitySignInPath,identityWorkspaceProjectHint,identityWorkspacePlanHint} from '../../../lib/identity-return-path.mjs';
 import {AccountWorkspace} from './workspace-client';
 import {CompanyBootstrapPanel} from './company-bootstrap-panel';
 import {ParticipantSelfServicePanel} from './participant-panel';
@@ -13,17 +13,17 @@ import styles from './workspace.module.css';
 import identityStyles from '../identity.module.css';
 import {IdentityLoadingNotice} from '../identity-load-guard';
 export function WorkspaceIdentityPanel(){
- const params=useSearchParams(),returnPath=identityAccountReturnPath(params),initialProjectId=identityWorkspaceProjectHint(params);
+ const params=useSearchParams(),returnPath=identityAccountReturnPath(params),initialProjectId=identityWorkspaceProjectHint(params),initialPlanId=identityWorkspacePlanHint(params);
  const {isLoaded,isSignedIn,userId,sessionId,orgId,orgRole,getToken}=useAuth();
  const {organization}=useOrganization();
  const sessionToken=useCallback(()=>getToken({skipCache:true}),[getToken]);
  const profileToken=useCallback(()=>getToken({template:'obrasaas-bootstrap-v1',skipCache:true}),[getToken]);
  const contextKey=JSON.stringify([isLoaded,isSignedIn,userId,orgId,sessionId,orgRole]);
- return <WorkspaceIdentityContext key={contextKey} contextKey={contextKey} returnPath={returnPath} signInPath={identitySignInPath(params)} initialProjectId={initialProjectId} isLoaded={isLoaded} isSignedIn={isSignedIn} userId={userId} sessionId={sessionId} orgId={orgId} orgRole={orgRole} organization={organization} sessionToken={sessionToken} profileToken={profileToken}/>;
+ return <WorkspaceIdentityContext key={contextKey} contextKey={contextKey} returnPath={returnPath} signInPath={identitySignInPath(params)} initialProjectId={initialProjectId} initialPlanId={initialPlanId} isLoaded={isLoaded} isSignedIn={isSignedIn} userId={userId} sessionId={sessionId} orgId={orgId} orgRole={orgRole} organization={organization} sessionToken={sessionToken} profileToken={profileToken}/>;
 }
 // A separate instance owns each context: an older callback cannot unlock a new
 // draft, including when the user returns to the same organization and session.
-function WorkspaceIdentityContext({contextKey,returnPath,signInPath,initialProjectId,isLoaded,isSignedIn,userId,sessionId,orgId,orgRole,organization,sessionToken,profileToken}){
+function WorkspaceIdentityContext({contextKey,returnPath,signInPath,initialProjectId,initialPlanId,isLoaded,isSignedIn,userId,sessionId,orgId,orgRole,organization,sessionToken,profileToken}){
  const currentContext=useRef(contextKey),[guideObservation,setGuideObservation]=useState(null),[companyContext,setCompanyContext]=useState(null),[workspacePending,setWorkspacePending]=useState(false);
  useLayoutEffect(()=>{currentContext.current=contextKey;return()=>{currentContext.current=null;};},[contextKey]);
  const observePending=useCallback(value=>{if(currentContext.current===contextKey&&typeof value==='boolean')setWorkspacePending(value);},[contextKey]);
@@ -41,7 +41,7 @@ function WorkspaceIdentityContext({contextKey,returnPath,signInPath,initialProje
   <OfficeJoinPanel key={`office:${contextKey}:${returnPath}`} getSessionToken={sessionToken}/>
   <div id="organization-context" tabIndex={-1} className={styles.context}><div style={{minWidth:0,flex:1}}><span>Espacio de trabajo</span><p className={styles.caption} style={{margin:'0.35rem 0',overflowWrap:'anywhere'}}>Elegí tu espacio de trabajo. Su nombre puede ser distinto al de la empresa.</p>{companyContext?.contextKey===contextKey&&companyContext.value&&<div className={styles.company}><div><span>Empresa de trabajo</span><strong data-workspace-company-name>{companyContext.value.name}</strong></div></div>}</div>{workspacePending?<p id="organization-context-lock" role="status" style={{margin:0,maxWidth:320,fontSize:16,overflowWrap:'anywhere'}}>Para cambiar de espacio de trabajo, completá la acción pendiente, cancelá el borrador o comprobá su resultado.</p>:<OrganizationSwitcher afterSelectOrganizationUrl={returnPath} afterSelectPersonalUrl={returnPath} afterLeaveOrganizationUrl={returnPath} afterCreateOrganizationUrl={returnPath}/>}<a href="#onboarding-guide-title" className={identityStyles.home}>Volver a la guía</a></div>
   {!orgId?<section><h2>Seleccioná o creá tu organización</h2><p>Usá el selector para crear el espacio de tu constructora. Después podrás dar de alta la empresa y su primera obra.</p></section>:
-   orgRole==='org:admin'?<CompanyBootstrapPanel key={contextKey} organizationId={orgId} organizationName={organization?.id===orgId?organization.name:''} getSessionToken={sessionToken} getProfileToken={profileToken}><AccountWorkspace key={contextKey} getSessionToken={sessionToken} onGuideObservation={observeGuide} onCompanyContext={observeCompany} onContextPending={observePending} initialProjectId={initialProjectId}/></CompanyBootstrapPanel>:
-   <AccountWorkspace key={contextKey} getSessionToken={sessionToken} onGuideObservation={observeGuide} onCompanyContext={observeCompany} onContextPending={observePending} initialProjectId={initialProjectId}/>}
+   orgRole==='org:admin'?<CompanyBootstrapPanel key={contextKey} organizationId={orgId} organizationName={organization?.id===orgId?organization.name:''} getSessionToken={sessionToken} getProfileToken={profileToken}><AccountWorkspace key={contextKey} getSessionToken={sessionToken} onGuideObservation={observeGuide} onCompanyContext={observeCompany} onContextPending={observePending} initialProjectId={initialProjectId} initialPlanId={initialPlanId}/></CompanyBootstrapPanel>:
+   <AccountWorkspace key={contextKey} getSessionToken={sessionToken} onGuideObservation={observeGuide} onCompanyContext={observeCompany} onContextPending={observePending} initialProjectId={initialProjectId} initialPlanId={initialPlanId}/>}
  </>;
 }

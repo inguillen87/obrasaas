@@ -11,6 +11,9 @@ import {voiceTranscriptForEvidence} from './voice-progress-draft.mjs';
 import {assertDevelopmentPilotCommit,assertDevelopmentPilotAdapter} from './meta-development-pilot-policy.mjs';
 import {lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
 import {siteText} from './site-register-policy.mjs';
+import {createMetaPlanImportTransport} from './meta-plan-import-transport.mjs';
+import {metaPlanImportContextDigest,metaPlanImportPromptMatches} from './meta-plan-import-origin.mjs';
+import {canImportPlan} from './plan-import-policy.mjs';
 
 export function metaFieldOperationId(eventId,purpose){const h=digest(['meta-field-operation-v1',eventId,purpose]);return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;}
 const receiptId=eventId=>'meta_field_'+digest(['meta-field-dispatch-v1',eventId]);
@@ -73,7 +76,7 @@ export function readMetaFieldConversation(r,environment=process.env){
 // Transport adapter, not a second field engine. The internal resolver supplies
 // the canonical actor after checking signed proof, binding, KYC and assignment.
 // It never creates a Clerk session or weakens the web authentication verifier.
-export function createMetaFieldBridge({connect,environment=process.env,resolveIdentity=resolveWorkerChannelIdentity,provider,put,get,analyzer,protocol=META_CUSTOMER_PROTOCOL,attendanceOnly=false}){
+export function createMetaFieldBridge({connect,environment=process.env,resolveIdentity=resolveWorkerChannelIdentity,provider,put,get,analyzer,planAnalyzer,protocol=META_CUSTOMER_PROTOCOL,attendanceOnly=false}){
  resolveMetaCloudProtocol(protocol);
  const within=run=>customerJobTransaction(connect,run);
  const seal=(r,purpose,resourceId,value)=>encryptCustomerSecret(JSON.stringify(value),{organizationId:r.member.organizationId,projectId:r.project.id,purpose,resourceId},environment);
@@ -152,6 +155,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   const type=(await client.query(`SELECT "eventType" FROM public."WebhookEvent" WHERE id=$1 AND provider=$2`,[context.eventId,protocol.provider])).rows[0];if(type?.eventType!=='message')return null;
   const r=await resolve(client,context),previous=await saved(client,r);if(previous)return {done:previous};
   if(r.kind==='CHANNEL_BOUND')return {done:await record(client,r,result(r,'CHANNEL_BOUND',text('Tu canal quedó vinculado a esta participación. Escribí MENU para continuar cuando el responsable active la conexión de la empresa.')),null)};
+  if(plans.configured&&canImportPlan(r.member.role)){const previousPlan=await plans.recover(client,r);if(previousPlan)return previousPlan;}
   const key='meta_field_media_'+digest(r.event.id),previousMedia=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND action='meta.field.media.prepared'`,[key,r.member.organizationId,r.member.actorId,r.worker.id])).rows[0];
   // A later conversation must not erase a durable upload already requested by
   // this message. Recovery uses its recorded input and preserves the new draft.
@@ -163,7 +167,8 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   const action=r.proof.value.type==='text'?metaFieldConversationAction(r.proof.value.text?.body):null;
   const activeState=state?.version===1&&Date.parse(state.expiresAt)>r.now.getTime()&&(!action||r.proof.value.text?.body?.trim().toUpperCase()==='HOLA'&&state.purpose!=='MENU')?state:null;
   const latest=data.attendance.filter(e=>e.workerId===r.worker.id).sort((a,b)=>b.sequence-a.sequence)[0]||null;
-  const limited=attendanceOnly||Boolean(r.connection.metadata?.developmentPilot),facts={projectName:r.project.name,workerId:r.worker.id,permissions:limited?{attendance:r.worker.metadata.participant.permissions.attendance,report:false}:r.worker.metadata.participant.permissions,attendanceOnly:limited,sectors:data.sectors,evidence:data.evidence,proposals:data.proposals,inventory:data.inventory,latest,mediaReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaFieldMediaContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId}};
+  const limited=attendanceOnly||Boolean(r.connection.metadata?.developmentPilot),facts={projectName:r.project.name,workerId:r.worker.id,permissions:limited?{attendance:r.worker.metadata.participant.permissions.attendance,report:false}:r.worker.metadata.participant.permissions,attendanceOnly:limited,sectors:data.sectors,evidence:data.evidence,proposals:data.proposals,inventory:data.inventory,latest,mediaReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaFieldMediaContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId},planImportRole:plans.configured&&!limited?r.member.role:null,planImportReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaPlanImportContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId}};
+  if(state?.purpose==='PLAN_IMPORT'&&Date.parse(state.expiresAt)>r.now.getTime()&&!['HOLA','ESTADO','MENU','AYUDA'].includes(r.proof.value.text?.body?.trim().toUpperCase())&&!await metaPlanImportPromptMatches(client,r,state,environment))return {done:await record(client,r,result(r,'PLAN_IMPORT_CONTEXT_REQUIRED',text('Respondé al mensaje vigente del cronograma para enviar el archivo o elegir su autorización. Conservamos el paso y no guardamos ni analizamos archivos.')),state,{preserveConversation:true})};
   let plan;
   try{
    Object.assign(facts,await readMetaFieldTaskCatalog(client,{projectId:r.project.id,state:activeState||{purpose:action},message:r.proof.value}));
@@ -171,6 +176,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
    plan=planMetaFieldConversation({message:r.proof.value,state,eventId:r.event.id,facts,now:r.now});
   }
   catch(error){if(!safeErrors.has(error.code))throw error;return {done:await record(client,r,result(r,'INPUT_REVIEW',text(explanation(error.code)+' Escribí CANCELAR para volver al menú.'),{code:error.code}),state)};}
+  if(plan.planImport)return plans.prepare(client,r,plan.planImport,{...plan.state,version:1});
   if(plan.media){
    assertDevelopmentPilotAdapter(r.connection,'media');
    if(facts.permissions.report!==true)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
@@ -193,8 +199,10 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   // the active prompt or discard a draft that still requires explicit cancel.
   return {done:await record(client,r,result(r,'CONVERSATION',plan.reply),plan.state,{preserveConversation:plan.preserveConversation===true||((limited||Boolean(r.companyProjection))&&r.proof.value.type==='text'&&r.proof.value.text?.body?.trim().toUpperCase()==='ESTADO')})};
  }
+ const plans=createMetaPlanImportTransport({within,resolve,saved,record,result,seal,unseal,commitFence,operationIdFor:metaFieldOperationId,environment,protocol,provider,put,get,analyzer:planAnalyzer,writePending:async(client,r,state)=>{await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify({...r.worker.metadata,fieldChannelConversation:conversationEnvelope(r,state)})]);}});
  return {async execute(context){
   const prepared=await within(client=>prepare(client,context));if(!prepared)return null;if(prepared.done)return prepared.done;
+  if(prepared.planning)return plans.execute(context,prepared);
   if(!provider||!put||!get||!analyzer)throw new WorkspaceError('META_CHANNEL_MEDIA_NOT_CONFIGURED',503);
   // No locks span provider I/O. Re-resolve the signed source, assignment,
   // individual KYC and binding immediately before each corporate external call.

@@ -1552,6 +1552,9 @@
           "src/lib/meta-kyc-identity.mjs",
           "src/lib/meta-kyc-outbound.mjs",
           "src/lib/meta-own-company-policy.mjs",
+          "src/lib/meta-plan-import-conversation.mjs",
+          "src/lib/meta-plan-import-origin.mjs",
+          "src/lib/meta-plan-import-transport.mjs",
           "src/lib/meta-test-recipient-binding.mjs",
           "src/lib/meta-whatsapp-transport.mjs",
           "src/lib/participant-account-discovery.mjs",
@@ -1576,6 +1579,11 @@
           "src/lib/participant-verified-office.mjs",
           "src/lib/person-worksite-journey.mjs",
           "src/lib/pilot-media.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-monthly-curve.mjs",
+          "src/lib/plan-import-ooxml.mjs",
+          "src/lib/plan-import-policy.mjs",
+          "src/lib/plan-import-store.mjs",
           "src/lib/private-image-upload.mjs",
           "src/lib/procurement-quantity.js",
           "src/lib/production-identity-config.mjs",
@@ -1793,6 +1801,9 @@
           "src/lib/meta-kyc-challenge.mjs",
           "src/lib/meta-kyc-conversation.mjs",
           "src/lib/meta-own-company-policy.mjs",
+          "src/lib/meta-plan-import-conversation.mjs",
+          "src/lib/meta-plan-import-origin.mjs",
+          "src/lib/meta-plan-import-transport.mjs",
           "src/lib/meta-test-recipient-binding.mjs",
           "src/lib/meta-whatsapp-transport.mjs",
           "src/lib/participant-account-discovery.mjs",
@@ -1817,6 +1828,11 @@
           "src/lib/participant-verified-office.mjs",
           "src/lib/person-worksite-journey.mjs",
           "src/lib/pilot-media.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-monthly-curve.mjs",
+          "src/lib/plan-import-ooxml.mjs",
+          "src/lib/plan-import-policy.mjs",
+          "src/lib/plan-import-store.mjs",
           "src/lib/private-image-upload.mjs",
           "src/lib/procurement-quantity.js",
           "src/lib/progress-measurement-quantity.js",
@@ -1952,6 +1968,9 @@
           "src/lib/meta-kyc-challenge.mjs",
           "src/lib/meta-kyc-conversation.mjs",
           "src/lib/meta-own-company-policy.mjs",
+          "src/lib/meta-plan-import-conversation.mjs",
+          "src/lib/meta-plan-import-origin.mjs",
+          "src/lib/meta-plan-import-transport.mjs",
           "src/lib/meta-test-recipient-binding.mjs",
           "src/lib/meta-whatsapp-transport.mjs",
           "src/lib/participant-account-discovery.mjs",
@@ -1976,6 +1995,11 @@
           "src/lib/participant-verified-office.mjs",
           "src/lib/person-worksite-journey.mjs",
           "src/lib/pilot-media.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-monthly-curve.mjs",
+          "src/lib/plan-import-ooxml.mjs",
+          "src/lib/plan-import-policy.mjs",
+          "src/lib/plan-import-store.mjs",
           "src/lib/private-image-upload.mjs",
           "src/lib/procurement-quantity.js",
           "src/lib/progress-measurement-quantity.js",
@@ -2072,6 +2096,9 @@
           "src/lib/meta-kyc-challenge.mjs",
           "src/lib/meta-kyc-conversation.mjs",
           "src/lib/meta-own-company-policy.mjs",
+          "src/lib/meta-plan-import-conversation.mjs",
+          "src/lib/meta-plan-import-origin.mjs",
+          "src/lib/meta-plan-import-transport.mjs",
           "src/lib/meta-test-recipient-binding.mjs",
           "src/lib/meta-whatsapp-transport.mjs",
           "src/lib/participant-account-discovery.mjs",
@@ -2096,6 +2123,11 @@
           "src/lib/participant-verified-office.mjs",
           "src/lib/person-worksite-journey.mjs",
           "src/lib/pilot-media.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-monthly-curve.mjs",
+          "src/lib/plan-import-ooxml.mjs",
+          "src/lib/plan-import-policy.mjs",
+          "src/lib/plan-import-store.mjs",
           "src/lib/private-image-upload.mjs",
           "src/lib/procurement-quantity.js",
           "src/lib/progress-measurement-quantity.js",
@@ -2221,6 +2253,10 @@
           "src/lib/meta-own-company-connection.mjs",
           "src/lib/meta-own-company-policy.mjs",
           "src/lib/meta-own-company-templates.mjs",
+          "src/lib/meta-plan-import-conversation.mjs",
+          "src/lib/meta-plan-import-origin.mjs",
+          "src/lib/meta-plan-import-recovery.mjs",
+          "src/lib/meta-plan-import-transport.mjs",
           "src/lib/meta-recovery-diagnostics.mjs",
           "src/lib/meta-release-observation.mjs",
           "src/lib/meta-test-dispatch.mjs",
@@ -2783,6 +2819,9 @@
           "src/lib/meta-kyc-challenge.mjs",
           "src/lib/meta-kyc-conversation.mjs",
           "src/lib/meta-own-company-policy.mjs",
+          "src/lib/meta-plan-import-conversation.mjs",
+          "src/lib/meta-plan-import-origin.mjs",
+          "src/lib/meta-plan-import-transport.mjs",
           "src/lib/meta-test-recipient-binding.mjs",
           "src/lib/meta-whatsapp-transport.mjs",
           "src/lib/participant-account-discovery.mjs",
@@ -2806,6 +2845,11 @@
           "src/lib/participant-verified-office.mjs",
           "src/lib/person-worksite-journey.mjs",
           "src/lib/pilot-media.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-monthly-curve.mjs",
+          "src/lib/plan-import-ooxml.mjs",
+          "src/lib/plan-import-policy.mjs",
+          "src/lib/plan-import-store.mjs",
           "src/lib/private-image-upload.mjs",
           "src/lib/procurement-quantity.js",
           "src/lib/progress-measurement-quantity.js",
@@ -2960,6 +3004,9 @@
           "src/lib/meta-kyc-challenge.mjs",
           "src/lib/meta-kyc-conversation.mjs",
           "src/lib/meta-own-company-policy.mjs",
+          "src/lib/meta-plan-import-conversation.mjs",
+          "src/lib/meta-plan-import-origin.mjs",
+          "src/lib/meta-plan-import-transport.mjs",
           "src/lib/meta-test-recipient-binding.mjs",
           "src/lib/meta-whatsapp-transport.mjs",
           "src/lib/participant-account-discovery.mjs",
@@ -2983,6 +3030,11 @@
           "src/lib/participant-verified-office.mjs",
           "src/lib/person-worksite-journey.mjs",
           "src/lib/pilot-media.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-monthly-curve.mjs",
+          "src/lib/plan-import-ooxml.mjs",
+          "src/lib/plan-import-policy.mjs",
+          "src/lib/plan-import-store.mjs",
           "src/lib/private-image-upload.mjs",
           "src/lib/procurement-quantity.js",
           "src/lib/progress-measurement-quantity.js",
@@ -3073,5 +3125,110 @@
         "src/app/(identity)/cuenta/plan-import-calendar-suggestions.mjs"
       ]
     }
+  },
+  "whatsappPlanImport": {
+    "version": 1,
+    "blockId": 26,
+    "lane": "meta",
+    "baselineCommandSha256": "2246f0872a4c7758260174677c28555af8b066761e89244c054f975e39fc2e13",
+    "step": {
+      "name": "Channel identity and integrated field transactions",
+      "run": "npx eslint src/lib/worker-channel-*.mjs src/lib/meta-field-*.mjs src/app/api/identity/worker-channel src/app/api/meta/customer-process scripts/verify-worker-channel-*.mjs scripts/verify-meta-field-*.mjs scripts/verify-meta-customer-processing-*.mjs scripts/verify-operations-status-ui.mjs tests/production-worker-channel*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-customer-processing.test.mjs tests/production-operations-status.test.mjs\nnpx eslint src/lib/meta-plan-import-*.mjs tests/production-meta-plan-import-conversation.test.mjs tests/production-meta-plan-source-provider.test.mjs tests/production-meta-plan-import-transport.test.mjs tests/production-plan-import-link-ui.test.mjs tests/fixtures/meta-plan-import-transport-synthetic.mjs --max-warnings 0\nnode --test tests/production-meta-plan-import-conversation.test.mjs tests/production-meta-plan-source-provider.test.mjs tests/production-meta-plan-import-transport.test.mjs tests/production-plan-import-link-ui.test.mjs\nnode scripts/verify-worker-channel-postgres.mjs\nnode scripts/verify-meta-customer-processing-postgres.mjs\nnode scripts/verify-meta-field-bridge-postgres.mjs\n"
+    },
+    "commandSha256": "74d4e0d4d165a8afd5564b6913a53255ed8688aa98b4e06a74d2ed68274311e2",
+    "sourceDependencies": {
+      "UNIT": [
+        "src/lib/meta-plan-import-conversation.mjs",
+        "src/lib/meta-plan-import-origin.mjs",
+        "src/lib/meta-plan-import-transport.mjs",
+        "src/lib/plan-import-cyp-curve.mjs",
+        "src/lib/plan-import-monthly-curve.mjs",
+        "src/lib/plan-import-ooxml.mjs",
+        "src/lib/plan-import-policy.mjs",
+        "src/lib/plan-import-store.mjs"
+      ],
+      "UI_BANK": [
+        "src/lib/meta-plan-import-conversation.mjs",
+        "src/lib/meta-plan-import-origin.mjs",
+        "src/lib/meta-plan-import-transport.mjs",
+        "src/lib/plan-import-cyp-curve.mjs",
+        "src/lib/plan-import-monthly-curve.mjs",
+        "src/lib/plan-import-ooxml.mjs",
+        "src/lib/plan-import-policy.mjs",
+        "src/lib/plan-import-store.mjs"
+      ],
+      "UI_JOINT": [
+        "src/lib/meta-plan-import-conversation.mjs",
+        "src/lib/meta-plan-import-origin.mjs",
+        "src/lib/meta-plan-import-transport.mjs",
+        "src/lib/plan-import-cyp-curve.mjs",
+        "src/lib/plan-import-monthly-curve.mjs",
+        "src/lib/plan-import-ooxml.mjs",
+        "src/lib/plan-import-policy.mjs",
+        "src/lib/plan-import-store.mjs"
+      ],
+      "UI_CAUSAL": [
+        "src/lib/meta-plan-import-conversation.mjs",
+        "src/lib/meta-plan-import-origin.mjs",
+        "src/lib/meta-plan-import-transport.mjs",
+        "src/lib/plan-import-cyp-curve.mjs",
+        "src/lib/plan-import-monthly-curve.mjs",
+        "src/lib/plan-import-ooxml.mjs",
+        "src/lib/plan-import-policy.mjs",
+        "src/lib/plan-import-store.mjs"
+      ],
+      "PG_FIELD": [
+        "src/lib/meta-plan-import-conversation.mjs",
+        "src/lib/meta-plan-import-origin.mjs",
+        "src/lib/meta-plan-import-transport.mjs",
+        "src/lib/plan-import-cyp-curve.mjs",
+        "src/lib/plan-import-monthly-curve.mjs",
+        "src/lib/plan-import-ooxml.mjs",
+        "src/lib/plan-import-policy.mjs",
+        "src/lib/plan-import-store.mjs"
+      ],
+      "PG_OVERTIME": [
+        "src/lib/meta-plan-import-conversation.mjs",
+        "src/lib/meta-plan-import-origin.mjs",
+        "src/lib/meta-plan-import-transport.mjs",
+        "src/lib/plan-import-cyp-curve.mjs",
+        "src/lib/plan-import-monthly-curve.mjs",
+        "src/lib/plan-import-ooxml.mjs",
+        "src/lib/plan-import-policy.mjs",
+        "src/lib/plan-import-store.mjs"
+      ],
+      "PG_COMPANY_KYC": [
+        "src/lib/meta-plan-import-conversation.mjs",
+        "src/lib/meta-plan-import-origin.mjs",
+        "src/lib/meta-plan-import-recovery.mjs",
+        "src/lib/meta-plan-import-transport.mjs"
+      ]
+    },
+    "testSources": [
+      {
+        "path": "tests/production-meta-plan-import-conversation.test.mjs",
+        "sha256": "89870b190e9f8ddf12a025b143da7618ab620af8a27c71e6bac8ea5f3366d17c"
+      },
+      {
+        "path": "tests/production-meta-plan-source-provider.test.mjs",
+        "sha256": "ad2277d6d48825eac897571204db1fcf20fc311d62db656968c912231ecf2c7d"
+      },
+      {
+        "path": "tests/production-meta-plan-import-transport.test.mjs",
+        "sha256": "5d7b26ad5f9c4ee980c4a47774919b525cd16dbe63df405a8e87abd98d6f3cee"
+      },
+      {
+        "path": "tests/production-plan-import-link-ui.test.mjs",
+        "sha256": "c9d790f1ff67010374cc84a431ab68ddeaf7770da2b5e1de41e4e593265458fc"
+      },
+      {
+        "path": "tests/fixtures/meta-plan-import-transport-synthetic.mjs",
+        "sha256": "9e2cdcc22b34d465486a74b831acc48ddab179729989d553c9c074234c1bdf29"
+      },
+      {
+        "path": "tests/fixtures/own-company-runtime.mjs",
+        "sha256": "6e734325c36db9e9d957699632a9b5b6d551cd22533a26eff8f55d388a3d92aa"
+      }
+    ]
   }
 }
