@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256='4363eb58a1f76cbdeb64c885793ad2952ec90bbdcc5fb7b6ea192493b43df345';
+export const EXPECTED_CONTRACT_SHA256="5927b8195c07bf526ace9133a86b97972d180e1a5011c4778f32a8e289620334";
 const POSTGRES_SERVICE_IMAGE='public.ecr.aws/docker/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -43,6 +43,7 @@ const PORTFOLIO_BLOCK_DIGEST='87166cb8289ff7e7380bdb6b1954746b65c26a1955d4b3985f
 const PORTFOLIO_ARTIFACTS=['.vercel/portfolio-overview-contract-evidence/','.vercel/private/portfolio-overview-ui-validation.json','.vercel/private/portfolio-*.png'];
 const PORTFOLIO_MODES=['success','pagination','503','401','403','409','503-html','401-html','403-html','409-html','invalid-json','wrong-scope','wrong-role','stale','unmount','locked','dark'];
 const IDENTITY_ARTIFACTS=['.vercel/workspace-identity-only-evidence/'];
+const IDENTITY_UI_BASELINE_PRODUCER={producer:'scripts/verify-workspace-identity-only-ui.mjs',path:'.vercel/workspace-identity-only-evidence/browser.json',retained:true,blockId:60,lane:'workspace-ui',sourceLine:240,producerSha256:'af286c0382dc5bb062fd13ec0d7e40f2e6e4da040c18fce351658ee4e9bcaa92',sourceBasis:'EXPECTED_HEAD_GIT_BYTES'};
 const IDENTITY_BASELINE_BLOCKS_SHA256='1ec5faa63519324e8b21611559622161522e5c05d37dfb63bd3065c4bdb5c4f9';
 const IDENTITY_BASELINE_OWNERSHIP_SHA256='78694a31aa081eaa44e2680a7b84512b9fc00a348fa4e57e01afdc7946be150f';
 const IDENTITY_BASELINE_PRODUCERS_SHA256='c84dfb43d147837ae604682617817be2b0463fc7178b2fac340a845acc21b516';
@@ -91,7 +92,16 @@ const ownTemplateDependenciesFor=kind=>({
  PG_COMPANY_KYC:['src/lib/meta-own-company-templates.mjs'],
  UI_IDENTITY_ONLY:['src/app/(identity)/cuenta/own-company-templates-panel.js','src/app/(identity)/cuenta/own-company-templates-view.mjs']
  }[kind]||[]);
-const currentOwnDependenciesFor=kind=>[...ownCompanyDependenciesFor(kind),...ownTemplateDependenciesFor(kind)];
+// Current subscription composition follows the real lib walk and account
+// mount. Historical counts, commands and producer receipts remain unchanged.
+const COMPANY_SUBSCRIPTION_BACKEND_SOURCES=['src/lib/company-subscription-http.mjs','src/lib/company-subscription-policy.mjs','src/lib/company-subscription-provider.mjs','src/lib/company-subscription-routing.mjs','src/lib/company-subscription-runtime-config.mjs','src/lib/company-subscription-runtime.mjs','src/lib/company-subscription-store.mjs'];
+const COMPANY_SUBSCRIPTION_UI_SOURCES=['src/app/(identity)/cuenta/company-subscription-panel.js','src/app/(identity)/cuenta/company-subscription-panel.module.css','src/app/(identity)/cuenta/company-subscription-view.mjs'];
+const PREVIOUS_COMPANY_BILLING_UI_SOURCES=['src/app/(identity)/cuenta/company-billing-panel.js','src/app/(identity)/cuenta/company-billing-panel.module.css','src/app/(identity)/cuenta/company-billing-view.mjs'];
+const COMPANY_SUBSCRIPTION_UI_FIXTURE='scripts/lib/company-subscription-ui-fixture.mjs';
+const companySubscriptionBackendDependenciesFor=kind=>kind==='PG_COMPANY_KYC'?COMPANY_SUBSCRIPTION_BACKEND_SOURCES:[];
+const companySubscriptionFixtureDependenciesFor=kind=>kind==='UI_IDENTITY_ONLY'?[COMPANY_SUBSCRIPTION_UI_FIXTURE]:[];
+const companySubscriptionProofDependenciesFor=kind=>kind==='UI_IDENTITY_ONLY'?[...COMPANY_SUBSCRIPTION_UI_SOURCES,...companySubscriptionFixtureDependenciesFor(kind)]:companySubscriptionBackendDependenciesFor(kind);
+const currentOwnDependenciesFor=kind=>[...ownCompanyDependenciesFor(kind),...ownTemplateDependenciesFor(kind),...companySubscriptionBackendDependenciesFor(kind)];
 // Current additive intake sources; historical source counts stay unchanged.
 const intakeAssignmentDependenciesFor=kind=>kind==='UNIT'?['src/lib/employee-intake-channel-continuity.mjs','tests/production-employee-intake-assignment-continuity.test.mjs']:['PG_INTAKE','UI_BANK','UI_JOINT','UI_CAUSAL','PG_COMPANY_KYC','PG_FIELD','PG_OVERTIME'].includes(kind)?['src/lib/employee-intake-channel-continuity.mjs']:[];
 const OWN_TEMPLATE_SOURCE_COUNTS={UNIT:107,UI_BANK:102,PG_COMPANY_KYC:180,UI_IDENTITY_ONLY:109,UI_INTAKE:24,UI_JOINT:102,UI_CAUSAL:102,UI_PREPARATION:16,UI_PORTFOLIO:13};
@@ -133,7 +143,7 @@ const currentPlanDependenciesFor=kind=>[...monthlyCurveDependenciesFor(kind),...
 // Current verified office sources are additive; frozen historical records remain unchanged.
 const VERIFIED_OFFICE_DEPENDENCIES={"UNIT":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"UI_BANK":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"UI_INTAKE":["src/app/(identity)/cuenta/participant-office-account-view.mjs"],"UI_JOINT":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"UI_CAUSAL":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"PG_COMPANY_KYC":["src/lib/participant-verified-office.mjs"],"UI_PREPARATION":["src/app/(identity)/cuenta/participant-office-account-view.mjs"],"UI_PORTFOLIO":["src/app/(identity)/cuenta/participant-office-account-view.mjs"],"UI_IDENTITY_ONLY":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"PG_FIELD":["src/lib/participant-verified-office.mjs"],"PG_OVERTIME":["src/lib/participant-verified-office.mjs"]};
 const officeAccountDependenciesFor=kind=>VERIFIED_OFFICE_DEPENDENCIES[kind]||[];
-const currentOwnTemplateSourceCount=kind=>OWN_TEMPLATE_SOURCE_COUNTS[kind]+currentPlanDependenciesFor(kind).length+officeAccountDependenciesFor(kind).length+currentKycStatusDependenciesFor(kind).length;
+const currentOwnTemplateSourceCount=kind=>OWN_TEMPLATE_SOURCE_COUNTS[kind]+currentPlanDependenciesFor(kind).length+officeAccountDependenciesFor(kind).length+currentKycStatusDependenciesFor(kind).length+companySubscriptionBackendDependenciesFor(kind).length+companySubscriptionFixtureDependenciesFor(kind).length;
 const isIdentity=spec=>spec.kind==='UI_IDENTITY_ONLY';
 const isCanonicalField=spec=>['PG_FIELD','PG_OVERTIME'].includes(spec.kind);
 const FIELD_PG_BASELINE_PRODUCER={producer:'scripts/verify-field-operations-postgres.mjs',path:'.vercel/field-operations-evidence/postgres.json',retained:true,blockId:20,lane:'field',baselineSourceLine:216,baselineProducerGitBlobSha256:'b91778574d63bc9dffb83af1b5aeb7a2666e7fb23e0d923ea79b435de7b265d8'};
@@ -318,7 +328,18 @@ function validateExtension(contract){
  if(extension.baseHead!=='a4b79d7a7f75427ed1d0b0e1e9b247e1188adf3f')deny('EXTENSION_BASE');
  equal(extension.proofs.map(p=>[p.id,p.lane,p.blockId,p.path,p.kind]),EXTENSION_PROOFS,'EXTENSION_PROOF_COVERAGE');
  for(const spec of extension.proofs){exactKeys(spec,['id','lane','blockId','path','kind','producer','producerSha256','sourceFiles','checkNames'],'EXTENSION_PROOF_SHAPE');if(!sha(spec.producerSha256)||!Array.isArray(spec.sourceFiles)||!spec.sourceFiles.length||new Set(spec.sourceFiles).size!==spec.sourceFiles.length)deny('EXTENSION_SOURCE_CONTRACT');spec.sourceFiles.forEach(sourcePath);sourcePath(spec.producer);if(!Array.isArray(spec.checkNames))deny('EXTENSION_CHECK_NAMES');}
- for(const spec of extension.proofs){const record=contract.evidenceProducers.find(p=>p.path===spec.path);if(spec.kind==='UNIT'){equal(record,INTAKE_PLAIN_TEXT_UNIT_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(Object.hasOwn(INTAKE_CONTINUITY_BASELINE_PRODUCERS,spec.kind)){equal(record,INTAKE_CONTINUITY_BASELINE_PRODUCERS[spec.kind],'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_FIELD'||spec.kind==='PG_OVERTIME'){equal(record,spec.kind==='PG_FIELD'?FIELD_PG_BASELINE_PRODUCER:OVERTIME_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_PORTFOLIO'){equal(record,PORTFOLIO_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_PREPARATION'){equal(record,PREPARATION_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(spec.kind==='PG_COMPANY_KYC'){equal(record,COMPANY_KYC_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}if(Object.hasOwn(COPY_CLOSURE_UI_BASELINE_PRODUCERS,spec.kind)){equal(record,COPY_CLOSURE_UI_BASELINE_PRODUCERS[spec.kind],'EXTENSION_PRODUCER_CONTRACT');continue;}equal(record&&{producer:record.producer,path:record.path,retained:record.retained,blockId:record.blockId,lane:record.lane,producerSha256:record.producerSha256,sourceBasis:record.sourceBasis},{producer:spec.producer,path:spec.path,retained:true,blockId:spec.blockId,lane:spec.lane,producerSha256:spec.producerSha256,sourceBasis:'EXPECTED_HEAD_GIT_BYTES'},'EXTENSION_PRODUCER_CONTRACT');}
+ for(const spec of extension.proofs){
+  const record=contract.evidenceProducers.find(p=>p.path===spec.path);
+  if(spec.kind==='UNIT'){equal(record,INTAKE_PLAIN_TEXT_UNIT_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}
+  if(Object.hasOwn(INTAKE_CONTINUITY_BASELINE_PRODUCERS,spec.kind)){equal(record,INTAKE_CONTINUITY_BASELINE_PRODUCERS[spec.kind],'EXTENSION_PRODUCER_CONTRACT');continue;}
+  if(spec.kind==='PG_FIELD'||spec.kind==='PG_OVERTIME'){equal(record,spec.kind==='PG_FIELD'?FIELD_PG_BASELINE_PRODUCER:OVERTIME_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}
+  if(spec.kind==='PG_PORTFOLIO'){equal(record,PORTFOLIO_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}
+  if(spec.kind==='PG_PREPARATION'){equal(record,PREPARATION_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}
+  if(spec.kind==='PG_COMPANY_KYC'){equal(record,COMPANY_KYC_PG_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}
+  if(isIdentity(spec)){equal(record,IDENTITY_UI_BASELINE_PRODUCER,'EXTENSION_PRODUCER_CONTRACT');continue;}
+  if(Object.hasOwn(COPY_CLOSURE_UI_BASELINE_PRODUCERS,spec.kind)){equal(record,COPY_CLOSURE_UI_BASELINE_PRODUCERS[spec.kind],'EXTENSION_PRODUCER_CONTRACT');continue;}
+  equal(record&&{producer:record.producer,path:record.path,retained:record.retained,blockId:record.blockId,lane:record.lane,producerSha256:record.producerSha256,sourceBasis:record.sourceBasis},{producer:spec.producer,path:spec.path,retained:true,blockId:spec.blockId,lane:spec.lane,producerSha256:spec.producerSha256,sourceBasis:'EXPECTED_HEAD_GIT_BYTES'},'EXTENSION_PRODUCER_CONTRACT');
+ }
  if(hash(canonical(contract.blocks.slice(0,46)))!==extension.baselineBlocksSha256||extension.baselineBlocksSha256!==BASELINE_BLOCKS_SHA256)deny('BASELINE_BLOCKS_CHANGED');
  const newPatterns=new Set([...PREPARATION_ARTIFACTS,...PORTFOLIO_ARTIFACTS,...extension.proofs.filter(spec=>spec.kind!=='PG_PORTFOLIO'&&!isCanonicalField(spec)).flatMap(spec=>contract.lanes[spec.lane].artifacts.filter(pattern=>matches(spec.path,pattern)))]);
  const ownership=Object.fromEntries(LANES.map(lane=>[lane,{blocks:contract.lanes[lane].blocks.filter(id=>id<=52),artifacts:contract.lanes[lane].artifacts.filter(pattern=>!newPatterns.has(pattern))}]));
@@ -529,7 +550,12 @@ export function currentProducerSourceFiles(spec,root){
   seeds.forEach(visit);return [...found].sort();
  };
  if(spec.kind==='UNIT')return bankUnitSourceFiles(root);
- if(isIdentity(spec)){const seeds=[...text.matchAll(/\bcopyGraph\('([^']+)'\)/g)].map(match=>match[1]);equal(seeds,['src/app/(identity)/cuenta/workspace-client.js','src/app/(identity)/cuenta/workspace-recovery-journal.mjs','src/lib/participant-policy.mjs'],'PROOF_IDENTITY_SOURCE_ROOTS');return walk(seeds);}
+ if(isIdentity(spec)){
+  const seeds=[...text.matchAll(/\bcopyGraph\('([^']+)'\)/g)].map(match=>match[1]);equal(seeds,['src/app/(identity)/cuenta/workspace-client.js','src/app/(identity)/cuenta/workspace-recovery-journal.mjs','src/lib/participant-policy.mjs'],'PROOF_IDENTITY_SOURCE_ROOTS');
+  assert.equal(text.split("import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';").length,2,'One explicit closed subscription fixture import');
+  assert.equal(text.split("sourceManifest.push({path:'scripts/lib/company-subscription-ui-fixture.mjs',sha256:sha256(sourceBytes('scripts/lib/company-subscription-ui-fixture.mjs'))});").length,2,'One exact closed subscription fixture source reference');
+  return walk([...seeds,COMPANY_SUBSCRIPTION_UI_FIXTURE]);
+ }
  if(spec.kind==='PORTFOLIO_UNIT')return portfolioUnitSourceFiles(root);
  if(spec.kind==='UI_PORTFOLIO')return array('files').map(file=>'src/app/(identity)/cuenta/'+file).sort();
  if(spec.kind==='PG_PORTFOLIO')return walk(array('sourcePaths'));
@@ -562,14 +588,14 @@ function currentKycStatusClosureSelftest(spec,proof,root,validate){
   }
   assert.ok(changed>0,'CURRENT source exists in shadow manifest: '+file);
  };
- good('exact-additive-count-and-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+calendarPreparationDependenciesFor(spec.kind).length+whatsappPlanImportDependenciesFor(spec.kind).length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
+ good('exact-additive-count-and-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+calendarPreparationDependenciesFor(spec.kind).length+whatsappPlanImportDependenciesFor(spec.kind).length+companySubscriptionBackendDependenciesFor(spec.kind).length+companySubscriptionFixtureDependenciesFor(spec.kind).length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
  for(const file of dependencies){
   good('source-pinned-'+file,()=>assert.ok(spec.sourceFiles.includes(file)));
   mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{remove:true}));
   mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',value=>rewrite(value,file,{changedHash:true}));
   mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{replacement:'src/lib/foreign-current-kyc-source.mjs'}));
  }
- mutate('previous-current-manifest-cannot-certify-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of [...dependencies,...calendarPreparationDependenciesFor(spec.kind),...whatsappPlanImportDependenciesFor(spec.kind)])rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,previousCount);});
+ mutate('previous-current-manifest-cannot-certify-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of [...dependencies,...calendarPreparationDependenciesFor(spec.kind),...whatsappPlanImportDependenciesFor(spec.kind),...companySubscriptionBackendDependenciesFor(spec.kind),...companySubscriptionFixtureDependenciesFor(spec.kind)])rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,previousCount);});
  return checks;
 }
 function ownTemplateClosureSelftest(spec,proof,root,validate){
@@ -598,7 +624,7 @@ function monthlyCurveClosureSelftest(spec,proof,root,validate){
   mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
   mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-monthly-source-curve.mjs';assert.equal(p.sourceManifest.length,currentOwnTemplateSourceCount(spec.kind));});
  }
- mutate('previous-manifest-cannot-certify-v3','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...currentPlanDependenciesFor(spec.kind),...officeAccountDependenciesFor(spec.kind),...currentKycStatusDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,OWN_TEMPLATE_SOURCE_COUNTS[spec.kind]);});
+ mutate('previous-manifest-cannot-certify-v3','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...currentPlanDependenciesFor(spec.kind),...officeAccountDependenciesFor(spec.kind),...currentKycStatusDependenciesFor(spec.kind),...companySubscriptionBackendDependenciesFor(spec.kind),...companySubscriptionFixtureDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,OWN_TEMPLATE_SOURCE_COUNTS[spec.kind]);});
  return checks;
 }
 function monthlyCurveContractSelftest(workflow,contract,root){
@@ -633,17 +659,17 @@ function monthlyCurveContractSelftest(workflow,contract,root){
  return checks;
 }
 function calendarPreparationClosureSelftest(spec,proof,root,validate){
- const dependencies=calendarPreparationDependenciesFor(spec.kind),previousCount=CALENDAR_PREPARATION_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-calendar-preparation-';
+ const dependencies=calendarPreparationDependenciesFor(spec.kind),fixtureDependencies=companySubscriptionFixtureDependenciesFor(spec.kind),previousCount=CALENDAR_PREPARATION_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-calendar-preparation-';
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};
- good('exact-additive-count-and-real-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
+ good('exact-additive-count-and-real-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+fixtureDependencies.length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
  for(const file of dependencies){
   good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));
   mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
   mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
-  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/app/(identity)/cuenta/foreign-calendar-source.mjs';assert.equal(p.sourceManifest.length,previousCount+dependencies.length);});
+  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/app/(identity)/cuenta/foreign-calendar-source.mjs';assert.equal(p.sourceManifest.length,previousCount+dependencies.length+fixtureDependencies.length);});
  }
- mutate('previous-current-manifest-cannot-certify-calendar','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!dependencies.includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
+ mutate('previous-current-manifest-cannot-certify-calendar','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...fixtureDependencies].includes(ref.path));assert.equal(p.sourceManifest.length,previousCount);});
  return checks;
 }
 function calendarPreparationContractSelftest(workflow,contract,root){
@@ -678,7 +704,7 @@ function calendarPreparationContractSelftest(workflow,contract,root){
  return checks;
 }
 function whatsappPlanImportClosureSelftest(spec,proof,root,validate){
- const dependencies=whatsappPlanImportDependenciesFor(spec.kind),previousCount=WHATSAPP_PLAN_IMPORT_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-whatsapp-plan-import-';
+ const dependencies=whatsappPlanImportDependenciesFor(spec.kind),subscriptionDependencies=companySubscriptionBackendDependenciesFor(spec.kind),previousCount=WHATSAPP_PLAN_IMPORT_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-whatsapp-plan-import-';
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};
  const rewrite=(value,file,{remove=false,replacement=null,changedHash=false}={})=>{
@@ -693,14 +719,14 @@ function whatsappPlanImportClosureSelftest(spec,proof,root,validate){
   }
   assert.ok(changed>0,'WhatsApp plan source exists in shadow proof: '+file);
  };
- good('exact-additive-count-and-real-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
+ good('exact-additive-count-and-real-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+subscriptionDependencies.length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
  for(const file of dependencies){
   good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));
   mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>rewrite(p,file,{remove:true}));
   mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>rewrite(p,file,{changedHash:true}));
-  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{rewrite(p,file,{replacement:'src/lib/foreign-whatsapp-plan-import.mjs'});assert.equal(isCanonicalField(spec)?canonicalFieldManifest(spec,p).length:p.sourceManifest.length,previousCount+dependencies.length);});
+  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{rewrite(p,file,{replacement:'src/lib/foreign-whatsapp-plan-import.mjs'});assert.equal(isCanonicalField(spec)?canonicalFieldManifest(spec,p).length:p.sourceManifest.length,previousCount+dependencies.length+subscriptionDependencies.length);});
  }
- mutate('previous-current-manifest-cannot-certify-whatsapp-import','PROOF_SOURCE_MANIFEST',p=>{for(const file of dependencies)rewrite(p,file,{remove:true});assert.equal(isCanonicalField(spec)?canonicalFieldManifest(spec,p).length:p.sourceManifest.length,previousCount);});
+ mutate('previous-current-manifest-cannot-certify-whatsapp-import','PROOF_SOURCE_MANIFEST',p=>{for(const file of [...dependencies,...subscriptionDependencies])rewrite(p,file,{remove:true});assert.equal(isCanonicalField(spec)?canonicalFieldManifest(spec,p).length:p.sourceManifest.length,previousCount);});
  return checks;
 }
 function whatsappPlanImportContractSelftest(workflow,contract,root){
@@ -751,8 +777,42 @@ function whatsappPlanImportContractSelftest(workflow,contract,root){
  bad('dependency-policy-foreign-kind','WHATSAPP_PLAN_IMPORT_SOURCE_DEPENDENCIES',c=>{c.whatsappPlanImport.sourceDependencies.UI_IDENTITY_ONLY=['src/lib/meta-plan-import-transport.mjs'];});
  return checks;
 }
+function validateCompanySubscriptionProofSources(contract){
+ for(const spec of contract.extension.proofs){
+  const dependencies=companySubscriptionProofDependenciesFor(spec.kind);
+  if(dependencies.some(file=>spec.sourceFiles.filter(source=>source===file).length!==1))deny('COMPANY_SUBSCRIPTION_SOURCE_DEPENDENCIES');
+  if(isIdentity(spec)&&PREVIOUS_COMPANY_BILLING_UI_SOURCES.some(file=>spec.sourceFiles.includes(file)))deny('COMPANY_SUBSCRIPTION_SOURCE_DEPENDENCIES');
+ }
+}
+function companySubscriptionProofClosureSelftest(spec,proof,root,validate){
+ const dependencies=companySubscriptionProofDependenciesFor(spec.kind),checks=[],prefix=spec.id+'-company-subscription-';if(!dependencies.length)return checks;
+ const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};
+ const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};
+ good('exact-current-producer-closure',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
+ for(const file of dependencies){
+  good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));
+  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});
+  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
+  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-company-subscription.mjs';assert.equal(p.sourceManifest.length,spec.sourceFiles.length);});
+ }
+ if(isIdentity(spec)){
+  mutate('previous-same-count-billing-mount-denied','PROOF_SOURCE_MANIFEST',p=>{for(const [index,file]of COMPANY_SUBSCRIPTION_UI_SOURCES.entries())p.sourceManifest.find(ref=>ref.path===file).path=PREVIOUS_COMPANY_BILLING_UI_SOURCES[index];assert.equal(p.sourceManifest.length,spec.sourceFiles.length);});
+  mutate('previous-117-manifest-without-closed-fixture-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==COMPANY_SUBSCRIPTION_UI_FIXTURE);assert.equal(p.sourceManifest.length,117);});
+ }
+ else mutate('previous-191-source-manifest-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!dependencies.includes(ref.path));assert.equal(p.sourceManifest.length,191);});
+ return checks;
+}
+function companySubscriptionContractSelftest(contract){
+ const checks=[],bad=(name,edit)=>{const value=clone(contract);edit(value);assert.throws(()=>validateContract(value),error=>error.code==='COMPANY_SUBSCRIPTION_SOURCE_DEPENDENCIES');checks.push({name:'company-subscription-contract-'+name,result:'PASS',expectedDenial:'COMPANY_SUBSCRIPTION_SOURCE_DEPENDENCIES',boundary:'pure contract fixture'});};
+ for(const kind of ['PG_COMPANY_KYC','UI_IDENTITY_ONLY'])for(const file of companySubscriptionProofDependenciesFor(kind)){
+  bad('missing-'+file,c=>{const spec=c.extension.proofs.find(p=>p.kind===kind);spec.sourceFiles=spec.sourceFiles.filter(source=>source!==file);});
+  bad('same-count-foreign-'+file,c=>{const spec=c.extension.proofs.find(p=>p.kind===kind);spec.sourceFiles[spec.sourceFiles.indexOf(file)]='src/lib/foreign-company-subscription.mjs';});
+ }
+ bad('previous-billing-mount-restored',c=>{const spec=c.extension.proofs.find(isIdentity);for(const [index,file]of COMPANY_SUBSCRIPTION_UI_SOURCES.entries())spec.sourceFiles[spec.sourceFiles.indexOf(file)]=PREVIOUS_COMPANY_BILLING_UI_SOURCES[index];});
+ return checks;
+}
 function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinuityChecks=[],currentReactiveChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[],currentKycStatusChecks=[],currentWhatsappPlanChecks=[]){
- const checks=[],discoveryChecks=[],videoChecks=[],preparationChecks=[],preparationProofChecks=[],identityClosureChecks=[],billingClosureChecks=[],expectedHead=contract.extension.baseHead;
+ const checks=[],discoveryChecks=[],videoChecks=[],preparationChecks=[],preparationProofChecks=[],identityClosureChecks=[],billingClosureChecks=[],subscriptionClosureChecks=[],expectedHead=contract.extension.baseHead;
  const discoveryBackend=['src/lib/participant-account-discovery.mjs'],discoveryUi=['src/app/(identity)/cuenta/participant-account-discovery-format.mjs','src/app/(identity)/cuenta/participant-account-discovery.js'];
  const discoveryDependenciesFor=kind=>kind==='UI_INTAKE'?discoveryUi:['UI_BANK','UI_JOINT','UI_CAUSAL'].includes(kind)?[...discoveryBackend,...discoveryUi]:discoveryBackend;
  const beforeDiscoveryCounts={UNIT:94,PG_BANK:12,PG_INTAKE:21,UI_BANK:87,UI_INTAKE:19,UI_JOINT:87,UI_CAUSAL:87,PG_COMPANY_KYC:155};
@@ -776,6 +836,7 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
    if(spec.kind==='UI_PREPARATION')Object.assign(proof,{validated:true,synthetic:true,realProviderCalls:false,sourceState:'EXACT_CI_SOURCE',fixtureRemoved:true,totalCheckCount:24,checks:proof.widths.flatMap(width=>PREPARATION_MODES.map(mode=>({width,mode,posts:mode==='cancel'?2:1,recoveryReads:0,currentSessionToken:true,placeholdersOnly:true,tasksUnchanged:true,noPayloadPersistence:true,horizontalOverflow:false})))});
    const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
   good(spec.id+'-complete-proof',()=>validate(proof));
+    if(companySubscriptionProofDependenciesFor(spec.kind).length)subscriptionClosureChecks.push(()=>companySubscriptionProofClosureSelftest(spec,proof,root,validate));
    if(whatsappPlanImportDependenciesFor(spec.kind).length)currentWhatsappPlanChecks.push(()=>whatsappPlanImportClosureSelftest(spec,proof,root,validate));
    if(ownTemplateDependenciesFor(spec.kind).length)currentTemplateChecks.push(()=>ownTemplateClosureSelftest(spec,proof,root,validate));
   if(currentKycStatusDependenciesFor(spec.kind).length)currentKycStatusChecks.push(()=>currentKycStatusClosureSelftest(spec,proof,root,validate));
@@ -988,6 +1049,7 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
  checks.push(...preparationProofChecks);
  for(const run of identityClosureChecks)run();
  for(const run of billingClosureChecks)run();
+  for(const run of subscriptionClosureChecks)checks.push(...run());
  return checks;
 }
 
@@ -1060,7 +1122,7 @@ export function validateContract(contract){
  equal([...patterns].sort(),[...contract.artifactPatterns].sort(),'CONTRACT_ARTIFACT_COVERAGE');
  if(patterns.length!==58||new Set(patterns).size!==58)deny('CONTRACT_ARTIFACT_DUPLICATE');
  patterns.forEach(patternValid);
- validateEvidenceContract(contract);validateExtension(contract);validateMonthlyCurveExtension(contract);validateCalendarPreparationExtension(contract);validateWhatsappPlanImportExtension(contract);
+  validateEvidenceContract(contract);validateExtension(contract);validateMonthlyCurveExtension(contract);validateCalendarPreparationExtension(contract);validateWhatsappPlanImportExtension(contract);validateCompanySubscriptionProofSources(contract);
  return contract;
 }
 export function loadContract(filename){
@@ -1444,6 +1506,7 @@ export function selftest(workflow,contract,root=process.cwd()){
  for(const run of currentCalendarChecks)checks.push(...run());
   checks.push(...whatsappPlanImportContractSelftest(workflow,contract,root));
   for(const run of currentWhatsappPlanChecks)checks.push(...run());
+   checks.push(...companySubscriptionContractSelftest(contract));
   return checks;
 }
 function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],currentKycStatusChecks=[],currentWhatsappPlanChecks=[]){
@@ -1527,12 +1590,15 @@ function identitySelftest(workflow,contract,root,currentContinuityChecks=[],curr
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(name,code,()=>validate(value));};
  good('complete-103-exact-source-proof',()=>assert.equal(validate(proof).checks,IDENTITY_ONLY_CHECK_COUNT));
  good('current-source-closure-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
+  checks.push(...companySubscriptionProofClosureSelftest(spec,proof,root,validate));
  good('manifest-order-independent',()=>{const value=clone(proof);value.sourceManifest.reverse();assert.equal(validate(value).sourceManifestSha256,validate(proof).sourceManifestSha256);});
  bad('malformed-json','PROOF_JSON',()=>validateExtensionProof(spec,Buffer.from('{'),{expectedHead,readSource}));bad('invalid-utf8','PROOF_ENCODING',()=>validateExtensionProof(spec,Buffer.from([255]),{expectedHead,readSource}));
  mutate('wrong-status','PROOF_STATUS',p=>{p.status='FAIL';});mutate('production-write','PROOF_PRODUCTION_BOUNDARY',p=>{p.productionDataWritten=true;});
  mutate('wrong-head','PROOF_SOURCE_HEAD',p=>{p.sourceRevision='f'.repeat(40);});mutate('missing-head','PROOF_IDENTITY_SHAPE',p=>{delete p.sourceRevision;});
  mutate('dirty-source','PROOF_SOURCE_STATE',p=>{p.trackedClean=false;});mutate('dirty-path','PROOF_SOURCE_STATE',p=>{p.dirtyTrackedPaths=['src/lib/participant-admission.mjs'];});mutate('local-review-source','PROOF_SOURCE_STATE',p=>{p.sourceState='LOCAL_REVIEW_SOURCE';});
  mutate('wrong-harness','PROOF_HARNESS_SOURCE',p=>{p.harnessSha256='f'.repeat(64);});
+ mutate('historical-harness-cannot-certify-current-source','PROOF_HARNESS_SOURCE',p=>{p.harnessSha256=IDENTITY_UI_BASELINE_PRODUCER.producerSha256;});
+ {const changed=clone(contract);changed.evidenceProducers.find(record=>record.path===spec.path).producerSha256=spec.producerSha256;bad('historical-record-cannot-be-overwritten','EXTENSION_PRODUCER_CONTRACT',()=>validateContract(changed));}
  mutate('foreign-environment','PROOF_IDENTITY_ENVIRONMENT',p=>{p.environment='production-browser';});
  for(const [key,value] of [['realProviderCalls',1],['postgresExecuted',true],['realClerkLogin',true],['realEmailDelivery',true],['physicalWhatsAppVerified',true]])mutate('provider-'+key,'PROOF_PROVIDER_IO',p=>{p[key]=value;});
  mutate('provider-array-not-zero','PROOF_PROVIDER_IO',p=>{p.realProviderCalls=[];});
@@ -1585,10 +1651,10 @@ function identitySelftest(workflow,contract,root,currentContinuityChecks=[],curr
  currentContinuityChecks.push(()=>{
   const start=checks.length;
   good('current-intake-continuity-source-pinned',()=>assert.ok(spec.sourceFiles.includes(INTAKE_CONTINUITY_SOURCE)));
-  good('current-intake-continuity-source-count-exact',()=>assert.equal(spec.sourceFiles.length,98+currentOwnDependenciesFor(spec.kind).length+reviewerDependenciesFor(spec.kind).length+intakeAssignmentDependenciesFor(spec.kind).length+currentPlanDependenciesFor(spec.kind).length+officeAccountDependenciesFor(spec.kind).length+currentKycStatusDependenciesFor(spec.kind).length));
+  good('current-intake-continuity-source-count-exact',()=>assert.equal(spec.sourceFiles.length,98+currentOwnDependenciesFor(spec.kind).length+reviewerDependenciesFor(spec.kind).length+intakeAssignmentDependenciesFor(spec.kind).length+currentPlanDependenciesFor(spec.kind).length+officeAccountDependenciesFor(spec.kind).length+currentKycStatusDependenciesFor(spec.kind).length+companySubscriptionFixtureDependenciesFor(spec.kind).length));
   mutate('missing-intake-continuity-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==INTAKE_CONTINUITY_SOURCE);});
   mutate('changed-intake-continuity-hash','PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===INTAKE_CONTINUITY_SOURCE).sha256='f'.repeat(64);});
-  mutate('old-97-source-manifest-without-intake-continuity','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![INTAKE_CONTINUITY_SOURCE,...currentOwnDependenciesFor(spec.kind),...reviewerDependenciesFor(spec.kind),...intakeAssignmentDependenciesFor(spec.kind),...currentPlanDependenciesFor(spec.kind),...officeAccountDependenciesFor(spec.kind),...currentKycStatusDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,97);});
+  mutate('old-97-source-manifest-without-intake-continuity','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![INTAKE_CONTINUITY_SOURCE,...currentOwnDependenciesFor(spec.kind),...reviewerDependenciesFor(spec.kind),...intakeAssignmentDependenciesFor(spec.kind),...currentPlanDependenciesFor(spec.kind),...officeAccountDependenciesFor(spec.kind),...currentKycStatusDependenciesFor(spec.kind),...companySubscriptionFixtureDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,97);});
   return checks.splice(start);
  });
  return checks;

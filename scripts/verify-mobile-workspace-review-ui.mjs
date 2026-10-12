@@ -6,12 +6,14 @@ import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-preparation-format.mjs';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
+import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';
 
 // Actual account workspace and styles; all session/API data is local and synthetic.
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),evidence=path.join(root,'.vercel/private');mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(evidence,'mobile-review-ui-')),app=path.join(fixture,'src/app'),components=path.join(app,'(identity)/cuenta');mkdirSync(components,{recursive:true});
 const sha256=value=>createHash('sha256').update(value).digest('hex'),sourceManifest=[];
+sourceManifest.push({path:'scripts/lib/company-subscription-ui-fixture.mjs',sha256:sha256(readFileSync(new URL('./lib/company-subscription-ui-fixture.mjs',import.meta.url)))});
 for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filter(name=>/\.(js|mjs|css)$/.test(name))){const source='src/app/(identity)/cuenta/'+file;copyFileSync(path.join(root,source),path.join(components,file));sourceManifest.push({path:source,sha256:sha256(readFileSync(path.join(components,file)))});}
 for(const source of ['src/app/(identity)/identity.module.css','src/lib/geo.js','src/lib/field-media-privacy.mjs','src/lib/voice-progress-draft.mjs','src/lib/progress-measurement-quantity.js','src/lib/worker-channel-consent-policy.mjs','src/lib/whatsapp/tenant-workspace-policy.js','src/lib/company-phone-format.mjs','src/lib/company-entitlement.mjs','src/lib/identity-return-path.mjs']){const destination=path.join(fixture,source);mkdirSync(path.dirname(destination),{recursive:true});copyFileSync(path.join(root,source),destination);if(['src/lib/company-entitlement.mjs','src/lib/identity-return-path.mjs'].includes(source))assert.deepEqual(readFileSync(path.join(root,source)),readFileSync(destination));sourceManifest.push({path:source,sha256:sha256(readFileSync(destination))});}
 const harnessSha256=sha256(readFileSync(new URL(import.meta.url)));
@@ -32,11 +34,13 @@ async function scenario(width,readOnly){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});page.on('pageerror',error=>errors.push({width,readOnly,message:error.message}));await page.setRequestInterception(true);
  const participant=worker=>({...worker,active:true,revision,status:'ACTIVE',self:readOnly,accountLinked:true,invitation:null,permissions:{attendance:true,report:true},kyc:{status:'PENDING_REVIEW',submissionId:'kyc_'+worker.id.slice(-32),images:[{id:'front',kind:'DOCUMENT_FRONT',contentType:'image/png',bytes:picture.length},{id:'selfie',kind:'SELFIE',contentType:'image/png',bytes:picture.length}],review:null}});
  const records=[participant(workerA),participant(workerB)],attendance=[{id:'event-source-A',workerId:workerA.id,eventType:'CHECK_IN',phase:'WORKING',sequence:1,sectorName:'Sector anterior',recordedAt:revision,verificationStatus:'REVIEW_REQUIRED',qrStatus:'MATCHED',location:{accuracyMeters:20,distanceMeters:130},review:null},{id:eventId,workerId:workerB.id,eventType:'CHECK_OUT',phase:'CLOSED',sequence:2,sectorName:'Sector exacto seleccionado',recordedAt,verificationStatus:'REVIEW_REQUIRED',qrStatus:'NOT_PROVIDED',location:{accuracyMeters:null,distanceMeters:null},review:null}],posts=[],privateReads=[];
- let denyFieldRead=false,missingFieldSource=false;
+ let denyFieldRead=false,missingFieldSource=false;const subscriptionReads=[];
  const respond=(request,value,status=200)=>request.respond({status,contentType:'application/json',body:JSON.stringify(value),headers:{'Cache-Control':'private, no-store'}});
  page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){assert.ok(['blob:','data:'].includes(url.protocol),'No external/provider requests');return request.continue();}if(!url.pathname.startsWith('/api/'))return request.continue();
-  assert.equal(request.headers().authorization,'Bearer synthetic-reviewer');assert.ok(['/api/identity/workspace','/api/identity/participants','/api/identity/field-operations','/api/identity/project-preparation','/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname),'Unexpected API '+url.pathname);
+  assert.equal(request.headers().authorization,'Bearer synthetic-reviewer');
+  if(await respondClosedCompanySubscription(request,{origin,scope,authorization:'Bearer synthetic-reviewer',allowed:true,reads:subscriptionReads}))return;
+  assert.ok(['/api/identity/workspace','/api/identity/participants','/api/identity/field-operations','/api/identity/project-preparation','/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname),'Unexpected API '+url.pathname);
   if(['/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname)){
    assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),projectId);
    return respond(request,url.pathname==='/api/identity/project-creation'?{scope,projectId,canCreate:true}:{scope,projectId,canManage:true,channels:[],invitations:[],candidates:[],truncated:false,candidatesLimited:false});
@@ -59,7 +63,7 @@ async function scenario(width,readOnly){
   if(denyFieldRead)return respond(request,{code:'WORKSPACE_PROJECT_UNAVAILABLE'},403);
   return respond(request,{scope,projectId,projectRevision:revision,canConfigure:false,canReview:!readOnly,canApproveProgress:false,selfWorkers:[],workers:[workerA,workerB],sectors:[{id:'sector-B',name:'Sector exacto seleccionado',latitude:0,longitude:0,radius:100}],attendance:missingFieldSource?attendance.slice(0,1):attendance,evidence:[],proposals:[],incidents:[],materialRequests:[],truncated:false});
  }catch(error){errors.push({width,readOnly,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
- await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de revisión sintética');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de revisión sintética')).click());await waitText(page,'0 de 0 tareas');await click(page,'Consultar participantes');await waitText(page,workerB.name);await click(page,'Abrir operaciones');await waitText(page,'Sector exacto seleccionado');
+ await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de revisión sintética');assert.equal(subscriptionReads.length,1,'Administrator mounts one closed company status consult');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de revisión sintética')).click());await waitText(page,'0 de 0 tareas');await click(page,'Consultar participantes');await waitText(page,workerB.name);await click(page,'Abrir operaciones');await waitText(page,'Sector exacto seleccionado');
  const participants='section[aria-labelledby="participant-title"]',field='section[aria-labelledby="field-title"]';
  const personSelector=participants+' select';
  await page.waitForFunction(selector=>Boolean(document.querySelector(selector)&&!document.querySelector(selector).disabled),{timeout:20000},personSelector);

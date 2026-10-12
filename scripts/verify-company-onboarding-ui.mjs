@@ -9,6 +9,7 @@ import {createLocalJWKSet,generateKeyPair,exportJWK,SignJWT} from 'jose';
 import {createBootstrapProfileVerifier} from '../src/lib/company-onboarding-identity.mjs';
 import {BOOTSTRAP_PROFILE_AUDIENCE} from '../src/lib/company-onboarding-policy.mjs';
 import {IDENTITY_ISSUER,IDENTITY_ORIGIN} from '../src/lib/production-identity-config.mjs';
+import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 assert.ok([undefined,'onboarding-recovery'].includes(process.env.COMPANY_ONBOARDING_UI_SUITE));
 const root=realpathSync(process.cwd()),parent=path.join(root,'.vercel'),output=path.join(parent,'company-onboarding-evidence');mkdirSync(output,{recursive:true});
@@ -25,6 +26,7 @@ const entitlementPath='src/lib/company-entitlement.mjs';copyFileSync(path.join(r
 const officeIdentityPath='src/lib/identity-return-path.mjs';copyFileSync(path.join(root,officeIdentityPath),path.join(dir,officeIdentityPath));sourcePaths.push(officeIdentityPath);copiedSourcePaths.add(officeIdentityPath);
 for(const file of ['src/app/(identity)/identity.module.css','src/app/(identity)/identity-load-guard.js']){copyFileSync(path.join(root,file),path.join(dir,file));sourcePaths.push(file);copiedSourcePaths.add(file);}
 const sourceManifest=sourcePaths.map(file=>{const bytes=readFileSync(path.join(root,file));if(copiedSourcePaths.has(file)||file.startsWith('src/app/(identity)/cuenta/'))assert.deepEqual(bytes,readFileSync(path.join(dir,file)));return {path:file,sha256:createHash('sha256').update(bytes).digest('hex')};});
+sourceManifest.push({path:'scripts/lib/company-subscription-ui-fixture.mjs',sha256:createHash('sha256').update(readFileSync(new URL('./lib/company-subscription-ui-fixture.mjs',import.meta.url))).digest('hex')});
 assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
 writeFileSync(path.join(dir,'package.json'),JSON.stringify({name:'synthetic-company-onboarding-ui',private:true}));
@@ -82,7 +84,7 @@ async function scenario(mode,width=390){
   const nativeUuid=crypto.randomUUID.bind(crypto);window.__issuedIds=[];crypto.randomUUID=()=>{const id=nativeUuid();window.__issuedIds.push(id);return id;};
  },{tokens:profileTokens,initialHung:mode==='initial-sdk-hung'});
  page.on('pageerror',error=>errors.push({mode,width,message:error.message}));await page.setRequestInterception(true);
-  let created=false,result=null,tasks=[],taskReceipts=new Map(),expectedOrganization='org_BootstrapA';const posts=[],postBodies=[],taskPosts=[],external=[],recoveryIds=[];const scope='c'.repeat(64);
+  let created=false,result=null,tasks=[],taskReceipts=new Map(),expectedOrganization='org_BootstrapA';const posts=[],postBodies=[],taskPosts=[],external=[],recoveryIds=[],subscriptionReads=[];const scope='c'.repeat(64);
   let releaseTaskReadback,markTaskReadbackStarted,taskReadbackHeld=false,taskReadbacks=0;
   const taskReadbackBarrier=mode==='empty'?new Promise(resolve=>{releaseTaskReadback=resolve;}):null;
   const taskReadbackStarted=mode==='empty'?new Promise(resolve=>{markTaskReadbackStarted=resolve;}):null;
@@ -92,6 +94,7 @@ async function scenario(mode,width=390){
    if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();external.push(url.hostname);return request.abort();}
    if(!url.pathname.startsWith('/api/identity/'))return request.continue();
    assert.equal(request.headers().authorization,'Bearer synthetic-session-token');
+   if(await respondClosedCompanySubscription(request,{origin,scope,authorization:'Bearer synthetic-session-token',allowed:created===true,reads:subscriptionReads}))return;
    let body,status=200;
    if(url.pathname==='/api/identity/company-onboarding'){
     assert.equal(request.headers().authorization,'Bearer synthetic-session-token');
@@ -214,7 +217,7 @@ async function scenario(mode,width=390){
   }
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(external,[]);
   if(mode==='empty'){const beforeReturn=posts.length;await page.reload({waitUntil:'networkidle0'});await wait(page,'Alta confirmada');await wait(page,'Mis obras');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+result.receiptId);assert.equal(posts.length,beforeReturn);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled));await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra inicial de ensayo')).click());await canonicalCreatedTask(page,taskReceipts.get(taskPosts[0].operationId).task);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,2);checks.push(`ordinary-return-keeps-workspace-open-and-original-receipt-consultable-${width}`);}
- checks.push(`${mode}-company-to-workspace-${width}`);await context.close();
+ assert.ok(subscriptionReads.length>=1,'Created administrator consults closed subscription status');checks.push(`${mode}-company-to-workspace-${width}`);await context.close();
 }
 async function companySelectorContext(width){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});

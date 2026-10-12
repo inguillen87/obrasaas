@@ -12,6 +12,7 @@ name: Authorized workspace acceptance
       - hotfix/customer-whatsapp-self-service-*
       - hotfix/new-constructor-onboarding-*
       - hotfix/field-team-journal-*
+      - hotfix/subscription-fixture-dependencies-*
       - fix/whatsapp-signup-*
       - fix/clerk-*
   workflow_dispatch: null
