@@ -155,7 +155,7 @@ export function PlanImportPanel({projectId,scope,getSessionToken,onPending,onApp
   if(!mounted.current||busy||localRequest.current||linkedRead.current)return;
   linkedUserWork.current=true;
   if(discardLocalChanges&&(!closeChoiceVisible||blocked||attemptReference.current||closeChoiceRef.current!==closeDraftTarget||closeDraftTarget.generation!==privateGeneration.current))return;
-  if((attempt||attemptReference.current||draftUsage?.pending)&&!discardLocalChanges){setOpen(false);focusAfterClose.current=true;setMessage('Consulta cerrada. Conservamos la referencia y el trabajo en esta pantalla para volver a comprobarlos.');return;}
+  if((attempt||attemptReference.current||draftUsage?.pending)&&!discardLocalChanges){attemptPayload.current=null;setRetryAllowed(false);setOpen(false);focusAfterClose.current=true;setMessage('Consulta cerrada. Conservamos la referencia y el trabajo en esta pantalla para volver a comprobarlos.');return;}
   if(!discardLocalChanges&&selectedDraftHasEdits&&!attempt&&!attemptReference.current){if(!recoveryReady||locked)return;setDraftConsultTarget(null);const target={draftId:draft.id,projectId,scope,generation:privateGeneration.current};closeChoiceRef.current=target;setCloseDraftTarget(target);setMessage('Hay correcciones sin guardar. Elegí si querés conservarlas o descartarlas antes de cerrar.');return;}
   attemptPayload.current=null;setRetryAllowed(false);setOpen(false);setDraft(null);setDraftConsultTarget(null);closeChoiceRef.current=null;setCloseDraftTarget(null);focusAfterClose.current=true;
   if(discardLocalChanges){replaceRows([]);setReason('');setApproved(false);setMessage('Correcciones locales descartadas. El borrador guardado conserva su estado.');}
