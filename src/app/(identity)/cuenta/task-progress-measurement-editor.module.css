@@ -1,0 +1,8 @@
+.editor{border:1px solid #6c8e91;border-radius:14px;background:#112a31;color:#e6f0f3;padding:1.2rem;margin:1rem 0;overflow-wrap:anywhere;min-width:0}
+.editor h4{font-size:1rem;margin:0 0 .75rem}.editor>p{font-size:.86rem;line-height:1.6;color:#c9dae1}
+.editor form{display:grid;gap:1rem}.editor label{display:grid;gap:.45rem;font-size:.86rem;line-height:1.5;min-width:0}
+.editor input,.editor select,.editor textarea{width:100%;min-width:0;min-height:46px;box-sizing:border-box;border:1px solid #7798ab;border-radius:8px;background:#081a27;color:#f4f8fb;padding:.75rem;font:inherit;color-scheme:dark}.editor textarea{min-height:96px;resize:vertical}
+.editor input:focus-visible,.editor select:focus-visible,.editor textarea:focus-visible,.editor button:focus-visible{outline:3px solid #edb664;outline-offset:3px}.quantities{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.editor .confirm{display:flex;gap:.7rem;align-items:center;min-height:44px}.editor .confirm input{width:22px;min-width:22px;min-height:22px;margin:.2rem 0;accent-color:#9bd3c6}.confirm span{padding-block:.1rem}
+.actions{display:flex;gap:.75rem;flex-wrap:wrap}.actions button{min-height:46px;border:1px solid #82a6a8;border-radius:9px;padding:.65rem 1rem;background:#214850;color:#f3faf9;font:inherit;cursor:pointer}.actions button:disabled,.editor input:disabled,.editor select:disabled,.editor textarea:disabled{opacity:.65;cursor:default}.notice{border:1px solid #b6a264;background:#332c1e;color:#f4e1b7!important;padding:.8rem;border-radius:8px}
+@media(max-width:500px){.editor{padding:1rem}.quantities{grid-template-columns:1fr}.actions{display:grid}.actions button{width:100%}}

@@ -1,5 +1,5 @@
 'use client';
-import {useEffect,useState} from 'react';
+import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'react';
 import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import {browserRecoveryJournal,RECOVERY_EVENT,RECOVERY_RESOURCES,recoveryQuery,recoveryResult} from './workspace-recovery-journal.mjs';
 import styles from './workspace.module.css';
@@ -8,7 +8,11 @@ const uploadRejectionNotice=code=>'El servidor registró el rechazo de esta carg
 
 export function WorkspaceRecoveryPanel({scope,projects,getSessionToken,onRecovered}) {
   const request=useWorkspaceRequest(getSessionToken);
-  const [entries,setEntries]=useState([]),[busy,setBusy]=useState(null),[messages,setMessages]=useState({}),[notice,setNotice]=useState('');
+  const owner=useMemo(()=>({scope,request}),[scope,request]),active=useRef(owner);
+  const [entries,setEntries]=useState([]),[busy,setBusy]=useState(null),[messages,setMessages]=useState({}),[notice,setNotice]=useState(''),[closeable,setCloseable]=useState({});
+  const [stateOwner,setStateOwner]=useState(owner);
+  if(stateOwner!==owner){setStateOwner(owner);setMessages({});setNotice('');setBusy(null);setCloseable({});}
+  useLayoutEffect(()=>{active.current=owner;return()=>{if(active.current===owner)active.current=null;};},[owner]);
   useEffect(()=>{
     let active=true,readSequence=0;
     const storageNotice='No se pueden consultar las referencias pendientes de este navegador. Revisá su almacenamiento antes de guardar otra operación.';
@@ -20,17 +24,31 @@ export function WorkspaceRecoveryPanel({scope,projects,getSessionToken,onRecover
     return()=>{active=false;channel?.close();window.removeEventListener(RECOVERY_EVENT,read);window.removeEventListener('storage',read);window.removeEventListener('focus',read);document.removeEventListener('visibilitychange',visible);};
   },[scope,projects]);
   async function check(entry) {
-    if(busy)return;setBusy(entry.operationId);setNotice('');
+    if(busy||entry.scope!==scope||!projects.some(project=>project.id===entry.projectId))return;setBusy(entry.operationId);setNotice('');
     try {
       const result=await request(recoveryQuery(entry),{requestTimeoutMs:15000},async response=>{const body=await response.json();if(!response.ok)throw new Error('No se pudo comprobar con tus permisos actuales. Conservamos la referencia.');if(!recoveryResult(entry,body))throw new Error('El resultado no permite confirmar este intento. Conservamos la referencia.');return body;});
+      if(active.current!==owner)return;
       const outcome=recoveryResult(entry,result);
-      const message=entry.resource==='plan-import'&&outcome.state==='REJECTED'&&outcome.proof==='AUDITED_UPLOAD'?uploadRejectionNotice(result.code):entry.resource==='plan-import'&&outcome.state==='REJECTED'&&outcome.phase==='PRE_DECISION'?'El servidor registró el rechazo de esta decisión. No se modificaron tareas ni el borrador. Volvé a Importar cronograma, consultá el estado actual y corregí los datos antes de una nueva decisión.':entry.resource==='project-preparation'&&outcome.state==='CANCELLED'?'Se canceló la preparación pendiente con recibo. Una solicitud demorada con esta referencia ya no puede modificar la obra.':entry.resource==='participants'&&outcome.state==='CANCELLED'?'Se canceló el intento privado pendiente con un recibo. Una solicitud demorada con esta referencia ya no puede guardar la cuenta.':entry.resource==='participants'&&outcome.state==='REJECTED'?'El estado cambió y el servidor registró el rechazo. La cuenta no se modificó por este intento. Consultá su referencia actual antes de preparar otra solicitud.':entry.resource==='company-channel'&&outcome.state==='REJECTED'?'El servidor registr\u00f3 un rechazo de esta decisi\u00f3n. No cambi\u00f3 el canal. Consult\u00e1 su estado actual antes de preparar otra decisi\u00f3n.':outcome.state==='EXPIRED'?'Venció el plazo de la extracción. No se aplicaron tareas por este intento. Podés elegir la fuente y autorizar una nueva carga explícita.':outcome.state==='RECORDED'?'Guardado confirmado. La consulta no volvió a enviar la operación.':outcome.state==='EVENT_PROCESSED'?'El evento ya está procesado. Este estado no atribuye su procesamiento a tu intento; consultá el seguimiento en la bandeja.':outcome.state==='PARTICIPATION_REVOKED'?'La participación está revocada en esta obra y no concede acceso. Esto no acredita la entrega ni la revocación remota de su correo.':outcome.state==='PROCESSING'?'El procesamiento sigue pendiente. Volvé a consultar su recibo.':outcome.state==='INVITATION_UNCONFIRMED'?'La invitación necesita comprobarse con el proveedor desde Participantes. No se volvió a enviar.':'Todavía no se observa un recibo. Esto no demuestra que el envío se haya perdido; conservamos su referencia y no habilitamos otro envío de este módulo.';
+      setCloseable(old=>({...old,[entry.operationId]:entry.resource==='field-operations'&&entry.action==='CONFIGURE_PROGRESS_MEASUREMENT'&&outcome.state==='NOT_OBSERVED'?owner:null}));
+      const message=entry.resource==='field-operations'&&entry.action==='CONFIGURE_PROGRESS_MEASUREMENT'&&outcome.state==='CANCELLED'?'Intento cerrado con recibo. La tarea y su avance no cambiaron.':entry.resource==='plan-import'&&outcome.state==='REJECTED'&&outcome.proof==='AUDITED_UPLOAD'?uploadRejectionNotice(result.code):entry.resource==='plan-import'&&outcome.state==='REJECTED'&&outcome.phase==='PRE_DECISION'?'El servidor registró el rechazo de esta decisión. No se modificaron tareas ni el borrador. Volvé a Importar cronograma, consultá el estado actual y corregí los datos antes de una nueva decisión.':entry.resource==='project-preparation'&&outcome.state==='CANCELLED'?'Se canceló la preparación pendiente con recibo. Una solicitud demorada con esta referencia ya no puede modificar la obra.':entry.resource==='participants'&&outcome.state==='CANCELLED'?'Se canceló el intento privado pendiente con un recibo. Una solicitud demorada con esta referencia ya no puede guardar la cuenta.':entry.resource==='participants'&&outcome.state==='REJECTED'?'El estado cambió y el servidor registró el rechazo. La cuenta no se modificó por este intento. Consultá su referencia actual antes de preparar otra solicitud.':entry.resource==='company-channel'&&outcome.state==='REJECTED'?'El servidor registr\u00f3 un rechazo de esta decisi\u00f3n. No cambi\u00f3 el canal. Consult\u00e1 su estado actual antes de preparar otra decisi\u00f3n.':outcome.state==='EXPIRED'?'Venció el plazo de la extracción. No se aplicaron tareas por este intento. Podés elegir la fuente y autorizar una nueva carga explícita.':outcome.state==='RECORDED'?'Guardado confirmado. La consulta no volvió a enviar la operación.':outcome.state==='EVENT_PROCESSED'?'El evento ya está procesado. Este estado no atribuye su procesamiento a tu intento; consultá el seguimiento en la bandeja.':outcome.state==='PARTICIPATION_REVOKED'?'La participación está revocada en esta obra y no concede acceso. Esto no acredita la entrega ni la revocación remota de su correo.':outcome.state==='PROCESSING'?'El procesamiento sigue pendiente. Volvé a consultar su recibo.':outcome.state==='INVITATION_UNCONFIRMED'?'La invitación necesita comprobarse con el proveedor desde Participantes. No se volvió a enviar.':'Todavía no se observa un recibo. Esto no demuestra que el envío se haya perdido; conservamos su referencia y no habilitamos otro envío de este módulo.';
       const ownPending=entry.resource==='company-channel'&&['CONNECT_OWN_NUMBER','ACTIVATE_OWN_NUMBER'].includes(entry.action)&&['VERIFYING','PROVIDER_STARTED','PROVIDER_UNKNOWN'].includes(outcome.state);
       const display=ownPending?(outcome.state==='PROVIDER_UNKNOWN'?'La activación quedó sin confirmación. Conservamos la referencia y no repetimos el registro ni la suscripción. El responsable debe revisar la conexión antes de continuar.':'La conexión sigue en curso. Esta consulta no vuelve a ejecutar la activación; conservamos la referencia para comprobarla.'):entry.resource==='template-send'?templateSendNotice(result):message;
       setMessages(old=>({...old,[entry.operationId]:display}));setNotice(display);
       if(outcome.state==='RECORDED'||entry.resource==='project-preparation'&&outcome.state==='CANCELLED')onRecovered?.(result,entry);
-    } catch(error){if(error.name!=='AbortError')setNotice(error.message);}
-    finally {setBusy(null);}
+    } catch(error){if(active.current===owner&&error.name!=='AbortError')setNotice(error.message);}
+    finally {if(active.current===owner)setBusy(null);}
+  }
+  async function closeMeasurement(entry){
+    if(busy||entry.scope!==scope||closeable[entry.operationId]!==owner||entry.resource!=='field-operations'||entry.action!=='CONFIGURE_PROGRESS_MEASUREMENT'||!projects.some(project=>project.id===entry.projectId))return;
+    setBusy(entry.operationId);setCloseable(old=>({...old,[entry.operationId]:null}));setNotice('');
+    try{
+      const body={scope:entry.scope,projectId:entry.projectId,operationId:entry.operationId,action:'CANCEL_PROGRESS_MEASUREMENT_CONFIGURATION',payload:{taskId:entry.taskId}};
+      const result=await request('/api/identity/field-operations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),requestTimeoutMs:15000},async response=>{const data=await response.json();if(!response.ok)throw new Error('No se pudo confirmar el cierre. Conservamos la referencia para comprobarla.');const proof=recoveryResult(entry,data);if(!['RECORDED','CANCELLED'].includes(proof?.state))throw new Error('El resultado no permite cerrar este intento. Conservamos la referencia.');return data;});
+      if(active.current!==owner)return;
+      const proof=recoveryResult(entry,result),message=proof.state==='CANCELLED'?'Intento cerrado con recibo. La tarea y su avance no cambiaron.':'La base ya estaba guardada. Consultamos el mismo intento y conservamos su resultado.';
+      setNotice(message);setMessages(old=>({...old,[entry.operationId]:message}));if(proof.state==='RECORDED')onRecovered?.(result,entry);
+    }catch(error){if(active.current===owner&&error.name!=='AbortError')setNotice(error.message);}
+    finally{if(active.current===owner)setBusy(null);}
   }
   const visibleEntries=entries.filter(entry=>entry.scope===scope&&projects.some(project=>project.id===entry.projectId));
   if(!visibleEntries.length&&!notice)return null;
@@ -38,6 +56,6 @@ export function WorkspaceRecoveryPanel({scope,projects,getSessionToken,onRecover
     <p className={styles.eyebrow}>RECUPERACIÓN</p><h3 id="pending-receipts-title">Operaciones por comprobar</h3>
     <p>Quedó una confirmación pendiente en este navegador. Podemos consultar su recibo después de recargar o volver a abrir la cuenta. Se conservan sólo referencias del intento; los textos, archivos y datos del formulario no se guardan en el navegador.</p>
     <p role="status" aria-live="polite">{notice}</p>
-    <ul>{visibleEntries.map(entry=><li key={entry.resource+entry.operationId}><div><strong>{RECOVERY_RESOURCES[entry.resource]}</strong><span>{projects.find(project=>project.id===entry.projectId)?.name}</span><small>{new Date(entry.createdAt).toLocaleString('es-AR')}</small>{messages[entry.operationId]&&<p>{messages[entry.operationId]}</p>}<details><summary>Referencia del intento</summary><code>{entry.operationId}</code></details></div><button type="button" disabled={Boolean(busy)} onClick={()=>check(entry)}>{busy===entry.operationId?'Comprobando…':'Comprobar recibo'}</button></li>)}</ul>
+    <ul>{visibleEntries.map(entry=><li key={entry.resource+entry.operationId}><div><strong>{RECOVERY_RESOURCES[entry.resource]}</strong><span>{projects.find(project=>project.id===entry.projectId)?.name}</span><small>{new Date(entry.createdAt).toLocaleString('es-AR')}</small>{messages[entry.operationId]&&<p>{messages[entry.operationId]}</p>}<details><summary>Referencia del intento</summary><code>{entry.operationId}</code></details></div><button type="button" disabled={Boolean(busy)} onClick={()=>check(entry)}>{busy===entry.operationId?'Comprobando…':'Comprobar recibo'}</button>{closeable[entry.operationId]===owner&&<button type="button" disabled={Boolean(busy)} onClick={()=>closeMeasurement(entry)}>Cerrar intento pendiente</button>}</li>)}</ul>
   </section>;
 }

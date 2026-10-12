@@ -4,6 +4,7 @@ import { validateReportedLocation, getDistanceMeters } from './geo.js';
 import { normalizeProgressMeasurementQuantity, parseProgressMeasurementQuantity } from './progress-measurement-quantity.js';
 import {inventoryQuantity} from './material-inventory.mjs';
 import {OVERTIME_ACTIONS,normalizeOvertimePayload} from './field-overtime-policy.mjs';
+import {MEASUREMENT_UNITS} from './task-progress-measurement.js';
 
 // The enterprise attendance transition and conservative geofence contracts are
 // preserved from 1677ff72773c95140535603093e5cb8624d1f063. This adapter writes the
@@ -101,6 +102,20 @@ export function normalizeFieldCommand(input) {
     recordKeys(p,['evidenceId','revision','decision','reason']);
     if(!['APPROVE','REJECT'].includes(p.decision))throw new WorkspaceError('FIELD_DECISION_INVALID');
     payload={evidenceId:id(p.evidenceId),revision:siteRevision(p.revision),decision:p.decision,reason:siteText(p.reason,1000,8,true)};
+  }else if(input.action==='CANCEL_PROGRESS_MEASUREMENT_CONFIGURATION') {
+    recordKeys(p,['taskId']);
+    payload={taskId:id(p.taskId)};
+  }else if(input.action==='CONFIGURE_PROGRESS_MEASUREMENT') {
+    recordKeys(p,['taskId','revision','baseline','unit','sourceReference','reason']);
+    let baseline;try{baseline=normalizeProgressMeasurementQuantity(p.baseline,{allowZero:false});}catch{throw new WorkspaceError('FIELD_QUANTITY_INVALID');}
+    if(!MEASUREMENT_UNITS.includes(p.unit))throw new WorkspaceError('FIELD_QUANTITY_INVALID');
+    payload={taskId:id(p.taskId),revision:siteRevision(p.revision),baseline,unit:p.unit,sourceReference:siteText(p.sourceReference,240,3),reason:siteText(p.reason,1000,8,true)};
+  }else if(input.action==='PROPOSE_PROGRESS'&&Object.hasOwn(p||{},'measurement')) {
+    recordKeys(p,['workerId','taskId','revision','measurement','reason','evidenceIds']);
+    recordKeys(p.measurement,['mode','quantity']);
+    if(!['DELTA','CUMULATIVE'].includes(p.measurement.mode)||!Array.isArray(p.evidenceIds)||!p.evidenceIds.length||p.evidenceIds.length>10||new Set(p.evidenceIds).size!==p.evidenceIds.length)throw new WorkspaceError('FIELD_PROGRESS_INVALID');
+    let quantity;try{quantity=normalizeProgressMeasurementQuantity(p.measurement.quantity,{allowZero:p.measurement.mode==='CUMULATIVE'});}catch{throw new WorkspaceError('FIELD_QUANTITY_INVALID');}
+    payload={workerId:id(p.workerId),taskId:id(p.taskId),revision:siteRevision(p.revision),measurement:{mode:p.measurement.mode,quantity},reason:siteText(p.reason,1000,8,true),evidenceIds:p.evidenceIds.map(id).sort()};
   }else if(input.action==='PROPOSE_PROGRESS') {
     recordKeys(p,['workerId','taskId','revision','progress','quantity','baseline','unit','reason','evidenceIds']);
     if(!Number.isInteger(p.progress)||p.progress<0||p.progress>100||!Array.isArray(p.evidenceIds)||!p.evidenceIds.length||p.evidenceIds.length>10||new Set(p.evidenceIds).size!==p.evidenceIds.length)throw new WorkspaceError('FIELD_PROGRESS_INVALID');

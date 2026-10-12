@@ -3,6 +3,7 @@ import {useMemo, useRef, useState} from 'react';
 import {Search, CalendarDays, CircleCheck, Clock3, TriangleAlert, ListFilter} from 'lucide-react';
 import {calendarDay, formatCalendarDay, loadedScheduleOverview, planningState, registeredProgress, scheduleCalendar, scheduledBar, selectLoadedTasks, taskStatus, taskStatusLabel} from './schedule-workbench.mjs';
 import styles from './schedule-workbench.module.css';
+import {taskMeasurementView,measuredQuantityLabel} from './task-progress-measurement-view.mjs';
 
 function ScheduleTimeline({tasks, range, partial}) {
  const [scale, setScale] = useState('WEEKS'), [page, setPage] = useState(0);
@@ -27,9 +28,9 @@ function ScheduleTimeline({tasks, range, partial}) {
      <div className={styles.ganttRows}>
       <div className={styles.calendarLines} aria-hidden="true">{calendar.cells.slice(1).map(cell => <span key={cell.start} style={{left: cell.left + '%'}}/>)}</div>
       {tasks.map(task => {
-       const state = planningState(task), progress = registeredProgress(task.progress), bar = scheduledBar(task, calendar);
+       const state = planningState(task), progress = registeredProgress(task.progress), bar = scheduledBar(task, calendar), measurement=taskMeasurementView(task);
        return <div className={styles.ganttRow} key={task.id} data-gantt-task-id={task.id}>
-        <div className={styles.ganttLabel}><strong title={task.title}>{task.title}</strong><span>{progress === null ? 'Avance por revisar' : `${progress} % registrado`}</span>{progress !== null && <div className={styles.ganttProgress} aria-hidden="true"><span style={{width: progress + '%'}}/></div>}</div>
+        <div className={styles.ganttLabel}><strong title={task.title}>{task.title}</strong><span>{progress === null ? 'Avance por revisar' : `${progress} % registrado`}</span>{measurement.state==='CONFIGURED'&&<small className={styles.measured} data-gantt-measurement>{measurement.label}{measurement.approvedAt?' aprobado':' · base definida'}</small>}{progress !== null && <div className={styles.ganttProgress} aria-hidden="true"><span style={{width: progress + '%'}}/></div>}</div>
         <div className={styles.ganttLane}>{bar ? <div className={styles.plannedBar} role="img" aria-label={`${task.title}: prevista del ${formatCalendarDay(task.startsOn)} al ${formatCalendarDay(task.endsOn)}`} style={{left: bar.left + '%', width: bar.width + '%'}} data-gantt-planned data-continues-before={bar.continuesBefore} data-continues-after={bar.continuesAfter}/> : <span className={styles.unplanned}>{state === 'VALID' ? 'Fuera de este intervalo' : state === 'MISSING' ? 'Sin fechas planificadas' : 'Fechas para revisar'}</span>}<span className={styles.srOnly}>{state === 'VALID' ? `Fechas previstas: ${formatCalendarDay(task.startsOn)} hasta ${formatCalendarDay(task.endsOn)}.` : ''} {taskStatusLabel(task.status)}.</span></div>
        </div>;
       })}
@@ -40,7 +41,7 @@ function ScheduleTimeline({tasks, range, partial}) {
  </section>;
 }
 
-export function ScheduleWorkbench({tasks, totalTasks, nextCursor, canPlan, locked, onPlan}) {
+export function ScheduleWorkbench({tasks, totalTasks, nextCursor, canPlan, canConfigureMeasurement=false, locked, onPlan, onConfigureMeasurement}) {
  const [search, setSearch] = useState(''), [status, setStatus] = useState('ALL'), [planning, setPlanning] = useState('ALL'), [order, setOrder] = useState('REGISTERED');
  const overview = useMemo(() => loadedScheduleOverview(tasks, totalTasks, nextCursor), [tasks, totalTasks, nextCursor]);
  const visible = useMemo(() => selectLoadedTasks(tasks, {search, status, planning, order}), [tasks, search, status, planning, order]);
@@ -73,16 +74,16 @@ export function ScheduleWorkbench({tasks, totalTasks, nextCursor, canPlan, locke
    {!tasks.length && <p className={styles.empty}>Esta obra todavía no tiene tareas registradas. Empezá por cargar la primera tarea.</p>}
    {tasks.length > 0 && !visible.length && <div className={styles.empty}><strong>No hay coincidencias entre las tareas cargadas.</strong><p>Revisá la búsqueda o usá «Limpiar filtros» para volver a verlas.{overview.partial && (nextCursor ? ' También podés cargar más tareas.' : ' Actualizá la consulta y volvé a abrir la obra para comprobar el total.')}</p></div>}
    <div className={styles.tasks}>{visible.map(task => {
-    const state = planningState(task), progress = registeredProgress(task.progress), range = overview.range;
+    const state = planningState(task), progress = registeredProgress(task.progress), range = overview.range,measurement=taskMeasurementView(task);
     return <article key={task.id} className={styles.task} data-task-id={task.id}>
      <div className={styles.taskHeading}><h5>{task.title}</h5><span className={styles.badge} data-status={taskStatus(task.status)}>{taskStatusLabel(task.status)}</span></div>
      <div className={styles.taskBody}>
       <div className={styles.planning}><p className={styles.label}>Fechas previstas</p><p className={styles.dates}>{state === 'VALID' ? <><time dateTime={task.startsOn}>{formatCalendarDay(task.startsOn)}</time><span aria-hidden="true"> → </span><span className={styles.srOnly}> hasta </span><time dateTime={task.endsOn}>{formatCalendarDay(task.endsOn)}</time></> : state === 'MISSING' ? 'Sin fechas planificadas' : 'Fechas para revisar'}</p>
        <div className={styles.track} aria-label={state === 'VALID' ? `Planificada desde ${formatCalendarDay(task.startsOn)} hasta ${formatCalendarDay(task.endsOn)}` : 'Sin intervalo de planificación válido'}>{state === 'VALID' && range && <span className={styles.bar} style={{left: ((calendarDay(task.startsOn) - range.start) / (range.end - range.start) * 100) + '%', width: ((calendarDay(task.endsOn) + 86400000 - calendarDay(task.startsOn)) / (range.end - range.start) * 100) + '%'}}/>}</div>
       </div>
-      <div className={styles.progress}><p className={styles.label}>Avance registrado: <strong>{progress === null ? 'Requiere revisión' : `${progress} %`}</strong></p>{progress !== null && <div className={styles.progressTrack} role="progressbar" aria-label={`Avance registrado de ${task.title}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{width: progress + '%'}}/></div>}</div>
+      <div className={styles.progress}><p className={styles.label}>Avance registrado: <strong>{progress === null ? 'Requiere revisión' : `${progress} %`}</strong></p>{progress !== null && <div className={styles.progressTrack} role="progressbar" aria-label={`Avance registrado de ${task.title}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{width: progress + '%'}}/></div>}<p className={styles.measurement} data-task-measurement>{measurement.state==='CONFIGURED'?<><strong>{measurement.label}</strong>{measurement.approvedAt?' aprobado':' · base definida'}<span>Restan {measuredQuantityLabel(measurement.remaining)} {measurement.unitLabel}.</span><span>Fuente de la base: {measurement.sourceReference}</span></>:measurement.label}</p></div>
      </div>
-     {canPlan && <div className={styles.taskActions}><button type="button" disabled={locked} onClick={() => onPlan(task)}>Planificar fechas</button></div>}
+     {(canPlan||canConfigureMeasurement===true)&&<div className={styles.taskActions}>{canConfigureMeasurement===true&&(measurement.state==='UNCONFIGURED'||measurement.state==='CONFIGURED'&&measurement.executed==='0.0000'&&measurement.approvedProposalId===null)&&<button type="button" disabled={locked} onClick={()=>onConfigureMeasurement?.(task)}>{measurement.state==='CONFIGURED'?'Revisar base':'Definir base de medición'}</button>}{canPlan&&<button type="button" disabled={locked} onClick={() => onPlan(task)}>Planificar fechas</button>}</div>}
     </article>;
    })}</div>
   </section>

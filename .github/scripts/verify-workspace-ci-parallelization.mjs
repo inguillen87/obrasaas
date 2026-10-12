@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="5927b8195c07bf526ace9133a86b97972d180e1a5011c4778f32a8e289620334";
+export const EXPECTED_CONTRACT_SHA256="7aa0deb0d917b28dafb074e7415b07f3e00a65f056d2da5b656a492c3487aef9";
 const POSTGRES_SERVICE_IMAGE='public.ecr.aws/docker/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -101,7 +101,10 @@ const COMPANY_SUBSCRIPTION_UI_FIXTURE='scripts/lib/company-subscription-ui-fixtu
 const companySubscriptionBackendDependenciesFor=kind=>kind==='PG_COMPANY_KYC'?COMPANY_SUBSCRIPTION_BACKEND_SOURCES:[];
 const companySubscriptionFixtureDependenciesFor=kind=>kind==='UI_IDENTITY_ONLY'?[COMPANY_SUBSCRIPTION_UI_FIXTURE]:[];
 const companySubscriptionProofDependenciesFor=kind=>kind==='UI_IDENTITY_ONLY'?[...COMPANY_SUBSCRIPTION_UI_SOURCES,...companySubscriptionFixtureDependenciesFor(kind)]:companySubscriptionBackendDependenciesFor(kind);
-const currentOwnDependenciesFor=kind=>[...ownCompanyDependenciesFor(kind),...ownTemplateDependenciesFor(kind),...companySubscriptionBackendDependenciesFor(kind)];
+const TASK_MEASUREMENT_SOURCE='src/lib/task-progress-measurement.js';
+const TASK_MEASUREMENT_UI_SOURCES=['src/app/(identity)/cuenta/task-progress-measurement-editor.js','src/app/(identity)/cuenta/task-progress-measurement-editor.module.css','src/app/(identity)/cuenta/task-progress-measurement-view.mjs'];
+const taskMeasurementDependenciesFor=kind=>kind==='UI_IDENTITY_ONLY'?[...TASK_MEASUREMENT_UI_SOURCES,TASK_MEASUREMENT_SOURCE]:['PORTFOLIO_UNIT','PG_PORTFOLIO'].includes(kind)?['src/lib/progress-measurement-quantity.js',TASK_MEASUREMENT_SOURCE]:['UNIT','UI_BANK','UI_JOINT','UI_CAUSAL','PG_COMPANY_KYC','PG_FIELD','PG_OVERTIME'].includes(kind)?[TASK_MEASUREMENT_SOURCE]:[];
+const currentOwnDependenciesFor=kind=>[...ownCompanyDependenciesFor(kind),...ownTemplateDependenciesFor(kind),...companySubscriptionBackendDependenciesFor(kind),...taskMeasurementDependenciesFor(kind)];
 // Current additive intake sources; historical source counts stay unchanged.
 const intakeAssignmentDependenciesFor=kind=>kind==='UNIT'?['src/lib/employee-intake-channel-continuity.mjs','tests/production-employee-intake-assignment-continuity.test.mjs']:['PG_INTAKE','UI_BANK','UI_JOINT','UI_CAUSAL','PG_COMPANY_KYC','PG_FIELD','PG_OVERTIME'].includes(kind)?['src/lib/employee-intake-channel-continuity.mjs']:[];
 const OWN_TEMPLATE_SOURCE_COUNTS={UNIT:107,UI_BANK:102,PG_COMPANY_KYC:180,UI_IDENTITY_ONLY:109,UI_INTAKE:24,UI_JOINT:102,UI_CAUSAL:102,UI_PREPARATION:16,UI_PORTFOLIO:13};
@@ -143,7 +146,7 @@ const currentPlanDependenciesFor=kind=>[...monthlyCurveDependenciesFor(kind),...
 // Current verified office sources are additive; frozen historical records remain unchanged.
 const VERIFIED_OFFICE_DEPENDENCIES={"UNIT":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"UI_BANK":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"UI_INTAKE":["src/app/(identity)/cuenta/participant-office-account-view.mjs"],"UI_JOINT":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"UI_CAUSAL":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"PG_COMPANY_KYC":["src/lib/participant-verified-office.mjs"],"UI_PREPARATION":["src/app/(identity)/cuenta/participant-office-account-view.mjs"],"UI_PORTFOLIO":["src/app/(identity)/cuenta/participant-office-account-view.mjs"],"UI_IDENTITY_ONLY":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"PG_FIELD":["src/lib/participant-verified-office.mjs"],"PG_OVERTIME":["src/lib/participant-verified-office.mjs"]};
 const officeAccountDependenciesFor=kind=>VERIFIED_OFFICE_DEPENDENCIES[kind]||[];
-const currentOwnTemplateSourceCount=kind=>OWN_TEMPLATE_SOURCE_COUNTS[kind]+currentPlanDependenciesFor(kind).length+officeAccountDependenciesFor(kind).length+currentKycStatusDependenciesFor(kind).length+companySubscriptionBackendDependenciesFor(kind).length+companySubscriptionFixtureDependenciesFor(kind).length;
+const currentOwnTemplateSourceCount=kind=>OWN_TEMPLATE_SOURCE_COUNTS[kind]+currentPlanDependenciesFor(kind).length+officeAccountDependenciesFor(kind).length+currentKycStatusDependenciesFor(kind).length+companySubscriptionBackendDependenciesFor(kind).length+companySubscriptionFixtureDependenciesFor(kind).length+taskMeasurementDependenciesFor(kind).length;
 const isIdentity=spec=>spec.kind==='UI_IDENTITY_ONLY';
 const isCanonicalField=spec=>['PG_FIELD','PG_OVERTIME'].includes(spec.kind);
 const FIELD_PG_BASELINE_PRODUCER={producer:'scripts/verify-field-operations-postgres.mjs',path:'.vercel/field-operations-evidence/postgres.json',retained:true,blockId:20,lane:'field',baselineSourceLine:216,baselineProducerGitBlobSha256:'b91778574d63bc9dffb83af1b5aeb7a2666e7fb23e0d923ea79b435de7b265d8'};
@@ -588,14 +591,14 @@ function currentKycStatusClosureSelftest(spec,proof,root,validate){
   }
   assert.ok(changed>0,'CURRENT source exists in shadow manifest: '+file);
  };
- good('exact-additive-count-and-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+calendarPreparationDependenciesFor(spec.kind).length+whatsappPlanImportDependenciesFor(spec.kind).length+companySubscriptionBackendDependenciesFor(spec.kind).length+companySubscriptionFixtureDependenciesFor(spec.kind).length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
+ good('exact-additive-count-and-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+calendarPreparationDependenciesFor(spec.kind).length+whatsappPlanImportDependenciesFor(spec.kind).length+companySubscriptionBackendDependenciesFor(spec.kind).length+companySubscriptionFixtureDependenciesFor(spec.kind).length+taskMeasurementDependenciesFor(spec.kind).length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
  for(const file of dependencies){
   good('source-pinned-'+file,()=>assert.ok(spec.sourceFiles.includes(file)));
   mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{remove:true}));
   mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',value=>rewrite(value,file,{changedHash:true}));
   mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{replacement:'src/lib/foreign-current-kyc-source.mjs'}));
  }
- mutate('previous-current-manifest-cannot-certify-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of [...dependencies,...calendarPreparationDependenciesFor(spec.kind),...whatsappPlanImportDependenciesFor(spec.kind),...companySubscriptionBackendDependenciesFor(spec.kind),...companySubscriptionFixtureDependenciesFor(spec.kind)])rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,previousCount);});
+ mutate('previous-current-manifest-cannot-certify-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of [...dependencies,...calendarPreparationDependenciesFor(spec.kind),...whatsappPlanImportDependenciesFor(spec.kind),...companySubscriptionBackendDependenciesFor(spec.kind),...companySubscriptionFixtureDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind)])rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,previousCount);});
  return checks;
 }
 function ownTemplateClosureSelftest(spec,proof,root,validate){
@@ -624,7 +627,7 @@ function monthlyCurveClosureSelftest(spec,proof,root,validate){
   mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
   mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-monthly-source-curve.mjs';assert.equal(p.sourceManifest.length,currentOwnTemplateSourceCount(spec.kind));});
  }
- mutate('previous-manifest-cannot-certify-v3','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...currentPlanDependenciesFor(spec.kind),...officeAccountDependenciesFor(spec.kind),...currentKycStatusDependenciesFor(spec.kind),...companySubscriptionBackendDependenciesFor(spec.kind),...companySubscriptionFixtureDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,OWN_TEMPLATE_SOURCE_COUNTS[spec.kind]);});
+ mutate('previous-manifest-cannot-certify-v3','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...currentPlanDependenciesFor(spec.kind),...officeAccountDependenciesFor(spec.kind),...currentKycStatusDependenciesFor(spec.kind),...companySubscriptionBackendDependenciesFor(spec.kind),...companySubscriptionFixtureDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,OWN_TEMPLATE_SOURCE_COUNTS[spec.kind]);});
  return checks;
 }
 function monthlyCurveContractSelftest(workflow,contract,root){
@@ -659,7 +662,7 @@ function monthlyCurveContractSelftest(workflow,contract,root){
  return checks;
 }
 function calendarPreparationClosureSelftest(spec,proof,root,validate){
- const dependencies=calendarPreparationDependenciesFor(spec.kind),fixtureDependencies=companySubscriptionFixtureDependenciesFor(spec.kind),previousCount=CALENDAR_PREPARATION_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-calendar-preparation-';
+ const dependencies=calendarPreparationDependenciesFor(spec.kind),fixtureDependencies=[...companySubscriptionFixtureDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind)],previousCount=CALENDAR_PREPARATION_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-calendar-preparation-';
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};
  good('exact-additive-count-and-real-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+fixtureDependencies.length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
@@ -704,7 +707,7 @@ function calendarPreparationContractSelftest(workflow,contract,root){
  return checks;
 }
 function whatsappPlanImportClosureSelftest(spec,proof,root,validate){
- const dependencies=whatsappPlanImportDependenciesFor(spec.kind),subscriptionDependencies=companySubscriptionBackendDependenciesFor(spec.kind),previousCount=WHATSAPP_PLAN_IMPORT_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-whatsapp-plan-import-';
+ const dependencies=whatsappPlanImportDependenciesFor(spec.kind),subscriptionDependencies=[...companySubscriptionBackendDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind)],previousCount=WHATSAPP_PLAN_IMPORT_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-whatsapp-plan-import-';
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};
  const rewrite=(value,file,{remove=false,replacement=null,changedHash=false}={})=>{
@@ -784,6 +787,38 @@ function validateCompanySubscriptionProofSources(contract){
   if(isIdentity(spec)&&PREVIOUS_COMPANY_BILLING_UI_SOURCES.some(file=>spec.sourceFiles.includes(file)))deny('COMPANY_SUBSCRIPTION_SOURCE_DEPENDENCIES');
  }
 }
+function validateTaskMeasurementProofSources(contract){
+ for(const spec of contract.extension.proofs)if(taskMeasurementDependenciesFor(spec.kind).some(file=>spec.sourceFiles.filter(source=>source===file).length!==1))deny('TASK_MEASUREMENT_SOURCE_DEPENDENCIES');
+}
+function taskMeasurementProofClosureSelftest(spec,proof,root,validate){
+ const dependencies=taskMeasurementDependenciesFor(spec.kind),checks=[],prefix=spec.id+'-task-measurement-';if(!dependencies.length)return checks;
+ const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};
+ const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};
+ const rewrite=(value,file,{remove=false,replacement=null,changedHash=false}={})=>{
+  let changed=0;
+  if(spec.kind==='PG_FIELD'){
+   for(const map of [value.sourceSha256,value.voiceProgressSourceSha256,value.mediaLeaseSourceSha256,value.videoAudioSourceSha256,value.participantKycFixture.sourceSha256])if(Object.hasOwn(map,file)){const previous=map[file];if(remove||replacement)delete map[file];if(replacement)map[replacement]=previous;if(changedHash)map[file]='f'.repeat(64);changed++;}
+  }else{const key=spec.kind==='PG_OVERTIME'?'file':'path';value.sourceManifest=value.sourceManifest.filter(ref=>{if(ref[key]!==file)return true;changed++;if(replacement)ref[key]=replacement;if(changedHash)ref.sha256='f'.repeat(64);return !remove;});}
+  assert.ok(changed>0,'Current task measurement source exists in proof: '+file);
+ };
+ good('exact-current-producer-closure',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
+ for(const file of dependencies){
+  good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));
+  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{remove:true}));
+  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',value=>rewrite(value,file,{changedHash:true}));
+  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{replacement:'src/lib/foreign-task-measurement.mjs'}));
+ }
+ return checks;
+}
+function taskMeasurementContractSelftest(contract){
+ const checks=[];
+ for(const spec of contract.extension.proofs)for(const file of taskMeasurementDependenciesFor(spec.kind))for(const mode of ['missing','foreign']){
+  const value=clone(contract),target=value.extension.proofs.find(proof=>proof.kind===spec.kind);
+  if(mode==='missing')target.sourceFiles=target.sourceFiles.filter(source=>source!==file);else target.sourceFiles[target.sourceFiles.indexOf(file)]='src/lib/foreign-task-measurement.mjs';
+  assert.throws(()=>validateContract(value),error=>error.code==='TASK_MEASUREMENT_SOURCE_DEPENDENCIES');checks.push({name:spec.id+'-task-measurement-contract-'+mode+'-'+file,result:'PASS',expectedDenial:'TASK_MEASUREMENT_SOURCE_DEPENDENCIES',boundary:'pure contract fixture'});
+ }
+ return checks;
+}
 function companySubscriptionProofClosureSelftest(spec,proof,root,validate){
  const dependencies=companySubscriptionProofDependenciesFor(spec.kind),checks=[],prefix=spec.id+'-company-subscription-';if(!dependencies.length)return checks;
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};
@@ -797,9 +832,9 @@ function companySubscriptionProofClosureSelftest(spec,proof,root,validate){
  }
  if(isIdentity(spec)){
   mutate('previous-same-count-billing-mount-denied','PROOF_SOURCE_MANIFEST',p=>{for(const [index,file]of COMPANY_SUBSCRIPTION_UI_SOURCES.entries())p.sourceManifest.find(ref=>ref.path===file).path=PREVIOUS_COMPANY_BILLING_UI_SOURCES[index];assert.equal(p.sourceManifest.length,spec.sourceFiles.length);});
-  mutate('previous-117-manifest-without-closed-fixture-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==COMPANY_SUBSCRIPTION_UI_FIXTURE);assert.equal(p.sourceManifest.length,117);});
+  mutate('previous-117-manifest-without-closed-fixture-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==COMPANY_SUBSCRIPTION_UI_FIXTURE&&!taskMeasurementDependenciesFor(spec.kind).includes(ref.path));assert.equal(p.sourceManifest.length,117);});
  }
- else mutate('previous-191-source-manifest-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!dependencies.includes(ref.path));assert.equal(p.sourceManifest.length,191);});
+ else mutate('previous-191-source-manifest-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...taskMeasurementDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,191);});
  return checks;
 }
 function companySubscriptionContractSelftest(contract){
@@ -836,6 +871,7 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
    if(spec.kind==='UI_PREPARATION')Object.assign(proof,{validated:true,synthetic:true,realProviderCalls:false,sourceState:'EXACT_CI_SOURCE',fixtureRemoved:true,totalCheckCount:24,checks:proof.widths.flatMap(width=>PREPARATION_MODES.map(mode=>({width,mode,posts:mode==='cancel'?2:1,recoveryReads:0,currentSessionToken:true,placeholdersOnly:true,tasksUnchanged:true,noPayloadPersistence:true,horizontalOverflow:false})))});
    const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
   good(spec.id+'-complete-proof',()=>validate(proof));
+    if(taskMeasurementDependenciesFor(spec.kind).length)subscriptionClosureChecks.push(()=>taskMeasurementProofClosureSelftest(spec,proof,root,validate));
     if(companySubscriptionProofDependenciesFor(spec.kind).length)subscriptionClosureChecks.push(()=>companySubscriptionProofClosureSelftest(spec,proof,root,validate));
    if(whatsappPlanImportDependenciesFor(spec.kind).length)currentWhatsappPlanChecks.push(()=>whatsappPlanImportClosureSelftest(spec,proof,root,validate));
    if(ownTemplateDependenciesFor(spec.kind).length)currentTemplateChecks.push(()=>ownTemplateClosureSelftest(spec,proof,root,validate));
@@ -1122,7 +1158,7 @@ export function validateContract(contract){
  equal([...patterns].sort(),[...contract.artifactPatterns].sort(),'CONTRACT_ARTIFACT_COVERAGE');
  if(patterns.length!==58||new Set(patterns).size!==58)deny('CONTRACT_ARTIFACT_DUPLICATE');
  patterns.forEach(patternValid);
-  validateEvidenceContract(contract);validateExtension(contract);validateMonthlyCurveExtension(contract);validateCalendarPreparationExtension(contract);validateWhatsappPlanImportExtension(contract);validateCompanySubscriptionProofSources(contract);
+  validateEvidenceContract(contract);validateExtension(contract);validateMonthlyCurveExtension(contract);validateCalendarPreparationExtension(contract);validateWhatsappPlanImportExtension(contract);validateCompanySubscriptionProofSources(contract);validateTaskMeasurementProofSources(contract);
  return contract;
 }
 export function loadContract(filename){
@@ -1507,6 +1543,7 @@ export function selftest(workflow,contract,root=process.cwd()){
   checks.push(...whatsappPlanImportContractSelftest(workflow,contract,root));
   for(const run of currentWhatsappPlanChecks)checks.push(...run());
    checks.push(...companySubscriptionContractSelftest(contract));
+   checks.push(...taskMeasurementContractSelftest(contract));
   return checks;
 }
 function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],currentKycStatusChecks=[],currentWhatsappPlanChecks=[]){
@@ -1531,10 +1568,10 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],
   good(spec.id+'-current-manifest-closure-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
   currentReactiveChecks.push(()=>{
    const start=checks.length,previous=REACTIVE_SOURCE_COUNTS[spec.kind]-1;
-   good(spec.id+'-reactive-source-name-count-and-closure-exact',()=>{assert.ok(spec.sourceFiles.includes(REACTIVE_IDENTITY_SOURCE));assert.equal(spec.sourceFiles.length,REACTIVE_SOURCE_COUNTS[spec.kind]+ownCompanyDependenciesFor(spec.kind).length+reviewerDependenciesFor(spec.kind).length+intakeAssignmentDependenciesFor(spec.kind).length+currentPlanDependenciesFor(spec.kind).length+officeAccountDependenciesFor(spec.kind).length+currentKycStatusDependenciesFor(spec.kind).length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
-   const remove=p=>{const removed=[REACTIVE_IDENTITY_SOURCE,...ownCompanyDependenciesFor(spec.kind),...reviewerDependenciesFor(spec.kind),...intakeAssignmentDependenciesFor(spec.kind),...currentPlanDependenciesFor(spec.kind),...officeAccountDependenciesFor(spec.kind),...currentKycStatusDependenciesFor(spec.kind)];if(spec.kind==='PG_FIELD'){for(const key of Object.keys(sets)){const map=key==='fixture'?p.participantKycFixture.sourceSha256:p[key];for(const file of removed)delete map[file];}}else p.sourceManifest=p.sourceManifest.filter(ref=>!removed.includes(ref.file));};
+   good(spec.id+'-reactive-source-name-count-and-closure-exact',()=>{assert.ok(spec.sourceFiles.includes(REACTIVE_IDENTITY_SOURCE));assert.equal(spec.sourceFiles.length,REACTIVE_SOURCE_COUNTS[spec.kind]+ownCompanyDependenciesFor(spec.kind).length+taskMeasurementDependenciesFor(spec.kind).length+reviewerDependenciesFor(spec.kind).length+intakeAssignmentDependenciesFor(spec.kind).length+currentPlanDependenciesFor(spec.kind).length+officeAccountDependenciesFor(spec.kind).length+currentKycStatusDependenciesFor(spec.kind).length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
+   const remove=p=>{const removed=[REACTIVE_IDENTITY_SOURCE,...ownCompanyDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind),...reviewerDependenciesFor(spec.kind),...intakeAssignmentDependenciesFor(spec.kind),...currentPlanDependenciesFor(spec.kind),...officeAccountDependenciesFor(spec.kind),...currentKycStatusDependenciesFor(spec.kind)];if(spec.kind==='PG_FIELD'){for(const key of Object.keys(sets)){const map=key==='fixture'?p.participantKycFixture.sourceSha256:p[key];for(const file of removed)delete map[file];}}else p.sourceManifest=p.sourceManifest.filter(ref=>!removed.includes(ref.file));};
    mutate('historical-'+previous+'-source-manifest-without-reactive','PROOF_SOURCE_MANIFEST',p=>{remove(p);assert.equal(canonicalFieldManifest(spec,p).length,previous);});
-   mutate('same-count-foreign-reactive-source','PROOF_SOURCE_MANIFEST',p=>{if(spec.kind==='PG_FIELD'){for(const key of Object.keys(sets)){const map=key==='fixture'?p.participantKycFixture.sourceSha256:p[key];if(Object.hasOwn(map,REACTIVE_IDENTITY_SOURCE)){map['src/lib/foreign-reactive.mjs']=map[REACTIVE_IDENTITY_SOURCE];delete map[REACTIVE_IDENTITY_SOURCE];}}}else p.sourceManifest.find(ref=>ref.file===REACTIVE_IDENTITY_SOURCE).file='src/lib/foreign-reactive.mjs';assert.equal(canonicalFieldManifest(spec,p).length,REACTIVE_SOURCE_COUNTS[spec.kind]+ownCompanyDependenciesFor(spec.kind).length+reviewerDependenciesFor(spec.kind).length+intakeAssignmentDependenciesFor(spec.kind).length+currentPlanDependenciesFor(spec.kind).length+officeAccountDependenciesFor(spec.kind).length+currentKycStatusDependenciesFor(spec.kind).length);});
+   mutate('same-count-foreign-reactive-source','PROOF_SOURCE_MANIFEST',p=>{if(spec.kind==='PG_FIELD'){for(const key of Object.keys(sets)){const map=key==='fixture'?p.participantKycFixture.sourceSha256:p[key];if(Object.hasOwn(map,REACTIVE_IDENTITY_SOURCE)){map['src/lib/foreign-reactive.mjs']=map[REACTIVE_IDENTITY_SOURCE];delete map[REACTIVE_IDENTITY_SOURCE];}}}else p.sourceManifest.find(ref=>ref.file===REACTIVE_IDENTITY_SOURCE).file='src/lib/foreign-reactive.mjs';assert.equal(canonicalFieldManifest(spec,p).length,REACTIVE_SOURCE_COUNTS[spec.kind]+ownCompanyDependenciesFor(spec.kind).length+taskMeasurementDependenciesFor(spec.kind).length+reviewerDependenciesFor(spec.kind).length+intakeAssignmentDependenciesFor(spec.kind).length+currentPlanDependenciesFor(spec.kind).length+officeAccountDependenciesFor(spec.kind).length+currentKycStatusDependenciesFor(spec.kind).length);});
    return checks.splice(start);
   });
   bad(spec.id+'-invalid-json','PROOF_JSON',()=>validateExtensionProof(spec,Buffer.from('{'),{expectedHead,readSource}));

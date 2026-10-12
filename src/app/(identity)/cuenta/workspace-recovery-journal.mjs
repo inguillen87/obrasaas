@@ -15,6 +15,8 @@ const id = value => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,12
 const channelReferenceValid=(action,connectionId)=>OWN_COMPANY_ACTIONS.includes(action)?(id(connectionId)||action==='CONNECT_OWN_NUMBER'&&connectionId===null):[...COMPANY_CHANNEL_ACTIONS,...OWN_TEMPLATE_ACTIONS].includes(action)&&id(connectionId);
 const PROGRESS_TEMPLATE_SEND_KEY='progress_review_notification';
 export const FIELD_OVERTIME_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_OVERTIME','PROPOSE_OVERTIME','DECIDE_OVERTIME']);
+const fieldMeasurementAction='CONFIGURE_PROGRESS_MEASUREMENT';
+const fieldMeasurementCancelAction='CANCEL_PROGRESS_MEASUREMENT_CONFIGURATION';
 export const PARTICIPANT_INTAKE_RECOVERY_ACTIONS=Object.freeze(['CONFIGURE_EMPLOYEE_INTAKE','ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE']);
 const templateSendActionReference=value=>Boolean(value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')==='proposalId|revision'&&id(value.proposalId)&&typeof value.revision==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(value.revision));
 const scopeValid = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -115,6 +117,8 @@ async function reference(url, options, now) {
   if(bank&&(!PRIVATE_BANK_ACTIONS.includes(bankAction)||!id(body.payload?.workerId)))throw unavailable();
   const progress=resource==='template-send'&&body.templateKey===PROGRESS_TEMPLATE_SEND_KEY;
   const overtime=resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(body.action);
+  const measurement=resource==='field-operations'&&[fieldMeasurementAction,fieldMeasurementCancelAction].includes(body.action);
+  if(measurement&&!id(body.payload?.taskId))throw unavailable();
   const intake=resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(body.action);
   const officeAccount=resource==='participants'&&body.action===PARTICIPANT_OFFICE_ASSIGN_ACTION;
   const plan=resource==='plan-import'&&typeof options.body==='string'&&['EDIT','APPLY','REJECT'].includes(body.action)&&id(body.draftId)&&Number.isSafeInteger(body.expectedRevision)&&body.expectedRevision>=1;
@@ -130,6 +134,7 @@ async function reference(url, options, now) {
     ...(resource==='company-channel'?{action:channelAction,connectionId:body.payload.connectionId}:{}),
     ...(resource==='meta-onboarding'?{action:body.action,...(['reconcile','cancel'].includes(body.action)?{signupId:body.signupId}:{eventId:body.eventId})}:{}),
     ...(overtime?{action:body.action}:{}),
+    ...(measurement?{action:fieldMeasurementAction,taskId:body.payload.taskId}:{}),
     ...(bank?{action:bankAction,workerId:body.payload.workerId}:{}),
     ...(intake?{action:body.action,connectionId:body.payload.connectionId,...(body.action==='CONFIGURE_EMPLOYEE_INTAKE'?{}:{applicationId:body.payload.applicationId})}:{}),
     ...(officeAccount?{action:PARTICIPANT_OFFICE_ASSIGN_ACTION}:{}),
@@ -142,7 +147,8 @@ async function reference(url, options, now) {
 function valid(entry) {
   if(!entry||entry.version!==1||!Object.hasOwn(RECOVERY_RESOURCES,entry.resource)||!scopeValid(entry.scope)||!id(entry.projectId)||!uuid(entry.operationId)||!Number.isSafeInteger(entry.createdAt)||entry.createdAt<0)return false;
   const progress=entry.resource==='template-send'&&entry.templateKey===PROGRESS_TEMPLATE_SEND_KEY;
-  const overtime=entry.resource==='field-operations'&&entry.action!==undefined;
+  const measurement=entry.resource==='field-operations'&&entry.action===fieldMeasurementAction;
+  const overtime=entry.resource==='field-operations'&&entry.action!==undefined&&!measurement;
   const bank=entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(entry.action);
   const intake=entry.resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action);
   const officeAccount=entry.resource==='participants'&&entry.action===PARTICIPANT_OFFICE_ASSIGN_ACTION;
@@ -155,7 +161,7 @@ function valid(entry) {
   if(office&&!['INVITE_AUDITOR','REVOKE_AUDITOR','SELECT_EVENT','SHARE_CONNECTION','WITHDRAW_CONNECTION'].includes(entry.action))return false;
   if(entry.resource==='participants'&&entry.action!==undefined&&!bank&&!intake&&!officeAccount)return false;
   if(preparation&&entry.action!=='SAVE_PREPARATION')return false;
-  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',['reconcile','cancel'].includes(entry.action)?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(bank?['action','workerId']:[]),...(intake?['action','connectionId',...(entry.action==='CONFIGURE_EMPLOYEE_INTAKE'?[]:['applicationId'])]:[]),...(progress?['templateKey','workerId','actionReference']:[]),...(planUpload?['action','inputDigest']:plan?['action','draftId','expectedRevision','inputDigest']:[]),...(preparation?['action']:[])];
+  const fields=['version','resource','scope','projectId','operationId','createdAt',...(entry.resource==='site-photo'?['reportId']:[]),...(entry.resource==='company-onboarding'?['action','expectedClerkOrganizationId']:[]),...(entry.resource==='company-channel'?['action','connectionId']:[]),...(entry.resource==='meta-onboarding'?['action',['reconcile','cancel'].includes(entry.action)?'signupId':'eventId']:[]),...(overtime?['action']:[]),...(measurement?['action','taskId']:[]),...(bank?['action','workerId']:[]),...(intake?['action','connectionId',...(entry.action==='CONFIGURE_EMPLOYEE_INTAKE'?[]:['applicationId'])]:[]),...(progress?['templateKey','workerId','actionReference']:[]),...(planUpload?['action','inputDigest']:plan?['action','draftId','expectedRevision','inputDigest']:[]),...(preparation?['action']:[])];
   if(office)fields.push('action');
   if(officeAccount)fields.push('action');
   if(creation)fields.push('action');
@@ -166,6 +172,7 @@ function valid(entry) {
   if(planUpload&&!/^[a-f0-9]{64}$/.test(entry.inputDigest||''))return false;
   if(plan&&!planUpload&&(!['EDIT','APPLY','REJECT'].includes(entry.action)||!id(entry.draftId)||!Number.isSafeInteger(entry.expectedRevision)||entry.expectedRevision<1||!/^[a-f0-9]{64}$/.test(entry.inputDigest||'')))return false;
   if(overtime&&!FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action))return false;
+  if(measurement&&!id(entry.taskId))return false;
   if(bank&&(!PRIVATE_BANK_ACTIONS.includes(entry.action)||!id(entry.workerId)))return false;
   if(intake&&(!PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action)||!id(entry.connectionId)||entry.action!=='CONFIGURE_EMPLOYEE_INTAKE'&&!/^customer_webhook_[a-f0-9]{64}$/.test(entry.applicationId||'')))return false;
   return (entry.resource!=='site-photo'||id(entry.reportId))&&(entry.resource!=='meta-onboarding'||(['reconcile','cancel'].includes(entry.action)?uuid(entry.signupId):['review_inbox','process_inbox'].includes(entry.action)&&id(entry.eventId)));
@@ -188,9 +195,36 @@ export function recoveryQuery(entry) {
     ...(entry.resource==='company-onboarding'?{action:entry.action,expectedClerkOrganizationId:entry.expectedClerkOrganizationId}:{}),
     ...(entry.resource==='site-photo'?{reportId:entry.reportId}:{}),...(entry.resource==='meta-onboarding'?{action:entry.action,...(['reconcile','cancel'].includes(entry.action)?{signupId:entry.signupId}:{eventId:entry.eventId})}:{})});
 }
+// Inline, so reference-only recovery fixtures retain their existing copy graph.
+// This proof acknowledges a saved configuration, never a percentage or another
+// action's receipt. Current and historical task snapshots are checked separately.
+function measurementRecoveryOutcome(entry,result){
+  if(result.operationId!==undefined&&result.operationId!==entry.operationId||result.action!==undefined&&result.action!==entry.action)return null;
+  if(result.state==='NOT_OBSERVED'&&result.definitive===false&&result.saved!==true&&!result.receiptId&&!result.task)return {state:'NOT_OBSERVED'};
+  if(result.state==='CANCELLED'){
+    if(Object.keys(result).sort().join('|')!=='action|kind|operationId|projectId|receiptId|replayed|saved|scope|state|taskId|taskProgressUnchanged'||result.projectId!==entry.projectId||result.operationId!==entry.operationId||result.action!==entry.action||result.kind!=='MEASUREMENT_CONFIGURATION_CANCELLED'||result.saved!==false||typeof result.replayed!=='boolean'||result.taskId!==entry.taskId||result.taskProgressUnchanged!==true||!/^field_[a-f0-9]{64}$/.test(result.receiptId||''))return null;
+    return {state:'CANCELLED',receiptId:result.receiptId};
+  }
+  if(result.projectId!==entry.projectId||result.operationId!==entry.operationId||result.action!==entry.action||result.kind!=='MEASUREMENT_CONFIGURATION'||result.state!=='RECORDED'||result.saved!==true||!/^field_[a-f0-9]{64}$/.test(result.receiptId||''))return null;
+  const timestamp=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
+  const decimal=value=>typeof value==='string'&&/^(?:0|[1-9]\d{0,13})\.\d{4}$/.test(value);
+  const snapshot=task=>{
+    const value=task?.measurement;
+    if(task?.id!==entry.taskId||typeof task.revision!=='string'||!/^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{6}$/.test(task.revision)||!Number.isFinite(Date.parse(task.revision+'Z'))||!Number.isInteger(task.progress)||task.progress<0||task.progress>100||!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join('|')!=='approvedAt|approvedProposalId|baseline|configuredAt|definitionId|executed|sourceReference|unit|version'||value.version!=='task-progress-measurement-v1'||!id(value.definitionId)||!decimal(value.baseline)||!decimal(value.executed)||!['M','M2','M3','KG','T','L','UNIT','HOUR','DAY','LOT'].includes(value.unit)||typeof value.sourceReference!=='string'||value.sourceReference.trim()!==value.sourceReference||value.sourceReference.length<3||value.sourceReference.length>240||/[\u0000-\u001f\u007f<>]/.test(value.sourceReference)||!timestamp(value.configuredAt))return false;
+    const baseline=BigInt(value.baseline.replace('.','')),executed=BigInt(value.executed.replace('.',''));
+    if(baseline===0n||executed>baseline||Number(executed*100n/baseline)!==task.progress)return false;
+    const empty=value.approvedProposalId===null&&value.approvedAt===null;
+    return empty?executed===0n:id(value.approvedProposalId)&&timestamp(value.approvedAt);
+  };
+  const configured=result.configuredTaskSnapshot||result.task;
+  if(!snapshot(configured)||!snapshot(result.task)||result.task.revision<configured.revision)return null;
+  return {state:'RECORDED',receiptId:result.receiptId};
+}
+
 export function recoveryResult(entry, result) {
   if(!valid(entry)||result?.scope!==entry.scope)return null;
   if(result.projectId!==undefined&&result.projectId!==entry.projectId)return null;
+  if(entry.resource==='field-operations'&&entry.action===fieldMeasurementAction)return measurementRecoveryOutcome(entry,result);
   if(entry.resource==='office-review')return officeReviewReceiptOutcome(result,entry);
   if(entry.resource==='project-creation')return projectCreationReceiptOutcome(result,entry);
   if(entry.resource==='participants'&&PRIVATE_BANK_ACTIONS.includes(entry.action)){try{validatePrivateBankOutcome(result,entry);return {state:result.state,...(result.receipt?{receiptId:result.receipt.id}:{})};}catch{return null;}}
@@ -413,7 +447,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       const reserve=()=>access('readwrite',entry.scope,s=>{
       if(options.signal?.aborted)throw Object.assign(new DOMException('La consulta se canceló.','AbortError'),{requestDispatched:false});
       const current=readEntries(s,entry.scope),existing=current.find(row=>keyOf(row)===keyOf(entry));
-      if(existing){if(existing.projectId!==entry.projectId||existing.reportId!==entry.reportId||existing.eventId!==entry.eventId||existing.action!==entry.action||existing.draftId!==entry.draftId||existing.expectedRevision!==entry.expectedRevision||existing.inputDigest!==entry.inputDigest||existing.connectionId!==entry.connectionId||existing.expectedClerkOrganizationId!==entry.expectedClerkOrganizationId||existing.signupId!==entry.signupId||existing.templateKey!==entry.templateKey||existing.workerId!==entry.workerId||existing.actionReference?.proposalId!==entry.actionReference?.proposalId||existing.actionReference?.revision!==entry.actionReference?.revision)throw failure('WORKSPACE_RECOVERY_CONFLICT','Este identificador corresponde a otro intento. Comprobá el recibo antes de continuar.');return {entry:existing,existed:true};}
+      if(existing){if(existing.projectId!==entry.projectId||existing.taskId!==entry.taskId||existing.reportId!==entry.reportId||existing.eventId!==entry.eventId||existing.action!==entry.action||existing.draftId!==entry.draftId||existing.expectedRevision!==entry.expectedRevision||existing.inputDigest!==entry.inputDigest||existing.connectionId!==entry.connectionId||existing.expectedClerkOrganizationId!==entry.expectedClerkOrganizationId||existing.signupId!==entry.signupId||existing.templateKey!==entry.templateKey||existing.workerId!==entry.workerId||existing.actionReference?.proposalId!==entry.actionReference?.proposalId||existing.actionReference?.revision!==entry.actionReference?.revision)throw failure('WORKSPACE_RECOVERY_CONFLICT','Este identificador corresponde a otro intento. Comprobá el recibo antes de continuar.');return {entry:existing,existed:true};}
       const pending=current.find(row=>row.resource===entry.resource&&(['company-channel','company-onboarding','project-creation'].includes(entry.resource)||row.projectId===entry.projectId)&&(entry.resource!=='meta-onboarding'||entry.action==='reconcile'||row.eventId===entry.eventId));
       let resolution=false;
       if(entry.resource==='participants'&&typeof options.body==='string'){try{resolution=JSON.parse(options.body).action==='REVOKE';}catch{ /* The server rejects malformed commands. */ }}
@@ -475,6 +509,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       const schedule=scheduleTickets.get(ticket),attendance=attendanceTickets.get(ticket);scheduleTickets.delete(ticket);attendanceTickets.delete(ticket);
       const companyPhone=companyPhoneTickets.get(ticket);companyPhoneTickets.delete(ticket);
       if(error){
+        if(ticket.entry.resource==='field-operations'&&ticket.entry.action===fieldMeasurementAction){if(!ticket.existed&&(error.requestDispatched===false||error.definitiveConfigurationRejection===true))await remove(ticket.entry);return;}
         if(companyPhone?.rejected===true&&!ticket.existed&&ticket.entry.resource==='company-onboarding'&&sameScheduleEntry(ticket.entry,companyPhone.entry)&&error.status===409&&error.code==='COMPANY_PHONE_CONFLICT'&&error.requestDispatched!==false&&!companyPhone.observation.signal?.aborted&&companyPhone.observation.isActive()){
           if(await remove(companyPhone.entry,companyPhone.observation)&&!companyPhone.observation.signal?.aborted&&companyPhone.observation.isActive())companyPhoneRejectedErrors.set(error,{entry:companyPhone.entry,identity:companyPhone.identity});return;
         }
@@ -500,6 +535,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       if(entry.resource==='company-channel'){if(['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='plan-import'){const outcome=recoveryResult(entry,result);if(outcome?.state==='RECORDED'||outcome?.state==='REJECTED'&&(outcome.phase==='PRE_DECISION'||outcome.proof==='AUDITED_UPLOAD'||!ticket.existed))await remove(entry);return;}
       if(entry.resource==='field-operations'&&FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action)){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
+      if(entry.resource==='field-operations'&&entry.action===fieldMeasurementAction){if(['RECORDED','CANCELLED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(result?.scope===entry.scope&&(result.projectId===undefined||result.projectId===entry.projectId)&&(result.saved===true||result.created===true)&&(result.receiptId||result.receipt?.id))await remove(entry);
     },
     async observe(url, result) {

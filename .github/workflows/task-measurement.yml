@@ -1,0 +1,62 @@
+name: Task measurement acceptance
+on:
+  push:
+    branches: [master, 'feat/task-daily-measurement-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      CUTOVER_TEST_DISPOSABLE: '1'
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Exact event source
+        run: node --input-type=module -e "import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';assert.equal(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),process.env.GITHUB_SHA);"
+      - name: Exact quantity, daily measurement and existing authorization contracts
+        run: node --test tests/production-task-progress-measurement*.test.mjs tests/production-task-daily-measurement-conversation.test.mjs tests/production-progress-measurement-quantity.test.mjs tests/production-field-*.test.mjs tests/production-meta-field*.test.mjs tests/production-workspace*.test.mjs tests/production-voice-progress-draft.test.mjs tests/production-video-voice-progress.test.mjs
+      - name: Measurement source and harness lint
+        run: npx eslint src/lib/task-progress-measurement.js src/lib/progress-measurement-quantity.js src/lib/field-operations-policy.mjs src/lib/field-operations-store.mjs src/lib/workspace-store.mjs src/lib/meta-field-bridge.mjs src/lib/meta-field-conversation.mjs 'src/app/(identity)/cuenta/task-progress-measurement-editor.js' 'src/app/(identity)/cuenta/task-progress-measurement-view.mjs' 'src/app/(identity)/cuenta/field-operations-panel.js' 'src/app/(identity)/cuenta/schedule-workbench.js' 'src/app/(identity)/cuenta/workspace-client.js' 'src/app/(identity)/cuenta/workspace-recovery-journal.mjs' 'src/app/(identity)/cuenta/workspace-recovery-panel.js' 'src/app/(identity)/cuenta/voice-progress-draft-view.js' tests/production-task-progress-measurement*.test.mjs tests/production-task-daily-measurement-conversation.test.mjs scripts/verify-task-progress-measurement*.mjs --max-warnings 0
+      - name: Disposable PostgreSQL daily measurement and concurrency
+        run: node scripts/verify-task-progress-measurement-postgres.mjs
+      - name: Actual responsive measurement components with synthetic APIs
+        run: node scripts/verify-task-progress-measurement-ui.mjs .vercel/private/task-progress-measurement-evidence/browser.json
+      - name: Preserve exact checked-out source
+        run: git diff --exit-code HEAD --
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: task-measurement-postgres-${{ github.sha }}-${{ github.run_attempt }}
+          path: .vercel/private/task-progress-measurement-postgres.json
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: task-measurement-ui-${{ github.sha }}-${{ github.run_attempt }}
+          path: .vercel/private/task-progress-measurement-evidence/
+          include-hidden-files: true
+          if-no-files-found: error

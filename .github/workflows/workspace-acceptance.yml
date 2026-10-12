@@ -6,6 +6,7 @@ name: Authorized workspace acceptance
       - master
       - feat/integral-worksite-*
       - feat/pilot-readiness-*
+      - feat/task-daily-measurement-*
       - feat/professional-experience-*
       - feat/local-font-*
       - hotfix/production-workspace-*

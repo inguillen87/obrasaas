@@ -14,11 +14,13 @@ import {siteText} from './site-register-policy.mjs';
 import {createMetaPlanImportTransport} from './meta-plan-import-transport.mjs';
 import {metaPlanImportContextDigest,metaPlanImportPromptMatches} from './meta-plan-import-origin.mjs';
 import {canImportPlan} from './plan-import-policy.mjs';
+import {publicTaskMeasurement} from './task-progress-measurement.js';
 
 export function metaFieldOperationId(eventId,purpose){const h=digest(['meta-field-operation-v1',eventId,purpose]);return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;}
 const receiptId=eventId=>'meta_field_'+digest(['meta-field-dispatch-v1',eventId]);
 const permissionFor=action=>action==='ATTENDANCE'?'attendance':'report';
 const safeErrors=new Set(['INVENTORY_QUANTITY_INVALID','INVENTORY_CATALOG_CHANGED','INVENTORY_MATERIAL_UNAVAILABLE','SITE_INPUT_INVALID','SITE_QUANTITY_INVALID','FIELD_QUANTITY_INVALID','FIELD_QUANTITY_PROGRESS_MISMATCH','FIELD_PROGRESS_REGRESSION','FIELD_PROGRESS_REVIEW_PENDING','FIELD_BASELINE_CHANGED','FIELD_REVISION_CHANGED','WORKSPACE_TASK_UNAVAILABLE','FIELD_SECTOR_UNAVAILABLE','ATTENDANCE_REVISION_CHANGED','ATTENDANCE_PERSON_JOURNEY_OPEN','ATTENDANCE_SHIFT_ALREADY_OPEN','ATTENDANCE_SHIFT_NOT_OPEN','ATTENDANCE_BREAK_ALREADY_OPEN','ATTENDANCE_BREAK_NOT_OPEN','ATTENDANCE_BREAK_OPEN','ATTENDANCE_LOCATION_STALE','ATTENDANCE_LOCATION_INVALID','FIELD_EVIDENCE_NOT_APPROVED','FIELD_EVIDENCE_UNAVAILABLE']);
+for(const code of ['FIELD_MEASUREMENT_REQUIRED','FIELD_MEASUREMENT_CHANGED','TASK_MEASUREMENT_INVALID','TASK_MEASUREMENT_NOT_CONFIGURED','TASK_MEASUREMENT_STATE_INVALID','TASK_MEASUREMENT_PROGRESS_MISMATCH','TASK_MEASUREMENT_EXCEEDS_BASELINE','TASK_MEASUREMENT_REGRESSION'])safeErrors.add(code);
 const explanation=code=>({ATTENDANCE_PERSON_JOURNEY_OPEN:'Tenés una jornada pendiente de cierre. Contactá al responsable.',ATTENDANCE_SHIFT_ALREADY_OPEN:'Ya tenés una jornada abierta.',ATTENDANCE_SHIFT_NOT_OPEN:'Primero registrá una entrada.',ATTENDANCE_BREAK_ALREADY_OPEN:'Tu pausa ya está abierta.',ATTENDANCE_BREAK_NOT_OPEN:'No hay una pausa abierta.',ATTENDANCE_BREAK_OPEN:'Cerrá la pausa antes de registrar la salida.',ATTENDANCE_LOCATION_STALE:'La ubicación venció. Volvé a empezar y compartí una ubicación actual.',FIELD_PROGRESS_REVIEW_PENDING:'Esta tarea ya tiene una propuesta pendiente.',FIELD_EVIDENCE_NOT_APPROVED:'La evidencia requiere revisión del responsable.',FIELD_PROGRESS_REGRESSION:'El avance propuesto no puede ser menor al ya aprobado.'}[code]||'Revisá los datos y el estado actual de la obra antes de volver a intentar.');
 const text=body=>({type:'text',body});
 export const metaFieldMediaContextDigest=r=>digest(['meta-field-media-context-v2',r.member.organizationId,r.member.actorId,r.member.membershipId,r.member.clerkUserId,r.project.id,r.worker.id,r.channelBinding.id,r.connection.id,r.connection.projectId,r.connection.phoneNumberId,r.connection.whatsappBusinessId,r.sourceProjectId||r.event.projectId,r.companyProjection?{projectId:r.companyProjection.projectId,workerId:r.companyProjection.workerId,actorId:r.companyProjection.actorId,membershipId:r.companyProjection.membershipId,assignmentRevision:r.companyProjection.assignmentRevision,bindingId:r.companyProjection.bindingId,routeId:r.companyProjection.routeId,routeEpoch:r.companyProjection.routeEpoch}:null]);
@@ -233,7 +235,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
 
 
 const optionalPurposes=new Set(['INCIDENT','MATERIAL','CONSUMPTION']);
-const taskColumns=`id,title,progress,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision,to_char("createdAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt"`;
+const taskColumns=`id,title,progress,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision,to_char("createdAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt"`;
 const unavailable=()=>{throw new WorkspaceError('WORKSPACE_TASK_UNAVAILABLE',404);};
 function validCursor(value){
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join('|')!=='createdAt|id'||!workspaceId(value.id)||typeof value.createdAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(value.createdAt)||value.createdAt.startsWith('0000-'))return false;
@@ -246,7 +248,7 @@ function selectedChoice(state,message){
  return match&&match[1]===state?.nonce&&Array.isArray(state?.choices)?state.choices[Number(match[2])]?.value:null;
 }
 const cursor=row=>({id:row.id,createdAt:row.createdAt});
-const publicTask=({id,title,progress,revision})=>({id,title,progress,revision});
+const publicTask=row=>{const {id,title,progress,revision}=row,measurement=publicTaskMeasurement(row);return {id,title,progress,revision,...(measurement?{measurement}:{})};};
 
 // Identity, live permissions and conversation TTL are checked by the signed
 // bridge before this bounded catalog read. A cursor never grants project access.
