@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {copyFileSync,mkdirSync,mkdtempSync,readFileSync,rmSync,writeFileSync} from 'node:fs';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
+import {createServer} from 'node:net';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
@@ -20,8 +21,14 @@ const scope='a'.repeat(64),projectId='project-mobile',workerId='worker-mobile';
 writeFileSync(path.join(app,'page.js'),`'use client';import {useCallback,useState} from 'react';import {ParticipantPanel} from './participant-panel';import {preparePhoto} from './field-media-preparation.mjs';import {browserRecoveryJournal} from './workspace-recovery-journal.mjs';export default function Page(){const [context,setContext]=useState(0);const token=useCallback(async()=> 'synthetic-active-context-'+context,[context]);if(typeof window!=='undefined'){window.__preparePhoto=preparePhoto;window.__mobileReferences=()=>browserRecoveryJournal.list('${scope}');}return <main style={{maxWidth:1000,margin:'0 auto'}}><h1>Ensayo controlado de identidad móvil</h1><p>Fotografías e identidad sintéticas. Ningún proveedor real.</p><button onClick={()=>setContext(value=>value+1)}>Cambiar contexto de ensayo</button><ParticipantPanel key={context} projectId="${projectId}" scope="${scope}" getSessionToken={token}/></main>}`);
 mkdirSync(path.join(app,'preparation'));
 writeFileSync(path.join(app,'preparation/page.js'),`'use client';import {KycPhotoPreparation} from '../kyc-photo-preparation';export default function Page(){return <main style={{maxWidth:600,margin:'0 auto'}}><h1>Ensayo controlado del componente</h1><KycPhotoPreparation kind="front" onChange={async file=>{if(!file)return false;if(window.__rejectAcceptance)throw new Error('Controlled parent failure');return true;}}/></main>}`);
-const port=3331,origin='http://127.0.0.1:'+port;
-const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
+const portProbe=createServer();await new Promise((resolve,reject)=>{portProbe.once('error',reject);portProbe.listen(0,'127.0.0.1',resolve);});const port=portProbe.address().port;await new Promise(resolve=>portProbe.close(resolve));const origin='http://127.0.0.1:'+port;
+const closeNonce=randomUUID(),serverFile=path.join(fixture,'owned-server.cjs');
+// Close only this IPC child and its own HTTP/bundler resources. No CLI watcher,
+// process-tree termination or shared development-server port is involved.
+writeFileSync(serverFile,`const {createServer}=require('node:http');const next=require(${JSON.stringify(path.join(root,'node_modules/next'))});const nonce=${JSON.stringify(closeNonce)};let app,server,closing=false;let ready;async function close(){if(closing)return;closing=true;try{await ready.catch(()=>{});if(server?.listening){server.closeAllConnections();await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}if(app)await app.close();if(process.connected)process.send({type:'closed',nonce},()=>process.exit(0));else process.exit(0);}catch{if(process.connected)process.send({type:'close-failed',nonce},()=>process.exit(1));else process.exit(1);}}process.on('message',message=>{if(message&&Object.keys(message).sort().join('|')==='nonce|type'&&message.type==='close'&&message.nonce===nonce)void close();});process.on('disconnect',()=>void close());ready=(async()=>{server=createServer((req,res)=>app.getRequestHandler()(req,res));app=next({dev:true,dir:${JSON.stringify(fixture)},hostname:'127.0.0.1',port:${port},httpServer:server,webpack:true,turbopack:false});await app.prepare();server.on('upgrade',(req,socket,head)=>app.getUpgradeHandler()(req,socket,head));await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(${port},'127.0.0.1',resolve);});if(process.connected)process.send({type:'ready',nonce});})();ready.catch(error=>{console.error(error);if(process.connected)process.send({type:'failed',nonce});});`);
+const serverEnv=Object.fromEntries(['PATH','Path','SystemRoot','WINDIR','TEMP','TMP','HOME','USERPROFILE','APPDATA','LOCALAPPDATA','ComSpec','COMSPEC'].filter(key=>process.env[key]!==undefined).map(key=>[key,process.env[key]]));
+const server=spawn(process.execPath,[serverFile],{cwd:fixture,env:{...serverEnv,NEXT_TELEMETRY_DISABLED:'1',NODE_ENV:'development'},stdio:['ignore','pipe','pipe','ipc'],windowsHide:true});
+let closeAcknowledged=false;server.on('message',message=>{if(message?.nonce===closeNonce&&message.type==='closed')closeAcknowledged=true;});const serverClose=new Promise(resolve=>server.once('close',resolve));
 let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',bytes=>{serverLog=(serverLog+bytes.toString()).slice(-18000);});
 const small=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==','base64'),smallPath=path.join(fixture,'synthetic-small.png');writeFileSync(smallPath,small);
 let browser,activePage,activeScenario;const errors=[],checks=[],postsSummary=[];
@@ -38,7 +45,11 @@ async function allRevoked(page){assert.ok(await page.evaluate(()=>window.__kycTe
 async function installLocalReadFixture(page,{accelerateDeadline=false,synchronousError=false}={}){
  await page.evaluate(({accelerateDeadline,synchronousError})=>{
   const NativeReader=window.FileReader,nativeTimeout=window.setTimeout.bind(window),nativeClear=window.clearTimeout.bind(window),add=AbortSignal.prototype.addEventListener,remove=AbortSignal.prototype.removeEventListener;
-  const test=window.__localReadFixture={readers:[],requestedDeadlines:[],clockScale:accelerateDeadline?10:1,synchronousError};
+  // Cancellation/error scenarios own a paused clock. Otherwise a busy browser
+  // can hit the real 15-second deadline before the test clicks Cancel, testing
+  // timeout instead of cancellation. The dedicated timeout scenario still
+  // fires the production-requested 15,000 ms timer at the recorded 10x scale.
+  const test=window.__localReadFixture={readers:[],requestedDeadlines:[],clockScale:accelerateDeadline?10:1,clockMode:accelerateDeadline?'accelerated':'paused',synchronousError};
   window.FileReader=class{
    constructor(){this.readyState=0;this.result=null;this.listenerAttached=false;test.readers.push(this);test.current=this;}
    readAsDataURL(file){this.file=file;this.readyState=1;this.saved={load:this.onload,error:this.onerror,abort:this.onabort};if(test.synchronousError){test.synchronousError=false;throw new Error('Controlled synchronous local reader failure');}}
@@ -47,7 +58,8 @@ async function installLocalReadFixture(page,{accelerateDeadline=false,synchronou
   window.setTimeout=(callback,ms,...args)=>{
    const reader=test.current;if(ms!==15000||!reader||reader.deadlineId!==undefined)return nativeTimeout(callback,ms,...args);
    test.requestedDeadlines.push(ms);reader.timerPending=true;
-   reader.deadlineId=nativeTimeout(()=>{reader.timerPending=false;reader.deadlineFired=true;callback(...args);},ms/test.clockScale);return reader.deadlineId;
+   reader.fireDeadline=()=>{reader.timerPending=false;reader.deadlineFired=true;callback(...args);};
+   reader.deadlineId=nativeTimeout(accelerateDeadline?reader.fireDeadline:()=>{},accelerateDeadline?ms/test.clockScale:2147483647);return reader.deadlineId;
   };
   window.clearTimeout=id=>{for(const reader of test.readers)if(reader.deadlineId===id){reader.timerPending=false;reader.timerCleared=true;}return nativeClear(id);};
   AbortSignal.prototype.addEventListener=function(type,callback,options){const reader=test.current;if(type==='abort'&&reader&&!reader.signal){reader.signal=this;reader.abortListener=callback;reader.listenerAttached=true;}return add.call(this,type,callback,options);};
@@ -57,7 +69,7 @@ async function installLocalReadFixture(page,{accelerateDeadline=false,synchronou
   test.restore=()=>{window.FileReader=NativeReader;};
  },{accelerateDeadline,synchronousError});
 }
-async function localReadSnapshot(page){return page.evaluate(()=>({requestedDeadlines:window.__localReadFixture.requestedDeadlines,clockScale:window.__localReadFixture.clockScale,readers:window.__localReadFixture.readers.map(reader=>({readyState:reader.readyState,listenerAttached:reader.listenerAttached,timerPending:Boolean(reader.timerPending),timerCleared:Boolean(reader.timerCleared),deadlineFired:Boolean(reader.deadlineFired),abortCalls:reader.abortCalls||0,handlersCleared:reader.onload===null&&reader.onerror===null&&reader.onabort===null}))}));}
+async function localReadSnapshot(page){return page.evaluate(()=>({requestedDeadlines:window.__localReadFixture.requestedDeadlines,clockScale:window.__localReadFixture.clockScale,clockMode:window.__localReadFixture.clockMode,readers:window.__localReadFixture.readers.map(reader=>({readyState:reader.readyState,listenerAttached:reader.listenerAttached,timerPending:Boolean(reader.timerPending),timerCleared:Boolean(reader.timerCleared),deadlineFired:Boolean(reader.deadlineFired),abortCalls:reader.abortCalls||0,handlersCleared:reader.onload===null&&reader.onerror===null&&reader.onabort===null}))}));}
 async function assertLocalReadCleanup(page){const snapshot=await localReadSnapshot(page);assert.ok(snapshot.readers.length>0);for(const reader of snapshot.readers){assert.equal(reader.listenerAttached,false);assert.equal(reader.timerPending,false);assert.equal(reader.timerCleared,true);assert.equal(reader.handlersCleared,true);}assert.ok(snapshot.requestedDeadlines.every(ms=>ms===15000));return snapshot;}
 
 async function scenario(width,mode,largePath){
@@ -95,7 +107,7 @@ async function scenario(width,mode,largePath){
   else if(mode==='local-read-error'){await page.evaluate(()=>window.__localReadFixture.emit(0,'error'));await wait(page,'No se pudo leer la imagen');}
   else await wait(page,'No se pudo leer la imagen');
   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Usar documento revisado'&&!button.disabled));assert.equal(await page.$eval(front+' img',image=>image.src),preview);assert.equal(await page.$eval(front+' input[type=checkbox]',input=>input.checked),true);assert.equal(await page.evaluate(()=>window.__kycTest.urls.length),allocated);assert.equal(await page.evaluate(()=>window.__kycTest.revoked.length),0);assert.equal(await disabled(page,'Presentar para revisión'),true);assert.equal(posts.length,0);assert.equal((await page.evaluate(()=>window.__mobileReferences())).length,0);
-  const cleanup=await assertLocalReadCleanup(page);assert.deepEqual(cleanup.requestedDeadlines,[15000]);if(mode==='local-read-timeout'){assert.equal(cleanup.clockScale,10);assert.equal(cleanup.readers[0].deadlineFired,true);}if(mode==='local-read-cancel')assert.equal(cleanup.readers[0].abortCalls,1);
+  const cleanup=await assertLocalReadCleanup(page);assert.deepEqual(cleanup.requestedDeadlines,[15000]);if(mode==='local-read-timeout'){assert.equal(cleanup.clockScale,10);assert.equal(cleanup.clockMode,'accelerated');assert.equal(cleanup.readers[0].deadlineFired,true);}else{assert.equal(cleanup.clockMode,'paused');assert.equal(cleanup.readers[0].deadlineFired,false);}if(mode==='local-read-cancel')assert.equal(cleanup.readers[0].abortCalls,1);
   await noOverflow(page);await page.screenshot({path:path.join(evidence,'read-recovery-'+width+'-'+mode+'.png'),fullPage:true});await page.evaluate(()=>window.__localReadFixture.restore());await click(page,'Usar documento revisado');await wait(page,'Imagen revisada y lista para presentar');assert.equal(posts.length,0);assert.equal((await page.evaluate(()=>window.__mobileReferences())).length,0);await click(page,'Cancelar');await allRevoked(page);checks.push({id:mode,width,copyAndReviewPreserved:true,cleanup,positiveRetry:'NativeFileReader',automaticPosts:0,noJournalAck:true});await context.close();return;
  }
 
@@ -157,4 +169,12 @@ try{
  for(const width of widths)for(const mode of readModes.slice(0,3))await scenario(width,mode,largePath);for(const mode of readModes.slice(3))await scenario(390,mode,largePath);}
  assert.deepEqual(errors,[]);const proof={status:'PASS',createdAt:new Date().toISOString(),durationMs:Date.now()-startedAt,environment:'actual-components-native-canvas-controlled-actor-and-intercepted-canonical-input',widths:focusedScenario?selectedWidths:widths,fullSuite:!focusedScenario,focusedScenario,checks,postBodies:postsSummary,sourceManifest,harnessSha256:sha256(readFileSync(new URL(import.meta.url))),errors,limits:{preparedBytes:1024*1024,originalBytes:20*1024*1024,originalPixels:24_000_000},limitations:{physicalPhone:false,realDocument:false,realHumanIdentityAccepted:false,realProviderWrites:false,noOfflineFileRestore:true}};writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
 }catch(error){const snapshot=await activePage?.evaluate(()=>({text:document.body.innerText,buttons:[...document.querySelectorAll('button')].map(button=>({label:button.textContent.trim(),disabled:button.disabled})),localUrls:window.__kycTest?.urls.length,revokedUrls:window.__kycTest?.revoked.length,decodes:window.__kycTest?.decodes,closed:window.__kycTest?.closed})).catch(()=>null);await activePage?.screenshot({path:path.join(evidence,'browser-failure.png'),fullPage:true}).catch(()=>{});writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAIL',message:error.message,scenario:activeScenario,checks,errors,sourceHashes:hashes,snapshot,serverLog},null,2));throw error;
-}finally{await browser?.close();try{if(process.platform==='win32')server.kill();else process.kill(-server.pid,'SIGTERM');}catch{}await new Promise(resolve=>setTimeout(resolve,500));const parent=path.resolve(root,'.vercel'),target=path.resolve(fixture);assert.ok(target.startsWith(parent+path.sep)&&path.basename(target).startsWith('mobile-identity-ui-'));rmSync(target,{recursive:true,force:true});}
+}finally{
+ let cleanupError,browserClosed=false,serverClosed=false,fixtureRemoved=false,timeout;
+ try{await browser?.close();browserClosed=true;}catch(error){cleanupError=error;}
+ try{if(server.connected)server.send({type:'close',nonce:closeNonce});await Promise.race([serverClose,new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('Owned mobile fixture did not acknowledge closure')),30000);})]);assert.equal(closeAcknowledged,true,'Only the nonce-bound child may confirm closure');assert.equal(server.exitCode,0);serverClosed=true;}catch(error){cleanupError ||=error;}finally{clearTimeout(timeout);}
+ if(browserClosed&&serverClosed){try{const parent=path.resolve(root,'.vercel'),target=path.resolve(fixture);assert.ok(target.startsWith(parent+path.sep)&&path.basename(target).startsWith('mobile-identity-ui-'));rmSync(target,{recursive:true,force:true});fixtureRemoved=true;}catch(error){cleanupError ||=error;}}
+ const cleanup={browserClosed,serverClosed,gracefulCloseAcknowledged:closeAcknowledged,fixtureRemoved};
+ try{const reportPath=path.join(evidence,'browser.json'),report=JSON.parse(readFileSync(reportPath,'utf8'));if(Date.parse(report.createdAt)>=startedAt){writeFileSync(reportPath,JSON.stringify({...report,status:cleanupError?'FAIL':report.status,cleanup},null,2));}}catch{/* A failed scenario may not have created a success report. */}
+ if(cleanupError)throw cleanupError;
+}
