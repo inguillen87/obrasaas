@@ -12,6 +12,8 @@ const pilotAudits=new WeakMap(),pilotInspections=new WeakMap();
 const ownAudits=new WeakMap(),ownInspections=new WeakMap();
 const ownTemplateAdministrations=new WeakMap();
 const ownScopes=['business_management',...META_CUSTOMER_REQUIRED_SCOPES];
+const mediaTypes=['image/jpeg','image/png','image/webp','audio/ogg','audio/mpeg','audio/mp4','audio/wav','audio/webm','video/mp4','video/webm'];
+const planSourceTypes=['application/pdf','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel.sheet.macroenabled.12','image/jpeg','image/png','image/webp'];
 function ownTokenVerified(debug,policy,now){
  const scopes=debug?.scopes,grants=debug?.granular_scopes;
  // OWN system-user grants may omit targets. The complete business ownership
@@ -129,6 +131,31 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
   const payload=await response.json().catch(()=>null);
   if(!response.ok)throw new WorkspaceError(response.status>=500||[408,425,429].includes(response.status)?'META_CUSTOMER_PROVIDER_UNCONFIRMED':'META_CUSTOMER_PROVIDER_REJECTED',response.status>=500||[408,425,429].includes(response.status)?503:409);
   if(!payload||typeof payload!=='object')throw new WorkspaceError('META_CUSTOMER_PROVIDER_UNCONFIRMED',503);await ownBoundary();return payload;
+ }
+ async function downloadScopedMedia({token,phoneNumberId,mediaId,limit=3*1024*1024,beforeExternal},allowedTypes,imageLimit){
+  pilotAdapter('media');
+  if(ownCapability&&(inspectedAssets?.phoneNumberId!==phoneNumberId||inspectedAssets.inspectionPhase!==META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL||inspectedAssets.registered!==true||inspectedAssets.platformType!=='CLOUD_API'))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);
+  if(!metaAssetId(phoneNumberId)||!metaAssetId(mediaId)||!Number.isSafeInteger(limit)||limit<=0||limit>3*1024*1024||beforeExternal!==undefined&&typeof beforeExternal!=='function')throw new WorkspaceError('META_CUSTOMER_MEDIA_INVALID');
+  // Only the authorized, phone-scoped Graph lookup supplies the attachment URL.
+  const item=await request(mediaId+'?'+new URLSearchParams({phone_number_id:phoneNumberId}),{token,beforeExternal});
+  let url;try{url=new URL(item.url);}catch{throw new WorkspaceError('META_CUSTOMER_MEDIA_UNCONFIRMED',503);}
+  const mime=typeof item.mime_type==='string'?item.mime_type.toLowerCase().split(';')[0].trim():'';
+  const boundedLimit=Math.min(limit,mime.startsWith('image/')?imageLimit:3*1024*1024);
+  if(String(item.id)!==mediaId||!Number.isSafeInteger(item.file_size)||item.file_size<=0||item.file_size>boundedLimit||!allowedTypes.includes(mime)||url.protocol!=='https:'||url.hostname!=='lookaside.fbsbx.com'||url.username||url.password||url.port||url.hash||!url.pathname.startsWith('/whatsapp_business/attachments/'))throw new WorkspaceError('META_CUSTOMER_MEDIA_REJECTED',409);
+  const expected=/^[a-f0-9]{64}$/i.test(item.sha256||'')?item.sha256.toLowerCase():/^[A-Za-z0-9+/]{43}=$/.test(item.sha256||'')?Buffer.from(item.sha256,'base64').toString('hex'):null;
+  if(!expected)throw new WorkspaceError('META_CUSTOMER_MEDIA_UNCONFIRMED',503);
+  // Revalidate after the Graph await and before the attachment GET. Denials
+  // retain their original code; an OWN runtime also fences every boundary.
+  if(beforeExternal)await beforeExternal();
+  await ownBoundary();
+  let response;try{response=await fetchImpl(url,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000)});}catch{throw new WorkspaceError('META_CUSTOMER_MEDIA_UNCONFIRMED',503);}
+  await ownBoundary();
+  if(!response.ok||!response.body||response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()!==mime)throw new WorkspaceError('META_CUSTOMER_MEDIA_UNCONFIRMED',503);
+  const length=response.headers.get('content-length');if(length!==null&&(!/^\d+$/.test(length)||Number(length)!==item.file_size))throw new WorkspaceError('META_CUSTOMER_MEDIA_INTEGRITY',409);
+  const reader=response.body.getReader(),parts=[];let size=0;
+  try{while(true){const part=await reader.read();if(ownCapability)config();if(part.done)break;size+=part.value.byteLength;if(size>boundedLimit||size>item.file_size)throw new WorkspaceError('META_CUSTOMER_MEDIA_INTEGRITY',409);parts.push(Buffer.from(part.value));}
+   const bytes=Buffer.concat(parts,size);if(size!==item.file_size||createHash('sha256').update(bytes).digest('hex')!==expected)throw new WorkspaceError('META_CUSTOMER_MEDIA_INTEGRITY',409);return {bytes,contentType:mime,sha256:expected};
+  }finally{await reader.cancel().catch(()=>{});reader.releaseLock();await ownBoundary();}
  }
  // Runtime grants enter only through forConnection, after the canonical row
  // and credential commitments match. Public administrative import stays 4h.
@@ -356,30 +383,9 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    if(!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(id||''))throw new WorkspaceError('META_CUSTOMER_SEND_UNCONFIRMED',503);
    return {messageId:id};
   },
-  async downloadMedia({token,phoneNumberId,mediaId,limit=3*1024*1024,beforeExternal}){
-   pilotAdapter('media');
-    if(ownCapability&&(inspectedAssets?.phoneNumberId!==phoneNumberId||inspectedAssets.inspectionPhase!==META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL||inspectedAssets.registered!==true||inspectedAssets.platformType!=='CLOUD_API'))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);
-   if(!metaAssetId(phoneNumberId)||!metaAssetId(mediaId)||!Number.isSafeInteger(limit)||limit<=0||limit>3*1024*1024||beforeExternal!==undefined&&typeof beforeExternal!=='function')throw new WorkspaceError('META_CUSTOMER_MEDIA_INVALID');
-   // The URL originates exclusively from an authorized Graph lookup scoped to
-   // this customer's phone. Webhook URLs are never download inputs.
-   const item=await request(mediaId+'?'+new URLSearchParams({phone_number_id:phoneNumberId}),{token,beforeExternal});
-   let url;try{url=new URL(item.url);}catch{throw new WorkspaceError('META_CUSTOMER_MEDIA_UNCONFIRMED',503);}
-   const mime=typeof item.mime_type==='string'?item.mime_type.toLowerCase().split(';')[0].trim():'';
-   if(String(item.id)!==mediaId||!Number.isSafeInteger(item.file_size)||item.file_size<=0||item.file_size>limit||!['image/jpeg','image/png','image/webp','audio/ogg','audio/mpeg','audio/mp4','audio/wav','audio/webm','video/mp4','video/webm'].includes(mime)||url.protocol!=='https:'||url.hostname!=='lookaside.fbsbx.com'||url.username||url.password||url.port||url.hash||!url.pathname.startsWith('/whatsapp_business/attachments/'))throw new WorkspaceError('META_CUSTOMER_MEDIA_REJECTED',409);
-   const expected=/^[a-f0-9]{64}$/i.test(item.sha256||'')?item.sha256.toLowerCase():/^[A-Za-z0-9+/]{43}=$/.test(item.sha256||'')?Buffer.from(item.sha256,'base64').toString('hex'):null;
-   if(!expected)throw new WorkspaceError('META_CUSTOMER_MEDIA_UNCONFIRMED',503);
-   // Revalidate the canonical source after the asynchronous Graph lookup.
-   // A denied guard must retain its error and prevent the attachment GET.
-   if(beforeExternal)await beforeExternal();
-   await ownBoundary();
-   let response;try{response=await fetchImpl(url,{headers:{Authorization:`Bearer ${token}`},cache:'no-store',redirect:'error',signal:AbortSignal.timeout(20000)});}catch{throw new WorkspaceError('META_CUSTOMER_MEDIA_UNCONFIRMED',503);}
-   await ownBoundary();
-   if(!response.ok||!response.body||response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()!==mime)throw new WorkspaceError('META_CUSTOMER_MEDIA_UNCONFIRMED',503);
-   const length=response.headers.get('content-length');if(length!==null&&(!/^\d+$/.test(length)||Number(length)!==item.file_size))throw new WorkspaceError('META_CUSTOMER_MEDIA_INTEGRITY',409);
-   const reader=response.body.getReader(),parts=[];let size=0;
-   try{while(true){const part=await reader.read();if(ownCapability)config();if(part.done)break;size+=part.value.byteLength;if(size>limit||size>item.file_size)throw new WorkspaceError('META_CUSTOMER_MEDIA_INTEGRITY',409);parts.push(Buffer.from(part.value));}
-    const bytes=Buffer.concat(parts,size);if(size!==item.file_size||createHash('sha256').update(bytes).digest('hex')!==expected)throw new WorkspaceError('META_CUSTOMER_MEDIA_INTEGRITY',409);return {bytes,contentType:mime,sha256:expected};
-   }finally{await reader.cancel().catch(()=>{});reader.releaseLock();await ownBoundary();}
-  },
+  async downloadMedia(input){return downloadScopedMedia(input,mediaTypes,3*1024*1024);},
+  // Dedicated source download only; consent, actor and worksite authorization
+  // belong to the caller's canonical plan-import bridge, never a MIME flag.
+  async downloadPlanSource(input){return downloadScopedMedia(input,planSourceTypes,2*1024*1024);},
  };
 }

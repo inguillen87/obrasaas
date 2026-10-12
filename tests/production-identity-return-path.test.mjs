@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { identityInvitationId, identityAccountReturnPath, identitySignInPath, identitySignUpPath, identityHasPendingInvitation, identityWorkspaceProjectHint } from '../src/lib/identity-return-path.mjs';
+import { identityInvitationId, identityAccountReturnPath, identitySignInPath, identitySignUpPath, identityHasPendingInvitation, identityWorkspaceProjectHint, identityWorkspacePlanHint } from '../src/lib/identity-return-path.mjs';
 
 const invitationId = 'invite_0123456789abcdef0123456789abcdef';
 const routes = [identityAccountReturnPath, identitySignInPath, identitySignUpPath];
@@ -137,4 +137,30 @@ test('a project hint cannot expand authentication return context or carry author
     assert.deepEqual([...new URL(destination, 'https://obrasaas.com').searchParams.keys()], ['participar']);
   });
   assert.equal(identityWorkspaceProjectHint(new URLSearchParams(identityAccountReturnPath(query).split('?')[1])), '');
+});
+
+const planId='plan_draft_'+'a'.repeat(64),projectId='project-pilot_20261012';
+test('one exact paired plan/project hint survives sign-in, sign-up and account returns without carrying authority',()=>{
+ for(const query of [{obra:projectId,plan:planId},new URLSearchParams({obra:projectId,plan:planId,role:'ADMIN',scope:'private',token:'synthetic',redirect_url:'https://foreign.example',invoice:'private',email:'not-a-real-email'})]){
+  assert.equal(identityWorkspacePlanHint(query),planId);
+  routes.forEach((route,index)=>{const destination=route(query);assert.equal(destination,paths[index]+'?obra='+projectId+'&plan='+planId);const parsed=new URL(destination,'https://obrasaas.com');assert.equal(parsed.origin,'https://obrasaas.com');assert.deepEqual([...parsed.searchParams.entries()],[['obra',projectId],['plan',planId]]);});
+ }
+ const account=new URL('https://obrasaas.com/cuenta?obra='+projectId+'&plan='+planId),login=new URL(identitySignInPath(account.searchParams),account.origin),signup=new URL(identitySignUpPath(login.searchParams),account.origin);
+ assert.equal(new URL(identityAccountReturnPath(signup.searchParams),account.origin).href,account.href);
+});
+test('plan hints require one project and one exact draft ID, including duplicates and trailing newline rejection',()=>{
+ for(const query of [undefined,null,{},'https://foreign.example',{plan:planId},{obra:projectId},{obra:[projectId,projectId],plan:planId},{obra:projectId,plan:[planId,planId]},Object.create({obra:projectId,plan:planId}),new URLSearchParams('obra='+projectId+'&plan='+planId+'&plan='+planId),new URLSearchParams('obra='+projectId+'&obra='+projectId+'&plan='+planId),...[null,123,'plan_draft_'+'a'.repeat(63),'plan_draft_'+'a'.repeat(65),'plan_draft_'+'A'.repeat(64),planId+'\n',planId+'\r',planId+' ',planId+'&role=ADMIN',planId+'#x','https://foreign.example','//foreign.example','../private'].map(plan=>({obra:projectId,plan}))]){
+  assert.equal(identityWorkspacePlanHint(query),'');routes.forEach((route,index)=>assert.equal(route(query),paths[index]));
+ }
+ assert.equal(identityWorkspacePlanHint(new URLSearchParams('obra='+projectId+'&plan=plan%5Fdraft%5F'+'a'.repeat(64))),planId);
+ assert.equal(identityWorkspacePlanHint(new URLSearchParams('obra='+projectId+'&plan=plan%255Fdraft%255F'+'a'.repeat(64))),'');
+});
+test('participant and office invitations retain priority and never forward the paired plan hint',()=>{
+ const officeId='office_invite_'+'b'.repeat(32);
+ for(const query of [{obra:projectId,plan:planId,participar:invitationId},{obra:projectId,plan:planId,oficina:officeId}]){
+  assert.equal(identityWorkspacePlanHint(query),'');const key=query.participar?'participar':'oficina',value=query[key];routes.forEach((route,index)=>assert.equal(route(query),paths[index]+'?'+key+'='+value));
+ }
+ for(const query of [{obra:projectId,plan:planId,participar:''},{obra:projectId,plan:planId,oficina:'invalid'},{obra:projectId,plan:planId,participar:[invitationId,invitationId]},{obra:projectId,plan:planId,participar:invitationId,oficina:officeId}]){
+  assert.equal(identityWorkspacePlanHint(query),'');routes.forEach((route,index)=>assert.equal(route(query),paths[index]));
+ }
 });

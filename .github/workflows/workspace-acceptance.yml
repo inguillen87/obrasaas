@@ -374,6 +374,8 @@ jobs:
       - name: Channel identity and integrated field transactions
         run: |
           npx eslint src/lib/worker-channel-*.mjs src/lib/meta-field-*.mjs src/app/api/identity/worker-channel src/app/api/meta/customer-process scripts/verify-worker-channel-*.mjs scripts/verify-meta-field-*.mjs scripts/verify-meta-customer-processing-*.mjs scripts/verify-operations-status-ui.mjs tests/production-worker-channel*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-customer-processing.test.mjs tests/production-operations-status.test.mjs
+          npx eslint src/lib/meta-plan-import-*.mjs tests/production-meta-plan-import-conversation.test.mjs tests/production-meta-plan-source-provider.test.mjs tests/production-meta-plan-import-transport.test.mjs tests/production-plan-import-link-ui.test.mjs tests/fixtures/meta-plan-import-transport-synthetic.mjs --max-warnings 0
+          node --test tests/production-meta-plan-import-conversation.test.mjs tests/production-meta-plan-source-provider.test.mjs tests/production-meta-plan-import-transport.test.mjs tests/production-plan-import-link-ui.test.mjs
           node scripts/verify-worker-channel-postgres.mjs
           node scripts/verify-meta-customer-processing-postgres.mjs
           node scripts/verify-meta-field-bridge-postgres.mjs
