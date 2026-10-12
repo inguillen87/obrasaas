@@ -1,0 +1,212 @@
+'use client';
+import {useCallback,useEffect,useId,useRef,useState} from 'react';
+import {ArrowUpRight,Check,CreditCard,RefreshCw,ShieldCheck} from 'lucide-react';
+import {useWorkspaceRequest} from './workspace-request-lifecycle';
+import {browserCompanySubscriptionJournal,COMPANY_SUBSCRIPTION_RECOVERY_EVENT,companySubscriptionView,companySubscriptionBeginCommand,companySubscriptionCancelCommand,companySubscriptionErrorMessage} from './company-subscription-view.mjs';
+import styles from './company-subscription-panel.module.css';
+
+const endpoint = '/api/identity/company-subscription';
+const blank = owner => ({owner,view:null,pending:null,storageReady:false,busy:false,notice:'',selected:'',confirmed:false,cancelReview:false,cancelConfirmed:false});
+const denied = error => [401,403].includes(error?.status) || error?.code === 'WORKSPACE_CONTEXT_CHANGED';
+
+export function CompanySubscriptionPanel(props) {
+  return <CompanySubscriptionContent key={props.scope} {...props}/>;
+}
+
+function CompanySubscriptionContent({scope,getSessionToken,locked = false,onPending}) {
+  const request = useWorkspaceRequest(getSessionToken),headingId = useId(),offerGroup = useId();
+  const [result,setResult] = useState(null);
+  const alive = useRef(false),epoch = useRef(0),active = useRef(null),owner = useRef(request),currentRef = useRef(null),pendingCallback = useRef(onPending);
+  owner.current = request;pendingCallback.current = onPending;
+  // Changing account, organization or token getter hides the previous access
+  // synchronously; late responses cannot restore its plan or checkout link.
+  const current = result?.owner === request ? result : null;
+  currentRef.current = current;
+  const busy = current?.busy === true,view = current?.view,pending = current?.pending;
+  const valid = useCallback((generation,controller) => alive.current && owner.current === request && epoch.current === generation && !controller.signal.aborted,[request]);
+  const api = useCallback(async (options,expected,controller) => {
+    const suffix = options.method === 'POST' ? '' : '?'+new URLSearchParams({scope,...(expected.operationId?{operationId:expected.operationId}:{})});
+    return request(endpoint+suffix,{...options,signal:controller.signal,requestTimeoutMs:options.method === 'POST'?25000:15000},async response => {
+      if (!response.ok) {
+        let code;try {const body = await response.json();if (typeof body?.code === 'string' && /^[A-Z0-9_]{1,128}$/.test(body.code)) code = body.code;} catch { /* Fixed guidance also covers non-JSON session failures. */ }
+        throw Object.assign(new Error('Company subscription request unconfirmed'),{status:response.status,...(code?{code}:{})});
+      }
+      let value;try {value = await response.json();} catch {throw Object.assign(new Error('Company subscription response unreadable'),{code:'COMPANY_SUBSCRIPTION_RESULT_UNCONFIRMED'});}
+      return companySubscriptionView(value,{scope,...expected});
+    });
+  },[request,scope]);
+
+  const consult = useCallback(async (initial = false) => {
+    if (active.current && !active.current.signal.aborted) return;
+    const controller = new AbortController(),generation = ++epoch.current;
+    active.current = controller;
+    const previous = currentRef.current;
+    setResult({...blank(request),pending:previous?.pending || null,busy:true});
+    try {
+      const next = await api({}, {},controller);
+      if (!valid(generation,controller)) return;
+      let reference = null,storageReady = true,notice = '';
+      try {reference = await browserCompanySubscriptionJournal.read(scope,next.organizationId,controller.signal);}
+      catch (error) {storageReady = false;reference = previous?.pending || null;notice = companySubscriptionErrorMessage(error);}
+      if (!valid(generation,controller)) return;
+      setResult({...blank(request),view:next,pending:reference,storageReady,notice});
+    } catch (error) {
+      if (valid(generation,controller)) setResult({...blank(request),pending:previous?.pending || null,notice:companySubscriptionErrorMessage(error)});
+    } finally {
+      if (active.current === controller) active.current = null;
+      if (initial && valid(generation,controller)) pendingCallback.current?.(false);
+    }
+  },[api,request,scope,valid]);
+
+  useEffect(() => {
+    const ownedEpoch = epoch,ownedActive = active;
+    alive.current = true;
+    void consult(true);
+    return () => {alive.current = false;ownedEpoch.current++;ownedActive.current?.abort();ownedActive.current = null;pendingCallback.current?.(false);};
+  },[consult]);
+  useEffect(() => {pendingCallback.current?.(busy);},[busy,request]);
+  useEffect(() => {
+    const changed = async () => {
+      const snapshot = currentRef.current,generation = epoch.current;
+      if (!snapshot?.view || owner.current !== request) return;
+      try {
+        const reference = await browserCompanySubscriptionJournal.read(scope,snapshot.view.organizationId);
+        if (alive.current && owner.current === request && epoch.current === generation) setResult(previous => previous?.owner === request ? {...previous,pending:reference,storageReady:true,...(reference?{selected:'',confirmed:false,cancelReview:false,cancelConfirmed:false}:{})} : previous);
+      } catch (error) {
+        if (alive.current && owner.current === request && epoch.current === generation) setResult(previous => previous?.owner === request ? {...previous,storageReady:false,notice:companySubscriptionErrorMessage(error)} : previous);
+      }
+    };
+    window.addEventListener(COMPANY_SUBSCRIPTION_RECOVERY_EVENT,changed);
+    return () => window.removeEventListener(COMPANY_SUBSCRIPTION_RECOVERY_EVENT,changed);
+  },[request,scope]);
+
+  function edit(change) {setResult(previous => previous?.owner === request ? {...previous,...change} : previous);}
+  async function applyResult(next,reference,controller,generation) {
+    const settled = await browserCompanySubscriptionJournal.settle(reference,next,controller.signal);
+    // A closed unsent operation is not a current subscription snapshot. Read
+    // the company's latest attempt before allowing another explicit purchase.
+    const observed = settled && next.recovery?.state === 'NO_DISPATCH' ? await api({}, {organizationId:reference.organizationId},controller) : next;
+    const retained = await browserCompanySubscriptionJournal.read(scope,observed.organizationId,controller.signal);
+    if (!valid(generation,controller)) return;
+    const notice = settled ? next.recovery?.state === 'NO_DISPATCH' ? 'Tu solicitud no se envió. Revisá el estado actualizado para continuar.' : reference.action === 'cancel_renewal' ? 'La renovación quedó cancelada.' : observed.attempt?.checkoutUrl ? 'Tu plan está listo para continuar en Mercado Pago.' : 'Estado de la suscripción actualizado.' : 'El intento sigue pendiente. Comprobalo antes de iniciar otro pago.';
+    setResult({...blank(request),view:observed,pending:retained,storageReady:true,notice});
+  }
+  async function dispatch(command) {
+    const snapshot = currentRef.current;
+    if (!snapshot?.view || snapshot.pending || !snapshot.storageReady || snapshot.busy || active.current || locked) return;
+    const controller = new AbortController(),generation = ++epoch.current;
+    const reference = {version:1,scope,organizationId:snapshot.view.organizationId,operationId:crypto.randomUUID(),action:command.action,createdAt:Date.now()};
+    let observed = null;
+    active.current = controller;
+    edit({busy:true,notice:'',pending:reference,selected:'',confirmed:false,cancelReview:false,cancelConfirmed:false});
+    try {
+      await browserCompanySubscriptionJournal.reserve(reference,controller.signal);
+      if (!valid(generation,controller)) return;
+      const next = await api({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...command,operationId:reference.operationId})},{organizationId:reference.organizationId,operationId:reference.operationId,action:reference.action},controller);
+      observed = next;
+      if (valid(generation,controller)) await applyResult(next,reference,controller,generation);
+    } catch (error) {
+      if (valid(generation,controller)) {
+        let retained = reference,storageReady = true;
+        try {retained = await browserCompanySubscriptionJournal.read(scope,reference.organizationId,controller.signal);} catch {storageReady = false;}
+        if (valid(generation,controller)) setResult({...blank(request),view:denied(error)?null:observed || snapshot.view,pending:retained,storageReady,notice:companySubscriptionErrorMessage(error,{mutation:true})});
+      }
+    } finally {
+      if (active.current === controller) active.current = null;
+      if (valid(generation,controller)) edit({busy:false});
+    }
+  }
+  async function recover() {
+    const snapshot = currentRef.current,reference = snapshot?.pending;
+    if (!reference || reference.scope !== scope || !snapshot.view || snapshot.view.organizationId !== reference.organizationId || snapshot.busy || active.current) return;
+    const controller = new AbortController(),generation = ++epoch.current;
+    let observed = null;
+    active.current = controller;edit({busy:true,notice:'',selected:'',confirmed:false,cancelReview:false,cancelConfirmed:false});
+    try {
+      // Explicit reconciliation inspects the same provider resource. It never
+      // creates or resends a checkout, even when no receipt is yet observable.
+      const next = await api({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'recover',scope,operationId:reference.operationId})},{organizationId:reference.organizationId,operationId:reference.operationId,action:reference.action},controller);
+      observed = next;
+      if (valid(generation,controller)) await applyResult(next,reference,controller,generation);
+    } catch (error) {
+      if (valid(generation,controller)) edit({view:denied(error)?null:observed || snapshot.view,notice:companySubscriptionErrorMessage(error,{mutation:true})});
+    } finally {
+      if (active.current === controller) active.current = null;
+      if (valid(generation,controller)) edit({busy:false});
+    }
+  }
+  async function checkPayment() {
+    const snapshot = currentRef.current;
+    if (!snapshot?.view?.attempt || snapshot.busy || active.current || pending) return;
+    const controller = new AbortController(),generation = ++epoch.current;
+    active.current = controller;edit({busy:true,notice:'',selected:'',confirmed:false,cancelReview:false,cancelConfirmed:false});
+    const attempt = snapshot.view.attempt,operationId = attempt.cancellation && attempt.cancellation.state !== 'CONFIRMED' ? attempt.cancellation.operationId : attempt.operationId;
+    try {
+      const next = await api({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'recover',scope,operationId})},{organizationId:snapshot.view.organizationId,operationId},controller);
+      if (valid(generation,controller)) setResult({...blank(request),view:next,storageReady:snapshot.storageReady,notice:'Estado actualizado con el resultado del pago.'});
+    } catch (error) {
+      if (valid(generation,controller)) edit({view:denied(error)?null:snapshot.view,notice:companySubscriptionErrorMessage(error)});
+    } finally {
+      if (active.current === controller) active.current = null;
+      if (valid(generation,controller)) edit({busy:false});
+    }
+  }
+  function begin(event) {
+    event.preventDefault();
+    try {void dispatch(companySubscriptionBeginCommand(view,{scope,offerId:current?.selected,confirmed:current?.confirmed}));}
+    catch (error) {edit({notice:companySubscriptionErrorMessage(error),confirmed:false});}
+  }
+  function cancelRenewal(event) {
+    event.preventDefault();
+    try {void dispatch(companySubscriptionCancelCommand(view,{scope,confirmed:current?.cancelConfirmed}));}
+    catch (error) {edit({notice:companySubscriptionErrorMessage(error),cancelConfirmed:false});}
+  }
+  const selected = view?.offers.find(offer => offer.id === current?.selected);
+  const decisionsDisabled = busy || locked || !current?.storageReady || Boolean(pending);
+  return <section className={styles.panel} aria-labelledby={headingId} aria-busy={busy} data-company-subscription>
+    <div className={styles.heading}>
+      <div><p className={styles.eyebrow}>SUSCRIPCIÓN DE EMPRESA</p><h3 id={headingId}><CreditCard size={21} aria-hidden="true"/>Plan y pago</h3><p>Una suscripción para toda tu empresa. Consultá la prueba, el pago y la renovación.</p></div>
+      <button type="button" className={styles.secondary} disabled={busy} onClick={() => consult()}><RefreshCw size={16} aria-hidden="true"/>{busy?'Consultando…':'Actualizar estado'}</button>
+    </div>
+    <div className={styles.live} role="status" aria-live="polite" aria-atomic="true">{current?.notice && <p className={styles.notice}>{current.notice}</p>}{busy && <p>Estamos comprobando el estado de esta empresa…</p>}</div>
+    {view && <>
+      <div className={styles.summary}><div><p className={styles.company}>{view.companyName}</p><p className={styles.plan}>{view.planLabel}</p></div><span className={view.tone === 'positive'?styles.positive:styles.attention}>{view.statusLabel}</span></div>
+      <dl className={styles.facts}>
+        {view.trialExpiryLabel && <div><dt>{view.trialCurrent?'Tu prueba vence':'Vencimiento de la prueba'}</dt><dd>{view.trialExpiryLabel}</dd></div>}
+        <div><dt>Pago</dt><dd>{view.paymentLabel}</dd></div>
+        {view.attempt?.paidThroughLabel && <div><dt>Acceso pagado hasta</dt><dd>{view.attempt.paidThroughLabel}</dd></div>}
+        {view.attempt && <div><dt>Abono elegido</dt><dd>{view.attempt.priceLabel} por mes</dd></div>}
+      </dl>
+      {pending && <div className={styles.recovery} data-subscription-recovery><h4>Hay un intento por comprobar</h4><p>Conservamos tu solicitud. Comprobarla consulta el mismo intento y evita iniciar otro pago.</p><button type="button" className={styles.primary} disabled={busy} onClick={recover}>Comprobar este intento</button></div>}
+      {!view.configurationReady && <div className={styles.setup} data-subscription-setup><ShieldCheck size={22} aria-hidden="true"/><div><h4>El pago en línea todavía no está habilitado</h4><p>Podés consultar el estado de tu empresa. Te mostraremos el importe y las condiciones cuando el pago esté disponible.</p></div></div>}
+      {view.configurationReady && view.canBegin && <form onSubmit={begin} className={styles.purchase}>
+        <fieldset className={styles.offers} disabled={decisionsDisabled}>
+          <legend>Elegí el plan de tu empresa</legend>
+          <div className={styles.offerGrid}>{view.offers.map(offer => <label className={`${styles.offer} ${current?.selected === offer.id?styles.selected:''}`} key={offer.id}>
+            <span className={styles.offerHeading}><span>{offer.planLabel}</span><input type="radio" name={offerGroup} value={offer.id} checked={current?.selected === offer.id} onChange={() => edit({selected:offer.id,confirmed:false,notice:''})}/></span>
+            <span className={styles.price}>{offer.priceLabel}<small>{offer.periodLabel}</small></span>
+            <span className={styles.tax}>{offer.taxLabel}</span>
+          </label>)}</div>
+        </fieldset>
+        <div className={styles.included}><Check size={18} aria-hidden="true"/><p>Un único abono: WhatsApp, verificación de identidad e IA incluidos. Sin adicionales automáticos.</p></div>
+        {selected && <div className={styles.review}>
+          <p><strong>{selected.planLabel} · {selected.priceLabel} por mes</strong></p><p>{selected.taxLabel}</p><p>Se renueva cada mes. Podés cancelar la renovación y conservar el acceso durante el período ya pagado.</p>
+          <label className={styles.confirmation}><input type="checkbox" checked={current?.confirmed === true} disabled={decisionsDisabled} onChange={event => edit({confirmed:event.target.checked})}/><span>Revisé el importe en {selected.currency}, los impuestos informados y la renovación mensual.</span></label>
+        </div>}
+        <button type="submit" className={styles.primary} disabled={decisionsDisabled || !selected || !current?.confirmed}>{selected?`Continuar con ${selected.planLabel}`:'Elegí un plan para continuar'}<ArrowUpRight size={17} aria-hidden="true"/></button>
+        <p className={styles.note}>Revisarás y autorizarás el pago en Mercado Pago. La autorización se comprueba por separado del pago.</p>
+      </form>}
+      {view.configurationReady && view.attempt?.checkoutUrl && !pending && <div className={styles.checkout}><h4>Continuá tu suscripción en Mercado Pago</h4><p>{view.attempt.planLabel} · {view.attempt.priceLabel} por mes. El pago se confirmará al comprobar el resultado.</p><p>{view.attempt.taxLabel}</p><p>Renovación mensual. Un único abono, sin adicionales automáticos.</p><a className={styles.primary} href={view.attempt.checkoutUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">Continuar en Mercado Pago<ArrowUpRight size={17} aria-hidden="true"/></a><button type="button" className={styles.secondary} disabled={busy} onClick={checkPayment}>Ya volví · comprobar pago</button></div>}
+      {view.attempt && (!view.attempt.checkoutUrl || !view.configurationReady) && !pending && <div className={styles.payment}><button type="button" className={styles.secondary} disabled={busy} onClick={checkPayment}>Comprobar pago y renovación</button></div>}
+      {view.canCancel && !pending && <div className={styles.renewal}>
+        {!current?.cancelReview?<button type="button" className={styles.textButton} disabled={decisionsDisabled} onClick={() => edit({cancelReview:true,cancelConfirmed:false,notice:''})}>Cancelar renovación</button>:<form onSubmit={cancelRenewal} className={styles.review}>
+          <h4>Cancelar renovación</h4><p>Se detendrán los próximos cobros de esta suscripción.{view.attempt?.paidThroughLabel?` Conservás el acceso pagado hasta ${view.attempt.paidThroughLabel}.`:' La cancelación no genera un reembolso.'}</p>
+          <label className={styles.confirmation}><input type="checkbox" checked={current.cancelConfirmed} disabled={decisionsDisabled} onChange={event => edit({cancelConfirmed:event.target.checked})}/><span>Quiero cancelar la renovación mensual de esta empresa.</span></label>
+          <div className={styles.actions}><button type="submit" className={styles.cancelButton} disabled={decisionsDisabled || !current.cancelConfirmed}>Confirmar cancelación de renovación</button><button type="button" className={styles.secondary} disabled={busy} onClick={() => edit({cancelReview:false,cancelConfirmed:false})}>Volver</button></div>
+        </form>}
+      </div>}
+      {view.attempt?.cancelAtPeriodEnd && <p className={styles.note}>La renovación está cancelada.{view.attempt.paidThroughLabel?' Tu acceso se conserva hasta el vencimiento del período pagado.':''}</p>}
+      <p className={styles.observed}>Última consulta: {view.observedAtLabel}</p>
+    </>}
+  </section>;
+}

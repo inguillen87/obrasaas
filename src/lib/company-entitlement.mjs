@@ -42,7 +42,20 @@ export function companyWhatsappOnboardingEntitlement(company,{now}={}){
  if(status==='PAST_DUE')return denied('COMPANY_ENTITLEMENT_PAST_DUE');
  if(status==='CANCELED')return denied('COMPANY_ENTITLEMENT_CANCELED');
  if(status==='SUSPENDED')return denied('COMPANY_ENTITLEMENT_SUSPENDED');
- if(status==='ACTIVE')return paidPlans.has(plan)?activePaidPlan:denied('COMPANY_ENTITLEMENT_ACTIVE_PLAN_UNSUPPORTED');
+ if(status==='ACTIVE'){
+  if(!paidPlans.has(plan))return denied('COMPANY_ENTITLEMENT_ACTIVE_PLAN_UNSUPPORTED');
+  // Existing manual grants retain their registered entitlement. Only a new
+  // server-managed financial receipt introduces a paid coverage boundary.
+  if(company.metadata&&Object.hasOwn(company.metadata,'companySubscription')){
+   const paid=company.metadata.companySubscription,period=paid?.paidPeriod;
+   if(!paid||typeof paid!=='object'||Array.isArray(paid)||paid.version!==1||!/^company_subscription_[a-f0-9]{64}$/.test(paid.attemptId||'')||!/^company_subscription_payment_[a-f0-9]{64}$/.test(paid.receiptId||'')||typeof paid.providerResourceId!=='string'||!paid.providerResourceId||typeof paid.cancelAtPeriodEnd!=='boolean'||!period||typeof period!=='object'||Array.isArray(period))return denied('COMPANY_ENTITLEMENT_PAID_PERIOD_UNOBSERVED');
+   const startsAt=instant(period.startsAt),endsAt=instant(period.endsAt);
+   if(startsAt===null||endsAt===null||endsAt<=startsAt)return denied('COMPANY_ENTITLEMENT_PAID_PERIOD_UNOBSERVED');
+   if(startsAt>checkedAt)return denied('COMPANY_ENTITLEMENT_PAID_PERIOD_NOT_STARTED');
+   if(endsAt<=checkedAt)return denied('COMPANY_ENTITLEMENT_PAID_PERIOD_EXPIRED');
+  }
+  return activePaidPlan;
+ }
  if(plan!=='TRIAL')return denied('COMPANY_ENTITLEMENT_TRIAL_PLAN_MISMATCH');
  const expiresAt=instant(company.trialEndsAt);if(expiresAt===null)return denied('COMPANY_ENTITLEMENT_TRIAL_EXPIRY_UNAVAILABLE');
  return expiresAt>checkedAt?currentTrial:denied('COMPANY_ENTITLEMENT_TRIAL_EXPIRED');

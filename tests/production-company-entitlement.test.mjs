@@ -112,3 +112,15 @@ test('output is sanitized and immutable; unrelated metadata cannot activate an e
  assert.equal(JSON.stringify(result).includes('Private'),false);assert.equal(JSON.stringify(result).includes('private'),false);assert.equal(JSON.stringify(result).includes('+12025550123'),false);
  assert.throws(()=>{result.allowed=true;},TypeError);
 });
+
+const managedPaid=(patch={})=>({version:1,attemptId:'company_subscription_'+'a'.repeat(64),receiptId:'company_subscription_payment_'+'b'.repeat(64),providerResourceId:'subscription-a',paidPeriod:{startsAt:'2026-10-01T03:00:00.000Z',endsAt:'2026-11-01T03:00:00.000Z'},cancelAtPeriodEnd:false,...patch});
+test('new managed paid coverage closes at its exact UTC end while cancellation preserves the prepaid period',()=>{
+ const company=row({subscriptionPlan:'PRO',subscriptionStatus:'ACTIVE',metadata:{companySubscription:managedPaid({cancelAtPeriodEnd:true})}});
+ assert.deepEqual(entitlement(company,{now:'2026-11-01T03:00:00.000Z'}),closed('COMPANY_ENTITLEMENT_PAID_PERIOD_EXPIRED'));
+ assert.deepEqual(entitlement(company,{now:'2026-10-31T23:59:59.999-03:00'}),allowed('ACTIVE_PAID_PLAN'));
+ assert.deepEqual(entitlement(company,{now:'2026-09-30T23:59:59.999-03:00'}),closed('COMPANY_ENTITLEMENT_PAID_PERIOD_NOT_STARTED'));
+});
+test('malformed managed receipt or period cannot become an unlimited manual grant',()=>{
+ for(const stored of [null,{},managedPaid({receiptId:null}),managedPaid({paidPeriod:{startsAt:'2026-10-01',endsAt:'2099-01-01'}}),managedPaid({paidPeriod:{startsAt:'2026-11-01T03:00:00Z',endsAt:'2026-10-01T03:00:00Z'}})])assert.deepEqual(check(row({subscriptionPlan:'PRO',subscriptionStatus:'ACTIVE',metadata:{companySubscription:stored}})),closed('COMPANY_ENTITLEMENT_PAID_PERIOD_UNOBSERVED'));
+ const manual=row({subscriptionPlan:'PRO',subscriptionStatus:'ACTIVE',trialEndsAt:null,metadata:{manualPromotion:{preserved:true}}});assert.deepEqual(entitlement(manual,{now:'2099-01-01T00:00:00Z'}),allowed('ACTIVE_PAID_PLAN'));
+});

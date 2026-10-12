@@ -1,7 +1,7 @@
-name: Canonical company plan and retired billing
+name: Canonical company subscription and retired billing
 on:
   push:
-    branches: [master, 'hotfix/production-workspace-company-plan-*']
+    branches: [master, 'hotfix/production-workspace-company-plan-*', 'feat/company-billing-checkout-*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,13 +35,17 @@ jobs:
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
       - name: Canonical plan contracts and closed legacy payment paths
-        run: node --test tests/production-company-billing.test.mjs tests/production-company-billing-view.test.mjs tests/production-company-entitlement.test.mjs
+        run: node --test tests/production-company-billing.test.mjs tests/production-company-billing-view.test.mjs tests/production-company-entitlement.test.mjs tests/production-company-subscription-*.test.mjs
       - name: Affected source lint
-        run: npx eslint src/lib/company-billing*.mjs src/lib/retired-billing.mjs src/lib/mercadopago.js src/lib/workspace-store.mjs src/proxy.js src/app/api/identity/company-billing/route.js src/app/api/billing scripts/verify-company-billing-*.mjs tests/production-company-billing*.test.mjs 'src/app/(identity)/cuenta/company-billing-panel.js' 'src/app/(identity)/cuenta/company-billing-view.mjs' 'src/app/(identity)/cuenta/workspace-client.js' --max-warnings 0
+        run: npx eslint src/lib/company-billing*.mjs src/lib/company-subscription*.mjs src/lib/company-entitlement.mjs src/lib/retired-billing.mjs src/lib/mercadopago.js src/lib/workspace-store.mjs src/lib/meta-customer-onboarding.mjs src/lib/participant-onboarding-authority.mjs src/proxy.js src/app/api/identity/company-billing/route.js src/app/api/identity/company-subscription src/app/api/billing scripts/verify-company-billing-*.mjs scripts/verify-company-subscription-*.mjs tests/production-company-billing*.test.mjs tests/production-company-subscription-*.test.mjs 'src/app/(identity)/cuenta/company-billing-panel.js' 'src/app/(identity)/cuenta/company-billing-view.mjs' 'src/app/(identity)/cuenta/company-subscription-panel.js' 'src/app/(identity)/cuenta/company-subscription-view.mjs' 'src/app/(identity)/cuenta/workspace-client.js' --max-warnings 0
       - name: PostgreSQL isolation with no operational tables
         run: node scripts/verify-company-billing-postgres.mjs
       - name: Responsive real component and stale access controls
         run: node scripts/verify-company-billing-ui.mjs
+      - name: Durable subscription PostgreSQL isolation and concurrency
+        run: node scripts/verify-company-subscription-postgres.mjs
+      - name: Responsive subscription checkout and recovery controls
+        run: node scripts/verify-company-subscription-ui.mjs
       - name: Preserve exact checked-out source
         run: git diff --exit-code HEAD --
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -49,5 +53,12 @@ jobs:
         with:
           name: canonical-company-billing-${{ github.sha }}-${{ github.run_attempt }}
           path: .vercel/private/company-billing-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: canonical-company-subscription-${{ github.sha }}-${{ github.run_attempt }}
+          path: .vercel/private/company-subscription-evidence/
           include-hidden-files: true
           if-no-files-found: error

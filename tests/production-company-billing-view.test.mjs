@@ -67,6 +67,23 @@ test('closed subscriptions and inconsistent canonical rows stay visibly closed',
   assert.equal(view(missingExpiry).trialExpiryLabel,null);
 });
 
+test('private managed payment periods accept only finite server denial states', () => {
+  for (const [reasonCode,label] of [
+    ['COMPANY_ENTITLEMENT_PAID_PERIOD_UNOBSERVED','Período por revisar'],
+    ['COMPANY_ENTITLEMENT_PAID_PERIOD_NOT_STARTED','Período pendiente'],
+    ['COMPANY_ENTITLEMENT_PAID_PERIOD_EXPIRED','Período finalizado'],
+  ]) {
+    const input = snapshot();input.subscription = {plan:'PRO',status:'ACTIVE',trialEndsAt:null,entitlement:closed(reasonCode)};
+    const result = view(input);
+    assert.equal(result.statusLabel,label);assert.equal(result.tone,'attention');
+    assert.match(result.paymentLabel,/no consultado/);
+    for (const change of [{allowed:true},{basis:'ACTIVE_PAID_PLAN'},{allowed:'false'},{reasonCode:'COMPANY_ENTITLEMENT_OTHER_PAID_DENIAL'}]) {
+      assert.throws(() => view({...input,subscription:{...input.subscription,entitlement:{...input.subscription.entitlement,...change}}}));
+    }
+    for (const change of [{plan:'TRIAL'},{status:'TRIALING'},{status:'SUSPENDED'}]) assert.throws(() => view({...input,subscription:{...input.subscription,...change}}));
+  }
+});
+
 test('context, envelope and unknown enums cannot be projected as a current company plan', () => {
   for (const change of [{scope:'b'.repeat(64)},{scope:scope.toUpperCase()},{version:2},{observedAt:null},{organization:[]},{subscription:null},{billing:[]},{organization:{id:'other.org',name:'Otra empresa'}},{organization:{id:'org_pilot',name:''}}]) assert.throws(() => view({...snapshot(),...change}));
   for (const expected of [undefined,null,{},{scope:'bad'},{scope:'b'.repeat(64)}]) assert.throws(() => companyBillingView(snapshot(),expected));

@@ -364,8 +364,8 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
     // Gate only a new ordinary CUSTOMER attempt. Exact replay and existing
     // connections retain their own authorization; OWN/pilot modes stay scoped.
     if(!c&&![META_OWN_COMPANY_MODE,META_DEVELOPMENT_PILOT_MODE].includes(provider.readiness().mode)){
-     const companies=(await client.query(`SELECT id,"subscriptionPlan"::text AS "subscriptionPlan","subscriptionStatus"::text AS "subscriptionStatus",
-      "trialEndsAt" AT TIME ZONE 'UTC' AS "trialEndsAt" FROM public."Organization" WHERE id=$1 FOR SHARE`,[member.organizationId])).rows;
+      const companies=(await client.query(`SELECT id,"subscriptionPlan"::text AS "subscriptionPlan","subscriptionStatus"::text AS "subscriptionStatus",
+       metadata,"trialEndsAt" AT TIME ZONE 'UTC' AS "trialEndsAt" FROM public."Organization" WHERE id=$1 FOR SHARE`,[member.organizationId])).rows;
      if(companies.length!==1||companies[0].id!==member.organizationId)throw new WorkspaceError('COMPANY_ENTITLEMENT_UNOBSERVED',503);
      // Read the canonical DB clock after all prior lock waits in this transaction.
      const observedAt=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
