@@ -12,7 +12,7 @@ export function createCompanyBilling({workspace}){
       return workspace.companyRead(session,{scope},async(client,member,currentScope)=>{
         // Canonical timestamp columns are UTC. The explicit conversion avoids
         // interpreting the trial according to the application host timezone.
-        const rows=(await client.query(`SELECT id,name,"subscriptionPlan"::text AS "subscriptionPlan",
+        const rows=(await client.query(`SELECT id,name,metadata,"subscriptionPlan"::text AS "subscriptionPlan",
           "subscriptionStatus"::text AS "subscriptionStatus", "trialEndsAt" AT TIME ZONE 'UTC' AS "trialEndsAt",
           clock_timestamp() AS "observedAt" FROM public."Organization" WHERE id=$1`,[member.organizationId])).rows;
         const company=rows[0];

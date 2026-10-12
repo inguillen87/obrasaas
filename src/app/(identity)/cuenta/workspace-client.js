@@ -15,7 +15,7 @@ import {WorkerChannelPanel} from './worker-channel-panel';
 import {CompanyChannelPanel} from './company-channel-panel';
 import {OwnCompanyNumberPanel} from './own-company-number-panel';
 import {OwnCompanyTemplatesPanel} from './own-company-templates-panel';
-import {CompanyBillingPanel} from './company-billing-panel';
+import {CompanySubscriptionPanel} from './company-subscription-panel';
 import {MetaOnboardingPanel} from './meta-onboarding-panel';
 import {OperationsStatusPanel} from './operations-status-panel';
 import {WorkspaceRecoveryPanel} from './workspace-recovery-panel';
@@ -324,7 +324,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
   <div role="status" aria-live="polite" className={notice?styles.notice:styles.silent}>{notice}</div>
   {planReadbackMatches&&planReadback.status==='failed'&&<button type="button" disabled={loading||contextLocked} onClick={()=>readRecordedSchedule(planReadback)}>Volver a consultar el cronograma</button>}
   {loading&&<p className={styles.loading}><LoaderCircle size={18} className={styles.spinner} aria-hidden="true"/>Consultando registros autorizados…</p>}
-  {account?.role==='ADMIN'&&account.officeReviewOnly!==true&&<CompanyBillingPanel key={`billing:${account.scope}`} scope={account.scope} getSessionToken={getSessionToken}/>}
+  {account?.role==='ADMIN'&&account.officeReviewOnly!==true&&<CompanySubscriptionPanel key={`billing:${account.scope}`} scope={account.scope} getSessionToken={getSessionToken}/>}
   {contextLocked&&<p className={styles.contextLock} id="workspace-context-lock"><LockKeyhole size={16} aria-hidden="true"/><span>Hay una acción en curso. Completala, cancelá el borrador o comprobá su resultado antes de actualizar o cambiar de obra.</span></p>}
   {account&&<><div className={styles.context}><div className={styles.company}><Building2 size={22} aria-hidden="true"/><div><span>Empresa</span><strong>{account.organizationName}</strong></div></div><dl className={styles.contextDetails}><div><dt>Tu acceso</dt><dd>{identitySelection?'Presentación privada de identidad':account.roleLabel}</dd></div><div><dt>Obra activa</dt><dd>{view?.project.name||identitySelection?.name||officeSelection?.name||'Sin seleccionar'}</dd></div></dl></div>
    {!identitySelection&&account.officeReviewOnly!==true&&<WorkspaceRecoveryPanel key={account.scope} scope={account.scope} projects={account.projects} getSessionToken={getSessionToken} onRecovered={(result,reference)=>{if(reference?.resource==='project-creation'&&projectCreationReceiptOutcome(result,reference)?.state==='RECORDED'){setCreationRecovery(result);projectCreated(result);}else if(reference?.resource==='project-preparation'&&result.scope===reference.scope&&result.projectId===reference.projectId&&['RECORDED','CANCELLED'].includes(result.state)){setPreparationRecovery(result);if(result.state==='RECORDED')projectPrepared(result);}else if(reference?.resource==='plan-import'&&result.scope===reference.scope&&result.projectId===reference.projectId&&result.saved===true&&result.receiptId&&result.action==='APPLY'&&result.draft?.status==='APPLIED')readRecordedSchedule({scope:reference.scope,projectId:reference.projectId,kind:'plan'});else if(result.created===true&&result.task&&reference?.resource==='task-creation')readRecordedSchedule({scope:reference.scope,projectId:reference.projectId,kind:'task'});else if(result.task)tasksChanged(result.task,reference);}}/>}

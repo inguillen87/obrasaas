@@ -28,7 +28,11 @@ const reasons = Object.freeze({
   COMPANY_ENTITLEMENT_PAST_DUE:{status:statuses.PAST_DUE,description:'La suscripción tiene un pago pendiente. La conexión de WhatsApp requiere un plan vigente.'},
   COMPANY_ENTITLEMENT_CANCELED:{status:statuses.CANCELED,description:'La suscripción está cancelada. La conexión de WhatsApp requiere un plan vigente.'},
   COMPANY_ENTITLEMENT_SUSPENDED:{status:statuses.SUSPENDED,description:'La suscripción está suspendida. La conexión de WhatsApp requiere un plan vigente.'},
+  COMPANY_ENTITLEMENT_PAID_PERIOD_UNOBSERVED:{status:'Período por revisar',description:'No se pudo confirmar el período cubierto por el pago registrado.'},
+  COMPANY_ENTITLEMENT_PAID_PERIOD_NOT_STARTED:{status:'Período pendiente',description:'El período registrado todavía no comenzó.'},
+  COMPANY_ENTITLEMENT_PAID_PERIOD_EXPIRED:{status:'Período finalizado',description:'El período registrado terminó. Hace falta confirmar la renovación del plan.'},
 });
+const managedPaidDenials = new Set(['COMPANY_ENTITLEMENT_PAID_PERIOD_UNOBSERVED','COMPANY_ENTITLEMENT_PAID_PERIOD_NOT_STARTED','COMPANY_ENTITLEMENT_PAID_PERIOD_EXPIRED']);
 
 // The server observation is the only clock used here. This is a display check,
 // never a client-side authorization or a payment receipt.
@@ -39,8 +43,13 @@ export function companyBillingView(value, {scope} = {}) {
   const subscription = value.subscription;
   if (!exact(subscription,['plan','status','trialEndsAt','entitlement']) || !Object.hasOwn(plans,subscription.plan) || !Object.hasOwn(statuses,subscription.status) || subscription.trialEndsAt !== null && !utcInstant(subscription.trialEndsAt)) fail();
   if (!exact(subscription.entitlement,['allowed','basis','reasonCode'])) fail();
-  const checked = companyWhatsappOnboardingEntitlement({subscriptionPlan:subscription.plan,subscriptionStatus:subscription.status,trialEndsAt:subscription.trialEndsAt},{now:value.observedAt});
-  if (['allowed','basis','reasonCode'].some(key => subscription.entitlement[key] !== checked[key])) fail();
+  const computed = companyWhatsappOnboardingEntitlement({subscriptionPlan:subscription.plan,subscriptionStatus:subscription.status,trialEndsAt:subscription.trialEndsAt},{now:value.observedAt});
+  // Receipt metadata remains private. Accept only the server's finite denial
+  // states for a managed paid period; this exception cannot grant access or
+  // turn this legacy read projection into evidence of a payment.
+  const managedDenied = ['PRO','ENTERPRISE'].includes(subscription.plan) && subscription.status === 'ACTIVE' && subscription.entitlement.allowed === false && subscription.entitlement.basis === null && managedPaidDenials.has(subscription.entitlement.reasonCode);
+  if (!managedDenied && ['allowed','basis','reasonCode'].some(key => subscription.entitlement[key] !== computed[key])) fail();
+  const checked = managedDenied ? subscription.entitlement : computed;
   if (!exact(value.billing,['state','checkoutAvailable','paymentEvidence']) || value.billing.state !== 'CONFIGURATION_PENDING' || value.billing.checkoutAvailable !== false || value.billing.paymentEvidence !== 'UNOBSERVED') fail();
   const denied = reasons[checked.reasonCode];
   if (!checked.allowed && !denied) fail();

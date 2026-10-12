@@ -113,7 +113,7 @@ async function resolveParticipantAuthority(client,intent,{environment=process.en
  checkedInput(intent,expected);
  const member=await principal(client,intent.organizationId,{actorId:intent.issuerActorId,membershipId:intent.issuerMembershipId});
  if(!['ADMIN','DIRECTOR'].includes(member.role))fail('PARTICIPANT_MANAGE_REQUIRED',403);
- const organizations=(await client.query(`SELECT id,name,metadata,"subscriptionPlan"::text AS "subscriptionPlan","subscriptionStatus"::text AS "subscriptionStatus","trialEndsAt" FROM public."Organization" WHERE id=$1 FOR SHARE`,[intent.organizationId])).rows;
+ const organizations=(await client.query(`SELECT id,name,metadata,"subscriptionPlan"::text AS "subscriptionPlan","subscriptionStatus"::text AS "subscriptionStatus","trialEndsAt" AT TIME ZONE 'UTC' AS "trialEndsAt" FROM public."Organization" WHERE id=$1 FOR SHARE`,[intent.organizationId])).rows;
  if(organizations.length!==1||organizations[0].metadata?.internal===true||typeof organizations[0].name!=='string'||!organizations[0].name.trim())fail('PARTICIPANT_ONBOARDING_ORGANIZATION_REQUIRED',403);
  const organization=organizations[0];
  member.organizationName=organization.name;

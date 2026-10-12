@@ -16,7 +16,7 @@ const publicReceipt = row => ({ id: row.id, taskId: row.entityId, recordedAt: ro
 
 export function createWorkspaceStore({ connect }) {
   if (typeof connect !== 'function') throw new TypeError('An explicit database connection is required');
-  async function transaction(session, writable, callback) {
+  async function transaction(session, writable, callback, companyWritable=false) {
     requireWorkspaceIdentity(session);
     let client, broken = false;
     try {
@@ -32,7 +32,7 @@ export function createWorkspaceStore({ connect }) {
         JOIN public."Organization" o ON o.id=m."organizationId"
         WHERE u."clerkUserId"=$1 AND o."clerkOrganizationId"=$2 AND m."clerkRole"=$3
           AND m.status='ACTIVE' AND COALESCE(o.metadata->'internal','false'::jsonb) <> 'true'::jsonb
-        ${writable ? 'FOR SHARE OF u,m,o' : ''}`, [session.userId, session.organizationId, session.organizationRole]);
+        ${writable ? companyWritable?'FOR SHARE OF u,m':'FOR SHARE OF u,m,o' : ''}`, [session.userId, session.organizationId, session.organizationRole]);
       if (result.rows.length !== 1 || !Object.hasOwn(WORKSPACE_ROLES, result.rows[0].role)) throw new WorkspaceError('WORKSPACE_MEMBERSHIP_REQUIRED', 403);
       const membership = {...result.rows[0],clerkUserId:session.userId,clerkRole:session.organizationRole}, scope = scopeStamp(session, membership);
       const value = await callback(client, membership, scope);
@@ -96,6 +96,23 @@ export function createWorkspaceStore({ connect }) {
         if(member.role!=='ADMIN'||session.organizationRole!=='org:admin')throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);
         return callback(client,member,scope);
       });
+    },
+    // A company subscription never needs a fictional project or participant
+    // admission. Lock membership first, then its Organization exclusively;
+    // concurrent billing actions must not both upgrade a shared company lock.
+    async companyOperation(session,{scope:expected},writable,callback){
+      if(typeof writable!=='boolean'||typeof callback!=='function')throw new TypeError('Explicit company transaction required');
+      if(!/^[a-f0-9]{64}$/.test(expected||''))throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
+      return transaction(session,writable,async(client,member,scope)=>{
+        checkScope(scope,expected);
+        if(member.officeReviewOnly===true)throw new WorkspaceError('OFFICE_REVIEW_ONLY',403);
+        if(member.role!=='ADMIN'||session.organizationRole!=='org:admin')throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);
+        if(writable){
+          const rows=(await client.query(`SELECT id FROM public."Organization" WHERE id=$1 AND "clerkOrganizationId"=$2 AND COALESCE(metadata->'internal','false'::jsonb)<>'true'::jsonb FOR UPDATE`,[member.organizationId,session.organizationId])).rows;
+          if(rows.length!==1||rows[0].id!==member.organizationId)throw new WorkspaceError('WORKSPACE_MEMBERSHIP_REQUIRED',403);
+        }
+        return callback(client,member,scope);
+      },writable);
     },
     // Company role changes lock the target membership without first locking a
     // project. Field transactions acquire their own membership before project.
