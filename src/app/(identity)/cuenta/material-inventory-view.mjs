@@ -43,3 +43,35 @@ export function inventoryOutcome(value,command,{recorded=false}={}){
  else if(!id(value.consumption?.id)||target&&value.consumption.id!==target||value.kind!=={PROPOSE_CONSUMPTION:'CONSUMPTION_PROPOSAL',DECIDE_CONSUMPTION:'CONSUMPTION_DECISION',REVERSE_CONSUMPTION:'CONSUMPTION_REVERSED'}[value.action]||!['PENDING','APPROVED','REJECTED','REVERSED'].includes(value.consumption.state)||!quantity(value.consumption.quantity)||!units.includes(value.consumption.unit)||!id(value.consumption.materialId))fail();
  return value;
 }
+
+// Read-only presentation of canonical inventory records. Missing historical
+// metadata never becomes a fabricated actor, date, receipt or stock operation.
+export function inventoryRecordedInstant(value){
+ if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value))return null;
+ const time=Date.parse(value);if(!Number.isFinite(time))return null;
+ const canonical=new Date(time).toISOString();return value===canonical||value===canonical.replace('.000Z','Z')?value:null;
+}
+const eventText=value=>typeof value==='string'&&value.trim().length>0&&value.trim().length<=1000?value.trim():null;
+const actorName=(value,actorId)=>actorId&&typeof value==='string'&&value.trim().length>=3&&value.trim().length<=160&&!/[\u0000-\u001f\u007f<>@]/.test(value)?value.trim():null;
+function consumptionEvent(value,kind){
+ const present=value&&typeof value==='object'&&!Array.isArray(value),actorId=present&&id(value.actorId)?value.actorId:null;
+ const verdict=present&&['APPROVE','REJECT'].includes(value.decision)?value.decision:null,reason=present?eventText(value.reason):null,recordedAt=present?inventoryRecordedInstant(value.recordedAt):null,receiptId=present&&/^field_[a-f0-9]{64}$/.test(value.receiptId||'')?value.receiptId:null,confirmed=Boolean(actorId&&reason&&recordedAt&&receiptId&&(kind==='REVERSAL'||verdict));
+ return {kind,title:kind==='REVERSAL'?confirmed?'Reversión registrada':'Reversión por comprobar':!confirmed?'Revisión por comprobar':verdict==='APPROVE'?'Aprobación registrada':'Rechazo registrado',confirmed,actorId,actorName:present?actorName(value.actorName,actorId):null,reason,recordedAt,receiptId,movementId:present&&/^inventory_move_[a-f0-9]{64}$/.test(value.movementId||'')?value.movementId:null,decision:verdict};
+}
+export function consumptionTraceability(consumption){
+ const state=['PENDING','APPROVED','REJECTED','REVERSED'].includes(consumption?.state)?consumption.state:null,events=[];
+ if(consumption?.decision||['APPROVED','REJECTED','REVERSED'].includes(state))events.push(consumptionEvent(consumption?.decision,'DECISION'));
+ if(consumption?.reversal||state==='REVERSED')events.push(consumptionEvent(consumption?.reversal,'REVERSAL'));
+ const explanation={PENDING:'Propuesta por revisar. Este informe todavía no descuenta stock.',APPROVED:'El consumo figura aprobado. La salida de stock corresponde a su aprobación.',REJECTED:'La propuesta fue rechazada. No registró una salida de stock.',REVERSED:'El consumo figura revertido. Se conservan la aprobación original y su reversión.'}[state]||'El estado de este consumo necesita comprobarse.';
+ const reporterId=id(consumption?.submittedBy)?consumption.submittedBy:null;
+ return {state,reference:id(consumption?.id)?consumption.id:null,proposalReceiptId:/^field_[a-f0-9]{64}$/.test(consumption?.proposalReceiptId||'')?consumption.proposalReceiptId:null,reporter:{actorId:reporterId,actorName:actorName(consumption?.actorName,reporterId)},explanation,events};
+}
+export function inventoryReceiptPresentation(value){
+ if(value?.state!=='RECORDED'||value.saved!==true||!/^field_[a-f0-9]{64}$/.test(value.receiptId||'')||!actions.includes(value.action))return null;
+ const kinds={ADD_MATERIAL:'MATERIAL_ADDED',PROPOSE_CONSUMPTION:'CONSUMPTION_PROPOSAL',DECIDE_CONSUMPTION:'CONSUMPTION_DECISION',REVERSE_CONSUMPTION:'CONSUMPTION_REVERSED',PROPOSE_STOCK_ADJUSTMENT:'STOCK_ADJUSTMENT_PROPOSAL',DECIDE_STOCK_ADJUSTMENT:'STOCK_ADJUSTMENT_DECISION'};
+ if(value.kind!==kinds[value.action])return null;
+ const titles={ADD_MATERIAL:'Material registrado',PROPOSE_CONSUMPTION:'Propuesta de consumo registrada',DECIDE_CONSUMPTION:'Revisión de consumo registrada',REVERSE_CONSUMPTION:'Reversión de consumo registrada',PROPOSE_STOCK_ADJUSTMENT:'Existencias propuestas',DECIDE_STOCK_ADJUSTMENT:'Revisión de existencias registrada'};
+ const proposal=['PROPOSE_CONSUMPTION','PROPOSE_STOCK_ADJUSTMENT'].includes(value.action);
+ const original=value.recordedConsumptionSnapshot,recordedState=id(original?.id)&&id(original.materialId)&&id(original.workerId)&&quantity(original.quantity)&&units.includes(original.unit)&&original.id===value.consumption?.id&&['materialId','workerId','quantity','unit'].every(key=>original[key]===value.consumption[key])&&['PENDING','APPROVED','REJECTED','REVERSED'].includes(original?.state)?original.state:null;
+ return {receiptId:value.receiptId,title:titles[value.action],recordedState,explanation:proposal?'Este recibo confirma la creación de la propuesta; ese envío no descontó ni agregó stock. El estado vigente se consulta por separado.':'Este recibo confirma esa operación. El estado y saldo vigentes se muestran en la consulta de inventario.',consumptionId:id(value.consumption?.id)?value.consumption.id:null};
+}

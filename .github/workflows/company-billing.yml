@@ -1,7 +1,7 @@
 name: Canonical company subscription and retired billing
 on:
   push:
-    branches: [master, 'hotfix/production-workspace-company-plan-*', 'feat/company-billing-checkout-*', 'feat/task-daily-measurement-*', 'hotfix/subscription-fixture-dependencies-*']
+    branches: [master, 'hotfix/production-workspace-company-plan-*', 'feat/company-billing-checkout-*', 'feat/task-daily-measurement-*', 'hotfix/subscription-fixture-dependencies-*', 'feat/integral-worksite-consumption-feedback-*']
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
         env:
           POSTGRES_USER: cutover_test
           POSTGRES_PASSWORD: cutover_test

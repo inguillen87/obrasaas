@@ -1,0 +1,71 @@
+name: Material consumption feedback acceptance
+on:
+  push:
+    branches: [master, 'feat/integral-worksite-consumption-feedback-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      CUTOVER_TEST_DISPOSABLE: '1'
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Exact event source
+        run: node --input-type=module -e "import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';assert.equal(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),process.env.GITHUB_SHA);"
+      - name: Own history, immutable author, stock and channel recovery contracts
+        run: node --test tests/production-material-consumption*.test.mjs tests/production-material-inventory*.test.mjs tests/production-company-field-operations.test.mjs tests/production-field-*.test.mjs tests/production-meta-field*.test.mjs tests/production-task-daily-measurement-conversation.test.mjs
+      - name: Consumption source and harness lint
+        run: npx eslint src/lib/material-inventory.mjs src/lib/field-operations-store.mjs src/lib/meta-field-bridge.mjs src/lib/meta-field-conversation.mjs 'src/app/(identity)/cuenta/material-inventory-panel.js' 'src/app/(identity)/cuenta/material-inventory-view.mjs' scripts/verify-material-consumption-feedback*.mjs scripts/verify-consumption-feedback*.mjs tests/production-material-consumption*.test.mjs tests/production-material-inventory-traceability-view.test.mjs --max-warnings 0
+      - name: Disposable PostgreSQL own author and durable consumption receipts
+        run: node scripts/verify-material-consumption-feedback-postgres.mjs
+      - name: Actual responsive components with synthetic authentication and APIs
+        run: node scripts/verify-consumption-feedback-ui.mjs .vercel/private/consumption-feedback-evidence/browser.json
+      - name: Require exact native and browser source, checks and cleanup
+        run: node scripts/verify-consumption-feedback-ci.mjs --expected-head "$GITHUB_SHA"
+      - name: Preserve exact checked-out source
+        run: git diff --exit-code HEAD --
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: consumption-feedback-postgres-${{ github.sha }}-${{ github.run_attempt }}
+          path: .vercel/private/material-consumption-feedback-postgres.json
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: consumption-feedback-ui-${{ github.sha }}-${{ github.run_attempt }}
+          path: .vercel/private/consumption-feedback-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: consumption-feedback-ci-${{ github.sha }}-${{ github.run_attempt }}
+          path: .vercel/private/consumption-feedback-ci.json
+          include-hidden-files: true
+          if-no-files-found: error
