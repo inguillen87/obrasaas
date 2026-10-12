@@ -1,7 +1,7 @@
 name: Task measurement acceptance
 on:
   push:
-    branches: [master, 'feat/task-daily-measurement-*']
+    branches: [master, 'feat/task-daily-measurement-*', 'feat/integral-worksite-consumption-feedback-*']
   workflow_dispatch:
 permissions:
   contents: read

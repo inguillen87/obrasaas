@@ -192,7 +192,7 @@ test('corporate full operations ESTADO records current ledger without replacing 
  assert.deepEqual(readMetaFieldConversation({worker:f.worker,project:f.project,member:{organizationId:'organization-a'},channelBinding:{id:draft.bindingId}},environment),draft);
  const before=structuredClone(f.worker.metadata);f.audits.clear();f.message.type='text';f.message.text={body:'ESTADO'};
  f.attendance.push({id:'attendance-fixture',workerId:f.worker.id,recordedAt:new Date().toISOString(),metadata:{fieldOperations:{sequence:1,eventType:'CHECK_IN',phase:'ON_BREAK'}}});
- const outcome=await f.bridge.execute(f.context);assert.equal(outcome.kind,'CONVERSATION');assert.match(outcome.reply.body,/en pausa/);assert.equal(outcome.businessApplied,false);
+ const outcome=await f.bridge.execute(f.context);assert.equal(outcome.kind,'CONSUMPTION_READ');assert.match(outcome.reply.body,/en pausa/);assert.match(outcome.reply.body,/Consumos informados por tu cuenta/);assert.equal(outcome.businessApplied,false);
  assert.deepEqual(f.worker.metadata,before);assert.deepEqual(f.io,[]);assert.equal([...f.audits.values()].filter(r=>r.action==='meta.field.dispatched').length,1);
 });
 

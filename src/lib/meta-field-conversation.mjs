@@ -10,7 +10,7 @@ import {voiceProgressDraftForEvidence,prepareVoiceProgressDraft,voiceProgressDra
 import {deriveTaskMeasurement} from './task-progress-measurement.js';
 
 const menuOptions=[['ATTEND_IN','Entrada'],['ATTEND_PAUSE','Iniciar pausa'],['ATTEND_RESUME','Volver de pausa'],['ATTEND_OUT','Salida'],['TASKS','Mis tareas'],['MEDIA','Enviar evidencia'],['INCIDENT','Informar incidencia'],['MATERIAL','Pedir material'],['CONSUMPTION','Proponer consumo'],['PROGRESS','Proponer avance'],['PLAN_IMPORT','Importar cronograma'],['STATUS','Consultar estado']];
-const aliases={MENU:'MENU',AYUDA:'MENU',HOLA:'MENU',ENTRADA:'ATTEND_IN',PAUSA:'ATTEND_PAUSE',VOLVER:'ATTEND_RESUME',SALIDA:'ATTEND_OUT',TAREAS:'TASKS',EVIDENCIA:'MEDIA',INCIDENCIA:'INCIDENT',MATERIALES:'MATERIAL',CONSUMO:'CONSUMPTION',AVANCE:'PROGRESS',CRONOGRAMA:'PLAN_IMPORT',GANTT:'PLAN_IMPORT',ESTADO:'STATUS',CANCELAR:'MENU'};
+const aliases={MENU:'MENU',AYUDA:'MENU',HOLA:'MENU',ENTRADA:'ATTEND_IN',PAUSA:'ATTEND_PAUSE',VOLVER:'ATTEND_RESUME',SALIDA:'ATTEND_OUT',TAREAS:'TASKS',EVIDENCIA:'MEDIA',INCIDENCIA:'INCIDENT',MATERIALES:'MATERIAL',CONSUMO:'CONSUMPTION',CONSUMOS:'OWN_CONSUMPTIONS',AVANCE:'PROGRESS',CRONOGRAMA:'PLAN_IMPORT',GANTT:'PLAN_IMPORT',ESTADO:'STATUS',CANCELAR:'MENU'};
 export const metaFieldConversationAction=body=>typeof body==='string'?aliases[body.trim().toUpperCase()]||null:null;
 const attendanceEvents={ATTEND_IN:'CHECK_IN',ATTEND_PAUSE:'BREAK_START',ATTEND_RESUME:'BREAK_END',ATTEND_OUT:'CHECK_OUT'};
 const journeyExplanation={ATTENDANCE_SHIFT_ALREADY_OPEN:'Ya tenés una jornada abierta.',ATTENDANCE_SHIFT_NOT_OPEN:'Primero registrá una entrada.',ATTENDANCE_BREAK_ALREADY_OPEN:'Tu pausa ya está abierta. Registrá el regreso de pausa para continuar.',ATTENDANCE_BREAK_NOT_OPEN:'No hay una pausa abierta.',ATTENDANCE_BREAK_OPEN:'Registrá el regreso de pausa antes de la salida.'};
@@ -36,6 +36,28 @@ function chooseTask(state,eventId,facts,detail=''){
  return choices({...state,step:'TASK',taskPage:page},eventId,detail||(state.purpose==='TASKS'?'Tareas de '+facts.projectName+'\nElegí una para consultar su avance, o recorré las páginas.':'Elegí la tarea de este registro. Podés recorrer todas las páginas.'),rows);
 }
 function consumptionMaterials(state,eventId,facts){const materials=facts.inventory?.materials?.filter(m=>m.active)||[];if(!materials.length)return {state:null,reply:text('El responsable debe configurar el catálogo antes de proponer consumo. El stock no cambió.')};const offset=state.materialOffset||0,rows=materials.slice(offset,offset+8).map(m=>[m.id,m.name+' · '+m.unit]);if(offset>0)rows.push(['PREVIOUS','Materiales anteriores']);if(offset+8<materials.length)rows.push(['NEXT','Más materiales']);return choices({...state,step:'CONSUMPTION_MATERIAL',materialOffset:offset},eventId,'Elegí el material del catálogo. La propuesta requiere revisión antes de descontar stock.',rows);}
+const consumptionState=state=>({PENDING:'Pendiente de revisión',APPROVED:'Aprobado',REJECTED:'Rechazado',REVERSED:'Revertido'}[state]||'Estado no confirmado');
+const consumptionName=c=>c.materialName||'Material '+c.materialId;
+const consumptionReason=value=>value.length>600?value.slice(0,600)+'… (motivo completo en Mi cuenta)':value;
+export function metaFieldConsumptionAcknowledgement(outcome,projectName){const c=outcome.recordedConsumptionSnapshot||outcome.consumption;return 'Consumo informado en '+projectName+': '+c.quantity+' '+c.unit+' de '+consumptionName(c)+'.\nReferencia del informe: '+c.id+'\nRecibo de propuesta: '+outcome.receiptId+'\nInformado: '+c.submittedAt+'\nQuedó pendiente de revisión. Este recibo no descuenta stock; otro responsable autorizado debe decidir.\nEscribí ESTADO para consultar la decisión vigente o CONSUMOS para recorrer tus informes.';}
+function ownConsumptionList(state,eventId,facts){
+ const page=facts.ownConsumptions;if(!page)return {state:null,reply:text('No se pudo confirmar la consulta de consumos. Escribí ESTADO para volver a intentar.')};
+ const rows=page.records.map(c=>[c.id,consumptionName(c),c.quantity+' '+c.unit+' · '+consumptionState(c.state)+' · '+c.submittedAt.slice(0,10)]);
+ if(page.nextCursor)rows.push(['NEXT_CONSUMPTIONS','Más consumos']);if(page.afterConsumption)rows.push(['FIRST_CONSUMPTIONS','Volver al inicio']);rows.push(['MENU','Volver al menú']);
+ return {...choices({...state,purpose:'OWN_CONSUMPTIONS',step:'OWN_CONSUMPTION_LIST',consumptionAfter:page.afterConsumption,nextConsumptionCursor:page.nextCursor},eventId,'Consumos informados por tu cuenta en '+facts.projectName+'.\n'+(page.records.length?'Elegí un informe para consultar su estado vigente, motivo, fechas y recibos.':page.afterConsumption?'No hay más informes en esta página.':'No hay consumos informados por tu cuenta en esta obra.')+'\nLa consulta no mueve stock.',rows),consumptionRead:true};
+}
+function ownConsumptionDetail(state,eventId,facts,id){
+ const c=facts.ownConsumptions?.records.find(row=>row.id===id);if(!c)throw new WorkspaceError('INVENTORY_CURSOR_UNAVAILABLE',404);
+ let body='Obra: '+facts.projectName+'\n'+consumptionName(c)+': '+c.quantity+' '+c.unit+'\nReferencia del informe: '+c.id+'\nInformado: '+c.submittedAt+'\nEstado vigente: '+consumptionState(c.state)+'\nMotivo del informe: '+consumptionReason(c.reason);
+ if(c.proposalReceiptId)body+='\nRecibo de propuesta: '+c.proposalReceiptId;
+ for(const [label,event] of [['Decisión registrada',c.decision],['Reversión registrada',c.reversal]])if(event)body+='\n'+label+': '+(event.decision==='REJECT'?'Rechazado':event.decision==='APPROVE'?'Aprobado':'Revertido')+'\nFecha: '+event.recordedAt+'\nMotivo: '+consumptionReason(event.reason)+'\nRecibo: '+event.receiptId;
+ body+='\nEl recibo de propuesta conserva el informe original. Las decisiones y sus movimientos tienen sus propios recibos.\nPara seguir recorriendo informes, usá las opciones de la lista anterior o escribí CONSUMOS para volver al inicio.';
+ return {state,preserveConversation:true,reply:text(body),consumptionRead:true};
+}
+function statusReply(facts){const e=facts.latest,page=facts.ownConsumptions;let body='Obra: '+facts.projectName+'\nJornada: '+(!e||e.eventType==='CHECK_OUT'?'cerrada':e.phase==='ON_BREAK'?'en pausa':'en curso')+'\nEvidencias pendientes: '+facts.evidence.filter(e=>e.status==='PENDING').length+'\nPropuestas pendientes: '+facts.proposals.filter(p=>p.status==='PENDING').length;
+ if(facts.permissions.report===true&&page)body+='\nConsumos informados por tu cuenta (últimos '+page.records.length+'):'+(page.records.length?'\n'+page.records.map(c=>consumptionName(c).slice(0,45)+' · '+c.quantity+' '+c.unit+' · '+consumptionState(c.state)).join('\n'):' ninguno.')+(page.nextCursor?'\nHay más informes para consultar.':'');
+ return body+'\nConsultá los recibos y las revisiones en Mi cuenta.';
+}
 function confirm(state,eventId,body){return choices({...state,step:'CONFIRM'},eventId,body,[['CONFIRM','Guardar'],['CANCEL','Cancelar']]);}
 const voiceEvidence=(state,facts)=>facts.evidence.filter(e=>e.taskId===state.taskId&&e.status==='APPROVED'&&voiceProgressDraftForEvidence(e,facts.tasks.find(t=>t.id===state.taskId))?.task.revision===facts.tasks.find(t=>t.id===state.taskId)?.revision);
 const includesVideo=rows=>rows.some(e=>e.media?.kind==='video');
@@ -87,7 +109,8 @@ function start(action,eventId,facts,now){
  if(action==='MENU')return choices({step:'MENU',purpose:'MENU'},eventId,'ObraSaaS · '+facts.projectName+'\nElegí una acción disponible para tu participación. CANCELAR vuelve al menú.',availableMenu(facts));
  if(action==='PLAN_IMPORT')return startMetaPlanImportConversation({eventId,facts,now});
  if(action==='TASKS')return chooseTask({purpose:'TASKS'},eventId,facts);
- if(action==='STATUS'){const e=facts.latest;return {state:null,reply:text('Obra: '+facts.projectName+'\nJornada: '+(!e||e.eventType==='CHECK_OUT'?'cerrada':e.phase==='ON_BREAK'?'en pausa':'en curso')+'\nEvidencias pendientes: '+facts.evidence.filter(e=>e.status==='PENDING').length+'\nPropuestas pendientes: '+facts.proposals.filter(p=>p.status==='PENDING').length+'\nConsultá los recibos y las revisiones en Mi cuenta.')};}
+ if(action==='STATUS'){const body=statusReply(facts);return facts.permissions.report===true&&facts.ownConsumptions?{...choices({purpose:'OWN_CONSUMPTIONS',step:'OWN_CONSUMPTION_STATUS',consumptionAfter:null},eventId,body,[['OWN_CONSUMPTIONS','Mis consumos'],['MENU','Volver al menú']]),consumptionRead:true}:{state:null,reply:text(body)};}
+ if(action==='OWN_CONSUMPTIONS')return permits('REPORT',facts)?ownConsumptionList({},eventId,facts):denied('REPORT');
  if(attendanceEvents[action]){if(!permits('ATTENDANCE',facts))return denied('ATTENDANCE');const error=journeyError(action,facts);if(error)return choices({step:'MENU',purpose:'MENU'},eventId,journeyExplanation[error]+' No registramos otro fichaje. Elegí una acción disponible.',availableMenu(facts));return chooseSector({purpose:'ATTENDANCE',eventType:attendanceEvents[action],expectedEventId:facts.latest?.id||null},eventId,facts);}
  if(!permits('REPORT',facts))return denied('REPORT');
  return chooseTask({purpose:action,...(action==='MEDIA'?{mediaAuthorizationVersion:META_FIELD_MEDIA_AUTHORIZATION_VERSION}:{})},eventId,facts);
@@ -118,6 +141,8 @@ function planConversation({message,state,eventId,facts,now}){
  // by the signed bridge and purpose permissions still gate continuation.
  if(body?.toUpperCase()==='HOLA'&&active&&active.purpose!=='MENU')return active.purpose==='PLAN_IMPORT'&&active.step==='PLAN_IMPORT_AUTHORIZED'?continueMetaPlanImportConversation({message,state:active,eventId,facts,now}):{state:active,preserveConversation:true,reply:text(permits(active.purpose,facts)?'Conservamos el borrador. Respondé al mensaje original del paso para continuar, o con CANCELAR para descartarlo.':'El permiso para este borrador cambió. Pedí al responsable que revise tus permisos. Conservamos el borrador; no registramos operaciones.')};
  const alias=metaFieldConversationAction(body);
+ if(alias==='STATUS'&&active&& !['MENU','OWN_CONSUMPTIONS'].includes(active.purpose))return {state:active,preserveConversation:true,consumptionRead:facts.permissions.report===true&&Boolean(facts.ownConsumptions),reply:text(statusReply(facts)+'\nConservamos el borrador. Para recorrer tus consumos, cancelalo explícitamente con CANCELAR y abrí ESTADO → Mis consumos.')};
+ if(alias==='OWN_CONSUMPTIONS'&&active&&!['MENU','OWN_CONSUMPTIONS'].includes(active.purpose))return {state:active,preserveConversation:true,reply:text('Conservamos el borrador actual. Escribí CANCELAR y abrí ESTADO → Mis consumos para consultar tus informes sin descartar un registro por accidente.')};
  if(active?.purpose==='PLAN_IMPORT'){
   if(alias==='STATUS')return {...start('STATUS',eventId,facts,now),state:active,preserveConversation:true};
   if(active.step==='PLAN_IMPORT_AUTHORIZED')return continueMetaPlanImportConversation({message,state:active,eventId,facts,now});
@@ -136,6 +161,12 @@ function planConversation({message,state,eventId,facts,now}){
  if(s.purpose==='PROGRESS'&&s.measurementDefinitionId){const task=facts.tasks.find(t=>t.id===s.taskId);if(task?.revision!==s.taskRevision||task.measurement?.definitionId!==s.measurementDefinitionId)return {state:active,reply:text('La tarea o su medición aprobada cambió. Conservamos el borrador y no sumamos cantidades. Escribí AVANCE para consultar la base y el acumulado vigentes, o CANCELAR para volver al menú.')};}
  if(s.purpose==='PROGRESS'&&s.evidenceIds?.some(id=>!facts.evidence.some(e=>e.id===id&&e.taskId===s.taskId&&e.status==='APPROVED')))return {state:active,reply:text('La evidencia elegida ya no está aprobada para esta tarea. Conservamos el borrador; escribí AVANCE para consultar los registros vigentes o CANCELAR para volver al menú. No guardamos una propuesta.')};
  if(s.step==='MENU')return selected?start(selected,eventId,facts,now):start('MENU',eventId,facts,now);
+ if(s.purpose==='OWN_CONSUMPTIONS'){
+  if(['OWN_CONSUMPTIONS','NEXT_CONSUMPTIONS','FIRST_CONSUMPTIONS','BACK_CONSUMPTIONS'].includes(selected))return ownConsumptionList(s,eventId,facts);
+  if(selected==='MENU')return start('MENU',eventId,facts,now);
+  if(selected&&s.step==='OWN_CONSUMPTION_LIST')return ownConsumptionDetail(active,eventId,facts,selected);
+  return {state:active,reply:text('Elegí un informe o una página en el mensaje vigente. La consulta no modifica stock.')};
+ }
  if(s.step==='TASK'){
   if(!selected)return {state:active,reply:text('Elegí una tarea en el menú anterior, o escribí CANCELAR.')};
   if(['NEXT_TASKS','PREVIOUS_TASKS'].includes(selected))return chooseTask(s,eventId,facts);
