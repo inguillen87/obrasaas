@@ -17,7 +17,7 @@ does not show worker-record creation instructions or an administrative shortcut.
 Browser coverage checks both destinations, keyboard focus and capability/role
 changes at 320/390/768/1280 pixels without creating a worker or invitation.
 
-The eight-step guide includes the existing **Clientes y seguimiento** panel.
+The ten-step guide includes worksite preparation, materials and the existing **Clientes y seguimiento** panel.
 Its shortcut is available only when that authorized panel is visible; a missing
 panel explains the administrator dependency. Reading marks never infer CRM
 authority. Official Meta asset authorization, receiving the phone verification
@@ -102,8 +102,12 @@ six parameters, including three additional keys. The exact token comparison,
 challenge constraints and signed POST remain mandatory. Invalid GET diagnostics
 contain only fixed scalar query-shape fields, without URL or parameter values.
 
-Private document/selfie review is human. Facial matching and liveness are not
-implemented. The manual open-shift reminder is the only adopted proactive
+Private document/selfie review is human. The later optional document extraction
+and static face-comparison circuits require their own notices, consents and
+configured services; their outputs remain advisory and require independent
+review. They do not certify civil identity, document authenticity or liveness.
+Live biometric and government-provider acceptance remain separate requirements.
+The manual open-shift reminder is the only adopted proactive
 template workflow; other catalog entries do not imply an implemented send.
 Formal quotes, tenders, commercial automations and offline file/draft submission
 are not part of this release. Demo preparation does not certify commercial

@@ -2558,6 +2558,7 @@
           "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
           "src/app/(identity)/cuenta/participant-panel.js",
           "src/app/(identity)/cuenta/participant-panel.module.css",
+          "src/app/(identity)/cuenta/plan-import-calendar-suggestions.mjs",
           "src/app/(identity)/cuenta/plan-import-panel.js",
           "src/app/(identity)/cuenta/plan-import-panel.module.css",
           "src/app/(identity)/cuenta/plan-source-curve.js",
@@ -3054,6 +3055,22 @@
         "src/app/(identity)/cuenta/plan-source-curve.js",
         "src/app/(identity)/cuenta/plan-source-curve.mjs",
         "src/app/(identity)/cuenta/plan-source-curve.module.css"
+      ]
+    }
+  },
+  "calendarPreparation": {
+    "version": 1,
+    "blockId": 12,
+    "lane": "plans",
+    "baselineCommandSha256": "221070ce4bf11abbbbd9dc8c4a1c23d43e704698e67dad055038f28e3e4f48fa",
+    "step": {
+      "name": "Reviewed PDF and image plan import, atomic lot and receipt recovery",
+      "run": "npx eslint src/lib/plan-import-*.mjs src/app/api/identity/plan-import 'src/app/(identity)/cuenta/plan-import-panel.js' 'src/app/(identity)/cuenta/plan-import-calendar-suggestions.mjs' 'src/app/(identity)/cuenta/plan-source-curve.js' 'src/app/(identity)/cuenta/plan-source-curve.mjs' scripts/lib/plan-import-live-check.mjs scripts/verify-plan-import-*.mjs scripts/verify-workspace-plan-recovery-ui.mjs scripts/fixtures/generate-plan-import-fixtures.mjs tests/production-plan-import*.test.mjs tests/production-plan-source-curve-ui.test.mjs --max-warnings 0\nnode --test tests/production-plan-import*.test.mjs tests/production-plan-source-curve-ui.test.mjs\nnode scripts/verify-plan-import-postgres.mjs\nnode scripts/verify-plan-import-boundary.mjs\nnode scripts/verify-plan-import-ui.mjs\nnode scripts/verify-workspace-plan-recovery-ui.mjs\n"
+    },
+    "commandSha256": "b24e4ff789e0f9e8a1dfee5d70c29201ef6325a3371993d0b1c0c2b6764de600",
+    "sourceDependencies": {
+      "UI_IDENTITY_ONLY": [
+        "src/app/(identity)/cuenta/plan-import-calendar-suggestions.mjs"
       ]
     }
   }

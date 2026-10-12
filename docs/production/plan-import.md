@@ -38,6 +38,20 @@ Cada fila v2 incorpora `code`, `parentCode` y `sourceIssueReviewed` a los cinco 
 
 APPLY crea únicamente las partidas retenidas como tareas BACKLOG con avance cero dentro de la transacción existente. `Task.metadata.planImport` conserva perfil, código, padre y sus agrupadores originales además de la procedencia previa. Un fallo del recibo revierte todo el lote; replay no duplica las 190 tareas. El cronograma y su progreso posterior se consultan por el workspace existente. Reconocer el modelo original offline no acredita publicación, aceptación de Victoria ni fechas de obra aprobadas.
 
+## Proponer fechas desde las semanas de CyP
+
+Los perfiles físicos CyP v2 y v4 conservan 48 columnas semanales numeradas, sin fechas calendario. En un borrador READY, **Preparar fechas desde semanas** permite elegir explícitamente el primer día de la semana 1 del Excel y confirmar un criterio de siete días corridos por columna, con fin inclusivo. Las 48 semanas son 336 días; no equivalen a doce meses calendario. No se toma una fecha del documento, del reloj, de la curva de inversión ni de otra obra como ancla.
+
+La lista propone únicamente la ventana entre la primera y la última celda con distribución positiva conocida de cada partida retenida. Una celda vacía sigue siendo desconocida y un cero explícito sigue siendo cero; ninguno define los extremos. La revisión muestra bloques positivos separados y semanas sin dato antes, dentro y después de la ventana. Puede existir actividad no informada fuera o dentro de ella: el rango no certifica continuidad, duración laboral ni avance físico.
+
+Sólo son candidatas las filas con ambas fechas vacías. Las fechas completas o parciales ya ingresadas se conservan, al igual que las filas excluidas, títulos, códigos, padres, evidencia, dudas, unidad/cantidad pendientes, marcas de revisión y curva original. Las filas sin distribución positiva o cuyo rango exceda las fechas admitidas quedan sin modificar. Los perfiles mensuales v1/v3 no usan este criterio semanal.
+
+Preparar, paginar o descartar la lista no envía HTTP ni modifica el borrador guardado. Una confirmación explícita copia únicamente las dos fechas propuestas a la revisión local en RAM y retira la aprobación local previa. No guarda EDIT, no aplica tareas ni resuelve las dudas de cada fila. Siguen siendo necesarios **Guardar correcciones**, la revisión individual de la fuente y la aplicación autorizada del circuito existente.
+
+La confirmación se vincula con proyecto, scope, ID/revisión del borrador, hash de la fuente, todas las filas y datos de la extracción, ancla y criterio actuales. Cambiar cualquiera de ellos invalida la lista anterior; un epoch síncrono protege además una edición rápida antes del rerender. Un cambio de contexto remonta el componente y una denegación de acceso a la fuente financiera elimina la propuesta privada con el borrador. No se persisten ancla, filas ni preview en almacenamiento del navegador. No cambian API, permisos, consentimientos, límites ni recibos.
+
+Las pruebas focales del helper y de los handlers reales cubren calendario UTC, años bisiestos, cambios de hora, fin inclusivo, 200 partidas, blancos/ceros/bloques discontinuos, conservación de correcciones y rechazo de confirmaciones alteradas o antiguas. El arnés de interfaz conserva sus 120 casos y añade ocho en 320/390/768/1280 píxeles: preparación local sin POST adicional y pérdida de permiso financiero con eliminación del preview. Los fixtures son sintéticos; la fecha real del piloto y su aceptación siguen a cargo de sus responsables.
+
 ## Límites y extracción
 
 - PDF, XLSM o XLSX hasta 3 MiB; PNG, JPEG o WebP hasta 2 MiB; cuerpo multipart limitado antes de procesarlo.

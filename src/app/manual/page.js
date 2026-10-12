@@ -6,7 +6,7 @@ import styles from './manual.module.css';
 export const metadata = publicPageMetadata('/manual');
 
 const contents = [
-  ['empezar', 'Abrir la empresa'], ['equipo', 'Invitar al equipo'], ['trabajo', 'Registrar trabajo'],
+  ['empezar', 'Abrir la empresa'], ['preparar-obra', 'Preparar la obra'], ['equipo', 'Invitar al equipo'], ['trabajo', 'Registrar trabajo'],
   ['cronograma', 'Importar un cronograma'], ['inventario', 'Compras y consumo'],
   ['clientes', 'Clientes y seguimiento'], ['whatsapp', 'Conectar WhatsApp'], ['menu', 'Usar el menú'],
   ['recuperacion', 'Resolver un resultado pendiente'], ['equipo-tecnico', 'Equipo técnico'],
@@ -47,14 +47,26 @@ export default function ManualPage() {
           <section id="empezar" className={styles.section} aria-labelledby="empezar-title">
             <p className={styles.eyebrow}>01 · EMPRESA Y PRIMERA OBRA</p><h2 id="empezar-title">Abrir tu constructora</h2>
             <Step number="1" title="Ingresá con tu propia cuenta"><p>Entrá a <Link href="/sign-in">Ingresar</Link> o <Link href="/sign-up">Crear cuenta</Link>. Elegí una de las conexiones disponibles en Clerk o usá tu correo. Completá la verificación del correo; no uses la cuenta de otro integrante. El formulario muestra únicamente las conexiones habilitadas para ObraSaaS.</p></Step>
-            <Step number="2" title="Creá o seleccioná la organización"><p>En <strong>Mi cuenta → Organización activa</strong>, usá el selector para crear la organización de la constructora. Si ya te invitaron a una empresa, aceptá esa invitación y elegila. Sólo su administrador puede completar el alta inicial.</p></Step>
+            <Step number="2" title="Creá o seleccioná el espacio de trabajo"><p>En <strong>Mi cuenta → Espacio de trabajo</strong>, usá el selector para crear el espacio de tu constructora. Si ya te invitaron, aceptá la invitación y elegí ese espacio. Su nombre puede ser distinto al de la constructora: <strong>Empresa de trabajo</strong> muestra la empresa vinculada una vez consultado el acceso. Sólo el administrador de ese espacio puede completar el alta inicial.</p></Step>
             <Step number="3" title="Completá «Tu empresa, desde cero»"><p>Cargá el nombre de la empresa y de la primera obra. La dirección es opcional: escribirla no configura el GPS. Podés agregar hasta 25 primeras tareas, con inicio y fin previstos, o dejar el cronograma vacío.</p><p>Revisá la confirmación y elegí <strong>Crear empresa y primera obra</strong>. Cada tarea empieza con avance cero. El nombre de la empresa no acredita una verificación legal.</p></Step>
             <Step number="4" title="Abrí la obra y revisá el cronograma"><p>Tras recibir el comprobante, elegí <strong>Entrar a mi obra</strong>. En Mis obras, abrí la obra y usá Tareas para crear o planificar actividades. Una fecha prevista no registra trabajo ni aprueba avance.</p><p>Usá <strong>Buscar tareas</strong>, los filtros de estado y planificación, o el orden por nombre e inicio previsto. <strong>Limpiar filtros</strong> vuelve a mostrar las tareas cargadas. Un <strong>Resumen parcial</strong> considera sólo esas tareas: usá <strong>Cargar más tareas</strong> para ampliar la consulta. Filtrar conserva la planificación que estés editando.</p></Step>
             <div className={styles.callout}><strong>Si no llega la confirmación</strong><p>Usá <strong>Comprobar creación</strong>. No abras otra organización para repetir el alta. Reenviá el mismo intento sólo cuando la pantalla lo permita tras comprobar su estado.</p></div>
           </section>
 
+          <section id="preparar-obra" className={styles.section} aria-labelledby="preparar-obra-title">
+            <p className={styles.eyebrow}>02 · PREPARACIÓN DE OBRA</p><h2 id="preparar-obra-title">Preparar los datos y el equipo previsto</h2>
+            <p>Antes de conocer a todos los operarios, el administrador o director puede preparar la obra y sus cuadrillas. Abrí la obra en <strong>Mis obras</strong> y, en <strong>Preparación de obra</strong>, elegí <strong>Preparar datos y equipo</strong>.</p>
+            <ol className={styles.stepsList}>
+              <li>Revisá el nombre, <strong>Cliente / comitente</strong> y dirección. Declarar una dirección no verifica la ubicación ni configura el sector del QR.</li>
+              <li>Elegí <strong>Agregar cuadrilla</strong>. Indicá su nombre, si es propia o subcontratada, la cantidad prevista y su alcance y disponibilidad. Si todavía no conocés al responsable, dejalo indicado en la nota.</li>
+              <li>Usá <strong>Agregar puesto previsto</strong> para describir el trabajo de cada puesto con una etiqueta provisoria. Cada puesto queda pendiente de identificación; todavía no necesitás inventar un nombre, teléfono o documento.</li>
+              <li>Completá el <strong>Motivo de esta preparación</strong>, revisá los datos y elegí <strong>Guardar preparación</strong>. Conservá el comprobante. Las tareas y sus fechas se administran aparte, en <strong>Tareas y cronograma</strong>.</li>
+            </ol>
+            <div className={styles.callout}><strong>Un puesto previsto todavía no es un acceso</strong><p>La preparación no crea cuentas ni invitaciones. Cuando se confirme cada persona, completá su ficha, contacto, invitación y permisos en los circuitos de equipo e identidad. No vuelvas a agregar las tareas del cronograma para describir una cuadrilla.</p><p>Si la confirmación queda pendiente, elegí <strong>Comprobar resultado</strong> antes de otro guardado. <strong>Cancelar borrador</strong> descarta una edición local; no confirma que un envío anterior se haya perdido. Si otra persona cambió la preparación, la pantalla conserva tu borrador y pide resolver el conflicto antes de guardar.</p></div>
+          </section>
+
           <section id="equipo" className={styles.section} aria-labelledby="equipo-title">
-            <p className={styles.eyebrow}>02 · PERSONAS Y ACCESO</p><h2 id="equipo-title">Invitar al equipo y revisar su identidad</h2>
+            <p className={styles.eyebrow}>03 · PERSONAS Y ACCESO</p><h2 id="equipo-title">Invitar al equipo y revisar su identidad</h2>
             <p>Para incorporar una nueva cuenta de oficina, la persona acepta la invitación de Clerk y verifica su correo. El administrador usa <strong>Incorporar cuenta aceptada en Clerk</strong>, consulta la cuenta, elige el rol y confirma su alcance. Esta incorporación no requiere ficha de campo, teléfono ni presentación de identidad de operario y no concede permisos de jornada o reportes. Dirección alcanza todas las obras de la empresa; los demás roles de oficina se asignan a la obra elegida.</p>
             <details className={styles.details}><summary>Acceso limitado para revisar WhatsApp</summary><p>En <strong>Revisión de oficina sin documentos</strong>, el administrador invita al revisor con acceso de lectura y fecha de vencimiento. El revisor acepta la invitación de Clerk con su correo verificado, selecciona esa organización y acepta la invitación de oficina. Después actualiza Mis obras y abre la obra asignada.</p><p>El administrador puede compartir saludos seleccionados y, por separado, la configuración guardada de la conexión con cada invitación aceptada. El revisor consulta <strong>Revisión de conexión y eventos</strong>, sin teléfono, credenciales, documentos ni acciones de envío. Actualizar comprueba la vigencia del acceso y del registro; no consulta el estado actual de la conexión en Meta.</p><p>Retirar la configuración conserva el acceso a los saludos compartidos. Revocar el acceso, su vencimiento o un cambio del canal impiden nuevas consultas. Este recorrido no exige identidad de operario ni habilita jornada o reportes.</p></details>
             <ol className={styles.stepsList}>
@@ -81,7 +93,7 @@ export default function ManualPage() {
           </section>
 
           <section id="trabajo" className={styles.section} aria-labelledby="trabajo-title">
-            <p className={styles.eyebrow}>03 · TRABAJO EN LA WEB</p><h2 id="trabajo-title">Jornada, evidencia y avance</h2>
+            <p className={styles.eyebrow}>04 · TRABAJO EN LA WEB</p><h2 id="trabajo-title">Jornada, evidencia y avance</h2>
             <p>En la obra abierta, entrá a <strong>Jornada y evidencia → Abrir operaciones</strong>. Antes de fichar, un administrador o director debe configurar el sector de la obra y su ubicación.</p>
             <p>En <strong>Sectores y QR</strong>, agregá o editá el sector que corresponde. Revisá su nombre, el centro y el radio; podés obtener una ubicación puntual desde el teléfono o completar las coordenadas. Obtenerla no guarda la configuración ni acredita el perímetro de la obra. Guardar una modificación renueva los QR de todos los sectores: revisá la confirmación y reemplazá los códigos colocados.</p>
             <p>Para volver a imprimir un código, descargá el <strong>QR vigente</strong> del sector. No hace falta guardar otra configuración ni renovar los códigos. La descarga comprueba tus permisos y la versión actual; si la configuración cambió, actualizá el listado antes de imprimir.</p>
@@ -97,10 +109,11 @@ export default function ManualPage() {
           </section>
 
           <section id="cronograma" className={styles.section} aria-labelledby="cronograma-title">
-            <p className={styles.eyebrow}>04 · PLANIFICACIÓN</p><h2 id="cronograma-title">Del PDF o la imagen al cronograma</h2>
+            <p className={styles.eyebrow}>05 · PLANIFICACIÓN</p><h2 id="cronograma-title">Del PDF, la imagen o el Excel al cronograma</h2>
             <ol className={styles.stepsList}>
-              <li>En el cronograma de la obra, elegí <strong>Importar PDF o imagen</strong>. Usá un PDF de hasta 3 MB o una imagen PNG, JPEG o WebP de hasta 2 MB, legible y con un máximo de 50 tareas.</li>
-              <li>Revisá el archivo y autorizá su envío a OpenAI para esta extracción. Elegí <strong>Extraer borrador</strong>. La fuente queda privada; todavía no se crean tareas.</li>
+              <li>En el cronograma de la obra, elegí <strong>Importar PDF, imagen o Excel</strong>. PDF y Excel XLSX/XLSM admiten hasta 3 MB; PNG, JPEG o WebP, hasta 2 MB. El archivo debe ser legible y corresponder al plan de esta obra.</li>
+              <li>Para PDF o imagen, autorizá la extracción con OpenAI; el límite es de 50 tareas. Para Excel compatible, elegí explícitamente el alcance: hasta 50 rubros mensuales o 200 partidas físicas del perfil CyP. La lectura del Excel es local y no ejecuta macros ni recalcula fórmulas. La inversión prevista requiere el rol Administrador o Director de obra y no se transforma en avance físico.</li>
+              <li>Elegí <strong>Extraer borrador</strong>. La fuente queda privada; todavía no se crean tareas. Los meses y semanas numerados del Excel no fijan una fecha de inicio: completá y revisá las fechas de calendario antes de aplicar.</li>
               <li>Compará los títulos y fechas con <strong>Descargar fuente</strong>. Corregí las filas, completá fechas dudosas y resolvé cada observación. Podés excluir filas y <strong>Guardar correcciones</strong> con un motivo.</li>
               <li>Un administrador o director revisa cuántas tareas existentes y nuevas tendrá la obra, confirma su aprobación y elige <strong>Aplicar tareas</strong>. Las nuevas empiezan por iniciar y con avance cero; las existentes conservan sus fechas y avance.</li>
             </ol>
@@ -108,7 +121,7 @@ export default function ManualPage() {
           </section>
 
           <section id="inventario" className={styles.section} aria-labelledby="inventario-title">
-            <p className={styles.eyebrow}>05 · MATERIALES</p><h2 id="inventario-title">Compras, entregas y consumo</h2>
+            <p className={styles.eyebrow}>06 · MATERIALES</p><h2 id="inventario-title">Compras, entregas y consumo</h2>
             <ol className={styles.stepsList}>
               <li>En <strong>Inventario y consumo → Abrir inventario → Agregar material</strong>, el administrador o director prepara el catálogo de la obra con nombre y unidad. Cada material comienza sin existencias; no se calcula stock a partir de mensajes antiguos.</li>
               <li>Registrá el pedido de materiales. En compras, prepará la cotización y obtené la autorización del importe. Comprar y recibir son pasos distintos; el pago tiene su registro propio.</li>
@@ -122,14 +135,14 @@ export default function ManualPage() {
           </section>
 
           <section id="clientes" className={styles.section} aria-labelledby="clientes-title">
-            <p className={styles.eyebrow}>06 · SEGUIMIENTO COMERCIAL</p><h2 id="clientes-title">Clientes y oportunidades</h2>
+            <p className={styles.eyebrow}>07 · SEGUIMIENTO COMERCIAL</p><h2 id="clientes-title">Clientes y oportunidades</h2>
             <p>El <strong>administrador</strong> accede a <strong>Mi cuenta → Abrir obra → Clientes</strong>. Cargá nombre, contacto, correo, teléfono, etapa, actividad, origen, próximo seguimiento y notas. Las fichas pertenecen a toda la empresa; la obra abierta aporta el contexto autorizado.</p>
             <p>La consulta muestra páginas de 20 registros. Usá Buscar clientes para consultar toda tu empresa por nombre, contacto, correo o teléfono; las páginas conservan la búsqueda. No hace falta respetar las mayúsculas, pero sí las tildes del dato guardado. Si una ficha cambió mientras editabas, consultá su versión vigente, compará los datos y revisá el cambio antes de guardar.</p>
             <p className={styles.note}>Guardar un cliente no verifica su número ni autoriza WhatsApp. Este CRM cubre contactos y etapas; no genera cotizaciones, presupuestos formales, licitaciones o automatizaciones comerciales.</p>
           </section>
 
           <section id="whatsapp" className={styles.section} aria-labelledby="whatsapp-title">
-            <p className={styles.eyebrow}>07 · WHATSAPP DE LA EMPRESA</p><h2 id="whatsapp-title">Preparar y autorizar tu número</h2>
+            <p className={styles.eyebrow}>08 · WHATSAPP DE LA EMPRESA</p><h2 id="whatsapp-title">Preparar y autorizar tu número</h2>
             <p>Este recorrido corresponde al número propio de la empresa. Tener la preparación guardada no significa que Meta ya autorizó la conexión.</p>
             <ol className={styles.stepsList}>
               <li>En <strong>Preparar WhatsApp → Tu número. Tu obra.</strong>, elegí nombre del asistente, tipo de número y circuitos. Usá <strong>número nuevo dedicado</strong> si la línea está libre y podés recibir SMS o llamada. Si ya trabajás en la app <strong>WhatsApp Business</strong>, elegí ese modo para preparar la coexistencia. Si ya usás <strong>Cloud API o un proveedor</strong>, necesitás revisar el plan de autorización de esa cuenta antes de conectarla. WhatsApp personal requiere primero el traslado oficial a Business App con respaldo; no borres tu cuenta ni desinstales la app para intentar habilitar una conexión.</li>
@@ -150,7 +163,7 @@ export default function ManualPage() {
           </section>
 
           <section id="menu" className={styles.section} aria-labelledby="menu-title">
-            <p className={styles.eyebrow}>08 · CONVERSACIÓN DE OBRA</p><h2 id="menu-title">Qué escribir en WhatsApp</h2>
+            <p className={styles.eyebrow}>09 · CONVERSACIÓN DE OBRA</p><h2 id="menu-title">Qué escribir en WhatsApp</h2>
             <p>Después de vincularte a un canal habilitado, escribí <code>MENU</code>. Las opciones dependen de tus permisos actuales. Elegí las opciones del último menú y revisá cada confirmación antes de guardar.</p>
             <p>Cuando el asistente solicite texto, ubicación o un archivo, mantené presionado su mensaje y elegí <strong>Responder</strong> antes de enviarlo. Así el dato queda asociado al paso y a la obra correctos. Un borrador vigente puede continuar con esa respuesta aunque venza la selección inicial de obra; para iniciar otro registro, volvé a seleccionar y confirmar la obra con <code>OBRA</code> si el asistente lo pide.</p>
             <p>El menú de jornada ofrece entrada, pausa, reanudación o salida según tu jornada vigente. Si un dato de avance o materiales no es válido, corregilo como indica la respuesta: el borrador sigue pendiente y todavía no se guardó ni se aprobó.</p>
@@ -159,13 +172,13 @@ export default function ManualPage() {
           </section>
 
           <section id="recuperacion" className={styles.section} aria-labelledby="recuperacion-title">
-            <p className={styles.eyebrow}>09 · COMPROBAR ANTES DE REPETIR</p><h2 id="recuperacion-title">Cuando el resultado queda pendiente</h2>
+            <p className={styles.eyebrow}>10 · COMPROBAR ANTES DE REPETIR</p><h2 id="recuperacion-title">Cuando el resultado queda pendiente</h2>
             <ol className={styles.stepsList}><li>Conservá la empresa y la obra correctas. Usá <strong>Comprobar estado</strong>, <strong>Comprobar creación</strong> o la acción de consultar recibo que ofrezca el panel.</li><li>La consulta comprueba lo registrado y no repite el envío. Una respuesta de aceptación de Meta tampoco demuestra entrega al teléfono: revisá el estado de entrega.</li><li>Si la sesión terminó, volvé a ingresar y seleccioná la misma empresa y obra. Si cambiaron los permisos o la revisión, consultá el estado actual antes de decidir.</li><li>No generes otro intento para eludir un envío incierto. Un registro rechazado definitivamente puede habilitar una nueva confirmación explícita; un resultado desconocido se recupera primero.</li></ol>
             <div className={styles.callout}><strong>Qué conserva el navegador</strong><p>El navegador conserva referencias mínimas para consultar los recibos, sin textos, imágenes, PIN ni códigos de vinculación. La importación también conserva su intento pendiente para volver a consultarlo. No son una copia de tus borradores ni una cola de archivos sin conexión. Para consultar se necesita conexión y acceso vigente.</p><p>Después de una actualización de la aplicación, recargá las pestañas antiguas antes de continuar. Si el almacenamiento del navegador falla, resolvelo antes de volver a guardar; no eludas la comprobación desde otra pestaña.</p></div>
           </section>
 
           <section id="equipo-tecnico" className={styles.section} aria-labelledby="tecnico-title">
-            <p className={styles.eyebrow}>10 · EQUIPO TÉCNICO</p><h2 id="tecnico-title">Comprobaciones antes de liberar el piloto</h2>
+            <p className={styles.eyebrow}>11 · EQUIPO TÉCNICO</p><h2 id="tecnico-title">Comprobaciones antes de liberar el piloto</h2>
             <p>Esta sección acompaña al equipo que configura y verifica la plataforma. No solicita credenciales en el manual ni ejecuta cambios del proveedor.</p>
             <p className={styles.note}>La dirección <code>/api/webhooks/whatsapp</code> es el receptor técnico de Meta. Abrirla directamente en el navegador no configura WhatsApp y puede mostrar un error de verificación. Para preparar la empresa y consultar su conexión, usá <Link href="/cuenta">Mi cuenta</Link>.</p>
             <details className={styles.details}><summary>Identidad y alta de empresa</summary><ul><li>Comprobar instancia Production de Clerk, claves existentes y dominio autorizado. El ingreso social necesita clientes OAuth propios y retorno exacto; un botón visible no prueba la sesión.</li><li>Verificar correo primario y pertenencia oficial de administrador. El alta valida sesión y prueba de perfil firmadas, y crea empresa, primera obra y recibo en la misma transacción.</li><li>Comprobar invitación recibida y aceptada por la cuenta correcta, pertenencia canónica y obra asignada. No usar un teléfono o correo escrito como autoridad.</li><li>Probar carga y descarga privadas con el titular y otro revisor autorizado. Eliminar de los registros de diagnóstico documentos, selfies y localizadores privados.</li></ul></details>
@@ -175,7 +188,7 @@ export default function ManualPage() {
           </section>
         </div>
       </div>
-      <footer className={styles.footer}><p>Guía revisada el 10 de octubre de 2026 · ObraSaaS, un producto desarrollado por Inmovar LATAM.</p><div><Link href="/cuenta">Ir a Mi cuenta</Link><a href="#manual-title">Volver al inicio del manual</a></div></footer>
+      <footer className={styles.footer}><p>Guía revisada el 12 de octubre de 2026 · ObraSaaS, un producto desarrollado por Inmovar LATAM.</p><div><Link href="/cuenta">Ir a Mi cuenta</Link><a href="#manual-title">Volver al inicio del manual</a></div></footer>
     </main>
   </div>;
 }

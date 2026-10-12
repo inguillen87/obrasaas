@@ -34,3 +34,15 @@
 .panel select{min-height:44px}
 
 .hierarchy{min-width:0;display:grid;gap:12px;margin:16px 0}.hierarchy ul{padding-left:20px;overflow-wrap:anywhere}.hierarchy li{margin:8px 0}.pagination{display:flex;align-items:center;flex-wrap:wrap;gap:10px}.pagination span{flex:1;min-width:130px}.original{white-space:pre-wrap;overflow-wrap:anywhere}.distribution{padding-left:24px;overflow-wrap:anywhere}.hierarchy select{max-width:100%;min-width:0}
+
+.calendar{min-width:0;padding:12px;border:1px solid #54708a;border-radius:8px;background:#132638}
+.calendar summary{cursor:pointer;min-height:44px;align-content:center;font-weight:600}
+.calendar summary:focus-visible{outline:3px solid #f7b94d;outline-offset:3px}
+.calendarContent,.calendarPreview{display:grid;gap:12px;min-width:0;margin-top:12px}
+.calendarContent>p,.calendarPreview>p,.calendarRows p{margin:0;line-height:1.5;overflow-wrap:anywhere}
+.calendarContent>label:not(.checkbox){max-width:320px}
+.calendarRows{display:grid;gap:12px;max-height:55vh;overflow:auto;min-width:0;margin:0;padding:4px 4px 4px 24px}
+.calendarRows>li{padding:12px;border:1px solid #3f5870;border-radius:8px;min-width:0;display:grid;gap:8px;overflow-wrap:anywhere}
+.calendarRows time{font-variant-numeric:tabular-nums}
+.calendarDetail{display:grid;gap:8px;margin-top:8px}
+@media(max-width:540px){.calendar{padding:10px}.calendarContent>label:not(.checkbox){max-width:100%}.calendar .pagination button{width:100%}.calendarRows{padding-left:20px}.calendarRows>li{padding:10px}}
