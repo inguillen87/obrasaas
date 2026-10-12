@@ -6,6 +6,7 @@ import {spawn,spawnSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-preparation-format.mjs';
 import {createPlanImportHandlers} from '../src/lib/plan-import-http.mjs';
+import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';
 
 // Real workspace, pagination, plan panel, transport and browser recovery state.
 // Only session tokens and HTTP responses are synthetic; no provider is called.
@@ -13,6 +14,7 @@ assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),evidence=path.join(root,'.vercel/private');mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(evidence,'workspace-plan-ui-')),app=path.join(fixture,'src/app'),components=path.join(app,'(identity)/cuenta');mkdirSync(components,{recursive:true});
 const sourceManifest=[];
+sourceManifest.push({path:'scripts/lib/company-subscription-ui-fixture.mjs',sha256:createHash('sha256').update(readFileSync(new URL('./lib/company-subscription-ui-fixture.mjs',import.meta.url))).digest('hex')});
 for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filter(name=>/\.(js|mjs|css)$/.test(name))){
  const source='src/app/(identity)/cuenta/'+file;copyFileSync(path.join(root,source),path.join(components,file));
  sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(path.join(components,file))).digest('hex')});
@@ -82,12 +84,13 @@ async function assertPlanBlockingNavigation(page,posts){
 async function scenario(mode,width){
  const taskMode=mode.startsWith('task-');
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});page.on('pageerror',error=>errors.push({mode,width,message:error.message}));await page.setRequestInterception(true);
- let draft=null,receipt=null,applied=mode==='task-recover-existing',heldRead=null,readFailures=0;const posts=[],workspaceReads=[],recoveryReads=[];
+ let draft=null,receipt=null,applied=mode==='task-recover-existing',heldRead=null,readFailures=0;const posts=[],workspaceReads=[],recoveryReads=[],subscriptionReads=[];
  const send=(request,body,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:JSON.stringify(body)});
  page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('Unexpected external request');}if(!url.pathname.startsWith('/api/'))return request.continue();
-  assert.ok(['/api/identity/workspace','/api/identity/plan-import','/api/identity/task-creation','/api/identity/project-preparation','/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname),'Unexpected API '+url.pathname);
   const activeB=request.headers().authorization==='Bearer synthetic-workspace-plan-B';assert.equal(request.headers().authorization,'Bearer synthetic-workspace-plan-'+(activeB?'B':'A'));
+  if(await respondClosedCompanySubscription(request,{origin,scope:activeB?scopeB:scope,authorization:'Bearer synthetic-workspace-plan-'+(activeB?'B':'A'),allowed:true,reads:subscriptionReads}))return;
+  assert.ok(['/api/identity/workspace','/api/identity/plan-import','/api/identity/task-creation','/api/identity/project-preparation','/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname),'Unexpected API '+url.pathname);
   if(['/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname)){
    assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);const currentScope=activeB?scopeB:scope,currentProject=activeB?projectB:projectId;const requestedScope=url.searchParams.get('scope'),requestedProject=url.searchParams.get('projectId');assert.ok([scope,scopeB].includes(requestedScope));assert.ok([projectId,projectB].includes(requestedProject));if(requestedScope!==currentScope)return send(request,{code:'WORKSPACE_CONTEXT_CHANGED'},409);if(requestedProject!==currentProject)return send(request,{code:'WORKSPACE_PROJECT_UNAVAILABLE'},404);
    return send(request,url.pathname==='/api/identity/project-creation'?{scope:currentScope,projectId:currentProject,canCreate:true}:{scope:currentScope,projectId:currentProject,canManage:true,channels:[],invitations:[],candidates:[],truncated:false,candidatesLimited:false});
@@ -137,7 +140,7 @@ async function scenario(mode,width){
   if(url.searchParams.has('draftId'))return send(request,{scope,projectId,draft});
   return send(request,{scope,projectId,canApprove:true,drafts:draft?[draft]:[],truncated:false});
  }catch(error){errors.push({mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
- await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa sintética de cronogramas');await openProject(page);await assertCount(page,applied?151:150);
+ await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa sintética de cronogramas');assert.equal(subscriptionReads.length,1,'Administrator mounts one closed company status consult');await openProject(page);await assertCount(page,applied?151:150);
  assert.equal(await page.$('[data-task-id="z-imported"]'),null,'Imported task must be outside the first page');
  if(taskMode){
   await click(page,'Nueva tarea');await page.type('section[aria-label="Crear tarea de la obra"] input',row.title);await click(page,'Crear tarea');
@@ -197,15 +200,16 @@ async function recoveryClosureScenario(mode,width){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});page.on('pageerror',error=>errors.push({mode,width,message:error.message}));await page.setRequestInterception(true);
  const globalMode=mode.startsWith('global-'),expiryMode=mode.endsWith('lease-expiry'),legacyConflict=mode==='legacy-conflict',correctionMode=['invalid-source','oversized-source'].includes(mode),explicitRetryMode=mode.endsWith('explicit-retry'),closeAfterCheck=mode==='upload-close-after-check',decisionMode=mode.startsWith('decision-')||globalMode&&!expiryMode||legacyConflict,legacyMode=mode==='legacy-reference';
  const legacyId='01234567-89ab-4cde-8fab-0123456789ab';
- let draft=null,receipt=null,applied=false,resolved=false,denyRead=false,rejectRead=false,observed=false,readbackFailed=false,leaseExpired=false,invalidExpiry=null,workspaceQueries=0;const posts=[],recoveryReads=[];
+ let draft=null,receipt=null,applied=false,resolved=false,denyRead=false,rejectRead=false,observed=false,readbackFailed=false,leaseExpired=false,invalidExpiry=null,workspaceQueries=0;const posts=[],recoveryReads=[],subscriptionReads=[];
  const send=(request,body,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:JSON.stringify(body)});
  const failStatus=mode.endsWith('403')?403:mode.endsWith('409')?409:503;
  let rejectedAttachCalls=0;
  const rejectionHandlers=createPlanImportHandlers({verify:async()=>({authenticated:true,verification:'clerk-production-jwt',userId:'user_Synthetic',organizationId:'org_Synthetic',organizationRole:'org:admin'}),imports:{attach:async()=>{rejectedAttachCalls++;throw Error('Invalid source must never reach attach');}}});
  page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('Unexpected external request');}if(!url.pathname.startsWith('/api/'))return request.continue();
-  assert.ok(['/api/identity/workspace','/api/identity/plan-import','/api/identity/project-preparation','/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname),'Unexpected API '+url.pathname);
   const activeB=request.headers().authorization==='Bearer synthetic-workspace-plan-B';assert.equal(request.headers().authorization,'Bearer synthetic-workspace-plan-'+(activeB?'B':'A'));
+  if(await respondClosedCompanySubscription(request,{origin,scope:activeB?scopeB:scope,authorization:'Bearer synthetic-workspace-plan-'+(activeB?'B':'A'),allowed:true,reads:subscriptionReads}))return;
+  assert.ok(['/api/identity/workspace','/api/identity/plan-import','/api/identity/project-preparation','/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname),'Unexpected API '+url.pathname);
   if(['/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname)){
    assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);const currentScope=activeB?scopeB:scope,currentProject=activeB?projectB:projectId;const requestedScope=url.searchParams.get('scope'),requestedProject=url.searchParams.get('projectId');assert.ok([scope,scopeB].includes(requestedScope));assert.ok([projectId,projectB].includes(requestedProject));if(requestedScope!==currentScope)return send(request,{code:'WORKSPACE_CONTEXT_CHANGED'},409);if(requestedProject!==currentProject)return send(request,{code:'WORKSPACE_PROJECT_UNAVAILABLE'},404);
    return send(request,url.pathname==='/api/identity/project-creation'?{scope:currentScope,projectId:currentProject,canCreate:true}:{scope:currentScope,projectId:currentProject,canManage:true,channels:[],invitations:[],candidates:[],truncated:false,candidatesLimited:false});
@@ -262,6 +266,7 @@ async function recoveryClosureScenario(mode,width){
   return send(request,{scope,projectId,canApprove:true,drafts:draft?[draft]:[],truncated:false});
  }catch(error){errors.push({mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa sintética de cronogramas');
+ assert.equal(subscriptionReads.length,1,'Administrator mounts one closed company status consult');
  if(legacyMode){await page.evaluate(({scope,projectId,operationId})=>sessionStorage.setItem('obrasaas-plan-attempt-v1:'+scope+':'+projectId,JSON.stringify({scope,projectId,operationId,kind:'UPLOAD'})),{scope,projectId,operationId:legacyId});}
  await openProject(page);await assertCount(page,150);
  if(!legacyMode){

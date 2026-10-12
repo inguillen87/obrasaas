@@ -1,7 +1,7 @@
 name: Canonical company subscription and retired billing
 on:
   push:
-    branches: [master, 'hotfix/production-workspace-company-plan-*', 'feat/company-billing-checkout-*']
+    branches: [master, 'hotfix/production-workspace-company-plan-*', 'feat/company-billing-checkout-*', 'hotfix/subscription-fixture-dependencies-*']
   workflow_dispatch:
 permissions:
   contents: read

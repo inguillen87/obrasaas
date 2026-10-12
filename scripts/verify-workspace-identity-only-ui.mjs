@@ -6,6 +6,7 @@ import {createServer} from 'node:net';
 import {spawn,execFileSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
+import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';
 
 // Actual account/private identity components, isolated synthetic session/API.
 // This proves UI restrictions and receipt behavior, never a customer login.
@@ -35,6 +36,7 @@ mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/workspace-identity-only-ui-')),app=path.join(fixture,'src/app');
 mkdirSync(app,{recursive:true});
 const sha256=value=>createHash('sha256').update(value).digest('hex'),sourceManifest=[],copied=new Set();
+sourceManifest.push({path:'scripts/lib/company-subscription-ui-fixture.mjs',sha256:sha256(sourceBytes('scripts/lib/company-subscription-ui-fixture.mjs'))});
 function copyGraph(relative){
  relative=relative.split(/[\\/]/).join('/');
  if(copied.has(relative))return;assert.ok(relative.startsWith('src'+path.sep)||relative.startsWith('src/'));
@@ -98,7 +100,7 @@ function ownChannel(current,projectId){
  return current.channelRows.get(projectId);
 }
 async function createPage(width,current,sharedContext=null){
- const context=sharedContext||await browser.createBrowserContext(),page=await context.newPage();active={width,current,page};
+ const context=sharedContext||await browser.createBrowserContext(),page=await context.newPage();active={width,current,page};const subscriptionReads=[];
  await page.setViewport({width,height:1050});page.on('pageerror',error=>pageErrors.push({width,mode:current.mode,error:error.message}));
  page.on('dialog',async dialog=>{assert.equal(dialog.type(),'beforeunload');current.acceptedReloadWarning=true;await dialog.accept();});
  await page.setRequestInterception(true);
@@ -114,6 +116,7 @@ async function createPage(width,current,sharedContext=null){
    const projectId=url.searchParams.get('projectId')||payload?.projectId;
    if(url.searchParams.has('scope'))assert.equal(url.searchParams.get('scope'),scope,'Crossed active organization');
    current.requests.push({path:url.pathname,method:request.method(),actor,projectId,operationId:url.searchParams.get('operationId')});
+   if(await respondClosedCompanySubscription(request,{origin,scope,authorization:'Bearer synthetic-current-'+actor,allowed:current.mode==='bootstrap',reads:subscriptionReads}))return;
    if(url.pathname==='/api/identity/worker-channel'){
     assert.equal(actor,'A');assert.ok(['p-a','p-a2'].includes(projectId));
     if(current.channelDenied)return answer(request,current.channelDenied.status,{code:current.channelDenied.code});
@@ -161,7 +164,7 @@ async function createPage(width,current,sharedContext=null){
    return answer(request,503,{code:'CONTROLLED_MODULE_UNAVAILABLE'});
   }catch(error){requestErrors.push({mode:current.mode,message:error.message});try{await request.abort();}catch{}}
  });
- await page.goto(origin,{waitUntil:'networkidle0'});await waitText(page,'Empresa de ensayo A');return {context,page};
+ await page.goto(origin,{waitUntil:'networkidle0'});await waitText(page,'Empresa de ensayo A');assert.equal(subscriptionReads.length,current.mode==='bootstrap'?1:0,'Only the bootstrap administrator consults closed subscription status');return {context,page};
 }
 async function references(page){return page.evaluate(async scopes=>({a:await window.__references(scopes[0]),b:await window.__references(scopes[1]),session:Object.values(sessionStorage),local:Object.values(localStorage)}),[scopeA,scopeB]);}
 function safeReferences(value,expected){

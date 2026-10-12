@@ -5,6 +5,7 @@ import path from 'node:path';
 import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-preparation-format.mjs';
+import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';
 
 // Browser-only acceptance of the real component with intercepted synthetic API
 // responses. This is NOT proof of a production login, employee or WhatsApp event.
@@ -16,6 +17,7 @@ const fixture=mkdtempSync(path.join(root,'.vercel/workspace-ui-')),app=path.join
 mkdirSync(components,{recursive:true});mkdirSync(path.join(fixture,'src/lib'),{recursive:true});copyFileSync(path.join(root,'src/lib/worker-channel-consent-policy.mjs'),path.join(fixture,'src/lib/worker-channel-consent-policy.mjs'));
 mkdirSync(path.join(fixture,'src/lib/whatsapp'),{recursive:true});copyFileSync(path.join(root,'src/lib/whatsapp/tenant-workspace-policy.js'),path.join(fixture,'src/lib/whatsapp/tenant-workspace-policy.js'));
 const sourceManifest=[];
+sourceManifest.push({path:'scripts/lib/company-subscription-ui-fixture.mjs',sha256:createHash('sha256').update(readFileSync(new URL('./lib/company-subscription-ui-fixture.mjs',import.meta.url))).digest('hex')});
 const entitlementPath='src/lib/company-entitlement.mjs';copyFileSync(path.join(root,entitlementPath),path.join(fixture,entitlementPath));assert.deepEqual(readFileSync(path.join(root,entitlementPath)),readFileSync(path.join(fixture,entitlementPath)));sourceManifest.push({path:entitlementPath,sha256:createHash('sha256').update(readFileSync(path.join(fixture,entitlementPath))).digest('hex')});
 const officeIdentityPath='src/lib/identity-return-path.mjs';copyFileSync(path.join(root,officeIdentityPath),path.join(fixture,officeIdentityPath));assert.deepEqual(readFileSync(path.join(root,officeIdentityPath)),readFileSync(path.join(fixture,officeIdentityPath)));sourceManifest.push({path:officeIdentityPath,sha256:createHash('sha256').update(readFileSync(path.join(fixture,officeIdentityPath))).digest('hex')});
 copyFileSync(path.join(root,'src/lib/geo.js'),path.join(fixture,'src/lib/geo.js'));
@@ -268,7 +270,7 @@ async function scheduleConflictScenario(mode,width=390){
 async function navigationScenario(role,width){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode:'navigation-'+role,width,message:error.message}));
- const requests=[],posts=[],administrator=role==='ADMIN';let preparationReads=0;
+ const requests=[],posts=[],subscriptionReads=[],administrator=role==='ADMIN';let preparationReads=0;
  await page.setRequestInterception(true);
  page.on('request',async request=>{
   try{
@@ -277,6 +279,7 @@ async function navigationScenario(role,width){
    requests.push({method:request.method(),path:url.pathname,query:url.search});
    if(request.method()!=='GET'){posts.push(request.postData());throw new Error('Navigation must not mutate a business record');}
    assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+   if(await respondClosedCompanySubscription(request,{origin,scope,authorization:'Bearer synthetic-active-tab-A',allowed:administrator,reads:subscriptionReads}))return;
    if(['/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname)){
     assert.equal(administrator,true);assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');
     const body=url.pathname==='/api/identity/project-creation'?{scope,projectId:'p-a',canCreate:true}:{scope,projectId:'p-a',canManage:true,channels:[],invitations:[],candidates:[],truncated:false,candidatesLimited:false};
@@ -294,6 +297,7 @@ async function navigationScenario(role,width){
   }catch(error){pageErrors.push({mode:'navigation-'+role,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
  });
  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo de navegación');
+ assert.equal(subscriptionReads.length,administrator?1:0,'Only the administrator automatically consults closed subscription status');
  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());
  await page.waitForSelector('nav[aria-labelledby="workspace-tools-title"]');
  const nav='nav[aria-labelledby="workspace-tools-title"]';
