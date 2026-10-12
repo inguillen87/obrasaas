@@ -270,10 +270,18 @@ async function noBrowserLocks(){
 }
 async function cancelWhileWaitingForLock(){
  const context=await browser.createBrowserContext(),current=state(),holder=await createPage(context,current),page=await createPage(context,current);
+ activeScenario={name:'cancelWhileWaitingForLock',pages:[holder,page],current};
+ const lockName='obrasaas-receipt:'+scopeA;
  await holder.evaluate(scope=>{window.__heldLock=navigator.locks.request('obrasaas-receipt:'+scope,async()=>{window.__lockReady=true;await new Promise(resolve=>{window.__releaseLock=resolve;});});},scopeA);
- await holder.waitForFunction(()=>window.__lockReady===true);await fillTask(page);await click(page,'Crear tarea');await pause(100);assert.equal(current.posts.length,0);assert.deepEqual(await stored(page),{});
- await click(page,'Contexto B');await waitText(page,'Organización sintética B');await holder.evaluate(()=>window.__releaseLock());await pause(200);
- assert.equal(current.posts.length,0);assert.deepEqual(await stored(page),{});checks.push('unmount-while-waiting-native-lock-never-dispatches-late-post');await context.close();
+ // The holder is a background tab; a property observation cannot depend on RAF.
+ await holder.waitForFunction(()=>window.__lockReady===true,{polling:100,timeout:30000});await fillTask(page);await click(page,'Crear tarea');
+ await page.waitForFunction(async name=>{const locks=await navigator.locks.query();return locks.held.some(lock=>lock.name===name&&lock.mode==='exclusive')&&locks.pending.some(lock=>lock.name===name&&lock.mode==='exclusive');},{polling:100,timeout:30000},lockName);
+ assert.equal(current.posts.length,0);assert.deepEqual(await stored(page),{});
+ await click(page,'Contexto B');await waitText(page,'Organización sintética B');
+ await page.waitForFunction(async name=>{const locks=await navigator.locks.query();return locks.held.some(lock=>lock.name===name&&lock.mode==='exclusive')&&!locks.pending.some(lock=>lock.name===name);},{polling:100,timeout:30000},lockName);
+ await holder.evaluate(()=>window.__releaseLock());
+ await holder.waitForFunction(async name=>{const locks=await navigator.locks.query();return !locks.held.some(lock=>lock.name===name)&&!locks.pending.some(lock=>lock.name===name);},{polling:100,timeout:30000},lockName);
+ assert.equal(current.posts.length,0);assert.deepEqual(await stored(page),{});checks.push('unmount-while-waiting-native-lock-never-dispatches-late-post');await context.close();activeScenario=null;
 }
 try{
  let ready=false;
@@ -295,7 +303,7 @@ try{
 }catch(error){
  const scenario=activeScenario?{name:activeScenario.name,posts:activeScenario.current.posts.map(row=>({operationId:row.operationId,scope:row.scope,projectId:row.projectId})),requests:activeScenario.current.requests,rows:[]}:null;
  if(scenario)for(const [index,page] of activeScenario.pages.entries()){
-  try{scenario.rows.push({index,url:page.url(),dom:await text(page),committedReferences:await stored(page)});await page.bringToFront();await page.screenshot({path:path.join(evidence,'failed-two-tabs-'+index+'.png'),fullPage:true});}
+  try{const observation=await page.evaluate(async()=>{const locks=typeof navigator.locks?.query==='function'?await navigator.locks.query():null;return {visibilityState:document.visibilityState,lockReady:window.__lockReady===true,nativeLocks:locks?{held:locks.held.map(({name,mode})=>({name,mode})),pending:locks.pending.map(({name,mode})=>({name,mode}))}:null};});const row={index,url:page.url(),...observation};scenario.rows.push(row);row.dom=await text(page);row.committedReferences=await stored(page);await page.bringToFront();await page.screenshot({path:path.join(evidence,'failed-two-tabs-'+index+'.png'),fullPage:true});}
   catch(snapshotError){scenario.rows.push({index,snapshotError:snapshotError.message});}
  }
  writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,checks,pageErrors,serverLog,scenario},null,2));throw error;
