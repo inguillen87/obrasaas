@@ -1,0 +1,78 @@
+name: Private KYC reply feedback acceptance
+on:
+  push:
+    branches: [master, 'feat/integral-worksite-kyc-reply-feedback-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      CUTOVER_TEST_DISPOSABLE: '1'
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Exact event source
+        run: node --input-type=module -e "import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';assert.equal(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),process.env.GITHUB_SHA);assert.equal(execFileSync('git',['status','--porcelain','--untracked-files=no'],{encoding:'utf8'}).trim(),'');"
+      - name: Canonical private identity, signed reply and finite delivery contracts
+        run: node --test tests/production-participant-kyc-attempt*.test.mjs tests/production-participant-kyc-code*.test.mjs tests/production-meta-kyc-rejection.test.mjs tests/production-meta-customer-processing.test.mjs tests/production-company-channel-kyc.test.mjs tests/production-company-kyc-rejection-feedback-postgres-target.test.mjs tests/production-kyc-reply-feedback*.test.mjs
+      - name: Private identity source and additive harness lint
+        run: npx eslint src/lib/participant-kyc-chat-attempt.mjs src/lib/company-channel-kyc.mjs 'src/app/(identity)/cuenta/participant-kyc-chat-attempt-panel.js' 'src/app/(identity)/cuenta/participant-kyc-chat-attempt-view.mjs' scripts/verify-company-kyc-rejection-feedback-postgres.mjs scripts/verify-kyc-reply-feedback*.mjs tests/production-participant-kyc-attempt*.test.mjs tests/production-company-channel-kyc.test.mjs tests/production-company-kyc-rejection-feedback-postgres-target.test.mjs tests/production-kyc-reply-feedback*.test.mjs --max-warnings 0
+      - name: Disposable native signed callback, guarded reply and delivery observation
+        run: node scripts/verify-company-kyc-rejection-feedback-postgres.mjs
+      - name: Responsive readonly private diagnostic with safe owned IPC
+        run: node scripts/verify-kyc-reply-feedback-ui.mjs --expected-head "$GITHUB_SHA" .vercel/private/kyc-reply-feedback-evidence/browser.json
+      - name: Require exact native and DOM source, matrix, boundaries and cleanup
+        run: node scripts/verify-kyc-reply-feedback-ci.mjs --expected-head "$GITHUB_SHA"
+      - name: Preserve exact checked-out source
+        run: git diff --exit-code HEAD --
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: kyc-reply-feedback-postgres-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            .vercel/private/company-kyc-rejection-feedback-postgres.json
+            .vercel/private/company-kyc-rejection-feedback-postgres-failure.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: kyc-reply-feedback-ui-${{ github.sha }}-${{ github.run_attempt }}
+          path: .vercel/private/kyc-reply-feedback-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: kyc-reply-feedback-ci-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            .vercel/private/kyc-reply-feedback-ci.json
+            .vercel/private/kyc-reply-feedback-ci.xml
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7

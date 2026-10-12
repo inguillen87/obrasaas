@@ -1,0 +1,70 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {createHash} from 'node:crypto';
+import {existsSync,readFileSync} from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import yaml from 'js-yaml';
+import {validateKycReplyFeedbackCi,kycReplyFeedbackSourceClosure,KYC_REPLY_FEEDBACK_CI_VERSION} from '../scripts/verify-kyc-reply-feedback-ci.mjs';
+import {COMPANY_KYC_REJECTION_FEEDBACK_PROOF_VERSION,COMPANY_KYC_REJECTION_FEEDBACK_CHECKS,COMPANY_KYC_REJECTION_SYNTHETIC_REPLY_COUNT} from '../scripts/verify-company-kyc-rejection-feedback-postgres.mjs';
+import {KYC_REPLY_FEEDBACK_UI_VERSION,KYC_REPLY_FEEDBACK_UI_WIDTHS,KYC_REPLY_FEEDBACK_UI_STATES,KYC_REPLY_FEEDBACK_UI_INVALID_STATES} from '../scripts/verify-kyc-reply-feedback-ui.mjs';
+
+const root=fileURLToPath(new URL('../',import.meta.url)),sources=Object.create(null),sha=bytes=>createHash('sha256').update(bytes).digest('hex');
+const readSource=file=>{const filename=path.join(root,file);if(!existsSync(filename))return null;if(!Object.hasOwn(sources,file))sources[file]=readFileSync(filename);return sources[file];};
+const native=kycReplyFeedbackSourceClosure(readSource),browser=kycReplyFeedbackSourceClosure(readSource,{ui:true});
+for(const file of ['scripts/verify-kyc-reply-feedback-ui.mjs','scripts/lib/owned-fixture-cleanup.mjs'])readSource(file);
+const manifest=files=>files.map(file=>({path:file,sha256:sha(sources[file])})),head='a'.repeat(40),tree='b'.repeat(40);
+function fixture(){
+ const provenance={sourceRevision:head,sourceTree:tree,trackedClean:true,sourceState:'EXACT_CI_SOURCE',status:'PASS',productionDataWritten:false,realIdentityDocuments:false};
+ const checks=[...KYC_REPLY_FEEDBACK_UI_WIDTHS.map(width=>({check:'responsive-keyboard-api-accepted-never-means-delivered',width,documentWidth:width,steps:3,targets:[{height:44,width:80},{height:44,width:160}],delivery:'Entrega sin comprobar'})),...KYC_REPLY_FEEDBACK_UI_STATES.map(state=>({check:'readonly-reply-delivery-state',state,response:state==='LEGACY'?'NOT_OBSERVED':state,times:['NOT_OBSERVED','UNAVAILABLE','WINDOW_CLOSED','LEGACY'].includes(state)?['2026-10-12T12:00:00.000Z']:['2026-10-12T12:00:00.000Z','2026-10-12T12:00:03.000Z']})),...KYC_REPLY_FEEDBACK_UI_INVALID_STATES.map(state=>({check:'invalid-private-diagnostic-clears-prior-observation',state})),...['scope','challengeId'].map(changed=>({check:'late-private-response-never-enters-new-context',changed})),...[401,403].map(status=>({check:'authorization-denial-clears-loaded-private-diagnostic',status}))];
+ return {expectedHead:head,head,sourceTree:tree,trackedClean:true,gitSources:{...sources},postgres:{...provenance,version:COMPANY_KYC_REJECTION_FEEDBACK_PROOF_VERSION,environment:'local-disposable-postgresql',postgresExecuted:true,providerCalls:0,mediaCalls:0,depositCalls:0,syntheticReplyCalls:COMPANY_KYC_REJECTION_SYNTHETIC_REPLY_COUNT,identityCertified:false,permissionsGranted:false,poolClosed:true,databaseRemoved:true,totalCheckCount:8,checks:[...COMPANY_KYC_REJECTION_FEEDBACK_CHECKS],sourceManifest:manifest(native.files),harnessSha256:sha(sources['scripts/verify-company-kyc-rejection-feedback-postgres.mjs'])},ui:{...provenance,version:KYC_REPLY_FEEDBACK_UI_VERSION,environment:'isolated-localhost-next-exact-jsx-readonly-synthetic-api',widths:[...KYC_REPLY_FEEDBACK_UI_WIDTHS],totalCheckCount:22,checks,sourceManifest:manifest(browser.files),dependencyManifest:manifest(['package.json','package-lock.json']),externalImports:[...browser.externalImports],harnessSha256:sha(sources['scripts/verify-kyc-reply-feedback-ui.mjs']),cleanupHelperSha256:sha(sources['scripts/lib/owned-fixture-cleanup.mjs']),pageErrors:[],interceptErrors:[],externalRequests:[],apiRequests:Array.from({length:28},()=>({method:'GET',scope:'a'.repeat(64),challengeId:'kyc_chat_'+'a'.repeat(32)})),automaticPostCount:0,providerRequests:0,productionLoginVerified:false,physicalDeviceAccepted:false,cleanup:{browserClosed:true,serverClosed:true,gracefulCloseAcknowledged:true,fixtureRemoved:true,fixtureCleanupProof:{fixtureRemoved:true,postcondition:{absent:true}}}}};
+}
+function rejected(mutate){const input=fixture();mutate(input);assert.throws(()=>validateKycReplyFeedbackCi(input),{code:'KYC_REPLY_FEEDBACK_CI_REJECTED'});}
+
+test('additive CI validates the native eight groups and readonly DOM twenty-two cases without executing producers',()=>{
+ assert.equal(native.files.length,101);assert.equal(browser.files.length,3);const input=fixture(),before=JSON.stringify(input),proof=validateKycReplyFeedbackCi(input);assert.equal(JSON.stringify(input),before);assert.equal(proof.version,KYC_REPLY_FEEDBACK_CI_VERSION);assert.equal(proof.status,'PASS');assert.equal(proof.postgres.totalCheckCount,8);assert.equal(proof.ui.totalCheckCount,22);assert.equal(proof.providerCalls,0);assert.equal(proof.productionLoginVerified,false);assert.equal(proof.permissionsGranted,false);
+});
+test('a forged foreign abbreviated or stale HEAD and tree cannot certify proofs',()=>{
+ for(const key of ['expectedHead','head','sourceTree'])rejected(input=>{input[key]='c'.repeat(40);});rejected(input=>{input.expectedHead=head.slice(0,7);});for(const kind of ['postgres','ui'])for(const key of ['sourceRevision','sourceTree'])rejected(input=>{input[kind][key]='c'.repeat(40);});
+});
+test('dirty proofs local working-tree records and false clean claims never qualify',()=>{
+ rejected(input=>{input.trackedClean=false;});for(const kind of ['postgres','ui']){rejected(input=>{input[kind].trackedClean=false;});for(const state of ['LOCAL_REVIEW_SOURCE','clean','working-tree',undefined])rejected(input=>{input[kind].sourceState=state;});}
+});
+test('failed nonnative real-document or production claims reject acceptance',()=>{
+ for(const kind of ['postgres','ui'])for(const [key,value]of [['status','FAIL'],['version','old'],['productionDataWritten',true],['realIdentityDocuments',true]])rejected(input=>{input[kind][key]=value;});rejected(input=>{input.postgres.environment='production-postgresql';});rejected(input=>{input.postgres.postgresExecuted=false;});rejected(input=>{input.ui.environment='production-browser';});rejected(input=>{input.ui.productionLoginVerified=true;});rejected(input=>{input.ui.physicalDeviceAccepted=true;});
+});
+test('native callback groups counters limits and no identity privileges must match exact source',()=>{
+ rejected(input=>{input.postgres.totalCheckCount=7;});rejected(input=>{input.postgres.checks.pop();});rejected(input=>{input.postgres.checks[3]='unsigned-callbacks-assumed-safe';});rejected(input=>{input.postgres.checks[5]='automatic-retry-allowed';});rejected(input=>{input.postgres.checks[1]=input.postgres.checks[0];});rejected(input=>{input.postgres.checks.reverse();});for(const calls of [0,7,9,999,undefined])rejected(input=>{input.postgres.syntheticReplyCalls=calls;});for(const key of ['identityCertified','permissionsGranted'])rejected(input=>{input.postgres[key]=true;});
+});
+test('real provider media deposit HTTP and automatic POST claims fail closed',()=>{
+ for(const key of ['providerCalls','mediaCalls','depositCalls']){rejected(input=>{input.postgres[key]=1;});rejected(input=>{delete input.postgres[key];});}for(const key of ['providerRequests','automaticPostCount']){rejected(input=>{input.ui[key]=1;});rejected(input=>{delete input.ui[key];});}for(const key of ['pageErrors','interceptErrors','externalRequests']){rejected(input=>{input.ui[key]=['synthetic failure'];});rejected(input=>{delete input.ui[key];});}
+});
+test('manifest counts cannot conceal omitted duplicate substituted or unrelated source',()=>{
+ for(const kind of ['postgres','ui']){rejected(input=>{input[kind].sourceManifest.pop();});rejected(input=>{input[kind].sourceManifest[1]={...input[kind].sourceManifest[0]};});rejected(input=>{input[kind].sourceManifest[0].path='src/unrelated.mjs';});rejected(input=>{input[kind].sourceManifest.push({path:'src/extra.mjs',sha256:'f'.repeat(64)});});}rejected(input=>{input.ui.dependencyManifest.pop();});rejected(input=>{input.ui.dependencyManifest[1]={...input.ui.dependencyManifest[0]};});
+});
+test('every transitive source producer package-lock and cleanup hash must match committed bytes',()=>{
+ for(const kind of ['postgres','ui']){rejected(input=>{input[kind].sourceManifest[0].sha256='f'.repeat(64);});rejected(input=>{input[kind].harnessSha256='f'.repeat(64);});}rejected(input=>{input.ui.cleanupHelperSha256='f'.repeat(64);});rejected(input=>{input.ui.dependencyManifest[1].sha256='f'.repeat(64);});rejected(input=>{input.gitSources['src/lib/participant-kyc-chat-attempt.mjs']=Buffer.from('// substituted source\n');});
+});
+test('missing committed graph nodes producer and helper are rejected before comparison',()=>{
+ for(const file of ['src/lib/participant-kyc-chat-attempt.mjs','src/app/(identity)/cuenta/participant-kyc-chat-attempt-view.mjs','scripts/verify-kyc-reply-feedback-ui.mjs','scripts/lib/owned-fixture-cleanup.mjs','package-lock.json'])rejected(input=>{delete input.gitSources[file];});
+});
+test('unsafe traversal nonliteral imports and external CSS cannot hide source dependencies',()=>{
+ for(const source of ["import '../outside.mjs';","import('../../../../../../outside.mjs');","const hidden='private';import(hidden);"])rejected(input=>{input.gitSources['src/app/(identity)/cuenta/participant-kyc-chat-attempt-panel.js']=Buffer.from(source);});rejected(input=>{input.gitSources['src/app/(identity)/cuenta/participant-panel.module.css']=Buffer.from('@import "https://example.invalid/style.css";');});
+});
+test('DOM requires every declared viewport state temporal fence denial and private-validation case once',()=>{
+ rejected(input=>{input.ui.totalCheckCount=21;});rejected(input=>{input.ui.checks.pop();});rejected(input=>{input.ui.widths=[390,768,1280];});rejected(input=>{input.ui.checks[1]=input.ui.checks[0];});rejected(input=>{input.ui.checks[17].state='FORGED';});rejected(input=>{input.ui.checks[18].changed='workerId';});rejected(input=>{input.ui.checks[21].status=500;});rejected(input=>{input.ui.checks[21].status='403';});rejected(input=>{input.ui.checks[0].width='320';});
+});
+test('overflow small targets missing steps and false delivery labels invalidate responsive proof',()=>{
+ rejected(input=>{input.ui.checks[0].documentWidth=321;});rejected(input=>{input.ui.checks[0].steps=2;});rejected(input=>{input.ui.checks[0].targets[0].height=43;});rejected(input=>{input.ui.checks[0].targets=[];});rejected(input=>{input.ui.checks[0].delivery='Entrega comprobada';});rejected(input=>{input.ui.checks[4].response='READ';});rejected(input=>{input.ui.checks[4].times=[];});
+});
+test('readonly requests must preserve exact bounds and synthetic challenge/scope correlation',()=>{
+ rejected(input=>{input.ui.apiRequests=[];});rejected(input=>{input.ui.apiRequests.push(input.ui.apiRequests[0]);});rejected(input=>{input.ui.apiRequests[0].method='POST';});rejected(input=>{input.ui.apiRequests[0].scope='foreign';});rejected(input=>{input.ui.apiRequests[0].challengeId='kyc_chat_foreign';});rejected(input=>{input.ui.apiRequests[0].scope='b'.repeat(64);input.ui.apiRequests[0].challengeId='kyc_chat_'+'b'.repeat(32);});rejected(input=>{input.ui.apiRequests[0].challengeId='kyc_chat_'+'b'.repeat(32);});for(const key of ['detail','projectId','workerId','private'])rejected(input=>{input.ui.apiRequests[0][key]='foreign';});rejected(input=>{input.ui.externalImports.push('unapproved-package');});
+});
+test('native pool database and owned IPC browser fixture cleanup need positive postconditions',()=>{
+ for(const key of ['poolClosed','databaseRemoved'])rejected(input=>{input.postgres[key]=false;});for(const key of ['browserClosed','serverClosed','gracefulCloseAcknowledged','fixtureRemoved'])rejected(input=>{input.ui.cleanup[key]=false;});rejected(input=>{input.ui.cleanup.fixtureCleanupProof.fixtureRemoved=false;});rejected(input=>{input.ui.cleanup.fixtureCleanupProof.postcondition.absent=false;});rejected(input=>{delete input.ui.cleanup;});
+});
+test('new workflow pins official image and actions with only local fixture scope and mandatory proof order',()=>{
+ const workflow=yaml.load(readFileSync(path.join(root,'.github/workflows/kyc-reply-feedback.yml'),'utf8')),job=workflow.jobs.verify,steps=job.steps;
+ assert.deepEqual(workflow.permissions,{contents:'read'});assert.deepEqual(workflow.on.push.branches,['master','feat/integral-worksite-kyc-reply-feedback-*']);assert.equal(job.services.postgres.image,'docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193');assert.deepEqual(Object.keys(job.env).sort(),['CUTOVER_TEST_DATABASE_URL','CUTOVER_TEST_DISPOSABLE','NEXT_TELEMETRY_DISABLED'].sort());assert.equal(job.env.CUTOVER_TEST_DISPOSABLE,'1');assert.equal(new URL(job.env.CUTOVER_TEST_DATABASE_URL).hostname,'127.0.0.1');assert.equal(steps[0].with['persist-credentials'],false);assert.equal(steps[0].with.ref,'${{ github.sha }}');
+ for(const step of steps.filter(step=>step.uses))assert.match(step.uses,/@[a-f0-9]{40}$/);const commands=steps.filter(step=>step.run).map(step=>step.run),pg=commands.indexOf('node scripts/verify-company-kyc-rejection-feedback-postgres.mjs'),ui=commands.findIndex(run=>run.startsWith('node scripts/verify-kyc-reply-feedback-ui.mjs ')),validator=commands.indexOf('node scripts/verify-kyc-reply-feedback-ci.mjs --expected-head "$GITHUB_SHA"');assert.ok(pg>commands.findIndex(run=>run.startsWith('node --test '))&&pg>commands.findIndex(run=>run.startsWith('npx eslint '))&&ui>pg&&validator>ui);assert.ok(commands.some(run=>run.includes("'--untracked-files=no'")));const artifacts=steps.filter(step=>step.uses?.startsWith('actions/upload-artifact@'));assert.equal(artifacts.length,3);for(const step of artifacts){assert.equal(step.uses,'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a');assert.equal(step.with['if-no-files-found'],'error');assert.equal(step.with['retention-days'],7);}assert.ok(artifacts[0].with.path.includes('company-kyc-rejection-feedback-postgres-failure.json'));
+});

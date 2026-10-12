@@ -5,15 +5,19 @@ import {createParticipantKycChatAttemptReader,publicParticipantKycChatAttempt} f
 import {createParticipantStore} from '../src/lib/participant-store.mjs';
 import {createParticipantHandlers} from '../src/lib/participant-http.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
-import {scopeStamp} from '../src/lib/workspace-policy.mjs';
+import {scopeStamp,digest} from '../src/lib/workspace-policy.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
 import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
+import {customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
+import {metaKycDispatchReceiptId} from '../src/lib/meta-kyc-identity.mjs';
+import {META_KYC_REJECTION_REPLY} from '../src/lib/meta-kyc-rejection.mjs';
+import {companyKycProjectionDigest,companyKycProjectionId} from '../src/lib/company-channel-kyc.mjs';
 
 // Real signed-envelope decoding and canonical authorization over synthetic SQL.
 // These units exercise neither PostgreSQL concurrency nor real Meta delivery.
 const result=rows=>({rows:structuredClone(rows),rowCount:rows.length});
 const forbidden=()=>assert.fail('The diagnostic must not call a provider, storage, write, or scheduler');
-const publicKeys=['codeMatch','codeSyntax','preparationReceiptMatch','processingState','reason','receivedAt','rejected','sameSecond','senderMatch','state','version'].sort();
+const publicKeys=['codeMatch','codeSyntax','preparationReceiptMatch','processingState','reason','receivedAt','rejected','replyDelivery','sameSecond','senderMatch','state','version'].sort();
 
 function attemptFixture({company=false}={}){
  const f=kycMemoryFixture({active:true,captureImageSetVersion:2});
@@ -27,17 +31,28 @@ function attemptFixture({company=false}={}){
   f.connection.company={mode:'COMPANY',targetProjectId:f.project.id};
   challenge.companyKyc={version:1,anchorProjectId:f.connection.projectId,targetProjectId:f.project.id};
  }
- const queries=[],controls={eventRows:null};let sequence=0;
+ const queries=[],controls={eventRows:null,outboundRows:null,statusRows:null};let sequence=0;
  const client={async query(sql,args=[]){
   queries.push({sql,args});assert.match(sql,/^SELECT\b/,'Adapter SQL must be read-only');
+  if(sql==='SELECT clock_timestamp() AS now')return result([{now:f.now}]);
   if(sql.includes('FROM public."WhatsAppConnection"'))return result(args[0]===f.connection.id&&args[1]===f.connection.projectId&&args[2]===f.connection.organizationId?[f.connection]:[]);
   if(sql.includes('FROM public."WebhookEvent"')){
+   if(sql.includes("provider='meta-customer-outbound-v1'")){
+    assert.equal(args[1],f.connection.projectId);assert.equal(args[2],f.issuer.organizationId);assert.equal(args[3],f.connection.id);assert.match(sql,/LIMIT 2$/);
+    return result(controls.outboundRows===null?[...f.outbounds.values()].filter(e=>e.id===args[0]&&e.projectId===args[1]&&e.provider==='meta-customer-outbound-v1'&&e.payload.organizationId===args[2]&&e.payload.channelId===args[3]):controls.outboundRows);
+   }
+   if(sql.includes("\"eventType\"='message_status'")){
+    assert.equal(args[1],f.connection.projectId);assert.equal(args[2],f.issuer.organizationId);assert.equal(args[3],f.connection.id);assert.match(sql,/LIMIT 2$/);
+    return result(controls.statusRows===null?[...f.events.values()].filter(e=>e.id===args[0]&&e.projectId===args[1]&&e.provider==='meta-customer-v1'&&e.eventType==='message_status'&&e.payload.organizationId===args[2]&&e.payload.channelId===args[3]):controls.statusRows);
+   }
    assert.deepEqual(args,[f.connection.projectId,f.issuer.organizationId,f.connection.id]);
    assert.match(sql,/provider='meta-customer-v1'/);assert.match(sql,/"eventType"='message'/);assert.match(sql,/LIMIT 20$/);
    if(controls.eventRows!==null)return result(controls.eventRows);
    return result([...f.events.values()].filter(e=>e.projectId===args[0]&&e.provider==='meta-customer-v1'&&e.eventType==='message'&&e.payload.organizationId===args[1]&&e.payload.channelId===args[2]).sort((a,b)=>b.createdAt-a.createdAt||b.id.localeCompare(a.id)).slice(0,20));
   }
   if(sql.includes('FROM public."AuditLog"')){
+   if(sql.includes("action='participant.kyc_chat.projected'")){assert.equal(args[1],f.issuer.organizationId);assert.equal(args[2],f.worker.id);return result([...f.audits.values()].filter(a=>a.id===args[0]&&a.organizationId===args[1]&&a.entityType==='Worker'&&a.entityId===args[2]&&a.action==='participant.kyc_chat.projected'));}
+   if(sql.includes('action=$5'))return result([...f.audits.values()].filter(a=>a.id===args[0]&&a.organizationId===args[1]&&a.entityType===args[2]&&a.entityId===args[3]&&a.action===args[4]));
    assert.deepEqual(args,[f.issuer.organizationId,challenge.issuerActorId,f.worker.id,challenge.id]);
    return result([...f.audits.values()].filter(a=>a.organizationId===args[0]&&a.actorId===args[1]&&a.entityType==='Worker'&&a.entityId===args[2]&&a.action==='participant.kyc_chat.prepared'&&a.metadata.challengeId===args[3]).slice(0,2));
   }
@@ -46,6 +61,24 @@ function attemptFixture({company=false}={}){
  const seal=(event,payload)=>{
   const aad={organizationId:f.connection.organizationId,projectId:event.projectId,resourceId:event.id},payloadDigest=metaCustomerContentDigest(payload);
   event.payload={channelId:f.connection.id,organizationId:f.connection.organizationId,payloadDigest,signatureVerified:true,signatureScheme:'meta-hmac-sha256-v1',encryptedPayload:encryptCustomerSecret(JSON.stringify(payload),{...aad,purpose:'webhook'},f.environment),encryptedProof:encryptCustomerSecret(JSON.stringify({scheme:'meta-hmac-sha256-v1',purpose:'CUSTOMER',appId:f.environment.NEXT_PUBLIC_META_APP_ID,payloadDigest,organizationId:f.connection.organizationId,channelId:f.connection.id}),{...aad,purpose:'webhook-proof'},f.environment)};
+ };
+ const reply=(event,{purpose='KYC_REJECTION',state='SENT'}={})=>{
+  const source=JSON.parse(decryptCustomerSecret(event.payload.encryptedPayload,{organizationId:f.connection.organizationId,projectId:event.projectId,purpose:'webhook',resourceId:event.id},f.environment)),id=customerOutboundId(event.id),rejection=purpose==='KYC_REJECTION',actorId=f.issuer.actorId;
+  const message=rejection?META_KYC_REJECTION_REPLY:{type:'text',body:'Synthetic private KYC consent prompt, never an identity approval.'},request={version:1,eventId:event.id,payloadDigest:event.payload.payloadDigest,channelId:f.connection.id,organizationId:f.connection.organizationId,to:source.value.from,replyTo:source.value.id,message,channelPurpose:purpose,...(!rejection?{challengeId:challenge.id}: {})};
+  const reservedAt=new Date(Number(source.value.timestamp)*1000+1000).toISOString(),completedAt=new Date(Date.parse(reservedAt)+1000).toISOString();f.now.setTime(Date.parse(completedAt)+1000);
+  if(company&&!rejection){
+   const projection={version:1,kind:'COMPANY_KYC_CAPTURE',sourceEventId:event.id,payloadDigest:event.payload.payloadDigest,organizationId:f.connection.organizationId,connectionId:f.connection.id,anchorProjectId:f.connection.projectId,targetProjectId:f.project.id,workerId:f.worker.id,challengeId:challenge.id,ownerRevision:1,assignmentRevision:1,grantDigest:'a'.repeat(64),issuerActorId:actorId,issuerMembershipId:f.issuer.membershipId,authorityDigest:'b'.repeat(64),participantActorId:null,participantMembershipId:null,participantClerkUserId:null};
+   request.targetProjectId=f.project.id;request.companyKycDigest=companyKycProjectionDigest(projection);
+   const projectionId=companyKycProjectionId(event.id);f.audits.set(projectionId,{id:projectionId,organizationId:f.connection.organizationId,actorId,entityType:'Worker',entityId:f.worker.id,action:'participant.kyc_chat.projected',metadata:projection});
+  }
+  const auditId=rejection?'meta_kyc_rejection_'+digest(['meta-kyc-rejection-v1',event.id]):metaKycDispatchReceiptId(event.id),recorded={kind:rejection?'KYC_REJECTION':'KYC_CHAT',identityStatus:rejection?'CHANNEL_IDENTITY_UNVERIFIED':'LIMITED_KYC_UPLOAD',businessApplied:false,replySent:false,reply:message,...(rejection?{code:'META_KYC_CHALLENGE_REJECTED'}:{})},aad={organizationId:f.connection.organizationId,projectId:f.connection.projectId};
+  f.audits.set(auditId,{id:auditId,organizationId:f.connection.organizationId,actorId,entityType:rejection?'WebhookEvent':'Worker',entityId:rejection?event.id:f.worker.id,action:rejection?'participant.kyc_chat.rejected':'participant.kyc_chat.dispatched',metadata:{version:1,projectId:rejection?f.connection.projectId:f.project.id,payloadDigest:event.payload.payloadDigest,replyDigest:digest(message),...(rejection?{channelId:f.connection.id,code:'META_KYC_CHALLENGE_REJECTED'}:{challengeId:challenge.id}),encryptedResult:encryptCustomerSecret(JSON.stringify(recorded),{...aad,purpose:rejection?'kyc-rejection':'kyc-chat-dispatch',resourceId:auditId},f.environment)}});
+  const out={id,projectId:f.connection.projectId,provider:'meta-customer-outbound-v1',eventType:'reply',status:state==='SEND_STARTED'?'PENDING':'PROCESSED',payload:{version:1,eventId:event.id,organizationId:f.connection.organizationId,channelId:f.connection.id,requestDigest:digest(request),encryptedPayload:encryptCustomerSecret(JSON.stringify(request),{...aad,purpose:'outbound',resourceId:id},f.environment),...(rejection?{kycRejection:true}:{kycCapture:true,challengeId:challenge.id})},outcome:{version:1,state,actorId,reservedAt,...(state==='SEND_STARTED'?{}:{completedAt,messageId:state==='SENT'?'wamid.syntheticreply123456':null})}};f.outbounds.set(id,out);return out;
+ };
+ const rewriteReply=(out,change)=>{const aad={organizationId:f.connection.organizationId,projectId:f.connection.projectId,purpose:'outbound',resourceId:out.id},request=JSON.parse(decryptCustomerSecret(out.payload.encryptedPayload,aad,f.environment));change(request);out.payload.requestDigest=digest(request);out.payload.encryptedPayload=encryptCustomerSecret(JSON.stringify(request),aad,f.environment);};
+ const statusReply=(out,status='delivered')=>{
+  const request=JSON.parse(decryptCustomerSecret(out.payload.encryptedPayload,{organizationId:f.connection.organizationId,projectId:f.connection.projectId,purpose:'outbound',resourceId:out.id},f.environment)),id='customer_webhook_'+digest(['synthetic-kyc-delivery',out.id,status,++sequence]),timestamp=Math.floor(f.now.getTime()/1000);
+  const event={id,projectId:f.connection.projectId,provider:'meta-customer-v1',eventType:'message_status',status:'PROCESSED'},payload={wabaId:f.connection.whatsappBusinessId,phoneNumberId:f.connection.phoneNumberId,field:'messages',type:'message_status',value:{id:out.outcome.messageId||'wamid.syntheticreply123456',recipient_id:request.to,biz_opaque_callback_data:out.id,status,timestamp:String(timestamp)}};seal(event,payload);f.events.set(id,event);out.status='PROCESSED';Object.assign(out.outcome,{state:'STATUS_OBSERVED',providerStatus:status,messageId:payload.value.id,statusEventId:id,statusObservedAt:f.now.toISOString()});return event;
  };
  const record=(text=f.code,{sender,timestamp,proof=true,rejected=true,status='PROCESSED'}={})=>{
   const context=f.receive(text,{...(sender===undefined?{}:{sender}),...(timestamp===undefined?{}:{timestamp}),proof});
@@ -64,13 +97,13 @@ function attemptFixture({company=false}={}){
   const serialized=JSON.stringify(value);
   for(const secret of [f.code,f.worker.phone,f.worker.phone.slice(1),f.connection.encryptedAccessToken,f.connection.id,challenge.codeDigest,'wamid.','encryptedPayload','META_KYC_CHALLENGE_REJECTED','synthetic-kyc-channel-token'])assert.equal(serialized.includes(secret),false,'Private material crossed the diagnostic DTO');
  };
- return {...f,challenge,client,queries,readControls:controls,reader,read,record,rewrite,snapshot,assertPrivate};
+ return {...f,challenge,client,queries,readControls:controls,reader,read,record,rewrite,reply,rewriteReply,statusReply,snapshot,assertPrivate};
 }
 
 test('current signed rejected attempt is observed twice without effects or private material',async()=>{
  const f=attemptFixture();f.record();const before=f.snapshot(),first=await f.read(),second=await f.read();
  assert.deepEqual(second,first);assert.equal(f.snapshot(),before);f.assertPrivate(first);
- assert.deepEqual(first,{version:1,state:'OBSERVED',receivedAt:'2026-10-10T20:00:01.000Z',processingState:'PROCESSED',rejected:true,reason:'CHALLENGE_REJECTED',codeSyntax:true,codeMatch:true,senderMatch:true,preparationReceiptMatch:true,sameSecond:false});
+ assert.deepEqual(first,{version:1,state:'OBSERVED',receivedAt:'2026-10-10T20:00:01.000Z',processingState:'PROCESSED',rejected:true,reason:'CHALLENGE_REJECTED',codeSyntax:true,codeMatch:true,senderMatch:true,preparationReceiptMatch:true,sameSecond:false,replyDelivery:{version:1,state:'NOT_OBSERVED',recordedAt:null}});
 });
 
 for(const sender of ['5491100002222','541100001111'])test('current code diagnoses an exact sender mismatch without phone normalization: '+sender,async()=>{
@@ -182,6 +215,109 @@ test('public projection strips injected private fields and rejects invalid obser
  for(const invalid of [{...observed,codeMatch:1},{...observed,receivedAt:'invalid'},{...observed,reason:'private provider detail'},{...observed,processingState:'FAILED'},{...observed,version:2}])assert.throws(()=>publicParticipantKycChatAttempt(invalid),{code:'PARTICIPANT_KYC_ATTEMPT_UNAVAILABLE'});
 });
 
+for(const [stored,state]of [['SEND_STARTED','RESERVED'],['SEND_UNKNOWN','SEND_UNKNOWN'],['SENT','API_ACCEPTED'],['REJECTED','API_REJECTED']])test('sealed '+stored+' is a bounded observation and never a delivery claim',async()=>{
+ const f=attemptFixture(),event=f.record(),out=f.reply(event,{state:stored}),before=f.snapshot(),value=await f.read();
+ assert.deepEqual(value.replyDelivery,{version:1,state,recordedAt:stored==='SEND_STARTED'?out.outcome.reservedAt:out.outcome.completedAt});assert.equal(f.snapshot(),before);f.assertPrivate(value);assert.deepEqual(await f.read(),value);
+});
+for(const status of ['sent','delivered','read','failed','deleted'])test('only the exact signed '+status+' event credits that reply',async()=>{
+ const f=attemptFixture(),event=f.record(),out=f.reply(event),signed=f.statusReply(out,status),before=f.snapshot(),value=await f.read();
+ assert.equal(value.replyDelivery.state,{sent:'API_ACCEPTED',delivered:'DELIVERED',read:'READ',failed:'FAILED',deleted:'FAILED'}[status]);
+ const payload=JSON.parse(decryptCustomerSecret(signed.payload.encryptedPayload,{organizationId:f.connection.organizationId,projectId:signed.projectId,purpose:'webhook',resourceId:signed.id},f.environment));
+ assert.equal(value.replyDelivery.recordedAt,new Date(Number(payload.value.timestamp)*1000).toISOString());assert.equal(f.snapshot(),before);f.assertPrivate(value);
+});
+test('delivery time is the provider signed instant rather than database observation time',async()=>{
+ const f=attemptFixture(),event=f.record(),out=f.reply(event);f.statusReply(out,'delivered');const value=await f.read();f.now.setTime(f.now.getTime()+5000);out.outcome.statusObservedAt=f.now.toISOString();
+ assert.deepEqual((await f.read()).replyDelivery,value.replyDelivery);assert.notEqual(value.replyDelivery.recordedAt,out.outcome.statusObservedAt);
+});
+test('signed sent confirms acceptance with the server observation instant without claiming delivery',async()=>{
+ const f=attemptFixture(),event=f.record(),out=f.reply(event);f.statusReply(out,'sent');f.now.setTime(f.now.getTime()+5000);out.outcome.statusObservedAt=f.now.toISOString();
+ const value=await f.read();assert.deepEqual(value.replyDelivery,{version:1,state:'API_ACCEPTED',recordedAt:out.outcome.statusObservedAt});f.assertPrivate(value);
+});
+test('API acceptance and completed inbound processing alone never become DELIVERED or READ',async()=>{
+ const f=attemptFixture(),event=f.record();Object.assign(event.outcome,{replySent:true,replyState:'SENT'});assert.equal((await f.read()).replyDelivery.state,'NOT_OBSERVED');
+ const out=f.reply(event);assert.equal((await f.read()).replyDelivery.state,'API_ACCEPTED');out.outcome.providerStatus='read';assert.equal((await f.read()).replyDelivery.state,'UNAVAILABLE');
+ out.outcome.state='STATUS_OBSERVED';out.outcome.statusEventId='customer_webhook_'+'c'.repeat(64);out.outcome.statusObservedAt=f.now.toISOString();assert.equal((await f.read()).replyDelivery.state,'UNAVAILABLE');
+});
+for(const [label,change]of [
+ ['another outgoing event',f=>{f.readControls.outboundRows=[{...f.out, id:customerOutboundId('customer_webhook_'+'c'.repeat(64))}];}],
+ ['another company',f=>{f.readControls.outboundRows=[{...f.out,payload:{...f.out.payload,organizationId:'company-other'}}];}],
+ ['another channel',f=>{f.readControls.outboundRows=[{...f.out,payload:{...f.out.payload,channelId:'connection-other'}}];}],
+ ['another anchor',f=>{f.readControls.outboundRows=[{...f.out,projectId:'project-other'}];}],
+ ['another provider',f=>{f.out.provider='meta-demo-pilot-v1';f.readControls.outboundRows=[f.out];}],
+ ['a template',f=>{f.out.eventType='template';}],
+ ['another signed source digest',f=>{f.rewriteReply(f.out,r=>{r.payloadDigest='c'.repeat(64);});}],
+ ['another source event',f=>{f.rewriteReply(f.out,r=>{r.eventId='customer_webhook_'+'c'.repeat(64);});}],
+ ['another original recipient',f=>{f.rewriteReply(f.out,r=>{r.to='5491100009999';});}],
+ ['another original message',f=>{f.rewriteReply(f.out,r=>{r.replyTo='wamid.anothermessage123456';});}],
+ ['an ordinary field reply',f=>{f.rewriteReply(f.out,r=>{r.channelPurpose='FIELD';});}],
+ ['edited sealed reply',f=>{f.rewriteReply(f.out,r=>{r.message={type:'text',body:'Synthetic different private message.'};});}],
+ ['corrupt ciphertext',f=>{f.out.payload.encryptedPayload='corrupt';}],
+ ['edited request digest',f=>{f.out.payload.requestDigest='c'.repeat(64);}],
+ ['duplicate outgoing rows',f=>{f.readControls.outboundRows=[f.out,structuredClone(f.out)];}],
+])test('reply subject integrity rejects '+label+' without private output or effects',async()=>{
+ const f=attemptFixture(),event=f.record();f.out=f.reply(event);change(f);const before=f.snapshot(),value=await f.read();assert.deepEqual(value.replyDelivery,{version:1,state:'UNAVAILABLE',recordedAt:null});assert.equal(f.snapshot(),before);f.assertPrivate(value);
+});
+for(const [label,change]of [
+ ['missing sealed dispatch',f=>{f.audits.delete(f.audit.id);}],
+ ['another dispatch actor',f=>{f.audit.actorId='actor-other';}],
+ ['another dispatch digest',f=>{f.audit.metadata.payloadDigest='c'.repeat(64);}],
+ ['edited dispatch reply digest',f=>{f.audit.metadata.replyDigest='c'.repeat(64);}],
+ ['corrupt dispatch',f=>{f.audit.metadata.encryptedResult='corrupt';}],
+])test('outgoing summary cannot bypass '+label,async()=>{
+ const f=attemptFixture(),event=f.record();f.reply(event);f.audit=[...f.audits.values()].find(a=>a.action==='participant.kyc_chat.rejected');change(f);const before=f.snapshot();assert.equal((await f.read()).replyDelivery.state,'UNAVAILABLE');assert.equal(f.snapshot(),before);
+});
+for(const [label,change]of [
+ ['missing proof',f=>{f.signed.payload.encryptedProof=null;}],
+ ['a signature boolean alone',f=>{f.signed.payload.encryptedProof='corrupt';}],
+ ['another opaque outbound reference',f=>f.rewrite(f.signed,p=>{p.value.biz_opaque_callback_data='customer_outbound_'+'c'.repeat(64);})],
+ ['another provider message',f=>f.rewrite(f.signed,p=>{p.value.id='wamid.anotherreply123456';})],
+ ['another recipient',f=>f.rewrite(f.signed,p=>{p.value.recipient_id='5491100009999';})],
+ ['another verdict',f=>f.rewrite(f.signed,p=>{p.value.status='read';})],
+ ['another WABA',f=>f.rewrite(f.signed,p=>{p.wabaId='990000011';})],
+ ['another phone asset',f=>f.rewrite(f.signed,p=>{p.phoneNumberId='990000011';})],
+ ['another company',f=>{f.signed.payload.organizationId='company-other';f.readControls.statusRows=[f.signed];}],
+ ['another channel',f=>{f.signed.payload.channelId='connection-other';f.readControls.statusRows=[f.signed];}],
+ ['another anchor',f=>{f.signed.projectId='project-other';f.readControls.statusRows=[f.signed];}],
+ ['another provider',f=>{f.signed.provider='meta-demo-pilot-v1';f.readControls.statusRows=[f.signed];}],
+ ['a message rather than status',f=>{f.signed.eventType='message';f.readControls.statusRows=[f.signed];}],
+ ['a status preceding its source',f=>f.rewrite(f.signed,p=>{p.value.timestamp=String(Math.floor(Date.parse(f.challenge.createdAt)/1000));})],
+ ['a status in the future',f=>f.rewrite(f.signed,p=>{p.value.timestamp=String(Math.floor(f.now.getTime()/1000)+61);})],
+ ['a malformed signed timestamp',f=>f.rewrite(f.signed,p=>{p.value.timestamp='later';})],
+ ['missing status row',f=>{f.readControls.statusRows=[];}],
+ ['duplicate status rows',f=>{f.readControls.statusRows=[f.signed,structuredClone(f.signed)];}],
+])test('signed delivery correlation rejects '+label,async()=>{
+ const f=attemptFixture(),event=f.record(),out=f.reply(event);f.signed=f.statusReply(out);change(f);const before=f.snapshot(),value=await f.read();assert.equal(value.replyDelivery.state,'UNAVAILABLE');assert.equal(f.snapshot(),before);f.assertPrivate(value);
+});
+for(const company of [false,true])test((company?'corporate':'project')+' capture response is bound to current worker and challenge',async()=>{
+ const f=attemptFixture({company}),event=f.record(f.code,{rejected:false}),out=f.reply(event,{purpose:'KYC_CAPTURE'});f.statusReply(out,'read');const before=f.snapshot(),value=await f.read();assert.equal(value.replyDelivery.state,'READ');assert.equal(f.snapshot(),before);f.assertPrivate(value);
+ f.rewriteReply(out,r=>{r.challengeId='kyc_chat_'+'c'.repeat(32);});assert.equal((await f.read()).replyDelivery.state,'UNAVAILABLE');
+});
+test('corporate capture cannot substitute a target worker/project/projection while generic rejection needs no worker projection',async()=>{
+ const f=attemptFixture({company:true}),event=f.record(f.code,{rejected:false}),out=f.reply(event,{purpose:'KYC_CAPTURE'}),projection=f.audits.get(companyKycProjectionId(event.id));
+ for(const key of ['targetProjectId','workerId','challengeId','sourceEventId']){const previous=projection.metadata[key];projection.metadata[key]=key==='sourceEventId'?'customer_webhook_'+'c'.repeat(64):'foreign-'+key;assert.equal((await f.read()).replyDelivery.state,'UNAVAILABLE');projection.metadata[key]=previous;}
+ f.rewriteReply(out,r=>{r.companyKycDigest='c'.repeat(64);});assert.equal((await f.read()).replyDelivery.state,'UNAVAILABLE');
+ const g=attemptFixture({company:true}),rejected=g.record();g.reply(rejected);assert.equal((await g.read()).replyDelivery.state,'API_ACCEPTED');assert.equal(g.queries.some(q=>q.sql.includes("action='participant.kyc_chat.projected'")),false);
+});
+test('same-second ambiguity never queries an outgoing record or accredits either tied reply',async()=>{
+ const f=attemptFixture(),start=Math.floor(f.now.getTime()/1000),first=f.record(f.code,{timestamp:start+2});f.reply(first);f.record('IDENTIDAD short',{timestamp:start+2});const value=await f.read();assert.equal(value.sameSecond,true);assert.deepEqual(value.replyDelivery,{version:1,state:'UNAVAILABLE',recordedAt:null});assert.equal(f.queries.some(q=>q.sql.includes("provider='meta-customer-outbound-v1'")),false);
+});
+test('a newer signed attempt cannot inherit the accepted or delivered reply of an earlier message',async()=>{
+ const f=attemptFixture(),start=Math.floor(f.now.getTime()/1000),first=f.record(f.code,{timestamp:start+2}),out=f.reply(first);f.statusReply(out,'delivered');assert.equal((await f.read()).replyDelivery.state,'DELIVERED');
+ f.record('IDENTIDAD '+'z'.repeat(43),{timestamp:start+4});const before=f.snapshot(),queries=f.queries.length,value=await f.read();assert.equal(value.reason,'CODE_MISMATCH');assert.deepEqual(value.replyDelivery,{version:1,state:'NOT_OBSERVED',recordedAt:null});assert.equal(f.queries.slice(queries).some(q=>q.sql.includes("\"eventType\"='message_status'")),false);assert.equal(f.snapshot(),before);f.assertPrivate(value);
+});
+test('API marker chronology and impossible or future server instants never manufacture acceptance',async()=>{
+ for(const change of [out=>{out.outcome.completedAt='2026-02-31T20:00:03.000Z';},out=>{out.outcome.completedAt=new Date(Date.parse(out.outcome.reservedAt)-1).toISOString();},out=>{out.outcome.completedAt=new Date(Date.parse(out.outcome.reservedAt)+65000).toISOString();},out=>{out.outcome.messageId=null;}]){const f=attemptFixture(),event=f.record(),out=f.reply(event);change(out);assert.equal((await f.read()).replyDelivery.state,'UNAVAILABLE');}
+});
+test('closed reply window is observed only for that processed source with no outgoing reservation',async()=>{
+ const f=attemptFixture(),event=f.record();Object.assign(event.outcome,{replyWindowClosed:true,replyState:'META_CUSTOMER_REPLY_WINDOW_CLOSED'});
+ assert.equal((await f.read()).replyDelivery.state,'NOT_OBSERVED');f.now.setTime(f.now.getTime()+86401000);assert.deepEqual((await f.read()).replyDelivery,{version:1,state:'WINDOW_CLOSED',recordedAt:null});
+});
+test('delivery projection keeps legacy omission and strips nested private material with strict UTC timestamps',async()=>{
+ const f=attemptFixture();f.record();const observed=await f.read(),legacy={...observed};delete legacy.replyDelivery;assert.equal(Object.hasOwn(publicParticipantKycChatAttempt(legacy),'replyDelivery'),false);
+ const value=publicParticipantKycChatAttempt({...observed,replyDelivery:{version:1,state:'API_ACCEPTED',recordedAt:'2026-10-10T20:00:02.000Z',phone:f.worker.phone,code:f.code,message:'private',hash:f.challenge.codeDigest}});assert.deepEqual(Object.keys(value.replyDelivery).sort(),['version','state','recordedAt'].sort());f.assertPrivate(value);
+ for(const replyDelivery of [null,[],{version:2,state:'READ',recordedAt:'2026-10-10T20:00:02.000Z'},{version:1,state:'FORGED',recordedAt:null},{version:1,state:'DELIVERED',recordedAt:null},{version:1,state:'READ',recordedAt:'2026-02-31T20:00:02.000Z'},{version:1,state:'READ',recordedAt:'2026-10-10T17:00:02.000-03:00'},{version:1,state:'READ',recordedAt:'2026-10-10T20:00:02Z'},{version:1,state:'NOT_OBSERVED',recordedAt:'2026-10-10T20:00:02.000Z'}])assert.throws(()=>publicParticipantKycChatAttempt({...observed,replyDelivery}),{code:'PARTICIPANT_KYC_ATTEMPT_UNAVAILABLE'});
+});
+
 function authorizedFixture({own=false,role=own?'AUDITOR':'ADMIN',reader=true}={}){
  const f=attemptFixture(),session={authenticated:true,verification:'clerk-production-jwt',userId:own?'user_WorkerA':'user_ManagerA',organizationId:'org_Synthetic',organizationRole:own?'org:member':'org:admin'};
  const member={membershipId:own?'worker-member':'manager-member',actorId:own?'worker-user-a':'manager-a',organizationId:f.project.organizationId,role,clerkUserId:session.userId,clerkRole:session.organizationRole};
@@ -213,6 +349,10 @@ for(const [own,role]of [[false,'ADMIN'],[false,'DIRECTOR'],[true,'AUDITOR']])tes
  const before=f.snapshot(),value=await f.store.kycChatAttempt(f.session,f.context());
  assert.deepEqual(Object.keys(value).sort(),['challengeId','detail','kycChatAttempt','projectId','scope','workerId']);assert.equal(value.challengeId,f.challenge.id);assert.equal(value.kycChatAttempt.codeMatch,true);assert.equal(f.authControls.adapterCalls,1);assert.equal(f.snapshot(),before);f.assertPrivate(value.kycChatAttempt);
  assert.ok(f.authQueries.some(q=>q.sql==='BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY'));assert.ok(f.authQueries.some(q=>q.sql==='ROLLBACK'));
+});
+test('revoked canonical ownership blocks a previously verified delivery before any private outbox query',async()=>{
+ const f=authorizedFixture({own:true}),event=f.record(),out=f.reply(event);f.statusReply(out,'read');const context=f.context(),observed=await f.store.kycChatAttempt(f.session,context);assert.equal(observed.kycChatAttempt.replyDelivery.state,'READ');
+ const queries=f.queries.length,privateCalls=f.authControls.adapterCalls,before=f.snapshot();f.authControls.membership=false;await assert.rejects(f.store.kycChatAttempt(f.session,context),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});assert.equal(f.authControls.adapterCalls,privateCalls);assert.equal(f.queries.length,queries);assert.equal(f.snapshot(),before);
 });
 
 for(const [label,options,change,code]of [

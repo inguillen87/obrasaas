@@ -37,6 +37,21 @@ test('corporate signed KYC resolves authentic selected event metadata on both in
  assert.equal(f.controls.sends,0);
 });
 
+for(const message of ['IDENTIDAD short','identidad '+'x'.repeat(43),'IDENTIDAD','IDENTIDAD '+'!'.repeat(43),'  IDENTIDAD short  '])test('signed corporate malformed code reaches fixed rejection classification without selecting a Worker: '+message.slice(0,24),async()=>{
+ const f=await companyKycMemoryFixture({captureImageSetVersion:2}),context=f.receive(message,{contextId:null}),before=structuredClone(f.worker.metadata),audits=[...f.audits.keys()],queryStart=f.control.sql.length;
+ await assert.rejects(f.bridge.execute(context),{code:'META_KYC_CHALLENGE_REJECTED'});
+ assert.deepEqual(f.worker.metadata,before);assert.deepEqual([...f.audits.keys()],audits);assert.equal(f.outbounds.size,0);assert.equal(f.control.graph,0);assert.equal(f.control.cdn,0);assert.equal(f.blob.puts(),0);assert.equal(f.controls.sends,0);
+ assert.equal(f.control.sql.slice(queryStart).some(sql=>sql.includes('FROM public."Worker"')),false);
+});
+for(const message of ['HOLA','IDENTIDADother','IDENTIDAD-short'])test('unrelated signed corporate text remains outside code rejection: '+message,async()=>{
+ const f=await companyKycMemoryFixture(),context=f.receive(message,{contextId:null}),before=structuredClone(f.worker.metadata);
+ assert.equal(await f.bridge.execute(context),null);assert.deepEqual(f.worker.metadata,before);assert.equal(f.outbounds.size,0);assert.equal(f.controls.sends,0);
+});
+test('malformed corporate code cannot bypass the authentic signed proof before rejection classification',async()=>{
+ const f=await companyKycMemoryFixture(),context=f.receive('IDENTIDAD short',{contextId:null}),before=structuredClone(f.worker.metadata);f.events.get(context.eventId).payload.encryptedProof='unverified';
+ await assert.rejects(f.bridge.execute(context),{code:'META_CUSTOMER_EVENT_PROOF_REQUIRED'});assert.deepEqual(f.worker.metadata,before);assert.equal(f.outbounds.size,0);assert.equal(f.controls.sends,0);
+});
+
 for(const stage of ['initial','locked'])for(const [field,code] of [['eventType','WORKER_CHANNEL_SIGNED_PROOF_REQUIRED'],['externalId','WORKER_CHANNEL_PROOF_INTEGRITY']])test(stage+' corporate signed read rejects missing authentic '+field+' and rolls back before I/O',async()=>{
  const f=await companyKycMemoryFixture(),context=f.receive(f.code),before=structuredClone(f.worker.metadata),audits=[...f.audits.keys()];let removed=false;
  f.control.hook=async(sql,args)=>{
