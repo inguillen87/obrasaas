@@ -102,7 +102,7 @@ export function validateConsumptionFeedbackCi({expectedHead,head,sourceTree,trac
  requireProof(postgres.realIdentityDocuments===false&&postgres.providerCalls===0&&postgres.poolClosed===true&&postgres.databaseRemoved===true,'PostgreSQL provider/identity/cleanup boundary must be closed');
  requireProof(postgres.totalCheckCount===15&&Array.isArray(postgres.checks),'PostgreSQL requires 15 native checks');
  same(postgres.checks,MATERIAL_CONSUMPTION_FEEDBACK_CHECKS,'PostgreSQL checks must equal the exported native contract');
- const pgClosure=consumptionFeedbackSourceClosure(readSource);requireProof(pgClosure.files.length===100,'PostgreSQL committed closure must contain all 100 sources');manifest(postgres,pgClosure.files,readSource,'PostgreSQL');
+ const pgClosure=consumptionFeedbackSourceClosure(readSource);requireProof(pgClosure.files.length===101,'PostgreSQL committed closure must contain all 101 sources, including the current usage policy');manifest(postgres,pgClosure.files,readSource,'PostgreSQL');
  requireProof(postgres.harnessSha256===sha(readSource(pgHarness)),'PostgreSQL producer hash must match committed Git bytes');
  requireProof(ui.environment==='isolated-localhost-next-exact-jsx-synthetic-api'&&ui.productionLoginVerified===false&&ui.physicalDeviceAccepted===false&&ui.providerRequests===0,'UI requires intercepted synthetic API/authentication only');
  for(const key of ['pageErrors','interceptErrors','externalRequests'])requireProof(Array.isArray(ui[key])&&ui[key].length===0,'UI '+key+' must be empty');
@@ -112,7 +112,7 @@ export function validateConsumptionFeedbackCi({expectedHead,head,sourceTree,trac
  const uiClosure=consumptionFeedbackSourceClosure(readSource,{ui:true});requireProof(uiClosure.files.length===17,'UI committed closure must contain all 17 sources');manifest(ui,uiClosure.files,readSource,'UI');
  same(ui.externalImports,uiClosure.externalImports,'UI package imports must match committed JSX graph');same(ui.externalImports,['react'],'UI fixture package dependency boundary changed');
  requireProof(ui.harnessSha256===sha(readSource(uiHarness))&&ui.cleanupHelperSha256===sha(readSource(cleanupHelper)),'UI producer and owned cleanup hashes must match committed Git bytes');
- return {version:CONSUMPTION_FEEDBACK_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{version:postgres.version,totalCheckCount:15,sourceCount:100,harnessSha256:postgres.harnessSha256},ui:{totalCheckCount:12,sourceCount:17,widths:[...CONSUMPTION_FEEDBACK_UI_WIDTHS],harnessSha256:ui.harnessSha256,cleanupHelperSha256:ui.cleanupHelperSha256},providerCalls:0,productionDataWritten:false,productionLoginVerified:false,physicalDeviceAccepted:false};
+ return {version:CONSUMPTION_FEEDBACK_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{version:postgres.version,totalCheckCount:15,sourceCount:101,harnessSha256:postgres.harnessSha256},ui:{totalCheckCount:12,sourceCount:17,widths:[...CONSUMPTION_FEEDBACK_UI_WIDTHS],harnessSha256:ui.harnessSha256,cleanupHelperSha256:ui.cleanupHelperSha256},providerCalls:0,productionDataWritten:false,productionLoginVerified:false,physicalDeviceAccepted:false};
 }
 
 function main(){

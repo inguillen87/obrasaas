@@ -18,7 +18,7 @@ const sourceErrors = new Set(['META_CUSTOMER_MEDIA_INVALID', 'META_CUSTOMER_MEDI
 // chat decision method and no synthetic Clerk session or office role upgrade.
 export function createMetaPlanImportTransport({within, resolve, saved, record, result,
   seal, unseal, writePending, commitFence, operationIdFor, environment,
-  protocol, provider, put, get, analyzer}) {
+  protocol, provider, put, get, analyzer, usage=null}) {
   const configured = protocol === META_CUSTOMER_PROTOCOL && typeof provider?.downloadPlanSource === 'function' &&
     typeof put === 'function' && typeof get === 'function' && typeof analyzer?.analyze === 'function';
   async function renew(client, r) {
@@ -96,8 +96,8 @@ export function createMetaPlanImportTransport({within, resolve, saved, record, r
       const external = fn => async (...args) => {await beforeExternal(); return fn(...args);};
       const session = Object.freeze({userId: prepared.userId});
       let phase = 'OBSERVE';
-      const workspace = {projectOperation: (s, input, writable, callback) => within(async client => {
-        const r = await resolve(client, context);
+      const workspace = {projectOperation: (s, input, writable, callback, beforeProject) => within(async client => {
+        const r = await resolve(client, context, null, beforeProject);
         checkPrepared(r, prepared);
         if (s !== session || s.userId !== r.member.clerkUserId || input.projectId !== r.project.id ||
             input.scope !== prepared.scope || typeof writable !== 'boolean') {
@@ -115,7 +115,7 @@ export function createMetaPlanImportTransport({within, resolve, saved, record, r
         return value;
       })};
       const imports = createPlanImport({workspace, put: external(put), get: external(get),
-        analyzer: {analyze: external((...args) => analyzer.analyze(...args))}, environment: () => environment});
+        analyzer: {analyze: external((...args) => analyzer.analyze(...args))}, usage, environment: () => environment});
       const base = {projectId: prepared.projectId, scope: prepared.scope};
       // Observe a prior reservation before any download. Pending/expired/failed
       // attempts are reported, not repeated or substituted with another id.

@@ -1,7 +1,7 @@
 name: Private KYC reply feedback acceptance
 on:
   push:
-    branches: [master, 'feat/integral-worksite-kyc-reply-feedback-*']
+    branches: [master, 'feat/integral-worksite-kyc-reply-feedback-*', 'feat/integral-worksite-included-usage-*']
   workflow_dispatch:
 permissions:
   contents: read
