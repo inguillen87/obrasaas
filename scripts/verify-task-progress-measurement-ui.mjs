@@ -57,7 +57,7 @@ function copyClosure(entry) {
     assert.ok(inside(destination,fixture));mkdirSync(path.dirname(destination),{recursive:true});copyFileSync(filename,destination);assert.deepEqual(readFileSync(destination),bytes);
     sourceManifest.push({path:relative.split(path.sep).join('/'),sha256:sha(bytes)});
     for (const specifier of importsOf(bytes,filename)) {
-      if (!specifier.startsWith('.')) {assert.ok(['react','lucide-react','jsqr'].includes(specifier),'Unexpected browser dependency '+specifier);externalImports.add(specifier);continue;}
+      if (!specifier.startsWith('.')) {assert.ok(['react','lucide-react','jsqr','next/navigation'].includes(specifier),'Unexpected browser dependency '+specifier);externalImports.add(specifier);continue;}
       const absolute = path.resolve(path.dirname(filename),specifier);
       const dependency = [absolute,absolute+'.js',absolute+'.mjs',absolute+'.css',path.join(absolute,'index.js')].find(candidate => existsSync(candidate) && lstatSync(candidate).isFile());
       assert.ok(dependency,'Missing dependency '+specifier);copy(dependency);
@@ -234,8 +234,10 @@ async function cumulativeScenario(){
 }
 
 try {
-  for(const entry of ['schedule-workbench.js','task-progress-measurement-editor.js','field-operations-panel.js','workspace-recovery-panel.js'])copyClosure('src/app/(identity)/cuenta/'+entry);
+  for(const entry of ['schedule-workbench.js','task-progress-measurement-editor.js','field-operations-panel.js','workspace-recovery-panel.js','workspace-client.js'])copyClosure('src/app/(identity)/cuenta/'+entry);
   const app = path.join(fixture,'src/app');
+  const initialWorkspace = path.join(app,'initial-workspace');mkdirSync(initialWorkspace,{recursive:true});
+  writeFileSync(path.join(initialWorkspace,'page.js'),"'use client';import {AccountWorkspace} from '../(identity)/cuenta/workspace-client';export default function InitialWorkspace(){return <main data-initial-workspace><AccountWorkspace/></main>;}\n");
   writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-task-progress-measurement-ui',private:true}));
   writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};\n`);
   writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#0b1526',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
@@ -251,6 +253,11 @@ try {
   for (const stream of [child.stdout,child.stderr]) stream.on('data',chunk => {serverLog = (serverLog+chunk.toString()).slice(-20000);});
   child.on('message',message => {if (message?.nonce === nonce && message.type === 'closed') closeAck = true;});
   await bounded(new Promise((resolve,reject) => {child.once('error',reject);child.on('message',message => {if (message?.nonce !== nonce) return;if (message.type === 'ready') resolve();if (message.type === 'failed') reject(new Error('Owned fixture preparation failed'));});child.once('exit',() => reject(new Error('Owned fixture exited before readiness')));}), 'Owned fixture readiness timed out',90000);
+  const initialResponse = await fetch(origin+'/initial-workspace',{signal:AbortSignal.timeout(60000)}),initialHtml = await initialResponse.text();
+  assert.equal(initialResponse.status,200,'Actual AccountWorkspace must render before account/project/measurement selection are present');
+  assert.ok(initialHtml.includes('data-initial-workspace')&&initialHtml.includes('Mis obras'));
+  assert.ok(!initialHtml.includes('data-task-id=')&&!initialHtml.includes('data-measurement-editor'));
+  checks.push({check:'actual-workspace-initial-null-account-project-selection-ssr',httpStatus:initialResponse.status,taskCount:0,privateFormCount:0,apiCalls:0});
   const response = await fetch(origin,{signal:AbortSignal.timeout(60000)});assert.ok(response.ok && (await response.text()).includes('TASK_MEASUREMENT_FIXTURE'));
   const runnerArgs = process.env.GITHUB_ACTIONS === 'true' && process.platform === 'linux'?['--no-sandbox','--disable-setuid-sandbox']:[];
   browser = await puppeteer.launch({headless:true,args:[...runnerArgs,'--disable-background-networking','--disable-component-update','--disable-domain-reliability','--disable-sync','--metrics-recording-only','--no-first-run','--disable-features=MediaRouter']});

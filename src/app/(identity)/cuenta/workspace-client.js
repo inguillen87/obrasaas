@@ -108,7 +108,7 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
  const navigateOnboarding=useCallback(value=>{identityNavigation.current=null;identityNavigationEpoch.current++;const id=participantOnboardingNavigationTarget(value,onboardingContext.current);if(!id)return;const target=document.getElementById(id);if(!target?.getClientRects().length)return;target.setAttribute('tabindex','-1');target.focus({preventScroll:true});target.scrollIntoView({block:'start',behavior:'auto'});},[]);
  const [creatingTask,setTaskCreating]=useState(false),[modulePending,setModulePending]=useState({});
  const [measurementSelection,setMeasurementSelection]=useState(null);
- const measurementTask=measurementSelection?.scope===account?.scope&&measurementSelection?.projectId===view?.project.id?view.tasks.find(task=>task.id===measurementSelection.taskId):null;
+ const measurementTask=measurementSelection&&account&&view&&measurementSelection.scope===account.scope&&measurementSelection.projectId===view.project.id?view.tasks.find(task=>task.id===measurementSelection.taskId):null;
  const [planReadback,setPlanReadback]=useState(null),[preparationRecovery,setPreparationRecovery]=useState(null),[creationRecovery,setCreationRecovery]=useState(null);
  const planReadbackMatches=Boolean(planReadback&&planReadback.scope===account?.scope&&planReadback.projectId===view?.project.id);
  const planReadbackPending=planReadbackMatches&&planReadback.status==='pending';
