@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="6cc00b1adce7a7c34b2d0960843d3a00054217905779b31747859065bdc50d1a";
+export const EXPECTED_CONTRACT_SHA256="aba22ba5dd12dd83527d0ec40b5840e30fce2dce6e8fba42991e717d00ee0cae";
 const POSTGRES_SERVICE_IMAGE='docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -127,7 +127,12 @@ const currentKycFeedbackDependenciesFor=kind=>({
  }[kind]||[]);
 const CURRENT_KYC_FEEDBACK_ONLY_BASE_COUNTS={UI_INTAKE:25,UI_IDENTITY_ONLY:114};
 const KYC_FEEDBACK_PREVIOUS_PRODUCER_PINS={UI_INTAKE:'07dd870b22df1ea2ae54cb13498bb868bf38f3e26047a0fab6f20c884afa1020',UI_JOINT:'814263fb2ce01f977e404f5e330e2e89aee102d5ad2f20a7c4468608420c94de',UI_CAUSAL:'814263fb2ce01f977e404f5e330e2e89aee102d5ad2f20a7c4468608420c94de'};
-const currentKycStatusDependenciesFor=kind=>[...({"UNIT":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_BANK":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_JOINT":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_CAUSAL":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_COMPANY_KYC":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_FIELD":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_OVERTIME":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_INTAKE":["src/lib/company-channel-kyc.mjs","src/lib/participant-onboarding-authority.mjs","src/lib/participant-onboarding-current-kyc.mjs","src/lib/participant-onboarding-reactive.mjs"]}[kind]||[]),...currentKycFeedbackDependenciesFor(kind)];
+// The reply diagnostic follows these actual imports. Earlier KYC closures and
+// producer receipts remain frozen; these dependencies only extend CURRENT proofs.
+const KYC_REPLY_REJECTION_SOURCES=['src/lib/meta-kyc-rejection-policy.mjs','src/lib/meta-kyc-rejection.mjs'];
+const currentKycReplyFeedbackDependenciesFor=kind=>kind==='UNIT'?KYC_REPLY_REJECTION_SOURCES:['UI_BANK','UI_JOINT','UI_CAUSAL','PG_FIELD','PG_OVERTIME'].includes(kind)?['src/lib/meta-kyc-identity.mjs',...KYC_REPLY_REJECTION_SOURCES]:[];
+const KYC_REPLY_PREVIOUS_UNIT_PRODUCER_SHA256='a024c6a26dcdfaf01719e51ee450ffe4e0a36b2ba04cb28a95d2eaa4a62e0a75';
+const currentKycStatusDependenciesFor=kind=>[...({"UNIT":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_BANK":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_JOINT":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_CAUSAL":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_COMPANY_KYC":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_FIELD":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_OVERTIME":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_INTAKE":["src/lib/company-channel-kyc.mjs","src/lib/participant-onboarding-authority.mjs","src/lib/participant-onboarding-current-kyc.mjs","src/lib/participant-onboarding-reactive.mjs"]}[kind]||[]),...currentKycFeedbackDependenciesFor(kind),...currentKycReplyFeedbackDependenciesFor(kind)];
 // Additive v3/v4 sources do not replace the historical counts or producer records.
 const MONTHLY_CURVE_DEPENDENCIES={PG_COMPANY_KYC:['src/lib/plan-import-monthly-curve.mjs','src/lib/plan-import-cyp-curve.mjs'],UI_IDENTITY_ONLY:['src/app/(identity)/cuenta/plan-source-curve.js','src/app/(identity)/cuenta/plan-source-curve.mjs','src/app/(identity)/cuenta/plan-source-curve.module.css']};
 const monthlyCurveDependenciesFor=kind=>MONTHLY_CURVE_DEPENDENCIES[kind]||[];
@@ -599,6 +604,8 @@ function currentKycStatusClosureSelftest(spec,proof,root,validate){
   mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{replacement:'src/lib/foreign-current-kyc-source.mjs'}));
  }
  mutate('previous-current-manifest-cannot-certify-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of [...dependencies,...calendarPreparationDependenciesFor(spec.kind),...whatsappPlanImportDependenciesFor(spec.kind),...companySubscriptionBackendDependenciesFor(spec.kind),...companySubscriptionFixtureDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind)])rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,previousCount);});
+ const replyDependencies=currentKycReplyFeedbackDependenciesFor(spec.kind);
+ if(replyDependencies.length)mutate('previous-reply-manifest-cannot-certify-delivery-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of replyDependencies)rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,spec.sourceFiles.length-replyDependencies.length);});
  return checks;
 }
 function ownTemplateClosureSelftest(spec,proof,root,validate){
@@ -707,7 +714,7 @@ function calendarPreparationContractSelftest(workflow,contract,root){
  return checks;
 }
 function whatsappPlanImportClosureSelftest(spec,proof,root,validate){
- const dependencies=whatsappPlanImportDependenciesFor(spec.kind),subscriptionDependencies=[...companySubscriptionBackendDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind)],previousCount=WHATSAPP_PLAN_IMPORT_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-whatsapp-plan-import-';
+ const dependencies=whatsappPlanImportDependenciesFor(spec.kind),subscriptionDependencies=[...companySubscriptionBackendDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind),...currentKycReplyFeedbackDependenciesFor(spec.kind)],previousCount=WHATSAPP_PLAN_IMPORT_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-whatsapp-plan-import-';
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};
  const rewrite=(value,file,{remove=false,replacement=null,changedHash=false}={})=>{
@@ -904,6 +911,7 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
    const start=checks.length;
    const staleSpec={...spec,producerSha256:INTAKE_PLAIN_TEXT_UNIT_BASELINE_PRODUCER.producerSha256};bad('bank-intake-units-historical-pin-cannot-certify-current-plain-text-harness','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(staleSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:staleSpec.producerSha256})),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}));
    const previousSpec={...spec,producerSha256:KYC_RETRY_PREVIOUS_UNIT_PRODUCER_SHA256};bad('bank-intake-units-previous-current-pin-cannot-certify-rejected-retry-count','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(previousSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:previousSpec.producerSha256})),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}));
+   const previousReplySpec={...spec,producerSha256:KYC_REPLY_PREVIOUS_UNIT_PRODUCER_SHA256};bad('bank-intake-units-previous-current-pin-cannot-certify-reply-feedback-count','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(previousReplySpec,Buffer.from(JSON.stringify({...proof,harnessSha256:previousReplySpec.producerSha256})),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}));
    const changed=clone(contract);changed.evidenceProducers.find(record=>record.path===spec.path).producerSha256=spec.producerSha256;bad('bank-intake-units-historical-record-cannot-be-overwritten','EXTENSION_PRODUCER_CONTRACT',()=>validateContract(changed));
    const intakeIndex=TEST_SUITES.indexOf('tests/production-employee-intake.test.mjs'),intakePath=proof.suites[intakeIndex].tap.path,intakeOriginal=evidence.get(intakePath),legacyIntakeTap=tap(Array.from({length:65},(_,i)=>'historical employee intake suite '+i));evidence.set(intakePath,legacyIntakeTap);mutate('plain-text-intake-legacy-sixty-five-tests','PROOF_UNIT_RESULTS',p=>{p.suites[intakeIndex]={file:TEST_SUITES[intakeIndex],exitCode:0,...parseTap(legacyIntakeTap),tap:{path:intakePath,bytes:legacyIntakeTap.length,sha256:hash(legacyIntakeTap)}};});evidence.set(intakePath,intakeOriginal);
    for(const [file,previous] of [['tests/production-company-channel-kyc.test.mjs',76],['tests/production-participant-onboarding-next-step.test.mjs',35]]){
