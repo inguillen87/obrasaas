@@ -1,0 +1,81 @@
+name: BINDX civil data transport preparation
+on:
+  push:
+    branches: [master, 'feat/bindx-civil-data-*']
+    paths:
+      - 'src/lib/bindx-civil-data-client.mjs'
+      - 'tests/production-bindx-civil-data-client.test.mjs'
+      - 'docs/production/bindx-civil-data.md'
+      - '.github/workflows/bindx-civil-data.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Closed transport and synthetic contract cases
+        run: |
+          mkdir -p .vercel/private/bindx-civil-ci
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {execFileSync} from 'node:child_process';
+          import {createHash} from 'node:crypto';
+          import {readFileSync,writeFileSync} from 'node:fs';
+          const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
+          assert.equal(git('rev-parse','HEAD'),process.env.GITHUB_SHA);
+          assert.equal(git('status','--porcelain','--untracked-files=no'),'');
+          const files=['src/lib/bindx-civil-data-client.mjs','tests/production-bindx-civil-data-client.test.mjs','docs/production/bindx-civil-data.md','.github/workflows/bindx-civil-data.yml','package.json','package-lock.json'];
+          const sourceManifest=files.map(path=>{const committed=execFileSync('git',['show','HEAD:'+path]);assert.deepEqual(readFileSync(path),committed);return {path,sha256:createHash('sha256').update(committed).digest('hex')};});
+          writeFileSync('.vercel/private/bindx-civil-ci/before.json',JSON.stringify({sourceRevision:git('rev-parse','HEAD'),sourceTree:git('rev-parse','HEAD^{tree}'),sourceManifest})+'\n');
+          NODE
+          node --check src/lib/bindx-civil-data-client.mjs
+          npx eslint src/lib/bindx-civil-data-client.mjs tests/production-bindx-civil-data-client.test.mjs --max-warnings 0
+          node --test --test-reporter=tap tests/production-bindx-civil-data-client.test.mjs > .vercel/private/bindx-civil-ci/tests.tap
+      - name: Record exact source without activation
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {execFileSync} from 'node:child_process';
+          import {createHash} from 'node:crypto';
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import {createBindxCivilDataClient} from './src/lib/bindx-civil-data-client.mjs';
+          const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
+          assert.equal(git('rev-parse','HEAD'),process.env.GITHUB_SHA);
+          assert.equal(git('status','--porcelain','--untracked-files=no'),'');
+          const tap=readFileSync('.vercel/private/bindx-civil-ci/tests.tap','utf8');
+          assert.match(tap,/^# tests 23$/m);assert.match(tap,/^# pass 23$/m);
+          for(const name of ['fail','cancelled','skipped','todo'])assert.match(tap,new RegExp('^# '+name+' 0$','m'));
+          let wireCalls=0;
+          const client=createBindxCivilDataClient({fetchImpl:async()=>{wireCalls++;throw Error('No real provider allowed');}});
+          assert.equal(client.readiness().state,'CONTRACT_PENDING');
+          assert.equal((await client.lookup()).state,'CONTRACT_PENDING');
+          assert.equal(wireCalls,0);
+          const files=['src/lib/bindx-civil-data-client.mjs','tests/production-bindx-civil-data-client.test.mjs','docs/production/bindx-civil-data.md','.github/workflows/bindx-civil-data.yml','package.json','package-lock.json'];
+          const sourceManifest=files.map(path=>{const committed=execFileSync('git',['show','HEAD:'+path]);assert.deepEqual(readFileSync(path),committed);return {path,sha256:createHash('sha256').update(committed).digest('hex')};});
+          const before=JSON.parse(readFileSync('.vercel/private/bindx-civil-ci/before.json','utf8'));
+          assert.equal(before.sourceRevision,process.env.GITHUB_SHA);assert.equal(before.sourceTree,git('rev-parse','HEAD^{tree}'));assert.deepEqual(sourceManifest,before.sourceManifest);
+          writeFileSync('.vercel/private/bindx-civil-ci/source.json',JSON.stringify({version:1,status:'PASS',sourceRevision:git('rev-parse','HEAD'),sourceTree:git('rev-parse','HEAD^{tree}'),trackedClean:true,sourceManifest,tapSha256:createHash('sha256').update(tap).digest('hex'),testCount:23,testTransport:'injected-synthetic',realProviderRequests:null,defaultSmokeWireCalls:wireCalls,defaultState:'CONTRACT_PENDING',runtimeMounted:false,identityCertified:false,biometricsVerified:false,financialAccountsCreated:false,publicationConfirmed:false})+'\n');
+          NODE
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: bindx-civil-preparation-${{ github.sha }}-${{ github.run_attempt }}
+          path: .vercel/private/bindx-civil-ci/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
