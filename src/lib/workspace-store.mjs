@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { WorkspaceError, WORKSPACE_ROLES, workspaceId, operationId, requireWorkspaceIdentity, scopeStamp, checkScope, calendarDate, digest, portfolioAccess, managesSchedule, validateScheduleChange, scheduleReceiptId, scheduleRequestDigest } from './workspace-policy.mjs';
 import {participantAccountBound,participantProjectAdmitted} from './participant-admission.mjs';
+import {publicTaskMeasurement} from './task-progress-measurement.js';
 
 const identityPurpose=Symbol('participant-own-identity');
 // Server-only composition: the purpose cannot be serialized or supplied by HTTP.
@@ -8,10 +9,10 @@ export function participantIdentityOperation(workspace,session,context,writable,
   return workspace.projectOperation(session,context,writable,callback,beforeProject,identityPurpose);
 }
 
-const taskColumns = `t.id, t.title, t.status::text AS status, t.progress,
+const taskColumns = `t.id, t.title, t.status::text AS status, t.progress, t.metadata,
   to_char(t."startsAt", 'YYYY-MM-DD') AS "startsOn", to_char(t."endsAt", 'YYYY-MM-DD') AS "endsOn",
   to_char(t."updatedAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
-const publicTask = row => ({ id: row.id, title: row.title, status: row.status, progress: row.progress, startsOn: row.startsOn, endsOn: row.endsOn, revision: row.revision });
+const publicTask = row => {const measurement=publicTaskMeasurement(row);return { id: row.id, title: row.title, status: row.status, progress: row.progress, startsOn: row.startsOn, endsOn: row.endsOn, revision: row.revision,...(measurement?{measurement}:{}) };};
 const publicReceipt = row => ({ id: row.id, taskId: row.entityId, recordedAt: row.recordedAt, before: row.metadata.before, after: row.metadata.after });
 
 export function createWorkspaceStore({ connect }) {
@@ -236,7 +237,7 @@ export function createWorkspaceStore({ connect }) {
           WHERE p."organizationId"=$1 AND p.status='ACTIVE' AND ($2::boolean OR EXISTS
           (SELECT 1 FROM public."ProjectMembership" pm WHERE pm."projectId"=p.id AND pm."tenantMembershipId"=$3 AND pm.status='ACTIVE'))
           ORDER BY p.id LIMIT 101`, [member.organizationId, member.officeReviewOnly!==true&&portfolioAccess(member.role)&&!member.participantBound, member.membershipId]);
-        return { scope, organizationName: member.organizationName, role: member.role, roleLabel: WORKSPACE_ROLES[member.role], ...(member.officeReviewOnly===true?{officeReviewOnly:true}:{}), canPlanSchedule: member.officeReviewOnly!==true&&managesSchedule(member.role), canManageIntegrations: member.officeReviewOnly!==true&&['ADMIN','DIRECTOR'].includes(member.role), projects: result.rows.slice(0,100), projectsTruncated: result.rows.length>100 };
+        return { scope, organizationName: member.organizationName, role: member.role, roleLabel: WORKSPACE_ROLES[member.role], ...(member.officeReviewOnly===true?{officeReviewOnly:true}:{}), canConfigureProgressMeasurement:member.officeReviewOnly!==true&&['ADMIN','DIRECTOR'].includes(member.role),canPlanSchedule: member.officeReviewOnly!==true&&managesSchedule(member.role), canManageIntegrations: member.officeReviewOnly!==true&&['ADMIN','DIRECTOR'].includes(member.role), projects: result.rows.slice(0,100), projectsTruncated: result.rows.length>100 };
       });
     },
     // A portfolio is a read of the current canonical organization, not an

@@ -1,5 +1,6 @@
 import {voiceProgressDraftForEvidence,UNKNOWN_VOICE_VALUE,voiceQuantityScopeLabel,voiceProgressQuantityLabel,voiceProgressUnitLabel} from '../../../lib/voice-progress-draft.mjs';
 import styles from './field-operations-panel.module.css';
+import {taskMeasurementView} from './task-progress-measurement-view.mjs';
 
 export function VoiceProgressDraftView({evidence,task,disabled,canPrepare,onPrepare}){
  const draft=voiceProgressDraftForEvidence(evidence,task);if(!draft)return null;
@@ -12,7 +13,7 @@ export function VoiceProgressDraftView({evidence,task,disabled,canPrepare,onPrep
   <p>Cantidad mencionada: {voiceProgressQuantityLabel(draft.quantity)} · Unidad: {voiceProgressUnitLabel(draft.unit)}</p>
   <p>Alcance: {voiceQuantityScopeLabel(draft.quantitySemantics)}</p>
   {draft.quantityQuote!==UNKNOWN_VOICE_VALUE&&<p>Fragmento: «{draft.quantityQuote}»</p>}
-  <p>La cantidad base y el porcentaje quedan para completar. Una cantidad del día no se suma automáticamente.</p>
+  {taskMeasurementView(task).state==='CONFIGURED'?<p>La tarea tiene una base definida. Revisarás si la cantidad es del día o acumulada y el cálculo antes de guardar una propuesta. La aprobación se realiza por separado.</p>:<p>La cantidad base y el porcentaje quedan para completar. Una cantidad del día no se suma automáticamente.</p>}
   {changed?<p role="alert">La tarea cambió desde la transcripción. Consultá el audio y prepará una medición manual con la tarea vigente.</p>:evidence.status!=='APPROVED'?<p>Otra persona autorizada debe aprobar esta evidencia antes de preparar el avance.</p>:canPrepare&&<button type="button" disabled={disabled} onClick={onPrepare}>Revisar borrador de avance</button>}
  </div>;
 }

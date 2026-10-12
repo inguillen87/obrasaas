@@ -7,6 +7,7 @@ import {inventoryQuantity} from './material-inventory.mjs';
 import {canImportPlan} from './plan-import-policy.mjs';
 import {startMetaPlanImportConversation,continueMetaPlanImportConversation} from './meta-plan-import-conversation.mjs';
 import {voiceProgressDraftForEvidence,prepareVoiceProgressDraft,voiceProgressDraftReady,UNKNOWN_VOICE_VALUE,voiceQuantityScopeLabel,voiceProgressQuantityLabel,voiceProgressUnitLabel} from './voice-progress-draft.mjs';
+import {deriveTaskMeasurement} from './task-progress-measurement.js';
 
 const menuOptions=[['ATTEND_IN','Entrada'],['ATTEND_PAUSE','Iniciar pausa'],['ATTEND_RESUME','Volver de pausa'],['ATTEND_OUT','Salida'],['TASKS','Mis tareas'],['MEDIA','Enviar evidencia'],['INCIDENT','Informar incidencia'],['MATERIAL','Pedir material'],['CONSUMPTION','Proponer consumo'],['PROGRESS','Proponer avance'],['PLAN_IMPORT','Importar cronograma'],['STATUS','Consultar estado']];
 const aliases={MENU:'MENU',AYUDA:'MENU',HOLA:'MENU',ENTRADA:'ATTEND_IN',PAUSA:'ATTEND_PAUSE',VOLVER:'ATTEND_RESUME',SALIDA:'ATTEND_OUT',TAREAS:'TASKS',EVIDENCIA:'MEDIA',INCIDENCIA:'INCIDENT',MATERIALES:'MATERIAL',CONSUMO:'CONSUMPTION',AVANCE:'PROGRESS',CRONOGRAMA:'PLAN_IMPORT',GANTT:'PLAN_IMPORT',ESTADO:'STATUS',CANCELAR:'MENU'};
@@ -38,7 +39,12 @@ function consumptionMaterials(state,eventId,facts){const materials=facts.invento
 function confirm(state,eventId,body){return choices({...state,step:'CONFIRM'},eventId,body,[['CONFIRM','Guardar'],['CANCEL','Cancelar']]);}
 const voiceEvidence=(state,facts)=>facts.evidence.filter(e=>e.taskId===state.taskId&&e.status==='APPROVED'&&voiceProgressDraftForEvidence(e,facts.tasks.find(t=>t.id===state.taskId))?.task.revision===facts.tasks.find(t=>t.id===state.taskId)?.revision);
 const includesVideo=rows=>rows.some(e=>e.media?.kind==='video');
-const manualMeasurement=state=>{const next={...state,step:'MEASUREMENT'};delete next.evidencePage;return {state:next,reply:text('Escribí el avance medido, por ejemplo 25%, o la cantidad acumulada y su base: 2.5 / 10 M2. La tarea conserva su avance hasta aprobación.')};};
+function manualMeasurement(state,eventId,facts){
+ const task=facts.tasks.find(t=>t.id===state.taskId),measurement=task?.measurement;
+ const next={...state};delete next.evidencePage;
+ if(measurement)return choices({...next,step:'MEASUREMENT_SCOPE',measurementDefinitionId:measurement.definitionId},eventId,'Tarea: '+task.title+'\nBase del responsable: '+voiceProgressQuantityLabel(measurement.baseline)+' '+voiceProgressUnitLabel(measurement.unit)+'\nAcumulado aprobado: '+voiceProgressQuantityLabel(measurement.executed)+' '+voiceProgressUnitLabel(measurement.unit)+'\n¿Vas a informar una cantidad adicional o el total acumulado?',[['DELTA','Realizado hoy'],['CUMULATIVE','Total acumulado']]);
+ return {state:{...next,step:'MEASUREMENT'},reply:text('Escribí el avance medido, por ejemplo 25%, o la cantidad acumulada y su base: 2.5 / 10 M2. La tarea conserva su avance hasta aprobación.')};
+}
 function chooseEvidence(state,eventId,facts,voice=false){
  const page=facts.evidencePage||{first:null,last:null,hasPrevious:false,hasNext:false},available=facts.pagedEvidence||facts.evidence;
  const current=voice?voiceEvidence(state,{...facts,evidence:available}):available.filter(e=>e.taskId===state.taskId&&e.status==='APPROVED');
@@ -96,6 +102,7 @@ export function planMetaFieldConversation({message,state,eventId,facts,now}){
   // backend errors retain their canonical handling in the signed bridge.
   if(state?.version!==1||!(Date.parse(state.expiresAt)>now.getTime()))throw error;
   const step=state.step;
+  if(step==='MEASUREMENT_QUANTITY'&&(error.name==='TaskProgressMeasurementError'||error.code==='PROGRESS_MEASUREMENT_QUANTITY_INVALID'))return {state,reply:text('Ingresá sólo una cantidad exacta, con punto y hasta cuatro decimales. El total no puede superar la base ni ser menor al acumulado aprobado. Conservamos el borrador; escribí CANCELAR para volver al menú.')};
   if(step==='MEASUREMENT'&&['FIELD_QUANTITY_INVALID','PROGRESS_MEASUREMENT_QUANTITY_INVALID'].includes(error.code))return {state,reply:text(progressHint)};
   if(step==='CONSUMPTION_QUANTITY'&&error.code==='INVENTORY_QUANTITY_INVALID')return {state,reply:text('Ingresá una cantidad positiva con punto y hasta tres decimales. El borrador y el stock se conservan.')};
   const hint=step==='REASON'&&['MATERIAL','PROGRESS','CONSUMPTION'].includes(state.purpose)?'Escribí el motivo de 8 a '+(state.purpose==='MATERIAL'?2000:1000)+' caracteres.':inputHints[step];
@@ -126,13 +133,14 @@ function planConversation({message,state,eventId,facts,now}){
  if(active.purpose!=='MENU'&&!permits(active.purpose,facts))return denied(active.purpose);
  const s={...active};delete s.choices;delete s.nonce;
  if(s.sourceVoice&&!voiceProgressDraftReady(s.sourceVoice,facts.evidence.find(e=>e.id===s.sourceVoice.evidenceId),facts.tasks.find(t=>t.id===s.taskId)))return {state:active,reply:text('La tarea o el '+(s.sourceVoice.mediaKind==='video'?'video':'audio')+' cambió desde que preparaste el borrador. No guardamos una propuesta. Conservamos este paso; escribí AVANCE para revisar los registros vigentes o CANCELAR para volver al menú.')};
+ if(s.purpose==='PROGRESS'&&s.measurementDefinitionId){const task=facts.tasks.find(t=>t.id===s.taskId);if(task?.revision!==s.taskRevision||task.measurement?.definitionId!==s.measurementDefinitionId)return {state:active,reply:text('La tarea o su medición aprobada cambió. Conservamos el borrador y no sumamos cantidades. Escribí AVANCE para consultar la base y el acumulado vigentes, o CANCELAR para volver al menú.')};}
  if(s.purpose==='PROGRESS'&&s.evidenceIds?.some(id=>!facts.evidence.some(e=>e.id===id&&e.taskId===s.taskId&&e.status==='APPROVED')))return {state:active,reply:text('La evidencia elegida ya no está aprobada para esta tarea. Conservamos el borrador; escribí AVANCE para consultar los registros vigentes o CANCELAR para volver al menú. No guardamos una propuesta.')};
  if(s.step==='MENU')return selected?start(selected,eventId,facts,now):start('MENU',eventId,facts,now);
  if(s.step==='TASK'){
   if(!selected)return {state:active,reply:text('Elegí una tarea en el menú anterior, o escribí CANCELAR.')};
   if(['NEXT_TASKS','PREVIOUS_TASKS'].includes(selected))return chooseTask(s,eventId,facts);
   s.taskId=selected==='NONE'?null:selected;const task=facts.tasks.find(t=>t.id===s.taskId);if(s.taskId&&!task)throw new WorkspaceError('WORKSPACE_TASK_UNAVAILABLE',404);s.taskRevision=task?.revision||null;
-  if(s.purpose==='TASKS'){delete s.taskId;delete s.taskRevision;return chooseTask(s,eventId,facts,task.title+'\nAvance aprobado: '+task.progress+'%.\nEl avance cambia sólo después de la revisión del responsable. Elegí otra tarea o escribí MENU.');}
+  if(s.purpose==='TASKS'){delete s.taskId;delete s.taskRevision;return chooseTask(s,eventId,facts,task.title+'\nAvance aprobado: '+task.progress+'%.'+(task.measurement?'\nMetrado aprobado: '+voiceProgressQuantityLabel(task.measurement.executed)+' / '+voiceProgressQuantityLabel(task.measurement.baseline)+' '+voiceProgressUnitLabel(task.measurement.unit)+'.':'')+'\nEl avance cambia sólo después de la revisión del responsable. Elegí otra tarea o escribí MENU.');}
   return chooseSector(s,eventId,facts);
  }
  if(s.step==='SECTOR'){
@@ -144,29 +152,29 @@ function planConversation({message,state,eventId,facts,now}){
   }
   if(s.purpose==='MEDIA')return s.mediaAuthorizationVersion===META_FIELD_MEDIA_AUTHORIZATION_VERSION?mediaFilePrompt(s):mediaNotice(s,eventId);
   if(s.purpose==='CONSUMPTION')return consumptionMaterials(s,eventId,facts);
-  if(s.purpose==='PROGRESS'){const rows=voiceEvidence(s,facts),video=includesVideo(rows),otherPages=facts.evidencePage?.hasNext||facts.evidencePage?.hasPrevious;return rows.length||otherPages?choices({...s,step:'PROGRESS_SOURCE'},eventId,'Podés buscar un borrador desde un audio o video ya aprobado o ingresar tu medición. La cantidad del día no se suma automáticamente.',[['VOICE',!rows.length&&otherPages?'Buscar audio o video':video||otherPages?'Revisar audio o video':'Revisar audio aprobado'],['MANUAL','Ingresar medición']]):manualMeasurement(s);}
+  if(s.purpose==='PROGRESS'){const rows=voiceEvidence(s,facts),video=includesVideo(rows),otherPages=facts.evidencePage?.hasNext||facts.evidencePage?.hasPrevious;return rows.length||otherPages?choices({...s,step:'PROGRESS_SOURCE'},eventId,'Podés buscar un borrador desde un audio o video ya aprobado o ingresar tu medición. '+(facts.tasks.find(t=>t.id===s.taskId)?.measurement?'Vas a confirmar si es del día o acumulada contra la base del responsable.':'La cantidad del día no se suma automáticamente.'),[['VOICE',!rows.length&&otherPages?'Buscar audio o video':video||otherPages?'Revisar audio o video':'Revisar audio aprobado'],['MANUAL','Ingresar medición']]):manualMeasurement(s,eventId,facts);}
   return {state:{...s,step:s.purpose==='INCIDENT'?'INCIDENT_TITLE':s.purpose==='MATERIAL'?'MATERIAL_NAME':'MEASUREMENT'},reply:text(s.purpose==='INCIDENT'?'Escribí un título breve para la incidencia.':s.purpose==='MATERIAL'?'Escribí el material que necesitás.':'Escribí el avance, por ejemplo 25%, o una cantidad como 2.5 / 10 M2. La tarea conservará su avance hasta que un responsable apruebe.')};
  }
  if(s.step==='PROGRESS_SOURCE'){
-  if(selected==='MANUAL')return manualMeasurement(s);
+  if(selected==='MANUAL')return manualMeasurement(s,eventId,facts);
   const rows=voiceEvidence(s,facts),label=includesVideo(rows)?'audio o video':'audio';
   if(selected!=='VOICE')return {state:active,reply:text('Elegí el '+label+' aprobado o la medición manual en el menú anterior.')};
   return chooseEvidence(s,eventId,facts,true);
  }
  if(s.step==='VOICE_EVIDENCE'){
    if(['NEXT_EVIDENCE','PREVIOUS_EVIDENCE'].includes(selected))return chooseEvidence(s,eventId,facts,true);
-   if(selected==='MANUAL')return manualMeasurement(s);
+   if(selected==='MANUAL')return manualMeasurement(s,eventId,facts);
   const rows=voiceEvidence(s,facts),evidence=rows.find(e=>e.id===selected);if(!evidence)return {state:active,reply:text('Elegí un '+(includesVideo(rows)?'audio o video':'audio')+' aprobado vigente del menú anterior.')};
   const task=facts.tasks.find(t=>t.id===s.taskId),draft=voiceProgressDraftForEvidence(evidence,task),prepared=prepareVoiceProgressDraft(evidence,task,facts.workerId);
   const video=evidence.media.kind==='video';
-  return choices({...s,step:'VOICE_REVIEW',voiceCandidate:prepared.sourceVoice},eventId,'Borrador del audio'+(video?' del video':'')+' · Tarea elegida: '+task.title.slice(0,160)+'\nActividad: '+(draft.activity===UNKNOWN_VOICE_VALUE?'Sin identificar':draft.activity.slice(0,160))+'\nCantidad: '+voiceProgressQuantityLabel(draft.quantity)+' '+voiceProgressUnitLabel(draft.unit)+'\nAlcance: '+voiceQuantityScopeLabel(draft.quantitySemantics)+'\nLa base y el porcentaje están pendientes. Revisá que el '+(video?'video original, su audio':'audio')+' y la unidad correspondan a esta tarea. Ingresarás la medición acumulada; una cantidad del día no se suma automáticamente.',[['USE','Revisé, completar'],['MANUAL','Medición manual']]);
+  return choices({...s,step:'VOICE_REVIEW',voiceCandidate:prepared.sourceVoice},eventId,'Borrador del audio'+(video?' del video':'')+' · Tarea elegida: '+task.title.slice(0,160)+'\nActividad: '+(draft.activity===UNKNOWN_VOICE_VALUE?'Sin identificar':draft.activity.slice(0,160))+'\nCantidad: '+voiceProgressQuantityLabel(draft.quantity)+' '+voiceProgressUnitLabel(draft.unit)+'\nAlcance: '+voiceQuantityScopeLabel(draft.quantitySemantics)+(task.measurement?'\nBase del responsable: '+voiceProgressQuantityLabel(task.measurement.baseline)+' '+voiceProgressUnitLabel(task.measurement.unit)+'. Elegirás el alcance y confirmarás la cantidad; el audio nunca suma ni aprueba por sí solo.':'\nLa base y el porcentaje están pendientes. Revisá que el '+(video?'video original, su audio':'audio')+' y la unidad correspondan a esta tarea. Ingresarás la medición acumulada; una cantidad del día no se suma automáticamente.'),[['USE','Revisé, completar'],['MANUAL','Medición manual']]);
  }
  if(s.step==='VOICE_REVIEW'){
-  if(selected==='MANUAL'){delete s.voiceCandidate;return manualMeasurement(s);}
+  if(selected==='MANUAL'){delete s.voiceCandidate;return manualMeasurement(s,eventId,facts);}
   if(selected!=='USE')return {state:active,reply:text('Revisá el borrador y elegí una opción del menú anterior. Todavía no se guardó una propuesta.')};
   const sourceVoice={...s.voiceCandidate,confirmed:true},evidence=facts.evidence.find(e=>e.id===sourceVoice.evidenceId),task=facts.tasks.find(t=>t.id===s.taskId);
   if(!voiceProgressDraftReady(sourceVoice,evidence,task))return {state:active,reply:text('La tarea o el '+(sourceVoice.mediaKind==='video'?'video':'audio')+' cambió. Escribí AVANCE para consultar nuevamente; no se guardó una propuesta.')};
-  delete s.voiceCandidate;return manualMeasurement({...s,sourceVoice});
+  delete s.voiceCandidate;return manualMeasurement({...s,sourceVoice},eventId,facts);
  }
  if(s.step==='LOCATION_NOTICE')return selected==='ACCEPT'?{state:{...s,step:'LOCATION',noticeVersion:FIELD_NOTICE},reply:text('Compartí tu ubicación actual con el botón de adjuntar de WhatsApp. No envíes la dirección escrita. La precisión y el QR quedan pendientes de revisión.')}:{state:null,reply:text('Operación cancelada. Escribí MENU cuando quieras continuar.')};
  if(s.step==='LOCATION'){
@@ -216,6 +224,17 @@ function planConversation({message,state,eventId,facts,now}){
  if(s.step==='MATERIAL_UNIT'){if(!selected)return {state:active,reply:text('Elegí la unidad del menú anterior.')};s.unit=selected;return {state:{...s,step:'REASON'},reply:text('Explicá para qué necesitás el material. El pedido requiere autorización de compra.')};}
  if(s.step==='CONSUMPTION_MATERIAL'){if(selected==='NEXT'||selected==='PREVIOUS')return consumptionMaterials({...s,materialOffset:Math.max(0,(s.materialOffset||0)+(selected==='NEXT'?8:-8))},eventId,facts);const material=facts.inventory?.materials?.find(m=>m.id===selected&&m.active);if(!material)return {state:active,reply:text('Elegí un material del catálogo anterior.')};return {state:{...s,step:'CONSUMPTION_QUANTITY',materialId:material.id,name:material.name,unit:material.unit,catalogHash:facts.inventory.catalogHash},reply:text('Material: '+material.name+'\nUnidad: '+material.unit+'\nEscribí la cantidad consumida, con punto y hasta tres decimales.')};}
  if(s.step==='CONSUMPTION_QUANTITY'){s.quantity=inventoryQuantity(body);return {state:{...s,step:'REASON'},reply:text('Explicá para qué se usó el material. Todavía no se descuenta stock.')};}
+ if(s.step==='MEASUREMENT_SCOPE'){
+  if(!['DELTA','CUMULATIVE'].includes(selected))return {state:active,reply:text('Elegí Realizado hoy o Total acumulado en el menú anterior.')};
+  const task=facts.tasks.find(t=>t.id===s.taskId);
+  return {state:{...s,step:'MEASUREMENT_QUANTITY',measurementMode:selected},reply:text('Escribí sólo la cantidad '+(selected==='DELTA'?'adicional de este reporte':'total acumulada')+' en '+voiceProgressUnitLabel(task.measurement.unit)+', por ejemplo 50 o 2.5. Usá punto y hasta cuatro decimales. La base y la unidad ya las definió el responsable.')};
+ }
+ if(s.step==='MEASUREMENT_QUANTITY'){
+  const task=facts.tasks.find(t=>t.id===s.taskId),derived=deriveTaskMeasurement(task,{mode:s.measurementMode,quantity:body});
+  Object.assign(s,{measurement:{mode:derived.mode,quantity:derived.reported},measurementSummary:derived,progress:derived.progress,quantity:derived.executed,baseline:derived.baseline,unit:derived.unit});
+  if(s.sourceVoice)return {state:{...s,step:'REASON',evidenceIds:[s.sourceVoice.evidenceId]},reply:text('Explicá cómo verificaste esta medición. El audio aprobado quedará vinculado; la cantidad requiere confirmación y revisión independiente.')};
+  return chooseEvidence(s,eventId,facts);
+ }
  if(s.step==='MEASUREMENT'){
   const percent=/^(100|\d{1,2})%$/.exec(body||''),quantity=/^(\d+(?:\.\d{1,4})?)\s*\/\s*(\d+(?:\.\d{1,4})?)\s+(M|M2|M3|KG|T|L|UNIT|HOUR|DAY|LOT)$/i.exec(body||'');
   if(percent)Object.assign(s,{progress:Number(percent[1]),quantity:null,baseline:null,unit:null});
@@ -225,7 +244,7 @@ function planConversation({message,state,eventId,facts,now}){
   return chooseEvidence(s,eventId,facts);
  }
  if(s.step==='PROGRESS_EVIDENCE'){if(['NEXT_EVIDENCE','PREVIOUS_EVIDENCE'].includes(selected))return chooseEvidence(s,eventId,facts);if(!selected||!facts.evidence.some(e=>e.id===selected&&e.taskId===s.taskId&&e.status==='APPROVED'))return {state:active,reply:text('Elegí una evidencia aprobada vigente del menú anterior. Si cambió, escribí AVANCE para consultar nuevamente.')};s.evidenceIds=[selected];return {state:{...s,step:'REASON'},reply:text('Explicá cómo mediste el avance o la cantidad ejecutada.')};}
- if(s.step==='REASON'){s.reason=siteText(body,s.purpose==='MATERIAL'?2000:1000,8,true);return confirm(s,eventId,(s.purpose==='MATERIAL'?'Pedido: '+s.quantity+' '+s.unit+' de '+s.name+'\nEsto no autoriza una compra.':s.purpose==='CONSUMPTION'?'Consumo propuesto: '+s.quantity+' '+s.unit+' de '+s.name+'\nEl stock se conserva hasta revisión del responsable.':'Avance propuesto: '+s.progress+'%'+(s.quantity!==null?' · '+s.quantity+' / '+s.baseline+' '+s.unit:'')+'\nLa tarea conserva su avance hasta aprobación.')+'\nMotivo: '+s.reason.slice(0,550)+(s.reason.length>550?'…':'')+'\n¿Guardar para revisión?');}
+ if(s.step==='REASON'){s.reason=siteText(body,s.purpose==='MATERIAL'?2000:1000,8,true);const m=s.measurementSummary;return confirm(s,eventId,(s.purpose==='MATERIAL'?'Pedido: '+s.quantity+' '+s.unit+' de '+s.name+'\nEsto no autoriza una compra.':s.purpose==='CONSUMPTION'?'Consumo propuesto: '+s.quantity+' '+s.unit+' de '+s.name+'\nEl stock se conserva hasta revisión del responsable.':m?'Acumulado aprobado: '+voiceProgressQuantityLabel(m.previous)+' '+voiceProgressUnitLabel(m.unit)+'\nAdicional propuesto: '+voiceProgressQuantityLabel(m.delta)+' '+voiceProgressUnitLabel(m.unit)+'\nNuevo acumulado: '+voiceProgressQuantityLabel(m.executed)+' / '+voiceProgressQuantityLabel(m.baseline)+' '+voiceProgressUnitLabel(m.unit)+' · '+m.progress+'%\nLa tarea conserva su avance hasta aprobación.':'Avance propuesto: '+s.progress+'%'+(s.quantity!==null?' · '+s.quantity+' / '+s.baseline+' '+s.unit:'')+'\nLa tarea conserva su avance hasta aprobación.')+'\nMotivo: '+s.reason.slice(0,550)+(s.reason.length>550?'…':'')+'\n¿Guardar para revisión?');}
  if(s.step==='CONFIRM'){
   if(selected==='CANCEL')return {state:null,reply:text('Operación cancelada. Escribí MENU para continuar.')};
   if(selected!=='CONFIRM')return {state:active,reply:text('Elegí Guardar o Cancelar en el menú anterior.')};
@@ -233,7 +252,7 @@ function planConversation({message,state,eventId,facts,now}){
   if(s.purpose==='INCIDENT')return {state:null,command:{action:'REPORT_INCIDENT',payload:{workerId:facts.workerId,taskId:s.taskId,sectorId:s.sectorId,title:s.title,description:s.description,severity:s.severity,evidenceIds:[]}}};
   if(s.purpose==='MATERIAL')return {state:null,command:{action:'REQUEST_MATERIAL',payload:{workerId:facts.workerId,taskId:s.taskId,sectorId:s.sectorId,name:s.name,quantity:s.quantity,unit:s.unit,reason:s.reason,evidenceIds:[]}}};
   if(s.purpose==='CONSUMPTION')return {state:null,command:{action:'PROPOSE_CONSUMPTION',payload:{workerId:facts.workerId,taskId:s.taskId,sectorId:s.sectorId,materialId:s.materialId,catalogHash:s.catalogHash,quantity:s.quantity,reason:s.reason}}};
-  if(s.purpose==='PROGRESS')return {state:null,command:{action:'PROPOSE_PROGRESS',payload:{workerId:facts.workerId,taskId:s.taskId,revision:s.taskRevision,progress:s.progress,quantity:s.quantity,baseline:s.baseline,unit:s.unit,reason:s.reason,evidenceIds:s.evidenceIds}}};
+  if(s.purpose==='PROGRESS')return {state:null,command:{action:'PROPOSE_PROGRESS',payload:s.measurement?{workerId:facts.workerId,taskId:s.taskId,revision:s.taskRevision,measurement:s.measurement,reason:s.reason,evidenceIds:s.evidenceIds}:{workerId:facts.workerId,taskId:s.taskId,revision:s.taskRevision,progress:s.progress,quantity:s.quantity,baseline:s.baseline,unit:s.unit,reason:s.reason,evidenceIds:s.evidenceIds}}};
  }
  return start('MENU',eventId,facts,now);
 }

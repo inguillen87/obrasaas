@@ -10,9 +10,25 @@ import {lockPersonWorksiteJourney,assertPersonWorksiteJourney} from './person-wo
 import {OVERTIME_ACTIONS,canDecideOvertime} from './field-overtime-policy.mjs';
 import {createFieldOvertime} from './field-overtime-store.mjs';
 import {assertApprovedParticipantKyc} from './participant-approved-identity.mjs';
+import {TASK_MEASUREMENT_VERSION,publicTaskMeasurement,deriveTaskMeasurement,assertMeasurementConfiguration} from './task-progress-measurement.js';
 
 const revision = name => `to_char(${name},'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const newId = prefix => prefix+'_'+randomUUID().replaceAll('-','');
+const publicMeasuredTask=row=>{const {metadata,...task}=row,measurement=publicTaskMeasurement(row);return {...task,...(measurement?{measurement}:{})};};
+const measurementGuard=callback=>{try{return callback();}catch(error){if(error?.name==='TaskProgressMeasurementError')throw new WorkspaceError(error.code,error.status);throw error;}};
+export function assertMeasuredProposalSnapshot(current,action){
+  const expected=measurementGuard(()=>deriveTaskMeasurement(current,{mode:action.measurement.mode,quantity:action.measurement.reported}));
+  // PostgreSQL jsonb does not preserve object key order. Check the exact fact
+  // set and each scalar; receipt digests keep their existing immutable format.
+  if(Object.keys(expected).sort().join('|')!==Object.keys(action.measurement).sort().join('|')||!Object.keys(expected).every(key=>action.measurement[key]===expected[key])||action.progress!==expected.progress||action.quantity!==expected.executed||action.baseline!==expected.baseline||action.unit!==expected.unit)throw new WorkspaceError('FIELD_MEASUREMENT_CHANGED',409);
+}
+const measurementConfigurationAction='CONFIGURE_PROGRESS_MEASUREMENT',measurementCancellationAction='CANCEL_PROGRESS_MEASUREMENT_CONFIGURATION';
+const measurementCancelled=receipt=>receipt?.metadata?.outcome?.kind==='MEASUREMENT_CONFIGURATION_CANCELLED';
+function cancelledMeasurementOutcome(receipt,{projectId,operationId:operation,taskId},scope,replayed=true){
+  const metadata=receipt.metadata,outcome=metadata?.outcome,key=operation.toLowerCase();
+  if(metadata?.version!==1||metadata.projectId!==projectId||metadata.command!==measurementConfigurationAction||metadata.action!==measurementConfigurationAction||metadata.operationId!==key||metadata.requestDigest!==null||outcome?.kind!=='MEASUREMENT_CONFIGURATION_CANCELLED'||!workspaceId(outcome.taskId)||taskId!==undefined&&outcome.taskId!==taskId||outcome.taskProgressUnchanged!==true)throw new WorkspaceError('FIELD_RECEIPT_INTEGRITY',409);
+  return {scope,projectId,operationId:key,action:measurementConfigurationAction,state:'CANCELLED',saved:false,replayed,receiptId:receipt.id,kind:'MEASUREMENT_CONFIGURATION_CANCELLED',taskId:outcome.taskId,taskProgressUnchanged:true};
+}
 export function assertProgressContinuity(current, proposed) {
   if(proposed.progress<current.progress)throw new WorkspaceError('FIELD_PROGRESS_REGRESSION',409);
   const approved=current.metadata?.fieldOperations?.quantity;
@@ -37,11 +53,11 @@ export function publicFieldEvidence(row) {
 }
 const publicEvent=row=>({id:row.id,workerId:row.workerId,recordedAt:row.recordedAt,...row.metadata.fieldOperations});
 const publicProposal=row=>({id:row.id,summary:row.summary,status:row.status==='PENDING'&&row.expired===true?'EXPIRED':row.status,statusStored:row.status,expiresAt:row.expiresAt?.toISOString()||null,revision:row.revision,
-  taskId:row.action.taskId,workerId:row.proposedByWorkerId,progress:row.action.progress,quantity:row.action.quantity,baseline:row.action.baseline,unit:row.action.unit,reason:row.action.reason,evidenceIds:row.action.evidenceIds,
+  taskId:row.action.taskId,workerId:row.proposedByWorkerId,progress:row.action.progress,quantity:row.action.quantity,baseline:row.action.baseline,unit:row.action.unit,...(row.action.measurement?{measurement:row.action.measurement}:{}),reason:row.action.reason,evidenceIds:row.action.evidenceIds,
   result:row.result?.fieldOperations||null});
 export function createFieldOperations({workspace,assertParticipant}) {
   const overtime=createFieldOvertime({assertWorker:worker});
-  const correlated=action=>MATERIAL_INVENTORY_ACTIONS.includes(action)||OVERTIME_ACTIONS.includes(action);
+  const correlated=action=>MATERIAL_INVENTORY_ACTIONS.includes(action)||OVERTIME_ACTIONS.includes(action)||action==='CONFIGURE_PROGRESS_MEASUREMENT';
   const run=(session,context,writable,callback)=>workspace.projectOperation(session,context,writable,callback,writable&&context.action==='ATTENDANCE'?lockPersonWorksiteJourney:writable&&OVERTIME_ACTIONS.includes(context.action)?(client,member)=>overtime.beforeProject(client,member,context):writable&&context.action==='DECIDE_STOCK_ADJUSTMENT'&&context.payload?.decision==='APPROVE'?async(client,member)=>{if(!canApproveProgress(member.role))throw new WorkspaceError('INVENTORY_MANAGE_REQUIRED',403);if(member.channelProof)throw new WorkspaceError('INVENTORY_ADJUSTMENT_WEB_ONLY',403);if(!await prior(client,member,fieldReceiptId(member.actorId,context.projectId,context.operationId)))await lockStockAdjustmentProposer(client,member,context.projectId,context.payload.proposalId);}:undefined);
   async function reviewAccess(client,member,session,projectId,scope) {
     const owned=(await client.query(`SELECT id,name,active,metadata FROM public."Worker" WHERE "projectId"=$1 AND active=true AND metadata->'participant'->>'version'='1' AND metadata->'participant'->>'clerkUserId'=$2 AND metadata->'participant'->>'status'='ACTIVE' AND metadata->'participant'->'kyc'->>'status'='APPROVED' ORDER BY id`,[projectId,session.userId])).rows;
@@ -74,7 +90,8 @@ export function createFieldOperations({workspace,assertParticipant}) {
     const action=receipt.metadata.command;
     if(['CONFIGURE_OVERTIME','DECIDE_OVERTIME'].includes(action)&&!canDecideOvertime(member.role))throw new WorkspaceError('OVERTIME_DECISION_PERMISSION_REQUIRED',403);
     if(['PROPOSE_STOCK_ADJUSTMENT','DECIDE_STOCK_ADJUSTMENT'].includes(action)&&member.channelProof)throw new WorkspaceError('INVENTORY_ADJUSTMENT_WEB_ONLY',403);
-    if(['CONFIGURE_SITE','DECIDE_PROGRESS','ADD_MATERIAL','DECIDE_CONSUMPTION','REVERSE_CONSUMPTION','PROPOSE_STOCK_ADJUSTMENT','DECIDE_STOCK_ADJUSTMENT'].includes(action)&&!canApproveProgress(member.role))throw new WorkspaceError('FIELD_PERMISSION_REQUIRED',403);
+    if(action==='CONFIGURE_PROGRESS_MEASUREMENT'&&member.channelProof)throw new WorkspaceError('FIELD_MEASUREMENT_WEB_ONLY',403);
+    if(['CONFIGURE_SITE','CONFIGURE_PROGRESS_MEASUREMENT','DECIDE_PROGRESS','ADD_MATERIAL','DECIDE_CONSUMPTION','REVERSE_CONSUMPTION','PROPOSE_STOCK_ADJUSTMENT','DECIDE_STOCK_ADJUSTMENT'].includes(action)&&!canApproveProgress(member.role))throw new WorkspaceError('FIELD_PERMISSION_REQUIRED',403);
     if(['REVIEW_ATTENDANCE','REVIEW_EVIDENCE'].includes(action)&&!canReviewField(member.role))throw new WorkspaceError('FIELD_PERMISSION_REQUIRED',403);
     if(['ATTENDANCE','PROPOSE_PROGRESS','REPORT_INCIDENT','REQUEST_MATERIAL','PROPOSE_CONSUMPTION','PROPOSE_OVERTIME'].includes(action)){
       const workerId=receipt.metadata.outcome.event?.workerId||receipt.metadata.outcome.proposal?.workerId||receipt.metadata.outcome.report?.workerId||receipt.metadata.outcome.consumption?.workerId||receipt.metadata.outcome.overtime?.workerId,permission=['ATTENDANCE','PROPOSE_OVERTIME'].includes(action)?'attendance':'report';
@@ -92,9 +109,9 @@ export function createFieldOperations({workspace,assertParticipant}) {
     if(outcome.adjustment?.id)return {...outcome,adjustment:(await readStockAdjustment(client,projectId,outcome.adjustment.id)).adjustment};
     if(outcome.report?.id){const row=(await client.query(`SELECT id,title,description,severity::text AS severity,metadata,${revision('"updatedAt"')} AS revision,${revision('"createdAt"')} AS "createdAt" FROM public."Incident" WHERE id=$1 AND "projectId"=$2`,[outcome.report.id,projectId])).rows[0];if(!row)throw new WorkspaceError('SITE_REPORT_UNAVAILABLE',404);return {...outcome,report:publicSiteReport(row)};}
     const currentProposal=outcome.proposal?.id?publicProposal(await proposal(client,projectId,outcome.proposal.id)):null;
-    if(outcome.kind==='PROGRESS_DECISION'&&outcome.task){
-      const current=await task(client,projectId,outcome.task.id);delete current.metadata;
-      return {...outcome,...(currentProposal?{proposal:currentProposal}:{}),task:current,decisionTaskSnapshot:outcome.task};
+    if(['PROGRESS_DECISION','MEASUREMENT_CONFIGURATION'].includes(outcome.kind)&&outcome.task){
+      const current=publicMeasuredTask(await task(client,projectId,outcome.task.id));
+      return {...outcome,...(currentProposal?{proposal:currentProposal}:{}),task:current,...(outcome.kind==='PROGRESS_DECISION'?{decisionTaskSnapshot:outcome.task}:{configuredTaskSnapshot:outcome.task})};
     }
     return currentProposal?{...outcome,proposal:currentProposal}:outcome;
   }
@@ -184,10 +201,30 @@ export function createFieldOperations({workspace,assertParticipant}) {
       return run(session,command,true,async(client,member,scope,project)=>{
         if(member.channelProof&&OVERTIME_ACTIONS.includes(command.action))throw new WorkspaceError('OVERTIME_WEB_ONLY',403);
         const id=fieldReceiptId(member.actorId,command.projectId,command.operationId),previous=await prior(client,member,id);
-        if(previous){if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);await recoveryPermission(client,member,session,command.projectId,previous);return {scope,saved:true,replayed:true,receiptId:id,...(correlated(command.action)?{projectId:command.projectId,operationId:command.operationId,action:command.action,state:'RECORDED'}:{}),...await recoveredOutcome(client,command.projectId,previous)};}
+        if(previous){
+          if(measurementCancelled(previous)){
+            if(![measurementConfigurationAction,measurementCancellationAction].includes(command.action)||previous.metadata.outcome.taskId!==p.taskId)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);
+            await recoveryPermission(client,member,session,command.projectId,previous);
+            return cancelledMeasurementOutcome(previous,{...command,taskId:p.taskId},scope);
+          }
+          if(command.action===measurementCancellationAction){
+            if(previous.metadata.command!==measurementConfigurationAction||previous.metadata.outcome?.kind!=='MEASUREMENT_CONFIGURATION'||previous.metadata.outcome.task?.id!==p.taskId)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);
+            await recoveryPermission(client,member,session,command.projectId,previous);
+            return {scope,saved:true,replayed:true,receiptId:id,projectId:command.projectId,operationId:command.operationId,action:measurementConfigurationAction,state:'RECORDED',...await recoveredOutcome(client,command.projectId,previous)};
+          }
+          if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);await recoveryPermission(client,member,session,command.projectId,previous);return {scope,saved:true,replayed:true,receiptId:id,...(correlated(command.action)?{projectId:command.projectId,operationId:command.operationId,action:command.action,state:'RECORDED'}:{}),...await recoveredOutcome(client,command.projectId,previous)};
+        }
         const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
         let outcome;
-        if(OVERTIME_ACTIONS.includes(command.action)){
+        if(command.action===measurementCancellationAction){
+          if(member.channelProof)throw new WorkspaceError('FIELD_MEASUREMENT_WEB_ONLY',403);
+          if(!canApproveProgress(member.role))throw new WorkspaceError('FIELD_PROGRESS_PERMISSION_REQUIRED',403);
+          await task(client,command.projectId,p.taskId,true);
+          const outcome={kind:'MEASUREMENT_CONFIGURATION_CANCELLED',taskId:p.taskId,taskProgressUnchanged:true};
+          const metadata={version:1,projectId:command.projectId,operationId:command.operationId,action:measurementConfigurationAction,command:measurementConfigurationAction,requestDigest:null,outcome};
+          await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'field.operation.recorded','Project',$4,$5::jsonb)`,[id,member.organizationId,member.actorId,command.projectId,JSON.stringify(metadata)]);
+          return cancelledMeasurementOutcome({id,metadata},{...command,taskId:p.taskId},scope,false);
+        }else if(OVERTIME_ACTIONS.includes(command.action)){
           outcome=await overtime.apply({client,member,session,project,command,receiptId:id,at:now.toISOString()});
         }else if(MATERIAL_INVENTORY_ACTIONS.includes(command.action)){
           outcome=await applyInventoryFieldAction({client,member,session,project,command,receiptId:id,at:now.toISOString(),assertWorker:worker,assertTask:task});
@@ -239,17 +276,33 @@ export function createFieldOperations({workspace,assertParticipant}) {
           const next={...e,review:{decision:p.decision,reason:p.reason,actorId:member.actorId,recordedAt:now.toISOString()}};
           await client.query(`UPDATE public."Incident" SET metadata=$3::jsonb,status=$4,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[row.id,command.projectId,JSON.stringify({...cleanMetadata(row.metadata),fieldOperations:next}),p.decision==='APPROVE'?'resolved':'rejected']);
           outcome={kind:'EVIDENCE_REVIEW',evidence:publicFieldEvidence(await evidence(client,command.projectId,row.id))};
+        }else if(command.action==='CONFIGURE_PROGRESS_MEASUREMENT') {
+          if(member.channelProof)throw new WorkspaceError('FIELD_MEASUREMENT_WEB_ONLY',403);
+          if(!canApproveProgress(member.role))throw new WorkspaceError('FIELD_PROGRESS_PERMISSION_REQUIRED',403);
+          const current=await task(client,command.projectId,p.taskId,true);
+          if(current.revision!==p.revision)throw new WorkspaceError('FIELD_REVISION_CHANGED',409);
+          const configured=measurementGuard(()=>assertMeasurementConfiguration(current,{baseline:p.baseline,unit:p.unit}));
+          await expireProgress(client,member,command,p.taskId);
+          const pending=(await client.query(`SELECT id FROM public."OperationalProposal" WHERE "projectId"=$1 AND type='TASK_PROGRESS' AND "sourceProvider"='account-field' AND status='PENDING' AND action->>'fieldOperationsVersion'='1' AND action->>'taskId'=$2 LIMIT 1`,[command.projectId,p.taskId])).rows;
+          if(pending.length)throw new WorkspaceError('FIELD_PROGRESS_REVIEW_PENDING',409);
+          const measurement={version:TASK_MEASUREMENT_VERSION,definitionId:newId('measurement'),baseline:configured.baseline,unit:configured.unit,sourceReference:p.sourceReference,configuredBy:member.actorId,configuredAt:now.toISOString()};
+          const metadata={...cleanMetadata(current.metadata),fieldOperations:{...cleanMetadata(current.metadata?.fieldOperations),version:1,measurement}};
+          await client.query(`UPDATE public."Task" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[current.id,command.projectId,JSON.stringify(metadata)]);
+          outcome={kind:'MEASUREMENT_CONFIGURATION',task:publicMeasuredTask(await task(client,command.projectId,current.id)),sourceReference:p.sourceReference,reason:p.reason,recordedAt:now.toISOString(),taskProgressUnchanged:true};
         }else if(command.action==='PROPOSE_PROGRESS') {
           await worker(client,member,session,command.projectId,p.workerId);
           const current=await task(client,command.projectId,p.taskId,true);
           if(current.revision!==p.revision)throw new WorkspaceError('FIELD_REVISION_CHANGED',409);
-          assertProgressContinuity(current,p);
+          const derived=p.measurement?measurementGuard(()=>deriveTaskMeasurement(current,p.measurement)):null;
+          if(!derived&&current.metadata?.fieldOperations?.measurement)throw new WorkspaceError('FIELD_MEASUREMENT_REQUIRED',409);
+          const measured=derived?{...p,progress:derived.progress,quantity:derived.executed,baseline:derived.baseline,unit:derived.unit,measurement:derived}:p;
+          assertProgressContinuity(current,measured);
           for(const eid of p.evidenceIds){const e=await evidence(client,command.projectId,eid);if(e.metadata.fieldOperations.taskId!==p.taskId||e.metadata.fieldOperations.review?.decision!=='APPROVE')throw new WorkspaceError('FIELD_EVIDENCE_NOT_APPROVED',409);}
           await expireProgress(client,member,command,p.taskId);
           const pending=(await client.query(`SELECT id FROM public."OperationalProposal" WHERE "projectId"=$1 AND type='TASK_PROGRESS' AND "sourceProvider"='account-field' AND status='PENDING' AND action->>'fieldOperationsVersion'='1' AND action->>'taskId'=$2 LIMIT 1`,[command.projectId,p.taskId])).rows;
           if(pending.length)throw new WorkspaceError('FIELD_PROGRESS_REVIEW_PENDING',409);
-          const proposalId=newId('proposal'),action={...p,fieldOperationsVersion:1,submittedBy:member.actorId,submittedAt:now.toISOString()};
-          await client.query(`INSERT INTO public."OperationalProposal"(id,"projectId","proposedByWorkerId","sourceProvider","sourceExternalId","confirmationCode",type,status,summary,action,precondition,"classifierVersion","transcriptSha256","expiresAt","updatedAt") VALUES($1,$2,$3,'account-field',$4,$5,'TASK_PROGRESS','PENDING',$6,$7::jsonb,$8::jsonb,'human-field-v1',$9,clock_timestamp()+interval '7 days',clock_timestamp())`,[proposalId,command.projectId,p.workerId,digest([member.actorId,command.operationId]),randomBytes(5).toString('hex').toUpperCase(),current.title+' · '+p.progress+'%',JSON.stringify(action),JSON.stringify({taskRevision:current.revision,progress:current.progress}),digest(p.reason)]);
+          const proposalId=newId('proposal'),action={...measured,fieldOperationsVersion:1,submittedBy:member.actorId,submittedAt:now.toISOString()};
+          await client.query(`INSERT INTO public."OperationalProposal"(id,"projectId","proposedByWorkerId","sourceProvider","sourceExternalId","confirmationCode",type,status,summary,action,precondition,"classifierVersion","transcriptSha256","expiresAt","updatedAt") VALUES($1,$2,$3,'account-field',$4,$5,'TASK_PROGRESS','PENDING',$6,$7::jsonb,$8::jsonb,'human-field-v1',$9,clock_timestamp()+interval '7 days',clock_timestamp())`,[proposalId,command.projectId,p.workerId,digest([member.actorId,command.operationId]),randomBytes(5).toString('hex').toUpperCase(),current.title+' · '+measured.progress+'%',JSON.stringify(action),JSON.stringify({taskRevision:current.revision,progress:current.progress}),digest(p.reason)]);
           outcome={kind:'PROGRESS_PROPOSAL',proposal:publicProposal(await proposal(client,command.projectId,proposalId)),taskUnchanged:true};
         }else {
           if(!canApproveProgress(member.role))throw new WorkspaceError('FIELD_PROGRESS_PERMISSION_REQUIRED',403);
@@ -262,11 +315,14 @@ export function createFieldOperations({workspace,assertParticipant}) {
           if(p.decision==='APPROVE') {
             const current=await task(client,command.projectId,a.taskId,true);
             if(current.revision!==row.precondition?.taskRevision)throw new WorkspaceError('FIELD_REVISION_CHANGED',409);
+            if(a.measurement){
+              assertMeasuredProposalSnapshot(current,a);
+            }else if(current.metadata?.fieldOperations?.measurement)throw new WorkspaceError('FIELD_MEASUREMENT_REQUIRED',409);
             assertProgressContinuity(current,a);
             for(const eid of a.evidenceIds){const e=await evidence(client,command.projectId,eid);if(e.metadata.fieldOperations.taskId!==a.taskId||e.metadata.fieldOperations.review?.decision!=='APPROVE')throw new WorkspaceError('FIELD_EVIDENCE_NOT_APPROVED',409);}
-            const metadata={...cleanMetadata(current.metadata),fieldOperations:{version:1,approvedProposalId:row.id,approvedBy:member.actorId,approvedAt:now.toISOString(),...(a.quantity!==null?{quantity:{executed:a.quantity,baseline:a.baseline,unit:a.unit}}:{})}};
+            const metadata={...cleanMetadata(current.metadata),fieldOperations:{...cleanMetadata(current.metadata?.fieldOperations),version:1,approvedProposalId:row.id,approvedBy:member.actorId,approvedAt:now.toISOString(),...(a.quantity!==null?{quantity:{executed:a.quantity,baseline:a.baseline,unit:a.unit}}:{})}};
             await client.query(`UPDATE public."Task" SET progress=$3,status=$4::"TaskStatus",metadata=$5::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[current.id,command.projectId,a.progress,current.status==='BLOCKED'?'BLOCKED':a.progress===100?'DONE':a.progress>0?'IN_PROGRESS':'BACKLOG',JSON.stringify(metadata)]);
-            updated=await task(client,command.projectId,current.id);delete updated.metadata;
+            updated=publicMeasuredTask(await task(client,command.projectId,current.id));
           }
           const result={fieldOperations:{decision:p.decision,reason:p.reason,actorId:member.actorId,recordedAt:now.toISOString(),task:updated,taskUpdated:Boolean(updated)}};
           await client.query(`UPDATE public."OperationalProposal" SET status=$3::"OperationalProposalStatus",result=$4::jsonb,"resolverProvider"='account-field',"resolverExternalId"=$5,"resolvedAt"=clock_timestamp(),"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[row.id,command.projectId,p.decision==='APPROVE'?'APPLIED':'REJECTED',JSON.stringify(result),digest([member.actorId,command.operationId])]);
@@ -281,6 +337,7 @@ export function createFieldOperations({workspace,assertParticipant}) {
         const row=await prior(client,member,fieldReceiptId(member.actorId,context.projectId,context.operationId));
         if(member.channelProof&&OVERTIME_ACTIONS.includes(row?.metadata?.command))throw new WorkspaceError('OVERTIME_WEB_ONLY',403);
         if(row)await recoveryPermission(client,member,session,context.projectId,row);
+        if(measurementCancelled(row))return cancelledMeasurementOutcome(row,context,scope);
         return row?{scope,state:'RECORDED',saved:true,replayed:true,receiptId:row.id,...(correlated(row.metadata.command)?{projectId:context.projectId,operationId:context.operationId,action:row.metadata.command}:{}),...await recoveredOutcome(client,context.projectId,row)}:{scope,projectId:context.projectId,operationId:context.operationId,state:'NOT_OBSERVED',definitive:false};
       });
     },
