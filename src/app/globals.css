@@ -2608,16 +2608,6 @@ select.form-input option {
 
   /* ── Landing page ── */
 
-  /* Navbar: hide desktop nav links, reduce padding */
-  header nav {
-    display: none !important;
-  }
-
-  header > div {
-    padding: 0 16px !important;
-    height: 56px !important;
-  }
-
   /* Hero section */
   section[style*="padding: '140px"] {
     padding-top: 80px !important;
