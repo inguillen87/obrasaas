@@ -10,6 +10,15 @@ const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0
 const text = (value, limit = 160) => typeof value === 'string' && value.trim() === value && value.length > 0 && value.length <= limit && !/[\u0000-\u001f\u007f<>\u202a-\u202e\u2066-\u2069]/.test(value);
 const attemptId = value => typeof value === 'string' && /^company_subscription_[a-f0-9]{64}$/.test(value);
 const receiptId = value => typeof value === 'string' && /^company_subscription_payment_[a-f0-9]{64}$/.test(value);
+const acceptanceId = value => typeof value === 'string' && /^company_subscription_offer_acceptance_[a-f0-9]{64}$/.test(value);
+const verifiedViews = new WeakSet();
+const offerFields = ['id','plan','amountMinor','currency','periodUnit','periodCount','taxTreatment','includedTerms','termsVersion','termsText','termsSha256','includesAllIn','automaticExtras'];
+const utf8 = new TextEncoder();
+const commercialText = (value,limit) => typeof value === 'string' && value.isWellFormed() && value.trim().length > 0 && utf8.encode(value).byteLength <= limit && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]/.test(value);
+const stable = value => Array.isArray(value)?value.map(stable):record(value)?Object.fromEntries(Object.keys(value).sort().map(key => [key,stable(value[key])])):value;
+const pick = (value,keys) => Object.fromEntries(keys.map(key => [key,value[key]]));
+async function sha(value) {return Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',utf8.encode(value))),byte => byte.toString(16).padStart(2,'0')).join('');}
+const contractDigest = value => sha(JSON.stringify(stable(value)));
 const approvedAmount = value => ['ARS','USD'].includes(value.currency) && typeof value.amountMinor === 'string' && /^[1-9]\d{0,14}$/.test(value.amountMinor) && (value.currency !== 'USD' || value.amountMinor === ({PRO:'14900',ENTERPRISE:'34900'})[value.plan]);
 const moneyLabel = value => `${value.currency} ${new Intl.NumberFormat('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(value.amountMinor) / 100)}`;
 const plans = Object.freeze({TRIAL:'Prueba gratuita',PRO:'Pro',ENTERPRISE:'Empresa'});
@@ -44,6 +53,38 @@ function offerView(offer) {
   return {...offer,planLabel:plans[offer.plan],priceLabel:moneyLabel(offer),periodLabel:'por mes',taxLabel:offer.taxTreatment};
 }
 
+function commercialOffer(value,{capabilities = true} = {}) {
+  if (!exact(value,[...offerFields,'offerDigest',...(capabilities?['canAccept','checkoutAvailable']:[])]) || !reference(value.id) || !['PRO','ENTERPRISE'].includes(value.plan) || !approvedAmount(value) || value.periodUnit !== 'MONTH' || value.periodCount !== 1 || value.includesAllIn !== true || value.automaticExtras !== false || !scopeValid(value.offerDigest)) fail();
+  if (value.taxTreatment !== null && !commercialText(value.taxTreatment,1024) || value.includedTerms !== null && !commercialText(value.includedTerms,16384) || value.termsVersion !== null && !reference(value.termsVersion) || value.termsText !== null && !commercialText(value.termsText,32768) || value.termsSha256 !== null && !scopeValid(value.termsSha256) || (value.termsText === null) !== (value.termsSha256 === null)) fail();
+  const ready = ['taxTreatment','includedTerms','termsVersion','termsText','termsSha256'].every(key => value[key] !== null);
+  if (capabilities && (typeof value.canAccept !== 'boolean' || typeof value.checkoutAvailable !== 'boolean' || (value.canAccept || value.checkoutAvailable) && !ready)) fail();
+  return {...value,termsReady:ready,planLabel:plans[value.plan],priceLabel:moneyLabel(value),periodLabel:'por empresa / mes',taxLabel:value.taxTreatment || 'Tratamiento de impuestos pendiente de aprobación.'};
+}
+
+function commercialView(value,config) {
+  if (!exact(value,['version','state','catalogVersion','catalogDigest','actorBinding','offers']) || value.version !== 1 || !['READY','TERMS_PENDING'].includes(value.state) || !reference(value.catalogVersion) || !scopeValid(value.catalogDigest) || !scopeValid(value.actorBinding) || !Array.isArray(value.offers) || value.offers.length < 1 || value.offers.length > 2) fail();
+  const offers = value.offers.map(offer => commercialOffer(offer));
+  if (new Set(offers.map(offer => offer.id)).size !== offers.length || new Set(offers.map(offer => offer.plan)).size !== offers.length || (offers.every(offer => offer.termsReady)?'READY':'TERMS_PENDING') !== value.state) fail();
+  for (const offer of offers) if (offer.checkoutAvailable) {
+    const financial = config.offers.find(item => item.id === offer.id);
+    if (config.state !== 'READY' || config.catalogVersion !== value.catalogVersion || !financial || ['plan','amountMinor','currency','periodUnit','periodCount','taxTreatment','termsVersion','includesAllIn','automaticExtras'].some(key => financial[key] !== offer[key])) fail();
+  }
+  return {...value,offers};
+}
+
+function acceptanceView(value,commercial,organizationId,expected) {
+  if (value === null) return null;
+  if (!exact(value,['version','receiptId','operationId','state','organizationId','actorBinding','catalogVersion','catalogDigest','offer','acceptedAt','acceptanceDigest','current','canCheckout']) || value.version !== 1 || !acceptanceId(value.receiptId) || !uuid(value.operationId) || value.state !== 'TERMS_ACCEPTED' || value.organizationId !== organizationId || !scopeValid(value.actorBinding) || !reference(value.catalogVersion) || !scopeValid(value.catalogDigest) || !scopeValid(value.acceptanceDigest) || !instant(value.acceptedAt) || typeof value.current !== 'boolean' || typeof value.canCheckout !== 'boolean') fail();
+  if (expected.acceptanceOperationId && value.operationId !== expected.acceptanceOperationId) fail('WORKSPACE_CONTEXT_CHANGED');
+  const offer = commercialOffer(value.offer,{capabilities:false});
+  if (!offer.termsReady || value.canCheckout && !value.current) fail();
+  if (value.current) {
+    const current = commercial.offers.find(item => item.id === offer.id);
+    if (value.actorBinding !== commercial.actorBinding || value.catalogVersion !== commercial.catalogVersion || value.catalogDigest !== commercial.catalogDigest || !current || [...offerFields,'offerDigest'].some(key => current[key] !== offer[key]) || value.canCheckout && !current.checkoutAvailable) fail('WORKSPACE_CONTEXT_CHANGED');
+  }
+  return {...value,offer};
+}
+
 function attemptView(value, observedAt, expected) {
   if (value === null) return null;
   if (!exact(value,['attemptId','operationId','state','plan','offerId','catalogVersion','amountMinor','currency','periodUnit','periodCount','taxTreatment','termsVersion','includesAllIn','automaticExtras','checkoutUrl','receiptId','paidPeriod','cancelAtPeriodEnd','code','cancellation']) || !attemptId(value.attemptId) || !uuid(value.operationId) || !states.has(value.state) || !['PRO','ENTERPRISE'].includes(value.plan) || !reference(value.offerId) || !reference(value.catalogVersion) || !approvedAmount(value) || value.periodUnit !== 'MONTH' || value.periodCount !== 1 || !text(value.taxTreatment) || !reference(value.termsVersion) || value.includesAllIn !== true || value.automaticExtras !== false || typeof value.cancelAtPeriodEnd !== 'boolean' || value.code !== null && (typeof value.code !== 'string' || !/^[A-Z0-9_]{1,128}$/.test(value.code))) fail();
@@ -68,15 +109,18 @@ function attemptView(value, observedAt, expected) {
 // canonical ACTIVE row itself still does not establish payment collection.
 export function companySubscriptionView(value, expected = {}) {
   if (!scopeValid(expected.scope) || value?.scope !== expected.scope) fail('WORKSPACE_CONTEXT_CHANGED');
-  if (!exact(value,['version','scope','organization','observedAt','configuration','subscription','attempt','recovery']) || value.version !== 1 || !exact(value.organization,['id','name']) || !id(value.organization.id) || !text(value.organization.name,512) || !instant(value.observedAt)) fail();
+  if (!exact(value,['version','scope','organization','observedAt','configuration','subscription','attempt','recovery','commercial','acceptance']) || value.version !== 2 || !exact(value.organization,['id','name']) || !id(value.organization.id) || !text(value.organization.name,512) || !instant(value.observedAt)) fail();
   if (expected.organizationId && value.organization.id !== expected.organizationId) fail('WORKSPACE_CONTEXT_CHANGED');
   if (expected.operationId && !uuid(expected.operationId)) fail('WORKSPACE_CONTEXT_CHANGED');
+  if (expected.acceptanceOperationId && !uuid(expected.acceptanceOperationId)) fail('WORKSPACE_CONTEXT_CHANGED');
   if (value.recovery !== null && (!exact(value.recovery,['operationId','state']) || !uuid(value.recovery.operationId) || value.recovery.state !== 'NO_DISPATCH' || !expected.operationId || value.recovery.operationId !== expected.operationId || value.attempt !== null)) fail();
   const config = value.configuration;
   if (!exact(config,['state','catalogVersion','offers']) || !['READY','CONFIGURATION_PENDING'].includes(config.state) || !Array.isArray(config.offers) || config.offers.length > 2) fail();
   if (config.state === 'CONFIGURATION_PENDING' && (config.catalogVersion !== null || config.offers.length !== 0) || config.state === 'READY' && (!reference(config.catalogVersion) || config.offers.length < 1)) fail();
-  const offers = config.offers.map(offerView);
-  if (new Set(offers.map(offer => offer.id)).size !== offers.length || new Set(offers.map(offer => offer.plan)).size !== offers.length) fail();
+  const financialOffers = config.offers.map(offerView);
+  if (new Set(financialOffers.map(offer => offer.id)).size !== financialOffers.length || new Set(financialOffers.map(offer => offer.plan)).size !== financialOffers.length) fail();
+  const commercial = commercialView(value.commercial,config),acceptance = acceptanceView(value.acceptance,commercial,value.organization.id,expected);
+  const offers = commercial.offers;
   const subscription = value.subscription;
   if (!exact(subscription,['plan','status','trialEndsAt','entitlement']) || !Object.hasOwn(plans,subscription.plan) || !['TRIALING','ACTIVE','PAST_DUE','CANCELED','SUSPENDED'].includes(subscription.status) || subscription.trialEndsAt !== null && !instant(subscription.trialEndsAt) || !exact(subscription.entitlement,['allowed','basis','reasonCode'])) fail();
   const checked = companyWhatsappOnboardingEntitlement({subscriptionPlan:subscription.plan,subscriptionStatus:subscription.status,trialEndsAt:subscription.trialEndsAt},{now:value.observedAt});
@@ -87,7 +131,7 @@ export function companySubscriptionView(value, expected = {}) {
   if (managedDenial && attempt?.paidPeriod && subscription.entitlement.reasonCode === 'COMPANY_ENTITLEMENT_PAID_PERIOD_NOT_STARTED' && Date.parse(attempt.paidPeriod.startsAt) <= Date.parse(value.observedAt)) fail();
   if (managedDenial && attempt?.paidPeriod && subscription.entitlement.reasonCode === 'COMPANY_ENTITLEMENT_PAID_PERIOD_EXPIRED' && Date.parse(attempt.paidPeriod.endsAt) > Date.parse(value.observedAt)) fail();
   if (attempt && config.state === 'READY' && attempt.catalogVersion === config.catalogVersion) {
-    const selected = offers.find(offer => offer.id === attempt.offerId);
+    const selected = financialOffers.find(offer => offer.id === attempt.offerId);
     if (!selected || ['plan','amountMinor','currency','periodUnit','periodCount','taxTreatment','termsVersion','includesAllIn','automaticExtras'].some(key => selected[key] !== attempt[key])) fail();
   }
   const trialCurrent = checked.basis === 'CURRENT_TRIAL';
@@ -96,19 +140,39 @@ export function companySubscriptionView(value, expected = {}) {
   const closedAttempt = attempt && ['CANCELED','CANCEL_CONFIRMED'].includes(attempt.state) && attempt.cancelAtPeriodEnd && !attempt.paidCovered && (attempt.cancellation === null || attempt.cancellation.state === 'CONFIRMED') && (attempt.paidPeriod !== null ? Date.parse(attempt.paidPeriod.endsAt) <= Date.parse(value.observedAt) : attempt.state === 'CANCELED');
   return freeze({
     scope:value.scope,organizationId:value.organization.id,companyName:value.organization.name,observedAt:value.observedAt,observedAtLabel:dateLabel(value.observedAt),
-    configurationReady:config.state === 'READY',catalogVersion:config.catalogVersion,offers,attempt,recovery:value.recovery,
+    configurationReady:config.state === 'READY',catalogVersion:commercial.catalogVersion,commercial,offers,acceptance,attempt,recovery:value.recovery,termsVerified:false,
     planLabel:attempt?.planLabel || plans[subscription.plan],statusLabel,tone:trialCurrent || attempt?.paidCovered?'positive':'attention',
     trialCurrent,trialExpiryLabel:subscription.trialEndsAt === null?null:dateLabel(subscription.trialEndsAt),
     paymentLabel:attempt?.paidCovered?'Pago confirmado para el período vigente.':attempt?.paymentConfirmed?'Hay un pago registrado; el período vigente requiere confirmación.':'Todavía no hay un pago confirmado.',
-    canBegin:value.recovery === null && config.state === 'READY' && (attempt === null && ['TRIALING','CANCELED'].includes(subscription.status) || closedAttempt === true),
+    purchaseEligible:value.recovery === null && config.state === 'READY' && (attempt === null && ['TRIALING','CANCELED'].includes(subscription.status) || closedAttempt === true),canBegin:false,
     canCancel:attempt?.canCancel === true,
   });
 }
 
-export function companySubscriptionBeginCommand(view,{scope,offerId,confirmed} = {}) {
+// Hash the exact received UTF-8 text and immutable snapshots before showing a
+// consent control. The synchronous projection alone cannot authorize a POST.
+export async function companySubscriptionVerifiedView(value,expected = {}) {
+  const projected = companySubscriptionView(value,expected),commercial = value.commercial;
+  for (const offer of commercial.offers) {
+    if (offer.termsText !== null && await sha(offer.termsText) !== offer.termsSha256 || await contractDigest(['company-subscription-commercial-offer-v1',pick(offer,offerFields)]) !== offer.offerDigest) fail();
+  }
+  if (await contractDigest(['company-subscription-commercial-catalog-v1',{version:1,catalogVersion:commercial.catalogVersion,offers:commercial.offers.map(offer => pick(offer,[...offerFields,'offerDigest']))}]) !== commercial.catalogDigest) fail();
+  const receipt = value.acceptance;
+  if (receipt && (await sha(receipt.offer.termsText) !== receipt.offer.termsSha256 || await contractDigest(['company-subscription-commercial-offer-v1',pick(receipt.offer,offerFields)]) !== receipt.offer.offerDigest || await contractDigest(['company-subscription-offer-acceptance-v1',pick(receipt,['version','receiptId','operationId','organizationId','actorBinding','catalogVersion','catalogDigest','offer','acceptedAt'])]) !== receipt.acceptanceDigest)) fail();
+  const verified = freeze({...projected,termsVerified:true,canBegin:projected.purchaseEligible && projected.acceptance?.current === true && projected.acceptance.canCheckout === true});
+  verifiedViews.add(verified);return verified;
+}
+
+export function companySubscriptionAcceptCommand(view,{scope,offerId,confirmed} = {}) {
   const selected = view?.offers?.find(offer => offer.id === offerId);
-  if (view?.scope !== scope || !scopeValid(scope) || view?.canBegin !== true || confirmed !== true || !selected) fail('COMPANY_SUBSCRIPTION_REVIEW_REQUIRED');
-  return {action:'begin',scope,offerId:selected.id,catalogVersion:view.catalogVersion};
+  if (!verifiedViews.has(view) || view.scope !== scope || !scopeValid(scope) || confirmed !== true || selected?.canAccept !== true || !selected.termsReady) fail('COMPANY_SUBSCRIPTION_REVIEW_REQUIRED');
+  return {action:'accept_offer',scope,offerId:selected.id,catalogVersion:view.catalogVersion,catalogDigest:view.commercial.catalogDigest,offerDigest:selected.offerDigest,termsVersion:selected.termsVersion,termsSha256:selected.termsSha256,accepted:true};
+}
+
+export function companySubscriptionBeginCommand(view,{scope,offerId,confirmed} = {}) {
+  const accepted = view?.acceptance;
+  if (!verifiedViews.has(view) || view?.scope !== scope || !scopeValid(scope) || view?.canBegin !== true || confirmed !== true || accepted?.current !== true || accepted.offer.id !== offerId) fail('COMPANY_SUBSCRIPTION_REVIEW_REQUIRED');
+  return {action:'begin',scope,offerId:accepted.offer.id,catalogVersion:accepted.catalogVersion,acceptanceReceiptId:accepted.receiptId,acceptanceDigest:accepted.acceptanceDigest};
 }
 export function companySubscriptionCancelCommand(view,{scope,confirmed} = {}) {
   if (view?.scope !== scope || !scopeValid(scope) || view?.canCancel !== true || confirmed !== true || !attemptId(view.attempt?.attemptId)) fail('COMPANY_SUBSCRIPTION_REVIEW_REQUIRED');
@@ -119,6 +183,7 @@ export function companySubscriptionErrorMessage(error,{mutation = false} = {}) {
   if ([401,403].includes(error?.status) || ['SESSION_REQUIRED','SESSION_INVALID','WORKSPACE_MEMBERSHIP_REQUIRED','WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED'].includes(error?.code)) return 'Tu acceso a esta empresa requiere una nueva consulta. Volvé a ingresar.';
   if (error?.code === 'WORKSPACE_CONTEXT_CHANGED') return 'Cambió la empresa o tu acceso. Volvé a abrir la empresa correcta.';
   if (error?.code === 'COMPANY_SUBSCRIPTION_CONFIGURATION_PENDING') return 'El pago en línea todavía no está habilitado para esta empresa.';
+  if (['COMPANY_SUBSCRIPTION_TERMS_PENDING','COMPANY_SUBSCRIPTION_CATALOG_CHANGED','COMPANY_SUBSCRIPTION_ACCEPTANCE_REQUIRED','COMPANY_SUBSCRIPTION_ACCEPTANCE_BINDING_REJECTED'].includes(error?.code)) return 'Las condiciones de esta oferta requieren una nueva consulta y aceptación.';
   if (error?.code === 'COMPANY_SUBSCRIPTION_REVIEW_REQUIRED') return 'Elegí el plan y revisá sus condiciones antes de continuar.';
   if (error?.code?.startsWith('WORKSPACE_RECOVERY_')) return 'No se pudo conservar o consultar el intento en este navegador. El pago queda bloqueado hasta recuperarlo.';
   if (mutation && error?.requestDispatched !== false) return 'La confirmación no llegó. Comprobá el mismo intento antes de continuar.';
@@ -131,7 +196,7 @@ const prefix = 'obrasaas.company-subscription-reference.v1.';
 const referenceKeys = ['version','scope','organizationId','operationId','action','createdAt'];
 const recoveryFailure = code => Object.assign(new Error(code),{code,status:409,requestDispatched:false});
 function validReference(value) {
-  return exact(value,referenceKeys) && value.version === 1 && scopeValid(value.scope) && id(value.organizationId) && uuid(value.operationId) && ['begin','cancel_renewal'].includes(value.action) && Number.isSafeInteger(value.createdAt) && value.createdAt >= 0;
+  return exact(value,referenceKeys) && value.version === 1 && scopeValid(value.scope) && id(value.organizationId) && uuid(value.operationId) && ['accept_offer','begin','cancel_renewal'].includes(value.action) && Number.isSafeInteger(value.createdAt) && value.createdAt >= 0;
 }
 const keyOf = value => `${prefix}${value.scope}.${value.organizationId}`;
 function storedReference(key,raw) {
@@ -168,6 +233,7 @@ export function createCompanySubscriptionJournal({withStorage = createBrowserRec
     },
     async settle(reference,view,signal) {
       if (!validReference(reference) || view?.scope !== reference.scope || view.organizationId !== reference.organizationId) return false;
+      if (reference.action === 'accept_offer' && (!verifiedViews.has(view) || view.acceptance?.operationId !== reference.operationId || view.acceptance.state !== 'TERMS_ACCEPTED')) return false;
       const noDispatch = exact(view.recovery,['operationId','state']) && view.recovery.operationId === reference.operationId && view.recovery.state === 'NO_DISPATCH' && view.attempt === null;
       if (!noDispatch && reference.action === 'begin' && (view.attempt?.operationId !== reference.operationId || ['DISPATCHING','UNKNOWN','CANCEL_REQUESTED'].includes(view.attempt.state))) return false;
       if (!noDispatch && reference.action === 'cancel_renewal' && (view.attempt?.cancellation?.operationId !== reference.operationId || view.attempt.cancellation.state !== 'CONFIRMED' || view.attempt.cancelAtPeriodEnd !== true)) return false;

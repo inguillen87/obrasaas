@@ -1,5 +1,6 @@
 import {WorkspaceError,operationId,requireWorkspaceIdentity} from './workspace-policy.mjs';
 import {boundedBody} from './workspace-http.mjs';
+import {subscriptionCommand} from './company-subscription-policy.mjs';
 
 const headers=Object.freeze({'Cache-Control':'private, no-store, max-age=0','Vary':'Cookie, Authorization','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow, noarchive'});
 const reply=(body,status=200)=>Response.json(body,{status,headers});
@@ -14,10 +15,10 @@ async function body(request){
 }
 function queryContext(request){
   const params=new URL(request.url).searchParams;
-  for(const key of params.keys())if(!['scope','operationId'].includes(key)||params.getAll(key).length!==1)invalid();
+  for(const key of params.keys())if(!['scope','operationId','acceptanceOperationId'].includes(key)||params.getAll(key).length!==1)invalid();
   const scope=params.get('scope');
-  if(!/^[a-f0-9]{64}$/.test(scope||'')||params.has('operationId')&&!operationId(params.get('operationId')))invalid();
-  return {scope,...(params.has('operationId')?{operationId:params.get('operationId').toLowerCase()}:{})};
+  if(!/^[a-f0-9]{64}$/.test(scope||'')||['operationId','acceptanceOperationId'].some(key=>params.has(key)&&!operationId(params.get(key)))||params.has('operationId')&&params.has('acceptanceOperationId'))invalid();
+  return {scope,...(params.has('operationId')?{operationId:params.get('operationId').toLowerCase()}:{}),...(params.has('acceptanceOperationId')?{acceptanceOperationId:params.get('acceptanceOperationId').toLowerCase()}:{})};
 }
 export function createCompanySubscriptionHandlers({verifySession,store}){
   if(typeof verifySession!=='function'||!store)throw new TypeError('Explicit company subscription composition required');
@@ -33,9 +34,14 @@ export function createCompanySubscriptionHandlers({verifySession,store}){
       const value=await body(request);
       if(!record(value)||!/^[a-f0-9]{64}$/.test(value.scope||'')||!operationId(value.operationId))invalid();
       let command;
+      if(value.action==='accept_offer'){
+        if(!exact(value,['action','scope','operationId','offerId','catalogVersion','catalogDigest','offerDigest','termsVersion','termsSha256','accepted']))invalid();
+        command=subscriptionCommand({scope:value.scope,operationId:value.operationId,offerId:value.offerId,catalogVersion:value.catalogVersion,catalogDigest:value.catalogDigest,offerDigest:value.offerDigest,termsVersion:value.termsVersion,termsSha256:value.termsSha256,accepted:value.accepted},'accept_offer');
+        return reply(await store.acceptOffer(session,command));
+      }
       if(value.action==='begin'){
-        if(!exact(value,['action','scope','operationId','offerId','catalogVersion']))invalid();
-        command={scope:value.scope,operationId:value.operationId,offerId:value.offerId,catalogVersion:value.catalogVersion};
+        if(!exact(value,['action','scope','operationId','offerId','catalogVersion','acceptanceReceiptId','acceptanceDigest']))invalid();
+        command=subscriptionCommand({scope:value.scope,operationId:value.operationId,offerId:value.offerId,catalogVersion:value.catalogVersion,acceptanceReceiptId:value.acceptanceReceiptId,acceptanceDigest:value.acceptanceDigest},'begin');
         return reply(await store.begin(session,command));
       }
       if(value.action==='recover'){

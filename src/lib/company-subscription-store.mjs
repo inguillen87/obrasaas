@@ -2,9 +2,11 @@ import {randomUUID} from 'node:crypto';
 import {WorkspaceError,digest,workspaceId,operationId} from './workspace-policy.mjs';
 import {companyWhatsappOnboardingEntitlement} from './company-entitlement.mjs';
 import {approvedSubscriptionConfiguration,subscriptionConfigurationDigest,subscriptionContractDigest,subscriptionCommand,subscriptionAttemptId,subscriptionRequestDigest,subscriptionExternalReference,subscriptionOpenStates,subscriptionInstant,verifiedSubscriptionObservation,publicSubscriptionAttempt,subscriptionRecord} from './company-subscription-policy.mjs';
+import {approvedCommercialCatalog,defaultCommercialCatalog,commercialContractDigest,commercialOfferSnapshot,commercialOfferDigest,commercialOfferReady,commercialAuthority,commercialActorBinding,commercialAcceptanceId,commercialAcceptanceDigest,commercialOfferMatchesFinancial,COMMERCIAL_OFFER_FIELDS} from './company-subscription-catalog.mjs';
 
 const action='company.subscription.attempt';
 const closureAction='company.subscription.operation.closed';
+const acceptanceAction='company.subscription.offer.accepted';
 const fail=(code,status=409)=>{throw new WorkspaceError(code,status);};
 const fixedCode=error=>error instanceof WorkspaceError&&/^(COMPANY_SUBSCRIPTION|BILLING)_[A-Z_]+$/.test(error.code)?error.code:'COMPANY_SUBSCRIPTION_PROVIDER_UNOBSERVED';
 const companySql=`SELECT id,name,metadata,"subscriptionPlan"::text AS "subscriptionPlan","subscriptionStatus"::text AS "subscriptionStatus","trialEndsAt" AT TIME ZONE 'UTC' AS "trialEndsAt",clock_timestamp() AS "observedAt" FROM public."Organization" WHERE id=$1`;
@@ -12,9 +14,48 @@ const companySql=`SELECT id,name,metadata,"subscriptionPlan"::text AS "subscript
 // Organization + AuditLog are the existing canonical customer and durable
 // journal. Organization FOR UPDATE serializes all company attempts; global
 // advisory resource/payment locks also prevent adoption across companies.
-export function createCompanySubscription({workspace,provider,configuration=()=>null,verifiedPayer=null,connect=null}={}){
-  if(typeof workspace?.companyOperation!=='function'||typeof configuration!=='function')throw new TypeError('Canonical company transaction required');
+export function createCompanySubscription({workspace,provider,configuration=()=>null,commercialCatalog=defaultCommercialCatalog,verifiedPayer=null,connect=null}={}){
+  if(typeof workspace?.companyOperation!=='function'||typeof configuration!=='function'||typeof commercialCatalog!=='function')throw new TypeError('Canonical company transaction required');
   const observations=new WeakSet();
+  function currentCommercial(){try{return approvedCommercialCatalog(commercialCatalog());}catch{return approvedCommercialCatalog(defaultCommercialCatalog());}}
+  const acceptanceRequestDigest=(value,binding)=>commercialContractDigest(['company-subscription-accept-offer-command-v1',binding,{operationId:value.operationId,offerId:value.offerId,catalogVersion:value.catalogVersion,catalogDigest:value.catalogDigest,offerDigest:value.offerDigest,termsVersion:value.termsVersion,termsSha256:value.termsSha256,accepted:true}]);
+  function acceptanceRecord(row,organizationId){
+    if(!row)return null;const a=row.metadata;
+    try{
+      const fields=['version','id','organizationId','actorId','membershipId','authority','actorBinding','operationId','requestDigest','state','accepted','catalogVersion','catalogDigest','offer','acceptedAt','acceptanceDigest'];
+      if(!subscriptionRecord(a)||Object.keys(a).sort().join('|')!==fields.sort().join('|')||a.version!==1||a.id!==row.id||row.organizationId!==organizationId||a.organizationId!==organizationId||row.entityId!==organizationId||row.actorId!==a.actorId||!operationId(a.operationId)||a.id!==commercialAcceptanceId(organizationId,a.operationId)||a.state!=='TERMS_ACCEPTED'||a.accepted!==true||!subscriptionInstant(a.acceptedAt)||!['requestDigest','actorBinding','catalogDigest','acceptanceDigest'].every(key=>/^[a-f0-9]{64}$/.test(a[key]||''))||typeof a.catalogVersion!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,254}$/.test(a.catalogVersion)||!subscriptionRecord(a.authority)||!subscriptionRecord(a.offer))throw Error();
+      if(Object.keys(a.offer).sort().join('|')!==[...COMMERCIAL_OFFER_FIELDS,'offerDigest'].sort().join('|')||!commercialOfferReady(commercialOfferSnapshot(a.offer))||a.offer.offerDigest!==commercialOfferDigest(a.offer))throw Error();
+      const authority=commercialAuthority({authenticated:true,verification:a.authority.verification,userId:a.authority.clerkUserId,organizationId:a.authority.clerkOrganizationId,organizationRole:a.authority.clerkRole},{actorId:a.actorId,membershipId:a.membershipId,organizationId:a.organizationId,role:a.authority.tenantRole});
+      if(commercialContractDigest(authority)!==commercialContractDigest(a.authority)||commercialActorBinding(authority)!==a.actorBinding||commercialAcceptanceDigest(a)!==a.acceptanceDigest)throw Error();
+      if(a.requestDigest!==acceptanceRequestDigest({operationId:a.operationId,offerId:a.offer.id,catalogVersion:a.catalogVersion,catalogDigest:a.catalogDigest,offerDigest:a.offer.offerDigest,termsVersion:a.offer.termsVersion,termsSha256:a.offer.termsSha256},a.actorBinding))throw Error();
+      return a;
+    }catch{fail('COMPANY_SUBSCRIPTION_ACCEPTANCE_INTEGRITY',503);}
+  }
+  async function acceptance(client,organizationId,id){
+    const rows=(await client.query(`SELECT id,"entityId",metadata,"actorId","organizationId" FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND action=$3 AND "entityType"='Organization'`,[id,organizationId,acceptanceAction])).rows;
+    if(rows.length>1)fail('COMPANY_SUBSCRIPTION_ACCEPTANCE_INTEGRITY',503);return acceptanceRecord(rows[0],organizationId);
+  }
+  async function latestAcceptance(client,member){
+    const rows=(await client.query(`SELECT id,"entityId",metadata,"actorId","organizationId" FROM public."AuditLog" WHERE "organizationId"=$1 AND action=$2 AND "entityType"='Organization' AND "actorId"=$3 ORDER BY "createdAt" DESC,id DESC LIMIT 1`,[member.organizationId,acceptanceAction,member.actorId])).rows;
+    const row=rows.find(row=>row.actorId===member.actorId);return acceptanceRecord(row,member.organizationId);
+  }
+  function acceptedCurrent(a,catalog,binding){return Boolean(a&&a.actorBinding===binding&&a.catalogVersion===catalog.catalogVersion&&a.catalogDigest===catalog.catalogDigest&&catalog.offers.some(offer=>offer.id===a.offer.id&&offer.offerDigest===a.offer.offerDigest&&commercialOfferReady(offer)));}
+  function financialOfferMatches(offer,catalog,ready=currentConfiguration()){return Boolean(ready&&ready.config.catalogVersion===catalog.catalogVersion&&ready.config.offers.some(financial=>commercialOfferMatchesFinancial(offer,financial)));}
+  async function requireAcceptance(client,session,member,command){
+    const a=await acceptance(client,member.organizationId,command.acceptanceReceiptId);if(!a)fail('COMPANY_SUBSCRIPTION_ACCEPTANCE_REQUIRED');
+    // Read the independent commercial catalog after the receipt SQL completes.
+    // Terms may change while the final beforeExternal fence awaits that query.
+    const catalog=currentCommercial();
+    const binding=commercialActorBinding(commercialAuthority(session,member));
+    if(a.actorId!==member.actorId||a.membershipId!==member.membershipId||a.actorBinding!==binding)fail('COMPANY_SUBSCRIPTION_ACCEPTANCE_AUTHORITY_CHANGED',403);
+    if(a.acceptanceDigest!==command.acceptanceDigest||a.offer.id!==command.offerId||a.catalogVersion!==command.catalogVersion||!acceptedCurrent(a,catalog,binding)||!financialOfferMatches(a.offer,catalog)||a.operationId===command.operationId)fail('COMPANY_SUBSCRIPTION_ACCEPTANCE_BINDING_REJECTED');
+    return a;
+  }
+  async function validateFinancialAcceptance(client,a){
+    if(a.version===1)return;
+    const accepted=await acceptance(client,a.organizationId,a.acceptanceReceiptId);
+    if(!accepted||accepted.acceptanceDigest!==a.acceptanceDigest||accepted.actorId!==a.actorId||accepted.membershipId!==a.membershipId||accepted.catalogVersion!==a.catalogVersion||!commercialOfferMatchesFinancial(accepted.offer,a.offer)||accepted.operationId===a.operationId)fail('COMPANY_SUBSCRIPTION_ACCEPTANCE_INTEGRITY',503);
+  }
   function currentConfiguration(){
     let config;try{config=approvedSubscriptionConfiguration(configuration());}catch{return null;}
     if(!config)return null;
@@ -34,17 +75,17 @@ export function createCompanySubscription({workspace,provider,configuration=()=>
   }
   function attemptRecord(row,organizationId){
     if(!row)return null;const a=row.metadata;
-    if(!subscriptionRecord(a)||a.version!==1||a.id!==row.id||a.organizationId!==organizationId||row.entityId!==organizationId||!operationId(a.operationId)||a.id!==subscriptionAttemptId(organizationId,a.operationId)||!workspaceId(a.actorId)||!subscriptionRecord(a.offer)||!subscriptionInstant(a.createdAt)||!Number.isSafeInteger(a.revision)||a.revision<1||typeof a.configurationDigest!=='string')fail('COMPANY_SUBSCRIPTION_INTEGRITY',503);
+    if(!subscriptionRecord(a)||![1,2].includes(a.version)||a.id!==row.id||a.organizationId!==organizationId||row.entityId!==organizationId||!operationId(a.operationId)||a.id!==subscriptionAttemptId(organizationId,a.operationId)||!workspaceId(a.actorId)||!subscriptionRecord(a.offer)||!subscriptionInstant(a.createdAt)||!Number.isSafeInteger(a.revision)||a.revision<1||typeof a.configurationDigest!=='string'||a.version===2&&(!/^company_subscription_offer_acceptance_[a-f0-9]{64}$/.test(a.acceptanceReceiptId||'')||!/^[a-f0-9]{64}$/.test(a.acceptanceDigest||'')))fail('COMPANY_SUBSCRIPTION_INTEGRITY',503);
     if(!['DISPATCHING','UNKNOWN','CHECKOUT_READY','AUTHORIZED','ACTIVE','PAST_DUE','CANCELED','SUSPENDED','CANCEL_REQUESTED','CANCEL_CONFIRMED'].includes(a.state)||!approvedSubscriptionConfiguration({version:1,provider:a.provider,merchantId:a.merchantId,accountMode:a.accountMode,catalogVersion:a.catalogVersion,offers:[a.offer]}))fail('COMPANY_SUBSCRIPTION_INTEGRITY',503);
     return a;
   }
   async function attempt(client,organizationId,id){
     const rows=(await client.query(`SELECT id,"entityId",metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND action=$3 AND "entityType"='Organization'`,[id,organizationId,action])).rows;
-    if(rows.length>1)fail('COMPANY_SUBSCRIPTION_INTEGRITY',503);return attemptRecord(rows[0],organizationId);
+    if(rows.length>1)fail('COMPANY_SUBSCRIPTION_INTEGRITY',503);const a=attemptRecord(rows[0],organizationId);if(a)await validateFinancialAcceptance(client,a);return a;
   }
   async function attempts(client,organizationId){
     const rows=(await client.query(`SELECT id,"entityId",metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND action=$2 AND "entityType"='Organization' ORDER BY "createdAt" DESC,id DESC LIMIT 101`,[organizationId,action])).rows;
-    if(rows.length>100)fail('COMPANY_SUBSCRIPTION_HISTORY_REVIEW_REQUIRED',503);return rows.map(row=>attemptRecord(row,organizationId));
+    if(rows.length>100)fail('COMPANY_SUBSCRIPTION_HISTORY_REVIEW_REQUIRED',503);const values=rows.map(row=>attemptRecord(row,organizationId));for(const a of values)await validateFinancialAcceptance(client,a);return values;
   }
   async function operationAttempt(client,organizationId,id){
     const direct=await attempt(client,organizationId,subscriptionAttemptId(organizationId,id));if(direct)return direct;
@@ -65,26 +106,57 @@ export function createCompanySubscription({workspace,provider,configuration=()=>
     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'company.subscription.transition','Organization',$2,$4::jsonb) ON CONFLICT(id) DO NOTHING`,[id,a.organizationId,a.actorId,JSON.stringify({version:1,attemptId:a.id,revision:a.revision,kind,...details})]);
   }
   const within=(session,context,writable,callback)=>workspace.companyOperation(session,{scope:context.scope},writable,callback);
-  function envelope(companyRow,scope,a,recovery=null){
-    const current=currentConfiguration();
-    return {version:1,scope,organization:{id:companyRow.id,name:companyRow.name},observedAt:subscriptionInstant(companyRow.observedAt),configuration:{state:current?'READY':'CONFIGURATION_PENDING',catalogVersion:current?.config.catalogVersion||null,offers:current?.config.offers.map(offer=>({...offer}))||[]},subscription:{plan:companyRow.subscriptionPlan,status:companyRow.subscriptionStatus,trialEndsAt:subscriptionInstant(companyRow.trialEndsAt),entitlement:companyWhatsappOnboardingEntitlement(companyRow,{now:companyRow.observedAt})},attempt:a?publicSubscriptionAttempt(a):null,recovery};
+  async function envelope(client,session,member,companyRow,scope,a,recovery=null,selectedAcceptance=undefined){
+    const current=currentConfiguration(),catalog=currentCommercial(),binding=commercialActorBinding(commercialAuthority(session,member)),accepted=selectedAcceptance===undefined?await latestAcceptance(client,member):selectedAcceptance;
+    if(accepted&&accepted.actorId!==member.actorId)fail('COMPANY_SUBSCRIPTION_ACCEPTANCE_AUTHORITY_CHANGED',403);
+    const isCurrent=acceptedCurrent(accepted,catalog,binding),canCheckout=isCurrent&&financialOfferMatches(accepted.offer,catalog,current);
+    const publicAcceptance=accepted?{version:1,receiptId:accepted.id,operationId:accepted.operationId,state:accepted.state,organizationId:accepted.organizationId,actorBinding:accepted.actorBinding,catalogVersion:accepted.catalogVersion,catalogDigest:accepted.catalogDigest,offer:{...accepted.offer},acceptedAt:accepted.acceptedAt,acceptanceDigest:accepted.acceptanceDigest,current:isCurrent,canCheckout}:null;
+    return {version:2,scope,organization:{id:companyRow.id,name:companyRow.name},observedAt:subscriptionInstant(companyRow.observedAt),configuration:{state:current?'READY':'CONFIGURATION_PENDING',catalogVersion:current?.config.catalogVersion||null,offers:current?.config.offers.map(offer=>({...offer}))||[]},commercial:{version:1,state:catalog.state,catalogVersion:catalog.catalogVersion,catalogDigest:catalog.catalogDigest,actorBinding:binding,offers:catalog.offers.map(offer=>({...offer,canAccept:commercialOfferReady(offer),checkoutAvailable:commercialOfferReady(offer)&&financialOfferMatches(offer,catalog,current)}))},acceptance:publicAcceptance,subscription:{plan:companyRow.subscriptionPlan,status:companyRow.subscriptionStatus,trialEndsAt:subscriptionInstant(companyRow.trialEndsAt),entitlement:companyWhatsappOnboardingEntitlement(companyRow,{now:companyRow.observedAt})},attempt:a?publicSubscriptionAttempt(a):null,recovery};
   }
   async function read(session,context){
-    if(!subscriptionRecord(context)||Object.keys(context).some(key=>!['scope','operationId'].includes(key))||context.operationId!==undefined&&!operationId(context.operationId))fail('COMPANY_SUBSCRIPTION_INPUT_INVALID',400);
+    if(!subscriptionRecord(context)||Object.keys(context).some(key=>!['scope','operationId','acceptanceOperationId'].includes(key))||context.operationId!==undefined&&!operationId(context.operationId)||context.acceptanceOperationId!==undefined&&!operationId(context.acceptanceOperationId)||context.operationId!==undefined&&context.acceptanceOperationId!==undefined)fail('COMPANY_SUBSCRIPTION_INPUT_INVALID',400);
     return within(session,context,false,async(client,member,scope)=>{
-      const row=await company(client,member.organizationId),a=context.operationId?await operationAttempt(client,member.organizationId,context.operationId):(await attempts(client,member.organizationId))[0]||null;
-      return envelope(row,scope,a,context.operationId&&!a?await operationClosure(client,member.organizationId,context.operationId):null);
+      const row=await company(client,member.organizationId),a=context.operationId?await operationAttempt(client,member.organizationId,context.operationId):(await attempts(client,member.organizationId))[0]||null,accepted=context.acceptanceOperationId?await acceptance(client,member.organizationId,commercialAcceptanceId(member.organizationId,context.acceptanceOperationId)):undefined;
+      return envelope(client,session,member,row,scope,a,context.operationId&&!a?await operationClosure(client,member.organizationId,context.operationId):null,accepted);
+    });
+  }
+  async function acceptOffer(session,input){
+    const command=subscriptionCommand(input,'accept_offer');
+    return within(session,command,true,async(client,member,scope)=>{
+      const row=await company(client,member.organizationId),authority=commercialAuthority(session,member),actorBinding=commercialActorBinding(authority),id=commercialAcceptanceId(member.organizationId,command.operationId),requestDigest=acceptanceRequestDigest(command,actorBinding),previous=await acceptance(client,member.organizationId,id);
+      if(previous){if(previous.actorBinding!==actorBinding)fail('COMPANY_SUBSCRIPTION_ACCEPTANCE_AUTHORITY_CHANGED',403);if(previous.requestDigest!==requestDigest)fail('COMPANY_SUBSCRIPTION_OPERATION_CONFLICT');return envelope(client,session,member,row,scope,(await attempts(client,member.organizationId))[0]||null,null,previous);}
+      const catalog=currentCommercial();if(command.catalogVersion!==catalog.catalogVersion||command.catalogDigest!==catalog.catalogDigest)fail('COMPANY_SUBSCRIPTION_CATALOG_CHANGED');
+      const offer=catalog.offers.find(offer=>offer.id===command.offerId);if(!offer)fail('COMPANY_SUBSCRIPTION_OFFER_UNAVAILABLE',400);if(!commercialOfferReady(offer))fail('COMPANY_SUBSCRIPTION_TERMS_PENDING');
+      if(command.offerDigest!==offer.offerDigest||command.termsVersion!==offer.termsVersion||command.termsSha256!==offer.termsSha256)fail('COMPANY_SUBSCRIPTION_ACCEPTANCE_BINDING_REJECTED');
+      // The catalog version is global and immutable, including across companies.
+      // The company lock already owns the receipt UUID; this independent lock
+      // prevents two server catalogs reusing a version with different bytes.
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['company-subscription-commercial-catalog:'+catalog.catalogVersion]);
+      const priorCatalogs=(await client.query(`SELECT DISTINCT metadata->>'catalogDigest' AS "catalogDigest" FROM public."AuditLog" WHERE action=$1 AND metadata->>'catalogVersion'=$2 LIMIT 2`,[acceptanceAction,catalog.catalogVersion])).rows;
+      if(priorCatalogs.some(prior=>prior.catalogDigest!==catalog.catalogDigest))fail('COMPANY_SUBSCRIPTION_CATALOG_CHANGED');
+      const accepted={version:1,id,organizationId:member.organizationId,actorId:member.actorId,membershipId:member.membershipId,authority,actorBinding,operationId:command.operationId,requestDigest,state:'TERMS_ACCEPTED',accepted:true,catalogVersion:catalog.catalogVersion,catalogDigest:catalog.catalogDigest,offer:{...offer},acceptedAt:subscriptionInstant(row.observedAt)};accepted.acceptanceDigest=commercialAcceptanceDigest(accepted);
+      await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,$4,'Organization',$2,$5::jsonb)`,[id,member.organizationId,member.actorId,acceptanceAction,JSON.stringify(accepted)]);
+      return envelope(client,session,member,row,scope,(await attempts(client,member.organizationId))[0]||null,null,accepted);
     });
   }
   function providerContext(a,extra={}){
     return {attemptId:a.id,operationId:a.operationId,organizationId:a.organizationId,offer:{...a.offer,catalogVersion:a.catalogVersion},merchantId:a.merchantId,accountMode:a.accountMode,provider:a.provider,idempotencyKey:a.id,externalReference:subscriptionExternalReference(a.organizationId,a.id),resourceId:a.resourceId,providerSubscriptionId:a.resourceId,...extra};
   }
   async function fenced(session,context,id,leaseId,strict=false){
-    return within(session,context,true,async(client,member)=>{
+    let acceptanceFence;
+    const a=await within(session,context,true,async(client,member)=>{
       const a=await attempt(client,member.organizationId,id);if(!a||a.lease?.id!==leaseId)fail('COMPANY_SUBSCRIPTION_STATE_CHANGED');
       requireConfiguration(a,strict);const row=await company(client,member.organizationId);
+      if(strict&&a.version===2){const accepted=await requireAcceptance(client,session,member,{scope:context.scope,operationId:a.operationId,offerId:a.offer.id,catalogVersion:a.catalogVersion,acceptanceReceiptId:a.acceptanceReceiptId,acceptanceDigest:a.acceptanceDigest});acceptanceFence={accepted,binding:commercialActorBinding(commercialAuthority(session,member))};}
       if(Date.parse(a.lease.expiresAt)<=row.observedAt.getTime())fail('COMPANY_SUBSCRIPTION_STATE_CHANGED');return a;
     });
+    if(acceptanceFence){
+      // The canonical transaction also awaits COMMIT after its callback. Keep
+      // independent terms/configuration current through that final SQL await.
+      requireConfiguration(a,true);const catalog=currentCommercial();
+      if(!acceptedCurrent(acceptanceFence.accepted,catalog,acceptanceFence.binding)||!financialOfferMatches(acceptanceFence.accepted.offer,catalog))fail('COMPANY_SUBSCRIPTION_ACCEPTANCE_BINDING_REJECTED');
+    }
+    return a;
   }
   async function retainUnconfirmedReference(a,leaseId,candidateResourceId,error){
     if(typeof connect!=='function'||typeof candidateResourceId!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,254}$/.test(candidateResourceId))return;
@@ -164,24 +236,28 @@ export function createCompanySubscription({workspace,provider,configuration=()=>
       const ready=requireConfiguration(a),row=await company(client,member.organizationId);
       const observation=verifiedSubscriptionObservation(raw,a,{checkoutHost:ready.checkoutHost,observedAt:row.observedAt});observations.add(observation);
       if(cancel&&observation.status!=='CANCELED')fail('COMPANY_SUBSCRIPTION_CANCELLATION_UNCONFIRMED');
-      await applyObservation(client,a,row,observation,{cancel});return envelope(await company(client,member.organizationId),scope,a);
+      await applyObservation(client,a,row,observation,{cancel});return envelope(client,session,member,await company(client,member.organizationId),scope,a);
     });
   }
   async function begin(session,input){
     const command=subscriptionCommand(input,'begin');
-    // Resolve the signed verified primary payer without persisting contact data.
-    requireConfiguration();const payer=await verifiedPayer(session);
+    requireConfiguration();
+    // Validate the current accepting administrator before any payer/provider IO,
+    // then repeat the check in the writable reservation and CREATE fences.
+    await within(session,command,false,async(client,member)=>{if(await operationClosure(client,member.organizationId,command.operationId))fail('COMPANY_SUBSCRIPTION_OPERATION_CLOSED');const previous=await attempt(client,member.organizationId,subscriptionAttemptId(member.organizationId,command.operationId));if(previous&&(previous.requestDigest!==subscriptionRequestDigest(command)||previous.actorId!==member.actorId))fail('COMPANY_SUBSCRIPTION_OPERATION_CONFLICT');await requireAcceptance(client,session,member,command);});
+    const payer=await verifiedPayer(session);
     if(!payer||payer.verified!==true||typeof payer.email!=='string'||payer.email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payer.email))fail('COMPANY_SUBSCRIPTION_PAYER_UNVERIFIED',403);
     const claim=await within(session,command,true,async(client,member,scope)=>{
       const ready=requireConfiguration(),row=await company(client,member.organizationId),id=subscriptionAttemptId(member.organizationId,command.operationId),requestDigest=subscriptionRequestDigest(command);
       if(await operationClosure(client,member.organizationId,command.operationId))fail('COMPANY_SUBSCRIPTION_OPERATION_CLOSED');
       const previous=await attempt(client,member.organizationId,id);
-      if(previous){if(previous.requestDigest!==requestDigest||previous.actorId!==member.actorId)fail('COMPANY_SUBSCRIPTION_OPERATION_CONFLICT');return {replay:envelope(row,scope,previous)};}
+      if(previous){if(previous.requestDigest!==requestDigest||previous.actorId!==member.actorId)fail('COMPANY_SUBSCRIPTION_OPERATION_CONFLICT');return {replay:await envelope(client,session,member,row,scope,previous)};}
       if(command.catalogVersion!==ready.config.catalogVersion)fail('COMPANY_SUBSCRIPTION_CATALOG_CHANGED');
       const offer=ready.config.offers.find(o=>o.id===command.offerId);if(!offer)fail('COMPANY_SUBSCRIPTION_OFFER_UNAVAILABLE',400);
+      const accepted=await requireAcceptance(client,session,member,command);
       const existing=(await attempts(client,member.organizationId)).find(a=>subscriptionOpenStates.has(a.state)&&!(a.state==='CANCEL_CONFIRMED'&&Date.parse(a.paidPeriod?.endsAt||'')<=row.observedAt.getTime()));
       if(existing)fail('COMPANY_SUBSCRIPTION_ATTEMPT_ALREADY_ACTIVE');
-      const a={version:1,id,organizationId:member.organizationId,actorId:member.actorId,membershipId:member.membershipId,operationId:command.operationId,requestDigest,configurationDigest:subscriptionConfigurationDigest(ready.config),provider:ready.config.provider,merchantId:ready.config.merchantId,accountMode:ready.config.accountMode,catalogVersion:ready.config.catalogVersion,offer:{...offer},initialSubscription:{plan:row.subscriptionPlan,status:row.subscriptionStatus,trialEndsAt:subscriptionInstant(row.trialEndsAt)},createdAt:subscriptionInstant(row.observedAt),revision:1,state:'DISPATCHING',resourceId:null,checkoutUrl:null,receiptId:null,paidPeriod:null,cancelAtPeriodEnd:false,code:null,lease:{id:randomUUID(),expiresAt:new Date(row.observedAt.getTime()+60000).toISOString(),kind:'CREATE'}};
+      const a={version:2,id,organizationId:member.organizationId,actorId:member.actorId,membershipId:member.membershipId,operationId:command.operationId,requestDigest,acceptanceReceiptId:accepted.id,acceptanceDigest:accepted.acceptanceDigest,configurationDigest:subscriptionConfigurationDigest(ready.config),provider:ready.config.provider,merchantId:ready.config.merchantId,accountMode:ready.config.accountMode,catalogVersion:ready.config.catalogVersion,offer:{...offer},initialSubscription:{plan:row.subscriptionPlan,status:row.subscriptionStatus,trialEndsAt:subscriptionInstant(row.trialEndsAt)},createdAt:subscriptionInstant(row.observedAt),revision:1,state:'DISPATCHING',resourceId:null,checkoutUrl:null,receiptId:null,paidPeriod:null,cancelAtPeriodEnd:false,code:null,lease:{id:randomUUID(),expiresAt:new Date(row.observedAt.getTime()+60000).toISOString(),kind:'CREATE'}};
       await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,$4,'Organization',$2,$5::jsonb)`,[id,a.organizationId,a.actorId,action,JSON.stringify(a)]);
       await transition(client,a,'CHECKOUT_RESERVED');return {a};
     });
@@ -212,9 +288,9 @@ export function createCompanySubscription({workspace,provider,configuration=()=>
           await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,$4,'Organization',$2,$5::jsonb)`,[id,member.organizationId,member.actorId,closureAction,JSON.stringify(metadata)]);
           recovery={operationId:command.operationId,state:'NO_DISPATCH'};
         }
-        return {replay:envelope(row,scope,null,recovery)};
+        return {replay:await envelope(client,session,member,row,scope,null,recovery)};
       }
-      requireConfiguration(a);if(!a.resourceId)return {replay:envelope(row,scope,{...a,state:'UNKNOWN',code:'COMPANY_SUBSCRIPTION_RESOURCE_UNOBSERVED'})};
+      requireConfiguration(a);if(!a.resourceId)return {replay:await envelope(client,session,member,row,scope,{...a,state:'UNKNOWN',code:'COMPANY_SUBSCRIPTION_RESOURCE_UNOBSERVED'})};
       if(a.lease&&Date.parse(a.lease.expiresAt)>row.observedAt.getTime())fail('COMPANY_SUBSCRIPTION_OPERATION_IN_PROGRESS');
       a.lease={id:randomUUID(),expiresAt:new Date(row.observedAt.getTime()+60000).toISOString(),kind:'INSPECT'};a.revision++;await save(client,a);return {a};
     });
@@ -227,7 +303,7 @@ export function createCompanySubscription({workspace,provider,configuration=()=>
       if(await operationClosure(client,member.organizationId,command.operationId))fail('COMPANY_SUBSCRIPTION_OPERATION_CLOSED');
       const row=await company(client,member.organizationId),a=await attempt(client,member.organizationId,command.subscriptionAttemptId);if(!a)fail('COMPANY_SUBSCRIPTION_ATTEMPT_UNAVAILABLE',404);
       requireConfiguration(a);if(!a.resourceId)fail('COMPANY_SUBSCRIPTION_RESOURCE_UNOBSERVED',503);
-      if(a.cancellation?.operationId===command.operationId){if(a.cancellation.requestDigest!==subscriptionRequestDigest(command))fail('COMPANY_SUBSCRIPTION_OPERATION_CONFLICT');return {replay:envelope(row,scope,a)};}
+      if(a.cancellation?.operationId===command.operationId){if(a.cancellation.requestDigest!==subscriptionRequestDigest(command))fail('COMPANY_SUBSCRIPTION_OPERATION_CONFLICT');return {replay:await envelope(client,session,member,row,scope,a)};}
       if(a.lease&&Date.parse(a.lease.expiresAt)>row.observedAt.getTime())fail('COMPANY_SUBSCRIPTION_OPERATION_IN_PROGRESS');
       if(a.cancellation&&a.cancellation.state!=='CONFIRMED')fail('COMPANY_SUBSCRIPTION_CANCELLATION_UNCONFIRMED');
       a.cancellation={operationId:command.operationId,requestDigest:subscriptionRequestDigest(command),state:'DISPATCHING'};a.state='CANCEL_REQUESTED';a.lease={id:randomUUID(),expiresAt:new Date(row.observedAt.getTime()+60000).toISOString(),kind:'CANCEL'};a.revision++;await save(client,a);await transition(client,a,'RENEWAL_CANCELLATION_RESERVED');return {a};
@@ -284,5 +360,5 @@ export function createCompanySubscription({workspace,provider,configuration=()=>
       throw error instanceof WorkspaceError?error:new WorkspaceError('COMPANY_SUBSCRIPTION_EVENT_UNOBSERVED',503);
     }finally{client?.release(broken);}
   }
-  return {catalog:read,read,begin,recover,cancelAtPeriodEnd,cancelRenewal:cancelAtPeriodEnd,processVerifiedEvent};
+  return {catalog:read,read,acceptOffer,begin,recover,cancelAtPeriodEnd,cancelRenewal:cancelAtPeriodEnd,processVerifiedEvent};
 }

@@ -36,9 +36,51 @@ schema is validated by `approvedSubscriptionConfiguration`. The provider needs
 `MERCADOPAGO_SUBSCRIPTION_CURRENCY`, `MERCADOPAGO_SUBSCRIPTION_CHECKOUT_HOST`
 and `MERCADOPAGO_SUBSCRIPTION_WEBHOOK_SECRET`. Credentials must be entered using
 the provider's secure configuration flow, never in source control or evidence.
-Missing settings provide no offer or purchase button. Live configuration is
-also restricted to the mapped ObraSaaS Vercel production project and canonical
-application URL; a local server or Preview remains closed even with those keys.
+Missing financial settings keep purchase unavailable. The separate commercial
+catalog can display the selected USD references without a merchant or provider
+connection. The default catalog has no confirmed tax treatment, included-service
+terms or complete contract text, so it cannot be accepted or used for checkout.
+Live financial configuration remains restricted to the mapped ObraSaaS Vercel
+production project and canonical application URL; a local server or Preview
+remains closed even with financial credentials.
+
+## Commercial offer and explicit acceptance
+
+The company response adds a separate versioned commercial catalog. Offer and
+catalog digests cover the server's immutable amounts, monthly period, included
+conditions and exact contract text. `termsSha256` covers the exact UTF-8 text;
+JSON formatting or newline normalization does not substitute for that hash.
+The browser verifies these hashes before offering an unchecked confirmation.
+Incomplete conditions remain pending, even if a financial provider is ready.
+
+An explicit `accept_offer` records an append-only
+`company.subscription.offer.accepted` entry in the existing `AuditLog` under
+the canonical company transaction. It retains the full server offer and terms,
+versions and digests, accepting administrator and membership, company and SQL
+timestamp. The browser sends only references, hashes and explicit acceptance;
+it cannot supply an amount, merchant, payer or payment facts. The acceptance
+does not modify Organization subscription/trial/financial metadata or grant a
+paid period, participant admission or identity approval.
+
+Acceptance and financial operations have separate identifiers and recovery
+paths. An absent acceptance read does not prove a completed financial
+`NO_DISPATCH` closure, release an uncertain reference or authorize a new UUID.
+A lost acknowledgment recovers the original acceptance by its operation ID.
+Changing company, administrator, offer or terms clears browser confirmation.
+Older financial attempts remain readable and recoverable without inventing an
+acceptance that was never recorded.
+
+Every new checkout needs an actual current acceptance by the initiating
+administrator, matching the immutable financial offer and complete commercial
+conditions. It has a different financial UUID. Before external creation, the
+server rechecks current authority and the accepted terms; a later catalog
+change cannot silently reuse an earlier confirmation. Existing charges can
+still be reconciled against their captured offer and verified provider facts.
+
+These changes prepare the contractual flow. They do not activate a merchant,
+approve taxes, included limits or provider funding, accept terms for the real
+pilot administrator, or certify payment/identity. Real contract and provider
+acceptance remain separate operational steps.
 
 ## Financial lifecycle
 

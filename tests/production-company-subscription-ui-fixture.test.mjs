@@ -14,7 +14,8 @@ test('closed synthetic envelope satisfies the actual strict view with no payment
   const envelope = closedCompanySubscriptionFixture({scope,observedAt:'2026-10-12T12:00:00.000Z'});
   const view = companySubscriptionView(envelope,{scope});
   assert.equal(view.configurationReady,false);
-  assert.deepEqual(view.offers,[]);
+  assert.deepEqual(view.offers.map(offer => offer.priceLabel),['USD 149,00','USD 349,00']);
+  assert.ok(view.offers.every(offer => offer.canAccept === false && offer.termsText === null));
   assert.equal(view.canBegin,false);
   assert.equal(view.canCancel,false);
   assert.equal(view.attempt,null);

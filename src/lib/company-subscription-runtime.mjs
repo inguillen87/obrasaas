@@ -5,6 +5,7 @@ import {createParticipantIdentityProvider} from './participant-identity-provider
 import {createCompanySubscription} from './company-subscription-store.mjs';
 import {createCompanySubscriptionProvider} from './company-subscription-provider.mjs';
 import {companySubscriptionRuntimeConfiguration} from './company-subscription-runtime-config.mjs';
+import {defaultCommercialCatalog} from './company-subscription-catalog.mjs';
 
 const configuration=companySubscriptionRuntimeConfiguration(process.env);
 const identity=createParticipantIdentityProvider({client:clerkClient});
@@ -12,6 +13,7 @@ export const productionCompanySubscriptionProvider=createCompanySubscriptionProv
 export const productionCompanySubscription=createCompanySubscription({
   workspace:productionWorkspace,connect:connectWorkspace,provider:productionCompanySubscriptionProvider,
   configuration:()=>configuration.catalog,
+  commercialCatalog:defaultCommercialCatalog,
   verifiedPayer:async session=>{
     const membership=await identity.verifyMembership({userId:session.userId,organizationId:session.organizationId});
     if(membership.role!=='org:admin')throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);

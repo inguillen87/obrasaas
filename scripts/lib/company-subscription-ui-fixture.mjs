@@ -1,20 +1,23 @@
 import assert from 'node:assert/strict';
+import {approvedCommercialCatalog,defaultCommercialCatalog} from '../../src/lib/company-subscription-catalog.mjs';
 
 const endpoint = '/api/identity/company-subscription';
 const scopePattern = /^[a-f0-9]{64}$/;
 
-// Synthetic browser fixtures only. No checkout, offer, receipt or paid access
-// is invented when an unrelated administrator surface mounts its status panel.
+// Synthetic browser fixtures only. The server's pending commercial catalogue
+// is informative; this fixture never grants acceptance, checkout or paid access.
 export function closedCompanySubscriptionFixture({scope,observedAt = new Date().toISOString()} = {}) {
   assert.match(scope,scopePattern,'Explicit synthetic company scope');
   assert.equal(new Date(observedAt).toISOString(),observedAt,'Explicit fixture observation instant');
+  const catalog = approvedCommercialCatalog(defaultCommercialCatalog());
   return {
-    version:1,scope,
+    version:2,scope,
     organization:{id:`org_subscription_fixture_${scope.slice(0,16)}`,name:'Empresa de ensayo sin cobro habilitado'},
     observedAt,
     configuration:{state:'CONFIGURATION_PENDING',catalogVersion:null,offers:[]},
     subscription:{plan:'TRIAL',status:'TRIALING',trialEndsAt:null,entitlement:{allowed:false,basis:null,reasonCode:'COMPANY_ENTITLEMENT_TRIAL_EXPIRY_UNAVAILABLE'}},
-    attempt:null,recovery:null,
+    attempt:null,recovery:null,acceptance:null,
+    commercial:{...catalog,actorBinding:'f'.repeat(64),offers:catalog.offers.map(offer => ({...offer,canAccept:false,checkoutAvailable:false}))},
   };
 }
 

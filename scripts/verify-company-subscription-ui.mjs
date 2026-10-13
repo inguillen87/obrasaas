@@ -3,34 +3,32 @@ import {createHash,randomUUID} from 'node:crypto';
 import {copyFileSync,existsSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,realpathSync,writeFileSync} from 'node:fs';
 import {createServer} from 'node:net';
 import path from 'node:path';
-import {spawn} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import {parse} from '@babel/parser';
 import puppeteer from 'puppeteer';
 import {captureOwnedFixture,removeOwnedFixture} from './lib/owned-fixture-cleanup.mjs';
+import {approvedCommercialCatalog,commercialTermsSha256,commercialAcceptanceDigest,commercialAcceptanceId} from '../src/lib/company-subscription-catalog.mjs';
+import {closedCompanySubscriptionFixture} from './lib/company-subscription-ui-fixture.mjs';
 
-// Exact production JSX/CSS rendered by Next. API responses, authentication and
-// money are synthetic; no real provider or financial request is authorized.
-assert.ok(!process.env.VERCEL && !process.env.VERCEL_ENV,'Run only against the disposable localhost fixture');
-const root = realpathSync(process.cwd()),privateRoot = path.join(root,'.vercel','private');
-for (const filename of [root,path.join(root,'.vercel'),privateRoot]) {
-  if (!existsSync(filename)) mkdirSync(filename);
-  assert.ok(lstatSync(filename).isDirectory() && !lstatSync(filename).isSymbolicLink());
-  assert.equal(realpathSync(filename),filename);
-}
-const output = path.join(privateRoot,'company-subscription-evidence');
-mkdirSync(output,{recursive:true});
-const runId = new Date().toISOString().replace(/[:.]/g,'-')+'-'+randomUUID().slice(0,8);
-const screenshots = path.join(output,'screenshots-'+runId);mkdirSync(screenshots);
-const fixturePrefix = 'company-subscription-ui-',fixture = mkdtempSync(path.join(privateRoot,fixturePrefix));
-const ownership = captureOwnedFixture({workspaceRoot:root,privateRoot,fixture,prefix:fixturePrefix});
-const scopeA = 'a'.repeat(64),scopeB = 'b'.repeat(64),fixedNow = '2026-10-12T12:00:00.000Z';
-const sourceManifest = [],externalImports = new Set(),checks = [],pageErrors = [],interceptErrors = [],externalRequests = [];
+export const COMPANY_SUBSCRIPTION_UI_VERSION = 'company-subscription-ui-v2';
+export const COMPANY_SUBSCRIPTION_UI_WIDTHS = Object.freeze([320,390,768,1280]);
+export const COMPANY_SUBSCRIPTION_UI_CHECKS = Object.freeze([
+  ...COMPANY_SUBSCRIPTION_UI_WIDTHS.map(width => 'commercial-acceptance-payment-cancellation:'+width),
+  'durable-lost-response-survives-reload-unknown-and-explicit-same-operation-recovery',
+  'original-checkout-price-currency-tax-terms-survive-changed-current-catalog',
+  'verified-checkout-persists-when-subsequent-journal-readback-fails',
+  'explicit-new-subscription-after-verified-cancellation-and-expired-paid-coverage',
+  'lost-cancellation-confirmation-retains-paid-access-and-recovers-same-cancel-operation',
+  'unreserved-begin-requires-durable-no-dispatch-then-fresh-read-and-new-explicit-purchase',
+  ...['scope','token-getter','unmount'].map(kind => 'late-response-cannot-restore-old-access:'+kind),
+  'company-switch-hides-foreign-recovery-and-retains-own-reference',
+  ...['401-html','403-html','wrong-scope'].map(kind => 'denial-or-foreign-envelope-erases-old-financial-actions:'+kind),
+  'token-resolved-after-unmount-does-not-dispatch','acceptance-uncertainty-reload-get-only',
+  'changed-commercial-binding-clears-unchecked-draft','invalid-digests-and-foreign-receipt-hide-all-actions','acceptance-preserves-existing-financial-unknown',
+]);
+export const COMPANY_SUBSCRIPTION_UI_DEPENDENCIES = Object.freeze(['package.json','package-lock.json']);
 const sha = value => createHash('sha256').update(value).digest('hex');
-const wait = milliseconds => new Promise(resolve => setTimeout(resolve,milliseconds));
-const harnessSha256 = sha(readFileSync(new URL(import.meta.url))),cleanupHelperSha256 = sha(readFileSync(new URL('./lib/owned-fixture-cleanup.mjs',import.meta.url)));
-let child,browser,origin,serverLog = '',failure,browserClosed = false,serverClosed = false,fixtureCleanupProof,closeAck = false;
-let childClose;
-
 function inside(filename,base) {const relative = path.relative(base,filename);return relative !== '' && !relative.startsWith('..'+path.sep) && relative !== '..' && !path.isAbsolute(relative);}
 function importsOf(bytes,filename) {
   if (filename.endsWith('.css')) {assert.ok(!/@import\s|url\(\s*['"]?(?!data:|#)/i.test(bytes.toString()),'A fixture stylesheet cannot reference external resources');return [];}
@@ -44,6 +42,78 @@ function importsOf(bytes,filename) {
   }
   visit(ast.program);return imports;
 }
+function guard(condition,message) {if (!condition) throw Object.assign(new Error(message),{code:'COMPANY_SUBSCRIPTION_UI_FIXTURE_REJECTED'});}
+export function companySubscriptionUiOptions(args,{repoRoot,environment = {}}) {
+  guard(!environment.VERCEL && !environment.VERCEL_ENV && !environment.VERCEL_TARGET_ENV,'Only an isolated local fixture is supported');
+  guard(Array.isArray(args) && typeof repoRoot === 'string' && path.isAbsolute(repoRoot),'Explicit fixture arguments/root required');
+  let expectedHead = environment.GITHUB_SHA || null,outputFile = null;
+  if (args[0] === '--expected-head') {guard(args.length === 2 || args.length === 3,'Unsupported fixture arguments');expectedHead = args[1];outputFile = args[2] || null;}
+  else {guard(args.length <= 1 && !args[0]?.startsWith('--'),'Unsupported fixture arguments');outputFile = args[0] || null;}
+  guard(expectedHead === null || typeof expectedHead === 'string' && /^[a-f0-9]{40}$/.test(expectedHead),'A full expected Git commit is required');
+  if (environment.GITHUB_SHA) guard(expectedHead === environment.GITHUB_SHA,'Expected HEAD must match CI');
+  const outputRoot = path.join(repoRoot,'.vercel/private/company-subscription-ui-evidence'),target = outputFile?path.resolve(repoRoot,outputFile):null;
+  guard(!target || path.dirname(target) === outputRoot && path.extname(target) === '.json','Evidence must be a direct JSON child of company-subscription-ui-evidence');
+  return {expectedHead,outputRoot,target};
+}
+export function companySubscriptionUiServerEnvironment(environment) {
+  const keys = ['PATH','Path','SystemRoot','WINDIR','TEMP','TMP','HOME','USERPROFILE','APPDATA','LOCALAPPDATA','ComSpec','COMSPEC'];
+  return {...Object.fromEntries(keys.filter(key => environment[key] !== undefined).map(key => [key,environment[key]])),NEXT_TELEMETRY_DISABLED:'1',NODE_ENV:'development'};
+}
+export function companySubscriptionUiSourceFiles(repoRoot) {
+  const root = realpathSync(repoRoot),seen = new Set();
+  function walk(filename) {
+    filename = realpathSync(filename);guard(inside(filename,path.join(root,'src')),'Only production src dependencies');if (seen.has(filename)) return;seen.add(filename);
+    for (const specifier of importsOf(readFileSync(filename),filename)) {
+      if (!specifier.startsWith('.')) {guard(['react','lucide-react'].includes(specifier),'Unexpected browser package dependency');continue;}
+      const absolute = path.resolve(path.dirname(filename),specifier),dependency = [absolute,absolute+'.js',absolute+'.mjs',absolute+'.css',path.join(absolute,'index.js')].find(file => existsSync(file) && lstatSync(file).isFile());guard(Boolean(dependency),'Missing source dependency');walk(dependency);
+    }
+  }
+  walk(path.join(root,'src/app/(identity)/cuenta/company-subscription-panel.js'));return [...seen].map(filename => path.relative(root,filename).split(path.sep).join('/')).sort();
+}
+export function companySubscriptionUiFixtureSourceFiles(repoRoot) {
+  const root = realpathSync(repoRoot),seen = new Set();
+  function walk(filename) {
+    filename = realpathSync(filename);guard(inside(filename,root),'Fixture source stays in workspace');if (seen.has(filename)) return;seen.add(filename);
+    for (const specifier of importsOf(readFileSync(filename),filename)) {
+      if (!specifier.startsWith('.')) {guard(specifier.startsWith('node:'),'Fixture helpers use only Node built-ins');continue;}
+      walk(path.resolve(path.dirname(filename),specifier));
+    }
+  }
+  for (const file of ['scripts/lib/company-subscription-ui-fixture.mjs','scripts/lib/owned-fixture-cleanup.mjs']) walk(path.join(root,file));
+  return [...seen].map(filename => path.relative(root,filename).split(path.sep).join('/')).sort();
+}
+
+export async function verifyCompanySubscriptionUi(args = process.argv.slice(2)) {
+
+// Exact production JSX/CSS rendered by Next. API responses, authentication and
+// money are synthetic; no real provider or financial request is authorized.
+const root = realpathSync(process.cwd()),privateRoot = path.join(root,'.vercel','private');
+const options = companySubscriptionUiOptions(args,{repoRoot:root,environment:process.env});
+const git = args => {const result = spawnSync('git',args,{cwd:root,encoding:'utf8',windowsHide:true});assert.equal(result.status,0,result.stderr);return result.stdout.trim();};
+const sourceRevision = git(['rev-parse','HEAD']),sourceTree = git(['rev-parse','HEAD^{tree}']),trackedClean = git(['status','--porcelain','--untracked-files=no']) === '';
+if (options.expectedHead) assert.equal(sourceRevision,options.expectedHead);if (process.env.CI === 'true') assert.ok(options.expectedHead && trackedClean,'Exact clean CI source required');
+for (const filename of [root,path.join(root,'.vercel'),privateRoot]) {
+  if (!existsSync(filename)) mkdirSync(filename);
+  assert.ok(lstatSync(filename).isDirectory() && !lstatSync(filename).isSymbolicLink());
+  assert.equal(realpathSync(filename),filename);
+}
+const output = options.outputRoot;
+mkdirSync(output,{recursive:true});
+assert.ok(!lstatSync(output).isSymbolicLink() && realpathSync(output) === output,'Evidence directory cannot be redirected');
+const runId = new Date().toISOString().replace(/[:.]/g,'-')+'-'+randomUUID().slice(0,8);
+const target = options.target || path.join(output,'browser-'+runId+'.json');guard(!existsSync(target),'Evidence is immutable');
+const screenshots = path.join(output,'screenshots-'+runId);mkdirSync(screenshots);
+const fixturePrefix = 'company-subscription-ui-',fixture = mkdtempSync(path.join(privateRoot,fixturePrefix));
+const ownership = captureOwnedFixture({workspaceRoot:root,privateRoot,fixture,prefix:fixturePrefix});
+const scopeA = 'a'.repeat(64),scopeB = 'b'.repeat(64),fixedNow = '2026-10-12T12:00:00.000Z';
+const sourceManifest = [],externalImports = new Set(),checks = [],pageErrors = [],interceptErrors = [],externalRequests = [],screenshotManifest = [],apiRequests = [];
+const wait = milliseconds => new Promise(resolve => setTimeout(resolve,milliseconds));
+const harnessSha256 = sha(readFileSync(new URL(import.meta.url))),cleanupHelperSha256 = sha(readFileSync(new URL('./lib/owned-fixture-cleanup.mjs',import.meta.url)));
+const dependencyManifest = COMPANY_SUBSCRIPTION_UI_DEPENDENCIES.map(relative => ({path:relative,sha256:sha(readFileSync(path.join(root,relative)))}));
+const fixtureSourceManifest = companySubscriptionUiFixtureSourceFiles(root).map(relative => ({path:relative,sha256:sha(readFileSync(path.join(root,relative)))}));
+let child,browser,origin,serverLog = '',failure,browserClosed = false,serverClosed = false,fixtureCleanupProof,closeAck = false;
+let childClose;
+
 function copyClosure(entry) {
   const seen = new Set();
   function copy(filename) {
@@ -66,7 +136,22 @@ function copyClosure(entry) {
 async function bounded(promise,message,milliseconds = 15000) {let timer;try {return await Promise.race([promise,new Promise((_,reject) => {timer = setTimeout(() => reject(new Error(message)),milliseconds);})]);} finally {clearTimeout(timer);}}
 async function freePort() {const server = createServer();await new Promise((resolve,reject) => {server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});const port = server.address().port;await new Promise(resolve => server.close(resolve));return port;}
 function offer(plan = 'PRO',currency = 'USD',amountMinor = plan === 'PRO'?'14900':'34900') {return {id:'offer-'+plan.toLowerCase(),plan,amountMinor,currency,periodUnit:'MONTH',periodCount:1,taxTreatment:'Impuestos incluidos · condiciones originales.',termsVersion:'terms-original',includesAllIn:true,automaticExtras:false};}
-function snapshot(scope = scopeA,ready = true) {return {version:1,scope,organization:{id:scope === scopeA?'org_UI_A':'org_UI_B',name:scope === scopeA?'Empresa sintética A':'Empresa sintética B'},observedAt:fixedNow,configuration:ready?{state:'READY',catalogVersion:'catalog-original',offers:[offer(),offer('ENTERPRISE')]}:{state:'CONFIGURATION_PENDING',catalogVersion:null,offers:[]},subscription:{plan:'TRIAL',status:'TRIALING',trialEndsAt:'2026-10-15T03:00:00.000Z',entitlement:{allowed:true,basis:'CURRENT_TRIAL',reasonCode:null}},attempt:null,recovery:null};}
+function alignCommercial(value) {
+  const termsText = ' Condiciones comerciales sintéticas de ensayo.\r\nAbono mensual para toda la empresa.\nPodés cancelar la renovación y conservar el período pagado.\n';
+  const catalog = approvedCommercialCatalog({version:1,catalogVersion:value.configuration.catalogVersion,offers:value.configuration.offers.map(item => ({...item,includedTerms:'Servicios incluidos según estas condiciones sintéticas aprobadas. Sin adicionales automáticos.',termsText,termsSha256:commercialTermsSha256(termsText)}))});
+  value.commercial = {...catalog,actorBinding:'e'.repeat(64),offers:catalog.offers.map(item => ({...item,canAccept:true,checkoutAvailable:true}))};return value;
+}
+function snapshot(scope = scopeA,ready = true) {
+  const value = {...closedCompanySubscriptionFixture({scope,observedAt:fixedNow}),organization:{id:scope === scopeA?'org_UI_A':'org_UI_B',name:scope === scopeA?'Empresa sintética A':'Empresa sintética B'},subscription:{plan:'TRIAL',status:'TRIALING',trialEndsAt:'2026-10-15T03:00:00.000Z',entitlement:{allowed:true,basis:'CURRENT_TRIAL',reasonCode:null}}};
+  if (ready) {value.configuration = {state:'READY',catalogVersion:'catalog-original',offers:[offer(),offer('ENTERPRISE')]};alignCommercial(value);}return value;
+}
+function acceptance(value,command) {
+  const selected = value.commercial.offers.find(item => item.id === command.offerId);assert.ok(selected);
+  const {canAccept,checkoutAvailable,...immutable} = selected;
+  assert.deepEqual(command,{action:'accept_offer',scope:value.scope,operationId:command.operationId,offerId:selected.id,catalogVersion:value.commercial.catalogVersion,catalogDigest:value.commercial.catalogDigest,offerDigest:selected.offerDigest,termsVersion:selected.termsVersion,termsSha256:selected.termsSha256,accepted:true});
+  const receipt = {version:1,receiptId:commercialAcceptanceId(value.organization.id,command.operationId),operationId:command.operationId,state:'TERMS_ACCEPTED',organizationId:value.organization.id,actorBinding:value.commercial.actorBinding,catalogVersion:value.commercial.catalogVersion,catalogDigest:value.commercial.catalogDigest,offer:immutable,acceptedAt:fixedNow,current:true,canCheckout:checkoutAvailable};
+  receipt.acceptanceDigest = commercialAcceptanceDigest(receipt);return receipt;
+}
 function checkout(scope,command,chosen = offer()) {const value = snapshot(scope);const {id,...terms} = chosen;value.attempt = {attemptId:'company_subscription_'+sha(command.operationId),operationId:command.operationId,state:'CHECKOUT_READY',...terms,offerId:id,catalogVersion:command.catalogVersion,checkoutUrl:'https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_id=synthetic_subscription',receiptId:null,paidPeriod:null,cancelAtPeriodEnd:false,cancellation:null,code:null};return value;}
 function paid(scope = scopeA,operationId = '11111111-1111-4111-8111-111111111111') {const value = checkout(scope,{operationId,catalogVersion:'catalog-original'});value.attempt = {...value.attempt,state:'ACTIVE',checkoutUrl:null,receiptId:'company_subscription_payment_'+sha(operationId),paidPeriod:{startsAt:'2026-10-10T12:00:00.000Z',endsAt:'2026-11-10T12:00:00.000Z'}};value.subscription = {plan:'PRO',status:'ACTIVE',trialEndsAt:null,entitlement:{allowed:true,basis:'ACTIVE_PAID_PLAN',reasonCode:null}};return value;}
 async function click(page,text) {const handle = await page.evaluateHandle(value => [...document.querySelectorAll('[data-company-subscription] button')].find(button => button.textContent.trim() === value),text);assert.ok(handle.asElement(),'Missing button '+text);await handle.asElement().click();await handle.dispose();}
@@ -90,7 +175,7 @@ async function layout(page,width) {
 }
 async function makePage(label,{width = 390,kind = 'ready'} = {}) {
   const context = await browser.createBrowserContext(),page = await context.newPage(),requests = [];
-  let currentKind = kind,latest = null,beginCommand = null;
+  let currentKind = kind,latest = null,beginCommand = null,acceptCommand = null,acceptedReceipt = null;
   await page.setViewport({width,height:980,deviceScaleFactor:1});page.on('pageerror',error => pageErrors.push({label,message:error.message}));
   await page.evaluateOnNewDocument(() => {
     const json = Response.prototype.json;
@@ -104,19 +189,23 @@ async function makePage(label,{width = 390,kind = 'ready'} = {}) {
       if (!url.pathname.startsWith('/api/')) {await intercepted.continue();return;}
       assert.equal(url.pathname,'/api/identity/company-subscription');assert.match(intercepted.headers().authorization,/^Bearer synthetic-subscription-ui-\d+-\d+$/);
       let command,scope;
-      if (intercepted.method() === 'POST') {assert.equal(url.search,'');command = JSON.parse(intercepted.postData());scope = command.scope;assert.ok(['begin','recover','cancel_renewal'].includes(command.action));const keys = {begin:['action','scope','operationId','offerId','catalogVersion'],recover:['action','scope','operationId'],cancel_renewal:['action','scope','operationId','subscriptionAttemptId']}[command.action];assert.deepEqual(Object.keys(command).sort(),keys.sort());}
-      else {assert.equal(intercepted.method(),'GET');assert.deepEqual([...url.searchParams.keys()],['scope']);scope = url.searchParams.get('scope');}
+      if (intercepted.method() === 'POST') {assert.equal(url.search,'');command = JSON.parse(intercepted.postData());scope = command.scope;assert.ok(['accept_offer','begin','recover','cancel_renewal'].includes(command.action));const keys = {accept_offer:['action','scope','operationId','offerId','catalogVersion','catalogDigest','offerDigest','termsVersion','termsSha256','accepted'],begin:['action','scope','operationId','offerId','catalogVersion','acceptanceReceiptId','acceptanceDigest'],recover:['action','scope','operationId'],cancel_renewal:['action','scope','operationId','subscriptionAttemptId']}[command.action];assert.deepEqual(Object.keys(command).sort(),keys.sort());}
+      else {assert.equal(intercepted.method(),'GET');assert.deepEqual([...url.searchParams.keys()],url.searchParams.has('acceptanceOperationId')?['scope','acceptanceOperationId']:['scope']);scope = url.searchParams.get('scope');if (url.searchParams.has('acceptanceOperationId')) assert.equal(url.searchParams.get('acceptanceOperationId'),acceptCommand.operationId);}
       assert.ok([scopeA,scopeB].includes(scope));
-      const logged = {method:intercepted.method(),scope,action:command?.action || null,operationId:command?.operationId || null,tokenGeneration:Number(intercepted.headers().authorization.split('-').at(-2)),kind:currentKind};requests.push(logged);
+      const logged = {label,method:intercepted.method(),scope,action:command?.action || null,operationId:command?.operationId || null,acceptanceOperationId:url.searchParams.get('acceptanceOperationId'),tokenGeneration:Number(intercepted.headers().authorization.split('-').at(-2)),kind:currentKind,...(command?{command:structuredClone(command)}:{})};requests.push(logged);apiRequests.push(logged);
       if (command && command.action !== 'recover') {
         const durable = (await references(page)).find(row => row.operationId === command.operationId);
         assert.ok(durable,'The real IDB reference must be committed before POST');assert.equal(durable.scope,scope);assert.equal(durable.organizationId,scope === scopeA?'org_UI_A':'org_UI_B');assert.equal(durable.action,command.action);assert.deepEqual(Object.keys(durable).sort(),['version','scope','organizationId','operationId','action','createdAt'].sort());logged.durableBeforeDispatch = true;
       }
       let value;
-      if (command?.action === 'begin') {
+      if (command?.action === 'accept_offer') {
+        acceptCommand = structuredClone(command);latest = latest && latest.scope === scope?latest:snapshot(scope);acceptedReceipt = acceptance(latest,command);latest.acceptance = acceptedReceipt;value = latest;
+        if (currentKind === 'acceptance-lost') {await intercepted.abort('failed');return;}
+      } else if (command?.action === 'begin') {
+        assert.ok(acceptedReceipt,'Checkout requires the actual preceding accepted receipt');assert.equal(command.acceptanceReceiptId,acceptedReceipt.receiptId);assert.equal(command.acceptanceDigest,acceptedReceipt.acceptanceDigest);assert.equal(command.offerId,acceptedReceipt.offer.id);assert.notEqual(command.operationId,acceptedReceipt.operationId,'Financial and consent operations are distinct');
         beginCommand = structuredClone(command);
         if (currentKind === 'begin-unreserved') {latest = null;await intercepted.respond({status:503,contentType:'application/json',body:JSON.stringify({code:'COMPANY_SUBSCRIPTION_UNCONFIRMED'})});return;}
-        const chosen = snapshot(scope).configuration.offers.find(item => item.id === command.offerId);assert.ok(chosen);latest = checkout(scope,command,chosen);
+        const chosen = snapshot(scope).configuration.offers.find(item => item.id === command.offerId);assert.ok(chosen);latest = checkout(scope,command,chosen);latest.acceptance = acceptedReceipt;
         if (currentKind === 'begin-lost') {await intercepted.abort('failed');return;}
         value = latest;
       } else if (command?.action === 'cancel_renewal') {
@@ -132,9 +221,16 @@ async function makePage(label,{width = 390,kind = 'ready'} = {}) {
       } else if (currentKind === '401-html' || currentKind === '403-html') {await intercepted.respond({status:Number(currentKind.slice(0,3)),contentType:'text/html',body:'<p>CONTROLLED PRIVATE DIAGNOSTIC</p>'});return;}
       else if (currentKind === 'wrong-scope') value = snapshot(scope === scopeA?scopeB:scopeA);
       else if (currentKind === 'active') {latest = paid(scope);value = latest;}
+      else if (currentKind === 'financial-unknown') {latest = checkout(scope,{operationId:'11111111-1111-4111-8111-111111111111',catalogVersion:'catalog-original'});latest.attempt = {...latest.attempt,state:'UNKNOWN',checkoutUrl:null};value = latest;}
       else if (currentKind === 'terminal-expired') {latest = paid(scope);latest.attempt = {...latest.attempt,state:'CANCEL_CONFIRMED',cancelAtPeriodEnd:true,paidPeriod:{startsAt:'2026-09-12T12:00:00.000Z',endsAt:fixedNow}};latest.subscription = {...latest.subscription,status:'CANCELED',entitlement:{allowed:false,basis:null,reasonCode:'COMPANY_ENTITLEMENT_CANCELED'}};value = latest;}
       else if (currentKind === 'closed') value = snapshot(scope,false);
-      else if (currentKind === 'immutable-new-catalog') {value = structuredClone(latest);value.configuration = {state:'READY',catalogVersion:'catalog-new',offers:[{...offer('PRO','ARS','20599950'),taxTreatment:'Condiciones nuevas aprobadas.',termsVersion:'terms-new'}]};}
+      else if (currentKind === 'immutable-new-catalog') {value = structuredClone(latest);value.configuration = {state:'READY',catalogVersion:'catalog-new',offers:[{...offer('PRO','ARS','20599950'),taxTreatment:'Condiciones nuevas aprobadas.',termsVersion:'terms-new'}]};alignCommercial(value);value.acceptance.current = false;value.acceptance.canCheckout = false;}
+      else if (currentKind === 'acceptance-absent') value = snapshot(scope);
+      else if (currentKind === 'changed-actor') {value = structuredClone(latest || snapshot(scope));value.commercial.actorBinding = 'f'.repeat(64);if (value.acceptance) {value.acceptance.current = false;value.acceptance.canCheckout = false;}}
+      else if (currentKind === 'changed-catalog') {value = snapshot(scope);value.configuration.catalogVersion = 'catalog-new';alignCommercial(value);}
+      else if (currentKind === 'invalid-terms') {value = snapshot(scope);value.commercial.offers[0].termsText += 'FOREIGN PRIVATE TERMS';}
+      else if (currentKind === 'invalid-catalog') {value = snapshot(scope);value.commercial.catalogDigest = 'f'.repeat(64);}
+      else if (currentKind === 'foreign-receipt') {value = structuredClone(latest);value.acceptance.actorBinding = 'f'.repeat(64);value.acceptance.acceptanceDigest = commercialAcceptanceDigest(value.acceptance);}
       else if (latest && latest.scope === scope) value = latest;
       else value = snapshot(scope);
       await intercepted.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(value)});
@@ -142,31 +238,37 @@ async function makePage(label,{width = 390,kind = 'ready'} = {}) {
   });
   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Plan y pago');await idle(page);
   assert.ok(requests.length >= 1 && requests.every(row => row.method === 'GET'),'Mount may only read state');
-  return {page,context,requests,setKind:value => {currentKind = value;},getBegin:() => beginCommand,getLatest:() => latest};
+  return {page,context,requests,setKind:value => {currentKind = value;},getBegin:() => beginCommand,getAccept:() => acceptCommand,getLatest:() => latest};
 }
 async function choose(state,plan = 'PRO') {
-  await state.page.click(`input[type="radio"][value="offer-${plan.toLowerCase()}"]`);
+  await state.page.focus(`input[type="radio"][value="offer-${plan.toLowerCase()}"]`);await state.page.keyboard.press('Space');
   assert.equal(await state.page.$eval('form button[type="submit"]',node => node.disabled),true,'Price review alone is not confirmation');
-  await state.page.click('form input[type="checkbox"]');assert.equal(await state.page.$eval('form button[type="submit"]',node => node.disabled),false);
+  assert.equal(await state.page.$eval('[data-commercial-offers] input[type="checkbox"]',node => node.checked),false,'No implied consent');assert.equal(await state.page.$eval('[data-offer-terms]',node => node.textContent),' Condiciones comerciales sintéticas de ensayo.\r\nAbono mensual para toda la empresa.\nPodés cancelar la renovación y conservar el período pagado.\n','The exact approved text precedes consent');
+  await state.page.focus('[data-commercial-offers] input[type="checkbox"]');await state.page.keyboard.press('Space');assert.equal(await state.page.$eval('form button[type="submit"]',node => node.disabled),false);
+  await click(state.page,'Aceptar condiciones de '+(plan === 'PRO'?'Pro':'Empresa'));await waitText(state.page,'Las condiciones quedaron aceptadas');await idle(state.page);
 }
+async function screenshot(page,filename,width) {const target = path.join(screenshots,filename);await page.screenshot({path:target,fullPage:true});screenshotManifest.push({width,path:path.relative(root,target).split(path.sep).join('/'),sha256:sha(readFileSync(target))});}
 async function viewportScenario(width) {
   const state = await makePage('viewport-'+width,{width,kind:'closed'});
   try {
+    await state.page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'reduce'}]);
     await waitText(state.page,'El pago en línea todavía no está habilitado');const closed = await layout(state.page,width);
-    assert.equal(await state.page.$$eval('section input,section a,section form',nodes => nodes.length),0);assert.ok(!(await panelText(state.page)).includes('USD 149'));
+    assert.equal(await state.page.$$eval('section input[type="checkbox"],section a',nodes => nodes.length),0);assert.ok((await panelText(state.page)).includes('USD 149,00'));assert.ok((await panelText(state.page)).includes('USD 349,00'));
+    await state.page.click('input[type="radio"][value="pro-monthly"]');await waitText(state.page,'pendientes de aprobación');assert.equal(await state.page.$$eval('section input[type="checkbox"]',nodes => nodes.length),0);assert.equal(state.requests.filter(row => row.method === 'POST').length,0);
     state.setKind('ready');await click(state.page,'Actualizar estado');await idle(state.page);await waitText(state.page,'Elegí el plan de tu empresa');
     const ready = await layout(state.page,width);await choose(state);const review = await layout(state.page,width);
-    await state.page.screenshot({path:path.join(screenshots,`review-${width}.png`),fullPage:true});
+    assert.equal(await state.page.$eval('[data-commercial-offers] label',node => getComputedStyle(node).transitionDuration),'0s');await screenshot(state.page,`review-${width}.png`,width);
     await click(state.page,'Continuar con Pro');await waitText(state.page,'Continuar en Mercado Pago');await idle(state.page);
     const checkoutLayout = await layout(state.page,width),link = await state.page.$eval('section a',node => ({href:node.href,target:node.target,rel:node.rel,referrerPolicy:node.referrerPolicy}));
     assert.deepEqual(link,{href:'https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_id=synthetic_subscription',target:'_blank',rel:'noopener noreferrer',referrerPolicy:'no-referrer'});assert.equal(state.requests.filter(row => row.action === 'begin').length,1);
     state.setKind('recover-authorized');await click(state.page,'Ya volví · comprobar pago');await waitText(state.page,'Débito autorizado · pago pendiente');assert.ok(!(await panelText(state.page)).includes('Pago confirmado para el período vigente.'));
     state.setKind('recover-paid');await click(state.page,'Comprobar pago y renovación');await waitText(state.page,'Pago confirmado para el período vigente.');
     const paidLayout = await layout(state.page,width),paidText = await panelText(state.page);assert.match(paidText,/10\/11\/2026.*09:00/);
-    await click(state.page,'Cancelar renovación');assert.equal(await state.page.$eval('form button[type="submit"]',node => node.disabled),true);await state.page.click('form input[type="checkbox"]');await click(state.page,'Confirmar cancelación de renovación');await waitText(state.page,'La renovación quedó cancelada.');await idle(state.page);
+    await click(state.page,'Cancelar renovación');assert.equal(await state.page.$eval('[data-subscription-cancel] button[type="submit"]',node => node.disabled),true);await state.page.click('[data-subscription-cancel] input[type="checkbox"]');await click(state.page,'Confirmar cancelación de renovación');await waitText(state.page,'La renovación quedó cancelada.');await idle(state.page);
     const canceled = await layout(state.page,width),canceledText = await panelText(state.page);assert.match(canceledText,/10\/11\/2026.*09:00/);assert.ok(canceledText.includes('Pago confirmado para el período vigente.'));assert.equal(state.requests.filter(row => row.action === 'cancel_renewal').length,1);assert.equal(state.requests.filter(row => row.action === 'begin').length,1);
-    await state.page.screenshot({path:path.join(screenshots,`canceled-${width}.png`),fullPage:true});
-    checks.push({check:'closed-configuration-confirmed-begin-authorized-distinct-paid-cancel-retains-period',width,closed,ready,review,checkout:checkoutLayout,paid:paidLayout,canceled,mutations:state.requests.filter(row => row.method === 'POST')});
+    await screenshot(state.page,`canceled-${width}.png`,width);
+    assert.equal(state.requests.filter(row => row.action === 'accept_offer').length,1);assert.notEqual(state.getBegin().operationId,state.getAccept().operationId);
+    checks.push({check:'commercial-acceptance-payment-cancellation:'+width,width,closed,ready,review,checkout:checkoutLayout,paid:paidLayout,canceled,mutations:state.requests.filter(row => row.method === 'POST')});
   } finally {await state.context.close();}
 }
 async function uncertaintyScenario() {
@@ -185,19 +287,19 @@ async function immutableScenario() {
   const state = await makePage('immutable-terms');
   try {
     await choose(state);await click(state.page,'Continuar con Pro');await waitText(state.page,'Continuar en Mercado Pago');state.setKind('immutable-new-catalog');await click(state.page,'Actualizar estado');await idle(state.page);
-    const text = await panelText(state.page);assert.ok(text.includes('USD 149,00 por mes'));assert.ok(text.includes('Impuestos incluidos · condiciones originales.'));assert.ok(!text.includes('205.999,50') && !text.includes('Condiciones nuevas aprobadas.'));assert.equal(state.requests.filter(row => row.action === 'begin').length,1);
+    const text = await panelText(state.page);assert.ok(text.includes('USD 149,00 por mes'));assert.ok(text.includes('Impuestos incluidos · condiciones originales.'));assert.ok(text.includes('ARS 205.999,50') && text.includes('Condiciones nuevas aprobadas.'));assert.equal(await state.page.$('[data-subscription-begin]'),null,'Changed catalog never reuses acceptance for checkout');assert.equal(state.requests.filter(row => row.action === 'begin').length,1);
     checks.push({check:'original-checkout-price-currency-tax-terms-survive-changed-current-catalog'});
   } finally {await state.context.close();}
 }
 async function cleanupFailureScenario() {
   const state = await makePage('journal-readback-failure-after-confirmed-checkout');
   try {
-    await state.page.evaluate(() => {
+    await choose(state);await state.page.evaluate(() => {
       const journal = window.__subscriptionJournal,settle = journal.settle,read = journal.read;
       journal.settle = async function(...args) {const value = await settle.apply(this,args);window.__settlementInjected = true;this.read = async function() {this.read = read;throw Object.assign(new Error('Controlled storage failure'),{code:'WORKSPACE_RECOVERY_STORAGE_UNAVAILABLE'});};return value;};
     });
-    await choose(state);await click(state.page,'Continuar con Pro');await waitText(state.page,'Continuar en Mercado Pago');await idle(state.page);
-    assert.equal(await state.page.evaluate(() => window.__settlementInjected),true);assert.deepEqual(await references(state.page),[]);assert.equal(await state.page.$$eval('section input[type="radio"]',nodes => nodes.length),0,'A settled financial response cannot restore the old trial form after storage failure');assert.equal(state.requests.filter(row => row.action === 'begin').length,1);
+    await click(state.page,'Continuar con Pro');await waitText(state.page,'Continuar en Mercado Pago');await idle(state.page);
+    assert.equal(await state.page.evaluate(() => window.__settlementInjected),true);assert.deepEqual(await references(state.page),[]);assert.equal(await state.page.$('[data-subscription-begin]'),null,'A settled financial response cannot restore a fresh checkout after storage failure');assert.equal(state.requests.filter(row => row.action === 'begin').length,1);
     checks.push({check:'verified-checkout-persists-when-subsequent-journal-readback-fails',beginPosts:1});
   } finally {await state.context.close();}
 }
@@ -213,8 +315,8 @@ async function terminalScenario() {
 async function cancellationUncertaintyScenario() {
   const state = await makePage('durable-cancel-uncertainty',{kind:'active'});
   try {
-    state.setKind('cancel-lost');await click(state.page,'Cancelar renovación');await state.page.click('form input[type="checkbox"]');await click(state.page,'Confirmar cancelación de renovación');await waitText(state.page,'La confirmación no llegó.');await idle(state.page);
-    const cancellation = state.requests.find(row => row.action === 'cancel_renewal');assert.ok(cancellation);assert.equal((await references(state.page))[0].operationId,cancellation.operationId);assert.match(await panelText(state.page),/10\/11\/2026.*09:00/);
+    state.setKind('cancel-lost');await click(state.page,'Cancelar renovación');await state.page.click('[data-subscription-cancel] input[type="checkbox"]');await click(state.page,'Confirmar cancelación de renovación');await waitText(state.page,'La confirmación no llegó.');await idle(state.page);
+    const cancellation = state.requests.find(row => row.action === 'cancel_renewal');assert.ok(cancellation);assert.equal((await references(state.page))[0].operationId,cancellation.operationId);assert.ok(!(await panelText(state.page)).includes('Acceso pagado hasta'),'Unconfirmed response hides old private facts until a fresh GET');
     await state.page.reload({waitUntil:'networkidle0'});await waitText(state.page,'Hay un intento por comprobar');await idle(state.page);assert.equal(state.requests.filter(row => row.action === 'cancel_renewal').length,1);
     state.setKind('recover-cancel-unknown');await click(state.page,'Comprobar este intento');await idle(state.page);assert.equal((await references(state.page))[0].operationId,cancellation.operationId);assert.match(await panelText(state.page),/10\/11\/2026.*09:00/);
     state.setKind('ready');await click(state.page,'Comprobar este intento');await waitText(state.page,'La renovación quedó cancelada.');await idle(state.page);assert.deepEqual(await references(state.page),[]);assert.match(await panelText(state.page),/10\/11\/2026.*09:00/);
@@ -248,7 +350,7 @@ async function lateScenario(kind) {
     else if (kind === 'token-getter') assert.ok((await panelText(state.page)).includes('Período pagado') && !(await panelText(state.page)).includes('Prueba vigente'));
     else assert.equal(await state.page.$('[data-company-subscription]'),null);
     assert.equal(state.requests.filter(row => row.method === 'POST').length,0);
-    checks.push({check:'late-response-cannot-restore-old-access',kind,requests:state.requests});
+    checks.push({check:'late-response-cannot-restore-old-access:'+kind,kind,requests:state.requests});
   } finally {await state.context.close();}
 }
 async function crossCompanyScenario() {
@@ -263,13 +365,54 @@ async function crossCompanyScenario() {
 async function errorScenario(kind) {
   const state = await makePage('error-'+kind);
   try {
-    state.setKind(kind);await click(state.page,'Actualizar estado');await idle(state.page);const text = await panelText(state.page);assert.ok(!text.includes('Empresa sintética A') && !text.includes('USD 149'));assert.ok(!text.includes('CONTROLLED PRIVATE'));assert.equal(await state.page.$$eval('section a,section input',nodes => nodes.length),0);assert.equal(state.requests.filter(row => row.method === 'POST').length,0);checks.push({check:'denial-or-foreign-envelope-erases-old-financial-actions',kind});
+    state.setKind(kind);await click(state.page,'Actualizar estado');await idle(state.page);const text = await panelText(state.page);assert.ok(!text.includes('Empresa sintética A') && !text.includes('USD 149'));assert.ok(!text.includes('CONTROLLED PRIVATE'));assert.equal(await state.page.$$eval('section a,section input',nodes => nodes.length),0);assert.equal(state.requests.filter(row => row.method === 'POST').length,0);checks.push({check:'denial-or-foreign-envelope-erases-old-financial-actions:'+kind,kind});
   } finally {await state.context.close();}
 }
 async function lateTokenScenario() {
   const state = await makePage('unmount-before-token');
   try {
     const count = state.requests.length;await state.page.evaluate(() => {window.__holdToken = true;});await click(state.page,'Actualizar estado');await state.page.waitForFunction(() => typeof window.__releaseToken === 'function');await state.page.evaluate(() => window.__unmountSubscription());await state.page.waitForSelector('[data-unmounted]');await state.page.evaluate(() => window.__releaseToken());await wait(100);assert.equal(state.requests.length,count);checks.push({check:'token-resolved-after-unmount-does-not-dispatch'});
+  } finally {await state.context.close();}
+}
+
+async function acceptanceUncertaintyScenario() {
+  const state = await makePage('acceptance-get-recovery');
+  try {
+    state.setKind('acceptance-lost');await state.page.click('input[type="radio"][value="offer-pro"]');await state.page.click('[data-commercial-offers] input[type="checkbox"]');await click(state.page,'Aceptar condiciones de Pro');await waitText(state.page,'La confirmación no llegó.');await idle(state.page);
+    const original = state.getAccept();assert.ok(original);assert.equal((await references(state.page))[0].operationId,original.operationId);assert.equal((await references(state.page))[0].action,'accept_offer');assert.equal(await state.page.$('[data-subscription-begin]'),null);assert.ok(!(await panelText(state.page)).includes('Empresa sintética A'));
+    state.setKind('acceptance-absent');await state.page.reload({waitUntil:'networkidle0'});await waitText(state.page,'Hay un intento por comprobar');await idle(state.page);await click(state.page,'Comprobar este intento');await idle(state.page);assert.equal((await references(state.page))[0].operationId,original.operationId,'Absent acceptance never permits a new UUID');assert.equal(await state.page.$('[data-subscription-begin]'),null);
+    state.setKind('ready');await click(state.page,'Comprobar este intento');await waitText(state.page,'Las condiciones quedaron aceptadas');await idle(state.page);assert.deepEqual(await references(state.page),[]);assert.equal(state.requests.filter(row => row.action === 'accept_offer').length,1);assert.equal(state.requests.filter(row => row.action === 'begin' || row.action === 'recover').length,0);assert.ok(state.requests.filter(row => row.acceptanceOperationId).every(row => row.method === 'GET' && row.acceptanceOperationId === original.operationId));
+    checks.push({check:'acceptance-uncertainty-reload-get-only',requests:state.requests});
+  } finally {await state.context.close();}
+}
+async function bindingChangeScenario() {
+  const state = await makePage('commercial-binding-change');
+  try {
+    await state.page.click('input[type="radio"][value="offer-pro"]');await state.page.click('[data-commercial-offers] input[type="checkbox"]');
+    await state.page.evaluate(() => {const form = document.querySelector('[data-commercial-offers]'),key = Object.keys(form).find(key => key.startsWith('__reactProps$'));window.__retainedAccept = form[key].onSubmit;});
+    state.setKind('changed-catalog');await click(state.page,'Actualizar estado');await idle(state.page);assert.equal(await state.page.$('[data-commercial-offers] input[type="checkbox"]'),null);assert.ok(await state.page.$$eval('input[type="radio"]',nodes => nodes.every(node => !node.checked)));await state.page.evaluate(() => window.__retainedAccept({preventDefault(){}}));await idle(state.page);assert.equal(state.requests.filter(row => row.method === 'POST').length,0,'A retained old form cannot use a cleared confirmation');
+    state.setKind('ready');await click(state.page,'Actualizar estado');await idle(state.page);await choose(state);await state.page.evaluate(() => {const form = document.querySelector('[data-subscription-begin]'),key = Object.keys(form).find(key => key.startsWith('__reactProps$'));window.__retainedBegin = form[key].onSubmit;});
+    state.setKind('changed-actor');await click(state.page,'Actualizar estado');await idle(state.page);assert.equal(await state.page.$('[data-offer-acceptance]'),null);await state.page.evaluate(() => window.__retainedBegin({preventDefault(){}}));await idle(state.page);assert.equal(state.requests.filter(row => row.action === 'begin').length,0);assert.equal(state.requests.filter(row => row.action === 'accept_offer').length,1);
+    checks.push({check:'changed-commercial-binding-clears-unchecked-draft',requests:state.requests});
+  } finally {await state.context.close();}
+}
+async function invalidCommercialScenario() {
+  for (const kind of ['invalid-terms','invalid-catalog','foreign-receipt']) {
+    const state = await makePage('invalid-'+kind);
+    try {
+      if (kind === 'foreign-receipt') await choose(state);
+      const count = state.requests.filter(row => row.method === 'POST').length;state.setKind(kind);await click(state.page,'Actualizar estado');await idle(state.page);assert.equal(await state.page.$$eval('section input,section a,[data-subscription-begin],[data-offer-acceptance]',nodes => nodes.length),0);assert.ok(!(await panelText(state.page)).includes('FOREIGN PRIVATE TERMS'));assert.equal(state.requests.filter(row => row.method === 'POST').length,count);
+    } finally {await state.context.close();}
+  }
+  checks.push({check:'invalid-digests-and-foreign-receipt-hide-all-actions',cases:['terms-text','catalog-digest','rehashed-foreign-actor-receipt']});
+}
+async function existingFinancialUnknownScenario() {
+  const state = await makePage('acceptance-preserves-financial-unknown',{kind:'financial-unknown'});
+  try {
+    await waitText(state.page,'Pago por comprobar');assert.equal(await state.page.$('[data-subscription-begin]'),null);assert.deepEqual(await references(state.page),[],'A fresh tab may lack the existing server financial reference');
+    await choose(state);assert.equal(await state.page.$('[data-subscription-begin]'),null);await waitText(state.page,'Pago por comprobar');assert.equal(state.getLatest().attempt.operationId,'11111111-1111-4111-8111-111111111111');assert.notEqual(state.getLatest().attempt.operationId,state.getAccept().operationId);
+    state.setKind('ready');await state.page.reload({waitUntil:'networkidle0'});await waitText(state.page,'Pago por comprobar');await idle(state.page);assert.equal(await state.page.$('[data-subscription-begin]'),null);assert.equal(state.requests.filter(row => row.action === 'begin').length,0);assert.equal(state.requests.filter(row => row.action === 'accept_offer').length,1);assert.equal(state.requests.filter(row => row.action === 'recover').length,0);
+    checks.push({check:'acceptance-preserves-existing-financial-unknown',requests:state.requests});
   } finally {await state.context.close();}
 }
 
@@ -284,8 +427,7 @@ try {
   // Own one IPC child and its HTTP server directly. Next's custom server close
   // drains its bundler resources; no CLI watcher, PID lookup or tree stop exists.
   writeFileSync(childFile,`const {createServer}=require('node:http');const next=require(${JSON.stringify(path.join(root,'node_modules/next'))});const nonce=${JSON.stringify(nonce)};let app,server,closing=false;let ready;async function close(){if(closing)return;closing=true;try{await ready.catch(()=>{});if(server?.listening){server.closeAllConnections();await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));}if(app)await app.close();if(process.connected)process.send({type:'closed',nonce},()=>process.exit(0));else process.exit(0);}catch{if(process.connected)process.send({type:'close-failed',nonce},()=>process.exit(1));else process.exit(1);}}process.on('message',message=>{if(message&&Object.keys(message).sort().join('|')==='nonce|type'&&message.type==='close'&&message.nonce===nonce)void close();});process.on('disconnect',()=>void close());process.on('SIGTERM',()=>void close());ready=(async()=>{server=createServer((req,res)=>app.getRequestHandler()(req,res));app=next({dev:true,dir:${JSON.stringify(fixture)},hostname:'127.0.0.1',port:${port},httpServer:server,webpack:true,turbopack:false});await app.prepare();server.on('upgrade',(req,socket,head)=>app.getUpgradeHandler()(req,socket,head));await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(${port},'127.0.0.1',resolve);});if(process.connected)process.send({type:'ready',nonce});})();ready.catch(error=>{console.error(error);process.exitCode=1;if(process.connected)process.send({type:'failed',nonce});});`);
-  const serverEnv = Object.fromEntries(['PATH','Path','SystemRoot','WINDIR','TEMP','TMP','HOME','USERPROFILE','APPDATA','LOCALAPPDATA','ComSpec','COMSPEC'].filter(key => process.env[key] !== undefined).map(key => [key,process.env[key]]));
-  child = spawn(process.execPath,[childFile],{cwd:fixture,env:{...serverEnv,NEXT_TELEMETRY_DISABLED:'1',NODE_ENV:'development'},stdio:['ignore','pipe','pipe','ipc'],windowsHide:true});
+  child = spawn(process.execPath,[childFile],{cwd:fixture,env:companySubscriptionUiServerEnvironment(process.env),stdio:['ignore','pipe','pipe','ipc'],windowsHide:true});
   child.__closeNonce = nonce;
   childClose = new Promise(resolve => child.once('close',resolve));
   for (const stream of [child.stdout,child.stderr]) stream.on('data',chunk => {serverLog = (serverLog+chunk.toString()).slice(-20000);});
@@ -298,8 +440,15 @@ try {
   await uncertaintyScenario();await immutableScenario();await cleanupFailureScenario();await terminalScenario();await cancellationUncertaintyScenario();await noDispatchScenario();
   for (const kind of ['scope','token-getter','unmount']) await lateScenario(kind);
   await crossCompanyScenario();for (const kind of ['401-html','403-html','wrong-scope']) await errorScenario(kind);await lateTokenScenario();
+  await acceptanceUncertaintyScenario();await bindingChangeScenario();await invalidCommercialScenario();await existingFinancialUnknownScenario();
   assert.deepEqual(pageErrors,[]);assert.deepEqual(interceptErrors,[]);assert.deepEqual(externalRequests,[]);
   for (const source of sourceManifest) assert.equal(sha(readFileSync(path.join(root,source.path))),source.sha256,'Dependency changed during rendering; repeat against exact final bytes');
+  assert.deepEqual(checks.map(row => row.check),COMPANY_SUBSCRIPTION_UI_CHECKS,'Every exported causal group must actually run');
+  assert.deepEqual(sourceManifest.map(row => row.path),companySubscriptionUiSourceFiles(root));
+  assert.deepEqual(fixtureSourceManifest.map(row => row.path),companySubscriptionUiFixtureSourceFiles(root));
+  for (const source of [...fixtureSourceManifest,...dependencyManifest]) assert.equal(sha(readFileSync(path.join(root,source.path))),source.sha256,'Producer dependency changed during rendering');
+  assert.equal(sha(readFileSync(new URL(import.meta.url))),harnessSha256,'Harness changed during rendering');assert.equal(sha(readFileSync(new URL('./lib/owned-fixture-cleanup.mjs',import.meta.url))),cleanupHelperSha256);
+  assert.equal(git(['rev-parse','HEAD']),sourceRevision);assert.equal(git(['rev-parse','HEAD^{tree}']),sourceTree);if (process.env.CI === 'true') assert.equal(git(['status','--porcelain','--untracked-files=no']),'');
 } catch (error) {failure = error;}
 finally {
   try {if (browser) await bounded(browser.close(),'Owned browser close timed out');browserClosed = true;} catch (error) {failure ||= error;}
@@ -314,8 +463,10 @@ finally {
   } catch (error) {failure ||= error;}
   try {fixtureCleanupProof = await removeOwnedFixture(ownership,{serverClosedBeforeFixtureRemoval:serverClosed});assert.ok(fixtureCleanupProof.fixtureRemoved);} catch (error) {failure ||= error;fixtureCleanupProof = error.cleanupProof;}
 }
-const target = path.join(output,'browser-'+runId+'.json');
-const proof = {status:failure?'FAILED':'PASS',recordedAt:new Date().toISOString(),runId,environment:'isolated-localhost-next-exact-jsx-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,sourceManifest,externalImports:[...externalImports].sort(),harnessSha256,cleanupHelperSha256,pageErrors,interceptErrors,externalRequests,cleanup:{browserClosed,serverClosed,gracefulCloseAcknowledged:closeAck,fixtureRemoved:fixtureCleanupProof?.fixtureRemoved === true,fixtureCleanupProof},productionLoginVerified:false,productionDataWritten:false,providerRequests:0,paymentAttempted:false,paymentVerified:false,physicalDeviceAccepted:false,...(failure?{failure:failure.message,serverLog}:{})};
+const proof = {version:COMPANY_SUBSCRIPTION_UI_VERSION,status:failure?'FAILED':'PASS',recordedAt:new Date().toISOString(),runId,sourceRevision,sourceTree,expectedHead:options.expectedHead,sourceState:trackedClean?'clean-git-head':'local-working-tree',sourceAfterChecked:!failure,environment:'isolated-localhost-next-exact-jsx-with-intercepted-synthetic-api',widths:COMPANY_SUBSCRIPTION_UI_WIDTHS,checks,sourceManifest,fixtureSourceManifest,dependencyManifest,screenshotManifest,apiRequests,externalImports:[...externalImports].sort(),harnessSha256,cleanupHelperSha256,pageErrors,interceptErrors,externalRequests,cleanup:{browserClosed,serverClosed,gracefulCloseAcknowledged:closeAck,fixtureRemoved:fixtureCleanupProof?.fixtureRemoved === true,fixtureCleanupProof},productionLoginVerified:false,productionDataWritten:false,providerRequests:0,paymentAttempted:false,paymentVerified:false,physicalDeviceAccepted:false,...(failure?{failure:failure.message,serverLog}:{})};
 writeFileSync(target,JSON.stringify(proof,null,2),{flag:'wx'});
 console.log(JSON.stringify({status:proof.status,evidence:path.relative(root,target).split(path.sep).join('/'),checks:checks.length,widths:proof.widths,cleanup:proof.cleanup}));
 if (failure) throw failure;
+return proof;
+}
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await verifyCompanySubscriptionUi();
