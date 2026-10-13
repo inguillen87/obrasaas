@@ -1,4 +1,4 @@
-import { WorkspaceError, workspaceId, requireWorkspaceIdentity, digest } from './workspace-policy.mjs';
+import { WorkspaceError, workspaceId, operationId, requireWorkspaceIdentity, digest } from './workspace-policy.mjs';
 import { boundedBody } from './workspace-http.mjs';
 import { boundedFieldMultipart } from './field-media.mjs';
 import { canApproveProgress } from './field-operations-policy.mjs';
@@ -49,7 +49,7 @@ export function createFieldMediaHandlers({verify,media}) {
     }
     if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
     const input=context(params,['operationId','evidenceId']);
-    if(params.has('operationId')){if(params.has('evidenceId'))throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await media.status(session,{...input,operationId:params.get('operationId')}));}
+    if(params.has('operationId')){if(!operationId(params.get('operationId'))||params.has('evidenceId')&&!workspaceId(params.get('evidenceId')))throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await media.status(session,{...input,operationId:params.get('operationId'),...(params.has('evidenceId')?{evidenceId:params.get('evidenceId')}:{})}));}
     const file=await media.download(session,{...input,evidenceId:params.get('evidenceId')});
     return new Response(file.bytes,{headers:{...fieldHeaders,'Content-Type':file.contentType,'Content-Length':String(file.bytes.length),'Content-Disposition':`attachment; filename="evidencia.${file.extension}"`,'Content-Security-Policy':"default-src 'none'; sandbox"}});
   }catch(error){return failed(error);}};

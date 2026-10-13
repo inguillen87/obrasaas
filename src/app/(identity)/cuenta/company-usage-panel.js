@@ -27,15 +27,29 @@ function CompanyUsageContent({scope,organizationId,getSessionToken,locked=false}
  }
  function cancel(){const active=controller.current;if(!active)return;epoch.current++;active.abort();controller.current=null;setResult({owner:request,busy:false,view:null,message:'Consulta cancelada. No se procesaron archivos ni se volvió a invocar la IA.'});}
  return <section className={styles.payment} aria-labelledby={headingId} data-company-usage>
-  <div className={styles.heading}><div><h4 id={headingId}>Uso registrado</h4><p>Consultá las importaciones de cronogramas que tienen un registro de uso de esta empresa.</p></div><button type="button" className={styles.secondary} disabled={busy||locked} onClick={consult}>{busy?'Consultando…':'Consultar uso'}</button></div>
+  <div className={styles.heading}><div><h4 id={headingId}>Uso registrado</h4><p>Consultá los análisis de cronogramas, documentos y medios de obra que tienen un registro de uso.</p></div><button type="button" className={styles.secondary} disabled={busy||locked} onClick={consult}>{busy?'Consultando…':'Consultar uso'}</button></div>
   <div className={styles.live} role="status" aria-live="polite">{busy&&<p>Comprobando registros guardados…</p>}{current?.message&&<p className={styles.notice}>{current.message}</p>}</div>
   {busy&&<button type="button" className={styles.secondary} onClick={cancel}>Cancelar consulta</button>}
-  {!view&&!busy&&!current?.message&&<p className={styles.note}>La consulta no vuelve a extraer el cronograma ni autoriza pagos.</p>}
+  {!view&&!busy&&!current?.message&&<p className={styles.note}>La consulta no vuelve a analizar archivos ni autoriza pagos.</p>}
   {view&&<>
-   <dl className={styles.facts}><div><dt>Cobertura actual</dt><dd>{view.coverage.label}{view.coverage.endsLabel&&<><br/>{view.coverage.startsLabel?`${view.coverage.startsLabel} a ${view.coverage.endsLabel}`:`Hasta ${view.coverage.endsLabel}`}</>}</dd></div><div><dt>Importaciones con uso comprobado</dt><dd>{view.summary.observedLabel}</dd></div><div><dt>Reservas registradas</dt><dd>{view.summary.reservedLabel}</dd></div><div><dt>Resultados por comprobar</dt><dd>{view.summary.pendingLabel}</dd></div><div><dt>Registros sin medición del proveedor</dt><dd>{view.summary.unmeasuredLabel}</dd></div>{view.summary.observed>0&&<div><dt>Tokens comprobados</dt><dd>{view.summary.tokensLabel}</dd></div>}<div><dt>Capacidad del abono</dt><dd>{view.capacityLabel}</dd></div><div><dt>Costo interno</dt><dd>{view.costLabel}</dd></div></dl>
+   <dl className={styles.facts}>
+    <div><dt>Cobertura actual</dt><dd>{view.coverage.label}{view.coverage.endsLabel&&<><br/>{view.coverage.startsLabel?`${view.coverage.startsLabel} a ${view.coverage.endsLabel}`:`Hasta ${view.coverage.endsLabel}`}</>}</dd></div>
+    <div><dt>Análisis con medición del proveedor</dt><dd>{view.summary.observedLabel}</dd></div>
+    <div><dt>Reservas registradas</dt><dd>{view.summary.reservedLabel}</dd></div>
+    <div><dt>Resultados por comprobar</dt><dd>{view.summary.pendingLabel}</dd></div>
+    <div><dt>Registros sin medición del proveedor</dt><dd>{view.summary.unmeasuredLabel}</dd></div>
+    {view.summary.totalTokens!=='0'&&<div><dt>Tokens comprobados</dt><dd>{view.summary.tokensLabel}</dd></div>}
+    {view.summary.audioSeconds&&view.summary.audioSeconds!=='0'&&<div><dt>Segundos de audio informados por el proveedor</dt><dd>{view.summary.audioSecondsLabel}</dd></div>}
+    <div><dt>Capacidad del abono</dt><dd>{view.capacityLabel}</dd></div>
+    <div><dt>Costo interno</dt><dd>{view.costLabel}</dd></div>
+   </dl>
    <p className={styles.note}>Estos registros no representan todo el consumo histórico de la empresa. {view.fundingLabel}. No se generan cargos adicionales.</p>
-   {view.summary.total===0&&<p className={styles.note}>Todavía no hay importaciones con un registro de uso. Esto no confirma que el consumo anterior haya sido cero.</p>}
-   {view.recent.length>0&&<details className={styles.review}><summary className={styles.secondary}>Últimos registros de uso</summary>{view.recent.map(record=><div className={styles.payment} key={record.receiptId}><h4>{record.stateLabel}</h4><p className={styles.note}><time dateTime={record.recordedAt}>{record.recordedLabel}</time>{record.usage?` · ${record.usage.totalLabel} tokens comprobados`:''}</p><details><summary className={styles.secondary}>Referencia del registro</summary><p className={styles.note}>{record.receiptId}</p>{record.model&&<p className={styles.note}>Modelo registrado: {record.model}</p>}</details></div>)}{view.truncated&&<p className={styles.note}>Se muestran los 20 registros más recientes.</p>}</details>}
+   {view.summary.total===0&&<p className={styles.note}>Todavía no hay análisis con un registro de uso. Esto no confirma que el consumo anterior haya sido cero.</p>}
+   {view.recent.length>0&&<details className={styles.review}><summary className={styles.secondary}>Últimos registros de uso</summary>{view.recent.map(record=><div className={styles.payment} key={record.receiptId}>
+    <h4>{record.stageLabel} · {record.stateLabel}</h4>
+    <p className={styles.note}><time dateTime={record.recordedAt}>{record.recordedLabel}</time>{record.usage?` · ${record.usage.totalLabel} tokens comprobados`:record.audioSecondsLabel?` · ${record.audioSecondsLabel} segundos de audio informados por el proveedor`:''}</p>
+    <details><summary className={styles.secondary}>Referencia del registro</summary><p className={styles.note}>{record.receiptId}</p>{record.model&&<p className={styles.note}>Modelo registrado: {record.model}</p>}</details>
+   </div>)}{view.truncated&&<p className={styles.note}>Se muestran los 20 registros más recientes.</p>}</details>}
    <p className={styles.observed}>Consulta comprobada: <time dateTime={view.observedAt}>{view.observedLabel}</time> · Hora de Argentina.</p>
   </>}
  </section>;

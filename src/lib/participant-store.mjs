@@ -67,7 +67,9 @@ async function ownKycReplayOutcome(client,member,session,input,found,fingerprint
 const canManageParticipants=member=>member.identityOnly!==true&&participantManager(member.role);
 function requireManager(member){if(member.identityOnly===true)throw new WorkspaceError('PARTICIPANT_KYC_REVIEW_REQUIRED',403);if(!canManageParticipants(member))throw new WorkspaceError('PARTICIPANT_MANAGE_REQUIRED',403);}
 function matchProvider(invitation,result){if(!result||result.invitationId!==invitation.id||result.email!==invitation.email||result.role!=='org:member'||!/^orginv_[A-Za-z0-9]+$/.test(result.id||'')||!['pending','accepted'].includes(result.state)||!Number.isFinite(Date.parse(result.expiresAt)))throw new WorkspaceError('PARTICIPANT_INVITATION_UNCONFIRMED',503);}
-export function createParticipantStore({workspace,connect,identity,upload,get,analyzer,prepareKycChat,readKycChatAttempt=null,assessBiometrics,environment=process.env}){
+export function createParticipantStore({workspace,connect,identity,upload,get,analyzer,usage=null,prepareKycChat,readKycChatAttempt=null,assessBiometrics,environment=process.env}){
+ if(usage!==null&&['reserveResource','resourcePending','fence','observe','unknown','lockBeforeProject'].some(key=>typeof usage[key]!=='function'))throw new TypeError('Explicit participant OCR usage port required');
+ const usageLock=usage?(client,member)=>usage.lockBeforeProject(client,member):undefined;
  const run=(session,input,writable,callback,beforeProject)=>workspace.projectOperation(session,input,writable,callback,beforeProject);
  const runIdentity=(session,input,writable,callback,beforeProject)=>participantIdentityOperation(workspace,session,input,writable,callback,beforeProject);
  const organizationRun=(session,input,writable,callback)=>workspace.organizationOperation(session,input,writable,callback);
@@ -136,12 +138,21 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
   if(k?.submissionId!==submissionId||!['PENDING_REVIEW','APPROVED','REJECTED'].includes(k.status)||(pending&&k.status!=='PENDING_REVIEW'))throw new WorkspaceError('PARTICIPANT_KYC_NOT_PENDING',409);
   return k;
  }
+ const ocrConsentCurrent=k=>k.ocrConsent?.allowed===true&&k.ocrConsent.noticeVersion===PARTICIPANT_OCR_NOTICE_VERSION&&k.ocrConsent.noticeSha256===digest(PARTICIPANT_OCR_NOTICE);
+ const biometricConsentCurrent=k=>k.biometricConsent?.allowed===true&&k.biometricConsent.noticeVersion===PARTICIPANT_BIOMETRIC_NOTICE_VERSION&&k.biometricConsent.noticeSha256===digest(PARTICIPANT_BIOMETRIC_NOTICE);
+ const ocrResource=(input,k)=>({projectId:input.projectId,resourceType:'Worker',resourceId:input.payload.workerId,resourceRevision:digest(['participant-ocr-resource-v1',k.submissionId,k.contentHash]),stage:'IDENTITY_OPENAI_OCR',sourceSha256:k.images.find(image=>image.id==='document-front').sha256});
+ const heldOcr=(input,k,code,value)=>({scope:input.scope,projectId:input.projectId,operationId:input.operationId.toLowerCase(),action:'PROCESS_KYC',state:'USAGE_HELD',saved:false,definitive:false,code,workerId:input.payload.workerId,submissionId:k.submissionId,retryAfterExpiration:false,...(value?{usage:value}:{})});
+ async function assertOcrEvidence(client,member,input,k){
+  const submitted=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND action='participant.operation.recorded' AND metadata->>'kind'='KYC_SUBMITTED' AND metadata->>'submissionId'=$3`,[member.organizationId,input.payload.workerId,k.submissionId])).rows;
+  if(submitted.length!==1||submitted[0].metadata.contentHash!==k.contentHash||!participantKycImageSet(k,{strictLegacy:true,receipt:submitted[0].metadata,projectId:input.projectId}))throw new WorkspaceError('PARTICIPANT_KYC_EVIDENCE_UNCONFIRMED',409);
+ }
  async function ocrOutcome(client,member,session,input,found,requestDigest){
   requireManager(member);const p=input.payload||input;
   if(found.entityType!=='Worker'||found.entityId!==p.workerId||found.metadata?.kind!=='PROCESS_KYC'||found.metadata.projectId!==input.projectId)throw new WorkspaceError('PARTICIPANT_RECEIPT_INVALID',409);
   if(requestDigest&&found.metadata.requestDigest!==requestDigest)throw new WorkspaceError('PARTICIPANT_OPERATION_CONFLICT',409);
   const row=await worker(client,input.projectId,p.workerId),k=ocrParticipant(row,session,p.submissionId);
   if(k.contentHash!==found.metadata.contentHash)throw new WorkspaceError('PARTICIPANT_REVISION_CHANGED',409);
+  if(k.processing?.fields&&!ocrConsentCurrent(k))throw new WorkspaceError('PARTICIPANT_OCR_CONSENT_REQUIRED',409);
   return {saved:true,replayed:true,receiptId:found.id,participant:publicParticipant(row,false,true)};
  }
  async function processKyc(session,input){
@@ -151,10 +162,9 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[key]);
    const prior=await receipt(client,member,key);if(prior)return {done:{scope,...await ocrOutcome(client,member,session,input,prior,requestDigest)}};
    const row=await worker(client,input.projectId,p.workerId,true),k=ocrParticipant(row,session,p.submissionId,{pending:true});
-   const ocrAllowed=k.ocrConsent?.allowed===true&&k.ocrConsent.noticeVersion===PARTICIPANT_OCR_NOTICE_VERSION&&k.ocrConsent.noticeSha256===digest(PARTICIPANT_OCR_NOTICE),biometricAllowed=k.biometricConsent?.allowed===true&&k.biometricConsent.noticeVersion===PARTICIPANT_BIOMETRIC_NOTICE_VERSION&&k.biometricConsent.noticeSha256===digest(PARTICIPANT_BIOMETRIC_NOTICE);
+   const ocrAllowed=ocrConsentCurrent(k),biometricAllowed=biometricConsentCurrent(k);
    if(!ocrAllowed&&!biometricAllowed)throw new WorkspaceError('PARTICIPANT_OCR_CONSENT_REQUIRED',409);
-   const submitted=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND action='participant.operation.recorded' AND metadata->>'kind'='KYC_SUBMITTED' AND metadata->>'submissionId'=$3`,[member.organizationId,row.id,p.submissionId])).rows;
-   if(submitted.length!==1||submitted[0].metadata.contentHash!==k.contentHash||!participantKycImageSet(k,{strictLegacy:true,receipt:submitted[0].metadata,projectId:input.projectId}))throw new WorkspaceError('PARTICIPANT_KYC_EVIDENCE_UNCONFIRMED',409);
+   await assertOcrEvidence(client,member,input,k);
    const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now,previous=k.processing;
    if(previous?.status==='RUNNING'&&Date.parse(previous.expiresAt)>now.getTime()){
     if(previous.operationId!==input.operationId||previous.actorId!==member.actorId||previous.requestDigest!==requestDigest)throw new WorkspaceError('PARTICIPANT_OCR_PROCESSING',409);
@@ -163,13 +173,38 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
    const sameClaim=previous?.status==='RUNNING'&&previous.operationId===input.operationId&&previous.actorId===member.actorId&&previous.requestDigest===requestDigest;
    if(row.revision!==p.revision&&!sameClaim)throw new WorkspaceError('PARTICIPANT_REVISION_CHANGED',409);
    if(['EXTRACTED_UNVERIFIED','ADVISORY_UNREVIEWED'].includes(previous?.status))throw new WorkspaceError('PARTICIPANT_OCR_ALREADY_PROCESSED',409);
-   const claimId=id('ocrclaim'),m=metadata(row);m.participant.kyc.processing={status:'RUNNING',claimId,operationId:input.operationId,requestDigest,actorId:member.actorId,startedAt:now.toISOString(),expiresAt:new Date(now.getTime()+(biometricAllowed?150000:90000)).toISOString()};
+   const resource=ocrResource(input,k);
+   if(usage&&ocrAllowed){const pending=await usage.resourcePending(client,member,resource);if(pending)return {done:heldOcr(input,k,'ORGANIZATION_USAGE_RESULT_PENDING',pending)};}
+   const claimId=id('ocrclaim'),m=metadata(row);m.participant.kyc.processing={status:'RUNNING',claimId,operationId:input.operationId,requestDigest,actorId:member.actorId,startedAt:now.toISOString(),expiresAt:new Date(now.getTime()+(biometricAllowed?150000:90000)).toISOString(),...(sameClaim&&previous.usage?{usage:previous.usage}:{})};
    const updated=await writeWorker(client,input.projectId,row,m);
-   return {key,claimId,actorId:member.actorId,revision:updated.revision,contentHash:k.contentHash,front:k.images.find(image=>image.id==='document-front'),selfie:biometricAllowed?k.images.find(image=>image.id==='selfie'):null,biometricAllowed,ocrAllowed};
-  });
+   return {key,claimId,actorId:member.actorId,revision:updated.revision,contentHash:k.contentHash,front:k.images.find(image=>image.id==='document-front'),selfie:biometricAllowed?k.images.find(image=>image.id==='selfie'):null,biometricAllowed,ocrAllowed,resource};
+  },usageLock);
   if(claim.done)return claim.done;
-  let extraction,code,provenance,biometrics,frontImage;
-  const checkClaim=()=>run(session,input,false,async(client,member)=>{requireManager(member);const row=await worker(client,input.projectId,p.workerId),k=ocrParticipant(row,session,p.submissionId,{pending:true}),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;if(participantKycHasDocumentBack(k)&&!participantKycImageSet(k)||member.actorId!==claim.actorId||row.revision!==claim.revision||k.contentHash!==claim.contentHash||k.processing?.claimId!==claim.claimId||k.processing.status!=='RUNNING'||Date.parse(k.processing.expiresAt)<=now.getTime())throw new WorkspaceError('PARTICIPANT_OCR_PROCESSING_CHANGED',409);});
+  let extraction,code,provenance,biometrics,frontImage,usageReservation=null,latestUsage=null,dispatched=false;
+  const currentClaim=async(client,member,lock=false)=>{
+   requireManager(member);const row=await worker(client,input.projectId,p.workerId,lock),k=ocrParticipant(row,session,p.submissionId,{pending:true}),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
+   if(!participantKycImageSet(k,{strictLegacy:true})||member.actorId!==claim.actorId||row.revision!==claim.revision||k.contentHash!==claim.contentHash||k.processing?.claimId!==claim.claimId||k.processing.status!=='RUNNING'||Date.parse(k.processing.expiresAt)<=now.getTime())throw new WorkspaceError('PARTICIPANT_OCR_PROCESSING_CHANGED',409);
+   if(claim.ocrAllowed&&!ocrConsentCurrent(k))throw new WorkspaceError('PARTICIPANT_OCR_CONSENT_REQUIRED',409);
+   if(claim.biometricAllowed&&!biometricConsentCurrent(k))throw new WorkspaceError('PARTICIPANT_OCR_PROCESSING_CHANGED',409);
+   await assertOcrEvidence(client,member,input,k);
+   return {row,k};
+  };
+  const checkClaim=()=>run(session,input,false,(client,member)=>currentClaim(client,member));
+  const usageObserver=usage?{
+   beforeDispatch:async({requestedModel,endpoint}={})=>{
+    if(requestedModel!=='gpt-4o'||endpoint!=='chat.completions')throw new WorkspaceError('ORGANIZATION_USAGE_BINDING_REJECTED',409);
+    const revision=await run(session,input,true,async(client,member)=>{
+     const {row}=await currentClaim(client,member,true);
+     usageReservation=await usage.reserveResource(client,member,{version:2,...claim.resource,operationId:input.operationId,requestDigest,consentVersion:PARTICIPANT_OCR_NOTICE_VERSION,requestedModel});latestUsage=usageReservation.usage||null;
+     if(usageReservation.deferred||usageReservation.done)throw new WorkspaceError(usageReservation.code||'ORGANIZATION_USAGE_ALREADY_DISPATCHED',409);
+     const fenced=await usage.fence(client,member,usageReservation.capability);if(fenced.deferred)throw new WorkspaceError(fenced.code,409);
+     latestUsage={...latestUsage,state:'DISPATCHED'};
+     const m=metadata(row);m.participant.kyc.processing.usage=latestUsage;return (await writeWorker(client,input.projectId,row,m)).revision;
+    },usageLock);claim.revision=revision;dispatched=true;
+   },
+   observeUsage:async fact=>{latestUsage=await usage.observe(usageReservation.capability,fact);},
+   dispatchUnknown:async()=>{if(dispatched)latestUsage=await usage.unknown(usageReservation.capability);}
+  }:null;
   const safeCodes=new Set(['AI_PROVIDER_NOT_CONFIGURED','AI_PROVIDER_REQUEST_REJECTED','MEDIA_IMAGE_INVALID','DNI_DOCUMENT_NOT_CONFIRMED','DNI_EXTRACTION_INCOMPLETE','AI_RESPONSE_UNCONFIRMED','AI_RESPONSE_INVALID','AI_REQUEST_UNCONFIRMED','PARTICIPANT_PRIVATE_STORAGE_UNCONFIRMED','PARTICIPANT_KYC_INTEGRITY']);
   try{
    const image=await privateKycBytes(claim.front);
@@ -177,12 +212,13 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
    // Recheck before the external transfer, as well as before persisting output.
    await checkClaim();
    if(claim.ocrAllowed){
-    const result=analyzer?.analyzeDni?await analyzer.analyzeDni({base64:image.bytes.toString('base64'),mimeType:image.contentType}):{success:false,code:'AI_PROVIDER_NOT_CONFIGURED'};
+    const result=analyzer?.analyzeDni?await analyzer.analyzeDni({base64:image.bytes.toString('base64'),mimeType:image.contentType,...(usageObserver||{})}):{success:false,code:'AI_PROVIDER_NOT_CONFIGURED'};
+    if(usage&&result?.success===true&&(!dispatched||!['OBSERVED','UNMEASURED'].includes(latestUsage?.state)))throw new WorkspaceError('ORGANIZATION_USAGE_UNCONFIRMED',503);
     const normalized=result?.success===true?normalizeDniExtraction(result):null;
     if(normalized?.success){extraction={nombreCompleto:normalized.nombreCompleto,dni:normalized.dni,cuil:normalized.cuil};if(result.provider==='openai'&&/^(?:gpt-4o(?:-mini)?|gpt-4\.1(?:-mini|-nano)?|gpt-5(?:\.\d)?(?:-mini|-nano)?)(?:-\d{4}-\d{2}-\d{2})?$/.test(result.providerModel||''))provenance={provider:'openai',providerModel:result.providerModel};}
     else code=safeCodes.has(result?.code)?result.code:normalized?.code||'PARTICIPANT_OCR_UNCONFIRMED';
    }
-  }catch(error){if(error instanceof WorkspaceError&&['PARTICIPANT_MANAGE_REQUIRED','PARTICIPANT_ACCESS_REQUIRED','PARTICIPANT_SELF_REVIEW_REJECTED','PARTICIPANT_KYC_NOT_PENDING','PARTICIPANT_OCR_PROCESSING_CHANGED','WORKSPACE_CONTEXT_CHANGED','WORKSPACE_PROJECT_UNAVAILABLE'].includes(error.code))throw error;code=safeCodes.has(error?.code)?error.code:'PARTICIPANT_OCR_UNCONFIRMED';}
+  }catch(error){if(error instanceof WorkspaceError&&['ORGANIZATION_USAGE_ALREADY_DISPATCHED','ORGANIZATION_USAGE_RESULT_PENDING'].includes(error.code))return heldOcr(input,{submissionId:p.submissionId},error.code,latestUsage);if(error instanceof WorkspaceError&&!safeCodes.has(error.code))throw error;code=safeCodes.has(error?.code)?error.code:'PARTICIPANT_OCR_UNCONFIRMED';}
   if(claim.biometricAllowed){
    biometrics={status:'UNAVAILABLE',code:'BIOMETRIC_SERVICE_NOT_CONFIGURED',identityCertified:false,livenessVerified:false,documentAuthenticityVerified:false,measurementCalibrated:false,requiresHumanReview:true};
    if(typeof assessBiometrics==='function'&&frontImage)try{
@@ -194,17 +230,16 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
   }
   return run(session,input,true,async(client,member,scope)=>{
    requireManager(member);const prior=await receipt(client,member,claim.key);if(prior)return {scope,...await ocrOutcome(client,member,session,input,prior,requestDigest)};
-   const row=await worker(client,input.projectId,p.workerId,true),k=ocrParticipant(row,session,p.submissionId,{pending:true});
-   if(participantKycHasDocumentBack(k)&&!participantKycImageSet(k)||member.actorId!==claim.actorId||row.revision!==claim.revision||k.contentHash!==claim.contentHash||k.processing?.claimId!==claim.claimId||k.processing.status!=='RUNNING')throw new WorkspaceError('PARTICIPANT_OCR_PROCESSING_CHANGED',409);
+   const {row,k}=await currentClaim(client,member,true);
    const completed=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
    if(Date.parse(k.processing.expiresAt)<=completed.getTime())throw new WorkspaceError('PARTICIPANT_OCR_PROCESSING_CHANGED',409);
    if(!extraction&&!code&&biometrics?.status==='UNAVAILABLE')code=biometrics.code;
    const completedAt=completed.toISOString(),status=extraction?'EXTRACTED_UNVERIFIED':biometrics?.status==='ADVISORY_UNREVIEWED'?'ADVISORY_UNREVIEWED':'FAILED_RETRYABLE',m=metadata(row);
-   m.participant.kyc.processing={status,completedAt,adapter:'pilot-media-v1',...provenance,requiresHumanReview:true,identityVerified:false,...(extraction?{fields:extraction}:{code}),...(biometrics?{biometrics}:{})};
+   m.participant.kyc.processing={status,completedAt,adapter:'pilot-media-v1',...provenance,requiresHumanReview:true,identityVerified:false,...(extraction?{fields:extraction}:{code}),...(biometrics?{biometrics}:{}),...(latestUsage?{usage:latestUsage}:{})};
    await writeWorker(client,input.projectId,row,m);
    await record(client,member,claim.key,input.projectId,row.id,requestDigest,{kind:'PROCESS_KYC',submissionId:p.submissionId,contentHash:claim.contentHash,status,code:code||null,adapter:'pilot-media-v1',...provenance,biometricStatus:biometrics?.status||null,identityCertified:false,livenessVerified:false});
    return {scope,saved:true,replayed:false,receiptId:claim.key,participant:publicParticipant(await worker(client,input.projectId,row.id),false,true)};
-  });
+  },usageLock);
  }
  async function setOfficeRole(session,input,requestDigest){const context={projectId:input.projectId,scope:input.scope},p=input.payload;
   const target=await organizationRun(session,context,false,async(client,member,scope)=>{const prior=await receipt(client,member,participantReceiptId(member.actorId,input.projectId,input.operationId));if(prior){if(prior.metadata.requestDigest!==requestDigest)throw new WorkspaceError('PARTICIPANT_OPERATION_CONFLICT',409);return {done:{scope,...await currentOutcome(client,input.projectId,prior,true,member.actorId)}};}const current=await account(client,member.organizationId,p.membershipId);if(!publicAccount(current,member.actorId).canChangeRole)throw new WorkspaceError('PARTICIPANT_OFFICE_ROLE_PROTECTED',403);if(current.revision!==p.revision)throw new WorkspaceError('PARTICIPANT_REVISION_CHANGED',409);return current;});
@@ -448,7 +483,7 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
     if(member.identityOnly&&!['KYC_SUBMITTED','INVITATION_ACCEPTED','REVOKE_ONBOARDING_CONTACT'].includes(found.metadata.kind))throw new WorkspaceError('PARTICIPANT_KYC_REVIEW_REQUIRED',403);
     if(found.metadata.kind===PRIVATE_BANK_RECEIPT_KIND)return privateBankStatus(client,member,session,{...context,operationId:context.operationId.toLowerCase(),workerId:found.entityId,action:found.metadata.bankAction},scope);
     if(EMPLOYEE_INTAKE_ACTIONS.includes(found.metadata.kind)){if(member.role!=='ADMIN')throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);return employeeIntakeOutcome(found,scope,context.operationId);}
-     if(found.metadata.kind==='PROCESS_KYC')return {scope,state:'RECORDED',...await ocrOutcome(client,member,session,{...context,workerId:found.entityId,submissionId:found.metadata.submissionId},found)};
+     if(found.metadata.kind==='PROCESS_KYC'){if(context.workerId!==undefined&&(context.workerId!==found.entityId||context.submissionId!==found.metadata.submissionId))throw new WorkspaceError('PARTICIPANT_RECEIPT_INVALID',409);return {scope,state:'RECORDED',...await ocrOutcome(client,member,session,{...context,workerId:found.entityId,submissionId:found.metadata.submissionId},found)};}
      if(found.metadata.kind==='PREPARE_KYC_CHAT'){requireManager(member);const row=await worker(client,context.projectId,found.entityId);if(!row.active||!['INVITED','ACTIVE'].includes(row.metadata?.participant?.status))throw new WorkspaceError('PARTICIPANT_ACCESS_REQUIRED',403);return {scope,state:'RECORDED',...await currentOutcome(client,context.projectId,found,true),kind:'PREPARE_KYC_CHAT',codeUnavailable:true,expiresAt:found.metadata.expiresAt,challengeId:await preparedKycChatChallengeId(client,member,context.projectId,found)};}
     if(found.metadata.kind==='CANCEL_KYC_CHAT')requireManager(member);
     if(found.entityType==='TenantMembership'&&found.metadata.kind==='OFFICE_ROLE_CHANGED'){if(member.role!=='ADMIN')throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);}
@@ -467,10 +502,18 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
     }
     return {scope,state:'RECORDED',...await currentOutcome(client,context.projectId,found,true,member.actorId)};
    }
+    if(context.workerId!==undefined){
+     if(member.identityOnly)throw new WorkspaceError('PARTICIPANT_KYC_REVIEW_REQUIRED',403);requireManager(member);
+     if(!workspaceId(context.workerId)||!workspaceId(context.submissionId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+     const row=await worker(client,context.projectId,context.workerId),k=ocrParticipant(row,session,context.submissionId),input={...context,payload:{workerId:context.workerId,submissionId:context.submissionId}};
+     if(!ocrConsentCurrent(k))throw new WorkspaceError('PARTICIPANT_OCR_CONSENT_REQUIRED',409);await assertOcrEvidence(client,member,input,k);
+     if(usage){const pending=await usage.resourcePending(client,member,ocrResource(input,k));if(pending)return heldOcr(input,k,'ORGANIZATION_USAGE_RESULT_PENDING',pending);
+      if(k.processing?.operationId===context.operationId&&k.processing?.usage){const current=await usage.resourceProjection(client,member,{receiptId:k.processing.usage.receiptId,resourceType:'Worker',resourceId:row.id,projectId:context.projectId});if(current.state!=='RESERVED')return heldOcr(input,k,'ORGANIZATION_USAGE_ALREADY_DISPATCHED',current);}}
+    }
     if(member.identityOnly)return {scope,state:'NOT_OBSERVED',definitive:false};
     const processing=(await client.query(`SELECT ${columns} FROM public."Worker" WHERE "projectId"=$1 AND metadata->'participant'->'kyc'->'processing'->>'operationId'=$2 AND metadata->'participant'->'kyc'->'processing'->>'actorId'=$3`,[context.projectId,context.operationId.toLowerCase(),member.actorId])).rows.filter(row=>row.metadata?.participant?.kyc?.processing?.status==='RUNNING');
     if(processing.length===1){requireManager(member);const row=processing[0],k=ocrParticipant(row,session,row.metadata.participant.kyc.submissionId,{pending:true}),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
-     return {scope,state:'PROCESSING',definitive:false,workerId:row.id,submissionId:k.submissionId,expiresAt:k.processing.expiresAt,retryAfterExpiration:Date.parse(k.processing.expiresAt)<=now.getTime()};}
+     return {scope,state:'PROCESSING',definitive:false,workerId:row.id,submissionId:k.submissionId,expiresAt:k.processing.expiresAt,retryAfterExpiration:!k.processing.usage&&Date.parse(k.processing.expiresAt)<=now.getTime()};}
     const pending=(await client.query(`SELECT ${columns} FROM public."Worker" WHERE "projectId"=$1 AND metadata->'participant'->'invitation'->>'operationId'=$2 AND metadata->'participant'->'invitation'->>'createdBy'=$3`,[context.projectId,context.operationId.toLowerCase(),member.actorId])).rows;
    if(pending.length===1&&!canManageParticipants(member))await assertOwnParticipant(client,member,session,context.projectId,pending[0].id);
    return {scope,state:pending.length===1?'INVITATION_UNCONFIRMED':'NOT_OBSERVED',definitive:false,...(pending.length===1?{participant:publicParticipant(pending[0])}:{})};

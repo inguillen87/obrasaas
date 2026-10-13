@@ -42,6 +42,7 @@ export function publicFieldEvidence(row) {
   const e=row.metadata?.fieldOperations;
   const raw=e.processing||{status:'NOT_REQUESTED'},processing={status:raw.status};
   for(const key of ['code','result','humanReviewRequired','analysisConsent','startedAt','expiresAt','completedAt'])if(Object.hasOwn(raw,key))processing[key]=raw[key];
+  if(raw.usage?.version===2&&Array.isArray(raw.usage.stages)||raw.usageHoldCode)processing.providerPending=Boolean(raw.usageHoldCode||['RUNNING','MANUAL_REVIEW_REQUIRED','FAILED_RETRYABLE'].includes(raw.status)&&raw.usage.stages.some(item=>['DISPATCHED','UNKNOWN','OBSERVED','UNMEASURED'].includes(item?.usage?.state)));
   if(raw.status==='RUNNING'){
     const expires=Date.parse(raw.expiresAt),observed=row.readAt instanceof Date?row.readAt.getTime():NaN;
     processing.leaseExpired=Number.isFinite(expires)&&Number.isFinite(observed)&&expires<=observed;
@@ -55,7 +56,8 @@ const publicEvent=row=>({id:row.id,workerId:row.workerId,recordedAt:row.recorded
 const publicProposal=row=>({id:row.id,summary:row.summary,status:row.status==='PENDING'&&row.expired===true?'EXPIRED':row.status,statusStored:row.status,expiresAt:row.expiresAt?.toISOString()||null,revision:row.revision,
   taskId:row.action.taskId,workerId:row.proposedByWorkerId,progress:row.action.progress,quantity:row.action.quantity,baseline:row.action.baseline,unit:row.action.unit,...(row.action.measurement?{measurement:row.action.measurement}:{}),reason:row.action.reason,evidenceIds:row.action.evidenceIds,
   result:row.result?.fieldOperations||null});
-export function createFieldOperations({workspace,assertParticipant}) {
+export function createFieldOperations({workspace,assertParticipant,usage=null}) {
+  if(usage!==null&&typeof usage.resourceProjection!=='function')throw new TypeError('Explicit field review usage port required');
   const overtime=createFieldOvertime({assertWorker:worker});
   const correlated=action=>MATERIAL_INVENTORY_ACTIONS.includes(action)||OVERTIME_ACTIONS.includes(action)||action==='CONFIGURE_PROGRESS_MEASUREMENT';
   const run=(session,context,writable,callback)=>workspace.projectOperation(session,context,writable,callback,writable&&context.action==='ATTENDANCE'?lockPersonWorksiteJourney:writable&&OVERTIME_ACTIONS.includes(context.action)?(client,member)=>overtime.beforeProject(client,member,context):writable&&context.action==='DECIDE_STOCK_ADJUSTMENT'&&context.payload?.decision==='APPROVE'?async(client,member)=>{if(!canApproveProgress(member.role))throw new WorkspaceError('INVENTORY_MANAGE_REQUIRED',403);if(member.channelProof)throw new WorkspaceError('INVENTORY_ADJUSTMENT_WEB_ONLY',403);if(!await prior(client,member,fieldReceiptId(member.actorId,context.projectId,context.operationId)))await lockStockAdjustmentProposer(client,member,context.projectId,context.payload.proposalId);}:undefined);
@@ -273,7 +275,14 @@ export function createFieldOperations({workspace,assertParticipant}) {
           const row=await evidence(client,command.projectId,p.evidenceId,true),e=row.metadata.fieldOperations;
           if(row.revision!==p.revision)throw new WorkspaceError('FIELD_REVISION_CHANGED',409);
           if(e.review)throw new WorkspaceError('FIELD_ALREADY_REVIEWED',409);
-          if(e.processing?.status==='RUNNING')throw new WorkspaceError('FIELD_MEDIA_PROCESSING',409);
+          if(e.processing?.status==='RUNNING'){
+            const processing=e.processing,expiresAt=Date.parse(processing.expiresAt),stages=processing.usage?.version===2&&Array.isArray(processing.usage.stages)?processing.usage.stages:[];
+            if(!usage||!Number.isFinite(expiresAt)||expiresAt>now.getTime()||!stages.length)throw new WorkspaceError('FIELD_MEDIA_PROCESSING',409);
+            if(e.recordedBy===member.actorId)throw new WorkspaceError('FIELD_MAKER_CHECKER_REQUIRED',403);
+            let dispatched=false;
+            for(const stage of stages){const proof=await usage.resourceProjection(client,member,{receiptId:stage?.usage?.receiptId,resourceType:'Incident',resourceId:row.id,projectId:command.projectId});if(['DISPATCHED','UNKNOWN','OBSERVED','UNMEASURED'].includes(proof.state))dispatched=true;}
+            if(!dispatched)throw new WorkspaceError('FIELD_MEDIA_PROCESSING',409);
+          }
           if(e.recordedBy===member.actorId)throw new WorkspaceError('FIELD_MAKER_CHECKER_REQUIRED',403);
           const next={...e,review:{decision:p.decision,reason:p.reason,actorId:member.actorId,recordedAt:now.toISOString()}};
           await client.query(`UPDATE public."Incident" SET metadata=$3::jsonb,status=$4,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[row.id,command.projectId,JSON.stringify({...cleanMetadata(row.metadata),fieldOperations:next}),p.decision==='APPROVE'?'resolved':'rejected']);
@@ -347,6 +356,8 @@ export function createFieldOperations({workspace,assertParticipant}) {
     inventoryHistory(session,context){return run(session,context,true,async(client,member,scope,project)=>{const reviewer=canApproveProgress(member.role);if((context.afterMovement||context.afterAdjustment||context.adjustmentId)&&!reviewer)throw new WorkspaceError('INVENTORY_MANAGE_REQUIRED',403);const owned=reviewer?[]:(await reviewAccess(client,member,session,project.id,scope)).owned.filter(w=>w.metadata.participant.permissions?.report===true);for(const row of owned)await worker(client,member,session,project.id,row.id,'report');return {scope,projectId:project.id,inventory:await readInventory(client,member,project,{reviewer,workerIds:owned.map(w=>w.id),after:context.afterMovement,afterConsumption:context.afterConsumption,consumptionId:context.consumptionId,afterAdjustment:context.afterAdjustment,adjustmentId:context.adjustmentId})};});},
     // Media provider I/O is performed outside transactions. Every callback still
     // enters the same verified project transaction and rechecks actor/permissions.
-    mediaTransaction:run,assertWorker:worker,readEvidence:evidence,readTask:task,
+    // Media's organization reservation must precede the canonical project lock.
+    // Its schemas do not admit the business action commands handled by run.
+    mediaTransaction:(session,context,writable,callback,beforeProject)=>workspace.projectOperation(session,context,writable,callback,beforeProject),assertWorker:worker,readEvidence:evidence,readTask:task,
   };
 }

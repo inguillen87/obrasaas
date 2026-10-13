@@ -8,6 +8,7 @@ import {createPilotMediaAnalyzer} from './pilot-media.mjs';
 import {prepareMetaKycChallenge} from './meta-kyc-challenge.mjs';
 import {readParticipantKycChatAttempt} from './participant-kyc-chat-attempt.mjs';
 import {createPrivateBiometricAnalyzer} from './private-biometric-analyzer.mjs';
+import {productionOrganizationUsage} from './organization-usage-runtime.mjs';
 const uploader=createPrivateImageUploader({get,put});
 const biometricAnalyzer=createPrivateBiometricAnalyzer();
-export const productionParticipants=createParticipantStore({workspace:productionWorkspace,connect:connectWorkspace,identity:createParticipantIdentityProvider({client:clerkClient}),upload:uploader.uploadImageToBlob,get,analyzer:createPilotMediaAnalyzer(),prepareKycChat:prepareMetaKycChallenge,readKycChatAttempt:readParticipantKycChatAttempt,assessBiometrics:input=>biometricAnalyzer.analyzeBiometricPair(input)});
+export const productionParticipants=createParticipantStore({workspace:productionWorkspace,connect:connectWorkspace,identity:createParticipantIdentityProvider({client:clerkClient}),upload:uploader.uploadImageToBlob,get,analyzer:createPilotMediaAnalyzer(),usage:productionOrganizationUsage,prepareKycChat:prepareMetaKycChallenge,readKycChatAttempt:readParticipantKycChatAttempt,assessBiometrics:input=>biometricAnalyzer.analyzeBiometricPair(input)});
