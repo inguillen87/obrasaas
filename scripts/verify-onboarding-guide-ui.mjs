@@ -11,7 +11,7 @@ const accountSourceFiles=['workspace-identity.js','workspace.module.css','onboar
  'office-review-panel.js','office-review-panel.module.css','office-review-view.mjs',
  'workspace-request-lifecycle.js','workspace-request-lifecycle.mjs','workspace-session-request.mjs',
  'workspace-recovery-journal.mjs','participant-office-account-view.mjs','workspace-recovery-storage.mjs','private-bank-account-format.mjs',
- 'site-purchase-view.mjs','company-channel-view.mjs','own-company-number-view.mjs','own-company-templates-view.mjs','schedule-workbench.mjs'];
+ 'site-purchase-view.mjs','company-channel-view.mjs','own-company-number-view.mjs','own-company-templates-view.mjs','schedule-workbench.mjs','plan-baseline-view.mjs','plan-source-curve.mjs'];
 const sourceManifest=accountSourceFiles.map(file=>({path:'src/app/(identity)/cuenta/'+file,sha256:createHash('sha256').update(readFileSync(path.join(root,'src/app/(identity)/cuenta',file))).digest('hex')}));
 for(const file of ['src/app/(identity)/identity.module.css','src/app/(identity)/identity-load-guard.js','src/lib/identity-return-path.mjs','src/app/globals.css'])sourceManifest.push({path:file,sha256:createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')});
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');

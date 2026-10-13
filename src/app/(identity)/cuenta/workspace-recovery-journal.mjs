@@ -1,4 +1,5 @@
 import {createBrowserRecoveryStorage} from './workspace-recovery-storage.mjs';
+import {planBaselineCommandDigest,planBaselineOutcome} from './plan-baseline-view.mjs';
 import {PRIVATE_BANK_ACTIONS,validatePrivateBankOutcome} from './private-bank-account-format.mjs';
 import {purchaseOutcome} from './site-purchase-view.mjs';
 import {companyChannelOutcome,COMPANY_CHANNEL_ACTIONS} from './company-channel-view.mjs';
@@ -82,6 +83,7 @@ export const RECOVERY_RESOURCES = Object.freeze({
   'constructor-crm':'Cliente u oportunidad de la empresa',
   'demo-pilot':'Preparación y vinculación del piloto DEMO',
   'plan-import':'Importación de cronograma',
+  'plan-baseline':'Curva prevista de la obra',
   'project-preparation':'Preparación de la obra',
   'company-channel':'Canal de la empresa y obras',
   'company-onboarding':'Número declarado de la empresa',
@@ -123,11 +125,12 @@ async function reference(url, options, now) {
   const officeAccount=resource==='participants'&&body.action===PARTICIPANT_OFFICE_ASSIGN_ACTION;
   const plan=resource==='plan-import'&&typeof options.body==='string'&&['EDIT','APPLY','REJECT'].includes(body.action)&&id(body.draftId)&&Number.isSafeInteger(body.expectedRevision)&&body.expectedRevision>=1;
   const planUpload=resource==='plan-import'&&typeof options.body?.get==='function';
-  let inputDigest;try{if(plan)inputDigest=await planImportCommandDigest(body);else if(planUpload)inputDigest=await planImportUploadFormDigest(options.body);}catch{throw unavailable();}
+  let inputDigest;try{if(resource==='plan-baseline')inputDigest=await planBaselineCommandDigest(body);else if(plan)inputDigest=await planImportCommandDigest(body);else if(planUpload)inputDigest=await planImportUploadFormDigest(options.body);}catch{throw unavailable();}
   if(intake&&(!id(body.payload?.connectionId)||body.action!=='CONFIGURE_EMPLOYEE_INTAKE'&&!/^customer_webhook_[a-f0-9]{64}$/.test(body.payload?.applicationId||'')))throw unavailable();
   if(progress&&(!id(body.workerId)||!templateSendActionReference(body.actionReference)))throw unavailable();
   return {version:1,resource,scope:body.scope,projectId:body.projectId,operationId:body.operationId.toLowerCase(),createdAt:now,
     ...(resource==='project-creation'?{action:'CREATE_PROJECT'}:{}),
+    ...(resource==='plan-baseline'?{action:'SELECT',inputDigest}:{}),
     ...(resource==='office-review'?{action:body.action}:{}),
     ...(resource==='site-photo'?{reportId:body.reportId}:{}),
     ...(resource==='company-onboarding'?{action:body.action,expectedClerkOrganizationId:body.expectedClerkOrganizationId}:{}),
@@ -157,6 +160,8 @@ function valid(entry) {
   const preparation=entry.resource==='project-preparation';
   const office=entry.resource==='office-review';
   const creation=entry.resource==='project-creation';
+  const curveBaseline=entry.resource==='plan-baseline';
+  if(curveBaseline&&(entry.action!=='SELECT'||!/^[a-f0-9]{64}$/.test(entry.inputDigest||'')))return false;
   if(creation&&entry.action!=='CREATE_PROJECT')return false;
   if(office&&!['INVITE_AUDITOR','REVOKE_AUDITOR','SELECT_EVENT','SHARE_CONNECTION','WITHDRAW_CONNECTION'].includes(entry.action))return false;
   if(entry.resource==='participants'&&entry.action!==undefined&&!bank&&!intake&&!officeAccount)return false;
@@ -165,6 +170,7 @@ function valid(entry) {
   if(office)fields.push('action');
   if(officeAccount)fields.push('action');
   if(creation)fields.push('action');
+  if(curveBaseline)fields.push('action','inputDigest');
   if(Object.keys(entry).sort().join('|')!==fields.sort().join('|'))return false;
   if(entry.resource==='company-onboarding'&&(entry.action!=='declare_company_phone'||!id(entry.expectedClerkOrganizationId)))return false;
   if(entry.resource==='company-channel'&&!channelReferenceValid(entry.action,entry.connectionId))return false;
@@ -247,6 +253,7 @@ export function recoveryResult(entry, result) {
     return null;
   }
   if(entry.resource==='company-channel'){try{(OWN_COMPANY_ACTIONS.includes(entry.action)?ownCompanyNumberOutcome:OWN_TEMPLATE_ACTIONS.includes(entry.action)?ownTemplatesOutcome:companyChannelOutcome)(result,entry);return result.state==='RECORDED'||result.state==='REJECTED'?{state:result.state,receiptId:result.receiptId}:{state:result.state};}catch{return null;}}
+  if(entry.resource==='plan-baseline'){try{return planBaselineOutcome(result,entry);}catch{return null;}}
   if(entry.resource==='project-preparation')return projectPreparationReceiptOutcome(result,entry);
   if(entry.resource==='plan-import') {
     if(result.projectId!==entry.projectId)return null;
@@ -523,11 +530,13 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
         if(attendance?.rejected===true&&ticket.entry.resource==='field-operations'&&sameScheduleEntry(ticket.entry,attendance.entry)&&error.status===409&&error.code==='ATTENDANCE_REVISION_CHANGED'&&error.attendanceRevisionRejected===true&&error.requestDispatched!==false){await remove(attendance.entry);return;}
         if(schedule?.rejected===true&&ticket.entry.resource==='workspace'&&sameScheduleEntry(ticket.entry,schedule.entry)&&error.status===409&&error.code==='SCHEDULE_REVISION_CHANGED'&&error.scheduleRevisionRejected===true&&error.requestDispatched!==false){await remove(schedule.entry);return;}
         if(ticket.entry.resource==='participants'&&ticket.entry.action===PARTICIPANT_OFFICE_ASSIGN_ACTION){if(!ticket.existed&&(error.requestDispatched===false||participantOfficePrecommitRejected(error)))await remove(ticket.entry);return;}
+        if(ticket.entry.resource==='plan-baseline'&&error.requestDispatched!==false){if(recoveryResult(ticket.entry,error.result)?.state==='REJECTED')await remove(ticket.entry);return;}
         if(['office-review','project-creation'].includes(ticket.entry.resource)&&error.requestDispatched!==false)return;
         const rejected=ticket.entry.resource==='plan-import'&&recoveryResult(ticket.entry,error.result)?.state==='REJECTED'&&error.code===error.result.code&&error.status===({PLAN_IMPORT_FILE_INVALID:400,PLAN_IMPORT_FILE_TOO_LARGE:413})[error.code];
         if(!ticket.existed&&(error.requestDispatched===false||rejected||!['plan-import','company-channel','company-onboarding'].includes(ticket.entry.resource)&&!(ticket.entry.resource==='participants'&&(PRIVATE_BANK_ACTIONS.includes(ticket.entry.action)||PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(ticket.entry.action)))&&!(ticket.entry.resource==='meta-onboarding'&&ticket.entry.action==='reconcile')&&error.status>=400&&error.status<500))await remove(ticket.entry);return;
       }
       const entry=ticket.entry;
+      if(entry.resource==='plan-baseline'){if(['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(['office-review','project-creation'].includes(entry.resource)){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}
       if(entry.resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(entry.action)){if(['RECORDED','REJECTED'].includes(recoveryResult(entry,result)?.state))await remove(entry);return;}
       if(entry.resource==='participants'&&entry.action===PARTICIPANT_OFFICE_ASSIGN_ACTION){if(recoveryResult(entry,result)?.state==='RECORDED')await remove(entry);return;}

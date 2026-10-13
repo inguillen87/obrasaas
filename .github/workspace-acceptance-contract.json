@@ -487,6 +487,14 @@
         "run": "npx eslint src/lib/participant-admission.mjs tests/production-participant-admission.test.mjs tests/production-workspace-identity-only.test.mjs scripts/verify-workspace-identity-only-ui.mjs scripts/fixtures/canonical-participant-kyc.mjs tests/production-field-canonical-kyc.test.mjs tests/production-company-field-operations.test.mjs --max-warnings 0\nnode scripts/verify-workspace-identity-only-ui.mjs --expected-head \"$GITHUB_SHA\"\n"
       },
       "commandSha256": "238695242b62319edb2feb2ff7b8e8dbf59c844292784e11cdbb18c70cd5d5b8"
+    },
+    {
+      "id": 61,
+      "step": {
+        "name": "Approved plan baseline explicit selection and native receipts",
+        "run": "npx eslint src/lib/plan-baseline-*.mjs src/app/api/identity/plan-baseline/route.js 'src/app/(identity)/cuenta/plan-baseline-panel.js' 'src/app/(identity)/cuenta/plan-baseline-view.mjs' scripts/verify-plan-baseline-postgres.mjs tests/production-plan-baseline*.test.mjs tests/fixtures/plan-baseline-synthetic.mjs --max-warnings 0\nnode --test tests/production-plan-baseline*.test.mjs\nnode scripts/verify-plan-baseline-postgres.mjs\n"
+      },
+      "commandSha256": "a15d185e7beedf8061d08a538ffeaae38ffdeb6adafe33d5a1e86adf4a396217"
     }
   ],
   "artifactPatterns": [
@@ -547,7 +555,8 @@
     ".vercel/portfolio-overview-contract-evidence/",
     ".vercel/private/portfolio-overview-ui-validation.json",
     ".vercel/private/portfolio-*.png",
-    ".vercel/workspace-identity-only-evidence/"
+    ".vercel/workspace-identity-only-evidence/",
+    ".vercel/private/approved-plan-baseline-evidence/"
   ],
   "lanes": {
     "contracts": {
@@ -579,14 +588,16 @@
     },
     "plans": {
       "blocks": [
-        12
+        12,
+        61
       ],
       "artifacts": [
         ".vercel/private/plan-import-postgres-validation.json",
         ".vercel/private/plan-import-boundary-validation.json",
         ".vercel/private/plan-import-ui-validation.json",
         ".vercel/private/plan-import-ui-*.png",
-        ".vercel/private/workspace-plan-recovery-ui-validation.json"
+        ".vercel/private/workspace-plan-recovery-ui-validation.json",
+        ".vercel/private/approved-plan-baseline-evidence/"
       ],
       "optionalArtifactPatterns": [
         ".vercel/private/plan-import-ui-*.png"
@@ -595,7 +606,8 @@
         ".vercel/private/plan-import-postgres-validation.json",
         ".vercel/private/plan-import-boundary-validation.json",
         ".vercel/private/plan-import-ui-validation.json",
-        ".vercel/private/workspace-plan-recovery-ui-validation.json"
+        ".vercel/private/workspace-plan-recovery-ui-validation.json",
+        ".vercel/private/approved-plan-baseline-evidence/postgres.json"
       ],
       "requiredProducedEvidence": []
     },
@@ -1461,6 +1473,16 @@
       "sourceLine": 240,
       "producerSha256": "af286c0382dc5bb062fd13ec0d7e40f2e6e4da040c18fce351658ee4e9bcaa92",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
+    },
+    {
+      "producer": "scripts/verify-plan-baseline-postgres.mjs",
+      "path": ".vercel/private/approved-plan-baseline-evidence/postgres.json",
+      "retained": true,
+      "blockId": 61,
+      "lane": "plans",
+      "sourceLine": 122,
+      "producerSha256": "eb93f212a94b2ea0de4476d529035fa7cd5565e4468ba09c210c2864a89afd57",
+      "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     }
   ],
   "stdoutOnlyProducers": [
@@ -1505,6 +1527,8 @@
           "src/app/(identity)/cuenta/own-company-templates-view.mjs",
           "src/app/(identity)/cuenta/participant-office-account-view.mjs",
           "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
+          "src/app/(identity)/cuenta/plan-baseline-view.mjs",
+          "src/app/(identity)/cuenta/plan-source-curve.mjs",
           "src/app/(identity)/cuenta/private-bank-account-format.mjs",
           "src/app/(identity)/cuenta/site-purchase-view.mjs",
           "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
@@ -1771,6 +1795,8 @@
           "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
           "src/app/(identity)/cuenta/participant-panel.js",
           "src/app/(identity)/cuenta/participant-panel.module.css",
+          "src/app/(identity)/cuenta/plan-baseline-view.mjs",
+          "src/app/(identity)/cuenta/plan-source-curve.mjs",
           "src/app/(identity)/cuenta/private-bank-account-format.mjs",
           "src/app/(identity)/cuenta/private-bank-account-panel.js",
           "src/app/(identity)/cuenta/private-bank-account-panel.module.css",
@@ -1891,7 +1917,7 @@
         "path": ".vercel/private/employee-intake-ui/browser.json",
         "kind": "UI_INTAKE",
         "producer": "scripts/verify-employee-intake-ui.mjs",
-        "producerSha256": "58e4a3b7503ba9953153831246df4f1c8e6c67b60377bc6e51ae99e5fcd1e066",
+        "producerSha256": "f95ed3a8c9dd43fa6072e4694ec44481dadea8885a63c554db7f76d5ba66b863",
         "sourceFiles": [
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/employee-intake-continuity.mjs",
@@ -1911,6 +1937,8 @@
           "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
           "src/app/(identity)/cuenta/participant-panel.js",
           "src/app/(identity)/cuenta/participant-panel.module.css",
+          "src/app/(identity)/cuenta/plan-baseline-view.mjs",
+          "src/app/(identity)/cuenta/plan-source-curve.mjs",
           "src/app/(identity)/cuenta/private-bank-account-format.mjs",
           "src/app/(identity)/cuenta/private-bank-account-panel.js",
           "src/app/(identity)/cuenta/private-bank-account-panel.module.css",
@@ -1933,7 +1961,7 @@
         "path": ".vercel/private/participant-bank-intake-integration/current/browser.json",
         "kind": "UI_JOINT",
         "producer": "scripts/verify-participant-bank-intake-ui.mjs",
-        "producerSha256": "fff7bad0befdec45acf960226d4a43175c5a4a1c08419526c0da76f68da654c3",
+        "producerSha256": "5785f9d5e9f3a4e8c329ccba804ab6fe453308b6ccfeaa1e60f26720259c10cd",
         "sourceFiles": [
           "scripts/lib/participant-bank-intake-fixture.mjs",
           "src/app/(identity)/cuenta/company-channel-view.mjs",
@@ -1954,6 +1982,8 @@
           "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
           "src/app/(identity)/cuenta/participant-panel.js",
           "src/app/(identity)/cuenta/participant-panel.module.css",
+          "src/app/(identity)/cuenta/plan-baseline-view.mjs",
+          "src/app/(identity)/cuenta/plan-source-curve.mjs",
           "src/app/(identity)/cuenta/private-bank-account-format.mjs",
           "src/app/(identity)/cuenta/private-bank-account-panel.js",
           "src/app/(identity)/cuenta/private-bank-account-panel.module.css",
@@ -2074,7 +2104,7 @@
         "path": ".vercel/private/participant-bank-intake-integration/bad-resolution/browser.json",
         "kind": "UI_CAUSAL",
         "producer": "scripts/verify-participant-bank-intake-ui.mjs",
-        "producerSha256": "fff7bad0befdec45acf960226d4a43175c5a4a1c08419526c0da76f68da654c3",
+        "producerSha256": "5785f9d5e9f3a4e8c329ccba804ab6fe453308b6ccfeaa1e60f26720259c10cd",
         "sourceFiles": [
           "scripts/lib/participant-bank-intake-fixture.mjs",
           "src/app/(identity)/cuenta/company-channel-view.mjs",
@@ -2095,6 +2125,8 @@
           "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
           "src/app/(identity)/cuenta/participant-panel.js",
           "src/app/(identity)/cuenta/participant-panel.module.css",
+          "src/app/(identity)/cuenta/plan-baseline-view.mjs",
+          "src/app/(identity)/cuenta/plan-source-curve.mjs",
           "src/app/(identity)/cuenta/private-bank-account-format.mjs",
           "src/app/(identity)/cuenta/private-bank-account-panel.js",
           "src/app/(identity)/cuenta/private-bank-account-panel.module.css",
@@ -2371,6 +2403,10 @@
           "src/lib/pdfGenerator.js",
           "src/lib/person-worksite-journey.mjs",
           "src/lib/pilot-media.mjs",
+          "src/lib/plan-baseline-http.mjs",
+          "src/lib/plan-baseline-policy.mjs",
+          "src/lib/plan-baseline-runtime.mjs",
+          "src/lib/plan-baseline-store.mjs",
           "src/lib/plan-import-analyzer.mjs",
           "src/lib/plan-import-cyp-curve.mjs",
           "src/lib/plan-import-http.mjs",
@@ -2496,12 +2532,14 @@
         "path": ".vercel/private/project-preparation-ui-validation.json",
         "kind": "UI_PREPARATION",
         "producer": "scripts/verify-project-preparation-ui.mjs",
-        "producerSha256": "b1aa95413cb840abda4c3ceb58e897919ff4ef723a9be5d5936ae1c22f7ce1e4",
+        "producerSha256": "5627cc47f2a885f796d8f59ba02cb204c869561ce985716cd7fd140688d11d69",
         "sourceFiles": [
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/own-company-number-view.mjs",
           "src/app/(identity)/cuenta/own-company-templates-view.mjs",
           "src/app/(identity)/cuenta/participant-office-account-view.mjs",
+          "src/app/(identity)/cuenta/plan-baseline-view.mjs",
+          "src/app/(identity)/cuenta/plan-source-curve.mjs",
           "src/app/(identity)/cuenta/private-bank-account-format.mjs",
           "src/app/(identity)/cuenta/project-preparation-format.mjs",
           "src/app/(identity)/cuenta/project-preparation-panel.js",
@@ -2548,12 +2586,14 @@
         "path": ".vercel/private/portfolio-overview-ui-validation.json",
         "kind": "UI_PORTFOLIO",
         "producer": "scripts/verify-portfolio-overview-ui.mjs",
-        "producerSha256": "5b05c517ca5fbe934b6db1a41c7f985cf6b0561bf956165fced14c9dae3c24ad",
+        "producerSha256": "d6e4d5751079cccc622110bf149e1bf83ce6147059d7c257b8efb9827985dbf3",
         "sourceFiles": [
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/own-company-number-view.mjs",
           "src/app/(identity)/cuenta/own-company-templates-view.mjs",
           "src/app/(identity)/cuenta/participant-office-account-view.mjs",
+          "src/app/(identity)/cuenta/plan-baseline-view.mjs",
+          "src/app/(identity)/cuenta/plan-source-curve.mjs",
           "src/app/(identity)/cuenta/portfolio-overview-panel.js",
           "src/app/(identity)/cuenta/portfolio-overview-panel.module.css",
           "src/app/(identity)/cuenta/portfolio-overview-view.mjs",
@@ -2685,6 +2725,9 @@
           "src/app/(identity)/cuenta/participant-onboarding-next-step.mjs",
           "src/app/(identity)/cuenta/participant-panel.js",
           "src/app/(identity)/cuenta/participant-panel.module.css",
+          "src/app/(identity)/cuenta/plan-baseline-panel.js",
+          "src/app/(identity)/cuenta/plan-baseline-view.mjs",
+          "src/app/(identity)/cuenta/plan-baseline.module.css",
           "src/app/(identity)/cuenta/plan-import-calendar-suggestions.mjs",
           "src/app/(identity)/cuenta/plan-import-panel.js",
           "src/app/(identity)/cuenta/plan-import-panel.module.css",
@@ -3199,6 +3242,63 @@
           "malformed-cross-tenant-project-scope-other-worker-and-changed-anchor-cursors-reject-with-current-authorization",
           "canonical-participant-store-revoke-restore-disables-restores-assignment-with-identical-worker-and-project-membership-timestamps-but-old-approval-stays-invalid",
           "canonical-set-office-role-a-to-b-to-a-with-identical-tenant-membership-timestamp-and-synthetic-identity-never-revives-old-approval"
+        ]
+      },
+      {
+        "id": "plan-baseline-postgres",
+        "lane": "plans",
+        "blockId": 61,
+        "path": ".vercel/private/approved-plan-baseline-evidence/postgres.json",
+        "kind": "PG_PLAN_BASELINE",
+        "producer": "scripts/verify-plan-baseline-postgres.mjs",
+        "producerSha256": "eb93f212a94b2ea0de4476d529035fa7cd5565e4468ba09c210c2864a89afd57",
+        "sourceFiles": [
+          "package-lock.json",
+          "package.json",
+          "scripts/lib/disposable-postgres-cleanup.mjs",
+          "scripts/verify-plan-baseline-postgres.mjs",
+          "src/app/api/identity/plan-baseline/route.js",
+          "src/lib/organization-usage-policy.mjs",
+          "src/lib/participant-admission.mjs",
+          "src/lib/participant-approved-identity.mjs",
+          "src/lib/participant-kyc-image-set.mjs",
+          "src/lib/plan-baseline-http.mjs",
+          "src/lib/plan-baseline-policy.mjs",
+          "src/lib/plan-baseline-runtime.mjs",
+          "src/lib/plan-baseline-store.mjs",
+          "src/lib/plan-import-analyzer.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-monthly-curve.mjs",
+          "src/lib/plan-import-ooxml.mjs",
+          "src/lib/plan-import-policy.mjs",
+          "src/lib/plan-import-store.mjs",
+          "src/lib/private-image-upload.mjs",
+          "src/lib/production-identity-config.mjs",
+          "src/lib/progress-measurement-quantity.js",
+          "src/lib/task-progress-measurement.js",
+          "src/lib/verified-session.mjs",
+          "src/lib/workspace-policy.mjs",
+          "src/lib/workspace-runtime.mjs",
+          "src/lib/workspace-store.mjs",
+          "tests/fixtures/plan-import-cyp-curve-synthetic.mjs",
+          "tests/fixtures/plan-import-monthly-curve-synthetic.mjs",
+          "tests/fixtures/plan-import-ooxml-synthetic.mjs",
+          "tests/production-plan-baseline-postgres-target.test.mjs"
+        ],
+        "checkNames": [
+          "real-local-OOXML-APPLIED-receipts-no-automatic-baseline",
+          "explicit-HTTP-selection-preserves-original-financial-curve",
+          "native-held-Project-lock-blocks-selection-before-CAS",
+          "concurrent-same-operation-one-immutable-selection",
+          "concurrent-stale-CAS-one-winner-one-audited-rejection",
+          "replacement-old-replay-original-snapshot-no-reactivation",
+          "actual-COMMIT-lost-ACK-recovers-durable-selection",
+          "actual-ROLLBACK-remains-uncertain-same-operation-retry",
+          "active-write-failure-rolls-back-selection-receipt",
+          "current-role-membership-project-tenant-scope-deny-private-data",
+          "tampered-active-pointer-APPLY-receipt-and-source-fail-closed",
+          "native-candidate-pagination-bound-to-current-project-scope",
+          "all-selection-reads-preserve-Tasks-imports-and-original-curve"
         ]
       }
     ]

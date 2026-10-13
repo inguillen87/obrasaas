@@ -21,7 +21,7 @@ function fixture(){
 function rejected(change){const input=fixture();change(input);assert.throws(()=>validateOrganizationUsageCi(input),{code:'ORGANIZATION_USAGE_CI_REJECTED'});}
 
 test('complete native and DOM source-bound contracts validate without executing producers',()=>{
- assert.equal(native.files.length,110);assert.equal(browser.files.length,24);assert.equal(ORGANIZATION_USAGE_PG_CHECKS.length,16);const input=fixture(),before=JSON.stringify(input),proof=validateOrganizationUsageCi(input);assert.equal(JSON.stringify(input),before);assert.equal(proof.version,ORGANIZATION_USAGE_CI_VERSION);assert.equal(proof.status,'PASS');assert.equal(proof.postgres.sourceCount,110);assert.equal(proof.providerRequests,0);assert.equal(proof.paymentVerified,false);assert.equal(proof.cost,null);
+ assert.equal(native.files.length,110);assert.equal(browser.files.length,25);assert.equal(ORGANIZATION_USAGE_PG_CHECKS.length,16);const input=fixture(),before=JSON.stringify(input),proof=validateOrganizationUsageCi(input);assert.equal(JSON.stringify(input),before);assert.equal(proof.version,ORGANIZATION_USAGE_CI_VERSION);assert.equal(proof.status,'PASS');assert.equal(proof.postgres.sourceCount,110);assert.equal(proof.ui.sourceCount,25);assert.equal(proof.providerRequests,0);assert.equal(proof.paymentVerified,false);assert.equal(proof.cost,null);
 });
 test('durable civil source lineage cannot be omitted, substituted or certified by the pre-civil manifest',()=>{
  const files=['src/lib/participant-civil-store.mjs','src/lib/participant-civil-policy.mjs','src/lib/bindx-civil-data-client.mjs'];
@@ -38,11 +38,12 @@ test('foreign abbreviated stale tree or dirty source cannot certify a release',(
  for(const key of ['expectedHead','head','sourceTree'])rejected(value=>{value[key]='c'.repeat(40);});rejected(value=>{value.expectedHead=head.slice(0,7);});rejected(value=>{value.trackedClean=false;});for(const kind of ['postgres','ui'])for(const [key,value] of [['sourceRevision','c'.repeat(40)],['sourceTree','c'.repeat(40)],['sourceState','working-tree'],['trackedClean',false],['status','FAILED']])rejected(input=>{input[kind][key]=value;});
 });
 test('current organization usage and UI helper nodes cannot be missing, stale or substituted',()=>{
- for(const [kind,file] of [['postgres','src/lib/organization-usage-store.mjs'],['postgres','src/lib/organization-usage-policy.mjs'],['postgres','src/lib/organization-resource-usage-store.mjs'],['postgres','src/lib/organization-resource-usage-policy.mjs'],['ui','src/app/(identity)/cuenta/company-usage-panel.js'],['ui','src/app/(identity)/cuenta/plan-import-usage-view.mjs']]){
+ for(const [kind,file] of [['postgres','src/lib/organization-usage-store.mjs'],['postgres','src/lib/organization-usage-policy.mjs'],['postgres','src/lib/organization-resource-usage-store.mjs'],['postgres','src/lib/organization-resource-usage-policy.mjs'],['ui','src/app/(identity)/cuenta/company-usage-panel.js'],['ui','src/app/(identity)/cuenta/plan-import-usage-view.mjs'],['ui','src/app/(identity)/cuenta/plan-baseline-view.mjs'],['ui','src/app/(identity)/cuenta/plan-source-curve.mjs']]){
   assert.equal((kind==='postgres'?native:browser).files.filter(source=>source===file).length,1);rejected(input=>{input[kind].sourceManifest=input[kind].sourceManifest.filter(ref=>ref.path!==file);});rejected(input=>{input[kind].sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-usage.mjs';});rejected(input=>{input[kind].sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});rejected(input=>{delete input.gitSources[file];});
  }
 });
 test('source manifests cannot conceal duplicates, extras or false package bytes',()=>{
+ rejected(input=>{input.ui.sourceManifest=input.ui.sourceManifest.filter(ref=>ref.path!=='src/app/(identity)/cuenta/plan-baseline-view.mjs');assert.equal(input.ui.sourceManifest.length,24);});
  for(const kind of ['postgres','ui']){rejected(input=>{input[kind].sourceManifest[1]={...input[kind].sourceManifest[0]};});rejected(input=>{input[kind].sourceManifest.push({path:'src/lib/extra.mjs',sha256:'f'.repeat(64)});});rejected(input=>{input[kind].harnessSha256='f'.repeat(64);});}rejected(input=>{input.ui.dependencyManifest.pop();});rejected(input=>{input.ui.dependencyManifest[0].sha256='f'.repeat(64);});rejected(input=>{input.ui.cleanupHelperSha256='f'.repeat(64);});
 });
 
