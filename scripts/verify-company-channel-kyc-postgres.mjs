@@ -9,11 +9,12 @@ import {encryptCustomerSecret,decryptCustomerSecret} from '../src/lib/meta-custo
 import {createMetaCustomerInbox,createMetaCustomerCallbackHandlers,splitMetaCustomerEvents} from '../src/lib/meta-customer-callback.mjs';
 import {createMetaCustomerProcessor} from '../src/lib/meta-customer-processing.mjs';
 import {createMetaCustomerProvider} from '../src/lib/meta-customer-provider.mjs';
-import {createMetaCustomerOutbound,customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
+import {createMetaCustomerOutbound,customerOutboundId,customerJobTransaction} from '../src/lib/meta-customer-outbound.mjs';
 import {prepareMetaKycChallenge} from '../src/lib/meta-kyc-challenge.mjs';
 import {resolveMetaKycAuthority,META_KYC_AUTHORIZATION_CODES} from '../src/lib/meta-kyc-identity.mjs';
 import {createMetaKycBridge} from '../src/lib/meta-kyc-bridge.mjs';
 import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
+import {createMetaKycExpiryFeedback,metaKycExpiryReceiptId,META_KYC_EXPIRY_REPLY} from '../src/lib/meta-kyc-expiry-feedback.mjs';
 import {createParticipantChannelKycDeposit,createParticipantChannelKycUploader} from '../src/lib/participant-channel-kyc.mjs';
 import {createCompanyChannelBridge,resolveCompanyOutboundIdentity} from '../src/lib/company-channel-routing.mjs';
 import {createWorkerChannelStore} from '../src/lib/worker-channel-identity.mjs';
@@ -60,15 +61,16 @@ const schema='obrasaas_company_kyc_'+randomUUID().replaceAll('-','');assert.matc
 const sqlInSchema=sql=>sql.replaceAll('public.',schema+'.').replaceAll("'public'::regnamespace","'"+schema+"'::regnamespace").replaceAll("table_schema='public'","table_schema='"+schema+"'");
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),root=process.cwd();
 const sources=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(entry=>entry.isDirectory()?sources(relative+'/'+entry.name):[relative+'/'+entry.name]);
-const sourceManifest=[...sources('src/lib'),'scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs'].map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
+const sourceManifest=[...sources('src/lib'),'src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs'].map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
 const admin=new Client({connectionString:url.toString()}),environment={...lifecycleEnvironment},a={...lifecycleTenants[0],anchorProjectId:'project-a',projectId:'project-target-b',channelId:'company-kyc-channel-a',workerId:'company-kyc-worker-b',invitationId:'invite_'+'a'.repeat(32),providerInvitationId:'orginv_CompanyKycA'},b={...lifecycleTenants[1],projectId:'project-foreign',channelId:'company-kyc-channel-foreign'},graph=createControlledLifecycleGraph(environment),blob=createControlledLifecycleBlob(),clerk=createControlledLifecycleClerk(),checks=[];
+let expiryFeedbackNative=null,poolClosed=false,adminClosed=false,ownConnectionsClosed=false;const ownedPids=new Set(),ownedEnds=[];
 let pool,created=false,passed=false,sequence=0,lastReplyId=null,networkCalls=0,loseDepositCommit=false,catalogFingerprintEquivalence=null,schemaReadinessEquivalence=null;
 const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{networkCalls++;throw Error('CORPORATE_KYC_UNCONTROLLED_NETWORK_REJECTED');};
 const query=async(sql,args=[])=>{const client=await pool.connect();try{return await client.query(sqlInSchema(sql),args);}finally{client.release();}};
 const connect=async()=>{const client=await pool.connect();let deposited=false;return {release:broken=>client.release(broken),query:async(sql,args=[])=>{const result=await client.query(sqlInSchema(sql),args);if(sql.startsWith('INSERT INTO public."AuditLog"')&&sql.includes("'participant.operation.recorded'"))deposited=true;if(sql==='COMMIT'&&deposited&&loseDepositCommit){loseDepositCommit=false;throw Error('SYNTHETIC_COMPANY_KYC_COMMIT_ACK_LOST');}return result;}};};
 try{
  await admin.connect();await admin.query('CREATE SCHEMA "'+schema+'"');created=true;
- pool=new Pool({connectionString:url.toString(),max:8,options:'-c search_path='+schema});await query(lifecycleSchema);
+ pool=new Pool({connectionString:url.toString(),max:8,options:'-c search_path='+schema});pool.on('connect',client=>{ownedPids.add(client.processID);ownedEnds.push(new Promise(resolve=>client.once('end',resolve)));});await query(lifecycleSchema);
  for(const t of [a,b]){
   await query(`INSERT INTO "Organization"(id,name,"clerkOrganizationId",metadata) VALUES($1,$2,$3,'{}')`,[t.organizationId,'Synthetic company '+t.key,t.clerkOrganizationId]);
   await query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES($1,$2,$3)`,[t.ownerId,t.ownerUserId,'owner-'+t.key+'@example.invalid']);
@@ -223,11 +225,96 @@ try{
  const ownScope3=(await workspace.list(ownSession)).scope,download3={projectId:threeProject,scope:ownScope3,workerId:threeWorker,imageId:'document-back'};assert.deepEqual((await threeStore.downloadKyc(ownSession,download3)).bytes,bytes3.back);const current3=await threeRow(),review3={projectId:threeProject,scope:reviewScope,operationId:randomUUID(),action:'REVIEW_KYC',payload:{workerId:threeWorker,revision:current3.revision,submissionId:adopted3.kyc.submissionId,decision:'APPROVED',reason:'Synthetic distinct human reviewed three corporate images'}};await assert.rejects(threeStore.save(ownSession,{...review3,scope:ownScope3}),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});assert.equal((await threeStore.save(reviewSession,review3)).saved,true);assert.equal((await assertApprovedParticipantKyc({query},await threeRow(),{actorId:'company-kyc-person',clerkUserId:a.workerUserId,organizationId:a.organizationId})).status,'ACTIVE');
  checks.push('schema2-corporate-canonical-Clerk-claim-adopts-three-original-images-and-private-back-download-before-distinct-human-review');
  const revoke3=await threeRow();await threeStore.save(reviewSession,{projectId:threeProject,scope:reviewScope,operationId:randomUUID(),action:'REVOKE',payload:{workerId:threeWorker,revision:revoke3.revision,reason:'Synthetic final three-image revocation'}});const readsBeforeRevocationCheck=privateBackReads,transportBeforeRevocationCheck=stable();await assert.rejects(threeStore.downloadKyc(ownSession,download3),{code:'WORKSPACE_PROJECT_UNAVAILABLE',status:404});assert.equal(privateBackReads,readsBeforeRevocationCheck);assert.deepEqual(stable(),transportBeforeRevocationCheck);assert.equal(JSON.stringify((await query(`SELECT * FROM "AuditLog" WHERE id=$1`,[capture3.id])).rows[0]),original3);checks.push('schema2-corporate-revocation-denies-private-dorso-with-original-capture-receipt-immutable');
+ // These fixtures are issued through the real preparer/bridge/outbound at a
+ // controlled SQL clock 31 minutes in the past. Continuation uses the actual
+ // PostgreSQL clock; no prepared receipt, claim or conversation is rewritten.
+ const expiryBase=a,expiryKind='COMPANY',expiryNativeSql=sql=>sqlInSchema(sql);
+ let expiryClockOffset=0,expiryCommitMode=null,expiryGate=null,expiryTracing=false;
+ const expiryPids=[];
+ const expiryConnect=async()=>{
+  const client=await pool.connect();let written=false;
+  return {release:broken=>client.release(broken),query:async(sql,args=[])=>{
+   if(sql==='BEGIN'&&expiryTracing)expiryPids.push(client.processID);
+   if(sql==='COMMIT'&&written&&expiryCommitMode==='ROLLBACK'){expiryCommitMode=null;throw Error('SYNTHETIC_EXPIRY_COMMIT_REJECTED_BEFORE_APPLY');}
+   if(sql==='COMMIT'&&written&&expiryGate&&!expiryGate.pid){expiryGate.pid=client.processID;await expiryGate.promise;}
+   const clockSql=expiryClockOffset?sql.replaceAll('clock_timestamp()',"(clock_timestamp()-interval '31 minutes')"):sql;
+   const value=await client.query(expiryNativeSql(clockSql),args);
+   if(sql.startsWith('INSERT INTO public."AuditLog"')&&sql.includes("'participant.kyc_chat.expiry_feedback'"))written=true;
+   if(sql==='COMMIT'&&written&&expiryCommitMode==='LOST_ACK'){expiryCommitMode=null;throw Error('SYNTHETIC_EXPIRY_COMMIT_APPLIED_ACK_LOST');}
+   return value;
+  }};
+ };
+ const expiryAdapter=createMetaKycExpiryFeedback({connect:expiryConnect,provider,environment}),expiryBridge=createMetaKycBridge({connect:expiryConnect,provider,deposit,environment}),expiryCaptureOutbound=createMetaKycOutbound({connect:expiryConnect,provider,environment});
+ const expiryProcessor=createMetaCustomerProcessor({connect:expiryConnect,environment,authorizationCodes:[...META_KYC_AUTHORIZATION_CODES,'META_KYC_EXPIRY_FEEDBACK_DENIED'],expiredKyc:expiryAdapter.feedback,dispatch:context=>expiryBridge.execute(context),outbound:{send:(context,reply,{purpose})=>purpose==='KYC_EXPIRY_FEEDBACK'?expiryAdapter.send(context,reply):expiryCaptureOutbound.send(context,reply)}});
+ const expiryCallback=createMetaCustomerCallbackHandlers({inbox:createMetaCustomerInbox({connect:expiryConnect,environment}),environment,schedule:()=>{}});
+ const expiryWorker=async t=>(await query(`SELECT *,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM "Worker" WHERE id=$1`,[t.workerId])).rows[0];
+ const expiryCount=async(context,receiptId)=>(await query(`SELECT (SELECT count(*)::int FROM "AuditLog" WHERE id=$1 AND action='participant.kyc_chat.expiry_feedback') AS receipts,(SELECT count(*)::int FROM "WebhookEvent" WHERE id=$2 AND provider='meta-customer-outbound-v1') AS outbounds`,[receiptId,customerOutboundId(context.eventId)])).rows[0];
+ async function expiryReceive(t,message,contextId=null){
+  const value={id:'wamid.NativeExpiry_'+randomUUID().replaceAll('-',''),from:t.sender,timestamp:String(Math.floor((Date.now()+expiryClockOffset)/1000)),...(typeof message==='string'?{type:'text',text:{body:message}}:message),...(contextId?{context:{id:contextId}}:{})},wire={object:'whatsapp_business_account',entry:[{id:t.wabaId,changes:[{field:'messages',value:{metadata:{phone_number_id:t.phoneNumberId},messages:[value]}}]}]},body=JSON.stringify(wire);
+  const response=await expiryCallback.POST(new Request('https://obrasaas.com/api/meta/customer-callback',{method:'POST',headers:{'Content-Type':'application/json','x-hub-signature-256':'sha256='+createHmac('sha256',environment.META_APP_SECRET).update(body).digest('hex')},body}));
+  assert.equal(response.status,200);assert.equal((await response.json()).durable,true);return 'customer_webhook_'+splitMetaCustomerEvents(wire)[0].externalId;
+ }
+ async function expiryFixture(index){
+  const t={...expiryBase,workerId:'native-expiry-'+expiryKind.toLowerCase()+'-'+index,sender:'549119900'+String(index).padStart(4,'0'),workerUserId:'user_NativeExpiry'+expiryKind+index},actor=t.workerId+'-actor',membership=t.workerId+'-member';
+  await query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES($1,$2,$3)`,[actor,t.workerUserId,t.workerId+'@example.invalid']);
+  await query(`INSERT INTO "TenantMembership"(id,"userId","organizationId","tenantRole","clerkRole",status) VALUES($1,$2,$3,'AUDITOR','org:member','ACTIVE')`,[membership,actor,t.organizationId]);
+  await query(`INSERT INTO "ProjectMembership"(id,"projectId","tenantMembershipId",status) VALUES($1,$2,$3,'ACTIVE')`,[t.workerId+'-pm',t.projectId,membership]);
+  await query(`INSERT INTO "Worker"(id,"projectId",name,phone,role,active,metadata) VALUES($1,$2,'Synthetic native expiry person',$3,'WORKER',true,$4::jsonb)`,[t.workerId,t.projectId,'+'+t.sender,JSON.stringify({siteRegister:{version:1},participant:{version:1,status:'ACTIVE',clerkUserId:t.workerUserId,permissions:{attendance:false,report:false},kyc:{version:1,status:'NOT_SUBMITTED'}}})]);
+  graph.assets.get(t.key).sender=t.sender;expiryClockOffset=-31*60000;
+  let prepared,promptEvent;
+  try{
+   prepared=await customerJobTransaction(expiryConnect,async client=>{const member={actorId:t.ownerId,membershipId:'owner-member-'+t.key,organizationId:t.organizationId,role:'ADMIN'},input={projectId:t.projectId,workerId:t.workerId,revision:(await expiryWorker(t)).revision,operationId:randomUUID()};await prepareMetaKycChallenge.beforeProject(client,member,input);return prepareMetaKycChallenge(client,member,{id:t.projectId,organizationId:t.organizationId},input,{environment});});
+   assert.equal(prepared.captureImageSetVersion,2);promptEvent=await expiryReceive(t,prepared.code);assert.equal((await expiryProcessor.process(promptEvent)).replySent,true);
+  }finally{expiryClockOffset=0;}
+  const prompt=(await query(`SELECT * FROM "WebhookEvent" WHERE id=$1`,[customerOutboundId(promptEvent)])).rows[0];assert.equal(prompt.outcome.state,'SENT');
+  const before=await expiryWorker(t),challenge=before.metadata.participant.kycChatChallenge,state=JSON.parse(decryptCustomerSecret(before.metadata.participant.kycChatConversation.encryptedState,{organizationId:t.organizationId,projectId:challenge.companyKyc?.anchorProjectId||t.projectId,purpose:'kyc-chat-conversation',resourceId:challenge.id},environment));
+  assert.equal(before.metadata.participant.kycChatChallenge.status,'CLAIMED');assert.equal(state.step,'CONSENT');assert.ok(Date.parse(state.expiresAt)<Date.now());
+  const eventId=await expiryReceive(t,{type:'image',image:{id:t.mediaId,mime_type:'image/png'}},prompt.outcome.messageId),leaseToken=randomUUID();
+  await query(`UPDATE "WebhookEvent" SET "leaseToken"=$2,"leaseExpiresAt"=clock_timestamp()+interval '1 minute',attempts=1 WHERE id=$1 AND status='PENDING'`,[eventId,leaseToken]);
+  const event=(await query(`SELECT * FROM "WebhookEvent" WHERE id=$1`,[eventId])).rows[0],context={eventId,projectId:t.anchorProjectId||t.projectId,channelId:t.channelId,payloadDigest:event.payload.payloadDigest,leaseToken};
+  return {t,context,before,receiptId:metaKycExpiryReceiptId(eventId),prompt};
+ }
+ const expiryStats=()=>({puts:blob.puts(),downloads:graph.assets.get(expiryBase.key).downloads,sends:graph.assets.get(expiryBase.key).sends});
+ const expiryEvidence={kind:expiryKind,postgresExecuted:true,controlledIssuanceClockOffsetMs:-31*60000,continuationClock:'actual-PostgreSQL-clock',preparedClaimPromptBytesRewritten:false,cases:[],provider:'real-adapter-controlled-Graph-fetch',realProviderCalls:0};
+ const waitExpiry=async predicate=>{const deadline=Date.now()+6000;while(Date.now()<deadline){const value=await predicate();if(value)return value;await new Promise(resolve=>setTimeout(resolve,20));}throw Error('NATIVE_EXPIRY_LOCK_PROBE_TIMEOUT');};
+ const originalExpirySender=graph.assets.get(expiryBase.key).sender;
+ try{
+  const t=await expiryFixture(1),baseline=expiryStats();expiryTracing=true;expiryPids.length=0;
+  let release;const promise=new Promise(resolve=>{release=resolve;});expiryGate={pid:null,promise,release};
+  let firstError;const first=expiryAdapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'});first.catch(error=>{firstError=error;});let second,lock;
+  try{
+   await waitExpiry(()=>{if(firstError)throw firstError;return expiryGate.pid;});assert.deepEqual(await expiryCount(t.context,t.receiptId),{receipts:0,outbounds:0});
+   second=expiryAdapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'});second.catch(()=>{});
+   lock=await waitExpiry(async()=>{const rows=(await query(`SELECT pid,wait_event_type,pg_blocking_pids(pid) AS blockers FROM pg_stat_activity WHERE datname=current_database() AND pid=ANY($1::int[])`,[expiryPids])).rows;return rows.find(row=>row.pid!==expiryGate.pid&&row.wait_event_type==='Lock'&&row.blockers.includes(expiryGate.pid));});
+  }finally{release();}
+  const receipts=await Promise.all([first,second]);expiryGate=null;expiryTracing=false;assert.equal(new Set(expiryPids).size>=2,true);assert.deepEqual(receipts[0],receipts[1]);assert.deepEqual(await expiryCount(t.context,t.receiptId),{receipts:1,outbounds:0});assert.deepEqual(expiryStats(),baseline);
+  const sent=await Promise.all(receipts.map(receipt=>expiryAdapter.send(t.context,receipt.reply)));assert.equal(sent.filter(value=>value.replayed===false).length,1);assert.equal(sent.filter(value=>value.replayed===true).length,1);assert.deepEqual(await expiryCount(t.context,t.receiptId),{receipts:1,outbounds:1});assert.deepEqual(expiryStats(),{...baseline,sends:baseline.sends+1});assert.deepEqual(await expiryWorker(t.t),t.before);
+  const recorded=(await query(`SELECT * FROM "WebhookEvent" WHERE id=$1`,[customerOutboundId(t.context.eventId)])).rows[0];assert.deepEqual(await expiryAdapter.feedback(t.context,{recoverOnly:true}),receipts[0]);assert.equal((await expiryAdapter.send(t.context,receipts[0].reply)).replayed,true);assert.deepEqual((await query(`SELECT * FROM "WebhookEvent" WHERE id=$1`,[recorded.id])).rows[0],recorded);assert.equal(expiryStats().sends,baseline.sends+1);
+  expiryEvidence.cases.push({name:'native-row-lock-concurrent-receipt-single-outbox-and-HTTP',distinctBackendPids:[...new Set(expiryPids)],blockedPid:lock.pid,blockers:lock.blockers,uncommittedReceiptInvisible:true,receiptCount:1,outboxCount:1,httpTransfers:1,workerBytesUnchanged:true,mediaAndDepositDelta:0});
+  checks.push('COMPANY-schema2-expired-SENT-prompt-native-row-lock-race-one-receipt-outbox-HTTP-no-media-or-Worker-change');
+  const commits=[];
+  for(const [index,mode]of [[2,'LOST_ACK'],[3,'ROLLBACK']]){
+   const t=await expiryFixture(index),baseline=expiryStats();expiryCommitMode=mode;await assert.rejects(expiryAdapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'}),new RegExp(mode==='LOST_ACK'?'COMMIT_APPLIED_ACK_LOST':'COMMIT_REJECTED_BEFORE_APPLY'));
+   assert.deepEqual(await expiryWorker(t.t),t.before);assert.deepEqual(expiryStats(),baseline);assert.deepEqual(await expiryCount(t.context,t.receiptId),{receipts:mode==='LOST_ACK'?1:0,outbounds:0});
+   const recovered=await expiryAdapter.feedback(t.context,{recoverOnly:true});assert.equal(recovered?.kind||null,mode==='LOST_ACK'?'KYC_EXPIRY_FEEDBACK':null);
+   const receipt=await expiryAdapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'});assert.deepEqual(receipt.reply,META_KYC_EXPIRY_REPLY);if(mode==='LOST_ACK')graph.assets.get(expiryBase.key).sendResponseLost=true;
+   const sent=await expiryAdapter.send(t.context,receipt.reply);assert.equal(sent.state,mode==='LOST_ACK'?'SEND_UNKNOWN':'SENT');assert.equal((await expiryAdapter.send(t.context,receipt.reply)).replayed,true);assert.deepEqual(await expiryCount(t.context,t.receiptId),{receipts:1,outbounds:1});assert.deepEqual(expiryStats(),{...baseline,sends:baseline.sends+1});assert.deepEqual(await expiryWorker(t.t),t.before);
+   commits.push({mode,actualCommitApplied:mode==='LOST_ACK',realRollback:mode==='ROLLBACK',recoveryReturnedReceipt:mode==='LOST_ACK',sendState:sent.state,httpTransfers:1,workerBytesUnchanged:true,mediaAndDepositDelta:0});
+  }
+  expiryEvidence.cases.push({name:'actual-COMMIT-ACK-loss-versus-ROLLBACK-and-unknown-wire-recovery',outcomes:commits});checks.push('COMPANY-expiry-native-COMMIT-applied-ACK-loss-vs-ROLLBACK-recovery-unknown-HTTP-never-retransmitted');
+  const revoked=await expiryFixture(4),baselineRevoked=expiryStats(),receipt=await expiryAdapter.feedback(revoked.context,{code:'META_KYC_CHALLENGE_EXPIRED'});
+  const denied=createMetaKycExpiryFeedback({connect:expiryConnect,provider,environment,afterReserve:()=>query(`UPDATE "TenantMembership" SET status='DISABLED' WHERE id=$1`,['owner-member-'+expiryBase.key])});
+  try{await assert.rejects(denied.send(revoked.context,receipt.reply));const observed=await denied.feedback(revoked.context,{recoverOnly:true});assert.equal(observed.reply,undefined);assert.equal(observed.replyState,'SEND_STARTED');assert.deepEqual(expiryStats(),baselineRevoked);assert.deepEqual(await expiryWorker(revoked.t),revoked.before);assert.deepEqual(await expiryCount(revoked.context,revoked.receiptId),{receipts:1,outbounds:1});}
+  finally{await query(`UPDATE "TenantMembership" SET status='ACTIVE' WHERE id=$1`,['owner-member-'+expiryBase.key]);}
+  expiryEvidence.cases.push({name:'current-native-issuer-revocation-after-reservation-no-HTTP',receiptCount:1,outboxCount:1,httpTransfers:0,workerBytesUnchanged:true,mediaAndDepositDelta:0});checks.push('COMPANY-expiry-native-current-issuer-revocation-after-reserve-retains-marker-with-zero-HTTP-or-media');
+ }finally{expiryGate?.release?.();expiryClockOffset=0;expiryTracing=false;graph.assets.get(expiryBase.key).sender=originalExpirySender;}
+ expiryFeedbackNative=expiryEvidence;
+
  const audits=JSON.stringify((await query(`SELECT metadata FROM "AuditLog"`)).rows);for(const forbidden of [a.token,'IDENTIDAD ','VINCULAR ','data:image'])assert.equal(audits.includes(forbidden),false);assert.equal(networkCalls,0);assert.deepEqual(graph.unexpected,[]);
  for(const source of sourceManifest)assert.equal(sha(readFileSync(path.join(root,source.path))),source.sha256);assert.equal(sha(readFileSync(new URL(import.meta.url))),harnessSha256);passed=true;
 }finally{
- globalThis.fetch=originalFetch;try{await pool?.end();if(created){await admin.query('DROP SCHEMA "'+schema+'" CASCADE');assert.equal((await admin.query('SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname=$1) AS present',[schema])).rows[0].present,false);}}finally{await admin.end();}
+ globalThis.fetch=originalFetch;try{await pool?.end();await Promise.all(ownedEnds);poolClosed=true;assert.equal((await admin.query('SELECT count(*)::int AS count FROM pg_stat_activity WHERE pid=ANY($1::int[])',[[...ownedPids]])).rows[0].count,0);ownConnectionsClosed=true;if(created){await admin.query('DROP SCHEMA "'+schema+'" CASCADE');assert.equal((await admin.query('SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname=$1) AS present',[schema])).rows[0].present,false);}}finally{await admin.end();adminClosed=true;}
 }
 assert.equal(passed,true);
-const proof={status:'PASS',checks,catalogFingerprintEquivalence,schemaReadinessEquivalence,sourceManifest,harnessSha256,environment:'schema-only-localhost-postgresql-corporate-KYC',databaseCreated:false,schemaRemoved:true,realProviderCalls:0,unexpectedNetworkCalls:networkCalls,productionDataTouched:false,realClerkLogin:false,realMetaAccepted:false,humanAccepted:false};
+const proof={status:'PASS',checks,expiryFeedbackNative,poolClosed,adminClosed,ownConnectionsClosed,catalogFingerprintEquivalence,schemaReadinessEquivalence,sourceManifest,harnessSha256,environment:'schema-only-localhost-postgresql-corporate-KYC',databaseCreated:false,schemaRemoved:true,realProviderCalls:0,unexpectedNetworkCalls:networkCalls,productionDataTouched:false,realClerkLogin:false,realMetaAccepted:false,humanAccepted:false};
 mkdirSync('.vercel/company-kyc-evidence',{recursive:true});writeFileSync('.vercel/company-kyc-evidence/postgres.json',JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));

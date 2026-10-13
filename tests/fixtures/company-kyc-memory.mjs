@@ -71,6 +71,7 @@ export async function companyKycMemoryFixture({active=false,grantLifetimeMs=null
   if(sql.includes('FROM public."WhatsAppConnection"'))return rows(args[0]===f.connection.id&&args[1]===anchor.id?[f.connection]:[]);
   if(sql.startsWith('SELECT')&&sql.includes('FROM public."AuditLog"')){
    const all=[...f.audits.values()];
+   if(sql.includes('"entityId"=ANY($2::text[])')||sql.includes('"createdAt">=$3::timestamptz'))return f.query(sql,args);
    if(sql.endsWith('LIMIT 1'))return rows(all.filter(a=>a.organizationId===args[0]&&a.entityId===args[1]&&((['participant.kyc_chat.projected','participant.kyc_chat.dispatched'].includes(a.action)&&a.metadata.challengeId===args[2])||(a.metadata.kind==='KYC_SUBMITTED'&&a.metadata.channelCapture?.challengeId===args[2]))).slice(0,1));
    if(sql.startsWith('SELECT id FROM'))return rows([...new Set([...all.filter(a=>a.organizationId===args[0]&&a.action==='participant.operation.recorded'&&a.entityId===args[1]&&['REVOKE','RESTORE_ACCESS','EXISTING_ACCOUNT_ASSIGNED','INVITATION_ACCEPTED','INVITATION_SENT'].includes(a.metadata.kind)).map(a=>a.id),...control.trail])].sort().map(id=>({id})));
    if(sql.includes("metadata->>'kind'='INVITATION_SENT'"))return rows([...f.audits.values()].filter(a=>a.metadata.kind==='INVITATION_SENT'&&a.entityId===args[1]&&a.metadata.invitationId===args[2]));

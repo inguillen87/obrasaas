@@ -3,7 +3,7 @@ import {lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
 import {customerJobTransaction} from './meta-customer-outbound.mjs';
 import {beginMetaKycConversation,planMetaKycConversation} from './meta-kyc-conversation.mjs';
 import {metaKycOperationId} from './meta-kyc-challenge.mjs';
-import {resolveMetaKycAuthority,metaKycDispatchReceiptId,metaKycConversationEnvelope,sealMetaKycValue} from './meta-kyc-identity.mjs';
+import {resolveMetaKycAuthority,metaKycDispatchReceiptId,metaKycConversationEnvelope,sealMetaKycValue,metaKycExpiryBindingDigest} from './meta-kyc-identity.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {decodePrivateImage,MAX_PRIVATE_IMAGE_BYTES} from './private-image-upload.mjs';
 import {companyKycProjectionDigest,fenceCompanyKycAuthority} from './company-channel-kyc.mjs';
@@ -18,11 +18,13 @@ export function createMetaKycBridge({connect,provider,deposit,environment=proces
   const current=(await client.query(`SELECT metadata FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id])).rows[0];
   if(current?.metadata?.participant?.kycChatChallenge?.id!==r.challenge.id)throw new WorkspaceError('META_KYC_CHALLENGE_REVOKED',409);
   const challenge={...current.metadata.participant.kycChatChallenge,...transition,messageCount:(current.metadata.participant.kycChatChallenge.messageCount||0)+1};r.challenge=challenge;
+  const feedbackBindingDigest=transition?.status==='CLAIMED'&&challenge.captureImageSetVersion===2&&!r.companyKyc?await metaKycExpiryBindingDigest(client,r):null;
   const metadata={...current.metadata,participant:{...current.metadata.participant,kycChatChallenge:challenge,kycChatConversation:preserveConversation?current.metadata.participant.kycChatConversation:metaKycConversationEnvelope(r,state,environment)}};
   await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify(metadata)]);
   const id=metaKycDispatchReceiptId(r.event.id);
-  await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.kyc_chat.dispatched','Worker',$4,$5::jsonb)`,[id,r.project.organizationId,r.member.actorId,r.worker.id,JSON.stringify({version:1,projectId:r.project.id,challengeId:r.challenge.id,payloadDigest:r.event.payload.payloadDigest,...(r.challenge.captureImageSetVersion===2?{captureImageSetVersion:2}:{}),replyDigest:digest(result.reply),encryptedResult:sealMetaKycValue(r,'kyc-chat-dispatch',id,result,environment),identityCertified:false,permissionsGranted:false})]);
+  await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.kyc_chat.dispatched','Worker',$4,$5::jsonb)`,[id,r.project.organizationId,r.member.actorId,r.worker.id,JSON.stringify({version:1,projectId:r.project.id,challengeId:r.challenge.id,payloadDigest:r.event.payload.payloadDigest,...(r.challenge.captureImageSetVersion===2?{captureImageSetVersion:2}:{}),...(feedbackBindingDigest?{feedbackBindingDigest}:{}),replyDigest:digest(result.reply),encryptedResult:sealMetaKycValue(r,'kyc-chat-dispatch',id,result,environment),identityCertified:false,permissionsGranted:false})]);
   await fenceCompanyKycAuthority(client,r,{eventId:r.event.id,projectId:r.connection.projectId,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,leaseToken:r.event.leaseToken},{environment});
+  if(feedbackBindingDigest)await resolveMetaKycAuthority(client,{eventId:r.event.id,projectId:r.connection.projectId,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,leaseToken:r.event.leaseToken},{environment});
   return result;
  }
  async function prepare(context){return within(async client=>{

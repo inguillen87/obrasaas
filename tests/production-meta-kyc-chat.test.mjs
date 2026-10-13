@@ -3,8 +3,15 @@ import assert from 'node:assert/strict';
 import {digest,WorkspaceError} from '../src/lib/workspace-policy.mjs';
 import {metaKycChallengeDigest,metaKycOperationId,prepareMetaKycChallenge} from '../src/lib/meta-kyc-challenge.mjs';
 import {beginMetaKycConversation,planMetaKycConversation} from '../src/lib/meta-kyc-conversation.mjs';
-import {resolveMetaKycAuthority,metaKycDispatchReceiptId} from '../src/lib/meta-kyc-identity.mjs';
+import {resolveMetaKycAuthority,metaKycDispatchReceiptId,resolveMetaKycExpiryFeedbackAuthority,metaKycExpiryAuthorityDigest} from '../src/lib/meta-kyc-identity.mjs';
+import {createMetaKycExpiryFeedback,META_KYC_EXPIRY_REPLY,metaKycExpiryReceiptId} from '../src/lib/meta-kyc-expiry-feedback.mjs';
+import {companyKycMemoryFixture} from './fixtures/company-kyc-memory.mjs';
+import {readFile} from 'node:fs/promises';
+import {encryptCustomerSecret,decryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
+import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
+import {customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
 import {kycMemoryFixture} from './fixtures/meta-kyc-chat-memory.mjs';
+import {ownCompanyRuntimeFixture} from './fixtures/own-company-runtime.mjs';
 import {customerReplyMessage,createMetaCustomerProvider} from '../src/lib/meta-customer-provider.mjs';
 import {createMetaKycBridge} from '../src/lib/meta-kyc-bridge.mjs';
 import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
@@ -196,4 +203,138 @@ test('WhatsApp schema2 committed receipt recovery needs no access-token decrypti
 });
 test('WhatsApp schema2 marker cannot downgrade a committed current capture after its back fields are removed',async()=>{
  const f=kycMemoryFixture({captureImageSetVersion:2});await f.toConfirmation();const state=f.state(),context=f.receive({type:'interactive',interactive:{list_reply:{id:'kyc:'+state.nonce+':0'}}});f.controls.loseDepositCommit=true;await assert.rejects(f.bridge.execute(context));const k=f.worker.metadata.participant.kyc;k.images.pop();delete k.documentBackConsent;const counts=[f.controls.downloads,f.blob.puts()];await assert.rejects(f.bridge.execute(context),{code:'PARTICIPANT_RECEIPT_INVALID'});assert.deepEqual([f.controls.downloads,f.blob.puts()],counts);
+});
+
+// Actual cipher/resolvers/transactions/outbox/provider with synthetic SQL and
+// HTTP. The mutex models serialization here; this is not a PG lock-race proof.
+async function expiryFixture(kind,{active=true,expired=true,own=false,factory=createMetaKycExpiryFeedback,afterReserve=async()=>{},providerAfterFirstFence=null}={}){
+ const runtime=own?await ownCompanyRuntimeFixture({time:Date.now()}):null,f=kind==='COMPANY'?await companyKycMemoryFixture({active,captureImageSetVersion:2}):kycMemoryFixture({active,captureImageSetVersion:2,ownRuntime:runtime});
+ await f.execute(f.code);const prompt=[...f.outbounds.values()].at(-1).outcome.messageId;
+ if(expired)f.now.setTime(f.now.getTime()+31*60*1000);
+ const context=f.receive({type:'image',context:{id:prompt},image:{id:'150000011',mime_type:'image/png'}}),requests=[],controls={loseAck:false,beforeSql:null,commitOutcome:null,afterOwnBoundary:null,afterFirstFence:providerAfterFirstFence};let tail=Promise.resolve();
+ const connect=async()=>{const client=await f.connect();let unlock=null,snapshot=null,committed=false;return {release(){unlock?.();client.release();},async query(sql,args=[]){
+  if(sql.startsWith('BEGIN')){const previous=tail;tail=new Promise(resolve=>{unlock=resolve;});await previous;snapshot=structuredClone({worker:f.worker,audits:[...f.audits],events:[...f.events],outbounds:[...f.outbounds]});}
+  if(controls.beforeSql)await controls.beforeSql(sql,args);
+  const feedbackRecorded=[...f.audits.values()].some(a=>a.action==='participant.kyc_chat.expiry_feedback');
+  if(sql==='COMMIT'&&feedbackRecorded&&controls.commitOutcome==='ROLLBACK'){controls.commitOutcome=null;throw new Error('Synthetic expiry COMMIT rejected before applying');}
+  const value=await client.query(sql,args);
+  if(sql==='COMMIT'){committed=true;unlock?.();unlock=null;if(feedbackRecorded&&controls.commitOutcome==='LOST_ACK'){controls.commitOutcome=null;throw new Error('Synthetic expiry COMMIT applied then ACK lost');}}
+  if(sql==='ROLLBACK'&&!committed&&snapshot){Object.assign(f.worker,snapshot.worker);for(const [map,key] of [[f.audits,'audits'],[f.events,'events'],[f.outbounds,'outbounds']]){map.clear();for(const [id,entry]of snapshot[key])map.set(id,entry);}unlock?.();unlock=null;}
+  return value;
+ }};};
+ const actual=createMetaCustomerProvider({environment:f.environment,now:()=>f.now.getTime(),fetchImpl:async(url,options)=>{
+  assert.equal(new URL(url).hostname,'graph.facebook.com');if(runtime&&options.method==='GET')return runtime.fetchImpl(url,options);assert.equal(options.method,'POST');assert.equal(new URL(url).pathname,'/'+f.environment.META_GRAPH_API_VERSION+'/'+f.connection.phoneNumberId+'/messages');const body=JSON.parse(options.body);assert.equal(body.type,'text');assert.equal(body.text.body,META_KYC_EXPIRY_REPLY.body);assert.equal(body.to,f.worker.metadata.participant.kycChatChallenge.senderE164.slice(1));assert.match(body.context.message_id,/^wamid\./);assert.match(body.biz_opaque_callback_data,/^customer_outbound_[a-f0-9]{64}$/);
+  requests.push({method:options.method,body});if(controls.loseAck)throw new Error('Synthetic HTTP accepted then ACK lost');return new Response(JSON.stringify({messages:[{id:'wamid.SyntheticExpiryAccepted_'+requests.length}]}),{status:200,headers:{'Content-Type':'application/json'}});
+ }});
+ const provider={sendReply:async input=>actual.sendReply({...input,beforeExternal:async()=>{await input.beforeExternal();if(controls.afterFirstFence)await controls.afterFirstFence();}})};
+ if(runtime)provider.forConnection=async input=>{let armed=false;const scoped=await actual.forConnection({...input,beforeExternal:async()=>{await input.beforeExternal();if(armed&&controls.afterOwnBoundary)await controls.afterOwnBoundary();}});armed=true;return scoped;};
+ const adapter=factory({connect,provider,environment:f.environment,afterReserve:()=>afterReserve({f,controls,context})});
+ return {f,context,connect,adapter,requests,controls,runtime};
+}
+const unchangedMedia=f=>{assert.equal(f.controls.downloads,0);assert.equal(f.blob.puts(),0);if(f.control){assert.equal(f.control.graph,0);assert.equal(f.control.cdn,0);}};
+function rewriteExpiryEvent(t,change){
+ const e=t.f.events.get(t.context.eventId),aad={organizationId:t.f.connection.organizationId,projectId:t.f.connection.projectId,resourceId:e.id},payload=JSON.parse(decryptCustomerSecret(e.payload.encryptedPayload,{...aad,purpose:'webhook'},t.f.environment)),proof=JSON.parse(decryptCustomerSecret(e.payload.encryptedProof,{...aad,purpose:'webhook-proof'},t.f.environment));
+ change(payload);proof.payloadDigest=metaCustomerContentDigest(payload);e.payload.payloadDigest=proof.payloadDigest;e.payload.encryptedPayload=encryptCustomerSecret(JSON.stringify(payload),{...aad,purpose:'webhook'},t.f.environment);e.payload.encryptedProof=encryptCustomerSecret(JSON.stringify(proof),{...aad,purpose:'webhook-proof'},t.f.environment);t.context.payloadDigest=proof.payloadDigest;
+}
+
+for(const kind of ['PROJECT','COMPANY'])for(const active of [false,true])test(kind+' expired incomplete '+(active?'ACTIVE':'INVITED')+' receives one real synthetic HTTP feedback without capture permissions or duplicate replay',async()=>{
+ const t=await expiryFixture(kind,{active}),{f,context,adapter}=t,before=structuredClone(f.worker),oldAudits=structuredClone([...f.audits]);
+ await assert.rejects(resolveMetaKycAuthority(await t.connect(),context,{environment:f.environment,allowExpired:true}),{code:'META_KYC_CHALLENGE_EXPIRED'});
+ const receipt=await adapter.feedback(context,{code:'META_KYC_CHALLENGE_EXPIRED'});assert.equal(receipt.kind,'KYC_EXPIRY_FEEDBACK');assert.equal(receipt.businessApplied,false);assert.deepEqual(receipt.reply,META_KYC_EXPIRY_REPLY);assert.equal(t.requests.length,0);assert.equal(f.outbounds.has(customerOutboundId(context.eventId)),false);
+ const sent=await adapter.send(context,receipt.reply);assert.equal(sent.state,'SENT');assert.equal(t.requests.length,1);assert.deepEqual(f.worker,before);unchangedMedia(f);
+ for(const [id,audit]of oldAudits)assert.deepEqual(f.audits.get(id),audit);assert.equal([...f.audits.values()].filter(a=>a.action==='participant.kyc_chat.expiry_feedback').length,1);
+ const recorded=structuredClone(f.outbounds.get(customerOutboundId(context.eventId)));assert.deepEqual(await adapter.feedback(context,{recoverOnly:true}),receipt);assert.equal((await adapter.send(context,receipt.reply)).replayed,true);assert.equal(t.requests.length,1);assert.deepEqual(f.outbounds.get(customerOutboundId(context.eventId)),recorded);
+ const client=await t.connect();assert.throws(()=>metaKycExpiryAuthorityDigest(client,{kind:'KYC_EXPIRY_FEEDBACK_REPLY'},context),{code:'META_KYC_EXPIRY_FEEDBACK_DENIED'});
+ await assert.rejects(resolveMetaKycAuthority(client,context,{environment:f.environment,allowExpired:true}),{code:'META_KYC_CHALLENGE_EXPIRED'});assert.deepEqual(f.worker,before);
+});
+
+for(const kind of ['PROJECT','COMPANY'])for(const [name,mutate]of [
+ ['signed other sender',t=>rewriteExpiryEvent(t,p=>{p.value.from='5491100009999';})],
+ ['no prompt context',t=>rewriteExpiryEvent(t,p=>{delete p.value.context;})],
+ ['foreign prompt',t=>rewriteExpiryEvent(t,p=>{p.value.context.id='wamid.ForeignSyntheticPrompt';})],
+ ['crossed project',t=>{t.context.projectId='other-project';}],
+ ['changed phone',t=>{t.f.worker.phone='+5491100009999';}],
+ ['revoked issuer',t=>{t.f.controls.issuerActive=false;}],
+ ['revoked member',t=>{t.f.controls.workerMembershipActive=false;}],
+ ['revoked assignment',t=>{t.f.controls.projectAssignmentActive=false;}],
+ ['rotated credential',t=>{t.f.connection.encryptedAccessToken+='changed';}],
+ ['changed accepting account',t=>{t.f.worker.metadata.participant.clerkUserId='user_ChangedSynthetic';}],
+ ['missing preparation',t=>{for(const[id,audit]of t.f.audits)if(audit.action==='participant.kyc_chat.prepared')t.f.audits.delete(id);}],
+ ['changed attempt',t=>{t.f.worker.metadata.participant.kycChatChallenge.id='kyc_chat_changed_attempt';}],
+ ['invalid deadline',t=>{t.f.worker.metadata.participant.kycChatChallenge.expiresAt='invalid';}],
+ ['future claim',t=>{t.f.worker.metadata.participant.kycChatChallenge.claimedAt=new Date(t.f.now.getTime()+1).toISOString();}],
+ ['FINALIZING',t=>{const s=t.f.state();s.step='FINALIZING';s.confirmationEventId=t.context.eventId;const envelope=t.f.worker.metadata.participant.kycChatConversation;envelope.encryptedState=encryptCustomerSecret(JSON.stringify(s),{organizationId:t.f.connection.organizationId,projectId:t.f.connection.projectId,purpose:'kyc-chat-conversation',resourceId:envelope.challengeId},t.f.environment);}],
+ ['COMPLETED',t=>{t.f.worker.metadata.participant.kycChatChallenge.status='COMPLETED';}],
+ ['CANCELLED',t=>{t.f.worker.metadata.participant.kycChatChallenge.status='CANCELLED';}],
+ ['later submission',t=>{t.f.audits.set('later-submission',{id:'later-submission',organizationId:t.f.connection.organizationId,entityType:'Worker',entityId:t.f.worker.id,action:'participant.operation.recorded',createdAt:new Date(t.f.now),metadata:{kind:'KYC_SUBMITTED'}});}],
+ ['expired lease',t=>{t.f.events.get(t.context.eventId).leaseExpiresAt=new Date(t.f.now.getTime()-1);}],
+ ['expired invitation',t=>{t.f.worker.metadata.participant.invitation.expiresAt=new Date(t.f.now.getTime()-1).toISOString();}],
+ ['closed response window',t=>rewriteExpiryEvent(t,p=>{p.value.timestamp=String(Math.floor(t.f.now.getTime()/1000)-86401);})],
+])test(kind+' expiry feedback denies '+name+' with no receipt reservation HTTP media or Worker change',async()=>{
+ const t=await expiryFixture(kind,{active:name!=='expired invitation'});mutate(t);const before=structuredClone(t.f.worker),audits=structuredClone([...t.f.audits]),outbounds=structuredClone([...t.f.outbounds]);
+ assert.equal(await t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'}),null);assert.deepEqual(t.f.worker,before);assert.deepEqual([...t.f.audits],audits);assert.deepEqual([...t.f.outbounds],outbounds);assert.equal(t.requests.length,0);unchangedMedia(t.f);
+});
+
+test('PROJECT legacy claim without a private binding remains closed and its old dispatch is never completed retroactively',async()=>{
+ const t=await expiryFixture('PROJECT'),c=t.f.worker.metadata.participant.kycChatChallenge,claim=t.f.audits.get(metaKycDispatchReceiptId(c.claimedEventId));delete claim.metadata.feedbackBindingDigest;const before=structuredClone([...t.f.audits]);
+ assert.equal(await t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'}),null);assert.deepEqual([...t.f.audits],before);assert.equal(t.requests.length,0);unchangedMedia(t.f);
+});
+test('PROJECT historical sealed dispatch replay neither fills a missing feedback binding nor rewrites its reply',async()=>{
+ const t=await expiryFixture('PROJECT',{expired:false}),c=t.f.worker.metadata.participant.kycChatChallenge,id=metaKycDispatchReceiptId(c.claimedEventId),claim=t.f.audits.get(id);delete claim.metadata.feedbackBindingDigest;const before=structuredClone(t.f.worker),audits=structuredClone([...t.f.audits]),outbounds=structuredClone([...t.f.outbounds]),event=t.f.events.get(c.claimedEventId),context={eventId:event.id,projectId:t.f.connection.projectId,channelId:t.f.connection.id,payloadDigest:event.payload.payloadDigest,leaseToken:event.leaseToken};
+ const original=JSON.parse(decryptCustomerSecret(claim.metadata.encryptedResult,{organizationId:t.f.project.organizationId,projectId:t.f.project.id,purpose:'kyc-chat-dispatch',resourceId:id},t.f.environment));assert.deepEqual(await t.f.bridge.execute(context),original);assert.deepEqual(t.f.worker,before);assert.deepEqual([...t.f.audits],audits);assert.deepEqual([...t.f.outbounds],outbounds);assert.equal(t.requests.length,0);unchangedMedia(t.f);
+});
+for(const kind of ['PROJECT','COMPANY'])test(kind+' live capture and never-started PENDING cannot acquire an expiry capability',async()=>{
+ const live=await expiryFixture(kind,{expired:false});assert.equal(await live.adapter.feedback(live.context,{code:'META_KYC_CHALLENGE_EXPIRED'}),null);assert.equal(live.requests.length,0);
+ const t=await expiryFixture(kind);t.f.worker.metadata.participant.kycChatChallenge.status='PENDING';const before=structuredClone(t.f.worker);assert.equal(await t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'}),null);assert.deepEqual(t.f.worker,before);assert.equal(t.requests.length,0);unchangedMedia(t.f);
+});
+for(const kind of ['PROJECT','COMPANY'])test(kind+' expiry lost HTTP ACK retains SEND_UNKNOWN and closed-window recovery never resends',async()=>{
+ const t=await expiryFixture(kind),receipt=await t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'});t.controls.loseAck=true;
+ const sent=await t.adapter.send(t.context,receipt.reply);assert.equal(sent.state,'SEND_UNKNOWN');assert.equal(t.requests.length,1);const before=structuredClone(t.f.outbounds.get(customerOutboundId(t.context.eventId)));
+ assert.equal((await t.adapter.send(t.context,receipt.reply)).state,'SEND_UNKNOWN');assert.equal(t.requests.length,1);
+ t.f.controls.issuerActive=false;const revoked=await t.adapter.feedback(t.context,{recoverOnly:true});assert.equal(revoked.reply,undefined);assert.equal(revoked.replyState,'SEND_UNKNOWN');assert.equal(t.requests.length,1);t.f.controls.issuerActive=true;
+ t.f.now.setTime(t.f.now.getTime()+25*3600000);t.f.events.get(t.context.eventId).leaseExpiresAt=new Date(t.f.now.getTime()+60000);
+ const recovered=await t.adapter.feedback(t.context,{recoverOnly:true});assert.equal(recovered.reply,undefined);assert.equal(recovered.replyState,'SEND_UNKNOWN');assert.equal(t.requests.length,1);assert.deepEqual(t.f.outbounds.get(customerOutboundId(t.context.eventId)),before);unchangedMedia(t.f);
+});
+
+for(const kind of ['PROJECT','COMPANY'])for(const state of ['SEND_UNKNOWN','REJECTED'])test(kind+' expiry requires a SENT current capture prompt, never '+state,async()=>{
+ const t=await expiryFixture(kind);[...t.f.outbounds.values()].at(-1).outcome.state=state;const audits=structuredClone([...t.f.audits]),outbounds=structuredClone([...t.f.outbounds]);assert.equal(await t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'}),null);assert.deepEqual([...t.f.audits],audits);assert.deepEqual([...t.f.outbounds],outbounds);assert.equal(t.requests.length,0);unchangedMedia(t.f);
+});
+for(const kind of ['PROJECT','COMPANY'])test(kind+' expiry rejects an older valid prompt after the conversation has advanced',async()=>{
+ const t=await expiryFixture(kind,{expired:false}),first=[...t.f.outbounds.values()][0].outcome.messageId;await t.f.choose('Autorizar imágenes');t.f.now.setTime(t.f.now.getTime()+31*60000);rewriteExpiryEvent(t,p=>{p.value.context.id=first;p.value.timestamp=String(Math.floor(t.f.now.getTime()/1000));});t.f.events.get(t.context.eventId).leaseExpiresAt=new Date(t.f.now.getTime()+60000);
+ const before=structuredClone(t.f.worker),audits=structuredClone([...t.f.audits]);assert.equal(await t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'}),null);assert.deepEqual(t.f.worker,before);assert.deepEqual([...t.f.audits],audits);assert.equal(t.requests.length,0);unchangedMedia(t.f);
+});
+for(const kind of ['PROJECT','COMPANY'])for(const purpose of ['KYC_CAPTURE','KYC_REJECTION'])test(kind+' expiry never converts an existing '+purpose+' SEND_UNKNOWN outbox or creates a competing receipt',async()=>{
+ const t=await expiryFixture(kind),f=t.f,id=customerOutboundId(t.context.eventId),original=[...f.outbounds.values()][0],oldId=original.id,aad={organizationId:f.connection.organizationId,projectId:f.connection.projectId,purpose:'outbound'},request=JSON.parse(decryptCustomerSecret(original.payload.encryptedPayload,{...aad,resourceId:oldId},f.environment));
+ Object.assign(request,{eventId:t.context.eventId,payloadDigest:t.context.payloadDigest,replyTo:'wamid.SyntheticKycMessage_2',channelPurpose:purpose});
+ const out=structuredClone(original);out.id=id;out.payload={...out.payload,requestDigest:digest(request),encryptedPayload:encryptCustomerSecret(JSON.stringify(request),{...aad,resourceId:id},f.environment)};delete out.payload.kycExpiryFeedback;out.outcome={state:'SEND_UNKNOWN',messageId:null};f.outbounds.set(id,out);
+ const before=structuredClone(f.worker),audits=structuredClone([...f.audits]),outbounds=structuredClone([...f.outbounds]);assert.equal(await t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'}),null);assert.deepEqual(f.worker,before);assert.deepEqual([...f.audits],audits);assert.deepEqual([...f.outbounds],outbounds);assert.equal(t.requests.length,0);unchangedMedia(f);
+});
+for(const kind of ['PROJECT','COMPANY'])test(kind+' expiry COMMIT loss recovers its exact durable receipt while a real adapter ROLLBACK leaves no receipt',async()=>{
+ for(const mode of ['LOST_ACK','ROLLBACK']){
+  const t=await expiryFixture(kind),before=structuredClone(t.f.worker);t.controls.commitOutcome=mode;await assert.rejects(t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'}));assert.deepEqual(t.f.worker,before);assert.equal(t.requests.length,0);assert.equal(t.f.outbounds.has(customerOutboundId(t.context.eventId)),false);
+  const recovered=await t.adapter.feedback(t.context,{recoverOnly:true});assert.equal(recovered?.kind??null,mode==='LOST_ACK'?'KYC_EXPIRY_FEEDBACK':null);assert.equal(t.f.audits.has(metaKycExpiryReceiptId(t.context.eventId)),mode==='LOST_ACK');
+  const receipt=await t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'});assert.deepEqual(receipt.reply,META_KYC_EXPIRY_REPLY);await assert.rejects(t.adapter.send(t.context,{type:'text',body:receipt.reply.body+' changed'}),{code:'META_KYC_EXPIRY_FEEDBACK_DENIED'});assert.equal(t.f.outbounds.has(customerOutboundId(t.context.eventId)),false);assert.equal((await t.adapter.send(t.context,receipt.reply)).state,'SENT');assert.equal(t.requests.length,1);unchangedMedia(t.f);
+ }
+});
+for(const kind of ['PROJECT','COMPANY'])test(kind+' identical concurrent expiry operations serialize one receipt and one HTTP transfer',async()=>{
+ const t=await expiryFixture(kind),receipts=await Promise.all([t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'}),t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'})]);assert.deepEqual(receipts[0],receipts[1]);
+ const sent=await Promise.all(receipts.map(receipt=>t.adapter.send(t.context,receipt.reply)));assert.equal(t.requests.length,1);assert.equal(sent.filter(value=>value.replayed===false).length,1);assert.equal([...t.f.audits.values()].filter(a=>a.id===metaKycExpiryReceiptId(t.context.eventId)).length,1);unchangedMedia(t.f);
+});
+
+async function expiryWithoutFinalFence(){
+ const url=new URL('../src/lib/meta-kyc-expiry-feedback.mjs',import.meta.url),source=await readFile(url,'utf8'),needle='finalBeforeExternal:fence';assert.equal(source.split(needle).length-1,1);
+ const mutant=source.replace(needle,'finalBeforeExternal:undefined').replace(/from (['"])(\.\.?\/[^'"]+)\1/g,(_all,_quote,relative)=>'from '+JSON.stringify(new URL(relative,url).href));return (await import('data:text/javascript;base64,'+Buffer.from(mutant).toString('base64'))).createMetaKycExpiryFeedback;
+}
+for(const kind of ['PROJECT','COMPANY'])test(kind+' final actual HTTP fence causally blocks revocation after the earlier provider await',async()=>{
+ for(const mutant of [false,true]){
+  let suspended=false;const t=await expiryFixture(kind,{factory:mutant?await expiryWithoutFinalFence():createMetaKycExpiryFeedback,providerAfterFirstFence:async()=>{suspended=true;t.f.controls.issuerActive=false;}}),receipt=await t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'});
+  await assert.rejects(t.adapter.send(t.context,receipt.reply));assert.equal(suspended,true);assert.equal(t.requests.length,mutant?1:0);assert.equal(t.f.outbounds.get(customerOutboundId(t.context.eventId)).outcome.state,'SEND_STARTED');unchangedMedia(t.f);
+ }
+});
+test('OWN actual provider boundary is followed by the expiry fence before the only messages POST',async()=>{
+ for(const mutant of [false,true]){
+  const t=await expiryFixture('PROJECT',{own:true,factory:mutant?await expiryWithoutFinalFence():createMetaKycExpiryFeedback}),receipt=await t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'}),before=structuredClone(t.f.worker);let changed=false;
+  t.controls.afterOwnBoundary=()=>{changed=true;t.f.controls.issuerActive=false;};await assert.rejects(t.adapter.send(t.context,receipt.reply));assert.equal(changed,true);assert.ok(t.runtime.calls.some(call=>call.method==='GET'&&call.path==='debug_token'));assert.equal(t.requests.length,mutant?1:0);assert.equal(t.f.outbounds.get(customerOutboundId(t.context.eventId)).outcome.state,'SEND_STARTED');assert.deepEqual(t.f.worker,before);unchangedMedia(t.f);
+  const recovered=await t.adapter.feedback(t.context,{recoverOnly:true});assert.equal(recovered.reply,undefined);assert.equal(recovered.replyState,'SEND_STARTED');assert.equal(t.requests.length,mutant?1:0);
+ }
 });

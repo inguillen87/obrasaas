@@ -2215,9 +2215,10 @@
         "path": ".vercel/company-kyc-evidence/postgres.json",
         "kind": "PG_COMPANY_KYC",
         "producer": "scripts/verify-company-channel-kyc-postgres.mjs",
-        "producerSha256": "16b162181c10751f219140725fed55c56a5042bbf1e8e1b4ae938933713ce747",
+        "producerSha256": "120b098054567b9d55ed238265c39cc1cbaaf4b5cdae3443a05fdf594b13620f",
         "sourceFiles": [
           "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
+          "src/app/(identity)/cuenta/private-bank-account-format.mjs",
           "src/lib/afipValidator.js",
           "src/lib/aiVision.js",
           "src/lib/auditLedger.js",
@@ -2312,6 +2313,7 @@
           "src/lib/meta-kyc-bridge.mjs",
           "src/lib/meta-kyc-challenge.mjs",
           "src/lib/meta-kyc-conversation.mjs",
+          "src/lib/meta-kyc-expiry-feedback.mjs",
           "src/lib/meta-kyc-identity.mjs",
           "src/lib/meta-kyc-outbound.mjs",
           "src/lib/meta-kyc-rejection-policy.mjs",
@@ -2437,7 +2439,10 @@
           "schema2-corporate-dorso-consent-and-three-images-require-immutable-A-source-B-target-with-no-FIELD-or-auto-grants",
           "schema2-corporate-incomplete-receipt-denies-and-lost-ACK-recovers-before-second-Graph-CDN-Blob",
           "schema2-corporate-canonical-Clerk-claim-adopts-three-original-images-and-private-back-download-before-distinct-human-review",
-          "schema2-corporate-revocation-denies-private-dorso-with-original-capture-receipt-immutable"
+          "schema2-corporate-revocation-denies-private-dorso-with-original-capture-receipt-immutable",
+          "COMPANY-schema2-expired-SENT-prompt-native-row-lock-race-one-receipt-outbox-HTTP-no-media-or-Worker-change",
+          "COMPANY-expiry-native-COMMIT-applied-ACK-loss-vs-ROLLBACK-recovery-unknown-HTTP-never-retransmitted",
+          "COMPANY-expiry-native-current-issuer-revocation-after-reserve-retains-marker-with-zero-HTTP-or-media"
         ]
       },
       {
@@ -3337,7 +3342,7 @@
       },
       {
         "path": "tests/fixtures/own-company-runtime.mjs",
-        "sha256": "6e734325c36db9e9d957699632a9b5b6d551cd22533a26eff8f55d388a3d92aa"
+        "sha256": "0161625b7bd4338597d62a5267d100c85de740e22f3f116507309f3673426247"
       }
     ]
   }
