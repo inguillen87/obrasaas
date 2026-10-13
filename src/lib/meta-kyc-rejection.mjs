@@ -30,12 +30,12 @@ export function createMetaKycRejection({connect,provider,environment=process.env
  }
  return {
   async rejection(context,{recoverOnly=false,code=null}={}){
-   if(!recoverOnly&&code!=='META_KYC_CHALLENGE_REJECTED')return null;
+   if(!recoverOnly&&!['META_KYC_CHALLENGE_REJECTED','META_KYC_CHALLENGE_EXPIRED'].includes(code))return null;
    // Recovery may observe a previous fixed dispatch before any capture retry.
    try{return await within(async client=>{
     if(recoverOnly){const source=await inspectMetaKycRejectionSource(client,context,{environment,replyWindow:false});if(!source)return null;const previous=await recorded(client,{connection:source.raw,event:source.initial[0]},{observation:true});if(!previous)return null;if(source.replyWindowClosed)return closedDelivery(client,source,previous);}
     const r=await resolve(client,context);if(!r)return null;const previous=await recorded(client,r);if(previous)return previous;if(recoverOnly)return null;
-    const value=result(),id=receiptId(r.event.id),metadata={version:1,projectId:r.connection.projectId,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,code:'META_KYC_CHALLENGE_REJECTED',replyDigest:digest(value.reply),encryptedResult:encryptCustomerSecret(JSON.stringify(value),secret(r,'kyc-rejection',id),environment),identityCertified:false,permissionsGranted:false};
+    const value=result(),id=receiptId(r.event.id),metadata={version:1,projectId:r.connection.projectId,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,code:'META_KYC_CHALLENGE_REJECTED',observedCode:code,replyDigest:digest(value.reply),encryptedResult:encryptCustomerSecret(JSON.stringify(value),secret(r,'kyc-rejection',id),environment),identityCertified:false,permissionsGranted:false};
     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.kyc_chat.rejected','WebhookEvent',$4,$5::jsonb)`,[id,r.connection.organizationId,r.issuer.actorId,r.event.id,JSON.stringify(metadata)]);return value;
    });}catch(error){if(!recoverOnly&&['META_CUSTOMER_REPLY_WINDOW_CLOSED','META_CUSTOMER_CHANNEL_ACCEPTANCE_REQUIRED','META_OWN_COMPANY_UNAVAILABLE','META_OWN_COMPANY_OWNER_UNVERIFIED'].includes(error.code))return null;throw error;}
   },

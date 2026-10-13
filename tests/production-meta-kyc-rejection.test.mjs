@@ -7,13 +7,15 @@ import {encryptCustomerSecret,decryptCustomerSecret} from '../src/lib/meta-custo
 import {createMetaKycRejection,META_KYC_REJECTION_REPLY} from '../src/lib/meta-kyc-rejection.mjs';
 import {resolveMetaKycRejectionAuthority,metaKycRejectionAuthorityDigest} from '../src/lib/meta-kyc-rejection-policy.mjs';
 import {createMetaCustomerProcessor} from '../src/lib/meta-customer-processing.mjs';
+import {createMetaCustomerProvider} from '../src/lib/meta-customer-provider.mjs';
+import {resolveMetaKycAuthority} from '../src/lib/meta-kyc-identity.mjs';
 import {customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
 import {COMPANY_CHANNEL_SCHEMA_CONTRACT} from '../src/lib/company-channel-schema.mjs';
 import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
 
 // Real encrypted proof/authority/reservation code, synthetic SQL and transport.
 // This does not emulate PostgreSQL locks or prove a real provider delivery.
-async function fixture({own=false,company=false,afterReserve=async()=>{}}={}){
+async function fixture({own=false,company=false,actualHttp=false,afterReserve=async()=>{}}={}){
  const f=kycMemoryFixture({active:true,captureImageSetVersion:2}),runtime=own?await ownCompanyRuntimeFixture():null;
  if(runtime){Object.assign(f.environment,runtime.environment);Object.assign(f.connection,runtime.connection);f.now.setTime(runtime.time);f.project.organizationId=f.connection.organizationId;}
  const issuer={...(runtime?runtime.context.member:f.issuer),membershipId:'current-reply-administrator',revision:'2026-10-10T00:00:00.000001'};
@@ -59,17 +61,29 @@ async function fixture({own=false,company=false,afterReserve=async()=>{}}={}){
   assert.fail('Unexpected rejection SQL: '+sql);
  },release(){}};
  const connect=async()=>client;
+ const httpRequests=[],http=createMetaCustomerProvider({environment:f.environment,now:()=>f.now.getTime(),fetchImpl:async(url,options)=>{assert.equal(new URL(url).hostname,'graph.facebook.com');assert.equal(options.method,'POST');assert.match(new URL(url).pathname,/\/120000011\/messages$/);const body=JSON.parse(options.body);assert.equal(body.type,'text');assert.equal(body.text.body,META_KYC_REJECTION_REPLY.body);httpRequests.push(body);return new Response(JSON.stringify({messages:[{id:'wamid.syntheticrejectHTTP'}]}),{status:200,headers:{'Content-Type':'application/json'}});}});
  const provider={async forConnection(options){assert.ok(runtime);assert.ok(options.capability);await options.beforeExternal();if(controls.afterScope)await controls.afterScope();return this;},async sendReply(value){
   if(controls.beforeSend)await controls.beforeSend();await value.beforeExternal();
   assert.ok(f.outbounds.has(value.correlationId));assert.equal(f.outbounds.get(value.correlationId).outcome.state,'SEND_STARTED');assert.ok(trace.lastIndexOf('COMMIT')>=0,'Reservation commit must precede transport');assert.deepEqual(value.message,META_KYC_REJECTION_REPLY);
-  controls.sends++;trace.push('POST');if(controls.throwSend)throw controls.throwSend;if(controls.afterSend)await controls.afterSend();return {messageId:'wamid.syntheticreject123456'};
+  controls.sends++;trace.push('POST');if(controls.throwSend)throw controls.throwSend;const sent=actualHttp?await http.sendReply(value):{messageId:'wamid.syntheticreject123456'};if(controls.afterSend)await controls.afterSend();return sent;
  }};
  const adapter=createMetaKycRejection({connect,provider,environment:f.environment,afterReserve:()=>afterReserve({f,controls,runtime,owner})});
  const receive=(text='IDENTIDAD '+'z'.repeat(43))=>{const c=f.receive(text),event=f.events.get(c.eventId);event.eventType='message';event.attempts=0;event.status='PENDING';if(company){rewrite(event,()=>{},{mode:'COMPANY',revision:owner.revision,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT});c.payloadDigest=event.payload.payloadDigest;}return c;};
  function rewrite(event,change,companyRouting){const aad={organizationId:f.connection.organizationId,projectId:f.connection.projectId,resourceId:event.id},payload=JSON.parse(decryptCustomerSecret(event.payload.encryptedPayload,{...aad,purpose:'webhook'},f.environment)),proof=JSON.parse(decryptCustomerSecret(event.payload.encryptedProof,{...aad,purpose:'webhook-proof'},f.environment));change(payload);proof.payloadDigest=metaCustomerContentDigest(payload);if(companyRouting)proof.companyRouting=companyRouting;event.payload.payloadDigest=proof.payloadDigest;event.payload.encryptedPayload=encryptCustomerSecret(JSON.stringify(payload),{...aad,purpose:'webhook'},f.environment);event.payload.encryptedProof=encryptCustomerSecret(JSON.stringify(proof),{...aad,purpose:'webhook-proof'},f.environment);}
  const rejected=context=>adapter.rejection(context,{code:'META_KYC_CHALLENGE_REJECTED'}),snapshot=()=>JSON.stringify(f.worker);
- return {...f,runtime,issuer,activation,owner,controls,coreControls,trace,queries,client,connect,provider,adapter,receive,rewrite,rejected,snapshot};
+ return {...f,runtime,issuer,activation,owner,controls,coreControls,trace,queries,client,connect,provider,adapter,receive,rewrite,rejected,snapshot,httpRequests};
 }
+
+test('actual expired never-started IDENTIDAD uses the unchanged generic rejection and privately retains EXPIRED without granting capture',async()=>{
+ const f=await fixture({actualHttp:true});f.worker.metadata.participant.kycChatChallenge.expiresAt=new Date(f.now.getTime()-1).toISOString();const c=f.receive(f.code),event=f.events.get(c.eventId),before=f.snapshot();event.leaseToken=null;event.leaseExpiresAt=null;let captureAttempts=0;
+ const processor=createMetaCustomerProcessor({connect:f.connect,environment:f.environment,now:()=>f.now.getTime(),lockChannel:async()=>f.connection,authorizationCodes:['META_KYC_CHALLENGE_EXPIRED'],expiredKyc:async()=>null,rejectedKyc:f.adapter.rejection,dispatch:async context=>{captureAttempts++;return resolveMetaKycAuthority({query:f.query},context,{environment:f.environment});},outbound:{send:(context,reply,{purpose})=>{assert.equal(purpose,'KYC_REJECTION');return f.adapter.send(context,reply);}}});
+ const value=await processor.process(c.eventId);assert.equal(value.processed,true);assert.equal(value.code,'META_KYC_CHALLENGE_REJECTED');assert.equal(value.businessApplied,false);assert.equal(value.replySent,true);assert.equal(captureAttempts,1);assert.equal(f.httpRequests.length,1);assert.equal(f.httpRequests[0].text.body,META_KYC_REJECTION_REPLY.body);assert.equal(f.queries.some(q=>q.sql.includes('public."Worker"')||q.sql.includes('public."ProjectMembership"')),false,'Generic reply authority does not select or write a person');
+ const audit=[...f.audits.values()].find(a=>a.action==='participant.kyc_chat.rejected');assert.equal(audit.metadata.code,'META_KYC_CHALLENGE_REJECTED');assert.equal(audit.metadata.observedCode,'META_KYC_CHALLENGE_EXPIRED');assert.equal(f.snapshot(),before);assert.equal(f.coreControls.downloads,0);assert.equal(f.blob.puts(),0);assert.equal(f.worker.metadata.participant.kycChatChallenge.status,'PENDING');
+ await processor.process(c.eventId);assert.equal(f.httpRequests.length,1);assert.equal(captureAttempts,1);assert.equal(f.snapshot(),before);
+});
+test('expired marker feedback is the same public result as a mismatched marker and never reveals whether its challenge exists',async()=>{
+ for(const company of [false,true]){const f=await fixture({company}),c=f.receive();const expired=await f.adapter.rejection(c,{code:'META_KYC_CHALLENGE_EXPIRED'});assert.deepEqual(expired.reply,META_KYC_REJECTION_REPLY);assert.equal(expired.code,'META_KYC_CHALLENGE_REJECTED');assert.equal(f.queries.some(q=>q.sql.includes('public."Worker"')),false);const sealed=structuredClone([...f.audits]);assert.deepEqual(await f.adapter.rejection(c,{code:'META_KYC_CHALLENGE_REJECTED'}),expired);assert.deepEqual([...f.audits],sealed);assert.equal(f.controls.sends,0);}
+});
 
 for(const own of [false,true])test((own?'OWN runtime':'customer activation')+' replies once with fixed text and no capture or identity authority',async()=>{
  const f=await fixture({own}),context=f.receive(),before=f.snapshot(),r=await f.rejected(context);

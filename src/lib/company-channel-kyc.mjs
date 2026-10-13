@@ -139,7 +139,13 @@ export async function fenceCompanyKycAuthority(client,r,context,{environment=pro
  // All current actor/assignment/grant rows are held. No await follows this clock.
  checkedTime(r,context,rows[0].now,rows[0],environment);
 }
-export async function resolveCompanyKycAuthority(client,context,{initial,firstChannel,payload,codeDigest,environment}){
+const capturePurpose=Symbol('company-kyc-capture'),expiryFeedbackPurpose=Symbol('company-kyc-expiry-feedback');
+export const resolveCompanyKycAuthority=(client,context,input)=>resolveCompanyKycContext(client,context,input,capturePurpose);
+// Internal composition: this context is never LIMITED_KYC_UPLOAD and cannot
+// write a capture projection. The final feedback resolver proves the deadline,
+// incomplete conversation and original prepared/claimed receipts separately.
+export const resolveCompanyKycExpiryContext=(client,context,input)=>resolveCompanyKycContext(client,context,input,expiryFeedbackPurpose);
+async function resolveCompanyKycContext(client,context,{initial,firstChannel,payload,codeDigest,environment},purpose){
  const proof=corporateKycSignedProof(initial,firstChannel,environment);
  if(!proof)return null;
  const selection=payload.value.interactive?.list_reply?.id||payload.value.interactive?.button_reply?.id;
@@ -211,8 +217,15 @@ export async function resolveCompanyKycAuthority(client,context,{initial,firstCh
  if(digest(finalPayload)!==digest(payload)||digest(corporateKycSignedProof(event,connection,environment).companyRouting)!==digest(proof.companyRouting))fail();
  if(challenge.status==='PENDING'){if(!codeDigest||codeDigest!==challenge.codeDigest)fail('META_KYC_CHALLENGE_REJECTED');}
  else if(!['CLAIMED','COMPLETED'].includes(challenge.status)&&!(challenge.status==='CANCELLED'&&challenge.cancelledEventId===event.id)||codeDigest&&challenge.claimedEventId!==event.id)fail('META_KYC_CHALLENGE_REJECTED');
- const r={kind:'LIMITED_KYC_UPLOAD',member,issuer,project:projects.get(candidate.projectId),worker,challenge,connection,event,payload:finalPayload,now,prompt,source:{kind:'META_KYC_CHAT',eventId:event.id,payloadDigest:context.payloadDigest,challengeId:challenge.id,connectionId:connection.id,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,senderE164:worker.phone}};
- checkedTime(r,context,now,r.event,environment);
+ const feedback=purpose===expiryFeedbackPurpose;
+ const r={kind:feedback?'KYC_EXPIRY_CONTEXT':'LIMITED_KYC_UPLOAD',member,issuer,project:projects.get(candidate.projectId),worker,challenge,connection,event,payload:finalPayload,now,prompt,source:{kind:'META_KYC_CHAT',eventId:event.id,payloadDigest:context.payloadDigest,challengeId:challenge.id,connectionId:connection.id,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,senderE164:worker.phone}};
+ if(feedback){
+  if(existing.length||challenge.status!=='CLAIMED'||!prompt||!pinned)fail('META_KYC_EXPIRY_FEEDBACK_DENIED');
+  if(!(now instanceof Date)||!Number.isFinite(now.getTime())||!customerChannelActive(connection,now.getTime(),{environment})||connection.metadata?.developmentPilot)fail('META_KYC_CHALLENGE_REVOKED');
+  checkedLease(event,context,now);
+  if(part.status==='INVITED'&&(!Number.isFinite(Date.parse(part.invitation.expiresAt))||Date.parse(part.invitation.expiresAt)<=now.getTime()))fail('META_KYC_CHALLENGE_REVOKED');
+  assertCustomerReplyWindow(finalPayload,now.getTime());
+ }else checkedTime(r,context,now,r.event,environment);
  const projection=companyKycProjectionContract({version:1,kind:COMPANY_KYC_PROJECTION_KIND,sourceEventId:event.id,payloadDigest:context.payloadDigest,organizationId:firstChannel.organizationId,connectionId:connection.id,anchorProjectId:connection.projectId,targetProjectId:r.project.id,workerId:worker.id,challengeId:challenge.id,ownerRevision:connection.company.revision,assignmentRevision:connection.company.assignmentRevision,grantDigest:d0.grantDigest,issuerActorId:issuer.actorId,issuerMembershipId:issuer.membershipId,authorityDigest,participantActorId:part.status==='ACTIVE'?member.actorId:null,participantMembershipId:part.status==='ACTIVE'?member.membershipId:null,participantClerkUserId:part.status==='ACTIVE'?member.clerkUserId:null});
  if(pinned){
   const current={...projection,sourceEventId:pinned.sourceEventId,payloadDigest:pinned.payloadDigest};
@@ -220,7 +233,7 @@ export async function resolveCompanyKycAuthority(client,context,{initial,firstCh
  }
  const conflict=(await client.query('SELECT "sourceEventId" FROM public."WhatsAppCompanyEventRoute" WHERE "sourceEventId"=$1',[event.id])).rows;
  if(conflict.length)fail();
- if(existing.length===0)await client.query('INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,\'participant.kyc_chat.projected\',\'Worker\',$4,$5::jsonb)',[companyKycProjectionId(event.id),firstChannel.organizationId,member.actorId,worker.id,JSON.stringify(projection)]);
+ if(!feedback&&existing.length===0)await client.query('INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,\'participant.kyc_chat.projected\',\'Worker\',$4,$5::jsonb)',[companyKycProjectionId(event.id),firstChannel.organizationId,member.actorId,worker.id,JSON.stringify(projection)]);
  r.companyKyc=projection;r.source.companyKyc=projection;
  return r;
 }

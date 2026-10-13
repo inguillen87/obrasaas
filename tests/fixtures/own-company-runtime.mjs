@@ -7,8 +7,8 @@ import {ownCompanyFixture} from './own-company-meta.mjs';
 
 // Explicit in-memory canonical SQL adapter. No database, credentials, browser
 // or real provider is used; original policy/provider functions execute.
-export async function ownCompanyRuntimeFixture(){
- const f=ownCompanyFixture({time:Date.parse('2026-10-09T12:00:00.000Z')});
+export async function ownCompanyRuntimeFixture({time=Date.parse('2026-10-09T12:00:00.000Z')}={}){
+ const f=ownCompanyFixture({time});
  f.debug.expires_at=Math.floor((f.time+24*3600000)/1000);
  f.debug.data_access_expires_at=Math.floor((f.time+18*3600000)/1000);
  const token=f.environment.META_OWN_COMPANY_ACCESS_TOKEN;

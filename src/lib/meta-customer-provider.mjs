@@ -121,12 +121,13 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
   const pilotAdapter=adapter=>{if(ownCapability){const runtime=ownCompanyCapabilityKind(ownCapability)==='RUNTIME',administration=ownTemplateAdministrations.get(ownTemplateAdministration);if(!(runtime?['inspect','reply','media',...(administration?.capability===ownCapability?['templates','template-create']:[])]:['inspect','subscribe','register','reply','media']).includes(adapter))throw new WorkspaceError('META_OWN_COMPANY_ADAPTER_UNAVAILABLE',409);}if(pilotCapability&&!['inspect','subscribe','register','reply'].includes(adapter))throw new WorkspaceError('META_DEVELOPMENT_PILOT_ADAPTER_UNAVAILABLE',409);};
   const ownTemplateDefinition=(wabaId,name,definition=null)=>{if(!ownCapability)return;const administration=ownTemplateAdministrations.get(ownTemplateAdministration),current=ownCompanyTransportPolicy(ownCapability,environment,now());if(!administration||administration.capability!==ownCapability||wabaId!==current.wabaId)throw new WorkspaceError('META_OWN_COMPANY_ASSET_REJECTED',403);const expected=administration.definition;if(name!==expected.name||definition&&JSON.stringify(definition)!==JSON.stringify(expected))throw new WorkspaceError('META_CUSTOMER_TEMPLATE_VERSION_REVIEW',409);};
   const ownBoundary=async()=>{if(ownCapability){if(ownCompanyCapabilityKind(ownCapability)==='RUNTIME'){if(typeof ownFence!=='function')throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);await ownFence();}config();}};
- async function request(path,{token,method='GET',body,appToken=false,beforeExternal}={}){
+ async function request(path,{token,method='GET',body,appToken=false,beforeExternal,finalBeforeExternal}={}){
   const ready=config(),url=new URL(`https://graph.facebook.com/${ready.version}/${path}`);
    if(ownCapability&&!appToken&&customerTokenDigest(token||'')!==ownAudits.get(ownAudit)?.tokenDigest)throw new WorkspaceError('META_OWN_COMPANY_CREDENTIAL_REJECTED',403);
   if(token&&!appToken)url.searchParams.set('appsecret_proof',createHmac('sha256',environment.META_APP_SECRET).update(token).digest('hex'));
   if(beforeExternal)await beforeExternal();
   await ownBoundary();
+  if(finalBeforeExternal)await finalBeforeExternal();
   let response;try{response=await fetchImpl(url,{method,headers:{Accept:'application/json',...(token?{Authorization:`Bearer ${token}`}:{}) ,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store',redirect:'error',signal:AbortSignal.timeout(15000)});}catch{throw new WorkspaceError('META_CUSTOMER_PROVIDER_UNCONFIRMED',503);}
   const payload=await response.json().catch(()=>null);
   if(!response.ok)throw new WorkspaceError(response.status>=500||[408,425,429].includes(response.status)?'META_CUSTOMER_PROVIDER_UNCONFIRMED':'META_CUSTOMER_PROVIDER_REJECTED',response.status>=500||[408,425,429].includes(response.status)?503:409);
@@ -366,11 +367,11 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    // Re-read the exact owned content; POST acceptance is not template approval.
    return result;
   },
-  async sendReply({token,phoneNumberId,to,message,correlationId,replyTo,beforeExternal}){
+  async sendReply({token,phoneNumberId,to,message,correlationId,replyTo,beforeExternal,finalBeforeExternal}){
    pilotAdapter('reply');if(pilotCapability&&(inspectedAssets?.phoneNumberId!==phoneNumberId||inspectedAssets.inspectionPhase!==META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL||inspectedAssets.registered!==true||inspectedAssets.platformType!=='CLOUD_API'))throw new WorkspaceError('META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED',403);
     if(ownCapability&&(inspectedAssets?.phoneNumberId!==phoneNumberId||inspectedAssets.inspectionPhase!==META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL||inspectedAssets.registered!==true||inspectedAssets.platformType!=='CLOUD_API'))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);
-   if(!metaAssetId(phoneNumberId)||!/^[1-9]\d{7,14}$/.test(to||'')||!/^customer_outbound_[a-f0-9]{64}$/.test(correlationId||'')||!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(replyTo||''))throw new WorkspaceError('META_CUSTOMER_REPLY_INVALID');
-   const result=await request(phoneNumberId+'/messages',{token,method:'POST',body:{messaging_product:'whatsapp',recipient_type:'individual',to,...customerReplyMessage(message),context:{message_id:replyTo},biz_opaque_callback_data:correlationId},beforeExternal});
+   if(!metaAssetId(phoneNumberId)||!/^[1-9]\d{7,14}$/.test(to||'')||!/^customer_outbound_[a-f0-9]{64}$/.test(correlationId||'')||!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(replyTo||'')||finalBeforeExternal!==undefined&&typeof finalBeforeExternal!=='function')throw new WorkspaceError('META_CUSTOMER_REPLY_INVALID');
+   const result=await request(phoneNumberId+'/messages',{token,method:'POST',body:{messaging_product:'whatsapp',recipient_type:'individual',to,...customerReplyMessage(message),context:{message_id:replyTo},biz_opaque_callback_data:correlationId},beforeExternal,finalBeforeExternal});
    const id=result.messages?.length===1?result.messages[0].id:null;
    if(!/^wamid\.[A-Za-z0-9+/_=-]{8,1024}$/.test(id||''))throw new WorkspaceError('META_CUSTOMER_SEND_UNCONFIRMED',503);
    return {messageId:id};

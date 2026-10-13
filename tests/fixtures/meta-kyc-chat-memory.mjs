@@ -13,7 +13,7 @@ import {lifecycleEnvironment,lifecyclePng,createControlledLifecycleBlob} from '.
 
 // A transaction/SQL adapter fixture for focal units. PostgreSQL behavior is
 // covered separately by verify-meta-kyc-chat-postgres.mjs in disposable CI.
-export function kycMemoryFixture({active=false,captureImageSetVersion}={}){
+export function kycMemoryFixture({active=false,captureImageSetVersion,ownRuntime=null}={}){
  const environment={...lifecycleEnvironment},now=new Date(),code='IDENTIDAD '+Buffer.alloc(32,48).toString('base64url');
  const project={id:'project-a',organizationId:'company-a',name:'Synthetic project',metadata:{}},issuer={membershipId:'manager-member',actorId:'manager-a',organizationId:project.organizationId,role:'ADMIN'};
  const member={membershipId:'worker-member',actorId:'worker-user-a',clerkUserId:'user_WorkerA',organizationId:project.organizationId,role:'EMPLOYEE'};
@@ -21,10 +21,12 @@ export function kycMemoryFixture({active=false,captureImageSetVersion}={}){
  const worker={id:'worker-a',projectId:project.id,phone:challenge.senderE164,active:true,revision:'r1',metadata:{siteRegister:{version:1},participant:{version:1,status:active?'ACTIVE':'INVITED',clerkUserId:active?member.clerkUserId:null,permissions:{attendance:active,report:active},invitation:{id:challenge.invitationId,state:active?'ACCEPTED':'SENT',expiresAt:new Date(now.getTime()+7*86400000).toISOString()},kycChatChallenge:challenge,kyc:{status:'NOT_SUBMITTED'}}}};
  const connection={id:challenge.connectionId,projectId:project.id,organizationId:project.organizationId,whatsappBusinessId:challenge.wabaId,phoneNumberId:challenge.phoneNumberId,enabled:true,connectionStatus:'CONNECTED',metadata:{credentialFormat:'tenant-aad-v2',credentialOrganizationId:project.organizationId,customerActivation:{version:1,state:'ACTIVE',actorId:issuer.actorId},customerSubscribed:true,customerVerification:{registered:true,scopes:['whatsapp_business_management','whatsapp_business_messaging'],expiresAt:null}}};
  connection.encryptedAccessToken=encryptCustomerSecret('synthetic-kyc-channel-token',{organizationId:project.organizationId,projectId:project.id,purpose:'access-token',resourceId:connection.phoneNumberId},environment);
+ if(ownRuntime){Object.assign(environment,ownRuntime.environment);now.setTime(ownRuntime.time);Object.assign(connection,structuredClone(ownRuntime.connection));Object.assign(issuer,ownRuntime.context.member,{membershipId:'own-current-admin',clerkUserId:ownRuntime.policy.clerkUserId});Object.assign(project,{id:connection.projectId,organizationId:connection.organizationId});member.organizationId=connection.organizationId;worker.projectId=connection.projectId;Object.assign(challenge,{organizationId:connection.organizationId,projectId:connection.projectId,connectionId:connection.id,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,issuerActorId:issuer.actorId,issuerMembershipId:issuer.membershipId,createdAt:now.toISOString(),expiresAt:new Date(now.getTime()+86400000).toISOString()});worker.metadata.participant.invitation.expiresAt=new Date(now.getTime()+7*86400000).toISOString();}
  const audits=new Map(),events=new Map(),outbounds=new Map(),blob=createControlledLifecycleBlob(),controls={issuerActive:true,workerMembershipActive:true,projectAssignmentActive:true,projectActive:true,loseDepositCommit:false,loseDispatchCommit:false,badMedia:false,transientMedia:false,downloads:0,sends:0};let counter=0,revision=1;
  if(captureImageSetVersion===2)audits.set('prepared-fixture',{id:'prepared-fixture',organizationId:project.organizationId,actorId:issuer.actorId,entityType:'Worker',entityId:worker.id,action:'participant.kyc_chat.prepared',metadata:{version:1,projectId:project.id,captureImageSetVersion:2,challengeId:challenge.id,requestDigest:digest(['synthetic-preparation',challenge.id]),expiresAt:challenge.expiresAt}});
  const query=async(sql,args=[])=>{
   const result=rows=>({rows:structuredClone(rows),rowCount:rows.length});
+  if(ownRuntime&&(sql.includes('FROM public."PlatformUser" u JOIN public."TenantMembership"')&&args.length===5||sql.includes('FROM public."WhatsAppConnection" c JOIN public."Project" p')&&args.length===3||sql.includes("action='company.own.number.recorded'")))return ownRuntime.client.query(sql,args);
   if(sql.startsWith('BEGIN')||sql.startsWith('SET LOCAL')||sql==='ROLLBACK'||sql.startsWith('SELECT pg_advisory'))return result([]);
   if(sql==='COMMIT'){
    if(controls.loseDepositCommit&&[...audits.values()].some(x=>x.action==='participant.operation.recorded')){controls.loseDepositCommit=false;throw new Error('SYNTHETIC_COMMITTED_DEPOSIT_RESPONSE_LOST');}
@@ -36,18 +38,25 @@ export function kycMemoryFixture({active=false,captureImageSetVersion}={}){
    const c=worker.metadata.participant.kycChatChallenge;
    return result(worker.projectId===args[0]&&project.organizationId===args[1]&&worker.phone===args[2]&&c.connectionId===args[3]&&(args.length===5?c.codeDigest===args[4]:['CLAIMED','COMPLETED','CANCELLED'].includes(c.status))?[worker]:[]);
   }
-  if(sql.includes('FROM public."PlatformUser"'))return result(args[0]===issuer.actorId?[{id:issuer.actorId,clerkUserId:'user_ManagerA'}]:args[0]===member.clerkUserId?[{id:member.actorId,clerkUserId:member.clerkUserId}]:[]);
+  if(sql.includes('FROM public."PlatformUser"'))return result(args[0]===issuer.actorId?[{id:issuer.actorId,clerkUserId:issuer.clerkUserId||'user_ManagerA'}]:args[0]===member.clerkUserId?[{id:member.actorId,clerkUserId:member.clerkUserId}]:[]);
   if(sql.includes('FROM public."TenantMembership"'))return result(args[0]===issuer.membershipId||args[0]===issuer.actorId?controls.issuerActive?[issuer]:[]:controls.workerMembershipActive?[member]:[]);
   if(sql.includes('FROM public."ProjectMembership"'))return result(controls.projectAssignmentActive?[{id:'project-member'}]:[]);
   if(sql.includes('FROM public."Project"'))return result(controls.projectActive&&args[0]===project.id?[project]:[]);
   if(sql.includes('JOIN public."Project"')&&sql.includes('public."WhatsAppConnection"'))return result(controls.projectActive&&args[0]===connection.id&&args[1]===project.id?[connection]:[]);
   if(sql.includes('FROM public."WhatsAppConnection"'))return result(sql.includes('WHERE "projectId"=$1')?args[0]===project.id?[connection]:[]:args[0]===connection.id&&args[1]===project.id?[connection]:[]);
-  if(sql.startsWith('SELECT')&&sql.includes('FROM public."WebhookEvent"'))return result([events.get(args[0])||outbounds.get(args[0])].filter(Boolean));
+   if(sql.startsWith('SELECT')&&sql.includes('FROM public."WebhookEvent"')){
+    const selected=sql.includes("outcome->>'messageId'")?[...outbounds.values()].filter(e=>e.projectId===args[0]&&e.payload.channelId===args[1]&&e.outcome.messageId===args[2]):[events.get(args[0])||outbounds.get(args[0])].filter(Boolean);
+    return result(selected.map(e=>sql.includes('clock_timestamp() AS now')?{...e,now:new Date(now)}:e));
+   }
   if(sql.startsWith('SELECT')&&sql.includes('FROM public."Worker"'))return result(args[0]===worker.id&&args[1]===worker.projectId?[worker]:[]);
   if(sql.includes("action='participant.kyc_chat.prepared'")&&sql.includes("metadata->>'challengeId'"))return result([...audits.values()].filter(a=>a.action==='participant.kyc_chat.prepared'&&a.organizationId===args[0]&&a.actorId===args[1]&&a.entityId===args[2]&&a.metadata.challengeId===args[3]));
-  if(sql.startsWith('SELECT')&&sql.includes('FROM public."AuditLog"'))return result([audits.get(args[0])].filter(Boolean));
+   if(sql.startsWith('SELECT')&&sql.includes('FROM public."AuditLog"')){
+    if(sql.includes('"entityId"=ANY($2::text[])'))return result([...audits.values()].filter(a=>a.organizationId===args[0]&&a.action==='participant.operation.recorded'&&(['OFFICE_ROLE_CHANGED','REVOKE','RESTORE_ACCESS','EXISTING_ACCOUNT_ASSIGNED','INVITATION_ACCEPTED','FIELD_PERMISSIONS_CHANGED'].includes(a.metadata.kind))&&(a.entityType==='TenantMembership'&&args[1].includes(a.entityId)||a.entityType==='Worker'&&a.entityId===args[2])).sort((a,b)=>a.id.localeCompare(b.id)));
+    if(sql.includes("metadata->>'kind'='KYC_SUBMITTED'"))return result([...audits.values()].filter(a=>a.organizationId===args[0]&&a.entityId===args[1]&&a.action==='participant.operation.recorded'&&a.metadata.kind==='KYC_SUBMITTED'&&new Date(a.createdAt).getTime()>=Date.parse(args[2])).slice(0,1));
+    return result([audits.get(args[0])].filter(Boolean));
+   }
   if(sql.startsWith('UPDATE public."Worker"')){assert.equal(args[0],worker.id);worker.metadata=JSON.parse(args[2]);worker.revision='r'+(++revision);return {rows:[],rowCount:1};}
-  if(sql.startsWith('INSERT INTO public."AuditLog"')){assert.ok(!audits.has(args[0]));audits.set(args[0],{id:args[0],organizationId:args[1],actorId:args[2],entityId:args[3],entityType:'Worker',action:/'(participant\.[a-z_.]+)'/.exec(sql)[1],metadata:JSON.parse(args[4])});return {rows:[],rowCount:1};}
+   if(sql.startsWith('INSERT INTO public."AuditLog"')){assert.ok(!audits.has(args[0]));audits.set(args[0],{id:args[0],organizationId:args[1],actorId:args[2],entityId:args[3],entityType:/'(Worker|WebhookEvent)'/.exec(sql)[1],action:/'(participant\.[a-z_.]+)'/.exec(sql)[1],metadata:JSON.parse(args[4]),createdAt:new Date(now)});return {rows:[],rowCount:1};}
   if(sql.startsWith('INSERT INTO public."WebhookEvent"')){outbounds.set(args[0],{id:args[0],projectId:args[1],payload:JSON.parse(args[3]),outcome:JSON.parse(args[4]),leaseToken:args[5]});return {rows:[],rowCount:1};}
   if(sql.startsWith('UPDATE public."WebhookEvent"')){
    if(sql.includes('180 seconds'))events.get(args[0]).leaseExpiresAt=new Date(now.getTime()+180000);
@@ -57,7 +66,7 @@ export function kycMemoryFixture({active=false,captureImageSetVersion}={}){
   throw new Error('UNCONTROLLED_UNIT_SQL: '+sql);
  };
  const connect=async()=>({query,release:()=>{}}),uploader=createPrivateImageUploader({get:blob.get,put:blob.put,environment:()=>environment});
- const provider={downloadMedia:async({beforeExternal}={})=>{if(beforeExternal)await beforeExternal();controls.downloads++;if(controls.transientMedia){controls.transientMedia=false;throw new Error('SYNTHETIC_TRANSIENT_MEDIA');}return {contentType:'image/png',bytes:controls.badMedia?Buffer.from('invalid image'):lifecyclePng};},sendReply:async()=>{controls.sends++;return {messageId:'wamid.SyntheticKycReply_'+controls.sends};}};
+ const provider={forConnection:async({beforeExternal})=>{await beforeExternal();return provider;},downloadMedia:async({beforeExternal}={})=>{if(beforeExternal)await beforeExternal();controls.downloads++;if(controls.transientMedia){controls.transientMedia=false;throw new Error('SYNTHETIC_TRANSIENT_MEDIA');}return {contentType:'image/png',bytes:controls.badMedia?Buffer.from('invalid image'):lifecyclePng};},sendReply:async()=>{controls.sends++;return {messageId:'wamid.SyntheticKycReply_'+controls.sends};}};
  const deposit=createParticipantChannelKycDeposit({connect,resolveAuthority:resolveMetaKycAuthority,upload:captureImageSetVersion===2?createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment}):uploader.uploadImageToBlob,environment}),bridge=createMetaKycBridge({connect,provider,deposit,environment}),outbound=createMetaKycOutbound({connect,provider,environment});
  let current=null;
  const receive=(message,{sender=challenge.senderE164.slice(1),timestamp,proof=true}={})=>{
