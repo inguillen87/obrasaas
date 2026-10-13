@@ -3,13 +3,15 @@ import test from 'node:test';
 import {createHmac,randomUUID} from 'node:crypto';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
 import {createCompanySubscription} from '../src/lib/company-subscription-store.mjs';
 import {createCompanySubscriptionProvider} from '../src/lib/company-subscription-provider.mjs';
 import {companySubscriptionView} from '../src/app/(identity)/cuenta/company-subscription-view.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {scopeStamp,WorkspaceError} from '../src/lib/workspace-policy.mjs';
 import {subscriptionCommand} from '../src/lib/company-subscription-policy.mjs';
-import {commercialTermsSha256,defaultCommercialCatalog,commercialAcceptanceId,commercialContractDigest} from '../src/lib/company-subscription-catalog.mjs';
+import {commercialTermsSha256,defaultCommercialCatalog,commercialAcceptanceId,commercialContractDigest,commercialCatalogDigest} from '../src/lib/company-subscription-catalog.mjs';
+import {companySubscriptionRuntimeConfiguration,companyCommercialRuntimeCatalog} from '../src/lib/company-subscription-runtime-config.mjs';
 
 const op='00000000-0000-4000-8000-000000000001',otherOp='00000000-0000-4000-8000-000000000002',cancelOp='00000000-0000-4000-8000-000000000003',scope='a'.repeat(64);
 const session={authenticated:true,verification:'clerk-production-jwt',userId:'user_Owner',organizationId:'org_A',organizationRole:'org:admin'};
@@ -212,6 +214,65 @@ test('successive current invoices extend coverage monotonically and an older inv
 const acceptanceOp='00000000-0000-4000-8000-000000000100';
 async function acceptanceInput(f,operationId=acceptanceOp){const view=await f.rawStore.read(session,{scope}),selected=view.commercial.offers[0];return {scope,operationId,offerId:selected.id,catalogVersion:view.commercial.catalogVersion,catalogDigest:view.commercial.catalogDigest,offerDigest:selected.offerDigest,termsVersion:selected.termsVersion||'pending-terms',termsSha256:selected.termsSha256||'a'.repeat(64),accepted:true};}
 const financialInput=accepted=>({...beginInput(),acceptanceReceiptId:accepted.acceptance.receiptId,acceptanceDigest:accepted.acceptance.acceptanceDigest});
+
+function approvedRuntimeEnvironment(raw=completeCatalog(),financial=null){
+ const environment={VERCEL_ENV:'production',VERCEL_PROJECT_ID:'prj_68NErbCqCFsDVaMak81gcwsGI9pF',NEXT_PUBLIC_APP_URL:'https://obrasaas.com',OBRASAAS_COMPANY_COMMERCIAL_RELEASE:'company-commercial-v1',OBRASAAS_COMPANY_COMMERCIAL_CATALOG:JSON.stringify(raw),OBRASAAS_COMPANY_COMMERCIAL_APPROVAL:JSON.stringify({version:1,catalogDigest:commercialCatalogDigest(raw),approvalReference:'synthetic-approval:store-v1',fundingEvidenceReference:'synthetic-funding:store-v1'})};
+ if(financial)Object.assign(environment,{OBRASAAS_COMPANY_SUBSCRIPTION_RELEASE:'company-subscription-v1',OBRASAAS_COMPANY_SUBSCRIPTION_CATALOG:JSON.stringify(financial),MERCADOPAGO_SUBSCRIPTION_MERCHANT_ID:financial.merchantId,MERCADOPAGO_SUBSCRIPTION_CURRENCY:financial.offers[0].currency,MERCADOPAGO_SUBSCRIPTION_CHECKOUT_HOST:'www.mercadopago.com.ar',MERCADOPAGO_ACCESS_TOKEN:'synthetic-runtime-token-123456',MERCADOPAGO_SUBSCRIPTION_WEBHOOK_SECRET:'synthetic-runtime-secret-123456'});
+ return environment;
+}
+function actualRuntime(f,environment,{source=readFileSync(new URL('../src/lib/company-subscription-runtime.mjs',import.meta.url),'utf8'),provider=null}={}){
+ // Execute the actual composition body, with no real process.env, Clerk,
+ // network or DB. The store and canonical workspace transaction code are real.
+ const body=source.replace(/^import [^\r\n]+;\r?$/gm,'').replace(/^export /gm,'');assert.doesNotMatch(body,/^\s*import\b/m);
+ const counts={membership:0,email:0,http:0},workspace=createWorkspaceStore({connect:async()=>f.client});
+ const result=runInNewContext(body+'\n({store:productionCompanySubscription,provider:productionCompanySubscriptionProvider})',{
+  process:Object.freeze({env:Object.freeze({...environment})}),clerkClient:()=>{throw new Error('No real Clerk in runtime integration');},WorkspaceError,
+  connectWorkspace:async()=>f.client,productionWorkspace:workspace,createCompanySubscription,
+  createCompanySubscriptionProvider:provider?()=>provider:options=>createCompanySubscriptionProvider({...options,fetchImpl:async()=>{counts.http++;throw new Error('No external provider in runtime integration');}}),
+  companySubscriptionRuntimeConfiguration,companyCommercialRuntimeCatalog,
+  createParticipantIdentityProvider:()=>({async verifyMembership(){counts.membership++;return {role:'org:admin'};},async verifiedEmail(){counts.email++;return 'synthetic@example.invalid';}})
+ });
+ return {...result,counts,scope:scopeStamp(session,f.member)};
+}
+async function runtimeAcceptance(runtime,operationId=acceptanceOp){
+ const view=await runtime.store.read(session,{scope:runtime.scope}),selected=view.commercial.offers[0];
+ return runtime.store.acceptOffer(session,{scope:runtime.scope,operationId,offerId:selected.id,catalogVersion:view.commercial.catalogVersion,catalogDigest:view.commercial.catalogDigest,offerDigest:selected.offerDigest,termsVersion:selected.termsVersion,termsSha256:selected.termsSha256,accepted:true});
+}
+
+test('actual runtime mounts approved loader into canonical acceptance while provider and financial grant remain closed',async()=>{
+ const f=fixture(),before=structuredClone(f.organizations),runtime=actualRuntime(f,approvedRuntimeEnvironment()),view=await runtime.store.read(session,{scope:runtime.scope});
+ assert.equal(runtime.provider.readiness().available,false);assert.equal(view.configuration.state,'CONFIGURATION_PENDING');assert.equal(view.commercial.state,'READY');assert.equal(view.commercial.offers[0].canAccept,true);assert.equal(view.commercial.offers[0].checkoutAvailable,false);
+ const accepted=await runtimeAcceptance(runtime),replay=await runtimeAcceptance(runtime);assert.deepEqual(replay.acceptance,accepted.acceptance);assert.equal(accepted.acceptance.current,true);assert.equal(accepted.acceptance.canCheckout,false);assert.equal(accepted.acceptance.offer.termsText,termsText);
+ assert.equal([...f.logs.values()].filter(row=>row.action==='company.subscription.offer.accepted').length,1);assert.deepEqual(f.organizations,before);
+ await assert.rejects(runtime.store.begin(session,{...financialInput(accepted),scope:runtime.scope}),{code:'COMPANY_SUBSCRIPTION_CONFIGURATION_PENDING'});
+ assert.deepEqual(runtime.counts,{membership:0,email:0,http:0});assert.deepEqual(f.calls(),{createCalls:0,inspectCalls:0,cancelCalls:0});assert.equal([...f.logs.values()].some(row=>row.action==='company.subscription.attempt'),false);
+});
+
+test('removing the real runtime loader call causally loses approved acceptance rather than making the helper sufficient',async()=>{
+ const source=readFileSync(new URL('../src/lib/company-subscription-runtime.mjs',import.meta.url),'utf8'),call='const commercialCatalog=companyCommercialRuntimeCatalog(process.env);';assert.equal(source.split(call).length,2);
+ const f=fixture(),runtime=actualRuntime(f,approvedRuntimeEnvironment(),{source:source.replace(call,'const commercialCatalog=companyCommercialRuntimeCatalog({});')}),view=await runtime.store.read(session,{scope:runtime.scope});
+ assert.equal(companyCommercialRuntimeCatalog(approvedRuntimeEnvironment()).offers[0].termsText,termsText,'The actual helper alone remains approved');assert.equal(view.commercial.state,'TERMS_PENDING');assert.ok(view.commercial.offers.every(offer=>!offer.canAccept&&!offer.checkoutAvailable));
+ await assert.rejects(runtime.store.acceptOffer(session,{scope:runtime.scope,operationId:acceptanceOp,offerId:view.commercial.offers[0].id,catalogVersion:view.commercial.catalogVersion,catalogDigest:view.commercial.catalogDigest,offerDigest:view.commercial.offers[0].offerDigest,termsVersion:'pending-terms',termsSha256:'a'.repeat(64),accepted:true}),{code:'COMPANY_SUBSCRIPTION_TERMS_PENDING'});
+ assert.equal(f.logs.size,0);assert.deepEqual(runtime.counts,{membership:0,email:0,http:0});
+});
+
+test('approved commercial runtime cannot checkout against a different independently configured financial contract',async()=>{
+ const f=fixture(),financial=config();financial.offers[0].termsVersion='different-financial-terms';const before=structuredClone(f.organizations),runtime=actualRuntime(f,approvedRuntimeEnvironment(completeCatalog(),financial));
+ assert.equal(runtime.provider.readiness().available,true);const accepted=await runtimeAcceptance(runtime);assert.equal(accepted.acceptance.current,true);assert.equal(accepted.acceptance.canCheckout,false);
+ await assert.rejects(runtime.store.begin(session,{...financialInput(accepted),scope:runtime.scope}),{code:'COMPANY_SUBSCRIPTION_ACCEPTANCE_BINDING_REJECTED'});
+ assert.deepEqual(runtime.counts,{membership:0,email:0,http:0});assert.deepEqual(f.organizations,before);assert.equal([...f.logs.values()].filter(row=>row.action==='company.subscription.offer.accepted').length,1);assert.equal([...f.logs.values()].some(row=>row.action==='company.subscription.attempt'),false);
+});
+
+test('new runtime with closed commercial approval recovers and cancels a previous receipt-bound financial attempt',async()=>{
+ const f=fixture(),environment=approvedRuntimeEnvironment(completeCatalog(),config()),first=actualRuntime(f,environment,{provider:f.provider}),accepted=await runtimeAcceptance(first),started=await first.store.begin(session,{...financialInput(accepted),scope:first.scope});
+ assert.equal(started.attempt.state,'CHECKOUT_READY');const receiptBefore=structuredClone([...f.logs.values()].find(row=>row.action==='company.subscription.offer.accepted'));
+ const closedEnvironment={...environment,OBRASAAS_COMPANY_COMMERCIAL_APPROVAL:undefined};assert.deepEqual(companySubscriptionRuntimeConfiguration(closedEnvironment),companySubscriptionRuntimeConfiguration(environment));
+ const fresh=actualRuntime(f,closedEnvironment,{provider:f.provider}),view=await fresh.store.read(session,{scope:fresh.scope,acceptanceOperationId:acceptanceOp});assert.equal(view.commercial.state,'TERMS_PENDING');assert.equal(view.acceptance.current,false);assert.equal(view.acceptance.canCheckout,false);assert.equal(view.attempt.attemptId,started.attempt.attemptId);
+ await assert.rejects(fresh.store.begin(session,{...financialInput(accepted),scope:fresh.scope}),{code:'COMPANY_SUBSCRIPTION_ACCEPTANCE_BINDING_REJECTED'});f.paid();
+ const recovered=await fresh.store.recover(session,{scope:fresh.scope,operationId:op});assert.equal(recovered.subscription.status,'ACTIVE');assert.equal(recovered.attempt.state,'ACTIVE');assert.equal(recovered.acceptance.current,false);assert.equal(recovered.acceptance.offer.termsText,termsText);
+ const canceled=await fresh.store.cancelAtPeriodEnd(session,{scope:fresh.scope,operationId:cancelOp,subscriptionAttemptId:started.attempt.attemptId});assert.equal(canceled.attempt.cancelAtPeriodEnd,true);assert.equal(canceled.subscription.entitlement.allowed,true);
+ assert.deepEqual([...f.logs.values()].find(row=>row.action==='company.subscription.offer.accepted'),receiptBefore);assert.equal(f.calls().createCalls,1);assert.equal(f.calls().inspectCalls,1);assert.equal(f.calls().cancelCalls,1);assert.deepEqual(fresh.counts,{membership:0,email:0,http:0});
+});
 
 test('default pending commercial catalog exposes selected prices without merchant writes or executable terms',async()=>{
  const f=fixture({commercialReady:false});f.configure(false);const before=structuredClone(f.organizations),view=await f.rawStore.read(session,{scope});assert.equal(view.version,2);assert.equal(view.commercial.state,'TERMS_PENDING');assert.deepEqual(view.commercial.offers.map(o=>o.amountMinor),['14900','34900']);assert.ok(view.commercial.offers.every(o=>!o.canAccept&&!o.checkoutAvailable));assert.equal(view.acceptance,null);

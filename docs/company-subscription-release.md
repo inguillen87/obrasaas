@@ -44,6 +44,46 @@ Live financial configuration remains restricted to the mapped ObraSaaS Vercel
 production project and canonical application URL; a local server or Preview
 remains closed even with financial credentials.
 
+### Approved commercial catalog source
+
+`companyCommercialRuntimeCatalog` now supplies the raw immutable catalog to the
+production store. Its server-only inputs are independent from the merchant:
+
+- `OBRASAAS_COMPANY_COMMERCIAL_RELEASE`: exactly `company-commercial-v1`.
+- `OBRASAAS_COMPANY_COMMERCIAL_CATALOG`: bounded JSON, at most 131072 UTF-8
+  bytes, with exactly `version`, `catalogVersion` and `offers`. Use a new
+  version, not the pending default version. One or two complete offers are
+  supported; an approved Pro-only catalog need not invent Enterprise terms.
+- `OBRASAAS_COMPANY_COMMERCIAL_APPROVAL`: JSON at most 4096 UTF-8 bytes, with
+  exactly `version:1`, the derived `catalogDigest`, `approvalReference` and
+  `fundingEvidenceReference`. References use the existing ASCII identifier
+  syntax and point to the operator-reviewed approval and funding dossier.
+
+The loader validates every offer's complete tax/included conditions, contract
+text and exact UTF-8 SHA-256. All offers in this configured catalog must be
+complete. It preserves CR/LF and Unicode bytes rather than normalizing them.
+The shared financial offer schema must accept its exact projection, including
+the tax label's 160-character bound. The current adapter also requires at most
+13 minor-unit digits and a maximum of 1000000000000. ARS is an explicit amount;
+there is no exchange calculation. These checks establish representability,
+not evidence that a particular merchant can settle that currency.
+
+Wrong project/origin/target, missing release, incomplete terms, malformed or
+oversized JSON, invalid approval references, mismatched digest and unsupported
+financial projection return the frozen pending default. Neither approval
+reference is exposed through the customer DTO. These references are operator
+assertions, not cryptographic proof of an actual contract or funded service;
+the supporting agreements and budget must be reviewed before configuration.
+No production approval, terms, funding or merchant is created by this change.
+
+The catalog is captured when the server module starts. Changing private
+settings requires a new deployment; it is not immediate revocation of every
+old process during rollout. Closing this source never closes the independent
+financial recovery configuration: previous receipts, reads, reconciliation and
+cancellation keep their recorded offer. Current acceptance can be recorded
+without a merchant, but checkout still needs exact matching financial terms,
+verified payer, provider readiness and the separate durable acceptance receipt.
+
 ## Commercial offer and explicit acceptance
 
 The company response adds a separate versioned commercial catalog. Offer and

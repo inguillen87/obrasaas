@@ -7,7 +7,7 @@ import {parse} from '@babel/parser';
 import {ORGANIZATION_USAGE_PG_VERSION,ORGANIZATION_USAGE_PG_CHECKS} from './verify-organization-usage-postgres.mjs';
 import {ORGANIZATION_USAGE_UI_VERSION,ORGANIZATION_USAGE_UI_CHECKS,ORGANIZATION_USAGE_UI_WIDTHS} from './verify-organization-usage-ui.mjs';
 
-export const ORGANIZATION_USAGE_CI_VERSION='organization-usage-ci-v1';
+export const ORGANIZATION_USAGE_CI_VERSION='organization-usage-ci-v2';
 const pgHarness='scripts/verify-organization-usage-postgres.mjs',uiHarness='scripts/verify-organization-usage-ui.mjs',cleanupHelper='scripts/lib/owned-fixture-cleanup.mjs';
 const dependencies=['package-lock.json','package.json'];
 const uiRoots=['src/app/(identity)/cuenta/company-subscription-panel.js','src/app/(identity)/cuenta/plan-import-panel.js'];
@@ -28,12 +28,13 @@ function imports(bytes,file){
   for(const value of Object.values(node))if(Array.isArray(value))value.forEach(visit);else if(value&&typeof value==='object')visit(value);
  }visit(ast.program);return found;
 }
-export function organizationUsageCiSourceClosure(readSource,{ui=false}={}){
- const files=new Set(ui?[]:dependencies),external=new Set();
+export function organizationUsageCiSourceClosure(readSource,{ui=false,fixture=false}={}){
+ requireProof(!(ui&&fixture),'Distinct browser and Node fixture closures');
+ const files=new Set(ui||fixture?[]:dependencies),external=new Set();
  for(const file of files)requireProof(readSource(file)!=null,'Missing package dependency: '+file);
  function visit(file){requireProof(safePath(file),'Unsafe source path');if(files.has(file))return;const bytes=readSource(file);requireProof(bytes!=null,'Missing source: '+file);files.add(file);
   for(const specifier of imports(bytes,file)){if(!specifier.startsWith('.')){external.add(specifier);continue;}const relative=path.posix.normalize(path.posix.join(path.posix.dirname(file),specifier)),dependency=[relative,relative+'.js',relative+'.mjs',relative+'.css',relative+'/index.js'].find(value=>safePath(value)&&readSource(value)!=null);requireProof(Boolean(dependency),'Unresolved source import: '+file);visit(dependency);}
- }(ui?uiRoots:[pgHarness]).forEach(visit);return {files:[...files].sort(),externalImports:[...external].sort()};
+ }(fixture?['scripts/lib/company-subscription-ui-fixture.mjs']:ui?uiRoots:[pgHarness]).forEach(visit);return {files:[...files].sort(),externalImports:[...external].sort()};
 }
 function manifest(records,files,readSource,label){
  requireProof(Array.isArray(records)&&records.length===files.length,label+' source count');const map=new Map();
@@ -64,7 +65,7 @@ export function validateOrganizationUsageCi({expectedHead,head,sourceTree,tracke
  for(const key of ['pageErrors','interceptErrors','externalRequests'])requireProof(Array.isArray(ui[key])&&ui[key].length===0,'Empty browser errors/foreign calls: '+key);
  same(ui.widths,[...ORGANIZATION_USAGE_UI_WIDTHS],'Complete viewport matrix');requireProof(ui.totalCheckCount===14&&Array.isArray(ui.checks)&&ui.checks.length===14,'Complete fourteen DOM groups');same(ui.checks.map(item=>item.check),[...ORGANIZATION_USAGE_UI_CHECKS],'Exact ordered DOM group names');
  for(const [index,record] of ui.checks.entries()){
-  if(index<4){requireProof(record.width===ORGANIZATION_USAGE_UI_WIDTHS[index]&&record.documentWidth<=record.width&&Array.isArray(record.targets)&&record.targets.length>3&&record.targets.every(target=>Number.isFinite(target.height)&&target.height>=44&&Number.isFinite(target.width)&&target.width>=44)&&record.postCount===0,'Responsive real targets and zero automatic upload');}
+  if(index<4){requireProof(record.width===ORGANIZATION_USAGE_UI_WIDTHS[index]&&record.documentWidth<=record.width&&Array.isArray(record.targets)&&record.targets.length>3&&record.targets.every(target=>Number.isFinite(target.height)&&target.height>=44&&Number.isFinite(target.width)&&target.width>=44)&&record.targets.filter(target=>target.tag==='LABEL'&&target.label==='radio').length===2&&record.postCount===0,'Responsive real targets and zero automatic upload');same(record.commercial,{prices:['USD 149,00','USD 349,00'],termsPending:true,acceptanceEnabled:false,checkoutPresent:false,receiptPresent:false},'Displayed current references with closed terms and payment');}
   else if(index<8)requireProof(record.postCount===0,'Read cancel/denial/context boundary');
   else requireProof(record.postCount===1&&uuid(record.operationId)&&Array.isArray(record.recoveryOperationIds)&&record.recoveryOperationIds.every(value=>value===record.operationId),'Exact source recovery without repeated POST');
  }
@@ -75,15 +76,16 @@ export function validateOrganizationUsageCi({expectedHead,head,sourceTree,tracke
  requireProof(uploads===6,'Exact observed synthetic upload count');
  for(const [index,label] of labels.entries())requireProof(counts.get(label)===requestCounts[index]&&posts.get(label)===(index>=8?1:0),'Complete bounded request observations for '+label);
  const browser=organizationUsageCiSourceClosure(readSource,{ui:true});requireProof(browser.files.length===24,'Complete 24-source UI graph');manifest(ui.sourceManifest,browser.files,readSource,'UI');manifest(ui.dependencyManifest,dependencies,readSource,'UI dependencies');same(ui.externalImports,browser.externalImports,'Browser packages match actual JSX');
+ const fixture=organizationUsageCiSourceClosure(readSource,{fixture:true});same(fixture.files,['scripts/lib/company-subscription-ui-fixture.mjs','src/lib/company-subscription-catalog.mjs','src/lib/workspace-policy.mjs'],'Complete current three-source Node fixture graph');manifest(ui.fixtureSourceManifest,fixture.files,readSource,'UI fixture');
  requireProof(ui.harnessSha256===sha(readSource(uiHarness))&&ui.cleanupHelperSha256===sha(readSource(cleanupHelper)),'UI and cleanup producer Git bytes');
  const cleanup=ui.cleanup;requireProof(cleanup?.browserClosed===true&&cleanup.serverClosed===true&&cleanup.gracefulCloseAcknowledged===true&&cleanup.fixtureRemoved===true&&cleanup.fixtureCleanupProof?.fixtureRemoved===true&&cleanup.fixtureCleanupProof.postcondition?.absent===true,'Owned browser/server/fixture cleanup');
- return {version:ORGANIZATION_USAGE_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{totalCheckCount:16,sourceCount:110,syntheticOpenAiRequests:11,nativeLockRaceCount:2,harnessSha256:postgres.harnessSha256},ui:{totalCheckCount:14,sourceCount:24,dependencyCount:2,widths:[...ORGANIZATION_USAGE_UI_WIDTHS],explicitSyntheticUploadCount:6,harnessSha256:ui.harnessSha256},providerRequests:0,productionDataWritten:false,paymentVerified:false,capacityContractPending:true,cost:null,productionLoginVerified:false,physicalDeviceAccepted:false};
+ return {version:ORGANIZATION_USAGE_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{totalCheckCount:16,sourceCount:110,syntheticOpenAiRequests:11,nativeLockRaceCount:2,harnessSha256:postgres.harnessSha256},ui:{totalCheckCount:14,sourceCount:24,fixtureSourceCount:fixture.files.length,dependencyCount:2,widths:[...ORGANIZATION_USAGE_UI_WIDTHS],explicitSyntheticUploadCount:6,harnessSha256:ui.harnessSha256},providerRequests:0,productionDataWritten:false,paymentVerified:false,capacityContractPending:true,cost:null,productionLoginVerified:false,physicalDeviceAccepted:false};
 }
 function main(){
  const args=process.argv.slice(2);requireProof(args.length===2&&args[0]==='--expected-head'&&revision(args[1]),'Usage --expected-head <full SHA>');const expectedHead=args[1],root=process.cwd(),git=(...values)=>execFileSync('git',values,{cwd:root,encoding:'utf8'}).trim();
  const head=git('rev-parse','HEAD'),sourceTree=git('rev-parse','HEAD^{tree}'),trackedClean=git('status','--porcelain','--untracked-files=no')==='';requireProof(head===expectedHead&&trackedClean,'Exact clean source');
  const gitSources=Object.create(null),readSource=file=>{if(!Object.hasOwn(gitSources,file)){try{gitSources[file]=execFileSync('git',['show',head+':'+file],{cwd:root,stdio:['ignore','pipe','ignore'],maxBuffer:4*1024*1024});}catch{return null;}}return gitSources[file];};
- organizationUsageCiSourceClosure(readSource);organizationUsageCiSourceClosure(readSource,{ui:true});[uiHarness,cleanupHelper,...dependencies].forEach(readSource);
+ organizationUsageCiSourceClosure(readSource);organizationUsageCiSourceClosure(readSource,{ui:true});organizationUsageCiSourceClosure(readSource,{fixture:true});[uiHarness,cleanupHelper,...dependencies].forEach(readSource);
  const postgres=JSON.parse(readFileSync(path.join(root,'.vercel/private/organization-usage-postgres.json'),'utf8')),ui=JSON.parse(readFileSync(path.join(root,'.vercel/private/organization-usage-evidence/browser.json'),'utf8'));
  const result=validateOrganizationUsageCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres,ui}),output=path.join(root,'.vercel/private/organization-usage-ci.json');mkdirSync(path.dirname(output),{recursive:true});writeFileSync(output,JSON.stringify(result,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:result.status,nativeGroups:16,uiGroups:14,providerRequests:0}));
 }

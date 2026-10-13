@@ -14,6 +14,11 @@ export function subscriptionInstant(value){
   const date=new Date(value);return Number.isFinite(date.getTime())&&date.toISOString()===(value.includes('.')?value:value.replace('Z','.000Z'))?date.toISOString():null;
 }
 const freeze=value=>Object.freeze(Object.fromEntries(Object.entries(value).map(([key,item])=>[key,Array.isArray(item)?Object.freeze(item.map(freeze)):subscriptionRecord(item)?freeze(item):item])));
+export const SUBSCRIPTION_OFFER_FIELDS=Object.freeze(['id','plan','amountMinor','currency','periodUnit','periodCount','taxTreatment','termsVersion','includesAllIn','automaticExtras']);
+export function approvedSubscriptionOffer(offer){
+  if(!exact(offer,SUBSCRIPTION_OFFER_FIELDS)||!reference(offer.id)||!['PRO','ENTERPRISE'].includes(offer.plan)||!minorUnits(offer.amountMinor)||!['USD','ARS'].includes(offer.currency)||offer.currency==='USD'&&offer.amountMinor!==({PRO:'14900',ENTERPRISE:'34900'})[offer.plan]||offer.periodUnit!=='MONTH'||offer.periodCount!==1||!label(offer.taxTreatment)||!reference(offer.termsVersion)||offer.includesAllIn!==true||offer.automaticExtras!==false)fail('COMPANY_SUBSCRIPTION_CONFIGURATION_PENDING',503);
+  return freeze({...offer});
+}
 
 // The server supplies the approved immutable contract. Missing or partial
 // commercial configuration does not become an executable default offer.
@@ -22,7 +27,8 @@ export function approvedSubscriptionConfiguration(value){
   if(!exact(value,['version','provider','merchantId','accountMode','catalogVersion','offers'])||value.version!==1||!reference(value.provider)||!reference(value.merchantId)||value.accountMode!=='LIVE'||!reference(value.catalogVersion)||!Array.isArray(value.offers)||value.offers.length<1||value.offers.length>2)fail('COMPANY_SUBSCRIPTION_CONFIGURATION_PENDING',503);
   const ids=new Set(),plans=new Set();
   for(const offer of value.offers){
-    if(!exact(offer,['id','plan','amountMinor','currency','periodUnit','periodCount','taxTreatment','termsVersion','includesAllIn','automaticExtras'])||!reference(offer.id)||!['PRO','ENTERPRISE'].includes(offer.plan)||!minorUnits(offer.amountMinor)||!['USD','ARS'].includes(offer.currency)||offer.currency==='USD'&&offer.amountMinor!==({PRO:'14900',ENTERPRISE:'34900'})[offer.plan]||offer.periodUnit!=='MONTH'||offer.periodCount!==1||!label(offer.taxTreatment)||!reference(offer.termsVersion)||offer.includesAllIn!==true||offer.automaticExtras!==false||ids.has(offer.id)||plans.has(offer.plan))fail('COMPANY_SUBSCRIPTION_CONFIGURATION_PENDING',503);
+    approvedSubscriptionOffer(offer);
+    if(ids.has(offer.id)||plans.has(offer.plan))fail('COMPANY_SUBSCRIPTION_CONFIGURATION_PENDING',503);
     ids.add(offer.id);plans.add(offer.plan);
   }
   return freeze({...value,offers:value.offers.map(offer=>({...offer}))});
