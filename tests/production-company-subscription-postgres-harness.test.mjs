@@ -63,3 +63,15 @@ test('native failures retain bounded SQL codes and repository locations without 
   const unknown=companySubscriptionPostgresFailure({name:'private identity',code:'private identity',message:'secret',stack:'private secret'});assert.equal(unknown.errorName,'Error');assert.equal(unknown.code,'COMPANY_SUBSCRIPTION_DISPOSABLE_CHECK_FAILED');assert.equal(unknown.sqlCode,null);assert.equal(JSON.stringify(unknown).includes('secret'),false);
   const windows=companySubscriptionPostgresFailure({stack:'Error\n at store (file:///C:/Users/guill/repo/src/lib/company-subscription-store.mjs:10:5)'},{root:'C:/Users/guill/repo'});assert.deepEqual(windows.locations,['src/lib/company-subscription-store.mjs:10:5']);
 });
+
+test('native diagnostic Windows drive roots stay exact under actual POSIX resolution and exclude outside frames',()=>{
+  const originalResolve=path.resolve;
+  try{
+    // Reproduce Linux path.resolve on this Windows runner using its real POSIX
+    // implementation and a fixed canonical runner cwd, without filesystem IO.
+    path.resolve=(...parts)=>path.posix.resolve('/home/runner/work/obrasaas/obrasaas',...parts);assert.equal(path.resolve('C:/Users/guill/repo'),'/home/runner/work/obrasaas/obrasaas/C:/Users/guill/repo');
+    const error={stack:'Error: private row details\n at same (file:///C:/Users/guill/repo/src/lib/company-subscription-store.mjs:10:5)\n at sameBackslash (C:\\Users\\guill\\repo\\scripts\\verify-company-subscription-postgres.mjs:20:8)\n at outside (file:///C:/Users/guill/repo-other/src/lib/company-subscription-store.mjs:30:7)\n at outsidePosix (/home/runner/private/nominal.mjs:2:3)'};
+    for(const root of ['C:/Users/guill/repo','C:\\Users\\guill\\repo']){const proof=companySubscriptionPostgresFailure(error,{root});assert.deepEqual(proof.locations,['src/lib/company-subscription-store.mjs:10:5','scripts/verify-company-subscription-postgres.mjs:20:8']);assert.equal(JSON.stringify(proof).includes('private'),false);assert.equal(JSON.stringify(proof).includes('repo-other'),false);}
+    const posix=companySubscriptionPostgresFailure({stack:'Error\n at source (file:///home/runner/work/obrasaas/obrasaas/src/lib/company-subscription-store.mjs:40:9)'},{root:'/home/runner/work/obrasaas/obrasaas'});assert.deepEqual(posix.locations,['src/lib/company-subscription-store.mjs:40:9']);
+  }finally{path.resolve=originalResolve;}
+});

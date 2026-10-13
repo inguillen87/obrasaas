@@ -64,7 +64,7 @@ export function createCompanySubscriptionTransportObserver(){
 export function companySubscriptionNativeTap(checks){assert.deepEqual(checks,[...COMPANY_SUBSCRIPTION_POSTGRES_CHECKS]);return ['TAP version 13',...checks.map((check,index)=>'ok '+(index+1)+' - '+check),'1..'+checks.length,'# tests '+checks.length,'# pass '+checks.length,'# fail 0',''].join('\n');}
 const sqlState=value=>typeof value==='string'&&/^(?:[0-9]{2}|0[A-Z]|2[A-Z]|3[BDF]|F0|HV|P0|XX)[0-9A-Z]{3}$/.test(value)?value:null;
 export function companySubscriptionPostgresFailure(error,{root=process.cwd(),context={}}={}){
-  const relativeRoot=(root.startsWith('/')?path.posix.normalize(root):path.resolve(root).replaceAll('\\','/')).replace(/\/$/,'')+'/',locations=[];
+  const relativeRoot=(root.startsWith('/')?path.posix.normalize(root):path.win32.isAbsolute(root)?path.win32.normalize(root).replaceAll('\\','/'):path.resolve(root).replaceAll('\\','/')).replace(/\/$/,'')+'/',locations=[];
   for(const line of typeof error?.stack==='string'?error.stack.split('\n').slice(1,65):[]){
     let normalized=line.replaceAll('\\','/');normalized=normalized.replace(/file:\/\/\/[^\s)]+/g,reference=>{try{const value=new URL(reference.replace(/:\d+:\d+$/,''));if(value.hostname||value.search||value.hash)return '';return decodeURIComponent(value.pathname).replace(/^\/([A-Za-z]:\/)/,'$1')+(reference.match(/:\d+:\d+$/)?.[0]||'');}catch{return '';}});
     const at=normalized.indexOf(relativeRoot);if(at<0)continue;const relative=normalized.slice(at+relativeRoot.length),match=/^(?:src|scripts|tests)\/[A-Za-z0-9_./-]+\.(?:mjs|js):[1-9]\d{0,6}:[1-9]\d{0,6}/.exec(relative);if(match&&!match[0].includes('..'))locations.push(match[0]);
