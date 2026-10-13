@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="83d34d321fc81202d850a6d32154367cd92780ace09bca6ec94c6b94ba3c3012";
+export const EXPECTED_CONTRACT_SHA256="8cbb6bb80b03e358d0f36ecb1acd0ce888a652671da31ca38b1f26da60452bb7";
 const POSTGRES_SERVICE_IMAGE='docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -94,12 +94,15 @@ const ownTemplateDependenciesFor=kind=>({
  }[kind]||[]);
 // Current subscription composition follows the real lib walk and account
 // mount. Historical counts, commands and producer receipts remain unchanged.
-const COMPANY_SUBSCRIPTION_BACKEND_SOURCES=['src/lib/company-subscription-http.mjs','src/lib/company-subscription-policy.mjs','src/lib/company-subscription-provider.mjs','src/lib/company-subscription-routing.mjs','src/lib/company-subscription-runtime-config.mjs','src/lib/company-subscription-runtime.mjs','src/lib/company-subscription-store.mjs'];
+const COMPANY_SUBSCRIPTION_BACKEND_SOURCES=['src/lib/company-subscription-catalog.mjs','src/lib/company-subscription-http.mjs','src/lib/company-subscription-policy.mjs','src/lib/company-subscription-provider.mjs','src/lib/company-subscription-routing.mjs','src/lib/company-subscription-runtime-config.mjs','src/lib/company-subscription-runtime.mjs','src/lib/company-subscription-store.mjs'];
 const COMPANY_SUBSCRIPTION_UI_SOURCES=['src/app/(identity)/cuenta/company-subscription-panel.js','src/app/(identity)/cuenta/company-subscription-panel.module.css','src/app/(identity)/cuenta/company-subscription-view.mjs'];
+// The new commercial acceptance is additive to the frozen organization-usage
+// and civil source lineages. Their historical counts remain unchanged.
+const commercialAcceptanceDependenciesFor=kind=>['PG_COMPANY_KYC','UI_IDENTITY_ONLY'].includes(kind)?['src/lib/company-subscription-catalog.mjs']:[];
 const PREVIOUS_COMPANY_BILLING_UI_SOURCES=['src/app/(identity)/cuenta/company-billing-panel.js','src/app/(identity)/cuenta/company-billing-panel.module.css','src/app/(identity)/cuenta/company-billing-view.mjs'];
 const COMPANY_SUBSCRIPTION_UI_FIXTURE='scripts/lib/company-subscription-ui-fixture.mjs';
 const companySubscriptionBackendDependenciesFor=kind=>kind==='PG_COMPANY_KYC'?COMPANY_SUBSCRIPTION_BACKEND_SOURCES:[];
-const companySubscriptionFixtureDependenciesFor=kind=>kind==='UI_IDENTITY_ONLY'?[COMPANY_SUBSCRIPTION_UI_FIXTURE]:[];
+const companySubscriptionFixtureDependenciesFor=kind=>kind==='UI_IDENTITY_ONLY'?[COMPANY_SUBSCRIPTION_UI_FIXTURE,'src/lib/company-subscription-catalog.mjs']:[];
 const companySubscriptionProofDependenciesFor=kind=>kind==='UI_IDENTITY_ONLY'?[...COMPANY_SUBSCRIPTION_UI_SOURCES,...companySubscriptionFixtureDependenciesFor(kind)]:companySubscriptionBackendDependenciesFor(kind);
 const TASK_MEASUREMENT_SOURCE='src/lib/task-progress-measurement.js';
 const TASK_MEASUREMENT_UI_SOURCES=['src/app/(identity)/cuenta/task-progress-measurement-editor.js','src/app/(identity)/cuenta/task-progress-measurement-editor.module.css','src/app/(identity)/cuenta/task-progress-measurement-view.mjs'];
@@ -593,7 +596,7 @@ export function currentProducerSourceFiles(spec,root){
  if(isIdentity(spec)){
   const seeds=[...text.matchAll(/\bcopyGraph\('([^']+)'\)/g)].map(match=>match[1]);equal(seeds,['src/app/(identity)/cuenta/workspace-client.js','src/app/(identity)/cuenta/workspace-recovery-journal.mjs','src/lib/participant-policy.mjs'],'PROOF_IDENTITY_SOURCE_ROOTS');
   assert.equal(text.split("import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';").length,2,'One explicit closed subscription fixture import');
-  assert.equal(text.split("sourceManifest.push({path:'scripts/lib/company-subscription-ui-fixture.mjs',sha256:sha256(sourceBytes('scripts/lib/company-subscription-ui-fixture.mjs'))});").length,2,'One exact closed subscription fixture source reference');
+  assert.equal(text.split("pinFixtureGraph('scripts/lib/company-subscription-ui-fixture.mjs');").length,2,'One exact closed subscription fixture dependency graph');
   return walk([...seeds,COMPANY_SUBSCRIPTION_UI_FIXTURE]);
  }
  if(spec.kind==='PORTFOLIO_UNIT')return portfolioUnitSourceFiles(root);
@@ -642,7 +645,7 @@ function currentKycStatusClosureSelftest(spec,proof,root,validate){
  return checks;
 }
 function organizationUsageClosureSelftest(spec,proof,root,validate){
- const dependencies=[...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind)];if(!dependencies.length)return [];
+ const dependencies=[...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...commercialAcceptanceDependenciesFor(spec.kind)];if(!dependencies.length)return [];
  const previousCount=ORGANIZATION_USAGE_PREVIOUS_SOURCE_COUNTS[spec.kind]??CIVIL_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-organization-usage-';
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure CURRENT source fixture; no PG/UI/provider execution'});};
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial CURRENT source fixture'});};
@@ -659,7 +662,7 @@ function organizationUsageClosureSelftest(spec,proof,root,validate){
   assert.ok(changed>0,'CURRENT organization usage source exists: '+file);
  };
  good('exact-additive-count-and-real-AST-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
- if(civilDataDependenciesFor(spec.kind).length)good('civil-current-count-and-closure-exact',()=>assert.equal(spec.sourceFiles.length,CIVIL_PREVIOUS_SOURCE_COUNTS[spec.kind]+civilDataDependenciesFor(spec.kind).length));
+ if(civilDataDependenciesFor(spec.kind).length)good('civil-current-count-and-closure-exact',()=>assert.equal(spec.sourceFiles.length,CIVIL_PREVIOUS_SOURCE_COUNTS[spec.kind]+civilDataDependenciesFor(spec.kind).length+commercialAcceptanceDependenciesFor(spec.kind).length));
  for(const file of dependencies){
   good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));
   mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{remove:true}));
@@ -673,7 +676,7 @@ function validateOrganizationUsageProofSources(contract){
  for(const spec of contract.extension.proofs){
   if(proofFixtureDependenciesFor(spec.kind).some(file=>spec.sourceFiles.filter(source=>source===file).length!==1))deny('CURRENT_PROOF_FIXTURE_SOURCE_DEPENDENCIES');
   const dependencies=organizationUsageDependenciesFor(spec.kind);if(!dependencies.length)continue;
-  if(spec.sourceFiles.length!==ORGANIZATION_USAGE_PREVIOUS_SOURCE_COUNTS[spec.kind]+dependencies.length+proofFixtureDependenciesFor(spec.kind).length+civilDataDependenciesFor(spec.kind).length||dependencies.some(file=>!spec.sourceFiles.includes(file)))deny('ORGANIZATION_USAGE_SOURCE_DEPENDENCIES');
+  if(spec.sourceFiles.length!==ORGANIZATION_USAGE_PREVIOUS_SOURCE_COUNTS[spec.kind]+dependencies.length+proofFixtureDependenciesFor(spec.kind).length+civilDataDependenciesFor(spec.kind).length+commercialAcceptanceDependenciesFor(spec.kind).length||dependencies.some(file=>!spec.sourceFiles.includes(file)))deny('ORGANIZATION_USAGE_SOURCE_DEPENDENCIES');
  }
 }
 function validateCivilDataProofSources(contract){
@@ -938,7 +941,7 @@ function companySubscriptionProofClosureSelftest(spec,proof,root,validate){
  }
  if(isIdentity(spec)){
   mutate('previous-same-count-billing-mount-denied','PROOF_SOURCE_MANIFEST',p=>{for(const [index,file]of COMPANY_SUBSCRIPTION_UI_SOURCES.entries())p.sourceManifest.find(ref=>ref.path===file).path=PREVIOUS_COMPANY_BILLING_UI_SOURCES[index];assert.equal(p.sourceManifest.length,spec.sourceFiles.length);});
-  mutate('previous-117-manifest-without-closed-fixture-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==COMPANY_SUBSCRIPTION_UI_FIXTURE&&![...taskMeasurementDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,117);});
+  mutate('previous-117-manifest-without-closed-fixture-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...companySubscriptionFixtureDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,117);});
  }
  else mutate('previous-191-source-manifest-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...taskMeasurementDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,191);});
  return checks;

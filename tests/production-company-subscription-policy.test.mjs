@@ -18,9 +18,15 @@ test('missing catalog is closed and an approved quote is exact, immutable and al
   const duplicate=config();duplicate.offers.push({...offer,id:'another'});assert.throws(()=>approvedSubscriptionConfiguration(duplicate));
 });
 test('client cannot choose merchant, amount, financial proof or payer identity',()=>{
-  const value={scope:'a'.repeat(64),operationId:id,offerId:offer.id,catalogVersion:'catalog-v1'};assert.deepEqual(subscriptionCommand(value,'begin'),value);
+  const value={scope:'a'.repeat(64),operationId:id,offerId:offer.id,catalogVersion:'catalog-v1',acceptanceReceiptId:'company_subscription_offer_acceptance_'+'b'.repeat(64),acceptanceDigest:'c'.repeat(64)};assert.deepEqual(subscriptionCommand(value,'begin'),value);
   for(const field of ['amountMinor','merchantId','paid','payerEmail','payerEmailVerified','organizationId','provider','subscriptionStatus'])assert.throws(()=>subscriptionCommand({...value,[field]:'forged'},'begin'),{code:'COMPANY_SUBSCRIPTION_INPUT_INVALID'});
   assert.equal(subscriptionExternalReference('company-a',attempt().id),attempt().id);assert.notEqual(subscriptionAttemptId('company-b',id),attempt().id);
+  const historical={...value};delete historical.acceptanceReceiptId;delete historical.acceptanceDigest;assert.throws(()=>subscriptionCommand(historical,'begin'),{code:'COMPANY_SUBSCRIPTION_INPUT_INVALID'});
+});
+
+test('acceptance command requires explicit true and exact current catalog offer and terms references',()=>{
+  const value={scope:'a'.repeat(64),operationId:id,offerId:offer.id,catalogVersion:'catalog-v1',catalogDigest:'b'.repeat(64),offerDigest:'c'.repeat(64),termsVersion:'terms-v1',termsSha256:'d'.repeat(64),accepted:true};assert.deepEqual(subscriptionCommand(value,'accept_offer'),value);
+  for(const patch of [{accepted:false},{accepted:'true'},{accepted:null},{termsSha256:'bad'},{offerDigest:'BAD'},{catalogDigest:null},{termsText:'Browser terms'},{taxTreatment:'Browser tax'},{amountMinor:'1'},{merchantId:'forged'},{organizationId:'foreign'}])assert.throws(()=>subscriptionCommand({...value,...patch},'accept_offer'),{code:'COMPANY_SUBSCRIPTION_INPUT_INVALID'});
 });
 test('pending checkout and authorization do not prove payment or activate a paid period',()=>{
   for(const status of ['PENDING','AUTHORIZED']){const result=normalize({...observation(),status});assert.equal(result.paidCovered,false);assert.equal(result.payment,null);}

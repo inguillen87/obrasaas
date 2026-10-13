@@ -29,8 +29,8 @@ export function approvedSubscriptionConfiguration(value){
 }
 export const subscriptionConfigurationDigest=config=>subscriptionContractDigest(['company-subscription-configuration-v1',config]);
 export function subscriptionCommand(value,kind){
-  const keys=kind==='begin'?['scope','operationId','offerId','catalogVersion']:kind==='cancel'?['scope','operationId','subscriptionAttemptId']:['scope','operationId'];
-  if(!exact(value,keys)||!/^[a-f0-9]{64}$/.test(value.scope||'')||!operationId(value.operationId)||kind==='begin'&&(!reference(value.offerId)||!reference(value.catalogVersion))||kind==='cancel'&&!/^company_subscription_[a-f0-9]{64}$/.test(value.subscriptionAttemptId||''))fail();
+  const keys=kind==='accept_offer'?['scope','operationId','offerId','catalogVersion','catalogDigest','offerDigest','termsVersion','termsSha256','accepted']:kind==='begin'?['scope','operationId','offerId','catalogVersion','acceptanceReceiptId','acceptanceDigest']:kind==='cancel'?['scope','operationId','subscriptionAttemptId']:['scope','operationId'];
+  if(!['accept_offer','begin','cancel','recover'].includes(kind)||!exact(value,keys)||!/^[a-f0-9]{64}$/.test(value.scope||'')||!operationId(value.operationId)||['begin','accept_offer'].includes(kind)&&(!reference(value.offerId)||!reference(value.catalogVersion))||kind==='begin'&&(!/^company_subscription_offer_acceptance_[a-f0-9]{64}$/.test(value.acceptanceReceiptId||'')||!/^[a-f0-9]{64}$/.test(value.acceptanceDigest||''))||kind==='accept_offer'&&(value.accepted!==true||!reference(value.termsVersion)||!['catalogDigest','offerDigest','termsSha256'].every(key=>/^[a-f0-9]{64}$/.test(value[key]||'')))||kind==='cancel'&&!/^company_subscription_[a-f0-9]{64}$/.test(value.subscriptionAttemptId||''))fail();
   return {...value,operationId:value.operationId.toLowerCase()};
 }
 export function subscriptionAttemptId(organizationId,id){

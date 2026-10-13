@@ -69,5 +69,11 @@
 .renewal .review{background:#fdf8f7;border-color:#e6d5d2}
 .actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-top:12px}
 .observed{margin:20px 0 0;color:#667c87;font-size:.74rem;line-height:1.6}
+.terms{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.88rem;line-height:1.7;color:#304f5f;margin-top:10px}
+.accepted{margin-top:20px;padding:17px;border:1px solid #cce0d4;border-radius:12px;background:#f4faf6}
+.accepted p{margin:8px 0;color:#304f5f;font-size:.88rem;line-height:1.6}
+.accepted .primary{margin-top:14px}
+.accepted summary{min-height:44px;padding:12px 0;cursor:pointer;color:#234b5c;font-size:.88rem;font-weight:650}
+.accepted summary:focus-visible{outline:3px solid #3b89a9;outline-offset:3px}
 @media(max-width:650px){.panel{padding:17px;border-radius:14px}.heading{gap:14px}.heading>div{flex-basis:100%}.heading>.secondary{width:100%}.summary{align-items:flex-start}.plan{font-size:1.35rem}.facts>div{grid-template-columns:minmax(0,1fr);gap:4px}.facts{padding-inline:13px}.offerGrid{grid-template-columns:minmax(0,1fr)}.offer{padding:15px}.price{font-size:1.35rem}.setup,.recovery,.review{padding:14px}.purchase>.primary,.recovery>.primary,.checkout .primary,.checkout .secondary,.actions>button,.payment>.secondary{width:100%;margin-right:0}.checkout .secondary{margin-top:10px}.actions{align-items:stretch}.confirmation{font-size:.84rem}.textButton{font-size:.84rem}.setup{gap:9px}.setup>svg{width:19px}.eyebrow{letter-spacing:.09em}}
 @media(prefers-reduced-motion:reduce){.offer{transition:none}}

@@ -1,22 +1,29 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {companySubscriptionView,companySubscriptionCheckoutUrl,companySubscriptionBeginCommand,companySubscriptionCancelCommand,companySubscriptionErrorMessage,createCompanySubscriptionJournal} from '../src/app/(identity)/cuenta/company-subscription-view.mjs';
+import {readFileSync} from 'node:fs';
+import {companySubscriptionView,companySubscriptionVerifiedView,companySubscriptionAcceptCommand,companySubscriptionCheckoutUrl,companySubscriptionBeginCommand,companySubscriptionCancelCommand,companySubscriptionErrorMessage,createCompanySubscriptionJournal} from '../src/app/(identity)/cuenta/company-subscription-view.mjs';
+import {approvedCommercialCatalog,defaultCommercialCatalog,commercialTermsSha256,commercialAcceptanceDigest,commercialAcceptanceId} from '../src/lib/company-subscription-catalog.mjs';
 
 const scope = 'a'.repeat(64),foreignScope = 'b'.repeat(64),operationId = '11111111-1111-4111-8111-111111111111',cancelOperationId = '22222222-2222-4222-8222-222222222222';
 const attemptId = 'company_subscription_'+ 'c'.repeat(64),receiptId = 'company_subscription_payment_'+ 'd'.repeat(64);
 const now = Date.parse('2026-10-12T12:00:00.000Z');
 const offer = (plan = 'PRO',currency = 'USD',amountMinor = plan === 'PRO'?'14900':'34900') => ({id:`offer-${plan.toLowerCase()}`,plan,amountMinor,currency,periodUnit:'MONTH',periodCount:1,taxTreatment:'Impuestos incluidos en el importe informado.',termsVersion:'terms-2026-10',includesAllIn:true,automaticExtras:false});
-const snapshot = () => ({version:1,scope,organization:{id:'org_pilot',name:'Empresa piloto'},observedAt:'2026-10-12T12:00:00.000Z',configuration:{state:'CONFIGURATION_PENDING',catalogVersion:null,offers:[]},subscription:{plan:'TRIAL',status:'TRIALING',trialEndsAt:'2026-10-15T03:00:00.000Z',entitlement:{allowed:true,basis:'CURRENT_TRIAL',reasonCode:null}},attempt:null,recovery:null});
-const ready = () => ({...snapshot(),configuration:{state:'READY',catalogVersion:'catalog-2026-10',offers:[offer(),offer('ENTERPRISE')]}});
+const pendingCommercial = () => {const catalog = approvedCommercialCatalog(defaultCommercialCatalog());return {...catalog,actorBinding:'e'.repeat(64),offers:catalog.offers.map(item => ({...item,canAccept:false,checkoutAvailable:false}))};};
+function alignCommercial(input) {const termsText = ' Condiciones sintéticas aprobadas.\r\nRenovación mensual.\n';const catalog = approvedCommercialCatalog({version:1,catalogVersion:input.configuration.catalogVersion,offers:input.configuration.offers.map(item => ({...item,includedTerms:'Servicios incluidos bajo condiciones aprobadas sintéticas.',termsText,termsSha256:commercialTermsSha256(termsText)}))});input.commercial = {...catalog,actorBinding:'e'.repeat(64),offers:catalog.offers.map(item => ({...item,canAccept:true,checkoutAvailable:true}))};return input;}
+const snapshot = () => ({version:2,scope,organization:{id:'org_pilot',name:'Empresa piloto'},observedAt:'2026-10-12T12:00:00.000Z',configuration:{state:'CONFIGURATION_PENDING',catalogVersion:null,offers:[]},subscription:{plan:'TRIAL',status:'TRIALING',trialEndsAt:'2026-10-15T03:00:00.000Z',entitlement:{allowed:true,basis:'CURRENT_TRIAL',reasonCode:null}},attempt:null,recovery:null,commercial:pendingCommercial(),acceptance:null});
+const ready = () => alignCommercial({...snapshot(),configuration:{state:'READY',catalogVersion:'catalog-2026-10',offers:[offer(),offer('ENTERPRISE')]}});
+function accepted(input = ready(),acceptOperationId = '33333333-3333-4333-8333-333333333333') {const {canAccept,checkoutAvailable,...offer} = input.commercial.offers[0];input.acceptance = {version:1,receiptId:commercialAcceptanceId(input.organization.id,acceptOperationId),operationId:acceptOperationId,state:'TERMS_ACCEPTED',organizationId:input.organization.id,actorBinding:input.commercial.actorBinding,catalogVersion:input.commercial.catalogVersion,catalogDigest:input.commercial.catalogDigest,offer,acceptedAt:input.observedAt,current:true,canCheckout:true};input.acceptance.acceptanceDigest = commercialAcceptanceDigest(input.acceptance);return input;}
+const verified = (value,expected = {}) => companySubscriptionVerifiedView(value,{scope,...expected});
 const attempt = (state = 'CHECKOUT_READY') => ({attemptId,operationId,state,plan:'PRO',offerId:'offer-pro',catalogVersion:'catalog-2026-10',amountMinor:'14900',currency:'USD',periodUnit:'MONTH',periodCount:1,taxTreatment:offer().taxTreatment,termsVersion:offer().termsVersion,includesAllIn:true,automaticExtras:false,checkoutUrl:state === 'CHECKOUT_READY'?'https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_id=remote_123':null,receiptId:null,paidPeriod:null,cancelAtPeriodEnd:false,code:null,cancellation:null});
 const active = () => ({...ready(),subscription:{plan:'PRO',status:'ACTIVE',trialEndsAt:null,entitlement:{allowed:true,basis:'ACTIVE_PAID_PLAN',reasonCode:null}},attempt:{...attempt('ACTIVE'),receiptId,paidPeriod:{startsAt:'2026-10-10T12:00:00.000Z',endsAt:'2026-11-10T12:00:00.000Z'}}});
 const view = (value,expected = {}) => companySubscriptionView(value,{scope,...expected});
 const ref = (action = 'begin',overrides = {}) => ({version:1,scope,organizationId:'org_pilot',operationId:action === 'begin'?operationId:cancelOperationId,action,createdAt:now,...overrides});
 
-test('an unconfigured seller supplies no offer or charge action and preserves the observed trial', () => {
+test('a closed provider shows pending commercial prices and no charge action while preserving the observed trial', () => {
   const input = snapshot(),before = JSON.stringify(input),result = view(input);
   assert.equal(result.configurationReady,false);
-  assert.deepEqual(result.offers,[]);
+  assert.deepEqual(result.offers.map(item => item.priceLabel),['USD 149,00','USD 349,00']);
+  assert.ok(result.offers.every(item => item.canAccept === false && item.checkoutAvailable === false && item.termsText === null));
   assert.equal(result.canBegin,false);
   assert.equal(result.canCancel,false);
   assert.equal(result.statusLabel,'Prueba vigente');
@@ -27,19 +34,20 @@ test('an unconfigured seller supplies no offer or charge action and preserves th
   assert.equal(JSON.stringify(input),before);
 });
 
-test('explicit offers show the approved total and immutable monthly conditions', () => {
-  const input = ready(),result = view(input);
+test('explicit accepted offers show the approved total and immutable monthly conditions', async () => {
+  const input = accepted(),result = await verified(input);
   assert.deepEqual(result.offers.map(item => item.priceLabel),['USD 149,00','USD 349,00']);
   assert.deepEqual(result.offers.map(item => item.planLabel),['Pro','Empresa']);
   assert.equal(result.canBegin,true);
   assert.equal(Object.isFrozen(result.offers[0]),true);
-  assert.deepEqual(companySubscriptionBeginCommand(result,{scope,offerId:'offer-pro',confirmed:true}),{action:'begin',scope,offerId:'offer-pro',catalogVersion:'catalog-2026-10'});
+  assert.deepEqual(companySubscriptionBeginCommand(result,{scope,offerId:'offer-pro',confirmed:true}),{action:'begin',scope,offerId:'offer-pro',catalogVersion:'catalog-2026-10',acceptanceReceiptId:input.acceptance.receiptId,acceptanceDigest:input.acceptance.acceptanceDigest});
   for (const changes of [{confirmed:false},{scope:foreignScope},{offerId:'foreign'}]) assert.throws(() => companySubscriptionBeginCommand(result,{scope,offerId:'offer-pro',confirmed:true,...changes}));
   assert.throws(() => companySubscriptionBeginCommand(view(snapshot()),{scope,offerId:'offer-pro',confirmed:true}));
 });
 
 test('an explicitly approved ARS offer is rendered as ARS without calculating a USD conversion', () => {
   const input = ready();input.configuration.offers = [offer('PRO','ARS','20599950')];
+  alignCommercial(input);
   const result = view(input);
   assert.equal(result.offers[0].priceLabel,'ARS 205.999,50');
   assert.equal(result.offers[0].amountMinor,'20599950');
@@ -48,6 +56,7 @@ test('an explicitly approved ARS offer is rendered as ARS without calculating a 
 
 test('recovering a previous checkout retains its approved price and terms after catalog changes', () => {
   const input = {...ready(),attempt:attempt()};input.configuration = {state:'READY',catalogVersion:'catalog-new',offers:[{...offer('PRO','ARS','20599950'),termsVersion:'terms-new',taxTreatment:'Condición nueva aprobada.'}]};
+  alignCommercial(input);
   const result = view(input,{operationId});
   assert.equal(result.attempt.priceLabel,'USD 149,00');
   assert.equal(result.attempt.taxLabel,offer().taxTreatment);
@@ -69,7 +78,7 @@ test('every envelope is bound to the current scope, organization and requested o
   const input = {...ready(),attempt:attempt()};
   assert.equal(view(input,{organizationId:'org_pilot',operationId}).attempt.operationId,operationId);
   for (const expected of [{scope:foreignScope},{scope:'bad'},{organizationId:'org_other'},{operationId:cancelOperationId},{operationId:'bad'}]) assert.throws(() => view(input,expected));
-  for (const change of [{scope:foreignScope},{version:2},{organization:{id:'org.other',name:'Otra empresa'}},{organization:{id:'org_pilot',name:'<Empresa>'}},{merchantId:'merchant_other'}]) assert.throws(() => view({...input,...change}));
+  for (const change of [{scope:foreignScope},{version:1},{organization:{id:'org.other',name:'Otra empresa'}},{organization:{id:'org_pilot',name:'<Empresa>'}},{merchantId:'merchant_other'}]) assert.throws(() => view({...input,...change}));
   assert.throws(() => companySubscriptionView(input));
   // An unobserved durable operation keeps its reference; absence is not proof
   // that the provider never received it.
@@ -133,16 +142,17 @@ test('cancellation pending or unknown remains visible and cannot open another pa
   }
 });
 
-test('a fresh subscription requires confirmed closure and a ended paid period or canceled unpaid checkout', () => {
+test('a fresh subscription requires confirmed closure, an ended paid period and a verified acceptance', async () => {
   for (const state of ['CANCELED','CANCEL_CONFIRMED']) {
     const input = active();input.attempt.state = state;input.attempt.cancelAtPeriodEnd = true;input.attempt.cancellation = {operationId:cancelOperationId,state:'CONFIRMED'};
     assert.equal(view(input).canBegin,false,'Current paid coverage blocks another checkout');
     input.observedAt = input.attempt.paidPeriod.endsAt;input.subscription.entitlement = {allowed:false,basis:null,reasonCode:'COMPANY_ENTITLEMENT_PAID_PERIOD_EXPIRED'};
-    const result = view(input);assert.equal(result.canBegin,true);assert.deepEqual(companySubscriptionBeginCommand(result,{scope,offerId:'offer-pro',confirmed:true}),{action:'begin',scope,offerId:'offer-pro',catalogVersion:'catalog-2026-10'});
+    assert.equal(view(input).purchaseEligible,true);assert.equal(view(input).canBegin,false,'Closure alone never supplies accepted terms');
+    const result = await verified(accepted(input));assert.equal(result.canBegin,true);assert.equal(companySubscriptionBeginCommand(result,{scope,offerId:'offer-pro',confirmed:true}).acceptanceDigest,input.acceptance.acceptanceDigest);
     input.attempt.cancellation.state = 'UNKNOWN';assert.equal(view(input).canBegin,false,'An uncertain cancellation does not enable a new charge');
   }
   const unpaid = {...ready(),attempt:{...attempt('CANCELED'),cancelAtPeriodEnd:true}};
-  assert.equal(view(unpaid).canBegin,true);
+  assert.equal(view(unpaid).purchaseEligible,true);assert.equal(view(unpaid).canBegin,false);assert.equal((await verified(accepted(unpaid))).canBegin,true);
   unpaid.attempt.state = 'CANCEL_CONFIRMED';assert.equal(view(unpaid).canBegin,false,'A missing paid-period boundary cannot imply expiry');
   for (const state of ['DISPATCHING','UNKNOWN','AUTHORIZED','PAST_DUE','SUSPENDED','CANCEL_REQUESTED']) assert.equal(view({...ready(),attempt:attempt(state)}).canBegin,false);
 });
@@ -286,4 +296,104 @@ test('safe fixed errors never display provider details, token values or a false 
     assert.equal(companySubscriptionErrorMessage(error,{mutation:true}).includes(secret),false);
   }
   assert.match(companySubscriptionErrorMessage({status:500},{mutation:true}),/mismo intento/);
+});
+
+test('pending terms remain informative even with a provider-ready configuration and cannot be accepted', async () => {
+  const input = ready();input.commercial = pendingCommercial();
+  const result = await verified(input);
+  assert.equal(result.configurationReady,true);assert.equal(result.canBegin,false);
+  assert.throws(() => companySubscriptionAcceptCommand(result,{scope,offerId:'pro-monthly',confirmed:true}));
+  assert.throws(() => companySubscriptionBeginCommand(result,{scope,offerId:'pro-monthly',confirmed:true}));
+});
+
+test('a mixed catalog permits only the individually approved offer without treating pending terms as approval', async () => {
+  const input = ready(),termsText = 'Condiciones sintéticas aprobadas sólo para Pro.';
+  input.configuration.offers = [offer()];
+  const catalog = approvedCommercialCatalog({version:1,catalogVersion:input.configuration.catalogVersion,offers:[{...offer(),includedTerms:'Servicios sintéticos de Pro.',termsText,termsSha256:commercialTermsSha256(termsText)},defaultCommercialCatalog().offers[1]]});
+  input.commercial = {...catalog,actorBinding:'e'.repeat(64),offers:catalog.offers.map(item => ({...item,canAccept:item.plan === 'PRO',checkoutAvailable:item.plan === 'PRO'}))};
+  const result = await verified(input);assert.equal(result.commercial.state,'TERMS_PENDING');assert.equal(companySubscriptionAcceptCommand(result,{scope,offerId:'offer-pro',confirmed:true}).termsSha256,commercialTermsSha256(termsText));assert.throws(() => companySubscriptionAcceptCommand(result,{scope,offerId:'enterprise-monthly',confirmed:true}));assert.equal(result.canBegin,false);
+});
+
+test('approved commercial terms can be accepted before checkout configuration without granting paid access', async () => {
+  const input = ready();input.configuration = {state:'CONFIGURATION_PENDING',catalogVersion:null,offers:[]};input.commercial.offers = input.commercial.offers.map(offer => ({...offer,checkoutAvailable:false}));
+  const result = await verified(input),selected = input.commercial.offers[0];
+  const command = companySubscriptionAcceptCommand(result,{scope,offerId:selected.id,confirmed:true});
+  assert.deepEqual(command,{action:'accept_offer',scope,offerId:selected.id,catalogVersion:input.commercial.catalogVersion,catalogDigest:input.commercial.catalogDigest,offerDigest:selected.offerDigest,termsVersion:selected.termsVersion,termsSha256:selected.termsSha256,accepted:true});
+  assert.equal(result.canBegin,false);assert.match(result.paymentLabel,/no hay un pago confirmado/);
+  for (const change of [{scope:foreignScope},{confirmed:false},{offerId:'foreign'}]) assert.throws(() => companySubscriptionAcceptCommand(result,{scope,offerId:selected.id,confirmed:true,...change}));
+  assert.throws(() => companySubscriptionAcceptCommand(view(input),{scope,offerId:selected.id,confirmed:true}),'Synchronous structural projection is not consent verification');
+  assert.throws(() => companySubscriptionAcceptCommand({...result},{scope,offerId:selected.id,confirmed:true}),'A forged local projection has no verification authority');
+});
+
+test('all exact UTF-8 terms, offer, catalog and receipt hashes are checked before any command', async () => {
+  const input = accepted(),before = JSON.stringify(input),result = await verified(input);
+  assert.equal(result.acceptance.offer.termsText,' Condiciones sintéticas aprobadas.\r\nRenovación mensual.\n');
+  assert.equal(JSON.stringify(input),before);assert.equal(Object.isFrozen(result.acceptance.offer),true);
+  const mutants = [value => {value.commercial.offers[0].termsText = value.commercial.offers[0].termsText.trim();},value => {value.commercial.offers[0].termsSha256 = '1'.repeat(64);},value => {value.commercial.offers[0].offerDigest = '2'.repeat(64);},value => {value.commercial.catalogDigest = '3'.repeat(64);},value => {value.acceptance.acceptanceDigest = '4'.repeat(64);},value => {value.acceptance.offer.termsText += '\n';},value => {value.acceptance.offer.offerDigest = '5'.repeat(64);}];
+  for (const mutate of mutants) {const value = structuredClone(input);mutate(value);await assert.rejects(verified(value));}
+});
+
+test('commercial text uses byte limits and rejects empty, hidden-control or unknown fields', async () => {
+  for (const [key,value] of [['termsText','é'.repeat(16385)],['termsText',' \n\t'],['termsText','aprobado\u0000oculto'],['termsText','aprobado\u202Eoculto'],['termsText','aprobado\uD800'],['includedTerms','é'.repeat(8193)],['taxTreatment','é'.repeat(513)],['termsVersion','version con espacios'],['automaticExtras',true]]) {
+    const input = ready();input.commercial.offers[0][key] = value;await assert.rejects(verified(input));
+  }
+  const input = ready();input.commercial.offers[0].merchantId = 'private';await assert.rejects(verified(input));
+});
+
+test('a receipt binds organization, actor, catalog, offer and requested acceptance operation', async () => {
+  for (const mutate of [value => {value.acceptance.organizationId = 'org_other';},value => {value.acceptance.actorBinding = 'f'.repeat(64);},value => {value.acceptance.catalogDigest = 'f'.repeat(64);},value => {value.acceptance.catalogVersion = 'other';},value => {value.acceptance.offer.id = 'other';},value => {value.acceptance.offer.canAccept = true;}]) {
+    const input = accepted();mutate(input);input.acceptance.acceptanceDigest = commercialAcceptanceDigest(input.acceptance);await assert.rejects(verified(input));
+  }
+  await assert.rejects(verified(accepted(),{acceptanceOperationId:operationId}));
+  await assert.rejects(verified(accepted(),{acceptanceOperationId:'bad'}));
+  const original = accepted();original.commercial.actorBinding = 'f'.repeat(64);original.acceptance.current = false;original.acceptance.canCheckout = false;
+  const stale = await verified(original);assert.equal(stale.canBegin,false);assert.equal(stale.acceptance.offer.termsText,original.acceptance.offer.termsText);
+  assert.throws(() => companySubscriptionBeginCommand(stale,{scope,offerId:'offer-pro',confirmed:true}));
+});
+
+test('an acceptance receipt alone cannot claim checkout configuration, matching offer or payment', async () => {
+  const input = accepted();input.configuration = {state:'CONFIGURATION_PENDING',catalogVersion:null,offers:[]};input.commercial.offers = input.commercial.offers.map(offer => ({...offer,checkoutAvailable:false}));input.acceptance.canCheckout = false;
+  const result = await verified(input);assert.equal(result.canBegin,false);assert.match(result.paymentLabel,/no hay un pago confirmado/);
+  input.acceptance.canCheckout = true;await assert.rejects(verified(input));
+  const mismatch = accepted();mismatch.configuration.offers[0].taxTreatment = 'Otro impuesto';await assert.rejects(verified(mismatch));
+});
+
+test('acceptance correlation preserves a different existing financial UNKNOWN and cannot open another checkout', async () => {
+  const input = accepted({...ready(),attempt:attempt('UNKNOWN')}),result = await verified(input,{acceptanceOperationId:input.acceptance.operationId,action:'accept_offer'});
+  assert.notEqual(input.acceptance.operationId,input.attempt.operationId);assert.equal(result.attempt.operationId,operationId);assert.equal(result.acceptance.operationId,input.acceptance.operationId);assert.equal(result.canBegin,false);assert.equal(result.statusLabel,'Pago por comprobar');
+  assert.throws(() => companySubscriptionBeginCommand(result,{scope,offerId:'offer-pro',confirmed:true}));
+});
+
+test('lost acceptance stays reserved through null reads, NO_DISPATCH hints, different receipts and changed actor', async () => {
+  const storage = memoryStorage(),journal = createCompanySubscriptionJournal({withStorage:storage.withStorage,now:() => now,onChange:() => {}}),input = accepted(),reference = ref('accept_offer',{operationId:input.acceptance.operationId});
+  await journal.reserve(reference);
+  assert.equal(await journal.settle(reference,await verified(ready(),{acceptanceOperationId:reference.operationId})),false);
+  assert.equal(await journal.settle(reference,await verified({...ready(),recovery:{operationId:reference.operationId,state:'NO_DISPATCH'}},{operationId:reference.operationId})),false,'Financial NO_DISPATCH never closes an acceptance');
+  assert.equal(await journal.settle(reference,await verified(accepted(ready(),operationId))),false);
+  assert.equal(await journal.settle(reference,{...await verified(input)}),false,'Unverified local object never erases a durable reference');
+  await assert.rejects(journal.reserve(ref('begin')));
+  assert.deepEqual(await journal.read(scope,'org_pilot'),reference);
+  input.commercial.actorBinding = 'f'.repeat(64);input.acceptance.current = false;input.acceptance.canCheckout = false;
+  assert.equal(await journal.settle(reference,await verified(input,{acceptanceOperationId:reference.operationId})),true,'Original immutable receipt settles only the original operation; it does not permit checkout');
+  assert.equal(await journal.read(scope,'org_pilot'),null);
+});
+
+test('causal actor-binding guard mutant admits a rehashed foreign-actor receipt that the real source rejects', async () => {
+  const filename = new URL('../src/app/(identity)/cuenta/company-subscription-view.mjs',import.meta.url),source = readFileSync(filename,'utf8'),needle = 'value.actorBinding !== commercial.actorBinding';
+  assert.equal(source.split(needle).length,2,'One actual authority-binding guard');
+  const mutant = source.replace(needle,'false').replace(/from '([^']+)';/g,(_,specifier) => `from '${new URL(specifier,filename).href}';`);
+  const imported = await import('data:text/javascript;base64,'+Buffer.from(mutant).toString('base64'));
+  const input = accepted();input.acceptance.actorBinding = 'f'.repeat(64);input.acceptance.acceptanceDigest = commercialAcceptanceDigest(input.acceptance);
+  await assert.rejects(verified(input));
+  const unsafe = await imported.companySubscriptionVerifiedView(input,{scope});
+  assert.equal(unsafe.canBegin,true,'Removing the real actor fence must make the negative probe unsafe');
+});
+
+test('causal organization guard mutant admits an immutable receipt from another company that the real source rejects', async () => {
+  const filename = new URL('../src/app/(identity)/cuenta/company-subscription-view.mjs',import.meta.url),source = readFileSync(filename,'utf8'),needle = 'value.organizationId !== organizationId';
+  assert.equal(source.split(needle).length,2,'One actual receipt-organization guard');
+  const mutant = source.replace(needle,'false').replace(/from '([^']+)';/g,(_,specifier) => `from '${new URL(specifier,filename).href}';`),imported = await import('data:text/javascript;base64,'+Buffer.from(mutant).toString('base64'));
+  const input = accepted();input.acceptance.organizationId = 'org_other';input.acceptance.receiptId = commercialAcceptanceId('org_other',input.acceptance.operationId);input.acceptance.acceptanceDigest = commercialAcceptanceDigest(input.acceptance);
+  await assert.rejects(verified(input));
+  const unsafe = await imported.companySubscriptionVerifiedView(input,{scope});assert.equal(unsafe.canBegin,true,'Removing the company fence must make the foreign receipt unsafe');
 });

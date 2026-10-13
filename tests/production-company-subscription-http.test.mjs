@@ -5,28 +5,38 @@ import {createCompanySubscriptionHandlers,createCompanySubscriptionWebhookHandle
 const scope='a'.repeat(64),op='b511ea88-4c89-4f71-9c9b-bb04579ecb6d';
 const session={authenticated:true,verification:'clerk-production-jwt',userId:'user_Owner',organizationId:'org_A',organizationRole:'org:admin'};
 const endpoint='https://obrasaas.com/api/identity/company-subscription';
+const acceptanceReceiptId='company_subscription_offer_acceptance_'+'b'.repeat(64),acceptanceDigest='c'.repeat(64);
 const request=(value,headers={})=>new Request(endpoint,{method:'POST',headers:{origin:'https://obrasaas.com','content-type':'application/json',...headers},body:JSON.stringify(value)});
 function fixture(){
   const calls=[];
-  const store=Object.fromEntries(['read','begin','recover','cancelAtPeriodEnd'].map(action=>[action,async(identity,value)=>{calls.push({action,identity,value});return {state:'OBSERVED'};}]));
+  const store=Object.fromEntries(['read','acceptOffer','begin','recover','cancelAtPeriodEnd'].map(action=>[action,async(identity,value)=>{calls.push({action,identity,value});return {state:'OBSERVED'};}]));
   return {calls,handlers:createCompanySubscriptionHandlers({verifySession:async()=>session,store})};
 }
 test('authorized commands carry only server contract selectors and operation references',async()=>{
   const {calls,handlers}=fixture();
   assert.equal((await handlers.GET(new Request(endpoint+'?scope='+scope))).status,200);
-  assert.equal((await handlers.POST(request({action:'begin',scope,operationId:op,offerId:'approved-pro',catalogVersion:'catalog-1'}))).status,200);
+  assert.equal((await handlers.POST(request({action:'begin',scope,operationId:op,offerId:'approved-pro',catalogVersion:'catalog-1',acceptanceReceiptId,acceptanceDigest}))).status,200);
   assert.equal((await handlers.POST(request({action:'recover',scope,operationId:op}))).status,200);
   assert.equal((await handlers.POST(request({action:'cancel_renewal',scope,operationId:op,subscriptionAttemptId:'company_subscription_'+'c'.repeat(64)}))).status,200);
   assert.deepEqual(calls.map(c=>c.action),['read','begin','recover','cancelAtPeriodEnd']);
-  assert.deepEqual(calls[1].value,{scope,operationId:op,offerId:'approved-pro',catalogVersion:'catalog-1'});
+  assert.deepEqual(calls[1].value,{scope,operationId:op,offerId:'approved-pro',catalogVersion:'catalog-1',acceptanceReceiptId,acceptanceDigest});
   assert.ok(calls.every(c=>c.identity===session&&!Object.hasOwn(c.value,'action')));
 });
 test('client amount, currency, merchant, payer and paid flags never reach subscription service',async()=>{
   const {calls,handlers}=fixture();
   for(const patch of [{amountMinor:'1'},{currency:'ARS'},{merchantId:'another'},{payerEmail:'private@example.invalid'},{paid:true},{status:'ACTIVE'},{resourceId:'123'},{termsAccepted:true}]){
-    assert.equal((await handlers.POST(request({action:'begin',scope,operationId:op,offerId:'approved-pro',catalogVersion:'catalog-1',...patch}))).status,400);
+    assert.equal((await handlers.POST(request({action:'begin',scope,operationId:op,offerId:'approved-pro',catalogVersion:'catalog-1',acceptanceReceiptId,acceptanceDigest,...patch}))).status,400);
   }
   assert.equal(calls.length,0);
+});
+
+test('explicit commercial acceptance and its read use an independent operation reference without financial recovery',async()=>{
+  const {calls,handlers}=fixture(),value={action:'accept_offer',scope,operationId:op,offerId:'approved-pro',catalogVersion:'catalog-1',catalogDigest:'d'.repeat(64),offerDigest:'e'.repeat(64),termsVersion:'terms-1',termsSha256:'f'.repeat(64),accepted:true};
+  assert.equal((await handlers.POST(request(value))).status,200);assert.equal((await handlers.GET(new Request(endpoint+'?scope='+scope+'&acceptanceOperationId='+op))).status,200);
+  assert.deepEqual(calls.map(x=>x.action),['acceptOffer','read']);assert.deepEqual(calls[1].value,{scope,acceptanceOperationId:op});const {action,...command}=value;assert.equal(action,'accept_offer');assert.deepEqual(calls[0].value,command);
+  for(const patch of [{accepted:false},{accepted:'true'},{termsText:'Browser terms'},{amountMinor:'14900'},{merchantId:'123'},{termsSha256:'bad'},{payerEmail:'synthetic@example.invalid'}])assert.equal((await handlers.POST(request({...value,...patch}))).status,400);
+  for(const query of ['acceptanceOperationId=bad','acceptanceOperationId='+op+'&acceptanceOperationId='+op,'operationId='+op+'&acceptanceOperationId='+op])assert.equal((await handlers.GET(new Request(endpoint+'?scope='+scope+'&'+query))).status,400);
+  assert.equal(calls.length,2);
 });
 test('query duplicates, success-return flags and cross-site writes cannot read or mutate a plan',async()=>{
   const {calls,handlers}=fixture();

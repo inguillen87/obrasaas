@@ -38,14 +38,43 @@ jobs:
         run: node --test tests/production-company-billing.test.mjs tests/production-company-billing-view.test.mjs tests/production-company-entitlement.test.mjs tests/production-company-subscription-*.test.mjs
       - name: Affected source lint
         run: npx eslint src/lib/company-billing*.mjs src/lib/company-subscription*.mjs src/lib/company-entitlement.mjs src/lib/retired-billing.mjs src/lib/mercadopago.js src/lib/workspace-store.mjs src/lib/meta-customer-onboarding.mjs src/lib/participant-onboarding-authority.mjs src/proxy.js src/app/api/identity/company-billing/route.js src/app/api/identity/company-subscription src/app/api/billing scripts/verify-company-billing-*.mjs scripts/verify-company-subscription-*.mjs tests/production-company-billing*.test.mjs tests/production-company-subscription-*.test.mjs 'src/app/(identity)/cuenta/company-billing-panel.js' 'src/app/(identity)/cuenta/company-billing-view.mjs' 'src/app/(identity)/cuenta/company-subscription-panel.js' 'src/app/(identity)/cuenta/company-subscription-view.mjs' 'src/app/(identity)/cuenta/workspace-client.js' --max-warnings 0
-      - name: PostgreSQL isolation with no operational tables
-        run: node scripts/verify-company-billing-postgres.mjs
-      - name: Responsive real component and stale access controls
-        run: node scripts/verify-company-billing-ui.mjs
-      - name: Durable subscription PostgreSQL isolation and concurrency
+      - name: Native accepted terms and durable subscription isolation
         run: node scripts/verify-company-subscription-postgres.mjs
-      - name: Responsive subscription checkout and recovery controls
-        run: node scripts/verify-company-subscription-ui.mjs
+      - name: Responsive accepted terms checkout and recovery controls
+        run: node scripts/verify-company-subscription-ui.mjs --expected-head "${GITHUB_SHA}" .vercel/private/company-subscription-ui-evidence/current-browser.json
+      - name: Verify exact accepted terms native and browser receipts
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {createHash} from 'node:crypto';
+          import {execFileSync} from 'node:child_process';
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import path from 'node:path';
+          import {companySubscriptionCommittedSource,assertCompanySubscriptionPostgresProof} from './scripts/verify-company-subscription-postgres.mjs';
+          import {COMPANY_SUBSCRIPTION_UI_VERSION,COMPANY_SUBSCRIPTION_UI_CHECKS,COMPANY_SUBSCRIPTION_UI_WIDTHS,COMPANY_SUBSCRIPTION_UI_DEPENDENCIES,companySubscriptionUiSourceFiles,companySubscriptionUiFixtureSourceFiles} from './scripts/verify-company-subscription-ui.mjs';
+          const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),root=process.cwd(),source=companySubscriptionCommittedSource(root,process.env);
+          const nativeFile='.vercel/private/company-subscription-evidence/postgres.json',tapFile='.vercel/private/company-subscription-evidence/native.tap',browserFile='.vercel/private/company-subscription-ui-evidence/current-browser.json';
+          const native=JSON.parse(readFileSync(nativeFile,'utf8')),browser=JSON.parse(readFileSync(browserFile,'utf8'));
+          assertCompanySubscriptionPostgresProof(native,readFileSync(tapFile,'utf8'),source);
+          assert.equal(source.sourceState,'EXACT_CI_SOURCE');assert.deepEqual(native.githubRun,{runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,job:process.env.GITHUB_JOB});
+          assert.equal(browser.version,COMPANY_SUBSCRIPTION_UI_VERSION);assert.equal(browser.status,'PASS');assert.equal(browser.sourceRevision,source.sourceRevision);assert.equal(browser.sourceTree,source.sourceTree);assert.equal(browser.expectedHead,process.env.GITHUB_SHA);assert.equal(browser.sourceState,'clean-git-head');assert.equal(browser.sourceAfterChecked,true);
+          assert.deepEqual(browser.checks.map(row=>row.check),[...COMPANY_SUBSCRIPTION_UI_CHECKS]);assert.deepEqual(browser.widths,[...COMPANY_SUBSCRIPTION_UI_WIDTHS]);
+          assert.deepEqual(browser.sourceManifest.map(row=>row.path).sort(),companySubscriptionUiSourceFiles(root).sort());assert.deepEqual(browser.fixtureSourceManifest.map(row=>row.path).sort(),companySubscriptionUiFixtureSourceFiles(root).sort());assert.deepEqual(browser.dependencyManifest.map(row=>row.path).sort(),[...COMPANY_SUBSCRIPTION_UI_DEPENDENCIES].sort());
+          const exactSource=relative=>{assert.ok(!path.isAbsolute(relative)&&!relative.includes('..')&&!relative.includes('\\'));const bytes=readFileSync(relative),committed=execFileSync('git',['show',source.sourceRevision+':'+relative],{maxBuffer:16*1024*1024});assert.equal(sha(bytes),sha(committed));return sha(bytes);};
+          for(const ref of [...browser.sourceManifest,...browser.fixtureSourceManifest,...browser.dependencyManifest])assert.equal(ref.sha256,exactSource(ref.path));
+          assert.equal(browser.harnessSha256,exactSource('scripts/verify-company-subscription-ui.mjs'));assert.equal(browser.cleanupHelperSha256,exactSource('scripts/lib/owned-fixture-cleanup.mjs'));
+          for(const key of ['browserClosed','serverClosed','gracefulCloseAcknowledged','fixtureRemoved'])assert.equal(browser.cleanup[key],true);assert.equal(browser.cleanup.fixtureCleanupProof.postcondition.absent,true);assert.equal(browser.cleanup.fixtureCleanupProof.attempts.at(-1).postcondition,'ABSENT');
+          for(const key of ['pageErrors','interceptErrors','externalRequests'])assert.deepEqual(browser[key],[]);assert.equal(browser.providerRequests,0);for(const key of ['productionLoginVerified','productionDataWritten','paymentAttempted','paymentVerified','physicalDeviceAccepted'])assert.equal(browser[key],false);
+          assert.ok(browser.apiRequests.length>0);assert.ok(browser.screenshotManifest.length>0);for(const width of COMPANY_SUBSCRIPTION_UI_WIDTHS)assert.ok(browser.screenshotManifest.some(ref=>ref.width===width));
+          for(const ref of browser.screenshotManifest){assert.match(ref.path,/^\.vercel\/private\/company-subscription-ui-evidence\/screenshots-[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+\.png$/);assert.equal(ref.sha256,sha(readFileSync(ref.path)));}
+          const workflowSha256=exactSource('.github/workflows/company-billing.yml');
+          const index={version:'company-subscription-dedicated-ci-v2',status:'PASS',sourceRevision:source.sourceRevision,sourceTree:source.sourceTree,sourceState:source.sourceState,githubRun:native.githubRun,workflowSha256,native:{path:nativeFile,sha256:sha(readFileSync(nativeFile)),tapPath:tapFile,tapSha256:sha(readFileSync(tapFile)),checkCount:native.totalCheckCount,sourceCount:native.sourceManifest.length,cleanup:native.cleanup},browser:{path:browserFile,sha256:sha(readFileSync(browserFile)),checkCount:browser.checks.length,sourceCount:browser.sourceManifest.length,fixtureSourceCount:browser.fixtureSourceManifest.length,screenshotCount:browser.screenshotManifest.length,cleanup:browser.cleanup},syntheticProviderOnly:true,realProviderRequests:null,financialAcceptance:false,humanAcceptance:false};
+          writeFileSync('.vercel/private/company-subscription-evidence/acceptance-proof-index.json',JSON.stringify(index,null,2)+'\n');console.log(JSON.stringify(index));
+          NODE
+      - name: Retired billing PostgreSQL isolation with no operational tables
+        run: node scripts/verify-company-billing-postgres.mjs
+      - name: Responsive retired billing component and stale access controls
+        run: node scripts/verify-company-billing-ui.mjs
       - name: Preserve exact checked-out source
         run: git diff --exit-code HEAD --
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -59,6 +88,9 @@ jobs:
         if: always()
         with:
           name: canonical-company-subscription-${{ github.sha }}-${{ github.run_attempt }}
-          path: .vercel/private/company-subscription-evidence/
+          path: |
+            .vercel/private/company-subscription-evidence/
+            .vercel/private/company-subscription-ui-evidence/
           include-hidden-files: true
           if-no-files-found: error
+          retention-days: 14

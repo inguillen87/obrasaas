@@ -35,14 +35,26 @@ const harnessSha256=createHash('sha256').update(sourceBytes('scripts/verify-work
 mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/workspace-identity-only-ui-')),app=path.join(fixture,'src/app');
 mkdirSync(app,{recursive:true});
-const sha256=value=>createHash('sha256').update(value).digest('hex'),sourceManifest=[],copied=new Set();
-sourceManifest.push({path:'scripts/lib/company-subscription-ui-fixture.mjs',sha256:sha256(sourceBytes('scripts/lib/company-subscription-ui-fixture.mjs'))});
+const sha256=value=>createHash('sha256').update(value).digest('hex'),sourceManifest=[],manifested=new Set(),copied=new Set(),fixturePinned=new Set();
+function recordSource(relative,bytes){
+ if(manifested.has(relative))return;manifested.add(relative);sourceManifest.push({path:relative,sha256:sha256(bytes)});
+}
+function pinFixtureGraph(relative){
+ relative=relative.split(/[\\/]/).join('/');
+ if(fixturePinned.has(relative))return;assert.ok(relative.startsWith('scripts/')||relative.startsWith('src/'));
+ fixturePinned.add(relative);const source=path.join(root,relative),bytes=sourceBytes(relative);recordSource(relative,bytes);
+ for(const match of bytes.toString('utf8').matchAll(/\b(?:from\s*|import\s*)['"](\.[^'"]+)['"]/g)){
+  const target=path.resolve(path.dirname(source),match[1]),resolved=[target,target+'.js',target+'.mjs',path.join(target,'index.js')].find(value=>existsSync(value)&&statSync(value).isFile());
+  assert.ok(resolved,'Missing fixture source dependency '+match[1]);pinFixtureGraph(path.relative(root,resolved));
+ }
+}
+pinFixtureGraph('scripts/lib/company-subscription-ui-fixture.mjs');
 function copyGraph(relative){
  relative=relative.split(/[\\/]/).join('/');
  if(copied.has(relative))return;assert.ok(relative.startsWith('src'+path.sep)||relative.startsWith('src/'));
  copied.add(relative);const source=path.join(root,relative),destination=path.join(fixture,relative),bytes=sourceBytes(relative.replaceAll(path.sep,'/'));
  mkdirSync(path.dirname(destination),{recursive:true});writeFileSync(destination,bytes);
- sourceManifest.push({path:relative.replaceAll(path.sep,'/'),sha256:sha256(bytes)});
+ recordSource(relative.replaceAll(path.sep,'/'),bytes);
  if(!/\.(?:js|mjs)$/.test(relative))return;
  for(const match of bytes.toString('utf8').matchAll(/\b(?:from\s*|import\s*)['"](\.[^'"]+)['"]/g)){
   const target=path.resolve(path.dirname(source),match[1]),resolved=[target,target+'.js',target+'.mjs',target+'.css',path.join(target,'index.js')].find(value=>existsSync(value)&&statSync(value).isFile());
