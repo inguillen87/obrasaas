@@ -52,6 +52,11 @@ export function createParticipantHandlers({verify,store,join=false,scheduleOnboa
   if(join){if(params.size!==1||params.getAll('invitationId').length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return reply(await store.join(session,{invitationId:params.get('invitationId')}));}
   for(const key of params.keys())if(!['projectId','scope','after','intakeAfter','operationId','workerId','intakeId','imageId','detail','action','query','afterAccount','accountId','email','challengeId','submissionId'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
   const context={projectId:params.get('projectId'),scope:params.get('scope')};if(!workspaceId(context.projectId)||!/^[a-f0-9]{64}$/.test(context.scope||''))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+  if(params.get('detail')==='civil-data'){
+   const required=['projectId','scope','detail','workerId'],allowed=[...required,'submissionId','operationId'];
+   if(required.some(key=>!params.has(key))||[...params.keys()].some(key=>!allowed.includes(key))||!workspaceId(params.get('workerId'))||params.has('submissionId')&&!workspaceId(params.get('submissionId'))||params.has('operationId')&&!operationId(params.get('operationId')))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+   return reply(await store.civilRead(session,{...context,workerId:params.get('workerId'),...(params.has('submissionId')?{submissionId:params.get('submissionId')}:{}) ,...(params.has('operationId')?{operationId:params.get('operationId').toLowerCase()}:{})}));
+  }
   if(params.get('detail')==='ocr-usage'){
    const keys=['projectId','scope','detail','workerId','submissionId','operationId'];if(params.size!==keys.length||keys.some(key=>!params.has(key))||!workspaceId(params.get('workerId'))||!workspaceId(params.get('submissionId'))||!operationId(params.get('operationId')))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
    return reply(await store.status(session,{...context,workerId:params.get('workerId'),submissionId:params.get('submissionId'),operationId:params.get('operationId').toLowerCase()}));

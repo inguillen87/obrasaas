@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 
-// Server transport only. This module is not mounted in the participant/KYC flow.
+// Server transport only. The caller owns canonical authority and durable receipts.
 export const BINDX_CIVIL_CONFIGURATION_VERSION='bindx-civil-data-config-v1';
 export const BINDX_CIVIL_CONSENT_VERSION='bindx-civil-data-consent-v1';
 export const BINDX_CIVIL_RESPONSE_SCHEMA='apistore-renaper-civil-ddmmyyyy-v1';
@@ -66,8 +66,8 @@ function civilProjection(data){
  return Object.freeze(Object.fromEntries([...strings,'codigo_fallecido'].map(key=>[key,data[key]])));
 }
 
-export function createBindxCivilDataClient({configuration=null,beforeExternal,fetchImpl=globalThis.fetch,timeoutMs=15000,clock=()=>Date.now()}={}){
- if(typeof fetchImpl!=='function'||typeof clock!=='function'||!Number.isInteger(timeoutMs)||timeoutMs<1||timeoutMs>30000)throw new TypeError('BINDX_CIVIL_CLIENT_OPTIONS_INVALID');
+export function createBindxCivilDataClient({configuration=null,beforeExternal,onTechnicalObservation=null,technicalObservationTimeoutMs=6000,fetchImpl=globalThis.fetch,timeoutMs=15000,clock=()=>Date.now()}={}){
+ if(typeof fetchImpl!=='function'||typeof clock!=='function'||onTechnicalObservation!==null&&typeof onTechnicalObservation!=='function'||!Number.isInteger(technicalObservationTimeoutMs)||technicalObservationTimeoutMs<1||technicalObservationTimeoutMs>6000||!Number.isInteger(timeoutMs)||timeoutMs<1||timeoutMs>30000)throw new TypeError('BINDX_CIVIL_CLIENT_OPTIONS_INVALID');
  let configured=null,configurationCode=null;
  if(configuration!==null&&configuration?.state!=='CONTRACT_PENDING'){try{const now=clock();if(!Number.isSafeInteger(now)||!Number.isFinite(new Date(now).getTime()))throw error('BINDX_CIVIL_CONFIGURATION_INVALID');configured=snapshot(configuration,beforeExternal,now);}catch(cause){configurationCode=['BINDX_CIVIL_CONFIGURATION_INVALID','BINDX_CIVIL_PROVIDER_EVIDENCE_REQUIRED','BINDX_CIVIL_CONTEXT_INVALID','BINDX_CIVIL_CONSENT_REQUIRED'].includes(cause?.code)?cause.code:'BINDX_CIVIL_CONFIGURATION_INVALID';}}
  let attempted=false,lastQueryAttempted=false;
@@ -79,22 +79,36 @@ export function createBindxCivilDataClient({configuration=null,beforeExternal,fe
   if(attempted)return result('UNKNOWN','BINDX_CIVIL_OPERATION_ALREADY_ATTEMPTED');
   // In-memory reuse guard only. A durable canonical operation/receipt is still
   // required before mounting this component or reconstructing it after a crash.
-  attempted=true;const controller=new AbortController(),deadline=performance.now()+timeoutMs,timer=setTimeout(()=>controller.abort(),timeoutMs);let queryAttempted=false;
+  attempted=true;const controller=new AbortController(),deadline=performance.now()+timeoutMs,timer=setTimeout(()=>controller.abort(),timeoutMs);let queryAttempted=false,technicalObservationAttempted=false;
   const ensureBudget=()=>{if(controller.signal.aborted||performance.now()>=deadline){controller.abort();throw error('BINDX_CIVIL_TIMEOUT');}};
   const fence=async stage=>{try{ensureBudget();if(await bounded(Promise.resolve().then(()=>beforeExternal(Object.freeze({...configured.fence,stage}))),controller.signal)!==true)throw error('BINDX_CIVIL_AUTHORITY_DENIED');ensureBudget();}catch(cause){if(cause?.code==='BINDX_CIVIL_TIMEOUT')throw cause;throw error('BINDX_CIVIL_AUTHORITY_DENIED');}};
   const request=async(url,options,limit)=>{
    let response;try{const pending=Promise.resolve().then(()=>{ensureBudget();if(options.method==='GET')queryAttempted=lastQueryAttempted=true;return fetchImpl(url,{...options,redirect:'error',credentials:'omit',cache:'no-store',referrerPolicy:'no-referrer',signal:controller.signal});});pending.then(late=>{if(controller.signal.aborted)cancel(late?.body);},()=>{});response=await bounded(pending,controller.signal);}catch(cause){if(cause?.code==='BINDX_CIVIL_TIMEOUT')throw cause;throw error('BINDX_CIVIL_TRANSPORT_UNCONFIRMED');}
    try{ensureBudget();if(!response||!Number.isInteger(response.status)||response.status<100||response.status>599||response.redirected===true||response.url&&response.url!==url)throw error('BINDX_CIVIL_RESPONSE_INVALID');if(response.status!==200)return {httpStatus:response.status,data:null};const data=await jsonBody(response,limit,controller.signal);ensureBudget();return {httpStatus:200,data};}finally{cancel(response?.body);}
   };
+  const observeTechnical=async value=>{
+   if(!queryAttempted||technicalObservationAttempted||onTechnicalObservation===null)return;
+   technicalObservationAttempted=true;
+   // Settlement is a local technical operation. A consumed wire deadline or
+   // later actor revocation cannot erase an already attempted civil query.
+   // The canonical observer owns its database timeout and receipt. Bound the
+   // await as well; a late local commit cannot disclose data or trigger a new
+   // UNKNOWN observation that would overwrite its already settled fact.
+   const local=new AbortController(),expiresAt=performance.now()+technicalObservationTimeoutMs,stop=setTimeout(()=>local.abort(),technicalObservationTimeoutMs);
+   try{await bounded(Promise.resolve().then(()=>onTechnicalObservation(value)),local.signal);if(performance.now()>=expiresAt)throw error('BINDX_CIVIL_TECHNICAL_OBSERVATION_UNCONFIRMED');}catch{throw error('BINDX_CIVIL_TECHNICAL_OBSERVATION_UNCONFIRMED');}finally{clearTimeout(stop);local.abort();}
+  };
   try{
    await fence('LOGIN');const login=await request(configured.origin+LOGIN_PATH,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(configured.credentials)},MAX_LOGIN_BYTES);
    if(login.httpStatus!==200)return result('AUTH_REJECTED','BINDX_CIVIL_AUTH_REJECTED',{httpStatus:login.httpStatus});
    const token=login.data?.token;if(!login.data||!has(login.data,'token')||typeof token!=='string'||token.length>8192||!(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/).test(token)||has(login.data,'expires_in')&&(!Number.isSafeInteger(login.data.expires_in)||login.data.expires_in<=0))throw error('BINDX_CIVIL_AUTH_SCHEMA_UNCONFIRMED');
    await fence('LOOKUP');const observed=await request(configured.origin+PERSON_PATH+configured.context.dni+'/gender/'+configured.context.gender,{method:'GET',headers:{'Content-Type':'application/json','Accept':'application/json','Authorization':'JWT '+token}},MAX_PERSON_BYTES);
-   if(observed.httpStatus!==200)return result('REQUEST_REJECTED','BINDX_CIVIL_REQUEST_REJECTED',{queryAttempted,httpStatus:observed.httpStatus});
-   const data=civilProjection(observed.data);await fence('RETURN_RESULT');const time=clock();ensureBudget();if(!Number.isSafeInteger(time)||!Number.isFinite(new Date(time).getTime()))throw error('BINDX_CIVIL_TIMEOUT');
-   return result('OBSERVED',null,{data,observedAt:new Date(time).toISOString(),queryAttempted,httpStatus:200});
-  }catch(cause){const safe=new Set(['BINDX_CIVIL_TIMEOUT','BINDX_CIVIL_AUTHORITY_DENIED','BINDX_CIVIL_TRANSPORT_UNCONFIRMED','BINDX_CIVIL_RESPONSE_INVALID','BINDX_CIVIL_RESPONSE_TOO_LARGE','BINDX_CIVIL_RESPONSE_SCHEMA_UNCONFIRMED','BINDX_CIVIL_AUTH_SCHEMA_UNCONFIRMED']);const code=safe.has(cause?.code)?cause.code:'BINDX_CIVIL_TRANSPORT_UNCONFIRMED';return result(code==='BINDX_CIVIL_AUTHORITY_DENIED'?'AUTHORITY_DENIED':'UNKNOWN',code,{queryAttempted});}
+   if(observed.httpStatus!==200){await observeTechnical(result('UNKNOWN','BINDX_CIVIL_REQUEST_REJECTED',{queryAttempted,httpStatus:observed.httpStatus}));return result('REQUEST_REJECTED','BINDX_CIVIL_REQUEST_REJECTED',{queryAttempted,httpStatus:observed.httpStatus});}
+   const data=civilProjection(observed.data),time=clock();ensureBudget();if(!Number.isSafeInteger(time)||!Number.isFinite(new Date(time).getTime()))throw error('BINDX_CIVIL_TIMEOUT');
+   const technical=result('OBSERVED',null,{data,observedAt:new Date(time).toISOString(),queryAttempted,httpStatus:200});
+   await observeTechnical(technical);await fence('RETURN_RESULT');return technical;
+  }catch(cause){const safe=new Set(['BINDX_CIVIL_TIMEOUT','BINDX_CIVIL_AUTHORITY_DENIED','BINDX_CIVIL_TRANSPORT_UNCONFIRMED','BINDX_CIVIL_RESPONSE_INVALID','BINDX_CIVIL_RESPONSE_TOO_LARGE','BINDX_CIVIL_RESPONSE_SCHEMA_UNCONFIRMED','BINDX_CIVIL_AUTH_SCHEMA_UNCONFIRMED','BINDX_CIVIL_TECHNICAL_OBSERVATION_UNCONFIRMED']);const code=safe.has(cause?.code)?cause.code:'BINDX_CIVIL_TRANSPORT_UNCONFIRMED';
+   try{await observeTechnical(result('UNKNOWN',code,{queryAttempted}));}catch{return result('UNKNOWN','BINDX_CIVIL_TECHNICAL_OBSERVATION_UNCONFIRMED',{queryAttempted});}
+   return result(code==='BINDX_CIVIL_AUTHORITY_DENIED'?'AUTHORITY_DENIED':'UNKNOWN',code,{queryAttempted});}
   finally{clearTimeout(timer);controller.abort();}
  }});
 }

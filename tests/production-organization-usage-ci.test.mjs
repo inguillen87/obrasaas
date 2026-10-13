@@ -21,7 +21,18 @@ function fixture(){
 function rejected(change){const input=fixture();change(input);assert.throws(()=>validateOrganizationUsageCi(input),{code:'ORGANIZATION_USAGE_CI_REJECTED'});}
 
 test('complete native and DOM source-bound contracts validate without executing producers',()=>{
- assert.equal(native.files.length,107);assert.equal(browser.files.length,24);assert.equal(ORGANIZATION_USAGE_PG_CHECKS.length,16);const input=fixture(),before=JSON.stringify(input),proof=validateOrganizationUsageCi(input);assert.equal(JSON.stringify(input),before);assert.equal(proof.version,ORGANIZATION_USAGE_CI_VERSION);assert.equal(proof.status,'PASS');assert.equal(proof.postgres.sourceCount,107);assert.equal(proof.providerRequests,0);assert.equal(proof.paymentVerified,false);assert.equal(proof.cost,null);
+ assert.equal(native.files.length,110);assert.equal(browser.files.length,24);assert.equal(ORGANIZATION_USAGE_PG_CHECKS.length,16);const input=fixture(),before=JSON.stringify(input),proof=validateOrganizationUsageCi(input);assert.equal(JSON.stringify(input),before);assert.equal(proof.version,ORGANIZATION_USAGE_CI_VERSION);assert.equal(proof.status,'PASS');assert.equal(proof.postgres.sourceCount,110);assert.equal(proof.providerRequests,0);assert.equal(proof.paymentVerified,false);assert.equal(proof.cost,null);
+});
+test('durable civil source lineage cannot be omitted, substituted or certified by the pre-civil manifest',()=>{
+ const files=['src/lib/participant-civil-store.mjs','src/lib/participant-civil-policy.mjs','src/lib/bindx-civil-data-client.mjs'];
+ for(const file of files){
+  assert.equal(native.files.filter(source=>source===file).length,1);
+  rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);});
+  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-civil-source.mjs';assert.equal(input.postgres.sourceManifest.length,110);});
+  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
+  rejected(input=>{delete input.gitSources[file];});
+ }
+ rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>!files.includes(ref.path));assert.equal(input.postgres.sourceManifest.length,107);});
 });
 test('foreign abbreviated stale tree or dirty source cannot certify a release',()=>{
  for(const key of ['expectedHead','head','sourceTree'])rejected(value=>{value[key]='c'.repeat(40);});rejected(value=>{value.expectedHead=head.slice(0,7);});rejected(value=>{value.trackedClean=false;});for(const kind of ['postgres','ui'])for(const [key,value] of [['sourceRevision','c'.repeat(40)],['sourceTree','c'.repeat(40)],['sourceState','working-tree'],['trackedClean',false],['status','FAILED']])rejected(input=>{input[kind][key]=value;});

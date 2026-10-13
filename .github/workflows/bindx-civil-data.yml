@@ -1,23 +1,29 @@
-name: BINDX civil data transport preparation
+name: BINDX durable civil integration preparation
 on:
   push:
     branches: [master, 'feat/bindx-civil-data-*']
-    paths:
-      - 'src/lib/bindx-civil-data-client.mjs'
-      - 'tests/production-bindx-civil-data-client.test.mjs'
-      - 'docs/production/bindx-civil-data.md'
-      - '.github/workflows/bindx-civil-data.yml'
-      - 'package.json'
-      - 'package-lock.json'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       NEXT_TELEMETRY_DISABLED: '1'
+      CUTOVER_TEST_DISPOSABLE: '1'
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -28,25 +34,35 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
-      - name: Closed transport and synthetic contract cases
+      - name: Exact source, closed transport and canonical consent cases
         run: |
           mkdir -p .vercel/private/bindx-civil-ci
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import {execFileSync} from 'node:child_process';
           import {createHash} from 'node:crypto';
-          import {readFileSync,writeFileSync} from 'node:fs';
+          import {readFileSync,writeFileSync,existsSync} from 'node:fs';
+          import path from 'node:path';
+          import {parse} from '@babel/parser';
+          import {participantCivilSourceFiles} from './scripts/verify-participant-civil-postgres.mjs';
+          import {participantCivilUiSourceFiles} from './scripts/verify-participant-civil-ui.mjs';
           const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
           assert.equal(git('rev-parse','HEAD'),process.env.GITHUB_SHA);
           assert.equal(git('status','--porcelain','--untracked-files=no'),'');
-          const files=['src/lib/bindx-civil-data-client.mjs','tests/production-bindx-civil-data-client.test.mjs','docs/production/bindx-civil-data.md','.github/workflows/bindx-civil-data.yml','package.json','package-lock.json'];
+          const seeds=[...participantCivilSourceFiles(process.cwd()),...participantCivilUiSourceFiles(process.cwd()),'src/lib/participant-runtime.mjs','src/app/api/identity/participants/route.js','src/proxy.js','tests/production-bindx-civil-data-client.test.mjs','tests/production-participant-civil-store.test.mjs','tests/production-participant-civil-ui.test.mjs','tests/production-participant-civil-ui-harness.test.mjs','scripts/verify-participant-civil-ui.mjs','scripts/lib/owned-fixture-cleanup.mjs','docs/production/bindx-civil-data.md','.github/workflows/bindx-civil-data.yml','package.json','package-lock.json'],seen=new Set();
+          function visit(file){assert.ok(!file.split('/').includes('..'));if(seen.has(file))return;seen.add(file);if(!/\.(?:mjs|js)$/.test(file))return;const imports=[],ast=parse(readFileSync(file,'utf8'),{sourceType:'unambiguous',plugins:['jsx'],createImportExpressions:true});function walk(node){if(!node||typeof node!=='object')return;if(['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration'].includes(node.type)&&node.source?.value)imports.push(node.source.value);if(node.type==='ImportExpression'&&node.source?.type==='StringLiteral')imports.push(node.source.value);for(const value of Object.values(node))if(Array.isArray(value))value.forEach(walk);else if(value&&typeof value==='object')walk(value);}walk(ast.program);for(const ref of imports.filter(value=>value.startsWith('.'))){const base=path.posix.normalize(path.posix.join(path.posix.dirname(file),ref)),resolved=[base,base+'.mjs',base+'.js',base+'.css'].find(value=>existsSync(value));assert.ok(resolved,'Relative source import must resolve');visit(resolved);}}
+          seeds.push('src/app/(identity)/cuenta/participant-panel.js');seeds.forEach(visit);const files=[...seen].sort();
           const sourceManifest=files.map(path=>{const committed=execFileSync('git',['show','HEAD:'+path]);assert.deepEqual(readFileSync(path),committed);return {path,sha256:createHash('sha256').update(committed).digest('hex')};});
           writeFileSync('.vercel/private/bindx-civil-ci/before.json',JSON.stringify({sourceRevision:git('rev-parse','HEAD'),sourceTree:git('rev-parse','HEAD^{tree}'),sourceManifest})+'\n');
           NODE
           node --check src/lib/bindx-civil-data-client.mjs
-          npx eslint src/lib/bindx-civil-data-client.mjs tests/production-bindx-civil-data-client.test.mjs --max-warnings 0
-          node --test --test-reporter=tap tests/production-bindx-civil-data-client.test.mjs > .vercel/private/bindx-civil-ci/tests.tap
-      - name: Record exact source without activation
+          npx eslint src/lib/bindx-civil-data-client.mjs src/lib/participant-civil-*.mjs src/lib/participant-store.mjs src/lib/participant-http.mjs 'src/app/(identity)/cuenta/participant-panel.js' 'src/app/(identity)/cuenta/participant-civil-data-panel.js' 'src/app/(identity)/cuenta/participant-civil-data-view.mjs' scripts/verify-participant-civil-*.mjs tests/production-bindx-civil-data-client.test.mjs tests/production-participant-civil-*.test.mjs --max-warnings 0
+          node --test --test-reporter=tap tests/production-bindx-civil-data-client.test.mjs tests/production-participant-civil-*.test.mjs > .vercel/private/bindx-civil-ci/tests.tap
+      - name: Native durable SQL, revocation and late observation
+        run: node scripts/verify-participant-civil-postgres.mjs
+      - name: Actual browser, four widths, consent and reload recovery
+        run: node scripts/verify-participant-civil-ui.mjs --expected-head "$GITHUB_SHA" .vercel/private/participant-civil-evidence/current-browser.json
+      - name: Record literal source and proof without provider activation
         run: |
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
@@ -54,28 +70,42 @@ jobs:
           import {createHash} from 'node:crypto';
           import {readFileSync,writeFileSync} from 'node:fs';
           import {createBindxCivilDataClient} from './src/lib/bindx-civil-data-client.mjs';
+          import {PARTICIPANT_CIVIL_POSTGRES_CHECKS} from './scripts/verify-participant-civil-postgres.mjs';
+          import {PARTICIPANT_CIVIL_UI_CHECKS,PARTICIPANT_CIVIL_UI_WIDTHS} from './scripts/verify-participant-civil-ui.mjs';
           const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
           assert.equal(git('rev-parse','HEAD'),process.env.GITHUB_SHA);
           assert.equal(git('status','--porcelain','--untracked-files=no'),'');
           const tap=readFileSync('.vercel/private/bindx-civil-ci/tests.tap','utf8');
-          assert.match(tap,/^# tests 23$/m);assert.match(tap,/^# pass 23$/m);
+          assert.doesNotMatch(tap,/^not ok|^Bail out!|# (?:SKIP|TODO)\b/m);
+          const cases=[...tap.matchAll(/^ok (\d+) - ([^\n]+)$/gm)];assert.ok(cases.length>=76);assert.equal(new Set(cases.map(row=>row[2])).size,cases.length);
+          assert.match(tap,new RegExp('^1\\.\\.'+cases.length+'$','m'));assert.match(tap,new RegExp('^# tests '+cases.length+'$','m'));assert.match(tap,new RegExp('^# pass '+cases.length+'$','m'));
           for(const name of ['fail','cancelled','skipped','todo'])assert.match(tap,new RegExp('^# '+name+' 0$','m'));
           let wireCalls=0;
           const client=createBindxCivilDataClient({fetchImpl:async()=>{wireCalls++;throw Error('No real provider allowed');}});
           assert.equal(client.readiness().state,'CONTRACT_PENDING');
           assert.equal((await client.lookup()).state,'CONTRACT_PENDING');
           assert.equal(wireCalls,0);
-          const files=['src/lib/bindx-civil-data-client.mjs','tests/production-bindx-civil-data-client.test.mjs','docs/production/bindx-civil-data.md','.github/workflows/bindx-civil-data.yml','package.json','package-lock.json'];
-          const sourceManifest=files.map(path=>{const committed=execFileSync('git',['show','HEAD:'+path]);assert.deepEqual(readFileSync(path),committed);return {path,sha256:createHash('sha256').update(committed).digest('hex')};});
           const before=JSON.parse(readFileSync('.vercel/private/bindx-civil-ci/before.json','utf8'));
+          const sourceManifest=before.sourceManifest.map(({path})=>{const committed=execFileSync('git',['show','HEAD:'+path]);assert.deepEqual(readFileSync(path),committed);return {path,sha256:createHash('sha256').update(committed).digest('hex')};});
           assert.equal(before.sourceRevision,process.env.GITHUB_SHA);assert.equal(before.sourceTree,git('rev-parse','HEAD^{tree}'));assert.deepEqual(sourceManifest,before.sourceManifest);
-          writeFileSync('.vercel/private/bindx-civil-ci/source.json',JSON.stringify({version:1,status:'PASS',sourceRevision:git('rev-parse','HEAD'),sourceTree:git('rev-parse','HEAD^{tree}'),trackedClean:true,sourceManifest,tapSha256:createHash('sha256').update(tap).digest('hex'),testCount:23,testTransport:'injected-synthetic',realProviderRequests:null,defaultSmokeWireCalls:wireCalls,defaultState:'CONTRACT_PENDING',runtimeMounted:false,identityCertified:false,biometricsVerified:false,financialAccountsCreated:false,publicationConfirmed:false})+'\n');
+          const native=JSON.parse(readFileSync('.vercel/private/participant-civil-postgres.json','utf8')),browser=JSON.parse(readFileSync('.vercel/private/participant-civil-evidence/current-browser.json','utf8'));
+          for(const proof of [native,browser]){assert.equal(proof.status,'PASS');assert.equal(proof.sourceRevision,before.sourceRevision);assert.equal(proof.sourceTree,before.sourceTree);}
+          assert.deepEqual(native.checks,PARTICIPANT_CIVIL_POSTGRES_CHECKS);assert.equal(native.totalCheckCount,PARTICIPANT_CIVIL_POSTGRES_CHECKS.length);assert.equal(native.postgresExecuted,true);assert.equal(native.poolClosed,true);assert.equal(native.databaseRemoved,true);
+          assert.equal(native.cleanup.adminClosed,true);assert.equal(native.cleanup.pgStatActivityBeforeDrop,0);assert.equal(native.nativeLockObservations.length,2);for(const lock of native.nativeLockObservations){assert.equal(lock.waitingBeforeWorker,true);assert.equal(lock.bothSettled,true);assert.equal(lock.civilOrganizationPrehook,false);assert.ok(lock.nativeProjectLockWaiters>0);}
+          assert.equal(native.uncontrolledFetchAttempts,0);assert.equal(native.realProviderRequests,null);assert.ok(native.syntheticLoginRequests>0&&native.syntheticCivilGetRequests>0);assert.equal(native.dispatchTransportObservations.length,native.syntheticLoginRequests+native.syntheticCivilGetRequests);for(const transfer of native.dispatchTransportObservations){assert.equal(transfer.reservationCommitted,true);assert.equal(transfer.callerClientsReleased,true);assert.ok(transfer.callerCheckoutCount>0);assert.ok(['POST','GET'].includes(transfer.method));}
+          assert.deepEqual(browser.checks.map(item=>item.check),PARTICIPANT_CIVIL_UI_CHECKS);assert.deepEqual(browser.widths,PARTICIPANT_CIVIL_UI_WIDTHS);assert.equal(browser.cleanup.browserClosed,true);assert.equal(browser.cleanup.serverClosed,true);assert.equal(browser.cleanup.gracefulCloseAcknowledged,true);assert.equal(browser.cleanup.fixtureRemoved,true);assert.equal(browser.cleanup.fixtureCleanupProof.postcondition.absent,true);
+          for(const field of ['pageErrors','interceptErrors','externalRequests'])assert.deepEqual(browser[field],[]);assert.equal(browser.productionDataWritten,false);assert.equal(browser.realHolderConsent,false);assert.equal(browser.physicalDeviceAccepted,false);
+          writeFileSync('.vercel/private/bindx-civil-ci/source.json',JSON.stringify({version:2,status:'PASS',sourceRevision:git('rev-parse','HEAD'),sourceTree:git('rev-parse','HEAD^{tree}'),trackedClean:true,sourceManifest,tapSha256:createHash('sha256').update(tap).digest('hex'),nativeSha256:createHash('sha256').update(readFileSync('.vercel/private/participant-civil-postgres.json')).digest('hex'),browserSha256:createHash('sha256').update(readFileSync('.vercel/private/participant-civil-evidence/current-browser.json')).digest('hex'),testCount:cases.length,testNames:cases.map(row=>row[2]),testTransport:'injected-synthetic',realProviderRequests:null,defaultSmokeWireCalls:wireCalls,defaultState:'CONTRACT_PENDING',runtimeMounted:true,professionalProviderActivated:false,identityCertified:false,biometricsVerified:false,livenessVerified:false,financialAccountsCreated:false,publicationConfirmed:false,physicalDeviceAcceptance:false})+'\n');
           NODE
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: bindx-civil-preparation-${{ github.sha }}-${{ github.run_attempt }}
-          path: .vercel/private/bindx-civil-ci/
+          name: bindx-civil-integration-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            .vercel/private/bindx-civil-ci/
+            .vercel/private/participant-civil-postgres.json
+            .vercel/private/participant-civil-postgres-failure.json
+            .vercel/private/participant-civil-evidence/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7

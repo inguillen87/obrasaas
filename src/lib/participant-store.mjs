@@ -19,6 +19,8 @@ import {readParticipantOnboardingStatuses} from './participant-onboarding-delive
 import {lockPersonWorksiteJourney,assertPersonWorksiteJourney} from './person-worksite-journey.mjs';
 import {PARTICIPANT_ACCOUNT_PAGE_SIZE,participantAccountRequest,participantAccountCursor,parseParticipantAccountCursor,participantAccountSearchPredicate} from './participant-account-discovery.mjs';
 import {VERIFIED_OFFICE_ACTION,participantVerifiedOfficeRequest,assertVerifiedOfficeIssuer,participantVerifiedOfficeProof,assertNewVerifiedOfficeTarget,createNewVerifiedOfficeAccount,participantOfficeAssignmentRequestDigest,participantOfficeAssignmentReceipt} from './participant-verified-office.mjs';
+import {createParticipantCivilStore} from './participant-civil-store.mjs';
+import {CIVIL_ACTIONS,civilParticipantCommand} from './participant-civil-policy.mjs';
 const columns=`id,name,active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
 const id=prefix=>prefix+'_'+randomUUID().replaceAll('-','');
 const metadata=row=>row.metadata&&typeof row.metadata==='object'&&!Array.isArray(row.metadata)?structuredClone(row.metadata):{};
@@ -67,12 +69,13 @@ async function ownKycReplayOutcome(client,member,session,input,found,fingerprint
 const canManageParticipants=member=>member.identityOnly!==true&&participantManager(member.role);
 function requireManager(member){if(member.identityOnly===true)throw new WorkspaceError('PARTICIPANT_KYC_REVIEW_REQUIRED',403);if(!canManageParticipants(member))throw new WorkspaceError('PARTICIPANT_MANAGE_REQUIRED',403);}
 function matchProvider(invitation,result){if(!result||result.invitationId!==invitation.id||result.email!==invitation.email||result.role!=='org:member'||!/^orginv_[A-Za-z0-9]+$/.test(result.id||'')||!['pending','accepted'].includes(result.state)||!Number.isFinite(Date.parse(result.expiresAt)))throw new WorkspaceError('PARTICIPANT_INVITATION_UNCONFIRMED',503);}
-export function createParticipantStore({workspace,connect,identity,upload,get,analyzer,usage=null,prepareKycChat,readKycChatAttempt=null,assessBiometrics,environment=process.env}){
+export function createParticipantStore({workspace,connect,identity,upload,get,analyzer,usage=null,prepareKycChat,readKycChatAttempt=null,assessBiometrics,environment=process.env,civilConfiguration=()=>null,civilClientFactory}){
  if(usage!==null&&['reserveResource','resourcePending','fence','observe','unknown','lockBeforeProject'].some(key=>typeof usage[key]!=='function'))throw new TypeError('Explicit participant OCR usage port required');
  const usageLock=usage?(client,member)=>usage.lockBeforeProject(client,member):undefined;
  const run=(session,input,writable,callback,beforeProject)=>workspace.projectOperation(session,input,writable,callback,beforeProject);
  const runIdentity=(session,input,writable,callback,beforeProject)=>participantIdentityOperation(workspace,session,input,writable,callback,beforeProject);
  const organizationRun=(session,input,writable,callback)=>workspace.organizationOperation(session,input,writable,callback);
+ let civil;const civilStore=()=>civil??=createParticipantCivilStore({workspace,connect,get,configuration:civilConfiguration,...(civilClientFactory?{clientFactory:civilClientFactory}:{})});
  async function verifiedOfficeProvider(context,session){
   if(typeof identity?.findVerifiedOfficeAccount!=='function')throw new WorkspaceError('PARTICIPANT_IDENTITY_PROVIDER_UNAVAILABLE',503);
   const value=await identity.findVerifiedOfficeAccount({organizationId:session.organizationId,email:context.email});
@@ -295,6 +298,7 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
   return {invitationId:invite.id,projectId:row.projectId,projectName:row.projectName,organizationName:row.organizationName,participantName:row.name,state:'ACTIVE',canAccept:false,saved:true,joined:true,replayed:true,receiptId:found.id,identityCertified:false,whatsAppAccessGranted:false};
  }
  return {
+  civilRead:(session,input)=>civilStore().read(session,input),civilPrepare:(session,input)=>civilStore().prepare(session,input),civilConsent:(session,input)=>civilStore().consent(session,input),civilDispatch:(session,input)=>civilStore().dispatch(session,input),civilRevokeConsent:(session,input)=>civilStore().revokeConsent(session,input),
   kycChatAttempt(session,context){participantContext(context);if(Object.keys(context).sort().join('|')!=='challengeId|projectId|scope|workerId'||!workspaceId(context.workerId)||!/^kyc_chat_[a-f0-9]{32}$/.test(context.challengeId||''))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return runIdentity(session,context,false,async(client,member,scope)=>{
    if(!canManageParticipants(member))await assertOwnParticipant(client,member,session,context.projectId,context.workerId);
    const rows=(await client.query(`SELECT ${columns},phone FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[context.workerId,context.projectId])).rows;
@@ -348,7 +352,7 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
     return found?{scope,state:'RECORDED',...await officeAssignmentOutcome(client,member,input,found,true)}:{scope,state:'NOT_OBSERVED',definitive:false};
    });
   },
-  async save(session,body){const input=participantCommand(body),context={projectId:input.projectId,scope:input.scope},p=input.payload;
+  async save(session,body){if(CIVIL_ACTIONS.includes(body?.action)){const command=civilParticipantCommand(body);return civilStore()[command.kind==='revoke'?'revokeConsent':command.kind](session,command.input);}const input=participantCommand(body),context={projectId:input.projectId,scope:input.scope},p=input.payload;
    if(input.action===VERIFIED_OFFICE_ACTION)return assignVerifiedOffice(session,input);
    if(PRIVATE_BANK_ACTIONS.includes(input.action)||input.action==='CANCEL_PENDING_PRIVATE_BANK_ACCOUNT')return run(session,context,true,(client,member,scope)=>savePrivateBankAccount(client,member,session,input,scope,{environment}));
    if(EMPLOYEE_INTAKE_ACTIONS.includes(input.action))return run(session,context,true,(client,member,scope,project)=>saveEmployeeIntake(client,member,scope,project,session,input,environment));
