@@ -8,6 +8,71 @@ import {digest} from '../src/lib/workspace-policy.mjs';
 import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
 import {metaCustomerContentDigest} from '../src/lib/meta-customer-callback.mjs';
 import {randomUUID} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
+import {planEmployeeIntakeConversation} from '../src/lib/meta-kyc-conversation.mjs';
+import {decodeSignedCustomerEvent} from '../src/lib/meta-customer-processing.mjs';
+
+const admittedGuidanceFixture=async()=>{
+ const f=employeeIntakeFixture(),s=await f.submit(),saved=await f.store.save(f.session,f.command('ADMIT_EMPLOYEE_INTAKE',{applicationId:s.applicationId,expectedRevision:s.revision,job:'WORKER',permissions:{attendance:false,report:false},confirmed:true})),worker=f.workers.get(saved.workerId);
+ await f.store.save(f.session,f.command('ASSIGN_EXISTING',{workerId:worker.id,revision:worker.revision,membershipId:'person-member',reason:'Asignación sintética revisada'}));
+ // A closed attempt marker supplies no authority to the generic intake reply.
+ worker.metadata.participant.kycChatChallenge={version:1,id:'kyc_chat_'+'1'.repeat(32),status:'CANCELLED'};
+ return {f,worker};
+};
+const assertAdmittedGuidance=reply=>{
+ assert.equal(reply.type,'text');assert.match(reply.body,/\n\nAbrí https:\/\/obrasaas\.com\/cuenta/);assert.match(reply.body,/Si te enviaron una invitación, aceptala desde tu correo/);assert.match(reply.body,/\n\nPara presentar identidad por este chat, pedile al responsable el mensaje IDENTIDAD vigente/);assert.match(reply.body,/esperá las indicaciones antes de enviar documentos/);assert.match(reply.body,/La identidad y los permisos se revisan por separado/);
+ assert.doesNotMatch(reply.body,/identidad (?:está |fue )?aprobada|permisos habilitados|(?:IDENTIDAD|VINCULAR) [A-Za-z0-9_-]{43}/);
+};
+async function priorAdmittedPlanner(){
+ const moduleUrl=new URL('../src/lib/meta-kyc-conversation.mjs',import.meta.url),source=await readFile(moduleUrl,'utf8'),pattern=/ADMITTED:'[^']*'/g;
+ assert.equal([...source.matchAll(pattern)].length,1);
+ const mutant=source.replace(pattern,"ADMITTED:'Tu ficha ya está registrada. Consultá el próximo paso en tu cuenta de ObraSaaS. La identidad y los permisos se revisan por separado.'").replace(/from (['"])(\.\.?\/[^'"]+)\1/g,(_all,_quote,relative)=>'from '+JSON.stringify(new URL(relative,moduleUrl).href));
+ return (await import('data:text/javascript;base64,'+Buffer.from(mutant).toString('base64'))).planEmployeeIntakeConversation;
+}
+
+test('registered own participation receives concrete guidance through the real bridge and reserved outbox without identity or permission changes',async()=>{
+ const {f,worker}=await admittedGuidanceFixture(),before={worker:structuredClone(worker),audits:structuredClone([...f.audits]),providers:f.controls.providerCalls};
+ assert.equal(worker.metadata.participant.status,'ACTIVE');assert.equal(worker.metadata.participant.kyc.status,'NOT_SUBMITTED');
+ for(const body of ['HOLA','AYUDA','ESTADO','MENU']){
+  const sends=f.controls.sends,outboundCount=f.outbounds.size,{context,result}=await f.execute(body),out=f.outbounds.get(customerOutboundId(context.eventId));
+  assertAdmittedGuidance(result.reply);assert.equal(result.businessApplied,false);assert.equal(result.identityStatus,'LIMITED_PARTICIPANT_INTAKE');assert.equal(f.controls.sends,sends+1);assert.equal(f.outbounds.size,outboundCount+1);assert.equal(out.outcome.state,'SENT');
+  const request=JSON.parse(decryptCustomerSecret(out.payload.encryptedPayload,{organizationId:f.connection.organizationId,projectId:f.connection.projectId,purpose:'outbound',resourceId:out.id},f.environment));
+  const inbound=decodeSignedCustomerEvent(f.events.get(context.eventId),f.connection,f.environment);assert.equal(request.channelPurpose,'EMPLOYEE_INTAKE');assert.deepEqual(request.message,result.reply);assert.equal(request.to,inbound.value.from);assert.equal(request.replyTo,inbound.value.id);
+  const stored=structuredClone(out);assert.deepEqual(await f.bridge.execute(context),result);assert.equal((await f.outbound.send(context,result.reply,{purpose:'EMPLOYEE_INTAKE'})).replayed,true);assert.equal(f.controls.sends,sends+1);assert.deepEqual(out,stored);
+ }
+ assert.deepEqual(f.workers.get(worker.id),before.worker);assert.deepEqual([...f.audits],before.audits);assert.equal(f.controls.providerCalls,before.providers);
+});
+
+test('the prior ADMITTED emitter fails the guidance control while its sealed historical reply and outbox remain replayable',async()=>{
+ const {f,worker}=await admittedGuidanceFixture(),prior=await priorAdmittedPlanner(),context=f.receive('HOLA'),legacyReply=prior({message:{type:'text',text:{body:'HOLA'}},state:f.state(),eventId:context.eventId}).reply;
+ assert.throws(()=>assertAdmittedGuidance(legacyReply),{code:'ERR_ASSERTION'});
+ const before=structuredClone(worker);
+ // Construct a sealed historical fixture from the prior emitter's real bytes.
+ // The current bridge/outbound still perform their complete current authority.
+ f.controls.afterDispatchWrite=async event=>{
+  assert.equal(event.id,context.eventId);const dispatch=event.payload.employeeIntakeDispatch,aad={organizationId:f.connection.organizationId,projectId:f.connection.projectId,purpose:'employee-intake-dispatch',resourceId:event.id},recorded=JSON.parse(decryptCustomerSecret(dispatch.encryptedResult,aad,f.environment));
+  recorded.reply=legacyReply;dispatch.replyDigest=digest(legacyReply);dispatch.encryptedResult=encryptCustomerSecret(JSON.stringify(recorded),aad,f.environment);
+ };
+ const current=await f.bridge.execute(context);f.controls.afterDispatchWrite=null;assertAdmittedGuidance(current.reply);
+ const sealed=structuredClone(f.events.get(context.eventId).payload),legacy=await f.bridge.execute(context);assert.deepEqual(legacy.reply,legacyReply);
+ const sends=f.controls.sends;await f.outbound.send(context,legacy.reply,{purpose:'EMPLOYEE_INTAKE'});assert.equal(f.controls.sends,sends+1);const out=structuredClone(f.outbounds.get(customerOutboundId(context.eventId)));
+ await assert.rejects(f.outbound.send(context,current.reply,{purpose:'EMPLOYEE_INTAKE'}),{code:'EMPLOYEE_INTAKE_INTEGRITY'});
+ assert.deepEqual(await f.bridge.execute(context),legacy);assert.equal((await f.outbound.send(context,legacy.reply,{purpose:'EMPLOYEE_INTAKE'})).replayed,true);assert.equal(f.controls.sends,sends+1);assert.deepEqual(f.events.get(context.eventId).payload,sealed);assert.deepEqual(f.outbounds.get(customerOutboundId(context.eventId)),out);assert.deepEqual(f.workers.get(worker.id),before);
+});
+
+test('registered guidance cannot reserve or send under a crossed project channel digest or lease',async()=>{
+ for(const patch of [{projectId:'other-project'},{channelId:'other-channel'},{payloadDigest:'b'.repeat(64)},{leaseToken:randomUUID()}]){
+  const {f,worker}=await admittedGuidanceFixture(),context=f.receive('HOLA'),wrong={...context,...patch},reply=planEmployeeIntakeConversation({message:{type:'text',text:{body:'HOLA'}},state:f.state(),eventId:context.eventId}).reply,before={worker:structuredClone(worker),events:structuredClone([...f.events]),audits:structuredClone([...f.audits]),outbounds:structuredClone([...f.outbounds]),sends:f.controls.sends,providers:f.controls.providerCalls};
+  await assert.rejects(f.bridge.execute(wrong),{code:'META_CUSTOMER_INBOX_LEASE_CHANGED'});await assert.rejects(f.outbound.send(wrong,reply,{purpose:'EMPLOYEE_INTAKE'}),{code:'META_CUSTOMER_INBOX_LEASE_CHANGED'});
+  assert.deepEqual(f.workers.get(worker.id),before.worker);assert.deepEqual([...f.events],before.events);assert.deepEqual([...f.audits],before.audits);assert.deepEqual([...f.outbounds],before.outbounds);assert.equal(f.controls.sends,before.sends);assert.equal(f.controls.providerCalls,before.providers);
+ }
+});
+
+test('registered guidance with lost provider ACK preserves its reservation and recovers without a second send',async()=>{
+ const {f,worker}=await admittedGuidanceFixture(),context=f.receive('HOLA'),result=await f.bridge.execute(context),before=structuredClone(worker),sends=f.controls.sends;assertAdmittedGuidance(result.reply);f.controls.loseSendAck=true;
+ const uncertain=await f.outbound.send(context,result.reply,{purpose:'EMPLOYEE_INTAKE'});assert.equal(uncertain.state,'SEND_UNKNOWN');assert.equal(f.controls.sends,sends+1);const out=structuredClone(f.outbounds.get(customerOutboundId(context.eventId)));f.controls.loseSendAck=false;
+ assert.deepEqual(await f.bridge.execute(context),result);const observed=await f.outbound.send(context,result.reply,{purpose:'EMPLOYEE_INTAKE'});assert.equal(observed.replayed,true);assert.equal(observed.state,'SEND_UNKNOWN');assert.equal(f.controls.sends,sends+1);assert.deepEqual(f.outbounds.get(customerOutboundId(context.eventId)),out);assert.deepEqual(f.workers.get(worker.id),before);
+});
 
 test('OFF is explicit and an unknown HOLA cannot create a person, actor or send',async()=>{
  const f=employeeIntakeFixture();await assert.rejects(f.execute('HOLA'),{code:'EMPLOYEE_INTAKE_DISABLED'});assert.equal(f.controls.sends,0);assert.equal(f.workers.size,0);assert.equal(f.audits.size,0);

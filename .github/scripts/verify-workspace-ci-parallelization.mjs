@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="8cbb6bb80b03e358d0f36ecb1acd0ce888a652671da31ca38b1f26da60452bb7";
+export const EXPECTED_CONTRACT_SHA256="b0b7efdedc983251fe022c91f3b07279d5941bbe0f7429225093d282431841f8";
 const POSTGRES_SERVICE_IMAGE='docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -36,6 +36,8 @@ const INTAKE_CONTINUITY_BASELINE_PRODUCERS={
 };
 const INTAKE_PLAIN_TEXT_UNIT_BASELINE_PRODUCER={producer:'scripts/verify-participant-bank-intake-contracts.mjs',path:'.vercel/participant-bank-intake-contract-evidence/proof.json',retained:true,blockId:53,lane:'contracts',sourceLine:57,producerSha256:'7066bea65970f0a8e959af59cb9ef7ded715b259aab9d58f3eeb7e2a514a736a',sourceBasis:'EXPECTED_HEAD_GIT_BYTES'};
 const KYC_RETRY_PREVIOUS_UNIT_PRODUCER_SHA256='b14443033c1e66c2baaa0048b13961216d46dc01ecc9916819e482fe239ddace';
+const ADMITTED_GUIDANCE_PREVIOUS_UNIT_PRODUCER_SHA256='e35b1b8138c1d47803600445ccd223dabc8fa4055de29d91a71ddeffdf6246f0';
+const ADMITTED_GUIDANCE_PREVIOUS_UNIT_TEST_COUNTS=Object.freeze({intake:91,total:285});
 const PORTFOLIO_BASELINE_BLOCKS_SHA256='fdb9d500f6e96981887bc1f7e74d55875c870239c198296466d4a362f63d68d7';
 const PORTFOLIO_BASELINE_OWNERSHIP_SHA256='81608969b6edbf08690ea31011d6c526f65bfae91468933e496f0cc52be5fab4';
 const PORTFOLIO_BASELINE_PRODUCERS_SHA256='f727810f0b923c95623fab858aa72da8ecccb21edded6278b972872aeb7a411e';
@@ -1008,7 +1010,7 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
    p.badTransform.fixtureSha256=hash(Buffer.from(readSource(p.badTransform.source).toString('utf8').replace(p.badTransform.needle,p.badTransform.replacement)));
   });
   if(spec.kind==='UNIT'){mutate('missing-suite','PROOF_UNIT_SUITES',p=>{p.suites.pop();});mutate('changed-tap-digest','PROOF_TAP_DIGEST',p=>{p.suites[4].tap.sha256='f'.repeat(64);});for(const names of [RECOVERY_CASES.slice(0,6),[...RECOVERY_CASES,'extra shadow case'],[...RECOVERY_CASES.slice(0,6),'wrong case']]){const bytes=tap(names),filename=proof.suites[4].tap.path,original=evidence.get(filename);evidence.set(filename,bytes);mutate('recovery-exact7-'+names.length+'-'+names.at(-1),'PROOF_UNIT_RESULTS',p=>{p.suites[4].tap={path:filename,bytes:bytes.length,sha256:hash(bytes)};});evidence.set(filename,original);}for(const key of ['fail','cancelled','skipped','todo']){const filename=proof.suites[4].tap.path,original=evidence.get(filename),bytes=Buffer.from(original.toString().replace('# '+key+' 0','# '+key+' 1'));evidence.set(filename,bytes);mutate('recovery-'+key,'PROOF_UNIT_RESULTS',p=>{p.suites[4].tap={path:filename,bytes:bytes.length,sha256:hash(bytes)};});evidence.set(filename,original);}}
-  const historicalSuiteCounts={...EXPECTED_SUITE_COUNTS,'tests/production-company-channel-kyc.test.mjs':76,'tests/production-participant-onboarding-next-step.test.mjs':35};
+  const historicalSuiteCounts={...EXPECTED_SUITE_COUNTS,'tests/production-employee-intake.test.mjs':ADMITTED_GUIDANCE_PREVIOUS_UNIT_TEST_COUNTS.intake,'tests/production-company-channel-kyc.test.mjs':76,'tests/production-participant-onboarding-next-step.test.mjs':35};
   if(spec.kind==='UNIT')for(const [file,count] of Object.entries(historicalSuiteCounts)){
    const index=TEST_SUITES.indexOf(file),filename=proof.suites[index].tap.path,original=evidence.get(filename);
    for(const size of [count-1,count+1]){const bytes=tap(Array.from({length:size},(_,i)=>'shadow exact suite '+i));evidence.set(filename,bytes);mutate('exact-suite-count-'+file+'-'+size,'PROOF_UNIT_RESULTS',p=>{p.suites[index]={file,exitCode:0,...parseTap(bytes),tap:{path:filename,bytes:bytes.length,sha256:hash(bytes)}};});}
@@ -1020,8 +1022,15 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
    const staleSpec={...spec,producerSha256:INTAKE_PLAIN_TEXT_UNIT_BASELINE_PRODUCER.producerSha256};bad('bank-intake-units-historical-pin-cannot-certify-current-plain-text-harness','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(staleSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:staleSpec.producerSha256})),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}));
    const previousSpec={...spec,producerSha256:KYC_RETRY_PREVIOUS_UNIT_PRODUCER_SHA256};bad('bank-intake-units-previous-current-pin-cannot-certify-rejected-retry-count','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(previousSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:previousSpec.producerSha256})),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}));
    const previousReplySpec={...spec,producerSha256:KYC_REPLY_PREVIOUS_UNIT_PRODUCER_SHA256};bad('bank-intake-units-previous-current-pin-cannot-certify-reply-feedback-count','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(previousReplySpec,Buffer.from(JSON.stringify({...proof,harnessSha256:previousReplySpec.producerSha256})),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}));
+   const previousGuidanceSpec={...spec,producerSha256:ADMITTED_GUIDANCE_PREVIOUS_UNIT_PRODUCER_SHA256};bad('bank-intake-units-previous-current-pin-cannot-certify-admitted-guidance-count','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(previousGuidanceSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:previousGuidanceSpec.producerSha256})),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}));
    const changed=clone(contract);changed.evidenceProducers.find(record=>record.path===spec.path).producerSha256=spec.producerSha256;bad('bank-intake-units-historical-record-cannot-be-overwritten','EXTENSION_PRODUCER_CONTRACT',()=>validateContract(changed));
    const intakeIndex=TEST_SUITES.indexOf('tests/production-employee-intake.test.mjs'),intakePath=proof.suites[intakeIndex].tap.path,intakeOriginal=evidence.get(intakePath),legacyIntakeTap=tap(Array.from({length:65},(_,i)=>'historical employee intake suite '+i));evidence.set(intakePath,legacyIntakeTap);mutate('plain-text-intake-legacy-sixty-five-tests','PROOF_UNIT_RESULTS',p=>{p.suites[intakeIndex]={file:TEST_SUITES[intakeIndex],exitCode:0,...parseTap(legacyIntakeTap),tap:{path:intakePath,bytes:legacyIntakeTap.length,sha256:hash(legacyIntakeTap)}};});evidence.set(intakePath,intakeOriginal);
+   const guidanceCount=EXPECTED_SUITE_COUNTS[TEST_SUITES[intakeIndex]];
+   for(const size of [ADMITTED_GUIDANCE_PREVIOUS_UNIT_TEST_COUNTS.intake,guidanceCount-1,guidanceCount+1]){
+    const bytes=tap(Array.from({length:size},(_,i)=>'admitted guidance suite '+i));evidence.set(intakePath,bytes);
+    mutate('admitted-guidance-exact-current-suite-count-'+size,'PROOF_UNIT_RESULTS',p=>{p.suites[intakeIndex]={file:TEST_SUITES[intakeIndex],exitCode:0,...parseTap(bytes),tap:{path:intakePath,bytes:bytes.length,sha256:hash(bytes)}};if(size===ADMITTED_GUIDANCE_PREVIOUS_UNIT_TEST_COUNTS.intake)assert.equal(p.suites.reduce((total,suite)=>total+suite.tests,0),ADMITTED_GUIDANCE_PREVIOUS_UNIT_TEST_COUNTS.total);});
+   }
+   evidence.set(intakePath,intakeOriginal);
    for(const [file,previous] of [['tests/production-company-channel-kyc.test.mjs',76],['tests/production-participant-onboarding-next-step.test.mjs',35]]){
     const count=EXPECTED_SUITE_COUNTS[file],index=TEST_SUITES.indexOf(file),filename=proof.suites[index].tap.path,original=evidence.get(filename);
     for(const size of [previous,count-1,count+1]){const bytes=tap(Array.from({length:size},(_,i)=>'current schema2 suite '+i));evidence.set(filename,bytes);mutate('current-suite-count-'+file+'-'+size,'PROOF_UNIT_RESULTS',p=>{p.suites[index]={file,exitCode:0,...parseTap(bytes),tap:{path:filename,bytes:bytes.length,sha256:hash(bytes)}};});}
