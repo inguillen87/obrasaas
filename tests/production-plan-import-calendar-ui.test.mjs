@@ -7,6 +7,7 @@ import {loadBindings,transform} from 'next/dist/build/swc/index.js';
 import {buildPlanCalendarSuggestions} from '../src/app/(identity)/cuenta/plan-import-calendar-suggestions.mjs';
 
 const helperUrl=new URL('../src/app/(identity)/cuenta/plan-import-calendar-suggestions.mjs',import.meta.url).href;
+const usageHelperUrl=new URL('../src/app/(identity)/cuenta/plan-import-usage-view.mjs',import.meta.url).href;
 const reactUrl=import.meta.resolve('react');
 const source=readFileSync(new URL('../src/app/(identity)/cuenta/plan-import-panel.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
 const context={projectId:'project-synthetic',scope:'a'.repeat(64),draftId:'draft-synthetic',revision:3,sourceSha256:'b'.repeat(64)};
@@ -16,7 +17,7 @@ const button=(tree,label)=>{const found=nodes(tree,node=>node.type==='button'&&R
 const inputs=tree=>nodes(tree,node=>node.type==='input');
 const hookCode='let states=[],refs=[],stateCursor=0,refCursor=0,cleanups=[];const useState=initial=>{const i=stateCursor++;if(!(i in states))states[i]=typeof initial==="function"?initial():initial;return [states[i],value=>{states[i]=typeof value==="function"?value(states[i]):value;}];};const useRef=initial=>{const i=refCursor++;return refs[i]??(refs[i]={current:initial});};const useEffect=fn=>{if(!cleanups.length)cleanups.push(fn());};const useCallback=fn=>fn;const styles={};';
 await loadBindings();
-async function compile(text,extra=''){const result=await transform('import React from '+JSON.stringify(reactUrl)+';import {calendarSuggestionBinding,buildPlanCalendarSuggestions,applyPlanCalendarSuggestions} from '+JSON.stringify(helperUrl)+';'+hookCode+text+extra,{filename:'calendar-real-component.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});return import('data:text/javascript;base64,'+Buffer.from(result.code).toString('base64'));}
+async function compile(text,extra=''){const result=await transform('import React from '+JSON.stringify(reactUrl)+';import {calendarSuggestionBinding,buildPlanCalendarSuggestions,applyPlanCalendarSuggestions} from '+JSON.stringify(helperUrl)+';import {planImportUsageView,planImportPreservation} from '+JSON.stringify(usageHelperUrl)+';'+hookCode+text+extra,{filename:'calendar-real-component.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});return import('data:text/javascript;base64,'+Buffer.from(result.code).toString('base64'));}
 const component=await compile(source.slice(source.indexOf('const calendarSkipLabels=')),'\nexport const reset=()=>{states=[];refs=[];cleanups=[];};export const render=props=>{stateCursor=0;refCursor=0;return PlanImportCalendarSuggestions(props);};export const unmount=()=>{cleanups.forEach(fn=>fn?.());};');
 function prepared(props){component.reset();let tree=component.render(props);inputs(tree)[0].props.onChange({target:{value:'2026-11-01'}});tree=component.render(props);inputs(tree)[1].props.onChange({target:{checked:true}});tree=component.render(props);button(tree,'Preparar lista de fechas').props.onClick();return component.render(props);}
 function confirmed(props){let tree=prepared(props);inputs(tree).at(-1).props.onChange({target:{checked:true}});return component.render(props);}

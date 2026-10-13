@@ -136,6 +136,7 @@ test('responsive chart motion has an explicit reduced motion override and scroll
 const panelSource=readFileSync(new URL('../src/app/(identity)/cuenta/plan-import-panel.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
 const stateNames=[...panelSource.matchAll(/\[([A-Za-z]+),set[A-Za-z]+\]=useState/g)].map(match=>match[1]);
 const panelHooks=`import React from ${JSON.stringify(reactUrl)};
+import {planImportUsageView,planImportPreservation} from ${JSON.stringify(new URL('../src/app/(identity)/cuenta/plan-import-usage-view.mjs',import.meta.url).href)};
 const styles={},stateNames=${JSON.stringify(stateNames)};
 let states=[],refs=[],stateCursor=0,refCursor=0,queue=[];
 const useState=initial=>{const index=stateCursor++;if(!(index in states))states[index]=initial;return [states[index],value=>{states[index]=typeof value==='function'?value(states[index]):value;}];};

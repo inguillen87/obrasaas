@@ -1,0 +1,76 @@
+name: Organization usage and recoverable plan imports
+on:
+  push:
+    branches: [master, 'feat/integral-worksite-included-usage-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      CUTOVER_TEST_DISPOSABLE: '1'
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Exact event source
+        run: node --input-type=module -e "import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';assert.equal(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),process.env.GITHUB_SHA);assert.equal(execFileSync('git',['status','--porcelain','--untracked-files=no'],{encoding:'utf8'}).trim(),'');"
+      - name: Included usage, commercial evidence and recoverable source contracts
+        run: node --test tests/production-organization-usage*.test.mjs tests/production-plan-import*.test.mjs tests/production-company-usage*.test.mjs tests/production-workspace-recovery-journal.test.mjs tests/production-meta-plan-import*.test.mjs
+      - name: Usage and actual import composition lint
+        run: npx eslint src/lib/organization-usage-*.mjs src/lib/plan-import-*.mjs src/lib/meta-plan-import-transport.mjs src/lib/meta-field-bridge.mjs src/lib/meta-customer-processing-runtime.mjs src/lib/company-channel-routing.mjs src/lib/worker-channel-identity.mjs src/app/api/identity/company-usage 'src/app/(identity)/cuenta/company-usage-panel.js' 'src/app/(identity)/cuenta/company-usage-view.mjs' 'src/app/(identity)/cuenta/company-subscription-panel.js' 'src/app/(identity)/cuenta/plan-import-panel.js' 'src/app/(identity)/cuenta/plan-import-usage-view.mjs' 'src/app/(identity)/cuenta/workspace-recovery-journal.mjs' scripts/verify-organization-usage*.mjs tests/production-organization-usage*.test.mjs tests/production-plan-import-usage*.test.mjs tests/production-company-usage*.test.mjs --max-warnings 0
+      - name: Native web and WhatsApp import fences, accounting and recovery
+        run: node scripts/verify-organization-usage-postgres.mjs
+      - name: Responsive usage and source preservation with owned IPC
+        run: node scripts/verify-organization-usage-ui.mjs --expected-head "$GITHUB_SHA" .vercel/private/organization-usage-evidence/browser.json
+      - name: Require exact source, complete native and UI cases and cleanup
+        run: node scripts/verify-organization-usage-ci.mjs --expected-head "$GITHUB_SHA"
+      - name: Preserve exact checked-out source
+        run: git diff --exit-code HEAD --
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: organization-usage-postgres-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            .vercel/private/organization-usage-postgres.json
+            .vercel/private/organization-usage-postgres-failure.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: organization-usage-ui-${{ github.sha }}-${{ github.run_attempt }}
+          path: .vercel/private/organization-usage-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: organization-usage-ci-${{ github.sha }}-${{ github.run_attempt }}
+          path: .vercel/private/organization-usage-ci.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7

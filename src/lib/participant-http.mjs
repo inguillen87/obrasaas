@@ -50,8 +50,13 @@ export function createParticipantHandlers({verify,store,join=false,scheduleOnboa
   }
   if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
   if(join){if(params.size!==1||params.getAll('invitationId').length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return reply(await store.join(session,{invitationId:params.get('invitationId')}));}
-  for(const key of params.keys())if(!['projectId','scope','after','intakeAfter','operationId','workerId','intakeId','imageId','detail','action','query','afterAccount','accountId','email','challengeId'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+  for(const key of params.keys())if(!['projectId','scope','after','intakeAfter','operationId','workerId','intakeId','imageId','detail','action','query','afterAccount','accountId','email','challengeId','submissionId'].includes(key)||params.getAll(key).length!==1)throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
   const context={projectId:params.get('projectId'),scope:params.get('scope')};if(!workspaceId(context.projectId)||!/^[a-f0-9]{64}$/.test(context.scope||''))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+  if(params.get('detail')==='ocr-usage'){
+   const keys=['projectId','scope','detail','workerId','submissionId','operationId'];if(params.size!==keys.length||keys.some(key=>!params.has(key))||!workspaceId(params.get('workerId'))||!workspaceId(params.get('submissionId'))||!operationId(params.get('operationId')))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
+   return reply(await store.status(session,{...context,workerId:params.get('workerId'),submissionId:params.get('submissionId'),operationId:params.get('operationId').toLowerCase()}));
+  }
+  if(params.has('submissionId'))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
   if(params.get('detail')==='kyc-chat-attempt'){
    const keys=['projectId','scope','detail','workerId','challengeId'];if(params.size!==keys.length||keys.some(key=>!params.has(key))||!workspaceId(params.get('workerId'))||!/^kyc_chat_[a-f0-9]{32}$/.test(params.get('challengeId')||''))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');
    return reply(await store.kycChatAttempt(session,{...context,workerId:params.get('workerId'),challengeId:params.get('challengeId')}));

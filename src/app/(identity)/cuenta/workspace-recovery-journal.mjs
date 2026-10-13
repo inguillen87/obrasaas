@@ -250,6 +250,12 @@ export function recoveryResult(entry, result) {
   if(entry.resource==='project-preparation')return projectPreparationReceiptOutcome(result,entry);
   if(entry.resource==='plan-import') {
     if(result.projectId!==entry.projectId)return null;
+    // A usage reservation is a separate durable observation. Expiring the
+    // source-processing lease never proves that its external effect or cost
+    // was absent. Keep the original reference for readonly recovery.
+    const usage=result.draft?.usage;
+    if(result.draft&&Object.hasOwn(result.draft,'usage')&&(!usage||typeof usage!=='object'||Array.isArray(usage)||Object.keys(usage).sort().join('|')!=='coverageState|receiptId|state|version'||usage.version!==1||!/^organization_usage_[a-f0-9]{64}$/.test(usage.receiptId||'')||!['RESERVED','DISPATCHED','UNKNOWN','OBSERVED','UNMEASURED'].includes(usage.state)||!['TRIAL_CURRENT','PAID_PERIOD_OBSERVED','EXPIRED','UNCONFIRMED'].includes(usage.coverageState)))return null;
+    const usagePending=usage&&['RESERVED','DISPATCHED','UNKNOWN'].includes(usage.state);
     if(result.state==='REJECTED'&&result.proof==='AUDITED_UPLOAD'){
       if(Object.keys(result).sort().join('|')!=='action|code|definitive|inputDigest|operationId|phase|projectId|proof|receiptId|recordedAt|replayed|reservationStarted|saved|scope|state|taskEffects|taskSnapshots|tasks'||entry.action!=='UPLOAD'||result.action!=='UPLOAD'||result.operationId!==entry.operationId||result.inputDigest!==entry.inputDigest||!/^[a-f0-9]{64}$/.test(result.inputDigest||'')||result.saved!==false||result.definitive!==true||result.reservationStarted!==false||result.taskEffects!==false||result.phase!=='PRE_RESERVATION'||!planUploadCodes.includes(result.code)||!/^plan_receipt_[a-f0-9]{64}$/.test(result.receiptId||'')||typeof result.replayed!=='boolean'||typeof result.recordedAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(result.recordedAt)||!Number.isFinite(Date.parse(result.recordedAt))||new Date(result.recordedAt).toISOString()!==result.recordedAt||!Array.isArray(result.tasks)||result.tasks.length||!Array.isArray(result.taskSnapshots)||result.taskSnapshots.length)return null;
       return {state:'REJECTED',phase:'PRE_RESERVATION',proof:'AUDITED_UPLOAD',receiptId:result.receiptId,code:result.code};
@@ -261,12 +267,13 @@ export function recoveryResult(entry, result) {
     if(result.state==='EXPIRED'){
       const draft=result.draft,expiry=draft?.processingExpiresAt;
       if(Object.keys(result).sort().join('|')!=='definitive|draft|operationId|projectId|saved|scope|state'||result.operationId!==entry.operationId||result.saved!==false||result.definitive!==true||!id(draft?.id)||!Number.isSafeInteger(draft.revision)||draft.revision<1||!Array.isArray(draft.rows)||!['UPLOADING','PROCESSING'].includes(draft.status)||draft.processingExpired!==true||typeof expiry!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(expiry)||!Number.isFinite(Date.parse(expiry))||new Date(expiry).toISOString()!==expiry||Date.parse(expiry)>Date.now())return null;
-      return {state:'EXPIRED',draftId:draft.id};
+      return usagePending?{state:'PROCESSING'}:{state:'EXPIRED',draftId:draft.id};
     }
     if(result.state==='REJECTED'&&result.operationId===entry.operationId&&result.definitive===true&&result.saved===false&&result.reservationStarted===false&&result.phase==='PRE_RESERVATION'&&['PLAN_IMPORT_FILE_INVALID','PLAN_IMPORT_FILE_TOO_LARGE'].includes(result.code)&&Object.keys(result).sort().join('|')==='code|definitive|operationId|phase|projectId|reservationStarted|saved|scope|state')return {state:'REJECTED',code:result.code};
     if(result.state==='NOT_OBSERVED'&&result.definitive===false&&!result.draft&&!result.receiptId)return {state:'NOT_OBSERVED'};
     const draft=result.draft;
     if(!(result.state==='RECORDED'||result.saved===true)||!id(draft?.id)||!Number.isSafeInteger(draft.revision)||draft.revision<1||!Array.isArray(draft.rows)||!['UPLOADING','PROCESSING','READY','FAILED','APPLIED','REJECTED'].includes(draft.status))return null;
+    if(usagePending)return {state:'PROCESSING'};
     if(result.receiptId!==undefined){
       if(result.saved!==true||!id(result.receiptId)||!['EDIT','APPLY','REJECT'].includes(result.action)||draft.status!==({EDIT:'READY',APPLY:'APPLIED',REJECT:'REJECTED'})[result.action]||!Array.isArray(result.tasks))return null;
       return {state:'RECORDED',receiptId:result.receiptId};

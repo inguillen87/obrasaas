@@ -21,22 +21,33 @@ function fixture(){
 function rejected(mutate){const input=fixture();mutate(input);assert.throws(()=>validateConsumptionFeedbackCi(input),{code:'CONSUMPTION_FEEDBACK_CI_REJECTED'});}
 
 test('CI validator accepts the complete exact native/browser contracts without running either producer',()=>{
- assert.equal(native.files.length,100);assert.equal(browser.files.length,17);
+ assert.equal(native.files.length,102);assert.equal(browser.files.length,17);
  const input=fixture(),before=JSON.stringify(input),result=validateConsumptionFeedbackCi(input);
- assert.equal(JSON.stringify(input),before);assert.equal(result.version,CONSUMPTION_FEEDBACK_CI_VERSION);assert.equal(result.status,'PASS');assert.equal(result.sourceRevision,head);assert.equal(result.postgres.totalCheckCount,15);assert.equal(result.postgres.sourceCount,100);assert.equal(result.ui.totalCheckCount,12);assert.equal(result.productionLoginVerified,false);assert.equal(result.productionDataWritten,false);assert.equal(result.providerCalls,0);
+ assert.equal(JSON.stringify(input),before);assert.equal(result.version,CONSUMPTION_FEEDBACK_CI_VERSION);assert.equal(result.status,'PASS');assert.equal(result.sourceRevision,head);assert.equal(result.postgres.totalCheckCount,15);assert.equal(result.postgres.sourceCount,102);assert.equal(result.ui.totalCheckCount,12);assert.equal(result.productionLoginVerified,false);assert.equal(result.productionDataWritten,false);assert.equal(result.providerCalls,0);
 });
 test('current signed KYC reply imports require their exact immutable source bytes',()=>{
  for(const file of ['src/lib/meta-kyc-identity.mjs','src/lib/meta-kyc-rejection-policy.mjs','src/lib/meta-kyc-rejection.mjs']){
   assert.equal(native.files.filter(source=>source===file).length,1);
   rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);});
-  rejected(input=>{const ref=input.postgres.sourceManifest.find(ref=>ref.path===file);ref.path='src/lib/foreign-kyc-reply-source.mjs';assert.equal(input.postgres.sourceManifest.length,100);});
+  rejected(input=>{const ref=input.postgres.sourceManifest.find(ref=>ref.path===file);ref.path='src/lib/foreign-kyc-reply-source.mjs';assert.equal(input.postgres.sourceManifest.length,102);});
   rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
   rejected(input=>{delete input.gitSources[file];});
  }
 });
 test('the historical 97-source receipt cannot certify the current signed reply reader',()=>{
- const additions=['src/lib/meta-kyc-identity.mjs','src/lib/meta-kyc-rejection-policy.mjs','src/lib/meta-kyc-rejection.mjs'];
+ const additions=['src/lib/meta-kyc-identity.mjs','src/lib/meta-kyc-rejection-policy.mjs','src/lib/meta-kyc-rejection.mjs','src/lib/organization-usage-policy.mjs','src/lib/organization-resource-usage-policy.mjs'];
  rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>!additions.includes(ref.path));assert.equal(input.postgres.sourceManifest.length,97);});
+});
+test('current usage policy cannot be omitted, substituted or certified by a historical 100-source receipt',()=>{
+ const files=['src/lib/organization-usage-policy.mjs','src/lib/organization-resource-usage-policy.mjs'];
+ for(const file of files){
+  assert.equal(native.files.filter(source=>source===file).length,1);
+  rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);assert.equal(input.postgres.sourceManifest.length,101);});
+  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-usage-policy.mjs';assert.equal(input.postgres.sourceManifest.length,102);});
+  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
+  rejected(input=>{delete input.gitSources[file];});
+ }
+ rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>!files.includes(ref.path));assert.equal(input.postgres.sourceManifest.length,100);});
 });
 test('stale, abbreviated or foreign HEAD/tree provenance fails even when proof status says PASS',()=>{
  for(const key of ['expectedHead','head','sourceTree'])rejected(input=>{input[key]='c'.repeat(40);});

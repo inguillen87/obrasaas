@@ -1,0 +1,7 @@
+import {WorkspaceError,requireWorkspaceIdentity} from './workspace-policy.mjs';
+const headers={'Cache-Control':'private, no-store, max-age=0','Vary':'Cookie, Authorization','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow, noarchive'};
+const reply=(body,status=200)=>Response.json(body,{status,headers});
+export function createOrganizationUsageHandlers({verifySession,store}){
+ if(typeof verifySession!=='function'||typeof store?.read!=='function')throw new TypeError('Canonical usage composition required');
+ return {GET:async request=>{try{if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);const session=await verifySession(request.headers);if(!session?.authenticated&&['IDENTITY_PROVIDER_UNAVAILABLE','IDENTITY_CONFIGURATION_PENDING'].includes(session?.code))throw new WorkspaceError('IDENTITY_PROVIDER_UNAVAILABLE',503);requireWorkspaceIdentity(session);if(request.headers.get('sec-fetch-site')==='cross-site')throw new WorkspaceError('WORKSPACE_ORIGIN_REJECTED',403);const params=new URL(request.url).searchParams;if(params.size!==1||params.getAll('scope').length!==1||!/^[a-f0-9]{64}$/.test(params.get('scope')||''))throw new WorkspaceError('ORGANIZATION_USAGE_INPUT_INVALID',400);return reply(await store.read(session,{scope:params.get('scope')}));}catch(error){return reply({code:error instanceof WorkspaceError?error.code:'ORGANIZATION_USAGE_UNCONFIRMED'},error instanceof WorkspaceError?error.status:503);}}};
+}
