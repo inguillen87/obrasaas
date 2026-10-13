@@ -1,4 +1,4 @@
-import {digest,WorkspaceError,workspaceId} from './workspace-policy.mjs';
+import {digest,WorkspaceError,workspaceId,calendarDate} from './workspace-policy.mjs';
 import {FIELD_NOTICE,fieldTransition} from './field-operations-policy.mjs';
 import {siteText,siteQuantity,MATERIAL_UNITS} from './site-register-policy.mjs';
 import {normalizeProgressMeasurementQuantity,parseProgressMeasurementQuantity} from './progress-measurement-quantity.js';
@@ -9,8 +9,8 @@ import {startMetaPlanImportConversation,continueMetaPlanImportConversation} from
 import {voiceProgressDraftForEvidence,prepareVoiceProgressDraft,voiceProgressDraftReady,UNKNOWN_VOICE_VALUE,voiceQuantityScopeLabel,voiceProgressQuantityLabel,voiceProgressUnitLabel} from './voice-progress-draft.mjs';
 import {deriveTaskMeasurement} from './task-progress-measurement.js';
 
-const menuOptions=[['ATTEND_IN','Entrada'],['ATTEND_PAUSE','Iniciar pausa'],['ATTEND_RESUME','Volver de pausa'],['ATTEND_OUT','Salida'],['TASKS','Mis tareas'],['MEDIA','Enviar evidencia'],['INCIDENT','Informar incidencia'],['MATERIAL','Pedir material'],['CONSUMPTION','Proponer consumo'],['PROGRESS','Proponer avance'],['PLAN_IMPORT','Importar cronograma'],['STATUS','Consultar estado']];
-const aliases={MENU:'MENU',AYUDA:'MENU',HOLA:'MENU',ENTRADA:'ATTEND_IN',PAUSA:'ATTEND_PAUSE',VOLVER:'ATTEND_RESUME',SALIDA:'ATTEND_OUT',TAREAS:'TASKS',EVIDENCIA:'MEDIA',INCIDENCIA:'INCIDENT',MATERIALES:'MATERIAL',CONSUMO:'CONSUMPTION',CONSUMOS:'OWN_CONSUMPTIONS',AVANCE:'PROGRESS',CRONOGRAMA:'PLAN_IMPORT',GANTT:'PLAN_IMPORT',ESTADO:'STATUS',CANCELAR:'MENU'};
+const menuOptions=[['ATTEND_IN','Entrada'],['ATTEND_PAUSE','Iniciar pausa'],['ATTEND_RESUME','Volver de pausa'],['ATTEND_OUT','Salida'],['TASKS','Cronograma y tareas'],['MEDIA','Enviar evidencia'],['INCIDENT','Informar incidencia'],['MATERIAL','Pedir material'],['CONSUMPTION','Proponer consumo'],['PROGRESS','Proponer avance'],['PLAN_IMPORT','Importar cronograma'],['STATUS','Consultar estado']];
+const aliases={MENU:'MENU',AYUDA:'MENU',HOLA:'MENU',ENTRADA:'ATTEND_IN',PAUSA:'ATTEND_PAUSE',VOLVER:'ATTEND_RESUME',SALIDA:'ATTEND_OUT',TAREAS:'TASKS',CRONOGRAMA:'TASKS',GANTT:'TASKS','IMPORTAR CRONOGRAMA':'PLAN_IMPORT','IMPORTAR PLAN':'PLAN_IMPORT',EVIDENCIA:'MEDIA',INCIDENCIA:'INCIDENT',MATERIALES:'MATERIAL',CONSUMO:'CONSUMPTION',CONSUMOS:'OWN_CONSUMPTIONS',AVANCE:'PROGRESS',ESTADO:'STATUS',CANCELAR:'MENU'};
 export const metaFieldConversationAction=body=>typeof body==='string'?aliases[body.trim().toUpperCase()]||null:null;
 const attendanceEvents={ATTEND_IN:'CHECK_IN',ATTEND_PAUSE:'BREAK_START',ATTEND_RESUME:'BREAK_END',ATTEND_OUT:'CHECK_OUT'};
 const journeyExplanation={ATTENDANCE_SHIFT_ALREADY_OPEN:'Ya tenés una jornada abierta.',ATTENDANCE_SHIFT_NOT_OPEN:'Primero registrá una entrada.',ATTENDANCE_BREAK_ALREADY_OPEN:'Tu pausa ya está abierta. Registrá el regreso de pausa para continuar.',ATTENDANCE_BREAK_NOT_OPEN:'No hay una pausa abierta.',ATTENDANCE_BREAK_OPEN:'Registrá el regreso de pausa antes de la salida.'};
@@ -28,12 +28,34 @@ function chooseSector(state,eventId,facts){
  if(offset>0)rows.push(['PREVIOUS_SECTORS','Sectores anteriores']);if(offset+8<facts.sectors.length)rows.push(['NEXT_SECTORS','Más sectores']);
  return choices({...state,step:'SECTOR',sectorOffset:offset},eventId,'Elegí el sector donde estás trabajando.',rows);
 }
+function compactReadText(value,limit){if(limit<=0)return '';const source=typeof value==='string'?value.trim().replace(/\s+/g,' '):'';if(source.length<=limit)return source;let result='';for(const character of source){if(result.length+character.length>=limit)break;result+=character;}return result+'…';}
+const taskProgress=task=>typeof task.progress==='number'&&Number.isFinite(task.progress)&&task.progress>=0&&task.progress<=100?String(task.progress)+'%':'sin confirmar';
+const taskDates=task=>calendarDate(task.startsOn)&&calendarDate(task.endsOn)&&task.endsOn>=task.startsOn?task.startsOn+' → '+task.endsOn:task.startsOn==null&&task.endsOn==null?'Sin fechas previstas':'Fechas por revisar';
+const taskStates={BACKLOG:'Pendiente',IN_PROGRESS:'En curso',BLOCKED:'Bloqueada',DONE:'Finalizada'};
+const taskState=task=>Object.hasOwn(taskStates,task.status)?taskStates[task.status]:'Estado por confirmar';
+function scheduleReadBody(facts,detail='',draftInstruction=''){
+ const tasks=facts.tasks.slice(0,8),page=facts.taskPage||{},limit=Number.isSafeInteger(facts.replyBodyLimit)&&facts.replyBodyLimit>=0&&facts.replyBodyLimit<=1024?facts.replyBodyLimit:1024;
+ const summary=titleLimit=>'Cronograma y tareas · '+compactReadText(facts.projectName,40)+'\n'+(tasks.length?tasks.map((task,index)=>(index+1)+'. '+compactReadText(task.title,titleLimit)+' · '+taskDates(task)+' · '+taskProgress(task)).join('\n'):'No hay tareas en esta consulta.')+'\nFechas previstas · avance registrado.\n'+(page.hasPrevious||page.hasNext?draftInstruction?'Vista parcial de la obra.':'Vista parcial: recorré las páginas.':'Tareas de esta consulta.');
+ const instruction=draftInstruction||'\nElegí una tarea para consultar su estado.',contentLimit=Math.max(0,limit-instruction.length);
+ let body=detail||summary(16);
+ // Reserve the original draft instructions before shortening titles or adding
+ // an optional link. Dates and progress for all eight tasks keep priority.
+ if(!detail)for(const titleLimit of [12,8,4]){if(body.length<=contentLimit)break;body=summary(titleLimit);}
+ if(body.length>contentLimit)body=compactReadText(body,contentLimit);
+ // This local hint is supplied by the signed bridge; Cuenta rechecks access.
+ const link=!facts.attendanceOnly&&workspaceId(facts.projectId)?'\nGantt completo: https://obrasaas.com/cuenta?'+new URLSearchParams({obra:facts.projectId})+'#schedule-gantt-title':'';
+ if(body.length+link.length+instruction.length<=limit)body+=link;
+ return body+(instruction.length<=limit-body.length?instruction:compactReadText(instruction,Math.max(0,limit-body.length)));
+}
+const limitedTaskRead=state=>({state:state||null,...(state?{preserveConversation:true}:{}),reply:text('Este piloto sólo habilita jornada y su estado. Escribí MENU o ESTADO para continuar. La consulta del cronograma no está habilitada por este canal.')});
 function chooseTask(state,eventId,facts,detail=''){
  const optional=['INCIDENT','MATERIAL','CONSUMPTION'].includes(state.purpose),limit=optional?7:8,page=facts.taskPage||{hasPrevious:false,hasNext:false},tasks=facts.tasks.slice(0,limit);
+ if(state.purpose==='TASKS'&&facts.attendanceOnly)return limitedTaskRead(null);
+ if(state.purpose==='TASKS'&&!tasks.length)return {state:null,reply:text(scheduleReadBody(facts))};
  if(!tasks.length&&!optional)return {state:null,reply:text('No hay tareas disponibles en esta página. Escribí TAREAS para consultar la obra desde el inicio.')};
  const rows=[...(optional?[['NONE','Sin tarea asociada']]:[]),...tasks.map(t=>[t.id,t.title,t.title+' · '+t.progress+'%'])];
  if(page.hasPrevious)rows.push(['PREVIOUS_TASKS','Tareas anteriores']);if(page.hasNext)rows.push(['NEXT_TASKS','Más tareas']);
- return choices({...state,step:'TASK',taskPage:page},eventId,detail||(state.purpose==='TASKS'?'Tareas de '+facts.projectName+'\nElegí una para consultar su avance, o recorré las páginas.':'Elegí la tarea de este registro. Podés recorrer todas las páginas.'),rows);
+ return choices({...state,step:'TASK',taskPage:page},eventId,state.purpose==='TASKS'?scheduleReadBody(facts,detail):detail||'Elegí la tarea de este registro. Podés recorrer todas las páginas.',rows);
 }
 function consumptionMaterials(state,eventId,facts){const materials=facts.inventory?.materials?.filter(m=>m.active)||[];if(!materials.length)return {state:null,reply:text('El responsable debe configurar el catálogo antes de proponer consumo. El stock no cambió.')};const offset=state.materialOffset||0,rows=materials.slice(offset,offset+8).map(m=>[m.id,m.name+' · '+m.unit]);if(offset>0)rows.push(['PREVIOUS','Materiales anteriores']);if(offset+8<materials.length)rows.push(['NEXT','Más materiales']);return choices({...state,step:'CONSUMPTION_MATERIAL',materialOffset:offset},eventId,'Elegí el material del catálogo. La propuesta requiere revisión antes de descontar stock.',rows);}
 const consumptionState=state=>({PENDING:'Pendiente de revisión',APPROVED:'Aprobado',REJECTED:'Rechazado',REVERSED:'Revertido'}[state]||'Estado no confirmado');
@@ -136,11 +158,13 @@ export function planMetaFieldConversation({message,state,eventId,facts,now}){
 function planConversation({message,state,eventId,facts,now}){
  const body=message.type==='text'?message.text?.body?.trim():null;
  const active=state?.version===1&&Date.parse(state.expiresAt)>now.getTime()?state:null;
+ const alias=metaFieldConversationAction(body);
+ if((alias==='TASKS'||!alias&&active?.purpose==='TASKS')&&facts.attendanceOnly)return limitedTaskRead(active);
+ if(alias==='TASKS'&&active&&!['MENU','TASKS'].includes(active.purpose))return {state:active,preserveConversation:true,reply:text(scheduleReadBody(facts,'','\nConservamos el borrador y su mensaje original. Respondé a ese paso para continuar; esta consulta no guarda ni extrae otro archivo.'+(active.purpose==='PLAN_IMPORT'&&active.step==='PLAN_IMPORT_AUTHORIZED'?' El archivo ya fue autorizado: comprobá el mismo intento desde Cuenta.':'')))};
  // A greeting is a read, never a replacement prompt for an open draft.
  // Keep its exact nonce, expiry and durable origin; authorization is resolved
  // by the signed bridge and purpose permissions still gate continuation.
  if(body?.toUpperCase()==='HOLA'&&active&&active.purpose!=='MENU')return active.purpose==='PLAN_IMPORT'&&active.step==='PLAN_IMPORT_AUTHORIZED'?continueMetaPlanImportConversation({message,state:active,eventId,facts,now}):{state:active,preserveConversation:true,reply:text(permits(active.purpose,facts)?'Conservamos el borrador. Respondé al mensaje original del paso para continuar, o con CANCELAR para descartarlo.':'El permiso para este borrador cambió. Pedí al responsable que revise tus permisos. Conservamos el borrador; no registramos operaciones.')};
- const alias=metaFieldConversationAction(body);
  if(alias==='STATUS'&&active&& !['MENU','OWN_CONSUMPTIONS'].includes(active.purpose))return {state:active,preserveConversation:true,consumptionRead:facts.permissions.report===true&&Boolean(facts.ownConsumptions),reply:text(statusReply(facts)+'\nConservamos el borrador. Para recorrer tus consumos, cancelalo explícitamente con CANCELAR y abrí ESTADO → Mis consumos.')};
  if(alias==='OWN_CONSUMPTIONS'&&active&&!['MENU','OWN_CONSUMPTIONS'].includes(active.purpose))return {state:active,preserveConversation:true,reply:text('Conservamos el borrador actual. Escribí CANCELAR y abrí ESTADO → Mis consumos para consultar tus informes sin descartar un registro por accidente.')};
  if(active?.purpose==='PLAN_IMPORT'){
@@ -171,7 +195,7 @@ function planConversation({message,state,eventId,facts,now}){
   if(!selected)return {state:active,reply:text('Elegí una tarea en el menú anterior, o escribí CANCELAR.')};
   if(['NEXT_TASKS','PREVIOUS_TASKS'].includes(selected))return chooseTask(s,eventId,facts);
   s.taskId=selected==='NONE'?null:selected;const task=facts.tasks.find(t=>t.id===s.taskId);if(s.taskId&&!task)throw new WorkspaceError('WORKSPACE_TASK_UNAVAILABLE',404);s.taskRevision=task?.revision||null;
-  if(s.purpose==='TASKS'){delete s.taskId;delete s.taskRevision;return chooseTask(s,eventId,facts,task.title+'\nAvance aprobado: '+task.progress+'%.'+(task.measurement?'\nMetrado aprobado: '+voiceProgressQuantityLabel(task.measurement.executed)+' / '+voiceProgressQuantityLabel(task.measurement.baseline)+' '+voiceProgressUnitLabel(task.measurement.unit)+'.':'')+'\nEl avance cambia sólo después de la revisión del responsable. Elegí otra tarea o escribí MENU.');}
+  if(s.purpose==='TASKS'){delete s.taskId;delete s.taskRevision;return chooseTask(s,eventId,facts,compactReadText(task.title,160)+'\n'+taskDates(task)+'\nEstado registrado: '+taskState(task)+'\nAvance registrado: '+taskProgress(task)+'.'+(task.measurement?'\nMetrado aprobado: '+voiceProgressQuantityLabel(task.measurement.executed)+' / '+voiceProgressQuantityLabel(task.measurement.baseline)+' '+voiceProgressUnitLabel(task.measurement.unit)+'.':'')+'\nEl avance cambia sólo después de la revisión del responsable.');}
   return chooseSector(s,eventId,facts);
  }
  if(s.step==='SECTOR'){

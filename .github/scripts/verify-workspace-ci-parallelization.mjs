@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="257a4d6d423bf9aa4407d59a11c39173e87c2fa38ea1c7b8eeb3df1b1ae20f05";
+export const EXPECTED_CONTRACT_SHA256="e67e56aecc4561e68ecbe1efbdf38e2086ced1bd8b1cf3d2e1b54fc04064edc0";
 const POSTGRES_SERVICE_IMAGE='docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -151,6 +151,7 @@ const WHATSAPP_PLAN_IMPORT_PREVIOUS_SOURCE_COUNTS={UNIT:111,UI_BANK:108,UI_JOINT
 const WHATSAPP_PLAN_IMPORT_TEST_FILES=['tests/production-meta-plan-import-conversation.test.mjs','tests/production-meta-plan-source-provider.test.mjs','tests/production-meta-plan-import-transport.test.mjs','tests/production-plan-import-link-ui.test.mjs'];
 const WHATSAPP_PLAN_IMPORT_TEST_SOURCE_PATHS=[...WHATSAPP_PLAN_IMPORT_TEST_FILES,'tests/fixtures/meta-plan-import-transport-synthetic.mjs','tests/fixtures/own-company-runtime.mjs'];
 const EXPIRY_FEEDBACK_PREVIOUS_OWN_RUNTIME_FIXTURE_SHA256='6e734325c36db9e9d957699632a9b5b6d551cd22533a26eff8f55d388a3d92aa';
+const SCHEDULE_READ_PREVIOUS_PLAN_TRANSPORT_TEST_SHA256='5d7b26ad5f9c4ee980c4a47774919b525cd16dbe63df405a8e87abd98d6f3cee';
 const WHATSAPP_PLAN_IMPORT_LINT_SOURCES=['src/lib/meta-plan-import-*.mjs',...WHATSAPP_PLAN_IMPORT_TEST_FILES,'tests/fixtures/meta-plan-import-transport-synthetic.mjs'];
 const whatsappPlanImportDependenciesFor=kind=>WHATSAPP_PLAN_IMPORT_DEPENDENCIES[kind]||[];
 // These CURRENT additions follow the actual plan/analyzer and account graphs.
@@ -931,6 +932,7 @@ function whatsappPlanImportContractSelftest(workflow,contract,root){
  denied('previous-transport-fixture-pin-cannot-certify-usage','WHATSAPP_PLAN_IMPORT_TEST_SOURCE_HASH',()=>{const previous=clone(contract);previous.whatsappPlanImport.testSources.find(source=>source.path==='tests/fixtures/meta-plan-import-transport-synthetic.mjs').sha256=ORGANIZATION_USAGE_PREVIOUS_TRANSPORT_FIXTURE_SHA256;verifyWhatsappPlanTestSources(previous,readSource);});
  denied('previous-link-test-pin-cannot-certify-usage','WHATSAPP_PLAN_IMPORT_TEST_SOURCE_HASH',()=>{const previous=clone(contract);previous.whatsappPlanImport.testSources.find(source=>source.path==='tests/production-plan-import-link-ui.test.mjs').sha256=ORGANIZATION_USAGE_PREVIOUS_LINK_TEST_SHA256;verifyWhatsappPlanTestSources(previous,readSource);});
  denied('previous-own-runtime-fixture-pin-cannot-certify-expiry','WHATSAPP_PLAN_IMPORT_TEST_SOURCE_HASH',()=>{const previous=clone(contract);previous.whatsappPlanImport.testSources.find(source=>source.path==='tests/fixtures/own-company-runtime.mjs').sha256=EXPIRY_FEEDBACK_PREVIOUS_OWN_RUNTIME_FIXTURE_SHA256;verifyWhatsappPlanTestSources(previous,readSource);});
+ denied('previous-plan-transport-test-pin-cannot-certify-schedule-read','WHATSAPP_PLAN_IMPORT_TEST_SOURCE_HASH',()=>{const previous=clone(contract);previous.whatsappPlanImport.testSources.find(source=>source.path==='tests/production-meta-plan-import-transport.test.mjs').sha256=SCHEDULE_READ_PREVIOUS_PLAN_TRANSPORT_TEST_SHA256;verifyWhatsappPlanTestSources(previous,readSource);});
  for(const source of contract.whatsappPlanImport.testSources){
   const altered=clone(contract);altered.whatsappPlanImport.testSources.find(entry=>entry.path===source.path).sha256='f'.repeat(64);
   denied('test-source-pin-changed-denied-'+source.path,'WHATSAPP_PLAN_IMPORT_TEST_SOURCE_HASH',()=>verifyWhatsappPlanTestSources(altered,readSource));

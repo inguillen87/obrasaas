@@ -181,7 +181,7 @@ test('development pilot cannot reuse corporate full-media dispatch',async()=>{
 test('report-only menus expose full reports and never attendance or office review',()=>{
  const facts={projectName:'Obra B',workerId:'worker-b',permissions:{attendance:false,report:true},attendanceOnly:false,latest:null,tasks:[{id:'task-b',title:'Task B',progress:0}],sectors:[{id:'sector-b',name:'Sector B'}],inventory:{materials:[{id:'material-b',active:true}]},evidence:[],proposals:[]};
  const menu=planMetaFieldConversation({message:{type:'text',text:{body:'MENU'}},facts,eventId:'menu'}),titles=menu.reply.sections[0].rows.map(r=>r.title);
- for(const title of ['Mis tareas','Enviar evidencia','Informar incidencia','Pedir material','Proponer consumo','Proponer avance','Consultar estado'])assert.ok(titles.includes(title));
+ for(const title of ['Cronograma y tareas','Enviar evidencia','Informar incidencia','Pedir material','Proponer consumo','Proponer avance','Consultar estado'])assert.ok(titles.includes(title));
  assert.ok(!titles.includes('Entrada'));assert.ok(!titles.some(t=>/aprobar|roles|banco|KYC/i.test(t)));assert.ok(titles.length<=10);
  const denied=planMetaFieldConversation({message:{type:'text',text:{body:'ENTRADA'}},facts,eventId:'denied'});assert.equal(denied.command,undefined);assert.match(denied.reply.body,/no tiene habilitado el registro de jornada/);
  const limited=planMetaFieldConversation({message:{type:'text',text:{body:'MENU'}},facts:{...facts,attendanceOnly:true,permissions:{attendance:true,report:false}},eventId:'pilot'});assert.ok(!limited.reply.sections[0].rows.some(r=>/evidencia|incidencia|consumo|avance|material/i.test(r.title)));

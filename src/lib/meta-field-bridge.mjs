@@ -170,8 +170,8 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   const action=r.proof.value.type==='text'?metaFieldConversationAction(r.proof.value.text?.body):null;
   const activeState=state?.version===1&&Date.parse(state.expiresAt)>r.now.getTime()&&(!action||r.proof.value.text?.body?.trim().toUpperCase()==='HOLA'&&state.purpose!=='MENU')?state:null;
   const latest=data.attendance.filter(e=>e.workerId===r.worker.id).sort((a,b)=>b.sequence-a.sequence)[0]||null;
-  const limited=attendanceOnly||Boolean(r.connection.metadata?.developmentPilot),facts={projectName:r.project.name,workerId:r.worker.id,permissions:limited?{attendance:r.worker.metadata.participant.permissions.attendance,report:false}:r.worker.metadata.participant.permissions,attendanceOnly:limited,sectors:data.sectors,evidence:data.evidence,proposals:data.proposals,inventory:data.inventory,latest,mediaReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaFieldMediaContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId},planImportRole:plans.configured&&!limited?r.member.role:null,planImportReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaPlanImportContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId}};
-  if(state?.purpose==='PLAN_IMPORT'&&Date.parse(state.expiresAt)>r.now.getTime()&&!['HOLA','ESTADO','MENU','AYUDA'].includes(r.proof.value.text?.body?.trim().toUpperCase())&&!await metaPlanImportPromptMatches(client,r,state,environment))return {done:await record(client,r,result(r,'PLAN_IMPORT_CONTEXT_REQUIRED',text('Respondé al mensaje vigente del cronograma para enviar el archivo o elegir su autorización. Conservamos el paso y no guardamos ni analizamos archivos.')),state,{preserveConversation:true})};
+  const limited=attendanceOnly||Boolean(r.connection.metadata?.developmentPilot),replyPrefix=attendanceOnly||r.companyProjection?'Obra: '+r.project.name+'\n':'',facts={projectName:r.project.name,projectId:limited?null:r.project.id,replyBodyLimit:Math.max(0,1024-replyPrefix.length),workerId:r.worker.id,permissions:limited?{attendance:r.worker.metadata.participant.permissions.attendance,report:false}:r.worker.metadata.participant.permissions,attendanceOnly:limited,sectors:data.sectors,evidence:data.evidence,proposals:data.proposals,inventory:data.inventory,latest,mediaReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaFieldMediaContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId},planImportRole:plans.configured&&!limited?r.member.role:null,planImportReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaPlanImportContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId}};
+  if(state?.purpose==='PLAN_IMPORT'&&Date.parse(state.expiresAt)>r.now.getTime()&&action!=='TASKS'&&!['HOLA','ESTADO','MENU','AYUDA'].includes(r.proof.value.text?.body?.trim().toUpperCase())&&!await metaPlanImportPromptMatches(client,r,state,environment))return {done:await record(client,r,result(r,'PLAN_IMPORT_CONTEXT_REQUIRED',text('Respondé al mensaje vigente del cronograma para enviar el archivo o elegir su autorización. Conservamos el paso y no guardamos ni analizamos archivos.')),state,{preserveConversation:true})};
   let plan;
   try{
    const selected=selectedChoice(activeState,r.proof.value),consumptionAction=['STATUS','OWN_CONSUMPTIONS'].includes(action)||activeState?.step==='MENU'&&selected==='STATUS'||activeState?.purpose==='OWN_CONSUMPTIONS'&&selected&&selected!=='MENU';
@@ -183,7 +183,8 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
     }
     facts.ownConsumptions=await service.ownConsumptions(session,{projectId:r.project.id,scope:r.scope,workerId:r.worker.id,afterConsumption,consumptionId});
    }
-   Object.assign(facts,await readMetaFieldTaskCatalog(client,{projectId:r.project.id,state:activeState||{purpose:action},message:r.proof.value}));
+   if(limited&&(action==='TASKS'||activeState?.purpose==='TASKS'))facts.tasks=[];
+   else Object.assign(facts,await readMetaFieldTaskCatalog(client,{projectId:r.project.id,state:activeState||{purpose:action},message:r.proof.value}));
    if(facts.permissions.report===true&&activeState?.purpose==='PROGRESS'&&activeState.taskId)Object.assign(facts,await readMetaFieldEvidenceCatalog(client,{organizationId:r.member.organizationId,projectId:r.project.id,workerId:r.worker.id,actorId:r.member.actorId,state:activeState,message:r.proof.value,tasks:facts.tasks}));
    plan=planMetaFieldConversation({message:r.proof.value,state,eventId:r.event.id,facts,now:r.now});
   }
@@ -245,7 +246,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
 
 
 const optionalPurposes=new Set(['INCIDENT','MATERIAL','CONSUMPTION']);
-const taskColumns=`id,title,progress,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision,to_char("createdAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt"`;
+const taskColumns=`id,title,status::text AS status,progress,metadata,to_char("startsAt",'YYYY-MM-DD') AS "startsOn",to_char("endsAt",'YYYY-MM-DD') AS "endsOn",to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision,to_char("createdAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt"`;
 const unavailable=()=>{throw new WorkspaceError('WORKSPACE_TASK_UNAVAILABLE',404);};
 function validCursor(value){
  if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join('|')!=='createdAt|id'||!workspaceId(value.id)||typeof value.createdAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(value.createdAt)||value.createdAt.startsWith('0000-'))return false;
@@ -258,7 +259,7 @@ function selectedChoice(state,message){
  return match&&match[1]===state?.nonce&&Array.isArray(state?.choices)?state.choices[Number(match[2])]?.value:null;
 }
 const cursor=row=>({id:row.id,createdAt:row.createdAt});
-const publicTask=row=>{const {id,title,progress,revision}=row,measurement=publicTaskMeasurement(row);return {id,title,progress,revision,...(measurement?{measurement}:{})};};
+const publicTask=row=>{const {id,title,progress,revision}=row,measurement=publicTaskMeasurement(row);return {id,title,progress,revision,status:row.status??null,startsOn:row.startsOn??null,endsOn:row.endsOn??null,...(measurement?{measurement}:{})};};
 
 // Identity, live permissions and conversation TTL are checked by the signed
 // bridge before this bounded catalog read. A cursor never grants project access.

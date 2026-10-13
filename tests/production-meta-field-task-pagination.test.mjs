@@ -39,7 +39,16 @@ test('optional task pages retain NONE and never skip the seventh/eighth boundary
 });
 test('task consultation pages are available without report permission and cannot write',()=>{
  const facts=page(0,false,{permissions:{attendance:false,report:false}}),initial=say('TAREAS',null,facts),nextFacts=page(8,false,{permissions:facts.permissions}),next=pick(initial,'NEXT_TASKS',nextFacts),detail=pick(next,'task-11',nextFacts);
- assert.match(detail.reply.body,/Partida 11/);assert.match(detail.reply.body,/Avance aprobado: 0%/);assert.equal(detail.state.step,'TASK');assert.equal(detail.state.taskId,undefined);assert.equal(detail.command,undefined);assert.equal(detail.media,undefined);bounded(detail);
+ assert.match(detail.reply.body,/Partida 11/);assert.match(detail.reply.body,/Avance registrado: 0%/);assert.equal(detail.state.step,'TASK');assert.equal(detail.state.taskId,undefined);assert.equal(detail.command,undefined);assert.equal(detail.media,undefined);bounded(detail);
+});
+test('schedule aliases traverse all 189 tasks with current dates/status, bounded pages and no import or write',()=>{
+ const rows=tasks.map((task,index)=>({...task,status:index===188?'BLOCKED':'IN_PROGRESS',progress:index===188?37:12,startsOn:'2026-10-10',endsOn:'2026-10-19'}));
+ for(const command of ['GANTT','CRONOGRAMA']){
+  const view=offset=>page(offset,false,{tasks:rows.slice(offset,offset+8),projectId:'project-a',permissions:{attendance:true,report:false}});
+  let plan=say(command,null,view(0)),offset=0;assert.match(plan.reply.body,/2026-10-10 → 2026-10-19/);assert.equal(plan.state.purpose,'TASKS');
+  while(offset+8<189){offset+=8;plan=pick(plan,'NEXT_TASKS',view(offset));bounded(plan);assert.ok(plan.reply.body.length<=1024);assert.equal(plan.command,undefined);assert.equal(plan.planImport,undefined);}
+  const detail=pick(plan,'task-189',view(offset));assert.match(detail.reply.body,/Partida 189/);assert.match(detail.reply.body,/Estado registrado: Bloqueada/);assert.match(detail.reply.body,/Avance registrado: 37%/);assert.match(detail.reply.body,/cuenta\?obra=project-a#schedule-gantt-title/);assert.equal(detail.state.taskId,undefined);assert.equal(detail.media,undefined);bounded(detail);
+ }
 });
 test('old page replies, expired choices, revoked permission and missing current task cannot continue',()=>{
  const first=say('EVIDENCIA'),next=pick(first,'NEXT_TASKS',page(8));
