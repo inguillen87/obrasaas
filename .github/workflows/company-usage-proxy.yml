@@ -1,0 +1,131 @@
+name: Company usage verified route regression
+on:
+  push:
+    branches: [master, 'fix/company-usage-verified-route-*']
+    paths:
+      - 'src/proxy.js'
+      - 'src/app/api/identity/company-usage/route.js'
+      - 'src/lib/**'
+      - 'tests/production-company-usage-proxy.test.mjs'
+      - 'tests/production-access-boundary.test.mjs'
+      - 'tests/production-verified-session.test.mjs'
+      - 'tests/production-organization-usage.test.mjs'
+      - 'tests/fixtures/plan-import-ooxml-synthetic.mjs'
+      - 'public/sw.js'
+      - 'src/app/access-notice.js'
+      - 'src/app/(identity)/**'
+      - 'eslint.config.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/company-usage-proxy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Bind actual source bytes before synthetic execution
+        run: |
+          mkdir -p .vercel/private/company-usage-proxy-ci
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {execFileSync} from 'node:child_process';
+          import {createHash} from 'node:crypto';
+          import {readFileSync,writeFileSync,existsSync,readdirSync} from 'node:fs';
+          import path from 'node:path';
+          import {parse} from '@babel/parser';
+          const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
+          const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+          assert.equal(git('rev-parse','HEAD'),process.env.GITHUB_SHA);
+          assert.equal(git('status','--porcelain'),'');
+          const roots=['src/proxy.js','src/app/api/identity/company-usage/route.js','tests/production-company-usage-proxy.test.mjs','tests/production-access-boundary.test.mjs','tests/production-verified-session.test.mjs','tests/production-organization-usage.test.mjs','public/sw.js','src/app/access-notice.js','src/app/(identity)/sign-in/[[...sign-in]]/page.js','src/app/(identity)/sign-up/[[...sign-up]]/page.js','eslint.config.mjs'];
+          const files=new Set(['package.json','package-lock.json','.github/workflows/company-usage-proxy.yml']);
+          function visit(file){
+            assert.ok(/^(src|tests|public)\//.test(file)||file==='eslint.config.mjs');
+            assert.ok(!file.split('/').includes('..'));
+            if(files.has(file))return;
+            const bytes=readFileSync(file);files.add(file);
+            if(!/\.(mjs|js)$/.test(file))return;
+            const ast=parse(bytes.toString('utf8'),{sourceType:'unambiguous',plugins:['jsx'],createImportExpressions:true}),imports=[];
+            function walk(node){if(!node||typeof node!=='object')return;if(['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration'].includes(node.type)&&node.source?.value)imports.push(node.source.value);if(node.type==='ImportExpression'&&node.source?.type==='StringLiteral')imports.push(node.source.value);for(const value of Object.values(node))if(Array.isArray(value))value.forEach(walk);else if(value&&typeof value==='object')walk(value);}
+            walk(ast.program);
+            for(const ref of imports.filter(value=>value.startsWith('.'))){const base=path.posix.normalize(path.posix.join(path.posix.dirname(file),ref));const resolved=[base,base+'.mjs',base+'.js',base+'/index.mjs',base+'/index.js'].find(value=>existsSync(value));assert.ok(resolved,'Every relative import must resolve');visit(resolved);}
+          }
+          roots.forEach(visit);
+          const sourceManifest=[...files].sort().map(file=>{const committed=execFileSync('git',['show','HEAD:'+file]);assert.deepEqual(readFileSync(file),committed);return {path:file,sha256:hash(committed)};});
+          assert.equal(sourceManifest.length,45);
+          const apiRouteInventory=git('ls-files','src/app/api').split('\n').filter(file=>file.endsWith('/route.js')).sort();
+          function visitRoutes(folder){return readdirSync(folder,{withFileTypes:true}).flatMap(item=>item.isDirectory()?visitRoutes(path.posix.join(folder,item.name)):item.name==='route.js'?[path.posix.join(folder,item.name)]:[]);}
+          assert.deepEqual(visitRoutes('src/app/api').sort(),apiRouteInventory);
+          assert.ok(apiRouteInventory.includes('src/app/api/identity/company-usage/route.js'));
+          writeFileSync('.vercel/private/company-usage-proxy-ci/before.json',JSON.stringify({version:1,sourceRevision:git('rev-parse','HEAD'),sourceTree:git('rev-parse','HEAD^{tree}'),sourceManifest,apiRouteInventory})+'\n');
+          NODE
+      - name: Real proxy, signed synthetic session and canonical mock store regressions
+        run: |
+          node --check src/proxy.js
+          node --check tests/production-company-usage-proxy.test.mjs
+          npx eslint src/proxy.js tests/production-company-usage-proxy.test.mjs --max-warnings 0
+          node --test --test-reporter=tap tests/production-company-usage-proxy.test.mjs tests/production-access-boundary.test.mjs tests/production-verified-session.test.mjs tests/production-organization-usage.test.mjs > .vercel/private/company-usage-proxy-ci/tests.tap
+      - name: Verify exact source and passing TAP without production acceptance
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {execFileSync} from 'node:child_process';
+          import {createHash} from 'node:crypto';
+          import {readFileSync,writeFileSync,existsSync,readdirSync} from 'node:fs';
+          import path from 'node:path';
+          import {parse} from '@babel/parser';
+          const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
+          const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+          assert.equal(git('rev-parse','HEAD'),process.env.GITHUB_SHA);
+          assert.equal(git('status','--porcelain'),'');
+          const roots=['src/proxy.js','src/app/api/identity/company-usage/route.js','tests/production-company-usage-proxy.test.mjs','tests/production-access-boundary.test.mjs','tests/production-verified-session.test.mjs','tests/production-organization-usage.test.mjs','public/sw.js','src/app/access-notice.js','src/app/(identity)/sign-in/[[...sign-in]]/page.js','src/app/(identity)/sign-up/[[...sign-up]]/page.js','eslint.config.mjs'];
+          const files=new Set(['package.json','package-lock.json','.github/workflows/company-usage-proxy.yml']);
+          function visit(file){
+            assert.ok(/^(src|tests|public)\//.test(file)||file==='eslint.config.mjs');
+            assert.ok(!file.split('/').includes('..'));
+            if(files.has(file))return;
+            const bytes=readFileSync(file);files.add(file);
+            if(!/\.(mjs|js)$/.test(file))return;
+            const ast=parse(bytes.toString('utf8'),{sourceType:'unambiguous',plugins:['jsx'],createImportExpressions:true}),imports=[];
+            function walk(node){if(!node||typeof node!=='object')return;if(['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration'].includes(node.type)&&node.source?.value)imports.push(node.source.value);if(node.type==='ImportExpression'&&node.source?.type==='StringLiteral')imports.push(node.source.value);for(const value of Object.values(node))if(Array.isArray(value))value.forEach(walk);else if(value&&typeof value==='object')walk(value);}
+            walk(ast.program);
+            for(const ref of imports.filter(value=>value.startsWith('.'))){const base=path.posix.normalize(path.posix.join(path.posix.dirname(file),ref));const resolved=[base,base+'.mjs',base+'.js',base+'/index.mjs',base+'/index.js'].find(value=>existsSync(value));assert.ok(resolved,'Every relative import must resolve');visit(resolved);}
+          }
+          roots.forEach(visit);
+          const sourceManifest=[...files].sort().map(file=>{const committed=execFileSync('git',['show','HEAD:'+file]);assert.deepEqual(readFileSync(file),committed);return {path:file,sha256:hash(committed)};});
+          assert.equal(sourceManifest.length,45);
+          const apiRouteInventory=git('ls-files','src/app/api').split('\n').filter(file=>file.endsWith('/route.js')).sort();
+          function visitRoutes(folder){return readdirSync(folder,{withFileTypes:true}).flatMap(item=>item.isDirectory()?visitRoutes(path.posix.join(folder,item.name)):item.name==='route.js'?[path.posix.join(folder,item.name)]:[]);}
+          assert.deepEqual(visitRoutes('src/app/api').sort(),apiRouteInventory);
+          const before=JSON.parse(readFileSync('.vercel/private/company-usage-proxy-ci/before.json','utf8'));
+          assert.equal(before.sourceRevision,process.env.GITHUB_SHA);assert.equal(before.sourceTree,git('rev-parse','HEAD^{tree}'));
+          assert.deepEqual(sourceManifest,before.sourceManifest);assert.deepEqual(apiRouteInventory,before.apiRouteInventory);
+          const tapBytes=readFileSync('.vercel/private/company-usage-proxy-ci/tests.tap'),tap=tapBytes.toString('utf8');
+          const totals={};for(const key of ['tests','suites','pass','fail','cancelled','skipped','todo']){const matches=[...tap.matchAll(new RegExp('^# '+key+' (\\d+)$','gm'))];assert.equal(matches.length,1);totals[key]=Number(matches[0][1]);assert.ok(Number.isSafeInteger(totals[key]));}
+          assert.equal(totals.tests,163);assert.equal(totals.pass,totals.tests);for(const key of ['suites','fail','cancelled','skipped','todo'])assert.equal(totals[key],0);
+          const plans=[...tap.matchAll(/^1\.\.(\d+)$/gm)];assert.equal(plans.length,1);assert.equal(Number(plans[0][1]),totals.tests);
+          const cases=[...tap.matchAll(/^ok (\d+) - (.+)$/gm)];assert.equal(cases.length,totals.tests);cases.forEach((value,index)=>assert.equal(Number(value[1]),index+1));assert.equal(new Set(cases.map(value=>value[2])).size,totals.tests);assert.doesNotMatch(tap,/^not ok |# (?:SKIP|TODO)\b/gm);
+          writeFileSync('.vercel/private/company-usage-proxy-ci/source.json',JSON.stringify({version:'company-usage-proxy-ci-v1',status:'PASS',sourceRevision:before.sourceRevision,sourceTree:before.sourceTree,trackedClean:true,sourceManifest,sourceCount:sourceManifest.length,apiRouteInventory,testSuites:['production-company-usage-proxy','production-access-boundary','production-verified-session','production-organization-usage'],tapSha256:hash(tapBytes),totals,testTransport:'local-signed-synthetic-session-and-mock-canonical-database',realProviderRequests:null,nativePostgresExecuted:false,productionDataWritten:false,productionSessionAccepted:false,publicationConfirmed:false})+'\n');
+          NODE
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: company-usage-proxy-${{ github.sha }}-${{ github.run_attempt }}
+          path: .vercel/private/company-usage-proxy-ci/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
