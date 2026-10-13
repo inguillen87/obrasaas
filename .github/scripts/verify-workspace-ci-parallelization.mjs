@@ -596,7 +596,7 @@ export function currentProducerSourceFiles(spec,root){
  if(isIdentity(spec)){
   const seeds=[...text.matchAll(/\bcopyGraph\('([^']+)'\)/g)].map(match=>match[1]);equal(seeds,['src/app/(identity)/cuenta/workspace-client.js','src/app/(identity)/cuenta/workspace-recovery-journal.mjs','src/lib/participant-policy.mjs'],'PROOF_IDENTITY_SOURCE_ROOTS');
   assert.equal(text.split("import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';").length,2,'One explicit closed subscription fixture import');
-  assert.equal(text.split("sourceManifest.push({path:'scripts/lib/company-subscription-ui-fixture.mjs',sha256:sha256(sourceBytes('scripts/lib/company-subscription-ui-fixture.mjs'))});").length,2,'One exact closed subscription fixture source reference');
+  assert.equal(text.split("pinFixtureGraph('scripts/lib/company-subscription-ui-fixture.mjs');").length,2,'One exact closed subscription fixture dependency graph');
   return walk([...seeds,COMPANY_SUBSCRIPTION_UI_FIXTURE]);
  }
  if(spec.kind==='PORTFOLIO_UNIT')return portfolioUnitSourceFiles(root);

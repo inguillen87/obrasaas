@@ -2615,7 +2615,7 @@
         "path": ".vercel/workspace-identity-only-evidence/browser.json",
         "kind": "UI_IDENTITY_ONLY",
         "producer": "scripts/verify-workspace-identity-only-ui.mjs",
-        "producerSha256": "206937ec7df082854564341823f28d25d759e1c2c2006469a2b87b89fcde0681",
+        "producerSha256": "f9b07f016b0ae9fe15497a63f6bc23ce996b42c45e29e19ef6c9e9f1a582e7d9",
         "sourceFiles": [
           "scripts/lib/company-subscription-ui-fixture.mjs",
           "src/app/(identity)/cuenta/company-bootstrap-panel.js",
