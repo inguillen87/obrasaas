@@ -3,6 +3,7 @@ import {useCallback,useEffect,useId,useRef,useState} from 'react';
 import {ArrowUpRight,Check,CreditCard,RefreshCw,ShieldCheck} from 'lucide-react';
 import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import {browserCompanySubscriptionJournal,COMPANY_SUBSCRIPTION_RECOVERY_EVENT,companySubscriptionView,companySubscriptionBeginCommand,companySubscriptionCancelCommand,companySubscriptionErrorMessage} from './company-subscription-view.mjs';
+import {CompanyUsagePanel} from './company-usage-panel';
 import styles from './company-subscription-panel.module.css';
 
 const endpoint = '/api/identity/company-subscription';
@@ -178,6 +179,7 @@ function CompanySubscriptionContent({scope,getSessionToken,locked = false,onPend
         {view.attempt && <div><dt>Abono elegido</dt><dd>{view.attempt.priceLabel} por mes</dd></div>}
       </dl>
       {pending && <div className={styles.recovery} data-subscription-recovery><h4>Hay un intento por comprobar</h4><p>Conservamos tu solicitud. Comprobarla consulta el mismo intento y evita iniciar otro pago.</p><button type="button" className={styles.primary} disabled={busy} onClick={recover}>Comprobar este intento</button></div>}
+      <CompanyUsagePanel scope={scope} organizationId={view.organizationId} getSessionToken={getSessionToken} locked={locked}/>
       {!view.configurationReady && <div className={styles.setup} data-subscription-setup><ShieldCheck size={22} aria-hidden="true"/><div><h4>El pago en línea todavía no está habilitado</h4><p>Podés consultar el estado de tu empresa. Te mostraremos el importe y las condiciones cuando el pago esté disponible.</p></div></div>}
       {view.configurationReady && view.canBegin && <form onSubmit={begin} className={styles.purchase}>
         <fieldset className={styles.offers} disabled={decisionsDisabled}>

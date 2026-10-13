@@ -10,7 +10,8 @@
 .panel input,.panel textarea,.panel select{padding:.6rem;border:1px solid #54708a;border-radius:6px;background:#091626;color:#edf5fb;max-width:100%;min-width:0;width:100%;font:inherit;box-sizing:border-box}
 .panel small,.evidence{color:#b9cadb;font-size:.8rem;overflow-wrap:anywhere}
 .panel input[type=file]{font-size:.85rem}
-.checkbox{display:flex!important;align-items:flex-start;gap:.6rem!important}
+.panel input:not([type=checkbox]),.panel textarea{min-height:44px}
+.checkbox{display:flex!important;align-items:flex-start;gap:.6rem!important;min-height:44px}
 .checkbox input{width:18px;min-width:18px;height:18px;margin-top:.15rem}
 .checkbox span{font-weight:400;line-height:1.5}
 .message{margin:.6rem 0;line-height:1.5;overflow-wrap:anywhere}

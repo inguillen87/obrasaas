@@ -6,6 +6,7 @@ import {loadBindings,transform} from 'next/dist/build/swc/index.js';
 
 const accountRoot=new URL('../src/app/(identity)/cuenta/',import.meta.url);
 const reactUrl=import.meta.resolve('react'),returnUrl=new URL('../src/lib/identity-return-path.mjs',import.meta.url).href;
+const usageHelperUrl=new URL('../src/app/(identity)/cuenta/plan-import-usage-view.mjs',import.meta.url).href;
 const source=name=>readFileSync(new URL(name,accountRoot),'utf8').replace(/^import .*;\r?\n/gm,'');
 const planId='plan_draft_'+'a'.repeat(64),projectId='project-synthetic',scope='b'.repeat(64);
 const props={projectId,scope,initialPlanId:planId,canonicalAccess:true,getSessionToken:()=>assert.fail('Real session provider forbidden')};
@@ -33,7 +34,7 @@ export const unmount=()=>{for(const effect of effects)effect?.cleanup?.();effect
 const stateNames=text=>[...text.matchAll(/\[([A-Za-z]+),set[A-Za-z]+\]=useState/g)].map(match=>match[1]);
 function resetExport(names){return `export const reset=(seed={})=>{states=[];refs=[];effects=[];memos=[];pending=[];for(const [key,value] of Object.entries(seed)){const i=${JSON.stringify(names)}.indexOf(key);if(i>=0)states[i]=value;}};export const snapshot=()=>Object.fromEntries(${JSON.stringify(names)}.map((key,i)=>[key,states[i]]));`;}
 await loadBindings();
-async function compile(text,prefix,extra){const result=await transform('import React from '+JSON.stringify(reactUrl)+';'+hooks+prefix+text+extra,{filename:'actual-plan-link-components.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});return import('data:text/javascript;base64,'+Buffer.from(result.code).toString('base64'));}
+async function compile(text,prefix,extra){const result=await transform('import React from '+JSON.stringify(reactUrl)+';import {planImportUsageView,planImportPreservation} from '+JSON.stringify(usageHelperUrl)+';'+hooks+prefix+text+extra,{filename:'actual-plan-link-components.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});return import('data:text/javascript;base64,'+Buffer.from(result.code).toString('base64'));}
 
 const panelSource=source('plan-import-panel.js');
 const panelMocks=`

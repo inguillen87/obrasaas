@@ -1,0 +1,68 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {createHash} from 'node:crypto';
+import {existsSync,readFileSync} from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import yaml from 'js-yaml';
+import {organizationUsageCiSourceClosure,validateOrganizationUsageCi,ORGANIZATION_USAGE_CI_VERSION} from '../scripts/verify-organization-usage-ci.mjs';
+import {ORGANIZATION_USAGE_PG_VERSION,ORGANIZATION_USAGE_PG_CHECKS} from '../scripts/verify-organization-usage-postgres.mjs';
+import {ORGANIZATION_USAGE_UI_VERSION,ORGANIZATION_USAGE_UI_CHECKS,ORGANIZATION_USAGE_UI_WIDTHS} from '../scripts/verify-organization-usage-ui.mjs';
+const root=fileURLToPath(new URL('../',import.meta.url)),sources=Object.create(null),sha=bytes=>createHash('sha256').update(bytes).digest('hex');
+const read=file=>{if(!existsSync(path.join(root,file)))return null;if(!Object.hasOwn(sources,file))sources[file]=readFileSync(path.join(root,file));return sources[file];};
+const native=organizationUsageCiSourceClosure(read),browser=organizationUsageCiSourceClosure(read,{ui:true});
+['scripts/verify-organization-usage-ui.mjs','scripts/lib/owned-fixture-cleanup.mjs','package-lock.json','package.json'].forEach(read);
+const head='a'.repeat(40),tree='b'.repeat(40),scope='a'.repeat(64),op=index=>'00000000-0000-4000-8000-'+String(index).padStart(12,'0');
+const manifest=files=>files.map(file=>({path:file,sha256:sha(sources[file])}));
+function fixture(){
+ const provenance={status:'PASS',sourceRevision:head,sourceTree:tree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,productionDataWritten:false};
+ return {expectedHead:head,head,sourceTree:tree,trackedClean:true,gitSources:{...sources},postgres:{...provenance,version:ORGANIZATION_USAGE_PG_VERSION,syntheticOnly:true,postgresExecuted:true,totalCheckCount:16,checks:[...ORGANIZATION_USAGE_PG_CHECKS],sourceManifest:manifest(native.files),harnessSha256:sha(sources['scripts/verify-organization-usage-postgres.mjs']),providerRequests:0,syntheticOpenAiRequests:11,syntheticReplyRequests:4,paymentAttempted:false,paymentVerified:false,capacityContractPending:true,cost:null,poolClosed:true,databaseRemoved:true,cleanup:{poolClosed:true,databaseRemoved:true},nativeLockObservations:['WEB','WHATSAPP'].map(firstTransport=>({firstTransport,secondTransport:firstTransport==='WEB'?'WHATSAPP':'WEB',sameOrganization:true,differentProjects:true,waitingCount:1,waitingBeforeProject:true,bothCompleted:true}))},ui:{...provenance,version:ORGANIZATION_USAGE_UI_VERSION,environment:'isolated-localhost-next-exact-jsx-synthetic-api',productionLoginVerified:false,realIdentityDocuments:false,realPlanDocuments:false,physicalDeviceAccepted:false,providerRequests:0,automaticPostCount:0,explicitSyntheticUploadCount:6,pageErrors:[],interceptErrors:[],externalRequests:[],widths:[...ORGANIZATION_USAGE_UI_WIDTHS],totalCheckCount:14,checks:ORGANIZATION_USAGE_UI_CHECKS.map((check,index)=>index<4?{check,width:ORGANIZATION_USAGE_UI_WIDTHS[index],documentWidth:ORGANIZATION_USAGE_UI_WIDTHS[index],targets:Array.from({length:4},()=>({height:44,width:80})),postCount:0}:index<8?{check,postCount:0}:{check,postCount:1,operationId:op(index),recoveryOperationIds:[op(index)]}),apiRequests:ORGANIZATION_USAGE_UI_CHECKS.flatMap((check,index)=>Array.from({length:[3,3,3,3,2,3,3,3,5,10,7,5,6,4][index]},(_,position)=>({label:index<4?'viewport-'+ORGANIZATION_USAGE_UI_WIDTHS[index]:check,path:index>=8?'/api/identity/plan-import':'/api/identity/company-usage',method:index>=8&&position===0?'POST':'GET',scope,...(index>=8?{operationId:op(index)}:{})}))),sourceManifest:manifest(browser.files),dependencyManifest:manifest(['package-lock.json','package.json']),externalImports:[...browser.externalImports],harnessSha256:sha(sources['scripts/verify-organization-usage-ui.mjs']),cleanupHelperSha256:sha(sources['scripts/lib/owned-fixture-cleanup.mjs']),cleanup:{browserClosed:true,serverClosed:true,gracefulCloseAcknowledged:true,fixtureRemoved:true,fixtureCleanupProof:{fixtureRemoved:true,postcondition:{absent:true}}}}};
+}
+function rejected(change){const input=fixture();change(input);assert.throws(()=>validateOrganizationUsageCi(input),{code:'ORGANIZATION_USAGE_CI_REJECTED'});}
+
+test('complete native and DOM source-bound contracts validate without executing producers',()=>{
+ assert.equal(native.files.length,105);assert.equal(browser.files.length,24);assert.equal(ORGANIZATION_USAGE_PG_CHECKS.length,16);const input=fixture(),before=JSON.stringify(input),proof=validateOrganizationUsageCi(input);assert.equal(JSON.stringify(input),before);assert.equal(proof.version,ORGANIZATION_USAGE_CI_VERSION);assert.equal(proof.status,'PASS');assert.equal(proof.providerRequests,0);assert.equal(proof.paymentVerified,false);assert.equal(proof.cost,null);
+});
+test('foreign abbreviated stale tree or dirty source cannot certify a release',()=>{
+ for(const key of ['expectedHead','head','sourceTree'])rejected(value=>{value[key]='c'.repeat(40);});rejected(value=>{value.expectedHead=head.slice(0,7);});rejected(value=>{value.trackedClean=false;});for(const kind of ['postgres','ui'])for(const [key,value] of [['sourceRevision','c'.repeat(40)],['sourceTree','c'.repeat(40)],['sourceState','working-tree'],['trackedClean',false],['status','FAILED']])rejected(input=>{input[kind][key]=value;});
+});
+test('current organization usage and UI helper nodes cannot be missing, stale or substituted',()=>{
+ for(const [kind,file] of [['postgres','src/lib/organization-usage-store.mjs'],['postgres','src/lib/organization-usage-policy.mjs'],['ui','src/app/(identity)/cuenta/company-usage-panel.js'],['ui','src/app/(identity)/cuenta/plan-import-usage-view.mjs']]){
+  assert.ok((kind==='postgres'?native:browser).files.includes(file));rejected(input=>{input[kind].sourceManifest=input[kind].sourceManifest.filter(ref=>ref.path!==file);});rejected(input=>{input[kind].sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-usage.mjs';});rejected(input=>{input[kind].sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});rejected(input=>{delete input.gitSources[file];});
+ }
+});
+test('source manifests cannot conceal duplicates, extras or false package bytes',()=>{
+ for(const kind of ['postgres','ui']){rejected(input=>{input[kind].sourceManifest[1]={...input[kind].sourceManifest[0]};});rejected(input=>{input[kind].sourceManifest.push({path:'src/lib/extra.mjs',sha256:'f'.repeat(64)});});rejected(input=>{input[kind].harnessSha256='f'.repeat(64);});}rejected(input=>{input.ui.dependencyManifest.pop();});rejected(input=>{input.ui.dependencyManifest[0].sha256='f'.repeat(64);});rejected(input=>{input.ui.cleanupHelperSha256='f'.repeat(64);});
+});
+test('AST closure rejects hidden, unsafe and external stylesheet dependencies',()=>{
+ for(const text of ["import '../../../../../../outside.mjs';","const x='private';import(x);"])rejected(input=>{input.gitSources['src/app/(identity)/cuenta/company-usage-panel.js']=Buffer.from(text);});rejected(input=>{input.gitSources['src/app/(identity)/cuenta/company-subscription-panel.module.css']=Buffer.from('@import "https://example.invalid/style.css";');});
+});
+test('all native group names and callback counters remain exact',()=>{
+ rejected(input=>{input.postgres.totalCheckCount=15;});rejected(input=>{input.postgres.checks.pop();});rejected(input=>{input.postgres.checks.reverse();});rejected(input=>{input.postgres.checks[1]=input.postgres.checks[0];});for(const value of [0,10,12,undefined])rejected(input=>{input.postgres.syntheticOpenAiRequests=value;});rejected(input=>{input.postgres.syntheticReplyRequests=0;});
+});
+test('both lock races must demonstrate real waiting before the project lock',()=>{
+ rejected(input=>{input.postgres.nativeLockObservations.pop();});for(const key of ['sameOrganization','differentProjects','waitingBeforeProject','bothCompleted'])rejected(input=>{input.postgres.nativeLockObservations[0][key]=false;});rejected(input=>{input.postgres.nativeLockObservations[1].firstTransport='WEB';});for(const value of [0,-1,'1',undefined])rejected(input=>{input.postgres.nativeLockObservations[0].waitingCount=value;});
+});
+test('real provider, payment, capacity or price claims cannot be certified by fixtures',()=>{
+ for(const kind of ['postgres','ui'])rejected(input=>{input[kind].providerRequests=1;});for(const [key,value] of [['postgresExecuted',false],['syntheticOnly',false],['paymentAttempted',true],['paymentVerified',true],['capacityContractPending',false],['cost',0]])rejected(input=>{input.postgres[key]=value;});for(const key of ['productionLoginVerified','realIdentityDocuments','realPlanDocuments','physicalDeviceAccepted'])rejected(input=>{input.ui[key]=true;});rejected(input=>{input.ui.productionDataWritten=true;});
+});
+test('every DOM case viewport and actual touch target remains required',()=>{
+ rejected(input=>{input.ui.totalCheckCount=13;});rejected(input=>{input.ui.checks.pop();});rejected(input=>{input.ui.checks[1]=input.ui.checks[0];});rejected(input=>{input.ui.widths=[390,768,1280];});rejected(input=>{input.ui.checks[0].documentWidth=321;});rejected(input=>{input.ui.checks[0].targets[0].height=43;});rejected(input=>{input.ui.checks[0].targets=[];});
+});
+test('read boundaries and exact source recovery cannot be replaced by automatic retries',()=>{
+ rejected(input=>{input.ui.automaticPostCount=1;});rejected(input=>{input.ui.explicitSyntheticUploadCount=7;});rejected(input=>{input.ui.checks[4].postCount=1;});rejected(input=>{input.ui.checks[8].postCount=2;});rejected(input=>{input.ui.checks[9].recoveryOperationIds=[op(30)];});rejected(input=>{input.ui.apiRequests[0].method='POST';});rejected(input=>{input.ui.apiRequests[1].path='/api/private';});rejected(input=>{input.ui.apiRequests[1].scope='c'.repeat(64);});rejected(input=>{input.ui.apiRequests[1].prompt='private';});rejected(input=>{input.ui.apiRequests.pop();});
+});
+test('browser errors and all owned cleanup postconditions must be explicit',()=>{
+ for(const key of ['pageErrors','interceptErrors','externalRequests'])rejected(input=>{input.ui[key]=['failed'];});for(const key of ['poolClosed','databaseRemoved'])rejected(input=>{input.postgres[key]=false;});for(const key of ['browserClosed','serverClosed','gracefulCloseAcknowledged','fixtureRemoved'])rejected(input=>{input.ui.cleanup[key]=false;});rejected(input=>{input.ui.cleanup.fixtureCleanupProof.postcondition.absent=false;});
+});
+test('HTTP labels and exact distinct UUIDs must bind each explicit upload and recovery case',()=>{
+ rejected(input=>{input.ui.checks[8].operationId='a'.repeat(36);});
+ rejected(input=>{const records=input.ui.apiRequests.filter(record=>record.method==='POST');records[0].operationId=records[1].operationId;});
+ rejected(input=>{input.ui.apiRequests.find(record=>record.method==='POST').label=ORGANIZATION_USAGE_UI_CHECKS[9];});
+ rejected(input=>{input.ui.apiRequests.find(record=>record.operationId&&record.method==='GET').operationId=op(30);});
+ rejected(input=>{input.ui.checks[9].operationId=input.ui.checks[8].operationId;input.ui.checks[9].recoveryOperationIds=[input.ui.checks[8].operationId];for(const record of input.ui.apiRequests.filter(record=>record.label===ORGANIZATION_USAGE_UI_CHECKS[9]))record.operationId=input.ui.checks[8].operationId;});
+ rejected(input=>{input.ui.apiRequests[0].label=input.ui.apiRequests[3].label;});
+});
+test('dedicated workflow uses pinned actions, disposable SQL and required proof order',()=>{
+ const workflow=yaml.load(readFileSync(path.join(root,'.github/workflows/organization-usage.yml'),'utf8')),job=workflow.jobs.verify,steps=job.steps;assert.deepEqual(workflow.permissions,{contents:'read'});assert.deepEqual(workflow.on.push.branches,['master','feat/integral-worksite-included-usage-*']);assert.equal(job.services.postgres.image,'docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193');assert.equal(job.env.CUTOVER_TEST_DISPOSABLE,'1');assert.equal(new URL(job.env.CUTOVER_TEST_DATABASE_URL).hostname,'127.0.0.1');assert.deepEqual(Object.keys(job.env).sort(),['CUTOVER_TEST_DATABASE_URL','CUTOVER_TEST_DISPOSABLE','NEXT_TELEMETRY_DISABLED']);assert.equal(steps[0].with['persist-credentials'],false);assert.equal(steps[0].with.ref,'${{ github.sha }}');for(const step of steps.filter(item=>item.uses))assert.match(step.uses,/@[a-f0-9]{40}$/);const commands=steps.filter(item=>item.run).map(item=>item.run),pg=commands.indexOf('node scripts/verify-organization-usage-postgres.mjs'),ui=commands.findIndex(value=>value.startsWith('node scripts/verify-organization-usage-ui.mjs ')),validator=commands.indexOf('node scripts/verify-organization-usage-ci.mjs --expected-head "$GITHUB_SHA"');assert.ok(pg>commands.findIndex(value=>value.startsWith('node --test '))&&ui>pg&&validator>ui);for(const step of steps.filter(item=>item.uses?.startsWith('actions/upload-artifact@'))){assert.equal(step.with['retention-days'],7);assert.equal(step.with['if-no-files-found'],'error');}
+});

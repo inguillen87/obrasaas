@@ -189,8 +189,8 @@ async function selector(client,r,env){
  }
  await reserve(client,r,'FIELD',selected);return {delegate:true};
 }
-export function createCompanyChannelBridge({connect,environment=process.env,provider,put,get,analyzer,planAnalyzer}){
- const within=run=>customerJobTransaction(connect,run),field=createMetaFieldBridge({connect,environment,provider,put,get,analyzer,planAnalyzer,resolveIdentity:(client,options)=>resolveWorkerChannelIdentity(client,{...options,companyRouting:true})});
+export function createCompanyChannelBridge({connect,environment=process.env,provider,put,get,analyzer,planAnalyzer,usage=null}){
+ const within=run=>customerJobTransaction(connect,run),field=createMetaFieldBridge({connect,environment,provider,put,get,analyzer,planAnalyzer,usage,resolveIdentity:(client,options)=>resolveWorkerChannelIdentity(client,{...options,companyRouting:true})});
  return {async execute(context){const prepared=await within(async client=>{const r=await resolveCompanyEnvelope(client,{eventId:context.eventId,environment,context});return r?selector(client,r,environment):null;});if(!prepared)return null;if(prepared.done)return prepared.done;const value=await field.execute(context);await within(async client=>{const r=await resolveCompanyEnvelope(client,{eventId:context.eventId,environment,context});if(!r)fault('COMPANY_CHANNEL_SOURCE_REQUIRED');await recordResult(client,r,value,environment);});return value;}};
 }
 export async function resolveCompanyOutboundIdentity(client,options){

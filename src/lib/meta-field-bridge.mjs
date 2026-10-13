@@ -79,15 +79,15 @@ export function readMetaFieldConversation(r,environment=process.env){
 // Transport adapter, not a second field engine. The internal resolver supplies
 // the canonical actor after checking signed proof, binding, KYC and assignment.
 // It never creates a Clerk session or weakens the web authentication verifier.
-export function createMetaFieldBridge({connect,environment=process.env,resolveIdentity=resolveWorkerChannelIdentity,provider,put,get,analyzer,planAnalyzer,protocol=META_CUSTOMER_PROTOCOL,attendanceOnly=false}){
+export function createMetaFieldBridge({connect,environment=process.env,resolveIdentity=resolveWorkerChannelIdentity,provider,put,get,analyzer,planAnalyzer,usage=null,protocol=META_CUSTOMER_PROTOCOL,attendanceOnly=false}){
  resolveMetaCloudProtocol(protocol);
  const within=run=>customerJobTransaction(connect,run);
  const seal=(r,purpose,resourceId,value)=>encryptCustomerSecret(JSON.stringify(value),{organizationId:r.member.organizationId,projectId:r.project.id,purpose,resourceId},environment);
  function unseal(r,purpose,resourceId,value){try{return JSON.parse(decryptCustomerSecret(value,{organizationId:r.member.organizationId,projectId:r.project.id,purpose,resourceId},environment));}catch{throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);}}
  const conversation=r=>readMetaFieldConversation(r,environment);
  function conversationEnvelope(r,state){if(!state)return null;const value={...state,version:1,lastEventId:r.event.id,lastMessageTimestamp:r.proof.value.timestamp,lastReceivedAt:new Date(r.event.createdAt).toISOString(),expiresAt:new Date(r.now.getTime()+15*60000).toISOString(),bindingId:r.channelBinding.id};return {version:1,lastEventId:value.lastEventId,lastMessageTimestamp:value.lastMessageTimestamp,lastReceivedAt:value.lastReceivedAt,expiresAt:value.expiresAt,bindingId:value.bindingId,encryptedState:seal(r,'field-conversation',r.worker.id,value)};}
- async function resolve(client,context,permission=null){
-  const r=await resolveIdentity(client,{eventId:context.eventId,permission,claimChallenge:true,environment});
+ async function resolve(client,context,permission=null,beforeProject){
+  const r=await resolveIdentity(client,{eventId:context.eventId,permission,claimChallenge:true,environment,...(beforeProject?{beforeProject}:{})});
   const {event,project,connection}=r,now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
   const expiresAt=new Date(event.leaseExpiresAt).getTime();
   if(event.status!=='PENDING'||event.leaseToken!==context.leaseToken||!Number.isFinite(expiresAt)||expiresAt<=now.getTime()||(r.sourceProjectId||project.id)!==context.projectId||connection.id!==context.channelId||event.payload.payloadDigest!==context.payloadDigest)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
@@ -211,7 +211,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   // the active prompt or discard a draft that still requires explicit cancel.
   return {done:await record(client,r,result(r,plan.consumptionRead?'CONSUMPTION_READ':'CONVERSATION',plan.reply),plan.state,{preserveConversation:plan.preserveConversation===true||((limited||Boolean(r.companyProjection))&&state&& !['MENU','OWN_CONSUMPTIONS'].includes(state.purpose)&&r.proof.value.type==='text'&&r.proof.value.text?.body?.trim().toUpperCase()==='ESTADO')})};
  }
- const plans=createMetaPlanImportTransport({within,resolve,saved,record,result,seal,unseal,commitFence,operationIdFor:metaFieldOperationId,environment,protocol,provider,put,get,analyzer:planAnalyzer,writePending:async(client,r,state)=>{await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify({...r.worker.metadata,fieldChannelConversation:conversationEnvelope(r,state)})]);}});
+ const plans=createMetaPlanImportTransport({within,resolve,saved,record,result,seal,unseal,commitFence,operationIdFor:metaFieldOperationId,environment,protocol,provider,put,get,analyzer:planAnalyzer,usage,writePending:async(client,r,state)=>{await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify({...r.worker.metadata,fieldChannelConversation:conversationEnvelope(r,state)})]);}});
  return {async execute(context){
   const prepared=await within(client=>prepare(client,context));if(!prepared)return null;if(prepared.done)return prepared.done;
   if(prepared.planning)return plans.execute(context,prepared);
