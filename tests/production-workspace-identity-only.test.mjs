@@ -64,8 +64,8 @@ test('actual identity producer emits and rechecks the complete fixture graph; si
  for(const ref of actual.manifest)assert.equal(ref.sha256,hash(readFileSync(path.join(root,ref.path))),ref.path);
  const closure=new Set();
  function fixtureGraph(relative){
-  if(closure.has(relative))return;closure.add(relative);const module=parse(readFileSync(path.join(root,relative),'utf8'),{sourceType:'module'});
-  for(const node of module.program.body)if(['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration'].includes(node.type)&&node.source?.value.startsWith('.')){
+  if(closure.has(relative))return;closure.add(relative);const moduleAst=parse(readFileSync(path.join(root,relative),'utf8'),{sourceType:'module'});
+  for(const node of moduleAst.program.body)if(['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration'].includes(node.type)&&node.source?.value.startsWith('.')){
    const base=path.resolve(root,path.dirname(relative),node.source.value),resolved=[base,base+'.js',base+'.mjs',path.join(base,'index.js')].find(file=>existsSync(file)&&statSync(file).isFile());assert.ok(resolved);fixtureGraph(path.relative(root,resolved).split(path.sep).join('/'));
   }
  }
