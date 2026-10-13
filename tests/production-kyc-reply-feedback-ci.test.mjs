@@ -8,6 +8,7 @@ import yaml from 'js-yaml';
 import {validateKycReplyFeedbackCi,kycReplyFeedbackSourceClosure,KYC_REPLY_FEEDBACK_CI_VERSION} from '../scripts/verify-kyc-reply-feedback-ci.mjs';
 import {COMPANY_KYC_REJECTION_FEEDBACK_PROOF_VERSION,COMPANY_KYC_REJECTION_FEEDBACK_CHECKS,COMPANY_KYC_REJECTION_SYNTHETIC_REPLY_COUNT} from '../scripts/verify-company-kyc-rejection-feedback-postgres.mjs';
 import {KYC_REPLY_FEEDBACK_UI_VERSION,KYC_REPLY_FEEDBACK_UI_WIDTHS,KYC_REPLY_FEEDBACK_UI_STATES,KYC_REPLY_FEEDBACK_UI_INVALID_STATES} from '../scripts/verify-kyc-reply-feedback-ui.mjs';
+import {KYC_REPLY_FEEDBACK_HISTORICAL_101_SOURCES} from './fixtures/feedback-ci-historical-source-sets.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url)),sources=Object.create(null),sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const readSource=file=>{const filename=path.join(root,file);if(!existsSync(filename))return null;if(!Object.hasOwn(sources,file))sources[file]=readFileSync(filename);return sources[file];};
@@ -22,18 +23,30 @@ function fixture(){
 function rejected(mutate){const input=fixture();mutate(input);assert.throws(()=>validateKycReplyFeedbackCi(input),{code:'KYC_REPLY_FEEDBACK_CI_REJECTED'});}
 
 test('additive CI validates the native eight groups and readonly DOM twenty-two cases without executing producers',()=>{
- assert.equal(native.files.length,103);assert.equal(browser.files.length,3);const input=fixture(),before=JSON.stringify(input),proof=validateKycReplyFeedbackCi(input);assert.equal(JSON.stringify(input),before);assert.equal(proof.version,KYC_REPLY_FEEDBACK_CI_VERSION);assert.equal(proof.status,'PASS');assert.equal(proof.postgres.totalCheckCount,8);assert.equal(proof.postgres.sourceCount,103);assert.equal(proof.ui.totalCheckCount,22);assert.equal(proof.providerCalls,0);assert.equal(proof.productionLoginVerified,false);assert.equal(proof.permissionsGranted,false);
+ assert.equal(native.files.length,106);assert.equal(browser.files.length,3);const input=fixture(),before=JSON.stringify(input),proof=validateKycReplyFeedbackCi(input);assert.equal(JSON.stringify(input),before);assert.equal(proof.version,KYC_REPLY_FEEDBACK_CI_VERSION);assert.equal(proof.status,'PASS');assert.equal(proof.postgres.totalCheckCount,8);assert.equal(proof.postgres.sourceCount,106);assert.equal(proof.ui.totalCheckCount,22);assert.equal(proof.providerCalls,0);assert.equal(proof.productionLoginVerified,false);assert.equal(proof.permissionsGranted,false);
 });
 test('current usage policy cannot be omitted, substituted or certified by a historical 101-source receipt',()=>{
  const files=['src/lib/organization-usage-policy.mjs','src/lib/organization-resource-usage-policy.mjs'];
  for(const file of files){
   assert.equal(native.files.filter(source=>source===file).length,1);
-  rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);assert.equal(input.postgres.sourceManifest.length,102);});
-  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-usage-policy.mjs';assert.equal(input.postgres.sourceManifest.length,103);});
+  rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);assert.equal(input.postgres.sourceManifest.length,105);});
+  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-usage-policy.mjs';assert.equal(input.postgres.sourceManifest.length,106);});
   rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
   rejected(input=>{delete input.gitSources[file];});
  }
- rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>!files.includes(ref.path));assert.equal(input.postgres.sourceManifest.length,101);});
+ assert.equal(KYC_REPLY_FEEDBACK_HISTORICAL_101_SOURCES.length,101);
+ rejected(input=>{input.postgres.sourceManifest=manifest(KYC_REPLY_FEEDBACK_HISTORICAL_101_SOURCES);assert.equal(input.postgres.sourceManifest.length,101);});
+});
+test('durable civil source lineage cannot be omitted, substituted or certified by the pre-civil manifest',()=>{
+ const files=['src/lib/participant-civil-store.mjs','src/lib/participant-civil-policy.mjs','src/lib/bindx-civil-data-client.mjs'];
+ for(const file of files){
+  assert.equal(native.files.filter(source=>source===file).length,1);
+  rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);});
+  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-civil-source.mjs';assert.equal(input.postgres.sourceManifest.length,106);});
+  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
+  rejected(input=>{delete input.gitSources[file];});
+ }
+ rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>!files.includes(ref.path));assert.equal(input.postgres.sourceManifest.length,103);});
 });
 test('a forged foreign abbreviated or stale HEAD and tree cannot certify proofs',()=>{
  for(const key of ['expectedHead','head','sourceTree'])rejected(input=>{input[key]='c'.repeat(40);});rejected(input=>{input.expectedHead=head.slice(0,7);});for(const kind of ['postgres','ui'])for(const key of ['sourceRevision','sourceTree'])rejected(input=>{input[kind][key]='c'.repeat(40);});
