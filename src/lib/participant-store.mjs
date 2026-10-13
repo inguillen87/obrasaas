@@ -479,6 +479,7 @@ export function createParticipantStore({workspace,connect,identity,upload,get,an
   },
   status(session,context){participantContext(context);if(!operationId(context.operationId))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');return runIdentity(session,context,false,async(client,member,scope)=>{
    const found=await receipt(client,member,participantReceiptId(member.actorId,context.projectId,context.operationId));if(found){
+    if(context.workerId!==undefined&&found.metadata?.kind!=='PROCESS_KYC')throw new WorkspaceError('PARTICIPANT_RECEIPT_INVALID',409);
     if(found.metadata?.projectId!==context.projectId)throw new WorkspaceError('PARTICIPANT_RECEIPT_INVALID',409);
     if(member.identityOnly&&!['KYC_SUBMITTED','INVITATION_ACCEPTED','REVOKE_ONBOARDING_CONTACT'].includes(found.metadata.kind))throw new WorkspaceError('PARTICIPANT_KYC_REVIEW_REQUIRED',403);
     if(found.metadata.kind===PRIVATE_BANK_RECEIPT_KIND)return privateBankStatus(client,member,session,{...context,operationId:context.operationId.toLowerCase(),workerId:found.entityId,action:found.metadata.bankAction},scope);

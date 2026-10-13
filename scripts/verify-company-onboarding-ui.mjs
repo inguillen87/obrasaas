@@ -201,7 +201,7 @@ async function scenario(mode,width=390){
  await click(page,'Entrar a mi obra');await wait(page,'Mis obras');await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled));await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra inicial de ensayo')).click());
  if(mode==='planned'){await wait(page,'Replanteo de la obra');assert.ok((await page.evaluate(()=>document.body.innerText)).includes('0 %'));}
   else{
-   await wait(page,'no tiene tareas registradas');await click(page,'Nueva tarea');await page.type('input[minlength="2"]','Primera tarea cargada después');
+   await wait(page,'no tiene tareas registradas');await click(page,'Nueva tarea');await page.waitForSelector('input[minlength="2"]',{visible:true,timeout:20000});await page.type('input[minlength="2"]','Primera tarea cargada después');
    await click(page,'Crear tarea');await wait(page,'Tarea creada y vinculada');
    assert.equal(taskPosts.length,1);const createdTask=taskReceipts.get(taskPosts[0].operationId).task;assert.equal(createdTask.title,'Primera tarea cargada después');assert.equal(createdTask.progress,0);
    if(mode==='empty'){

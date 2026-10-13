@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash,randomUUID} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {createParticipantStore} from '../src/lib/participant-store.mjs';
+import {createParticipantHandlers} from '../src/lib/participant-http.mjs';
 import {createOrganizationUsage} from '../src/lib/organization-usage-store.mjs';
 import {createPilotMediaAnalyzer} from '../src/lib/pilot-media.mjs';
 import {PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE} from '../src/lib/participant-policy.mjs';
@@ -16,7 +18,7 @@ const fields={isDni:true,nombreCompleto:'Persona OCR sintética',dni:'12345678',
 const units={prompt_tokens:123,completion_tokens:17,total_tokens:140,prompt_tokens_details:{cached_tokens:20},completion_tokens_details:{reasoning_tokens:2}};
 const providerResponse=(patch={})=>Response.json({id:'chatcmpl_synthetic',model:'gpt-4o-2024-08-06',usage:units,choices:[{finish_reason:'stop',message:{content:JSON.stringify(fields)}}],...patch},{headers:{'x-request-id':'req_synthetic'}});
 
-function fixture({response=()=>providerResponse(),configured=true,consent=true,expired=false,role='DIRECTOR',beforeGet}={}){
+function fixture({response=()=>providerResponse(),configured=true,consent=true,expired=false,role='DIRECTOR',beforeGet,storeFactory=createParticipantStore}={}){
  const session={authenticated:true,verification:'clerk-production-jwt',userId:'user_Reviewer',organizationId:'org_Synthetic',organizationRole:'org:member'},scope='a'.repeat(64),projectId='project-synthetic';
  const member={actorId:'actor-synthetic',organizationId:'company-synthetic',role},calls={get:0,provider:0,biometrics:0},sqls=[],audits=new Map();
  let now=new Date('2026-10-12T12:00:00.000Z'),revision=1,revoked=false,technicalSnapshot=null;
@@ -74,7 +76,7 @@ function fixture({response=()=>providerResponse(),configured=true,consent=true,e
   calls.provider++;assert.equal(url,'https://api.openai.com/v1/chat/completions');const request=JSON.parse(options.body),content=request.messages[1].content;assert.equal(request.model,'gpt-4o');assert.equal(content.filter(item=>item.type==='image_url').length,1);assert.equal(content.find(item=>item.type==='image_url').image_url.url,'data:image/png;base64,'+picture.toString('base64'));
   assert.equal(usageRows().filter(audit=>audit.metadata.state==='DISPATCHED').length,1);return response({row,member,usage,audits,company,calls,advance:ms=>{now=new Date(now.getTime()+ms);},revoke:()=>{revoked=true;}});
  }});
- const store=createParticipantStore({workspace,usage,analyzer,assessBiometrics:async()=>{calls.biometrics++;return {success:false,code:'BIOMETRIC_SERVICE_NOT_CONFIGURED'};},get:async path=>{
+ const store=storeFactory({workspace,usage,analyzer,assessBiometrics:async()=>{calls.biometrics++;return {success:false,code:'BIOMETRIC_SERVICE_NOT_CONFIGURED'};},get:async path=>{
   calls.get++;if(beforeGet)await beforeGet({row,member,company});return {statusCode:200,blob:{url:'https://synthetic.private.blob.vercel-storage.com/'+path,size:picture.length,contentType:'image/png'},stream:new Response(picture).body};
  }});
  const command=()=>({operationId:randomUUID(),projectId,scope,action:'PROCESS_KYC',payload:{workerId:row.id,revision:row.revision,submissionId:row.metadata.participant.kyc.submissionId}});
@@ -89,11 +91,31 @@ test('actual OCR store binds one private front to a company receipt, exact usage
  assert.doesNotMatch(JSON.stringify(f.usageRows()),/12345678|Persona OCR|base64|private\.blob/);assert.equal((await f.store.save(f.session,command)).replayed,true);assert.equal(f.calls.provider,1);assert.equal((await f.usage.read(f.session,{scope:f.scope})).summary.total,1);
 });
 
+test('targeted OCR status rejects a valid human-review receipt and removing its guard restores the previous mismatch',async()=>{
+ const base=new URL('../src/lib/participant-store.mjs',import.meta.url),source=readFileSync(base,'utf8');
+ // A causal control runs the actual store with only this correlation guard
+ // removed. The checkout and the tested current implementation stay intact.
+ const unguardedSource=source.replace(/^\s*if\(context.workerId!==undefined&&found.metadata\?\.kind!=='PROCESS_KYC'\)throw new WorkspaceError\('PARTICIPANT_RECEIPT_INVALID',409\);\r?\n/m,'');
+ assert.notEqual(unguardedSource,source,'The causal control must remove exactly the targeted OCR correlation guard');
+ const resolved=unguardedSource.replace(/^(import\s.*?\sfrom\s*)(['"])(\.[^'"]+)\2;?$/gm,(_match,prefix,_quote,reference)=>prefix+JSON.stringify(new URL(reference,base).href)+';');
+ const unguarded=await import('data:text/javascript;base64,'+Buffer.from(resolved).toString('base64'));
+ for(const [storeFactory,expectedStatus] of [[createParticipantStore,409],[unguarded.createParticipantStore,200]]){
+  const f=fixture({storeFactory}),command={...f.command(),action:'REVIEW_KYC'};
+  command.payload={...command.payload,decision:'REJECTED',reason:'Revisión humana sintética independiente de la lectura OCR.'};
+  const reviewed=await f.store.save(f.session,command);assert.equal(reviewed.saved,true);assert.equal(reviewed.participant.kyc.status,'REJECTED');
+  const handlers=createParticipantHandlers({verify:async()=>f.session,store:f.store}),params=new URLSearchParams({projectId:f.projectId,scope:f.scope,detail:'ocr-usage',workerId:command.payload.workerId,submissionId:command.payload.submissionId,operationId:command.operationId});
+  const response=await handlers.GET(new Request('https://obrasaas.com/api/identity/participants?'+params)),value=await response.json();assert.equal(response.status,expectedStatus);
+  if(expectedStatus===409){assert.equal(value.code,'PARTICIPANT_RECEIPT_INVALID');assert.equal(value.saved,false);assert.equal(value.receiptId,undefined);}
+  else{assert.equal(value.state,'RECORDED');assert.equal(value.receiptId,reviewed.receiptId);}
+  assert.equal(f.calls.provider,0);assert.equal(f.calls.get,0);assert.equal(f.usageRows().length,0);
+ }
+});
+
 for(const [name,patch] of [['refusal',{choices:[{finish_reason:'stop',message:{refusal:'Synthetic refusal'}}]}],['malformed fields',{choices:[{finish_reason:'stop',message:{content:JSON.stringify({isDni:true,dni:null})}}]}],['truncated output',{choices:[{finish_reason:'length',message:{content:JSON.stringify(fields)}}]}]])test(name+' retains actual observed tokens before rejecting OCR output',async()=>{
  const f=fixture({response:()=>providerResponse(patch)}),result=await f.store.save(f.session,f.command());assert.equal(result.participant.kyc.processing.status,'FAILED_RETRYABLE');assert.equal(result.participant.kyc.processing.fields,undefined);assert.equal(f.usageRows()[0].metadata.state,'OBSERVED');assert.equal((await f.usage.read(f.session,{scope:f.scope})).summary.totalTokens,'140');
 });
 
-for(const response of [()=>providerResponse({usage:null}),()=>new Response(null,{status:429,headers:{'x-request-id':'req_rejected'}})])test('unmeasured/rejected provider response keeps unknown cost without inventing token zeros',async()=>{
+for(const [name,response] of [['missing usage',()=>providerResponse({usage:null})],['HTTP 429',()=>new Response(null,{status:429,headers:{'x-request-id':'req_rejected'}})]])test('unmeasured/rejected provider response keeps unknown cost without inventing token zeros: '+name,async()=>{
  const f=fixture({response});await f.store.save(f.session,f.command());assert.equal(f.usageRows()[0].metadata.state,'UNMEASURED');assert.equal(f.usageRows()[0].metadata.observation.usage,null);const view=await f.usage.read(f.session,{scope:f.scope});assert.equal(view.summary.observed,0);assert.equal(view.capacity.cost,null);
 });
 

@@ -8,6 +8,7 @@ import {bankFixture,syntheticBankNumber} from '../tests/fixtures/private-bank-fi
 import {RECOVERY_DATABASE_NAME} from '../src/app/(identity)/cuenta/workspace-recovery-storage.mjs';
 import {SITE_ROLES} from '../src/lib/site-register-policy.mjs';
 import {EMPLOYEE_INTAKE_NOTICE,EMPLOYEE_INTAKE_NOTICE_VERSION} from '../src/lib/meta-kyc-conversation.mjs';
+import {applyBankIntakeDeadlockControl} from './lib/participant-bank-intake-fixture.mjs';
 
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV&&!process.env.VERCEL_TARGET);
 const bad=process.argv.includes('--bad-resolution'),widthArg=process.argv.find(value=>value.startsWith('--width=')),caseArg=process.argv.find(value=>value.startsWith('--case='));
@@ -21,10 +22,10 @@ const files=['participant-onboarding-next-step.mjs','participant-panel.js','part
 for(const file of files)copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
 const sources=new Set(files.map(file=>'src/app/(identity)/cuenta/'+file));
 function visit(file){if(sources.has(file))return;sources.add(file);const text=readFileSync(path.join(root,file),'utf8');for(const match of text.matchAll(/(?:from\s*|import\s*)['"](\.[^'"]+)['"]/g)){const relative=path.posix.normalize(path.posix.join(path.posix.dirname(file),match[1])),found=[relative,relative+'.js',relative+'.mjs'].find(value=>existsSync(path.join(root,value)));assert.ok(found);visit(found);}}
-for(const file of ['tests/fixtures/private-bank-fixture.mjs','src/lib/site-register-policy.mjs','src/lib/meta-kyc-conversation.mjs'])visit(file);
+for(const file of ['tests/fixtures/private-bank-fixture.mjs','src/lib/site-register-policy.mjs','src/lib/meta-kyc-conversation.mjs','scripts/lib/participant-bank-intake-fixture.mjs'])visit(file);
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),sourceManifest=[...sources].sort().map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
 let badTransform=null;
-if(bad){const target=path.join(app,'participant-panel.js','participant-ocr-usage-view.mjs'),before=readFileSync(target,'utf8'),needle='locked={busy||Boolean(attempt)||Boolean(durableReference)||!recoveryReady||Boolean(draft)||intakePending}',replacement='locked={busy||Boolean(attempt)||Boolean(durableReference)||!recoveryReady||Boolean(draft)||intakePending||hasBankPending}';assert.equal(before.split(needle).length,2);writeFileSync(target,before.replace(needle,replacement));badTransform={source:'src/app/(identity)/cuenta/participant-panel.js',originalSha256:sha(Buffer.from(before)),fixtureSha256:sha(readFileSync(target)),needle,replacement,runtimeSourceEdited:false};}
+if(bad)badTransform=applyBankIntakeDeadlockControl(app);
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({private:true}));writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export const viewport={width:'device-width',initialScale:1};export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
 const initial=bankFixture();

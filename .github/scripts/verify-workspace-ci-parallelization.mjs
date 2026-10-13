@@ -8,7 +8,7 @@ import yaml from 'js-yaml';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="72f51e254b64199660958484d4259c2913051b7a19c134bc4cf5b3bdb26ac340";
+export const EXPECTED_CONTRACT_SHA256="03ff6da732f7a267df1df10cd93de7e0a1617ec3b40d18418d4c34ec2e02aea3";
 const POSTGRES_SERVICE_IMAGE='docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -152,11 +152,23 @@ const whatsappPlanImportDependenciesFor=kind=>WHATSAPP_PLAN_IMPORT_DEPENDENCIES[
 const ORGANIZATION_USAGE_POLICY_SOURCE='src/lib/organization-usage-policy.mjs';
 const ORGANIZATION_USAGE_BACKEND_SOURCES=[ORGANIZATION_USAGE_POLICY_SOURCE,'src/lib/organization-usage-store.mjs','src/lib/organization-usage-http.mjs','src/lib/organization-usage-runtime.mjs'];
 const ORGANIZATION_USAGE_UI_SOURCES=['src/app/(identity)/cuenta/company-usage-panel.js','src/app/(identity)/cuenta/company-usage-view.mjs','src/app/(identity)/cuenta/plan-import-usage-view.mjs'];
-const ORGANIZATION_USAGE_PREVIOUS_SOURCE_COUNTS={UNIT:122,UI_BANK:120,UI_JOINT:120,UI_CAUSAL:120,PG_COMPANY_KYC:199,PG_FIELD:113,PG_OVERTIME:98,UI_IDENTITY_ONLY:122};
-const organizationUsageDependenciesFor=kind=>kind==='PG_COMPANY_KYC'?ORGANIZATION_USAGE_BACKEND_SOURCES:kind==='UI_IDENTITY_ONLY'?ORGANIZATION_USAGE_UI_SOURCES:['UNIT','UI_BANK','UI_JOINT','UI_CAUSAL','PG_FIELD','PG_OVERTIME'].includes(kind)?[ORGANIZATION_USAGE_POLICY_SOURCE]:[];
+// Resource accounting extends the reviewed runtime and account graphs. These
+// additions never replace the previous usage counts or historical producer pins.
+const ORGANIZATION_RESOURCE_USAGE_POLICY_SOURCE='src/lib/organization-resource-usage-policy.mjs';
+const PARTICIPANT_OCR_USAGE_SOURCE='src/app/(identity)/cuenta/participant-ocr-usage-view.mjs';
+const FIELD_MEDIA_HELD_SOURCE='src/app/(identity)/cuenta/field-media-held-view.mjs';
+const resourceUsageDependenciesFor=kind=>kind==='PG_COMPANY_KYC'?[ORGANIZATION_RESOURCE_USAGE_POLICY_SOURCE,'src/lib/organization-resource-usage-store.mjs']:kind==='UI_IDENTITY_ONLY'?[PARTICIPANT_OCR_USAGE_SOURCE,FIELD_MEDIA_HELD_SOURCE]:kind==='UI_INTAKE'?[PARTICIPANT_OCR_USAGE_SOURCE]:['UI_BANK','UI_JOINT','UI_CAUSAL'].includes(kind)?[ORGANIZATION_RESOURCE_USAGE_POLICY_SOURCE,PARTICIPANT_OCR_USAGE_SOURCE]:['UNIT','PG_FIELD','PG_OVERTIME'].includes(kind)?[ORGANIZATION_RESOURCE_USAGE_POLICY_SOURCE]:[];
+const ORGANIZATION_USAGE_PREVIOUS_SOURCE_COUNTS={UNIT:122,UI_BANK:120,UI_INTAKE:27,UI_JOINT:120,UI_CAUSAL:120,PG_COMPANY_KYC:199,PG_FIELD:113,PG_OVERTIME:98,UI_IDENTITY_ONLY:122};
+const organizationUsageDependenciesFor=kind=>[...(kind==='PG_COMPANY_KYC'?ORGANIZATION_USAGE_BACKEND_SOURCES:kind==='UI_IDENTITY_ONLY'?ORGANIZATION_USAGE_UI_SOURCES:['UNIT','UI_BANK','UI_JOINT','UI_CAUSAL','PG_FIELD','PG_OVERTIME'].includes(kind)?[ORGANIZATION_USAGE_POLICY_SOURCE]:[]),...resourceUsageDependenciesFor(kind)];
+const RESOURCE_USAGE_PREVIOUS_PRODUCER_PINS={UI_INTAKE:'c26662f73153290bf7def41b6fe5fa6d3a976f0833b01f58e4000a32b306d1da',UI_JOINT:'059187f68012fb621e3e099b78d5190ab4dadb0029536f00fd935808de7e642c',UI_CAUSAL:'059187f68012fb621e3e099b78d5190ab4dadb0029536f00fd935808de7e642c'};
+// The joint producer records the executed causal transform helper. Its source
+// is additive to CURRENT proofs; every earlier source count remains frozen.
+const INTAKE_CAUSAL_FIXTURE_SOURCE='scripts/lib/participant-bank-intake-fixture.mjs';
+const proofFixtureDependenciesFor=kind=>['UI_JOINT','UI_CAUSAL'].includes(kind)?[INTAKE_CAUSAL_FIXTURE_SOURCE]:[];
+const INTAKE_CAUSAL_FIXTURE_PREVIOUS_PRODUCER_SHA256='457f06d73435ccdac3a45e8b304f04973c5d0ac1dfc1706ae1b940539b93f94b';
 const ORGANIZATION_USAGE_PREVIOUS_TRANSPORT_FIXTURE_SHA256='9e2cdcc22b34d465486a74b831acc48ddab179729989d553c9c074234c1bdf29';
 const ORGANIZATION_USAGE_PREVIOUS_LINK_TEST_SHA256='c9d790f1ff67010374cc84a431ab68ddeaf7770da2b5e1de41e4e593265458fc';
-const currentPlanDependenciesFor=kind=>[...monthlyCurveDependenciesFor(kind),...calendarPreparationDependenciesFor(kind),...whatsappPlanImportDependenciesFor(kind),...organizationUsageDependenciesFor(kind)];
+const currentPlanDependenciesFor=kind=>[...monthlyCurveDependenciesFor(kind),...calendarPreparationDependenciesFor(kind),...whatsappPlanImportDependenciesFor(kind),...organizationUsageDependenciesFor(kind),...proofFixtureDependenciesFor(kind)];
 // Current verified office sources are additive; frozen historical records remain unchanged.
 const VERIFIED_OFFICE_DEPENDENCIES={"UNIT":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"UI_BANK":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"UI_INTAKE":["src/app/(identity)/cuenta/participant-office-account-view.mjs"],"UI_JOINT":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"UI_CAUSAL":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"PG_COMPANY_KYC":["src/lib/participant-verified-office.mjs"],"UI_PREPARATION":["src/app/(identity)/cuenta/participant-office-account-view.mjs"],"UI_PORTFOLIO":["src/app/(identity)/cuenta/participant-office-account-view.mjs"],"UI_IDENTITY_ONLY":["src/app/(identity)/cuenta/participant-office-account-view.mjs","src/lib/participant-verified-office.mjs"],"PG_FIELD":["src/lib/participant-verified-office.mjs"],"PG_OVERTIME":["src/lib/participant-verified-office.mjs"]};
 const officeAccountDependenciesFor=kind=>VERIFIED_OFFICE_DEPENDENCIES[kind]||[];
@@ -605,21 +617,21 @@ function currentKycStatusClosureSelftest(spec,proof,root,validate){
   }
   assert.ok(changed>0,'CURRENT source exists in shadow manifest: '+file);
  };
- good('exact-additive-count-and-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+calendarPreparationDependenciesFor(spec.kind).length+whatsappPlanImportDependenciesFor(spec.kind).length+organizationUsageDependenciesFor(spec.kind).length+companySubscriptionBackendDependenciesFor(spec.kind).length+companySubscriptionFixtureDependenciesFor(spec.kind).length+taskMeasurementDependenciesFor(spec.kind).length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
+ good('exact-additive-count-and-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+calendarPreparationDependenciesFor(spec.kind).length+whatsappPlanImportDependenciesFor(spec.kind).length+organizationUsageDependenciesFor(spec.kind).length+proofFixtureDependenciesFor(spec.kind).length+companySubscriptionBackendDependenciesFor(spec.kind).length+companySubscriptionFixtureDependenciesFor(spec.kind).length+taskMeasurementDependenciesFor(spec.kind).length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
  for(const file of dependencies){
   good('source-pinned-'+file,()=>assert.ok(spec.sourceFiles.includes(file)));
   mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{remove:true}));
   mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',value=>rewrite(value,file,{changedHash:true}));
   mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{replacement:'src/lib/foreign-current-kyc-source.mjs'}));
  }
- mutate('previous-current-manifest-cannot-certify-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of [...dependencies,...calendarPreparationDependenciesFor(spec.kind),...whatsappPlanImportDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...companySubscriptionBackendDependenciesFor(spec.kind),...companySubscriptionFixtureDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind)])rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,previousCount);});
+ mutate('previous-current-manifest-cannot-certify-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of [...dependencies,...calendarPreparationDependenciesFor(spec.kind),...whatsappPlanImportDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind),...companySubscriptionBackendDependenciesFor(spec.kind),...companySubscriptionFixtureDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind)])rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,previousCount);});
  const replyDependencies=currentKycReplyFeedbackDependenciesFor(spec.kind);
  if(replyDependencies.length)mutate('previous-reply-manifest-cannot-certify-delivery-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of replyDependencies)rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,spec.sourceFiles.length-replyDependencies.length);});
  checks.push(...organizationUsageClosureSelftest(spec,proof,root,validate));
  return checks;
 }
 function organizationUsageClosureSelftest(spec,proof,root,validate){
- const dependencies=organizationUsageDependenciesFor(spec.kind);if(!dependencies.length)return [];
+ const dependencies=[...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind)];if(!dependencies.length)return [];
  const previousCount=ORGANIZATION_USAGE_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-organization-usage-';
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure CURRENT source fixture; no PG/UI/provider execution'});};
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial CURRENT source fixture'});};
@@ -647,16 +659,24 @@ function organizationUsageClosureSelftest(spec,proof,root,validate){
 }
 function validateOrganizationUsageProofSources(contract){
  for(const spec of contract.extension.proofs){
+  if(proofFixtureDependenciesFor(spec.kind).some(file=>spec.sourceFiles.filter(source=>source===file).length!==1))deny('CURRENT_PROOF_FIXTURE_SOURCE_DEPENDENCIES');
   const dependencies=organizationUsageDependenciesFor(spec.kind);if(!dependencies.length)continue;
-  if(spec.sourceFiles.length!==ORGANIZATION_USAGE_PREVIOUS_SOURCE_COUNTS[spec.kind]+dependencies.length||dependencies.some(file=>!spec.sourceFiles.includes(file)))deny('ORGANIZATION_USAGE_SOURCE_DEPENDENCIES');
+  if(spec.sourceFiles.length!==ORGANIZATION_USAGE_PREVIOUS_SOURCE_COUNTS[spec.kind]+dependencies.length+proofFixtureDependenciesFor(spec.kind).length||dependencies.some(file=>!spec.sourceFiles.includes(file)))deny('ORGANIZATION_USAGE_SOURCE_DEPENDENCIES');
  }
 }
 function organizationUsageContractSelftest(contract){
  const checks=[];
- for(const spec of contract.extension.proofs)for(const file of organizationUsageDependenciesFor(spec.kind)){
-  const changed=clone(contract);changed.extension.proofs.find(proof=>proof.id===spec.id).sourceFiles=spec.sourceFiles.filter(source=>source!==file);
+ for(const spec of contract.extension.proofs)for(const file of organizationUsageDependenciesFor(spec.kind))for(const mode of ['missing','foreign']){
+  const changed=clone(contract),target=changed.extension.proofs.find(proof=>proof.id===spec.id);
+  if(mode==='missing')target.sourceFiles=target.sourceFiles.filter(source=>source!==file);else target.sourceFiles[target.sourceFiles.indexOf(file)]='src/lib/foreign-organization-usage-source.mjs';
   assert.throws(()=>validateContract(changed),error=>error.code==='ORGANIZATION_USAGE_SOURCE_DEPENDENCIES');
-  checks.push({name:spec.id+'-organization-usage-contract-source-omitted-'+file,result:'PASS',expectedDenial:'ORGANIZATION_USAGE_SOURCE_DEPENDENCIES',boundary:'pure CURRENT contract fixture'});
+  checks.push({name:spec.id+'-organization-usage-contract-source-'+mode+'-'+file,result:'PASS',expectedDenial:'ORGANIZATION_USAGE_SOURCE_DEPENDENCIES',boundary:'pure CURRENT contract fixture'});
+ }
+ for(const spec of contract.extension.proofs)for(const file of proofFixtureDependenciesFor(spec.kind))for(const mode of ['missing','foreign']){
+  const changed=clone(contract),target=changed.extension.proofs.find(proof=>proof.id===spec.id);
+  if(mode==='missing')target.sourceFiles=target.sourceFiles.filter(source=>source!==file);else target.sourceFiles[target.sourceFiles.indexOf(file)]='scripts/lib/foreign-intake-causal-fixture.mjs';
+  assert.throws(()=>validateContract(changed),error=>error.code==='CURRENT_PROOF_FIXTURE_SOURCE_DEPENDENCIES');
+  checks.push({name:spec.id+'-current-causal-fixture-contract-'+mode,result:'PASS',expectedDenial:'CURRENT_PROOF_FIXTURE_SOURCE_DEPENDENCIES',boundary:'pure CURRENT contract fixture'});
  }
  return checks;
 }
@@ -766,7 +786,7 @@ function calendarPreparationContractSelftest(workflow,contract,root){
  return checks;
 }
 function whatsappPlanImportClosureSelftest(spec,proof,root,validate){
- const dependencies=whatsappPlanImportDependenciesFor(spec.kind),subscriptionDependencies=[...companySubscriptionBackendDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind),...currentKycReplyFeedbackDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind)],previousCount=WHATSAPP_PLAN_IMPORT_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-whatsapp-plan-import-';
+ const dependencies=whatsappPlanImportDependenciesFor(spec.kind),subscriptionDependencies=[...companySubscriptionBackendDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind),...currentKycReplyFeedbackDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind)],previousCount=WHATSAPP_PLAN_IMPORT_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-whatsapp-plan-import-';
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};
  const rewrite=(value,file,{remove=false,replacement=null,changedHash=false}={})=>{
@@ -1081,6 +1101,14 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
    if(Object.hasOwn(KYC_FEEDBACK_PREVIOUS_PRODUCER_PINS,spec.kind)){
     const staleSpec={...spec,producerSha256:KYC_FEEDBACK_PREVIOUS_PRODUCER_PINS[spec.kind]};
     bad(spec.id+'-previous-current-pin-cannot-certify-KYC-feedback-harness','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(staleSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:staleSpec.producerSha256})),{expectedHead,readSource}));
+   }
+   if(Object.hasOwn(RESOURCE_USAGE_PREVIOUS_PRODUCER_PINS,spec.kind)){
+    const staleSpec={...spec,producerSha256:RESOURCE_USAGE_PREVIOUS_PRODUCER_PINS[spec.kind]};
+    bad(spec.id+'-previous-current-pin-cannot-certify-resource-usage-harness','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(staleSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:staleSpec.producerSha256})),{expectedHead,readSource}));
+   }
+   if(proofFixtureDependenciesFor(spec.kind).length){
+    const staleSpec={...spec,producerSha256:INTAKE_CAUSAL_FIXTURE_PREVIOUS_PRODUCER_SHA256};
+    bad(spec.id+'-pre-fix-causal-producer-cannot-certify-current-fixture','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(staleSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:staleSpec.producerSha256})),{expectedHead,readSource}));
    }
    if(spec.kind==='UI_INTAKE'){
     good('intake-ui-current-twenty-producer-modes-exact',()=>{const match=readFileSync(path.join(root,spec.producer),'utf8').match(/\bmodes=\[([^\]]+)\]/);assert.ok(match);equal([...match[1].matchAll(/'([^']+)'/g)].map(value=>value[1]),INTAKE_UI_MODES,'PROOF_MATRIX');});
@@ -1580,7 +1608,10 @@ export function selftest(workflow,contract,root=process.cwd()){
     ['binding-checks','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).checks=0;}]
    ]){if(spec.kind==='UI_CAUSAL'&&name==='binding-checks')continue;const n=clone(needs),r=JSON.parse(n[spec.lane].outputs.provenance);edit(r);delete r.manifestSha256;n[spec.lane].outputs.provenance=JSON.stringify(seal(r));bad(spec.id+'-'+name,code,()=>gate({...input,needs:n}));}
    bad(spec.id+'-current-source-bytes-tampered','PROOF_BINDING_SOURCE',()=>gate({...input,readSource:file=>file===spec.sourceFiles[0]?Buffer.concat([shadowSource(file),Buffer.from('altered shadow source')]):shadowSource(file)}));
-   const changedPath=clone(contract);changedPath.extension.proofs.find(p=>p.id===spec.id).sourceFiles[0]=spec.producer;bad(spec.id+'-current-source-path-tampered','PROOF_BINDING_SOURCE',()=>gate({...input,contract:changedPath}));
+   // Keep this binding control independent from the causal fixture-presence
+   // guard when its additive script source sorts before the application graph.
+   const sourceIndex=spec.sourceFiles.findIndex(file=>!proofFixtureDependenciesFor(spec.kind).includes(file));assert.ok(sourceIndex>=0);
+   const changedPath=clone(contract);changedPath.extension.proofs.find(p=>p.id===spec.id).sourceFiles[sourceIndex]=spec.producer;bad(spec.id+'-current-source-path-tampered','PROOF_BINDING_SOURCE',()=>gate({...input,contract:changedPath}));
   }
   for(const id of [53,54,55,56,57])for(const [name,code,edit] of [
    ['omitted','CONTRACT_BLOCKS',c=>{c.blocks=c.blocks.filter(b=>b.id!==id);}],
