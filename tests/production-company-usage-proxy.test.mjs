@@ -49,8 +49,8 @@ async function fixture({role='ADMIN',clerkRole='org:admin',membershipId='members
   calls.usage++;
   assert.deepEqual(values,[member.organizationId],'Usage queries remain bound to the canonical company');
   if(sql.includes('FROM public."Organization"'))return {rows:[{id:member.organizationId,name:member.organizationName,metadata:{},subscriptionPlan:'TRIAL',subscriptionStatus:'TRIALING',trialEndsAt:new Date('2026-10-27T12:00:00.000Z'),observedAt:now}]};
-  assert.ok(sql.includes("action='organization.usage.plan-import'"),'Only the existing usage ledger is queried');
-  if(sql.includes('count(*)::text'))return {rows:[{total:'0',reserved:'0',pending:'0',observed:'0',unmeasured:'0',inputTokens:'0',outputTokens:'0',totalTokens:'0'}]};
+  assert.ok(sql.includes("action='organization.usage.plan-import'")||sql.includes("action='organization.usage.resource'"),'Only the canonical usage ledgers are queried');
+  if(sql.includes('count(*)::text'))return {rows:[{total:'0',reserved:'0',pending:'0',observed:'0',unmeasured:'0',inputTokens:'0',outputTokens:'0',totalTokens:'0',audioSeconds:'0'}]};
   if(sql.startsWith('SELECT id,metadata FROM public."AuditLog"'))return {rows:[]};
   assert.fail('Unexpected synthetic SQL');
  }};
@@ -82,11 +82,11 @@ test('locally signed current ADMIN reaches proxy, actual route and canonical usa
  const f=await fixture(),{gateway,response}=await f.request(),body=await response.json();
  assert.equal(response.status,200);assert.equal(gateway.headers.get('x-middleware-next'),'1');
  assert.equal(f.calls.legacy,0);assert.equal(f.calls.handler,1);assert.equal(f.calls.verify,1);
- assert.equal(f.calls.connect,1);assert.equal(f.calls.release,1);assert.equal(f.calls.membership,1);assert.equal(f.calls.usage,3);
+ assert.equal(f.calls.connect,1);assert.equal(f.calls.release,1);assert.equal(f.calls.membership,1);assert.equal(f.calls.usage,5);
  assert.equal(body.scope,f.scope);assert.deepEqual(body.organization,{id:'company-synthetic',name:'Synthetic usage company'});
  assert.deepEqual(body.coverage,{state:'TRIAL_CURRENT',startsAt:null,endsAt:'2026-10-27T12:00:00.000Z'});
  assert.deepEqual(body.capacity,{state:'CONTRACT_PENDING',cost:null});assert.deepEqual(body.funding,{state:'UNCONFIRMED'});
- assert.deepEqual(body.summary,{total:0,reserved:0,pending:0,observed:0,unmeasured:0,inputTokens:'0',outputTokens:'0',totalTokens:'0'});
+ assert.equal(body.version,2);assert.deepEqual(body.summary,{total:0,reserved:0,pending:0,observed:0,unmeasured:0,inputTokens:'0',outputTokens:'0',totalTokens:'0',audioSeconds:'0'});
  assert.deepEqual(body.recent,[]);assert.equal(body.truncated,false);
  assert.match(response.headers.get('cache-control'),/private, no-store/);assert.equal(response.headers.get('vary'),'Cookie, Authorization');
  assert.ok(f.queries.every(sql=>!/^(INSERT|UPDATE|DELETE)/.test(sql)));assert.ok(f.queries.includes('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY'));

@@ -1,0 +1,105 @@
+name: Identity and worksite media included usage
+on:
+  push:
+    branches: [master, 'feat/integral-worksite-included-usage-media-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      CUTOVER_TEST_DISPOSABLE: '1'
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Bind committed source and complete import closure
+        run: |
+          mkdir -p .vercel/private/resource-usage-ci
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {execFileSync} from 'node:child_process';
+          import {readFileSync,writeFileSync,existsSync} from 'node:fs';
+          import {createHash} from 'node:crypto';
+          import path from 'node:path';
+          import {parse} from '@babel/parser';
+          const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
+          const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+          assert.equal(git('rev-parse','HEAD'),process.env.GITHUB_SHA);
+          assert.equal(git('status','--porcelain'),'');
+          const roots=['scripts/verify-resource-usage-postgres.mjs','tests/production-resource-usage-reservation.test.mjs','tests/production-resource-usage-view.test.mjs','tests/production-resource-usage-postgres-target.test.mjs','tests/production-participant-ocr-usage.test.mjs','tests/production-pilot-media-usage.test.mjs','tests/production-field-media-usage.test.mjs','tests/production-field-media-held-ui.test.mjs','tests/production-company-usage-proxy.test.mjs','tests/production-organization-usage.test.mjs','tests/production-company-usage-view.test.mjs','src/lib/participant-runtime.mjs','src/lib/field-operations-runtime.mjs','src/lib/meta-demo-pilot-runtime.mjs','src/app/(identity)/cuenta/company-usage-panel.js','src/app/(identity)/cuenta/participant-panel.js','src/app/(identity)/cuenta/field-operations-panel.js'];
+          const files=new Set(['package.json','package-lock.json','.github/workflows/resource-usage.yml']);
+          function visit(file){
+            assert.ok(/^(src|tests|scripts)\//.test(file)&&!file.split('/').includes('..'));
+            if(files.has(file))return;
+            const bytes=readFileSync(file);files.add(file);
+            if(!/\.(?:mjs|js)$/.test(file))return;
+            const ast=parse(bytes.toString('utf8'),{sourceType:'unambiguous',plugins:['jsx'],createImportExpressions:true}),imports=[];
+            function walk(node){if(!node||typeof node!=='object')return;if(['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration'].includes(node.type)&&node.source?.value)imports.push(node.source.value);if(node.type==='ImportExpression'&&node.source?.type==='StringLiteral')imports.push(node.source.value);for(const value of Object.values(node))if(Array.isArray(value))value.forEach(walk);else if(value&&typeof value==='object')walk(value);}
+            walk(ast.program);
+            for(const ref of imports.filter(value=>value.startsWith('.'))){const base=path.posix.normalize(path.posix.join(path.posix.dirname(file),ref)),resolved=[base,base+'.mjs',base+'.js',base+'.css'].find(value=>existsSync(value));assert.ok(resolved,'Relative source import must resolve');visit(resolved);}
+          }
+          roots.forEach(visit);
+          for(const file of ['src/proxy.js','src/app/api/identity/company-usage/route.js','tests/fixtures/plan-import-ooxml-synthetic.mjs'])visit(file);
+          const sourceManifest=[...files].sort().map(file=>{const bytes=readFileSync(file);assert.deepEqual(bytes,execFileSync('git',['show','HEAD:'+file]));return {path:file,sha256:hash(bytes)};});
+          writeFileSync('.vercel/private/resource-usage-ci/before.json',JSON.stringify({version:'resource-usage-source-v2',sourceRevision:git('rev-parse','HEAD'),sourceTree:git('rev-parse','HEAD^{tree}'),sourceManifest},null,2)+'\n');
+          NODE
+      - name: Actual adapters, current authority, uncertain dispatch and typed UI recovery
+        run: |
+          node --test --test-reporter=tap tests/production-resource-usage-*.test.mjs tests/production-participant-ocr-usage.test.mjs tests/production-pilot-media-usage.test.mjs tests/production-field-media-usage.test.mjs tests/production-field-media-held-ui.test.mjs tests/production-organization-usage.test.mjs tests/production-company-usage-view.test.mjs tests/production-company-usage-proxy.test.mjs > .vercel/private/resource-usage-ci/tests.tap
+      - name: Native resource SQL, revocation settlement and both advisory lock orders
+        run: node scripts/verify-resource-usage-postgres.mjs
+      - name: Changed runtime and UI lint
+        run: |
+          npx eslint src/lib/organization-resource-usage-*.mjs src/lib/organization-usage-store.mjs src/lib/participant-store.mjs src/lib/participant-runtime.mjs src/lib/participant-http.mjs src/lib/field-media.mjs src/lib/field-operations-runtime.mjs src/lib/field-operations-store.mjs src/lib/field-operations-http.mjs src/lib/meta-field-bridge.mjs src/lib/meta-demo-pilot.mjs src/lib/meta-demo-pilot-runtime.mjs src/lib/pilot-media.mjs 'src/app/(identity)/cuenta/company-usage-panel.js' 'src/app/(identity)/cuenta/company-usage-view.mjs' 'src/app/(identity)/cuenta/participant-panel.js' 'src/app/(identity)/cuenta/participant-ocr-usage-view.mjs' 'src/app/(identity)/cuenta/field-operations-panel.js' 'src/app/(identity)/cuenta/field-media-held-view.mjs' scripts/verify-resource-usage-postgres.mjs tests/production-resource-usage-*.test.mjs tests/production-participant-ocr-usage.test.mjs tests/production-pilot-media-usage.test.mjs tests/production-field-media-usage.test.mjs tests/production-field-media-held-ui.test.mjs --max-warnings 0
+      - name: Verify proof, zero skipped cases, exact post-execution source and cleanup
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {execFileSync} from 'node:child_process';
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import {createHash} from 'node:crypto';
+          import {RESOURCE_USAGE_POSTGRES_CHECKS} from './scripts/verify-resource-usage-postgres.mjs';
+          const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+          const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
+          const before=JSON.parse(readFileSync('.vercel/private/resource-usage-ci/before.json','utf8'));
+          assert.equal(before.sourceRevision,process.env.GITHUB_SHA);
+          assert.equal(git('rev-parse','HEAD'),before.sourceRevision);assert.equal(git('rev-parse','HEAD^{tree}'),before.sourceTree);assert.equal(git('status','--porcelain'),'');
+          for(const source of before.sourceManifest){assert.equal(hash(readFileSync(source.path)),source.sha256);assert.equal(hash(execFileSync('git',['show','HEAD:'+source.path])),source.sha256);}
+          const native=JSON.parse(readFileSync('.vercel/private/resource-usage-postgres.json','utf8'));
+          assert.equal(native.status,'PASS');assert.equal(native.sourceRevision,before.sourceRevision);assert.equal(native.sourceTree,before.sourceTree);assert.deepEqual(native.checks,RESOURCE_USAGE_POSTGRES_CHECKS);assert.equal(native.totalCheckCount,RESOURCE_USAGE_POSTGRES_CHECKS.length);assert.equal(native.postgresExecuted,true);assert.equal(native.poolClosed,true);assert.equal(native.databaseRemoved,true);assert.equal(native.providerRequests,0);assert.equal(native.nativeLockObservations.length,2);for(const lock of native.nativeLockObservations){assert.equal(lock.waitingBeforeProject,true);assert.equal(lock.callbacksWhileHeld,0);assert.equal(lock.bothCompleted,true);}
+          const tap=readFileSync('.vercel/private/resource-usage-ci/tests.tap','utf8');assert.doesNotMatch(tap,/^not ok|^Bail out!|# (?:SKIP|TODO)\b/m);const results=[...tap.matchAll(/^ok (\d+) - ([^\n]+)$/gm)];assert.ok(results.length>=180);assert.equal(new Set(results.map(row=>row[2])).size,results.length);for(const counter of ['fail','cancelled','skipped','todo'])assert.match(tap,new RegExp('^# '+counter+' 0$','m'));assert.match(tap,new RegExp('^1\\.\\.'+results.length+'$','m'));assert.match(tap,new RegExp('^# pass '+results.length+'$','m'));
+          writeFileSync('.vercel/private/resource-usage-ci/verified.json',JSON.stringify({version:'resource-usage-ci-v2',status:'PASS',sourceRevision:before.sourceRevision,sourceTree:before.sourceTree,sourceManifest:before.sourceManifest,totalNativeCheckCount:native.totalCheckCount,totalUnitCheckCount:results.length,testNames:results.map(row=>row[2]),tapSha256:hash(Buffer.from(tap)),nativeSha256:hash(readFileSync('.vercel/private/resource-usage-postgres.json')),postgresExecuted:true,realProviderRequests:null,productionSessionAcceptance:false,physicalDeviceAcceptance:false},null,2)+'\n');
+          NODE
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: resource-usage-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            .vercel/private/resource-usage-ci/
+            .vercel/private/resource-usage-postgres.json
+            .vercel/private/resource-usage-postgres-failure.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
