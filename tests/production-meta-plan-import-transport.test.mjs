@@ -222,7 +222,8 @@ for(const role of ['ADMIN','DIRECTOR','SITE_MANAGER'])test('real field caller '+
 test('real field caller exposes no import menu or intent without a canonical import role',()=>{
  for(const role of [null,undefined,'AUDITOR','FINANCE','WORKER','admin']){
   const f=fieldPlanCaller(role),menu=f.say('MENU');callerNoIntent(menu);assert.ok(!menu.state.choices.some(row=>row.value==='PLAN_IMPORT'));
-  for(const body of ['CRONOGRAMA','GANTT']){const denied=f.say(body,menu.state);callerNoIntent(denied);assert.equal(denied.state,null);}
+   for(const body of ['IMPORTAR CRONOGRAMA','IMPORTAR PLAN']){const denied=f.say(body,menu.state);callerNoIntent(denied);assert.equal(denied.state,null);}
+   for(const body of ['CRONOGRAMA','GANTT']){const read=f.say(body,menu.state,{tasks:[{id:'task-read',title:'Tarea registrada',status:'IN_PROGRESS',progress:30,startsOn:'2026-10-12',endsOn:'2026-10-20'}]});callerNoIntent(read);assert.equal(read.state.purpose,'TASKS');assert.match(read.reply.body,/2026-10-12 → 2026-10-20/);assert.match(read.reply.body,/30%/);}
  }
 });
 test('real field menu stays within ten WhatsApp rows in every journey and permission state',()=>{
@@ -259,6 +260,13 @@ for(const body of ['CANCELAR','MENU','HOLA','AYUDA','ENTRADA','CRONOGRAMA','ESTA
  assert.equal(authorized.state.step,'PLAN_IMPORT_AUTHORIZED');assert.ok(authorized.planImport);
  const value=f.say(body,authorized.state);callerNoIntent(value);assert.equal(value.state,authorized.state);assert.equal(value.preserveConversation,true);assert.deepEqual(value.state,before);
  assert.equal(value.state.nonce,pending.state.nonce);assert.deepEqual(value.state.pendingFile,authorized.planImport.sourceOrigin);assert.equal(value.state.lastEventId,pending.eventId);assert.equal(value.state.analysisConsentEventId,authorized.eventId);assert.equal(value.state.consent,authorized.planImport.consent);
- if(body==='ESTADO')assert.match(value.reply.body,/Obra: Obra sintética\nJornada: cerrada/);
+  if(body==='ESTADO')assert.match(value.reply.body,/Obra: Obra sintética\nJornada: cerrada/);
+  else if(body==='CRONOGRAMA')assert.match(value.reply.body,/Conservamos el borrador.*comprobá el mismo intento/);
  else assert.match(value.reply.body,/ya fue autorizada.*mismo intento/);
+});
+test('explicit import commands retain every permitted format while schedule aliases remain reads',()=>{
+ for(const role of ['ADMIN','DIRECTOR','SITE_MANAGER'])for(const body of ['IMPORTAR CRONOGRAMA','IMPORTAR PLAN']){
+  const f=fieldPlanCaller(role),started=f.say(body);callerNoIntent(started);assert.equal(started.state.purpose,'PLAN_IMPORT');assert.equal(started.state.step,'PLAN_IMPORT_FORMAT');assert.ok(started.state.choices.some(row=>row.value==='DOCUMENT'));
+  const current=f.say('GANTT',null,{tasks:[{id:'task-read',title:'Tarea vigente',status:'BACKLOG',progress:0,startsOn:null,endsOn:null}]});callerNoIntent(current);assert.equal(current.state.purpose,'TASKS');assert.match(current.reply.body,/Sin fechas previstas/);
+ }
 });

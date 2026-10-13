@@ -89,6 +89,50 @@ test('HOLA reads current journey and permissions with no draft or from a menu',(
  const reportOnly=say('HOLA',null,{facts:{...facts,permissions:{attendance:false,report:true}}});assert.ok(reportOnly.state.choices.every(choice=>!choice.value.startsWith('ATTEND_')));assert.ok(reportOnly.state.choices.some(choice=>choice.value==='MEDIA'));
  const pilot=say('HOLA',null,{facts:{...facts,attendanceOnly:true,permissions:{attendance:true,report:false}}});assert.deepEqual(pilot.state.choices.map(choice=>choice.value),['ATTEND_IN','STATUS']);
 });
+test('GANTT and CRONOGRAMA consult current registered dates and progress without an import role',()=>{
+ const current={...facts,projectId:'project-a',planImportRole:'AUDITOR',permissions:{attendance:true,report:false},tasks:[{...facts.tasks[0],status:'IN_PROGRESS',progress:37,startsOn:'2026-10-13',endsOn:'2026-10-21',budgetAmount:'PRIVATE_FINANCIAL_AMOUNT'}]};
+ for(const body of ['GANTT','CRONOGRAMA','TAREAS']){
+  const read=say(body,null,{facts:current});assert.equal(read.state.purpose,'TASKS');assert.match(read.reply.body,/2026-10-13 → 2026-10-21/);assert.match(read.reply.body,/37%/);assert.match(read.reply.body,/https:\/\/obrasaas.com\/cuenta\?obra=project-a#schedule-gantt-title/);assert.doesNotMatch(read.reply.body,/PRIVATE_FINANCIAL_AMOUNT/);assert.equal(read.command,undefined);assert.equal(read.media,undefined);assert.equal(read.planImport,undefined);
+  const detail=pickValue(read,'task-a',{facts:current});assert.match(detail.reply.body,/Estado registrado: En curso/);assert.match(detail.reply.body,/Avance registrado: 37%/);assert.equal(detail.state.taskId,undefined);assert.equal(detail.command,undefined);
+ }
+});
+test('schedule reads preserve exact live attendance, media, incident and material drafts and their original choice',()=>{
+ for(const body of ['ENTRADA','EVIDENCIA','INCIDENCIA','MATERIALES'])for(const command of ['GANTT','CRONOGRAMA','TAREAS']){
+  const original=say(body),state=Object.freeze({...original.state,lastEventId:'original-draft-event',expiresAt:'2026-10-01T12:01:00.000Z',choices:Object.freeze(original.state.choices.map(choice=>Object.freeze({...choice})))}),before=JSON.stringify(state);
+  const read=planMetaFieldConversation({message:{type:'text',text:{body:command}},state,eventId:'later-read-event',facts:{...facts,projectId:'project-a'},now});
+  assert.equal(read.state,state);assert.equal(read.preserveConversation,true);assert.equal(JSON.stringify(state),before);assert.match(read.reply.body,/Conservamos el borrador y su mensaje original/);assert.equal(read.command,undefined);assert.equal(read.media,undefined);assert.equal(read.planImport,undefined);
+  const continued=planMetaFieldConversation({message:{type:'interactive',interactive:{type:'list_reply',list_reply:{id:original.reply.sections[0].rows[0].id}}},state:read.state,eventId:'resume-original-event',facts,now});assert.equal(continued.state.step,body==='ENTRADA'?'LOCATION_NOTICE':'SECTOR');assert.equal(continued.command,undefined);assert.equal(continued.media,undefined);
+ }
+});
+test('attendance-only pilot refuses schedule aliases and legacy TASKS capabilities without losing a draft',()=>{
+ const limited={...facts,attendanceOnly:true,projectId:'project-a',tasks:[{...facts.tasks[0],startsOn:'2026-10-13',endsOn:'2026-10-21',progress:37}]},original=say('ENTRADA'),state=Object.freeze({...original.state}),legacy=say('TAREAS');
+ for(const command of ['GANTT','CRONOGRAMA','TAREAS'])for(const active of [null,state]){
+  const read=planMetaFieldConversation({message:{type:'text',text:{body:command}},state:active,eventId:'limited-read',facts:limited,now});assert.equal(read.state,active);assert.match(read.reply.body,/sólo habilita jornada/);assert.doesNotMatch(read.reply.body,/Mampostería|2026-10-13|37%|cuenta\?/);assert.equal(read.command,undefined);assert.equal(read.planImport,undefined);if(active)assert.equal(read.preserveConversation,true);
+ }
+ const oldChoice=planMetaFieldConversation({message:{type:'interactive',interactive:{type:'list_reply',list_reply:{id:legacy.reply.sections[0].rows[0].id}}},state:legacy.state,eventId:'legacy-limited-read',facts:limited,now});assert.equal(oldChoice.state,legacy.state);assert.equal(oldChoice.preserveConversation,true);assert.doesNotMatch(oldChoice.reply.body,/Mampostería|37%/);
+ const menu=planMetaFieldConversation({message:{type:'text',text:{body:'MENU'}},state:legacy.state,eventId:'leave-legacy-limited-read',facts:limited,now});assert.equal(menu.state.purpose,'MENU');assert.deepEqual(menu.state.choices.map(choice=>choice.value),['ATTEND_IN','STATUS']);assert.equal(menu.preserveConversation,undefined);assert.doesNotMatch(menu.reply.body,/Mampostería|37%/);
+});
+test('unknown or invalid task dates/status/progress are shown for review without inventing registered values',()=>{
+ for(const patch of [{startsOn:null,endsOn:null,status:null,progress:NaN},{startsOn:'2026-02-30',endsOn:'2026-03-01',status:'constructor',progress:101},{startsOn:'2026-10-21',endsOn:'2026-10-13',status:'UNKNOWN',progress:-1}]){
+  const current={...facts,tasks:[{...facts.tasks[0],...patch}]},read=say('GANTT',null,{facts:current}),detail=pickValue(read,'task-a',{facts:current});assert.match(detail.reply.body,/Sin fechas previstas|Fechas por revisar/);assert.match(detail.reply.body,/Estado por confirmar/);assert.match(detail.reply.body,/Avance registrado: sin confirmar/);assert.doesNotMatch(detail.reply.body,/2026-02-30|101%|-1%|\[object Object\]/);assert.equal(detail.command,undefined);assert.equal(detail.planImport,undefined);
+ }
+});
+test('schedule keeps all eight tasks and both page controls within the COMPANY body budget at maximum names',()=>{
+ const prefix='Obra: '+'O'.repeat(160)+'\n',rows=Array.from({length:8},(_,index)=>({...facts.tasks[0],id:'task-'+index,title:'😀'.repeat(80),progress:37.12345678901234,status:'IN_PROGRESS',startsOn:'2026-10-13',endsOn:'2026-10-21'})),current={...facts,projectName:'O'.repeat(160),projectId:'p'.repeat(128),replyBodyLimit:1024-prefix.length,tasks:rows,taskPage:{hasPrevious:true,hasNext:true}};
+ const read=say('GANTT',null,{facts:current});assert.ok(prefix.length+read.reply.body.length<=1024);assert.equal(read.state.choices.length,10);assert.deepEqual(read.state.choices.map(choice=>choice.value),[...rows.map(row=>row.id),'PREVIOUS_TASKS','NEXT_TASKS']);assert.match(read.reply.body,/Vista parcial/);assert.match(read.reply.body,/2026-10-13 → 2026-10-21/);assert.equal(read.planImport,undefined);
+ const detail=pickValue(read,'task-7',{facts:current});assert.ok(prefix.length+detail.reply.body.length<=1024);assert.equal(detail.state.choices.length,10);assert.match(detail.reply.body,/Avance registrado: 37\.12345678901234%/);
+});
+test('maximum COMPANY schedule read reserves the live draft and authorized-attempt instruction inside its body budget',()=>{
+ const at=new Date('2026-10-13T20:00:00.000Z'),prefix='Obra: '+'O'.repeat(160)+'\n',rows=Array.from({length:8},(_,index)=>({id:'task-'+index,title:'😀'.repeat(80),progress:37.12345678901234,status:'IN_PROGRESS',startsOn:'2026-10-13',endsOn:'2026-10-21'})),current={...facts,projectName:'O'.repeat(160),projectId:'p'.repeat(128),replyBodyLimit:1024-prefix.length,tasks:rows,taskPage:{hasPrevious:true,hasNext:true}};
+ for(const step of ['PLAN_IMPORT_FILE','PLAN_IMPORT_NOTICE','PLAN_IMPORT_AUTHORIZED']){
+  const state=Object.freeze({version:1,purpose:'PLAN_IMPORT',step,nonce:'c'.repeat(20),lastEventId:'original-plan-event',expiresAt:'2026-10-13T20:30:00.000Z',pendingFile:Object.freeze({eventId:'original-file-event'})}),before=JSON.stringify(state),read=planMetaFieldConversation({message:{type:'text',text:{body:'GANTT'}},state,eventId:'maximum-draft-read-event',facts:current,now:at});
+  assert.ok(prefix.length+read.reply.body.length<=1024,'Actual COMPANY body length '+(prefix.length+read.reply.body.length));assert.equal(read.state,state);assert.equal(JSON.stringify(state),before);assert.equal(read.preserveConversation,true);assert.match(read.reply.body,/\nConservamos el borrador y su mensaje original/);assert.match(read.reply.body,/Respondé a ese paso para continuar/);assert.match(read.reply.body,/esta consulta no guarda ni extrae otro archivo/);assert.equal(read.reply.body.split('2026-10-13 → 2026-10-21').length-1,8);assert.equal(read.reply.body.split('37.12345678901234%').length-1,8);assert.match(read.reply.body,/Vista parcial/);assert.equal(read.command,undefined);assert.equal(read.planImport,undefined);assert.equal(read.media,undefined);
+  if(step==='PLAN_IMPORT_AUTHORIZED')assert.match(read.reply.body,/El archivo ya fue autorizado: comprobá el mismo intento desde Cuenta\.$/);
+ }
+});
+test('schedule link accepts only the canonical local project hint and never a caller URL or source-project override',()=>{
+ for(const projectId of ['../foreign','https://foreign.invalid',undefined]){const read=say('GANTT',null,{facts:{...facts,projectId,sourceProjectId:'foreign-source-project',link:'https://foreign.invalid/private'}});assert.doesNotMatch(read.reply.body,/https:\/\/|foreign/);assert.equal(read.state.purpose,'TASKS');}
+});
 test('HOLA preserves exact live attendance, media and material drafts then accepts only their original nonce',()=>{
  for(const body of ['ENTRADA','EVIDENCIA','MATERIALES']){
   const initial=say(body),state=Object.freeze({...initial.state,lastEventId:'durable-original-event',lastReceivedAt:'2026-10-01T11:59:59.900Z',lastMessageTimestamp:1790855999,expiresAt:'2026-10-01T12:01:00.000Z',choices:Object.freeze(initial.state.choices.map(choice=>Object.freeze({...choice})))}),before=JSON.stringify(state);
