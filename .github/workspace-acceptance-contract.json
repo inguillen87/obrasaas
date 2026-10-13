@@ -2730,6 +2730,7 @@
           "src/app/(identity)/cuenta/workspace.module.css",
           "src/lib/company-entitlement.mjs",
           "src/lib/company-phone-format.mjs",
+          "src/lib/company-subscription-catalog.mjs",
           "src/lib/field-media-privacy.mjs",
           "src/lib/geo.js",
           "src/lib/identity-return-path.mjs",
