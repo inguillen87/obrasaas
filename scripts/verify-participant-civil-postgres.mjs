@@ -42,6 +42,19 @@ export function participantCivilDisposableUrl(environment={}){
  return url;
 }
 export function participantCivilOwnedDatabase(value){if(typeof value!=='string'||!/^obrasaas_civil_[a-f0-9]{32}$/.test(value))throw new WorkspaceError('PARTICIPANT_CIVIL_OWNED_DATABASE_REJECTED');return value;}
+export function createParticipantCivilBlobAdapter({objects=new Map(),onPut=()=>{}}={}){
+ assert.ok(objects instanceof Map);assert.equal(typeof onPut,'function');
+ return {
+  async get(pathname,options){
+   assert.equal(options.access,'private');assert.equal(options.useCache,false);const item=objects.get(pathname);if(!item)return null;
+   return {statusCode:200,blob:{url:item.url,pathname,size:item.bytes.length,contentType:item.contentType},stream:new Response(item.bytes).body};
+  },
+  async put(pathname,bytes,options){
+   assert.equal(options.access,'private');assert.equal(options.allowOverwrite,false);assert.equal(options.addRandomSuffix,false);assert.equal(objects.has(pathname),false);
+   const item={bytes:Buffer.from(bytes),contentType:options.contentType,url:'https://synthetic.private.blob.vercel-storage.com/'+pathname};objects.set(pathname,item);onPut();return {url:item.url,pathname};
+  },
+ };
+}
 // Track actual pool checkouts within one logical dispatch. Another dispatch can
 // hold a native transaction while this caller has committed and released its own.
 export function createParticipantCivilDispatchObserver(){
@@ -96,10 +109,11 @@ const FIXTURE_SQL=`CREATE TYPE "TenantRole" AS ENUM('ADMIN','DIRECTOR','SITE_MAN
  CREATE TABLE "ProjectMembership"(id text PRIMARY KEY,"projectId" text REFERENCES "Project","tenantMembershipId" text REFERENCES "TenantMembership",status text,"updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP,UNIQUE("projectId","tenantMembershipId"));
  CREATE TABLE "Worker"(id text PRIMARY KEY,"projectId" text REFERENCES "Project",name text NOT NULL,phone text,active boolean DEFAULT true,metadata jsonb,"createdAt" timestamp DEFAULT CURRENT_TIMESTAMP,"updatedAt" timestamp DEFAULT CURRENT_TIMESTAMP,UNIQUE("projectId",phone));
  CREATE TABLE "AuditLog"(id text PRIMARY KEY,"organizationId" text REFERENCES "Organization","actorId" text REFERENCES "PlatformUser",action text,"entityType" text,"entityId" text,metadata jsonb,"createdAt" timestamp DEFAULT CURRENT_TIMESTAMP);`;
-let failureContext={stage:'TARGET_GUARD',check:null,completedCheckCount:0,poolClosed:false,databaseRemoved:false,adminClosed:false};
+const sqlState=value=>typeof value==='string'&&/^(?:[0-9]{2}|0[A-Z]|2[A-Z]|3[BDF]|F0|HV|P0|XX)[0-9A-Z]{3}$/.test(value)?value:null;
+let failureContext={stage:'TARGET_GUARD',check:null,completedCheckCount:0,poolClosed:false,databaseRemoved:false,adminClosed:false,sqlCode:null};
 
 export async function verifyParticipantCivilPostgres(environment=process.env){
- failureContext={stage:'TARGET_GUARD',check:null,completedCheckCount:0,poolClosed:false,databaseRemoved:false,adminClosed:false};
+ failureContext={stage:'TARGET_GUARD',check:null,completedCheckCount:0,poolClosed:false,databaseRemoved:false,adminClosed:false,sqlCode:null};
  const target=participantCivilDisposableUrl(environment),root=process.cwd(),revision=git(root,['rev-parse','HEAD']),tree=git(root,['rev-parse','HEAD^{tree}']);assert.match(revision,/^[a-f0-9]{40}$/);
  assert.equal(git(root,['status','--porcelain','--untracked-files=no']),'','Native verification requires committed clean tracked sources');
  const exactCi=environment.CI==='true';if(exactCi){assert.match(environment.GITHUB_SHA||'',/^[a-f0-9]{40}$/);assert.equal(environment.GITHUB_SHA,revision,'CI must execute the exact event SHA');}
@@ -108,7 +122,7 @@ export async function verifyParticipantCivilPostgres(environment=process.env){
  let connected=false,created=false,removed=false,pool,poolClosed=false,adminClosed=false,cleanupActivityCount=null,uncontrolledFetchAttempts=0,syntheticLoginRequests=0,syntheticCivilGetRequests=0,syntheticBlobWrites=0,barrier=null,time=Date.now();
  const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{uncontrolledFetchAttempts++;throw Error('PARTICIPANT_CIVIL_UNCONTROLLED_HTTP_REJECTED');};
  async function until(predicate,message){const end=Date.now()+2500;while(Date.now()<end){if(await predicate())return;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail(message);}
- const beginCheck=index=>{failureContext={...failureContext,stage:'NATIVE_CHECK',check:PARTICIPANT_CIVIL_POSTGRES_CHECKS[index],completedCheckCount:checks.length};};
+ const beginCheck=index=>{failureContext={...failureContext,stage:'NATIVE_CHECK',check:PARTICIPANT_CIVIL_POSTGRES_CHECKS[index],completedCheckCount:checks.length,sqlCode:null};};
  const finishCheck=index=>{assert.equal(checks.length,index);checks.push(PARTICIPANT_CIVIL_POSTGRES_CHECKS[index]);};
  try{
   failureContext.stage='OWNED_DATABASE';await admin.connect();connected=true;let authority=(await admin.query('SELECT current_database() AS db,current_user AS role')).rows[0];assert.equal(authority.db,'obrasaas_cutover_ci');assert.equal(authority.role,'cutover_test');
@@ -123,13 +137,13 @@ export async function verifyParticipantCivilPostgres(environment=process.env){
   const sqlClock=sql=>sql.replaceAll('clock_timestamp()','public.fixture_clock_timestamp()');
   const connect=async()=>{const native=await pool.connect(),caller=dispatchObserver.trackClient(native.processID);return {release:broken=>{native.release(broken);caller.released();},query:async(sql,args=[])=>{
    const stage=sql.startsWith('BEGIN')?'BEGIN':sql==='COMMIT'||sql==='ROLLBACK'?sql:sql.includes('pg_advisory_xact_lock')?'ADVISORY':sql.includes('FOR UPDATE OF p')?'PROJECT_LOCK':sql.includes('FROM public."Worker"')&&sql.endsWith('FOR UPDATE')?'WORKER_LOCK':null;
-   if(stage)trace.push({pid:native.processID,stage,phase:'REQUEST',readOnly:stage==='BEGIN'?sql.includes('READ ONLY'):null});const result=await native.query(sqlClock(sql),args);if(stage){caller.acquired(stage,stage==='BEGIN'?sql.includes('READ ONLY'):null);trace.push({pid:native.processID,stage,phase:'ACQUIRED',readOnly:stage==='BEGIN'?sql.includes('READ ONLY'):null});}
+   if(stage)trace.push({pid:native.processID,stage,phase:'REQUEST',readOnly:stage==='BEGIN'?sql.includes('READ ONLY'):null});let result;try{result=await native.query(sqlClock(sql),args);}catch(error){failureContext.sqlCode=sqlState(error?.code)||failureContext.sqlCode;throw error;}if(stage){caller.acquired(stage,stage==='BEGIN'?sql.includes('READ ONLY'):null);trace.push({pid:native.processID,stage,phase:'ACQUIRED',readOnly:stage==='BEGIN'?sql.includes('READ ONLY'):null});}
    if(barrier&&stage==='WORKER_LOCK'&&args[0]===barrier.workerId&&!barrier.held){barrier.held=true;barrier.pid=native.processID;barrier.reached.resolve();await barrier.release.promise;}
    return result;
   }};};
   const workspace=createWorkspaceStore({connect});
-  const get=async pathname=>{const item=objects.get(pathname);assert.ok(item,'Only this owned synthetic Blob may be read');return {statusCode:200,blob:{url:item.url,size:item.bytes.length,contentType:item.contentType},stream:new Response(item.bytes).body};};
-  const uploader=createPrivateImageUploader({get,put:async(pathname,bytes,options)=>{assert.equal(options.access,'private');assert.equal(options.allowOverwrite,false);syntheticBlobWrites++;const item={bytes:Buffer.from(bytes),contentType:options.contentType,url:'https://synthetic.private.blob.vercel-storage.com/'+pathname};objects.set(pathname,item);return {url:item.url,pathname};},environment:()=>({PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'synthetic-civil-blob-token-only'})});
+  const {get,put}=createParticipantCivilBlobAdapter({objects,onPut:()=>{syntheticBlobWrites++;}});
+  const uploader=createPrivateImageUploader({get,put,environment:()=>({PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'synthetic-civil-blob-token-only'})});
   const template={version:BINDX_CIVIL_CONFIGURATION_VERSION,state:'CONFIRMED',product:'RENAPER_CIVIL_DATA',origin:'https://apistore.pcnt.io',authentication:'JWT',credentials:{username:'synthetic-civil',password:'synthetic-civil'},providerEvidence:{reference:'synthetic-provider-contract',confirmedAt:new Date(time-60000).toISOString(),confirmed:true,origin:'https://apistore.pcnt.io',product:'RENAPER_CIVIL_DATA',authentication:'JWT',responseSchema:BINDX_CIVIL_RESPONSE_SCHEMA,environmentConfirmed:true},renaperAgreement:{reference:'synthetic-renaper-agreement',confirmedAt:new Date(time-60000).toISOString(),confirmed:true},notice:{version:BINDX_CIVIL_CONSENT_VERSION,text:'Aviso exclusivamente sintético del harness civil PostgreSQL.',sha256:null}};template.notice.sha256=civilSha(template.notice.text);
   async function seed(label){
    assert.match(label,/^[A-Za-z0-9]+$/);const projectId='civil-project-'+label,workerId='civil-worker-'+label,actorId='civil-holder-'+label,membershipId=actorId+'-m',clerkUserId='user_CivilHolder'+label;
@@ -197,10 +211,20 @@ export async function verifyParticipantCivilPostgres(environment=process.env){
  return {version:PARTICIPANT_CIVIL_POSTGRES_PROOF_VERSION,status:'PASS',recordedAt:new Date().toISOString(),postgresExecuted:true,environment:'owned-local-disposable-postgresql',engine:failureContext.engine,syntheticOnly:true,totalCheckCount:checks.length,checks,sourceRevision:revision,sourceTree:tree,sourceState:exactCi?'EXACT_CI_SOURCE':'COMMITTED_LOCAL_SOURCE',trackedClean:true,sourceManifest,harnessSha256:sha(readFileSync(fileURLToPath(import.meta.url))),providerTransport:'injected-synthetic-http-only',uncontrolledFetchAttempts,syntheticLoginRequests,syntheticCivilGetRequests,syntheticBlobWrites,realProviderRequests:null,realProviderAcceptanceVerified:false,sqlClock:'synthetic-fixture-clock',civilOrganizationPrehook:false,nativeLockObservations,dispatchTransportObservations,trace,productionDataWritten:false,realIdentityPresented:false,identityApproved:false,identityCertified:false,biometricsVerified:false,livenessVerified:false,financialAccountsCreated:false,paymentAttempted:false,databaseRemoved:removed,poolClosed,cleanup:{poolClosed,databaseRemoved:removed,adminClosed,pgStatActivityBeforeDrop:cleanupActivityCount}};
 }
 
+const nativeFailureCodes=new Set([
+ 'PARTICIPANT_CIVIL_DISPOSABLE_TARGET_REJECTED','PARTICIPANT_CIVIL_OWNED_DATABASE_REJECTED','PARTICIPANT_CIVIL_NATIVE_UNCONFIRMED',
+ 'PARTICIPANT_CIVIL_INPUT_INVALID','PARTICIPANT_CIVIL_OBSERVATION_INVALID','PARTICIPANT_CIVIL_ATTEMPT_REQUIRED','PARTICIPANT_CIVIL_CONFIGURATION_CHANGED','PARTICIPANT_CIVIL_CONSENT_BINDING_REJECTED','PARTICIPANT_CIVIL_CONSENT_REQUIRED','PARTICIPANT_CIVIL_HOLDER_CONSENT_REQUIRED','PARTICIPANT_CIVIL_OBSERVATION_CONFLICT','PARTICIPANT_CIVIL_OPERATOR_REQUIRED','PARTICIPANT_CIVIL_PRESENTATION_CHANGED','PARTICIPANT_CIVIL_PRESENTATION_REQUIRED','PARTICIPANT_CIVIL_RECEIPT_INVALID','PARTICIPANT_CIVIL_RESULT_UNCONFIRMED','PARTICIPANT_CIVIL_SOURCE_ALREADY_RESERVED','PARTICIPANT_CIVIL_STATE_CHANGED','PARTICIPANT_CIVIL_TECHNICAL_UNCONFIRMED','PARTICIPANT_CIVIL_UNCONFIRMED',
+ 'PARTICIPANT_ACCESS_REQUIRED','PARTICIPANT_KYC_EVIDENCE_UNCONFIRMED','PARTICIPANT_KYC_NOT_PENDING','PARTICIPANT_MANAGE_REQUIRED','PARTICIPANT_PRIVATE_STORAGE_UNCONFIRMED','PARTICIPANT_REVISION_CHANGED','PARTICIPANT_UNAVAILABLE','PARTICIPANT_KYC_INTEGRITY','PARTICIPANT_KYC_IMAGE_UNAVAILABLE','PARTICIPANT_KYC_ALREADY_SUBMITTED','PARTICIPANT_OPERATION_UNCONFIRMED','PARTICIPANT_RECEIPT_INVALID',
+ 'WORKSPACE_CONTEXT_CHANGED','WORKSPACE_DATABASE_UNAVAILABLE','WORKSPACE_ORGANIZATION_REQUIRED','WORKSPACE_MEMBERSHIP_REQUIRED','WORKSPACE_OPERATION_UNCONFIRMED','WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED','WORKSPACE_PROJECT_INVALID','WORKSPACE_PROJECT_UNAVAILABLE','WORKSPACE_QUERY_INVALID',
+ 'PRIVATE_IMAGE_ADAPTER_INVALID','PRIVATE_IMAGE_CONFIRMATION_PENDING','PRIVATE_IMAGE_FILENAME_INVALID','PRIVATE_IMAGE_IDENTITY_REQUIRED','PRIVATE_IMAGE_INVALID','PRIVATE_IMAGE_PROVIDER_REQUIRED','PRIVATE_IMAGE_RECEIPT_MISMATCH','PRIVATE_IMAGE_REQUEST_INVALID','PRIVATE_IMAGE_STORAGE_NOT_CONFIGURED','PRIVATE_IMAGE_STORAGE_UNAVAILABLE','PRIVATE_IMAGE_TOO_LARGE','PRIVATE_IMAGE_TYPE_MISMATCH',
+]);
 export function participantCivilPostgresFailure(error,{root=process.cwd(),context=failureContext}={}){
- const name=['AssertionError','TypeError','WorkspaceError','Error'].includes(error?.name)?error.name:'Error',relativeRoot=path.resolve(root).replaceAll('\\','/')+'/',locations=[];
- for(const line of typeof error?.stack==='string'?error.stack.split('\n').slice(1):[]){const normalized=line.replaceAll('\\','/').replaceAll('file:///','');if(!normalized.includes(relativeRoot))continue;const match=/(?:src|scripts|tests)\/[^\s():]+\.(?:mjs|js):\d+:\d+/.exec(normalized);if(match)locations.push(match[0]);}
- return {version:PARTICIPANT_CIVIL_POSTGRES_PROOF_VERSION,status:'FAILED',stage:['TARGET_GUARD','OWNED_DATABASE','SEED_CANONICAL','NATIVE_CHECK','CLEANUP'].includes(context.stage)?context.stage:'TARGET_GUARD',check:PARTICIPANT_CIVIL_POSTGRES_CHECKS.includes(context.check)?context.check:null,completedCheckCount:Number.isInteger(context.completedCheckCount)&&context.completedCheckCount>=0&&context.completedCheckCount<=PARTICIPANT_CIVIL_POSTGRES_CHECKS.length?context.completedCheckCount:0,errorName:name,code:/^PARTICIPANT_CIVIL_[A-Z_]+$/.test(error?.code||'')?error.code:'PARTICIPANT_CIVIL_NATIVE_UNCONFIRMED',sqlCode:/^[0-9A-Z]{5}$/.test(error?.code||'')?error.code:null,locations:[...new Set(locations)].slice(0,8),poolClosed:context.poolClosed===true,databaseRemoved:context.databaseRemoved===true,adminClosed:context.adminClosed===true};
+ const name=['AssertionError','TypeError','WorkspaceError','PrivateImageError','Error'].includes(error?.name)?error.name:'Error',relativeRoot=(root.startsWith('/')?path.posix.normalize(root):path.resolve(root).replaceAll('\\','/')).replace(/\/$/,'')+'/',locations=[];
+ for(const line of typeof error?.stack==='string'?error.stack.split('\n').slice(1,65):[]){
+  let normalized=line.replaceAll('\\','/');normalized=normalized.replace(/file:\/\/\/[^\s)]+/g,reference=>{try{const value=new URL(reference.replace(/:\d+:\d+$/,''));if(value.hostname||value.search||value.hash)return '';return decodeURIComponent(value.pathname).replace(/^\/([A-Za-z]:\/)/,'$1')+(reference.match(/:\d+:\d+$/)?.[0]||'');}catch{return '';}});
+  const at=normalized.indexOf(relativeRoot);if(at<0)continue;const relative=normalized.slice(at+relativeRoot.length),match=/^(?:src|scripts|tests)\/[A-Za-z0-9_./-]+\.(?:mjs|js):[1-9]\d{0,6}:[1-9]\d{0,6}/.exec(relative);if(match&&!match[0].includes('..'))locations.push(match[0]);
+ }
+ return {version:PARTICIPANT_CIVIL_POSTGRES_PROOF_VERSION,status:'FAILED',stage:['TARGET_GUARD','OWNED_DATABASE','SEED_CANONICAL','NATIVE_CHECK','CLEANUP'].includes(context.stage)?context.stage:'TARGET_GUARD',check:PARTICIPANT_CIVIL_POSTGRES_CHECKS.includes(context.check)?context.check:null,completedCheckCount:Number.isInteger(context.completedCheckCount)&&context.completedCheckCount>=0&&context.completedCheckCount<=PARTICIPANT_CIVIL_POSTGRES_CHECKS.length?context.completedCheckCount:0,errorName:name,code:nativeFailureCodes.has(error?.code)?error.code:'PARTICIPANT_CIVIL_NATIVE_UNCONFIRMED',sqlCode:sqlState(error?.code)||sqlState(error?.cause?.code)||sqlState(context.sqlCode),locations:[...new Set(locations)].slice(0,8),poolClosed:context.poolClosed===true,databaseRemoved:context.databaseRemoved===true,adminClosed:context.adminClosed===true};
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  verifyParticipantCivilPostgres().then(proof=>{const out=path.resolve('.vercel/private/participant-civil-postgres.json');mkdirSync(path.dirname(out),{recursive:true});writeFileSync(out,JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify({status:proof.status,totalCheckCount:proof.totalCheckCount,postgresExecuted:proof.postgresExecuted,poolClosed:proof.poolClosed,databaseRemoved:proof.databaseRemoved,syntheticCivilGetRequests:proof.syntheticCivilGetRequests,realProviderRequests:proof.realProviderRequests}));}).catch(error=>{const proof=participantCivilPostgresFailure(error),out=path.resolve('.vercel/private/participant-civil-postgres-failure.json');mkdirSync(path.dirname(out),{recursive:true});writeFileSync(out,JSON.stringify(proof,null,2)+'\n');console.error(JSON.stringify({status:proof.status,stage:proof.stage,check:proof.check,errorName:proof.errorName,code:proof.code}));process.exitCode=1;});

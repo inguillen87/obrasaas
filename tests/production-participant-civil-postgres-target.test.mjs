@@ -1,11 +1,34 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import {participantCivilDisposableUrl,participantCivilOwnedDatabase,participantCivilSourceFiles,participantCivilPostgresFailure,createParticipantCivilDispatchObserver,verifyParticipantCivilPostgres,PARTICIPANT_CIVIL_POSTGRES_PROOF_VERSION,PARTICIPANT_CIVIL_POSTGRES_CHECKS} from '../scripts/verify-participant-civil-postgres.mjs';
+import {createPrivateImageUploader,PrivateImageError} from '../src/lib/private-image-upload.mjs';
+import {participantCivilDisposableUrl,participantCivilOwnedDatabase,participantCivilSourceFiles,participantCivilPostgresFailure,createParticipantCivilDispatchObserver,createParticipantCivilBlobAdapter,verifyParticipantCivilPostgres,PARTICIPANT_CIVIL_POSTGRES_PROOF_VERSION,PARTICIPANT_CIVIL_POSTGRES_CHECKS} from '../scripts/verify-participant-civil-postgres.mjs';
 
 // Guards/source closure only. These tests never execute native SQL or connect.
 const target={CUTOVER_TEST_DISPOSABLE:'1',CUTOVER_TEST_DATABASE_URL:'postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci'};
 const rejected=value=>assert.throws(()=>participantCivilDisposableUrl(value),{code:'PARTICIPANT_CIVIL_DISPOSABLE_TARGET_REJECTED'});
+const picture='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==';
+const blobEnvironment=()=>({PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'synthetic-guard-only'});
+
+test('the actual native Blob adapter permits missing probe, real uploader confirmation and exact replay without overwrite',async()=>{
+ const objects=new Map(),trace=[];let writes=0;const adapter=createParticipantCivilBlobAdapter({objects,onPut:()=>{writes++;}});
+ const get=async(...args)=>{const value=await adapter.get(...args);trace.push(value===null?'GET_MISSING':'GET_FOUND');return value;},put=async(...args)=>{trace.push('PUT');return adapter.put(...args);};
+ const uploader=createPrivateImageUploader({get,put,environment:blobEnvironment}),url=await uploader.uploadImageToBlob(picture,'civil-native-front','image/png');
+ assert.deepEqual(trace,['GET_MISSING','PUT','GET_FOUND']);assert.equal(writes,1);assert.equal(objects.size,1);
+ const pathname=[...objects.keys()][0],receipt=await adapter.get(pathname,{access:'private',useCache:false});assert.equal(receipt.blob.pathname,pathname);assert.equal(receipt.blob.url,url);assert.equal(receipt.blob.contentType,'image/png');assert.equal(receipt.blob.size,Buffer.from(picture,'base64').length);assert.deepEqual(Buffer.from(await new Response(receipt.stream).arrayBuffer()),Buffer.from(picture,'base64'));
+ assert.equal(await uploader.uploadImageToBlob(picture,'civil-native-front','image/png'),url);assert.equal(trace.at(-1),'GET_FOUND');assert.equal(writes,1);assert.equal(objects.size,1);
+});
+
+test('real uploader recovers a synthetic lost PUT ACK by reading the same committed private object once',async()=>{
+ const objects=new Map(),trace=[];let writes=0;const adapter=createParticipantCivilBlobAdapter({objects,onPut:()=>{writes++;}}),uploader=createPrivateImageUploader({get:async(...args)=>{trace.push('GET');return adapter.get(...args);},put:async(...args)=>{trace.push('PUT');await adapter.put(...args);throw Error('Synthetic lost write ACK');},environment:blobEnvironment});
+ const url=await uploader.uploadImageToBlob(picture,'civil-native-front','image/png');assert.deepEqual(trace,['GET','PUT','GET']);assert.equal(writes,1);assert.equal(objects.size,1);assert.equal(await uploader.uploadImageToBlob(picture,'civil-native-front','image/png'),url);assert.equal(writes,1);
+});
+
+test('real uploader rejects the former missing-pathname receipt instead of weakening private Blob identity',async()=>{
+ const adapter=createParticipantCivilBlobAdapter(),uploader=createPrivateImageUploader({...adapter,environment:blobEnvironment});await uploader.uploadImageToBlob(picture,'civil-native-front','image/png');
+ const mutant=createPrivateImageUploader({...adapter,get:async(...args)=>{const result=await adapter.get(...args);if(result)delete result.blob.pathname;return result;},environment:blobEnvironment});
+ await assert.rejects(mutant.uploadImageToBlob(picture,'civil-native-front','image/png'),error=>error instanceof PrivateImageError&&error.code==='PRIVATE_IMAGE_RECEIPT_MISMATCH');
+});
 
 test('native civil verification requires the explicitly marked disposable URL before creating any connection',async()=>{
  for(const value of [{},{CUTOVER_TEST_DATABASE_URL:target.CUTOVER_TEST_DATABASE_URL},{...target,CUTOVER_TEST_DISPOSABLE:'0'},{...target,CUTOVER_TEST_DISPOSABLE:'true'},{CUTOVER_TEST_DISPOSABLE:'1',DATABASE_URL:target.CUTOVER_TEST_DATABASE_URL}])rejected(value);
@@ -67,4 +90,13 @@ test('native failure evidence retains only bounded source location, safe codes, 
  const sensitive='synthetic-private-secret',context={stage:'NATIVE_CHECK',check:PARTICIPANT_CIVIL_POSTGRES_CHECKS[13],completedCheckCount:13,poolClosed:true,databaseRemoved:true,adminClosed:true},root=process.cwd(),source=path.join(root,'src/lib/participant-civil-store.mjs');
  const error=Object.assign(new TypeError(sensitive),{stack:`TypeError: ${sensitive}\n    at settle (${source}:100:10)\n    at provider (/private/${sensitive}.js:1:1)`,actual:{dni:sensitive},expected:sensitive}),proof=participantCivilPostgresFailure(error,{root,context});assert.equal(proof.check,context.check);assert.equal(proof.completedCheckCount,13);assert.equal(proof.poolClosed,true);assert.equal(proof.databaseRemoved,true);assert.equal(proof.adminClosed,true);assert.deepEqual(proof.locations,['src/lib/participant-civil-store.mjs:100:10']);assert.doesNotMatch(JSON.stringify(proof),new RegExp(sensitive));
  const sql=participantCivilPostgresFailure({name:'error',code:'42703',query:sensitive,message:sensitive,detail:sensitive},{context});assert.equal(sql.sqlCode,'42703');assert.doesNotMatch(JSON.stringify(sql),new RegExp(sensitive));const forged=participantCivilPostgresFailure({message:sensitive},{context:{...context,stage:sensitive,check:sensitive,completedCheckCount:999}});assert.equal(forged.check,null);assert.equal(forged.completedCheckCount,0);assert.equal(forged.stage,'TARGET_GUARD');assert.doesNotMatch(JSON.stringify(forged),new RegExp(sensitive));
+});
+
+test('native diagnostics preserve known wrapped storage codes, native SQLSTATE and POSIX file URL locations without private messages',()=>{
+ const sensitive='private-nominal-secret',root='/home/runner/work/obrasaas/obrasaas',context={stage:'NATIVE_CHECK',check:PARTICIPANT_CIVIL_POSTGRES_CHECKS[1],completedCheckCount:1,sqlCode:'42703'},stack=`WorkspaceError: ${sensitive}\n    at upload (file://${root}/src/lib/participant-store.mjs:300:10)\n    at seed (file://${root}/scripts/verify-participant-civil-postgres.mjs:150:4)\n    at foreign (file:///private/${sensitive}.mjs:1:1)`;
+ for(const code of ['PARTICIPANT_PRIVATE_STORAGE_UNCONFIRMED','WORKSPACE_OPERATION_UNCONFIRMED','PRIVATE_IMAGE_RECEIPT_MISMATCH']){
+  const proof=participantCivilPostgresFailure({name:'WorkspaceError',code,message:sensitive,stack,detail:sensitive},{root,context});assert.equal(proof.code,code);assert.equal(proof.sqlCode,'42703');assert.deepEqual(proof.locations,['src/lib/participant-store.mjs:300:10','scripts/verify-participant-civil-postgres.mjs:150:4']);assert.doesNotMatch(JSON.stringify(proof),new RegExp(sensitive));
+ }
+ for(const code of ['PARTICIPANT_CIVIL_'+sensitive.toUpperCase(),'WORKSPACE_UNKNOWN_PRIVATE','TOKEN']){const proof=participantCivilPostgresFailure({code,message:sensitive,stack},{root,context:{...context,sqlCode:sensitive}});assert.equal(proof.code,'PARTICIPANT_CIVIL_NATIVE_UNCONFIRMED');assert.equal(proof.sqlCode,null);assert.doesNotMatch(JSON.stringify(proof),new RegExp(sensitive));}
+ const caused=participantCivilPostgresFailure({code:'WORKSPACE_OPERATION_UNCONFIRMED',cause:{code:'40P01',message:sensitive}},{context});assert.equal(caused.sqlCode,'40P01');assert.doesNotMatch(JSON.stringify(caused),new RegExp(sensitive));
 });
