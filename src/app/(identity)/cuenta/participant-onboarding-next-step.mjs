@@ -193,7 +193,7 @@ const copies={
  STATUS_OBSERVED:['Estado informado por WhatsApp','El proveedor informó un estado del mensaje. La aceptación de la cuenta y la revisión de identidad se comprueban por separado.'],
  CANCELED:['Envío cancelado','Esta solicitud no continuará enviándose. La invitación de acceso y la revisión de identidad conservan sus propios estados.'],
 };
-const unknown=()=>({observed:false,state:'UNKNOWN',blocker:null,label:'Estado de WhatsApp sin consultar',description:'Consultá el perfil vigente para comprobar el envío y tus permisos.',canSend:false,canRevoke:false,contactAuthorized:null,providerAccepted:false,deliveryConfirmed:false,automaticResendAllowed:false,revokeWarning:null});
+const unknown=()=>({observed:false,state:'UNKNOWN',blocker:null,label:'Seguimiento no disponible',description:'Este seguimiento corresponde a la invitación y las instrucciones iniciales. La presentación de identidad y sus respuestas tienen su propio seguimiento.',canSend:false,canRevoke:false,contactAuthorized:null,providerAccepted:false,deliveryConfirmed:false,automaticResendAllowed:false,revokeWarning:null});
 
 function participantOnboardingContactNotice(value){
  if(!object(value)||Object.keys(value).sort().join('|')!=='sha256|text|version'||typeof value.version!=='string'||!/^[a-z0-9][a-z0-9.-]{0,63}$/.test(value.version)||!hash(value.sha256)||typeof value.text!=='string'||!value.text.trim()||value.text.length>6000)return null;
