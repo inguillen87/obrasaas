@@ -11,6 +11,7 @@ import {OVERTIME_ACTIONS,canDecideOvertime} from './field-overtime-policy.mjs';
 import {createFieldOvertime} from './field-overtime-store.mjs';
 import {assertApprovedParticipantKyc} from './participant-approved-identity.mjs';
 import {TASK_MEASUREMENT_VERSION,publicTaskMeasurement,deriveTaskMeasurement,assertMeasurementConfiguration} from './task-progress-measurement.js';
+import {readOwnFieldReports} from './field-report-feedback.mjs';
 
 const revision = name => `to_char(${name},'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const newId = prefix => prefix+'_'+randomUUID().replaceAll('-','');
@@ -353,6 +354,7 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
       });
     },
     ownConsumptions(session,context){return run(session,context,true,async(client,member,scope,project)=>{await worker(client,member,session,project.id,context.workerId,'report');return {scope,projectId:project.id,workerId:context.workerId,...await readOwnConsumptions(client,member,project,{workerId:context.workerId,afterConsumption:context.afterConsumption??null,consumptionId:context.consumptionId??null})};});},
+    ownReports(session,context){return run(session,context,true,async(client,member,scope,project)=>{await worker(client,member,session,project.id,context.workerId,'report');return {scope,projectId:project.id,workerId:context.workerId,...await readOwnFieldReports(client,member,project,{workerId:context.workerId,section:context.section,afterReport:context.afterReport??null,reportId:context.reportId??null})};});},
     inventoryHistory(session,context){return run(session,context,true,async(client,member,scope,project)=>{const reviewer=canApproveProgress(member.role);if((context.afterMovement||context.afterAdjustment||context.adjustmentId)&&!reviewer)throw new WorkspaceError('INVENTORY_MANAGE_REQUIRED',403);const owned=reviewer?[]:(await reviewAccess(client,member,session,project.id,scope)).owned.filter(w=>w.metadata.participant.permissions?.report===true);for(const row of owned)await worker(client,member,session,project.id,row.id,'report');return {scope,projectId:project.id,inventory:await readInventory(client,member,project,{reviewer,workerIds:owned.map(w=>w.id),after:context.afterMovement,afterConsumption:context.afterConsumption,consumptionId:context.consumptionId,afterAdjustment:context.afterAdjustment,adjustmentId:context.adjustmentId})};});},
     // Media provider I/O is performed outside transactions. Every callback still
     // enters the same verified project transaction and rechecks actor/permissions.

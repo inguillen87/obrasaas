@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {hasCompanyKycOutboundAuthority,prepareLockedCompanyKycOutboundAuthority,fenceLockedCompanyKycOutboundAuthority} from '../src/lib/company-channel-kyc.mjs';
-import {companyKycOutboundCompactProofOutput} from '../scripts/verify-company-kyc-outbound-compact-postgres.mjs';
+import {companyKycOutboundCompactProofOutput,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS,COMPANY_KYC_CONTEXT_OUTBOUND_CHECKS} from '../scripts/verify-company-kyc-outbound-compact-postgres.mjs';
 import path from 'node:path';
 
 test('a serialized corporate KYC shape cannot create a compact outbound authority',async()=>{
@@ -16,4 +16,7 @@ test('native proof may choose a fresh private output but cannot overwrite unrela
  assert.equal(companyKycOutboundCompactProofOutput([],root),path.resolve(root,'.vercel/private/company-kyc-outbound-compact-postgres.json'));
  assert.equal(companyKycOutboundCompactProofOutput(['--output','.vercel/private/company-kyc-outbound-compact-postgres-original-tx-20261014.json'],root),path.resolve(root,'.vercel/private/company-kyc-outbound-compact-postgres-original-tx-20261014.json'));
  for(const args of [['--output','outside.json'],['--output','.vercel/private/unrelated.json'],['--output','.vercel/private/../company-kyc-outbound-compact-postgres.json'],['--unsafe','ignored']])assert.throws(()=>companyKycOutboundCompactProofOutput(args,root));
+});
+test('OWN feedback measurements are a separate additive check group from the historical thirteen',()=>{
+ assert.equal(COMPANY_KYC_OUTBOUND_COMPACT_CHECKS.length,13);assert.equal(COMPANY_KYC_CONTEXT_OUTBOUND_CHECKS.length,1);assert.equal(COMPANY_KYC_OUTBOUND_COMPACT_CHECKS.some(check=>COMPANY_KYC_CONTEXT_OUTBOUND_CHECKS.includes(check)),false);
 });

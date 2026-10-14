@@ -15,6 +15,7 @@ import {resolveMetaKycAuthority,readMetaKycConversation,META_KYC_AUTHORIZATION_C
 import {createMetaKycBridge} from '../src/lib/meta-kyc-bridge.mjs';
 import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
 import {createMetaKycExpiryFeedback,metaKycExpiryReceiptId,META_KYC_EXPIRY_REPLY} from '../src/lib/meta-kyc-expiry-feedback.mjs';
+import {verifyKycContextFeedbackNative} from './lib/kyc-context-feedback-native.mjs';
 import {createParticipantChannelKycDeposit,createParticipantChannelKycUploader} from '../src/lib/participant-channel-kyc.mjs';
 import {participantKycImageSet,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_SHA256} from '../src/lib/participant-kyc-image-set.mjs';
 import {assertApprovedParticipantKyc} from '../src/lib/participant-approved-identity.mjs';
@@ -29,12 +30,12 @@ import {digest} from '../src/lib/workspace-policy.mjs';
 const url=lifecycleDisposableUrl(process.env),database='obrasaas_meta_kyc_'+randomUUID().replaceAll('-','');
 assert.match(database,/^obrasaas_meta_kyc_[a-f0-9]{32}$/);
 const admin=new Client({connectionString:url.toString()}),environment={...lifecycleEnvironment},tenants=lifecycleTenants.map(t=>({...t,channelId:'kyc-channel-'+t.key,workerId:'kyc-worker-'+t.key,invitationId:'invite_'+t.key.repeat(32),providerInvitationId:'orginv_KycFixture'+t.key,sequence:0,baseTimestamp:Math.floor(Date.now()/1000)-45})),checks=[],graph=createControlledLifecycleGraph(environment),blob=createControlledLifecycleBlob(),clerk=createControlledLifecycleClerk();
-let expiryFeedbackNative=null,nativeReport=null,poolClosed=false,databaseRemoved=false,adminClosed=false,ownConnectionsClosed=false;const ownedPids=new Set();
+let expiryFeedbackNative=null,contextFeedbackNative=null,nativeReport=null,poolClosed=false,databaseRemoved=false,adminClosed=false,ownConnectionsClosed=false;const ownedPids=new Set();
 let pool,created=false,loseDepositCommit=false,loseDispatchCommit=false,unexpectedNetworkCalls=0,fieldFallbacks=0;
 const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{unexpectedNetworkCalls++;throw new Error('KYC_UNCONTROLLED_NETWORK_REJECTED');};
 const query=(sql,args)=>pool.query(sql,args);
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),root=process.cwd(),sources=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(entry=>entry.isDirectory()?sources(relative+'/'+entry.name):[relative+'/'+entry.name]);
-const sourceManifest=[...sources('src/lib'),'src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs'].map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
+const sourceManifest=[...sources('src/lib'),'src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/kyc-context-feedback-native.mjs'].map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
 try{
  await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;
  pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));pool.on('connect',client=>ownedPids.add(client.processID));await query(lifecycleSchema);
@@ -217,7 +218,7 @@ try{
   const response=await expiryCallback.POST(new Request('https://obrasaas.com/api/meta/customer-callback',{method:'POST',headers:{'Content-Type':'application/json','x-hub-signature-256':'sha256='+createHmac('sha256',environment.META_APP_SECRET).update(body).digest('hex')},body}));
   assert.equal(response.status,200);assert.equal((await response.json()).durable,true);return 'customer_webhook_'+splitMetaCustomerEvents(wire)[0].externalId;
  }
- async function expiryFixture(index){
+ async function expiryFixture(index,{advance=false}={}){
   const t={...expiryBase,workerId:'native-expiry-'+expiryKind.toLowerCase()+'-'+index,sender:'549119900'+String(index).padStart(4,'0'),workerUserId:'user_NativeExpiry'+expiryKind+index},actor=t.workerId+'-actor',membership=t.workerId+'-member';
   await query(`INSERT INTO "PlatformUser"(id,"clerkUserId","primaryEmail") VALUES($1,$2,$3)`,[actor,t.workerUserId,t.workerId+'@example.invalid']);
   await query(`INSERT INTO "TenantMembership"(id,"userId","organizationId","tenantRole","clerkRole",status) VALUES($1,$2,$3,'AUDITOR','org:member','ACTIVE')`,[membership,actor,t.organizationId]);
@@ -228,10 +229,14 @@ try{
   try{
    prepared=await customerJobTransaction(expiryConnect,async client=>{const member={actorId:t.ownerId,membershipId:'owner-member-'+t.key,organizationId:t.organizationId,role:'ADMIN'},input={projectId:t.projectId,workerId:t.workerId,revision:(await expiryWorker(t)).revision,operationId:randomUUID()};await prepareMetaKycChallenge.beforeProject(client,member,input);return prepareMetaKycChallenge(client,member,{id:t.projectId,organizationId:t.organizationId},input,{environment});});
    assert.equal(prepared.captureImageSetVersion,2);promptEvent=await expiryReceive(t,prepared.code);assert.equal((await expiryProcessor.process(promptEvent)).replySent,true);
+   if(advance){
+    const original=(await query(`SELECT * FROM "WebhookEvent" WHERE id=$1`,[customerOutboundId(promptEvent)])).rows[0],row=await expiryWorker(t),c=row.metadata.participant.kycChatChallenge,s=JSON.parse(decryptCustomerSecret(row.metadata.participant.kycChatConversation.encryptedState,{organizationId:t.organizationId,projectId:c.companyKyc?.anchorProjectId||t.projectId,purpose:'kyc-chat-conversation',resourceId:c.id},environment));
+    expiryClockOffset=-31*60000+2000;const next=await expiryReceive(t,{type:'interactive',interactive:{type:'list_reply',list_reply:{id:'kyc:'+s.nonce+':0'}}},original.outcome.messageId);assert.equal((await expiryProcessor.process(next)).replySent,true);
+   }
   }finally{expiryClockOffset=0;}
   const prompt=(await query(`SELECT * FROM "WebhookEvent" WHERE id=$1`,[customerOutboundId(promptEvent)])).rows[0];assert.equal(prompt.outcome.state,'SENT');
   const before=await expiryWorker(t),challenge=before.metadata.participant.kycChatChallenge,state=JSON.parse(decryptCustomerSecret(before.metadata.participant.kycChatConversation.encryptedState,{organizationId:t.organizationId,projectId:challenge.companyKyc?.anchorProjectId||t.projectId,purpose:'kyc-chat-conversation',resourceId:challenge.id},environment));
-  assert.equal(before.metadata.participant.kycChatChallenge.status,'CLAIMED');assert.equal(state.step,'CONSENT');assert.ok(Date.parse(state.expiresAt)<Date.now());
+  assert.equal(before.metadata.participant.kycChatChallenge.status,'CLAIMED');assert.equal(state.step,advance?'BACK_CONSENT':'CONSENT');assert.ok(Date.parse(state.expiresAt)<Date.now());
   const eventId=await expiryReceive(t,{type:'image',image:{id:t.mediaId,mime_type:'image/png'}},prompt.outcome.messageId),leaseToken=randomUUID();
   await query(`UPDATE "WebhookEvent" SET "leaseToken"=$2,"leaseExpiresAt"=clock_timestamp()+interval '1 minute',attempts=1 WHERE id=$1 AND status='PENDING'`,[eventId,leaseToken]);
   const event=(await query(`SELECT * FROM "WebhookEvent" WHERE id=$1`,[eventId])).rows[0],context={eventId,projectId:t.anchorProjectId||t.projectId,channelId:t.channelId,payloadDigest:event.payload.payloadDigest,leaseToken};
@@ -270,12 +275,13 @@ try{
   try{await assert.rejects(denied.send(revoked.context,receipt.reply));const observed=await denied.feedback(revoked.context,{recoverOnly:true});assert.equal(observed.reply,undefined);assert.equal(observed.replyState,'SEND_STARTED');assert.deepEqual(expiryStats(),baselineRevoked);assert.deepEqual(await expiryWorker(revoked.t),revoked.before);assert.deepEqual(await expiryCount(revoked.context,revoked.receiptId),{receipts:1,outbounds:1});}
   finally{await query(`UPDATE "TenantMembership" SET status='ACTIVE' WHERE id=$1`,['owner-member-'+expiryBase.key]);}
   expiryEvidence.cases.push({name:'current-native-issuer-revocation-after-reservation-no-HTTP',receiptCount:1,outboxCount:1,httpTransfers:0,workerBytesUnchanged:true,mediaAndDepositDelta:0});checks.push('PROJECT-expiry-native-current-issuer-revocation-after-reserve-retains-marker-with-zero-HTTP-or-media');
+  contextFeedbackNative=await verifyKycContextFeedbackNative({query,connect:expiryConnect,provider,environment,fixture:expiryFixture,receive:expiryReceive,readWorker:expiryWorker,stats:expiryStats,kind:expiryKind,checks});
  }finally{expiryGate?.release?.();expiryClockOffset=0;expiryTracing=false;graph.assets.get(expiryBase.key).sender=originalExpirySender;}
  expiryFeedbackNative=expiryEvidence;
 
  const durable=JSON.stringify((await query(`SELECT metadata FROM "AuditLog"`)).rows);for(const t of tenants){assert.ok(!durable.includes(t.token));assert.ok(!durable.includes('data:image'));assert.ok(!durable.includes('IDENTIDAD '));}
  assert.equal(unexpectedNetworkCalls,0);assert.deepEqual(graph.unexpected,[]);assert.equal(blob.puts(),7);for(const source of sourceManifest)assert.equal(sha(readFileSync(path.join(root,source.path))),source.sha256);assert.equal(sha(readFileSync(new URL(import.meta.url))),harnessSha256);
- const report={status:'PASS',expiryFeedbackNative,environment:'disposable-localhost-postgresql-meta-kyc-chat',checks,sourceManifest,harnessSha256,tenants:2,provider:'strict-controlled-Graph-fetch-only',blob:'controlled-private-byte-store',realProviderCalls:0,unexpectedNetworkCalls,productionDataTouched:false,realMetaAccepted:false,humanAccepted:false};
+ const report={status:'PASS',expiryFeedbackNative,contextFeedbackNative,environment:'disposable-localhost-postgresql-meta-kyc-chat',checks,sourceManifest,harnessSha256,tenants:2,provider:'strict-controlled-Graph-fetch-only',blob:'controlled-private-byte-store',realProviderCalls:0,unexpectedNetworkCalls,productionDataTouched:false,realMetaAccepted:false,humanAccepted:false};
  nativeReport=report;
 }finally{
  globalThis.fetch=originalFetch;

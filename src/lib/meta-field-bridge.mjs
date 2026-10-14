@@ -114,7 +114,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   }};
   return {session,service:createFieldOperations({workspace})};
  }
- async function saved(client,r){const row=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND action='meta.field.dispatched'`,[receiptId(r.event.id),r.member.organizationId,r.member.actorId,r.worker.id])).rows[0];if(!row)return null;if(row.metadata?.payloadDigest!==r.event.payload.payloadDigest||row.metadata.channelBindingId!==r.channelBinding.id)throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);if(['CONSUMPTION_PROPOSAL','CONSUMPTION_READ'].includes(row.metadata.kind)&&(attendanceOnly||r.connection.metadata?.developmentPilot||r.worker.metadata?.participant?.permissions?.report!==true))throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);return unseal(r,'field-dispatch',receiptId(r.event.id),row.metadata.encryptedResult);}
+ async function saved(client,r){const row=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND action='meta.field.dispatched'`,[receiptId(r.event.id),r.member.organizationId,r.member.actorId,r.worker.id])).rows[0];if(!row)return null;if(row.metadata?.payloadDigest!==r.event.payload.payloadDigest||row.metadata.channelBindingId!==r.channelBinding.id)throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);if(['CONSUMPTION_PROPOSAL','CONSUMPTION_READ','FIELD_REPORT_READ'].includes(row.metadata.kind)&&(attendanceOnly||r.connection.metadata?.developmentPilot||r.worker.metadata?.participant?.permissions?.report!==true))throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);return unseal(r,'field-dispatch',receiptId(r.event.id),row.metadata.encryptedResult);}
  async function record(client,r,result,state,{onlyIfCurrent=false,preserveConversation=false}={}){
   await assertDevelopmentPilotCommit(client,r.connection,environment);
   const current=(await client.query(`SELECT metadata FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id])).rows[0];
@@ -183,12 +183,24 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
     }
     facts.ownConsumptions=await service.ownConsumptions(session,{projectId:r.project.id,scope:r.scope,workerId:r.worker.id,afterConsumption,consumptionId});
    }
+   const ownPurposes=['OWN_EVIDENCE','OWN_PROGRESS'],ownReads=['OWN_CONSUMPTIONS',...ownPurposes],businessDraft=state?.version===1&&Date.parse(state.expiresAt)>r.now.getTime()&&!['MENU',...ownReads].includes(state.purpose);
+   const reportPurpose=ownPurposes.includes(action)?action:ownPurposes.includes(selected)&&ownReads.includes(activeState?.purpose)?selected:ownPurposes.includes(activeState?.purpose)&&selected&&selected!=='MENU'?activeState.purpose:null;
+   if(facts.permissions.report===true&&reportPurpose&&!businessDraft){let afterReport=null,reportId=null;
+    if(activeState?.purpose===reportPurpose&&!action&&!ownPurposes.includes(selected)){
+     if(selected==='NEXT_REPORTS'){if(!workspaceId(activeState.nextReportCursor))throw new WorkspaceError('FIELD_REPORT_CURSOR_UNAVAILABLE',404);afterReport=activeState.nextReportCursor;}
+     else if(selected==='FIRST_REPORTS')afterReport=null;
+     else if(activeState.step==='OWN_REPORT_LIST'){reportId=selected;}
+    }
+    facts.ownReports=await service.ownReports(session,{projectId:r.project.id,scope:r.scope,workerId:r.worker.id,section:reportPurpose==='OWN_EVIDENCE'?'EVIDENCE':'PROGRESS',afterReport,reportId});
+   }
    if(limited&&(action==='TASKS'||activeState?.purpose==='TASKS'))facts.tasks=[];
    else Object.assign(facts,await readMetaFieldTaskCatalog(client,{projectId:r.project.id,state:activeState||{purpose:action},message:r.proof.value}));
    if(facts.permissions.report===true&&activeState?.purpose==='PROGRESS'&&activeState.taskId)Object.assign(facts,await readMetaFieldEvidenceCatalog(client,{organizationId:r.member.organizationId,projectId:r.project.id,workerId:r.worker.id,actorId:r.member.actorId,state:activeState,message:r.proof.value,tasks:facts.tasks}));
    plan=planMetaFieldConversation({message:r.proof.value,state,eventId:r.event.id,facts,now:r.now});
   }
-  catch(error){if(!safeErrors.has(error.code))throw error;return {done:await record(client,r,result(r,'INPUT_REVIEW',text(explanation(error.code)+' Escribí CANCELAR para volver al menú.'),{code:error.code}),state)};}
+  catch(error){
+   if(['FIELD_REPORT_CURSOR_UNAVAILABLE','FIELD_REPORT_UNAVAILABLE','FIELD_REPORT_INTEGRITY','FIELD_REPORT_QUERY_INVALID'].includes(error.code))return {done:await record(client,r,result(r,'FIELD_REPORT_READ',text('No se pudo confirmar ese informe con tu acceso vigente. Conservamos el paso. Escribí EVIDENCIAS o AVANCES para consultar una lista actual; la consulta no cambia la tarea.'),{code:'FIELD_REPORT_READ_UNAVAILABLE'}),state,{preserveConversation:true})};
+   if(!safeErrors.has(error.code))throw error;return {done:await record(client,r,result(r,'INPUT_REVIEW',text(explanation(error.code)+' Escribí CANCELAR para volver al menú.'),{code:error.code}),state)};}
   if(plan.planImport)return plans.prepare(client,r,plan.planImport,{...plan.state,version:1});
   if(plan.media){
    assertDevelopmentPilotAdapter(r.connection,'media');
@@ -210,7 +222,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   }
   // Corporate status is a canonical ledger read. Its receipt cannot replace
   // the active prompt or discard a draft that still requires explicit cancel.
-  return {done:await record(client,r,result(r,plan.consumptionRead?'CONSUMPTION_READ':'CONVERSATION',plan.reply),plan.state,{preserveConversation:plan.preserveConversation===true||((limited||Boolean(r.companyProjection))&&state&& !['MENU','OWN_CONSUMPTIONS'].includes(state.purpose)&&r.proof.value.type==='text'&&r.proof.value.text?.body?.trim().toUpperCase()==='ESTADO')})};
+  return {done:await record(client,r,result(r,plan.reportRead?'FIELD_REPORT_READ':plan.consumptionRead?'CONSUMPTION_READ':'CONVERSATION',plan.reply),plan.state,{preserveConversation:plan.preserveConversation===true||((limited||Boolean(r.companyProjection))&&state&& !['MENU','OWN_CONSUMPTIONS','OWN_EVIDENCE','OWN_PROGRESS'].includes(state.purpose)&&r.proof.value.type==='text'&&r.proof.value.text?.body?.trim().toUpperCase()==='ESTADO')})};
  }
  const plans=createMetaPlanImportTransport({within,resolve,saved,record,result,seal,unseal,commitFence,operationIdFor:metaFieldOperationId,environment,protocol,provider,put,get,analyzer:planAnalyzer,usage,writePending:async(client,r,state)=>{await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify({...r.worker.metadata,fieldChannelConversation:conversationEnvelope(r,state)})]);}});
  return {async execute(context){
