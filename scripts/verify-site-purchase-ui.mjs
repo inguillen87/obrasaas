@@ -22,7 +22,7 @@ const copiedFiles=['site-purchase-panel.js','site-purchase-panel.module.css','si
 for(const name of copiedFiles)copyFileSync(path.join(root,'src/app/(identity)/cuenta',name),path.join(app,name));
 const sha256=bytes=>createHash('sha256').update(bytes).digest('hex');
 const importedPolicies=['site-purchase-policy.mjs','workspace-policy.mjs','site-register-policy.mjs','procurement-quantity.js','procurement-money.js'];
-const sourcePaths=[...copiedFiles.map(name=>'src/app/(identity)/cuenta/'+name),...importedPolicies.map(name=>'src/lib/'+name)];
+const sourcePaths=[...copiedFiles.map(name=>'src/app/(identity)/cuenta/'+name),...importedPolicies.map(name=>'src/lib/'+name),'src/lib/plan-import-document-curve.mjs','scripts/lib/plan-document-curve-fixture-copy.mjs'];
 const sourceManifest=sourcePaths.map(file=>({path:file,sha256:sha256(readFileSync(path.join(root,file)))}));
 for(const file of copiedFiles)assert.deepEqual(readFileSync(path.join(app,file)),readFileSync(path.join(root,'src/app/(identity)/cuenta',file)));
 const git=(...args)=>execFileSync('git',args,{cwd:root,encoding:'utf8',timeout:15000}).trim();

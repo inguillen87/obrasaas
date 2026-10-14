@@ -39,21 +39,44 @@ const multiply=(a,b)=>({coefficient:a.coefficient*b.coefficient,scale:a.scale+b.
 const atMost=(a,b)=>{const [x,y]=align(a,b);return x<=y;};
 const numeric=v=>v.decimalText===null?null:decimal(v.decimalText);
 
+function printedPercentageStep(field){
+ if(field.decimalText===null||typeof field.rawText!=='string')return null;
+ const printed=/^\s*(\d+)(?:[.,](\d+))?\s*%\s*$/.exec(field.rawText);
+ if(!printed)return null;
+ const scale=(printed[2]||'').length+2;
+ if(!equal({coefficient:BigInt(printed[1]+(printed[2]||'')),scale},numeric(field)))return null;
+ return {coefficient:1n,scale};
+}
+
 // A printed percentage can be rounded even when its monetary amount is exact.
 // Derive its interval from the literal printed precision, never from a fixed
 // tolerance or a guessed locale. A proposal must equal that literal first.
 function withinPrintedPercentage(amount,total,field){
- if(!amount||!total||field.decimalText===null||typeof field.rawText!=='string')return false;
- const printed=/^\s*(\d+)(?:[.,](\d+))?\s*%\s*$/.exec(field.rawText);
- if(!printed)return false;
- const scale=(printed[2]||'').length+2;
- const printedRatio={coefficient:BigInt(printed[1]+(printed[2]||'')),scale};
- const proposal=numeric(field);
- if(!equal(printedRatio,proposal))return false;
- const expected=multiply(total,proposal),[a,b,differenceScale]=align(amount,expected);
+ if(!amount||!total)return false;
+ const step=printedPercentageStep(field);if(!step)return false;
+ const expected=multiply(total,numeric(field)),[a,b,differenceScale]=align(amount,expected);
  const doubledDifference={coefficient:2n*(a>=b?a-b:b-a),scale:differenceScale};
- const printedStep=multiply(total,{coefficient:1n,scale});
+ const printedStep=multiply(total,step);
  return atMost(doubledDifference,printedStep);
+}
+
+const maximum=(a,b)=>a===null?b:atMost(a,b)?b:a;
+function percentageObservation(field){
+ const value=numeric(field),step=printedPercentageStep(field),center={coefficient:2n*value.coefficient,scale:value.scale};
+ if(!step)return {value,step,lower:center,upper:center};
+ const lower=sum([center,{coefficient:-step.coefficient,scale:step.scale}]),upper=sum([center,step]);
+ // These are doubled endpoints, so their exact domain is [0, 2].
+ return {value,step,lower:maximum({coefficient:0n,scale:0},lower),upper:atMost(upper,{coefficient:2n,scale:0})?upper:{coefficient:2n,scale:0}};
+}
+function percentageOrder(previous,current){
+ // Pairwise overlap with only the previous month is insufficient: a coarse
+ // middle observation could hide a decline between two precise endpoints.
+ if(!atMost(previous.lowerBound,current.upper))return 'MISMATCH';
+ if(atMost(previous.maximumValue,current.value))return 'MATCH';
+ // Rounding may only justify declining centers when their literal printed
+ // precision is valid. A non-literal proposal remains an exact observation.
+ if(!current.step||previous.exactMaximum!==null&&!atMost(previous.exactMaximum,current.value))return 'MISMATCH';
+ return 'MATCH_PRINTED_PRECISION';
 }
 
 function evidence(value){
@@ -84,11 +107,17 @@ function coherence(curve){
  const match=(kind,ordinal,a,b)=>add(kind,ordinal,a===null||b===null?'INCOMPLETE':equal(a,b)?'MATCH':'MISMATCH');
  const total=numeric(curve.total),initial=numeric(curve.initialCumulative),monthly=curve.periods.map(p=>numeric(p.monthlyAmount));
  match('MONTHLY_TOTAL',null,total,initial===null||monthly.some(v=>v===null)?null:sum([initial,...monthly]));
- let previous=initial;
+ let previous=initial,previousKnownCumulative=initial,previousKnownPercentage=null;
  for(const p of curve.periods){
   const amount=numeric(p.monthlyAmount),cumulative=numeric(p.cumulativeAmount),monthlyRatio=numeric(p.monthlyPercentage),cumulativeRatio=numeric(p.cumulativePercentage);
   match('CUMULATIVE_AMOUNT',p.ordinal,cumulative,previous===null||amount===null?null:sum([previous,amount]));
-  add('CUMULATIVE_MONOTONIC',p.ordinal,previous===null||cumulative===null?'INCOMPLETE':atMost(previous,cumulative)?'MATCH':'MISMATCH');
+  add('CUMULATIVE_MONOTONIC',p.ordinal,previousKnownCumulative===null||cumulative===null?'INCOMPLETE':atMost(previousKnownCumulative,cumulative)?'MATCH':'MISMATCH');
+  if(cumulative!==null)previousKnownCumulative=cumulative;
+  if(cumulativeRatio!==null){
+   const observation=percentageObservation(p.cumulativePercentage);
+   if(previousKnownPercentage)add('CUMULATIVE_PERCENTAGE_MONOTONIC',p.ordinal,percentageOrder(previousKnownPercentage,observation));
+   previousKnownPercentage={lowerBound:maximum(previousKnownPercentage?.lowerBound??null,observation.lower),maximumValue:maximum(previousKnownPercentage?.maximumValue??null,observation.value),exactMaximum:observation.step?previousKnownPercentage?.exactMaximum??null:maximum(previousKnownPercentage?.exactMaximum??null,observation.value)};
+  }
   const percentageMatch=(kind,value,ratio,field)=>{
    if(value===null||total===null||total.coefficient===0n||ratio===null)add(kind,p.ordinal,'INCOMPLETE');
    else add(kind,p.ordinal,equal(value,multiply(total,ratio))?'MATCH':withinPrintedPercentage(value,total,field)?'MATCH_PRINTED_PRECISION':'MISMATCH');
