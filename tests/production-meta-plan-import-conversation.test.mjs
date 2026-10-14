@@ -7,9 +7,10 @@ import {
 } from '../src/lib/meta-plan-import-conversation.mjs';
 import {
  PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,
- PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT,
+ PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT,PLAN_IMPORT_DOCUMENT_CURVE_CONSENT,
 } from '../src/lib/plan-import-policy.mjs';
 import {digest} from '../src/lib/workspace-policy.mjs';
+import {requireMetaPlanImportRole} from '../src/lib/meta-plan-import-origin.mjs';
 
 const now=new Date('2026-10-12T04:00:00.000Z');
 const xlsx='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -41,7 +42,7 @@ function freeze(value){if(value&&typeof value==='object'){Object.values(value).f
 test('current canonical import roles receive only their permitted formats',()=>{
  for(const role of ['ADMIN','DIRECTOR','SITE_MANAGER']){
   const result=start({role});noEffect(result);
-  const values=role==='SITE_MANAGER'?['DOCUMENT','MONTHLY','CYP']:Object.keys(consents);
+  const values=role==='SITE_MANAGER'?['DOCUMENT','MONTHLY','CYP']:[...Object.keys(consents),'DOC_CURVE'];
   assert.deepEqual(result.state.choices.map(row=>row.value),values);
   assert.equal(result.state.purpose,'PLAN_IMPORT');assert.equal(result.state.version,1);assert.equal(result.state.step,'PLAN_IMPORT_FORMAT');
   assert.equal(result.state.lastEventId,result.eventId);assert.equal(result.state.pendingFile,undefined);assert.equal(result.state.consent,undefined);
@@ -50,6 +51,27 @@ test('current canonical import roles receive only their permitted formats',()=>{
   assert.ok(result.reply.sections[0].rows.every((row,i)=>row.id===`obra:${result.state.nonce}:${i}`&&row.title.length<=24));
  }
  for(const role of ['FINANCE','AUDITOR','WORKER',null,undefined,'admin']){const result=start({role});noEffect(result);assert.equal(result.state,null);}
+});
+
+test('financial PDF/photo purpose has its own notice and current administrative authority',()=>{
+ for(const role of ['ADMIN','DIRECTOR'])for(const [kind,type] of [['document','application/pdf'],['image','image/png'],['image','image/jpeg'],['image','image/webp']]){
+  const pending=notice('DOC_CURVE',{role,kind,contentType:type});noEffect(pending);
+  assert.equal(pending.state.consent,PLAN_IMPORT_DOCUMENT_CURVE_CONSENT);
+  assert.match(pending.reply.body,/archivo financiero.*OpenAI.*36 meses/);
+  assert.match(pending.reply.body,/referencias al texto y la página/);
+  assert.match(pending.reply.body,/sin valores impresos/);
+  assert.match(pending.reply.body,/inversión monetaria planificada, no avance físico/);
+  assert.ok(pending.reply.body.length<=1024);
+  const result=choose(pending,'EXTRACT');assert.equal(metaPlanImportAuthorizationValid(result.input,result.planImport,result.state),true);
+  const changed=structuredClone(result.state);changed.consent=PLAN_IMPORT_CONSENT;
+  assert.equal(metaPlanImportAuthorizationValid(result.input,{...result.planImport,consent:PLAN_IMPORT_CONSENT},changed),false);
+  const revoked=say('continuar',pending.state,{factChanges:{planImportRole:'SITE_MANAGER'}});noEffect(revoked);assert.equal(revoked.state,null);
+ }
+ assert.equal(start({role:'SITE_MANAGER'}).state.choices.some(row=>row.value==='DOC_CURVE'),false);
+ const pending=waiting('DOC_CURVE').state;
+ for(const type of [xlsx,xlsm]){const rejected=run(file('document',type),pending);noEffect(rejected);assert.equal(rejected.state,pending);}
+ for(const role of ['ADMIN','DIRECTOR'])assert.doesNotThrow(()=>requireMetaPlanImportRole({connection:{metadata:{}},member:{role}},PLAN_IMPORT_DOCUMENT_CURVE_CONSENT));
+ for(const role of ['SITE_MANAGER','FINANCE','AUDITOR'])assert.throws(()=>requireMetaPlanImportRole({connection:{metadata:{}},member:{role}},PLAN_IMPORT_DOCUMENT_CURVE_CONSENT),{code:'PLAN_IMPORT_PERMISSION_REQUIRED'});
 });
 
 test('start rejects missing or nonexact host reference context and invalid clocks/events',()=>{

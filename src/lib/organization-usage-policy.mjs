@@ -33,7 +33,7 @@ export function openAiUsageFact(data,requestId=null){
  return {state:usage?'OBSERVED':'UNMEASURED',model:usageModel(data?.model),usage,providerResponseHash,providerRequestHash};
 }
 export function usageBinding(value){
- if(!usageExact(value,['organizationId','actorId','projectId','draftId','operationId','stage','sourceSha256','requestDigest','consentVersion','requestedModel'])||![value.organizationId,value.actorId,value.projectId,value.draftId].every(workspaceId)||!operationId(value.operationId)||value.stage!==ORGANIZATION_USAGE_STAGE||!usageHash(value.sourceSha256)||!usageHash(value.requestDigest)||value.consentVersion!=='plan-document-openai-v1'||value.requestedModel!=='gpt-4o')fail('ORGANIZATION_USAGE_BINDING_REJECTED',409);
+ if(!usageExact(value,['organizationId','actorId','projectId','draftId','operationId','stage','sourceSha256','requestDigest','consentVersion','requestedModel'])||![value.organizationId,value.actorId,value.projectId,value.draftId].every(workspaceId)||!operationId(value.operationId)||value.stage!==ORGANIZATION_USAGE_STAGE||!usageHash(value.sourceSha256)||!usageHash(value.requestDigest)||!['plan-document-openai-v1','plan-document-monthly-curve-openai-v1'].includes(value.consentVersion)||value.requestedModel!=='gpt-4o')fail('ORGANIZATION_USAGE_BINDING_REJECTED',409);
  return {...value,operationId:value.operationId.toLowerCase()};
 }
 export const organizationUsageId=binding=>'organization_usage_'+usageDigest(['organization-usage-v1',binding.organizationId,binding.operationId,binding.stage]);

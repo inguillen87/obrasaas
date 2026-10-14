@@ -5,6 +5,7 @@ import path from 'node:path';
 import {spawn,execFileSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),scratch=path.join(root,'.vercel');mkdirSync(scratch,{recursive:true});
@@ -14,6 +15,9 @@ const sourcePaths=['scripts/verify-participant-ai-ui.mjs',...componentFiles.map(
 const sourceManifest=sourcePaths.map(file=>({path:file,sha256:createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')}));
 const headSha=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',windowsHide:true}).trim();
 for(const name of componentFiles)copyFileSync(path.join(root,'src/app/(identity)/cuenta',name),path.join(app,name));
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(app),sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({private:true}));writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,fontFamily:'Arial'}}>{children}</body></html>}`);
 const scope='a'.repeat(64),projectId='project-fixture';
@@ -93,7 +97,7 @@ try{
 }
 assert.deepEqual(sourcePaths.map(file=>({path:file,sha256:createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')})),sourceManifest,'Source files changed during participant AI UI validation');
 assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',windowsHide:true}).trim(),headSha,'HEAD changed during participant AI UI validation');
-writeFileSync(path.join(scratch,'participant-ai-ui.json'),JSON.stringify({validated:true,fullSuite:!focus,widths,synthetic:true,realProviderCalls:false,checkedAt:new Date().toISOString(),headSha,sourceManifest,harnessSha256:sourceManifest[0].sha256,checks,serverClosed:true,fixtureRemoved:true},null,2));
+writeFileSync(path.join(scratch,'participant-ai-ui.json'),JSON.stringify({validated:true,fullSuite:!focus,widths,synthetic:true,realProviderCalls:false,checkedAt:new Date().toISOString(),headSha,sourceManifest,harnessSha256:sourceManifest[0].sha256,checks,serverClosed:true,fixtureRemoved:true,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms},null,2));
 console.log(JSON.stringify({validated:true,fullSuite:!focus,checks:checks.length,synthetic:true,realProviderCalls:false,serverClosed:true,fixtureRemoved:true}));
 // All owned processes and the fixture were checked above; Puppeteer's Windows
 // disconnect may leave inert handles that must not keep this CLI alive.

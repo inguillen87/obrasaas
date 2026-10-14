@@ -1,6 +1,7 @@
 import {WorkspaceError,digest,workspaceId,operationId} from './workspace-policy.mjs';
-import {normalizePlanRows,validatePlanSourceRows,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT} from './plan-import-policy.mjs';
+import {normalizePlanRows,validatePlanSourceRows,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT,normalizeDocumentCurveDecision,documentCurveDecisionDigest} from './plan-import-policy.mjs';
 import {safePlanOoxmlAnalysis,PLAN_OOXML_TYPES} from './plan-import-ooxml.mjs';
+import {DOCUMENT_CURVE_CONSENT,DOCUMENT_CURVE_PROFILE,DOCUMENT_CURVE_PURPOSE,DOCUMENT_CURVE_INCONSISTENT_CODE,normalizeDocumentCurve,hasDocumentCurveSeriesValue} from './plan-import-document-curve.mjs';
 
 export const PLAN_BASELINE_VERSION=1;
 export const PLAN_BASELINE_PAGE_SIZE=10;
@@ -12,6 +13,15 @@ const id=(value,prefix)=>typeof value==='string'&&new RegExp('^'+prefix+'[a-f0-9
 export const planBaselineTimestamp=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
 export const planBaselineCanonical=value=>Array.isArray(value)?value.map(planBaselineCanonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,planBaselineCanonical(value[key])])):value;
 export const planBaselineSame=(a,b)=>JSON.stringify(planBaselineCanonical(a))===JSON.stringify(planBaselineCanonical(b));
+export const planDocumentCurveDigest=curve=>digest(['plan-document-reviewed-curve-v1',planBaselineCanonical(curve)]);
+// A single uploaded image cannot attest evidence on another page. PDF page
+// counts are deliberately unknown here; page coordinates are never invented.
+export function planDocumentCurvePagesMatch(curve,contentType){
+ if(!String(contentType).startsWith('image/'))return true;
+ const evidence=[...curve.currency.evidence,...curve.total.evidence,...curve.initialCumulative.evidence];
+ for(const period of curve.periods){evidence.push(...period.labelEvidence,...period.calendarEvidence);for(const key of ['monthlyAmount','cumulativeAmount','monthlyPercentage','cumulativePercentage'])evidence.push(...period[key].evidence);}
+ return evidence.every(value=>value.page===1);
+}
 export const planBaselineId=(organizationId,projectId)=>'plan_baseline_'+digest(['plan-baseline-active-v1',organizationId,projectId]);
 export const planBaselineReceiptId=(actorId,projectId,key)=>'plan_baseline_receipt_'+digest(['plan-baseline-selection-receipt-v1',actorId,projectId,key.toLowerCase()]);
 
@@ -45,6 +55,7 @@ export function parsePlanBaselineCursor(value,context){
 
 export function appliedPlanBaselineCandidate(row,projectId,organizationId){
  const m=row?.metadata,r=row?.decisionMetadata,o=r?.outcome,d=o?.draft;
+ if(m?.consent?.version===DOCUMENT_CURVE_CONSENT||m?.analysis?.documentCurve?.profile===DOCUMENT_CURVE_PROFILE)return appliedDocumentCurveCandidate(row,projectId,organizationId);
  if(!row||row.organizationId!==organizationId||row.entityId!==projectId||m?.projectId!==projectId||m?.status!=='APPLIED'||![3,4].includes(m?.analysis?.spreadsheet?.version))fail('PLAN_BASELINE_CANDIDATE_UNAVAILABLE',409);
  try{
   const spreadsheet=safePlanOoxmlAnalysis(m.analysis.spreadsheet),consent=spreadsheet?.version===4?PLAN_IMPORT_CYP_CURVE_CONSENT:PLAN_IMPORT_MONTHLY_CURVE_CONSENT;
@@ -53,5 +64,42 @@ export function appliedPlanBaselineCandidate(row,projectId,organizationId){
   const {reviewed,...receiptSpreadsheet}=d?.spreadsheet||{};
   if(!id(row.decisionId,'plan_receipt_')||row.decisionId!==m.decision.receiptId||row.decisionOrganizationId!==organizationId||row.decisionEntityId!==projectId||row.decisionActorId!==m.decision.actorId||r?.version!==1||r.projectId!==projectId||!sha(r.requestDigest)||!sha(r.inputDigest)||r.sourceSha256!==m.source.sha256||r.sourceConsent!==consent||o?.action!=='APPLY'||o.recordedAt!==m.decision.recordedAt||d?.id!==row.id||d.status!=='APPLIED'||d.revision!==m.revision||!planBaselineSame(d.decision,m.decision)||!planBaselineSame(d.source,{contentType:m.source.contentType,bytes:m.source.bytes,sha256:m.source.sha256})||!planBaselineSame(d.rows,rows)||reviewed!==true||!planBaselineSame(receiptSpreadsheet,spreadsheet)||!Array.isArray(o.taskSnapshots)||o.taskSnapshots.length!==rows.length||new Set(o.taskSnapshots.map(t=>t.id)).size!==rows.length||o.taskSnapshots.some((t,i)=>!workspaceId(t.id)||t.title!==rows[i].title||t.startsOn!==rows[i].startsOn||t.endsOn!==rows[i].endsOn||t.status!=='BACKLOG'||t.progress!==0))throw Error('Receipt');
   return {draftId:row.id,draftRevision:m.revision,decisionReceiptId:row.decisionId,sourceSha256:m.source.sha256,profile:spreadsheet.profile,sourceRowCount:spreadsheet.rowCount,selectedRowCount:rows.length,appliedAt:o.recordedAt,curve:structuredClone(spreadsheet.curve)};
+ }catch{fail('PLAN_BASELINE_SOURCE_CHANGED',409);}
+}
+
+// The immutable document decision has a separate request fingerprint. This
+// validator is shared by recovery and baseline selection; old receipts keep
+// their original decoder and do not acquire document fields or zero-task rules.
+export function validatePlanDocumentReceipt(row,{organizationId,projectId,actorId}){
+ const reject=()=>{throw new WorkspaceError('PLAN_IMPORT_RECEIPT_INTEGRITY',503);};
+ try{
+  const m=row?.metadata,o=m?.outcome,request=normalizeDocumentCurveDecision(m?.request);
+  const keys=['version','purpose','organizationId','projectId','actorId','operationId','sourceSha256','sourceConsent','requestDigest','inputDigest','request','sourceCurveDigest','reviewReceiptId','reviewedCurveDigest','outcome'];
+  if(!planBaselineExact(m,keys)||m.version!==2||m.purpose!==DOCUMENT_CURVE_PURPOSE||m.organizationId!==organizationId||m.projectId!==projectId||m.actorId!==actorId||row.organizationId!==organizationId||row.entityId!==projectId||row.actorId!==actorId||row.action!=='plan.import.decision'||row.id!=='plan_receipt_'+digest([actorId,projectId,request.operationId])||request.projectId!==projectId||m.operationId!==request.operationId||m.sourceConsent!==DOCUMENT_CURVE_CONSENT||!sha(m.sourceSha256)||!sha(m.sourceCurveDigest)||m.inputDigest!==documentCurveDecisionDigest(request)||m.requestDigest!==m.inputDigest||!planBaselineTimestamp(o?.recordedAt)||o.action!==request.action||o.operationId!==request.operationId||o.expectedRevision!==request.expectedRevision||o.inputDigest!==m.inputDigest||o.definitive!==true||o.taskEffects!==false||o.baselineEffects!==false||!Array.isArray(o.taskSnapshots)||o.taskSnapshots.length)reject();
+  if(m.reviewReceiptId!==null&&!id(m.reviewReceiptId,'plan_receipt_')||m.reviewedCurveDigest!==null&&!sha(m.reviewedCurveDigest))reject();
+  if(o.state==='REJECTED'){
+   const rejectedKeys=['action','operationId','draftId','expectedRevision','inputDigest','state','definitive','phase','saved','taskEffects','baselineEffects','code','taskSnapshots','recordedAt'];
+   if(!planBaselineExact(o,rejectedKeys)||o.saved!==false||o.phase!=='PRE_DECISION'||o.draftId!==request.draftId||!['PLAN_IMPORT_REVIEW_REQUIRED','PLAN_IMPORT_REVISION_CHANGED','PLAN_IMPORT_SOURCE_ALREADY_APPLIED',DOCUMENT_CURVE_INCONSISTENT_CODE,'PLAN_DOCUMENT_CURVE_VALUES_REQUIRED'].includes(o.code))reject();
+   return {replayed:true,receiptId:row.id,...structuredClone(o),tasks:[]};
+  }
+  const recordedKeys=['action','operationId','expectedRevision','inputDigest','state','definitive','phase','saved','taskEffects','baselineEffects','draft','taskSnapshots','recordedAt'],d=o.draft;
+  if(!planBaselineExact(o,recordedKeys)||o.state!=='RECORDED'||o.saved!==true||o.phase!=='COMMITTED'||!d||d.id!==request.draftId||d.revision!==request.expectedRevision+1||d.status!==({REVIEW_CURVE:'READY',APPLY_CURVE:'APPLIED',REJECT:'REJECTED'})[request.action]||d.source?.sha256!==m.sourceSha256||!['application/pdf','image/png','image/jpeg','image/webp'].includes(d.source?.contentType)||!Number.isSafeInteger(d.source?.bytes)||d.source.bytes<1||d.source.bytes>3*1024*1024||d.existingTaskCount!==null||d.financialSource!==true||d.sourceAvailable!==true||!Array.isArray(d.rows)||d.rows.length||typeof d.documentReviewed!=='boolean')reject();
+  const original=normalizeDocumentCurve(d.documentCurve,{sourceSha256:m.sourceSha256}),reviewed=d.reviewedCurve===null?null:normalizeDocumentCurve(d.reviewedCurve,{sourceSha256:m.sourceSha256});
+  if(!planDocumentCurvePagesMatch(original,d.source.contentType)||reviewed&&!planDocumentCurvePagesMatch(reviewed,d.source.contentType)||planDocumentCurveDigest(original)!==m.sourceCurveDigest||(reviewed?planDocumentCurveDigest(reviewed):null)!==m.reviewedCurveDigest||d.documentReviewed!==(reviewed!==null))reject();
+  if(request.action==='REVIEW_CURVE'&&(!reviewed||m.reviewReceiptId!==row.id||!planBaselineSame(reviewed,request.curve)))reject();
+  if(request.action==='APPLY_CURVE'&&(!reviewed||!m.reviewReceiptId||reviewed.coherence.status==='INCONSISTENT'||!hasDocumentCurveSeriesValue(reviewed)))reject();
+  if(request.action!=='REVIEW_CURVE'&&!planBaselineSame(d.decision,{action:request.action,actorId,reason:request.reason,recordedAt:o.recordedAt,receiptId:row.id}))reject();
+  return {replayed:true,receiptId:row.id,...structuredClone(o),tasks:[]};
+ }catch{reject();}
+}
+
+function appliedDocumentCurveCandidate(row,projectId,organizationId){
+ try{
+  const m=row.metadata,original=normalizeDocumentCurve(m.analysis?.documentCurve,{sourceSha256:m.source?.sha256}),reviewed=normalizeDocumentCurve(m.reviewedCurve,{sourceSha256:m.source?.sha256}),review=m.documentReview;
+  if(!planDocumentCurvePagesMatch(original,m.source.contentType)||!planDocumentCurvePagesMatch(reviewed,m.source.contentType)||row.organizationId!==organizationId||row.entityId!==projectId||m.version!==1||m.projectId!==projectId||m.status!=='APPLIED'||m.sourcePurpose!==DOCUMENT_CURVE_PURPOSE||m.consent?.version!==DOCUMENT_CURVE_CONSENT||m.analysis?.provider!=='openai'||m.analysis.reviewed!==true||m.sourceConfirmed!==true||m.baseline!==null||m.existingTaskCount!==null||!Array.isArray(m.rows)||m.rows.length||!Array.isArray(m.extractedRows)||m.extractedRows.length||m.decision?.action!=='APPLY_CURVE'||m.decision.receiptId!==row.decisionId||!planBaselineExact(review,['receiptId','actorId','recordedAt','revision','sourceCurveDigest','reviewedCurveDigest'])||m.revision!==review.revision+1||!workspaceId(review.actorId)||review.sourceCurveDigest!==planDocumentCurveDigest(original)||review.reviewedCurveDigest!==planDocumentCurveDigest(reviewed))throw Error('Document source');
+  const applied=validatePlanDocumentReceipt({id:row.decisionId,organizationId:row.decisionOrganizationId,entityId:row.decisionEntityId,actorId:row.decisionActorId,action:'plan.import.decision',metadata:row.decisionMetadata},{organizationId,projectId,actorId:m.decision.actorId});
+  const confirmed=validatePlanDocumentReceipt(row.reviewReceipt,{organizationId,projectId,actorId:review.actorId});
+  if(applied.action!=='APPLY_CURVE'||applied.draft.revision!==m.revision||applied.draft.documentReviewed!==true||!planBaselineSame(applied.draft.documentCurve,original)||!planBaselineSame(applied.draft.reviewedCurve,reviewed)||!planBaselineSame(applied.draft.decision,m.decision)||row.decisionMetadata.reviewReceiptId!==review.receiptId||confirmed.action!=='REVIEW_CURVE'||confirmed.receiptId!==review.receiptId||confirmed.recordedAt!==review.recordedAt||confirmed.draft.revision!==review.revision||!planBaselineSame(confirmed.draft.documentCurve,original)||!planBaselineSame(confirmed.draft.reviewedCurve,reviewed)||!planBaselineSame(applied.draft.source,{contentType:m.source.contentType,bytes:m.source.bytes,sha256:m.source.sha256}))throw Error('Document receipt');
+  return {draftId:row.id,draftRevision:m.revision,decisionReceiptId:row.decisionId,sourceSha256:m.source.sha256,profile:DOCUMENT_CURVE_PROFILE,sourceRowCount:0,selectedRowCount:0,appliedAt:applied.recordedAt,curve:reviewed,sourceKind:'DOCUMENT',presentation:'DOCUMENT_MONTHLY_CURVE'};
  }catch{fail('PLAN_BASELINE_SOURCE_CHANGED',409);}
 }

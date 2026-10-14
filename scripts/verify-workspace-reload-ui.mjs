@@ -6,6 +6,7 @@ import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {purchaseReceiptId} from '../src/lib/site-purchase-policy.mjs';
 import {RECOVERY_DATABASE_NAME} from '../src/app/(identity)/cuenta/workspace-recovery-storage.mjs';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 
 // Real account, mutation, transport, journal and recovery components.
 // Session tokens and HTTP replies are controlled fixtures, never a login.
@@ -26,6 +27,9 @@ const officeIdentityPath='src/lib/identity-return-path.mjs';copyFileSync(path.jo
 const sourceManifest=sourcePaths.map(file=>{const bytes=readFileSync(path.join(root,file));if(copiedSourcePaths.has(file)||file.startsWith('src/app/(identity)/cuenta/'))assert.deepEqual(bytes,readFileSync(path.join(fixture,file)));return {path:file,sha256:createHash('sha256').update(bytes).digest('hex')};});
 assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(components),sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-reload-ui-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),'export default {turbopack:{root:'+JSON.stringify(root)+'}};\n');
 writeFileSync(path.join(app,'layout.js'),'export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:16,background:"#0b1c2d",fontFamily:"Arial,sans-serif"}}>{children}</body></html>}');
@@ -298,7 +302,7 @@ try{
  await abortedReferenceCommit();await abortedFactoryCallback();if(!locksOnly)await confirmedLegacyDoesNotReturn();
  for(let iteration=1;iteration<=5;iteration++)await twoTabRace(iteration);
  await noBrowserLocks();await cancelWhileWaitingForLock();assert.deepEqual(pageErrors,[]);
- const proof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',suite:locksOnly?'native-idb-lock-focal':'full-reload-and-isolation',widths:locksOnly?[390]:[320,390,768,1280],checks,sourceManifest,harnessSha256,pageErrors,screenshots,nativeWebLocksTested:true,nativeIndexedDbAuthorityTested:true,twoTabRaceIterations:5,reservationCommittedBeforeHttpTested:true,abortedTransactionBeforeHttpTested:true,legacyMigrationAndNoReimportTested:!locksOnly,secureContext:'trusted-http-loopback',actualPageReloadTested:!locksOnly,actualTabCloseOpenTested:!locksOnly,profileRestartSimulatedByReferenceOnlyStorageClone:!locksOnly,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,providerCallCountScope:'This local controlled fixture only; it does not describe public Clerk SDK bootstrap or provider calls in other release checks.',physicalDeviceAccepted:false,automaticRecoveryPostCount:0};
+ const proof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',suite:locksOnly?'native-idb-lock-focal':'full-reload-and-isolation',widths:locksOnly?[390]:[320,390,768,1280],checks,sourceManifest,harnessSha256,pageErrors,screenshots,nativeWebLocksTested:true,nativeIndexedDbAuthorityTested:true,twoTabRaceIterations:5,reservationCommittedBeforeHttpTested:true,abortedTransactionBeforeHttpTested:true,legacyMigrationAndNoReimportTested:!locksOnly,secureContext:'trusted-http-loopback',actualPageReloadTested:!locksOnly,actualTabCloseOpenTested:!locksOnly,profileRestartSimulatedByReferenceOnlyStorageClone:!locksOnly,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,providerCallCountScope:'This local controlled fixture only; it does not describe public Clerk SDK bootstrap or provider calls in other release checks.',physicalDeviceAccepted:false,automaticRecoveryPostCount:0,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
  writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:proof.status,checks:checks.length,pageErrors:pageErrors.length,screenshots,evidence:path.join(evidence,'browser.json')}));
 }catch(error){
  const scenario=activeScenario?{name:activeScenario.name,posts:activeScenario.current.posts.map(row=>({operationId:row.operationId,scope:row.scope,projectId:row.projectId})),requests:activeScenario.current.requests,rows:[]}:null;

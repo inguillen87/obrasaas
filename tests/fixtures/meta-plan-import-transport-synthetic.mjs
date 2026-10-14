@@ -17,7 +17,7 @@ import {digest,WorkspaceError} from '../../src/lib/workspace-policy.mjs';
 const clone=value=>structuredClone(value),hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 // Real origin/transport/planner/store/provider functions; exclusively in-memory
 // canonical SQL, signed synthetic payloads, private Blob and extraction results.
-export function metaPlanImportTransportFixture({role='ADMIN',corporate=false,ownAuthority=null,ownCapability=null,usage=null,planAnalyzer=null}={}){
+export function metaPlanImportTransportFixture({role='ADMIN',profile='DOCUMENT',corporate=false,ownAuthority=null,ownCapability=null,usage=null,planAnalyzer=null}={}){
  const environment={...(ownAuthority?.environment||{NEXT_PUBLIC_META_APP_ID:OBRASAAS_META_CHANNEL.appId,META_APP_SECRET:'synthetic-plan-transport-secret-only',META_CONFIG_ID:'280000003',META_GRAPH_API_VERSION:'v25.0',META_CUSTOMER_VERIFY_TOKEN:'synthetic-plan-transport-verifier-'.repeat(2),META_EMBEDDED_SIGNUP_VERSION:'4',OBRASAAS_META_SIGNUP_RELEASE:'customer-self-service-v1',WHATSAPP_CREDENTIALS_ENCRYPTION_KEY:Buffer.alloc(32,23).toString('base64')}),BLOB_READ_WRITE_TOKEN:'vercel_blob_rw_synthetic',PRIVATE_MEDIA_PROVIDER:'vercel-blob'};
  const member={...(ownAuthority?{...ownAuthority.context.member,clerkUserId:ownAuthority.policy.clerkUserId}:{organizationId:'org-plan-synthetic',actorId:'actor-plan-synthetic',clerkUserId:'user_PlanSynthetic'}),membershipId:'membership-plan-synthetic',role};
  const project={id:ownAuthority?.connection.projectId||'project-plan-synthetic',name:'Obra sintética'},worker={id:'worker-plan-synthetic',phone:'+5491100001111'},channelBinding={id:'binding-plan-synthetic'};
@@ -39,7 +39,8 @@ export function metaPlanImportTransportFixture({role='ADMIN',corporate=false,own
  }
  const facts=row=>({planImportRole:member.role,planImportReferenceContext:{eventId:row.id,payloadDigest:row.payload.payloadDigest,contextDigest:metaPlanImportContextDigest({...r,event:row}),sourceProjectId:connection.projectId}});
  const started=event('Start',{type:'text',text:{body:'CRONOGRAMA'}}),format=startMetaPlanImportConversation({eventId:started.id,facts:facts(started),now:r.now});
- const selected=event('Format',{type:'interactive',interactive:{type:'list_reply',list_reply:{id:format.reply.sections[0].rows[0].id}}});
+ const profileIndex=format.state.choices.findIndex(row=>row.value===profile);assert.ok(profileIndex>=0,'Synthetic profile must be permitted by the real planner');
+ const selected=event('Format',{type:'interactive',interactive:{type:'list_reply',list_reply:{id:format.reply.sections[0].rows[profileIndex].id}}});
  const requested=continueMetaPlanImportConversation({message:decodeWorkerChannelProof(selected,connection,environment).value,state:format.state,eventId:selected.id,facts:facts(selected),now:r.now});
  const fileEvent=event('File',{type:'document',document:{id:mediaId,mime_type:'application/pdf'},context:{id:'wamid.SyntheticPlanFilePrompt'}});
  const notice=continueMetaPlanImportConversation({message:decodeWorkerChannelProof(fileEvent,connection,environment).value,state:requested.state,eventId:fileEvent.id,facts:facts(fileEvent),now:r.now});

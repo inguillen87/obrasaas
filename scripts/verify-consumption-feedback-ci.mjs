@@ -102,7 +102,8 @@ export function validateConsumptionFeedbackCi({expectedHead,head,sourceTree,trac
  requireProof(postgres.realIdentityDocuments===false&&postgres.providerCalls===0&&postgres.poolClosed===true&&postgres.databaseRemoved===true,'PostgreSQL provider/identity/cleanup boundary must be closed');
  requireProof(postgres.totalCheckCount===15&&Array.isArray(postgres.checks),'PostgreSQL requires 15 native checks');
  same(postgres.checks,MATERIAL_CONSUMPTION_FEEDBACK_CHECKS,'PostgreSQL checks must equal the exported native contract');
- const pgClosure=consumptionFeedbackSourceClosure(readSource);requireProof(pgClosure.files.length===105,'PostgreSQL committed closure must contain all 105 sources, including the current usage policy and durable civil composition');manifest(postgres,pgClosure.files,readSource,'PostgreSQL');
+ const pgClosure=consumptionFeedbackSourceClosure(readSource);requireProof(pgClosure.files.length===107,'PostgreSQL committed closure must contain all 107 sources, including the current usage policy and durable civil composition');manifest(postgres,pgClosure.files,readSource,'PostgreSQL');
+ requireProof(['src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs'].every(file=>pgClosure.files.includes(file)),'Current native document curve dependency lineage');
  requireProof(['src/lib/participant-civil-store.mjs','src/lib/participant-civil-policy.mjs','src/lib/bindx-civil-data-client.mjs'].every(file=>pgClosure.files.includes(file)),'The current native lineage requires every durable civil source');
  requireProof(postgres.harnessSha256===sha(readSource(pgHarness)),'PostgreSQL producer hash must match committed Git bytes');
  requireProof(ui.environment==='isolated-localhost-next-exact-jsx-synthetic-api'&&ui.productionLoginVerified===false&&ui.physicalDeviceAccepted===false&&ui.providerRequests===0,'UI requires intercepted synthetic API/authentication only');
@@ -110,10 +111,10 @@ export function validateConsumptionFeedbackCi({expectedHead,head,sourceTree,trac
  const cleanup=ui.cleanup;
  requireProof(cleanup&&cleanup.browserClosed===true&&cleanup.serverClosed===true&&cleanup.gracefulCloseAcknowledged===true&&cleanup.fixtureRemoved===true&&cleanup.fixtureCleanupProof?.fixtureRemoved===true&&cleanup.fixtureCleanupProof?.postcondition?.absent===true,'UI browser/server/owned fixture cleanup must be confirmed');
  uiChecks(ui);
- const uiClosure=consumptionFeedbackSourceClosure(readSource,{ui:true});requireProof(uiClosure.files.length===19,'UI committed closure must contain all 19 sources');manifest(ui,uiClosure.files,readSource,'UI');
+ const uiClosure=consumptionFeedbackSourceClosure(readSource,{ui:true});requireProof(uiClosure.files.length===20,'UI committed closure must contain all 20 sources');manifest(ui,uiClosure.files,readSource,'UI');
  same(ui.externalImports,uiClosure.externalImports,'UI package imports must match committed JSX graph');same(ui.externalImports,['react'],'UI fixture package dependency boundary changed');
  requireProof(ui.harnessSha256===sha(readSource(uiHarness))&&ui.cleanupHelperSha256===sha(readSource(cleanupHelper)),'UI producer and owned cleanup hashes must match committed Git bytes');
- return {version:CONSUMPTION_FEEDBACK_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{version:postgres.version,totalCheckCount:15,sourceCount:105,harnessSha256:postgres.harnessSha256},ui:{totalCheckCount:12,sourceCount:19,widths:[...CONSUMPTION_FEEDBACK_UI_WIDTHS],harnessSha256:ui.harnessSha256,cleanupHelperSha256:ui.cleanupHelperSha256},providerCalls:0,productionDataWritten:false,productionLoginVerified:false,physicalDeviceAccepted:false};
+ return {version:CONSUMPTION_FEEDBACK_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{version:postgres.version,totalCheckCount:15,sourceCount:107,harnessSha256:postgres.harnessSha256},ui:{totalCheckCount:12,sourceCount:20,widths:[...CONSUMPTION_FEEDBACK_UI_WIDTHS],harnessSha256:ui.harnessSha256,cleanupHelperSha256:ui.cleanupHelperSha256},providerCalls:0,productionDataWritten:false,productionLoginVerified:false,physicalDeviceAccepted:false};
 }
 
 function main(){

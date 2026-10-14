@@ -3,10 +3,10 @@ import {decodeWorkerChannelProof} from './worker-channel-identity.mjs';
 import {META_CUSTOMER_PROTOCOL} from './meta-cloud-protocol.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerOutboundId} from './meta-customer-outbound.mjs';
-import {canImportPlan, canApprovePlan, PLAN_IMPORT_MONTHLY_CURVE_CONSENT, PLAN_IMPORT_CYP_CURVE_CONSENT} from './plan-import-policy.mjs';
+import {canImportPlan, canApprovePlan, PLAN_IMPORT_MONTHLY_CURVE_CONSENT, PLAN_IMPORT_CYP_CURVE_CONSENT, PLAN_IMPORT_DOCUMENT_CURVE_CONSENT} from './plan-import-policy.mjs';
 import {validMetaPlanImportReferenceContext, metaPlanImportAuthorizationValid} from './meta-plan-import-conversation.mjs';
 
-const financial = value => [PLAN_IMPORT_MONTHLY_CURVE_CONSENT, PLAN_IMPORT_CYP_CURVE_CONSENT].includes(value);
+const financial = value => [PLAN_IMPORT_MONTHLY_CURVE_CONSENT, PLAN_IMPORT_CYP_CURVE_CONSENT, PLAN_IMPORT_DOCUMENT_CURVE_CONSENT].includes(value);
 const fields = ['organizationId', 'connectionId', 'projectId', 'workerId', 'actorId', 'membershipId', 'assignmentRevision', 'bindingId', 'routeId', 'routeEpoch'];
 
 // This digest binds a file reference to the canonical person and immutable

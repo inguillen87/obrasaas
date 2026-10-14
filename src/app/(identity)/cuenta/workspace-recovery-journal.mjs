@@ -1,5 +1,6 @@
 import {createBrowserRecoveryStorage} from './workspace-recovery-storage.mjs';
 import {planBaselineCommandDigest,planBaselineOutcome} from './plan-baseline-view.mjs';
+import {normalizeDocumentCurve,documentCurveCanonical,planDocumentDraftView} from './plan-source-curve.mjs';
 import {PRIVATE_BANK_ACTIONS,validatePrivateBankOutcome} from './private-bank-account-format.mjs';
 import {purchaseOutcome} from './site-purchase-view.mjs';
 import {companyChannelOutcome,COMPANY_CHANNEL_ACTIONS} from './company-channel-view.mjs';
@@ -53,15 +54,38 @@ export function projectPreparationReceiptOutcome(value,reference){
  if(!exact([...PROJECT_PREPARATION_SNAPSHOT_KEYS,...fields])||value.state!=='RECORDED'||value.saved!==true||typeof value.replayed!=='boolean'||!/^project_preparation_[a-f0-9]{64}$/.test(value.receiptId||'')||!Number.isSafeInteger(value.revision)||value.revision<1||value.revision>2147483647||!Number.isSafeInteger(value.savedRevision)||value.savedRevision<1||value.savedRevision>value.revision||typeof value.savedPreparationIsCurrent!=='boolean'||value.savedPreparationIsCurrent!==(value.savedRevision===value.revision)||value.canManage!==true||!scopeValid(value.detailsDigest)||typeof value.name!=='string'||typeof value.clientName!=='string'||typeof value.address!=='string'||!Array.isArray(value.teams)||value.teams.length>20||!Array.isArray(value.slots)||value.slots.length>50||value.startStatus!=='TO_CONFIRM'||value.declarationOnly!==true)return null;
  return {state:'RECORDED',receiptId:value.receiptId};
 }
-const planDecisionCodes=Object.freeze(['PLAN_IMPORT_ROWS_LIMIT','PLAN_IMPORT_ROWS_INVALID','PLAN_IMPORT_DATES_INVALID','PLAN_IMPORT_DUPLICATE_ROWS','PLAN_IMPORT_REVIEW_REQUIRED','PLAN_IMPORT_REVISION_CHANGED','PLAN_IMPORT_SCHEDULE_CHANGED','PLAN_IMPORT_SOURCE_ALREADY_APPLIED','PLAN_IMPORT_SCHEDULE_TOO_LARGE']);
+const planDecisionCodes=Object.freeze(['PLAN_IMPORT_ROWS_LIMIT','PLAN_IMPORT_ROWS_INVALID','PLAN_IMPORT_DATES_INVALID','PLAN_IMPORT_DUPLICATE_ROWS','PLAN_IMPORT_REVIEW_REQUIRED','PLAN_IMPORT_REVISION_CHANGED','PLAN_IMPORT_SCHEDULE_CHANGED','PLAN_IMPORT_SOURCE_ALREADY_APPLIED','PLAN_IMPORT_SCHEDULE_TOO_LARGE','PLAN_DOCUMENT_CURVE_INCONSISTENT','PLAN_DOCUMENT_CURVE_VALUES_REQUIRED','PLAN_IMPORT_DOCUMENT_CURVE_INVALID']);
+const documentCurveActions=['REVIEW_CURVE','APPLY_CURVE'];
+const planActions=['EDIT','APPLY','REJECT',...documentCurveActions];
+const documentCurveConsent='plan-document-monthly-curve-openai-v1';
+function documentCurveReceiptOutcome(entry,result){
+ const exact=keys=>Object.keys(result).sort().join('|')===keys.sort().join('|');
+ const common=['scope','projectId','action','operationId','expectedRevision','inputDigest','state','definitive','phase','saved','taskEffects','baselineEffects','taskSnapshots','tasks','recordedAt','replayed','receiptId'];
+ if(!['REVIEW_CURVE','APPLY_CURVE','REJECT'].includes(entry.action)||result.action!==entry.action||result.operationId!==entry.operationId||result.expectedRevision!==entry.expectedRevision||result.inputDigest!==entry.inputDigest||result.definitive!==true||result.taskEffects!==false||result.baselineEffects!==false||!/^plan_receipt_[a-f0-9]{64}$/.test(result.receiptId||'')||typeof result.replayed!=='boolean'||typeof result.recordedAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(result.recordedAt)||!Number.isFinite(Date.parse(result.recordedAt))||new Date(result.recordedAt).toISOString()!==result.recordedAt||!Array.isArray(result.taskSnapshots)||result.taskSnapshots.length||!Array.isArray(result.tasks)||result.tasks.length)return null;
+ if(result.state==='REJECTED')return exact([...common,'draftId','code'])&&result.saved===false&&result.phase==='PRE_DECISION'&&result.draftId===entry.draftId&&planDecisionCodes.includes(result.code)?{state:'REJECTED',phase:'PRE_DECISION',receiptId:result.receiptId,code:result.code}:null;
+ if(!exact([...common,'draft'])||result.state!=='RECORDED'||result.saved!==true||result.phase!=='COMMITTED'||result.draft?.id!==entry.draftId||result.draft.revision!==entry.expectedRevision+1||result.draft.status!==({REVIEW_CURVE:'READY',APPLY_CURVE:'APPLIED',REJECT:'REJECTED'})[entry.action])return null;
+ try{const view=planDocumentDraftView(result.draft);if(!view||entry.action!=='REJECT'&&(!view.reviewed||!view.documentReviewed)||entry.action==='APPLY_CURVE'&&view.reviewed.coherence.status==='INCONSISTENT')return null;}catch{return null;}
+ return {state:'RECORDED',receiptId:result.receiptId};
+}
 const planUploadCodes=Object.freeze(['PLAN_IMPORT_SOURCE_ALREADY_APPLIED','PLAN_IMPORT_SCHEDULE_TOO_LARGE']);
 const sha256=async bytes=>[...new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
 const canonicalPlanCommand=value=>Array.isArray(value)?value.map(canonicalPlanCommand):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonicalPlanCommand(value[key])])):value;
 export async function planImportCommandDigest(body){
+ if(documentCurveActions.includes(body?.action)||body?.action==='REJECT'&&Object.hasOwn(body,'curve')){
+  const keys=['action','draftId','expectedRevision','operationId','projectId','reason','rows','scope','curve'];
+  if(!body||Object.keys(body).sort().join('|')!==keys.sort().join('|')||!uuid(body.operationId)||!scopeValid(body.scope)||!id(body.projectId)||!id(body.draftId)||!Number.isSafeInteger(body.expectedRevision)||body.expectedRevision<1||body.expectedRevision>2147483647||body.rows!==null||typeof body.reason!=='string'||body.reason.length>800||body.reason.trim().length<8||/[\u0000-\u001f\u007f<>]/.test(body.reason))throw unavailable();
+  const curve=body.action==='REVIEW_CURVE'?normalizeDocumentCurve(body.curve):body.curve===null?null:(()=>{throw unavailable();})();
+  const normalized={...body,operationId:body.operationId.toLowerCase(),reason:body.reason.trim(),curve};
+  return sha256(new TextEncoder().encode(JSON.stringify(['plan-document-curve-decision-v1','FINANCIAL_MONTHLY_CURVE',documentCurveCanonical(normalized)])));
+ }
  const bytes=new TextEncoder().encode(JSON.stringify(['plan-import-command-v1',canonicalPlanCommand({...body,operationId:body.operationId.toLowerCase()})]));
  return [...new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
 }
 export async function planImportUploadDigest({scope,projectId,operationId,consent,source}){
+ if(consent===documentCurveConsent){
+  if(!scopeValid(scope)||!id(projectId)||!uuid(operationId)||!source||!Number.isSafeInteger(source.bytes)||source.bytes<1||source.bytes>3*1024*1024||!['application/pdf','image/png','image/jpeg','image/webp'].includes(source.contentType)||!/^[a-f0-9]{64}$/.test(source.sha256||''))throw unavailable();
+  return sha256(new TextEncoder().encode(JSON.stringify(['plan-document-curve-upload-command-v1',{action:'UPLOAD',purpose:'FINANCIAL_MONTHLY_CURVE',consent,operationId:operationId.toLowerCase(),projectId,scope,source:{bytes:source.bytes,contentType:source.contentType,sha256:source.sha256}}])));
+ }
  const spreadsheet=['application/vnd.ms-excel.sheet.macroenabled.12','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(source?.contentType);
  if(!scopeValid(scope)||!id(projectId)||!uuid(operationId)||!(spreadsheet?['plan-spreadsheet-monthly-rubros-v1','plan-spreadsheet-cyp-partidas-v2','plan-spreadsheet-monthly-curve-v3','plan-spreadsheet-cyp-curve-v4'].includes(consent):consent==='plan-document-openai-v1')||!source||!Number.isSafeInteger(source.bytes)||source.bytes<1||source.bytes>3*1024*1024||!['application/pdf','image/png','image/jpeg','image/webp','application/vnd.ms-excel.sheet.macroenabled.12','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(source.contentType)||!/^[a-f0-9]{64}$/.test(source.sha256||''))throw unavailable();
  return sha256(new TextEncoder().encode(JSON.stringify(['plan-import-upload-command-v1',{action:'UPLOAD',consent,operationId:operationId.toLowerCase(),projectId,scope,source:{bytes:source.bytes,contentType:source.contentType,sha256:source.sha256}}])));
@@ -123,7 +147,7 @@ async function reference(url, options, now) {
   if(measurement&&!id(body.payload?.taskId))throw unavailable();
   const intake=resource==='participants'&&PARTICIPANT_INTAKE_RECOVERY_ACTIONS.includes(body.action);
   const officeAccount=resource==='participants'&&body.action===PARTICIPANT_OFFICE_ASSIGN_ACTION;
-  const plan=resource==='plan-import'&&typeof options.body==='string'&&['EDIT','APPLY','REJECT'].includes(body.action)&&id(body.draftId)&&Number.isSafeInteger(body.expectedRevision)&&body.expectedRevision>=1;
+  const plan=resource==='plan-import'&&typeof options.body==='string'&&planActions.includes(body.action)&&id(body.draftId)&&Number.isSafeInteger(body.expectedRevision)&&body.expectedRevision>=1;
   const planUpload=resource==='plan-import'&&typeof options.body?.get==='function';
   let inputDigest;try{if(resource==='plan-baseline')inputDigest=await planBaselineCommandDigest(body);else if(plan)inputDigest=await planImportCommandDigest(body);else if(planUpload)inputDigest=await planImportUploadFormDigest(options.body);}catch{throw unavailable();}
   if(intake&&(!id(body.payload?.connectionId)||body.action!=='CONFIGURE_EMPLOYEE_INTAKE'&&!/^customer_webhook_[a-f0-9]{64}$/.test(body.payload?.applicationId||'')))throw unavailable();
@@ -176,7 +200,7 @@ function valid(entry) {
   if(entry.resource==='company-channel'&&!channelReferenceValid(entry.action,entry.connectionId))return false;
   if(progress&&(!id(entry.workerId)||!templateSendActionReference(entry.actionReference)))return false;
   if(planUpload&&!/^[a-f0-9]{64}$/.test(entry.inputDigest||''))return false;
-  if(plan&&!planUpload&&(!['EDIT','APPLY','REJECT'].includes(entry.action)||!id(entry.draftId)||!Number.isSafeInteger(entry.expectedRevision)||entry.expectedRevision<1||!/^[a-f0-9]{64}$/.test(entry.inputDigest||'')))return false;
+  if(plan&&!planUpload&&(!planActions.includes(entry.action)||!id(entry.draftId)||!Number.isSafeInteger(entry.expectedRevision)||entry.expectedRevision<1||!/^[a-f0-9]{64}$/.test(entry.inputDigest||'')))return false;
   if(overtime&&!FIELD_OVERTIME_RECOVERY_ACTIONS.includes(entry.action))return false;
   if(measurement&&!id(entry.taskId))return false;
   if(bank&&(!PRIVATE_BANK_ACTIONS.includes(entry.action)||!id(entry.workerId)))return false;
@@ -263,12 +287,17 @@ export function recoveryResult(entry, result) {
     const usage=result.draft?.usage;
     if(result.draft&&Object.hasOwn(result.draft,'usage')&&(!usage||typeof usage!=='object'||Array.isArray(usage)||Object.keys(usage).sort().join('|')!=='coverageState|receiptId|state|version'||usage.version!==1||!/^organization_usage_[a-f0-9]{64}$/.test(usage.receiptId||'')||!['RESERVED','DISPATCHED','UNKNOWN','OBSERVED','UNMEASURED'].includes(usage.state)||!['TRIAL_CURRENT','PAID_PERIOD_OBSERVED','EXPIRED','UNCONFIRMED'].includes(usage.coverageState)))return null;
     const usagePending=usage&&['RESERVED','DISPATCHED','UNKNOWN'].includes(usage.state);
+    if(documentCurveActions.includes(entry.action)||entry.action==='REJECT'&&Object.hasOwn(result,'baselineEffects')){
+      if(result.state==='NOT_OBSERVED'&&result.definitive===false&&!result.draft&&!result.receiptId)return {state:'NOT_OBSERVED'};
+      const outcome=documentCurveReceiptOutcome(entry,result);
+      return outcome?.state==='RECORDED'&&usagePending?{state:'PROCESSING'}:outcome;
+    }
     if(result.state==='REJECTED'&&result.proof==='AUDITED_UPLOAD'){
       if(Object.keys(result).sort().join('|')!=='action|code|definitive|inputDigest|operationId|phase|projectId|proof|receiptId|recordedAt|replayed|reservationStarted|saved|scope|state|taskEffects|taskSnapshots|tasks'||entry.action!=='UPLOAD'||result.action!=='UPLOAD'||result.operationId!==entry.operationId||result.inputDigest!==entry.inputDigest||!/^[a-f0-9]{64}$/.test(result.inputDigest||'')||result.saved!==false||result.definitive!==true||result.reservationStarted!==false||result.taskEffects!==false||result.phase!=='PRE_RESERVATION'||!planUploadCodes.includes(result.code)||!/^plan_receipt_[a-f0-9]{64}$/.test(result.receiptId||'')||typeof result.replayed!=='boolean'||typeof result.recordedAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(result.recordedAt)||!Number.isFinite(Date.parse(result.recordedAt))||new Date(result.recordedAt).toISOString()!==result.recordedAt||!Array.isArray(result.tasks)||result.tasks.length||!Array.isArray(result.taskSnapshots)||result.taskSnapshots.length)return null;
       return {state:'REJECTED',phase:'PRE_RESERVATION',proof:'AUDITED_UPLOAD',receiptId:result.receiptId,code:result.code};
     }
     if(result.state==='REJECTED'&&result.phase==='PRE_DECISION'){
-      if(Object.keys(result).sort().join('|')!=='action|code|definitive|draftId|expectedRevision|inputDigest|operationId|phase|projectId|receiptId|recordedAt|replayed|saved|scope|state|taskEffects|taskSnapshots|tasks'||result.operationId!==entry.operationId||result.saved!==false||result.definitive!==true||result.taskEffects!==false||!planDecisionCodes.includes(result.code)||!/^plan_receipt_[a-f0-9]{64}$/.test(result.receiptId||'')||!['EDIT','APPLY','REJECT'].includes(result.action)||!id(result.draftId)||!Number.isSafeInteger(result.expectedRevision)||result.expectedRevision<1||!/^[a-f0-9]{64}$/.test(result.inputDigest||'')||typeof result.replayed!=='boolean'||typeof result.recordedAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(result.recordedAt)||!Number.isFinite(Date.parse(result.recordedAt))||!Array.isArray(result.tasks)||result.tasks.length||!Array.isArray(result.taskSnapshots)||result.taskSnapshots.length||entry.action!==undefined&&(result.action!==entry.action||result.draftId!==entry.draftId||result.expectedRevision!==entry.expectedRevision||result.inputDigest!==entry.inputDigest))return null;
+      if(Object.keys(result).sort().join('|')!=='action|code|definitive|draftId|expectedRevision|inputDigest|operationId|phase|projectId|receiptId|recordedAt|replayed|saved|scope|state|taskEffects|taskSnapshots|tasks'||result.operationId!==entry.operationId||result.saved!==false||result.definitive!==true||result.taskEffects!==false||!planDecisionCodes.includes(result.code)||!/^plan_receipt_[a-f0-9]{64}$/.test(result.receiptId||'')||!planActions.includes(result.action)||!id(result.draftId)||!Number.isSafeInteger(result.expectedRevision)||result.expectedRevision<1||!/^[a-f0-9]{64}$/.test(result.inputDigest||'')||typeof result.replayed!=='boolean'||typeof result.recordedAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(result.recordedAt)||!Number.isFinite(Date.parse(result.recordedAt))||!Array.isArray(result.tasks)||result.tasks.length||!Array.isArray(result.taskSnapshots)||result.taskSnapshots.length||entry.action!==undefined&&(result.action!==entry.action||result.draftId!==entry.draftId||result.expectedRevision!==entry.expectedRevision||result.inputDigest!==entry.inputDigest))return null;
       return {state:'REJECTED',phase:'PRE_DECISION',receiptId:result.receiptId,code:result.code};
     }
     if(result.state==='EXPIRED'){
@@ -282,7 +311,8 @@ export function recoveryResult(entry, result) {
     if(!(result.state==='RECORDED'||result.saved===true)||!id(draft?.id)||!Number.isSafeInteger(draft.revision)||draft.revision<1||!Array.isArray(draft.rows)||!['UPLOADING','PROCESSING','READY','FAILED','APPLIED','REJECTED'].includes(draft.status))return null;
     if(usagePending)return {state:'PROCESSING'};
     if(result.receiptId!==undefined){
-      if(result.saved!==true||!id(result.receiptId)||!['EDIT','APPLY','REJECT'].includes(result.action)||draft.status!==({EDIT:'READY',APPLY:'APPLIED',REJECT:'REJECTED'})[result.action]||!Array.isArray(result.tasks))return null;
+      if(result.saved!==true||!id(result.receiptId)||!planActions.includes(result.action)||draft.status!==({EDIT:'READY',APPLY:'APPLIED',REJECT:'REJECTED',REVIEW_CURVE:'READY',APPLY_CURVE:'APPLIED'})[result.action]||!Array.isArray(result.tasks))return null;
+      if(documentCurveActions.includes(result.action)){try{if(!planDocumentDraftView(draft)||result.tasks.length||result.action==='APPLY_CURVE'&&draft.documentReviewed!==true)return null;}catch{return null;}}
       return {state:'RECORDED',receiptId:result.receiptId};
     }
     return ['UPLOADING','PROCESSING'].includes(draft.status)?{state:'PROCESSING'}:{state:'RECORDED',draftId:draft.id};

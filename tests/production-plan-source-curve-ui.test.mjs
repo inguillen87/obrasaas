@@ -14,7 +14,7 @@ await loadBindings();
 const require=createRequire(import.meta.url),reactUrl=pathToFileURL(require.resolve('react')).href;
 const helperUrl=new URL('../src/app/(identity)/cuenta/plan-source-curve.mjs',import.meta.url).href;
 const source=readFileSync(new URL('../src/app/(identity)/cuenta/plan-source-curve.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
-const baseImports=`import React from ${JSON.stringify(reactUrl)};\nimport {formatSourceCurveDecimal,planSourceCurveView,sourceCurveKeyboardIndex} from ${JSON.stringify(helperUrl)};\nconst styles={};\n`;
+const baseImports=`import React from ${JSON.stringify(reactUrl)};\nimport {formatSourceCurveDecimal,planSourceCurveView,sourceCurveKeyboardIndex,planDocumentCurveView,documentCurveKeyboardIndex,DOCUMENT_CURVE_PROFILE} from ${JSON.stringify(helperUrl)};\nconst styles={};\n`;
 async function compile(imports,extra=''){
  const result=await transform(imports+source+extra,{filename:'plan-source-curve.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});
  return import('data:text/javascript;base64,'+Buffer.from(result.code).toString('base64'));
@@ -137,6 +137,7 @@ const panelSource=readFileSync(new URL('../src/app/(identity)/cuenta/plan-import
 const stateNames=[...panelSource.matchAll(/\[([A-Za-z]+),set[A-Za-z]+\]=useState/g)].map(match=>match[1]);
 const panelHooks=`import React from ${JSON.stringify(reactUrl)};
 import {planImportUsageView,planImportPreservation} from ${JSON.stringify(new URL('../src/app/(identity)/cuenta/plan-import-usage-view.mjs',import.meta.url).href)};
+import {planDocumentDraftView,documentCurveReviewValue,documentCurveValuesEqual,DOCUMENT_CURVE_PROFILE} from ${JSON.stringify(helperUrl)};
 const styles={},stateNames=${JSON.stringify(stateNames)};
 let states=[],refs=[],stateCursor=0,refCursor=0,queue=[];
 const useState=initial=>{const index=stateCursor++;if(!(index in states))states[index]=initial;return [states[index],value=>{states[index]=typeof value==='function'?value(states[index]):value;}];};
@@ -159,7 +160,7 @@ const buttonText=node=>elements(node,element=>element.type==='button').map(eleme
 function panelButton(tree,text){const value=buttonText(tree).find(([,label])=>label===text)?.[0];assert.ok(value,`Expected visible ${text} control`);return value;}
 async function openPanel(value,{canApprove=true,drafts=[value]}={}){
  panel.reset();let tree=panel.render(panelContext);panel.respond({data:{...panelContext,canApprove,drafts,truncated:false}});await panelButton(tree,'Importar PDF, imagen o Excel').props.onClick();
- tree=panel.render(panelContext);panel.respond({data:{...panelContext,draft:value}});await elements(tree,node=>node.type==='button'&&Array.isArray(node.props.children)&&node.props.children.includes(' tareas'))[0].props.onClick();
+  tree=panel.render(panelContext);panel.respond({data:{...panelContext,draft:value}});await elements(tree,node=>node.type==='button'&&textContent(node).includes(' · ')&&textContent(node).endsWith(' tareas'))[0].props.onClick();
  panel.seed({recoveryReady:true,reason:'Revisión sintética del archivo',receipt:'receipt-synthetic',file:new File(['synthetic'],'source-synthetic.xlsx',{type:value.source.contentType}),consent:true,approved:true});
  tree=panel.render(panelContext);elements(tree,node=>node.type==='input'&&node.props.type==='file')[0].props.ref.current={value:'source-synthetic.xlsx'};
  return tree;
@@ -168,7 +169,7 @@ async function openPanel(value,{canApprove=true,drafts=[value]}={}){
 // Keep this helper synchronous so adversarial queued reads start before later responses.
 function consultSavedDraft(tree){
  const before=panel.snapshot(),queuedBefore=panel.queued();
- const saved=elements(tree,node=>node.type==='button'&&Array.isArray(node.props.children)&&node.props.children.includes(' tareas'))[0];
+  const saved=elements(tree,node=>node.type==='button'&&textContent(node).includes(' · ')&&textContent(node).endsWith(' tareas'))[0];
  assert.ok(saved,'Expected saved draft control');const request=saved.props.onClick();
  const current=panel.snapshot();if(!current.draftConsultTarget)return request;
  assert.equal(panel.queued(),queuedBefore,'Opening the choice must not consume a response');

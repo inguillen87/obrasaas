@@ -170,7 +170,9 @@ export function createMetaPlanImportTransport({within, resolve, saved, record, r
         const link = 'https://obrasaas.com/cuenta?obra=' + encodeURIComponent(r.project.id)
           + (draft ? '&plan=' + encodeURIComponent(draft.id) + '#plan-import-title' : '');
         const body = draft?.status === 'READY'
-          ? 'El borrador del cronograma está preparado con ' + draft.rows.length + (draft.rows.length === 1 ? ' partida. ' : ' partidas. ') + 'Abrilo para revisar la fuente, completar las fechas y resolver las dudas antes de aplicar tareas. '
+          ? draft.documentCurve
+            ? 'La curva de inversión mensual está preparada para revisión. Abrila en tu cuenta para comparar los valores con el archivo y resolver las dudas. Esta importación no crea tareas ni elige la línea base. '
+            : 'El borrador del cronograma está preparado con ' + draft.rows.length + (draft.rows.length === 1 ? ' partida. ' : ' partidas. ') + 'Abrilo para revisar la fuente, completar las fechas y resolver las dudas antes de aplicar tareas. '
           : draft?.status === 'FAILED'
           ? 'La extracción no quedó confirmada. Consultá el borrador y su fuente en la obra antes de decidir otra carga. '
           : draft ? 'El intento está registrado y su procesamiento sigue pendiente' + (draft.processingExpired ? ' o vencido' : '') + '. Consultá su estado en la obra; no repetimos la descarga ni la extracción. '

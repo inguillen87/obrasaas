@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 
 // Real component and session transport; controlled Graph SDK/API fixtures only.
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV&&!process.env.VERCEL_TARGET_ENV);
@@ -11,6 +12,9 @@ const root=realpathSync(process.cwd()),parent=path.join(root,'.vercel'),evidence
 const fixture=mkdtempSync(path.join(parent,'restricted-meta-pilot-ui-')),app=path.join(fixture,'app');mkdirSync(app);
 const copied=['meta-onboarding-panel.js','meta-onboarding-panel.module.css','meta-onboarding-readiness-view.mjs','meta-sdk-loader.mjs','workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','workspace-recovery-journal.mjs','participant-office-account-view.mjs','own-company-number-view.mjs','own-company-templates-view.mjs', 'private-bank-account-format.mjs','company-channel-view.mjs','site-purchase-view.mjs','workspace-recovery-storage.mjs','plan-baseline-view.mjs','plan-source-curve.mjs'],sourceManifest=[];
 for(const file of copied){const source=path.join(root,'src/app/(identity)/cuenta',file),target=path.join(app,file);copyFileSync(source,target);assert.deepEqual(readFileSync(source),readFileSync(target));sourceManifest.push({path:'src/app/(identity)/cuenta/'+file,sha256:createHash('sha256').update(readFileSync(source)).digest('hex')});}
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(app),sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'synthetic-restricted-meta-pilot',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#f4f7f9',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
@@ -85,5 +89,5 @@ try{
  let started=false;for(let attempt=0;attempt<90;attempt++){if(server.exitCode!==null)throw new Error('Local Next fixture exited');try{const response=await fetch(origin);if(response.ok){started=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,500));}assert.equal(started,true,'Local fixture did not start');
  browser=await puppeteer.launch({headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
   for(const width of [320,390,768,1280])for(const mode of ['normal','active-expiry','owner-denied','expired','owner-denied-global-ready','expired-global-ready','owner-diagnostics','owner-diagnostics-global-ready','foreign','unknown','callback-policy-expiry','callback-signup-expiry','event-expiry'])await scenario(mode,width);
- assert.deepEqual(errors,[]);writeFileSync(path.join(evidence,'proof.json'),JSON.stringify({status:'PASS',realComponent:true,realProviders:false,checks,errors,sourceManifest,harnessSha256:createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex')},null,2));console.log(JSON.stringify({status:'PASS',checks:checks.length,widths:[320,390,768,1280],realProviderRequests:0}));
+ assert.deepEqual(errors,[]);writeFileSync(path.join(evidence,'proof.json'),JSON.stringify({status:'PASS',realComponent:true,realProviders:false,checks,errors,sourceManifest,harnessSha256:createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex'),documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms},null,2));console.log(JSON.stringify({status:'PASS',checks:checks.length,widths:[320,390,768,1280],realProviderRequests:0}));
 }catch(error){writeFileSync(path.join(evidence,'failure-server.log'),log);throw error;}finally{if(browser)await browser.close();if(process.platform==='win32')await new Promise(resolve=>{const child=spawn('taskkill',['/PID',String(server.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});child.once('exit',resolve);child.once('error',resolve);});else server.kill('SIGTERM');const resolved=realpathSync(fixture);assert.ok(resolved.startsWith(realpathSync(parent)+path.sep));rmSync(resolved,{recursive:true,force:true});}

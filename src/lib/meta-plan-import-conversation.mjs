@@ -1,7 +1,7 @@
 import {digest,workspaceId} from './workspace-policy.mjs';
 import {
  canImportPlan,canApprovePlan,PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,
- PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT,
+ PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT,PLAN_IMPORT_DOCUMENT_CURVE_CONSENT,
 } from './plan-import-policy.mjs';
 
 export const META_PLAN_IMPORT_REFERENCE_TTL_MS=900000;
@@ -13,6 +13,7 @@ const profiles=Object.freeze({
  CYP:{title:'Partidas CyP',consent:PLAN_IMPORT_CYP_CONSENT,limit:200,financial:false},
  MONTHLY_CURVE:{title:'Curva por mes',consent:PLAN_IMPORT_MONTHLY_CURVE_CONSENT,limit:50,financial:true},
  CYP_CURVE:{title:'Partidas y curva',consent:PLAN_IMPORT_CYP_CURVE_CONSENT,limit:200,financial:true},
+ DOC_CURVE:{title:'Curva PDF o foto',consent:PLAN_IMPORT_DOCUMENT_CURVE_CONSENT,limit:36,financial:true},
 });
 const referenceKeys=['version','eventId','payloadDigest','contextDigest','sourceProjectId','kind','mediaId','contentType','receivedAt','expiresAt'];
 const contextKeys=['eventId','payloadDigest','contextDigest','sourceProjectId'];
@@ -27,7 +28,7 @@ const selectedId=message=>message?.type==='interactive'?(message.interactive?.ty
 const allowed=(profile,role)=>canImportPlan(role)&&Object.hasOwn(profiles,profile)&&(!profiles[profile].financial||canApprovePlan(role));
 const formatChoices=role=>Object.entries(profiles).filter(([,profile])=>!profile.financial||canApprovePlan(role)).map(([value,profile])=>({value,title:profile.title}));
 const contextValid=value=>exactKeys(value,contextKeys)&&workspaceId(value.eventId)&&workspaceId(value.sourceProjectId)&&hex(value.payloadDigest)&&hex(value.contextDigest);
-const mediaMatches=(profile,kind,contentType)=>profile==='DOCUMENT'?(kind==='image'&&imageTypes.includes(contentType)||kind==='document'&&contentType==='application/pdf'):Object.hasOwn(profiles,profile)&&kind==='document'&&spreadsheetTypes.includes(contentType);
+const mediaMatches=(profile,kind,contentType)=>['DOCUMENT','DOC_CURVE'].includes(profile)?(kind==='image'&&imageTypes.includes(contentType)||kind==='document'&&contentType==='application/pdf'):Object.hasOwn(profiles,profile)&&kind==='document'&&spreadsheetTypes.includes(contentType);
 
 function prompt(state,eventId,body,rows){
  const nonce=digest([eventId,state.step]).slice(0,20);
@@ -66,12 +67,12 @@ export function startMetaPlanImportConversation({eventId,facts,now}={}){
 }
 
 function filePrompt(state,eventId){
- const body=state.profile==='DOCUMENT'?'Enviá un PDF de hasta 3 MiB o una imagen PNG o JPEG de hasta 2 MiB.':'Enviá un archivo XLSX de hasta 3 MiB para '+profiles[state.profile].title+'. Si WhatsApp no admite tu XLSM, cargalo desde Mi cuenta; no hace falta cambiar sus macros para la lectura local.';
+ const body=['DOCUMENT','DOC_CURVE'].includes(state.profile)?'Enviá un PDF de hasta 3 MiB o una imagen PNG o JPEG de hasta 2 MiB.'+(state.profile==='DOC_CURVE'?' Debe mostrar los valores impresos de la inversión prevista por mes.':''):'Enviá un archivo XLSX de hasta 3 MiB para '+profiles[state.profile].title+'. Si WhatsApp no admite tu XLSM, cargalo desde Mi cuenta; no hace falta cambiar sus macros para la lectura local.';
  return {state:{...state,lastEventId:eventId},reply:text(body+' Después leerás el aviso y decidirás si autorizás la extracción. No envíes otro formato. Escribí CANCELAR para terminar.')};
 }
 function notice(state,eventId){
  const profile=profiles[state.profile];
- const analysis=state.profile==='DOCUMENT'?'Si elegís Extraer borrador, autorizás guardar el archivo en almacenamiento privado y enviarlo a OpenAI para extraer hasta 50 tareas.':'Si elegís Extraer borrador, autorizás guardar el archivo en almacenamiento privado y leerlo localmente, sin enviarlo a OpenAI, sin ejecutar macros ni recalcular fórmulas. Límite: '+profile.limit+(state.profile.startsWith('CYP')?' partidas CyP.':' rubros mensuales.');
+ const analysis=state.profile==='DOC_CURVE'?'Si elegís Extraer borrador, autorizás guardar este archivo financiero en almacenamiento privado y enviarlo a OpenAI para proponer una lectura de hasta 36 meses, con referencias al texto y la página. Revisarás los importes y las dudas en tu cuenta. No estimamos cifras de gráficos sin valores impresos ni completamos años ausentes.':state.profile==='DOCUMENT'?'Si elegís Extraer borrador, autorizás guardar el archivo en almacenamiento privado y enviarlo a OpenAI para extraer hasta 50 tareas.':'Si elegís Extraer borrador, autorizás guardar el archivo en almacenamiento privado y leerlo localmente, sin enviarlo a OpenAI, sin ejecutar macros ni recalcular fórmulas. Límite: '+profile.limit+(state.profile.startsWith('CYP')?' partidas CyP.':' rubros mensuales.');
  const curve=profile.financial?' La curva representa inversión monetaria planificada, no avance físico; no se aprueban ni aplican tareas.':' Las fechas, cantidades y dudas se revisan en tu cuenta; ninguna tarea queda aprobada ni aplicada.';
  return prompt({...state,step:'PLAN_IMPORT_NOTICE'},eventId,analysis+curve+' Podés cancelar ahora sin guardar ni analizar el archivo. La autorización corresponde únicamente a este archivo y formato durante 15 minutos.',noticeChoices);
 }

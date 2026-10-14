@@ -49,8 +49,8 @@ test('actual identity producer emits and rechecks the complete fixture graph; si
  const fixtureCall=ast.program.body.filter(node=>node.type==='ExpressionStatement'&&node.expression.type==='CallExpression'&&node.expression.callee.name==='pinFixtureGraph'&&node.expression.arguments.length===1&&node.expression.arguments[0].value===fixtureSource);assert.equal(fixtureCall.length,1);
  const historicalReference="sourceManifest.push({path:'scripts/lib/company-subscription-ui-fixture.mjs',sha256:sha256(sourceBytes('scripts/lib/company-subscription-ui-fixture.mjs'))});";
  const mutant=emission.slice(0,fixtureCall[0].start-starts[0].start)+historicalReference+emission.slice(fixtureCall[0].end-starts[0].start);
- function execute(code){
-  const overrides=new Map(),writes=new Map(),reads=[],fixture=path.join(root,'.vercel/controlled-identity-emitter-no-files-created');
+ function execute(code,initialOverrides=[]){
+  const overrides=new Map(initialOverrides),writes=new Map(),reads=[],fixture=path.join(root,'.vercel/controlled-identity-emitter-no-files-created');
   const sourceBytes=relative=>{assert.ok(!path.isAbsolute(relative)&&!relative.split(/[\\/]/).includes('..'));reads.push(relative);return overrides.get(relative)??readFileSync(path.join(root,relative));};
   const inside=target=>{const relative=path.relative(fixture,target);assert.ok(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));return relative.split(path.sep).join('/');};
   const context=createContext({assert,root,fixture,path,createHash,existsSync,statSync,sourceBytes,mkdirSync:target=>{inside(target);},writeFileSync:(target,bytes)=>{writes.set(inside(target),Buffer.from(bytes));}});
@@ -71,6 +71,10 @@ test('actual identity producer emits and rechecks the complete fixture graph; si
  }
  fixtureGraph(fixtureSource);assert.ok(closure.has(catalogSource));for(const relative of closure){assert.equal(names.filter(name=>name===relative).length,1);assert.ok(actual.reads.includes(relative));}
  actual.recheck();actual.change(catalogSource);assert.throws(actual.recheck,/Copied UI source changed during validation: src\/lib\/company-subscription-catalog\.mjs/);
+ const documentSource='src/lib/plan-import-document-curve.mjs',curveView='src/app/(identity)/cuenta/plan-source-curve.mjs';
+ const documentActual=execute(emission);assert.equal(documentActual.manifest.filter(ref=>ref.path===documentSource).length,1);documentActual.change(documentSource);assert.throws(documentActual.recheck,/Copied UI source changed during validation: src\/lib\/plan-import-document-curve\.mjs/);
+ const originalCurveView=readFileSync(path.join(root,curveView),'utf8'),curveAst=parse(originalCurveView,{sourceType:'module'}),documentImports=curveAst.program.body.filter(node=>node.type==='ImportDeclaration'&&node.source.value==='../../../lib/plan-import-document-curve.mjs');assert.equal(documentImports.length,1);
+ const omittedDocumentImport=originalCurveView.slice(0,documentImports[0].start)+originalCurveView.slice(documentImports[0].end),documentMutant=execute(emission,[[curveView,Buffer.from(omittedDocumentImport)]]),documentNames=documentMutant.manifest.map(ref=>ref.path).sort();assert.deepEqual(expected.filter(name=>!documentNames.includes(name)),[documentSource]);assert.throws(()=>assert.deepEqual(documentNames,expected));documentMutant.change(documentSource);assert.doesNotThrow(documentMutant.recheck,'Removing the real import also removes the real after-byte guard');
  const old=execute(mutant),oldNames=old.manifest.map(ref=>ref.path).sort();assert.deepEqual(expected.filter(name=>!oldNames.includes(name)),[catalogSource]);assert.deepEqual(oldNames.filter(name=>!expected.includes(name)),[]);assert.equal(oldNames.length,expected.length-1);assert.throws(()=>assert.deepEqual(oldNames,expected));
  old.change(catalogSource);assert.doesNotThrow(old.recheck,'The former emitter also missed the catalog in its real post-browser check');
  assert.ok(actual.writes.size>0);assert.equal(actual.writes.has(catalogSource),false,'The server fixture catalog is bound without copying it into the browser bundle');

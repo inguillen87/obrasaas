@@ -7,6 +7,7 @@ import {spawn,spawnSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {summarizeFieldShift} from '../src/lib/field-shift-summary.mjs';
 import {overtimeConfiguration,OVERTIME_CONTRACT,fieldOvertimeJourneyCursor} from '../src/lib/field-overtime-policy.mjs';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 
 // Real Jornada components and account CSS. APIs, identities and receipts are
 // synthetic. Only Puppeteer's isolated cached headless shell is permitted.
@@ -20,6 +21,9 @@ const sha256=value=>createHash('sha256').update(value).digest('hex'),sourceManif
 for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filter(name=>/\.(js|mjs|css)$/.test(name))){const source='src/app/(identity)/cuenta/'+file;copyFileSync(path.join(root,source),path.join(components,file));sourceManifest.push({path:source,sha256:sha256(readFileSync(path.join(components,file)))});}
 for(const source of ['src/app/(identity)/identity.module.css','src/lib/geo.js','src/lib/field-media-privacy.mjs','src/lib/voice-progress-draft.mjs','src/lib/progress-measurement-quantity.js','src/lib/task-progress-measurement.js']){const destination=path.join(fixture,source);mkdirSync(path.dirname(destination),{recursive:true});copyFileSync(path.join(root,source),destination);sourceManifest.push({path:source,sha256:sha256(readFileSync(destination))});}
 for(const source of ['src/lib/field-shift-summary.mjs','src/lib/field-overtime-policy.mjs'])sourceManifest.push({path:source,sha256:sha256(readFileSync(path.join(root,source)))});
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:components,sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-field-overtime-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,fontFamily:'Arial'}}>{children}</body></html>}`);
@@ -113,7 +117,7 @@ try{
  for(let attempt=0;attempt<100;attempt++){try{if((await fetch(origin)).ok)break;}catch{}if(server.exitCode!==null)throw Error(log);await new Promise(resolve=>setTimeout(resolve,500));if(attempt===99)throw Error(log);}
  browser=await puppeteer.launch({headless:'shell',args:['--no-sandbox']});assert.match(browser.process().spawnfile,/chrome-headless-shell/i,'Never launch user Chrome');
  for(const width of widths)for(const mode of ['configure','request','review','stale','readonly','integrity','overlap','conflict','lost','reload','denial','wronguuid','wrongaction','missingcorrelation','reloadwronguuid','reloadwrongaction','refresh-off','refresh-approved','refresh-draft','pagination','pagination-reload'])await scenario(width,mode);
- assert.deepEqual(errors,[]);for(const item of sourceManifest)assert.equal(sha256(readFileSync(path.join(root,item.path))),item.sha256,'Source must remain unchanged during verification');proof={status:'PASS',synthetic:true,widths,checks,errors,sourceManifest,harnessSha256:sha256(readFileSync(new URL(import.meta.url))),browser:'isolated-cached-chrome-headless-shell',port,providerCalls:0,realBusinessDatabaseUsed:false,physicalPhoneAccepted:false,humanAccepted:false};
+ assert.deepEqual(errors,[]);for(const item of sourceManifest)assert.equal(sha256(readFileSync(path.join(root,item.path))),item.sha256,'Source must remain unchanged during verification');proof={status:'PASS',synthetic:true,widths,checks,errors,sourceManifest,harnessSha256:sha256(readFileSync(new URL(import.meta.url))),browser:'isolated-cached-chrome-headless-shell',port,providerCalls:0,realBusinessDatabaseUsed:false,physicalPhoneAccepted:false,humanAccepted:false,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
 }catch(error){console.error(JSON.stringify({log,checks,errors}));throw error;}finally{
  await browser?.close();if(server.exitCode===null&&server.pid){if(process.platform==='win32')spawnSync('taskkill.exe',['/PID',String(server.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});else server.kill();}
  assert.ok(path.resolve(fixture).startsWith(path.resolve(privateRoot)+path.sep)&&/^overtime-ui-/.test(path.basename(fixture)));rmSync(fixture,{recursive:true,force:true});if(!readFileSync(agentsFile).equals(agentsBefore))writeFileSync(agentsFile,agentsBefore);assert.equal(sha256(readFileSync(agentsFile)),sha256(agentsBefore));

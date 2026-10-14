@@ -10,6 +10,7 @@ import {monthlyCurveFixture} from '../tests/fixtures/plan-import-monthly-curve-s
 import {cypCurveFixture} from '../tests/fixtures/plan-import-cyp-curve-synthetic.mjs';
 import {normalizePlanRows,validatePlanSourceRows} from '../src/lib/plan-import-policy.mjs';
 import puppeteer from 'puppeteer';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),scratch=path.join(root,'.vercel/private');mkdirSync(scratch,{recursive:true});
 const fixture=mkdtempSync(path.join(scratch,'plan-ui-')),app=path.join(fixture,'app');mkdirSync(app);
@@ -18,6 +19,9 @@ const hashFile=file=>createHash('sha256').update(readFileSync(file)).digest('hex
 if(process.env.CI==='true')assert.equal(trackedClean,true);
 const sourceProof={sourceRevision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),sourceTree:execFileSync('git',['rev-parse','HEAD^{tree}'],{encoding:'utf8'}).trim(),sourceState:process.env.CI==='true'?'EXACT_CI_SOURCE':'LOCAL_REVIEW_SOURCE',trackedClean,harnessSha256:hashFile('scripts/verify-plan-import-ui.mjs'),sourceManifest:copiedFiles.slice(0,10).map(name=>({path:'src/app/(identity)/cuenta/'+name,sha256:hashFile(path.join(root,'src/app/(identity)/cuenta',name))})).sort((a,b)=>a.path.localeCompare(b.path)),decisionSourceManifest:copiedFiles.slice(10).map(name=>({path:'src/app/(identity)/cuenta/'+name,sha256:hashFile(path.join(root,'src/app/(identity)/cuenta',name))})).sort((a,b)=>a.path.localeCompare(b.path)),spreadsheetSourceManifest:['src/lib/organization-usage-policy.mjs','src/lib/plan-import-ooxml.mjs','src/lib/plan-import-monthly-curve.mjs','src/lib/plan-import-cyp-curve.mjs','tests/fixtures/plan-import-monthly-curve-synthetic.mjs','tests/fixtures/plan-import-cyp-curve-synthetic.mjs','src/lib/plan-import-policy.mjs','src/lib/plan-import-analyzer.mjs','tests/fixtures/plan-import-ooxml-synthetic.mjs','package.json','package-lock.json'].map(name=>({path:name,sha256:hashFile(path.join(root,name))}))};
 for(const name of copiedFiles)copyFileSync(path.join(root,'src/app/(identity)/cuenta',name),path.join(app,name));
+const documentCurveSourceManifest=[];
+const {fixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:app,sourceManifest:documentCurveSourceManifest});
+sourceProof.documentSourceManifest=documentCurveSourceManifest.filter(ref=>ref.path!=='src/app/(identity)/cuenta/plan-source-curve.mjs');sourceProof.fixtureTransforms=fixtureTransforms;
 const linkSourceFiles=['src/lib/identity-return-path.mjs'];sourceProof.linkSourceManifest=linkSourceFiles.map(name=>({path:name,sha256:hashFile(path.join(root,name))}));
 copyFileSync(path.join(root,linkSourceFiles[0]),path.join(app,'identity-return-path.mjs'));
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({private:true}));writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);

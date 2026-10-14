@@ -8,6 +8,7 @@ import {spawn,execFileSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {OFFICE_ROLES} from '../src/lib/participant-policy.mjs';
 import {PARTICIPANT_OFFICE_ASSIGN_ACTION} from '../src/app/(identity)/cuenta/participant-office-account-view.mjs';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=realpathSync(process.cwd()),widths=[320,390,768,1280],modes=['success','pending','blocked','unknown','reload','not-observed','crossed','crossed-receipt','late-email','role-change','proof-change','cancel','known-rejection'];
@@ -20,6 +21,10 @@ const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),gitLF=bytes=>
 const sourceManifest=copiedFiles.map(file=>({path:'src/app/(identity)/cuenta/'+file,sha256:hash(gitLF(readFileSync(path.join(app,file)))),copiedSha256:hash(readFileSync(path.join(app,file)))}));
 sourceManifest.push({path:'src/lib/participant-policy.mjs',sha256:hash(gitLF(readFileSync(path.join(root,'src/lib/participant-policy.mjs')))),copiedSha256:hash(readFileSync(path.join(root,'src/lib/participant-policy.mjs')))});
 if(process.env.CI){assert.equal(trackedClean,true,'CI must execute the committed source with a clean checkout');assert.equal(process.env.GITHUB_SHA,sourceRevision,'CI must execute its exact declared source revision');}
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(app),sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const sourceSha256=hash(gitLF(readFileSync(path.join(root,ref.path)))),existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,sourceSha256,'Git LF source identity remains independent of the fixture');else sourceManifest.push({...ref,sha256:sourceSha256,copiedSha256:ref.sha256});}
+for(const transformed of documentCurveFixtureTransforms){const entry=sourceManifest.find(row=>row.path===transformed.path);assert.ok(entry);entry.copiedSha256=transformed.fixtureSha256;}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-office-account-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#eef3f9',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
@@ -89,11 +94,11 @@ try{
  const deadline=Date.now()+60000;while(Date.now()<deadline){try{const response=await fetch(origin);if(response.ok)break;}catch{}await new Promise(resolve=>setTimeout(resolve,250));}assert.ok(Date.now()<deadline,'Local fixture did not start');
  browser=await puppeteer.launch({headless:true,args:['--no-sandbox','--disable-setuid-sandbox']});for(const width of widths)for(const mode of selectedMode?[selectedMode]:modes)await scenario(width,mode);
  assert.deepEqual(errors,[]);assert.deepEqual(unexpectedRequests,[]);assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8',windowsHide:true}).trim(),sourceRevision,'Source revision changed during UI verification');for(const source of sourceManifest)assert.equal(hash(gitLF(readFileSync(path.join(root,source.path)))),source.sha256,'Source changed during UI verification: '+source.path);
- report={schemaVersion:1,kind:'SYNTHETIC_VERIFIED_OFFICE_ACCOUNT_UI',sourceRevision,trackedClean,harnessSha256,providerCalls:0,productionCalls:0,unexpectedRequests,sourceManifest,generatedSources:['package.json','next.config.mjs','app/layout.js','app/page.js'].map(file=>({path:file,sha256:hash(gitLF(readFileSync(path.join(fixture,file))))})),widths,checks,errors,cleanup};
+ report={schemaVersion:1,kind:'SYNTHETIC_VERIFIED_OFFICE_ACCOUNT_UI',sourceRevision,trackedClean,harnessSha256,providerCalls:0,productionCalls:0,unexpectedRequests,sourceManifest,generatedSources:['package.json','next.config.mjs','app/layout.js','app/page.js'].map(file=>({path:file,sha256:hash(gitLF(readFileSync(path.join(fixture,file))))})),widths,checks,errors,cleanup,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
 }catch(error){failure=error;}
 finally{
  if(browser)await browser.close();cleanup.browserClosed=true;if(server.exitCode===null){if(process.platform==='win32')execFileSync('taskkill.exe',['/PID',String(server.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});else process.kill(-server.pid,'SIGTERM');await Promise.race([serverClosed,new Promise(resolve=>setTimeout(resolve,10000))]);}cleanup.serverStopped=server.exitCode!==null||server.signalCode!==null;
  const resolvedFixture=realpathSync(fixture);assert.ok(resolvedFixture.startsWith(realpathSync(path.join(root,'.vercel'))+path.sep)&&path.basename(resolvedFixture).startsWith('verified-office-ui-'));rmSync(resolvedFixture,{recursive:true,force:true});cleanup.fixtureRemoved=!existsSync(resolvedFixture);
 }
-if(failure){writeFileSync(path.join(evidence,'FAILURE.json'),JSON.stringify({passed:false,error:failure.message,checks,errors,sourceRevision,trackedClean,harnessSha256,sourceManifest,serverLog,cleanup},null,2));throw failure;}
+if(failure){writeFileSync(path.join(evidence,'FAILURE.json'),JSON.stringify({passed:false,error:failure.message,checks,errors,sourceRevision,trackedClean,harnessSha256,sourceManifest,serverLog,cleanup,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms},null,2));throw failure;}
 assert.ok(Object.values(cleanup).every(Boolean),'Owned fixture cleanup must complete');writeFileSync(path.join(evidence,'browser.json'),JSON.stringify({...report,passed:true},null,2));writeFileSync(path.join(evidence,'RESULTS.json'),JSON.stringify({...report,passed:true},null,2));console.log(JSON.stringify({passed:true,checks:checks.length,evidence,resultSha256:hash(readFileSync(path.join(evidence,'browser.json'))),cleanup}));

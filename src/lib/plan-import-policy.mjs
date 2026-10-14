@@ -2,6 +2,9 @@ import {createHash} from 'node:crypto';
 import {WorkspaceError, workspaceId, operationId, calendarDate, digest} from './workspace-policy.mjs';
 import {decodePrivateImage} from './private-image-upload.mjs';
 import {PLAN_OOXML_TYPES,PLAN_OOXML_CONSENT,PLAN_CYP_CONSENT,PLAN_MONTHLY_CURVE_CONSENT,PLAN_CYP_CURVE_CONSENT,PLAN_CYP_ROWS,validatePlanOoxml,safePlanOoxmlAnalysis} from './plan-import-ooxml.mjs';
+import {DOCUMENT_CURVE_CONSENT,DocumentCurveError,isDocumentCurveConsent,normalizeDocumentCurve,documentCurveCanonical,DOCUMENT_CURVE_PURPOSE} from './plan-import-document-curve.mjs';
+export {isDocumentCurveConsent} from './plan-import-document-curve.mjs';
+export const PLAN_IMPORT_DOCUMENT_CURVE_CONSENT=DOCUMENT_CURVE_CONSENT;
 
 export const PLAN_IMPORT_LIMIT=3*1024*1024;
 export const PLAN_IMPORT_ROWS=50;
@@ -12,7 +15,7 @@ export const PLAN_IMPORT_CYP_CONSENT=PLAN_CYP_CONSENT;
 export const PLAN_IMPORT_MONTHLY_CURVE_CONSENT=PLAN_MONTHLY_CURVE_CONSENT;
 export const PLAN_IMPORT_CYP_CURVE_CONSENT=PLAN_CYP_CURVE_CONSENT;
 export const planSourceConsent=contentType=>PLAN_OOXML_TYPES[contentType]?PLAN_IMPORT_SPREADSHEET_CONSENT:PLAN_IMPORT_CONSENT;
-export const isPlanSourceConsent=(contentType,consent)=>PLAN_OOXML_TYPES[contentType]?[PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT].includes(consent):consent===PLAN_IMPORT_CONSENT;
+export const isPlanSourceConsent=(contentType,consent)=>PLAN_OOXML_TYPES[contentType]?[PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT].includes(consent):consent===PLAN_IMPORT_CONSENT||isDocumentCurveConsent(consent);
 export const canImportPlan=role=>['ADMIN','DIRECTOR','SITE_MANAGER'].includes(role);
 export const canApprovePlan=role=>['ADMIN','DIRECTOR'].includes(role);
 const fail=(code='PLAN_IMPORT_INPUT_INVALID',status=400)=>{throw new WorkspaceError(code,status);};
@@ -111,6 +114,23 @@ export function validatePlanSourceRows(rows,analysis,original,{complete=false}={
 export function planDecisionDigest(input) {
  return digest(['plan-import-decision-v1',input.projectId,input.scope,input.operationId,input.draftId,input.expectedRevision,input.action,input.reason,input.rows===null?null:input.rows.map(row=>[row.title,row.startsOn,row.endsOn,row.evidence,row.uncertainty,...(Object.hasOwn(row,'code')?[row.code,row.parentCode,row.sourceIssueReviewed]:Object.hasOwn(row,'sourceRowId')?[row.sourceRowId]:[])])]);
 }
+// A document review cannot reuse a task decision or its historical fingerprint.
+export function normalizeDocumentCurveDecision(input){
+ const keys=['action','draftId','expectedRevision','operationId','projectId','reason','rows','scope','curve'];
+ if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).sort().join('|')!==keys.sort().join('|')||!operationId(input.operationId)||!workspaceId(input.draftId)||!Number.isSafeInteger(input.expectedRevision)||input.expectedRevision<1||input.expectedRevision>2147483647||!['REVIEW_CURVE','APPLY_CURVE','REJECT'].includes(input.action)||input.rows!==null)fail();
+ planContext(input);let curve=null;
+ if(input.action==='REVIEW_CURVE'){try{curve=normalizeDocumentCurve(input.curve);}catch(error){if(error instanceof DocumentCurveError)fail(error.code,error.status);throw error;}}
+ else if(input.curve!==null)fail();
+ return {...input,operationId:input.operationId.toLowerCase(),reason:planText(input.reason,800,8),curve};
+}
+export function documentCurveDecisionDigest(input){
+ return digest(['plan-document-curve-decision-v1',DOCUMENT_CURVE_PURPOSE,documentCurveCanonical(normalizeDocumentCurveDecision(input))]);
+}
+export function documentCurveUploadDigest(input){
+ planContext(input);const source=input.source;
+ if(!operationId(input.operationId)||!isDocumentCurveConsent(input.consent)||!source||!Number.isSafeInteger(source.bytes)||source.bytes<1||source.bytes>PLAN_IMPORT_LIMIT||!['application/pdf','image/png','image/jpeg','image/webp'].includes(source.contentType)||!/^[a-f0-9]{64}$/.test(source.sha256||''))fail('PLAN_IMPORT_INPUT_INVALID');
+ return digest(['plan-document-curve-upload-command-v1',{action:'UPLOAD',purpose:DOCUMENT_CURVE_PURPOSE,consent:input.consent,operationId:input.operationId.toLowerCase(),projectId:input.projectId,scope:input.scope,source:{bytes:source.bytes,contentType:source.contentType,sha256:source.sha256}}]);
+}
 export async function boundedPlanMultipart(request) {
  const mime=request.headers.get('content-type'),limit=PLAN_IMPORT_LIMIT+65536,length=request.headers.get('content-length');
  if(!mime?.startsWith('multipart/form-data;')||request.headers.has('content-encoding'))fail();
@@ -122,7 +142,7 @@ export async function boundedPlanMultipart(request) {
   if([...form.keys()].sort().join('|')!==keys.sort().join('|'))fail();
   const file=form.get('file');if(!file||typeof file==='string')fail();
   const input=Object.fromEntries(keys.filter(k=>k!=='file').map(k=>[k,form.get(k)]));
-  if(!operationId(input.operationId)||![PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT].includes(input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED');planContext(input);
+  if(!operationId(input.operationId)||![PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT,PLAN_IMPORT_DOCUMENT_CURVE_CONSENT].includes(input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED');planContext(input);
   const bytes=new Uint8Array(await file.arrayBuffer());let source;
   try{source=decodePlanSource(bytes,file.type);if(!isPlanSourceConsent(source.contentType,input.consent))fail('PLAN_IMPORT_CONSENT_REQUIRED');if(PLAN_OOXML_TYPES[source.contentType])await validatePlanOoxml(source.bytes,source.contentType);}catch(error){
    if(error instanceof WorkspaceError&&['PLAN_IMPORT_FILE_INVALID','PLAN_IMPORT_FILE_TOO_LARGE'].includes(error.code))sourceRejections.set(error,{scope:input.scope,projectId:input.projectId,operationId:input.operationId.toLowerCase()});

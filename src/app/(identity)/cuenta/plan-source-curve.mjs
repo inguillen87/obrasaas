@@ -1,3 +1,5 @@
+import {normalizeDocumentCurve,DOCUMENT_CURVE_PROFILE,documentCurveCanonical} from '../../../lib/plan-import-document-curve.mjs';
+
 const decimalPattern=/^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:[eE]([+-]?\d{1,3}))?$/;
 const fields=['monthlyAmount','cumulativeAmount','monthlyPercentage','cumulativePercentage'];
 const record=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
@@ -67,3 +69,59 @@ export function sourceCurveKeyboardIndex(key,index,length){
  if(key==='End')return length-1;
  return null;
 }
+export {DOCUMENT_CURVE_PROFILE,normalizeDocumentCurve,documentCurveCanonical};
+
+/** Document readings have page evidence, never fabricated spreadsheet cells. */
+export function planDocumentCurveView(value,{sourceSha256}={}){
+ if(value===null||value===undefined)return null;
+ if(!Object.hasOwn(value,'coherence'))throw new Error('DOCUMENT_CURVE_UNCONFIRMED');
+ const curve=normalizeDocumentCurve(value,{sourceSha256});
+ const points=curve.periods.map((period,index)=>({ordinal:period.ordinal,x:curve.periods.length===1?450:50+800*index/(curve.periods.length-1),y:period.cumulativePercentage.decimalText===null?null:254-220*Number(period.cumulativePercentage.decimalText)}));
+ const segments=[];let segment=[];
+ for(const point of points){if(point.y===null){if(segment.length)segments.push(segment);segment=[];}else segment.push(point);}
+ if(segment.length)segments.push(segment);
+ return {...curve,points,segments};
+}
+
+export function planDocumentDraftView(draft){
+ if(!draft||!Object.hasOwn(draft,'documentCurve')&&!Object.hasOwn(draft,'reviewedCurve')&&!Object.hasOwn(draft,'documentReviewed'))return null;
+ if(draft.financialSource!==true||!Array.isArray(draft.rows)||draft.rows.length||draft.spreadsheet!==undefined||typeof draft.documentReviewed!=='boolean'||!['application/pdf','image/png','image/jpeg','image/webp'].includes(draft.source?.contentType))throw new Error('DOCUMENT_DRAFT_UNCONFIRMED');
+ if(draft.documentCurve===null&&draft.reviewedCurve===null&&draft.documentReviewed===false&&['UPLOADING','PROCESSING','FAILED','REJECTED'].includes(draft.status))return {original:null,reviewed:null,documentReviewed:false};
+ const original=planDocumentCurveView(draft.documentCurve,{sourceSha256:draft.source.sha256});
+ const reviewed=draft.reviewedCurve===null?null:planDocumentCurveView(draft.reviewedCurve,{sourceSha256:draft.source.sha256});
+ if(!original||draft.documentReviewed&&!reviewed)throw new Error('DOCUMENT_DRAFT_UNCONFIRMED');
+ return {original,reviewed,documentReviewed:draft.documentReviewed};
+}
+
+export function documentCurveKeyboardIndex(key,index,length){
+ if(!Number.isInteger(length)||length<1||length>36||!Number.isInteger(index)||index<0||index>=length)return null;
+ if(key==='ArrowRight'||key==='ArrowDown')return Math.min(index+1,length-1);
+ if(key==='ArrowLeft'||key==='ArrowUp')return Math.max(index-1,0);
+ if(key==='Home')return 0;
+ if(key==='End')return length-1;
+ return null;
+}
+
+/** BigInt scales only visual coordinates. Source money/ratios are never recalculated. */
+export function documentCurvePlot(value,{series=null}={}){
+ const view=planDocumentCurveView(value),preferred=['cumulativePercentage','cumulativeAmount','monthlyAmount','monthlyPercentage'];
+ if(!view)return null;
+ const available=preferred.filter(field=>view.periods.some(period=>period[field].decimalText!==null));
+ if(series!==null&&!preferred.includes(series))throw new Error('DOCUMENT_CURVE_SERIES_INVALID');
+ const selected=available.includes(series)?series:available[0]||'cumulativePercentage',percentage=selected.endsWith('Percentage');
+ const values=view.periods.map(period=>{const raw=period[selected].decimalText;if(raw===null)return null;const parts=decimalParts(raw);return {raw,coefficient:BigInt(parts.whole+parts.fraction),scale:parts.fraction.length};});
+ const scale=Math.max(0,...values.filter(Boolean).map(item=>item.scale));
+ const integers=values.map(item=>item===null?null:item.coefficient*10n**BigInt(scale-item.scale));
+ let maximum=percentage?10n**BigInt(scale):0n,maximumRaw=percentage?'1':'0';
+ for(let i=0;i<integers.length;i++)if(integers[i]!==null&&integers[i]>maximum){maximum=integers[i];maximumRaw=values[i].raw;}
+ const points=integers.map((integer,index)=>({ordinal:index+1,x:view.periods.length===1?450:50+800*index/(view.periods.length-1),y:integer===null?null:254-(maximum===0n?0:Number(integer*220000n/maximum)/1000)}));
+ const segments=[];let segment=[];for(const point of points){if(point.y===null){if(segment.length)segments.push(segment);segment=[];}else segment.push(point);}if(segment.length)segments.push(segment);
+ return {series:selected,available,percentage,maximumRaw,points,segments};
+}
+
+export function documentCurveReviewValue(value,sourceSha256){
+ const draft={...value};delete draft.coherence;delete draft.points;delete draft.segments;
+ return normalizeDocumentCurve(draft,{sourceSha256});
+}
+
+export const documentCurveValuesEqual=(left,right)=>JSON.stringify(documentCurveCanonical(left))===JSON.stringify(documentCurveCanonical(right));

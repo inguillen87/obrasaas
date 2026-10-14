@@ -4,6 +4,7 @@ import {copyFileSync,existsSync,lstatSync,mkdirSync,mkdtempSync,readFileSync,rea
 import path from 'node:path';
 import {execFileSync,spawn,spawnSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 
 // Actual client components and recovery storage; every API response is synthetic.
 // The supplied revision identifies the author's base, not committed WIP bytes.
@@ -26,6 +27,9 @@ const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 for(const name of copiedFiles)copyFileSync(path.join(root,'src/app/(identity)/cuenta',name),path.join(app,name));
 const sourceManifest=copiedFiles.map(name=>{const file='src/app/(identity)/cuenta/'+name,bytes=readFileSync(path.join(root,file));assert.ok(bytes.equals(readFileSync(path.join(app,name))));return {path:file,bytes:bytes.length,sha256:sha(bytes)};}).sort((a,b)=>a.path.localeCompare(b.path));
 const harnessSha256=sha(readFileSync(new URL(import.meta.url)));
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(app),sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-participant-kyc-chat-closure-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export const viewport={width:'device-width',initialScale:1};export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
@@ -179,5 +183,5 @@ finally{
 for(const file of sourceManifest)if(sha(readFileSync(path.join(root,file.path)))!==file.sha256){runError ||=Error('SOURCE_DRIFT');errors.push({phase:'source-drift',path:file.path});}
 if(harnessSha256!==sha(readFileSync(new URL(import.meta.url)))){runError ||=Error('HARNESS_DRIFT');errors.push({phase:'harness-drift'});}
 if(ci)try{assert.equal(currentIdentity(),sourceRevision);}catch(error){runError ||=error;errors.push({phase:'ci-source',message:error.message});}
-const proof={status:runError?'FAIL':'PASS',sourceRevision,baseSourceRevision,sourceState:ci?'Committed exact Git HEAD; checked clean before and after':'Author WIP; exact bytes in sourceManifest; no Git operation performed',trackedClean:ci?true:null,ciEligible:ci&&!runError,widths,modes,checks,errors,sourceManifest,sourceManifestSha256:sha(Buffer.from(JSON.stringify(sourceManifest))),harnessSha256,providerRequests:0,realIdentityAcceptance:false,serverClosedBeforeFixtureRemoval,fixtureRemoved};
+const proof={status:runError?'FAIL':'PASS',sourceRevision,baseSourceRevision,sourceState:ci?'Committed exact Git HEAD; checked clean before and after':'Author WIP; exact bytes in sourceManifest; no Git operation performed',trackedClean:ci?true:null,ciEligible:ci&&!runError,widths,modes,checks,errors,sourceManifest,sourceManifestSha256:sha(Buffer.from(JSON.stringify(sourceManifest))),harnessSha256,providerRequests:0,realIdentityAcceptance:false,serverClosedBeforeFixtureRemoval,fixtureRemoved,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
 writeFileSync(path.join(output,'server.log'),serverLog,{flag:'wx'});writeFileSync(path.join(output,'proof.json'),JSON.stringify(proof,null,2)+'\n',{flag:'wx'});if(ci)writeFileSync(path.join(outputRoot,'kyc-chat-closure-ui.json'),JSON.stringify(proof,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:proof.status,checks:checks.length,errors:errors.length,proof:path.relative(root,path.join(output,'proof.json')),sourceState:proof.sourceState}));process.stdout.write('',()=>process.exit(runError?1:0));

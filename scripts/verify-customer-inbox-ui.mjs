@@ -5,6 +5,7 @@ import path from 'node:path';
 import {spawn,spawnSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {RECOVERY_DATABASE_NAME} from '../src/app/(identity)/cuenta/workspace-recovery-storage.mjs';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 
 // Actual component and request/journal lifecycle; all HTTP and identity are
 // explicitly controlled synthetic fixtures. No Meta, Clerk or business writes.
@@ -15,6 +16,9 @@ const source=path.join(root,'src/app/(identity)/cuenta');
 const copiedFiles=readdirSync(source).filter(file=>/^workspace-.*\.(?:js|mjs)$/.test(file)||['customer-inbox-panel.js','customer-inbox-panel.module.css','customer-inbox-view.mjs','company-channel-view.mjs','own-company-number-view.mjs','own-company-templates-view.mjs','private-bank-account-format.mjs','site-purchase-view.mjs','participant-office-account-view.mjs','plan-baseline-view.mjs','plan-source-curve.mjs'].includes(file));
 const sourceManifest=copiedFiles.map(file=>{copyFileSync(path.join(source,file),path.join(app,file));assert.deepEqual(readFileSync(path.join(source,file)),readFileSync(path.join(app,file)));return {path:'src/app/(identity)/cuenta/'+file,sha256:createHash('sha256').update(readFileSync(path.join(source,file))).digest('hex')};});
 const focusedScenario=process.env.CUSTOMER_INBOX_SCENARIO||null;
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:app,sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'synthetic-customer-inbox-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#f4f7f9',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
@@ -152,7 +156,7 @@ try{
  if(!focusedScenario){for(const width of [320,390,768,1280])await scenario('layout',width);for(const mode of ['review','process','uncertain','receipt-error','receipt-sdk','denied-recovery','scope-recovery','pending','sdk-command','held-token','cancel-token','held-request','crossed','denied'])await scenario(mode);}
  const accessModes=['access-read-html401','access-read-html403','access-read-project404','access-review-html401','access-review-html403','access-review-json403','access-review-project404','access-review-200-context'];
  if(focusedScenario)await scenario(focusedScenario);else{for(const width of [320,390,768,1280])for(const mode of accessModes)await scenario(mode,width);for(const width of [320,390])await scenario('access-close-absent',width);await scenario('access-receipt-malformed');for(const width of [320,390,768,1280])for(const mode of ['media-retry-lost','media-retry-revoked','media-retry-denied','media-send-unknown','media-send-started','media-forged-receipt','media-close-reload','media-context-change'])await scenario(mode,width);}
- assert.deepEqual(errors,[]);result={status:'PASS',environment:'real-components-controlled-synthetic-services',checkedAt:new Date().toISOString(),checks,widths:focusedScenario?[390]:[320,390,768,1280],fullSuite:!focusedScenario,focusedScenario,sourceManifest,harnessSha256:createHash('sha256').update(readFileSync(path.join(root,'scripts/verify-customer-inbox-ui.mjs'))).digest('hex'),errors,realProviderCalls:0,productionDataWritten:false};
+ assert.deepEqual(errors,[]);result={status:'PASS',environment:'real-components-controlled-synthetic-services',checkedAt:new Date().toISOString(),checks,widths:focusedScenario?[390]:[320,390,768,1280],fullSuite:!focusedScenario,focusedScenario,sourceManifest,harnessSha256:createHash('sha256').update(readFileSync(path.join(root,'scripts/verify-customer-inbox-ui.mjs'))).digest('hex'),errors,realProviderCalls:0,productionDataWritten:false,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
 }catch(error){writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({activeScenario,message:error.message,errors,log},null,2));throw error;}
 finally{
  // Chrome's close handshake can wait on canceled intercepted requests on

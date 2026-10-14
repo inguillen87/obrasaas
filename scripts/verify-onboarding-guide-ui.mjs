@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {spawn,spawnSync} from 'node:child_process';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV,'Guided onboarding fixture is local only');
 const root=process.cwd(),parent=path.resolve(root,'.vercel'),evidence=path.join(parent,'onboarding-guide-evidence');mkdirSync(evidence,{recursive:true});
@@ -27,6 +28,9 @@ copyFileSync(path.join(root,'src/app/(identity)/identity.module.css'),path.join(
 copyFileSync(path.join(root,'src/app/(identity)/identity-load-guard.js'),path.join(app,'(identity)','identity-load-guard.js'));
 copyFileSync(path.join(root,'src/lib/identity-return-path.mjs'),path.join(fixture,'lib','identity-return-path.mjs'));
 copyFileSync(path.join(root,'src/app/globals.css'),path.join(app,'globals.css'));
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(account),sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'actual-onboarding-guide-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`import path from 'node:path';export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}},webpack(config){config.resolve.alias['@clerk/nextjs']=path.resolve(${JSON.stringify(fixture)},'clerk-fixture.js');return config;}};`);
 // Clerk/context and downstream panels are controlled. Both the guide and its production wrapper are actual source.
@@ -256,7 +260,7 @@ try{
  await page.click('#anonymous');await wait('La sesión terminó');assert.equal(await page.$('#onboarding-guide-title'),null);checks.push('anonymous-session-hides-guide-and-offers-real-login');
  for(const width of widths)await guideMobileDisclosureScenarios(width);
  assert.deepEqual(errors,[]);assert.ok(requests.every(request=>(!request.external||request.controlledFont)&&!request.path.startsWith('/api/')&&request.method==='GET'));checks.push('navigation-guide-never-dispatches-business-or-provider-request');
- writeFileSync(path.join(evidence,'browser.json'),JSON.stringify({status:'PASS',environment:'actual-guide-workspace-identity-safe-projection-global-account-styles-with-controlled-Clerk-and-destination-panels',checkedAt:new Date().toISOString(),checks,widths,errors,sourceManifest,harnessSha256,generatedSources:[{path:'app/(identity)/cuenta/workspace-guide-projection.mjs',sha256:createHash('sha256').update(projectionSource).digest('hex'),derivedFrom:workspaceSourcePath}],controlledExternalFontRequests:requests.filter(row=>row.controlledFont).length,businessWrites:0,realProviderCalls:0,realLoginTested:false,humanPilotAccepted:false},null,2));
+ writeFileSync(path.join(evidence,'browser.json'),JSON.stringify({status:'PASS',environment:'actual-guide-workspace-identity-safe-projection-global-account-styles-with-controlled-Clerk-and-destination-panels',checkedAt:new Date().toISOString(),checks,widths,errors,sourceManifest,harnessSha256,generatedSources:[{path:'app/(identity)/cuenta/workspace-guide-projection.mjs',sha256:createHash('sha256').update(projectionSource).digest('hex'),derivedFrom:workspaceSourcePath}],controlledExternalFontRequests:requests.filter(row=>row.controlledFont).length,businessWrites:0,realProviderCalls:0,realLoginTested:false,humanPilotAccepted:false,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms},null,2));
 }catch(error){failure=error;await page?.screenshot({path:path.join(evidence,'browser-failure.png'),fullPage:true}).catch(()=>{});writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({message:error.message,checks,errors,log},null,2));}
 finally{if(browser){if(process.platform==='win32'){const pid=browser.process().pid;browser.disconnect();stopOwned(pid);}else await browser.close();}stopOwned(server.pid);const target=path.resolve(fixture);assert.ok(target.startsWith(parent+path.sep)&&path.basename(target).startsWith('onboarding-guide-ui-'));rmSync(target,{recursive:true,force:true});}
 if(failure)throw failure;console.log(JSON.stringify({status:'PASS',checks:checks.length,pageErrors:errors.length,widths}));

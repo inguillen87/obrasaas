@@ -4,6 +4,7 @@ import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readFileSync} fr
 import {spawn,spawnSync} from 'node:child_process';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),parent=path.resolve(root,'.vercel'),evidence=path.join(parent,'template-send-evidence');mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(parent,'template-send-ui-')),app=path.join(fixture,'app');mkdirSync(app);
@@ -12,6 +13,9 @@ const sourcePaths=["src/app/(identity)/cuenta/site-purchase-view.mjs","src/app/(
 const sourceManifest=sourcePaths.map(file=>{const bytes=readFileSync(path.join(root,file));if(copiedSourcePaths.has(file)||false)assert.deepEqual(bytes,readFileSync(path.join(app,path.basename(file))));return {path:file,sha256:createHash('sha256').update(bytes).digest('hex')};});
 assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(app),sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'controlled-template-send-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,fontFamily:'Arial',background:'#edf3f8'}}>{children}</body></html>}`);
@@ -128,4 +132,4 @@ try{let ready=false;for(let n=0;n<100;n++){if(server.exitCode!==null)throw new E
 finally{if(process.platform==='win32'){if(browser){const pid=browser.process().pid;browser.disconnect();stopOwned(pid);}stopOwned(server.pid);}else{await browser?.close();try{process.kill(-server.pid,'SIGTERM');}catch{}}
  const target=path.resolve(fixture);assert.ok(target.startsWith(parent+path.sep)&&path.basename(target).startsWith('template-send-ui-'));rmSync(target,{recursive:true,force:true});}
 if(failure)throw failure;
-const proof={status:'PASS',environment:'actual-components-with-controlled-HTTP-and-session',checkedAt:new Date().toISOString(),checks,sourceManifest,harnessSha256,widths:[320,390,768,1280],errors,productionDataWritten:false,realProviderCalls:0,realConsentAccepted:false,realTemplateDeliveryAccepted:false};writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:'PASS',checks:checks.length,pageErrors:errors.length}));
+const proof={status:'PASS',environment:'actual-components-with-controlled-HTTP-and-session',checkedAt:new Date().toISOString(),checks,sourceManifest,harnessSha256,widths:[320,390,768,1280],errors,productionDataWritten:false,realProviderCalls:0,realConsentAccepted:false,realTemplateDeliveryAccepted:false,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:'PASS',checks:checks.length,pageErrors:errors.length}));

@@ -22,7 +22,8 @@
           "hotfix/field-team-journal-*",
           "hotfix/subscription-fixture-dependencies-*",
           "fix/whatsapp-signup-*",
-          "fix/clerk-*"
+          "fix/clerk-*",
+          "feat/document-monthly-curves-*"
         ]
       },
       "workflow_dispatch": null
@@ -495,6 +496,14 @@
         "run": "npx eslint src/lib/plan-baseline-*.mjs src/app/api/identity/plan-baseline/route.js 'src/app/(identity)/cuenta/plan-baseline-panel.js' 'src/app/(identity)/cuenta/plan-baseline-view.mjs' scripts/verify-plan-baseline-postgres.mjs tests/production-plan-baseline*.test.mjs tests/fixtures/plan-baseline-synthetic.mjs --max-warnings 0\nnode --test tests/production-plan-baseline*.test.mjs\nnode scripts/verify-plan-baseline-postgres.mjs\n"
       },
       "commandSha256": "a15d185e7beedf8061d08a538ffeaae38ffdeb6adafe33d5a1e86adf4a396217"
+    },
+    {
+      "id": 62,
+      "step": {
+        "name": "Document monthly curve explicit review and isolated browser receipts",
+        "run": "npx eslint scripts/verify-plan-document-curve-ui.mjs scripts/lib/plan-document-curve-ui-fixture.mjs scripts/lib/plan-document-curve-fixture-copy.mjs tests/production-plan-document-curve*.test.mjs tests/production-plan-import-document-curve*.test.mjs tests/fixtures/plan-import-document-curve-synthetic.mjs --max-warnings 0\nnode --test tests/production-plan-document-curve*.test.mjs\nnode scripts/verify-plan-document-curve-ui.mjs --expected-head \"$GITHUB_SHA\" .vercel/private/plan-document-curve-evidence/current-browser.json\n"
+      },
+      "commandSha256": "b95e70ed1a67fd202408ba4a1ec72dfb5531be9e3b7c9e701e315207fad1710b"
     }
   ],
   "artifactPatterns": [
@@ -556,7 +565,8 @@
     ".vercel/private/portfolio-overview-ui-validation.json",
     ".vercel/private/portfolio-*.png",
     ".vercel/workspace-identity-only-evidence/",
-    ".vercel/private/approved-plan-baseline-evidence/"
+    ".vercel/private/approved-plan-baseline-evidence/",
+    ".vercel/private/plan-document-curve-evidence/"
   ],
   "lanes": {
     "contracts": {
@@ -589,7 +599,8 @@
     "plans": {
       "blocks": [
         12,
-        61
+        61,
+        62
       ],
       "artifacts": [
         ".vercel/private/plan-import-postgres-validation.json",
@@ -597,7 +608,8 @@
         ".vercel/private/plan-import-ui-validation.json",
         ".vercel/private/plan-import-ui-*.png",
         ".vercel/private/workspace-plan-recovery-ui-validation.json",
-        ".vercel/private/approved-plan-baseline-evidence/"
+        ".vercel/private/approved-plan-baseline-evidence/",
+        ".vercel/private/plan-document-curve-evidence/"
       ],
       "optionalArtifactPatterns": [
         ".vercel/private/plan-import-ui-*.png"
@@ -607,7 +619,8 @@
         ".vercel/private/plan-import-boundary-validation.json",
         ".vercel/private/plan-import-ui-validation.json",
         ".vercel/private/workspace-plan-recovery-ui-validation.json",
-        ".vercel/private/approved-plan-baseline-evidence/postgres.json"
+        ".vercel/private/approved-plan-baseline-evidence/postgres.json",
+        ".vercel/private/plan-document-curve-evidence/current-browser.json"
       ],
       "requiredProducedEvidence": []
     },
@@ -1481,7 +1494,17 @@
       "blockId": 61,
       "lane": "plans",
       "sourceLine": 122,
-      "producerSha256": "eb93f212a94b2ea0de4476d529035fa7cd5565e4468ba09c210c2864a89afd57",
+      "producerSha256": "e6dd0da63d68af0816637e661c19530a62b4b91d71022f3d78fc6b29c7bc878c",
+      "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
+    },
+    {
+      "producer": "scripts/verify-plan-document-curve-ui.mjs",
+      "path": ".vercel/private/plan-document-curve-evidence/current-browser.json",
+      "retained": true,
+      "blockId": 62,
+      "lane": "plans",
+      "sourceLine": 112,
+      "producerSha256": "eaed425d6fe1e24859611afbf84c318db5457f9541d9afc0f27cc1187858a3e8",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     }
   ],
@@ -1612,7 +1635,9 @@
           "src/lib/participant-verified-office.mjs",
           "src/lib/person-worksite-journey.mjs",
           "src/lib/pilot-media.mjs",
+          "src/lib/plan-baseline-policy.mjs",
           "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-document-curve.mjs",
           "src/lib/plan-import-monthly-curve.mjs",
           "src/lib/plan-import-ooxml.mjs",
           "src/lib/plan-import-policy.mjs",
@@ -1881,7 +1906,9 @@
           "src/lib/participant-verified-office.mjs",
           "src/lib/person-worksite-journey.mjs",
           "src/lib/pilot-media.mjs",
+          "src/lib/plan-baseline-policy.mjs",
           "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-document-curve.mjs",
           "src/lib/plan-import-monthly-curve.mjs",
           "src/lib/plan-import-ooxml.mjs",
           "src/lib/plan-import-policy.mjs",
@@ -1917,8 +1944,9 @@
         "path": ".vercel/private/employee-intake-ui/browser.json",
         "kind": "UI_INTAKE",
         "producer": "scripts/verify-employee-intake-ui.mjs",
-        "producerSha256": "f95ed3a8c9dd43fa6072e4694ec44481dadea8885a63c554db7f76d5ba66b863",
+        "producerSha256": "0c7a5b928bc8a8ff2b1ec43d8e72a5a69144934d1d3fcefeabb4631c11a3855c",
         "sourceFiles": [
+          "scripts/lib/plan-document-curve-fixture-copy.mjs",
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/employee-intake-continuity.mjs",
           "src/app/(identity)/cuenta/employee-intake-panel.js",
@@ -1950,6 +1978,7 @@
           "src/app/(identity)/cuenta/workspace-session-request.mjs",
           "src/lib/meta-kyc-conversation.mjs",
           "src/lib/participant-policy.mjs",
+          "src/lib/plan-import-document-curve.mjs",
           "src/lib/site-register-policy.mjs"
         ],
         "checkNames": []
@@ -2068,7 +2097,9 @@
           "src/lib/participant-verified-office.mjs",
           "src/lib/person-worksite-journey.mjs",
           "src/lib/pilot-media.mjs",
+          "src/lib/plan-baseline-policy.mjs",
           "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-document-curve.mjs",
           "src/lib/plan-import-monthly-curve.mjs",
           "src/lib/plan-import-ooxml.mjs",
           "src/lib/plan-import-policy.mjs",
@@ -2211,7 +2242,9 @@
           "src/lib/participant-verified-office.mjs",
           "src/lib/person-worksite-journey.mjs",
           "src/lib/pilot-media.mjs",
+          "src/lib/plan-baseline-policy.mjs",
           "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-document-curve.mjs",
           "src/lib/plan-import-monthly-curve.mjs",
           "src/lib/plan-import-ooxml.mjs",
           "src/lib/plan-import-policy.mjs",
@@ -2409,6 +2442,7 @@
           "src/lib/plan-baseline-store.mjs",
           "src/lib/plan-import-analyzer.mjs",
           "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-document-curve.mjs",
           "src/lib/plan-import-http.mjs",
           "src/lib/plan-import-monthly-curve.mjs",
           "src/lib/plan-import-ooxml.mjs",
@@ -2532,8 +2566,9 @@
         "path": ".vercel/private/project-preparation-ui-validation.json",
         "kind": "UI_PREPARATION",
         "producer": "scripts/verify-project-preparation-ui.mjs",
-        "producerSha256": "5627cc47f2a885f796d8f59ba02cb204c869561ce985716cd7fd140688d11d69",
+        "producerSha256": "cd5c76caa731d7df4e73298adcf76096deab7935d3cc08efa916815b55a9a727",
         "sourceFiles": [
+          "scripts/lib/plan-document-curve-fixture-copy.mjs",
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/own-company-number-view.mjs",
           "src/app/(identity)/cuenta/own-company-templates-view.mjs",
@@ -2552,7 +2587,8 @@
           "src/app/(identity)/cuenta/workspace-request-lifecycle.js",
           "src/app/(identity)/cuenta/workspace-request-lifecycle.mjs",
           "src/app/(identity)/cuenta/workspace-session-request.mjs",
-          "src/app/(identity)/cuenta/workspace.module.css"
+          "src/app/(identity)/cuenta/workspace.module.css",
+          "src/lib/plan-import-document-curve.mjs"
         ],
         "checkNames": []
       },
@@ -2586,8 +2622,9 @@
         "path": ".vercel/private/portfolio-overview-ui-validation.json",
         "kind": "UI_PORTFOLIO",
         "producer": "scripts/verify-portfolio-overview-ui.mjs",
-        "producerSha256": "d6e4d5751079cccc622110bf149e1bf83ce6147059d7c257b8efb9827985dbf3",
+        "producerSha256": "516d3399aaa8d437208cede178fd06de177d241a3b17bfc29013974624f6e8d1",
         "sourceFiles": [
+          "scripts/lib/plan-document-curve-fixture-copy.mjs",
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/own-company-number-view.mjs",
           "src/app/(identity)/cuenta/own-company-templates-view.mjs",
@@ -2603,7 +2640,8 @@
           "src/app/(identity)/cuenta/workspace-recovery-storage.mjs",
           "src/app/(identity)/cuenta/workspace-request-lifecycle.js",
           "src/app/(identity)/cuenta/workspace-request-lifecycle.mjs",
-          "src/app/(identity)/cuenta/workspace-session-request.mjs"
+          "src/app/(identity)/cuenta/workspace-session-request.mjs",
+          "src/lib/plan-import-document-curve.mjs"
         ],
         "checkNames": []
       },
@@ -2788,6 +2826,7 @@
           "src/lib/participant-onboarding-policy.mjs",
           "src/lib/participant-policy.mjs",
           "src/lib/participant-verified-office.mjs",
+          "src/lib/plan-import-document-curve.mjs",
           "src/lib/private-image-upload.mjs",
           "src/lib/progress-measurement-quantity.js",
           "src/lib/site-register-policy.mjs",
@@ -2993,7 +3032,9 @@
           "src/lib/participant-verified-office.mjs",
           "src/lib/person-worksite-journey.mjs",
           "src/lib/pilot-media.mjs",
+          "src/lib/plan-baseline-policy.mjs",
           "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-document-curve.mjs",
           "src/lib/plan-import-monthly-curve.mjs",
           "src/lib/plan-import-ooxml.mjs",
           "src/lib/plan-import-policy.mjs",
@@ -3187,7 +3228,9 @@
           "src/lib/participant-verified-office.mjs",
           "src/lib/person-worksite-journey.mjs",
           "src/lib/pilot-media.mjs",
+          "src/lib/plan-baseline-policy.mjs",
           "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-document-curve.mjs",
           "src/lib/plan-import-monthly-curve.mjs",
           "src/lib/plan-import-ooxml.mjs",
           "src/lib/plan-import-policy.mjs",
@@ -3251,7 +3294,7 @@
         "path": ".vercel/private/approved-plan-baseline-evidence/postgres.json",
         "kind": "PG_PLAN_BASELINE",
         "producer": "scripts/verify-plan-baseline-postgres.mjs",
-        "producerSha256": "eb93f212a94b2ea0de4476d529035fa7cd5565e4468ba09c210c2864a89afd57",
+        "producerSha256": "e6dd0da63d68af0816637e661c19530a62b4b91d71022f3d78fc6b29c7bc878c",
         "sourceFiles": [
           "package-lock.json",
           "package.json",
@@ -3268,6 +3311,7 @@
           "src/lib/plan-baseline-store.mjs",
           "src/lib/plan-import-analyzer.mjs",
           "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-document-curve.mjs",
           "src/lib/plan-import-monthly-curve.mjs",
           "src/lib/plan-import-ooxml.mjs",
           "src/lib/plan-import-policy.mjs",
@@ -3281,6 +3325,7 @@
           "src/lib/workspace-runtime.mjs",
           "src/lib/workspace-store.mjs",
           "tests/fixtures/plan-import-cyp-curve-synthetic.mjs",
+          "tests/fixtures/plan-import-document-curve-synthetic.mjs",
           "tests/fixtures/plan-import-monthly-curve-synthetic.mjs",
           "tests/fixtures/plan-import-ooxml-synthetic.mjs",
           "tests/production-plan-baseline-postgres-target.test.mjs"
@@ -3298,7 +3343,66 @@
           "current-role-membership-project-tenant-scope-deny-private-data",
           "tampered-active-pointer-APPLY-receipt-and-source-fail-closed",
           "native-candidate-pagination-bound-to-current-project-scope",
-          "all-selection-reads-preserve-Tasks-imports-and-original-curve"
+          "all-selection-reads-preserve-Tasks-imports-and-original-curve",
+          "document-reviewed-APPLY-curve-zero-Task-SQL-no-automatic-baseline-explicit-SELECT",
+          "document-native-selection-COMMIT-ACK-ROLLBACK-same-UUID-current-financial-authority",
+          "document-original-review-APPLY-receipt-source-tamper-fail-closed-Task-state-preserved"
+        ]
+      },
+      {
+        "id": "document-curve-ui",
+        "lane": "plans",
+        "blockId": 62,
+        "path": ".vercel/private/plan-document-curve-evidence/current-browser.json",
+        "kind": "UI_DOCUMENT_CURVE",
+        "producer": "scripts/verify-plan-document-curve-ui.mjs",
+        "producerSha256": "eaed425d6fe1e24859611afbf84c318db5457f9541d9afc0f27cc1187858a3e8",
+        "sourceFiles": [
+          "package-lock.json",
+          "package.json",
+          "scripts/lib/owned-fixture-cleanup.mjs",
+          "scripts/lib/plan-document-curve-ui-fixture.mjs",
+          "src/app/(identity)/cuenta/company-channel-view.mjs",
+          "src/app/(identity)/cuenta/own-company-number-view.mjs",
+          "src/app/(identity)/cuenta/own-company-templates-view.mjs",
+          "src/app/(identity)/cuenta/participant-office-account-view.mjs",
+          "src/app/(identity)/cuenta/plan-baseline-panel.js",
+          "src/app/(identity)/cuenta/plan-baseline-view.mjs",
+          "src/app/(identity)/cuenta/plan-baseline.module.css",
+          "src/app/(identity)/cuenta/plan-import-calendar-suggestions.mjs",
+          "src/app/(identity)/cuenta/plan-import-panel.js",
+          "src/app/(identity)/cuenta/plan-import-panel.module.css",
+          "src/app/(identity)/cuenta/plan-import-usage-view.mjs",
+          "src/app/(identity)/cuenta/plan-source-curve.js",
+          "src/app/(identity)/cuenta/plan-source-curve.mjs",
+          "src/app/(identity)/cuenta/plan-source-curve.module.css",
+          "src/app/(identity)/cuenta/private-bank-account-format.mjs",
+          "src/app/(identity)/cuenta/site-purchase-view.mjs",
+          "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
+          "src/app/(identity)/cuenta/workspace-recovery-storage.mjs",
+          "src/app/(identity)/cuenta/workspace-request-lifecycle.js",
+          "src/app/(identity)/cuenta/workspace-request-lifecycle.mjs",
+          "src/app/(identity)/cuenta/workspace-session-request.mjs",
+          "src/lib/plan-baseline-policy.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-document-curve.mjs",
+          "src/lib/plan-import-monthly-curve.mjs",
+          "src/lib/plan-import-ooxml.mjs",
+          "src/lib/plan-import-policy.mjs",
+          "src/lib/private-image-upload.mjs",
+          "src/lib/workspace-policy.mjs"
+        ],
+        "checkNames": [
+          "document-review-apply-explicit-baseline:320",
+          "document-review-apply-explicit-baseline:390",
+          "document-review-apply-explicit-baseline:1280",
+          "amount-only-exact-money-and-gaps",
+          "inconsistent-review-blocks-apply",
+          "site-manager-tasks-only",
+          "lost-apply-ack-reload-get-only",
+          "unknown-upload-reload-get-only",
+          "crossed-source-hides-private-result",
+          "scope-change-purges-private-review"
         ]
       }
     ]
@@ -3348,9 +3452,9 @@
     "baselineCommandSha256": "2246f0872a4c7758260174677c28555af8b066761e89244c054f975e39fc2e13",
     "step": {
       "name": "Channel identity and integrated field transactions",
-      "run": "npx eslint src/lib/worker-channel-*.mjs src/lib/meta-field-*.mjs src/app/api/identity/worker-channel src/app/api/meta/customer-process scripts/verify-worker-channel-*.mjs scripts/verify-meta-field-*.mjs scripts/verify-meta-customer-processing-*.mjs scripts/verify-operations-status-ui.mjs tests/production-worker-channel*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-customer-processing.test.mjs tests/production-operations-status.test.mjs\nnpx eslint src/lib/meta-plan-import-*.mjs tests/production-meta-plan-import-conversation.test.mjs tests/production-meta-plan-source-provider.test.mjs tests/production-meta-plan-import-transport.test.mjs tests/production-plan-import-link-ui.test.mjs tests/fixtures/meta-plan-import-transport-synthetic.mjs --max-warnings 0\nnode --test tests/production-meta-plan-import-conversation.test.mjs tests/production-meta-plan-source-provider.test.mjs tests/production-meta-plan-import-transport.test.mjs tests/production-plan-import-link-ui.test.mjs\nnode scripts/verify-worker-channel-postgres.mjs\nnode scripts/verify-meta-customer-processing-postgres.mjs\nnode scripts/verify-meta-field-bridge-postgres.mjs\n"
+      "run": "npx eslint src/lib/worker-channel-*.mjs src/lib/meta-field-*.mjs src/app/api/identity/worker-channel src/app/api/meta/customer-process scripts/verify-worker-channel-*.mjs scripts/verify-meta-field-*.mjs scripts/verify-meta-customer-processing-*.mjs scripts/verify-operations-status-ui.mjs tests/production-worker-channel*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-customer-processing.test.mjs tests/production-operations-status.test.mjs\nnpx eslint src/lib/meta-plan-import-*.mjs tests/production-meta-plan-import-conversation.test.mjs tests/production-meta-plan-source-provider.test.mjs tests/production-meta-plan-import-transport.test.mjs tests/production-plan-import-link-ui.test.mjs tests/production-meta-plan-document-curve.test.mjs tests/fixtures/meta-plan-import-transport-synthetic.mjs --max-warnings 0\nnode --test tests/production-meta-plan-import-conversation.test.mjs tests/production-meta-plan-source-provider.test.mjs tests/production-meta-plan-import-transport.test.mjs tests/production-plan-import-link-ui.test.mjs tests/production-meta-plan-document-curve.test.mjs\nnode scripts/verify-worker-channel-postgres.mjs\nnode scripts/verify-meta-customer-processing-postgres.mjs\nnode scripts/verify-meta-field-bridge-postgres.mjs\n"
     },
-    "commandSha256": "74d4e0d4d165a8afd5564b6913a53255ed8688aa98b4e06a74d2ed68274311e2",
+    "commandSha256": "65f34df4abf218b832a8add3c85a5ef485b5934f7df7c687d84c79af39ff4d92",
     "sourceDependencies": {
       "UNIT": [
         "src/lib/meta-plan-import-conversation.mjs",
@@ -3422,7 +3526,7 @@
     "testSources": [
       {
         "path": "tests/production-meta-plan-import-conversation.test.mjs",
-        "sha256": "89870b190e9f8ddf12a025b143da7618ab620af8a27c71e6bac8ea5f3366d17c"
+        "sha256": "066ad0c5cdb675f437798d16bc0d3034466dfd046ca1f103994e965560eded9e"
       },
       {
         "path": "tests/production-meta-plan-source-provider.test.mjs",
@@ -3434,15 +3538,23 @@
       },
       {
         "path": "tests/production-plan-import-link-ui.test.mjs",
-        "sha256": "f893cdd92f1930e26f914ec81317bc0e4be64fd682033b7c3487d0e301b0e7ac"
+        "sha256": "936a1dc56d2713cb9fc69827b6acbeca522dbb06c3da1e60ea658ca9e434c7ae"
+      },
+      {
+        "path": "tests/production-meta-plan-document-curve.test.mjs",
+        "sha256": "b129ed9de4617a14488af49354c5b62f598b91c16df7a648601a60dfa6f9703e"
       },
       {
         "path": "tests/fixtures/meta-plan-import-transport-synthetic.mjs",
-        "sha256": "2c97110a3de9546f53377ad9e831e1d2971ff8ddc7b401995119192e9293c6bc"
+        "sha256": "fa71e70245e564edafbae7be9fb05d260b8ea25bf6f80de6a8a855a4ba03a901"
       },
       {
         "path": "tests/fixtures/own-company-runtime.mjs",
         "sha256": "0161625b7bd4338597d62a5267d100c85de740e22f3f116507309f3673426247"
+      },
+      {
+        "path": "tests/fixtures/plan-import-document-curve-synthetic.mjs",
+        "sha256": "59b85a8489363c6d78bc33eb77a0b8eb8e6464112934cdb26eedc247536dc71f"
       }
     ]
   }
