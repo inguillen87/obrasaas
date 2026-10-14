@@ -52,7 +52,12 @@ export function createMetaKycContextFeedback({connect,provider,environment=proce
     if(recoverOnly){const observed=await source(client,context),previous=await recorded(client,observed);if(!previous)return null;
      try{const current=await inspect(client,context);assertCustomerReplyWindow(current.r.payload,current.r.now.getTime());return previous.value;}catch(error){if(!(error instanceof WorkspaceError))throw error;return observation(client,observed,previous);}
     }
-    let r;try{r=await resolve(client,context);}catch(error){if(error instanceof WorkspaceError)return null;throw error;}if(!r||staleOnly&&!r.feedbackStalePrompt)return null;
+    let r;try{r=await resolve(client,context);}catch(error){if(error instanceof WorkspaceError)return null;throw error;}
+    // The signed resolver has proved the same current CLAIMED challenge,
+    // original SENT prompt, current principals and expired conversation. Only
+    // neutral quoted text may use this current-prompt pre-dispatch exception.
+    const expiredNeutral=r?.feedbackExpiredCurrentPrompt===true&&r.payload.value.type==='text'&&['ESTADO','ESTADO IDENTIDAD'].includes(r.payload.value.text?.body?.trim().toUpperCase());
+    if(!r||staleOnly&&!r.feedbackStalePrompt&&!expiredNeutral)return null;
     const previous=await recorded(client,r);if(previous)return previous.value;
     const existing=(await client.query(`SELECT id FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1' FOR SHARE`,[customerOutboundId(r.event.id),r.connection.projectId])).rows;if(existing.length)fail();
     const id=metaKycContextReceiptId(r.event.id),value=result(),authorityDigest=metaKycContextAuthorityDigest(client,r,context);

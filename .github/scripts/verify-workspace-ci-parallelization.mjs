@@ -9,8 +9,9 @@ import yaml from 'js-yaml';
 import {parse} from '@babel/parser';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
+import {KYC_EXPIRED_CURRENT_ADDITIONS,KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,validateKycExpiredCurrentWorkspaceContract,verifyKycExpiredCurrentSources} from '../../scripts/lib/kyc-expired-current-ci-lineage.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="fa8a57d8dd6c69650d835b5e741e93e467245ec5bd0456d8a9181df260bf7a6c";
+export const EXPECTED_CONTRACT_SHA256="9dab901cb93f3834cad0f1ea9ba386c5bb12acc913463a7dfb6368847af3fd37";
 const POSTGRES_SERVICE_IMAGE='docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -1707,6 +1708,7 @@ export function validateContract(contract){
    // denial category. The direct lineage validator keeps its precise cause.
    if(error.code==='WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_LINEAGE')deny('PROOF_BINDING_SOURCE');throw error;
   }}
+ try{validateKycExpiredCurrentWorkspaceContract(contract);}catch(error){if(error.code==='KYC_EXPIRED_CURRENT_LINEAGE_REJECTED'&&error.reason==='PUBLISHED_CONTRACT_CHANGED')deny('PROOF_BINDING_SOURCE');throw error;}
  return contract;
 }
 export function loadContract(filename){
@@ -1817,6 +1819,7 @@ export function provenance({root,lane,contract,expectedHead,workflowSha256,env=p
  requireEvidence(producedNotUploaded,owner.requiredProducedEvidence,'MISSING_REQUIRED_PRODUCED_EVIDENCE');
   const readSource=gitSource(root,actual);const expectedTree=execFileSync('git',['rev-parse',actual+'^{tree}'],{cwd:root,encoding:'utf8'}).trim();
   verifyWhatsappPlanTestSources(contract,readSource);
+  verifyKycExpiredCurrentSources(contract.kycExpiredCurrentComposition,readSource);
   const extensionProofBindings=contract.extension.proofs.filter(p=>p.lane===lane).map(spec=>validateExtensionProof(spec,readFileSync(path.join(root,spec.path)),{expectedHead:actual,expectedTree,readSource,readEvidence:file=>readFileSync(path.join(root,cleanPath(file)))}));
  const record=seal({version:2,proofBindings:extensionProofBindings,lane,head:actual,...clock,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
  if(Buffer.byteLength(JSON.stringify(record))>400*1024)deny('PROVENANCE_LIMIT');
@@ -1826,6 +1829,7 @@ export function provenance({root,lane,contract,expectedHead,workflowSha256,env=p
 export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttempt,readSource}){
  validateContract(contract);if(!head(expectedHead)||!sha(workflowSha256)||!positive(runId)||!positive(runAttempt))deny('EXPECTED_IDENTITY_INVALID');
  if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');
+ try{verifyKycExpiredCurrentSources(contract.kycExpiredCurrentComposition,readSource);}catch(error){if(error.code==='KYC_EXPIRED_CURRENT_LINEAGE_REJECTED')deny('PROOF_BINDING_SOURCE');throw error;}
  exactKeys(needs,LANES,'MISSING_OR_EXTRA_LANE');
  const paths=new Set(),artifacts=new Set();let fileCount=0;
  const records=[];
@@ -1875,11 +1879,40 @@ function expectedNeeds(contract,expectedHead,workflowSha256,readSource){
   return [lane,{result:'success',outputs:{provenance:JSON.stringify(record),artifactId:String(i+1),artifactDigest:'2'.repeat(64)}}];
  }));
 }
+export function kycExpiredCurrentCompositionSelftest(contract,root=process.cwd()){
+ const checks=[],section=contract.kycExpiredCurrentComposition,prefix='kyc-expired-current-composition-';
+ const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source/contract read; no PG/provider execution'});};
+ const bad=(name,run)=>{assert.throws(run,error=>error.code==='KYC_EXPIRED_CURRENT_LINEAGE_REJECTED');checks.push({name:prefix+name,result:'PASS',expectedDenial:'KYC_EXPIRED_CURRENT_LINEAGE_REJECTED',boundary:'pure source/contract negative fixture'});};
+ const readSource=file=>Buffer.from(readFileSync(path.join(root,file),'utf8').replaceAll('\r\n','\n'));
+ good('all-published-contract-fields-byte-equivalent',()=>validateKycExpiredCurrentWorkspaceContract(contract));
+ good('actual-production-and-native-125-source-closure',()=>assert.equal(verifyKycExpiredCurrentSources(section,readSource).sourceCount,125));
+ good('old-117-source-corpus-plus-exact-eight-additions',()=>{assert.equal(section.previousSourceCount,117);assert.equal(section.sourceFiles.length,125);equal(section.sourceAdditions,KYC_EXPIRED_CURRENT_ADDITIONS,'PROOF_BINDING_SOURCE');});
+ good('thirteen-historical-plus-prior-and-composed-contexts',()=>{assert.equal(section.historicalScenarioCount,13);assert.equal(section.historicalMeasurementCount,3);assert.equal(section.historicalPostCount,4);assert.equal(section.priorContextPostCount,1);assert.equal(section.composedCurrentPostCount,1);assert.equal(section.totalPostCount,6);});
+ for(const [name,edit]of [
+  ['missing-section',value=>{delete value.kycExpiredCurrentComposition;}],
+  ['historical-contract-field-replaced',value=>{value.packageLockSha256='f'.repeat(64);} ],
+  ['old-117-cannot-certify-current',value=>{value.kycExpiredCurrentComposition.sourceCount=117;}],
+  ['same-count-foreign-current-source',value=>{value.kycExpiredCurrentComposition.sourceFiles[0]='src/lib/foreign-source.mjs';}],
+  ['source-addition-omitted',value=>{value.kycExpiredCurrentComposition.sourceAdditions.pop();}],
+  ['historical-source-corpus-replaced',value=>{value.kycExpiredCurrentComposition.previousSourcePathsSha256='f'.repeat(64);} ],
+  ['historical-check-sequence-replaced',value=>{value.kycExpiredCurrentComposition.historicalChecksSha256='f'.repeat(64);} ],
+  ['prior-context-check-substituted',value=>{value.kycExpiredCurrentComposition.priorContextChecks=[...value.kycExpiredCurrentComposition.composedCurrentChecks];}],
+  ['current-context-check-omitted',value=>{value.kycExpiredCurrentComposition.composedCurrentChecks=[];}],
+  ['original-lease-extended',value=>{value.kycExpiredCurrentComposition.sourceLeaseMs=120000;}],
+  ['blanket-total-substituted',value=>{value.kycExpiredCurrentComposition.historicalPostCount=6;value.kycExpiredCurrentComposition.priorContextPostCount=0;value.kycExpiredCurrentComposition.composedCurrentPostCount=0;}],
+  ['old-validator-pin-cannot-certify-current',value=>{value.kycExpiredCurrentComposition.validationSources.find(ref=>ref.path==='scripts/verify-company-kyc-outbound-compact-ci.mjs').sha256=value.kycExpiredCurrentComposition.previousValidatorSha256;}],
+ ])bad(name,()=>{const changed=clone(contract);edit(changed);validateKycExpiredCurrentWorkspaceContract(changed);});
+ for(const file of KYC_EXPIRED_CURRENT_ADDITIONS)bad('missing-runtime-dependency-'+file,()=>verifyKycExpiredCurrentSources(section,name=>name===file?null:readSource(name)));
+ for(const ref of [...section.reviewedSources,...section.validationSources])bad('changed-reviewed-Git-bytes-'+ref.path,()=>verifyKycExpiredCurrentSources(section,file=>file===ref.path?Buffer.concat([readSource(file),Buffer.from('\n// altered reviewed bytes\n')]):readSource(file)));
+ for(const file of KYC_EXPIRED_CURRENT_VALIDATION_SOURCES)bad('validation-source-pin-omitted-'+file,()=>{const changed=clone(contract);changed.kycExpiredCurrentComposition.validationSources=changed.kycExpiredCurrentComposition.validationSources.filter(ref=>ref.path!==file);validateKycExpiredCurrentWorkspaceContract(changed);});
+ return checks;
+}
 export function selftest(workflow,contract,root=process.cwd()){
  const checks=[];
  function good(name,run){run();checks.push({name,result:'PASS'});}
  function bad(name,code,run){assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code});}
  good('yaml-parsed-and-full-baseline-equivalent',()=>equivalent(workflow,contract));
+ checks.push(...kycExpiredCurrentCompositionSelftest(contract,root));
  const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
  const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedNeeds(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};
  bad('gate-source-resolver-required','PROOF_SOURCE_RESOLVER',()=>gate({...input,readSource:undefined}));
@@ -2337,6 +2370,7 @@ function main(){
  }
  if(mode==='preflight'){
   identity(root,opts['expected-head']);clocks(process.env);if(!LANES.includes(opts.lane))deny('UNKNOWN_LANE');
+  verifyKycExpiredCurrentSources(contract.kycExpiredCurrentComposition,gitSource(root,opts['expected-head']));
   assertFreshEvidence({root,lane:opts.lane,contract});
   console.log(JSON.stringify({state:'PASS',lane:opts.lane}));return;
  }

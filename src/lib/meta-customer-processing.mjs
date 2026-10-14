@@ -40,6 +40,15 @@ export function createDevelopmentPilotDispatchGuard({connect,environment=process
   await assertDevelopmentPilotCommit(client,candidate,environment);return true;
  });
 }
+// One production composition shared by the runtime and native regressions.
+// Adapters keep their canonical authorization; this function only preserves
+// dispatch order, recovery order and the exact purpose-specific outbound route.
+export function createMetaCustomerProductionProcessor({connect,environment=process.env,now=()=>Date.now(),onboarding,fieldBridge,kycBridge,kycOutbound,appProjection,companyBridge,fieldOutbound,companyOutbound,isCompany,rejectedKyc,expiredKyc,contextKyc,deferAuthorization,authorizationCodes}){
+ if(typeof connect!=='function'||typeof isCompany!=='function'||typeof deferAuthorization!=='function'||!Array.isArray(authorizationCodes)||[fieldBridge,kycBridge,appProjection,companyBridge].some(adapter=>typeof adapter?.execute!=='function')||typeof kycBridge.executeIntake!=='function'||[fieldOutbound,companyOutbound,kycOutbound,rejectedKyc,expiredKyc,contextKyc].some(adapter=>typeof adapter?.send!=='function')||typeof rejectedKyc.rejection!=='function'||typeof expiredKyc.feedback!=='function'||typeof contextKyc.feedback!=='function')throw new TypeError('Invalid production Meta composition');
+ return createMetaCustomerProcessor({connect,environment,now,onboarding,beforeDispatch:createDevelopmentPilotDispatchGuard({connect,environment}),rejectedKyc:rejectedKyc.rejection,expiredKyc:expiredKyc.feedback,contextKyc:contextKyc.feedback,deferAuthorization,authorizationCodes,
+  dispatch:async context=>context.developmentPilot?fieldBridge.execute(context):(await kycBridge.executeIntake(context))||(await kycBridge.execute(context))||(await appProjection.execute(context))||(await companyBridge.execute(context))||fieldBridge.execute(context),
+  outbound:{send:async(context,reply,{purpose}={})=>purpose==='KYC_REJECTION'?rejectedKyc.send(context,reply):purpose==='KYC_EXPIRY_FEEDBACK'?expiredKyc.send(context,reply):purpose==='KYC_CONTEXT_FEEDBACK'?contextKyc.send(context,reply):['EMPLOYEE_INTAKE','KYC_CAPTURE'].includes(purpose)?kycOutbound.send(context,reply,{purpose}):(await isCompany(context))?companyOutbound.send(context,reply):fieldOutbound.send(context,reply),observeStatus:(...args)=>fieldOutbound.observeStatus(...args)}});
+}
 export function createMetaCustomerProcessor({connect,dispatch,outbound,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{},beforeDispatch=async()=>false,deferAuthorization=async()=>false,protocol=META_CUSTOMER_PROTOCOL,lockChannel=lockMetaCustomerInboxChannel,authorizationCodes=[],onboarding=null,rejectedKyc=null,expiredKyc=null,contextKyc=null}){
  resolveMetaCloudProtocol(protocol);
  const within=run=>customerJobTransaction(connect,run);

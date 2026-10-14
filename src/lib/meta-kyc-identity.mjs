@@ -206,12 +206,13 @@ async function finishMetaKycExpiryAuthority(client,context,r,{environment,contex
  const expired=Date.parse(c.expiresAt)<=now.getTime()||Date.parse(s.expiresAt)<=now.getTime();
  if(contextFeedback?!r.feedbackStalePrompt&&!expired:!expired)fail('META_KYC_EXPIRY_FEEDBACK_DENIED');
  r.kind=contextFeedback?'KYC_CONTEXT_FEEDBACK_REPLY':'KYC_EXPIRY_FEEDBACK_REPLY';r.now=now;r.feedbackBindingDigest=bindingDigest;r.feedbackPromptDigest=promptDigest;
+ if(contextFeedback)r.feedbackExpiredCurrentPrompt=Date.parse(c.expiresAt)>now.getTime()&&Date.parse(s.expiresAt)<=now.getTime()&&!r.feedbackStalePrompt;
  (contextFeedback?contextAuthorities:expiryAuthorities).set(r,{client,contextDigest:digest(context),fingerprint:contextFeedback?contextFingerprint(r):expiryFingerprint(r)});return r;
 }
 const expiryFingerprint=r=>digest(stable([r.kind,r.member,r.issuer,r.project,r.worker,r.challenge,r.connection,r.event.payload,r.state,r.feedbackBindingDigest,r.feedbackPromptDigest]));
 export function metaKycExpiryAuthorityDigest(client,r,context){const proof=expiryAuthorities.get(r);if(!proof||proof.client!==client||proof.contextDigest!==digest(context)||proof.fingerprint!==expiryFingerprint(r))fail('META_KYC_EXPIRY_FEEDBACK_DENIED');return proof.fingerprint;}
 export const resolveMetaKycExpiryFeedbackAuthority=(client,context,{environment=process.env}={})=>resolveMetaKycContext(client,context,{environment},expiryFeedbackPurpose);
 const contextAuthorities=new WeakMap();
-const contextFingerprint=r=>digest([expiryFingerprint(r),r.feedbackSourceEventId,r.feedbackStalePrompt]);
+const contextFingerprint=r=>digest(r.feedbackExpiredCurrentPrompt===true?[expiryFingerprint(r),r.feedbackSourceEventId,r.feedbackStalePrompt,true]:[expiryFingerprint(r),r.feedbackSourceEventId,r.feedbackStalePrompt]);
 export function metaKycContextAuthorityDigest(client,r,context){const proof=contextAuthorities.get(r);if(!proof||proof.client!==client||proof.contextDigest!==digest(context)||proof.fingerprint!==contextFingerprint(r))fail('META_KYC_CONTEXT_FEEDBACK_DENIED');return proof.fingerprint;}
 export const resolveMetaKycContextFeedbackAuthority=(client,context,{environment=process.env}={})=>resolveMetaKycContext(client,context,{environment},contextFeedbackPurpose);
