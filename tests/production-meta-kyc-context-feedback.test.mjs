@@ -21,6 +21,29 @@ for(const kind of ['PROJECT','COMPANY'])for(const text of ['ESTADO','ESTADO IDEN
  const t=await contextFeedbackFixture(kind,{expired:true,stale:false,text}),before=structuredClone(t.f.worker),receipt=await t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'});
  assert.deepEqual(receipt.reply,META_KYC_CONTEXT_REPLY);await t.adapter.send(t.context,receipt.reply);assert.deepEqual(t.f.worker,before);assert.equal(t.f.worker.metadata.participant.kyc.status,'NOT_SUBMITTED');assert.equal(t.f.state().consent,false);unchangedMedia(t.f);
 });
+for(const kind of ['PROJECT','COMPANY'])for(const text of ['ESTADO','ESTADO IDENTIDAD'])test(`${kind} latest expired neutral ${text} is intercepted before capture and expiry priority`,async()=>{
+ const t=await contextFeedbackFixture(kind,{expired:true,stale:false,text}),before=structuredClone(t.f.worker),deadline=t.f.events.get(t.context.eventId).leaseExpiresAt;
+ const receipt=await t.adapter.feedback(t.context,{staleOnly:true});
+ assert.equal(receipt?.kind,'KYC_CONTEXT_FEEDBACK');assert.deepEqual(receipt.reply,META_KYC_CONTEXT_REPLY);await t.adapter.send(t.context,receipt.reply);
+ assert.equal(t.requests.length,1);assert.deepEqual(t.f.worker,before);assert.deepEqual(t.f.events.get(t.context.eventId).leaseExpiresAt,deadline);assert.equal(t.f.state().consent,false);unchangedMedia(t.f);
+});
+for(const kind of ['PROJECT','COMPANY'])test(kind+' latest expired consent/image is not reclassified as neutral predispatch feedback',async()=>{
+ const t=await contextFeedbackFixture(kind,{expired:true,stale:false}),before=structuredClone(t.f.worker);
+ assert.equal(await t.adapter.feedback(t.context,{staleOnly:true}),null);
+ rewriteContextEvent(t,p=>{p.value.type='image';delete p.value.interactive;p.value.image={id:'150000011',mime_type:'image/png'};});
+ assert.equal(await t.adapter.feedback(t.context,{staleOnly:true}),null);assert.deepEqual(t.f.worker,before);assert.equal(t.requests.length,0);unchangedMedia(t.f);
+});
+test('latest expired source classification is bound to the signed current authority fingerprint',async()=>{
+ const t=await contextFeedbackFixture('COMPANY',{expired:true,stale:false,text:'ESTADO IDENTIDAD'}),client=await t.connect();await client.query('BEGIN');
+ try{const r=await resolveMetaKycContextFeedbackAuthority(client,t.context,{environment:t.f.environment});assert.equal(r.feedbackExpiredCurrentPrompt,true);await prepareKycContextOutboundSnapshot(client,r,t.context,{environment:t.f.environment});r.feedbackExpiredCurrentPrompt=false;await assert.rejects(fenceKycContextOutboundSnapshot(client,r,t.context,{environment:t.f.environment}),{code:'META_KYC_CONTEXT_FEEDBACK_DENIED'});}
+ finally{await client.query('ROLLBACK');client.release();}
+});
+for(const kind of ['PROJECT','COMPANY'])test(kind+' overall-expired current prompt keeps its prior expiry route instead of the new neutral exception',async()=>{
+ const t=await contextFeedbackFixture(kind,{expired:true,stale:false,text:'ESTADO IDENTIDAD',grantLifetimeMs:48*3600000}),before=structuredClone(t.f.worker);
+ t.f.now.setTime(Date.parse(t.f.worker.metadata.participant.kycChatChallenge.expiresAt)+60000);rewriteContextEvent(t,p=>{p.value.timestamp=String(Math.floor(t.f.now.getTime()/1000));});t.f.events.get(t.context.eventId).leaseExpiresAt=new Date(t.f.now.getTime()+60000);
+ const client=await t.connect();await client.query('BEGIN');try{const r=await resolveMetaKycContextFeedbackAuthority(client,t.context,{environment:t.f.environment});assert.equal(r.feedbackExpiredCurrentPrompt,false);assert.equal(r.feedbackStalePrompt,false);}finally{await client.query('ROLLBACK');client.release();}
+ assert.equal(await t.adapter.feedback(t.context,{staleOnly:true}),null);assert.deepEqual(t.f.worker,before);assert.equal(t.requests.length,0);unchangedMedia(t.f);
+});
 
 const denials=[
  ['foreign sender',t=>rewriteContextEvent(t,p=>{p.value.from='5491100009999';})],

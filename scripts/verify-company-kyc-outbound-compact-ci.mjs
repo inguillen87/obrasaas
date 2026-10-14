@@ -4,8 +4,9 @@ import {readFileSync,mkdirSync,writeFileSync,existsSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parse} from '@babel/parser';
-import {COMPANY_KYC_OUTBOUND_COMPACT_PROOF_VERSION,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS,COMPANY_KYC_CONTEXT_OUTBOUND_CHECKS} from './verify-company-kyc-outbound-compact-postgres.mjs';
+import {COMPANY_KYC_OUTBOUND_COMPACT_PROOF_VERSION,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS,COMPANY_KYC_CONTEXT_OUTBOUND_CHECKS,COMPANY_KYC_LATEST_EXPIRED_COMPOSITION_CHECKS} from './verify-company-kyc-outbound-compact-postgres.mjs';
 import {readCustomerOutboundDiagnostic} from '../src/lib/meta-customer-outbound.mjs';
+import {KYC_EXPIRED_CURRENT_CONTRACT_PATH,KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,KYC_EXPIRED_CURRENT_REVIEWED_SOURCES,validateKycExpiredCurrentWorkspaceContract,validateKycExpiredCurrentReceipt} from './lib/kyc-expired-current-ci-lineage.mjs';
 
 export const COMPANY_KYC_OUTBOUND_COMPACT_CI_VERSION='company-kyc-outbound-compact-ci-v1';
 const producer='scripts/verify-company-kyc-outbound-compact-postgres.mjs';
@@ -15,6 +16,7 @@ const baselineRevision='b5723d23092bd214b9271582af8e6bcb2c929a66';
 const baselineSourceHash='3f562c8d30280bf9ccce53a94523c9f0dd33278ce744bd72cae3949becc72f7f';
 const proofPath='.vercel/private/company-kyc-outbound-compact-postgres.json';
 const outputPath='.vercel/private/company-kyc-outbound-compact-ci.json';
+const lineageAuditSources=[KYC_EXPIRED_CURRENT_CONTRACT_PATH,...KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,...KYC_EXPIRED_CURRENT_REVIEWED_SOURCES.map(ref=>ref.path)];
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{40}$/.test(value);
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -35,6 +37,9 @@ function baselineImport(node){
 // Reads the complete committed import graph; it never executes the producer.
 export function companyKycOutboundCompactCiSourceClosure(readSource){
  const files=new Set(['package.json','package-lock.json',baselineFixture]),external=new Set();let computedImports=0;
+ // Validation sources bind the CI receipt separately; the measured native
+ // producer and runtime closure remains exactly 125 sources.
+ for(const file of lineageAuditSources)sourceBytes(readSource,file);
  for(const file of files)sourceBytes(readSource,file);
  function imports(bytes,file){
   const tree=parse(bytes.toString('utf8'),{sourceType:'module',plugins:['jsx'],createImportExpressions:true}),references=[];
@@ -59,6 +64,7 @@ export function companyKycOutboundCompactCiSourceClosure(readSource){
   }
  }
  visit(producer);
+ visit('src/lib/meta-customer-processing-runtime.mjs');
  const previous=baseline(readSource);
  for(const specifier of imports(Buffer.from(previous.source),previous.sourcePath)){requireProof(specifier.startsWith('.'),'Baseline external import changed');visit(path.posix.normalize(path.posix.join(path.posix.dirname(previous.sourcePath),specifier)));}
  requireProof(computedImports===1,'Expected one bounded immutable baseline import');
@@ -109,7 +115,20 @@ function validateContextFeedback(proof){
  requireProof(row.statementDelayMs===225&&row.graphDelayMs===200&&row.sourceLeaseMs===60000&&row.leaseExtended===false&&row.productionLatencyMeasured===false,'OWN controlled latency and original lease cannot be substituted');
  requireProof(Number.isFinite(row.elapsedMs)&&row.elapsedMs>0&&row.elapsedMs<60000&&Number.isFinite(row.prePostMs)&&row.prePostMs>0&&row.prePostMs<=row.elapsedMs&&row.marginMs===60000-row.elapsedMs&&row.marginMs>0,'OWN feedback must reach POST and completion inside the original lease');
  requireProof(row.providerPosts===1&&row.replayedPosts===0&&row.replyState==='SENT'&&row.messageIdPresent===true&&context.realProviderCalls===0&&context.productionDataTouched===false&&context.humanAccepted===false,'OWN feedback needs one synthetic POST with no replay or human acceptance claim');
- requireProof(proof.totalSyntheticMessagePostCount===proof.syntheticMessagePostCount+row.providerPosts&&proof.totalSyntheticMessagePostCount===5,'The historical four POSTs and one context POST need a truthful separate total');
+ requireProof(proof.syntheticMessagePostCount+row.providerPosts===5,'The historical four POSTs and one prior-context POST need their unchanged separate subtotal');
+}
+function validateLatestExpiredComposition(proof){
+ const context=proof.latestExpiredContextNative,row=context?.measurement;
+ requireProof(context?.status==='PASS'&&context.kind==='OWN_COMPANY_RUNTIME'&&context.postgresExecuted===true&&context.compositionFactory==='createMetaCustomerProductionProcessor'&&context.input==='ESTADO IDENTIDAD'&&context.sourcePurpose==='KYC_CAPTURE'&&context.sourcePromptConfirmed===true&&context.quotedLatestPrompt===true&&context.fixtureConversationExpired===true&&context.challengeStillValid===true&&context.challengeStatus==='CLAIMED','Full production composition needs the same current confirmed prompt and expired conversation within a live CLAIMED challenge');
+ same(context.checks,COMPANY_KYC_LATEST_EXPIRED_COMPOSITION_CHECKS,'Every separate latest-expired composition check required');
+ same(context.calls,{rejectionRecovery:1,expiryRecovery:1,contextRecovery:1,contextPredispatch:1,intake:0,capture:0,app:0,company:0,field:0,expiryFallback:0,authorizationDefer:0},'Real recovery adapters must run before compact interception with no intake/capture/expiry fallback');
+ requireProof(context.consentChosen===false&&context.identitySubmitted===false&&context.privateMediaCalls===0&&context.workerBytesUnchanged===true&&context.sourcePromptBytesUnchanged===true&&context.sourceEventBytesUnchanged===true&&context.realProviderCalls===0&&context.productionDataTouched===false&&context.humanAccepted===false,'Latest-expired composition cannot assert consent, private effects or real acceptance');
+ for(const [before,after]of [['workerBeforeSha256','workerAfterSha256'],['sourcePromptBeforeSha256','sourcePromptAfterSha256'],['sourceEventBeforeSha256','sourceEventAfterSha256']])requireProof(hash(context[before])&&context[before]===context[after],'Latest-expired original private/source evidence changed');
+ requireProof(row?.kind==='controlled-production-latest-expired-neutral'&&Number.isSafeInteger(row.sqlStatements)&&row.sqlStatements>0&&row.fullResolutions===3&&Number.isSafeInteger(row.compactFences)&&row.compactFences>0&&Number.isSafeInteger(row.runtimeFences)&&row.runtimeFences>0&&row.beforeDispatchReads===1&&Number.isSafeInteger(row.graphRequests)&&row.graphRequests>0,'Full composition must report actual before-dispatch, signed resolutions and Graph fences');
+ requireProof(row.statementDelayMs===225&&row.graphDelayMs===200&&row.sourceLeaseMs===60000&&row.sourceLeaseWrites===1&&row.leaseExtended===false&&row.productionLatencyMeasured===false,'Latest-expired original source lease and controlled delays cannot be substituted');
+ requireProof(Number.isFinite(row.elapsedMs)&&row.elapsedMs>0&&row.elapsedMs<60000&&Number.isFinite(row.prePostMs)&&row.prePostMs>0&&row.prePostMs<=row.elapsedMs&&row.marginMs===60000-row.elapsedMs&&row.marginMs>0,'Full production composition must reach POST and completion within the original lease');
+ requireProof(row.providerPosts===1&&row.replayedPosts===0&&row.replyState==='SENT'&&row.messageIdPresent===true&&row.workerWrites===0,'Latest-expired composition needs one synthetic POST, no replay and zero Worker writes');
+ requireProof(proof.totalSyntheticMessagePostCount===proof.syntheticMessagePostCount+proof.contextFeedbackNative.measurement.providerPosts+row.providerPosts&&proof.totalSyntheticMessagePostCount===6,'Historical four, prior-context one and composed-current one need truthful independent counters');
 }
 export function validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres}){
  requireProof(revision(expectedHead)&&head===expectedHead&&revision(sourceTree)&&trackedClean===true,'Exact clean Git HEAD and tree required');
@@ -119,8 +138,10 @@ export function validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTre
  requireProof(postgres.provider==='controlled-synthetic-only'&&postgres.operativeDatabaseUsed===false&&postgres.realProviderUsed===false&&postgres.municipalOrIdentityAcceptance===false&&postgres.leaseExtended===false,'Native proof cannot certify operative data, providers, identity or an extended lease');
  requireProof(postgres.poolClosed===true&&postgres.databaseRemoved===true&&postgres.adminClosed===true,'Native pool, child database and administration connection cleanup required');
  same(postgres.checks,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS,'Every native lease, revocation, seal and uncertain reply scenario required');
- const closure=companyKycOutboundCompactCiSourceClosure(readSource);validateManifest(postgres,closure.files,readSource);validateMeasurements(postgres);validateScenarios(postgres);validateContextFeedback(postgres);
- return {version:COMPANY_KYC_OUTBOUND_COMPACT_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,trackedClean:true,sourceState:'EXACT_CI_SOURCE',nativeVersion:postgres.version,checks:[...postgres.checks],sourceCount:closure.files.length,harnessSha256:postgres.harnessSha256,measurements:postgres.measurements,scenarios:postgres.scenarios,syntheticMessagePostCount:postgres.syntheticMessagePostCount,contextFeedbackNative:postgres.contextFeedbackNative,totalSyntheticMessagePostCount:postgres.totalSyntheticMessagePostCount,operativeDatabaseUsed:false,realProviderUsed:false,municipalOrIdentityAcceptance:false,leaseExtended:false,poolClosed:true,databaseRemoved:true,adminClosed:true};
+ const closure=companyKycOutboundCompactCiSourceClosure(readSource);validateManifest(postgres,closure.files,readSource);validateMeasurements(postgres);validateScenarios(postgres);validateContextFeedback(postgres);validateLatestExpiredComposition(postgres);
+ let currentCompositionLineage;
+ try{const contract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH));currentCompositionLineage=validateKycExpiredCurrentReceipt(postgres,validateKycExpiredCurrentWorkspaceContract(contract),readSource);}catch(error){requireProof(false,error.code==='KYC_EXPIRED_CURRENT_LINEAGE_REJECTED'?error.message:'Current KYC composition source contract could not be confirmed');}
+ return {version:COMPANY_KYC_OUTBOUND_COMPACT_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,trackedClean:true,sourceState:'EXACT_CI_SOURCE',nativeVersion:postgres.version,checks:[...postgres.checks],sourceCount:closure.files.length,harnessSha256:postgres.harnessSha256,measurements:postgres.measurements,scenarios:postgres.scenarios,syntheticMessagePostCount:postgres.syntheticMessagePostCount,contextFeedbackNative:postgres.contextFeedbackNative,latestExpiredContextNative:postgres.latestExpiredContextNative,totalSyntheticMessagePostCount:postgres.totalSyntheticMessagePostCount,currentCompositionLineage,operativeDatabaseUsed:false,realProviderUsed:false,municipalOrIdentityAcceptance:false,leaseExtended:false,poolClosed:true,databaseRemoved:true,adminClosed:true};
 }
 function main(){
  const args=process.argv.slice(2);requireProof(args.length===2&&args[0]==='--expected-head'&&revision(args[1]),'Usage: --expected-head <full Git SHA>');
@@ -130,10 +151,10 @@ function main(){
  const committed=new Set(git('ls-tree','-r','--name-only',expectedHead).split('\n')),gitSources=Object.create(null);
  const readSource=file=>{if(!committed.has(file))return null;if(!Object.hasOwn(gitSources,file))gitSources[file]=execFileSync('git',['show',expectedHead+':'+file],{cwd:root,maxBuffer:16*1024*1024,windowsHide:true});return gitSources[file];};
  const closure=companyKycOutboundCompactCiSourceClosure(readSource);
- for(const file of [validator,...closure.files])requireProof(readSource(file)!==null&&sha(readFileSync(path.join(root,file)))===sha(readSource(file)),'Checkout differs from committed expected Git bytes: '+file);
+ for(const file of [...lineageAuditSources,...closure.files])requireProof(readSource(file)!==null&&sha(readFileSync(path.join(root,file)))===sha(readSource(file)),'Checkout differs from committed expected Git bytes: '+file);
  const inputBytes=readFileSync(path.join(root,proofPath)),proof=validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres:JSON.parse(inputBytes)});
  requireProof(git('rev-parse','HEAD')===head&&git('rev-parse','HEAD^{tree}')===sourceTree&&git('status','--porcelain','--untracked-files=no')==='','Source changed during native proof validation');
- for(const file of [validator,...closure.files])requireProof(sha(readFileSync(path.join(root,file)))===sha(readSource(file)),'Source changed during validation: '+file);
+ for(const file of [...lineageAuditSources,...closure.files])requireProof(sha(readFileSync(path.join(root,file)))===sha(readSource(file)),'Source changed during validation: '+file);
  const output=path.join(root,outputPath);requireProof(!existsSync(output),'A previous compact CI proof must not be overwritten');mkdirSync(path.dirname(output),{recursive:true});
  writeFileSync(output,JSON.stringify({...proof,checkedAt:new Date().toISOString(),validatorSha256:sha(readSource(validator)),inputProof:{path:proofPath,sha256:sha(inputBytes)}},null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:proof.status,sourceRevision:head,output:outputPath,nativeChecks:proof.checks.length,sourceCount:proof.sourceCount}));
 }
