@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {digest,WorkspaceError} from '../src/lib/workspace-policy.mjs';
 import {metaKycChallengeDigest,metaKycOperationId,prepareMetaKycChallenge} from '../src/lib/meta-kyc-challenge.mjs';
 import {beginMetaKycConversation,planMetaKycConversation} from '../src/lib/meta-kyc-conversation.mjs';
-import {resolveMetaKycAuthority,metaKycDispatchReceiptId,resolveMetaKycExpiryFeedbackAuthority,metaKycExpiryAuthorityDigest} from '../src/lib/meta-kyc-identity.mjs';
+import {resolveMetaKycAuthority,metaKycDispatchReceiptId,resolveMetaKycExpiryFeedbackAuthority,metaKycExpiryAuthorityDigest,resolveMetaKycContextFeedbackAuthority} from '../src/lib/meta-kyc-identity.mjs';
 import {createMetaKycExpiryFeedback,META_KYC_EXPIRY_REPLY,metaKycExpiryReceiptId} from '../src/lib/meta-kyc-expiry-feedback.mjs';
 import {companyKycMemoryFixture} from './fixtures/company-kyc-memory.mjs';
 import {readFile} from 'node:fs/promises';
@@ -299,9 +299,10 @@ for(const kind of ['PROJECT','COMPANY'])test(kind+' expiry lost HTTP ACK retains
 for(const kind of ['PROJECT','COMPANY'])for(const state of ['SEND_UNKNOWN','REJECTED'])test(kind+' expiry requires a SENT current capture prompt, never '+state,async()=>{
  const t=await expiryFixture(kind);[...t.f.outbounds.values()].at(-1).outcome.state=state;const audits=structuredClone([...t.f.audits]),outbounds=structuredClone([...t.f.outbounds]);assert.equal(await t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'}),null);assert.deepEqual([...t.f.audits],audits);assert.deepEqual([...t.f.outbounds],outbounds);assert.equal(t.requests.length,0);unchangedMedia(t.f);
 });
-for(const kind of ['PROJECT','COMPANY'])test(kind+' expiry rejects an older valid prompt after the conversation has advanced',async()=>{
+for(const kind of ['PROJECT','COMPANY'])test(kind+' expiry keeps its current-prompt guard while separate context feedback handles an older valid prompt',async()=>{
  const t=await expiryFixture(kind,{expired:false}),first=[...t.f.outbounds.values()][0].outcome.messageId;await t.f.choose('Autorizar imágenes');t.f.now.setTime(t.f.now.getTime()+31*60000);rewriteExpiryEvent(t,p=>{p.value.context.id=first;p.value.timestamp=String(Math.floor(t.f.now.getTime()/1000));});t.f.events.get(t.context.eventId).leaseExpiresAt=new Date(t.f.now.getTime()+60000);
  const before=structuredClone(t.f.worker),audits=structuredClone([...t.f.audits]);assert.equal(await t.adapter.feedback(t.context,{code:'META_KYC_CHALLENGE_EXPIRED'}),null);assert.deepEqual(t.f.worker,before);assert.deepEqual([...t.f.audits],audits);assert.equal(t.requests.length,0);unchangedMedia(t.f);
+ const feedback=await resolveMetaKycContextFeedbackAuthority(await t.connect(),t.context,{environment:t.f.environment});assert.equal(feedback.kind,'KYC_CONTEXT_FEEDBACK_REPLY');assert.equal(feedback.feedbackStalePrompt,true);assert.deepEqual(t.f.worker,before);assert.deepEqual([...t.f.audits],audits);unchangedMedia(t.f);
 });
 for(const kind of ['PROJECT','COMPANY'])for(const purpose of ['KYC_CAPTURE','KYC_REJECTION'])test(kind+' expiry never converts an existing '+purpose+' SEND_UNKNOWN outbox or creates a competing receipt',async()=>{
  const t=await expiryFixture(kind),f=t.f,id=customerOutboundId(t.context.eventId),original=[...f.outbounds.values()][0],oldId=original.id,aad={organizationId:f.connection.organizationId,projectId:f.connection.projectId,purpose:'outbound'},request=JSON.parse(decryptCustomerSecret(original.payload.encryptedPayload,{...aad,resourceId:oldId},f.environment));

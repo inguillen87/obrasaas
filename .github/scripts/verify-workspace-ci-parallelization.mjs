@@ -10,7 +10,7 @@ import {parse} from '@babel/parser';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="b291b891fb47f67b4dd8863bdab54eb3749dd704f7166895100adddc4e8ae38f";
+export const EXPECTED_CONTRACT_SHA256="fa8a57d8dd6c69650d835b5e741e93e467245ec5bd0456d8a9181df260bf7a6c";
 const POSTGRES_SERVICE_IMAGE='docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -139,7 +139,18 @@ const KYC_FEEDBACK_PREVIOUS_PRODUCER_PINS={UI_INTAKE:'07dd870b22df1ea2ae54cb1349
 const KYC_REPLY_REJECTION_SOURCES=['src/lib/meta-kyc-rejection-policy.mjs','src/lib/meta-kyc-rejection.mjs'];
 const currentKycReplyFeedbackDependenciesFor=kind=>kind==='UNIT'?KYC_REPLY_REJECTION_SOURCES:['UI_BANK','UI_JOINT','UI_CAUSAL','PG_FIELD','PG_OVERTIME'].includes(kind)?['src/lib/meta-kyc-identity.mjs',...KYC_REPLY_REJECTION_SOURCES]:[];
 const KYC_REPLY_PREVIOUS_UNIT_PRODUCER_SHA256='a024c6a26dcdfaf01719e51ee450ffe4e0a36b2ba04cb28a95d2eaa4a62e0a75';
-const currentKycStatusDependenciesFor=kind=>[...({"UNIT":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_BANK":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_JOINT":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_CAUSAL":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_COMPANY_KYC":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_FIELD":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_OVERTIME":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_INTAKE":["src/lib/company-channel-kyc.mjs","src/lib/participant-onboarding-authority.mjs","src/lib/participant-onboarding-current-kyc.mjs","src/lib/participant-onboarding-reactive.mjs"]}[kind]||[]),...currentKycFeedbackDependenciesFor(kind),...currentKycReplyFeedbackDependenciesFor(kind)];
+// The new read-only WhatsApp paths extend CURRENT execution graphs only. The
+// published PR142 path sets remain frozen below, independently of older bases.
+const FIELD_REPORT_FEEDBACK_SOURCE='src/lib/field-report-feedback.mjs';
+const KYC_CONTEXT_FEEDBACK_SOURCE='src/lib/meta-kyc-context-feedback.mjs';
+const KYC_CONTEXT_OUTBOUND_SOURCE='src/lib/meta-kyc-context-outbound.mjs';
+const KYC_CONTEXT_NATIVE_HELPER='scripts/lib/kyc-context-feedback-native.mjs';
+const currentWhatsappFeedbackDependenciesFor=kind=>kind==='PG_COMPANY_KYC'?[FIELD_REPORT_FEEDBACK_SOURCE,KYC_CONTEXT_FEEDBACK_SOURCE,KYC_CONTEXT_OUTBOUND_SOURCE,KYC_CONTEXT_NATIVE_HELPER]:['UNIT','UI_BANK','UI_JOINT','UI_CAUSAL','PG_FIELD','PG_OVERTIME'].includes(kind)?[FIELD_REPORT_FEEDBACK_SOURCE]:[];
+export const WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS=Object.freeze({UNIT:131,UI_BANK:132,UI_JOINT:134,UI_CAUSAL:134,PG_COMPANY_KYC:216,PG_FIELD:120,PG_OVERTIME:105});
+const WHATSAPP_FEEDBACK_PREVIOUS_PATHS_SHA256=Object.freeze({UNIT:'b0d7794135c4ce3fe63fa5afe32a80eac8e71018df832d912980fd4650399f47',UI_BANK:'907d7169c4cd8925f97e26b04f0cd98962052394bfdc53b0c41425ceb556debc',UI_JOINT:'8f4c9570bbe628025476dba3a69cab9d97e52b2b2a6cf809b95b8a102551e1ec',UI_CAUSAL:'8f4c9570bbe628025476dba3a69cab9d97e52b2b2a6cf809b95b8a102551e1ec',PG_COMPANY_KYC:'59e04b75c7e14d785562869dea526db64273dc488c84882fee897ac6f4eb03a3',PG_FIELD:'4f1db7b51c2694e6e175309d039d80d2dbf211d4f0677ac85492533e4ef89073',PG_OVERTIME:'78f45233dbc7c8adca07f637054dfd5191612af27bc399c40aa4c9f5e9fc1c3e'});
+const WHATSAPP_FEEDBACK_PREVIOUS_COMPANY_CHECKS_SHA256='cca2d12d4788581a1a1dc6774f5dc885c1cedb766b0dd275337cfb40d27f881c';
+const COMPANY_KYC_CONTEXT_CHECK_SUFFIXES=Object.freeze(['-context-native-old-signed-source-concurrent-single-outbox-HTTP-no-capture-writes','-context-native-neutral-ESTADO-IDENTIDAD-no-consent-or-private-media','-context-native-current-issuer-revocation-no-HTTP-no-media','-context-native-processor-pre-dispatch-no-capture-or-replay','-context-native-original-60s-lease-225ms-SQL-200ms-Graph-single-POST']);
+const currentKycStatusDependenciesFor=kind=>[...({"UNIT":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_BANK":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_JOINT":["src/lib/participant-onboarding-current-kyc.mjs"],"UI_CAUSAL":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_COMPANY_KYC":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_FIELD":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_OVERTIME":["src/lib/participant-onboarding-current-kyc.mjs"],"PG_INTAKE":["src/lib/company-channel-kyc.mjs","src/lib/participant-onboarding-authority.mjs","src/lib/participant-onboarding-current-kyc.mjs","src/lib/participant-onboarding-reactive.mjs"]}[kind]||[]),...currentKycFeedbackDependenciesFor(kind),...currentKycReplyFeedbackDependenciesFor(kind),...currentWhatsappFeedbackDependenciesFor(kind)];
 // Additive v3/v4 sources do not replace the historical counts or producer records.
 const MONTHLY_CURVE_DEPENDENCIES={PG_COMPANY_KYC:['src/lib/plan-import-monthly-curve.mjs','src/lib/plan-import-cyp-curve.mjs'],UI_IDENTITY_ONLY:['src/app/(identity)/cuenta/plan-source-curve.js','src/app/(identity)/cuenta/plan-source-curve.mjs','src/app/(identity)/cuenta/plan-source-curve.module.css']};
 const monthlyCurveDependenciesFor=kind=>MONTHLY_CURVE_DEPENDENCIES[kind]||[];
@@ -596,6 +607,28 @@ function validateCompanyKycExpiryNativeProof(proof){
  for(const [index,mode]of ['LOST_ACK','ROLLBACK'].entries()){const row=commits.outcomes[index],applied=mode==='LOST_ACK';if(!row||typeof row!=='object'||Array.isArray(row)||row.mode!==mode||row.actualCommitApplied!==applied||row.realRollback!==!applied||row.recoveryReturnedReceipt!==applied||row.sendState!==(applied?'SEND_UNKNOWN':'SENT')||row.httpTransfers!==1||row.workerBytesUnchanged!==true||row.mediaAndDepositDelta!==0)deny('PROOF_KYC_EXPIRY_NATIVE');}
  if(revoked.name!=='current-native-issuer-revocation-after-reservation-no-HTTP'||revoked.receiptCount!==1||revoked.outboxCount!==1||revoked.httpTransfers!==0||revoked.workerBytesUnchanged!==true||revoked.mediaAndDepositDelta!==0)deny('PROOF_KYC_EXPIRY_NATIVE');
 }
+export function validateCompanyKycContextNativeProof(proof){
+ const e=proof.contextFeedbackNative;
+ exactKeys(e,['kind','postgresExecuted','cases','provider','realProviderCalls','humanAccepted','identityCertified','permissionsGranted'],'PROOF_KYC_CONTEXT_NATIVE');
+ if(e.kind!=='COMPANY'||e.postgresExecuted!==true||e.provider!=='actual-adapter-controlled-Graph-fetch'||e.realProviderCalls!==0||e.humanAccepted!==false||e.identityCertified!==false||e.permissionsGranted!==false||!Array.isArray(e.cases)||e.cases.length!==5)deny('PROOF_KYC_CONTEXT_NATIVE');
+ const [concurrent,status,revoked,processor,lease]=e.cases;
+ const keys=[['name','receiptCount','outboxCount','httpTransfers','workerBytesUnchanged','mediaDelta'],['name','receiptCount','outboxCount','httpTransfers','consentChosen','workerBytesUnchanged','mediaDelta'],['name','receiptCount','outboxCount','httpTransfers','workerBytesUnchanged','mediaDelta'],['name','captureDispatches','httpTransfers','workerBytesUnchanged','mediaDelta'],['name','sqlStatements','compactFences','fullResolutions','elapsedMs','prePostMs','statementDelayMs','graphDelayMs','sourceLeaseMs','marginMs','leaseExtended','httpTransfers','workerBytesUnchanged','mediaDelta','productionLatencyMeasured']];
+ e.cases.forEach((row,index)=>exactKeys(row,keys[index],'PROOF_KYC_CONTEXT_NATIVE'));
+ const names=['native-prior-prompt-concurrent-receipt-one-HTTP-private-state-unchanged','native-neutral-status-exact-expired-source-without-consent-choice','native-current-issuer-revoked-after-reservation-no-HTTP','native-processor-intercepts-before-capture-without-replay-dispatch','native-original-60s-lease-controlled-225ms-SQL-200ms-Graph'];
+ if(e.cases.some((row,index)=>row.name!==names[index]||row.workerBytesUnchanged!==true||row.mediaDelta!==0||row.httpTransfers!==(index===2?0:1)))deny('PROOF_KYC_CONTEXT_NATIVE');
+ if([concurrent,status,revoked].some(row=>row.receiptCount!==1||row.outboxCount!==1)||status.consentChosen!==false||processor.captureDispatches!==0)deny('PROOF_KYC_CONTEXT_NATIVE');
+ if(['sqlStatements','compactFences','fullResolutions'].some(key=>!Number.isSafeInteger(lease[key])||lease[key]<=0)||!Number.isFinite(lease.elapsedMs)||!Number.isFinite(lease.prePostMs)||lease.prePostMs<=0||lease.prePostMs>lease.elapsedMs||lease.elapsedMs>=60000||lease.marginMs!==60000-lease.elapsedMs||lease.statementDelayMs!==225||lease.graphDelayMs!==200||lease.sourceLeaseMs!==60000||lease.leaseExtended!==false||lease.productionLatencyMeasured!==false)deny('PROOF_KYC_CONTEXT_NATIVE');
+}
+// Validator-only shadow input. This is never a native execution receipt.
+function companyKycContextNativeShadowFixture(){
+ return {kind:'COMPANY',postgresExecuted:true,provider:'actual-adapter-controlled-Graph-fetch',realProviderCalls:0,humanAccepted:false,identityCertified:false,permissionsGranted:false,cases:[
+  {name:'native-prior-prompt-concurrent-receipt-one-HTTP-private-state-unchanged',receiptCount:1,outboxCount:1,httpTransfers:1,workerBytesUnchanged:true,mediaDelta:0},
+  {name:'native-neutral-status-exact-expired-source-without-consent-choice',receiptCount:1,outboxCount:1,httpTransfers:1,consentChosen:false,workerBytesUnchanged:true,mediaDelta:0},
+  {name:'native-current-issuer-revoked-after-reservation-no-HTTP',receiptCount:1,outboxCount:1,httpTransfers:0,workerBytesUnchanged:true,mediaDelta:0},
+  {name:'native-processor-intercepts-before-capture-without-replay-dispatch',captureDispatches:0,httpTransfers:1,workerBytesUnchanged:true,mediaDelta:0},
+  {name:'native-original-60s-lease-controlled-225ms-SQL-200ms-Graph',sqlStatements:140,compactFences:8,fullResolutions:8,elapsedMs:35000,prePostMs:33000,statementDelayMs:225,graphDelayMs:200,sourceLeaseMs:60000,marginMs:25000,leaseExtended:false,httpTransfers:1,workerBytesUnchanged:true,mediaDelta:0,productionLatencyMeasured:false},
+ ]};
+}
 // Positive validator input only. This fixture is never written as execution
 // evidence; every enclosing selftest records its no-PG shadow boundary.
 function companyKycExpiryNativeShadowFixture(){
@@ -637,8 +670,8 @@ function validatePlanBaselineNativeProof(spec,proof,{expectedHead,expectedTree,r
 function documentCurveCurrentSourceLineageSelftest(contract,root){
  const checks=[];
  for(const spec of contract.extension.proofs){const dependencies=spec.kind==='PG_PLAN_BASELINE'?[DOCUMENT_CURVE_SOURCE,'tests/fixtures/plan-import-document-curve-synthetic.mjs']:documentCurveDependenciesFor(spec.kind);if(!dependencies.length)continue;
-  const previous=spec.sourceFiles.filter(file=>!dependencies.includes(file)).sort();assert.equal(previous.length,DOCUMENT_CURVE_PREVIOUS_CURRENT_COUNTS[spec.kind]);assert.equal(hash(canonical(previous)),DOCUMENT_CURVE_PREVIOUS_CURRENT_PATHS_SHA256[spec.kind]);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles,'PROOF_SOURCE_MANIFEST');checks.push({name:spec.id+'-document-current-additions-preserve-frozen-5fb-path-lineage',result:'PASS',boundary:'pure actual source graph and immutable path definitions; no producer execution'});
-  if(['UI_JOINT','UI_CAUSAL'].includes(spec.kind)){const old=spec.sourceFiles.filter(file=>file!==DOCUMENT_CURVE_COPY_HELPER).sort();assert.equal(old.length,JOINT_DOCUMENT_RELOCATION_PREVIOUS_COUNT);assert.equal(hash(canonical(old)),JOINT_DOCUMENT_RELOCATION_PREVIOUS_PATHS_SHA256);checks.push({name:spec.id+'-physical-document-relocation-preserves-frozen-133-path-lineage',result:'PASS',boundary:'pure source lineage; no browser execution'});}
+   const previous=spec.sourceFiles.filter(file=>!dependencies.includes(file)&&!currentWhatsappFeedbackDependenciesFor(spec.kind).includes(file)).sort();assert.equal(previous.length,DOCUMENT_CURVE_PREVIOUS_CURRENT_COUNTS[spec.kind]);assert.equal(hash(canonical(previous)),DOCUMENT_CURVE_PREVIOUS_CURRENT_PATHS_SHA256[spec.kind]);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles,'PROOF_SOURCE_MANIFEST');checks.push({name:spec.id+'-document-current-additions-preserve-frozen-5fb-path-lineage',result:'PASS',boundary:'pure actual source graph and immutable path definitions; no producer execution'});
+   if(['UI_JOINT','UI_CAUSAL'].includes(spec.kind)){const old=spec.sourceFiles.filter(file=>file!==DOCUMENT_CURVE_COPY_HELPER&&!currentWhatsappFeedbackDependenciesFor(spec.kind).includes(file)).sort();assert.equal(old.length,JOINT_DOCUMENT_RELOCATION_PREVIOUS_COUNT);assert.equal(hash(canonical(old)),JOINT_DOCUMENT_RELOCATION_PREVIOUS_PATHS_SHA256);checks.push({name:spec.id+'-physical-document-relocation-preserves-frozen-133-path-lineage',result:'PASS',boundary:'pure source lineage; no browser execution'});}
   for(const file of dependencies){assert.equal(spec.sourceFiles.filter(source=>source===file).length,1);const substituted=spec.sourceFiles.map(source=>source===file?'src/lib/foreign-document-curve.mjs':source);assert.equal(substituted.length,spec.sourceFiles.length);assert.throws(()=>equal(substituted,currentProducerSourceFiles(spec,root),'PROOF_SOURCE_MANIFEST'),error=>error.code==='PROOF_SOURCE_MANIFEST');checks.push({name:spec.id+'-document-same-count-source-substitution-denied-'+file,result:'PASS',expectedDenial:'PROOF_SOURCE_MANIFEST',boundary:'pure exact AST/source emitter comparison'});}
  }
  return checks;
@@ -741,7 +774,7 @@ export function validateExtensionProof(spec,bytes,{expectedHead,expectedTree,rea
  }
  else if(spec.kind==='PG_COMPANY_KYC'){
   if(proof.databaseCreated!==false||proof.schemaRemoved!==true||proof.environment!=='schema-only-localhost-postgresql-corporate-KYC')deny('PROOF_CLEANUP');equal(proof.checks,spec.checkNames,'PROOF_CHECK_NAMES');if(proof.realProviderCalls!==0||proof.unexpectedNetworkCalls!==0||proof.realClerkLogin!==false||proof.realMetaAccepted!==false||proof.humanAccepted!==false)deny('PROOF_PROVIDER_IO');
-  validateCompanyKycExpiryNativeProof(proof);
+   validateCompanyKycExpiryNativeProof(proof);validateCompanyKycContextNativeProof(proof);
  }
  else if(spec.kind==='PG_BANK'||spec.kind==='PG_INTAKE'){if(proof.schemaRemoved!==true)deny('PROOF_CLEANUP');equal(proof.checks,spec.checkNames,'PROOF_CHECK_NAMES');if(spec.kind==='PG_BANK'){if(proof.realProviderCalls!==0)deny('PROOF_PROVIDER_IO');}else{if(proof.providerCalls!==0||proof.unexpectedNetworkCalls!==0)deny('PROOF_PROVIDER_IO');equal(proof.sqlFailures,[],'PROOF_SQL_ERRORS');}}
  else if(spec.kind==='UNIT'){
@@ -795,7 +828,7 @@ function validatePlanBaselineContract(contract){
  for(const current of contract.extension.proofs){const dependencies=planBaselineDependenciesFor(current.kind);if(dependencies.some(file=>current.sourceFiles.filter(source=>source===file).length!==1))deny('PLAN_BASELINE_CURRENT_SOURCE_DEPENDENCIES');}
 }
 function validatePlanBaselinePreviousSourceLineage(spec){
- const dependencies=planBaselineDependenciesFor(spec.kind),previous=spec.sourceFiles.filter(file=>!dependencies.includes(file)).toSorted();
+  const dependencies=[...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind)],previous=spec.sourceFiles.filter(file=>!dependencies.includes(file)).toSorted();
  if(previous.length!==PLAN_BASELINE_PREVIOUS_SOURCE_COUNTS[spec.kind]||hash(canonical(previous))!==PLAN_BASELINE_PREVIOUS_SOURCE_PATHS_SHA256[spec.kind])deny('PLAN_BASELINE_PREVIOUS_SOURCE_LINEAGE');
 }
 function planBaselineSelftest(workflow,contract,root){
@@ -862,7 +895,7 @@ function planBaselineSelftest(workflow,contract,root){
  for(const current of contract.extension.proofs){const dependencies=planBaselineDependenciesFor(current.kind);if(!historicalPlanBaselineDependenciesFor(current.kind).length)continue;
   good(current.id+'-actual-current-closure-and-frozen-previous-path-set',()=>{validatePlanBaselinePreviousSourceLineage(current);equal(currentProducerSourceFiles(current,root),current.sourceFiles,'PROOF_SOURCE_MANIFEST');});
   for(const file of dependencies){const changed=clone(contract),target=changed.extension.proofs.find(spec=>spec.id===current.id);target.sourceFiles=target.sourceFiles.filter(source=>source!==file);bad(current.id+'-contract-missing-'+file,'PLAN_BASELINE_CURRENT_SOURCE_DEPENDENCIES',()=>validatePlanBaselineContract(changed));}
-  const old=current.sourceFiles.filter(file=>!dependencies.includes(file));good(current.id+'-previous-count-remains-'+old.length,()=>assert.equal(old.length,PLAN_BASELINE_PREVIOUS_SOURCE_COUNTS[current.kind]));
+   const old=current.sourceFiles.filter(file=>!dependencies.includes(file)&&!currentWhatsappFeedbackDependenciesFor(current.kind).includes(file));good(current.id+'-previous-count-remains-'+old.length,()=>assert.equal(old.length,PLAN_BASELINE_PREVIOUS_SOURCE_COUNTS[current.kind]));
   const changed={...current,sourceFiles:[...current.sourceFiles]},index=changed.sourceFiles.findIndex(file=>!dependencies.includes(file));changed.sourceFiles[index]='src/lib/foreign-plan-baseline-previous.mjs';bad(current.id+'-previous-path-lineage-cannot-be-redefined','PLAN_BASELINE_PREVIOUS_SOURCE_LINEAGE',()=>validatePlanBaselinePreviousSourceLineage(changed));
  }
  return checks;
@@ -897,22 +930,32 @@ export function currentProducerSourceFiles(spec,root){
  if(spec.kind==='UI_BANK'){const seeds=[...text.matchAll(/\bvisit\('([^']+)'(?:,true)?\)/g)].map(match=>match[1]);assert.equal(seeds.length,3,'Exact current bank producer roots');return walk(seeds);}
  if(spec.kind==='UI_INTAKE')return [...array('files').map(file=>'src/app/(identity)/cuenta/'+file),...literals(/\.\.\.\[([^\]]+)\]\.map\(file=>/g),...documentCurveDependenciesFor(spec.kind)].sort();
  if(spec.kind==='UI_JOINT'||spec.kind==='UI_CAUSAL')return walk(literals(/for\(const file of \[([^\]]+)\]\)visit\(file\);/g),array('files').map(file=>'src/app/(identity)/cuenta/'+file));
- assert.equal(spec.kind,'PG_COMPANY_KYC');assert.ok(text.includes("const sourceManifest=[...sources('src/lib'),'src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs']"),'Exact current company producer roots with the pre-existing formatter import');
+  assert.equal(spec.kind,'PG_COMPANY_KYC');assert.ok(text.includes("const sourceManifest=[...sources('src/lib'),'src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/kyc-context-feedback-native.mjs']"),'Exact current company producer roots with the pre-existing formatter and native context helper imports');
  const files=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?files(relative+'/'+entry.name):[relative+'/'+entry.name]);
- return [...files('src/lib'),COMPANY_KYC_FORMAT_CLOSURE_SOURCE,'scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs'].sort();
+  return [...files('src/lib'),COMPANY_KYC_FORMAT_CLOSURE_SOURCE,'scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs',KYC_CONTEXT_NATIVE_HELPER].sort();
 }
 function validateCompanyKycCurrentSourceClosure(contract){
- const spec=contract.extension.proofs.find(proof=>proof.kind==='PG_COMPANY_KYC'),dependencies=[...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind)];
+  const spec=contract.extension.proofs.find(proof=>proof.kind==='PG_COMPANY_KYC'),dependencies=[...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind)];
  if(spec.sourceFiles.length!==COMPANY_KYC_EXPIRY_PREVIOUS_SOURCE_COUNTS[spec.kind]+dependencies.length||dependencies.some(file=>spec.sourceFiles.filter(source=>source===file).length!==1))deny('COMPANY_KYC_CURRENT_SOURCE_CLOSURE');
 }
+export function validateWhatsappFeedbackPreviousSourceLineage(spec){
+ const dependencies=currentWhatsappFeedbackDependenciesFor(spec?.kind);if(!dependencies.length)return;
+ if(!Array.isArray(spec.sourceFiles)||dependencies.some(file=>spec.sourceFiles.filter(source=>source===file).length!==1)||spec.sourceFiles.length!==WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS[spec.kind]+dependencies.length)deny('WHATSAPP_FEEDBACK_CURRENT_SOURCE_DEPENDENCIES');
+ const previous=spec.sourceFiles.filter(file=>!dependencies.includes(file)).toSorted();
+ if(previous.length!==WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS[spec.kind]||hash(canonical(previous))!==WHATSAPP_FEEDBACK_PREVIOUS_PATHS_SHA256[spec.kind])deny('WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_LINEAGE');
+ if(spec.kind==='PG_COMPANY_KYC'){
+  if(!Array.isArray(spec.checkNames)||spec.checkNames.length!==13+COMPANY_KYC_CONTEXT_CHECK_SUFFIXES.length||hash(canonical(spec.checkNames.slice(0,13)))!==WHATSAPP_FEEDBACK_PREVIOUS_COMPANY_CHECKS_SHA256)deny('WHATSAPP_FEEDBACK_PREVIOUS_CHECK_LINEAGE');
+  equal(spec.checkNames.slice(13),COMPANY_KYC_CONTEXT_CHECK_SUFFIXES.map(suffix=>'COMPANY'+suffix),'WHATSAPP_FEEDBACK_CURRENT_CHECK_NAMES');
+ }
+}
 function validateCompanyKycPreviousSourceLineage(spec){
- const dependencies=[...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind)];
+  const dependencies=[...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind)];
  const previous=spec.sourceFiles.filter(file=>!dependencies.includes(file)).toSorted();
  if(hash(canonical(previous))!==COMPANY_KYC_EXPIRY_PREVIOUS_SOURCE_PATHS_SHA256)deny('COMPANY_KYC_PREVIOUS_SOURCE_LINEAGE');
 }
 function companyKycCurrentSourceClosureSelftest(spec,proof,root,validate){
  if(spec.kind!=='PG_COMPANY_KYC')return [];
- const dependencies=[...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind)],checks=[],prefix=spec.id+'-expiry-current-source-';if(!dependencies.length)return checks;
+  const dependencies=[...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind)],checks=[],prefix=spec.id+'-expiry-current-source-';if(!dependencies.length)return checks;
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure source and shadow proof; no PG/UI/provider execution'});};
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial shadow proof'});};
  good('actual-emitter-and-declared-corpus-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
@@ -923,7 +966,7 @@ function companyKycCurrentSourceClosureSelftest(spec,proof,root,validate){
   mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
   mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-expiry-source.mjs';assert.equal(p.sourceManifest.length,spec.sourceFiles.length);});
  }
- mutate('initial-210-emitter-omission-cannot-certify-AST-closure','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==COMPANY_KYC_FORMAT_CLOSURE_SOURCE&&!planBaselineDependenciesFor(spec.kind).includes(ref.path));assert.equal(p.sourceManifest.length,210);});
+  mutate('initial-210-emitter-omission-cannot-certify-AST-closure','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==COMPANY_KYC_FORMAT_CLOSURE_SOURCE&&!planBaselineDependenciesFor(spec.kind).includes(ref.path)&&!currentWhatsappFeedbackDependenciesFor(spec.kind).includes(ref.path));assert.equal(p.sourceManifest.length,210);});
  mutate('previous-209-manifest-cannot-certify-expiry','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!dependencies.includes(ref.path));assert.equal(p.sourceManifest.length,209);});
  mutate('previous-reviewed-producer-cannot-certify-current-native-groups','PROOF_HARNESS_SOURCE',p=>{p.harnessSha256=COMPANY_KYC_EXPIRY_PREVIOUS_PRODUCER_SHA256;});
  return checks;
@@ -973,7 +1016,7 @@ function currentKycStatusClosureSelftest(spec,proof,root,validate){
  return checks;
 }
 function organizationUsageClosureSelftest(spec,proof,root,validate){
- const dependencies=[...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...commercialAcceptanceDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind)];if(!dependencies.length)return [];
+  const dependencies=[...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...commercialAcceptanceDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind)];if(!dependencies.length)return [];
  const previousCount=ORGANIZATION_USAGE_PREVIOUS_SOURCE_COUNTS[spec.kind]??CIVIL_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-organization-usage-';
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure CURRENT source fixture; no PG/UI/provider execution'});};
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial CURRENT source fixture'});};
@@ -990,7 +1033,7 @@ function organizationUsageClosureSelftest(spec,proof,root,validate){
   assert.ok(changed>0,'CURRENT organization usage source exists: '+file);
  };
  good('exact-additive-count-and-real-AST-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});
- if(civilDataDependenciesFor(spec.kind).length+companyKycCurrentSourceClosureDependenciesFor(spec.kind).length)good('civil-current-count-and-closure-exact',()=>assert.equal(spec.sourceFiles.length,CIVIL_PREVIOUS_SOURCE_COUNTS[spec.kind]+civilDataDependenciesFor(spec.kind).length+companyKycCurrentSourceClosureDependenciesFor(spec.kind).length+commercialAcceptanceDependenciesFor(spec.kind).length+planBaselineDependenciesFor(spec.kind).length));
+  if(civilDataDependenciesFor(spec.kind).length+companyKycCurrentSourceClosureDependenciesFor(spec.kind).length)good('civil-current-count-and-closure-exact',()=>assert.equal(spec.sourceFiles.length,CIVIL_PREVIOUS_SOURCE_COUNTS[spec.kind]+civilDataDependenciesFor(spec.kind).length+companyKycCurrentSourceClosureDependenciesFor(spec.kind).length+commercialAcceptanceDependenciesFor(spec.kind).length+planBaselineDependenciesFor(spec.kind).length+currentWhatsappFeedbackDependenciesFor(spec.kind).length));
  for(const file of dependencies){
   good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));
   mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{remove:true}));
@@ -1004,7 +1047,7 @@ function validateOrganizationUsageProofSources(contract){
  for(const spec of contract.extension.proofs){
   if(proofFixtureDependenciesFor(spec.kind).some(file=>spec.sourceFiles.filter(source=>source===file).length!==1))deny('CURRENT_PROOF_FIXTURE_SOURCE_DEPENDENCIES');
   const dependencies=organizationUsageDependenciesFor(spec.kind);if(!dependencies.length)continue;
-  if(spec.sourceFiles.length!==ORGANIZATION_USAGE_PREVIOUS_SOURCE_COUNTS[spec.kind]+dependencies.length+proofFixtureDependenciesFor(spec.kind).length+civilDataDependenciesFor(spec.kind).length+companyKycCurrentSourceClosureDependenciesFor(spec.kind).length+commercialAcceptanceDependenciesFor(spec.kind).length+planBaselineDependenciesFor(spec.kind).length||dependencies.some(file=>!spec.sourceFiles.includes(file)))deny('ORGANIZATION_USAGE_SOURCE_DEPENDENCIES');
+  if(spec.sourceFiles.length!==ORGANIZATION_USAGE_PREVIOUS_SOURCE_COUNTS[spec.kind]+dependencies.length+proofFixtureDependenciesFor(spec.kind).length+civilDataDependenciesFor(spec.kind).length+companyKycCurrentSourceClosureDependenciesFor(spec.kind).length+commercialAcceptanceDependenciesFor(spec.kind).length+planBaselineDependenciesFor(spec.kind).length+currentWhatsappFeedbackDependenciesFor(spec.kind).length||dependencies.some(file=>!spec.sourceFiles.includes(file)))deny('ORGANIZATION_USAGE_SOURCE_DEPENDENCIES');
  }
 }
 function validateCivilDataProofSources(contract){
@@ -1142,7 +1185,7 @@ function calendarPreparationContractSelftest(workflow,contract,root){
  return checks;
 }
 function whatsappPlanImportClosureSelftest(spec,proof,root,validate){
- const dependencies=whatsappPlanImportDependenciesFor(spec.kind),subscriptionDependencies=[...companySubscriptionBackendDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind),...currentKycReplyFeedbackDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind)],previousCount=WHATSAPP_PLAN_IMPORT_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-whatsapp-plan-import-';
+ const dependencies=whatsappPlanImportDependenciesFor(spec.kind),subscriptionDependencies=[...companySubscriptionBackendDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind),...currentKycReplyFeedbackDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind)],previousCount=WHATSAPP_PLAN_IMPORT_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-whatsapp-plan-import-';
  const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};
  const rewrite=(value,file,{remove=false,replacement=null,changedHash=false}={})=>{
@@ -1273,7 +1316,7 @@ function companySubscriptionProofClosureSelftest(spec,proof,root,validate){
   mutate('previous-same-count-billing-mount-denied','PROOF_SOURCE_MANIFEST',p=>{for(const [index,file]of COMPANY_SUBSCRIPTION_UI_SOURCES.entries())p.sourceManifest.find(ref=>ref.path===file).path=PREVIOUS_COMPANY_BILLING_UI_SOURCES[index];assert.equal(p.sourceManifest.length,spec.sourceFiles.length);});
   mutate('previous-117-manifest-without-closed-fixture-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...companySubscriptionFixtureDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,117);});
  }
- else mutate('previous-191-source-manifest-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...taskMeasurementDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,191);});
+  else mutate('previous-191-source-manifest-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...taskMeasurementDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,191);});
  return checks;
 }
 function companySubscriptionContractSelftest(contract){
@@ -1301,7 +1344,7 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
    const originalCheckCount=checks.length;
   const evidence=new Map(),base={status:spec.kind==='UI_CAUSAL'?'EXPECTED_CAUSAL_FAILURE':'PASS',productionDataWritten:false,sourceManifest:spec.sourceFiles.map(file=>({path:file,sha256:hash(readSource(file))})),harnessSha256:spec.producerSha256};
   let proof={...base};
-  if(spec.kind.startsWith('PG_'))Object.assign(proof,{schemaRemoved:true,checks:[...spec.checkNames],realProviderCalls:0,providerCalls:0,unexpectedNetworkCalls:0,sqlFailures:[],...(spec.kind==='PG_COMPANY_KYC'?{productionDataTouched:false,databaseCreated:false,environment:'schema-only-localhost-postgresql-corporate-KYC',realClerkLogin:false,realMetaAccepted:false,humanAccepted:false,poolClosed:true,adminClosed:true,ownConnectionsClosed:true,expiryFeedbackNative:companyKycExpiryNativeShadowFixture()}:{})});
+  if(spec.kind.startsWith('PG_'))Object.assign(proof,{schemaRemoved:true,checks:[...spec.checkNames],realProviderCalls:0,providerCalls:0,unexpectedNetworkCalls:0,sqlFailures:[],...(spec.kind==='PG_COMPANY_KYC'?{productionDataTouched:false,databaseCreated:false,environment:'schema-only-localhost-postgresql-corporate-KYC',realClerkLogin:false,realMetaAccepted:false,humanAccepted:false,poolClosed:true,adminClosed:true,ownConnectionsClosed:true,expiryFeedbackNative:companyKycExpiryNativeShadowFixture(),contextFeedbackNative:companyKycContextNativeShadowFixture()}:{})});
   else if(spec.kind==='UNIT'){Object.assign(proof,{sourceRevision:expectedHead,sourceState:'committed exact Git HEAD',trackedClean:true,postgresExecuted:false,suites:TEST_SUITES.map((file,index)=>{const bytes=tap(index===4?RECOVERY_CASES:Array.from({length:EXPECTED_SUITE_COUNTS[file]||1},(_,i)=>'shadow fixture '+index+' case '+i)),filename='.vercel/participant-bank-intake-contract-evidence/suite-'+index+'.tap';evidence.set(filename,bytes);return {file,exitCode:0,...parseTap(bytes,{recovery:index===4,expectedTests:EXPECTED_SUITE_COUNTS[file]??null}),tap:{path:filename,bytes:bytes.length,sha256:hash(bytes)}};})});}
   else{Object.assign(proof,{errors:[],realProviderCalls:0,providerCalls:0,postgresExecuted:false,realIdentityAccepted:false,widths:[320,390,768,1280],sourceRevision:expectedHead,sourceState:'committed exact Git HEAD',trackedClean:true,dirtyTrackedPaths:[],fullSuite:true,badTransform:null,causalFailure:null});const modes=spec.kind==='UI_BANK'?['normal','invalid-cancel','lost-reload','unknown-close-reload','same-retry','stale','denied-forged','integrated']:spec.kind==='UI_INTAKE'?INTAKE_UI_MODES:['bank','intake'];proof.checks=proof.widths.flatMap(width=>modes.map(mode=>({width,mode,parentAndSiblingBlocked:true,ownRecoveryAndLocalCloseEnabled:true,noFeedbackDeadlock:true,automaticPost:false,storagePrivate:true,...(spec.kind==='UI_INTAKE'?{posts:intakeUiExpectedPosts(mode),...intakeUiExistingGuards(mode),privateStored:false,canonicalInvitationPrepared:true,scopeIsolated:true,canonicalInvitationConfirmed:true,focusRetainedAfterInvite:true,focusedRefresh:true,fullListExplicit:true,...(INTAKE_UI_FOCUSED_404_MODES.includes(mode)?{focused404Cleared:true,explicitListReconsulted:true,confirmedReceiptRetained:mode!=='continuation-missing'}:{})}:{})})));
    if(spec.kind==='UI_CAUSAL'){const source='src/app/(identity)/cuenta/participant-panel.js',original=readSource(source),needle=CIVIL_CURRENT_BANK_LOCK,replacement=CIVIL_CURRENT_CAUSAL_BANK_LOCK;Object.assign(proof,{widths:[320],checks:[],badTransform:{source,originalSha256:hash(original),fixtureSha256:hash(Buffer.from(original.toString().replace(needle,replacement))),needle,replacement,runtimeSourceEdited:false},causalFailure:{stage:'own-bank-save',message:'own bank save must remain enabled while its own pending gates siblings (shadow fixture)',expectedFailure:true}});}
@@ -1339,6 +1382,18 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
    mutate('expiry-revoked-cannot-send','PROOF_KYC_EXPIRY_NATIVE',p=>{p.expiryFeedbackNative.cases[2].httpTransfers=1;});
    mutate('expiry-worker-must-be-unchanged','PROOF_KYC_EXPIRY_NATIVE',p=>{p.expiryFeedbackNative.cases[0].workerBytesUnchanged=false;});
    mutate('expiry-cannot-capture-media-or-deposit','PROOF_KYC_EXPIRY_NATIVE',p=>{p.expiryFeedbackNative.cases[0].mediaAndDepositDelta=1;});
+    mutate('context-missing-native-evidence','PROOF_KYC_CONTEXT_NATIVE',p=>{delete p.contextFeedbackNative;});
+    mutate('context-missing-native-group','PROOF_KYC_CONTEXT_NATIVE',p=>{p.contextFeedbackNative.cases.pop();});
+    mutate('context-private-worker-mutated','PROOF_KYC_CONTEXT_NATIVE',p=>{p.contextFeedbackNative.cases[0].workerBytesUnchanged=false;});
+    mutate('context-repeat-provider-POST','PROOF_KYC_CONTEXT_NATIVE',p=>{p.contextFeedbackNative.cases[0].httpTransfers=2;});
+    mutate('context-consent-chosen','PROOF_KYC_CONTEXT_NATIVE',p=>{p.contextFeedbackNative.cases[1].consentChosen=true;});
+    mutate('context-revoked-provider-POST','PROOF_KYC_CONTEXT_NATIVE',p=>{p.contextFeedbackNative.cases[2].httpTransfers=1;});
+    mutate('context-capture-dispatched','PROOF_KYC_CONTEXT_NATIVE',p=>{p.contextFeedbackNative.cases[3].captureDispatches=1;});
+    mutate('context-source-lease-extended','PROOF_KYC_CONTEXT_NATIVE',p=>{p.contextFeedbackNative.cases[4].sourceLeaseMs=180000;});
+    mutate('context-final-fence-after-sixty-seconds','PROOF_KYC_CONTEXT_NATIVE',p=>{p.contextFeedbackNative.cases[4].prePostMs=60000;});
+    mutate('context-delay-suppressed','PROOF_KYC_CONTEXT_NATIVE',p=>{p.contextFeedbackNative.cases[4].statementDelayMs=0;});
+    mutate('context-physical-latency-claimed','PROOF_KYC_CONTEXT_NATIVE',p=>{p.contextFeedbackNative.cases[4].productionLatencyMeasured=true;});
+    for(const key of ['humanAccepted','identityCertified','permissionsGranted'])mutate('context-false-claim-'+key,'PROOF_KYC_CONTEXT_NATIVE',p=>{p.contextFeedbackNative[key]=true;});
   }
    if(['UI_BANK','UI_INTAKE','UI_JOINT','UI_PREPARATION'].includes(spec.kind)){mutate('partial-matrix','PROOF_MATRIX',p=>{p.checks.pop();});mutate('duplicate-matrix','PROOF_MATRIX',p=>{p.checks[0]=p.checks[1];});mutate('ui-error','PROOF_UI_ERRORS',p=>{p.errors=['shadow error'];});}
    if(spec.kind==='PG_PREPARATION'||spec.kind==='UI_PREPARATION'){
@@ -1386,7 +1441,9 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
    const staleSpec={...spec,producerSha256:COMPANY_KYC_PG_BASELINE_PRODUCER.producerSha256};bad('company-kyc-postgres-historical-pin-cannot-certify-current-harness','PROOF_HARNESS_SOURCE',()=>validateExtensionProof(staleSpec,Buffer.from(JSON.stringify({...proof,harnessSha256:staleSpec.producerSha256})),{expectedHead,readSource}));
    const changed=clone(contract);changed.evidenceProducers.find(record=>record.path===spec.path).producerSha256=spec.producerSha256;bad('company-kyc-postgres-historical-record-cannot-be-overwritten','EXTENSION_PRODUCER_CONTRACT',()=>validateContract(changed));
    good('company-kyc-postgres-previous-ten-SQL-checks-preserved',()=>{assert.equal(hash(canonical(spec.checkNames.slice(0,COMPANY_KYC_EXPIRY_PREVIOUS_CHECK_COUNT))),COMPANY_KYC_EXPIRY_PREVIOUS_CHECK_NAMES_SHA256);});
-   good('company-kyc-postgres-current-thirteen-SQL-checks-exact',()=>{assert.equal(spec.checkNames.length,COMPANY_KYC_EXPIRY_PREVIOUS_CHECK_COUNT+COMPANY_KYC_EXPIRY_NATIVE_CHECK_COUNT);equal([...readFileSync(path.join(root,spec.producer),'utf8').matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),spec.checkNames,'PROOF_CHECK_NAMES');});
+    good('company-kyc-postgres-current-thirteen-SQL-checks-exact',()=>{const previous=spec.checkNames.slice(0,13);assert.equal(previous.length,COMPANY_KYC_EXPIRY_PREVIOUS_CHECK_COUNT+COMPANY_KYC_EXPIRY_NATIVE_CHECK_COUNT);equal([...readFileSync(path.join(root,spec.producer),'utf8').matchAll(/checks\.push\('([^']+)'\)/g)].map(match=>match[1]),previous,'PROOF_CHECK_NAMES');});
+    good('company-kyc-postgres-current-context-eighteen-SQL-checks-exact',()=>{validateWhatsappFeedbackPreviousSourceLineage(spec);const suffixes=[...readFileSync(path.join(root,KYC_CONTEXT_NATIVE_HELPER),'utf8').matchAll(/checks\.push\(kind\+'([^']+)'\)/g)].map(match=>match[1]);equal(suffixes,COMPANY_KYC_CONTEXT_CHECK_SUFFIXES,'PROOF_CHECK_NAMES');equal(spec.checkNames.slice(13),suffixes.map(suffix=>'COMPANY'+suffix),'PROOF_CHECK_NAMES');});
+    mutate('previous-thirteen-checks-cannot-certify-current-context','PROOF_CHECK_NAMES',p=>{p.checks=p.checks.slice(0,13);});
    mutate('previous-ten-checks-cannot-certify-expiry','PROOF_CHECK_NAMES',p=>{p.checks=spec.checkNames.slice(0,COMPANY_KYC_EXPIRY_PREVIOUS_CHECK_COUNT);});
    mutate('legacy-six-checks','PROOF_CHECK_NAMES',p=>{p.checks=spec.checkNames.slice(0,6);});
    for(const file of planImportDependenciesFor(spec.kind)){
@@ -1645,6 +1702,11 @@ export function validateContract(contract){
  if(patterns.length!==60||new Set(patterns).size!==60)deny('CONTRACT_ARTIFACT_DUPLICATE');
  patterns.forEach(patternValid);
   validateEvidenceContract(contract);validateExtension(contract);validateMonthlyCurveExtension(contract);validateCalendarPreparationExtension(contract);validateWhatsappPlanImportExtension(contract);validateCompanySubscriptionProofSources(contract);validateTaskMeasurementProofSources(contract);validateCivilDataProofSources(contract);validateOrganizationUsageProofSources(contract);validateCompanyKycCurrentSourceClosure(contract);validatePlanBaselineContract(contract);validateDocumentCurveUiContract(contract);
+  for(const spec of contract.extension.proofs){try{validateWhatsappFeedbackPreviousSourceLineage(spec);}catch(error){
+   // A replacement of the published source set remains the existing binding
+   // denial category. The direct lineage validator keeps its precise cause.
+   if(error.code==='WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_LINEAGE')deny('PROOF_BINDING_SOURCE');throw error;
+  }}
  return contract;
 }
 export function loadContract(filename){

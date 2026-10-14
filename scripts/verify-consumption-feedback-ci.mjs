@@ -100,9 +100,9 @@ export function validateConsumptionFeedbackCi({expectedHead,head,sourceTree,trac
  provenance(postgres,{expectedHead,sourceTree},'EXACT_CI_SOURCE','PostgreSQL');provenance(ui,{expectedHead,sourceTree},'clean','UI');
  requireProof(postgres.version===MATERIAL_CONSUMPTION_FEEDBACK_PROOF_VERSION&&postgres.environment==='local-disposable-postgresql'&&postgres.postgresExecuted===true,'PostgreSQL proof must use the native disposable producer');
  requireProof(postgres.realIdentityDocuments===false&&postgres.providerCalls===0&&postgres.poolClosed===true&&postgres.databaseRemoved===true,'PostgreSQL provider/identity/cleanup boundary must be closed');
- requireProof(postgres.totalCheckCount===15&&Array.isArray(postgres.checks),'PostgreSQL requires 15 native checks');
+ requireProof(postgres.totalCheckCount===23&&Array.isArray(postgres.checks),'PostgreSQL requires all 23 native checks');
  same(postgres.checks,MATERIAL_CONSUMPTION_FEEDBACK_CHECKS,'PostgreSQL checks must equal the exported native contract');
- const pgClosure=consumptionFeedbackSourceClosure(readSource);requireProof(pgClosure.files.length===107,'PostgreSQL committed closure must contain all 107 sources, including the current usage policy and durable civil composition');manifest(postgres,pgClosure.files,readSource,'PostgreSQL');
+ const pgClosure=consumptionFeedbackSourceClosure(readSource);requireProof(pgClosure.files.length===108,'PostgreSQL committed closure must contain all 108 sources, including the current usage policy and durable civil composition');manifest(postgres,pgClosure.files,readSource,'PostgreSQL');
  requireProof(['src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs'].every(file=>pgClosure.files.includes(file)),'Current native document curve dependency lineage');
  requireProof(['src/lib/participant-civil-store.mjs','src/lib/participant-civil-policy.mjs','src/lib/bindx-civil-data-client.mjs'].every(file=>pgClosure.files.includes(file)),'The current native lineage requires every durable civil source');
  requireProof(postgres.harnessSha256===sha(readSource(pgHarness)),'PostgreSQL producer hash must match committed Git bytes');
@@ -114,7 +114,7 @@ export function validateConsumptionFeedbackCi({expectedHead,head,sourceTree,trac
  const uiClosure=consumptionFeedbackSourceClosure(readSource,{ui:true});requireProof(uiClosure.files.length===20,'UI committed closure must contain all 20 sources');manifest(ui,uiClosure.files,readSource,'UI');
  same(ui.externalImports,uiClosure.externalImports,'UI package imports must match committed JSX graph');same(ui.externalImports,['react'],'UI fixture package dependency boundary changed');
  requireProof(ui.harnessSha256===sha(readSource(uiHarness))&&ui.cleanupHelperSha256===sha(readSource(cleanupHelper)),'UI producer and owned cleanup hashes must match committed Git bytes');
- return {version:CONSUMPTION_FEEDBACK_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{version:postgres.version,totalCheckCount:15,sourceCount:107,harnessSha256:postgres.harnessSha256},ui:{totalCheckCount:12,sourceCount:20,widths:[...CONSUMPTION_FEEDBACK_UI_WIDTHS],harnessSha256:ui.harnessSha256,cleanupHelperSha256:ui.cleanupHelperSha256},providerCalls:0,productionDataWritten:false,productionLoginVerified:false,physicalDeviceAccepted:false};
+ return {version:CONSUMPTION_FEEDBACK_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{version:postgres.version,totalCheckCount:23,sourceCount:108,harnessSha256:postgres.harnessSha256},ui:{totalCheckCount:12,sourceCount:20,widths:[...CONSUMPTION_FEEDBACK_UI_WIDTHS],harnessSha256:ui.harnessSha256,cleanupHelperSha256:ui.cleanupHelperSha256},providerCalls:0,productionDataWritten:false,productionLoginVerified:false,physicalDeviceAccepted:false};
 }
 
 function main(){
@@ -132,6 +132,6 @@ function main(){
  requireProof(git('rev-parse','HEAD')===head&&git('rev-parse','HEAD^{tree}')===sourceTree&&git('status','--porcelain','--untracked-files=no')==='','Source changed during CI proof validation');
  const output=path.join(root,'.vercel/private/consumption-feedback-ci.json');mkdirSync(path.dirname(output),{recursive:true});
  const proof={...result,checkedAt:new Date().toISOString(),validatorSha256:sha(validatorBytes),inputProofs:[{path:'.vercel/private/material-consumption-feedback-postgres.json',sha256:sha(pgBytes)},{path:'.vercel/private/consumption-feedback-evidence/browser.json',sha256:sha(uiBytes)}]};
- writeFileSync(output,JSON.stringify(proof,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:proof.status,sourceRevision:head,output:path.relative(root,output).split(path.sep).join('/'),nativeChecks:15,uiChecks:12}));
+ writeFileSync(output,JSON.stringify(proof,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:proof.status,sourceRevision:head,output:path.relative(root,output).split(path.sep).join('/'),nativeChecks:23,uiChecks:12}));
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){try{main();}catch(error){console.error(JSON.stringify({status:'FAIL',code:error.code==='CONSUMPTION_FEEDBACK_CI_REJECTED'?error.code:'CONSUMPTION_FEEDBACK_CI_UNCONFIRMED',reason:error.message}));process.exitCode=1;}}

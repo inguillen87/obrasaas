@@ -18,17 +18,17 @@ const head='a'.repeat(40),tree='b'.repeat(40),operationId=n=>'00000000-0000-4000
 function fixture(){
  const provenance={sourceRevision:head,sourceTree:tree,trackedClean:true,status:'PASS',productionDataWritten:false};
  const checks=[...CONSUMPTION_FEEDBACK_UI_WIDTHS.map(width=>({check:'true-consumption-history-progressive-references-long-content',width,documentWidth:width,targets:[{tag:'BUTTON',height:44,width:80}],cards:[{text:'Pending',dates:[]},{text:'Approved',dates:[]},{text:'Rejected',dates:[]},{text:'Reversed',dates:['2026-10-12T13:00:00.000Z','2026-10-12T16:00:00.000Z']}]})),...CONSUMPTION_FEEDBACK_UI_CASES.map((check,index)=>({check,...(index>=1&&index<=4?{operationId:operationId(index)}:{}),...(index===5||index===6?{beforeCards:4,afterCards:0,afterReceipts:0,afterForms:0,postCount:0}:{})}))];
- return {expectedHead:head,head,sourceTree:tree,trackedClean:true,gitSources:{...sources},postgres:{...provenance,version:MATERIAL_CONSUMPTION_FEEDBACK_PROOF_VERSION,sourceState:'EXACT_CI_SOURCE',environment:'local-disposable-postgresql',postgresExecuted:true,providerCalls:0,realIdentityDocuments:false,poolClosed:true,databaseRemoved:true,totalCheckCount:15,checks:[...MATERIAL_CONSUMPTION_FEEDBACK_CHECKS],sourceManifest:manifest(native.files),harnessSha256:sha(sources['scripts/verify-material-consumption-feedback-postgres.mjs'])},ui:{...provenance,sourceState:'clean',environment:'isolated-localhost-next-exact-jsx-synthetic-api',widths:[...CONSUMPTION_FEEDBACK_UI_WIDTHS],checks,sourceManifest:manifest(browser.files),externalImports:[...browser.externalImports],harnessSha256:sha(sources['scripts/verify-consumption-feedback-ui.mjs']),cleanupHelperSha256:sha(sources['scripts/lib/owned-fixture-cleanup.mjs']),pageErrors:[],interceptErrors:[],externalRequests:[],providerRequests:0,productionLoginVerified:false,physicalDeviceAccepted:false,cleanup:{browserClosed:true,serverClosed:true,gracefulCloseAcknowledged:true,fixtureRemoved:true,fixtureCleanupProof:{fixtureRemoved:true,postcondition:{absent:true}}}}};
+ return {expectedHead:head,head,sourceTree:tree,trackedClean:true,gitSources:{...sources},postgres:{...provenance,version:MATERIAL_CONSUMPTION_FEEDBACK_PROOF_VERSION,sourceState:'EXACT_CI_SOURCE',environment:'local-disposable-postgresql',postgresExecuted:true,providerCalls:0,realIdentityDocuments:false,poolClosed:true,databaseRemoved:true,totalCheckCount:23,checks:[...MATERIAL_CONSUMPTION_FEEDBACK_CHECKS],sourceManifest:manifest(native.files),harnessSha256:sha(sources['scripts/verify-material-consumption-feedback-postgres.mjs'])},ui:{...provenance,sourceState:'clean',environment:'isolated-localhost-next-exact-jsx-synthetic-api',widths:[...CONSUMPTION_FEEDBACK_UI_WIDTHS],checks,sourceManifest:manifest(browser.files),externalImports:[...browser.externalImports],harnessSha256:sha(sources['scripts/verify-consumption-feedback-ui.mjs']),cleanupHelperSha256:sha(sources['scripts/lib/owned-fixture-cleanup.mjs']),pageErrors:[],interceptErrors:[],externalRequests:[],providerRequests:0,productionLoginVerified:false,physicalDeviceAccepted:false,cleanup:{browserClosed:true,serverClosed:true,gracefulCloseAcknowledged:true,fixtureRemoved:true,fixtureCleanupProof:{fixtureRemoved:true,postcondition:{absent:true}}}}};
 }
 function rejected(mutate){const input=fixture();mutate(input);assert.throws(()=>validateConsumptionFeedbackCi(input),{code:'CONSUMPTION_FEEDBACK_CI_REJECTED'});}
 
 test('CI validator accepts the complete exact native/browser contracts without running either producer',()=>{
- assert.equal(native.files.length,107);assert.equal(browser.files.length,20);
+ assert.equal(native.files.length,108);assert.equal(browser.files.length,20);
  const input=fixture(),before=JSON.stringify(input),result=validateConsumptionFeedbackCi(input);
- assert.equal(JSON.stringify(input),before);assert.equal(result.version,CONSUMPTION_FEEDBACK_CI_VERSION);assert.equal(result.status,'PASS');assert.equal(result.sourceRevision,head);assert.equal(result.postgres.totalCheckCount,15);assert.equal(result.postgres.sourceCount,107);assert.equal(result.ui.totalCheckCount,12);assert.equal(result.ui.sourceCount,20);assert.equal(result.productionLoginVerified,false);assert.equal(result.productionDataWritten,false);assert.equal(result.providerCalls,0);
+ assert.equal(JSON.stringify(input),before);assert.equal(result.version,CONSUMPTION_FEEDBACK_CI_VERSION);assert.equal(result.status,'PASS');assert.equal(result.sourceRevision,head);assert.equal(result.postgres.totalCheckCount,23);assert.equal(result.postgres.sourceCount,108);assert.equal(result.ui.totalCheckCount,12);assert.equal(result.ui.sourceCount,20);assert.equal(result.productionLoginVerified,false);assert.equal(result.productionDataWritten,false);assert.equal(result.providerCalls,0);
  // Challenge the new graph with the independently frozen pre-document path set.
  assert.equal(MATERIAL_NATIVE_PRE_DOCUMENT_SOURCES.length,105);
- assert.deepEqual(native.files.filter(file=>!['src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs'].includes(file)),MATERIAL_NATIVE_PRE_DOCUMENT_SOURCES);
+ assert.deepEqual(native.files.filter(file=>!['src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs','src/lib/field-report-feedback.mjs'].includes(file)),MATERIAL_NATIVE_PRE_DOCUMENT_SOURCES);
  rejected(input=>{input.postgres.sourceManifest=manifest(MATERIAL_NATIVE_PRE_DOCUMENT_SOURCES);});
  for(const file of ["src/lib/plan-baseline-policy.mjs", "src/lib/plan-import-document-curve.mjs"]){rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);});rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/substituted-document-curve.mjs';});rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});rejected(input=>{delete input.gitSources[file];});}
  for(const file of ["src/lib/plan-import-document-curve.mjs"]){rejected(input=>{input.ui.sourceManifest=input.ui.sourceManifest.filter(ref=>ref.path!==file);});rejected(input=>{input.ui.sourceManifest.find(ref=>ref.path===file).path='src/lib/substituted-document-curve.mjs';});rejected(input=>{input.ui.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});rejected(input=>{delete input.gitSources[file];});}
@@ -39,7 +39,7 @@ test('current signed KYC reply imports require their exact immutable source byte
  for(const file of ['src/lib/meta-kyc-identity.mjs','src/lib/meta-kyc-rejection-policy.mjs','src/lib/meta-kyc-rejection.mjs']){
   assert.equal(native.files.filter(source=>source===file).length,1);
   rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);});
-  rejected(input=>{const ref=input.postgres.sourceManifest.find(ref=>ref.path===file);ref.path='src/lib/foreign-kyc-reply-source.mjs';assert.equal(input.postgres.sourceManifest.length,107);});
+  rejected(input=>{const ref=input.postgres.sourceManifest.find(ref=>ref.path===file);ref.path='src/lib/foreign-kyc-reply-source.mjs';assert.equal(input.postgres.sourceManifest.length,108);});
   rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
   rejected(input=>{delete input.gitSources[file];});
  }
@@ -52,8 +52,8 @@ test('current usage policy cannot be omitted, substituted or certified by a hist
  const files=['src/lib/organization-usage-policy.mjs','src/lib/organization-resource-usage-policy.mjs'];
  for(const file of files){
   assert.equal(native.files.filter(source=>source===file).length,1);
-  rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);assert.equal(input.postgres.sourceManifest.length,106);});
-  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-usage-policy.mjs';assert.equal(input.postgres.sourceManifest.length,107);});
+  rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);assert.equal(input.postgres.sourceManifest.length,107);});
+  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-usage-policy.mjs';assert.equal(input.postgres.sourceManifest.length,108);});
   rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
   rejected(input=>{delete input.gitSources[file];});
  }
@@ -65,11 +65,19 @@ test('durable civil source lineage cannot be omitted, substituted or certified b
  for(const file of files){
   assert.equal(native.files.filter(source=>source===file).length,1);
   rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);});
-  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-civil-source.mjs';assert.equal(input.postgres.sourceManifest.length,107);});
+  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-civil-source.mjs';assert.equal(input.postgres.sourceManifest.length,108);});
   rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
   rejected(input=>{delete input.gitSources[file];});
  }
- rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>!files.includes(ref.path));assert.equal(input.postgres.sourceManifest.length,104);});
+ rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>!files.includes(ref.path));assert.equal(input.postgres.sourceManifest.length,105);});
+});
+test('new own field report lineage and all eight additive native checks require exact current proofs',()=>{
+ const file='src/lib/field-report-feedback.mjs';assert.equal(native.files.filter(source=>source===file).length,1);
+ rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);});
+ rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
+ rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-report-reader.mjs';});
+ rejected(input=>{delete input.gitSources[file];});
+ rejected(input=>{input.postgres.totalCheckCount=15;input.postgres.checks=input.postgres.checks.slice(0,15);});
 });
 test('stale, abbreviated or foreign HEAD/tree provenance fails even when proof status says PASS',()=>{
  for(const key of ['expectedHead','head','sourceTree'])rejected(input=>{input[key]='c'.repeat(40);});
@@ -121,7 +129,7 @@ test('recursive JSX closure rejects traversal, external stylesheet and nonlitera
  }
  rejected(input=>{input.gitSources['src/app/(identity)/cuenta/material-inventory-panel.module.css']=Buffer.from('@import "https://example.invalid/style.css";');});
 });
-test('all 15 native names must match the exported ordered contract without duplicates',()=>{
+test('all 23 native names must match the exported ordered contract without duplicates',()=>{
  rejected(input=>{input.postgres.totalCheckCount=14;});
  rejected(input=>{input.postgres.checks.pop();});
  rejected(input=>{input.postgres.checks[1]=input.postgres.checks[0];});

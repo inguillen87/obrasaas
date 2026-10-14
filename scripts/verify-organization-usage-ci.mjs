@@ -11,6 +11,10 @@ export const ORGANIZATION_USAGE_CI_VERSION='organization-usage-ci-v2';
 const pgHarness='scripts/verify-organization-usage-postgres.mjs',uiHarness='scripts/verify-organization-usage-ui.mjs',cleanupHelper='scripts/lib/owned-fixture-cleanup.mjs';
 const dependencies=['package-lock.json','package.json'];
 const uiRoots=['src/app/(identity)/cuenta/company-subscription-panel.js','src/app/(identity)/cuenta/plan-import-panel.js'];
+const fieldReportSource='src/lib/field-report-feedback.mjs';
+// Frozen 0e22 CURRENT native paths. The new reader is an additive dependency;
+// it never substitutes a prior source or makes its 112-source receipt current.
+const previousNativePathsSha256='ec9178af9cf5b41217a5af28198bbef3c5179b50f7b6355773eb105a15b46e54';
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{40}$/.test(value);
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -57,7 +61,9 @@ export function validateOrganizationUsageCi({expectedHead,head,sourceTree,tracke
  requireProof(postgres.poolClosed===true&&postgres.databaseRemoved===true&&postgres.cleanup?.poolClosed===true&&postgres.cleanup.databaseRemoved===true,'Owned PostgreSQL cleanup');
  requireProof(Array.isArray(postgres.nativeLockObservations)&&postgres.nativeLockObservations.length===2,'Two native lock races');
  for(const [index,record] of postgres.nativeLockObservations.entries())requireProof(exact(record,['firstTransport','secondTransport','sameOrganization','differentProjects','waitingCount','waitingBeforeProject','bothCompleted'])&&record.firstTransport===['WEB','WHATSAPP'][index]&&record.secondTransport===['WHATSAPP','WEB'][index]&&record.sameOrganization===true&&record.differentProjects===true&&Number.isSafeInteger(record.waitingCount)&&record.waitingCount>=1&&record.waitingBeforeProject===true&&record.bothCompleted===true,'Native advisory-before-project ordering');
- const native=organizationUsageCiSourceClosure(readSource);requireProof(native.files.length===112,'Complete 112-source native closure with durable civil composition');manifest(postgres.sourceManifest,native.files,readSource,'PostgreSQL');requireProof(postgres.harnessSha256===sha(readSource(pgHarness)),'Native producer Git bytes');
+ const native=organizationUsageCiSourceClosure(readSource);requireProof(native.files.length===113&&native.files.filter(file=>file===fieldReportSource).length===1,'Complete 113-source native closure with the own field report reader');
+ const previousNative=native.files.filter(file=>file!==fieldReportSource);requireProof(previousNative.length===112&&sha(JSON.stringify(previousNative))===previousNativePathsSha256,'Preserved exact previous 112-source native lineage');
+ manifest(postgres.sourceManifest,native.files,readSource,'PostgreSQL');requireProof(postgres.harnessSha256===sha(readSource(pgHarness)),'Native producer Git bytes');
  requireProof(['src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs'].every(file=>native.files.includes(file)),'Current native document curve dependency lineage');
  requireProof(['src/lib/participant-civil-store.mjs','src/lib/participant-civil-policy.mjs','src/lib/bindx-civil-data-client.mjs'].every(file=>native.files.includes(file)),'The current native lineage requires every durable civil source');
  requireProof(ui.version===ORGANIZATION_USAGE_UI_VERSION&&ui.environment==='isolated-localhost-next-exact-jsx-synthetic-api','Controlled real JSX fixture');
@@ -80,7 +86,7 @@ export function validateOrganizationUsageCi({expectedHead,head,sourceTree,tracke
  const fixture=organizationUsageCiSourceClosure(readSource,{fixture:true});same(fixture.files,['scripts/lib/company-subscription-ui-fixture.mjs','src/lib/company-subscription-catalog.mjs','src/lib/workspace-policy.mjs'],'Complete current three-source Node fixture graph');manifest(ui.fixtureSourceManifest,fixture.files,readSource,'UI fixture');
  requireProof(ui.harnessSha256===sha(readSource(uiHarness))&&ui.cleanupHelperSha256===sha(readSource(cleanupHelper)),'UI and cleanup producer Git bytes');
  const cleanup=ui.cleanup;requireProof(cleanup?.browserClosed===true&&cleanup.serverClosed===true&&cleanup.gracefulCloseAcknowledged===true&&cleanup.fixtureRemoved===true&&cleanup.fixtureCleanupProof?.fixtureRemoved===true&&cleanup.fixtureCleanupProof.postcondition?.absent===true,'Owned browser/server/fixture cleanup');
- return {version:ORGANIZATION_USAGE_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{totalCheckCount:16,sourceCount:112,syntheticOpenAiRequests:11,nativeLockRaceCount:2,harnessSha256:postgres.harnessSha256},ui:{totalCheckCount:14,sourceCount:26,fixtureSourceCount:fixture.files.length,dependencyCount:2,widths:[...ORGANIZATION_USAGE_UI_WIDTHS],explicitSyntheticUploadCount:6,harnessSha256:ui.harnessSha256},providerRequests:0,productionDataWritten:false,paymentVerified:false,capacityContractPending:true,cost:null,productionLoginVerified:false,physicalDeviceAccepted:false};
+ return {version:ORGANIZATION_USAGE_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{totalCheckCount:16,sourceCount:113,syntheticOpenAiRequests:11,nativeLockRaceCount:2,harnessSha256:postgres.harnessSha256},ui:{totalCheckCount:14,sourceCount:26,fixtureSourceCount:fixture.files.length,dependencyCount:2,widths:[...ORGANIZATION_USAGE_UI_WIDTHS],explicitSyntheticUploadCount:6,harnessSha256:ui.harnessSha256},providerRequests:0,productionDataWritten:false,paymentVerified:false,capacityContractPending:true,cost:null,productionLoginVerified:false,physicalDeviceAccepted:false};
 }
 function main(){
  const args=process.argv.slice(2);requireProof(args.length===2&&args[0]==='--expected-head'&&revision(args[1]),'Usage --expected-head <full SHA>');const expectedHead=args[1],root=process.cwd(),git=(...values)=>execFileSync('git',values,{cwd:root,encoding:'utf8'}).trim();

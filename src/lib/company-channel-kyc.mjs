@@ -202,12 +202,14 @@ export async function fenceLockedCompanyKycOutboundAuthority(client,r,context,{e
  return rows[0].kycNow;
 }
 export function releaseLockedCompanyKycOutboundAuthority(r){lockedOutboundContexts.delete(r);resolvedOutboundContexts.delete(r);}
-const capturePurpose=Symbol('company-kyc-capture'),expiryFeedbackPurpose=Symbol('company-kyc-expiry-feedback');
+const capturePurpose=Symbol('company-kyc-capture'),expiryFeedbackPurpose=Symbol('company-kyc-expiry-feedback'),contextFeedbackPurpose=Symbol('company-kyc-context-feedback');
 export const resolveCompanyKycAuthority=(client,context,input)=>resolveCompanyKycContext(client,context,input,capturePurpose);
 // Internal composition: this context is never LIMITED_KYC_UPLOAD and cannot
 // write a capture projection. The final feedback resolver proves the deadline,
 // incomplete conversation and original prepared/claimed receipts separately.
 export const resolveCompanyKycExpiryContext=(client,context,input)=>resolveCompanyKycContext(client,context,input,expiryFeedbackPurpose);
+// Separate read/reply purpose: it never mints LIMITED_KYC_UPLOAD or a projection.
+export const resolveCompanyKycFeedbackContext=(client,context,input)=>resolveCompanyKycContext(client,context,input,contextFeedbackPurpose);
 async function resolveCompanyKycContext(client,context,{initial,firstChannel,payload,codeDigest,environment},purpose){
  const proof=corporateKycSignedProof(initial,firstChannel,environment);
  if(!proof)return null;
@@ -280,7 +282,7 @@ async function resolveCompanyKycContext(client,context,{initial,firstChannel,pay
  if(digest(finalPayload)!==digest(payload)||digest(corporateKycSignedProof(event,connection,environment).companyRouting)!==digest(proof.companyRouting))fail();
  if(challenge.status==='PENDING'){if(!codeDigest||codeDigest!==challenge.codeDigest)fail('META_KYC_CHALLENGE_REJECTED');}
  else if(!['CLAIMED','COMPLETED'].includes(challenge.status)&&!(challenge.status==='CANCELLED'&&challenge.cancelledEventId===event.id)||codeDigest&&challenge.claimedEventId!==event.id)fail('META_KYC_CHALLENGE_REJECTED');
- const feedback=purpose===expiryFeedbackPurpose;
+ const feedback=purpose===expiryFeedbackPurpose||purpose===contextFeedbackPurpose;
  const r={kind:feedback?'KYC_EXPIRY_CONTEXT':'LIMITED_KYC_UPLOAD',member,issuer,project:projects.get(candidate.projectId),worker,challenge,connection,event,payload:finalPayload,now,prompt,source:{kind:'META_KYC_CHAT',eventId:event.id,payloadDigest:context.payloadDigest,challengeId:challenge.id,connectionId:connection.id,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,senderE164:worker.phone}};
  if(feedback){
   if(existing.length||challenge.status!=='CLAIMED'||!prompt||!pinned)fail('META_KYC_EXPIRY_FEEDBACK_DENIED');

@@ -4,7 +4,7 @@ import {readFileSync,mkdirSync,writeFileSync,existsSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {parse} from '@babel/parser';
-import {COMPANY_KYC_OUTBOUND_COMPACT_PROOF_VERSION,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS} from './verify-company-kyc-outbound-compact-postgres.mjs';
+import {COMPANY_KYC_OUTBOUND_COMPACT_PROOF_VERSION,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS,COMPANY_KYC_CONTEXT_OUTBOUND_CHECKS} from './verify-company-kyc-outbound-compact-postgres.mjs';
 import {readCustomerOutboundDiagnostic} from '../src/lib/meta-customer-outbound.mjs';
 
 export const COMPANY_KYC_OUTBOUND_COMPACT_CI_VERSION='company-kyc-outbound-compact-ci-v1';
@@ -99,6 +99,18 @@ function validateScenarios(proof){
  }
  requireProof(proof.syntheticMessagePostCount===4&&proof.scenarios.reduce((count,row)=>count+row.providerPosts,0)===proof.syntheticMessagePostCount,'Observed native synthetic POST total must equal scenario counters');
 }
+function validateContextFeedback(proof){
+ const context=proof.contextFeedbackNative,row=context?.measurement;
+ requireProof(context?.status==='PASS'&&context.kind==='OWN_COMPANY_RUNTIME'&&context.postgresExecuted===true&&context.sourcePromptConfirmed===true&&context.sourcePurpose==='KYC_CAPTURE'&&context.input==='ESTADO IDENTIDAD'&&context.priorPrompt===true,'OWN runtime feedback requires the exact confirmed prior KYC prompt and neutral input');
+ same(context.checks,COMPANY_KYC_CONTEXT_OUTBOUND_CHECKS,'Every separate OWN context check required');
+ requireProof(context.consentChosen===false&&context.identitySubmitted===false&&context.privateMediaCalls===0&&context.workerBytesUnchanged===true&&context.sourcePromptBytesUnchanged===true,'Context feedback cannot certify consent, capture or rewritten private/source state');
+ requireProof(hash(context.workerBeforeSha256)&&context.workerBeforeSha256===context.workerAfterSha256&&hash(context.sourcePromptBeforeSha256)&&context.sourcePromptBeforeSha256===context.sourcePromptAfterSha256,'Before/after hashes must prove the original Worker and sent prompt are unchanged');
+ requireProof(row&&row.kind==='controlled-own-context-feedback'&&row.fullResolutions===3&&Number.isSafeInteger(row.sqlStatements)&&row.sqlStatements>0&&Number.isSafeInteger(row.compactFences)&&row.compactFences>0&&Number.isSafeInteger(row.runtimeFences)&&row.runtimeFences>0&&Number.isSafeInteger(row.graphRequests)&&row.graphRequests>0,'Actual OWN feedback must report full resolutions, compact fences and Graph calls');
+ requireProof(row.statementDelayMs===225&&row.graphDelayMs===200&&row.sourceLeaseMs===60000&&row.leaseExtended===false&&row.productionLatencyMeasured===false,'OWN controlled latency and original lease cannot be substituted');
+ requireProof(Number.isFinite(row.elapsedMs)&&row.elapsedMs>0&&row.elapsedMs<60000&&Number.isFinite(row.prePostMs)&&row.prePostMs>0&&row.prePostMs<=row.elapsedMs&&row.marginMs===60000-row.elapsedMs&&row.marginMs>0,'OWN feedback must reach POST and completion inside the original lease');
+ requireProof(row.providerPosts===1&&row.replayedPosts===0&&row.replyState==='SENT'&&row.messageIdPresent===true&&context.realProviderCalls===0&&context.productionDataTouched===false&&context.humanAccepted===false,'OWN feedback needs one synthetic POST with no replay or human acceptance claim');
+ requireProof(proof.totalSyntheticMessagePostCount===proof.syntheticMessagePostCount+row.providerPosts&&proof.totalSyntheticMessagePostCount===5,'The historical four POSTs and one context POST need a truthful separate total');
+}
 export function validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres}){
  requireProof(revision(expectedHead)&&head===expectedHead&&revision(sourceTree)&&trackedClean===true,'Exact clean Git HEAD and tree required');
  requireProof(gitSources&&typeof gitSources==='object'&&!Array.isArray(gitSources),'Committed Git sources required');
@@ -107,8 +119,8 @@ export function validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTre
  requireProof(postgres.provider==='controlled-synthetic-only'&&postgres.operativeDatabaseUsed===false&&postgres.realProviderUsed===false&&postgres.municipalOrIdentityAcceptance===false&&postgres.leaseExtended===false,'Native proof cannot certify operative data, providers, identity or an extended lease');
  requireProof(postgres.poolClosed===true&&postgres.databaseRemoved===true&&postgres.adminClosed===true,'Native pool, child database and administration connection cleanup required');
  same(postgres.checks,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS,'Every native lease, revocation, seal and uncertain reply scenario required');
- const closure=companyKycOutboundCompactCiSourceClosure(readSource);validateManifest(postgres,closure.files,readSource);validateMeasurements(postgres);validateScenarios(postgres);
- return {version:COMPANY_KYC_OUTBOUND_COMPACT_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,trackedClean:true,sourceState:'EXACT_CI_SOURCE',nativeVersion:postgres.version,checks:[...postgres.checks],sourceCount:closure.files.length,harnessSha256:postgres.harnessSha256,measurements:postgres.measurements,scenarios:postgres.scenarios,syntheticMessagePostCount:postgres.syntheticMessagePostCount,operativeDatabaseUsed:false,realProviderUsed:false,municipalOrIdentityAcceptance:false,leaseExtended:false,poolClosed:true,databaseRemoved:true,adminClosed:true};
+ const closure=companyKycOutboundCompactCiSourceClosure(readSource);validateManifest(postgres,closure.files,readSource);validateMeasurements(postgres);validateScenarios(postgres);validateContextFeedback(postgres);
+ return {version:COMPANY_KYC_OUTBOUND_COMPACT_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,trackedClean:true,sourceState:'EXACT_CI_SOURCE',nativeVersion:postgres.version,checks:[...postgres.checks],sourceCount:closure.files.length,harnessSha256:postgres.harnessSha256,measurements:postgres.measurements,scenarios:postgres.scenarios,syntheticMessagePostCount:postgres.syntheticMessagePostCount,contextFeedbackNative:postgres.contextFeedbackNative,totalSyntheticMessagePostCount:postgres.totalSyntheticMessagePostCount,operativeDatabaseUsed:false,realProviderUsed:false,municipalOrIdentityAcceptance:false,leaseExtended:false,poolClosed:true,databaseRemoved:true,adminClosed:true};
 }
 function main(){
  const args=process.argv.slice(2);requireProof(args.length===2&&args[0]==='--expected-head'&&revision(args[1]),'Usage: --expected-head <full Git SHA>');
