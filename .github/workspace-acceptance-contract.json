@@ -1990,9 +1990,10 @@
         "path": ".vercel/private/participant-bank-intake-integration/current/browser.json",
         "kind": "UI_JOINT",
         "producer": "scripts/verify-participant-bank-intake-ui.mjs",
-        "producerSha256": "5785f9d5e9f3a4e8c329ccba804ab6fe453308b6ccfeaa1e60f26720259c10cd",
+        "producerSha256": "55c7ff7caf96501804ee9eb605a405f9a982cf20b1c1d0b007b8332dda925154",
         "sourceFiles": [
           "scripts/lib/participant-bank-intake-fixture.mjs",
+          "scripts/lib/plan-document-curve-fixture-copy.mjs",
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/employee-intake-continuity.mjs",
           "src/app/(identity)/cuenta/employee-intake-panel.js",
@@ -2135,9 +2136,10 @@
         "path": ".vercel/private/participant-bank-intake-integration/bad-resolution/browser.json",
         "kind": "UI_CAUSAL",
         "producer": "scripts/verify-participant-bank-intake-ui.mjs",
-        "producerSha256": "5785f9d5e9f3a4e8c329ccba804ab6fe453308b6ccfeaa1e60f26720259c10cd",
+        "producerSha256": "55c7ff7caf96501804ee9eb605a405f9a982cf20b1c1d0b007b8332dda925154",
         "sourceFiles": [
           "scripts/lib/participant-bank-intake-fixture.mjs",
+          "scripts/lib/plan-document-curve-fixture-copy.mjs",
           "src/app/(identity)/cuenta/company-channel-view.mjs",
           "src/app/(identity)/cuenta/employee-intake-continuity.mjs",
           "src/app/(identity)/cuenta/employee-intake-panel.js",

@@ -10,7 +10,7 @@ import {parse} from '@babel/parser';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="7db12b37df57b6ded980f97e48ae34fd52e6c4db68d2782994ee2c7a17290742";
+export const EXPECTED_CONTRACT_SHA256="b291b891fb47f67b4dd8863bdab54eb3749dd704f7166895100adddc4e8ae38f";
 const POSTGRES_SERVICE_IMAGE='docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
 const BASELINE_BLOCKS_SHA256='97abbb70282f13efede473f08954e3a233cb77c76efe7178c0de981310c6f8bd';
 const BASELINE_OWNERSHIP_SHA256='26c7acdbb7d3a5eb6e75355c3c4af715c8f07ce27b12248d6028160c76fa77a4';
@@ -223,7 +223,11 @@ const PLAN_BASELINE_PREVIOUS_SOURCE_PATHS_SHA256=Object.freeze({UNIT:'8e7a814017
 const historicalPlanBaselineDependenciesFor=kind=>kind==='PG_COMPANY_KYC'?PLAN_BASELINE_BACKEND_SOURCES:kind==='UI_IDENTITY_ONLY'?PLAN_BASELINE_UI_SOURCES:['UNIT','UI_BANK','UI_INTAKE','UI_JOINT','UI_CAUSAL','UI_PREPARATION','UI_PORTFOLIO'].includes(kind)?[PLAN_BASELINE_UI_SOURCES[1],'src/app/(identity)/cuenta/plan-source-curve.mjs']:[];
 const DOCUMENT_CURVE_SOURCE='src/lib/plan-import-document-curve.mjs';
 const DOCUMENT_CURVE_COPY_HELPER='scripts/lib/plan-document-curve-fixture-copy.mjs';
-const DOCUMENT_CURVE_CURRENT_DEPENDENCIES=Object.freeze({UNIT:['src/lib/plan-baseline-policy.mjs',DOCUMENT_CURVE_SOURCE],UI_BANK:['src/lib/plan-baseline-policy.mjs',DOCUMENT_CURVE_SOURCE],UI_JOINT:['src/lib/plan-baseline-policy.mjs',DOCUMENT_CURVE_SOURCE],UI_CAUSAL:['src/lib/plan-baseline-policy.mjs',DOCUMENT_CURVE_SOURCE],PG_FIELD:['src/lib/plan-baseline-policy.mjs',DOCUMENT_CURVE_SOURCE],PG_OVERTIME:['src/lib/plan-baseline-policy.mjs',DOCUMENT_CURVE_SOURCE],PG_COMPANY_KYC:[DOCUMENT_CURVE_SOURCE],UI_IDENTITY_ONLY:[DOCUMENT_CURVE_SOURCE],UI_INTAKE:[DOCUMENT_CURVE_COPY_HELPER,DOCUMENT_CURVE_SOURCE],UI_PREPARATION:[DOCUMENT_CURVE_COPY_HELPER,DOCUMENT_CURVE_SOURCE],UI_PORTFOLIO:[DOCUMENT_CURVE_COPY_HELPER,DOCUMENT_CURVE_SOURCE]});
+const DOCUMENT_CURVE_CURRENT_DEPENDENCIES=Object.freeze({UNIT:['src/lib/plan-baseline-policy.mjs',DOCUMENT_CURVE_SOURCE],UI_BANK:['src/lib/plan-baseline-policy.mjs',DOCUMENT_CURVE_SOURCE],UI_JOINT:['src/lib/plan-baseline-policy.mjs',DOCUMENT_CURVE_SOURCE,DOCUMENT_CURVE_COPY_HELPER],UI_CAUSAL:['src/lib/plan-baseline-policy.mjs',DOCUMENT_CURVE_SOURCE,DOCUMENT_CURVE_COPY_HELPER],PG_FIELD:['src/lib/plan-baseline-policy.mjs',DOCUMENT_CURVE_SOURCE],PG_OVERTIME:['src/lib/plan-baseline-policy.mjs',DOCUMENT_CURVE_SOURCE],PG_COMPANY_KYC:[DOCUMENT_CURVE_SOURCE],UI_IDENTITY_ONLY:[DOCUMENT_CURVE_SOURCE],UI_INTAKE:[DOCUMENT_CURVE_COPY_HELPER,DOCUMENT_CURVE_SOURCE],UI_PREPARATION:[DOCUMENT_CURVE_COPY_HELPER,DOCUMENT_CURVE_SOURCE],UI_PORTFOLIO:[DOCUMENT_CURVE_COPY_HELPER,DOCUMENT_CURVE_SOURCE]});
+// The 133-reference corpus and producer before the physical joint relocation remain immutable.
+const JOINT_DOCUMENT_RELOCATION_PREVIOUS_COUNT=133;
+const JOINT_DOCUMENT_RELOCATION_PREVIOUS_PATHS_SHA256='f466331c42ff59d238f01523214aa60b4a6872f7cbf7ff0c7574b2fe0de18f7b';
+const JOINT_DOCUMENT_RELOCATION_PREVIOUS_PRODUCER_SHA256='5785f9d5e9f3a4e8c329ccba804ab6fe453308b6ccfeaa1e60f26720259c10cd';
 const documentCurveDependenciesFor=kind=>DOCUMENT_CURVE_CURRENT_DEPENDENCIES[kind]||[];
 const planBaselineDependenciesFor=kind=>[...historicalPlanBaselineDependenciesFor(kind),...documentCurveDependenciesFor(kind)];
 const DOCUMENT_CURVE_PREVIOUS_CURRENT_COUNTS=Object.freeze({"UNIT":129,"UI_BANK":130,"UI_INTAKE":32,"UI_JOINT":131,"UI_CAUSAL":131,"PG_COMPANY_KYC":215,"UI_PREPARATION":19,"UI_PORTFOLIO":16,"UI_IDENTITY_ONLY":133,"PG_FIELD":118,"PG_OVERTIME":103,"PG_PLAN_BASELINE":31});
@@ -634,6 +638,7 @@ function documentCurveCurrentSourceLineageSelftest(contract,root){
  const checks=[];
  for(const spec of contract.extension.proofs){const dependencies=spec.kind==='PG_PLAN_BASELINE'?[DOCUMENT_CURVE_SOURCE,'tests/fixtures/plan-import-document-curve-synthetic.mjs']:documentCurveDependenciesFor(spec.kind);if(!dependencies.length)continue;
   const previous=spec.sourceFiles.filter(file=>!dependencies.includes(file)).sort();assert.equal(previous.length,DOCUMENT_CURVE_PREVIOUS_CURRENT_COUNTS[spec.kind]);assert.equal(hash(canonical(previous)),DOCUMENT_CURVE_PREVIOUS_CURRENT_PATHS_SHA256[spec.kind]);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles,'PROOF_SOURCE_MANIFEST');checks.push({name:spec.id+'-document-current-additions-preserve-frozen-5fb-path-lineage',result:'PASS',boundary:'pure actual source graph and immutable path definitions; no producer execution'});
+  if(['UI_JOINT','UI_CAUSAL'].includes(spec.kind)){const old=spec.sourceFiles.filter(file=>file!==DOCUMENT_CURVE_COPY_HELPER).sort();assert.equal(old.length,JOINT_DOCUMENT_RELOCATION_PREVIOUS_COUNT);assert.equal(hash(canonical(old)),JOINT_DOCUMENT_RELOCATION_PREVIOUS_PATHS_SHA256);checks.push({name:spec.id+'-physical-document-relocation-preserves-frozen-133-path-lineage',result:'PASS',boundary:'pure source lineage; no browser execution'});}
   for(const file of dependencies){assert.equal(spec.sourceFiles.filter(source=>source===file).length,1);const substituted=spec.sourceFiles.map(source=>source===file?'src/lib/foreign-document-curve.mjs':source);assert.equal(substituted.length,spec.sourceFiles.length);assert.throws(()=>equal(substituted,currentProducerSourceFiles(spec,root),'PROOF_SOURCE_MANIFEST'),error=>error.code==='PROOF_SOURCE_MANIFEST');checks.push({name:spec.id+'-document-same-count-source-substitution-denied-'+file,result:'PASS',expectedDenial:'PROOF_SOURCE_MANIFEST',boundary:'pure exact AST/source emitter comparison'});}
  }
  return checks;
@@ -694,7 +699,7 @@ function documentCurveCopyShadow(readSource){
  return {documentCurveSourceManifest:[view,DOCUMENT_CURVE_SOURCE,DOCUMENT_CURVE_COPY_HELPER].map(file=>({path:file,sha256:hash(readSource(file))})),fixtureTransforms:[{path:view,kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:hash(original),copiedBeforeSha256:hash(original),fixtureSha256:hash(Buffer.from(text.replace(needle,'./plan-import-document-curve.mjs'))),fixtureRelativePath:'app/plan-source-curve.mjs',dependencySourcePath:DOCUMENT_CURVE_SOURCE,dependencyFixturePath:'app/plan-import-document-curve.mjs'}]};
 }
 function validateDocumentCurveCopyProof(spec,proof,readSource){
- if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO'].includes(spec.kind))return;
+ if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO','UI_JOINT','UI_CAUSAL'].includes(spec.kind))return;
  const expected=documentCurveCopyShadow(readSource);
  if(!Array.isArray(proof.documentCurveSourceManifest)||!Array.isArray(proof.fixtureTransforms))deny('PROOF_DOCUMENT_CURVE_COPY');
  for(const ref of proof.documentCurveSourceManifest)exactKeys(ref,['path','sha256'],'PROOF_DOCUMENT_CURVE_COPY');
@@ -702,7 +707,7 @@ function validateDocumentCurveCopyProof(spec,proof,readSource){
  if(proof.fixtureTransforms.length!==1)deny('PROOF_DOCUMENT_CURVE_COPY');exactKeys(proof.fixtureTransforms[0],Object.keys(expected.fixtureTransforms[0]),'PROOF_DOCUMENT_CURVE_COPY');equal(proof.fixtureTransforms,expected.fixtureTransforms,'PROOF_DOCUMENT_CURVE_COPY');
 }
 function documentCurveCopySelftest(spec,proof,validate){
- if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO'].includes(spec.kind))return [];
+ if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO','UI_JOINT','UI_CAUSAL'].includes(spec.kind))return [];
  const checks=[],bad=(name,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');checks.push({name:spec.id+'-document-copy-'+name,result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure source/relocation shadow; no UI execution'});};
  bad('source-map-missing',p=>{delete p.documentCurveSourceManifest;});bad('source-map-substituted',p=>{p.documentCurveSourceManifest[1].path='src/lib/foreign-document-curve.mjs';});bad('source-map-stale',p=>{p.documentCurveSourceManifest[1].sha256='f'.repeat(64);});bad('source-map-duplicate',p=>{p.documentCurveSourceManifest[1]=clone(p.documentCurveSourceManifest[0]);});bad('relocation-missing',p=>{p.fixtureTransforms=[];});
  for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('relocation-'+key,p=>{p.fixtureTransforms[0][key]='f'.repeat(64);});bad('relocation-foreign-root',p=>{p.fixtureTransforms[0].fixtureRelativePath='../foreign.mjs';});bad('relocation-wrong-module',p=>{p.fixtureTransforms[0].dependencySourcePath='src/lib/foreign-document-curve.mjs';});bad('relocation-untracked-fields',p=>{p.fixtureTransforms[0].exactCopied=true;});
@@ -1304,8 +1309,9 @@ function extensionSelftest(contract,root,currentCompanyChecks=[],currentContinui
    if(spec.kind==='PG_PREPARATION')Object.assign(proof,{ok:true,sourceRevision:expectedHead,sourceState:'EXACT_CI_SOURCE',trackedClean:true,databaseRemoved:true,fixture:'disposable-local-postgres-canonical-workspace-with-synthetic-sessions',totalCheckCount:spec.checkNames.length});
    if(spec.kind==='UI_PREPARATION')Object.assign(proof,{validated:true,synthetic:true,realProviderCalls:false,sourceState:'EXACT_CI_SOURCE',fixtureRemoved:true,totalCheckCount:24,checks:proof.widths.flatMap(width=>PREPARATION_MODES.map(mode=>({width,mode,posts:mode==='cancel'?2:1,recoveryReads:0,currentSessionToken:true,placeholdersOnly:true,tasksUnchanged:true,noPayloadPersistence:true,horizontalOverflow:false})))});
    const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
-  if(['UI_INTAKE','UI_PREPARATION'].includes(spec.kind))Object.assign(proof,documentCurveCopyShadow(readSource));
+  if(['UI_INTAKE','UI_PREPARATION','UI_JOINT','UI_CAUSAL'].includes(spec.kind))Object.assign(proof,documentCurveCopyShadow(readSource));
   good(spec.id+'-complete-proof',()=>validate(proof));checks.push(...documentCurveCopySelftest(spec,proof,validate));
+  if(['UI_JOINT','UI_CAUSAL'].includes(spec.kind))mutate('pre-document-relocation-harness-cannot-certify-current-source','PROOF_HARNESS_SOURCE',p=>{p.harnessSha256=JOINT_DOCUMENT_RELOCATION_PREVIOUS_PRODUCER_SHA256;});
   if(spec.kind==='PG_BANK')checks.push(...organizationUsageClosureSelftest(spec,proof,root,validate));
   checks.push(...companyKycCurrentSourceClosureSelftest(spec,proof,root,validate));
     if(taskMeasurementDependenciesFor(spec.kind).length)subscriptionClosureChecks.push(()=>taskMeasurementProofClosureSelftest(spec,proof,root,validate));
