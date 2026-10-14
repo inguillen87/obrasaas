@@ -22,9 +22,9 @@ function fixture(){
 function rejected(mutate){const input=fixture();mutate(input);assert.throws(()=>validateConsumptionFeedbackCi(input),{code:'CONSUMPTION_FEEDBACK_CI_REJECTED'});}
 
 test('CI validator accepts the complete exact native/browser contracts without running either producer',()=>{
- assert.equal(native.files.length,105);assert.equal(browser.files.length,17);
+ assert.equal(native.files.length,105);assert.equal(browser.files.length,19);
  const input=fixture(),before=JSON.stringify(input),result=validateConsumptionFeedbackCi(input);
- assert.equal(JSON.stringify(input),before);assert.equal(result.version,CONSUMPTION_FEEDBACK_CI_VERSION);assert.equal(result.status,'PASS');assert.equal(result.sourceRevision,head);assert.equal(result.postgres.totalCheckCount,15);assert.equal(result.postgres.sourceCount,105);assert.equal(result.ui.totalCheckCount,12);assert.equal(result.productionLoginVerified,false);assert.equal(result.productionDataWritten,false);assert.equal(result.providerCalls,0);
+ assert.equal(JSON.stringify(input),before);assert.equal(result.version,CONSUMPTION_FEEDBACK_CI_VERSION);assert.equal(result.status,'PASS');assert.equal(result.sourceRevision,head);assert.equal(result.postgres.totalCheckCount,15);assert.equal(result.postgres.sourceCount,105);assert.equal(result.ui.totalCheckCount,12);assert.equal(result.ui.sourceCount,19);assert.equal(result.productionLoginVerified,false);assert.equal(result.productionDataWritten,false);assert.equal(result.providerCalls,0);
 });
 test('current signed KYC reply imports require their exact immutable source bytes',()=>{
  for(const file of ['src/lib/meta-kyc-identity.mjs','src/lib/meta-kyc-rejection-policy.mjs','src/lib/meta-kyc-rejection.mjs']){
@@ -79,6 +79,14 @@ test('failed, nonnative, unsafely authenticated and real-data producer claims fa
  for(const [key,value] of [['environment','production-browser'],['productionLoginVerified',true],['physicalDeviceAccepted',true]])rejected(input=>{input.ui[key]=value;});
 });
 test('source manifests must include every transitive dependency once and no substituted source',()=>{
+ const baselineFiles=['src/app/(identity)/cuenta/plan-baseline-view.mjs','src/app/(identity)/cuenta/plan-source-curve.mjs'];
+ for(const file of baselineFiles){
+  assert.equal(browser.files.filter(source=>source===file).length,1);
+  rejected(input=>{input.ui.sourceManifest=input.ui.sourceManifest.filter(ref=>ref.path!==file);});
+  rejected(input=>{input.ui.sourceManifest.find(ref=>ref.path===file).path='src/app/(identity)/cuenta/foreign-baseline-view.mjs';assert.equal(input.ui.sourceManifest.length,19);});
+  rejected(input=>{input.ui.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
+ }
+ rejected(input=>{input.ui.sourceManifest=input.ui.sourceManifest.filter(ref=>!baselineFiles.includes(ref.path));assert.equal(input.ui.sourceManifest.length,17);});
  for(const proof of ['postgres','ui']){
   rejected(input=>{input[proof].sourceManifest.pop();});
   rejected(input=>{input[proof].sourceManifest[1]={...input[proof].sourceManifest[0]};});
@@ -95,7 +103,7 @@ test('matching manifest counts cannot conceal stale source, producer or owned-cl
  rejected(input=>{input.gitSources['src/lib/material-inventory.mjs']=Buffer.from('// stale implementation\n');});
 });
 test('missing graph dependencies and omitted committed producer/helper files fail before acceptance',()=>{
- for(const file of ['src/lib/material-inventory.mjs','src/app/(identity)/cuenta/material-inventory-view.mjs','scripts/verify-consumption-feedback-ui.mjs','scripts/lib/owned-fixture-cleanup.mjs','package-lock.json'])rejected(input=>{delete input.gitSources[file];});
+ for(const file of ['src/lib/material-inventory.mjs','src/app/(identity)/cuenta/material-inventory-view.mjs','src/app/(identity)/cuenta/plan-baseline-view.mjs','src/app/(identity)/cuenta/plan-source-curve.mjs','scripts/verify-consumption-feedback-ui.mjs','scripts/lib/owned-fixture-cleanup.mjs','package-lock.json'])rejected(input=>{delete input.gitSources[file];});
 });
 test('recursive JSX closure rejects traversal, external stylesheet and nonliteral hidden imports',()=>{
  for(const source of ["import '../outside.mjs';","import('../../../../../../outside.mjs');","const target='hidden';import(target);"]){

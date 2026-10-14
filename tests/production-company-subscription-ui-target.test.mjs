@@ -24,7 +24,30 @@ test('server subprocess receives operating-system inputs and no provider, databa
   assert.deepEqual(result,{PATH:'os-path',TEMP:'temporary',NEXT_TELEMETRY_DISABLED:'1',NODE_ENV:'development'});
 });
 test('AST closure includes actual subscription, usage, session and durable recovery sources exactly once',() => {
-  const files = companySubscriptionUiSourceFiles(root);assert.equal(new Set(files).size,files.length);assert.equal(files.length,17);
+  const files = companySubscriptionUiSourceFiles(root);assert.equal(new Set(files).size,files.length);assert.equal(files.length,19);
+  const baselineDependencies = ['src/app/(identity)/cuenta/plan-baseline-view.mjs','src/app/(identity)/cuenta/plan-source-curve.mjs'];
+  for (const file of baselineDependencies) assert.ok(files.includes(file),file);
+  const legacySubscriptionSources = [
+    'src/app/(identity)/cuenta/company-channel-view.mjs',
+    'src/app/(identity)/cuenta/company-subscription-panel.js',
+    'src/app/(identity)/cuenta/company-subscription-panel.module.css',
+    'src/app/(identity)/cuenta/company-subscription-view.mjs',
+    'src/app/(identity)/cuenta/company-usage-panel.js',
+    'src/app/(identity)/cuenta/company-usage-view.mjs',
+    'src/app/(identity)/cuenta/own-company-number-view.mjs',
+    'src/app/(identity)/cuenta/own-company-templates-view.mjs',
+    'src/app/(identity)/cuenta/participant-office-account-view.mjs',
+    'src/app/(identity)/cuenta/private-bank-account-format.mjs',
+    'src/app/(identity)/cuenta/site-purchase-view.mjs',
+    'src/app/(identity)/cuenta/workspace-recovery-journal.mjs',
+    'src/app/(identity)/cuenta/workspace-recovery-storage.mjs',
+    'src/app/(identity)/cuenta/workspace-request-lifecycle.js',
+    'src/app/(identity)/cuenta/workspace-request-lifecycle.mjs',
+    'src/app/(identity)/cuenta/workspace-session-request.mjs',
+    'src/lib/company-entitlement.mjs',
+  ];
+  assert.equal(legacySubscriptionSources.length,17);
+  assert.deepEqual(files.filter(file => !baselineDependencies.includes(file)),legacySubscriptionSources);
   for (const suffix of ['company-subscription-panel.js','company-subscription-view.mjs','company-subscription-panel.module.css','workspace-session-request.mjs','workspace-recovery-storage.mjs','company-usage-panel.js']) assert.ok(files.some(file => file.endsWith(suffix)),suffix);
   assert.deepEqual(companySubscriptionUiFixtureSourceFiles(root),['scripts/lib/company-subscription-ui-fixture.mjs','scripts/lib/owned-fixture-cleanup.mjs','src/lib/company-subscription-catalog.mjs','src/lib/workspace-policy.mjs']);
 });

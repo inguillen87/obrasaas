@@ -1,4 +1,4 @@
-# Additive private identity CI: preserves all 53 prior blocks and 57 artifact patterns.
+# Approved plan baseline CI: preserves the 54 prior blocks and 58 artifact patterns.
 name: Authorized workspace acceptance
 "on":
   push:
@@ -151,6 +151,11 @@ jobs:
           node scripts/verify-plan-import-boundary.mjs
           node scripts/verify-plan-import-ui.mjs
           node scripts/verify-workspace-plan-recovery-ui.mjs
+      - name: Approved plan baseline explicit selection and native receipts
+        run: |
+          npx eslint src/lib/plan-baseline-*.mjs src/app/api/identity/plan-baseline/route.js 'src/app/(identity)/cuenta/plan-baseline-panel.js' 'src/app/(identity)/cuenta/plan-baseline-view.mjs' scripts/verify-plan-baseline-postgres.mjs tests/production-plan-baseline*.test.mjs tests/fixtures/plan-baseline-synthetic.mjs --max-warnings 0
+          node --test tests/production-plan-baseline*.test.mjs
+          node scripts/verify-plan-baseline-postgres.mjs
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane plans --expected-head "$GITHUB_SHA"
@@ -165,6 +170,7 @@ jobs:
             .vercel/private/plan-import-ui-validation.json
             .vercel/private/plan-import-ui-*.png
             .vercel/private/workspace-plan-recovery-ui-validation.json
+            .vercel/private/approved-plan-baseline-evidence/
             .vercel/workspace-ci-evidence/lane-plans.json
           include-hidden-files: true
           retention-days: 7
