@@ -7,6 +7,7 @@ import {parse} from '@babel/parser';
 import {COMPANY_KYC_OUTBOUND_COMPACT_PROOF_VERSION,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS,COMPANY_KYC_CONTEXT_OUTBOUND_CHECKS,COMPANY_KYC_LATEST_EXPIRED_COMPOSITION_CHECKS} from './verify-company-kyc-outbound-compact-postgres.mjs';
 import {readCustomerOutboundDiagnostic} from '../src/lib/meta-customer-outbound.mjs';
 import {KYC_EXPIRED_CURRENT_CONTRACT_PATH,KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,KYC_EXPIRED_CURRENT_REVIEWED_SOURCES,validateKycExpiredCurrentWorkspaceContract,validateKycExpiredCurrentReceipt} from './lib/kyc-expired-current-ci-lineage.mjs';
+import {validatePlanMeasurementCurrentCompactReceipt} from './lib/plan-measurement-current-ci-lineage.mjs';
 
 export const COMPANY_KYC_OUTBOUND_COMPACT_CI_VERSION='company-kyc-outbound-compact-ci-v1';
 const producer='scripts/verify-company-kyc-outbound-compact-postgres.mjs';
@@ -40,6 +41,7 @@ export function companyKycOutboundCompactCiSourceClosure(readSource){
  // Validation sources bind the CI receipt separately; the measured native
  // producer and runtime closure remains exactly 125 sources.
  for(const file of lineageAuditSources)sourceBytes(readSource,file);
+ const sourceContract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH));for(const ref of sourceContract.planMeasurementCurrentLineage?.currentValidationSources||[])sourceBytes(readSource,ref.path);for(const delta of sourceContract.planMeasurementCurrentLineage?.currentProofChanges||[])sourceBytes(readSource,sourceContract.extension.proofs.find(spec=>spec.id===delta.id)?.producer);
  for(const file of files)sourceBytes(readSource,file);
  function imports(bytes,file){
   const tree=parse(bytes.toString('utf8'),{sourceType:'module',plugins:['jsx'],createImportExpressions:true}),references=[];
@@ -140,7 +142,7 @@ export function validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTre
  same(postgres.checks,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS,'Every native lease, revocation, seal and uncertain reply scenario required');
  const closure=companyKycOutboundCompactCiSourceClosure(readSource);validateManifest(postgres,closure.files,readSource);validateMeasurements(postgres);validateScenarios(postgres);validateContextFeedback(postgres);validateLatestExpiredComposition(postgres);
  let currentCompositionLineage;
- try{const contract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH));currentCompositionLineage=validateKycExpiredCurrentReceipt(postgres,validateKycExpiredCurrentWorkspaceContract(contract),readSource);}catch(error){requireProof(false,error.code==='KYC_EXPIRED_CURRENT_LINEAGE_REJECTED'?error.message:'Current KYC composition source contract could not be confirmed');}
+ try{const contract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH));currentCompositionLineage=contract.planMeasurementCurrentLineage?validatePlanMeasurementCurrentCompactReceipt(postgres,contract,readSource):validateKycExpiredCurrentReceipt(postgres,validateKycExpiredCurrentWorkspaceContract(contract),readSource);}catch(error){requireProof(false,['KYC_EXPIRED_CURRENT_LINEAGE_REJECTED','PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code)?error.message:'Current KYC composition source contract could not be confirmed');}
  return {version:COMPANY_KYC_OUTBOUND_COMPACT_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,trackedClean:true,sourceState:'EXACT_CI_SOURCE',nativeVersion:postgres.version,checks:[...postgres.checks],sourceCount:closure.files.length,harnessSha256:postgres.harnessSha256,measurements:postgres.measurements,scenarios:postgres.scenarios,syntheticMessagePostCount:postgres.syntheticMessagePostCount,contextFeedbackNative:postgres.contextFeedbackNative,latestExpiredContextNative:postgres.latestExpiredContextNative,totalSyntheticMessagePostCount:postgres.totalSyntheticMessagePostCount,currentCompositionLineage,operativeDatabaseUsed:false,realProviderUsed:false,municipalOrIdentityAcceptance:false,leaseExtended:false,poolClosed:true,databaseRemoved:true,adminClosed:true};
 }
 function main(){
@@ -151,10 +153,11 @@ function main(){
  const committed=new Set(git('ls-tree','-r','--name-only',expectedHead).split('\n')),gitSources=Object.create(null);
  const readSource=file=>{if(!committed.has(file))return null;if(!Object.hasOwn(gitSources,file))gitSources[file]=execFileSync('git',['show',expectedHead+':'+file],{cwd:root,maxBuffer:16*1024*1024,windowsHide:true});return gitSources[file];};
  const closure=companyKycOutboundCompactCiSourceClosure(readSource);
- for(const file of [...lineageAuditSources,...closure.files])requireProof(readSource(file)!==null&&sha(readFileSync(path.join(root,file)))===sha(readSource(file)),'Checkout differs from committed expected Git bytes: '+file);
+ const contract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH)),currentGuardSources=[...(contract.planMeasurementCurrentLineage?.currentValidationSources||[]).map(ref=>ref.path),...(contract.planMeasurementCurrentLineage?.currentProofChanges||[]).map(delta=>contract.extension.proofs.find(spec=>spec.id===delta.id)?.producer)];
+ for(const file of [...lineageAuditSources,...currentGuardSources,...closure.files])requireProof(readSource(file)!==null&&sha(readFileSync(path.join(root,file)))===sha(readSource(file)),'Checkout differs from committed expected Git bytes: '+file);
  const inputBytes=readFileSync(path.join(root,proofPath)),proof=validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres:JSON.parse(inputBytes)});
  requireProof(git('rev-parse','HEAD')===head&&git('rev-parse','HEAD^{tree}')===sourceTree&&git('status','--porcelain','--untracked-files=no')==='','Source changed during native proof validation');
- for(const file of [...lineageAuditSources,...closure.files])requireProof(sha(readFileSync(path.join(root,file)))===sha(readSource(file)),'Source changed during validation: '+file);
+ for(const file of [...lineageAuditSources,...currentGuardSources,...closure.files])requireProof(sha(readFileSync(path.join(root,file)))===sha(readSource(file)),'Source changed during validation: '+file);
  const output=path.join(root,outputPath);requireProof(!existsSync(output),'A previous compact CI proof must not be overwritten');mkdirSync(path.dirname(output),{recursive:true});
  writeFileSync(output,JSON.stringify({...proof,checkedAt:new Date().toISOString(),validatorSha256:sha(readSource(validator)),inputProof:{path:proofPath,sha256:sha(inputBytes)}},null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:proof.status,sourceRevision:head,output:outputPath,nativeChecks:proof.checks.length,sourceCount:proof.sourceCount}));
 }

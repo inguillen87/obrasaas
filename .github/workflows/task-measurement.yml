@@ -60,3 +60,57 @@ jobs:
           path: .vercel/private/task-progress-measurement-evidence/
           include-hidden-files: true
           if-no-files-found: error
+      - name: Source import quantity, authority, recovery and CI rejection contracts
+        run: node --test tests/production-plan-measurement*.test.mjs tests/production-plan-import-ooxml.test.mjs
+      - name: Source import actual API, UI and connected validator lint
+        run: npx eslint src/lib/plan-measurement-*.mjs 'src/app/(identity)/cuenta/plan-measurement-panel.js' 'src/app/(identity)/cuenta/plan-measurement-view.mjs' scripts/verify-plan-measurement-*.mjs scripts/lib/plan-measurement-consumer-ci-lineage.mjs scripts/lib/plan-measurement-current-ci-lineage.mjs tests/production-plan-measurement*.test.mjs tests/fixtures/plan-measurement-ci-unit.mjs --max-warnings 0
+      - name: Exact fresh source import producer paths and immutable CI source
+        run: node scripts/verify-plan-measurement-ci.mjs --preflight --expected-head "$GITHUB_SHA"
+      - name: Native PostgreSQL source import, exact replay, rejection and cleanup
+        run: node scripts/verify-plan-measurement-postgres.mjs
+      - name: Actual responsive source import components and unknown acknowledgment recovery
+        run: node scripts/verify-plan-measurement-ui.mjs --expected-head "$GITHUB_SHA" .vercel/private/plan-measurement-ui-evidence/browser.json
+      - name: Connect exact committed native and browser raw proofs
+        run: node scripts/verify-plan-measurement-ci.mjs --expected-head "$GITHUB_SHA"
+      - name: Preserve all checked-out source after source import gates
+        run: git diff --exit-code HEAD --
+      - name: Preserve new source import native proof
+        id: plan_measurement_postgres_artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: plan-measurement-postgres-${{ github.sha }}-${{ github.run_attempt }}
+          path: .vercel/private/plan-measurement-postgres.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - name: Preserve new source import browser proof and synthetic screenshots
+        id: plan_measurement_ui_artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: plan-measurement-ui-${{ github.sha }}-${{ github.run_attempt }}
+          path: .vercel/private/plan-measurement-ui-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - name: Bind actual uploaded producer artifact IDs and archive digests
+        env:
+          PLAN_MEASUREMENT_POSTGRES_ARTIFACT_ID: ${{ steps.plan_measurement_postgres_artifact.outputs.artifact-id }}
+          PLAN_MEASUREMENT_POSTGRES_ARTIFACT_DIGEST: ${{ steps.plan_measurement_postgres_artifact.outputs.artifact-digest }}
+          PLAN_MEASUREMENT_POSTGRES_ARTIFACT_URL: ${{ steps.plan_measurement_postgres_artifact.outputs.artifact-url }}
+          PLAN_MEASUREMENT_UI_ARTIFACT_ID: ${{ steps.plan_measurement_ui_artifact.outputs.artifact-id }}
+          PLAN_MEASUREMENT_UI_ARTIFACT_DIGEST: ${{ steps.plan_measurement_ui_artifact.outputs.artifact-digest }}
+          PLAN_MEASUREMENT_UI_ARTIFACT_URL: ${{ steps.plan_measurement_ui_artifact.outputs.artifact-url }}
+        run: node scripts/verify-plan-measurement-ci.mjs --bind-artifacts --expected-head "$GITHUB_SHA"
+      - name: Preserve connected source import receipts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: plan-measurement-ci-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            .vercel/private/plan-measurement-ci.json
+            .vercel/private/plan-measurement-ci-artifacts.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7

@@ -1,0 +1,17 @@
+# Importación de metrado físico
+
+El panel **Metrado desde archivo** prepara cantidades físicas desde una fuente privada. Administración o dirección eligen un consentimiento específico: Excel se lee localmente; PDF e imágenes usan la extracción de documentos existente, con reserva y observación de uso. La extracción conserva SHA, texto literal, celda/página, fórmulas, cachés, formatos, visibilidad y agrupadores excluidos. La persona que carga el archivo es el actor de la carga; no se presume la autoría del documento.
+
+La revisión compara fuente, candidato y tarea. Cada cantidad se ingresa como texto decimal exacto y unidad canónica; la lectura local no convierte unidades conocidas. Fórmulas, cachés, formatos dudosos, identidades ocultas y lectura OCR requieren confirmación explícita. Toda fila omitida lleva su propio motivo. La revisión se guarda antes de aplicar.
+
+Las tareas nuevas requieren título y fechas explícitas y nacen en BACKLOG con avance 0 y ejecución 0.0000. Las existentes requieren selección de taskId, revisión vigente, código original y confirmación de identidad. Una definición existente requiere REPLACE_UNSEALED, su definitionId vigente y confirmación de reemplazo; el importador preserva fechas, título y porcentaje. La guardia canónica de medición bloquea bases selladas y tareas con avance incompatible. Toda propuesta pendiente, incluso vencida sin reconciliación, bloquea la aplicación. El origen anterior queda en la trazabilidad del reemplazo.
+
+Reemplazar la base no permite cambiar el código de la partida ya asociada a la tarea. La procedencia física anterior debe tener el contrato vigente; una procedencia malformada, ajena o un código de cronograma conocido diferente bloquean la asociación. El importador no ofrece una reasignación implícita de partidas.
+
+REVIEW_MEASUREMENT, APPLY_MEASUREMENT y REJECT_MEASUREMENT usan projectOperation y un recibo propio. La aplicación de todas las filas y el recibo comparten transacción. SHA, digest de fuente/revisión, revisión del borrador y revisión de cada tarea se comprueban antes de escribir. El mismo UUID con el mismo contenido recupera el mismo recibo; otro contenido produce conflicto. El navegador conserva referencias y hashes, sin cantidades, motivos, archivos ni comandos. Una confirmación incierta requiere lectura del mismo intento; no hay reenvío automático.
+
+Un rechazo conocido de revisión o CAS, detectado antes de cualquier cambio, tiene un recibo REJECTED/PRE_DECISION ligado al comando y al origen. Ese HTTP409 confirma que tareas, borrador y propuestas no cambiaron y permite conservar correcciones, consultar el estado actual y preparar una nueva revisión explícita. El mismo UUID recupera el rechazo sin repetir la decisión. Un error de base de datos, permiso, ámbito o confirmación incierta no sustituye ese recibo y conserva la referencia pendiente.
+
+El metrado configurado entra después en PROPOSE_PROGRESS y DECIDE_PROGRESS existentes: el importador no acredita trabajo, evidencia ni aprobación de avance. La prueba nativa `scripts/verify-plan-measurement-postgres.mjs` verifica este recorrido con PostgreSQL local, fuente/evidencia e identidades sintéticas y revisión por un actor autorizado distinto. No certifica almacenamiento remoto, documentos de un cliente, proveedor real, identidad humana ni aceptación de campo.
+
+Los perfiles históricos de cronograma y curva conservan sus fingerprints y contratos. Las curvas monetarias, precios y porcentajes financieros no se importan como medición física.
