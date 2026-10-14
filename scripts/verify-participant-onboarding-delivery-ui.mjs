@@ -168,7 +168,7 @@ async function scenario(mode,width){
    if(mode==='send-lost-ack'){
     mark('unknown-ack');await waitText(page,'El resultado quedó sin confirmar');assert.equal(posts.length,1);
     const before=(await privateStorage(page,1))[0];assert.equal(before.operationId,posts[0].operationId);
-    await absent(page,'Reintentar exactamente esta solicitud');assert.ok((await controls(page,'Consultar estado del envío')).every(item=>item.disabled));
+    await absent(page,'Reintentar exactamente esta solicitud');assert.ok((await controls(page,'Consultar instrucciones iniciales')).every(item=>item.disabled));
     await page.waitForFunction(()=>document.querySelector('#context').disabled,{timeout:10000});
     await page.reload({waitUntil:'domcontentloaded',timeout:20000});await waitText(page,'Comprobar el mismo intento');
     assert.deepEqual(dialogs,['beforeunload']);assert.deepEqual(await references(page),[before]);assert.equal(posts.length,1,'Reload cannot send');
@@ -181,7 +181,7 @@ async function scenario(mode,width){
     mark('fresh-read-failed');await waitText(page,'El recibo está confirmado. Actualizá la lista');await absent(page,'Preparar identidad por WhatsApp');await enabled(page,'Consultar presentación por chat');
     assert.equal(await page.$eval('[data-onboarding-delivery]',el=>el.dataset.onboardingDelivery),'UNKNOWN');
     await absent(page,'Solicitar instrucciones por WhatsApp');await absent(page,'Enviar instrucciones por WhatsApp');await absent(page,'Retirar autorización de contacto');
-    await privateStorage(page,0);await click(page,'Consultar estado del envío');await waitText(page,'Pendiente de envío');
+    await privateStorage(page,0);await click(page,'Consultar instrucciones iniciales');await waitText(page,'Pendiente de envío');
     assert.equal(posts.length,1,'Failed fresh GET never allows a repost');
    }else{
     await waitText(page,'Pendiente de envío');assert.equal(posts.length,1);await absent(page,'Solicitar instrucciones por WhatsApp');await absent(page,'Enviar instrucciones por WhatsApp');await privateStorage(page,0);
@@ -200,12 +200,12 @@ async function scenario(mode,width){
      assert.equal(await page.$('#customer-template-workbench'),null,'Review reaches the visible panel heading before a workbench is observed');
      const navigations=await page.evaluate(()=>window.onboardingNavigations);assert.deepEqual(navigations,[{scope,projectId,target:'meta-onboarding',destination:'customer-meta-title'}]);navigationCount=1;
      const blocked=await page.evaluate(({scope,projectId})=>[{scope:'b'.repeat(64),projectId,target:'meta-onboarding'},{scope,projectId:'other-project',target:'meta-onboarding'},{scope,projectId,target:'customer-template-workbench'}].map(value=>window.onboardingTryNavigation(value)).concat(window.onboardingTryNavigation({scope,projectId,target:'meta-onboarding'},{scope,projectId,canManageIntegrations:false})),{scope,projectId});assert.deepEqual(blocked,[false,false,false,false]);
-     assert.equal(await page.evaluate(()=>window.onboardingNavigations.length),1);assert.equal(posts.length,0);await click(page,'Consultar estado del envío');await enabled(page,'Revisar plantilla de alta');assert.equal(posts.length,0,'Template consultation cannot resend');
+     assert.equal(await page.evaluate(()=>window.onboardingNavigations.length),1);assert.equal(posts.length,0);await click(page,'Consultar instrucciones iniciales');await enabled(page,'Revisar plantilla de alta');assert.equal(posts.length,0,'Template consultation cannot resend');
     }else if(mode==='template-operation-pending'){
      await page.evaluate(()=>window.onboardingSeedReference());await waitText(page,'Comprobar el mismo intento');await absent(page,'Revisar plantilla de alta');assert.equal(await page.$eval('[data-onboarding-step]',el=>el.dataset.onboardingStep),'OPERATION_UNCERTAIN');referenceCount=1;
      const prior=(await privateStorage(page,1))[0];await page.reload({waitUntil:'domcontentloaded',timeout:20000});await waitText(page,'Comprobar el mismo intento');assert.deepEqual(await references(page),[prior]);await absent(page,'Revisar plantilla de alta');assert.equal(posts.length,0,'Pending reload cannot send or navigate');
     }else{
-     await absent(page,'Revisar plantilla de alta');assert.equal(await page.$eval('[data-onboarding-step]',el=>el.dataset.onboardingStep),mode==='template-chat-pending'?'KYC_CHAT_PENDING':'ONBOARDING_WHATSAPP_PENDING');await click(page,'Consultar estado del envío');assert.equal(posts.length,0);
+     await absent(page,'Revisar plantilla de alta');assert.equal(await page.$eval('[data-onboarding-step]',el=>el.dataset.onboardingStep),mode==='template-chat-pending'?'KYC_CHAT_PENDING':'ONBOARDING_WHATSAPP_PENDING');await click(page,'Consultar instrucciones iniciales');assert.equal(posts.length,0);
     }
     await privateStorage(page,referenceCount);assert.equal(posts.length,0);assert.equal(await page.evaluate(()=>window.onboardingNavigations.length),navigationCount);assert.ok((await controls(page,'Preparar identidad por WhatsApp')).every(item=>item.disabled),'A retained reference cannot prepare another code');templateGuidanceChecks.push({mode,width,staticBlocker:mode!=='template-other-blocker',noParallelKycCode:true,posts:0,navigationCount,referenceCount,scopedNavigation:true,keyboardNavigation:mode==='template-required'});
    }else if(mode==='sent-provider'||mode==='status-delivered'){
@@ -215,7 +215,7 @@ async function scenario(mode,width){
    assert.ok(deliveryText.includes('No puede borrar ni retirar'));
    assert.equal(await page.evaluate(()=>document.body.innerText.includes('Invitación aceptada')),false,'Provider status cannot accept the individual invitation');
    assert.equal(await page.evaluate(()=>document.body.innerText.includes('Aprobado por un responsable')),false,'Provider status cannot approve KYC');
-   assert.equal(posts.length,0);await click(page,'Consultar estado del envío');assert.equal(posts.length,0);await privateStorage(page,0);
+   assert.equal(posts.length,0);await click(page,'Consultar instrucciones iniciales');assert.equal(posts.length,0);await privateStorage(page,0);
   }else{
    mark('fail-closed');await absent(page,'Solicitar instrucciones por WhatsApp');await absent(page,'Enviar instrucciones por WhatsApp');assert.equal(posts.length,0);
    if(mode==='send-unknown')await waitText(page,'no lo vuelvas a enviar');
