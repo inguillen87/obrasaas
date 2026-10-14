@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {WorkspaceError,digest} from './workspace-policy.mjs';
+import {WorkspaceError,digest,workspaceId} from './workspace-policy.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerReplyMessage} from './meta-customer-provider.mjs';
 import {hasMetaCustomerRequiredScopes} from './meta-customer-permissions.mjs';
@@ -9,6 +9,32 @@ import {assertDevelopmentPilotAttendance} from './meta-development-pilot-policy.
 import {ownCompanyConnectionPolicy,lockOwnCompanyIssuer,ownCompanyCapabilityKind,fenceOwnCompanyRuntime} from './meta-own-company-policy.mjs';
 
 export const customerOutboundId=eventId=>'customer_outbound_'+digest(['meta-customer-reply-v1',eventId]);
+const diagnosticPhases=new Set(['AFTER_RESERVE','OWN_PROVIDER_SCOPE','OWN_BEFORE_EXTERNAL','REPLY_POST','OUTCOME_COMMIT','PROCESSING']);
+const diagnosticCodes=new Set(['META_CUSTOMER_OUTBOUND_FAILURE_UNCONFIRMED','META_CUSTOMER_INBOX_LEASE_CHANGED','META_CUSTOMER_OUTBOUND_LEASE_CHANGED','META_CUSTOMER_OUTBOUND_CONTEXT_CHANGED','META_CUSTOMER_OUTBOUND_UNCONFIRMED','META_CUSTOMER_REPLY_WINDOW_CLOSED','META_CUSTOMER_PROVIDER_REJECTED','META_CUSTOMER_PROVIDER_UNCONFIRMED','META_CUSTOMER_SEND_UNCONFIRMED','META_KYC_CHALLENGE_REJECTED','META_KYC_CHALLENGE_REVOKED','META_KYC_CHALLENGE_EXPIRED','META_KYC_COMPANY_AUTHORITY_CHANGED','META_KYC_COMPANY_CONTEXT_REQUIRED','META_CUSTOMER_CHANNEL_ACCEPTANCE_REQUIRED','EMPLOYEE_INTAKE_INTEGRITY','EMPLOYEE_INTAKE_REVOKED','META_OWN_COMPANY_UNAVAILABLE','META_OWN_COMPANY_CONFIGURATION_PENDING','META_OWN_COMPANY_OWNER_UNVERIFIED','META_OWN_COMPANY_OWNER_UNCONFIRMED','META_OWN_COMPANY_TOKEN_REJECTED','META_OWN_COMPANY_CREDENTIAL_REJECTED','META_OWN_COMPANY_ASSET_REJECTED','META_OWN_COMPANY_PHONE_REJECTED','META_OWN_COMPANY_ADAPTER_UNAVAILABLE']);
+// A diagnostic is an observation, never proof that the provider POST occurred.
+// Do not serialize an exception, SQL, token, message body or document reference.
+export function customerOutboundDiagnostic({phase,code,now=Date.now()}={}){
+ if(!Number.isFinite(now)||Math.abs(now)>8640000000000000)return null;
+ return {version:1,phase:diagnosticPhases.has(phase)?phase:'PROCESSING',code:diagnosticCodes.has(code)?code:'META_CUSTOMER_OUTBOUND_FAILURE_UNCONFIRMED',recordedAt:new Date(now).toISOString()};
+}
+export function readCustomerOutboundDiagnostic(value){
+ if(!value||Array.isArray(value)||Object.keys(value).sort().join('|')!=='code|phase|recordedAt|version'||value.version!==1||!diagnosticPhases.has(value.phase)||!diagnosticCodes.has(value.code)||typeof value.recordedAt!=='string'||!Number.isFinite(Date.parse(value.recordedAt))||new Date(value.recordedAt).toISOString()!==value.recordedAt)return null;
+ return {version:1,phase:value.phase,code:value.code,recordedAt:value.recordedAt};
+}
+export async function recordCustomerOutboundDiagnostic(client,{reserved=null,context,phase,code,now=Date.now()}){
+ const diagnostic=customerOutboundDiagnostic({phase,code,now});
+ if(!diagnostic||!/^customer_webhook_[a-f0-9]{64}$/.test(context?.eventId||'')||typeof context.leaseToken!=='string'||!context.leaseToken||!workspaceId(context.projectId)||!workspaceId(context.channelId)||!/^[a-f0-9]{64}$/.test(context.payloadDigest||''))return false;
+ // The failed source lease may have expired. It must still be the exact lease
+ // that owned this attempt; recording its cause cannot renew or execute it.
+ const sources=(await client.query(`SELECT id,"projectId",status::text AS status,payload,"leaseToken" FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-v1' AND status='PENDING' AND "leaseToken"=$3 FOR UPDATE`,[context.eventId,context.projectId,context.leaseToken])).rows;
+ if(sources.length!==1)return false;const source=sources[0],organizationId=source.payload?.organizationId;
+ if(source.id!==context.eventId||source.projectId!==context.projectId||source.status!=='PENDING'||source.leaseToken!==context.leaseToken||source.payload?.channelId!==context.channelId||source.payload?.payloadDigest!==context.payloadDigest||!workspaceId(organizationId)||reserved&&(reserved.id!==customerOutboundId(context.eventId)||reserved.connection?.id!==context.channelId||reserved.connection?.projectId!==context.projectId||reserved.connection?.organizationId!==organizationId))return false;
+ const id=customerOutboundId(context.eventId),rows=(await client.query(`SELECT id,"projectId",payload,outcome,"leaseToken" FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1' FOR UPDATE`,[id,context.projectId])).rows;
+ if(rows.length!==1)return false;const row=rows[0],stored=row.payload;
+ if(row.id!==id||row.projectId!==context.projectId||stored?.version!==1||stored.eventId!==context.eventId||stored.channelId!==context.channelId||stored.organizationId!==organizationId||!/^[a-f0-9]{64}$/.test(stored.requestDigest||'')||row.outcome?.version!==1||!['SEND_STARTED','SEND_UNKNOWN'].includes(row.outcome?.state)||row.outcome?.messageId||Object.hasOwn(row.outcome||{},'diagnostic')||reserved&&(reserved.requestDigest!==stored.requestDigest||reserved.leaseToken!==row.leaseToken))return false;
+ const written=await client.query(`UPDATE public."WebhookEvent" SET outcome=jsonb_set(outcome,'{diagnostic}',$6::jsonb),"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1' AND payload->>'requestDigest'=$3 AND "leaseToken" IS NOT DISTINCT FROM $4::text AND outcome->>'state'=$5 AND NOT (outcome ? 'diagnostic') AND EXISTS(SELECT 1 FROM public."WebhookEvent" source WHERE source.id=$7 AND source."projectId"=$2 AND source.provider='meta-customer-v1' AND source.status='PENDING' AND source."leaseToken"=$8 AND source.payload->>'channelId'=$9 AND source.payload->>'payloadDigest'=$10 AND source.payload->>'organizationId'=$11)`,[id,context.projectId,stored.requestDigest,row.leaseToken,row.outcome.state,JSON.stringify(diagnostic),context.eventId,context.leaseToken,context.channelId,context.payloadDigest,organizationId]);
+ return written.rowCount===1;
+}
 export function customerChannelActive(connection,now=Date.now(),{pilotAttendance=false,environment=process.env}={}){
  if(connection?.metadata?.ownCompany||Object.hasOwn(connection?.metadata||{},'ownCompanyRuntime')){try{ownCompanyConnectionPolicy(connection,environment,now);}catch{return false;}}
  if(connection?.metadata?.developmentPilot){if(!pilotAttendance)return false;try{assertDevelopmentPilotAttendance(connection,environment,now);}catch{return false;}}
@@ -84,27 +110,35 @@ export function createMetaCustomerOutbound({connect,resolveIdentity,provider,env
    const reserved=await reserve(context,reply);if(reserved.done)return reserved.done;
    // No retry may send an existing reservation, including after this hook,
    // a crashed worker, a timed-out POST or a lost database commit response.
-   await afterReserve();let state='SEND_UNKNOWN',result=null;
-   const send=async scopedProvider=>{try{result=await scopedProvider.sendReply({...reserved,message:reply,correlationId:reserved.id});state='SENT';}catch(error){if(error instanceof WorkspaceError&&error.code==='META_CUSTOMER_PROVIDER_REJECTED')state='REJECTED';}};
-   if(ownCompanyCapabilityKind(reserved.ownCompanyCapability)==='RUNTIME'){
-    // Hold the canonical credential/issuer/audit SHARE locks through the single
-    // POST. Provider awaits also invoke this same fresh fence; a new grant does
-    // not authorize the captured token or reservation from the previous grant.
-    await within(async client=>{
-     // Revalidate with the same transaction: canonical resolvers acquire
-     // Project UPDATE before the OWN SHARE fence, without a second connection.
-     await reserve(context,reply,client);
-     const beforeExternal=async()=>{await reserve(context,reply,client);return fenceOwnCompanyRuntime(client,reserved.connection,{environment,now:now()});};await beforeExternal();
-     const scopedProvider=await provider.forConnection({capability:reserved.ownCompanyCapability,connection:reserved.connection,token:reserved.token,beforeExternal});
-     await beforeExternal();await send(scopedProvider);
-    });
-   }else{
-    let scopedProvider=provider;
-    if(reserved.connection?.metadata?.developmentPilot||reserved.connection?.metadata?.ownCompany||Object.hasOwn(reserved.connection?.metadata||{},'ownCompanyRuntime'))scopedProvider=await provider.forConnection({capability:reserved.ownCompanyCapability||reserved.developmentPilotCapability,connection:reserved.connection,token:reserved.token});
-    await reserve(context,reply);await send(scopedProvider);
-   }
-   const completed=await within(client=>completeCustomerOutbound(client,{...reserved,projectId:context.projectId,state,messageId:result?.messageId||null,now:now()}));
-   const {payload:privatePayload,...resultPublic}=completed;void privatePayload;return resultPublic;
+   let state='SEND_UNKNOWN',result=null,phase='AFTER_RESERVE',firstFailure=null;
+   const observeFailure=error=>{firstFailure??={phase,code:error instanceof WorkspaceError?error.code:null};};
+   // Record only after the canonical transaction releases its locks. This
+   // observation neither leases an old reservation nor invokes its transport.
+   const remember=()=>firstFailure?within(client=>recordCustomerOutboundDiagnostic(client,{reserved,context,...firstFailure,now:now()})).catch(()=>false):false;
+   try{
+    await afterReserve();
+    const send=async scopedProvider=>{try{result=await scopedProvider.sendReply({...reserved,message:reply,correlationId:reserved.id});state='SENT';}catch(error){observeFailure(error);if(error instanceof WorkspaceError&&error.code==='META_CUSTOMER_PROVIDER_REJECTED')state='REJECTED';}};
+    if(ownCompanyCapabilityKind(reserved.ownCompanyCapability)==='RUNTIME'){
+     // Hold the canonical credential/issuer/audit SHARE locks through the single
+     // POST. Provider awaits also invoke this same fresh fence; a new grant does
+     // not authorize the captured token or reservation from the previous grant.
+     await within(async client=>{
+      // Revalidate with the same transaction: canonical resolvers acquire
+      // Project UPDATE before the OWN SHARE fence, without a second connection.
+      phase='OWN_BEFORE_EXTERNAL';await reserve(context,reply,client);
+      const beforeExternal=async()=>{const resumePhase=phase;phase='OWN_BEFORE_EXTERNAL';await reserve(context,reply,client);const capability=await fenceOwnCompanyRuntime(client,reserved.connection,{environment,now:now()});phase=resumePhase;return capability;};await beforeExternal();
+      phase='OWN_PROVIDER_SCOPE';const scopedProvider=await provider.forConnection({capability:reserved.ownCompanyCapability,connection:reserved.connection,token:reserved.token,beforeExternal});
+      phase='REPLY_POST';await beforeExternal();await send(scopedProvider);
+     });
+    }else{
+     phase='OWN_PROVIDER_SCOPE';let scopedProvider=provider;
+     if(reserved.connection?.metadata?.developmentPilot||reserved.connection?.metadata?.ownCompany||Object.hasOwn(reserved.connection?.metadata||{},'ownCompanyRuntime'))scopedProvider=await provider.forConnection({capability:reserved.ownCompanyCapability||reserved.developmentPilotCapability,connection:reserved.connection,token:reserved.token});
+     phase='OWN_BEFORE_EXTERNAL';await reserve(context,reply);phase='REPLY_POST';await send(scopedProvider);
+    }
+    await remember();phase='OUTCOME_COMMIT';
+    const completed=await within(client=>completeCustomerOutbound(client,{...reserved,projectId:context.projectId,state,messageId:result?.messageId||null,now:now()}));
+    const {payload:privatePayload,...resultPublic}=completed;void privatePayload;return resultPublic;
+   }catch(error){observeFailure(error);await remember();throw error;}
   },
   async result({eventId,projectId,channelId}){
    return within(async client=>{const row=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1' AND payload->>'channelId'=$3`,[customerOutboundId(eventId),projectId,channelId])).rows[0];return row?publicResult(row):{state:'NOT_OBSERVED',replySent:false,definitive:false};});

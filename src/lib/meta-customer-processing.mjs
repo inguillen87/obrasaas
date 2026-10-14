@@ -3,7 +3,7 @@ import {WorkspaceError,digest} from './workspace-policy.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {lockMetaCustomerInboxChannel,metaCustomerContentDigest} from './meta-customer-callback.mjs';
 import {metaCustomerInboxIntent} from './meta-customer-inbox-review.mjs';
-import {customerJobTransaction} from './meta-customer-outbound.mjs';
+import {customerJobTransaction,recordCustomerOutboundDiagnostic} from './meta-customer-outbound.mjs';
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
 import {exactSecretMatch} from './legacy-access-boundary.js';
 import {META_CUSTOMER_PROTOCOL,resolveMetaCloudProtocol,metaCloudEventMatches} from './meta-cloud-protocol.mjs';
@@ -43,6 +43,7 @@ export function createDevelopmentPilotDispatchGuard({connect,environment=process
 export function createMetaCustomerProcessor({connect,dispatch,outbound,environment=process.env,now=()=>Date.now(),afterClaim=async()=>{},beforeDispatch=async()=>false,deferAuthorization=async()=>false,protocol=META_CUSTOMER_PROTOCOL,lockChannel=lockMetaCustomerInboxChannel,authorizationCodes=[],onboarding=null,rejectedKyc=null,expiredKyc=null}){
  resolveMetaCloudProtocol(protocol);
  const within=run=>customerJobTransaction(connect,run);
+ const rememberReplyFailure=(context,error)=>within(client=>recordCustomerOutboundDiagnostic(client,{context,phase:'PROCESSING',code:error instanceof WorkspaceError?error.code:null,now:now()})).catch(()=>false);
  async function claim(eventId){return within(async client=>{
   const row=(await client.query(`SELECT id,"projectId",payload,status::text AS status,"leaseToken","leaseExpiresAt",outcome,attempts FROM public."WebhookEvent" WHERE id=$1 AND provider=$2 FOR UPDATE`,[eventId,protocol.provider])).rows[0];
   if(!row)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);
@@ -63,7 +64,9 @@ export function createMetaCustomerProcessor({connect,dispatch,outbound,environme
  });}
  async function finish(context,result){return within(async client=>{
   const outcome=safeOutcome(result);
-  const written=await client.query(`UPDATE public."WebhookEvent" SET status='PROCESSED',outcome=$4::jsonb,"processedAt"=clock_timestamp(),"appliedAt"=CASE WHEN $5 THEN clock_timestamp() ELSE "appliedAt" END,"leaseToken"=NULL,"leaseExpiresAt"=NULL,"lastError"=NULL,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2 AND status='PENDING' AND "leaseToken"=$3 AND "leaseExpiresAt">$6`,[context.eventId,context.projectId,context.leaseToken,JSON.stringify(outcome),outcome.businessApplied,new Date(now())]);
+  // Replaying an uncertain outbound is a terminal observation, not evidence
+  // that its first failure disappeared or that a second send occurred.
+  const written=await client.query(`UPDATE public."WebhookEvent" SET status='PROCESSED',outcome=$4::jsonb,"processedAt"=clock_timestamp(),"appliedAt"=CASE WHEN $5 THEN clock_timestamp() ELSE "appliedAt" END,"leaseToken"=NULL,"leaseExpiresAt"=NULL,"lastError"=CASE WHEN $7 THEN "lastError" ELSE NULL END,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2 AND status='PENDING' AND "leaseToken"=$3 AND "leaseExpiresAt">$6`,[context.eventId,context.projectId,context.leaseToken,JSON.stringify(outcome),outcome.businessApplied,new Date(now()),['SEND_STARTED','SEND_UNKNOWN'].includes(outcome.replyState)]);
   if(written.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
   return {eventId:context.eventId,processed:true,...outcome};
  });}
@@ -92,7 +95,7 @@ export function createMetaCustomerProcessor({connect,dispatch,outbound,environme
      if(error instanceof WorkspaceError&&(authorizationObservations.has(error.code)||authorizationCodes.includes(error.code))){const deferred=await deferPrepared(context,error.code);if(deferred)return deferred;if(!context.developmentPilot&&protocol===META_CUSTOMER_PROTOCOL&&error.code==='META_KYC_CHALLENGE_EXPIRED'&&expiredKyc!==null)result=await expiredKyc(context,{code:error.code});if(!result&&!context.developmentPilot&&protocol===META_CUSTOMER_PROTOCOL&&['META_KYC_CHALLENGE_REJECTED','META_KYC_CHALLENGE_EXPIRED'].includes(error.code)&&rejectedKyc!==null)result=await rejectedKyc(context,{code:error.code});if(!result)result=await observe(context,error.code);}else throw error;
     }
     if(!result)result=await observe(context);
-    if(result.reply){let reply;try{reply=await outbound.send(context,result.reply,{purpose:result.kind==='EMPLOYEE_INTAKE'?'EMPLOYEE_INTAKE':result.kind==='KYC_CHAT'?'KYC_CAPTURE':result.kind==='KYC_REJECTION'?'KYC_REJECTION':result.kind==='KYC_EXPIRY_FEEDBACK'?'KYC_EXPIRY_FEEDBACK':'FIELD'});}catch(error){if(error instanceof WorkspaceError&&(error.code==='META_CUSTOMER_REPLY_WINDOW_CLOSED'||authorizationObservations.has(error.code)||authorizationCodes.includes(error.code))){const deferred=await deferPrepared(context,error.code,result);if(deferred)return deferred;reply={replySent:false,state:error.code};}else throw error;}result={...result,replySent:reply.replySent,replyState:reply.state};}
+    if(result.reply){let reply;try{reply=await outbound.send(context,result.reply,{purpose:result.kind==='EMPLOYEE_INTAKE'?'EMPLOYEE_INTAKE':result.kind==='KYC_CHAT'?'KYC_CAPTURE':result.kind==='KYC_REJECTION'?'KYC_REJECTION':result.kind==='KYC_EXPIRY_FEEDBACK'?'KYC_EXPIRY_FEEDBACK':'FIELD'});}catch(error){await rememberReplyFailure(context,error);if(error instanceof WorkspaceError&&(error.code==='META_CUSTOMER_REPLY_WINDOW_CLOSED'||authorizationObservations.has(error.code)||authorizationCodes.includes(error.code))){const deferred=await deferPrepared(context,error.code,result);if(deferred)return deferred;reply={replySent:false,state:error.code};}else throw error;}result={...result,replySent:reply.replySent,replyState:reply.state};}
     return finish(context,result);
    }catch(error){
     await within(client=>client.query(`UPDATE public."WebhookEvent" SET "lastError"=$3,"leaseToken"=NULL,"leaseExpiresAt"=NULL,"updatedAt"=clock_timestamp() WHERE id=$1 AND "leaseToken"=$2 AND status='PENDING'`,[context.eventId,context.leaseToken,error instanceof WorkspaceError?error.code:'META_CUSTOMER_PROCESSING_UNCONFIRMED'])).catch(()=>{});throw error;
