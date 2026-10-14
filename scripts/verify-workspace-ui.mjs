@@ -6,6 +6,7 @@ import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-preparation-format.mjs';
 import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 
 // Browser-only acceptance of the real component with intercepted synthetic API
 // responses. This is NOT proof of a production login, employee or WhatsApp event.
@@ -29,6 +30,9 @@ const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta
 for(const file of ["src/lib/whatsapp/tenant-workspace-policy.js","src/lib/worker-channel-consent-policy.mjs","src/lib/field-media-privacy.mjs"])sourceManifest.push({path:file,sha256:createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')});
 for(const file of ['voice-progress-draft.mjs','progress-measurement-quantity.js','task-progress-measurement.js']){const source='src/lib/'+file,destination=path.join(fixture,source);copyFileSync(path.join(root,source),destination);assert.deepEqual(readFileSync(path.join(root,source)),readFileSync(destination));sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(destination)).digest('hex')});}
 assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(components),sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-ui-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};\n`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:16,background:'#0b1c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
@@ -1031,7 +1035,7 @@ try{
  for(const width of [320,390,768,1280])for(const uncertain of [false,true])await mobileImportNavigationScenario(width,uncertain);
  }
  assert.deepEqual(pageErrors,[]);
- const proof={status:'PASS',fullSuite:!process.env.WORKSPACE_UI_SCENARIO,focusedScenario:process.env.WORKSPACE_UI_SCENARIO||null,environment:'isolated-browser-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,pageErrors,sourceManifest,harnessSha256,productionLoginVerified:false,productionDataWritten:false,physicalWhatsAppVerified:false};
+ const proof={status:'PASS',fullSuite:!process.env.WORKSPACE_UI_SCENARIO,focusedScenario:process.env.WORKSPACE_UI_SCENARIO||null,environment:'isolated-browser-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,pageErrors,sourceManifest,harnessSha256,productionLoginVerified:false,productionDataWritten:false,physicalWhatsAppVerified:false,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
  writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
-}catch(error){writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,checks,pageErrors,sourceManifest,harnessSha256,serverLog},null,2));throw error;}
+}catch(error){writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,checks,pageErrors,sourceManifest,harnessSha256,serverLog,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms},null,2));throw error;}
 finally{await browser?.close();try{if(process.platform!=='win32')process.kill(-server.pid,'SIGTERM');else server.kill();}catch{}await new Promise(resolve=>setTimeout(resolve,500));assert.equal(path.dirname(path.resolve(fixture)),path.resolve(root,'.vercel'));rmSync(fixture,{recursive:true,force:true});}

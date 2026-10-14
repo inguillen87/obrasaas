@@ -7,6 +7,7 @@ import puppeteer from 'puppeteer';
 import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-preparation-format.mjs';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION} from '../src/lib/participant-policy.mjs';
 import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 
 // Actual account workspace and styles; all session/API data is local and synthetic.
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
@@ -17,6 +18,9 @@ sourceManifest.push({path:'scripts/lib/company-subscription-ui-fixture.mjs',sha2
 for(const file of readdirSync(path.join(root,'src/app/(identity)/cuenta')).filter(name=>/\.(js|mjs|css)$/.test(name))){const source='src/app/(identity)/cuenta/'+file;copyFileSync(path.join(root,source),path.join(components,file));sourceManifest.push({path:source,sha256:sha256(readFileSync(path.join(components,file)))});}
 for(const source of ['src/app/(identity)/identity.module.css','src/lib/geo.js','src/lib/field-media-privacy.mjs','src/lib/voice-progress-draft.mjs','src/lib/progress-measurement-quantity.js','src/lib/task-progress-measurement.js','src/lib/worker-channel-consent-policy.mjs','src/lib/whatsapp/tenant-workspace-policy.js','src/lib/company-phone-format.mjs','src/lib/company-entitlement.mjs','src/lib/identity-return-path.mjs']){const destination=path.join(fixture,source);mkdirSync(path.dirname(destination),{recursive:true});copyFileSync(path.join(root,source),destination);if(['src/lib/company-entitlement.mjs','src/lib/identity-return-path.mjs'].includes(source))assert.deepEqual(readFileSync(path.join(root,source)),readFileSync(destination));sourceManifest.push({path:source,sha256:sha256(readFileSync(destination))});}
 const harnessSha256=sha256(readFileSync(new URL(import.meta.url)));
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:components,sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-mobile-workspace-review',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,fontFamily:'Arial'}}>{children}</body></html>}`);
@@ -86,5 +90,5 @@ async function scenario(width,readOnly){
 try{
  for(let attempt=0;attempt<100;attempt++){try{if((await fetch(origin)).ok)break;}catch{}if(server.exitCode!==null)throw Error(log);await new Promise(resolve=>setTimeout(resolve,500));if(attempt===99)throw Error(log);}
  browser=await puppeteer.launch({headless:'shell',args:['--no-sandbox']});for(const width of widths){await scenario(width,false);await scenario(width,true);}assert.deepEqual(errors,[]);
- writeFileSync(path.join(evidence,'mobile-workspace-review-ui-validation.json'),JSON.stringify({validated:true,synthetic:true,checkedAt:new Date().toISOString(),widths,checks,errors,sourceManifest,harnessSha256,providerCalls:0,productionDataWritten:false,physicalPhoneAccepted:false},null,2)+'\n');console.log(JSON.stringify({validated:true,synthetic:true,checks:checks.length,providerCalls:0}));
+ writeFileSync(path.join(evidence,'mobile-workspace-review-ui-validation.json'),JSON.stringify({validated:true,synthetic:true,checkedAt:new Date().toISOString(),widths,checks,errors,sourceManifest,harnessSha256,providerCalls:0,productionDataWritten:false,physicalPhoneAccepted:false,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms},null,2)+'\n');console.log(JSON.stringify({validated:true,synthetic:true,checks:checks.length,providerCalls:0}));
 }catch(error){console.error(JSON.stringify({log,errors,checks}));throw error;}finally{await browser?.close();server.kill();assert.ok(path.resolve(fixture).startsWith(path.resolve(evidence)+path.sep)&&path.basename(fixture).startsWith('mobile-review-ui-'));rmSync(fixture,{recursive:true,force:true});}

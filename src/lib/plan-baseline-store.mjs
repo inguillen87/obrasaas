@@ -1,10 +1,12 @@
 import {WorkspaceError,workspaceId,operationId} from './workspace-policy.mjs';
 import {canApprovePlan} from './plan-import-policy.mjs';
 import {PLAN_BASELINE_VERSION,PLAN_BASELINE_PAGE_SIZE,PLAN_BASELINE_REJECTIONS,planBaselineExact,planBaselineTimestamp,planBaselineSame,planBaselineId,planBaselineReceiptId,planBaselineContext,normalizePlanBaselineSelection,planBaselineSelectionDigest,planBaselineCursor,parsePlanBaselineCursor,appliedPlanBaselineCandidate} from './plan-baseline-policy.mjs';
+import {DOCUMENT_CURVE_CONSENT,DOCUMENT_CURVE_PROFILE} from './plan-import-document-curve.mjs';
 
 const fail=(code='PLAN_BASELINE_INTEGRITY',status=503)=>{throw new WorkspaceError(code,status);};
 const candidateKeys=['draftId','draftRevision','decisionReceiptId','sourceSha256','profile','sourceRowCount','selectedRowCount','appliedAt','curve'];
 const baselineKeys=['version','id','revision','selectionReceiptId',...candidateKeys,'selectedBy','selectedAt','reason'];
+const documentKeys=value=>value?.profile===DOCUMENT_CURVE_PROFILE?['sourceKind','presentation']:[];
 const candidateColumns=`d.id,d.metadata,d."organizationId" AS "organizationId",d."entityId" AS "entityId",r.id AS "decisionId",r.metadata AS "decisionMetadata",r."organizationId" AS "decisionOrganizationId",r."entityId" AS "decisionEntityId",r."actorId" AS "decisionActorId"`;
 const candidateJoin=`FROM public."AuditLog" d LEFT JOIN public."AuditLog" r ON r.id=d.metadata->'decision'->>'receiptId' AND r.action='plan.import.decision' WHERE d."organizationId"=$1 AND d."entityId"=$2 AND d.action='plan.import.draft'`;
 
@@ -13,8 +15,15 @@ export function createPlanBaseline({workspace}){
  const permission=member=>{if(!canApprovePlan(member.role))fail('PLAN_BASELINE_PERMISSION_REQUIRED',403);};
  const candidate=async(client,member,projectId,draftId)=>{
   const row=(await client.query(`SELECT ${candidateColumns} ${candidateJoin} AND d.id=$3`,[member.organizationId,projectId,draftId])).rows[0];
-  return appliedPlanBaselineCandidate(row,projectId,member.organizationId);
+  return decodedCandidate(client,member,projectId,row);
  };
+ async function decodedCandidate(client,member,projectId,row){
+  if(row?.metadata?.consent?.version===DOCUMENT_CURVE_CONSENT||row?.metadata?.analysis?.documentCurve?.profile===DOCUMENT_CURVE_PROFILE){
+   const reviewId=row.metadata.documentReview?.receiptId;
+   row.reviewReceipt=(await client.query(`SELECT id,"organizationId","actorId","entityId",action,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "entityId"=$3 AND action='plan.import.decision'`,[reviewId,member.organizationId,projectId])).rows[0]||null;
+  }
+  return appliedPlanBaselineCandidate(row,projectId,member.organizationId);
+ }
  const receipt=async(client,id)=>(await client.query(`SELECT id,"organizationId","actorId","entityId",action,metadata FROM public."AuditLog" WHERE id=$1`,[id])).rows[0]||null;
  async function validateReceipt(client,member,projectId,row){
   const m=row?.metadata;
@@ -26,9 +35,9 @@ export function createPlanBaseline({workspace}){
    return {row,request,baseline:null,code:o.code};
   }
   const b=o?.baseline;
-  if(!planBaselineExact(o,['state','baseline'])||o.state!=='RECORDED'||!planBaselineExact(b,baselineKeys)||b.version!==PLAN_BASELINE_VERSION||b.id!==planBaselineId(member.organizationId,projectId)||b.revision!==request.expectedBaselineRevision+1||b.selectionReceiptId!==row.id||b.selectedBy!==m.actorId||!planBaselineTimestamp(b.selectedAt)||b.reason!==request.reason||b.draftId!==request.draftId||b.draftRevision!==request.draftRevision||b.decisionReceiptId!==request.decisionReceiptId||b.sourceSha256!==request.sourceSha256)fail();
+  if(!planBaselineExact(o,['state','baseline'])||o.state!=='RECORDED'||!planBaselineExact(b,[...baselineKeys,...documentKeys(b)])||b.version!==PLAN_BASELINE_VERSION||b.id!==planBaselineId(member.organizationId,projectId)||b.revision!==request.expectedBaselineRevision+1||b.selectionReceiptId!==row.id||b.selectedBy!==m.actorId||!planBaselineTimestamp(b.selectedAt)||b.reason!==request.reason||b.draftId!==request.draftId||b.draftRevision!==request.draftRevision||b.decisionReceiptId!==request.decisionReceiptId||b.sourceSha256!==request.sourceSha256)fail();
   let origin;try{origin=await candidate(client,member,projectId,b.draftId);}catch{fail();}
-  if(!planBaselineSame(Object.fromEntries(candidateKeys.map(k=>[k,b[k]])),origin))fail();
+  if(!planBaselineSame(Object.fromEntries([...candidateKeys,...documentKeys(b)].map(k=>[k,b[k]])),origin))fail();
   return {row,request,baseline:structuredClone(b),code:null};
  }
  async function active(client,member,projectId){
@@ -57,8 +66,8 @@ export function createPlanBaseline({workspace}){
     if(context.operationId!==undefined){const key=context.operationId.toLowerCase(),row=await receipt(client,planBaselineReceiptId(member.actorId,context.projectId,key)),found=row?await validateReceipt(client,member,context.projectId,row):null;return result(scope,context.projectId,key,found,current,Boolean(found));}
     let after='';
     if(context.cursor!==undefined){after=parsePlanBaselineCursor(context.cursor,context);try{await candidate(client,member,context.projectId,after);}catch{fail('PLAN_BASELINE_CURSOR_INVALID',400);}}
-    const rows=(await client.query(`SELECT ${candidateColumns} ${candidateJoin} AND d.metadata->>'status'='APPLIED' AND (d.metadata->'analysis'->'spreadsheet'->>'version' IN ('3','4') OR d.metadata->'consent'->>'version' IN ('plan-spreadsheet-monthly-curve-v3','plan-spreadsheet-cyp-curve-v4')) AND d.id>$3 ORDER BY d.id LIMIT ${PLAN_BASELINE_PAGE_SIZE+1}`,[member.organizationId,context.projectId,after])).rows;
-    const candidates=rows.map(row=>{try{return appliedPlanBaselineCandidate(row,context.projectId,member.organizationId);}catch{fail();}}).slice(0,PLAN_BASELINE_PAGE_SIZE);
+    const rows=(await client.query(`SELECT ${candidateColumns} ${candidateJoin} AND d.metadata->>'status'='APPLIED' AND (d.metadata->'analysis'->'spreadsheet'->>'version' IN ('3','4') OR d.metadata->'consent'->>'version' IN ('plan-spreadsheet-monthly-curve-v3','plan-spreadsheet-cyp-curve-v4','${DOCUMENT_CURVE_CONSENT}') OR d.metadata->'analysis'->'documentCurve'->>'profile'='${DOCUMENT_CURVE_PROFILE}') AND d.id>$3 ORDER BY d.id LIMIT ${PLAN_BASELINE_PAGE_SIZE+1}`,[member.organizationId,context.projectId,after])).rows;
+    const allCandidates=[];for(const row of rows){try{allCandidates.push(await decodedCandidate(client,member,context.projectId,row));}catch{fail();}}const candidates=allCandidates.slice(0,PLAN_BASELINE_PAGE_SIZE);
     return {version:PLAN_BASELINE_VERSION,scope,projectId:context.projectId,canSelect:true,active:current,candidates,nextCursor:rows.length>PLAN_BASELINE_PAGE_SIZE?planBaselineCursor(context,candidates.at(-1).draftId):null};
    });
   },

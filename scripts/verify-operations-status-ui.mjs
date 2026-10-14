@@ -4,6 +4,7 @@ import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readFileSync} fr
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),output=path.join(root,'.vercel/operations-status-evidence');mkdirSync(output,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/operations-ui-')),app=path.join(fixture,'app');mkdirSync(app);
@@ -13,6 +14,9 @@ const sourcePaths=["src/app/(identity)/cuenta/operations-status-panel.js","src/a
 const sourceManifest=sourcePaths.map(file=>{const bytes=readFileSync(path.join(root,file));if(copiedSourcePaths.has(file)||false)assert.deepEqual(bytes,readFileSync(path.join(app,path.basename(file))));return {path:file,sha256:createHash('sha256').update(bytes).digest('hex')};});
 assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(app),sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-operations-status-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#f0f4f7',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
@@ -36,6 +40,6 @@ async function scenario(width,mode='normal'){
  if(mode==='normal'){await page.click('[data-context]');await page.waitForFunction(()=>!document.querySelector('dt'));assert.equal(requests,1);await wait(page,'Consultar estado');checks.push(`authorized-context-change-removes-stale-metrics-${width}`);}
  checks.push(`separate-inbox-outbound-media-business-and-provider-metrics-${width}-${mode}`);await context.close();
 }
-try{let ready=false;for(let n=0;n<120;n++){if(server.exitCode!==null)throw new Error('Fixture exited');try{if((await fetch(origin)).ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,500));}assert.ok(ready);browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});for(const width of [320,390,768,1280])await scenario(width);for(const mode of ['denied','wrong-context','retry','empty','missing'])await scenario(390,mode);assert.deepEqual(errors,[]);const proof={status:'PASS',environment:'actual-component-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,sourceManifest,harnessSha256,errors,productionDataWritten:false,providerCalls:0,humanAcceptanceVerified:false};writeFileSync(path.join(output,'browser.json'),JSON.stringify(proof,null,2));rmSync(path.join(output,'browser-failure.json'),{force:true});console.log(JSON.stringify(proof));}
+try{let ready=false;for(let n=0;n<120;n++){if(server.exitCode!==null)throw new Error('Fixture exited');try{if((await fetch(origin)).ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,500));}assert.ok(ready);browser=await puppeteer.launch({headless:true,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});for(const width of [320,390,768,1280])await scenario(width);for(const mode of ['denied','wrong-context','retry','empty','missing'])await scenario(390,mode);assert.deepEqual(errors,[]);const proof={status:'PASS',environment:'actual-component-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,sourceManifest,harnessSha256,errors,productionDataWritten:false,providerCalls:0,humanAcceptanceVerified:false,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};writeFileSync(path.join(output,'browser.json'),JSON.stringify(proof,null,2));rmSync(path.join(output,'browser-failure.json'),{force:true});console.log(JSON.stringify(proof));}
 catch(error){writeFileSync(path.join(output,'browser-failure.json'),JSON.stringify({message:error.message,errors,serverLog},null,2));throw error;}
 finally{await browser?.close();try{if(process.platform!=='win32')process.kill(-server.pid,'SIGTERM');else server.kill();}catch{}await new Promise(resolve=>setTimeout(resolve,500));const resolved=path.resolve(fixture);assert.ok(resolved.startsWith(path.resolve(root,'.vercel')+path.sep));rmSync(resolved,{recursive:true,force:true});}

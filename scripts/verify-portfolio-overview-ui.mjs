@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {spawn,spawnSync,execFileSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),scratch=path.join(root,'.vercel/private');mkdirSync(scratch,{recursive:true});
 const fixture=mkdtempSync(path.join(scratch,'portfolio-ui-')),app=path.join(fixture,'app');mkdirSync(app);
@@ -11,6 +12,9 @@ const files=['portfolio-overview-panel.js','portfolio-overview-panel.module.css'
 const sha=file=>createHash('sha256').update(readFileSync(file)).digest('hex');
 const sourceManifest=files.map(name=>({path:'src/app/(identity)/cuenta/'+name,sha256:sha(path.join(root,'src/app/(identity)/cuenta',name))}));
 for(const name of files)copyFileSync(path.join(root,'src/app/(identity)/cuenta',name),path.join(app,name));
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(app),sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,fontFamily:'Arial'}}>{children}</body></html>}`);
@@ -77,8 +81,8 @@ try{
   checks.push({mode,width,reads:requests.length,providerCalls:0,mutations:0,horizontalOverflow:false});await context.close();
  }
  assert.deepEqual(errors,[]);
-}catch(error){writeFileSync(path.join(scratch,'portfolio-overview-ui-failure.json'),JSON.stringify({error:error.message,log,errors,checks,sourceManifest},null,2));throw error;}
+}catch(error){writeFileSync(path.join(scratch,'portfolio-overview-ui-failure.json'),JSON.stringify({error:error.message,log,errors,checks,sourceManifest,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms},null,2));throw error;}
 finally{await browser?.close();await stopServer();const target=realpathSync(fixture);assert.equal(path.dirname(target),realpathSync(scratch));assert.ok(path.basename(target).startsWith('portfolio-ui-'));rmSync(target,{recursive:true,force:true});removed=!existsSync(target);}
 assert.equal(removed,true);for(const source of sourceManifest)assert.equal(sha(source.path),source.sha256,'Source changed during UI checks');
-const result={state:'PASS_LOCAL_UI_NOT_RELEASE_ACCEPTANCE',sourceRevision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),sourceManifest,harnessSha256:sha('scripts/verify-portfolio-overview-ui.mjs'),checks,widths,errors,fixtureRemoved:true,providerCalls:0,productionDataWritten:false};
-writeFileSync(path.join(scratch,'portfolio-overview-ui-validation.json'),JSON.stringify(result,null,2));console.log(JSON.stringify({...result,sourceManifest:sourceManifest.length,checks:checks.length}));
+const result={state:'PASS_LOCAL_UI_NOT_RELEASE_ACCEPTANCE',sourceRevision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),sourceManifest,harnessSha256:sha('scripts/verify-portfolio-overview-ui.mjs'),checks,widths,errors,fixtureRemoved:true,providerCalls:0,productionDataWritten:false,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
+writeFileSync(path.join(scratch,'portfolio-overview-ui-validation.json'),JSON.stringify(result,null,2));console.log(JSON.stringify({...result,sourceManifest:sourceManifest.length,checks:checks.length,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms}));

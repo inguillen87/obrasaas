@@ -1,4 +1,3 @@
-# Approved plan baseline CI: preserves the 54 prior blocks and 58 artifact patterns.
 name: Authorized workspace acceptance
 "on":
   push:
@@ -16,6 +15,7 @@ name: Authorized workspace acceptance
       - hotfix/subscription-fixture-dependencies-*
       - fix/whatsapp-signup-*
       - fix/clerk-*
+      - feat/document-monthly-curves-*
   workflow_dispatch: null
 permissions:
   contents: read
@@ -156,6 +156,11 @@ jobs:
           npx eslint src/lib/plan-baseline-*.mjs src/app/api/identity/plan-baseline/route.js 'src/app/(identity)/cuenta/plan-baseline-panel.js' 'src/app/(identity)/cuenta/plan-baseline-view.mjs' scripts/verify-plan-baseline-postgres.mjs tests/production-plan-baseline*.test.mjs tests/fixtures/plan-baseline-synthetic.mjs --max-warnings 0
           node --test tests/production-plan-baseline*.test.mjs
           node scripts/verify-plan-baseline-postgres.mjs
+      - name: Document monthly curve explicit review and isolated browser receipts
+        run: |
+          npx eslint scripts/verify-plan-document-curve-ui.mjs scripts/lib/plan-document-curve-ui-fixture.mjs scripts/lib/plan-document-curve-fixture-copy.mjs tests/production-plan-document-curve*.test.mjs tests/production-plan-import-document-curve*.test.mjs tests/fixtures/plan-import-document-curve-synthetic.mjs --max-warnings 0
+          node --test tests/production-plan-document-curve*.test.mjs
+          node scripts/verify-plan-document-curve-ui.mjs --expected-head "$GITHUB_SHA" .vercel/private/plan-document-curve-evidence/current-browser.json
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane plans --expected-head "$GITHUB_SHA"
@@ -171,6 +176,7 @@ jobs:
             .vercel/private/plan-import-ui-*.png
             .vercel/private/workspace-plan-recovery-ui-validation.json
             .vercel/private/approved-plan-baseline-evidence/
+            .vercel/private/plan-document-curve-evidence/
             .vercel/workspace-ci-evidence/lane-plans.json
           include-hidden-files: true
           retention-days: 7
@@ -382,8 +388,8 @@ jobs:
       - name: Channel identity and integrated field transactions
         run: |
           npx eslint src/lib/worker-channel-*.mjs src/lib/meta-field-*.mjs src/app/api/identity/worker-channel src/app/api/meta/customer-process scripts/verify-worker-channel-*.mjs scripts/verify-meta-field-*.mjs scripts/verify-meta-customer-processing-*.mjs scripts/verify-operations-status-ui.mjs tests/production-worker-channel*.test.mjs tests/production-meta-field.test.mjs tests/production-meta-customer-processing.test.mjs tests/production-operations-status.test.mjs
-          npx eslint src/lib/meta-plan-import-*.mjs tests/production-meta-plan-import-conversation.test.mjs tests/production-meta-plan-source-provider.test.mjs tests/production-meta-plan-import-transport.test.mjs tests/production-plan-import-link-ui.test.mjs tests/fixtures/meta-plan-import-transport-synthetic.mjs --max-warnings 0
-          node --test tests/production-meta-plan-import-conversation.test.mjs tests/production-meta-plan-source-provider.test.mjs tests/production-meta-plan-import-transport.test.mjs tests/production-plan-import-link-ui.test.mjs
+          npx eslint src/lib/meta-plan-import-*.mjs tests/production-meta-plan-import-conversation.test.mjs tests/production-meta-plan-source-provider.test.mjs tests/production-meta-plan-import-transport.test.mjs tests/production-plan-import-link-ui.test.mjs tests/production-meta-plan-document-curve.test.mjs tests/fixtures/meta-plan-import-transport-synthetic.mjs --max-warnings 0
+          node --test tests/production-meta-plan-import-conversation.test.mjs tests/production-meta-plan-source-provider.test.mjs tests/production-meta-plan-import-transport.test.mjs tests/production-plan-import-link-ui.test.mjs tests/production-meta-plan-document-curve.test.mjs
           node scripts/verify-worker-channel-postgres.mjs
           node scripts/verify-meta-customer-processing-postgres.mjs
           node scripts/verify-meta-field-bridge-postgres.mjs

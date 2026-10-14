@@ -7,6 +7,7 @@ import puppeteer from 'puppeteer';
 import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-preparation-format.mjs';
 import {createPlanImportHandlers} from '../src/lib/plan-import-http.mjs';
 import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 
 // Real workspace, pagination, plan panel, transport and browser recovery state.
 // Only session tokens and HTTP responses are synthetic; no provider is called.
@@ -25,7 +26,10 @@ for(const source of ['src/lib/geo.js','src/lib/field-media-privacy.mjs','src/lib
  sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(destination)).digest('hex')});
 }
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
-for(const source of ['src/lib/organization-usage-policy.mjs','src/lib/plan-import-http.mjs','src/lib/plan-import-policy.mjs','src/lib/plan-import-store.mjs','src/lib/plan-import-ooxml.mjs','src/lib/plan-import-monthly-curve.mjs','src/lib/plan-import-cyp-curve.mjs','src/lib/workspace-policy.mjs','src/lib/private-image-upload.mjs','package.json','package-lock.json'])sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(path.join(root,source))).digest('hex')});
+for(const source of ['src/lib/organization-usage-policy.mjs','src/lib/plan-import-http.mjs','src/lib/plan-import-policy.mjs','src/lib/plan-import-store.mjs','src/lib/plan-import-ooxml.mjs','src/lib/plan-import-monthly-curve.mjs','src/lib/plan-import-cyp-curve.mjs','src/lib/plan-import-document-curve.mjs','src/lib/workspace-policy.mjs','src/lib/private-image-upload.mjs','package.json','package-lock.json'])sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(path.join(root,source))).digest('hex')});
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components,sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256);else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-plan-recovery-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,fontFamily:'Arial'}}>{children}</body></html>}`);
@@ -365,5 +369,5 @@ try{
  assert.ok(path.resolve(fixture).startsWith(path.resolve(evidence)+path.sep));rmSync(fixture,{recursive:true,force:true});
 }
 // A cleanup failure must exit nonzero without publishing a new successful proof.
-writeFileSync(path.join(evidence,'workspace-plan-recovery-ui-validation.json'),JSON.stringify({validated:true,synthetic:true,checkedAt:new Date().toISOString(),fullSuite:selectedModes.length===modes.length+closureModes.length,selectedModes,realProviderCalls:false,physicalPhoneAccepted:false,widths,checks,sourceManifest,harnessSha256,serverClosedBeforeFixtureRemoval:true,fixtureRemoved:true},null,2)+'\n');
+writeFileSync(path.join(evidence,'workspace-plan-recovery-ui-validation.json'),JSON.stringify({validated:true,synthetic:true,checkedAt:new Date().toISOString(),fullSuite:selectedModes.length===modes.length+closureModes.length,selectedModes,realProviderCalls:false,physicalPhoneAccepted:false,widths,checks,sourceManifest,harnessSha256,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms,serverClosedBeforeFixtureRemoval:true,fixtureRemoved:true},null,2)+'\n');
 console.log(JSON.stringify({validated:true,synthetic:true,realProviderCalls:false,checks:checks.length}));

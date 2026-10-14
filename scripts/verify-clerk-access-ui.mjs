@@ -5,6 +5,7 @@ import path from 'node:path';
 import {spawn} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {IDENTITY_INSTANCE, IDENTITY_ORIGIN, IDENTITY_PUBLIC_KEY} from '../src/lib/production-identity-config.mjs';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 
 // Local component evidence only: no real Clerk session, invitation, JWT or user.
 assert.ok(!process.env.VERCEL && !process.env.VERCEL_ENV, 'Local fixture only');
@@ -34,6 +35,9 @@ const entitlementPath='src/lib/company-entitlement.mjs';copy(path.join(root,enti
 const sourceManifest=sourcePaths.map(file=>{const bytes=readFileSync(path.join(root,file));if(copiedSourcePaths.has(file)||file.startsWith('src/app/(identity)/cuenta/'))assert.deepEqual(bytes,readFileSync(path.join(dir,file)));return {path:file,sha256:createHash('sha256').update(bytes).digest('hex')};});
 assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
 const harnessSha256=createHash('sha256').update(readFileSync(new URL(import.meta.url))).digest('hex');
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture:dir,components:path.join(identity,'cuenta'),sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 write(path.join(dir, 'package.json'), JSON.stringify({name:'synthetic-clerk-access-ui',private:true}));
 write(path.join(dir, 'jsconfig.json'), JSON.stringify({compilerOptions:{baseUrl:'.',paths:{'@/*':['src/*']}}}));
 write(path.join(dir, 'next.config.mjs'), `export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}},webpack(config){config.resolve.alias['@clerk/nextjs']=${JSON.stringify(path.join(dir, 'synthetic-clerk.js'))};return config;}};`);
@@ -407,7 +411,7 @@ try {
   }
   assert.deepEqual(errors, []);
   const proof={status:'PASS',environment:'actual-source-components-local-controlled-Clerk-hooks-and-server-verifier',checks,sourceManifest,harnessSha256,widths,errors,signedOutLinkContrast,focusedMode:entryOnly?'entry-only':null,
-    realClerkLogin:false,realClerkInvitationAcceptance:false,emailDeliveryTested:false,cryptographicJWTVerified:false,productionDataWritten:false,providerWrites:0,automaticMutationRequests:0};
+    realClerkLogin:false,realClerkInvitationAcceptance:false,emailDeliveryTested:false,cryptographicJWTVerified:false,productionDataWritten:false,providerWrites:0,automaticMutationRequests:0,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
   for(const file of ['browser-failure.json','browser-failure.png'])rmSync(path.join(output,file),{force:true});
   writeFileSync(path.join(output,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
 } catch (error) {

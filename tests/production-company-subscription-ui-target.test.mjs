@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {copyFileSync,existsSync,mkdirSync,mkdtempSync,readFileSync,realpathSync,writeFileSync} from 'node:fs';
+import {copyFileSync,existsSync,mkdirSync,mkdtempSync,readFileSync,realpathSync,writeFileSync,unlinkSync} from 'node:fs';
 import {COMPANY_SUBSCRIPTION_UI_VERSION,COMPANY_SUBSCRIPTION_UI_CHECKS,COMPANY_SUBSCRIPTION_UI_WIDTHS,companySubscriptionUiOptions,companySubscriptionUiSourceFiles,companySubscriptionUiFixtureSourceFiles,companySubscriptionUiServerEnvironment} from '../scripts/verify-company-subscription-ui.mjs';
 import {captureOwnedFixture,removeOwnedFixture} from '../scripts/lib/owned-fixture-cleanup.mjs';
 
@@ -24,7 +24,7 @@ test('server subprocess receives operating-system inputs and no provider, databa
   assert.deepEqual(result,{PATH:'os-path',TEMP:'temporary',NEXT_TELEMETRY_DISABLED:'1',NODE_ENV:'development'});
 });
 test('AST closure includes actual subscription, usage, session and durable recovery sources exactly once',() => {
-  const files = companySubscriptionUiSourceFiles(root);assert.equal(new Set(files).size,files.length);assert.equal(files.length,19);
+  const files = companySubscriptionUiSourceFiles(root);assert.equal(new Set(files).size,files.length);assert.equal(files.length,20);
   const baselineDependencies = ['src/app/(identity)/cuenta/plan-baseline-view.mjs','src/app/(identity)/cuenta/plan-source-curve.mjs'];
   for (const file of baselineDependencies) assert.ok(files.includes(file),file);
   const legacySubscriptionSources = [
@@ -47,7 +47,9 @@ test('AST closure includes actual subscription, usage, session and durable recov
     'src/lib/company-entitlement.mjs',
   ];
   assert.equal(legacySubscriptionSources.length,17);
-  assert.deepEqual(files.filter(file => !baselineDependencies.includes(file)),legacySubscriptionSources);
+  assert.deepEqual(files.filter(file => !baselineDependencies.includes(file)&&file!=='src/lib/plan-import-document-curve.mjs'),legacySubscriptionSources);
+  assert.deepEqual(files.filter(file=>file!=='src/lib/plan-import-document-curve.mjs'),[...legacySubscriptionSources,...baselineDependencies].sort());
+  assert.ok(files.includes('src/lib/plan-import-document-curve.mjs'));
   for (const suffix of ['company-subscription-panel.js','company-subscription-view.mjs','company-subscription-panel.module.css','workspace-session-request.mjs','workspace-recovery-storage.mjs','company-usage-panel.js']) assert.ok(files.some(file => file.endsWith(suffix)),suffix);
   assert.deepEqual(companySubscriptionUiFixtureSourceFiles(root),['scripts/lib/company-subscription-ui-fixture.mjs','scripts/lib/owned-fixture-cleanup.mjs','src/lib/company-subscription-catalog.mjs','src/lib/workspace-policy.mjs']);
 });
@@ -58,6 +60,7 @@ test('actual AST closure rejects external stylesheet and unresolved import mutan
     const files = companySubscriptionUiSourceFiles(root);
     for (const relative of files) {const target = path.join(fixture,relative);mkdirSync(path.dirname(target),{recursive:true});copyFileSync(path.join(root,relative),target);}
     assert.deepEqual(companySubscriptionUiSourceFiles(fixture),files);
+    const documentModule=path.join(fixture,'src/lib/plan-import-document-curve.mjs'),documentBytes=readFileSync(documentModule);unlinkSync(documentModule);assert.throws(()=>companySubscriptionUiSourceFiles(fixture));writeFileSync(documentModule,documentBytes);
     const stylesheet = path.join(fixture,'src/app/(identity)/cuenta/company-subscription-panel.module.css'),original = readFileSync(stylesheet);
     writeFileSync(stylesheet,Buffer.concat([original,Buffer.from('\n.attack{background:url(https://foreign.example/private)}')]));assert.throws(() => companySubscriptionUiSourceFiles(fixture));writeFileSync(stylesheet,original);
     const component = path.join(fixture,'src/app/(identity)/cuenta/company-subscription-panel.js');writeFileSync(component,readFileSync(component,'utf8')+"\nconst unexpected=()=>import('./missing-source.mjs');\n");assert.throws(() => companySubscriptionUiSourceFiles(fixture));

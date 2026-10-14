@@ -13,6 +13,7 @@ const prefix=`import React from ${JSON.stringify(import.meta.resolve('react'))};
 ${importFrom('createWorkspaceRequestLifecycle','workspace-request-lifecycle.mjs')}
 ${importFrom('createWorkspaceRecoveryJournal,recoveryResult,planImportCommandDigest,planImportUploadFormDigest','workspace-recovery-journal.mjs')}
 ${importFrom('planImportUsageView,planImportPreservation','plan-import-usage-view.mjs')}
+${importFrom('planDocumentDraftView,documentCurveReviewValue,documentCurveValuesEqual,DOCUMENT_CURVE_PROFILE','plan-source-curve.mjs')}
 ${importFrom('calendarSuggestionBinding,buildPlanCalendarSuggestions,applyPlanCalendarSuggestions','plan-import-calendar-suggestions.mjs')}
 let states=[],refs=[],stateCursor=0,refCursor=0,calls=[],responses=[],lifecycle,browserRecoveryJournal;
 const useState=initial=>{const i=stateCursor++;if(!(i in states))states[i]=typeof initial==='function'?initial():initial;return [states[i],next=>{states[i]=typeof next==='function'?next(states[i]):next;}];};

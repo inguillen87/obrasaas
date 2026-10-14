@@ -5,6 +5,7 @@ import path from 'node:path';
 import {execFileSync,spawn,spawnSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {captureOwnedFixture,removeOwnedFixture} from './lib/owned-fixture-cleanup.mjs';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 
 // Actual client components and recovery storage; every API response is synthetic.
 // The supplied revision identifies the author's base, not committed WIP bytes.
@@ -28,6 +29,9 @@ for(const name of copiedFiles)copyFileSync(path.join(root,'src/app/(identity)/cu
 const sourceManifest=copiedFiles.map(name=>{const file='src/app/(identity)/cuenta/'+name,bytes=readFileSync(path.join(root,file));assert.ok(bytes.equals(readFileSync(path.join(app,name))));return {path:file,bytes:bytes.length,sha256:sha(bytes)};}).sort((a,b)=>a.path.localeCompare(b.path));
 const harnessSha256=sha(readFileSync(new URL(import.meta.url)));
 const cleanupHelperSource=new URL('./lib/owned-fixture-cleanup.mjs',import.meta.url),cleanupHelperSha256=sha(readFileSync(cleanupHelperSource));
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(app),sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-participant-onboarding-delivery-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export const viewport={width:'device-width',initialScale:1};export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
@@ -237,5 +241,5 @@ for(const file of sourceManifest)if(sha(readFileSync(path.join(root,file.path)))
 if(harnessSha256!==sha(readFileSync(new URL(import.meta.url)))){runError ||=Error('HARNESS_DRIFT');errors.push({phase:'harness-drift'});}
 if(cleanupHelperSha256!==sha(readFileSync(cleanupHelperSource))){runError ||=Error('CLEANUP_HELPER_DRIFT');errors.push({phase:'cleanup-helper-drift'});}
 if(ci)try{assert.equal(currentIdentity(),sourceRevision);trackedCleanAfter=true;}catch(error){runError ||=error;errors.push({phase:'ci-source',message:error.message});}
-const proof={status:runError?'FAIL':'PASS',sourceRevision,baseSourceRevision,sourceState:ci?(trackedCleanAfter?'Committed exact Git HEAD; checked clean before and after':'CI source after-check failed; source is not certified clean'):'Author WIP; exact bytes in sourceManifest; no Git operation performed',trackedClean:ci?trackedCleanAfter:null,ciEligible:ci&&!runError,widths,modes,checks,templateGuidanceChecks,errors,sourceManifest,sourceManifestSha256:sha(Buffer.from(JSON.stringify(sourceManifest))),harnessSha256,cleanupHelperSha256,providerRequests:0,realIdentityAcceptance:false,production:false,serverClosedBeforeFixtureRemoval,fixtureRemoved,fixtureCleanupProof};
+const proof={status:runError?'FAIL':'PASS',sourceRevision,baseSourceRevision,sourceState:ci?(trackedCleanAfter?'Committed exact Git HEAD; checked clean before and after':'CI source after-check failed; source is not certified clean'):'Author WIP; exact bytes in sourceManifest; no Git operation performed',trackedClean:ci?trackedCleanAfter:null,ciEligible:ci&&!runError,widths,modes,checks,templateGuidanceChecks,errors,sourceManifest,sourceManifestSha256:sha(Buffer.from(JSON.stringify(sourceManifest))),harnessSha256,cleanupHelperSha256,providerRequests:0,realIdentityAcceptance:false,production:false,serverClosedBeforeFixtureRemoval,fixtureRemoved,fixtureCleanupProof,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
 writeFileSync(path.join(output,'server.log'),serverLog,{flag:'wx'});writeFileSync(path.join(output,'proof.json'),JSON.stringify(proof,null,2)+'\n',{flag:'wx'});if(ci)writeFileSync(path.join(outputRoot,'onboarding-delivery-ui.json'),JSON.stringify(proof,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:proof.status,checks:checks.length,errors:errors.length,proof:path.relative(root,path.join(output,'proof.json')),sourceState:proof.sourceState}));process.stdout.write('',()=>process.exit(runError?1:0));

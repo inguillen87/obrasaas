@@ -7,6 +7,7 @@ import puppeteer from 'puppeteer';
 import {WORKSPACE_NUMBER_MODES,WORKSPACE_USE_CASES,tenantWorkspaceFromMetadata} from '../src/lib/whatsapp/tenant-workspace-policy.js';
 import {customerWhatsAppReadiness} from '../src/lib/customer-whatsapp-setup.mjs';
 import {RECOVERY_DATABASE_NAME} from '../src/app/(identity)/cuenta/workspace-recovery-storage.mjs';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=realpathSync(process.cwd()),parent=path.join(root,'.vercel'),evidence=path.join(parent,'customer-whatsapp-evidence');mkdirSync(evidence,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/customer-whatsapp-ui-')),app=path.join(fixture,'app'),account=path.join(app,'(identity)/cuenta');mkdirSync(account,{recursive:true});
@@ -17,6 +18,9 @@ copyFileSync(path.join(root,'src/lib/company-phone-format.mjs'),path.join(fixtur
 const sourceManifest=[...['customer-whatsapp-panel.js','customer-whatsapp-panel.module.css','customer-whatsapp-view.mjs','company-bootstrap-panel.js','company-bootstrap-panel.module.css','workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','workspace-recovery-journal.mjs','participant-office-account-view.mjs','own-company-number-view.mjs','own-company-templates-view.mjs', 'private-bank-account-format.mjs','company-channel-view.mjs','site-purchase-view.mjs','workspace-recovery-storage.mjs','private-workspace-download.js','plan-baseline-view.mjs','plan-source-curve.mjs'].map(file=>'src/app/(identity)/cuenta/'+file),'src/lib/whatsapp/tenant-workspace-policy.js','src/lib/company-phone-format.mjs','src/lib/customer-whatsapp-setup.mjs','src/lib/whatsapp/project-workspace-profile.js','src/lib/workspace-policy.mjs'].map(file=>({path:file,sha256:createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')}));
 for(const item of sourceManifest){const copied=item.path.startsWith('src/app/')?path.join(account,path.basename(item.path)):item.path==='src/lib/whatsapp/tenant-workspace-policy.js'?path.join(fixture,'lib/whatsapp/tenant-workspace-policy.js'):item.path==='src/lib/company-phone-format.mjs'?path.join(fixture,'lib/company-phone-format.mjs'):null;if(copied)assert.deepEqual(readFileSync(path.join(root,item.path)),readFileSync(copied));}
 const focusedScenario=process.env.WHATSAPP_UI_SCENARIO||null;
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(account),sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'customer-whatsapp-fixture',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{root:${JSON.stringify(root)}}};`);
 const scope='a'.repeat(64),projectId='project-a';
@@ -188,7 +192,7 @@ try{
  const accessModes=['access-load-html401','access-load-html403','access-load-project404','access-post-html401','access-post-html403','access-post-json403','access-post-project404'];
  if(focusedScenario)await scenario(focusedScenario);else{for(const width of [320,390,768,1280])for(const mode of accessModes)await scenario(mode,width);for(const width of [320,390])await scenario('access-close-absent',width);}
  assert.deepEqual(pageErrors,[]);
- const proof={status:'PASS',environment:'real-component-with-synthetic-intercepted-api',checkedAt:new Date().toISOString(),checks,widths:focusedScenario?[390]:[320,390,768,1280],fullSuite:!focusedScenario,focusedScenario,sourceManifest,harnessSha256:createHash('sha256').update(readFileSync(path.join(root,'scripts/verify-customer-whatsapp-ui.mjs'))).digest('hex'),pageErrors,metaCalls:0,realCustomerAuthorization:false,productionDataWritten:false};
+ const proof={status:'PASS',environment:'real-component-with-synthetic-intercepted-api',checkedAt:new Date().toISOString(),checks,widths:focusedScenario?[390]:[320,390,768,1280],fullSuite:!focusedScenario,focusedScenario,sourceManifest,harnessSha256:createHash('sha256').update(readFileSync(path.join(root,'scripts/verify-customer-whatsapp-ui.mjs'))).digest('hex'),pageErrors,metaCalls:0,realCustomerAuthorization:false,productionDataWritten:false,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
  rmSync(path.join(evidence,'failure.json'),{force:true});writeFileSync(path.join(evidence,'proof.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
 }catch(error){writeFileSync(path.join(evidence,'failure.json'),JSON.stringify({status:'FAILED',activeScenario,message:error.message,pageErrors,serverLog},null,2));throw error;}
 finally{await browser?.close();try{if(process.platform!=='win32')process.kill(-server.pid,'SIGTERM');else server.kill();}catch{}await new Promise(resolve=>setTimeout(resolve,500));const resolved=realpathSync(fixture);assert.equal(path.dirname(resolved),realpathSync(parent));assert.ok(path.basename(resolved).startsWith('customer-whatsapp-ui-'));rmSync(resolved,{recursive:true,force:true});}

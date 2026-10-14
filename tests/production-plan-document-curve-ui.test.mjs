@@ -1,0 +1,82 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {loadBindings,transform} from 'next/dist/build/swc/index.js';
+import {createDocumentCurveUiScenario,DOCUMENT_CURVE_UI_PDF,documentCurveUiValue} from '../scripts/lib/plan-document-curve-ui-fixture.mjs';
+const account=new URL('../src/app/(identity)/cuenta/',import.meta.url),reactUrl=import.meta.resolve('react');
+const source=readFileSync(new URL('plan-import-panel.js',account),'utf8').replace(/^import .*;\r?\n/gm,'');
+const stateNames=[...source.matchAll(/\[([A-Za-z]+),set[A-Za-z]+\]=useState/g)].map(m=>m[1]);
+const from=(names,file)=>`import {${names}} from ${JSON.stringify(new URL(file,account).href)};`;
+const prefix=`import React from ${JSON.stringify(reactUrl)};
+${from('createWorkspaceRequestLifecycle','workspace-request-lifecycle.mjs')}
+${from('createWorkspaceRecoveryJournal,recoveryResult,planImportCommandDigest,planImportUploadFormDigest','workspace-recovery-journal.mjs')}
+${from('planImportUsageView,planImportPreservation','plan-import-usage-view.mjs')}
+${from('planDocumentDraftView,documentCurveReviewValue,documentCurveValuesEqual,DOCUMENT_CURVE_PROFILE','plan-source-curve.mjs')}
+${from('calendarSuggestionBinding,buildPlanCalendarSuggestions,applyPlanCalendarSuggestions','plan-import-calendar-suggestions.mjs')}
+let states=[],refs=[],stateCursor=0,refCursor=0,scenario,rows,lifecycle,browserRecoveryJournal,loseAck=null,lastWireError=null;
+const useState=initial=>{const i=stateCursor++;if(!(i in states))states[i]=initial;return [states[i],v=>{states[i]=typeof v==='function'?v(states[i]):v;}];};
+const useRef=initial=>refs[refCursor++]??(refs[refCursor-1]={current:initial}),useEffect=()=>{},useCallback=v=>v,useWorkspaceRequest=()=>lifecycle.request;
+const styles={},FileUp=()=>null,FileCheck2=()=>null,Download=()=>null,TriangleAlert=()=>null,PlanSourceCurve=()=>null,DocumentCurveEvidence=()=>null,RECOVERY_EVENT='synthetic-document-recovery';
+export function setup(seed,controller){states=[];refs=[];scenario=controller;loseAck=null;rows=new Map();for(const [key,v] of Object.entries(seed))states[${JSON.stringify(stateNames)}.indexOf(key)]=v;
+ const storage={get length(){return rows.size;},key:i=>[...rows.keys()][i]??null,getItem:key=>rows.get(key)??null,setItem:(key,v)=>rows.set(key,v),removeItem:key=>rows.delete(key)};
+ browserRecoveryJournal=createWorkspaceRecoveryJournal({getStorage:()=>storage,now:()=>1});
+ lifecycle=createWorkspaceRequestLifecycle(async()=> 'synthetic-document-ui-session',{journal:browserRecoveryJournal,fetchImpl:async(url,options)=>{let result;try{result=await scenario.handle(url,options);}catch(error){lastWireError=error.stack;throw error;}let action;try{action=typeof options.body==='string'?JSON.parse(options.body).action:null;}catch{}if(loseAck!==null&&action===loseAck){loseAck=null;throw new TypeError('Lost synthetic commit acknowledgement');}return Response.json(result.value,{status:result.status});}});
+}
+export const render=props=>{stateCursor=refCursor=0;return PlanImportPanel(props);};
+export const editor=props=>{stateCursor=refCursor=0;return DocumentCurveReview(props);};
+export const state=()=>Object.fromEntries(${JSON.stringify(stateNames)}.map((name,i)=>[name,states[i]]));
+export const loseNextAck=action=>{loseAck=action;};
+export const references=()=>[...rows.values()].map(JSON.parse);
+export const wireError=()=>lastWireError;
+`;
+await loadBindings();
+const compiled=await transform(prefix+source,{filename:'plan-document-ui-actual.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});
+const ui=await import('data:text/javascript;base64,'+Buffer.from(compiled.code).toString('base64'));
+const props={scope:'a'.repeat(64),projectId:'project_synthetic',canonicalAccess:true,getSessionToken:async()=>'synthetic'};
+const file=()=>new File([DOCUMENT_CURVE_UI_PDF],'synthetic-financial.pdf',{type:'application/pdf'});
+function find(node,predicate,found=[]){if(!node||typeof node!=='object')return found;if(Array.isArray(node)){node.forEach(child=>find(child,predicate,found));return found;}if(predicate(node))found.push(node);find(node.props?.children,predicate,found);return found;}
+const text=node=>node===null||node===undefined||typeof node==='boolean'?'':typeof node==='string'||typeof node==='number'?String(node):Array.isArray(node)?node.map(text).join(''):text(node.props?.children);
+const button=(tree,label)=>{const node=find(tree,n=>n.type==='button'&&text(n)===label)[0];assert.ok(node,'Missing '+label);return node;};
+async function upload(controller,{role=true}={}){
+ ui.setup({open:true,recoveryReady:true,canApprove:role,file:file()},controller);let tree=ui.render(props);
+ const purpose=find(tree,n=>n.type==='select'&&n.props['data-document-purpose'])[0];if(role){purpose.props.onChange({target:{value:'FINANCIAL_MONTHLY_CURVE'}});tree=ui.render(props);}
+ const consent=find(tree,n=>n.type==='input'&&n.props.type==='checkbox')[0];consent.props.onChange({target:{checked:true}});tree=ui.render(props);await find(tree,n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});await new Promise(setImmediate);assert.ok(ui.state().draft,'Upload must expose its current draft: '+JSON.stringify({wireError:ui.wireError(),message:ui.state().message,attempt:ui.state().attempt,trace:controller.trace}));return ui.render(props);
+}
+function reason(value){find(ui.render(props),n=>n.type==='textarea'&&n.props.minLength===8)[0].props.onChange({target:{value}});}
+test('actual selector defaults to tasks, requires a fresh unchecked consent, and never POSTs from rendering',()=>{
+ const controller=createDocumentCurveUiScenario();ui.setup({open:true,recoveryReady:true,canApprove:true,file:file(),consent:true},controller);let tree=ui.render(props);const selector=find(tree,n=>n.type==='select'&&n.props['data-document-purpose'])[0];assert.equal(selector.props.value,'TASKS');selector.props.onChange({target:{value:'FINANCIAL_MONTHLY_CURVE'}});tree=ui.render(props);assert.equal(find(tree,n=>n.type==='input'&&n.props.type==='checkbox')[0].props.checked,false);assert.equal(button(tree,'Extraer borrador').props.disabled,true);assert.equal(controller.trace.length,0);
+});
+test('SITE_MANAGER keeps PDF task import and receives no document financial purpose',async()=>{
+ const controller=createDocumentCurveUiScenario({canApprove:false});const tree=await upload(controller,{role:false});assert.equal(find(tree,n=>n.props?.['data-document-purpose']).length,0);assert.equal(controller.publicDraft().financialSource,undefined);assert.equal(controller.publicDraft().rows.length,1);assert.equal(controller.trace.filter(r=>r.method==='POST').length,1);
+});
+test('real financial handlers preserve original, save review, and apply with no tasks or baseline effect',async()=>{
+ const controller=createDocumentCurveUiScenario({mode:'INCORRECT'});let tree=await upload(controller);const original=structuredClone(controller.publicDraft().documentCurve),review=structuredClone(original);delete review.coherence;review.periods[0].monthlyAmount.decimalText=review.periods[0].monthlyAmount.rawText;
+ find(tree,n=>n.type?.name==='DocumentCurveReview')[0].props.onChange(review);reason('Comparé los importes con el archivo sintético');tree=ui.render(props);find(tree,n=>n.props?.['data-document-review-confirm'])[0].props.onChange({target:{checked:true}});tree=ui.render(props);await button(tree,'Guardar revisión financiera').props.onClick();assert.deepEqual(controller.publicDraft().documentCurve,original);assert.equal(controller.publicDraft().documentReviewed,true);assert.equal(controller.publicDraft().reviewedCurve.coherence.status,'CONSISTENT');
+ reason('Apruebo esta revisión financiera sintética');tree=ui.render(props);find(tree,n=>n.props?.['data-document-apply-confirm'])[0].props.onChange({target:{checked:true}});tree=ui.render(props);await button(tree,'Aprobar curva sin crear tareas').props.onClick();assert.equal(controller.publicDraft().status,'APPLIED');assert.deepEqual(controller.publicDraft().rows,[]);assert.equal(controller.active(),null);assert.deepEqual(controller.trace.filter(r=>r.method==='POST').map(r=>r.action),['UPLOAD','REVIEW_CURVE','APPLY_CURVE']);assert.equal(ui.references().length,0);
+});
+test('inconsistent review can be saved but direct or disabled APPLY handler cannot dispatch it',async()=>{
+ const controller=createDocumentCurveUiScenario({mode:'INCORRECT'});await upload(controller);reason('Dejo registrado el desacuerdo sintético');let tree=ui.render(props);find(tree,n=>n.props?.['data-document-review-confirm'])[0].props.onChange({target:{checked:true}});tree=ui.render(props);await button(tree,'Guardar revisión financiera').props.onClick();tree=ui.render(props);assert.equal(button(tree,'Aprobar curva sin crear tareas').props.disabled,true);await button(tree,'Aprobar curva sin crear tareas').props.onClick();assert.deepEqual(controller.trace.filter(r=>r.method==='POST').map(r=>r.action),['UPLOAD','REVIEW_CURVE']);
+});
+test('actual APPLY lostACK stores only a reference and explicit GET recovers without a second POST',async()=>{
+ const controller=createDocumentCurveUiScenario();await upload(controller);reason('Comparé todos los datos sintéticos');let tree=ui.render(props);find(tree,n=>n.props?.['data-document-review-confirm'])[0].props.onChange({target:{checked:true}});await button(ui.render(props),'Guardar revisión financiera').props.onClick();reason('Aprobación sintética para prueba de recibo');tree=ui.render(props);find(tree,n=>n.props?.['data-document-apply-confirm'])[0].props.onChange({target:{checked:true}});ui.loseNextAck('APPLY_CURVE');await button(ui.render(props),'Aprobar curva sin crear tareas').props.onClick();const reference=ui.references()[0];assert.equal(reference.action,'APPLY_CURVE');for(const name of ['curve','rawText','decimalText','reason','file','token'])assert.equal(Object.hasOwn(reference,name),false);const posts=controller.trace.filter(r=>r.method==='POST').length;await button(ui.render(props),'Comprobar resultado').props.onClick();assert.equal(controller.trace.filter(r=>r.method==='POST').length,posts);assert.equal(ui.references().length,0);assert.equal(ui.state().draft.status,'APPLIED');
+});
+test('unconfirmed year or invalid page correction cannot reserve or POST a financial review',async()=>{
+ const controller=createDocumentCurveUiScenario();let tree=await upload(controller),value=structuredClone(controller.publicDraft().documentCurve);delete value.coherence;value.periods[0].calendarMonth='2037-01';value.periods[0].calendarEvidence=[];find(tree,n=>n.type?.name==='DocumentCurveReview')[0].props.onChange(value);reason('No inventar el año de esta fuente');tree=ui.render(props);assert.equal(find(tree,n=>n.props?.['data-document-review-confirm'])[0].props.disabled,true);await button(tree,'Guardar revisión financiera').props.onClick();assert.equal(controller.trace.filter(r=>r.method==='POST').length,1);assert.equal(ui.references().length,0);
+});
+test('actual field editor preserves original and treats clearing a reading as unknown rather than zero',()=>{
+ const value=documentCurveUiValue(),before=structuredClone(value),controller=createDocumentCurveUiScenario();let changed;ui.setup({},controller);const editor=ui.editor({value,onChange:next=>{changed=next;}});const field=find(editor,n=>n.type==='fieldset'&&n.props['data-document-value']==='total')[0];button(field,'Dejar este dato sin confirmar').props.onClick();assert.equal(changed.total.decimalText,null);assert.equal(changed.total.rawText,null);assert.equal(Object.hasOwn(changed,'coherence'),false);assert.deepEqual(value,before);
+});
+test('image review cannot POST a second page even through a saved confirmation or direct disabled handler',async()=>{
+ const controller=createDocumentCurveUiScenario();await upload(controller);const draft=controller.publicDraft(),curve=structuredClone(draft.documentCurve);delete curve.coherence;curve.total.evidence[0].page=2;draft.source.contentType='image/png';ui.setup({open:true,recoveryReady:true,canApprove:true,draft,curveDraft:curve,curveReviewConfirmed:true,reason:'Comparo una imagen de una sola página'},controller);const tree=ui.render(props);assert.equal(button(tree,'Guardar revisión financiera').props.disabled,true);await button(tree,'Guardar revisión financiera').props.onClick();assert.equal(ui.references().length,0);assert.equal(controller.trace.filter(row=>row.method==='POST').length,1);
+});
+test('percentage controls accept the printed percentage and preserve every decimal without floating point conversion',()=>{
+ assert.equal(ui.documentPercentageInput('35.50'),'0.3550');assert.equal(ui.documentPercentageInput('35,50%'),'0.3550');assert.equal(ui.documentPercentageInput('100'),'1.00');assert.equal(ui.documentPercentageDisplay('1'),'100');assert.equal(ui.documentPercentageDisplay('0.3550'),'35.50');assert.equal(ui.documentPercentageInput('0.000000000000000001'),'0.00000000000000000001');for(const invalid of ['1,000.00','-2','1e2','abc'])assert.equal(ui.documentPercentageInput(invalid),'INVALID_PERCENTAGE');
+ const controller=createDocumentCurveUiScenario(),value=documentCurveUiValue();let changed;ui.setup({},controller);const tree=ui.editor({value,onChange:next=>{changed=next;}}),input=find(tree,n=>n.props?.['data-document-number']==='periods.0.monthlyPercentage')[0];assert.equal(input.props.value,'25');input.props.onChange({target:{value:'35,50'}});assert.equal(changed.periods[0].monthlyPercentage.decimalText,'0.3550');assert.equal(value.periods[0].monthlyPercentage.decimalText,'.25');assert.ok(!text(tree).includes('0.25 representa'));
+});
+test('real source renderer graphs amount-only monthly data and exposes exact decimals and proposed page geometry',async()=>{
+ const sourceCurve=readFileSync(new URL('plan-source-curve.js',account),'utf8').replace(/^import .*;\r?\n/gm,'');const helper=new URL('plan-source-curve.mjs',account).href;
+ const result=await transform(`import React,{useId,useRef,useState} from ${JSON.stringify(reactUrl)};import {formatSourceCurveDecimal,planSourceCurveView,sourceCurveKeyboardIndex,planDocumentCurveView,documentCurveKeyboardIndex,documentCurvePlot,DOCUMENT_CURVE_PROFILE} from ${JSON.stringify(helper)};const styles={};`+sourceCurve,{filename:'actual-document-curve-renderer.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});const curveComponent=await import('data:text/javascript;base64,'+Buffer.from(result.code).toString('base64'));
+ const html=renderToStaticMarkup(React.createElement(curveComponent.PlanSourceCurve,{curve:documentCurveUiValue({amountOnly:true}),profile:'DOCUMENT_MONTHLY_CURVE_V1',status:'READY'})).replace(/<!--[\s\S]*?-->/g,'');assert.ok(html.includes('<polyline'));assert.match(html,/Importe mensual previsto del documento/);assert.match(html,/25\.000\.000\.000\.000\.000\.000,000000000001/);assert.match(html,/Zona propuesta/);assert.ok(!html.includes('Celda de origen'));assert.ok(!html.includes('Tareas elegidas: 0'));
+});

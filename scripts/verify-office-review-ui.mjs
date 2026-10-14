@@ -7,6 +7,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import puppeteer from 'puppeteer';
 import {officeAdminSnapshot,officeReviewSnapshot} from '../src/app/(identity)/cuenta/office-review-view.mjs';
+import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
 
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV,'Office review UI verification is local and synthetic');
 const root=realpathSync(process.cwd()),vercelRoot=path.join(root,'.vercel'),evidence=path.join(vercelRoot,'office-review-evidence');
@@ -24,6 +25,9 @@ mkdirSync(account,{recursive:true});mkdirSync(path.join(fixture,'lib'));
 for(const file of copiedFiles)copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(account,file));
 copyFileSync(path.join(root,'src/lib/identity-return-path.mjs'),path.join(fixture,'lib/identity-return-path.mjs'));
 for(const source of sourceManifest){const copied=source.path.startsWith('src/app/')?path.join(account,path.basename(source.path)):path.join(fixture,'lib',path.basename(source.path));source.copiedSha256=hash(readFileSync(copied));assert.equal(source.copiedSha256,source.sha256,'The owned fixture must use the exact declared source');}
+const documentCurveSourceManifest=[];
+const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(account),sourceManifest:documentCurveSourceManifest});
+for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'synthetic-office-review-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#081c2d',color:'#edf4fa',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
@@ -187,7 +191,7 @@ finally{
  try{const resolvedFixture=realpathSync(fixture);assert.ok(resolvedFixture.startsWith(realpathSync(vercelRoot)+path.sep)&&path.basename(resolvedFixture).startsWith('office-review-ui-'),'Cleanup must remain inside the exact owned fixture');rmSync(resolvedFixture,{recursive:true,force:true});cleanup.fixtureRemoved=!existsSync(resolvedFixture);}catch(error){failure??=error;}
 }
 if(!Object.values(cleanup).every(Boolean))failure??=new Error('Owned fixture cleanup must complete');
-const report={schemaVersion:1,kind:'SYNTHETIC_OFFICE_REVIEW_UI',status:failure?'FAIL':'PASS',checkedAt:new Date().toISOString(),gitHead,trackedClean,harnessPath,harnessSha256,ciSourceVerified:Boolean(process.env.CI),sourceManifest,generatedSources,widths,selectedMode,checks,errors,unexpectedRequests,inlineResourceRequests,cleanup,limits:{syntheticFixtures:true,actualReactPanels:true,actualCss:true,actualRequestLifecycleAndRecoveryJournal:true,localInterceptedPostsOnly:true,inlineImagesAreNonNetworkResources:true,liveBusinessWrites:0,providerCalls:0,productionCalls:0,realLoginTested:false,metaFreshStateVerified:false,realMessageDeliveryVerified:false,humanAcceptance:false},...(failure?{failure:failure.message,serverLog}:{})};
+const report={schemaVersion:1,kind:'SYNTHETIC_OFFICE_REVIEW_UI',status:failure?'FAIL':'PASS',checkedAt:new Date().toISOString(),gitHead,trackedClean,harnessPath,harnessSha256,ciSourceVerified:Boolean(process.env.CI),sourceManifest,generatedSources,widths,selectedMode,checks,errors,unexpectedRequests,inlineResourceRequests,cleanup,limits:{syntheticFixtures:true,actualReactPanels:true,actualCss:true,actualRequestLifecycleAndRecoveryJournal:true,localInterceptedPostsOnly:true,inlineImagesAreNonNetworkResources:true,liveBusinessWrites:0,providerCalls:0,productionCalls:0,realLoginTested:false,metaFreshStateVerified:false,realMessageDeliveryVerified:false,humanAcceptance:false},...(failure?{failure:failure.message,serverLog}:{}),documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
 writeFileSync(path.join(evidence,'ui.json'),JSON.stringify(report,null,2));
 if(failure)throw failure;
 console.log(JSON.stringify({status:'PASS',checks:checks.length,widths,evidence,resultSha256:hash(readFileSync(path.join(evidence,'ui.json'))),cleanup}));
