@@ -60,6 +60,23 @@ export function participantKycChatCapabilities(row,canManage,now){
  return {observed:true,canPrepare:eligible&&value.canPrepare,canCancel:cancellable&&value.canCancel,challenge:{...value}};
 }
 
+// Status copy only. A device clock can request a fresh consultation, never
+// expire the canonical challenge, grant cancellation or replace an operation.
+export function participantKycChatPresentation(chat,now){
+ if(chat?.observed!==true||!chat.challenge)return null;
+ const challenge=chat.challenge;
+ if(challenge.status==='COMPLETED')return {state:'SAVED',label:'guardada',description:'Las imágenes fueron presentadas. La revisión de identidad y los permisos se consultan por separado.'};
+ if(['CANCELLED','CLOSED'].includes(challenge.status))return {state:'CLOSED',label:'cerrada',description:'La presentación anterior y su recibo se conservan. No se preparó otro código.'};
+ if(!['PENDING','CLAIMED'].includes(challenge.status))return null;
+ if(challenge.step==='FINALIZING'||challenge.recoveryRequired===true||challenge.blockedCode==='PARTICIPANT_KYC_CHAT_CONFIRMATION_PENDING')return {state:'UNCONFIRMED',label:'resultado por comprobar',description:'Consultá el mismo intento para comprobar si quedó guardado. No vuelvas a enviar la presentación ni prepares otro código.'};
+ if(challenge.expired===true)return {state:'EXPIRED',label:'plazo vencido',description:'El plazo de presentación está vencido. El responsable debe revisar su cierre antes de preparar otro código.'};
+ const dates=[challenge.expiresAt,...(challenge.conversationExpiresAt?[challenge.conversationExpiresAt]:[])].map(Date.parse);
+ if(!Number.isFinite(now)||now<0||dates.some(value=>!Number.isFinite(value)||value<=now))return {state:'TIME_UNCONFIRMED',label:'plazo por comprobar',description:'Consultá la presentación vigente para comprobar su plazo. El reloj del dispositivo no cierra la presentación ni permite preparar otro código.'};
+ return challenge.status==='PENDING'
+  ?{state:'PREPARED',label:'código preparado',description:'La presentación todavía no comenzó. La persona debe continuar desde su WhatsApp registrado.'}
+  :{state:'IN_PROGRESS',label:'en curso',description:'Continuá desde el último mensaje de identidad del bot. Cada autorización y la presentación de imágenes son pasos personales.'};
+}
+
 const consult=()=>step('CONTEXT_UNVERIFIED','CONSULT_ACCESS','Comprobar mi acceso');
 const bank=()=>({action:'CONSULT_PRIVATE_BANK',label:'Mi cuenta privada'});
 const selected=(records,key,value)=>{
