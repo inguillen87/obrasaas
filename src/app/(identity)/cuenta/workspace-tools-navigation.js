@@ -7,6 +7,7 @@ const tool=(id,label)=>({id,label});
 const destinations={
  schedule:tool('schedule-title','Tareas y cronograma'),
  plan:tool('plan-import-title','Importación de cronograma'),
+ planMeasurement:tool('plan-measurement-title','Metrados por revisar'),
  projectPreparation:tool('project-preparation-title','Preparación de la obra'),
  register:tool('site-register-title','Incidencias y materiales'),
  field:tool('field-title','Jornada, evidencia y avance'),
@@ -56,6 +57,7 @@ export function WorkspaceToolsNavigation({canManageIntegrations=false,canImportP
  const visible=new Set(groups.flatMap(group=>group.tools.map(item=>item.id)));
  // An open import is an outstanding action inside the schedule panel.
  if(canImportPlan)visible.add(destinations.plan.id);
+ if(canImportPlan&&canManageIntegrations)visible.add(destinations.planMeasurement.id);
  const outstanding=[...(schedulePending?[scheduleEditing?tool('schedule-edit-title','Planificación pendiente'):destinations.schedule]:[]),...Object.entries(pending).filter(([,value])=>value===true).map(([key])=>destinations[key]).filter(item=>item&&visible.has(item.id))];
  return <nav className={styles.navigation} aria-labelledby="workspace-tools-title">
   <div className={styles.heading}><p className={styles.eyebrow}>NAVEGACIÓN</p><h3 id="workspace-tools-title">Herramientas de esta obra</h3><p className={styles.intro}>Todo el trabajo, en el mismo contexto.</p></div>

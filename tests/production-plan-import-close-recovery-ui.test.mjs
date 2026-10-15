@@ -62,16 +62,34 @@ async function closeAndRecover({decision=false,pendingUsage=false}={}){
  const durable=await panel.durable(scope);assert.equal(durable.length,1);assert.equal(durable[0].operationId,reference.operationId);assert.ok(!JSON.stringify(durable).includes(file.name));
  await button(tree,'Comprobar resultado').props.onClick();tree=panel.render(props);
  if(!pendingUsage)assert.equal(panel.snapshot().retryAllowed,true);
- assert.ok(panel.ref('attemptPayload').current,'There really was an exact RAM transport before close');
+ const payload=panel.ref('attemptPayload').current;assert.ok(payload,'There really was an exact RAM transport before close');
  const staleRetry=pendingUsage?null:button(tree,'Reintentar los mismos datos').props.onClick,work=panel.snapshot();
- button(tree,'Cerrar').props.onClick();const closed=panel.snapshot();assert.equal(closed.open,false);assert.equal(closed.retryAllowed,false);assert.equal(panel.ref('attemptPayload').current,null);
+ button(tree,'Cerrar').props.onClick();const closed=panel.snapshot();assert.equal(closed.open,false);assert.equal(closed.retryAllowed,false);assert.equal(panel.ref('attemptPayload').current,payload);
  assert.equal(closed.file,file);assert.equal(closed.draft,work.draft);assert.deepEqual(closed.rows,work.rows);assert.equal(closed.reason,work.reason);assert.equal(closed.attempt,reference);assert.equal(panel.ref('attemptReference').current,reference);assert.deepEqual(await panel.durable(scope),durable);
  // A retained callback from the closed view must also be unable to resend.
  await staleRetry?.();assert.equal(panel.requests().filter(x=>x.method==='POST').length,1);
- tree=panel.render(props);await button(tree,'Importar PDF, imagen o Excel').props.onClick();tree=panel.render(props);await button(tree,'Comprobar resultado').props.onClick();tree=panel.render(props);
- assert.equal(panel.snapshot().retryAllowed,false);assert.equal(nodes(tree,node=>node.type==='button'&&text(node)==='Reintentar los mismos datos').length,0);assert.equal(panel.ref('attemptPayload').current,null);assert.equal(panel.snapshot().file,file);assert.deepEqual(panel.snapshot().draft,work.draft);assert.deepEqual(panel.snapshot().rows,work.rows);assert.equal(panel.snapshot().reason,work.reason);assert.equal(panel.snapshot().attempt,reference);assert.deepEqual(await panel.durable(scope),durable);
+ tree=panel.render(props);assert.equal(button(tree,'Importar PDF, imagen o Excel').props.id,'plan-import-title');await button(tree,'Importar PDF, imagen o Excel').props.onClick();tree=panel.render(props);assert.equal(nodes(tree,node=>node.type==='button'&&text(node)==='Reintentar los mismos datos').length,0);await button(tree,'Comprobar resultado').props.onClick();tree=panel.render(props);
+ assert.equal(panel.snapshot().retryAllowed,!pendingUsage);assert.equal(nodes(tree,node=>node.type==='button'&&text(node)==='Reintentar los mismos datos').length,pendingUsage?0:1);assert.equal(panel.ref('attemptPayload').current,payload);assert.equal(panel.snapshot().file,file);assert.deepEqual(panel.snapshot().draft,work.draft);assert.deepEqual(panel.snapshot().rows,work.rows);assert.equal(panel.snapshot().reason,work.reason);assert.equal(panel.snapshot().attempt,reference);assert.deepEqual(await panel.durable(scope),durable);
+ // A fresh GET permits only the current render's explicit retry, never an older callback.
+ await staleRetry?.();assert.equal(panel.requests().filter(x=>x.method==='POST').length,1);
  assert.equal(panel.requests().filter(x=>x.method==='POST').length,1);assert.ok(panel.requests().filter(x=>x.operationId).every(x=>x.operationId===reference.operationId));assert.ok(panel.requests().slice(1).every(x=>x.method==='GET'));assert.equal(nodes(tree,node=>node.type==='input'&&node.props.type==='file').length,0);
 }
-test('closing an uncertain upload drops RAM resend data and remains GET-only after another NOT_OBSERVED',async()=>{await closeAndRecover();});
-test('closing an uncertain correction preserves source file rows and reason while discarding the old resend callback',async()=>{await closeAndRecover({decision:true});});
-test('closing a pending usage observation retains its durable reference and source while discarding transport RAM',async()=>{await closeAndRecover({pendingUsage:true});});
+test('closing an uncertain upload preserves the exact RAM transport and requires a fresh GET before explicit retry',async()=>{await closeAndRecover();});
+test('closing an uncertain correction preserves source rows reason and snapshot while invalidating the old resend callback',async()=>{await closeAndRecover({decision:true});});
+test('closing a pending usage observation preserves its exact transport and reference without authorizing any retry',async()=>{await closeAndRecover({pendingUsage:true});});
+
+test('removing a selected local file requires a current confirmation and preserves canonical draft rows and receipt',()=>{
+ const file=new File(['synthetic'],'local-selected.pdf',{type:'application/pdf'}),recorded={...draft('OBSERVED'),status:'APPLIED'},receipt='recorded-synthetic-receipt';
+ panel.reset({open:true,recoveryReady:true,file,consent:true,draft:recorded,rows:[row],reason:'Retained recorded work',receipt},[]);
+ let tree=panel.render(props);button(tree,'Quitar archivo local').props.onClick();tree=panel.render(props);
+ assert.equal(panel.snapshot().file,file);assert.equal(panel.requests().length,0);button(tree,'Conservar archivo').props.onClick();assert.equal(panel.snapshot().file,file);
+ tree=panel.render(props);button(tree,'Quitar archivo local').props.onClick();tree=panel.render(props);button(tree,'Confirmar quitar archivo local').props.onClick();
+ const result=panel.snapshot();assert.equal(result.file,null);assert.equal(result.consent,false);assert.equal(result.draft,recorded);assert.deepEqual(result.rows,[row]);assert.equal(result.reason,'Retained recorded work');assert.equal(result.receipt,receipt);assert.equal(panel.requests().length,0);
+});
+
+test('an old local-file confirmation cannot remove a replacement file or run while an attempt is uncertain',()=>{
+ const first=new File(['first'],'first.pdf',{type:'application/pdf'}),second=new File(['second'],'second.pdf',{type:'application/pdf'});
+ panel.reset({open:true,recoveryReady:true,file:first},[]);let tree=panel.render(props);button(tree,'Quitar archivo local').props.onClick();tree=panel.render(props);const stale=button(tree,'Confirmar quitar archivo local').props.onClick;
+ panel.ref('attemptReference').current={scope,projectId,operationId:'aabbddee-0000-4000-8000-000000000001'};stale();assert.equal(panel.snapshot().file,first);assert.equal(panel.requests().length,0);
+ panel.ref('attemptReference').current=null;nodes(tree,node=>node.type==='input'&&node.props.type==='file')[0].props.onChange({target:{files:[second]}});stale();assert.equal(panel.snapshot().file,second);assert.equal(panel.snapshot().removeFileRequested,false);assert.equal(panel.requests().length,0);
+});
