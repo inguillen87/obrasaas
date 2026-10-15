@@ -12,11 +12,16 @@ import {deriveTaskMeasurement} from './task-progress-measurement.js';
 const menuOptions=[['ATTEND_IN','Entrada'],['ATTEND_PAUSE','Iniciar pausa'],['ATTEND_RESUME','Volver de pausa'],['ATTEND_OUT','Salida'],['TASKS','Cronograma y tareas'],['MEDIA','Enviar evidencia'],['INCIDENT','Informar incidencia'],['MATERIAL','Pedir material'],['CONSUMPTION','Proponer consumo'],['PROGRESS','Proponer avance'],['PLAN_IMPORT','Importar cronograma'],['STATUS','Consultar estado']];
 const aliases={MENU:'MENU',AYUDA:'MENU',HOLA:'MENU',ENTRADA:'ATTEND_IN',PAUSA:'ATTEND_PAUSE',VOLVER:'ATTEND_RESUME',SALIDA:'ATTEND_OUT',TAREAS:'TASKS',CRONOGRAMA:'TASKS',GANTT:'TASKS','IMPORTAR CRONOGRAMA':'PLAN_IMPORT','IMPORTAR PLAN':'PLAN_IMPORT',EVIDENCIA:'MEDIA',EVIDENCIAS:'OWN_EVIDENCE',AVANCES:'OWN_PROGRESS',INCIDENCIA:'INCIDENT',MATERIALES:'MATERIAL',CONSUMO:'CONSUMPTION',CONSUMOS:'OWN_CONSUMPTIONS',AVANCE:'PROGRESS',ESTADO:'STATUS',CANCELAR:'MENU'};
 export const metaFieldConversationAction=body=>typeof body==='string'?aliases[body.trim().toUpperCase()]||null:null;
+// A read requirement, never participant authority. The signed bridge proves
+// the recovery origin/binding and current permission before using this scope.
+export function metaFieldRecoveryCatalogRead({message,state,recovery,now,attendanceOnly=false}){
+ return attendanceOnly!==true&&message?.type==='text'&&metaFieldConversationAction(message.text?.body)==='CONSUMPTION'&&state?.version===1&&state.purpose==='CONSUMPTION'&&now instanceof Date&&Number.isFinite(now.getTime())&&Date.parse(state.expiresAt)>now.getTime()&&recovery?.version===1&&recovery.expired!==true&&recovery.deadline===state.expiresAt&&Date.parse(recovery.deadline)>now.getTime();
+}
 const attendanceEvents={ATTEND_IN:'CHECK_IN',ATTEND_PAUSE:'BREAK_START',ATTEND_RESUME:'BREAK_END',ATTEND_OUT:'CHECK_OUT'};
 const journeyExplanation={ATTENDANCE_SHIFT_ALREADY_OPEN:'Ya tenés una jornada abierta.',ATTENDANCE_SHIFT_NOT_OPEN:'Primero registrá una entrada.',ATTENDANCE_BREAK_ALREADY_OPEN:'Tu pausa ya está abierta. Registrá el regreso de pausa para continuar.',ATTENDANCE_BREAK_NOT_OPEN:'No hay una pausa abierta.',ATTENDANCE_BREAK_OPEN:'Registrá el regreso de pausa antes de la salida.'};
 const text=body=>({type:'text',body});
 const permits=(purpose,facts)=>purpose==='PLAN_IMPORT'?canImportPlan(facts.planImportRole):purpose==='TASKS'||(purpose==='ATTENDANCE'?facts.permissions.attendance===true:facts.permissions.report===true);
-const denied=purpose=>({state:null,reply:text((purpose==='ATTENDANCE'?'Tu participación no tiene habilitado el registro de jornada.':'Tu participación no tiene habilitado el envío de reportes, evidencia o propuestas de avance.')+' Pedí al responsable que revise tus permisos en Mi cuenta. Escribí MENU para consultar las opciones disponibles.')});
+const denied=purpose=>markMetaFieldDisclosure({state:null,reply:text((purpose==='ATTENDANCE'?'Tu participación no tiene habilitado el registro de jornada.':'Tu participación no tiene habilitado el envío de reportes, evidencia o propuestas de avance.')+' Pedí al responsable que revise tus permisos en Mi cuenta. Escribí MENU para consultar las opciones disponibles.')},'GENERIC');
 function journeyError(action,facts){try{fieldTransition(attendanceEvents[action],facts.latest);return null;}catch(error){if(!Object.hasOwn(journeyExplanation,error.code))throw error;return error.code;}}
 const availableMenu=facts=>menuOptions.filter(([action])=>(!facts.attendanceOnly||action.startsWith('ATTEND_')||action==='STATUS')).filter(([action])=>action==='PLAN_IMPORT'?permits('PLAN_IMPORT',facts):action.startsWith('ATTEND_')?permits('ATTENDANCE',facts)&&!journeyError(action,facts):action==='CONSUMPTION'?permits('REPORT',facts)&&Boolean(facts.inventory?.materials?.some(m=>m.active)):['MEDIA','INCIDENT','MATERIAL','PROGRESS'].includes(action)?permits('REPORT',facts):true);
 const progressHint='Usá el formato 25% o 2.5 / 10 M2. La base debe ser mayor que cero y la cantidad no puede superarla. Usá punto, hasta 4 decimales y hasta 14 cifras enteras, sin ceros a la izquierda. El borrador se conserva. Escribí CANCELAR para volver al menú.';
@@ -58,7 +63,9 @@ function chooseTask(state,eventId,facts,detail=''){
  if(page.hasPrevious)rows.push(['PREVIOUS_TASKS','Tareas anteriores']);if(page.hasNext)rows.push(['NEXT_TASKS','Más tareas']);
  return choices({...state,step:'TASK',taskPage:page},eventId,state.purpose==='TASKS'?scheduleReadBody(facts,detail):detail||'Elegí la tarea de este registro. Podés recorrer todas las páginas.',rows);
 }
-function consumptionMaterials(state,eventId,facts){const materials=facts.inventory?.materials?.filter(m=>m.active)||[];if(!materials.length)return {state:null,reply:text('El responsable debe configurar el catálogo antes de proponer consumo. El stock no cambió.')};const offset=state.materialOffset||0,rows=materials.slice(offset,offset+8).map(m=>[m.id,m.name+' · '+m.unit]);if(offset>0)rows.push(['PREVIOUS','Materiales anteriores']);if(offset+8<materials.length)rows.push(['NEXT','Más materiales']);return choices({...state,step:'CONSUMPTION_MATERIAL',materialOffset:offset},eventId,'Elegí el material del catálogo. La propuesta requiere revisión antes de descontar stock.',rows);}
+function consumptionMaterials(state,eventId,facts){const materials=facts.inventory?.materials?.filter(m=>m.active)||[];if(!materials.length)return state.consumptionRecovery?{state,preserveConversation:true,reply:text('El catálogo no tiene materiales disponibles. Conservamos el borrador y su plazo; pedí al responsable que revise el catálogo o descartalo con CANCELAR.') }:{state:null,reply:text('El responsable debe configurar el catálogo antes de proponer consumo. El stock no cambió.')};const offset=Math.min(state.materialOffset||0,Math.floor((materials.length-1)/8)*8),rows=materials.slice(offset,offset+8).map(m=>[m.id,m.name+' · '+m.unit]);if(offset>0)rows.push(['PREVIOUS','Materiales anteriores']);if(offset+8<materials.length)rows.push(['NEXT','Más materiales']);const previous=state.recoverySuggestion;return choices({...state,step:'CONSUMPTION_MATERIAL',materialOffset:offset},eventId,(previous?'Borrador anterior: '+previous.quantity+' '+previous.unit+' de '+previous.name+'. Es una sugerencia, sin conversión ni aplicación automática.\n':'')+'Elegí el material del catálogo vigente. La propuesta requiere revisión antes de descontar stock.',rows);}
+function consumptionReasonPrompt(state,eventId){return state.consumptionRecovery?choices({...state,step:'CONSUMPTION_RECOVERY_REASON'},eventId,'Motivo anterior: '+state.recoverySuggestion.reason.slice(0,550)+(state.recoverySuggestion.reason.length>550?'…':'')+'\nConfirmá si sigue correspondiendo al material y la cantidad elegidos.',[['KEEP_REASON','Usar motivo anterior'],['NEW_REASON','Escribir otro motivo']]):{state:{...state,step:'REASON'},reply:text('Explicá para qué se usó el material. Todavía no se descuenta stock.')};}
+function consumptionConfirmation(state,eventId){return confirm(state,eventId,'Consumo propuesto: '+state.quantity+' '+state.unit+' de '+state.name+'\nEl stock se conserva hasta revisión del responsable.\nMotivo: '+state.reason.slice(0,550)+(state.reason.length>550?'…':'')+'\n¿Guardar para revisión?');}
 const consumptionState=state=>({PENDING:'Pendiente de revisión',APPROVED:'Aprobado',REJECTED:'Rechazado',REVERSED:'Revertido'}[state]||'Estado no confirmado');
 const consumptionName=c=>c.materialName||'Material '+c.materialId;
 const consumptionReason=value=>value.length>600?value.slice(0,600)+'… (motivo completo en Mi cuenta)':value;
@@ -97,7 +104,8 @@ function ownReportDetail(state,facts,id){
  body+='\n'+(r.section==='EVIDENCE'?'La revisión de evidencia no acredita por sí sola avance ejecutado ni identidad civil.':'La propuesta original y la decisión son registros distintos. Consultar no modifica el avance vigente de la tarea.')+'\nUsá las opciones de la lista anterior o escribí '+reportCommand(state.purpose)+' para volver al inicio.';
  return {state,preserveConversation:true,reply:text(body),reportRead:true};
 }
-function statusReply(facts){const e=facts.latest,page=facts.ownConsumptions;let body='Obra: '+compactReadText(facts.projectName,160)+'\nJornada: '+(!e||e.eventType==='CHECK_OUT'?'cerrada':e.phase==='ON_BREAK'?'en pausa':'en curso');
+function statusReply(facts){const e=facts.latest,page=facts.ownConsumptions;let body='Obra: '+compactReadText(facts.projectName,160);
+ if(facts.permissions.attendance===true)body+='\nJornada: '+(!e||e.eventType==='CHECK_OUT'?'cerrada':e.phase==='ON_BREAK'?'en pausa':'en curso');
  if(facts.permissions.report===true)body+='\nEvidencias y avances: consultá tus informes para ver la revisión vigente, su motivo y sus recibos.';
  if(facts.permissions.report===true&&page)body+='\nConsumos informados por tu cuenta (últimos '+page.records.length+'):'+(page.records.length?'\n'+page.records.map(c=>consumptionName(c).slice(0,45)+' · '+c.quantity+' '+c.unit+' · '+consumptionState(c.state)).join('\n'):' ninguno.')+(page.nextCursor?'\nHay más informes para consultar.':'');
  return boundedReadBody(body+(facts.permissions.report===true?'\nEscribí EVIDENCIAS, AVANCES o CONSUMOS para consultar tus informes.':'\nConsultá los recibos de jornada en Mi cuenta.'),Number.isSafeInteger(facts.replyBodyLimit)?facts.replyBodyLimit:1024);
@@ -156,14 +164,62 @@ function start(action,eventId,facts,now){
  if(action==='STATUS'){const body=statusReply(facts);return facts.permissions.report===true?{...choices({purpose:'OWN_CONSUMPTIONS',step:'OWN_CONSUMPTION_STATUS',consumptionAfter:null},eventId,body,[['OWN_EVIDENCE','Mis evidencias'],['OWN_PROGRESS','Mis avances'],...(facts.ownConsumptions?[['OWN_CONSUMPTIONS','Mis consumos']]:[]),['MENU','Volver al menú']]),consumptionRead:Boolean(facts.ownConsumptions)}:{state:null,reply:text(body)};}
  if(action==='OWN_CONSUMPTIONS')return permits('REPORT',facts)?ownConsumptionList({},eventId,facts):denied('REPORT');
  if(ownReportPurposes.includes(action))return permits('REPORT',facts)?ownReportList({},eventId,facts,action):denied('REPORT');
- if(attendanceEvents[action]){if(!permits('ATTENDANCE',facts))return denied('ATTENDANCE');const error=journeyError(action,facts);if(error)return choices({step:'MENU',purpose:'MENU'},eventId,journeyExplanation[error]+' No registramos otro fichaje. Elegí una acción disponible.',availableMenu(facts));return chooseSector({purpose:'ATTENDANCE',eventType:attendanceEvents[action],expectedEventId:facts.latest?.id||null},eventId,facts);}
+ if(attendanceEvents[action]){if(!permits('ATTENDANCE',facts))return denied('ATTENDANCE');const error=journeyError(action,facts);if(error)return markMetaFieldDisclosure(choices({step:'MENU',purpose:'MENU'},eventId,journeyExplanation[error]+' No registramos otro fichaje. Elegí una acción disponible.',availableMenu(facts)),'ATTENDANCE');return chooseSector({purpose:'ATTENDANCE',eventType:attendanceEvents[action],expectedEventId:facts.latest?.id||null},eventId,facts);}
  if(!permits('REPORT',facts))return denied('REPORT');
  return chooseTask({purpose:action,...(action==='MEDIA'?{mediaAuthorizationVersion:META_FIELD_MEDIA_AUTHORIZATION_VERSION}:{})},eventId,facts);
 }
 
 // Only provider-authenticated messages enter this state machine. Interactive
 // choices are single-context capabilities; free text never authorizes approval.
-export function planMetaFieldConversation({message,state,eventId,facts,now}){
+const canonicalPlanDisclosures=new WeakMap();
+const recoveryCatalogPlans=new WeakSet();
+export const metaFieldRecoveryCatalogPlan=plan=>recoveryCatalogPlans.has(plan);
+const reportPurposes=new Set(['MEDIA','INCIDENT','MATERIAL','CONSUMPTION','PROGRESS','OWN_CONSUMPTIONS','OWN_EVIDENCE','OWN_PROGRESS']);
+export function metaFieldPurposeDisclosure(purpose){if(purpose==='ATTENDANCE')return 'ATTENDANCE';if(reportPurposes.has(purpose))return 'REPORT';if(purpose==='PLAN_IMPORT')return 'PLAN_IMPORT';if(purpose==='MENU')return 'MENU';if(purpose==='TASKS')return 'GENERIC';return null;}
+const menuActions=new Set(menuOptions.map(([action])=>action));
+export function metaFieldMenuDisclosure(choices,base='MENU'){
+ // Choices themselves reveal which journey transitions/catalog operations are
+ // available. This union only adds capabilities to the canonical base. A role
+ // requirement cannot be represented by these two flags, so fail closed rather
+ // than turning a future PLAN_IMPORT menu into an ordinary report permission.
+ if(!['MENU','WITHDRAWAL','GENERIC','ATTENDANCE','REPORT','MIXED'].includes(base)||!Array.isArray(choices)||!choices.length||choices.some(choice=>!menuActions.has(choice?.value)))return null;
+ const attendance=['ATTENDANCE','MIXED'].includes(base)||choices.some(choice=>Object.hasOwn(attendanceEvents,choice.value)),report=['REPORT','MIXED'].includes(base)||choices.some(choice=>reportPurposes.has(choice.value));
+ return attendance?(report?'MIXED':'ATTENDANCE'):report?'REPORT':base;
+}
+// This classification is produced by the canonical planner, never accepted in
+// an inbound payload or inferred from translated/private reply text.
+export const metaFieldPlanDisclosure=plan=>canonicalPlanDisclosures.get(plan)||null;
+function markMetaFieldDisclosure(plan,disclosure){canonicalPlanDisclosures.set(plan,disclosure);return plan;}
+function classifyPlan(input,plan){
+ const {message,state,facts,now}=input,body=message.type==='text'?message.text?.body?.trim().toUpperCase():null,action=metaFieldConversationAction(body);
+ const active=state?.version===1&&Date.parse(state.expiresAt)>now.getTime()?state:null;
+ const selection=message.type==='interactive'?(message.interactive?.list_reply?.id||message.interactive?.button_reply?.id):null,match=/^obra:([a-f0-9]{20}):(\d{1,2})$/.exec(selection||'');
+ const selected=active&&match&&match[1]===active.nonce?active.choices?.[Number(match[2])]?.value:null;
+ let disclosure=canonicalPlanDisclosures.get(plan);
+ if(!disclosure){
+ if((body==='CANCELAR'||selected==='CANCEL')&&!plan.command&&(!plan.state||plan.state.purpose==='MENU'))disclosure='WITHDRAWAL';
+ else if(action==='STATUS'||selected==='STATUS'||plan.state?.step==='OWN_CONSUMPTION_STATUS')disclosure=facts.permissions.attendance===true?(facts.permissions.report===true?'MIXED':'ATTENDANCE'):'REPORT';
+ else if(action==='TASKS'||plan.state?.purpose==='TASKS')disclosure='GENERIC';
+ else if(body==='HOLA'&&active?.purpose!=='MENU'&&plan.preserveConversation&&active?.purpose!=='PLAN_IMPORT')disclosure='GENERIC';
+ else if(plan.command)disclosure=plan.command.action==='ATTENDANCE'?'ATTENDANCE':'REPORT';
+ else if(plan.media||plan.reportRead||plan.consumptionRead)disclosure='REPORT';
+ else if(plan.planImport)disclosure='PLAN_IMPORT';
+ else if(selection&&!active)disclosure='GENERIC'; // Expired/stale choice feedback contains no old draft.
+ else if(plan.state)disclosure=metaFieldPurposeDisclosure(plan.state.purpose);
+ else if(action==='MENU')disclosure='MENU';
+ else if(active)disclosure=metaFieldPurposeDisclosure(active.purpose);
+ else if(action)disclosure='GENERIC'; // Friendly refusal with no private draft.
+ }
+ // Only an emitted general menu carries these choices. HOLA preserving a
+ // private draft and stale-choice text feedback do not emit a new menu.
+ if(plan.state?.purpose==='MENU'&&plan.reply?.type==='interactive')disclosure=metaFieldMenuDisclosure(plan.state.choices,disclosure);
+ if(!disclosure)throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);
+ canonicalPlanDisclosures.set(plan,disclosure);return plan;
+}
+export function planMetaFieldConversation(input){const {message,state,eventId,facts,now}=input;
+ const plan=planMetaFieldConversationInput({message,state,eventId,facts,now});return classifyPlan(input,plan);
+}
+function planMetaFieldConversationInput({message,state,eventId,facts,now}){
  try{return planConversation({message,state,eventId,facts,now});}
  catch(error){
   // Recover only the current input step. Identity, permission, revision and
@@ -197,6 +253,15 @@ function planConversation({message,state,eventId,facts,now}){
   if(alias==='MENU'&&body?.toUpperCase()==='CANCELAR')return start('MENU',eventId,facts,now);
   if(alias)return {state:active,preserveConversation:true,reply:text('Conservamos el borrador del cronograma. Respondé al mensaje de ese paso para continuar, o con CANCELAR para descartarlo explícitamente.')};
   return continueMetaPlanImportConversation({message,state:active,eventId,facts,now});
+ }
+ if(facts.consumptionRecovery&&active?.purpose==='CONSUMPTION'&&body?.toUpperCase()!=='CANCELAR'){
+  if(!permits('REPORT',facts))return denied('REPORT');
+  if(alias==='CONSUMPTION'){
+   const recovery=facts.consumptionRecovery,suggestion=recovery.suggestion,next={...active,consumptionRecovery:{version:1,id:recovery.id,deadline:recovery.deadline,contextDigest:recovery.contextDigest,rejectionReceiptId:recovery.lastError.receiptId},recoverySuggestion:suggestion,materialOffset:0};
+   for(const key of ['materialId','name','unit','catalogHash','quantity','reason'])delete next[key];
+   const plan=consumptionMaterials(next,eventId,facts);recoveryCatalogPlans.add(plan);return plan;
+  }
+  if(alias||active.consumptionRecovery?.rejectionReceiptId!==facts.consumptionRecovery.lastError.receiptId)return {state:active,preserveConversation:true,reply:text('Conservamos el consumo pendiente, su mensaje original y su plazo. Respondé a ese mensaje con CONSUMO para volver a elegir material y revisar cantidad y motivo, o CANCELAR para descartarlo.')};
  }
  if(alias)return start(alias,eventId,facts,now);
  const selection=message.type==='interactive'?(message.interactive?.type==='list_reply'?message.interactive.list_reply?.id:message.interactive?.type==='button_reply'?message.interactive.button_reply?.id:null):null;
@@ -308,8 +373,10 @@ function planConversation({message,state,eventId,facts,now}){
  if(s.step==='MATERIAL_NAME'){s.name=siteText(body,160,2);return {state:{...s,step:'MATERIAL_QUANTITY'},reply:text('Escribí la cantidad exacta, por ejemplo 12 o 2.5. Usá punto para los decimales.')};}
  if(s.step==='MATERIAL_QUANTITY'){s.quantity=siteQuantity(body);return choices({...s,step:'MATERIAL_UNIT'},eventId,'Elegí la unidad.',MATERIAL_UNITS.map(u=>[u,u]));}
  if(s.step==='MATERIAL_UNIT'){if(!selected)return {state:active,reply:text('Elegí la unidad del menú anterior.')};s.unit=selected;return {state:{...s,step:'REASON'},reply:text('Explicá para qué necesitás el material. El pedido requiere autorización de compra.')};}
- if(s.step==='CONSUMPTION_MATERIAL'){if(selected==='NEXT'||selected==='PREVIOUS')return consumptionMaterials({...s,materialOffset:Math.max(0,(s.materialOffset||0)+(selected==='NEXT'?8:-8))},eventId,facts);const material=facts.inventory?.materials?.find(m=>m.id===selected&&m.active);if(!material)return {state:active,reply:text('Elegí un material del catálogo anterior.')};return {state:{...s,step:'CONSUMPTION_QUANTITY',materialId:material.id,name:material.name,unit:material.unit,catalogHash:facts.inventory.catalogHash},reply:text('Material: '+material.name+'\nUnidad: '+material.unit+'\nEscribí la cantidad consumida, con punto y hasta tres decimales.')};}
- if(s.step==='CONSUMPTION_QUANTITY'){s.quantity=inventoryQuantity(body);return {state:{...s,step:'REASON'},reply:text('Explicá para qué se usó el material. Todavía no se descuenta stock.')};}
+ if(s.step==='CONSUMPTION_MATERIAL'){if(selected==='NEXT'||selected==='PREVIOUS')return consumptionMaterials({...s,materialOffset:Math.max(0,(s.materialOffset||0)+(selected==='NEXT'?8:-8))},eventId,facts);const material=facts.inventory?.materials?.find(m=>m.id===selected&&m.active);if(!material)return {state:active,reply:text('Elegí un material del catálogo anterior.')};const next={...s,step:'CONSUMPTION_QUANTITY',materialId:material.id,name:material.name,unit:material.unit,catalogHash:facts.inventory.catalogHash};if(s.consumptionRecovery&&s.recoverySuggestion.unit===material.unit)return choices({...next,step:'CONSUMPTION_RECOVERY_QUANTITY'},eventId,'Material elegido: '+material.name+'\nUnidad: '+material.unit+'\nCantidad anterior sugerida: '+s.recoverySuggestion.quantity+' '+s.recoverySuggestion.unit+'. Elegí si corresponde usarla.',[['KEEP_QUANTITY','Usar cantidad anterior'],['NEW_QUANTITY','Escribir otra cantidad']]);return {state:next,reply:text('Material: '+material.name+'\nUnidad: '+material.unit+'\n'+(s.consumptionRecovery?'La unidad anterior era '+s.recoverySuggestion.unit+'. No convertimos la cantidad.\n':'')+'Escribí la cantidad consumida, con punto y hasta tres decimales.')};}
+ if(s.step==='CONSUMPTION_RECOVERY_QUANTITY'){if(selected==='NEW_QUANTITY')return {state:{...s,step:'CONSUMPTION_QUANTITY'},reply:text('Escribí la cantidad consumida en '+s.unit+', con punto y hasta tres decimales.')};if(selected!=='KEEP_QUANTITY'||s.unit!==s.recoverySuggestion.unit)return {state:active,reply:text('Elegí una cantidad desde el mensaje vigente.')};s.quantity=inventoryQuantity(s.recoverySuggestion.quantity);return consumptionReasonPrompt(s,eventId);}
+ if(s.step==='CONSUMPTION_QUANTITY'){s.quantity=inventoryQuantity(body);return consumptionReasonPrompt(s,eventId);}
+ if(s.step==='CONSUMPTION_RECOVERY_REASON'){if(selected==='NEW_REASON')return {state:{...s,step:'REASON'},reply:text('Escribí el motivo vigente, de 8 a 1000 caracteres.')};if(selected!=='KEEP_REASON')return {state:active,reply:text('Elegí el motivo desde el mensaje vigente.')};s.reason=siteText(s.recoverySuggestion.reason,1000,8,true);return consumptionConfirmation(s,eventId);}
  if(s.step==='MEASUREMENT_SCOPE'){
   if(!['DELTA','CUMULATIVE'].includes(selected))return {state:active,reply:text('Elegí Realizado hoy o Total acumulado en el menú anterior.')};
   const task=facts.tasks.find(t=>t.id===s.taskId);

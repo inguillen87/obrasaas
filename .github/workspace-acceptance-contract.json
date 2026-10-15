@@ -4097,11 +4097,11 @@
       },
       {
         "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
-        "sha256": "b672e9830733b0759104acf12b1ca7d9f02f49d7c8420dfd046931b3c8f8fc0e"
+        "sha256": "2706bd16d34d44b647161ad73441aad3d07b6def741e0075a928db9ca6a063b4"
       },
       {
         "path": "scripts/verify-company-kyc-outbound-compact-ci.mjs",
-        "sha256": "5c0af6f13c767cb4bb809388a45b3d6a671c0519679c9c7e9e82c301d8375920"
+        "sha256": "4b643f0af2909511b38dea9d1c66dc59b70ea06cab8f9638440e223da970033a"
       },
       {
         "path": "scripts/verify-consumption-feedback-ci.mjs",
@@ -4335,5 +4335,52 @@
         }
       ]
     }
+  },
+  "fieldOutboundCurrentRevision": {
+    "version": 1,
+    "referenceHead": "9d65c743bfaa2fbc0cf964ff4a21e8c27028c12f",
+    "referenceTree": "8ed2c3a9e0519edbbc405888781cdb52a3ccf22c",
+    "previousContractSha256": "5cfa4ffc63c260b2ab158f769ce95cde88a69b6d0365ea2b9cca35f0cf2605bb",
+    "validationDeltas": [
+      {
+        "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
+        "previousSha256": "b672e9830733b0759104acf12b1ca7d9f02f49d7c8420dfd046931b3c8f8fc0e",
+        "currentSha256": "2706bd16d34d44b647161ad73441aad3d07b6def741e0075a928db9ca6a063b4"
+      },
+      {
+        "path": "scripts/verify-company-kyc-outbound-compact-ci.mjs",
+        "previousSha256": "5c0af6f13c767cb4bb809388a45b3d6a671c0519679c9c7e9e82c301d8375920",
+        "currentSha256": "4b643f0af2909511b38dea9d1c66dc59b70ea06cab8f9638440e223da970033a"
+      }
+    ],
+    "reviewedSourceChanges": [
+      {
+        "path": "src/lib/meta-customer-processing.mjs",
+        "previousSha256": "f2bb4443d149895e9c69beac5b148f7733a9951a292289c4f2ac2a420e5d54c2",
+        "currentSha256": "e4a52dbd2ce86793b66c4af5963c288b13d7b2b2f656c4c6f795bcac8074f4ad"
+      },
+      {
+        "path": "src/lib/meta-kyc-identity.mjs",
+        "previousSha256": "5b65901dc449288516535312569fd69198d6699c98204e3c0146d13fcd26d160",
+        "currentSha256": "b647de9ee86b32848d689a153658e8c34b98699287ad9758332531300470a5a8"
+      }
+    ],
+    "limits": {
+      "sourceLeaseMs": 60000,
+      "statementDelayMs": 225,
+      "graphDelayMs": 200,
+      "compactSources": 127,
+      "consumptionSources": 110
+    },
+    "validationSources": [
+      {
+        "path": "scripts/lib/field-outbound-current-ci-lineage.mjs",
+        "sha256": "1537ffbb1ddfcb582f4c06dea4887c7558321e3f60eba65a15a4ba3e7714cd21"
+      },
+      {
+        "path": "tests/production-field-outbound-current-ci-lineage.test.mjs",
+        "sha256": "b3aac294e6baa10d94a6cf5dfc95611560a86ee4bf40d71bf2f0c6553f945925"
+      }
+    ]
   }
 }

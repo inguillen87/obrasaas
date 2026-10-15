@@ -5,7 +5,7 @@ import { normalizeFieldCommand, fieldTransition, evaluateFieldLocation, fieldRec
 import { insertSiteReport, publicSiteReport } from './site-register-store.mjs';
 import { META_DEMO_PILOT_PROTOCOL } from './meta-cloud-protocol.mjs';
 import { compareProgressMeasurementQuantities } from './progress-measurement-quantity.js';
-import {MATERIAL_INVENTORY_ACTIONS,applyInventoryFieldAction,readInventory,readOwnConsumptions,readConsumption,readStockAdjustment,lockStockAdjustmentProposer} from './material-inventory.mjs';
+import {MATERIAL_INVENTORY_ACTIONS,MATERIAL_CATALOG_LIMIT,inventoryCatalog,inventoryCatalogHash,applyInventoryFieldAction,readInventory,readOwnConsumptions,readConsumption,readStockAdjustment,lockStockAdjustmentProposer} from './material-inventory.mjs';
 import {lockPersonWorksiteJourney,assertPersonWorksiteJourney} from './person-worksite-journey.mjs';
 import {OVERTIME_ACTIONS,canDecideOvertime} from './field-overtime-policy.mjs';
 import {createFieldOvertime} from './field-overtime-store.mjs';
@@ -178,6 +178,21 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
           linked.push(publicFieldEvidence(record));
         }
         return {scope,projectId:context.projectId,proposalId:row.id,proposalRevision:row.revision,evidence:linked};
+      });
+    },
+    async recoveryMaterialCatalog(session,context) {
+      if(!workspaceId(context.workerId))throw new WorkspaceError('FIELD_QUERY_INVALID');
+      return run(session,context,false,async(client,member,scope,project)=>{
+        if(!member.channelProof)throw new WorkspaceError('FIELD_QUERY_INVALID');
+        const access=await reviewAccess(client,member,session,context.projectId,scope),owned=access.owned.slice(0,101),inventoryOwned=owned.filter(row=>row.metadata.participant.permissions?.report===true);
+        if(!inventoryOwned.some(row=>row.id===context.workerId))throw new WorkspaceError('FIELD_PARTICIPANT_REQUIRED',403);
+        // Keep every KYC check made by the complete field read, including other
+        // owned report participants. A narrower result cannot hide bad proofs.
+        for(const row of inventoryOwned)await assertApprovedParticipantKyc(client,{...row,projectId:project.id},{...member,clerkUserId:session.userId},{code:'FIELD_KYC_REVIEW_REQUIRED'});
+        const current=(await client.query(`SELECT id,metadata,${revision('"updatedAt"')} AS revision FROM public."Project" WHERE id=$1 AND "organizationId"=$2`,[context.projectId,member.organizationId])).rows;
+        if(current.length!==1||current[0].id!==project.id)throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
+        const catalog=inventoryCatalog(current[0]);
+        return {scope,projectId:project.id,projectRevision:current[0].revision,inventory:{version:1,catalogVersion:catalog.catalogVersion,catalogHash:inventoryCatalogHash(catalog),catalogLimit:MATERIAL_CATALOG_LIMIT,materials:catalog.materials}};
       });
     },
     async read(session,context) {
