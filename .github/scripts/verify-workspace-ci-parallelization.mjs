@@ -12,7 +12,7 @@ import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourc
 import {KYC_EXPIRED_CURRENT_ADDITIONS,KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,validateKycExpiredCurrentWorkspaceContract as validatePublishedKycWorkspaceContract,verifyKycExpiredCurrentSources as verifyPublishedKycSources} from '../../scripts/lib/kyc-expired-current-ci-lineage.mjs';
 import {PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES,planMeasurementCurrentDependencies,reconstructPublishedHContract,verifyPlanMeasurementCurrentSources} from '../../scripts/lib/plan-measurement-current-ci-lineage.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="69d3ad4b9ec0cf4d1696aa226e83b13d266741887b23314e5b23ad2c73baa0ad";
+export const EXPECTED_CONTRACT_SHA256="1c361f22405cb3b0b923a923cfacda927a7a62c97c47bb9e9e81a8d8906be654";
 function validateKycExpiredCurrentWorkspaceContract(contract){return validatePublishedKycWorkspaceContract(contract.planMeasurementCurrentLineage?reconstructPublishedHContract(contract):contract);}
 function verifyKycExpiredCurrentSources(section,readSource){
  const current=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));
