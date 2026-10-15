@@ -1,7 +1,7 @@
 import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {WorkspaceError,workspaceId,operationId,digest,WORKSPACE_ROLES} from './workspace-policy.mjs';
 import {participantRevision,participantReason} from './participant-policy.mjs';
-import {assertApprovedParticipantKyc} from './participant-approved-identity.mjs';
+import {assertApprovedParticipantKyc,assertApprovedParticipantKycEvidence} from './participant-approved-identity.mjs';
 import {participantIdentityOperation} from './workspace-store.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {metaCustomerContentDigest} from './meta-customer-callback.mjs';
@@ -13,12 +13,22 @@ import {companyConnectionForProject} from './company-channel-connection.mjs';
 import {lockPersonWorksiteJourney} from './person-worksite-journey.mjs';
 import {lockDevelopmentPilotIssuer,assertDevelopmentPilotAttendance,assertDevelopmentPilotAdapter,assertDevelopmentPilotCommit} from './meta-development-pilot-policy.mjs';
 import {lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
+import {prepareCompanyFieldDispatch} from './company-channel-routing.mjs';
 
 export const WORKER_CHANNEL_TTL_MS=300000;
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const columns=`id,"projectId",name,phone,active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
 const metadata=row=>row.metadata&&typeof row.metadata==='object'&&!Array.isArray(row.metadata)?structuredClone(row.metadata):{};
 const fault=(code,status=403)=>{throw new WorkspaceError(code,status);};
+const lockedIdentity=Symbol('canonical-worker-channel-transaction'),lockedIdentities=new WeakMap();
+const stable=value=>value instanceof Date?value.toISOString():Array.isArray(value)?value.map(stable):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
+const lockedContext=r=>digest(stable([r.kind,r.member?.actorId,r.member?.membershipId,r.member?.organizationId,r.member?.clerkUserId,r.project?.id,r.worker?.id,r.worker?.phone,r.channelBinding?.id,r.connection,r.sourceProjectId||r.event?.projectId,r.event?.id,r.event?.provider,r.event?.externalId,r.event?.payload,r.event?.leaseToken,r.event?.leaseExpiresAt,r.proof,r.companyProjection?Object.fromEntries(['sourceEventId','payloadDigest','organizationId','connectionId','kind','routeId','routeEpoch','actorId','membershipId','projectId','workerId','assignmentRevision','bindingId'].map(key=>[key,r.companyProjection[key]])):null]));
+function registerLockedIdentity(client,r,transactionId,environment){
+ if(!/^\d{1,20}$/.test(transactionId||''))fault('WORKER_CHANNEL_PARTICIPANT_REQUIRED');
+ const token=Object.freeze({});r[lockedIdentity]=token;
+ lockedIdentities.set(token,{client,transactionId,environment,contextDigest:lockedContext(r),actorId:r.member.actorId,membershipId:r.member.membershipId,organizationId:r.member.organizationId,clerkUserId:r.member.clerkUserId,projectId:r.project.id,workerId:r.worker.id,senderE164:r.proof.senderE164,sourceProjectId:r.sourceProjectId||r.event.projectId,eventId:r.event.id,bindingId:r.channelBinding.id,bindingDigest:digest(stable(r.channelBinding)),connection:structuredClone(r.connection),sourceDigest:digest(stable([r.event.id,r.event.projectId,r.event.provider,r.event.externalId,r.event.eventType,r.event.payload])),leaseToken:r.event.leaseToken,leaseExpiresAt:new Date(r.event.leaseExpiresAt).getTime()});
+ return r;
+}
 export const workerChannelCodeDigest=code=>/^VINCULAR [A-Za-z0-9_-]{43}$/.test(code||'')?sha(code):null;
 export function workerChannelCommand(input){
  if(!input||typeof input!=='object'||Array.isArray(input)||Object.keys(input).sort().join('|')!=='action|operationId|payload|projectId|scope'||!workspaceId(input.projectId)||!/^[a-f0-9]{64}$/.test(input.scope||'')||!operationId(input.operationId))fault('WORKER_CHANNEL_INPUT_INVALID',400);
@@ -48,11 +58,14 @@ export function decodeWorkerChannelProof(row,connection,environment=process.env,
 }
 async function worker(client,projectId,workerId,lock=false){const row=(await client.query(`SELECT ${columns} FROM public."Worker" WHERE id=$1 AND "projectId"=$2 ${lock?'FOR UPDATE':''}`,[workerId,projectId])).rows[0];if(!row)fault('WORKER_CHANNEL_PARTICIPANT_REQUIRED');return row;}
 async function connection(client,organizationId,projectId,lock=false){const corporate=await companyConnectionForProject(client,organizationId,projectId,lock);if(corporate)return corporate;const rows=(await client.query(`SELECT id,"projectId","whatsappBusinessId","phoneNumberId",enabled,"connectionStatus"::text AS "connectionStatus","encryptedAccessToken",metadata,"displayPhoneNumber" FROM public."WhatsAppConnection" WHERE "projectId"=$1 ${lock?'FOR SHARE':''}`,[projectId])).rows;if(rows.length!==1)fault('WORKER_CHANNEL_CUSTOMER_CONNECTION_REQUIRED');return {...rows[0],organizationId};}
-export async function approvedParticipant(client,row,member,{permission=null,requireKyc=true}={}){
+function approvedParticipantState(row,member,{permission=null,requireKyc=true}={}){
  const p=row.metadata?.participant;if(!row.active||p?.version!==1||p.status!=='ACTIVE'||p.clerkUserId!==member.clerkUserId||!/^\+[1-9]\d{7,14}$/.test(row.phone||''))fault('WORKER_CHANNEL_PARTICIPANT_REQUIRED');
  if(permission&&!['attendance','report'].includes(permission))fault('WORKER_CHANNEL_INPUT_INVALID',400);
  if(requireKyc&&(permission?p.permissions?.[permission]!==true:p.permissions?.attendance!==true&&p.permissions?.report!==true))fault('WORKER_CHANNEL_PERMISSION_REQUIRED');
- if(!requireKyc)return p;
+ return p;
+}
+export async function approvedParticipant(client,row,member,{permission=null,requireKyc=true}={}){
+ const p=approvedParticipantState(row,member,{permission,requireKyc});if(!requireKyc)return p;
  return assertApprovedParticipantKyc(client,row,member,{code:'WORKER_CHANNEL_KYC_REVIEW_REQUIRED'});
 }
 export async function assignment(client,member,projectId,lock=false){const rows=(await client.query(`SELECT id FROM public."ProjectMembership" WHERE "projectId"=$1 AND "tenantMembershipId"=$2 AND status='ACTIVE' ${lock?'FOR SHARE':''}`,[projectId,member.membershipId])).rows;if(rows.length!==1)fault('WORKER_CHANNEL_PARTICIPANT_REQUIRED');}
@@ -139,7 +152,69 @@ export function createWorkerChannelStore({workspace,environment=process.env,prot
 
 export async function lockParticipantMember(client,candidate,lock=true){
  const user=(await client.query(`SELECT id,"clerkUserId" FROM public."PlatformUser" WHERE id=$1 AND "clerkUserId"=$2 ${lock?'FOR SHARE':''}`,[candidate.actorId,candidate.clerkUserId])).rows[0];if(!user)fault('WORKER_CHANNEL_PARTICIPANT_REQUIRED');
- const member=(await client.query(`SELECT tm.id AS "membershipId",tm."userId" AS "actorId",tm."organizationId",tm."tenantRole"::text AS role,tm."clerkRole",o."clerkOrganizationId",o.name AS "organizationName",o.metadata AS "organizationMetadata" FROM public."TenantMembership" tm JOIN public."Organization" o ON o.id=tm."organizationId" WHERE tm.id=$1 AND tm."userId"=$2 AND tm."organizationId"=$3 AND tm.status='ACTIVE' ${lock?'FOR SHARE OF tm,o':''}`,[candidate.membershipId,user.id,candidate.organizationId])).rows[0];if(!member||!Object.hasOwn(WORKSPACE_ROLES,member.role)||member.organizationMetadata?.internal===true)fault('WORKER_CHANNEL_PARTICIPANT_REQUIRED');return {...member,clerkUserId:user.clerkUserId};
+ const member=(await client.query(`SELECT tm.id AS "membershipId",tm."userId" AS "actorId",tm."organizationId",tm."tenantRole"::text AS role,tm."clerkRole",o."clerkOrganizationId",o.name AS "organizationName",o.metadata AS "organizationMetadata" FROM public."TenantMembership" tm JOIN public."Organization" o ON o.id=tm."organizationId" WHERE tm.id=$1 AND tm."userId"=$2 AND tm."organizationId"=$3 AND tm.status='ACTIVE' ${lock?'FOR SHARE OF tm,o':''}`,[candidate.membershipId,user.id,candidate.organizationId])).rows[0];return checkedParticipantMember(user,member);
+}
+function checkedParticipantMember(user,member){if(!user||!member||!Object.hasOwn(WORKSPACE_ROLES,member.role)||member.organizationMetadata?.internal===true)fault('WORKER_CHANNEL_PARTICIPANT_REQUIRED');return {...member,clerkUserId:user.clerkUserId};}
+
+function lockedParticipantRead(origin){
+ const k="(x.worker->'metadata'->'participant'->'kyc')",capture=`(${k}->'channelCapture')`,submission=`a.action='participant.operation.recorded' AND a.metadata->>'projectId'=$5 AND a.metadata->>'kind'='KYC_SUBMITTED' AND a.metadata->>'submissionId'=${k}->>'submissionId'`,review=`a."actorId"=${k}->'review'->>'actorId' AND a.action='participant.operation.recorded' AND a.metadata->>'projectId'=$5 AND a.metadata->>'kind'='REVIEW_KYC' AND a.metadata->>'submissionId'=${k}->>'submissionId' AND a.metadata->>'decision'='APPROVED'`,ownSubmission=`a."actorId"=$1 AND ${submission}`,adoption=`(a.id=ANY(ARRAY[${capture}->>'receiptId',${capture}->>'acceptanceReceiptId',(${capture}->>'acceptanceReceiptId')||'_kyc']::text[]) OR (${submission}))`,adopted=`(${k} ? 'channelCapture') AND (${capture}->'invitationId') IS DISTINCT FROM 'null'::jsonb`;
+ return {values:[origin.actorId,origin.clerkUserId,origin.membershipId,origin.organizationId,origin.projectId,origin.workerId,origin.transactionId],sql:`WITH "workerChannelPrincipal" AS MATERIALIZED (
+ SELECT jsonb_build_object('id',u.id,'clerkUserId',u."clerkUserId") AS "user",
+ jsonb_build_object('membershipId',tm.id,'actorId',tm."userId",'organizationId',tm."organizationId",'role',tm."tenantRole"::text,'clerkRole',tm."clerkRole",'clerkOrganizationId',o."clerkOrganizationId",'organizationName',o.name,'organizationMetadata',o.metadata) AS member,
+ jsonb_build_object('id',p.id,'name',p.name,'organizationId',p."organizationId",'metadata',p.metadata,'status',p.status::text) AS project,
+ jsonb_build_object('id',w.id,'projectId',w."projectId",'name',w.name,'phone',w.phone,'active',w.active,'metadata',w.metadata,'revision',to_char(w."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US')) AS worker
+ FROM public."PlatformUser" u JOIN public."TenantMembership" tm ON tm.id=$3 AND tm."userId"=u.id AND tm."organizationId"=$4 AND tm.status='ACTIVE'
+ JOIN public."Organization" o ON o.id=tm."organizationId" JOIN public."Project" p ON p.id=$5 AND p."organizationId"=o.id AND p.status='ACTIVE'
+ JOIN public."ProjectMembership" pm ON pm."projectId"=p.id AND pm."tenantMembershipId"=tm.id AND pm.status='ACTIVE'
+ JOIN public."Worker" w ON w.id=$6 AND w."projectId"=p.id
+ WHERE u.id=$1 AND u."clerkUserId"=$2 AND pg_current_xact_id()::text=$7 FOR SHARE OF u,tm,o,p,pm FOR UPDATE OF w
+ ), "workerChannelKyc" AS MATERIALIZED (
+ SELECT a.id,a."actorId",a.action,a."entityType",a."entityId",a.metadata,(${review}) AS "reviewProof",(${ownSubmission}) AS "submissionProof",(${adoption}) AS "adoptionProof"
+ FROM public."AuditLog" a CROSS JOIN "workerChannelPrincipal" x
+ WHERE a."organizationId"=$4 AND a."entityId"=$6 AND ((${review}) OR CASE WHEN ${adopted} THEN ${adoption} ELSE (${ownSubmission}) END)
+ ORDER BY a.id FOR SHARE OF a
+ ) SELECT x.*,pg_current_xact_id()::text AS "identityTransactionId",COALESCE((SELECT jsonb_agg(to_jsonb(proof) ORDER BY proof.id) FROM "workerChannelKyc" proof),'[]'::jsonb) AS "kycProofs" FROM "workerChannelPrincipal" x`};
+}
+// This is a fresh read, not a cached permission. Only a complete signed
+// canonical resolver can mint the opaque source; XID also rejects a pooled
+// client reused by a later transaction. No discovery/initial lock acquisition
+// may use this path, and no caller-supplied boolean or proof array opts into it.
+export async function refreshLockedWorkerChannelIdentity(client,r,{permission=null,environment=process.env}={}){
+ if(permission!==null&&!['attendance','report'].includes(permission))fault('WORKER_CHANNEL_INPUT_INVALID',400);
+ const origin=lockedIdentities.get(r?.[lockedIdentity]);
+ if(!origin||origin.client!==client||origin.environment!==environment||origin.contextDigest!==lockedContext(r))fault('WORKER_CHANNEL_PARTICIPANT_REQUIRED');
+ const query=lockedParticipantRead(origin),rows=(await client.query(query.sql,query.values)).rows,read=rows[0];
+ if(rows.length!==1||read.identityTransactionId!==origin.transactionId||read.user?.id!==origin.actorId||read.user?.clerkUserId!==origin.clerkUserId||read.member?.actorId!==origin.actorId||read.member?.membershipId!==origin.membershipId||read.member?.organizationId!==origin.organizationId||read.project?.id!==origin.projectId||read.worker?.id!==origin.workerId||read.worker?.projectId!==origin.projectId||!Array.isArray(read.kycProofs))fault('WORKER_CHANNEL_PARTICIPANT_REQUIRED');
+ const member=checkedParticipantMember(read.user,read.member),worker=read.worker;
+ approvedParticipantState(worker,member,{permission});
+ assertApprovedParticipantKycEvidence(worker,member,{reviews:read.kycProofs.filter(proof=>proof.reviewProof===true),submissions:read.kycProofs.filter(proof=>proof.submissionProof===true),adoptedProofs:read.kycProofs.filter(proof=>proof.adoptionProof===true)},{code:'WORKER_CHANNEL_KYC_REVIEW_REQUIRED'});
+ const binding=worker.metadata?.participant?.channelIdentity?.binding;
+ if(worker.phone!==origin.senderE164||binding?.id!==origin.bindingId||digest(stable(binding))!==origin.bindingDigest||!validBinding(binding,worker,member,origin.connection))fault('WORKER_CHANNEL_BINDING_REQUIRED');
+ // New KYC receipt locks above can wait. Read source AND clock after that
+ // statement, never a projected clock from before LockRows finished waiting.
+ const sources=(await client.query(`SELECT id,"projectId",provider,"externalId","eventType",status::text AS status,payload,outcome,"createdAt","leaseToken","leaseExpiresAt",clock_timestamp() AS now,pg_current_xact_id()::text AS "identityTransactionId" FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2`,[origin.eventId,origin.sourceProjectId])).rows,source=sources[0],now=source?.now;
+ if(sources.length!==1||source.identityTransactionId!==origin.transactionId||!(now instanceof Date)||!Number.isFinite(now.getTime())||source.status!=='PENDING'||source.leaseToken!==origin.leaseToken||new Date(source.leaseExpiresAt).getTime()!==origin.leaseExpiresAt||origin.leaseExpiresAt<=now.getTime()||digest(stable([source.id,source.projectId,source.provider,source.externalId,source.eventType,source.payload]))!==origin.sourceDigest)fault('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
+ assertWorkerCustomerConnection(origin.connection,member.organizationId,origin.projectId,now.getTime(),{operational:true,environment});
+ return {...r,member,worker,project:read.project,channelBinding:binding,event:source,now};
+}
+export function releaseLockedWorkerChannelIdentity(r){return lockedIdentities.delete(r?.[lockedIdentity]);}
+
+// Canonical composition owns BOTH discovery and selection. In particular this
+// API accepts no caller-provided resolved object or callback granting authority.
+// The company resolver already acquired U/TM, journey, ordered projects, PM,
+// Worker, connection, signed binding and source locks in their normal order.
+export async function resolveCompanyFieldDispatchIdentity(client,{eventId,context,environment=process.env}={}){
+ if(!context||context.eventId!==eventId||!workspaceId(eventId)||!workspaceId(context.projectId)||!workspaceId(context.channelId)||!/^[a-f0-9]{64}$/.test(context.payloadDigest||'')||typeof context.leaseToken!=='string'||!context.leaseToken)fault('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
+ const dispatch=await prepareCompanyFieldDispatch(client,{eventId,context,environment});
+ if(!dispatch?.resolved)return dispatch;
+ const r=dispatch.resolved,p=r.companyProjection,w=r.worker,b=r.channelBinding;
+ if(r.owner.mode!=='COMPANY'||r.proof.companyRouting?.mode!=='COMPANY'||p.sourceEventId!==r.event.id||p.payloadDigest!==r.event.payload.payloadDigest||p.organizationId!==r.member.organizationId||p.connectionId!==r.connection.id||p.kind!=='FIELD'||p.workerId!==w.id||p.projectId!==r.project?.id||p.bindingId!==b.id||r.project.organizationId!==r.member.organizationId||w.phone!==r.proof.senderE164)fault('COMPANY_CHANNEL_CONTEXT_CHANGED',409);
+ const connection={...r.connection,company:{connectionId:r.connection.id,anchorProjectId:r.connection.projectId,mode:r.owner.mode,revision:r.owner.revision,assignmentRevision:p.assignmentRevision,targetProjectId:r.project.id,organizationId:r.member.organizationId}};
+ const resolved={kind:'CHANNEL_VERIFIED',member:r.member,project:r.project,worker:w,connection,event:r.event,proof:r.proof,sourceProjectId:r.sourceProjectId,companyProjection:p,channelBinding:b,ownCompanyCapability:r.ownCompanyCapability};
+ const transaction=(await client.query('SELECT pg_current_xact_id()::text AS "workerChannelTransactionId"')).rows[0];
+ registerLockedIdentity(client,resolved,transaction?.workerChannelTransactionId,environment);
+ try{return {prepared:dispatch.prepared,resolved:await refreshLockedWorkerChannelIdentity(client,resolved,{permission:'report',environment})};}
+ catch(error){releaseLockedWorkerChannelIdentity(resolved);throw error;}
 }
 
 // Default locks compose BEFORE the caller's project lock. lock:false is solely
@@ -169,12 +244,13 @@ export async function resolveWorkerChannelIdentity(client,{eventId,permission=nu
  if(beforeProject)await beforeProject(client,Object.freeze({...member}));
  let project;for(const id of [...new Set([initial.projectId,targetProjectId])].sort()){const locked=(await client.query(`SELECT id,name,"organizationId",metadata,status::text AS status FROM public."Project" WHERE id=$1 AND "organizationId"=$2 FOR UPDATE`,[id,member.organizationId])).rows[0];if(!locked||(!projection||id===targetProjectId)&&locked.status!=='ACTIVE')fault('WORKER_CHANNEL_PARTICIPANT_REQUIRED');if(id===targetProjectId)project=locked;}if(!project)fault('WORKER_CHANNEL_PARTICIPANT_REQUIRED');await assignment(client,member,project.id,true);
  const row=await worker(client,project.id,candidate.id,true);await approvedParticipant(client,row,member,{permission});
- const c=await connection(client,member.organizationId,project.id,true),event=(await client.query(`SELECT id,"projectId",provider,"externalId","eventType",status::text AS status,payload,outcome,"createdAt","leaseToken","leaseExpiresAt" FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 FOR UPDATE`,[eventId,initial.projectId])).rows[0];if(!event||event.provider!==protocol.provider||!metaCloudEventMatches(protocol,event.id))fault('WORKER_CHANNEL_SIGNED_PROOF_REQUIRED');const proof=decodeProof(event,c,environment,protocol),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;assertConnection(c,member.organizationId,project.id,now.getTime(),{operational:!claim,environment});if(developmentPilotCapability)assertDevelopmentPilotAttendance(c,environment,now.getTime());if(proof.senderE164!==row.phone||event.payload.payloadDigest!==initial.payload.payloadDigest)fault('WORKER_CHANNEL_PROOF_INTEGRITY',409);
+ const c=await connection(client,member.organizationId,project.id,true),event=(await client.query(`SELECT id,"projectId",provider,"externalId","eventType",status::text AS status,payload,outcome,"createdAt","leaseToken","leaseExpiresAt" FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 FOR UPDATE`,[eventId,initial.projectId])).rows[0];if(!event||event.provider!==protocol.provider||!metaCloudEventMatches(protocol,event.id))fault('WORKER_CHANNEL_SIGNED_PROOF_REQUIRED');const canonicalRefresh=protocol===META_CUSTOMER_PROTOCOL&&assertConnection===assertWorkerCustomerConnection&&decodeProof===decodeWorkerChannelProof,proof=decodeProof(event,c,environment,protocol),authorityClock=(await client.query(canonicalRefresh?'SELECT clock_timestamp() AS now,pg_current_xact_id()::text AS "workerChannelTransactionId"':'SELECT clock_timestamp() AS now')).rows[0],now=authorityClock.now;assertConnection(c,member.organizationId,project.id,now.getTime(),{operational:!claim,environment});if(developmentPilotCapability)assertDevelopmentPilotAttendance(c,environment,now.getTime());if(proof.senderE164!==row.phone||event.payload.payloadDigest!==initial.payload.payloadDigest)fault('WORKER_CHANNEL_PROOF_INTEGRITY',409);
  if(projection){const locked=(await client.query(`SELECT * FROM public."WhatsAppCompanyEventRoute" WHERE "sourceEventId"=$1 FOR UPDATE`,[eventId])).rows[0];if(!locked||locked.payloadDigest!==event.payload.payloadDigest||locked.projectId!==project.id||locked.workerId!==row.id||locked.actorId!==member.actorId||locked.membershipId!==member.membershipId||!c.company||c.company.assignmentRevision!==locked.assignmentRevision||locked.kind==='FIELD'&&(c.company.mode!=='COMPANY'||proof.companyRouting?.mode!=='COMPANY'||row.metadata.participant.channelIdentity?.binding?.id!==locked.bindingId))fault('COMPANY_CHANNEL_CONTEXT_CHANGED',409);}
  const state=row.metadata.participant.channelIdentity;
  if(claim){const challenge=state?.challenge;if(!challenge||challenge.codeDigest!==workerChannelCodeDigest(proof.value.text?.body)||!validBinding({...challenge,status:'VERIFIED'},row,member,c))fault('WORKER_CHANNEL_CHALLENGE_REJECTED',409);if(challenge.status==='CONSUMED'){if(challenge.proofEventId!==event.id||!validBinding(state.binding,row,member,c))fault('WORKER_CHANNEL_CHALLENGE_USED',409);return {kind:'CHANNEL_BOUND',replayed:true,member,project,worker:row,connection:c,event,proof,sourceProjectId:initial.projectId,companyProjection:projection,channelBinding:state.binding};}if(challenge.status!=='PENDING')fault('WORKER_CHANNEL_CHALLENGE_USED',409);const messageAt=Number(proof.value.timestamp)*1000;if(!Number.isSafeInteger(messageAt)||messageAt<Date.parse(challenge.requestedAt)-30000||messageAt>Date.parse(challenge.expiresAt)||messageAt>now.getTime()+60000||now.getTime()>=Date.parse(challenge.expiresAt))fault('WORKER_CHANNEL_CHALLENGE_EXPIRED',410);
   const m=metadata(row),binding={...challenge,id:'channel_binding_'+randomUUID().replaceAll('-',''),status:'VERIFIED',proofEventId:event.id,proofExternalId:event.externalId,proofPayloadDigest:event.payload.payloadDigest,verifiedAt:now.toISOString()};delete binding.codeDigest;delete binding.requestedAt;delete binding.expiresAt;m.participant.channelIdentity={version:1,challenge:{...challenge,status:'CONSUMED',proofEventId:event.id,consumedAt:now.toISOString()},binding};const after=await writeWorker(client,row,m);await record(client,member,'worker_channel_event_'+digest([event.id,row.id]),row.id,{projectId:project.id,kind:'CHANNEL_BOUND',bindingId:binding.id,challengeId:challenge.id,proofEventId:event.id,proofExternalId:event.externalId,proofPayloadDigest:event.payload.payloadDigest,identityCertified:false});return {kind:'CHANNEL_BOUND',replayed:false,member,project,worker:after,connection:c,event,proof,sourceProjectId:initial.projectId,companyProjection:projection,channelBinding:binding};
  }
  const binding=await signedBinding(client,row,member,c,environment,{protocol,decodeProof});
-  return {kind:'CHANNEL_VERIFIED',member,project,worker:row,connection:c,event,proof,sourceProjectId:initial.projectId,companyProjection:projection,channelBinding:binding,developmentPilotCapability,ownCompanyCapability};
+ const resolved={kind:'CHANNEL_VERIFIED',member,project,worker:row,connection:c,event,proof,sourceProjectId:initial.projectId,companyProjection:projection,channelBinding:binding,developmentPilotCapability,ownCompanyCapability};
+ return canonicalRefresh?registerLockedIdentity(client,resolved,authorityClock.workerChannelTransactionId,environment):resolved;
 }

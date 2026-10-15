@@ -1,12 +1,15 @@
 import {WorkspaceError,workspaceId,digest} from './workspace-policy.mjs';
 import {participantKycImageSet} from './participant-kyc-image-set.mjs';
-async function adoptedKycSubmission(client,row,member,p,reject){
+function adoptedKycSubmissionIds(row,member,p,reject){
  const k=p.kyc,c=k.channelCapture,invite=p.invitation;
  // Pre-account capture remains attributed to its original issuer. Only the
  // canonical account-acceptance and adoption receipts can bridge that actor.
  if(!c||typeof c!=='object'||Array.isArray(c)||Object.keys(c).sort().join('|')!=='acceptanceReceiptId|accountClaimRequired|capturedParticipantClerkUserId|challengeId|claimedActorId|claimedAt|claimedClerkUserId|invitationId|kind|receiptId|sourceDigest|version'||c.version!==1||c.kind!=='META_KYC_CHAT'||c.accountClaimRequired!==false||c.capturedParticipantClerkUserId!==null||!/^participant_[a-f0-9]{64}$/.test(c.receiptId||'')||!/^participant_[a-f0-9]{64}$/.test(c.acceptanceReceiptId||'')||c.receiptId===c.acceptanceReceiptId||!workspaceId(c.challengeId)||!/^[a-f0-9]{64}$/.test(c.sourceDigest||'')||!/^[a-f0-9]{64}$/.test(k.contentHash||'')||!/^invite_[a-f0-9]{32}$/.test(c.invitationId||'')||invite?.id!==c.invitationId||invite.state!=='ACCEPTED'||typeof invite.email!=='string'||! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invite.email)||c.claimedActorId!==member.actorId||c.claimedClerkUserId!==member.clerkUserId||p.acceptanceReceiptId!==c.acceptanceReceiptId||!Number.isFinite(Date.parse(c.claimedAt))||Date.parse(c.claimedAt)>Date.parse(k.review.recordedAt))reject();
- const ids=[c.receiptId,c.acceptanceReceiptId,c.acceptanceReceiptId+'_kyc'];
- const proofs=(await client.query(`SELECT id,"actorId",action,"entityType","entityId",metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND (id=ANY($3::text[]) OR (action='participant.operation.recorded' AND metadata->>'projectId'=$4 AND metadata->>'kind'='KYC_SUBMITTED' AND metadata->>'submissionId'=$5))`,[member.organizationId,row.id,ids,row.projectId,k.submissionId])).rows;
+ return [c.receiptId,c.acceptanceReceiptId,c.acceptanceReceiptId+'_kyc'];
+}
+function adoptedKycSubmission(row,member,p,proofs,reject){
+ adoptedKycSubmissionIds(row,member,p,reject);
+ const k=p.kyc,c=k.channelCapture,invite=p.invitation;
  const captures=proofs.filter(a=>a.id===c.receiptId),accepts=proofs.filter(a=>a.id===c.acceptanceReceiptId),adoptions=proofs.filter(a=>a.id===c.acceptanceReceiptId+'_kyc');
  if(proofs.length!==3||captures.length!==1||accepts.length!==1||adoptions.length!==1)reject();
  const capture=captures[0],accept=accepts[0],adoption=adoptions[0],initial={...c,accountClaimRequired:true};for(const key of ['claimedAt','claimedActorId','claimedClerkUserId','acceptanceReceiptId'])delete initial[key];
@@ -14,12 +17,33 @@ async function adoptedKycSubmission(client,row,member,p,reject){
  if(!participantKycImageSet(k,{receipt:capture.metadata,projectId:row.projectId}))reject();
  if(!scoped(capture)||!workspaceId(capture.actorId)||capture.metadata.kind!=='KYC_SUBMITTED'||capture.metadata.status!=='PENDING_ACCOUNT_CLAIM'||capture.metadata.submissionId!==k.submissionId||capture.metadata.contentHash!==k.contentHash||!capture.metadata.channelCapture||digest(capture.metadata.channelCapture)!==digest(initial)||!scoped(accept)||accept.actorId!==member.actorId||accept.metadata.kind!=='INVITATION_ACCEPTED'||accept.metadata.invitationId!==invite.id||accept.metadata.requestDigest!==digest([row.id,invite.id,member.clerkUserId,invite.email])||!scoped(adoption)||adoption.actorId!==member.actorId||adoption.metadata.submissionId!==k.submissionId||adoption.metadata.contentHash!==k.contentHash||adoption.metadata.captureReceiptId!==c.receiptId||adoption.metadata.acceptanceReceiptId!==c.acceptanceReceiptId)reject();
 }
-export async function assertApprovedParticipantKyc(client,row,member,{code='PARTICIPANT_KYC_REVIEW_REQUIRED'}={}){
- const reject=()=>{throw new WorkspaceError(code,403);},p=row.metadata?.participant;
+function approvedKycState(row,member,reject){
+ const p=row.metadata?.participant;
  if(!row.active||p?.version!==1||p.status!=='ACTIVE'||p.clerkUserId!==member.clerkUserId)reject();
  const k=p.kyc;if(k?.version!==1||k.status!=='APPROVED'||k.review?.decision!=='APPROVED'||!workspaceId(k.submissionId)||!workspaceId(k.review.actorId)||k.review.actorId===member.actorId||!Number.isFinite(Date.parse(k.review.recordedAt))||!participantKycImageSet(k))reject();
+ return p;
+}
+// Pure validation of facts read by a canonical database reader. This function
+// does not resolve a principal, acquire locks or mint channel authority.
+export function assertApprovedParticipantKycEvidence(row,member,{reviews,submissions,adoptedProofs},{code='PARTICIPANT_KYC_REVIEW_REQUIRED'}={}){
+ const reject=()=>{throw new WorkspaceError(code,403);},p=approvedKycState(row,member,reject),k=p.kyc;
+ if(!Array.isArray(reviews))reject();
+ if(reviews.length!==1)reject();
+ if(k.channelCapture!==undefined&&k.channelCapture?.invitationId!==null){if(!Array.isArray(adoptedProofs))reject();adoptedKycSubmission(row,member,p,adoptedProofs,reject);}
+ else if(!Array.isArray(submissions)||submissions.length!==1||submissions[0].metadata.contentHash!==k.contentHash||!participantKycImageSet(k,{receipt:submissions[0].metadata,projectId:row.projectId}))reject();
+ return p;
+}
+export async function assertApprovedParticipantKyc(client,row,member,{code='PARTICIPANT_KYC_REVIEW_REQUIRED'}={}){
+ const reject=()=>{throw new WorkspaceError(code,403);},p=approvedKycState(row,member,reject),k=p.kyc;
+ // Ordinary account reads also run in READ ONLY transactions. Keep their
+ // established nonlocking readers; the locked channel reader supplies fresh
+ // facts to the same pure validators through its separate internal path.
  const reviews=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "actorId"=$2 AND "entityId"=$3 AND action='participant.operation.recorded' AND metadata->>'projectId'=$4 AND metadata->>'kind'='REVIEW_KYC' AND metadata->>'submissionId'=$5 AND metadata->>'decision'='APPROVED'`,[member.organizationId,k.review.actorId,row.id,row.projectId,k.submissionId])).rows;
  if(reviews.length!==1)reject();
- if(k.channelCapture!==undefined&&k.channelCapture?.invitationId!==null)await adoptedKycSubmission(client,row,member,p,reject);
- else {const submissions=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "actorId"=$2 AND "entityId"=$3 AND action='participant.operation.recorded' AND metadata->>'projectId'=$4 AND metadata->>'kind'='KYC_SUBMITTED' AND metadata->>'submissionId'=$5`,[member.organizationId,member.actorId,row.id,row.projectId,k.submissionId])).rows;if(submissions.length!==1||submissions[0].metadata.contentHash!==k.contentHash||!participantKycImageSet(k,{receipt:submissions[0].metadata,projectId:row.projectId}))reject();}return p;
+ if(k.channelCapture!==undefined&&k.channelCapture?.invitationId!==null){
+  const ids=adoptedKycSubmissionIds(row,member,p,reject),adoptedProofs=(await client.query(`SELECT id,"actorId",action,"entityType","entityId",metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityId"=$2 AND (id=ANY($3::text[]) OR (action='participant.operation.recorded' AND metadata->>'projectId'=$4 AND metadata->>'kind'='KYC_SUBMITTED' AND metadata->>'submissionId'=$5))`,[member.organizationId,row.id,ids,row.projectId,k.submissionId])).rows;
+  return assertApprovedParticipantKycEvidence(row,member,{reviews,adoptedProofs},{code});
+ }
+ const submissions=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "actorId"=$2 AND "entityId"=$3 AND action='participant.operation.recorded' AND metadata->>'projectId'=$4 AND metadata->>'kind'='KYC_SUBMITTED' AND metadata->>'submissionId'=$5`,[member.organizationId,member.actorId,row.id,row.projectId,k.submissionId])).rows;
+ return assertApprovedParticipantKycEvidence(row,member,{reviews,submissions},{code});
 }

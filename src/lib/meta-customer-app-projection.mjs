@@ -82,6 +82,14 @@ export async function decodeCustomerAppProjection(client,row,member,project,conn
 const lifecycleOutcome=(code=null,reviewState='OBSERVED')=>({kind:'CUSTOMER_ACCOUNT_LIFECYCLE',reviewState,businessApplied:false,replySent:false,identityStatus:'NOT_APPLICABLE',...(code?{code}:{})});
 const reconnectTerminal=new Set(['RESTORED','KEPT_DISABLED','MANUAL_REVIEW_REQUIRED']);
 export function createMetaCustomerAppProjection({connect,provider,environment=process.env,now=()=>Date.now()}){
+ // Discovery can only exclude a signed, ordinary message from this adapter.
+ // It grants no channel capability and supplies no facts to a positive app
+ // projection: those callbacks still enter the complete locked reader below.
+ const appCandidate=context=>customerJobTransaction(connect,async client=>{
+  const rows=(await client.query(`SELECT to_jsonb(e) AS "discoveryEvent",to_jsonb(c)||jsonb_build_object('organizationId',p."organizationId") AS "discoveryConnection",clock_timestamp() AS "discoveryNow" FROM public."WebhookEvent" e JOIN public."WhatsAppConnection" c ON c.id=e.payload->>'channelId' AND c."projectId"=e."projectId" JOIN public."Project" p ON p.id=c."projectId" AND p."organizationId"=e.payload->>'organizationId' WHERE e.id=$1 AND e."projectId"=$2 AND c.id=$3 AND e.provider='meta-customer-v1'`,[context.eventId,context.projectId,context.channelId])).rows,observed=rows[0],event=observed?.discoveryEvent,c=observed?.discoveryConnection,clock=observed?.discoveryNow;
+  if(rows.length!==1||!(clock instanceof Date)||!Number.isFinite(clock.getTime())||!event||event.id!==context.eventId||event.projectId!==context.projectId||event.provider!=='meta-customer-v1'||event.payload?.channelId!==context.channelId||event.payload?.organizationId!==c?.organizationId||c?.id!==context.channelId||c.projectId!==context.projectId||event.status!=='PENDING'||event.leaseToken!==context.leaseToken||!Number.isFinite(Date.parse(event.leaseExpiresAt))||Date.parse(event.leaseExpiresAt)<=clock.getTime()||event.payload.payloadDigest!==context.payloadDigest)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
+  return customerAppRecords(decodeSignedCustomerEvent(event,c,environment))!==null;
+ });
  const locked=(context,run)=>customerJobTransaction(connect,async client=>{
   const candidate=(await client.query(`SELECT "whatsappBusinessId","phoneNumberId" FROM public."WhatsAppConnection" WHERE id=$1 AND "projectId"=$2`,[context.channelId,context.projectId])).rows[0];
   if(!candidate)throw new WorkspaceError('META_CUSTOMER_CALLBACK_SCOPE_REJECTED',403);
@@ -92,7 +100,7 @@ export function createMetaCustomerAppProjection({connect,provider,environment=pr
  });
  const save=async(client,c,metadata,enabled=c.enabled)=>{const result=await client.query(`UPDATE public."WhatsAppConnection" SET metadata=metadata||$3::jsonb,enabled=$4,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[c.id,c.projectId,JSON.stringify(metadata),enabled]);if(result.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_RECONNECTION_CHANGED',409);};
  const profile=async(client,c)=>{const p=(await client.query(`SELECT p.id,p.metadata,o.metadata AS "organizationMetadata" FROM public."Project" p JOIN public."Organization" o ON o.id=p."organizationId" WHERE p.id=$1 AND p."organizationId"=$2 AND p.status='ACTIVE'`,[c.projectId,c.organizationId])).rows[0];return p?readProjectWorkspaceProfile(p.metadata,p.organizationMetadata,p.id).profile:null;};
- return {async execute(context){const claimed=await locked(context,async(client,c,event,payload)=>{
+ return {async execute(context){if(!await appCandidate(context))return null;const claimed=await locked(context,async(client,c,event,payload)=>{
   const parsed=customerAppRecords(payload);
   if(!parsed)return null;
   if(parsed.lifecycle){

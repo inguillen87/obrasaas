@@ -112,12 +112,6 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  // Pure snapshot discovery supplies IDs only, without minting a capability.
  // currentPolicy performs the full locked OWN resolver after the sorted union.
  const discoveryPolicy=ownCompanyConnectionPolicy(raw,environment);
- let ownDiscovery=null;
- if(discoveryPolicy){
-  const refs=(await client.query(`SELECT tm.id AS "membershipId",u.id AS "actorId",u."clerkUserId" FROM public."TenantMembership" tm JOIN public."PlatformUser" u ON u.id=tm."userId" WHERE u.id=$1 AND u."clerkUserId"=$2 AND tm."organizationId"=$3 AND tm.status='ACTIVE'`,[discoveryPolicy.actorId,discoveryPolicy.clerkUserId,raw.organizationId])).rows;
-  if(refs.length!==1||!workspaceId(refs[0].membershipId))fail('EMPLOYEE_INTAKE_REVOKED');
-  ownDiscovery={ref:refs[0],policyDigest:discoveryPolicy.policyDigest,channelDigest:ownIntakeDiscoveryDigest(raw)};
- }
  const payload=decodeSignedCustomerEvent(initial,raw,environment);if(payload.type!=='message')return null;
  const signed=JSON.parse(decryptCustomerSecret(initial.payload.encryptedProof,context(raw,META_CUSTOMER_PROTOCOL.proofPurpose,initial.id),environment));
  if(!signed.companyRouting){if(raw.metadata?.companyRoutingVersion===1)fail('EMPLOYEE_INTAKE_REVOKED');return null;}
@@ -130,6 +124,12 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  if(!initial.payload.employeeIntakeDispatch&&(message.type==='image'||/^(IDENTIDAD|VINCULAR)(?:\s|$)/.test(command)))return null;
  if(!initial.payload.employeeIntakeDispatch&&await isCompanyKycReplyIntent(client,raw,message,environment))return null;
  if(!hello&&!anchors.length&&!initial.payload.employeeIntakeDispatch)return null;
+ let ownDiscovery=null;
+ if(discoveryPolicy){
+  const refs=(await client.query(`SELECT tm.id AS "membershipId",u.id AS "actorId",u."clerkUserId" FROM public."TenantMembership" tm JOIN public."PlatformUser" u ON u.id=tm."userId" WHERE u.id=$1 AND u."clerkUserId"=$2 AND tm."organizationId"=$3 AND tm.status='ACTIVE'`,[discoveryPolicy.actorId,discoveryPolicy.clerkUserId,raw.organizationId])).rows;
+  if(refs.length!==1||!workspaceId(refs[0].membershipId))fail('EMPLOYEE_INTAKE_REVOKED');
+  ownDiscovery={ref:refs[0],policyDigest:discoveryPolicy.policyDigest,channelDigest:ownIntakeDiscoveryDigest(raw)};
+ }
  // This lookup grants no authority. Every new message from a linked sender
  // must reach FIELD's complete identity/assignment/permission resolver, even
  // when its old intake anchor is ADMITTED or the opt-in is now OFF.

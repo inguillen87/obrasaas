@@ -29,7 +29,7 @@ try{
  const resolveIdentity=async(client,{eventId})=>{
   if(revoked)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
   const event=(await client.query(`SELECT *,status::text AS status FROM "WebhookEvent" WHERE id=$1 FOR UPDATE`,[eventId])).rows[0],connection=(await client.query(`SELECT * FROM "WhatsAppConnection" WHERE id='c1'`)).rows[0];connection.organizationId='o1';
-  return {kind:'CHANNEL_VERIFIED',event,connection,project:{id:'p1'},member:{organizationId:'o1',actorId:'worker1'},worker:{id:'w1'},proof:decodeSignedCustomerEvent(event,connection,environment)};
+  return {kind:'CHANNEL_VERIFIED',event,connection,project:{id:'p1'},member:{organizationId:'o1',actorId:'worker1'},proof:decodeSignedCustomerEvent(event,connection,environment)};
  };
  const outbound=createMetaCustomerOutbound({connect,resolveIdentity,provider,environment,now:()=>clock,afterReserve:()=>afterReserve()}),dispatch=async context=>{
   if(context.channelId!=='c1')throw new Error('scope');

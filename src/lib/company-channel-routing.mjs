@@ -4,9 +4,9 @@ import {companyChannelSchemaReady,COMPANY_CHANNEL_SCHEMA_CONTRACT} from './compa
 import {decodeWorkerChannelProof,workerChannelCodeDigest,lockParticipantMember,approvedParticipant,signedBinding,assignment,assertWorkerCustomerConnection,resolveWorkerChannelIdentity} from './worker-channel-identity.mjs';
 import {lockPersonWorksiteJourney} from './person-worksite-journey.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-credentials.mjs';
-import {customerJobTransaction,customerOutboundId} from './meta-customer-outbound.mjs';
+import {customerOutboundId} from './meta-customer-outbound.mjs';
 import {metaFieldConversationAction,META_FIELD_MEDIA_AUTHORIZATION_VERSION} from './meta-field-conversation.mjs';
-import {createMetaFieldBridge,readMetaFieldConversation,validateMetaFieldMediaOrigin} from './meta-field-bridge.mjs';
+import {createMetaFieldBridge,createCompanyMetaFieldIdentityResolver,createMetaFieldReplyAuthority,readMetaFieldConversation,inspectMetaFieldConsumptionRecovery,validateMetaFieldMediaOrigin} from './meta-field-bridge.mjs';
 import {validFieldMediaAnalysisConsent} from './field-media-privacy.mjs';
 import {siteText} from './site-register-policy.mjs';
 import {companyConnectionForProject} from './company-channel-connection.mjs';
@@ -129,38 +129,43 @@ async function reserve(client,r,kind,worker=null){
  if(r.projection)return r.projection;
  const bindingId=worker&&(kind==='BINDING'?worker.metadata.participant.channelIdentity.challenge.id:worker.channelBinding.id);
  await client.query(`INSERT INTO public."WhatsAppCompanyEventRoute"("sourceEventId","payloadDigest","organizationId","connectionId",kind,"routeId","routeEpoch","actorId","membershipId","projectId","workerId","assignmentRevision","bindingId") VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[r.event.id,r.event.payload.payloadDigest,r.member.organizationId,r.connection.id,kind,r.route?.id||null,r.route?.epoch||null,r.member.actorId,r.member.membershipId,worker?.projectId||null,worker?.id||null,worker?.assignmentRevision||null,bindingId]);
- return {...r.projection,sourceEventId:r.event.id,kind,projectId:worker?.projectId||null,workerId:worker?.id||null};
+ r.projection={sourceEventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,organizationId:r.member.organizationId,connectionId:r.connection.id,kind,routeId:r.route?.id||null,routeEpoch:r.route?.epoch||null,actorId:r.member.actorId,membershipId:r.member.membershipId,projectId:worker?.projectId||null,workerId:worker?.id||null,assignmentRevision:worker?.assignmentRevision||null,bindingId};return r.projection;
 }
-async function recordResult(client,r,value,env){await client.query(`UPDATE public."WhatsAppCompanyEventRoute" SET "encryptedResult"=$2 WHERE "sourceEventId"=$1 AND "payloadDigest"=$3`,[r.event.id,seal(r,'company-source-result',r.event.id,value,env),r.event.payload.payloadDigest]);return value;}
+async function recordResult(client,r,value,env){if(r.projection?.kind==='SELECTION')value={...value,replyAuthority:createMetaFieldReplyAuthority({...r,project:r.projects.get(r.connection.projectId),companyProjection:r.projection},value.kind==='WORKSITE_DRAFT_CANCELLED'?'WITHDRAWAL':'MENU',value.reply,{company:true})};await client.query(`UPDATE public."WhatsAppCompanyEventRoute" SET "encryptedResult"=$2 WHERE "sourceEventId"=$1 AND "payloadDigest"=$3`,[r.event.id,seal(r,'company-source-result',r.event.id,value,env),r.event.payload.payloadDigest]);return value;}
 async function writeRoute(client,r,state,worker,env,{advance=false}={}){
  const epoch=(r.route?.epoch||1)+(advance&&r.route?1:0);
  await client.query(`INSERT INTO public."WhatsAppCompanyRoute"(id,"organizationId","connectionId","senderHmac","actorId","membershipId",epoch,"projectId","workerId","assignmentRevision","bindingId","encryptedState") VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT(id) DO UPDATE SET epoch=EXCLUDED.epoch,"projectId"=EXCLUDED."projectId","workerId"=EXCLUDED."workerId","assignmentRevision"=EXCLUDED."assignmentRevision","bindingId"=EXCLUDED."bindingId","encryptedState"=EXCLUDED."encryptedState","updatedAt"=clock_timestamp()`,[r.routeId,r.member.organizationId,r.connection.id,r.senderHmac,r.member.actorId,r.member.membershipId,epoch,worker?.projectId||null,worker?.id||null,worker?.assignmentRevision||null,worker?.channelBinding?.id||null,seal(r,'company-route',r.routeId,{...state,epoch},env)]);
 }
 function menu(r,eventId,offset=0){const choices=r.workers.slice(offset,offset+8).map(w=>({value:w.id,title:w.projectName,assignmentRevision:w.assignmentRevision,bindingId:w.channelBinding.id}));if(offset>0)choices.push({value:'PREVIOUS',title:'Obras anteriores'});if(offset+8<r.workers.length)choices.push({value:'NEXT',title:'Más obras'});const nonce=digest([eventId,r.routeId,(r.route?.epoch||0)+1,choices]).slice(0,20);return {state:{phase:'MENU',nonce,choices,offset,expiresAt:new Date(r.now.getTime()+300000).toISOString()},reply:{type:'interactive',body:'Elegí la obra autorizada. Después confirmá el destino; cambiar de obra no cierra una jornada.',button:'Elegir obra',sections:[{title:'Obras',rows:choices.map((c,i)=>({id:'empresa:'+nonce+':'+i,title:c.title.slice(0,24)}))}]}};}
 async function selector(client,r,env){
- if(r.projection?.encryptedResult)return {done:unseal(r,'company-source-result',r.event.id,r.projection.encryptedResult,env)};
+ // Field replay always re-enters its current participant/receipt authority.
+ // The company cache alone cannot disclose a report after its permission changes.
  if(r.projection?.kind==='FIELD'||r.projection?.kind==='BINDING')return {delegate:true};
+ if(r.projection?.encryptedResult)return {done:unseal(r,'company-source-result',r.event.id,r.projection.encryptedResult,env)};
  if(r.code){await reserve(client,r,'BINDING',r.workers[0]);return {delegate:true};}
  if(r.owner.mode!=='COMPANY'||r.proof.companyRouting?.mode!=='COMPANY')fault('COMPANY_CHANNEL_SOURCE_REQUIRED');
  const body=r.proof.value.type==='text'?r.proof.value.text?.body?.trim().toUpperCase():null,state=r.route?unseal(r,'company-route',r.routeId,r.route.encryptedState,env):null,active=state&&Date.parse(state.expiresAt)>r.now.getTime(),selected=r.route&&r.workers.find(w=>w.id===r.route.workerId&&w.projectId===r.route.projectId&&w.assignmentRevision===r.route.assignmentRevision&&w.channelBinding.id===r.route.bindingId);
  const id=r.proof.value.type==='interactive'?(r.proof.value.interactive?.list_reply?.id||r.proof.value.interactive?.button_reply?.id):null;
  const match=/^empresa:([a-f0-9]{20}):(\d{1,2})$/.exec(id||'');
- const fieldState=selected?readMetaFieldConversation({...r,worker:selected,project:r.projects.get(selected.projectId),channelBinding:selected.channelBinding},env):null;
+ const recoveryInput=selected&&['CONSUMO','CANCELAR','OBRA','CAMBIAR OBRA'].includes(body)&&selected.metadata?.fieldConsumptionRecovery?inspectMetaFieldConsumptionRecovery({...r,worker:selected,project:r.projects.get(selected.projectId),channelBinding:selected.channelBinding,sourceProjectId:r.connection.projectId,companyProjection:{projectId:selected.projectId,workerId:selected.id,actorId:r.member.actorId,membershipId:r.member.membershipId,assignmentRevision:selected.assignmentRevision,bindingId:selected.channelBinding.id,routeId:r.routeId,routeEpoch:r.route.epoch}}):null;
+ if(recoveryInput&&body==='CONSUMO')await approvedParticipant(client,selected,r.member,{permission:'report'});
+ const cancellingRecovery=body==='CANCELAR'&&Boolean(recoveryInput),recoveryDiscardRequired=Boolean(recoveryInput)&&['OBRA','CAMBIAR OBRA'].includes(body),fieldState=cancellingRecovery||recoveryDiscardRequired?null:selected?readMetaFieldConversation({...r,worker:selected,project:r.projects.get(selected.projectId),channelBinding:selected.channelBinding},env):null;
  const activeField=fieldState&&Date.parse(fieldState.expiresAt)>r.now.getTime()?fieldState:null;
+ const promptField=cancellingRecovery?recoveryInput.prompt:activeField;
  const promptSource=async()=>{
-  if(!activeField)return false;
-  const source=(await client.query(`SELECT "routeId","routeEpoch","workerId","projectId","bindingId","actorId","membershipId" FROM public."WhatsAppCompanyEventRoute" WHERE "sourceEventId"=$1 AND "organizationId"=$2 AND "connectionId"=$3 AND kind='FIELD'`,[activeField.lastEventId,r.member.organizationId,r.connection.id])).rows[0];
+  if(!promptField)return false;
+  const source=(await client.query(`SELECT "routeId","routeEpoch","workerId","projectId","bindingId","actorId","membershipId" FROM public."WhatsAppCompanyEventRoute" WHERE "sourceEventId"=$1 AND "organizationId"=$2 AND "connectionId"=$3 AND kind='FIELD'`,[promptField.lastEventId,r.member.organizationId,r.connection.id])).rows[0];
   return Boolean(source&&source.routeId===r.routeId&&source.routeEpoch===r.route.epoch&&source.workerId===selected.id&&source.projectId===selected.projectId&&source.bindingId===selected.channelBinding.id&&source.actorId===r.member.actorId&&source.membershipId===r.member.membershipId);
  };
  const promptContext=async()=>{
   if(typeof r.proof.value.context?.id!=='string'||!(await promptSource()))return false;
-  const outbound=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1'`,[customerOutboundId(activeField.lastEventId),r.connection.projectId])).rows[0];
+  const outbound=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1'`,[customerOutboundId(promptField.lastEventId),r.connection.projectId])).rows[0];
   if(!outbound?.outcome?.messageId||r.proof.value.context.id!==outbound.outcome.messageId)return false;
-  const request=unseal(r,'outbound',outbound.id,outbound.payload.encryptedPayload,env);return digest(request)===outbound.payload.requestDigest&&request.organizationId===r.member.organizationId&&request.channelId===r.connection.id&&request.targetProjectId===selected.projectId&&request.sourceRouteId===activeField.lastEventId;
+  const request=unseal(r,'outbound',outbound.id,outbound.payload.encryptedPayload,env);return digest(request)===outbound.payload.requestDigest&&request.organizationId===r.member.organizationId&&request.channelId===r.connection.id&&request.targetProjectId===selected.projectId&&request.sourceRouteId===promptField.lastEventId;
  };
  const emit=async(value,newState=null,worker=selected,advance=false)=>{await reserve(client,r,'SELECTION');if(newState)await writeRoute(client,r,newState,worker,env,{advance});return {done:await recordResult(client,r,value,env)};};
  if(body==='OBRA'||body==='CAMBIAR OBRA'||!selected&&!match){
-  if(selected){const pending=(await client.query(`SELECT EXISTS(SELECT 1 FROM public."WhatsAppCompanyEventRoute" er JOIN public."WebhookEvent" e ON e.id=er."sourceEventId" WHERE er."routeId"=$1 AND er.kind='FIELD' AND e.status='PENDING') AS pending`,[r.routeId])).rows[0].pending;if(pending)return emit(result('WORKSITE_PENDING',text('Hay una operación pendiente. Consultá su recibo antes de cambiar de obra.')));if(activeField&&activeField.purpose!=='MENU')return emit(result('WORKSITE_DRAFT_PENDING',text('Conservamos el borrador de la obra actual. Respondé al mensaje de ese paso con CANCELAR para descartarlo explícitamente y después CAMBIAR OBRA.')));}
+  if(selected){const pending=(await client.query(`SELECT EXISTS(SELECT 1 FROM public."WhatsAppCompanyEventRoute" er JOIN public."WebhookEvent" e ON e.id=er."sourceEventId" WHERE er."routeId"=$1 AND er.kind='FIELD' AND e.status='PENDING') AS pending`,[r.routeId])).rows[0].pending;if(pending)return emit(result('WORKSITE_PENDING',text('Hay una operación pendiente. Consultá su recibo antes de cambiar de obra.')));if(recoveryDiscardRequired||activeField&&activeField.purpose!=='MENU')return emit(result('WORKSITE_DRAFT_PENDING',text('Conservamos el borrador de la obra actual. Respondé al mensaje de ese paso con CANCELAR para descartarlo explícitamente y después CAMBIAR OBRA.')));}
   const next=menu(r,r.event.id);return emit(result('WORKSITE_SELECTION',next.reply),next.state,null,true);
  }
  if(match){
@@ -171,14 +176,15 @@ async function selector(client,r,env){
   if(state.phase==='CONFIRM'){const next={phase:'SELECTED',expiresAt:new Date(r.now.getTime()+900000).toISOString()};return emit(result('WORKSITE_SELECTED',text('Obra confirmada: '+worker.projectName+'. Escribí MENU para ver las operaciones que permite tu participación. Las evidencias y propuestas requieren revisión humana. KYC, Flow y avisos proactivos no están habilitados en este canal.')),next,worker,true);}
   const nonce=digest([r.event.id,r.routeId,state.epoch,worker.id,worker.assignmentRevision,worker.channelBinding.id,'confirm']).slice(0,20),next={phase:'CONFIRM',nonce,choices:[{...choice}],expiresAt:new Date(r.now.getTime()+300000).toISOString()};return emit(result('WORKSITE_CONFIRM', {type:'interactive',body:'¿Confirmar la obra '+worker.projectName+'? La jornada y los recibos conservarán este destino.',button:'Confirmar obra',sections:[{title:'Destino',rows:[{id:'empresa:'+nonce+':0',title:'Confirmar obra'}]}]}),next,null);
  }
- if(body==='CANCELAR'&&selected){if(activeField&&!(await promptContext()))return emit(result('WORKSITE_INPUT_CONTEXT_REQUIRED',text('Respondé al mensaje del paso actual con CANCELAR. Conservamos el borrador y no cambiamos la obra.')));await client.query(`UPDATE public."Worker" SET metadata=metadata-'fieldChannelConversation',"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[selected.id,selected.projectId]);return emit(result('WORKSITE_DRAFT_CANCELLED',text('Borrador cancelado en '+selected.projectName+'. La jornada y los recibos se conservan. Escribí CAMBIAR OBRA para elegir otro destino.')));}
+ if(body==='CANCELAR'&&selected){if(cancellingRecovery&&!recoveryInput.fresh||(activeField||cancellingRecovery)&&!(await promptContext()))return emit(result('WORKSITE_INPUT_CONTEXT_REQUIRED',text('Respondé al mensaje del paso actual con CANCELAR. Conservamos el borrador y no cambiamos la obra.')));const fence=async()=>{if(cancellingRecovery){const observed=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;assertWorkerCustomerConnection(r.connection,r.member.organizationId,r.connection.projectId,observed.getTime(),{operational:true,environment:env});sourceLease(r.event,{projectId:r.event.projectId,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,leaseToken:r.event.leaseToken},observed);}};await fence();await client.query(`UPDATE public."Worker" SET metadata=metadata-'fieldChannelConversation'-'fieldConsumptionRecovery',"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[selected.id,selected.projectId]);const closed=await emit(result('WORKSITE_DRAFT_CANCELLED',text('Borrador cancelado en '+selected.projectName+'. La jornada y los recibos se conservan. Escribí CAMBIAR OBRA para elegir otro destino.')));await fence();return closed;}
  // A live draft keeps its already confirmed destination only while its durable
  // prompt still belongs to the same route epoch, person, worksite and binding.
  // Every new input must also pass the current prompt/nonce checks below. This
  // does not renew an expired menu or permit selecting another worksite.
  const continuingDraft=selected&&state?.phase==='SELECTED'&&Number.isFinite(Date.parse(state.expiresAt))&&['ATTENDANCE','MEDIA','INCIDENT','MATERIAL','CONSUMPTION','PROGRESS','PLAN_IMPORT'].includes(activeField?.purpose)&&await promptSource();
  if(!selected||state?.phase!=='SELECTED'||!active&&!continuingDraft)return emit(result('WORKSITE_SELECTION_REQUIRED',text('Elegí y confirmá una obra vigente. Escribí OBRA.')));
- if(!active&&continuingDraft&&metaFieldConversationAction(body)&&body!=='ESTADO')return emit(result('WORKSITE_DRAFT_PENDING',text('Conservamos el borrador de '+selected.projectName+'. Respondé al mensaje de ese paso para continuar, o con CANCELAR para descartarlo. Para otra operación, elegí y confirmá nuevamente la obra.')));
+ const continuingConsumptionRecovery=body==='CONSUMO'&&recoveryInput?.fresh&&activeField?.purpose==='CONSUMPTION'&&Date.parse(recoveryInput.header.deadline)>r.now.getTime()&&await promptContext();
+ if(!active&&continuingDraft&&metaFieldConversationAction(body)&&body!=='ESTADO'&&!continuingConsumptionRecovery)return emit(result('WORKSITE_DRAFT_PENDING',text('Conservamos el borrador de '+selected.projectName+'. Respondé al mensaje de ese paso para continuar, o con CANCELAR para descartarlo. Para otra operación, elegí y confirmá nuevamente la obra.')));
  if(activeField&&activeField.purpose!=='MENU'&&['MENU','AYUDA','HOLA'].includes(body))return emit(result('WORKSITE_DRAFT_PENDING',text('Conservamos el borrador de '+selected.projectName+'. Respondé al mensaje del paso actual para continuar, o con CANCELAR para descartarlo explícitamente. ESTADO permite consultar la jornada sin borrar este paso.')));
  if(r.proof.value.type==='document'&&!(activeField?.purpose==='PLAN_IMPORT'&&activeField.step==='PLAN_IMPORT_FILE')||r.proof.value.type==='nfm_reply'||r.proof.value.interactive?.nfm_reply||['KYC','VERIFICAR'].includes(body))return emit(result('COMPANY_ADAPTER_DISABLED',text('KYC y Flow requieren los pasos habilitados en Mi cuenta. Los archivos de cronograma se reciben sólo después de elegir Importar cronograma y responder a su mensaje vigente. Escribí MENU para ver tus operaciones autorizadas.')));
  // Free input/location must reply to the durable prompt; an uncorrelated late
@@ -189,12 +195,25 @@ async function selector(client,r,env){
  }
  await reserve(client,r,'FIELD',selected);return {delegate:true};
 }
+// Only the actual signed envelope and selector may prepare this transaction.
+// Callers cannot supply a resolved principal, projection or selected worksite.
+export async function prepareCompanyFieldDispatch(client,{eventId,environment=process.env,context}){
+ const r=await resolveCompanyEnvelope(client,{eventId,environment,context});if(!r)return null;
+ const prepared=await selector(client,r,environment);
+ if(!prepared.delegate||r.code||r.proof.value.type!=='text'||r.proof.value.text?.body?.trim().toUpperCase()!=='CONSUMO')return {prepared};
+ const p=r.projection,w=r.workers.find(worker=>worker.id===p?.workerId);
+ if(p?.kind!=='FIELD'||!w||p.routeId!==r.route?.id||p.routeEpoch!==r.route.epoch||p.projectId!==w.projectId||p.actorId!==r.member.actorId||p.membershipId!==r.member.membershipId||p.assignmentRevision!==w.assignmentRevision||p.bindingId!==w.channelBinding?.id)return {prepared};
+ const candidate={...r,worker:w,project:r.projects.get(w.projectId),channelBinding:w.channelBinding,sourceProjectId:r.connection.projectId,companyProjection:p};
+ const recovery=inspectMetaFieldConsumptionRecovery(candidate);
+ if(!recovery?.fresh||Date.parse(recovery.header.deadline)<=r.now.getTime())return {prepared};
+ return {prepared,resolved:candidate};
+}
 export function createCompanyChannelBridge({connect,environment=process.env,provider,put,get,analyzer,planAnalyzer,usage=null}){
- const within=run=>customerJobTransaction(connect,run),field=createMetaFieldBridge({connect,environment,provider,put,get,analyzer,planAnalyzer,usage,resolveIdentity:(client,options)=>resolveWorkerChannelIdentity(client,{...options,companyRouting:true})});
- return {async execute(context){const prepared=await within(async client=>{const r=await resolveCompanyEnvelope(client,{eventId:context.eventId,environment,context});return r?selector(client,r,environment):null;});if(!prepared)return null;if(prepared.done)return prepared.done;const value=await field.execute(context);await within(async client=>{const r=await resolveCompanyEnvelope(client,{eventId:context.eventId,environment,context});if(!r)fault('COMPANY_CHANNEL_SOURCE_REQUIRED');await recordResult(client,r,value,environment);});return value;}};
+ const field=createMetaFieldBridge({connect,environment,provider,put,get,analyzer,planAnalyzer,usage,resolveIdentity:createCompanyMetaFieldIdentityResolver()});
+ return {execute:context=>field.executeCompany(context)};
 }
 export async function resolveCompanyOutboundIdentity(client,options){
  const projection=(await client.query(`SELECT kind FROM public."WhatsAppCompanyEventRoute" WHERE "sourceEventId"=$1`,[options.eventId])).rows[0];if(projection?.kind==='FIELD'||projection?.kind==='BINDING')return resolveWorkerChannelIdentity(client,{...options,companyRouting:true});
  const r=await resolveCompanyEnvelope(client,options);if(!r)fault('COMPANY_CHANNEL_SOURCE_REQUIRED');
- if(!r.projection?.encryptedResult)fault('COMPANY_CHANNEL_SOURCE_REQUIRED');return {kind:'CHANNEL_VERIFIED',member:r.member,project:r.projects.get(r.connection.projectId),connection:r.connection,event:r.event,proof:r.proof,sourceProjectId:r.connection.projectId,companyProjection:r.projection,ownCompanyCapability:r.ownCompanyCapability};
+ if(!r.projection?.encryptedResult)fault('COMPANY_CHANNEL_SOURCE_REQUIRED');const companyResult=unseal(r,'company-source-result',r.event.id,r.projection.encryptedResult,options.environment||process.env);return {kind:'CHANNEL_VERIFIED',companyResult,member:r.member,project:r.projects.get(r.connection.projectId),connection:r.connection,event:r.event,proof:r.proof,sourceProjectId:r.connection.projectId,companyProjection:r.projection,ownCompanyCapability:r.ownCompanyCapability};
 }

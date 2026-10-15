@@ -117,15 +117,36 @@ export async function fenceOwnCompanyRuntime(client,connection,options){
 // transaction. This does not cache or extend a captured transport capability.
 export async function compactOwnCompanyRuntimeFence(client,connection,{environment=process.env,now=Date.now(),notAfter}={}){
  const expected=ownCompanyConnectionPolicy(connection,environment,now);if(!expected?.grantDigest)fail();
- const rows=(await client.query(`SELECT c.*,p."organizationId",u.id AS "runtimeActorId",tm."tenantRole"::text AS "runtimeRole",o.metadata AS "runtimeOrganizationMetadata",a.metadata AS "runtimeAudit",clock_timestamp() AS "runtimeNow"
+ const rows=(await client.query(compactRuntimeQuery,[expected.connectionId,expected.projectId,expected.organizationId,expected.actorId,expected.clerkUserId,expected.clerkOrganizationId,expected.origin.receiptId])).rows;
+ return validateCompactRuntimeRows(rows,connection,expected,{environment,notAfter});
+}
+const compactRuntimeQuery=`SELECT c.*,p."organizationId",u.id AS "runtimeActorId",tm."tenantRole"::text AS "runtimeRole",o.metadata AS "runtimeOrganizationMetadata",a.metadata AS "runtimeAudit",clock_timestamp() AS "runtimeNow"
   FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId"
   JOIN public."Organization" o ON o.id=p."organizationId" JOIN public."PlatformUser" u ON u.id=$4 AND u."clerkUserId"=$5
   JOIN public."TenantMembership" tm ON tm."userId"=u.id AND tm."organizationId"=o.id AND tm.status='ACTIVE' AND tm."tenantRole"::text='ADMIN' AND tm."clerkRole"='org:admin'
   JOIN public."AuditLog" a ON a.id=$7 AND a."organizationId"=o.id AND a."actorId"=u.id AND a.action='company.own.number.recorded' AND a."entityType"='WhatsAppConnection' AND a."entityId"=c.id
-  WHERE c.id=$1 AND c."projectId"=$2 AND p."organizationId"=$3 AND p.status='ACTIVE' AND o."clerkOrganizationId"=$6 AND COALESCE(o.metadata->'internal','false'::jsonb)<>'true'::jsonb FOR SHARE OF c,p,o,u,tm,a`,[expected.connectionId,expected.projectId,expected.organizationId,expected.actorId,expected.clerkUserId,expected.clerkOrganizationId,expected.origin.receiptId])).rows;
+  WHERE c.id=$1 AND c."projectId"=$2 AND p."organizationId"=$3 AND p.status='ACTIVE' AND o."clerkOrganizationId"=$6 AND COALESCE(o.metadata->'internal','false'::jsonb)<>'true'::jsonb FOR SHARE OF c,p,o,u,tm,a`;
+function validateCompactRuntimeRows(rows,connection,expected,{environment,notAfter}){
  if(rows.length!==1)fail();const row=rows[0],time=row.runtimeNow;
  if(!(time instanceof Date)||!Number.isFinite(time.getTime())||row.encryptedAccessToken!==connection.encryptedAccessToken)fail();
  const policy=ownCompanyConnectionPolicy(row,environment,time.getTime()),audit=row.runtimeAudit;
  if(policy.grantDigest!==expected.grantDigest||!memberMatches(policy,{member:{actorId:row.runtimeActorId,organizationId:row.organizationId,role:row.runtimeRole},session:{userId:policy.clerkUserId,organizationId:policy.clerkOrganizationId,organizationRole:'org:admin'},project:{id:policy.projectId,organizationId:policy.organizationId,organizationMetadata:row.runtimeOrganizationMetadata}})||audit?.state!=='RECORDED'||audit.action!=='ACTIVATE_OWN_NUMBER'||audit.projectId!==policy.projectId||audit.operationId!==policy.origin.operationId||audit.connectionId!==policy.connectionId||audit.policyDigest!==policy.origin.policyDigest||!sameKeys(audit.runtimeGrant,runtimeKeys)||grantDigest(audit.runtimeGrant)!==policy.grantDigest||audit.runtimeGrant.grantDigest!==policy.grantDigest)fail();
  const capability=Object.freeze({});runtimeCapabilities.set(capability,{policy,leaseExpiresAt:Math.min(time.getTime()+60000,Date.parse(policy.expiresAt))});return notAfter===undefined?capability:restrictOwnCompanyRuntimeCapability(capability,notAfter,time.getTime());
+}
+// Only preparation inside the canonical, already locked send transaction uses
+// this combined read. It grants OWN transport, never worker/report authority.
+// The materialized dependencies finish their reads/locks before the final clock;
+// final reply authorization and marker checks still precede the sole POST.
+export async function compactOwnCompanyRuntimeSourceFence(client,connection,source,{environment=process.env,now=Date.now()}={}){
+ const expected=ownCompanyConnectionPolicy(connection,environment,now);
+ if(!expected?.grantDigest||source?.projectId!==expected.projectId||source.channelId!==expected.connectionId||source.organizationId!==expected.organizationId||!/^customer_webhook_[a-f0-9]{64}$/.test(source.eventId||'')||!/^[a-f0-9]{64}$/.test(source.payloadDigest||'')||typeof source.leaseToken!=='string'||!source.leaseToken)throw new WorkspaceError('META_CUSTOMER_OUTBOUND_CONTEXT_CHANGED',409);
+ const rows=(await client.query(`WITH "ownRuntimePreparation" AS MATERIALIZED (${compactRuntimeQuery}),"ownRuntimeSource" AS MATERIALIZED (SELECT e.id,e."projectId",e.provider,e.status::text AS status,e.payload,e."leaseToken",e."leaseExpiresAt" FROM public."WebhookEvent" e CROSS JOIN "ownRuntimePreparation" prepared WHERE e.id=$8 AND e."projectId"=$2 FOR UPDATE OF e) SELECT prepared.*,to_jsonb(source) AS "runtimeSource",clock_timestamp() AS "runtimeNow" FROM "ownRuntimePreparation" prepared LEFT JOIN "ownRuntimeSource" source ON true`,[expected.connectionId,expected.projectId,expected.organizationId,expected.actorId,expected.clerkUserId,expected.clerkOrganizationId,expected.origin.receiptId,source.eventId])).rows;
+ // Keep OWN failures on the original canonical policy path. A missing source
+ // cannot mint transport either; its caller will retain the uncertain marker.
+ if(rows.length!==1)fail();
+ const row=rows[0],event=row.runtimeSource,observed=row.runtimeNow;
+ const capability=validateCompactRuntimeRows(rows,connection,expected,{environment});
+ if(!event||event.id!==source.eventId||event.projectId!==source.projectId||event.provider!=='meta-customer-v1'||event.payload?.payloadDigest!==source.payloadDigest||event.payload?.channelId!==source.channelId||event.payload?.organizationId!==source.organizationId)throw new WorkspaceError('META_CUSTOMER_OUTBOUND_CONTEXT_CHANGED',409);
+ if(event.status!=='PENDING'||event.leaseToken!==source.leaseToken||!Number.isFinite(Date.parse(event.leaseExpiresAt))||Date.parse(event.leaseExpiresAt)<=observed.getTime())throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
+ return {capability:restrictOwnCompanyRuntimeCapability(capability,Date.parse(event.leaseExpiresAt),observed.getTime()),observed};
 }

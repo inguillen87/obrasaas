@@ -186,13 +186,13 @@ test('report-only menus expose full reports and never attendance or office revie
  const denied=planMetaFieldConversation({message:{type:'text',text:{body:'ENTRADA'}},facts,eventId:'denied'});assert.equal(denied.command,undefined);assert.match(denied.reply.body,/no tiene habilitado el registro de jornada/);
  const limited=planMetaFieldConversation({message:{type:'text',text:{body:'MENU'}},facts:{...facts,attendanceOnly:true,permissions:{attendance:true,report:false}},eventId:'pilot'});assert.ok(!limited.reply.sections[0].rows.some(r=>/evidencia|incidencia|consumo|avance|material/i.test(r.title)));
 });
-test('corporate full operations ESTADO records current ledger without replacing encrypted draft',async()=>{
+test('corporate report-only ESTADO records reports without disclosing journey or replacing encrypted draft',async()=>{
  const f=mediaFixture(),draft={purpose:'INCIDENT',step:'INCIDENT_DESCRIPTION',title:'Fixture incident',lastEventId:'previous-field-event',lastMessageTimestamp:'1',lastReceivedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+60000).toISOString(),bindingId:'binding-project-b'};
  f.worker.metadata.fieldChannelConversation={version:1,...draft,encryptedState:encryptCustomerSecret(JSON.stringify(draft),{organizationId:'organization-a',projectId:'project-b',purpose:'field-conversation',resourceId:f.worker.id},environment)};
  assert.deepEqual(readMetaFieldConversation({worker:f.worker,project:f.project,member:{organizationId:'organization-a'},channelBinding:{id:draft.bindingId}},environment),draft);
  const before=structuredClone(f.worker.metadata);f.audits.clear();f.message.type='text';f.message.text={body:'ESTADO'};
  f.attendance.push({id:'attendance-fixture',workerId:f.worker.id,recordedAt:new Date().toISOString(),metadata:{fieldOperations:{sequence:1,eventType:'CHECK_IN',phase:'ON_BREAK'}}});
- const outcome=await f.bridge.execute(f.context);assert.equal(outcome.kind,'CONSUMPTION_READ');assert.match(outcome.reply.body,/en pausa/);assert.match(outcome.reply.body,/Consumos informados por tu cuenta/);assert.equal(outcome.businessApplied,false);
+ const outcome=await f.bridge.execute(f.context);assert.equal(outcome.kind,'CONSUMPTION_READ');assert.doesNotMatch(outcome.reply.body,/Jornada:|en pausa/);assert.match(outcome.reply.body,/Consumos informados por tu cuenta/);assert.equal(outcome.businessApplied,false);
  assert.deepEqual(f.worker.metadata,before);assert.deepEqual(f.io,[]);assert.equal([...f.audits.values()].filter(r=>r.action==='meta.field.dispatched').length,1);
 });
 

@@ -41,7 +41,6 @@ async function resolveMetaKycContext(client,context,{deposit=false,outbound=fals
  if(!initial||initial.projectId!==context.projectId||initial.payload?.channelId!==context.channelId)fail('META_KYC_CHALLENGE_REJECTED');
  const firstChannel=(await client.query(`SELECT c.*,p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c.id=$1 AND c."projectId"=$2 AND p.status='ACTIVE'`,[context.channelId,context.projectId])).rows[0];
  if(!firstChannel)fail('META_KYC_CHALLENGE_REVOKED');
- const ownCompanyCapability=await lockOwnCompanyIssuer(client,firstChannel,{environment});
  const payload=decodeSignedCustomerEvent(initial,firstChannel,environment);
  if(payload.type!=='message')fail('META_KYC_NOT_APPLICABLE');
  if(feedback&&(payload.value?.type==='text'&&/^IDENTIDAD(?:\s|$)/i.test(payload.value.text?.body?.trim()||'')||typeof payload.value?.context?.id!=='string'))return null;
@@ -51,6 +50,7 @@ async function resolveMetaKycContext(client,context,{deposit=false,outbound=fals
   if(!(['interactive','image'].includes(message.type)||message.type==='text'&&['ESTADO','ESTADO IDENTIDAD'].includes(message.text?.body?.trim().toUpperCase())))return null;
   if(message.type==='image'&&(!/^\d{5,32}$/.test(message.image?.id||'')||!['image/jpeg','image/png','image/webp'].includes(message.image?.mime_type)))return null;
  }
+ const ownCompanyCapability=await lockOwnCompanyIssuer(client,firstChannel,{environment});
  const reactiveStart=feedback?null:await resolveReactiveKycStart(client,initial,firstChannel,payload,{environment});
  const senderE164='+'+payload.value?.from,code=payload.value?.type==='text'?payload.value.text?.body?.trim():null,codeDigest=reactiveStart?.codeDigest||metaKycChallengeDigest(code);
  const corporate=await (contextFeedback?resolveCompanyKycFeedbackContext:feedback?resolveCompanyKycExpiryContext:resolveCompanyKycAuthority)(client,context,{initial,firstChannel,payload,codeDigest,environment});

@@ -7,7 +7,7 @@ import {customerReplyMessage} from '../src/lib/meta-customer-provider.mjs';
 import {WorkspaceError,digest} from '../src/lib/workspace-policy.mjs';
 import {createMetaFieldBridge,readMetaFieldConversation} from '../src/lib/meta-field-bridge.mjs';
 
-const member={organizationId:'company-a',actorId:'actor-a',clerkUserId:'user_Synthetic',role:'ADMIN'},project={id:'project-a',name:'Obra sintética'},workerId='worker-a',now=new Date('2026-10-14T12:00:00.000Z'),scope='a'.repeat(64);
+const member={organizationId:'company-a',actorId:'actor-a',membershipId:'membership-a',clerkUserId:'user_Synthetic',role:'ADMIN'},project={id:'project-a',name:'Obra sintética'},workerId='worker-a',now=new Date('2026-10-14T12:00:00.000Z'),scope='a'.repeat(64);
 const rows=values=>({rows:values,rowCount:values.length});
 const review=decision=>({decision,actorId:'reviewer-a',reason:'Revisión humana independiente del informe original.',recordedAt:'2026-10-14T13:00:00.000Z',taskUpdated:decision==='APPROVE'});
 function report(section,index,changes={}){

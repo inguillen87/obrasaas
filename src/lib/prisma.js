@@ -8,7 +8,9 @@ const globalForPrisma = global;
 function createPrismaClient() {
   const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_PRISMA_URL;
   if (!connectionString) {
-    return new PrismaClient();
+    // Importing a route during a build must not construct an unconfigured
+    // Prisma 7 client. Configured environments still use the PostgreSQL adapter.
+    return null;
   }
   const pool = new Pool({
     connectionString,
