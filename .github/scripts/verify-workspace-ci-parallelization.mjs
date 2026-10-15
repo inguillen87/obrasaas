@@ -10,9 +10,9 @@ import {parse} from '@babel/parser';
 import {parseTap,TEST_SUITES,RECOVERY_CASES,EXPECTED_SUITE_COUNTS,EXPECTED_TOTAL_TESTS,sourceFiles as bankUnitSourceFiles} from '../../scripts/verify-participant-bank-intake-contracts.mjs';
 import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourceFiles as portfolioUnitSourceFiles} from '../../scripts/verify-portfolio-overview-contracts.mjs';
 import {KYC_EXPIRED_CURRENT_ADDITIONS,KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,validateKycExpiredCurrentWorkspaceContract as validatePublishedKycWorkspaceContract,verifyKycExpiredCurrentSources as verifyPublishedKycSources} from '../../scripts/lib/kyc-expired-current-ci-lineage.mjs';
-import {PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES,planMeasurementCurrentDependencies,reconstructPublishedHContract,verifyPlanMeasurementCurrentSources} from '../../scripts/lib/plan-measurement-current-ci-lineage.mjs';
+import {PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES,planMeasurementCurrentDependencies,reconstructPublishedHContract,verifyPlanMeasurementCurrentSources,currentFieldPrivacyRevision,currentFieldPrivacySpecRevision} from '../../scripts/lib/plan-measurement-current-ci-lineage.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="1c361f22405cb3b0b923a923cfacda927a7a62c97c47bb9e9e81a8d8906be654";
+export const EXPECTED_CONTRACT_SHA256="5cfa4ffc63c260b2ab158f769ce95cde88a69b6d0365ea2b9cca35f0cf2605bb";
 function validateKycExpiredCurrentWorkspaceContract(contract){return validatePublishedKycWorkspaceContract(contract.planMeasurementCurrentLineage?reconstructPublishedHContract(contract):contract);}
 function verifyKycExpiredCurrentSources(section,readSource){
  const current=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));
@@ -475,8 +475,10 @@ function validateExtension(contract){
  if(hash(canonical(contract.evidenceProducers.filter(p=>p.blockId<=59)))!==IDENTITY_BASELINE_PRODUCERS_SHA256)deny('IDENTITY_BASELINE_PRODUCERS_CHANGED');
  if(contract.blocks.find(block=>block.id===60).commandSha256!==IDENTITY_BLOCK_DIGEST)deny('IDENTITY_BLOCK_COMMAND');
  equal(extension.proofs.find(isIdentity).checkNames,IDENTITY_ONLY_CHECKS.map(canonical),'EXTENSION_CHECK_NAMES');
- const field=extension.proofs.find(spec=>spec.kind==='PG_FIELD'),overtime=extension.proofs.find(spec=>spec.kind==='PG_OVERTIME');if(field.checkNames.length!==66||overtime.checkNames.length!==29)deny('EXTENSION_CHECK_NAMES');
- equal(field.checkNames.slice(-3),FIELD_CANONICAL_CHECKS.map(name=>canonical({group:'canonicalOwnFieldChecks',name})),'EXTENSION_CHECK_NAMES');
+ const field=extension.proofs.find(spec=>spec.kind==='PG_FIELD'),overtime=extension.proofs.find(spec=>spec.kind==='PG_OVERTIME');
+ let fieldPrivacy,overtimePrivacy;try{fieldPrivacy=currentFieldPrivacyRevision(contract,field.id);overtimePrivacy=currentFieldPrivacyRevision(contract,overtime.id);}catch{deny('EXTENSION_FIELD_PRIVACY_REVISION');}
+ if(field.checkNames.length!==(fieldPrivacy?.currentCheckCount??66)||overtime.checkNames.length!==(overtimePrivacy?.currentCheckCount??29))deny('EXTENSION_CHECK_NAMES');
+ equal(field.checkNames.slice(0,fieldPrivacy?.previousCheckCount??66).slice(-3),FIELD_CANONICAL_CHECKS.map(name=>canonical({group:'canonicalOwnFieldChecks',name})),'EXTENSION_CHECK_NAMES');
 }
 function expectedMonthlyCurveStep(contract){
  const baseline=contract.blocks.find(block=>block.id===12).step;
@@ -554,13 +556,30 @@ function canonicalFieldManifest(spec,proof){
  for(const map of [proof.sourceSha256,proof.voiceProgressSourceSha256,proof.mediaLeaseSourceSha256,proof.videoAudioSourceSha256,proof.participantKycFixture?.sourceSha256]){if(!map||typeof map!=='object'||Array.isArray(map)||!Object.keys(map).length)deny('PROOF_FIELD_SOURCE_MAP');for(const [file,digest] of Object.entries(map)){sourcePath(file);if(!sha(digest)||references.has(file)&&references.get(file)!==digest)deny('PROOF_FIELD_SOURCE_MAP');references.set(file,digest);}}
  return [...references].map(([path,sha256])=>({path,sha256}));
 }
-function validateCanonicalFieldProof(spec,proof,readSource){
- const fixture=proof.participantKycFixture;exactKeys(fixture,spec.kind==='PG_FIELD'?['sourceSha256','records','syntheticPrivateCalls','providerCalls','biometricIdentityCertified']:['records','syntheticPrivateCalls','providerCalls','biometricIdentityCertified'],'PROOF_FIELD_KYC_FIXTURE');
- if(fixture.providerCalls!==0||fixture.biometricIdentityCertified!==false||proof.providerCalls!==0)deny('PROOF_PROVIDER_IO');
+function validateCanonicalFieldKycFixture(fixture,sourceMap=false){
+ exactKeys(fixture,sourceMap?['sourceSha256','records','syntheticPrivateCalls','providerCalls','biometricIdentityCertified']:['records','syntheticPrivateCalls','providerCalls','biometricIdentityCertified'],'PROOF_FIELD_KYC_FIXTURE');
+ if(fixture.providerCalls!==0||fixture.biometricIdentityCertified!==false)deny('PROOF_PROVIDER_IO');
  if(!Array.isArray(fixture.records)||!fixture.records.length)deny('PROOF_FIELD_KYC_FIXTURE');exactKeys(fixture.syntheticPrivateCalls,['privatePuts','privateReads'],'PROOF_FIELD_KYC_FIXTURE');
  if(fixture.syntheticPrivateCalls.privatePuts!==fixture.records.length*2||fixture.syntheticPrivateCalls.privateReads!==fixture.records.length*6)deny('PROOF_FIELD_KYC_FIXTURE');
  for(const record of fixture.records){exactKeys(record,['projectId','workerId','submissionId','submissionReceiptId','reviewReceiptId','actorId','reviewerActorId','contentHash','canonicalAdmissionConfirmed','identityCertified','providerCalls'],'PROOF_FIELD_KYC_FIXTURE');if(record.canonicalAdmissionConfirmed!==true||record.identityCertified!==false||record.providerCalls!==0||!sha(record.contentHash)||typeof record.actorId!=='string'||typeof record.reviewerActorId!=='string'||!record.actorId||!record.reviewerActorId||record.actorId===record.reviewerActorId||!/^participant_[a-f0-9]{64}$/.test(record.submissionReceiptId)||!/^participant_[a-f0-9]{64}$/.test(record.reviewReceiptId))deny('PROOF_FIELD_KYC_FIXTURE');}
- const sets=canonicalFieldSourceSets(spec,readSource);
+}
+function fieldPrivacySpecRevision(spec){try{return currentFieldPrivacySpecRevision(spec);}catch{deny('PROOF_FIELD_PRIVACY_REVISION');}}
+function validateFieldHistoryPrivacy(spec,proof){
+ const revision=fieldPrivacySpecRevision(spec);
+ if(!revision){if(Object.hasOwn(proof,'ownHistoryPrivacy'))deny('PROOF_FIELD_PRIVACY_REVISION');return null;}
+ const value=proof.ownHistoryPrivacy,common=['version','currentAccountKycCanonical','originalAuthorRestored','reviewerRoles','readBusinessWrites','participantKycFixture'];
+ exactKeys(value,spec.kind==='PG_FIELD'?[...common,'checks','deniedBeforePrivateRead','postReadAuthorityRaces','providerCalls']:[...common,'sameWorkerReassigned','newAuthorOwnShiftWithForeignPredecessorReadable'],'PROOF_FIELD_HISTORY_PRIVACY');
+ if(value.version!==1||value.currentAccountKycCanonical!==true||value.originalAuthorRestored!==true||value.readBusinessWrites!==0)deny('PROOF_FIELD_HISTORY_PRIVACY');
+ equal(value.reviewerRoles,['ADMIN','DIRECTOR','SITE_MANAGER'],'PROOF_FIELD_HISTORY_PRIVACY');validateCanonicalFieldKycFixture(value.participantKycFixture);
+ if(spec.kind==='PG_FIELD'){
+  if(value.deniedBeforePrivateRead!==true||value.providerCalls!==0)deny('PROOF_FIELD_HISTORY_PRIVACY');equal(value.postReadAuthorityRaces,['REASSIGNED','REVOKED'],'PROOF_FIELD_HISTORY_PRIVACY');
+  if(!Array.isArray(value.checks))deny('PROOF_FIELD_HISTORY_PRIVACY');equal(value.checks.map(name=>canonical({group:'ownHistoryPrivacy.checks',name})),revision.addedChecks,'PROOF_FIELD_HISTORY_PRIVACY');
+ }else if(value.sameWorkerReassigned!==true||value.newAuthorOwnShiftWithForeignPredecessorReadable!==true)deny('PROOF_FIELD_HISTORY_PRIVACY');
+ return revision;
+}
+function validateCanonicalFieldProof(spec,proof,readSource){
+ const fixture=proof.participantKycFixture;validateCanonicalFieldKycFixture(fixture,spec.kind==='PG_FIELD');if(proof.providerCalls!==0)deny('PROOF_PROVIDER_IO');
+ const revision=validateFieldHistoryPrivacy(spec,proof),sets=canonicalFieldSourceSets(spec,readSource);
  if(spec.kind==='PG_OVERTIME'){
   if(proof.environment!=='disposable-random-schema-on-approved-local-postgres'||!/^obrasaas_overtime_[a-f0-9]{32}$/.test(proof.schema)||proof.disposableSchemaRemoved!==true)deny('PROOF_CLEANUP');
   if(proof.newOvertimeEnum!==false||proof.paymentEngineUsed!==false||proof.humanAccepted!==false)deny('PROOF_PROVIDER_IO');equal(proof.sqlFailures,[],'PROOF_SQL_ERRORS');equal(proof.checks,spec.checkNames,'PROOF_CHECK_NAMES');equal(proof.sourceManifest.map(ref=>ref.path).toSorted(),sets.sourceManifest,'PROOF_SOURCE_MANIFEST');
@@ -569,7 +588,8 @@ function validateCanonicalFieldProof(spec,proof,readSource){
   for(const key of ['reviewPaginationProviderCalls','voiceProgressProviderCalls','mediaLeaseProviderCalls','videoAudioProviderCalls'])if(proof[key]!==0)deny('PROOF_PROVIDER_IO');
   if(proof.physicalAttendanceAccepted!==false||proof.whatsAppTested!==false||proof.videoAudioFfmpegExecuted!==false)deny('PROOF_PROVIDER_IO');
   for(const [group,countKey,count] of FIELD_CHECK_GROUPS){if(!Array.isArray(proof[group])||proof[group].length!==count||proof[countKey]!==count)deny('PROOF_CHECK_NAMES');}
-  equal(FIELD_CHECK_GROUPS.flatMap(([group])=>proof[group].map(name=>canonical({group,name}))),spec.checkNames,'PROOF_CHECK_NAMES');equal(proof.canonicalOwnFieldChecks,FIELD_CANONICAL_CHECKS,'PROOF_CHECK_NAMES');if(proof.totalChecks!==66)deny('PROOF_CHECK_NAMES');
+  const allChecks=FIELD_CHECK_GROUPS.flatMap(([group])=>proof[group].map(name=>canonical({group,name})));if(revision)allChecks.push(...proof.ownHistoryPrivacy.checks.map(name=>canonical({group:'ownHistoryPrivacy.checks',name})));
+  equal(allChecks,spec.checkNames,'PROOF_CHECK_NAMES');equal(proof.canonicalOwnFieldChecks,FIELD_CANONICAL_CHECKS,'PROOF_CHECK_NAMES');if(proof.totalChecks!==(revision?.currentCheckCount??66))deny('PROOF_CHECK_NAMES');
   for(const [key,files] of Object.entries(sets)){const map=key==='fixture'?fixture.sourceSha256:proof[key];equal(Object.keys(map).toSorted(),files,'PROOF_FIELD_SOURCE_MAP');}
  }
 }
@@ -2153,12 +2173,18 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],
   if(spec.kind==='PG_FIELD'){
    for(const [key,files] of Object.entries(sets)){if(key==='fixture')fixture.sourceSha256=map(files);else proof[key]=map(files);}
    for(const [group,countKey,count] of FIELD_CHECK_GROUPS){proof[group]=spec.checkNames.map(row=>JSON.parse(row)).filter(row=>row.group===group).map(row=>row.name);proof[countKey]=count;}
-   Object.assign(proof,{environment:'disposable-local-postgresql17',databaseEngineVersion:'17.6',databaseRemoved:true,totalChecks:66,productionDataWritten:false,reviewPaginationProviderCalls:0,voiceProgressProviderCalls:0,mediaLeaseProviderCalls:0,videoAudioProviderCalls:0,physicalAttendanceAccepted:false,whatsAppTested:false,videoAudioFfmpegExecuted:false});
+   Object.assign(proof,{environment:'disposable-local-postgresql17',databaseEngineVersion:'17.6',databaseRemoved:true,totalChecks:spec.checkNames.length,productionDataWritten:false,reviewPaginationProviderCalls:0,voiceProgressProviderCalls:0,mediaLeaseProviderCalls:0,videoAudioProviderCalls:0,physicalAttendanceAccepted:false,whatsAppTested:false,videoAudioFfmpegExecuted:false});
   }else Object.assign(proof,{environment:'disposable-random-schema-on-approved-local-postgres',schema:'obrasaas_overtime_'+'a'.repeat(32),disposableSchemaRemoved:true,realBusinessDatabaseUsed:false,newOvertimeEnum:false,paymentEngineUsed:false,humanAccepted:false,sqlFailures:[],checks:[...spec.checkNames],sourceManifest:sets.sourceManifest.map(file=>({file,sha256:hash(readSource(file))}))});
+  const privacyRevision=fieldPrivacySpecRevision(spec);if(privacyRevision){
+   const privacyFixture=clone(fixture);delete privacyFixture.sourceSha256;
+   proof.ownHistoryPrivacy={version:1,currentAccountKycCanonical:true,originalAuthorRestored:true,reviewerRoles:['ADMIN','DIRECTOR','SITE_MANAGER'],readBusinessWrites:0,participantKycFixture:privacyFixture};
+   if(spec.kind==='PG_FIELD')Object.assign(proof.ownHistoryPrivacy,{checks:privacyRevision.addedChecks.map(value=>JSON.parse(value).name),deniedBeforePrivateRead:true,postReadAuthorityRaces:['REASSIGNED','REVOKED'],providerCalls:0});
+   else Object.assign(proof.ownHistoryPrivacy,{sameWorkerReassigned:true,newAuthorOwnShiftWithForeignPredecessorReadable:true});
+  }
   const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
   currentKycStatusChecks.push(()=>currentKycStatusClosureSelftest(spec,proof,root,validate));
    currentWhatsappPlanChecks.push(()=>whatsappPlanImportClosureSelftest(spec,proof,root,validate));
-  good(spec.id+'-complete-current-proof',()=>assert.equal(validate(proof).checks,spec.kind==='PG_FIELD'?66:29));
+  good(spec.id+'-complete-current-proof',()=>assert.equal(validate(proof).checks,privacyRevision?.currentCheckCount??(spec.kind==='PG_FIELD'?66:29)));
   good(spec.id+'-current-manifest-closure-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
   currentReactiveChecks.push(()=>{
    const start=checks.length,previous=REACTIVE_SOURCE_COUNTS[spec.kind]-1;
@@ -2173,6 +2199,19 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],
   mutate('wrong-head','PROOF_SOURCE_HEAD',p=>{p.sourceRevision='f'.repeat(40);});mutate('real-database','PROOF_PRODUCTION_BOUNDARY',p=>{if(spec.kind==='PG_FIELD')p.productionDataWritten=true;else p.realBusinessDatabaseUsed=true;});
   mutate('provider-call','PROOF_PROVIDER_IO',p=>{p.providerCalls=1;});mutate('fixture-provider-call','PROOF_PROVIDER_IO',p=>{p.participantKycFixture.providerCalls=1;});mutate('claims-biometric-certification','PROOF_PROVIDER_IO',p=>{p.participantKycFixture.biometricIdentityCertified=true;});
   mutate('fixture-no-records','PROOF_FIELD_KYC_FIXTURE',p=>{p.participantKycFixture.records=[];});mutate('fixture-private-calls-forged','PROOF_FIELD_KYC_FIXTURE',p=>{p.participantKycFixture.syntheticPrivateCalls.privateReads++;});
+  if(privacyRevision){
+   mutate('own-history-privacy-omitted','PROOF_FIELD_HISTORY_PRIVACY',p=>{delete p.ownHistoryPrivacy;});mutate('own-history-privacy-extra-field','PROOF_FIELD_HISTORY_PRIVACY',p=>{p.ownHistoryPrivacy.unreviewed=true;});
+   for(const key of ['currentAccountKycCanonical','originalAuthorRestored'])mutate('own-history-privacy-'+key,'PROOF_FIELD_HISTORY_PRIVACY',p=>{p.ownHistoryPrivacy[key]=false;});
+   mutate('own-history-business-write','PROOF_FIELD_HISTORY_PRIVACY',p=>{p.ownHistoryPrivacy.readBusinessWrites=1;});mutate('own-history-reviewers-omitted','PROOF_FIELD_HISTORY_PRIVACY',p=>{p.ownHistoryPrivacy.reviewerRoles.pop();});
+   mutate('own-history-fixture-provider-call','PROOF_PROVIDER_IO',p=>{p.ownHistoryPrivacy.participantKycFixture.providerCalls=1;});mutate('own-history-fixture-not-canonical','PROOF_FIELD_KYC_FIXTURE',p=>{p.ownHistoryPrivacy.participantKycFixture.records[0].canonicalAdmissionConfirmed=false;});
+   mutate('own-history-fixture-calls-forged','PROOF_FIELD_KYC_FIXTURE',p=>{p.ownHistoryPrivacy.participantKycFixture.syntheticPrivateCalls.privateReads++;});
+   if(spec.kind==='PG_FIELD'){
+    mutate('own-history-check-omitted','PROOF_FIELD_HISTORY_PRIVACY',p=>{p.ownHistoryPrivacy.checks=[];});mutate('own-history-check-changed','PROOF_FIELD_HISTORY_PRIVACY',p=>{p.ownHistoryPrivacy.checks[0]='foreign privacy check';});
+    mutate('own-history-private-read-before-denial','PROOF_FIELD_HISTORY_PRIVACY',p=>{p.ownHistoryPrivacy.deniedBeforePrivateRead=false;});mutate('own-history-race-omitted','PROOF_FIELD_HISTORY_PRIVACY',p=>{p.ownHistoryPrivacy.postReadAuthorityRaces.pop();});mutate('own-history-provider-call','PROOF_FIELD_HISTORY_PRIVACY',p=>{p.ownHistoryPrivacy.providerCalls=1;});
+   }else{
+    for(const key of ['sameWorkerReassigned','newAuthorOwnShiftWithForeignPredecessorReadable'])mutate('own-history-privacy-'+key,'PROOF_FIELD_HISTORY_PRIVACY',p=>{p.ownHistoryPrivacy[key]=false;});
+   }
+  }
   for(const [key,value] of [['canonicalAdmissionConfirmed',false],['identityCertified',true],['providerCalls',1],['contentHash','not-a-sha256'],['reviewerActorId','worker'],['reviewReceiptId','missing'],['submissionReceiptId','missing']])mutate('fixture-record-'+key,'PROOF_FIELD_KYC_FIXTURE',p=>{p.participantKycFixture.records[0][key]=value;});
   for(const file of spec.sourceFiles){
    mutate('source-omitted-'+file,'PROOF_SOURCE_MANIFEST',p=>{if(spec.kind==='PG_FIELD'){for(const key of Object.keys(sets)){const source=key==='fixture'?p.participantKycFixture.sourceSha256:p[key];delete source[file];}}else p.sourceManifest=p.sourceManifest.filter(ref=>ref.file!==file);});

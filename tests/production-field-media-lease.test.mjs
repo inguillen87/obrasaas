@@ -13,7 +13,7 @@ const result={success:true,status:'TRANSCRIBED_UNREVIEWED',text:'Ejecutamos en t
 function fixture({onTransaction,onGet,onAnalyze,conditionalMiss=false,processTimeoutMs,stallBody=false}={}){
  const bytes=Buffer.concat([Buffer.from('RIFF0000WAVE'),Buffer.alloc(40)]),pathname='obrasaas/field/v1/'+'b'.repeat(64)+'/evidence.wav';
  const media={kind:'audio',contentType:'audio/wav',pathname,bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),url:'https://fixture.private.blob.vercel-storage.com/'+pathname};
- const row={id:input.evidenceId,title:'Synthetic audio',description:'Synthetic private audio only.',revision,metadata:{fieldOperations:{version:1,kind:'EVIDENCE',workerId:'worker-a',taskId:'task-a',sectorId:'sector-a',media,processing:{status:'QUEUED'},review:null}}};
+ const row={id:input.evidenceId,title:'Synthetic audio',description:'Synthetic private audio only.',revision,metadata:{fieldOperations:{version:1,kind:'EVIDENCE',recordedBy:'uploader-a',workerId:'worker-a',taskId:'task-a',sectorId:'sector-a',media,processing:{status:'QUEUED'},review:null}}};
  const counts={get:0,provider:0,put:0,transactions:0,bodyCancelled:0},receipts=new Map(),queries=[];
  let now=new Date('2026-10-07T12:00:00.000Z'),revoked=false;
  const expire=()=>{row.metadata.fieldOperations.processing.expiresAt=new Date(now.getTime()-1).toISOString();};

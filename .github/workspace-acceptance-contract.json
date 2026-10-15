@@ -2984,7 +2984,7 @@
         "path": ".vercel/field-operations-evidence/postgres.json",
         "kind": "PG_FIELD",
         "producer": "scripts/verify-field-operations-postgres.mjs",
-        "producerSha256": "d3f099602fcd23fe5fcf7d5cb5aeefc46d87e9889fd6c832a3e7405f2e838a4c",
+        "producerSha256": "c3cf9eed8983b9ab43ad9b11cf0f59af206b08ba70f5e6697133bb448b940662",
         "sourceFiles": [
           "scripts/fixtures/canonical-participant-kyc.mjs",
           "scripts/verify-field-operations-postgres.mjs",
@@ -3176,7 +3176,8 @@
           "{\"group\":\"videoAudioChecks\",\"name\":\"video-task-quantity-and-gantt-change-only-after-independent-canonical-decision-and-concurrent-exact-replay-applies-one-precise-measurement-and-one-receipt\"}",
           "{\"group\":\"canonicalOwnFieldChecks\",\"name\":\"administrator-own-post-replay-read-only-receipt-and-media-review-decision-corrupt-denied-with-zero-database-or-private-provider-effects\"}",
           "{\"group\":\"canonicalOwnFieldChecks\",\"name\":\"administrator-own-post-replay-read-only-receipt-and-media-submission-content-digest-corrupt-denied-with-zero-database-or-private-provider-effects\"}",
-          "{\"group\":\"canonicalOwnFieldChecks\",\"name\":\"administrator-own-complete-independent-kyc-admits-field-save-and-exact-read-only-recovery-with-no-repeat-effects\"}"
+          "{\"group\":\"canonicalOwnFieldChecks\",\"name\":\"administrator-own-complete-independent-kyc-admits-field-save-and-exact-read-only-recovery-with-no-repeat-effects\"}",
+          "{\"group\":\"ownHistoryPrivacy.checks\",\"name\":\"same-worker-reassignment-keeps-original-author-feed-review-count-cursor-detail-and-private-media-while-restored-author-and-reviewers-retain-access-and-post-read-authority-races-deny\"}"
         ]
       },
       {
@@ -3186,7 +3187,7 @@
         "path": ".vercel/private/field-overtime-postgres-proof.json",
         "kind": "PG_OVERTIME",
         "producer": "scripts/verify-field-overtime-postgres.mjs",
-        "producerSha256": "06f570e65eb336e83bd6449ca4f68049d9fbed0a6df1d8658df038d2091db96b",
+        "producerSha256": "51164b87849c57269f54a86cbd4b15bacf2fa5337ef123a19ab6ce2eddd7530f",
         "sourceFiles": [
           "scripts/fixtures/canonical-participant-kyc.mjs",
           "scripts/lib/disposable-postgres-cleanup.mjs",
@@ -3326,7 +3327,8 @@
           "stable-scoped-keyset-pages-over-thirty-with-timestamp-ties-reach-and-review-an-old-pending-request",
           "malformed-cross-tenant-project-scope-other-worker-and-changed-anchor-cursors-reject-with-current-authorization",
           "canonical-participant-store-revoke-restore-disables-restores-assignment-with-identical-worker-and-project-membership-timestamps-but-old-approval-stays-invalid",
-          "canonical-set-office-role-a-to-b-to-a-with-identical-tenant-membership-timestamp-and-synthetic-identity-never-revives-old-approval"
+          "canonical-set-office-role-a-to-b-to-a-with-identical-tenant-membership-timestamp-and-synthetic-identity-never-revives-old-approval",
+          "same-worker-account-reassignment-keeps-original-author-list-cursor-detail-private-restored-author-and-independent-reviewers-retain-read-with-zero-business-writes"
         ]
       },
       {
@@ -4095,7 +4097,7 @@
       },
       {
         "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
-        "sha256": "6dfc4d9298a55aaf9d29ab0db0f2fc5ace7903b47ba0157ea9c201edf8aa5169"
+        "sha256": "b672e9830733b0759104acf12b1ca7d9f02f49d7c8420dfd046931b3c8f8fc0e"
       },
       {
         "path": "scripts/verify-company-kyc-outbound-compact-ci.mjs",
@@ -4251,7 +4253,7 @@
       },
       {
         "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
-        "sha256": "916f9a8316108a3d83db955576df5fb5bc9466ed513d4cc950164a00e3f211aa"
+        "sha256": "e8e37a1998d3990190e1a802ace1ea6fde2a291c4effea69613b600c6bd09cfe"
       },
       {
         "path": "tests/production-plan-measurement-postgres-target.test.mjs",
@@ -4285,6 +4287,53 @@
       "previousSha256": "9835f6f8af3a3d81bc770aa611bcf9233324a7ff196d63f4a1c9194c5b931f51",
       "currentSha256": "9978062c966ed599d6d65783813169da48b6fd39fdc65ea6691144598f8c3413",
       "sourcePatchesSha256": "9754616e39e829847a91a4e82c7fe1d7c90158737e9e59bad9effb54ecc2a886"
+    },
+    "fieldHistoryPrivacyRevision": {
+      "version": "field-history-privacy-producer-v1",
+      "referenceHead": "74426e936d8906a3b410a892cda980fcd8344ff9",
+      "previousContractSha256": "1c361f22405cb3b0b923a923cfacda927a7a62c97c47bb9e9e81a8d8906be654",
+      "producers": [
+        {
+          "id": "field-canonical-postgres",
+          "kind": "PG_FIELD",
+          "producer": "scripts/verify-field-operations-postgres.mjs",
+          "previousSha256": "d3f099602fcd23fe5fcf7d5cb5aeefc46d87e9889fd6c832a3e7405f2e838a4c",
+          "currentSha256": "c3cf9eed8983b9ab43ad9b11cf0f59af206b08ba70f5e6697133bb448b940662",
+          "previousCheckCount": 66,
+          "currentCheckCount": 67,
+          "previousCheckNamesSha256": "c8e188d83ffc4a30494bd178ebc8ae24f19d17898953a20804e796221ac48580",
+          "currentCheckNamesSha256": "f1e846044e855a94d416d1b7edef89850a51131a5cd2fe1d7bbc0f0809dea3a0",
+          "addedChecks": [
+            "{\"group\":\"ownHistoryPrivacy.checks\",\"name\":\"same-worker-reassignment-keeps-original-author-feed-review-count-cursor-detail-and-private-media-while-restored-author-and-reviewers-retain-access-and-post-read-authority-races-deny\"}"
+          ],
+          "sourcePatchesSha256": "2115d47670896260916d77d098205c8739286f83ef195f7cb20fe75e98d9f75f"
+        },
+        {
+          "id": "overtime-canonical-postgres",
+          "kind": "PG_OVERTIME",
+          "producer": "scripts/verify-field-overtime-postgres.mjs",
+          "previousSha256": "06f570e65eb336e83bd6449ca4f68049d9fbed0a6df1d8658df038d2091db96b",
+          "currentSha256": "51164b87849c57269f54a86cbd4b15bacf2fa5337ef123a19ab6ce2eddd7530f",
+          "previousCheckCount": 29,
+          "currentCheckCount": 30,
+          "previousCheckNamesSha256": "75da781fadf62bc677fe9043b9fca8b5c1b4eb6cdf9d32ddf0cb44639eb4ffd3",
+          "currentCheckNamesSha256": "7029297c231f71219b7c5bc6ee4932f901f33da025e30a1a1e3ca83c66d07e4b",
+          "addedChecks": [
+            "same-worker-account-reassignment-keeps-original-author-list-cursor-detail-private-restored-author-and-independent-reviewers-retain-read-with-zero-business-writes"
+          ],
+          "sourcePatchesSha256": "a1e96dbc0206ec40daf5fd1a3da2b46db3b309d692dc4cb5179105b82c31548d"
+        }
+      ],
+      "validationSources": [
+        {
+          "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
+          "previousSha256": "6dfc4d9298a55aaf9d29ab0db0f2fc5ace7903b47ba0157ea9c201edf8aa5169"
+        },
+        {
+          "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
+          "previousSha256": "916f9a8316108a3d83db955576df5fb5bc9466ed513d4cc950164a00e3f211aa"
+        }
+      ]
     }
   }
 }
