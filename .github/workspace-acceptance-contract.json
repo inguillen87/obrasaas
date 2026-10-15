@@ -4095,7 +4095,7 @@
       },
       {
         "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
-        "sha256": "73c35038bda4d20fe64d7e7fe32d829c68dbd80adae18c0eb4487c565744c2b6"
+        "sha256": "6dfc4d9298a55aaf9d29ab0db0f2fc5ace7903b47ba0157ea9c201edf8aa5169"
       },
       {
         "path": "scripts/verify-company-kyc-outbound-compact-ci.mjs",
@@ -4131,11 +4131,11 @@
       },
       {
         "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
-        "sha256": "9835f6f8af3a3d81bc770aa611bcf9233324a7ff196d63f4a1c9194c5b931f51"
+        "sha256": "9978062c966ed599d6d65783813169da48b6fd39fdc65ea6691144598f8c3413"
       },
       {
         "path": "src/app/(identity)/cuenta/plan-import-panel.js",
-        "sha256": "c3b2eff3a916780dca853319ffad5e0fbaf64c383b9e59a2d306604a0830caba"
+        "sha256": "3fb02bb63848059a8d045ca7d780e59a0b7b7093fa21d1c490604f9763c2cf00"
       },
       {
         "path": "src/app/(identity)/cuenta/plan-measurement-panel.js",
@@ -4251,7 +4251,7 @@
       },
       {
         "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
-        "sha256": "204675f3c90cfc608a196a3abee30a6e226dcf6bffd016f7f05cb54e17fbcb9b"
+        "sha256": "916f9a8316108a3d83db955576df5fb5bc9466ed513d4cc950164a00e3f211aa"
       },
       {
         "path": "tests/production-plan-measurement-postgres-target.test.mjs",
@@ -4277,6 +4277,14 @@
         "path": "tests/production-whatsapp-feedback-workspace-ci.test.mjs",
         "sha256": "e6d609c407425087b5cebf14abdf96f92dfc49535d7c85e7d27f846052208c75"
       }
-    ]
+    ],
+    "planImportRecoveryRetentionRevision": {
+      "version": "plan-import-recovery-retention-producer-v1",
+      "referenceHead": "47ae04ff96420b0b2f118c932553dcdf27bf5d02",
+      "producer": "scripts/verify-workspace-plan-recovery-ui.mjs",
+      "previousSha256": "9835f6f8af3a3d81bc770aa611bcf9233324a7ff196d63f4a1c9194c5b931f51",
+      "currentSha256": "9978062c966ed599d6d65783813169da48b6fd39fdc65ea6691144598f8c3413",
+      "sourcePatchesSha256": "9754616e39e829847a91a4e82c7fe1d7c90158737e9e59bad9effb54ecc2a886"
+    }
   }
 }

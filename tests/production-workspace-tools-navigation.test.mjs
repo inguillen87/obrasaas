@@ -61,3 +61,31 @@ test('DIRECTOR integration capability keeps permitted work without exposing ADMI
   if(expected.length===0)assert.doesNotMatch(html,/role="status"/);
  }
 });
+
+test('a pending physical quantity review has a direct return link for both authorized planning roles',()=>{
+ for(const role of ['ADMIN','DIRECTOR']){
+  const html=render({role,canImportPlan:true,canManageIntegrations:true,pending:{planMeasurement:true}});
+  assert.deepEqual(pendingHrefs(html),['#plan-measurement-title']);
+  assert.match(html,/Metrados por revisar/);
+  assert.match(html,/role="status" aria-live="polite"/);
+ }
+});
+
+test('a stale measurement flag cannot expose the return link without both canonical capabilities',()=>{
+ for(const props of [
+  {role:'WORKER',canImportPlan:false,canManageIntegrations:false},
+  {role:'DIRECTOR',canImportPlan:true,canManageIntegrations:false},
+  {role:'ADMIN',canImportPlan:false,canManageIntegrations:true},
+ ]){
+  const html=render({...props,pending:{planMeasurement:true,field:true}});
+  assert.deepEqual(pendingHrefs(html),['#field-title']);
+  assert.doesNotMatch(html,/href="#plan-measurement-title"/);
+ }
+});
+
+test('quantity and schedule reviews keep independent return destinations and completed reviews disappear',()=>{
+ const props={role:'ADMIN',canImportPlan:true,canManageIntegrations:true};
+ assert.deepEqual(pendingHrefs(render({...props,pending:{plan:true,planMeasurement:true}})),['#plan-import-title','#plan-measurement-title']);
+ assert.deepEqual(pendingHrefs(render({...props,pending:{planMeasurement:false}})),[]);
+ assert.doesNotMatch(render({...props,pending:{planMeasurement:false}}),/role="status"/);
+});
