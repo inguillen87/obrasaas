@@ -119,8 +119,77 @@ async function workbook(bytes,contentType) {
   }
   const stringRel=[...rels.values()].filter(rel=>rel.type===relationshipNS+'/sharedStrings');if(stringRel.length>1)fail();const strings=[];
   if(stringRel.length){const shared=xml(await container.read(stringRel[0].target),'sst',spreadsheetNS,container.check);for(const s of children(shared,'si')){if(strings.length>=PLAN_OOXML_LIMITS.strings)fail();strings.push(richText(s));}}
-  return {async sheet(name){const sheet=sheets.get(name);if(!sheet?.visible)fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');return sheetCells(await container.read(sheet.target),strings,container.check);},has:name=>sheets.has(name),visible:name=>sheets.get(name)?.visible===true,close:container.close};
+  let sourceStyles;
+  return {async sheet(name){const sheet=sheets.get(name);if(!sheet?.visible)fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');return sheetCells(await container.read(sheet.target),strings,container.check);},async measurementSheet(name,columns){const sheet=sheets.get(name);if(!sheet?.visible)fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');if(!sourceStyles){const matches=[...rels.values()].filter(rel=>rel.type===relationshipNS+'/styles');if(matches.length>1)fail();sourceStyles=matches.length?measurementStyles(await container.read(matches[0].target),container.check):{formats:new Map(),xfs:[],bases:[]};}return measurementCells(await container.read(sheet.target),strings,sourceStyles,container.check,columns);},has:name=>sheets.has(name),visible:name=>sheets.get(name)?.visible===true,close:container.close};
  }catch(error){container.close();throw error;}
+}
+// Separate, detached provenance for the opt-in physical-quantity profile. The
+// legacy cell reader and all v1/v2/v3/v4 extraction outputs stay unchanged.
+const sourceAttributes=node=>Object.fromEntries(Object.entries(node?.attrs||{}));
+const sourceIndex=value=>typeof value==='string'&&/^(?:0|[1-9]\d{0,5})$/.test(value);
+const sourceAddress=value=>typeof value==='string'&&/^[A-Z]{1,3}[1-9]\d{0,5}$/.test(value);
+const sourcePosition=address=>{const [,letters,row]=/^([A-Z]+)(\d+)$/.exec(address);let column=0;for(const letter of letters)column=column*26+letter.charCodeAt(0)-64;return {column,row:BigInt(row)};};
+function measurementStyles(bytes,check){
+ const root=xml(bytes,'styleSheet',spreadsheetNS,check),formats=new Map();
+ if(['numFmts','cellXfs','cellStyleXfs'].some(name=>children(root,name).length>1))fail();
+ for(const format of children(child(root,'numFmts'),'numFmt')){const id=attr(format,'numFmtId'),code=attr(format,'formatCode');if(!sourceIndex(id)||BigInt(id)<164n||typeof code!=='string'||code.length>500||formats.has(id))fail();formats.set(id,code);}
+ const xfs=children(child(root,'cellXfs'),'xf').map(sourceAttributes),bases=children(child(root,'cellStyleXfs'),'xf').map(sourceAttributes);
+ if(xfs.length>PLAN_OOXML_LIMITS.cells||bases.length>PLAN_OOXML_LIMITS.cells)fail();
+ return {formats,xfs,bases};
+}
+function measurementStyle(index,source,styles){
+ const attributes=index==='0'&&!styles.xfs.length?{}:styles.xfs[index]??null;
+ if(attributes?.applyNumberFormat!==undefined&&!['0','1','false','true'].includes(attributes.applyNumberFormat))fail('PLAN_IMPORT_MEASUREMENT_SOURCE_INVALID');
+ const baseAttributes=attributes?.xfId?styles.bases[attributes.xfId]??null:null;
+ const inherited=['0','false'].includes(attributes?.applyNumberFormat),numFmtId=attributes?(inherited?baseAttributes?.numFmtId??(attributes.xfId?'': '0'):attributes.numFmtId??'0'):null;
+ const builtins={'0':'General','1':'0','2':'0.00','3':'#,##0','4':'#,##0.00'};
+ return {source,index,numFmtId:sourceIndex(numFmtId)?numFmtId:null,formatCode:sourceIndex(numFmtId)?styles.formats.get(numFmtId)??builtins[numFmtId]??null:null,attributes,baseAttributes};
+}
+function measurementCells(bytes,strings,styles,check,requestedColumns){
+ const root=xml(bytes,'worksheet',spreadsheetNS,check),cells=new Map(),masters=new Map(),rowContexts=new Map();
+ if(children(root,'sheetData').length!==1||children(root,'cols').length>1||children(root,'mergeCells').length>1)fail();
+ const columns=children(child(root,'cols'),'col').map(sourceAttributes),merges=children(child(root,'mergeCells'),'mergeCell').map(item=>attr(item,'ref'));
+ for(const col of columns)if(!/^[1-9]\d{0,4}$/.test(col.min||'')||!/^[1-9]\d{0,4}$/.test(col.max||'')||BigInt(col.min)>BigInt(col.max)||BigInt(col.max)>16384n)fail();
+ for(const range of merges)if(typeof range!=='string'||!range.split(':').every(sourceAddress)||range.split(':').length!==2)fail();
+ const context=(address,rowAttributes,cellAttributes)=>{
+  const position=sourcePosition(address),columnAttributes=columns.filter(col=>BigInt(col.min)<=BigInt(position.column)&&BigInt(col.max)>=BigInt(position.column)),columnStyles=[...new Set(columnAttributes.filter(col=>col.style!==undefined).map(col=>col.style))];
+  let style;
+  if(cellAttributes.s!==undefined)style=measurementStyle(cellAttributes.s,'CELL',styles);
+  else if(rowAttributes.s!==undefined&&['1','true'].includes(rowAttributes.customFormat))style=measurementStyle(rowAttributes.s,'ROW',styles);
+  else if(columnStyles.length>1)style={source:'AMBIGUOUS',index:null,numFmtId:null,formatCode:null,attributes:null,baseAttributes:null};
+  else style=measurementStyle(columnStyles[0]??'0',columnStyles.length?'COLUMN':'DEFAULT',styles);
+  const mergedRanges=merges.filter(range=>{const [left,right]=range.split(':').map(sourcePosition);return left.column<=position.column&&right.column>=position.column&&left.row<=position.row&&right.row>=position.row;});
+  return {style,rowAttributes,columnAttributes,cellAttributes,mergedRanges};
+ };
+ for(const row of children(child(root,'sheetData'),'row'))for(const item of children(row,'c')){
+  check();const address=attr(item,'r');if(!sourceAddress(address)||cells.has(address)||cells.size>=PLAN_OOXML_LIMITS.cells)fail();
+  const position=sourcePosition(address),rowAttributes=sourceAttributes(row),cellAttributes=sourceAttributes(item);
+  if(rowAttributes.customFormat!==undefined&&!['0','1','false','true'].includes(rowAttributes.customFormat))fail('PLAN_IMPORT_MEASUREMENT_SOURCE_INVALID');
+  if(rowAttributes.r!==undefined&&rowAttributes.r!==String(position.row))fail('PLAN_IMPORT_MEASUREMENT_SOURCE_INVALID');
+  if(rowContexts.has(String(position.row))&&JSON.stringify(rowContexts.get(String(position.row)))!==JSON.stringify(rowAttributes))fail();rowContexts.set(String(position.row),rowAttributes);
+  if(['f','v','is'].some(name=>children(item,name).length>1))fail();
+  const formula=child(item,'f'),cache=child(item,'v'),type=attr(item,'t')||'n',rawValue=cache?.value??null;let value=rawValue;
+  if(type==='s'){if(!sourceIndex(rawValue)||strings[rawValue]===undefined)fail();value=strings[rawValue];}
+  else if(type==='inlineStr'){const inline=child(item,'is');value=inline?richText(inline):null;}
+  else if(!['n','str','e','b','d'].includes(type))fail();
+  const formulaAttributes=formula?sourceAttributes(formula):null;
+  if(formulaAttributes?.t==='shared'&&formula?.value){if(!sourceIndex(formulaAttributes.si)||masters.has(formulaAttributes.si))fail();masters.set(formulaAttributes.si,{address,text:formula.value,attributes:formulaAttributes});}
+  cells.set(address,{address,present:true,rawValue,value,type,cachePresent:Boolean(cache),formulaText:formula?.value??null,formulaAttributes,sharedFormulaMaster:null,...context(address,rowAttributes,cellAttributes)});
+ }
+ for(const cell of cells.values())if(cell.formulaAttributes?.t==='shared')cell.sharedFormulaMaster=masters.get(cell.formulaAttributes.si)??null;
+ for(const [row,rowAttributes] of rowContexts)for(const column of requestedColumns){const address=column+row;if(!cells.has(address)){if(cells.size>=PLAN_OOXML_LIMITS.cells)fail();cells.set(address,{address,present:false,rawValue:null,value:null,type:'n',cachePresent:false,formulaText:null,formulaAttributes:null,sharedFormulaMaster:null,...context(address,rowAttributes,{})});}}
+ return cells;
+}
+export async function readPlanMeasurementOoxml(bytes,contentType){
+ let book;
+ try{
+  book=await workbook(bytes,contentType);const cyp=book.has('Plan de trabajo')&&book.has('CyP Integral completo'),quote=book.has('Cotización');
+  if(cyp===quote)fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');
+  const names=cyp?['Plan de trabajo','CyP Integral completo']:['Cotización'],allowed=cyp?{ 'Plan de trabajo':/^[ABCD][1-9]\d{0,5}$/,'CyP Integral completo':/^[BC][1-9]\d{0,5}$/}:{'Cotización':/^[CDEF][1-9]\d{0,5}$/};
+  const worksheets=[];
+  for(const name of names){const columns=cyp?(name==='Plan de trabajo'?['A','B','C','D']:['B','C']):['C','D','E','F'],cells=await book.measurementSheet(name,columns);worksheets.push({name,visible:true,cells:[...cells.values()].filter(cell=>allowed[name].test(cell.address))});}
+  return {format:cyp?'CYP_PARTIDAS':'COTIZACION_PARTIDAS',worksheets};
+ }catch(error){if(error instanceof WorkspaceError)throw error;fail();}finally{book?.close();}
 }
 export async function validatePlanOoxml(bytes,contentType) {
  let value;try{value=await workbook(bytes,contentType);return true;}catch(error){if(error instanceof WorkspaceError)throw error;fail();}finally{value?.close();}

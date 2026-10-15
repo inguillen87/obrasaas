@@ -5,6 +5,7 @@ import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import {WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS,validateWhatsappFeedbackPreviousSourceLineage,validateCompanyKycContextNativeProof,validateExtensionProof,currentProducerSourceFiles} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';
+import {planMeasurementCurrentDependencies} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url));
 const contract=JSON.parse(readFileSync(path.join(root,'.github/workspace-acceptance-contract.json'),'utf8'));
@@ -17,7 +18,7 @@ const current=contract.extension.proofs.filter(spec=>Object.hasOwn(WHATSAPP_FEED
 test('current execution graphs add only their real WhatsApp imports and preserve every published PR142 path set',()=>{
  assert.equal(current.length,7);
  for(const spec of current){
-  assert.equal(spec.sourceFiles.length,WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS[spec.kind]+additions(spec.kind).length);
+  assert.equal(spec.sourceFiles.length,WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS[spec.kind]+additions(spec.kind).length+(contract.planMeasurementCurrentLineage?planMeasurementCurrentDependencies(spec.kind).length:0));
   assert.doesNotThrow(()=>validateWhatsappFeedbackPreviousSourceLineage(spec));
   assert.deepEqual(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted());
  }

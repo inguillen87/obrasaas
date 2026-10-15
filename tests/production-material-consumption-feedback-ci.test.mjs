@@ -8,11 +8,20 @@ import {fileURLToPath} from 'node:url';
 import {validateConsumptionFeedbackCi,consumptionFeedbackSourceClosure,CONSUMPTION_FEEDBACK_CI_VERSION,CONSUMPTION_FEEDBACK_UI_WIDTHS,CONSUMPTION_FEEDBACK_UI_CASES} from '../scripts/verify-consumption-feedback-ci.mjs';
 import {MATERIAL_CONSUMPTION_FEEDBACK_CHECKS,MATERIAL_CONSUMPTION_FEEDBACK_PROOF_VERSION} from '../scripts/verify-material-consumption-feedback-postgres.mjs';
 import {MATERIAL_FEEDBACK_HISTORICAL_97_SOURCES,MATERIAL_FEEDBACK_HISTORICAL_100_SOURCES} from './fixtures/feedback-ci-historical-source-sets.mjs';
+import {PLAN_MEASUREMENT_CONSUMER_CI_HELPER,PLAN_MEASUREMENT_CONSUMER_SOURCES} from '../scripts/lib/plan-measurement-consumer-ci-lineage.mjs';
 
 const root=fileURLToPath(new URL('../',import.meta.url)),sources=Object.create(null),sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const readSource=file=>{const filename=path.join(root,file);if(!existsSync(filename))return null;if(!Object.hasOwn(sources,file))sources[file]=readFileSync(filename);return sources[file];};
 const native=consumptionFeedbackSourceClosure(readSource),browser=consumptionFeedbackSourceClosure(readSource,{ui:true});
-for(const file of ['scripts/verify-consumption-feedback-ui.mjs','scripts/lib/owned-fixture-cleanup.mjs'])readSource(file);
+ for(const file of ['scripts/verify-consumption-feedback-ui.mjs','scripts/lib/owned-fixture-cleanup.mjs',PLAN_MEASUREMENT_CONSUMER_CI_HELPER])readSource(file);
+const historicalNative=native.files.filter(file=>!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file));
+test('source import CURRENT110 retains previous108 and rejects old receipts, missing quantities and a resealed producer',()=>{
+ assert.equal(historicalNative.length,108);assert.equal(sha(JSON.stringify(historicalNative)),'aba2e13b273f24b8f2d9ec5378dc3c3b6f3846341ce576735d9fc7da587d6caa');
+ rejected(input=>{input.postgres.sourceManifest=manifest(historicalNative);});
+ for(const file of PLAN_MEASUREMENT_CONSUMER_SOURCES){rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);});rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-measurement.mjs';assert.equal(input.postgres.sourceManifest.length,110);});rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});rejected(input=>{delete input.gitSources[file];});}
+ rejected(input=>{delete input.gitSources[PLAN_MEASUREMENT_CONSUMER_CI_HELPER];});
+ rejected(input=>{const file='scripts/verify-material-consumption-feedback-postgres.mjs';input.gitSources[file]=Buffer.concat([input.gitSources[file],Buffer.from('\n// Changed producer\n')]);input.postgres.harnessSha256=sha(input.gitSources[file]);input.postgres.sourceManifest.find(ref=>ref.path===file).sha256=input.postgres.harnessSha256;});
+});
 const manifest=files=>files.map(file=>({path:file,sha256:sha(sources[file])}));
 const head='a'.repeat(40),tree='b'.repeat(40),operationId=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 function fixture(){
@@ -23,12 +32,12 @@ function fixture(){
 function rejected(mutate){const input=fixture();mutate(input);assert.throws(()=>validateConsumptionFeedbackCi(input),{code:'CONSUMPTION_FEEDBACK_CI_REJECTED'});}
 
 test('CI validator accepts the complete exact native/browser contracts without running either producer',()=>{
- assert.equal(native.files.length,108);assert.equal(browser.files.length,20);
+ assert.equal(native.files.length,110);assert.equal(browser.files.length,20);
  const input=fixture(),before=JSON.stringify(input),result=validateConsumptionFeedbackCi(input);
- assert.equal(JSON.stringify(input),before);assert.equal(result.version,CONSUMPTION_FEEDBACK_CI_VERSION);assert.equal(result.status,'PASS');assert.equal(result.sourceRevision,head);assert.equal(result.postgres.totalCheckCount,23);assert.equal(result.postgres.sourceCount,108);assert.equal(result.ui.totalCheckCount,12);assert.equal(result.ui.sourceCount,20);assert.equal(result.productionLoginVerified,false);assert.equal(result.productionDataWritten,false);assert.equal(result.providerCalls,0);
+ assert.equal(JSON.stringify(input),before);assert.equal(result.version,CONSUMPTION_FEEDBACK_CI_VERSION);assert.equal(result.status,'PASS');assert.equal(result.sourceRevision,head);assert.equal(result.postgres.totalCheckCount,23);assert.equal(result.postgres.sourceCount,110);assert.equal(result.postgres.sourceLineage.previousSourceCount,108);assert.equal(result.ui.totalCheckCount,12);assert.equal(result.ui.sourceCount,20);assert.equal(result.productionLoginVerified,false);assert.equal(result.productionDataWritten,false);assert.equal(result.providerCalls,0);
  // Challenge the new graph with the independently frozen pre-document path set.
  assert.equal(MATERIAL_NATIVE_PRE_DOCUMENT_SOURCES.length,105);
- assert.deepEqual(native.files.filter(file=>!['src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs','src/lib/field-report-feedback.mjs'].includes(file)),MATERIAL_NATIVE_PRE_DOCUMENT_SOURCES);
+ assert.deepEqual(historicalNative.filter(file=>!['src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs','src/lib/field-report-feedback.mjs'].includes(file)),MATERIAL_NATIVE_PRE_DOCUMENT_SOURCES);
  rejected(input=>{input.postgres.sourceManifest=manifest(MATERIAL_NATIVE_PRE_DOCUMENT_SOURCES);});
  for(const file of ["src/lib/plan-baseline-policy.mjs", "src/lib/plan-import-document-curve.mjs"]){rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);});rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/substituted-document-curve.mjs';});rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});rejected(input=>{delete input.gitSources[file];});}
  for(const file of ["src/lib/plan-import-document-curve.mjs"]){rejected(input=>{input.ui.sourceManifest=input.ui.sourceManifest.filter(ref=>ref.path!==file);});rejected(input=>{input.ui.sourceManifest.find(ref=>ref.path===file).path='src/lib/substituted-document-curve.mjs';});rejected(input=>{input.ui.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});rejected(input=>{delete input.gitSources[file];});}
@@ -39,7 +48,7 @@ test('current signed KYC reply imports require their exact immutable source byte
  for(const file of ['src/lib/meta-kyc-identity.mjs','src/lib/meta-kyc-rejection-policy.mjs','src/lib/meta-kyc-rejection.mjs']){
   assert.equal(native.files.filter(source=>source===file).length,1);
   rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);});
-  rejected(input=>{const ref=input.postgres.sourceManifest.find(ref=>ref.path===file);ref.path='src/lib/foreign-kyc-reply-source.mjs';assert.equal(input.postgres.sourceManifest.length,108);});
+  rejected(input=>{const ref=input.postgres.sourceManifest.find(ref=>ref.path===file);ref.path='src/lib/foreign-kyc-reply-source.mjs';assert.equal(input.postgres.sourceManifest.length,110);});
   rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
   rejected(input=>{delete input.gitSources[file];});
  }
@@ -52,8 +61,8 @@ test('current usage policy cannot be omitted, substituted or certified by a hist
  const files=['src/lib/organization-usage-policy.mjs','src/lib/organization-resource-usage-policy.mjs'];
  for(const file of files){
   assert.equal(native.files.filter(source=>source===file).length,1);
-  rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);assert.equal(input.postgres.sourceManifest.length,107);});
-  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-usage-policy.mjs';assert.equal(input.postgres.sourceManifest.length,108);});
+  rejected(input=>{input.postgres.sourceManifest=manifest(historicalNative.filter(source=>source!==file));assert.equal(input.postgres.sourceManifest.length,107);});
+  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-usage-policy.mjs';assert.equal(input.postgres.sourceManifest.length,110);});
   rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
   rejected(input=>{delete input.gitSources[file];});
  }
@@ -65,11 +74,11 @@ test('durable civil source lineage cannot be omitted, substituted or certified b
  for(const file of files){
   assert.equal(native.files.filter(source=>source===file).length,1);
   rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);});
-  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-civil-source.mjs';assert.equal(input.postgres.sourceManifest.length,108);});
+  rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-civil-source.mjs';assert.equal(input.postgres.sourceManifest.length,110);});
   rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});
   rejected(input=>{delete input.gitSources[file];});
  }
- rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>!files.includes(ref.path));assert.equal(input.postgres.sourceManifest.length,105);});
+ rejected(input=>{input.postgres.sourceManifest=manifest(historicalNative.filter(file=>!files.includes(file)));assert.equal(input.postgres.sourceManifest.length,105);});
 });
 test('new own field report lineage and all eight additive native checks require exact current proofs',()=>{
  const file='src/lib/field-report-feedback.mjs';assert.equal(native.files.filter(source=>source===file).length,1);

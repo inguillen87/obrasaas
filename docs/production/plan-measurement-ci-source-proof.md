@@ -1,0 +1,28 @@
+# Fuente de metrado: evidencia técnica de CI
+
+El workflow `Task measurement acceptance` conserva todos sus pasos previos de cantidad exacta, medición diaria, autorización, PostgreSQL, interfaz y artefactos. Los pasos de importación de metrado se agregan después de esos pasos. La ejecución usa el PostgreSQL desechable existente del job y el componente real en un fixture de Next aislado con APIs sintéticas. No configura otro proveedor ni una base operativa.
+
+El contrato nuevo exige 11 comprobaciones nativas y un cierre AST de 113 archivos. Incluye el rechazo previo a la decisión con recibo vinculado, CAS de fuente/borrador/destino, rollback íntegro del lote, concurrencia/replay exacto, reemplazo explícito de definición no sellada, propuestas pendientes, aprobación independiente y revocación de autoridad. Deben quedar cerrados el pool y la conexión administrativa, con cero sesiones de la base desechable antes de eliminarla y su ausencia comprobada después.
+
+La interfaz exige 19 comprobaciones: cuatro recorridos a 320/390/768/1280, trece casos de recuperación, consentimiento, cantidades literales, corrección y conservación del trabajo, y dos recorridos con doscientas partidas. El caso 500 devuelve un cuerpo de rechazo perfectamente vinculado con estado HTTP 500. La interfaz conserva referencia, UUID y correcciones; hace una consulta de resultado y sólo reenvía el mismo comando tras una acción explícita y `NOT_OBSERVED`. Un rechazo definitivo en el catch de POST requiere HTTP 409 y el recibo exacto original. El caso 409 corregido consulta el estado actual, restablece confirmaciones y exige una revisión explícita con un UUID nuevo.
+
+El manifiesto de JSX contiene sus 18 dependencias reales; otro manifiesto fija los 14 archivos del runtime del productor, incluyendo el parser HTTP, fuente, reglas y limpieza. Se fijan aparte `package.json`, `package-lock.json` y la integración de `workspace-client.js`. Esto no certifica el montaje del workspace completo. El cuerpo matriz tiene exactamente 58 peticiones locales (21 POST), incluidas las dos consultas de recuperación con UUID originales independientes; no se aceptan POST adicionales o recuperación convertida en POST. Los dos casos grandes comprueban diez filas renderizadas como máximo, totales 175/25 de toda la revisión, aplicación explícita del digest completo con avance cero y localización de una fila incompleta en la página veinte sin POST ni confirmaciones inferidas. La limpieza requiere cierre del navegador, cierre del servidor con acuse de su nonce y ausencia real del fixture después de una eliminación acotada.
+
+Los comandos de CI son:
+
+```sh
+node scripts/verify-plan-measurement-ci.mjs --preflight --expected-head "$GITHUB_SHA"
+node scripts/verify-plan-measurement-postgres.mjs
+node scripts/verify-plan-measurement-ui.mjs --expected-head "$GITHUB_SHA" .vercel/private/plan-measurement-ui-evidence/browser.json
+node scripts/verify-plan-measurement-ci.mjs --expected-head "$GITHUB_SHA"
+```
+
+El productor de interfaz emite `EXACT_CI_SOURCE` sólo cuando `CI=true`, SHA esperado, `GITHUB_SHA`, HEAD/tree y checkout limpio coinciden, con repositorio, workflow, evento `push`/`workflow_dispatch`, run ID y attempt válidos. Comprueba bytes antes y después de ejecución y limpieza. El comando con `--expected-head` compara bytes reales con los blobs Git del commit, sin convertir CRLF. La ejecución local sin ese argumento sigue emitiendo `LOCAL_REVIEW_SOURCE`, incluso si el checkout coincide con un commit. Un SHA equivocado o checkout sucio con SHA esperado se rechaza antes de crear un fixture o abrir el navegador.
+
+El preflight impide sobrescribir evidencia existente. Los archivos estables nuevos son `.vercel/private/plan-measurement-postgres.json`, `.vercel/private/plan-measurement-ui-evidence/browser.json`, `.vercel/private/plan-measurement-ci.json` y `.vercel/private/plan-measurement-ci-artifacts.json`. El recibo conectado registra los hashes de los bytes JSON originales, el SHA/tree esperado, metadata real de la ejecución y hashes del validator/workflow. El productor nativo actual emite SHA/manifiesto pero no tree ni metadata de run: el recibo conectado declara expresamente que su vínculo al tree proviene de los blobs Git del commit esperado, sin agregar campos al JSON nativo.
+
+Los artefactos `plan-measurement-postgres-<SHA>-<attempt>`, `plan-measurement-ui-<SHA>-<attempt>` y `plan-measurement-ci-<SHA>-<attempt>` conservan siete días. Después de las dos primeras cargas, `--bind-artifacts` vincula sus IDs, URL y SHA-256 de archivos ZIP devueltos por la acción fijada `actions/upload-artifact`. El sidecar identifica esa fuente como `ACTIONS_UPLOAD_ARTIFACT_OUTPUT` y mantiene `downloadedArchiveValidated=false`: la descarga y recomputación independiente de los ZIP debe hacerse en la auditoría posterior. El propio recibo declara `artifactArchiveValidated=false`. Una salida de la acción no se presenta como una descarga independiente.
+
+Las fixtures unitarias nuevas son construcciones explícitas en memoria. Prueban rechazo de versiones/cuentas antiguas, manifiestos incompletos, hash/run/attempt equivocados, omisión de casos negativos, pérdida de referencia, peticiones automáticas, limpieza incompleta y afirmaciones de aceptación real. No se usan recibos locales como pruebas de CI ni se cambian sus hashes. Los recibos locales previos permanecen privados e intactos.
+
+PASS de estos contratos significa evidencia técnica sintética ligada al commit ejecutado. No significa login real de Clerk, documento humano aceptado, proveedor gubernamental o Graph real, aceptación de obra, dispositivo físico ni publicación en producción.
