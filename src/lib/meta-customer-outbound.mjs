@@ -205,13 +205,45 @@ export function createMetaCustomerOutbound({connect,resolveIdentity,provider,env
        }finally{releaseLockedWorkerChannelIdentity(transactionGuard.resolved);}
      });
     }else{
+     // Legacy pilot/admin readiness performs external ownership GETs. Complete
+     // that audit before locking participants, then acquire fresh canonical
+     // authority and keep its locks through the single reply POST.
+     phase='OWN_PROVIDER_SCOPE';let scopedProvider=provider;
+     if(reserved.connection?.metadata?.developmentPilot||reserved.connection?.metadata?.ownCompany||Object.hasOwn(reserved.connection?.metadata||{},'ownCompanyRuntime'))scopedProvider=await provider.forConnection({capability:reserved.ownCompanyCapability||reserved.developmentPilotCapability,connection:reserved.connection,token:reserved.token});
      await within(async client=>{
       // Keep the existing canonical participant/worker locks through the only
       // POST in this lane too. Awaited readiness cannot release that authority.
-       const transactionGuard={resolved:null};try{const beforeExternal=async()=>{const resumePhase=phase;phase='OWN_BEFORE_EXTERNAL';await reserve(context,reply,client,transactionGuard);phase=resumePhase;};
-      phase='OWN_BEFORE_EXTERNAL';await beforeExternal();phase='OWN_PROVIDER_SCOPE';let scopedProvider=provider;
-      if(reserved.connection?.metadata?.developmentPilot||reserved.connection?.metadata?.ownCompany||Object.hasOwn(reserved.connection?.metadata||{},'ownCompanyRuntime'))scopedProvider=await provider.forConnection({capability:reserved.ownCompanyCapability||reserved.developmentPilotCapability,connection:reserved.connection,token:reserved.token,beforeExternal});
-       await beforeExternal();phase='REPLY_POST';await send(scopedProvider,beforeExternal);
+       const transactionGuard={resolved:null};try{
+      const revalidate=async()=>{
+       try{return await reserve(context,reply,client,transactionGuard);}
+       catch(error){
+        // A conflicting captured marker belongs to another attempt. Observe
+        // that mismatch without adding this attempt's diagnostic to its row.
+        if(error instanceof WorkspaceError&&error.code==='META_CUSTOMER_OUTBOUND_CONFLICT')await capturedMarker(client);
+        throw error;
+       }
+      };
+      const beforeExternal=async()=>{
+       const resumePhase=phase;phase='OWN_BEFORE_EXTERNAL';
+       if(!await capturedMarker(client))throw new WorkspaceError('META_CUSTOMER_OUTBOUND_LEASE_CHANGED',409);
+       await revalidate();
+       if(!await capturedMarker(client))throw new WorkspaceError('META_CUSTOMER_OUTBOUND_LEASE_CHANGED',409);
+       const current=transactionGuard.resolved,observed=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
+       // Readiness authorized the captured credential and asset tuple. A later
+       // valid connection cannot authorize sending with the previous token.
+       if(['id','projectId','organizationId','phoneNumberId','whatsappBusinessId','encryptedAccessToken'].some(key=>current.connection[key]!==reserved.connection[key]))throw new WorkspaceError('META_CUSTOMER_OUTBOUND_CONTEXT_CHANGED',409);
+       if(!(observed instanceof Date)||!Number.isFinite(observed.getTime())||current.event.status!=='PENDING'||current.event.leaseToken!==context.leaseToken||!Number.isFinite(Date.parse(current.event.leaseExpiresAt))||Date.parse(current.event.leaseExpiresAt)<=observed.getTime())throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);
+       if(!channelActive(current.connection,observed.getTime(),{pilotAttendance:Boolean(current.developmentPilotCapability),environment}))throw new WorkspaceError('META_CUSTOMER_CHANNEL_ACCEPTANCE_REQUIRED',409);
+       assertCustomerReplyWindow(current.proof?.payload||current.proof?.message||current.proof,observed.getTime());
+       const deadline=transactionGuard.authority?.recoveryDeadline;
+       if(deadline&&(!Number.isFinite(Date.parse(deadline))||Date.parse(deadline)<=observed.getTime()))throw new WorkspaceError('META_CHANNEL_CONSUMPTION_RECOVERY_EXPIRED',409);
+       phase=resumePhase;
+      };
+      // Acquire the principal/project/worker/source locks in canonical order
+      // before the first marker lock, matching concurrent reserve/replay paths.
+      phase='OWN_BEFORE_EXTERNAL';await revalidate();
+      if(!await capturedMarker(client))return;
+      phase='OWN_BEFORE_EXTERNAL';await beforeExternal();phase='REPLY_POST';await send(scopedProvider,beforeExternal);
        }finally{releaseLockedWorkerChannelIdentity(transactionGuard.resolved);}
      });
     }

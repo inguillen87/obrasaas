@@ -74,6 +74,7 @@ function outboundFixture({afterReserve=async()=>{},channelActive=()=>true,sendEr
  const event={...f.source,leaseExpiresAt:new Date(time+60000).toISOString()},reply={type:'text',body:'Synthetic private fixed reply'};
  const query=async(sql,args=[])=>{
   if(['BEGIN','COMMIT','ROLLBACK'].includes(sql)||sql.startsWith('SET LOCAL'))return {rows:[],rowCount:0};
+  if(sql==='SELECT clock_timestamp() AS now'){assert.deepEqual(args,[]);return {rows:[{now:new Date(time)}]};}
   if(sql.startsWith('SELECT id,"projectId",status::text'))return {rows:[structuredClone(event)]};
   if(sql.startsWith('SELECT id,')&&sql.includes("provider='meta-customer-outbound-v1'"))return {rows:outbound?[structuredClone(outbound)]:[]};
   if(sql.startsWith('INSERT INTO public."WebhookEvent"')){assert.equal(outbound,null);outbound={id:args[0],projectId:args[1],status:'PENDING',payload:JSON.parse(args[3]),outcome:JSON.parse(args[4]),leaseToken:args[5],leaseExpiresAt:args[6]};return {rows:[],rowCount:1};}

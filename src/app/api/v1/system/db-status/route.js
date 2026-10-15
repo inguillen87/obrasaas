@@ -1,7 +1,7 @@
 // ObraSaaS System API — Neon Cloud Database Health & Relational Telemetry
 import { NextResponse } from 'next/server';
 import { getDatabaseHealth, getAppState } from '@/lib/db';
-import { prisma, syncStateToRelationalDb } from '@/lib/prisma';
+import { syncStateToRelationalDb } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
