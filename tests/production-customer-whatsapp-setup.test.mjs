@@ -65,3 +65,71 @@ test('enterprise project-profile source was reused without a forked data format'
  const normalized=Buffer.from(file.toString().replace(/\r\n/g,'\n'));const hash=createHash('sha1').update('blob '+normalized.length+'\0').update(normalized).digest('hex');
  assert.equal(hash,'8bdfe773c8a5138130ab880a7a8fdfa22ddfad8b');
 });
+
+// A bounded in-memory query adapter exercises the actual preparation service.
+// It supplies one canonical project and rejects every unexpected SQL operation.
+function credentialBoundPreparation(state){
+ const member={actorId:'preparation-owner',organizationId:'preparation-company',organizationName:'Constructora de prueba',role:'ADMIN'};
+ const company={id:member.organizationId,name:member.organizationName,clerkOrganizationId:identity.organizationId,metadata:{unrelatedCompany:{keep:true}},trialEndsOn:null};
+ const project={id:projectId,name:'Obra de prueba',organizationMetadata:company.metadata,metadata:{unrelatedProject:{keep:true},whatsappWorkspace:stored(),metaSignup:{id:'12345678-1234-4234-8234-123456789013',state,preparedRevision:1,encryptedToken:'v2.controlled-retained-grant',wabaId:'123456789012345',phoneNumberId:'123456789012346'}}};
+ const connection={id:'retained-connection',displayPhoneNumber:'+12025550123',enabled:false,status:'PENDING',metadata:{customerSignupId:project.metadata.metaSignup.id},encryptedAccessToken:'v2.controlled-connection-grant'};
+ const audits=[{id:'wa_preparation_'+'c'.repeat(64),organizationId:member.organizationId,actorId:member.actorId,metadata:{requestDigest:'d'.repeat(64),projectId,revision:1,numberMode:'DEDICATED',useCases:['FIELD_REPORTS'],ownership:'CUSTOMER',automationActivated:false,unchanged:false}}];
+ const queries=[],writes=[];
+ const client={query:async(statement,args=[])=>{
+  const sql=statement.replace(/\s+/g,' ').trim();queries.push(sql);assert.ok(queries.length<=32,'Preparation fixture exceeded its bounded query budget');
+  if(sql.startsWith('SELECT to_regclass(\'public."WhatsAppCompanySchema"\')'))return {rows:[{present:false,count:0}]};
+  if(sql==='SELECT to_regclass(\'public."WhatsAppCompanyChannel"\') IS NOT NULL AS present')return {rows:[{present:false}]};
+  if(sql.startsWith('SELECT id,metadata FROM public."AuditLog"')){
+   assert.equal(args[1],member.organizationId);assert.equal(args[2],member.actorId);
+   return {rows:audits.filter(row=>row.id===args[0]).map(row=>structuredClone(row))};
+  }
+  if(sql.startsWith('UPDATE public."Project" SET metadata=$3::jsonb')){
+   assert.deepEqual(args.slice(0,2),[projectId,member.organizationId]);project.metadata=JSON.parse(args[2]);writes.push('Project');return {rows:[],rowCount:1};
+  }
+  if(sql.startsWith('INSERT INTO public."AuditLog"')){
+   assert.deepEqual(args.slice(1,4),[member.organizationId,member.actorId,projectId]);assert.match(args[0],/^wa_preparation_[a-f0-9]{64}$/);assert.equal(audits.some(row=>row.id===args[0]),false);
+   audits.push({id:args[0],organizationId:args[1],actorId:args[2],metadata:JSON.parse(args[4])});writes.push('AuditLog');return {rows:[],rowCount:1};
+  }
+  if(sql.startsWith('SELECT id,"displayPhoneNumber",enabled,"connectionStatus"::text AS status FROM public."WhatsAppConnection"')){
+   assert.deepEqual(args,[projectId]);return {rows:[{id:connection.id,displayPhoneNumber:connection.displayPhoneNumber,enabled:connection.enabled,status:connection.status}]};
+  }
+  if(sql.startsWith('SELECT id,name,"clerkOrganizationId",metadata,to_char("trialEndsAt"')){
+   assert.deepEqual(args,[member.organizationId]);return {rows:[structuredClone(company)]};
+  }
+  throw new Error('Unexpected preparation fixture query: '+sql);
+ }};
+ const workspace={integrationProject:async(session,context,writable,run)=>{
+  assert.equal(session,identity);assert.equal(context.projectId,projectId);assert.equal(context.scope,scope);assert.equal(writable,true);return run(client,member,scope,project);
+ }};
+ return {service:createCustomerWhatsAppSetup({workspace}),project,company,connection,audits,writes,queries,input:patch=>({projectId,scope,operationId,profile:{...profile(),expectedRevision:1,...patch}})};
+}
+const credentialPendingStates=['CREDENTIAL_STORED','VERIFYING','REVIEW_REQUIRED','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN'];
+const preparationChanges=[['assistant name',{assistantName:'Nombre corregido'}],['use cases',{useCases:['FIELD_REPORTS','SCHEDULE_QUERIES']}],['number mode',{numberMode:'BUSINESS_APP'}]];
+
+for(const state of credentialPendingStates)test('credential-bound '+state+' rejects preparation edits before project or receipt writes',async()=>{
+ const fixture=credentialBoundPreparation(state),metadata=structuredClone(fixture.project.metadata),audits=structuredClone(fixture.audits),connection=structuredClone(fixture.connection);
+ for(const [,change] of preparationChanges){
+  await assert.rejects(fixture.service.save(identity,fixture.input(change)),{code:'WHATSAPP_PREPARATION_AUTHORIZATION_PENDING',status:409});
+  assert.deepEqual(fixture.writes,[]);assert.deepEqual(fixture.project.metadata,metadata);assert.deepEqual(fixture.audits,audits);assert.deepEqual(fixture.connection,connection);
+  assert.equal(fixture.project.metadata.metaSignup.encryptedToken,metadata.metaSignup.encryptedToken);assert.equal(fixture.project.metadata.metaSignup.preparedRevision,1);
+ }
+});
+
+for(const state of credentialPendingStates)test('identical '+state+' preparation keeps its original revision and grant with replayable receipt',async()=>{
+ const fixture=credentialBoundPreparation(state),metadata=structuredClone(fixture.project.metadata),audits=structuredClone(fixture.audits),connection=structuredClone(fixture.connection),input=fixture.input({});
+ const result=await fixture.service.save(identity,input);
+ assert.equal(result.saved,true);assert.equal(result.unchanged,true);assert.equal(result.profile.revision,1);assert.equal(result.profile.updatedAt,metadata.whatsappWorkspace.updatedAt);assert.equal(result.receipt.savedRevision,1);
+ assert.deepEqual(fixture.writes,['AuditLog']);assert.deepEqual(fixture.project.metadata,metadata);assert.deepEqual(fixture.connection,connection);assert.deepEqual(fixture.audits.slice(0,audits.length),audits);
+ const recorded=structuredClone(fixture.audits),replay=await fixture.service.save(identity,input);
+ assert.equal(replay.replayed,true);assert.equal(replay.savedProfileIsCurrent,true);assert.deepEqual(replay.receipt,result.receipt);assert.equal(replay.profile.revision,1);
+ assert.deepEqual(fixture.writes,['AuditLog']);assert.deepEqual(fixture.audits,recorded);assert.deepEqual(fixture.project.metadata,metadata);assert.deepEqual(fixture.connection,connection);
+});
+
+for(const [label,change] of preparationChanges)test('confirmed local CANCELLED state allows a fresh '+label+' preparation without changing retained authorization history',async()=>{
+ const fixture=credentialBoundPreparation('CANCELLED'),signup=structuredClone(fixture.project.metadata.metaSignup),audits=structuredClone(fixture.audits),connection=structuredClone(fixture.connection);
+ const result=await fixture.service.save(identity,fixture.input(change));
+ assert.equal(result.saved,true);assert.equal(result.unchanged,false);assert.equal(result.profile.revision,2);assert.equal(result.receipt.savedRevision,2);
+ for(const [key,value] of Object.entries(change))assert.deepEqual(result.profile[key],value);
+ assert.deepEqual(fixture.writes,['Project','AuditLog']);assert.deepEqual(fixture.project.metadata.metaSignup,signup);assert.deepEqual(fixture.project.metadata.unrelatedProject,{keep:true});
+ assert.deepEqual(fixture.audits.slice(0,audits.length),audits);assert.deepEqual(fixture.connection,connection);assert.equal(fixture.audits.length,audits.length+1);
+});

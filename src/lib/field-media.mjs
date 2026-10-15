@@ -159,7 +159,10 @@ export function createFieldMedia({operations,put,get,analyzer,usage=null,extract
   }
   function scopeInput(input){if(!workspaceId(input.projectId)||!operationId(input.operationId)||!/^[a-f0-9]{64}$/.test(input.scope||''))throw new WorkspaceError('FIELD_MEDIA_INPUT_INVALID');}
   async function ownsEvidence(client,member,session,input,row) {
-    if(!canReviewField(member.role))await operations.assertWorker(client,member,session,input.projectId,row.metadata.fieldOperations.workerId);
+    if(!canReviewField(member.role)){
+      if(row.metadata.fieldOperations.recordedBy!==member.actorId)throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);
+      await operations.assertWorker(client,member,session,input.projectId,row.metadata.fieldOperations.workerId);
+    }
   }
   async function currentClaim(client,member,input,row,claim,requestDigest){
     const processing=row.metadata.fieldOperations.processing;
@@ -374,6 +377,8 @@ export function createFieldMedia({operations,put,get,analyzer,usage=null,extract
         const id=fieldReceiptId(member.actorId,input.projectId,input.operationId),row=await prior(client,member,id);
         if(row&&input.evidenceId!==undefined&&row.metadata.outcome.evidence.id!==input.evidenceId)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);
         if(row&&!canReviewField(member.role)){
+          const current=await operations.readEvidence(client,input.projectId,row.metadata.outcome.evidence.id);
+          if(current.metadata.fieldOperations.recordedBy!==member.actorId)throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);
           const owned=(await client.query(`SELECT id FROM public."Worker" WHERE id=$1 AND "projectId"=$2 AND active=true AND metadata->'participant'->>'clerkUserId'=$3 AND metadata->'participant'->>'status'='ACTIVE' AND metadata->'participant'->'permissions'->>'report'='true' AND metadata->'participant'->'kyc'->>'status'='APPROVED'`,[row.metadata.outcome.evidence.workerId,input.projectId,session.userId])).rows;
           if(owned.length!==1)throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);
         }
@@ -384,6 +389,7 @@ export function createFieldMedia({operations,put,get,analyzer,usage=null,extract
           if(pending?.processing?.status==='RUNNING'||usage&&pending?.processing?.status==='MANUAL_REVIEW_REQUIRED'){
             const current=target||await operations.readEvidence(client,input.projectId,pending.id);
             if(!canReviewField(member.role)){
+              if(current.metadata.fieldOperations.recordedBy!==member.actorId)throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);
               const owned=(await client.query(`SELECT id FROM public."Worker" WHERE id=$1 AND "projectId"=$2 AND active=true AND metadata->'participant'->>'version'='1' AND metadata->'participant'->>'clerkUserId'=$3 AND metadata->'participant'->>'status'='ACTIVE' AND metadata->'participant'->'permissions'->>'report'='true' AND metadata->'participant'->'kyc'->>'status'='APPROVED'`,[current.metadata.fieldOperations.workerId,input.projectId,session.userId])).rows;
               if(owned.length!==1)throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);
             }
@@ -406,6 +412,7 @@ export function createFieldMedia({operations,put,get,analyzer,usage=null,extract
       const authorizedMedia=()=>run(session,input,false,async(client,member)=>{
         const row=await operations.readEvidence(client,input.projectId,input.evidenceId),e=row.metadata.fieldOperations;
         if(!canReviewField(member.role)){
+          if(e.recordedBy!==member.actorId)throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);
           const owned=(await client.query(`SELECT id FROM public."Worker" WHERE id=$1 AND "projectId"=$2 AND active=true AND metadata->'participant'->>'clerkUserId'=$3 AND metadata->'participant'->>'status'='ACTIVE' AND metadata->'participant'->'permissions'->>'report'='true' AND metadata->'participant'->'kyc'->>'status'='APPROVED'`,[e.workerId,input.projectId,session.userId])).rows;
           if(owned.length!==1)throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);
         }return e.media;

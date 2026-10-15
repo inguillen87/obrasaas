@@ -310,6 +310,89 @@ export const PLAN_MEASUREMENT_CURRENT_RETENTION_REVISION=Object.freeze({
   "sourcePatchesSha256": "9754616e39e829847a91a4e82c7fe1d7c90158737e9e59bad9effb54ecc2a886"
 });
 // END AUDITED I RETENTION PRODUCER REVISION
+// BEGIN AUDITED L FIELD HISTORY PRIVACY PRODUCER REVISION
+// Literal restoration is historical evidence only, never a current-source shim.
+function freezeFieldHistoryPrivacy(value){if(value&&typeof value==='object'){for(const child of Object.values(value))freezeFieldHistoryPrivacy(child);Object.freeze(value);}return value;}
+export const FIELD_HISTORY_PRIVACY_SOURCE_PATCHES=freezeFieldHistoryPrivacy([
+  {
+    "producer": "scripts/verify-field-operations-postgres.mjs",
+    "patches": [
+      {
+        "before": " await pool.query(`INSERT INTO \"OperationalProposal\"(id,\"projectId\",\"proposedByWorkerId\",\"sourceProvider\",\"sourceExternalId\",type,status,summary,action,precondition,\"expiresAt\",\"createdAt\",\"updatedAt\") SELECT 'review-other-worker-proposal',\"projectId\",'wr-a2','account-field','review-other-worker-proposal','TASK_PROGRESS','PENDING',summary,jsonb_set(jsonb_set(action,'{workerId}','\"wr-a2\"'),'{taskId}','\"synthetic-pagination-task\"'),precondition,\"expiresAt\",'2025-01-01',clock_timestamp() FROM \"OperationalProposal\" WHERE id=$1`,[oldReviewProposal.proposal.id]);\n",
+        "after": " await pool.query(`INSERT INTO \"OperationalProposal\"(id,\"projectId\",\"proposedByWorkerId\",\"sourceProvider\",\"sourceExternalId\",type,status,summary,action,precondition,\"expiresAt\",\"createdAt\",\"updatedAt\") SELECT 'review-other-worker-proposal',\"projectId\",'wr-a2','account-field','review-other-worker-proposal','TASK_PROGRESS','PENDING',summary,jsonb_set(jsonb_set(jsonb_set(action,'{workerId}','\"wr-a2\"'),'{submittedBy}','\"worker2\"'),'{taskId}','\"synthetic-pagination-task\"'),precondition,\"expiresAt\",'2025-01-01',clock_timestamp() FROM \"OperationalProposal\" WHERE id=$1`,[oldReviewProposal.proposal.id]);\n"
+      },
+      {
+        "before": "",
+        "after": " // Additive original-author privacy control. Existing check groups, fixture\n // counters and their assertions above remain unchanged.\n const privacyActor=session('user_PrivacyB');await pool.query(`INSERT INTO \"PlatformUser\"(id,\"clerkUserId\") VALUES('privacy-b','user_PrivacyB');INSERT INTO \"TenantMembership\"(id,\"organizationId\",\"userId\",\"tenantRole\",\"clerkRole\",status) VALUES('privacy-b-m','company-a','privacy-b','AUDITOR','org:member','ACTIVE');INSERT INTO \"ProjectMembership\"(id,\"projectId\",\"tenantMembershipId\",status) VALUES('privacy-b-p','p-a','privacy-b-m','ACTIVE');`);scopes[privacyActor.userId]=(await workspace.list(privacyActor)).scope;\n const privacyOriginal=(await pool.query(`SELECT metadata FROM \"Worker\" WHERE id='w-a'`)).rows[0].metadata;\n // The historical revocation test deliberately leaves this fixture revoked.\n // Begin this separate control with the same canonical KYC receipts restored\n // to ACTIVE; no preceding assertion or recorded outcome is rewritten.\n privacyOriginal.participant.status='ACTIVE';await pool.query(`UPDATE \"Worker\" SET metadata=$1::jsonb WHERE id='w-a'`,[JSON.stringify(privacyOriginal)]);\n const privacyIssue=await operations.save(worker,command(worker,'REPORT_INCIDENT',{workerId:'w-a',sectorId:'sector-main',taskId:null,title:'Synthetic original author issue',description:'Private issue retained under original author after reassignment.',severity:'LOW',evidenceIds:[]}));\n const privacyMaterial=await operations.save(worker,command(worker,'REQUEST_MATERIAL',{workerId:'w-a',sectorId:'sector-main',taskId:null,name:'Synthetic original material',quantity:'2.599',unit:'m2',reason:'Private precise original author request.',evidenceIds:[]}));\n const reassigned=structuredClone(privacyOriginal);reassigned.participant.clerkUserId=privacyActor.userId;reassigned.participant.kyc={version:1,status:'NOT_SUBMITTED'};await pool.query(`UPDATE \"Worker\" SET metadata=$1::jsonb WHERE id='w-a'`,[JSON.stringify(reassigned)]);\n const privacyKyc=createCanonicalParticipantKycFixture({workspace,connect:async()=>pool.connect(),query:(sql,args)=>pool.query(sql,args)});await privacyKyc.approve({projectId:'p-a',workerId:'w-a',actor:privacyActor,reviewer:owner});const privacyBound=(await pool.query(`SELECT metadata FROM \"Worker\" WHERE id='w-a'`)).rows[0].metadata;\n const beforePrivacyReads=await ownFieldState(),beforePrivacyCalls={putCount,getCount,providerCalls},bRead=await read(privacyActor);assert.ok(bRead.selfWorkers.some(row=>row.id==='w-a'));for(const key of ['attendance','evidence','proposals','incidents','materialRequests'])assert.deepEqual(bRead[key],[],key+' cannot transfer to B');\n for(const [section,id]of [['EVIDENCE',attached.evidence.id],['PROGRESS',proposed.proposal.id]]){\n  const base={...context(privacyActor),reviewSection:section,reviewFilter:'ALL'},ownPage=await operations.reviewPage(privacyActor,base);assert.deepEqual(ownPage.records,[]);assert.equal(ownPage.total,0);\n  for(const selector of ['afterReview','reviewId'])await assert.rejects(operations.reviewPage(privacyActor,{...base,reviewAccessStamp:ownPage.reviewAccessStamp,[selector]:id}),{code:'FIELD_REVIEW_CURSOR_UNAVAILABLE',status:404});\n }\n const privateInput={...context(privacyActor),operationId:randomUUID(),evidenceId:attached.evidence.id,revision:(await pool.query(`SELECT to_char(\"updatedAt\",'YYYY-MM-DD\"T\"HH24:MI:SS.US') AS revision FROM \"Incident\" WHERE id=$1`,[attached.evidence.id])).rows[0].revision,analysisConsent:fieldMediaAnalysisConsent(true)};\n await assert.rejects(media.download(privacyActor,privateInput),{code:'FIELD_EVIDENCE_UNAVAILABLE',status:404});await assert.rejects(media.process(privacyActor,privateInput),{code:'FIELD_EVIDENCE_UNAVAILABLE',status:404});await assert.rejects(media.status(privacyActor,privateInput),{code:'FIELD_EVIDENCE_UNAVAILABLE',status:404});assert.deepEqual({putCount,getCount,providerCalls},beforePrivacyCalls);assert.deepEqual(await ownFieldState(),beforePrivacyReads);\n for(const reviewer of [owner,director,manager]){assert.deepEqual((await media.download(reviewer,{...context(reviewer),evidenceId:attached.evidence.id})).bytes,png);assert.ok((await read(reviewer)).incidents.some(row=>row.id===privacyIssue.report.id));assert.equal((await operations.reviewPage(reviewer,{...context(reviewer),reviewSection:'PROGRESS',reviewFilter:'ALL',reviewId:proposed.proposal.id,reviewAccessStamp:(await operations.reviewPage(reviewer,{...context(reviewer),reviewSection:'PROGRESS',reviewFilter:'ALL'})).reviewAccessStamp})).records[0].quantity,'2.5000');}\n assert.deepEqual(await ownFieldState(),beforePrivacyReads);\n const bOwnEvidence=await media.attach(privacyActor,{...upload,...context(privacyActor),operationId:randomUUID(),caption:'Synthetic B own original'});assert.ok((await read(privacyActor)).evidence.some(row=>row.id===bOwnEvidence.evidence.id));assert.deepEqual((await media.download(privacyActor,{...context(privacyActor),evidenceId:bOwnEvidence.evidence.id})).bytes,png);\n await pool.query(`UPDATE \"Worker\" SET metadata=$1::jsonb WHERE id='w-a'`,[JSON.stringify(privacyOriginal)]);const beforeRestoredReads=await ownFieldState(),restored=await read(worker);assert.ok(restored.incidents.some(row=>row.id===privacyIssue.report.id));assert.ok(restored.materialRequests.some(row=>row.id===privacyMaterial.report.id));assert.ok(restored.evidence.every(row=>row.id!==bOwnEvidence.evidence.id));assert.deepEqual((await media.download(worker,{...context(worker),evidenceId:attached.evidence.id})).bytes,png);await assert.rejects(media.download(worker,{...context(worker),evidenceId:bOwnEvidence.evidence.id}),{code:'FIELD_EVIDENCE_UNAVAILABLE'});assert.deepEqual(await ownFieldState(),beforeRestoredReads);\n for(const mutation of ['REASSIGNED','REVOKED']){\n  const raced=createFieldMedia({operations,put,get:async pathname=>{const changed=mutation==='REASSIGNED'?privacyBound:{...privacyOriginal,participant:{...privacyOriginal.participant,status:'REVOKED'}};await pool.query(`UPDATE \"Worker\" SET metadata=$1::jsonb WHERE id='w-a'`,[JSON.stringify(changed)]);return get(pathname);},analyzer});const beforeRaceProvider=providerCalls;\n  try{await assert.rejects(raced.download(worker,{...context(worker),evidenceId:attached.evidence.id}),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED',status:403});assert.equal(providerCalls,beforeRaceProvider);}finally{await pool.query(`UPDATE \"Worker\" SET metadata=$1::jsonb WHERE id='w-a'`,[JSON.stringify(privacyOriginal)]);}\n }\n const ownHistoryPrivacyChecks=['same-worker-reassignment-keeps-original-author-feed-review-count-cursor-detail-and-private-media-while-restored-author-and-reviewers-retain-access-and-post-read-authority-races-deny'];\n const ownHistoryPrivacy={version:1,checks:ownHistoryPrivacyChecks,currentAccountKycCanonical:true,originalAuthorRestored:true,reviewerRoles:['ADMIN','DIRECTOR','SITE_MANAGER'],readBusinessWrites:0,deniedBeforePrivateRead:true,postReadAuthorityRaces:['REASSIGNED','REVOKED'],providerCalls:0,participantKycFixture:{records:privacyKyc.records,syntheticPrivateCalls:privacyKyc.calls,providerCalls:0,biometricIdentityCertified:false}};\n"
+      },
+      {
+        "before": " proof={status:'PASS',harnessSha256,participantKycFixture:{sourceSha256:fixtureSourceSha256,records:kycFixture.records,syntheticPrivateCalls:kycFixture.calls,providerCalls:0,biometricIdentityCertified:false},environment:'disposable-local-postgresql'+databaseEngineVersion.split('.')[0],databaseEngineVersion,checks,reviewPaginationChecks,voiceProgressChecks,checkCount:checks.length,reviewPaginationCheckCount:reviewPaginationChecks.length,voiceProgressCheckCount:voiceProgressChecks.length,totalChecks:checks.length+reviewPaginationChecks.length+voiceProgressChecks.length+mediaLeaseChecks.length+videoAudioChecks.length+canonicalOwnFieldChecks.length,canonicalOwnFieldChecks,canonicalOwnFieldCheckCount:canonicalOwnFieldChecks.length,sourceSha256,voiceProgressSourceSha256,mediaLeaseChecks,mediaLeaseCheckCount:mediaLeaseChecks.length,mediaLeaseSourceSha256,mediaLeaseSyntheticAdapterCalls,mediaLeaseFinalSqlBoundary,mediaLeaseClockBiasMs:[-86400000,86400000],mediaLeaseProviderCalls:0,mediaLeaseAdapters:{storage:'synthetic-private-objects',decoder:'synthetic-video-decoder-double-no-codec-acceptance',provider:'synthetic-responses',database:'real-disposable-postgresql'},videoAudioChecks,videoAudioCheckCount:videoAudioChecks.length,videoAudioSourceSha256,videoAudioSyntheticAdapterCalls,videoAudioBoundaryObservations,videoAudioProviderCalls:0,videoAudioFfmpegExecuted:false,videoAudioAdapters:{storage:'synthetic-private-objects-original-only',frameDecoder:'synthetic-frame-response-no-codec-acceptance',audioDecoder:'synthetic-canonical-pcm-and-metadata-no-codec-acceptance',provider:'synthetic-responses',database:'real-disposable-postgresql'},productionDataWritten:false,providerCalls:0,reviewPaginationProviderCalls:0,voiceProgressProviderCalls:0,voiceProgressSyntheticAdapterCalls:voiceAdapterCalls,mediaAdapters:'synthetic-isolated-objects-and-responses',physicalAttendanceAccepted:false,whatsAppTested:false};\n",
+        "after": " proof={status:'PASS',harnessSha256,participantKycFixture:{sourceSha256:fixtureSourceSha256,records:kycFixture.records,syntheticPrivateCalls:kycFixture.calls,providerCalls:0,biometricIdentityCertified:false},environment:'disposable-local-postgresql'+databaseEngineVersion.split('.')[0],databaseEngineVersion,checks,reviewPaginationChecks,voiceProgressChecks,checkCount:checks.length,reviewPaginationCheckCount:reviewPaginationChecks.length,voiceProgressCheckCount:voiceProgressChecks.length,totalChecks:checks.length+reviewPaginationChecks.length+voiceProgressChecks.length+mediaLeaseChecks.length+videoAudioChecks.length+canonicalOwnFieldChecks.length+ownHistoryPrivacyChecks.length,canonicalOwnFieldChecks,canonicalOwnFieldCheckCount:canonicalOwnFieldChecks.length,ownHistoryPrivacy,sourceSha256,voiceProgressSourceSha256,mediaLeaseChecks,mediaLeaseCheckCount:mediaLeaseChecks.length,mediaLeaseSourceSha256,mediaLeaseSyntheticAdapterCalls,mediaLeaseFinalSqlBoundary,mediaLeaseClockBiasMs:[-86400000,86400000],mediaLeaseProviderCalls:0,mediaLeaseAdapters:{storage:'synthetic-private-objects',decoder:'synthetic-video-decoder-double-no-codec-acceptance',provider:'synthetic-responses',database:'real-disposable-postgresql'},videoAudioChecks,videoAudioCheckCount:videoAudioChecks.length,videoAudioSourceSha256,videoAudioSyntheticAdapterCalls,videoAudioBoundaryObservations,videoAudioProviderCalls:0,videoAudioFfmpegExecuted:false,videoAudioAdapters:{storage:'synthetic-private-objects-original-only',frameDecoder:'synthetic-frame-response-no-codec-acceptance',audioDecoder:'synthetic-canonical-pcm-and-metadata-no-codec-acceptance',provider:'synthetic-responses',database:'real-disposable-postgresql'},productionDataWritten:false,providerCalls:0,reviewPaginationProviderCalls:0,voiceProgressProviderCalls:0,voiceProgressSyntheticAdapterCalls:voiceAdapterCalls,mediaAdapters:'synthetic-isolated-objects-and-responses',physicalAttendanceAccepted:false,whatsAppTested:false};\n"
+      }
+    ]
+  },
+  {
+    "producer": "scripts/verify-field-overtime-postgres.mjs",
+    "patches": [
+      {
+        "before": "",
+        "after": " // Reassignment never transfers an account's original shift or private review\n // history. Reapprove B through the canonical synthetic KYC adapter so a stale\n // approval cannot accidentally make this a vacuous authorization denial.\n const privacyTarget=await seed(),privacyOriginal=(await query(`SELECT metadata FROM public.\"Worker\" WHERE id='w-a'`)).rows[0].metadata,privacyAt=(await query(`SELECT to_char(\"checkedInAt\",'YYYY-MM-DD\"T\"HH24:MI:SS.US') AS \"sortAt\" FROM public.\"AttendanceEntry\" WHERE id=$1`,[privacyTarget.closingEventId])).rows[0].sortAt;\n const privacySnapshot=async()=>sha256(JSON.stringify(await Promise.all(['AttendanceEntry','Worker','AuditLog'].map(async table=>(await query(`SELECT to_jsonb(t) AS row FROM public.\"${table}\" t ORDER BY id`)).rows))));\n assert.equal((await detail(worker,privacyTarget)).summary.recordedBy,'worker');\n const reassigned=structuredClone(privacyOriginal);reassigned.participant.clerkUserId=finance.userId;reassigned.participant.kyc={version:1,status:'NOT_SUBMITTED'};await query(`UPDATE public.\"Worker\" SET metadata=$1::jsonb WHERE id='w-a'`,[JSON.stringify(reassigned)]);\n const reassignmentKyc=createCanonicalParticipantKycFixture({workspace,connect:()=>connect(),query});await reassignmentKyc.approve({projectId:'p-a',workerId:'w-a',actor:finance,reviewer:owner});\n const beforeReassignedReads=await privacySnapshot(),bPage=await operations.read(finance,context(finance));assert.ok(bPage.selfWorkers.some(row=>row.id==='w-a'));assert.deepEqual(bPage.overtime.journeys,[],'B cannot list A-authored shifts on the same current Worker');\n const bCursor=fieldOvertimeJourneyCursor('p-a',scopes[finance.userId],{id:privacyTarget.closingEventId,sortAt:privacyAt});await assert.rejects(operations.read(finance,{...context(finance),journeyCursor:bCursor}),{code:'FIELD_QUERY_INVALID'});\n await assert.rejects(detail(finance,privacyTarget),{code:'OVERTIME_SHIFT_UNAVAILABLE',status:404});await assert.rejects(operations.shift(finance,{...context(finance),shiftId:privacyTarget.shiftId}),{code:'OVERTIME_SHIFT_UNAVAILABLE',status:404});await assert.rejects(detail(worker,privacyTarget),{code:'PARTICIPANT_KYC_REVIEW_REQUIRED',status:403});\n for(const reviewer of [owner,director,manager])assert.equal((await detail(reviewer,privacyTarget)).summary.recordedBy,'worker');\n assert.equal(await privacySnapshot(),beforeReassignedReads,'Reassigned own and reviewer reads never write Worker, attendance or receipts');\n // A new, genuinely B-authored shift may link to A's previous closing event.\n // That predecessor is chain integrity evidence, not a transferred shift.\n const bShift=await seed('w-a','finance'),beforeOwnReads=await privacySnapshot();assert.equal((await detail(finance,bShift)).summary.recordedBy,'finance');assert.equal((await detail(finance,bShift)).summary.complete,true);assert.equal((await detail(finance,bShift)).events.length,2);assert.ok((await operations.read(finance,context(finance))).overtime.journeys.some(row=>row.closingEventId===bShift.closingEventId));assert.equal(await privacySnapshot(),beforeOwnReads);\n await query(`UPDATE public.\"Worker\" SET metadata=$1::jsonb WHERE id='w-a'`,[JSON.stringify(privacyOriginal)]);\n const beforeRestoredReads=await privacySnapshot();assert.equal((await detail(worker,privacyTarget)).summary.recordedBy,'worker');assert.equal((await detail(worker,privacyTarget)).summary.complete,true);const restoredPage=await operations.read(worker,context(worker));assert.ok(restoredPage.overtime.journeys.some(row=>row.closingEventId===privacyTarget.closingEventId));assert.ok(restoredPage.overtime.journeys.every(row=>row.closingEventId!==bShift.closingEventId));await assert.rejects(detail(worker,bShift),{code:'OVERTIME_SHIFT_UNAVAILABLE'});await assert.rejects(detail(finance,privacyTarget),{code:'FIELD_PARTICIPANT_REQUIRED'});assert.equal(await privacySnapshot(),beforeRestoredReads);\n checks.push('same-worker-account-reassignment-keeps-original-author-list-cursor-detail-private-restored-author-and-independent-reviewers-retain-read-with-zero-business-writes');\n const ownHistoryPrivacy={version:1,sameWorkerReassigned:true,currentAccountKycCanonical:true,originalAuthorRestored:true,newAuthorOwnShiftWithForeignPredecessorReadable:true,reviewerRoles:['ADMIN','DIRECTOR','SITE_MANAGER'],readBusinessWrites:0,participantKycFixture:{records:reassignmentKyc.records,syntheticPrivateCalls:reassignmentKyc.calls,providerCalls:0,biometricIdentityCertified:false}};\n"
+      },
+      {
+        "before": " proof={status:'PASS',participantKycFixture:{records:kycFixture.records,syntheticPrivateCalls:kycFixture.calls,providerCalls:0,biometricIdentityCertified:false},environment:'disposable-random-schema-on-approved-local-postgres',schema,checks,sourceManifest,harnessSha256,providerCalls:0,realBusinessDatabaseUsed:false,newOvertimeEnum:false,paymentEngineUsed:false,humanAccepted:false,syntheticIdentityCalls,sqlFailures};\n",
+        "after": " proof={status:'PASS',participantKycFixture:{records:kycFixture.records,syntheticPrivateCalls:kycFixture.calls,providerCalls:0,biometricIdentityCertified:false},environment:'disposable-random-schema-on-approved-local-postgres',schema,checks,sourceManifest,harnessSha256,providerCalls:0,realBusinessDatabaseUsed:false,newOvertimeEnum:false,paymentEngineUsed:false,humanAccepted:false,syntheticIdentityCalls,sqlFailures,ownHistoryPrivacy};\n"
+      }
+    ]
+  }
+]);
+export const FIELD_HISTORY_PRIVACY_REVISION=freezeFieldHistoryPrivacy({
+  "version": "field-history-privacy-producer-v1",
+  "referenceHead": "74426e936d8906a3b410a892cda980fcd8344ff9",
+  "previousContractSha256": "1c361f22405cb3b0b923a923cfacda927a7a62c97c47bb9e9e81a8d8906be654",
+  "producers": [
+    {
+      "id": "field-canonical-postgres",
+      "kind": "PG_FIELD",
+      "producer": "scripts/verify-field-operations-postgres.mjs",
+      "previousSha256": "d3f099602fcd23fe5fcf7d5cb5aeefc46d87e9889fd6c832a3e7405f2e838a4c",
+      "currentSha256": "c3cf9eed8983b9ab43ad9b11cf0f59af206b08ba70f5e6697133bb448b940662",
+      "previousCheckCount": 66,
+      "currentCheckCount": 67,
+      "previousCheckNamesSha256": "c8e188d83ffc4a30494bd178ebc8ae24f19d17898953a20804e796221ac48580",
+      "currentCheckNamesSha256": "f1e846044e855a94d416d1b7edef89850a51131a5cd2fe1d7bbc0f0809dea3a0",
+      "addedChecks": [
+        "{\"group\":\"ownHistoryPrivacy.checks\",\"name\":\"same-worker-reassignment-keeps-original-author-feed-review-count-cursor-detail-and-private-media-while-restored-author-and-reviewers-retain-access-and-post-read-authority-races-deny\"}"
+      ],
+      "sourcePatchesSha256": "2115d47670896260916d77d098205c8739286f83ef195f7cb20fe75e98d9f75f"
+    },
+    {
+      "id": "overtime-canonical-postgres",
+      "kind": "PG_OVERTIME",
+      "producer": "scripts/verify-field-overtime-postgres.mjs",
+      "previousSha256": "06f570e65eb336e83bd6449ca4f68049d9fbed0a6df1d8658df038d2091db96b",
+      "currentSha256": "51164b87849c57269f54a86cbd4b15bacf2fa5337ef123a19ab6ce2eddd7530f",
+      "previousCheckCount": 29,
+      "currentCheckCount": 30,
+      "previousCheckNamesSha256": "75da781fadf62bc677fe9043b9fca8b5c1b4eb6cdf9d32ddf0cb44639eb4ffd3",
+      "currentCheckNamesSha256": "7029297c231f71219b7c5bc6ee4932f901f33da025e30a1a1e3ca83c66d07e4b",
+      "addedChecks": [
+        "same-worker-account-reassignment-keeps-original-author-list-cursor-detail-private-restored-author-and-independent-reviewers-retain-read-with-zero-business-writes"
+      ],
+      "sourcePatchesSha256": "a1e96dbc0206ec40daf5fd1a3da2b46db3b309d692dc4cb5179105b82c31548d"
+    }
+  ],
+  "validationSources": [
+    {
+      "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
+      "previousSha256": "6dfc4d9298a55aaf9d29ab0db0f2fc5ace7903b47ba0157ea9c201edf8aa5169"
+    },
+    {
+      "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
+      "previousSha256": "916f9a8316108a3d83db955576df5fb5bc9466ed513d4cc950164a00e3f211aa"
+    }
+  ]
+});
+// END AUDITED L FIELD HISTORY PRIVACY PRODUCER REVISION
 const sha=value=>createHash('sha256').update(value).digest('hex'),digest=value=>sha(JSON.stringify(value)),hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value),plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 function deny(message){throw Object.assign(new Error(message),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});}
 function requireLineage(condition,message){if(!condition)deny(message);}
@@ -332,6 +415,75 @@ export function restorePlanMeasurementPublishedGProducerText(section,producer,va
  }
  requireLineage(sha(text)===prior.sha256,'The complete restored G producer body must remain exact');return text;
 }
+// L metadata and restoration authenticate history only. Actual source manifests
+// and native receipts always retain the current raw readSource bytes.
+function validateFieldHistoryPrivacyLedger(section){
+ if(!Object.hasOwn(section,'fieldHistoryPrivacyRevision'))return null;
+ const revision=section.fieldHistoryPrivacyRevision;
+ exactKeys(revision,Object.keys(FIELD_HISTORY_PRIVACY_REVISION),'Exact L field privacy revision shape required');
+ same(revision,FIELD_HISTORY_PRIVACY_REVISION,'Only the reviewed L field privacy revision is permitted');
+ return revision;
+}
+export function currentFieldPrivacySpecRevision(spec){
+ const revision=FIELD_HISTORY_PRIVACY_REVISION.producers.find(row=>row.id===spec?.id);
+ if(!revision)return null;
+ requireLineage(spec.kind===revision.kind&&spec.producer===revision.producer,'L field privacy proof identity changed');
+ requireLineage(Array.isArray(spec.checkNames),'L field privacy check matrix required');
+ const old=spec.producerSha256===revision.previousSha256&&spec.checkNames.length===revision.previousCheckCount&&digest(spec.checkNames)===revision.previousCheckNamesSha256;
+ if(old)return null;
+ requireLineage(spec.producerSha256===revision.currentSha256&&spec.checkNames.length===revision.currentCheckCount&&digest(spec.checkNames)===revision.currentCheckNamesSha256,'L field privacy current producer and exact matrix must advance together');
+ requireLineage(digest(spec.checkNames.slice(0,revision.previousCheckCount))===revision.previousCheckNamesSha256,'Every original K field check must remain ordered');
+ same(spec.checkNames.slice(revision.previousCheckCount),revision.addedChecks,'Exactly the reviewed L privacy check is additive');
+ return revision;
+}
+export function currentFieldPrivacyRevision(contract,specOrId){
+ requireLineage(plain(contract)&&plain(contract.planMeasurementCurrentLineage)&&Array.isArray(contract.extension?.proofs),'Workspace contract required for L field privacy');
+ const ledger=validateFieldHistoryPrivacyLedger(contract.planMeasurementCurrentLineage);
+ for(const row of FIELD_HISTORY_PRIVACY_REVISION.producers){
+  const matches=contract.extension.proofs.filter(spec=>spec.id===row.id);requireLineage(matches.length===1,'Exactly one field privacy producer required');
+  const current=currentFieldPrivacySpecRevision(matches[0]);
+  requireLineage(ledger?current===row:current===null,'The L ledger and both current field privacy producers are inseparable');
+ }
+ const requested=typeof specOrId==='string'?specOrId:specOrId?.id;
+ const row=FIELD_HISTORY_PRIVACY_REVISION.producers.find(value=>[value.id,value.kind,value.producer].includes(requested));
+ if(!row)return null;
+ if(plain(specOrId))same(specOrId,contract.extension.proofs.find(value=>value.id===row.id),'Only the actual contract field privacy spec may be selected');
+ return ledger?row:null;
+}
+export function restorePlanMeasurementPublishedKPrivacyContract(contract){
+ requireLineage(plain(contract),'Workspace contract required for exact K restoration');
+ validatePlanMeasurementCurrentSection(contract.planMeasurementCurrentLineage);
+ currentFieldPrivacyRevision(contract);
+ const previous=structuredClone(contract),revision=validateFieldHistoryPrivacyLedger(contract.planMeasurementCurrentLineage);
+ if(!revision)return previous;
+ for(const row of revision.producers){
+  const spec=previous.extension.proofs.find(value=>value.id===row.id);
+  spec.producerSha256=row.previousSha256;spec.checkNames=spec.checkNames.slice(0,row.previousCheckCount);
+ }
+ for(const source of revision.validationSources){
+  const matches=previous.planMeasurementCurrentLineage.currentValidationSources.filter(ref=>ref.path===source.path);
+  requireLineage(matches.length===1&&hash(matches[0].sha256)&&matches[0].sha256!==source.previousSha256,'L requires its current helper and test pins');
+  matches[0].sha256=source.previousSha256;
+ }
+ delete previous.planMeasurementCurrentLineage.fieldHistoryPrivacyRevision;
+ requireLineage(sha(JSON.stringify(previous,null,2)+'\n')===revision.previousContractSha256,'L must restore the complete exact K contract before I G and H');
+ return previous;
+}
+export function restorePlanMeasurementPublishedKPrivacyProducerText(contract,producer,value){
+ const known=FIELD_HISTORY_PRIVACY_REVISION.producers.find(row=>row.producer===producer);
+ requireLineage(Boolean(known)&&Buffer.isBuffer(value),'Only a reviewed L field producer can be restored');
+ const revision=currentFieldPrivacyRevision(contract,known.id),decoded=value.toString('utf8');
+ requireLineage(value.equals(Buffer.from(decoded)),'Invalid field privacy producer encoding');let text=decoded.replaceAll('\r\n','\n');
+ if(revision){
+  requireLineage(sha(text)===revision.currentSha256,'Current L field privacy producer body is not exact');
+  const patchSet=FIELD_HISTORY_PRIVACY_SOURCE_PATCHES.find(row=>row.producer===producer);
+  requireLineage(Boolean(patchSet)&&digest(patchSet.patches)===revision.sourcePatchesSha256,'Only the audited L source patches may restore K');
+  for(const patch of patchSet.patches){requireLineage(typeof patch.before==='string'&&typeof patch.after==='string'&&patch.after.length>0&&text.split(patch.after).length===2,'Each audited L source block must occur exactly once');text=text.replace(patch.after,()=>patch.before);}
+ }
+ requireLineage(sha(text)===known.previousSha256,'The complete K field producer body must remain exact');
+ return text;
+}
+
 export function planMeasurementCurrentDependencies(kind){return PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES.find(row=>row.kind===kind)?.sourceAdditions||[];}
 // Metadata only: no source bytes, native manifests or observed receipts are
 // projected. Historical checkers see the exact published H metadata again.
@@ -345,8 +497,9 @@ export function publishedHProofMetadata(spec){
  return {...spec,sourceFiles:previous,...(delta.allowedFields.includes('producerSha256')?{producerSha256:delta.previousProducerSha256}:{})};
 }
 export function validatePlanMeasurementCurrentSection(section){
- requireLineage(plain(section),'Current measurement lineage section required');const hasRetentionRevision=Object.hasOwn(section,'planImportRecoveryRetentionRevision');
- exactKeys(section,['version','referenceHead','referencePublicationVerified','previousContractSha256','publishedKycSectionSha256','currentProofChanges','nativeCompact','legacyProducerSources','currentValidationSources',...(hasRetentionRevision?['planImportRecoveryRetentionRevision']:[])],'Current measurement lineage section required');
+ requireLineage(plain(section),'Current measurement lineage section required');const hasRetentionRevision=Object.hasOwn(section,'planImportRecoveryRetentionRevision'),hasFieldPrivacyRevision=Object.hasOwn(section,'fieldHistoryPrivacyRevision');
+ exactKeys(section,['version','referenceHead','referencePublicationVerified','previousContractSha256','publishedKycSectionSha256','currentProofChanges','nativeCompact','legacyProducerSources','currentValidationSources',...(hasRetentionRevision?['planImportRecoveryRetentionRevision']:[]),...(hasFieldPrivacyRevision?['fieldHistoryPrivacyRevision']:[])],'Current measurement lineage section required');
+ validateFieldHistoryPrivacyLedger(section);
  if(hasRetentionRevision){exactKeys(section.planImportRecoveryRetentionRevision,Object.keys(PLAN_MEASUREMENT_CURRENT_RETENTION_REVISION),'Exact I producer revision shape required');same(section.planImportRecoveryRetentionRevision,PLAN_MEASUREMENT_CURRENT_RETENTION_REVISION,'Only the reviewed I producer revision may differ from G');}
  requireLineage(section.version===PLAN_MEASUREMENT_CURRENT_CI_VERSION&&section.referenceHead==='cade7e09907f188222a709e79d632ef015a911bd'&&typeof section.referencePublicationVerified==='boolean'&&section.previousContractSha256===PLAN_MEASUREMENT_PUBLISHED_H_CONTRACT_SHA256&&section.publishedKycSectionSha256===PLAN_MEASUREMENT_PUBLISHED_H_KYC_SHA256,'Published H source reference changed');
  same(section.currentProofChanges,PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES,'Only the twelve reviewed CURRENT source fields and two producer fields may change');same(section.nativeCompact,PLAN_MEASUREMENT_CURRENT_COMPACT,'Current127 must remain separate from published125 and historical117');same(section.legacyProducerSources,PLAN_MEASUREMENT_CURRENT_LEGACY_PRODUCERS,'Only exact source literals may extend legacy producers');
@@ -357,7 +510,7 @@ export function validatePlanMeasurementCurrentSection(section){
  for(const file of [PLAN_MEASUREMENT_CURRENT_CI_HELPER,PLAN_MEASUREMENT_CURRENT_CI_TEST,'scripts/verify-company-kyc-outbound-compact-ci.mjs','tests/production-kyc-reply-feedback-current-lineage.test.mjs'])requireLineage(found.has(file),'Current validator source omitted: '+file);return section;
 }
 export function publishedHContractMetadata(contract){
- requireLineage(plain(contract),'Current workspace contract required');const section=validatePlanMeasurementCurrentSection(contract.planMeasurementCurrentLineage);
+ requireLineage(plain(contract),'Current workspace contract required');contract=restorePlanMeasurementPublishedKPrivacyContract(contract);const section=validatePlanMeasurementCurrentSection(contract.planMeasurementCurrentLineage);
  requireLineage(plain(contract.kycExpiredCurrentComposition),'Published H section required');
  requireLineage(digest(contract.kycExpiredCurrentComposition)===PLAN_MEASUREMENT_PUBLISHED_H_KYC_SHA256,'Every published H125/117 source and guard pin must remain unchanged');
  const previous=structuredClone(contract);delete previous.planMeasurementCurrentLineage;
@@ -379,7 +532,7 @@ export function verifyPlanMeasurementCurrentSources(contract,readSource){
  validatePlanMeasurementCompactSourceLineage(kycExpiredCurrentSourceFiles(readSource));
  for(const ref of [...KYC_EXPIRED_CURRENT_REVIEWED_SOURCES,...section.currentValidationSources])requireLineage(lfSha(readSource,ref.path)===ref.sha256,'Stale current source bytes: '+ref.path);
  for(const ref of section.legacyProducerSources)requireLineage(sha(restorePlanMeasurementPublishedGProducerText(section,ref.path,bytes(readSource,ref.path)))===ref.sha256,'A published G producer body changed: '+ref.path);
- for(const delta of PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES){const spec=contract.extension.proofs.find(row=>row.id===delta.id);requireLineage(lfSha(readSource,spec.producer)===delta.currentProducerSha256,'Current producer is not the reviewed Git source: '+delta.id);}
+ for(const delta of PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES){const spec=contract.extension.proofs.find(row=>row.id===delta.id),privacy=currentFieldPrivacyRevision(contract,spec);if(privacy){requireLineage(lfSha(readSource,spec.producer)===privacy.currentSha256,'Current L field producer is not the reviewed Git source: '+delta.id);requireLineage(sha(restorePlanMeasurementPublishedKPrivacyProducerText(contract,spec.producer,bytes(readSource,spec.producer)))===delta.currentProducerSha256,'Restored K field producer differs from the original G lineage: '+delta.id);}else requireLineage(lfSha(readSource,spec.producer)===delta.currentProducerSha256,'Current producer is not the reviewed Git source: '+delta.id);}
  return {version:PLAN_MEASUREMENT_CURRENT_CI_VERSION,publishedContractSha256:sha(JSON.stringify(prior,null,2)+'\n'),sourceCount:127,previousSourceCount:125,historicalSourceCount:117,sourcePathsSha256:section.nativeCompact.sourcePathsSha256,sourceAdditions:[...PLAN_MEASUREMENT_CURRENT_SOURCES]};
 }
 export function validatePlanMeasurementCurrentCompactReceipt(proof,contract,readSource){

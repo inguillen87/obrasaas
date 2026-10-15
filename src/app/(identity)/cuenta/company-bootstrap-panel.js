@@ -1,5 +1,5 @@
 'use client';
-import {useCallback,useEffect,useRef,useState} from 'react';
+import React,{useCallback,useEffect,useRef,useState} from 'react';
 import {workspaceActiveToken} from './workspace-session-request.mjs';
 import {browserRecoveryJournal,RECOVERY_EVENT,wasCompanyPhoneRevisionRejected} from './workspace-recovery-journal.mjs';
 import {useWorkspaceRequest} from './workspace-request-lifecycle';
@@ -8,11 +8,14 @@ import {companyPhoneE164} from '../../../lib/company-phone-format.mjs';
 const endpoint='/api/identity/company-onboarding';
 const explanations={COMPANY_VERIFIED_PROFILE_REQUIRED:'No se pudo confirmar tu correo verificado. Comprobá tu cuenta y volvé a consultar el alta.',COMPANY_IDENTITY_PROVIDER_UNAVAILABLE:'No se pudo comprobar tu acceso. Conservamos tus datos; volvé a consultar.',IDENTITY_PROVIDER_UNAVAILABLE:'No se pudo renovar tu acceso. Conservamos tus datos; volvé a consultar.',COMPANY_CREATOR_ROLE_REQUIRED:'La organización activa requiere un administrador para completar el alta.',COMPANY_ALREADY_CONFIGURED:'Esta organización ya tiene una empresa. No se creó otra.',COMPANY_IDENTITY_CONFLICT:'La identidad coincide con un registro que no puede reasignarse automáticamente. No se fusionaron cuentas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Tu pertenencia a esta empresa no está habilitada.',WORKSPACE_CONTEXT_CHANGED:'Cambió la organización activa. Volvé a abrir la empresa correcta.',COMPANY_CREATION_LIMIT:'Se alcanzó el límite de nuevas empresas durante las últimas 24 horas.',COMPANY_INITIAL_DATES_INVALID:'Completá inicio y fin de cada tarea, o dejá ambos vacíos.',COMPANY_INITIAL_TASKS_DUPLICATED:'Dos tareas tienen el mismo título. Diferencialas antes de guardar.',SESSION_REQUIRED:'Tu sesión terminó. Volvé a ingresar.'};
 const explain=code=>explanations[code]||'No se pudo confirmar el alta. No se agregaron datos de ejemplo ni se conectó WhatsApp.';
-export function CompanyBootstrapPanel({organizationId,organizationName,getSessionToken,getProfileToken,children}){
+export function CompanyBootstrapPanel({organizationId,organizationName,getSessionToken,getProfileToken,onPending,children}){
  const [stage,setStage]=useState('checking'),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[attempt,setAttempt]=useState(null),[receipt,setReceipt]=useState(null),[canRetry,setCanRetry]=useState(false);
  const [companyName,setCompanyName]=useState(organizationName||''),[projectName,setProjectName]=useState(''),[address,setAddress]=useState(''),[tasks,setTasks]=useState([]),[confirmed,setConfirmed]=useState(false);
  const [companyPhone,setCompanyPhone]=useState(''),[currentCompany,setCurrentCompany]=useState(null);
  const mounted=useRef(true),version=useRef(0),retainedProfileProof=useRef(null),request=useRef(null);
+ const [initialCompanyName]=useState(organizationName||'');
+ const dirty=stage==='new'&&(companyName!==initialCompanyName||projectName!==''||address!==''||companyPhone!==''||tasks.length>0||confirmed);
+ React.useLayoutEffect(()=>{onPending?.(busy||Boolean(attempt)||dirty);return()=>onPending?.(false);},[busy,attempt,dirty,onPending]);
  const api=useCallback(async function(method,body=null,operationId=null,refreshProfile=false){
   const controller=new AbortController();request.current?.abort();request.current=controller;const signal=controller.signal;
   const timeout=setTimeout(()=>controller.abort(),20000);let dispatched=false;
@@ -82,6 +85,10 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
  }
  const locked=busy||Boolean(attempt);
  const editTask=(index,key,value)=>setTasks(previous=>previous.map((task,i)=>i===index?{...task,[key]:value}:task));
+ function discardDraft(){
+  if(locked||stage!=='new')return;
+  retainedProfileProof.current=null;setCompanyName(initialCompanyName);setProjectName('');setAddress('');setCompanyPhone('');setTasks([]);setConfirmed(false);setNotice('Se descartaron los datos del formulario. Podés cambiar de espacio de trabajo.');
+ }
  if(stage==='ready')return <><CompanyTrialExpiry company={currentCompany}/>{receipt&&<section className={styles.panel} aria-labelledby="company-receipt-heading"><h2 id="company-receipt-heading">Alta confirmada</h2><p>Este recibo confirma el alta original. Tu espacio de trabajo muestra el estado vigente.</p><details className={styles.created}><summary>Datos del alta</summary><dl><dt>Empresa declarada al crear el espacio</dt><dd>{receipt.companyName}</dd><dt>Primera obra registrada</dt><dd>{receipt.projectName}</dd><dt>Tareas cargadas en el plan inicial</dt><dd>{receipt.initialTaskCount}</dd></dl><p className={styles.caption}>La confirmación del alta no acredita una conexión de WhatsApp ni la aprobación de identidades.</p><small>Recibo: {receipt.receiptId}</small></details></section>}{children}</>;
  return <section className={styles.panel} aria-labelledby="company-bootstrap-heading">
   <p className={styles.eyebrow}>ALTA DE CONSTRUCTORA</p><h2 id="company-bootstrap-heading">Tu empresa, desde cero.</h2>
@@ -102,7 +109,7 @@ export function CompanyBootstrapPanel({organizationId,organizationName,getSessio
    <p id="company-trial-notice" className={styles.caption}>Al crear la empresa empieza una prueba de 15 días desde el alta. Después podés consultar su fecha y hora de vencimiento en esta cuenta. Recuperar un alta existente no reinicia la prueba.</p>
    <label className={styles.confirmation}><input type="checkbox" checked={confirmed} required disabled={locked} aria-describedby="company-trial-notice" onChange={event=>setConfirmed(event.target.checked)}/><span>Confirmo que quiero crear una empresa nueva para esta organización. No se importarán empleados, mensajes, gastos ni obras de otras empresas.</span></label>
    <p className={styles.caption}>Se comprobarán tu sesión de administrador y el correo verificado por Clerk. El nombre declarado no acredita una verificación legal de la empresa. El formulario no se conserva al recargar: se consultará el alta existente y no se reenviará automáticamente.</p>
-   <div className={styles.actions}>{attempt?<><button type="button" disabled={busy} onClick={recover}>Comprobar creación</button>{canRetry&&<button type="button" disabled={busy} onClick={retry}>Reenviar mismo intento</button>}</>:<button className={styles.primary} type="submit" disabled={busy||!confirmed} aria-describedby="company-trial-notice">Crear empresa y primera obra</button>}</div>
+    <div className={styles.actions}>{attempt?<><button type="button" disabled={busy} onClick={recover}>Comprobar creación</button>{canRetry&&<button type="button" disabled={busy} onClick={retry}>Reenviar mismo intento</button>}</>:<><button className={styles.primary} type="submit" disabled={busy||!confirmed} aria-describedby="company-trial-notice">Crear empresa y primera obra</button>{dirty&&<button type="button" disabled={busy} onClick={discardDraft}>Descartar borrador de alta</button>}</>}</div>
   </form>}
   {stage==='created'&&receipt&&<><CompanyTrialExpiry company={currentCompany}/><div className={styles.created}><h3>El espacio está creado</h3><dl><dt>Empresa</dt><dd>{receipt.companyName}</dd><dt>Primera obra</dt><dd>{receipt.projectName}</dd><dt>Tareas iniciales</dt><dd>{receipt.initialTaskCount}</dd></dl><p>Sin empleados, movimientos económicos ni mensajes de ejemplo. El número y la autorización de Meta se completan por separado.</p><small>Recibo: {receipt.receiptId}</small><button type="button" className={styles.primary} onClick={()=>setStage('ready')}>Entrar a mi obra</button></div></>}
  </section>;

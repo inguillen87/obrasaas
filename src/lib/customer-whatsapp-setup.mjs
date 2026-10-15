@@ -4,7 +4,7 @@ import {WorkspaceError,operationId,digest} from './workspace-policy.mjs';
 import {companyConnectionForProject,assertLegacyProjectChannel} from './company-channel-connection.mjs';
 import {readCompanyPhoneDeclaration} from './company-onboarding-policy.mjs';
 const publicError=error=>{if(error instanceof TenantWorkspaceError)throw new WorkspaceError(error.code,error.status);throw error;};
-const pendingCredentialStates=new Set(['CREDENTIAL_STORED','VERIFYING','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN']);
+const pendingCredentialStates=new Set(['CREDENTIAL_STORED','VERIFYING','REVIEW_REQUIRED','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN']);
 const same=(current,command)=>['assistantName','numberMode','initialProjectId'].every(key=>current[key]===command[key])&&JSON.stringify(current.useCases)===JSON.stringify(command.useCases);
 const receiptId=(member,projectId,id)=>'wa_preparation_'+digest([member.actorId,projectId,id.toLowerCase()]);
 export function customerWhatsAppReadiness(profile,connection){
