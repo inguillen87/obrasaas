@@ -1,6 +1,7 @@
 import {restoreParticipantPreanalysisPreviousContract,restoreParticipantPreanalysisSourceSet} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {restoreIntegratedIdentityPreviousContract,restoreIntegratedIdentitySourceSet,integratedIdentityCurrentSourcePin} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
+import {DOCUMENT_TASK_ASSOCIATION_CURRENT_REVISION as documentRevision} from '../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
@@ -99,7 +100,8 @@ test('old current or foreign pins for the same changed path cannot fall through 
  for(const row of changes){
   const checkpoint=restoreIntegratedIdentityPreviousContract(currentContract),ref={path:row.path,sha256:row.previousSha256},checkpointPin=ooxmlAccountingCurrentSourcePin(checkpoint,ref),actualPin=integratedIdentityCurrentSourcePin(currentContract,{path:row.path,sha256:checkpointPin});
   assert.equal(ooxmlAccountingCurrentSourcePin(currentContract,ref),actualPin);assert.equal(fieldOutboundCurrentSourcePin(currentContract,ref),actualPin);
-  for(const badSha of [row.currentSha256,'f'.repeat(64)]){denied(()=>ooxmlAccountingCurrentSourcePin(currentContract,{path:row.path,sha256:badSha}));denied(()=>fieldOutboundCurrentSourcePin(currentContract,{path:row.path,sha256:badSha}));}
+  const outer=documentRevision.reviewedSourceChanges.find(ref=>ref.path===row.path),currentNegativePin=outer?.currentSha256||row.currentSha256;
+  for(const badSha of [currentNegativePin,'f'.repeat(64)]){denied(()=>ooxmlAccountingCurrentSourcePin(currentContract,{path:row.path,sha256:badSha}));denied(()=>fieldOutboundCurrentSourcePin(currentContract,{path:row.path,sha256:badSha}));}
  }
 });
 test('each reviewed source helper and test rejects independently tampered raw bytes',()=>{

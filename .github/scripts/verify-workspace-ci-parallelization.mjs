@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {DOCUMENT_TASK_ASSOCIATION_PREVIOUS_CONTRACT_SHA256,restoreDocumentTaskAssociationPreviousContract,verifyDocumentTaskAssociationCurrentSources} from '../../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
 import {INTEGRATED_IDENTITY_CURRENT_REVISION,integratedIdentityCurrentSourcePin,restoreIntegratedIdentityPreviousContract,validateIntegratedIdentityWorkspaceContract,verifyIntegratedIdentityCurrentSources,validateIntegratedCompanyCurrentNative,integratedCompanyCurrentShadowFixture,integratedIdentityCurrentSelftest,integratedIdentityPreviousProofChecks} from '../../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import {FOCUSED_WORKSPACE_CI_KIND,validateFocusedWorkspaceCi,focusedWorkspaceCiSourceClosure} from '../../scripts/verify-focused-workspace-ci.mjs';
@@ -16,7 +17,7 @@ import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourc
 import {KYC_EXPIRED_CURRENT_ADDITIONS,KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,validateKycExpiredCurrentWorkspaceContract as validatePublishedKycWorkspaceContract,verifyKycExpiredCurrentSources as verifyPublishedKycSources} from '../../scripts/lib/kyc-expired-current-ci-lineage.mjs';
 import {PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES,planMeasurementCurrentDependencies,reconstructPublishedHContract,verifyPlanMeasurementCurrentSources,currentFieldPrivacyRevision,currentFieldPrivacySpecRevision} from '../../scripts/lib/plan-measurement-current-ci-lineage.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="10319b1ab8a283b7c89cab96a279e20e25fe4be2736d91caaa915a4e62afa524";
+export const EXPECTED_CONTRACT_SHA256="8c2afc33e9454b9c7a9d9fd2056f2c3de75f4657bbcbce4fb1bdf618e0590db3";
 function validateKycExpiredCurrentWorkspaceContract(contract){return validatePublishedKycWorkspaceContract(contract.planMeasurementCurrentLineage?reconstructPublishedHContract(contract):contract);}
 function verifyKycExpiredCurrentSources(section,readSource){
  const current=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));
@@ -1742,6 +1743,7 @@ function validateEvidenceContract(contract){
  if(Object.values(contract.lanes).flatMap(owner=>owner.optionalArtifactPatterns).length!==6)deny('OPTIONAL_ARTIFACT_COVERAGE');
 }
 export function validateContract(contract){
+ if(contract?.planMeasurementDocumentAssociationRevision){try{validateContract(restoreDocumentTaskAssociationPreviousContract(contract));}catch(error){if(error.code==='PLAN_MEASUREMENT_DOCUMENT_ASSOCIATION_CI_LINEAGE_REJECTED')deny('PROOF_BINDING_SOURCE');throw error;}return contract;}
  if(contract?.integratedIdentityCurrentRevision){try{validateIntegratedIdentityWorkspaceContract(contract);validateContract(restoreIntegratedIdentityPreviousContract(contract));}catch(error){if(error.code==='INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED')deny('PROOF_BINDING_SOURCE');throw error;}return contract;}
  if(contract?.participantPreanalysisCurrentRevision){try{validateParticipantPreanalysisWorkspaceContract(contract);validateContract(restoreParticipantPreanalysisPreviousContract(contract));}catch(error){if(error.code==='PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED')deny('PROOF_BINDING_SOURCE');throw error;}return contract;}
  if(contract?.version!==2||contract.sourceCommit!=='61d316a8983c268d43f8af6de10df9743a46278e')deny('CONTRACT_BASE');
@@ -1970,6 +1972,11 @@ export function selftest(workflow,contract,root=process.cwd()){
  function good(name,run){run();checks.push({name,result:'PASS'});}
  function bad(name,code,run){assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code});}
  good('yaml-parsed-and-full-baseline-equivalent',()=>equivalent(workflow,contract));
+ if(contract.planMeasurementDocumentAssociationRevision){
+  good('document-association-complete-a203-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreDocumentTaskAssociationPreviousContract(contract),null,2)+'\n'),DOCUMENT_TASK_ASSOCIATION_PREVIOUS_CONTRACT_SHA256));
+  good('document-association-current-source-leaves-independent-from-native-proofs',()=>verifyDocumentTaskAssociationCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
+  for(const [name,edit]of [['old-source-relabelled-current',c=>{c.planMeasurementDocumentAssociationRevision.reviewedSourceChanges[0].currentSha256=c.planMeasurementDocumentAssociationRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.planMeasurementDocumentAssociationRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.planMeasurementDocumentAssociationRevision.previousContractSha256='f'.repeat(64);}],['historical49-pin-tampered',c=>{c.planMeasurementCurrentLineage.currentValidationSources[0].sha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('document-association-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}
+ }
  checks.push(...kycExpiredCurrentCompositionSelftest(contract,root));
  const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
  checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource));

@@ -1,3 +1,13 @@
+import {restoreDocumentTaskAssociationPreviousContract as documentOuter0,documentTaskAssociationCurrentSourcePin as documentOuter1,verifyDocumentTaskAssociationCurrentSources as documentOuter2,restoreDocumentTaskAssociationSourceSet as documentOuter3,documentTaskAssociationProofSourceAdditions as documentOuter4} from './plan-measurement-document-association-ci-lineage.mjs';
+// Existing APIs keep their original precise denial category; the additive
+// module retains its distinct code when invoked directly. No error is accepted.
+function documentOuterCall(fn,args){try{return fn(...args);}catch(error){if(error.code==='PLAN_MEASUREMENT_DOCUMENT_ASSOCIATION_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED'});throw error;}}
+const restoreDocumentTaskAssociationPreviousContract=(...args)=>documentOuterCall(documentOuter0,args);
+const documentTaskAssociationCurrentSourcePin=(...args)=>documentOuterCall(documentOuter1,args);
+const verifyDocumentTaskAssociationCurrentSources=(...args)=>documentOuterCall(documentOuter2,args);
+const restoreDocumentTaskAssociationSourceSet=(...args)=>documentOuterCall(documentOuter3,args);
+const documentTaskAssociationProofSourceAdditions=(...args)=>documentOuterCall(documentOuter4,args);
+
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import checkpoint from '../../tests/fixtures/integrated-identity-contract-27aa.json' with {type:'json'};
@@ -2044,12 +2054,14 @@ export function composeIntegratedIdentityContract(value){
  current.integratedIdentityCurrentRevision=structuredClone(value);return current;
 }
 export function restoreIntegratedIdentityPreviousContract(contract){
+ contract=restoreDocumentTaskAssociationPreviousContract(contract);
  if(!plain(contract)||!Object.hasOwn(contract,'integratedIdentityCurrentRevision'))return contract;
  const value=revision(contract);if(!value)return contract;
  requireLineage(same(contract,composeIntegratedIdentityContract(value)),'The integrated delta must restore the complete clean AI checkpoint exactly');return structuredClone(checkpoint);
 }
 export function integratedIdentityCurrentRevision(contract){return revision(contract);}
 export function integratedIdentityCurrentSourcePin(contract,ref){
+ const outerPin=documentTaskAssociationCurrentSourcePin(contract,ref);if(outerPin!==ref.sha256)return outerPin;
  const value=revision(contract);if(!value)return ref.sha256;const row=[...value.reviewedSourceChanges,...value.validationDeltas].find(row=>row.path===ref.path);if(!row)return ref.sha256;
  if(ref.path==='scripts/verify-workspace-identity-only-ui.mjs'&&ref.sha256===row.currentSha256)return integratedIdentityCurrentUiProducerPin(contract,ref);
  requireLineage(ref.sha256===row.previousSha256,'A previous exact checkpoint pin must remain unchanged: '+ref.path);return row.currentSha256;
@@ -2064,24 +2076,27 @@ export function integratedIdentityCurrentUiProducerPin(contract,ref){
  requireLineage(change?.previousProducerSha256===row.previousSha256&&change?.currentProducerSha256===row.currentSha256&&ref.sha256===row.currentSha256&&proof?.producer===row.path&&proof?.producerSha256===row.currentSha256&&same(proof.checkNames,change.currentCheckNames),'Exact current identity UI proof binding required');return row.currentSha256;
 }
 export function verifyIntegratedIdentityCurrentSources(contract,readSource){
+ verifyDocumentTaskAssociationCurrentSources(contract,readSource);
  const value=revision(contract);if(!value)return null;restoreIntegratedIdentityPreviousContract(contract);requireLineage(typeof readSource==='function','Current committed source reader required');
  authenticateIntegratedIdentityUiProducerMigrationSource(readSource(INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH));
- for(const row of [...value.reviewedSourceChanges,...value.validationDeltas])requireLineage(lf(readSource,row.path)===row.currentSha256,'Stale integrated current source: '+row.path);
- for(const row of [...value.addedSources,...value.validationSources])requireLineage(lf(readSource,row.path)===row.sha256,'Stale integrated added or validation source: '+row.path);
+ for(const row of [...value.reviewedSourceChanges,...value.validationDeltas])requireLineage(lf(readSource,row.path)===documentTaskAssociationCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}),'Stale integrated current source: '+row.path);
+ for(const row of [...value.addedSources,...value.validationSources])requireLineage(lf(readSource,row.path)===documentTaskAssociationCurrentSourcePin(contract,row),'Stale integrated added or validation source: '+row.path);
  requireLineage(lf(readSource,INTEGRATED_IDENTITY_CHECKPOINT_PATH)===previousContractSha256,'The original checkpoint fixture bytes cannot change');
  return{version:1,previousContractSha256,completeCheckpointRestored:true,historicalPinsPreserved:true,nativeOrBrowserAcceptance:false};
 }
 export function restoreIntegratedIdentitySourceSet(family,files,contract){
+ files=restoreDocumentTaskAssociationSourceSet(family,files,contract);
  const value=revision(contract);if(!value)return files;const delta=[...value.proofSourceDeltas,...value.consumerSourceDeltas].find(row=>row.family===family);if(!delta)return files;
  requireLineage(Array.isArray(files)&&files.length===delta.currentCount&&sha(JSON.stringify(files))===delta.currentPathsSha256,'Exact integrated current source set required: '+family);
  const previous=files.filter(file=>!delta.additions.includes(file));requireLineage(previous.length===delta.previousCount&&sha(JSON.stringify(previous))===delta.previousPathsSha256,'Exact checkpoint sources must remain present: '+family);return previous;
 }
 export function integratedIdentityProofSourceAdditions(spec){
- const delta=INTEGRATED_IDENTITY_CURRENT_REVISION.proofSourceDeltas.find(row=>row.id===spec?.id);if(!delta)return[];
+ const outer=documentTaskAssociationProofSourceAdditions(spec);if(outer.length)spec={...spec,sourceFiles:spec.sourceFiles.filter(file=>!outer.includes(file))};
+ const delta=INTEGRATED_IDENTITY_CURRENT_REVISION.proofSourceDeltas.find(row=>row.id===spec?.id);if(!delta)return outer;
  const historical=checkpoint.participantPreanalysisCurrentRevision.proofSourceDeltas.find(row=>row.id===spec?.id);
- if(historical&&spec.sourceFiles?.length===historical.previousCount&&sha(JSON.stringify(spec.sourceFiles))===historical.previousPathsSha256)return[];
- if(spec.sourceFiles?.length===delta.previousCount&&sha(JSON.stringify(spec.sourceFiles))===delta.previousPathsSha256)return[];
- requireLineage(spec.sourceFiles?.length===delta.currentCount&&sha(JSON.stringify(spec.sourceFiles))===delta.currentPathsSha256,'Unknown integrated proof source set');return[...delta.additions];
+ if(historical&&spec.sourceFiles?.length===historical.previousCount&&sha(JSON.stringify(spec.sourceFiles))===historical.previousPathsSha256)return outer;
+ if(spec.sourceFiles?.length===delta.previousCount&&sha(JSON.stringify(spec.sourceFiles))===delta.previousPathsSha256)return outer;
+ requireLineage(spec.sourceFiles?.length===delta.currentCount&&sha(JSON.stringify(spec.sourceFiles))===delta.currentPathsSha256,'Unknown integrated proof source set');return[...delta.additions,...outer];
 }
 // Only metadata is reconstructed for older check-lineage assertions. Actual
 // native checks and their original raw evidence still require the new matrix.
