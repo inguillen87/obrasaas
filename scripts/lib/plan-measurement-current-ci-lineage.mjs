@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {INTEGRATED_IDENTITY_UI_PRODUCER_PATHS,restoreIntegratedIdentityUiProducerText} from './integrated-identity-current-ci-lineage.mjs';
 import {restoreParticipantPreanalysisSourceSet} from './participant-preanalysis-current-ci-lineage.mjs';
 import {restoreFieldOutboundPreviousContract,fieldOutboundCurrentSourcePin,verifyFieldOutboundCurrentSources} from './field-outbound-current-ci-lineage.mjs';
 import {kycExpiredCurrentSourceFiles,KYC_EXPIRED_CURRENT_ADDITIONS,KYC_EXPIRED_CURRENT_REVIEWED_SOURCES,validateKycExpiredCurrentWorkspaceContract} from './kyc-expired-current-ci-lineage.mjs';
@@ -408,6 +409,7 @@ export function restorePlanMeasurementPublishedGProducerText(section,producer,va
  validatePlanMeasurementCurrentSection(section);
  const prior=PLAN_MEASUREMENT_CURRENT_LEGACY_PRODUCERS.find(ref=>ref.path===producer);
  requireLineage(Boolean(prior)&&Buffer.isBuffer(value),'Only a reviewed legacy producer can be restored');
+ if(INTEGRATED_IDENTITY_UI_PRODUCER_PATHS.includes(producer)){try{value=restoreIntegratedIdentityUiProducerText(producer,value);}catch{deny('The exact reviewed modular UI producer migration is required');}}
  const decoded=value.toString('utf8');requireLineage(value.equals(Buffer.from(decoded)),'Invalid legacy producer encoding');let text=decoded.replaceAll('\r\n','\n');
  const revision=section.planImportRecoveryRetentionRevision;
  if(revision&&producer===revision.producer){

@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import checkpoint from '../../tests/fixtures/integrated-identity-contract-27aa.json' with {type:'json'};
 
 const sha=value=>createHash('sha256').update(value).digest('hex'),same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
@@ -7,6 +8,27 @@ const requireLineage=(ok,message)=>{if(!ok)throw Object.assign(new Error(message
 const previousContractSha256='3c1a184f2e6839bba6bd7116ccf6c062fbb015500ec4900583dbd15f82fe7270';
 requireLineage(sha(JSON.stringify(checkpoint,null,2)+'\n')===previousContractSha256,'The full clean AI checkpoint contract is immutable');
 function freeze(value){if(value&&typeof value==='object'){for(const item of Object.values(value))freeze(item);Object.freeze(value);}return value;}freeze(checkpoint);
+
+export const INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH='tests/fixtures/integrated-identity-ui-producer-migration-86f2.json';
+export const INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_SHA256='00026e577701bbf8c0120a958262e5d12f88d96bd85bdf8355e70aa350640522';
+export function authenticateIntegratedIdentityUiProducerMigrationSource(bytes){
+ requireLineage(Buffer.isBuffer(bytes),'Exact reviewed UI producer migration bytes required');const decoded=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(decoded)),'Invalid reviewed UI migration UTF-8');const text=decoded.replaceAll('\r\n','\n');
+ requireLineage(sha(text)===INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_SHA256,'The complete reviewed UI producer migration is immutable');return freeze(JSON.parse(text));
+}
+// This fs/new URL input is an explicitly enumerated validation dependency.
+// Current verification also authenticates readSource bytes; it is not claimed
+// as an inferred JavaScript import closure or a native application dependency.
+const uiProducerMigration=authenticateIntegratedIdentityUiProducerMigrationSource(readFileSync(new URL('../../tests/fixtures/integrated-identity-ui-producer-migration-86f2.json',import.meta.url)));
+export const INTEGRATED_IDENTITY_UI_PRODUCER_PATHS=Object.freeze(uiProducerMigration.producers.map(row=>row.path));
+// Reconstruct source history only. Real current-source gates always require
+// the reviewed current SHA first and never substitute these historical bytes.
+export function restoreIntegratedIdentityUiProducerText(producer,bytes){
+ const row=uiProducerMigration.producers.find(ref=>ref.path===producer);requireLineage(Boolean(row)&&Buffer.isBuffer(bytes),'Only exact reviewed UI producer bytes can be restored');const decoded=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(decoded)),'Invalid UI producer UTF-8');let text=decoded.replaceAll('\r\n','\n');
+ if(sha(text)===row.previousSha256&&Buffer.byteLength(text)===row.previousBytes)return Buffer.from(text);
+ requireLineage(sha(text)===row.currentSha256&&Buffer.byteLength(text)===row.currentBytes,'The current UI producer differs from its reviewed body');
+ for(const hunk of [...row.inverseHunks].reverse()){const offset=hunk.currentOffsetCharacters;requireLineage(text.slice(offset,offset+hunk.currentText.length)===hunk.currentText,'An exact inverse UI producer hunk changed');text=text.slice(0,offset)+hunk.previousText+text.slice(offset+hunk.currentText.length);}
+ requireLineage(sha(text)===row.previousSha256&&Buffer.byteLength(text)===row.previousBytes,'The complete predecessor UI producer body must restore exactly');return Buffer.from(text);
+}
 export const INTEGRATED_IDENTITY_CONTRACT_PATH='.github/workspace-acceptance-contract.json';
 export const INTEGRATED_IDENTITY_CHECKPOINT_PATH='tests/fixtures/integrated-identity-contract-27aa.json';
 export const INTEGRATED_IDENTITY_VALIDATION_PATHS=Object.freeze([
@@ -16,7 +38,9 @@ export const INTEGRATED_IDENTITY_VALIDATION_PATHS=Object.freeze([
  'scripts/verify-focused-workspace-ci.mjs',
  'tests/production-focused-workspace-ci.test.mjs',
  'scripts/verify-focused-workspace-ui.mjs',
- 'tests/production-focused-workspace-ui.test.mjs'
+ 'tests/production-focused-workspace-ui.test.mjs',
+ INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH,
+ 'tests/production-integrated-identity-ui-producer-migration.test.mjs'
 ]);
 export const INTEGRATED_FOCUSED_STEP=Object.freeze({
  name:'Focused worksite navigation and three-step synthetic identity browser evidence',
@@ -136,7 +160,7 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
       "previousSha256": "97fdbefc6a2a43627c7298d456574265d964bb84336066e2dbb09c047fb0d9b8",
-      "currentSha256": "6c4dc06bf3947b24c485bb68b5b90f68f88071e66800b58d95e57cec1e60d0c7"
+      "currentSha256": "0ef5c541e380a67d8d19bbf0b225af768e3f0fca557cb32c993bbe9f496ce9cb"
     },
     {
       "path": "scripts/verify-company-channel-kyc-postgres.mjs",
@@ -236,7 +260,7 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
       "previousSha256": "9552a531d027a4c331fbc0ca46d382562e9f7ad3ae311800368332daa1a7f401",
-      "currentSha256": "521831931b5cb262ce952b31f355813ce7eb5c364f3e7f51ba1d726d9b2f2283"
+      "currentSha256": "b0cafe723a23cf47e59ae24f76a68ccc051a7ee7ac93ce8b7cbbfb6a22959a85"
     },
     {
       "path": "tests/production-whatsapp-feedback-workspace-ci.test.mjs",
@@ -247,6 +271,51 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
       "path": "tests/production-workspace-tools-navigation.test.mjs",
       "previousSha256": "3da761320723d221139edf9d46fe76c99ae12ec78849e580984c51b461f6597a",
       "currentSha256": "a2e52b1e323c65f592cc338e275c73a9de1d231e695e50b1e08a5822f8052eb1"
+    },
+    {
+      "path": "scripts/verify-company-onboarding-ui.mjs",
+      "previousSha256": "1237874587a756ddb67a15c09525887f29215fe76df7708aeee35d472716b676",
+      "currentSha256": "1c269e2386a70c34e43089187cfd88829a6663814be60dfb02b673b099d61511"
+    },
+    {
+      "path": "scripts/verify-mobile-workspace-review-ui.mjs",
+      "previousSha256": "14178c269b9032442f40712d6928f7cb68ee43b2e84b3348e6519953cbdee594",
+      "currentSha256": "7739e28a2ed86fbc8ed496306f4f682e776ea2cfee573be9e7f32d28f4f26449"
+    },
+    {
+      "path": "scripts/verify-onboarding-guide-ui.mjs",
+      "previousSha256": "7690c9d459858491a236c2caa360f5bbdf989a56b8c4298a35e4aea057287b31",
+      "currentSha256": "3fa4a862e815896444a500144bbdd77a4e49b86d9bfd477c03f2696ebe6c2c02"
+    },
+    {
+      "path": "scripts/verify-participant-project-navigation-ui.mjs",
+      "previousSha256": "4946126fcc2e3408fe823a9094debe6aa362b5f5c232a67712990dad0058e695",
+      "currentSha256": "be3227c09712878995410fea5ef1e713fb0d86fca63627940234f4a45f09d799"
+    },
+    {
+      "path": "scripts/verify-task-progress-measurement-ui.mjs",
+      "previousSha256": "3cd593333b735c7def545e1410bb4c2a6c7539f38167eb98ef156196854c40ec",
+      "currentSha256": "49c4071a94e5dca5c2e8a5ee6517ce7ccab129bc318241a974e5b8ecf1224204"
+    },
+    {
+      "path": "scripts/verify-workspace-identity-only-ui.mjs",
+      "previousSha256": "f9b07f016b0ae9fe15497a63f6bc23ce996b42c45e29e19ef6c9e9f1a582e7d9",
+      "currentSha256": "e11ed3c52c998f84c0e7ed21ebbe806a1aa8816007b7819203e7d6c4ef4add19"
+    },
+    {
+      "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
+      "previousSha256": "9978062c966ed599d6d65783813169da48b6fd39fdc65ea6691144598f8c3413",
+      "currentSha256": "ef7a5f0e099e468d5f0ec903ae78f6b9df4cf8dc48e1ed272e7ef9e31010c6c8"
+    },
+    {
+      "path": "scripts/verify-workspace-reload-ui.mjs",
+      "previousSha256": "ccaddad1d15827bcc3c1c3413c40ad959da95063c2961155d48d97935f739096",
+      "currentSha256": "7b90b86b5b341edde5a792782fafbe07193fcf4250b2fc922c17ec011f4b423a"
+    },
+    {
+      "path": "scripts/verify-workspace-ui.mjs",
+      "previousSha256": "1d5de4cd92f799f8034531e9e44f70798ba137ff8d656a7152fa738cb9e266f2",
+      "currentSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd"
     }
   ],
   "addedSources": [
@@ -325,6 +394,10 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-participant-kyc-notice-page.test.mjs",
       "sha256": "4bbd193893af0f8fef000cfdc35276cff1caad796f7246372f3d874de40ea184"
+    },
+    {
+      "path": "tests/fixtures/integrated-identity-ui-producer-migration-86f2.json",
+      "sha256": "00026e577701bbf8c0120a958262e5d12f88d96bd85bdf8355e70aa350640522"
     }
   ],
   "proofSourceDeltas": [
@@ -442,24 +515,35 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
       "family": "WORKSPACE_PG_PARTICIPANT_KYC_PREANALYSIS",
       "previousCount": 200,
       "previousPathsSha256": "64012c5b7be1d291bff1f861c7d81cf8480e2492e4fdfd101cafff42485d47d1",
-      "currentCount": 218,
-      "currentPathsSha256": "e3d3917be52f759806fcabe60540af11cc941d8c2473b0aee8618fe42d00bee1",
+      "currentCount": 229,
+      "currentPathsSha256": "935ce4042c36639e55046301a2c72c93200cdc72f8a8d989ca7a8b403cffddee",
       "additions": [
         "scripts/lib/integrated-identity-current-ci-lineage.mjs",
         "scripts/lib/owned-fixture-cleanup.mjs",
         "scripts/verify-company-channel-kyc-postgres.mjs",
         "scripts/verify-company-kyc-outbound-compact-postgres.mjs",
+        "scripts/verify-company-onboarding-ui.mjs",
         "scripts/verify-focused-workspace-ci.mjs",
         "scripts/verify-focused-workspace-ui.mjs",
+        "scripts/verify-mobile-workspace-review-ui.mjs",
+        "scripts/verify-onboarding-guide-ui.mjs",
+        "scripts/verify-participant-project-navigation-ui.mjs",
+        "scripts/verify-task-progress-measurement-ui.mjs",
+        "scripts/verify-workspace-identity-only-ui.mjs",
+        "scripts/verify-workspace-plan-recovery-ui.mjs",
+        "scripts/verify-workspace-reload-ui.mjs",
+        "scripts/verify-workspace-ui.mjs",
         "src/app/(identity)/cuenta/participant-kyc-capture.js",
         "src/app/(identity)/cuenta/participant-kyc-capture.module.css",
         "src/lib/meta-kyc-current-image.mjs",
         "src/lib/participant-kyc-chat-copy.mjs",
         "src/lib/participant-kyc-notice-links.mjs",
         "tests/fixtures/integrated-identity-contract-27aa.json",
+        "tests/fixtures/integrated-identity-ui-producer-migration-86f2.json",
         "tests/production-focused-workspace-ci.test.mjs",
         "tests/production-focused-workspace-ui.test.mjs",
         "tests/production-integrated-identity-current-ci-lineage.test.mjs",
+        "tests/production-integrated-identity-ui-producer-migration.test.mjs",
         "tests/production-meta-customer-composition.test.mjs",
         "tests/production-plan-import-link-ui.test.mjs",
         "tests/production-workspace-tools-navigation.test.mjs"
@@ -1222,6 +1306,221 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
         "signed-WhatsApp-three-image-capture-enqueues-current-v2-consent-once-with-original-issuer-and-no-account-or-field-grant",
         "only-technical-preanalysis-and-usage-records-are-created-no-review-permission-attendance-or-task-effect"
       ]
+    },
+    {
+      "id": "identity-only-ui",
+      "previousProducerSha256": "f9b07f016b0ae9fe15497a63f6bc23ce996b42c45e29e19ef6c9e9f1a582e7d9",
+      "currentProducerSha256": "e11ed3c52c998f84c0e7ed21ebbe806a1aa8816007b7819203e7d6c4ef4add19",
+      "previousCheckNames": [
+        "{\"director\":false,\"name\":\"private-identity-submission-uncertain-receipt-and-explicit-approval-refresh\",\"posts\":1,\"receiptGets\":1,\"reload\":false,\"width\":320}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"application/json\",\"width\":320}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"text/html\",\"width\":320}",
+        "{\"name\":\"revoked-workspace-hides-loaded-tasks-and-only-own-private-read-remains\",\"ownDenied\":false,\"width\":320}",
+        "{\"name\":\"late-prior-project-denial-cannot-replace-authorized-project\",\"width\":320}",
+        "{\"name\":\"late-prior-company-response-cannot-restore-private-context\",\"width\":320}",
+        "{\"name\":\"token-held-prior-company-never-dispatches-after-context-change\",\"width\":320}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":320}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":320}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":320}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":320}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"PENDING_REVIEW\",\"width\":320}",
+        "{\"action\":\"UNLINK\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"REJECTED\",\"width\":320}",
+        "{\"name\":\"late-approved-channel-DTO-never-exposes-codes-grant-chat-or-workspace\",\"width\":320}",
+        "{\"name\":\"late-channel-read-cannot-cross-project\",\"width\":320}",
+        "{\"name\":\"late-channel-read-cannot-cross-account\",\"width\":320}",
+        "{\"name\":\"withdrawal-held-token-cancels-before-POST-on-account-change\",\"width\":320}",
+        "{\"name\":\"dispatched-withdrawal-account-change-keeps-durable-receipt-without-rePOST\",\"width\":320}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":320}",
+        "{\"code\":\"WORKSPACE_MEMBERSHIP_REQUIRED\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":320}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":404,\"width\":320}",
+        "{\"durableReference\":true,\"name\":\"canonical-project-404-after-withdrawal-dispatch-keeps-UUID-and-receipt-reference\",\"receiptGets\":1,\"sameOperationId\":true,\"width\":320}",
+        "{\"durableReference\":true,\"name\":\"canonical-reference-GET-404-hides-loaded-record-and-retains-original-cross-tab-UUID\",\"posts\":1,\"receiptGets\":2,\"sameOperationId\":true,\"width\":320}",
+        "{\"name\":\"own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace\",\"width\":320}",
+        "{\"director\":false,\"name\":\"private-identity-submission-uncertain-receipt-and-explicit-approval-refresh\",\"posts\":1,\"receiptGets\":1,\"reload\":false,\"width\":390}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"application/json\",\"width\":390}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"text/html\",\"width\":390}",
+        "{\"name\":\"revoked-workspace-hides-loaded-tasks-and-only-own-private-read-remains\",\"ownDenied\":false,\"width\":390}",
+        "{\"name\":\"late-prior-project-denial-cannot-replace-authorized-project\",\"width\":390}",
+        "{\"name\":\"late-prior-company-response-cannot-restore-private-context\",\"width\":390}",
+        "{\"name\":\"token-held-prior-company-never-dispatches-after-context-change\",\"width\":390}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":390}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":390}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":390}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":390}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"PENDING_REVIEW\",\"width\":390}",
+        "{\"action\":\"UNLINK\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"REJECTED\",\"width\":390}",
+        "{\"name\":\"late-approved-channel-DTO-never-exposes-codes-grant-chat-or-workspace\",\"width\":390}",
+        "{\"name\":\"late-channel-read-cannot-cross-project\",\"width\":390}",
+        "{\"name\":\"late-channel-read-cannot-cross-account\",\"width\":390}",
+        "{\"name\":\"withdrawal-held-token-cancels-before-POST-on-account-change\",\"width\":390}",
+        "{\"name\":\"dispatched-withdrawal-account-change-keeps-durable-receipt-without-rePOST\",\"width\":390}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":390}",
+        "{\"code\":\"WORKSPACE_MEMBERSHIP_REQUIRED\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":390}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":404,\"width\":390}",
+        "{\"durableReference\":true,\"name\":\"canonical-project-404-after-withdrawal-dispatch-keeps-UUID-and-receipt-reference\",\"receiptGets\":1,\"sameOperationId\":true,\"width\":390}",
+        "{\"durableReference\":true,\"name\":\"canonical-reference-GET-404-hides-loaded-record-and-retains-original-cross-tab-UUID\",\"posts\":1,\"receiptGets\":2,\"sameOperationId\":true,\"width\":390}",
+        "{\"name\":\"own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace\",\"width\":390}",
+        "{\"director\":false,\"name\":\"private-identity-submission-uncertain-receipt-and-explicit-approval-refresh\",\"posts\":1,\"receiptGets\":1,\"reload\":false,\"width\":768}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"application/json\",\"width\":768}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"text/html\",\"width\":768}",
+        "{\"name\":\"revoked-workspace-hides-loaded-tasks-and-only-own-private-read-remains\",\"ownDenied\":false,\"width\":768}",
+        "{\"name\":\"late-prior-project-denial-cannot-replace-authorized-project\",\"width\":768}",
+        "{\"name\":\"late-prior-company-response-cannot-restore-private-context\",\"width\":768}",
+        "{\"name\":\"token-held-prior-company-never-dispatches-after-context-change\",\"width\":768}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":768}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":768}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":768}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":768}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"PENDING_REVIEW\",\"width\":768}",
+        "{\"action\":\"UNLINK\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"REJECTED\",\"width\":768}",
+        "{\"name\":\"late-approved-channel-DTO-never-exposes-codes-grant-chat-or-workspace\",\"width\":768}",
+        "{\"name\":\"late-channel-read-cannot-cross-project\",\"width\":768}",
+        "{\"name\":\"late-channel-read-cannot-cross-account\",\"width\":768}",
+        "{\"name\":\"withdrawal-held-token-cancels-before-POST-on-account-change\",\"width\":768}",
+        "{\"name\":\"dispatched-withdrawal-account-change-keeps-durable-receipt-without-rePOST\",\"width\":768}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":768}",
+        "{\"code\":\"WORKSPACE_MEMBERSHIP_REQUIRED\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":768}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":404,\"width\":768}",
+        "{\"durableReference\":true,\"name\":\"canonical-project-404-after-withdrawal-dispatch-keeps-UUID-and-receipt-reference\",\"receiptGets\":1,\"sameOperationId\":true,\"width\":768}",
+        "{\"durableReference\":true,\"name\":\"canonical-reference-GET-404-hides-loaded-record-and-retains-original-cross-tab-UUID\",\"posts\":1,\"receiptGets\":2,\"sameOperationId\":true,\"width\":768}",
+        "{\"name\":\"own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace\",\"width\":768}",
+        "{\"director\":false,\"name\":\"private-identity-submission-uncertain-receipt-and-explicit-approval-refresh\",\"posts\":1,\"receiptGets\":1,\"reload\":false,\"width\":1280}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"application/json\",\"width\":1280}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"text/html\",\"width\":1280}",
+        "{\"name\":\"revoked-workspace-hides-loaded-tasks-and-only-own-private-read-remains\",\"ownDenied\":false,\"width\":1280}",
+        "{\"name\":\"late-prior-project-denial-cannot-replace-authorized-project\",\"width\":1280}",
+        "{\"name\":\"late-prior-company-response-cannot-restore-private-context\",\"width\":1280}",
+        "{\"name\":\"token-held-prior-company-never-dispatches-after-context-change\",\"width\":1280}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":1280}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":1280}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":1280}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":1280}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"PENDING_REVIEW\",\"width\":1280}",
+        "{\"action\":\"UNLINK\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"REJECTED\",\"width\":1280}",
+        "{\"name\":\"late-approved-channel-DTO-never-exposes-codes-grant-chat-or-workspace\",\"width\":1280}",
+        "{\"name\":\"late-channel-read-cannot-cross-project\",\"width\":1280}",
+        "{\"name\":\"late-channel-read-cannot-cross-account\",\"width\":1280}",
+        "{\"name\":\"withdrawal-held-token-cancels-before-POST-on-account-change\",\"width\":1280}",
+        "{\"name\":\"dispatched-withdrawal-account-change-keeps-durable-receipt-without-rePOST\",\"width\":1280}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":1280}",
+        "{\"code\":\"WORKSPACE_MEMBERSHIP_REQUIRED\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":1280}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":404,\"width\":1280}",
+        "{\"durableReference\":true,\"name\":\"canonical-project-404-after-withdrawal-dispatch-keeps-UUID-and-receipt-reference\",\"receiptGets\":1,\"sameOperationId\":true,\"width\":1280}",
+        "{\"durableReference\":true,\"name\":\"canonical-reference-GET-404-hides-loaded-record-and-retains-original-cross-tab-UUID\",\"posts\":1,\"receiptGets\":2,\"sameOperationId\":true,\"width\":1280}",
+        "{\"name\":\"own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace\",\"width\":1280}",
+        "{\"director\":false,\"name\":\"private-identity-submission-uncertain-receipt-and-explicit-approval-refresh\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"width\":390}",
+        "{\"director\":true,\"name\":\"private-identity-submission-uncertain-receipt-and-explicit-approval-refresh\",\"posts\":1,\"receiptGets\":1,\"reload\":false,\"width\":390}",
+        "{\"name\":\"revoked-workspace-hides-loaded-tasks-and-only-own-private-read-remains\",\"ownDenied\":true,\"width\":390}",
+        "{\"name\":\"bootstrap-administrator-without-worker-keeps-server-authorized-operation\",\"width\":390}",
+        "{\"code\":\"PARTICIPANT_KYC_REVIEW_REQUIRED\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":401,\"type\":\"application/json\",\"width\":390}",
+        "{\"code\":\"PARTICIPANT_KYC_REVIEW_REQUIRED\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":409,\"type\":\"application/json\",\"width\":390}",
+        "{\"code\":\"PARTICIPANT_KYC_REVIEW_REQUIRED\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":500,\"type\":\"application/json\",\"width\":390}"
+      ],
+      "currentCheckNames": [
+        "{\"director\":false,\"name\":\"private-identity-submission-uncertain-receipt-and-explicit-approval-refresh\",\"posts\":1,\"receiptGets\":1,\"reload\":false,\"width\":320}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"application/json\",\"width\":320}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"text/html\",\"width\":320}",
+        "{\"name\":\"revoked-workspace-hides-loaded-tasks-and-only-own-private-read-remains\",\"ownDenied\":false,\"width\":320}",
+        "{\"name\":\"late-prior-project-denial-cannot-replace-authorized-project\",\"width\":320}",
+        "{\"name\":\"late-prior-company-response-cannot-restore-private-context\",\"width\":320}",
+        "{\"name\":\"token-held-prior-company-never-dispatches-after-context-change\",\"width\":320}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":320}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":320}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":320}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":320}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"PENDING_REVIEW\",\"width\":320}",
+        "{\"action\":\"UNLINK\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"REJECTED\",\"width\":320}",
+        "{\"name\":\"late-approved-channel-DTO-never-exposes-codes-grant-chat-or-workspace\",\"width\":320}",
+        "{\"name\":\"late-channel-read-cannot-cross-project\",\"width\":320}",
+        "{\"name\":\"late-channel-read-cannot-cross-account\",\"width\":320}",
+        "{\"name\":\"withdrawal-held-token-cancels-before-POST-on-account-change\",\"width\":320}",
+        "{\"name\":\"dispatched-withdrawal-account-change-keeps-durable-receipt-without-rePOST\",\"width\":320}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":320}",
+        "{\"code\":\"WORKSPACE_MEMBERSHIP_REQUIRED\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":320}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":404,\"width\":320}",
+        "{\"durableReference\":true,\"name\":\"canonical-project-404-after-withdrawal-dispatch-keeps-UUID-and-receipt-reference\",\"receiptGets\":1,\"sameOperationId\":true,\"width\":320}",
+        "{\"durableReference\":true,\"name\":\"canonical-reference-GET-404-hides-loaded-record-and-retains-original-cross-tab-UUID\",\"posts\":1,\"receiptGets\":2,\"sameOperationId\":true,\"width\":320}",
+        "{\"name\":\"own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace\",\"width\":320}",
+        "{\"director\":false,\"name\":\"private-identity-submission-uncertain-receipt-and-explicit-approval-refresh\",\"posts\":1,\"receiptGets\":1,\"reload\":false,\"width\":390}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"application/json\",\"width\":390}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"text/html\",\"width\":390}",
+        "{\"name\":\"revoked-workspace-hides-loaded-tasks-and-only-own-private-read-remains\",\"ownDenied\":false,\"width\":390}",
+        "{\"name\":\"late-prior-project-denial-cannot-replace-authorized-project\",\"width\":390}",
+        "{\"name\":\"late-prior-company-response-cannot-restore-private-context\",\"width\":390}",
+        "{\"name\":\"token-held-prior-company-never-dispatches-after-context-change\",\"width\":390}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":390}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":390}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":390}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":390}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"PENDING_REVIEW\",\"width\":390}",
+        "{\"action\":\"UNLINK\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"REJECTED\",\"width\":390}",
+        "{\"name\":\"late-approved-channel-DTO-never-exposes-codes-grant-chat-or-workspace\",\"width\":390}",
+        "{\"name\":\"late-channel-read-cannot-cross-project\",\"width\":390}",
+        "{\"name\":\"late-channel-read-cannot-cross-account\",\"width\":390}",
+        "{\"name\":\"withdrawal-held-token-cancels-before-POST-on-account-change\",\"width\":390}",
+        "{\"name\":\"dispatched-withdrawal-account-change-keeps-durable-receipt-without-rePOST\",\"width\":390}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":390}",
+        "{\"code\":\"WORKSPACE_MEMBERSHIP_REQUIRED\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":390}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":404,\"width\":390}",
+        "{\"durableReference\":true,\"name\":\"canonical-project-404-after-withdrawal-dispatch-keeps-UUID-and-receipt-reference\",\"receiptGets\":1,\"sameOperationId\":true,\"width\":390}",
+        "{\"durableReference\":true,\"name\":\"canonical-reference-GET-404-hides-loaded-record-and-retains-original-cross-tab-UUID\",\"posts\":1,\"receiptGets\":2,\"sameOperationId\":true,\"width\":390}",
+        "{\"name\":\"own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace\",\"width\":390}",
+        "{\"director\":false,\"name\":\"private-identity-submission-uncertain-receipt-and-explicit-approval-refresh\",\"posts\":1,\"receiptGets\":1,\"reload\":false,\"width\":768}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"application/json\",\"width\":768}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"text/html\",\"width\":768}",
+        "{\"name\":\"revoked-workspace-hides-loaded-tasks-and-only-own-private-read-remains\",\"ownDenied\":false,\"width\":768}",
+        "{\"name\":\"late-prior-project-denial-cannot-replace-authorized-project\",\"width\":768}",
+        "{\"name\":\"late-prior-company-response-cannot-restore-private-context\",\"width\":768}",
+        "{\"name\":\"token-held-prior-company-never-dispatches-after-context-change\",\"width\":768}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":768}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":768}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":768}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":768}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"PENDING_REVIEW\",\"width\":768}",
+        "{\"action\":\"UNLINK\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"REJECTED\",\"width\":768}",
+        "{\"name\":\"late-approved-channel-DTO-never-exposes-codes-grant-chat-or-workspace\",\"width\":768}",
+        "{\"name\":\"late-channel-read-cannot-cross-project\",\"width\":768}",
+        "{\"name\":\"late-channel-read-cannot-cross-account\",\"width\":768}",
+        "{\"name\":\"withdrawal-held-token-cancels-before-POST-on-account-change\",\"width\":768}",
+        "{\"name\":\"dispatched-withdrawal-account-change-keeps-durable-receipt-without-rePOST\",\"width\":768}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":768}",
+        "{\"code\":\"WORKSPACE_MEMBERSHIP_REQUIRED\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":768}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":404,\"width\":768}",
+        "{\"durableReference\":true,\"name\":\"canonical-project-404-after-withdrawal-dispatch-keeps-UUID-and-receipt-reference\",\"receiptGets\":1,\"sameOperationId\":true,\"width\":768}",
+        "{\"durableReference\":true,\"name\":\"canonical-reference-GET-404-hides-loaded-record-and-retains-original-cross-tab-UUID\",\"posts\":1,\"receiptGets\":2,\"sameOperationId\":true,\"width\":768}",
+        "{\"name\":\"own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace\",\"width\":768}",
+        "{\"director\":false,\"name\":\"private-identity-submission-uncertain-receipt-and-explicit-approval-refresh\",\"posts\":1,\"receiptGets\":1,\"reload\":false,\"width\":1280}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"application/json\",\"width\":1280}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":403,\"type\":\"text/html\",\"width\":1280}",
+        "{\"name\":\"revoked-workspace-hides-loaded-tasks-and-only-own-private-read-remains\",\"ownDenied\":false,\"width\":1280}",
+        "{\"name\":\"late-prior-project-denial-cannot-replace-authorized-project\",\"width\":1280}",
+        "{\"name\":\"late-prior-company-response-cannot-restore-private-context\",\"width\":1280}",
+        "{\"name\":\"token-held-prior-company-never-dispatches-after-context-change\",\"width\":1280}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":1280}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"PENDING_REVIEW\",\"width\":1280}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":1280}",
+        "{\"action\":\"UNLINK\",\"name\":\"own-private-withdrawal-without-KYC-admission\",\"posts\":1,\"receiptGets\":0,\"reload\":false,\"status\":\"REJECTED\",\"width\":1280}",
+        "{\"action\":\"REVOKE_TEMPLATE_MESSAGES\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"PENDING_REVIEW\",\"width\":1280}",
+        "{\"action\":\"UNLINK\",\"durableReference\":true,\"name\":\"own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"sameOperationId\":true,\"status\":\"REJECTED\",\"width\":1280}",
+        "{\"name\":\"late-approved-channel-DTO-never-exposes-codes-grant-chat-or-workspace\",\"width\":1280}",
+        "{\"name\":\"late-channel-read-cannot-cross-project\",\"width\":1280}",
+        "{\"name\":\"late-channel-read-cannot-cross-account\",\"width\":1280}",
+        "{\"name\":\"withdrawal-held-token-cancels-before-POST-on-account-change\",\"width\":1280}",
+        "{\"name\":\"dispatched-withdrawal-account-change-keeps-durable-receipt-without-rePOST\",\"width\":1280}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":1280}",
+        "{\"code\":\"WORKSPACE_MEMBERSHIP_REQUIRED\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":403,\"width\":1280}",
+        "{\"code\":\"WORKSPACE_PROJECT_UNAVAILABLE\",\"name\":\"revoked-private-channel-assignment-or-membership-hides-current-records\",\"status\":404,\"width\":1280}",
+        "{\"durableReference\":true,\"name\":\"canonical-project-404-after-withdrawal-dispatch-keeps-UUID-and-receipt-reference\",\"receiptGets\":1,\"sameOperationId\":true,\"width\":1280}",
+        "{\"durableReference\":true,\"name\":\"canonical-reference-GET-404-hides-loaded-record-and-retains-original-cross-tab-UUID\",\"posts\":1,\"receiptGets\":2,\"sameOperationId\":true,\"width\":1280}",
+        "{\"name\":\"own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace\",\"width\":1280}",
+        "{\"director\":false,\"name\":\"private-identity-submission-uncertain-receipt-and-explicit-approval-refresh\",\"posts\":1,\"receiptGets\":1,\"reload\":true,\"width\":390}",
+        "{\"director\":true,\"name\":\"private-identity-submission-uncertain-receipt-and-explicit-approval-refresh\",\"posts\":1,\"receiptGets\":1,\"reload\":false,\"width\":390}",
+        "{\"name\":\"revoked-workspace-hides-loaded-tasks-and-only-own-private-read-remains\",\"ownDenied\":true,\"width\":390}",
+        "{\"name\":\"bootstrap-administrator-without-worker-keeps-server-authorized-operation\",\"width\":390}",
+        "{\"code\":\"PARTICIPANT_KYC_REVIEW_REQUIRED\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":401,\"type\":\"application/json\",\"width\":390}",
+        "{\"code\":\"PARTICIPANT_KYC_REVIEW_REQUIRED\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":409,\"type\":\"application/json\",\"width\":390}",
+        "{\"code\":\"PARTICIPANT_KYC_REVIEW_REQUIRED\",\"name\":\"noncanonical-denial-cannot-open-private-or-operative-ui\",\"status\":500,\"type\":\"application/json\",\"width\":390}"
+      ]
     }
   ],
   "preanalysisSourceDeltas": [
@@ -1243,24 +1542,35 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
       "family": "AI_ciSourceFiles",
       "previousCount": 200,
       "previousPathsSha256": "64012c5b7be1d291bff1f861c7d81cf8480e2492e4fdfd101cafff42485d47d1",
-      "currentCount": 218,
-      "currentPathsSha256": "e3d3917be52f759806fcabe60540af11cc941d8c2473b0aee8618fe42d00bee1",
+      "currentCount": 229,
+      "currentPathsSha256": "935ce4042c36639e55046301a2c72c93200cdc72f8a8d989ca7a8b403cffddee",
       "additions": [
         "scripts/lib/integrated-identity-current-ci-lineage.mjs",
         "scripts/lib/owned-fixture-cleanup.mjs",
         "scripts/verify-company-channel-kyc-postgres.mjs",
         "scripts/verify-company-kyc-outbound-compact-postgres.mjs",
+        "scripts/verify-company-onboarding-ui.mjs",
         "scripts/verify-focused-workspace-ci.mjs",
         "scripts/verify-focused-workspace-ui.mjs",
+        "scripts/verify-mobile-workspace-review-ui.mjs",
+        "scripts/verify-onboarding-guide-ui.mjs",
+        "scripts/verify-participant-project-navigation-ui.mjs",
+        "scripts/verify-task-progress-measurement-ui.mjs",
+        "scripts/verify-workspace-identity-only-ui.mjs",
+        "scripts/verify-workspace-plan-recovery-ui.mjs",
+        "scripts/verify-workspace-reload-ui.mjs",
+        "scripts/verify-workspace-ui.mjs",
         "src/app/(identity)/cuenta/participant-kyc-capture.js",
         "src/app/(identity)/cuenta/participant-kyc-capture.module.css",
         "src/lib/meta-kyc-current-image.mjs",
         "src/lib/participant-kyc-chat-copy.mjs",
         "src/lib/participant-kyc-notice-links.mjs",
         "tests/fixtures/integrated-identity-contract-27aa.json",
+        "tests/fixtures/integrated-identity-ui-producer-migration-86f2.json",
         "tests/production-focused-workspace-ci.test.mjs",
         "tests/production-focused-workspace-ui.test.mjs",
         "tests/production-integrated-identity-current-ci-lineage.test.mjs",
+        "tests/production-integrated-identity-ui-producer-migration.test.mjs",
         "tests/production-meta-customer-composition.test.mjs",
         "tests/production-plan-import-link-ui.test.mjs",
         "tests/production-workspace-tools-navigation.test.mjs"
@@ -1741,10 +2051,21 @@ export function restoreIntegratedIdentityPreviousContract(contract){
 export function integratedIdentityCurrentRevision(contract){return revision(contract);}
 export function integratedIdentityCurrentSourcePin(contract,ref){
  const value=revision(contract);if(!value)return ref.sha256;const row=[...value.reviewedSourceChanges,...value.validationDeltas].find(row=>row.path===ref.path);if(!row)return ref.sha256;
+ if(ref.path==='scripts/verify-workspace-identity-only-ui.mjs'&&ref.sha256===row.currentSha256)return integratedIdentityCurrentUiProducerPin(contract,ref);
  requireLineage(ref.sha256===row.previousSha256,'A previous exact checkpoint pin must remain unchanged: '+ref.path);return row.currentSha256;
+}
+
+// This one producer is already CURRENT in the composed extension proof. It may
+// cross older accessors without applying its historical delta a second time.
+// No other current SHA is accepted as a historical input by the generic pin.
+export function integratedIdentityCurrentUiProducerPin(contract,ref){
+ const value=revision(contract),row=uiProducerMigration.producers.find(item=>item.path===ref?.path);requireLineage(Boolean(value)&&ref?.path==='scripts/verify-workspace-identity-only-ui.mjs'&&Boolean(row),'Only the reviewed current identity UI producer is accepted');
+ const change=value.currentProofChanges.find(item=>item.id==='identity-only-ui'),proof=contract.extension?.proofs?.find(item=>item.id==='identity-only-ui');
+ requireLineage(change?.previousProducerSha256===row.previousSha256&&change?.currentProducerSha256===row.currentSha256&&ref.sha256===row.currentSha256&&proof?.producer===row.path&&proof?.producerSha256===row.currentSha256&&same(proof.checkNames,change.currentCheckNames),'Exact current identity UI proof binding required');return row.currentSha256;
 }
 export function verifyIntegratedIdentityCurrentSources(contract,readSource){
  const value=revision(contract);if(!value)return null;restoreIntegratedIdentityPreviousContract(contract);requireLineage(typeof readSource==='function','Current committed source reader required');
+ authenticateIntegratedIdentityUiProducerMigrationSource(readSource(INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH));
  for(const row of [...value.reviewedSourceChanges,...value.validationDeltas])requireLineage(lf(readSource,row.path)===row.currentSha256,'Stale integrated current source: '+row.path);
  for(const row of [...value.addedSources,...value.validationSources])requireLineage(lf(readSource,row.path)===row.sha256,'Stale integrated added or validation source: '+row.path);
  requireLineage(lf(readSource,INTEGRATED_IDENTITY_CHECKPOINT_PATH)===previousContractSha256,'The original checkpoint fixture bytes cannot change');
