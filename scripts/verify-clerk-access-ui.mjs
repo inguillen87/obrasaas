@@ -251,7 +251,7 @@ async function recoveryError(mode) {
   // A deliberately rejected fetch need not satisfy CDP's network-idle heuristic.
   // The user-visible phase and exact no-refresh/no-business counts are the gate.
   await page.goto(origin + '/cuenta?participar=' + invitation, {waitUntil:'domcontentloaded'});
-  await wait(page, mode === '401' ? 'Tu acceso no pudo renovarse' : mode === '503' ? 'El servicio de acceso no respondió' : mode === 'expired' ? 'El servicio de acceso no respondió' : 'No se pudo sincronizar');
+  await wait(page, mode === '401' ? 'Tu acceso no pudo renovarse' : mode === '503' ? 'El servicio de acceso no respondió' : mode === 'expired' ? 'El servicio de acceso no respondió' : 'Comprobamos tu sesión. Volvé a abrir la cuenta');
   assert.equal(record.sessionRequests.length, 1);assert.equal(record.refreshRequests.length, 0);assert.equal(record.businessReads.length, 0);
   assert.equal(await page.$eval('a[href^="/sign-in"]', e => e.getAttribute('href')), '/sign-in?participar=' + invitation);
   await page.screenshot({path:path.join(output, `recovery-${mode}.png`),fullPage:true});
