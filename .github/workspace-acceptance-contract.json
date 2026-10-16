@@ -5797,7 +5797,7 @@
       {
         "path": "src/app/(identity)/cuenta/participant-panel.js",
         "previousSha256": "4e10ff5f05942b9704f247e13972968cc2a441b6ba09bca277694e85a94cd56e",
-        "currentSha256": "88bad0ff56f58dd4f9810b56d6a74f548171bca7d305a9038afb0d2c21654575"
+        "currentSha256": "d16ee3ba394be011c5d338599d01653eec7d462705a2414821e02db3b44e38aa"
       },
       {
         "path": "src/app/(identity)/cuenta/participant-panel.module.css",
@@ -5807,7 +5807,7 @@
       {
         "path": "src/app/(identity)/cuenta/workspace-client.js",
         "previousSha256": "4f3ccde7f433c98e63f0ada92cd1346f0757bea06ea8bf93abf9ac0ff62b79f8",
-        "currentSha256": "81d72d8a4d39f9ef4a9eea8d989189ef47aa40c35f72cdfd45ccb943fba62f61"
+        "currentSha256": "4143cf960157d8bd5f642842ee1672a3555c0e415c3dc4579763e2e8eabf84fb"
       },
       {
         "path": "src/app/(identity)/cuenta/workspace-identity.js",
@@ -5822,7 +5822,7 @@
       {
         "path": "src/app/(identity)/cuenta/workspace-tools-navigation.js",
         "previousSha256": "2247f489d60ec0a05c8fb62fe2428c3d5ba2476d4a799bb0c861bdb56764a6e8",
-        "currentSha256": "c57ec89203942a518cb33e72a049ce5db314bde75e2bce9b2a036b5a085d0075"
+        "currentSha256": "6e3bc5b9d14973153e080a55ba55a51f1c36838641c8510af4f2f664e676ddc9"
       },
       {
         "path": "src/app/(identity)/cuenta/workspace-tools-navigation.module.css",
@@ -6020,7 +6020,7 @@
       },
       {
         "path": "src/app/(identity)/cuenta/workspace-screen.js",
-        "sha256": "b484a522d222fb38b7531c11361ee4bc3089a8808167573e877f63ab8c9146d0"
+        "sha256": "b5c217095badf8db73842b98d86b6ae498da9f01b793ccda3683dc46be040b4a"
       },
       {
         "path": "src/app/(identity)/cuenta/workspace-view-routing.mjs",
@@ -7454,7 +7454,7 @@
     "validationSources": [
       {
         "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
-        "sha256": "7227bc6479f5f0f5cfa35a43665dccf10a6499b5b34319aff84724a30569a1a3"
+        "sha256": "52c55bfdd401e3fa947db28870aee19599758b89fa9fc04335b4c3a0a5a13a4f"
       },
       {
         "path": "tests/production-integrated-identity-current-ci-lineage.test.mjs",

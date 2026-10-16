@@ -186,9 +186,18 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
  const tasksChanged=useCallback((task,context)=>{if(mounted.current&&task?.id)setView(old=>old&&context&&old.scope===context.scope&&old.project.id===context.projectId?{...old,tasks:updateLoadedTask(old.tasks,task)}:old);},[]);
  const navigateProgressSchedule=useCallback(value=>{
   const context=onboardingContext.current;if(!mounted.current||!context||context.generation!==generation.current||value?.scope!==context.scope||value.projectId!==context.projectId||typeof value.taskId!=='string'||!value.taskId.trim())return;
+  const taskId=value.taskId;
   revealWorkspaceDestination('schedule-title');
-  const schedule=document.querySelector('section[aria-labelledby="schedule-title"]'),row=schedule&&[...schedule.querySelectorAll('[data-task-id]')].find(element=>element.dataset.taskId===value.taskId),more=document.getElementById('schedule-load-more'),target=row||(more&&!more.disabled?more:document.getElementById('schedule-title'));
-  if(!target?.getClientRects().length)return;if(target.tagName!=='BUTTON')target.setAttribute('tabindex','-1');target.focus({preventScroll:true});target.scrollIntoView({block:'start',behavior:'auto'});
+  // Reveal commits the section first; its layout effect also focuses the heading.
+  // Apply the more specific receipt destination after that presentation effect.
+  window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>{
+   const current=onboardingContext.current;
+   if(!mounted.current||!current||current.generation!==generation.current||current.generation!==context.generation||current.scope!==context.scope||current.projectId!==context.projectId)return;
+   const schedule=document.querySelector('section[aria-labelledby="schedule-title"]');
+   if(!schedule?.getClientRects().length)return;
+   const row=[...schedule.querySelectorAll('[data-task-id]')].find(element=>element.dataset.taskId===taskId),more=document.getElementById('schedule-load-more'),target=row||(more&&!more.disabled?more:document.getElementById('schedule-title'));
+   if(!target?.getClientRects().length)return;if(target.tagName!=='BUTTON')target.setAttribute('tabindex','-1');target.focus({preventScroll:true});target.scrollIntoView({block:'start',behavior:'auto'});
+  }));
  },[]);
  const portfolioAccessRejected=useCallback(()=>{
   identityNavigation.current=null;identityNavigationEpoch.current++;

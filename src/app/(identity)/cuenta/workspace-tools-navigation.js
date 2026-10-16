@@ -1,6 +1,7 @@
 'use client';
 import {House,CalendarDays,UsersRound,HardHat,Package,ShoppingBag,BriefcaseBusiness,MessageCircle,Settings2,Clock3,CreditCard} from 'lucide-react';
 import {workspaceDestination,workspaceViewAllowed} from './workspace-view-routing.mjs';
+import {revealWorkspaceDestination} from './workspace-screen';
 import styles from './workspace-tools-navigation.module.css';
 const main=[['workspace-home-title',House],['schedule-title',CalendarDays],['participant-title',UsersRound],['field-title',HardHat],['inventory-title',Package],['purchase-title',ShoppingBag],['constructor-crm-title',BriefcaseBusiness],['customer-inbox-title',MessageCircle]];
 const settings=['project-preparation-title','project-creation-title','site-register-title','worker-channel-title','own-company-number-title','own-company-templates-title','company-channel-title','customer-whatsapp-title','customer-meta-title','template-send-title','operation-status-title','office-review-admin-title','workspace-recovery-title','demo-pilot-title'];
@@ -10,11 +11,12 @@ export function WorkspaceToolsNavigation({canManageIntegrations=false,canImportP
  const allowed=id=>{if(id==='plan-import-title'&&!canImportPlan||id==='plan-measurement-title'&&(!canImportPlan||!canManageIntegrations))return false;const destination=workspaceDestination(id);return destination&&workspaceViewAllowed(destination.section,capabilities);};
  const primary=main.filter(([id])=>allowed(id)),secondary=settings.filter(allowed);
  const outstanding=[...new Set([...(schedulePending?[scheduleEditing?'schedule-edit-title':'schedule-title']:[]),...Object.entries(pending).filter(([,value])=>value===true).map(([key])=>pendingTargets[key]).filter(id=>id&&allowed(id))])];
- const renderLink=(id,Icon)=>{const destination=workspaceDestination(id);return <a key={id} href={'#'+id} aria-current={activeSection===destination.section?'page':undefined}>{Icon&&<Icon size={18} aria-hidden="true"/>}<span>{destination.label}</span></a>;};
+ const navigate=(event,id)=>{if(event.defaultPrevented||event.button!==0||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;event.preventDefault();revealWorkspaceDestination(id);};
+ const renderLink=(id,Icon)=>{const destination=workspaceDestination(id);return <a key={id} href={'#'+id} onClick={event=>navigate(event,id)} aria-current={activeSection===destination.section?'page':undefined}>{Icon&&<Icon size={18} aria-hidden="true"/>}<span>{destination.label}</span></a>;};
  const options=[...primary.map(([id])=>id),...secondary,...(role==='ADMIN'?['company-subscription-title']:[])];
  return <nav className={styles.navigation} aria-label="Navegación de la obra">
   <p className={styles.eyebrow}>TU ESPACIO DE TRABAJO</p>
-  <label className={styles.mobilePicker}>Ir a la sección<select value={options.find(id=>workspaceDestination(id).section===activeSection)||'workspace-home-title'} onChange={event=>{window.location.hash=event.target.value;}}>{options.map(id=><option key={id} value={id}>{workspaceDestination(id).label}</option>)}</select></label>
+  <label className={styles.mobilePicker}>Ir a la sección<select value={options.find(id=>workspaceDestination(id).section===activeSection)||'workspace-home-title'} onChange={event=>revealWorkspaceDestination(event.target.value)}>{options.map(id=><option key={id} value={id}>{workspaceDestination(id).label}</option>)}</select></label>
   <div className={styles.desktopLinks}>{primary.map(([id,Icon])=>renderLink(id,Icon))}
    {secondary.length>0&&<details className={styles.settings}><summary><Settings2 size={18} aria-hidden="true"/>Configuración</summary><div className={styles.secondary}>{secondary.map(id=>renderLink(id))}</div></details>}
    {role==='ADMIN'&&<div className={styles.billing}>{renderLink('company-subscription-title',CreditCard)}</div>}
