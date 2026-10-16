@@ -13,7 +13,7 @@ const messages = {
   contextChanged: 'Cambió la cuenta o la organización. Volvé a verificar el acceso antes de continuar.',
   SESSION_RECOVERY_REQUIRED: 'Tu acceso no pudo renovarse. Volvé a ingresar para abrir tu cuenta.',
   SESSION_RECOVERY_UNAVAILABLE: 'El servicio de acceso no respondió. Podés volver a verificar; no se modificó ninguna operación.',
-  SESSION_RECOVERY_COOKIE_PENDING: 'No se pudo sincronizar el acceso en este navegador. Volvé a verificar o ingresá nuevamente.',
+  SESSION_RECOVERY_COOKIE_PENDING: 'Comprobamos tu sesión. Volvé a abrir la cuenta para verificar el acceso de este navegador.',
   SESSION_RECOVERY_SDK_TIMEOUT: 'El servicio de acceso está tardando en cargar. Podés recargar la página o volver a ingresar.',
 };
 
@@ -25,6 +25,7 @@ export function SessionRecovery({ signInPath = '/sign-in', initialCode = 'SESSIO
   const [phase, setPhase] = useState(initialCode === 'IDENTITY_PROVIDER_UNAVAILABLE' ? 'SESSION_RECOVERY_UNAVAILABLE' : 'loading');
   const mounted = useRef(false), generation = useRef(0), controller = useRef(null);
   const activeContext = useRef(context), automaticAttempted = useRef(false), redirected = useRef(false);
+  const reopenAttempt = useRef(null);
 
   useEffect(() => {
     const epoch = generation, pending = controller;
@@ -84,10 +85,27 @@ export function SessionRecovery({ signInPath = '/sign-in', initialCode = 'SESSIO
   }, [isLoaded, isSignedIn, initialCode, destination, recover, router]);
 
   const busy = (!isLoaded && phase !== 'SESSION_RECOVERY_SDK_TIMEOUT') || phase === 'checking';
+  const canReopen = isLoaded && isSignedIn && phase === 'SESSION_RECOVERY_COOKIE_PENDING';
+  useEffect(() => {
+    if (!canReopen) { reopenAttempt.current = null; return; }
+    // A retry can finish in the same phase without committing "checking".
+    const attempt = reopenAttempt.current;
+    if (attempt?.context !== context || attempt?.generation !== generation.current)
+      reopenAttempt.current = { context, generation: generation.current, used: false };
+  });
+  const reopenAccount = () => {
+    const attempt = reopenAttempt.current;
+    if (!canReopen || !mounted.current || activeContext.current !== context ||
+        !attempt || attempt.context !== context || attempt.generation !== generation.current || attempt.used) return;
+    attempt.used = true;
+    // Reload this exact URL; only the server can open the workspace.
+    window.location.reload();
+  };
   return <div>
     <h1>Verificá tu acceso</h1>
     <p className={styles.lead} role={busy || phase === 'loading' || phase === 'refreshed' ? 'status' : 'alert'} aria-live="polite">{messages[phase]}</p>
-    {isLoaded && isSignedIn && <button type="button" className={styles.retry} disabled={busy} onClick={() => void recover()}>{busy ? 'Verificando…' : 'Volver a verificar'}</button>}
+    {canReopen && <p><button type="button" className={styles.retry} onClick={reopenAccount}>Volver a abrir mi cuenta</button></p>}
+    {isLoaded && isSignedIn && <button type="button" className={canReopen ? styles.home : styles.retry} style={canReopen ? { background: 'none', border: 0, padding: 0, cursor: 'pointer' } : undefined} disabled={busy} onClick={() => void recover()}>{busy ? 'Verificando…' : 'Volver a verificar'}</button>}
     {!isLoaded && phase === 'SESSION_RECOVERY_SDK_TIMEOUT' && <button type="button" className={styles.retry} onClick={() => window.location.reload()}>Recargar página</button>}
     <p><Link href={destination} className={styles.home}>Volver a ingresar</Link></p>
     <p className={styles.note}>La renovación del acceso no reenvía cambios ni habilita operaciones pendientes.</p>
