@@ -7,9 +7,12 @@ import {PARTICIPANT_KYC_PREANALYSIS_CHECKS,participantPreanalysisSourceManifest}
 import {parseParticipantPreanalysisTap,validateParticipantKycPreanalysisNative,validateParticipantKycPreanalysisCi,PARTICIPANT_PREANALYSIS_CI_VERSION} from '../scripts/verify-participant-kyc-preanalysis-ci.mjs';
 import {restoreOoxmlAccountingPreviousContract} from '../scripts/lib/ooxml-accounting-current-ci-lineage.mjs';
 import {reconstructPublishedHContract} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';
+import {restoreIntegratedIdentityPreviousContract} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
-const root=new URL('../',import.meta.url),read=file=>readFileSync(new URL(file,root));
+// This pure CI envelope fixture represents the committed LF runner bytes. The
+// native shadow keeps every original RAW producer/runtime source observation.
+const root=new URL('../',import.meta.url),read=file=>{const bytes=readFileSync(new URL(file,root));return file==='scripts/verify-participant-kyc-preanalysis-ci.mjs'?Buffer.from(bytes.toString().replaceAll('\r\n','\n')):bytes;};
 const denied=run=>assert.throws(run,error=>['PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED','PARTICIPANT_PREANALYSIS_CI_REJECTED'].includes(error.code));
 const nativeSource=participantPreanalysisSourceManifest(),nativeSourceFiles=nativeSource.map(row=>row.path);
 // Pure adversarial validator inputs. These shadows do not execute PostgreSQL,
@@ -90,7 +93,7 @@ test('omitted delta source or new proof block cannot be concealed by an otherwis
 test('block63 binds all actual native source roots and the reviewed CI leaves without claiming PG execution',()=>{
  for(const kind of ['proof','block']){const changed=JSON.parse(read('.github/workspace-acceptance-contract.json')),target=kind==='proof'?changed.extension.proofs.find(row=>row.kind==='PG_PARTICIPANT_KYC_PREANALYSIS'):changed.blocks.find(row=>row.id===63);target.unreviewed=true;denied(()=>validateParticipantPreanalysisWorkspaceContract(changed));}
  const contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),result=validateParticipantPreanalysisWorkspaceContract(contract);
- assert.equal(result.nativeSourceCount,142);assert.equal(result.nativeCheckCount,19);assert.equal(result.nativeAcceptance,false);assert.equal(contract.blocks.length,57);assert.equal(contract.extension.proofs.length,19);
+ assert.equal(result.nativeSourceCount,142);assert.equal(result.nativeCheckCount,19);assert.equal(result.nativeAcceptance,false);const checkpoint=restoreIntegratedIdentityPreviousContract(contract);assert.equal(checkpoint.blocks.length,57);assert.equal(checkpoint.extension.proofs.length,19);assert.equal(contract.blocks.length,58);assert.equal(contract.extension.proofs.length,20);
 });
 
 function ciShadow(){

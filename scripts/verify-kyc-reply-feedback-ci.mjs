@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {participantPreanalysisConsumerSourceFiles} from './lib/participant-preanalysis-current-ci-lineage.mjs';
+import {participantPreanalysisConsumerSourceFiles,preloadParticipantPreanalysisConsumerSources} from './lib/participant-preanalysis-current-ci-lineage.mjs';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,mkdirSync,writeFileSync,existsSync} from 'node:fs';
 import path from 'node:path';
@@ -117,8 +117,9 @@ function main(){
  const validatorPath='scripts/verify-kyc-reply-feedback-ci.mjs',validatorBytes=readFileSync(fileURLToPath(import.meta.url)),pg=kycReplyFeedbackSourceClosure(readSource),ui=kycReplyFeedbackSourceClosure(readSource,{ui:true});
  for(const file of new Set([validatorPath,PLAN_MEASUREMENT_CONSUMER_CI_HELPER,...pg.files,...ui.files,uiHarness,cleanupHelper,...dependencies]))requireProof(readSource(file)!==null&&sha(readFileSync(path.join(root,file)))===sha(readSource(file)),'Current source must equal committed expected Git bytes: '+file);
  const pgPath='.vercel/private/company-kyc-rejection-feedback-postgres.json',uiPath='.vercel/private/kyc-reply-feedback-evidence/browser.json',pgBytes=readFileSync(path.join(root,pgPath)),uiBytes=readFileSync(path.join(root,uiPath));
+ preloadParticipantPreanalysisConsumerSources({readSource,readCheckout:file=>readFileSync(path.join(root,file))});
  const result=validateKycReplyFeedbackCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres:JSON.parse(pgBytes),ui:JSON.parse(uiBytes)});
- requireProof(git('rev-parse','HEAD')===head&&git('rev-parse','HEAD^{tree}')===sourceTree&&git('status','--porcelain','--untracked-files=no')==='','Source changed during proof validation');requireProof(sha(readFileSync(path.join(root,PLAN_MEASUREMENT_CONSUMER_CI_HELPER)))===sha(readSource(PLAN_MEASUREMENT_CONSUMER_CI_HELPER)),'Consumer lineage helper changed during validation');
+ preloadParticipantPreanalysisConsumerSources({readSource,readCheckout:file=>readFileSync(path.join(root,file))});requireProof(git('rev-parse','HEAD')===head&&git('rev-parse','HEAD^{tree}')===sourceTree&&git('status','--porcelain','--untracked-files=no')==='','Source changed during proof validation');requireProof(sha(readFileSync(path.join(root,PLAN_MEASUREMENT_CONSUMER_CI_HELPER)))===sha(readSource(PLAN_MEASUREMENT_CONSUMER_CI_HELPER)),'Consumer lineage helper changed during validation');
  const output=path.join(root,'.vercel/private/kyc-reply-feedback-ci.json'),xml=output.replace(/\.json$/,'.xml');requireProof(!existsSync(output)&&!existsSync(xml),'A prior aggregate CI proof must not be overwritten');mkdirSync(path.dirname(output),{recursive:true});
  const proof={...result,checkedAt:new Date().toISOString(),validatorSha256:sha(validatorBytes),inputProofs:[{path:pgPath,sha256:sha(pgBytes)},{path:uiPath,sha256:sha(uiBytes)}]};
  writeFileSync(xml,'<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="kyc-reply-feedback-proof-validation" tests="2" failures="0"><testcase name="exact-native-eight-group-proof"/><testcase name="exact-dom-twenty-two-case-proof"/></testsuite>\n',{flag:'wx'});writeFileSync(output,JSON.stringify(proof,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:proof.status,sourceRevision:head,output:path.relative(root,output).split(path.sep).join('/'),nativeChecks:8,uiChecks:22}));

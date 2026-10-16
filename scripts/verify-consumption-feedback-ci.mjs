@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {participantPreanalysisConsumerSourceFiles} from './lib/participant-preanalysis-current-ci-lineage.mjs';
+import {participantPreanalysisConsumerSourceFiles,preloadParticipantPreanalysisConsumerSources} from './lib/participant-preanalysis-current-ci-lineage.mjs';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
 import path from 'node:path';
@@ -131,8 +131,9 @@ function main(){
  consumptionFeedbackSourceClosure(readSource);consumptionFeedbackSourceClosure(readSource,{ui:true});for(const file of [uiHarness,cleanupHelper,PLAN_MEASUREMENT_CONSUMER_CI_HELPER])requireProof(readSource(file)!==null,'Missing committed producer: '+file);
  requireProof(sha(readFileSync(path.join(root,PLAN_MEASUREMENT_CONSUMER_CI_HELPER)))===sha(readSource(PLAN_MEASUREMENT_CONSUMER_CI_HELPER)),'Consumer lineage helper must equal committed Git bytes');
  const pgBytes=readFileSync(path.join(root,'.vercel/private/material-consumption-feedback-postgres.json')),uiBytes=readFileSync(path.join(root,'.vercel/private/consumption-feedback-evidence/browser.json'));
+ preloadParticipantPreanalysisConsumerSources({readSource,readCheckout:file=>readFileSync(path.join(root,file))});
  const result=validateConsumptionFeedbackCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres:JSON.parse(pgBytes),ui:JSON.parse(uiBytes)});
- requireProof(git('rev-parse','HEAD')===head&&git('rev-parse','HEAD^{tree}')===sourceTree&&git('status','--porcelain','--untracked-files=no')==='','Source changed during CI proof validation');requireProof(sha(readFileSync(path.join(root,PLAN_MEASUREMENT_CONSUMER_CI_HELPER)))===sha(readSource(PLAN_MEASUREMENT_CONSUMER_CI_HELPER)),'Consumer lineage helper changed during validation');
+ preloadParticipantPreanalysisConsumerSources({readSource,readCheckout:file=>readFileSync(path.join(root,file))});requireProof(git('rev-parse','HEAD')===head&&git('rev-parse','HEAD^{tree}')===sourceTree&&git('status','--porcelain','--untracked-files=no')==='','Source changed during CI proof validation');requireProof(sha(readFileSync(path.join(root,PLAN_MEASUREMENT_CONSUMER_CI_HELPER)))===sha(readSource(PLAN_MEASUREMENT_CONSUMER_CI_HELPER)),'Consumer lineage helper changed during validation');
  const output=path.join(root,'.vercel/private/consumption-feedback-ci.json');mkdirSync(path.dirname(output),{recursive:true});
  const proof={...result,checkedAt:new Date().toISOString(),validatorSha256:sha(validatorBytes),inputProofs:[{path:'.vercel/private/material-consumption-feedback-postgres.json',sha256:sha(pgBytes)},{path:'.vercel/private/consumption-feedback-evidence/browser.json',sha256:sha(uiBytes)}]};
  writeFileSync(output,JSON.stringify(proof,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:proof.status,sourceRevision:head,output:path.relative(root,output).split(path.sep).join('/'),nativeChecks:23,uiChecks:12}));

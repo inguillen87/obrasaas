@@ -5,8 +5,9 @@ import {lockPersonWorksiteJourney} from './person-worksite-journey.mjs';
 import {decodeWorkerChannelProof} from './worker-channel-identity.mjs';
 import {decodeSignedCustomerEvent} from './meta-customer-processing.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
-import {customerChannelActive,assertCustomerReplyWindow} from './meta-customer-outbound.mjs';
+import {customerChannelActive,assertCustomerReplyWindow,customerOutboundId} from './meta-customer-outbound.mjs';
 import {META_KYC_CONVERSATION_TTL_MS} from './meta-kyc-conversation.mjs';
+import {markCurrentImageDiscovery,assertCurrentImageSource,currentImageOutboundGuard} from './meta-kyc-current-image.mjs';
 
 const fail=(code='META_KYC_COMPANY_PROJECTION_REJECTED',status=409)=>{throw new WorkspaceError(code,status);};
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -145,7 +146,7 @@ export async function fenceCompanyKycAuthority(client,r,context,{environment=pro
 // A full resolver has already acquired these rows in canonical order. This
 // single statement rechecks their exact current projection, audit trails and
 // transaction before each external boundary, without repeating discovery.
-function lockedCompanyKycOutboundRead(r){
+function lockedCompanyKycOutboundRead(r,currentImage=null){
  const organizationId=r.project.organizationId,issuer=r.issuer,member=r.member;
  const principalJson=(u,m)=>`jsonb_build_object('membershipId',${m}.id,'actorId',${m}."userId",'organizationId',${m}."organizationId",'role',${m}."tenantRole"::text,'clerkRole',${m}."clerkRole",'revision',to_char(${m}."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US'),'clerkUserId',${u}."clerkUserId",'userRevision',to_char(${u}."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US'))`;
  const projectJson=p=>`jsonb_build_object('id',${p}.id,'name',${p}.name,'organizationId',${p}."organizationId",'metadata',${p}.metadata)`;
@@ -159,7 +160,8 @@ function lockedCompanyKycOutboundRead(r){
  CASE WHEN w.metadata->'participant'->>'status'='ACTIVE' THEN COALESCE((SELECT jsonb_agg(jsonb_build_object('id',pm.id,'revision',to_char(pm."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US')) ORDER BY pm.id) FROM public."ProjectMembership" pm WHERE pm."projectId"=tp.id AND pm."tenantMembershipId"=mm.id AND pm.status='ACTIVE'),'[]'::jsonb) ELSE NULL END AS "kycMembership",
  ${trailSql('ARRAY[$5]')} AS "kycIssuerTrail",${trailSql('$9')} AS "kycAccessTrail",
  COALESCE((SELECT jsonb_agg(jsonb_build_object('id',a.id,'actorId',a."actorId",'entityId',a."entityId",'metadata',a.metadata) ORDER BY a.id) FROM public."AuditLog" a WHERE a.id=$10 AND a."organizationId"=$3 AND a.action='participant.kyc_chat.projected' AND a."entityType"='Worker'),'[]'::jsonb) AS "kycProjection",
- COALESCE((SELECT jsonb_agg(to_jsonb(a) ORDER BY a.id) FROM (SELECT * FROM public."AuditLog" WHERE "organizationId"=$3 AND "entityType"='Worker' AND "entityId"=$4 AND action IN ('participant.kyc_chat.prepared','participant.kyc_chat.dispatched','participant.kyc_chat.account_bound','participant.operation.recorded') ORDER BY id LIMIT 1001) a),'[]'::jsonb) AS "kycReceipts"
+ COALESCE((SELECT jsonb_agg(to_jsonb(a) ORDER BY a.id) FROM (SELECT * FROM public."AuditLog" WHERE "organizationId"=$3 AND "entityType"='Worker' AND "entityId"=$4 AND action IN ('participant.kyc_chat.prepared','participant.kyc_chat.dispatched','participant.kyc_chat.account_bound','participant.operation.recorded'${currentImage?",'participant.kyc_chat.image_context','participant.kyc_chat.projected'":''}) ORDER BY id LIMIT 1001) a),'[]'::jsonb) AS "kycReceipts"
+ ${currentImage?`,COALESCE((SELECT jsonb_agg(jsonb_build_object('id',s.id,'projectId',s."projectId",'provider',s.provider,'eventType',s."eventType",'externalId',s."externalId",'payload',s.payload,'messageId',s.outcome->>'messageId','completedAt',s.outcome->>'completedAt','accepted',CASE WHEN s.provider='meta-customer-outbound-v1' THEN s.outcome->>'state' IN ('SENT','STATUS_OBSERVED') AND COALESCE(s.outcome->>'providerStatus','') NOT IN ('failed','deleted') ELSE true END) ORDER BY s.id) FROM public."WebhookEvent" s WHERE s.id=ANY($12::text[])),'[]'::jsonb) AS "kycCurrentImageSources"`:''}
  FROM public."WebhookEvent" e JOIN public."Organization" o ON o.id=$3 AND COALESCE(o.metadata->'internal','false'::jsonb)<>'true'::jsonb
  JOIN public."Project" ap ON ap.id=e."projectId" AND ap."organizationId"=o.id AND ap.status='ACTIVE'
  JOIN public."Project" tp ON tp.id=$11 AND tp."organizationId"=o.id AND tp.status='ACTIVE'
@@ -171,7 +173,7 @@ function lockedCompanyKycOutboundRead(r){
  JOIN public."PlatformUser" iu ON iu.id=im."userId"
  JOIN public."TenantMembership" mm ON mm.id=$7 AND mm."userId"=$8 AND mm."organizationId"=o.id AND mm.status='ACTIVE'
  JOIN public."PlatformUser" mu ON mu.id=mm."userId"
- WHERE e.id=$1 AND e."projectId"=ap.id AND e.provider='meta-customer-v1' AND e."eventType"='message' FOR UPDATE OF e,w FOR SHARE OF o,ap,tp,c,cc,assignment,im,iu,mm,mu`,values:[r.event.id,r.connection.id,organizationId,r.worker.id,issuer.membershipId,issuer.actorId,member.membershipId,member.actorId,[...new Set([issuer.membershipId,member.membershipId])],companyKycProjectionId(r.event.id),r.project.id]};
+ WHERE e.id=$1 AND e."projectId"=ap.id AND e.provider='meta-customer-v1' AND e."eventType"='message' FOR UPDATE OF e,w FOR SHARE OF o,ap,tp,c,cc,assignment,im,iu,mm,mu`,values:[r.event.id,r.connection.id,organizationId,r.worker.id,issuer.membershipId,issuer.actorId,member.membershipId,member.actorId,[...new Set([issuer.membershipId,member.membershipId])],companyKycProjectionId(r.event.id),r.project.id,...(currentImage?[currentImage.sourceIds]:[])]};
 }
 const lockedProjection=row=>Object.fromEntries(Object.keys(row).filter(key=>key!=='kycNow').sort().map(key=>[key,row[key]]));
 const outboundContextFingerprint=(r,context)=>digest(stable([context,r.kind,r.issuer,r.member,r.project,r.worker,r.challenge,r.connection,r.event,r.payload,r.companyKyc,r.recorded,r.state,r.prompt,r.reactiveStartExpiresAt??null]));
@@ -179,12 +181,13 @@ export const hasCompanyKycOutboundAuthority=(client,r)=>resolvedOutboundContexts
 export async function prepareLockedCompanyKycOutboundAuthority(client,r,context,{environment=process.env}={}){
  const original=resolvedOutboundContexts.get(r);
  if(!original||original.client!==client||original.contextDigest!==digest(context)||original.environment!==environment||r.kind!=='LIMITED_KYC_UPLOAD'||!r.recorded?.reply||digest(stable(original.issuer))!==digest(stable(r.issuer))||digest(stable(original.member))!==digest(stable(r.member))||original.workerDigest!==digest(stable(r.worker))||original.connectionDigest!==digest(stable(r.connection))||original.projectionDigest!==companyKycProjectionDigest(r.companyKyc))fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
- const read=lockedCompanyKycOutboundRead(r),rows=(await client.query(read.sql,read.values)).rows;
+ const currentImage=currentImageOutboundGuard(client,r),read=lockedCompanyKycOutboundRead(r,currentImage),rows=(await client.query(read.sql,read.values)).rows;
  if(rows.length!==1)fail('META_KYC_COMPANY_AUTHORITY_CHANGED');const row=rows[0];
  const connection={...row.kycConnection,company:row.kycOwner};
  if(!/^\d{1,20}$/.test(row.kycTransactionId||'')||row.kycTransactionId!==original.transactionId||digest(stable(row.kycOrganizationMetadata))!==original.organizationDigest||digest(stable(row.kycIssuer))!==digest(stable(r.issuer))||digest(stable(row.kycMember))!==digest(stable(r.member))||digest(stable(row.kycWorker))!==original.workerDigest||digest(stable(connection))!==original.connectionDigest||digest(stable(row.kycMembership))!==digest(stable(original.assigned))||digest(stable(row.kycIssuerTrail))!==digest(stable(original.issuerTrail))||digest(stable(row.kycAccessTrail))!==digest(stable(original.accessTrail))||[row.kycAnchorProject,row.kycTargetProject].some(p=>original.projects.get(p?.id)!==digest(stable(p)))||row.kycProjection?.length!==1||row.kycProjection[0].actorId!==(r.companyKyc.participantActorId||r.companyKyc.issuerActorId)||row.kycProjection[0].entityId!==r.worker.id||companyKycProjectionDigest(row.kycProjection[0].metadata)!==original.projectionDigest||!Array.isArray(row.kycReceipts)||row.kycReceipts.length>1000)fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
  const dispatched=row.kycReceipts.filter(a=>a.id==='meta_kyc_dispatch_'+digest(['meta-kyc-dispatch-v1',r.event.id])&&a.action==='participant.kyc_chat.dispatched'),prepared=row.kycReceipts.filter(a=>a.action==='participant.kyc_chat.prepared'&&a.metadata?.challengeId===r.challenge.id);
  if(dispatched.length!==1||dispatched[0].metadata?.challengeId!==r.challenge.id||dispatched[0].metadata.payloadDigest!==context.payloadDigest||dispatched[0].metadata.replyDigest!==digest(r.recorded.reply)||prepared.length!==1||prepared[0].metadata?.version!==1||prepared[0].metadata.projectId!==r.project.id||prepared[0].metadata.expiresAt!==r.challenge.expiresAt||!hash(prepared[0].metadata.requestDigest))fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
+ if(currentImage&&(!Array.isArray(row.kycCurrentImageSources)||row.kycCurrentImageSources.length!==currentImage.sourceIds.length||row.kycCurrentImageSources.some(s=>s.accepted!==true)||row.kycReceipts.filter(a=>a.id===currentImage.receiptId&&a.action==='participant.kyc_chat.image_context'&&a.metadata?.proofDigest===currentImage.proofDigest).length!==1))fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
  const captured=JSON.parse(decryptCustomerSecret(dispatched[0].metadata.encryptedResult,companyKycSecretContext(r.companyKyc,'kyc-chat-dispatch',dispatched[0].id),environment));if(digest(stable(captured))!==digest(stable(r.recorded)))fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
  checkedTime(r,context,row.kycNow,row,environment);
  const notAfter=Math.min(Date.parse(row.leaseExpiresAt),Date.parse(r.challenge.expiresAt),Date.parse(r.challenge.claimedAt)+META_KYC_CONVERSATION_TTL_MS,r.reactiveStartExpiresAt===undefined?Infinity:Date.parse(r.reactiveStartExpiresAt),r.worker.metadata.participant.status==='INVITED'?Date.parse(r.worker.metadata.participant.invitation.expiresAt):Infinity,Number(r.payload.value.timestamp)*1000+24*3600000,Date.parse(r.connection.metadata.ownCompanyRuntime.validUntil));
@@ -202,7 +205,7 @@ export async function fenceLockedCompanyKycOutboundAuthority(client,r,context,{e
  return rows[0].kycNow;
 }
 export function releaseLockedCompanyKycOutboundAuthority(r){lockedOutboundContexts.delete(r);resolvedOutboundContexts.delete(r);}
-const capturePurpose=Symbol('company-kyc-capture'),expiryFeedbackPurpose=Symbol('company-kyc-expiry-feedback'),contextFeedbackPurpose=Symbol('company-kyc-context-feedback');
+const capturePurpose=Symbol('company-kyc-capture'),expiryFeedbackPurpose=Symbol('company-kyc-expiry-feedback'),contextFeedbackPurpose=Symbol('company-kyc-context-feedback'),reminderPurpose=Symbol('company-kyc-step-reminder');
 export const resolveCompanyKycAuthority=(client,context,input)=>resolveCompanyKycContext(client,context,input,capturePurpose);
 // Internal composition: this context is never LIMITED_KYC_UPLOAD and cannot
 // write a capture projection. The final feedback resolver proves the deadline,
@@ -210,31 +213,66 @@ export const resolveCompanyKycAuthority=(client,context,input)=>resolveCompanyKy
 export const resolveCompanyKycExpiryContext=(client,context,input)=>resolveCompanyKycContext(client,context,input,expiryFeedbackPurpose);
 // Separate read/reply purpose: it never mints LIMITED_KYC_UPLOAD or a projection.
 export const resolveCompanyKycFeedbackContext=(client,context,input)=>resolveCompanyKycContext(client,context,input,contextFeedbackPurpose);
+// Feedback only: discovery never supplies a user quote or capture authority.
+export const resolveCompanyKycReminderContext=(client,context,input)=>resolveCompanyKycContext(client,context,input,reminderPurpose);
+function reminderLifetime(metadata,now){
+ const challenge=metadata?.participant?.kycChatChallenge,conversation=metadata?.participant?.kycChatConversation;
+ const instant=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
+ if(challenge?.version!==1||challenge.status!=='CLAIMED'||conversation?.version!==1||conversation.challengeId!==challenge.id||![challenge.createdAt,challenge.claimedAt,challenge.expiresAt,conversation.expiresAt].every(instant))fail('META_KYC_NOT_APPLICABLE');
+ const created=Date.parse(challenge.createdAt),claimed=Date.parse(challenge.claimedAt),expires=Date.parse(challenge.expiresAt),conversationExpires=Date.parse(conversation.expiresAt);
+ if(created>claimed||claimed>=expires||claimed>now||conversationExpires!==claimed+META_KYC_CONVERSATION_TTL_MS)fail('META_KYC_NOT_APPLICABLE');
+ return expires>now&&conversationExpires>now;
+}
+async function currentReminderCandidates(client,connection,sender){
+ const clock=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
+ if(!(clock instanceof Date)||!Number.isFinite(clock.getTime()))fail('META_KYC_NOT_APPLICABLE');
+ // One statement snapshot, scoped to this signed sender/company channel. Do
+ // not truncate before validating deadlines; expired attempts are not ambiguity.
+ const rows=(await client.query(`SELECT w.id AS "reminderWorkerId",w."projectId",w.metadata FROM public."Worker" w JOIN public."Project" p ON p.id=w."projectId" JOIN public."WhatsAppChannelProjectAssignment" a ON a."projectId"=p.id AND a."organizationId"=p."organizationId" WHERE a."connectionId"=$1 AND a."organizationId"=$2 AND a.status='ACTIVE' AND p.status='ACTIVE' AND w.active=true AND w.phone=$3 AND w.metadata->'participant'->'kycChatChallenge'->>'connectionId'=$1 AND w.metadata->'participant'->'kycChatChallenge'->>'status'='CLAIMED' ORDER BY w.id`,[connection.id,connection.organizationId,sender])).rows;
+ const current=[],seen=new Set();
+ for(const row of rows){
+  if(!workspaceId(row.reminderWorkerId)||seen.has(row.reminderWorkerId))fail('META_KYC_NOT_APPLICABLE');seen.add(row.reminderWorkerId);
+  if(reminderLifetime(row.metadata,clock.getTime()))current.push(row);
+  if(current.length===2)return current;
+ }
+ return current;
+}
 async function resolveCompanyKycContext(client,context,{initial,firstChannel,payload,codeDigest,environment},purpose){
  const proof=corporateKycSignedProof(initial,firstChannel,environment);
  if(!proof)return null;
  const selection=payload.value.interactive?.list_reply?.id||payload.value.interactive?.button_reply?.id;
- let pinned=null,prompt=null;
+ let pinned=null,prompt=null,reminderSourceEventId=null,currentImageSourceEventId=null;
  const existing=await projectionRow(client,initial.id,firstChannel.organizationId);
  if(existing.length)pinned=await readProjection(client,initial.id,firstChannel.organizationId);
  else if(!codeDigest){
   // A signed code attempt is not a FIELD or worksite selection request. The
   // existing fixed rejection adapter proves current channel authority again.
   if(payload.value?.type==='text'&&typeof payload.value.text?.body==='string'&&/^IDENTIDAD(?:\s|$)/i.test(payload.value.text.body.trim()))fail('META_KYC_CHALLENGE_REJECTED');
+  const reminder=purpose===reminderPurpose,currentImage=purpose===capturePurpose&&payload.value.type==='image'&&!Object.hasOwn(payload.value,'context'),currentContext=reminder||currentImage;
+  if(currentContext){
+   if(payload.value.type!=='image'||Object.hasOwn(payload.value,'context'))fail('META_KYC_NOT_APPLICABLE');
+   if(!await companyChannelSchemaReady(client))fail('COMPANY_CHANNEL_CATALOG_REQUIRED');
+   const current=await currentReminderCandidates(client,firstChannel,'+'+payload.value.from);
+   if(current.length!==1)fail(currentImage&&current.length?'META_KYC_CURRENT_IMAGE_REJECTED':'META_KYC_NOT_APPLICABLE');
+   const sourceEventId=current[0].metadata?.participant?.kycChatConversation?.lastEventId;
+   if(!/^customer_webhook_[a-f0-9]{64}$/.test(sourceEventId||''))fail('META_KYC_NOT_APPLICABLE');
+   if(reminder)reminderSourceEventId=sourceEventId;else currentImageSourceEventId=sourceEventId;
+  }
   const replyId=payload.value.context?.id;
-  if(typeof replyId!=='string'){
+  if(!currentContext&&typeof replyId!=='string'){
    if(selection?.startsWith('kyc:'))fail('META_KYC_COMPANY_CONTEXT_REQUIRED');
    fail('META_KYC_NOT_APPLICABLE');
   }
-  const rows=(await client.query('SELECT id,payload,outcome FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider=\'meta-customer-outbound-v1\' AND payload->>\'channelId\'=$2 AND outcome->>\'messageId\'=$3',[firstChannel.projectId,firstChannel.id,replyId])).rows;
-  if(rows.length!==1){if(selection?.startsWith('kyc:'))fail('META_KYC_COMPANY_CONTEXT_REQUIRED');fail('META_KYC_NOT_APPLICABLE');}
+  const rows=currentContext?(await client.query(`SELECT id,payload,outcome,"processedAt" FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1'`,[customerOutboundId(reminderSourceEventId||currentImageSourceEventId),firstChannel.projectId])).rows:(await client.query('SELECT id,payload,outcome FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider=\'meta-customer-outbound-v1\' AND payload->>\'channelId\'=$2 AND outcome->>\'messageId\'=$3',[firstChannel.projectId,firstChannel.id,replyId])).rows;
+  if(rows.length!==1){if(currentImage)fail('META_KYC_CURRENT_IMAGE_REJECTED');if(selection?.startsWith('kyc:'))fail('META_KYC_COMPANY_CONTEXT_REQUIRED');fail('META_KYC_NOT_APPLICABLE');}
   const row=rows[0];
   let request;try{request=JSON.parse(decryptCustomerSecret(row.payload.encryptedPayload,{organizationId:firstChannel.organizationId,projectId:firstChannel.projectId,purpose:'outbound',resourceId:row.id},environment));}catch{fail();}
   if(request.channelPurpose!=='KYC_CAPTURE')fail('META_KYC_NOT_APPLICABLE');
+  if(currentContext&&(request.eventId!==(reminderSourceEventId||currentImageSourceEventId)||row.id!==customerOutboundId(request.eventId)))fail();
   if(!['SENT','STATUS_OBSERVED'].includes(row.outcome?.state)||['failed','deleted'].includes(row.outcome?.providerStatus)||request.organizationId!==firstChannel.organizationId||request.channelId!==firstChannel.id||digest(request)!==row.payload.requestDigest)fail('META_KYC_COMPANY_CONTEXT_REQUIRED');
   pinned=await readProjection(client,request.eventId,firstChannel.organizationId);
   if(request.companyKycDigest!==companyKycProjectionDigest(pinned)||request.targetProjectId!==pinned.targetProjectId||request.challengeId!==pinned.challengeId||request.payloadDigest!==pinned.payloadDigest)fail();
-  prompt={sourceEventId:request.eventId,message:request.message};
+  prompt={sourceEventId:request.eventId,message:request.message,...(currentContext&&row.processedAt instanceof Date&&Number.isFinite(row.processedAt.getTime())?{acceptedAt:row.outcome?.completedAt}:{} )};
  }
  if(!await companyChannelSchemaReady(client))fail('COMPANY_CHANNEL_CATALOG_REQUIRED');
  const candidates=(await client.query('SELECT w.id,w."projectId",w.phone,w.active,w.metadata FROM public."Worker" w JOIN public."Project" p ON p.id=w."projectId" JOIN public."WhatsAppChannelProjectAssignment" a ON a."projectId"=p.id AND a."organizationId"=p."organizationId" WHERE a."connectionId"=$1 AND a."organizationId"=$2 AND a.status=\'ACTIVE\' AND p.status=\'ACTIVE\' AND w.active=true AND w.phone=$3 AND w.metadata->\'participant\'->\'kycChatChallenge\'->>\'connectionId\'=$1 AND '+(pinned?'w.id=$4 AND w."projectId"=$5':'w.metadata->\'participant\'->\'kycChatChallenge\'->>\'codeDigest\'=$4')+' LIMIT 2',pinned?[firstChannel.id,firstChannel.organizationId,'+'+payload.value.from,pinned.workerId,pinned.targetProjectId]:[firstChannel.id,firstChannel.organizationId,'+'+payload.value.from,codeDigest])).rows;
@@ -282,7 +320,7 @@ async function resolveCompanyKycContext(client,context,{initial,firstChannel,pay
  if(digest(finalPayload)!==digest(payload)||digest(corporateKycSignedProof(event,connection,environment).companyRouting)!==digest(proof.companyRouting))fail();
  if(challenge.status==='PENDING'){if(!codeDigest||codeDigest!==challenge.codeDigest)fail('META_KYC_CHALLENGE_REJECTED');}
  else if(!['CLAIMED','COMPLETED'].includes(challenge.status)&&!(challenge.status==='CANCELLED'&&challenge.cancelledEventId===event.id)||codeDigest&&challenge.claimedEventId!==event.id)fail('META_KYC_CHALLENGE_REJECTED');
- const feedback=purpose===expiryFeedbackPurpose||purpose===contextFeedbackPurpose;
+ const feedback=purpose===expiryFeedbackPurpose||purpose===contextFeedbackPurpose||purpose===reminderPurpose;
  const r={kind:feedback?'KYC_EXPIRY_CONTEXT':'LIMITED_KYC_UPLOAD',member,issuer,project:projects.get(candidate.projectId),worker,challenge,connection,event,payload:finalPayload,now,prompt,source:{kind:'META_KYC_CHAT',eventId:event.id,payloadDigest:context.payloadDigest,challengeId:challenge.id,connectionId:connection.id,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,senderE164:worker.phone}};
  if(feedback){
   if(existing.length||challenge.status!=='CLAIMED'||!prompt||!pinned)fail('META_KYC_EXPIRY_FEEDBACK_DENIED');
@@ -290,6 +328,7 @@ async function resolveCompanyKycContext(client,context,{initial,firstChannel,pay
   checkedLease(event,context,now);
   if(part.status==='INVITED'&&(!Number.isFinite(Date.parse(part.invitation.expiresAt))||Date.parse(part.invitation.expiresAt)<=now.getTime()))fail('META_KYC_CHALLENGE_REVOKED');
   assertCustomerReplyWindow(finalPayload,now.getTime());
+  if(purpose===reminderPurpose&&worker.metadata.participant.kycChatConversation?.lastEventId!==reminderSourceEventId)fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
  }else checkedTime(r,context,now,r.event,environment);
  const projection=companyKycProjectionContract({version:1,kind:COMPANY_KYC_PROJECTION_KIND,sourceEventId:event.id,payloadDigest:context.payloadDigest,organizationId:firstChannel.organizationId,connectionId:connection.id,anchorProjectId:connection.projectId,targetProjectId:r.project.id,workerId:worker.id,challengeId:challenge.id,ownerRevision:connection.company.revision,assignmentRevision:connection.company.assignmentRevision,grantDigest:d0.grantDigest,issuerActorId:issuer.actorId,issuerMembershipId:issuer.membershipId,authorityDigest,participantActorId:part.status==='ACTIVE'?member.actorId:null,participantMembershipId:part.status==='ACTIVE'?member.membershipId:null,participantClerkUserId:part.status==='ACTIVE'?member.clerkUserId:null});
  if(pinned){
@@ -300,6 +339,8 @@ async function resolveCompanyKycContext(client,context,{initial,firstChannel,pay
  if(conflict.length)fail();
  if(!feedback&&existing.length===0)await client.query('INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,\'participant.kyc_chat.projected\',\'Worker\',$4,$5::jsonb)',[companyKycProjectionId(event.id),firstChannel.organizationId,member.actorId,worker.id,JSON.stringify(projection)]);
  r.companyKyc=projection;r.source.companyKyc=projection;
+ if(currentImageSourceEventId)markCurrentImageDiscovery(r,currentImageSourceEventId);
+ if(purpose===reminderPurpose)r.feedbackReminderSourceEventId=reminderSourceEventId;
  if(!feedback&&connection.metadata?.ownCompanyRuntime){
   if(!/^\d{1,20}$/.test(authorityClock?.kycTransactionId||''))fail('META_KYC_COMPANY_AUTHORITY_CHANGED');
   resolvedOutboundContexts.set(r,{client,environment,transactionId:authorityClock.kycTransactionId,contextDigest:digest(context),issuer:structuredClone(issuer),member:structuredClone(member),workerDigest:digest(stable(worker)),connectionDigest:digest(stable(connection)),projectionDigest:companyKycProjectionDigest(projection),organizationDigest:digest(stable(organizations[0].metadata)),projects:new Map([...projects].map(([id,p])=>[id,digest(stable(p))])),assigned:structuredClone(assigned),issuerTrail:[...issuerTrail],accessTrail:[...accessTrail]});
@@ -424,5 +465,6 @@ export async function assertCompanyKycImageSources(client,r,environment){
   const payload=decodeSignedCustomerEvent(rows[0],r.connection,environment);
   const compare={...r.companyKyc,sourceEventId:p.sourceEventId,payloadDigest:p.payloadDigest};
   if(companyKycProjectionDigest(p)!==companyKycProjectionDigest(compare)||rows[0].payload.payloadDigest!==p.payloadDigest||payload.value.type!=='image'||payload.value.image?.id!==reference.mediaId||payload.value.image?.mime_type!==reference.contentType||'+'+payload.value.from!==r.worker.phone)fail();
+  await assertCurrentImageSource(client,r,rows[0],p,reference,environment);
  }
 }

@@ -1,9 +1,18 @@
 import {createHash} from 'node:crypto';
+import {restoreIntegratedIdentityPreviousContract as integratedRestore,integratedIdentityCurrentSourcePin as integratedPin,verifyIntegratedIdentityCurrentSources as integratedVerify,restoreIntegratedIdentitySourceSet as integratedSourceSet,integratedIdentityProofSourceAdditions as integratedAdditions} from './integrated-identity-current-ci-lineage.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const requireLineage=(ok,message)=>{if(!ok)throw Object.assign(new Error(message),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});};
+// This existing API retains its original denial code. The new outer layer has
+// its own distinct error identity when invoked directly by its own validator.
+function currentCall(fn,args){try{return fn(...args);}catch(error){if(error.code==='INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}}
+const restoreIntegratedIdentityPreviousContract=(...args)=>currentCall(integratedRestore,args);
+const integratedIdentityCurrentSourcePin=(...args)=>currentCall(integratedPin,args);
+const verifyIntegratedIdentityCurrentSources=(...args)=>currentCall(integratedVerify,args);
+const restoreIntegratedIdentitySourceSet=(...args)=>currentCall(integratedSourceSet,args);
+const integratedIdentityProofSourceAdditions=(...args)=>currentCall(integratedAdditions,args);
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 export const PARTICIPANT_PREANALYSIS_CONTRACT_PATH='.github/workspace-acceptance-contract.json';
 export const PARTICIPANT_PREANALYSIS_EVIDENCE='.vercel/private/participant-kyc-preanalysis-evidence/';
@@ -763,6 +772,7 @@ export const PARTICIPANT_PREANALYSIS_CURRENT_REVISION=Object.freeze({
 });
 
 function revision(contract){
+ contract=restoreIntegratedIdentityPreviousContract(contract);
  requireLineage(plain(contract),'Workspace contract required');
  if(!Object.hasOwn(contract,'participantPreanalysisCurrentRevision'))return null;
  const value=contract.participantPreanalysisCurrentRevision;
@@ -775,9 +785,10 @@ function revision(contract){
  return value;
 }
 
-export function participantPreanalysisCurrentRevision(contract){return revision(contract);}
+export function participantPreanalysisCurrentRevision(contract){const value=revision(contract);return value?contract.participantPreanalysisCurrentRevision:null;}
 
 export function validateParticipantPreanalysisWorkspaceContract(contract){
+ contract=restoreIntegratedIdentityPreviousContract(contract);
  const value=revision(contract);if(!value)return null;
  restoreParticipantPreanalysisPreviousContract(contract);
  const block=contract.blocks.find(row=>row.id===63),spec=contract.extension.proofs.find(row=>row.id===PARTICIPANT_PREANALYSIS_PROOF_ID);
@@ -795,6 +806,7 @@ export function validateParticipantPreanalysisWorkspaceContract(contract){
 // Restoration is metadata-only and authenticates the entire published c2ba
 // contract before the pre-existing OOXML -> Q -> P -> L/K/I/G/H chain runs.
 export function restoreParticipantPreanalysisPreviousContract(contract){
+ contract=restoreIntegratedIdentityPreviousContract(contract);
  const value=revision(contract);if(!value)return contract;
  const previous=structuredClone(contract);delete previous.participantPreanalysisCurrentRevision;
  const proof=previous.extension?.proofs?.filter(row=>row.id===PARTICIPANT_PREANALYSIS_PROOF_ID);
@@ -819,25 +831,26 @@ export function restoreParticipantPreanalysisPreviousContract(contract){
 }
 
 export function participantPreanalysisCurrentSourcePin(contract,ref){
- const value=revision(contract);if(!value)return ref.sha256;
+ const value=revision(contract);if(!value)return integratedIdentityCurrentSourcePin(contract,ref);
  const change=[...value.reviewedSourceChanges,...value.validationDeltas].find(row=>row.path===ref.path);
- if(!change)return ref.sha256;
+ if(!change)return integratedIdentityCurrentSourcePin(contract,ref);
  requireLineage(ref.sha256===change.originalSha256,'An original reviewed source pin must remain unchanged');
- return change.currentSha256;
+ return integratedIdentityCurrentSourcePin(contract,{...ref,sha256:change.currentSha256});
 }
 
 export function participantPreanalysisPriorValidationPin(contract,ref){
- const value=revision(contract);if(!value)return ref.sha256;
+ const value=revision(contract);if(!value)return integratedIdentityCurrentSourcePin(contract,ref);
  const change=[...value.reviewedSourceChanges,...value.validationDeltas].find(row=>row.path===ref.path);
- if(!change)return ref.sha256;
+ if(!change)return integratedIdentityCurrentSourcePin(contract,ref);
  requireLineage(ref.sha256===change.previousSha256,'The previous complete reviewed validator pin must remain unchanged');
- return change.currentSha256;
+ return integratedIdentityCurrentSourcePin(contract,{...ref,sha256:change.currentSha256});
 }
 
 // The actual proof/source manifest remains untouched. This function only
 // authenticates its current path set and reconstructs the historical path set
 // used by an earlier independent contract assertion.
 export function restoreParticipantPreanalysisSourceSet(family,files,contract){
+ files=restoreIntegratedIdentitySourceSet(family,files,contract);
  const value=revision(contract);if(!value)return files;
  const rows=[...value.proofSourceDeltas,...value.consumerSourceDeltas].filter(row=>row.family===family);
  requireLineage(rows.length===1,'Exactly one reviewed current source family is required: '+family);
@@ -851,12 +864,13 @@ export function restoreParticipantPreanalysisSourceSet(family,files,contract){
 }
 
 export function verifyParticipantPreanalysisCurrentSources(contract,readSource){
+ verifyIntegratedIdentityCurrentSources(contract,readSource);
  const value=revision(contract);if(!value)return null;
  restoreParticipantPreanalysisPreviousContract(contract);
  requireLineage(typeof readSource==='function','Current preanalysis source reader required');
  for(const row of [...value.reviewedSourceChanges.map(row=>({path:row.path,sha256:row.currentSha256})),...value.validationDeltas.map(row=>({path:row.path,sha256:row.currentSha256})),...value.validationSources]){
   const bytes=readSource(row.path);requireLineage(Buffer.isBuffer(bytes),'Missing current preanalysis source: '+row.path);
-  const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===row.sha256,'Stale current preanalysis source: '+row.path);
+  const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===integratedIdentityCurrentSourcePin(contract,row),'Stale current preanalysis source: '+row.path);
  }
  for(const row of [{file:'scripts/verify-participant-kyc-preanalysis-postgres.mjs',sourceLfSha256:value.nativeProducerSha256},...value.unitSuites]){
   requireLineage(hash(row.sourceLfSha256),'Frozen native and executed unit producer pins required');
@@ -878,10 +892,36 @@ export function participantPreanalysisConsumerSourceFiles(family,files,readSourc
  return restoreParticipantPreanalysisSourceSet(family,files,contract);
 }
 
+// CLI consumers close their lazy Git map before entering the pure validator.
+// Load every authenticated outer and checkpoint leaf first; a native import
+// graph alone does not contain the contract or its current validation leaves.
+export function participantPreanalysisConsumerValidationFiles(contract){
+ const files=new Set([PARTICIPANT_PREANALYSIS_CONTRACT_PATH]);
+ const prior=restoreIntegratedIdentityPreviousContract(contract);
+ const value=revision(prior);
+ if(value){
+  for(const row of [...value.reviewedSourceChanges,...value.validationDeltas,...value.validationSources])files.add(row.path);
+  files.add('scripts/verify-participant-kyc-preanalysis-postgres.mjs');
+  for(const row of value.unitSuites)files.add(row.file);
+ }
+ const integrated=contract.integratedIdentityCurrentRevision;
+ if(integrated)for(const row of [...integrated.reviewedSourceChanges,...integrated.validationDeltas,...integrated.addedSources,...integrated.validationSources])files.add(row.path);
+ return [...files].sort();
+}
+export function preloadParticipantPreanalysisConsumerSources({readSource,readCheckout}){
+ requireLineage(typeof readSource==='function'&&typeof readCheckout==='function','Committed and actual checkout readers required');
+ const bytes=readSource(PARTICIPANT_PREANALYSIS_CONTRACT_PATH);requireLineage(Buffer.isBuffer(bytes),'Current consumer contract must be preloaded');
+ const contract=JSON.parse(bytes),files=participantPreanalysisConsumerValidationFiles(contract);
+ for(const file of files){const committed=readSource(file),actual=readCheckout(file);requireLineage(Buffer.isBuffer(committed)&&Buffer.isBuffer(actual)&&actual.equals(committed),'Consumer current source must equal exact committed RAW bytes: '+file);}
+ verifyParticipantPreanalysisCurrentSources(contract,readSource);
+ return files;
+}
+
 export function participantPreanalysisProofSourceAdditions(spec){
+ const integrated=integratedIdentityProofSourceAdditions(spec);if(integrated.length)spec={...spec,sourceFiles:spec.sourceFiles.filter(file=>!integrated.includes(file))};
  const delta=PARTICIPANT_PREANALYSIS_CURRENT_REVISION.proofSourceDeltas.find(row=>row.id===spec?.id);
- if(!delta)return [];
+ if(!delta)return integrated;
  requireLineage(Array.isArray(spec.sourceFiles),'Proof source paths required');
- if(spec.sourceFiles.length===delta.previousCount&&sha(JSON.stringify(spec.sourceFiles))===delta.previousPathsSha256)return [];
- return [...delta.additions];
+ if(spec.sourceFiles.length===delta.previousCount&&sha(JSON.stringify(spec.sourceFiles))===delta.previousPathsSha256)return integrated;
+ return [...delta.additions,...integrated];
 }

@@ -50,6 +50,8 @@ export function participantPreanalysisCiSourceClosure(readSource){
  if(Buffer.isBuffer(contractBytes)){
   const contract=JSON.parse(contractBytes);
   for(const ref of contract.participantPreanalysisCurrentRevision?.validationDeltas||[]){bytes(readSource,ref.path);files.add(ref.path);}
+  for(const ref of contract.integratedIdentityCurrentRevision?.validationSources||[])visit(ref.path);
+  for(const ref of contract.integratedIdentityCurrentRevision?.validationDeltas||[]){bytes(readSource,ref.path);files.add(ref.path);}
  }
  files.add('.github/scripts/verify-workspace-ci-parallelization.mjs');
  for(const file of files)bytes(readSource,file);

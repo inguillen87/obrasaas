@@ -1,3 +1,4 @@
+import {restoreIntegratedIdentitySourceSet} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import {participantPreanalysisConsumerSourceFiles} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {KYC_NATIVE_PRE_DOCUMENT_SOURCES} from './fixtures/feedback-ci-historical-source-sets.mjs';
 import assert from 'node:assert/strict';
@@ -18,6 +19,7 @@ const readSource=file=>{const filename=path.join(root,file);if(!existsSync(filen
 const native=kycReplyFeedbackSourceClosure(readSource),browser=kycReplyFeedbackSourceClosure(readSource,{ui:true});
 for(const file of ['scripts/verify-kyc-reply-feedback-ui.mjs','scripts/lib/owned-fixture-cleanup.mjs',PLAN_MEASUREMENT_CONSUMER_CI_HELPER])readSource(file);
 const preanalysisPriorNative=participantPreanalysisConsumerSourceFiles('KYC_REPLY_FEEDBACK',native.files,readSource);
+const integratedPriorNative=restoreIntegratedIdentitySourceSet('KYC_REPLY_FEEDBACK',native.files,JSON.parse(readSource('.github/workspace-acceptance-contract.json')));
 const historicalNative=preanalysisPriorNative.filter(file=>!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file));
 test('source import CURRENT111 retains previous109 and rejects old receipts, missing quantities and a resealed producer',()=>{
  assert.equal(historicalNative.length,109);assert.equal(sha(JSON.stringify(historicalNative)),'7840351acc884606627ae6b2edefcbab5abe4bd6a1befc7c3c03adff12814714');
@@ -35,7 +37,7 @@ function fixture(){
 function rejected(mutate){const input=fixture();mutate(input);assert.throws(()=>validateKycReplyFeedbackCi(input),{code:'KYC_REPLY_FEEDBACK_CI_REJECTED'});}
 
 test('additive CI validates the native eight groups and readonly DOM twenty-two cases without executing producers',()=>{
- assert.equal(preanalysisPriorNative.length,111);assert.equal(native.files.length,113);assert.equal(browser.files.length,3);const input=fixture(),before=JSON.stringify(input),proof=validateKycReplyFeedbackCi(input);assert.equal(JSON.stringify(input),before);assert.equal(proof.version,KYC_REPLY_FEEDBACK_CI_VERSION);assert.equal(proof.status,'PASS');assert.equal(proof.postgres.totalCheckCount,8);assert.equal(proof.postgres.sourceLineage.publishedCurrentSourceCount,111);assert.equal(proof.postgres.sourceCount,native.files.length);assert.equal(proof.postgres.sourceLineage.previousSourceCount,109);assert.equal(proof.ui.totalCheckCount,22);assert.equal(proof.providerCalls,0);assert.equal(proof.productionLoginVerified,false);assert.equal(proof.permissionsGranted,false);
+ assert.equal(preanalysisPriorNative.length,111);assert.equal(integratedPriorNative.length,113);assert.equal(native.files.length,116);assert.equal(browser.files.length,3);const input=fixture(),before=JSON.stringify(input),proof=validateKycReplyFeedbackCi(input);assert.equal(JSON.stringify(input),before);assert.equal(proof.version,KYC_REPLY_FEEDBACK_CI_VERSION);assert.equal(proof.status,'PASS');assert.equal(proof.postgres.totalCheckCount,8);assert.equal(proof.postgres.sourceLineage.publishedCurrentSourceCount,111);assert.equal(proof.postgres.sourceCount,native.files.length);assert.equal(proof.postgres.sourceLineage.previousSourceCount,109);assert.equal(proof.ui.totalCheckCount,22);assert.equal(proof.providerCalls,0);assert.equal(proof.productionLoginVerified,false);assert.equal(proof.permissionsGranted,false);
  // Challenge the new graph with the independently frozen pre-document path set.
  assert.equal(KYC_NATIVE_PRE_DOCUMENT_SOURCES.length,106);
  assert.deepEqual(historicalNative.filter(file=>!['src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs','src/lib/field-report-feedback.mjs'].includes(file)),KYC_NATIVE_PRE_DOCUMENT_SOURCES);

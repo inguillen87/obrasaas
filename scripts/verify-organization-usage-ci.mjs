@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {participantPreanalysisConsumerSourceFiles} from './lib/participant-preanalysis-current-ci-lineage.mjs';
+import {participantPreanalysisConsumerSourceFiles,preloadParticipantPreanalysisConsumerSources} from './lib/participant-preanalysis-current-ci-lineage.mjs';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
 import path from 'node:path';
@@ -98,6 +98,7 @@ function main(){
  organizationUsageCiSourceClosure(readSource);organizationUsageCiSourceClosure(readSource,{ui:true});organizationUsageCiSourceClosure(readSource,{fixture:true});[uiHarness,cleanupHelper,PLAN_MEASUREMENT_CONSUMER_CI_HELPER,...dependencies].forEach(readSource);
  requireProof(sha(readFileSync(path.join(root,PLAN_MEASUREMENT_CONSUMER_CI_HELPER)))===sha(readSource(PLAN_MEASUREMENT_CONSUMER_CI_HELPER)),'Consumer lineage helper must equal committed Git bytes');
  const postgres=JSON.parse(readFileSync(path.join(root,'.vercel/private/organization-usage-postgres.json'),'utf8')),ui=JSON.parse(readFileSync(path.join(root,'.vercel/private/organization-usage-evidence/browser.json'),'utf8'));
- const result=validateOrganizationUsageCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres,ui}),output=path.join(root,'.vercel/private/organization-usage-ci.json');requireProof(git('rev-parse','HEAD')===head&&git('rev-parse','HEAD^{tree}')===sourceTree&&git('status','--porcelain','--untracked-files=no')==='','Source changed during CI proof validation');requireProof(sha(readFileSync(path.join(root,PLAN_MEASUREMENT_CONSUMER_CI_HELPER)))===sha(readSource(PLAN_MEASUREMENT_CONSUMER_CI_HELPER)),'Consumer lineage helper changed during validation');mkdirSync(path.dirname(output),{recursive:true});writeFileSync(output,JSON.stringify(result,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:result.status,nativeGroups:16,uiGroups:14,providerRequests:0}));
+ preloadParticipantPreanalysisConsumerSources({readSource,readCheckout:file=>readFileSync(path.join(root,file))});
+ const result=validateOrganizationUsageCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres,ui}),output=path.join(root,'.vercel/private/organization-usage-ci.json');preloadParticipantPreanalysisConsumerSources({readSource,readCheckout:file=>readFileSync(path.join(root,file))});requireProof(git('rev-parse','HEAD')===head&&git('rev-parse','HEAD^{tree}')===sourceTree&&git('status','--porcelain','--untracked-files=no')==='','Source changed during CI proof validation');requireProof(sha(readFileSync(path.join(root,PLAN_MEASUREMENT_CONSUMER_CI_HELPER)))===sha(readSource(PLAN_MEASUREMENT_CONSUMER_CI_HELPER)),'Consumer lineage helper changed during validation');mkdirSync(path.dirname(output),{recursive:true});writeFileSync(output,JSON.stringify(result,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:result.status,nativeGroups:16,uiGroups:14,providerRequests:0}));
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))main();

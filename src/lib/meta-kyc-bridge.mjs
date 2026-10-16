@@ -9,6 +9,9 @@ import {decodePrivateImage,MAX_PRIVATE_IMAGE_BYTES} from './private-image-upload
 import {companyKycProjectionDigest,fenceCompanyKycAuthority} from './company-channel-kyc.mjs';
 import {createEmployeeIntakeBridge} from './meta-employee-intake.mjs';
 import {participantOcrNotice,participantBiometricNotice} from './participant-analysis-consent.mjs';
+import {participantIdentityUrl} from './participant-kyc-chat-copy.mjs';
+import {recordCurrentImageContext,assertCurrentImageBytes} from './meta-kyc-current-image.mjs';
+
 
 const text=body=>({type:'text',body});
 const replyResult=(reply,extra={})=>({kind:'KYC_CHAT',identityStatus:'LIMITED_KYC_UPLOAD',reviewState:'OBSERVED',businessApplied:false,replySent:false,reply,...extra});
@@ -19,6 +22,7 @@ export function createMetaKycBridge({connect,provider,deposit,scheduleAnalysis=(
   const current=(await client.query(`SELECT metadata FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id])).rows[0];
   if(current?.metadata?.participant?.kycChatChallenge?.id!==r.challenge.id)throw new WorkspaceError('META_KYC_CHALLENGE_REVOKED',409);
   const challenge={...current.metadata.participant.kycChatChallenge,...transition,messageCount:(current.metadata.participant.kycChatChallenge.messageCount||0)+1};r.challenge=challenge;
+  await recordCurrentImageContext(client,r,state,environment);
   const feedbackBindingDigest=transition?.status==='CLAIMED'&&challenge.captureImageSetVersion===2&&!r.companyKyc?await metaKycExpiryBindingDigest(client,r):null;
   const metadata={...current.metadata,participant:{...current.metadata.participant,kycChatChallenge:challenge,kycChatConversation:preserveConversation?current.metadata.participant.kycChatConversation:metaKycConversationEnvelope(r,state,environment)}};
   await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify(metadata)]);
@@ -61,7 +65,9 @@ export function createMetaKycBridge({connect,provider,deposit,scheduleAnalysis=(
   try{for(const key of ['front','selfie',...(state.captureImageSetVersion===2?['back']:[])]){
     const reference=state[key],downloaded=await scopedProvider.downloadMedia({token,phoneNumberId:authorized.connection.phoneNumberId,mediaId:reference.mediaId,limit:MAX_PRIVATE_IMAGE_BYTES,...(beforeExternal?{beforeExternal}:{})});
    const contentType=downloaded.contentType?.split(';')[0].trim(),encoded='data:'+contentType+';base64,'+Buffer.from(downloaded.bytes).toString('base64');
-   if(contentType!==reference.contentType)throw new WorkspaceError('META_KYC_MEDIA_INTEGRITY',409);decodePrivateImage(encoded,contentType);images[key]=encoded;
+   if(contentType!==reference.contentType)throw new WorkspaceError('META_KYC_MEDIA_INTEGRITY',409);decodePrivateImage(encoded,contentType);
+   if(authorized.companyKyc)await within(async client=>{const current=await resolve(client,context,{deposit:true});await assertCurrentImageBytes(client,current,reference,downloaded.bytes,environment);});
+   images[key]=encoded;
   }}catch(error){
    if(!['META_KYC_MEDIA_INTEGRITY','META_CUSTOMER_MEDIA_INTEGRITY','META_CUSTOMER_MEDIA_REJECTED','META_CUSTOMER_PROVIDER_REJECTED','PRIVATE_IMAGE_INVALID','PRIVATE_IMAGE_TOO_LARGE','PRIVATE_IMAGE_TYPE_MISMATCH'].includes(error.code))throw error;
    return within(async client=>{const r=await resolve(client,context,{deposit:true});if(r.recorded)return r.recorded;return record(client,r,replyResult(text('No pudimos validar las imágenes. No se presentó la identidad. Volvé a enviar el frente del documento como imagen nítida de hasta 2 MB; '+(r.state.captureImageSetVersion===2?'después pediremos el dorso y una selfie nueva.':'después pediremos una selfie nueva.')+' Escribí CANCELAR para terminar.')),{...r.state,step:'FRONT',front:null,selfie:null,...(r.state.captureImageSetVersion===2?{back:null}:{}),confirmationEventId:null});});
@@ -71,11 +77,12 @@ export function createMetaKycBridge({connect,provider,deposit,scheduleAnalysis=(
   }
    const completed=await within(async client=>{
    const r=await resolve(client,context,{deposit:true});if(r.recorded)return r.recorded;
-   const invited=r.worker.metadata.participant.status==='INVITED';
+   const invited=r.worker.metadata.participant.status==='INVITED',identityUrl=participantIdentityUrl(r.project.id);
     const automatic=(state.ocrConsent&&participantOcrNotice(state.ocrNoticeVersion)?.automatic)||(state.biometricConsent&&participantBiometricNotice(state.biometricNoticeVersion)?.automatic);
-   const result=replyResult(text(outcome.superseded?'El recibo original quedó confirmado. Existe una presentación más reciente; consultá su estado vigente en https://obrasaas.com/cuenta. No habilitamos permisos.':invited?''+(state.captureImageSetVersion===2?'Frente, dorso y selfie':'Documento y selfie')+' presentados en privado. Falta la aceptación verificada de la cuenta antes de la revisión y la vinculación operativa. Aceptá la invitación recibida por correo y continuá en https://obrasaas.com/cuenta. No habilitamos permisos.':''+(state.captureImageSetVersion===2?'Frente, dorso y selfie':'Documento y selfie')+' presentados en privado. Un responsable debe revisar tu identidad antes de vincular WhatsApp. Consultá el estado en https://obrasaas.com/cuenta. No habilitamos permisos.'),{businessApplied:true,receiptId:outcome.receiptId||null,reviewState:'RECORDED'});
+   const result=replyResult(text(outcome.superseded?'El recibo original quedó confirmado. Existe una presentación más reciente; consultá su estado vigente en '+identityUrl+'. No habilitamos permisos.':invited?''+(state.captureImageSetVersion===2?'Frente, dorso y selfie':'Documento y selfie')+' presentados en privado. Falta la aceptación verificada de la cuenta antes de la revisión y la vinculación operativa. Aceptá la invitación recibida por correo y continuá en '+identityUrl+'. No habilitamos permisos.':''+(state.captureImageSetVersion===2?'Frente, dorso y selfie':'Documento y selfie')+' presentados en privado. Un responsable debe revisar tu identidad antes de vincular WhatsApp. Consultá el estado en '+identityUrl+'. No habilitamos permisos.'),{businessApplied:true,receiptId:outcome.receiptId||null,reviewState:'RECORDED'});
     if(automatic&&!outcome.superseded)result.reply.body+=' El análisis asistido autorizado se procesará automáticamente. Si el servicio no está disponible, quedará pendiente; no aprueba tu identidad ni concede permisos.';
     return record(client,r,result,r.state,{status:'COMPLETED',completedAt:r.now.toISOString(),completionEventId:r.event.id});
+
   });
    if(!outcome.superseded&&outcome.submissionId)try{Promise.resolve(scheduleAnalysis({projectId:authorized.project.id,workerId:authorized.worker.id,submissionId:outcome.submissionId})).catch(()=>{});}catch{}
    return completed;

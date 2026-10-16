@@ -38,6 +38,7 @@ import {COMPANY_CHANNEL_DISPOSABLE_FIXTURE_SQL} from './lib/company-channel-disp
 import {executeCompanyChannelAdoption} from './lib/company-channel-migration.mjs';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {companyKycRejectionFeedbackDisposableUrl} from './verify-company-kyc-rejection-feedback-postgres.mjs';
+import {verifyKycCurrentImageOwnNative} from './lib/kyc-current-image-own-native.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const producer='scripts/verify-company-kyc-outbound-compact-postgres.mjs';
@@ -242,7 +243,8 @@ export async function verifyCompanyKycOutboundCompactPostgres(environment=proces
    latestExpiredContextNative={status:'PASS',kind:'OWN_COMPANY_RUNTIME',postgresExecuted:true,checks:[...COMPANY_KYC_LATEST_EXPIRED_COMPOSITION_CHECKS],compositionFactory:'createMetaCustomerProductionProcessor',input:'ESTADO IDENTIDAD',sourcePurpose:'KYC_CAPTURE',sourcePromptConfirmed:true,quotedLatestPrompt:true,fixtureConversationExpired:true,challengeStillValid:true,challengeStatus:'CLAIMED',consentChosen:false,identitySubmitted:false,privateMediaCalls:0,workerBytesUnchanged:true,sourcePromptBytesUnchanged:true,sourceEventBytesUnchanged:true,workerBeforeSha256:sha(JSON.stringify(workerBefore)),workerAfterSha256:sha(JSON.stringify(workerAfter)),sourcePromptBeforeSha256:sha(JSON.stringify(promptBefore)),sourcePromptAfterSha256:sha(JSON.stringify(promptAfter)),sourceEventBeforeSha256:sha(JSON.stringify(sourceBefore)),sourceEventAfterSha256:sha(JSON.stringify(sourceAfter)),calls,measurement,realProviderCalls:0,productionDataTouched:false,humanAccepted:false};
   }
   assert.equal(posts(),6);
-  return proof={version:COMPANY_KYC_OUTBOUND_COMPACT_PROOF_VERSION,status:'PASS',checks,measurements,scenarios,syntheticMessagePostCount:historicalSyntheticMessagePostCount,totalSyntheticMessagePostCount:posts(),contextFeedbackNative,latestExpiredContextNative,provider:'controlled-synthetic-only',operativeDatabaseUsed:false,realProviderUsed:false,municipalOrIdentityAcceptance:false,leaseExtended:false,poolClosed:false,databaseRemoved:false,adminClosed:false};
+  const currentImageOwnNative=await verifyKycCurrentImageOwnNative({pool,fixture:f,workspace,owner,scope,channel:await channel()});
+  return proof={version:COMPANY_KYC_OUTBOUND_COMPACT_PROOF_VERSION,status:'PASS',checks,measurements,scenarios,syntheticMessagePostCount:historicalSyntheticMessagePostCount,totalSyntheticMessagePostCount:posts(),contextFeedbackNative,latestExpiredContextNative,currentImageOwnNative,provider:'controlled-synthetic-only',operativeDatabaseUsed:false,realProviderUsed:false,municipalOrIdentityAcceptance:false,leaseExtended:false,poolClosed:false,databaseRemoved:false,adminClosed:false};
  }finally{globalThis.fetch=originalFetch;await closeDisposablePool(pool);poolClosed=true;if(created){await admin.query(`DROP DATABASE "${database}"`);removed=true;}if(connected){await admin.end();adminClosed=true;}assert.ok(!created||removed);if(proof)Object.assign(proof,{poolClosed,databaseRemoved:removed,adminClosed});}
 }
 

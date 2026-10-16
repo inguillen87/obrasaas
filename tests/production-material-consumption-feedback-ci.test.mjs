@@ -1,3 +1,4 @@
+import {restoreIntegratedIdentitySourceSet} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import {participantPreanalysisConsumerSourceFiles} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {MATERIAL_NATIVE_PRE_DOCUMENT_SOURCES,MATERIAL_UI_PRE_DOCUMENT_SOURCES} from './fixtures/feedback-ci-historical-source-sets.mjs';
 import assert from 'node:assert/strict';
@@ -16,6 +17,7 @@ const readSource=file=>{const filename=path.join(root,file);if(!existsSync(filen
 const native=consumptionFeedbackSourceClosure(readSource),browser=consumptionFeedbackSourceClosure(readSource,{ui:true});
  for(const file of ['scripts/verify-consumption-feedback-ui.mjs','scripts/lib/owned-fixture-cleanup.mjs',PLAN_MEASUREMENT_CONSUMER_CI_HELPER])readSource(file);
 const preanalysisPriorNative=participantPreanalysisConsumerSourceFiles('CONSUMPTION_FEEDBACK',native.files,readSource);
+const integratedPriorNative=restoreIntegratedIdentitySourceSet('CONSUMPTION_FEEDBACK',native.files,JSON.parse(readSource('.github/workspace-acceptance-contract.json')));
 const historicalNative=preanalysisPriorNative.filter(file=>!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file));
 test('source import CURRENT110 retains previous108 and rejects old receipts, missing quantities and a resealed producer',()=>{
  assert.equal(historicalNative.length,108);assert.equal(sha(JSON.stringify(historicalNative)),'aba2e13b273f24b8f2d9ec5378dc3c3b6f3846341ce576735d9fc7da587d6caa');
@@ -34,7 +36,7 @@ function fixture(){
 function rejected(mutate){const input=fixture();mutate(input);assert.throws(()=>validateConsumptionFeedbackCi(input),{code:'CONSUMPTION_FEEDBACK_CI_REJECTED'});}
 
 test('CI validator accepts the complete exact native/browser contracts without running either producer',()=>{
- assert.equal(preanalysisPriorNative.length,110);assert.equal(native.files.length,112);assert.equal(browser.files.length,20);
+ assert.equal(preanalysisPriorNative.length,110);assert.equal(integratedPriorNative.length,112);assert.equal(native.files.length,115);assert.equal(browser.files.length,20);
  const input=fixture(),before=JSON.stringify(input),result=validateConsumptionFeedbackCi(input);
  assert.equal(JSON.stringify(input),before);assert.equal(result.version,CONSUMPTION_FEEDBACK_CI_VERSION);assert.equal(result.status,'PASS');assert.equal(result.sourceRevision,head);assert.equal(result.postgres.totalCheckCount,23);assert.equal(result.postgres.sourceLineage.publishedCurrentSourceCount,110);assert.equal(result.postgres.sourceCount,native.files.length);assert.equal(result.postgres.sourceLineage.previousSourceCount,108);assert.equal(result.ui.totalCheckCount,12);assert.equal(result.ui.sourceCount,20);assert.equal(result.productionLoginVerified,false);assert.equal(result.productionDataWritten,false);assert.equal(result.providerCalls,0);
  // Challenge the new graph with the independently frozen pre-document path set.

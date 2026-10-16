@@ -4,14 +4,15 @@ import {decodeSignedCustomerEvent} from './meta-customer-processing.mjs';
 import {customerChannelActive,assertCustomerReplyWindow,customerOutboundId} from './meta-customer-outbound.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {metaKycChallengeDigest} from './meta-kyc-challenge.mjs';
-import {resolveCompanyKycAuthority,resolveCompanyKycExpiryContext,resolveCompanyKycFeedbackContext,companyKycGrantDigest,companyKycSecretContext,assertCompanyKycPrompt,assertCompanyKycImageSources,fenceCompanyKycAuthority,COMPANY_KYC_AUTHORIZATION_CODES} from './company-channel-kyc.mjs';
+import {resolveCompanyKycAuthority,resolveCompanyKycExpiryContext,resolveCompanyKycFeedbackContext,resolveCompanyKycReminderContext,companyKycGrantDigest,companyKycSecretContext,assertCompanyKycPrompt,assertCompanyKycImageSources,fenceCompanyKycAuthority,COMPANY_KYC_AUTHORIZATION_CODES} from './company-channel-kyc.mjs';
 import {decodeWorkerChannelProof} from './worker-channel-identity.mjs';
 import {META_KYC_CONVERSATION_TTL_MS} from './meta-kyc-conversation.mjs';
 import {resolveReactiveKycStart} from './meta-employee-intake.mjs';
 import {lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
+import {prepareCurrentImageContext} from './meta-kyc-current-image.mjs';
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_SHA256} from './participant-policy.mjs';
 
-export const META_KYC_AUTHORIZATION_CODES=Object.freeze(['META_KYC_CHALLENGE_REJECTED','META_KYC_CHALLENGE_EXPIRED','META_KYC_CHALLENGE_REVOKED','META_KYC_MESSAGE_OUT_OF_ORDER','META_KYC_CONVERSATION_LIMIT','META_KYC_DEPOSIT_REQUIRED',...COMPANY_KYC_AUTHORIZATION_CODES]);
+export const META_KYC_AUTHORIZATION_CODES=Object.freeze(['META_KYC_CHALLENGE_REJECTED','META_KYC_CHALLENGE_EXPIRED','META_KYC_CHALLENGE_REVOKED','META_KYC_MESSAGE_OUT_OF_ORDER','META_KYC_CONVERSATION_LIMIT','META_KYC_DEPOSIT_REQUIRED','META_KYC_CURRENT_IMAGE_REJECTED','META_KYC_CURRENT_IMAGE_ORDER',...COMPANY_KYC_AUTHORIZATION_CODES]);
 const fail=code=>{throw new WorkspaceError(code,409);};
 const eventId=value=>/^customer_webhook_[a-f0-9]{64}$/.test(value||'');
 export const metaKycDispatchReceiptId=value=>'meta_kyc_dispatch_'+digest(['meta-kyc-dispatch-v1',value]);
@@ -33,10 +34,10 @@ export function metaKycConversationEnvelope(r,state,environment){
 
 // This is limited write authority for KYC capture, not a Clerk session and not
 // CHANNEL_VERIFIED. Field and VINCULAR resolvers never use this function.
-const capturePurpose=Symbol('meta-kyc-capture'),expiryFeedbackPurpose=Symbol('meta-kyc-expiry-feedback'),contextFeedbackPurpose=Symbol('meta-kyc-context-feedback');
+const capturePurpose=Symbol('meta-kyc-capture'),expiryFeedbackPurpose=Symbol('meta-kyc-expiry-feedback'),contextFeedbackPurpose=Symbol('meta-kyc-context-feedback'),reminderPurpose=Symbol('meta-kyc-step-reminder');
 export const resolveMetaKycAuthority=(client,context,options={})=>resolveMetaKycContext(client,context,options,capturePurpose);
 async function resolveMetaKycContext(client,context,{deposit=false,outbound=false,environment=process.env},purpose){
- const contextFeedback=purpose===contextFeedbackPurpose,feedback=purpose===expiryFeedbackPurpose||contextFeedback;
+ const reminder=purpose===reminderPurpose,contextFeedback=purpose===contextFeedbackPurpose||reminder,feedback=purpose===expiryFeedbackPurpose||contextFeedback;
  if(!eventId(context?.eventId))fail('META_KYC_CHALLENGE_REJECTED');
  const initial=(await client.query(`SELECT id,"projectId",provider,"eventType","externalId",status::text AS status,payload,"leaseToken","leaseExpiresAt","createdAt" FROM public."WebhookEvent" WHERE id=$1`,[context.eventId])).rows[0];
  if(!initial||initial.projectId!==context.projectId||initial.payload?.channelId!==context.channelId)fail('META_KYC_CHALLENGE_REJECTED');
@@ -44,7 +45,8 @@ async function resolveMetaKycContext(client,context,{deposit=false,outbound=fals
  if(!firstChannel)fail('META_KYC_CHALLENGE_REVOKED');
  const payload=decodeSignedCustomerEvent(initial,firstChannel,environment);
  if(payload.type!=='message')fail('META_KYC_NOT_APPLICABLE');
- if(feedback&&(payload.value?.type==='text'&&/^IDENTIDAD(?:\s|$)/i.test(payload.value.text?.body?.trim()||'')||typeof payload.value?.context?.id!=='string'))return null;
+ if(reminder&&(payload.value.type!=='image'||Object.hasOwn(payload.value,'context')))return null;
+ if(feedback&&!reminder&&(payload.value?.type==='text'&&/^IDENTIDAD(?:\s|$)/i.test(payload.value.text?.body?.trim()||'')||typeof payload.value?.context?.id!=='string'))return null;
  if(contextFeedback){
   decodeWorkerChannelProof(initial,firstChannel,environment);
   const message=payload.value;
@@ -54,8 +56,9 @@ async function resolveMetaKycContext(client,context,{deposit=false,outbound=fals
  const ownCompanyCapability=await lockOwnCompanyIssuer(client,firstChannel,{environment});
  const reactiveStart=feedback?null:await resolveReactiveKycStart(client,initial,firstChannel,payload,{environment});
  const senderE164='+'+payload.value?.from,code=payload.value?.type==='text'?payload.value.text?.body?.trim():null,codeDigest=reactiveStart?.codeDigest||metaKycChallengeDigest(code);
- const corporate=await (contextFeedback?resolveCompanyKycFeedbackContext:feedback?resolveCompanyKycExpiryContext:resolveCompanyKycAuthority)(client,context,{initial,firstChannel,payload,codeDigest,environment});
+ const corporate=await (reminder?resolveCompanyKycReminderContext:contextFeedback?resolveCompanyKycFeedbackContext:feedback?resolveCompanyKycExpiryContext:resolveCompanyKycAuthority)(client,context,{initial,firstChannel,payload,codeDigest,environment});
  if(corporate){corporate.ownCompanyCapability=ownCompanyCapability;if(reactiveStart){if(corporate.challenge.id!==reactiveStart.challengeId||corporate.worker.id!==reactiveStart.workerId||corporate.project.id!==reactiveStart.targetProjectId)fail('META_KYC_CHALLENGE_REJECTED');corporate.reactiveStartExpiresAt=reactiveStart.expiresAt;}return feedback?finishMetaKycExpiryAuthority(client,context,corporate,{environment,contextFeedback}):finishMetaKycAuthority(client,context,corporate,{deposit,outbound,environment});}
+ if(reminder)return null;
  if(reactiveStart)fail('META_KYC_CHALLENGE_REJECTED');
  const candidates=(await client.query(`SELECT w.id,w."projectId",w.phone,w.active,w.metadata FROM public."Worker" w JOIN public."Project" p ON p.id=w."projectId" WHERE w."projectId"=$1 AND p."organizationId"=$2 AND w.phone=$3 AND w.metadata->'participant'->'kycChatChallenge'->>'connectionId'=$4 AND (${codeDigest?"w.metadata->'participant'->'kycChatChallenge'->>'codeDigest'=$5":"w.metadata->'participant'->'kycChatChallenge'->>'status' IN ('CLAIMED','COMPLETED','CANCELLED')"})`,codeDigest?[context.projectId,firstChannel.organizationId,senderE164,context.channelId,codeDigest]:[context.projectId,firstChannel.organizationId,senderE164,context.channelId])).rows;
  if(candidates.length!==1)fail(codeDigest||code?.startsWith('IDENTIDAD')?'META_KYC_CHALLENGE_REJECTED':'META_KYC_NOT_APPLICABLE');
@@ -110,6 +113,7 @@ async function finishMetaKycAuthority(client,context,r,{deposit,outbound,environ
  if(r.state&&r.state.captureImageSetVersion!==challenge.captureImageSetVersion)fail('META_KYC_CHALLENGE_REJECTED');
  const prior=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "entityId"=$3 AND action='participant.kyc_chat.dispatched'`,[metaKycDispatchReceiptId(event.id),project.organizationId,worker.id])).rows[0];
  if(prior){if(prior.metadata.payloadDigest!==context.payloadDigest||prior.metadata.challengeId!==challenge.id)fail('META_KYC_CHALLENGE_REJECTED');r.recorded=readMetaKycValue(r,'kyc-chat-dispatch',metaKycDispatchReceiptId(event.id),prior.metadata.encryptedResult,environment);if(r.recorded?.kind!=='KYC_CHAT'||r.recorded.identityStatus!=='LIMITED_KYC_UPLOAD'||prior.metadata.replyDigest!==digest(r.recorded.reply))fail('META_KYC_CHALLENGE_REJECTED');}
+ await prepareCurrentImageContext(client,r,environment);
  if((!r.recorded||outbound)&&r.state&&r.state.lastEventId!==event.id){
   const timestamp=Number(finalPayload.value.timestamp);
   if(timestamp<r.state.lastMessageTimestamp)fail('META_KYC_MESSAGE_OUT_OF_ORDER');
@@ -150,10 +154,11 @@ export async function metaKycExpiryBindingDigest(client,r){
  return digest(stable(['meta-kyc-expiry-binding-v1',principalBinding(r.issuer),r.issuerClerkUserId||r.issuer.clerkUserId||null,principalBinding(r.member),{id:r.project.id,organizationId:r.project.organizationId},companyKycGrantDigest(r.connection),{id:r.worker.id,phone:r.worker.phone,active:r.worker.active,status:p.status,clerkUserId:p.clerkUserId||null,invitation:p.invitation||null,permissions:p.permissions},['id','organizationId','projectId','workerId','senderE164','connectionId','wabaId','phoneNumberId','issuerActorId','issuerMembershipId','participantClerkUserId','invitationId','codeDigest','createdAt','expiresAt','captureImageSetVersion','claimedAt','claimedEventId'].map(key=>[key,c[key]??null]),trail]));
 }
 async function feedbackPrompt(client,r,environment,{contextFeedback=false}={}){
- const message=r.payload.value,rows=(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-outbound-v1' AND payload->>'channelId'=$2 AND outcome->>'messageId'=$3 FOR SHARE`,[r.connection.projectId,r.connection.id,message.context?.id])).rows;
+ const message=r.payload.value,reminder=Boolean(r.feedbackReminderSourceEventId),rows=reminder?(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1' FOR SHARE`,[customerOutboundId(r.feedbackReminderSourceEventId),r.connection.projectId])).rows:(await client.query(`SELECT id,payload,outcome FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-outbound-v1' AND payload->>'channelId'=$2 AND outcome->>'messageId'=$3 FOR SHARE`,[r.connection.projectId,r.connection.id,message.context?.id])).rows;
  if(rows.length!==1)fail('META_KYC_EXPIRY_FEEDBACK_DENIED');const out=rows[0];
  let request;try{request=JSON.parse(decryptCustomerSecret(out.payload.encryptedPayload,{organizationId:r.project.organizationId,projectId:r.connection.projectId,purpose:'outbound',resourceId:out.id},environment));}catch{fail('META_KYC_EXPIRY_FEEDBACK_DENIED');}
  if(request?.version!==1||!eventId(request.eventId)||out.id!==customerOutboundId(request.eventId)||request.channelPurpose!=='KYC_CAPTURE'||request.organizationId!==r.project.organizationId||request.channelId!==r.connection.id||request.challengeId!==r.challenge.id||request.to!==message.from||digest(request)!==out.payload.requestDigest||!['SENT','STATUS_OBSERVED'].includes(out.outcome?.state)||['failed','deleted'].includes(out.outcome?.providerStatus)||!contextFeedback&&r.state.lastEventId!==request.eventId)fail('META_KYC_EXPIRY_FEEDBACK_DENIED');
+ if(reminder&&(message.type!=='image'||Object.hasOwn(message,'context')||request.eventId!==r.feedbackReminderSourceEventId||r.state.lastEventId!==request.eventId))fail('META_KYC_CONTEXT_FEEDBACK_DENIED');
  const source=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 FOR SHARE`,[request.eventId,r.connection.projectId])).rows;
  if(source.length!==1||source[0].payload?.channelId!==r.connection.id||source[0].payload.payloadDigest!==request.payloadDigest)fail('META_KYC_EXPIRY_FEEDBACK_DENIED');
  const signed=decodeSignedCustomerEvent(source[0],r.connection,environment);
@@ -205,7 +210,8 @@ async function finishMetaKycExpiryAuthority(client,context,r,{environment,contex
  if(current.length!==1||!(now instanceof Date)||!Number.isFinite(now.getTime())||current[0].status!=='PENDING'||current[0].leaseToken!==context.leaseToken||!Number.isFinite(Date.parse(current[0].leaseExpiresAt))||Date.parse(current[0].leaseExpiresAt)<=now.getTime()||digest(current[0].payload)!==digest(r.event.payload))fail('META_CUSTOMER_INBOX_LEASE_CHANGED');
  assertCustomerReplyWindow(r.payload,now.getTime());
  const expired=Date.parse(c.expiresAt)<=now.getTime()||Date.parse(s.expiresAt)<=now.getTime();
- if(contextFeedback?!r.feedbackStalePrompt&&!expired:!expired)fail('META_KYC_EXPIRY_FEEDBACK_DENIED');
+ if(r.feedbackReminderSourceEventId){if(!contextFeedback||expired||r.feedbackStalePrompt)fail('META_KYC_EXPIRY_FEEDBACK_DENIED');r.feedbackUnquotedReminder=true;}
+ else if(contextFeedback?!r.feedbackStalePrompt&&!expired:!expired)fail('META_KYC_EXPIRY_FEEDBACK_DENIED');
  r.kind=contextFeedback?'KYC_CONTEXT_FEEDBACK_REPLY':'KYC_EXPIRY_FEEDBACK_REPLY';r.now=now;r.feedbackBindingDigest=bindingDigest;r.feedbackPromptDigest=promptDigest;
  if(contextFeedback)r.feedbackExpiredCurrentPrompt=Date.parse(c.expiresAt)>now.getTime()&&Date.parse(s.expiresAt)<=now.getTime()&&!r.feedbackStalePrompt;
  (contextFeedback?contextAuthorities:expiryAuthorities).set(r,{client,contextDigest:digest(context),fingerprint:contextFeedback?contextFingerprint(r):expiryFingerprint(r)});return r;
@@ -214,6 +220,7 @@ const expiryFingerprint=r=>digest(stable([r.kind,r.member,r.issuer,r.project,r.w
 export function metaKycExpiryAuthorityDigest(client,r,context){const proof=expiryAuthorities.get(r);if(!proof||proof.client!==client||proof.contextDigest!==digest(context)||proof.fingerprint!==expiryFingerprint(r))fail('META_KYC_EXPIRY_FEEDBACK_DENIED');return proof.fingerprint;}
 export const resolveMetaKycExpiryFeedbackAuthority=(client,context,{environment=process.env}={})=>resolveMetaKycContext(client,context,{environment},expiryFeedbackPurpose);
 const contextAuthorities=new WeakMap();
-const contextFingerprint=r=>digest(r.feedbackExpiredCurrentPrompt===true?[expiryFingerprint(r),r.feedbackSourceEventId,r.feedbackStalePrompt,true]:[expiryFingerprint(r),r.feedbackSourceEventId,r.feedbackStalePrompt]);
+const contextFingerprint=r=>digest(r.feedbackUnquotedReminder===true?[expiryFingerprint(r),r.feedbackSourceEventId,r.feedbackStalePrompt,'unquoted-step-reminder-v2',r.feedbackReminderSourceEventId]:r.feedbackExpiredCurrentPrompt===true?[expiryFingerprint(r),r.feedbackSourceEventId,r.feedbackStalePrompt,true]:[expiryFingerprint(r),r.feedbackSourceEventId,r.feedbackStalePrompt]);
 export function metaKycContextAuthorityDigest(client,r,context){const proof=contextAuthorities.get(r);if(!proof||proof.client!==client||proof.contextDigest!==digest(context)||proof.fingerprint!==contextFingerprint(r))fail('META_KYC_CONTEXT_FEEDBACK_DENIED');return proof.fingerprint;}
 export const resolveMetaKycContextFeedbackAuthority=(client,context,{environment=process.env}={})=>resolveMetaKycContext(client,context,{environment},contextFeedbackPurpose);
+export const resolveMetaKycStepReminderAuthority=(client,context,{environment=process.env}={})=>resolveMetaKycContext(client,context,{environment},reminderPurpose);

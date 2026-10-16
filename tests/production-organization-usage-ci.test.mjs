@@ -1,3 +1,4 @@
+import {restoreIntegratedIdentitySourceSet} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import {participantPreanalysisConsumerSourceFiles} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {ORGANIZATION_NATIVE_PRE_DOCUMENT_SOURCES,ORGANIZATION_UI_PRE_DOCUMENT_SOURCES} from './fixtures/feedback-ci-historical-source-sets.mjs';
 import assert from 'node:assert/strict';
@@ -16,6 +17,7 @@ const read=file=>{if(!existsSync(path.join(root,file)))return null;if(!Object.ha
 const native=organizationUsageCiSourceClosure(read),browser=organizationUsageCiSourceClosure(read,{ui:true}),nodeFixture=organizationUsageCiSourceClosure(read,{fixture:true});
 ['scripts/verify-organization-usage-ui.mjs','scripts/lib/owned-fixture-cleanup.mjs',PLAN_MEASUREMENT_CONSUMER_CI_HELPER,'package-lock.json','package.json'].forEach(read);
 const preanalysisPriorNative=participantPreanalysisConsumerSourceFiles('ORGANIZATION_USAGE',native.files,read);
+const integratedPriorNative=restoreIntegratedIdentitySourceSet('ORGANIZATION_USAGE',native.files,JSON.parse(read('.github/workspace-acceptance-contract.json')));
 const historicalNative=preanalysisPriorNative.filter(file=>!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file));
 test('source import CURRENT115 retains previous113 and rejects old receipts, missing quantities and a resealed producer',()=>{
  assert.equal(historicalNative.length,113);assert.equal(sha(JSON.stringify(historicalNative)),'e09335573fc3fe06574f23907088ae2f0a16340fd0a5a4a8b61ae31016be9736');
@@ -33,7 +35,7 @@ function fixture(){
 function rejected(change){const input=fixture();change(input);assert.throws(()=>validateOrganizationUsageCi(input),{code:'ORGANIZATION_USAGE_CI_REJECTED'});}
 
 test('complete native and DOM source-bound contracts validate without executing producers',()=>{
- assert.equal(preanalysisPriorNative.length,115);assert.equal(native.files.length,117);assert.equal(browser.files.length,26);assert.equal(ORGANIZATION_USAGE_PG_CHECKS.length,16);const input=fixture(),before=JSON.stringify(input),proof=validateOrganizationUsageCi(input);assert.equal(JSON.stringify(input),before);assert.equal(proof.version,ORGANIZATION_USAGE_CI_VERSION);assert.equal(proof.status,'PASS');assert.equal(proof.postgres.sourceLineage.publishedCurrentSourceCount,115);assert.equal(proof.postgres.sourceCount,native.files.length);assert.equal(proof.postgres.sourceLineage.previousSourceCount,113);assert.equal(proof.ui.sourceCount,26);assert.equal(proof.providerRequests,0);assert.equal(proof.paymentVerified,false);assert.equal(proof.cost,null);
+ assert.equal(preanalysisPriorNative.length,115);assert.equal(integratedPriorNative.length,117);assert.equal(native.files.length,120);assert.equal(browser.files.length,26);assert.equal(ORGANIZATION_USAGE_PG_CHECKS.length,16);const input=fixture(),before=JSON.stringify(input),proof=validateOrganizationUsageCi(input);assert.equal(JSON.stringify(input),before);assert.equal(proof.version,ORGANIZATION_USAGE_CI_VERSION);assert.equal(proof.status,'PASS');assert.equal(proof.postgres.sourceLineage.publishedCurrentSourceCount,115);assert.equal(proof.postgres.sourceCount,native.files.length);assert.equal(proof.postgres.sourceLineage.previousSourceCount,113);assert.equal(proof.ui.sourceCount,26);assert.equal(proof.providerRequests,0);assert.equal(proof.paymentVerified,false);assert.equal(proof.cost,null);
  // Challenge the new graph with the independently frozen pre-document path set.
  assert.equal(ORGANIZATION_NATIVE_PRE_DOCUMENT_SOURCES.length,110);
  assert.deepEqual(historicalNative.filter(file=>!['src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs','src/lib/field-report-feedback.mjs'].includes(file)),ORGANIZATION_NATIVE_PRE_DOCUMENT_SOURCES);

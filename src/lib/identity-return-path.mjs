@@ -52,7 +52,15 @@ function invitationPath(path, searchParams) {
   if(officeId)return invitationId?path:`${path}?oficina=${officeId}`;
   if(invitationId)return `${path}?participar=${invitationId}`;
   const planId=identityWorkspacePlanHint(searchParams);
-  return planId?`${path}?${new URLSearchParams({obra:identityWorkspaceProjectHint(searchParams),plan:planId})}`:path;
+  if(planId)return `${path}?${new URLSearchParams({obra:identityWorkspaceProjectHint(searchParams),plan:planId})}`;
+  // A closed presentation hint survives sign-in. It cannot choose a URL,
+  // organization, identity, consent, or permission.
+  const section=singleQueryValue(searchParams,'seccion');
+  if(section==='identidad'){
+    const project=identityWorkspaceProjectHint(searchParams);
+    return `${path}?${new URLSearchParams({seccion:section,...(project?{obra:project}:{})})}`;
+  }
+  return path;
 }
 
 export const identityAccountReturnPath = searchParams => invitationPath('/cuenta', searchParams);
