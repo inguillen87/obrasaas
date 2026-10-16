@@ -1,3 +1,4 @@
+import {restoreWorkspaceContinuityPreviousContract} from '../scripts/lib/workspace-continuity-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import {DOCUMENT_TASK_ASSOCIATION_CURRENT_REVISION as documentRevision,restoreDocumentTaskAssociationPreviousContract} from '../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
 import test from 'node:test';
@@ -27,7 +28,10 @@ test('integrated identity authenticates every current added and validation sourc
  {const c=restoreDocumentTaskAssociationPreviousContract(current());
  for(const row of [...INTEGRATED_IDENTITY_CURRENT_REVISION.reviewedSourceChanges,...INTEGRATED_IDENTITY_CURRENT_REVISION.validationDeltas])assert.equal(integratedIdentityCurrentSourcePin(c,{path:row.path,sha256:row.previousSha256}),row.currentSha256);
  }
+ {const c=restoreWorkspaceContinuityPreviousContract(current());
  for(const row of [...INTEGRATED_IDENTITY_CURRENT_REVISION.reviewedSourceChanges,...INTEGRATED_IDENTITY_CURRENT_REVISION.validationDeltas]){const outer=[...documentRevision.reviewedSourceChanges,...documentRevision.validationDeltas].find(ref=>ref.path===row.path);assert.equal(integratedIdentityCurrentSourcePin(c,{path:row.path,sha256:row.previousSha256}),outer?.currentSha256||row.currentSha256);}
+ }
+ assert.equal(integratedIdentityCurrentSourcePin(c,{path:'src/app/(identity)/cuenta/workspace-client.js',sha256:'4143cf960157d8bd5f642842ee1672a3555c0e415c3dc4579763e2e8eabf84fb'}),'75ae3226996571c43e5a03f47df2241dc28425a00b804f8eb86600b0ea528858');
  const loaded=Object.create(null),lazy=file=>{const bytes=reader(file);if(bytes)loaded[file]=bytes;return bytes;},files=preloadParticipantPreanalysisConsumerSources({readSource:lazy,readCheckout:reader});assert.deepEqual(files,participantPreanalysisConsumerValidationFiles(c));assert.ok(files.includes('.github/workspace-acceptance-contract.json'));assert.ok(files.every(file=>Buffer.isBuffer(loaded[file])));assert.equal(verifyIntegratedIdentityCurrentSources(c,file=>loaded[file]||null).completeCheckpointRestored,true);assert.throws(()=>preloadParticipantPreanalysisConsumerSources({readSource:()=>null,readCheckout:reader}),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});const leaf=files.find(file=>file!=='.github/workspace-acceptance-contract.json');assert.throws(()=>preloadParticipantPreanalysisConsumerSources({readSource:lazy,readCheckout:file=>file===leaf?Buffer.concat([reader(file),Buffer.from('\n// checkout changed')]):reader(file)}),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});
 });
 test('integrated identity foreign checkpoint source tree or status cannot replace the reviewed delta',()=>{
@@ -61,7 +65,10 @@ test('integrated identity proof source additions cannot reinterpret foreign curr
  const currentContract=current();{const c=restoreDocumentTaskAssociationPreviousContract(currentContract);
  for(const delta of c.integratedIdentityCurrentRevision.proofSourceDeltas){const spec=c.extension.proofs.find(row=>row.id===delta.id);assert.deepEqual(integratedIdentityProofSourceAdditions(spec),delta.additions);const previous=restoreIntegratedIdentitySourceSet(delta.family,spec.sourceFiles,c);assert.deepEqual(integratedIdentityProofSourceAdditions({...spec,sourceFiles:previous}),[]);denied(()=>integratedIdentityProofSourceAdditions({...spec,sourceFiles:[...spec.sourceFiles,'src/lib/foreign.mjs'].sort()}));}
  }
+ {const currentContract=restoreWorkspaceContinuityPreviousContract(current());
  for(const outer of documentRevision.proofSourceDeltas){const spec=currentContract.extension.proofs.find(row=>row.id===outer.id),inner=INTEGRATED_IDENTITY_CURRENT_REVISION.proofSourceDeltas.find(row=>row.id===outer.id);assert.deepEqual(integratedIdentityProofSourceAdditions(spec),[...(inner?.additions||[]),...outer.additions]);denied(()=>integratedIdentityProofSourceAdditions({...spec,sourceFiles:[...spec.sourceFiles,'src/lib/foreign.mjs'].sort()}));}
+ }
+ for(const outer of documentRevision.proofSourceDeltas){const spec=currentContract.extension.proofs.find(row=>row.id===outer.id),inner=INTEGRATED_IDENTITY_CURRENT_REVISION.proofSourceDeltas.find(row=>row.id===outer.id),additions=['scripts/lib/workspace-continuity-current-ci-lineage.mjs','tests/fixtures/workspace-continuity-contract-d5d.json',...(outer.id==='focused-workspace-ui'?['tests/production-company-bootstrap-receipt.test.mjs','tests/production-focused-workspace-continuity-ui.test.mjs']:[])];assert.deepEqual(integratedIdentityProofSourceAdditions(spec),[...(inner?.additions||[]),...outer.additions,...additions]);denied(()=>integratedIdentityProofSourceAdditions({...spec,sourceFiles:[...spec.sourceFiles,'src/lib/foreign.mjs'].sort()}));}
 });
 test('integrated identity validation pin shape and new metadata supersets remain denied',()=>{
  mutate(c=>{c.integratedIdentityCurrentRevision.validationSources[0].trusted=true;});mutate(c=>{c.integratedIdentityCurrentRevision.foreign=true;});mutate(c=>{c.extension.proofs.find(row=>row.kind==='UI_FOCUSED_WORKSPACE').realSessionAccepted=true;});mutate(c=>{c.evidenceProducers.find(row=>row.blockId===64).retained=false;});

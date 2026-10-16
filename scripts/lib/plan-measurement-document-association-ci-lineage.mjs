@@ -1,3 +1,14 @@
+import {restoreWorkspaceContinuityPreviousContract as continuity0,workspaceContinuityCurrentSourcePin as continuity1,verifyWorkspaceContinuityCurrentSources as continuity2,restoreWorkspaceContinuitySourceSet as continuity3,workspaceContinuityProofSourceAdditions as continuity4,workspaceContinuityValidationFiles as continuity5} from './workspace-continuity-current-ci-lineage.mjs';
+// Preserve the inherited API's precise rejection code. A new outer rejection
+// remains a rejection, and unrelated errors retain their original identity.
+function continuityCall(fn,args){try{return fn(...args);}catch(error){if(error.code==='WORKSPACE_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'PLAN_MEASUREMENT_DOCUMENT_ASSOCIATION_CI_LINEAGE_REJECTED'});throw error;}}
+const restoreWorkspaceContinuityPreviousContract=(...args)=>continuityCall(continuity0,args);
+const workspaceContinuityCurrentSourcePin=(...args)=>continuityCall(continuity1,args);
+const verifyWorkspaceContinuityCurrentSources=(...args)=>continuityCall(continuity2,args);
+const restoreWorkspaceContinuitySourceSet=(...args)=>continuityCall(continuity3,args);
+const workspaceContinuityProofSourceAdditions=(...args)=>continuityCall(continuity4,args);
+const workspaceContinuityValidationFiles=(...args)=>continuityCall(continuity5,args);
+
 import {createHash} from 'node:crypto';
 import checkpoint from '../../tests/fixtures/plan-measurement-contract-a203.json' with {type:'json'};
 
@@ -275,6 +286,7 @@ export function composeDocumentTaskAssociationContract(value){
 // This is a metadata-only inverse. It never changes an original producer proof
 // or exposes historical bytes as the current readSource result.
 export function restoreDocumentTaskAssociationPreviousContract(contract){
+ contract=restoreWorkspaceContinuityPreviousContract(contract);
  const value=section(contract);if(!value)return contract;
  requireLineage(same(contract,composeDocumentTaskAssociationContract(value)),'The outer delta must restore the complete a203 contract without altering history');return structuredClone(checkpoint);
 }
@@ -284,34 +296,38 @@ function historicalPins(file){
  const result=new Set();function walk(value){if(!value||typeof value!=='object')return;if(!Array.isArray(value)&&(value.path===file||value.file===file||value.producer===file)){for(const key of ['sha256','sourceLfSha256','producerSha256','previousSha256','currentSha256','originalSha256','previousProducerSha256','currentProducerSha256'])if(hash(value[key]))result.add(value[key]);}for(const item of Object.values(value))if(item&&typeof item==='object')walk(item);}walk(checkpoint);historicalPinCache.set(file,[...result]);return result;
 }
 export function documentTaskAssociationCurrentSourcePin(contract,ref){
+ const outerPin=workspaceContinuityCurrentSourcePin(contract,ref);if(outerPin!==ref.sha256)return outerPin;
  const value=section(contract);if(!value)return ref.sha256;
  const row=[...value.reviewedSourceChanges,...value.validationDeltas].find(item=>item.path===ref.path);if(!row)return ref.sha256;
  const expected=historicalPins(ref.path);expected.add(row.previousSha256);
  requireLineage(expected.has(ref.sha256),'Only an exact authenticated previous source pin may advance: '+ref.path);return row.currentSha256;
 }
 export function documentTaskAssociationValidationFiles(contract){
- const value=authenticatedSection(contract);if(!value)return[];
- return [...new Set([DOCUMENT_TASK_ASSOCIATION_CHECKPOINT_PATH,...value.reviewedSourceChanges.map(row=>row.path),...value.validationDeltas.map(row=>row.path),...value.addedSources.map(row=>row.path),...value.validationSources.map(row=>row.path)])].sort();
+ const outer=workspaceContinuityValidationFiles(contract),value=authenticatedSection(contract);if(!value)return outer;
+ return [...new Set([...outer,DOCUMENT_TASK_ASSOCIATION_CHECKPOINT_PATH,...value.reviewedSourceChanges.map(row=>row.path),...value.validationDeltas.map(row=>row.path),...value.addedSources.map(row=>row.path),...value.validationSources.map(row=>row.path)])].sort();
 }
 export function verifyDocumentTaskAssociationCurrentSources(contract,readSource){
+ verifyWorkspaceContinuityCurrentSources(contract,readSource);
  const value=authenticatedSection(contract);if(!value)return null;requireLineage(typeof readSource==='function','Current committed source reader required');
  const original=readSource(DOCUMENT_TASK_ASSOCIATION_CHECKPOINT_PATH);requireLineage(Buffer.isBuffer(original)&&sha(original)===DOCUMENT_TASK_ASSOCIATION_PREVIOUS_CONTRACT_SHA256,'Original a203 RAW checkpoint bytes required');
  const refs=[...value.reviewedSourceChanges.map(row=>({path:row.path,sha256:row.currentSha256})),...value.validationDeltas.map(row=>({path:row.path,sha256:row.currentSha256})),...value.addedSources,...value.validationSources];
  requireLineage(new Set(refs.map(row=>row.path)).size===refs.length,'Unique outer source references required');
- for(const row of refs){const bytes=readSource(row.path);requireLineage(Buffer.isBuffer(bytes),'Missing current outer source: '+row.path);const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===row.sha256,'Stale current outer source: '+row.path);}
+ for(const row of refs){const bytes=readSource(row.path);requireLineage(Buffer.isBuffer(bytes),'Missing current outer source: '+row.path);const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===workspaceContinuityCurrentSourcePin(contract,row),'Stale current outer source: '+row.path);}
  return{version:1,previousContractSha256:DOCUMENT_TASK_ASSOCIATION_PREVIOUS_CONTRACT_SHA256,completeCheckpointRestored:true,historical49PinsPreserved:true,auxiliaryValidationSources:refs.map(row=>({...row})),nativeOrBrowserAcceptance:false};
 }
 export function restoreDocumentTaskAssociationSourceSet(family,files,contract){
+ files=restoreWorkspaceContinuitySourceSet(family,files,contract);
  const value=authenticatedSection(contract);if(!value)return files;const delta=[...value.sourceSetDeltas,...value.proofSourceDeltas].find(row=>row.family===family);if(!delta)return files;
  requireLineage(Array.isArray(files)&&new Set(files).size===files.length&&same(files,[...files].sort())&&files.length===delta.currentCount&&sha(JSON.stringify(files))===delta.currentPathsSha256,'Exact current source set required: '+family);
  const previous=files.filter(file=>!delta.additions.includes(file));requireLineage(previous.length===delta.previousCount&&sha(JSON.stringify(previous))===delta.previousPathsSha256,'Exact a203 predecessor sources must remain present: '+family);return previous;
 }
 export function documentTaskAssociationProofSourceAdditions(spec){
- const delta=DOCUMENT_TASK_ASSOCIATION_CURRENT_REVISION.proofSourceDeltas?.find(row=>row.id===spec?.id);if(!delta)return[];
- if(spec.sourceFiles?.length===delta.previousCount&&sha(JSON.stringify(spec.sourceFiles))===delta.previousPathsSha256)return[];
+ const outer=workspaceContinuityProofSourceAdditions(spec);if(outer.length)spec={...spec,sourceFiles:spec.sourceFiles.filter(file=>!outer.includes(file))};
+ const delta=DOCUMENT_TASK_ASSOCIATION_CURRENT_REVISION.proofSourceDeltas?.find(row=>row.id===spec?.id);if(!delta)return outer;
+ if(spec.sourceFiles?.length===delta.previousCount&&sha(JSON.stringify(spec.sourceFiles))===delta.previousPathsSha256)return outer;
  // The inner published helper retains its exact200 predecessor oracle. This
  // metadata-only exemption never changes the actual231 source contract.
  const inherited=checkpoint.integratedIdentityCurrentRevision.proofSourceDeltas.find(row=>row.id===spec.id);
- if(inherited&&spec.sourceFiles?.length===inherited.previousCount&&sha(JSON.stringify(spec.sourceFiles))===inherited.previousPathsSha256)return[];
- requireLineage(spec.sourceFiles?.length===delta.currentCount&&sha(JSON.stringify(spec.sourceFiles))===delta.currentPathsSha256,'Unknown document association proof source set');return [...delta.additions];
+ if(inherited&&spec.sourceFiles?.length===inherited.previousCount&&sha(JSON.stringify(spec.sourceFiles))===inherited.previousPathsSha256)return outer;
+ requireLineage(spec.sourceFiles?.length===delta.currentCount&&sha(JSON.stringify(spec.sourceFiles))===delta.currentPathsSha256,'Unknown document association proof source set');return [...delta.additions,...outer];
 }

@@ -212,9 +212,9 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
   setAttempt(null);setRetryAllowed(false);setTaskCreating(false);setModulePending({});
   setNotice('Tu acceso cambió. Actualizá las obras antes de continuar.');
  },[]);
- const restrictProject=useCallback((error,projectId)=>{
+ const restrictProject=useCallback((error,projectId,currentAccount=account)=>{
   identityNavigation.current=null;identityNavigationEpoch.current++;
-  const identity=workspaceIdentityOnlyProject(error,account,projectId);
+  const identity=workspaceIdentityOnlyProject(error,currentAccount,projectId);
    setGuideAccessReason(workspaceGuideAccessReason(error));
   onboardingContext.current=null;setChannelSnapshot(null);setView(null);setIdentityProject(identity);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setPreparationRecovery(null);
   // Recovery references remain in the durable journal. Clear revoked controls
@@ -232,9 +232,31 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
  },[request]);
  async function refresh(){
   identityNavigation.current=null;identityNavigationEpoch.current++;
-  if(contextLocked)return;controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
+  if(contextLocked||loading)return;
+  // Preserve only an intention to read, never the previous worksite data.
+  const projectId=(view?.scope===account?.scope?view?.project?.id:null)||officeSelection?.projectId||identitySelection?.projectId;
+  const selection=projectId&&/^[a-f0-9]{64}$/.test(account?.scope||'')?{projectId,scope:account.scope,role:account.role,officeReviewOnly:account.officeReviewOnly===true}:null;
+  initialProjectHint.current.consumed=true;
+  controller.current?.abort();const abort=new AbortController();controller.current=abort;const current=++generation.current;setObservationEpoch(current);setChannelSnapshot(null);
   setAccount(null);setView(null);setIdentityProject(null);setOfficeProject(null);setCreationRecovery(null);setDraft(null);setReceipt(null);setPlanReadback(null);setNotice('');setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);setLoading(true);
-  try{const data=await request('',{signal:abort.signal});if(mounted.current&&current===generation.current){const confirmed=confirmedWorkspaceAccount(data);initialProjectHint.current.listGeneration=current;setAccount(confirmed);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);}}catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}finally{if(mounted.current&&current===generation.current)setLoading(false);}
+  try{
+   const confirmed=confirmedWorkspaceAccount(await request('',{signal:abort.signal}));
+   if(!mounted.current||current!==generation.current)return;
+   initialProjectHint.current.listGeneration=current;setAccount(confirmed);setGuideUnavailable(false);setGuideReadFailed(false);setGuideAccessReason(null);
+   if(!selection||selection.scope!==confirmed.scope||selection.role!==confirmed.role||selection.officeReviewOnly!==(confirmed.officeReviewOnly===true))return;
+   const listed=confirmed.projects.find(project=>project.id===selection.projectId);
+   if(confirmed.officeReviewOnly===true){if(listed)setOfficeProject({scope:confirmed.scope,projectId:listed.id,name:listed.name});return;}
+   // A truncated list cannot establish absence. The canonical project GET
+   // still decides access, and only its fresh identity can extend the selector.
+   if(!listed&&confirmed.projectsTruncated!==true){setNotice('La obra anterior no figura entre tus obras disponibles. Elegí una obra para continuar.');return;}
+   try{
+    const data=await request(query({projectId:selection.projectId,scope:confirmed.scope}),{signal:abort.signal});
+    if(!mounted.current||current!==generation.current)return;
+    if(data?.scope!==confirmed.scope||data?.project?.id!==selection.projectId||data.project.status!=='ACTIVE'||typeof data.project.name!=='string'||!data.project.name.trim())throw new Error('No pudimos confirmar la obra activa. Elegí una obra para volver a consultar.');
+    if(!listed)setAccount(previous=>previous===confirmed?{...previous,projects:[...previous.projects,{id:data.project.id,name:data.project.name,status:data.project.status}].sort((a,b)=>a.id.localeCompare(b.id))}:previous);
+    setView(data);setGuideReadFailed(false);
+   }catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);if(guideAccessDenied(error))restrictProject(error,selection.projectId,confirmed);}}
+  }catch(error){if(error.name!=='AbortError'&&mounted.current&&current===generation.current){setNotice(error.message);setGuideReadFailed(true);setGuideAccessReason(workspaceGuideAccessReason(error));if(guideAccessDenied(error))setGuideUnavailable(true);}}finally{if(mounted.current&&current===generation.current)setLoading(false);}
  }
  const open=useCallback(async(projectId,append=false,navigation=null,portfolioSelection=null)=>{
   const currentPortfolio=portfolioContext.current;
