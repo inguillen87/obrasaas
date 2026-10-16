@@ -66,7 +66,11 @@ jobs:
           }
           roots.forEach(visit);
           const sourceManifest=[...files].sort().map(file=>{const committed=execFileSync('git',['show','HEAD:'+file]);assert.deepEqual(readFileSync(file),committed);return {path:file,sha256:hash(committed)};});
-          assert.equal(sourceManifest.length,45);
+          // Preserve the original 45-path set and bind its six added dependencies.
+          const additions=['src/lib/organization-resource-usage-policy.mjs','src/lib/organization-resource-usage-store.mjs','src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs','src/lib/plan-measurement-policy.mjs','src/lib/plan-measurement-source.mjs'];
+          assert.equal(sourceManifest.length,51);
+          const previousPaths=sourceManifest.map(ref=>ref.path).filter(file=>!additions.includes(file));assert.equal(previousPaths.length,45);
+          assert.equal(hash(JSON.stringify(previousPaths)),'7b80374f19fbef78313555d34f04ebe46d415a0005e60cb2feed08079896bdb1');
           const apiRouteInventory=git('ls-files','src/app/api').split('\n').filter(file=>file.endsWith('/route.js')).sort();
           function visitRoutes(folder){return readdirSync(folder,{withFileTypes:true}).flatMap(item=>item.isDirectory()?visitRoutes(path.posix.join(folder,item.name)):item.name==='route.js'?[path.posix.join(folder,item.name)]:[]);}
           assert.deepEqual(visitRoutes('src/app/api').sort(),apiRouteInventory);
@@ -107,7 +111,11 @@ jobs:
           }
           roots.forEach(visit);
           const sourceManifest=[...files].sort().map(file=>{const committed=execFileSync('git',['show','HEAD:'+file]);assert.deepEqual(readFileSync(file),committed);return {path:file,sha256:hash(committed)};});
-          assert.equal(sourceManifest.length,45);
+          // Preserve the original 45-path set and bind its six added dependencies.
+          const additions=['src/lib/organization-resource-usage-policy.mjs','src/lib/organization-resource-usage-store.mjs','src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs','src/lib/plan-measurement-policy.mjs','src/lib/plan-measurement-source.mjs'];
+          assert.equal(sourceManifest.length,51);
+          const previousPaths=sourceManifest.map(ref=>ref.path).filter(file=>!additions.includes(file));assert.equal(previousPaths.length,45);
+          assert.equal(hash(JSON.stringify(previousPaths)),'7b80374f19fbef78313555d34f04ebe46d415a0005e60cb2feed08079896bdb1');
           const apiRouteInventory=git('ls-files','src/app/api').split('\n').filter(file=>file.endsWith('/route.js')).sort();
           function visitRoutes(folder){return readdirSync(folder,{withFileTypes:true}).flatMap(item=>item.isDirectory()?visitRoutes(path.posix.join(folder,item.name)):item.name==='route.js'?[path.posix.join(folder,item.name)]:[]);}
           assert.deepEqual(visitRoutes('src/app/api').sort(),apiRouteInventory);

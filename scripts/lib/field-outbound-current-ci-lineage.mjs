@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {restoreOoxmlAccountingPreviousContract,ooxmlAccountingCurrentSourcePin,verifyOoxmlAccountingCurrentSources} from './ooxml-accounting-current-ci-lineage.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
@@ -40,6 +41,7 @@ function revision(contract){
 // Metadata restoration authenticates the exact previous contract. It never
 // changes readSource bytes or a native receipt's source manifest.
 export function restoreFieldOutboundPreviousContract(contract){
+ contract=restoreOoxmlAccountingPreviousContract(contract);
  const section=revision(contract);if(!section)return contract;
  const previous=structuredClone(contract);delete previous.fieldOutboundCurrentRevision;
  for(const delta of section.validationDeltas){
@@ -52,6 +54,7 @@ export function restoreFieldOutboundPreviousContract(contract){
 }
 
 export function fieldOutboundCurrentSourcePin(contract,ref){
+ const ooxmlPin=ooxmlAccountingCurrentSourcePin(contract,ref);if(ooxmlPin!==ref.sha256)return ooxmlPin;
  const section=revision(contract);if(!section)return ref.sha256;
  const change=section.reviewedSourceChanges.find(row=>row.path===ref.path);
  if(!change)return ref.sha256;
@@ -60,12 +63,13 @@ export function fieldOutboundCurrentSourcePin(contract,ref){
 }
 
 export function verifyFieldOutboundCurrentSources(contract,readSource){
+ verifyOoxmlAccountingCurrentSources(contract,readSource);
  const section=revision(contract);if(!section)return null;
  restoreFieldOutboundPreviousContract(contract);
  requireLineage(typeof readSource==='function','Current source reader required');
  for(const row of [...section.reviewedSourceChanges.map(row=>({path:row.path,sha256:row.currentSha256})),...section.validationDeltas.map(row=>({path:row.path,sha256:row.currentSha256})),...section.validationSources]){
   const bytes=readSource(row.path);requireLineage(Buffer.isBuffer(bytes),'Missing current outbound source: '+row.path);
-  const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===row.sha256,'Stale current outbound source: '+row.path);
+  const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===ooxmlAccountingCurrentSourcePin(contract,row),'Stale current outbound source: '+row.path);
  }
  return {version:1,previousContractSha256:section.previousContractSha256,reviewedSourceChanges:section.reviewedSourceChanges.map(row=>row.path),historicalPinsPreserved:true,nativeAcceptance:false};
 }
