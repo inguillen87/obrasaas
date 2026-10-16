@@ -1,3 +1,4 @@
+import {restoreParticipantPreanalysisPreviousContract,participantPreanalysisProofSourceAdditions} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
@@ -18,7 +19,7 @@ const current=contract.extension.proofs.filter(spec=>Object.hasOwn(WHATSAPP_FEED
 test('current execution graphs add only their real WhatsApp imports and preserve every published PR142 path set',()=>{
  assert.equal(current.length,7);
  for(const spec of current){
-  assert.equal(spec.sourceFiles.length,WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS[spec.kind]+additions(spec.kind).length+(contract.planMeasurementCurrentLineage?planMeasurementCurrentDependencies(spec.kind).length:0));
+  const prior=restoreParticipantPreanalysisPreviousContract(contract).extension.proofs.find(row=>row.id===spec.id);assert.equal(prior.sourceFiles.length,WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS[spec.kind]+additions(spec.kind).length+(contract.planMeasurementCurrentLineage?planMeasurementCurrentDependencies(spec.kind).length:0));assert.equal(spec.sourceFiles.length,prior.sourceFiles.length+participantPreanalysisProofSourceAdditions(spec).length);
   assert.doesNotThrow(()=>validateWhatsappFeedbackPreviousSourceLineage(spec));
   assert.deepEqual(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted());
  }

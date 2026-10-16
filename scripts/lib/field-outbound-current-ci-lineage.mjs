@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {restoreParticipantPreanalysisPreviousContract,participantPreanalysisPriorValidationPin} from './participant-preanalysis-current-ci-lineage.mjs';
 import {restoreOoxmlAccountingPreviousContract,ooxmlAccountingCurrentSourcePin,verifyOoxmlAccountingCurrentSources} from './ooxml-accounting-current-ci-lineage.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
@@ -69,7 +70,7 @@ export function verifyFieldOutboundCurrentSources(contract,readSource){
  requireLineage(typeof readSource==='function','Current source reader required');
  for(const row of [...section.reviewedSourceChanges.map(row=>({path:row.path,sha256:row.currentSha256})),...section.validationDeltas.map(row=>({path:row.path,sha256:row.currentSha256})),...section.validationSources]){
   const bytes=readSource(row.path);requireLineage(Buffer.isBuffer(bytes),'Missing current outbound source: '+row.path);
-  const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===ooxmlAccountingCurrentSourcePin(contract,row),'Stale current outbound source: '+row.path);
+  const text=bytes.toString('utf8'),priorPin=ooxmlAccountingCurrentSourcePin(restoreParticipantPreanalysisPreviousContract(contract),row);requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===participantPreanalysisPriorValidationPin(contract,{...row,sha256:priorPin}),'Stale current outbound source: '+row.path);
  }
  return {version:1,previousContractSha256:section.previousContractSha256,reviewedSourceChanges:section.reviewedSourceChanges.map(row=>row.path),historicalPinsPreserved:true,nativeAcceptance:false};
 }

@@ -10,6 +10,7 @@ import {validateCompanyKycOutboundCompactCi,companyKycOutboundCompactCiSourceClo
 const root=fileURLToPath(new URL('../',import.meta.url)),sources=Object.create(null),sha=value=>createHash('sha256').update(value).digest('hex');
 const readSource=file=>{const filename=path.join(root,file);if(!existsSync(filename))return null;if(!Object.hasOwn(sources,file))sources[file]=readFileSync(filename);return sources[file];};
 const closure=companyKycOutboundCompactCiSourceClosure(readSource),head='a'.repeat(40),tree='b'.repeat(40);
+const preanalysisProducerSources=['scripts/verify-participant-kyc-preanalysis-postgres.mjs',...JSON.parse(readSource('.github/workspace-acceptance-contract.json')).participantPreanalysisCurrentRevision.unitSuites.map(row=>row.file)];
 test('separate localhost QA port preserves every historical disposable target restriction',()=>{
  const environment={CUTOVER_TEST_DISPOSABLE:'1',CUTOVER_TEST_DATABASE_URL:'postgresql://cutover_test@127.0.0.1:6550/obrasaas_cutover_ci'};
  for(const port of ['6549','6550'])for(const hostname of ['127.0.0.1','localhost']){const url=new URL(environment.CUTOVER_TEST_DATABASE_URL);url.port=port;url.hostname=hostname;assert.equal(companyKycOutboundCompactDisposableUrl({...environment,CUTOVER_TEST_DATABASE_URL:url.toString()}).toString(),url.toString());}
@@ -29,7 +30,7 @@ function fixture(){
 function rejected(edit){const input=fixture();edit(input);assert.throws(()=>validateCompanyKycOutboundCompactCi(input),{code:'KYC_OUTBOUND_COMPACT_CI_REJECTED'});}
 
 test('complete pure source-bound compact receipt validates without running PostgreSQL or providers',()=>{
- assert.deepEqual(closure.files,companyKycOutboundCompactSourceFiles(root));const input=fixture(),before=JSON.stringify(input),value=validateCompanyKycOutboundCompactCi(input);assert.equal(JSON.stringify(input),before);assert.equal(value.status,'PASS');assert.equal(value.sourceCount,closure.files.length);assert.deepEqual(value.checks,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS);
+ for(const file of preanalysisProducerSources){assert.equal(Buffer.isBuffer(sources[file]),true,'Auxiliary current producer is loaded: '+file);assert.equal(closure.files.includes(file),false,'CI validation leaf cannot be presented as measured native source: '+file);}assert.deepEqual(closure.files,companyKycOutboundCompactSourceFiles(root));const input=fixture(),before=JSON.stringify(input),value=validateCompanyKycOutboundCompactCi(input);assert.equal(JSON.stringify(input),before);assert.equal(value.status,'PASS');assert.equal(value.sourceCount,closure.files.length);assert.deepEqual(value.checks,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS);
 });
 test('foreign or abbreviated HEAD and stale tree cannot certify the native receipt',()=>{
  rejected(value=>{value.expectedHead=head.slice(0,7);});rejected(value=>{value.head='c'.repeat(40);});rejected(value=>{value.sourceTree='c'.repeat(40);});for(const key of ['sourceRevision','sourceTree'])rejected(value=>{value.postgres[key]='c'.repeat(40);});
@@ -38,7 +39,7 @@ test('dirty checkout local review records and false success claims cannot certif
  rejected(value=>{value.trackedClean=false;});for(const [key,bad]of [['trackedClean',false],['sourceState','LOCAL_REVIEW_SOURCE'],['status','FAIL'],['version','prior-version']])rejected(value=>{value.postgres[key]=bad;});
 });
 test('omitted duplicate foreign and stale source references fail against exact transitive closure',()=>{
- rejected(value=>{value.postgres.sourceManifest.pop();});rejected(value=>{value.postgres.sourceManifest[1]={...value.postgres.sourceManifest[0]};});rejected(value=>{value.postgres.sourceManifest[0].path='src/lib/foreign.mjs';});rejected(value=>{value.postgres.sourceManifest[0].sha256='f'.repeat(64);});rejected(value=>{delete value.gitSources['src/lib/company-channel-kyc.mjs'];});
+ rejected(value=>{value.postgres.sourceManifest.pop();});rejected(value=>{value.postgres.sourceManifest[1]={...value.postgres.sourceManifest[0]};});rejected(value=>{value.postgres.sourceManifest[0].path='src/lib/foreign.mjs';});rejected(value=>{value.postgres.sourceManifest[0].sha256='f'.repeat(64);});rejected(value=>{delete value.gitSources['src/lib/company-channel-kyc.mjs'];});for(const file of preanalysisProducerSources)rejected(value=>{delete value.gitSources[file];});
 });
 test('an altered producer digest or changed committed source cannot reuse the old receipt',()=>{
  rejected(value=>{value.postgres.harnessSha256='f'.repeat(64);});rejected(value=>{value.gitSources['src/lib/company-channel-kyc.mjs']=Buffer.concat([value.gitSources['src/lib/company-channel-kyc.mjs'],Buffer.from('\n// Changed after the receipt\n')]);});

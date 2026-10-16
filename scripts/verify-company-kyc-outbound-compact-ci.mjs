@@ -18,6 +18,7 @@ const baselineSourceHash='3f562c8d30280bf9ccce53a94523c9f0dd33278ce744bd72cae394
 const proofPath='.vercel/private/company-kyc-outbound-compact-postgres.json';
 const outputPath='.vercel/private/company-kyc-outbound-compact-ci.json';
 const lineageAuditSources=[KYC_EXPIRED_CURRENT_CONTRACT_PATH,...KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,...KYC_EXPIRED_CURRENT_REVIEWED_SOURCES.map(ref=>ref.path)];
+const preanalysisProducerSources=contract=>contract.participantPreanalysisCurrentRevision?['scripts/verify-participant-kyc-preanalysis-postgres.mjs',...contract.participantPreanalysisCurrentRevision.unitSuites.map(row=>row.file)]:[];
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{40}$/.test(value);
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -44,6 +45,8 @@ export function companyKycOutboundCompactCiSourceClosure(readSource){
  const sourceContract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH));for(const ref of sourceContract.planMeasurementCurrentLineage?.currentValidationSources||[])sourceBytes(readSource,ref.path);for(const delta of sourceContract.planMeasurementCurrentLineage?.currentProofChanges||[])sourceBytes(readSource,sourceContract.extension.proofs.find(spec=>spec.id===delta.id)?.producer);
  for(const ref of sourceContract.fieldOutboundCurrentRevision?.validationSources||[])sourceBytes(readSource,ref.path);
  for(const ref of sourceContract.ooxmlAccountingCurrentRevision?.validationSources||[])sourceBytes(readSource,ref.path);
+ for(const ref of sourceContract.participantPreanalysisCurrentRevision?.validationSources||[])sourceBytes(readSource,ref.path);
+ for(const file of preanalysisProducerSources(sourceContract))sourceBytes(readSource,file);
  for(const file of files)sourceBytes(readSource,file);
  function imports(bytes,file){
   const tree=parse(bytes.toString('utf8'),{sourceType:'module',plugins:['jsx'],createImportExpressions:true}),references=[];
@@ -155,7 +158,7 @@ function main(){
  const committed=new Set(git('ls-tree','-r','--name-only',expectedHead).split('\n')),gitSources=Object.create(null);
  const readSource=file=>{if(!committed.has(file))return null;if(!Object.hasOwn(gitSources,file))gitSources[file]=execFileSync('git',['show',expectedHead+':'+file],{cwd:root,maxBuffer:16*1024*1024,windowsHide:true});return gitSources[file];};
  const closure=companyKycOutboundCompactCiSourceClosure(readSource);
- const contract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH)),currentGuardSources=[...(contract.planMeasurementCurrentLineage?.currentValidationSources||[]).map(ref=>ref.path),...(contract.planMeasurementCurrentLineage?.currentProofChanges||[]).map(delta=>contract.extension.proofs.find(spec=>spec.id===delta.id)?.producer),...(contract.fieldOutboundCurrentRevision?.validationSources||[]).map(ref=>ref.path),...(contract.ooxmlAccountingCurrentRevision?.validationSources||[]).map(ref=>ref.path)];
+ const contract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH)),currentGuardSources=[...(contract.planMeasurementCurrentLineage?.currentValidationSources||[]).map(ref=>ref.path),...(contract.planMeasurementCurrentLineage?.currentProofChanges||[]).map(delta=>contract.extension.proofs.find(spec=>spec.id===delta.id)?.producer),...(contract.fieldOutboundCurrentRevision?.validationSources||[]).map(ref=>ref.path),...(contract.ooxmlAccountingCurrentRevision?.validationSources||[]).map(ref=>ref.path),...(contract.participantPreanalysisCurrentRevision?.validationSources||[]).map(ref=>ref.path),...preanalysisProducerSources(contract)];
  for(const file of [...lineageAuditSources,...currentGuardSources,...closure.files])requireProof(readSource(file)!==null&&sha(readFileSync(path.join(root,file)))===sha(readSource(file)),'Checkout differs from committed expected Git bytes: '+file);
  const inputBytes=readFileSync(path.join(root,proofPath)),proof=validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres:JSON.parse(inputBytes)});
  requireProof(git('rev-parse','HEAD')===head&&git('rev-parse','HEAD^{tree}')===sourceTree&&git('status','--porcelain','--untracked-files=no')==='','Source changed during native proof validation');

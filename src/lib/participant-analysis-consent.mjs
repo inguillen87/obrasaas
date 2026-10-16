@@ -1,0 +1,20 @@
+import {digest} from './workspace-policy.mjs';
+
+// Historical wording is immutable: v1 authorizes an optional manager action.
+export const PARTICIPANT_OCR_NOTICE_VERSION='participant-external-ocr-v1';
+export const PARTICIPANT_OCR_NOTICE='La lectura asistida es opcional. Si la autorizás, un responsable podrá enviar únicamente el frente de tu documento a OpenAI para extraer el texto visible. La selfie no se envía para esta lectura. Los datos extraídos permanecen privados y requieren revisión humana; no comprueban autenticidad, biometría ni prueba de vida. Podés presentar tu identidad y recibir revisión manual sin autorizar esta lectura.';
+export const PARTICIPANT_BIOMETRIC_NOTICE_VERSION='participant-private-biometric-v1';
+export const PARTICIPANT_BIOMETRIC_NOTICE='La comparación facial asistida es opcional y tiene una autorización independiente. Si la autorizás, un responsable podrá procesar el frente del documento y tu selfie dentro del servicio privado de ObraSaaS para comparar las fotografías y obtener una señal orientativa sobre la captura. No se guardan vectores faciales ni se envían las imágenes a Hugging Face. Los resultados no certifican tu identidad, la autenticidad del documento ni la prueba de vida y requieren revisión humana. Podés recibir revisión manual sin autorizar esta comparación.';
+export const PARTICIPANT_AUTO_OCR_NOTICE_VERSION='participant-external-ocr-v2';
+export const PARTICIPANT_AUTO_OCR_NOTICE='La lectura asistida es opcional. Si la autorizás, ObraSaaS iniciará automáticamente al completar esta presentación el envío de únicamente el frente de tu documento a OpenAI para extraer el texto visible. La selfie y el dorso no se envían para esta lectura. Los datos extraídos permanecen privados y requieren revisión humana; no comprueban autenticidad, identidad ni prueba de vida y no conceden permisos. Si el servicio no está disponible, el análisis quedará pendiente. Podés presentar tu identidad y recibir revisión manual sin autorizar esta lectura.';
+export const PARTICIPANT_AUTO_BIOMETRIC_NOTICE_VERSION='participant-private-biometric-v2';
+export const PARTICIPANT_AUTO_BIOMETRIC_NOTICE='La comparación facial asistida es opcional y tiene una autorización independiente. Si la autorizás, ObraSaaS iniciará automáticamente al completar esta presentación el procesamiento del frente del documento y tu selfie dentro de su servicio privado para comparar las fotografías y obtener una señal orientativa sobre la captura. El dorso no se procesa, no se guardan vectores faciales ni se envían imágenes a Hugging Face. Los resultados no certifican identidad, autenticidad ni prueba de vida y no conceden permisos; requieren revisión humana. Si el servicio no está disponible, el análisis quedará pendiente. Podés recibir revisión manual sin autorizar esta comparación.';
+const notice=(version,text,automatic)=>Object.freeze({version,text,sha256:digest(text),automatic});
+const ocr=new Map([[PARTICIPANT_OCR_NOTICE_VERSION,notice(PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,false)],[PARTICIPANT_AUTO_OCR_NOTICE_VERSION,notice(PARTICIPANT_AUTO_OCR_NOTICE_VERSION,PARTICIPANT_AUTO_OCR_NOTICE,true)]]);
+const biometric=new Map([[PARTICIPANT_BIOMETRIC_NOTICE_VERSION,notice(PARTICIPANT_BIOMETRIC_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE,false)],[PARTICIPANT_AUTO_BIOMETRIC_NOTICE_VERSION,notice(PARTICIPANT_AUTO_BIOMETRIC_NOTICE_VERSION,PARTICIPANT_AUTO_BIOMETRIC_NOTICE,true)]]);
+export const participantOcrNotice=version=>ocr.get(version)||null;
+export const participantBiometricNotice=version=>biometric.get(version)||null;
+export function participantAnalysisConsent(kyc,kind,{automaticOnly=false}={}){
+ const consent=kind==='ocr'?kyc?.ocrConsent:kyc?.biometricConsent,known=(kind==='ocr'?participantOcrNotice:participantBiometricNotice)(consent?.noticeVersion);
+ return Boolean(consent?.allowed===true&&known&&consent.noticeSha256===known.sha256&&(!automaticOnly||known.automatic));
+}

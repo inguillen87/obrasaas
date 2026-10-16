@@ -1,3 +1,4 @@
+import {restoreParticipantPreanalysisPreviousContract,restoreParticipantPreanalysisSourceSet} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
@@ -20,7 +21,7 @@ test('outbound revision restores the complete exact P contract before L K I G H 
 test('outbound source validation uses actual current bytes and certifies no native or human acceptance',()=>{
  const result=verifyFieldOutboundCurrentSources(contract,read);
  assert.equal(result.nativeAcceptance,false);assert.equal(result.historicalPinsPreserved,true);
- assert.equal(verifyPlanMeasurementCurrentSources(contract,read).sourceCount,127);
+ const lineage=verifyPlanMeasurementCurrentSources(contract,read);assert.equal(lineage.publishedCurrentSourceCount,127);assert.equal(lineage.sourceCount,contract.participantPreanalysisCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
 });
 test('original eight reviewed H source pins stay immutable and only two explicit current pins advance',()=>{
  assert.deepEqual(contract.kycExpiredCurrentComposition.reviewedSources,KYC_EXPIRED_CURRENT_REVIEWED_SOURCES);

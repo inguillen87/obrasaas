@@ -1,3 +1,4 @@
+import {participantPreanalysisConsumerSourceFiles} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync,existsSync} from 'node:fs';
@@ -12,12 +13,12 @@ import {PLAN_MEASUREMENT_CONSUMER_CI_HELPER,PLAN_MEASUREMENT_CONSUMER_CI_VERSION
 const root=fileURLToPath(new URL('../',import.meta.url)),sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const readSource=file=>existsSync(path.join(root,file))?readFileSync(path.join(root,file)):null;
 for(const [family,close]of [['ORGANIZATION_USAGE',organizationUsageCiSourceClosure],['CONSUMPTION_FEEDBACK',consumptionFeedbackSourceClosure],['KYC_REPLY_FEEDBACK',kycReplyFeedbackSourceClosure]]){
- const files=close(readSource).files,expected=PLAN_MEASUREMENT_CONSUMER_LINEAGE[family];
+ const files=close(readSource).files,historicalFiles=participantPreanalysisConsumerSourceFiles(family,files,readSource),expected=PLAN_MEASUREMENT_CONSUMER_LINEAGE[family];
  const validate=(candidate=files,reader=readSource)=>validatePlanMeasurementConsumerSourceLineage({family,files:candidate,readSource:reader});
  const rejects=(candidate,reader)=>assert.throws(()=>validate(candidate,reader),{code:'PLAN_MEASUREMENT_CONSUMER_LINEAGE_REJECTED'});
  test(family+' exact AST CURRENT adds two files and retains previous producer and source hashes',()=>{
-  const before=JSON.stringify(files),value=validate();assert.equal(JSON.stringify(files),before);assert.equal(value.version,PLAN_MEASUREMENT_CONSUMER_CI_VERSION);assert.equal(value.previousSourceCount,expected.previousSourceCount);assert.equal(value.sourceCount,expected.previousSourceCount+2);assert.equal(value.nativeCheckCount,expected.nativeCheckCount);assert.deepEqual(value.sourceAdditions,PLAN_MEASUREMENT_CONSUMER_SOURCES);
-  assert.equal(sha(JSON.stringify(files.filter(file=>!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file)))),expected.previousSourcePathsSha256);assert.equal(value.validationSource.sha256,sha(readSource(PLAN_MEASUREMENT_CONSUMER_CI_HELPER)));for(const ref of value.sourceReferences)assert.equal(ref.sha256,sha(readSource(ref.path)));
+  const before=JSON.stringify(files),value=validate();assert.equal(JSON.stringify(files),before);assert.equal(value.version,PLAN_MEASUREMENT_CONSUMER_CI_VERSION);assert.equal(value.previousSourceCount,expected.previousSourceCount);assert.equal(value.publishedCurrentSourceCount,expected.previousSourceCount+2);assert.equal(value.sourceCount,files.length);assert.equal(historicalFiles.length,value.publishedCurrentSourceCount);assert.equal(value.nativeCheckCount,expected.nativeCheckCount);assert.deepEqual(value.sourceAdditions,PLAN_MEASUREMENT_CONSUMER_SOURCES);
+  assert.equal(sha(JSON.stringify(historicalFiles.filter(file=>!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file)))),expected.previousSourcePathsSha256);assert.equal(value.validationSource.sha256,sha(readSource(PLAN_MEASUREMENT_CONSUMER_CI_HELPER)));for(const ref of value.sourceReferences)assert.equal(ref.sha256,sha(readSource(ref.path)));
  });
  test(family+' previous receipt paths cannot satisfy current source import',()=>rejects(files.filter(file=>!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file))));
  test(family+' omissions duplicates reordering and extras remain denied',()=>{rejects(files.slice(1));rejects([files[0],...files.slice(0,-1)].sort());rejects([...files].reverse());rejects([...files,'src/lib/extra.mjs'].sort());});

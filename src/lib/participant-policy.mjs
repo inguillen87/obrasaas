@@ -6,6 +6,8 @@ import {validateParticipantOnboardingChoice} from './participant-onboarding-poli
 import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256} from './participant-kyc-image-set.mjs';
 import {assertApprovedParticipantKyc} from './participant-approved-identity.mjs';
 import {VERIFIED_OFFICE_ACTION,participantVerifiedOfficeEmail} from './participant-verified-office.mjs';
+import {participantOcrNotice,participantBiometricNotice} from './participant-analysis-consent.mjs';
+export {PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE} from './participant-analysis-consent.mjs';
 export {PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_SHA256} from './participant-kyc-image-set.mjs';
 export {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256,participantKycImageSet} from './participant-kyc-image-set.mjs';
 const backKeys=['back','backConsent','backNoticeVersion','backNoticeSha256'];
@@ -13,10 +15,6 @@ const hasBackChoice=input=>backKeys.some(key=>Object.hasOwn(input||{},key));
 function validateBackChoice(input){
  if(input.backConsent!==true||input.backNoticeVersion!==PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION||input.backNoticeSha256!==PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256)throw new WorkspaceError('PARTICIPANT_DOCUMENT_BACK_CONSENT_REQUIRED',400);
 }
-export const PARTICIPANT_OCR_NOTICE_VERSION='participant-external-ocr-v1';
-export const PARTICIPANT_OCR_NOTICE='La lectura asistida es opcional. Si la autorizás, un responsable podrá enviar únicamente el frente de tu documento a OpenAI para extraer el texto visible. La selfie no se envía para esta lectura. Los datos extraídos permanecen privados y requieren revisión humana; no comprueban autenticidad, biometría ni prueba de vida. Podés presentar tu identidad y recibir revisión manual sin autorizar esta lectura.';
-export const PARTICIPANT_BIOMETRIC_NOTICE_VERSION='participant-private-biometric-v1';
-export const PARTICIPANT_BIOMETRIC_NOTICE='La comparación facial asistida es opcional y tiene una autorización independiente. Si la autorizás, un responsable podrá procesar el frente del documento y tu selfie dentro del servicio privado de ObraSaaS para comparar las fotografías y obtener una señal orientativa sobre la captura. No se guardan vectores faciales ni se envían las imágenes a Hugging Face. Los resultados no certifican tu identidad, la autenticidad del documento ni la prueba de vida y requieren revisión humana. Podés recibir revisión manual sin autorizar esta comparación.';
 export const participantManager=role=>['ADMIN','DIRECTOR'].includes(role);
 export const OFFICE_ROLES=Object.freeze({DIRECTOR:{label:'Dirección',scope:'Gestiona todas las obras de la empresa, participantes, identidad, compras y aprobaciones.'},SITE_MANAGER:{label:'Jefatura de obra',scope:'Consulta y planifica solamente las obras asignadas. No administra participantes ni aprueba compras o avances.'},FINANCE:{label:'Finanzas',scope:'Consulta solamente las obras asignadas. Este rol no autoriza compras, cambios de cronograma ni aprobaciones.'},AUDITOR:{label:'Consulta',scope:'Consulta solamente las obras asignadas. La participación propia de campo requiere una vinculación independiente.'}});
 export function participantKeys(value,keys){if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).sort().join('|')!==[...keys].sort().join('|'))throw new WorkspaceError('PARTICIPANT_INPUT_INVALID');}
@@ -85,8 +83,8 @@ export function participantKycInput(input){
  const backChoice=hasBackChoice(input);
  participantKeys(input,['operationId','projectId','scope','workerId','revision','noticeVersion','consent','front','selfie',...(externalChoice?['ocrConsent','ocrNoticeVersion']:[]),...(biometricChoice?['biometricConsent','biometricNoticeVersion']:[]),...(backChoice?backKeys:[])]);participantContext(input);participantRevision(input.revision);
  if(!operationId(input.operationId)||!workspaceId(input.workerId)||input.consent!==true||input.noticeVersion!==PARTICIPANT_NOTICE_VERSION)throw new WorkspaceError('PARTICIPANT_PRIVACY_REQUIRED');
- if(externalChoice&&(typeof input.ocrConsent!=='boolean'||input.ocrNoticeVersion!==PARTICIPANT_OCR_NOTICE_VERSION))throw new WorkspaceError('PARTICIPANT_OCR_CONSENT_REQUIRED',400);
- if(biometricChoice&&(typeof input.biometricConsent!=='boolean'||input.biometricNoticeVersion!==PARTICIPANT_BIOMETRIC_NOTICE_VERSION))throw new WorkspaceError('PARTICIPANT_BIOMETRIC_CONSENT_REQUIRED',400);
+ if(externalChoice&&(typeof input.ocrConsent!=='boolean'||!participantOcrNotice(input.ocrNoticeVersion)))throw new WorkspaceError('PARTICIPANT_OCR_CONSENT_REQUIRED',400);
+ if(biometricChoice&&(typeof input.biometricConsent!=='boolean'||!participantBiometricNotice(input.biometricNoticeVersion)))throw new WorkspaceError('PARTICIPANT_BIOMETRIC_CONSENT_REQUIRED',400);
  if(backChoice)validateBackChoice(input);
  try{return {...input,...(backChoice?{back:decodePrivateImage(input.back)}:{}),ocrConsent:externalChoice&&input.ocrConsent,ocrNoticeVersion:externalChoice?input.ocrNoticeVersion:null,biometricConsent:biometricChoice&&input.biometricConsent,biometricNoticeVersion:biometricChoice?input.biometricNoticeVersion:null,operationId:input.operationId.toLowerCase(),front:decodePrivateImage(input.front),selfie:decodePrivateImage(input.selfie)};}catch(error){throw new WorkspaceError(error instanceof PrivateImageError?error.code:'PARTICIPANT_INPUT_INVALID',error.code==='PRIVATE_IMAGE_TOO_LARGE'?413:400);}
 }

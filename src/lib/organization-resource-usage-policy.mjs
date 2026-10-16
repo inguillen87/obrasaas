@@ -3,7 +3,7 @@ import {usageExact,usageDigest,usageHash,usageInstant,normalizedUsage,ORGANIZATI
 
 export const RESOURCE_USAGE_ACTION='organization.usage.resource';
 export const RESOURCE_USAGE_STAGES=Object.freeze({
- IDENTITY_OPENAI_OCR:{resourceType:'Worker',consents:['participant-external-ocr-v1'],kind:'vision'},
+ IDENTITY_OPENAI_OCR:{resourceType:'Worker',consents:['participant-external-ocr-v1','participant-external-ocr-v2'],kind:'vision'},
  FIELD_OPENAI_VISION:{resourceType:'Incident',consents:['field-media-analysis-v1'],kind:'vision'},
  FIELD_OPENAI_TRANSCRIPTION:{resourceType:'Incident',consents:['field-media-analysis-v1'],kind:'audio'},
  FIELD_VIDEO_TRANSCRIPTION:{resourceType:'Incident',consents:['field-video-audio-transcription-v1'],kind:'audio'},

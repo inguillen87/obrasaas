@@ -8,10 +8,11 @@ import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {decodePrivateImage,MAX_PRIVATE_IMAGE_BYTES} from './private-image-upload.mjs';
 import {companyKycProjectionDigest,fenceCompanyKycAuthority} from './company-channel-kyc.mjs';
 import {createEmployeeIntakeBridge} from './meta-employee-intake.mjs';
+import {participantOcrNotice,participantBiometricNotice} from './participant-analysis-consent.mjs';
 
 const text=body=>({type:'text',body});
 const replyResult=(reply,extra={})=>({kind:'KYC_CHAT',identityStatus:'LIMITED_KYC_UPLOAD',reviewState:'OBSERVED',businessApplied:false,replySent:false,reply,...extra});
-export function createMetaKycBridge({connect,provider,deposit,environment=process.env,resolveAuthority=resolveMetaKycAuthority}){
+export function createMetaKycBridge({connect,provider,deposit,scheduleAnalysis=()=>{},environment=process.env,resolveAuthority=resolveMetaKycAuthority}){
  const intake=createEmployeeIntakeBridge({connect,environment});
  const within=run=>customerJobTransaction(connect,run),resolve=(client,context,options={})=>resolveAuthority(client,context,{...options,environment});
  async function record(client,r,result,state,transition=null,{preserveConversation=false}={}){
@@ -31,7 +32,8 @@ export function createMetaKycBridge({connect,provider,deposit,environment=proces
   const r=await resolve(client,context);if(r.recorded)return {result:r.recorded};
   if(r.state?.step==='FINALIZING'&&r.state.confirmationEventId===r.event.id){await resolve(client,context,{deposit:true});if(!r.companyKyc)await client.query(`UPDATE public."WebhookEvent" SET "leaseExpiresAt"=clock_timestamp()+interval '180 seconds' WHERE id=$1 AND "leaseToken"=$2`,[r.event.id,context.leaseToken]);return {deposit:true};}
   if(['COMPLETED','CANCELLED'].includes(r.challenge.status))throw new WorkspaceError('META_KYC_NOT_APPLICABLE',409);
-  const plan=r.challenge.status==='PENDING'?beginMetaKycConversation(r.event.id,{captureImageSetVersion:r.challenge.captureImageSetVersion}):planMetaKycConversation({message:r.payload.value,state:r.state,eventId:r.event.id});
+   if(r.challenge.status==='PENDING'&&r.state)throw new WorkspaceError('META_KYC_CHALLENGE_REJECTED',409);
+   const plan=r.challenge.status==='PENDING'?beginMetaKycConversation(r.event.id,{captureImageSetVersion:r.challenge.captureImageSetVersion,analysisConsentVersion:2}):planMetaKycConversation({message:r.payload.value,state:r.state,eventId:r.event.id});
   if(plan.deposit){
    const metadata={...r.worker.metadata,participant:{...r.worker.metadata.participant,kycChatConversation:metaKycConversationEnvelope(r,plan.state,environment)}};
    await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify(metadata)]);
@@ -39,7 +41,7 @@ export function createMetaKycBridge({connect,provider,deposit,environment=proces
    await fenceCompanyKycAuthority(client,r,context,{environment});
    return {deposit:true};
   }
-  const transition=plan.cancelled?{status:'CANCELLED',cancelledEventId:r.event.id}:r.challenge.status==='PENDING'?{status:'CLAIMED',claimedAt:r.now.toISOString(),claimedEventId:r.event.id}:null;
+   const transition=plan.cancelled?{status:'CANCELLED',cancelledEventId:r.event.id}:r.challenge.status==='PENDING'?{status:'CLAIMED',analysisConsentVersion:2,claimedAt:r.now.toISOString(),claimedEventId:r.event.id}:null;
   return {result:await record(client,r,replyResult(plan.reply),plan.state,transition,{preserveConversation:plan.preserveConversation===true})};
  });}
  return {executeIntake:context=>intake.execute(context),async execute(context){
@@ -67,11 +69,15 @@ export function createMetaKycBridge({connect,provider,deposit,environment=proces
    if(beforeExternal)await beforeExternal();
    outcome=await deposit.deposit(context,{operationId:metaKycOperationId(context.eventId),noticeVersion:state.noticeVersion,noticeSha256:state.noticeSha256,consent:state.consent,ocrConsent:state.ocrConsent,ocrNoticeVersion:state.ocrNoticeVersion,biometricConsent:state.biometricConsent,biometricNoticeVersion:state.biometricNoticeVersion,...(state.captureImageSetVersion===2?{captureImageSetVersion:2,backConsent:state.backConsent,backNoticeVersion:state.backNoticeVersion,backNoticeSha256:state.backNoticeSha256}:{}),...images});
   }
-  return within(async client=>{
+   const completed=await within(async client=>{
    const r=await resolve(client,context,{deposit:true});if(r.recorded)return r.recorded;
    const invited=r.worker.metadata.participant.status==='INVITED';
+    const automatic=(state.ocrConsent&&participantOcrNotice(state.ocrNoticeVersion)?.automatic)||(state.biometricConsent&&participantBiometricNotice(state.biometricNoticeVersion)?.automatic);
    const result=replyResult(text(outcome.superseded?'El recibo original quedó confirmado. Existe una presentación más reciente; consultá su estado vigente en https://obrasaas.com/cuenta. No habilitamos permisos.':invited?''+(state.captureImageSetVersion===2?'Frente, dorso y selfie':'Documento y selfie')+' presentados en privado. Falta la aceptación verificada de la cuenta antes de la revisión y la vinculación operativa. Aceptá la invitación recibida por correo y continuá en https://obrasaas.com/cuenta. No habilitamos permisos.':''+(state.captureImageSetVersion===2?'Frente, dorso y selfie':'Documento y selfie')+' presentados en privado. Un responsable debe revisar tu identidad antes de vincular WhatsApp. Consultá el estado en https://obrasaas.com/cuenta. No habilitamos permisos.'),{businessApplied:true,receiptId:outcome.receiptId||null,reviewState:'RECORDED'});
-   return record(client,r,result,r.state,{status:'COMPLETED',completedAt:r.now.toISOString(),completionEventId:r.event.id});
+    if(automatic&&!outcome.superseded)result.reply.body+=' El análisis asistido autorizado se procesará automáticamente. Si el servicio no está disponible, quedará pendiente; no aprueba tu identidad ni concede permisos.';
+    return record(client,r,result,r.state,{status:'COMPLETED',completedAt:r.now.toISOString(),completionEventId:r.event.id});
   });
+   if(!outcome.superseded&&outcome.submissionId)try{Promise.resolve(scheduleAnalysis({projectId:authorized.project.id,workerId:authorized.worker.id,submissionId:outcome.submissionId})).catch(()=>{});}catch{}
+   return completed;
  }};
 }

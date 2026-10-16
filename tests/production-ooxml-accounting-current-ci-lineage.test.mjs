@@ -1,3 +1,4 @@
+import {restoreParticipantPreanalysisPreviousContract,restoreParticipantPreanalysisSourceSet} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
@@ -8,7 +9,7 @@ import {verifyPlanMeasurementCurrentSources,reconstructPublishedHContract} from 
 import {companyKycOutboundCompactCiSourceClosure} from '../scripts/verify-company-kyc-outbound-compact-ci.mjs';
 
 const root=new URL('../',import.meta.url),read=file=>{try{return readFileSync(new URL(file,root));}catch(error){if(error.code==='ENOENT'||error.code==='EISDIR')return null;throw error;}},sha=value=>createHash('sha256').update(value).digest('hex');
-const contract=JSON.parse(read('.github/workspace-acceptance-contract.json'));
+const contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),previous=restoreParticipantPreanalysisPreviousContract(contract);
 const denied=run=>assert.throws(run,{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});
 const changed=edit=>{const value=structuredClone(contract);edit(value);denied(()=>verifyPlanMeasurementCurrentSources(value,read));};
 const changes=[...OOXML_ACCOUNTING_CURRENT_REVISION.reviewedSourceChanges,...OOXML_ACCOUNTING_CURRENT_REVISION.validationDeltas];
@@ -37,11 +38,11 @@ test('current raw OOXML and validator bytes are checked without native or human 
  const result=verifyOoxmlAccountingCurrentSources(contract,read);
  assert.equal(result.historicalPinsPreserved,true);assert.equal(result.nativeAcceptance,false);
  assert.deepEqual(result.reviewedSourceChanges,OOXML_ACCOUNTING_CURRENT_REVISION.reviewedSourceChanges.map(row=>row.path));
- assert.equal(verifyPlanMeasurementCurrentSources(contract,read).sourceCount,127);
+ const lineage=verifyPlanMeasurementCurrentSources(contract,read);assert.equal(lineage.publishedCurrentSourceCount,127);assert.equal(lineage.sourceCount,contract.participantPreanalysisCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
 });
 test('the native compact closure remains 127 and the two new CI guards stay outside it',()=>{
  const requested=new Set(),source=file=>{requested.add(file);return read(file);},closure=companyKycOutboundCompactCiSourceClosure(source);
- assert.equal(closure.files.length,127);
+ assert.equal(restoreParticipantPreanalysisSourceSet('COMPACT',closure.files,contract).length,127);assert.equal(closure.files.length,contract.participantPreanalysisCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
  for(const file of OOXML_ACCOUNTING_CURRENT_VALIDATION_PATHS){assert.equal(requested.has(file),true);assert.equal(closure.files.includes(file),false);}
  for(const file of ['src/lib/plan-import-ooxml.mjs','src/lib/plan-measurement-source.mjs'])assert.equal(closure.files.includes(file),true);
 });
@@ -64,7 +65,7 @@ test('omitted duplicate extra or foreign source and validator deltas are rejecte
 });
 test('old current or foreign pins for the same changed path cannot fall through to Q or historical source',()=>{
  for(const row of changes){
-  assert.equal(ooxmlAccountingCurrentSourcePin(contract,{path:row.path,sha256:row.previousSha256}),row.currentSha256);
+  assert.equal(ooxmlAccountingCurrentSourcePin(previous,{path:row.path,sha256:row.previousSha256}),row.currentSha256);const currentChange=contract.participantPreanalysisCurrentRevision.validationDeltas.find(ref=>ref.path===row.path);assert.equal(ooxmlAccountingCurrentSourcePin(contract,{path:row.path,sha256:row.previousSha256}),currentChange?.currentSha256||row.currentSha256);
   for(const badSha of [row.currentSha256,'f'.repeat(64)]){
    denied(()=>ooxmlAccountingCurrentSourcePin(contract,{path:row.path,sha256:badSha}));
    denied(()=>fieldOutboundCurrentSourcePin(contract,{path:row.path,sha256:badSha}));

@@ -30,7 +30,7 @@ export async function readParticipantKycBody(request){
  }catch(error){if(error instanceof PrivateImageError)throw error;fail('PRIVATE_IMAGE_REQUEST_INVALID');}
  finally{await reader.cancel().catch(()=>{});reader.releaseLock();}
 }
-export function createParticipantHandlers({verify,store,join=false,scheduleOnboarding=()=>{}}){
+export function createParticipantHandlers({verify,store,join=false,scheduleOnboarding=()=>{},scheduleAnalysis=()=>{}}){
  async function handle(request){try{
   const session=await verify(request.headers);if(!session.authenticated&&['IDENTITY_CONFIGURATION_PENDING','IDENTITY_PROVIDER_UNAVAILABLE'].includes(session.code))throw new WorkspaceError('IDENTITY_PROVIDER_UNAVAILABLE',503);requireWorkspaceIdentity(session);
   if(request.headers.get('sec-fetch-site')==='cross-site')throw new WorkspaceError('WORKSPACE_ORIGIN_REJECTED',403);
@@ -41,6 +41,10 @@ export function createParticipantHandlers({verify,store,join=false,scheduleOnboa
    // Images have their own bounded reader. The exact command contract rejects
    // mixing KYC submissions with administrative mutation payloads.
    const body=await readParticipantKycBody(request),result=['front','selfie','back','backConsent','backNoticeVersion','backNoticeSha256'].some(key=>Object.hasOwn(body,key))?await store.submitKyc(session,body):await store.save(session,body);
+    if(result.saved===true&&result.replayed===false&&result.participant?.kyc?.processing?.automatic===true&&workspaceId(body.projectId)&&workspaceId(result.participant.id)&&workspaceId(result.participant.kyc.submissionId)){
+     // The capture transaction already owns the intent; this wake-up is optional.
+     try{Promise.resolve(scheduleAnalysis({projectId:body.projectId,workerId:result.participant.id,submissionId:result.participant.kyc.submissionId})).catch(()=>{});}catch{}
+    }
    if(['INVITE','SEND_ONBOARDING_WHATSAPP'].includes(body.action)&&result.saved===true&&result.replayed===false&&workspaceId(body.projectId)&&workspaceId(body.payload?.workerId)&&result.participant?.id===body.payload.workerId&&['SENT','ACCEPTED'].includes(result.participant.invitation?.state)&&result.participant.onboardingDelivery?.contactAuthorized===true){
     // The durable intent was committed by the store. This wake-up is optional;
     // cron recovers it if the HTTP response or runtime scheduling is lost.
