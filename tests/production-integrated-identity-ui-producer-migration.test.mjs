@@ -43,7 +43,7 @@ test('UI producer migration rejects altered hash old body extra path hunk and en
  denied(()=>authenticateIntegratedIdentityUiProducerMigrationSource(null));denied(()=>authenticateIntegratedIdentityUiProducerMigrationSource(Buffer.from([0xff])));denied(()=>authenticateIntegratedIdentityUiProducerMigrationSource(Buffer.concat([read(INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH),Buffer.from(' ')])));
 });
 test('UI producer current gate denies every old-as-current source and missing substituted validation JSON',()=>{
- const c=current();assert.equal(verifyIntegratedIdentityCurrentSources(c,read).historicalPinsPreserved,true);
+ const c=JSON.parse(read('.github/workspace-acceptance-contract.json'));denied(()=>verifyIntegratedIdentityCurrentSources(current(),read));assert.equal(verifyIntegratedIdentityCurrentSources(c,read).historicalPinsPreserved,true);
  for(const row of fixture.producers){const old=restoreIntegratedIdentityUiProducerText(row.path,read(row.path));denied(()=>verifyIntegratedIdentityCurrentSources(c,file=>file===row.path?old:read(file)));denied(()=>verifyIntegratedIdentityCurrentSources(c,file=>file===row.path?null:read(file)));}
  for(const value of [null,Buffer.from('{}'),Buffer.concat([read(INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH),Buffer.from('\n')])])denied(()=>verifyIntegratedIdentityCurrentSources(c,file=>file===INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH?value:read(file)));
 });
@@ -61,7 +61,8 @@ test('UI migration retains complete checkpoint and native source sets and every 
  assert.equal(c.integratedIdentityCurrentRevision.validationDeltas.filter(row=>row.path==='scripts/lib/plan-measurement-current-ci-lineage.mjs').length,1);const prior=checkpoint.integratedIdentityCurrentRevision;assert.equal(prior,undefined);
 });
 test('Plan lower validator restores unchanged I G and H lineage while binding actual current UI producers',()=>{
- const c=current(),result=verifyPlanMeasurementCurrentSources(c,read);assert.equal(result.publishedCurrentSourceCount,127);assert.equal(result.previousSourceCount,125);assert.equal(result.historicalSourceCount,117);assert.equal(result.publishedContractSha256,'9dab901cb93f3834cad0f1ea9ba386c5bb12acc913463a7dfb6368847af3fd37');
+ assert.throws(()=>verifyPlanMeasurementCurrentSources(current(),read),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});
+ const c=JSON.parse(read('.github/workspace-acceptance-contract.json')),result=verifyPlanMeasurementCurrentSources(c,read);assert.equal(result.publishedCurrentSourceCount,127);assert.equal(result.previousSourceCount,125);assert.equal(result.historicalSourceCount,117);assert.equal(result.publishedContractSha256,'9dab901cb93f3834cad0f1ea9ba386c5bb12acc913463a7dfb6368847af3fd37');
  const producer='scripts/verify-workspace-plan-recovery-ui.mjs',raw=read(producer),old=restoreIntegratedIdentityUiProducerText(producer,raw),section=c.planMeasurementCurrentLineage;assert.equal(sha(restorePlanMeasurementPublishedGProducerText(section,producer,raw)),'9835f6f8af3a3d81bc770aa611bcf9233324a7ff196d63f4a1c9194c5b931f51');assert.equal(restorePlanMeasurementPublishedGProducerText(section,producer,raw),restorePlanMeasurementPublishedGProducerText(section,producer,old));
  assert.throws(()=>verifyPlanMeasurementCurrentSources(c,file=>file===producer?old:read(file)));assert.throws(()=>restorePlanMeasurementPublishedGProducerText(section,producer,Buffer.concat([raw,Buffer.from('\n')])));
 });

@@ -1,3 +1,4 @@
+import {documentTaskAssociationValidationFiles} from './plan-measurement-document-association-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
 import {restoreIntegratedIdentityPreviousContract as integratedRestore,integratedIdentityCurrentSourcePin as integratedPin,verifyIntegratedIdentityCurrentSources as integratedVerify,restoreIntegratedIdentitySourceSet as integratedSourceSet,integratedIdentityProofSourceAdditions as integratedAdditions} from './integrated-identity-current-ci-lineage.mjs';
 
@@ -896,7 +897,7 @@ export function participantPreanalysisConsumerSourceFiles(family,files,readSourc
 // Load every authenticated outer and checkpoint leaf first; a native import
 // graph alone does not contain the contract or its current validation leaves.
 export function participantPreanalysisConsumerValidationFiles(contract){
- const files=new Set([PARTICIPANT_PREANALYSIS_CONTRACT_PATH]);
+ const files=new Set([PARTICIPANT_PREANALYSIS_CONTRACT_PATH,...documentTaskAssociationValidationFiles(contract)]);
  const prior=restoreIntegratedIdentityPreviousContract(contract);
  const value=revision(prior);
  if(value){
