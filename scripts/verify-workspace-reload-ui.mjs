@@ -140,9 +140,14 @@ async function createPage(context,current,{width=390,snapshot={},failStorage=fal
  });
  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Organización sintética A');await page.waitForFunction(()=>typeof window.__recoveryFixture?.list==='function');return page;
 }
+async function openCurrentReloadSection(page,target='schedule-title',section='cronograma'){
+ const nav='nav[aria-label="Navegación de la obra"]';await page.waitForSelector(nav+' a[href="#'+target+'"]',{timeout:15000});const picker=await page.$(nav+' select');
+ if(picker&&await picker.evaluate(node=>node.checkVisibility({contentVisibilityAuto:true,opacityProperty:true,visibilityProperty:true})))await page.select(nav+' select',target);else{const link=await page.$(nav+' a[href="#'+target+'"]');assert.ok(link);if(!await link.evaluate(node=>node.checkVisibility({contentVisibilityAuto:true,opacityProperty:true,visibilityProperty:true}))){const disclosure=await page.$(nav+' details > summary');await disclosure.click();await page.waitForFunction(selector=>document.querySelector(selector)?.open===true,{timeout:15000},nav+' details');await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await disclosure.dispose();}await link.click();await link.dispose();}
+ await page.waitForSelector('[data-workspace-screen="'+section+'"]:not([hidden])',{visible:true,timeout:15000});await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));if(picker)await picker.dispose();
+}
 async function fillTask(page,title='PRIVATE_FORM_MARKER tarea recuperable'){
  await page.bringToFront();
- await click(page,'Obra sintética A');await waitText(page,'Tarea sintética A');await click(page,'Nueva tarea');await page.type('form input:not([type="date"])',title);
+ await click(page,'Obra sintética A');await openCurrentReloadSection(page);await waitText(page,'Tarea sintética A');await click(page,'Nueva tarea');await page.type('form input:not([type="date"])',title);
 }
 async function startTask(page,title){await fillTask(page,title);await click(page,'Crear tarea');}
 async function capture(page,name){
@@ -154,7 +159,7 @@ async function reloadRecovery(width){
  await startTask(page);await waitText(page,'La confirmación no llegó');assert.equal(current.posts.length,1);
  const snapshot=await stored(page);assertMetadataOnly(snapshot);assert.equal(Object.keys(snapshot).length,1);assert.equal(current.persistedBeforeDispatch,true);
  const operationId=current.posts[0].operationId;assert.equal(JSON.parse(Object.values(snapshot)[0]).operationId,operationId);
- await page.reload({waitUntil:'networkidle0'});await waitText(page,'Operaciones por comprobar');
+ await page.reload({waitUntil:'networkidle0'});await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');
  assert.equal(current.posts.length,1);assert.equal(current.receipts.length,0);await capture(page,'reload-pending-'+width);
  await click(page,'Comprobar recibo');await waitText(page,'Guardado confirmado');
  assert.equal(current.receipts.length,1);assert.equal(current.receipts[0].operationId,operationId);assert.equal(current.posts.length,1);assert.deepEqual(await stored(page),{});
@@ -165,31 +170,31 @@ async function reloadRecovery(width){
 async function closeAndClone(){
  const old=await browser.createBrowserContext(),current=state();let page=await createPage(old,current);
  await startTask(page);await waitText(page,'La confirmación no llegó');const snapshot=await stored(page);assertMetadataOnly(snapshot);
- await page.close();page=await createPage(old,current);await waitText(page,'Operaciones por comprobar');assert.equal(current.posts.length,1);assert.equal(current.receipts.length,0);await page.close();
- const fresh=await browser.createBrowserContext();page=await createPage(fresh,current,{snapshot});await waitText(page,'Operaciones por comprobar');await click(page,'Comprobar recibo');await waitText(page,'Guardado confirmado');assert.equal(current.posts.length,1);assert.deepEqual(await stored(page),{});
+ await page.close();page=await createPage(old,current);await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');assert.equal(current.posts.length,1);assert.equal(current.receipts.length,0);await page.close();
+ const fresh=await browser.createBrowserContext();page=await createPage(fresh,current,{snapshot});await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');await click(page,'Comprobar recibo');await waitText(page,'Guardado confirmado');assert.equal(current.posts.length,1);assert.deepEqual(await stored(page),{});
  checks.push('actual-tab-close-open-preserves-pending-reference');checks.push('isolated-context-restoration-from-reference-only-storage-clone');await old.close();await fresh.close();
 }
 async function notObservedBlocksDuplicate(){
  const context=await browser.createBrowserContext(),current=state(),pending=entry(),page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});
- await waitText(page,'Operaciones por comprobar');assert.equal(current.receipts.length,0);await click(page,'Comprobar recibo');await waitText(page,'Esto no demuestra que el envío se haya perdido');
+ await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');assert.equal(current.receipts.length,0);await click(page,'Comprobar recibo');await waitText(page,'Esto no demuestra que el envío se haya perdido');
  assert.equal(Object.keys(await stored(page)).length,1);await startTask(page,'Nueva tarea explícita distinta');await waitText(page,'Hay un envío anterior sin confirmar');
  assert.equal(current.posts.length,0);assert.equal(Object.keys(await stored(page)).length,1);await capture(page,'not-observed-no-duplicate-390');checks.push('not-observed-retains-reference-and-blocks-a-new-uuid');await context.close();
 }
 async function storageFailure(corrupt=false){
  const context=await browser.createBrowserContext(),current=state(),pending=entry(),snapshot=corrupt?{[keyOf(pending)]:'{malformed-reference'}:{};
- const page=await createPage(context,current,{snapshot,failStorage:!corrupt});if(corrupt)await waitText(page,'No se pueden consultar las referencias pendientes');
+ const page=await createPage(context,current,{snapshot,failStorage:!corrupt});if(corrupt){await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'No se pueden consultar las referencias pendientes');}
  await startTask(page);await waitText(page,'la operación no se envió');assert.equal(current.posts.length,0);assert.equal(current.receipts.length,0);
  assert.equal(await page.$eval('form input:not([type="date"])',node=>node.value),'PRIVATE_FORM_MARKER tarea recuperable');
  checks.push(corrupt?'corrupt-current-reference-blocks-post-without-losing-form':'quota-failure-blocks-post-before-fetch-and-preserves-form');await context.close();
 }
 async function contextIsolation(late=false){
  const context=await browser.createBrowserContext(),current=state(),pending=entry(),page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});
- await waitText(page,'Operaciones por comprobar');
+ await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');
  if(late){current.delay=600;current.outcome={scope:scopeA,state:'RECORDED',created:true,receiptId:'receipt-old-context',task:{...task('A'),id:'new-a'}};await click(page,'Comprobar recibo');await page.waitForFunction(()=>document.body.innerText.includes('Comprobando…'));}
- await click(page,'Contexto B');await waitText(page,'Organización sintética B');await pause(late?850:50);
+ await click(page,'Contexto B');await waitText(page,'Organización sintética B');await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await pause(late?850:50);
  assert.ok(!(await text(page)).includes('Operaciones por comprobar'));assert.ok(!(await text(page)).includes('Guardado confirmado'));assert.ok(!(await text(page)).includes('Tarea sintética A'));
  assert.equal(Object.keys(await stored(page)).length,1);assert.equal(current.posts.length,0);assert.equal(current.receipts.length,late?1:0);
- await click(page,'Contexto A');await waitText(page,'Operaciones por comprobar');
+ await click(page,'Contexto A');await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');
  checks.push(late?'late-old-context-receipt-is-aborted-and-does-not-clear-or-enter-new-account':'different-user-org-role-scope-does-not-display-or-query-old-references');await context.close();
 }
 async function noDispatchPreservesPrevious(){
@@ -200,7 +205,7 @@ async function noDispatchPreservesPrevious(){
 }
 async function firstSdkFailure(){
  const context=await browser.createBrowserContext(),current=state(),page=await createPage(context,current);
- await click(page,'Obra sintética A');await waitText(page,'Tarea sintética A');await click(page,'Nueva tarea');await page.type('form input:not([type="date"])','PRIVATE_FORM_MARKER no enviado');await page.evaluate(()=>{window.__rejectToken=true;});await click(page,'Crear tarea');await waitText(page,'No se pudo renovar');
+ await click(page,'Obra sintética A');await openCurrentReloadSection(page);await waitText(page,'Tarea sintética A');await click(page,'Nueva tarea');await page.type('form input:not([type="date"])','PRIVATE_FORM_MARKER no enviado');await page.evaluate(()=>{window.__rejectToken=true;});await click(page,'Crear tarea');await waitText(page,'No se pudo renovar');
  assert.equal(current.posts.length,0);assert.deepEqual(await stored(page),{});checks.push('first-sdk-failure-does-not-leave-a-phantom-reference');await context.close();
 }
 async function canonicalQuery(resource,outcome='RECORDED'){
@@ -208,7 +213,7 @@ async function canonicalQuery(resource,outcome='RECORDED'){
  const pending=entry(resource,extra),context=await browser.createBrowserContext(),current=state();
  current.outcome=outcome==='RECORDED'?resource==='meta-onboarding'?{scope:scopeA,projectId:'p-a',receipt:{operationId:uuid,eventId:'event-a',action:'review_inbox',state:'RECORDED',actorOperationVerified:true,receiptId:'receipt-meta-a'}}:{scope:scopeA,state:'RECORDED',saved:resource!=='task-creation',created:resource==='task-creation',receiptId:'receipt-'+resource}:{scope:scopeA,state:outcome,definitive:false,...(outcome==='PROCESSING'?{expiresAt:new Date(Date.now()+60000).toISOString(),retryAfterExpiration:true}:{})};
   if(resource==='site-purchases'){const receiptId=purchaseReceiptId('synthetic-purchase-actor',{operationId:uuid,projectId:'p-a'});current.outcome={scope:scopeA,projectId:'p-a',state:'RECORDED',saved:true,definitive:true,receiptId,replayed:true,receipt:{id:receiptId,operationId:uuid,requestId:'purchase-request-a',action:'DRAFT_ORDER'},record:{id:'purchase-request-a',material:'Material sintético',requestedQuantity:'10',unit:'unidad',sector:'Sector de ensayo',requestState:'OPEN',revision:'2026-10-01T10:00:00.000001',order:{state:'DRAFT',supplier:'Proveedor sintético',quantity:'10',unitPrice:'2',total:'20',currency:'ARS',reference:'Cotización sintética',received:'0',decision:null,receipts:[]}}};}
- const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await waitText(page,'Operaciones por comprobar');assert.equal(current.receipts.length,0);await click(page,'Comprobar recibo');
+ const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');assert.equal(current.receipts.length,0);await click(page,'Comprobar recibo');
  await waitText(page,outcome==='RECORDED'?'Guardado confirmado':outcome==='PROCESSING'?'El procesamiento sigue pendiente':'La invitación necesita comprobarse');
  assert.equal(current.posts.length,0);assert.equal(current.receipts.length,1);const params=new URLSearchParams(current.receipts[0].query);assert.equal(params.get('operationId'),uuid);
  if(resource==='site-photo')assert.equal(params.get('reportId'),'report-a');if(resource==='meta-onboarding'){assert.equal(params.get('eventId'),'event-a');assert.equal(params.get('action'),'review_inbox');}
@@ -216,12 +221,12 @@ async function canonicalQuery(resource,outcome='RECORDED'){
 }
 async function unauthorizedReceipt(){
  const context=await browser.createBrowserContext(),current=state(),pending=entry();current.receiptStatus=403;
- const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await waitText(page,'Operaciones por comprobar');await click(page,'Comprobar recibo');await waitText(page,'Conservamos la referencia');
+ const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');await click(page,'Comprobar recibo');await waitText(page,'Conservamos la referencia');
  assert.equal(Object.keys(await stored(page)).length,1);assert.equal(current.posts.length,0);checks.push('receipt-permission-denial-retains-reference-without-declaring-rollback');await context.close();
 }
 async function tamperedEntry(){
  const context=await browser.createBrowserContext(),current=state(),pending={...entry(),endpoint:'https://invalid.example/collect',token:'synthetic-forbidden'};
- const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await waitText(page,'No se pueden consultar las referencias pendientes');assert.equal(current.receipts.length,0);await startTask(page);await waitText(page,'la operación no se envió');assert.equal(current.posts.length,0);
+ const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'No se pueden consultar las referencias pendientes');assert.equal(current.receipts.length,0);await startTask(page);await waitText(page,'la operación no se envió');assert.equal(current.posts.length,0);
  checks.push('unexpected-fields-or-url-in-storage-are-rejected-before-any-recovery-or-post');await context.close();
 }
 async function abortedReferenceCommit(){
@@ -244,13 +249,13 @@ async function abortedFactoryCallback(){
 async function confirmedLegacyDoesNotReturn(){
  const context=await browser.createBrowserContext(),current=state(),pending=entry();
  current.outcome={scope:scopeA,state:'RECORDED',created:true,receiptId:'receipt-legacy-upgrade',task:{...task('A'),id:'legacy-upgrade-task'}};
- const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await waitText(page,'Operaciones por comprobar');
+ const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');
  const migrated=await stored(page);assertMetadataOnly(migrated);assert.equal(Object.keys(migrated).length,1);
  assert.equal(JSON.parse(Object.values(migrated)[0]).operationId,pending.operationId);checks.push('legacy-reference-is-migrated-into-actual-idb-authority');
  await click(page,'Comprobar recibo');await waitText(page,'Guardado confirmado');assert.deepEqual(await stored(page),{});assert.equal(current.receipts.length,1);assert.equal(current.posts.length,0);
  // The original legacy snapshot is deliberately restored on navigation by the
  // preload hook. Its migration marker must prevent a confirmed attempt returning.
- await page.reload({waitUntil:'networkidle0'});await waitText(page,'Organización sintética A');
+ await page.reload({waitUntil:'networkidle0'});await waitText(page,'Organización sintética A');await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');
  await page.waitForFunction(async scope=>typeof window.__recoveryFixture?.list==='function'&&(await window.__recoveryFixture.list(scope)).length===0&&!document.body.innerText.includes('Operaciones por comprobar'),{timeout:15000},scopeA);
  assert.deepEqual(await stored(page),{});assert.equal(current.receipts.length,1);assert.equal(current.posts.length,0);await capture(page,'legacy-confirmed-not-reimported-390');
  checks.push('confirmed-idb-reference-is-not-reimported-from-stale-legacy-after-reload');await context.close();

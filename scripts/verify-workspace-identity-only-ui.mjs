@@ -88,11 +88,15 @@ const scopeA='a'.repeat(64),scopeB='b'.repeat(64),revision='2026-10-01T11:00:00.
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function waitText(page,label){await page.waitForFunction(text=>document.body.innerText.includes(text),{timeout:15000},label);}
 async function click(page,label){
- await page.waitForFunction(text=>[...document.querySelectorAll('button')].some(button=>!button.disabled&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),{timeout:15000},label);
- const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(button=>!button.disabled&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),label);
+ const hiddenScreen=await page.evaluate(text=>{const matches=[...document.querySelectorAll('button')].filter(button=>!button.disabled&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text));if(matches.some(button=>!button.closest('[hidden]')))return null;return matches[0]?.closest('[data-workspace-screen]')?.dataset.workspaceScreen||null;},label);
+ if(hiddenScreen){const id={identidad:'participant-title','mi-whatsapp':'worker-channel-title',cronograma:'schedule-title',recuperacion:'workspace-recovery-title'}[hiddenScreen];assert.ok(id,'Known real destination for '+label);const menu='nav[aria-label="Navegación de la obra"]';if((await page.viewport()).width<1100)await page.select(menu+' select',id);else{const selector=menu+' a[href="#'+id+'"]';const anchor=await page.$(selector);assert.ok(anchor,'Real destination link');await anchor.click();await anchor.dispose();}await page.waitForFunction(section=>document.querySelector('[data-workspace-screen="'+section+'"]')?.hidden===false,{timeout:15000},hiddenScreen);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}
+
+ await page.waitForFunction(text=>[...document.querySelectorAll('button')].some(button=>!button.disabled&&!button.closest('[hidden]')&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),{timeout:15000},label);
+ const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(button=>!button.disabled&&!button.closest('[hidden]')&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),label);
  await page.evaluate(button=>{for(let parent=button.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;},handle);
  await handle.asElement().click();await handle.dispose();
 }
+async function chooseWorkspaceView(page,id){const menu='nav[aria-label="Navegación de la obra"]';if((await page.viewport()).width<1100)await page.select(menu+' select',id);else await page.click(menu+' a[href="#'+id+'"]');await page.waitForFunction(target=>document.activeElement?.id===target,{timeout:15000},id);}
 async function settled(page){await page.waitForFunction(()=>document.querySelector('[aria-labelledby="workspace-title"]')?.getAttribute('aria-busy')==='false');}
 async function identityOnly(page){
  await page.waitForSelector('#identity-access-title');await settled(page);
@@ -101,6 +105,7 @@ async function identityOnly(page){
  assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Revisá cada perfil'));
  for(const id of ['schedule-title','schedule-overview-title','workspace-tools-title','field-title','inventory-title','portfolio-overview-title','pending-receipts-title'])assert.equal(await page.$('#'+id),null,'Operational surface mounted before KYC: '+id);
  assert.equal(await page.$('[data-schedule-workbench]'),null);
+ assert.equal(await page.$('nav[aria-label="Navegación de la obra"]'),null);
  assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Tarea operativa'));
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Horizontal overflow');
 }
@@ -184,20 +189,25 @@ function safeReferences(value,expected){
  for(const row of value.a)assert.deepEqual(Object.keys(row).sort(),['createdAt','operationId','projectId','resource','scope','version']);
  assert.doesNotMatch(JSON.stringify(value),/data:image|Bearer |synthetic-current-|front|selfie|payload|Persona de ensayo/i);
 }
+async function waitRecordedTask(page,label){
+ await page.waitForFunction(text=>document.querySelector('[data-schedule-workbench]')?.textContent.includes(text),{timeout:15000},label);
+}
 async function presentOwn(page){
  await click(page,'Consultar mi identidad');await waitText(page,'Persona de ensayo');await click(page,'Presentar mi identidad');
  for(const [title,label]of [['Frente del documento','Usar documento revisado'],['Fotografía del rostro','Usar fotografía revisada']]){
   const selector='fieldset[aria-label="'+title+'"]';await (await page.$(selector+' input[type=file]')).uploadFile(picturePath);await page.waitForSelector(selector+' img');await page.$eval(selector+' input[type=checkbox]',input=>input.click());await click(page,label);
   await page.waitForFunction(title=>[...document.querySelectorAll('fieldset')].find(field=>field.getAttribute('aria-label')===title)?.textContent.includes('Imagen revisada y lista'),{},title);
+  if(title==='Frente del documento'){await click(page,'Continuar al dorso');await click(page,'Continuar sin dorso');}
  }
- await page.evaluate(()=>[...document.querySelectorAll('label')].find(label=>label.textContent.includes('Leí el aviso y autorizo la presentación')).querySelector('input').click());
+ await page.evaluate(()=>[...document.querySelectorAll('label')].find(label=>label.textContent.includes('Leí el aviso y autorizo presentar estas imágenes')).querySelector('input').click());
  await click(page,'Presentar para revisión');await waitText(page,'El resultado quedó sin confirmar');
 }
 async function privateFlow(width,{reload=false,director=false}={}){
  const current=newState(director?'director':'pending'),{context,page}=await createPage(width,current);
  await click(page,'Obra A');await identityOnly(page);
  const privateScreenshot=path.join(evidence,'identity-private-'+width+(reload?'-reload':director?'-director':'')+'.png');await page.screenshot({path:privateScreenshot,fullPage:true});screenshots.push(path.relative(root,privateScreenshot).split(path.sep).join('/'));
- assert.deepEqual(current.requests.map(row=>row.path),['/api/identity/workspace','/api/identity/workspace']);
+ assert.deepEqual(current.requests.map(row=>row.path),['/api/identity/workspace','/api/identity/workspace','/api/identity/participants']);
+ assert.deepEqual(current.requests.at(-1),{path:'/api/identity/participants',method:'GET',actor:'A',projectId:'p-a',operationId:null});
  await presentOwn(page);await identityOnly(page);safeReferences(await references(page),1);assert.equal(current.posts.length,1);
  assert.ok(!current.requests.some(row=>!['/api/identity/workspace','/api/identity/participants'].includes(row.path)));
  if(reload){await page.reload({waitUntil:'networkidle0'});assert.equal(current.acceptedReloadWarning,true);await waitText(page,'Empresa de ensayo A');await click(page,'Obra A');await identityOnly(page);await waitText(page,'Comprobar el mismo intento');assert.equal(current.receiptQueries.length,0);safeReferences(await references(page),1);}
@@ -206,7 +216,7 @@ async function privateFlow(width,{reload=false,director=false}={}){
  current.row={...current.row,kyc:{...current.row.kyc,status:'APPROVED',review:{decision:'APPROVED',reason:'Controlled human acceptance',reviewedAt:'2026-10-07T12:05:00Z'}}};
  await click(page,'Consultar mi identidad');await waitText(page,'Aprobado por un responsable');await identityOnly(page);
  const operativeBefore=current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length;
- current.approved=true;await click(page,'Comprobar habilitación de obra');await waitText(page,'Tarea operativa p-a');await page.waitForSelector('#workspace-tools-title');assert.equal(await page.$('#identity-access-title'),null);
+ current.approved=true;await click(page,'Comprobar habilitación de obra');await waitRecordedTask(page,'Tarea operativa p-a');await page.waitForSelector('nav[aria-label="Navegación de la obra"]');assert.equal(await page.$('#identity-access-title'),null);
  assert.equal(await page.$eval('#participant-title',node=>node.textContent),'Participantes y revisión de identidad','Private presentation hint changed the normal workspace');
  assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,operativeBefore+1,'Approval did not require explicit fresh workspace read');
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -216,7 +226,7 @@ async function privateFlow(width,{reload=false,director=false}={}){
 }
 async function administratorBootstrap(){
  const current=newState('bootstrap');current.approved=true;current.row=null;const {context,page}=await createPage(390,current);
- await click(page,'Obra A');await waitText(page,'Tarea operativa p-a');assert.equal(await page.$('#identity-access-title'),null);assert.equal(current.posts.length,0);assert.ok(!(current.requests.some(row=>row.path==='/api/identity/participants')));
+ await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');assert.equal(await page.$('#identity-access-title'),null);assert.equal(current.posts.length,0);assert.ok(!(current.requests.some(row=>row.path==='/api/identity/participants')));
  checks.push({name:'bootstrap-administrator-without-worker-keeps-server-authorized-operation',width:390});await context.close();
 }
 async function denial(width,{status=403,code='WORKSPACE_PROJECT_UNAVAILABLE',type='application/json'}={}){
@@ -227,7 +237,7 @@ async function denial(width,{status=403,code='WORKSPACE_PROJECT_UNAVAILABLE',typ
 }
 async function revocation(width,{ownDenied=false}={}){
  const current=newState('revoke');current.approved=true;const {context,page}=await createPage(width,current);
- await click(page,'Obra A');await waitText(page,'Tarea operativa p-a');current.approved=false;if(ownDenied)current.mode='revoked-own';
+ await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');current.approved=false;if(ownDenied)current.mode='revoked-own';
  await click(page,'Cargar más tareas');await identityOnly(page);assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Tarea operativa p-a'));
  await click(page,'Consultar mi identidad');if(ownDenied){await waitText(page,'No hay un acceso activo vinculado a tu cuenta');assert.equal(await page.$('article'),null);assert.equal(await page.$('form'),null);}else await waitText(page,'Persona de ensayo');
  await identityOnly(page);checks.push({name:'revoked-workspace-hides-loaded-tasks-and-only-own-private-read-remains',width,ownDenied});await context.close();
@@ -236,8 +246,9 @@ async function lateResponse(width,company){
  const current=newState(company?'late-company':'late-project'),{context,page}=await createPage(width,current);
  await click(page,'Obra A');await page.waitForFunction(()=>document.querySelector('[aria-labelledby="workspace-title"]')?.getAttribute('aria-busy')==='true');
  for(let attempt=0;!current.held.length&&attempt<50;attempt++)await pause(20);assert.equal(current.held.length,1);
- if(company){await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');await click(page,'Obra B');await waitText(page,'Tarea operativa p-b');}
- else{await click(page,'Obra A2');await waitText(page,'Tarea operativa p-a2');}
+ if(company){await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');await click(page,'Obra B');await waitRecordedTask(page,'Tarea operativa p-b');}
+ else{await click(page,'Obra A2');await waitRecordedTask(page,'Tarea operativa p-a2');}
+ await chooseWorkspaceView(page,'schedule-title');await waitText(page,company?'Tarea operativa p-b':'Tarea operativa p-a2');
  current.held.shift()();await pause(150);assert.equal(await page.$('#identity-access-title'),null);assert.ok((await page.evaluate(()=>document.body.innerText)).includes(company?'Tarea operativa p-b':'Tarea operativa p-a2'));
  checks.push({name:company?'late-prior-company-response-cannot-restore-private-context':'late-prior-project-denial-cannot-replace-authorized-project',width});await context.close();
 }
@@ -246,7 +257,7 @@ async function tokenHeld(width){
  await click(page,'Obra A');await page.waitForFunction(()=>typeof window.__releaseToken==='function');assert.equal(current.requests.filter(row=>row.projectId==='p-a').length,0);
  await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');await page.evaluate(()=>window.__releaseToken());await pause(150);
  assert.equal(current.requests.filter(row=>row.projectId==='p-a').length,0);assert.equal(await page.$('#identity-access-title'),null);
- await click(page,'Obra B');await waitText(page,'Tarea operativa p-b');checks.push({name:'token-held-prior-company-never-dispatches-after-context-change',width});await context.close();
+ await click(page,'Obra B');await waitRecordedTask(page,'Tarea operativa p-b');checks.push({name:'token-held-prior-company-never-dispatches-after-context-change',width});await context.close();
 }
 async function privacySurface(page){
  await identityOnly(page);await page.evaluate(()=>{const summary=[...document.querySelectorAll('summary')].find(node=>node.textContent==='Mi WhatsApp y mis avisos');assertSummary(summary);function assertSummary(node){if(!node)throw Error('Own privacy section missing');node.parentElement.open=true;}});
@@ -284,7 +295,7 @@ async function privacyWithdrawal(width,status,action,{reload=false}={}){
   await click(page,'Consultar resultado pendiente');await waitText(page,'Recibo confirmado');assert.deepEqual(current.channelReceiptQueries,[current.channelPosts[0].operationId]);safeReferences(await references(page),0);
   await click(page,'Consultar vinculación');await waitText(page,'Titular propio WhatsApp A');
  }else await waitText(page,action==='UNLINK'?'WhatsApp desvinculado.':'Autorización retirada.');
- await restrictedChannel(page);assert.equal(current.channelPosts.length,1);assert.equal(current.channelPosts[0].action,action);assert.ok(!current.requests.some(row=>!['/api/identity/workspace','/api/identity/worker-channel'].includes(row.path)));
+ await restrictedChannel(page);assert.equal(current.channelPosts.length,1);assert.equal(current.channelPosts[0].action,action);assert.ok(!current.requests.some(row=>!['/api/identity/workspace','/api/identity/worker-channel','/api/identity/participants'].includes(row.path)));assert.deepEqual(current.requests.filter(row=>row.path==='/api/identity/participants'),Array.from({length:reload?2:1},()=>({path:'/api/identity/participants',method:'GET',actor:'A',projectId:'p-a',operationId:null})),'Exactly one canonical own-profile metadata GET per initial load or explicit reload is allowed');
  const screenshot=path.join(evidence,'privacy-'+status+'-'+action+'-'+width+(reload?'-reload':'')+'.png');await page.screenshot({path:screenshot,fullPage:true});screenshots.push(path.relative(root,screenshot).split(path.sep).join('/'));
  checks.push({name:reload?'own-withdrawal-lost-response-reload-recovers-same-UUID-without-second-POST':'own-private-withdrawal-without-KYC-admission',width,status,action,reload,posts:current.channelPosts.length,receiptGets:current.channelReceiptQueries.length,...(reload?{sameOperationId:true,durableReference:true}:{})});await context.close();
 }
@@ -295,7 +306,7 @@ async function privacyLateApproved(width){
 }
 async function privacyLateContext(width,company){
  const {current,context,page}=await startPrivacy(width);current.channelHold='read';await click(page,'Consultar vinculación');for(let i=0;!current.held.length&&i<100;i++)await pause(20);assert.equal(current.held.length,1);
- if(company){await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');await click(page,'Obra B');await waitText(page,'Tarea operativa p-b');}
+ if(company){await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');await click(page,'Obra B');await waitRecordedTask(page,'Tarea operativa p-b');}
  else{await click(page,'Obra A2');await privacySurface(page);await click(page,'Consultar vinculación');await waitText(page,'Titular propio WhatsApp A2');}
  current.held.shift()();await pause(150);assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Titular propio WhatsApp A\n'));assert.equal(current.channelPosts.length,0);
  const ids=await page.$$eval('[data-worker-channel]',nodes=>nodes.map(node=>node.getAttribute('data-worker-channel')));assert.deepEqual(ids,company?[]:['worker-second']);
@@ -344,7 +355,7 @@ async function privateApprovalFocus(width){
  const {current,context,page}=await startPrivacy(width);
  current.row={...current.row,permissions:{attendance:true,report:true},kyc:{...current.row.kyc,status:'APPROVED'}};
  await click(page,'Consultar mi identidad');await waitText(page,'Aprobado por un responsable');await identityOnly(page);
- current.approved=true;await click(page,'Consultar mi vínculo');await waitText(page,'Tarea operativa p-a');await focusedOwnChannel(page,current);
+ current.approved=true;await click(page,'Consultar mi vínculo');await waitRecordedTask(page,'Tarea operativa p-a');await focusedOwnChannel(page,current);
  assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,2,'Own channel navigation requires exactly one fresh canonical project GET');
  await click(page,'Consultar participantes');await waitText(page,'Aprobado por un responsable');await settled(page);
  assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','A consumed focus ticket must not repeat when the participant panel is consulted');
@@ -369,14 +380,14 @@ async function approvalTokenNavigationRace(width,outcome){
  const releaseCurrent=current.held.shift();
  if(outcome==='refresh'){
   current.holdWorkspaceProject=null;
-  await click(page,'Obra A');await waitText(page,'Tarea operativa p-a');releaseCurrent();
+  await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');releaseCurrent();
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await settled(page);
   assert.equal(await page.$eval('#schedule-title',node=>node.textContent),'Obra A');assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','Manual selection must cancel the previous focus request');
-  await click(page,'Actualizar');await waitText(page,'Empresa de ensayo A');await click(page,'Obra A');await waitText(page,'Tarea operativa p-a');
+  await click(page,'Actualizar');await waitText(page,'Empresa de ensayo A');await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');
   assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','A refreshed manual selection must not restore the consumed focus request');
   assert.equal(current.requests.filter(row=>row.path==='/api/identity/worker-channel').length,0);assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);
  }else{
-  releaseCurrent();await waitText(page,'Tarea operativa p-a2');await focusedOwnChannel(page,current);
+  releaseCurrent();await waitRecordedTask(page,'Tarea operativa p-a2');await focusedOwnChannel(page,current);
   assert.equal(await page.$eval('#schedule-title',node=>node.textContent),'Obra A2');assert.equal(await page.$('#identity-access-title'),null);
  }
  await context.close();
@@ -386,7 +397,7 @@ async function privateApprovalNavigation(width){
  current.row={...current.row,permissions:{attendance:true,report:true},kyc:{...current.row.kyc,status:'APPROVED'}};await click(page,'Consultar mi identidad');await waitText(page,'Aprobado por un responsable');await identityOnly(page);
  assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,1);assert.equal(current.channelPosts.length,0);
  await click(page,'Consultar mi vínculo');await identityOnly(page);assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,2,'Own approval callback did not query canonical workspace');
- current.approved=true;await click(page,'Comprobar habilitación de obra');await waitText(page,'Tarea operativa p-a');assert.equal(await page.$('#identity-access-title'),null);assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,3);assert.equal(current.channelPosts.length,0);
+ current.approved=true;await click(page,'Comprobar habilitación de obra');await waitRecordedTask(page,'Tarea operativa p-a');assert.equal(await page.$('#identity-access-title'),null);assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,3);assert.equal(current.channelPosts.length,0);
  assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','Manual canonical refresh must not request the onboarding focus');
  await context.close();await privateApprovalFocus(width);for(const outcome of ['resolve','reject','refresh'])await approvalTokenNavigationRace(width,outcome);
  checks.push({name:'own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace',width});

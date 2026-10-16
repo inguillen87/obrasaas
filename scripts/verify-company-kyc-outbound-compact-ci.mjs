@@ -1,4 +1,6 @@
+import {participantPreanalysisConsumerValidationFiles} from './lib/participant-preanalysis-current-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
+import {validateIntegratedOwnCurrentNative} from './lib/integrated-identity-current-ci-lineage.mjs';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,mkdirSync,writeFileSync,existsSync} from 'node:fs';
 import path from 'node:path';
@@ -18,6 +20,7 @@ const baselineSourceHash='3f562c8d30280bf9ccce53a94523c9f0dd33278ce744bd72cae394
 const proofPath='.vercel/private/company-kyc-outbound-compact-postgres.json';
 const outputPath='.vercel/private/company-kyc-outbound-compact-ci.json';
 const lineageAuditSources=[KYC_EXPIRED_CURRENT_CONTRACT_PATH,...KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,...KYC_EXPIRED_CURRENT_REVIEWED_SOURCES.map(ref=>ref.path)];
+const preanalysisProducerSources=contract=>contract.participantPreanalysisCurrentRevision?['scripts/verify-participant-kyc-preanalysis-postgres.mjs',...contract.participantPreanalysisCurrentRevision.unitSuites.map(row=>row.file)]:[];
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const revision=value=>typeof value==='string'&&/^[a-f0-9]{40}$/.test(value);
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -44,6 +47,10 @@ export function companyKycOutboundCompactCiSourceClosure(readSource){
  const sourceContract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH));for(const ref of sourceContract.planMeasurementCurrentLineage?.currentValidationSources||[])sourceBytes(readSource,ref.path);for(const delta of sourceContract.planMeasurementCurrentLineage?.currentProofChanges||[])sourceBytes(readSource,sourceContract.extension.proofs.find(spec=>spec.id===delta.id)?.producer);
  for(const ref of sourceContract.fieldOutboundCurrentRevision?.validationSources||[])sourceBytes(readSource,ref.path);
  for(const ref of sourceContract.ooxmlAccountingCurrentRevision?.validationSources||[])sourceBytes(readSource,ref.path);
+ for(const ref of sourceContract.participantPreanalysisCurrentRevision?.validationSources||[])sourceBytes(readSource,ref.path);
+ for(const ref of sourceContract.integratedIdentityCurrentRevision?.validationSources||[])sourceBytes(readSource,ref.path);
+ for(const file of preanalysisProducerSources(sourceContract))sourceBytes(readSource,file);
+ for(const file of participantPreanalysisConsumerValidationFiles(sourceContract))sourceBytes(readSource,file);
  for(const file of files)sourceBytes(readSource,file);
  function imports(bytes,file){
   const tree=parse(bytes.toString('utf8'),{sourceType:'module',plugins:['jsx'],createImportExpressions:true}),references=[];
@@ -144,7 +151,7 @@ export function validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTre
  same(postgres.checks,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS,'Every native lease, revocation, seal and uncertain reply scenario required');
  const closure=companyKycOutboundCompactCiSourceClosure(readSource);validateManifest(postgres,closure.files,readSource);validateMeasurements(postgres);validateScenarios(postgres);validateContextFeedback(postgres);validateLatestExpiredComposition(postgres);
  let currentCompositionLineage;
- try{const contract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH));currentCompositionLineage=contract.planMeasurementCurrentLineage?validatePlanMeasurementCurrentCompactReceipt(postgres,contract,readSource):validateKycExpiredCurrentReceipt(postgres,validateKycExpiredCurrentWorkspaceContract(contract),readSource);}catch(error){requireProof(false,['KYC_EXPIRED_CURRENT_LINEAGE_REJECTED','PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code)?error.message:'Current KYC composition source contract could not be confirmed');}
+ try{const contract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH));currentCompositionLineage=contract.planMeasurementCurrentLineage?validatePlanMeasurementCurrentCompactReceipt(postgres,contract,readSource):validateKycExpiredCurrentReceipt(postgres,validateKycExpiredCurrentWorkspaceContract(contract),readSource);const current=validateIntegratedOwnCurrentNative(postgres,contract,readSource);if(current)currentCompositionLineage={...currentCompositionLineage,integratedCurrentImage:current};}catch(error){requireProof(false,['KYC_EXPIRED_CURRENT_LINEAGE_REJECTED','PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED','INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code)?error.message:'Current KYC composition source contract could not be confirmed');}
  return {version:COMPANY_KYC_OUTBOUND_COMPACT_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,trackedClean:true,sourceState:'EXACT_CI_SOURCE',nativeVersion:postgres.version,checks:[...postgres.checks],sourceCount:closure.files.length,harnessSha256:postgres.harnessSha256,measurements:postgres.measurements,scenarios:postgres.scenarios,syntheticMessagePostCount:postgres.syntheticMessagePostCount,contextFeedbackNative:postgres.contextFeedbackNative,latestExpiredContextNative:postgres.latestExpiredContextNative,totalSyntheticMessagePostCount:postgres.totalSyntheticMessagePostCount,currentCompositionLineage,operativeDatabaseUsed:false,realProviderUsed:false,municipalOrIdentityAcceptance:false,leaseExtended:false,poolClosed:true,databaseRemoved:true,adminClosed:true};
 }
 function main(){
@@ -155,7 +162,7 @@ function main(){
  const committed=new Set(git('ls-tree','-r','--name-only',expectedHead).split('\n')),gitSources=Object.create(null);
  const readSource=file=>{if(!committed.has(file))return null;if(!Object.hasOwn(gitSources,file))gitSources[file]=execFileSync('git',['show',expectedHead+':'+file],{cwd:root,maxBuffer:16*1024*1024,windowsHide:true});return gitSources[file];};
  const closure=companyKycOutboundCompactCiSourceClosure(readSource);
- const contract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH)),currentGuardSources=[...(contract.planMeasurementCurrentLineage?.currentValidationSources||[]).map(ref=>ref.path),...(contract.planMeasurementCurrentLineage?.currentProofChanges||[]).map(delta=>contract.extension.proofs.find(spec=>spec.id===delta.id)?.producer),...(contract.fieldOutboundCurrentRevision?.validationSources||[]).map(ref=>ref.path),...(contract.ooxmlAccountingCurrentRevision?.validationSources||[]).map(ref=>ref.path)];
+ const contract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH)),currentGuardSources=[...(contract.planMeasurementCurrentLineage?.currentValidationSources||[]).map(ref=>ref.path),...(contract.planMeasurementCurrentLineage?.currentProofChanges||[]).map(delta=>contract.extension.proofs.find(spec=>spec.id===delta.id)?.producer),...(contract.fieldOutboundCurrentRevision?.validationSources||[]).map(ref=>ref.path),...(contract.ooxmlAccountingCurrentRevision?.validationSources||[]).map(ref=>ref.path),...(contract.participantPreanalysisCurrentRevision?.validationSources||[]).map(ref=>ref.path),...(contract.integratedIdentityCurrentRevision?.validationSources||[]).map(ref=>ref.path),...preanalysisProducerSources(contract),...participantPreanalysisConsumerValidationFiles(contract)];
  for(const file of [...lineageAuditSources,...currentGuardSources,...closure.files])requireProof(readSource(file)!==null&&sha(readFileSync(path.join(root,file)))===sha(readSource(file)),'Checkout differs from committed expected Git bytes: '+file);
  const inputBytes=readFileSync(path.join(root,proofPath)),proof=validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres:JSON.parse(inputBytes)});
  requireProof(git('rev-parse','HEAD')===head&&git('rev-parse','HEAD^{tree}')===sourceTree&&git('status','--porcelain','--untracked-files=no')==='','Source changed during native proof validation');

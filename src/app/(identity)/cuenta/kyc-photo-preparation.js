@@ -36,26 +36,25 @@ export function KycPhotoPreparation({kind,disabled,onChange}){
   const current=++generation.current;acceptance.current=null;attempt.abort();setPhase('READY');setNotice('Lectura detenida. Conservamos esta copia y tu revisión. Podés volver a usarla.');
   requestAnimationFrame(()=>{if(alive.current&&current===generation.current)useButton.current?.focus();});
  }
+ const picker=<><label>Tomar o elegir una fotografía<input disabled={disabled||phase==='USING'} type="file" accept="image/jpeg,image/png,image/webp" capture={documentPhoto?'environment':'user'} onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)prepare(file);}}/></label><details className={styles.photoDetails}><summary>Formatos y tamaño admitidos</summary><p className={styles.photoHint}>JPEG, PNG o WebP. Original hasta 20 MiB y 24 megapíxeles. La imagen a enviar será de hasta 1 MiB; el original se conserva.</p></details></>;
+ const editing=<><button type="button" disabled={disabled||phase==='USING'} onClick={()=>prepare(original.current,(photo.rotation+90)%360)}>Girar 90°</button><button type="button" disabled={disabled||phase==='USING'} onClick={reset}>Descartar fotografía</button></>;
  return <fieldset className={styles.photo} aria-label={title}>
   <legend>{title}</legend>
   <p>{documentPhoto?'Fotografiá el '+(kind==='back'?'dorso':'frente')+' completo, con luz pareja y sin reflejos. Revisá que se lean los datos.':'Mirando a la cámara, con luz de frente y el rostro completo. Esta foto se presenta para revisión humana.'}</p>
-  <label>Tomar o elegir una fotografía<input disabled={disabled||phase==='USING'} type="file" accept="image/jpeg,image/png,image/webp" capture={documentPhoto?'environment':'user'} onChange={event=>{const file=event.target.files?.[0];event.target.value='';if(file)prepare(file);}}/></label>
-  <p className={styles.photoHint}>JPEG, PNG o WebP. Original hasta 20 MiB y 24 megapíxeles. La imagen a enviar será de hasta 1 MiB; el original se conserva.</p>
+  {phase!=='ACCEPTED'&&picker}
   <p role="status" aria-live="polite">{notice|| (phase==='PREPARING'?'Preparando una copia en este teléfono…':phase==='USING'?'Leyendo la copia revisada… Todavía no se presentó.':phase==='ACCEPTED'?'Imagen revisada y lista para presentar.':'')}</p>
   {phase==='PREPARING'&&<button type="button" disabled={disabled} onClick={reset}>Cancelar preparación</button>}
   {photo&&<>
    {/* Only browser-local object URLs are shown; these images are not uploaded here. */}
    {/* eslint-disable-next-line @next/next/no-img-element */}
    <img className={styles.photoPreview} src={photo.preview} alt={'Vista previa privada: '+title.toLowerCase()}/>
-   <p className={styles.photoHint}>{photo.reduced?'Copia JPEG: '+size(photo.file.size)+' · '+photo.width+' × '+photo.height+' px. Original: '+size(photo.originalBytes)+'. '+(photo.file.size<photo.originalBytes?'Reducción de '+Math.round(100*(1-photo.file.size/photo.originalBytes))+'%.':'Se cambió la orientación; no se redujo el tamaño.'):'Se usará la imagen original: '+size(photo.file.size)+'. No fue reducida.'}</p>
-   <a className={styles.photoLink} href={photo.originalUrl} download={photo.originalName}>Conservar original</a>
+   <details className={styles.photoDetails}><summary>Detalles de la imagen</summary><p className={styles.photoHint}>{photo.reduced?'Copia JPEG: '+size(photo.file.size)+' · '+photo.width+' × '+photo.height+' px. Original: '+size(photo.originalBytes)+'. '+(photo.file.size<photo.originalBytes?'Reducción de '+Math.round(100*(1-photo.file.size/photo.originalBytes))+'%.':'Se cambió la orientación; no se redujo el tamaño.'):'Se usará la imagen original: '+size(photo.file.size)+'. No fue reducida.'}</p><a className={styles.photoLink} href={photo.originalUrl} download={photo.originalName}>Conservar original</a></details>
    {phase!=='ACCEPTED'&&<label className={styles.consent}><input disabled={disabled||phase==='USING'} type="checkbox" checked={reviewed} onChange={event=>setReviewed(event.target.checked)}/>{documentPhoto?'Revisé la orientación y los datos del documento se leen con claridad.':'Revisé la orientación y el rostro se ve con claridad.'}</label>}
-   <div className={styles.actions}>
+   {phase==='ACCEPTED'?<details className={styles.photoDetails}><summary>Cambiar fotografía</summary>{picker}<div className={styles.actions}>{editing}</div></details>:<div className={styles.actions}>
     {phase==='USING'&&<button type="button" onClick={cancelAcceptance}>Cancelar lectura local</button>}
     {phase!=='ACCEPTED'&&<button ref={useButton} type="button" disabled={disabled||phase==='USING'||!reviewed} onClick={accept}>{documentPhoto?'Usar documento revisado':'Usar fotografía revisada'}</button>}
-    <button type="button" disabled={disabled||phase==='USING'} onClick={()=>prepare(original.current,(photo.rotation+90)%360)}>Girar 90°</button>
-    <button type="button" disabled={disabled||phase==='USING'} onClick={reset}>Descartar fotografía</button>
-   </div>
+    {editing}
+   </div>}
   </>}
  </fieldset>;
 }

@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {restoreParticipantPreanalysisPreviousContract,participantPreanalysisCurrentSourcePin,participantPreanalysisPriorValidationPin,verifyParticipantPreanalysisCurrentSources} from './participant-preanalysis-current-ci-lineage.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
@@ -47,6 +48,7 @@ function revision(contract){
 // This restores metadata only. The complete previous contract, including all
 // 49 reviewed pins and the Q revision, must remain byte-authenticatable.
 export function restoreOoxmlAccountingPreviousContract(contract){
+ contract=restoreParticipantPreanalysisPreviousContract(contract);
  const section=revision(contract);if(!section)return contract;
  const previous=structuredClone(contract);delete previous.ooxmlAccountingCurrentRevision;
  requireLineage(sha(JSON.stringify(previous,null,2)+'\n')===section.previousContractSha256,'OOXML revision must restore the complete previous contract');
@@ -54,6 +56,7 @@ export function restoreOoxmlAccountingPreviousContract(contract){
 }
 
 export function ooxmlAccountingCurrentSourcePin(contract,ref){
+ const preanalysisPin=participantPreanalysisCurrentSourcePin(contract,ref);if(preanalysisPin!==ref.sha256)return preanalysisPin;
  const section=revision(contract);if(!section)return ref.sha256;
  const change=[...section.reviewedSourceChanges,...section.validationDeltas].find(row=>row.path===ref.path);
  if(!change)return ref.sha256;
@@ -62,12 +65,14 @@ export function ooxmlAccountingCurrentSourcePin(contract,ref){
 }
 
 export function verifyOoxmlAccountingCurrentSources(contract,readSource){
+ verifyParticipantPreanalysisCurrentSources(contract,readSource);
+ const currentContract=contract;contract=restoreParticipantPreanalysisPreviousContract(contract);
  const section=revision(contract);if(!section)return null;
  restoreOoxmlAccountingPreviousContract(contract);
  requireLineage(typeof readSource==='function','Current OOXML source reader required');
  for(const row of [...section.reviewedSourceChanges.map(row=>({path:row.path,sha256:row.currentSha256})),...section.validationDeltas.map(row=>({path:row.path,sha256:row.currentSha256})),...section.validationSources]){
   const bytes=readSource(row.path);requireLineage(Buffer.isBuffer(bytes),'Missing current OOXML source: '+row.path);
-  const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===row.sha256,'Stale current OOXML source: '+row.path);
+  const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===participantPreanalysisPriorValidationPin(currentContract,row),'Stale current OOXML source: '+row.path);
  }
  return {version:1,previousContractSha256:section.previousContractSha256,reviewedSourceChanges:section.reviewedSourceChanges.map(row=>row.path),historicalPinsPreserved:true,nativeAcceptance:false};
 }

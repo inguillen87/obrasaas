@@ -6,7 +6,7 @@ import styles from './workspace.module.css';
 import {templateSendNotice} from './template-send-view.mjs';
 const uploadRejectionNotice=code=>'El servidor registró el rechazo de esta carga. No se reservó un borrador ni se modificaron tareas. '+(code==='PLAN_IMPORT_SOURCE_ALREADY_APPLIED'?'Esta fuente ya fue aplicada; consultá sus tareas y elegí otra fuente si necesitás importar un plan distinto.':'La obra supera las 5.000 tareas que permite revisar la importación; solicitá una revisión del cronograma.')+' Volvé a Importar cronograma y autorizá una nueva carga explícita sólo después de resolver el motivo.';
 
-export function WorkspaceRecoveryPanel({scope,projects,getSessionToken,onRecovered}) {
+export function WorkspaceRecoveryPanel({scope,projects,getSessionToken,onRecovered,showEmpty=false}) {
   const request=useWorkspaceRequest(getSessionToken);
   const owner=useMemo(()=>({scope,request}),[scope,request]),active=useRef(owner);
   const [entries,setEntries]=useState([]),[busy,setBusy]=useState(null),[messages,setMessages]=useState({}),[notice,setNotice]=useState(''),[closeable,setCloseable]=useState({});
@@ -51,7 +51,7 @@ export function WorkspaceRecoveryPanel({scope,projects,getSessionToken,onRecover
     finally{if(active.current===owner)setBusy(null);}
   }
   const visibleEntries=entries.filter(entry=>entry.scope===scope&&projects.some(project=>project.id===entry.projectId));
-  if(!visibleEntries.length&&!notice)return null;
+  if(!visibleEntries.length&&!notice)return showEmpty?<p role="status" data-workspace-recovery-empty>No hay operaciones pendientes registradas en este navegador para tus obras disponibles.</p>:null;
   return <section className={styles.recovery} aria-labelledby="pending-receipts-title">
     <p className={styles.eyebrow}>RECUPERACIÓN</p><h3 id="pending-receipts-title">Operaciones por comprobar</h3>
     <p>Quedó una confirmación pendiente en este navegador. Podemos consultar su recibo después de recargar o volver a abrir la cuenta. Se conservan sólo referencias del intento; los textos, archivos y datos del formulario no se guardan en el navegador.</p>

@@ -86,6 +86,15 @@ function listRequests(current){return current.requests.filter(row=>row.path==='/
 function unchanged(current){assert.equal(JSON.stringify(current.row),current.rowBefore,'Navigation changed identity or field permissions');assert.equal(current.row.kyc.status,'NOT_SUBMITTED');assert.deepEqual(current.row.permissions,{attendance:false,report:false});}
 async function waitText(page,label){await page.waitForFunction(text=>document.body.innerText.includes(text),{timeout:15000},label);}
 async function settled(page){await page.waitForFunction(()=>document.querySelector('[aria-labelledby="workspace-title"]')?.getAttribute('aria-busy')==='false',{timeout:15000});}
+async function waitRecordedTask(page,label){
+ await settled(page);
+ const nav='nav[aria-label="Navegación de la obra"]',picker=nav+' select';
+ await page.waitForFunction(()=>document.querySelector('nav[aria-label="Navegación de la obra"] select option[value="schedule-title"]')&&document.querySelector('#schedule-title'),{timeout:15000});
+ if(await page.$eval(picker,node=>node.getClientRects().length>0))await page.select(picker,'schedule-title');
+ else await page.click(nav+' a[href="#schedule-title"]');
+ await page.waitForFunction(()=>{const visible=[...document.querySelectorAll('[data-workspace-screen]')].filter(node=>node.getClientRects().length);return visible.length===1&&visible[0].dataset.workspaceScreen==='cronograma';},{timeout:15000});
+ await waitText(page,label);
+}
 async function uiTurn(page){await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await pause(150);}
 async function click(page,label){
  await page.waitForFunction(text=>[...document.querySelectorAll('button')].some(button=>!button.disabled&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),{timeout:15000},label);
@@ -107,10 +116,11 @@ async function privateOnly(page,current){
  for(const id of ['schedule-title','schedule-overview-title','workspace-tools-title','field-title','inventory-title','portfolio-overview-title','pending-receipts-title'])assert.equal(await page.$('#'+id),null,'Operational surface mounted while KYC is pending: '+id);
  assert.equal(await page.$('[data-schedule-workbench]'),null);
  assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Untrusted task'));
- assert.equal(current.requests.filter(row=>row.path==='/api/identity/participants').length,0,'Identity read must remain explicit');
+ await waitText(page,current.row.name);
+ assert.equal(current.requests.filter(row=>row.path==='/api/identity/participants').length,1,'Opening the private identity panel performs exactly one canonical metadata GET');
  await click(page,'Consultar mi identidad');await waitText(page,current.row.name);await settled(page);
  assert.ok((await page.evaluate(()=>document.body.innerText)).includes('Sin presentar'));
- assert.equal(current.requests.filter(row=>row.path==='/api/identity/participants').length,1);
+ assert.equal(current.requests.filter(row=>row.path==='/api/identity/participants').length,2,'Explicit identity refresh performs exactly one additional canonical GET');
  assert.equal(current.posts.filter(row=>row.path!=='/api/identity/participant-join').length,0);
  unchanged(current);await noExtraAuthority(page);await noOverflow(page);
 }
@@ -197,18 +207,18 @@ async function invitationNavigation(width,mode){
  const href=await assertCanonicalJoinHref(page);await noOverflow(page);
  const link=await page.$('a[href="'+href+'"]');assert.ok(link);
  await Promise.all([page.waitForNavigation({waitUntil:'networkidle0'}),link.click()]);
- if(mode==='recovered')await privateOnly(page,current);else{await waitText(page,'Tarea de consulta '+targetProjectId);await settled(page);await noExtraAuthority(page);await noOverflow(page);}
+ if(mode==='recovered')await privateOnly(page,current);else{await waitRecordedTask(page,'Tarea de consulta '+targetProjectId);await settled(page);await noExtraAuthority(page);await noOverflow(page);}
  assert.deepEqual(projectRequests(current).map(row=>[row.actor,row.projectId]),[['A',targetProjectId]]);assert.equal(listRequests(current).length,1);
  assert.equal(current.requests.filter(row=>row.path==='/api/identity/participant-join').length,mode==='recovered'?3:2,'Navigation performed another invitation request');
  await snapshot(page,'invitation-'+mode+'-'+width);recordCheck(width,current,'confirmed-invitation-link-uses-current-receipt-project-and-canonical-get',{mode});await context.close();
 }
 async function authorizedOnce(width){
  const current=newState('authorized-once'),entry='/cuenta?obra='+targetProjectId+'&scope='+scopeB+'&role=ADMIN&canManage=true&canSend=true';
- const {context,page}=await createPage(width,current,entry);await waitText(page,'Tarea de consulta '+targetProjectId);await settled(page);await noExtraAuthority(page);await noOverflow(page);
+ const {context,page}=await createPage(width,current,entry);await waitRecordedTask(page,'Tarea de consulta '+targetProjectId);await settled(page);await noExtraAuthority(page);await noOverflow(page);
  assert.deepEqual(projectRequests(current).map(row=>row.projectId),[targetProjectId]);assert.equal(listRequests(current).length,1);
  await click(page,'Actualizar');await waitText(page,'Empresa de ensayo A');await settled(page);await uiTurn(page);await noProject(page);
  assert.deepEqual(projectRequests(current).map(row=>row.projectId),[targetProjectId],'Refresh reopened a consumed hint');
- await click(page,'Obra A');await waitText(page,'Tarea de consulta p-a');await settled(page);await uiTurn(page);
+ await click(page,'Obra A');await waitRecordedTask(page,'Tarea de consulta p-a');await settled(page);await uiTurn(page);
  assert.deepEqual(projectRequests(current).map(row=>row.projectId),[targetProjectId,'p-a'],'Manual selection reopened the original hint');assert.equal(listRequests(current).length,2);assert.equal(current.posts.length,0);
  await noExtraAuthority(page);await noOverflow(page);recordCheck(width,current,'hint-selects-second-authorized-project-once-and-never-adds-authority');await context.close();
 }
@@ -226,7 +236,7 @@ async function rejectedHints(width){
 async function failedListRefresh(width){
  const current=newState('failed-list-refresh',{listFailures:1}),{context,page}=await createPage(width,current,'/cuenta?obra='+targetProjectId);
  await settled(page);await noProject(page);assert.equal(projectRequests(current).length,0);assert.equal(listRequests(current).length,1);
- await click(page,'Actualizar');await waitText(page,'Tarea de consulta '+targetProjectId);await settled(page);
+ await click(page,'Actualizar');await waitRecordedTask(page,'Tarea de consulta '+targetProjectId);await settled(page);
  assert.deepEqual(projectRequests(current).map(row=>row.projectId),[targetProjectId]);assert.equal(listRequests(current).length,2);
  await click(page,'Actualizar');await waitText(page,'Empresa de ensayo A');await settled(page);await uiTurn(page);await noProject(page);
  assert.deepEqual(projectRequests(current).map(row=>row.projectId),[targetProjectId]);assert.equal(listRequests(current).length,3);assert.equal(current.posts.length,0);
@@ -242,10 +252,10 @@ async function lateContext(width){
  for(let attempt=0;attempt<80&&!current.held.length;attempt++)await pause(25);assert.equal(current.held.length,1,'Expected held automatic project GET');
  await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');await settled(page);await uiTurn(page);await noProject(page);
  assert.deepEqual(projectRequests(current).map(row=>[row.actor,row.projectId]),[['A',targetProjectId]],'Foreign hint opened in the replacement context');
- await click(page,'Obra B');await waitText(page,'Tarea de consulta p-b');await settled(page);
+ await click(page,'Obra B');await waitRecordedTask(page,'Tarea de consulta p-b');await settled(page);
  for(const release of current.held.splice(0))release();
  for(let attempt=0;attempt<80&&!current.heldResponseSettled;attempt++)await pause(25);assert.equal(current.heldResponseSettled,true,'Old request was not released');await uiTurn(page);
- await waitText(page,'Tarea de consulta p-b');assert.equal(await page.$('#identity-access-title'),null);assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Untrusted task'));assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Empresa de ensayo A'));
+ await waitRecordedTask(page,'Tarea de consulta p-b');assert.equal(await page.$('#identity-access-title'),null);assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Untrusted task'));assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Empresa de ensayo A'));
  assert.deepEqual(projectRequests(current).map(row=>[row.actor,row.projectId]),[['A',targetProjectId],['B','p-b']]);assert.equal(current.posts.length,0);await noExtraAuthority(page);await noOverflow(page);
  await snapshot(page,'late-context-'+width);recordCheck(width,current,'late-prior-context-cannot-restore-its-project-or-private-state');await context.close();
 }

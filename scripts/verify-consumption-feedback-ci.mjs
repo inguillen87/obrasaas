@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {participantPreanalysisConsumerSourceFiles,preloadParticipantPreanalysisConsumerSources} from './lib/participant-preanalysis-current-ci-lineage.mjs';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
 import path from 'node:path';
@@ -103,7 +104,7 @@ export function validateConsumptionFeedbackCi({expectedHead,head,sourceTree,trac
  requireProof(postgres.realIdentityDocuments===false&&postgres.providerCalls===0&&postgres.poolClosed===true&&postgres.databaseRemoved===true,'PostgreSQL provider/identity/cleanup boundary must be closed');
  requireProof(postgres.totalCheckCount===23&&Array.isArray(postgres.checks),'PostgreSQL requires all 23 native checks');
  same(postgres.checks,MATERIAL_CONSUMPTION_FEEDBACK_CHECKS,'PostgreSQL checks must equal the exported native contract');
- const pgClosure=consumptionFeedbackSourceClosure(readSource);let sourceLineage;try{sourceLineage=validatePlanMeasurementConsumerSourceLineage({family:'CONSUMPTION_FEEDBACK',files:pgClosure.files,readSource});}catch(error){requireProof(false,error.message);}requireProof(pgClosure.files.length===110,'PostgreSQL committed closure must contain the previous 108 sources and exactly two source import dependencies');manifest(postgres,pgClosure.files,readSource,'PostgreSQL');
+ const pgClosure=consumptionFeedbackSourceClosure(readSource);let historicalNativeFiles,sourceLineage;try{historicalNativeFiles=participantPreanalysisConsumerSourceFiles('CONSUMPTION_FEEDBACK',pgClosure.files,readSource);sourceLineage=validatePlanMeasurementConsumerSourceLineage({family:'CONSUMPTION_FEEDBACK',files:pgClosure.files,readSource});}catch(error){requireProof(false,error.message);}requireProof(historicalNativeFiles.length===110,'PostgreSQL committed closure must contain the previous 108 sources and exactly two source import dependencies');manifest(postgres,pgClosure.files,readSource,'PostgreSQL');
  requireProof(['src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs'].every(file=>pgClosure.files.includes(file)),'Current native document curve dependency lineage');
  requireProof(['src/lib/participant-civil-store.mjs','src/lib/participant-civil-policy.mjs','src/lib/bindx-civil-data-client.mjs'].every(file=>pgClosure.files.includes(file)),'The current native lineage requires every durable civil source');
  requireProof(postgres.harnessSha256===sha(readSource(pgHarness)),'PostgreSQL producer hash must match committed Git bytes');
@@ -115,7 +116,7 @@ export function validateConsumptionFeedbackCi({expectedHead,head,sourceTree,trac
  const uiClosure=consumptionFeedbackSourceClosure(readSource,{ui:true});requireProof(uiClosure.files.length===20,'UI committed closure must contain all 20 sources');manifest(ui,uiClosure.files,readSource,'UI');
  same(ui.externalImports,uiClosure.externalImports,'UI package imports must match committed JSX graph');same(ui.externalImports,['react'],'UI fixture package dependency boundary changed');
  requireProof(ui.harnessSha256===sha(readSource(uiHarness))&&ui.cleanupHelperSha256===sha(readSource(cleanupHelper)),'UI producer and owned cleanup hashes must match committed Git bytes');
- return {version:CONSUMPTION_FEEDBACK_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{version:postgres.version,totalCheckCount:23,sourceCount:110,harnessSha256:postgres.harnessSha256,sourceLineage},ui:{totalCheckCount:12,sourceCount:20,widths:[...CONSUMPTION_FEEDBACK_UI_WIDTHS],harnessSha256:ui.harnessSha256,cleanupHelperSha256:ui.cleanupHelperSha256},providerCalls:0,productionDataWritten:false,productionLoginVerified:false,physicalDeviceAccepted:false};
+ return {version:CONSUMPTION_FEEDBACK_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{version:postgres.version,totalCheckCount:23,sourceCount:pgClosure.files.length,harnessSha256:postgres.harnessSha256,sourceLineage},ui:{totalCheckCount:12,sourceCount:20,widths:[...CONSUMPTION_FEEDBACK_UI_WIDTHS],harnessSha256:ui.harnessSha256,cleanupHelperSha256:ui.cleanupHelperSha256},providerCalls:0,productionDataWritten:false,productionLoginVerified:false,physicalDeviceAccepted:false};
 }
 
 function main(){
@@ -130,8 +131,9 @@ function main(){
  consumptionFeedbackSourceClosure(readSource);consumptionFeedbackSourceClosure(readSource,{ui:true});for(const file of [uiHarness,cleanupHelper,PLAN_MEASUREMENT_CONSUMER_CI_HELPER])requireProof(readSource(file)!==null,'Missing committed producer: '+file);
  requireProof(sha(readFileSync(path.join(root,PLAN_MEASUREMENT_CONSUMER_CI_HELPER)))===sha(readSource(PLAN_MEASUREMENT_CONSUMER_CI_HELPER)),'Consumer lineage helper must equal committed Git bytes');
  const pgBytes=readFileSync(path.join(root,'.vercel/private/material-consumption-feedback-postgres.json')),uiBytes=readFileSync(path.join(root,'.vercel/private/consumption-feedback-evidence/browser.json'));
+ preloadParticipantPreanalysisConsumerSources({readSource,readCheckout:file=>readFileSync(path.join(root,file))});
  const result=validateConsumptionFeedbackCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres:JSON.parse(pgBytes),ui:JSON.parse(uiBytes)});
- requireProof(git('rev-parse','HEAD')===head&&git('rev-parse','HEAD^{tree}')===sourceTree&&git('status','--porcelain','--untracked-files=no')==='','Source changed during CI proof validation');requireProof(sha(readFileSync(path.join(root,PLAN_MEASUREMENT_CONSUMER_CI_HELPER)))===sha(readSource(PLAN_MEASUREMENT_CONSUMER_CI_HELPER)),'Consumer lineage helper changed during validation');
+ preloadParticipantPreanalysisConsumerSources({readSource,readCheckout:file=>readFileSync(path.join(root,file))});requireProof(git('rev-parse','HEAD')===head&&git('rev-parse','HEAD^{tree}')===sourceTree&&git('status','--porcelain','--untracked-files=no')==='','Source changed during CI proof validation');requireProof(sha(readFileSync(path.join(root,PLAN_MEASUREMENT_CONSUMER_CI_HELPER)))===sha(readSource(PLAN_MEASUREMENT_CONSUMER_CI_HELPER)),'Consumer lineage helper changed during validation');
  const output=path.join(root,'.vercel/private/consumption-feedback-ci.json');mkdirSync(path.dirname(output),{recursive:true});
  const proof={...result,checkedAt:new Date().toISOString(),validatorSha256:sha(validatorBytes),inputProofs:[{path:'.vercel/private/material-consumption-feedback-postgres.json',sha256:sha(pgBytes)},{path:'.vercel/private/consumption-feedback-evidence/browser.json',sha256:sha(uiBytes)}]};
  writeFileSync(output,JSON.stringify(proof,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:proof.status,sourceRevision:head,output:path.relative(root,output).split(path.sep).join('/'),nativeChecks:23,uiChecks:12}));

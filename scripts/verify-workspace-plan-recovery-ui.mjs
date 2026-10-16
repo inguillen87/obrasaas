@@ -60,7 +60,16 @@ const widths=[320,390,768,1280],modes=['apply','recover-after-reload','read-fail
 const closureModes=['upload-not-observed','decision-not-observed','upload-denied-403','upload-context-409','decision-denied-403','decision-context-409','legacy-reference','legacy-conflict','global-recovery','global-read-failure','global-same-mount','invalid-source','oversized-source','upload-explicit-retry','decision-explicit-retry','upload-close-after-check','upload-lease-expiry','global-lease-expiry'];
 const selectedModes=process.env.PLAN_RECOVERY_UI_MODES?.split(',')||[...modes,...closureModes];assert.ok(selectedModes.length&&selectedModes.every(mode=>[...modes,...closureModes].includes(mode)));
 const waitText=(page,value)=>page.waitForFunction(expected=>document.body.innerText.includes(expected),{timeout:20000},value);
+async function showWorkspaceSection(page,target,section){
+ const nav='nav[aria-label="Navegación de la obra"]',picker=nav+' select';
+ await page.waitForSelector(nav);
+ if(await page.$eval(picker,node=>node.getClientRects().length>0))await page.select(picker,target);
+ else{const selector=nav+' a[href="#'+target+'"]';if(await page.$eval(selector,node=>node.closest('details')?.open===false))await page.click(nav+' details>summary');await page.click(selector);}
+ await page.waitForFunction(expected=>{const visible=[...document.querySelectorAll('[data-workspace-screen]')].filter(node=>node.getClientRects().length);return visible.length===1&&visible[0].dataset.workspaceScreen===expected;},{timeout:20000},section);
+}
 async function click(page,label){
+ if(label==='Comprobar recibo')await showWorkspaceSection(page,'workspace-recovery-title','recuperacion');
+ else if(label==='Importar PDF, imagen o Excel'||label==='Comprobar resultado')await showWorkspaceSection(page,'schedule-title','cronograma');
  await page.waitForFunction(expected=>[...document.querySelectorAll('button')].some(button=>button.textContent.trim()===expected&&!button.disabled),{timeout:20000},label);
  const button=await page.evaluateHandle(expected=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===expected),label);await button.asElement().click();await button.dispose();
 }
@@ -69,13 +78,14 @@ async function openProject(page,id=projectId){
  await page.evaluate(project=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes(project)).click(),id===projectId?'Obra paginada A':'Obra del contexto B');
 }
 async function assertCount(page,total,loaded=100){
+ await showWorkspaceSection(page,'schedule-title','cronograma');
  await waitText(page,`${loaded} de ${total} tareas`);assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),loaded);
  assert.ok(!await page.evaluate(()=>document.body.innerText.includes('de 152 tareas')),'A recovered receipt must not increment an existing canonical count');
 }
 async function assertPlanBlockingNavigation(page,posts){
- const selector='nav[aria-labelledby="workspace-tools-title"] [role="status"] a[href="#plan-import-title"]',beforePosts=posts.length;
+ const selector='nav[aria-label="Navegación de la obra"] [role="status"] a[href="#plan-import-title"]',beforePosts=posts.length;
  await page.waitForSelector(selector);
- assert.deepEqual(await page.$$eval('nav[aria-labelledby="workspace-tools-title"] [role="status"] a',links=>links.map(link=>link.getAttribute('href'))),['#plan-import-title'],'The plan lock must name the actual blocking module, without labelling it as task creation');
+ assert.deepEqual(await page.$$eval('nav[aria-label="Navegación de la obra"] [role="status"] a',links=>links.map(link=>link.getAttribute('href'))),['#plan-import-title'],'The plan lock must name the actual blocking module, without labelling it as task creation');
  assert.equal(await page.$$eval('button',buttons=>buttons.find(button=>button.textContent.trim()==='Actualizar')?.disabled),true,'A ready or uncertain import locks context refresh');
  const link=await page.$(selector);assert.ok(await link.evaluate(element=>{const rect=element.getBoundingClientRect();return rect.width>=44&&rect.height>=44;}),'The recovery link must be touch accessible');
  await link.focus();await page.keyboard.press('Enter');
@@ -90,7 +100,7 @@ async function closeRetainedUncertainReview(page,posts){
  await page.evaluate(()=>[...document.querySelectorAll('[data-plan-import] button')].find(button=>button.textContent==='Cerrar').click());
  await page.waitForFunction(()=>document.querySelector('#plan-import-title')?.tagName==='BUTTON'&&[...document.querySelectorAll('button')].find(button=>button.textContent==='Actualizar')?.disabled===true);
  assert.deepEqual(await browserReferences(page),references,'Closing retains every exact durable reference');
- const link=await page.$('nav[aria-labelledby="workspace-tools-title"] [role="status"] a[href="#plan-import-title"]');assert.ok(link,'A closed uncertain import still names its blocking panel');
+ const link=await page.$('nav[aria-label="Navegación de la obra"] [role="status"] a[href="#plan-import-title"]');assert.ok(link,'A closed uncertain import still names its blocking panel');
  await link.focus();await page.keyboard.press('Enter');
  await page.waitForFunction(()=>document.activeElement?.id==='plan-import-title'&&location.hash==='#plan-import-title');
  assert.equal(await page.$eval('#plan-import-title',element=>element.tagName),'BUTTON','The closed import destination remains actionable');
@@ -168,7 +178,7 @@ async function scenario(mode,width){
  }
  if(mode==='task-recover-after-reload'){
   await waitText(page,'La confirmación no llegó. Comprobá el recibo');assert.equal(posts.length,1);assert.equal(applied,true);
-  await page.reload({waitUntil:'networkidle0'});await waitText(page,'Empresa sintética de cronogramas');await openProject(page);await assertCount(page,151);await waitText(page,'Operaciones por comprobar');await click(page,'Comprobar recibo');await waitText(page,'El total incluye la tarea creada');await assertCount(page,151);assert.equal(recoveryReads.length,1);
+  await page.reload({waitUntil:'networkidle0'});await waitText(page,'Empresa sintética de cronogramas');await openProject(page);await assertCount(page,151);await showWorkspaceSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');await click(page,'Comprobar recibo');await waitText(page,'El total incluye la tarea creada');await assertCount(page,151);assert.equal(recoveryReads.length,1);
   assert.ok(!await page.evaluate(()=>document.body.innerText.includes('El plan tiene un recibo')),'Task recovery must use the task label');
  }else if(mode==='task-recover-existing'){
   // The receipt's task is already included in count(*), outside page100. The

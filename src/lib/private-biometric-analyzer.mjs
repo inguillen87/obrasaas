@@ -1,13 +1,14 @@
 import {createHash,createHmac,randomBytes} from 'node:crypto';
 
 export const BIOMETRIC_NOTICE_VERSION='participant-private-biometric-v1';
+const CONSENT_VERSIONS=new Set([BIOMETRIC_NOTICE_VERSION,'participant-private-biometric-v2']);
 const FAILURE=code=>({success:false,code,identityCertified:false,livenessVerified:false,requiresHumanReview:true});
 const MIME=new Set(['image/jpeg','image/png','image/webp']);
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const MANIFEST_SHA='c695e1a85db3ac933836562ce1f7d7e2b372ba2951dc9c4d0160b88cd448c860';
 export function createPrivateBiometricAnalyzer({environment=process.env,fetchImpl=fetch,clock=()=>Date.now(),nonce=()=>randomBytes(16).toString('hex'),timeoutMs=60000}={}){
  return {async analyzeBiometricPair({front,selfie,consentVersion}={}){
-  if(consentVersion!==BIOMETRIC_NOTICE_VERSION)return FAILURE('BIOMETRIC_PRIVACY_REQUIRED');
+  if(!CONSENT_VERSIONS.has(consentVersion))return FAILURE('BIOMETRIC_PRIVACY_REQUIRED');
   const secret=environment.OBRASAAS_BIOMETRIC_SERVICE_KEY;
   if(typeof secret!=='string'||!/^[a-f0-9]{64}$/.test(secret))return FAILURE('BIOMETRIC_SERVICE_NOT_CONFIGURED');
   let endpoint;

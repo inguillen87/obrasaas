@@ -255,7 +255,7 @@ try {
   await bounded(new Promise((resolve,reject) => {child.once('error',reject);child.on('message',message => {if (message?.nonce !== nonce) return;if (message.type === 'ready') resolve();if (message.type === 'failed') reject(new Error('Owned fixture preparation failed'));});child.once('exit',() => reject(new Error('Owned fixture exited before readiness')));}), 'Owned fixture readiness timed out',90000);
   const initialResponse = await fetch(origin+'/initial-workspace',{signal:AbortSignal.timeout(60000)}),initialHtml = await initialResponse.text();
   assert.equal(initialResponse.status,200,'Actual AccountWorkspace must render before account/project/measurement selection are present');
-  assert.ok(initialHtml.includes('data-initial-workspace')&&initialHtml.includes('Mis obras'));
+  assert.ok(initialHtml.includes('data-initial-workspace')&&/<h2\b[^>]*\bid="workspace-title"[^>]*>Panel de obra<\/h2>/.test(initialHtml));
   assert.ok(!initialHtml.includes('data-task-id=')&&!initialHtml.includes('data-measurement-editor'));
   checks.push({check:'actual-workspace-initial-null-account-project-selection-ssr',httpStatus:initialResponse.status,taskCount:0,privateFormCount:0,apiCalls:0});
   const response = await fetch(origin,{signal:AbortSignal.timeout(60000)});assert.ok(response.ok && (await response.text()).includes('TASK_MEASUREMENT_FIXTURE'));

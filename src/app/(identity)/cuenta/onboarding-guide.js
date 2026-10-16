@@ -1,6 +1,8 @@
 'use client';
 import {useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore} from 'react';
 import Link from 'next/link';
+import {workspaceDestination} from './workspace-view-routing.mjs';
+import {revealWorkspaceDestination} from './workspace-screen';
 import styles from './onboarding-guide.module.css';
 
 const targetIds = ['organization-context','office-join-title','office-review-title','company-bootstrap-heading','workspace-title','workspace-refresh','project-preparation-title','schedule-title','site-register-title','participant-title','inventory-title','field-title','customer-whatsapp-title','own-company-number-title','own-company-templates-title','worker-channel-title','company-channel-title','customer-meta-title','constructor-crm-title'];
@@ -10,7 +12,7 @@ function subscribeTargets(callback) {
  window.addEventListener('resize', callback);
  return () => { observer.disconnect(); window.removeEventListener('resize', callback); };
 }
-const readTargets = () => targetIds.filter(id => {const element=document.getElementById(id);return element?.getClientRects().length&&(id!=='workspace-refresh'||!element.disabled);}).join('|');
+const readTargets = () => targetIds.filter(id => {const element=document.getElementById(id);return element&&(element.getClientRects().length||workspaceDestination(id))&&(id!=='workspace-refresh'||!element.disabled);}).join('|');
 const noTargets = () => '';
 const accessNotices={
  SESSION_REQUIRED:{title:'Sesión por verificar',text:'Esta consulta no pudo confirmar tu sesión. Usá Actualizar en Mis obras. Si el aviso continúa, volvé a ingresar con tu cuenta.'},
@@ -109,6 +111,7 @@ function OnboardingGuideFlow({orgId,orgRole,summary,guideSteps,officeReviewOnly,
  function go(destination=target){
   noticeRequest.current=null;if(!mounted.current)return;
   const element=destination&&document.getElementById(destination);
+  if(element&&workspaceDestination(destination)){setNotice('');revealWorkspaceDestination(destination);return;}
   if(!element?.getClientRects().length||element.disabled){
    const message=destination==='workspace-refresh'?'Esperá o resolvé la acción pendiente en Mis obras antes de actualizar.':dependency;
    noticeRequest.current={context:JSON.stringify([orgId,orgRole,officeReviewOnly]),message};

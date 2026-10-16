@@ -1,10 +1,12 @@
+import {restoreParticipantPreanalysisPreviousContract,restoreParticipantPreanalysisSourceSet} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
+import {restoreIntegratedIdentitySourceSet} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {FIELD_OUTBOUND_CURRENT_REVISION,restoreFieldOutboundPreviousContract,verifyFieldOutboundCurrentSources} from '../scripts/lib/field-outbound-current-ci-lineage.mjs';
 import {verifyPlanMeasurementCurrentSources,reconstructPublishedHContract} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';
-import {KYC_EXPIRED_CURRENT_REVIEWED_SOURCES} from '../scripts/lib/kyc-expired-current-ci-lineage.mjs';
+import {KYC_EXPIRED_CURRENT_REVIEWED_SOURCES,kycExpiredCurrentSourceFiles} from '../scripts/lib/kyc-expired-current-ci-lineage.mjs';
 const root=new URL('../',import.meta.url),read=file=>readFileSync(new URL(file,root)),sha=value=>createHash('sha256').update(value).digest('hex');
 const contract=JSON.parse(read('.github/workspace-acceptance-contract.json'));
 const denied=run=>assert.throws(run,{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});
@@ -20,7 +22,10 @@ test('outbound revision restores the complete exact P contract before L K I G H 
 test('outbound source validation uses actual current bytes and certifies no native or human acceptance',()=>{
  const result=verifyFieldOutboundCurrentSources(contract,read);
  assert.equal(result.nativeAcceptance,false);assert.equal(result.historicalPinsPreserved,true);
- assert.equal(verifyPlanMeasurementCurrentSources(contract,read).sourceCount,127);
+ const lineage=verifyPlanMeasurementCurrentSources(contract,read);assert.equal(lineage.publishedCurrentSourceCount,127);
+ const actualFiles=kycExpiredCurrentSourceFiles(read),checkpointFiles=restoreIntegratedIdentitySourceSet('COMPACT',actualFiles,contract);
+ assert.equal(checkpointFiles.length,contract.participantPreanalysisCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
+ assert.equal(lineage.sourceCount,actualFiles.length);assert.equal(lineage.sourceCount,137);assert.equal(lineage.sourceCount,contract.integratedIdentityCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
 });
 test('original eight reviewed H source pins stay immutable and only two explicit current pins advance',()=>{
  assert.deepEqual(contract.kycExpiredCurrentComposition.reviewedSources,KYC_EXPIRED_CURRENT_REVIEWED_SOURCES);

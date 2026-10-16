@@ -248,6 +248,13 @@ jobs:
         run: |
           npx eslint src/lib/company-channel-kyc.mjs src/lib/meta-kyc-*.mjs src/lib/participant-channel-kyc.mjs scripts/verify-company-channel-kyc-postgres.mjs tests/fixtures/company-kyc-memory.mjs tests/production-company-channel-kyc.test.mjs --max-warnings 0
           node scripts/verify-company-channel-kyc-postgres.mjs
+      - name: AI-first participant preanalysis with personal consent and owned PostgreSQL evidence
+        run: |
+          npx eslint scripts/verify-participant-kyc-preanalysis-ci.mjs scripts/verify-participant-kyc-preanalysis-postgres.mjs scripts/lib/participant-preanalysis-current-ci-lineage.mjs src/lib/participant-analysis-consent.mjs src/lib/participant-kyc-preanalysis*.mjs "src/app/(identity)/cuenta/participant-kyc-preanalysis-view.mjs" tests/production-participant-preanalysis-current-ci-lineage.test.mjs tests/production-participant-kyc-preanalysis*.test.mjs tests/fixtures/participant-preanalysis-memory.mjs --max-warnings 0
+          node --test tests/production-participant-preanalysis-current-ci-lineage.test.mjs
+          node scripts/verify-participant-kyc-preanalysis-postgres.mjs --guard-self-test
+          node scripts/verify-participant-kyc-preanalysis-ci.mjs native --expected-head "$GITHUB_SHA"
+          node scripts/verify-participant-kyc-preanalysis-ci.mjs verify --expected-head "$GITHUB_SHA"
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane people --expected-head "$GITHUB_SHA"
@@ -268,6 +275,7 @@ jobs:
             .vercel/private/participant-bank-intake-integration/current/browser.json
             .vercel/private/participant-bank-intake-integration/bad-resolution/browser.json
             .vercel/company-kyc-evidence/
+            .vercel/private/participant-kyc-preanalysis-evidence/
             .vercel/workspace-ci-evidence/lane-people.json
           include-hidden-files: true
           retention-days: 7
@@ -664,6 +672,12 @@ jobs:
         run: |
           npx eslint src/lib/participant-admission.mjs tests/production-participant-admission.test.mjs tests/production-workspace-identity-only.test.mjs scripts/verify-workspace-identity-only-ui.mjs scripts/fixtures/canonical-participant-kyc.mjs tests/production-field-canonical-kyc.test.mjs tests/production-company-field-operations.test.mjs --max-warnings 0
           node scripts/verify-workspace-identity-only-ui.mjs --expected-head "$GITHUB_SHA"
+      - name: Focused worksite navigation and three-step synthetic identity browser evidence
+        run: |
+          npx eslint scripts/verify-focused-workspace-ci.mjs scripts/verify-focused-workspace-ui.mjs scripts/lib/integrated-identity-current-ci-lineage.mjs tests/production-focused-workspace-ci.test.mjs tests/production-focused-workspace-ui.test.mjs tests/production-focused-workspace-navigation.test.mjs tests/production-integrated-identity-current-ci-lineage.test.mjs --max-warnings 0
+          node --test tests/production-integrated-identity-current-ci-lineage.test.mjs
+          node scripts/verify-focused-workspace-ci.mjs browser --expected-head "$GITHUB_SHA"
+          node scripts/verify-focused-workspace-ci.mjs verify --expected-head "$GITHUB_SHA"
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane workspace-ui --expected-head "$GITHUB_SHA"
@@ -682,6 +696,7 @@ jobs:
             .vercel/private/portfolio-overview-ui-validation.json
             .vercel/private/portfolio-*.png
             .vercel/workspace-identity-only-evidence/
+            .vercel/private/focused-workspace-ui-evidence/
             .vercel/workspace-ci-evidence/lane-workspace-ui.json
           include-hidden-files: true
           retention-days: 7

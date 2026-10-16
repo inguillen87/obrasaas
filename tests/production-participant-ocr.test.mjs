@@ -113,3 +113,13 @@ test('revocation during provider I/O prevents persistence and result exposure',a
 test('HTTP retains no-store and never reflects provider exception details',async()=>{
  const f=fixture({analyze:async()=>{throw new Error('PRIVATE_DNI_12345678');}}),handlers=createParticipantHandlers({verify:async()=>f.session,store:f.store}),response=await handlers.POST(new Request('https://obrasaas.com/api/identity/participants',{method:'POST',headers:{origin:'https://obrasaas.com','content-type':'application/json'},body:JSON.stringify(f.command())}));assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'private, no-store, max-age=0');assert.doesNotMatch(await response.text(),/PRIVATE_DNI|12345678/);
 });
+test('the participant store projects normalized completed automatic OCR to another manager while a separate stage waits or is uncertain',async()=>{
+ const f=fixture(),expected={nombreCompleto:'Persona Sintética',dni:'12345678',cuil:null};
+ for(const status of ['WAITING_CONFIGURATION','USAGE_HELD','UNCERTAIN']){
+  f.row.metadata.participant.kyc.processing={automatic:true,status,requiresHumanReview:true,stages:{ocr:{state:'COMPLETE'},biometric:{state:'WAITING_CONFIGURATION'}},fields:{nombreCompleto:'  Persona Sintética  ',dni:'12.345.678',cuil:null,rawProvider:'private-extra-never-project'}};
+  const manager=await f.store.read(f.session,f.context);assert.deepEqual(manager.records[0].kyc.processing.fields,expected);assert.doesNotMatch(JSON.stringify(manager.records[0].kyc.processing),/private-extra|rawProvider/);
+  f.member.role='AUDITOR';f.session.userId='user_Participant';assert.equal((await f.store.read(f.session,f.context)).records[0].kyc.processing.fields,undefined);
+  f.member.role='DIRECTOR';assert.equal((await f.store.read(f.session,f.context)).records[0].kyc.processing.fields,undefined);f.session.userId='user_Reviewer';
+ }
+ f.row.metadata.participant.kyc.processing.fields={nombreCompleto:'Documento',dni:'not-a-dni',cuil:null};assert.equal((await f.store.read(f.session,f.context)).records[0].kyc.processing.fields,undefined);
+});

@@ -1,3 +1,5 @@
+import {integratedIdentityPreviousProofChecks} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
+import {restoreParticipantPreanalysisPreviousContract,participantPreanalysisProofSourceAdditions} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
@@ -18,8 +20,8 @@ const current=contract.extension.proofs.filter(spec=>Object.hasOwn(WHATSAPP_FEED
 test('current execution graphs add only their real WhatsApp imports and preserve every published PR142 path set',()=>{
  assert.equal(current.length,7);
  for(const spec of current){
-  assert.equal(spec.sourceFiles.length,WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS[spec.kind]+additions(spec.kind).length+(contract.planMeasurementCurrentLineage?planMeasurementCurrentDependencies(spec.kind).length:0));
-  assert.doesNotThrow(()=>validateWhatsappFeedbackPreviousSourceLineage(spec));
+  const prior=restoreParticipantPreanalysisPreviousContract(contract).extension.proofs.find(row=>row.id===spec.id);assert.equal(prior.sourceFiles.length,WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS[spec.kind]+additions(spec.kind).length+(contract.planMeasurementCurrentLineage?planMeasurementCurrentDependencies(spec.kind).length:0));assert.equal(spec.sourceFiles.length,prior.sourceFiles.length+participantPreanalysisProofSourceAdditions(spec).length);
+  assert.doesNotThrow(()=>validateWhatsappFeedbackPreviousSourceLineage({...spec,checkNames:integratedIdentityPreviousProofChecks(spec)}));
   assert.deepEqual(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted());
  }
 });
@@ -38,7 +40,7 @@ test('same-count replacement of an older source cannot redefine the frozen PR142
 });
 
 test('the original thirteen company KYC groups remain immutable and all five native context groups are required',()=>{
- const spec=current.find(value=>value.kind==='PG_COMPANY_KYC');assert.equal(spec.checkNames.length,18);
+ const actual=current.find(value=>value.kind==='PG_COMPANY_KYC'),spec={...actual,checkNames:integratedIdentityPreviousProofChecks(actual)};assert.equal(spec.checkNames.length,18);assert.equal(actual.checkNames.length,19);assert.deepEqual(actual.checkNames.slice(0,18),spec.checkNames);
  for(const mutate of [value=>{value.checkNames[0]='redefined-original-authority';},value=>{value.checkNames.pop();},value=>{value.checkNames=value.checkNames.slice(0,13);}]){const changed=clone(spec);mutate(changed);assert.throws(()=>validateWhatsappFeedbackPreviousSourceLineage(changed),{code:'WHATSAPP_FEEDBACK_PREVIOUS_CHECK_LINEAGE'});}
  for(const mutate of [value=>{value.checkNames[13]='assumed-current-source';},value=>{value.checkNames[14]=value.checkNames[13];},value=>{value.checkNames.splice(13,5,...value.checkNames.slice(13).reverse());}]){const changed=clone(spec);mutate(changed);assert.throws(()=>validateWhatsappFeedbackPreviousSourceLineage(changed),{code:'WHATSAPP_FEEDBACK_CURRENT_CHECK_NAMES'});}
 });

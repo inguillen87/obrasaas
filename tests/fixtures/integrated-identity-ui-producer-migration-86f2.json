@@ -1,0 +1,838 @@
+{
+  "version": 1,
+  "kind": "EXACT_REVIEWED_WORKSPACE_UI_PRODUCER_TEXT_MIGRATION",
+  "referenceHead": "86f2c484f3d4affb10d1852a320956c4c46aae99",
+  "referenceTree": "165cda969471978fa68d4a6bbabd27a1f2f1f803",
+  "reviewedHead": "600a0887691077748e82f06388a16187b56bf4c5",
+  "reviewedTree": "9df3a64f3fe78031b1b66841bf9b1116c40cca74",
+  "sourceEncoding": "UTF-8_GIT_LF",
+  "historicalProofsRewritten": false,
+  "producers": [
+    {
+      "path": "scripts/verify-company-onboarding-ui.mjs",
+      "previousSha256": "1237874587a756ddb67a15c09525887f29215fe76df7708aeee35d472716b676",
+      "currentSha256": "1c269e2386a70c34e43089187cfd88829a6663814be60dfb02b673b099d61511",
+      "previousBytes": 74908,
+      "currentBytes": 76644,
+      "inverseHunks": [
+        {
+          "currentOffsetCharacters": 15930,
+          "currentText": "async function openCurrentSection(page,target='schedule-title',section='cronograma'){\n const nav='nav[aria-label=\"Navegación de la obra\"]';await page.waitForSelector(nav+' a[href=\"#'+target+'\"]',{timeout:20000});\n const picker=await page.$(nav+' select');\n if(picker&&await picker.evaluate(node=>node.checkVisibility({contentVisibilityAuto:true,opacityProperty:true,visibilityProperty:true})))await page.select(nav+' select',target);\n else{const link=await page.$(nav+' a[href=\"#'+target+'\"]');assert.ok(link);await link.click();}\n await page.waitForSelector('[data-workspace-screen=\"'+section+'\"]:not([hidden])',{visible:true,timeout:20000});await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));if(picker)await picker.dispose();\n}\nasync function openCurrentFixtureProject(page){\n await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled),{timeout:20000});\n const projectHandle=await page.evaluateHandle(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled)),project=projectHandle.asElement();assert.ok(project);\n const detailsHandle=await project.evaluateHandle(node=>node.closest('details')),details=detailsHandle.asElement();if(details&&!await details.evaluate(node=>node.open)){const summary=await details.$(':scope > summary');assert.ok(summary);await summary.click();}\n await project.click();await detailsHandle.dispose();await projectHandle.dispose();await openCurrentSection(page);\n}\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 31837,
+          "currentText": "  else if(['reload-other-actor','reload-missing-receipt'].includes(mode)){await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo: '+originalReceipt));}\n  else {await wait(page,'Alta confirmada');await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+originalReceipt);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);}\n",
+          "previousText": "  else if(['reload-other-actor','reload-missing-receipt'].includes(mode)){await wait(page,'Mis obras');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo: '+originalReceipt));}\n  else {await wait(page,'Alta confirmada');await wait(page,'Mis obras');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+originalReceipt);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);}\n"
+        },
+        {
+          "currentOffsetCharacters": 35385,
+          "currentText": " await click(page,'Entrar a mi obra');await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});await openCurrentFixtureProject(page);\n",
+          "previousText": " await click(page,'Entrar a mi obra');await wait(page,'Mis obras');await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled));await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra inicial de ensayo')).click());\n"
+        },
+        {
+          "currentOffsetCharacters": 37404,
+          "currentText": "  if(mode==='empty'){const beforeReturn=posts.length;await page.reload({waitUntil:'networkidle0'});await wait(page,'Alta confirmada');await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+result.receiptId);assert.equal(posts.length,beforeReturn);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);await openCurrentFixtureProject(page);await canonicalCreatedTask(page,taskReceipts.get(taskPosts[0].operationId).task);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,2);checks.push(`ordinary-return-keeps-workspace-open-and-original-receipt-consultable-${width}`);}\n",
+          "previousText": "  if(mode==='empty'){const beforeReturn=posts.length;await page.reload({waitUntil:'networkidle0'});await wait(page,'Alta confirmada');await wait(page,'Mis obras');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+result.receiptId);assert.equal(posts.length,beforeReturn);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled));await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra inicial de ensayo')).click());await canonicalCreatedTask(page,taskReceipts.get(taskPosts[0].operationId).task);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,2);checks.push(`ordinary-return-keeps-workspace-open-and-original-receipt-consultable-${width}`);}\n"
+        },
+        {
+          "currentOffsetCharacters": 40058,
+          "currentText": "  assert.ok((await page.$eval('#organization-context',node=>node.innerText)).includes('Empresa activa'));\n",
+          "previousText": "  assert.ok((await page.$eval('#organization-context',node=>node.innerText)).includes('Empresa de trabajo'));\n"
+        },
+        {
+          "currentOffsetCharacters": 43134,
+          "currentText": "  assert.notEqual(await page.$eval('[data-fixture-organization]',node=>node.selectedOptions[0].textContent),await page.$eval('[data-workspace-company-name]',node=>node.textContent),'The selected organization and canonical company retain distinct names');assert.ok(!selectorText.includes('Clerk'));\n",
+          "previousText": "  assert.ok(selectorText.includes('Elegí tu espacio de trabajo. Su nombre puede ser distinto al de la empresa.'));assert.ok(!selectorText.includes('Clerk'));\n"
+        },
+        {
+          "currentOffsetCharacters": 48486,
+          "currentText": "  assert.equal(await page.$eval('#organization-context-lock',node=>node.innerText),'Completá la acción pendiente antes de cambiar de empresa.');\n",
+          "previousText": "  assert.ok((await page.$eval('#organization-context-lock',node=>node.innerText)).includes('cancelá el borrador o comprobá su resultado'));\n"
+        },
+        {
+          "currentOffsetCharacters": 49003,
+          "currentText": "  await openCurrentSection(page);await wait(page,tasks[letter].title);await page.waitForFunction(id=>document.querySelector('article[data-task-id=\"'+id+'\"] button')?.disabled===false,{timeout:20000},tasks[letter].id);\n",
+          "previousText": "  await wait(page,tasks[letter].title);await page.waitForFunction(id=>document.querySelector('article[data-task-id=\"'+id+'\"] button')?.disabled===false,{timeout:20000},tasks[letter].id);\n"
+        },
+        {
+          "currentOffsetCharacters": 67793,
+          "currentText": "   await page.evaluate(()=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes('Obra listada 1')&&!node.textContent.includes('Obra listada 10')).click());await openCurrentSection(page);await wait(page,'Actividad canónica 001');\n",
+          "previousText": "   await page.evaluate(()=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes('Obra listada 1')&&!node.textContent.includes('Obra listada 10')).click());await wait(page,'Actividad canónica 001');\n"
+        },
+        {
+          "currentOffsetCharacters": 68579,
+          "currentText": "   await click(page,'Cancelar');await openCurrentSection(page,'workspace-home-title','inicio');await click(page,'Abrir Resumen obra 101');await openCurrentSection(page);await wait(page,'Actividad canónica 101 primera');assert.equal(project101Reads,1);\n",
+          "previousText": "   await click(page,'Cancelar');await click(page,'Abrir Resumen obra 101');await wait(page,'Actividad canónica 101 primera');assert.equal(project101Reads,1);\n"
+        },
+        {
+          "currentOffsetCharacters": 69338,
+          "currentText": "    else{await page.evaluate(()=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes('Obra listada 1')&&!node.textContent.includes('Obra listada 10')).click());await openCurrentSection(page);await wait(page,'Actividad canónica 001');}\n",
+          "previousText": "    else{await page.evaluate(()=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes('Obra listada 1')&&!node.textContent.includes('Obra listada 10')).click());await wait(page,'Actividad canónica 001');}\n"
+        },
+        {
+          "currentOffsetCharacters": 70669,
+          "currentText": "    if(mode==='retry503'){await page.evaluate(()=>{window.__portfolioTokenEpoch=2;});await openCurrentSection(page,'workspace-home-title','inicio');await click(page,'Abrir Resumen obra 101');await openCurrentSection(page);await wait(page,'Actividad canónica 101 primera');assert.equal(project101Reads,2);assert.equal(reads.at(-1).authorization,'Bearer synthetic-portfolio-A-2');}\n",
+          "previousText": "    if(mode==='retry503'){await page.evaluate(()=>{window.__portfolioTokenEpoch=2;});await click(page,'Abrir Resumen obra 101');await wait(page,'Actividad canónica 101 primera');assert.equal(project101Reads,2);assert.equal(reads.at(-1).authorization,'Bearer synthetic-portfolio-A-2');}\n"
+        },
+        {
+          "currentOffsetCharacters": 71253,
+          "currentText": "    await openCurrentSection(page);await wait(page,'Actividad canónica 101 primera');await page.waitForFunction(id=>window.__portfolioGuide?.projectId===id,{},projectId);assert.equal(project101Reads,1);assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),projectId);assert.equal(await page.$eval('button[aria-pressed=\"true\"]',node=>node.textContent.includes('Obra canónica 101')),true);assert.ok((await page.$eval('[aria-labelledby=\"schedule-title\"]',node=>node.innerText)).includes('1 de 2 tareas'));\n",
+          "previousText": "    await wait(page,'Actividad canónica 101 primera');await page.waitForFunction(id=>window.__portfolioGuide?.projectId===id,{},projectId);assert.equal(project101Reads,1);assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),projectId);assert.equal(await page.$eval('button[aria-pressed=\"true\"]',node=>node.textContent.includes('Obra canónica 101')),true);assert.ok((await page.$eval('[aria-labelledby=\"schedule-title\"]',node=>node.innerText)).includes('1 de 2 tareas'));\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/verify-mobile-workspace-review-ui.mjs",
+      "previousSha256": "14178c269b9032442f40712d6928f7cb68ee43b2e84b3348e6519953cbdee594",
+      "currentSha256": "7739e28a2ed86fbc8ed496306f4f682e776ea2cfee573be9e7f32d28f4f26449",
+      "previousBytes": 19626,
+      "currentBytes": 20130,
+      "inverseHunks": [
+        {
+          "currentOffsetCharacters": 5548,
+          "currentText": "async function navigate(page,id){const menu='nav[aria-label=\"Navegación de la obra\"]';if((await page.viewport()).width<1100)await page.select(menu+' select',id);else await page.locator(menu+' a[href=\"#'+id+'\"]').click();await page.waitForFunction(target=>document.activeElement?.id===target,{timeout:20000},id);}\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 13811,
+          "currentText": " await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de revisión sintética');assert.equal(subscriptionReads.length,1,'Administrator mounts one closed company status consult');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de revisión sintética')).click());await navigate(page,'schedule-title');await waitText(page,'0 de 0 tareas');await navigate(page,'participant-title');await click(page,'Consultar participantes');await waitText(page,workerB.name);await navigate(page,'field-title');await click(page,'Abrir operaciones');await waitText(page,'Sector exacto seleccionado');await navigate(page,'participant-title');\n",
+          "previousText": " await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de revisión sintética');assert.equal(subscriptionReads.length,1,'Administrator mounts one closed company status consult');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de revisión sintética')).click());await waitText(page,'0 de 0 tareas');await click(page,'Consultar participantes');await waitText(page,workerB.name);await click(page,'Abrir operaciones');await waitText(page,'Sector exacto seleccionado');\n"
+        },
+        {
+          "currentOffsetCharacters": 16981,
+          "currentText": "  await navigate(page,'field-title');await sourceCardButton(page,field,workerB.name,'Revisar fichaje');const sourceAttendance=await page.$eval(field+' form',node=>node.textContent);for(const value of [workerB.name,eventId,'Salida','Sector exacto seleccionado','Precisión no informada','Distancia sin confirmar','QR sin presentar'])assert.ok(sourceAttendance.includes(value),'Selected attendance source '+value);assert.ok(!sourceAttendance.includes(workerA.name)&&!sourceAttendance.includes('Sector anterior'));assert.equal(await page.$eval(field+' form time',node=>node.getAttribute('datetime')),recordedAt);await keyboardForm(page,field+' form',posts);await click(page,'Guardar con recibo');await waitText(page,'Revisión aprobada');assert.equal(posts.length,2);\n",
+          "previousText": "  await sourceCardButton(page,field,workerB.name,'Revisar fichaje');const sourceAttendance=await page.$eval(field+' form',node=>node.textContent);for(const value of [workerB.name,eventId,'Salida','Sector exacto seleccionado','Precisión no informada','Distancia sin confirmar','QR sin presentar'])assert.ok(sourceAttendance.includes(value),'Selected attendance source '+value);assert.ok(!sourceAttendance.includes(workerA.name)&&!sourceAttendance.includes('Sector anterior'));assert.equal(await page.$eval(field+' form time',node=>node.getAttribute('datetime')),recordedAt);await keyboardForm(page,field+' form',posts);await click(page,'Guardar con recibo');await waitText(page,'Revisión aprobada');assert.equal(posts.length,2);\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/verify-onboarding-guide-ui.mjs",
+      "previousSha256": "7690c9d459858491a236c2caa360f5bbdf989a56b8c4298a35e4aea057287b31",
+      "currentSha256": "3fa4a862e815896444a500144bbdd77a4e49b86d9bfd477c03f2696ebe6c2c02",
+      "previousBytes": 60273,
+      "currentBytes": 63842,
+      "inverseHunks": [
+        {
+          "currentOffsetCharacters": 761,
+          "currentText": " 'workspace-screen.js','workspace-view-routing.mjs',\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 10212,
+          "currentText": "import{useWorkspaceView}from'./workspace-screen';\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 10463,
+          "currentText": " const navigationAccount=accessError?null:{scope:(orgId==='org_b'?'b':'a').repeat(64),role:canonicalRole||(orgRole==='org:admin'?'ADMIN':'AUDITOR')};\n const navigationView=open&&!accessError&&!officeReviewOnly?{project:{id:'fixture-project'}}:null;\n useWorkspaceView({role:navigationAccount?.role,canManageIntegrations:navigationAccount?.canManageIntegrations,projectAvailable:Boolean(navigationView)},(navigationAccount?.scope||'')+':'+(navigationView?.project.id||''));\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 14582,
+          "currentText": "async function click(text){const handle=await page.evaluateHandle(value=>[...document.querySelectorAll('button')].find(node=>node.textContent.trim()===value),text);assert.ok(handle.asElement(),'Missing button: '+text);await handle.asElement().click();await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));await handle.dispose();}\n",
+          "previousText": "async function click(text){const handle=await page.evaluateHandle(value=>[...document.querySelectorAll('button')].find(node=>node.textContent.trim()===value),text);assert.ok(handle.asElement(),'Missing button: '+text);await handle.asElement().click();await handle.dispose();}\n"
+        },
+        {
+          "currentOffsetCharacters": 16521,
+          "currentText": "async function keyboardPress(key){await page.keyboard.press(key);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));}\nasync function openGuideShell(){\n await page.waitForSelector('section[aria-labelledby=\"onboarding-guide-title\"]');\n const section=await page.$('section[aria-labelledby=\"onboarding-guide-title\"]'),shellHandle=await section.evaluateHandle(node=>node.closest('details')),shell=shellHandle.asElement();\n assert.ok(shell,'The actual workspace identity guide disclosure must be mounted');\n if(!await shell.evaluate(node=>node.open)){const summary=await shell.$(':scope > summary');assert.ok(summary);await summary.click();}\n await shellHandle.dispose();await section.dispose();\n}\nasync function contextClick(selector){await page.click(selector);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>resolve())));await openGuideShell();}\nasync function showGuide(){await openGuideShell();const toggle=await page.$(guideSelector+' button[aria-controls=\"onboarding-guide-content\"]');await toggle.focus();if(await toggle.evaluate(node=>node.getAttribute('aria-expanded')==='false'))await click('Abrir guía');await page.waitForSelector('#onboarding-guide-content');}\n",
+          "previousText": "async function showGuide(){const toggle=await page.$(guideSelector+' button[aria-controls=\"onboarding-guide-content\"]');await toggle.focus();if(await toggle.evaluate(node=>node.getAttribute('aria-expanded')==='false'))await click('Abrir guía');await page.waitForSelector('#onboarding-guide-content');}\n"
+        },
+        {
+          "currentOffsetCharacters": 18189,
+          "currentText": "async function freshGuide(width){await page.setViewport({width,height:1050});await page.goto(origin+'/cuenta',{waitUntil:'networkidle0',timeout:90000});await wait('Paso 1 de 10');await contextClick('#organization');await page.click('#ready');await page.waitForSelector('[data-guide-observation=\"OBSERVED\"]');await wait('Paso 2 de 10');await page.waitForNetworkIdle({idleTime:100,timeout:15000});}\n",
+          "previousText": "async function freshGuide(width){await page.setViewport({width,height:1050});await page.goto(origin+'/cuenta',{waitUntil:'networkidle0',timeout:90000});await wait('Paso 1 de 10');await page.click('#organization');await page.click('#ready');await page.waitForSelector('[data-guide-observation=\"OBSERVED\"]');await wait('Paso 2 de 10');await page.waitForNetworkIdle({idleTime:100,timeout:15000});}\n"
+        },
+        {
+          "currentOffsetCharacters": 31583,
+          "currentText": "  await closedGuideAccessFixture(width);const before=requests.length;await loseGuideRefresh('disabled',true);await rejectedGuideNoticeFocused(1);await page.click('#'+reset);if(reset!=='anonymous')await openGuideShell();\n",
+          "previousText": "  await closedGuideAccessFixture(width);const before=requests.length;await loseGuideRefresh('disabled',true);await rejectedGuideNoticeFocused(1);await page.click('#'+reset);\n"
+        },
+        {
+          "currentOffsetCharacters": 32908,
+          "currentText": " await freshGuide(width);await contextClick('#office-limited');await wait('Paso 2 de 4');await page.click('#open');await page.waitForSelector('#office-review-title');await page.waitForFunction(()=>document.querySelector('[data-guide-mode=\"office-review\"]')?.textContent.includes('Obra seleccionada'));assert.ok(await page.$('#onboarding-guide-content'));assert.equal(await page.$$eval('nav[aria-label=\"Pasos de inicio\"] button',nodes=>nodes.length),4);assert.equal(await page.$('#schedule-title'),null);assert.equal(await page.$('#participant-title'),null);checks.push('authorized-selected-office-review-remains-full-four-steps-without-field-controls-'+width);\n await freshGuide(width);await emitGuideObservation(selectedGuideObservation());await page.waitForFunction(()=>!document.getElementById('onboarding-guide-content'));await showGuide();await step(4);await review();await page.evaluate(()=>{window.__previousCompactObserver=window.__guideObservers.at(-1);});await contextClick('#company-b');await wait('Paso 2 de 10');assert.ok((await guide()).includes('0 de 10 pasos revisados por vos'));await page.evaluate(value=>window.__previousCompactObserver?.(value),{...selectedGuideObservation(),projectCount:99});assert.ok(!(await guide()).includes('99 obras'));await page.click('#ready');await page.waitForSelector('[data-guide-observation=\"OBSERVED\"]');await page.click('#open');await page.waitForFunction(()=>!document.getElementById('onboarding-guide-content'));await showGuide();assert.ok((await guide()).includes('0 de 10 pasos revisados por vos'));await contextClick('#session');await showGuide();await wait('Paso 2 de 10');assert.ok((await guide()).includes('0 de 10 pasos revisados por vos'));assert.deepEqual(await page.evaluate(()=>({local:{...localStorage},session:{...sessionStorage}})),{local:{},session:{}});await page.click('#anonymous');await wait('La sesión terminó');assert.equal(await page.$('#onboarding-guide-title'),null);checks.push('compact-local-preferences-reset-on-context-session-and-reject-previous-callback-without-storage-'+width);\n",
+          "previousText": " await freshGuide(width);await page.click('#office-limited');await wait('Paso 2 de 4');await page.click('#open');await page.waitForSelector('#office-review-title');await page.waitForFunction(()=>document.querySelector('[data-guide-mode=\"office-review\"]')?.textContent.includes('Obra seleccionada'));assert.ok(await page.$('#onboarding-guide-content'));assert.equal(await page.$$eval('nav[aria-label=\"Pasos de inicio\"] button',nodes=>nodes.length),4);assert.equal(await page.$('#schedule-title'),null);assert.equal(await page.$('#participant-title'),null);checks.push('authorized-selected-office-review-remains-full-four-steps-without-field-controls-'+width);\n await freshGuide(width);await emitGuideObservation(selectedGuideObservation());await page.waitForFunction(()=>!document.getElementById('onboarding-guide-content'));await showGuide();await step(4);await review();await page.evaluate(()=>{window.__previousCompactObserver=window.__guideObservers.at(-1);});await page.click('#company-b');await wait('Paso 2 de 10');assert.ok((await guide()).includes('0 de 10 pasos revisados por vos'));await page.evaluate(value=>window.__previousCompactObserver?.(value),{...selectedGuideObservation(),projectCount:99});assert.ok(!(await guide()).includes('99 obras'));await page.click('#ready');await page.waitForSelector('[data-guide-observation=\"OBSERVED\"]');await page.click('#open');await page.waitForFunction(()=>!document.getElementById('onboarding-guide-content'));await showGuide();assert.ok((await guide()).includes('0 de 10 pasos revisados por vos'));await page.click('#session');await showGuide();await wait('Paso 2 de 10');assert.ok((await guide()).includes('0 de 10 pasos revisados por vos'));assert.deepEqual(await page.evaluate(()=>({local:{...localStorage},session:{...sessionStorage}})),{local:{},session:{}});await page.click('#anonymous');await wait('La sesión terminó');assert.equal(await page.$('#onboarding-guide-title'),null);checks.push('compact-local-preferences-reset-on-context-session-and-reject-previous-callback-without-storage-'+width);\n"
+        },
+        {
+          "currentOffsetCharacters": 37313,
+          "currentText": "  await contextClick('#organization');await wait('Paso 2 de 10');assert.ok((await guide()).includes('Empresa y primera obra'));assert.equal(await page.$$eval('nav[aria-label=\"Pasos de inicio\"] button',nodes=>nodes.length),10);\n  await contextClick('#denied-member');await page.waitForSelector('[data-guide-access-reason=\"WORKSPACE_MEMBERSHIP_REQUIRED\"]');\n",
+          "previousText": "  await page.click('#organization');await wait('Paso 2 de 10');assert.ok((await guide()).includes('Empresa y primera obra'));assert.equal(await page.$$eval('nav[aria-label=\"Pasos de inicio\"] button',nodes=>nodes.length),10);\n  await page.click('#denied-member');await page.waitForSelector('[data-guide-access-reason=\"WORKSPACE_MEMBERSHIP_REQUIRED\"]');\n"
+        },
+        {
+          "currentOffsetCharacters": 40513,
+          "currentText": "  await page.evaluate(()=>{window.__priorGuideObserver=window.__guideObservers.at(-1);});await contextClick('#company-b');await wait('Paso 2 de 10');await page.evaluate(()=>window.__priorGuideObserver?.({version:1,state:'OBSERVED',generation:999,scope:'a'.repeat(64),projectId:null,role:'DIRECTOR',projectCount:99,projectsPartial:false,schedulePending:false,schedule:null,channel:null}));assert.ok(!(await guide()).includes('99 obras'));assert.equal(await page.$('[data-guide-access-reason=\"WORKSPACE_CONTEXT_CHANGED\"]'),null);\n",
+          "previousText": "  await page.evaluate(()=>{window.__priorGuideObserver=window.__guideObservers.at(-1);});await page.click('#company-b');await wait('Paso 2 de 10');await page.evaluate(()=>window.__priorGuideObserver?.({version:1,state:'OBSERVED',generation:999,scope:'a'.repeat(64),projectId:null,role:'DIRECTOR',projectCount:99,projectsPartial:false,schedulePending:false,schedule:null,channel:null}));assert.ok(!(await guide()).includes('99 obras'));assert.equal(await page.$('[data-guide-access-reason=\"WORKSPACE_CONTEXT_CHANGED\"]'),null);\n"
+        },
+        {
+          "currentOffsetCharacters": 41610,
+          "currentText": "  await page.setViewport({width,height:1050});await page.goto(origin+'/cuenta',{waitUntil:'networkidle0',timeout:90000});await contextClick('#office-invited');await page.waitForSelector('[data-guide-access-reason=\"WORKSPACE_MEMBERSHIP_REQUIRED\"]');\n",
+          "previousText": "  await page.setViewport({width,height:1050});await page.goto(origin+'/cuenta',{waitUntil:'networkidle0',timeout:90000});await page.click('#office-invited');await page.waitForSelector('[data-guide-access-reason=\"WORKSPACE_MEMBERSHIP_REQUIRED\"]');\n"
+        },
+        {
+          "currentOffsetCharacters": 42221,
+          "currentText": "  await contextClick('#office-limited');await page.waitForSelector('[data-guide-mode=\"office-review\"]');await wait('Paso 2 de 4');assert.ok((await guide()).includes('Tu revisión de oficina, paso a paso'));assert.ok((await guide()).includes('0 de 4 pasos revisados por vos'));assert.equal(await page.$$eval('nav[aria-label=\"Pasos de inicio\"] button',nodes=>nodes.length),4);\n",
+          "previousText": "  await page.click('#office-limited');await page.waitForSelector('[data-guide-mode=\"office-review\"]');await wait('Paso 2 de 4');assert.ok((await guide()).includes('Tu revisión de oficina, paso a paso'));assert.ok((await guide()).includes('0 de 4 pasos revisados por vos'));assert.equal(await page.$$eval('nav[aria-label=\"Pasos de inicio\"] button',nodes=>nodes.length),4);\n"
+        },
+        {
+          "currentOffsetCharacters": 45259,
+          "currentText": "  await review();assert.ok((await guide()).includes('1 de 4 pasos revisados por vos'));await contextClick('#session');await page.waitForSelector('[data-guide-mode=\"office-review\"]');await wait('Paso 2 de 4');assert.ok((await guide()).includes('0 de 4 pasos revisados por vos'));\n  await contextClick('#office-normal');await showGuide();await page.waitForSelector('[data-guide-observation=\"OBSERVED\"][data-guide-mode=\"workspace\"]');assert.equal(await page.$$eval('nav[aria-label=\"Pasos de inicio\"] button',nodes=>nodes.length),10);await page.$eval('[data-guide-mode=\"workspace\"]',node=>{node.closest('details').open=true;});assert.ok((await guide()).includes('Empresa consultada con acceso Auditor'));await step(9);await noOwnWhatsAppLinks();await enabled();await click('Ir a este paso');assert.equal(await page.evaluate(()=>document.activeElement.id),'worker-channel-title');\n  await contextClick('#office-limited');await page.waitForSelector('[data-guide-mode=\"office-review\"]');assert.ok(!(await guide()).includes('Obra seleccionada en esta consulta'));await step(4,4);assert.equal(await canGo(),false);\n",
+          "previousText": "  await review();assert.ok((await guide()).includes('1 de 4 pasos revisados por vos'));await page.click('#session');await page.waitForSelector('[data-guide-mode=\"office-review\"]');await wait('Paso 2 de 4');assert.ok((await guide()).includes('0 de 4 pasos revisados por vos'));\n  await page.click('#office-normal');await showGuide();await page.waitForSelector('[data-guide-observation=\"OBSERVED\"][data-guide-mode=\"workspace\"]');assert.equal(await page.$$eval('nav[aria-label=\"Pasos de inicio\"] button',nodes=>nodes.length),10);await page.$eval('[data-guide-mode=\"workspace\"]',node=>{node.closest('details').open=true;});assert.ok((await guide()).includes('Empresa consultada con acceso Auditor'));await step(9);await noOwnWhatsAppLinks();await enabled();await click('Ir a este paso');assert.equal(await page.evaluate(()=>document.activeElement.id),'worker-channel-title');\n  await page.click('#office-limited');await page.waitForSelector('[data-guide-mode=\"office-review\"]');assert.ok(!(await guide()).includes('Obra seleccionada en esta consulta'));await step(4,4);assert.equal(await canGo(),false);\n"
+        },
+        {
+          "currentOffsetCharacters": 46627,
+          "currentText": "  await contextClick('#office-limited');await page.waitForSelector('[data-guide-mode=\"office-review\"]');await page.evaluate(()=>{window.__priorOfficeGuideObserver=window.__guideObservers.at(-1);});await contextClick('#company-b');await wait('Paso 2 de 10');await page.evaluate(()=>window.__priorOfficeGuideObserver?.({version:1,state:'OBSERVED',generation:999,scope:'a'.repeat(64),projectId:'fixture-project',role:'AUDITOR',officeReviewOnly:true,projectCount:99,projectsPartial:false,schedulePending:false,schedule:null,channel:null}));assert.equal(await page.$('[data-guide-mode=\"office-review\"]'),null);assert.ok(!(await guide()).includes('99 obras'));\n  await contextClick('#office-limited');await page.waitForSelector('[data-guide-mode=\"office-review\"]');await page.click('#anonymous');await wait('La sesión terminó');assert.equal(await page.$('#onboarding-guide-title'),null);assert.equal(await page.evaluate(()=>window.__fixtureAccessReads),1);\n",
+          "previousText": "  await page.click('#office-limited');await page.waitForSelector('[data-guide-mode=\"office-review\"]');await page.evaluate(()=>{window.__priorOfficeGuideObserver=window.__guideObservers.at(-1);});await page.click('#company-b');await wait('Paso 2 de 10');await page.evaluate(()=>window.__priorOfficeGuideObserver?.({version:1,state:'OBSERVED',generation:999,scope:'a'.repeat(64),projectId:'fixture-project',role:'AUDITOR',officeReviewOnly:true,projectCount:99,projectsPartial:false,schedulePending:false,schedule:null,channel:null}));assert.equal(await page.$('[data-guide-mode=\"office-review\"]'),null);assert.ok(!(await guide()).includes('99 obras'));\n  await page.click('#office-limited');await page.waitForSelector('[data-guide-mode=\"office-review\"]');await page.click('#anonymous');await wait('La sesión terminó');assert.equal(await page.$('#onboarding-guide-title'),null);assert.equal(await page.evaluate(()=>window.__fixtureAccessReads),1);\n"
+        },
+        {
+          "currentOffsetCharacters": 48342,
+          "currentText": " const disclosureInitialText=await guide(),reviewDetail=await page.$(guideSelector+' h3+ p + details'),reviewDetailWasOpen=await reviewDetail.evaluate(node=>node.open);await review();assert.ok((await guide()).includes('1 de 10 pasos revisados por vos'));\n const disclosureStateBefore=await guide(),disclosureRequestsBefore=requests.length,disclosureSection=await page.$(guideSelector),disclosureHandle=await disclosureSection.evaluateHandle(node=>node.closest('details')),disclosure=disclosureHandle.asElement(),disclosureSummary=await disclosure.$(':scope > summary');\n assert.ok(disclosureSummary);assert.equal(await disclosure.evaluate(node=>node.open),true);await disclosureSummary.focus();await keyboardPress('Enter');assert.equal(await disclosure.evaluate(node=>node.open),false);assert.equal(await disclosureSummary.evaluate(node=>document.activeElement===node),true);assert.ok(await disclosureSummary.evaluate(node=>node.getClientRects().length>0));assert.equal(await disclosureSection.evaluate(node=>node.checkVisibility({contentVisibilityAuto:true,opacityProperty:true,visibilityProperty:true})),false);\n await keyboardPress('Enter');assert.equal(await disclosure.evaluate(node=>node.open),true);assert.equal(await disclosureSummary.evaluate(node=>document.activeElement===node),true);assert.equal(await disclosureSection.evaluate(node=>node.checkVisibility({contentVisibilityAuto:true,opacityProperty:true,visibilityProperty:true})),true);assert.equal(await guide(),disclosureStateBefore);assert.ok((await guide()).includes('1 de 10 pasos revisados por vos'));assert.equal(requests.length,disclosureRequestsBefore);assert.equal(requests.slice(disclosureRequestsBefore).filter(row=>row.method!=='GET'||row.path.startsWith('/api/')).length,0);\n await review();if(!reviewDetailWasOpen)await reviewDetail.$('summary').then(summary=>summary.click());assert.equal(await guide(),disclosureInitialText);await disclosureSummary.dispose();await disclosureHandle.dispose();await disclosureSection.dispose();await reviewDetail.dispose();checks.push('current-outer-guide-disclosure-keyboard-preserves-reviewed-state-without-requests');\n",
+          "previousText": " await page.$eval('#organization-context a',node=>node.focus());await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>document.activeElement.id),'onboarding-guide-title');checks.push('contextual-return-link-focuses-guide-with-keyboard');\n"
+        },
+        {
+          "currentOffsetCharacters": 50666,
+          "currentText": " await contextClick('#organization');await enabled();await step(2);await enabled();await click('Ir a este paso');assert.equal(await page.evaluate(()=>document.activeElement.id),'company-bootstrap-heading');checks.push('admin-context-exposes-actual-company-panel');\n",
+          "previousText": " await page.click('#organization');await enabled();await step(2);await enabled();await click('Ir a este paso');assert.equal(await page.evaluate(()=>document.activeElement.id),'company-bootstrap-heading');checks.push('admin-context-exposes-actual-company-panel');\n"
+        },
+        {
+          "currentOffsetCharacters": 54016,
+          "currentText": " for(const width of widths){await page.setViewport({width,height:1050});await click('Ir a este paso');assert.equal(await page.evaluate(()=>document.activeElement.id),'site-register-title');checks.push('team-first-destination-focuses-visible-worker-register-'+width);const invitations=await page.$('section[aria-labelledby=\"onboarding-guide-title\"] a[href=\"#participant-title\"]');assert.ok(invitations);await invitations.focus();await keyboardPress('Enter');assert.equal(await page.evaluate(()=>document.activeElement.id),'participant-title');assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(evidence,`guide-team-${width}.png`),fullPage:true});checks.push('team-second-shortcut-focuses-invitations-with-keyboard-'+width);}\n",
+          "previousText": " for(const width of widths){await page.setViewport({width,height:1050});await click('Ir a este paso');assert.equal(await page.evaluate(()=>document.activeElement.id),'site-register-title');checks.push('team-first-destination-focuses-visible-worker-register-'+width);const invitations=await page.$('section[aria-labelledby=\"onboarding-guide-title\"] a[href=\"#participant-title\"]');assert.ok(invitations);await invitations.focus();await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>document.activeElement.id),'participant-title');assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(evidence,`guide-team-${width}.png`),fullPage:true});checks.push('team-second-shortcut-focuses-invitations-with-keyboard-'+width);}\n"
+        },
+        {
+          "currentOffsetCharacters": 54862,
+          "currentText": " await step(6);await page.$eval('section[aria-labelledby=\"onboarding-guide-title\"] h3+ p + details summary',node=>node.focus());await keyboardPress('Enter');assert.equal(await page.$eval('section[aria-labelledby=\"onboarding-guide-title\"] h3+ p + details',node=>node.open),true);assert.ok((await guide()).includes('autorizaciones independientes'));assert.ok((await guide()).includes('no verifica prueba de vida'));assert.ok((await guide()).includes('IDENTIDAD'));assert.ok((await guide()).includes('En la web, presentá el frente y una selfie; el dorso es opcional con autorización separada'));assert.ok((await guide()).includes('En nuevas capturas por WhatsApp, presentá frente, dorso y selfie después de autorizar el dorso'));assert.ok((await guide()).includes('Las presentaciones anteriores por WhatsApp conservan su recorrido de dos imágenes'));assert.ok(!(await guide()).includes('las dos imágenes'));checks.push('identity-boundaries-expanded-with-keyboard');\n",
+          "previousText": " await step(6);await page.$eval('section[aria-labelledby=\"onboarding-guide-title\"] h3+ p + details summary',node=>node.focus());await page.keyboard.press('Enter');assert.equal(await page.$eval('section[aria-labelledby=\"onboarding-guide-title\"] h3+ p + details',node=>node.open),true);assert.ok((await guide()).includes('autorizaciones independientes'));assert.ok((await guide()).includes('no verifica prueba de vida'));assert.ok((await guide()).includes('IDENTIDAD'));assert.ok((await guide()).includes('En la web, presentá el frente y una selfie; el dorso es opcional con autorización separada'));assert.ok((await guide()).includes('En nuevas capturas por WhatsApp, presentá frente, dorso y selfie después de autorizar el dorso'));assert.ok((await guide()).includes('Las presentaciones anteriores por WhatsApp conservan su recorrido de dos imágenes'));assert.ok(!(await guide()).includes('las dos imágenes'));checks.push('identity-boundaries-expanded-with-keyboard');\n"
+        },
+        {
+          "currentOffsetCharacters": 56039,
+          "currentText": " await step(9);await enabled();await click('Ir a este paso');assert.equal(await page.evaluate(()=>document.activeElement.id),'customer-whatsapp-title');checks.push('admin-whatsapp-step-uses-company-preparation');for(const id of ['own-company-number-title','own-company-templates-title','company-channel-title','customer-meta-title']){const link=await page.$('section[aria-labelledby=\"onboarding-guide-title\"] a[href=\"#'+id+'\"]');assert.ok(link);await link.focus();await keyboardPress('Enter');assert.equal(await page.evaluate(()=>document.activeElement.id),id);}checks.push('whatsapp-company-and-meta-shortcuts-only-focus-authorized-destinations');\n",
+          "previousText": " await step(9);await enabled();await click('Ir a este paso');assert.equal(await page.evaluate(()=>document.activeElement.id),'customer-whatsapp-title');checks.push('admin-whatsapp-step-uses-company-preparation');for(const id of ['own-company-number-title','own-company-templates-title','company-channel-title','customer-meta-title']){const link=await page.$('section[aria-labelledby=\"onboarding-guide-title\"] a[href=\"#'+id+'\"]');assert.ok(link);await link.focus();await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>document.activeElement.id),id);}checks.push('whatsapp-company-and-meta-shortcuts-only-focus-authorized-destinations');\n"
+        },
+        {
+          "currentOffsetCharacters": 57082,
+          "currentText": " await page.$eval('section[aria-labelledby=\"onboarding-guide-title\"] h3+ p + details summary',node=>node.focus());await keyboardPress('Enter');assert.ok((await guide()).includes('no envía mensajes ni emite un presupuesto'));\n",
+          "previousText": " await page.$eval('section[aria-labelledby=\"onboarding-guide-title\"] h3+ p + details summary',node=>node.focus());await page.keyboard.press('Enter');assert.ok((await guide()).includes('no envía mensajes ni emite un presupuesto'));\n"
+        },
+        {
+          "currentOffsetCharacters": 57798,
+          "currentText": " await contextClick('#member');await showGuide();await wait('Paso 2 de 10');assert.ok((await guide()).includes('0 de 10 pasos revisados por vos'));await step(9);await enabled();await noOwnWhatsAppLinks();await click('Ir a este paso');assert.equal(await page.evaluate(()=>document.activeElement.id),'worker-channel-title');checks.push('role-change-resets-marks-and-member-uses-own-channel');\n",
+          "previousText": " await page.click('#member');await showGuide();await wait('Paso 2 de 10');assert.ok((await guide()).includes('0 de 10 pasos revisados por vos'));await step(9);await enabled();await noOwnWhatsAppLinks();await click('Ir a este paso');assert.equal(await page.evaluate(()=>document.activeElement.id),'worker-channel-title');checks.push('role-change-resets-marks-and-member-uses-own-channel');\n"
+        },
+        {
+          "currentOffsetCharacters": 59430,
+          "currentText": " await contextClick('#member');await page.waitForFunction(()=>!document.getElementById('site-register-title')&&!document.querySelector('section[aria-labelledby=\"onboarding-guide-title\"] a[href=\"#participant-title\"]'));await click('Ir a este paso');assert.equal(await page.evaluate(()=>document.activeElement.id),'participant-title');checks.push('removed-register-restores-own-route-without-stale-shortcut');\n",
+          "previousText": " await page.click('#member');await page.waitForFunction(()=>!document.getElementById('site-register-title')&&!document.querySelector('section[aria-labelledby=\"onboarding-guide-title\"] a[href=\"#participant-title\"]'));await click('Ir a este paso');assert.equal(await page.evaluate(()=>document.activeElement.id),'participant-title');checks.push('removed-register-restores-own-route-without-stale-shortcut');\n"
+        },
+        {
+          "currentOffsetCharacters": 60096,
+          "currentText": " await contextClick('#company-b');await wait('Paso 2 de 10');await step(9);await noOwnWhatsAppLinks();await step(4);assert.equal(await canGo(),false);assert.equal(await page.$('#workspace-title'),null);checks.push('organization-change-remounts-guide-without-old-destinations');await page.evaluate(()=>window.__guideObservers[0]?.({version:1,state:'OBSERVED',generation:999,scope:'a'.repeat(64),projectId:'fixture-project',role:'ADMIN',projectCount:99,projectsPartial:false,schedulePending:false,schedule:{loaded:99,total:99,partial:false,missingDates:0,invalidDates:0},channel:{ready:true,partial:false,ownLinked:true}}));assert.ok(await page.$eval('[data-guide-observation]',node=>!node.textContent.includes('99 obras')&&!node.textContent.includes('Tu vínculo personal está vigente')));checks.push('late-observation-from-previous-organization-is-rejected');\n await step(2);await review();await contextClick('#session');await wait('Paso 2 de 10');assert.ok((await guide()).includes('0 de 10 pasos revisados por vos'));checks.push('session-change-resets-reviewed-state');\n const next=await page.evaluateHandle(()=>[...document.querySelectorAll('button')].find(node=>node.textContent==='Siguiente'));await next.asElement().focus();await keyboardPress('Enter');await wait('Paso 3 de 10');assert.equal(await page.evaluate(()=>document.activeElement.tagName),'H3');await click('Anterior');await wait('Paso 2 de 10');checks.push('previous-next-keyboard-moves-focus-to-step-heading');\n",
+          "previousText": " await page.click('#company-b');await wait('Paso 2 de 10');await step(9);await noOwnWhatsAppLinks();await step(4);assert.equal(await canGo(),false);assert.equal(await page.$('#workspace-title'),null);checks.push('organization-change-remounts-guide-without-old-destinations');await page.evaluate(()=>window.__guideObservers[0]?.({version:1,state:'OBSERVED',generation:999,scope:'a'.repeat(64),projectId:'fixture-project',role:'ADMIN',projectCount:99,projectsPartial:false,schedulePending:false,schedule:{loaded:99,total:99,partial:false,missingDates:0,invalidDates:0},channel:{ready:true,partial:false,ownLinked:true}}));assert.ok(await page.$eval('[data-guide-observation]',node=>!node.textContent.includes('99 obras')&&!node.textContent.includes('Tu vínculo personal está vigente')));checks.push('late-observation-from-previous-organization-is-rejected');\n await step(2);await review();await page.click('#session');await wait('Paso 2 de 10');assert.ok((await guide()).includes('0 de 10 pasos revisados por vos'));checks.push('session-change-resets-reviewed-state');\n const next=await page.evaluateHandle(()=>[...document.querySelectorAll('button')].find(node=>node.textContent==='Siguiente'));await next.asElement().focus();await page.keyboard.press('Enter');await wait('Paso 3 de 10');assert.equal(await page.evaluate(()=>document.activeElement.tagName),'H3');await click('Anterior');await wait('Paso 2 de 10');checks.push('previous-next-keyboard-moves-focus-to-step-heading');\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/verify-participant-project-navigation-ui.mjs",
+      "previousSha256": "4946126fcc2e3408fe823a9094debe6aa362b5f5c232a67712990dad0058e695",
+      "currentSha256": "be3227c09712878995410fea5ef1e713fb0d86fca63627940234f4a45f09d799",
+      "previousBytes": 35168,
+      "currentBytes": 36159,
+      "inverseHunks": [
+        {
+          "currentOffsetCharacters": 7534,
+          "currentText": "async function waitRecordedTask(page,label){\n await settled(page);\n const nav='nav[aria-label=\"Navegación de la obra\"]',picker=nav+' select';\n await page.waitForFunction(()=>document.querySelector('nav[aria-label=\"Navegación de la obra\"] select option[value=\"schedule-title\"]')&&document.querySelector('#schedule-title'),{timeout:15000});\n if(await page.$eval(picker,node=>node.getClientRects().length>0))await page.select(picker,'schedule-title');\n else await page.click(nav+' a[href=\"#schedule-title\"]');\n await page.waitForFunction(()=>{const visible=[...document.querySelectorAll('[data-workspace-screen]')].filter(node=>node.getClientRects().length);return visible.length===1&&visible[0].dataset.workspaceScreen==='cronograma';},{timeout:15000});\n await waitText(page,label);\n}\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 10855,
+          "currentText": " await waitText(page,current.row.name);\n assert.equal(current.requests.filter(row=>row.path==='/api/identity/participants').length,1,'Opening the private identity panel performs exactly one canonical metadata GET');\n",
+          "previousText": " assert.equal(current.requests.filter(row=>row.path==='/api/identity/participants').length,0,'Identity read must remain explicit');\n"
+        },
+        {
+          "currentOffsetCharacters": 11264,
+          "currentText": " assert.equal(current.requests.filter(row=>row.path==='/api/identity/participants').length,2,'Explicit identity refresh performs exactly one additional canonical GET');\n",
+          "previousText": " assert.equal(current.requests.filter(row=>row.path==='/api/identity/participants').length,1);\n"
+        },
+        {
+          "currentOffsetCharacters": 20174,
+          "currentText": " if(mode==='recovered')await privateOnly(page,current);else{await waitRecordedTask(page,'Tarea de consulta '+targetProjectId);await settled(page);await noExtraAuthority(page);await noOverflow(page);}\n",
+          "previousText": " if(mode==='recovered')await privateOnly(page,current);else{await waitText(page,'Tarea de consulta '+targetProjectId);await settled(page);await noExtraAuthority(page);await noOverflow(page);}\n"
+        },
+        {
+          "currentOffsetCharacters": 21058,
+          "currentText": " const {context,page}=await createPage(width,current,entry);await waitRecordedTask(page,'Tarea de consulta '+targetProjectId);await settled(page);await noExtraAuthority(page);await noOverflow(page);\n",
+          "previousText": " const {context,page}=await createPage(width,current,entry);await waitText(page,'Tarea de consulta '+targetProjectId);await settled(page);await noExtraAuthority(page);await noOverflow(page);\n"
+        },
+        {
+          "currentOffsetCharacters": 21648,
+          "currentText": " await click(page,'Obra A');await waitRecordedTask(page,'Tarea de consulta p-a');await settled(page);await uiTurn(page);\n",
+          "previousText": " await click(page,'Obra A');await waitText(page,'Tarea de consulta p-a');await settled(page);await uiTurn(page);\n"
+        },
+        {
+          "currentOffsetCharacters": 23974,
+          "currentText": " await click(page,'Actualizar');await waitRecordedTask(page,'Tarea de consulta '+targetProjectId);await settled(page);\n",
+          "previousText": " await click(page,'Actualizar');await waitText(page,'Tarea de consulta '+targetProjectId);await settled(page);\n"
+        },
+        {
+          "currentOffsetCharacters": 26057,
+          "currentText": " await click(page,'Obra B');await waitRecordedTask(page,'Tarea de consulta p-b');await settled(page);\n",
+          "previousText": " await click(page,'Obra B');await waitText(page,'Tarea de consulta p-b');await settled(page);\n"
+        },
+        {
+          "currentOffsetCharacters": 26399,
+          "currentText": " await waitRecordedTask(page,'Tarea de consulta p-b');assert.equal(await page.$('#identity-access-title'),null);assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Untrusted task'));assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Empresa de ensayo A'));\n",
+          "previousText": " await waitText(page,'Tarea de consulta p-b');assert.equal(await page.$('#identity-access-title'),null);assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Untrusted task'));assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Empresa de ensayo A'));\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/verify-task-progress-measurement-ui.mjs",
+      "previousSha256": "3cd593333b735c7def545e1410bb4c2a6c7539f38167eb98ef156196854c40ec",
+      "currentSha256": "49c4071a94e5dca5c2e8a5ee6517ce7ccab129bc318241a974e5b8ecf1224204",
+      "previousBytes": 43914,
+      "currentBytes": 43958,
+      "inverseHunks": [
+        {
+          "currentOffsetCharacters": 40336,
+          "currentText": "  assert.ok(initialHtml.includes('data-initial-workspace')&&/<h2\\b[^>]*\\bid=\"workspace-title\"[^>]*>Panel de obra<\\/h2>/.test(initialHtml));\n",
+          "previousText": "  assert.ok(initialHtml.includes('data-initial-workspace')&&initialHtml.includes('Mis obras'));\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/verify-workspace-identity-only-ui.mjs",
+      "previousSha256": "f9b07f016b0ae9fe15497a63f6bc23ce996b42c45e29e19ef6c9e9f1a582e7d9",
+      "currentSha256": "e11ed3c52c998f84c0e7ed21ebbe806a1aa8816007b7819203e7d6c4ef4add19",
+      "previousBytes": 53096,
+      "currentBytes": 55811,
+      "inverseHunks": [
+        {
+          "currentOffsetCharacters": 8058,
+          "currentText": " const hiddenScreen=await page.evaluate(text=>{const matches=[...document.querySelectorAll('button')].filter(button=>!button.disabled&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text));if(matches.some(button=>!button.closest('[hidden]')))return null;return matches[0]?.closest('[data-workspace-screen]')?.dataset.workspaceScreen||null;},label);\n if(hiddenScreen){const id={identidad:'participant-title','mi-whatsapp':'worker-channel-title',cronograma:'schedule-title',recuperacion:'workspace-recovery-title'}[hiddenScreen];assert.ok(id,'Known real destination for '+label);const menu='nav[aria-label=\"Navegación de la obra\"]';if((await page.viewport()).width<1100)await page.select(menu+' select',id);else{const selector=menu+' a[href=\"#'+id+'\"]';const anchor=await page.$(selector);assert.ok(anchor,'Real destination link');await anchor.click();await anchor.dispose();}await page.waitForFunction(section=>document.querySelector('[data-workspace-screen=\"'+section+'\"]')?.hidden===false,{timeout:15000},hiddenScreen);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}\n\n await page.waitForFunction(text=>[...document.querySelectorAll('button')].some(button=>!button.disabled&&!button.closest('[hidden]')&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),{timeout:15000},label);\n const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(button=>!button.disabled&&!button.closest('[hidden]')&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),label);\n",
+          "previousText": " await page.waitForFunction(text=>[...document.querySelectorAll('button')].some(button=>!button.disabled&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),{timeout:15000},label);\n const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(button=>!button.disabled&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),label);\n"
+        },
+        {
+          "currentOffsetCharacters": 10055,
+          "currentText": "async function chooseWorkspaceView(page,id){const menu='nav[aria-label=\"Navegación de la obra\"]';if((await page.viewport()).width<1100)await page.select(menu+' select',id);else await page.click(menu+' a[href=\"#'+id+'\"]');await page.waitForFunction(target=>document.activeElement?.id===target,{timeout:15000},id);}\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 11213,
+          "currentText": " assert.equal(await page.$('nav[aria-label=\"Navegación de la obra\"]'),null);\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 22080,
+          "currentText": "async function waitRecordedTask(page,label){\n await page.waitForFunction(text=>document.querySelector('[data-schedule-workbench]')?.textContent.includes(text),{timeout:15000},label);\n}\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 23023,
+          "currentText": "  if(title==='Frente del documento'){await click(page,'Continuar al dorso');await click(page,'Continuar sin dorso');}\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 23144,
+          "currentText": " await page.evaluate(()=>[...document.querySelectorAll('label')].find(label=>label.textContent.includes('Leí el aviso y autorizo presentar estas imágenes')).querySelector('input').click());\n",
+          "previousText": " await page.evaluate(()=>[...document.querySelectorAll('label')].find(label=>label.textContent.includes('Leí el aviso y autorizo la presentación')).querySelector('input').click());\n"
+        },
+        {
+          "currentOffsetCharacters": 23929,
+          "currentText": " assert.deepEqual(current.requests.map(row=>row.path),['/api/identity/workspace','/api/identity/workspace','/api/identity/participants']);\n assert.deepEqual(current.requests.at(-1),{path:'/api/identity/participants',method:'GET',actor:'A',projectId:'p-a',operationId:null});\n",
+          "previousText": " assert.deepEqual(current.requests.map(row=>row.path),['/api/identity/workspace','/api/identity/workspace']);\n"
+        },
+        {
+          "currentOffsetCharacters": 25601,
+          "currentText": " current.approved=true;await click(page,'Comprobar habilitación de obra');await waitRecordedTask(page,'Tarea operativa p-a');await page.waitForSelector('nav[aria-label=\"Navegación de la obra\"]');assert.equal(await page.$('#identity-access-title'),null);\n",
+          "previousText": " current.approved=true;await click(page,'Comprobar habilitación de obra');await waitText(page,'Tarea operativa p-a');await page.waitForSelector('#workspace-tools-title');assert.equal(await page.$('#identity-access-title'),null);\n"
+        },
+        {
+          "currentOffsetCharacters": 27196,
+          "currentText": " await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');assert.equal(await page.$('#identity-access-title'),null);assert.equal(current.posts.length,0);assert.ok(!(current.requests.some(row=>row.path==='/api/identity/participants')));\n",
+          "previousText": " await click(page,'Obra A');await waitText(page,'Tarea operativa p-a');assert.equal(await page.$('#identity-access-title'),null);assert.equal(current.posts.length,0);assert.ok(!(current.requests.some(row=>row.path==='/api/identity/participants')));\n"
+        },
+        {
+          "currentOffsetCharacters": 28520,
+          "currentText": " await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');current.approved=false;if(ownDenied)current.mode='revoked-own';\n",
+          "previousText": " await click(page,'Obra A');await waitText(page,'Tarea operativa p-a');current.approved=false;if(ownDenied)current.mode='revoked-own';\n"
+        },
+        {
+          "currentOffsetCharacters": 29670,
+          "currentText": " if(company){await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');await click(page,'Obra B');await waitRecordedTask(page,'Tarea operativa p-b');}\n else{await click(page,'Obra A2');await waitRecordedTask(page,'Tarea operativa p-a2');}\n await chooseWorkspaceView(page,'schedule-title');await waitText(page,company?'Tarea operativa p-b':'Tarea operativa p-a2');\n",
+          "previousText": " if(company){await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');await click(page,'Obra B');await waitText(page,'Tarea operativa p-b');}\n else{await click(page,'Obra A2');await waitText(page,'Tarea operativa p-a2');}\n"
+        },
+        {
+          "currentOffsetCharacters": 31086,
+          "currentText": " await click(page,'Obra B');await waitRecordedTask(page,'Tarea operativa p-b');checks.push({name:'token-held-prior-company-never-dispatches-after-context-change',width});await context.close();\n",
+          "previousText": " await click(page,'Obra B');await waitText(page,'Tarea operativa p-b');checks.push({name:'token-held-prior-company-never-dispatches-after-context-change',width});await context.close();\n"
+        },
+        {
+          "currentOffsetCharacters": 35642,
+          "currentText": " await restrictedChannel(page);assert.equal(current.channelPosts.length,1);assert.equal(current.channelPosts[0].action,action);assert.ok(!current.requests.some(row=>!['/api/identity/workspace','/api/identity/worker-channel','/api/identity/participants'].includes(row.path)));assert.deepEqual(current.requests.filter(row=>row.path==='/api/identity/participants'),Array.from({length:reload?2:1},()=>({path:'/api/identity/participants',method:'GET',actor:'A',projectId:'p-a',operationId:null})),'Exactly one canonical own-profile metadata GET per initial load or explicit reload is allowed');\n",
+          "previousText": " await restrictedChannel(page);assert.equal(current.channelPosts.length,1);assert.equal(current.channelPosts[0].action,action);assert.ok(!current.requests.some(row=>!['/api/identity/workspace','/api/identity/worker-channel'].includes(row.path)));\n"
+        },
+        {
+          "currentOffsetCharacters": 37762,
+          "currentText": " if(company){await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');await click(page,'Obra B');await waitRecordedTask(page,'Tarea operativa p-b');}\n",
+          "previousText": " if(company){await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');await click(page,'Obra B');await waitText(page,'Tarea operativa p-b');}\n"
+        },
+        {
+          "currentOffsetCharacters": 45739,
+          "currentText": " current.approved=true;await click(page,'Consultar mi vínculo');await waitRecordedTask(page,'Tarea operativa p-a');await focusedOwnChannel(page,current);\n",
+          "previousText": " current.approved=true;await click(page,'Consultar mi vínculo');await waitText(page,'Tarea operativa p-a');await focusedOwnChannel(page,current);\n"
+        },
+        {
+          "currentOffsetCharacters": 48426,
+          "currentText": "  await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');releaseCurrent();\n",
+          "previousText": "  await click(page,'Obra A');await waitText(page,'Tarea operativa p-a');releaseCurrent();\n"
+        },
+        {
+          "currentOffsetCharacters": 48887,
+          "currentText": "  await click(page,'Actualizar');await waitText(page,'Empresa de ensayo A');await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');\n",
+          "previousText": "  await click(page,'Actualizar');await waitText(page,'Empresa de ensayo A');await click(page,'Obra A');await waitText(page,'Tarea operativa p-a');\n"
+        },
+        {
+          "currentOffsetCharacters": 49399,
+          "currentText": "  releaseCurrent();await waitRecordedTask(page,'Tarea operativa p-a2');await focusedOwnChannel(page,current);\n",
+          "previousText": "  releaseCurrent();await waitText(page,'Tarea operativa p-a2');await focusedOwnChannel(page,current);\n"
+        },
+        {
+          "currentOffsetCharacters": 50500,
+          "currentText": " current.approved=true;await click(page,'Comprobar habilitación de obra');await waitRecordedTask(page,'Tarea operativa p-a');assert.equal(await page.$('#identity-access-title'),null);assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,3);assert.equal(current.channelPosts.length,0);\n",
+          "previousText": " current.approved=true;await click(page,'Comprobar habilitación de obra');await waitText(page,'Tarea operativa p-a');assert.equal(await page.$('#identity-access-title'),null);assert.equal(current.requests.filter(row=>row.path==='/api/identity/workspace'&&row.projectId).length,3);assert.equal(current.channelPosts.length,0);\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
+      "previousSha256": "9978062c966ed599d6d65783813169da48b6fd39fdc65ea6691144598f8c3413",
+      "currentSha256": "ef7a5f0e099e468d5f0ec903ae78f6b9df4cf8dc48e1ed272e7ef9e31010c6c8",
+      "previousBytes": 60878,
+      "currentBytes": 61975,
+      "inverseHunks": [
+        {
+          "currentOffsetCharacters": 8065,
+          "currentText": "async function showWorkspaceSection(page,target,section){\n const nav='nav[aria-label=\"Navegación de la obra\"]',picker=nav+' select';\n await page.waitForSelector(nav);\n if(await page.$eval(picker,node=>node.getClientRects().length>0))await page.select(picker,target);\n else{const selector=nav+' a[href=\"#'+target+'\"]';if(await page.$eval(selector,node=>node.closest('details')?.open===false))await page.click(nav+' details>summary');await page.click(selector);}\n await page.waitForFunction(expected=>{const visible=[...document.querySelectorAll('[data-workspace-screen]')].filter(node=>node.getClientRects().length);return visible.length===1&&visible[0].dataset.workspaceScreen===expected;},{timeout:20000},section);\n}\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 8817,
+          "currentText": " if(label==='Comprobar recibo')await showWorkspaceSection(page,'workspace-recovery-title','recuperacion');\n else if(label==='Importar PDF, imagen o Excel'||label==='Comprobar resultado')await showWorkspaceSection(page,'schedule-title','cronograma');\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 9941,
+          "currentText": " await showWorkspaceSection(page,'schedule-title','cronograma');\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 10354,
+          "currentText": " const selector='nav[aria-label=\"Navegación de la obra\"] [role=\"status\"] a[href=\"#plan-import-title\"]',beforePosts=posts.length;\n",
+          "previousText": " const selector='nav[aria-labelledby=\"workspace-tools-title\"] [role=\"status\"] a[href=\"#plan-import-title\"]',beforePosts=posts.length;\n"
+        },
+        {
+          "currentOffsetCharacters": 10522,
+          "currentText": " assert.deepEqual(await page.$$eval('nav[aria-label=\"Navegación de la obra\"] [role=\"status\"] a',links=>links.map(link=>link.getAttribute('href'))),['#plan-import-title'],'The plan lock must name the actual blocking module, without labelling it as task creation');\n",
+          "previousText": " assert.deepEqual(await page.$$eval('nav[aria-labelledby=\"workspace-tools-title\"] [role=\"status\"] a',links=>links.map(link=>link.getAttribute('href'))),['#plan-import-title'],'The plan lock must name the actual blocking module, without labelling it as task creation');\n"
+        },
+        {
+          "currentOffsetCharacters": 12557,
+          "currentText": " const link=await page.$('nav[aria-label=\"Navegación de la obra\"] [role=\"status\"] a[href=\"#plan-import-title\"]');assert.ok(link,'A closed uncertain import still names its blocking panel');\n",
+          "previousText": " const link=await page.$('nav[aria-labelledby=\"workspace-tools-title\"] [role=\"status\"] a[href=\"#plan-import-title\"]');assert.ok(link,'A closed uncertain import still names its blocking panel');\n"
+        },
+        {
+          "currentOffsetCharacters": 23648,
+          "currentText": "  await page.reload({waitUntil:'networkidle0'});await waitText(page,'Empresa sintética de cronogramas');await openProject(page);await assertCount(page,151);await showWorkspaceSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');await click(page,'Comprobar recibo');await waitText(page,'El total incluye la tarea creada');await assertCount(page,151);assert.equal(recoveryReads.length,1);\n",
+          "previousText": "  await page.reload({waitUntil:'networkidle0'});await waitText(page,'Empresa sintética de cronogramas');await openProject(page);await assertCount(page,151);await waitText(page,'Operaciones por comprobar');await click(page,'Comprobar recibo');await waitText(page,'El total incluye la tarea creada');await assertCount(page,151);assert.equal(recoveryReads.length,1);\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/verify-workspace-reload-ui.mjs",
+      "previousSha256": "ccaddad1d15827bcc3c1c3413c40ad959da95063c2961155d48d97935f739096",
+      "currentSha256": "7b90b86b5b341edde5a792782fafbe07193fcf4250b2fc922c17ec011f4b423a",
+      "previousBytes": 41718,
+      "currentBytes": 44086,
+      "inverseHunks": [
+        {
+          "currentOffsetCharacters": 18647,
+          "currentText": "async function openCurrentReloadSection(page,target='schedule-title',section='cronograma'){\n const nav='nav[aria-label=\"Navegación de la obra\"]';await page.waitForSelector(nav+' a[href=\"#'+target+'\"]',{timeout:15000});const picker=await page.$(nav+' select');\n if(picker&&await picker.evaluate(node=>node.checkVisibility({contentVisibilityAuto:true,opacityProperty:true,visibilityProperty:true})))await page.select(nav+' select',target);else{const link=await page.$(nav+' a[href=\"#'+target+'\"]');assert.ok(link);if(!await link.evaluate(node=>node.checkVisibility({contentVisibilityAuto:true,opacityProperty:true,visibilityProperty:true}))){const disclosure=await page.$(nav+' details > summary');await disclosure.click();await page.waitForFunction(selector=>document.querySelector(selector)?.open===true,{timeout:15000},nav+' details');await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await disclosure.dispose();}await link.click();await link.dispose();}\n await page.waitForSelector('[data-workspace-screen=\"'+section+'\"]:not([hidden])',{visible:true,timeout:15000});await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));if(picker)await picker.dispose();\n}\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 20016,
+          "currentText": " await click(page,'Obra sintética A');await openCurrentReloadSection(page);await waitText(page,'Tarea sintética A');await click(page,'Nueva tarea');await page.type('form input:not([type=\"date\"])',title);\n",
+          "previousText": " await click(page,'Obra sintética A');await waitText(page,'Tarea sintética A');await click(page,'Nueva tarea');await page.type('form input:not([type=\"date\"])',title);\n"
+        },
+        {
+          "currentOffsetCharacters": 21139,
+          "currentText": " await page.reload({waitUntil:'networkidle0'});await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');\n",
+          "previousText": " await page.reload({waitUntil:'networkidle0'});await waitText(page,'Operaciones por comprobar');\n"
+        },
+        {
+          "currentOffsetCharacters": 22212,
+          "currentText": " await page.close();page=await createPage(old,current);await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');assert.equal(current.posts.length,1);assert.equal(current.receipts.length,0);await page.close();\n const fresh=await browser.createBrowserContext();page=await createPage(fresh,current,{snapshot});await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');await click(page,'Comprobar recibo');await waitText(page,'Guardado confirmado');assert.equal(current.posts.length,1);assert.deepEqual(await stored(page),{});\n",
+          "previousText": " await page.close();page=await createPage(old,current);await waitText(page,'Operaciones por comprobar');assert.equal(current.posts.length,1);assert.equal(current.receipts.length,0);await page.close();\n const fresh=await browser.createBrowserContext();page=await createPage(fresh,current,{snapshot});await waitText(page,'Operaciones por comprobar');await click(page,'Comprobar recibo');await waitText(page,'Guardado confirmado');assert.equal(current.posts.length,1);assert.deepEqual(await stored(page),{});\n"
+        },
+        {
+          "currentOffsetCharacters": 23284,
+          "currentText": " await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');assert.equal(current.receipts.length,0);await click(page,'Comprobar recibo');await waitText(page,'Esto no demuestra que el envío se haya perdido');\n",
+          "previousText": " await waitText(page,'Operaciones por comprobar');assert.equal(current.receipts.length,0);await click(page,'Comprobar recibo');await waitText(page,'Esto no demuestra que el envío se haya perdido');\n"
+        },
+        {
+          "currentOffsetCharacters": 24163,
+          "currentText": " const page=await createPage(context,current,{snapshot,failStorage:!corrupt});if(corrupt){await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'No se pueden consultar las referencias pendientes');}\n",
+          "previousText": " const page=await createPage(context,current,{snapshot,failStorage:!corrupt});if(corrupt)await waitText(page,'No se pueden consultar las referencias pendientes');\n"
+        },
+        {
+          "currentOffsetCharacters": 25069,
+          "currentText": " await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');\n",
+          "previousText": " await waitText(page,'Operaciones por comprobar');\n"
+        },
+        {
+          "currentOffsetCharacters": 25471,
+          "currentText": " await click(page,'Contexto B');await waitText(page,'Organización sintética B');await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await pause(late?850:50);\n",
+          "previousText": " await click(page,'Contexto B');await waitText(page,'Organización sintética B');await pause(late?850:50);\n"
+        },
+        {
+          "currentOffsetCharacters": 25992,
+          "currentText": " await click(page,'Contexto A');await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');\n",
+          "previousText": " await click(page,'Contexto A');await waitText(page,'Operaciones por comprobar');\n"
+        },
+        {
+          "currentOffsetCharacters": 27229,
+          "currentText": " await click(page,'Obra sintética A');await openCurrentReloadSection(page);await waitText(page,'Tarea sintética A');await click(page,'Nueva tarea');await page.type('form input:not([type=\"date\"])','PRIVATE_FORM_MARKER no enviado');await page.evaluate(()=>{window.__rejectToken=true;});await click(page,'Crear tarea');await waitText(page,'No se pudo renovar');\n",
+          "previousText": " await click(page,'Obra sintética A');await waitText(page,'Tarea sintética A');await click(page,'Nueva tarea');await page.type('form input:not([type=\"date\"])','PRIVATE_FORM_MARKER no enviado');await page.evaluate(()=>{window.__rejectToken=true;});await click(page,'Crear tarea');await waitText(page,'No se pudo renovar');\n"
+        },
+        {
+          "currentOffsetCharacters": 29279,
+          "currentText": " const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');assert.equal(current.receipts.length,0);await click(page,'Comprobar recibo');\n",
+          "previousText": " const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await waitText(page,'Operaciones por comprobar');assert.equal(current.receipts.length,0);await click(page,'Comprobar recibo');\n"
+        },
+        {
+          "currentOffsetCharacters": 30472,
+          "currentText": " const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');await click(page,'Comprobar recibo');await waitText(page,'Conservamos la referencia');\n",
+          "previousText": " const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await waitText(page,'Operaciones por comprobar');await click(page,'Comprobar recibo');await waitText(page,'Conservamos la referencia');\n"
+        },
+        {
+          "currentOffsetCharacters": 31184,
+          "currentText": " const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'No se pueden consultar las referencias pendientes');assert.equal(current.receipts.length,0);await startTask(page);await waitText(page,'la operación no se envió');assert.equal(current.posts.length,0);\n",
+          "previousText": " const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await waitText(page,'No se pueden consultar las referencias pendientes');assert.equal(current.receipts.length,0);await startTask(page);await waitText(page,'la operación no se envió');assert.equal(current.posts.length,0);\n"
+        },
+        {
+          "currentOffsetCharacters": 33664,
+          "currentText": " const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');await waitText(page,'Operaciones por comprobar');\n",
+          "previousText": " const page=await createPage(context,current,{snapshot:{[keyOf(pending)]:JSON.stringify(pending)}});await waitText(page,'Operaciones por comprobar');\n"
+        },
+        {
+          "currentOffsetCharacters": 34521,
+          "currentText": " await page.reload({waitUntil:'networkidle0'});await waitText(page,'Organización sintética A');await openCurrentReloadSection(page,'workspace-recovery-title','recuperacion');\n",
+          "previousText": " await page.reload({waitUntil:'networkidle0'});await waitText(page,'Organización sintética A');\n"
+        }
+      ]
+    },
+    {
+      "path": "scripts/verify-workspace-ui.mjs",
+      "previousSha256": "1d5de4cd92f799f8034531e9e44f70798ba137ff8d656a7152fa738cb9e266f2",
+      "currentSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
+      "previousBytes": 165130,
+      "currentBytes": 173377,
+      "inverseHunks": [
+        {
+          "currentOffsetCharacters": 802,
+          "currentText": "assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume','confirmed-progress','confirmed-progress-planning','confirmed-progress-unloaded','confirmed-progress-snapshots','navigation'].includes(process.env.WORKSPACE_UI_SCENARIO));\n",
+          "previousText": "assert.ok([undefined,'onboarding-epoch','guide-observation','guide-http-denial','portfolio-access-race','workbench','gantt-volume','confirmed-progress','confirmed-progress-planning','confirmed-progress-unloaded','confirmed-progress-snapshots'].includes(process.env.WORKSPACE_UI_SCENARIO));\n"
+        },
+        {
+          "currentOffsetCharacters": 10196,
+          "currentText": "const workspaceNav='nav[aria-label=\"Navegación de la obra\"]';\nasync function showWorkspaceSection(page,id){\n await page.waitForSelector(workspaceNav);await page.waitForFunction((nav,target)=>[...(document.querySelector(nav+' select')?.options||[])].some(option=>option.value===target),{timeout:15000},workspaceNav,id);\n const already=await page.evaluate(target=>{const node=document.getElementById(target),screen=node?.closest('[data-workspace-screen]');return Boolean(node?.getClientRects().length)&&Boolean(screen)&&!screen.hidden;},id);\n if(already)return;\n const picker=await page.$(workspaceNav+' select');assert.ok(picker,'Missing native section picker');\n if(await picker.evaluate(node=>node.getClientRects().length>0)){\n  assert.ok(await picker.evaluate((node,target)=>[...node.options].some(option=>option.value===target),id),'Section unavailable in the canonical picker: '+id);await page.select(workspaceNav+' select',id);\n }else{\n  const selector=workspaceNav+' a[href=\"#'+id+'\"]',link=await page.$(selector);assert.ok(link,'Missing authorized section link: '+id);\n  if(await link.evaluate(node=>Boolean(node.closest('details')&&!node.closest('details').open))){const summary=await link.evaluateHandle(node=>node.closest('details')?.querySelector('summary'));assert.ok(summary.asElement(),'Missing configuration disclosure');await page.locator(workspaceNav+' details summary').click();await summary.dispose();await page.waitForFunction(target=>document.querySelector('nav[aria-label=\"Navegación de la obra\"] a[href=\"#'+target+'\"]')?.closest('details')?.open===true,{},id);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}\n  await page.locator(selector).click();await link.dispose();\n }\n await picker.dispose();await page.waitForFunction(target=>{const node=document.getElementById(target),screen=node?.closest('[data-workspace-screen]');return Boolean(node?.getClientRects().length)&&Boolean(screen)&&!screen.hidden&&document.activeElement?.id===target;},{timeout:15000},id);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));\n}\nconst toolsNav=workspaceNav;\n",
+          "previousText": "const toolsNav='nav[aria-labelledby=\"workspace-tools-title\"]',toolsToggle=toolsNav+' button[aria-controls=\"workspace-tool-groups\"]';\n"
+        },
+        {
+          "currentOffsetCharacters": 12730,
+          "currentText": "async function toggleTools(page,opened,activation='click'){\n const summary=await page.$(toolsNav+' details summary');assert.ok(summary);\n if(await summary.evaluate((node,value)=>node.closest('details').open===value,opened))return;\n if(activation==='click')await page.locator(toolsNav+' details summary').click();else{await summary.focus();await page.keyboard.press(activation);}\n await page.waitForFunction(value=>document.querySelector('nav[aria-label=\"Navegación de la obra\"] details')?.open===value,{},opened);\n}\n",
+          "previousText": "async function toggleTools(page,opened,activation='click'){const button=await page.$(toolsToggle);assert.ok(button);if(await button.evaluate((node,value)=>node.getAttribute('aria-expanded')===String(value),opened))return;if(activation==='click')await button.click();else{await button.focus();await page.keyboard.press(activation);}await page.waitForFunction(value=>document.querySelector('nav[aria-labelledby=\"workspace-tools-title\"] button[aria-controls=\"workspace-tool-groups\"]')?.getAttribute('aria-expanded')===String(value),{},opened);}\n"
+        },
+        {
+          "currentOffsetCharacters": 13324,
+          "currentText": " const before=requests.length,forms=await page.$$eval('form',nodes=>nodes.length),picker=toolsNav+' select',desktop=toolsNav+' > div';\n await page.evaluate(()=>{window.__mobileNavigation=document.querySelector('nav[aria-label=\"Navegación de la obra\"]');window.__mobileForms=[...document.querySelectorAll('form')];window.__mobileGroups=document.querySelector('nav[aria-label=\"Navegación de la obra\"] select');});\n assert.equal(await page.$eval(picker,node=>node.tagName),'SELECT');assert.equal(await page.$eval(desktop,node=>node.getClientRects().length>0),width>=1100);assert.equal(await page.$eval(picker,node=>node.getClientRects().length>0),width<1100);\n if(width<1100){assert.ok(await page.$eval(picker,node=>node.getBoundingClientRect().height>=44));for(const activation of ['Enter','Space','click']){if(activation==='click')await page.click(picker);else{await page.focus(picker);await page.keyboard.press(activation);}await page.keyboard.press('Escape');await page.select(picker,'schedule-title');await page.waitForFunction(()=>document.querySelector('[data-workspace-screen=\"cronograma\"]')?.hidden===false);assert.ok(await page.$eval('[data-workspace-screen=\"cronograma\"]',node=>node.getClientRects().length>0));await page.select(picker,'workspace-home-title');await page.waitForFunction(()=>document.querySelector('[data-workspace-screen=\"inicio\"]')?.hidden===false);assert.equal(await page.$eval('[data-workspace-screen=\"cronograma\"]',node=>node.getClientRects().length>0),false);}}\n await page.setViewport({width:1099,height:1000});assert.equal(await page.$eval(desktop,node=>node.getClientRects().length>0),false);await page.setViewport({width:1100,height:1000});assert.ok(await page.$eval(desktop,node=>node.getClientRects().length>0));assert.equal(await page.$eval(picker,node=>node.getClientRects().length>0),false);await page.setViewport({width:1099,height:1000});assert.equal(await page.$eval(desktop,node=>node.getClientRects().length>0),false);\n await page.setViewport({width:1280,height:1000});await page.focus(toolsNav+' details summary');await page.evaluate(()=>{window.__mobileFocusedGroup=document.activeElement;});await page.setViewport({width:320,height:1000});await page.waitForFunction(()=>document.querySelector('nav[aria-label=\"Navegación de la obra\"] select')?.checkVisibility());assert.equal(await page.evaluate(()=>window.__mobileFocusedGroup.isConnected),true);assert.ok(await page.$eval(picker,node=>node.getClientRects().length>0));await page.focus(picker);assert.equal(await page.evaluate(()=>document.activeElement===document.querySelector('nav[aria-label=\"Navegación de la obra\"] select')),true);\n await page.setViewport({width,height:1000});if(width>=1100)await toggleTools(page,true);assert.ok(await page.$eval(width<1100?picker:desktop,node=>node.getClientRects().length>0));assert.equal(await page.evaluate(()=>document.querySelector('nav[aria-label=\"Navegación de la obra\"]')===window.__mobileNavigation&&document.querySelector('nav[aria-label=\"Navegación de la obra\"] select')===window.__mobileGroups&&window.__mobileForms.every(node=>node.isConnected)),true);assert.equal(await page.$$eval('form',nodes=>nodes.length),forms);assert.equal(requests.length,before);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks.push('mobile-tools-native-keyboard-pointer-breakpoint-focused-orientation-no-unmount-no-requests-'+width);\n",
+          "previousText": " const before=requests.length,forms=await page.$$eval('form',nodes=>nodes.length);\n await page.evaluate(()=>{window.__mobileNavigation=document.querySelector('nav[aria-labelledby=\"workspace-tools-title\"]');window.__mobileForms=[...document.querySelectorAll('form')];window.__mobileGroups=document.getElementById('workspace-tool-groups');});\n assert.equal(await page.$eval(toolsToggle,node=>node.getAttribute('aria-expanded')),'false');assert.equal(await page.$eval('#workspace-tool-groups',node=>node.getClientRects().length>0),width>600);assert.equal(await page.$eval(toolsToggle,node=>node.getClientRects().length>0),width<=600);\n if(width<=600){assert.ok(await page.$eval(toolsToggle,node=>node.getBoundingClientRect().height>=44));for(const activation of ['Enter','Space','click']){await toggleTools(page,true,activation);assert.ok(await page.$eval('#workspace-tool-groups',node=>node.getClientRects().length>0));await toggleTools(page,false,activation);assert.equal(await page.$eval('#workspace-tool-groups',node=>node.getClientRects().length>0),false);}}\n await page.setViewport({width:600,height:1000});await toggleTools(page,false);assert.equal(await page.$eval('#workspace-tool-groups',node=>node.getClientRects().length>0),false);await page.setViewport({width:601,height:1000});assert.ok(await page.$eval('#workspace-tool-groups',node=>node.getClientRects().length>0));assert.equal(await page.$eval(toolsToggle,node=>node.getClientRects().length>0),false);await page.setViewport({width:600,height:1000});assert.equal(await page.$eval('#workspace-tool-groups',node=>node.getClientRects().length>0),false);\n await page.setViewport({width:1280,height:1000});await page.focus(toolsNav+' details summary');await page.evaluate(()=>{window.__mobileFocusedGroup=document.activeElement;});await page.setViewport({width:320,height:1000});await page.waitForFunction(()=>document.querySelector('nav[aria-labelledby=\"workspace-tools-title\"] button[aria-controls]')?.getAttribute('aria-expanded')==='true');assert.equal(await page.evaluate(()=>document.activeElement===window.__mobileFocusedGroup),true);assert.ok(await page.$eval('#workspace-tool-groups',node=>node.getClientRects().length>0));await toggleTools(page,false);assert.equal(await page.evaluate(()=>document.activeElement===document.querySelector('nav[aria-labelledby=\"workspace-tools-title\"] button[aria-controls]')),true);\n await page.setViewport({width,height:1000});if(width<=600)await toggleTools(page,true);assert.ok(await page.$eval('#workspace-tool-groups',node=>node.getClientRects().length>0));assert.equal(await page.evaluate(()=>document.querySelector('nav[aria-labelledby=\"workspace-tools-title\"]')===window.__mobileNavigation&&document.getElementById('workspace-tool-groups')===window.__mobileGroups&&window.__mobileForms.every(node=>node.isConnected)),true);assert.equal(await page.$$eval('form',nodes=>nodes.length),forms);assert.equal(requests.length,before);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks.push('mobile-tools-native-keyboard-pointer-breakpoint-focused-orientation-no-unmount-no-requests-'+width);\n"
+        },
+        {
+          "currentOffsetCharacters": 17268,
+          "currentText": " if(width>=1100)await toggleTools(page,false);const pendingLink=toolsNav+' [role=\"status\"] a[href=\"#'+id+'\"]';await page.waitForSelector(pendingLink);assert.ok(await page.$eval(pendingLink,node=>node.getClientRects().length>0&&node.getBoundingClientRect().height>=44));if(width<1100)assert.equal(await page.$eval(toolsNav+' select',node=>node.getClientRects().length>0),true);\n assert.ok(await page.evaluate(()=>window.__pendingNavigationDraft.nodes.length>0));await page.focus(pendingLink);await page.keyboard.press('Enter');await page.waitForFunction(selector=>document.querySelector(selector)?.getAttribute('aria-current')==='page',{},pendingLink);await page.waitForFunction(target=>document.activeElement.id===target,{},id);assert.equal(await page.evaluate(()=>document.activeElement.id),id);assert.equal(await page.evaluate(()=>location.hash),'#'+id);assert.equal(await page.$eval(pendingLink,node=>node.getAttribute('aria-current')),'page');\n if(width>=1100){await toggleTools(page,true,'Space');await toggleTools(page,false,'Enter');}\n",
+          "previousText": " if(width<=600)await toggleTools(page,false);const pendingLink=toolsNav+' [role=\"status\"] a[href=\"#'+id+'\"]';await page.waitForSelector(pendingLink);assert.ok(await page.$eval(pendingLink,node=>node.getClientRects().length>0&&node.getBoundingClientRect().height>=44));if(width<=600)assert.equal(await page.$eval('#workspace-tool-groups',node=>node.getClientRects().length>0),false);\n assert.ok(await page.evaluate(()=>window.__pendingNavigationDraft.nodes.length>0));await page.focus(pendingLink);await page.keyboard.press('Enter');await page.waitForFunction(selector=>document.querySelector(selector)?.getAttribute('aria-current')==='location',{},pendingLink);assert.equal(await page.evaluate(()=>document.activeElement.id),id);assert.equal(await page.evaluate(()=>location.hash),'#'+id);assert.equal(await page.$eval(pendingLink,node=>node.getAttribute('aria-current')),'location');\n if(width<=600){await toggleTools(page,true,'Space');await toggleTools(page,false,'Enter');}\n"
+        },
+        {
+          "currentOffsetCharacters": 22516,
+          "currentText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa sintética de navegación de importación');await page.evaluate(()=>[...document.querySelectorAll('button')].find(node=>node.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id=\"task-a\"]');await page.waitForFunction(()=>document.querySelector('section[aria-labelledby=\"project-preparation-title\"]')?.getAttribute('aria-busy')==='false');await showWorkspaceSection(page,'schedule-title');await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(label=>[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent.trim()===label&&button.disabled===false),{timeout:15000},'Para revisar · 2026-10-06 · 1 tareas');await click(page,'Para revisar · 2026-10-06 · 1 tareas');await waitText(page,'Compará cada fila con el archivo');\n",
+          "previousText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa sintética de navegación de importación');await page.evaluate(()=>[...document.querySelectorAll('button')].find(node=>node.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id=\"task-a\"]');await page.waitForFunction(()=>document.querySelector('section[aria-labelledby=\"project-preparation-title\"]')?.getAttribute('aria-busy')==='false');await click(page,'Importar PDF, imagen o Excel');await page.waitForFunction(label=>[...document.querySelectorAll('[data-plan-import] button')].some(button=>button.textContent.trim()===label&&button.disabled===false),{timeout:15000},'Para revisar · 2026-10-06 · 1 tareas');await click(page,'Para revisar · 2026-10-06 · 1 tareas');await waitText(page,'Compará cada fila con el archivo');\n"
+        },
+        {
+          "currentOffsetCharacters": 30106,
+          "currentText": "  await showWorkspaceSection(page,'schedule-title');await waitText(page,'Tarea visible de la última obra');await new Promise(resolve=>setTimeout(resolve,700));assert.ok(!(await text(page)).includes('Mampostería'));checks.push('stale-project-response-never-replaces-current-scope');await context.close();return;\n",
+          "previousText": "  await waitText(page,'Tarea visible de la última obra');await new Promise(resolve=>setTimeout(resolve,700));assert.ok(!(await text(page)).includes('Mampostería'));checks.push('stale-project-response-never-replaces-current-scope');await context.close();return;\n"
+        },
+        {
+          "currentOffsetCharacters": 30420,
+          "currentText": " await showWorkspaceSection(page,'schedule-title');\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 30711,
+          "currentText": " await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');\n",
+          "previousText": " await waitText(page,'Mampostería');\n"
+        },
+        {
+          "currentOffsetCharacters": 31620,
+          "currentText": " await showWorkspaceSection(page,'schedule-title');await fill(page);assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')).every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input,form textarea')].every(e=>!e.disabled)));\n",
+          "previousText": " await fill(page);assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')).every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input,form textarea')].every(e=>!e.disabled)));\n"
+        },
+        {
+          "currentOffsetCharacters": 33110,
+          "currentText": "  await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);\n",
+          "previousText": "  await click(page,'Confirmar planificación');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);\n"
+        },
+        {
+          "currentOffsetCharacters": 34664,
+          "currentText": "  await click(page,'Comprobar guardado');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);checks.push('uncertain-save-recovers-receipt-without-reposting');\n",
+          "previousText": "  await click(page,'Comprobar guardado');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);checks.push('uncertain-save-recovers-receipt-without-reposting');\n"
+        },
+        {
+          "currentOffsetCharacters": 36185,
+          "currentText": "  await click(page,'Reintentar la misma planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,2);assert.deepEqual(posts[1],posts[0]);assert.equal(applications,1);\n",
+          "previousText": "  await click(page,'Reintentar la misma planificación');await waitText(page,'Cambio confirmado');assert.equal(posts.length,2);assert.deepEqual(posts[1],posts[0]);assert.equal(applications,1);\n"
+        },
+        {
+          "currentOffsetCharacters": 36850,
+          "currentText": "  await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.ok((await text(page)).includes('2026-10-07 → 2026-10-15'));assert.ok((await text(page)).includes('37 %'));assert.equal(posts.length,1);checks.push('planned-dates-receipt-and-unchanged-progress-'+width);\n",
+          "previousText": "  await waitText(page,'Cambio confirmado');assert.ok((await text(page)).includes('2026-10-07 → 2026-10-15'));assert.ok((await text(page)).includes('37 %'));assert.equal(posts.length,1);checks.push('planned-dates-receipt-and-unchanged-progress-'+width);\n"
+        },
+        {
+          "currentOffsetCharacters": 42503,
+          "currentText": " await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,target.title);await showWorkspaceSection(page,'schedule-title');await fill(page,target.id);\n",
+          "previousText": " await waitText(page,'Mampostería');await click(page,'Cargar más tareas');await waitText(page,target.title);await fill(page,target.id);\n"
+        },
+        {
+          "currentOffsetCharacters": 50270,
+          "currentText": " await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(applications,1);assert.equal(posts.length,mode==='changed-again'||mode==='retry-conflict'?3:2);assert.equal(posts.at(-1).expectedRevision,mode==='changed-again'?secondRevision:firstRevision);assert.notEqual(posts.at(-1).operationId,posts[0].operationId);assert.deepEqual(await references(),history);assert.equal(await page.$(editor),null);const targetProgress=await page.$eval('[data-task-id=\"task-z\"]',node=>({text:node.innerText,bars:[...node.querySelectorAll('[role=\"progressbar\"]')].map(bar=>Number(bar.getAttribute('aria-valuenow')))}));if(mode==='get-failed'){assert.deepEqual(targetProgress.bars,[]);assert.ok(targetProgress.text.includes('Requiere revisión'));}else assert.deepEqual(targetProgress.bars,[currentTask.progress]);assert.equal(await page.$eval('[data-task-id=\"task-a\"] [role=\"progressbar\"]',node=>Number(node.getAttribute('aria-valuenow'))),37);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n",
+          "previousText": " await waitText(page,'Cambio confirmado');assert.equal(applications,1);assert.equal(posts.length,mode==='changed-again'||mode==='retry-conflict'?3:2);assert.equal(posts.at(-1).expectedRevision,mode==='changed-again'?secondRevision:firstRevision);assert.notEqual(posts.at(-1).operationId,posts[0].operationId);assert.deepEqual(await references(),history);assert.equal(await page.$(editor),null);const targetProgress=await page.$eval('[data-task-id=\"task-z\"]',node=>({text:node.innerText,bars:[...node.querySelectorAll('[role=\"progressbar\"]')].map(bar=>Number(bar.getAttribute('aria-valuenow')))}));if(mode==='get-failed'){assert.deepEqual(targetProgress.bars,[]);assert.ok(targetProgress.text.includes('Requiere revisión'));}else assert.deepEqual(targetProgress.bars,[currentTask.progress]);assert.equal(await page.$eval('[data-task-id=\"task-a\"] [role=\"progressbar\"]',node=>Number(node.getAttribute('aria-valuenow'))),37);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n"
+        },
+        {
+          "currentOffsetCharacters": 51754,
+          "currentText": " const requests=[],posts=[],subscriptionReads=[],administrator=role==='ADMIN';let preparationReads=0,participantReads=0;\n",
+          "previousText": " const requests=[],posts=[],subscriptionReads=[],administrator=role==='ADMIN';let preparationReads=0;\n"
+        },
+        {
+          "currentOffsetCharacters": 54045,
+          "currentText": "   if(url.pathname==='/api/identity/participants'){assert.equal(++participantReads,1);assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify({scope,projectId:'p-a',canManage:administrator,canInvite:administrator,canManageOfficeRoles:administrator,existingAccounts:[],records:[],privacyNotice:{version:'synthetic-navigation-notice',text:'Ensayo sin documentos ni permisos reales'}})});return;}\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 56022,
+          "currentText": " await page.waitForSelector(workspaceNav);\n const nav=workspaceNav;\n",
+          "previousText": " await page.waitForSelector('nav[aria-labelledby=\"workspace-tools-title\"]');\n const nav='nav[aria-labelledby=\"workspace-tools-title\"]';\n"
+        },
+        {
+          "currentOffsetCharacters": 56419,
+          "currentText": " await showGuide(page);assert.ok(await page.$('#onboarding-guide-title'));\n const expected=['workspace-home-title','schedule-title','field-title','inventory-title','participant-title','worker-channel-title','workspace-recovery-title',...(administrator?['project-preparation-title','project-creation-title','site-register-title','purchase-title','own-company-number-title','own-company-templates-title','company-channel-title','customer-whatsapp-title','customer-meta-title','customer-inbox-title','template-send-title','constructor-crm-title','demo-pilot-title','operation-status-title','office-review-admin-title','company-subscription-title']:[])];\n const anchors=await page.$$eval(nav+' a[href^=\"#\"]',elements=>elements.map(element=>element.hash.slice(1)));\n",
+          "previousText": " const expected=['onboarding-guide-title','schedule-title','field-title','inventory-title','participant-title','worker-channel-title',...(administrator?['project-preparation-title','site-register-title','purchase-title','own-company-number-title','own-company-templates-title','company-channel-title','customer-whatsapp-title','customer-meta-title','customer-inbox-title','template-send-title','constructor-crm-title','demo-pilot-title','operation-status-title']:[])];\n const anchors=await page.$$eval(nav+' a',elements=>elements.map(element=>element.hash.slice(1)));\n"
+        },
+        {
+          "currentOffsetCharacters": 57245,
+          "currentText": " assert.equal(await page.$eval(nav,element=>[...element.querySelectorAll('a[href^=\"#\"]')].every(link=>document.getElementById(link.hash.slice(1)))),true);\n",
+          "previousText": " assert.equal(await page.$eval(nav,element=>[...element.querySelectorAll('a')].every(link=>document.getElementById(link.hash.slice(1)))),true);\n"
+        },
+        {
+          "currentOffsetCharacters": 57470,
+          "currentText": " const groups=await page.$$(nav+' details');if(width>=1100){for(const group of groups){assert.ok(await group.$eval('summary',element=>element.getBoundingClientRect().height>=44));if(!await group.evaluate(element=>element.open))await page.locator(nav+' details summary').click();}}else assert.ok(await page.$eval(nav+' select',element=>element.getBoundingClientRect().height>=44));\n",
+          "previousText": " const groups=await page.$$(nav+' details');for(const group of groups){assert.ok(await group.$eval('summary',element=>element.getBoundingClientRect().height>=44));if(!await group.evaluate(element=>element.open))await (await group.$('summary')).click();}\n"
+        },
+        {
+          "currentOffsetCharacters": 57964,
+          "currentText": " for(const id of expected){await showWorkspaceSection(page,id);await page.waitForFunction(target=>document.activeElement.id===target,{},id);assert.equal(await page.evaluate(()=>document.activeElement.id),id);assert.equal(await page.evaluate(()=>location.hash),'#'+id);}\n await page.waitForNetworkIdle({idleTime:100,timeout:15000});assert.equal(participantReads,1);assert.equal(requests.length,initialRequestCount+participantReads);assert.equal(posts.length,0);assert.equal(await page.$$eval('form',elements=>elements.length),initialFormCount);\n if(width<1100){await showWorkspaceSection(page,'workspace-home-title');await page.focus(nav+' select');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');}else{const keyboard=await page.$(nav+' a[href=\"#schedule-title\"]');await keyboard.focus();await page.keyboard.press('Enter');}await page.waitForFunction(()=>document.activeElement.id==='schedule-title');assert.equal(await page.evaluate(()=>document.activeElement.id),'schedule-title');\n",
+          "previousText": " for(const id of expected){await page.click(nav+' a[href=\"#'+id+'\"]');assert.equal(await page.evaluate(()=>document.activeElement.id),id);assert.equal(await page.evaluate(()=>location.hash),'#'+id);}\n assert.equal(requests.length,initialRequestCount);assert.equal(posts.length,0);assert.equal(await page.$$eval('form',elements=>elements.length),initialFormCount);\n const keyboard=await page.$(nav+' a[href=\"#schedule-title\"]');await keyboard.focus();await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>document.activeElement.id),'schedule-title');\n"
+        },
+        {
+          "currentOffsetCharacters": 59292,
+          "currentText": "  await click(page,'Planificar fechas');await page.waitForSelector('#schedule-edit-title');await page.waitForFunction(()=>document.activeElement.id==='schedule-edit-title',{timeout:15000});\n",
+          "previousText": "  await click(page,'Planificar fechas');await page.waitForSelector('#schedule-edit-title');\n"
+        },
+        {
+          "currentOffsetCharacters": 60073,
+          "currentText": "  await showWorkspaceSection(page,'worker-channel-title');\n  await page.locator(nav+' a[href=\"#schedule-edit-title\"]').click();await page.waitForFunction(()=>document.activeElement.id==='schedule-edit-title',{timeout:15000});\n",
+          "previousText": "  await page.click(nav+' a[href=\"#worker-channel-title\"]');\n  await page.click(nav+' a[href=\"#schedule-edit-title\"]');\n"
+        },
+        {
+          "currentOffsetCharacters": 60506,
+          "currentText": "  assert.equal(requests.length,initialRequestCount+participantReads);assert.equal(posts.length,0);\n",
+          "previousText": "  assert.equal(requests.length,initialRequestCount);assert.equal(posts.length,0);\n"
+        },
+        {
+          "currentOffsetCharacters": 66240,
+          "currentText": "  await showWorkspaceSection(page,'schedule-title');\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 77605,
+          "currentText": "  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitWorkbenchTasks(page,['wb-page-two-match','wb-mamp-a']);\n",
+          "previousText": "  await click(page,'Cargar más tareas');await waitWorkbenchTasks(page,['wb-page-two-match','wb-mamp-a']);\n"
+        },
+        {
+          "currentOffsetCharacters": 84251,
+          "currentText": "  await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mostrando 100 de 100 tareas cargadas');\n  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 200 de 200 tareas cargadas');\n  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 240 de 240 tareas cargadas');\n",
+          "previousText": "  await waitText(page,'Mostrando 100 de 100 tareas cargadas');\n  await click(page,'Cargar más tareas');await waitText(page,'Mostrando 200 de 200 tareas cargadas');\n  await click(page,'Cargar más tareas');await waitText(page,'Mostrando 240 de 240 tareas cargadas');\n"
+        },
+        {
+          "currentOffsetCharacters": 90456,
+          "currentText": " await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Organización de prueba sintética');await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Obra de prueba A')).click());await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type('form input:not([type=\"date\"])','Tarea de ensayo recuperable');assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>!e.disabled)));\n",
+          "previousText": " await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Organización de prueba sintética');await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Obra de prueba A')).click());await waitText(page,'Mampostería');await click(page,'Nueva tarea');await page.type('form input:not([type=\"date\"])','Tarea de ensayo recuperable');assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>!e.disabled)));\n"
+        },
+        {
+          "currentOffsetCharacters": 100633,
+          "currentText": "  if(planningMode){await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await planningReady;}\n  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label=\"Operaciones de campo\"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');\n  if(!planningMode){await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type('section[aria-label=\"Crear tarea de la obra\"] form input:not([type=\"date\"])',created.title);await click(page,'Crear tarea');await readbackReady;}\n  await showWorkspaceSection(page,'field-title');await click(page,'Decidir propuesta');await page.type('section[aria-labelledby=\"field-title\"] form textarea','Aprobación sintética independiente.');await click(page,'Guardar con recibo');await decisionReady;\n",
+          "previousText": "  if(planningMode){await fill(page);await click(page,'Confirmar planificación');await planningReady;}\n  await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label=\"Operaciones de campo\"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');\n  if(!planningMode){await click(page,'Nueva tarea');await page.type('section[aria-label=\"Crear tarea de la obra\"] form input:not([type=\"date\"])',created.title);await click(page,'Crear tarea');await readbackReady;}\n  await click(page,'Decidir propuesta');await page.type('section[aria-labelledby=\"field-title\"] form textarea','Aprobación sintética independiente.');await click(page,'Guardar con recibo');await decisionReady;\n"
+        },
+        {
+          "currentOffsetCharacters": 101695,
+          "currentText": "   await respond(heldPlanning.request,heldPlanning.outcome);await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');\n",
+          "previousText": "   await respond(heldPlanning.request,heldPlanning.outcome);await waitText(page,'Cambio confirmado');\n"
+        },
+        {
+          "currentOffsetCharacters": 102351,
+          "currentText": "   await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,`workspace-confirmed-progress-planning-${width}.png`)});\n",
+          "previousText": "   await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,`workspace-confirmed-progress-planning-${width}.png`)});\n"
+        },
+        {
+          "currentOffsetCharacters": 103095,
+          "currentText": "  await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cronograma actualizado desde los registros de la obra.');\n  if(mode==='callback'){await respond(heldDecision.request,heldDecision.outcome);await showWorkspaceSection(page,'field-title');await waitText(page,'Decisión guardada.');await showWorkspaceSection(page,'schedule-title');}\n",
+          "previousText": "  await waitText(page,'Cronograma actualizado desde los registros de la obra.');\n  if(mode==='callback'){await respond(heldDecision.request,heldDecision.outcome);await waitText(page,'Decisión guardada.');}\n"
+        },
+        {
+          "currentOffsetCharacters": 104069,
+          "currentText": "  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await page.waitForSelector('[data-task-id=\"tail-task\"]');assert.ok((await text(page)).includes('3 de 3 tareas cargadas'));\n",
+          "previousText": "  await click(page,'Cargar más tareas');await page.waitForSelector('[data-task-id=\"tail-task\"]');assert.ok((await text(page)).includes('3 de 3 tareas cargadas'));\n"
+        },
+        {
+          "currentOffsetCharacters": 104545,
+          "currentText": "  await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,`workspace-confirmed-progress-${mode}-${width}.png`)});\n",
+          "previousText": "  await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,`workspace-confirmed-progress-${mode}-${width}.png`)});\n"
+        },
+        {
+          "currentOffsetCharacters": 112672,
+          "currentText": "  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label=\"Operaciones de campo\"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');assert.equal(posts.length,0);assert.equal(scheduleReads.length,1);\n  await showWorkspaceSection(page,'field-title');await click(page,'Decidir propuesta');await page.waitForSelector('section[aria-labelledby=\"field-title\"] form');await page.select('section[aria-labelledby=\"field-title\"] form select',decision);await page.type('section[aria-labelledby=\"field-title\"] form textarea','Decisión sintética de otra cuenta responsable.');assert.equal(posts.length,0);await click(page,'Guardar con recibo');\n",
+          "previousText": "  await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label=\"Operaciones de campo\"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');assert.equal(posts.length,0);assert.equal(scheduleReads.length,1);\n  await click(page,'Decidir propuesta');await page.waitForSelector('section[aria-labelledby=\"field-title\"] form');await page.select('section[aria-labelledby=\"field-title\"] form select',decision);await page.type('section[aria-labelledby=\"field-title\"] form textarea','Decisión sintética de otra cuenta responsable.');assert.equal(posts.length,0);await click(page,'Guardar con recibo');\n"
+        },
+        {
+          "currentOffsetCharacters": 113783,
+          "currentText": "  await showWorkspaceSection(page,'schedule-title');assert.equal(posts.length,1);assert.equal(scheduleReads.length,1);assert.equal((await page.$$('[data-task-id=\"task-outside\"]')).length,0);assert.ok((await text(page)).includes('1 de 2 tareas cargadas'));\n",
+          "previousText": "  assert.equal(posts.length,1);assert.equal(scheduleReads.length,1);assert.equal((await page.$$('[data-task-id=\"task-outside\"]')).length,0);assert.ok((await text(page)).includes('1 de 2 tareas cargadas'));\n"
+        },
+        {
+          "currentOffsetCharacters": 114348,
+          "currentText": "  await showWorkspaceSection(page,'field-title');assert.equal(await page.$eval('section[aria-labelledby=\"field-title\"] details code',element=>element.textContent),recorded.receiptId);\n",
+          "previousText": "  assert.equal(await page.$eval('section[aria-labelledby=\"field-title\"] details code',element=>element.textContent),recorded.receiptId);\n"
+        },
+        {
+          "currentOffsetCharacters": 114970,
+          "currentText": "   await showWorkspaceSection(page,'field-title');await (await page.$('section[aria-labelledby=\"field-title\"]')).screenshot({path:path.join(evidence,'workspace-unloaded-progress-receipt-'+width+'.png')});\n   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Ver en el cronograma'&&!button.disabled)&&document.getElementById('schedule-load-more')?.disabled===false);assert.ok(await page.$eval('[data-confirmed-progress=\"task-outside\"] button',element=>element.getBoundingClientRect().height>=44));await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.id==='schedule-load-more');assert.equal(await page.evaluate(()=>document.activeElement?.id),'schedule-load-more');assert.equal(scheduleReads.length,1);\n",
+          "previousText": "   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Ver en el cronograma'&&!button.disabled)&&document.getElementById('schedule-load-more')?.disabled===false);assert.ok(await page.$eval('[data-confirmed-progress=\"task-outside\"] button',element=>element.getBoundingClientRect().height>=44));await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>document.activeElement?.id),'schedule-load-more');assert.equal(scheduleReads.length,1);\n   await (await page.$('section[aria-labelledby=\"field-title\"]')).screenshot({path:path.join(evidence,'workspace-unloaded-progress-receipt-'+width+'.png')});\n"
+        },
+        {
+          "currentOffsetCharacters": 117101,
+          "currentText": "   await showWorkspaceSection(page,'field-title');await waitText(page,'Esta tarea está cargada en el cronograma.');await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-outside');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-outside');assert.equal(scheduleReads.length,2);assert.equal(posts.length,1);\n",
+          "previousText": "   await waitText(page,'Esta tarea está cargada en el cronograma.');await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-outside');assert.equal(scheduleReads.length,2);assert.equal(posts.length,1);\n"
+        },
+        {
+          "currentOffsetCharacters": 118028,
+          "currentText": "  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,mode+'-'+width+'.png')});\n",
+          "previousText": "  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,mode+'-'+width+'.png')});\n"
+        },
+        {
+          "currentOffsetCharacters": 125874,
+          "currentText": "  await showWorkspaceSection(page,'schedule-title');\n",
+          "previousText": ""
+        },
+        {
+          "currentOffsetCharacters": 127419,
+          "currentText": "  const trace=await page.evaluate(()=>window.__loadedReceiptTrace);assert.ok(trace.length>0);assert.ok(trace.some(row=>row.progress===50));assert.ok(trace.every(row=>row.progress!==25),'The receipt snapshot must never be written to the already loaded schedule');await showWorkspaceSection(page,'field-title');\n",
+          "previousText": "  const trace=await page.evaluate(()=>window.__loadedReceiptTrace);assert.ok(trace.length>0);assert.ok(trace.some(row=>row.progress===50));assert.ok(trace.every(row=>row.progress!==25),'The receipt snapshot must never be written to the already loaded schedule');\n"
+        },
+        {
+          "currentOffsetCharacters": 129075,
+          "currentText": "  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label=\"Operaciones de campo\"]');await click(page,'Avance');\n",
+          "previousText": "  await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label=\"Operaciones de campo\"]');await click(page,'Avance');\n"
+        },
+        {
+          "currentOffsetCharacters": 131940,
+          "currentText": "   if(mode==='loaded-current'){await page.focus('[data-confirmed-progress=\"task-a\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-a');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-a');assert.equal(scheduleReads.length,1);assert.equal(posts.length,1);assert.ok((await page.$eval('[data-confirmed-progress=\"task-a\"]',element=>element.textContent)).includes('25% de avance aprobado en este recibo'));}\n   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await showWorkspaceSection(page,'field-title');await (await page.$('section[aria-labelledby=\"field-title\"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+kind+'-'+width+'.png')});\n",
+          "previousText": "   if(mode==='loaded-current'){await page.focus('[data-confirmed-progress=\"task-a\"] button');await page.keyboard.press('Enter');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-a');assert.equal(scheduleReads.length,1);assert.equal(posts.length,1);assert.ok((await page.$eval('[data-confirmed-progress=\"task-a\"]',element=>element.textContent)).includes('25% de avance aprobado en este recibo'));}\n   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await (await page.$('section[aria-labelledby=\"field-title\"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+kind+'-'+width+'.png')});\n"
+        },
+        {
+          "currentOffsetCharacters": 132746,
+          "currentText": "  await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+snapshotCase+'-schedule-'+width+'.png')});\n",
+          "previousText": "  await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+snapshotCase+'-schedule-'+width+'.png')});\n"
+        },
+        {
+          "currentOffsetCharacters": 136082,
+          "currentText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo de página tardía');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await showWorkspaceSection(page,'schedule-title');await page.waitForSelector('[data-task-id=\"task-a\"]');\n  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await paginationStarted;await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);\n",
+          "previousText": "  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo de página tardía');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id=\"task-a\"]');\n  await click(page,'Cargar más tareas');await paginationStarted;await fill(page);await click(page,'Confirmar planificación');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);\n"
+        },
+        {
+          "currentOffsetCharacters": 137788,
+          "currentText": "  await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,'workspace-workbench-stale-page-390.png')});checks.push('workbench-late-cursor-page-preserves-confirmed-newer-schedule-and-receipt-390');\n",
+          "previousText": "  await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,'workspace-workbench-stale-page-390.png')});checks.push('workbench-late-cursor-page-preserves-confirmed-newer-schedule-and-receipt-390');\n"
+        },
+        {
+          "currentOffsetCharacters": 141826,
+          "currentText": " try{await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});assert.equal(await page.evaluate(()=>innerWidth),width);await waitText(page,'Empresa de epoch sint\\u00e9tico');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id=\"task-a\"]');await showGuide(page);await showWorkspaceSection(page,'participant-title');await click(page,'Consultar participantes');await page.waitForSelector('[data-onboarding-step=\"CHANNEL_UNOBSERVED\"]');await showWorkspaceSection(page,'worker-channel-title');await click(page,'Consultar vinculaci\\u00f3n');await page.waitForSelector('[data-onboarding-step=\"CHANNEL_VERIFIED\"]');assert.equal(await page.$$eval('a[href^=\"https://wa.me/\"]',els=>els.length),1);await page.waitForFunction(()=>document.querySelector('[data-guide-observation=\"OBSERVED\"]')?.textContent.includes('Tu vínculo personal está vigente'));assert.match(await guideStatus(page),/1 tarea cargada de 2.*Vista parcial/s);\n  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar m\\u00e1s tareas');await page.waitForSelector('[data-task-id=\"task-second\"]');await page.waitForSelector('[data-onboarding-step=\"CHANNEL_UNOBSERVED\"]');assert.equal(channelReads,1);assert.equal(await page.$$eval('a[href^=\"https://wa.me/\"]',els=>els.length),0);assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));assert.match(await guideStatus(page),/2 tareas cargadas de 2.*Vista completa/s);\n  await page.evaluate(async body=>{await window.__prepareWorkspaceReference(body);},{scope,projectId:'p-a',operationId:'11111111-1111-4111-8111-111111111111'});await showWorkspaceSection(page,'workspace-recovery-title');await waitText(page,'Operaciones por comprobar');await showWorkspaceSection(page,'worker-channel-title');await click(page,'Consultar vinculaci\\u00f3n');await channelGate;await showWorkspaceSection(page,'workspace-recovery-title');await click(page,'Comprobar recibo');await showWorkspaceSection(page,'schedule-title');await page.waitForFunction(()=>document.body.innerText.includes('Cronograma actualizado desde los registros'));assert.equal(workspaceReads,3);\n",
+          "previousText": " try{await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});assert.equal(await page.evaluate(()=>innerWidth),width);await waitText(page,'Empresa de epoch sint\\u00e9tico');await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id=\"task-a\"]');await showGuide(page);await click(page,'Consultar participantes');await page.waitForSelector('[data-onboarding-step=\"CHANNEL_UNOBSERVED\"]');await click(page,'Consultar vinculaci\\u00f3n');await page.waitForSelector('[data-onboarding-step=\"CHANNEL_VERIFIED\"]');assert.equal(await page.$$eval('a[href^=\"https://wa.me/\"]',els=>els.length),1);await page.waitForFunction(()=>document.querySelector('[data-guide-observation=\"OBSERVED\"]')?.textContent.includes('Tu vínculo personal está vigente'));assert.match(await guideStatus(page),/1 tarea cargada de 2.*Vista parcial/s);\n  await click(page,'Cargar m\\u00e1s tareas');await page.waitForSelector('[data-task-id=\"task-second\"]');await page.waitForSelector('[data-onboarding-step=\"CHANNEL_UNOBSERVED\"]');assert.equal(channelReads,1);assert.equal(await page.$$eval('a[href^=\"https://wa.me/\"]',els=>els.length),0);assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));assert.match(await guideStatus(page),/2 tareas cargadas de 2.*Vista completa/s);\n  await page.evaluate(async body=>{await window.__prepareWorkspaceReference(body);},{scope,projectId:'p-a',operationId:'11111111-1111-4111-8111-111111111111'});await waitText(page,'Operaciones por comprobar');await click(page,'Consultar vinculaci\\u00f3n');await channelGate;await click(page,'Comprobar recibo');await page.waitForFunction(()=>document.body.innerText.includes('Cronograma actualizado desde los registros'));assert.equal(workspaceReads,3);\n"
+        },
+        {
+          "currentOffsetCharacters": 144652,
+          "currentText": "  await showWorkspaceSection(page,'worker-channel-title');await click(page,'Consultar vinculaci\\u00f3n');await page.waitForSelector('[data-onboarding-step=\"CHANNEL_VERIFIED\"]');assert.equal(channelReads,3);assert.equal(await page.$$eval('a[href^=\"https://wa.me/\"]',els=>els.length),1);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(evidence,`workspace-onboarding-epoch-${width}.png`),fullPage:true});checks.push({mode,width,workspaceReads,channelReads,posts:posts.length,appendInvalidates:true,lateSnapshotRejected:true,freshExplicitReadRequired:true});\n }catch(error){console.error(JSON.stringify({diagnostic:'onboarding-epoch-primary-failure',width,message:error.message,stack:error.stack,ui:await page.evaluate(()=>({hash:location.hash,active:document.activeElement?.id,visibleScreens:[...document.querySelectorAll('[data-workspace-screen]')].filter(node=>!node.hidden).map(node=>node.dataset.workspaceScreen)})).catch(()=>null)}));throw error;}finally{if(heldChannel&&!heldChannel.isInterceptResolutionHandled())await heldChannel.abort().catch(()=>{});await context.close();}\n",
+          "previousText": "  await click(page,'Consultar vinculaci\\u00f3n');await page.waitForSelector('[data-onboarding-step=\"CHANNEL_VERIFIED\"]');assert.equal(channelReads,3);assert.equal(await page.$$eval('a[href^=\"https://wa.me/\"]',els=>els.length),1);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(evidence,`workspace-onboarding-epoch-${width}.png`),fullPage:true});checks.push({mode,width,workspaceReads,channelReads,posts:posts.length,appendInvalidates:true,lateSnapshotRejected:true,freshExplicitReadRequired:true});\n }finally{if(heldChannel&&!heldChannel.isInterceptResolutionHandled())await heldChannel.abort().catch(()=>{});await context.close();}\n"
+        },
+        {
+          "currentOffsetCharacters": 149116,
+          "currentText": "  await showWorkspaceSection(page,'worker-channel-title');await click(page,'Consultar vinculación');await page.waitForFunction(()=>window.__guideObservation?.channel?.ownLinked===true);assert.match(await guideStatus(page),/Tu vínculo personal está vigente/);\n  failureStatus=503;await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await page.waitForSelector('[data-guide-observation=\"UNOBSERVED\"]');assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));assert.ok(!(await guideStatus(page)).includes('1 tarea cargada'));assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),1);\n  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await page.waitForFunction(()=>window.__guideObservation?.schedule?.loaded===2);assert.match(await guideStatus(page),/2 tareas cargadas de 3/);assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));\n",
+          "previousText": "  await click(page,'Consultar vinculación');await page.waitForFunction(()=>window.__guideObservation?.channel?.ownLinked===true);assert.match(await guideStatus(page),/Tu vínculo personal está vigente/);\n  failureStatus=503;await click(page,'Cargar más tareas');await page.waitForSelector('[data-guide-observation=\"UNOBSERVED\"]');assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));assert.ok(!(await guideStatus(page)).includes('1 tarea cargada'));assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),1);\n  await click(page,'Cargar más tareas');await page.waitForFunction(()=>window.__guideObservation?.schedule?.loaded===2);assert.match(await guideStatus(page),/2 tareas cargadas de 3/);assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));\n"
+        },
+        {
+          "currentOffsetCharacters": 150566,
+          "currentText": "  for(const denial of [401,403]){failureStatus=denial;await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await page.waitForSelector('[data-guide-observation=\"UNAVAILABLE\"]');assert.ok(!(await guideStatus(page)).includes('Empresa consultada'));assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),0);await click(page,'Actualizar');await page.waitForSelector('[data-guide-observation=\"OBSERVED\"]');assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForFunction(()=>window.__guideObservation?.projectId==='p-a');}\n",
+          "previousText": "  for(const denial of [401,403]){failureStatus=denial;await click(page,'Cargar más tareas');await page.waitForSelector('[data-guide-observation=\"UNAVAILABLE\"]');assert.ok(!(await guideStatus(page)).includes('Empresa consultada'));assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),0);await click(page,'Actualizar');await page.waitForSelector('[data-guide-observation=\"OBSERVED\"]');assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForFunction(()=>window.__guideObservation?.projectId==='p-a');}\n"
+        },
+        {
+          "currentOffsetCharacters": 155584,
+          "currentText": "  await showWorkspaceSection(page,'worker-channel-title');await click(page,'Consultar vinculación');await page.waitForFunction(()=>window.__guideObservation?.channel?.ownLinked===true);assert.match(await guideStatus(page),/Tu vínculo personal está vigente/);\n",
+          "previousText": "  await click(page,'Consultar vinculación');await page.waitForFunction(()=>window.__guideObservation?.channel?.ownLinked===true);assert.match(await guideStatus(page),/Tu vínculo personal está vigente/);\n"
+        },
+        {
+          "currentOffsetCharacters": 155865,
+          "currentText": "  if(action==='append'){await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');}\n  else{await page.evaluate(body=>window.__prepareWorkspaceReference(body),{scope,projectId:'p-a',operationId:'11111111-1111-4111-8111-111111111111'});await showWorkspaceSection(page,'workspace-recovery-title');await waitText(page,'Operaciones por comprobar');await showWorkspaceSection(page,'workspace-recovery-title');await click(page,'Comprobar recibo');}\n",
+          "previousText": "  if(action==='append')await click(page,'Cargar más tareas');\n  else{await page.evaluate(body=>window.__prepareWorkspaceReference(body),{scope,projectId:'p-a',operationId:'11111111-1111-4111-8111-111111111111'});await waitText(page,'Operaciones por comprobar');await click(page,'Comprobar recibo');}\n"
+        },
+        {
+          "currentOffsetCharacters": 161700,
+          "currentText": "  await showWorkspaceSection(page,'worker-channel-title');await click(page,'Consultar vinculación');await page.waitForFunction(()=>window.__guideObservation?.channel?.ownLinked===true);\n  await page.evaluate(body=>window.__prepareWorkspaceReference(body),{scope,projectId:'p-a',operationId:'22222222-2222-4222-8222-222222222222'});await showWorkspaceSection(page,'workspace-recovery-title');await waitText(page,'Operaciones por comprobar');\n",
+          "previousText": "  await click(page,'Consultar vinculación');await page.waitForFunction(()=>window.__guideObservation?.channel?.ownLinked===true);\n  await page.evaluate(body=>window.__prepareWorkspaceReference(body),{scope,projectId:'p-a',operationId:'22222222-2222-4222-8222-222222222222'});await waitText(page,'Operaciones por comprobar');\n"
+        },
+        {
+          "currentOffsetCharacters": 162348,
+          "currentText": "  await showWorkspaceSection(page,'workspace-home-title');await click(page,'Consultar resumen');await page.waitForFunction(()=>document.querySelector('#portfolio-overview-title')?.closest('section').getAttribute('aria-busy')==='true');\n",
+          "previousText": "  await click(page,'Consultar resumen');await page.waitForFunction(()=>document.querySelector('#portfolio-overview-title')?.closest('section').getAttribute('aria-busy')==='true');\n"
+        },
+        {
+          "currentOffsetCharacters": 163196,
+          "currentText": "   await showWorkspaceSection(page,'schedule-title');await fill(page);if(action==='token')await page.evaluate(()=>{window.__holdToken=true;});await click(page,'Confirmar planificación');\n",
+          "previousText": "   await fill(page);if(action==='token')await page.evaluate(()=>{window.__holdToken=true;});await click(page,'Confirmar planificación');\n"
+        },
+        {
+          "currentOffsetCharacters": 170773,
+          "currentText": " if(process.env.WORKSPACE_UI_SCENARIO==='navigation')for(const width of [320,390,768,1280])for(const role of ['ADMIN','AUDITOR'])await navigationScenario(role,width);\n",
+          "previousText": ""
+        }
+      ]
+    }
+  ]
+}

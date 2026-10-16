@@ -13,6 +13,7 @@ import urllib.request
 from pathlib import Path
 
 NOTICE_VERSION = "participant-private-biometric-v1"
+NOTICE_VERSIONS = {NOTICE_VERSION, "participant-private-biometric-v2"}
 MAX_BODY = 4_000_000
 MAX_IMAGE = 2 * 1024 * 1024
 MODEL_MANIFEST = (
@@ -186,7 +187,7 @@ def passive_tensor(image, bbox):
 
 
 def evaluate(payload, models=None):
-    if not isinstance(payload, dict) or set(payload) != {"version", "consentVersion", "front", "selfie"} or type(payload["version"]) is not int or payload["version"] != 1 or payload["consentVersion"] != NOTICE_VERSION:
+    if not isinstance(payload, dict) or set(payload) != {"version", "consentVersion", "front", "selfie"} or type(payload["version"]) is not int or payload["version"] != 1 or payload["consentVersion"] not in NOTICE_VERSIONS:
         raise BiometricError("BIOMETRIC_PRIVACY_REQUIRED", 400)
     front_raw, selfie_raw = image_input(payload["front"]), image_input(payload["selfie"])
     if payload["front"]["sha256"] == payload["selfie"]["sha256"]:

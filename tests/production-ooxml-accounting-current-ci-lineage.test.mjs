@@ -1,3 +1,5 @@
+import {restoreParticipantPreanalysisPreviousContract,restoreParticipantPreanalysisSourceSet} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
+import {restoreIntegratedIdentityPreviousContract,restoreIntegratedIdentitySourceSet,integratedIdentityCurrentSourcePin} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
@@ -8,7 +10,7 @@ import {verifyPlanMeasurementCurrentSources,reconstructPublishedHContract} from 
 import {companyKycOutboundCompactCiSourceClosure} from '../scripts/verify-company-kyc-outbound-compact-ci.mjs';
 
 const root=new URL('../',import.meta.url),read=file=>{try{return readFileSync(new URL(file,root));}catch(error){if(error.code==='ENOENT'||error.code==='EISDIR')return null;throw error;}},sha=value=>createHash('sha256').update(value).digest('hex');
-const contract=JSON.parse(read('.github/workspace-acceptance-contract.json'));
+const contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),previous=restoreParticipantPreanalysisPreviousContract(contract);
 const denied=run=>assert.throws(run,{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});
 const changed=edit=>{const value=structuredClone(contract);edit(value);denied(()=>verifyPlanMeasurementCurrentSources(value,read));};
 const changes=[...OOXML_ACCOUNTING_CURRENT_REVISION.reviewedSourceChanges,...OOXML_ACCOUNTING_CURRENT_REVISION.validationDeltas];
@@ -23,6 +25,10 @@ test('OOXML restores the complete exact published Q contract before the Q P L K 
  assert.equal(sha(JSON.stringify(reconstructPublishedHContract(contract),null,2)+'\n'),'9dab901cb93f3834cad0f1ea9ba386c5bb12acc913463a7dfb6368847af3fd37');
 });
 test('only the seven reviewed OOXML and unit advisory source pins advance while all original 49 rows remain historical',()=>{
+ const currentContract=contract;
+ // The original assertions authenticate only the immutable27aa checkpoint layer.
+ {
+  const contract=restoreIntegratedIdentityPreviousContract(currentContract);
  assert.equal(contract.planMeasurementCurrentLineage.currentValidationSources.length,49);
  assert.equal(OOXML_ACCOUNTING_CURRENT_REVISION.reviewedSourceChanges.length,7);
  for(const row of OOXML_ACCOUNTING_CURRENT_REVISION.reviewedSourceChanges){
@@ -32,16 +38,28 @@ test('only the seven reviewed OOXML and unit advisory source pins advance while 
  }
  const originalQ=FIELD_OUTBOUND_CURRENT_REVISION.reviewedSourceChanges[0];
  assert.equal(fieldOutboundCurrentSourcePin(contract,{path:originalQ.path,sha256:originalQ.previousSha256}),originalQ.currentSha256);
+
+ }
+ // Current accessors are observed separately; prior expected pins are not resealed.
+ for(const row of OOXML_ACCOUNTING_CURRENT_REVISION.reviewedSourceChanges){
+  const checkpoint=restoreIntegratedIdentityPreviousContract(currentContract),ref=checkpoint.planMeasurementCurrentLineage.currentValidationSources.find(ref=>ref.path===row.path),checkpointPin=fieldOutboundCurrentSourcePin(checkpoint,ref);
+  assert.equal(fieldOutboundCurrentSourcePin(currentContract,ref),integratedIdentityCurrentSourcePin(currentContract,{path:ref.path,sha256:checkpointPin}));
+ }
 });
 test('current raw OOXML and validator bytes are checked without native or human acceptance',()=>{
  const result=verifyOoxmlAccountingCurrentSources(contract,read);
  assert.equal(result.historicalPinsPreserved,true);assert.equal(result.nativeAcceptance,false);
  assert.deepEqual(result.reviewedSourceChanges,OOXML_ACCOUNTING_CURRENT_REVISION.reviewedSourceChanges.map(row=>row.path));
- assert.equal(verifyPlanMeasurementCurrentSources(contract,read).sourceCount,127);
+ const lineage=verifyPlanMeasurementCurrentSources(contract,read);assert.equal(lineage.publishedCurrentSourceCount,127);
+ const actualFiles=companyKycOutboundCompactCiSourceClosure(read).files,checkpointFiles=restoreIntegratedIdentitySourceSet('COMPACT',actualFiles,contract);
+ assert.equal(checkpointFiles.length,contract.participantPreanalysisCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
+ assert.equal(lineage.sourceCount,actualFiles.length);assert.equal(lineage.sourceCount,137);assert.equal(lineage.sourceCount,contract.integratedIdentityCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
 });
 test('the native compact closure remains 127 and the two new CI guards stay outside it',()=>{
  const requested=new Set(),source=file=>{requested.add(file);return read(file);},closure=companyKycOutboundCompactCiSourceClosure(source);
- assert.equal(closure.files.length,127);
+ assert.equal(restoreParticipantPreanalysisSourceSet('COMPACT',closure.files,contract).length,127);const checkpointFiles=restoreIntegratedIdentitySourceSet('COMPACT',closure.files,contract);
+ assert.equal(checkpointFiles.length,contract.participantPreanalysisCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
+ assert.equal(closure.files.length,137);assert.equal(closure.files.length,contract.integratedIdentityCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
  for(const file of OOXML_ACCOUNTING_CURRENT_VALIDATION_PATHS){assert.equal(requested.has(file),true);assert.equal(closure.files.includes(file),false);}
  for(const file of ['src/lib/plan-import-ooxml.mjs','src/lib/plan-measurement-source.mjs'])assert.equal(closure.files.includes(file),true);
 });
@@ -63,14 +81,26 @@ test('omitted duplicate extra or foreign source and validator deltas are rejecte
  }
 });
 test('old current or foreign pins for the same changed path cannot fall through to Q or historical source',()=>{
+ const currentContract=contract;
+ // The original assertions authenticate only the immutable27aa checkpoint layer.
+ {
+  const contract=restoreIntegratedIdentityPreviousContract(currentContract);
  for(const row of changes){
-  assert.equal(ooxmlAccountingCurrentSourcePin(contract,{path:row.path,sha256:row.previousSha256}),row.currentSha256);
+  assert.equal(ooxmlAccountingCurrentSourcePin(previous,{path:row.path,sha256:row.previousSha256}),row.currentSha256);const currentChange=contract.participantPreanalysisCurrentRevision.validationDeltas.find(ref=>ref.path===row.path);assert.equal(ooxmlAccountingCurrentSourcePin(contract,{path:row.path,sha256:row.previousSha256}),currentChange?.currentSha256||row.currentSha256);
   for(const badSha of [row.currentSha256,'f'.repeat(64)]){
    denied(()=>ooxmlAccountingCurrentSourcePin(contract,{path:row.path,sha256:badSha}));
    denied(()=>fieldOutboundCurrentSourcePin(contract,{path:row.path,sha256:badSha}));
   }
  }
  for(const key of ['reviewedSourceChanges','validationDeltas'])changed(value=>{const row=value.ooxmlAccountingCurrentRevision[key][0];row.currentSha256=row.previousSha256;});
+
+ }
+ // Current accessors are observed separately; prior expected pins are not resealed.
+ for(const row of changes){
+  const checkpoint=restoreIntegratedIdentityPreviousContract(currentContract),ref={path:row.path,sha256:row.previousSha256},checkpointPin=ooxmlAccountingCurrentSourcePin(checkpoint,ref),actualPin=integratedIdentityCurrentSourcePin(currentContract,{path:row.path,sha256:checkpointPin});
+  assert.equal(ooxmlAccountingCurrentSourcePin(currentContract,ref),actualPin);assert.equal(fieldOutboundCurrentSourcePin(currentContract,ref),actualPin);
+  for(const badSha of [row.currentSha256,'f'.repeat(64)]){denied(()=>ooxmlAccountingCurrentSourcePin(currentContract,{path:row.path,sha256:badSha}));denied(()=>fieldOutboundCurrentSourcePin(currentContract,{path:row.path,sha256:badSha}));}
+ }
 });
 test('each reviewed source helper and test rejects independently tampered raw bytes',()=>{
  for(const row of [...changes,...contract.ooxmlAccountingCurrentRevision.validationSources]){

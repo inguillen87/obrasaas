@@ -70,6 +70,19 @@ async function canonicalCreatedTask(page,task){
  assert.deepEqual(rendered,[{title:task.title,zeroProgress:true,progress:'0'}]);
  assert.ok((await page.evaluate(()=>document.querySelector('[aria-labelledby="schedule-title"]').innerText)).includes('1 de 1 tareas'));
 }
+async function openCurrentSection(page,target='schedule-title',section='cronograma'){
+ const nav='nav[aria-label="Navegación de la obra"]';await page.waitForSelector(nav+' a[href="#'+target+'"]',{timeout:20000});
+ const picker=await page.$(nav+' select');
+ if(picker&&await picker.evaluate(node=>node.checkVisibility({contentVisibilityAuto:true,opacityProperty:true,visibilityProperty:true})))await page.select(nav+' select',target);
+ else{const link=await page.$(nav+' a[href="#'+target+'"]');assert.ok(link);await link.click();}
+ await page.waitForSelector('[data-workspace-screen="'+section+'"]:not([hidden])',{visible:true,timeout:20000});await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));if(picker)await picker.dispose();
+}
+async function openCurrentFixtureProject(page){
+ await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled),{timeout:20000});
+ const projectHandle=await page.evaluateHandle(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled)),project=projectHandle.asElement();assert.ok(project);
+ const detailsHandle=await project.evaluateHandle(node=>node.closest('details')),details=detailsHandle.asElement();if(details&&!await details.evaluate(node=>node.open)){const summary=await details.$(':scope > summary');assert.ok(summary);await summary.click();}
+ await project.click();await detailsHandle.dispose();await projectHandle.dispose();await openCurrentSection(page);
+}
 async function scenario(mode,width=390){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
  const epoch=Math.floor(Date.now()/1000);let profileClock=epoch;
@@ -183,8 +196,8 @@ async function scenario(mode,width=390){
   await wait(page,'No recibimos la confirmación');assert.equal(posts.length,1);const originalReceipt=result?.receiptId;await page.reload({waitUntil:'networkidle0'});
   if(mode==='reload-denied'){await wait(page,'Tu pertenencia a esta empresa no está habilitada');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo:'));assert.equal((await page.$$('form')).length,0);}
   else if(mode==='reload-not-committed'){await wait(page,'Crear empresa y primera obra');assert.equal(await page.$eval('input[autocomplete="organization"]',node=>node.value),'');assert.equal(await page.$eval('input[placeholder*="Edificio"]',node=>node.value),'');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo:'));assert.equal(created,false);}
-  else if(['reload-other-actor','reload-missing-receipt'].includes(mode)){await wait(page,'Mis obras');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo: '+originalReceipt));}
-  else {await wait(page,'Alta confirmada');await wait(page,'Mis obras');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+originalReceipt);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);}
+  else if(['reload-other-actor','reload-missing-receipt'].includes(mode)){await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo: '+originalReceipt));}
+  else {await wait(page,'Alta confirmada');await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+originalReceipt);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);}
   assert.equal(posts.length,1,'Reload performed another company POST');assert.equal(recoveryIds.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(output,`company-${mode}-${width}.png`),fullPage:true});checks.push(`${mode}-company-receipt-readonly-after-reload-${width}`);await context.close();return;
  }
  if(mode==='uncertain'){await wait(page,'No recibimos la confirmación');assert.equal(posts.length,1);await click(page,'Comprobar creación');}
@@ -202,7 +215,7 @@ async function scenario(mode,width=390){
   await click(page,'Reenviar mismo intento');await wait(page,'El espacio está creado');assert.equal(posts.length,2);assert.equal(postBodies[0],postBodies[1]);assert.equal(await page.evaluate(()=>window.__profileReads),mode==='profile-retry-unavailable'?3:2);checks.push(`${mode}-checked-absence-explicit-identical-retry-fresh-profile-proof`);
  }
  await wait(page,'El espacio está creado');assert.equal(posts.length,['no-arrival','rollback','expired-profile','profile-retry-unavailable'].includes(mode)?2:1);assert.equal(posts[0].initialTasks.length,mode==='planned'?1:0);assert.ok((await page.evaluate(()=>document.body.innerText)).includes('WhatsApp todavía no quedó conectado'));
- await click(page,'Entrar a mi obra');await wait(page,'Mis obras');await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled));await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra inicial de ensayo')).click());
+ await click(page,'Entrar a mi obra');await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});await openCurrentFixtureProject(page);
  if(mode==='planned'){await wait(page,'Replanteo de la obra');assert.ok((await page.evaluate(()=>document.body.innerText)).includes('0 %'));}
   else{
    await wait(page,'no tiene tareas registradas');await click(page,'Nueva tarea');await page.waitForSelector('input[minlength="2"]',{visible:true,timeout:20000});await page.type('input[minlength="2"]','Primera tarea cargada después');
@@ -220,7 +233,7 @@ async function scenario(mode,width=390){
    await canonicalCreatedTask(page,createdTask);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,1);
   }
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(external,[]);
-  if(mode==='empty'){const beforeReturn=posts.length;await page.reload({waitUntil:'networkidle0'});await wait(page,'Alta confirmada');await wait(page,'Mis obras');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+result.receiptId);assert.equal(posts.length,beforeReturn);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled));await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra inicial de ensayo')).click());await canonicalCreatedTask(page,taskReceipts.get(taskPosts[0].operationId).task);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,2);checks.push(`ordinary-return-keeps-workspace-open-and-original-receipt-consultable-${width}`);}
+  if(mode==='empty'){const beforeReturn=posts.length;await page.reload({waitUntil:'networkidle0'});await wait(page,'Alta confirmada');await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+result.receiptId);assert.equal(posts.length,beforeReturn);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);await openCurrentFixtureProject(page);await canonicalCreatedTask(page,taskReceipts.get(taskPosts[0].operationId).task);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,2);checks.push(`ordinary-return-keeps-workspace-open-and-original-receipt-consultable-${width}`);}
  assert.ok(subscriptionReads.length>=1,'Created administrator consults closed subscription status');checks.push(`${mode}-company-to-workspace-${width}`);await context.close();
 }
 async function companySelectorContext(width){
@@ -237,7 +250,7 @@ async function companySelectorContext(width){
   await page.waitForFunction(name=>document.querySelector('[data-workspace-company-name]')?.textContent===name&&document.querySelector('#workspace-refresh')?.disabled===false,{timeout:20000},names[letter]);
   assert.deepEqual(await page.$$eval('[data-workspace-company-name]',nodes=>nodes.map(node=>node.textContent)),[names[letter]]);
   assert.equal(await page.$$eval('[data-workspace-company-name] b',nodes=>nodes.length),0,'Canonical name is escaped React text');
-  assert.ok((await page.$eval('#organization-context',node=>node.innerText)).includes('Empresa de trabajo'));
+  assert.ok((await page.$eval('#organization-context',node=>node.innerText)).includes('Empresa activa'));
   assert.equal(await page.$eval('[data-fixture-organization]',node=>node.selectedOptions[0].textContent),'Espacio personal '+letter);
   assert.equal(await page.$eval('[aria-labelledby="workspace-title"]',node=>node.innerText.includes('Director de obra')),true,'An existing non-admin membership uses the real workspace branch');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -266,7 +279,7 @@ async function companySelectorContext(width){
  try{
   const initial=observed('synthetic-selector-A-1');await page.goto(origin+'/selector',{waitUntil:'domcontentloaded'});await confirm(initial,'A');
   const selectorText=await page.$eval('#organization-context',node=>node.innerText);
-  assert.ok(selectorText.includes('Elegí tu espacio de trabajo. Su nombre puede ser distinto al de la empresa.'));assert.ok(!selectorText.includes('Clerk'));
+  assert.notEqual(await page.$eval('[data-fixture-organization]',node=>node.selectedOptions[0].textContent),await page.$eval('[data-workspace-company-name]',node=>node.textContent),'The selected organization and canonical company retain distinct names');assert.ok(!selectorText.includes('Clerk'));
   // Hold an actual refresh, change the organization manually, then release the earlier request only after B is current.
   const oldRead=arm('synthetic-selector-A-1');await page.click('#workspace-refresh');const oldRequest=await oldRead;await absent();
   const newRead=arm('synthetic-selector-B-1'),newResponse=observed('synthetic-selector-B-1');await page.select('[data-fixture-organization]','org_SelectorB');const newRequest=await newRead;await absent();await release(newRequest);await confirm(newResponse,'B');
@@ -303,12 +316,12 @@ async function organizationDraftProtection(mode,width){
  const ready=async letter=>{await page.waitForFunction(name=>document.querySelector('[data-workspace-company-name]')?.textContent===name,{timeout:20000},names[letter]);await unlocked(letter);};
  const locked=async()=>{
   await page.waitForSelector('#organization-context-lock');assert.equal(await page.$$eval('[data-fixture-organization]',nodes=>nodes.length),0);
-  assert.ok((await page.$eval('#organization-context-lock',node=>node.innerText)).includes('cancelá el borrador o comprobá su resultado'));
+  assert.equal(await page.$eval('#organization-context-lock',node=>node.innerText),'Completá la acción pendiente antes de cambiar de empresa.');
   assert.equal(await page.$eval('#workspace-refresh',node=>node.disabled),true);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  };
  const openWork=async letter=>{
   await page.evaluate(id=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes(id)&&!node.disabled).click(),project(letter).name);
-  await wait(page,tasks[letter].title);await page.waitForFunction(id=>document.querySelector('article[data-task-id="'+id+'"] button')?.disabled===false,{timeout:20000},tasks[letter].id);
+  await openCurrentSection(page);await wait(page,tasks[letter].title);await page.waitForFunction(id=>document.querySelector('article[data-task-id="'+id+'"] button')?.disabled===false,{timeout:20000},tasks[letter].id);
  };
  const edit=async(letter,text=reason)=>{
   await page.click('article[data-task-id="'+tasks[letter].id+'"] button');await page.waitForSelector('form[aria-labelledby="schedule-edit-title"]');
@@ -433,24 +446,24 @@ async function portfolioThirdPage(mode,width){
    if(mode==='reconsult-callback'){await page.evaluate(()=>{[...document.querySelectorAll('[aria-labelledby="portfolio-overview-title"] button')].find(node=>node.textContent==='Actualizar resumen').click();window.__savedPortfolioClick();});await wait(page,'50 obras consultadas');assert.equal(project101Reads,0);}else if(mode==='stale-callback'){await page.evaluate(()=>window.__changePortfolioContext());await wait(page,'Empresa de cartera B');}else{await page.click('#workspace-refresh');await page.waitForFunction(()=>document.querySelector('#workspace-refresh')?.disabled===false&&!document.querySelector('[aria-labelledby="portfolio-overview-title"] article'));}
    await page.evaluate(()=>window.__savedPortfolioClick());await tick();assert.equal(project101Reads,0);await absent();assert.equal(reads.filter(row=>row.query.includes('portfolio=1')).length,mode==='reconsult-callback'?4:3);
   }else if(mode==='locked'){
-   await page.evaluate(()=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes('Obra listada 1')&&!node.textContent.includes('Obra listada 10')).click());await wait(page,'Actividad canónica 001');
+   await page.evaluate(()=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes('Obra listada 1')&&!node.textContent.includes('Obra listada 10')).click());await openCurrentSection(page);await wait(page,'Actividad canónica 001');
    await page.evaluate(()=>document.querySelector('article[data-task-id="task-001"] button').click());await page.type('form[aria-labelledby="schedule-edit-title"] textarea','Borrador de navegación conservado');
    assert.equal(await button.evaluate(node=>node.disabled),true);await page.evaluate(()=>window.__savedPortfolioClick());await tick();assert.equal(project101Reads,0);assert.equal(await page.$eval('form[aria-labelledby="schedule-edit-title"] textarea',node=>node.value),'Borrador de navegación conservado');
-   await click(page,'Cancelar');await click(page,'Abrir Resumen obra 101');await wait(page,'Actividad canónica 101 primera');assert.equal(project101Reads,1);
+   await click(page,'Cancelar');await openCurrentSection(page,'workspace-home-title','inicio');await click(page,'Abrir Resumen obra 101');await openCurrentSection(page);await wait(page,'Actividad canónica 101 primera');assert.equal(project101Reads,1);
   }else{
    await page.keyboard.press('Enter');
    if(['stale-context','stale-project','unmount'].includes(mode)){
     for(let i=0;i<800&&!held.length;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.equal(held.length,1);await absent();
     if(mode==='stale-context'){await page.evaluate(()=>window.__changePortfolioContext());await wait(page,'Empresa de cartera B');}
     else if(mode==='unmount'){await page.evaluate(()=>window.__unmountPortfolio());await wait(page,'Portfolio desmontado');}
-    else{await page.evaluate(()=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes('Obra listada 1')&&!node.textContent.includes('Obra listada 10')).click());await wait(page,'Actividad canónica 001');}
+    else{await page.evaluate(()=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes('Obra listada 1')&&!node.textContent.includes('Obra listada 10')).click());await openCurrentSection(page);await wait(page,'Actividad canónica 001');}
     await releaseHeld();await tick();assert.equal(project101Reads,1);assert.equal(await page.$$eval('article[data-task-id="task-101-a"]',nodes=>nodes.length),0);assert.equal(await page.$$eval('button[aria-pressed]',nodes=>nodes.filter(node=>node.textContent.includes('Obra canónica 101')).length),0);if(mode==='stale-project'){await page.waitForFunction(()=>window.__portfolioGuide?.projectId==='p-001');assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),'p-001');}else assert.equal(await page.evaluate(()=>window.__portfolioGuide?.projectId||null),null);
    }else if(['401','403','404','503','retry503','wrong-scope','wrong-project','wrong-status'].includes(mode)){
     await page.waitForFunction(()=>{const node=document.querySelector('[aria-labelledby="workspace-title"] > [role="status"]');return Boolean(node?.textContent.trim())&&document.querySelector('#workspace-refresh')?.disabled===false;});await absent();assert.equal(project101Reads,1);await tick();assert.equal(project101Reads,1,'No automatic retry after denial/error');
-    if(mode==='retry503'){await page.evaluate(()=>{window.__portfolioTokenEpoch=2;});await click(page,'Abrir Resumen obra 101');await wait(page,'Actividad canónica 101 primera');assert.equal(project101Reads,2);assert.equal(reads.at(-1).authorization,'Bearer synthetic-portfolio-A-2');}
+    if(mode==='retry503'){await page.evaluate(()=>{window.__portfolioTokenEpoch=2;});await openCurrentSection(page,'workspace-home-title','inicio');await click(page,'Abrir Resumen obra 101');await openCurrentSection(page);await wait(page,'Actividad canónica 101 primera');assert.equal(project101Reads,2);assert.equal(reads.at(-1).authorization,'Bearer synthetic-portfolio-A-2');}
     else if(['401','403'].includes(mode))assert.equal(await page.$$eval('[aria-labelledby="portfolio-overview-title"]',nodes=>nodes.length),0,'Authorization denial clears the account summary');
    }else{
-    await wait(page,'Actividad canónica 101 primera');await page.waitForFunction(id=>window.__portfolioGuide?.projectId===id,{},projectId);assert.equal(project101Reads,1);assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),projectId);assert.equal(await page.$eval('button[aria-pressed="true"]',node=>node.textContent.includes('Obra canónica 101')),true);assert.ok((await page.$eval('[aria-labelledby="schedule-title"]',node=>node.innerText)).includes('1 de 2 tareas'));
+    await openCurrentSection(page);await wait(page,'Actividad canónica 101 primera');await page.waitForFunction(id=>window.__portfolioGuide?.projectId===id,{},projectId);assert.equal(project101Reads,1);assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),projectId);assert.equal(await page.$eval('button[aria-pressed="true"]',node=>node.textContent.includes('Obra canónica 101')),true);assert.ok((await page.$eval('[aria-labelledby="schedule-title"]',node=>node.innerText)).includes('1 de 2 tareas'));
     await click(page,'Cargar más tareas');await wait(page,'Actividad canónica 101 segunda');assert.equal(project101Reads,2);assert.equal(await page.$$eval('article[data-task-id]',nodes=>nodes.length),2);assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),projectId);
    }
   }
