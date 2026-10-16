@@ -1,3 +1,4 @@
+import {restoreWorkspaceContinuityPreviousContract} from '../scripts/lib/workspace-continuity-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
@@ -38,10 +39,11 @@ test('current source leaves are authenticated independently and substituted byte
 });
 
 test('only exact authenticated historical aliases advance and neither foreign nor current pins become historical',()=>{
- const contract=current();for(const row of [...contract[section].reviewedSourceChanges,...contract[section].validationDeltas]){
+ const actual=current(),contract=restoreWorkspaceContinuityPreviousContract(actual);for(const row of [...contract[section].reviewedSourceChanges,...contract[section].validationDeltas]){
   assert.equal(documentTaskAssociationCurrentSourcePin(contract,{path:row.path,sha256:row.previousSha256}),row.currentSha256);
   reject(()=>documentTaskAssociationCurrentSourcePin(contract,{path:row.path,sha256:'f'.repeat(64)}));reject(()=>documentTaskAssociationCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}));
  }
+ for(const path of ['tests/production-integrated-identity-current-ci-lineage.test.mjs','tests/production-plan-measurement-current-ci-lineage.test.mjs','tests/production-plan-measurement-document-association-ci-lineage.test.mjs']){const prior=contract[section].validationDeltas.find(row=>row.path===path)||contract[section].validationSources.map(row=>({path:row.path,currentSha256:row.sha256})).find(row=>row.path===path),currentSha=sha(read(path).toString('utf8').replaceAll('\r\n','\n'));assert.ok(prior);assert.notEqual(currentSha,prior.currentSha256);assert.equal(documentTaskAssociationCurrentSourcePin(actual,{path,sha256:prior.currentSha256}),currentSha);reject(()=>documentTaskAssociationCurrentSourcePin(actual,{path,sha256:currentSha}));reject(()=>documentTaskAssociationCurrentSourcePin(actual,{path,sha256:'f'.repeat(64)}));}
 });
 
 test('a foreign old49 pin or omitted duplicate and unreviewed delta cannot reseal the outer contract',()=>{
@@ -79,6 +81,7 @@ test('the immutable a203 JSON is an explicit authenticated validation dependency
 });
 
 test('current outer composition changes no workflow command lane artifact or historical proof labels',()=>{
- const contract=current(),rebuilt=composeDocumentTaskAssociationContract(contract[section]);assert.deepEqual(rebuilt,contract);assert.deepEqual(contract.blocks,checkpoint.blocks);assert.deepEqual(contract.lanes,checkpoint.lanes);assert.deepEqual(contract.artifactPatterns,checkpoint.artifactPatterns);assert.equal(contract.extension.proofs.length,20);
+ const actual=current(),contract=restoreWorkspaceContinuityPreviousContract(actual),rebuilt=composeDocumentTaskAssociationContract(contract[section]);assert.deepEqual(rebuilt,contract);assert.deepEqual(contract.blocks,checkpoint.blocks);assert.deepEqual(contract.lanes,checkpoint.lanes);assert.deepEqual(contract.artifactPatterns,checkpoint.artifactPatterns);assert.equal(contract.extension.proofs.length,20);
  for(const spec of contract.extension.proofs){const old=checkpoint.extension.proofs.find(row=>row.id===spec.id);assert.deepEqual(spec.checkNames,old.checkNames);assert.equal(spec.producerSha256,old.producerSha256);}
+ const focused=actual.extension.proofs.find(row=>row.id==='focused-workspace-ui'),prior=contract.extension.proofs.find(row=>row.id===focused.id);assert.equal(prior.checkNames.length,20);assert.equal(focused.checkNames.length,45);assert.deepEqual(focused.checkNames.slice(0,20),prior.checkNames);assert.equal(focused.producerSha256,'b7d134ed370e7984f8aed315127b82e4d2bdebe20a6d0d79a7453bf7e1f63dab');assert.equal(actual.evidenceProducers.find(row=>row.path===focused.path).producerSha256,focused.producerSha256);
 });

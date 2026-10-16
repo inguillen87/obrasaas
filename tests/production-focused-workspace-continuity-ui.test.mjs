@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {focusedCompanyBootstrapUiSourceClosure,focusedWorkspaceUiSourceClosure,FOCUSED_WORKSPACE_WIDTHS,FOCUSED_WORKSPACE_CONTINUITY_WIDTHS,FOCUSED_WORKSPACE_REFRESH_NEGATIVES,FOCUSED_WORKSPACE_CONTINUITY_CHECKS,FOCUSED_WORKSPACE_UI_VERSION,FOCUSED_WORKSPACE_UI_EXPECTED_CHECK_COUNT} from '../scripts/verify-focused-workspace-ui.mjs';
+const entry='src/app/(identity)/cuenta/company-bootstrap-panel.js',reader=files=>file=>Object.hasOwn(files,file)?Buffer.from(files[file]):null;
+test('continuity matrix preserves baseline widths and explicitly appends all controlled cases',()=>{
+ assert.equal(FOCUSED_WORKSPACE_UI_VERSION,2);assert.deepEqual(FOCUSED_WORKSPACE_WIDTHS,[390,1440]);assert.deepEqual(FOCUSED_WORKSPACE_CONTINUITY_WIDTHS,[320,390,1440]);
+ assert.equal(FOCUSED_WORKSPACE_CONTINUITY_CHECKS.length,25);assert.equal(new Set(FOCUSED_WORKSPACE_CONTINUITY_CHECKS).size,25);assert.equal(FOCUSED_WORKSPACE_UI_EXPECTED_CHECK_COUNT,20+25);
+ for(const mode of ['list-role','list-scope','list-missing','list-401','list-403','list-500','project-401','project-403','project-500','project-scope','project-id','project-null'])assert.ok(FOCUSED_WORKSPACE_REFRESH_NEGATIVES.includes(mode));
+ for(const width of [320,390,1440]){assert.ok(FOCUSED_WORKSPACE_CONTINUITY_CHECKS.includes('fresh-list-project-preserves-section-no-POST-'+width));assert.ok(FOCUSED_WORKSPACE_CONTINUITY_CHECKS.includes('bootstrap-ready-receipt-compact-disclosure-trial-no-POST-'+width));}
+});
+test('bootstrap closure independently follows actual JSX CSS aliases and static dynamic imports',()=>{
+ const files={[entry]:"import React from 'react';import './panel.css';export const load=()=>import('@/lib/bootstrap-pure.mjs');",'src/app/(identity)/cuenta/panel.css':'.panel{color:white}','src/lib/bootstrap-pure.mjs':'export const value=1;'};
+ assert.deepEqual(focusedCompanyBootstrapUiSourceClosure(reader(files)),{files:Object.keys(files).sort(),externalImports:['react']});
+ assert.throws(()=>focusedWorkspaceUiSourceClosure(reader(files)),{code:'FOCUSED_WORKSPACE_UI_BOUNDARY_REJECTED'});
+});
+test('bootstrap closure rejects missing unsafe remote and external CSS dependencies',()=>{
+ for(const ref of ['./missing','https://example.invalid/code.mjs','file:/private/code.mjs','data:text/javascript,void0','../../../../outside.mjs','./bad\\path.mjs','./bad\0path.mjs']){
+  const files={[entry]:'import '+JSON.stringify(ref)+';','outside.mjs':'export const value=1;','src/app/(identity)/cuenta/bad\\path.mjs':'export const value=1;','src/app/(identity)/cuenta/bad\0path.mjs':'export const value=1;'};
+  assert.throws(()=>focusedCompanyBootstrapUiSourceClosure(reader(files)),{code:'FOCUSED_WORKSPACE_UI_BOUNDARY_REJECTED'},ref);
+ }
+ for(const css of ['@import "https://example.invalid/font.css";','body{background:url(https://example.invalid/image.png)}'])assert.throws(()=>focusedCompanyBootstrapUiSourceClosure(reader({[entry]:"import './panel.css';",'src/app/(identity)/cuenta/panel.css':css})),{code:'FOCUSED_WORKSPACE_UI_BOUNDARY_REJECTED'});
+});
