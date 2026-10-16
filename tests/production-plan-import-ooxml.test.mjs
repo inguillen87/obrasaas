@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID,createHash} from 'node:crypto';
-import {extractMonthlyPlanOoxml,validatePlanOoxml,PLAN_OOXML_LIMITS,safePlanOoxmlAnalysis} from '../src/lib/plan-import-ooxml.mjs';
+import {extractMonthlyPlanOoxml,validatePlanOoxml,PLAN_OOXML_LIMITS,safePlanOoxmlAnalysis,readPlanMeasurementOoxml} from '../src/lib/plan-import-ooxml.mjs';
 import {createPlanImportAnalyzer} from '../src/lib/plan-import-analyzer.mjs';
 import {decodePlanSource,boundedPlanMultipart,normalizePlanRows,PLAN_IMPORT_CONSENT,PLAN_IMPORT_SPREADSHEET_CONSENT,planImportSourceRejection} from '../src/lib/plan-import-policy.mjs';
 import {planImportUploadFormDigest,planImportUploadDigest} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
 import {ooxmlFixture,ooxmlFixtureParts,zipOoxmlFixture} from './fixtures/plan-import-ooxml-synthetic.mjs';
+import {measurementQuoteFixtureParts,addPhysicalStyles,replacePhysicalCell,physicalNumericCell} from './fixtures/plan-measurement-source-synthetic.mjs';
 const mime='application/vnd.ms-excel.sheet.macroenabled.12',xlsx='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const form=(bytes=ooxmlFixture(),consent=PLAN_IMPORT_SPREADSHEET_CONSENT,type=mime)=>{const f=new FormData();for(const [k,v] of Object.entries({operationId:randomUUID(),projectId:'p-synthetic',scope:'a'.repeat(64),consent}))f.append(k,v);f.append('file',new Blob([bytes],{type}),'synthetic-plan.'+(type===xlsx?'xlsx':'xlsm'));return f;};
 const request=f=>new Request('https://obrasaas.com/api/identity/plan-import',{method:'POST',body:f});
@@ -69,4 +70,30 @@ test('malformed original workbook is typed as pre-reservation source rejection b
 });
 test('public analysis accepts only bounded declaration flags, never financial values or grants',async()=>{
  const analysis=(await extractMonthlyPlanOoxml(ooxmlFixture(),mime)).spreadsheet;assert.deepEqual(safePlanOoxmlAnalysis(analysis),analysis);for(const bad of [{...analysis,progressImported:true},{...analysis,formulasRecalculated:true},{...analysis,amount:100},{...analysis,permission:true},{...analysis,periodOrdinals:[1,3]},{...analysis,rowCount:51}])assert.equal(safePlanOoxmlAnalysis(bad),null);
+});
+
+const formatXml=value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+function declaredQuoteFormats(declarations,{selected='0',type='xlsx'}={}){
+ const {parts}=measurementQuoteFixtureParts();addPhysicalStyles(parts);
+ parts['xl/styles.xml']=parts['xl/styles.xml'].replace(/<numFmts\b[^>]*>[\s\S]*?<\/numFmts>/,`<numFmts count="${declarations.length}">${declarations.join('')}</numFmts>`).replace('<xf numFmtId="164"/>',`<xf numFmtId="${selected}"/>`);
+ if(type==='xlsm'){parts['[Content_Types].xml']=parts['[Content_Types].xml'].replace('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml','application/vnd.ms-excel.sheet.macroEnabled.main+xml');parts['xl/vbaProject.bin']=Buffer.from('Synthetic inert accounting workbook macro bytes; never executed');}
+ return parts;
+}
+test('physical OOXML accepts unused accounting declarations in both XLSX and XLSM without changing selected quantity facts',async()=>{
+ const declarations=[41,43,44].map(id=>`<numFmt numFmtId="${id}" formatCode="${formatXml('_(* #,##0.00_);_(* (#,##0.00);_(* "-"_);_(@_)')}"/>`);
+ for(const [type,contentType]of [['xlsx',xlsx],['xlsm',mime]]){
+  const plain=declaredQuoteFormats([],{type}),styled=declaredQuoteFormats(declarations,{type}),plainBytes=zipOoxmlFixture(plain),bytes=zipOoxmlFixture(styled),before=createHash('sha256').update(bytes).digest('hex');
+  assert.deepEqual(await readPlanMeasurementOoxml(bytes,contentType),await readPlanMeasurementOoxml(plainBytes,contentType));assert.equal(createHash('sha256').update(bytes).digest('hex'),before);
+  const first=(await readPlanMeasurementOoxml(bytes,contentType)).worksheets[0].cells.find(cell=>cell.address==='F7');assert.equal(first.rawValue,'1');assert.equal(first.style.numFmtId,'0');assert.equal(first.style.formatCode,'General');
+ }
+});
+test('physical OOXML preserves declared accounting IDs and literal codes as evidence instead of replacing them with General',async()=>{
+ for(const id of ['41','43','44','999999']){
+  const code=id==='999999'?'0.0000':'_(* #,##0.00_);_(* (#,##0.00);_(* "-"_);_(@_)',parts=declaredQuoteFormats([`<numFmt numFmtId="${id}" formatCode="${formatXml(code)}"/>`],{selected:id});replacePhysicalCell(parts,'xl/worksheets/sheet2.xml','F7',physicalNumericCell('F7','12.34000',{attributes:' s="1"'}));
+  const cell=(await readPlanMeasurementOoxml(zipOoxmlFixture(parts),xlsx)).worksheets[0].cells.find(cell=>cell.address==='F7');assert.equal(cell.style.numFmtId,id);assert.equal(cell.style.formatCode,code);assert.equal(cell.style.attributes.numFmtId,id);assert.equal(cell.rawValue,'12.34000');assert.equal(cell.value,'12.34000');
+ }
+});
+test('physical OOXML rejects duplicate or invalid format declarations before returning any measurement snapshot',async()=>{
+ const one='<numFmt numFmtId="41" formatCode="0"/>',bad=[[one,one],...['-1','01','1000000','1.5','x',''].map(id=>[`<numFmt numFmtId="${id}" formatCode="0"/>`]),['<numFmt formatCode="0"/>'],['<numFmt numFmtId="41"/>'],[`<numFmt numFmtId="41" formatCode="${'0'.repeat(501)}"/>`]];
+ for(const declarations of bad)await assert.rejects(readPlanMeasurementOoxml(zipOoxmlFixture(declaredQuoteFormats(declarations)),xlsx),{code:'PLAN_IMPORT_FILE_INVALID'});
 });

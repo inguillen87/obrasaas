@@ -157,3 +157,92 @@ test('document source rejects partial extraction, forged literal evidence, other
  assert.throws(()=>normalizePlanMeasurementDocument(measurementDocumentFixture({isMeasurement:false}),documentOptions),{code:'PLAN_IMPORT_MEASUREMENT_NOT_FOUND'});
  assert.equal(PLAN_MEASUREMENT_DOCUMENT_SCHEMA.additionalProperties,false);assert.equal(PLAN_MEASUREMENT_DOCUMENT_SCHEMA.properties.rows.items.properties.rawQuantity.type[0],'string');assert.match(PLAN_MEASUREMENT_DOCUMENT_INSTRUCTIONS,/No calcules cantidades desde importes/);
 });
+
+function declaredQuantityFormat(id,formatCode,{quantity='12.34000',selected=true}={}){
+ const {parts,row}=measurementCypFixtureParts();addPhysicalStyles(parts);
+ const encoded=formatCode.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+ parts['xl/styles.xml']=parts['xl/styles.xml'].replace('<numFmt numFmtId="164" formatCode="0.0000"/>',`<numFmt numFmtId="${id}" formatCode="${encoded}"/>`).replace('<xf numFmtId="164"/>',`<xf numFmtId="${id}"/>`);
+ replacePhysicalCell(parts,'xl/worksheets/sheet1.xml','D'+row,physicalNumericCell('D'+row,quantity,{attributes:selected?' s="1"':''}));return {parts,row};
+}
+test('unused low accounting declarations do not alter exact physical candidates or legacy financial extraction',async()=>{
+ for(const id of ['41','43','44']){
+  const code='_(* #,##0.00_);_(* (#,##0.00);_(* "-"_);_(@_)',plain=declaredQuantityFormat(id,code,{selected:false}),{parts}=declaredQuantityFormat(id,code,{selected:false});plain.parts['xl/styles.xml']=plain.parts['xl/styles.xml'].replace(/<numFmts\b[^>]*>[\s\S]*?<\/numFmts>/,'<numFmts count="0"/>');
+  const bytes=zipOoxmlFixture(parts),before=sha(bytes),source=await extractPlanMeasurementSource(bytes,mime),original=await extractPlanMeasurementSource(zipOoxmlFixture(plain.parts),mime);
+  assert.deepEqual(source.rows,original.rows);assert.equal(source.sourceSha256,before);assert.equal(sha(bytes),before);assert.equal(source.rows[0].candidate.baseline,'12.3400');assert.equal(source.rows[0].candidate.unit,'M2');assert.equal(Object.hasOwn(source.rows[0],'startsOn'),false);assert.equal(Object.hasOwn(source.rows[0],'progress'),false);
+  const legacy=await extractCypPlanOoxml(bytes,mime);assert.equal(legacy.spreadsheet.quantityImported,false);assert.equal(legacy.spreadsheet.progressImported,false);assert.deepEqual(legacy,await extractCypPlanOoxml(zipOoxmlFixture(plain.parts),mime));
+ }
+});
+test('used date money percentage accounting and unknown low format IDs never become baselines even with a numeric-looking declaration',async()=>{
+ for(const id of ['5','7','9','14','41','43','44','163']){
+  const {parts,row}=declaredQuantityFormat(id,'0'),bytes=zipOoxmlFixture(parts),source=await extractPlanMeasurementSource(bytes,mime),first=source.rows[0];
+  assert.equal(first.sourceRowId,`Plan de trabajo!A${row}:D${row}`);assert.equal(first.quantity.style.numFmtId,id);assert.equal(first.quantity.style.formatCode,'0');assert.equal(first.quantity.rawValue,'12.34000');assert.equal(first.quantity.value,'12.34000');assert.equal(first.candidate.baseline,null);assert.equal(first.candidate.unit,'M2');assert.ok(first.candidate.issues.includes('QUANTITY_FORMAT_UNSUPPORTED'));assert.deepEqual(normalizePlanMeasurementSource(source),source);
+  const forged=cloned(source);forged.rows[0].candidate.baseline='12.3400';assert.throws(()=>normalizePlanMeasurementSource(forged),sourceError);assert.throws(()=>normalizePlanMeasurementReview({source,rows:[reviewRow(source,{issuesAcknowledged:false})]}),{code:'PLAN_IMPORT_MEASUREMENT_REVIEW_REQUIRED'});
+ }
+});
+test('coherent numeric built-ins and simple declared custom formats retain exact lexical quantities',async()=>{
+ for(const [id,code]of [['0','General'],['1','0'],['2','0.00'],['3','#,##0'],['4','#,##0.00'],['164','0.0000'],['999999','#,##0.0000']]){
+  const {parts}=declaredQuantityFormat(id,code),source=await extractPlanMeasurementSource(zipOoxmlFixture(parts),mime),first=source.rows[0];assert.equal(first.quantity.style.numFmtId,id);assert.equal(first.quantity.style.formatCode,code);assert.equal(first.quantity.rawValue,'12.34000');assert.deepEqual(first.candidate,{baseline:'12.3400',unit:'M2',issues:[]});
+ }
+});
+test('incoherent built-in numeric declarations preserve the existing source rejection rather than approving a numeric disguise',async()=>{
+ for(const [id,code]of [['0','0'],['1','0.00'],['2','0'],['3','0'],['4','0']]){const {parts}=declaredQuantityFormat(id,code);await assert.rejects(extractPlanMeasurementSource(zipOoxmlFixture(parts),mime),sourceError);}
+});
+test('an accounting style without a cached quantity preserves absence and cannot synthesize a baseline',async()=>{
+ const {parts}=declaredQuantityFormat('43','0',{quantity:null}),source=await extractPlanMeasurementSource(zipOoxmlFixture(parts),mime),first=source.rows[0];assert.equal(first.quantity.present,true);assert.equal(first.quantity.cachePresent,false);assert.equal(first.quantity.rawValue,null);assert.equal(first.quantity.value,null);assert.equal(first.quantity.style.numFmtId,'43');assert.equal(first.quantity.style.formatCode,'0');assert.equal(first.candidate.baseline,null);assert.ok(first.candidate.issues.includes('QUANTITY_MISSING'));assert.ok(first.candidate.issues.includes('QUANTITY_FORMAT_UNSUPPORTED'));
+});
+
+const syntheticMoneyFooter='SON PESOS CIENTO VEINTITRES MIL CUATROCIENTOS CINCUENTA Y SEIS CON 78/100';
+function quoteMoneyFooter({cells=physicalTextCell('C11',syntheticMoneyFooter),rowAttributes='',extraRows=''}={}){
+ const {parts}=measurementQuoteFixtureParts();parts['xl/worksheets/sheet2.xml']=parts['xl/worksheets/sheet2.xml'].replace('</sheetData>',`<row r="11"${rowAttributes}>${cells}</row>${extraRows}</sheetData>`);return parts;
+}
+test('literal money-in-words footer after the unique quote total is retained as an explicit monetary exclusion',async()=>{
+ for(const footer of [syntheticMoneyFooter,'SON PESOS: DOSCIENTOS CUARENTA Y CINCO CON SETENTA Y OCHO CENTAVOS.']){const parts=quoteMoneyFooter({cells:physicalTextCell('C11',footer)}),bytes=zipOoxmlFixture(parts),source=await extractPlanMeasurementSource(bytes,mime),original=await extractPlanMeasurementSource(zipOoxmlFixture(measurementQuoteFixtureParts().parts),mime);assert.equal(source.sourceSha256,sha(bytes));assert.deepEqual(source.rows,original.rows);assert.equal(source.rows.length,2);assert.deepEqual(source.excludedRows,[{sourceRowId:'Cotización!C11:F11',code:null,sourceTitle:footer,reason:'MONETARY_COST_ROW'}]);assert.deepEqual(normalizePlanMeasurementSource(source),source);assert.ok(source.rows.every(row=>!Object.hasOwn(row,'startsOn')&&!Object.hasOwn(row,'progress')));assert.equal(Object.hasOwn(source,'amount'),false);assert.equal(Object.hasOwn(source,'currency'),false);}
+});
+test('money footer vocabulary never hides task words ambiguous prefixes notes or populated companion columns',async()=>{
+ const cells=[physicalTextCell('C11','SON PESOS CIEN CON 00/100 COLOCAR HORMIGON'),physicalTextCell('C11','IMPORTE SON PESOS CIEN CON 00/100'),physicalTextCell('C11','SON PESOS CIEN CON 100/100'),physicalTextCell('C11','SON PESOS CIEN CON 00/100 SALDO A CONFIRMAR'),physicalTextCell('C11','Nota textual sintética sin partidas'),physicalNumericCell('C11','123'),...['D','E','F'].map(column=>physicalTextCell('C11',syntheticMoneyFooter)+(column==='F'?physicalNumericCell('F11','1'):physicalTextCell(column+'11',column==='D'?'Nota adicional sintética':'m²')))];
+ for(const value of cells)await assert.rejects(extractPlanMeasurementSource(zipOoxmlFixture(quoteMoneyFooter({cells:value})),mime),{code:'PLAN_IMPORT_MEASUREMENT_EXTRACTION_INCOMPLETE',status:413});
+});
+test('formula hidden merged and unsafe formatted money footer cells cannot be silently excluded',async()=>{
+ const formula=physicalNumericCell('C11',syntheticMoneyFooter,{attributes:' t="str"',formula:'"SON PESOS CIEN CON 00/100"'}),blankFormula=physicalTextCell('C11',syntheticMoneyFooter)+physicalNumericCell('D11',null,{attributes:' t="str"',formula:'""'}),cases=[quoteMoneyFooter({cells:formula}),quoteMoneyFooter({cells:blankFormula}),quoteMoneyFooter({rowAttributes:' hidden="1"'}),quoteMoneyFooter({rowAttributes:' hidden="True"'})];
+ const merged=quoteMoneyFooter();merged['xl/worksheets/sheet2.xml']=merged['xl/worksheets/sheet2.xml'].replace('</worksheet>','<mergeCells count="1"><mergeCell ref="C11:D11"/></mergeCells></worksheet>');cases.push(merged);
+ const columnHidden=quoteMoneyFooter();columnHidden['xl/worksheets/sheet2.xml']=columnHidden['xl/worksheets/sheet2.xml'].replace('<sheetData>','<cols><col min="3" max="3" hidden="1"/></cols><sheetData>');cases.push(columnHidden);
+ const styled=quoteMoneyFooter({cells:physicalTextCell('C11',syntheticMoneyFooter,' s="1"')});addPhysicalStyles(styled,{formatId:'14'});cases.push(styled);
+ const disguised=quoteMoneyFooter({cells:physicalTextCell('C11',syntheticMoneyFooter,' s="1"')});addPhysicalStyles(disguised);disguised['xl/styles.xml']=disguised['xl/styles.xml'].replace('<numFmt numFmtId="164" formatCode="0.0000"/>','<numFmt numFmtId="43" formatCode="0"/>').replace('<xf numFmtId="164"/>','<xf numFmtId="43"/>');cases.push(disguised);
+ for(const parts of cases)await assert.rejects(extractPlanMeasurementSource(zipOoxmlFixture(parts),mime),{code:'PLAN_IMPORT_MEASUREMENT_EXTRACTION_INCOMPLETE',status:413});
+});
+test('a valid money footer cannot turn an extra physical item on either side of that footer into a complete import',async()=>{
+ for(const row of ['10','12']){const extraRows=`<row r="${row}">${physicalTextCell('C'+row,'1.3')}${physicalTextCell('D'+row,'Partida física posterior sintética')}${physicalTextCell('E'+row,'m²')}${physicalNumericCell('F'+row,'5')}</row>`;await assert.rejects(extractPlanMeasurementSource(zipOoxmlFixture(quoteMoneyFooter({extraRows})),mime),{code:'PLAN_IMPORT_MEASUREMENT_EXTRACTION_INCOMPLETE',status:413});}
+});
+test('a genuinely empty percent-formatted footer companion preserves its style facts without manufacturing a quantity',async()=>{
+ const parts=quoteMoneyFooter({cells:physicalTextCell('C11',syntheticMoneyFooter)+physicalNumericCell('F11',null,{attributes:' s="1"'})});addPhysicalStyles(parts,{formatId:'9'});const bytes=zipOoxmlFixture(parts),snapshot=await readPlanMeasurementOoxml(bytes,mime),empty=snapshot.worksheets[0].cells.find(cell=>cell.address==='F11');assert.equal(empty.present,true);assert.equal(empty.rawValue,null);assert.equal(empty.value,null);assert.equal(empty.cachePresent,false);assert.equal(empty.style.source,'CELL');assert.equal(empty.style.index,'1');assert.equal(empty.style.numFmtId,'9');assert.equal(empty.formulaAttributes,null);assert.equal(empty.formulaText,null);assert.deepEqual(empty.mergedRanges,[]);
+ const source=await extractPlanMeasurementSource(bytes,mime);assert.equal(source.sourceSha256,sha(bytes));assert.equal(source.rows.length,2);assert.deepEqual(source.excludedRows,[{sourceRowId:'Cotización!C11:F11',code:null,sourceTitle:syntheticMoneyFooter,reason:'MONETARY_COST_ROW'}]);assert.equal(source.rows.some(row=>row.sourceRowId==='Cotización!C11:F11'),false);assert.ok(source.rows.every(row=>row.candidate.baseline==='1.0000'&&row.candidate.unit==='UNIT'));
+});
+test('blank footer style tolerance never admits unresolved or ambiguous styles nor unsafe labels or companion facts',async()=>{
+ const empty=(attributes=' s="1"',formula=null)=>quoteMoneyFooter({cells:physicalTextCell('C11',syntheticMoneyFooter)+physicalNumericCell('F11',null,{attributes,formula})}),unresolved=empty(' s="2"');addPhysicalStyles(unresolved,{formatId:'9'});
+ const ambiguous=empty('');addPhysicalStyles(ambiguous,{formatId:'9'});ambiguous['xl/worksheets/sheet2.xml']=ambiguous['xl/worksheets/sheet2.xml'].replace('<sheetData>','<cols><col min="6" max="6" style="0"/><col min="6" max="6" style="1"/></cols><sheetData>');
+ const label=quoteMoneyFooter({cells:physicalTextCell('C11',syntheticMoneyFooter,' s="1"')+physicalNumericCell('F11',null,{attributes:' s="1"'})});addPhysicalStyles(label,{formatId:'9'});
+ const formula=empty(' s="1"','SUM(F1:F2)');addPhysicalStyles(formula,{formatId:'9'});
+ const hidden=empty();addPhysicalStyles(hidden,{formatId:'9'});hidden['xl/worksheets/sheet2.xml']=hidden['xl/worksheets/sheet2.xml'].replace('<sheetData>','<cols><col min="6" max="6" hidden="1"/></cols><sheetData>');
+ const merged=empty();addPhysicalStyles(merged,{formatId:'9'});merged['xl/worksheets/sheet2.xml']=merged['xl/worksheets/sheet2.xml'].replace('</worksheet>','<mergeCells count="1"><mergeCell ref="F11:G11"/></mergeCells></worksheet>');
+ for(const parts of [unresolved,ambiguous,label,formula,hidden,merged])await assert.rejects(extractPlanMeasurementSource(zipOoxmlFixture(parts),mime),{code:'PLAN_IMPORT_MEASUREMENT_EXTRACTION_INCOMPLETE',status:413});
+});
+
+const literalLineFeedTitle='  Partida  sintética\nuno \n  literal  ';
+function quoteLineFeedTitleParts({title=literalLineFeedTitle,type='xlsx'}={}){
+ const {parts}=measurementQuoteFixtureParts();replacePhysicalCell(parts,'xl/worksheets/sheet2.xml','D7',physicalNumericCell('D7',title,{attributes:' t="str"'}));if(type==='xlsm'){parts['[Content_Types].xml']=parts['[Content_Types].xml'].replace('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml','application/vnd.ms-excel.sheet.macroEnabled.main+xml');parts['xl/vbaProject.bin']=Buffer.from('Synthetic inert line feed title workbook; never executed');}return parts;
+}
+test('Excel LF title presentation is derived without trimming other spaces or changing original XLSX and XLSM facts',async()=>{
+ for(const[type,contentType]of [['xlsx',mime],['xlsm','application/vnd.ms-excel.sheet.macroenabled.12']]){const bytes=zipOoxmlFixture(quoteLineFeedTitleParts({type})),before=sha(bytes),source=await extractPlanMeasurementSource(bytes,contentType),first=source.rows[0];assert.equal(source.sourceSha256,before);assert.equal(sha(bytes),before);assert.equal(first.sourceTitle,literalLineFeedTitle.replaceAll('\n',' '));assert.equal(first.provenance.titleFact.value,literalLineFeedTitle);assert.equal(first.provenance.titleFact.rawValue,literalLineFeedTitle);assert.equal(first.provenance.titleFact.type,'str');assert.equal(first.provenance.titleFact.address,'D7');assert.equal(first.provenance.titleFact.formulaText,null);assert.equal(first.sourceRowId,'Cotización!C7:F7');assert.equal(first.quantity.rawValue,'1');assert.deepEqual(first.candidate,{baseline:'1.0000',unit:'UNIT',issues:[]});assert.deepEqual(normalizePlanMeasurementSource(source),source);}
+});
+test('LF normalization also preserves grouping titles and requires exact original CyP cross-sheet title equality',async()=>{
+ const grouped=quoteLineFeedTitleParts();replacePhysicalCell(grouped,'xl/worksheets/sheet2.xml','C7',physicalTextCell('C7','1'));replacePhysicalCell(grouped,'xl/worksheets/sheet2.xml','C8',physicalTextCell('C8','1.1'));const quoted=await extractPlanMeasurementSource(zipOoxmlFixture(grouped),mime);assert.equal(quoted.rows.length,1);assert.deepEqual(quoted.excludedRows,[{sourceRowId:'Cotización!C7:F7',code:'1',sourceTitle:literalLineFeedTitle.replaceAll('\n',' '),reason:'GROUPING_ROW'}]);
+ const {parts}=measurementCypFixtureParts(),original=await extractPlanMeasurementSource(zipOoxmlFixture(parts),mime),first=original.rows[0],group=original.excludedRows.find(row=>row.code===first.parentCode),groupRow=/!A(\d+):/.exec(group.sourceRowId)[1],budgetRow=/<c r="B(\d+)" t="inlineStr"><is><t>A\.1\.1<\/t>/.exec(parts['xl/worksheets/sheet2.xml'])[1],rawGroup='Rubro  sintético\nA.1.1';
+ for(const[sheet,address,title]of [['xl/worksheets/sheet1.xml',first.provenance.titleCell,literalLineFeedTitle],['xl/worksheets/sheet2.xml',first.provenance.matchingSource.titleFact.address,literalLineFeedTitle],['xl/worksheets/sheet1.xml','B'+groupRow,rawGroup],['xl/worksheets/sheet2.xml','C'+budgetRow,rawGroup]])replacePhysicalCell(parts,sheet,address,physicalNumericCell(address,title,{attributes:' t="str"'}));
+ const source=await extractPlanMeasurementSource(zipOoxmlFixture(parts),mime),leaf=source.rows[0];assert.equal(leaf.sourceTitle,literalLineFeedTitle.replaceAll('\n',' '));assert.equal(leaf.provenance.titleFact.value,literalLineFeedTitle);assert.equal(leaf.provenance.titleFact.rawValue,literalLineFeedTitle);assert.equal(leaf.provenance.matchingSource.titleFact.value,literalLineFeedTitle);assert.equal(leaf.provenance.matchingSource.titleFact.rawValue,literalLineFeedTitle);assert.equal(source.excludedRows.find(row=>row.code===first.parentCode).sourceTitle,rawGroup.replaceAll('\n',' '));
+ replacePhysicalCell(parts,'xl/worksheets/sheet2.xml',first.provenance.matchingSource.titleFact.address,physicalNumericCell(first.provenance.matchingSource.titleFact.address,literalLineFeedTitle.replaceAll('\n',' '),{attributes:' t="str"'}));await assert.rejects(extractPlanMeasurementSource(zipOoxmlFixture(parts),mime),sourceError);
+});
+test('LF title derivation cannot admit forged presentation or carriage returns tabs and markup characters',async()=>{
+ const source=await extractPlanMeasurementSource(zipOoxmlFixture(quoteLineFeedTitleParts()),mime);for(const title of [literalLineFeedTitle,literalLineFeedTitle.replaceAll('\n',' ').trim(),'Título arbitrario sintético',source.rows[0].sourceTitle.replace('  ',' ')]){const forged=cloned(source);forged.rows[0].sourceTitle=title;assert.throws(()=>normalizePlanMeasurementSource(forged),sourceError);}
+ for(const encoded of ['Partida&#13;sintética','Partida&#9;sintética','Partida&lt;sintética','Partida&gt;sintética']){const {parts}=measurementQuoteFixtureParts();replacePhysicalCell(parts,'xl/worksheets/sheet2.xml','D7',`<c r="D7" t="str"><v>${encoded}</v></c>`);await assert.rejects(extractPlanMeasurementSource(zipOoxmlFixture(parts),mime),sourceError);}
+ for(const raw of ['Partida\rsintética','Partida\tsintética','Partida<sintética','Partida>sintética']){const forged=cloned(source);forged.rows[0].provenance.titleFact.value=raw;forged.rows[0].provenance.titleFact.rawValue=raw;forged.rows[0].sourceTitle=raw;assert.throws(()=>normalizePlanMeasurementSource(forged),sourceError);}
+});

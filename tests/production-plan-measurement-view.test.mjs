@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {planMeasurementOriginalQuantity,planMeasurementRows,planMeasurementReviewStatus,planMeasurementReviewCommand,planMeasurementDecisionCommand,planMeasurementResponseContext,planMeasurementTaskBlocked} from '../src/app/(identity)/cuenta/plan-measurement-view.mjs';
+import {planMeasurementOriginalQuantity,planMeasurementUnitSuggestion,planMeasurementRows,planMeasurementReviewStatus,planMeasurementReviewCommand,planMeasurementDecisionCommand,planMeasurementResponseContext,planMeasurementTaskBlocked} from '../src/app/(identity)/cuenta/plan-measurement-view.mjs';
 import {normalizePlanMeasurementCommand,normalizePlanMeasurementDestinations} from '../src/lib/plan-measurement-policy.mjs';
+import {extractPlanMeasurementSource,normalizePlanMeasurementReview} from '../src/lib/plan-measurement-source.mjs';
+import {measurementQuoteFixtureParts,addPhysicalStyles,physicalTextCell,replacePhysicalCell,zipOoxmlFixture} from './fixtures/plan-measurement-source-synthetic.mjs';
 const context={scope:'a'.repeat(64),projectId:'project-a',operationId:'11111111-1111-4111-8111-111111111111'},reason='Fuente y cantidades revisadas por responsable.';
 const row=(id='source-1')=>({sourceRowId:id,code:'A.1.1.1',sourceTitle:'Revoque',quantity:{rawValue:'100.0000'},unit:{rawValue:'m²'},candidate:{baseline:'100.0000',unit:'M2',issues:[]}});
 const draft=()=>({id:'draft-a',revision:1,status:'READY',measurementImport:true,source:{sha256:'b'.repeat(64)},sourceDigest:'c'.repeat(64),measurementSource:{format:'DOCUMENT',rows:[row()],excludedRows:[]},review:null});
@@ -23,3 +25,43 @@ test('apply carries only the saved review digest and cannot carry new row comman
 test('responses from another scope, project or financial process are rejected',()=>{for(const result of [{scope:'z'.repeat(64),projectId:context.projectId},{scope:context.scope,projectId:'project-b'},{scope:context.scope,projectId:context.projectId,draft:{measurementImport:false}}])assert.throws(()=>planMeasurementResponseContext(result,context),/esta obra/);});
 test('200-row review locates the exact incomplete source on page twenty without confirming or changing edits',()=>{const original=draft();original.measurementSource.rows=Array.from({length:200},(_,index)=>row('source-'+(index+1)));const values=edits(original);for(const edit of values.slice(0,199)){edit.choice='EXCLUDE';edit.excludeReason='Exclusión revisada expresamente.';}values[199].confirmed=false;const before=structuredClone(values),status=planMeasurementReviewStatus(original,values,[]),pending=status.filter(row=>!row.complete);assert.equal(status.filter(row=>row.complete).length,199);assert.equal(pending.length,1);assert.equal(pending[0].sourceRowId,'source-200');assert.throws(()=>planMeasurementReviewCommand(original,values,[],reason,context),error=>error.sourceRowId==='source-200'&&/Confirmá/.test(error.message));assert.deepEqual(values,before);values[199].confirmed=true;assert.equal(planMeasurementReviewStatus(original,values,[]).every(row=>row.complete),true);const command=planMeasurementReviewCommand(original,values,[],reason,context);assert.equal(command.rows.length,1);assert.equal(command.excludedRows.length,199);});
 test('completion navigator shares date, quantity, identity, exclusion and duplicate-task gates with the exact command',()=>{for(const mutate of [value=>value.baseline='0',value=>value.startsOn='',value=>value.confirmed=false]){const original=draft(),values=edits(original);mutate(values[0]);assert.equal(planMeasurementReviewStatus(original,values,[])[0].complete,false);assert.throws(()=>planMeasurementReviewCommand(original,values,[],reason,context),error=>error.sourceRowId==='source-1');}const original=draft();original.measurementSource.rows.push(row('source-2'));const values=edits(original).map(value=>({...value,mode:'EXISTING',taskId:task.id,confirmIdentity:true,confirmReplacement:true}));const status=planMeasurementReviewStatus(original,values,[task]);assert.equal(status[0].complete,true);assert.equal(status[1].complete,false);assert.match(status[1].message,/tarea distinta/);assert.throws(()=>planMeasurementReviewCommand(original,values,[task],reason,context),error=>error.sourceRowId==='source-2');});
+
+async function accountingUnitDraft(){
+ const {parts}=measurementQuoteFixtureParts();addPhysicalStyles(parts,{formatCode:'0.00 "$"'});replacePhysicalCell(parts,'xl/worksheets/sheet2.xml','E7',physicalTextCell('E7','m²',' s="1"'));
+ const source=await extractPlanMeasurementSource(zipOoxmlFixture(parts),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');return {...draft(),source:{sha256:source.sourceSha256},measurementSource:source};
+}
+
+test('safe literal Excel unit fills only the editable proposal while immutable candidates and every human decision remain pending',async()=>{
+ const original=await accountingUnitDraft(),before=structuredClone(original),source=original.measurementSource.rows[0],values=planMeasurementRows(original),first=values[0];
+ assert.equal(source.candidate.unit,null);assert.ok(source.candidate.issues.includes('UNIT_FORMAT_UNSUPPORTED'));assert.equal(first.unit,'M2');assert.equal(first.baseline,'1.0000');
+ for(const key of ['confirmed','issuesAcknowledged','identityConfirmed','confirmIdentity','confirmReplacement'])assert.equal(first[key],false,key);
+ for(const key of ['choice','reason','mode','startsOn','endsOn','taskId'])assert.equal(first[key],'',key);
+ assert.equal(planMeasurementReviewStatus(original,values,[])[0].complete,false);assert.throws(()=>planMeasurementReviewCommand(original,values,[],reason,context),/Elegí incluir/);assert.deepEqual(original,before);
+});
+
+test('suggestions use resolved Excel literal aliases without reading shared-string indexes or extending the unit vocabulary',async()=>{
+ const original=await accountingUnitDraft(),source=original.measurementSource.rows[0];
+ for(const format of ['CYP_PARTIDAS','COTIZACION_PARTIDAS'])for(const type of ['s','inlineStr','str'])for(const [literal,unit]of [['m3','M3'],['un.','UNIT'],['m2','M2'],['m²','M2']]){const item=structuredClone(source);Object.assign(item.unit,{type,value:literal,rawValue:type==='s'?'7':type==='inlineStr'?null:literal});assert.equal(planMeasurementUnitSuggestion(item,format),unit);assert.equal(item.unit.value,literal);}
+ for(const literal of ['ml','tubos','bolsas','constructor','toString','',null]){const item=structuredClone(source);item.unit.value=literal;assert.equal(planMeasurementUnitSuggestion(item,'COTIZACION_PARTIDAS'),null);}
+ assert.equal(planMeasurementUnitSuggestion(source,'DOCUMENT'),null);assert.equal(planMeasurementUnitSuggestion(source,'MONTHLY_RUBROS'),null);
+});
+
+test('literal suggestions fail closed on formula hidden merged ambiguous unresolved or nontext unit facts',async()=>{
+ const original=await accountingUnitDraft(),source=original.measurementSource.rows[0];
+ const mutations=[...['n','b','d','e'].map(type=>value=>value.type=type),value=>value.formulaAttributes={},value=>value.formulaText='',value=>value.sharedFormulaMaster={},value=>value.rowAttributes.hidden='1',value=>value.rowAttributes.hidden='true',value=>value.rowAttributes.hidden='True',value=>value.columnAttributes=[{hidden:'1'}],value=>value.columnAttributes=[{hidden:'unknown'}],value=>value.mergedRanges=['E7:F7'],value=>value.mergedRanges=null,value=>value.style.source='AMBIGUOUS',value=>value.style.index=null,value=>value.style.index='01',value=>value.style.numFmtId=null,value=>value.style.formatCode=null,value=>value.style.attributes=null,value=>value.rowAttributes=null,value=>value.columnAttributes=null];
+ for(const mutate of mutations){const item=structuredClone(source);mutate(item.unit);const changed={...original,measurementSource:{...original.measurementSource,rows:[item]}};assert.equal(planMeasurementUnitSuggestion(item,changed.measurementSource.format),null);assert.equal(planMeasurementRows(changed)[0].unit,'');}
+});
+
+test('saved choices including explicit blanks and corrected units take priority over advisory and candidate defaults',async()=>{
+ const original=await accountingUnitDraft(),source=original.measurementSource.rows[0];
+ source.candidate.unit='M3';assert.equal(planMeasurementRows(original)[0].unit,'M3');source.candidate.unit='';assert.equal(planMeasurementRows(original)[0].unit,'');source.candidate.unit=null;
+ for(const unit of ['','KG','M2',null]){const saved={sourceRowId:source.sourceRowId,unit,baseline:'2.0000',reason,confirmed:true,issuesAcknowledged:true,identityConfirmed:true};original.review={rows:[saved],destinations:[],excludedSourceRowIds:[]};const before=structuredClone(original);assert.equal(planMeasurementRows(original)[0].unit,unit??'');assert.equal(planMeasurementRows(original)[0].baseline,'2.0000');assert.deepEqual(original,before);}
+});
+
+test('unit proposal never confirms observations and both browser and canonical review still reject incompatible corrections',async()=>{
+ const original=await accountingUnitDraft(),values=planMeasurementRows(original);for(const value of values)Object.assign(value,{choice:'INCLUDE',reason,mode:'CREATE',startsOn:'2026-10-15',endsOn:'2026-10-16'});
+ assert.throws(()=>planMeasurementReviewCommand(original,values,[],reason,context),/Confirmá/);for(const value of values)value.confirmed=true;assert.throws(()=>planMeasurementReviewCommand(original,values,[],reason,context),/observaciones/);for(const value of values)value.issuesAcknowledged=true;
+ const command=planMeasurementReviewCommand(original,values,[],reason,context),review=normalizePlanMeasurementReview({source:original.measurementSource,rows:command.rows});assert.equal(command.rows[0].unit,'M2');assert.equal(review.rows[0].corrected,true);assert.equal(original.measurementSource.rows[0].candidate.unit,null);
+ values[0].unit='KG';assert.throws(()=>planMeasurementReviewCommand(original,values,[],reason,context),/unidad literal/);const incompatible=structuredClone(command.rows);incompatible[0].unit='KG';assert.throws(()=>normalizePlanMeasurementReview({source:original.measurementSource,rows:incompatible}),{code:'PLAN_IMPORT_MEASUREMENT_UNIT_INCOMPATIBLE',status:409});
+ values[0].unit='';const before=structuredClone(values);assert.equal(planMeasurementReviewStatus(original,values,[])[0].complete,false);assert.deepEqual(values,before);assert.equal(values[0].unit,'');
+});

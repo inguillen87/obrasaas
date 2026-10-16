@@ -4382,5 +4382,78 @@
         "sha256": "b3aac294e6baa10d94a6cf5dfc95611560a86ee4bf40d71bf2f0c6553f945925"
       }
     ]
+  },
+  "ooxmlAccountingCurrentRevision": {
+    "version": 1,
+    "referenceHead": "a130e976a1566053b5fda96f875a1e9df776d037",
+    "referenceTree": "93ce47d45296cec9b1719619db673c742129cf92",
+    "previousContractSha256": "63252e3af6a5e595f731302d33cf32e18182f24c75ac144cc062b0911efeda17",
+    "reviewedSourceChanges": [
+      {
+        "path": "src/lib/plan-import-ooxml.mjs",
+        "previousSha256": "00c14c85a01734f9b77e508ef8c30fd1b1fa9e1d921b632649f93c534cc9cdd5",
+        "currentSha256": "473a0ac3199ef044107a2847059a6fea1c04f9716af4b8c4008623f0deb80b4d"
+      },
+      {
+        "path": "src/lib/plan-measurement-source.mjs",
+        "previousSha256": "37f3c1e16f01392794b486079c74e458d953006bb05ac9b732e75c019db248ba",
+        "currentSha256": "ecf33b67a333d8ce73bfb51610218a1658cd94a26b62eb35d2290b795f826f36"
+      },
+      {
+        "path": "tests/production-plan-measurement-analyzer-http.test.mjs",
+        "previousSha256": "ee7d0e1b1631a5fc79ce56931d0168abc531b6816496fb4018d407f826c2332a",
+        "currentSha256": "f9441c1e09e20ccad42608003e8f410b43cabc10ec37da33285d2c98ccc23d24"
+      },
+      {
+        "path": "tests/production-plan-measurement-source.test.mjs",
+        "previousSha256": "1207ee60d31ddd28e74a33ca887a2addf051d7e229989a366f167abeb77703f1",
+        "currentSha256": "8dba7384fd57882e13f3d148395ed46e445c5b7fceb0260f937d7de05f92d35c"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/plan-measurement-view.mjs",
+        "previousSha256": "1c980824bc38e7fcaec42812e205e774fa3d849b63da9adf620a5447de256816",
+        "currentSha256": "ba6c55a030fe53174825b620bc7f0b349d6fb66b6c827f5e8ca0eda393e8ff5d"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/plan-measurement-panel.js",
+        "previousSha256": "7558e7c27b03229e422b1ae8b00ffb78f7115371ee6571d5ac6ee9e7d584c0a4",
+        "currentSha256": "08214cdfbf5fdf921a0ac6527437367cb5dff7e7b0de724b149d8483900da042"
+      },
+      {
+        "path": "tests/production-plan-measurement-view.test.mjs",
+        "previousSha256": "b84a051be31a7bc5c0d15f3ff5a0f6a0d47b9752034db92237f4df7e610faddc",
+        "currentSha256": "04ec71570ce229ef5b0355aa2bc96f030c56977c2e422bf5336f210cca5c63f5"
+      }
+    ],
+    "validationDeltas": [
+      {
+        "path": "scripts/lib/field-outbound-current-ci-lineage.mjs",
+        "previousSha256": "1537ffbb1ddfcb582f4c06dea4887c7558321e3f60eba65a15a4ba3e7714cd21",
+        "currentSha256": "b9dcbb4283c2092913f02cf98b9bb5550bdae2ab54551f03cc502f13c454ca8e"
+      },
+      {
+        "path": "scripts/verify-company-kyc-outbound-compact-ci.mjs",
+        "previousSha256": "4b643f0af2909511b38dea9d1c66dc59b70ea06cab8f9638440e223da970033a",
+        "currentSha256": "1ab190ed268eecf39fed2614f1cebe038f910403b2f2bbc7fa7c081d209153bd"
+      }
+    ],
+    "limits": {
+      "currentValidationPaths": 49,
+      "compactSources": 127,
+      "consumptionSources": 110,
+      "kycSources": 111,
+      "measurementSources": 113,
+      "organizationSources": 115
+    },
+    "validationSources": [
+      {
+        "path": "scripts/lib/ooxml-accounting-current-ci-lineage.mjs",
+        "sha256": "da926d18f6e71037405ef5e9220097eb2eaec3167d759dad5175578ad9d1b82e"
+      },
+      {
+        "path": "tests/production-ooxml-accounting-current-ci-lineage.test.mjs",
+        "sha256": "fe2e7766f2cd8178f703d36f765820820bfe3e42dd9002e6f8d84ae8ef167640"
+      }
+    ]
   }
 }

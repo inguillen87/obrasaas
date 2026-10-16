@@ -132,7 +132,7 @@ const sourcePosition=address=>{const [,letters,row]=/^([A-Z]+)(\d+)$/.exec(addre
 function measurementStyles(bytes,check){
  const root=xml(bytes,'styleSheet',spreadsheetNS,check),formats=new Map();
  if(['numFmts','cellXfs','cellStyleXfs'].some(name=>children(root,name).length>1))fail();
- for(const format of children(child(root,'numFmts'),'numFmt')){const id=attr(format,'numFmtId'),code=attr(format,'formatCode');if(!sourceIndex(id)||BigInt(id)<164n||typeof code!=='string'||code.length>500||formats.has(id))fail();formats.set(id,code);}
+ for(const format of children(child(root,'numFmts'),'numFmt')){const id=attr(format,'numFmtId'),code=attr(format,'formatCode');if(!sourceIndex(id)||typeof code!=='string'||code.length>500||formats.has(id))fail();formats.set(id,code);}
  const xfs=children(child(root,'cellXfs'),'xf').map(sourceAttributes),bases=children(child(root,'cellStyleXfs'),'xf').map(sourceAttributes);
  if(xfs.length>PLAN_OOXML_LIMITS.cells||bases.length>PLAN_OOXML_LIMITS.cells)fail();
  return {formats,xfs,bases};

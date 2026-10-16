@@ -26,6 +26,7 @@ const same=(left,right)=>JSON.stringify(canonical(left))===JSON.stringify(canoni
 const clone=value=>JSON.parse(JSON.stringify(value));
 const sorted=value=>[...new Set(value)].sort();
 const header=value=>typeof value==='string'?value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase():'';
+const excelSourceTitle=value=>typeof value==='string'?value.replaceAll('\n',' '):value;
 const parent=value=>typeof value==='string'&&value.includes('.')?value.slice(0,value.lastIndexOf('.')):null;
 
 // Expand source decimal/exponent syntax with BigInt. No rounding, locale
@@ -70,7 +71,7 @@ function normalizeCellFact(value,expectedAddress){
  const numFmtId=s.attributes?(['0','false'].includes(s.attributes.applyNumberFormat)?s.baseAttributes?.numFmtId??(s.attributes.xfId?'':'0'):s.attributes.numFmtId??'0'):null;
  if(s.numFmtId!==(index(numFmtId)?numFmtId:null))fail();
  const builtins={'0':'General','1':'0','2':'0.00','3':'#,##0','4':'#,##0.00'};
- if(s.numFmtId!==null&&BigInt(s.numFmtId)<164n&&s.formatCode!==(builtins[s.numFmtId]??null))fail();
+ if(Object.hasOwn(builtins,s.numFmtId)&&s.formatCode!==builtins[s.numFmtId])fail();
  for(const range of value.mergedRanges){const [left,right]=range.split(':');if(columnOf(left)>position||columnOf(right)<position||BigInt(rowOf(left))>BigInt(rowOf(value.address))||BigInt(rowOf(right))<BigInt(rowOf(value.address)))fail();}
  return clone(value);
 }
@@ -85,7 +86,10 @@ function cellIssues(fact,{quantity=false,identity=false}={}){
   if(!fact.cachePresent||!formula||/\[|#REF!|\b(?:WEBSERVICE|HYPERLINK|DDE|RTD|INDIRECT)\s*\(/i.test(formula)||fact.formulaAttributes.t&& !['normal','shared'].includes(fact.formulaAttributes.t)||fact.formulaAttributes.t==='shared'&&!fact.sharedFormulaMaster)issues.push('FORMULA_UNSUPPORTED');
   else issues.push('FORMULA_CACHE_REVIEW_REQUIRED');
  }
- if(fact.style.source==='AMBIGUOUS'||fact.style.numFmtId===null||!['General','0','0.00','#,##0','#,##0.00'].includes(fact.style.formatCode)&&!/^(?:0|#,##0)\.0{1,14}$/.test(fact.style.formatCode||''))issues.push(identity?'IDENTITY_FORMAT_UNSUPPORTED':quantity?'QUANTITY_FORMAT_UNSUPPORTED':'UNIT_FORMAT_UNSUPPORTED');
+ // Valid low-ID declarations remain source facts; only numeric built-ins 0–4
+ // are eligible here, regardless of a low format's numeric-looking code.
+ const unsupportedLowFormat=fact.style.numFmtId!==null&&BigInt(fact.style.numFmtId)>4n&&BigInt(fact.style.numFmtId)<164n;
+ if(fact.style.source==='AMBIGUOUS'||fact.style.numFmtId===null||unsupportedLowFormat||!['General','0','0.00','#,##0','#,##0.00'].includes(fact.style.formatCode)&&!/^(?:0|#,##0)\.0{1,14}$/.test(fact.style.formatCode||''))issues.push(identity?'IDENTITY_FORMAT_UNSUPPORTED':quantity?'QUANTITY_FORMAT_UNSUPPORTED':'UNIT_FORMAT_UNSUPPORTED');
  return issues;
 }
 function candidateFor(row,format){
@@ -135,12 +139,12 @@ export function normalizePlanMeasurementSource(value,{sourceSha256=null,contentT
    const p=row.provenance,cyp=value.format==='CYP_PARTIDAS',worksheet=cyp?'Plan de trabajo':'Cotización',letters=cyp?['A','B','D','C']:['C','D','F','E'];
    if(!exact(p,excelProvenanceKeys)||p.worksheet!==worksheet||typeof p.row!=='string'||!/^[1-9]\d{0,5}$/.test(p.row)||p.sameRow!==true||[p.codeCell,p.titleCell,p.quantityCell,p.unitCell].some((cell,i)=>cell!==letters[i]+p.row)||p.sourceRange!==`${worksheet}!${letters[0]}${p.row}:${cyp?'D':'F'}${p.row}`||row.sourceRowId!==p.sourceRange||cyp&&!/^[AB]\.1\.\d{1,3}\.\d{1,3}$/.test(row.code||''))fail();
    const codeFact=normalizeCellFact(p.codeFact,p.codeCell),titleFact=normalizeCellFact(p.titleFact,p.titleCell);
-   if((codeFact.value===null||codeFact.value===''?null:codeFact.value)!==row.code||titleFact.value!==row.sourceTitle)fail();
+   if((codeFact.value===null||codeFact.value===''?null:codeFact.value)!==row.code||excelSourceTitle(titleFact.value)!==row.sourceTitle)fail();
    let matchingSource=null;
    if(cyp){
     if(!exact(p.matchingSource,['worksheet','codeFact','titleFact'])||p.matchingSource.worksheet!=='CyP Integral completo'||!/^B[1-9]\d{0,5}$/.test(p.matchingSource.codeFact?.address||''))fail();
     const matchedCode=normalizeCellFact(p.matchingSource.codeFact,p.matchingSource.codeFact.address),matchedTitle=normalizeCellFact(p.matchingSource.titleFact,'C'+rowOf(matchedCode.address));
-    if(matchedCode.value!==row.code||matchedTitle.value!==row.sourceTitle)fail();
+    if(matchedCode.value!==row.code||matchedTitle.value!==titleFact.value)fail();
     matchingSource={worksheet:p.matchingSource.worksheet,codeFact:matchedCode,titleFact:matchedTitle};
    }else if(p.matchingSource!==null)fail();
    quantity=normalizeCellFact(row.quantity,p.quantityCell);unit=normalizeCellFact(row.unit,p.unitCell);provenance={...p,codeFact,titleFact,matchingSource};
@@ -159,9 +163,25 @@ function cellMap(sheet){return new Map(sheet.cells.map(cell=>[cell.address,cell]
 const absentCell=address=>({address,present:false,rawValue:null,value:null,type:'n',cachePresent:false,formulaText:null,formulaAttributes:null,sharedFormulaMaster:null,style:{source:'DEFAULT',index:'0',numFmtId:'0',formatCode:'General',attributes:{},baseAttributes:null},rowAttributes:{},columnAttributes:[],cellAttributes:{},mergedRanges:[]});
 const rawCell=(cells,address)=>cells.get(address)??absentCell(address);
 const cellValue=(cells,address)=>rawCell(cells,address).value;
+const monetaryNumberWords=new Set('CERO UN UNO UNA DOS TRES CUATRO CINCO SEIS SIETE OCHO NUEVE DIEZ ONCE DOCE TRECE CATORCE QUINCE DIECISEIS DIECISIETE DIECIOCHO DIECINUEVE VEINTE VEINTIUN VEINTIUNO VEINTIUNA VEINTIDOS VEINTITRES VEINTICUATRO VEINTICINCO VEINTISEIS VEINTISIETE VEINTIOCHO VEINTINUEVE TREINTA CUARENTA CINCUENTA SESENTA SETENTA OCHENTA NOVENTA CIEN CIENTO DOSCIENTOS DOSCIENTAS TRESCIENTOS TRESCIENTAS CUATROCIENTOS CUATROCIENTAS QUINIENTOS QUINIENTAS SEISCIENTOS SEISCIENTAS SETECIENTOS SETECIENTAS OCHOCIENTOS OCHOCIENTAS NOVECIENTOS NOVECIENTAS MIL MILLON MILLONES BILLON BILLONES TRILLON TRILLONES CUATRILLON CUATRILLONES QUINTILLON QUINTILLONES SEXTILLON SEXTILLONES SEPTILLON SEPTILLONES OCTILLON OCTILLONES NONILLON NONILLONES DECILLON DECILLONES'.split(' '));
+const monetaryCents=/^(?:CERO|UN|UNO|UNA|DOS|TRES|CUATRO|CINCO|SEIS|SIETE|OCHO|NUEVE|DIEZ|ONCE|DOCE|TRECE|CATORCE|QUINCE|DIECISEIS|DIECISIETE|DIECIOCHO|DIECINUEVE|VEINTE|VEINTIUN|VEINTIUNO|VEINTIUNA|VEINTIDOS|VEINTITRES|VEINTICUATRO|VEINTICINCO|VEINTISEIS|VEINTISIETE|VEINTIOCHO|VEINTINUEVE|(?:TREINTA|CUARENTA|CINCUENTA|SESENTA|SETENTA|OCHENTA|NOVENTA)(?: Y (?:UN|UNO|UNA|DOS|TRES|CUATRO|CINCO|SEIS|SIETE|OCHO|NUEVE))?) CENTAVOS?$/;
+function monetaryFooter(cells,row){
+ const facts=['C','D','E','F'].map(column=>rawCell(cells,column+row)),[label,...blank]=facts;
+ if(!['s','inlineStr','str'].includes(label.type)||!text(label.value)||cellIssues(label).length||facts.some(fact=>!['n','s','inlineStr','str'].includes(fact.type)||fact.formulaAttributes!==null||fact.formulaText!==null||fact.sharedFormulaMaster!==null))return false;
+ // An empty cell may retain a nonphysical format, but no hidden source value,
+ // unresolved style, formula, visibility or merge can be ignored with it.
+ if(blank.some(fact=>fact.value!==null&&fact.value!==''||fact.type!=='s'&&fact.rawValue!==null&&fact.rawValue!==''||fact.style.source==='AMBIGUOUS'||!index(fact.style.index)||!index(fact.style.numFmtId)||cellIssues(fact).some(issue=>issue!=='UNIT_FORMAT_UNSUPPORTED')))return false;
+ // This is a literal monetary footer, never a quantity or a recalculated sum.
+ const match=/^SON(?:\s*:\s*|\s+)PESOS(?:\s*:\s*|\s+)(.+?)(?:\.)?$/.exec(header(label.value).replace(/\s+/g,' '));
+ if(!match)return false;
+ const parts=match[1].split(' CON ');if(parts.length>2)return false;
+ const words=parts[0].split(' ');
+ if(!words.length||words[0]==='Y'||words.at(-1)==='Y'||words.some((word,i)=>word==='Y'?words[i-1]==='Y':!monetaryNumberWords.has(word)))return false;
+ return parts.length===1||/^[0-9]{1,2}\/100(?: CENTAVOS?)?$/.test(parts[1])||monetaryCents.test(parts[1]);
+}
 function excelRow(cells,worksheet,row,sourceCode,format,matchingSource=null){
  const cyp=format==='CYP_PARTIDAS',letters=cyp?['A','B','D','C']:['C','D','F','E'],sourceRange=`${worksheet}!${letters[0]}${row}:${cyp?'D':'F'}${row}`;
- const result={sourceRowId:sourceRange,code:sourceCode,parentCode:parent(sourceCode),sourceTitle:cellValue(cells,letters[1]+row),quantity:rawCell(cells,letters[2]+row),unit:rawCell(cells,letters[3]+row),provenance:{worksheet,row,codeCell:letters[0]+row,titleCell:letters[1]+row,quantityCell:letters[2]+row,unitCell:letters[3]+row,sourceRange,sameRow:true,codeFact:rawCell(cells,letters[0]+row),titleFact:rawCell(cells,letters[1]+row),matchingSource}};
+ const result={sourceRowId:sourceRange,code:sourceCode,parentCode:parent(sourceCode),sourceTitle:excelSourceTitle(cellValue(cells,letters[1]+row)),quantity:rawCell(cells,letters[2]+row),unit:rawCell(cells,letters[3]+row),provenance:{worksheet,row,codeCell:letters[0]+row,titleCell:letters[1]+row,quantityCell:letters[2]+row,unitCell:letters[3]+row,sourceRange,sameRow:true,codeFact:rawCell(cells,letters[0]+row),titleFact:rawCell(cells,letters[1]+row),matchingSource}};
  return {...result,candidate:candidateFor(result,format)};
 }
 export async function extractPlanMeasurementSource(bytes,contentType,{profile=PLAN_MEASUREMENT_PROFILE,sourceSha256=null}={}){
@@ -175,14 +195,14 @@ export async function extractPlanMeasurementSource(bytes,contentType,{profile=PL
   const codes=(cells,column)=>{const result=new Map();for(const [address,cell] of cells){if(!address.startsWith(column)||!new RegExp(`^${column}[1-9]\\d{0,5}$`).test(address)||BigInt(rowOf(address))<6n)continue;if(typeof cell.value!=='string')continue;if(/^[ABHI](?:\.|$)/.test(cell.value)&&!/^[ABHI](?:\.\d{1,3}){0,3}$/.test(cell.value))fail();if(!/^[ABHI](?:\.\d{1,3}){0,3}$/.test(cell.value))continue;if(result.has(cell.value))fail();result.set(cell.value,rowOf(address));}return result;};
   const selected=codes(plan,'A'),original=codes(budget,'B');
   if(!selected.size||selected.size!==original.size||[...selected.keys()].some(code=>!original.has(code))||!['A','A.1','B','B.1'].every(code=>selected.has(code)))fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');
-  for(const [address,cell] of plan)if(/^B[1-9]\d{0,5}$/.test(address)&&BigInt(rowOf(address))>=7n&&text(cell.value)&&(cellValue(plan,'C'+rowOf(address))!==null||cellValue(plan,'D'+rowOf(address))!==null)&&!selected.has(cellValue(plan,'A'+rowOf(address))))fail();
+  for(const [address,cell] of plan)if(/^B[1-9]\d{0,5}$/.test(address)&&BigInt(rowOf(address))>=7n&&text(excelSourceTitle(cell.value))&&(cellValue(plan,'C'+rowOf(address))!==null||cellValue(plan,'D'+rowOf(address))!==null)&&!selected.has(cellValue(plan,'A'+rowOf(address))))fail();
   for(const [sourceCode,row] of selected){
    if(sourceCode.includes('.')&&!selected.has(parent(sourceCode))||/^[AB](?:\.|$)/.test(sourceCode)&&!/^[AB](?:\.1(?:\.\d{1,3}){0,2})?$/.test(sourceCode))fail();
-   const title=cellValue(plan,'B'+row);if(!text(title)||title!==cellValue(budget,'C'+original.get(sourceCode)))fail();
+   const title=cellValue(plan,'B'+row);if(!text(excelSourceTitle(title))||title!==cellValue(budget,'C'+original.get(sourceCode)))fail();
    const matchingSource={worksheet:'CyP Integral completo',codeFact:rawCell(budget,'B'+original.get(sourceCode)),titleFact:rawCell(budget,'C'+original.get(sourceCode))};
    if([rawCell(plan,'A'+row),rawCell(plan,'B'+row),matchingSource.codeFact,matchingSource.titleFact].some(fact=>cellIssues(fact,{identity:true}).includes('FORMULA_UNSUPPORTED')))fail();
    if(/^[AB]\.1\.\d{1,3}\.\d{1,3}$/.test(sourceCode))rows.push(excelRow(plan,'Plan de trabajo',row,sourceCode,snapshot.format,matchingSource));
-   else excludedRows.push({sourceRowId:`Plan de trabajo!A${row}:D${row}`,code:sourceCode,sourceTitle:title,reason:/^[HI](?:\.|$)/.test(sourceCode)?'MONETARY_COST_ROW':'GROUPING_ROW'});
+   else excludedRows.push({sourceRowId:`Plan de trabajo!A${row}:D${row}`,code:sourceCode,sourceTitle:excelSourceTitle(title),reason:/^[HI](?:\.|$)/.test(sourceCode)?'MONETARY_COST_ROW':'GROUPING_ROW'});
   }
  }else{
   const quote=cellMap(snapshot.worksheets[0]);
@@ -190,15 +210,18 @@ export async function extractPlanMeasurementSource(bytes,contentType,{profile=PL
   const titles=[...quote.values()].filter(cell=>/^D[1-9]\d{0,5}$/.test(cell.address)&&BigInt(rowOf(cell.address))>5n),totals=titles.filter(cell=>header(cell.value)==='TOTAL OBRA');
   if(totals.length!==1)fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');
   // A premature total cannot turn a partial physical source into a complete
-  // import. Text-only notes can follow the total; populated identity/unit/
-  // quantity columns require another supported source instead of omission.
+  // import. Retain a recognized literal monetary footer as an explicit
+  // exclusion; any other populated identity/unit/quantity cell still rejects.
   const totalRow=BigInt(rowOf(totals[0].address));
-  for(const [address,cell] of quote)if(/^[CEF][1-9]\d{0,5}$/.test(address)&&BigInt(rowOf(address))>totalRow&&cell.value!==null&&cell.value!=='')fail('PLAN_IMPORT_MEASUREMENT_EXTRACTION_INCOMPLETE',413);
-  for(const [address,cell] of quote)if(/^[CEF][1-9]\d{0,5}$/.test(address)&&BigInt(rowOf(address))>5n&&BigInt(rowOf(address))<totalRow&&cell.value!==null&&cell.value!==''&&!text(cellValue(quote,'D'+rowOf(address))))fail();
+  for(const [address,cell] of quote)if(/^[CEF][1-9]\d{0,5}$/.test(address)&&BigInt(rowOf(address))>totalRow&&cell.value!==null&&cell.value!==''){
+   const row=rowOf(address);if(address!=='C'+row||!monetaryFooter(quote,row))fail('PLAN_IMPORT_MEASUREMENT_EXTRACTION_INCOMPLETE',413);
+   excludedRows.push({sourceRowId:`Cotización!C${row}:F${row}`,code:null,sourceTitle:cell.value,reason:'MONETARY_COST_ROW'});
+  }
+  for(const [address,cell] of quote)if(/^[CEF][1-9]\d{0,5}$/.test(address)&&BigInt(rowOf(address))>5n&&BigInt(rowOf(address))<totalRow&&cell.value!==null&&cell.value!==''&&!text(excelSourceTitle(cellValue(quote,'D'+rowOf(address)))))fail();
   const selected=titles.filter(cell=>BigInt(rowOf(cell.address))<BigInt(rowOf(totals[0].address))&&cell.value!==null&&cell.value!=='');
   const codes=selected.map(cell=>cellValue(quote,'C'+rowOf(cell.address)));
   for(const item of selected){const row=rowOf(item.address),rawCode=cellValue(quote,'C'+row),sourceCode=rawCode===null||rawCode===''?null:rawCode;if(sourceCode!==null&&!code(sourceCode))fail();
-   if(sourceCode!==null&&codes.some(other=>typeof other==='string'&&other.startsWith(sourceCode+'.')))excludedRows.push({sourceRowId:`Cotización!C${row}:F${row}`,code:sourceCode,sourceTitle:item.value,reason:'GROUPING_ROW'});
+   if(sourceCode!==null&&codes.some(other=>typeof other==='string'&&other.startsWith(sourceCode+'.')))excludedRows.push({sourceRowId:`Cotización!C${row}:F${row}`,code:sourceCode,sourceTitle:excelSourceTitle(item.value),reason:'GROUPING_ROW'});
    else rows.push(excelRow(quote,'Cotización',row,sourceCode,snapshot.format));
   }
  }
