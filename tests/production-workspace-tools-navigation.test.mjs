@@ -15,7 +15,8 @@ before(async()=>{
  const require=createRequire(import.meta.url),reactUrl=pathToFileURL(require.resolve('react')).href,lucideUrl=pathToFileURL(require.resolve('lucide-react')).href;
  const source=readFileSync(new URL('../src/app/(identity)/cuenta/workspace-tools-navigation.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
  // Preserve the real hook, icons, navigation policy and JSX. Only CSS class names are stubbed.
- const imports=`import React,{useState,useSyncExternalStore} from ${JSON.stringify(reactUrl)};\nimport lucide from ${JSON.stringify(lucideUrl)};\nconst {HardHat,UsersRound,MessageCircle,BriefcaseBusiness,ArrowUpRight,ArrowUp,Clock3}=lucide;\nconst styles=new Proxy({}, {get:(_target,key)=>String(key)});\n`;
+ const routingUrl=new URL('../src/app/(identity)/cuenta/workspace-view-routing.mjs',import.meta.url).href;
+ const imports=`import React from ${JSON.stringify(reactUrl)};\nimport lucide from ${JSON.stringify(lucideUrl)};\nimport {workspaceDestination,workspaceViewAllowed} from ${JSON.stringify(routingUrl)};\nconst {House,CalendarDays,UsersRound,HardHat,Package,ShoppingBag,BriefcaseBusiness,MessageCircle,Settings2,Clock3,CreditCard}=lucide;\nconst styles=new Proxy({}, {get:(_target,key)=>String(key)});\n`;
  const compiled=await transform(imports+source,{filename:'workspace-tools-navigation.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});
  fixtureDirectory=mkdtempSync(path.join(tmpdir(),'obrasaas-workspace-tools-navigation-'));
  const compiledPath=path.join(fixtureDirectory,'workspace-tools-navigation.mjs');writeFileSync(compiledPath,compiled.code);
@@ -31,7 +32,7 @@ after(()=>{
 });
 const render=props=>renderToStaticMarkup(React.createElement(WorkspaceToolsNavigation,props));
 const pendingHrefs=html=>{
- const status=html.match(/<div[^>]*role="status"[^>]*>([\s\S]*?)<\/div><\/div>/)?.[1]??'';
+ const status=html.match(/<div[^>]*role="status"[^>]*>([\s\S]*?)<\/div>/)?.[1]??'';
  return [...status.matchAll(/<a[^>]*href="([^"]+)"/g)].map(match=>match[1]).sort();
 };
 

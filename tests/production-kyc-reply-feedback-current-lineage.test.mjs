@@ -1,3 +1,4 @@
+import {restoreIntegratedIdentityPreviousContract,restoreIntegratedIdentitySourceSet} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import {restoreParticipantPreanalysisPreviousContract,restoreParticipantPreanalysisSourceSet} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -14,7 +15,7 @@ import {reconstructPublishedHContract,verifyPlanMeasurementCurrentSources,valida
 
 const root=fileURLToPath(new URL('../',import.meta.url)),sha=value=>createHash('sha256').update(value).digest('hex'),readSource=file=>readFileSync(path.join(root,file));
 const contract=JSON.parse(readSource(KYC_EXPIRED_CURRENT_CONTRACT_PATH)),section=contract.kycExpiredCurrentComposition;
-const currentFiles=kycExpiredCurrentSourceFiles(readSource),previous=restoreParticipantPreanalysisPreviousContract(contract),currentCount=contract.participantPreanalysisCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount;
+const currentFiles=kycExpiredCurrentSourceFiles(readSource),previous=restoreParticipantPreanalysisPreviousContract(contract),checkpoint=restoreIntegratedIdentityPreviousContract(contract),currentCount=contract.integratedIdentityCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount;
 const validateKycExpiredCurrentWorkspaceContract=value=>{validatePublishedH(value.planMeasurementCurrentLineage?reconstructPublishedHContract(value):value);return value.kycExpiredCurrentComposition;};
 const verifyKycExpiredCurrentSources=(value,read)=>contract.planMeasurementCurrentLineage?verifyPlanMeasurementCurrentSources(contract,read):verifyPublishedH(value,read);
 const validateKycExpiredCurrentReceipt=(proof,value,read)=>contract.planMeasurementCurrentLineage?validatePlanMeasurementCurrentCompactReceipt(proof,contract,read):validatePublishedReceipt(proof,value,read);
@@ -29,7 +30,7 @@ test('H appends its contract while every published field retains the exact previ
  const changed=structuredClone(contract);changed.extension.proofs[0].producerSha256='f'.repeat(64);rejected(()=>validateKycExpiredCurrentWorkspaceContract(changed));
 });
 test('all eighteen current producer closures match and retain the published H counts as prior metadata',()=>{
- assert.equal(previous.extension.proofs.length,18);assert.equal(contract.extension.proofs.length,19);for(const spec of contract.extension.proofs)assert.deepEqual(currentProducerSourceFiles(spec,root),[...spec.sourceFiles].sort(),spec.id);assert.equal(previous.extension.proofs.find(spec=>spec.kind==='PG_COMPANY_KYC').sourceFiles.length,220+(contract.planMeasurementCurrentLineage?6:0));assert.equal(contract.extension.proofs.find(spec=>spec.kind==='PG_COMPANY_KYC').sourceFiles.length,230);
+ assert.equal(previous.extension.proofs.length,18);assert.equal(checkpoint.extension.proofs.length,19);assert.equal(contract.extension.proofs.length,20);assert.equal(restoreIntegratedIdentitySourceSet('COMPACT',currentFiles,contract).length,132);assert.equal(currentFiles.length,137);for(const spec of contract.extension.proofs)assert.deepEqual(currentProducerSourceFiles(spec,root),[...spec.sourceFiles].sort(),spec.id);assert.equal(previous.extension.proofs.find(spec=>spec.kind==='PG_COMPANY_KYC').sourceFiles.length,220+(contract.planMeasurementCurrentLineage?6:0));assert.equal(checkpoint.extension.proofs.find(spec=>spec.kind==='PG_COMPANY_KYC').sourceFiles.length,230);assert.equal(contract.extension.proofs.find(spec=>spec.kind==='PG_COMPANY_KYC').sourceFiles.length,234);
 });
 test('independent runtime AST native and CI current closures agree while the published H125 path set stays intact',()=>{
  const independent=kycExpiredCurrentSourceFiles(readSource);assert.equal(independent.length,currentCount);const publishedCurrent=restoreParticipantPreanalysisSourceSet('COMPACT',independent,contract);assert.equal(publishedCurrent.length,127);assert.deepEqual(publishedCurrent.filter(file=>!contract.planMeasurementCurrentLineage||!PLAN_MEASUREMENT_CURRENT_SOURCES.includes(file)),section.sourceFiles);assert.deepEqual(independent,companyKycOutboundCompactSourceFiles(root));assert.deepEqual(independent,companyKycOutboundCompactCiSourceClosure(readSource).files);assert.equal(verifyKycExpiredCurrentSources(section,readSource).sourceCount,currentCount);

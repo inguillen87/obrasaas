@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {restoreIntegratedIdentityPreviousContract,validateIntegratedIdentityWorkspaceContract,verifyIntegratedIdentityCurrentSources,validateIntegratedCompanyCurrentNative,integratedCompanyCurrentShadowFixture,integratedIdentityCurrentSelftest,integratedIdentityPreviousProofChecks} from '../../scripts/lib/integrated-identity-current-ci-lineage.mjs';
+import {INTEGRATED_IDENTITY_CURRENT_REVISION,integratedIdentityCurrentSourcePin,restoreIntegratedIdentityPreviousContract,validateIntegratedIdentityWorkspaceContract,verifyIntegratedIdentityCurrentSources,validateIntegratedCompanyCurrentNative,integratedCompanyCurrentShadowFixture,integratedIdentityCurrentSelftest,integratedIdentityPreviousProofChecks} from '../../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import {FOCUSED_WORKSPACE_CI_KIND,validateFocusedWorkspaceCi,focusedWorkspaceCiSourceClosure} from '../../scripts/verify-focused-workspace-ci.mjs';
 import {PARTICIPANT_PREANALYSIS_KIND,restoreParticipantPreanalysisPreviousContract,validateParticipantPreanalysisWorkspaceContract,participantPreanalysisProofSourceAdditions,restoreParticipantPreanalysisSourceSet} from '../../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {validateParticipantKycPreanalysisCi,participantPreanalysisCiSourceClosure} from '../../scripts/verify-participant-kyc-preanalysis-ci.mjs';
@@ -16,7 +16,7 @@ import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourc
 import {KYC_EXPIRED_CURRENT_ADDITIONS,KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,validateKycExpiredCurrentWorkspaceContract as validatePublishedKycWorkspaceContract,verifyKycExpiredCurrentSources as verifyPublishedKycSources} from '../../scripts/lib/kyc-expired-current-ci-lineage.mjs';
 import {PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES,planMeasurementCurrentDependencies,reconstructPublishedHContract,verifyPlanMeasurementCurrentSources,currentFieldPrivacyRevision,currentFieldPrivacySpecRevision} from '../../scripts/lib/plan-measurement-current-ci-lineage.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="30da5669dac6ae816722a94256aa08f4caea30e43ad9e275aa1bb7ae6e796f9f";
+export const EXPECTED_CONTRACT_SHA256="e99426b906e6a9f9a1893199c4865b2e2ee07dbd6bd8d214a22c8717a61af2f1";
 function validateKycExpiredCurrentWorkspaceContract(contract){return validatePublishedKycWorkspaceContract(contract.planMeasurementCurrentLineage?reconstructPublishedHContract(contract):contract);}
 function verifyKycExpiredCurrentSources(section,readSource){
  const current=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));
@@ -545,7 +545,7 @@ function validateWhatsappPlanImportExtension(contract){
 }
 function verifyWhatsappPlanTestSources(contract,readSource){
  if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');
- for(const source of contract.whatsappPlanImport.testSources){const bytes=readSource(source.path);if(!Buffer.isBuffer(bytes))deny('PROOF_SOURCE_BYTES');if(hash(bytes)!==source.sha256)deny('WHATSAPP_PLAN_IMPORT_TEST_SOURCE_HASH');}
+ for(const source of contract.whatsappPlanImport.testSources){const bytes=readSource(source.path);if(!Buffer.isBuffer(bytes))deny('PROOF_SOURCE_BYTES');let expected;try{expected=integratedIdentityCurrentSourcePin(contract,source);}catch(error){if(error.code==='INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED')deny('WHATSAPP_PLAN_IMPORT_TEST_SOURCE_HASH');throw error;}if(hash(bytes)!==expected)deny('WHATSAPP_PLAN_IMPORT_TEST_SOURCE_HASH');}
 }
 const currentCommandBlock=(contract,id)=>id===12?{...contract.blocks.find(block=>block.id===id),...contract.calendarPreparation}:id===26?{...contract.blocks.find(block=>block.id===id),...contract.whatsappPlanImport}:contract.blocks.find(block=>block.id===id);
 function canonicalFieldSourceSets(spec,readSource){
@@ -872,7 +872,8 @@ function validatePlanBaselineContract(contract){
  for(const current of contract.extension.proofs){const dependencies=planBaselineDependenciesFor(current.kind);if(dependencies.some(file=>current.sourceFiles.filter(source=>source===file).length!==1))deny('PLAN_BASELINE_CURRENT_SOURCE_DEPENDENCIES');}
 }
 function validatePlanBaselinePreviousSourceLineage(spec){
-  const dependencies=[...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(spec)],previous=spec.sourceFiles.filter(file=>!dependencies.includes(file)).toSorted();
+ let currentAdditions;try{currentAdditions=participantPreanalysisProofSourceAdditions(spec);}catch(error){if(error.code==='PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED')deny('PLAN_BASELINE_PREVIOUS_SOURCE_LINEAGE');throw error;}
+  const dependencies=[...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...currentAdditions],previous=spec.sourceFiles.filter(file=>!dependencies.includes(file)).toSorted();
  if(previous.length!==PLAN_BASELINE_PREVIOUS_SOURCE_COUNTS[spec.kind]||hash(canonical(previous))!==PLAN_BASELINE_PREVIOUS_SOURCE_PATHS_SHA256[spec.kind])deny('PLAN_BASELINE_PREVIOUS_SOURCE_LINEAGE');
 }
 function planBaselineSelftest(workflow,contract,root){
@@ -986,7 +987,10 @@ function validateCompanyKycCurrentSourceClosure(contract){
 }
 export function validateWhatsappFeedbackPreviousSourceLineage(spec){
  if(!currentWhatsappFeedbackDependenciesFor(spec?.kind).length)return;
- const dependencies=[...currentWhatsappFeedbackDependenciesFor(spec?.kind),...planMeasurementCurrentDependencies(spec?.kind),...participantPreanalysisProofSourceAdditions(spec)];
+ const required=[...currentWhatsappFeedbackDependenciesFor(spec?.kind),...planMeasurementCurrentDependencies(spec?.kind)];
+ if(!Array.isArray(spec.sourceFiles)||required.some(file=>spec.sourceFiles.filter(source=>source===file).length!==1))deny('WHATSAPP_FEEDBACK_CURRENT_SOURCE_DEPENDENCIES');
+ let currentAdditions;try{currentAdditions=participantPreanalysisProofSourceAdditions(spec);}catch(error){if(error.code!=='PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED')throw error;const delta=INTEGRATED_IDENTITY_CURRENT_REVISION.proofSourceDeltas.find(row=>row.id===spec.id);if(delta&&(spec.sourceFiles.length!==delta.currentCount||new Set(spec.sourceFiles).size!==spec.sourceFiles.length))deny('WHATSAPP_FEEDBACK_CURRENT_SOURCE_DEPENDENCIES');deny('WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_LINEAGE');}
+ const dependencies=[...currentWhatsappFeedbackDependenciesFor(spec?.kind),...planMeasurementCurrentDependencies(spec?.kind),...currentAdditions];
  if(!Array.isArray(spec.sourceFiles)||dependencies.some(file=>spec.sourceFiles.filter(source=>source===file).length!==1)||spec.sourceFiles.length!==WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS[spec.kind]+dependencies.length)deny('WHATSAPP_FEEDBACK_CURRENT_SOURCE_DEPENDENCIES');
  const previous=spec.sourceFiles.filter(file=>!dependencies.includes(file)).toSorted();
  if(previous.length!==WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS[spec.kind]||hash(canonical(previous))!==WHATSAPP_FEEDBACK_PREVIOUS_PATHS_SHA256[spec.kind])deny('WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_LINEAGE');

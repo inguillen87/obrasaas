@@ -74,7 +74,7 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
     {
       "path": "src/app/(identity)/cuenta/workspace-tools-navigation.js",
       "previousSha256": "2247f489d60ec0a05c8fb62fe2428c3d5ba2476d4a799bb0c861bdb56764a6e8",
-      "currentSha256": "62576479d92472ba371a6c833252ab1c46d39a6f693b9a3ffbfa9dbd3fb1d06f"
+      "currentSha256": "c57ec89203942a518cb33e72a049ce5db314bde75e2bce9b2a036b5a085d0075"
     },
     {
       "path": "src/app/(identity)/cuenta/workspace-tools-navigation.module.css",
@@ -184,14 +184,34 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
       "currentSha256": "65d64e2d68a371310893c12073f1cb3e186753a4bf4f85e1171d922ceff262b2"
     },
     {
+      "path": "tests/production-field-outbound-current-ci-lineage.test.mjs",
+      "previousSha256": "dbe78f301d5c87b9cfec76c315c181ff44c6df3e93611ce40df1eaac6c3098cc",
+      "currentSha256": "43b095e245845dbf4636bed107bae08a841956b5c304a6cee13b721a8d24989c"
+    },
+    {
       "path": "tests/production-kyc-reply-feedback-ci.test.mjs",
       "previousSha256": "e380b84f6a4c1368a16c5f88c58a3a210b15f63699b1c62cbf9fcc869eb9d3af",
       "currentSha256": "2fa8d14f7872d20342f1bdafec73cd9e008a729b034f7a29a339b9f0cb3efe66"
     },
     {
+      "path": "tests/production-kyc-reply-feedback-current-lineage.test.mjs",
+      "previousSha256": "768a94b9d62638bad3c87e3a47fb6453061e73f2bd590ebc49c427709395c63a",
+      "currentSha256": "43649a2c500301f4e3e872f086a3dff327c72591d1251dd59bc067b1292ef282"
+    },
+    {
       "path": "tests/production-material-consumption-feedback-ci.test.mjs",
       "previousSha256": "f0b1f387fd7df15f56b24b936a1a848bdbcc437202a5e29e4c65f1b972f566e2",
       "currentSha256": "4342158578f2589c07b6e605582395549c45cf634e5a412ebab8ce5f4bf990ea"
+    },
+    {
+      "path": "tests/production-meta-customer-composition.test.mjs",
+      "previousSha256": "c0425600caa47d4ccdc86798aa01c18456f19cc85e8411487f5c990b67c91717",
+      "currentSha256": "5820c8eb8d54275ca8970e18d25e16b1b59fd3b08a7d5439186851748dae4654"
+    },
+    {
+      "path": "tests/production-ooxml-accounting-current-ci-lineage.test.mjs",
+      "previousSha256": "22dc0989b4c3aea4486f2b89df931a768ed0685ca2eef90d796fa28562a2ac04",
+      "currentSha256": "cbda38fcd5bb0220f433ec03d9152984786d2656b53c8ccc26b90b9ff108ba07"
     },
     {
       "path": "tests/production-organization-usage-ci.test.mjs",
@@ -204,9 +224,29 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
       "currentSha256": "6cb2d234dd3eee662cab7d713da8477c9c4933f176b519ee3f456c0619cccaca"
     },
     {
+      "path": "tests/production-plan-import-link-ui.test.mjs",
+      "previousSha256": "936a1dc56d2713cb9fc69827b6acbeca522dbb06c3da1e60ea658ca9e434c7ae",
+      "currentSha256": "294ccb99a5758ad710358f8896cd7277c7f22694914e836b06dc4ce25fa04133"
+    },
+    {
       "path": "tests/production-plan-measurement-ci.test.mjs",
       "previousSha256": "dfe24918646dcf5390bff1c44cc7056a994e18641ffb5d21b3a9925398a5379b",
       "currentSha256": "2388c7639b46b47cb5d0597bb854c9f250c1f6638f372f69689007769f67c6e4"
+    },
+    {
+      "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
+      "previousSha256": "9552a531d027a4c331fbc0ca46d382562e9f7ad3ae311800368332daa1a7f401",
+      "currentSha256": "521831931b5cb262ce952b31f355813ce7eb5c364f3e7f51ba1d726d9b2f2283"
+    },
+    {
+      "path": "tests/production-whatsapp-feedback-workspace-ci.test.mjs",
+      "previousSha256": "90e18193fb365fffac6fca6f591a2ff7fe9501bbbb3c54249037c324adc2f7c1",
+      "currentSha256": "e3729bc7083843ae395f189e9ede2e80cc973794d0a164eaa9dc011e702930d8"
+    },
+    {
+      "path": "tests/production-workspace-tools-navigation.test.mjs",
+      "previousSha256": "3da761320723d221139edf9d46fe76c99ae12ec78849e580984c51b461f6597a",
+      "currentSha256": "a2e52b1e323c65f592cc338e275c73a9de1d231e695e50b1e08a5822f8052eb1"
     }
   ],
   "addedSources": [
@@ -402,8 +442,8 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
       "family": "WORKSPACE_PG_PARTICIPANT_KYC_PREANALYSIS",
       "previousCount": 200,
       "previousPathsSha256": "64012c5b7be1d291bff1f861c7d81cf8480e2492e4fdfd101cafff42485d47d1",
-      "currentCount": 215,
-      "currentPathsSha256": "0abaece1c1c51bb45f747986a5fb0313ff9abb1e8b63ec812dc9acd6bdf0f6ba",
+      "currentCount": 218,
+      "currentPathsSha256": "e3d3917be52f759806fcabe60540af11cc941d8c2473b0aee8618fe42d00bee1",
       "additions": [
         "scripts/lib/integrated-identity-current-ci-lineage.mjs",
         "scripts/lib/owned-fixture-cleanup.mjs",
@@ -419,7 +459,10 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
         "tests/fixtures/integrated-identity-contract-27aa.json",
         "tests/production-focused-workspace-ci.test.mjs",
         "tests/production-focused-workspace-ui.test.mjs",
-        "tests/production-integrated-identity-current-ci-lineage.test.mjs"
+        "tests/production-integrated-identity-current-ci-lineage.test.mjs",
+        "tests/production-meta-customer-composition.test.mjs",
+        "tests/production-plan-import-link-ui.test.mjs",
+        "tests/production-workspace-tools-navigation.test.mjs"
       ]
     }
   ],
@@ -1200,8 +1243,8 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
       "family": "AI_ciSourceFiles",
       "previousCount": 200,
       "previousPathsSha256": "64012c5b7be1d291bff1f861c7d81cf8480e2492e4fdfd101cafff42485d47d1",
-      "currentCount": 215,
-      "currentPathsSha256": "0abaece1c1c51bb45f747986a5fb0313ff9abb1e8b63ec812dc9acd6bdf0f6ba",
+      "currentCount": 218,
+      "currentPathsSha256": "e3d3917be52f759806fcabe60540af11cc941d8c2473b0aee8618fe42d00bee1",
       "additions": [
         "scripts/lib/integrated-identity-current-ci-lineage.mjs",
         "scripts/lib/owned-fixture-cleanup.mjs",
@@ -1217,7 +1260,10 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
         "tests/fixtures/integrated-identity-contract-27aa.json",
         "tests/production-focused-workspace-ci.test.mjs",
         "tests/production-focused-workspace-ui.test.mjs",
-        "tests/production-integrated-identity-current-ci-lineage.test.mjs"
+        "tests/production-integrated-identity-current-ci-lineage.test.mjs",
+        "tests/production-meta-customer-composition.test.mjs",
+        "tests/production-plan-import-link-ui.test.mjs",
+        "tests/production-workspace-tools-navigation.test.mjs"
       ]
     }
   ],
@@ -1226,6 +1272,7 @@ export const INTEGRATED_IDENTITY_CURRENT_REVISION=Object.freeze({
     "package.json",
     "scripts/lib/integrated-identity-current-ci-lineage.mjs",
     "scripts/lib/owned-fixture-cleanup.mjs",
+    "scripts/lib/participant-preanalysis-current-ci-lineage.mjs",
     "scripts/verify-focused-workspace-ci.mjs",
     "scripts/verify-focused-workspace-ui.mjs",
     "src/app/(identity)/cuenta/company-bootstrap-panel.js",
