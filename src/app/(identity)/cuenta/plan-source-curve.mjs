@@ -1,4 +1,5 @@
 import {normalizeDocumentCurve,DOCUMENT_CURVE_PROFILE,documentCurveCanonical} from '../../../lib/plan-import-document-curve.mjs';
+import {safeCypInvestmentAnalysis,PLAN_CYP_INVESTMENT_PROFILE} from '../../../lib/plan-import-cyp-curve.mjs';
 
 const decimalPattern=/^([+-]?)(?:(\d+)(?:\.(\d*))?|\.(\d+))(?:[eE]([+-]?\d{1,3}))?$/;
 const fields=['monthlyAmount','cumulativeAmount','monthlyPercentage','cumulativePercentage'];
@@ -125,3 +126,32 @@ export function documentCurveReviewValue(value,sourceSha256){
 }
 
 export const documentCurveValuesEqual=(left,right)=>JSON.stringify(documentCurveCanonical(left))===JSON.stringify(documentCurveCanonical(right));
+
+export {PLAN_CYP_INVESTMENT_PROFILE};
+export function planInvestmentCurveView(value,{sourceSha256}={}){
+ const view=safeCypInvestmentAnalysis(value);
+ if(!view||sourceSha256!==undefined&&view.sourceSha256!==sourceSha256)throw new Error('INVESTMENT_CURVE_UNCONFIRMED');
+ return view;
+}
+export function planInvestmentDraftView(draft){
+ if(draft?.spreadsheet?.version!==5&&!Object.hasOwn(draft||{},'investmentReviewed'))return null;
+ if(draft.financialSource!==true||!Array.isArray(draft.rows)||draft.rows.length||typeof draft.investmentReviewed!=='boolean'||typeof draft.differenceAcknowledged!=='boolean')throw new Error('INVESTMENT_DRAFT_UNCONFIRMED');
+ if(!draft.spreadsheet&&['UPLOADING','PROCESSING','FAILED','REJECTED'].includes(draft.status)&&!draft.investmentReviewed&&!draft.differenceAcknowledged)return null;
+ const source={...draft.spreadsheet};delete source.reviewed;
+ const curve=planInvestmentCurveView(source,{sourceSha256:draft.source?.sha256});
+ if(draft.investmentReviewed&&curve.comparison.status==='DIFFERENT'&&!draft.differenceAcknowledged)throw new Error('INVESTMENT_REVIEW_UNCONFIRMED');
+ return curve;
+}
+export function investmentWeekKeyboardIndex(key,index){
+ if(!Number.isInteger(index)||index<0||index>=48)return null;
+ if(key==='ArrowRight'||key==='ArrowDown')return Math.min(47,index+1);
+ if(key==='ArrowLeft'||key==='ArrowUp')return Math.max(0,index-1);
+ if(key==='Home')return 0;if(key==='End')return 47;return null;
+}
+/** Only visual coordinates are scaled; cached monetary decimals remain untouched. */
+export function investmentWeeklyPlot(value){
+ const curve=planInvestmentCurveView(value),values=curve.weekly.periods.map(p=>decimalParts(p.amount.cachedValue)),scale=Math.max(...values.map(v=>v.fraction.length));
+ const integers=values.map(v=>BigInt(v.whole+v.fraction)*10n**BigInt(scale-v.fraction.length));
+ let maximum=0n,maximumRaw='0';integers.forEach((v,i)=>{if(v>maximum){maximum=v;maximumRaw=curve.weekly.periods[i].amount.cachedValue;}});
+ return {maximumRaw,points:integers.map((v,i)=>({ordinal:i+1,x:50+800*i/47,y:254-(maximum===0n?0:Number(v*220000n/maximum)/1000)}))};
+}

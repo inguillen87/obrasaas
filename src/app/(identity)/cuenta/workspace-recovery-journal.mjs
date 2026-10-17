@@ -1,6 +1,6 @@
 import {createBrowserRecoveryStorage} from './workspace-recovery-storage.mjs';
 import {planBaselineCommandDigest,planBaselineOutcome} from './plan-baseline-view.mjs';
-import {normalizeDocumentCurve,documentCurveCanonical,planDocumentDraftView} from './plan-source-curve.mjs';
+import {normalizeDocumentCurve,documentCurveCanonical,planDocumentDraftView,planInvestmentDraftView} from './plan-source-curve.mjs';
 import {PRIVATE_BANK_ACTIONS,validatePrivateBankOutcome} from './private-bank-account-format.mjs';
 import {purchaseOutcome} from './site-purchase-view.mjs';
 import {companyChannelOutcome,COMPANY_CHANNEL_ACTIONS} from './company-channel-view.mjs';
@@ -86,10 +86,21 @@ export function projectPreparationReceiptOutcome(value,reference){
 }
 const planDecisionCodes=Object.freeze(['PLAN_IMPORT_ROWS_LIMIT','PLAN_IMPORT_ROWS_INVALID','PLAN_IMPORT_DATES_INVALID','PLAN_IMPORT_DUPLICATE_ROWS','PLAN_IMPORT_REVIEW_REQUIRED','PLAN_IMPORT_REVISION_CHANGED','PLAN_IMPORT_SCHEDULE_CHANGED','PLAN_IMPORT_SOURCE_ALREADY_APPLIED','PLAN_IMPORT_SCHEDULE_TOO_LARGE','PLAN_DOCUMENT_CURVE_INCONSISTENT','PLAN_DOCUMENT_CURVE_VALUES_REQUIRED','PLAN_IMPORT_DOCUMENT_CURVE_INVALID']);
 const documentCurveActions=['REVIEW_CURVE','APPLY_CURVE'];
-const planActions=['EDIT','APPLY','REJECT',...documentCurveActions];
+const investmentActions=['REVIEW_INVESTMENT','APPLY_INVESTMENT','REJECT_INVESTMENT'];
+const planActions=['EDIT','APPLY','REJECT',...documentCurveActions,...investmentActions];
 const measurementImportActions=['REVIEW_MEASUREMENT','APPLY_MEASUREMENT','REJECT_MEASUREMENT'];
 const measurementImportRejectCodes=['PLAN_IMPORT_REVISION_CHANGED','PLAN_IMPORT_REVIEW_REQUIRED','PLAN_IMPORT_SOURCE_ALREADY_APPLIED','PLAN_MEASUREMENT_SOURCE_CHANGED','PLAN_MEASUREMENT_REVIEW_CHANGED','FIELD_REVISION_CHANGED','FIELD_PROGRESS_REVIEW_PENDING','TASK_MEASUREMENT_BASELINE_LOCKED','TASK_MEASUREMENT_STATE_INVALID','PLAN_MEASUREMENT_REPLACEMENT_REQUIRED','PLAN_MEASUREMENT_DEFINITION_CHANGED','PLAN_MEASUREMENT_SOURCE_IDENTITY_REQUIRED','PLAN_MEASUREMENT_SOURCE_IDENTITY_CHANGED','PLAN_MEASUREMENT_EXCLUSION_REVIEW_REQUIRED','PLAN_IMPORT_MEASUREMENT_REVIEW_REQUIRED','PLAN_IMPORT_MEASUREMENT_UNIT_INCOMPATIBLE','PLAN_MEASUREMENT_DATES_REQUIRED','WORKSPACE_TASK_UNAVAILABLE'];
 const documentCurveConsent='plan-document-monthly-curve-openai-v1';
+function investmentReceiptOutcome(entry,result){
+ const exact=keys=>Object.keys(result).sort().join('|')===[...keys].sort().join('|');
+ if(result.state==='NOT_OBSERVED')return exact(['scope','projectId','definitive','state'])&&result.definitive===false?{state:'NOT_OBSERVED'}:null;
+ const common=['scope','projectId','action','operationId','expectedRevision','inputDigest','state','definitive','phase','saved','taskEffects','baselineEffects','taskSnapshots','tasks','recordedAt','replayed','receiptId'];
+ if(result.action!==entry.action||result.operationId!==entry.operationId||result.expectedRevision!==entry.expectedRevision||result.inputDigest!==entry.inputDigest||result.definitive!==true||result.taskEffects!==false||result.baselineEffects!==false||!/^plan_receipt_[a-f0-9]{64}$/.test(result.receiptId||'')||typeof result.replayed!=='boolean'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(result.recordedAt||'')||!Number.isFinite(Date.parse(result.recordedAt))||new Date(result.recordedAt).toISOString()!==result.recordedAt||!Array.isArray(result.tasks)||result.tasks.length||!Array.isArray(result.taskSnapshots)||result.taskSnapshots.length)return null;
+ if(result.state==='REJECTED')return exact([...common,'draftId','code'])&&result.draftId===entry.draftId&&result.saved===false&&result.phase==='PRE_DECISION'&&['PLAN_IMPORT_REVIEW_REQUIRED','PLAN_IMPORT_REVISION_CHANGED','PLAN_IMPORT_SOURCE_ALREADY_APPLIED'].includes(result.code)?{state:'REJECTED',phase:'PRE_DECISION',receiptId:result.receiptId,code:result.code}:null;
+ if(!exact([...common,'draft'])||result.state!=='RECORDED'||result.saved!==true||result.phase!=='COMMITTED'||result.draft?.id!==entry.draftId||result.draft.revision!==entry.expectedRevision+1||result.draft.status!==({REVIEW_INVESTMENT:'READY',APPLY_INVESTMENT:'APPLIED',REJECT_INVESTMENT:'REJECTED'})[entry.action])return null;
+ try{if(!planInvestmentDraftView(result.draft)||entry.action!=='REJECT_INVESTMENT'&&!result.draft.investmentReviewed)return null;}catch{return null;}
+ return {state:'RECORDED',receiptId:result.receiptId};
+}
 function documentCurveReceiptOutcome(entry,result){
  const exact=keys=>Object.keys(result).sort().join('|')===keys.sort().join('|');
  const common=['scope','projectId','action','operationId','expectedRevision','inputDigest','state','definitive','phase','saved','taskEffects','baselineEffects','taskSnapshots','tasks','recordedAt','replayed','receiptId'];
@@ -103,6 +114,11 @@ const planUploadCodes=Object.freeze(['PLAN_IMPORT_SOURCE_ALREADY_APPLIED','PLAN_
 const sha256=async bytes=>[...new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
 const canonicalPlanCommand=value=>Array.isArray(value)?value.map(canonicalPlanCommand):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonicalPlanCommand(value[key])])):value;
 export async function planImportCommandDigest(body){
+ if(investmentActions.includes(body?.action)){
+  const keys=['action','scope','projectId','operationId','draftId','expectedRevision','reason','acknowledgeDifference'];
+  if(!body||Object.keys(body).sort().join('|')!==keys.sort().join('|')||!uuid(body.operationId?.toLowerCase?.())||!scopeValid(body.scope)||!id(body.projectId)||!/^plan_draft_[a-f0-9]{64}$/.test(body.draftId||'')||!Number.isSafeInteger(body.expectedRevision)||body.expectedRevision<1||body.expectedRevision>=2147483647||typeof body.acknowledgeDifference!=='boolean'||typeof body.reason!=='string'||body.reason.length>800||body.reason.trim().length<8||/[\u0000-\u001f\u007f<>]/.test(body.reason))throw unavailable();
+  return sha256(new TextEncoder().encode(JSON.stringify(['plan-investment-curves-decision-v1',canonicalPlanCommand({...body,operationId:body.operationId.toLowerCase(),reason:body.reason.trim()})])));
+ }
  if(documentCurveActions.includes(body?.action)||body?.action==='REJECT'&&Object.hasOwn(body,'curve')){
   const keys=['action','draftId','expectedRevision','operationId','projectId','reason','rows','scope','curve'];
   if(!body||Object.keys(body).sort().join('|')!==keys.sort().join('|')||!uuid(body.operationId)||!scopeValid(body.scope)||!id(body.projectId)||!id(body.draftId)||!Number.isSafeInteger(body.expectedRevision)||body.expectedRevision<1||body.expectedRevision>2147483647||body.rows!==null||typeof body.reason!=='string'||body.reason.length>800||body.reason.trim().length<8||/[\u0000-\u001f\u007f<>]/.test(body.reason))throw unavailable();
@@ -119,7 +135,7 @@ export async function planImportUploadDigest({scope,projectId,operationId,consen
   return sha256(new TextEncoder().encode(JSON.stringify(['plan-document-curve-upload-command-v1',{action:'UPLOAD',purpose:'FINANCIAL_MONTHLY_CURVE',consent,operationId:operationId.toLowerCase(),projectId,scope,source:{bytes:source.bytes,contentType:source.contentType,sha256:source.sha256}}])));
  }
  const spreadsheet=['application/vnd.ms-excel.sheet.macroenabled.12','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(source?.contentType);
- if(!scopeValid(scope)||!id(projectId)||!uuid(operationId)||!(spreadsheet?['plan-spreadsheet-monthly-rubros-v1','plan-spreadsheet-cyp-partidas-v2','plan-spreadsheet-monthly-curve-v3','plan-spreadsheet-cyp-curve-v4'].includes(consent):consent==='plan-document-openai-v1')||!source||!Number.isSafeInteger(source.bytes)||source.bytes<1||source.bytes>3*1024*1024||!['application/pdf','image/png','image/jpeg','image/webp','application/vnd.ms-excel.sheet.macroenabled.12','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(source.contentType)||!/^[a-f0-9]{64}$/.test(source.sha256||''))throw unavailable();
+ if(!scopeValid(scope)||!id(projectId)||!uuid(operationId)||!(spreadsheet?['plan-spreadsheet-monthly-rubros-v1','plan-spreadsheet-cyp-partidas-v2','plan-spreadsheet-monthly-curve-v3','plan-spreadsheet-cyp-curve-v4','plan-spreadsheet-cyp-investment-curves-v1'].includes(consent):consent==='plan-document-openai-v1')||!source||!Number.isSafeInteger(source.bytes)||source.bytes<1||source.bytes>3*1024*1024||!['application/pdf','image/png','image/jpeg','image/webp','application/vnd.ms-excel.sheet.macroenabled.12','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].includes(source.contentType)||!/^[a-f0-9]{64}$/.test(source.sha256||''))throw unavailable();
  return sha256(new TextEncoder().encode(JSON.stringify(['plan-import-upload-command-v1',{action:'UPLOAD',consent,operationId:operationId.toLowerCase(),projectId,scope,source:{bytes:source.bytes,contentType:source.contentType,sha256:source.sha256}}])));
 }
 export async function planImportUploadFormDigest(form){
@@ -353,6 +369,7 @@ export function recoveryResult(entry, result) {
   if(entry.resource==='plan-measurement'&&entry.action!=='UPLOAD')return measurementImportRecoveryOutcome(entry,result);
   if(entry.resource==='plan-import'||entry.resource==='plan-measurement'&&entry.action==='UPLOAD') {
     if(result.projectId!==entry.projectId)return null;
+    if(investmentActions.includes(entry.action))return investmentReceiptOutcome(entry,result);
     // A usage reservation is a separate durable observation. Expiring the
     // source-processing lease never proves that its external effect or cost
     // was absent. Keep the original reference for readonly recovery.

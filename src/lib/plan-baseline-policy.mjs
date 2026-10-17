@@ -1,7 +1,8 @@
 import {WorkspaceError,digest,workspaceId,operationId} from './workspace-policy.mjs';
-import {normalizePlanRows,validatePlanSourceRows,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT,normalizeDocumentCurveDecision,documentCurveDecisionDigest} from './plan-import-policy.mjs';
+import {normalizePlanRows,validatePlanSourceRows,PLAN_IMPORT_MONTHLY_CURVE_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT,normalizeDocumentCurveDecision,documentCurveDecisionDigest,validatePlanInvestmentReceipt,planInvestmentCurveDigest} from './plan-import-policy.mjs';
 import {safePlanOoxmlAnalysis,PLAN_OOXML_TYPES} from './plan-import-ooxml.mjs';
 import {DOCUMENT_CURVE_CONSENT,DOCUMENT_CURVE_PROFILE,DOCUMENT_CURVE_PURPOSE,DOCUMENT_CURVE_INCONSISTENT_CODE,normalizeDocumentCurve,hasDocumentCurveSeriesValue} from './plan-import-document-curve.mjs';
+import {safeCypInvestmentAnalysis,PLAN_CYP_INVESTMENT_CONSENT,PLAN_CYP_INVESTMENT_PROFILE,PLAN_CYP_INVESTMENT_PURPOSE} from './plan-import-cyp-curve.mjs';
 
 export const PLAN_BASELINE_VERSION=1;
 export const PLAN_BASELINE_PAGE_SIZE=10;
@@ -55,6 +56,7 @@ export function parsePlanBaselineCursor(value,context){
 
 export function appliedPlanBaselineCandidate(row,projectId,organizationId){
  const m=row?.metadata,r=row?.decisionMetadata,o=r?.outcome,d=o?.draft;
+ if(m?.sourcePurpose===PLAN_CYP_INVESTMENT_PURPOSE||m?.consent?.version===PLAN_CYP_INVESTMENT_CONSENT||m?.analysis?.spreadsheet?.version===5)return appliedInvestmentCurveCandidate(row,projectId,organizationId);
  if(m?.consent?.version===DOCUMENT_CURVE_CONSENT||m?.analysis?.documentCurve?.profile===DOCUMENT_CURVE_PROFILE)return appliedDocumentCurveCandidate(row,projectId,organizationId);
  if(!row||row.organizationId!==organizationId||row.entityId!==projectId||m?.projectId!==projectId||m?.status!=='APPLIED'||![3,4].includes(m?.analysis?.spreadsheet?.version))fail('PLAN_BASELINE_CANDIDATE_UNAVAILABLE',409);
  try{
@@ -101,5 +103,20 @@ function appliedDocumentCurveCandidate(row,projectId,organizationId){
   const confirmed=validatePlanDocumentReceipt(row.reviewReceipt,{organizationId,projectId,actorId:review.actorId});
   if(applied.action!=='APPLY_CURVE'||applied.draft.revision!==m.revision||applied.draft.documentReviewed!==true||!planBaselineSame(applied.draft.documentCurve,original)||!planBaselineSame(applied.draft.reviewedCurve,reviewed)||!planBaselineSame(applied.draft.decision,m.decision)||row.decisionMetadata.reviewReceiptId!==review.receiptId||confirmed.action!=='REVIEW_CURVE'||confirmed.receiptId!==review.receiptId||confirmed.recordedAt!==review.recordedAt||confirmed.draft.revision!==review.revision||!planBaselineSame(confirmed.draft.documentCurve,original)||!planBaselineSame(confirmed.draft.reviewedCurve,reviewed)||!planBaselineSame(applied.draft.source,{contentType:m.source.contentType,bytes:m.source.bytes,sha256:m.source.sha256}))throw Error('Document receipt');
   return {draftId:row.id,draftRevision:m.revision,decisionReceiptId:row.decisionId,sourceSha256:m.source.sha256,profile:DOCUMENT_CURVE_PROFILE,sourceRowCount:0,selectedRowCount:0,appliedAt:applied.recordedAt,curve:reviewed,sourceKind:'DOCUMENT',presentation:'DOCUMENT_MONTHLY_CURVE'};
+ }catch{fail('PLAN_BASELINE_SOURCE_CHANGED',409);}
+}
+
+// A financial-only spreadsheet needs both immutable decisions. Its original
+// monthly and weekly values stay together; SELECT never imports physical rows.
+function appliedInvestmentCurveCandidate(row,projectId,organizationId){
+ try{
+  const m=row.metadata,source=safeCypInvestmentAnalysis(m.analysis?.spreadsheet),review=m.investmentReview;
+  if(row.organizationId!==organizationId||row.entityId!==projectId||!id(row.id,'plan_draft_')||m.version!==1||m.projectId!==projectId||m.status!=='APPLIED'||m.sourcePurpose!==PLAN_CYP_INVESTMENT_PURPOSE||m.consent?.version!==PLAN_CYP_INVESTMENT_CONSENT||m.analysis?.provider!=='local-ooxml'||m.analysis.reviewed!==true||!source||source.sourceSha256!==m.source?.sha256||m.sourceConfirmed!==true||m.baseline!==null||m.existingTaskCount!==null||!Array.isArray(m.rows)||m.rows.length||!Array.isArray(m.extractedRows)||m.extractedRows.length||m.decision?.action!=='APPLY_INVESTMENT'||m.decision.receiptId!==row.decisionId||!planBaselineExact(review,['receiptId','actorId','recordedAt','revision','sourceCurveDigest','acknowledgeDifference','reason'])||!id(review.receiptId,'plan_receipt_')||!workspaceId(review.actorId)||!planBaselineTimestamp(review.recordedAt)||!Number.isSafeInteger(review.revision)||review.revision<2||m.revision!==review.revision+1||review.sourceCurveDigest!==planInvestmentCurveDigest(source)||typeof review.acknowledgeDifference!=='boolean'||source.comparison.status==='DIFFERENT'&&!review.acknowledgeDifference)throw Error('Investment source');
+  const applied=validatePlanInvestmentReceipt({id:row.decisionId,organizationId:row.decisionOrganizationId,entityId:row.decisionEntityId,actorId:row.decisionActorId,action:'plan.import.decision',metadata:row.decisionMetadata},{organizationId,projectId,actorId:m.decision.actorId});
+  const confirmed=validatePlanInvestmentReceipt(row.reviewReceipt,{organizationId,projectId,actorId:review.actorId});
+  const spreadsheetOf=draft=>{const {reviewed,...value}=draft?.spreadsheet||{};if(reviewed!==true)throw Error('Investment review');return safeCypInvestmentAnalysis(value);};
+  const sameSource=draft=>planBaselineSame(draft.source,{contentType:m.source.contentType,bytes:m.source.bytes,sha256:m.source.sha256})&&planBaselineSame(spreadsheetOf(draft),source)&&draft.investmentReviewed===true&&draft.differenceAcknowledged===review.acknowledgeDifference;
+  if(applied.action!=='APPLY_INVESTMENT'||applied.draft.revision!==m.revision||!sameSource(applied.draft)||!planBaselineSame(applied.draft.decision,m.decision)||row.decisionMetadata.sourceCurveDigest!==review.sourceCurveDigest||row.decisionMetadata.reviewReceiptId!==review.receiptId||confirmed.action!=='REVIEW_INVESTMENT'||confirmed.receiptId!==review.receiptId||confirmed.recordedAt!==review.recordedAt||confirmed.draft.revision!==review.revision||!sameSource(confirmed.draft)||row.reviewReceipt.metadata.sourceCurveDigest!==review.sourceCurveDigest||row.reviewReceipt.metadata.request.reason!==review.reason||row.reviewReceipt.metadata.request.acknowledgeDifference!==review.acknowledgeDifference)throw Error('Investment receipt');
+  return {draftId:row.id,draftRevision:m.revision,decisionReceiptId:row.decisionId,sourceSha256:m.source.sha256,profile:PLAN_CYP_INVESTMENT_PROFILE,sourceRowCount:0,selectedRowCount:0,appliedAt:applied.recordedAt,curve:source,sourceKind:'SPREADSHEET',presentation:'CYP_INVESTMENT_CURVES'};
  }catch{fail('PLAN_BASELINE_SOURCE_CHANGED',409);}
 }

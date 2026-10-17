@@ -8,6 +8,10 @@ import {digest} from '../src/lib/workspace-policy.mjs';
 import {planImportUploadDigest,createWorkspaceRecoveryJournal,recoveryQuery} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
 import {cypCurveFixture} from './fixtures/plan-import-cyp-curve-synthetic.mjs';
 import {storeHarness,context,session,oldTask} from './fixtures/plan-import-store-synthetic.mjs';
+import {documentStoreHarness,session as investmentSession} from './fixtures/plan-document-curve-store-synthetic.mjs';
+import {createPlanImportAnalyzer} from '../src/lib/plan-import-analyzer.mjs';
+import {cypInvestmentFixture} from './fixtures/plan-import-cyp-curve-synthetic.mjs';
+import {PLAN_CYP_INVESTMENT_CONSENT,normalizePlanInvestmentDecision,planInvestmentDecisionDigest,planInvestmentCurveDigest,validatePlanInvestmentReceipt} from '../src/lib/plan-import-policy.mjs';
 const mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',permissionError={code:'PLAN_IMPORT_PERMISSION_REQUIRED',status:403};
 let samplePromise;
 async function sample(){samplePromise??=(async()=>{const bytes=cypCurveFixture(),source=decodePlanSource(bytes,mime),extraction=await extractCypCurveOoxml(bytes,mime);return {source,extraction};})();return structuredClone(await samplePromise);}
@@ -92,4 +96,68 @@ test('v4 upload recovery uses the unchanged v1 fingerprint and stores no source,
 test('wrong workspace scope cannot expose v4 or its source, and receipt failure rolls back Task creation',async()=>{
  const h=await seeded();await assert.rejects(h.imports.read(session,{...context,scope:'b'.repeat(64),draftId:h.draftId}),{code:'WORKSPACE_CONTEXT_CHANGED'});assert.equal(h.calls.get,0);
  const rows=reviewed(h.extraction.rows.slice(0,3)),edited=await h.imports.decide(session,decision(h,rows)),before=h.logs();h.setFailReceipt(true);await assert.rejects(h.imports.decide(session,decision(h,rows,{action:'APPLY',revision:edited.draft.revision})),/Synthetic receipt failure/);assert.deepEqual(h.tasks(),[oldTask]);assert.deepEqual(h.logs(),before);
+});
+
+// Real canonical transaction, HTTP, local analyzer and OOXML parser; only SQL
+// transport and private Blob are synthetic. Task access is forbidden outright.
+const investmentAnalyzer=()=>createPlanImportAnalyzer({environment:()=>{throw Error('Local CyP must not read AI credentials');},fetchImpl:()=>{throw Error('Local CyP must not call a provider');}});
+const investmentHarness=options=>documentStoreHarness({analyzerOverride:investmentAnalyzer(),...options});
+const investmentSourceFile=options=>decodePlanSource(cypInvestmentFixture(options),mime);
+const investmentAttach=(h,options={})=>h.attach({consent:PLAN_CYP_INVESTMENT_CONSENT,source:investmentSourceFile(options)});
+const investmentCommand=(h,draft,action='REVIEW_INVESTMENT',acknowledgeDifference=draft.differenceAcknowledged===true)=>({...h.context(),action,operationId:randomUUID(),draftId:draft.id,expectedRevision:draft.revision,reason:'Reviewed original monthly and weekly cached amounts',acknowledgeDifference});
+const investmentPost=(h,body,headers={})=>h.http.POST(new Request('https://obrasaas.com/api/identity/plan-import',{method:'POST',headers:{origin:'https://obrasaas.com','content-type':'application/json',...headers},body:JSON.stringify(body)}));
+
+for(const role of ['ADMIN','DIRECTOR'])test('v5 canonical financial upload review approval and exact recovery preserve both source curves and 5001 Tasks for '+role,async()=>{
+ const h=investmentHarness({role}),before=h.tasks(),uploaded=await investmentAttach(h),draft=uploaded.draft,original=structuredClone(draft.spreadsheet),sourceDigest=planInvestmentCurveDigest(original);
+ assert.equal(draft.financialSource,true);assert.equal(draft.investmentReviewed,false);assert.equal(draft.differenceAcknowledged,false);assert.equal(draft.existingTaskCount,null);assert.deepEqual(draft.rows,[]);assert.equal(draft.spreadsheet.version,5);assert.equal(draft.spreadsheet.weekly.periods.length,48);
+ assert.equal(planInvestmentCurveDigest({...original,reviewed:true}),sourceDigest);assert.equal(h.logs().find(row=>row.id===draft.id).metadata.baseline,null);
+ const early=await investmentPost(h,investmentCommand(h,draft,'APPLY_INVESTMENT'));assert.equal(early.status,409);assert.equal((await early.json()).code,'PLAN_IMPORT_REVIEW_REQUIRED');
+ const reviewBody=investmentCommand(h,draft),review=await h.imports.decide(investmentSession,reviewBody);assert.equal(review.inputDigest,planInvestmentDecisionDigest(reviewBody));assert.equal(review.draft.investmentReviewed,true);assert.equal(review.draft.decision,null);assert.equal(review.draft.differenceAcknowledged,false);
+ const wrongAck=await h.imports.decide(investmentSession,investmentCommand(h,review.draft,'APPLY_INVESTMENT',true));assert.equal(wrongAck.state,'REJECTED');assert.equal(wrongAck.code,'PLAN_IMPORT_REVIEW_REQUIRED');
+ const body=investmentCommand(h,review.draft,'APPLY_INVESTMENT'),response=await investmentPost(h,body),applied=await response.json();assert.equal(response.status,200);assert.match(response.headers.get('cache-control'),/private, no-store/);assert.equal(applied.draft.status,'APPLIED');assert.equal(applied.taskEffects,false);assert.equal(applied.baselineEffects,false);assert.deepEqual(applied.taskSnapshots,[]);assert.deepEqual(applied.tasks,[]);assert.deepEqual(applied.draft.spreadsheet,{...original,reviewed:true});
+ const log=h.logs().find(row=>row.id===applied.receiptId);assert.equal(log.metadata.version,3);assert.equal(log.metadata.reviewReceiptId,review.receiptId);assert.equal(log.metadata.sourceCurveDigest,sourceDigest);assert.deepEqual(validatePlanInvestmentReceipt(log,{organizationId:h.member.organizationId,projectId:h.context().projectId,actorId:h.member.actorId}).draft,applied.draft);
+ const io=[h.calls.put,h.calls.get,h.calls.provider],replay=await h.imports.decide(investmentSession,body),lookup=await h.imports.read(investmentSession,{...h.context(),operationId:body.operationId});assert.equal(replay.replayed,true);assert.equal(lookup.receiptId,applied.receiptId);assert.deepEqual(lookup.draft,applied.draft);assert.deepEqual([h.calls.put,h.calls.get,h.calls.provider],io);
+ assert.deepEqual(h.tasks(),before);assert.equal(h.calls.taskWrites,0);assert.equal(h.calls.sql.some(sql=>sql.includes('public."Task"')),false);assert.equal(h.calls.provider,0);assert.doesNotMatch(JSON.stringify(applied),/"pathname"|"lease"|private\.blob|"sourceConsent"|"investmentReview"/);
+});
+
+test('v5 exact difference requires explicit persisted acknowledgement and cannot silently change either source series',async()=>{
+ const h=investmentHarness({taskCount:0}),uploaded=await investmentAttach(h,{weeklyAmounts:Array(48).fill('1.0010')}),draft=uploaded.draft,original=structuredClone(draft.spreadsheet);
+ assert.equal(original.comparison.status,'DIFFERENT');assert.equal(original.comparison.weeklySumDecimalText,'48.0480000');assert.ok(original.weekly.periods.every(period=>period.amount.cachedValue==='1.0010'));
+ const missingBody=investmentCommand(h,draft),missing=await investmentPost(h,missingBody);assert.equal(missing.status,409);const denied=await missing.json();assert.equal(denied.code,'PLAN_IMPORT_REVIEW_REQUIRED');assert.equal(denied.taskEffects,false);assert.equal((await h.imports.read(investmentSession,{...h.context(),operationId:missingBody.operationId})).receiptId,denied.receiptId);
+ const review=await h.imports.decide(investmentSession,investmentCommand(h,draft,'REVIEW_INVESTMENT',true)),body=investmentCommand(h,review.draft,'APPLY_INVESTMENT',true),applied=await h.imports.decide(investmentSession,body);assert.equal(applied.draft.differenceAcknowledged,true);assert.deepEqual(applied.draft.spreadsheet,{...original,reviewed:true});
+ const duplicate=await investmentAttach(h,{weeklyAmounts:Array(48).fill('1.0010')});assert.equal(duplicate.state,'REJECTED');assert.equal(duplicate.phase,'PRE_RESERVATION');assert.equal(duplicate.code,'PLAN_IMPORT_SOURCE_ALREADY_APPLIED');assert.equal(h.calls.sql.some(sql=>sql.includes('public."Task"')),false);
+});
+
+test('v5 exact envelope rejects client amounts and legacy commands while receipt decoder binds source review and immutable acknowledgement',async()=>{
+ const h=investmentHarness({taskCount:0}),draft=(await investmentAttach(h)).draft,body=investmentCommand(h,draft);
+ for(const change of [{rows:[]},{curve:draft.spreadsheet},{acknowledgeDifference:1},{expectedRevision:2147483647},{reason:'short'},{action:'APPLY'}])assert.throws(()=>normalizePlanInvestmentDecision({...body,...change}),{code:'PLAN_IMPORT_INPUT_INVALID'});
+ await assert.rejects(h.imports.decide(investmentSession,{...h.context(),action:'EDIT',operationId:randomUUID(),draftId:draft.id,expectedRevision:draft.revision,reason:'Legacy task command must not review finance',rows:[]}),{code:'PLAN_IMPORT_INPUT_INVALID'});
+ const review=await h.imports.decide(investmentSession,body),row=h.logs().find(value=>value.id===review.receiptId),identity={organizationId:h.member.organizationId,projectId:h.context().projectId,actorId:h.member.actorId};
+ for(const mutate of [r=>{r.metadata.request.reason='Changed without digest';},r=>{r.metadata.reviewReceiptId='plan_receipt_'+'0'.repeat(64);},r=>{r.metadata.outcome.draft.differenceAcknowledged=true;},r=>{r.metadata.outcome.draft.spreadsheet.weekly.periods[0].amount.cachedValue='0';},r=>{r.actorId='actor-other';},r=>{r.metadata.outcome.taskEffects=true;},r=>{r.metadata.outcome.taskSnapshots=[{id:'invented-task'}];}]){const changed=structuredClone(row);mutate(changed);assert.throws(()=>validatePlanInvestmentReceipt(changed,identity),{code:'PLAN_IMPORT_RECEIPT_INTEGRITY'});}
+ h.changeLog(draft.id,r=>{r.metadata.investmentReview.reason='Reason no longer matches authentic review';});await assert.rejects(h.imports.decide(investmentSession,investmentCommand(h,review.draft,'APPLY_INVESTMENT')),{code:'PLAN_IMPORT_RECEIPT_INTEGRITY'});assert.equal(h.calls.taskWrites,0);
+});
+
+test('v5 current financial authority protects pending drafts, receipts, source download and post-Blob dispatch',async()=>{
+ for(const role of ['SITE_MANAGER','FINANCE','AUDITOR']){const h=investmentHarness({role,taskCount:0});await assert.rejects(investmentAttach(h),permissionError);assert.deepEqual([h.calls.put,h.calls.get,h.calls.provider,h.calls.mutations],[0,0,0,0]);}
+ const h=investmentHarness({taskCount:0}),uploaded=await investmentAttach(h),body=investmentCommand(h,uploaded.draft),review=await h.imports.decide(investmentSession,body);h.member.role='SITE_MANAGER';
+ assert.deepEqual((await h.imports.read(investmentSession,h.context())).drafts,[]);for(const method of [()=>h.imports.read(investmentSession,{...h.context(),draftId:uploaded.draft.id}),()=>h.imports.read(investmentSession,{...h.context(),operationId:body.operationId}),()=>h.imports.source(investmentSession,{...h.context(),draftId:uploaded.draft.id}),()=>h.imports.decide(investmentSession,investmentCommand(h,review.draft,'APPLY_INVESTMENT'))])await assert.rejects(method,permissionError);
+ const revoked=investmentHarness({taskCount:0});revoked.controls.afterBlob=()=>{revoked.member.role='SITE_MANAGER';};await assert.rejects(investmentAttach(revoked),{code:'WORKSPACE_CONTEXT_CHANGED',status:409});assert.equal(revoked.calls.provider,0);assert.equal(revoked.calls.taskWrites,0);
+ const failed=investmentHarness({taskCount:0,analyzerOverride:{analyze:async()=>({success:false,code:'PLAN_IMPORT_SPREADSHEET_FORMULA_INVALID'})}}),out=await investmentAttach(failed);assert.equal(out.draft.status,'FAILED');assert.equal(out.draft.investmentReviewed,false);assert.equal(out.draft.differenceAcknowledged,false);assert.equal(out.draft.financialSource,true);assert.equal(out.draft.spreadsheet,undefined);failed.member.role='SITE_MANAGER';assert.deepEqual((await failed.imports.read(investmentSession,failed.context())).drafts,[]);
+});
+
+test('v5 lost acknowledgement and rollback preserve exact UUID recovery without repeating source I/O',async()=>{
+ for(const action of ['REVIEW_INVESTMENT','APPLY_INVESTMENT','REJECT_INVESTMENT'])for(const mode of ['ACK_LOST','ROLLBACK']){
+  const h=investmentHarness({taskCount:0});let draft=(await investmentAttach(h)).draft;if(action==='APPLY_INVESTMENT')draft=(await h.imports.decide(investmentSession,investmentCommand(h,draft))).draft;
+  const body=investmentCommand(h,draft,action),io=[h.calls.put,h.calls.get,h.calls.provider];h.controls.commitMode=mode;const response=await investmentPost(h,body);assert.equal(response.status,503);assert.equal((await response.json()).code,'WORKSPACE_OPERATION_UNCONFIRMED');const recovery=await h.imports.read(investmentSession,{...h.context(),operationId:body.operationId});assert.equal(recovery.state,mode==='ACK_LOST'?'RECORDED':'NOT_OBSERVED');if(mode==='ROLLBACK')assert.equal(recovery.definitive,false);
+  const replay=await h.imports.decide(investmentSession,body);assert.equal(replay.replayed,mode==='ACK_LOST');assert.equal(h.logs().filter(row=>row.action==='plan.import.decision'&&row.metadata.operationId===body.operationId).length,1);assert.deepEqual([h.calls.put,h.calls.get,h.calls.provider],io);assert.equal(h.calls.sql.some(sql=>sql.includes('public."Task"')),false);
+ }
+});
+
+test('v5 financial purpose coexists with a real applied v4 Task import of the identical workbook SHA',async()=>{
+ const h=investmentHarness({taskCount:0}),source=investmentSourceFile();h.controls.forbidTasks=false;
+ const legacy=await h.attach({consent:PLAN_IMPORT_CYP_CURVE_CONSENT,source}),row={...legacy.draft.rows[0],startsOn:'2026-11-01',endsOn:'2026-11-02',uncertainty:'',sourceIssueReviewed:true},command=(draft,action)=>({...h.context(),action,operationId:randomUUID(),draftId:draft.id,expectedRevision:draft.revision,reason:'Reviewed synthetic physical task and exact dates',rows:[row]});
+ const edit=await h.imports.decide(investmentSession,command(legacy.draft,'EDIT')),oldBody=command(edit.draft,'APPLY'),old=await h.imports.decide(investmentSession,oldBody);assert.equal(old.tasks.length,1);
+ const before=h.tasks(),writes=h.calls.taskWrites,sqlStart=h.calls.sql.length;h.controls.forbidTasks=true;
+ const uploaded=await h.attach({consent:PLAN_CYP_INVESTMENT_CONSENT,source}),review=await h.imports.decide(investmentSession,investmentCommand(h,uploaded.draft)),applied=await h.imports.decide(investmentSession,investmentCommand(h,review.draft,'APPLY_INVESTMENT'));
+ assert.equal(applied.draft.source.sha256,old.draft.source.sha256);assert.equal(applied.draft.status,'APPLIED');assert.deepEqual(h.tasks(),before);assert.equal(h.calls.taskWrites,writes);assert.equal(h.calls.sql.slice(sqlStart).some(sql=>sql.includes('public."Task"')),false);h.controls.forbidTasks=false;assert.deepEqual((await h.imports.read(investmentSession,{...h.context(),operationId:oldBody.operationId})).tasks,old.tasks);
 });

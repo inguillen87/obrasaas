@@ -1,6 +1,7 @@
 import {normalizePlanRows,decodePlanSource,PLAN_IMPORT_ROWS,PLAN_IMPORT_TEXT_LIMITS,planImportRowRejection,safePlanImportDiagnostic} from './plan-import-policy.mjs';
 import {WorkspaceError} from './workspace-policy.mjs';
-import {PLAN_OOXML_TYPES,extractMonthlyPlanOoxml,extractCypPlanOoxml,extractMonthlyCurveOoxml,extractCypCurveOoxml} from './plan-import-ooxml.mjs';
+import {PLAN_OOXML_TYPES,extractMonthlyPlanOoxml,extractCypPlanOoxml,extractMonthlyCurveOoxml,extractCypCurveOoxml,extractCypInvestmentOoxml} from './plan-import-ooxml.mjs';
+import {PLAN_CYP_INVESTMENT_CONSENT,PLAN_CYP_INVESTMENT_PROFILE} from './plan-import-cyp-curve.mjs';
 import {openAiUsageFact} from './organization-usage-policy.mjs';
 import {DOCUMENT_CURVE_PROFILE,DocumentCurveError,isDocumentCurveConsent,normalizeDocumentCurveExtraction,documentCurveResponseSchema,DOCUMENT_CURVE_INSTRUCTIONS} from './plan-import-document-curve.mjs';
 import {PLAN_MEASUREMENT_PROFILE,PLAN_MEASUREMENT_DOCUMENT_SCHEMA,PLAN_MEASUREMENT_DOCUMENT_INSTRUCTIONS,isPlanMeasurementConsent,extractPlanMeasurementSource,normalizePlanMeasurementDocument} from './plan-measurement-source.mjs';
@@ -19,12 +20,14 @@ const schema={
 export function createPlanImportAnalyzer({environment=()=>process.env,fetchImpl=fetch,timeoutMs=45000}={}) {
  if(typeof fetchImpl!=='function'||typeof environment!=='function'||!Number.isInteger(timeoutMs)||timeoutMs<1||timeoutMs>60000)throw new TypeError('Invalid plan analyzer');
  return {async analyze(source,{profile='MONTHLY_RUBROS',consent=null,usageObserver=null}={}) {
-  const documentOnly=profile===DOCUMENT_CURVE_PROFILE,measurementOnly=profile===PLAN_MEASUREMENT_PROFILE;
+  const documentOnly=profile===DOCUMENT_CURVE_PROFILE,measurementOnly=profile===PLAN_MEASUREMENT_PROFILE,investmentOnly=profile===PLAN_CYP_INVESTMENT_PROFILE;
+  if(investmentOnly!==(consent===PLAN_CYP_INVESTMENT_CONSENT)||investmentOnly&&!PLAN_OOXML_TYPES[String(source?.contentType||'').split(';')[0].toLowerCase().trim()])return failure('PLAN_IMPORT_CONSENT_REQUIRED');
   if(measurementOnly&&!isPlanMeasurementConsent(consent,String(source?.contentType||'').split(';')[0].toLowerCase().trim()))return failure('PLAN_IMPORT_CONSENT_REQUIRED');
   if(!measurementOnly&&isPlanMeasurementConsent(consent,String(source?.contentType||'').split(';')[0].toLowerCase().trim()))return failure('PLAN_IMPORT_CONSENT_REQUIRED');
   if(documentOnly&&!isDocumentCurveConsent(consent)||isDocumentCurveConsent(consent)&&!documentOnly)return failure('PLAN_IMPORT_CONSENT_REQUIRED');
   if(documentOnly&&PLAN_OOXML_TYPES[String(source?.contentType||'').split(';')[0].toLowerCase().trim()])return failure('PLAN_IMPORT_CONSENT_REQUIRED');
   if(PLAN_OOXML_TYPES[String(source?.contentType||'').split(';')[0].toLowerCase().trim()]) {
+   if(investmentOnly){try{const file=decodePlanSource(source.bytes,source.contentType),extraction=await extractCypInvestmentOoxml(file.bytes,file.contentType);return {success:true,provider:'local-ooxml',model:null,requestedModel:null,rows:[],warnings:extraction.warnings,spreadsheet:extraction.spreadsheet};}catch(error){return failure(error instanceof WorkspaceError?error.code:'PLAN_IMPORT_FILE_INVALID');}}
    if(measurementOnly){try{const file=decodePlanSource(source.bytes,source.contentType),measurementSource=await extractPlanMeasurementSource(file.bytes,file.contentType,{profile,sourceSha256:file.sha256});return {success:true,provider:'local-ooxml',model:null,requestedModel:null,rows:[],warnings:[],measurementSource};}catch(error){return failure(error?.code||'PLAN_IMPORT_FILE_INVALID');}}
    try{const file=decodePlanSource(source.bytes,source.contentType);if(!['MONTHLY_RUBROS','CYP_PARTIDAS','MONTHLY_RUBROS_CURVE','CYP_PARTIDAS_CURVE'].includes(profile))throw new WorkspaceError('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED',400);const extraction=profile==='CYP_PARTIDAS'?await extractCypPlanOoxml(file.bytes,file.contentType):profile==='CYP_PARTIDAS_CURVE'?await extractCypCurveOoxml(file.bytes,file.contentType):profile==='MONTHLY_RUBROS_CURVE'?await extractMonthlyCurveOoxml(file.bytes,file.contentType,{rowLimit:PLAN_IMPORT_ROWS}):await extractMonthlyPlanOoxml(file.bytes,file.contentType,{rowLimit:PLAN_IMPORT_ROWS});return {success:true,provider:'local-ooxml',model:null,requestedModel:null,rows:normalizePlanRows(extraction.rows),warnings:extraction.warnings,spreadsheet:extraction.spreadsheet};}
    catch(error){return failure(error instanceof WorkspaceError?error.code:'PLAN_IMPORT_FILE_INVALID');}

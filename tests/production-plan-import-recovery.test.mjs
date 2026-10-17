@@ -4,6 +4,11 @@ import {createWorkspaceRecoveryJournal,recoveryQuery,recoveryResult,WORKSPACE_RE
 import {createWorkspaceRequestLifecycle} from '../src/app/(identity)/cuenta/workspace-request-lifecycle.mjs';
 import {createPlanImportHandlers} from '../src/lib/plan-import-http.mjs';
 import {WorkspaceError} from '../src/lib/workspace-policy.mjs';
+import {documentStoreHarness,session as investmentSession} from './fixtures/plan-document-curve-store-synthetic.mjs';
+import {cypInvestmentFixture} from './fixtures/plan-import-cyp-curve-synthetic.mjs';
+import {createPlanImportAnalyzer} from '../src/lib/plan-import-analyzer.mjs';
+import {decodePlanSource,planInvestmentDecisionDigest} from '../src/lib/plan-import-policy.mjs';
+import {planImportCommandDigest} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
 
 const scope='a'.repeat(64),otherScope='b'.repeat(64),projectId='project-plan',operationId='01234567-89ab-4cde-8fab-0123456789ab',secondId='01234567-89ab-4cde-8fab-0123456789ac';
 const endpoint='/api/identity/plan-import';
@@ -13,6 +18,24 @@ const command=(extra={})=>({method:'POST',body:JSON.stringify({operationId,scope
 const draft=status=>({id:'draft-plan',revision:3,status,rows:[]});
 const recorded=(status='READY')=>({scope,projectId,state:'RECORDED',draft:draft(status)});
 const rejection=()=>({scope,projectId,operationId,saved:false,state:'REJECTED',definitive:true,reservationStarted:false,phase:'PRE_RESERVATION',code:'PLAN_IMPORT_FILE_INVALID'});
+
+test('weekly financial real receipts recover through the browser journal with exact digests and no source or acknowledgement stored locally',async()=>{
+ const h=documentStoreHarness({taskCount:0,analyzerOverride:createPlanImportAnalyzer({environment:()=>{throw Error('No provider');},fetchImpl:()=>{throw Error('No provider');}})}),source=decodePlanSource(cypInvestmentFixture(),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+ let current=(await h.attach({consent:'plan-spreadsheet-cyp-investment-curves-v1',source})).draft;
+ for(const action of ['REVIEW_INVESTMENT','APPLY_INVESTMENT']){
+  const body={...h.context(),action,operationId:crypto.randomUUID(),draftId:current.id,expectedRevision:current.revision,reason:' Reviewed exact source and all 48 periods ',acknowledgeDifference:false};
+  assert.equal(await planImportCommandDigest(body),planInvestmentDecisionDigest(body));
+  const s=storage(),j=journal(s),ticket=await j.prepare(endpoint,{method:'POST',body:JSON.stringify(body)});
+  assert.doesNotMatch(JSON.stringify([...s.rows]),/acknowledgeDifference|cachedValue|weekly|sourceSha256|reason/);
+  const result=await h.imports.decide(investmentSession,body),recovered=await h.imports.read(investmentSession,{...h.context(),operationId:body.operationId});
+  assert.deepEqual(recoveryResult(ticket.entry,recovered),{state:'RECORDED',receiptId:result.receiptId});
+  for(const change of [v=>{v.taskEffects=true;},v=>{v.baselineEffects=true;},v=>{v.inputDigest='f'.repeat(64);},v=>{v.draft.spreadsheet.weekly.periods[47].amount.cachedValue='1';},v=>{v.tasks=[{id:'foreign'}];},v=>{v.draft.source.sha256='f'.repeat(64);}]){const bad=structuredClone(recovered);change(bad);assert.equal(recoveryResult(ticket.entry,bad),null);}
+  current=result.draft;
+ }
+ const body={...h.context(),action:'REVIEW_INVESTMENT',operationId:crypto.randomUUID(),draftId:current.id,expectedRevision:current.revision,reason:'Review attempt after prior approval',acknowledgeDifference:false},s=storage(),j=journal(s),ticket=await j.prepare(endpoint,{method:'POST',body:JSON.stringify(body)});
+ const absent=await h.imports.read(investmentSession,{...h.context(),operationId:body.operationId});assert.deepEqual(recoveryResult(ticket.entry,absent),{state:'NOT_OBSERVED'});
+ const rejected=await h.imports.decide(investmentSession,body);assert.equal(recoveryResult(ticket.entry,rejected).state,'REJECTED');assert.equal(h.calls.taskWrites,0);
+});
 
 test('plan FormData is durably reserved before dispatch and restart keeps only minimal scoped references',async()=>{
  const store=storage(),j=journal(store),form=new FormData();for(const [key,value] of Object.entries({scope,projectId,operationId,consent:'plan-document-openai-v1'}))form.append(key,value);form.append('file',new Blob(['private source bytes'],{type:'application/pdf'}),'private-schedule.pdf');

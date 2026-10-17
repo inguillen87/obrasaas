@@ -1,3 +1,4 @@
+import {restoreWeeklyCypPreviousContract,weeklyCypCurrentSourcePin} from './home-decisions-current-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
 import {restoreParticipantPreanalysisPreviousContract,participantPreanalysisPriorValidationPin} from './participant-preanalysis-current-ci-lineage.mjs';
 import {restoreOoxmlAccountingPreviousContract,ooxmlAccountingCurrentSourcePin,verifyOoxmlAccountingCurrentSources} from './ooxml-accounting-current-ci-lineage.mjs';
@@ -64,13 +65,16 @@ export function fieldOutboundCurrentSourcePin(contract,ref){
 }
 
 export function verifyFieldOutboundCurrentSources(contract,readSource){
+ try{
  verifyOoxmlAccountingCurrentSources(contract,readSource);
  const section=revision(contract);if(!section)return null;
  restoreFieldOutboundPreviousContract(contract);
  requireLineage(typeof readSource==='function','Current source reader required');
+ const priorValidationContract=restoreWeeklyCypPreviousContract(contract),priorParticipantContract=restoreParticipantPreanalysisPreviousContract(priorValidationContract);
  for(const row of [...section.reviewedSourceChanges.map(row=>({path:row.path,sha256:row.currentSha256})),...section.validationDeltas.map(row=>({path:row.path,sha256:row.currentSha256})),...section.validationSources]){
   const bytes=readSource(row.path);requireLineage(Buffer.isBuffer(bytes),'Missing current outbound source: '+row.path);
-  const text=bytes.toString('utf8'),priorPin=ooxmlAccountingCurrentSourcePin(restoreParticipantPreanalysisPreviousContract(contract),row);requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===participantPreanalysisPriorValidationPin(contract,{...row,sha256:priorPin}),'Stale current outbound source: '+row.path);
+  const text=bytes.toString('utf8'),priorPin=ooxmlAccountingCurrentSourcePin(priorParticipantContract,row);requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===weeklyCypCurrentSourcePin(contract,{...row,sha256:participantPreanalysisPriorValidationPin(priorValidationContract,{...row,sha256:priorPin})}),'Stale current outbound source: '+row.path);
  }
  return {version:1,previousContractSha256:section.previousContractSha256,reviewedSourceChanges:section.reviewedSourceChanges.map(row=>row.path),historicalPinsPreserved:true,nativeAcceptance:false};
+ }catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
 }

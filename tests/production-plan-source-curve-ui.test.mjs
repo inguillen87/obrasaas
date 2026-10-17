@@ -7,21 +7,21 @@ import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {loadBindings,transform} from 'next/dist/build/swc/index.js';
 import {formatSourceCurveDecimal,planSourceCurveView,sourceCurveKeyboardIndex} from '../src/app/(identity)/cuenta/plan-source-curve.mjs';
-import {extractCypCurveOoxml} from '../src/lib/plan-import-ooxml.mjs';
-import {cypCurveFixture} from './fixtures/plan-import-cyp-curve-synthetic.mjs';
+import {extractCypCurveOoxml,extractCypInvestmentOoxml} from '../src/lib/plan-import-ooxml.mjs';
+import {cypCurveFixture,cypInvestmentFixture} from './fixtures/plan-import-cyp-curve-synthetic.mjs';
 
 await loadBindings();
 const require=createRequire(import.meta.url),reactUrl=pathToFileURL(require.resolve('react')).href;
 const helperUrl=new URL('../src/app/(identity)/cuenta/plan-source-curve.mjs',import.meta.url).href;
 const source=readFileSync(new URL('../src/app/(identity)/cuenta/plan-source-curve.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
-const baseImports=`import React from ${JSON.stringify(reactUrl)};\nimport {formatSourceCurveDecimal,planSourceCurveView,sourceCurveKeyboardIndex,planDocumentCurveView,documentCurveKeyboardIndex,DOCUMENT_CURVE_PROFILE} from ${JSON.stringify(helperUrl)};\nconst styles={};\n`;
+const baseImports=`import React from ${JSON.stringify(reactUrl)};\nimport {formatSourceCurveDecimal,planSourceCurveView,sourceCurveKeyboardIndex,planDocumentCurveView,documentCurveKeyboardIndex,documentCurvePlot,DOCUMENT_CURVE_PROFILE,PLAN_CYP_INVESTMENT_PROFILE,planInvestmentCurveView,investmentWeeklyPlot,investmentWeekKeyboardIndex} from ${JSON.stringify(helperUrl)};\nconst styles={};\n`;
 async function compile(imports,extra=''){
  const result=await transform(imports+source+extra,{filename:'plan-source-curve.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});
  return import('data:text/javascript;base64,'+Buffer.from(result.code).toString('base64'));
 }
-const {PlanSourceCurve}=await compile(`import {useId,useRef,useState} from ${JSON.stringify(reactUrl)};\n`+baseImports);
+const {PlanSourceCurve}=await compile(`import {useEffect,useId,useRef,useState} from ${JSON.stringify(reactUrl)};\n`+baseImports);
 // This controlled hook harness invokes the real compiled component's handlers; it is not browser acceptance.
-const interactive=await compile(baseImports+`let selected=0;const controls={current:[]};const useId=()=>"curve-test",useRef=()=>controls,useState=()=>[selected,value=>{selected=value;}];\n`,`\nexport const render=props=>PlanSourceCurve(props);export const reset=()=>{selected=0;controls.current=[];};export const selection=()=>selected;`);
+const interactive=await compile(baseImports+`let selected=0;const controls={current:[]};const useEffect=()=>{},useId=()=>"curve-test",useRef=()=>controls,useState=()=>[selected,value=>{selected=value;}];\n`,`\nexport const render=props=>PlanSourceCurve(props);export const reset=()=>{selected=0;controls.current=[];};export const selection=()=>selected;`);
 
 const cell=(column,row,cachedValue,hasFormula=false)=>({sourceCell:`Plan y curva Meses!${column}${row}`,cachedValue,hasFormula});
 function curve(){
@@ -36,6 +36,29 @@ function elements(node,predicate,found=[]){
  elements(node.props?.children,predicate,found);return found;
 }
 const polyline=markup=>[...markup.matchAll(/<polyline[^>]+points="([^"]+)"/g)].map(match=>match[1]);
+
+const investmentHooks=await compile(baseImports+`let states=[],cursor=0;const refs=[];const useEffect=()=>{},useId=()=>"investment-test",useRef=()=>({current:refs}),useState=initial=>{const i=cursor++;if(!(i in states))states[i]=initial;return [states[i],v=>{states[i]=v;}];};\n`,`\nexport const render=props=>{cursor=0;return InvestmentSourceCurves(props);};export const reset=()=>{states=[];cursor=0;};`);
+const weeklyValue=async(options={})=>(await extractCypInvestmentOoxml(cypInvestmentFixture(options),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')).spreadsheet;
+test('weekly financial source renders all 48 literal amounts with a compact four-week selector and separate monthly view',async()=>{
+ const value=await weeklyValue(),before=structuredClone(value),markup=html(value,{profile:'CYP_INVESTMENT_CURVES_V1',sourceRowCount:0,selectedRowCount:0});
+ assert.match(markup,/Inversión prevista/);assert.match(markup,/48 períodos ordinales/);assert.match(markup,/Mes 12 · semana 4/);assert.match(markup,/12\.345\.678\.901\.234\.567\.890,1234500/);assert.match(markup,/Plan de trabajo!BE/);
+ assert.equal((markup.match(/>Semana [1-4]<\/button>/g)||[]).length,4);assert.match(markup,/Moneda por confirmar/);assert.match(markup,/todavía no tienen fechas de calendario/);assert.match(markup,/no registra pagos/);assert.deepEqual(value,before);
+ assert.doesNotMatch(markup,/Aplicar 0 tareas|undefined|NaN|Infinity/);
+});
+test('weekly controls cross month boundaries and reach period 48 using the real component handlers',async()=>{
+ const value=await weeklyValue();investmentHooks.reset();let tree=investmentHooks.render({curve:value});
+ const weeks=()=>elements(tree,n=>n.type==='button'&&String(n.props.children).startsWith('Semana '));
+ let prevented=0;weeks()[0].props.onKeyDown({key:'End',preventDefault(){prevented++;}});tree=investmentHooks.render({curve:value});
+ assert.equal(elements(tree,n=>n.props?.['aria-label']==='Período 48 de 48').length,1);assert.equal(weeks().length,4);assert.equal(weeks()[3].props['aria-pressed'],true);
+ weeks()[3].props.onKeyDown({key:'Home',preventDefault(){prevented++;}});tree=investmentHooks.render({curve:value});weeks()[3].props.onClick();tree=investmentHooks.render({curve:value});weeks()[3].props.onKeyDown({key:'ArrowRight',preventDefault(){prevented++;}});tree=investmentHooks.render({curve:value});
+ assert.equal(elements(tree,n=>n.props?.['aria-label']==='Período 5 de 48').length,1);assert.equal(weeks()[0].props['aria-pressed'],true);assert.equal(prevented,3);
+ elements(tree,n=>n.type==='button'&&n.props.children==='Meses')[0].props.onClick();tree=investmentHooks.render({curve:value});assert.equal(elements(tree,n=>n.type?.name==='PlanSourceCurve'&&n.props.profile==='CYP_PARTIDAS_CURVE').length,1);
+});
+test('source mismatch remains exact and visible instead of silently rounding or reconciling monetary values',async()=>{
+ const amounts=Array(48).fill('0');amounts[0]='12345678901234567890.1704500';const value=await weeklyValue({weeklyAmounts:amounts}),markup=html(value,{profile:'CYP_INVESTMENT_CURVES_V1'});
+ assert.match(markup,/no coinciden/);assert.match(markup,/0,0470000/);assert.match(markup,/no se presenta como una suma conciliada/);
+ const bad=structuredClone(value);bad.comparison.differenceDecimalText='0';assert.match(html(bad,{profile:'CYP_INVESTMENT_CURVES_V1'}),/No pudimos confirmar/);
+});
 
 test('cached monetary decimals and source ratios display exactly beyond floating point precision',()=>{
  assert.equal(formatSourceCurveDecimal('12345678901234567890.123456789000'),'12.345.678.901.234.567.890,123456789000');
@@ -137,7 +160,7 @@ const panelSource=readFileSync(new URL('../src/app/(identity)/cuenta/plan-import
 const stateNames=[...panelSource.matchAll(/\[([A-Za-z]+),set[A-Za-z]+\]=useState/g)].map(match=>match[1]);
 const panelHooks=`import React from ${JSON.stringify(reactUrl)};
 import {planImportUsageView,planImportPreservation} from ${JSON.stringify(new URL('../src/app/(identity)/cuenta/plan-import-usage-view.mjs',import.meta.url).href)};
-import {planDocumentDraftView,documentCurveReviewValue,documentCurveValuesEqual,DOCUMENT_CURVE_PROFILE} from ${JSON.stringify(helperUrl)};
+import {planDocumentDraftView,documentCurveReviewValue,documentCurveValuesEqual,DOCUMENT_CURVE_PROFILE,PLAN_CYP_INVESTMENT_PROFILE,planInvestmentDraftView} from ${JSON.stringify(helperUrl)};
 const styles={},stateNames=${JSON.stringify(stateNames)};
 let states=[],refs=[],stateCursor=0,refCursor=0,queue=[];
 const useState=initial=>{const index=stateCursor++;if(!(index in states))states[index]=initial;return [states[index],value=>{states[index]=typeof value==='function'?value(states[index]):value;}];};

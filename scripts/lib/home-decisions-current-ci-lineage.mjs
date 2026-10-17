@@ -1,3 +1,4 @@
+import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {parse} from '@babel/parser';
 
@@ -4260,7 +4261,7 @@ export function homeDecisionsCurrentSourcePin(contract,ref){
 }
 export function homeDecisionsValidationFiles(contract){
  const value=section(contract);if(!value)return[];restoreHomeDecisionsPreviousContract(contract);
- return [...new Set([...customerPhoneSelectionValidationFiles(contract),...[...value.reviewedSourceChanges,...value.validationDeltas,...value.validationSources].map(row=>row.path)])].sort();
+ const weekly=weeklyCypSection(contract);return [...new Set([...customerPhoneSelectionValidationFiles(contract),...(weekly?['scripts/lib/plan-document-curve-fixture-copy.mjs',...weekly.validationSources.map(row=>row.path)]:[]),...[...value.reviewedSourceChanges,...value.validationDeltas,...value.validationSources].map(row=>row.path)])].sort();
 }
 // Only complete, reviewed AST nodes are projected. A changed identity guard,
 // query, role expression or unrelated statement remains in the historical AST.
@@ -4277,6 +4278,7 @@ export function homeDecisionsLegacyOperationsAst(tree){
  return project(tree);
 }
 export function verifyHomeDecisionsCurrentSources(contract,readSource){
+ verifyWeeklyCypCurrentSources(contract,readSource);
  verifyCompanyOnboardingUxValidationSources(contract,readSource);
  verifyCustomerPhoneSelectionCurrentSources(contract,readSource);
  const value=section(contract);if(!value)return null;restoreHomeDecisionsPreviousContract(contract);reject(typeof readSource==='function','Actual home decisions source reader required');
@@ -4288,14 +4290,16 @@ export function verifyHomeDecisionsCurrentSources(contract,readSource){
  return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,historicalPinsPreserved:true,nativeOrBrowserAcceptance:false};
 }
 export function restoreHomeDecisionsSourceSet(family,files,contract){
+ const weekly=weeklyCypSection(contract)?.proofSourceDeltas.find(row=>row.family===family);if(weekly)files=previousPaths(files,weekly);
  const value=section(contract);if(!value)return files;restoreHomeDecisionsPreviousContract(contract);
  const delta=value.proofSourceDeltas.find(row=>row.family===family);return delta?previousPaths(files,delta):files;
 }
 export function homeDecisionsProofSourceAdditions(spec){
- const delta=HOME_DECISIONS_CURRENT_REVISION.proofSourceDeltas?.find(row=>row.id===spec?.id);if(!delta)return[];
+ const outer=weeklyCypProofSourceAdditions(spec);if(outer.length)spec={...spec,sourceFiles:spec.sourceFiles.filter(file=>!outer.includes(file))};
+ const delta=HOME_DECISIONS_CURRENT_REVISION.proofSourceDeltas?.find(row=>row.id===spec?.id);if(!delta)return outer;
  const files=spec.sourceFiles;reject(Array.isArray(files)&&new Set(files).size===files.length&&same(files,[...files].sort()),'Distinct sorted home decisions proof sources required');
- const count=files.length,digest=sha(JSON.stringify(files));if(count===delta.currentCount&&digest===delta.currentPathsSha256)return [...delta.additions];
- reject(delta.inheritedSets.some(row=>row.count===count&&row.pathsSha256===digest),'Unknown home decisions proof source set: '+delta.id);return[];
+ const count=files.length,digest=sha(JSON.stringify(files));if(count===delta.currentCount&&digest===delta.currentPathsSha256)return [...delta.additions,...outer];
+ reject(delta.inheritedSets.some(row=>row.count===count&&row.pathsSha256===digest),'Unknown home decisions proof source set: '+delta.id);return outer;
 }
 export function normalizeHomeDecisionsFocusedRaw(raw,{contract,readSource,readEvidence,directory}){
  const value=section(contract);if(!value)return raw;verifyHomeDecisionsCurrentSources(contract,readSource);
@@ -4525,28 +4529,32 @@ function companyOnboardingUxSection(contract){
  for(const row of value.validationSources){exact(row,['path','sha256'],'Exact company onboarding UX validator reference required');reject(hash(row.sha256),'Company onboarding UX validator hash required');}return value;
 }
 export function restoreCompanyOnboardingUxPreviousContract(contract){
+ contract=restoreWeeklyCypPreviousContract(contract);
  const value=companyOnboardingUxSection(contract);if(!value)return contract;
  const previous=structuredClone(contract);delete previous[COMPANY_ONBOARDING_UX_CURRENT_SECTION];
  reject(sha(JSON.stringify(previous,null,2)+'\n')===value.previousContractSha256,'The complete published4f1 contract must restore exactly');return previous;
 }
 function companyOnboardingUxReferences(value){return [...value.reviewedSourceChanges,...value.validationPredecessors.map(previous=>({path:previous.path,previousSha256:previous.sha256,currentSha256:value.validationSources.find(row=>row.path===previous.path).sha256}))];}
 export function companyOnboardingUxCurrentSourcePin(contract,ref){
- const value=companyOnboardingUxSection(contract);if(!value)return ref.sha256;const row=companyOnboardingUxReferences(value).find(row=>row.path===ref.path);if(!row)return ref.sha256;
- reject([row.previousSha256,row.currentSha256].includes(ref.sha256),'Only exact published4f1 and reviewed company onboarding UX pins may advance: '+ref.path);return row.currentSha256;
+ ref={...ref,sha256:weeklyCypPreviousSourcePin(contract,ref)};
+ const value=companyOnboardingUxSection(contract);if(!value)return weeklyCypCurrentSourcePin(contract,ref);const row=companyOnboardingUxReferences(value).find(row=>row.path===ref.path);if(!row)return weeklyCypCurrentSourcePin(contract,ref);
+ reject([row.previousSha256,row.currentSha256].includes(ref.sha256),'Only exact published4f1 and reviewed company onboarding UX pins may advance: '+ref.path);return weeklyCypCurrentSourcePin(contract,{...ref,sha256:row.currentSha256});
 }
 export function companyOnboardingUxPreviousSourcePin(contract,ref){
+ ref={...ref,sha256:weeklyCypPreviousSourcePin(contract,ref)};
  const value=companyOnboardingUxSection(contract);if(!value)return ref.sha256;const row=companyOnboardingUxReferences(value).find(row=>row.path===ref.path);return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;
 }
-function verifyCompanyOnboardingUxRefs(refs,readSource){
+function verifyCompanyOnboardingUxRefs(refs,readSource,contract){
  reject(typeof readSource==='function','Actual company onboarding UX source reader required');
- for(const row of refs){const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current company onboarding UX source: '+row.path);const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===row.currentSha256,'Stale current company onboarding UX source: '+row.path);}
+ for(const row of refs){const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current company onboarding UX source: '+row.path);const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===weeklyCypCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}),'Stale current company onboarding UX source: '+row.path);}
 }
 function verifyCompanyOnboardingUxValidationSources(contract,readSource){
  const value=companyOnboardingUxSection(contract);if(!value)return null;restoreCompanyOnboardingUxPreviousContract(contract);
- verifyCompanyOnboardingUxRefs(companyOnboardingUxReferences(value).filter(row=>value.validationSources.some(v=>v.path===row.path)),readSource);return value;
+ verifyCompanyOnboardingUxRefs(companyOnboardingUxReferences(value).filter(row=>value.validationSources.some(v=>v.path===row.path)),readSource,contract);return value;
 }
 export function verifyCompanyOnboardingUxCurrentSources(contract,readSource){
- const value=companyOnboardingUxSection(contract);if(!value)return null;restoreCompanyOnboardingUxPreviousContract(contract);verifyCompanyOnboardingUxRefs(companyOnboardingUxReferences(value),readSource);
+ verifyWeeklyCypCurrentSources(contract,readSource);
+ const value=companyOnboardingUxSection(contract);if(!value)return null;restoreCompanyOnboardingUxPreviousContract(contract);verifyCompanyOnboardingUxRefs(companyOnboardingUxReferences(value),readSource,contract);
  return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,historicalPinsPreserved:true,sourceSetChanges:0,nativeOrBrowserAcceptance:false};
 }
 export function companyOnboardingUxHistoricalFocusedAssertions(source,contract){
@@ -4556,4 +4564,453 @@ export function companyOnboardingUxHistoricalFocusedAssertions(source,contract){
  const calls=[];function walk(node){if(!node||typeof node!=='object')return;if(node.type==='CallExpression'&&node.callee.type==='MemberExpression'&&node.callee.object?.name==='assert')calls.push(text.slice(node.start,node.end).replaceAll('\r\n','\n'));for(const child of Object.values(node))if(Array.isArray(child))child.forEach(walk);else if(child&&typeof child==='object')walk(child);}walk(parse(text,{sourceType:'module'}).program);
  const p=value.focusedAssertions;reject(calls.length===p.currentCount&&same(calls.slice(p.start,p.start+p.current.length),p.current),'Exact current h23 afternoon and midnight assertions required');
  const previous=[...calls.slice(0,p.start),...p.previous,...calls.slice(p.start+p.current.length)];reject(previous.length===p.previousCount&&sha(JSON.stringify(previous))===p.previousAssertionsSha256,'All201 previous focused assertions must restore exactly');return previous;
+}
+
+export const WEEKLY_CYP_CURRENT_SECTION='weeklyCypCurrentRevision';
+export const WEEKLY_CYP_CURRENT_REVISION=Object.freeze({
+  "version": 1,
+  "predecessorCommit": "0acac0857310e57bc717a3d734e02923a5ea83a1",
+  "previousContractSha256": "04db9c3dd25a41425f3b8f71f5d51ab23fcf4ad575b88710350b005dff04502b",
+  "reviewedSourceChanges": [
+    {
+      "path": "tests/production-plan-import-link-ui.test.mjs",
+      "previousSha256": "294ccb99a5758ad710358f8896cd7277c7f22694914e836b06dc4ce25fa04133",
+      "currentSha256": "017801e29c6a3a145bd16a1536a52f144b5c2e7c7086a51b6951879304cf3037",
+      "authenticatedPreviousAliases": [
+        "936a1dc56d2713cb9fc69827b6acbeca522dbb06c3da1e60ea658ca9e434c7ae"
+      ]
+    },
+    {
+      "path": "src/app/(identity)/cuenta/plan-import-panel.js",
+      "previousSha256": "3fb02bb63848059a8d045ca7d780e59a0b7b7093fa21d1c490604f9763c2cf00",
+      "currentSha256": "a532eefe56961ba7a9c3a33e5a888f7b4b4affee837412a2aba4066fb0ee1882"
+    },
+    {
+      "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
+      "previousSha256": "625c33c7b957dc922a5d9132fc0385c968dc573af4ff7a2f52a4fe111d0b42a2",
+      "currentSha256": "060e128b54eefdadfbabac45c3ec696934f5e74d79b9e26e905081128e8e99c5",
+      "authenticatedPreviousAliases": [
+        "a522852b7c82cd978a3f758137d8505c43b8d4edae269f215dda4ca51d787b2f"
+      ]
+    },
+    {
+      "path": "src/lib/plan-import-analyzer.mjs",
+      "previousSha256": "e3b6a312e9b0399533bb6c61b78a0c4bc036c5653d2e39628744d67f9e44a9f7",
+      "currentSha256": "0427c7fbdf0ba27b07c328661e52731c996e0a7b5f0749dcc6207410b28c52bb"
+    },
+    {
+      "path": "src/lib/plan-import-ooxml.mjs",
+      "previousSha256": "473a0ac3199ef044107a2847059a6fea1c04f9716af4b8c4008623f0deb80b4d",
+      "currentSha256": "a146b9b300086bd8f44af6549d75611f7ac542a6c6c2f9eddf099cd8fc0f9251",
+      "authenticatedPreviousAliases": [
+        "00c14c85a01734f9b77e508ef8c30fd1b1fa9e1d921b632649f93c534cc9cdd5"
+      ]
+    },
+    {
+      "path": "src/lib/plan-import-policy.mjs",
+      "previousSha256": "4149d1db8f2038dcb9d9799010e5379bf4755ac632d22e2a01a407f6fb5971e4",
+      "currentSha256": "f2d73b8c58df571fb0dc6e5d76e2fb5d60daffa6ed6a41bc2be3c7e536458696"
+    },
+    {
+      "path": "src/lib/plan-import-store.mjs",
+      "previousSha256": "d1db682c5f8e52985596e12b6ca7f759cd62c9436840377e91e98f206cde4d47",
+      "currentSha256": "455c06e64301b2679e1278cc288cd4b06c875a222339e15c6720c58bc1f011c2"
+    }
+  ],
+  "validationPredecessors": [
+    {
+      "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+      "sha256": "35a27b696cf1b2282fc1da41eb6f7f8173ccf2477cffbc48483bb83a50fef44b"
+    },
+    {
+      "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+      "sha256": "31df3637107941e47985305ddc5704c061b135dbc5f4b34c880b5f75accb02e8"
+    },
+    {
+      "path": "scripts/lib/ooxml-accounting-current-ci-lineage.mjs",
+      "sha256": "bd078b7faa74affff2e78f86d1c26270f3a78bdf2b8b20b56352ff1da4953104",
+      "authenticatedPreviousAliases": [
+        "da926d18f6e71037405ef5e9220097eb2eaec3167d759dad5175578ad9d1b82e"
+      ]
+    },
+    {
+      "path": "scripts/verify-consumption-feedback-ci.mjs",
+      "sha256": "537c70c6accdccc8220fc438502dd1af4da7a6f5fa46cd0414f4f4b222240897",
+      "authenticatedPreviousAliases": [
+        "40b8bc71e33fdb72ce8dc3c82bcf175835eb39e2384c2be875841f070048aa72"
+      ]
+    },
+    {
+      "path": "scripts/verify-organization-usage-ci.mjs",
+      "sha256": "a2e716b6e9199996d0425986b98f17e5a333003b6d3144b7dee12dbd7a80d659",
+      "authenticatedPreviousAliases": [
+        "be7458395db29bf5cbbcd71736192cb59cd15b61b16c3f742a07a946753b220a"
+      ]
+    },
+    {
+      "path": "scripts/verify-plan-measurement-ci.mjs",
+      "sha256": "86e9fe3dbe138caf327a2ea09c7b817cc0e8bf88b8ed273d0cf5363e95a0176f",
+      "authenticatedPreviousAliases": [
+        "38fe0338a778cffbeaac94860cf35f8c15e72de8813964015986ddb2f3eab57f"
+      ]
+    },
+    {
+      "path": "tests/production-material-consumption-feedback-ci.test.mjs",
+      "sha256": "87d154dce14a4d4aaa72b4ec05237cf57f62aef33e3fb4256571d8ed633b3c60",
+      "authenticatedPreviousAliases": [
+        "724dae07b355ea971bd0ca87355bda49998d6ff2dc65467e1d35bd7b27a550a9"
+      ]
+    },
+    {
+      "path": "tests/production-organization-usage-ci.test.mjs",
+      "sha256": "6acf018a2c19559ee7a895e0de9eaa0508b52bc19d0a2d738783f8cdc47ba418",
+      "authenticatedPreviousAliases": [
+        "d73ec704f98bcd8bf737cfef9c0e2bfedf7d9b6a7acacc38d38e6e1e7ae39137"
+      ]
+    },
+    {
+      "path": "tests/production-plan-measurement-ci.test.mjs",
+      "sha256": "286ea19ff474a4bda4254650faa49cdc9b40dd54bcb5a878d61941f960a85a2b",
+      "authenticatedPreviousAliases": [
+        "e5c5a0413eafa50e76e2a29c2f6aa7f743485bb02a07594fc51f48c514de0494"
+      ]
+    },
+    {
+      "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
+      "sha256": "4dfbc2f58044ddbcde52a00ae1017e810c1c9893c01164c90beb1b03c371aaf7",
+      "authenticatedPreviousAliases": [
+        "e8e37a1998d3990190e1a802ace1ea6fde2a291c4effea69613b600c6bd09cfe"
+      ]
+    },
+    {
+      "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
+      "sha256": "2b9b7f26beb8aa2ae1d6ba9cab9c1a0bee6c457ce5f17a0eb7ea8f1fcb7c9faa"
+    },
+    {
+      "path": "scripts/lib/participant-preanalysis-current-ci-lineage.mjs",
+      "sha256": "f1e94bbb3f370c769fa4ce74fb70310b4617605d890ffacc7113fc9fce736399"
+    },
+    {
+      "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
+      "sha256": "0ef5c541e380a67d8d19bbf0b225af768e3f0fca557cb32c993bbe9f496ce9cb"
+    },
+    {
+      "path": "scripts/lib/field-outbound-current-ci-lineage.mjs",
+      "sha256": "13656381f1e032bb82b43d3c6ea9a7db04b42ec15359e758e729d9edb7165afa"
+    }
+  ],
+  "proofSourceDeltas": [
+    {
+      "id": "intake-ui",
+      "family": "UI_INTAKE",
+      "additions": [
+        "src/lib/plan-import-cyp-curve.mjs"
+      ],
+      "previousCount": 34,
+      "currentCount": 35,
+      "previousPathsSha256": "6a42e27db8035b6e903d752b59f323d501c204ed09b4bdfcc8cb0c3b0b29ce32",
+      "currentPathsSha256": "195264635c61b946b37f07bcbf8227647da22237bb43a981755be8cc2b2764ed"
+    },
+    {
+      "id": "project-preparation-ui",
+      "family": "UI_PREPARATION",
+      "additions": [
+        "src/lib/plan-import-cyp-curve.mjs"
+      ],
+      "previousCount": 21,
+      "currentCount": 22,
+      "previousPathsSha256": "2434b6d29bf5d076dc8c1685a9d7302439365f1a476a5f9f6b1533253ab8e169",
+      "currentPathsSha256": "cf0c7022649725745f7a58c7f5d21b83c9a97f3e684ccc832e3533fba800b48e"
+    },
+    {
+      "id": "portfolio-ui",
+      "family": "UI_PORTFOLIO",
+      "additions": [
+        "src/lib/plan-import-cyp-curve.mjs"
+      ],
+      "previousCount": 18,
+      "currentCount": 19,
+      "previousPathsSha256": "e239eed23a483d3c3b9e2f19c19bb0714f2a5090bc3aa0fa7b093d8146841215",
+      "currentPathsSha256": "a877471d19d373def1c2ba1f255aa4e5edafa5524bda71625a151d8c058a1aae"
+    },
+    {
+      "id": "identity-only-ui",
+      "family": "UI_IDENTITY_ONLY",
+      "additions": [
+        "src/lib/plan-import-cyp-curve.mjs"
+      ],
+      "previousCount": 148,
+      "currentCount": 149,
+      "previousPathsSha256": "bdbd7164a1191259bc6a414e327027e97796cc74e3e5f6e8970d3ac752b70a06",
+      "currentPathsSha256": "b10d37cab7e7bcf5c549a5c4af269495c2df6bfc0b6ef038d4456cbe2bcb776c"
+    },
+    {
+      "id": "focused-workspace-ui",
+      "family": "UI_FOCUSED_WORKSPACE",
+      "additions": [
+        "src/lib/plan-import-cyp-curve.mjs"
+      ],
+      "previousCount": 184,
+      "currentCount": 185,
+      "previousPathsSha256": "2fc2eaf4f05e8f58b4fe703709c5b421a2760fe331e64ebf680d566aece4d6e8",
+      "currentPathsSha256": "efbebce1fcdf6f8613b8b30c2ca6dde85af82ba4bd797578282a6375212d1853"
+    },
+    {
+      "id": "field-task-pagination-ui",
+      "family": "UI_FIELD_TASK_PAGINATION",
+      "additions": [
+        "src/lib/plan-import-cyp-curve.mjs"
+      ],
+      "previousCount": 65,
+      "currentCount": 66,
+      "previousPathsSha256": "37c4005666f2a3f09a857c3153dd49c2dd49e0f76337b135e293cabb2d34850b",
+      "currentPathsSha256": "f24faeb0e27ba7e075312e532190e2ad62e8cf1dd97acfff7c1a9acaf29e98ac"
+    }
+  ],
+  "proofProducerDeltas": [
+    {
+      "id": "plan-baseline-postgres",
+      "producer": "scripts/verify-plan-baseline-postgres.mjs",
+      "path": ".vercel/private/approved-plan-baseline-evidence/postgres.json",
+      "previousProducerSha256": "e6dd0da63d68af0816637e661c19530a62b4b91d71022f3d78fc6b29c7bc878c",
+      "currentProducerSha256": "e4c8c13b4b9082d5b139b231140d4f4fd722fdd82c09f077952df6e7f12ea456"
+    }
+  ],
+  "documentCurveCopy": {
+    "version": 2,
+    "dependencies": [
+      "src/lib/plan-import-document-curve.mjs",
+      "src/lib/plan-import-cyp-curve.mjs"
+    ],
+    "helperLfSha256": "05eb49f3948bef7d95580d5ee1bda3cf3c4592e235440a2dbfdb760c2fcb781e"
+  },
+  "baselineNative": {
+    "historicalCheckCount": 16,
+    "addedCheckNames": [
+      "v5-local-OOXML-monthly-weekly-upload-no-Task-mismatch-review-ack",
+      "v5-native-Project-lock-concurrent-review-and-APPLY-one-receipt",
+      "v5-approved-source-explicit-GET-SELECT-no-automatic-baseline",
+      "v5-concurrent-baseline-CAS-replacement-old-replay-no-reactivation",
+      "v5-native-COMMIT-ACK-ROLLBACK-review-apply-selection-exact-UUID",
+      "v5-source-review-APPLY-receipt-active-baseline-tamper-denied",
+      "v5-current-authority-private-recovery-and-business-state-preserved"
+    ],
+    "totalCheckCount": 23
+  },
+  "browser": {
+    "producer": "scripts/verify-plan-import-ui.mjs",
+    "producerLfSha256": "cb76ddce38c6221effa78aba6ae5ce716bead59f587a42d74a2f2724ff453734",
+    "widths": [
+      320,
+      390,
+      768,
+      1280
+    ],
+    "historicalCheckCount": 160,
+    "addedCheckCount": 4,
+    "totalCheckCount": 164,
+    "investmentSourceCount": 31,
+    "investmentSourcePathsSha256": "d8638a12e88f7f82c1c812617a019355ae40368989c8e344db8043fd9508b973",
+    "historicalModes": {
+      "checks": [
+        "apply",
+        "ambiguous",
+        "recover",
+        "manager"
+      ],
+      "decisionRejectionChecks": [
+        "decision-rejected",
+        "decision-rejected-reload",
+        "decision-unconfirmed"
+      ],
+      "uploadRejectionChecks": [
+        "upload-source-rejected",
+        "upload-source-rejected-reload",
+        "upload-quota-rejected",
+        "upload-quota-rejected-reload",
+        "upload-unconfirmed"
+      ],
+      "spreadsheetChecks": [
+        "ooxml-apply",
+        "ooxml-upload-recover"
+      ],
+      "cypChecks": [
+        "cyp-review",
+        "cyp-recover"
+      ],
+      "monthlyCurveChecks": [
+        "curve-review",
+        "curve-recover",
+        "curve-revoked",
+        "curve-invalid-denial"
+      ],
+      "cypCurveChecks": [
+        "cyp-curve-review",
+        "cyp-curve-recover",
+        "cyp-curve-pending-revoked",
+        "cyp-curve-failed-revoked"
+      ],
+      "closeReviewChecks": [
+        "close-conserve",
+        "close-discard",
+        "close-save",
+        "close-clean",
+        "close-uncertain",
+        "close-private-denial"
+      ],
+      "calendarChecks": [
+        "calendar-local-proposal",
+        "calendar-private-denial"
+      ],
+      "planLinkChecks": [
+        "link-ready",
+        "link-canonical-denied",
+        "link-wrong-project",
+        "link-private-denial",
+        "link-unsaved-file",
+        "link-late",
+        "link-pending",
+        "link-malformed"
+      ]
+    },
+    "retainedScreenshots": [
+      {
+        "width": 320,
+        "path": ".vercel/private/plan-import-ui-investment-320.png"
+      },
+      {
+        "width": 390,
+        "path": ".vercel/private/plan-import-ui-investment-390.png"
+      },
+      {
+        "width": 768,
+        "path": ".vercel/private/plan-import-ui-investment-768.png"
+      },
+      {
+        "width": 1280,
+        "path": ".vercel/private/plan-import-ui-investment-1280.png"
+      }
+    ]
+  },
+  "nativeOrBrowserAcceptance": false,
+  "consumerSourceDeltas": [
+    {
+      "family": "CONSUMPTION_FEEDBACK_UI",
+      "previousCount": 22,
+      "previousPathsSha256": "a199678963148d623e1312081691b3fd29930e215474b08838b368bad04dc0ac",
+      "currentCount": 23,
+      "currentPathsSha256": "c4eac1d0ee56262e1df6432ee23c7bdbe83f4a8e87266192284389c03e671483",
+      "additions": [
+        "src/lib/plan-import-cyp-curve.mjs"
+      ]
+    },
+    {
+      "family": "ORGANIZATION_USAGE_UI",
+      "previousCount": 26,
+      "previousPathsSha256": "46b06391df84b1952383d6a53dbe44f1f7385f844406050ed89954f5077dc02e",
+      "currentCount": 27,
+      "currentPathsSha256": "ba289e890f0f4c12aee451e19f4e5b8e3880c39df935dbba2eb243e8f45601e0",
+      "additions": [
+        "src/lib/plan-import-cyp-curve.mjs"
+      ]
+    },
+    {
+      "family": "MEASUREMENT_UI",
+      "previousCount": 18,
+      "previousPathsSha256": "4fe202152d08827101fe2f70ef6ddd12dd0c88f681723fc9350266b479899b2f",
+      "currentCount": 19,
+      "currentPathsSha256": "74e718eaa4c446355f64500947313efdd3f18225f409f87e96c42319d253ff69",
+      "additions": [
+        "src/lib/plan-import-cyp-curve.mjs"
+      ]
+    }
+  ]
+});
+deepFreeze(WEEKLY_CYP_CURRENT_REVISION);
+
+function weeklyCypSection(contract){
+ if(!plain(contract)||!Object.hasOwn(contract,WEEKLY_CYP_CURRENT_SECTION))return null;
+ const value=contract[WEEKLY_CYP_CURRENT_SECTION];exact(value,[...Object.keys(WEEKLY_CYP_CURRENT_REVISION),'validationSources'],'Exact weekly CyP revision required');
+ for(const[key,expected]of Object.entries(WEEKLY_CYP_CURRENT_REVISION))reject(same(value[key],expected),'Unreviewed weekly CyP declaration: '+key);
+ reject(Array.isArray(value.validationSources)&&same(value.validationSources.map(row=>row?.path),value.validationPredecessors.map(row=>row.path)),'Exact weekly CyP validators required');
+ for(const row of value.validationSources){exact(row,['path','sha256'],'Exact weekly CyP validation reference required');reject(hash(row.sha256),'Weekly CyP validation hash required');}return value;
+}
+function weeklyCypReferences(value){return [...value.reviewedSourceChanges,...value.proofProducerDeltas.map(row=>({path:row.producer,previousSha256:row.previousProducerSha256,currentSha256:row.currentProducerSha256})),...value.validationPredecessors.map(row=>({path:row.path,previousSha256:row.sha256,currentSha256:value.validationSources.find(ref=>ref.path===row.path).sha256,authenticatedPreviousAliases:row.authenticatedPreviousAliases||[]}))];}
+export function restoreWeeklyCypPreviousContract(contract){
+ const value=weeklyCypSection(contract);if(!value)return contract;const previous=structuredClone(contract);delete previous[WEEKLY_CYP_CURRENT_SECTION];
+ for(const delta of value.proofSourceDeltas){const proofs=previous.extension?.proofs?.filter(row=>row.id===delta.id);reject(proofs?.length===1,'One weekly CyP proof required');proofs[0].sourceFiles=previousPaths(proofs[0].sourceFiles,delta);}
+ for(const delta of value.proofProducerDeltas){const proofs=previous.extension?.proofs?.filter(row=>row.id===delta.id),records=previous.evidenceProducers?.filter(row=>row.path===delta.path&&row.producer===delta.producer);reject(proofs?.length===1&&records?.length===1&&proofs[0].producer===delta.producer&&proofs[0].path===delta.path&&proofs[0].producerSha256===delta.currentProducerSha256&&records[0].producerSha256===delta.currentProducerSha256,'Exact current weekly CyP producer required');proofs[0].producerSha256=delta.previousProducerSha256;records[0].producerSha256=delta.previousProducerSha256;}
+ reject(sha(JSON.stringify(previous,null,2)+'\n')===value.previousContractSha256,'The complete published0ac monthly contract must restore exactly');return previous;
+}
+export function weeklyCypCurrentSourcePin(contract,ref){const value=weeklyCypSection(contract),row=value&&weeklyCypReferences(value).find(row=>row.path===ref.path);if(!row)return ref.sha256;reject([row.previousSha256,row.currentSha256,...(row.authenticatedPreviousAliases||[])].includes(ref.sha256),'Only exact published0ac or weekly CyP pins may advance: '+ref.path);return row.currentSha256;}
+export function weeklyCypPreviousSourcePin(contract,ref){const value=weeklyCypSection(contract),row=value&&weeklyCypReferences(value).find(row=>row.path===ref.path);return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}
+export function restoreWeeklyCypConsumerSourceSet(family,files,contract){
+ const value=weeklyCypSection(contract);if(!value)return files;restoreWeeklyCypPreviousContract(contract);
+ const delta=value.consumerSourceDeltas.find(row=>row.family===family);reject(Boolean(delta),'One exact weekly CyP consumer source family required: '+family);
+ return previousPaths(files,delta);
+}
+export function weeklyCypProofSourceAdditions(spec){
+ const delta=WEEKLY_CYP_CURRENT_REVISION.proofSourceDeltas.find(row=>row.id===spec?.id);if(!delta)return[];
+ const files=spec.sourceFiles;reject(Array.isArray(files)&&new Set(files).size===files.length&&same(files,[...files].sort()),'Distinct sorted weekly CyP source paths required');
+ if(files.length===delta.currentCount&&sha(JSON.stringify(files))===delta.currentPathsSha256){previousPaths(files,delta);return [...delta.additions];}
+ // Older callers may already have removed this outer addition. Their own
+ // immutable count/digest validators remain responsible for inherited sets.
+ reject(files.length<delta.currentCount&&!delta.additions.some(file=>files.includes(file)),'Unknown weekly CyP source set: '+delta.id);return[];
+}
+export function verifyWeeklyCypCurrentSources(contract,readSource){
+ const value=weeklyCypSection(contract);if(!value)return null;restoreWeeklyCypPreviousContract(contract);reject(typeof readSource==='function','Weekly CyP actual source reader required');
+ const refs=weeklyCypReferences(value);reject(new Set(refs.map(row=>row.path)).size===refs.length,'Unique weekly CyP sources required');
+ for(const row of refs){const bytes=readSource(row.path);reject(safe(row.path)&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8')))&&sha(bytes.toString('utf8').replaceAll('\r\n','\n'))===row.currentSha256,'Stale current weekly CyP source: '+row.path);}
+ const copy=readSource('scripts/lib/plan-document-curve-fixture-copy.mjs');reject(Buffer.isBuffer(copy)&&sha(copy.toString('utf8').replaceAll('\r\n','\n'))===value.documentCurveCopy.helperLfSha256,'Exact two-dependency fixture copier required');
+ return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,sourceSetChanges:value.proofSourceDeltas.length,nativeOrBrowserAcceptance:false};
+}
+
+
+function weeklyUiRequired(ok,reason){if(!ok)throw Object.assign(new Error('Weekly CyP browser proof rejected: '+reason),{code:'WEEKLY_CYP_UI_PROOF_REJECTED',reason});}
+function weeklyUiKeys(value,keys,reason){weeklyUiRequired(plain(value)&&same(Object.keys(value).sort(),keys.slice().sort()),reason);}
+function weeklyUiRead(readSource,file){let bytes;try{bytes=readSource(file);}catch{}weeklyUiRequired(Buffer.isBuffer(bytes),'SOURCE_MISSING');return bytes;}
+export function weeklyCypInvestmentUiSourceFiles(readSource){
+ const files=new Set(['package.json','package-lock.json']);
+ function visit(file){weeklyUiRequired(safe(file)&&/^(src|tests)\//.test(file),'SOURCE_PATH');if(files.has(file))return;files.add(file);const bytes=weeklyUiRead(readSource,file),tree=parse(bytes.toString('utf8'),{sourceType:'module'}),imports=[];
+  function walk(node){if(!node||typeof node!=='object')return;if(['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration'].includes(node.type)&&node.source)imports.push(node.source.value);if(node.type==='ImportExpression'){weeklyUiRequired(node.source.type==='StringLiteral','DYNAMIC_SOURCE');imports.push(node.source.value);}if(node.type==='CallExpression'&&node.callee?.type==='Import'){weeklyUiRequired(node.arguments.length===1&&node.arguments[0].type==='StringLiteral','DYNAMIC_SOURCE');imports.push(node.arguments[0].value);}for(const child of Object.values(node))if(Array.isArray(child))child.forEach(walk);else if(child&&typeof child==='object')walk(child);}
+  walk(tree.program);for(const ref of imports.filter(ref=>ref.startsWith('.')))visit(path.posix.normalize(path.posix.join(path.posix.dirname(file),ref)));
+ }
+ visit('tests/fixtures/plan-document-curve-store-synthetic.mjs');visit('tests/fixtures/plan-import-cyp-curve-synthetic.mjs');return [...files].sort();
+}
+function weeklyUiSourceManifests(readSource){
+ const producer=weeklyUiRead(readSource,WEEKLY_CYP_CURRENT_REVISION.browser.producer),tree=parse(producer.toString('utf8'),{sourceType:'module'}),declarations=tree.program.body.filter(node=>node.type==='VariableDeclaration').flatMap(node=>node.declarations),copied=declarations.find(node=>node.id?.name==='copiedFiles'),source=declarations.find(node=>node.id?.name==='sourceProof');
+ weeklyUiRequired(copied?.init?.type==='ArrayExpression'&&copied.init.elements.every(node=>node.type==='StringLiteral'),'BROWSER_SOURCE_ROOTS');const files=copied.init.elements.map(node=>'src/app/(identity)/cuenta/'+node.value);
+ const array=source?.init?.properties?.find(node=>node.key?.name==='spreadsheetSourceManifest')?.value?.callee?.object;weeklyUiRequired(array?.type==='ArrayExpression'&&array.elements.every(node=>node.type==='StringLiteral'),'SPREADSHEET_SOURCE_ROOTS');
+ return {sourceManifest:files.slice(0,10),decisionSourceManifest:files.slice(10),spreadsheetSourceManifest:array.elements.map(node=>node.value),documentSourceManifest:['src/lib/plan-import-document-curve.mjs','scripts/lib/plan-document-curve-fixture-copy.mjs','src/lib/plan-import-cyp-curve.mjs'],linkSourceManifest:['src/lib/identity-return-path.mjs'],investmentSourceManifest:weeklyCypInvestmentUiSourceFiles(readSource)};
+}
+export function validateWeeklyCypImportUiProof(proof,readSource,{expectedHead,expectedTree,readEvidence}={}){
+ const n=WEEKLY_CYP_CURRENT_REVISION.browser,r=weeklyUiRequired;
+ r(plain(proof)&&proof.validated===true&&proof.synthetic===true&&proof.realProviderCalls===false&&proof.providerCalls===0&&proof.productionDataWritten===false&&proof.fixtureRemoved===true&&same(proof.errors,[]),'LIMITS');
+ r(typeof expectedHead==='string'&&/^[a-f0-9]{40}$/.test(expectedHead)&&typeof expectedTree==='string'&&/^[a-f0-9]{40}$/.test(expectedTree)&&proof.sourceRevision===expectedHead&&proof.sourceTree===expectedTree&&proof.sourceState==='EXACT_CI_SOURCE'&&proof.trackedClean===true,'SOURCE_IDENTITY');
+ const producer=weeklyUiRead(readSource,n.producer);r(sha(producer)===n.producerLfSha256&&proof.harnessSha256===n.producerLfSha256,'PRODUCER');
+ r(same(proof.widths,n.widths)&&proof.baselineCheckCount===80&&proof.originalTotalCheckCount===96&&proof.totalCheckCount===164&&proof.planLinkSubcaseCount===40,'TOTALS');
+ for(const[field,modes]of Object.entries(n.historicalModes)){const expected=field==='calendarChecks'?modes.flatMap(mode=>n.widths.map(width=>({width,mode}))):n.widths.flatMap(width=>modes.map(mode=>({width,mode})));r(Array.isArray(proof[field])&&same(proof[field].map(row=>({width:row?.width,mode:row?.mode})),expected),'HISTORICAL_LEDGER_'+field);}
+ r(Object.keys(n.historicalModes).reduce((sum,field)=>sum+proof[field].length,0)===160,'HISTORICAL_TOTAL');
+ const manifests=weeklyUiSourceManifests(readSource);r(manifests.investmentSourceManifest.length===n.investmentSourceCount&&sha(JSON.stringify(manifests.investmentSourceManifest))===n.investmentSourcePathsSha256,'INVESTMENT_CLOSURE');
+ for(const[field,files]of Object.entries(manifests)){r(Array.isArray(proof[field])&&same(proof[field].map(row=>row?.path).sort(),[...files].sort()),'MANIFEST_'+field);for(const row of proof[field]){weeklyUiKeys(row,['path','sha256'],'MANIFEST_REFERENCE');r(hash(row.sha256)&&sha(weeklyUiRead(readSource,row.path))===row.sha256,'SOURCE_BYTES');}}
+ r(Array.isArray(proof.fixtureTransforms)&&proof.fixtureTransforms.length===2,'COPY_CHAIN');let generated=weeklyUiRead(readSource,'src/app/(identity)/cuenta/plan-source-curve.mjs');const original=generated;
+ for(const[index,dependency]of WEEKLY_CYP_CURRENT_REVISION.documentCurveCopy.dependencies.entries()){const before=generated,needle='../../../lib/'+path.posix.basename(dependency);r(before.toString('utf8').split(needle).length===2,'COPY_IMPORT');generated=Buffer.from(before.toString('utf8').replace(needle,'./'+path.posix.basename(dependency)));r(same(proof.fixtureTransforms[index],{path:'src/app/(identity)/cuenta/plan-source-curve.mjs',kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:sha(original),copiedBeforeSha256:sha(before),fixtureSha256:sha(generated),fixtureRelativePath:'app/plan-source-curve.mjs',dependencySourcePath:dependency,dependencyFixturePath:'app/'+path.posix.basename(dependency)}),'COPY_CHAIN');}
+ r(Array.isArray(proof.investmentCurveChecks)&&same(proof.investmentCurveChecks.map(row=>row?.width),n.widths),'INVESTMENT_MATRIX');const screenshots=new Set(),receipts=new Set();let sourceSha=null,context=null;
+ for(const row of proof.investmentCurveChecks){weeklyUiKeys(row,['width','mode','canonicalStoreAndHttp','localOoxmlParser','transport','sourceSha256','sourceManifestContext','weeklyPeriods','monthlyPeriods','exactDifference','uncheckedConsentAndMismatchReviewBlocked','acknowledgmentBoundToReview','keyboard48AndCrossMonth','modeTogglePreservesSelection','immutableApplyReceipt','lostCommitAckRecoveredAfterReload','applyPosts','recoveryReads','existingTasksPreserved','taskSqlAttempts','baselineEffects','realProviderCalls','sourceDownloads','screenshot'],'INVESTMENT_CASE');
+  r(row.mode==='investment-monthly-weekly'&&row.canonicalStoreAndHttp===true&&row.localOoxmlParser===true&&row.transport==='RECONSTRUCTED_NODE_FORMDATA_FROM_VERIFIED_BROWSER_FILE'&&hash(row.sourceSha256)&&row.weeklyPeriods===48&&row.monthlyPeriods===12&&row.exactDifference==='0.0470000'&&['uncheckedConsentAndMismatchReviewBlocked','acknowledgmentBoundToReview','keyboard48AndCrossMonth','modeTogglePreservesSelection','lostCommitAckRecoveredAfterReload'].every(key=>row[key]===true)&&row.applyPosts===1&&row.recoveryReads===1&&row.existingTasksPreserved===5001&&row.taskSqlAttempts===0&&row.baselineEffects===false&&row.realProviderCalls===0&&row.sourceDownloads===0,'INVESTMENT_FACTS');
+  weeklyUiKeys(row.sourceManifestContext,['projectId','scope'],'INVESTMENT_CONTEXT');r(row.sourceManifestContext.projectId==='project-document-synthetic'&&hash(row.sourceManifestContext.scope)&&(!sourceSha||row.sourceSha256===sourceSha)&&(!context||same(row.sourceManifestContext,context)),'INVESTMENT_CONTEXT');sourceSha=row.sourceSha256;context=row.sourceManifestContext;
+  r(typeof row.immutableApplyReceipt==='string'&&row.immutableApplyReceipt.length>0&&!receipts.has(row.immutableApplyReceipt),'APPLY_RECEIPT');receipts.add(row.immutableApplyReceipt);
+  r(typeof row.screenshot==='string'&&new RegExp('^\\.vercel/private/investment-ui-[a-zA-Z0-9_-]+/investment-'+row.width+'\\.png$').test(row.screenshot)&&!screenshots.has(row.screenshot)&&typeof readEvidence==='function','SCREENSHOT_PATH');screenshots.add(row.screenshot);let png;try{png=readEvidence(row.screenshot);}catch{}r(Buffer.isBuffer(png)&&png.length>24&&png.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))&&png.readUInt32BE(16)===row.width&&png.readUInt32BE(20)===1000,'SCREENSHOT_BYTES');
+ }
+ return {status:'PASS',historicalCheckCount:160,addedCheckCount:4,totalCheckCount:164,investmentSourceCount:n.investmentSourceCount,transport:'RECONSTRUCTED_NODE_FORMDATA_FROM_VERIFIED_BROWSER_FILE',nativePostgresExecuted:false,humanAccepted:false};
+}
+export function validateWeeklyCypImportUiProofBytes(bytes,readSource,options){let proof;try{proof=JSON.parse(bytes.toString('utf8'));weeklyUiRequired(Buffer.from(bytes.toString('utf8')).equals(bytes),'ENCODING');}catch(error){if(error.code==='WEEKLY_CYP_UI_PROOF_REJECTED')throw error;weeklyUiRequired(false,'JSON');}return validateWeeklyCypImportUiProof(proof,readSource,options);}
+// Validator-only shadow input. These buffers are never execution screenshots.
+export function weeklyCypImportUiShadowFixture(readSource,expectedHead,expectedTree){
+ const n=WEEKLY_CYP_CURRENT_REVISION.browser,proof={validated:true,synthetic:true,realProviderCalls:false,providerCalls:0,productionDataWritten:false,fixtureRemoved:true,errors:[],sourceRevision:expectedHead,sourceTree:expectedTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,harnessSha256:n.producerLfSha256,widths:[...n.widths],baselineCheckCount:80,originalTotalCheckCount:96,totalCheckCount:164,planLinkSubcaseCount:40,fixtureTransforms:[]},evidence=new Map();
+ for(const[field,modes]of Object.entries(n.historicalModes))proof[field]=field==='calendarChecks'?modes.flatMap(mode=>n.widths.map(width=>({width,mode}))):n.widths.flatMap(width=>modes.map(mode=>({width,mode})));
+ for(const[field,files]of Object.entries(weeklyUiSourceManifests(readSource)))proof[field]=files.map(path=>({path,sha256:sha(weeklyUiRead(readSource,path))}));
+ const view='src/app/(identity)/cuenta/plan-source-curve.mjs',original=weeklyUiRead(readSource,view);let generated=original;for(const dependency of WEEKLY_CYP_CURRENT_REVISION.documentCurveCopy.dependencies){const before=generated;generated=Buffer.from(before.toString('utf8').replace('../../../lib/'+path.posix.basename(dependency),'./'+path.posix.basename(dependency)));proof.fixtureTransforms.push({path:view,kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:sha(original),copiedBeforeSha256:sha(before),fixtureSha256:sha(generated),fixtureRelativePath:'app/plan-source-curve.mjs',dependencySourcePath:dependency,dependencyFixturePath:'app/'+path.posix.basename(dependency)});}
+ proof.investmentCurveChecks=n.widths.map(width=>{const screenshot='.vercel/private/investment-ui-shadow/investment-'+width+'.png',png=Buffer.alloc(25);Buffer.from([137,80,78,71,13,10,26,10]).copy(png);png.writeUInt32BE(width,16);png.writeUInt32BE(1000,20);evidence.set(screenshot,png);return {width,mode:'investment-monthly-weekly',canonicalStoreAndHttp:true,localOoxmlParser:true,transport:'RECONSTRUCTED_NODE_FORMDATA_FROM_VERIFIED_BROWSER_FILE',sourceSha256:'a'.repeat(64),sourceManifestContext:{projectId:'project-document-synthetic',scope:'b'.repeat(64)},weeklyPeriods:48,monthlyPeriods:12,exactDifference:'0.0470000',uncheckedConsentAndMismatchReviewBlocked:true,acknowledgmentBoundToReview:true,keyboard48AndCrossMonth:true,modeTogglePreservesSelection:true,immutableApplyReceipt:'synthetic-apply-'+width,lostCommitAckRecoveredAfterReload:true,applyPosts:1,recoveryReads:1,existingTasksPreserved:5001,taskSqlAttempts:0,baselineEffects:false,realProviderCalls:0,sourceDownloads:0,screenshot};});
+ return {proof,evidence,boundary:'VALIDATOR_ONLY_NOT_BROWSER_EXECUTION'};
 }

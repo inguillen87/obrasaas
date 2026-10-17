@@ -1,3 +1,4 @@
+import {restoreWeeklyCypPreviousContract,weeklyCypCurrentSourcePin} from './home-decisions-current-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
 import {INTEGRATED_IDENTITY_UI_PRODUCER_PATHS,restoreIntegratedIdentityUiProducerText} from './integrated-identity-current-ci-lineage.mjs';
 import {restoreParticipantPreanalysisSourceSet} from './participant-preanalysis-current-ci-lineage.mjs';
@@ -534,13 +535,16 @@ export function validatePlanMeasurementCompactSourceLineage(files,contract=null)
  const published=files.filter(file=>!PLAN_MEASUREMENT_CURRENT_SOURCES.includes(file));requireLineage(published.length===125&&digest(published)===PLAN_MEASUREMENT_CURRENT_COMPACT.previousSourcePathsSha256,'G127 must retain every H125 path');const historical=published.filter(file=>!KYC_EXPIRED_CURRENT_ADDITIONS.includes(file));requireLineage(historical.length===117&&digest(historical)===PLAN_MEASUREMENT_CURRENT_COMPACT.historicalSourcePathsSha256,'Original117 must remain immutable');return currentFiles;
 }
 export function verifyPlanMeasurementCurrentSources(contract,readSource){
+ try{
  verifyFieldOutboundCurrentSources(contract,readSource);
  const prior=reconstructPublishedHContract(contract),section=contract.planMeasurementCurrentLineage;
+ const priorValidationContract=restoreWeeklyCypPreviousContract(contract);
  const currentCompactFiles=validatePlanMeasurementCompactSourceLineage(kycExpiredCurrentSourceFiles(readSource),contract);
- for(const ref of [...KYC_EXPIRED_CURRENT_REVIEWED_SOURCES,...section.currentValidationSources])requireLineage(lfSha(readSource,ref.path)===fieldOutboundCurrentSourcePin(contract,ref),'Stale current source bytes: '+ref.path);
+ for(const ref of [...KYC_EXPIRED_CURRENT_REVIEWED_SOURCES,...section.currentValidationSources])requireLineage(lfSha(readSource,ref.path)===weeklyCypCurrentSourcePin(contract,{...ref,sha256:fieldOutboundCurrentSourcePin(priorValidationContract,ref)}),'Stale current source bytes: '+ref.path);
  for(const ref of section.legacyProducerSources)requireLineage(sha(restorePlanMeasurementPublishedGProducerText(section,ref.path,bytes(readSource,ref.path)))===ref.sha256,'A published G producer body changed: '+ref.path);
- for(const delta of PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES){const spec=contract.extension.proofs.find(row=>row.id===delta.id),privacy=currentFieldPrivacyRevision(contract,spec);if(privacy){requireLineage(lfSha(readSource,spec.producer)===privacy.currentSha256,'Current L field producer is not the reviewed Git source: '+delta.id);requireLineage(sha(restorePlanMeasurementPublishedKPrivacyProducerText(contract,spec.producer,bytes(readSource,spec.producer)))===delta.currentProducerSha256,'Restored K field producer differs from the original G lineage: '+delta.id);}else requireLineage(lfSha(readSource,spec.producer)===fieldOutboundCurrentSourcePin(contract,{path:spec.producer,sha256:delta.currentProducerSha256}),'Current producer is not the reviewed Git source: '+delta.id);}
+ for(const delta of PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES){const spec=contract.extension.proofs.find(row=>row.id===delta.id),privacy=currentFieldPrivacyRevision(contract,spec);if(privacy){requireLineage(lfSha(readSource,spec.producer)===privacy.currentSha256,'Current L field producer is not the reviewed Git source: '+delta.id);requireLineage(sha(restorePlanMeasurementPublishedKPrivacyProducerText(contract,spec.producer,bytes(readSource,spec.producer)))===delta.currentProducerSha256,'Restored K field producer differs from the original G lineage: '+delta.id);}else requireLineage(lfSha(readSource,spec.producer)===weeklyCypCurrentSourcePin(contract,{path:spec.producer,sha256:fieldOutboundCurrentSourcePin(priorValidationContract,{path:spec.producer,sha256:delta.currentProducerSha256})}),'Current producer is not the reviewed Git source: '+delta.id);}
  return {version:PLAN_MEASUREMENT_CURRENT_CI_VERSION,publishedContractSha256:sha(JSON.stringify(prior,null,2)+'\n'),sourceCount:currentCompactFiles.length,publishedCurrentSourceCount:127,previousSourceCount:125,historicalSourceCount:117,sourcePathsSha256:digest(currentCompactFiles),sourceAdditions:[...PLAN_MEASUREMENT_CURRENT_SOURCES]};
+ }catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
 }
 export function validatePlanMeasurementCurrentCompactReceipt(proof,contract,readSource){
  const lineage=verifyPlanMeasurementCurrentSources(contract,readSource),h=contract.kycExpiredCurrentComposition;

@@ -1,3 +1,4 @@
+import {WEEKLY_CYP_CURRENT_REVISION,verifyWeeklyCypCurrentSources,validateWeeklyCypImportUiProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {validateCompanyOnboardingUxNativeProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import {WHATSAPP_FIELD_CONTINUITY_CURRENT_REVISION,WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWhatsappFieldContinuityPreviousContract,verifyWhatsappFieldContinuityCurrentSources,whatsappFieldCompanyNativeSourceFiles,validateWhatsappFieldNeutralStepNative,whatsappFieldNeutralStepShadowFixture} from '../../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
@@ -21,7 +22,7 @@ import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourc
 import {KYC_EXPIRED_CURRENT_ADDITIONS,KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,validateKycExpiredCurrentWorkspaceContract as validatePublishedKycWorkspaceContract,verifyKycExpiredCurrentSources as verifyPublishedKycSources} from '../../scripts/lib/kyc-expired-current-ci-lineage.mjs';
 import {PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES,planMeasurementCurrentDependencies,reconstructPublishedHContract,verifyPlanMeasurementCurrentSources,currentFieldPrivacyRevision,currentFieldPrivacySpecRevision} from '../../scripts/lib/plan-measurement-current-ci-lineage.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="04db9c3dd25a41425f3b8f71f5d51ab23fcf4ad575b88710350b005dff04502b";
+export const EXPECTED_CONTRACT_SHA256="0134ff841636654e447148bcc81f7c2127763089dd16b10166c4e26632b01b28";
 function validateKycExpiredCurrentWorkspaceContract(contract){return validatePublishedKycWorkspaceContract(contract.planMeasurementCurrentLineage?reconstructPublishedHContract(contract):contract);}
 function verifyKycExpiredCurrentSources(section,readSource){
  const current=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));
@@ -677,6 +678,7 @@ function companyKycExpiryNativeShadowFixture(){
  ]};
 }
 function validatePlanBaselineNativeProof(spec,proof,{expectedHead,expectedTree,readSource}){
+ const weekly=JSON.parse(readSource('.github/workspace-acceptance-contract.json')).weeklyCypCurrentRevision;
  if(!head(expectedTree))deny('PROOF_SOURCE_TREE_RESOLVER');
  if(proof.version!=='plan-baseline-postgres-v1'||proof.sourceState!=='EXACT_CI_SOURCE'||proof.trackedClean!==true)deny('PROOF_SOURCE_STATE');
  if(proof.sourceRevision!==expectedHead||proof.baseRevision!==expectedHead)deny('PROOF_SOURCE_HEAD');
@@ -689,7 +691,7 @@ function validatePlanBaselineNativeProof(spec,proof,{expectedHead,expectedTree,r
  if(!Array.isArray(proof.nativeLockObservations)||proof.nativeLockObservations.length!==1)deny('PROOF_NATIVE_LOCK');
  const lock=proof.nativeLockObservations[0];exactKeys(lock,['pid','wait_event_type','wait_event'],'PROOF_NATIVE_LOCK');
  if(!Number.isSafeInteger(lock.pid)||lock.pid<=0||lock.wait_event_type!=='Lock'||typeof lock.wait_event!=='string'||!lock.wait_event)deny('PROOF_NATIVE_LOCK');
- if(!Array.isArray(proof.checks)||proof.totalCheckCount!==spec.checkNames.length||proof.checks.length!==spec.checkNames.length)deny('PROOF_CHECK_NAMES');
+ if(!Array.isArray(proof.checks)||proof.totalCheckCount!==(weekly?WEEKLY_CYP_CURRENT_REVISION.baselineNative.totalCheckCount:spec.checkNames.length)||proof.checks.length!==spec.checkNames.length)deny('PROOF_CHECK_NAMES');
  for(const row of proof.checks){exactKeys(row,['check','status'],'PROOF_CHECK_NAMES');if(row.status!=='PASS')deny('PROOF_CHECK_NAMES');}
  equal(proof.checks.map(row=>row.check),spec.checkNames,'PROOF_CHECK_NAMES');
  if(['syntheticBlobWrites','syntheticBlobReads','localOoxmlAnalyses'].some(key=>!Number.isSafeInteger(proof[key])||proof[key]<=0))deny('PROOF_NATIVE_FIXTURE');
@@ -701,10 +703,30 @@ function validatePlanBaselineNativeProof(spec,proof,{expectedHead,expectedTree,r
   if(!Buffer.isBuffer(bytes)||!sha(ref.sha256)||hash(bytes)!==ref.sha256)deny('PROOF_SOURCE_HASH');
   if(ref.bytes!==bytes.length||ref.worktreeGitBlobOid!==createHash('sha1').update(Buffer.from('blob '+bytes.length+'\0')).update(bytes).digest('hex'))deny('PROOF_SOURCE_GIT_BLOB');
  }
+ if(weekly)validateWeeklyCypBaselineSupplement(proof,readSource);
  // The gate digest uses the common immutable path/hash projection; all richer
  // before/after byte and Git-object facts have already been checked above.
  proof.sourceManifest=proof.sourceManifest.map(({path,sha256})=>({path,sha256}));
 }
+function validateWeeklyCypBaselineSupplement(proof,readSource){
+ try{verifyWeeklyCypCurrentSources(JSON.parse(readSource('.github/workspace-acceptance-contract.json')),readSource);}catch{deny('PROOF_WEEKLY_CYP_SOURCE');}
+ const current=WEEKLY_CYP_CURRENT_REVISION.baselineNative;
+ if(proof.historicalCheckCount!==current.historicalCheckCount||proof.supplementalCheckCount!==current.addedCheckNames.length||proof.totalCheckCount!==current.totalCheckCount||!Array.isArray(proof.supplementalChecks))deny('PROOF_WEEKLY_CYP_CHECK_NAMES');
+ for(const row of proof.supplementalChecks){exactKeys(row,['check','status'],'PROOF_WEEKLY_CYP_CHECK_NAMES');if(row.status!=='PASS')deny('PROOF_WEEKLY_CYP_CHECK_NAMES');}
+ equal(proof.supplementalChecks.map(row=>row.check),current.addedCheckNames,'PROOF_WEEKLY_CYP_CHECK_NAMES');
+ const value=proof.investment;exactKeys(value,['status','sourceSha256','sourceCurveDigest','draftId','reviewReceiptId','applyReceiptId','selectionReceiptId','monthlyPeriodCount','weeklyPeriodCount','comparison','differenceAcknowledged','taskEffects','baselineAutomaticallySelected','taskSqlAttempts','tasksPreserved','nativeLockObservations','commitObservations','tamperCases','limits'],'PROOF_WEEKLY_CYP_NATIVE');
+ if(value.status!=='PASS'||!sha(value.sourceSha256)||!sha(value.sourceCurveDigest)||['draftId','reviewReceiptId','applyReceiptId','selectionReceiptId'].some(key=>typeof value[key]!=='string'||!value[key])||new Set([value.reviewReceiptId,value.applyReceiptId,value.selectionReceiptId]).size!==3||value.monthlyPeriodCount!==12||value.weeklyPeriodCount!==48||value.differenceAcknowledged!==true||value.taskEffects!==false||value.baselineAutomaticallySelected!==false||value.taskSqlAttempts!==0||!Number.isSafeInteger(value.tasksPreserved)||value.tasksPreserved<0||proof.financialTaskSqlAttempts!==0||!Number.isSafeInteger(proof.syntheticDocumentResponses)||proof.syntheticDocumentResponses<=0)deny('PROOF_WEEKLY_CYP_NATIVE');
+ equal(value.comparison,{status:'DIFFERENT',weeklySumDecimalText:'48.0480000',totalDecimalText:'12345678901234567890.1234500',differenceDecimalText:'-12345678901234567842.0754500'},'PROOF_WEEKLY_CYP_NATIVE');
+ if(!Array.isArray(value.nativeLockObservations)||value.nativeLockObservations.length!==1)deny('PROOF_WEEKLY_CYP_NATIVE');
+ for(const row of value.nativeLockObservations){exactKeys(row,['pid','wait_event_type','wait_event'],'PROOF_WEEKLY_CYP_NATIVE');if(!Number.isSafeInteger(row.pid)||row.pid<=0||row.wait_event_type!=='Lock'||typeof row.wait_event!=='string'||!row.wait_event)deny('PROOF_WEEKLY_CYP_NATIVE');}
+ const expected=['REVIEW_INVESTMENT','APPLY_INVESTMENT','SELECT'].flatMap(action=>['ACK_LOST','ROLLBACK'].map(mode=>({action,mode,recoveredState:mode==='ACK_LOST'?'RECORDED':'NOT_OBSERVED',replayed:mode==='ACK_LOST'})));
+ if(!Array.isArray(value.commitObservations)||value.commitObservations.length!==expected.length)deny('PROOF_WEEKLY_CYP_NATIVE');
+ value.commitObservations.forEach((row,index)=>{exactKeys(row,['action','mode','recoveredState','receiptId','replayed'],'PROOF_WEEKLY_CYP_NATIVE');const{receiptId,...facts}=row;if(typeof receiptId!=='string'||!receiptId)deny('PROOF_WEEKLY_CYP_NATIVE');equal(facts,expected[index],'PROOF_WEEKLY_CYP_NATIVE');});
+ equal(value.tamperCases,['weekly-cache','review-ack','review-receipt','apply-receipt','source-hash','active-pointer'],'PROOF_WEEKLY_CYP_NATIVE');
+ equal(value.limits,{syntheticWorkbook:true,syntheticSessions:true,syntheticBlob:true,realProviderRequests:0,realWorkbookImported:false,realHumanSelectionVerified:false,productionDataWritten:false,currencyConfirmed:false,calendarConfirmed:false,actualExecutionRecorded:false,paymentRecorded:false},'PROOF_WEEKLY_CYP_NATIVE');
+}
+// Decoder-only input, never a PostgreSQL execution or acceptance receipt.
+function weeklyCypBaselineShadow(){return {historicalCheckCount:16,supplementalCheckCount:7,totalCheckCount:23,supplementalChecks:WEEKLY_CYP_CURRENT_REVISION.baselineNative.addedCheckNames.map(check=>({check,status:'PASS'})),financialTaskSqlAttempts:0,syntheticDocumentResponses:1,investment:{status:'PASS',sourceSha256:'a'.repeat(64),sourceCurveDigest:'b'.repeat(64),draftId:'synthetic-draft',reviewReceiptId:'synthetic-review',applyReceiptId:'synthetic-apply',selectionReceiptId:'synthetic-select',monthlyPeriodCount:12,weeklyPeriodCount:48,comparison:{status:'DIFFERENT',weeklySumDecimalText:'48.0480000',totalDecimalText:'12345678901234567890.1234500',differenceDecimalText:'-12345678901234567842.0754500'},differenceAcknowledged:true,taskEffects:false,baselineAutomaticallySelected:false,taskSqlAttempts:0,tasksPreserved:1,nativeLockObservations:[{pid:102,wait_event_type:'Lock',wait_event:'transactionid'}],commitObservations:['REVIEW_INVESTMENT','APPLY_INVESTMENT','SELECT'].flatMap(action=>['ACK_LOST','ROLLBACK'].map(mode=>({action,mode,recoveredState:mode==='ACK_LOST'?'RECORDED':'NOT_OBSERVED',receiptId:'synthetic-'+action+'-'+mode,replayed:mode==='ACK_LOST'}))),tamperCases:['weekly-cache','review-ack','review-receipt','apply-receipt','source-hash','active-pointer'],limits:{syntheticWorkbook:true,syntheticSessions:true,syntheticBlob:true,realProviderRequests:0,realWorkbookImported:false,realHumanSelectionVerified:false,productionDataWritten:false,currencyConfirmed:false,calendarConfirmed:false,actualExecutionRecorded:false,paymentRecorded:false}}};}
 function documentCurveCurrentSourceLineageSelftest(contract,root){
  const checks=[];
  for(const spec of contract.extension.proofs){const dependencies=spec.kind==='PG_PLAN_BASELINE'?[DOCUMENT_CURVE_SOURCE,'tests/fixtures/plan-import-document-curve-synthetic.mjs']:documentCurveDependenciesFor(spec.kind);if(!dependencies.length)continue;
@@ -751,7 +773,7 @@ function documentCurveUiSelftest(workflow,contract,root){
  const screenshotManifest=['320-document-baseline.png','390-document-baseline.png','1280-document-baseline.png','390-amount-only-exact-money.png'].map((name,index)=>{const bytes=Buffer.alloc(24);Buffer.from([137,80,78,71,13,10,26,10]).copy(bytes);bytes.write('IHDR',12);bytes.writeUInt32BE([320,390,1280,390][index],16);bytes.writeUInt32BE(900,20);const path=DOCUMENT_CURVE_UI_ARTIFACTS[0]+'screenshots-shadow/'+name;evidence.set(path,bytes);return {path,sha256:hash(bytes)};});
  const proof={version:'plan-document-curve-ui-v1',status:'PASS',sourceState:'EXACT_CI_SOURCE',sourceRevision:expectedHead,sourceBaseRevision:expectedHead,sourceTree:expectedTree,trackedClean:true,environment:'isolated-localhost-next-exact-jsx-synthetic-document-wire',fixtureVersion:'synthetic-document-monthly-curve-wire-v1',widths:[320,390,1280],totalCheckCount:10,checks:[...[320,390,1280].map(width=>({check:'document-review-apply-explicit-baseline:'+width,width,documentWidth:width,targets:Array.from({length:7},()=>({width:44,height:44})),postActions:['UPLOAD','REVIEW_CURVE','APPLY_CURVE','SELECT'],taskWrites:0,baselineSelections:1})),{check:DOCUMENT_CURVE_UI_CHECKS[3],postCount:1,unknownCurrency:true,unknownCalendar:true,exactMoney:true,missingAmountInterruptsLine:true},{check:DOCUMENT_CURVE_UI_CHECKS[4],postCount:2,applyCount:0},{check:DOCUMENT_CURVE_UI_CHECKS[5],financialPosts:0,taskUploadCount:1},{check:DOCUMENT_CURVE_UI_CHECKS[6],postCount:3,recoveredOperationId:lostId},{check:DOCUMENT_CURVE_UI_CHECKS[7],postCount:1,retainedOperationId:unknownId},{check:DOCUMENT_CURVE_UI_CHECKS[8],postCount:1,privateFactsShown:false},{check:DOCUMENT_CURVE_UI_CHECKS[9],postCount:1,privateDraftCleared:true}],sourceManifest:manifest(sets.rendered),fixtureSourceManifest:manifest(sets.fixture),dependencyManifest:manifest(sets.dependencies),harnessSha256:spec.producerSha256,cleanupHelperSha256:hash(readSource('scripts/lib/owned-fixture-cleanup.mjs')),screenshotManifest,pageErrors:[],interceptErrors:[],externalRequests:[],apiRequests:requests,automaticPostCount:0,providerRequests:0,actualOcrVerified:false,productionLoginVerified:false,productionDataWritten:false,realPlanDocuments:false,realFinancialReview:false,physicalDeviceAccepted:false,cleanup:{browserClosed:true,serverClosed:true,gracefulCloseAcknowledged:true,fixtureRemoved:true,fixtureCleanupProof:{fixtureRemoved:true,postcondition:{absent:true}}}};
  const validate=(value,options={})=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,expectedTree,readSource,readEvidence:file=>evidence.get(file),...options}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(name,code,()=>validate(value));};
- good('complete-shadow-contract-not-browser-evidence',()=>assert.equal(validate(proof).checks,10));good('exact-current-browser22-fixture-and-combined-retain-prior9-and33',()=>{const additions=planMeasurementCurrentDependencies(spec.kind);assert.equal(sets.rendered.length,22);assert.equal(sets.fixture.length,9+additions.length);assert.equal(sets.combined.length,33+additions.length);assert.equal(sets.fixture.filter(file=>!additions.includes(file)).length,9);assert.equal(sets.combined.filter(file=>!additions.includes(file)).length,33);equal(sets.combined,spec.sourceFiles,'PROOF_SOURCE_MANIFEST');});good('eighteenth-binding-command-and-retained-artifact',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).extension.proofs.length,18);equal(workflow.jobs.plans.steps.find(step=>step.name===DOCUMENT_CURVE_UI_STEP.name),DOCUMENT_CURVE_UI_STEP,'WORKFLOW_NOT_EQUIVALENT');assert.ok(contract.lanes.plans.requiredRetainedEvidence.includes(spec.path));assert.ok(contract.lanes.plans.artifacts.includes(DOCUMENT_CURVE_UI_ARTIFACTS[0]));});
+ good('complete-shadow-contract-not-browser-evidence',()=>assert.equal(validate(proof).checks,10));good('exact-current-browser23-retains-frozen22-and-fixture-combined-prior9-and33',()=>{const additions=planMeasurementCurrentDependencies(spec.kind),cyp='src/lib/plan-import-cyp-curve.mjs',previousRendered=sets.rendered.filter(file=>file!==cyp);assert.equal(sets.rendered.length,23);assert.equal(sets.rendered.filter(file=>file===cyp).length,1);assert.equal(previousRendered.length,22);assert.equal(hash(canonical(previousRendered)),'0f5221bb8af053c18d8387492141378df09a9780845539b5bdd6fa3206e06efa');assert.equal(sets.fixture.length,9+additions.length);assert.equal(sets.combined.length,33+additions.length);assert.equal(sets.fixture.filter(file=>!additions.includes(file)).length,9);assert.equal(sets.combined.filter(file=>!additions.includes(file)).length,33);equal(sets.combined,spec.sourceFiles,'PROOF_SOURCE_MANIFEST');});good('eighteenth-binding-command-and-retained-artifact',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).extension.proofs.length,18);equal(workflow.jobs.plans.steps.find(step=>step.name===DOCUMENT_CURVE_UI_STEP.name),DOCUMENT_CURVE_UI_STEP,'WORKFLOW_NOT_EQUIVALENT');assert.ok(contract.lanes.plans.requiredRetainedEvidence.includes(spec.path));assert.ok(contract.lanes.plans.artifacts.includes(DOCUMENT_CURVE_UI_ARTIFACTS[0]));});
  bad('missing-tree','PROOF_SOURCE_TREE_RESOLVER',()=>validate(proof,{expectedTree:undefined}));bad('missing-screenshot-reader','PROOF_SCREENSHOT_RESOLVER',()=>validate(proof,{readEvidence:undefined}));bad('invalid-json','PROOF_JSON',()=>validateExtensionProof(spec,Buffer.from('{'),{expectedHead,expectedTree,readSource}));
  for(const [key,files] of [['sourceManifest',sets.rendered],['fixtureSourceManifest',sets.fixture],['dependencyManifest',sets.dependencies]])for(const file of files){mutate('missing-'+key+'-'+file,'PROOF_SOURCE_MANIFEST',p=>{p[key]=p[key].filter(ref=>ref.path!==file);});mutate('substituted-'+key+'-'+file,'PROOF_SOURCE_MANIFEST',p=>{p[key].find(ref=>ref.path===file).path='src/lib/foreign-document-curve.mjs';});mutate('stale-'+key+'-'+file,'PROOF_SOURCE_HASH',p=>{p[key].find(ref=>ref.path===file).sha256='f'.repeat(64);});mutate('wrong-GitOID-'+key+'-'+file,'PROOF_SOURCE_GIT_BLOB',p=>{p[key].find(ref=>ref.path===file).gitBlobOid='f'.repeat(40);});}
  bad('external-stylesheet-dependency','PROOF_DOCUMENT_SOURCE_IMPORT',()=>validate(proof,{readSource:file=>file==='src/app/(identity)/cuenta/plan-import-panel.module.css'?Buffer.from('@import \"https://foreign.invalid/private.css\";'):readSource(file)}));
@@ -764,10 +786,18 @@ function documentCurveUiSelftest(workflow,contract,root){
  for(const [name,code,edit] of [['command-removed','DOCUMENT_CURVE_UI_COMMAND',c=>{const block=c.blocks.find(row=>row.id===62);block.step.run=block.step.run.replace('node scripts/verify-plan-document-curve-ui.mjs','node scripts/foreign.mjs');block.commandSha256=hash(block.step.run);}],['source-substituted','DOCUMENT_CURVE_UI_SOURCE_CONTRACT',c=>{const target=c.extension.proofs.find(row=>row.kind==='UI_DOCUMENT_CURVE');target.sourceFiles[target.sourceFiles.indexOf(DOCUMENT_CURVE_SOURCE)]='src/lib/foreign-document-curve.mjs';}],['checks-substituted','DOCUMENT_CURVE_UI_CHECK_NAMES',c=>{c.extension.proofs.find(row=>row.kind==='UI_DOCUMENT_CURVE').checkNames[0]='foreign';}]]){const changed=clone(contract);edit(changed);bad('contract-'+name,code,()=>validateDocumentCurveUiContract(changed));}
  return checks;
 }
-function documentCurveCopyShadow(readSource){
+function documentCurveCopyV1Shadow(readSource){
  const view='src/app/(identity)/cuenta/plan-source-curve.mjs',original=readSource(view),text=utf8(original),needle='../../../lib/plan-import-document-curve.mjs';
  if(text.split(needle).length!==2)deny('PROOF_DOCUMENT_CURVE_COPY');
  return {documentCurveSourceManifest:[view,DOCUMENT_CURVE_SOURCE,DOCUMENT_CURVE_COPY_HELPER].map(file=>({path:file,sha256:hash(readSource(file))})),fixtureTransforms:[{path:view,kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:hash(original),copiedBeforeSha256:hash(original),fixtureSha256:hash(Buffer.from(text.replace(needle,'./plan-import-document-curve.mjs'))),fixtureRelativePath:'app/plan-source-curve.mjs',dependencySourcePath:DOCUMENT_CURVE_SOURCE,dependencyFixturePath:'app/plan-import-document-curve.mjs'}]};
+}
+function documentCurveCopyShadow(readSource){
+ const view='src/app/(identity)/cuenta/plan-source-curve.mjs',original=readSource(view),text=utf8(original),cyp='../../../lib/plan-import-cyp-curve.mjs';
+ if(!text.includes(cyp))return documentCurveCopyV1Shadow(readSource);
+ if(hash(Buffer.from(utf8(readSource(DOCUMENT_CURVE_COPY_HELPER)).replaceAll('\r\n','\n')))!==WEEKLY_CYP_CURRENT_REVISION.documentCurveCopy.helperLfSha256)deny('PROOF_DOCUMENT_CURVE_COPY');
+ let generated=original;const fixtureTransforms=[];
+ for(const dependency of WEEKLY_CYP_CURRENT_REVISION.documentCurveCopy.dependencies){const needle='../../../lib/'+path.posix.basename(dependency);if(text.split(needle).length!==2)deny('PROOF_DOCUMENT_CURVE_COPY');const before=generated;generated=Buffer.from(utf8(before).replace(needle,'./'+path.posix.basename(dependency)));fixtureTransforms.push({path:view,kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:hash(original),copiedBeforeSha256:hash(before),fixtureSha256:hash(generated),fixtureRelativePath:'app/plan-source-curve.mjs',dependencySourcePath:dependency,dependencyFixturePath:'app/'+path.posix.basename(dependency)});}
+ return {documentCurveSourceManifest:[view,DOCUMENT_CURVE_SOURCE,DOCUMENT_CURVE_COPY_HELPER,'src/lib/plan-import-cyp-curve.mjs'].map(file=>({path:file,sha256:hash(readSource(file))})),fixtureTransforms};
 }
 function validateDocumentCurveCopyProof(spec,proof,readSource){
  if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO','UI_JOINT','UI_CAUSAL'].includes(spec.kind))return;
@@ -775,13 +805,14 @@ function validateDocumentCurveCopyProof(spec,proof,readSource){
  if(!Array.isArray(proof.documentCurveSourceManifest)||!Array.isArray(proof.fixtureTransforms))deny('PROOF_DOCUMENT_CURVE_COPY');
  for(const ref of proof.documentCurveSourceManifest)exactKeys(ref,['path','sha256'],'PROOF_DOCUMENT_CURVE_COPY');
  equal([...proof.documentCurveSourceManifest].sort((a,b)=>a.path.localeCompare(b.path)),expected.documentCurveSourceManifest.sort((a,b)=>a.path.localeCompare(b.path)),'PROOF_DOCUMENT_CURVE_COPY');
- if(proof.fixtureTransforms.length!==1)deny('PROOF_DOCUMENT_CURVE_COPY');exactKeys(proof.fixtureTransforms[0],Object.keys(expected.fixtureTransforms[0]),'PROOF_DOCUMENT_CURVE_COPY');equal(proof.fixtureTransforms,expected.fixtureTransforms,'PROOF_DOCUMENT_CURVE_COPY');
+ if(proof.fixtureTransforms.length!==expected.fixtureTransforms.length)deny('PROOF_DOCUMENT_CURVE_COPY');proof.fixtureTransforms.forEach((row,index)=>exactKeys(row,Object.keys(expected.fixtureTransforms[index]),'PROOF_DOCUMENT_CURVE_COPY'));equal(proof.fixtureTransforms,expected.fixtureTransforms,'PROOF_DOCUMENT_CURVE_COPY');
 }
 function documentCurveCopySelftest(spec,proof,validate){
  if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO','UI_JOINT','UI_CAUSAL'].includes(spec.kind))return [];
  const checks=[],bad=(name,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');checks.push({name:spec.id+'-document-copy-'+name,result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure source/relocation shadow; no UI execution'});};
  bad('source-map-missing',p=>{delete p.documentCurveSourceManifest;});bad('source-map-substituted',p=>{p.documentCurveSourceManifest[1].path='src/lib/foreign-document-curve.mjs';});bad('source-map-stale',p=>{p.documentCurveSourceManifest[1].sha256='f'.repeat(64);});bad('source-map-duplicate',p=>{p.documentCurveSourceManifest[1]=clone(p.documentCurveSourceManifest[0]);});bad('relocation-missing',p=>{p.fixtureTransforms=[];});
  for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('relocation-'+key,p=>{p.fixtureTransforms[0][key]='f'.repeat(64);});bad('relocation-foreign-root',p=>{p.fixtureTransforms[0].fixtureRelativePath='../foreign.mjs';});bad('relocation-wrong-module',p=>{p.fixtureTransforms[0].dependencySourcePath='src/lib/foreign-document-curve.mjs';});bad('relocation-untracked-fields',p=>{p.fixtureTransforms[0].exactCopied=true;});
+ if(proof.fixtureTransforms.length===2){bad('cyp-module-omitted',p=>{p.documentCurveSourceManifest=p.documentCurveSourceManifest.filter(row=>row.path!=='src/lib/plan-import-cyp-curve.mjs');});bad('second-relocation-omitted',p=>{p.fixtureTransforms.pop();});bad('relocations-reordered',p=>{p.fixtureTransforms.reverse();});for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('second-relocation-'+key,p=>{p.fixtureTransforms[1][key]='f'.repeat(64);});}
  return checks;
 }
 export function validateExtensionProof(spec,bytes,{expectedHead,expectedTree,readSource,readEvidence,runId,runAttempt}){
@@ -894,9 +925,16 @@ function planBaselineSelftest(workflow,contract,root){
  const bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name:'plan-baseline-'+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial AST/emitter and native-proof shadow; no native execution'});};
  const refs=spec.sourceFiles.map(file=>{const bytes=readSource(file);return {path:file,sha256:hash(bytes),bytes:bytes.length,worktreeGitBlobOid:createHash('sha1').update(Buffer.from('blob '+bytes.length+'\0')).update(bytes).digest('hex')};});
  const proof={version:'plan-baseline-postgres-v1',status:'PASS',postgresExecuted:true,syntheticOnly:true,engine:{version:'PostgreSQL 17.6 shadow validator input',number:'170006',timezone:'UTC'},totalCheckCount:spec.checkNames.length,checks:spec.checkNames.map(check=>({check,status:'PASS'})),nativeLockObservations:[{pid:101,wait_event_type:'Lock',wait_event:'transactionid'}],sourceRevision:expectedHead,sourceTree:expectedTree,baseRevision:expectedHead,baseTree:expectedTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,sourceManifest:refs,sourceManifestAfter:clone(refs),harnessSha256:spec.producerSha256,syntheticBlobWrites:1,syntheticBlobReads:1,localOoxmlAnalyses:1,uncontrolledFetchAttempts:0,realProviderRequests:0,realProviderAcceptanceVerified:false,productionDataWritten:false,realWorkbookImported:false,realHumanSelectionVerified:false,currencyConfirmed:false,calendarConfirmed:false,actualCurveCreated:false,poolClosed:true,databaseRemoved:true,cleanup:{poolClosed:true,databaseRemoved:true,adminClosed:true,pgStatActivityBeforeDrop:0}};
+ if(contract.weeklyCypCurrentRevision)Object.assign(proof,weeklyCypBaselineShadow());
  const validate=(value,options={})=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,expectedTree,readSource,...options});
  const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(name,code,()=>validate(value));};
  good('full-shadow-input-validates-not-execution-evidence',()=>assert.equal(validate(proof).checks,16));
+ if(contract.weeklyCypCurrentRevision){
+  good('weekly-seven-additional-native-names-bound-to-actual-producer-AST',()=>{const tree=parse(readFileSync(path.join(root,spec.producer),'utf8'),{sourceType:'module'}),names=tree.program.body.filter(node=>node.type==='ExportNamedDeclaration'&&node.declaration?.type==='VariableDeclaration').flatMap(node=>node.declaration.declarations).find(node=>node.id.name==='PLAN_BASELINE_INVESTMENT_POSTGRES_CHECKS');assert.ok(names);equal(names.init.arguments[0].elements.map(node=>node.value),WEEKLY_CYP_CURRENT_REVISION.baselineNative.addedCheckNames,'PROOF_WEEKLY_CYP_CHECK_NAMES');});
+  for(const[name,edit]of [['omitted',p=>p.supplementalChecks.pop()],['duplicate',p=>p.supplementalChecks.push(clone(p.supplementalChecks[0]))],['reordered',p=>p.supplementalChecks.reverse()],['same-count-foreign',p=>{p.supplementalChecks[0].check='foreign';}]])mutate('weekly-'+name,'PROOF_WEEKLY_CYP_CHECK_NAMES',edit);
+  mutate('weekly-historical-only','PROOF_CHECK_NAMES',p=>{p.totalCheckCount=16;delete p.investment;delete p.supplementalChecks;});
+  for(const[name,edit]of [['missing-lock',p=>{p.investment.nativeLockObservations=[];}],['task-SQL',p=>{p.investment.taskSqlAttempts=1;}],['automatic-baseline',p=>{p.investment.baselineAutomaticallySelected=true;}],['missing-ACK-observation',p=>p.investment.commitObservations.pop()],['wrong-decimal',p=>{p.investment.comparison.differenceDecimalText='0';}],['tamper-case-omitted',p=>p.investment.tamperCases.pop()],['real-workbook-claim',p=>{p.investment.limits.realWorkbookImported=true;}]])mutate('weekly-'+name,'PROOF_WEEKLY_CYP_NATIVE',edit);
+ }
  good('actual-emitter-and-independent-AST-both-exact33',()=>{equal(planBaselineActualManifestEmitter(root),spec.sourceFiles,'PROOF_SOURCE_MANIFEST');equal(planBaselineCurrentSourceFiles(root),spec.sourceFiles,'PROOF_SOURCE_MANIFEST');});
  good('native-version-and-current-sixteen-names-from-actual-producer-AST',()=>{const ast=parse(readFileSync(path.join(root,spec.producer),'utf8'),{sourceType:'module'}),declarations=ast.program.body.filter(node=>node.type==='ExportNamedDeclaration'&&node.declaration?.type==='VariableDeclaration').flatMap(node=>node.declaration.declarations),version=declarations.find(node=>node.id.name==='PLAN_BASELINE_POSTGRES_VERSION'),names=declarations.find(node=>node.id.name==='PLAN_BASELINE_POSTGRES_CHECKS');assert.equal(version.init.value,'plan-baseline-postgres-v1');const array=names.init.arguments[0];assert.equal(array.type,'ArrayExpression');assert.ok(array.elements.every(node=>node.type==='StringLiteral'));equal(array.elements.map(node=>node.value),spec.checkNames,'PROOF_CHECK_NAMES');});
  good('pre-document-native13-and-source31-lineage-retained',()=>{assert.equal(PLAN_BASELINE_PRE_DOCUMENT_CHECKS.length,13);equal(spec.checkNames.slice(0,13),PLAN_BASELINE_PRE_DOCUMENT_CHECKS,'PROOF_CHECK_NAMES');const previous=spec.sourceFiles.filter(file=>![DOCUMENT_CURVE_SOURCE,'tests/fixtures/plan-import-document-curve-synthetic.mjs',...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(spec)].includes(file));assert.equal(previous.length,31);assert.equal(hash(canonical(previous)),PLAN_BASELINE_PRE_DOCUMENT_SOURCE_PATHS_SHA256);});
@@ -984,14 +1022,14 @@ export function currentProducerSourceFiles(spec,root){
  }
  if(spec.kind==='PORTFOLIO_UNIT')return portfolioUnitSourceFiles(root);
  if(['UI_PORTFOLIO','UI_PREPARATION','UI_INTAKE'].includes(spec.kind)){assert.equal(text.split("from './lib/plan-document-curve-fixture-copy.mjs'").length,2,'One actual reviewed copier helper import');assert.equal(text.split('copyPlanDocumentCurveFixture({').length,2,'One actual reviewed copier call');}
- if(spec.kind==='UI_PORTFOLIO')return [...array('files').map(file=>'src/app/(identity)/cuenta/'+file),...documentCurveDependenciesFor(spec.kind)].sort();
+ if(spec.kind==='UI_PORTFOLIO')return [...array('files').map(file=>'src/app/(identity)/cuenta/'+file),...documentCurveDependenciesFor(spec.kind),'src/lib/plan-import-cyp-curve.mjs'].sort();
  if(spec.kind==='PG_PORTFOLIO')return walk(array('sourcePaths'));
  if(spec.kind==='PG_BANK')return array('sourceFiles').sort();
  if(spec.kind==='PG_INTAKE')return array('sourcePaths').sort();
  if(spec.kind==='PG_PREPARATION')return array('sourcePaths').sort();
- if(spec.kind==='UI_PREPARATION')return [...array('copiedFiles').map(file=>'src/app/(identity)/cuenta/'+file),...documentCurveDependenciesFor(spec.kind)].sort();
+ if(spec.kind==='UI_PREPARATION')return [...array('copiedFiles').map(file=>'src/app/(identity)/cuenta/'+file),...documentCurveDependenciesFor(spec.kind),'src/lib/plan-import-cyp-curve.mjs'].sort();
  if(spec.kind==='UI_BANK'){const seeds=[...text.matchAll(/\bvisit\('([^']+)'(?:,true)?\)/g)].map(match=>match[1]);assert.equal(seeds.length,3,'Exact current bank producer roots');return walk(seeds);}
- if(spec.kind==='UI_INTAKE')return [...array('files').map(file=>'src/app/(identity)/cuenta/'+file),...literals(/\.\.\.\[([^\]]+)\]\.map\(file=>/g),...documentCurveDependenciesFor(spec.kind)].sort();
+ if(spec.kind==='UI_INTAKE')return [...array('files').map(file=>'src/app/(identity)/cuenta/'+file),...literals(/\.\.\.\[([^\]]+)\]\.map\(file=>/g),...documentCurveDependenciesFor(spec.kind),'src/lib/plan-import-cyp-curve.mjs'].sort();
  if(spec.kind==='UI_JOINT'||spec.kind==='UI_CAUSAL')return walk(literals(/for\(const file of \[([^\]]+)\]\)visit\(file\);/g),array('files').map(file=>'src/app/(identity)/cuenta/'+file));
   assert.equal(spec.kind,'PG_COMPANY_KYC');const originalCompanyRoots="const sourceManifest=[...sources('src/lib'),'src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/kyc-context-feedback-native.mjs']",currentCompanyRoots=originalCompanyRoots.slice(0,-1)+",'scripts/lib/kyc-current-image-native.mjs'"+']';assert.equal(text.split(currentCompanyRoots).length,2,'One exact current company producer declaration');assert.equal(currentCompanyRoots.replace(",'scripts/lib/kyc-current-image-native.mjs'",''),originalCompanyRoots,'Exact previous company producer roots remain unchanged');
  const files=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?files(relative+'/'+entry.name):[relative+'/'+entry.name]);
@@ -1897,11 +1935,16 @@ export function readLaneNeedsEnvironment(env){
 export function provenance({root,lane,contract,expectedHead,workflowSha256,env=process.env}){
  if(!LANES.includes(lane))deny('UNKNOWN_LANE');
  const actual=identity(root,expectedHead),clock=clocks(env),owner=contract.lanes[lane];
+ const readSource=gitSource(root,actual);
+ const expectedTree=execFileSync('git',['rev-parse',actual+'^{tree}'],{cwd:root,encoding:'utf8'}).trim();
+ // Preserve verified screenshot bytes through the existing narrow upload
+ // pattern. The producer's private temporary paths remain original provenance.
+ let weeklyUi=null;
+ if(lane==='plans'&&contract.weeklyCypCurrentRevision){const bytes=readFileSync(path.join(root,'.vercel/private/plan-import-ui-validation.json'));weeklyUi={bytes,screenshots:retainWeeklyCypImportUiScreenshots({root,bytes,readSource,expectedHead:actual,expectedTree})};}
  const files=collect(root,owner.artifacts);
  requireEvidence(files,owner.requiredRetainedEvidence,'MISSING_REQUIRED_RETAINED_EVIDENCE');
  const producedNotUploaded=collect(root,owner.requiredProducedEvidence);
  requireEvidence(producedNotUploaded,owner.requiredProducedEvidence,'MISSING_REQUIRED_PRODUCED_EVIDENCE');
-  const readSource=gitSource(root,actual);const expectedTree=execFileSync('git',['rev-parse',actual+'^{tree}'],{cwd:root,encoding:'utf8'}).trim();
   verifyWhatsappPlanTestSources(contract,readSource);
   verifyKycExpiredCurrentSources(contract.kycExpiredCurrentComposition,readSource);
  // This is an explicit semantic check of the retained native block29 proof.
@@ -1911,12 +1954,35 @@ export function provenance({root,lane,contract,expectedHead,workflowSha256,env=p
   if(!retained||retained.sha256!==hash(nativeBytes)||retained.bytes!==nativeBytes.length)deny('PROOF_COMPANY_CORE_FILE_BINDING');
   try{validateCompanyOnboardingUxNativeProofBytes(nativeBytes,readSource);}catch(error){if(error.code==='COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED')deny('PROOF_COMPANY_CORE_BOUNDARY');throw error;}
  }
+ // The same retained block12 browser bytes must contain all160 historical
+ // journeys plus the four canonical v5 journeys. Viewport PNGs are read here;
+ // this local synthetic check does not certify a human or provider workflow.
+ if(weeklyUi){
+  const uiPath='.vercel/private/plan-import-ui-validation.json',retained=files.find(file=>file.path===uiPath);
+  if(!retained||retained.sha256!==hash(weeklyUi.bytes)||retained.bytes!==weeklyUi.bytes.length)deny('PROOF_WEEKLY_CYP_UI_FILE_BINDING');
+  validateWeeklyCypRetainedScreenshotBindings(files,weeklyUi.screenshots);
+ }
 
   const extensionProofBindings=contract.extension.proofs.filter(p=>p.lane===lane).map(spec=>validateExtensionProof(spec,readFileSync(path.join(root,spec.path)),{expectedHead:actual,expectedTree,...clock,readSource,readEvidence:file=>readFileSync(path.join(root,cleanPath(file)))}));
  const record=seal({version:2,proofBindings:extensionProofBindings,lane,head:actual,...clock,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
  if(Buffer.byteLength(JSON.stringify(record))>400*1024)deny('PROVENANCE_LIMIT');
  assertLaneOutputSize(JSON.stringify(record));
  return record;
+}
+export function retainWeeklyCypImportUiScreenshots({root,bytes,readSource,expectedHead,expectedTree}){
+ const originals=new Map(),readEvidence=file=>{const target=path.join(root,cleanPath(file)),stat=lstatSync(target);if(!stat.isFile()||stat.isSymbolicLink()||!realpathSync(target).startsWith(realpathSync(root)+path.sep))deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_SOURCE');const data=readFileSync(target);originals.set(file,data);return data;};
+ try{validateWeeklyCypImportUiProofBytes(bytes,readSource,{expectedHead,expectedTree,readEvidence});}catch(error){if(error.code==='WEEKLY_CYP_UI_PROOF_REJECTED')deny('PROOF_WEEKLY_CYP_UI_BOUNDARY');throw error;}
+ const proof=JSON.parse(utf8(bytes)),retained=[];
+ for(const declaration of WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots){const source=proof.investmentCurveChecks.find(row=>row.width===declaration.width),data=originals.get(source.screenshot),target=path.join(root,cleanPath(declaration.path));if(!Buffer.isBuffer(data)||!realpathSync(path.dirname(target)).startsWith(realpathSync(root)+path.sep))deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_SOURCE');
+  // Preflight forbids stale evidence. Exclusive creation also prevents an
+  // existing file or link from being overwritten by the retention seam.
+  writeFileSync(target,data,{flag:'wx'});if(!readFileSync(target).equals(data))deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING');retained.push({path:declaration.path,sha256:hash(data),bytes:data.length});}
+ return retained;
+}
+export function validateWeeklyCypRetainedScreenshotBindings(files,expected=null){
+ if(!Array.isArray(files))deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING');
+ if(expected!==null&&(!Array.isArray(expected)||expected.length!==4||new Set(expected.map(row=>row.path)).size!==4))deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING');
+ for(const declaration of WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots){const matches=files.filter(row=>row.path===declaration.path);if(matches.length!==1||!sha(matches[0].sha256)||!Number.isSafeInteger(matches[0].bytes)||matches[0].bytes<=24)deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING');if(expected){const bound=expected.find(row=>row.path===declaration.path);if(!bound||bound.sha256!==matches[0].sha256||bound.bytes!==matches[0].bytes)deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING');}}
 }
 export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttempt,readSource}){
  validateContract(contract);if(!head(expectedHead)||!sha(workflowSha256)||!positive(runId)||!positive(runAttempt))deny('EXPECTED_IDENTITY_INVALID');
@@ -1948,6 +2014,7 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
   equal(record.requiredRetainedEvidence,contract.lanes[lane].requiredRetainedEvidence,'RETAINED_EVIDENCE_CONTRACT');
   equal(record.requiredProducedEvidence,contract.lanes[lane].requiredProducedEvidence,'PRODUCED_EVIDENCE_CONTRACT');
   requireEvidence(record.files,record.requiredRetainedEvidence,'MISSING_REQUIRED_RETAINED_EVIDENCE');
+  if(lane==='plans'&&contract.weeklyCypCurrentRevision)validateWeeklyCypRetainedScreenshotBindings(record.files);
   if(!Array.isArray(record.producedNotUploaded)||record.producedNotUploaded.length!==record.requiredProducedEvidence.length)deny('MISSING_REQUIRED_PRODUCED_EVIDENCE');
   for(const file of record.producedNotUploaded){
    exactKeys(file,['path','sha256','bytes'],'INVALID_EVIDENCE_SHAPE');cleanPath(file.path);
@@ -1966,8 +2033,9 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
 }
 function expectedNeeds(contract,expectedHead,workflowSha256,readSource){
  return Object.fromEntries(LANES.map((lane,i)=>{
-  const owner=contract.lanes[lane],file=filename=>({path:filename,sha256:'1'.repeat(64),bytes:128});
-  const record=seal({version:2,proofBindings:proofBindings(contract,lane,owner.requiredRetainedEvidence.map(file),expectedHead,readSource),lane,head:expectedHead,runId:'100',runAttempt:'1',workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded:owner.requiredProducedEvidence.map(file),verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files:owner.requiredRetainedEvidence.map(file)});
+  const owner=contract.lanes[lane],file=filename=>({path:filename,sha256:'1'.repeat(64),bytes:128}),files=owner.requiredRetainedEvidence.map(file);
+  if(lane==='plans'&&contract.weeklyCypCurrentRevision)files.push(...WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots.map(row=>file(row.path)));
+  const record=seal({version:2,proofBindings:proofBindings(contract,lane,owner.requiredRetainedEvidence.map(file),expectedHead,readSource),lane,head:expectedHead,runId:'100',runAttempt:'1',workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded:owner.requiredProducedEvidence.map(file),verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
   return [lane,{result:'success',outputs:{provenance:JSON.stringify(record),artifactId:String(i+1),artifactDigest:'2'.repeat(64)}}];
  }));
 }
@@ -2097,7 +2165,8 @@ export function selftest(workflow,contract,root=process.cwd()){
   ['always-green-gate',w=>{w.jobs.workspace.steps[4].run='true';}],
   ['changed-upload-path',w=>{w.jobs.channels.steps.at(-1).with.path+='.vercel/private/**\n';}]
  ]){const w=clone(original);edit(w);bad(name,'WORKFLOW_NOT_EQUIVALENT',()=>equivalent(w,contract));}
- good('all-three-optional-PNG-patterns-absent',()=>assert.equal(gate(input).state,'PASS'));
+ good('all-historical-optional-PNGs-absent-with-required-weekly-captures-present',()=>assert.equal(gate(input).state,'PASS'));
+ if(contract.weeklyCypCurrentRevision)for(const screenshot of WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots){const n=clone(needs),r=JSON.parse(n.plans.outputs.provenance);r.files=r.files.filter(file=>file.path!==screenshot.path);delete r.manifestSha256;n.plans.outputs.provenance=JSON.stringify(seal(r));bad('weekly-retained-capture-omitted-'+screenshot.width,'PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING',()=>gate({...input,needs:n}));}
  for(const lane of LANES)for(const pattern of contract.lanes[lane].optionalArtifactPatterns.filter(pattern=>!PORTFOLIO_ARTIFACTS.includes(pattern))){
   const n=clone(needs),r=JSON.parse(n[lane].outputs.provenance);
   r.files.push({path:pattern.replaceAll('*','fixture'),sha256:'4'.repeat(64),bytes:128});

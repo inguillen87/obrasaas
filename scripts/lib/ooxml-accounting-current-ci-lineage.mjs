@@ -1,3 +1,4 @@
+import {restoreWeeklyCypPreviousContract,weeklyCypCurrentSourcePin} from './home-decisions-current-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
 import {restoreParticipantPreanalysisPreviousContract,participantPreanalysisCurrentSourcePin,participantPreanalysisPriorValidationPin,verifyParticipantPreanalysisCurrentSources} from './participant-preanalysis-current-ci-lineage.mjs';
 
@@ -56,23 +57,24 @@ export function restoreOoxmlAccountingPreviousContract(contract){
 }
 
 export function ooxmlAccountingCurrentSourcePin(contract,ref){
+ const section=revision(contract),change=section&&[...section.reviewedSourceChanges,...section.validationDeltas].find(row=>row.path===ref.path);
+ if(change)requireLineage(ref.sha256===change.previousSha256,'The original OOXML reviewed source pin must remain unchanged');
  const preanalysisPin=participantPreanalysisCurrentSourcePin(contract,ref);if(preanalysisPin!==ref.sha256)return preanalysisPin;
- const section=revision(contract);if(!section)return ref.sha256;
- const change=[...section.reviewedSourceChanges,...section.validationDeltas].find(row=>row.path===ref.path);
  if(!change)return ref.sha256;
- requireLineage(ref.sha256===change.previousSha256,'The original OOXML reviewed source pin must remain unchanged');
  return change.currentSha256;
 }
 
 export function verifyOoxmlAccountingCurrentSources(contract,readSource){
+ try{
  verifyParticipantPreanalysisCurrentSources(contract,readSource);
- const currentContract=contract;contract=restoreParticipantPreanalysisPreviousContract(contract);
+ const currentContract=contract,priorValidationContract=restoreWeeklyCypPreviousContract(contract);contract=restoreParticipantPreanalysisPreviousContract(priorValidationContract);
  const section=revision(contract);if(!section)return null;
  restoreOoxmlAccountingPreviousContract(contract);
  requireLineage(typeof readSource==='function','Current OOXML source reader required');
  for(const row of [...section.reviewedSourceChanges.map(row=>({path:row.path,sha256:row.currentSha256})),...section.validationDeltas.map(row=>({path:row.path,sha256:row.currentSha256})),...section.validationSources]){
   const bytes=readSource(row.path);requireLineage(Buffer.isBuffer(bytes),'Missing current OOXML source: '+row.path);
-  const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===participantPreanalysisPriorValidationPin(currentContract,row),'Stale current OOXML source: '+row.path);
+  const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===weeklyCypCurrentSourcePin(currentContract,{...row,sha256:participantPreanalysisPriorValidationPin(priorValidationContract,row)}),'Stale current OOXML source: '+row.path);
  }
  return {version:1,previousContractSha256:section.previousContractSha256,reviewedSourceChanges:section.reviewedSourceChanges.map(row=>row.path),historicalPinsPreserved:true,nativeAcceptance:false};
+ }catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
 }

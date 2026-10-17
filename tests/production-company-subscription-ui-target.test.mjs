@@ -24,8 +24,9 @@ test('server subprocess receives operating-system inputs and no provider, databa
   assert.deepEqual(result,{PATH:'os-path',TEMP:'temporary',NEXT_TELEMETRY_DISABLED:'1',NODE_ENV:'development'});
 });
 test('AST closure includes actual subscription, usage, session and durable recovery sources exactly once',() => {
-  const files = companySubscriptionUiSourceFiles(root);assert.equal(new Set(files).size,files.length);assert.equal(files.length,20);
+  const files = companySubscriptionUiSourceFiles(root);assert.equal(new Set(files).size,files.length);assert.equal(files.length,21);
   const baselineDependencies = ['src/app/(identity)/cuenta/plan-baseline-view.mjs','src/app/(identity)/cuenta/plan-source-curve.mjs'];
+  const curveDependencies = ['src/lib/plan-import-document-curve.mjs','src/lib/plan-import-cyp-curve.mjs'];
   for (const file of baselineDependencies) assert.ok(files.includes(file),file);
   const legacySubscriptionSources = [
     'src/app/(identity)/cuenta/company-channel-view.mjs',
@@ -47,9 +48,9 @@ test('AST closure includes actual subscription, usage, session and durable recov
     'src/lib/company-entitlement.mjs',
   ];
   assert.equal(legacySubscriptionSources.length,17);
-  assert.deepEqual(files.filter(file => !baselineDependencies.includes(file)&&file!=='src/lib/plan-import-document-curve.mjs'),legacySubscriptionSources);
-  assert.deepEqual(files.filter(file=>file!=='src/lib/plan-import-document-curve.mjs'),[...legacySubscriptionSources,...baselineDependencies].sort());
-  assert.ok(files.includes('src/lib/plan-import-document-curve.mjs'));
+  assert.deepEqual(files.filter(file => !baselineDependencies.includes(file)&&!curveDependencies.includes(file)),legacySubscriptionSources);
+  assert.deepEqual(files,[...legacySubscriptionSources,...baselineDependencies,...curveDependencies].sort());
+  for (const file of curveDependencies) assert.ok(files.includes(file),file);
   for (const suffix of ['company-subscription-panel.js','company-subscription-view.mjs','company-subscription-panel.module.css','workspace-session-request.mjs','workspace-recovery-storage.mjs','company-usage-panel.js']) assert.ok(files.some(file => file.endsWith(suffix)),suffix);
   assert.deepEqual(companySubscriptionUiFixtureSourceFiles(root),['scripts/lib/company-subscription-ui-fixture.mjs','scripts/lib/owned-fixture-cleanup.mjs','src/lib/company-subscription-catalog.mjs','src/lib/workspace-policy.mjs']);
 });
