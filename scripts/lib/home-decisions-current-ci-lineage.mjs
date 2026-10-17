@@ -4066,9 +4066,67 @@ export const CUSTOMER_PHONE_SELECTION_CURRENT_REVISION=Object.freeze({
   },
   "nativeOrBrowserAcceptance": false
 }); // PHONE_SELECTION_REVIEWED_REVISION_DATA
+export const PARTICIPANT_DRAFT_SAFETY_CURRENT_SECTION='participantDraftSafetyCurrentRevision';
+export const PARTICIPANT_DRAFT_SAFETY_CURRENT_REVISION=Object.freeze({
+  "version": 1,
+  "status": "REVIEWED_PARTICIPANT_DRAFT_SELECTION_AND_REVISION_RECOVERY",
+  "predecessorCommit": "9b26ac5f78ee469b4a61d83018b1ea98fb73aa3e",
+  "previousContractSha256": "42ced37df92bfaa681e0844ba23839bf8630a0d00404415aeb5dbca77238c27e",
+  "reviewedSourceChanges": [
+    {
+      "path": "src/app/(identity)/cuenta/participant-panel.js",
+      "previousSha256": "d16ee3ba394be011c5d338599d01653eec7d462705a2414821e02db3b44e38aa",
+      "currentSha256": "a9d5934c7bda61c49362ac53cfb339a5d66497566f71415ecc4621686ce17519",
+      "authenticatedPreviousAliases": [
+        "4e10ff5f05942b9704f247e13972968cc2a441b6ba09bca277694e85a94cd56e"
+      ]
+    },
+    {
+      "path": "scripts/verify-participants-ui.mjs",
+      "previousSha256": "77e5e12f6d5de2512e1f54d0cb0a45131355245ad1cd2e1b26b2b7d804d18ef9",
+      "currentSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976"
+    },
+    {
+      "path": "scripts/verify-participant-kyc-chat-closure-ui.mjs",
+      "previousSha256": "ab94c5a5ee387ce6cf9eb99bc3018e22b5485c2bd228c3ac10acfd014def5752",
+      "currentSha256": "7922adb699d783b231952aeba405d1845f0f4699c4d14c626ce7bf3b04efe412"
+    }
+  ],
+  "validationPredecessors": [
+    {
+      "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+      "sha256": "463cac0a3406559db5ceca581e035cf1c1bd20b0e8c9c85f6323c524a1ae4ea1"
+    },
+    {
+      "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+      "sha256": "f07e9dd108fb478608ff6e42f3a1f9a954e49a028cfdfd993c4dcbbc722fc97f"
+    }
+  ],
+  "fixtureSourceDeltas": [
+    {
+      "producer": "scripts/verify-participants-ui.mjs",
+      "additions": [
+        "src/app/(identity)/cuenta/participant-kyc-capture.js",
+        "src/app/(identity)/cuenta/participant-kyc-capture.module.css",
+        "src/app/(identity)/cuenta/participant-kyc-preanalysis-view.mjs"
+      ]
+    },
+    {
+      "producer": "scripts/verify-participant-kyc-chat-closure-ui.mjs",
+      "additions": [
+        "src/app/(identity)/cuenta/participant-kyc-capture.js",
+        "src/app/(identity)/cuenta/participant-kyc-capture.module.css",
+        "src/app/(identity)/cuenta/participant-kyc-preanalysis-view.mjs"
+      ]
+    }
+  ],
+  "sourceSetChanges": 0,
+  "nativeOrBrowserAcceptance": false
+}); // PARTICIPANT_DRAFT_SAFETY_REVIEWED_REVISION_DATA
 function deepFreeze(value){if(value&&typeof value==='object'){Object.values(value).forEach(deepFreeze);Object.freeze(value);}}
 deepFreeze(HOME_DECISIONS_CURRENT_REVISION);
 deepFreeze(CUSTOMER_PHONE_SELECTION_CURRENT_REVISION);
+deepFreeze(PARTICIPANT_DRAFT_SAFETY_CURRENT_REVISION);
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
@@ -4078,6 +4136,38 @@ const reject=(ok,message)=>{if(!ok)throw Object.assign(new Error(message),{code:
 const exact=(value,keys,message)=>reject(plain(value)&&same(Object.keys(value).sort(),keys.slice().sort()),message);
 const actualRefs=(files,readSource)=>files.map(path=>{const bytes=readSource(path);reject(Buffer.isBuffer(bytes),'Missing actual observed source: '+path);return {path,sha256:sha(bytes)};});
 const syntax=value=>Array.isArray(value)?value.map(syntax):plain(value)?Object.fromEntries(Object.entries(value).filter(([key])=>!['start','end','loc','extra','comments','leadingComments','innerComments','trailingComments'].includes(key)).map(([key,child])=>[key,syntax(child)])):value;
+function participantDraftSafetySection(contract){
+ if(!plain(contract)||!Object.hasOwn(contract,PARTICIPANT_DRAFT_SAFETY_CURRENT_SECTION))return null;
+ const value=contract[PARTICIPANT_DRAFT_SAFETY_CURRENT_SECTION];exact(value,[...Object.keys(PARTICIPANT_DRAFT_SAFETY_CURRENT_REVISION),'validationSources'],'Exact participant draft safety revision required');
+ for(const[key,expected]of Object.entries(PARTICIPANT_DRAFT_SAFETY_CURRENT_REVISION))reject(same(value[key],expected),'Unreviewed participant draft safety declaration: '+key);
+ reject(Array.isArray(value.validationSources)&&same(value.validationSources.map(row=>row?.path),value.validationPredecessors.map(row=>row.path)),'Exact participant draft safety validator sources required');
+ for(const row of value.validationSources){exact(row,['path','sha256'],'Exact participant draft safety validator reference required');reject(hash(row.sha256),'Participant draft safety validator hash required');}
+ return value;
+}
+export function restoreParticipantDraftSafetyPreviousContract(contract){
+ const value=participantDraftSafetySection(contract);if(!value)return contract;
+ const previous=structuredClone(contract);delete previous[PARTICIPANT_DRAFT_SAFETY_CURRENT_SECTION];
+ reject(sha(JSON.stringify(previous,null,2)+'\n')===value.previousContractSha256,'The complete published9b26ac5f contract must restore exactly');return previous;
+}
+function participantDraftSafetyReferences(value){return [...value.reviewedSourceChanges,...value.validationPredecessors.map(previous=>({path:previous.path,previousSha256:previous.sha256,currentSha256:value.validationSources.find(row=>row.path===previous.path).sha256}))];}
+export function participantDraftSafetyCurrentSourcePin(contract,ref){
+ const value=participantDraftSafetySection(contract);if(!value)return ref.sha256;
+ const row=participantDraftSafetyReferences(value).find(row=>row.path===ref.path);if(!row)return ref.sha256;
+ reject([row.previousSha256,row.currentSha256,...(row.authenticatedPreviousAliases||[])].includes(ref.sha256),'Only exact authenticated participant draft predecessor or current pins may advance: '+ref.path);return row.currentSha256;
+}
+export function participantDraftSafetyPreviousSourcePin(contract,ref){
+ const value=participantDraftSafetySection(contract);if(!value)return ref.sha256;
+ const row=participantDraftSafetyReferences(value).find(row=>row.path===ref.path);return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;
+}
+export function verifyParticipantDraftSafetyCurrentSources(contract,readSource){
+ const value=participantDraftSafetySection(contract);if(!value)return null;restoreParticipantDraftSafetyPreviousContract(contract);reject(typeof readSource==='function','Actual participant draft safety source reader required');
+ const refs=participantDraftSafetyReferences(value);
+ reject(new Set(refs.map(row=>row.path)).size===refs.length,'Unique participant draft safety source references required');
+ for(const row of refs){reject(safe(row.path)&&hash(row.previousSha256)&&hash(row.currentSha256),'Safe exact participant draft safety source pin required');const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current participant draft safety source: '+row.path);const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===row.currentSha256,'Stale current participant draft safety source: '+row.path);}
+ return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,historicalPinsPreserved:true,sourceSetChanges:0,nativeOrBrowserAcceptance:false};
+}
+// Global consumers retain their existing source closures. Integrated already
+// reads the participant panel; the explicit UI verifier also reads both harnesses.
 function phoneSelectionSection(contract){
  if(!plain(contract)||!Object.hasOwn(contract,CUSTOMER_PHONE_SELECTION_CURRENT_SECTION))return null;
  const value=contract[CUSTOMER_PHONE_SELECTION_CURRENT_SECTION];exact(value,[...Object.keys(CUSTOMER_PHONE_SELECTION_CURRENT_REVISION),'validationSources'],'Exact customer phone selection revision required');
@@ -4087,17 +4177,20 @@ function phoneSelectionSection(contract){
  return value;
 }
 export function restoreCustomerPhoneSelectionPreviousContract(contract){
+ contract=restoreParticipantDraftSafetyPreviousContract(contract);
  const value=phoneSelectionSection(contract);if(!value)return contract;
  const previous=structuredClone(contract);delete previous[CUSTOMER_PHONE_SELECTION_CURRENT_SECTION];
  reject(sha(JSON.stringify(previous,null,2)+'\n')===value.previousContractSha256,'The complete published8599969 contract must restore exactly');return previous;
 }
 function phoneSelectionReferences(value){return [...value.reviewedSourceChanges,...value.validationPredecessors.map(previous=>({path:previous.path,previousSha256:previous.sha256,currentSha256:value.validationSources.find(row=>row.path===previous.path).sha256}))];}
 export function customerPhoneSelectionCurrentSourcePin(contract,ref){
- const value=phoneSelectionSection(contract);if(!value)return ref.sha256;
- const row=phoneSelectionReferences(value).find(row=>row.path===ref.path);if(!row)return ref.sha256;
- reject([row.previousSha256,row.currentSha256].includes(ref.sha256),'Only exact authenticated8599969 or current phone selection pins may advance: '+ref.path);return row.currentSha256;
+ ref={...ref,sha256:participantDraftSafetyPreviousSourcePin(contract,ref)};
+ const value=phoneSelectionSection(contract);if(!value)return participantDraftSafetyCurrentSourcePin(contract,ref);
+ const row=phoneSelectionReferences(value).find(row=>row.path===ref.path);if(!row)return participantDraftSafetyCurrentSourcePin(contract,ref);
+ reject([row.previousSha256,row.currentSha256].includes(ref.sha256),'Only exact authenticated8599969 or current phone selection pins may advance: '+ref.path);return participantDraftSafetyCurrentSourcePin(contract,{...ref,sha256:row.currentSha256});
 }
 export function customerPhoneSelectionPreviousSourcePin(contract,ref){
+ ref={...ref,sha256:participantDraftSafetyPreviousSourcePin(contract,ref)};
  const value=phoneSelectionSection(contract);if(!value)return ref.sha256;
  const row=phoneSelectionReferences(value).find(row=>row.path===ref.path);if(!row)return ref.sha256;
  return ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;
@@ -4108,7 +4201,7 @@ export function customerPhoneSelectionValidationFiles(contract){
 export function verifyCustomerPhoneSelectionCurrentSources(contract,readSource){
  const value=phoneSelectionSection(contract);if(!value)return null;restoreCustomerPhoneSelectionPreviousContract(contract);reject(typeof readSource==='function','Actual customer phone selection source reader required');
  const refs=phoneSelectionReferences(value);reject(new Set(refs.map(row=>row.path)).size===refs.length,'Unique customer phone selection references required');
- for(const row of refs){reject(safe(row.path)&&hash(row.previousSha256)&&hash(row.currentSha256),'Safe exact customer phone selection source pin required');const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current customer phone selection source: '+row.path);const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===row.currentSha256,'Stale current customer phone selection source: '+row.path);}
+ for(const row of refs){reject(safe(row.path)&&hash(row.previousSha256)&&hash(row.currentSha256),'Safe exact customer phone selection source pin required');const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current customer phone selection source: '+row.path);const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===participantDraftSafetyCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}),'Stale current customer phone selection source: '+row.path);}
  return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,historicalPinsPreserved:true,nativeOrBrowserAcceptance:false};
 }
 export function normalizeCustomerPhoneSelectionNativeProof(proof,contract,readSource){

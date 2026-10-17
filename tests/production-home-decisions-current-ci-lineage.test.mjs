@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {parse} from '@babel/parser';
-import {HOME_DECISIONS_CURRENT_REVISION as expected,HOME_DECISIONS_CURRENT_SECTION as key,restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin,homeDecisionsValidationFiles,verifyHomeDecisionsCurrentSources,restoreHomeDecisionsSourceSet,homeDecisionsProofSourceAdditions,homeDecisionsLegacyOperationsAst,normalizeHomeDecisionsFocusedRaw,validateHomeDecisionsNativeProof,validateHomeDecisionsFieldProof,CUSTOMER_PHONE_SELECTION_CURRENT_REVISION as phoneExpected,CUSTOMER_PHONE_SELECTION_CURRENT_SECTION as phoneKey,restoreCustomerPhoneSelectionPreviousContract,customerPhoneSelectionCurrentSourcePin,customerPhoneSelectionPreviousSourcePin,customerPhoneSelectionValidationFiles,verifyCustomerPhoneSelectionCurrentSources,normalizeCustomerPhoneSelectionNativeProof} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
+import {HOME_DECISIONS_CURRENT_REVISION as expected,HOME_DECISIONS_CURRENT_SECTION as key,restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin,homeDecisionsValidationFiles,verifyHomeDecisionsCurrentSources,restoreHomeDecisionsSourceSet,homeDecisionsProofSourceAdditions,homeDecisionsLegacyOperationsAst,normalizeHomeDecisionsFocusedRaw,validateHomeDecisionsNativeProof,validateHomeDecisionsFieldProof,CUSTOMER_PHONE_SELECTION_CURRENT_REVISION as phoneExpected,CUSTOMER_PHONE_SELECTION_CURRENT_SECTION as phoneKey,restoreCustomerPhoneSelectionPreviousContract,customerPhoneSelectionCurrentSourcePin,customerPhoneSelectionPreviousSourcePin,customerPhoneSelectionValidationFiles,verifyCustomerPhoneSelectionCurrentSources,normalizeCustomerPhoneSelectionNativeProof,PARTICIPANT_DRAFT_SAFETY_CURRENT_REVISION as draftExpected,PARTICIPANT_DRAFT_SAFETY_CURRENT_SECTION as draftKey,restoreParticipantDraftSafetyPreviousContract,participantDraftSafetyCurrentSourcePin,participantDraftSafetyPreviousSourcePin,verifyParticipantDraftSafetyCurrentSources} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {restoreExistingApiPlanPreviousContract,verifyExistingApiPlanCurrentSources} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
 import {verifyMaterialReviewCurrentSources} from '../scripts/lib/material-review-current-ci-lineage.mjs';
 import {WHATSAPP_FIELD_CONTINUITY_FOCUSED_UI as previousFocused,verifyWhatsappFieldContinuityCurrentSources} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
@@ -47,7 +47,7 @@ test('customer phone companion restores exact8599969 without changing historical
 test('customer phone source pins authenticate only the exact8599969 and reviewed current bytes',()=>{
  const contract=current(),value=contract[phoneKey],refs=[...value.reviewedSourceChanges,...value.validationPredecessors.map(row=>({path:row.path,previousSha256:row.sha256,currentSha256:value.validationSources.find(ref=>ref.path===row.path).sha256}))];
  for(const row of refs){
-  for(const pin of [row.previousSha256,row.currentSha256])assert.equal(customerPhoneSelectionCurrentSourcePin(contract,{path:row.path,sha256:pin}),row.currentSha256);
+  for(const pin of [row.previousSha256,row.currentSha256])assert.equal(customerPhoneSelectionCurrentSourcePin(contract,{path:row.path,sha256:pin}),participantDraftSafetyCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}));
   assert.equal(customerPhoneSelectionPreviousSourcePin(contract,{path:row.path,sha256:row.currentSha256}),row.previousSha256);
   denied(()=>customerPhoneSelectionCurrentSourcePin(contract,{path:row.path,sha256:'f'.repeat(64)}));
  }
@@ -149,4 +149,40 @@ test('review declarations historical contracts immutable source references and p
  assert.throws(()=>expected.proofSourceDeltas[0].additions.push('scripts/lib/foreign.mjs'),TypeError);
  for(const change of [c=>c[key].reviewedSourceChanges.pop(),c=>c[key].validationDeltas.pop(),c=>c[key].nativeOrBrowserAcceptance=true,c=>c[key].previousContractSha256='0'.repeat(64),c=>c[key].unreviewed=true,c=>c.blocks[0].step.run+='\ntrue',c=>c.extension.proofs[0].sourceFiles.pop(),c=>c[key].validationSources[0].path='scripts/foreign.mjs',c=>c[key].focusedUi.currentRequestCount--]){const contract=current();change(contract);denied(()=>restoreHomeDecisionsPreviousContract(contract));}
  const previous=restoreHomeDecisionsPreviousContract(current());assert.equal(verifyHomeDecisionsCurrentSources(previous,read),null);assert.deepEqual(homeDecisionsValidationFiles(previous),[]);
+});
+
+
+test('participant draft companion restores the complete published9b26 contract and preserves every inherited source set and producer record',()=>{
+ const contract=current(),before=serialize(contract),previous=restoreParticipantDraftSafetyPreviousContract(contract);
+ assert.equal(draftExpected.predecessorCommit,'9b26ac5f78ee469b4a61d83018b1ea98fb73aa3e');assert.equal(sha(serialize(previous)),'42ced37df92bfaa681e0844ba23839bf8630a0d00404415aeb5dbca77238c27e');assert.equal(Object.hasOwn(previous,draftKey),false);assert.equal(serialize(contract),before);
+ for(const field of Object.keys(previous))assert.deepEqual(contract[field],previous[field],'Published9b26 field remains exact: '+field);
+ assert.equal(draftExpected.sourceSetChanges,0);assert.deepEqual(contract.extension,previous.extension);assert.deepEqual(contract.evidenceProducers,previous.evidenceProducers);assert.deepEqual(contract[key],previous[key]);assert.deepEqual(contract[phoneKey],previous[phoneKey]);
+ assert.deepEqual(draftExpected.fixtureSourceDeltas.map(row=>row.producer),['scripts/verify-participants-ui.mjs','scripts/verify-participant-kyc-chat-closure-ui.mjs']);for(const delta of draftExpected.fixtureSourceDeltas)assert.deepEqual(delta.additions,['participant-kyc-capture.js','participant-kyc-capture.module.css','participant-kyc-preanalysis-view.mjs'].map(name=>'src/app/(identity)/cuenta/'+name));
+ assert.equal(verifyParticipantDraftSafetyCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
+ const uiFiles=draftExpected.reviewedSourceChanges.map(row=>row.path),noUiRead=file=>{assert.equal(uiFiles.includes(file),false,'Global Home verifier must retain its existing source closure: '+file);return read(file);};
+ assert.equal(verifyHomeDecisionsCurrentSources(contract,noUiRead).nativeOrBrowserAcceptance,false);
+ assert.equal(contract.extension.proofs.find(row=>row.id==='field-task-pagination-ui').sourceFiles.includes('src/app/(identity)/cuenta/participant-panel.js'),false);
+});
+
+test('participant draft pins allow only exact published current and authenticated Integrated panel aliases',()=>{
+ const contract=current(),value=contract[draftKey],previous=restoreParticipantDraftSafetyPreviousContract(contract),refs=[...value.reviewedSourceChanges,...value.validationPredecessors.map(row=>({path:row.path,previousSha256:row.sha256,currentSha256:value.validationSources.find(ref=>ref.path===row.path).sha256}))];
+ for(const row of refs){
+  for(const pin of [row.previousSha256,row.currentSha256,...(row.authenticatedPreviousAliases||[])])assert.equal(participantDraftSafetyCurrentSourcePin(contract,{path:row.path,sha256:pin}),row.currentSha256);
+  assert.equal(participantDraftSafetyPreviousSourcePin(contract,{path:row.path,sha256:row.currentSha256}),row.previousSha256);
+  denied(()=>participantDraftSafetyCurrentSourcePin(contract,{path:row.path,sha256:'f'.repeat(64)}));
+  assert.equal(homeDecisionsCurrentSourcePin(contract,{path:row.path,sha256:row.previousSha256}),row.currentSha256);
+ }
+ const panel=value.reviewedSourceChanges.find(row=>row.path.endsWith('/participant-panel.js')),oldPanel=previous.integratedIdentityCurrentRevision.reviewedSourceChanges.find(row=>row.path===panel.path);
+ assert.deepEqual(panel.authenticatedPreviousAliases,[oldPanel.previousSha256]);assert.equal(panel.previousSha256,oldPanel.currentSha256);
+ for(const row of refs)for(const replacement of [null,Buffer.from('unreviewed participant draft source')])denied(()=>verifyParticipantDraftSafetyCurrentSources(contract,file=>file===row.path?replacement:read(file)));
+ denied(()=>verifyHomeDecisionsCurrentSources(previous,read));
+});
+
+test('participant draft companion rejects omitted duplicated reordered same-count foreign and current-as-prior declarations',()=>{
+ for(const edit of [
+  c=>c[draftKey].reviewedSourceChanges.pop(),c=>c[draftKey].reviewedSourceChanges.push(c[draftKey].reviewedSourceChanges[0]),c=>c[draftKey].reviewedSourceChanges.reverse(),c=>{c[draftKey].reviewedSourceChanges[0].path='scripts/foreign-same-count.mjs';},c=>{c[draftKey].reviewedSourceChanges[0].previousSha256=c[draftKey].reviewedSourceChanges[0].currentSha256;},c=>{c[draftKey].reviewedSourceChanges[0].currentSha256='f'.repeat(64);},c=>{c[draftKey].reviewedSourceChanges[0].authenticatedPreviousAliases=['f'.repeat(64)];},
+  c=>c[draftKey].validationSources.pop(),c=>c[draftKey].validationSources.push(c[draftKey].validationSources[0]),c=>c[draftKey].validationSources.reverse(),c=>{c[draftKey].validationSources[0].path='scripts/lib/foreign-same-count.mjs';},c=>{c[draftKey].validationSources[0].sha256='f'.repeat(64);},
+  c=>{c[draftKey].previousContractSha256='f'.repeat(64);},c=>{c[draftKey].nativeOrBrowserAcceptance=true;},c=>{c[draftKey].sourceSetChanges=1;},c=>c[draftKey].fixtureSourceDeltas[0].additions.pop(),c=>{c[phoneKey].native.currentCheckCount=41;},c=>{c[key].validationSources[0].sha256=c[draftKey].validationSources[0].sha256;},c=>c.evidenceProducers.pop(),c=>c.extension.proofs[0].sourceFiles.pop()
+ ]){const changed=current();edit(changed);denied(()=>verifyParticipantDraftSafetyCurrentSources(changed,read));}
+ const missing=current();delete missing[draftKey];denied(()=>verifyHomeDecisionsCurrentSources(missing,read));
 });
