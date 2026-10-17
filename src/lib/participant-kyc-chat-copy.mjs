@@ -15,6 +15,18 @@ export function participantKycStepReminder(step,projectId){
  return {type:'text',body:'Esta foto todavía no se guardó. '+actions[step]+'\n\nPara continuar en este chat, buscá el mensaje anterior que '+(['FRONT','BACK','SELFIE'].includes(step)?'te pidió esa foto':'tiene el botón «Elegir»')+' y tocá Responder sobre ese mensaje. '+(['FRONT','BACK','SELFIE'].includes(step)?'Después reenviá la foto que corresponde a ese paso.':'Usá sus opciones antes de enviar otra foto.')+'\n\nTambién podés ver el paso pendiente en '+participantIdentityUrl(projectId)+'.'};
 }
 
+// Classification only. The canonical signed resolver must still prove the
+// current person, channel, claim, prompt, consent state and original deadlines.
+export function participantKycNeutralStepCommand(message){
+ return message?.type==='text'&&!Object.hasOwn(message,'context')&&typeof message.text?.body==='string'&&['HOLA','ESTADO','MENU','MENÚ'].includes(message.text.body.trim().toUpperCase());
+}
+export function participantKycStepGuidance(step,projectId){
+ if(!KYC_GUIDED_STEPS.includes(step)||!workspaceId(projectId))return null;
+ const photo=['FRONT','BACK','SELFIE'].includes(step),original=photo?'mensaje original de identidad que te pidió la foto':'mensaje original de identidad que tiene el botón «Elegir»';
+ const continuation=photo?'Enviá una sola imagen y esperá la indicación del próximo paso.':'Usá las opciones del '+original+' para continuar.';
+ return {type:'text',body:'Tu intento de identidad sigue vigente. '+actions[step].replace('último mensaje de identidad',original)+'\n\n'+continuation+' Para terminar sin presentar, respondé con CANCELAR al '+original+'.\n\nTambién podés consultar el paso pendiente en '+participantIdentityUrl(projectId)+'.'};
+}
+
 // Integration catalogue only: base58 validators continue accepting their exact
 // historical notices. New notices must be selected and hashed at issuance when
 // merging the version-aware consent protocol; never reinterpret a v1 receipt.

@@ -8,6 +8,7 @@ import {parseParticipantPreanalysisTap,validateParticipantKycPreanalysisNative,v
 import {restoreOoxmlAccountingPreviousContract} from '../scripts/lib/ooxml-accounting-current-ci-lineage.mjs';
 import {reconstructPublishedHContract} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';
 import {restoreIntegratedIdentityPreviousContract} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
+import {restoreWhatsappFieldContinuityPreviousContract} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 // This pure CI envelope fixture represents the committed LF runner bytes. The
@@ -93,7 +94,7 @@ test('omitted delta source or new proof block cannot be concealed by an otherwis
 test('block63 binds all actual native source roots and the reviewed CI leaves without claiming PG execution',()=>{
  for(const kind of ['proof','block']){const changed=JSON.parse(read('.github/workspace-acceptance-contract.json')),target=kind==='proof'?changed.extension.proofs.find(row=>row.kind==='PG_PARTICIPANT_KYC_PREANALYSIS'):changed.blocks.find(row=>row.id===63);target.unreviewed=true;denied(()=>validateParticipantPreanalysisWorkspaceContract(changed));}
  const contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),result=validateParticipantPreanalysisWorkspaceContract(contract);
- assert.equal(result.nativeSourceCount,142);assert.equal(result.nativeCheckCount,19);assert.equal(result.nativeAcceptance,false);const checkpoint=restoreIntegratedIdentityPreviousContract(contract);assert.equal(checkpoint.blocks.length,57);assert.equal(checkpoint.extension.proofs.length,19);assert.equal(contract.blocks.length,58);assert.equal(contract.extension.proofs.length,20);
+ assert.equal(result.nativeSourceCount,142);assert.equal(result.nativeCheckCount,19);assert.equal(result.nativeAcceptance,false);const checkpoint=restoreIntegratedIdentityPreviousContract(contract);assert.equal(checkpoint.blocks.length,57);assert.equal(checkpoint.extension.proofs.length,19);const previousWa=restoreWhatsappFieldContinuityPreviousContract(contract);assert.equal(previousWa.blocks.length,58);assert.equal(previousWa.extension.proofs.length,20);assert.equal(contract.blocks.length,59);assert.equal(contract.extension.proofs.length,21);assert.deepEqual(contract.blocks.slice(0,58),previousWa.blocks);assert.equal(contract.blocks.at(-1).id,65);assert.equal(contract.extension.proofs.at(-1).kind,'UI_FIELD_TASK_PAGINATION');
 });
 
 function ciShadow(){

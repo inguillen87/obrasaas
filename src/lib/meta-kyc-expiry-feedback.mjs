@@ -16,11 +16,14 @@ export function createMetaKycExpiryFeedback({connect,provider,environment=proces
  const within=run=>customerJobTransaction(connect,run),resolve=(client,context)=>resolveMetaKycExpiryFeedbackAuthority(client,context,{environment});
  async function source(client,context){
   if(!/^customer_webhook_[a-f0-9]{64}$/.test(context?.eventId||'')||!workspaceId(context.projectId)||!workspaceId(context.channelId)||!operationId(context.leaseToken)||!/^[a-f0-9]{64}$/.test(context.payloadDigest||''))fail();
-  const events=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2`,[context.eventId,context.projectId])).rows,event=events[0];
-  if(events.length!==1||event.provider!=='meta-customer-v1'||event.payload?.channelId!==context.channelId||event.payload.payloadDigest!==context.payloadDigest)fail();
-  const channels=(await client.query(`SELECT c.*,p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c.id=$1 AND c."projectId"=$2 AND p.status='ACTIVE'`,[context.channelId,context.projectId])).rows,connection=channels[0];
-  if(channels.length!==1||connection.metadata?.developmentPilot||connection.whatsappBusinessId===OBRASAAS_META_CHANNEL.wabaId||connection.phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId||connection.metadata?.credentialFormat!=='tenant-aad-v2'||connection.metadata.credentialOrganizationId!==connection.organizationId)fail();
-  const payload=decodeSignedCustomerEvent(event,connection,environment),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
+  // Recovery reads one coherent source snapshot; it creates no authority or locks.
+  const rows=(await client.query(`SELECT c.*,p."organizationId",e.id AS "feedbackSourceEventId",e."projectId" AS "feedbackSourceProjectId",e.provider AS "feedbackSourceProvider",e.status::text AS "feedbackSourceStatus",e.payload AS "feedbackSourcePayload",e."leaseToken" AS "feedbackSourceLeaseToken",e."leaseExpiresAt" AS "feedbackSourceLeaseExpiresAt",clock_timestamp() AS "feedbackSourceNow" FROM public."WebhookEvent" e JOIN public."WhatsAppConnection" c ON c.id=$3 AND c."projectId"=e."projectId" JOIN public."Project" p ON p.id=c."projectId" AND p.status='ACTIVE' WHERE e.id=$1 AND e."projectId"=$2`,[context.eventId,context.projectId,context.channelId])).rows;
+  if(rows.length!==1)fail();
+  const {feedbackSourceEventId,feedbackSourceProjectId,feedbackSourceProvider,feedbackSourceStatus,feedbackSourcePayload,feedbackSourceLeaseToken,feedbackSourceLeaseExpiresAt,feedbackSourceNow,...connection}=rows[0];
+  const event={id:feedbackSourceEventId,projectId:feedbackSourceProjectId,provider:feedbackSourceProvider,status:feedbackSourceStatus,payload:feedbackSourcePayload,leaseToken:feedbackSourceLeaseToken,leaseExpiresAt:feedbackSourceLeaseExpiresAt};
+  if(event.provider!=='meta-customer-v1'||event.payload?.channelId!==context.channelId||event.payload.payloadDigest!==context.payloadDigest)fail();
+  if(connection.metadata?.developmentPilot||connection.whatsappBusinessId===OBRASAAS_META_CHANNEL.wabaId||connection.phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId||connection.metadata?.credentialFormat!=='tenant-aad-v2'||connection.metadata.credentialOrganizationId!==connection.organizationId)fail();
+  const payload=decodeSignedCustomerEvent(event,connection,environment),now=feedbackSourceNow;
   if(payload.type!=='message'||!(now instanceof Date)||!Number.isFinite(now.getTime())||event.status!=='PENDING'||event.leaseToken!==context.leaseToken||!Number.isFinite(Date.parse(event.leaseExpiresAt))||Date.parse(event.leaseExpiresAt)<=now.getTime())fail();
   return {connection,event,payload,now};
  }

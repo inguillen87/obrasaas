@@ -331,6 +331,12 @@ jobs:
           node --test tests/production-field-overtime-recovery.test.mjs
           node scripts/verify-field-overtime-postgres.mjs
           node scripts/verify-field-overtime-ui.mjs
+      - name: Canonical task pagination, preserved field drafts and current WhatsApp guidance
+        run: |
+          npx eslint scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs scripts/lib/kyc-neutral-step-guidance-native.mjs scripts/lib/kyc-neutral-step-guidance-own-native.mjs scripts/verify-field-task-pagination-ci.mjs scripts/verify-field-task-pagination-ui.mjs tests/production-field-task-pagination-ci.test.mjs tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs tests/production-meta-kyc-neutral-step-guidance.test.mjs tests/production-whatsapp-menu-continuity.test.mjs tests/production-worksite-task-selector.test.mjs tests/production-workspace-task-page.test.mjs tests/production-focused-workspace-task-pagination.test.mjs --max-warnings 0
+          node --test tests/production-meta-kyc-neutral-step-guidance.test.mjs tests/production-whatsapp-menu-continuity.test.mjs
+          node scripts/verify-field-task-pagination-ci.mjs browser --expected-head "$GITHUB_SHA"
+          node scripts/verify-field-task-pagination-ci.mjs verify --expected-head "$GITHUB_SHA"
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane field --expected-head "$GITHUB_SHA"
@@ -345,6 +351,7 @@ jobs:
             .vercel/private/field-overtime-unit-proof.json
             .vercel/private/field-overtime-postgres-proof.json
             .vercel/private/field-overtime-ui-proof.json
+            .vercel/private/field-task-pagination-ui-evidence/
             .vercel/workspace-ci-evidence/lane-field.json
           include-hidden-files: true
           retention-days: 7

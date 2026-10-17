@@ -39,6 +39,7 @@ import {executeCompanyChannelAdoption} from './lib/company-channel-migration.mjs
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {companyKycRejectionFeedbackDisposableUrl} from './verify-company-kyc-rejection-feedback-postgres.mjs';
 import {verifyKycCurrentImageOwnNative} from './lib/kyc-current-image-own-native.mjs';
+import {verifyKycNeutralStepGuidanceOwnNative} from './lib/kyc-neutral-step-guidance-own-native.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const producer='scripts/verify-company-kyc-outbound-compact-postgres.mjs';
@@ -102,20 +103,24 @@ export async function verifyCompanyKycOutboundCompactPostgres(environment=proces
   await admin.query(`CREATE DATABASE "${database}"`);created=true;const child=new URL(target);child.pathname='/'+database;
   pool=trackDisposablePool(new Pool({connectionString:child.toString(),max:8,connectionTimeoutMillis:5000}));await pool.query(COMPANY_CHANNEL_DISPOSABLE_FIXTURE_SQL);
   await pool.query(`CREATE TYPE "SystemRole" AS ENUM('TENANT_USER');ALTER TABLE "PlatformUser" ADD COLUMN "systemRole" "SystemRole" NOT NULL DEFAULT 'TENANT_USER';ALTER TABLE "Worker" ADD COLUMN role text;ALTER TABLE "Organization" ADD COLUMN "subscriptionPlan" text DEFAULT 'PRO',ADD COLUMN "subscriptionStatus" text DEFAULT 'ACTIVE';ALTER TABLE "WhatsAppConnection" ADD COLUMN "createdAt" timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,ADD COLUMN "updatedAt" timestamp(3) NOT NULL`);
-  const f=ownCompanyFixture(),channelEnvironment=f.environment;f.debug.expires_at=Math.floor((f.time+24*3600000)/1000);
+  // Keep the original canonical activation older than the later backdated
+  // near-expiry KYC claim. Only setup uses this coherent issuance clock.
+  let setupClockOffsetMs=META_KYC_CONVERSATION_TTL_MS+60000;const setupNow=()=>Date.now()-setupClockOffsetMs;
+  const f=ownCompanyFixture({time:setupNow()}),channelEnvironment=f.environment;f.debug.expires_at=Math.floor((f.time+24*3600000)/1000);
   await pool.query(`UPDATE "Organization" SET metadata=$1::jsonb WHERE id='org-a'`,[JSON.stringify(f.context.project.organizationMetadata)]);
   const migration=await pool.connect();try{const dry=await executeCompanyChannelAdoption(migration);await executeCompanyChannelAdoption(migration,{mode:'APPLY',expectedFingerprint:dry.fingerprint});}finally{migration.release();}
   const connect=async()=>{const c=await pool.connect();return {release:bad=>c.release(bad),query:async(sql,args=[])=>{
    if(statementDelayMs)await new Promise(resolve=>setTimeout(resolve,statementDelayMs));
    if(sql.includes('AS "kycNow"')&&fenceHook)await fenceHook(c,sql,args);
    if(sql.includes('AS "runtimeNow"')&&runtimeHook)await runtimeHook(c,sql,args);
-   const start=performance.now();try{return await c.query(sql,args);}finally{queries.push({sql,durationMs:performance.now()-start});}
+   const start=performance.now();try{return await c.query(setupClockOffsetMs?sql.replaceAll('clock_timestamp()',"(clock_timestamp()-interval '"+setupClockOffsetMs+" milliseconds')"):sql,args);}finally{queries.push({sql,durationMs:performance.now()-start});}
   }};};
-  const workspace=createWorkspaceStore({connect}),provider=createMetaCustomerProvider({environment:channelEnvironment,now:()=>Date.now(),fetchImpl:async(url,options={})=>{if(graphDelayMs)await new Promise(resolve=>setTimeout(resolve,graphDelayMs));const response=await f.fetchImpl(url,options);return syntheticSourceReplyId&&options.method==='POST'&&new URL(url).pathname.endsWith('/'+f.policy.phoneNumberId+'/messages')?Response.json({messages:[{id:syntheticSourceReplyId}]}):response;}}),ownConnection=createOwnCompanyConnection({workspace,provider,environment:channelEnvironment}),store=createCompanyChannelStore({workspace,ownConnection,environment:channelEnvironment}),owner=f.context.session;
+  const workspace=createWorkspaceStore({connect}),provider=createMetaCustomerProvider({environment:channelEnvironment,now:setupNow,fetchImpl:async(url,options={})=>{if(graphDelayMs)await new Promise(resolve=>setTimeout(resolve,graphDelayMs));const response=await f.fetchImpl(url,options);return syntheticSourceReplyId&&options.method==='POST'&&new URL(url).pathname.endsWith('/'+f.policy.phoneNumberId+'/messages')?Response.json({messages:[{id:syntheticSourceReplyId}]}):response;}}),ownConnection=createOwnCompanyConnection({workspace,provider,environment:channelEnvironment,now:setupNow}),store=createCompanyChannelStore({workspace,ownConnection,environment:channelEnvironment}),owner=f.context.session;
   const scope=(await workspace.list(owner)).scope,operation=(action,payload)=>({scope,projectId:'project-a',action,payload,operationId:randomUUID()}),assets={connectionId:null,revision:0,companyPhoneRevision:1,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId,confirmOwnBusiness:true,confirmReplacement:false};
   const linked=await store.command(owner,operation('CONNECT_OWN_NUMBER',assets));assert.equal(linked.state,'RECORDED');
   await store.command(owner,operation('ACTIVATE_OWN_NUMBER',{...assets,connectionId:linked.channel.id,revision:linked.channel.revision,confirmRegistration:false,securityPin:null}));
   const preparedChannel=(await store.read(owner,{scope,projectId:'project-a'})).channels[0];await store.command(owner,operation('ACTIVATE',{connectionId:preparedChannel.id,revision:preparedChannel.revision,targetProjectId:null}));
+  setupClockOffsetMs=0; // All continuations use the actual SQL and provider clocks.
   const channel=async()=>(await pool.query(`SELECT c.*,p."organizationId" FROM "WhatsAppConnection" c JOIN "Project" p ON p.id=c."projectId" WHERE c.id=$1`,[linked.channel.id])).rows[0],originalChannel=await channel();
   const participants=createParticipantStore({workspace,connect,prepareKycChat:prepareMetaKycChallenge,environment:channelEnvironment}),inbox=createMetaCustomerInbox({connect,environment:channelEnvironment}),bridge=createMetaKycBridge({connect,provider,environment:channelEnvironment}),outbound=createMetaKycOutbound({connect,provider,environment:channelEnvironment,afterReserve:()=>afterReserve()}),processor=createMetaCustomerProcessor({connect,environment:channelEnvironment,dispatch:context=>bridge.execute(context),outbound,authorizationCodes:[...META_KYC_AUTHORIZATION_CODES,...META_OWN_COMPANY_AUTHORIZATION_CODES]});
   const posts=()=>f.calls.filter(call=>call.method==='POST'&&call.path===f.policy.phoneNumberId+'/messages').length;
@@ -244,7 +249,8 @@ export async function verifyCompanyKycOutboundCompactPostgres(environment=proces
   }
   assert.equal(posts(),6);
   const currentImageOwnNative=await verifyKycCurrentImageOwnNative({pool,fixture:f,workspace,owner,scope,channel:await channel()});
-  return proof={version:COMPANY_KYC_OUTBOUND_COMPACT_PROOF_VERSION,status:'PASS',checks,measurements,scenarios,syntheticMessagePostCount:historicalSyntheticMessagePostCount,totalSyntheticMessagePostCount:posts(),contextFeedbackNative,latestExpiredContextNative,currentImageOwnNative,provider:'controlled-synthetic-only',operativeDatabaseUsed:false,realProviderUsed:false,municipalOrIdentityAcceptance:false,leaseExtended:false,poolClosed:false,databaseRemoved:false,adminClosed:false};
+  const neutralStepGuidanceNative=await verifyKycNeutralStepGuidanceOwnNative({pool,fixture:f,workspace,owner,channel:await channel()});
+  return proof={version:COMPANY_KYC_OUTBOUND_COMPACT_PROOF_VERSION,status:'PASS',checks,measurements,scenarios,syntheticMessagePostCount:historicalSyntheticMessagePostCount,totalSyntheticMessagePostCount:posts(),contextFeedbackNative,latestExpiredContextNative,currentImageOwnNative,neutralStepGuidanceNative,provider:'controlled-synthetic-only',operativeDatabaseUsed:false,realProviderUsed:false,municipalOrIdentityAcceptance:false,leaseExtended:false,poolClosed:false,databaseRemoved:false,adminClosed:false};
  }finally{globalThis.fetch=originalFetch;await closeDisposablePool(pool);poolClosed=true;if(created){await admin.query(`DROP DATABASE "${database}"`);removed=true;}if(connected){await admin.end();adminClosed=true;}assert.ok(!created||removed);if(proof)Object.assign(proof,{poolClosed,databaseRemoved:removed,adminClosed});}
 }
 

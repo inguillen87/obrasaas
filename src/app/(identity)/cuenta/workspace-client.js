@@ -39,6 +39,7 @@ import {OfficeReviewPanel,OfficeReviewAdminPanel} from './office-review-panel';
 import {ProjectCreationPanel} from './project-creation-panel';
 import {projectCreationReceiptOutcome} from './workspace-recovery-journal.mjs';
 import {calendarDay,loadedScheduleOverview,mergeLoadedTasks,refreshLoadedTasks,updateLoadedTask} from './schedule-workbench.mjs';
+import {createWorksiteTaskPager} from './workspace-task-page.mjs';
 const endpoint='/api/identity/workspace';
 const messages={WORKSPACE_ORGANIZATION_REQUIRED:'Elegí una organización desde tu cuenta para consultar las obras asignadas.',WORKSPACE_MEMBERSHIP_REQUIRED:'Todavía no podemos confirmar tu pertenencia vigente a esta empresa en ObraSaaS. Si ya aceptaste la invitación, pedile al administrador que habilite tu rol desde Permisos de las cuentas en la empresa. Cuando lo confirme, usá Actualizar en Mis obras.',WORKSPACE_PROJECT_UNAVAILABLE:'Esta obra no está disponible con tus permisos actuales.',WORKSPACE_CONTEXT_CHANGED:'Cambió tu organización o tu permiso. Volvé a cargar las obras antes de continuar.',SCHEDULE_REVISION_CHANGED:'Otra persona modificó la tarea. Consultá su revisión actual sin descartar tus fechas ni el motivo.',SCHEDULE_PERMISSION_REQUIRED:'Tu rol actual no puede modificar la planificación.',SCHEDULE_UNCHANGED:'Las fechas son iguales a las registradas. No se hizo ningún cambio.',SCHEDULE_OPERATION_CONFLICT:'Este intento ya pertenece a otra solicitud. Comprobá su recibo antes de continuar.',SESSION_REQUIRED:'Tu sesión venció. Volvé a ingresar.',SCHEDULE_DATES_INVALID:'Revisá el inicio y el fin. El fin no puede ser anterior al inicio.',SCHEDULE_REASON_REQUIRED:'Explicá brevemente el motivo del cambio.'};
 const describe=code=>code==='PARTICIPANT_KYC_REVIEW_REQUIRED'?'Tu identidad necesita una revisión vigente para habilitar esta obra. Podés presentar o consultar tu documentación privada.':messages[code]||'No se pudo confirmar la operación. No se reemplazaron los datos por ejemplos.';
@@ -112,13 +113,20 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
  const channelObserved=useCallback(value=>{const context=onboardingContext.current;if(!context||value.scope!==context.scope||value.projectId!==context.projectId||value.observedGeneration!==context.generation)return;setChannelSnapshot(value.snapshot?{...value.snapshot,observedGeneration:value.observedGeneration}:null);},[]);
  const navigateOnboarding=useCallback(value=>{identityNavigation.current=null;identityNavigationEpoch.current++;const id=participantOnboardingNavigationTarget(value,onboardingContext.current);if(!id)return;revealWorkspaceDestination(id);const target=document.getElementById(id);if(!target?.getClientRects().length)return;target.setAttribute('tabindex','-1');target.focus({preventScroll:true});target.scrollIntoView({block:'start',behavior:'auto'});},[]);
  const [creatingTask,setTaskCreating]=useState(false),[modulePending,setModulePending]=useState({});
+ const [taskPageReadSnapshot,setTaskPageReadSnapshot]=useState(null);
+ const taskPager=useRef(null),taskPageContext=useRef(null),taskReadBusy=useRef({});
+ const taskReadKey=[account?.scope||'',view?.project?.id||'',account?.role||'',observationEpoch].join(':');
+ const taskPageRead=taskPageReadSnapshot?.account===account&&taskPageReadSnapshot.request===request&&taskPageReadSnapshot.contextKey===taskReadKey&&account?.officeReviewOnly!==true?taskPageReadSnapshot.value:{loading:false,error:''};
+ const fieldTaskReadBusy=useCallback(busy=>{taskReadBusy.current.field={key:taskReadKey,busy:busy===true};},[taskReadKey]);
+ const inventoryTaskReadBusy=useCallback(busy=>{taskReadBusy.current.inventory={key:taskReadKey,busy:busy===true};},[taskReadKey]);
+ const loadMoreDraftTasks=useCallback(()=>taskPager.current?.loadMore(),[]);
  const [measurementSelection,setMeasurementSelection]=useState(null);
  const measurementTask=measurementSelection&&account&&view&&measurementSelection.scope===account.scope&&measurementSelection.projectId===view.project.id?view.tasks.find(task=>task.id===measurementSelection.taskId):null;
  const [planReadback,setPlanReadback]=useState(null),[preparationRecovery,setPreparationRecovery]=useState(null),[creationRecovery,setCreationRecovery]=useState(null);
  const planReadbackMatches=Boolean(planReadback&&planReadback.scope===account?.scope&&planReadback.projectId===view?.project.id);
  const planReadbackPending=planReadbackMatches&&planReadback.status==='pending';
  const taskCreating=creatingTask||Object.values(modulePending).some(Boolean);
- const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft)||planReadbackPending;
+ const contextLocked=saving||Boolean(attempt)||taskCreating||Boolean(draft)||planReadbackPending||taskPageRead.loading;
  // Publish before paint so the global organization selector respects this lock.
  useLayoutEffect(()=>()=>onContextPending?.(false),[onContextPending]);
  useLayoutEffect(()=>{onContextPending?.(contextLocked);},[contextLocked,onContextPending]);
@@ -223,6 +231,34 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
   setGuideUnavailable(!identity);setGuideReadFailed(!identity);
   if(!identity)setAccount(null);
  },[account]);
+ // Loading another task page is allowed inside a field/material draft. It
+ // never uses open(append), increments the workspace generation or resets a
+ // draft. All writes, uncertain attempts and other modules still lock it.
+ useLayoutEffect(()=>{
+  taskPageContext.current=mounted.current&&account&&view&&account.officeReviewOnly!==true&&view.scope===account.scope&&!loading?{scope:account.scope,projectId:view.project.id,role:account.role,generation:observationEpoch,cursor:view.nextCursor,officeReviewOnly:false,blocked:saving||Boolean(attempt)||creatingTask||Boolean(draft)||planReadbackPending||Object.entries(modulePending).some(([name,pending])=>pending&&!['field','inventory'].includes(name))}:null;
+  return()=>{taskPageContext.current=null;};
+ },[account,view,loading,observationEpoch,saving,attempt,creatingTask,draft,planReadbackPending,modulePending]);
+ useLayoutEffect(()=>{
+  taskPager.current?.reset();
+ },[account?.scope,account?.role,account?.officeReviewOnly,view?.project?.id,observationEpoch,request]);
+ useLayoutEffect(()=>{
+  const pager=createWorksiteTaskPager({request,getContext:()=>{
+   const context=taskPageContext.current;
+   if(!mounted.current||!context||context.generation!==generation.current)return null;
+   const key=[context.scope,context.projectId,context.role,context.generation].join(':');
+   return {...context,blocked:context.blocked||Object.values(taskReadBusy.current).some(value=>value.key===key&&value.busy)};
+  },onState:value=>{
+   const context=taskPageContext.current;
+   if(mounted.current&&context)setTaskPageReadSnapshot({account,request,contextKey:[context.scope,context.projectId,context.role,context.generation].join(':'),value});
+  },onPage:(page,captured)=>{
+   if(!mounted.current||generation.current!==captured.generation)return;
+   setView(previous=>previous?.scope===captured.scope&&previous.project.id===captured.projectId&&previous.nextCursor===captured.cursor?{...previous,tasks:mergeLoadedTasks(previous.tasks,page.tasks),totalTasks:page.totalTasks,nextCursor:page.nextCursor}:previous);
+  },onAccessRejected:(error,captured)=>{
+   if(mounted.current&&generation.current===captured.generation)restrictProject(error,captured.projectId);
+  }});
+  taskPager.current=pager;
+  return()=>{if(taskPager.current===pager)taskPager.current=null;pager.dispose();};
+ },[account,request,restrictProject]);
  useEffect(()=>{
   const epoch=generation,navigation=identityNavigation,navigationEpoch=identityNavigationEpoch;
   navigation.current=null;navigationEpoch.current++;mounted.current=true;const abort=new AbortController();controller.current=abort;const current=++epoch.current;setObservationEpoch(current);setChannelSnapshot(null);
@@ -410,8 +446,8 @@ export function AccountWorkspace({getSessionToken,onGuideObservation,onCompanyCo
   <WorkspaceScreen name="plantillas" active={activeSection}>{view&&account?.role==='ADMIN'&&<OwnCompanyTemplatesPanel key={`own-company-templates:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={ownCompanyTemplatesPending} locked={saving||Boolean(attempt)||Boolean(draft)||creatingTask||planReadbackPending||Object.entries(modulePending).some(([key,value])=>key!=='ownCompanyTemplates'&&value)}/> }</WorkspaceScreen>
   <WorkspaceScreen name="canal" active={activeSection}>{view&&(account?.role==='ADMIN'||account?.canManageIntegrations)&&<CompanyChannelPanel key={`company-channel:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={companyChannelPending} locked={saving||Boolean(attempt)||Boolean(draft)||creatingTask||planReadbackPending||Object.entries(modulePending).some(([key,value])=>key!=='companyChannel'&&value)}/> }</WorkspaceScreen>
   <WorkspaceScreen name="piloto" active={activeSection}>{view&&account?.role==='ADMIN'&&<DemoPilotPanel key={`demo:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={demoPending}/> }</WorkspaceScreen>
-  <WorkspaceScreen name="actividad" active={activeSection}>{view&&<FieldOperationsPanel key={`field:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} tasks={view.tasks} onPending={fieldPending} onTasksChanged={task=>tasksChanged(task,{scope:account.scope,projectId:view.project.id})} onNavigateSchedule={navigateProgressSchedule}/> }</WorkspaceScreen>
-  <WorkspaceScreen name="materiales" active={activeSection}>{view&&<MaterialInventoryPanel key={`inventory:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} tasks={view.tasks} onPending={inventoryPending}/> }</WorkspaceScreen>
+  <WorkspaceScreen name="actividad" active={activeSection}>{view&&<FieldOperationsPanel key={`field:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} tasks={view.tasks} taskPaging={{totalTasks:view.totalTasks,nextCursor:view.nextCursor,...taskPageRead}} onLoadMoreTasks={loadMoreDraftTasks} onTaskReadBusy={fieldTaskReadBusy} onPending={fieldPending} onTasksChanged={task=>tasksChanged(task,{scope:account.scope,projectId:view.project.id})} onNavigateSchedule={navigateProgressSchedule}/> }</WorkspaceScreen>
+  <WorkspaceScreen name="materiales" active={activeSection}>{view&&<MaterialInventoryPanel key={`inventory:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} tasks={view.tasks} taskPaging={{totalTasks:view.totalTasks,nextCursor:view.nextCursor,...taskPageRead}} onLoadMoreTasks={loadMoreDraftTasks} onTaskReadBusy={inventoryTaskReadBusy} onPending={inventoryPending}/> }</WorkspaceScreen>
   <WorkspaceScreen name="compras" active={activeSection}>{view&&account?.canManageIntegrations&&<SitePurchasePanel key={`purchases:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={purchasePending}/> }</WorkspaceScreen>
   <WorkspaceScreen name="configurar-whatsapp" active={activeSection}>{view&&account?.canManageIntegrations&&<CustomerWhatsAppPanel key={`${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={preparationPending}/> }</WorkspaceScreen>
   <WorkspaceScreen name="conexion" active={activeSection}>{view&&account?.canManageIntegrations&&<MetaOnboardingPanel key={`meta:${account.scope}:${view.project.id}`} projectId={view.project.id} scope={account.scope} getSessionToken={getSessionToken} onPending={metaPending}/> }</WorkspaceScreen>

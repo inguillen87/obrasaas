@@ -1,5 +1,6 @@
 import {restoreParticipantPreanalysisPreviousContract,restoreParticipantPreanalysisSourceSet} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {restoreIntegratedIdentitySourceSet} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
+import {restoreWhatsappFieldContinuitySourceSet} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
@@ -25,7 +26,7 @@ test('outbound source validation uses actual current bytes and certifies no nati
  const lineage=verifyPlanMeasurementCurrentSources(contract,read);assert.equal(lineage.publishedCurrentSourceCount,127);
  const actualFiles=kycExpiredCurrentSourceFiles(read),checkpointFiles=restoreIntegratedIdentitySourceSet('COMPACT',actualFiles,contract);
  assert.equal(checkpointFiles.length,contract.participantPreanalysisCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
- assert.equal(lineage.sourceCount,actualFiles.length);assert.equal(lineage.sourceCount,137);assert.equal(lineage.sourceCount,contract.integratedIdentityCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
+ const outer=contract.whatsappFieldContinuityCurrentRevision.sourceSetDeltas.find(row=>row.family==='COMPACT'),previousCurrentFiles=restoreWhatsappFieldContinuitySourceSet('COMPACT',actualFiles,contract);assert.equal(outer.previousCount,137);assert.equal(outer.currentCount,139);assert.deepEqual(outer.additions,['scripts/lib/kyc-neutral-step-guidance-native.mjs','scripts/lib/kyc-neutral-step-guidance-own-native.mjs']);assert.equal(sha(JSON.stringify(actualFiles)),outer.currentPathsSha256);assert.equal(previousCurrentFiles.length,137);assert.equal(sha(JSON.stringify(previousCurrentFiles)),'ab60b810e098f47892e1a17cb01ce1f7f8e1796c1687776b528100e62cb3083f');assert.equal(previousCurrentFiles.length,contract.integratedIdentityCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);assert.equal(lineage.sourceCount,actualFiles.length);assert.equal(lineage.sourceCount,outer.currentCount);
 });
 test('original eight reviewed H source pins stay immutable and only two explicit current pins advance',()=>{
  assert.deepEqual(contract.kycExpiredCurrentComposition.reviewedSources,KYC_EXPIRED_CURRENT_REVIEWED_SOURCES);
