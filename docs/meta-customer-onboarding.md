@@ -1,6 +1,6 @@
 # Alta Meta de clientes: implementación y límites de aceptación
 
-Este bloque conserva la app, WABA, Test Number y transporte de demostración. No migra cuentas existentes ni reutiliza sus tokens para empresas cliente. Sólo habilita números nuevos dedicados; migración/coexistencia sigue requiriendo su circuito específico.
+Este bloque conserva la app, WABA, Test Number y transporte de demostración. No reutiliza sus tokens para empresas cliente. Los circuitos de número dedicado y coexistencia con Business App tienen habilitaciones independientes. EXISTING_API conserva un plan de revisión; todavía no conecta la cuenta de otro proveedor. Tener el código implementado no acredita la aprobación de Meta ni el alta real de un cliente.
 
 ## Contrato durable
 
@@ -84,3 +84,36 @@ Las páginas directas de Meta devolvieron HTTP 429 en esta sesión; se contrasta
 - [SDK oficial WhatsApp: verificación de firma](https://github.com/WhatsApp/WhatsApp-Nodejs-SDK/blob/main/website/docs/api-reference/webhooks/start.md).
 
 La lectura de documentación no verifica permisos efectivos ni modifica una configuración remota.
+
+## Business App: resolver el número autorizado
+
+El evento `FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING` puede incluir sólo
+`waba_id`. El catálogo no garantiza un único número. La inspección CUSTOMER
+BUSINESS_APP lee el catálogo completo del activo autorizado, con un máximo de
+10 páginas de 100 filas, y reconstruye cada consulta con el cursor recibido.
+Nunca sigue la URL de continuación ni devuelve una selección parcial.
+
+Si Meta devuelve un identificador de teléfono, debe pertenecer al catálogo y
+ser elegible para coexistencia. Si el intento conserva una declaración de
+teléfono, también debe coincidir exactamente con ella. En un evento sin
+identificador, una declaración vigente permite resolver una única coincidencia.
+La declaración procede del contrato guardado en el intento o de una corrección
+confirmada; un campo del navegador no puede reemplazarla. Sólo se elimina el
+formato del número; no se infieren país ni variantes de móvil argentino.
+
+Los intentos históricos sin declaración conservan el criterio previo de un
+único número elegible. Los duplicados, catálogos truncados, respuestas incompletas
+y coincidencias ambiguas requieren revisión. DEDICATED, OWN y el piloto conservan
+sus restricciones independientes. Esto no habilita EXISTING_API ni sustituye
+la aprobación de Meta o una prueba real del cliente.
+
+La selección no prolonga la reserva de verificación de 60 segundos. Antes de
+guardar el vínculo y antes de suscribirlo se comprueban nuevamente la reserva,
+la preparación y el contrato vigente. En una reautorización también se verifica
+la credencial del canal existente bajo bloqueo. Una respuesta tardía o una
+credencial reemplazada no pueden autorizar esa suscripción. La recuperación
+consulta el mismo intento y conserva su credencial cifrada; no repite el canje
+del código ni registra de nuevo el número de Business App.
+
+Contrato oficial: [Business App onboarding](https://developers.facebook.com/documentation/business-messaging/whatsapp/embedded-signup/onboarding-business-app-users),
+[catálogo de números](https://developers.facebook.com/documentation/business-messaging/whatsapp/solution-providers/manage-phone-numbers).

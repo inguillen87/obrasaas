@@ -69,6 +69,99 @@ test('ambiguous, incomplete, non-app and foreign selection cannot bind a coexist
  for(const phones of [{data:[]},{data:[{id:'9999999901',is_on_biz_app:false,platform_type:'CLOUD_API'}]},{data:[{id:'9999999901',is_on_biz_app:true,platform_type:'ON_PREMISE'}]},{data:[{id:'9999999901',is_on_biz_app:true,platform_type:'CLOUD_API'},{id:'9999999902',is_on_biz_app:true,platform_type:'CLOUD_API'}]},{data:[{id:'9999999901',is_on_biz_app:true,platform_type:'CLOUD_API'}],paging:{next:'https://graph.facebook.com/next'}}])await assert.rejects(provider(phones).value.inspect({token:'synthetic-token-only',wabaId:'8888888801',phoneNumberId:null,numberMode:'BUSINESS_APP'}));
  await assert.rejects(provider({data:[{id:'9999999901',is_on_biz_app:true,platform_type:'CLOUD_API'}]}).value.inspect({token:'synthetic-token-only',wabaId:'8888888801',phoneNumberId:'9999999902',numberMode:'BUSINESS_APP'}));
 });
+const appPhone=(id='9999999901',display='+15550001001',patch={})=>({id,display_phone_number:display,is_on_biz_app:true,platform_type:'CLOUD_API',status:'PENDING',...patch});
+const nextPhones=(after,patch={})=>({cursors:{after},next:'https://graph.facebook.com/v25.0/8888888801/phone_numbers?'+new URLSearchParams({after}),...patch});
+const appInspection={token:'synthetic-token-only',wabaId:'8888888801',phoneNumberId:null,numberMode:'BUSINESS_APP'};
+function phoneCatalog(pages){
+ const calls=[];let page=0;
+ const value=createMetaCustomerProvider({environment,fetchImpl:async(url,options)=>{
+  const parsed=new URL(url);calls.push({url:parsed,options});
+  assert.equal(parsed.origin,'https://graph.facebook.com');assert.equal(options.method,'GET');assert.equal(options.cache,'no-store');assert.equal(options.redirect,'error');
+  if(parsed.pathname==='/v25.0/debug_token')return Response.json({data:debug});
+  assert.equal(parsed.pathname,'/v25.0/8888888801/phone_numbers');assert.equal(options.headers.Authorization,'Bearer '+appInspection.token);assert.equal(parsed.searchParams.get('limit'),'100');assert.equal(parsed.searchParams.get('fields'),'id,display_phone_number,verified_name,code_verification_status,status,is_on_biz_app,platform_type');assert.match(parsed.searchParams.get('appsecret_proof'),/^[a-f0-9]{64}$/);
+  assert.ok(page<pages.length,'Unexpected catalog request after the bounded fixture');return Response.json(pages[page++]);
+ }});
+ return {value,calls};
+}
+test('customer Business App resolves the exact declared phone only after a complete multi-page catalog',async()=>{
+ const f=phoneCatalog([{data:[appPhone()],paging:nextPhones('page_2')},{data:[appPhone('9999999902','1 (555) 000-1002'),appPhone('9999999903','+15550001003',{is_on_biz_app:false})]}]);
+ const selected=await f.value.inspect({...appInspection,expectedPhoneE164:'+15550001002'});
+ assert.equal(selected.phoneNumberId,'9999999902');assert.equal(selected.displayPhoneNumber,'1 (555) 000-1002');assert.equal(selected.registered,true);assert.equal(f.calls.length,3);assert.equal(f.calls[1].url.searchParams.has('after'),false);assert.equal(f.calls[2].url.searchParams.get('after'),'page_2');assert.equal(f.calls[1].url.searchParams.get('appsecret_proof'),f.calls[2].url.searchParams.get('appsecret_proof'));
+});
+test('an explicit eligible phone can select among multiple customer Business App numbers with or without a declaration',async()=>{
+ for(const expectedPhoneE164 of [undefined,null,'+15550001002']){
+  const f=phoneCatalog([{data:[appPhone()],paging:nextPhones('page_2')},{data:[appPhone('9999999902','+15550001002')]}]);
+  const selected=await f.value.inspect({...appInspection,phoneNumberId:'9999999902',expectedPhoneE164});assert.equal(selected.phoneNumberId,'9999999902');assert.equal(f.calls.length,3);
+ }
+});
+test('explicit phone and declared phone must agree; a matching alternate entry cannot replace the selected asset',async()=>{
+ const f=phoneCatalog([{data:[appPhone(),appPhone('9999999902','+15550001002')]}]);
+ await assert.rejects(f.value.inspect({...appInspection,phoneNumberId:'9999999901',expectedPhoneE164:'+15550001002'}),{code:'META_CUSTOMER_COMPANY_PHONE_MISMATCH'});assert.equal(f.calls.length,2);
+ const foreign=phoneCatalog([{data:[appPhone(),appPhone('9999999902','+15550001002',{is_on_biz_app:false})]}]);
+ await assert.rejects(foreign.value.inspect({...appInspection,phoneNumberId:'9999999902',expectedPhoneE164:'+15550001001'}),{code:'META_CUSTOMER_COEXISTENCE_PHONE_REQUIRED'});
+});
+test('waba-only declared selection rejects zero and multiple normalized matches without inferring Argentine mobile aliases',async()=>{
+ for(const [phones,expectedPhoneE164,code] of [
+  [[appPhone()],'+15550001002','META_CUSTOMER_COMPANY_PHONE_MISMATCH'],
+  [[appPhone('9999999901','+54 11 1234-5678')],'+5491112345678','META_CUSTOMER_COMPANY_PHONE_MISMATCH'],
+  [[appPhone('9999999901','+5491112345678')],'+541112345678','META_CUSTOMER_COMPANY_PHONE_MISMATCH'],
+  [[appPhone(),appPhone('9999999902','1 (555) 000-1001')],'+15550001001','META_CUSTOMER_PHONE_SELECTION_REQUIRED']
+ ]){const f=phoneCatalog([{data:phones}]);await assert.rejects(f.value.inspect({...appInspection,expectedPhoneE164}),{code});assert.equal(f.calls.length,2);}
+});
+test('without a declaration the legacy single eligible customer phone remains sufficient after complete pagination',async()=>{
+ const f=phoneCatalog([{data:[appPhone('9999999902','+15550001002',{is_on_biz_app:false})],paging:nextPhones('page_2')},{data:[appPhone()]}]);
+ assert.equal((await f.value.inspect(appInspection)).phoneNumberId,'9999999901');assert.equal(f.calls.length,3);
+ const ambiguous=phoneCatalog([{data:[appPhone(),appPhone('9999999902','+15550001002')]}]);await assert.rejects(ambiguous.value.inspect(appInspection));
+});
+test('malformed declaration and path assets are rejected before any customer provider request',async()=>{
+ for(const patch of [
+  ...['15550001001','+1 (555) 000-1001','+0123456789','+123',123,{value:'+15550001001'}].map(expectedPhoneE164=>({expectedPhoneE164})),
+  ...[8888888801,'8888888801/phone_numbers','8888888801?token=foreign'].map(wabaId=>({wabaId})),
+  ...[9999999901,'','9999999901/other'].map(phoneNumberId=>({phoneNumberId}))
+ ]){const f=phoneCatalog([]);await assert.rejects(f.value.inspect({...appInspection,...patch}));assert.equal(f.calls.length,0);}
+});
+test('every customer phone item must have a unique exact string ID and sufficient classification fields',async()=>{
+ for(const invalid of [null,[],42,appPhone(9999999901),appPhone('9007199254740993',{bad:'display'}),appPhone('9999999902','+15550001002',{is_on_biz_app:'true'}),appPhone('9999999902','+15550001002',{platform_type:null}),appPhone('9999999902','+15550001002',{status:1})]){
+  const f=phoneCatalog([{data:[appPhone(),invalid]}]);await assert.rejects(f.value.inspect({...appInspection,phoneNumberId:'9999999901'}),{code:'META_CUSTOMER_PHONE_SELECTION_REQUIRED'});assert.equal(f.calls.length,2);
+ }
+ for(const second of [appPhone(),appPhone('9999999901','+15550001002')]){const f=phoneCatalog([{data:[appPhone()],paging:nextPhones('page_2')},{data:[second]}]);await assert.rejects(f.value.inspect({...appInspection,phoneNumberId:'9999999901'}),{code:'META_CUSTOMER_PHONE_SELECTION_REQUIRED'});assert.equal(f.calls.length,3);}
+});
+test('a malformed eligible phone display cannot be silently omitted while matching a declaration',async()=>{
+ for(const display of [undefined,'5550001','+0123456789','+15550001002 ext 1']){const f=phoneCatalog([{data:[appPhone(),{...appPhone('9999999902'),display_phone_number:display}]}]);await assert.rejects(f.value.inspect({...appInspection,expectedPhoneE164:'+15550001001'}),{code:'META_CUSTOMER_COMPANY_PHONE_UNCONFIRMED'});}
+});
+test('customer phone pagination validates terminal pages before using an earlier matching number',async()=>{
+ for(const last of [{data:null},{data:[appPhone('9999999902')],paging:[]},{data:[],paging:null},{data:[],paging:{cursors:null}},{data:[],paging:{cursors:{after:'bad cursor'}}},{data:[],paging:{next:null}}]){
+  const f=phoneCatalog([{data:[appPhone()],paging:nextPhones('page_2')},last]);await assert.rejects(f.value.inspect({...appInspection,expectedPhoneE164:'+15550001001'}),{code:'META_CUSTOMER_PHONE_SELECTION_REQUIRED'});assert.equal(f.calls.length,3);
+ }
+ const finalCursor=phoneCatalog([{data:[appPhone()],paging:nextPhones('page_2')},{data:[],paging:{cursors:{after:'page_2'}}}]);assert.equal((await finalCursor.value.inspect({...appInspection,expectedPhoneE164:'+15550001001'})).phoneNumberId,'9999999901');
+});
+test('customer phone continuation rejects repeated malformed or missing cursors and never follows an injected host or path',async()=>{
+ for(const paging of [
+  {next:'https://evil.example/phones',cursors:{after:'page_2'}},nextPhones('page_2',{next:'https://graph.facebook.com/v25.0/other/phone_numbers?after=page_2'}),
+  nextPhones('page_2',{next:'https://graph.facebook.com.evil.example/v25.0/8888888801/phone_numbers?after=page_2'}),
+  nextPhones('page_2',{next:'https://user@graph.facebook.com/v25.0/8888888801/phone_numbers?after=page_2'}),
+  nextPhones('page_2',{next:'http://graph.facebook.com/v25.0/8888888801/phone_numbers?after=page_2'}),
+  nextPhones('page_2',{next:'https://graph.facebook.com/v25.0/8888888801/phone_numbers?after=other'}),
+  nextPhones('page_2',{next:'https://graph.facebook.com/v25.0/8888888801/phone_numbers?after=page_2&after=page_2'}),
+  {next:'https://graph.facebook.com/v25.0/8888888801/phone_numbers?after=page_2'},
+  ...['','bad cursor','%2F','x'.repeat(2049),12].map(cursor=>nextPhones(cursor))
+ ]){const f=phoneCatalog([{data:[appPhone()],paging}]);await assert.rejects(f.value.inspect({...appInspection,expectedPhoneE164:'+15550001001'}),{code:'META_CUSTOMER_PHONE_SELECTION_REQUIRED'});assert.equal(f.calls.length,2);}
+ const repeated=phoneCatalog([{data:[appPhone()],paging:nextPhones('page_2')},{data:[],paging:nextPhones('page_2')}]);await assert.rejects(repeated.value.inspect({...appInspection,expectedPhoneE164:'+15550001001'}),{code:'META_CUSTOMER_PHONE_SELECTION_REQUIRED'});assert.equal(repeated.calls.length,3);
+});
+test('continuation reconstructs fields limit and authorization instead of trusting a provider URL query',async()=>{
+ const paging=nextPhones('page_2',{next:'https://graph.facebook.com/v25.0/8888888801/phone_numbers?after=page_2&access_token=foreign&appsecret_proof=foreign&fields=foreign&limit=1'}),f=phoneCatalog([{data:[appPhone()],paging},{data:[appPhone('9999999902','+15550001002')]}]);
+ assert.equal((await f.value.inspect({...appInspection,expectedPhoneE164:'+15550001002'})).phoneNumberId,'9999999902');assert.equal(f.calls[2].url.searchParams.has('access_token'),false);assert.notEqual(f.calls[2].url.searchParams.get('appsecret_proof'),'foreign');assert.equal(f.calls[2].url.searchParams.size,4);
+});
+test('the complete ten-page thousand-item boundary is accepted and an eleventh page or oversized page cannot yield a selection',async()=>{
+ const pages=Array.from({length:10},(_,page)=>({data:Array.from({length:100},(_,index)=>{const n=page*100+index;return appPhone(String(9990000000+n),'+1555'+String(n).padStart(7,'0'));}),...(page<9?{paging:nextPhones('page_'+(page+2))}:{})}));
+ const complete=phoneCatalog(pages);assert.equal((await complete.value.inspect({...appInspection,expectedPhoneE164:'+15550000999'})).phoneNumberId,'9990000999');assert.equal(complete.calls.length,11);
+ const truncatedPages=structuredClone(pages);truncatedPages[9].paging=nextPhones('page_11');const truncated=phoneCatalog(truncatedPages);await assert.rejects(truncated.value.inspect({...appInspection,expectedPhoneE164:'+15550000000'}),{code:'META_CUSTOMER_PHONE_SELECTION_REQUIRED'});assert.equal(truncated.calls.length,11);
+ const oversized=phoneCatalog([{data:Array.from({length:101},(_,index)=>appPhone(String(9990000000+index),'+1555'+String(index).padStart(7,'0')))}]);await assert.rejects(oversized.value.inspect({...appInspection,phoneNumberId:'9990000000'}),{code:'META_CUSTOMER_PHONE_SELECTION_REQUIRED'});assert.equal(oversized.calls.length,2);
+});
+test('dedicated and custom demo inspection retain their prior single-page and single-eligible restrictions',async()=>{
+ const dedicated=phoneCatalog([{data:[appPhone('9999999901','+15550001001',{is_on_biz_app:false})],paging:nextPhones('page_2')}]);await assert.rejects(dedicated.value.inspect({...appInspection,numberMode:'DEDICATED',phoneNumberId:'9999999901'}),{code:'META_CUSTOMER_PHONE_SELECTION_REQUIRED'});assert.equal(dedicated.calls.length,2);
+ const demoGates={fixedAssets:true,testMode:true,credential:true,vault:true,signature:true,version:true,recipients:true},demo=createMetaCustomerProvider({environment,readiness:()=>({canLaunchMeta:true,appId:OBRASAAS_META_CHANNEL.appId,version:'v25.0',gates:demoGates}),fetchImpl:async url=>Response.json(new URL(url).pathname.endsWith('/debug_token')?{data:debug}:{data:[appPhone(),appPhone('9999999902','+15550001002')]})});await assert.rejects(demo.inspect({...appInspection,phoneNumberId:'9999999901'}),{code:'META_CUSTOMER_PHONE_SELECTION_REQUIRED'});
+});
 const history=(count=51,progress=100)=>({object:'whatsapp_business_account',entry:[{id:'8888888801',changes:[{field:'history',value:{metadata:{phone_number_id:'9999999901'},history:[{metadata:{phase:2,chunk_order:10,progress},threads:[{id:'5491112345678',messages:Array.from({length:count},(_,i)=>({id:'wamid.synthetic_'+String(i).padStart(8,'0'),from:'5491112345678',timestamp:'1700000000',type:'text',text:{body:'Historia sintética '+i}}))}]}]}}]}]});
 test('large history is partitioned into immutable bounded source receipts with out-of-order checkpoint identity',()=>{
  const events=splitMetaCustomerEvents(history());assert.equal(events.length,3);assert.deepEqual(events.map(event=>event.payload.checkpoint.part),[0,1,2]);assert.ok(events.every(event=>event.payload.checkpoint.total===3));assert.equal(new Set(events.map(event=>event.payload.checkpoint.chunkDigest)).size,1);assert.equal(events.map(event=>customerAppRecords(event.payload).records.length).reduce((a,b)=>a+b),51);assert.deepEqual(splitMetaCustomerEvents(history()).map(x=>x.externalId),events.map(x=>x.externalId));

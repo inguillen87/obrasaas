@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync,readdirSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
+import {restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin,CUSTOMER_PHONE_SELECTION_CURRENT_REVISION as phoneExpected} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {EXISTING_API_PLAN_CURRENT_REVISION as expected,EXISTING_API_PLAN_CURRENT_SECTION as key,restoreExistingApiPlanPreviousContract,existingApiPlanCurrentSourcePin,existingApiPlanValidationFiles,verifyExistingApiPlanCurrentSources,restoreExistingApiPlanSourceSet,existingApiPlanProofSourceAdditions,existingApiPlanCurrentNativeSourceFiles,validateExistingApiPlanNativeProof} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
 import {verifyMaterialReviewCurrentSources,restoreMaterialReviewPreviousContract} from '../scripts/lib/material-review-current-ci-lineage.mjs';
 import {whatsappFieldCompanyNativeSourceFiles,verifyWhatsappFieldContinuityCurrentSources} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
@@ -63,10 +63,10 @@ test('COMPANY gains only the new server module while every historical native mat
 });
 
 test('the local native proof requires all 38 historical and three additive observations without acceptance claims',()=>{
- const contract=current(),proof={status:'PASS',environment:'local-disposable-postgresql17',checks:expected.native.currentCheckNames,realProviderCalls:0,physicalNumberTested:false,productionDataTouched:false};
+ const contract=current(),proof={status:'PASS',environment:'local-disposable-postgresql17',checks:[...expected.native.currentCheckNames,...phoneExpected.native.addedCheckNames],realProviderCalls:0,physicalNumberTested:false,productionDataTouched:false};
  assert.equal(expected.native.previousCheckNames.length,38);assert.equal(expected.native.addedCheckNames.length,3);assert.deepEqual(expected.native.currentCheckNames.filter(name=>!expected.native.addedCheckNames.includes(name)),expected.native.previousCheckNames);assert.equal(expected.native.currentCheckNames.length,41);
  assert.deepEqual(validateExistingApiPlanNativeProof(proof,contract,read),{version:1,status:'PASS',historicalChecksPreserved:38,addedChecks:3,nativeOrBrowserAcceptance:false});
- for(const patch of [{checks:proof.checks.slice(1)},{checks:[...proof.checks,proof.checks[0]]},{realProviderCalls:1},{physicalNumberTested:true},{productionDataTouched:true}])denied(()=>validateExistingApiPlanNativeProof({...proof,...patch},contract,read));
+ for(const patch of [{checks:expected.native.currentCheckNames},{checks:proof.checks.slice(1)},{checks:[...proof.checks,proof.checks[0]]},{realProviderCalls:1},{physicalNumberTested:true},{productionDataTouched:true}])denied(()=>validateExistingApiPlanNativeProof({...proof,...patch},contract,read));
 });
 
 test('contract declarations and historical fields cannot be altered or resealed by callers',()=>{

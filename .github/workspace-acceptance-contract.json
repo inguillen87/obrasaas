@@ -22835,5 +22835,85 @@
         "sha256": "066887a5225fc53e2c9d6dd5d35512dc5b640fdb29cdbbb34e52e606775013f9"
       }
     ]
+  },
+  "customerPhoneSelectionCurrentRevision": {
+    "version": 1,
+    "status": "REVIEWED_CUSTOMER_BUSINESS_APP_PHONE_SELECTION",
+    "predecessorCommit": "8599969a1072c9b8e1afac0640df6a69219968b3",
+    "previousContractSha256": "d3e0a5af11643ad3b5fb3c3ebb046edfc6f796a0142b23e1b604d0b15c14d5cb",
+    "reviewedSourceChanges": [
+      {
+        "path": "scripts/verify-meta-customer-coexistence-postgres.mjs",
+        "previousSha256": "20aae77b10b62c5bbdddb2d4568177bd51052a1272621ea78ecea6a3a1a8773e",
+        "currentSha256": "fd94401af9a07866a2cd28a355b7f2f69ef122cf3ae325690c8ffc35cb97092a"
+      },
+      {
+        "path": "src/lib/meta-customer-onboarding.mjs",
+        "previousSha256": "4f8cd0f93a731871444d3f6d5d2c39285c84641b1141bc83b708cec1483306d8",
+        "currentSha256": "6c0a115998d6e46236dcb70c3753c80f1559fec88de7735f122f157adc9530b8"
+      },
+      {
+        "path": "src/lib/meta-customer-provider.mjs",
+        "previousSha256": "131ddc2c6344bc1e58a6ea17aa665f9e8585a0aabee7300eaa050c06ab85470a",
+        "currentSha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f"
+      }
+    ],
+    "validationPredecessors": [
+      {
+        "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+        "sha256": "c2c4b99966b8983d49673f0623e7a0cf6983ae9de143dc90704126c803cd7009"
+      },
+      {
+        "path": "scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs",
+        "sha256": "f7e4779963eed7cd0442f7e4a9ebc56a75543fae1e69f9ad6214e18af1b04bfc"
+      },
+      {
+        "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+        "sha256": "066887a5225fc53e2c9d6dd5d35512dc5b640fdb29cdbbb34e52e606775013f9"
+      },
+      {
+        "path": "tests/production-meta-existing-api-plan-current-ci-lineage.test.mjs",
+        "sha256": "b321b7dfb5c82333883f2008b5dfe9e00b6d8aba31c920bd3484e397bf5dd1ed"
+      }
+    ],
+    "native": {
+      "producer": "scripts/verify-meta-customer-coexistence-postgres.mjs",
+      "previousCheckCount": 41,
+      "currentCheckCount": 52,
+      "previousCheckNamesSha256": "2ae29a080a935b03e965c7e3e92169b9e8ca61f411534c9862d0f33c17998509",
+      "currentCheckNamesSha256": "017a754bed3aba7d628c453bbe3dd2ac2bc39d7340d6452cdf6941c6f6d5bc6c",
+      "addedCheckNames": [
+        "native-provider-WABA-only-multipage-uses-sealed-company-phone-exactly-once-without-register-or-activation",
+        "native-provider-declaration-change-during-GET-denies-binding-and-POST-then-explicit-current-revision-recovers-same-grant-and-escrow-with-GET-only-receipt",
+        "native-provider-explicit-wrong-ID-cannot-be-replaced-by-matching-alternate-number-or-dispatch-subscription",
+        "native-provider-legacy-existing-credential-race-during-catalog-GET-preserves-current-connection-and-dispatches-no-POST",
+        "native-provider-tenant-revocation-during-catalog-GET-denies-binding-and-subscription-with-durable-grant-reference",
+        "native-provider-61-second-same-lease-expiry-before-binding-stops-all-effects-and-explicit-reconcile-recovers-identical-escrow-without-code-exchange",
+        "native-provider-existing-credential-change-after-binding-commit-is-fenced-before-subscribe-with-legacy-declaration-absent",
+        "native-provider-lease-expiry-after-binding-commit-prevents-subscription-and-keeps-disabled-binding-for-review",
+        "native-provider-expired-inspection-loses-to-explicit-reclaimer-and-cannot-bind-subscribe-or-overwrite-the-newer-lease-result",
+        "native-provider-real-binding-advisory-lock-crosses-lease-denies-bind-and-POST-preserves-grant-and-explicitly-recovers-without-exchange",
+        "native-provider-real-existing-connection-row-lock-crosses-lease-denies-POST-preserves-provider-and-explicitly-recovers-same-escrow-without-exchange"
+      ]
+    },
+    "nativeOrBrowserAcceptance": false,
+    "validationSources": [
+      {
+        "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+        "sha256": "463cac0a3406559db5ceca581e035cf1c1bd20b0e8c9c85f6323c524a1ae4ea1"
+      },
+      {
+        "path": "scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs",
+        "sha256": "93763476c4dc0b193cf1e4d174f7eae71c0daf1081827d18d21cc7ee22f7d586"
+      },
+      {
+        "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+        "sha256": "f07e9dd108fb478608ff6e42f3a1f9a954e49a028cfdfd993c4dcbbc722fc97f"
+      },
+      {
+        "path": "tests/production-meta-existing-api-plan-current-ci-lineage.test.mjs",
+        "sha256": "6559fc99b2e4c40762b8b3a9dfbb6b542847ac08ab54d39e7461035e33b513f2"
+      }
+    ]
   }
 }
