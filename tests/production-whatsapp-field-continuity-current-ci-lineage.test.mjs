@@ -10,6 +10,7 @@ import {restoreIntegratedIdentityPreviousContract} from '../scripts/lib/integrat
 import {restoreParticipantPreanalysisPreviousContract,preloadParticipantPreanalysisConsumerSources} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {restoreOoxmlAccountingPreviousContract} from '../scripts/lib/ooxml-accounting-current-ci-lineage.mjs';
 import {reconstructPublishedHContract} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';
+import {restoreMaterialReviewPreviousContract,materialReviewCurrentSourcePin} from '../scripts/lib/material-review-current-ci-lineage.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex'),serialize=value=>Buffer.from(JSON.stringify(value,null,2)+'\n');
 const read=file=>existsSync(file)?readFileSync(file):null,current=()=>JSON.parse(read('.github/workspace-acceptance-contract.json'));
@@ -23,7 +24,7 @@ test('WA field inverse restores exact published052 then all previous checkpoints
 });
 
 test('the59th block ID65 and independent21st proof preserve every previous command and all eight lanes',()=>{
- const contract=current(),revision=contract[section];assert.deepEqual(composeWhatsappFieldContinuityContract(revision),contract);
+ const contract=current(),previous=restoreMaterialReviewPreviousContract(contract),revision=previous[section];assert.deepEqual(composeWhatsappFieldContinuityContract(revision),previous);
  assert.deepEqual(contract.blocks.slice(0,58),checkpoint.blocks);assert.equal(contract.blocks.length,59);assert.equal(contract.blocks.at(-1).id,65);assert.equal(new Set(contract.blocks.map(row=>row.id)).size,59);assert.equal(contract.extension.proofs.length,21);assert.equal(contract.artifactPatterns.length,63);
  assert.deepEqual(Object.keys(contract.lanes),Object.keys(checkpoint.lanes));assert.equal(Object.keys(contract.lanes).length,8);for(const name of Object.keys(contract.lanes).filter(name=>name!=='field'))assert.deepEqual(contract.lanes[name],checkpoint.lanes[name]);
  assert.deepEqual(contract.lanes.field.blocks,[...checkpoint.lanes.field.blocks,65]);assert.deepEqual(contract.artifactPatterns.slice(0,62),checkpoint.artifactPatterns);
@@ -40,7 +41,7 @@ test('every current source is authenticated before inherited consumers and no pr
 });
 
 test('only exact inherited and052 source aliases advance while current bytes cannot impersonate a predecessor',()=>{
- const contract=current();for(const row of [...contract[section].reviewedSourceChanges,...contract[section].validationDeltas]){assert.equal(whatsappFieldContinuityCurrentSourcePin(contract,{path:row.path,sha256:row.previousSha256}),row.currentSha256);denied(()=>whatsappFieldContinuityCurrentSourcePin(contract,{path:row.path,sha256:'e'.repeat(64)}));}
+ const contract=current();for(const row of [...contract[section].reviewedSourceChanges,...contract[section].validationDeltas]){assert.equal(whatsappFieldContinuityCurrentSourcePin(contract,{path:row.path,sha256:row.previousSha256}),materialReviewCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}));denied(()=>whatsappFieldContinuityCurrentSourcePin(contract,{path:row.path,sha256:'e'.repeat(64)}));}
  const row=contract[section].reviewedSourceChanges.find(row=>row.path.endsWith('/workspace-client.js'));assert.ok(row);assert.equal(whatsappFieldContinuityCurrentSourcePin(contract,{path:row.path,sha256:'4f3ccde7f433c98e63f0ada92cd1346f0757bea06ea8bf93abf9ac0ff62b79f8'}),row.currentSha256);denied(()=>whatsappFieldContinuityCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}));
 });
 
@@ -50,11 +51,11 @@ test('omitted deltas foreign checkpoints modified old matrices and inconsistent 
 });
 
 test('actual source additions restore exact predecessor sets and old or same-count foreign sets cannot satisfy current',()=>{
- const contract=current();for(const delta of [...contract[section].sourceSetDeltas,...contract[section].proofSourceDeltas]){const files=delta.id?contract.extension.proofs.find(row=>row.id===delta.id).sourceFiles:delta.currentFiles;assert.equal(files.length,delta.currentCount);assert.equal(sha(JSON.stringify(files)),delta.currentPathsSha256);const previous=restoreWhatsappFieldContinuitySourceSet(delta.family,files,contract);assert.equal(previous.length,delta.previousCount);assert.equal(sha(JSON.stringify(previous)),delta.previousPathsSha256);if(delta.additions.length){denied(()=>restoreWhatsappFieldContinuitySourceSet(delta.family,previous,contract));const foreign=[...files];foreign[foreign.indexOf(delta.additions[0])]='src/lib/foreign-current-source.mjs';foreign.sort();denied(()=>restoreWhatsappFieldContinuitySourceSet(delta.family,foreign,contract));}}
+ const contract=current(),priorMaterial=restoreMaterialReviewPreviousContract(contract);for(const delta of [...contract[section].sourceSetDeltas,...contract[section].proofSourceDeltas]){const files=delta.id?contract.extension.proofs.find(row=>row.id===delta.id).sourceFiles:delta.currentFiles,priorFiles=delta.id?priorMaterial.extension.proofs.find(row=>row.id===delta.id).sourceFiles:delta.currentFiles;assert.equal(priorFiles.length,delta.currentCount);assert.equal(sha(JSON.stringify(priorFiles)),delta.currentPathsSha256);const previous=restoreWhatsappFieldContinuitySourceSet(delta.family,files,contract);assert.equal(previous.length,delta.previousCount);assert.equal(sha(JSON.stringify(previous)),delta.previousPathsSha256);if(delta.additions.length){denied(()=>restoreWhatsappFieldContinuitySourceSet(delta.family,previous,contract));const foreign=[...files];foreign[foreign.indexOf(delta.additions[0])]='src/lib/foreign-current-source.mjs';foreign.sort();denied(()=>restoreWhatsappFieldContinuitySourceSet(delta.family,foreign,contract));}}
 });
 
 test('proof additions accept only authenticated historical context or the exact complete current set',()=>{
- const contract=current();for(const delta of contract[section].proofSourceDeltas){const prior=checkpoint.extension.proofs.find(row=>row.id===delta.id),spec=contract.extension.proofs.find(row=>row.id===delta.id);assert.deepEqual(whatsappFieldContinuityProofSourceAdditions(prior),[]);assert.deepEqual(whatsappFieldContinuityProofSourceAdditions(spec),delta.additions);const changed=structuredClone(spec);changed.sourceFiles=[...changed.sourceFiles.slice(0,-1),'src/lib/foreign-proof-source.mjs'].sort();denied(()=>whatsappFieldContinuityProofSourceAdditions(changed));}
+ const contract=current();for(const delta of contract[section].proofSourceDeltas){const prior=checkpoint.extension.proofs.find(row=>row.id===delta.id),spec=contract.extension.proofs.find(row=>row.id===delta.id);assert.deepEqual(whatsappFieldContinuityProofSourceAdditions(prior),[]);const material=contract.materialReviewCurrentRevision.proofSourceDeltas.find(row=>row.id===spec.id);assert.deepEqual(whatsappFieldContinuityProofSourceAdditions(spec),[...delta.additions,...(material?.additions||[])]);const changed=structuredClone(spec);changed.sourceFiles=[...changed.sourceFiles.slice(0,-1),'src/lib/foreign-proof-source.mjs'].sort();denied(()=>whatsappFieldContinuityProofSourceAdditions(changed));}
 });
 
 test('unrelated contract records cannot be smuggled through a valid outer revision',()=>{
