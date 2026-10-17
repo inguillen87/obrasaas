@@ -14,6 +14,9 @@ const ownTemplateAdministrations=new WeakMap();
 const ownScopes=['business_management',...META_CUSTOMER_REQUIRED_SCOPES];
 const mediaTypes=['image/jpeg','image/png','image/webp','audio/ogg','audio/mpeg','audio/mp4','audio/wav','audio/webm','video/mp4','video/webm'];
 const planSourceTypes=['application/pdf','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel.sheet.macroenabled.12','image/jpeg','image/png','image/webp'];
+const customerPhoneFields='id,display_phone_number,verified_name,code_verification_status,status,is_on_biz_app,platform_type';
+const customerPhonePageLimit=10,customerPhoneLimit=1000;
+const phoneCursor=value=>typeof value==='string'&&/^[A-Za-z0-9+/_=-]{1,2048}$/.test(value);
 function ownTokenVerified(debug,policy,now){
  const scopes=debug?.scopes,grants=debug?.granular_scopes;
  // OWN system-user grants may omit targets. The complete business ownership
@@ -132,6 +135,29 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
   const payload=await response.json().catch(()=>null);
   if(!response.ok)throw new WorkspaceError(response.status>=500||[408,425,429].includes(response.status)?'META_CUSTOMER_PROVIDER_UNCONFIRMED':'META_CUSTOMER_PROVIDER_REJECTED',response.status>=500||[408,425,429].includes(response.status)?503:409);
   if(!payload||typeof payload!=='object')throw new WorkspaceError('META_CUSTOMER_PROVIDER_UNCONFIRMED',503);await ownBoundary();return payload;
+ }
+ async function customerBusinessAppPhones(wabaId,token){
+  const fail=()=>{throw new WorkspaceError('META_CUSTOMER_PHONE_SELECTION_REQUIRED',409);};
+  const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+  const items=[],ids=new Set(),cursors=new Set(),endpoint=wabaId+'/phone_numbers';let after;
+  for(let page=0;page<customerPhonePageLimit;page++){
+   const result=await request(endpoint+'?'+new URLSearchParams({fields:customerPhoneFields,limit:'100',...(after?{after}:{})}),{token});
+   if(!plain(result)||!Array.isArray(result.data)||result.data.length>100||items.length+result.data.length>customerPhoneLimit)fail();
+   for(const item of result.data){
+    if(!plain(item)||!metaAssetId(item.id)||ids.has(item.id)||typeof item.is_on_biz_app!=='boolean'||typeof item.platform_type!=='string'||!item.platform_type||item.platform_type.length>64||['display_phone_number','verified_name','code_verification_status','status'].some(key=>item[key]!==undefined&&(typeof item[key]!=='string'||item[key].length>(key==='verified_name'?160:64))))fail();
+    ids.add(item.id);items.push(item);
+   }
+   const paging=result.paging;
+   if(paging!==undefined&&(!plain(paging)||paging.cursors!==undefined&&(!plain(paging.cursors)||['before','after'].some(key=>paging.cursors[key]!==undefined&&!phoneCursor(paging.cursors[key])))))fail();
+   if(paging?.next===undefined)return items;
+   const cursor=paging.cursors?.after;let next;
+   try{next=new URL(paging.next);}catch{fail();}
+   if(typeof paging.next!=='string'||paging.next.length>8192||next.protocol!=='https:'||next.hostname!=='graph.facebook.com'||next.username||next.password||next.port||next.hash||next.pathname!==`/${config().version}/${endpoint}`||next.searchParams.getAll('after').length!==1||next.searchParams.get('after')!==cursor||!phoneCursor(cursor)||cursors.has(cursor))fail();
+   // A provider URL is only a continuation signal. Rebuild the authorized
+   // endpoint and retain our token/proof instead of following paging.next.
+   cursors.add(cursor);after=cursor;
+  }
+  fail();
  }
  async function downloadScopedMedia({token,phoneNumberId,mediaId,limit=3*1024*1024,beforeExternal},allowedTypes,imageLimit){
   pilotAdapter('media');
@@ -262,7 +288,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    const result=await request('oauth/access_token?'+query);
    if(typeof result.access_token!=='string'||result.access_token.length<20||result.access_token.length>4096)throw new WorkspaceError('META_CUSTOMER_EXCHANGE_UNCONFIRMED',503);return result.access_token;
   },
-  async inspect({token,wabaId,phoneNumberId,numberMode='DEDICATED',inspectionPhase=META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL}){
+  async inspect({token,wabaId,phoneNumberId,numberMode='DEDICATED',expectedPhoneE164,inspectionPhase=META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL}){
    // A new inspection, including a failed one, supersedes this instance's
    // previous authorization. Provisioning evidence cannot authorize replies.
    const sequence=++inspectionSequence;inspectedAssets=null;
@@ -271,6 +297,9 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
     const ownPolicy=ownCapability?ownCompanyTransportPolicy(ownCapability,environment,now()):null;
     if(ownPolicy&&(numberMode!=='DEDICATED'||wabaId!==ownPolicy.wabaId||phoneNumberId!==ownPolicy.phoneNumberId))throw new WorkspaceError('META_OWN_COMPANY_ASSET_REJECTED',403);
     if(ownPolicy&&customerTokenDigest(token||'')!==ownAudits.get(ownAudit)?.tokenDigest)throw new WorkspaceError('META_OWN_COMPANY_CREDENTIAL_REJECTED',403);
+   const customerBusinessApp=numberMode==='BUSINESS_APP'&&!ownCapability&&!pilotCapability&&readiness===metaCustomerReadiness,hasExpectedPhone=customerBusinessApp&&expectedPhoneE164!=null;
+   if(customerBusinessApp&&(!metaAssetId(wabaId)||phoneNumberId!=null&&!metaAssetId(phoneNumberId)))throw new WorkspaceError('META_CUSTOMER_PHONE_SELECTION_REQUIRED',409);
+   if(hasExpectedPhone){try{if(normalizeCompanyPhone(expectedPhoneE164,true)!==expectedPhoneE164)throw new Error();}catch{throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_UNCONFIRMED',409);}}
    const ready=config();const result=await request('debug_token?'+new URLSearchParams({input_token:token}),{token:ready.appId+'|'+environment.META_APP_SECRET,appToken:true});
    const data=result.data;
    if(data?.is_valid!==true||String(data.app_id)!==ready.appId||!hasMetaCustomerRequiredScopes(data.scopes))throw new WorkspaceError('META_CUSTOMER_TOKEN_SCOPE_REJECTED',403);
@@ -278,14 +307,19 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
     if(ownPolicy&&(!ownTokenVerified(data,ownPolicy,now())||String(data.user_id)!==ownAudits.get(ownAudit)?.systemUserId||ownCompanyCapabilityKind(ownCapability)==='RUNTIME'&&!ownRuntimeTokenMatches(data,ownPolicy)))throw new WorkspaceError('META_OWN_COMPANY_TOKEN_REJECTED',403);
    const scopes=data.granular_scopes;
     if(!ownPolicy&&(!Array.isArray(scopes)||!scopes.some(scope=>scope.scope==='whatsapp_business_management'&&Array.isArray(scope.target_ids)&&scope.target_ids.map(String).includes(wabaId))))throw new WorkspaceError('META_CUSTOMER_WABA_SCOPE_REJECTED',403);
-   const phones=await request(wabaId+'/phone_numbers?'+new URLSearchParams({fields:'id,display_phone_number,verified_name,code_verification_status,status,is_on_biz_app,platform_type',limit:'100'}),{token});
+   const phones=customerBusinessApp?{data:await customerBusinessAppPhones(wabaId,token)}:await request(wabaId+'/phone_numbers?'+new URLSearchParams({fields:customerPhoneFields,limit:'100'}),{token});
    if(!Array.isArray(phones.data)||phones.paging?.next)throw new WorkspaceError('META_CUSTOMER_PHONE_SELECTION_REQUIRED',409);
     if(ownPolicy&&(phones.data.length>100||phones.data.some(phone=>!metaAssetId(String(phone?.id)))||new Set(phones.data.map(phone=>String(phone.id))).size!==phones.data.length))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);
    const eligible=numberMode==='BUSINESS_APP'?phones.data.filter(item=>item.is_on_biz_app===true&&item.platform_type==='CLOUD_API'):phones.data;
-   const phone=phoneNumberId?eligible.find(item=>String(item.id)===phoneNumberId):numberMode==='BUSINESS_APP'&&eligible.length===1?eligible[0]:null;
+   let phone;
+   if(hasExpectedPhone){
+    const matches=eligible.filter(item=>{let normalized;try{normalized=normalizeCompanyPhone(item.display_phone_number,true);}catch{throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_UNCONFIRMED',409);}return normalized===expectedPhoneE164;});
+    if(phoneNumberId){phone=eligible.find(item=>item.id===phoneNumberId);if(phone&&!matches.includes(phone))throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_MISMATCH',409);}
+    else{if(matches.length>1)throw new WorkspaceError('META_CUSTOMER_PHONE_SELECTION_REQUIRED',409);if(!matches.length)throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_MISMATCH',409);phone=matches[0];}
+   }else phone=phoneNumberId?eligible.find(item=>String(item.id)===phoneNumberId):numberMode==='BUSINESS_APP'&&eligible.length===1?eligible[0]:null;
    if(!phone||!metaAssetId(String(phone.id)))throw new WorkspaceError(numberMode==='BUSINESS_APP'?'META_CUSTOMER_COEXISTENCE_PHONE_REQUIRED':'META_CUSTOMER_PHONE_WABA_MISMATCH',403);
    if(ownCompanyCapabilityKind(ownCapability)==='RUNTIME'&&phone.code_verification_status!=='VERIFIED')throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);
-   if(numberMode==='BUSINESS_APP'&&eligible.length!==1)throw new WorkspaceError('META_CUSTOMER_PHONE_SELECTION_REQUIRED',409);
+   if(numberMode==='BUSINESS_APP'&&!customerBusinessApp&&eligible.length!==1)throw new WorkspaceError('META_CUSTOMER_PHONE_SELECTION_REQUIRED',409);
    if(pilotCapability&&(phone.is_on_biz_app!==false||!['CLOUD_API','NOT_APPLICABLE'].includes(phone.platform_type)||phone.platform_type==='NOT_APPLICABLE'&&phone.status==='CONNECTED'||inspectionPhase===META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL&&(phone.platform_type!=='CLOUD_API'||phone.status!=='CONNECTED')))throw new WorkspaceError('META_DEVELOPMENT_PILOT_DEDICATED_UNVERIFIED',403);
    // Phone verification is not the Cloud API registration signal.
    if(pilotCapability&&!developmentPilotPhoneMatches(policy(),phone.display_phone_number))throw new WorkspaceError('META_DEVELOPMENT_PILOT_PHONE_REJECTED',403);

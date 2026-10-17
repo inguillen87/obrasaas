@@ -103,6 +103,17 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
   if(state.numberMode!=='BUSINESS_APP'&&verified.phoneNumberId!==state.phoneNumberId)throw new WorkspaceError('META_CUSTOMER_PHONE_WABA_MISMATCH',403);
   assertCompanyPhoneMatch(companyPhoneAuthorizationContract(state),company.metadata,verified.displayPhoneNumber);
  }
+  function assertVerificationClaim(state,claim){
+   const expiresAt=Date.parse(state.verificationLeaseExpiresAt);
+   if(state.state!=='VERIFYING'||state.verificationLeaseId!==claim.verificationLeaseId||!Number.isFinite(expiresAt)||expiresAt<=now()||state.wabaId!==claim.state.wabaId||state.phoneNumberId!==claim.state.phoneNumberId||state.encryptedToken!==claim.state.encryptedToken||state.numberMode!==claim.state.numberMode)throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
+  }
+  async function checkExistingConnection(client,member,project,state,claim,verified){
+   const expected=claim.state.existingConnection,current=state.existingConnection;
+   if(!expected){if(current)throw new WorkspaceError('META_CUSTOMER_EXISTING_CONNECTION_REVIEW',409);return;}
+   if(!current||['id','wabaId','phoneNumberId','tokenDigest'].some(key=>current[key]!==expected[key])||expected.wabaId!==state.wabaId||expected.phoneNumberId!==verified.phoneNumberId)throw new WorkspaceError('META_CUSTOMER_EXISTING_CONNECTION_REVIEW',409);
+   const connections=(await client.query(`SELECT id,"encryptedAccessToken",metadata,"phoneNumberId","whatsappBusinessId" FROM public."WhatsAppConnection" WHERE "projectId"=$1 FOR UPDATE`,[project.id])).rows,c=connections[0];
+   if(connections.length!==1||c.id!==expected.id||c.phoneNumberId!==expected.phoneNumberId||c.whatsappBusinessId!==expected.wabaId||c.metadata?.credentialFormat!=='tenant-aad-v2'||c.metadata.credentialOrganizationId!==member.organizationId||digest(c.encryptedAccessToken)!==expected.tokenDigest)throw new WorkspaceError('META_CUSTOMER_EXISTING_CONNECTION_REVIEW',409);
+  }
  function flow(numberMode){const ready=provider.readiness();if(ready.mode===META_DEVELOPMENT_PILOT_MODE){if(numberMode!=='DEDICATED'||!metaCustomerAuthorizationReady(ready))throw new WorkspaceError(ready.pilot.code,503);return {numberMode:'DEDICATED',configId:ready.configId,signupVersion:'4',developmentPilot:provider.pilotReference()};}return customerSignupFlow(ready,numberMode);}
  function requirePreparation(project){const {profile}=readProjectWorkspaceProfile(project.metadata,project.organizationMetadata,project.id);if(!profile.configured||!['DEDICATED','BUSINESS_APP'].includes(profile.numberMode))throw new WorkspaceError('META_CUSTOMER_PREPARATION_REQUIRED',409);flow(profile.numberMode);return profile;}
  function owned(project,member,id){const state=project.metadata?.metaSignup;if(!state||state.id!==id||state.actorId!==member.actorId||state.organizationId!==member.organizationId)throw new WorkspaceError('META_CUSTOMER_SESSION_UNAVAILABLE',404);return state;}
@@ -220,12 +231,15 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
   let beforeBindingModeCode=null;
   try{
    const mode=claim.state.numberMode||'DEDICATED';
-   let verified;try{verified=await provider.inspect({token:claim.token,wabaId:claim.state.wabaId,phoneNumberId:claim.state.phoneNumberId,numberMode:mode,inspectionPhase:META_CUSTOMER_INSPECTION_PHASE.PRE_REGISTRATION});assertMetaCustomerPhoneMode(verified,mode);}catch(error){if(mode==='DEDICATED'&&error instanceof WorkspaceError&&localModeRejectionCodes.has(error.code))beforeBindingModeCode=error.code;throw error;}
+   // A WABA-only Business App finish does not identify a phone. Resolve it
+   // against the declaration sealed in this grant (or its explicit correction),
+   // never a browser hint or whichever number Graph happens to return first.
+   const expectedPhone=mode==='BUSINESS_APP'?(claim.proposedPhone||companyPhoneAuthorizationContract(claim.state)):undefined;
+   let verified;try{verified=await provider.inspect({token:claim.token,wabaId:claim.state.wabaId,phoneNumberId:claim.state.phoneNumberId,numberMode:mode,...(expectedPhone?{expectedPhoneE164:expectedPhone.e164}:{}),inspectionPhase:META_CUSTOMER_INSPECTION_PHASE.PRE_REGISTRATION});assertMetaCustomerPhoneMode(verified,mode);}catch(error){if(mode==='DEDICATED'&&error instanceof WorkspaceError&&localModeRejectionCodes.has(error.code))beforeBindingModeCode=error.code;throw error;}
    // Persist an exclusive asset binding before subscribing to any remote WABA.
    await within(session,body,true,async(client,member,_scope,project)=>{
-    const state=owned(project,member,body.signupId);if(state.state!=='VERIFYING'||state.verificationLeaseId!==claim.verificationLeaseId)throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
+     const state=owned(project,member,body.signupId);assertVerificationClaim(state,claim);
     if(requirePreparation(project).revision!==state.preparedRevision)throw new WorkspaceError('META_CUSTOMER_PREPARATION_CHANGED',409);
-    if(Object.hasOwn(state,'declaredCompanyPhone')&&(state.wabaId!==claim.state.wabaId||state.phoneNumberId!==claim.state.phoneNumberId||state.encryptedToken!==claim.state.encryptedToken))throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
     if(claim.proposedPhone){
      if(state.numberMode!=='BUSINESS_APP'&&verified.phoneNumberId!==state.phoneNumberId)throw new WorkspaceError('META_CUSTOMER_PHONE_WABA_MISMATCH',403);
      const company=(await client.query(`SELECT metadata FROM public."Organization" WHERE id=$1 FOR SHARE`,[member.organizationId])).rows[0];if(!company)throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_CHANGED',409);
@@ -239,6 +253,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
      await save(client,member,project,state,body.operationId);
     }
     await checkDeclaredPhone(client,member,state,verified);
+     await checkExistingConnection(client,member,project,state,claim,verified);
     if(mode==='BUSINESS_APP'){
      if(verified.isOnBizApp!==true||verified.platformType!=='CLOUD_API'||!metaAssetId(verified.phoneNumberId))throw new WorkspaceError('META_CUSTOMER_COEXISTENCE_PHONE_REQUIRED',409);
      if(state.existingConnection&&(state.existingConnection.wabaId!==state.wabaId||state.existingConnection.phoneNumberId!==verified.phoneNumberId))throw new WorkspaceError('META_CUSTOMER_EXISTING_CONNECTION_REVIEW',409);
@@ -257,12 +272,12 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
     const pilotProof=provider.pilotProvenance?.(verified),metadata={...(existing.rows[0]?.metadata||{}),credentialFormat:'tenant-aad-v2',credentialOrganizationId:member.organizationId,customerSignupId:state.id,customerVerification:verified,...(Object.hasOwn(state,'declaredCompanyPhone')?{declaredCompanyPhone:state.declaredCompanyPhone,...(state.companyPhoneCorrections?{companyPhoneCorrections:state.companyPhoneCorrections}:{})}:{}),...(pilotProof?{developmentPilot:pilotProof}:{}),roundTrip:'NOT_VERIFIED',fieldAcceptance:'NOT_VERIFIED'};
     await client.query(`INSERT INTO public."WhatsAppConnection" (id,"projectId","phoneNumberId","whatsappBusinessId","displayPhoneNumber",enabled,"connectionStatus","encryptedAccessToken","verifiedBusinessName",metadata,"updatedAt") VALUES ($1,$2,$3,$4,$5,false,'PENDING',$6,$7,$8::jsonb,clock_timestamp()) ON CONFLICT ("projectId") DO UPDATE SET "encryptedAccessToken"=EXCLUDED."encryptedAccessToken",metadata=EXCLUDED.metadata,"updatedAt"=clock_timestamp()`,[existing.rows[0]?.id||'wa_customer_'+randomUUID().replaceAll('-',''),project.id,state.phoneNumberId,state.wabaId,verified.displayPhoneNumber,encryptedToken,verified.verifiedBusinessName,JSON.stringify(metadata)]);
    });
-   if(Object.hasOwn(claim.state,'declaredCompanyPhone'))await within(session,body,true,async(client,member,_scope,project)=>{
-    const state=owned(project,member,body.signupId);if(state.state!=='VERIFYING'||state.verificationLeaseId!==claim.verificationLeaseId||requirePreparation(project).revision!==state.preparedRevision)throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
+    await within(session,body,true,async(client,member,_scope,project)=>{
+     const state=owned(project,member,body.signupId);assertVerificationClaim(state,claim);if(requirePreparation(project).revision!==state.preparedRevision)throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
     // The canonical organization share lock remains held across the POST, so
     // a declaration cannot change between this check and the remote mutation.
-    await checkDeclaredPhone(client,member,state,verified);await provider.subscribe({token:claim.token,wabaId:state.wabaId});
-   });else await provider.subscribe({token:claim.token,wabaId:claim.state.wabaId});
+     await checkDeclaredPhone(client,member,state,verified);await checkExistingConnection(client,member,project,state,claim,verified);await provider.subscribe({token:claim.token,wabaId:state.wabaId});
+    });
    return await within(session,body,true,async(client,member,scope,project)=>{
     const state=owned(project,member,body.signupId);if(state.state!=='VERIFYING'||state.verificationLeaseId!==claim.verificationLeaseId)throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
     if(requirePreparation(project).revision!==state.preparedRevision)throw new WorkspaceError('META_CUSTOMER_PREPARATION_CHANGED',409);

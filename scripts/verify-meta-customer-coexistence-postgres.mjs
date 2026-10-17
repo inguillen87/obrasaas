@@ -6,7 +6,7 @@ import {Pool,Client} from 'pg';
 import {trackDisposablePool,closeDisposablePool} from './lib/disposable-postgres-cleanup.mjs';
 import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
 import {createMetaCustomerOnboarding} from '../src/lib/meta-customer-onboarding.mjs';
-import {metaCustomerReadiness} from '../src/lib/meta-customer-provider.mjs';
+import {metaCustomerReadiness,createMetaCustomerProvider} from '../src/lib/meta-customer-provider.mjs';
 import {createMetaCustomerInbox,createMetaCustomerCallbackHandlers} from '../src/lib/meta-customer-callback.mjs';
 import {createMetaCustomerProcessor} from '../src/lib/meta-customer-processing.mjs';
 import {createMetaCustomerAppProjection,META_APP_PROJECTION_PROVIDER} from '../src/lib/meta-customer-app-projection.mjs';
@@ -40,7 +40,7 @@ try{
   INSERT INTO "Organization" VALUES ('company-a','Synthetic company A','org_A','{}'),('company-b','Synthetic company B','org_B','{}');
   INSERT INTO "PlatformUser" VALUES ('owner','user_Owner'),('foreign','user_Foreign'),('colleague','user_Colleague');
   INSERT INTO "TenantMembership" VALUES ('m-owner','company-a','owner','ADMIN','org:admin','ACTIVE'),('m-foreign','company-b','foreign','ADMIN','org:admin','ACTIVE'),('m-colleague','company-a','colleague','DIRECTOR','org:admin','ACTIVE');
-  INSERT INTO "Project"(id,"organizationId",name,status,metadata) SELECT 'p-'||i,'company-a','Synthetic worksite '||i,'ACTIVE','{}'::jsonb FROM generate_series(1,14)i;
+  INSERT INTO "Project"(id,"organizationId",name,status,metadata) SELECT 'p-'||i,'company-a','Synthetic worksite '||i,'ACTIVE','{}'::jsonb FROM generate_series(1,18)i;
   INSERT INTO "Project"(id,"organizationId",name,status,metadata) VALUES('p-b','company-b','Synthetic worksite B','ACTIVE','{}');`);
 
  await pool.query(`UPDATE "Project" SET metadata=jsonb_build_object('manualSales',jsonb_build_array('sale-preserved'),'whatsappWorkspace',jsonb_build_object('schemaVersion',2,'assistantName','Synthetic assistant','numberMode','BUSINESS_APP','initialProjectId',id,'useCases',jsonb_build_array('FIELD_REPORTS'),'revision',1,'mode','REVIEW_REQUIRED','ownership','CUSTOMER','updatedAt','2026-10-01T00:00:00.000Z'));
@@ -191,6 +191,81 @@ try{
  const ambiguousBefore=(await pool.query(`SELECT id,enabled,metadata,"encryptedAccessToken" FROM "WhatsAppConnection" WHERE "projectId"=ANY($1::text[]) ORDER BY id`,[['p-1','p-11']])).rows,ambiguousEvents=(await pool.query(`SELECT count(*)::int AS n FROM "WebhookEvent"`)).rows[0].n,ambiguousLookup=inspectCalls.length;
  assert.deepEqual(await receive(lifecycleEnvelope(1,'ACCOUNT_OFFBOARDED'),{expectedStatus:409}),[]);assert.deepEqual((await pool.query(`SELECT id,enabled,metadata,"encryptedAccessToken" FROM "WhatsAppConnection" WHERE "projectId"=ANY($1::text[]) ORDER BY id`,[['p-1','p-11']])).rows,ambiguousBefore);assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "WebhookEvent"`)).rows[0].n,ambiguousEvents);assert.equal(inspectCalls.length,ambiguousLookup);
  await pool.query(`INSERT INTO "WhatsAppConnection"(id,"projectId","phoneNumberId","whatsappBusinessId","encryptedAccessToken",enabled,metadata) VALUES('foreign-WABA-collision','p-b','9999999988','8888888801',$1,false,'{"credentialFormat":"tenant-aad-v2","credentialOrganizationId":"company-b"}')`,[encryptCustomerSecret('synthetic-foreign-token-only',{organizationId:'company-b',projectId:'p-b',purpose:'access-token',resourceId:'9999999988'},environment)]);assert.deepEqual(await receive(lifecycleEnvelope(1,'ACCOUNT_RECONNECTED'),{expectedStatus:409}),[]);await assert.rejects(service.read(foreign,{projectId:'p-1',scope:otherScope}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});assert.equal((await channel(1)).enabled,false);assert.equal(sends,0);assert.equal(syncCalls.length,recoveryMutations.sync);checks.push('WABA-only-callback-with-multiple-worksites-or-tenants-rejected-atomically-without-arbitrary-project-provider-or-source-write');
+ // The following cases keep the real provider parser and native PostgreSQL
+ // transactions. Only Graph transport and the existing application clock are
+ // injected; no customer token, phone, callback or external request is used.
+ async function nativeProject(n){
+  const projectId='p-'+n;
+  if(n>18)await pool.query(`INSERT INTO "Project"(id,"organizationId",name,status,metadata) VALUES($1,'company-a','Synthetic native phone worksite','ACTIVE',$2::jsonb)`,[projectId,JSON.stringify({manualSales:['sale-preserved'],whatsappWorkspace:{schemaVersion:2,assistantName:'Synthetic assistant',numberMode:'BUSINESS_APP',initialProjectId:projectId,useCases:['FIELD_REPORTS'],revision:1,mode:'REVIEW_REQUIRED',ownership:'CUSTOMER',updatedAt:'2026-10-01T00:00:00.000Z'}})]);
+  return projectId;
+ }
+ async function declareNativePhone(e164,revision=1){
+  const declaration={version:1,status:'UNVERIFIED',e164,revision,declaredAt:new Date(clock).toISOString(),receiptId:'company_phone_'+digest(['synthetic-native-phone',e164,revision])};
+  await pool.query(`UPDATE "Organization" SET metadata=jsonb_set(metadata,'{companyPhoneDeclaration}',$1::jsonb) WHERE id='company-a'`,[JSON.stringify(declaration)]);return declaration;
+ }
+ function nativeFixture(n){
+  const projectId='p-'+n,wabaId='88877777'+n,phoneA='99977777'+n+'1',phoneB='99977777'+n+'2',e164A='+1555010'+String(n).padStart(4,'0')+'1',e164B='+1555010'+String(n).padStart(4,'0')+'2';
+  const f={projectId,wabaId,phoneA,phoneB,e164A,e164B,calls:[],exchanges:0,subscriptionPosts:0,registrationPosts:0,phoneReads:0,onPhoneRead:null,afterBinding:null,inspectionComplete:false};
+  const connect=async()=>{const client=await pool.connect();let bound=false;return {release:(...args)=>client.release(...args),query:async(sql,values)=>{
+   if(typeof sql==='string'&&sql.startsWith('UPDATE public."Project"')&&values?.[0]===projectId&&f.inspectionComplete){const state=JSON.parse(values[2]).metaSignup;if(state?.state==='VERIFYING'&&state.phoneNumberId)bound=true;}
+   const result=await client.query(sql,values);if(sql==='COMMIT'&&bound&&f.afterBinding){const hook=f.afterBinding;f.afterBinding=null;await hook();}return result;
+  }};};
+  const actual=createMetaCustomerProvider({environment,now:()=>clock,fetchImpl:async(url,options)=>{
+   const parsed=new URL(url),endpoint=parsed.pathname;assert.equal(parsed.origin,'https://graph.facebook.com');assert.equal(options.redirect,'error');f.calls.push({method:options.method,endpoint,after:parsed.searchParams.get('after')});
+   if(endpoint==='/v25.0/oauth/access_token'){f.exchanges++;return Response.json({access_token:'synthetic-native-grant-token-'+n+'-only'});}
+   if(endpoint==='/v25.0/debug_token')return Response.json({data:{is_valid:true,app_id:environment.NEXT_PUBLIC_META_APP_ID,scopes:['whatsapp_business_management','whatsapp_business_messaging'],granular_scopes:[{scope:'whatsapp_business_management',target_ids:[wabaId]}],expires_at:0}});
+   if(endpoint===`/v25.0/${wabaId}/phone_numbers`){
+    assert.equal(options.method,'GET');f.phoneReads++;if(f.onPhoneRead)await f.onPhoneRead();
+    const row=(id,display,is_on_biz_app=true)=>({id,display_phone_number:display,is_on_biz_app,platform_type:'CLOUD_API',status:'CONNECTED'});
+    if(parsed.searchParams.get('after')===null)return Response.json({data:[row(phoneA,e164A)],paging:{cursors:{after:'native_page_2'},next:`https://graph.facebook.com/v25.0/${wabaId}/phone_numbers?after=native_page_2`}});
+    assert.equal(parsed.searchParams.get('after'),'native_page_2');f.inspectionComplete=true;return Response.json({data:[row(phoneB,e164B),row('99977777'+n+'3','+1555010'+String(n).padStart(4,'0')+'3',false)]});
+   }
+   if(endpoint===`/v25.0/${wabaId}/subscribed_apps`){if(options.method==='POST'){f.subscriptionPosts++;return Response.json({success:true});}return Response.json({data:[{whatsapp_business_api_data:{id:environment.NEXT_PUBLIC_META_APP_ID}}]});}
+   if(endpoint.endsWith('/register'))f.registrationPosts++;throw Error('Unexpected synthetic Graph endpoint');
+  }});
+  const nativeWorkspace=createWorkspaceStore({connect});f.service=createMetaCustomerOnboarding({workspace:nativeWorkspace,provider:actual,environment,now:()=>clock});
+  f.begin=()=>f.service.command(owner,command(projectId,'begin',{preparedRevision:1}));
+  f.complete=(start,phoneNumberId=null)=>f.service.command(owner,command(projectId,'complete',{signupId:start.signup.id,stateToken:start.stateToken,code:'synthetic-native-authorization-'+n,wabaId,phoneNumberId,signupEvent:'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING'}));
+  f.state=async()=>(await pool.query(`SELECT metadata->'metaSignup' AS state FROM "Project" WHERE id=$1`,[projectId])).rows[0].state;
+  f.connection=async()=>(await pool.query(`SELECT * FROM "WhatsAppConnection" WHERE "projectId"=$1`,[projectId])).rows[0]||null;
+  return f;
+ }
+ await nativeProject(15);const exact=nativeFixture(15);await declareNativePhone(exact.e164B);const exactStart=await exact.begin(),exactResult=await exact.complete(exactStart);
+ assert.equal(exactResult.signup.phoneNumberId,exact.phoneB);assert.equal(exactResult.signup.state,'LINKED_PENDING_ACCEPTANCE');assert.equal(exact.exchanges,1);assert.equal(exact.phoneReads,2);assert.equal(exact.subscriptionPosts,1);assert.equal(exact.registrationPosts,0);assert.equal((await exact.connection()).enabled,false);assert.equal((await exact.state()).declaredCompanyPhone.e164,exact.e164B);checks.push('native-provider-WABA-only-multipage-uses-sealed-company-phone-exactly-once-without-register-or-activation');
+
+ await nativeProject(16);const corrected=nativeFixture(16);await declareNativePhone(corrected.e164A);const correctionStart=await corrected.begin();let correctionOriginal;
+ corrected.onPhoneRead=async()=>{corrected.onPhoneRead=null;correctionOriginal=await corrected.state();await declareNativePhone(corrected.e164B,2);};
+ await assert.rejects(corrected.complete(correctionStart),{code:'META_CUSTOMER_COMPANY_PHONE_CHANGED'});const correctionRejected=await corrected.state();assert.equal(await corrected.connection(),null);assert.equal(corrected.subscriptionPosts,0);assert.equal(correctionRejected.encryptedToken,correctionOriginal.encryptedToken);assert.equal(correctionRejected.codeDigest,correctionOriginal.codeDigest);assert.equal(correctionRejected.state,'REVIEW_REQUIRED');
+ const correctionCommand=command(corrected.projectId,'reconcile',{signupId:correctionStart.signup.id,expectedCompanyPhoneRevision:2,confirmCompanyPhoneRevision:true}),correctionResult=await corrected.service.command(owner,correctionCommand),correctionSaved=await corrected.state();
+ assert.equal(correctionResult.signup.phoneNumberId,corrected.phoneB);assert.equal(correctionSaved.id,correctionOriginal.id);assert.equal(correctionSaved.encryptedToken,correctionOriginal.encryptedToken);assert.deepEqual(correctionSaved.declaredCompanyPhone,correctionOriginal.declaredCompanyPhone);assert.equal(correctionSaved.companyPhoneCorrections.length,1);assert.equal(correctionSaved.companyPhoneCorrections[0].contract.e164,corrected.e164B);assert.equal(corrected.exchanges,1);assert.equal(corrected.subscriptionPosts,1);const correctedIO=corrected.calls.length;assert.equal((await corrected.service.read(owner,correctionCommand)).receipt.state,'RECORDED');assert.equal(corrected.calls.length,correctedIO);checks.push('native-provider-declaration-change-during-GET-denies-binding-and-POST-then-explicit-current-revision-recovers-same-grant-and-escrow-with-GET-only-receipt');
+
+ await nativeProject(17);const wrong=nativeFixture(17);await declareNativePhone(wrong.e164B);const wrongStart=await wrong.begin();await assert.rejects(wrong.complete(wrongStart,wrong.phoneA),{code:'META_CUSTOMER_COMPANY_PHONE_MISMATCH'});assert.equal(await wrong.connection(),null);assert.equal(wrong.subscriptionPosts,0);assert.equal(wrong.registrationPosts,0);assert.equal(wrong.exchanges,1);assert.ok((await wrong.state()).encryptedToken);checks.push('native-provider-explicit-wrong-ID-cannot-be-replaced-by-matching-alternate-number-or-dispatch-subscription');
+
+ async function seedNativeConnection(f){
+  const encryptedToken=encryptCustomerSecret('synthetic-existing-native-token-'+f.projectId,{organizationId:'company-a',projectId:f.projectId,purpose:'access-token',resourceId:f.phoneB},environment);
+  await pool.query(`INSERT INTO "WhatsAppConnection"(id,"projectId","phoneNumberId","whatsappBusinessId","encryptedAccessToken",enabled,"connectionStatus",metadata) VALUES($1,$2,$3,$4,$5,true,'CONNECTED',$6::jsonb)`,['existing-native-'+f.projectId,f.projectId,f.phoneB,f.wabaId,encryptedToken,JSON.stringify({credentialFormat:'tenant-aad-v2',credentialOrganizationId:'company-a',preserved:'synthetic-existing-connection'})]);return f.connection();
+ }
+ await pool.query(`UPDATE "Organization" SET metadata=metadata-'companyPhoneDeclaration' WHERE id='company-a'`);
+ await nativeProject(18);const raced=nativeFixture(18),racedBefore=await seedNativeConnection(raced),racedStart=await raced.begin(),racedToken=encryptCustomerSecret('synthetic-replaced-native-token',{organizationId:'company-a',projectId:raced.projectId,purpose:'access-token',resourceId:raced.phoneB},environment);
+ raced.onPhoneRead=async()=>{raced.onPhoneRead=null;await pool.query(`UPDATE "WhatsAppConnection" SET "encryptedAccessToken"=$1 WHERE "projectId"=$2`,[racedToken,raced.projectId]);};
+ await assert.rejects(raced.complete(racedStart,raced.phoneB),{code:'META_CUSTOMER_EXISTING_CONNECTION_REVIEW'});const racedAfter=await raced.connection();assert.equal(raced.subscriptionPosts,0);assert.equal(raced.registrationPosts,0);assert.equal(racedAfter.encryptedAccessToken,racedToken);for(const key of ['id','phoneNumberId','whatsappBusinessId','enabled','connectionStatus'])assert.equal(racedAfter[key],racedBefore[key]);assert.deepEqual(racedAfter.metadata,racedBefore.metadata);checks.push('native-provider-legacy-existing-credential-race-during-catalog-GET-preserves-current-connection-and-dispatches-no-POST');
+
+ await nativeProject(19);const revoked=nativeFixture(19);await declareNativePhone(revoked.e164B);const revokedStart=await revoked.begin();revoked.onPhoneRead=async()=>{revoked.onPhoneRead=null;await pool.query(`UPDATE "TenantMembership" SET status='SUSPENDED' WHERE id='m-owner'`);};
+ await assert.rejects(revoked.complete(revokedStart),{code:'WORKSPACE_MEMBERSHIP_REQUIRED'});assert.equal(await revoked.connection(),null);assert.equal(revoked.subscriptionPosts,0);assert.ok((await revoked.state()).encryptedToken);await pool.query(`UPDATE "TenantMembership" SET status='ACTIVE' WHERE id='m-owner'`);checks.push('native-provider-tenant-revocation-during-catalog-GET-denies-binding-and-subscription-with-durable-grant-reference');
+
+ await nativeProject(20);const expired=nativeFixture(20);await declareNativePhone(expired.e164B);const expiredStart=await expired.begin();let expiredOriginal;expired.onPhoneRead=async()=>{expired.onPhoneRead=null;expiredOriginal=await expired.state();clock+=61000;};
+ await assert.rejects(expired.complete(expiredStart),{code:'META_CUSTOMER_STATE_CHANGED'});const expiredRejected=await expired.state();assert.equal(await expired.connection(),null);assert.equal(expired.subscriptionPosts,0);assert.equal(expiredRejected.encryptedToken,expiredOriginal.encryptedToken);assert.equal(expiredRejected.state,'REVIEW_REQUIRED');
+ const expiredRecovered=await expired.service.command(owner,command(expired.projectId,'reconcile',{signupId:expiredStart.signup.id}));assert.equal(expiredRecovered.signup.state,'LINKED_PENDING_ACCEPTANCE');assert.equal(expired.exchanges,1);assert.equal(expired.subscriptionPosts,1);assert.equal((await expired.state()).encryptedToken,expiredOriginal.encryptedToken);assert.equal((await expired.state()).codeDigest,expiredOriginal.codeDigest);checks.push('native-provider-61-second-same-lease-expiry-before-binding-stops-all-effects-and-explicit-reconcile-recovers-identical-escrow-without-code-exchange');
+
+ await pool.query(`UPDATE "Organization" SET metadata=metadata-'companyPhoneDeclaration' WHERE id='company-a'`);
+ await nativeProject(21);const lateRace=nativeFixture(21),lateBefore=await seedNativeConnection(lateRace),lateStart=await lateRace.begin(),lateToken=encryptCustomerSecret('synthetic-replaced-after-binding-token',{organizationId:'company-a',projectId:lateRace.projectId,purpose:'access-token',resourceId:lateRace.phoneB},environment);
+ lateRace.afterBinding=()=>pool.query(`UPDATE "WhatsAppConnection" SET "encryptedAccessToken"=$1 WHERE "projectId"=$2`,[lateToken,lateRace.projectId]);await assert.rejects(lateRace.complete(lateStart,lateRace.phoneB),{code:'META_CUSTOMER_EXISTING_CONNECTION_REVIEW'});const lateAfter=await lateRace.connection();assert.equal(lateRace.subscriptionPosts,0);assert.equal(lateAfter.encryptedAccessToken,lateToken);assert.deepEqual(lateAfter.metadata,lateBefore.metadata);assert.equal(lateAfter.enabled,true);assert.equal((await lateRace.state()).state,'REVIEW_REQUIRED');checks.push('native-provider-existing-credential-change-after-binding-commit-is-fenced-before-subscribe-with-legacy-declaration-absent');
+
+ await nativeProject(22);const lateExpiry=nativeFixture(22);await declareNativePhone(lateExpiry.e164B);const lateExpiryStart=await lateExpiry.begin();lateExpiry.afterBinding=async()=>{clock+=61000;};await assert.rejects(lateExpiry.complete(lateExpiryStart),{code:'META_CUSTOMER_STATE_CHANGED'});assert.equal(lateExpiry.subscriptionPosts,0);assert.equal((await lateExpiry.connection()).enabled,false);assert.equal((await lateExpiry.state()).state,'REVIEW_REQUIRED');checks.push('native-provider-lease-expiry-after-binding-commit-prevents-subscription-and-keeps-disabled-binding-for-review');
+
+ await nativeProject(23);const reclaimed=nativeFixture(23);await declareNativePhone(reclaimed.e164B);const reclaimedStart=await reclaimed.begin();let reclaimedWinner,firstLease;
+ reclaimed.onPhoneRead=async()=>{reclaimed.onPhoneRead=null;firstLease=(await reclaimed.state()).verificationLeaseId;clock+=61000;reclaimedWinner=await reclaimed.service.command(owner,command(reclaimed.projectId,'reconcile',{signupId:reclaimedStart.signup.id}));};
+ await assert.rejects(reclaimed.complete(reclaimedStart),{code:'META_CUSTOMER_STATE_CHANGED'});const reclaimedFinal=await reclaimed.state();assert.equal(reclaimedWinner.signup.state,'LINKED_PENDING_ACCEPTANCE');assert.equal(reclaimedFinal.state,'LINKED_PENDING_ACCEPTANCE');assert.notEqual(reclaimedFinal.verificationLeaseId,firstLease);assert.equal(reclaimed.subscriptionPosts,1);assert.equal(reclaimed.exchanges,1);assert.equal((await reclaimed.connection()).phoneNumberId,reclaimed.phoneB);checks.push('native-provider-expired-inspection-loses-to-explicit-reclaimer-and-cannot-bind-subscribe-or-overwrite-the-newer-lease-result');
  const audit=(await pool.query(`SELECT metadata FROM "AuditLog"`)).rows;assert.doesNotMatch(JSON.stringify(audit),/Synthetic private history|5491112345678|synthetic-token|encryptedPayload/);
  const result={status:'PASS',environment:'local-disposable-postgresql17',checks,realProviderCalls:0,physicalNumberTested:false,productionDataTouched:false};mkdirSync('.vercel/meta-customer-evidence',{recursive:true});writeFileSync('.vercel/meta-customer-evidence/coexistence-postgres.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
 }finally{await closeDisposablePool(pool);if(created)await admin.query('DROP DATABASE "'+database+'"');await admin.end();}

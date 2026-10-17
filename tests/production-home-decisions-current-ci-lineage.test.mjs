@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {parse} from '@babel/parser';
-import {HOME_DECISIONS_CURRENT_REVISION as expected,HOME_DECISIONS_CURRENT_SECTION as key,restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin,homeDecisionsValidationFiles,verifyHomeDecisionsCurrentSources,restoreHomeDecisionsSourceSet,homeDecisionsProofSourceAdditions,homeDecisionsLegacyOperationsAst,normalizeHomeDecisionsFocusedRaw,validateHomeDecisionsNativeProof,validateHomeDecisionsFieldProof} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
+import {HOME_DECISIONS_CURRENT_REVISION as expected,HOME_DECISIONS_CURRENT_SECTION as key,restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin,homeDecisionsValidationFiles,verifyHomeDecisionsCurrentSources,restoreHomeDecisionsSourceSet,homeDecisionsProofSourceAdditions,homeDecisionsLegacyOperationsAst,normalizeHomeDecisionsFocusedRaw,validateHomeDecisionsNativeProof,validateHomeDecisionsFieldProof,CUSTOMER_PHONE_SELECTION_CURRENT_REVISION as phoneExpected,CUSTOMER_PHONE_SELECTION_CURRENT_SECTION as phoneKey,restoreCustomerPhoneSelectionPreviousContract,customerPhoneSelectionCurrentSourcePin,customerPhoneSelectionPreviousSourcePin,customerPhoneSelectionValidationFiles,verifyCustomerPhoneSelectionCurrentSources,normalizeCustomerPhoneSelectionNativeProof} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {restoreExistingApiPlanPreviousContract,verifyExistingApiPlanCurrentSources} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
 import {verifyMaterialReviewCurrentSources} from '../scripts/lib/material-review-current-ci-lineage.mjs';
 import {WHATSAPP_FIELD_CONTINUITY_FOCUSED_UI as previousFocused,verifyWhatsappFieldContinuityCurrentSources} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
@@ -31,9 +31,47 @@ test('current bytes authenticate only reviewed sources and every missing foreign
 
 test('exact predecessor current pins advance while foreign aliases cannot be silently resealed',()=>{
  const contract=current();for(const row of [...expected.reviewedSourceChanges,...expected.validationDeltas]){
-  for(const pin of [row.previousSha256,row.currentSha256])assert.equal(homeDecisionsCurrentSourcePin(contract,{path:row.path,sha256:pin}),row.currentSha256);
+  for(const pin of [row.previousSha256,row.currentSha256])assert.equal(homeDecisionsCurrentSourcePin(contract,{path:row.path,sha256:pin}),customerPhoneSelectionCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}));
   denied(()=>homeDecisionsCurrentSourcePin(contract,{path:row.path,sha256:'f'.repeat(64)}));
  }
+});
+
+test('customer phone companion restores exact8599969 without changing historical Home metadata or any source set',()=>{
+ const contract=current(),before=serialize(contract),previous=restoreCustomerPhoneSelectionPreviousContract(contract);
+ assert.equal(phoneExpected.predecessorCommit,'8599969a1072c9b8e1afac0640df6a69219968b3');assert.equal(sha(serialize(previous)),'d3e0a5af11643ad3b5fb3c3ebb046edfc6f796a0142b23e1b604d0b15c14d5cb');assert.equal(Object.hasOwn(previous,phoneKey),false);assert.equal(serialize(contract),before);
+ for(const field of Object.keys(previous))assert.deepEqual(contract[field],previous[field],'Published8599969 field remains byte-equivalent: '+field);
+ assert.deepEqual(previous[key],contract[key]);assert.deepEqual(contract[key].reviewedSourceChanges,expected.reviewedSourceChanges);assert.equal(verifyCustomerPhoneSelectionCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
+ for(const spec of contract.extension.proofs)assert.deepEqual(currentProducerSourceFiles(spec,process.cwd()),spec.sourceFiles,'No source closure growth: '+spec.id);
+});
+
+test('customer phone source pins authenticate only the exact8599969 and reviewed current bytes',()=>{
+ const contract=current(),value=contract[phoneKey],refs=[...value.reviewedSourceChanges,...value.validationPredecessors.map(row=>({path:row.path,previousSha256:row.sha256,currentSha256:value.validationSources.find(ref=>ref.path===row.path).sha256}))];
+ for(const row of refs){
+  for(const pin of [row.previousSha256,row.currentSha256])assert.equal(customerPhoneSelectionCurrentSourcePin(contract,{path:row.path,sha256:pin}),row.currentSha256);
+  assert.equal(customerPhoneSelectionPreviousSourcePin(contract,{path:row.path,sha256:row.currentSha256}),row.previousSha256);
+  denied(()=>customerPhoneSelectionCurrentSourcePin(contract,{path:row.path,sha256:'f'.repeat(64)}));
+ }
+ for(const file of customerPhoneSelectionValidationFiles(contract)){
+  for(const replacement of [null,Buffer.from('unreviewed source')])denied(()=>verifyCustomerPhoneSelectionCurrentSources(contract,path=>path===file?replacement:read(path)));
+ }
+ denied(()=>verifyHomeDecisionsCurrentSources(restoreCustomerPhoneSelectionPreviousContract(contract),read));
+});
+
+test('customer phone companion rejects omitted duplicated reordered and tampered deltas or validators and modified predecessor fields',()=>{
+ for(const edit of [
+  c=>c[phoneKey].reviewedSourceChanges.pop(),c=>c[phoneKey].reviewedSourceChanges.push(c[phoneKey].reviewedSourceChanges[0]),c=>c[phoneKey].reviewedSourceChanges.reverse(),c=>{c[phoneKey].reviewedSourceChanges[0].previousSha256='f'.repeat(64);},c=>{c[phoneKey].reviewedSourceChanges[0].currentSha256='f'.repeat(64);},
+  c=>c[phoneKey].validationSources.pop(),c=>c[phoneKey].validationSources.push(c[phoneKey].validationSources[0]),c=>c[phoneKey].validationSources.reverse(),c=>{c[phoneKey].validationSources[0].sha256='f'.repeat(64);},c=>{c[phoneKey].validationSources[0].path='scripts/lib/foreign-same-count.mjs';},
+  c=>{c[phoneKey].previousContractSha256='f'.repeat(64);},c=>{c[phoneKey].nativeOrBrowserAcceptance=true;},c=>{c[key].validationSources[0].sha256=c[phoneKey].validationSources[0].sha256;},c=>c.blocks[0].step.run+='\ntrue',c=>c.extension.proofs[0].sourceFiles.pop()
+ ]){const changed=current();edit(changed);denied(()=>verifyCustomerPhoneSelectionCurrentSources(changed,read));}
+ const missing=current();delete missing[phoneKey];denied(()=>verifyHomeDecisionsCurrentSources(missing,read));
+});
+
+test('all50 current native controls are required before exact historical41 projection and the raw proof remains untouched',()=>{
+ const contract=current(),previous=restoreCustomerPhoneSelectionPreviousContract(contract),old=previous.existingApiPlanCurrentRevision.native.currentCheckNames,checks=[...old,...phoneExpected.native.addedCheckNames],proof={status:'PASS',environment:'local-disposable-postgresql17',checks,realProviderCalls:0,physicalNumberTested:false,productionDataTouched:false},before=serialize(proof);
+ assert.equal(old.length,41);assert.equal(phoneExpected.native.addedCheckNames.length,9);assert.equal(checks.length,50);
+ assert.deepEqual(normalizeCustomerPhoneSelectionNativeProof(proof,contract,read),{...proof,checks:old});assert.equal(serialize(proof),before);
+ const historical={...proof,checks:old};assert.equal(normalizeCustomerPhoneSelectionNativeProof(historical,previous,read),historical);
+ for(const patch of [{checks:old},{checks:checks.slice(1)},{checks:checks.slice(0,-1)},{checks:[...checks,checks.at(-1)]},{checks:[...checks.slice(0,-1),'foreign-same-count-control']},{checks:[...checks].reverse()},{realProviderCalls:1},{physicalNumberTested:true},{productionDataTouched:true},{status:'FAILED'},{environment:'production'}])denied(()=>normalizeCustomerPhoneSelectionNativeProof({...proof,...patch},contract,read));
 });
 
 test('the exact operations read projection preserves every inherited authority HTTP guard and full read query',()=>{

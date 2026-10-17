@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {restoreHomeDecisionsPreviousContract as homeOuter0,homeDecisionsPreviousSourcePin as homeOuter1,homeDecisionsCurrentSourcePin as homeOuter2,homeDecisionsValidationFiles as homeOuter3,verifyHomeDecisionsCurrentSources as homeOuter4,restoreHomeDecisionsSourceSet as homeOuter5,homeDecisionsProofSourceAdditions as homeOuter6} from './home-decisions-current-ci-lineage.mjs';
+import {restoreHomeDecisionsPreviousContract as homeOuter0,homeDecisionsPreviousSourcePin as homeOuter1,homeDecisionsCurrentSourcePin as homeOuter2,homeDecisionsValidationFiles as homeOuter3,verifyHomeDecisionsCurrentSources as homeOuter4,restoreHomeDecisionsSourceSet as homeOuter5,homeDecisionsProofSourceAdditions as homeOuter6,normalizeCustomerPhoneSelectionNativeProof as homeOuter7} from './home-decisions-current-ci-lineage.mjs';
 function homeOuterCall(fn,args){try{return fn(...args);}catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'EXISTING_API_PLAN_CURRENT_CI_LINEAGE_REJECTED'});throw error;}}
 const restoreHomeDecisionsPreviousContract=(...args)=>homeOuterCall(homeOuter0,args);
 const homeDecisionsPreviousSourcePin=(...args)=>homeOuterCall(homeOuter1,args);
@@ -8,6 +8,7 @@ const homeDecisionsValidationFiles=(...args)=>homeOuterCall(homeOuter3,args);
 const verifyHomeDecisionsCurrentSources=(...args)=>homeOuterCall(homeOuter4,args);
 const restoreHomeDecisionsSourceSet=(...args)=>homeOuterCall(homeOuter5,args);
 const homeDecisionsProofSourceAdditions=(...args)=>homeOuterCall(homeOuter6,args);
+const normalizeCustomerPhoneSelectionNativeProof=(...args)=>homeOuterCall(homeOuter7,args);
 
 export const EXISTING_API_PLAN_CURRENT_SECTION='existingApiPlanCurrentRevision';
 export const EXISTING_API_PLAN_CURRENT_HELPER='scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
@@ -482,6 +483,7 @@ export function existingApiPlanNativeSourceFilesFromReader(readSource,family,pre
 }
 export function validateExistingApiPlanNativeProof(proof,contract,readSource){
  const value=section(contract);if(!value)return null;verifyExistingApiPlanCurrentSources(contract,readSource);
+ proof=normalizeCustomerPhoneSelectionNativeProof(proof,contract,readSource);
  reject(plain(proof)&&proof.status==='PASS'&&proof.environment==='local-disposable-postgresql17'&&same(proof.checks,value.native.currentCheckNames)&&proof.realProviderCalls===0&&proof.physicalNumberTested===false&&proof.productionDataTouched===false,'Exact inherited plus additive local API plan observations required');
  return {version:1,status:'PASS',historicalChecksPreserved:value.native.previousCheckNames.length,addedChecks:value.native.addedCheckNames.length,nativeOrBrowserAcceptance:false};
 }
