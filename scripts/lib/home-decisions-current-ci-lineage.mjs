@@ -4145,17 +4145,20 @@ function participantDraftSafetySection(contract){
  return value;
 }
 export function restoreParticipantDraftSafetyPreviousContract(contract){
+ contract=restoreCompanyOnboardingUxPreviousContract(contract);
  const value=participantDraftSafetySection(contract);if(!value)return contract;
  const previous=structuredClone(contract);delete previous[PARTICIPANT_DRAFT_SAFETY_CURRENT_SECTION];
  reject(sha(JSON.stringify(previous,null,2)+'\n')===value.previousContractSha256,'The complete published9b26ac5f contract must restore exactly');return previous;
 }
 function participantDraftSafetyReferences(value){return [...value.reviewedSourceChanges,...value.validationPredecessors.map(previous=>({path:previous.path,previousSha256:previous.sha256,currentSha256:value.validationSources.find(row=>row.path===previous.path).sha256}))];}
 export function participantDraftSafetyCurrentSourcePin(contract,ref){
- const value=participantDraftSafetySection(contract);if(!value)return ref.sha256;
- const row=participantDraftSafetyReferences(value).find(row=>row.path===ref.path);if(!row)return ref.sha256;
- reject([row.previousSha256,row.currentSha256,...(row.authenticatedPreviousAliases||[])].includes(ref.sha256),'Only exact authenticated participant draft predecessor or current pins may advance: '+ref.path);return row.currentSha256;
+ ref={...ref,sha256:companyOnboardingUxPreviousSourcePin(contract,ref)};
+ const value=participantDraftSafetySection(contract);if(!value)return companyOnboardingUxCurrentSourcePin(contract,ref);
+ const row=participantDraftSafetyReferences(value).find(row=>row.path===ref.path);if(!row)return companyOnboardingUxCurrentSourcePin(contract,ref);
+ reject([row.previousSha256,row.currentSha256,...(row.authenticatedPreviousAliases||[])].includes(ref.sha256),'Only exact authenticated participant draft predecessor or current pins may advance: '+ref.path);return companyOnboardingUxCurrentSourcePin(contract,{...ref,sha256:row.currentSha256});
 }
 export function participantDraftSafetyPreviousSourcePin(contract,ref){
+ ref={...ref,sha256:companyOnboardingUxPreviousSourcePin(contract,ref)};
  const value=participantDraftSafetySection(contract);if(!value)return ref.sha256;
  const row=participantDraftSafetyReferences(value).find(row=>row.path===ref.path);return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;
 }
@@ -4163,7 +4166,7 @@ export function verifyParticipantDraftSafetyCurrentSources(contract,readSource){
  const value=participantDraftSafetySection(contract);if(!value)return null;restoreParticipantDraftSafetyPreviousContract(contract);reject(typeof readSource==='function','Actual participant draft safety source reader required');
  const refs=participantDraftSafetyReferences(value);
  reject(new Set(refs.map(row=>row.path)).size===refs.length,'Unique participant draft safety source references required');
- for(const row of refs){reject(safe(row.path)&&hash(row.previousSha256)&&hash(row.currentSha256),'Safe exact participant draft safety source pin required');const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current participant draft safety source: '+row.path);const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===row.currentSha256,'Stale current participant draft safety source: '+row.path);}
+ for(const row of refs){reject(safe(row.path)&&hash(row.previousSha256)&&hash(row.currentSha256),'Safe exact participant draft safety source pin required');const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current participant draft safety source: '+row.path);const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===companyOnboardingUxCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}),'Stale current participant draft safety source: '+row.path);}
  return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,historicalPinsPreserved:true,sourceSetChanges:0,nativeOrBrowserAcceptance:false};
 }
 // Global consumers retain their existing source closures. Integrated already
@@ -4274,6 +4277,7 @@ export function homeDecisionsLegacyOperationsAst(tree){
  return project(tree);
 }
 export function verifyHomeDecisionsCurrentSources(contract,readSource){
+ verifyCompanyOnboardingUxValidationSources(contract,readSource);
  verifyCustomerPhoneSelectionCurrentSources(contract,readSource);
  const value=section(contract);if(!value)return null;restoreHomeDecisionsPreviousContract(contract);reject(typeof readSource==='function','Actual home decisions source reader required');
  const refs=[...value.reviewedSourceChanges,...value.validationDeltas].map(row=>({path:row.path,sha256:row.currentSha256})).concat(value.validationSources);
@@ -4327,4 +4331,229 @@ export function validateHomeDecisionsFieldProof(proof,contract,readSource){
  reject(plain(proof)&&proof.status==='PASS'&&proof.environment==='actual-component-with-intercepted-synthetic-api'&&proof.fullSuite===true&&proof.focusedScenario===null&&same(proof.widths,[320,390,768,1280])&&same(proof.checks,value.fieldUi.currentCheckNames)&&proof.providerCalls===0&&proof.metaMessagesSent===0&&proof.productionDataWritten===false&&proof.physicalGeolocationAccepted===false&&proof.cameraQrAccepted===false&&proof.physicalCameraAccepted===false&&proof.physicalMicrophoneAccepted===false&&!Object.hasOwn(proof,'humanAccepted')&&same(proof.errors,[]),'The complete field browser run is required; focused observations cannot replace FULL or claim physical acceptance');
  reject(proof.harnessSha256===sha(readSource(value.fieldUi.producer))&&same(proof.sourceManifest,actualRefs(value.fieldUi.sourceFiles,readSource)), 'Exact actual field source manifest and producer required');
  return {version:1,status:'PASS',historicalChecksPreserved:value.fieldUi.previousCheckNames.length,addedChecks:value.fieldUi.addedCheckNames.length,nativeOrBrowserAcceptance:false};
+}
+
+
+// Native core observation boundary. The declaration is source-reviewed; this is
+// local/synthetic evidence, never provider, identity or human acceptance.
+export const COMPANY_ONBOARDING_UX_NATIVE_REVIEW=Object.freeze({
+  "producer": "scripts/verify-company-channel-postgres.mjs",
+  "producerLfSha256": "ae2031c88abba7716cd7a56afcb1546c4bf706d8381901c0c2272fb023866320",
+  "historicalCheckCount": 45,
+  "historicalChecksSha256": "4bf365631adfc58cf7e36d8178ae4683e4371edde67576d838cabcea4df4d34b",
+  "historicalSupplementalCount": 4,
+  "historicalSupplementalSha256": "05e2f22dbfc69aa78bc9ec5352d621d904f5e1e8cc81d0f7e4a8e9b5e768fa83",
+  "currentSupplementalCount": 9,
+  "currentSupplementalSha256": "e027afa8cb9854af0c0e35d500edc6aa00574fee6f62c08ebabed1cbdea94c88",
+  "addedCheckNames": [
+    "composed-import-APPLY-creates-one-real-Task-from-explicitly-deterministic-private-document-fixture",
+    "composed-signed-company-photo-belongs-to-import-created-Task-and-canonical-independent-review-does-not-apply-progress",
+    "composed-imported-Task-progress-is-APPLIED-by-distinct-authorized-actor-only-after-approved-linked-photo",
+    "composed-same-imported-Task-consumption-is-APPROVED-and-one-canonical-OUT-movement-deducts-exact-1.001-kg",
+    "composed-signed-source-command-and-status-replays-preserve-one-import-task-evidence-APPLIED-progress-APPROVED-consumption-and-stock-movement"
+  ],
+  "totalCheckCount": 54,
+  "sourceCount": 238,
+  "sourcePathsSha256": "2419e373bc9ca766076ae015bae3af9bb187a7df663a5cc82979990e5b5c2d61",
+  "documentSourceSha256": "d0842da039e306f698aa237d476e93ace6c7cd88d90c2877beb1d6b6739b1385"
+});
+Object.freeze(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.addedCheckNames);
+function companyNativeRequired(ok,reason){if(!ok)throw Object.assign(new Error('Current company native proof rejected: '+reason),{code:'COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED',reason});}
+function companyNativeKeys(value,keys,reason){companyNativeRequired(value!==null&&typeof value==='object'&&!Array.isArray(value)&&JSON.stringify(Object.keys(value).sort())===JSON.stringify(keys.slice().sort()),reason);}
+const companyNativeSha=bytes=>createHash('sha256').update(bytes).digest('hex');
+const companyNativeHash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
+const companyNativeCount=value=>Number.isSafeInteger(value)&&value>=0;
+const companyNativePattern=(pattern,value)=>typeof value==='string'&&pattern.test(value);
+const companyNativeSourcePath=value=>typeof value==='string'&&/^(src|scripts|tests)\//.test(value)&&!value.includes('..')&&!value.includes('\\');
+function companyNativeRead(readSource,file){let bytes;try{bytes=readSource(file);}catch{companyNativeRequired(false,'SOURCE_MISSING');}companyNativeRequired(Buffer.isBuffer(bytes),'SOURCE_MISSING');return bytes;}
+export function validateCompanyOnboardingUxNativeProof(proof,readSource){
+ const n=COMPANY_ONBOARDING_UX_NATIVE_REVIEW,r=companyNativeRequired,k=companyNativeKeys;
+ k(proof,['version','at','status','participantKycFixture','disposableDatabase','production','provider','checks','checkCount','supplementalChecks','supplementalCheckCount','totalCheckCount','sourceEventsUnique','composedFieldCore','connections','sends','mediaIO','realMediaIO','harnessSha256','sourceManifest','databaseRemoved'],'PROOF_SHAPE');
+ r(proof.version===1&&proof.status==='PASS'&&typeof proof.at==='string'&&Number.isFinite(Date.parse(proof.at))&&new Date(proof.at).toISOString()===proof.at,'PROOF_STATE');
+ r(proof.disposableDatabase===true&&proof.databaseRemoved===true&&proof.production===false&&proof.provider==='controlled-synthetic-only'&&proof.sourceEventsUnique===true&&proof.connections===1&&companyNativeCount(proof.sends),'PROOF_LIMITS');
+ r(Array.isArray(proof.checks)&&proof.checkCount===n.historicalCheckCount&&proof.checks.length===n.historicalCheckCount&&companyNativeSha(JSON.stringify(proof.checks))===n.historicalChecksSha256,'HISTORICAL_CHECKS');
+ r(Array.isArray(proof.supplementalChecks)&&proof.supplementalCheckCount===n.currentSupplementalCount&&proof.supplementalChecks.length===n.currentSupplementalCount&&companyNativeSha(JSON.stringify(proof.supplementalChecks))===n.currentSupplementalSha256&&proof.totalCheckCount===n.totalCheckCount&&proof.totalCheckCount===proof.checkCount+proof.supplementalCheckCount,'SUPPLEMENTAL_CHECKS');
+ const historical=proof.supplementalChecks.filter(name=>!n.addedCheckNames.includes(name));
+ r(historical.length===n.historicalSupplementalCount&&companyNativeSha(JSON.stringify(historical))===n.historicalSupplementalSha256&&n.addedCheckNames.every(name=>proof.supplementalChecks.filter(value=>value===name).length===1),'HISTORICAL_SUPPLEMENTAL');
+ k(proof.participantKycFixture,['records','syntheticPrivateCalls','providerCalls','biometricIdentityCertified'],'KYC_FIXTURE_SHAPE');
+ r(proof.participantKycFixture.providerCalls===0&&proof.participantKycFixture.biometricIdentityCertified===false&&Array.isArray(proof.participantKycFixture.records)&&proof.participantKycFixture.records.length>0&&proof.participantKycFixture.records.every(row=>row&&row.identityCertified===false&&row.providerCalls===0),'KYC_FIXTURE_LIMITS');
+ k(proof.participantKycFixture.syntheticPrivateCalls,['privatePuts','privateReads'],'PRIVATE_IO_SHAPE');r(Object.values(proof.participantKycFixture.syntheticPrivateCalls).every(companyNativeCount),'PRIVATE_IO');
+ k(proof.mediaIO,['downloads','gets','puts','analyses'],'MEDIA_IO_SHAPE');r(Object.values(proof.mediaIO).every(companyNativeCount),'MEDIA_IO');
+ // These Graph/CDN counters are controlled local HTTP parser observations.
+ k(proof.realMediaIO,['graph','cdn'],'CONTROLLED_HTTP_SHAPE');r(Object.values(proof.realMediaIO).every(companyNativeCount),'CONTROLLED_HTTP');
+ const c=proof.composedFieldCore;
+ k(c,['version','status','execution','projectId','originChannelProjectId','taskId','document','evidence','progress','inventory','replays','limits'],'CORE_SHAPE');
+ r(c.version===1&&c.status==='PASS'&&c.execution==='LOCAL_DISPOSABLE_POSTGRES_SYNTHETIC_CANONICAL_CHAIN'&&c.projectId==='project-c'&&c.originChannelProjectId==='project-a'&&c.projectId!==c.originChannelProjectId,'CORE_CONTEXT');
+ r(typeof c.taskId==='string'&&/^task_[a-f0-9]{32}$/.test(c.taskId),'CORE_TASK_ID');
+ k(c.document,['draftId','applyReceiptId','sourceSha256','contentType','analyzer','io'],'DOCUMENT_SHAPE');
+ r(companyNativePattern(/^plan_draft_[a-f0-9]{64}$/,c.document.draftId)&&companyNativePattern(/^plan_receipt_[a-f0-9]{64}$/,c.document.applyReceiptId)&&c.document.sourceSha256===n.documentSourceSha256&&c.document.contentType==='application/pdf'&&c.document.analyzer==='synthetic-deterministic-composed-fixture','DOCUMENT');
+ k(c.document.io,['puts','gets','analyses'],'DOCUMENT_IO_SHAPE');r(c.document.io.puts===1&&c.document.io.gets===2&&c.document.io.analyses===1,'DOCUMENT_IO');
+ k(c.evidence,['id','sourceEventId','reviewReceiptId','taskId'],'EVIDENCE_SHAPE');
+ r(companyNativePattern(/^evidence_[a-f0-9]{40}$/,c.evidence.id)&&companyNativePattern(/^customer_webhook_[a-f0-9]{64}$/,c.evidence.sourceEventId)&&companyNativePattern(/^field_[a-f0-9]{64}$/,c.evidence.reviewReceiptId)&&c.evidence.taskId===c.taskId,'EVIDENCE');
+ k(c.progress,['proposalId','sourceEventId','receiptId','taskId','state','progress','submittedBy','reviewedBy'],'PROGRESS_SHAPE');
+ r(companyNativePattern(/^proposal_[a-f0-9]{32}$/,c.progress.proposalId)&&companyNativePattern(/^customer_webhook_[a-f0-9]{64}$/,c.progress.sourceEventId)&&companyNativePattern(/^field_[a-f0-9]{64}$/,c.progress.receiptId)&&c.progress.taskId===c.taskId&&c.progress.state==='APPLIED'&&c.progress.progress===25&&c.progress.submittedBy==='person'&&c.progress.reviewedBy==='core-reviewer'&&c.progress.reviewedBy!==c.progress.submittedBy,'PROGRESS');
+ k(c.inventory,['materialId','openingProposalId','openingReceiptId','consumptionId','sourceEventId','receiptId','taskId','state','movementId','movementCount','quantity','unit','balanceBefore','balanceAfter'],'INVENTORY_SHAPE');
+ const i=c.inventory;
+ r(companyNativePattern(/^material_[a-f0-9]{32}$/,i.materialId)&&companyNativePattern(/^stock_adjustment_[a-f0-9]{32}$/,i.openingProposalId)&&companyNativePattern(/^field_[a-f0-9]{64}$/,i.openingReceiptId)&&companyNativePattern(/^consumption_[a-f0-9]{32}$/,i.consumptionId)&&companyNativePattern(/^customer_webhook_[a-f0-9]{64}$/,i.sourceEventId)&&companyNativePattern(/^field_[a-f0-9]{64}$/,i.receiptId)&&companyNativePattern(/^inventory_move_[a-f0-9]{64}$/,i.movementId)&&i.taskId===c.taskId&&i.state==='APPROVED'&&i.movementCount===1,'INVENTORY');
+ r(i.movementId==='inventory_move_'+companyNativeSha(JSON.stringify(['material-movement-v1',i.receiptId])),'MOVEMENT_RECEIPT_IDENTITY');
+ r(i.quantity==='1.001'&&i.unit==='kg'&&i.balanceBefore==='10.001'&&i.balanceAfter==='9.000'&&BigInt(i.balanceBefore.replace('.',''))-BigInt(i.quantity.replace('.',''))===BigInt(i.balanceAfter.replace('.','')),'STOCK_EXACT');
+ const events=[c.evidence.sourceEventId,c.progress.sourceEventId,i.sourceEventId],receipts=[c.document.applyReceiptId,c.evidence.reviewReceiptId,c.progress.receiptId,i.openingReceiptId,i.receiptId];
+ r(new Set(events).size===events.length&&new Set(receipts).size===receipts.length,'SOURCE_AND_RECEIPT_IDENTITY');
+ k(c.replays,['duplicateSources','commandReplays','statusRecovery','snapshotUnchanged'],'REPLAY_SHAPE');
+ r(c.replays.duplicateSources===3&&c.replays.commandReplays===true&&c.replays.statusRecovery===true&&c.replays.snapshotUnchanged===true,'REPLAY_STABLE');
+ const limits={syntheticIdentities:true,syntheticDocumentBytes:true,deterministicAnalyzer:true,syntheticPrivateMedia:true,canonicalReviewerCommandWithSyntheticSession:true,realProviderCalls:0,realModelCalls:0,realDevicePhoto:false,realDocumentRecognition:false,ganttUiValidated:false,realHumanKyc:false,production:false,realAcceptance:false};
+ k(c.limits,Object.keys(limits),'CORE_LIMITS_SHAPE');r(Object.entries(limits).every(([key,value])=>c.limits[key]===value),'CORE_LIMITS');
+ r(typeof readSource==='function','SOURCE_READER');
+ const producer=companyNativeRead(readSource,n.producer),text=producer.toString('utf8');
+ r(producer.equals(Buffer.from(text))&&companyNativeSha(text.replaceAll('\r\n','\n'))===n.producerLfSha256&&proof.harnessSha256===companyNativeSha(producer),'CURRENT_HARNESS');
+ r(Array.isArray(proof.sourceManifest)&&proof.sourceManifest.length===n.sourceCount,'SOURCE_MANIFEST');
+ const paths=[];
+ for(const ref of proof.sourceManifest){k(ref,['path','sha256'],'SOURCE_REFERENCE');r(companyNativeSourcePath(ref.path)&&companyNativeHash(ref.sha256),'SOURCE_REFERENCE');paths.push(ref.path);r(companyNativeSha(companyNativeRead(readSource,ref.path))===ref.sha256,'SOURCE_HASH');}
+ r(new Set(paths).size===paths.length&&companyNativeSha(JSON.stringify(paths.slice().sort()))===n.sourcePathsSha256,'SOURCE_SET');
+ return {status:'PASS',checks:n.totalCheckCount,coreChecks:n.addedCheckNames.length,sourceReferences:n.sourceCount,syntheticOnly:true,realAcceptance:false};
+}
+export function validateCompanyOnboardingUxNativeProofBytes(bytes,readSource){
+ companyNativeRequired(Buffer.isBuffer(bytes)&&bytes.length>0&&bytes.length<=512*1024,'PROOF_BYTES');
+ const text=bytes.toString('utf8');companyNativeRequired(bytes.equals(Buffer.from(text)),'PROOF_UTF8');
+ let proof;try{proof=JSON.parse(text);}catch{companyNativeRequired(false,'PROOF_JSON');}
+ return validateCompanyOnboardingUxNativeProof(proof,readSource);
+}
+
+export const COMPANY_ONBOARDING_UX_CURRENT_SECTION='companyOnboardingUxCurrentRevision';
+export const COMPANY_ONBOARDING_UX_CURRENT_REVISION=Object.freeze({
+  "version": 1,
+  "status": "REVIEWED_COMPANY_ONBOARDING_INFORMATION_AND_COMPOSED_FIELD_CORE",
+  "predecessorCommit": "4f1b6df18e210a1be673c020a60274294d351e17",
+  "previousContractSha256": "ecec0aa86b5826cdb38a75ff02803ae831479204e42bba97273c788b46ab834e",
+  "reviewedSourceChanges": [
+    {
+      "path": "src/app/(identity)/cuenta/meta-onboarding-panel.js",
+      "previousSha256": "6dd8eda06e40816270a707b01c71e468327c5659a480bce720d6db987893b57d",
+      "currentSha256": "314f7b6b6e160a4c58f9f373ff6970d049ad4feefea7501a5d29ad4d63613af8"
+    },
+    {
+      "path": "src/app/(identity)/cuenta/customer-whatsapp-panel.js",
+      "previousSha256": "5186d11e95a8514e25d36d7157721f35627ce245476525295f62f05d0cc041ec",
+      "currentSha256": "d129c4aa22e8048e03674382828222e5141e219f5d12368139a75ae735c9b247"
+    },
+    {
+      "path": "src/app/(identity)/cuenta/company-channel-panel.js",
+      "previousSha256": "41d778f1ead861ecb14020551079173dfe4b7cbaf89e7c158335b1156ed7d578",
+      "currentSha256": "b41b9fd9a0fa16a25914b8d074ffbac1588b5d26dcca0310a8626ee211154a24"
+    },
+    {
+      "path": "src/app/(identity)/cuenta/workspace-overview.js",
+      "previousSha256": "1efd9a741ddd4e38492c38f62d95104a0a98c715a962df44aab0d1f793031b00",
+      "currentSha256": "456e78d9e5c729182e65cd30141af37a5a6571d05261896ab5e19e39c4951c1b"
+    },
+    {
+      "path": "scripts/verify-company-channel-ui.mjs",
+      "previousSha256": "8fb58b5accb1f61f8862736f468a40bcd5e0b59be078f9468244dea6285095d6",
+      "currentSha256": "06aa30e01daa873db935bf28856b17a4f17fb970cbc031649a392b66a5c05421"
+    },
+    {
+      "path": "scripts/verify-focused-workspace-ui.mjs",
+      "previousSha256": "fde529288d806f0aed540f155f4b7058485b7c6bcdfe8edddc607eb89b868cac",
+      "currentSha256": "940bc05e5aa47d19e2251bc5559eed34e29275afff0d025f76f73a8fde41649f"
+    },
+    {
+      "path": "scripts/verify-company-channel-postgres.mjs",
+      "previousSha256": "21c273c25c315fdcacc05cfb16d528451f4caebb38eaf26aae0fd07887cc9e3b",
+      "currentSha256": "ae2031c88abba7716cd7a56afcb1546c4bf706d8381901c0c2272fb023866320"
+    }
+  ],
+  "validationPredecessors": [
+    {
+      "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+      "sha256": "cb2c1731ec5192786434fc4b905df6062068fde33c8f68719765a45c5dd02b3f"
+    },
+    {
+      "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+      "sha256": "7a901da987b797dca7c8b574dc28ce300cb8839483c472f019e25d26dd914c84"
+    },
+    {
+      "path": "tests/production-focused-workspace-task-pagination.test.mjs",
+      "sha256": "058eb4f1ed8812e2b4d8341ea55bff8a98c22292153482260fdb9f0773398b35"
+    }
+  ],
+  "focusedAssertions": {
+    "previousCount": 201,
+    "currentCount": 202,
+    "previousAssertionsSha256": "3f44e2aad77a90668763e65989fee7a2f5637843da32c5482b4c7784824fc654",
+    "start": 130,
+    "previous": [
+      "assert.ok(await item.page.$eval('[aria-labelledby=\"home-decisions-title\"]',node=>node.innerText.includes('hora de Argentina')))",
+      "assert.equal(homeFacts(item).length,2,'Refresh dispatches one bounded GET even before React flushes')"
+    ],
+    "current": [
+      "assert.ok(await item.page.$eval('[aria-labelledby=\"home-decisions-title\"]',node=>node.innerText.includes('hora de Argentina')&&node.innerText.includes('13:49:23')),'Home afternoon must use the Argentina h23 clock')",
+      "assert.equal(homeFacts(item).length,2,'Refresh dispatches one bounded GET even before React flushes')",
+      "assert.ok(await item.page.$eval('[aria-labelledby=\"home-decisions-title\"]',node=>node.innerText.includes('00:00:00')&&!node.innerText.includes('24:00:00')),'Home midnight must render 00:00 in Argentina')"
+    ]
+  },
+  "native": {
+    "producer": "scripts/verify-company-channel-postgres.mjs",
+    "producerLfSha256": "ae2031c88abba7716cd7a56afcb1546c4bf706d8381901c0c2272fb023866320",
+    "historicalCheckCount": 45,
+    "historicalChecksSha256": "4bf365631adfc58cf7e36d8178ae4683e4371edde67576d838cabcea4df4d34b",
+    "historicalSupplementalCount": 4,
+    "historicalSupplementalSha256": "05e2f22dbfc69aa78bc9ec5352d621d904f5e1e8cc81d0f7e4a8e9b5e768fa83",
+    "currentSupplementalCount": 9,
+    "currentSupplementalSha256": "e027afa8cb9854af0c0e35d500edc6aa00574fee6f62c08ebabed1cbdea94c88",
+    "addedCheckNames": [
+      "composed-import-APPLY-creates-one-real-Task-from-explicitly-deterministic-private-document-fixture",
+      "composed-signed-company-photo-belongs-to-import-created-Task-and-canonical-independent-review-does-not-apply-progress",
+      "composed-imported-Task-progress-is-APPLIED-by-distinct-authorized-actor-only-after-approved-linked-photo",
+      "composed-same-imported-Task-consumption-is-APPROVED-and-one-canonical-OUT-movement-deducts-exact-1.001-kg",
+      "composed-signed-source-command-and-status-replays-preserve-one-import-task-evidence-APPLIED-progress-APPROVED-consumption-and-stock-movement"
+    ],
+    "totalCheckCount": 54,
+    "sourceCount": 238,
+    "sourcePathsSha256": "2419e373bc9ca766076ae015bae3af9bb187a7df663a5cc82979990e5b5c2d61",
+    "documentSourceSha256": "d0842da039e306f698aa237d476e93ace6c7cd88d90c2877beb1d6b6739b1385"
+  },
+  "sourceSetChanges": 0,
+  "nativeOrBrowserAcceptance": false
+});
+deepFreeze(COMPANY_ONBOARDING_UX_CURRENT_REVISION);
+
+function companyOnboardingUxSection(contract){
+ if(!plain(contract)||!Object.hasOwn(contract,COMPANY_ONBOARDING_UX_CURRENT_SECTION))return null;
+ const value=contract[COMPANY_ONBOARDING_UX_CURRENT_SECTION];exact(value,[...Object.keys(COMPANY_ONBOARDING_UX_CURRENT_REVISION),'validationSources'],'Exact company onboarding UX revision required');
+ for(const[key,expected]of Object.entries(COMPANY_ONBOARDING_UX_CURRENT_REVISION))reject(same(value[key],expected),'Unreviewed company onboarding UX declaration: '+key);
+ reject(Array.isArray(value.validationSources)&&same(value.validationSources.map(row=>row?.path),value.validationPredecessors.map(row=>row.path)),'Exact company onboarding UX validator sources required');
+ for(const row of value.validationSources){exact(row,['path','sha256'],'Exact company onboarding UX validator reference required');reject(hash(row.sha256),'Company onboarding UX validator hash required');}return value;
+}
+export function restoreCompanyOnboardingUxPreviousContract(contract){
+ const value=companyOnboardingUxSection(contract);if(!value)return contract;
+ const previous=structuredClone(contract);delete previous[COMPANY_ONBOARDING_UX_CURRENT_SECTION];
+ reject(sha(JSON.stringify(previous,null,2)+'\n')===value.previousContractSha256,'The complete published4f1 contract must restore exactly');return previous;
+}
+function companyOnboardingUxReferences(value){return [...value.reviewedSourceChanges,...value.validationPredecessors.map(previous=>({path:previous.path,previousSha256:previous.sha256,currentSha256:value.validationSources.find(row=>row.path===previous.path).sha256}))];}
+export function companyOnboardingUxCurrentSourcePin(contract,ref){
+ const value=companyOnboardingUxSection(contract);if(!value)return ref.sha256;const row=companyOnboardingUxReferences(value).find(row=>row.path===ref.path);if(!row)return ref.sha256;
+ reject([row.previousSha256,row.currentSha256].includes(ref.sha256),'Only exact published4f1 and reviewed company onboarding UX pins may advance: '+ref.path);return row.currentSha256;
+}
+export function companyOnboardingUxPreviousSourcePin(contract,ref){
+ const value=companyOnboardingUxSection(contract);if(!value)return ref.sha256;const row=companyOnboardingUxReferences(value).find(row=>row.path===ref.path);return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;
+}
+function verifyCompanyOnboardingUxRefs(refs,readSource){
+ reject(typeof readSource==='function','Actual company onboarding UX source reader required');
+ for(const row of refs){const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current company onboarding UX source: '+row.path);const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===row.currentSha256,'Stale current company onboarding UX source: '+row.path);}
+}
+function verifyCompanyOnboardingUxValidationSources(contract,readSource){
+ const value=companyOnboardingUxSection(contract);if(!value)return null;restoreCompanyOnboardingUxPreviousContract(contract);
+ verifyCompanyOnboardingUxRefs(companyOnboardingUxReferences(value).filter(row=>value.validationSources.some(v=>v.path===row.path)),readSource);return value;
+}
+export function verifyCompanyOnboardingUxCurrentSources(contract,readSource){
+ const value=companyOnboardingUxSection(contract);if(!value)return null;restoreCompanyOnboardingUxPreviousContract(contract);verifyCompanyOnboardingUxRefs(companyOnboardingUxReferences(value),readSource);
+ return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,historicalPinsPreserved:true,sourceSetChanges:0,nativeOrBrowserAcceptance:false};
+}
+export function companyOnboardingUxHistoricalFocusedAssertions(source,contract){
+ const value=companyOnboardingUxSection(contract);reject(value,'Reviewed company onboarding UX revision required');restoreCompanyOnboardingUxPreviousContract(contract);
+ const file='scripts/verify-focused-workspace-ui.mjs',pin=value.reviewedSourceChanges.find(row=>row.path===file),text=Buffer.isBuffer(source)?source.toString('utf8'):source;
+ reject(typeof text==='string'&&sha(text.replaceAll('\r\n','\n'))===pin.currentSha256,'Exact reviewed focused producer bytes required');
+ const calls=[];function walk(node){if(!node||typeof node!=='object')return;if(node.type==='CallExpression'&&node.callee.type==='MemberExpression'&&node.callee.object?.name==='assert')calls.push(text.slice(node.start,node.end).replaceAll('\r\n','\n'));for(const child of Object.values(node))if(Array.isArray(child))child.forEach(walk);else if(child&&typeof child==='object')walk(child);}walk(parse(text,{sourceType:'module'}).program);
+ const p=value.focusedAssertions;reject(calls.length===p.currentCount&&same(calls.slice(p.start,p.start+p.current.length),p.current),'Exact current h23 afternoon and midnight assertions required');
+ const previous=[...calls.slice(0,p.start),...p.previous,...calls.slice(p.start+p.current.length)];reject(previous.length===p.previousCount&&sha(JSON.stringify(previous))===p.previousAssertionsSha256,'All201 previous focused assertions must restore exactly');return previous;
 }

@@ -22981,5 +22981,114 @@
         "sha256": "7a901da987b797dca7c8b574dc28ce300cb8839483c472f019e25d26dd914c84"
       }
     ]
+  },
+  "companyOnboardingUxCurrentRevision": {
+    "version": 1,
+    "status": "REVIEWED_COMPANY_ONBOARDING_INFORMATION_AND_COMPOSED_FIELD_CORE",
+    "predecessorCommit": "4f1b6df18e210a1be673c020a60274294d351e17",
+    "previousContractSha256": "ecec0aa86b5826cdb38a75ff02803ae831479204e42bba97273c788b46ab834e",
+    "reviewedSourceChanges": [
+      {
+        "path": "src/app/(identity)/cuenta/meta-onboarding-panel.js",
+        "previousSha256": "6dd8eda06e40816270a707b01c71e468327c5659a480bce720d6db987893b57d",
+        "currentSha256": "314f7b6b6e160a4c58f9f373ff6970d049ad4feefea7501a5d29ad4d63613af8"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/customer-whatsapp-panel.js",
+        "previousSha256": "5186d11e95a8514e25d36d7157721f35627ce245476525295f62f05d0cc041ec",
+        "currentSha256": "d129c4aa22e8048e03674382828222e5141e219f5d12368139a75ae735c9b247"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/company-channel-panel.js",
+        "previousSha256": "41d778f1ead861ecb14020551079173dfe4b7cbaf89e7c158335b1156ed7d578",
+        "currentSha256": "b41b9fd9a0fa16a25914b8d074ffbac1588b5d26dcca0310a8626ee211154a24"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/workspace-overview.js",
+        "previousSha256": "1efd9a741ddd4e38492c38f62d95104a0a98c715a962df44aab0d1f793031b00",
+        "currentSha256": "456e78d9e5c729182e65cd30141af37a5a6571d05261896ab5e19e39c4951c1b"
+      },
+      {
+        "path": "scripts/verify-company-channel-ui.mjs",
+        "previousSha256": "8fb58b5accb1f61f8862736f468a40bcd5e0b59be078f9468244dea6285095d6",
+        "currentSha256": "06aa30e01daa873db935bf28856b17a4f17fb970cbc031649a392b66a5c05421"
+      },
+      {
+        "path": "scripts/verify-focused-workspace-ui.mjs",
+        "previousSha256": "fde529288d806f0aed540f155f4b7058485b7c6bcdfe8edddc607eb89b868cac",
+        "currentSha256": "940bc05e5aa47d19e2251bc5559eed34e29275afff0d025f76f73a8fde41649f"
+      },
+      {
+        "path": "scripts/verify-company-channel-postgres.mjs",
+        "previousSha256": "21c273c25c315fdcacc05cfb16d528451f4caebb38eaf26aae0fd07887cc9e3b",
+        "currentSha256": "ae2031c88abba7716cd7a56afcb1546c4bf706d8381901c0c2272fb023866320"
+      }
+    ],
+    "validationPredecessors": [
+      {
+        "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+        "sha256": "cb2c1731ec5192786434fc4b905df6062068fde33c8f68719765a45c5dd02b3f"
+      },
+      {
+        "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+        "sha256": "7a901da987b797dca7c8b574dc28ce300cb8839483c472f019e25d26dd914c84"
+      },
+      {
+        "path": "tests/production-focused-workspace-task-pagination.test.mjs",
+        "sha256": "058eb4f1ed8812e2b4d8341ea55bff8a98c22292153482260fdb9f0773398b35"
+      }
+    ],
+    "focusedAssertions": {
+      "previousCount": 201,
+      "currentCount": 202,
+      "previousAssertionsSha256": "3f44e2aad77a90668763e65989fee7a2f5637843da32c5482b4c7784824fc654",
+      "start": 130,
+      "previous": [
+        "assert.ok(await item.page.$eval('[aria-labelledby=\"home-decisions-title\"]',node=>node.innerText.includes('hora de Argentina')))",
+        "assert.equal(homeFacts(item).length,2,'Refresh dispatches one bounded GET even before React flushes')"
+      ],
+      "current": [
+        "assert.ok(await item.page.$eval('[aria-labelledby=\"home-decisions-title\"]',node=>node.innerText.includes('hora de Argentina')&&node.innerText.includes('13:49:23')),'Home afternoon must use the Argentina h23 clock')",
+        "assert.equal(homeFacts(item).length,2,'Refresh dispatches one bounded GET even before React flushes')",
+        "assert.ok(await item.page.$eval('[aria-labelledby=\"home-decisions-title\"]',node=>node.innerText.includes('00:00:00')&&!node.innerText.includes('24:00:00')),'Home midnight must render 00:00 in Argentina')"
+      ]
+    },
+    "native": {
+      "producer": "scripts/verify-company-channel-postgres.mjs",
+      "producerLfSha256": "ae2031c88abba7716cd7a56afcb1546c4bf706d8381901c0c2272fb023866320",
+      "historicalCheckCount": 45,
+      "historicalChecksSha256": "4bf365631adfc58cf7e36d8178ae4683e4371edde67576d838cabcea4df4d34b",
+      "historicalSupplementalCount": 4,
+      "historicalSupplementalSha256": "05e2f22dbfc69aa78bc9ec5352d621d904f5e1e8cc81d0f7e4a8e9b5e768fa83",
+      "currentSupplementalCount": 9,
+      "currentSupplementalSha256": "e027afa8cb9854af0c0e35d500edc6aa00574fee6f62c08ebabed1cbdea94c88",
+      "addedCheckNames": [
+        "composed-import-APPLY-creates-one-real-Task-from-explicitly-deterministic-private-document-fixture",
+        "composed-signed-company-photo-belongs-to-import-created-Task-and-canonical-independent-review-does-not-apply-progress",
+        "composed-imported-Task-progress-is-APPLIED-by-distinct-authorized-actor-only-after-approved-linked-photo",
+        "composed-same-imported-Task-consumption-is-APPROVED-and-one-canonical-OUT-movement-deducts-exact-1.001-kg",
+        "composed-signed-source-command-and-status-replays-preserve-one-import-task-evidence-APPLIED-progress-APPROVED-consumption-and-stock-movement"
+      ],
+      "totalCheckCount": 54,
+      "sourceCount": 238,
+      "sourcePathsSha256": "2419e373bc9ca766076ae015bae3af9bb187a7df663a5cc82979990e5b5c2d61",
+      "documentSourceSha256": "d0842da039e306f698aa237d476e93ace6c7cd88d90c2877beb1d6b6739b1385"
+    },
+    "sourceSetChanges": 0,
+    "nativeOrBrowserAcceptance": false,
+    "validationSources": [
+      {
+        "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+        "sha256": "35a27b696cf1b2282fc1da41eb6f7f8173ccf2477cffbc48483bb83a50fef44b"
+      },
+      {
+        "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+        "sha256": "31df3637107941e47985305ddc5704c061b135dbc5f4b34c880b5f75accb02e8"
+      },
+      {
+        "path": "tests/production-focused-workspace-task-pagination.test.mjs",
+        "sha256": "5afbb67627d790d41df2d9cde0270dcafe93ab5292d822c9a45534203acaed34"
+      }
+    ]
   }
 }

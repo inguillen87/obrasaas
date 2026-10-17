@@ -1,3 +1,4 @@
+import {validateCompanyOnboardingUxNativeProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import {WHATSAPP_FIELD_CONTINUITY_CURRENT_REVISION,WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWhatsappFieldContinuityPreviousContract,verifyWhatsappFieldContinuityCurrentSources,whatsappFieldCompanyNativeSourceFiles,validateWhatsappFieldNeutralStepNative,whatsappFieldNeutralStepShadowFixture} from '../../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import {FIELD_TASK_PAGINATION_CI_KIND,validateFieldTaskPaginationCi,fieldTaskPaginationCiSourceClosure} from '../../scripts/verify-field-task-pagination-ci.mjs';
@@ -20,7 +21,7 @@ import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourc
 import {KYC_EXPIRED_CURRENT_ADDITIONS,KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,validateKycExpiredCurrentWorkspaceContract as validatePublishedKycWorkspaceContract,verifyKycExpiredCurrentSources as verifyPublishedKycSources} from '../../scripts/lib/kyc-expired-current-ci-lineage.mjs';
 import {PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES,planMeasurementCurrentDependencies,reconstructPublishedHContract,verifyPlanMeasurementCurrentSources,currentFieldPrivacyRevision,currentFieldPrivacySpecRevision} from '../../scripts/lib/plan-measurement-current-ci-lineage.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="ecec0aa86b5826cdb38a75ff02803ae831479204e42bba97273c788b46ab834e";
+export const EXPECTED_CONTRACT_SHA256="04db9c3dd25a41425f3b8f71f5d51ab23fcf4ad575b88710350b005dff04502b";
 function validateKycExpiredCurrentWorkspaceContract(contract){return validatePublishedKycWorkspaceContract(contract.planMeasurementCurrentLineage?reconstructPublishedHContract(contract):contract);}
 function verifyKycExpiredCurrentSources(section,readSource){
  const current=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));
@@ -1903,6 +1904,14 @@ export function provenance({root,lane,contract,expectedHead,workflowSha256,env=p
   const readSource=gitSource(root,actual);const expectedTree=execFileSync('git',['rev-parse',actual+'^{tree}'],{cwd:root,encoding:'utf8'}).trim();
   verifyWhatsappPlanTestSources(contract,readSource);
   verifyKycExpiredCurrentSources(contract.kycExpiredCurrentComposition,readSource);
+ // This is an explicit semantic check of the retained native block29 proof.
+ // It validates exactly the bytes hashed into the same provenance record.
+ if(lane==='channels'){
+  const nativePath='.vercel/private/company-channel-postgres-proof.json',nativeBytes=readFileSync(path.join(root,nativePath)),retained=files.find(file=>file.path===nativePath);
+  if(!retained||retained.sha256!==hash(nativeBytes)||retained.bytes!==nativeBytes.length)deny('PROOF_COMPANY_CORE_FILE_BINDING');
+  try{validateCompanyOnboardingUxNativeProofBytes(nativeBytes,readSource);}catch(error){if(error.code==='COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED')deny('PROOF_COMPANY_CORE_BOUNDARY');throw error;}
+ }
+
   const extensionProofBindings=contract.extension.proofs.filter(p=>p.lane===lane).map(spec=>validateExtensionProof(spec,readFileSync(path.join(root,spec.path)),{expectedHead:actual,expectedTree,...clock,readSource,readEvidence:file=>readFileSync(path.join(root,cleanPath(file)))}));
  const record=seal({version:2,proofBindings:extensionProofBindings,lane,head:actual,...clock,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
  if(Buffer.byteLength(JSON.stringify(record))>400*1024)deny('PROVENANCE_LIMIT');

@@ -1,3 +1,4 @@
+import {companyOnboardingUxHistoricalFocusedAssertions} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync,existsSync,lstatSync} from 'node:fs';
@@ -42,9 +43,7 @@ test('browser source manifest includes this test and the canonical parent pager 
  const files=focusedWorkspaceUiSourceFiles(readSource);for(const file of [entry,factory,'tests/production-focused-workspace-task-pagination.test.mjs'])assert.ok(files.includes(file));assert.ok(files.every(file=>!file.includes('.vercel/')&&!file.includes('node_modules/')));assert.equal(new Set(files).size,files.length);
 });
 test('all128 historical producer assertions remain exact after projecting only authenticated home additions',()=>{
- const text=readSource('scripts/verify-focused-workspace-ui.mjs').toString(),ast=parse(text,{sourceType:'module'}),calls=[];
- function walk(node){if(!node||typeof node!=='object')return;if(node.type==='CallExpression'&&node.callee.type==='MemberExpression'&&node.callee.object?.name==='assert')calls.push(text.slice(node.start,node.end).replaceAll('\r\n','\n'));for(const value of Object.values(node))if(Array.isArray(value))value.forEach(walk);else if(value&&typeof value==='object')walk(value);}
- walk(ast.program);assert.equal(calls.length,201);
+ const calls=companyOnboardingUxHistoricalFocusedAssertions(readSource('scripts/verify-focused-workspace-ui.mjs'),JSON.parse(readSource('.github/workspace-acceptance-contract.json')));assert.equal(calls.length,201);
  assert.deepEqual(calls.slice(18,23),["assert.ok(['ADMIN','DIRECTOR'].includes(role))","assert.equal(url.searchParams.size,3)","assert.equal(url.searchParams.get('view'),'decisions')","assert.equal(url.searchParams.get('scope'),scope)","assert.equal(url.searchParams.get('projectId'),'project-a')"]);
  assert.equal(sha(JSON.stringify(calls.slice(128,150))),'74f50ce9dd5d97d531eed6cb99a0eb26461aa19fd7ac5bb49526dfc7b78eac0e');
  const historicalPrefix=[...calls.slice(0,18),...calls.slice(23,128),...calls.slice(150,155)];assert.equal(historicalPrefix.length,128);assert.equal(sha(JSON.stringify(historicalPrefix)),'41c2c075ff830bd9b0cab70c778c50a782915f466773e72299fce4977712dcdb');
