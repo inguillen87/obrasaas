@@ -96,6 +96,11 @@ export const HOME_DECISIONS_CURRENT_REVISION=Object.freeze({
       "currentSha256": "4185d2b01cd1a142b846ee05067e38ae4dad60f90ae7dc0288f19cdddd77adf9"
     },
     {
+      "path": "tests/production-plan-measurement-document-association-ci-lineage.test.mjs",
+      "previousSha256": "6e1424a595ed5be8ee7111a4aa0edc031e10678f8da0ec2c337cd9d9da2281cd",
+      "currentSha256": "4145a4398f3c4b4c4d1226983cbf8d95313c8c7f5e59ec544b897344f794fb91"
+    },
+    {
       "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
       "previousSha256": "63d8b5b1c3e8f3f38add5c66b0901ea4477a7e7c9eb394ed6f02a4a4ee2b8acb",
       "currentSha256": "d55968747a2bfc23f02de49d0418374665e2db7e156cfa0356c21145cc9c83b4"
