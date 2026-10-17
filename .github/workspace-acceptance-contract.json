@@ -1520,7 +1520,7 @@
       "blockId": 60,
       "lane": "workspace-ui",
       "sourceLine": 240,
-      "producerSha256": "e11ed3c52c998f84c0e7ed21ebbe806a1aa8816007b7819203e7d6c4ef4add19",
+      "producerSha256": "9e236a07c14417f23209a889de850820810f2ea978c1d44a4fe94688869ff3d8",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     },
     {
@@ -2831,7 +2831,7 @@
         "path": ".vercel/workspace-identity-only-evidence/browser.json",
         "kind": "UI_IDENTITY_ONLY",
         "producer": "scripts/verify-workspace-identity-only-ui.mjs",
-        "producerSha256": "e11ed3c52c998f84c0e7ed21ebbe806a1aa8816007b7819203e7d6c4ef4add19",
+        "producerSha256": "9e236a07c14417f23209a889de850820810f2ea978c1d44a4fe94688869ff3d8",
         "sourceFiles": [
           "scripts/lib/company-subscription-ui-fixture.mjs",
           "src/app/(identity)/cuenta/company-bootstrap-panel.js",
@@ -2880,6 +2880,8 @@
           "src/app/(identity)/cuenta/office-review-panel.js",
           "src/app/(identity)/cuenta/office-review-panel.module.css",
           "src/app/(identity)/cuenta/office-review-view.mjs",
+          "src/app/(identity)/cuenta/onboarding-guide.js",
+          "src/app/(identity)/cuenta/onboarding-guide.module.css",
           "src/app/(identity)/cuenta/operations-status-panel.js",
           "src/app/(identity)/cuenta/operations-status-panel.module.css",
           "src/app/(identity)/cuenta/own-company-number-panel.js",
@@ -23647,6 +23649,294 @@
       {
         "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
         "sha256": "8088480f2864dc860f6e4dbf3f9a15a1f29c333cb2e7e4e246ee6b7a6fc4ce2a"
+      }
+    ]
+  },
+  "identityDestinationUxCurrentRevision": {
+    "version": 1,
+    "predecessorCommit": "8c3060ba70d7f997c75c203a2948b4975db94bdf",
+    "previousContractSha256": "9511a06c538d2e11de2fdbbc9c947476f89da0402744201594772170fdfe518b",
+    "reviewedSourceChanges": [
+      {
+        "path": "src/app/(identity)/cuenta/workspace-client.js",
+        "previousSha256": "7f9612e2f92d582b1318c39d542060a9ab3d41df72e20511d659235601f10cb8",
+        "currentSha256": "e53ad474a3677243fbcaff6ce526c0983514d42e78c6daf60e73ba06d6f63bec"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/workspace-view-routing.mjs",
+        "previousSha256": "1f5d2827d0ad76282331d77b368d19c260d355eb37b1f56860a5ac485a7c9793",
+        "currentSha256": "d02f2d11ec5ce4a1419ed79c9639cdad40174c236382853778fc984f071e4df4"
+      },
+      {
+        "path": "tests/production-focused-workspace-navigation.test.mjs",
+        "previousSha256": "87ac26aa97c3efcb89bf2ce96abb0e9a2da9773f40fd3907f64815eaf8429b72",
+        "currentSha256": "5f6614ed798d02be2b99de9267c2766ec61e8d1b4d46c3fefed3aa69832bde7e"
+      }
+    ],
+    "validationPredecessors": [
+      {
+        "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+        "sha256": "7063a942c736b5fe35b40ad2eac018afdd188333a7792dda8b328ed9b860c1cd"
+      },
+      {
+        "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+        "sha256": "8088480f2864dc860f6e4dbf3f9a15a1f29c333cb2e7e4e246ee6b7a6fc4ce2a"
+      },
+      {
+        "path": "tests/production-integrated-identity-ui-producer-migration.test.mjs",
+        "sha256": "e3f47007ae8365064e8dc625aee4190fb44d8291a7e098cec0bcc8c19532282c"
+      }
+    ],
+    "browser": {
+      "producerSourceHistory": {
+        "previousBytes": 55811,
+        "currentBytes": 77713,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 4899,
+            "previousText": "copyGraph('src/app/(identity)/cuenta/workspace-client.js');copyGraph('src/app/(identity)/cuenta/workspace-recovery-journal.mjs');copyGraph('src/lib/participant-policy.mjs');\n",
+            "currentText": "copyGraph('src/app/(identity)/cuenta/workspace-client.js');copyGraph('src/app/(identity)/cuenta/workspace-recovery-journal.mjs');copyGraph('src/lib/participant-policy.mjs');copyGraph('src/app/(identity)/cuenta/onboarding-guide.js');\n"
+          },
+          {
+            "currentOffsetCharacters": 5793,
+            "previousText": "",
+            "currentText": "import {OnboardingGuide} from './(identity)/cuenta/onboarding-guide';\n"
+          },
+          {
+            "currentOffsetCharacters": 5986,
+            "previousText": " const [context,setContext]=useState('A');\n",
+            "currentText": " const [context,setContext]=useState('A'),[guideObservation,setGuideObservation]=useState(null);\n const observeGuide=useCallback(value=>setGuideObservation({context,value}),[context]);\n const initialProjectId=typeof window==='undefined'?'':new URL(window.location.href).searchParams.get('obra')||'';\n"
+          },
+          {
+            "currentOffsetCharacters": 6728,
+            "previousText": " return <main style={{maxWidth:1000,margin:'0 auto'}}><div><button onClick={()=>setContext('A')}>Contexto A</button><button onClick={()=>setContext('B')}>Contexto B</button></div><AccountWorkspace key={context} getSessionToken={token}/></main>;\n",
+            "currentText": " return <main style={{maxWidth:1000,margin:'0 auto'}}><div><button onClick={()=>setContext('A')}>Contexto A</button><button onClick={()=>setContext('B')}>Contexto B</button></div><OnboardingGuide key={\"guide-\"+context} orgId={\"fixture-\"+context} orgRole=\"org:member\" observation={guideObservation?.context===context?guideObservation.value:null}/><AccountWorkspace key={\"workspace-\"+context} getSessionToken={token} onGuideObservation={observeGuide} initialProjectId={initialProjectId}/></main>;\n"
+          },
+          {
+            "currentOffsetCharacters": 8320,
+            "previousText": "const scopeA='a'.repeat(64),scopeB='b'.repeat(64),revision='2026-10-01T11:00:00.000001',checks=[],pageErrors=[],requestErrors=[],screenshots=[];\n",
+            "currentText": "const scopeA='a'.repeat(64),scopeB='b'.repeat(64),revision='2026-10-01T11:00:00.000001',checks=[],destinationChecks=[],pageErrors=[],requestErrors=[],screenshots=[];\n"
+          },
+          {
+            "currentOffsetCharacters": 8681,
+            "previousText": "",
+            "currentText": "async function visibleElementClick(page,handle){\n // Open only necessary disclosures by clicking their visible native summary.\n // Never set details.open or bypass the rendered user navigation.\n for(let depth=0;depth<12;depth++){\n  const summary=await page.evaluateHandle(node=>{let outer=null;const ownSummary=node.tagName==='SUMMARY'?node.parentElement:null;for(let parent=node.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS'&&!parent.open&&parent!==ownSummary)outer=parent;return outer?[...outer.children].find(child=>child.tagName==='SUMMARY')||null:null;},handle);\n  const element=summary.asElement();if(!element){await summary.dispose();break;}\n  assert.ok(await page.evaluate(node=>node.isConnected&&node.getClientRects().length>0&&!node.closest('[hidden],[inert],[aria-hidden=\"true\"]'),element),'Disclosure summary must already be visible');await element.click();await summary.dispose();\n }\n assert.ok(await page.evaluate(node=>node.isConnected&&node.getClientRects().length>0&&!node.closest('[hidden],[inert],[aria-hidden=\"true\"]'),handle),'Click target must be visible in the current screen');\n await handle.click();\n}\n"
+          },
+          {
+            "currentOffsetCharacters": 10300,
+            "previousText": " if(hiddenScreen){const id={identidad:'participant-title','mi-whatsapp':'worker-channel-title',cronograma:'schedule-title',recuperacion:'workspace-recovery-title'}[hiddenScreen];assert.ok(id,'Known real destination for '+label);const menu='nav[aria-label=\"Navegación de la obra\"]';if((await page.viewport()).width<1100)await page.select(menu+' select',id);else{const selector=menu+' a[href=\"#'+id+'\"]';const anchor=await page.$(selector);assert.ok(anchor,'Real destination link');await anchor.click();await anchor.dispose();}await page.waitForFunction(section=>document.querySelector('[data-workspace-screen=\"'+section+'\"]')?.hidden===false,{timeout:15000},hiddenScreen);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}\n\n",
+            "currentText": " if(hiddenScreen){const id={identidad:'participant-title','mi-whatsapp':'worker-channel-title',cronograma:'schedule-title',recuperacion:'workspace-recovery-title'}[hiddenScreen];assert.ok(id,'Known real destination for '+label);await chooseWorkspaceView(page,id);}\n"
+          },
+          {
+            "currentOffsetCharacters": 11139,
+            "previousText": " await page.evaluate(button=>{for(let parent=button.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;},handle);\n await handle.asElement().click();await handle.dispose();\n",
+            "currentText": " await visibleElementClick(page,handle.asElement());await handle.dispose();\n}\nasync function chooseWorkspaceView(page,id){\n const own='nav[aria-label=\"Mi participación en la obra\"]';if(await page.$(own)){const anchor=await page.$(own+' a[href=\"#'+id+'\"]');assert.ok(anchor,'Private destination must be listed');await visibleElementClick(page,anchor);await anchor.dispose();await page.waitForFunction(target=>document.activeElement?.id===target,{timeout:15000},id);return;}\n const menu='nav[aria-label=\"Navegación de la obra\"]';if((await page.viewport()).width<1100)await page.select(menu+' select',id);else{const anchor=await page.$(menu+' a[href=\"#'+id+'\"]');assert.ok(anchor);await visibleElementClick(page,anchor);await anchor.dispose();}\n await page.waitForFunction(target=>document.activeElement?.id===target,{timeout:15000},id);\n"
+          },
+          {
+            "currentOffsetCharacters": 11976,
+            "previousText": "async function chooseWorkspaceView(page,id){const menu='nav[aria-label=\"Navegación de la obra\"]';if((await page.viewport()).width<1100)await page.select(menu+' select',id);else await page.click(menu+' a[href=\"#'+id+'\"]');await page.waitForFunction(target=>document.activeElement?.id===target,{timeout:15000},id);}\n",
+            "currentText": ""
+          },
+          {
+            "currentOffsetCharacters": 14441,
+            "previousText": "async function createPage(width,current,sharedContext=null){\n",
+            "currentText": "async function createPage(width,current,sharedContext=null,{initialPath=''}={}){\n assert.ok(initialPath===''||initialPath==='/?obra=p-a#worker-channel-title','Only the controlled same-origin project hint is allowed');\n"
+          },
+          {
+            "currentOffsetCharacters": 19111,
+            "previousText": "",
+            "currentText": "    if(current.destinationPaging===true&&projectId)(current.destinationProjectReads??=[]).push({actor,projectId,afterTask:url.searchParams.get('afterTask')});\n"
+          },
+          {
+            "currentOffsetCharacters": 19734,
+            "previousText": "    if(current.mode==='late-project'&&projectId==='p-a'||current.mode==='late-company'&&actor==='A'||current.holdWorkspaceProject===projectId){\n",
+            "currentText": "    if(current.mode==='late-project'&&projectId==='p-a'||current.mode==='late-company'&&actor==='A'||current.holdWorkspaceProject===projectId||current.holdWorkspacePage===projectId&&url.searchParams.has('afterTask')){\n"
+          },
+          {
+            "currentOffsetCharacters": 20331,
+            "previousText": "",
+            "currentText": "     if(current.destinationPaging===true){const after=url.searchParams.get('afterTask'),pageIndex=after?after.endsWith('-second')?2:1:0,record=pageIndex===0?task:{...task,id:task.id+(pageIndex===1?'-second':'-third'),title:task.title+(pageIndex===1?' segunda página':' tercera página')};return answer(request,200,{scope,project:{id:projectId,name:'Obra A',status:'ACTIVE'},roleLabel:'Consulta',canPlanSchedule:false,tasks:[record],totalTasks:3,nextCursor:pageIndex<2?record.id:null});}\n"
+          },
+          {
+            "currentOffsetCharacters": 23061,
+            "previousText": "",
+            "currentText": "    if(current.destinationHoldProfile===true)await new Promise(resolve=>(current.destinationHeldProfile??=[]).push(resolve));\n"
+          },
+          {
+            "currentOffsetCharacters": 23811,
+            "previousText": " await page.goto(origin,{waitUntil:'networkidle0'});await waitText(page,'Empresa de ensayo A');assert.equal(subscriptionReads.length,current.mode==='bootstrap'?1:0,'Only the bootstrap administrator consults closed subscription status');return {context,page};\n",
+            "currentText": " await page.goto(origin+initialPath,{waitUntil:initialPath?'domcontentloaded':'networkidle0'});await waitText(page,'Empresa de ensayo A');assert.equal(subscriptionReads.length,current.mode==='bootstrap'?1:0,'Only the bootstrap administrator consults closed subscription status');return {context,page};\n"
+          },
+          {
+            "currentOffsetCharacters": 24917,
+            "previousText": "async function presentOwn(page){\n await click(page,'Consultar mi identidad');await waitText(page,'Persona de ensayo');await click(page,'Presentar mi identidad');\n",
+            "currentText": "async function prepareOwn(page,{consult=true}={}){\n if(consult)await click(page,'Consultar mi identidad');await waitText(page,'Persona de ensayo');await click(page,'Presentar mi identidad');\n"
+          },
+          {
+            "currentOffsetCharacters": 26015,
+            "previousText": " await click(page,'Presentar para revisión');await waitText(page,'El resultado quedó sin confirmar');\n",
+            "currentText": "}\nasync function presentOwn(page){await prepareOwn(page);await click(page,'Presentar para revisión');await waitText(page,'El resultado quedó sin confirmar');\n"
+          },
+          {
+            "currentOffsetCharacters": 34018,
+            "previousText": "",
+            "currentText": "async function privacyDisclosure(page,open){await chooseWorkspaceView(page,open?'worker-channel-title':'participant-title');}\n\n"
+          },
+          {
+            "currentOffsetCharacters": 34182,
+            "previousText": " await identityOnly(page);await page.evaluate(()=>{const summary=[...document.querySelectorAll('summary')].find(node=>node.textContent==='Mi WhatsApp y mis avisos');assertSummary(summary);function assertSummary(node){if(!node)throw Error('Own privacy section missing');node.parentElement.open=true;}});\n await page.waitForSelector('#worker-channel-title');\n",
+            "currentText": " await identityOnly(page);await privacyDisclosure(page,true);await page.waitForSelector('#worker-channel-title',{visible:true});\n"
+          },
+          {
+            "currentOffsetCharacters": 35457,
+            "previousText": " assert.ok(await page.$eval('summary',node=>node.getBoundingClientRect().height>=44),'Own privacy disclosure needs a44px touch target');\n",
+            "currentText": " assert.ok(await page.$eval('nav[aria-label=\"Mi participación en la obra\"] a[href=\"#worker-channel-title\"]',node=>node.getBoundingClientRect().height>=44),'Own privacy navigation needs a44px touch target');\n"
+          },
+          {
+            "currentOffsetCharacters": 53967,
+            "previousText": "",
+            "currentText": "\nconst destinationEntry='/?obra=p-a#worker-channel-title';\nconst destinationNames=['private-destination-initial-hash-held-canonical-mount-focus','private-destination-visible-guide-same-hash-and-browser-history','private-destination-context-change-cancels-held-private-mount','private-destination-revoked-canonical-access-and-history-stay-closed'];\nfunction destinationNetwork(current){\n const apiSequence=current.requests.map(row=>({path:row.path,method:row.method,actor:row.actor,projectId:row.projectId||null})),workerChannelGets=apiSequence.filter(row=>row.path==='/api/identity/worker-channel'&&row.method==='GET').length,totalPosts=apiSequence.filter(row=>row.method==='POST').length;\n assert.equal(workerChannelGets,0,'Navigation must not automatically read WhatsApp');assert.equal(totalPosts,0,'Navigation must not write');assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);assert.ok(apiSequence.every(row=>row.method==='GET'&&['/api/identity/workspace','/api/identity/participants'].includes(row.path)));\n return {apiSequence,workspaceGets:apiSequence.filter(row=>row.path==='/api/identity/workspace').length,participantGets:apiSequence.filter(row=>row.path==='/api/identity/participants').length,workerChannelGets,totalPosts,participantPosts:current.posts.length,channelPosts:current.channelPosts.length};\n}\nasync function destinationGeometry(page,id){\n await page.waitForFunction(target=>document.activeElement?.id===target&&document.getElementById(target)?.getClientRects().length>0,{timeout:15000},id);\n const geometry=await page.$eval('#'+id,node=>{const rect=node.getBoundingClientRect();return {id:node.id,visible:node.getClientRects().length>0,focused:document.activeElement===node,left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom,width:rect.width,height:rect.height,viewportWidth:innerWidth,viewportHeight:innerHeight,documentWidth:document.documentElement.scrollWidth,detailsOpen:node.closest('details')?.open??null,screen:node.closest('[data-workspace-screen]')?.dataset.workspaceScreen??null,screenHidden:node.closest('[data-workspace-screen]')?.hidden??null,otherPrivateScreenHidden:document.querySelector('[data-workspace-screen=\"'+(node.id==='worker-channel-title'?'identidad':'mi-whatsapp')+'\"]')?.hidden??null};});\n active.current.destinationGeometryObservation={...geometry};\n assert.equal(geometry.visible,true);assert.equal(geometry.focused,true);assert.ok(geometry.width>0&&geometry.height>0&&geometry.left>=0&&geometry.right<=geometry.viewportWidth+1&&geometry.top<geometry.viewportHeight&&geometry.bottom>0&&geometry.documentWidth<=geometry.viewportWidth);\n assert.equal(geometry.detailsOpen,null);assert.equal(geometry.screen,id==='worker-channel-title'?'mi-whatsapp':'identidad');assert.equal(geometry.screenHidden,false);assert.equal(geometry.otherPrivateScreenHidden,true);return geometry;\n}\nasync function noDestinationActivation(page){\n const forbidden=await page.evaluate(()=>{const panel=document.querySelector('[aria-labelledby=\"worker-channel-title\"]');if(!panel)return 0;const labels=['Generar código','Generar otro código','Revisar autorización de avisos','Guardar autorización','Continuar en WhatsApp','Copiar MENU','VINCULAR '];return [...panel.querySelectorAll('button,a,code')].filter(node=>node.matches('code,a[href*=\"wa.me\"]')||labels.some(label=>node.textContent.includes(label))).length;});assert.equal(forbidden,0);return forbidden;\n}\nasync function destinationScreenshot(page,name,width){\n const target=path.join(evidence,'destination-'+name+'-'+width+'.png');await page.screenshot({path:target,fullPage:true});const bytes=readFileSync(target);assert.ok(bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])));const pngWidth=bytes.readUInt32BE(16),height=bytes.readUInt32BE(20);assert.equal(pngWidth,width);assert.ok(height>0);return {path:path.relative(root,target).split(path.sep).join('/'),sha256:sha256(bytes),width:pngWidth,height};\n}\nasync function heldCanonical(current){for(let attempt=0;!current.held.length&&attempt<100;attempt++)await pause(20);assert.equal(current.held.length,1,'One canonical project GET must be held');}\nasync function guideDestination(page,id){\n const guide='section[aria-labelledby=\"onboarding-guide-title\"]';if(!await page.$('#onboarding-guide-content'))await click(page,'Abrir guía');\n const summary=await page.evaluateHandle(selector=>[...document.querySelector(selector).querySelectorAll('summary')].find(node=>node.textContent.trim()==='Elegir otro paso')||null,guide);assert.ok(summary.asElement());if(!await page.evaluate(node=>node.parentElement.open,summary))await visibleElementClick(page,summary.asElement());await summary.dispose();\n const position=id==='worker-channel-title'?9:id==='participant-title'?6:null;assert.ok(position);const button=await page.$(guide+' nav[aria-label=\"Pasos de inicio\"] button:nth-child('+position+')');assert.ok(button);await visibleElementClick(page,button);await button.dispose();\n await click(page,'Ir a este paso');await page.waitForFunction(target=>location.hash==='#'+target,{timeout:15000},id);return destinationGeometry(page,id);\n}\nasync function destinationDelayedMount(width){\n const current=newState('destination-delayed');current.holdWorkspaceProject='p-a';current.destinationHoldProfile=true;const {context,page}=await createPage(width,current,null,{initialPath:destinationEntry});await heldCanonical(current);\n assert.equal(await page.$('#worker-channel-title'),null);assert.equal(await page.$('#identity-access-title'),null);assert.equal(await page.evaluate(()=>location.hash),'#worker-channel-title');const beforeRelease={targetMounted:false,focused:false,heldCanonicalCount:current.held.length,...destinationNetwork(current)};\n current.holdWorkspaceProject=null;current.held.shift()();await identityOnly(page);for(let attempt=0;!current.destinationHeldProfile?.length&&attempt<100;attempt++)await pause(20);assert.equal(current.destinationHeldProfile?.length,1);const beforeProfileGeometry=await destinationGeometry(page,'worker-channel-title');current.destinationHoldProfile=false;current.destinationHeldProfile.shift()();await page.waitForFunction(()=>document.querySelector('[aria-labelledby=\"participant-title\"]')?.textContent.includes('Persona de ensayo'));await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const geometry=await destinationGeometry(page,'worker-channel-title'),profileRead={heldBeforeNavigation:true,releasedAfterNavigation:true,beforeGeometry:beforeProfileGeometry,afterGeometry:geometry},activationControls=await noDestinationActivation(page),network=destinationNetwork(current);assert.equal(network.workspaceGets,2);assert.equal(network.participantGets,1);const screenshot=await destinationScreenshot(page,'delayed',width);\n destinationChecks.push({name:destinationNames[0],width,status:'PASS',trigger:'INITIAL_HASH_AND_CANONICAL_PROJECT_HINT',initialPath:destinationEntry,beforeRelease,geometry,profileRead,activationControls,...network,screenshot});await context.close();\n}\nasync function destinationOperationalAppend(page,current){\n current.approved=true;current.destinationPaging=true;current.row={...current.row,kyc:{...current.row.kyc,status:'APPROVED'}};\n await click(page,'Comprobar habilitación de obra');await waitRecordedTask(page,'Tarea operativa p-a');await chooseWorkspaceView(page,'schedule-title');assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),1);\n current.holdWorkspacePage='p-a';const button=await page.$('#schedule-load-more');assert.ok(button);await button.hover();await page.mouse.down();\n const observe=()=>page.evaluate(()=>{const button=document.getElementById('schedule-load-more'),rect=button?.getBoundingClientRect();return {activeId:document.activeElement?.id||'',activeTagName:document.activeElement?.tagName||'',scrollY,taskCount:document.querySelectorAll('[data-task-id]').length,buttonMounted:Boolean(button),buttonDisabled:button?.disabled??null,rect:rect?{left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom,width:rect.width,height:rect.height}:null,viewportWidth:innerWidth,viewportHeight:innerHeight,firstTaskTop:document.querySelector('[data-task-id]')?.getBoundingClientRect().top??null};});\n const nativeFocus=row=>row.activeId==='schedule-load-more'&&row.activeTagName==='BUTTON'||row.activeId===''&&row.activeTagName==='BODY';\n const buttonBox=(row,visible)=>{assert.ok(row.rect&&Object.values(row.rect).every(Number.isFinite)&&row.rect.width>0&&row.rect.height>0);assert.ok(Number.isFinite(row.firstTaskTop));if(visible)assert.ok(row.rect.left>=0&&row.rect.right<=row.viewportWidth+1&&row.rect.top<row.viewportHeight&&row.rect.bottom>0,'OPERATIONAL_APPEND_BUTTON_VISIBLE');};\n const before=await observe();assert.equal(before.activeId,'schedule-load-more');assert.equal(before.activeTagName,'BUTTON');assert.equal(before.buttonDisabled,false);buttonBox(before,true);await page.mouse.up();await button.dispose();await heldCanonical(current);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const pending=await observe();current.destinationAppendObservation={before,pending,after:null};\n assert.ok(nativeFocus(pending),'OPERATIONAL_APPEND_FOCUS_DURING_READ');assert.equal(pending.buttonDisabled,true);buttonBox(pending,true);assert.ok(Math.abs(pending.rect.top-before.rect.top)<=3&&Math.abs(pending.rect.left-before.rect.left)<=3,'OPERATIONAL_APPEND_VIEWPORT_POSITION_DURING_READ');assert.equal(pending.taskCount,1);\n current.holdWorkspacePage=null;current.held.shift()();await settled(page);await page.waitForFunction(()=>document.querySelectorAll('[data-task-id]').length===2);const after=await observe();current.destinationAppendObservation.after=after;\n assert.ok(nativeFocus(after),'OPERATIONAL_APPEND_FOCUS_AFTER_READ');buttonBox(after,false);assert.equal(after.buttonDisabled,false);assert.equal(after.taskCount,2);assert.equal(after.buttonMounted,true);\n assert.deepEqual(current.destinationProjectReads,[{actor:'A',projectId:'p-a',afterTask:null},{actor:'A',projectId:'p-a',afterTask:'t-p-a'}]);\n return {canonicalAdmissionSimulated:true,totalTasks:3,projectReads:current.destinationProjectReads,before,pending,after};\n}\n\nasync function destinationPrivateDraft(page,current){\n await chooseWorkspaceView(page,'participant-title');await prepareOwn(page,{consult:false});const original=await page.$('[aria-labelledby=\"participant-title\"] form'),images=await page.$$eval('[aria-labelledby=\"participant-title\"] form fieldset img',nodes=>nodes.map(node=>node.src));assert.equal(images.length,2);\n const observe=async()=>{const facts=await page.evaluate(form=>{const capture=form.querySelector('[data-kyc-capture-step]'),choice=[...capture.querySelectorAll('label')].find(node=>node.textContent.includes('Leí el aviso y autorizo presentar estas imágenes'))?.querySelector('input');return {step:Number(capture.dataset.kycCaptureStep),consent:choice?.checked===true,formMounted:form.isConnected,formVisible:form.getClientRects().length>0,sameForm:form===document.querySelector('[aria-labelledby=\"participant-title\"] form'),imageCount:form.querySelectorAll('fieldset img').length};},original);const next=await page.$$eval('[aria-labelledby=\"participant-title\"] form fieldset img',nodes=>nodes.map(node=>node.src));return {...facts,sameImages:JSON.stringify(next)===JSON.stringify(images)};};\n const before=await observe();await chooseWorkspaceView(page,'worker-channel-title');const hidden=await observe();await chooseWorkspaceView(page,'participant-title');const after=await observe();\n for(const row of [before,hidden,after]){assert.equal(row.step,3);assert.equal(row.consent,true);assert.equal(row.formMounted,true);assert.equal(row.sameForm,true);assert.equal(row.imageCount,2);assert.equal(row.sameImages,true);}assert.equal(before.formVisible,true);assert.equal(hidden.formVisible,false);assert.equal(after.formVisible,true);assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);await click(page,'Cancelar');await original.dispose();await chooseWorkspaceView(page,'worker-channel-title');return {syntheticImagesOnly:true,submitted:false,before,hidden,after};\n}\nasync function destinationGuideHistory(width){\n const {current,context,page}=await startPrivacy(width,'NOT_SUBMITTED');const before=destinationNetwork(current);await privacyDisclosure(page,false);\n const history=[];history.push({action:'guide-private',hash:'#worker-channel-title',geometry:await guideDestination(page,'worker-channel-title')});await page.focus('nav[aria-label=\"Mi participación en la obra\"] a[href=\"#worker-channel-title\"]');assert.equal(await page.evaluate(()=>location.hash),'#worker-channel-title');\n history.push({action:'same-hash-reopen',hash:'#worker-channel-title',geometry:await guideDestination(page,'worker-channel-title')});history.push({action:'guide-identity',hash:'#participant-title',geometry:await guideDestination(page,'participant-title')});\n await page.goBack({waitUntil:'domcontentloaded'});assert.equal(await page.evaluate(()=>location.hash),'#worker-channel-title');history.push({action:'back',hash:'#worker-channel-title',geometry:await destinationGeometry(page,'worker-channel-title')});\n await page.goForward({waitUntil:'domcontentloaded'});assert.equal(await page.evaluate(()=>location.hash),'#participant-title');history.push({action:'forward',hash:'#participant-title',geometry:await destinationGeometry(page,'participant-title')});\n await page.goBack({waitUntil:'domcontentloaded'});history.push({action:'back-final',hash:'#worker-channel-title',geometry:await destinationGeometry(page,'worker-channel-title')});\n const navigationNetwork=destinationNetwork(current);assert.deepEqual(navigationNetwork,before,'Guide and same-document history must not read or write');const activationControls=await noDestinationActivation(page),draftPreservation=await destinationPrivateDraft(page,current),append=await destinationOperationalAppend(page,current),network=destinationNetwork(current),screenshot=await destinationScreenshot(page,'guide-history-append',width);\n destinationChecks.push({name:destinationNames[1],width,status:'PASS',trigger:'REAL_ONBOARDING_GUIDE',history,requestCountBefore:before.apiSequence.length,requestCountAfter:navigationNetwork.apiSequence.length,navigationNetwork,draftPreservation,append,activationControls,...network,screenshot});await context.close();\n}\nasync function destinationContextChange(width){\n const current=newState('destination-context');current.holdWorkspaceProject='p-a';const {context,page}=await createPage(width,current,null,{initialPath:destinationEntry});await heldCanonical(current);assert.equal(await page.$('#worker-channel-title'),null);\n await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');current.holdWorkspaceProject=null;current.held.shift()();await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await settled(page);await pause(150);\n const targetMounted=await page.$('#worker-channel-title')!==null,privateMounted=await page.$('#identity-access-title')!==null,oldFactsVisible=await page.evaluate(()=>/Persona de ensayo|Titular propio WhatsApp A|MUST NEVER RENDER|Tarea operativa p-a/.test(document.body.innerText));assert.equal(targetMounted,false);assert.equal(privateMounted,false);assert.equal(oldFactsVisible,false);safeReferences(await references(page),0);\n const network=destinationNetwork(current);assert.deepEqual(network.apiSequence.map(row=>[row.path,row.actor,row.projectId]),[['/api/identity/workspace','A',null],['/api/identity/workspace','A','p-a'],['/api/identity/workspace','B',null]]);const screenshot=await destinationScreenshot(page,'context',width);\n destinationChecks.push({name:destinationNames[2],width,status:'PASS',initialPath:destinationEntry,heldBeforeContextChange:true,releasedAfterContextChange:true,currentActor:'B',targetMounted,privateMounted,oldFactsVisible,activationControls:await noDestinationActivation(page),...network,screenshot});await context.close();\n}\nasync function destinationRevokedAccess(width){\n const current=newState('destination-revoked'),{context,page}=await createPage(width,current,null,{initialPath:destinationEntry});await identityOnly(page);const initialGeometry=await destinationGeometry(page,'worker-channel-title');await guideDestination(page,'participant-title');await guideDestination(page,'worker-channel-title');\n current.denialCode='WORKSPACE_MEMBERSHIP_REQUIRED';await click(page,'Comprobar habilitación de obra');await settled(page);await page.waitForFunction(()=>!document.getElementById('identity-access-title')&&!document.getElementById('worker-channel-title')&&!document.getElementById('participant-title'));\n const beforeHistory=destinationNetwork(current),history=[];for(const [method,hash]of [['goBack','#participant-title'],['goForward','#worker-channel-title']]){await page[method]({waitUntil:'domcontentloaded'});assert.equal(await page.evaluate(()=>location.hash),hash);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const targetMounted=await page.$('#worker-channel-title')!==null,privateMounted=await page.$('#identity-access-title')!==null;assert.equal(targetMounted,false);assert.equal(privateMounted,false);history.push({action:method,hash,targetMounted,privateMounted});}\n const network=destinationNetwork(current);assert.deepEqual(network,beforeHistory);assert.equal(network.workspaceGets,3);assert.equal(network.participantGets,1);const oldFactsVisible=await page.evaluate(()=>/Persona de ensayo|Titular propio WhatsApp A|MUST NEVER RENDER|Tarea operativa p-a/.test(document.body.innerText));assert.equal(oldFactsVisible,false);assert.equal(await page.$('form'),null);const screenshot=await destinationScreenshot(page,'revoked',width);\n destinationChecks.push({name:destinationNames[3],width,status:'PASS',initialPath:destinationEntry,initialGeometry,denialCode:current.denialCode,history,oldFactsVisible,activationControls:await noDestinationActivation(page),...network,screenshot});await context.close();\n}\n\n"
+          },
+          {
+            "currentOffsetCharacters": 73953,
+            "previousText": "",
+            "currentText": " assert.equal(checks.length,103,'Historical identity UI ledger must stay103');\n for(const width of [320,390,768,1280]){await destinationDelayedMount(width);await destinationGuideHistory(width);await destinationContextChange(width);await destinationRevokedAccess(width);}\n assert.equal(destinationChecks.length,16);assert.deepEqual(destinationChecks.map(row=>[row.width,row.name]),[320,390,768,1280].flatMap(width=>destinationNames.map(name=>[width,name])));\n"
+          },
+          {
+            "currentOffsetCharacters": 74871,
+            "previousText": " resultProof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',...identityBefore,widths:[320,390,768,1280],totalCheckCount:checks.length,checks,sourceManifest,harnessSha256,pageErrors,requestErrors,screenshots,actualPageReloadTested:true,nativeIndexedDbReceiptReferencesTested:true,automaticRecoveryPostCount:0,postgresExecuted:false,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,physicalWhatsAppVerified:false};\n",
+            "currentText": " resultProof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',...identityBefore,widths:[320,390,768,1280],totalCheckCount:checks.length,checks,sourceManifest,harnessSha256,pageErrors,requestErrors,screenshots,actualPageReloadTested:true,nativeIndexedDbReceiptReferencesTested:true,automaticRecoveryPostCount:0,postgresExecuted:false,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,physicalWhatsAppVerified:false,destinationNavigation:{version:1,widths:[320,390,768,1280],totalCheckCount:destinationChecks.length,checks:destinationChecks,limits:{syntheticSession:true,controlledHttp:true,realProviderCalls:0,productionDataWritten:false,realIdentityApproved:false}},combinedTotalCheckCount:checks.length+destinationChecks.length};\n"
+          },
+          {
+            "currentOffsetCharacters": 75876,
+            "previousText": " writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,checks,pageErrors,requestErrors,serverLog,active:active?{width:active.width,mode:active.current.mode,requests:active.current.requests,posts:active.current.posts.map(row=>({operationId:row.operationId,scope:row.scope,projectId:row.projectId})),dom}:null},null,2));throw error;\n",
+            "currentText": " writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,checks,pageErrors,requestErrors,serverLog,destinationChecks,active:active?{width:active.width,mode:active.current.mode,destinationAppendObservation:active.current.destinationAppendObservation||null,destinationGeometryObservation:active.current.destinationGeometryObservation||null,requests:active.current.requests,posts:active.current.posts.map(row=>({operationId:row.operationId,scope:row.scope,projectId:row.projectId})),dom}:null},null,2));throw error;\n"
+          },
+          {
+            "currentOffsetCharacters": 77293,
+            "previousText": "  writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:'PASS',checks:checks.length,pageErrors:pageErrors.length,requestErrors:requestErrors.length,evidence:path.join(evidence,'browser.json')}));\n",
+            "currentText": "  writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:'PASS',checks:checks.length,destinationChecks:destinationChecks.length,combinedChecks:checks.length+destinationChecks.length,pageErrors:pageErrors.length,requestErrors:requestErrors.length,evidence:path.join(evidence,'browser.json')}));\n"
+          }
+        ]
+      },
+      "producerDelta": {
+        "id": "identity-only-ui",
+        "producer": "scripts/verify-workspace-identity-only-ui.mjs",
+        "path": ".vercel/workspace-identity-only-evidence/browser.json",
+        "previousProducerSha256": "e11ed3c52c998f84c0e7ed21ebbe806a1aa8816007b7819203e7d6c4ef4add19",
+        "currentProducerSha256": "9e236a07c14417f23209a889de850820810f2ea978c1d44a4fe94688869ff3d8"
+      },
+      "sourceDelta": {
+        "id": "identity-only-ui",
+        "family": "UI_IDENTITY_ONLY",
+        "previousCount": 149,
+        "previousPathsSha256": "b10d37cab7e7bcf5c549a5c4af269495c2df6bfc0b6ef038d4456cbe2bcb776c",
+        "currentCount": 151,
+        "currentPathsSha256": "0003ee7f4ccd7a1e60f8c4d2bb1135c330a9a51fb5079796b1ebe1adfa4e7411",
+        "additions": [
+          "src/app/(identity)/cuenta/onboarding-guide.js",
+          "src/app/(identity)/cuenta/onboarding-guide.module.css"
+        ]
+      },
+      "historicalCheckCount": 103,
+      "historicalCheckNamesSha256": "202e8d5a761476cf756a6e62a25e549e708cdc32814cb6dfd2fce309281a7268",
+      "supplementalCheckCount": 16,
+      "combinedTotalCheckCount": 119,
+      "widths": [
+        320,
+        390,
+        768,
+        1280
+      ],
+      "caseNames": [
+        "private-destination-initial-hash-held-canonical-mount-focus",
+        "private-destination-visible-guide-same-hash-and-browser-history",
+        "private-destination-context-change-cancels-held-private-mount",
+        "private-destination-revoked-canonical-access-and-history-stay-closed"
+      ],
+      "copyGraphAdditions": [
+        "src/app/(identity)/cuenta/onboarding-guide.js"
+      ],
+      "retainedScreenshots": [
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-delayed-320.png",
+          "width": 320
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-guide-history-append-320.png",
+          "width": 320
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-context-320.png",
+          "width": 320
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-revoked-320.png",
+          "width": 320
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-delayed-390.png",
+          "width": 390
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-guide-history-append-390.png",
+          "width": 390
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-context-390.png",
+          "width": 390
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-revoked-390.png",
+          "width": 390
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-delayed-768.png",
+          "width": 768
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-guide-history-append-768.png",
+          "width": 768
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-context-768.png",
+          "width": 768
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-revoked-768.png",
+          "width": 768
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-delayed-1280.png",
+          "width": 1280
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-guide-history-append-1280.png",
+          "width": 1280
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-context-1280.png",
+          "width": 1280
+        },
+        {
+          "path": ".vercel/workspace-identity-only-evidence/destination-revoked-1280.png",
+          "width": 1280
+        }
+      ]
+    },
+    "nativeOrBrowserAcceptance": false,
+    "validationSources": [
+      {
+        "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+        "sha256": "f08121f2310fa0a74e56b803ae8d20b4a397467ce1c5da539d0a37fafdfca1b5"
+      },
+      {
+        "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+        "sha256": "e17e2c0bd225a22034653c6012566eb2e5ed01dfac64e5581adb871dd8a5fe8b"
+      },
+      {
+        "path": "tests/production-integrated-identity-ui-producer-migration.test.mjs",
+        "sha256": "4f60c07bd585b508ecf58e50014e21cd5c1d2025c781f043e964d9f509f0babf"
       }
     ]
   }
