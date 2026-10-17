@@ -1,3 +1,4 @@
+import {COMPANY_ONBOARDING_UX_CURRENT_REVISION as companyExpected,COMPANY_ONBOARDING_UX_CURRENT_SECTION as companyKey,restoreCompanyOnboardingUxPreviousContract,companyOnboardingUxCurrentSourcePin,companyOnboardingUxPreviousSourcePin,verifyCompanyOnboardingUxCurrentSources,companyOnboardingUxHistoricalFocusedAssertions,validateCompanyOnboardingUxNativeProofBytes} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
@@ -39,7 +40,7 @@ test('exact predecessor current pins advance while foreign aliases cannot be sil
 test('customer phone companion restores exact8599969 without changing historical Home metadata or any source set',()=>{
  const contract=current(),before=serialize(contract),previous=restoreCustomerPhoneSelectionPreviousContract(contract);
  assert.equal(phoneExpected.predecessorCommit,'8599969a1072c9b8e1afac0640df6a69219968b3');assert.equal(sha(serialize(previous)),'d3e0a5af11643ad3b5fb3c3ebb046edfc6f796a0142b23e1b604d0b15c14d5cb');assert.equal(Object.hasOwn(previous,phoneKey),false);assert.equal(serialize(contract),before);
- for(const field of Object.keys(previous))assert.deepEqual(contract[field],previous[field],'Published8599969 field remains byte-equivalent: '+field);
+ for(const field of Object.keys(previous))assert.deepEqual(restoreCompanyOnboardingUxPreviousContract(contract)[field],previous[field],'Published8599969 field remains byte-equivalent: '+field);
  assert.deepEqual(previous[key],contract[key]);assert.deepEqual(contract[key].reviewedSourceChanges,expected.reviewedSourceChanges);assert.equal(verifyCustomerPhoneSelectionCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
  for(const spec of contract.extension.proofs)assert.deepEqual(currentProducerSourceFiles(spec,process.cwd()),spec.sourceFiles,'No source closure growth: '+spec.id);
 });
@@ -48,7 +49,7 @@ test('customer phone source pins authenticate only the exact8599969 and reviewed
  const contract=current(),value=contract[phoneKey],refs=[...value.reviewedSourceChanges,...value.validationPredecessors.map(row=>({path:row.path,previousSha256:row.sha256,currentSha256:value.validationSources.find(ref=>ref.path===row.path).sha256}))];
  for(const row of refs){
   for(const pin of [row.previousSha256,row.currentSha256])assert.equal(customerPhoneSelectionCurrentSourcePin(contract,{path:row.path,sha256:pin}),participantDraftSafetyCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}));
-  assert.equal(customerPhoneSelectionPreviousSourcePin(contract,{path:row.path,sha256:row.currentSha256}),row.previousSha256);
+  assert.equal(customerPhoneSelectionPreviousSourcePin(contract,{path:row.path,sha256:customerPhoneSelectionCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256})}),row.previousSha256);
   denied(()=>customerPhoneSelectionCurrentSourcePin(contract,{path:row.path,sha256:'f'.repeat(64)}));
  }
  for(const file of customerPhoneSelectionValidationFiles(contract)){
@@ -155,7 +156,7 @@ test('review declarations historical contracts immutable source references and p
 test('participant draft companion restores the complete published9b26 contract and preserves every inherited source set and producer record',()=>{
  const contract=current(),before=serialize(contract),previous=restoreParticipantDraftSafetyPreviousContract(contract);
  assert.equal(draftExpected.predecessorCommit,'9b26ac5f78ee469b4a61d83018b1ea98fb73aa3e');assert.equal(sha(serialize(previous)),'42ced37df92bfaa681e0844ba23839bf8630a0d00404415aeb5dbca77238c27e');assert.equal(Object.hasOwn(previous,draftKey),false);assert.equal(serialize(contract),before);
- for(const field of Object.keys(previous))assert.deepEqual(contract[field],previous[field],'Published9b26 field remains exact: '+field);
+ for(const field of Object.keys(previous))assert.deepEqual(restoreCompanyOnboardingUxPreviousContract(contract)[field],previous[field],'Published9b26 field remains exact: '+field);
  assert.equal(draftExpected.sourceSetChanges,0);assert.deepEqual(contract.extension,previous.extension);assert.deepEqual(contract.evidenceProducers,previous.evidenceProducers);assert.deepEqual(contract[key],previous[key]);assert.deepEqual(contract[phoneKey],previous[phoneKey]);
  assert.deepEqual(draftExpected.fixtureSourceDeltas.map(row=>row.producer),['scripts/verify-participants-ui.mjs','scripts/verify-participant-kyc-chat-closure-ui.mjs']);for(const delta of draftExpected.fixtureSourceDeltas)assert.deepEqual(delta.additions,['participant-kyc-capture.js','participant-kyc-capture.module.css','participant-kyc-preanalysis-view.mjs'].map(name=>'src/app/(identity)/cuenta/'+name));
  assert.equal(verifyParticipantDraftSafetyCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
@@ -167,10 +168,10 @@ test('participant draft companion restores the complete published9b26 contract a
 test('participant draft pins allow only exact published current and authenticated Integrated panel aliases',()=>{
  const contract=current(),value=contract[draftKey],previous=restoreParticipantDraftSafetyPreviousContract(contract),refs=[...value.reviewedSourceChanges,...value.validationPredecessors.map(row=>({path:row.path,previousSha256:row.sha256,currentSha256:value.validationSources.find(ref=>ref.path===row.path).sha256}))];
  for(const row of refs){
-  for(const pin of [row.previousSha256,row.currentSha256,...(row.authenticatedPreviousAliases||[])])assert.equal(participantDraftSafetyCurrentSourcePin(contract,{path:row.path,sha256:pin}),row.currentSha256);
+  for(const pin of [row.previousSha256,row.currentSha256,...(row.authenticatedPreviousAliases||[])])assert.equal(participantDraftSafetyCurrentSourcePin(contract,{path:row.path,sha256:pin}),companyOnboardingUxCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}));
   assert.equal(participantDraftSafetyPreviousSourcePin(contract,{path:row.path,sha256:row.currentSha256}),row.previousSha256);
   denied(()=>participantDraftSafetyCurrentSourcePin(contract,{path:row.path,sha256:'f'.repeat(64)}));
-  assert.equal(homeDecisionsCurrentSourcePin(contract,{path:row.path,sha256:row.previousSha256}),row.currentSha256);
+  assert.equal(homeDecisionsCurrentSourcePin(contract,{path:row.path,sha256:row.previousSha256}),companyOnboardingUxCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}));
  }
  const panel=value.reviewedSourceChanges.find(row=>row.path.endsWith('/participant-panel.js')),oldPanel=previous.integratedIdentityCurrentRevision.reviewedSourceChanges.find(row=>row.path===panel.path);
  assert.deepEqual(panel.authenticatedPreviousAliases,[oldPanel.previousSha256]);assert.equal(panel.previousSha256,oldPanel.currentSha256);
@@ -185,4 +186,18 @@ test('participant draft companion rejects omitted duplicated reordered same-coun
   c=>{c[draftKey].previousContractSha256='f'.repeat(64);},c=>{c[draftKey].nativeOrBrowserAcceptance=true;},c=>{c[draftKey].sourceSetChanges=1;},c=>c[draftKey].fixtureSourceDeltas[0].additions.pop(),c=>{c[phoneKey].native.currentCheckCount=41;},c=>{c[key].validationSources[0].sha256=c[draftKey].validationSources[0].sha256;},c=>c.evidenceProducers.pop(),c=>c.extension.proofs[0].sourceFiles.pop()
  ]){const changed=current();edit(changed);denied(()=>verifyParticipantDraftSafetyCurrentSources(changed,read));}
  const missing=current();delete missing[draftKey];denied(()=>verifyHomeDecisionsCurrentSources(missing,read));
+});
+
+test('company onboarding companion restores exact published4f1 and every closure while authenticating all ten reviewed sources',()=>{
+ const contract=current(),before=serialize(contract),previous=restoreCompanyOnboardingUxPreviousContract(contract);assert.equal(sha(serialize(previous)),companyExpected.previousContractSha256);assert.equal(companyExpected.previousContractSha256,'ecec0aa86b5826cdb38a75ff02803ae831479204e42bba97273c788b46ab834e');assert.equal(serialize(contract),before);assert.equal(Object.hasOwn(previous,companyKey),false);
+ assert.deepEqual(contract.extension,previous.extension);assert.deepEqual(contract.evidenceProducers,previous.evidenceProducers);assert.deepEqual(contract[key],previous[key]);assert.deepEqual(contract[phoneKey],previous[phoneKey]);assert.deepEqual(contract[draftKey],previous[draftKey]);assert.equal(verifyCompanyOnboardingUxCurrentSources(contract,read).completePreviousContractRestored,true);
+ const value=contract[companyKey],refs=[...value.reviewedSourceChanges,...value.validationPredecessors.map(p=>({path:p.path,previousSha256:p.sha256,currentSha256:value.validationSources.find(r=>r.path===p.path).sha256}))];assert.equal(refs.length,10);
+ for(const row of refs){for(const pin of [row.previousSha256,row.currentSha256])assert.equal(companyOnboardingUxCurrentSourcePin(contract,{path:row.path,sha256:pin}),row.currentSha256);assert.equal(companyOnboardingUxPreviousSourcePin(contract,{path:row.path,sha256:row.currentSha256}),row.previousSha256);denied(()=>companyOnboardingUxCurrentSourcePin(contract,{path:row.path,sha256:'f'.repeat(64)}));for(const bytes of [null,Buffer.from('foreign')])denied(()=>verifyCompanyOnboardingUxCurrentSources(contract,path=>path===row.path?bytes:read(path)));}
+});
+test('company onboarding rejects omitted duplicate foreign reordered current-as-prior declarations and altered published fields',()=>{
+ for(const edit of [c=>c[companyKey].reviewedSourceChanges.pop(),c=>c[companyKey].reviewedSourceChanges.reverse(),c=>c[companyKey].reviewedSourceChanges.push(c[companyKey].reviewedSourceChanges[0]),c=>{c[companyKey].reviewedSourceChanges[0].previousSha256=c[companyKey].reviewedSourceChanges[0].currentSha256;},c=>{c[companyKey].reviewedSourceChanges[0].path='scripts/foreign.mjs';},c=>c[companyKey].validationSources.pop(),c=>c[companyKey].validationSources.reverse(),c=>c[companyKey].validationSources.push(c[companyKey].validationSources[0]),c=>{c[companyKey].validationSources[0].sha256='f'.repeat(64);},c=>{c[companyKey].native.totalCheckCount=49;},c=>{c[companyKey].nativeOrBrowserAcceptance=true;},c=>c.blocks.pop(),c=>c.extension.proofs[0].sourceFiles.pop()]){const c=current();edit(c);denied(()=>verifyCompanyOnboardingUxCurrentSources(c,read));}
+ const c=current();delete c[companyKey];denied(()=>verifyHomeDecisionsCurrentSources(c,read));
+});
+test('the reviewed current h23 assertions restore all201 historical instructions and reject producer tampering',()=>{
+ const c=current(),source=read('scripts/verify-focused-workspace-ui.mjs'),calls=companyOnboardingUxHistoricalFocusedAssertions(source,c);assert.equal(calls.length,201);assert.equal(sha(JSON.stringify(calls)),companyExpected.focusedAssertions.previousAssertionsSha256);denied(()=>companyOnboardingUxHistoricalFocusedAssertions(Buffer.concat([source,Buffer.from('\n//unreviewed')]),c));assert.equal(companyExpected.native.totalCheckCount,54);assert.equal(companyExpected.native.addedCheckNames.length,5);assert.throws(()=>validateCompanyOnboardingUxNativeProofBytes(Buffer.from('{}'),read),{code:'COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED'});
 });

@@ -44,7 +44,7 @@ function Decisions({projectId,scope,active,allowed,getSessionToken}){
   {data&&<><div className={styles.decisionCards}>
    <article><p>Avances de obra</p><strong>{data.proposals.pending}</strong><span>propuestas pendientes</span><a href="#field-title" onClick={()=>open(FIELD_PROGRESS_PENDING_EVENT)}>Revisar avances <ArrowUpRight size={16} aria-hidden="true"/></a></article>
    <article><p>Materiales</p><dl><div><dt>Consumos pendientes</dt><dd>{counts.consumptions}</dd></div><div><dt>Existencias pendientes</dt><dd>{counts.adjustments}</dd></div></dl><a href="#inventory-title" onClick={()=>open(INVENTORY_PENDING_EVENT)}>Revisar materiales <ArrowUpRight size={16} aria-hidden="true"/></a></article>
-  </div><p className={styles.decisionsObserved}>Consultado {new Date(data.observedAt).toLocaleString('es-AR',{timeZone:'America/Argentina/Buenos_Aires'})} (hora de Argentina). Las colas comprueban nuevamente los registros al abrirlas.</p></>}
+  </div><p className={styles.decisionsObserved}>Consultado {new Date(data.observedAt).toLocaleString('es-AR',{timeZone:'America/Argentina/Buenos_Aires',hourCycle:'h23'})} (hora de Argentina). Las colas comprueban nuevamente los registros al abrirlas.</p></>}
  </section>;
 }
 export function WorkspaceOverview({project,tasks,totalTasks,nextCursor,roleLabel,canPlan,scope,active=false,canManageDecisions=false,getSessionToken}){
