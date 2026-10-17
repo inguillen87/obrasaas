@@ -1,4 +1,5 @@
 import {WHATSAPP_FIELD_CONTINUITY_CURRENT_REVISION as waRevision,WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWhatsappFieldContinuityPreviousContract} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
+import {restoreExistingApiPlanPreviousContract,restoreExistingApiPlanSourceSet} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
 import {integratedIdentityPreviousProofChecks} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import {restoreParticipantPreanalysisPreviousContract,participantPreanalysisProofSourceAdditions} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
@@ -46,7 +47,18 @@ test('missing duplicate substituted or historical-only current imports cannot re
 });
 
 test('same-count replacement of an older source cannot redefine the frozen PR142 path lineage',()=>{
- for(const spec of current){const changed=clone(spec),index=changed.sourceFiles.findIndex(file=>!additions(spec.kind).includes(file));changed.sourceFiles[index]='src/lib/foreign-historical-source.mjs';assert.equal(changed.sourceFiles.length,spec.sourceFiles.length);assert.throws(()=>validateWhatsappFeedbackPreviousSourceLineage(changed),{code:'WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_LINEAGE'});}
+ const published=restoreExistingApiPlanPreviousContract(contract);
+ for(const spec of current){
+  const normalized=previousCheckMetadata({...spec,sourceFiles:restoreExistingApiPlanSourceSet(spec.kind,spec.sourceFiles,contract)});
+  assert.deepEqual(normalized.sourceFiles,published.extension.proofs.find(row=>row.id===spec.id).sourceFiles);
+  assert.doesNotThrow(()=>validateWhatsappFeedbackPreviousSourceLineage(normalized));
+  const dependencies=[...additions(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(normalized)],historical=normalized.sourceFiles.filter(file=>!dependencies.includes(file));
+  assert.equal(historical.length,WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS[spec.kind]);
+  const changed=clone(normalized);changed.sourceFiles[changed.sourceFiles.indexOf(historical[0])]='src/lib/foreign-historical-source.mjs';changed.sourceFiles.sort();
+  assert.equal(changed.sourceFiles.length,normalized.sourceFiles.length);assert.equal(new Set(changed.sourceFiles).size,changed.sourceFiles.length);
+  for(const file of dependencies)assert.equal(changed.sourceFiles.filter(source=>source===file).length,1);
+  assert.throws(()=>validateWhatsappFeedbackPreviousSourceLineage(changed),{code:'WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_LINEAGE'});
+ }
 });
 
 test('the original thirteen company KYC groups remain immutable and all five native context groups are required',()=>{

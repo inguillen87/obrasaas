@@ -4,6 +4,7 @@ import {readFileSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {MATERIAL_REVIEW_CURRENT_REVISION as expected,MATERIAL_REVIEW_CURRENT_SECTION as key,restoreMaterialReviewPreviousContract,restoreMaterialReviewSourceSet,materialReviewProofSourceAdditions,materialReviewCurrentSourcePin,materialReviewValidationFiles,verifyMaterialReviewCurrentSources,materialReviewUnchangedSurface} from '../scripts/lib/material-review-current-ci-lineage.mjs';
 import {verifyWhatsappFieldContinuityCurrentSources,whatsappFieldContinuityCurrentSourcePin} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
+import {restoreExistingApiPlanPreviousContract,existingApiPlanCurrentSourcePin} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
 import {currentProducerSourceFiles} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';
 
 const read=file=>existsSync(file)?readFileSync(file):null;
@@ -21,7 +22,7 @@ test('materials revision restores the whole published predecessor and preserves 
  const withoutCiPaths=value=>({...value,proofs:value.proofs.map(proof=>{const copy={...proof};delete copy.sourceFiles;return copy;})});
  assert.deepEqual(withoutCiPaths(previous.extension),withoutCiPaths(contract.extension));
  const {ciSourceFiles:priorCi,...priorPreanalysis}=previous.participantPreanalysisCurrentRevision,{ciSourceFiles:currentCi,...currentPreanalysis}=contract.participantPreanalysisCurrentRevision;
- assert.deepEqual(priorPreanalysis,currentPreanalysis);assert.equal(currentCi.length,priorCi.length+1);
+ assert.deepEqual(priorPreanalysis,currentPreanalysis);assert.deepEqual(currentCi,contract.extension.proofs.find(row=>row.id==='participant-kyc-preanalysis-postgres').sourceFiles);assert.equal(restoreExistingApiPlanPreviousContract(contract).participantPreanalysisCurrentRevision.ciSourceFiles.length,priorCi.length+1);
 });
 
 test('source validation authenticates actual current bytes without certifying native browser or human operation',()=>{
@@ -39,13 +40,13 @@ test('source validation authenticates actual current bytes without certifying na
 test('only authenticated predecessor or current material pins may advance and older aliases pass the inherited validator',()=>{
  const contract=current();
  for(const row of [...expected.reviewedSourceChanges,...expected.validationDeltas]){
-  for(const pin of [row.previousSha256,row.currentSha256])assert.equal(materialReviewCurrentSourcePin(contract,{path:row.path,sha256:pin}),row.currentSha256);
+  for(const pin of [row.previousSha256,row.currentSha256])assert.equal(materialReviewCurrentSourcePin(contract,{path:row.path,sha256:pin}),existingApiPlanCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}));
   denied(()=>materialReviewCurrentSourcePin(contract,{path:row.path,sha256:'0'.repeat(64)}));
  }
  for(const row of contract.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges){
   const legacy=whatsappFieldContinuityCurrentSourcePin(contract,{path:row.path,sha256:row.previousSha256});
   const delta=expected.reviewedSourceChanges.find(item=>item.path===row.path);
-  assert.equal(legacy,delta?.currentSha256??row.currentSha256);
+  assert.equal(legacy,existingApiPlanCurrentSourcePin(contract,{path:row.path,sha256:delta?.currentSha256??row.currentSha256}));
  }
 });
 
@@ -76,10 +77,10 @@ test('predecessor contracts retain their exact behavior with no materials source
  const ref={path:'src/lib/material-inventory.mjs',sha256:'0'.repeat(64)};assert.equal(materialReviewCurrentSourcePin(previous,ref),ref.sha256);
 });
 test('only the new reviewed helper extends the three actual CI import graphs and native manifests remain unchanged',()=>{
- const contract=current(),previous=restoreMaterialReviewPreviousContract(contract);
+ const full=current(),contract=restoreExistingApiPlanPreviousContract(full),previous=restoreMaterialReviewPreviousContract(contract);
  assert.deepEqual(expected.proofSourceDeltas.map(row=>row.id),['participant-kyc-preanalysis-postgres','focused-workspace-ui','field-task-pagination-ui']);assert.deepEqual(expected.sourceSetDeltas,[]);
  for(const spec of contract.extension.proofs){
-  assert.deepEqual(currentProducerSourceFiles(spec,process.cwd()),spec.sourceFiles,'Actual producer import graph '+spec.id);
+  assert.deepEqual(currentProducerSourceFiles(full.extension.proofs.find(row=>row.id===spec.id),process.cwd()),full.extension.proofs.find(row=>row.id===spec.id).sourceFiles,'Actual producer import graph '+spec.id);
   const delta=expected.proofSourceDeltas.find(row=>row.id===spec.id),prior=previous.extension.proofs.find(row=>row.id===spec.id);
   assert.deepEqual(spec.checkNames,prior.checkNames);assert.equal(spec.producerSha256,prior.producerSha256);
   if(!delta){assert.deepEqual(spec.sourceFiles,prior.sourceFiles);continue;}

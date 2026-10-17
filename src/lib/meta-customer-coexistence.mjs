@@ -1,7 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {WorkspaceError,operationId,digest} from './workspace-policy.mjs';
 import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
-import {readProjectWorkspaceProfile} from './whatsapp/project-workspace-profile.js';
 
 export const META_APP_IMPORT_NOTICE_VERSION='business-app-import-v1';
 export const META_APP_IMPORT_NOTICE='Autorizo importar los datos seleccionados de mi WhatsApp Business a la bandeja privada de esta empresa y obra. El historial depende del permiso que doy en Meta y de sus límites. No reemplaza ventas, contactos manuales ni permisos de participantes.';
@@ -56,23 +55,7 @@ export function createMetaCustomerCoexistence({workspace,provider,environment=pr
   const written=await client.query(`UPDATE public."WhatsAppConnection" SET metadata=metadata||$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[c.id,c.projectId,JSON.stringify({coexistence})]);
   if(written.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_WRITE_UNCONFIRMED',503);
  }
- return {async prepareExistingApiPlan(session,body){
-  const keys=['action','operationId','projectId','scope','preparedRevision','confirmPreserveProvider'];
-  if(!body||Object.keys(body).sort().join('|')!==keys.sort().join('|')||body.action!=='prepare_existing_api_plan'||!operationId(body.operationId)||body.confirmPreserveProvider!==true||!Number.isInteger(body.preparedRevision))throw new WorkspaceError('META_CUSTOMER_SYNC_INPUT_INVALID');
-  return within(session,body,async(client,member,_scope,project)=>{
-   const {profile}=readProjectWorkspaceProfile(project.metadata,project.organizationMetadata,project.id);
-   if(!profile.configured||profile.numberMode!=='EXISTING_API'||profile.revision!==body.preparedRevision)throw new WorkspaceError('META_CUSTOMER_PREPARATION_CHANGED',409);
-   const requestDigest=digest(Object.fromEntries(keys.map(key=>[key,body[key]]))),prior=project.metadata?.metaExistingApiPlan;
-   if(prior){if(prior.operationId!==body.operationId||prior.requestDigest!==requestDigest)throw new WorkspaceError('META_CUSTOMER_EXISTING_API_PLAN_ALREADY_PREPARED',409);return {saved:true,replayed:true};}
-   const channels=(await client.query(`SELECT id,"phoneNumberId","whatsappBusinessId","encryptedAccessToken" FROM public."WhatsAppConnection" WHERE "projectId"=$1 FOR SHARE`,[project.id])).rows;
-   if(channels.length>1)throw new WorkspaceError('META_CUSTOMER_BINDING_INTEGRITY',409);
-   const c=channels[0],plan={version:1,state:'ADDITIONAL_AUTHORIZATION_REVIEW_REQUIRED',operationId:body.operationId,requestDigest,actorId:member.actorId,organizationId:member.organizationId,preparedRevision:profile.revision,preparedAt:new Date(now()).toISOString(),preserveProvider:true,existingConnection:c?{id:c.id,phoneNumberId:c.phoneNumberId,wabaId:c.whatsappBusinessId,credentialDigest:digest(c.encryptedAccessToken)}:null};
-   const written=await client.query(`UPDATE public."Project" SET metadata=metadata||$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "organizationId"=$2`,[project.id,member.organizationId,JSON.stringify({metaExistingApiPlan:plan})]);
-   if(written.rowCount!==1)throw new WorkspaceError('META_CUSTOMER_WRITE_UNCONFIRMED',503);
-   await client.query(`INSERT INTO public."AuditLog" (id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES ($1,$2,$3,'integration.whatsapp.existing_api_plan','Project',$4,$5::jsonb) ON CONFLICT (id) DO NOTHING`,['meta_share_plan_'+digest([project.id,body.operationId]),member.organizationId,member.actorId,project.id,JSON.stringify({version:1,state:plan.state,requestDigest,preserveProvider:true,providerChanged:false})]);
-   return {saved:true,replayed:false};
-  });
- },async command(session,body){
+ return {async command(session,body){
   if(!body||Object.keys(body).sort().join('|')!==selectedKeys.slice().sort().join('|')||!['start_app_sync','continue_app_sync'].includes(body.action)||!operationId(body.operationId)||typeof body.contactsConsent!=='boolean'||typeof body.historyConsent!=='boolean'||body.noticeVersion!==META_APP_IMPORT_NOTICE_VERSION||body.confirmPreserveApp!==true)throw new WorkspaceError('META_CUSTOMER_SYNC_INPUT_INVALID');
   const requestDigest=digest(Object.fromEntries(selectedKeys.map(key=>[key,key==='action'?'start_app_sync':body[key]])));
   const plan=await within(session,body,async(client,member,_scope,project)=>{

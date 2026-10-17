@@ -9,9 +9,11 @@ export function createMetaCustomerHandlers({verify,service}){
    if(request.method==='POST'){if(request.headers.get('origin')!=='https://obrasaas.com'||params.size)throw new WorkspaceError('WORKSPACE_ORIGIN_REJECTED',403);
     return Response.json(await service.command(session,await boundedBody(request)),{headers});}
    if(request.method!=='GET')return Response.json({code:'METHOD_NOT_ALLOWED'},{status:405,headers});
-   for(const name of params.keys())if(!['projectId','scope','after','operationId','eventId','action','signupId'].includes(name)||params.getAll(name).length!==1)throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');
+   for(const name of params.keys())if(!['projectId','scope','after','operationId','eventId','action','signupId','planId'].includes(name)||params.getAll(name).length!==1)throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');
    const projectId=params.get('projectId'),scope=params.get('scope');if(!workspaceId(projectId)||!/^[a-f0-9]{64}$/.test(scope||''))throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');
    const event=value=>/^customer_webhook_[a-f0-9]{64}$/.test(value||'');
+   if(['prepare_existing_api_plan','close_existing_api_plan'].includes(params.get('action'))){if(params.has('after')||params.has('eventId')||params.has('signupId')||!operationId(params.get('planId'))||!operationId(params.get('operationId'))||params.get('action')==='prepare_existing_api_plan'&&params.get('planId').toLowerCase()!==params.get('operationId').toLowerCase())throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');return Response.json(await service.read(session,{projectId,scope,action:params.get('action'),planId:params.get('planId').toLowerCase(),operationId:params.get('operationId').toLowerCase()}),{headers});}
+   if(params.has('planId'))throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');
    if(['reconcile','cancel'].includes(params.get('action'))){if(params.has('after')||params.has('eventId')||!operationId(params.get('signupId'))||!operationId(params.get('operationId')))throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');return Response.json(await service.read(session,{projectId,scope,action:params.get('action'),signupId:params.get('signupId'),operationId:params.get('operationId').toLowerCase()}),{headers});}
    if(params.has('signupId'))throw new WorkspaceError('META_CUSTOMER_INPUT_INVALID');
    const receipt=params.has('operationId')||params.has('eventId')||params.has('action');

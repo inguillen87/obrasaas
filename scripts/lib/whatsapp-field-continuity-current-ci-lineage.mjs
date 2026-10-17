@@ -1,5 +1,8 @@
 import {restoreMaterialReviewPreviousContract as materialOuter0,materialReviewCurrentSourcePin as materialOuter1,verifyMaterialReviewCurrentSources as materialOuter2,materialReviewValidationFiles as materialOuter3,restoreMaterialReviewSourceSet as materialOuter4,materialReviewProofSourceAdditions as materialOuter5} from './material-review-current-ci-lineage.mjs';
-function materialOuterCall(fn,args){try{return fn(...args);}catch(error){if(error.code==='MATERIAL_REVIEW_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'});throw error;}}
+import {existingApiPlanCurrentNativeSourceFiles as planNative0,existingApiPlanNativeSourceFilesFromReader as planNative1} from './meta-existing-api-plan-current-ci-lineage.mjs';
+function materialOuterCall(fn,args){try{return fn(...args);}catch(error){if(['MATERIAL_REVIEW_CURRENT_CI_LINEAGE_REJECTED','EXISTING_API_PLAN_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code))throw Object.assign(new Error(error.message),{code:'WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'});throw error;}}
+const existingApiPlanCurrentNativeSourceFiles=(...args)=>materialOuterCall(planNative0,args);
+const existingApiPlanNativeSourceFilesFromReader=(...args)=>materialOuterCall(planNative1,args);
 const restoreMaterialReviewPreviousContract=(...args)=>materialOuterCall(materialOuter0,args);
 const materialReviewCurrentSourcePin=(...args)=>materialOuterCall(materialOuter1,args);
 const verifyMaterialReviewCurrentSources=(...args)=>materialOuterCall(materialOuter2,args);
@@ -13021,7 +13024,7 @@ export function whatsappFieldCompanyNativeSourceFiles(readSource,libraryFiles){
  const roots=['src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/kyc-context-feedback-native.mjs','scripts/lib/kyc-current-image-native.mjs','scripts/lib/kyc-neutral-step-guidance-native.mjs'];
  const expected=parse("const sourceManifest=[...sources('src/lib'),"+roots.map(file=>JSON.stringify(file)).join(',')+"].map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))}));",{sourceType:'module'}).program.body[0].declarations[0].init;
  requireLineage(actual&&same(syntaxShape(actual),syntaxShape(expected)),'Exact additive current COMPANY source-manifest AST required');
- const files=[...libraryFiles,...roots].sort();requireLineage(files.length===family.sourceCount&&sha(JSON.stringify(files))===family.sourcePathsSha256,'Exact complete current COMPANY path set required');for(const file of files)requireLineage(Buffer.isBuffer(readSource(file)),'Missing actual COMPANY source: '+file);return files;
+ const files=[...libraryFiles,...roots].sort(),expectedFiles=existingApiPlanNativeSourceFilesFromReader(readSource,'COMPANY',family.sourceFiles);requireLineage(same(files,expectedFiles),'Exact complete current COMPANY path set required');for(const file of files)requireLineage(Buffer.isBuffer(readSource(file)),'Missing actual COMPANY source: '+file);return files;
 }
 
 // Additional native observations are mandatory under this current contract.
@@ -13059,9 +13062,10 @@ export function validateWhatsappFieldNeutralStepNative(proof,familyName,contract
  });
  requireLineage(same(projected,family.caseMatrix),'Every fixed current native observation must equal its reviewed matrix');
  const producer=readSource(family.producer);requireLineage(Buffer.isBuffer(producer)&&sha(producer.toString('utf8').replaceAll('\r\n','\n'))===family.producerSha256&&proof.harnessSha256===sha(producer),'Actual native harness must equal the current source reader');
- requireLineage(Array.isArray(proof.sourceManifest)&&proof.sourceManifest.length===family.sourceCount&&same(proof.sourceManifest.map(row=>row?.path).sort(),family.sourceFiles),'The complete current native source manifest is required');
+ const currentNativeFiles=existingApiPlanCurrentNativeSourceFiles(contract,familyName,family.sourceFiles);
+ requireLineage(Array.isArray(proof.sourceManifest)&&proof.sourceManifest.length===currentNativeFiles.length&&same(proof.sourceManifest.map(row=>row?.path).sort(),currentNativeFiles),'The complete current native source manifest is required');
  for(const row of proof.sourceManifest){exactKeys(row,['path','sha256'],'native source reference');const bytes=readSource(row.path);requireLineage(Buffer.isBuffer(bytes)&&row.sha256===sha(bytes),'Stale native source bytes: '+row.path);}
- return{version:1,status:'PASS',family:familyName,currentCases:family.caseNames.length,currentNativeSourceCount:family.sourceCount,historicalCasesPreserved:familyName==='COMPANY'?17:4,rawProofTransformed:false,sourceLeaseExtended:false,identityOrProviderAccepted:false};
+ return{version:1,status:'PASS',family:familyName,currentCases:family.caseNames.length,currentNativeSourceCount:currentNativeFiles.length,historicalCasesPreserved:familyName==='COMPANY'?17:4,rawProofTransformed:false,sourceLeaseExtended:false,identityOrProviderAccepted:false};
 }
 
 // Pure negative-test fixture only. It does not execute SQL or create a receipt;
