@@ -10,9 +10,14 @@ const uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}
 const adjustmentSource=value=>value&&(['OPENING','COUNT'].includes(value.type)?typeof value.reference==='string'&&value.reference.length>=2&&value.reference.length<=160:value.type==='RECEIPT'&&id(value.requestId)&&uuid(value.receiptOperationId));
 const adjustmentValid=value=>id(value?.id)&&id(value.materialId)&&quantity(value.quantity)&&quantity(value.expectedBalance)&&units.includes(value.unit)&&['PENDING','APPROVED','REJECTED'].includes(value.state)&&['IN','OUT'].includes(value.direction)&&adjustmentSource(value.source)&&id(value.submittedBy)&&hash(value.catalogHash)&&typeof value.reason==='string';
 const fail=()=>{throw Object.assign(new Error('No se pudo confirmar este resultado. Conservamos la referencia del intento.'),{code:'INVENTORY_RESULT_UNCONFIRMED'});};
+const queryKeys=['afterConsumption','consumptionId','afterAdjustment','adjustmentId','afterMovement'];
+export const INVENTORY_PENDING_EVENT='obrasaas:inventory-pending';
+export function inventoryQuery(value={}){return Object.fromEntries(queryKeys.map(key=>[key,value[key]??null]));}
+export function inventoryPendingCounts(value){const counts=value?.pendingCounts;return value?.canManage===true&&['PENDING','ALL'].includes(value.inventoryFilter)&&counts&&Object.keys(counts).sort().join('|')==='adjustments|consumptions'&&['consumptions','adjustments'].every(key=>Number.isSafeInteger(counts[key])&&counts[key]>=0)?counts:null;}
 function context(value,expected){if(value?.scope!==expected.scope||value.projectId!==expected.projectId)throw Object.assign(new Error('Cambió el contexto de esta obra. Volvé a consultarla con tu acceso vigente.'),{code:'WORKSPACE_CONTEXT_CHANGED'});}
 export const inventoryAccessDenied=error=>[401,403].includes(error?.status)||['WORKSPACE_CONTEXT_CHANGED','WORKSPACE_PROJECT_UNAVAILABLE'].includes(error?.code);
 export function mergeInventoryRows(previous,incoming){const merged=new Map(previous.map(row=>[row.id,row]));for(const row of incoming){const old=merged.get(row.id);if(!old||!row.revision||row.revision>=old.revision)merged.set(row.id,row);}return [...merged.values()];}
+export function inventoryVisiblePage(rows,page=0){const size=10,index=Math.min(Math.max(0,Number.isSafeInteger(page)?page:0),Math.max(0,Math.ceil(rows.length/size)-1)),start=index*size;return {rows:rows.slice(start,start+size),index,from:rows.length?start+1:0,to:Math.min(start+size,rows.length),hasPrevious:index>0,hasNext:start+size<rows.length};}
 export function inventoryState(value){
  if(value?.version!==1||!Number.isSafeInteger(value.catalogVersion)||value.catalogVersion<0||!hash(value.catalogHash)||value.catalogLimit!==200||typeof value.canManage!=='boolean'||!Array.isArray(value.materials)||value.materials.length>200||!Array.isArray(value.consumptions)||value.consumptions.length>100||typeof value.consumptionsTruncated!=='boolean'||value.nextConsumptionCursor!==null&&!id(value.nextConsumptionCursor)||!Array.isArray(value.movements)||value.movements.length>100||value.nextMovementCursor!==null&&!id(value.nextMovementCursor))fail();
  for(const m of value.materials)if(!id(m?.id)||!text(m.name)||!units.includes(m.unit)||typeof m.active!=='boolean'||!quantity(m.balance))fail();
@@ -24,14 +29,34 @@ export function inventoryState(value){
  for(const m of value.movements)if(!id(m?.id)||!id(m.materialId)||!quantity(m.quantity)||!units.includes(m.unit)||!['RECEIPT','CONSUMPTION','REVERSAL','STOCK_ADJUSTMENT'].includes(m.kind)||!['IN','OUT'].includes(m.direction))fail();
  for(const rows of [value.materials,value.consumptions,value.movements,value.adjustments])if(new Set(rows.map(r=>r.id)).size!==rows.length)fail();
  if(new Set(value.priorReceipts.map(r=>r.requestId+':'+r.receiptOperationId)).size!==value.priorReceipts.length)fail();
+ if(['inventoryFilter','pendingCounts','inventoryQuery'].some(key=>Object.hasOwn(value,key))){
+  if(!inventoryPendingCounts(value)||!value.inventoryQuery||Object.keys(value.inventoryQuery).sort().join('|')!==[...queryKeys].sort().join('|')||queryKeys.some(key=>value.inventoryQuery[key]!==null&&!id(value.inventoryQuery[key])))fail();
+  if(value.inventoryFilter==='PENDING'&&(value.consumptions.some(row=>row.state!=='PENDING')||value.adjustments.some(row=>row.state!=='PENDING')||value.inventoryQuery.consumptionId||value.inventoryQuery.adjustmentId))fail();
+ }
  return value;
 }
 export function inventorySnapshot(value,expected,{history=false}={}){
  context(value,expected);inventoryState(value.inventory);
+ if(expected.inventoryFilter){if(value.inventory.inventoryFilter!==expected.inventoryFilter||queryKeys.some(key=>value.inventory.inventoryQuery?.[key]!==inventoryQuery(expected)[key]))fail();}
+ else if(Object.hasOwn(value.inventory,'inventoryFilter'))fail();
  if(expected.consumptionId&&(value.inventory.consumptions.length!==1||value.inventory.consumptions[0].id!==expected.consumptionId||value.inventory.nextConsumptionCursor!==null))fail();
  if(expected.adjustmentId&&(value.inventory.adjustments.length!==1||value.inventory.adjustments[0].id!==expected.adjustmentId||value.inventory.nextAdjustmentCursor!==null))fail();
  if(!history&&(!revision(value.projectRevision)||!Array.isArray(value.selfWorkers)||!Array.isArray(value.sectors)||value.selfWorkers.some(w=>!id(w?.id)||typeof w.name!=='string'||typeof w.canReport!=='boolean')||value.sectors.some(s=>!id(s?.id)||typeof s.name!=='string')))fail();
  return value;
+}
+export function mergeInventoryPage(previous,incoming,expected,kind){
+ inventorySnapshot(incoming,expected,{history:true});context(previous,expected);
+ const cursor={consumptions:'nextConsumptionCursor',adjustments:'nextAdjustmentCursor',movements:'nextMovementCursor'}[kind],queryKey={consumptions:'afterConsumption',adjustments:'afterAdjustment',movements:'afterMovement'}[kind];
+ if(!cursor||!previous?.inventory||previous.inventory.inventoryFilter!==incoming.inventory.inventoryFilter||previous.inventory[cursor]!==expected[queryKey]||!expected[queryKey])fail();
+ const rows=mergeInventoryRows(previous.inventory[kind],incoming.inventory[kind]);
+ const head=items=>JSON.stringify(items.slice(0,100).map(row=>[row.id,row.revision]));
+ if(incoming.inventory.inventoryFilter==='PENDING'&&['consumptions','adjustments'].some(key=>(kind===key?rows:previous.inventory[key]).length>incoming.inventory.pendingCounts[key]||kind!==key&&head(previous.inventory[key])!==head(incoming.inventory[key])))throw Object.assign(new Error('Cambió la cola mientras la recorrías. Consultamos de nuevo las primeras propuestas pendientes.'),{code:'INVENTORY_QUEUE_CHANGED'});
+ return {...previous,inventory:{...incoming.inventory,consumptions:previous.inventory.consumptions,adjustments:previous.inventory.adjustments,movements:previous.inventory.movements,nextConsumptionCursor:previous.inventory.nextConsumptionCursor,nextAdjustmentCursor:previous.inventory.nextAdjustmentCursor,nextMovementCursor:previous.inventory.nextMovementCursor,[kind]:rows,[cursor]:incoming.inventory[cursor]}};
+}
+export function inventoryAfterRecorded(value,result){
+ if(!value?.inventory)return value;
+ const update=(rows,row)=>!row?rows:rows.flatMap(current=>current.id!==row.id?[current]:value.inventory.inventoryFilter==='PENDING'&&row.state!=='PENDING'?[]:[{...current,...row,canDecide:false,canReverse:false}]);
+ return {...value,inventory:{...value.inventory,consumptions:update(value.inventory.consumptions,result.consumption),adjustments:update(value.inventory.adjustments,result.adjustment)}};
 }
 export function inventoryOutcome(value,command,{recorded=false}={}){
  context(value,command);if(value.operationId!==command.operationId)fail();

@@ -1,5 +1,7 @@
 import {WorkspaceError,workspaceId,requireWorkspaceIdentity} from './workspace-policy.mjs';
 import {META_CUSTOMER_PROOF_REVIEW_CODES} from './meta-customer-processing.mjs';
+import {canApproveProgress} from './field-operations-policy.mjs';
+import {readInventoryPendingCounts} from './material-inventory.mjs';
 const reply=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'private, no-store, max-age=0','Vary':'Cookie, Authorization','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'}});
 export function createOperationsStatus({workspace}) {
  return {read:(session,context)=>workspace.integrationProject(session,context,false,async(client,member,scope)=>{
@@ -25,6 +27,10 @@ export function createOperationsStatus({workspace}) {
     count(*) FILTER(WHERE metadata->'siteRegister'->>'version'='1' AND metadata->'siteRegister'->>'type'='ISSUE' AND metadata->'siteRegister'->>'state' IN ('OPEN','ACKNOWLEDGED'))::int AS "issuesOpen"
     FROM public."Incident" WHERE "projectId"=$1`,[context.projectId])).rows[0];
   const proposals=(await client.query(`SELECT count(*)::int AS pending FROM public."OperationalProposal" WHERE "projectId"=$1 AND type='TASK_PROGRESS' AND "sourceProvider"='account-field' AND status='PENDING' AND "expiresAt">clock_timestamp() AND action->>'fieldOperationsVersion'='1'`,[context.projectId])).rows[0];
+  // Counts cover the complete project queue, independently of history pages.
+  // Keep material review narrower than field review (which includes site managers).
+  const inventoryCanManage=canApproveProgress(member.role);
+  const inventory={canManage:inventoryCanManage,pendingCounts:inventoryCanManage?await readInventoryPendingCounts(client,member,{id:context.projectId}):null};
   // Inbox completion and outbound delivery are different durable namespaces.
   // Only aggregate authorized company/project counts; encrypted payloads and
   // provider errors never leave this read model.
@@ -49,7 +55,7 @@ export function createOperationsStatus({workspace}) {
     FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-outbound-v1' AND payload->>'organizationId'=$2`,[context.projectId,member.organizationId])).rows[0];
   const webhooks=(await client.query(`SELECT status::text AS state,count(*)::int AS count FROM public."WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-v1' AND payload->>'organizationId'=$2 GROUP BY status ORDER BY status`,[context.projectId,member.organizationId])).rows;
   const history=(await client.query(`SELECT id,action,"entityType",to_char("createdAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "recordedAt" FROM public."AuditLog" WHERE "organizationId"=(SELECT "organizationId" FROM public."Project" WHERE id=$1) AND ("entityId"=$1 OR metadata->>'projectId'=$1) ORDER BY "createdAt" DESC,id DESC LIMIT 20`,[context.projectId])).rows;
-  return {scope,projectId:context.projectId,observedAt:new Date().toISOString(),people,reports,attendance,proposals,channel:{inbox,outbound},webhooks,history,acceptance:'NOT_VERIFIED'};
+  return {scope,projectId:context.projectId,observedAt:new Date().toISOString(),people,reports,attendance,proposals,inventory,channel:{inbox,outbound},webhooks,history,acceptance:'NOT_VERIFIED'};
  })};
 }
 export function createOperationsStatusHandler({verify,store}) {
