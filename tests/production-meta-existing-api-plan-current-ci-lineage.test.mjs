@@ -14,10 +14,11 @@ const serialize=value=>JSON.stringify(value,null,2)+'\n';
 const denied=run=>assert.throws(run,{code:'EXISTING_API_PLAN_CURRENT_CI_LINEAGE_REJECTED'});
 
 test('API plan revision restores the whole published material contract and every inherited proof',()=>{
- const contract=current(),before=serialize(contract),previous=restoreExistingApiPlanPreviousContract(contract);
+ const contract=current(),before=serialize(contract),publishedHomePredecessor=restoreHomeDecisionsPreviousContract(contract),previous=restoreExistingApiPlanPreviousContract(contract);
  assert.equal(sha(serialize(previous)),expected.previousContractSha256);assert.equal(expected.predecessorCommit,'5d0c4303cbced786f2ec8a0a10edaa72b3aff02d');assert.equal(Object.hasOwn(previous,key),false);assert.equal(serialize(contract),before);
  assert.deepEqual(previous.materialReviewCurrentRevision,contract.materialReviewCurrentRevision);
- for(const name of ['blocks','lanes','artifactPatterns','evidenceProducers','whatsappFieldContinuityCurrentRevision'])assert.deepEqual(previous[name],contract[name]);
+ for(const name of ['blocks','lanes','artifactPatterns','evidenceProducers','whatsappFieldContinuityCurrentRevision'])assert.deepEqual(previous[name],publishedHomePredecessor[name]);
+ const focusedProducer=value=>value.evidenceProducers.find(row=>row.producer==='scripts/verify-focused-workspace-ci.mjs');assert.equal(focusedProducer(contract).producerSha256,'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24');assert.equal(focusedProducer(publishedHomePredecessor).producerSha256,'a4eb59cb781eeb9578e46ffcdec21833cce1ba79eb9f99e3543fda799dfc62f4');
  assert.equal(sha(serialize(restoreMaterialReviewPreviousContract(contract))),'1bb5e262dac06377590ea983a9c800163726cb6510ae0fbbbdca17309253c6af');
 });
 

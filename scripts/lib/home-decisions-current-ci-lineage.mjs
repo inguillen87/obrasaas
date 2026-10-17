@@ -81,9 +81,14 @@ export const HOME_DECISIONS_CURRENT_REVISION=Object.freeze({
       "currentSha256": "7563982646aebf713696686499ae5fdde8cc007fec3b28f448e728c7e7cda68d"
     },
     {
+      "path": "tests/production-material-review-current-ci-lineage.test.mjs",
+      "previousSha256": "38012a323a305bd8e41dcc04bc698b50dcac04110cec2cb7db93c8fa0f1e7ffa",
+      "currentSha256": "d4ff4dd321b7e7499cd2aed817abc0f5aab47b94e38d9d88c72d694d1768b0a1"
+    },
+    {
       "path": "tests/production-meta-existing-api-plan-current-ci-lineage.test.mjs",
       "previousSha256": "ab3984d2393131261baa298b9408394b695cbca9f8e06d54ddac563c20c41587",
-      "currentSha256": "e1ad7a7c23d8d9c803babd75567241c040dad3825169ff861b84b491ba775c0d"
+      "currentSha256": "b321b7dfb5c82333883f2008b5dfe9e00b6d8aba31c920bd3484e397bf5dd1ed"
     },
     {
       "path": "tests/production-operations-status.test.mjs",
@@ -221,6 +226,15 @@ export const HOME_DECISIONS_CURRENT_REVISION=Object.freeze({
           "pathsSha256": "ebf85a9a6d749b9d6f8dcdcb69963c41d49e2289db6bc5d7e793279227105fb2"
         }
       ]
+    }
+  ],
+  "proofProducerDeltas": [
+    {
+      "id": "focused-workspace-ui",
+      "producer": "scripts/verify-focused-workspace-ci.mjs",
+      "path": ".vercel/private/focused-workspace-ui-evidence/current-ci.json",
+      "previousProducerSha256": "a4eb59cb781eeb9578e46ffcdec21833cce1ba79eb9f99e3543fda799dfc62f4",
+      "currentProducerSha256": "48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24"
     }
   ],
   "operationsProjection": {
@@ -4012,6 +4026,12 @@ function previousPaths(files,delta){
 export function restoreHomeDecisionsPreviousContract(contract){
  const value=section(contract);if(!value)return contract;
  const previous=structuredClone(contract);delete previous[HOME_DECISIONS_CURRENT_SECTION];
+ for(const delta of value.proofProducerDeltas){
+  const proofs=previous.extension?.proofs?.filter(row=>row.id===delta.id);reject(proofs?.length===1,'One exact home decisions producer proof required: '+delta.id);
+  const proof=proofs[0];reject(proof.producer===delta.producer&&proof.path===delta.path&&proof.producerSha256===delta.currentProducerSha256,'Exact current home decisions proof producer required: '+delta.id);
+  const records=previous.evidenceProducers?.filter(row=>row.path===delta.path&&row.producer===delta.producer);reject(records?.length===1&&records[0].producerSha256===delta.currentProducerSha256,'One exact current home decisions evidence producer required: '+delta.id);
+  proof.producerSha256=delta.previousProducerSha256;records[0].producerSha256=delta.previousProducerSha256;
+ }
  for(const delta of value.proofSourceDeltas){
   const proofs=previous.extension?.proofs?.filter(row=>row.id===delta.id);reject(proofs?.length===1,'One exact home decisions proof required: '+delta.id);
   const files=previousPaths(proofs[0].sourceFiles,delta);

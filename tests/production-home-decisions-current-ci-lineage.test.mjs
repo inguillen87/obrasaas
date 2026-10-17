@@ -18,7 +18,8 @@ const syntax=value=>Array.isArray(value)?value.map(syntax):value&&typeof value==
 test('home decisions restores the complete published2b contract and every inherited layer without mutating input',()=>{
  const contract=current(),before=serialize(contract),previous=restoreHomeDecisionsPreviousContract(contract);
  assert.equal(expected.predecessorCommit,'2b98984628761783ba7bd7e6543dbe1d76c0203c');assert.equal(sha(serialize(previous)),'fe3fbd513518951d4e9625f0c76d89bd5c178919d923d3a385f32ab7c787590e');assert.equal(Object.hasOwn(previous,key),false);assert.equal(serialize(contract),before);
- for(const field of ['blocks','lanes','artifactPatterns','evidenceProducers','existingApiPlanCurrentRevision','materialReviewCurrentRevision','whatsappFieldContinuityCurrentRevision'])assert.deepEqual(previous[field],contract[field]);
+ for(const field of ['blocks','lanes','artifactPatterns','existingApiPlanCurrentRevision','materialReviewCurrentRevision','whatsappFieldContinuityCurrentRevision'])assert.deepEqual(previous[field],contract[field]);
+ const previousRecords=structuredClone(contract.evidenceProducers);for(const delta of expected.proofProducerDeltas)previousRecords.find(row=>row.path===delta.path&&row.producer===delta.producer).producerSha256=delta.previousProducerSha256;assert.deepEqual(previous.evidenceProducers,previousRecords);
  assert.equal(sha(serialize(restoreExistingApiPlanPreviousContract(contract))),'8ec3226f985366168e3a6eb873a6f282bfa91778260e15c724ee208814f88b09');
 });
 
@@ -44,10 +45,18 @@ test('the exact operations read projection preserves every inherited authority H
 test('actual producer import graphs add only the authenticated helper and preserve historical proof counts',()=>{
  const contract=current(),previous=restoreHomeDecisionsPreviousContract(contract);assert.equal(expected.proofSourceDeltas.length,3);
  for(const spec of contract.extension.proofs){
-  assert.deepEqual(currentProducerSourceFiles(spec,process.cwd()),spec.sourceFiles,'Actual current import closure '+spec.id);const old=previous.extension.proofs.find(row=>row.id===spec.id);assert.deepEqual(spec.checkNames,old.checkNames);assert.equal(spec.producerSha256,old.producerSha256);
+  assert.deepEqual(currentProducerSourceFiles(spec,process.cwd()),spec.sourceFiles,'Actual current import closure '+spec.id);const old=previous.extension.proofs.find(row=>row.id===spec.id),producer=expected.proofProducerDeltas.find(row=>row.id===spec.id);assert.deepEqual(spec.checkNames,old.checkNames);assert.equal(spec.producerSha256,producer?.currentProducerSha256??old.producerSha256);assert.equal(old.producerSha256,producer?.previousProducerSha256??spec.producerSha256);assert.equal(spec.producerSha256,sha(read(spec.producer).toString('utf8').replaceAll('\r\n','\n')),'Every official producer pin binds the actual LF source: '+spec.id);
   const delta=expected.proofSourceDeltas.find(row=>row.id===spec.id);if(!delta){assert.deepEqual(spec.sourceFiles,old.sourceFiles);continue;}
   assert.equal(delta.currentCount,delta.previousCount+1);assert.deepEqual(delta.additions,['scripts/lib/home-decisions-current-ci-lineage.mjs']);assert.deepEqual(restoreHomeDecisionsSourceSet(delta.family,spec.sourceFiles,contract),old.sourceFiles);assert.deepEqual(homeDecisionsProofSourceAdditions(spec),delta.additions);assert.deepEqual(homeDecisionsProofSourceAdditions(old),[]);
  }
+});
+
+test('the sole current focused producer and evidence record advance together and reject omissions tampering duplicates or old-as-current pins',()=>{
+ const contract=current(),previous=restoreHomeDecisionsPreviousContract(contract);assert.equal(expected.proofProducerDeltas.length,1);const delta=expected.proofProducerDeltas[0];
+ assert.equal(delta.id,'focused-workspace-ui');assert.equal(delta.producer,'scripts/verify-focused-workspace-ci.mjs');assert.equal(delta.previousProducerSha256,'a4eb59cb781eeb9578e46ffcdec21833cce1ba79eb9f99e3543fda799dfc62f4');assert.equal(delta.currentProducerSha256,'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24');
+ const proof=value=>value.extension.proofs.find(row=>row.id===delta.id),record=value=>value.evidenceProducers.find(row=>row.path===delta.path&&row.producer===delta.producer);
+ assert.equal(proof(contract).producerSha256,delta.currentProducerSha256);assert.equal(record(contract).producerSha256,delta.currentProducerSha256);assert.equal(proof(previous).producerSha256,delta.previousProducerSha256);assert.equal(record(previous).producerSha256,delta.previousProducerSha256);
+ for(const edit of [value=>{value[key].proofProducerDeltas=[];},value=>{value.extension.proofs=value.extension.proofs.filter(row=>row.id!==delta.id);},value=>{value.extension.proofs.push(structuredClone(proof(value)));},value=>{value.evidenceProducers=value.evidenceProducers.filter(row=>row!==record(value));},value=>{value.evidenceProducers.push(structuredClone(record(value)));},value=>{proof(value).producerSha256=delta.previousProducerSha256;},value=>{record(value).producerSha256=delta.previousProducerSha256;},value=>{proof(value).producerSha256=record(value).producerSha256=delta.previousProducerSha256;},value=>{proof(value).producerSha256='f'.repeat(64);},value=>{record(value).producerSha256='f'.repeat(64);},value=>{proof(value).producer='scripts/foreign.mjs';},value=>{record(value).producer='scripts/foreign.mjs';}]){const changed=structuredClone(contract);edit(changed);denied(()=>restoreHomeDecisionsPreviousContract(changed));}
 });
 
 test('source sets reject omissions duplicates old-as-current reverse order and foreign same-count replacements',()=>{
