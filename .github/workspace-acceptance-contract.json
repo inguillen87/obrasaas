@@ -22915,5 +22915,71 @@
         "sha256": "6559fc99b2e4c40762b8b3a9dfbb6b542847ac08ab54d39e7461035e33b513f2"
       }
     ]
+  },
+  "participantDraftSafetyCurrentRevision": {
+    "version": 1,
+    "status": "REVIEWED_PARTICIPANT_DRAFT_SELECTION_AND_REVISION_RECOVERY",
+    "predecessorCommit": "9b26ac5f78ee469b4a61d83018b1ea98fb73aa3e",
+    "previousContractSha256": "42ced37df92bfaa681e0844ba23839bf8630a0d00404415aeb5dbca77238c27e",
+    "reviewedSourceChanges": [
+      {
+        "path": "src/app/(identity)/cuenta/participant-panel.js",
+        "previousSha256": "d16ee3ba394be011c5d338599d01653eec7d462705a2414821e02db3b44e38aa",
+        "currentSha256": "a9d5934c7bda61c49362ac53cfb339a5d66497566f71415ecc4621686ce17519",
+        "authenticatedPreviousAliases": [
+          "4e10ff5f05942b9704f247e13972968cc2a441b6ba09bca277694e85a94cd56e"
+        ]
+      },
+      {
+        "path": "scripts/verify-participants-ui.mjs",
+        "previousSha256": "77e5e12f6d5de2512e1f54d0cb0a45131355245ad1cd2e1b26b2b7d804d18ef9",
+        "currentSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976"
+      },
+      {
+        "path": "scripts/verify-participant-kyc-chat-closure-ui.mjs",
+        "previousSha256": "ab94c5a5ee387ce6cf9eb99bc3018e22b5485c2bd228c3ac10acfd014def5752",
+        "currentSha256": "7922adb699d783b231952aeba405d1845f0f4699c4d14c626ce7bf3b04efe412"
+      }
+    ],
+    "validationPredecessors": [
+      {
+        "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+        "sha256": "463cac0a3406559db5ceca581e035cf1c1bd20b0e8c9c85f6323c524a1ae4ea1"
+      },
+      {
+        "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+        "sha256": "f07e9dd108fb478608ff6e42f3a1f9a954e49a028cfdfd993c4dcbbc722fc97f"
+      }
+    ],
+    "fixtureSourceDeltas": [
+      {
+        "producer": "scripts/verify-participants-ui.mjs",
+        "additions": [
+          "src/app/(identity)/cuenta/participant-kyc-capture.js",
+          "src/app/(identity)/cuenta/participant-kyc-capture.module.css",
+          "src/app/(identity)/cuenta/participant-kyc-preanalysis-view.mjs"
+        ]
+      },
+      {
+        "producer": "scripts/verify-participant-kyc-chat-closure-ui.mjs",
+        "additions": [
+          "src/app/(identity)/cuenta/participant-kyc-capture.js",
+          "src/app/(identity)/cuenta/participant-kyc-capture.module.css",
+          "src/app/(identity)/cuenta/participant-kyc-preanalysis-view.mjs"
+        ]
+      }
+    ],
+    "sourceSetChanges": 0,
+    "nativeOrBrowserAcceptance": false,
+    "validationSources": [
+      {
+        "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+        "sha256": "cb2c1731ec5192786434fc4b905df6062068fde33c8f68719765a45c5dd02b3f"
+      },
+      {
+        "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+        "sha256": "7a901da987b797dca7c8b574dc28ce300cb8839483c472f019e25d26dd914c84"
+      }
+    ]
   }
 }
