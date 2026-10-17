@@ -29,3 +29,19 @@ export function cypCurveFixtureParts({partidas=190,initial=null,...physical}={})
  return parts;
 }
 export const cypCurveFixture=options=>zipOoxmlFixture(cypCurveFixtureParts(options));
+
+// The new financial-only profile adds genuine shared-formula topology and 48
+// independent caches. Historical fixture defaults and versions stay unchanged.
+export function cypInvestmentFixtureParts({weeklyAmounts=null,sharedWeekly=true,...options}={}){
+ const parts=cypCurveFixtureParts(options),sheet='xl/worksheets/sheet1.xml';
+ const totalRow=Math.max(...[...parts[sheet].matchAll(/<c r="A(\d+)"/g)].map(match=>Number(match[1])))+2,row=totalRow+1;
+ const amounts=weeklyAmounts??Array.from({length:48},(_,i)=>i===0?'12345678901234567890.1234500':'0.0000');
+ if(amounts.length!==48)throw new TypeError('Exactly48 synthetic weekly amounts required');
+ const formula=col=>`+SUMPRODUCT($F$7:$F$${totalRow-1},${col}7:${col}${totalRow-1})`;
+ const cells=amounts.map((value,i)=>{
+  const col=column(9+i),f=sharedWeekly?(i===0?`<f t="shared" si="42" ref="J${row}:BE${row}">${formula(col)}</f>`:'<f t="shared" si="42"/>'):`<f>${formula(col)}</f>`;
+  return `<c r="${col}${row}">${f}${value===null?'':`<v>${value}</v>`}</c>`;
+ }).join('');
+ parts[sheet]=add(parts[sheet],cells);return parts;
+}
+export const cypInvestmentFixture=options=>zipOoxmlFixture(cypInvestmentFixtureParts(options));

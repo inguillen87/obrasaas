@@ -1,3 +1,4 @@
+import {restoreWeeklyCypPreviousContract,weeklyCypCurrentSourcePin} from './home-decisions-current-ci-lineage.mjs';
 import {restoreDocumentTaskAssociationPreviousContract as documentOuter0,documentTaskAssociationCurrentSourcePin as documentOuter1,verifyDocumentTaskAssociationCurrentSources as documentOuter2,restoreDocumentTaskAssociationSourceSet as documentOuter3,documentTaskAssociationProofSourceAdditions as documentOuter4} from './plan-measurement-document-association-ci-lineage.mjs';
 // Existing APIs keep their original precise denial category; the additive
 // module retains its distinct code when invoked directly. No error is accepted.
@@ -2076,13 +2077,16 @@ export function integratedIdentityCurrentUiProducerPin(contract,ref){
  requireLineage(change?.previousProducerSha256===row.previousSha256&&change?.currentProducerSha256===row.currentSha256&&ref.sha256===row.currentSha256&&proof?.producer===row.path&&proof?.producerSha256===row.currentSha256&&same(proof.checkNames,change.currentCheckNames),'Exact current identity UI proof binding required');return row.currentSha256;
 }
 export function verifyIntegratedIdentityCurrentSources(contract,readSource){
+ try{
  verifyDocumentTaskAssociationCurrentSources(contract,readSource);
  const value=revision(contract);if(!value)return null;restoreIntegratedIdentityPreviousContract(contract);requireLineage(typeof readSource==='function','Current committed source reader required');
  authenticateIntegratedIdentityUiProducerMigrationSource(readSource(INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH));
- for(const row of [...value.reviewedSourceChanges,...value.validationDeltas])requireLineage(lf(readSource,row.path)===documentTaskAssociationCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}),'Stale integrated current source: '+row.path);
- for(const row of [...value.addedSources,...value.validationSources])requireLineage(lf(readSource,row.path)===documentTaskAssociationCurrentSourcePin(contract,row),'Stale integrated added or validation source: '+row.path);
+ const priorValidationContract=restoreWeeklyCypPreviousContract(contract);
+ for(const row of [...value.reviewedSourceChanges,...value.validationDeltas])requireLineage(lf(readSource,row.path)===weeklyCypCurrentSourcePin(contract,{path:row.path,sha256:documentTaskAssociationCurrentSourcePin(priorValidationContract,{path:row.path,sha256:row.currentSha256})}),'Stale integrated current source: '+row.path);
+ for(const row of [...value.addedSources,...value.validationSources])requireLineage(lf(readSource,row.path)===weeklyCypCurrentSourcePin(contract,{...row,sha256:documentTaskAssociationCurrentSourcePin(priorValidationContract,row)}),'Stale integrated added or validation source: '+row.path);
  requireLineage(lf(readSource,INTEGRATED_IDENTITY_CHECKPOINT_PATH)===previousContractSha256,'The original checkpoint fixture bytes cannot change');
  return{version:1,previousContractSha256,completeCheckpointRestored:true,historicalPinsPreserved:true,nativeOrBrowserAcceptance:false};
+ }catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
 }
 export function restoreIntegratedIdentitySourceSet(family,files,contract){
  files=restoreDocumentTaskAssociationSourceSet(family,files,contract);

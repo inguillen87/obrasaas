@@ -2,11 +2,12 @@ import {WorkspaceError,workspaceId,operationId} from './workspace-policy.mjs';
 import {canApprovePlan} from './plan-import-policy.mjs';
 import {PLAN_BASELINE_VERSION,PLAN_BASELINE_PAGE_SIZE,PLAN_BASELINE_REJECTIONS,planBaselineExact,planBaselineTimestamp,planBaselineSame,planBaselineId,planBaselineReceiptId,planBaselineContext,normalizePlanBaselineSelection,planBaselineSelectionDigest,planBaselineCursor,parsePlanBaselineCursor,appliedPlanBaselineCandidate} from './plan-baseline-policy.mjs';
 import {DOCUMENT_CURVE_CONSENT,DOCUMENT_CURVE_PROFILE} from './plan-import-document-curve.mjs';
+import {PLAN_CYP_INVESTMENT_CONSENT,PLAN_CYP_INVESTMENT_PROFILE,PLAN_CYP_INVESTMENT_PURPOSE} from './plan-import-cyp-curve.mjs';
 
 const fail=(code='PLAN_BASELINE_INTEGRITY',status=503)=>{throw new WorkspaceError(code,status);};
 const candidateKeys=['draftId','draftRevision','decisionReceiptId','sourceSha256','profile','sourceRowCount','selectedRowCount','appliedAt','curve'];
 const baselineKeys=['version','id','revision','selectionReceiptId',...candidateKeys,'selectedBy','selectedAt','reason'];
-const documentKeys=value=>value?.profile===DOCUMENT_CURVE_PROFILE?['sourceKind','presentation']:[];
+const documentKeys=value=>[DOCUMENT_CURVE_PROFILE,PLAN_CYP_INVESTMENT_PROFILE].includes(value?.profile)?['sourceKind','presentation']:[];
 const candidateColumns=`d.id,d.metadata,d."organizationId" AS "organizationId",d."entityId" AS "entityId",r.id AS "decisionId",r.metadata AS "decisionMetadata",r."organizationId" AS "decisionOrganizationId",r."entityId" AS "decisionEntityId",r."actorId" AS "decisionActorId"`;
 const candidateJoin=`FROM public."AuditLog" d LEFT JOIN public."AuditLog" r ON r.id=d.metadata->'decision'->>'receiptId' AND r.action='plan.import.decision' WHERE d."organizationId"=$1 AND d."entityId"=$2 AND d.action='plan.import.draft'`;
 
@@ -18,8 +19,9 @@ export function createPlanBaseline({workspace}){
   return decodedCandidate(client,member,projectId,row);
  };
  async function decodedCandidate(client,member,projectId,row){
-  if(row?.metadata?.consent?.version===DOCUMENT_CURVE_CONSENT||row?.metadata?.analysis?.documentCurve?.profile===DOCUMENT_CURVE_PROFILE){
-   const reviewId=row.metadata.documentReview?.receiptId;
+  const investment=row?.metadata?.sourcePurpose===PLAN_CYP_INVESTMENT_PURPOSE||row?.metadata?.consent?.version===PLAN_CYP_INVESTMENT_CONSENT||row?.metadata?.analysis?.spreadsheet?.version===5;
+  if(investment||row?.metadata?.consent?.version===DOCUMENT_CURVE_CONSENT||row?.metadata?.analysis?.documentCurve?.profile===DOCUMENT_CURVE_PROFILE){
+   const reviewId=(investment?row.metadata.investmentReview:row.metadata.documentReview)?.receiptId;
    row.reviewReceipt=(await client.query(`SELECT id,"organizationId","actorId","entityId",action,metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "entityId"=$3 AND action='plan.import.decision'`,[reviewId,member.organizationId,projectId])).rows[0]||null;
   }
   return appliedPlanBaselineCandidate(row,projectId,member.organizationId);
@@ -66,7 +68,7 @@ export function createPlanBaseline({workspace}){
     if(context.operationId!==undefined){const key=context.operationId.toLowerCase(),row=await receipt(client,planBaselineReceiptId(member.actorId,context.projectId,key)),found=row?await validateReceipt(client,member,context.projectId,row):null;return result(scope,context.projectId,key,found,current,Boolean(found));}
     let after='';
     if(context.cursor!==undefined){after=parsePlanBaselineCursor(context.cursor,context);try{await candidate(client,member,context.projectId,after);}catch{fail('PLAN_BASELINE_CURSOR_INVALID',400);}}
-    const rows=(await client.query(`SELECT ${candidateColumns} ${candidateJoin} AND d.metadata->>'status'='APPLIED' AND (d.metadata->'analysis'->'spreadsheet'->>'version' IN ('3','4') OR d.metadata->'consent'->>'version' IN ('plan-spreadsheet-monthly-curve-v3','plan-spreadsheet-cyp-curve-v4','${DOCUMENT_CURVE_CONSENT}') OR d.metadata->'analysis'->'documentCurve'->>'profile'='${DOCUMENT_CURVE_PROFILE}') AND d.id>$3 ORDER BY d.id LIMIT ${PLAN_BASELINE_PAGE_SIZE+1}`,[member.organizationId,context.projectId,after])).rows;
+    const rows=(await client.query(`SELECT ${candidateColumns} ${candidateJoin} AND d.metadata->>'status'='APPLIED' AND (d.metadata->'analysis'->'spreadsheet'->>'version' IN ('3','4','5') OR d.metadata->'consent'->>'version' IN ('plan-spreadsheet-monthly-curve-v3','plan-spreadsheet-cyp-curve-v4','${DOCUMENT_CURVE_CONSENT}','${PLAN_CYP_INVESTMENT_CONSENT}') OR d.metadata->>'sourcePurpose'='${PLAN_CYP_INVESTMENT_PURPOSE}' OR d.metadata->'analysis'->'documentCurve'->>'profile'='${DOCUMENT_CURVE_PROFILE}') AND d.id>$3 ORDER BY d.id LIMIT ${PLAN_BASELINE_PAGE_SIZE+1}`,[member.organizationId,context.projectId,after])).rows;
     const allCandidates=[];for(const row of rows){try{allCandidates.push(await decodedCandidate(client,member,context.projectId,row));}catch{fail();}}const candidates=allCandidates.slice(0,PLAN_BASELINE_PAGE_SIZE);
     return {version:PLAN_BASELINE_VERSION,scope,projectId:context.projectId,canSelect:true,active:current,candidates,nextCursor:rows.length>PLAN_BASELINE_PAGE_SIZE?planBaselineCursor(context,candidates.at(-1).draftId):null};
    });

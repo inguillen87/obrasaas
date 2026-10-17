@@ -1,4 +1,4 @@
-import {planSourceCurveView,planDocumentCurveView,DOCUMENT_CURVE_PROFILE} from './plan-source-curve.mjs';
+import {planSourceCurveView,planDocumentCurveView,DOCUMENT_CURVE_PROFILE,PLAN_CYP_INVESTMENT_PROFILE,planInvestmentCurveView} from './plan-source-curve.mjs';
 
 const record=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const exact=(value,keys)=>record(value)&&Object.keys(value).sort().join('|')===[...keys].sort().join('|');
@@ -14,6 +14,10 @@ const positive=value=>Number.isSafeInteger(value)&&value>0&&value<=2147483647;
 const canonical=value=>Array.isArray(value)?value.map(canonical):record(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
 
 function candidate(value,keys){
+ if(value?.profile===PLAN_CYP_INVESTMENT_PROFILE){
+  if(!exact(value,[...keys,'sourceKind','presentation'])||!/^plan_draft_[a-f0-9]{64}$/.test(value.draftId||'')||!positive(value.draftRevision)||value.draftRevision<2||!/^plan_receipt_[a-f0-9]{64}$/.test(value.decisionReceiptId||'')||!hash(value.sourceSha256)||value.sourceKind!=='SPREADSHEET'||value.presentation!=='CYP_INVESTMENT_CURVES'||value.sourceRowCount!==0||value.selectedRowCount!==0||!timestamp(value.appliedAt)||!planInvestmentCurveView(value.curve,{sourceSha256:value.sourceSha256}))reject();
+  return value;
+ }
  if(value?.profile===DOCUMENT_CURVE_PROFILE){
   if(!exact(value,[...keys,'sourceKind','presentation'])||!/^plan_draft_[a-f0-9]{64}$/.test(value.draftId||'')||!positive(value.draftRevision)||value.draftRevision<2||!/^plan_receipt_[a-f0-9]{64}$/.test(value.decisionReceiptId||'')||!hash(value.sourceSha256)||value.sourceKind!=='DOCUMENT'||value.presentation!=='DOCUMENT_MONTHLY_CURVE'||value.sourceRowCount!==0||value.selectedRowCount!==0||!timestamp(value.appliedAt)||!planDocumentCurveView(value.curve,{sourceSha256:value.sourceSha256}))reject();
   return value;

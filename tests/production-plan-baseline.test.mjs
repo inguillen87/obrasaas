@@ -4,6 +4,11 @@ import {randomUUID} from 'node:crypto';
 import {planBaselineHarness,projectId,session} from './fixtures/plan-baseline-synthetic.mjs';
 import {normalizePlanBaselineSelection,planBaselineSelectionDigest,planBaselineCursor,parsePlanBaselineCursor,planBaselineId} from '../src/lib/plan-baseline-policy.mjs';
 import {createPlanBaselineHandlers} from '../src/lib/plan-baseline-http.mjs';
+import {createPlanImportAnalyzer} from '../src/lib/plan-import-analyzer.mjs';
+import {decodePlanSource} from '../src/lib/plan-import-policy.mjs';
+import {PLAN_CYP_INVESTMENT_CONSENT,PLAN_CYP_INVESTMENT_PROFILE} from '../src/lib/plan-import-cyp-curve.mjs';
+import {cypInvestmentFixture} from './fixtures/plan-import-cyp-curve-synthetic.mjs';
+import {documentStoreHarness,session as investmentSession} from './fixtures/plan-document-curve-store-synthetic.mjs';
 const endpoint='https://obrasaas.com/api/identity/plan-baseline';
 const post=(http,body,headers={})=>http.POST(new Request(endpoint,{method:'POST',headers:{origin:'https://obrasaas.com','content-type':'application/json',...headers},body:JSON.stringify(body)}));
 
@@ -98,4 +103,58 @@ test('actual HTTP composition accepts list/selection/recovery and preserves no-s
  assert.equal((await post(http,{...input,operationId:randomUUID()},{origin:'https://hostile.invalid'})).status,403);assert.equal((await post(http,{...input,reason:'a'.repeat(5000)})).status,413);
  assert.equal((await http.GET(new Request(endpoint+'?'+new URLSearchParams({...h.context(),operationId:input.operationId,cursor:'x'})))).status,400);assert.equal((await http.GET(new Request(endpoint+'?scope='+input.scope+'&scope='+input.scope+'&projectId='+projectId))).status,400);
  h.setRole('SITE_MANAGER');const denied=await http.GET(new Request(endpoint+'?'+new URLSearchParams(h.context())));assert.equal(denied.status,403);assert.doesNotMatch(JSON.stringify(await denied.json()),/cachedValue|curve|sourceSha256/);
+});
+
+function investmentHarness({different=false,role='ADMIN',taskCount=0}={}){
+ let providerCalls=0;const analyzer=createPlanImportAnalyzer({environment:()=>{providerCalls++;throw Error('Financial Excel must stay local');},fetchImpl:()=>{providerCalls++;throw Error('Financial Excel must stay local');}}),h=documentStoreHarness({role,taskCount,analyzerOverride:analyzer}),mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+ const source=options=>decodePlanSource(cypInvestmentFixture({...options,...(different?{weeklyAmounts:Array.from({length:48},(_,index)=>index===0?'12345678901234567890.1704500':'0.0000')}: {})}),mime);
+ const attach=options=>h.attach({source:source(options),consent:PLAN_CYP_INVESTMENT_CONSENT}),decision=(draft,action='REVIEW_INVESTMENT',acknowledgeDifference=different)=>({...h.context(),action,operationId:randomUUID(),draftId:draft.id,expectedRevision:draft.revision,reason:'Explicit synthetic monthly and weekly source review',acknowledgeDifference});
+ const apply=async(options)=>{const uploaded=await attach(options),reviewBody=decision(uploaded.draft),review=await h.imports.decide(investmentSession,reviewBody),applyBody=decision(review.draft,'APPLY_INVESTMENT'),applied=await h.imports.decide(investmentSession,applyBody);return{uploaded,reviewBody,review,applyBody,applied};};
+ return{...h,attachInvestment:attach,investmentDecision:decision,applyInvestment:apply,providerCalls:()=>providerCalls};
+}
+
+for(const role of ['ADMIN','DIRECTOR'])test('v5 financial-only approval becomes a candidate and explicit SELECT preserves both source series for '+role,async()=>{
+ const h=investmentHarness({role,taskCount:5001}),before=h.tasks(),r=await h.applyInvestment(),source={...r.applied.draft.spreadsheet};delete source.reviewed;const imports=h.logs(),list=await h.baselines.read(investmentSession,h.context());
+ assert.equal(r.applied.saved,true);assert.equal(list.active,null);assert.equal(list.candidates.length,1);const candidate=list.candidates[0];assert.equal(candidate.profile,PLAN_CYP_INVESTMENT_PROFILE);assert.equal(candidate.sourceKind,'SPREADSHEET');assert.equal(candidate.presentation,'CYP_INVESTMENT_CURVES');assert.equal(candidate.sourceRowCount,0);assert.equal(candidate.selectedRowCount,0);assert.deepEqual(candidate.curve,source);assert.equal(candidate.curve.monthly.periods.length,12);assert.equal(candidate.curve.weekly.periods.length,48);assert.equal(candidate.curve.comparison.status,'MATCH');assert.equal(candidate.curve.weekly.periods[0].amount.cachedValue,'12345678901234567890.1234500');
+ const out=await h.baselines.select(investmentSession,h.baselineInput(r.applied.draft));assert.equal(out.state,'RECORDED');assert.equal(out.active.revision,1);assert.deepEqual(out.active.curve,source);assert.deepEqual((await h.baselines.read(investmentSession,h.context())).active,out.active);assert.deepEqual(h.logs().filter(row=>row.action.startsWith('plan.import.')),imports);assert.deepEqual(h.tasks(),before);assert.equal(h.calls.taskWrites,0);assert.equal(h.calls.sql.some(sql=>sql.includes('public."Task"')),false);assert.equal(h.providerCalls(),0);
+});
+
+test('v5 DIFFERENT totals require the same explicit acknowledgement in authentic REVIEW and APPLY before SELECT',async()=>{
+ const h=investmentHarness({different:true}),uploaded=await h.attachInvestment();assert.equal(uploaded.draft.spreadsheet.comparison.status,'DIFFERENT');const noReview=await h.imports.decide(investmentSession,h.investmentDecision(uploaded.draft,'REVIEW_INVESTMENT',false));assert.equal(noReview.saved,false);assert.deepEqual((await h.baselines.read(investmentSession,h.context())).candidates,[]);
+ const review=await h.imports.decide(investmentSession,h.investmentDecision(uploaded.draft)),noApply=await h.imports.decide(investmentSession,h.investmentDecision(review.draft,'APPLY_INVESTMENT',false));assert.equal(noApply.saved,false);const applied=await h.imports.decide(investmentSession,h.investmentDecision(review.draft,'APPLY_INVESTMENT'));assert.equal(applied.draft.differenceAcknowledged,true);const selected=await h.baselines.select(investmentSession,h.baselineInput(applied.draft));assert.equal(selected.active.curve.comparison.status,'DIFFERENT');assert.equal(selected.active.curve.comparison.differenceDecimalText,'0.0470000');assert.equal(selected.active.sourceRowCount,0);assert.equal(h.calls.taskWrites,0);
+});
+
+test('v5 baseline revalidates authentic source, review, acknowledgement and no-effects APPLY receipts',async()=>{
+ const edits={
+  'review-request':(h,r)=>h.changeLog(r.review.receiptId,row=>{row.metadata.request.reason='Altered original review reason';}),
+  'review-ack':(h,r)=>h.changeLog(r.review.receiptId,row=>{row.metadata.request.acknowledgeDifference=false;}),
+  'review-actor':(h,r)=>h.changeLog(r.review.receiptId,row=>{row.actorId='actor-foreign';}),
+  'review-missing':(h,r)=>h.changeLog(r.review.receiptId,row=>{row.action='foreign';}),
+  'review-digest':(h,r)=>h.changeLog(r.applied.draft.id,row=>{row.metadata.investmentReview.sourceCurveDigest='f'.repeat(64);}),
+  'review-revision':(h,r)=>h.changeLog(r.applied.draft.id,row=>{row.metadata.investmentReview.revision++;}),
+  'review-reason':(h,r)=>h.changeLog(r.applied.draft.id,row=>{row.metadata.investmentReview.reason='Altered stored review reason';}),
+  'apply-link':(h,r)=>h.changeLog(r.applied.receiptId,row=>{row.metadata.reviewReceiptId=r.applied.receiptId;}),
+  'apply-digest':(h,r)=>h.changeLog(r.applied.receiptId,row=>{row.metadata.sourceCurveDigest='f'.repeat(64);}),
+  'apply-ack':(h,r)=>h.changeLog(r.applied.receiptId,row=>{row.metadata.outcome.draft.differenceAcknowledged=false;}),
+  'apply-tasks':(h,r)=>h.changeLog(r.applied.receiptId,row=>{row.metadata.outcome.taskSnapshots.push({id:'task-foreign'});}),
+  'apply-effects':(h,r)=>h.changeLog(r.applied.receiptId,row=>{row.metadata.outcome.taskEffects=true;}),
+  'source-sha':(h,r)=>h.changeLog(r.applied.draft.id,row=>{row.metadata.source.sha256='f'.repeat(64);}),
+  'source-week':(h,r)=>h.changeLog(r.applied.draft.id,row=>{row.metadata.analysis.spreadsheet.weekly.periods[0].amount.cachedValue='1';}),
+  'physical-row':(h,r)=>h.changeLog(r.applied.draft.id,row=>{row.metadata.rows.push({title:'Not a financial-only source'});})
+ };
+ for(const [name,edit]of Object.entries(edits)){const h=investmentHarness({different:true}),r=await h.applyInvestment(),input=h.baselineInput(r.applied.draft);edit(h,r);const out=await h.baselines.select(investmentSession,input);assert.equal(out.state,'REJECTED',name);assert.equal(out.baselineEffects,false,name);assert.equal(out.active,null,name);assert.equal(h.logs().filter(row=>row.action==='plan.baseline.active').length,0,name);await assert.rejects(h.baselines.read(investmentSession,h.context()),{code:'PLAN_BASELINE_INTEGRITY'},name);assert.equal(h.calls.taskWrites,0,name);}
+});
+
+test('v5 replacement uses the existing SELECT CAS and old operation recovery cannot reactivate a historical curve',async()=>{
+ const h=investmentHarness(),a=await h.applyInvestment(),firstInput=h.baselineInput(a.applied.draft),first=await h.baselines.select(investmentSession,firstInput),b=await h.applyInvestment({sharedWeekly:false}),secondInput={...h.baselineInput(b.applied.draft),expectedBaselineId:first.active.id,expectedBaselineRevision:first.active.revision},second=await h.baselines.select(investmentSession,secondInput),before=h.logs();
+ assert.notEqual(a.applied.draft.source.sha256,b.applied.draft.source.sha256);assert.equal(second.active.revision,2);assert.equal(second.active.draftId,b.applied.draft.id);const replay=await h.baselines.select(investmentSession,firstInput),recovery=await h.baselines.read(investmentSession,{...h.context(),operationId:firstInput.operationId});assert.deepEqual(replay.baselineSnapshot,first.baselineSnapshot);assert.deepEqual(replay.active,second.active);assert.deepEqual(recovery.active,second.active);assert.deepEqual(h.logs(),before);
+ const stale=await h.baselines.select(investmentSession,h.baselineInput(a.applied.draft));assert.equal(stale.code,'PLAN_BASELINE_REVISION_CHANGED');assert.deepEqual(stale.active,second.active);assert.equal(h.calls.taskWrites,0);
+});
+
+test('v5 active snapshot tampering or financial permission revocation never returns private series',async()=>{
+ for(const kind of ['snapshot','source','permission']){const h=investmentHarness(),r=await h.applyInvestment(),selected=await h.baselines.select(investmentSession,h.baselineInput(r.applied.draft));if(kind==='snapshot')h.changeLog(selected.receiptId,row=>{row.metadata.outcome.baseline.curve.weekly.periods[0].amount.cachedValue='1';});if(kind==='source')h.changeLog(r.applied.draft.id,row=>{row.metadata.investmentReview.acknowledgeDifference=true;});if(kind==='permission')h.member.role='SITE_MANAGER';const response=await h.baselineHttp.GET(new Request(endpoint+'?'+new URLSearchParams({...h.context(),operationId:selected.operationId})));assert.equal(response.status,kind==='permission'?403:503,kind);assert.doesNotMatch(JSON.stringify(await response.json()),/cachedValue|weekly|monthly|sourceSha256/,kind);}
+});
+
+test('v5 SELECT COMMIT acknowledgement loss recovers one snapshot while rollback requires the same UUID retry',async()=>{
+ for(const mode of ['ACK_LOST','ROLLBACK']){const h=investmentHarness(),r=await h.applyInvestment(),input=h.baselineInput(r.applied.draft);h.controls.commitMode=mode;await assert.rejects(h.baselines.select(investmentSession,input),{code:'WORKSPACE_OPERATION_UNCONFIRMED'});const read=await h.baselines.read(investmentSession,{...h.context(),operationId:input.operationId});assert.equal(read.state,mode==='ACK_LOST'?'RECORDED':'NOT_OBSERVED');const retry=await h.baselines.select(investmentSession,input);assert.equal(retry.replayed,mode==='ACK_LOST');assert.equal(retry.active.curve.weekly.periods.length,48);assert.equal(h.logs().filter(row=>row.action==='plan.baseline.selected').length,1);assert.equal(h.calls.taskWrites,0);}
 });

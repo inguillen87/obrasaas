@@ -1,3 +1,4 @@
+import {restoreWeeklyCypPreviousContract,weeklyCypCurrentSourcePin} from './home-decisions-current-ci-lineage.mjs';
 import {documentTaskAssociationValidationFiles} from './plan-measurement-document-association-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
 import {restoreIntegratedIdentityPreviousContract as integratedRestore,integratedIdentityCurrentSourcePin as integratedPin,verifyIntegratedIdentityCurrentSources as integratedVerify,restoreIntegratedIdentitySourceSet as integratedSourceSet,integratedIdentityProofSourceAdditions as integratedAdditions} from './integrated-identity-current-ci-lineage.mjs';
@@ -865,13 +866,15 @@ export function restoreParticipantPreanalysisSourceSet(family,files,contract){
 }
 
 export function verifyParticipantPreanalysisCurrentSources(contract,readSource){
+ try{
  verifyIntegratedIdentityCurrentSources(contract,readSource);
  const value=revision(contract);if(!value)return null;
  restoreParticipantPreanalysisPreviousContract(contract);
  requireLineage(typeof readSource==='function','Current preanalysis source reader required');
+ const priorValidationContract=restoreWeeklyCypPreviousContract(contract);
  for(const row of [...value.reviewedSourceChanges.map(row=>({path:row.path,sha256:row.currentSha256})),...value.validationDeltas.map(row=>({path:row.path,sha256:row.currentSha256})),...value.validationSources]){
   const bytes=readSource(row.path);requireLineage(Buffer.isBuffer(bytes),'Missing current preanalysis source: '+row.path);
-  const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===integratedIdentityCurrentSourcePin(contract,row),'Stale current preanalysis source: '+row.path);
+  const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===weeklyCypCurrentSourcePin(contract,{...row,sha256:integratedIdentityCurrentSourcePin(priorValidationContract,row)}),'Stale current preanalysis source: '+row.path);
  }
  for(const row of [{file:'scripts/verify-participant-kyc-preanalysis-postgres.mjs',sourceLfSha256:value.nativeProducerSha256},...value.unitSuites]){
   requireLineage(hash(row.sourceLfSha256),'Frozen native and executed unit producer pins required');
@@ -879,6 +882,7 @@ export function verifyParticipantPreanalysisCurrentSources(contract,readSource){
   const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===row.sourceLfSha256,'Frozen native/unit producer changed: '+row.file);
  }
  return {version:1,previousContractSha256:value.previousContractSha256,historicalContractRestored:true,historicalPinsPreserved:true,nativeAcceptance:false};
+ }catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
 }
 
 export function participantPreanalysisConsumerSourceFiles(family,files,readSource){

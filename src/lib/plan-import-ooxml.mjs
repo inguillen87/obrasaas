@@ -1,12 +1,14 @@
 import yauzl from 'yauzl';
 import {SaxesParser} from 'saxes';
 import {crc32} from 'node:zlib';
+import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {WorkspaceError} from './workspace-policy.mjs';
 import {safeMonthlyCurveAnalysis,PLAN_MONTHLY_CURVE_PROFILE} from './plan-import-monthly-curve.mjs';
 export {safeMonthlyCurveAnalysis,PLAN_MONTHLY_CURVE_CONSENT} from './plan-import-monthly-curve.mjs';
-import {safeCypCurveAnalysis,safeCypCurveCache,PLAN_CYP_CURVE_PROFILE} from './plan-import-cyp-curve.mjs';
+import {safeCypCurveAnalysis,safeCypCurveCache,PLAN_CYP_CURVE_PROFILE,PLAN_CYP_INVESTMENT_PROFILE,safeCypInvestmentAnalysis,cypInvestmentComparison} from './plan-import-cyp-curve.mjs';
 export {PLAN_CYP_CURVE_CONSENT} from './plan-import-cyp-curve.mjs';
+export {PLAN_CYP_INVESTMENT_CONSENT,PLAN_CYP_INVESTMENT_PROFILE,PLAN_CYP_INVESTMENT_PURPOSE,safeCypInvestmentAnalysis} from './plan-import-cyp-curve.mjs';
 
 export const PLAN_OOXML_TYPES=Object.freeze({
  'application/vnd.ms-excel.sheet.macroenabled.12':'xlsm',
@@ -97,7 +99,7 @@ function sheetCells(bytes,strings,check) {
   else if(!['n','str','e','b','d'].includes(type))fail();
   const sharedId=attr(formula,'t')==='shared'?attr(formula,'si'):null;
   if(sharedId!==null&&formula?.value){if(shared.has(sharedId))fail();shared.set(sharedId,formula.value);}
-  cells.set(address,{value,type,formula:formula?.value??null,hasFormula:Boolean(formula),sharedId});
+  cells.set(address,{value,type,formula:formula?.value??null,hasFormula:Boolean(formula),sharedId,formulaRaw:formula?.value||null,sharedRange:attr(formula,'ref')??null});
  }
  for(const c of cells.values())if(c.sharedId!==null){if(!shared.has(c.sharedId))fail();c.formula=shared.get(c.sharedId);}
  return cells;
@@ -226,6 +228,7 @@ export async function extractMonthlyPlanOoxml(bytes,contentType,{rowLimit=50}={}
 }
 
 export function safePlanOoxmlAnalysis(value) {
+ if(value?.version===5)return safeCypInvestmentAnalysis(value);
  if(value?.version===4)return safeCypCurveAnalysis(value,safeCypPlanAnalysis);
  if(value?.version===3)return safeMonthlyCurveAnalysis(value);
  if(value?.version===2)return safeCypPlanAnalysis(value);
@@ -345,5 +348,36 @@ export async function extractCypCurveOoxml(bytes,contentType){
   const spreadsheet={...original.spreadsheet,version:4,profile:PLAN_CYP_CURVE_PROFILE,curve};
   if(!safePlanOoxmlAnalysis(spreadsheet))fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');
   return {...original,spreadsheet,warnings:[...original.warnings,'La inversión prevista conserva la curva completa y la base presupuestaria originales. Los costos adicionales excluidos como tareas no se descuentan de esa curva. Excluir o renombrar partidas no recalcula importes; moneda y fechas siguen por confirmar.']};
+ }catch(error){if(error instanceof WorkspaceError)throw error;fail();}finally{book?.close();}
+}
+
+// The financial-only view preserves the same workbook's monthly curve and all
+// 48 weekly caches. No Task rows are returned and no formula is executed.
+export async function extractCypInvestmentOoxml(bytes,contentType){
+ const original=await extractCypCurveOoxml(bytes,contentType);let book;
+ try{
+  book=await workbook(bytes,contentType);const plan=await book.sheet('Plan de trabajo'),monthly=original.spreadsheet.curve,totalRow=Number(/^Plan de trabajo!I(\d+)$/.exec(monthly.total.sourceCell)[1]),weeklyRow=totalRow+1;
+  const normalizeFormula=value=>typeof value==='string'?value.replace(/^\+/, '').replaceAll('$',''):null;
+  if(text(safeValue(plan,`D${weeklyRow}`)).replaceAll(' ','')!=='CERTIFICADOSEMANAL($)')fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');
+  const start=`J${weeklyRow}`,end=`BE${weeklyRow}`,master=cell(plan,start),shared=master?.sharedId!==null&&master?.sharedId!==undefined;
+  const expectedFormula=col=>`SUMPRODUCT(F7:F${totalRow-1},${col}7:${col}${totalRow-1})`;
+  if(shared){
+   if(!/^\d{1,6}$/.test(master.sharedId)||master.sharedRange!==`${start}:${end}`||normalizeFormula(master.formulaRaw)!==expectedFormula('J'))fail('PLAN_IMPORT_SPREADSHEET_FORMULA_INVALID');
+   const members=[...plan.entries()].filter(([,value])=>value.sharedId===master.sharedId).map(([address])=>address).sort();
+   const expected=Array.from({length:48},(_,i)=>`${column(9+i)}${weeklyRow}`).sort();
+   if(members.length!==48||members.some((address,i)=>address!==expected[i]))fail('PLAN_IMPORT_SPREADSHEET_FORMULA_INVALID');
+  }
+  const periods=Array.from({length:48},(_,i)=>{
+   const col=column(9+i),address=`${col}${weeklyRow}`,c=cell(plan,address),cached=safeValue(plan,address),monthHeaderCell=`${column(9+Math.floor(i/4)*4)}5`,weekHeaderCell=`${col}6`;
+   if(text(safeValue(plan,monthHeaderCell))!==`MES ${Math.floor(i/4)+1}`||number(safeValue(plan,weekHeaderCell))!==i%4+1)fail('PLAN_IMPORT_SPREADSHEET_PERIODS_INVALID');
+   if(!c||c.type!=='n'||!c.hasFormula||cached===null||cached===''||shared&&(c.sharedId!==master.sharedId||i>0&&(c.formulaRaw!==null||c.sharedRange!==null))||!shared&&(c.sharedId!==null||c.sharedRange!==null||normalizeFormula(c.formulaRaw)!==expectedFormula(col)))fail('PLAN_IMPORT_SPREADSHEET_FORMULA_INVALID');
+   const amount={sourceCell:`Plan de trabajo!${address}`,cachedValue:cached,hasFormula:c.hasFormula};
+   if(!safeCypCurveCache(amount,amount.sourceCell,{required:true}))fail('PLAN_IMPORT_SPREADSHEET_FORMULA_INVALID');
+   return {ordinal:i+1,monthOrdinal:Math.floor(i/4)+1,weekInMonth:i%4+1,monthHeaderCell:`Plan de trabajo!${monthHeaderCell}`,weekHeaderCell:`Plan de trabajo!${weekHeaderCell}`,amount};
+  });
+  const weekly={granularity:'ORDINAL_WEEK_12X4',currency:null,calendarStart:null,total:{...monthly.total},periods};
+  const spreadsheet=safeCypInvestmentAnalysis({version:5,profile:PLAN_CYP_INVESTMENT_PROFILE,sourceSha256:createHash('sha256').update(Buffer.from(bytes)).digest('hex'),kind:'PLANNED_MONETARY_INVESTMENT',monthly,weekly,comparison:cypInvestmentComparison(weekly)});
+  if(!spreadsheet)fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');
+  return {rows:[],spreadsheet,warnings:['Se conservaron las 12 columnas mensuales y las 48 columnas semanales de inversión prevista del archivo original. No se crearon tareas ni se importaron cantidades físicas.','Los períodos son 12 grupos de cuatro semanas ordinales; no son fechas de calendario. La moneda sigue por confirmar. Los cachés guardados no se recalcularon; no se ejecutaron macros ni referencias externas.',...(spreadsheet.comparison.status==='DIFFERENT'?[`La suma semanal y el total guardado difieren exactamente en ${spreadsheet.comparison.differenceDecimalText}. Los valores originales se conservan sin ajustar; requieren revisión explícita.`]:[])]};
  }catch(error){if(error instanceof WorkspaceError)throw error;fail();}finally{book?.close();}
 }

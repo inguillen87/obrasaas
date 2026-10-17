@@ -1530,7 +1530,7 @@
       "blockId": 61,
       "lane": "plans",
       "sourceLine": 122,
-      "producerSha256": "e6dd0da63d68af0816637e661c19530a62b4b91d71022f3d78fc6b29c7bc878c",
+      "producerSha256": "e4c8c13b4b9082d5b139b231140d4f4fd722fdd82c09f077952df6e7f12ea456",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     },
     {
@@ -2064,6 +2064,7 @@
           "src/app/(identity)/cuenta/workspace-session-request.mjs",
           "src/lib/meta-kyc-conversation.mjs",
           "src/lib/participant-policy.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
           "src/lib/plan-import-document-curve.mjs",
           "src/lib/site-register-policy.mjs"
         ],
@@ -2718,6 +2719,7 @@
           "src/app/(identity)/cuenta/workspace-request-lifecycle.mjs",
           "src/app/(identity)/cuenta/workspace-session-request.mjs",
           "src/app/(identity)/cuenta/workspace.module.css",
+          "src/lib/plan-import-cyp-curve.mjs",
           "src/lib/plan-import-document-curve.mjs"
         ],
         "checkNames": []
@@ -2771,6 +2773,7 @@
           "src/app/(identity)/cuenta/workspace-request-lifecycle.js",
           "src/app/(identity)/cuenta/workspace-request-lifecycle.mjs",
           "src/app/(identity)/cuenta/workspace-session-request.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
           "src/lib/plan-import-document-curve.mjs"
         ],
         "checkNames": []
@@ -2970,6 +2973,7 @@
           "src/lib/participant-onboarding-policy.mjs",
           "src/lib/participant-policy.mjs",
           "src/lib/participant-verified-office.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
           "src/lib/plan-import-document-curve.mjs",
           "src/lib/private-image-upload.mjs",
           "src/lib/progress-measurement-quantity.js",
@@ -3456,7 +3460,7 @@
         "path": ".vercel/private/approved-plan-baseline-evidence/postgres.json",
         "kind": "PG_PLAN_BASELINE",
         "producer": "scripts/verify-plan-baseline-postgres.mjs",
-        "producerSha256": "e6dd0da63d68af0816637e661c19530a62b4b91d71022f3d78fc6b29c7bc878c",
+        "producerSha256": "e4c8c13b4b9082d5b139b231140d4f4fd722fdd82c09f077952df6e7f12ea456",
         "sourceFiles": [
           "package-lock.json",
           "package.json",
@@ -4013,6 +4017,7 @@
           "src/lib/participant-onboarding-policy.mjs",
           "src/lib/participant-policy.mjs",
           "src/lib/participant-verified-office.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
           "src/lib/plan-import-document-curve.mjs",
           "src/lib/private-image-upload.mjs",
           "src/lib/production-identity-config.mjs",
@@ -4159,6 +4164,7 @@
           "src/app/(identity)/cuenta/workspace-task-page.mjs",
           "src/lib/field-media-privacy.mjs",
           "src/lib/geo.js",
+          "src/lib/plan-import-cyp-curve.mjs",
           "src/lib/plan-import-document-curve.mjs",
           "src/lib/progress-measurement-quantity.js",
           "src/lib/task-progress-measurement.js",
@@ -23088,6 +23094,423 @@
       {
         "path": "tests/production-focused-workspace-task-pagination.test.mjs",
         "sha256": "5afbb67627d790d41df2d9cde0270dcafe93ab5292d822c9a45534203acaed34"
+      }
+    ]
+  },
+  "weeklyCypCurrentRevision": {
+    "version": 1,
+    "predecessorCommit": "0acac0857310e57bc717a3d734e02923a5ea83a1",
+    "previousContractSha256": "04db9c3dd25a41425f3b8f71f5d51ab23fcf4ad575b88710350b005dff04502b",
+    "reviewedSourceChanges": [
+      {
+        "path": "tests/production-plan-import-link-ui.test.mjs",
+        "previousSha256": "294ccb99a5758ad710358f8896cd7277c7f22694914e836b06dc4ce25fa04133",
+        "currentSha256": "017801e29c6a3a145bd16a1536a52f144b5c2e7c7086a51b6951879304cf3037",
+        "authenticatedPreviousAliases": [
+          "936a1dc56d2713cb9fc69827b6acbeca522dbb06c3da1e60ea658ca9e434c7ae"
+        ]
+      },
+      {
+        "path": "src/app/(identity)/cuenta/plan-import-panel.js",
+        "previousSha256": "3fb02bb63848059a8d045ca7d780e59a0b7b7093fa21d1c490604f9763c2cf00",
+        "currentSha256": "a532eefe56961ba7a9c3a33e5a888f7b4b4affee837412a2aba4066fb0ee1882"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
+        "previousSha256": "625c33c7b957dc922a5d9132fc0385c968dc573af4ff7a2f52a4fe111d0b42a2",
+        "currentSha256": "060e128b54eefdadfbabac45c3ec696934f5e74d79b9e26e905081128e8e99c5",
+        "authenticatedPreviousAliases": [
+          "a522852b7c82cd978a3f758137d8505c43b8d4edae269f215dda4ca51d787b2f"
+        ]
+      },
+      {
+        "path": "src/lib/plan-import-analyzer.mjs",
+        "previousSha256": "e3b6a312e9b0399533bb6c61b78a0c4bc036c5653d2e39628744d67f9e44a9f7",
+        "currentSha256": "0427c7fbdf0ba27b07c328661e52731c996e0a7b5f0749dcc6207410b28c52bb"
+      },
+      {
+        "path": "src/lib/plan-import-ooxml.mjs",
+        "previousSha256": "473a0ac3199ef044107a2847059a6fea1c04f9716af4b8c4008623f0deb80b4d",
+        "currentSha256": "a146b9b300086bd8f44af6549d75611f7ac542a6c6c2f9eddf099cd8fc0f9251",
+        "authenticatedPreviousAliases": [
+          "00c14c85a01734f9b77e508ef8c30fd1b1fa9e1d921b632649f93c534cc9cdd5"
+        ]
+      },
+      {
+        "path": "src/lib/plan-import-policy.mjs",
+        "previousSha256": "4149d1db8f2038dcb9d9799010e5379bf4755ac632d22e2a01a407f6fb5971e4",
+        "currentSha256": "f2d73b8c58df571fb0dc6e5d76e2fb5d60daffa6ed6a41bc2be3c7e536458696"
+      },
+      {
+        "path": "src/lib/plan-import-store.mjs",
+        "previousSha256": "d1db682c5f8e52985596e12b6ca7f759cd62c9436840377e91e98f206cde4d47",
+        "currentSha256": "455c06e64301b2679e1278cc288cd4b06c875a222339e15c6720c58bc1f011c2"
+      }
+    ],
+    "validationPredecessors": [
+      {
+        "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+        "sha256": "35a27b696cf1b2282fc1da41eb6f7f8173ccf2477cffbc48483bb83a50fef44b"
+      },
+      {
+        "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+        "sha256": "31df3637107941e47985305ddc5704c061b135dbc5f4b34c880b5f75accb02e8"
+      },
+      {
+        "path": "scripts/lib/ooxml-accounting-current-ci-lineage.mjs",
+        "sha256": "bd078b7faa74affff2e78f86d1c26270f3a78bdf2b8b20b56352ff1da4953104",
+        "authenticatedPreviousAliases": [
+          "da926d18f6e71037405ef5e9220097eb2eaec3167d759dad5175578ad9d1b82e"
+        ]
+      },
+      {
+        "path": "scripts/verify-consumption-feedback-ci.mjs",
+        "sha256": "537c70c6accdccc8220fc438502dd1af4da7a6f5fa46cd0414f4f4b222240897",
+        "authenticatedPreviousAliases": [
+          "40b8bc71e33fdb72ce8dc3c82bcf175835eb39e2384c2be875841f070048aa72"
+        ]
+      },
+      {
+        "path": "scripts/verify-organization-usage-ci.mjs",
+        "sha256": "a2e716b6e9199996d0425986b98f17e5a333003b6d3144b7dee12dbd7a80d659",
+        "authenticatedPreviousAliases": [
+          "be7458395db29bf5cbbcd71736192cb59cd15b61b16c3f742a07a946753b220a"
+        ]
+      },
+      {
+        "path": "scripts/verify-plan-measurement-ci.mjs",
+        "sha256": "86e9fe3dbe138caf327a2ea09c7b817cc0e8bf88b8ed273d0cf5363e95a0176f",
+        "authenticatedPreviousAliases": [
+          "38fe0338a778cffbeaac94860cf35f8c15e72de8813964015986ddb2f3eab57f"
+        ]
+      },
+      {
+        "path": "tests/production-material-consumption-feedback-ci.test.mjs",
+        "sha256": "87d154dce14a4d4aaa72b4ec05237cf57f62aef33e3fb4256571d8ed633b3c60",
+        "authenticatedPreviousAliases": [
+          "724dae07b355ea971bd0ca87355bda49998d6ff2dc65467e1d35bd7b27a550a9"
+        ]
+      },
+      {
+        "path": "tests/production-organization-usage-ci.test.mjs",
+        "sha256": "6acf018a2c19559ee7a895e0de9eaa0508b52bc19d0a2d738783f8cdc47ba418",
+        "authenticatedPreviousAliases": [
+          "d73ec704f98bcd8bf737cfef9c0e2bfedf7d9b6a7acacc38d38e6e1e7ae39137"
+        ]
+      },
+      {
+        "path": "tests/production-plan-measurement-ci.test.mjs",
+        "sha256": "286ea19ff474a4bda4254650faa49cdc9b40dd54bcb5a878d61941f960a85a2b",
+        "authenticatedPreviousAliases": [
+          "e5c5a0413eafa50e76e2a29c2f6aa7f743485bb02a07594fc51f48c514de0494"
+        ]
+      },
+      {
+        "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
+        "sha256": "4dfbc2f58044ddbcde52a00ae1017e810c1c9893c01164c90beb1b03c371aaf7",
+        "authenticatedPreviousAliases": [
+          "e8e37a1998d3990190e1a802ace1ea6fde2a291c4effea69613b600c6bd09cfe"
+        ]
+      },
+      {
+        "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
+        "sha256": "2b9b7f26beb8aa2ae1d6ba9cab9c1a0bee6c457ce5f17a0eb7ea8f1fcb7c9faa"
+      },
+      {
+        "path": "scripts/lib/participant-preanalysis-current-ci-lineage.mjs",
+        "sha256": "f1e94bbb3f370c769fa4ce74fb70310b4617605d890ffacc7113fc9fce736399"
+      },
+      {
+        "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
+        "sha256": "0ef5c541e380a67d8d19bbf0b225af768e3f0fca557cb32c993bbe9f496ce9cb"
+      },
+      {
+        "path": "scripts/lib/field-outbound-current-ci-lineage.mjs",
+        "sha256": "13656381f1e032bb82b43d3c6ea9a7db04b42ec15359e758e729d9edb7165afa"
+      }
+    ],
+    "proofSourceDeltas": [
+      {
+        "id": "intake-ui",
+        "family": "UI_INTAKE",
+        "additions": [
+          "src/lib/plan-import-cyp-curve.mjs"
+        ],
+        "previousCount": 34,
+        "currentCount": 35,
+        "previousPathsSha256": "6a42e27db8035b6e903d752b59f323d501c204ed09b4bdfcc8cb0c3b0b29ce32",
+        "currentPathsSha256": "195264635c61b946b37f07bcbf8227647da22237bb43a981755be8cc2b2764ed"
+      },
+      {
+        "id": "project-preparation-ui",
+        "family": "UI_PREPARATION",
+        "additions": [
+          "src/lib/plan-import-cyp-curve.mjs"
+        ],
+        "previousCount": 21,
+        "currentCount": 22,
+        "previousPathsSha256": "2434b6d29bf5d076dc8c1685a9d7302439365f1a476a5f9f6b1533253ab8e169",
+        "currentPathsSha256": "cf0c7022649725745f7a58c7f5d21b83c9a97f3e684ccc832e3533fba800b48e"
+      },
+      {
+        "id": "portfolio-ui",
+        "family": "UI_PORTFOLIO",
+        "additions": [
+          "src/lib/plan-import-cyp-curve.mjs"
+        ],
+        "previousCount": 18,
+        "currentCount": 19,
+        "previousPathsSha256": "e239eed23a483d3c3b9e2f19c19bb0714f2a5090bc3aa0fa7b093d8146841215",
+        "currentPathsSha256": "a877471d19d373def1c2ba1f255aa4e5edafa5524bda71625a151d8c058a1aae"
+      },
+      {
+        "id": "identity-only-ui",
+        "family": "UI_IDENTITY_ONLY",
+        "additions": [
+          "src/lib/plan-import-cyp-curve.mjs"
+        ],
+        "previousCount": 148,
+        "currentCount": 149,
+        "previousPathsSha256": "bdbd7164a1191259bc6a414e327027e97796cc74e3e5f6e8970d3ac752b70a06",
+        "currentPathsSha256": "b10d37cab7e7bcf5c549a5c4af269495c2df6bfc0b6ef038d4456cbe2bcb776c"
+      },
+      {
+        "id": "focused-workspace-ui",
+        "family": "UI_FOCUSED_WORKSPACE",
+        "additions": [
+          "src/lib/plan-import-cyp-curve.mjs"
+        ],
+        "previousCount": 184,
+        "currentCount": 185,
+        "previousPathsSha256": "2fc2eaf4f05e8f58b4fe703709c5b421a2760fe331e64ebf680d566aece4d6e8",
+        "currentPathsSha256": "efbebce1fcdf6f8613b8b30c2ca6dde85af82ba4bd797578282a6375212d1853"
+      },
+      {
+        "id": "field-task-pagination-ui",
+        "family": "UI_FIELD_TASK_PAGINATION",
+        "additions": [
+          "src/lib/plan-import-cyp-curve.mjs"
+        ],
+        "previousCount": 65,
+        "currentCount": 66,
+        "previousPathsSha256": "37c4005666f2a3f09a857c3153dd49c2dd49e0f76337b135e293cabb2d34850b",
+        "currentPathsSha256": "f24faeb0e27ba7e075312e532190e2ad62e8cf1dd97acfff7c1a9acaf29e98ac"
+      }
+    ],
+    "proofProducerDeltas": [
+      {
+        "id": "plan-baseline-postgres",
+        "producer": "scripts/verify-plan-baseline-postgres.mjs",
+        "path": ".vercel/private/approved-plan-baseline-evidence/postgres.json",
+        "previousProducerSha256": "e6dd0da63d68af0816637e661c19530a62b4b91d71022f3d78fc6b29c7bc878c",
+        "currentProducerSha256": "e4c8c13b4b9082d5b139b231140d4f4fd722fdd82c09f077952df6e7f12ea456"
+      }
+    ],
+    "documentCurveCopy": {
+      "version": 2,
+      "dependencies": [
+        "src/lib/plan-import-document-curve.mjs",
+        "src/lib/plan-import-cyp-curve.mjs"
+      ],
+      "helperLfSha256": "05eb49f3948bef7d95580d5ee1bda3cf3c4592e235440a2dbfdb760c2fcb781e"
+    },
+    "baselineNative": {
+      "historicalCheckCount": 16,
+      "addedCheckNames": [
+        "v5-local-OOXML-monthly-weekly-upload-no-Task-mismatch-review-ack",
+        "v5-native-Project-lock-concurrent-review-and-APPLY-one-receipt",
+        "v5-approved-source-explicit-GET-SELECT-no-automatic-baseline",
+        "v5-concurrent-baseline-CAS-replacement-old-replay-no-reactivation",
+        "v5-native-COMMIT-ACK-ROLLBACK-review-apply-selection-exact-UUID",
+        "v5-source-review-APPLY-receipt-active-baseline-tamper-denied",
+        "v5-current-authority-private-recovery-and-business-state-preserved"
+      ],
+      "totalCheckCount": 23
+    },
+    "browser": {
+      "producer": "scripts/verify-plan-import-ui.mjs",
+      "producerLfSha256": "cb76ddce38c6221effa78aba6ae5ce716bead59f587a42d74a2f2724ff453734",
+      "widths": [
+        320,
+        390,
+        768,
+        1280
+      ],
+      "historicalCheckCount": 160,
+      "addedCheckCount": 4,
+      "totalCheckCount": 164,
+      "investmentSourceCount": 31,
+      "investmentSourcePathsSha256": "d8638a12e88f7f82c1c812617a019355ae40368989c8e344db8043fd9508b973",
+      "historicalModes": {
+        "checks": [
+          "apply",
+          "ambiguous",
+          "recover",
+          "manager"
+        ],
+        "decisionRejectionChecks": [
+          "decision-rejected",
+          "decision-rejected-reload",
+          "decision-unconfirmed"
+        ],
+        "uploadRejectionChecks": [
+          "upload-source-rejected",
+          "upload-source-rejected-reload",
+          "upload-quota-rejected",
+          "upload-quota-rejected-reload",
+          "upload-unconfirmed"
+        ],
+        "spreadsheetChecks": [
+          "ooxml-apply",
+          "ooxml-upload-recover"
+        ],
+        "cypChecks": [
+          "cyp-review",
+          "cyp-recover"
+        ],
+        "monthlyCurveChecks": [
+          "curve-review",
+          "curve-recover",
+          "curve-revoked",
+          "curve-invalid-denial"
+        ],
+        "cypCurveChecks": [
+          "cyp-curve-review",
+          "cyp-curve-recover",
+          "cyp-curve-pending-revoked",
+          "cyp-curve-failed-revoked"
+        ],
+        "closeReviewChecks": [
+          "close-conserve",
+          "close-discard",
+          "close-save",
+          "close-clean",
+          "close-uncertain",
+          "close-private-denial"
+        ],
+        "calendarChecks": [
+          "calendar-local-proposal",
+          "calendar-private-denial"
+        ],
+        "planLinkChecks": [
+          "link-ready",
+          "link-canonical-denied",
+          "link-wrong-project",
+          "link-private-denial",
+          "link-unsaved-file",
+          "link-late",
+          "link-pending",
+          "link-malformed"
+        ]
+      },
+      "retainedScreenshots": [
+        {
+          "width": 320,
+          "path": ".vercel/private/plan-import-ui-investment-320.png"
+        },
+        {
+          "width": 390,
+          "path": ".vercel/private/plan-import-ui-investment-390.png"
+        },
+        {
+          "width": 768,
+          "path": ".vercel/private/plan-import-ui-investment-768.png"
+        },
+        {
+          "width": 1280,
+          "path": ".vercel/private/plan-import-ui-investment-1280.png"
+        }
+      ]
+    },
+    "nativeOrBrowserAcceptance": false,
+    "consumerSourceDeltas": [
+      {
+        "family": "CONSUMPTION_FEEDBACK_UI",
+        "previousCount": 22,
+        "previousPathsSha256": "a199678963148d623e1312081691b3fd29930e215474b08838b368bad04dc0ac",
+        "currentCount": 23,
+        "currentPathsSha256": "c4eac1d0ee56262e1df6432ee23c7bdbe83f4a8e87266192284389c03e671483",
+        "additions": [
+          "src/lib/plan-import-cyp-curve.mjs"
+        ]
+      },
+      {
+        "family": "ORGANIZATION_USAGE_UI",
+        "previousCount": 26,
+        "previousPathsSha256": "46b06391df84b1952383d6a53dbe44f1f7385f844406050ed89954f5077dc02e",
+        "currentCount": 27,
+        "currentPathsSha256": "ba289e890f0f4c12aee451e19f4e5b8e3880c39df935dbba2eb243e8f45601e0",
+        "additions": [
+          "src/lib/plan-import-cyp-curve.mjs"
+        ]
+      },
+      {
+        "family": "MEASUREMENT_UI",
+        "previousCount": 18,
+        "previousPathsSha256": "4fe202152d08827101fe2f70ef6ddd12dd0c88f681723fc9350266b479899b2f",
+        "currentCount": 19,
+        "currentPathsSha256": "74e718eaa4c446355f64500947313efdd3f18225f409f87e96c42319d253ff69",
+        "additions": [
+          "src/lib/plan-import-cyp-curve.mjs"
+        ]
+      }
+    ],
+    "validationSources": [
+      {
+        "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+        "sha256": "59bed869142fc27c1e663c53d95bbd8dbb66b08c5231d04bc9863d9e4ec612e6"
+      },
+      {
+        "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+        "sha256": "95f8367157246020f35cdcad9c914e8022dd0fcc656d04201dd8bd5f050e9af5"
+      },
+      {
+        "path": "scripts/lib/ooxml-accounting-current-ci-lineage.mjs",
+        "sha256": "481bd570fe9eb6b08db6568e830e5c74f4d07a3e0eebff9f95c4abc541db9681"
+      },
+      {
+        "path": "scripts/verify-consumption-feedback-ci.mjs",
+        "sha256": "c75e1bbf4412b2d307fcace6d276bb6c80ba16c6113aaa16cae171cbb0460c0d"
+      },
+      {
+        "path": "scripts/verify-organization-usage-ci.mjs",
+        "sha256": "369a8f571cdb987127aff88067703868ee5638af7a7cc0968a198cc31fcf3805"
+      },
+      {
+        "path": "scripts/verify-plan-measurement-ci.mjs",
+        "sha256": "f2d1c3d288fcdb238b0706600e541edd6ea3a7f48a68dfd2603d3d4eaf837cbb"
+      },
+      {
+        "path": "tests/production-material-consumption-feedback-ci.test.mjs",
+        "sha256": "59af0297c0f75472f6682521ba338cd28357f5eb6270d67ed102191387b672ad"
+      },
+      {
+        "path": "tests/production-organization-usage-ci.test.mjs",
+        "sha256": "5ac1d06ca215b96a9e07e0acdb2464a255154850fcf0a58822de4ef846d8085c"
+      },
+      {
+        "path": "tests/production-plan-measurement-ci.test.mjs",
+        "sha256": "887f418e42483569c0a955c6969429d607e51fbf8c672c3fe986076e84c1cb5f"
+      },
+      {
+        "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
+        "sha256": "7f194c2913ba98b3551832bb40608f58473bf94603390b0810f67a75fb2a463f"
+      },
+      {
+        "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
+        "sha256": "aaf23ee0e97231520f29669136d969ffc513bd6b52067df751d3dc6cf9c86bb8"
+      },
+      {
+        "path": "scripts/lib/participant-preanalysis-current-ci-lineage.mjs",
+        "sha256": "3c330d4f821d7f2c998dd17064c67ffdcc52dc3cfbd033c165af39e071333f7b"
+      },
+      {
+        "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
+        "sha256": "19addbc7ba23c963c2a1a9fae59fbc8cb2658f94d345cc7b731a5d9648dce818"
+      },
+      {
+        "path": "scripts/lib/field-outbound-current-ci-lineage.mjs",
+        "sha256": "7801d9d074c4451178d7900d605aa75c91ebf6b4a82a24f997e89d0284008c7b"
       }
     ]
   }

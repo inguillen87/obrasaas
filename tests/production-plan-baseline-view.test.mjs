@@ -6,11 +6,24 @@ import {planBaselineSelectionDigest} from '../src/lib/plan-baseline-policy.mjs';
 import {planBaselineCandidateView,planBaselineActiveView,planBaselineListView,planBaselineOutcome,planBaselineCommandDigest,planBaselineSelectionCommandView} from '../src/app/(identity)/cuenta/plan-baseline-view.mjs';
 import {createWorkspaceRecoveryJournal,recoveryQuery,recoveryResult,WORKSPACE_RECOVERY_PREFIX,validateWorkspaceRecoveryStoredEntry} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
 import {createWorkspaceRequestLifecycle} from '../src/app/(identity)/cuenta/workspace-request-lifecycle.mjs';
+import {documentStoreHarness,session as investmentSession} from './fixtures/plan-document-curve-store-synthetic.mjs';
+import {cypInvestmentFixture} from './fixtures/plan-import-cyp-curve-synthetic.mjs';
+import {createPlanImportAnalyzer} from '../src/lib/plan-import-analyzer.mjs';
+import {decodePlanSource} from '../src/lib/plan-import-policy.mjs';
 
 function storage(seed=[]){const rows=new Map(seed);return {get length(){return rows.size;},key:i=>[...rows.keys()][i]??null,getItem:key=>rows.get(key)??null,setItem:(key,value)=>rows.set(key,value),removeItem:key=>rows.delete(key),rows};}
 const journal=s=>createWorkspaceRecoveryJournal({getStorage:()=>s,now:()=>123456});
 const post=body=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
 async function values(){const h=await planBaselineHarness({sources:2}),input=h.input(),result=await h.baselines.select(session,input);return {h,input,result,reference:{...h.context(),operationId:input.operationId,inputDigest:await planBaselineCommandDigest(input)}};}
+
+test('client baseline decoder reopens authentic monthly and weekly source without recasting its zero Task counts',async()=>{
+ const h=documentStoreHarness({taskCount:0,analyzerOverride:createPlanImportAnalyzer({environment:()=>{throw Error('No provider');},fetchImpl:()=>{throw Error('No provider');}})}),source=decodePlanSource(cypInvestmentFixture(),'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+ let draft=(await h.attach({consent:'plan-spreadsheet-cyp-investment-curves-v1',source})).draft;
+ for(const action of ['REVIEW_INVESTMENT','APPLY_INVESTMENT'])draft=(await h.imports.decide(investmentSession,{...h.context(),operationId:randomUUID(),action,draftId:draft.id,expectedRevision:draft.revision,reason:'Reviewed original financial monthly and weekly series',acknowledgeDifference:false})).draft;
+ const list=JSON.parse(JSON.stringify(await h.baselines.read(investmentSession,h.context())));assert.equal(planBaselineListView(list,h.context()),list);const value=list.candidates[0];assert.equal(planBaselineCandidateView(value),value);assert.equal(value.sourceRowCount,0);assert.equal(value.curve.weekly.periods.length,48);
+ const input=h.baselineInput(draft),result=JSON.parse(JSON.stringify(await h.baselines.select(investmentSession,input)));assert.equal(planBaselineActiveView(result.active),result.active);assert.equal(result.active.curve.monthly.periods.length,12);assert.equal(result.active.curve.weekly.periods[47].ordinal,48);assert.equal(planBaselineOutcome(result,{...h.context(),operationId:input.operationId,inputDigest:await planBaselineCommandDigest(input)}).state,'RECORDED');
+ for(const change of [v=>{v.curve.weekly.periods[47].ordinal=47;},v=>{v.curve.weekly.currency='ARS';},v=>{v.sourceKind='DOCUMENT';},v=>{v.selectedRowCount=1;},v=>{v.sourceSha256='f'.repeat(64);}]){const bad=structuredClone(result.active);change(bad);assert.throws(()=>planBaselineActiveView(bad));}
+});
 
 test('client digest and normalized command match the actual server command contract',async()=>{
  const h=await planBaselineHarness(),input=h.input();

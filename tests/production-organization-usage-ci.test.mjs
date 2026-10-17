@@ -1,3 +1,4 @@
+import {restoreWeeklyCypConsumerSourceSet} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {restoreIntegratedIdentitySourceSet} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import {participantPreanalysisConsumerSourceFiles} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {ORGANIZATION_NATIVE_PRE_DOCUMENT_SOURCES,ORGANIZATION_UI_PRE_DOCUMENT_SOURCES} from './fixtures/feedback-ci-historical-source-sets.mjs';
@@ -19,6 +20,7 @@ const native=organizationUsageCiSourceClosure(read),browser=organizationUsageCiS
 const preanalysisPriorNative=participantPreanalysisConsumerSourceFiles('ORGANIZATION_USAGE',native.files,read);
 const integratedPriorNative=restoreIntegratedIdentitySourceSet('ORGANIZATION_USAGE',native.files,JSON.parse(read('.github/workspace-acceptance-contract.json')));
 const historicalNative=preanalysisPriorNative.filter(file=>!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file));
+const publishedBrowser=restoreWeeklyCypConsumerSourceSet('ORGANIZATION_USAGE_UI',browser.files,JSON.parse(read('.github/workspace-acceptance-contract.json')));
 test('source import CURRENT115 retains previous113 and rejects old receipts, missing quantities and a resealed producer',()=>{
  assert.equal(historicalNative.length,113);assert.equal(sha(JSON.stringify(historicalNative)),'e09335573fc3fe06574f23907088ae2f0a16340fd0a5a4a8b61ae31016be9736');
  rejected(input=>{input.postgres.sourceManifest=manifest(historicalNative);});
@@ -35,14 +37,14 @@ function fixture(){
 function rejected(change){const input=fixture();change(input);assert.throws(()=>validateOrganizationUsageCi(input),{code:'ORGANIZATION_USAGE_CI_REJECTED'});}
 
 test('complete native and DOM source-bound contracts validate without executing producers',()=>{
- assert.equal(preanalysisPriorNative.length,115);assert.equal(integratedPriorNative.length,117);assert.equal(native.files.length,120);assert.equal(browser.files.length,26);assert.equal(ORGANIZATION_USAGE_PG_CHECKS.length,16);const input=fixture(),before=JSON.stringify(input),proof=validateOrganizationUsageCi(input);assert.equal(JSON.stringify(input),before);assert.equal(proof.version,ORGANIZATION_USAGE_CI_VERSION);assert.equal(proof.status,'PASS');assert.equal(proof.postgres.sourceLineage.publishedCurrentSourceCount,115);assert.equal(proof.postgres.sourceCount,native.files.length);assert.equal(proof.postgres.sourceLineage.previousSourceCount,113);assert.equal(proof.ui.sourceCount,26);assert.equal(proof.providerRequests,0);assert.equal(proof.paymentVerified,false);assert.equal(proof.cost,null);
+ assert.equal(preanalysisPriorNative.length,115);assert.equal(integratedPriorNative.length,117);assert.equal(native.files.length,120);assert.equal(browser.files.length,27);assert.equal(publishedBrowser.length,26);assert.deepEqual(browser.files,[...publishedBrowser,'src/lib/plan-import-cyp-curve.mjs'].sort());assert.equal(ORGANIZATION_USAGE_PG_CHECKS.length,16);const input=fixture(),before=JSON.stringify(input),proof=validateOrganizationUsageCi(input);assert.equal(JSON.stringify(input),before);assert.equal(proof.version,ORGANIZATION_USAGE_CI_VERSION);assert.equal(proof.status,'PASS');assert.equal(proof.postgres.sourceLineage.publishedCurrentSourceCount,115);assert.equal(proof.postgres.sourceCount,native.files.length);assert.equal(proof.postgres.sourceLineage.previousSourceCount,113);assert.equal(proof.ui.sourceCount,27);assert.equal(proof.providerRequests,0);assert.equal(proof.paymentVerified,false);assert.equal(proof.cost,null);
  // Challenge the new graph with the independently frozen pre-document path set.
  assert.equal(ORGANIZATION_NATIVE_PRE_DOCUMENT_SOURCES.length,110);
  assert.deepEqual(historicalNative.filter(file=>!['src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs','src/lib/field-report-feedback.mjs'].includes(file)),ORGANIZATION_NATIVE_PRE_DOCUMENT_SOURCES);
  rejected(input=>{input.postgres.sourceManifest=manifest(ORGANIZATION_NATIVE_PRE_DOCUMENT_SOURCES);});
  for(const file of ["src/lib/plan-baseline-policy.mjs", "src/lib/plan-import-document-curve.mjs"]){rejected(input=>{input.postgres.sourceManifest=input.postgres.sourceManifest.filter(ref=>ref.path!==file);});rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).path='src/lib/substituted-document-curve.mjs';});rejected(input=>{input.postgres.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});rejected(input=>{delete input.gitSources[file];});}
- for(const file of ["src/lib/plan-import-document-curve.mjs"]){rejected(input=>{input.ui.sourceManifest=input.ui.sourceManifest.filter(ref=>ref.path!==file);});rejected(input=>{input.ui.sourceManifest.find(ref=>ref.path===file).path='src/lib/substituted-document-curve.mjs';});rejected(input=>{input.ui.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});rejected(input=>{delete input.gitSources[file];});}
- assert.equal(ORGANIZATION_UI_PRE_DOCUMENT_SOURCES.length,25);assert.deepEqual(browser.files.filter(file=>file!=='src/lib/plan-import-document-curve.mjs'),ORGANIZATION_UI_PRE_DOCUMENT_SOURCES);rejected(input=>{input.ui.sourceManifest=manifest(ORGANIZATION_UI_PRE_DOCUMENT_SOURCES);});
+ for(const file of ["src/lib/plan-import-document-curve.mjs","src/lib/plan-import-cyp-curve.mjs"]){rejected(input=>{input.ui.sourceManifest=input.ui.sourceManifest.filter(ref=>ref.path!==file);});rejected(input=>{input.ui.sourceManifest.find(ref=>ref.path===file).path='src/lib/substituted-document-curve.mjs';});rejected(input=>{input.ui.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});rejected(input=>{delete input.gitSources[file];});}
+ assert.equal(ORGANIZATION_UI_PRE_DOCUMENT_SOURCES.length,25);assert.deepEqual(publishedBrowser.filter(file=>file!=='src/lib/plan-import-document-curve.mjs'),ORGANIZATION_UI_PRE_DOCUMENT_SOURCES);rejected(input=>{input.ui.sourceManifest=manifest(ORGANIZATION_UI_PRE_DOCUMENT_SOURCES);});
 
 });
 test('durable civil source lineage cannot be omitted, substituted or certified by the pre-civil manifest',()=>{
@@ -73,7 +75,7 @@ test('current organization usage and UI helper nodes cannot be missing, stale or
  }
 });
 test('source manifests cannot conceal duplicates, extras or false package bytes',()=>{
- rejected(input=>{input.ui.sourceManifest=input.ui.sourceManifest.filter(ref=>ref.path!=='src/app/(identity)/cuenta/plan-baseline-view.mjs');assert.equal(input.ui.sourceManifest.length,25);});
+ rejected(input=>{input.ui.sourceManifest=input.ui.sourceManifest.filter(ref=>ref.path!=='src/app/(identity)/cuenta/plan-baseline-view.mjs');assert.equal(input.ui.sourceManifest.length,26);});
  for(const kind of ['postgres','ui']){rejected(input=>{input[kind].sourceManifest[1]={...input[kind].sourceManifest[0]};});rejected(input=>{input[kind].sourceManifest.push({path:'src/lib/extra.mjs',sha256:'f'.repeat(64)});});rejected(input=>{input[kind].harnessSha256='f'.repeat(64);});}rejected(input=>{input.ui.dependencyManifest.pop();});rejected(input=>{input.ui.dependencyManifest[0].sha256='f'.repeat(64);});rejected(input=>{input.ui.cleanupHelperSha256='f'.repeat(64);});
 });
 
