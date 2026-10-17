@@ -178,8 +178,74 @@ test('revoked draft permission blocks a previously offered confirmation and medi
  const task=say('EVIDENCIA'),place=pick(task),pending=pick(place),media=run({type:'image',image:{id:'123456789012345',mime_type:'image/jpeg'}},pending.state,{facts:{...facts,permissions:{attendance:true,report:false}}});
  assert.equal(media.state,null);assert.equal(media.media,undefined);assert.match(media.reply.body,/permisos/);
 });
-test('progress with no approved evidence preserves task and asks for human review first',()=>{
- const task=say('AVANCE'),sector=pick(task),measurement=pick(sector),result=say('25%',measurement.state);assert.equal(result.command,undefined);assert.equal(result.state,null);assert.match(result.reply.body,/evidencia revisada/);
+const progressDeadline='2026-10-01T12:04:00.000Z';
+const waitingAt=new Date('2026-10-01T12:01:00.000Z');
+function rawProgress(message,state,current=facts,at=waitingAt){return planMetaFieldConversation({message,state,eventId:'progress_wait_'+(++sequence),facts:current,now:at});}
+const waitSay=(body,state,current,at)=>rawProgress({type:'text',text:{body}},state,current,at);
+function waitPick(plan,value,current,at){const index=plan.state.choices.findIndex(choice=>choice.value===value);assert.notEqual(index,-1);return rawProgress({type:'interactive',interactive:{type:'list_reply',list_reply:{id:plan.reply.sections[0].rows[index].id}}},plan.state,current,at);}
+function waitingProgress(value='25%',current=facts,mode=null){
+ const extra={facts:current},task=say('AVANCE',null,extra),sector=pick(task,0,extra),measurement=pick(sector,0,extra),input=mode?pickValue(measurement,mode,extra):measurement;
+ const state=Object.freeze({...input.state,expiresAt:progressDeadline}),before=JSON.stringify(state),result=waitSay(value,state,current);
+ assert.equal(JSON.stringify(state),before);return result;
+}
+function measuredWaitFacts(){return {...facts,tasks:[{...facts.tasks[0],progress:25,measurement:{version:'task-progress-measurement-v1',definitionId:'measurement-a',baseline:'10.0000',unit:'M2',executed:'2.5000',sourceReference:'Planilla sintética A-01',configuredAt:'2026-10-01T11:00:00.000Z',approvedProposalId:'previous-proposal',approvedAt:'2026-10-01T11:30:00.000Z'}}]};}
+const reviewedPhoto={id:'evidence-a',title:'Foto revisada',taskId:'task-a',status:'APPROVED'};
+
+for(const [label,value,mode]of [['percentage','25%',null],['legacy quantity','2.5 / 10 M2',null],['daily quantity','1','DELTA'],['cumulative quantity','3.5','CUMULATIVE']])test('missing approved evidence retains '+label+' and its original deadline without a proposal',()=>{
+ const current=mode?measuredWaitFacts():facts,result=waitingProgress(value,current,mode);
+ assert.equal(result.state.step,'PROGRESS_EVIDENCE_WAIT');assert.equal(result.state.taskId,'task-a');assert.equal(result.state.sectorId,'sector-a');assert.equal(result.state.taskRevision,current.tasks[0].revision);assert.equal(result.state.expiresAt,progressDeadline);assert.deepEqual(result.state.progressEvidenceWait,{version:1,deadline:progressDeadline});
+ assert.equal(result.state.progress,mode?35:25);assert.equal(result.state.quantity,label==='percentage'?null:mode?'3.5000':'2.5000');assert.equal(result.state.baseline,label==='percentage'?null:'10.0000');assert.equal(result.state.unit,label==='percentage'?null:'M2');
+ if(mode){assert.deepEqual(result.state.measurement,{mode,quantity:mode==='DELTA'?'1.0000':'3.5000'});assert.equal(result.state.measurementDefinitionId,'measurement-a');assert.equal(result.state.measurementSummary.previous,'2.5000');}
+ assert.deepEqual(result.state.choices.map(choice=>choice.value),['RECHECK_EVIDENCE','CANCEL']);assert.ok(result.reply.sections[0].rows.every(row=>row.title.length<=24));assert.match(result.reply.body,/evidencia revisada y aprobada/);assert.equal(result.preserveConversation,undefined);assert.equal(result.command,undefined);assert.equal(result.media,undefined);
+});
+
+test('rechecking rotates only the prompt and reaches a proposal only after approved evidence, reason and final confirmation',()=>{
+ const current={...facts,evidence:[{...reviewedPhoto,status:'PENDING'},{...reviewedPhoto,id:'rejected-photo',status:'REJECTED'},{...reviewedPhoto,id:'other-task-photo',taskId:'other-task'}]},waiting=waitingProgress('2.5 / 10 M2',current),before=JSON.stringify(waiting.state),rechecked=waitPick(waiting,'RECHECK_EVIDENCE',current,new Date('2026-10-01T12:02:00.000Z'));
+ assert.equal(JSON.stringify(waiting.state),before);assert.notEqual(rechecked.state.nonce,waiting.state.nonce);assert.equal(rechecked.state.expiresAt,progressDeadline);assert.equal(rechecked.command,undefined);assert.equal(rechecked.preserveConversation,undefined);
+ for(const key of ['taskId','taskRevision','sectorId','progress','quantity','baseline','unit','progressEvidenceWait'])assert.deepEqual(rechecked.state[key],waiting.state[key]);
+ const stale=rawProgress({type:'interactive',interactive:{type:'list_reply',list_reply:{id:waiting.reply.sections[0].rows[0].id}}},rechecked.state,current,new Date('2026-10-01T12:02:30.000Z'));assert.equal(stale.state,rechecked.state);assert.equal(stale.preserveConversation,true);assert.match(stale.reply.body,/paso anterior/);assert.equal(stale.command,undefined);
+ const approved={...current,evidence:[reviewedPhoto]},evidence=waitPick(rechecked,'RECHECK_EVIDENCE',approved,new Date('2026-10-01T12:03:00.000Z'));assert.equal(evidence.state.step,'PROGRESS_EVIDENCE');assert.equal(evidence.state.expiresAt,progressDeadline);assert.equal(evidence.command,undefined);
+ const afterApproval=new Date('2026-10-01T12:03:30.000Z'),invalidChoice=waitSay('evidence-a',evidence.state,approved,afterApproval);assert.equal(invalidChoice.state,evidence.state);assert.equal(invalidChoice.preserveConversation,true);assert.equal(invalidChoice.command,undefined);
+ const reason=waitPick(evidence,'evidence-a',approved,afterApproval),invalid=waitSay('corto',reason.state,approved,afterApproval);assert.equal(invalid.state,reason.state);assert.equal(invalid.state.expiresAt,progressDeadline);assert.equal(invalid.command,undefined);
+ const confirmation=waitSay('Medí el área ejecutada en el sector.',reason.state,approved,afterApproval),plain=waitSay('Guardar',confirmation.state,approved,afterApproval);assert.equal(confirmation.state.expiresAt,progressDeadline);assert.equal(plain.command,undefined);assert.equal(plain.state.step,'CONFIRM');
+ const saved=waitPick(confirmation,'CONFIRM',approved,afterApproval);assert.equal(saved.state,null);assert.deepEqual(saved.command,{action:'PROPOSE_PROGRESS',payload:{workerId:'worker-a',taskId:'task-a',revision:facts.tasks[0].revision,progress:25,quantity:'2.5000',baseline:'10.0000',unit:'M2',reason:'Medí el área ejecutada en el sector.',evidenceIds:['evidence-a']}});
+});
+
+test('resumed daily and cumulative drafts keep the original reported quantity and approved baseline through confirmation',()=>{
+ for(const mode of ['DELTA','CUMULATIVE']){
+  const current=measuredWaitFacts(),waiting=waitingProgress(mode==='DELTA'?'1':'3.5',current,mode),approved={...current,evidence:[reviewedPhoto]},evidence=waitPick(waiting,'RECHECK_EVIDENCE',approved),reason=waitPick(evidence,'evidence-a',approved),confirmation=waitSay('Verifiqué la cantidad y el alcance informado.',reason.state,approved);
+  for(const step of [evidence,reason,confirmation]){assert.deepEqual(step.state.measurement,waiting.state.measurement);assert.deepEqual(step.state.measurementSummary,waiting.state.measurementSummary);assert.equal(step.state.measurementDefinitionId,'measurement-a');assert.equal(step.state.expiresAt,progressDeadline);assert.equal(step.command,undefined);}
+  const saved=waitPick(confirmation,'CONFIRM',approved);assert.deepEqual(saved.command,{action:'PROPOSE_PROGRESS',payload:{workerId:'worker-a',taskId:'task-a',revision:current.tasks[0].revision,measurement:{mode,quantity:mode==='DELTA'?'1.0000':'3.5000'},reason:'Verifiqué la cantidad y el alcance informado.',evidenceIds:['evidence-a']}});
+ }
+});
+
+test('waiting progress reads, plain text and other aliases preserve the exact prompt until explicit cancellation',()=>{
+ const waiting=waitingProgress(),state=Object.freeze({...waiting.state,lastEventId:'original-wait-prompt'}),before=JSON.stringify(state);
+ for(const body of ['HOLA','ESTADO','TAREAS','AVANCES','EVIDENCIAS','CONSUMOS','AVANCE','EVIDENCIA','MENU','Consultar evidencia','RECHECK_EVIDENCE','sí']){
+  const read=waitSay(body,state,facts,new Date('2026-10-01T12:03:59.000Z'));assert.equal(read.state,state,body);assert.equal(read.preserveConversation,true,body);assert.equal(read.command,undefined);assert.equal(read.media,undefined);assert.equal(read.state.expiresAt,progressDeadline);
+ }
+ assert.equal(JSON.stringify(state),before);
+ const cancelled=waitPick(waiting,'CANCEL');assert.equal(cancelled.state,null);assert.equal(cancelled.command,undefined);assert.match(cancelled.reply.body,/cancelado/);
+ const textCancelled=waitSay('CANCELAR',state);assert.equal(textCancelled.state.purpose,'MENU');assert.equal(textCancelled.state.progressEvidenceWait,undefined);assert.equal(textCancelled.command,undefined);
+});
+
+test('waiting progress cannot resume with changed task revision, removed task or changed measurement definition',()=>{
+ for(const current of [facts,measuredWaitFacts()]){
+  const waiting=waitingProgress(current===facts?'25%':'1',current,current===facts?null:'DELTA'),task=current.tasks[0],changes=[{...current,tasks:[]},{...current,tasks:[{...task,revision:'2026-10-01T12:02:00.000001'}]},{...current,tasks:[{...task,measurement:{...(task.measurement||{}),definitionId:'changed-definition'}}]}];
+  for(const changed of changes){const stopped=waitPick(waiting,'RECHECK_EVIDENCE',changed);assert.equal(stopped.state,waiting.state);assert.equal(stopped.preserveConversation,true);assert.equal(stopped.command,undefined);assert.match(stopped.reply.body,/cambió/);const cancelled=waitPick(waiting,'CANCEL',changed);assert.equal(cancelled.state,null);assert.equal(cancelled.command,undefined);}
+ }
+ const waiting=waitingProgress(),denied=waitPick(waiting,'RECHECK_EVIDENCE',{...facts,permissions:{attendance:true,report:false}});assert.equal(denied.state,null);assert.equal(denied.command,undefined);assert.match(denied.reply.body,/permisos/);
+});
+
+test('the original waiting deadline also bounds resumed evidence, reason and confirmation without renewal',()=>{
+ const waiting=waitingProgress(),approved={...facts,evidence:[reviewedPhoto]},evidence=waitPick(waiting,'RECHECK_EVIDENCE',approved),reason=waitPick(evidence,'evidence-a',approved),confirmation=waitSay('Medí el avance con la evidencia revisada.',reason.state,approved);
+ for(const plan of [waiting,evidence,reason,confirmation]){
+  assert.equal(plan.state.expiresAt,progressDeadline);assert.deepEqual(plan.state.progressEvidenceWait,{version:1,deadline:progressDeadline});
+  const expired=rawProgress({type:'interactive',interactive:{type:'list_reply',list_reply:{id:plan.reply.type==='interactive'?plan.reply.sections[0].rows[0].id:'obra:'+'f'.repeat(20)+':0'}}},plan.state,approved,new Date(progressDeadline));assert.equal(expired.state,null);assert.equal(expired.command,undefined);assert.equal(expired.media,undefined);
+ }
+ const changed={...approved,tasks:[{...facts.tasks[0],revision:'2026-10-01T12:02:00.000001'}]},stopped=waitPick(confirmation,'CONFIRM',changed);assert.equal(stopped.state,confirmation.state);assert.equal(stopped.command,undefined);
+ const rejected=waitPick(confirmation,'CONFIRM',{...approved,evidence:[{...reviewedPhoto,status:'REJECTED'}]});assert.equal(rejected.state,confirmation.state);assert.equal(rejected.preserveConversation,true);assert.equal(rejected.command,undefined);
+ for(const progressEvidenceWait of [{version:2,deadline:progressDeadline},{version:1,deadline:'2026-10-01T12:05:00.000Z'}])assert.throws(()=>waitSay('dato',{...waiting.state,progressEvidenceWait}),error=>error.code==='META_CHANNEL_RECEIPT_INTEGRITY');
 });
 test('quantitative proposal binds the selected task revision and approved evidence',()=>{
  const enhanced={...facts,evidence:[{id:'evidence-a',title:'Foto revisada',taskId:'task-a',status:'APPROVED'}]},task=say('AVANCE',null,{facts:enhanced}),sector=pick(task,0,{facts:enhanced}),measurement=pick(sector,0,{facts:enhanced}),evidence=say('2.5 / 10 M2',measurement.state,{facts:enhanced}),reason=pick(evidence,0,{facts:enhanced}),confirmation=say('Medí el área ejecutada en el sector.',reason.state,{facts:enhanced}),saved=pick(confirmation,0,{facts:enhanced});
