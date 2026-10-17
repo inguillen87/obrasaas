@@ -2111,7 +2111,8 @@ export function integratedIdentityConsumerSourceFiles(family,files,readSource){
 }
 export function validateIntegratedIdentityWorkspaceContract(contract){
  const value=revision(contract);if(!value)return null;restoreIntegratedIdentityPreviousContract(contract);
- requireLineage(contract.blocks.length===58&&contract.extension.proofs.length===20&&contract.artifactPatterns.length===62,'All checkpoint blocks proofs and artifact patterns plus one focused proof are required');
+ const historicalMetadata=restoreDocumentTaskAssociationPreviousContract(contract);
+ requireLineage(historicalMetadata.blocks.length===58&&historicalMetadata.extension.proofs.length===20&&historicalMetadata.artifactPatterns.length===62,'All checkpoint blocks proofs and artifact patterns plus one focused proof are required');
  requireLineage(value.companyCurrentCaseNames.length===17&&value.ownCurrentCaseNames.length===4,'All additive CURRENT scenarios must remain declared');
  requireLineage(value.companyCurrentSummary.kind==='COMPANY'&&value.companyCurrentSummary.postgresExecuted===true&&value.companyCurrentSummary.identityCertified===false&&value.companyCurrentSummary.permissionsGranted===false&&value.ownCurrentSummary.kind==='OWN_COMPANY_RUNTIME_CURRENT_IMAGE'&&value.ownCurrentSummary.postgresExecuted===true&&value.ownCurrentSummary.identityCertified===false&&value.ownCurrentSummary.permissionsGranted===false,'Current native summaries remain synthetic and cannot grant identity or permissions');
  requireLineage(same(contract.participantPreanalysisCurrentRevision.nativeCheckNames,checkpoint.participantPreanalysisCurrentRevision.nativeCheckNames)&&contract.participantPreanalysisCurrentRevision.nativeProducerSha256===checkpoint.participantPreanalysisCurrentRevision.nativeProducerSha256,'Original AI19 producer and scenario order are immutable');

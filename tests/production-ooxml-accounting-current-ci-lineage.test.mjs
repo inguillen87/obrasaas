@@ -1,4 +1,5 @@
 import {restoreParticipantPreanalysisPreviousContract,restoreParticipantPreanalysisSourceSet} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
+import {restoreWhatsappFieldContinuitySourceSet} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import {restoreIntegratedIdentityPreviousContract,restoreIntegratedIdentitySourceSet,integratedIdentityCurrentSourcePin} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import {DOCUMENT_TASK_ASSOCIATION_CURRENT_REVISION as documentRevision} from '../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
@@ -54,13 +55,13 @@ test('current raw OOXML and validator bytes are checked without native or human 
  const lineage=verifyPlanMeasurementCurrentSources(contract,read);assert.equal(lineage.publishedCurrentSourceCount,127);
  const actualFiles=companyKycOutboundCompactCiSourceClosure(read).files,checkpointFiles=restoreIntegratedIdentitySourceSet('COMPACT',actualFiles,contract);
  assert.equal(checkpointFiles.length,contract.participantPreanalysisCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
- assert.equal(lineage.sourceCount,actualFiles.length);assert.equal(lineage.sourceCount,137);assert.equal(lineage.sourceCount,contract.integratedIdentityCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
+ const outer=contract.whatsappFieldContinuityCurrentRevision.sourceSetDeltas.find(row=>row.family==='COMPACT'),previousCurrentFiles=restoreWhatsappFieldContinuitySourceSet('COMPACT',actualFiles,contract);assert.equal(outer.currentCount,139);assert.equal(sha(JSON.stringify(actualFiles)),outer.currentPathsSha256);assert.equal(previousCurrentFiles.length,137);assert.equal(sha(JSON.stringify(previousCurrentFiles)),'ab60b810e098f47892e1a17cb01ce1f7f8e1796c1687776b528100e62cb3083f');assert.equal(previousCurrentFiles.length,contract.integratedIdentityCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);assert.equal(lineage.sourceCount,actualFiles.length);assert.equal(lineage.sourceCount,outer.currentCount);
 });
 test('the native compact closure remains 127 and the two new CI guards stay outside it',()=>{
  const requested=new Set(),source=file=>{requested.add(file);return read(file);},closure=companyKycOutboundCompactCiSourceClosure(source);
  assert.equal(restoreParticipantPreanalysisSourceSet('COMPACT',closure.files,contract).length,127);const checkpointFiles=restoreIntegratedIdentitySourceSet('COMPACT',closure.files,contract);
  assert.equal(checkpointFiles.length,contract.participantPreanalysisCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
- assert.equal(closure.files.length,137);assert.equal(closure.files.length,contract.integratedIdentityCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
+ const previousCurrentFiles=restoreWhatsappFieldContinuitySourceSet('COMPACT',closure.files,contract);assert.equal(previousCurrentFiles.length,137);assert.equal(sha(JSON.stringify(previousCurrentFiles)),'ab60b810e098f47892e1a17cb01ce1f7f8e1796c1687776b528100e62cb3083f');assert.equal(previousCurrentFiles.length,contract.integratedIdentityCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);assert.equal(closure.files.length,139);assert.equal(sha(JSON.stringify(closure.files)),contract.whatsappFieldContinuityCurrentRevision.sourceSetDeltas.find(row=>row.family==='COMPACT').currentPathsSha256);
  for(const file of OOXML_ACCOUNTING_CURRENT_VALIDATION_PATHS){assert.equal(requested.has(file),true);assert.equal(closure.files.includes(file),false);}
  for(const file of ['src/lib/plan-import-ooxml.mjs','src/lib/plan-measurement-source.mjs'])assert.equal(closure.files.includes(file),true);
 });

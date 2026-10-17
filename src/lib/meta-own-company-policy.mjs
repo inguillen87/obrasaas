@@ -94,11 +94,22 @@ export function ownCompanyConnectionPolicy(connection,environment=process.env,no
 }
 // Runtime callers use the canonical connection and current issuer membership,
 // never a serialized company boolean or an actor supplied by a webhook.
+async function ownCompanyIssuerPrincipal(client,policy,lockClause){
+ const rows=(await client.query(`SELECT u.id AS "actorId",tm."organizationId",tm."tenantRole"::text AS role,o.metadata AS "organizationMetadata" FROM public."PlatformUser" u JOIN public."TenantMembership" tm ON tm."userId"=u.id JOIN public."Organization" o ON o.id=tm."organizationId" JOIN public."Project" p ON p."organizationId"=o.id AND p.id=$4 WHERE u.id=$1 AND u."clerkUserId"=$2 AND tm."organizationId"=$3 AND tm.status='ACTIVE' AND tm."tenantRole"::text='ADMIN' AND tm."clerkRole"='org:admin' AND o."clerkOrganizationId"=$5 AND p.status='ACTIVE' AND COALESCE(o.metadata->'internal','false'::jsonb)<>'true'::jsonb ${lockClause}`,[policy.actorId,policy.clerkUserId,policy.organizationId,policy.projectId,policy.clerkOrganizationId])).rows;
+ if(rows.length!==1)fail();return rows[0];
+}
+// KYC must hold the original number owner's principals before its person and
+// Project locks. This prefix locks no channel/project/audit and mints nothing;
+// only the later complete resolver can authorize the original connection.
+export async function lockOwnCompanyIssuerPrincipal(client,connection,{environment=process.env,now=Date.now()}={}){
+ if(!connection?.metadata?.ownCompany&&!Object.hasOwn(connection?.metadata||{},'ownCompanyRuntime'))return;
+ const policy=ownCompanyConnectionPolicy(connection,environment,now),row=await ownCompanyIssuerPrincipal(client,policy,'FOR SHARE OF u,tm,o');
+ if(!memberMatches(policy,{member:row,session:{userId:policy.clerkUserId,organizationId:policy.clerkOrganizationId,organizationRole:'org:admin'},project:{id:policy.projectId,organizationId:policy.organizationId,organizationMetadata:row.organizationMetadata}}))fail();
+}
 export async function lockOwnCompanyIssuer(client,connection,{environment=process.env,now=Date.now(),lock=true}={}){
  if(!connection?.metadata?.ownCompany&&!Object.hasOwn(connection?.metadata||{},'ownCompanyRuntime'))return null;
  const policy=ownCompanyConnectionPolicy(connection,environment,now);
- const rows=(await client.query(`SELECT u.id AS "actorId",tm."organizationId",tm."tenantRole"::text AS role,o.metadata AS "organizationMetadata" FROM public."PlatformUser" u JOIN public."TenantMembership" tm ON tm."userId"=u.id JOIN public."Organization" o ON o.id=tm."organizationId" JOIN public."Project" p ON p."organizationId"=o.id AND p.id=$4 WHERE u.id=$1 AND u."clerkUserId"=$2 AND tm."organizationId"=$3 AND tm.status='ACTIVE' AND tm."tenantRole"::text='ADMIN' AND tm."clerkRole"='org:admin' AND o."clerkOrganizationId"=$5 AND p.status='ACTIVE' AND COALESCE(o.metadata->'internal','false'::jsonb)<>'true'::jsonb ${lock?'FOR SHARE OF u,tm,o,p':''}`,[policy.actorId,policy.clerkUserId,policy.organizationId,policy.projectId,policy.clerkOrganizationId])).rows;
- if(rows.length!==1)fail();const row=rows[0];
+ const row=await ownCompanyIssuerPrincipal(client,policy,lock?'FOR SHARE OF u,tm,o,p':'');
  if(Object.hasOwn(connection.metadata,'ownCompanyRuntime')){
   if(!memberMatches(policy,{member:row,session:{userId:policy.clerkUserId,organizationId:policy.clerkOrganizationId,organizationRole:'org:admin'},project:{id:policy.projectId,organizationId:policy.organizationId,organizationMetadata:row.organizationMetadata}}))fail();
   const current=(await client.query(`SELECT c.*,p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c.id=$1 AND c."projectId"=$2 AND p."organizationId"=$3 ${lock?'FOR SHARE OF c,p':''}`,[policy.connectionId,policy.projectId,policy.organizationId])).rows;

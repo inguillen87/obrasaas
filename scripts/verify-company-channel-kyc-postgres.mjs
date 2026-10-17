@@ -17,6 +17,7 @@ import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
 import {createMetaKycExpiryFeedback,metaKycExpiryReceiptId,META_KYC_EXPIRY_REPLY} from '../src/lib/meta-kyc-expiry-feedback.mjs';
 import {verifyKycContextFeedbackNative} from './lib/kyc-context-feedback-native.mjs';
 import {assertCurrentImageNativeBoundary,verifyKycCurrentImageNative} from './lib/kyc-current-image-native.mjs';
+import {verifyKycNeutralStepGuidanceNative} from './lib/kyc-neutral-step-guidance-native.mjs';
 import {createParticipantChannelKycDeposit,createParticipantChannelKycUploader} from '../src/lib/participant-channel-kyc.mjs';
 import {createCompanyChannelBridge,resolveCompanyOutboundIdentity} from '../src/lib/company-channel-routing.mjs';
 import {createWorkerChannelStore} from '../src/lib/worker-channel-identity.mjs';
@@ -66,10 +67,10 @@ const schema='obrasaas_company_kyc_'+randomUUID().replaceAll('-','');assert.matc
 const sqlInSchema=sql=>sql.replaceAll('public.',schema+'.').replaceAll("'public'::regnamespace","'"+schema+"'::regnamespace").replaceAll("table_schema='public'","table_schema='"+schema+"'");
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),root=process.cwd();
 const sources=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(entry=>entry.isDirectory()?sources(relative+'/'+entry.name):[relative+'/'+entry.name]);
-const sourceManifest=[...sources('src/lib'),'src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/kyc-context-feedback-native.mjs','scripts/lib/kyc-current-image-native.mjs'].map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
+const sourceManifest=[...sources('src/lib'),'src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/kyc-context-feedback-native.mjs','scripts/lib/kyc-current-image-native.mjs','scripts/lib/kyc-neutral-step-guidance-native.mjs'].map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
 const admin=new Client({connectionString:url.toString()}),environment={...lifecycleEnvironment},a={...lifecycleTenants[0],anchorProjectId:'project-a',projectId:'project-target-b',channelId:'company-kyc-channel-a',workerId:'company-kyc-worker-b',invitationId:'invite_'+'a'.repeat(32),providerInvitationId:'orginv_CompanyKycA'},b={...lifecycleTenants[1],projectId:'project-foreign',channelId:'company-kyc-channel-foreign'},graph=createControlledLifecycleGraph(environment),blob=createControlledLifecycleBlob(),clerk=createControlledLifecycleClerk(),checks=[];
 let expiryFeedbackNative=null,contextFeedbackNative=null,poolClosed=false,adminClosed=false,ownConnectionsClosed=false;const ownedPids=new Set(),ownedEnds=[];
-let currentImageNative=null;
+let currentImageNative=null,neutralStepGuidanceNative=null;
 let pool,created=false,passed=false,sequence=0,lastReplyId=null,networkCalls=0,loseDepositCommit=false,catalogFingerprintEquivalence=null,schemaReadinessEquivalence=null;
 const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{networkCalls++;throw Error('CORPORATE_KYC_UNCONTROLLED_NETWORK_REJECTED');};
 const query=async(sql,args=[])=>{const client=await pool.connect();try{return await client.query(sqlInSchema(sql),args);}finally{client.release();}};
@@ -333,6 +334,7 @@ try{
  }finally{expiryGate?.release?.();expiryClockOffset=0;expiryTracing=false;graph.assets.get(expiryBase.key).sender=originalExpirySender;}
  expiryFeedbackNative=expiryEvidence;
  currentImageNative=await verifyKycCurrentImageNative({query,connect,provider,environment,graph,blob,base:a,ownerSession,checks});
+ neutralStepGuidanceNative=await verifyKycNeutralStepGuidanceNative({query,connect,provider,environment,graph,base:a,ownerSession,workspace});
 
  const audits=JSON.stringify((await query(`SELECT metadata FROM "AuditLog"`)).rows);for(const forbidden of [a.token,'IDENTIDAD ','VINCULAR ','data:image'])assert.equal(audits.includes(forbidden),false);assert.equal(networkCalls,0);assert.deepEqual(graph.unexpected,[]);
  for(const source of sourceManifest)assert.equal(sha(readFileSync(path.join(root,source.path))),source.sha256);assert.equal(sha(readFileSync(new URL(import.meta.url))),harnessSha256);passed=true;
@@ -340,5 +342,5 @@ try{
  globalThis.fetch=originalFetch;try{await pool?.end();await Promise.all(ownedEnds);poolClosed=true;assert.equal((await admin.query('SELECT count(*)::int AS count FROM pg_stat_activity WHERE pid=ANY($1::int[])',[[...ownedPids]])).rows[0].count,0);ownConnectionsClosed=true;if(created){await admin.query('DROP SCHEMA "'+schema+'" CASCADE');assert.equal((await admin.query('SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname=$1) AS present',[schema])).rows[0].present,false);}}finally{await admin.end();adminClosed=true;}
 }
 assert.equal(passed,true);
-const proof={status:'PASS',checks,expiryFeedbackNative,contextFeedbackNative,currentImageNative,poolClosed,adminClosed,ownConnectionsClosed,catalogFingerprintEquivalence,schemaReadinessEquivalence,sourceManifest,harnessSha256,environment:'schema-only-localhost-postgresql-corporate-KYC',databaseCreated:false,schemaRemoved:true,realProviderCalls:0,unexpectedNetworkCalls:networkCalls,productionDataTouched:false,realClerkLogin:false,realMetaAccepted:false,humanAccepted:false};
+const proof={status:'PASS',checks,expiryFeedbackNative,contextFeedbackNative,currentImageNative,neutralStepGuidanceNative,poolClosed,adminClosed,ownConnectionsClosed,catalogFingerprintEquivalence,schemaReadinessEquivalence,sourceManifest,harnessSha256,environment:'schema-only-localhost-postgresql-corporate-KYC',databaseCreated:false,schemaRemoved:true,realProviderCalls:0,unexpectedNetworkCalls:networkCalls,productionDataTouched:false,realClerkLogin:false,realMetaAccepted:false,humanAccepted:false};
 mkdirSync('.vercel/company-kyc-evidence',{recursive:true});writeFileSync('.vercel/company-kyc-evidence/postgres.json',JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));

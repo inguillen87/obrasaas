@@ -8,6 +8,7 @@ import {decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerChannelActive,assertCustomerReplyWindow,customerOutboundId} from './meta-customer-outbound.mjs';
 import {META_KYC_CONVERSATION_TTL_MS} from './meta-kyc-conversation.mjs';
 import {markCurrentImageDiscovery,assertCurrentImageSource,currentImageOutboundGuard} from './meta-kyc-current-image.mjs';
+import {participantKycNeutralStepCommand} from './participant-kyc-chat-copy.mjs';
 
 const fail=(code='META_KYC_COMPANY_PROJECTION_REJECTED',status=409)=>{throw new WorkspaceError(code,status);};
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -250,7 +251,7 @@ async function resolveCompanyKycContext(client,context,{initial,firstChannel,pay
   if(payload.value?.type==='text'&&typeof payload.value.text?.body==='string'&&/^IDENTIDAD(?:\s|$)/i.test(payload.value.text.body.trim()))fail('META_KYC_CHALLENGE_REJECTED');
   const reminder=purpose===reminderPurpose,currentImage=purpose===capturePurpose&&payload.value.type==='image'&&!Object.hasOwn(payload.value,'context'),currentContext=reminder||currentImage;
   if(currentContext){
-   if(payload.value.type!=='image'||Object.hasOwn(payload.value,'context'))fail('META_KYC_NOT_APPLICABLE');
+   if(!(payload.value.type==='image'||reminder&&participantKycNeutralStepCommand(payload.value))||Object.hasOwn(payload.value,'context'))fail('META_KYC_NOT_APPLICABLE');
    if(!await companyChannelSchemaReady(client))fail('COMPANY_CHANNEL_CATALOG_REQUIRED');
    const current=await currentReminderCandidates(client,firstChannel,'+'+payload.value.from);
    if(current.length!==1)fail(currentImage&&current.length?'META_KYC_CURRENT_IMAGE_REJECTED':'META_KYC_NOT_APPLICABLE');

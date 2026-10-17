@@ -2,8 +2,8 @@ import {WorkspaceError,digest,workspaceId,operationId} from './workspace-policy.
 import {decodeSignedCustomerEvent} from './meta-customer-processing.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret} from './meta-customer-credentials.mjs';
 import {customerJobTransaction,customerOutboundId,customerOutboundResult,reserveCustomerOutbound,completeCustomerOutbound,assertCustomerReplyWindow} from './meta-customer-outbound.mjs';
-import {resolveMetaKycContextFeedbackAuthority,resolveMetaKycStepReminderAuthority,metaKycContextAuthorityDigest} from './meta-kyc-identity.mjs';
-import {participantKycStepReminder} from './participant-kyc-chat-copy.mjs';
+import {resolveMetaKycContextOrReminderAuthority,metaKycContextAuthorityDigest} from './meta-kyc-identity.mjs';
+import {participantKycStepReminder,participantKycStepGuidance} from './participant-kyc-chat-copy.mjs';
 import {currentImageStageEligible} from './meta-kyc-current-image.mjs';
 import {lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
 import {OBRASAAS_META_CHANNEL} from './meta-channel-binding.mjs';
@@ -15,17 +15,20 @@ const fail=()=>{throw new WorkspaceError('META_KYC_CONTEXT_FEEDBACK_DENIED',409)
 export const metaKycContextReceiptId=eventId=>'meta_kyc_context_'+digest(['meta-kyc-context-feedback-v1',eventId]);
 const aad=(r,purpose,resourceId)=>({organizationId:r.connection.organizationId,projectId:r.connection.projectId,purpose,resourceId});
 const result=(reply=META_KYC_CONTEXT_REPLY)=>({kind:'KYC_CONTEXT_FEEDBACK',code:'META_KYC_CONTEXT_REQUIRED',identityStatus:'LIMITED_KYC_FEEDBACK',reviewState:'OBSERVED',businessApplied:false,replySent:false,reply});
-const receiptReply=m=>m.replyCopyVersion===undefined?META_KYC_CONTEXT_REPLY:m.replyCopyVersion===2?participantKycStepReminder(m.replyStep,m.targetProjectId):null;
+const receiptReply=m=>m.replyCopyVersion===undefined?META_KYC_CONTEXT_REPLY:m.replyCopyVersion===2?participantKycStepReminder(m.replyStep,m.targetProjectId):m.replyCopyVersion===3?participantKycStepGuidance(m.replyStep,m.targetProjectId):null;
 
 export function createMetaKycContextFeedback({connect,provider,environment=process.env,afterReserve=async()=>{}}){
- const within=run=>customerJobTransaction(connect,run),resolve=async(client,context)=>await resolveMetaKycContextFeedbackAuthority(client,context,{environment})||resolveMetaKycStepReminderAuthority(client,context,{environment});
+ const within=run=>customerJobTransaction(connect,run),resolve=(client,context)=>resolveMetaKycContextOrReminderAuthority(client,context,{environment});
  async function source(client,context){
   if(!/^customer_webhook_[a-f0-9]{64}$/.test(context?.eventId||'')||!workspaceId(context.projectId)||!workspaceId(context.channelId)||!operationId(context.leaseToken)||!/^[a-f0-9]{64}$/.test(context.payloadDigest||''))fail();
-  const events=(await client.query(`SELECT * FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2`,[context.eventId,context.projectId])).rows,event=events[0];
-  if(events.length!==1||event.provider!=='meta-customer-v1'||event.payload?.channelId!==context.channelId||event.payload.payloadDigest!==context.payloadDigest)fail();
-  const channels=(await client.query(`SELECT c.*,p."organizationId" FROM public."WhatsAppConnection" c JOIN public."Project" p ON p.id=c."projectId" WHERE c.id=$1 AND c."projectId"=$2 AND p.status='ACTIVE'`,[context.channelId,context.projectId])).rows,connection=channels[0];
-  if(channels.length!==1||connection.metadata?.developmentPilot||connection.whatsappBusinessId===OBRASAAS_META_CHANNEL.wabaId||connection.phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId||connection.metadata?.credentialFormat!=='tenant-aad-v2'||connection.metadata.credentialOrganizationId!==connection.organizationId)fail();
-  const payload=decodeSignedCustomerEvent(event,connection,environment),now=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
+  // Recovery reads one coherent source snapshot; it creates no authority or locks.
+  const rows=(await client.query(`SELECT c.*,p."organizationId",e.id AS "feedbackSourceEventId",e."projectId" AS "feedbackSourceProjectId",e.provider AS "feedbackSourceProvider",e.status::text AS "feedbackSourceStatus",e.payload AS "feedbackSourcePayload",e."leaseToken" AS "feedbackSourceLeaseToken",e."leaseExpiresAt" AS "feedbackSourceLeaseExpiresAt",clock_timestamp() AS "feedbackSourceNow" FROM public."WebhookEvent" e JOIN public."WhatsAppConnection" c ON c.id=$3 AND c."projectId"=e."projectId" JOIN public."Project" p ON p.id=c."projectId" AND p.status='ACTIVE' WHERE e.id=$1 AND e."projectId"=$2`,[context.eventId,context.projectId,context.channelId])).rows;
+  if(rows.length!==1)fail();
+  const {feedbackSourceEventId,feedbackSourceProjectId,feedbackSourceProvider,feedbackSourceStatus,feedbackSourcePayload,feedbackSourceLeaseToken,feedbackSourceLeaseExpiresAt,feedbackSourceNow,...connection}=rows[0];
+  const event={id:feedbackSourceEventId,projectId:feedbackSourceProjectId,provider:feedbackSourceProvider,status:feedbackSourceStatus,payload:feedbackSourcePayload,leaseToken:feedbackSourceLeaseToken,leaseExpiresAt:feedbackSourceLeaseExpiresAt};
+  if(event.provider!=='meta-customer-v1'||event.payload?.channelId!==context.channelId||event.payload.payloadDigest!==context.payloadDigest)fail();
+  if(connection.metadata?.developmentPilot||connection.whatsappBusinessId===OBRASAAS_META_CHANNEL.wabaId||connection.phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId||connection.metadata?.credentialFormat!=='tenant-aad-v2'||connection.metadata.credentialOrganizationId!==connection.organizationId)fail();
+  const payload=decodeSignedCustomerEvent(event,connection,environment),now=feedbackSourceNow;
   if(payload.type!=='message'||!(now instanceof Date)||!Number.isFinite(now.getTime())||event.status!=='PENDING'||event.leaseToken!==context.leaseToken||!Number.isFinite(Date.parse(event.leaseExpiresAt))||Date.parse(event.leaseExpiresAt)<=now.getTime())fail();
   return {connection,event,payload,now};
  }
@@ -61,12 +64,12 @@ export function createMetaKycContextFeedback({connect,provider,environment=proce
     // original SENT prompt, current principals and expired conversation. Only
     // neutral quoted text may use this current-prompt pre-dispatch exception.
     const expiredNeutral=r?.feedbackExpiredCurrentPrompt===true&&r.payload.value.type==='text'&&['ESTADO','ESTADO IDENTIDAD'].includes(r.payload.value.text?.body?.trim().toUpperCase());
-    if(!r||staleOnly&&!r.feedbackStalePrompt&&!expiredNeutral&&!r.feedbackUnquotedReminder)return null;
+    if(!r||staleOnly&&!r.feedbackStalePrompt&&!expiredNeutral&&!r.feedbackUnquotedReminder&&!r.feedbackUnquotedGuidance)return null;
     if(staleOnly&&r.feedbackUnquotedReminder&&currentImageStageEligible(r))return null;
     const previous=await recorded(client,r);if(previous)return previous.value;
     const existing=(await client.query(`SELECT id FROM public."WebhookEvent" WHERE id=$1 AND "projectId"=$2 AND provider='meta-customer-outbound-v1' FOR SHARE`,[customerOutboundId(r.event.id),r.connection.projectId])).rows;if(existing.length)fail();
-    const id=metaKycContextReceiptId(r.event.id),reply=r.feedbackUnquotedReminder?participantKycStepReminder(r.state.step,r.project.id):META_KYC_CONTEXT_REPLY;if(!reply)fail();const value=result(reply),authorityDigest=metaKycContextAuthorityDigest(client,r,context);
-    const metadata={version:1,projectId:r.connection.projectId,targetProjectId:r.project.id,workerId:r.worker.id,challengeId:r.challenge.id,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,code:'META_KYC_CONTEXT_REQUIRED',authorityDigest,...(r.feedbackUnquotedReminder?{replyCopyVersion:2,replyStep:r.state.step}:{}),replyDigest:digest(reply),encryptedResult:encryptCustomerSecret(JSON.stringify(value),aad(r,'kyc-context-feedback',id),environment),identityCertified:false,permissionsGranted:false};
+    const id=metaKycContextReceiptId(r.event.id),reply=r.feedbackUnquotedGuidance?participantKycStepGuidance(r.state.step,r.project.id):r.feedbackUnquotedReminder?participantKycStepReminder(r.state.step,r.project.id):META_KYC_CONTEXT_REPLY;if(!reply)fail();const value=result(reply),authorityDigest=metaKycContextAuthorityDigest(client,r,context);
+    const metadata={version:1,projectId:r.connection.projectId,targetProjectId:r.project.id,workerId:r.worker.id,challengeId:r.challenge.id,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,code:'META_KYC_CONTEXT_REQUIRED',authorityDigest,...(r.feedbackUnquotedGuidance?{replyCopyVersion:3,replyStep:r.state.step}:r.feedbackUnquotedReminder?{replyCopyVersion:2,replyStep:r.state.step}:{}),replyDigest:digest(reply),encryptedResult:encryptCustomerSecret(JSON.stringify(value),aad(r,'kyc-context-feedback',id),environment),identityCertified:false,permissionsGranted:false};
     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'participant.kyc_chat.context_feedback','WebhookEvent',$4,$5::jsonb)`,[id,r.connection.organizationId,r.issuer.actorId,r.event.id,JSON.stringify(metadata)]);
     try{await prepareKycContextOutboundSnapshot(client,r,context,{environment});await fenceKycContextOutboundSnapshot(client,r,context,{environment});}finally{releaseKycContextOutboundSnapshot(r);}return value;
    });

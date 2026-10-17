@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {participantPreanalysisConsumerSourceFiles,preloadParticipantPreanalysisConsumerSources} from './lib/participant-preanalysis-current-ci-lineage.mjs';
+import {restoreWhatsappFieldContinuitySourceSet,verifyWhatsappFieldContinuityCurrentSources} from './lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
 import path from 'node:path';
@@ -113,10 +114,12 @@ export function validateConsumptionFeedbackCi({expectedHead,head,sourceTree,trac
  const cleanup=ui.cleanup;
  requireProof(cleanup&&cleanup.browserClosed===true&&cleanup.serverClosed===true&&cleanup.gracefulCloseAcknowledged===true&&cleanup.fixtureRemoved===true&&cleanup.fixtureCleanupProof?.fixtureRemoved===true&&cleanup.fixtureCleanupProof?.postcondition?.absent===true,'UI browser/server/owned fixture cleanup must be confirmed');
  uiChecks(ui);
- const uiClosure=consumptionFeedbackSourceClosure(readSource,{ui:true});requireProof(uiClosure.files.length===20,'UI committed closure must contain all 20 sources');manifest(ui,uiClosure.files,readSource,'UI');
+ const uiClosure=consumptionFeedbackSourceClosure(readSource,{ui:true}),contract=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));
+ if(contract.whatsappFieldContinuityCurrentRevision){const delta=contract.whatsappFieldContinuityCurrentRevision.sourceSetDeltas.find(row=>row.family==='CONSUMPTION_FEEDBACK_UI');requireProof(delta?.previousCount===20&&delta.currentCount===22,'The exact current consumption UI source revision is required');same(delta.additions,['src/app/(identity)/cuenta/worksite-task-selector.js','src/app/(identity)/cuenta/worksite-task-selector.module.css'],'Only the two reviewed task selector UI dependencies may be added');let previous;try{verifyWhatsappFieldContinuityCurrentSources(contract,readSource);previous=restoreWhatsappFieldContinuitySourceSet('CONSUMPTION_FEEDBACK_UI',uiClosure.files,contract);}catch(error){requireProof(false,error.message);}requireProof(previous.length===20&&sha(JSON.stringify(previous))===delta.previousPathsSha256&&uiClosure.files.length===22&&sha(JSON.stringify(uiClosure.files))===delta.currentPathsSha256,'Current UI22 must restore exact historical UI20 without changing observed bytes');}else requireProof(uiClosure.files.length===20,'Historical UI committed closure must contain all 20 sources');
+ manifest(ui,uiClosure.files,readSource,'UI');
  same(ui.externalImports,uiClosure.externalImports,'UI package imports must match committed JSX graph');same(ui.externalImports,['react'],'UI fixture package dependency boundary changed');
  requireProof(ui.harnessSha256===sha(readSource(uiHarness))&&ui.cleanupHelperSha256===sha(readSource(cleanupHelper)),'UI producer and owned cleanup hashes must match committed Git bytes');
- return {version:CONSUMPTION_FEEDBACK_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{version:postgres.version,totalCheckCount:23,sourceCount:pgClosure.files.length,harnessSha256:postgres.harnessSha256,sourceLineage},ui:{totalCheckCount:12,sourceCount:20,widths:[...CONSUMPTION_FEEDBACK_UI_WIDTHS],harnessSha256:ui.harnessSha256,cleanupHelperSha256:ui.cleanupHelperSha256},providerCalls:0,productionDataWritten:false,productionLoginVerified:false,physicalDeviceAccepted:false};
+ return {version:CONSUMPTION_FEEDBACK_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{version:postgres.version,totalCheckCount:23,sourceCount:pgClosure.files.length,harnessSha256:postgres.harnessSha256,sourceLineage},ui:{totalCheckCount:12,sourceCount:uiClosure.files.length,widths:[...CONSUMPTION_FEEDBACK_UI_WIDTHS],harnessSha256:ui.harnessSha256,cleanupHelperSha256:ui.cleanupHelperSha256},providerCalls:0,productionDataWritten:false,productionLoginVerified:false,physicalDeviceAccepted:false};
 }
 
 function main(){

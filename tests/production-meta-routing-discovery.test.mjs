@@ -69,7 +69,13 @@ test('existing intake anchor and recorded dispatch retain precedence and exact r
 test('a real quoted OWN KYC candidate retains all three canonical OWN reads on each transaction',async()=>{
  const t=await contextFeedbackFixture('PROJECT',{own:true}),worker=structuredClone(t.f.worker),start=t.runtime.queries.length;
  for(let i=0;i<2;i++){const client=await t.connect();await client.query('BEGIN');try{const r=await resolveMetaKycContextFeedbackAuthority(client,t.context,{environment:t.f.environment});assert.equal(r.kind,'KYC_CONTEXT_FEEDBACK_REPLY');assert.ok(r.ownCompanyCapability);}finally{await client.query('ROLLBACK');client.release();}}
- assert.equal(t.runtime.queries.length-start,6);assert.deepEqual(t.f.worker,worker);assert.equal(t.requests.length,0);unchangedMedia(t.f);
+ const reads=t.runtime.queries.slice(start),prefix=reads.filter(q=>q.sql.endsWith('FOR SHARE OF u,tm,o')),full=reads.filter(q=>!q.sql.endsWith('FOR SHARE OF u,tm,o'));
+ assert.equal(full.length,6);assert.deepEqual(t.f.worker,worker);assert.equal(t.requests.length,0);unchangedMedia(t.f);
+ assert.equal(prefix.length,2);assert.equal(reads.length,8);
+ for(let i=0;i<2;i++){
+  const group=reads.slice(i*4,i*4+4);assert.deepEqual(group.map(q=>q.sql.slice(q.sql.lastIndexOf('FOR SHARE'))),['FOR SHARE OF u,tm,o','FOR SHARE OF u,tm,o,p','FOR SHARE OF c,p','FOR SHARE']);
+  assert.deepEqual(group[0].args,group[1].args);assert.equal(group[2].args[0],t.f.connection.id);assert.equal(group[3].args[0],t.runtime.runtimeGrant.origin.receiptId);
+ }
 });
 test('a changed signed source after OWN discovery cannot return private KYC context or fall through to FIELD',async()=>{
  const t=await contextFeedbackFixture('PROJECT',{own:true}),worker=structuredClone(t.f.worker),client=await t.connect();let changed=false,fieldCalls=0;

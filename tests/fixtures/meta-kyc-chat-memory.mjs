@@ -26,6 +26,9 @@ export function kycMemoryFixture({active=false,captureImageSetVersion,ownRuntime
  if(captureImageSetVersion===2)audits.set('prepared-fixture',{id:'prepared-fixture',organizationId:project.organizationId,actorId:issuer.actorId,entityType:'Worker',entityId:worker.id,action:'participant.kyc_chat.prepared',metadata:{version:1,projectId:project.id,captureImageSetVersion:2,challengeId:challenge.id,requestDigest:digest(['synthetic-preparation',challenge.id]),expiresAt:challenge.expiresAt}});
  const query=async(sql,args=[])=>{
   const result=rows=>({rows:structuredClone(rows),rowCount:rows.length});
+  if(sql.includes('AS "feedbackSourceNow"')){
+   const event=events.get(args[0]);return result(event&&event.projectId===args[1]&&connection.id===args[2]&&connection.projectId===args[1]&&controls.projectActive?[{...connection,feedbackSourceEventId:event.id,feedbackSourceProjectId:event.projectId,feedbackSourceProvider:event.provider,feedbackSourceStatus:event.status,feedbackSourcePayload:event.payload,feedbackSourceLeaseToken:event.leaseToken,feedbackSourceLeaseExpiresAt:event.leaseExpiresAt,feedbackSourceNow:new Date(now)}]:[]);
+  }
   if(ownRuntime&&(sql.includes('FROM public."PlatformUser" u JOIN public."TenantMembership"')&&args.length===5||sql.includes('FROM public."WhatsAppConnection" c JOIN public."Project" p')&&args.length===3||sql.includes("action='company.own.number.recorded'")))return ownRuntime.client.query(sql,args);
   if(sql.startsWith('BEGIN')||sql.startsWith('SET LOCAL')||sql==='ROLLBACK'||sql.startsWith('SELECT pg_advisory'))return result([]);
   if(sql==='COMMIT'){

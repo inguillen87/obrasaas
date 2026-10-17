@@ -14,3 +14,4 @@
 /.github/workspace-acceptance-contract.json text eol=lf
 /tests/fixtures/plan-measurement-contract-a203.json text eol=lf
 /tests/fixtures/workspace-continuity-contract-d5d.json text eol=lf
+tests/fixtures/whatsapp-field-continuity-contract-052.json text eol=lf

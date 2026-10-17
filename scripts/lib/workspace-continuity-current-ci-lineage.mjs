@@ -1,3 +1,12 @@
+import {restoreWhatsappFieldContinuityPreviousContract as outer0,whatsappFieldContinuityCurrentSourcePin as outer1,verifyWhatsappFieldContinuityCurrentSources as outer2,restoreWhatsappFieldContinuitySourceSet as outer3,whatsappFieldContinuityProofSourceAdditions as outer4,whatsappFieldContinuityValidationFiles as outer5} from './whatsapp-field-continuity-current-ci-lineage.mjs';
+function outerCall(fn,args){try{return fn(...args);}catch(error){if(error.code==='WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'WORKSPACE_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'});throw error;}}
+const restoreWhatsappFieldContinuityPreviousContract=(...args)=>outerCall(outer0,args);
+const whatsappFieldContinuityCurrentSourcePin=(...args)=>outerCall(outer1,args);
+const verifyWhatsappFieldContinuityCurrentSources=(...args)=>outerCall(outer2,args);
+const restoreWhatsappFieldContinuitySourceSet=(...args)=>outerCall(outer3,args);
+const whatsappFieldContinuityProofSourceAdditions=(...args)=>outerCall(outer4,args);
+const whatsappFieldContinuityValidationFiles=(...args)=>outerCall(outer5,args);
+
 import {createHash} from 'node:crypto';
 import checkpoint from '../../tests/fixtures/workspace-continuity-contract-d5d.json' with {type:'json'};
 
@@ -6199,6 +6208,7 @@ export function composeWorkspaceContinuityContract(value){
 // Only contract metadata is inverted. Current-source readers and original raw
 // browser/native evidence are never replaced by historical bytes.
 export function restoreWorkspaceContinuityPreviousContract(contract){
+ contract=restoreWhatsappFieldContinuityPreviousContract(contract);
  const value=section(contract);if(!value)return contract;
  requireLineage(same(contract,composeWorkspaceContinuityContract(value)),'The outer delta must restore the complete d5d contract without altering history');return structuredClone(checkpoint);
 }
@@ -6209,22 +6219,26 @@ function historicalPins(file){
  function walk(value){if(!value||typeof value!=='object')return;if(!Array.isArray(value)&&(value.path===file||value.file===file||value.producer===file))for(const key of ['sha256','sourceLfSha256','producerSha256','previousSha256','currentSha256','originalSha256','previousProducerSha256','currentProducerSha256'])if(hash(value[key]))result.add(value[key]);for(const child of Object.values(value))if(child&&typeof child==='object')walk(child);}walk(checkpoint);historicalPinCache.set(file,[...result]);return result;
 }
 export function workspaceContinuityCurrentSourcePin(contract,ref){
+ const outerPin=whatsappFieldContinuityCurrentSourcePin(contract,ref);if(outerPin!==ref.sha256)return outerPin;
  const value=section(contract);if(!value)return ref.sha256;
  const row=[...value.reviewedSourceChanges,...value.validationDeltas].find(item=>item.path===ref.path);if(!row)return ref.sha256;
  const allowed=historicalPins(ref.path);allowed.add(row.previousSha256);requireLineage(allowed.has(ref.sha256),'Only an authenticated d5d or inherited source pin may advance: '+ref.path);return row.currentSha256;
 }
 export function workspaceContinuityValidationFiles(contract){
- const value=authenticatedSection(contract);if(!value)return[];
- return [...new Set([WORKSPACE_CONTINUITY_CHECKPOINT_PATH,...value.reviewedSourceChanges.map(row=>row.path),...value.validationDeltas.map(row=>row.path),...value.addedSources.map(row=>row.path),...value.validationSources.map(row=>row.path)])].sort();
+ const outer=whatsappFieldContinuityValidationFiles(contract),value=authenticatedSection(contract);if(!value)return outer;
+ return [...new Set([...outer,WORKSPACE_CONTINUITY_CHECKPOINT_PATH,...value.reviewedSourceChanges.map(row=>row.path),...value.validationDeltas.map(row=>row.path),...value.addedSources.map(row=>row.path),...value.validationSources.map(row=>row.path)])].sort();
 }
 export function verifyWorkspaceContinuityCurrentSources(contract,readSource){
+ verifyWhatsappFieldContinuityCurrentSources(contract,readSource);
  const value=authenticatedSection(contract);if(!value)return null;requireLineage(typeof readSource==='function','Current committed source reader required');
  const original=readSource(WORKSPACE_CONTINUITY_CHECKPOINT_PATH);requireLineage(Buffer.isBuffer(original)&&sha(original)===WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256,'Original d5d RAW checkpoint bytes required');
  const refs=[...value.reviewedSourceChanges.map(row=>({path:row.path,sha256:row.currentSha256})),...value.validationDeltas.map(row=>({path:row.path,sha256:row.currentSha256})),...value.addedSources,...value.validationSources];requireLineage(new Set(refs.map(row=>row.path)).size===refs.length,'Unique continuity source references required');
- for(const row of refs){requireLineage(safe(row.path)&&hash(row.sha256),'Exact safe current source reference required');const bytes=readSource(row.path);requireLineage(Buffer.isBuffer(bytes),'Missing current continuity source: '+row.path);const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===row.sha256,'Stale current continuity source: '+row.path);}
+ for(const row of refs){requireLineage(safe(row.path)&&hash(row.sha256),'Exact safe current source reference required');const bytes=readSource(row.path);requireLineage(Buffer.isBuffer(bytes),'Missing current continuity source: '+row.path);const text=bytes.toString('utf8');requireLineage(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===whatsappFieldContinuityCurrentSourcePin(contract,row),'Stale current continuity source: '+row.path);}
  return{version:1,previousContractSha256:WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256,completeCheckpointRestored:true,historical49PinsPreserved:true,auxiliaryValidationSources:refs.map(row=>({...row})),nativeOrBrowserAcceptance:false};
 }
 export function restoreWorkspaceContinuitySourceSet(family,files,contract){
+ const outerFamily=family==='FOCUSED_WORKSPACE_CI'?'UI_FOCUSED_WORKSPACE':family==='WORKSPACE_PG_PARTICIPANT_KYC_PREANALYSIS'?'PG_PARTICIPANT_KYC_PREANALYSIS':family==='WORKSPACE_PG_COMPANY_KYC'?'PG_COMPANY_KYC':family==='WORKSPACE_UI_IDENTITY_ONLY'?'UI_IDENTITY_ONLY':family;
+ files=restoreWhatsappFieldContinuitySourceSet(outerFamily,files,contract);
  const value=authenticatedSection(contract);if(!value)return files;const delta=[...value.sourceSetDeltas,...value.proofSourceDeltas].find(row=>row.family===family);if(!delta)return files;
  requireLineage(Array.isArray(files)&&new Set(files).size===files.length&&same(files,[...files].sort())&&files.length===delta.currentCount&&sha(JSON.stringify(files))===delta.currentPathsSha256,'Exact current continuity source set required: '+family);
  const previous=files.filter(file=>!delta.additions.includes(file));requireLineage(previous.length===delta.previousCount&&sha(JSON.stringify(previous))===delta.previousPathsSha256,'Exact d5d predecessor sources must remain present: '+family);return previous;
@@ -6235,7 +6249,8 @@ function inheritedProofSet(spec){
  return candidates.some(([count,digest])=>spec.sourceFiles?.length===count&&sha(JSON.stringify(spec.sourceFiles))===digest);
 }
 export function workspaceContinuityProofSourceAdditions(spec){
- const delta=WORKSPACE_CONTINUITY_CURRENT_REVISION.proofSourceDeltas.find(row=>row.id===spec?.id);if(!delta)return[];
- if(inheritedProofSet(spec))return[];
- requireLineage(spec.sourceFiles?.length===delta.currentCount&&sha(JSON.stringify(spec.sourceFiles))===delta.currentPathsSha256,'Unknown continuity proof source set');return [...delta.additions];
+ const outer=whatsappFieldContinuityProofSourceAdditions(spec);if(outer.length)spec={...spec,sourceFiles:spec.sourceFiles.filter(file=>!outer.includes(file))};
+ const delta=WORKSPACE_CONTINUITY_CURRENT_REVISION.proofSourceDeltas.find(row=>row.id===spec?.id);if(!delta)return outer;
+ if(inheritedProofSet(spec))return outer;
+ requireLineage(spec.sourceFiles?.length===delta.currentCount&&sha(JSON.stringify(spec.sourceFiles))===delta.currentPathsSha256,'Unknown continuity proof source set');return [...delta.additions,...outer];
 }
