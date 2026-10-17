@@ -1,3 +1,4 @@
+import {validateProgressEvidenceWaitNativeProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {WEEKLY_CYP_CURRENT_REVISION,verifyWeeklyCypCurrentSources,validateWeeklyCypImportUiProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {validateCompanyOnboardingUxNativeProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
@@ -22,7 +23,7 @@ import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourc
 import {KYC_EXPIRED_CURRENT_ADDITIONS,KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,validateKycExpiredCurrentWorkspaceContract as validatePublishedKycWorkspaceContract,verifyKycExpiredCurrentSources as verifyPublishedKycSources} from '../../scripts/lib/kyc-expired-current-ci-lineage.mjs';
 import {PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES,planMeasurementCurrentDependencies,reconstructPublishedHContract,verifyPlanMeasurementCurrentSources,currentFieldPrivacyRevision,currentFieldPrivacySpecRevision} from '../../scripts/lib/plan-measurement-current-ci-lineage.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="0134ff841636654e447148bcc81f7c2127763089dd16b10166c4e26632b01b28";
+export const EXPECTED_CONTRACT_SHA256="9511a06c538d2e11de2fdbbc9c947476f89da0402744201594772170fdfe518b";
 function validateKycExpiredCurrentWorkspaceContract(contract){return validatePublishedKycWorkspaceContract(contract.planMeasurementCurrentLineage?reconstructPublishedHContract(contract):contract);}
 function verifyKycExpiredCurrentSources(section,readSource){
  const current=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));
@@ -1947,6 +1948,12 @@ export function provenance({root,lane,contract,expectedHead,workflowSha256,env=p
  requireEvidence(producedNotUploaded,owner.requiredProducedEvidence,'MISSING_REQUIRED_PRODUCED_EVIDENCE');
   verifyWhatsappPlanTestSources(contract,readSource);
   verifyKycExpiredCurrentSources(contract.kycExpiredCurrentComposition,readSource);
+ // The retained block26 proof keeps its historical37 and adds nine wait controls.
+ if(lane==='meta'&&contract.progressEvidenceWaitCurrentRevision){
+  const nativePath='.vercel/meta-field-evidence/postgres.json',nativeBytes=readFileSync(path.join(root,nativePath)),retained=files.find(file=>file.path===nativePath);
+  if(!retained||retained.sha256!==hash(nativeBytes)||retained.bytes!==nativeBytes.length)deny('PROOF_PROGRESS_WAIT_FILE_BINDING');
+  try{validateProgressEvidenceWaitNativeProofBytes(nativeBytes,contract,readSource);}catch(error){if(error.code==='PROGRESS_EVIDENCE_WAIT_NATIVE_PROOF_REJECTED')deny('PROOF_PROGRESS_WAIT_BOUNDARY');throw error;}
+ }
  // This is an explicit semantic check of the retained native block29 proof.
  // It validates exactly the bytes hashed into the same provenance record.
  if(lane==='channels'){

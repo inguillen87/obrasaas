@@ -27,6 +27,8 @@ const text=body=>({type:'text',body});
 export const metaFieldMediaContextDigest=r=>digest(['meta-field-media-context-v2',r.member.organizationId,r.member.actorId,r.member.membershipId,r.member.clerkUserId,r.project.id,r.worker.id,r.channelBinding.id,r.connection.id,r.connection.projectId,r.connection.phoneNumberId,r.connection.whatsappBusinessId,r.sourceProjectId||r.event.projectId,r.companyProjection?{projectId:r.companyProjection.projectId,workerId:r.companyProjection.workerId,actorId:r.companyProjection.actorId,membershipId:r.companyProjection.membershipId,assignmentRevision:r.companyProjection.assignmentRevision,bindingId:r.companyProjection.bindingId,routeId:r.companyProjection.routeId,routeEpoch:r.companyProjection.routeEpoch}:null]);
 const consumptionContext=r=>digest(['meta-field-consumption-recovery-v1',metaFieldMediaContextDigest(r)]);
 const recoveryExpired='META_CHANNEL_CONSUMPTION_RECOVERY_EXPIRED';
+const progressDraftExpired='META_CHANNEL_PROGRESS_DRAFT_EXPIRED';
+const progressDraftExpiryBody='Venció el plazo del borrador de avance. No guardamos una propuesta ni cambiamos la tarea. Escribí AVANCE para revisar la tarea y preparar una medición nueva.';
 const recoveryCancelled='CONSUMPTION_RECOVERY_CANCELLED';
 const consumptionRecoveryExpiryBody='Venció el plazo del borrador de consumo. Conservamos los datos y el rechazo anterior; no guardamos otra propuesta ni descontamos stock. Escribí CANCELAR para descartarlo y empezar otro consumo.';
 const consumptionRecoveryExpiryMessage=r=>text((r.companyProjection?'Obra: '+r.project.name+'\n':'')+consumptionRecoveryExpiryBody);
@@ -212,7 +214,19 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
  const seal=(r,purpose,resourceId,value)=>encryptCustomerSecret(JSON.stringify(value),{organizationId:r.member.organizationId,projectId:r.project.id,purpose,resourceId},environment);
  function unseal(r,purpose,resourceId,value){try{return JSON.parse(decryptCustomerSecret(value,{organizationId:r.member.organizationId,projectId:r.project.id,purpose,resourceId},environment));}catch{throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);}}
  const conversation=r=>readMetaFieldConversation(r,environment);
- function conversationEnvelope(r,state){if(!state)return null;const fixed=state.consumptionRecovery;if(fixed&&(fixed.version!==1||fixed.contextDigest!==r.principalDigest||!Number.isFinite(Date.parse(fixed.deadline))||fixed.deadline!==state.expiresAt))throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);const value={...state,version:1,lastEventId:r.event.id,lastMessageTimestamp:r.proof.value.timestamp,lastReceivedAt:new Date(r.event.createdAt).toISOString(),expiresAt:fixed?fixed.deadline:new Date(r.now.getTime()+15*60000).toISOString(),bindingId:r.channelBinding.id};return {version:1,lastEventId:value.lastEventId,lastMessageTimestamp:value.lastMessageTimestamp,lastReceivedAt:value.lastReceivedAt,expiresAt:value.expiresAt,bindingId:value.bindingId,encryptedState:seal(r,'field-conversation',r.worker.id,value)};}
+ function progressEvidenceDeadline(r,state){
+  if(!state||!Object.hasOwn(state,'progressEvidenceWait'))return null;
+  const fixed=state.progressEvidenceWait,header=r.worker.metadata?.fieldChannelConversation;
+  if(state.purpose!=='PROGRESS'||!['PROGRESS_EVIDENCE_WAIT','PROGRESS_EVIDENCE','REASON','CONFIRM'].includes(state.step)||!fixed||typeof fixed!=='object'||Array.isArray(fixed)||Object.keys(fixed).sort().join('|')!=='deadline|version'||fixed.version!==1||typeof fixed.deadline!=='string'||!Number.isFinite(Date.parse(fixed.deadline))||new Date(fixed.deadline).toISOString()!==fixed.deadline||fixed.deadline!==state.expiresAt||header?.version!==1||header.bindingId!==r.channelBinding.id||header.expiresAt!==fixed.deadline)throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);
+  return fixed.deadline;
+ }
+ function conversationEnvelope(r,state){
+  if(!state)return null;
+  const fixed=state.consumptionRecovery,progressDeadline=progressEvidenceDeadline(r,state);
+  if(fixed&&(fixed.version!==1||fixed.contextDigest!==r.principalDigest||!Number.isFinite(Date.parse(fixed.deadline))||fixed.deadline!==state.expiresAt))throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
+  const value={...state,version:1,lastEventId:r.event.id,lastMessageTimestamp:r.proof.value.timestamp,lastReceivedAt:new Date(r.event.createdAt).toISOString(),expiresAt:fixed?fixed.deadline:progressDeadline||new Date(r.now.getTime()+15*60000).toISOString(),bindingId:r.channelBinding.id};
+  return {version:1,lastEventId:value.lastEventId,lastMessageTimestamp:value.lastMessageTimestamp,lastReceivedAt:value.lastReceivedAt,expiresAt:value.expiresAt,bindingId:value.bindingId,encryptedState:seal(r,'field-conversation',r.worker.id,value)};
+ }
  async function resolve(client,context,permission=null,beforeProject){
   const r=await resolveIdentity(client,{eventId:context.eventId,permission,claimChallenge:true,environment,...(beforeProject?{beforeProject}:{})});
   if(canonicalFieldResolvers.has(resolveIdentity))lockedResolutions.get(client)?.add(r);
@@ -247,6 +261,10 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   if(!allowExpired&&(!Number.isFinite(Date.parse(deadline))||Date.parse(deadline)<=observed.getTime()))throw new WorkspaceError(recoveryExpired,409);
   return current;
  }
+ async function progressEvidenceFence(client,r,state){
+  const deadline=progressEvidenceDeadline(r,state);if(!deadline)throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);
+  try{await recoveryFence(client,r,deadline);}catch(error){if(error.code===recoveryExpired)throw new WorkspaceError(progressDraftExpired,409);throw error;}
+ }
  function recoveryHeader(r){
   return inspectMetaFieldConsumptionRecovery(r)?.header||null;
  }
@@ -263,6 +281,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   return {version:1,id:previous?.id||digest([r.principalDigest,origin,state.expiresAt]),contextDigest:r.principalDigest,deadline:previous?.deadline||state.expiresAt,origin,suggestion:{materialId:state.materialId,name:state.name,unit:state.unit,quantity:state.quantity,reason:state.reason,taskId:state.taskId,sectorId:state.sectorId},firstError:previous?.firstError||error,lastError:error};
  }
  const expiryReply=r=>result(r,'CONSUMPTION_RECOVERY',text(consumptionRecoveryExpiryBody),{code:recoveryExpired});
+ const resultForProgressExpiry=r=>result(r,'INPUT_REVIEW',text(progressDraftExpiryBody),{code:progressDraftExpired});
  // The credential remains anchored to the physical connection; business input
  // stays on the immutable event projection. Neither uses the current selector.
  const mediaIdentity=r=>digest([r.member.organizationId,r.member.actorId,r.member.membershipId,r.member.clerkUserId,r.project.id,r.worker.id,r.channelBinding.id,r.connection.id,r.connection.projectId,r.connection.phoneNumberId,r.connection.whatsappBusinessId,r.connection.encryptedAccessToken,r.sourceProjectId||r.project.id,r.event.id,r.event.payload.payloadDigest,r.companyProjection?{projectId:r.companyProjection.projectId,workerId:r.companyProjection.workerId,assignmentRevision:r.companyProjection.assignmentRevision,bindingId:r.companyProjection.bindingId,routeId:r.companyProjection.routeId,routeEpoch:r.companyProjection.routeEpoch}:null]);
@@ -286,11 +305,15 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   return {session,service:createFieldOperations({workspace})};
  }
  async function saved(client,r){const row=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "actorId"=$3 AND "entityId"=$4 AND action='meta.field.dispatched'`,[receiptId(r.event.id),r.member.organizationId,r.member.actorId,r.worker.id])).rows[0];if(!row)return null;if(row.metadata?.payloadDigest!==r.event.payload.payloadDigest||row.metadata.channelBindingId!==r.channelBinding.id)throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);if(row.metadata.kind==='CONSUMPTION_RECOVERY'&&Number.isFinite(Date.parse(row.metadata.consumptionRecoveryDeadline))&&Date.parse(row.metadata.consumptionRecoveryDeadline)<=r.now.getTime()){const expired=await authorizeFieldReceipt(client,r,row.metadata,{environment,reply:consumptionRecoveryExpiryMessage(r)});if(expired.derivedExpiryFeedback)return expiryReply(r);}if(['CONSUMPTION_PROPOSAL','CONSUMPTION_READ','CONSUMPTION_RECOVERY','FIELD_REPORT_READ'].includes(row.metadata.kind)&&(attendanceOnly||r.connection.metadata?.developmentPilot||r.worker.metadata?.participant?.permissions?.report!==true))throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);if(row.metadata.kind==='CONSUMPTION_RECOVERY'||row.metadata.kind===recoveryCancelled||row.metadata.consumptionRecoveryContext!==undefined){if(row.metadata.consumptionRecoveryContext!==r.principalDigest)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);try{await recoveryFence(client,r,row.metadata.consumptionRecoveryDeadline,{allowExpired:row.metadata.kind!=='CONSUMPTION_RECOVERY',withdrawal:row.metadata.kind===recoveryCancelled});}catch(error){if(error.code!==recoveryExpired)throw error;return expiryReply(r);}}const value=(await authorizeFieldReceipt(client,r,row.metadata,{environment})).result;if(canonicalFieldResolvers.has(resolveIdentity))await writeMetaFieldCompanyResult(client,r,value,environment);await commitFence(client,r);return value;}
- async function record(client,r,result,state,{onlyIfCurrent=false,preserveConversation=false,recovery=null,recoveryUpdate=null,allowRecoveryExpired=false,withdrawalSnapshot=null,disclosure=null}={}){
+ async function record(client,r,result,state,{onlyIfCurrent=false,preserveConversation=false,recovery=null,recoveryUpdate=null,allowRecoveryExpired=false,allowProgressExpired=false,withdrawalSnapshot=null,disclosure=null}={}){
+  const progressPending=!allowProgressExpired&&(typeof r.progressEvidenceGuard==='function'||Boolean(state?.progressEvidenceWait&&!preserveConversation));
+  const progressFence=async()=>{if(progressPending)await (r.progressEvidenceGuard?r.progressEvidenceGuard():progressEvidenceFence(client,r,state));};
   const withdrawal=result.kind===recoveryCancelled&&typeof withdrawalSnapshot==='string';
   const beforeWrite=async()=>{const current=await recoveryFence(client,r,recovery.deadline,{allowExpired:allowRecoveryExpired,withdrawal});if(withdrawal&&withdrawalSnapshot!==digest([current.worker.metadata?.fieldConsumptionRecovery,current.worker.metadata?.fieldChannelConversation]))throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);};
   if(recovery)await client.query('SAVEPOINT meta_field_recovery_record');
+  if(progressPending)await client.query('SAVEPOINT meta_field_progress_record');
   try{
+  await progressFence();
   if(recovery)await beforeWrite();
   await assertDevelopmentPilotCommit(client,r.connection,environment);
   const current=(await client.query(`SELECT metadata FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id])).rows[0];
@@ -301,6 +324,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
    const instruction='\nPara continuar, mantené presionado este mensaje, elegí Responder y enviá el dato, la ubicación o el archivo desde esa respuesta. Para cancelar, respondé a este mismo mensaje con CANCELAR.';
    result={...result,reply:{...result.reply,body:result.reply.body.slice(0,4096-instruction.length)+instruction}};
   }
+  await progressFence();
   if(writesConversation||recoveryUpdate){const metadata={...current.metadata};if(writesConversation){metadata.fieldChannelConversation=conversationEnvelope(r,state);if(!state||state.purpose!=='CONSUMPTION')delete metadata.fieldConsumptionRecovery;}if(recoveryUpdate)metadata.fieldConsumptionRecovery={version:1,id:recoveryUpdate.id,contextDigest:recoveryUpdate.contextDigest,deadline:recoveryUpdate.deadline,bindingId:r.channelBinding.id,encryptedState:seal(r,'field-consumption-recovery',r.worker.id,recoveryUpdate)};await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify(metadata)]);}
   if(recovery)await recoveryFence(client,r,recovery.deadline,{allowExpired:allowRecoveryExpired,withdrawal});
   const replyAuthority=createMetaFieldReplyAuthority(r,disclosure||canonicalReplyDisclosure(result),result.reply);
@@ -310,7 +334,8 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   if(canonicalFieldResolvers.has(resolveIdentity))await writeMetaFieldCompanyResult(client,r,result,environment);if(r.companyProjection&&(!recovery||!canonicalFieldResolvers.has(resolveIdentity)))await commitFence(client,r);
   await assertDevelopmentPilotCommit(client,r.connection,environment);
   if(recovery)await recoveryFence(client,r,recovery.deadline,{allowExpired:allowRecoveryExpired,withdrawal});
-  }catch(error){if(!recovery||error.code!==recoveryExpired||allowRecoveryExpired)throw error;await client.query('ROLLBACK TO SAVEPOINT meta_field_recovery_record');if(result.businessApplied)throw error;return record(client,r,expiryReply(r),state,{preserveConversation:true,recovery,recoveryUpdate,allowRecoveryExpired:true});}
+  await progressFence();
+  }catch(error){if(progressPending&&error.code===progressDraftExpired){await client.query('ROLLBACK TO SAVEPOINT meta_field_progress_record');if(result.businessApplied)throw error;return record(client,r,resultForProgressExpiry(r),state,{preserveConversation:true,allowProgressExpired:true});}if(!recovery||error.code!==recoveryExpired||allowRecoveryExpired)throw error;await client.query('ROLLBACK TO SAVEPOINT meta_field_recovery_record');if(result.businessApplied)throw error;return record(client,r,expiryReply(r),state,{preserveConversation:true,recovery,recoveryUpdate,allowRecoveryExpired:true});}
   return result;
  }
  const result=(r,kind,reply,extra={})=>({kind,identityStatus:'CHANNEL_VERIFIED',workerId:r.worker.id,reviewState:'OBSERVED',businessApplied:false,replySent:false,reply:attendanceOnly||r.companyProjection?{...reply,body:('Obra: '+r.project.name+'\n'+reply.body).slice(0,reply.type==='interactive'?1024:4096)}:reply,...extra});
@@ -361,6 +386,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   const recovery=await readRecovery(client,r);
   if(recovery?.expired)return {done:await record(client,r,expiryReply(r),null,{preserveConversation:true,recovery,allowRecoveryExpired:true})};
   const state=conversation(r);
+  if(state&&Object.hasOwn(state,'progressEvidenceWait'))progressEvidenceDeadline(r,state);
   if(state?.consumptionRecovery&&(!recovery||state.consumptionRecovery.id!==recovery.id||state.consumptionRecovery.contextDigest!==recovery.contextDigest||state.consumptionRecovery.deadline!==recovery.deadline||state.expiresAt!==recovery.deadline))throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
   if(recovery&&state&&!state.consumptionRecovery&&['lastEventId','lastMessageTimestamp','lastReceivedAt','nonce','bindingId'].some(key=>state[key]!==recovery.origin?.[key]))throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);
   if(recovery){if(!state||state.purpose!=='CONSUMPTION')throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);r.recoveryGuard=()=>recoveryFence(client,r,recovery.deadline,{allowExpired:cancelling});if(!cancelling&&Date.parse(recovery.deadline)<=r.now.getTime())return {done:await record(client,r,expiryReply(r),state,{preserveConversation:true,recovery,allowRecoveryExpired:true})};}
@@ -370,6 +396,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   const {session,service}=operations(client,r);let data;try{data=catalogOnly?await service.recoveryMaterialCatalog(session,{projectId:r.project.id,scope:r.scope,workerId:r.worker.id}):await service.read(session,{projectId:r.project.id,scope:r.scope});}catch(error){if(!recovery||error.code!==recoveryExpired)throw error;return {done:await record(client,r,expiryReply(r),state,{preserveConversation:true,recovery,allowRecoveryExpired:true})};}
   const action=r.proof.value.type==='text'?metaFieldConversationAction(r.proof.value.text?.body):null;
   const activeState=state?.version===1&&Date.parse(state.expiresAt)>r.now.getTime()&&(!action||r.proof.value.text?.body?.trim().toUpperCase()==='HOLA'&&state.purpose!=='MENU')?state:null;
+  const progressWithdrawal=Boolean(activeState?.purpose==='PROGRESS'&&activeState.progressEvidenceWait&&selectedChoice(activeState,r.proof.value)==='CANCEL');
   const replyPrefix=attendanceOnly||r.companyProjection?'Obra: '+r.project.name+'\n':'',facts={projectName:r.project.name,projectId:limited?null:r.project.id,replyBodyLimit:Math.max(0,1024-replyPrefix.length),workerId:r.worker.id,permissions:limited?{attendance:r.worker.metadata.participant.permissions.attendance,report:false}:r.worker.metadata.participant.permissions,attendanceOnly:limited,inventory:data.inventory,...(!catalogOnly?{sectors:data.sectors,evidence:data.evidence,proposals:data.proposals,latest:data.attendance.filter(e=>e.workerId===r.worker.id).sort((a,b)=>b.sequence-a.sequence)[0]||null}:{}),mediaReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaFieldMediaContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId},planImportRole:plans.configured&&!limited?r.member.role:null,planImportReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaPlanImportContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId}};
   if(recovery)facts.consumptionRecovery=recovery;
   if(state?.purpose==='PLAN_IMPORT'&&Date.parse(state.expiresAt)>r.now.getTime()&&action!=='TASKS'&&!['HOLA','ESTADO','MENU','AYUDA'].includes(r.proof.value.text?.body?.trim().toUpperCase())&&!await metaPlanImportPromptMatches(client,r,state,environment))return {done:await record(client,r,result(r,'PLAN_IMPORT_CONTEXT_REQUIRED',text('Respondé al mensaje vigente del cronograma para enviar el archivo o elegir su autorización. Conservamos el paso y no guardamos ni analizamos archivos.')),state,{preserveConversation:true})};
@@ -394,9 +421,9 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
     }
     facts.ownReports=await service.ownReports(session,{projectId:r.project.id,scope:r.scope,workerId:r.worker.id,section:reportPurpose==='OWN_EVIDENCE'?'EVIDENCE':'PROGRESS',afterReport,reportId});
    }
-   if(!catalogOnly){if(limited&&(action==='TASKS'||activeState?.purpose==='TASKS'))facts.tasks=[];
+   if(!catalogOnly){if(progressWithdrawal||limited&&(action==='TASKS'||activeState?.purpose==='TASKS'))facts.tasks=[];
    else Object.assign(facts,await readMetaFieldTaskCatalog(client,{projectId:r.project.id,state:activeState||{purpose:action},message:r.proof.value}));}
-   if(facts.permissions.report===true&&activeState?.purpose==='PROGRESS'&&activeState.taskId)Object.assign(facts,await readMetaFieldEvidenceCatalog(client,{organizationId:r.member.organizationId,projectId:r.project.id,workerId:r.worker.id,actorId:r.member.actorId,state:activeState,message:r.proof.value,tasks:facts.tasks}));
+   if(!progressWithdrawal&&facts.permissions.report===true&&activeState?.purpose==='PROGRESS'&&activeState.taskId)Object.assign(facts,await readMetaFieldEvidenceCatalog(client,{organizationId:r.member.organizationId,projectId:r.project.id,workerId:r.worker.id,actorId:r.member.actorId,state:activeState,message:r.proof.value,tasks:facts.tasks}));
    if(recovery)await recoveryFence(client,r,recovery.deadline,{allowExpired:cancelling});
    plan=planMetaFieldConversation({message:r.proof.value,state,eventId:r.event.id,facts,now:r.now});
    // Only this exact canonical planner branch is satisfied by the narrow read.
@@ -406,7 +433,7 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   catch(error){
    if(recovery&&error.code===recoveryExpired)return {done:await record(client,r,expiryReply(r),state,{preserveConversation:true,recovery,allowRecoveryExpired:true})};
    if(['FIELD_REPORT_CURSOR_UNAVAILABLE','FIELD_REPORT_UNAVAILABLE','FIELD_REPORT_INTEGRITY','FIELD_REPORT_QUERY_INVALID'].includes(error.code))return {done:await record(client,r,result(r,'FIELD_REPORT_READ',text('No se pudo confirmar ese informe con tu acceso vigente. Conservamos el paso. Escribí EVIDENCIAS o AVANCES para consultar una lista actual; la consulta no cambia la tarea.'),{code:'FIELD_REPORT_READ_UNAVAILABLE'}),state,{preserveConversation:true})};
-   if(!safeErrors.has(error.code))throw error;return {done:await record(client,r,result(r,recovery?'CONSUMPTION_RECOVERY':'INPUT_REVIEW',text(explanation(error.code)+' Escribí CANCELAR para volver al menú.'),{code:error.code}),state,{preserveConversation:Boolean(recovery),recovery})};}
+   if(!safeErrors.has(error.code))throw error;return {done:await record(client,r,result(r,recovery?'CONSUMPTION_RECOVERY':'INPUT_REVIEW',text(explanation(error.code)+' Escribí CANCELAR para volver al menú.'),{code:error.code}),state,{preserveConversation:Boolean(recovery)||Boolean(state?.progressEvidenceWait),recovery})};}
   if(plan.planImport)return plans.prepare(client,r,plan.planImport,{...plan.state,version:1});
   if(plan.media){
    assertDevelopmentPilotAdapter(r.connection,'media');
@@ -421,16 +448,19 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
    const required=permissionFor(plan.command.action);if(facts.permissions[required]!==true)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
    // A failed command must not leave partial effects before its friendly error.
    await client.query('SAVEPOINT meta_field_command');
+   if(state?.progressEvidenceWait&&plan.command.action==='PROPOSE_PROGRESS'){r.progressEvidenceGuard=()=>progressEvidenceFence(client,r,state);r.recoveryGuard=r.progressEvidenceGuard;}
    try{const outcome=await service.save(session,{projectId:r.project.id,scope:r.scope,operationId:metaFieldOperationId(r.event.id,plan.command.action),...plan.command});
     const reply=text(outcome.kind==='ATTENDANCE'?(attendanceOnly?'Fichaje guardado en '+r.project.name+'. ':'Fichaje guardado. ')+(outcome.event.verificationStatus==='REVIEW_REQUIRED'?'Quedó pendiente de revisión humana.':'Podés consultar el recibo en Mi cuenta.'):outcome.kind==='INCIDENT_REPORT'?'Incidencia guardada para seguimiento del responsable.':outcome.kind==='MATERIAL_REQUEST'?'Pedido de material guardado. La compra todavía requiere autorización.':outcome.kind==='CONSUMPTION_PROPOSAL'?metaFieldConsumptionAcknowledgement(outcome,r.project.name):'Propuesta de avance guardada. La tarea conservará su avance hasta una decisión autorizada.');
     return {done:await record(client,r,result(r,outcome.kind,reply,{businessApplied:true,receiptId:outcome.receiptId,reviewState:'RECORDED'}),plan.state,{recovery})};
    }catch(error){
+    if(error.code===progressDraftExpired){await client.query('ROLLBACK TO SAVEPOINT meta_field_command');return {done:await record(client,r,resultForProgressExpiry(r),state,{preserveConversation:true,allowProgressExpired:true})};}
     if(recovery&&error.code===recoveryExpired){await client.query('ROLLBACK TO SAVEPOINT meta_field_command');return {done:await record(client,r,expiryReply(r),state,{preserveConversation:true,recovery,allowRecoveryExpired:true})};}
     if(!safeErrors.has(error.code))throw error;await client.query('ROLLBACK TO SAVEPOINT meta_field_command');
     if(error.code==='INVENTORY_CATALOG_CHANGED'&&plan.command.action==='PROPOSE_CONSUMPTION'&&state?.purpose==='CONSUMPTION'&&state.step==='CONFIRM'){
      const retained=catalogRecovery(r,state,recovery);return {done:await record(client,r,result(r,'CONSUMPTION_RECOVERY',text('El catálogo cambió. Conservamos tu material, cantidad, motivo y plazo; no guardamos una propuesta ni descontamos stock. Respondé al mensaje original con CONSUMO para volver a elegir el material y confirmar cantidad y motivo, o CANCELAR para descartarlo.'),{code:error.code}),state,{preserveConversation:true,recovery:retained,recoveryUpdate:retained})};
     }
-    return {done:await record(client,r,result(r,recovery?'CONSUMPTION_RECOVERY':'INPUT_REVIEW',text(explanation(error.code)+' Escribí MENU para continuar.'),{code:error.code}),recovery?state:null,{preserveConversation:Boolean(recovery),recovery})};
+    const retainedProgress=Boolean(state?.progressEvidenceWait);
+    return {done:await record(client,r,result(r,recovery?'CONSUMPTION_RECOVERY':'INPUT_REVIEW',text(explanation(error.code)+(retainedProgress?' Conservamos la medición y el plazo original. Respondé al paso vigente para volver a comprobar o con CANCELAR para descartar el borrador.':' Escribí MENU para continuar.')),{code:error.code}),recovery||retainedProgress?state:null,{preserveConversation:Boolean(recovery)||retainedProgress,recovery})};
    }
   }
   // Corporate status is a canonical ledger read. Its receipt cannot replace
@@ -576,7 +606,7 @@ export async function readMetaFieldEvidenceCatalog(client,{organizationId,projec
  // Re-read selections and retained voice/progress links independently of the
  // page. SHARE locks keep that attribution/review current through final command
  // persistence in this transaction; the canonical save and commit fence still run.
- const selected=paging&&choice&&!['NEXT_EVIDENCE','PREVIOUS_EVIDENCE','MANUAL'].includes(choice)?[choice]:[];
+ const selected=paging&&choice&&!['NEXT_EVIDENCE','PREVIOUS_EVIDENCE','RECHECK_EVIDENCE','CANCEL','MANUAL'].includes(choice)?[choice]:[];
  const retained=[...(state.evidenceIds||[]),state.sourceVoice?.evidenceId,state.voiceCandidate?.evidenceId,...selected].filter(value=>value!==undefined&&value!==null);
  if(retained.length>12||retained.some(value=>!workspaceId(value)))unavailable();
  for(const id of new Set(retained)){

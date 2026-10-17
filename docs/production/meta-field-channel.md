@@ -20,6 +20,18 @@ El proveedor resuelve el Media ID mediante Graph con el token del cliente y su P
 
 Foto/audio usan el procesador privado existente; un fallo conserva el archivo y queda recuperable. Video admite captura, almacenamiento, reproducción y revisión humana; no incorpora análisis automático. Las propuestas de cantidades/avance requieren evidencia aprobada y mantienen la tarea sin cambios hasta la decisión autorizada de otra persona desde la web.
 
+## Avance que espera evidencia aprobada
+
+Si el participante ya informó un porcentaje o una cantidad y todavía no hay evidencia aprobada para esa tarea, el canal conserva cifrados la medición, la tarea, el sector, la revisión y el vencimiento original. Ofrece **Consultar evidencia** y **Cancelar**; no guarda una propuesta incompleta ni cambia el avance de la tarea. La consulta vuelve al catálogo vigente de evidencia propia, de esa obra y tarea. Una fotografía pendiente o rechazada y un archivo de otra persona u obra no cumplen ese requisito.
+
+Cada reconsulta explícita emite un mensaje y opciones nuevos, conservando el mismo plazo. HOLA, ESTADO, TAREAS y una opción vieja conservan el paso original. Durante esta espera, MENU y AYUDA también conservan el borrador: para descartarlo se usa CANCELAR o la opción Cancelar vigente. La cancelación no necesita que la tarea siga disponible.
+
+Cuando la evidencia fue aprobada, el participante la elige, escribe el motivo y confirma el envío. El servidor vuelve a comprobar permisos, tarea, base de medición, evidencia y reloj antes de persistir. La revisión de la foto no aprueba el avance. Una tarea o base modificada exige descartar el borrador y preparar la medición con los datos actuales.
+
+Consultar no renueva el vencimiento. Si el plazo vence durante una espera SQL, incluso después de comenzar a escribir la propuesta, la transacción revierte los efectos y registra una respuesta de vencimiento; no presenta el envío como guardado. El participante debe iniciar AVANCE para preparar otro intento. La conservación de este paso no es una cola de reportes fuera de línea ni una autorización para aprobar automáticamente.
+
+El productor local de campo prueba reinicio, reconsulta, revisión independiente, permisos revocados, cancelación, alteraciones del estado cifrado, reloj SQL y reintentos. La cadena compartida de empresa prueba este mismo paso entre la foto pendiente de una tarea importada y su revisión por otra persona, antes de aplicar avance y consumo. Los mensajes, archivos y sesiones de esos ensayos son sintéticos; la aceptación de un operario y una directora en el canal real se acredita por separado.
+
 ## Respuestas y recuperación
 
 Antes de enviar se guarda una única reserva cifrada, vinculada al evento, trabajador, empresa y canal. El envío usa exclusivamente la credencial de ese cliente, dentro de la ventana vigente. Una respuesta incierta no se retransmite automáticamente: los callbacks correlacionados con `biz_opaque_callback_data` permiten observar envío, entrega y lectura. Estos estados no acreditan aceptación humana.

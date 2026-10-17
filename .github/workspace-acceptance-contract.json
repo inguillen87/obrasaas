@@ -23513,5 +23513,141 @@
         "sha256": "7801d9d074c4451178d7900d605aa75c91ebf6b4a82a24f997e89d0284008c7b"
       }
     ]
+  },
+  "progressEvidenceWaitCurrentRevision": {
+    "version": 1,
+    "predecessorCommit": "5e25fcb01a33c327af86cb5f360209c67e1a28d3",
+    "previousContractSha256": "0134ff841636654e447148bcc81f7c2127763089dd16b10166c4e26632b01b28",
+    "reviewedSourceChanges": [
+      {
+        "path": "src/lib/meta-field-bridge.mjs",
+        "previousSha256": "6ddb62df2dc3dab50a5d11071a4f0741dec8f94feeb96ce16a32ca29d176aa63",
+        "currentSha256": "79c961cf91f988e5d913cfb241a887c26a78d49e04ebf2c5fbb2bf6a74bc809b",
+        "previousRawSha256": "840868b35f1b39f832fb8e4b70179c04ca15f81f6b22166600defa98b31ae8d2",
+        "currentRawSha256": "105ed2432a753d0d70d6a1dc22b868ae41bd3878a379134f39e0c946d7ec0fc5"
+      },
+      {
+        "path": "src/lib/meta-field-conversation.mjs",
+        "previousSha256": "a839410418cafdc915e827ff993f8d83b268cadec08157ff9a8906d27d61c6dc",
+        "currentSha256": "2da5b4a58e4f62a912d4df4bd93574c9907c6561123fe5ffabdd12420b72047f",
+        "previousRawSha256": "ed8feee27c81dc550e0015e1a8bedcc1c65689c26b6483d8ca4820054b2f106e",
+        "currentRawSha256": "77c51cbe6ac48087085acf114660a8979428f2e67dafdde6cf4ae0e09cae466d"
+      },
+      {
+        "path": "scripts/verify-meta-field-bridge-postgres.mjs",
+        "previousSha256": "bcb9e3c22b2b4169d0ce5ccbbd26ae4c50d3ade8959a0c73dbbc52ad3d59fd44",
+        "currentSha256": "1580fcf08d81f0778cb4240215060d51f321671eba2d1b2d72aac7f800d3ee63",
+        "previousRawSha256": "71e32b9db118b3948e94432d306420d6b674d89d2bb7089d320f6b906ba30332",
+        "currentRawSha256": "e191bbe05d70186a52af06198d1a45e42a3d46a1badc22420961daaec60a38f4"
+      },
+      {
+        "path": "tests/production-meta-field.test.mjs",
+        "previousSha256": "4f4d02e455d3a445973842908949f536ef2723655a1d36d00146d22ab5e121f0",
+        "currentSha256": "fdc0ddf2cf5fab717654860bdd89543a70c161cb9fac7ab3fdd0cbc96d1c1e18",
+        "previousRawSha256": "97620985477f5320815e28eb5b85a8fda9d1da5e18ed6377e562d18e896e05f2",
+        "currentRawSha256": "30a9302f2f0da2c2e749e2de8eb3111e429a5dfff7eed0dcde099ecbfb74ec1e"
+      },
+      {
+        "path": "scripts/verify-company-channel-postgres.mjs",
+        "previousSha256": "ae2031c88abba7716cd7a56afcb1546c4bf706d8381901c0c2272fb023866320",
+        "currentSha256": "500d3b39c03295b1c10ea1aed48bcbb5d3171f39370947fc9e5d657f23985079",
+        "previousRawSha256": "d7886cf87a9d6ddfc0373aff76467bab4913bff84231f299543b6549264d70e8",
+        "currentRawSha256": "782695c1c4a21ce52a146432fbc323f5df01c91b15655b03f24141596c6bb45e"
+      }
+    ],
+    "validationPredecessors": [
+      {
+        "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+        "sha256": "59bed869142fc27c1e663c53d95bbd8dbb66b08c5231d04bc9863d9e4ec612e6"
+      },
+      {
+        "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+        "sha256": "95f8367157246020f35cdcad9c914e8022dd0fcc656d04201dd8bd5f050e9af5"
+      }
+    ],
+    "proofSourceSets": [
+      {
+        "kind": "UNIT",
+        "count": 139,
+        "pathsSha256": "4903f545a3b30380477561563262496477b10fc30eed030053083321b2b8dcf4"
+      },
+      {
+        "kind": "UI_BANK",
+        "count": 143,
+        "pathsSha256": "cae04a2e0c16e266bd5ae879e150ccff8e2ec0c155b5cb09ea050dc2836a6de6"
+      },
+      {
+        "kind": "UI_JOINT",
+        "count": 142,
+        "pathsSha256": "c34d375a88ae4fe2be1624fdf4b98b4d2788401b3d2e0a9915b8976426abdab3"
+      },
+      {
+        "kind": "UI_CAUSAL",
+        "count": 142,
+        "pathsSha256": "c34d375a88ae4fe2be1624fdf4b98b4d2788401b3d2e0a9915b8976426abdab3"
+      },
+      {
+        "kind": "PG_COMPANY_KYC",
+        "count": 236,
+        "pathsSha256": "ead9d712f7d5bf0561efc2a0b7e971f6e55a82677c2a08cb16641686e37bdf38"
+      },
+      {
+        "kind": "PG_FIELD",
+        "count": 128,
+        "pathsSha256": "4655f7b2e71f4fb5f3e9f6d71e00a5ccb828b9e87292566798cbc657ff812446"
+      },
+      {
+        "kind": "PG_OVERTIME",
+        "count": 113,
+        "pathsSha256": "d68a4ef55c57de688cf210a033da50f59cc2833be5f6cbfb4221dba58121ae0a"
+      },
+      {
+        "kind": "PG_PARTICIPANT_KYC_PREANALYSIS",
+        "count": 238,
+        "pathsSha256": "cd841d37ce905f066258d3f0c76ac1fd28b96e4c49b123663dc41164403bb0b5"
+      }
+    ],
+    "native": {
+      "producer": "scripts/verify-meta-field-bridge-postgres.mjs",
+      "path": ".vercel/meta-field-evidence/postgres.json",
+      "blockId": 26,
+      "lane": "meta",
+      "environment": "disposable-local-postgresql-actual-HMAC-and-real-canonical-bridge",
+      "historicalCheckCount": 37,
+      "historicalChecksSha256": "2f444d0cf71c4b7bfb2b818687064d36b3109ffacaf962c0f8abc68bc86f1f4d",
+      "addedCheckNames": [
+        "progress-evidence-wait-preserves-exact-quantity-task-sector-deadline-after-restart-explicit-recheck-stale-nonce-status-and-event-replay-without-business-media-IO",
+        "progress-evidence-wait-pending-rejected-foreign-task-worker-author-and-tenant-records-cannot-satisfy-the-current-approved-catalog",
+        "progress-evidence-wait-canonical-review-pending-error-rolls-back-and-retains-exact-ciphertext-deadline-origin-and-measurement-without-an-extra-proposal",
+        "progress-evidence-wait-independent-human-approval-unlocks-explicit-evidence-reason-and-confirmation-one-new-proposal-concurrent-replay-without-changing-Task-progress",
+        "progress-evidence-wait-revoked-membership-foreign-source-and-changed-measurement-definition-preserve-ledger-and-never-adopt-a-new-base",
+        "progress-evidence-wait-exact-marker-deadline-header-and-worker-AAD-tampering-are-rejected-without-a-dispatch-or-business-ledger-effect",
+        "progress-evidence-wait-deleted-task-HOLA-preserves-exact-encrypted-origin-and-interactive-cancel-clears-the-draft-without-reading-a-missing-target-or-proposing",
+        "progress-evidence-wait-real-SQL-clock-crosses-fixed-deadline-after-catalog-await-and-recovers-one-expiry-receipt-with-no-proposal-or-TTL-renewal",
+        "progress-evidence-wait-real-SQL-expiry-after-proposal-INSERT-rolls-back-business-Task-Incident-Proposal-Audit-and-retains-exact-encrypted-confirmation-for-one-expiry-replay"
+      ],
+      "totalCheckCount": 46
+    },
+    "company": {
+      "producer": "scripts/verify-company-channel-postgres.mjs",
+      "path": ".vercel/private/company-channel-postgres-proof.json",
+      "blockId": 29,
+      "lane": "channels",
+      "historicalCheckCount": 45,
+      "supplementalCheckCount": 9,
+      "totalCheckCount": 54,
+      "progressWaitField": "evidenceWait"
+    },
+    "nativeOrBrowserAcceptance": false,
+    "validationSources": [
+      {
+        "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+        "sha256": "7063a942c736b5fe35b40ad2eac018afdd188333a7792dda8b328ed9b860c1cd"
+      },
+      {
+        "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+        "sha256": "8088480f2864dc860f6e4dbf3f9a15a1f29c333cb2e7e4e246ee6b7a6fc4ce2a"
+      }
+    ]
   }
 }

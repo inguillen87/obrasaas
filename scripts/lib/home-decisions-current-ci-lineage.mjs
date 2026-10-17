@@ -4261,7 +4261,7 @@ export function homeDecisionsCurrentSourcePin(contract,ref){
 }
 export function homeDecisionsValidationFiles(contract){
  const value=section(contract);if(!value)return[];restoreHomeDecisionsPreviousContract(contract);
- const weekly=weeklyCypSection(contract);return [...new Set([...customerPhoneSelectionValidationFiles(contract),...(weekly?['scripts/lib/plan-document-curve-fixture-copy.mjs',...weekly.validationSources.map(row=>row.path)]:[]),...[...value.reviewedSourceChanges,...value.validationDeltas,...value.validationSources].map(row=>row.path)])].sort();
+ const wait=progressEvidenceWaitSection(contract),weekly=weeklyCypSection(contract);return [...new Set([...(wait?wait.reviewedSourceChanges.map(row=>row.path):[]),...customerPhoneSelectionValidationFiles(contract),...(weekly?['scripts/lib/plan-document-curve-fixture-copy.mjs',...weekly.validationSources.map(row=>row.path)]:[]),...[...value.reviewedSourceChanges,...value.validationDeltas,...value.validationSources].map(row=>row.path)])].sort();
 }
 // Only complete, reviewed AST nodes are projected. A changed identity guard,
 // query, role expression or unrelated statement remains in the historical AST.
@@ -4371,7 +4371,7 @@ const companyNativePattern=(pattern,value)=>typeof value==='string'&&pattern.tes
 const companyNativeSourcePath=value=>typeof value==='string'&&/^(src|scripts|tests)\//.test(value)&&!value.includes('..')&&!value.includes('\\');
 function companyNativeRead(readSource,file){let bytes;try{bytes=readSource(file);}catch{companyNativeRequired(false,'SOURCE_MISSING');}companyNativeRequired(Buffer.isBuffer(bytes),'SOURCE_MISSING');return bytes;}
 export function validateCompanyOnboardingUxNativeProof(proof,readSource){
- const n=COMPANY_ONBOARDING_UX_NATIVE_REVIEW,r=companyNativeRequired,k=companyNativeKeys;
+ const n=COMPANY_ONBOARDING_UX_NATIVE_REVIEW,r=companyNativeRequired,k=companyNativeKeys,contract=progressEvidenceWaitReaderContract(readSource),wait=progressEvidenceWaitSection(contract);
  k(proof,['version','at','status','participantKycFixture','disposableDatabase','production','provider','checks','checkCount','supplementalChecks','supplementalCheckCount','totalCheckCount','sourceEventsUnique','composedFieldCore','connections','sends','mediaIO','realMediaIO','harnessSha256','sourceManifest','databaseRemoved'],'PROOF_SHAPE');
  r(proof.version===1&&proof.status==='PASS'&&typeof proof.at==='string'&&Number.isFinite(Date.parse(proof.at))&&new Date(proof.at).toISOString()===proof.at,'PROOF_STATE');
  r(proof.disposableDatabase===true&&proof.databaseRemoved===true&&proof.production===false&&proof.provider==='controlled-synthetic-only'&&proof.sourceEventsUnique===true&&proof.connections===1&&companyNativeCount(proof.sends),'PROOF_LIMITS');
@@ -4394,7 +4394,8 @@ export function validateCompanyOnboardingUxNativeProof(proof,readSource){
  k(c.document.io,['puts','gets','analyses'],'DOCUMENT_IO_SHAPE');r(c.document.io.puts===1&&c.document.io.gets===2&&c.document.io.analyses===1,'DOCUMENT_IO');
  k(c.evidence,['id','sourceEventId','reviewReceiptId','taskId'],'EVIDENCE_SHAPE');
  r(companyNativePattern(/^evidence_[a-f0-9]{40}$/,c.evidence.id)&&companyNativePattern(/^customer_webhook_[a-f0-9]{64}$/,c.evidence.sourceEventId)&&companyNativePattern(/^field_[a-f0-9]{64}$/,c.evidence.reviewReceiptId)&&c.evidence.taskId===c.taskId,'EVIDENCE');
- k(c.progress,['proposalId','sourceEventId','receiptId','taskId','state','progress','submittedBy','reviewedBy'],'PROGRESS_SHAPE');
+ k(c.progress,['proposalId','sourceEventId','receiptId','taskId','state','progress','submittedBy','reviewedBy',...(wait?['evidenceWait']:[])],'PROGRESS_SHAPE');
+ if(wait)validateProgressEvidenceWaitCompanyFacts(c.progress.evidenceWait,c);
  r(companyNativePattern(/^proposal_[a-f0-9]{32}$/,c.progress.proposalId)&&companyNativePattern(/^customer_webhook_[a-f0-9]{64}$/,c.progress.sourceEventId)&&companyNativePattern(/^field_[a-f0-9]{64}$/,c.progress.receiptId)&&c.progress.taskId===c.taskId&&c.progress.state==='APPLIED'&&c.progress.progress===25&&c.progress.submittedBy==='person'&&c.progress.reviewedBy==='core-reviewer'&&c.progress.reviewedBy!==c.progress.submittedBy,'PROGRESS');
  k(c.inventory,['materialId','openingProposalId','openingReceiptId','consumptionId','sourceEventId','receiptId','taskId','state','movementId','movementCount','quantity','unit','balanceBefore','balanceAfter'],'INVENTORY_SHAPE');
  const i=c.inventory;
@@ -4409,11 +4410,12 @@ export function validateCompanyOnboardingUxNativeProof(proof,readSource){
  k(c.limits,Object.keys(limits),'CORE_LIMITS_SHAPE');r(Object.entries(limits).every(([key,value])=>c.limits[key]===value),'CORE_LIMITS');
  r(typeof readSource==='function','SOURCE_READER');
  const producer=companyNativeRead(readSource,n.producer),text=producer.toString('utf8');
- r(producer.equals(Buffer.from(text))&&companyNativeSha(text.replaceAll('\r\n','\n'))===n.producerLfSha256&&proof.harnessSha256===companyNativeSha(producer),'CURRENT_HARNESS');
+ r(producer.equals(Buffer.from(text))&&companyNativeSha(text.replaceAll('\r\n','\n'))===progressEvidenceWaitCurrentSourcePin(contract,{path:n.producer,sha256:n.producerLfSha256})&&proof.harnessSha256===companyNativeSha(producer),'CURRENT_HARNESS');
  r(Array.isArray(proof.sourceManifest)&&proof.sourceManifest.length===n.sourceCount,'SOURCE_MANIFEST');
  const paths=[];
  for(const ref of proof.sourceManifest){k(ref,['path','sha256'],'SOURCE_REFERENCE');r(companyNativeSourcePath(ref.path)&&companyNativeHash(ref.sha256),'SOURCE_REFERENCE');paths.push(ref.path);r(companyNativeSha(companyNativeRead(readSource,ref.path))===ref.sha256,'SOURCE_HASH');}
  r(new Set(paths).size===paths.length&&companyNativeSha(JSON.stringify(paths.slice().sort()))===n.sourcePathsSha256,'SOURCE_SET');
+ if(wait){try{verifyProgressEvidenceWaitCurrentSources(contract,readSource);}catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')r(false,'CURRENT_WAIT_SOURCES');throw error;}}
  return {status:'PASS',checks:n.totalCheckCount,coreChecks:n.addedCheckNames.length,sourceReferences:n.sourceCount,syntheticOnly:true,realAcceptance:false};
 }
 export function validateCompanyOnboardingUxNativeProofBytes(bytes,readSource){
@@ -4937,13 +4939,14 @@ function weeklyCypSection(contract){
 }
 function weeklyCypReferences(value){return [...value.reviewedSourceChanges,...value.proofProducerDeltas.map(row=>({path:row.producer,previousSha256:row.previousProducerSha256,currentSha256:row.currentProducerSha256})),...value.validationPredecessors.map(row=>({path:row.path,previousSha256:row.sha256,currentSha256:value.validationSources.find(ref=>ref.path===row.path).sha256,authenticatedPreviousAliases:row.authenticatedPreviousAliases||[]}))];}
 export function restoreWeeklyCypPreviousContract(contract){
+ contract=restoreProgressEvidenceWaitPreviousContract(contract);
  const value=weeklyCypSection(contract);if(!value)return contract;const previous=structuredClone(contract);delete previous[WEEKLY_CYP_CURRENT_SECTION];
  for(const delta of value.proofSourceDeltas){const proofs=previous.extension?.proofs?.filter(row=>row.id===delta.id);reject(proofs?.length===1,'One weekly CyP proof required');proofs[0].sourceFiles=previousPaths(proofs[0].sourceFiles,delta);}
  for(const delta of value.proofProducerDeltas){const proofs=previous.extension?.proofs?.filter(row=>row.id===delta.id),records=previous.evidenceProducers?.filter(row=>row.path===delta.path&&row.producer===delta.producer);reject(proofs?.length===1&&records?.length===1&&proofs[0].producer===delta.producer&&proofs[0].path===delta.path&&proofs[0].producerSha256===delta.currentProducerSha256&&records[0].producerSha256===delta.currentProducerSha256,'Exact current weekly CyP producer required');proofs[0].producerSha256=delta.previousProducerSha256;records[0].producerSha256=delta.previousProducerSha256;}
  reject(sha(JSON.stringify(previous,null,2)+'\n')===value.previousContractSha256,'The complete published0ac monthly contract must restore exactly');return previous;
 }
-export function weeklyCypCurrentSourcePin(contract,ref){const value=weeklyCypSection(contract),row=value&&weeklyCypReferences(value).find(row=>row.path===ref.path);if(!row)return ref.sha256;reject([row.previousSha256,row.currentSha256,...(row.authenticatedPreviousAliases||[])].includes(ref.sha256),'Only exact published0ac or weekly CyP pins may advance: '+ref.path);return row.currentSha256;}
-export function weeklyCypPreviousSourcePin(contract,ref){const value=weeklyCypSection(contract),row=value&&weeklyCypReferences(value).find(row=>row.path===ref.path);return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}
+export function weeklyCypCurrentSourcePin(contract,ref){ref={...ref,sha256:progressEvidenceWaitPreviousSourcePin(contract,ref)};const value=weeklyCypSection(contract),row=value&&weeklyCypReferences(value).find(row=>row.path===ref.path);if(!row)return progressEvidenceWaitCurrentSourcePin(contract,ref);reject([row.previousSha256,row.currentSha256,...(row.authenticatedPreviousAliases||[])].includes(ref.sha256),'Only exact published0ac or weekly CyP pins may advance: '+ref.path);return progressEvidenceWaitCurrentSourcePin(contract,{...ref,sha256:row.currentSha256});}
+export function weeklyCypPreviousSourcePin(contract,ref){ref={...ref,sha256:progressEvidenceWaitPreviousSourcePin(contract,ref)};const value=weeklyCypSection(contract),row=value&&weeklyCypReferences(value).find(row=>row.path===ref.path);return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}
 export function restoreWeeklyCypConsumerSourceSet(family,files,contract){
  const value=weeklyCypSection(contract);if(!value)return files;restoreWeeklyCypPreviousContract(contract);
  const delta=value.consumerSourceDeltas.find(row=>row.family===family);reject(Boolean(delta),'One exact weekly CyP consumer source family required: '+family);
@@ -4958,9 +4961,10 @@ export function weeklyCypProofSourceAdditions(spec){
  reject(files.length<delta.currentCount&&!delta.additions.some(file=>files.includes(file)),'Unknown weekly CyP source set: '+delta.id);return[];
 }
 export function verifyWeeklyCypCurrentSources(contract,readSource){
+ verifyProgressEvidenceWaitCurrentSources(contract,readSource);
  const value=weeklyCypSection(contract);if(!value)return null;restoreWeeklyCypPreviousContract(contract);reject(typeof readSource==='function','Weekly CyP actual source reader required');
  const refs=weeklyCypReferences(value);reject(new Set(refs.map(row=>row.path)).size===refs.length,'Unique weekly CyP sources required');
- for(const row of refs){const bytes=readSource(row.path);reject(safe(row.path)&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8')))&&sha(bytes.toString('utf8').replaceAll('\r\n','\n'))===row.currentSha256,'Stale current weekly CyP source: '+row.path);}
+ for(const row of refs){const bytes=readSource(row.path);reject(safe(row.path)&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8')))&&sha(bytes.toString('utf8').replaceAll('\r\n','\n'))===progressEvidenceWaitCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}),'Stale current weekly CyP source: '+row.path);}
  const copy=readSource('scripts/lib/plan-document-curve-fixture-copy.mjs');reject(Buffer.isBuffer(copy)&&sha(copy.toString('utf8').replaceAll('\r\n','\n'))===value.documentCurveCopy.helperLfSha256,'Exact two-dependency fixture copier required');
  return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,sourceSetChanges:value.proofSourceDeltas.length,nativeOrBrowserAcceptance:false};
 }
@@ -5013,4 +5017,185 @@ export function weeklyCypImportUiShadowFixture(readSource,expectedHead,expectedT
  const view='src/app/(identity)/cuenta/plan-source-curve.mjs',original=weeklyUiRead(readSource,view);let generated=original;for(const dependency of WEEKLY_CYP_CURRENT_REVISION.documentCurveCopy.dependencies){const before=generated;generated=Buffer.from(before.toString('utf8').replace('../../../lib/'+path.posix.basename(dependency),'./'+path.posix.basename(dependency)));proof.fixtureTransforms.push({path:view,kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:sha(original),copiedBeforeSha256:sha(before),fixtureSha256:sha(generated),fixtureRelativePath:'app/plan-source-curve.mjs',dependencySourcePath:dependency,dependencyFixturePath:'app/'+path.posix.basename(dependency)});}
  proof.investmentCurveChecks=n.widths.map(width=>{const screenshot='.vercel/private/investment-ui-shadow/investment-'+width+'.png',png=Buffer.alloc(25);Buffer.from([137,80,78,71,13,10,26,10]).copy(png);png.writeUInt32BE(width,16);png.writeUInt32BE(1000,20);evidence.set(screenshot,png);return {width,mode:'investment-monthly-weekly',canonicalStoreAndHttp:true,localOoxmlParser:true,transport:'RECONSTRUCTED_NODE_FORMDATA_FROM_VERIFIED_BROWSER_FILE',sourceSha256:'a'.repeat(64),sourceManifestContext:{projectId:'project-document-synthetic',scope:'b'.repeat(64)},weeklyPeriods:48,monthlyPeriods:12,exactDifference:'0.0470000',uncheckedConsentAndMismatchReviewBlocked:true,acknowledgmentBoundToReview:true,keyboard48AndCrossMonth:true,modeTogglePreservesSelection:true,immutableApplyReceipt:'synthetic-apply-'+width,lostCommitAckRecoveredAfterReload:true,applyPosts:1,recoveryReads:1,existingTasksPreserved:5001,taskSqlAttempts:0,baselineEffects:false,realProviderCalls:0,sourceDownloads:0,screenshot};});
  return {proof,evidence,boundary:'VALIDATOR_ONLY_NOT_BROWSER_EXECUTION'};
+}
+
+// This outer companion preserves the complete published monthly/weekly contract.
+// It changes no measured source path set and certifies only synthetic evidence.
+export const PROGRESS_EVIDENCE_WAIT_CURRENT_SECTION='progressEvidenceWaitCurrentRevision';
+export const PROGRESS_EVIDENCE_WAIT_CURRENT_REVISION=Object.freeze({
+  "version": 1,
+  "predecessorCommit": "5e25fcb01a33c327af86cb5f360209c67e1a28d3",
+  "previousContractSha256": "0134ff841636654e447148bcc81f7c2127763089dd16b10166c4e26632b01b28",
+  "reviewedSourceChanges": [
+    {
+      "path": "src/lib/meta-field-bridge.mjs",
+      "previousSha256": "6ddb62df2dc3dab50a5d11071a4f0741dec8f94feeb96ce16a32ca29d176aa63",
+      "currentSha256": "79c961cf91f988e5d913cfb241a887c26a78d49e04ebf2c5fbb2bf6a74bc809b",
+      "previousRawSha256": "840868b35f1b39f832fb8e4b70179c04ca15f81f6b22166600defa98b31ae8d2",
+      "currentRawSha256": "105ed2432a753d0d70d6a1dc22b868ae41bd3878a379134f39e0c946d7ec0fc5"
+    },
+    {
+      "path": "src/lib/meta-field-conversation.mjs",
+      "previousSha256": "a839410418cafdc915e827ff993f8d83b268cadec08157ff9a8906d27d61c6dc",
+      "currentSha256": "2da5b4a58e4f62a912d4df4bd93574c9907c6561123fe5ffabdd12420b72047f",
+      "previousRawSha256": "ed8feee27c81dc550e0015e1a8bedcc1c65689c26b6483d8ca4820054b2f106e",
+      "currentRawSha256": "77c51cbe6ac48087085acf114660a8979428f2e67dafdde6cf4ae0e09cae466d"
+    },
+    {
+      "path": "scripts/verify-meta-field-bridge-postgres.mjs",
+      "previousSha256": "bcb9e3c22b2b4169d0ce5ccbbd26ae4c50d3ade8959a0c73dbbc52ad3d59fd44",
+      "currentSha256": "1580fcf08d81f0778cb4240215060d51f321671eba2d1b2d72aac7f800d3ee63",
+      "previousRawSha256": "71e32b9db118b3948e94432d306420d6b674d89d2bb7089d320f6b906ba30332",
+      "currentRawSha256": "e191bbe05d70186a52af06198d1a45e42a3d46a1badc22420961daaec60a38f4"
+    },
+    {
+      "path": "tests/production-meta-field.test.mjs",
+      "previousSha256": "4f4d02e455d3a445973842908949f536ef2723655a1d36d00146d22ab5e121f0",
+      "currentSha256": "fdc0ddf2cf5fab717654860bdd89543a70c161cb9fac7ab3fdd0cbc96d1c1e18",
+      "previousRawSha256": "97620985477f5320815e28eb5b85a8fda9d1da5e18ed6377e562d18e896e05f2",
+      "currentRawSha256": "30a9302f2f0da2c2e749e2de8eb3111e429a5dfff7eed0dcde099ecbfb74ec1e"
+    },
+    {
+      "path": "scripts/verify-company-channel-postgres.mjs",
+      "previousSha256": "ae2031c88abba7716cd7a56afcb1546c4bf706d8381901c0c2272fb023866320",
+      "currentSha256": "500d3b39c03295b1c10ea1aed48bcbb5d3171f39370947fc9e5d657f23985079",
+      "previousRawSha256": "d7886cf87a9d6ddfc0373aff76467bab4913bff84231f299543b6549264d70e8",
+      "currentRawSha256": "782695c1c4a21ce52a146432fbc323f5df01c91b15655b03f24141596c6bb45e"
+    }
+  ],
+  "validationPredecessors": [
+    {
+      "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+      "sha256": "59bed869142fc27c1e663c53d95bbd8dbb66b08c5231d04bc9863d9e4ec612e6"
+    },
+    {
+      "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+      "sha256": "95f8367157246020f35cdcad9c914e8022dd0fcc656d04201dd8bd5f050e9af5"
+    }
+  ],
+  "proofSourceSets": [
+    {
+      "kind": "UNIT",
+      "count": 139,
+      "pathsSha256": "4903f545a3b30380477561563262496477b10fc30eed030053083321b2b8dcf4"
+    },
+    {
+      "kind": "UI_BANK",
+      "count": 143,
+      "pathsSha256": "cae04a2e0c16e266bd5ae879e150ccff8e2ec0c155b5cb09ea050dc2836a6de6"
+    },
+    {
+      "kind": "UI_JOINT",
+      "count": 142,
+      "pathsSha256": "c34d375a88ae4fe2be1624fdf4b98b4d2788401b3d2e0a9915b8976426abdab3"
+    },
+    {
+      "kind": "UI_CAUSAL",
+      "count": 142,
+      "pathsSha256": "c34d375a88ae4fe2be1624fdf4b98b4d2788401b3d2e0a9915b8976426abdab3"
+    },
+    {
+      "kind": "PG_COMPANY_KYC",
+      "count": 236,
+      "pathsSha256": "ead9d712f7d5bf0561efc2a0b7e971f6e55a82677c2a08cb16641686e37bdf38"
+    },
+    {
+      "kind": "PG_FIELD",
+      "count": 128,
+      "pathsSha256": "4655f7b2e71f4fb5f3e9f6d71e00a5ccb828b9e87292566798cbc657ff812446"
+    },
+    {
+      "kind": "PG_OVERTIME",
+      "count": 113,
+      "pathsSha256": "d68a4ef55c57de688cf210a033da50f59cc2833be5f6cbfb4221dba58121ae0a"
+    },
+    {
+      "kind": "PG_PARTICIPANT_KYC_PREANALYSIS",
+      "count": 238,
+      "pathsSha256": "cd841d37ce905f066258d3f0c76ac1fd28b96e4c49b123663dc41164403bb0b5"
+    }
+  ],
+  "native": {
+    "producer": "scripts/verify-meta-field-bridge-postgres.mjs",
+    "path": ".vercel/meta-field-evidence/postgres.json",
+    "blockId": 26,
+    "lane": "meta",
+    "environment": "disposable-local-postgresql-actual-HMAC-and-real-canonical-bridge",
+    "historicalCheckCount": 37,
+    "historicalChecksSha256": "2f444d0cf71c4b7bfb2b818687064d36b3109ffacaf962c0f8abc68bc86f1f4d",
+    "addedCheckNames": [
+      "progress-evidence-wait-preserves-exact-quantity-task-sector-deadline-after-restart-explicit-recheck-stale-nonce-status-and-event-replay-without-business-media-IO",
+      "progress-evidence-wait-pending-rejected-foreign-task-worker-author-and-tenant-records-cannot-satisfy-the-current-approved-catalog",
+      "progress-evidence-wait-canonical-review-pending-error-rolls-back-and-retains-exact-ciphertext-deadline-origin-and-measurement-without-an-extra-proposal",
+      "progress-evidence-wait-independent-human-approval-unlocks-explicit-evidence-reason-and-confirmation-one-new-proposal-concurrent-replay-without-changing-Task-progress",
+      "progress-evidence-wait-revoked-membership-foreign-source-and-changed-measurement-definition-preserve-ledger-and-never-adopt-a-new-base",
+      "progress-evidence-wait-exact-marker-deadline-header-and-worker-AAD-tampering-are-rejected-without-a-dispatch-or-business-ledger-effect",
+      "progress-evidence-wait-deleted-task-HOLA-preserves-exact-encrypted-origin-and-interactive-cancel-clears-the-draft-without-reading-a-missing-target-or-proposing",
+      "progress-evidence-wait-real-SQL-clock-crosses-fixed-deadline-after-catalog-await-and-recovers-one-expiry-receipt-with-no-proposal-or-TTL-renewal",
+      "progress-evidence-wait-real-SQL-expiry-after-proposal-INSERT-rolls-back-business-Task-Incident-Proposal-Audit-and-retains-exact-encrypted-confirmation-for-one-expiry-replay"
+    ],
+    "totalCheckCount": 46
+  },
+  "company": {
+    "producer": "scripts/verify-company-channel-postgres.mjs",
+    "path": ".vercel/private/company-channel-postgres-proof.json",
+    "blockId": 29,
+    "lane": "channels",
+    "historicalCheckCount": 45,
+    "supplementalCheckCount": 9,
+    "totalCheckCount": 54,
+    "progressWaitField": "evidenceWait"
+  },
+  "nativeOrBrowserAcceptance": false
+});
+deepFreeze(PROGRESS_EVIDENCE_WAIT_CURRENT_REVISION);
+function progressEvidenceWaitSection(contract){
+ if(!plain(contract)||!Object.hasOwn(contract,PROGRESS_EVIDENCE_WAIT_CURRENT_SECTION))return null;
+ const value=contract[PROGRESS_EVIDENCE_WAIT_CURRENT_SECTION];exact(value,[...Object.keys(PROGRESS_EVIDENCE_WAIT_CURRENT_REVISION),'validationSources'],'Exact progress evidence wait companion required');
+ for(const[key,expected]of Object.entries(PROGRESS_EVIDENCE_WAIT_CURRENT_REVISION))reject(same(value[key],expected),'Unreviewed progress evidence wait declaration: '+key);
+ reject(Array.isArray(value.validationSources)&&same(value.validationSources.map(row=>row?.path),value.validationPredecessors.map(row=>row.path)),'Exact progress evidence wait validators required');
+ for(const row of value.validationSources){exact(row,['path','sha256'],'Exact progress evidence wait validation reference required');reject(hash(row.sha256),'Progress evidence wait validation hash required');}return value;
+}
+function progressEvidenceWaitReferences(value){return [...value.reviewedSourceChanges,...value.validationPredecessors.map(row=>({path:row.path,previousSha256:row.sha256,currentSha256:value.validationSources.find(ref=>ref.path===row.path).sha256}))];}
+export function restoreProgressEvidenceWaitPreviousContract(contract){
+ const value=progressEvidenceWaitSection(contract);if(!value)return contract;const previous=structuredClone(contract);delete previous[PROGRESS_EVIDENCE_WAIT_CURRENT_SECTION];
+ reject(sha(JSON.stringify(previous,null,2)+'\n')===value.previousContractSha256,'The complete published5e25 monthly and weekly contract must restore exactly');return previous;
+}
+export function progressEvidenceWaitCurrentSourcePin(contract,ref){
+ const value=progressEvidenceWaitSection(contract),row=value&&progressEvidenceWaitReferences(value).find(row=>row.path===ref.path);if(!row)return ref.sha256;
+ reject([row.previousSha256,row.currentSha256].includes(ref.sha256),'Only exact published5e25 or progress evidence wait pins may advance: '+ref.path);return row.currentSha256;
+}
+export function progressEvidenceWaitPreviousSourcePin(contract,ref){const value=progressEvidenceWaitSection(contract),row=value&&progressEvidenceWaitReferences(value).find(row=>row.path===ref.path);return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}
+export function verifyProgressEvidenceWaitCurrentSources(contract,readSource){
+ const value=progressEvidenceWaitSection(contract);if(!value)return null;restoreProgressEvidenceWaitPreviousContract(contract);reject(typeof readSource==='function','Progress evidence wait actual source reader required');
+ const refs=progressEvidenceWaitReferences(value);reject(new Set(refs.map(row=>row.path)).size===refs.length,'Unique progress evidence wait sources required');
+ for(const row of refs){const bytes=readSource(row.path);reject(safe(row.path)&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8')))&&sha(bytes.toString('utf8').replaceAll('\r\n','\n'))===row.currentSha256,'Stale current progress evidence wait source: '+row.path);}
+ for(const row of value.proofSourceSets){const spec=contract.extension.proofs.find(spec=>spec.kind===row.kind);reject(Boolean(spec)&&spec.sourceFiles.length===row.count&&sha(JSON.stringify(spec.sourceFiles))===row.pathsSha256,'Unchanged progress evidence wait source set required: '+row.kind);}
+ return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,sourceSetChanges:0,nativeOrBrowserAcceptance:false};
+}
+function progressWaitNativeRequired(ok,reason){if(!ok)throw Object.assign(new Error('Progress evidence wait native proof rejected: '+reason),{code:'PROGRESS_EVIDENCE_WAIT_NATIVE_PROOF_REJECTED',reason});}
+export function validateProgressEvidenceWaitNativeProofBytes(bytes,contract,readSource){
+ const value=progressEvidenceWaitSection(contract);if(!value)return null;const r=progressWaitNativeRequired,n=value.native;
+ r(Buffer.isBuffer(bytes)&&bytes.length>0&&bytes.length<=256*1024,'PROOF_BYTES');const text=bytes.toString('utf8');r(bytes.equals(Buffer.from(text)),'PROOF_UTF8');let proof;try{proof=JSON.parse(text);}catch{r(false,'PROOF_JSON');}
+ r(plain(proof)&&same(Object.keys(proof).sort(),['status','environment','checks','provider','blob','outbound','productionDataWritten','realMetaRequests','physicalAttendanceAccepted','realHumanIdentityAccepted','cleanup'].sort()),'PROOF_SHAPE');
+ r(proof.status==='PASS'&&proof.environment===n.environment&&proof.provider==='controlled-synthetic-media-only'&&proof.blob==='controlled-private-byte-store'&&proof.outbound==='controlled-no-send-result-only','PROOF_STATE');
+ r(Array.isArray(proof.checks)&&proof.checks.length===n.totalCheckCount&&sha(JSON.stringify(proof.checks.slice(0,n.historicalCheckCount)))===n.historicalChecksSha256&&same(proof.checks.slice(n.historicalCheckCount),n.addedCheckNames),'EXACT_HISTORICAL_AND_CURRENT_CHECKS');
+ r(proof.productionDataWritten===false&&proof.realMetaRequests===0&&proof.physicalAttendanceAccepted===false&&proof.realHumanIdentityAccepted===false,'PROOF_LIMITS');
+ r(plain(proof.cleanup)&&same(Object.keys(proof.cleanup).sort(),['poolClosed','ownConnectionsClosed','databaseRemoved','adminClosed'].sort())&&Object.values(proof.cleanup).every(value=>value===true),'CLEANUP');
+ try{verifyProgressEvidenceWaitCurrentSources(contract,readSource);}catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')r(false,'CURRENT_SOURCES');throw error;}
+ return {status:'PASS',historicalChecks:n.historicalCheckCount,addedChecks:n.addedCheckNames.length,checks:n.totalCheckCount,syntheticOnly:true,realAcceptance:false};
+}
+function progressEvidenceWaitReaderContract(readSource){
+ const bytes=companyNativeRead(readSource,'.github/workspace-acceptance-contract.json');let contract;try{contract=JSON.parse(bytes);}catch{companyNativeRequired(false,'CONTRACT_JSON');}return contract;
+}
+export function validateProgressEvidenceWaitCompanyFacts(wait,core){
+ const r=companyNativeRequired,k=companyNativeKeys;
+ k(wait,['version','state','taskId','taskRevision','sectorId','progress','quantity','baseline','unit','originalDeadline','initial','recheck','resumed','routePrincipal','taskUnchanged','proposalCount'],'PROGRESS_WAIT_SHAPE');
+ r(wait.version===1&&wait.state==='PROGRESS_EVIDENCE_WAIT'&&wait.taskId===core.taskId&&typeof wait.taskRevision==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(wait.taskRevision)&&Number.isFinite(Date.parse(wait.taskRevision+'Z'))&&wait.sectorId==='sector-main'&&wait.progress===25&&wait.quantity===null&&wait.baseline===null&&wait.unit===null&&wait.taskUnchanged===true&&wait.proposalCount===0,'PROGRESS_WAIT_MEASUREMENT');
+ r(typeof wait.originalDeadline==='string'&&Number.isFinite(Date.parse(wait.originalDeadline))&&new Date(wait.originalDeadline).toISOString()===wait.originalDeadline,'PROGRESS_WAIT_DEADLINE');
+ const eventIds=[];for(const name of ['initial','recheck','resumed']){const prompt=wait[name];k(prompt,name==='resumed'?['eventId','promptEventId','deadline']:['eventId','promptEventId','nonce','deadline'],'PROGRESS_WAIT_PROMPT_SHAPE');r(companyNativePattern(/^customer_webhook_[a-f0-9]{64}$/,prompt.eventId)&&prompt.eventId===prompt.promptEventId&&prompt.deadline===wait.originalDeadline,'PROGRESS_WAIT_PROMPT');eventIds.push(prompt.eventId);if(name!=='resumed')r(companyNativePattern(/^[a-f0-9]{20}$/,prompt.nonce),'PROGRESS_WAIT_NONCE');}
+ r(new Set(eventIds).size===3&&wait.initial.nonce!==wait.recheck.nonce&&!eventIds.includes(core.progress.sourceEventId)&&!eventIds.includes(core.evidence.sourceEventId),'PROGRESS_WAIT_PROMPT_IDENTITY');
+ const principal=wait.routePrincipal;k(principal,['organizationId','connectionId','routeId','routeEpoch','projectId','workerId','actorId','membershipId','assignmentRevision','bindingId'],'PROGRESS_WAIT_PRINCIPAL_SHAPE');
+ r(principal.organizationId==='org-a'&&principal.connectionId==='channel-a'&&companyNativePattern(/^company_route_[a-f0-9]{64}$/,principal.routeId)&&Number.isSafeInteger(principal.routeEpoch)&&principal.routeEpoch>0&&principal.projectId===core.projectId&&principal.workerId==='worker-c'&&principal.actorId===core.progress.submittedBy&&principal.membershipId==='member'&&Number.isSafeInteger(principal.assignmentRevision)&&principal.assignmentRevision>0&&companyNativePattern(/^channel_binding_[a-f0-9]{32}$/,principal.bindingId),'PROGRESS_WAIT_PRINCIPAL');
+ return {status:'PASS',syntheticOnly:true,realAcceptance:false};
 }
