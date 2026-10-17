@@ -66,12 +66,12 @@ test('customer phone companion rejects omitted duplicated reordered and tampered
  const missing=current();delete missing[phoneKey];denied(()=>verifyHomeDecisionsCurrentSources(missing,read));
 });
 
-test('all50 current native controls are required before exact historical41 projection and the raw proof remains untouched',()=>{
+test('all52 current native controls are required before exact historical41 projection and the raw proof remains untouched',()=>{
  const contract=current(),previous=restoreCustomerPhoneSelectionPreviousContract(contract),old=previous.existingApiPlanCurrentRevision.native.currentCheckNames,checks=[...old,...phoneExpected.native.addedCheckNames],proof={status:'PASS',environment:'local-disposable-postgresql17',checks,realProviderCalls:0,physicalNumberTested:false,productionDataTouched:false},before=serialize(proof);
- assert.equal(old.length,41);assert.equal(phoneExpected.native.addedCheckNames.length,9);assert.equal(checks.length,50);
+ assert.equal(old.length,41);assert.equal(phoneExpected.native.addedCheckNames.length,11);assert.equal(checks.length,52);
  assert.deepEqual(normalizeCustomerPhoneSelectionNativeProof(proof,contract,read),{...proof,checks:old});assert.equal(serialize(proof),before);
  const historical={...proof,checks:old};assert.equal(normalizeCustomerPhoneSelectionNativeProof(historical,previous,read),historical);
- for(const patch of [{checks:old},{checks:checks.slice(1)},{checks:checks.slice(0,-1)},{checks:[...checks,checks.at(-1)]},{checks:[...checks.slice(0,-1),'foreign-same-count-control']},{checks:[...checks].reverse()},{realProviderCalls:1},{physicalNumberTested:true},{productionDataTouched:true},{status:'FAILED'},{environment:'production'}])denied(()=>normalizeCustomerPhoneSelectionNativeProof({...proof,...patch},contract,read));
+ for(const patch of [{checks:old},{checks:checks.slice(0,50)},{checks:checks.slice(1)},{checks:checks.slice(0,-1)},{checks:[...checks,checks.at(-1)]},{checks:[...checks.slice(0,-1),'foreign-same-count-control']},{checks:[...checks].reverse()},{realProviderCalls:1},{physicalNumberTested:true},{productionDataTouched:true},{status:'FAILED'},{environment:'production'}])denied(()=>normalizeCustomerPhoneSelectionNativeProof({...proof,...patch},contract,read));
 });
 
 test('the exact operations read projection preserves every inherited authority HTTP guard and full read query',()=>{

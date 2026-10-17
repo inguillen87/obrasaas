@@ -254,6 +254,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
     }
     await checkDeclaredPhone(client,member,state,verified);
      await checkExistingConnection(client,member,project,state,claim,verified);
+     assertVerificationClaim(state,claim);
     if(mode==='BUSINESS_APP'){
      if(verified.isOnBizApp!==true||verified.platformType!=='CLOUD_API'||!metaAssetId(verified.phoneNumberId))throw new WorkspaceError('META_CUSTOMER_COEXISTENCE_PHONE_REQUIRED',409);
      if(state.existingConnection&&(state.existingConnection.wabaId!==state.wabaId||state.existingConnection.phoneNumberId!==verified.phoneNumberId))throw new WorkspaceError('META_CUSTOMER_EXISTING_CONNECTION_REVIEW',409);
@@ -265,6 +266,9 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
     const preserved=mode==='BUSINESS_APP'&&state.existingConnection&&existing.rows.length===1&&existing.rows[0].id===state.existingConnection.id&&existing.rows[0].phoneNumberId===state.phoneNumberId&&existing.rows[0].whatsappBusinessId===state.wabaId&&existing.rows[0].metadata?.credentialOrganizationId===member.organizationId;
     if(existing.rows.length&&!preserved&&!(existing.rows.length===1&&existing.rows[0].metadata?.customerSignupId===state.id&&existing.rows[0].phoneNumberId===state.phoneNumberId&&existing.rows[0].whatsappBusinessId===state.wabaId))throw new WorkspaceError('META_CUSTOMER_EXISTING_CONNECTION_REVIEW',409);
     await sealLegacyLifecycle(client,project,existing.rows[0]);
+     // Lock waits above can outlive the reservation without changing its ID.
+     // Check again after acquiring them, immediately before committing a bind.
+     assertVerificationClaim(state,claim);
     // Existing matching assets retain their credential and operating state
     // until the new grant and subscription have both been verified.
     if(preserved)return;
@@ -276,7 +280,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
      const state=owned(project,member,body.signupId);assertVerificationClaim(state,claim);if(requirePreparation(project).revision!==state.preparedRevision)throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);
     // The canonical organization share lock remains held across the POST, so
     // a declaration cannot change between this check and the remote mutation.
-     await checkDeclaredPhone(client,member,state,verified);await checkExistingConnection(client,member,project,state,claim,verified);await provider.subscribe({token:claim.token,wabaId:state.wabaId});
+     await checkDeclaredPhone(client,member,state,verified);await checkExistingConnection(client,member,project,state,claim,verified);assertVerificationClaim(state,claim);await provider.subscribe({token:claim.token,wabaId:state.wabaId});
     });
    return await within(session,body,true,async(client,member,scope,project)=>{
     const state=owned(project,member,body.signupId);if(state.state!=='VERIFYING'||state.verificationLeaseId!==claim.verificationLeaseId)throw new WorkspaceError('META_CUSTOMER_STATE_CHANGED',409);

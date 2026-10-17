@@ -205,10 +205,10 @@ try{
  }
  function nativeFixture(n){
   const projectId='p-'+n,wabaId='88877777'+n,phoneA='99977777'+n+'1',phoneB='99977777'+n+'2',e164A='+1555010'+String(n).padStart(4,'0')+'1',e164B='+1555010'+String(n).padStart(4,'0')+'2';
-  const f={projectId,wabaId,phoneA,phoneB,e164A,e164B,calls:[],exchanges:0,subscriptionPosts:0,registrationPosts:0,phoneReads:0,onPhoneRead:null,afterBinding:null,inspectionComplete:false};
+  const f={projectId,wabaId,phoneA,phoneB,e164A,e164B,calls:[],exchanges:0,subscriptionPosts:0,registrationPosts:0,phoneReads:0,onPhoneRead:null,afterBinding:null,afterQueryStarted:null,inspectionComplete:false};
   const connect=async()=>{const client=await pool.connect();let bound=false;return {release:(...args)=>client.release(...args),query:async(sql,values)=>{
    if(typeof sql==='string'&&sql.startsWith('UPDATE public."Project"')&&values?.[0]===projectId&&f.inspectionComplete){const state=JSON.parse(values[2]).metaSignup;if(state?.state==='VERIFYING'&&state.phoneNumberId)bound=true;}
-   const result=await client.query(sql,values);if(sql==='COMMIT'&&bound&&f.afterBinding){const hook=f.afterBinding;f.afterBinding=null;await hook();}return result;
+   const pending=client.query(sql,values);if(f.afterQueryStarted)await f.afterQueryStarted({sql,values,backendPid:client.processID});const result=await pending;if(sql==='COMMIT'&&bound&&f.afterBinding){const hook=f.afterBinding;f.afterBinding=null;await hook();}return result;
   }};};
   const actual=createMetaCustomerProvider({environment,now:()=>clock,fetchImpl:async(url,options)=>{
    const parsed=new URL(url),endpoint=parsed.pathname;assert.equal(parsed.origin,'https://graph.facebook.com');assert.equal(options.redirect,'error');f.calls.push({method:options.method,endpoint,after:parsed.searchParams.get('after')});
@@ -266,6 +266,38 @@ try{
  await nativeProject(23);const reclaimed=nativeFixture(23);await declareNativePhone(reclaimed.e164B);const reclaimedStart=await reclaimed.begin();let reclaimedWinner,firstLease;
  reclaimed.onPhoneRead=async()=>{reclaimed.onPhoneRead=null;firstLease=(await reclaimed.state()).verificationLeaseId;clock+=61000;reclaimedWinner=await reclaimed.service.command(owner,command(reclaimed.projectId,'reconcile',{signupId:reclaimedStart.signup.id}));};
  await assert.rejects(reclaimed.complete(reclaimedStart),{code:'META_CUSTOMER_STATE_CHANGED'});const reclaimedFinal=await reclaimed.state();assert.equal(reclaimedWinner.signup.state,'LINKED_PENDING_ACCEPTANCE');assert.equal(reclaimedFinal.state,'LINKED_PENDING_ACCEPTANCE');assert.notEqual(reclaimedFinal.verificationLeaseId,firstLease);assert.equal(reclaimed.subscriptionPosts,1);assert.equal(reclaimed.exchanges,1);assert.equal((await reclaimed.connection()).phoneNumberId,reclaimed.phoneB);checks.push('native-provider-expired-inspection-loses-to-explicit-reclaimer-and-cannot-bind-subscribe-or-overwrite-the-newer-lease-result');
+
+ // These holders block the runtime's actual SQL, not an artificial delay before
+ // it. Observe PostgreSQL's blocker relation before crossing the injected lease.
+ async function nativeLockHolder(sql,values){
+  const holder=await pool.connect();let released=false,observed=false;
+  try{await holder.query('BEGIN');await holder.query(sql,values);}catch(error){await holder.query('ROLLBACK').catch(()=>{});holder.release();throw error;}
+  const release=async()=>{if(released)return;try{await holder.query('COMMIT');}finally{released=true;holder.release();}};
+  return {release,get observed(){return observed;},async expireWaitingLease(backendPid){
+   const started=Date.now(),deadline=started+1500;
+   try{
+    while(Date.now()<deadline){
+     const wait=(await pool.query('SELECT wait_event_type,pg_blocking_pids(pid) AS blockers FROM pg_stat_activity WHERE pid=$1',[backendPid])).rows[0];
+     if(wait?.wait_event_type==='Lock'&&wait.blockers.includes(holder.processID)){observed=true;break;}
+     await new Promise(resolve=>setTimeout(resolve,10));
+    }
+    assert.equal(observed,true,'The runtime SQL must actually wait for the held PostgreSQL lock');clock+=61000;
+   }finally{await release();}
+   assert.ok(Date.now()-started<2500,'Release the real blocker within the existing workspace lock_timeout');
+  }};
+ }
+ await nativeProject(24);const blockedBinding=nativeFixture(24);await declareNativePhone(blockedBinding.e164B);const blockedBindingStart=await blockedBinding.begin();let bindingHolder,bindingEscrow;
+ blockedBinding.onPhoneRead=async()=>{blockedBinding.onPhoneRead=null;bindingEscrow=await blockedBinding.state();bindingHolder=await nativeLockHolder('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['customer-waba:'+blockedBinding.wabaId]);blockedBinding.afterQueryStarted=async({sql,values,backendPid})=>{if(sql!=='SELECT pg_advisory_xact_lock(hashtextextended($1,0))'||values?.[0]!=='customer-waba:'+blockedBinding.wabaId||!blockedBinding.inspectionComplete)return;blockedBinding.afterQueryStarted=null;await bindingHolder.expireWaitingLease(backendPid);};};
+ try{await assert.rejects(blockedBinding.complete(blockedBindingStart),{code:'META_CUSTOMER_STATE_CHANGED'});}finally{await bindingHolder?.release();}
+ const bindingRejected=await blockedBinding.state();assert.equal(bindingHolder.observed,true);assert.equal(await blockedBinding.connection(),null);assert.equal(blockedBinding.subscriptionPosts,0);assert.equal(blockedBinding.registrationPosts,0);assert.equal(bindingRejected.state,'REVIEW_REQUIRED');for(const key of ['id','codeDigest','encryptedToken','wabaId'])assert.equal(bindingRejected[key],bindingEscrow[key]);assert.deepEqual(bindingRejected.declaredCompanyPhone,bindingEscrow.declaredCompanyPhone);
+ const bindingRecovered=await blockedBinding.service.command(owner,command(blockedBinding.projectId,'reconcile',{signupId:blockedBindingStart.signup.id})),bindingFinal=await blockedBinding.state();assert.equal(bindingRecovered.signup.state,'LINKED_PENDING_ACCEPTANCE');assert.equal(blockedBinding.exchanges,1);assert.equal(blockedBinding.subscriptionPosts,1);assert.equal(bindingFinal.encryptedToken,bindingEscrow.encryptedToken);assert.equal(bindingFinal.codeDigest,bindingEscrow.codeDigest);assert.equal((await blockedBinding.connection()).enabled,false);checks.push('native-provider-real-binding-advisory-lock-crosses-lease-denies-bind-and-POST-preserves-grant-and-explicitly-recovers-without-exchange');
+
+ await pool.query(`UPDATE "Organization" SET metadata=metadata-'companyPhoneDeclaration' WHERE id='company-a'`);
+ await nativeProject(25);const blockedPost=nativeFixture(25),postBefore=await seedNativeConnection(blockedPost),blockedPostStart=await blockedPost.begin();let postHolder,postEscrow;
+ blockedPost.afterBinding=async()=>{postEscrow=await blockedPost.state();postHolder=await nativeLockHolder('SELECT id FROM public."WhatsAppConnection" WHERE "projectId"=$1 FOR UPDATE',[blockedPost.projectId]);blockedPost.afterQueryStarted=async({sql,values,backendPid})=>{if(!sql.startsWith('SELECT id,"encryptedAccessToken",metadata,"phoneNumberId","whatsappBusinessId" FROM public."WhatsAppConnection"')||values?.[0]!==blockedPost.projectId)return;blockedPost.afterQueryStarted=null;await postHolder.expireWaitingLease(backendPid);};};
+ try{await assert.rejects(blockedPost.complete(blockedPostStart,blockedPost.phoneB),{code:'META_CUSTOMER_STATE_CHANGED'});}finally{await postHolder?.release();}
+ const postRejected=await blockedPost.state();assert.equal(postHolder.observed,true);assert.equal(blockedPost.subscriptionPosts,0);assert.equal(blockedPost.registrationPosts,0);assert.deepEqual(await blockedPost.connection(),postBefore);assert.equal(postRejected.state,'REVIEW_REQUIRED');for(const key of ['id','codeDigest','encryptedToken','wabaId','phoneNumberId'])assert.equal(postRejected[key],postEscrow[key]);assert.deepEqual(postRejected.existingConnection,postEscrow.existingConnection);
+ const postRecovered=await blockedPost.service.command(owner,command(blockedPost.projectId,'reconcile',{signupId:blockedPostStart.signup.id})),postFinal=await blockedPost.state();assert.equal(postRecovered.signup.state,'LINKED_PENDING_ACCEPTANCE');assert.equal(blockedPost.exchanges,1);assert.equal(blockedPost.subscriptionPosts,1);assert.equal(postFinal.encryptedToken,postEscrow.encryptedToken);assert.equal(postFinal.codeDigest,postEscrow.codeDigest);assert.equal((await blockedPost.connection()).id,postBefore.id);assert.equal((await blockedPost.connection()).enabled,true);checks.push('native-provider-real-existing-connection-row-lock-crosses-lease-denies-POST-preserves-provider-and-explicitly-recovers-same-escrow-without-exchange');
  const audit=(await pool.query(`SELECT metadata FROM "AuditLog"`)).rows;assert.doesNotMatch(JSON.stringify(audit),/Synthetic private history|5491112345678|synthetic-token|encryptedPayload/);
  const result={status:'PASS',environment:'local-disposable-postgresql17',checks,realProviderCalls:0,physicalNumberTested:false,productionDataTouched:false};mkdirSync('.vercel/meta-customer-evidence',{recursive:true});writeFileSync('.vercel/meta-customer-evidence/coexistence-postgres.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
 }finally{await closeDisposablePool(pool);if(created)await admin.query('DROP DATABASE "'+database+'"');await admin.end();}

@@ -4013,12 +4013,12 @@ export const CUSTOMER_PHONE_SELECTION_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/verify-meta-customer-coexistence-postgres.mjs",
       "previousSha256": "20aae77b10b62c5bbdddb2d4568177bd51052a1272621ea78ecea6a3a1a8773e",
-      "currentSha256": "f8dd78d0cd617cf5287cefe797279a271e7a60c17dc3c17535acfb105fe91ce9"
+      "currentSha256": "fd94401af9a07866a2cd28a355b7f2f69ef122cf3ae325690c8ffc35cb97092a"
     },
     {
       "path": "src/lib/meta-customer-onboarding.mjs",
       "previousSha256": "4f8cd0f93a731871444d3f6d5d2c39285c84641b1141bc83b708cec1483306d8",
-      "currentSha256": "d95d7b5505f38cb36922d4252f39b44de69fd60431d553785e976a1a4aac47d5"
+      "currentSha256": "6c0a115998d6e46236dcb70c3753c80f1559fec88de7735f122f157adc9530b8"
     },
     {
       "path": "src/lib/meta-customer-provider.mjs",
@@ -4047,9 +4047,9 @@ export const CUSTOMER_PHONE_SELECTION_CURRENT_REVISION=Object.freeze({
   "native": {
     "producer": "scripts/verify-meta-customer-coexistence-postgres.mjs",
     "previousCheckCount": 41,
-    "currentCheckCount": 50,
+    "currentCheckCount": 52,
     "previousCheckNamesSha256": "2ae29a080a935b03e965c7e3e92169b9e8ca61f411534c9862d0f33c17998509",
-    "currentCheckNamesSha256": "10c8b4a49127f6428852725ae9f1944d8ba0af926ce251b0ba47a24efe6c343a",
+    "currentCheckNamesSha256": "017a754bed3aba7d628c453bbe3dd2ac2bc39d7340d6452cdf6941c6f6d5bc6c",
     "addedCheckNames": [
       "native-provider-WABA-only-multipage-uses-sealed-company-phone-exactly-once-without-register-or-activation",
       "native-provider-declaration-change-during-GET-denies-binding-and-POST-then-explicit-current-revision-recovers-same-grant-and-escrow-with-GET-only-receipt",
@@ -4059,7 +4059,9 @@ export const CUSTOMER_PHONE_SELECTION_CURRENT_REVISION=Object.freeze({
       "native-provider-61-second-same-lease-expiry-before-binding-stops-all-effects-and-explicit-reconcile-recovers-identical-escrow-without-code-exchange",
       "native-provider-existing-credential-change-after-binding-commit-is-fenced-before-subscribe-with-legacy-declaration-absent",
       "native-provider-lease-expiry-after-binding-commit-prevents-subscription-and-keeps-disabled-binding-for-review",
-      "native-provider-expired-inspection-loses-to-explicit-reclaimer-and-cannot-bind-subscribe-or-overwrite-the-newer-lease-result"
+      "native-provider-expired-inspection-loses-to-explicit-reclaimer-and-cannot-bind-subscribe-or-overwrite-the-newer-lease-result",
+      "native-provider-real-binding-advisory-lock-crosses-lease-denies-bind-and-POST-preserves-grant-and-explicitly-recovers-without-exchange",
+      "native-provider-real-existing-connection-row-lock-crosses-lease-denies-POST-preserves-provider-and-explicitly-recovers-same-escrow-without-exchange"
     ]
   },
   "nativeOrBrowserAcceptance": false
@@ -4115,7 +4117,7 @@ export function normalizeCustomerPhoneSelectionNativeProof(proof,contract,readSo
  reject(Array.isArray(historical)&&historical.length===value.native.previousCheckCount&&sha(JSON.stringify(historical))===value.native.previousCheckNamesSha256,'Exact41 historical API plan controls required');
  const complete=[...historical,...value.native.addedCheckNames];
  reject(complete.length===value.native.currentCheckCount&&new Set(value.native.addedCheckNames).size===value.native.addedCheckNames.length&&value.native.addedCheckNames.every(name=>!historical.includes(name))&&sha(JSON.stringify(complete))===value.native.currentCheckNamesSha256,'Exact additive customer phone selection controls required');
- reject(plain(proof)&&proof.status==='PASS'&&proof.environment==='local-disposable-postgresql17'&&same(proof.checks,complete)&&proof.realProviderCalls===0&&proof.physicalNumberTested===false&&proof.productionDataTouched===false,'All50 native observations including all9 new controls are required without provider or human acceptance');
+ reject(plain(proof)&&proof.status==='PASS'&&proof.environment==='local-disposable-postgresql17'&&same(proof.checks,complete)&&proof.realProviderCalls===0&&proof.physicalNumberTested===false&&proof.productionDataTouched===false,'All52 native observations including all11 new controls are required without provider or human acceptance');
  return {...proof,checks:[...historical]};
 }
 function section(contract){
