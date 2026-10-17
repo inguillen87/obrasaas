@@ -5,6 +5,14 @@ import {readInventoryPendingCounts} from './material-inventory.mjs';
 const reply=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'private, no-store, max-age=0','Vary':'Cookie, Authorization','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff'}});
 export function createOperationsStatus({workspace}) {
  return {read:(session,context)=>workspace.integrationProject(session,context,false,async(client,member,scope)=>{
+  if(context.view!==undefined&&context.view!=='decisions')throw new WorkspaceError('OPERATIONS_STATUS_QUERY_INVALID');
+  if(context.view==='decisions'){
+   if(!canApproveProgress(member.role))throw new WorkspaceError('WORKSPACE_INTEGRATION_PERMISSION_REQUIRED',403);
+   const pending=(await client.query(`SELECT count(*)::int AS pending FROM public."OperationalProposal" WHERE "projectId"=$1 AND type='TASK_PROGRESS' AND "sourceProvider"='account-field' AND status='PENDING' AND "expiresAt">transaction_timestamp() AND action->>'fieldOperationsVersion'='1'`,[context.projectId])).rows[0]?.pending;
+   if(!Number.isSafeInteger(pending)||pending<0)throw new WorkspaceError('OPERATIONS_STATUS_UNAVAILABLE',503);
+   const pendingCounts=await readInventoryPendingCounts(client,member,{id:context.projectId});
+   return {scope,projectId:context.projectId,view:'decisions',observedAt:new Date().toISOString(),proposals:{pending},inventory:{canManage:true,pendingCounts}};
+  }
   const people=(await client.query(`WITH people AS (
     SELECT w.active,w.metadata,EXISTS(SELECT 1 FROM public."PlatformUser" u
       JOIN public."TenantMembership" m ON m."userId"=u.id AND m.status='ACTIVE'
@@ -65,8 +73,8 @@ export function createOperationsStatusHandler({verify,store}) {
    if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
    if(request.headers.get('sec-fetch-site')==='cross-site')throw new WorkspaceError('WORKSPACE_ORIGIN_REJECTED',403);
    const params=new URL(request.url).searchParams;
-   if(params.size!==2||[...params.keys()].some(k=>!['projectId','scope'].includes(k)||params.getAll(k).length!==1))throw new WorkspaceError('OPERATIONS_STATUS_QUERY_INVALID');
-   const context={projectId:params.get('projectId'),scope:params.get('scope')};
+   if(params.size!==(params.has('view')?3:2)||[...params.keys()].some(k=>!['projectId','scope','view'].includes(k)||params.getAll(k).length!==1)||params.has('view')&&params.get('view')!=='decisions')throw new WorkspaceError('OPERATIONS_STATUS_QUERY_INVALID');
+   const context={projectId:params.get('projectId'),scope:params.get('scope'),...(params.has('view')?{view:'decisions'}:{})};
    if(!workspaceId(context.projectId)||!/^[a-f0-9]{64}$/.test(context.scope||''))throw new WorkspaceError('OPERATIONS_STATUS_QUERY_INVALID');
    return reply(await store.read(session,context));
   }catch(e){return reply({code:e instanceof WorkspaceError?e.code:'OPERATIONS_STATUS_UNAVAILABLE'},e instanceof WorkspaceError?e.status:503);}

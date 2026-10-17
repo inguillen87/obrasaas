@@ -1,3 +1,4 @@
+import {restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
@@ -46,7 +47,7 @@ test('current continuity source validation authenticates every leaf independentl
 test('only authenticated predecessor aliases advance and old or foreign bytes cannot certify current',()=>{
  const contract=previousCurrent();for(const row of [...contract[section].reviewedSourceChanges,...contract[section].validationDeltas]){assert.equal(workspaceContinuityCurrentSourcePin(contract,{path:row.path,sha256:row.previousSha256}),row.currentSha256);reject(()=>workspaceContinuityCurrentSourcePin(contract,{path:row.path,sha256:'e'.repeat(64)}));reject(()=>workspaceContinuityCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}));}
  const row=contract[section].reviewedSourceChanges.find(row=>row.path.endsWith('/workspace-client.js'));assert.equal(workspaceContinuityCurrentSourcePin(contract,{path:row.path,sha256:'4f3ccde7f433c98e63f0ada92cd1346f0757bea06ea8bf93abf9ac0ff62b79f8'}),row.currentSha256);
- const actual=current(),outer=actual.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.find(delta=>delta.path===row.path);assert.equal(workspaceContinuityCurrentSourcePin(actual,{path:row.path,sha256:row.currentSha256}),outer.currentSha256);reject(()=>workspaceContinuityCurrentSourcePin(actual,{path:row.path,sha256:outer.currentSha256}));reject(()=>workspaceContinuityCurrentSourcePin(actual,{path:row.path,sha256:'e'.repeat(64)}));
+ const actual=current(),previousLayer=restoreHomeDecisionsPreviousContract(actual),outer=actual.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.find(delta=>delta.path===row.path),currentPin=homeDecisionsCurrentSourcePin(actual,{path:row.path,sha256:outer.currentSha256});assert.equal(workspaceContinuityCurrentSourcePin(actual,{path:row.path,sha256:row.currentSha256}),currentPin);reject(()=>workspaceContinuityCurrentSourcePin(previousLayer,{path:row.path,sha256:outer.currentSha256}));assert.equal(workspaceContinuityCurrentSourcePin(actual,{path:row.path,sha256:outer.currentSha256}),currentPin);reject(()=>workspaceContinuityCurrentSourcePin(actual,{path:row.path,sha256:'e'.repeat(64)}));
 });
 
 test('omitted duplicate substituted and unreviewed outer deltas cannot reseal a historical contract',()=>{

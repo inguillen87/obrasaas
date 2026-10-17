@@ -5,6 +5,7 @@ import {mkdtemp,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
+import {performance} from 'node:perf_hooks';
 import ffmpegPath from 'ffmpeg-static';
 import {createFieldMedia} from '../src/lib/field-media.mjs';
 import {createVideoFrameExtractor} from '../src/lib/video-frame-extractor.mjs';
@@ -122,9 +123,12 @@ for(const boundary of ['GET','visual-decode','audio-decode','audio-cancel','audi
  const options=boundary==='GET'?{onGet:timeout}:boundary==='visual-decode'?{extractFrames:coded('FIELD_VIDEO_DECODE_TIMEOUT')}:boundary==='audio-decode'?{extractAudio:coded('FIELD_VIDEO_AUDIO_DECODE_TIMEOUT')}:boundary==='audio-cancel'?{extractAudio:coded('FIELD_VIDEO_AUDIO_CANCELLED')}:boundary==='audio-provider'?{onAudio:timeout}:{onVision:timeout};
  const f=fixture(options);await assert.rejects(f.media.process({},input),{code:'FIELD_MEDIA_PROCESSING_DEADLINE'});assert.equal(f.counts.vision,boundary==='visual-provider'?1:0);noWrites(f);
 });
-test('shared deadline aborts and awaits both decoding branches before returning with no provider or receipt',async()=>{
- const closed={frames:false,audio:false},pending=key=>request=>new Promise((resolve,reject)=>{request.signal.addEventListener('abort',()=>{setTimeout(()=>{closed[key]=true;reject(request.signal.reason);},5);},{once:true});});
- const keepAlive=setTimeout(()=>{},1000);try{const f=fixture({processTimeoutMs:30,extractFrames:pending('frames'),extractAudio:pending('audio')});await assert.rejects(f.media.process({},input),{code:'FIELD_MEDIA_PROCESSING_DEADLINE'});assert.deepEqual(closed,{frames:true,audio:true});assert.equal(f.counts.transcribe,0);assert.equal(f.counts.vision,0);noWrites(f);}finally{clearTimeout(keepAlive);}
+test('shared deadline aborts and awaits both decoding branches before returning with no provider or receipt',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});let elapsed=0,started=0,ready;const entered=new Promise(resolve=>{ready=resolve;});t.mock.method(performance,'now',()=>elapsed);
+ const closed={frames:false,audio:false},pending=key=>request=>new Promise((resolve,reject)=>{if(++started===2)ready();request.signal.addEventListener('abort',()=>{setTimeout(()=>{closed[key]=true;reject(request.signal.reason);},5);},{once:true});});
+ const f=fixture({processTimeoutMs:30,extractFrames:pending('frames'),extractAudio:pending('audio')}),outcome=f.media.process({},input);let settled=false;outcome.then(()=>{settled=true;},()=>{settled=true;});const rejected=assert.rejects(outcome,{code:'FIELD_MEDIA_PROCESSING_DEADLINE'});
+ await entered;assert.equal(f.counts.frames,1);assert.equal(f.counts.audioDecode,1);elapsed=30;t.mock.timers.tick(30);await Promise.resolve();assert.deepEqual(closed,{frames:false,audio:false});assert.equal(settled,false);elapsed=35;t.mock.timers.tick(5);
+ await rejected;assert.deepEqual(closed,{frames:true,audio:true});assert.equal(f.counts.transcribe,0);assert.equal(f.counts.vision,0);noWrites(f);
 });
 test('twenty-second decode stage deadline is fatal even while the shared eighty-second budget remains live',async t=>{
  t.mock.timers.enable({apis:['setTimeout']});let started,closed=0;const ready=new Promise(resolve=>{started=resolve;});
@@ -142,9 +146,9 @@ test('audio integrity rejection cancels and awaits its visual sibling without sa
  let closed=false;const f=fixture({extractAudio:async()=>{await new Promise(resolve=>setTimeout(resolve,5));throw new WorkspaceError('FIELD_MEDIA_INTEGRITY',503);},extractFrames:request=>new Promise((resolve,reject)=>{request.signal.addEventListener('abort',()=>{setTimeout(()=>{closed=true;reject(request.signal.reason);},5);},{once:true});})});await assert.rejects(f.media.process({},input),{code:'FIELD_MEDIA_INTEGRITY'});assert.equal(closed,true);assert.equal(f.counts.transcribe,0);assert.equal(f.counts.vision,0);noWrites(f);
 });
 for(const component of ['audio','visual'])test('shared deadline during '+component+' provider cannot be degraded into a partial receipt',async t=>{
- t.mock.timers.enable({apis:['setTimeout']});let started;const ready=new Promise(resolve=>{started=resolve;});
+ t.mock.timers.enable({apis:['setTimeout']});let elapsed=0,started;const ready=new Promise(resolve=>{started=resolve;});t.mock.method(performance,'now',()=>elapsed);
  const pending=request=>new Promise((resolve,reject)=>{started();request.signal.addEventListener('abort',()=>reject(request.signal.reason),{once:true});});
- const f=fixture({processTimeoutMs:25,...(component==='audio'?{onAudio:pending}:{onVision:pending})}),outcome=f.media.process({},input);await ready;t.mock.timers.tick(25);await assert.rejects(outcome,{code:'FIELD_MEDIA_PROCESSING_DEADLINE'});assert.equal(f.counts.transcribe,1);assert.equal(f.counts.vision,component==='audio'?0:1);noWrites(f);
+ const f=fixture({processTimeoutMs:25,...(component==='audio'?{onAudio:pending}:{onVision:pending})}),outcome=f.media.process({},input);await ready;elapsed=25;t.mock.timers.tick(25);await assert.rejects(outcome,{code:'FIELD_MEDIA_PROCESSING_DEADLINE'});assert.equal(f.counts.transcribe,1);assert.equal(f.counts.vision,component==='audio'?0:1);noWrites(f);
 });
 test('task changed during providers stays untouched and invalidates later progress preparation',async()=>{
  const f=fixture({onAudio:(_request,c)=>{c.changeTask();return transcript;}}),e=await process(f);assert.equal(e.processing.result.progressDraft.task.revision,task.revision);assert.notEqual(f.getTask().revision,task.revision);assert.throws(()=>prepareVoiceProgressDraft({...e,status:'APPROVED'},f.getTask(),'worker-a'),/tarea cambió/);assert.equal(f.receipts.size,1);assert.ok(f.queries.every(sql=>!sql.includes('public."Task"')));

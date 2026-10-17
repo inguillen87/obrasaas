@@ -1,3 +1,4 @@
+export const FIELD_PROGRESS_PENDING_EVENT='obrasaas:progress-pending';
 const id=value=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value);
 const revision=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(value);
 const decimal=value=>typeof value==='string'&&/^(?:0|[1-9]\d{0,13})(?:\.\d{1,4})?$/.test(value);

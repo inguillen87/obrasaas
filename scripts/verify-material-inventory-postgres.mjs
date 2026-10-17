@@ -172,6 +172,14 @@ try{
  const nativeStatus=createOperationsStatus({workspace:{integrationProject:(actor,context,writable,callback,beforeProject)=>workspace.integrationProject(actor,context,writable,async(client,member,scope,project)=>{
   const expected=await fullPending(client,context.projectId),result=await callback(client,member,scope,project);assert.deepEqual(result.inventory,{canManage:true,pendingCounts:expected});return result;
  },beforeProject)}});
+ // Distinct synthetic proposals exercise the same status/expiry/project filter
+ // as the real progress queue. These fixtures never approve a task or stock.
+ for(const [id,projectId,status,provider,version,expired] of [
+  ['home-progress-a',reviewProjectId,'PENDING','account-field',1,false],['home-progress-b',reviewProjectId,'PENDING','account-field',1,false],
+  ['home-progress-expired',reviewProjectId,'PENDING','account-field',1,true],['home-progress-closed',reviewProjectId,'REJECTED','account-field',1,false],
+  ['home-progress-other-provider',reviewProjectId,'PENDING','foreign-fixture',1,false],['home-progress-other-version',reviewProjectId,'PENDING','account-field',2,false],
+  ['home-progress-foreign','p-b','PENDING','account-field',1,false]
+ ])await pool.query(`INSERT INTO public."OperationalProposal"(id,"projectId",type,status,"sourceProvider",summary,action,"expiresAt","updatedAt") VALUES($1,$2,'TASK_PROGRESS',$3,$4,'Propuesta sintética de resumen',$5::jsonb,clock_timestamp()+CASE WHEN $6 THEN interval '-1 day' ELSE interval '7 days' END,clock_timestamp())`,[id,projectId,status,provider,JSON.stringify({fieldOperationsVersion:version,workerId:'w-worker-review',taskId:'task-material-review',progress:20,quantity:null,baseline:null,unit:null,reason:'Propuesta sintética para comprobar totales de lectura.',evidenceIds:['evidence-home-fixture']}),expired]);
  const beforeReviewReads=await reviewState(),pendingPages={consumptions:[],adjustments:[]};captureReviewSql=true;
  try{
   for(const [actor,context] of [[owner,reviewOwnerContext],[director,reviewDirectorContext]]){
@@ -210,6 +218,24 @@ try{
  assert.ok(reviewTransactions.every(transaction=>transaction.readOnly==='on'&&transaction.isolation==='repeatable read'));
  checks.push('native-canonical-rejection-updates-microsecond-revision-while-decided-cursor-remains-usable-for-the-next-pending-page-and-directed-ALL-recovery-keeps-stock-unchanged');
  const materialReviewQueue={environment:'real-disposable-localhost-postgresql',pendingPerKindBeforeReview:203,newerClosedPerKind:151,pendingPages,anchorProof,readOnlyTransactions:reviewTransactions.length,readOnlySetting:'on',isolation:'repeatable read',readOnlyStateUnchanged:true,summaryMatchesUnboundedSameSnapshot:true,rolesDenied:['SITE_MANAGER','AUDITOR'],providerCalls:0};
+ const homeState=await reviewState(),homeReads=[];
+ const homeStatus=createOperationsStatus({workspace:{integrationProject:(actor,context,writable,callback)=>workspace.integrationProject(actor,context,writable,async(client,member,scope,project)=>{
+  assert.equal(writable,false);const queries=[],observed={query:(sql,args)=>{queries.push(sql);return client.query(sql,args);}},result=await callback(observed,member,scope,project);
+  assert.equal(queries.length,2);assert.ok(queries.every(sql=>/^SELECT /.test(sql)&&!sql.includes('"WebhookEvent"')&&!sql.includes('"AuditLog"')&&!sql.includes('"Worker"')));homeReads.push({projectId:project.id,role:member.role,queries:queries.length});return result;
+ })}});
+ captureReviewSql=true;try{
+  for(const [actor,context] of [[owner,reviewOwnerContext],[director,reviewDirectorContext]]){
+   const summary=await homeStatus.read(actor,{...context,view:'decisions'});assert.deepEqual(Object.keys(summary).sort(),['inventory','observedAt','projectId','proposals','scope','view']);assert.equal(summary.scope,context.scope);assert.equal(summary.projectId,reviewProjectId);assert.equal(summary.view,'decisions');assert.equal(new Date(summary.observedAt).toISOString(),summary.observedAt);assert.deepEqual(summary.proposals,{pending:2});assert.deepEqual(summary.inventory,{canManage:true,pendingCounts:{consumptions:202,adjustments:202}});
+   const full=await nativeStatus.read(actor,context);assert.deepEqual(summary.proposals,full.proposals);assert.deepEqual(summary.inventory,full.inventory);
+  }
+  const other=await homeStatus.read(foreign,{...foreignContext,view:'decisions'});assert.deepEqual(other.proposals,{pending:1});assert.deepEqual(other.inventory.pendingCounts,{consumptions:2,adjustments:1});
+  for(const [actor,context] of [[worker,reviewWorkerContext],[siteReviewer,reviewSiteContext]])await assert.rejects(homeStatus.read(actor,{...context,view:'decisions'}),{code:'WORKSPACE_INTEGRATION_PERMISSION_REQUIRED'});
+  await assert.rejects(homeStatus.read(foreign,{projectId:reviewProjectId,scope:foreignContext.scope,view:'decisions'}),{code:'WORKSPACE_PROJECT_UNAVAILABLE'});
+  await assert.rejects(homeStatus.read(owner,{...reviewOwnerContext,scope:foreignContext.scope,view:'decisions'}),{code:'WORKSPACE_CONTEXT_CHANGED'});
+ }finally{captureReviewSql=false;}
+ assert.deepEqual(await reviewState(),homeState);assert.equal(homeReads.length,3);assert.ok(reviewTransactions.every(transaction=>transaction.readOnly==='on'&&transaction.isolation==='repeatable read'));
+ const homeDecisions={projection:'decisions',sqlQueriesPerRead:2,authorizedReads:homeReads,progressPending:2,materialPendingPerKind:202,foreignProgressPending:1,excludedExpiredClosedProviderAndVersion:true,canonicalReadOnly:true,businessStateUnchanged:true,providerCalls:0};
+ checks.push('native-home-decisions-read-uses-two-canonical-same-snapshot-aggregates-with-current-progress-material-totals-tenant-role-scope-denials-and-no-business-write');
  for(const entry of sourceManifest)assert.equal(fileHash(entry.path),entry.sha256,'Source changed during disposable PostgreSQL verification: '+entry.path);
- const report={status:'PASS',sourceManifest,harnessSha256,checks,checkCount:checks.length,materialReviewQueue,participantKycFixture:{records:kycFixture.records,syntheticPrivateCalls:kycFixture.calls,providerCalls:0,identityCertified:false},environment:'disposable-localhost-canonical-material-inventory',tenants:2,providerCalls:0,productionDataTouched:false,humanAccepted:false,newTables:false};mkdirSync('.vercel/material-inventory-evidence',{recursive:true});writeFileSync('.vercel/material-inventory-evidence/postgres.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+ const report={status:'PASS',sourceManifest,harnessSha256,checks,checkCount:checks.length,materialReviewQueue,homeDecisions,participantKycFixture:{records:kycFixture.records,syntheticPrivateCalls:kycFixture.calls,providerCalls:0,identityCertified:false},environment:'disposable-localhost-canonical-material-inventory',tenants:2,providerCalls:0,productionDataTouched:false,humanAccepted:false,newTables:false};mkdirSync('.vercel/material-inventory-evidence',{recursive:true});writeFileSync('.vercel/material-inventory-evidence/postgres.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }finally{try{await closeDisposablePool(pool);if(created)await admin.query(`DROP DATABASE "${database}"`);}finally{await admin.end();}}

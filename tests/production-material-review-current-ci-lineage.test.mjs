@@ -14,13 +14,14 @@ const serialize=value=>JSON.stringify(value,null,2)+'\n';
 const denied=fn=>assert.throws(fn,{code:'MATERIAL_REVIEW_CURRENT_CI_LINEAGE_REJECTED'});
 
 test('materials revision restores the whole published predecessor and preserves every historical proof',()=>{
- const contract=current(),before=serialize(contract),previous=restoreMaterialReviewPreviousContract(contract);
+ const contract=current(),before=serialize(contract),publishedMaterialCurrent=restoreExistingApiPlanPreviousContract(contract),previous=restoreMaterialReviewPreviousContract(contract);
  assert.equal(sha(serialize(previous)),expected.previousContractSha256);
  assert.equal(expected.predecessorCommit,'3c853aa6baf900b123efb7cbdd95ea86508bdb8a');
  assert.equal(Object.hasOwn(previous,key),false);assert.equal(serialize(contract),before);
- for(const name of ['blocks','lanes','evidenceProducers','artifactPatterns','planMeasurementCurrentLineage'])assert.deepEqual(previous[name],contract[name]);
+ for(const name of ['blocks','lanes','evidenceProducers','artifactPatterns','planMeasurementCurrentLineage'])assert.deepEqual(previous[name],publishedMaterialCurrent[name]);
  const withoutCiPaths=value=>({...value,proofs:value.proofs.map(proof=>{const copy={...proof};delete copy.sourceFiles;return copy;})});
- assert.deepEqual(withoutCiPaths(previous.extension),withoutCiPaths(contract.extension));
+ assert.deepEqual(withoutCiPaths(previous.extension),withoutCiPaths(publishedMaterialCurrent.extension));
+ const focusedProducer=value=>value.extension.proofs.find(row=>row.id==='focused-workspace-ui');assert.equal(focusedProducer(contract).producerSha256,'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24');assert.equal(focusedProducer(publishedMaterialCurrent).producerSha256,'a4eb59cb781eeb9578e46ffcdec21833cce1ba79eb9f99e3543fda799dfc62f4');
  const {ciSourceFiles:priorCi,...priorPreanalysis}=previous.participantPreanalysisCurrentRevision,{ciSourceFiles:currentCi,...currentPreanalysis}=contract.participantPreanalysisCurrentRevision;
  assert.deepEqual(priorPreanalysis,currentPreanalysis);assert.deepEqual(currentCi,contract.extension.proofs.find(row=>row.id==='participant-kyc-preanalysis-postgres').sourceFiles);assert.equal(restoreExistingApiPlanPreviousContract(contract).participantPreanalysisCurrentRevision.ciSourceFiles.length,priorCi.length+1);
 });

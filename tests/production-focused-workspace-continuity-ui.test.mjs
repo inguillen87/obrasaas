@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {focusedCompanyBootstrapUiSourceClosure,focusedWorkspaceUiSourceClosure,FOCUSED_WORKSPACE_WIDTHS,FOCUSED_WORKSPACE_CONTINUITY_WIDTHS,FOCUSED_WORKSPACE_REFRESH_NEGATIVES,FOCUSED_WORKSPACE_CONTINUITY_CHECKS,FOCUSED_WORKSPACE_UI_VERSION,FOCUSED_WORKSPACE_UI_EXPECTED_CHECK_COUNT,FOCUSED_WORKSPACE_TASK_PAGING_WIDTHS,FOCUSED_WORKSPACE_TASK_PAGING_CHECKS,FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT} from '../scripts/verify-focused-workspace-ui.mjs';
+import {focusedCompanyBootstrapUiSourceClosure,focusedWorkspaceUiSourceClosure,FOCUSED_WORKSPACE_WIDTHS,FOCUSED_WORKSPACE_CONTINUITY_WIDTHS,FOCUSED_WORKSPACE_REFRESH_NEGATIVES,FOCUSED_WORKSPACE_CONTINUITY_CHECKS,FOCUSED_WORKSPACE_UI_VERSION,FOCUSED_WORKSPACE_UI_EXPECTED_CHECK_COUNT,FOCUSED_WORKSPACE_TASK_PAGING_WIDTHS,FOCUSED_WORKSPACE_TASK_PAGING_CHECKS,FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT,HOME_DECISIONS_WIDTHS,HOME_DECISIONS_NEGATIVES,HOME_DECISIONS_CHECKS} from '../scripts/verify-focused-workspace-ui.mjs';
 const entry='src/app/(identity)/cuenta/company-bootstrap-panel.js',reader=files=>file=>Object.hasOwn(files,file)?Buffer.from(files[file]):null;
 test('continuity matrix preserves baseline widths and explicitly appends all controlled cases',()=>{
  assert.equal(FOCUSED_WORKSPACE_UI_VERSION,4);assert.deepEqual(FOCUSED_WORKSPACE_WIDTHS,[390,1440]);assert.deepEqual(FOCUSED_WORKSPACE_CONTINUITY_WIDTHS,[320,390,1440]);
@@ -11,7 +11,15 @@ test('continuity matrix preserves baseline widths and explicitly appends all con
   ...['field','inventory'].flatMap(consumer=>['503-retry','403-clear','busy-uncertain-and-late-page'].map(scenario=>'account-task-pages-'+scenario+'-'+consumer+'-390')),
   ...['field','inventory'].map(consumer=>'account-task-pages-404-revoked-clear-'+consumer+'-390')
  ]);
- assert.equal(new Set(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS).size,14);assert.equal(FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT,45+14);
+ assert.equal(new Set(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS).size,14);
+ assert.deepEqual(HOME_DECISIONS_WIDTHS,[320,390,768,1440]);assert.deepEqual(HOME_DECISIONS_NEGATIVES,['denied','500','missing','foreign-scope','foreign-project','negative','invalid-date','capability']);
+ assert.deepEqual(HOME_DECISIONS_CHECKS,[
+  ...[320,390,768,1440].map(width=>'home-decisions-auto-scoped-read-and-queues-'+width),
+  'home-decisions-director-390',...['WORKER','AUDITOR'].map(role=>'home-decisions-no-management-read-'+role+'-390'),
+  'home-decisions-only-when-home-active-390',...['denied','500','missing','foreign-scope','foreign-project','negative','invalid-date','capability'].map(mode=>'home-decisions-no-false-zero-'+mode+'-390'),
+  'home-decisions-explicit-retry-390','home-decisions-late-response-does-not-reenter-hidden-home-390'
+ ]);
+ assert.equal(HOME_DECISIONS_CHECKS.length,18);assert.equal(new Set(HOME_DECISIONS_CHECKS).size,18);assert.equal(FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT,45+14+18);
  for(const mode of ['list-role','list-scope','list-missing','list-401','list-403','list-500','project-401','project-403','project-500','project-scope','project-id','project-null'])assert.ok(FOCUSED_WORKSPACE_REFRESH_NEGATIVES.includes(mode));
  for(const width of [320,390,1440]){assert.ok(FOCUSED_WORKSPACE_CONTINUITY_CHECKS.includes('fresh-list-project-preserves-section-no-POST-'+width));assert.ok(FOCUSED_WORKSPACE_CONTINUITY_CHECKS.includes('bootstrap-ready-receipt-compact-disclosure-trial-no-POST-'+width));}
 });

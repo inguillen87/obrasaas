@@ -3,15 +3,15 @@ import test from 'node:test';
 import {readFileSync,existsSync,lstatSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {parse} from '@babel/parser';
-import {focusedWorkspaceTaskPagingCopy,focusedWorkspaceTaskPageResponse,focusedWorkspaceUiSourceFiles,FOCUSED_WORKSPACE_TASK_PAGING_WIDTHS,FOCUSED_WORKSPACE_TASK_PAGING_CHECKS,FOCUSED_WORKSPACE_UI_EXPECTED_CHECK_COUNT,FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT} from '../scripts/verify-focused-workspace-ui.mjs';
+import {focusedWorkspaceTaskPagingCopy,focusedWorkspaceTaskPageResponse,focusedWorkspaceUiSourceFiles,FOCUSED_WORKSPACE_TASK_PAGING_WIDTHS,FOCUSED_WORKSPACE_TASK_PAGING_CHECKS,FOCUSED_WORKSPACE_UI_EXPECTED_CHECK_COUNT,FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT,HOME_DECISIONS_CHECKS} from '../scripts/verify-focused-workspace-ui.mjs';
 import {confirmedWorksiteTaskPage} from '../src/app/(identity)/cuenta/workspace-task-page.mjs';
 
 const root=new URL('../',import.meta.url),readSource=file=>{const target=new URL(file,root);return existsSync(target)&&lstatSync(target).isFile()?readFileSync(target):null;};
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),entry='src/app/(identity)/cuenta/workspace-client.js',factory='src/app/(identity)/cuenta/workspace-task-page.mjs',scope='c'.repeat(64);
 const consumers=['src/app/(identity)/cuenta/field-operations-panel.js','src/app/(identity)/cuenta/material-inventory-panel.js'];
 
-test('task-page browser extension preserves the historical45 and declares twelve ordered additions',()=>{
- assert.equal(FOCUSED_WORKSPACE_UI_EXPECTED_CHECK_COUNT,45);assert.equal(FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT,59);assert.deepEqual(FOCUSED_WORKSPACE_TASK_PAGING_WIDTHS,[320,390,1440]);assert.equal(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS.length,14);assert.equal(new Set(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS).size,14);
+test('task-page browser extension preserves the historical45 and fourteen ordered additions before eighteen home cases',()=>{
+ assert.equal(FOCUSED_WORKSPACE_UI_EXPECTED_CHECK_COUNT,45);assert.equal(HOME_DECISIONS_CHECKS.length,18);assert.equal(new Set(HOME_DECISIONS_CHECKS).size,18);assert.equal(FOCUSED_WORKSPACE_UI_CURRENT_CHECK_COUNT,45+14+18);assert.deepEqual(FOCUSED_WORKSPACE_TASK_PAGING_WIDTHS,[320,390,1440]);assert.equal(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS.length,14);assert.equal(new Set(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS).size,14);
  assert.deepEqual(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS.slice(0,6),[320,390,1440].flatMap(width=>['field','inventory'].map(name=>'account-task-pages-draft-100-200-205-single-GET-'+name+'-'+width)));
  assert.deepEqual(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS.slice(6,12),['field','inventory'].flatMap(name=>['503-retry','403-clear','busy-uncertain-and-late-page'].map(kind=>'account-task-pages-'+kind+'-'+name+'-390')));assert.deepEqual(FOCUSED_WORKSPACE_TASK_PAGING_CHECKS.slice(12),['field','inventory'].map(name=>'account-task-pages-404-revoked-clear-'+name+'-390'));
 });
@@ -41,8 +41,11 @@ test('synthetic pages satisfy the real canonical response validator for100 then1
 test('browser source manifest includes this test and the canonical parent pager without a private evidence dependency',()=>{
  const files=focusedWorkspaceUiSourceFiles(readSource);for(const file of [entry,factory,'tests/production-focused-workspace-task-pagination.test.mjs'])assert.ok(files.includes(file));assert.ok(files.every(file=>!file.includes('.vercel/')&&!file.includes('node_modules/')));assert.equal(new Set(files).size,files.length);
 });
-test('all128 historical producer assertions remain the exact ordered source prefix',()=>{
+test('all128 historical producer assertions remain exact after projecting only authenticated home additions',()=>{
  const text=readSource('scripts/verify-focused-workspace-ui.mjs').toString(),ast=parse(text,{sourceType:'module'}),calls=[];
  function walk(node){if(!node||typeof node!=='object')return;if(node.type==='CallExpression'&&node.callee.type==='MemberExpression'&&node.callee.object?.name==='assert')calls.push(text.slice(node.start,node.end).replaceAll('\r\n','\n'));for(const value of Object.values(node))if(Array.isArray(value))value.forEach(walk);else if(value&&typeof value==='object')walk(value);}
- walk(ast.program);assert.ok(calls.length>128);assert.equal(sha(JSON.stringify(calls.slice(0,128))),'41c2c075ff830bd9b0cab70c778c50a782915f466773e72299fce4977712dcdb');
+ walk(ast.program);assert.equal(calls.length,201);
+ assert.deepEqual(calls.slice(18,23),["assert.ok(['ADMIN','DIRECTOR'].includes(role))","assert.equal(url.searchParams.size,3)","assert.equal(url.searchParams.get('view'),'decisions')","assert.equal(url.searchParams.get('scope'),scope)","assert.equal(url.searchParams.get('projectId'),'project-a')"]);
+ assert.equal(sha(JSON.stringify(calls.slice(128,150))),'74f50ce9dd5d97d531eed6cb99a0eb26461aa19fd7ac5bb49526dfc7b78eac0e');
+ const historicalPrefix=[...calls.slice(0,18),...calls.slice(23,128),...calls.slice(150,155)];assert.equal(historicalPrefix.length,128);assert.equal(sha(JSON.stringify(historicalPrefix)),'41c2c075ff830bd9b0cab70c778c50a782915f466773e72299fce4977712dcdb');
 });
