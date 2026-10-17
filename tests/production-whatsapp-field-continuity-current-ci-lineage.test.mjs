@@ -1,3 +1,4 @@
+import {restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
@@ -43,7 +44,7 @@ test('every current source is authenticated before inherited consumers and no pr
 
 test('only exact inherited and052 source aliases advance while current bytes cannot impersonate a predecessor',()=>{
  const contract=current();for(const row of [...contract[section].reviewedSourceChanges,...contract[section].validationDeltas]){assert.equal(whatsappFieldContinuityCurrentSourcePin(contract,{path:row.path,sha256:row.previousSha256}),materialReviewCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}));denied(()=>whatsappFieldContinuityCurrentSourcePin(contract,{path:row.path,sha256:'e'.repeat(64)}));}
- const row=contract[section].reviewedSourceChanges.find(row=>row.path.endsWith('/workspace-client.js'));assert.ok(row);assert.equal(whatsappFieldContinuityCurrentSourcePin(contract,{path:row.path,sha256:'4f3ccde7f433c98e63f0ada92cd1346f0757bea06ea8bf93abf9ac0ff62b79f8'}),row.currentSha256);denied(()=>whatsappFieldContinuityCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}));
+ const previousLayer=restoreHomeDecisionsPreviousContract(contract),row=previousLayer[section].reviewedSourceChanges.find(row=>row.path.endsWith('/workspace-client.js'));assert.ok(row);const inherited={path:row.path,sha256:'4f3ccde7f433c98e63f0ada92cd1346f0757bea06ea8bf93abf9ac0ff62b79f8'},currentPin=homeDecisionsCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256});assert.equal(whatsappFieldContinuityCurrentSourcePin(previousLayer,inherited),row.currentSha256);denied(()=>whatsappFieldContinuityCurrentSourcePin(previousLayer,{path:row.path,sha256:row.currentSha256}));assert.equal(whatsappFieldContinuityCurrentSourcePin(contract,inherited),currentPin);assert.equal(whatsappFieldContinuityCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}),currentPin);
 });
 
 test('omitted deltas foreign checkpoints modified old matrices and inconsistent producer records are denied',()=>{

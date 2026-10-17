@@ -11,7 +11,7 @@ import {validateReportedLocation} from '../../../lib/geo.js';
 import {FIELD_MEDIA_PRIVACY_NOTICE,fieldMediaAnalysisConsent,FIELD_VIDEO_PRIVACY_NOTICE,FIELD_VIDEO_PRIVACY_NOTICE_VERSION,FIELD_VIDEO_AUDIO_PRIVACY_NOTICE,fieldVideoAnalysisConsent} from '../../../lib/field-media-privacy.mjs';
 import {FieldOvertimeJourney,FieldOvertimeForm} from './field-overtime-view';
 import {FIELD_OVERTIME_RECOVERY_ACTIONS} from './workspace-recovery-journal.mjs';
-import {fieldReviewPage,mergeFieldReviewRows} from './field-review-page-view.mjs';
+import {FIELD_PROGRESS_PENDING_EVENT,fieldReviewPage,mergeFieldReviewRows} from './field-review-page-view.mjs';
 import {fieldMediaAttemptReference,fieldMediaHeldOutcome,fieldMediaHeldMessage,fieldMediaEvidenceHeld,fieldMediaReviewEligible} from './field-media-held-view.mjs';
 import {voiceProgressDraftReady,voiceProgressUnitLabel} from '../../../lib/voice-progress-draft.mjs';
 import {VoiceProgressDraftView} from './voice-progress-draft-view';
@@ -60,6 +60,8 @@ function FieldOperationsPanelInner({projectId,scope,tasks=[],taskPaging,onLoadMo
   const [accessBlocked,setAccessBlocked]=useState(false),[retryAllowed,setRetryAllowed]=useState(false);
   const [shiftDetail,setShiftDetail]=useState(null),overtimeForm=useRef(null);
   const [reviewPages,setReviewPages]=useState({EVIDENCE:null,PROGRESS:null}),[reviewRecheck,setReviewRecheck]=useState(null);
+  const [progressPendingRequested,setProgressPendingRequested]=useState(false),progressPendingOpening=useRef(false),progressPendingNavigation=useRef(null);
+  useEffect(()=>{const openPending=event=>{if(event.detail?.scope===scope&&event.detail?.projectId===projectId)progressPendingNavigation.current?.();};window.addEventListener(FIELD_PROGRESS_PENDING_EVENT,openPending);return()=>window.removeEventListener(FIELD_PROGRESS_PENDING_EVENT,openPending);},[scope,projectId]);
   useLayoutEffect(()=>{if(shiftDetail){const element=document.getElementById('overtime-shift-detail');element?.scrollIntoView({behavior:'instant',block:'start'});element?.focus({preventScroll:true});}},[shiftDetail]);
   useLayoutEffect(()=>{if(['CONFIGURE_OVERTIME','PROPOSE_OVERTIME','DECIDE_OVERTIME'].includes(draft?.action)){overtimeForm.current?.scrollIntoView({behavior:'instant',block:'start'});overtimeForm.current?.querySelector('select,input,textarea')?.focus({preventScroll:true});}},[draft?.key,draft?.action]);
    const [attendanceGpsBusy,setAttendanceGpsBusy]=useState(false),attendanceGpsSequence=useRef(0),attendanceGpsStart=useRef(null),attendanceGpsFocus=useRef(null);
@@ -106,19 +108,31 @@ function FieldOperationsPanelInner({projectId,scope,tasks=[],taskPaging,onLoadMo
      finally{if(mounted.current&&completionSequence===epoch.current)setBusy(false);}
    }
    async function earlierJourneys(){if(locked||draft||!data?.overtime?.hasMore||!data.overtime.nextCursor)return;const sequence=++epoch.current;setBusy(true);setNotice('');try{const result=await api(sessionRequest,endpoint,{projectId,scope,journeyCursor:data.overtime.nextCursor},{requestTimeoutMs:15000},value=>scoped(value,true));if(mounted.current&&sequence===epoch.current)receivedData(result);}catch(error){if(mounted.current){hidePrivate(error);setNotice(error.message);}}finally{if(mounted.current)setBusy(false);}}
-   async function loadReview(reviewSection,reviewFilter,more=false,reviewId=null){
-     if(locked||!data||draft&&!reviewId)return;const previous=reviewPages[reviewSection];if(more&&(!previous?.nextCursor||previous.reviewFilter!==reviewFilter))return;
-     const query={projectId,scope,reviewAccessStamp:data.reviewAccessStamp,reviewSection,reviewFilter,...(more?{afterReview:previous.nextCursor}:{}),...(reviewId?{reviewId}:{})},sequence=++epoch.current;
+   async function loadReview(reviewSection,reviewFilter,more=false,reviewId=null,freshProgress=false){
+     if(freshProgress){
+       setProgressPendingRequested(true);
+       if(progressPendingOpening.current)return;
+       if(busy||mediaBusy||qrBusy||sectorGpsBusy||attendanceGpsBusy||draftRef.current||attemptRef.current||taskPaging?.loading===true){setNotice('Conservamos tu trabajo. Terminá o cancelá lo preparado y después abrí los avances por revisar.');return;}
+       progressPendingOpening.current=true;
+     }else if(progressPendingOpening.current||locked||!data||draft&&!reviewId)return;
+     const previous=reviewPages[reviewSection];if(more&&(!previous?.nextCursor||previous.reviewFilter!==reviewFilter))return;
+     const sequence=++epoch.current;
      let completionSequence=sequence;
      setBusy(true);setNotice('');
      try{
-       if(!/^[a-f0-9]{64}$/.test(data.reviewAccessStamp||''))throw Object.assign(new Error('Tu acceso cambió. Volvé a consultar la obra antes de recuperar estos registros.'),{code:'WORKSPACE_CONTEXT_CHANGED'});
+       const snapshot=freshProgress?await api(sessionRequest,endpoint,{projectId,scope},{requestTimeoutMs:15000},value=>scoped(value,true)):data;
+       if(!mounted.current||sequence!==epoch.current)return;
+       if(freshProgress&&(snapshot.canReview!==true||snapshot.canApproveProgress!==true))throw Object.assign(new Error(messages.FIELD_PROGRESS_PERMISSION_REQUIRED),{code:'FIELD_PROGRESS_PERMISSION_REQUIRED',status:403});
+       if(!/^[a-f0-9]{64}$/.test(snapshot.reviewAccessStamp||''))throw Object.assign(new Error('Tu acceso cambió. Volvé a consultar la obra antes de recuperar estos registros.'),{code:'WORKSPACE_CONTEXT_CHANGED'});
+       const query={projectId,scope,reviewAccessStamp:snapshot.reviewAccessStamp,reviewSection,reviewFilter,...(more?{afterReview:previous.nextCursor}:{}),...(reviewId?{reviewId}:{})};
        const result=await api(sessionRequest,endpoint,query,{requestTimeoutMs:15000},value=>fieldReviewPage(value,query));if(!mounted.current||sequence!==epoch.current)return;
-       if(result.canReview!==data.canReview||result.canApproveProgress!==data.canApproveProgress)throw Object.assign(new Error('Tu permiso cambió. Volvé a consultar la obra antes de revisar estos registros.'),{code:'WORKSPACE_CONTEXT_CHANGED'});
-       const key=reviewSection==='EVIDENCE'?'evidence':'proposals';setData(old=>({...old,[key]:mergeFieldReviewRows(old[key],result.records)}));
+       if(result.canReview!==snapshot.canReview||result.canApproveProgress!==snapshot.canApproveProgress)throw Object.assign(new Error('Tu permiso cambió. Volvé a consultar la obra antes de revisar estos registros.'),{code:'WORKSPACE_CONTEXT_CHANGED'});
+       const key=reviewSection==='EVIDENCE'?'evidence':'proposals';
+       if(freshProgress){receivedData(snapshot);setData({...snapshot,[key]:mergeFieldReviewRows(snapshot[key],result.records)});setOpened(true);setTab('PROGRESS');setReviewRecheck(null);setProposalEvidence(null);setProgressPendingRequested(false);}
+       else setData(old=>({...old,[key]:mergeFieldReviewRows(old[key],result.records)}));
        if(reviewId){const row=result.records[0];setDraft(old=>old?{...old,payload:{...old.payload,revision:row.revision}}:old);setProposalEvidence(null);const allowed=reviewSection==='EVIDENCE'?fieldMediaReviewEligible(row):row.status==='PENDING';setReviewRecheck({record:row,allowed,confirmed:false});setReviewPages(old=>({...old,[reviewSection]:old[reviewSection]?{...old[reviewSection],records:mergeFieldReviewRows(old[reviewSection].records,result.records)}:null}));setNotice('Registro vigente consultado. Conservamos el motivo; revisá su estado antes de confirmar.');}
        else {setReviewPages(old=>({...old,[reviewSection]:{...result,records:more?mergeFieldReviewRows(previous.records,result.records):result.records}}));setNotice(result.total===0?'No hay registros para esta consulta.':'Consulta actualizada. Las decisiones se comprueban nuevamente al guardar.');}
-     }catch(error){if(mounted.current&&sequence===epoch.current){if(hidePrivate(error))completionSequence=epoch.current;setNotice(error.message);}}finally{if(mounted.current&&completionSequence===epoch.current)setBusy(false);}
+     }catch(error){if(mounted.current&&sequence===epoch.current){if(hidePrivate(error))completionSequence=epoch.current;setNotice(error.message);}}finally{if(freshProgress)progressPendingOpening.current=false;if(mounted.current&&completionSequence===epoch.current)setBusy(false);}
    }
    async function refresh(){const sequence=epoch.current;try{const result=await api(sessionRequest,endpoint,{projectId,scope},{requestTimeoutMs:15000},value=>scoped(value,true));if(mounted.current&&sequence===epoch.current)receivedData(result);}catch(error){if(mounted.current)setNotice(hidePrivate(error)?'La operación quedó confirmada, pero tu acceso vigente no permite consultar esta obra. Volvé a ingresar o consultá cuando se restablezca.':'La operación está confirmada. Actualizá el listado para consultar los registros vigentes.');}}
    async function confirmed(result,mediaRef){
@@ -201,6 +215,7 @@ function FieldOperationsPanelInner({projectId,scope,tasks=[],taskPaging,onLoadMo
      },failed,{enableHighAccuracy:true,timeout:20000,maximumAge:0});}catch{failed();}
    }
     const locked=busy||mediaBusy||qrBusy||sectorGpsBusy||attendanceGpsBusy||Boolean(attempt)||accessBlocked||taskPaging?.loading===true,replacingDraftLocked=locked||Boolean(draft),p=draft?.payload,own=data?.selfWorkers||[],sectorOptions=data?.sectors||[];
+   useLayoutEffect(()=>{progressPendingNavigation.current=()=>loadReview('PROGRESS','PENDING',false,null,true);});
    const progressTaskLoaded=Boolean(progressReceipt&&tasks.some(task=>task.id===progressReceipt.taskId));
    const evidenceRows=reviewPages.EVIDENCE?.records.filter(row=>reviewPages.EVIDENCE.reviewFilter!=='PENDING'||row.status==='PENDING')||data?.evidence||[],proposalRows=reviewPages.PROGRESS?.records.filter(row=>reviewPages.PROGRESS.reviewFilter!=='PENDING'||row.status==='PENDING')||data?.proposals||[];
    const reviewDraft=['REVIEW_EVIDENCE','DECIDE_PROGRESS'].includes(draft?.action),reviewSection=draft?.action==='REVIEW_EVIDENCE'?'EVIDENCE':'PROGRESS';
@@ -231,6 +246,7 @@ function FieldOperationsPanelInner({projectId,scope,tasks=[],taskPaging,onLoadMo
   return <section className={styles.panel} aria-labelledby="field-title"><div className={styles.heading}><div><p className={styles.eyebrow}>TRABAJO EN CAMPO</p><h3 id="field-title">Jornada, evidencia y avance</h3></div><button type="button" disabled={busy||mediaBusy||qrBusy||attendanceGpsBusy||Boolean(attempt)} onClick={load}>Abrir operaciones</button></div>
     <p className={styles.intro}>Registrá tu actividad y evidencia dentro de esta obra. Las propuestas cambian el avance únicamente después de una decisión autorizada.</p>
     <p role="status" aria-live="polite" className={notice?styles.notice:styles.silent}>{notice}</p>
+    {progressPendingRequested&&<div className={styles.notice}><p>El acceso a avances pendientes está preparado. Conservamos los borradores y los intentos sin confirmar hasta que los resuelvas.</p><button type="button" disabled={busy||mediaBusy||qrBusy||sectorGpsBusy||attendanceGpsBusy||Boolean(draft)||Boolean(attempt)||taskPaging?.loading===true} onClick={()=>loadReview('PROGRESS','PENDING',false,null,true)}>Abrir avances por revisar</button></div>}
     {receipt&&progressReceipt&&<div className={[styles.notice,styles.sourceReference].join(" ")} data-confirmed-progress={progressReceipt.taskId}><strong>«{progressReceipt.title}»: {progressReceipt.progress}% de avance aprobado en este recibo.</strong><p>{progressTaskLoaded?'Esta tarea está cargada en el cronograma. Consultá allí su avance vigente.':'El avance quedó guardado. Falta cargar esta tarea en el cronograma.'}</p>{onNavigateSchedule&&<button type="button" disabled={locked||Boolean(draft)} onClick={()=>onNavigateSchedule({scope,projectId,taskId:progressReceipt.taskId})}>Ver en el cronograma</button>}</div>}
     {attempt&&<div className={styles.recovery}><p>Este envío sigue pendiente de confirmación. Conservamos el identificador del mismo intento para comprobar su recibo.</p><button type="button" disabled={busy} onClick={recover}>Comprobar guardado</button><button type="button" disabled={busy||accessBlocked||!retryAllowed} onClick={retry}>Reenviar exactamente el mismo intento</button></div>}
     {opened&&data&&<><nav className={styles.tabs} aria-label="Operaciones de campo">{[['JOURNEY','Jornada'],['EVIDENCE','Evidencia'],['PROGRESS','Avance'],['REPORTS','Incidencias y materiales'],...(data.canConfigure?[['CONFIG','Sectores y QR']]:[])].map(([key,label])=><button type="button" key={key} aria-pressed={tab===key} disabled={replacingDraftLocked} onClick={()=>{if(locked||draftRef.current)return;cancelAttendanceGps();setTab(key);}}>{label}</button>)}<button type="button" disabled={locked} onClick={load}>Actualizar</button></nav>

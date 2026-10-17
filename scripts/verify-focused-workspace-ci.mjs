@@ -1,5 +1,6 @@
 import {WORKSPACE_CONTINUITY_FOCUSED_UI} from './lib/workspace-continuity-current-ci-lineage.mjs';
 import {WHATSAPP_FIELD_CONTINUITY_FOCUSED_UI} from './lib/whatsapp-field-continuity-current-ci-lineage.mjs';
+import {HOME_DECISIONS_CURRENT_SECTION,normalizeHomeDecisionsFocusedRaw} from './lib/home-decisions-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync,spawnSync} from 'node:child_process';
@@ -26,6 +27,10 @@ const keys=(value,expected,label)=>reject(plain(value)&&same(Object.keys(value).
 const safe=value=>typeof value==='string'&&value!==''&&!value.includes('\\')&&!value.includes('\0')&&!path.posix.isAbsolute(value)&&path.posix.normalize(value)===value&&!value.startsWith('../');
 const bytes=(reader,file)=>{reject(safe(file),'Unsafe source or evidence path');const value=reader(file);reject(Buffer.isBuffer(value),'Missing actual bytes: '+file);return value;};
 const refs=(files,reader)=>files.map(file=>({path:file,sha256:sha(bytes(reader,file))}));
+export function focusedHomeDecisionsRaw(raw,{readSource,readEvidence,directory}){
+ const contract=JSON.parse(bytes(readSource,contractPath));reject(Object.hasOwn(contract,HOME_DECISIONS_CURRENT_SECTION),'The reviewed current home decisions layer is required');
+ try{return normalizeHomeDecisionsFocusedRaw(raw,{contract,readSource,readEvidence,directory});}catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}
+}
 
 export const FOCUSED_WORKSPACE_CHECK_NAMES=Object.freeze(FOCUSED_WORKSPACE_WIDTHS.flatMap(width=>[
  'hidden-panel-headings-absent-from-accessibility-tree-'+width,
@@ -151,6 +156,7 @@ export function validateFocusedWorkspaceCi(proof,{expectedHead,expectedTree,read
  reject(same(spec.sourceFiles,focusedWorkspaceCiSourceClosure(readSource))&&same(proof.sourceManifest,refs(spec.sourceFiles,readSource)),'Complete current AST closure and every RAW source required');
  keys(proof.rawBrowser,['path','bytes','sha256'],'original browser proof');reject(proof.rawBrowser.path.startsWith(FOCUSED_WORKSPACE_CI_EVIDENCE+'run-')&&proof.rawBrowser.path.endsWith('/browser.json'),'Owned original browser evidence required');
  const rawBytes=bytes(readEvidence,proof.rawBrowser.path);reject(rawBytes.length===proof.rawBrowser.bytes&&sha(rawBytes)===proof.rawBrowser.sha256,'Original browser bytes changed');let raw;try{raw=JSON.parse(rawBytes);}catch{reject(false,'Original browser JSON must parse');}
+ raw=focusedHomeDecisionsRaw(raw,{readSource,readEvidence,directory:path.posix.dirname(proof.rawBrowser.path)});
  keys(raw,['version','status','sourceState','ciRun','sourceRevision','sourceTree','trackedClean','checkedAt','widths','continuityWidths','historicalCheckCount','continuityCheckLedger','previousTotalCheckCount','taskPagingWidths','taskPagingCheckLedger','taskPagingFixture','expectedTotalCheckCount','bootstrapSourceManifest','bootstrapExternalImports','checks','totalCheckCount','sourceManifest','sourceBytesUnchanged','externalImports','requests','errors','screenshots','providerCalls','businessPosts','navigationPosts','productionDataTouched','actualAccountWorkspaceMounted','actualClerkOrSSRVerified','syntheticPixelsOnly','transport','cleanup'],'original browser');
  reject(raw.version===current.rawVersion&&raw.status==='PASS'&&raw.sourceState==='EXACT_CI_SOURCE'&&raw.sourceRevision===expectedHead&&raw.sourceTree===expectedTree&&raw.trackedClean===true&&same(raw.ciRun,proof.ciRun),'Browser must execute on this actual CI source and identity');
  reject(typeof raw.checkedAt==='string'&&Number.isFinite(Date.parse(raw.checkedAt))&&new Date(raw.checkedAt).toISOString()===raw.checkedAt,'Original browser completion timestamp required');
@@ -187,7 +193,7 @@ async function main(){
   const unitSuites=[];
   for(const [index,file]of unitFiles.entries()){const result=spawnSync(process.execPath,['--test','--test-reporter=tap',file],{cwd:root,env:environment,encoding:'utf8',maxBuffer:16*1024*1024,windowsHide:true});const tap=Buffer.from(result.stdout||''),tapPath=FOCUSED_WORKSPACE_CI_EVIDENCE+'unit-'+index+'.tap';writeFileSync(path.join(root,tapPath),tap,{flag:'wx'});writeFileSync(path.join(root,tapPath+'.stderr.log'),result.stderr||'',{flag:'wx'});reject(result.status===0,'Current unit suite failed: '+file);unitSuites.push({file,sourceSha256:sha(bytes(readSource,file)),exitCode:result.status,tap:{path:tapPath,bytes:tap.length,sha256:sha(tap)},result:parseFocusedWorkspaceTap(tap)});}
   const run=spawnSync(process.execPath,[producer,'--ci',...args],{cwd:root,env:environment,encoding:'utf8',maxBuffer:32*1024*1024,windowsHide:true});writeFileSync(path.join(root,FOCUSED_WORKSPACE_CI_EVIDENCE+'browser.stdout.log'),run.stdout||'',{flag:'wx'});writeFileSync(path.join(root,FOCUSED_WORKSPACE_CI_EVIDENCE+'browser.stderr.log'),run.stderr||'',{flag:'wx'});reject(run.status===0,'Original browser producer failed');
-  const lines=run.stdout.trim().split(/\r?\n/),emitted=JSON.parse(lines.at(-1)),relative=path.relative(root,emitted.target).split(path.sep).join('/');reject(safe(relative),'Owned browser output required');const raw=bytes(readEvidence,relative),rawProof=JSON.parse(raw);
+  const lines=run.stdout.trim().split(/\r?\n/),emitted=JSON.parse(lines.at(-1)),relative=path.relative(root,emitted.target).split(path.sep).join('/');reject(safe(relative),'Owned browser output required');const raw=bytes(readEvidence,relative),rawProof=focusedHomeDecisionsRaw(JSON.parse(raw),{readSource,readEvidence,directory:path.posix.dirname(relative)});
   const proof={version:FOCUSED_WORKSPACE_CI_VERSION,status:'PASS',sourceRevision:head,sourceTree:tree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,ciRun:options.ciRun,harnessSha256:sha(bytes(readSource,runner)),sourceManifest:before,checks:normalizeFocusedWorkspaceCurrentChecks(rawProof.checks),historicalCheckCount:current.previousCheckCount,continuityCheckLedger:[...current.continuityCheckNames],historicalUnitSuiteCount:previousUnitFiles.length,previousTotalCheckCount:current.previousTotalCheckCount,taskPagingCheckLedger:[...current.taskPagingCheckNames],rawBrowser:{path:relative,bytes:raw.length,sha256:sha(raw)},unitSuites,providerCalls:0,realClerkOrSsrVerified:false,productionDataTouched:false,humanAccepted:false};
   validateFocusedWorkspaceCi(proof,{expectedHead:head,expectedTree:tree,readSource,readEvidence,spec,runId:options.ciRun.runId,runAttempt:options.ciRun.runAttempt});writeFileSync(path.join(root,output),JSON.stringify(proof,null,2)+'\n',{flag:'wx'});
  }

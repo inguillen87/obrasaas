@@ -1,4 +1,13 @@
 import {createHash} from 'node:crypto';
+import {restoreHomeDecisionsPreviousContract as homeOuter0,homeDecisionsPreviousSourcePin as homeOuter1,homeDecisionsCurrentSourcePin as homeOuter2,homeDecisionsValidationFiles as homeOuter3,verifyHomeDecisionsCurrentSources as homeOuter4,restoreHomeDecisionsSourceSet as homeOuter5,homeDecisionsProofSourceAdditions as homeOuter6} from './home-decisions-current-ci-lineage.mjs';
+function homeOuterCall(fn,args){try{return fn(...args);}catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'EXISTING_API_PLAN_CURRENT_CI_LINEAGE_REJECTED'});throw error;}}
+const restoreHomeDecisionsPreviousContract=(...args)=>homeOuterCall(homeOuter0,args);
+const homeDecisionsPreviousSourcePin=(...args)=>homeOuterCall(homeOuter1,args);
+const homeDecisionsCurrentSourcePin=(...args)=>homeOuterCall(homeOuter2,args);
+const homeDecisionsValidationFiles=(...args)=>homeOuterCall(homeOuter3,args);
+const verifyHomeDecisionsCurrentSources=(...args)=>homeOuterCall(homeOuter4,args);
+const restoreHomeDecisionsSourceSet=(...args)=>homeOuterCall(homeOuter5,args);
+const homeDecisionsProofSourceAdditions=(...args)=>homeOuterCall(homeOuter6,args);
 
 export const EXISTING_API_PLAN_CURRENT_SECTION='existingApiPlanCurrentRevision';
 export const EXISTING_API_PLAN_CURRENT_HELPER='scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
@@ -416,6 +425,7 @@ function previousPaths(files,delta){
  reject(previous.length===delta.previousCount&&sha(JSON.stringify(previous))===delta.previousPathsSha256,'Exact API plan predecessor source set required: '+delta.family);return previous;
 }
 export function restoreExistingApiPlanPreviousContract(contract){
+ contract=restoreHomeDecisionsPreviousContract(contract);
  const value=section(contract);if(!value)return contract;
  const previous=structuredClone(contract);delete previous[EXISTING_API_PLAN_CURRENT_SECTION];
  for(const delta of value.proofSourceDeltas){
@@ -427,33 +437,38 @@ export function restoreExistingApiPlanPreviousContract(contract){
  reject(sha(JSON.stringify(previous,null,2)+'\n')===value.previousContractSha256,'The complete published 5d0 contract must restore exactly');return previous;
 }
 export function existingApiPlanPreviousSourcePin(contract,ref){
+ ref={...ref,sha256:homeDecisionsPreviousSourcePin(contract,ref)};
  const value=section(contract),row=value&&[...value.reviewedSourceChanges,...value.validationDeltas].find(row=>row.path===ref.path);
  return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;
 }
 export function existingApiPlanCurrentSourcePin(contract,ref){
- const value=section(contract),row=value&&[...value.reviewedSourceChanges,...value.validationDeltas].find(row=>row.path===ref.path);if(!row)return ref.sha256;
- reject([row.previousSha256,row.currentSha256].includes(ref.sha256),'Only an exact authenticated API plan predecessor or current pin may advance: '+ref.path);return row.currentSha256;
+ ref={...ref,sha256:homeDecisionsPreviousSourcePin(contract,ref)};
+ const value=section(contract),row=value&&[...value.reviewedSourceChanges,...value.validationDeltas].find(row=>row.path===ref.path);if(!row)return homeDecisionsCurrentSourcePin(contract,ref);
+ reject([row.previousSha256,row.currentSha256].includes(ref.sha256),'Only an exact authenticated API plan predecessor or current pin may advance: '+ref.path);return homeDecisionsCurrentSourcePin(contract,{...ref,sha256:row.currentSha256});
 }
 export function existingApiPlanValidationFiles(contract){
  const value=section(contract);if(!value)return[];restoreExistingApiPlanPreviousContract(contract);
- return [...new Set([...value.reviewedSourceChanges,...value.validationDeltas,...value.addedSources,...value.validationSources].map(row=>row.path))].sort();
+ return [...new Set([...homeDecisionsValidationFiles(contract),...[...value.reviewedSourceChanges,...value.validationDeltas,...value.addedSources,...value.validationSources].map(row=>row.path)])].sort();
 }
 export function verifyExistingApiPlanCurrentSources(contract,readSource){
+ verifyHomeDecisionsCurrentSources(contract,readSource);
  const value=section(contract);if(!value)return null;restoreExistingApiPlanPreviousContract(contract);reject(typeof readSource==='function','Actual API plan source reader required');
  const refs=[...value.reviewedSourceChanges,...value.validationDeltas].map(row=>({path:row.path,sha256:row.currentSha256})).concat(value.addedSources,value.validationSources);
  reject(new Set(refs.map(row=>row.path)).size===refs.length,'Unique API plan current source references required');
- for(const row of refs){reject(safe(row.path)&&hash(row.sha256),'Safe exact API plan source pin required');const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current API plan source: '+row.path);const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===row.sha256,'Stale current API plan source: '+row.path);}
+ for(const row of refs){reject(safe(row.path)&&hash(row.sha256),'Safe exact API plan source pin required');const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current API plan source: '+row.path);const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===homeDecisionsCurrentSourcePin(contract,row),'Stale current API plan source: '+row.path);}
  return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,historicalPinsPreserved:true,nativeOrBrowserAcceptance:false};
 }
 export function restoreExistingApiPlanSourceSet(family,files,contract){
+ files=restoreHomeDecisionsSourceSet(family,files,contract);
  const value=section(contract);if(!value)return files;restoreExistingApiPlanPreviousContract(contract);
  const delta=[...value.proofSourceDeltas,...value.nativeSourceDeltas].find(row=>row.family===family);return delta?previousPaths(files,delta):files;
 }
 export function existingApiPlanProofSourceAdditions(spec){
- const delta=EXISTING_API_PLAN_CURRENT_REVISION.proofSourceDeltas.find(row=>row.id===spec?.id);if(!delta)return[];
+ const outer=homeDecisionsProofSourceAdditions(spec);if(outer.length)spec={...spec,sourceFiles:spec.sourceFiles.filter(file=>!outer.includes(file))};
+ const delta=EXISTING_API_PLAN_CURRENT_REVISION.proofSourceDeltas.find(row=>row.id===spec?.id);if(!delta)return outer;
  const files=spec.sourceFiles;reject(Array.isArray(files)&&new Set(files).size===files.length&&same(files,[...files].sort()),'Distinct sorted API plan proof sources required');
- const count=files.length,digest=sha(JSON.stringify(files));if(count===delta.currentCount&&digest===delta.currentPathsSha256)return [...delta.additions];
- reject((delta.inheritedSets||[]).some(row=>row.count===count&&row.pathsSha256===digest),'Unknown API plan proof source set: '+delta.id);return[];
+ const count=files.length,digest=sha(JSON.stringify(files));if(count===delta.currentCount&&digest===delta.currentPathsSha256)return [...delta.additions,...outer];
+ reject((delta.inheritedSets||[]).some(row=>row.count===count&&row.pathsSha256===digest),'Unknown API plan proof source set: '+delta.id);return outer;
 }
 export function existingApiPlanCurrentNativeSourceFiles(contract,family,previous){
  const value=section(contract);if(!value)return previous;restoreExistingApiPlanPreviousContract(contract);

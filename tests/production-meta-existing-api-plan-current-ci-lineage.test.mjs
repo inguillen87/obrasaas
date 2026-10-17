@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync,readdirSync} from 'node:fs';
 import {createHash} from 'node:crypto';
+import {restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {EXISTING_API_PLAN_CURRENT_REVISION as expected,EXISTING_API_PLAN_CURRENT_SECTION as key,restoreExistingApiPlanPreviousContract,existingApiPlanCurrentSourcePin,existingApiPlanValidationFiles,verifyExistingApiPlanCurrentSources,restoreExistingApiPlanSourceSet,existingApiPlanProofSourceAdditions,existingApiPlanCurrentNativeSourceFiles,validateExistingApiPlanNativeProof} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
 import {verifyMaterialReviewCurrentSources,restoreMaterialReviewPreviousContract} from '../scripts/lib/material-review-current-ci-lineage.mjs';
 import {whatsappFieldCompanyNativeSourceFiles,verifyWhatsappFieldContinuityCurrentSources} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
@@ -28,15 +29,15 @@ test('exact current source bytes authenticate the new layer without claiming pro
 
 test('only exact authenticated predecessor and current pins advance',()=>{
  const contract=current();for(const row of [...expected.reviewedSourceChanges,...expected.validationDeltas]){
-  for(const pin of [row.previousSha256,row.currentSha256])assert.equal(existingApiPlanCurrentSourcePin(contract,{path:row.path,sha256:pin}),row.currentSha256);
+  for(const pin of [row.previousSha256,row.currentSha256])assert.equal(existingApiPlanCurrentSourcePin(contract,{path:row.path,sha256:pin}),homeDecisionsCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}));
   denied(()=>existingApiPlanCurrentSourcePin(contract,{path:row.path,sha256:'0'.repeat(64)}));
  }
 });
 
 test('actual producer closures grow only by their exact reviewed dependencies',()=>{
- const contract=current(),previous=restoreExistingApiPlanPreviousContract(contract);
+ const full=current(),contract=restoreHomeDecisionsPreviousContract(full),previous=restoreExistingApiPlanPreviousContract(contract);
  for(const spec of contract.extension.proofs){
-  assert.deepEqual(currentProducerSourceFiles(spec,process.cwd()),spec.sourceFiles,'Actual source closure '+spec.id);
+  const actual=full.extension.proofs.find(row=>row.id===spec.id);assert.deepEqual(currentProducerSourceFiles(actual,process.cwd()),actual.sourceFiles,'Actual current source closure '+spec.id);
   const delta=expected.proofSourceDeltas.find(row=>row.id===spec.id),prior=previous.extension.proofs.find(row=>row.id===spec.id);assert.deepEqual(spec.checkNames,prior.checkNames);assert.equal(spec.producerSha256,prior.producerSha256);
   if(!delta){assert.deepEqual(spec.sourceFiles,prior.sourceFiles);continue;}
   assert.deepEqual(restoreExistingApiPlanSourceSet(delta.family,spec.sourceFiles,contract),prior.sourceFiles);assert.deepEqual(existingApiPlanProofSourceAdditions(spec),delta.additions);assert.deepEqual(existingApiPlanProofSourceAdditions(prior),[]);

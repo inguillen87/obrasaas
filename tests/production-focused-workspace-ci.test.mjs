@@ -1,5 +1,6 @@
 import {WORKSPACE_CONTINUITY_FOCUSED_UI} from '../scripts/lib/workspace-continuity-current-ci-lineage.mjs';
 import {WHATSAPP_FIELD_CONTINUITY_FOCUSED_UI as currentFocused} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
+import {HOME_DECISIONS_CURRENT_REVISION as homeDecisions} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
@@ -28,7 +29,15 @@ function fixture(){
  const unitSuites=unitFiles.map((file,index)=>{const cases=focusedWorkspaceUnitCases(readSource,file),text=['TAP version 13',...cases.map((name,i)=>'ok '+(i+1)+' - '+name),'1..'+cases.length,'# tests '+cases.length,'# pass '+cases.length,'# fail 0','# cancelled 0','# skipped 0','# todo 0',''].join('\n'),tap=Buffer.from(text),tapPath=FOCUSED_WORKSPACE_CI_EVIDENCE+'unit-'+index+'.tap';evidence.set(tapPath,tap);return{file,sourceSha256:hash(readSource(file)),exitCode:0,tap:{path:tapPath,bytes:tap.length,sha256:hash(tap)},result:parseFocusedWorkspaceTap(tap)};});
  const spec={id:FOCUSED_WORKSPACE_CI_PROOF_ID,kind:FOCUSED_WORKSPACE_CI_KIND,lane:'workspace-ui',blockId:64,path:FOCUSED_WORKSPACE_CI_EVIDENCE+'current-ci.json',producer:'scripts/verify-focused-workspace-ci.mjs',producerSha256:hash(readSource('scripts/verify-focused-workspace-ci.mjs')),sourceFiles,checkNames:[...current.checkNames]};
  const proof={version:FOCUSED_WORKSPACE_CI_VERSION,status:'PASS',sourceRevision:head,sourceTree:tree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,ciRun:clone(identity),harnessSha256:spec.producerSha256,sourceManifest:ref(sourceFiles),checks:[...current.checkNames],historicalCheckCount:20,continuityCheckLedger:[...current.continuityCheckNames],historicalUnitSuiteCount:3,previousTotalCheckCount:current.previousTotalCheckCount,taskPagingCheckLedger:[...current.taskPagingCheckNames],rawBrowser:null,unitSuites,providerCalls:0,realClerkOrSsrVerified:false,productionDataTouched:false,humanAccepted:false};
- const reseal=()=>{const b=Buffer.from(JSON.stringify(raw));evidence.set(browserPath,b);proof.rawBrowser={path:browserPath,bytes:b.length,sha256:hash(b)};};reseal();
+ // Preserve the historical59 mutation surface for all inherited negatives.
+ // Only this in-memory unit shadow adds the independently frozen18 current
+ // observations; the real runner always consumes untouched producer bytes.
+ const home=homeDecisions.focusedUi,homeScreenshots=home.screenshotNames.slice(current.screenshotNames.length).map((name,index)=>{const b=Buffer.from('synthetic home nonpersonal pixels '+index),width=Number(/-(320|390|768|1440)\.png$/.exec(name)?.[1]);evidence.set(path.posix.dirname(browserPath)+'/'+name,b);return {path:name,sha256:hash(b),geometry:{width,height:1000,scrollWidth:width,identityActionTop:null}};});
+ const reseal=()=>{
+  let currentRequests=raw.requests;if(Array.isArray(raw.requests)&&raw.requests.length===home.previousRequestCount){currentRequests=Array(home.currentRequestCount);home.previousRequestIndices.forEach((index,previousIndex)=>{currentRequests[index]=raw.requests[previousIndex];});for(const row of home.addedRequestFacts)currentRequests[row.index]=clone(row.request);}
+  const currentRaw={...raw,checks:Array.isArray(raw.checks)?[...raw.checks,...home.addedCheckNames]:raw.checks,totalCheckCount:raw.totalCheckCount+home.addedCheckNames.length,expectedTotalCheckCount:raw.expectedTotalCheckCount+home.addedCheckNames.length,homeDecisionsWidths:[...home.widths],homeDecisionsCheckLedger:[...home.addedCheckNames],requests:currentRequests,screenshots:Array.isArray(raw.screenshots)&&raw.screenshots.length===home.previousScreenshotNames.length?[...raw.screenshots,...homeScreenshots]:raw.screenshots};
+  const b=Buffer.from(JSON.stringify(currentRaw));evidence.set(browserPath,b);proof.rawBrowser={path:browserPath,bytes:b.length,sha256:hash(b)};
+ };reseal();
  const validate=()=>validateFocusedWorkspaceCi(proof,{expectedHead:head,expectedTree:tree,readSource,readEvidence:file=>evidence.get(file)||null,spec,runId:42,runAttempt:1});
  return{raw,proof,spec,evidence,sourceOverrides,readSource,validate,reseal};
 }

@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {parse} from '@babel/parser';
+import {homeDecisionsLegacyOperationsAst} from './home-decisions-current-ci-lineage.mjs';
 import {restoreExistingApiPlanPreviousContract as planOuter0,existingApiPlanPreviousSourcePin as planOuter1,existingApiPlanCurrentSourcePin as planOuter2,existingApiPlanValidationFiles as planOuter3,verifyExistingApiPlanCurrentSources as planOuter4,restoreExistingApiPlanSourceSet as planOuter5,existingApiPlanProofSourceAdditions as planOuter6} from './meta-existing-api-plan-current-ci-lineage.mjs';
 function planOuterCall(fn,args){try{return fn(...args);}catch(error){if(error.code==='EXISTING_API_PLAN_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'MATERIAL_REVIEW_CURRENT_CI_LINEAGE_REJECTED'});throw error;}}
 const restoreExistingApiPlanPreviousContract=(...args)=>planOuterCall(planOuter0,args);
@@ -191,7 +192,7 @@ export function materialReviewUnchangedSurface(file,bytes){
  })[file];
  if(!mode)return null;
  reject(Buffer.isBuffer(bytes),'Actual reviewed source bytes required');
- const tree=parse(bytes.toString('utf8'),{sourceType:'module'});
+ const parsed=parse(bytes.toString('utf8'),{sourceType:'module'}),tree=mode==='INVENTORY_COUNTS'?homeDecisionsLegacyOperationsAst(parsed):parsed;
  function project(node){
   if(Array.isArray(node))return node.map(project).filter(value=>value!==null);
   if(!node||typeof node!=='object')return node;
