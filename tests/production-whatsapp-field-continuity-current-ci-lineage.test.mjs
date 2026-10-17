@@ -10,6 +10,7 @@ import {restoreIntegratedIdentityPreviousContract} from '../scripts/lib/integrat
 import {restoreParticipantPreanalysisPreviousContract,preloadParticipantPreanalysisConsumerSources} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {restoreOoxmlAccountingPreviousContract} from '../scripts/lib/ooxml-accounting-current-ci-lineage.mjs';
 import {reconstructPublishedHContract} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';
+import {existingApiPlanProofSourceAdditions} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
 import {restoreMaterialReviewPreviousContract,materialReviewCurrentSourcePin} from '../scripts/lib/material-review-current-ci-lineage.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex'),serialize=value=>Buffer.from(JSON.stringify(value,null,2)+'\n');
@@ -55,7 +56,7 @@ test('actual source additions restore exact predecessor sets and old or same-cou
 });
 
 test('proof additions accept only authenticated historical context or the exact complete current set',()=>{
- const contract=current();for(const delta of contract[section].proofSourceDeltas){const prior=checkpoint.extension.proofs.find(row=>row.id===delta.id),spec=contract.extension.proofs.find(row=>row.id===delta.id);assert.deepEqual(whatsappFieldContinuityProofSourceAdditions(prior),[]);const material=contract.materialReviewCurrentRevision.proofSourceDeltas.find(row=>row.id===spec.id);assert.deepEqual(whatsappFieldContinuityProofSourceAdditions(spec),[...delta.additions,...(material?.additions||[])]);const changed=structuredClone(spec);changed.sourceFiles=[...changed.sourceFiles.slice(0,-1),'src/lib/foreign-proof-source.mjs'].sort();denied(()=>whatsappFieldContinuityProofSourceAdditions(changed));}
+ const contract=current();for(const delta of contract[section].proofSourceDeltas){const prior=checkpoint.extension.proofs.find(row=>row.id===delta.id),spec=contract.extension.proofs.find(row=>row.id===delta.id);assert.deepEqual(whatsappFieldContinuityProofSourceAdditions(prior),[]);const material=contract.materialReviewCurrentRevision.proofSourceDeltas.find(row=>row.id===spec.id);assert.deepEqual(whatsappFieldContinuityProofSourceAdditions(spec),[...delta.additions,...(material?.additions||[]),...existingApiPlanProofSourceAdditions(spec)]);const changed=structuredClone(spec);changed.sourceFiles=[...changed.sourceFiles.slice(0,-1),'src/lib/foreign-proof-source.mjs'].sort();denied(()=>whatsappFieldContinuityProofSourceAdditions(changed));}
 });
 
 test('unrelated contract records cannot be smuggled through a valid outer revision',()=>{

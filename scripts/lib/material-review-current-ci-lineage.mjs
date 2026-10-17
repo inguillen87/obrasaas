@@ -1,5 +1,14 @@
 import {createHash} from 'node:crypto';
 import {parse} from '@babel/parser';
+import {restoreExistingApiPlanPreviousContract as planOuter0,existingApiPlanPreviousSourcePin as planOuter1,existingApiPlanCurrentSourcePin as planOuter2,existingApiPlanValidationFiles as planOuter3,verifyExistingApiPlanCurrentSources as planOuter4,restoreExistingApiPlanSourceSet as planOuter5,existingApiPlanProofSourceAdditions as planOuter6} from './meta-existing-api-plan-current-ci-lineage.mjs';
+function planOuterCall(fn,args){try{return fn(...args);}catch(error){if(error.code==='EXISTING_API_PLAN_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'MATERIAL_REVIEW_CURRENT_CI_LINEAGE_REJECTED'});throw error;}}
+const restoreExistingApiPlanPreviousContract=(...args)=>planOuterCall(planOuter0,args);
+const existingApiPlanPreviousSourcePin=(...args)=>planOuterCall(planOuter1,args);
+const existingApiPlanCurrentSourcePin=(...args)=>planOuterCall(planOuter2,args);
+const existingApiPlanValidationFiles=(...args)=>planOuterCall(planOuter3,args);
+const verifyExistingApiPlanCurrentSources=(...args)=>planOuterCall(planOuter4,args);
+const restoreExistingApiPlanSourceSet=(...args)=>planOuterCall(planOuter5,args);
+const existingApiPlanProofSourceAdditions=(...args)=>planOuterCall(planOuter6,args);
 
 export const MATERIAL_REVIEW_CURRENT_SECTION='materialReviewCurrentRevision';
 export const MATERIAL_REVIEW_CURRENT_HELPER='scripts/lib/material-review-current-ci-lineage.mjs';
@@ -216,6 +225,7 @@ function section(contract){
  return value;
 }
 export function restoreMaterialReviewPreviousContract(contract){
+ contract=restoreExistingApiPlanPreviousContract(contract);
  const value=section(contract);if(!value)return contract;
  const previous=structuredClone(contract);delete previous[MATERIAL_REVIEW_CURRENT_SECTION];
  for(const delta of value.proofSourceDeltas||[]){
@@ -243,34 +253,38 @@ function restoreMaterialSourcePaths(files,delta){
  return previous;
 }
 export function restoreMaterialReviewSourceSet(family,files,contract){
+ files=restoreExistingApiPlanSourceSet(family,files,contract);
  const value=section(contract);if(!value)return files;
  restoreMaterialReviewPreviousContract(contract);
  const delta=[...(value.sourceSetDeltas||[]),...(value.proofSourceDeltas||[])].find(row=>row.family===family);
  return delta?restoreMaterialSourcePaths(files,delta):files;
 }
 export function materialReviewProofSourceAdditions(spec){
- const delta=MATERIAL_REVIEW_CURRENT_REVISION.proofSourceDeltas?.find(row=>row.id===spec?.id);if(!delta)return[];
+ const outer=existingApiPlanProofSourceAdditions(spec);if(outer.length)spec={...spec,sourceFiles:spec.sourceFiles.filter(file=>!outer.includes(file))};
+ const delta=MATERIAL_REVIEW_CURRENT_REVISION.proofSourceDeltas?.find(row=>row.id===spec?.id);if(!delta)return outer;
  const files=spec.sourceFiles;
  reject(Array.isArray(files)&&new Set(files).size===files.length&&same(files,[...files].sort()),'Unique sorted material proof sources required');
- if(files.length===delta.currentCount&&sha(JSON.stringify(files))===delta.currentPathsSha256)return[...delta.additions];
+ if(files.length===delta.currentCount&&sha(JSON.stringify(files))===delta.currentPathsSha256)return[...delta.additions,...outer];
  reject(files.length===delta.previousCount&&sha(JSON.stringify(files))===delta.previousPathsSha256,'Unknown material CI proof source set: '+delta.id);
- return[];
+ return outer;
 }
 export function materialReviewCurrentSourcePin(contract,ref){
- const value=section(contract);if(!value)return ref.sha256;
+ ref={...ref,sha256:existingApiPlanPreviousSourcePin(contract,ref)};
+ const value=section(contract);if(!value)return existingApiPlanCurrentSourcePin(contract,ref);
  // This resolves a pin, not a proof. The source verifier and inverse authenticate
  // the complete predecessor once before accepting a source set.
  const change=[...value.reviewedSourceChanges,...value.validationDeltas].find(row=>row.path===ref.path);
- if(!change)return ref.sha256;
+ if(!change)return existingApiPlanCurrentSourcePin(contract,ref);
  reject(ref.sha256===change.previousSha256||ref.sha256===change.currentSha256,'Only the exact material review predecessor or current pin may be used: '+ref.path);
- return change.currentSha256;
+ return existingApiPlanCurrentSourcePin(contract,{...ref,sha256:change.currentSha256});
 }
 export function materialReviewValidationFiles(contract){
  const value=section(contract);if(!value)return[];
  restoreMaterialReviewPreviousContract(contract);
- return [...new Set([...value.reviewedSourceChanges.map(row=>row.path),...value.addedSources.map(row=>row.path),...value.validationDeltas.map(row=>row.path),...value.validationSources.map(row=>row.path)])].sort();
+ return [...new Set([...existingApiPlanValidationFiles(contract),...value.reviewedSourceChanges.map(row=>row.path),...value.addedSources.map(row=>row.path),...value.validationDeltas.map(row=>row.path),...value.validationSources.map(row=>row.path)])].sort();
 }
 export function verifyMaterialReviewCurrentSources(contract,readSource){
+ verifyExistingApiPlanCurrentSources(contract,readSource);
  const value=section(contract);if(!value)return null;
  restoreMaterialReviewPreviousContract(contract);reject(typeof readSource==='function','Actual current material review source reader required');
  const refs=[...value.reviewedSourceChanges,...value.validationDeltas].map(row=>({path:row.path,sha256:row.currentSha256,unchangedSurfaceSha256:row.unchangedSurfaceSha256})).concat(value.addedSources,value.validationSources);
@@ -278,7 +292,7 @@ export function verifyMaterialReviewCurrentSources(contract,readSource){
  for(const row of refs){
   reject(safe(row.path)&&hash(row.sha256),'Exact safe material review source pin required');
   const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current material review source: '+row.path);
-  const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===row.sha256,'Stale current material review source: '+row.path);
+  const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===existingApiPlanCurrentSourcePin(contract,row),'Stale current material review source: '+row.path);
   if(row.unchangedSurfaceSha256)reject(materialReviewUnchangedSurface(row.path,bytes)===row.unchangedSurfaceSha256,'Material review changed an inherited business surface: '+row.path);
  }
  return {version:1,previousContractSha256:value.previousContractSha256,completePreviousContractRestored:true,unchangedBusinessSurfaces:value.reviewedSourceChanges.filter(row=>row.unchangedSurfaceSha256).map(row=>row.path),historicalPinsPreserved:true,nativeOrBrowserAcceptance:false};

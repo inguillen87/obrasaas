@@ -16,6 +16,7 @@ import {companyPreparedMediaRecoveryAuthorized} from './company-channel-routing.
 import {companyPhoneContract,readCompanyPhoneDeclaration,assertCompanyPhoneMatch,companyPhoneAuthorizationContract} from './company-onboarding-policy.mjs';
 import {companyWhatsappOnboardingEntitlement} from './company-entitlement.mjs';
 import {META_OWN_COMPANY_MODE} from './meta-own-company-policy.mjs';
+import {createMetaExistingApiPlan} from './meta-existing-api-plan.mjs';
 const activeStates=new Set(['PREPARED','EXCHANGE_STARTED','EXCHANGE_UNKNOWN','CREDENTIAL_STORED','VERIFYING','REVIEW_REQUIRED','LINKED_PENDING_ACCEPTANCE','REGISTRATION_REQUIRED','REGISTRATION_REJECTED','REGISTRATION_VERIFYING','REGISTRATION_STARTED','REGISTRATION_UNKNOWN']);
 const phoneModeReviewCodes=new Set(['META_CUSTOMER_DEDICATED_PHONE_REQUIRED','META_CUSTOMER_EXISTING_API_REVIEW_REQUIRED','META_CUSTOMER_PHONE_MODE_UNCONFIRMED','META_CUSTOMER_PHONE_STATUS_UNCONFIRMED']);
 const localModeRejectionCodes=new Set(['META_CUSTOMER_DEDICATED_PHONE_REQUIRED','META_CUSTOMER_EXISTING_API_REVIEW_REQUIRED']);
@@ -66,7 +67,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
    return scoped===provider?ordinary:createMetaCustomerOnboarding({workspace,provider:scoped,processor,environment,now,scopedProvider:true});
   };
   return {read:async(session,context)=>(await resolve(session,context)).read(session,context),command:async(session,body)=>{
-   if(!['begin','complete','cancel','reconcile','refresh_templates','register_number','restart_authorization','activate_channel','deactivate_channel','process_inbox','review_inbox','prepare_template','submit_template','recover_template','start_app_sync','continue_app_sync','prepare_existing_api_plan'].includes(body?.action))return ordinary.command(session,body);
+   if(!['begin','complete','cancel','reconcile','refresh_templates','register_number','restart_authorization','activate_channel','deactivate_channel','process_inbox','review_inbox','prepare_template','submit_template','recover_template','start_app_sync','continue_app_sync','prepare_existing_api_plan','close_existing_api_plan'].includes(body?.action))return ordinary.command(session,body);
    return (await resolve(session,body)).command(session,body);
   }};
  }
@@ -93,6 +94,7 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
  const inboxService=createMetaCustomerInboxReview({workspace:guardedWorkspace,environment,now});
  const activationService=createMetaCustomerActivation({workspace:guardedWorkspace,provider,environment,now});
  const coexistenceService=createMetaCustomerCoexistence({workspace:guardedWorkspace,provider,environment,now});
+ const existingApiService=createMetaExistingApiPlan({workspace:guardedWorkspace,now});
  const within=(...args)=>guardedWorkspace.integrationProject(...args);
  async function checkDeclaredPhone(client,member,state,verified){
   if(!Object.hasOwn(state,'declaredCompanyPhone'))return;
@@ -166,9 +168,10 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
    stateToken:signup?.state==='PREPARED'&&!phoneReviewCode&&metaCustomerAuthorizationReady(readiness)?stateToken(state,member,project,environment):null,
    connection:connection?{recordPresent:true,displayNumber:connection.displayPhoneNumber,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,enabled:connection.enabled===true,storedStatus:connection.status,operational:currentActivation.operational}:null,
    coexistence,
-   existingApiPlan:project.metadata?.metaExistingApiPlan?{state:project.metadata.metaExistingApiPlan.state,preparedAt:project.metadata.metaExistingApiPlan.preparedAt,preserveProvider:true,providerChanged:false}:null,
+   existingApiPlan:await existingApiService.publicPlan(client,member,project),
+   ...(['prepare_existing_api_plan','close_existing_api_plan'].includes(context.action)?{existingApiPlanReceipt:await existingApiService.readReceipt(client,member,scope,project,context)}:{}),
    activation:currentActivation,
-   templates:connection?.metadata?.customerTemplates||null,templateWorkbench:publicCustomerTemplateWorkbench(connection),inbox:await readMetaCustomerInbox(client,member,project,connection,environment,{after:context.after||null}),...(context.operationId&&context.action!=='cancel'?{receipt:context.action==='reconcile'?await readPhoneReviewReceipt(client,member,scope,project,context):await readMetaCustomerInboxReceipt(client,member,project,connection,environment,context)}:{}),acceptance:{roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'}};
+   templates:connection?.metadata?.customerTemplates||null,templateWorkbench:publicCustomerTemplateWorkbench(connection),inbox:await readMetaCustomerInbox(client,member,project,connection,environment,{after:context.after||null}),...(context.operationId&&!['cancel','prepare_existing_api_plan','close_existing_api_plan'].includes(context.action)?{receipt:context.action==='reconcile'?await readPhoneReviewReceipt(client,member,scope,project,context):await readMetaCustomerInboxReceipt(client,member,project,connection,environment,context)}:{}),acceptance:{roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'}};
  }
  async function assertAssetVacant(client,project,wabaId,phoneNumberId){
   if(wabaId===OBRASAAS_META_CHANNEL.wabaId||phoneNumberId===OBRASAAS_META_CHANNEL.phoneNumberId)throw new WorkspaceError('META_CUSTOMER_DEMO_ASSET_REJECTED',403);
@@ -291,7 +294,10 @@ export function createMetaCustomerOnboarding({workspace,provider,processor=null,
   async command(session,body){
    const action=body?.action;
    if(['start_app_sync','continue_app_sync'].includes(action)){await coexistenceService.command(session,body);return within(session,body,false,response);}
-   if(action==='prepare_existing_api_plan'){await coexistenceService.prepareExistingApiPlan(session,body);return within(session,body,false,response);}
+   if(['prepare_existing_api_plan','close_existing_api_plan'].includes(action)){
+    const receipt=await existingApiService.command(session,body),context={...body,planId:action==='prepare_existing_api_plan'?body.operationId:body.planId};
+    return within(session,body,false,async(client,member,scope,project)=>({...await response(client,member,scope,project,context),existingApiPlanReceipt:receipt}));
+   }
    if(action==='process_inbox'&&processor){
     input(body,['action','operationId','projectId','scope','eventId']);if(!/^customer_webhook_[a-f0-9]{64}$/.test(body.eventId||''))throw new WorkspaceError('META_CUSTOMER_INBOX_INPUT_INVALID');
     const corporate=await within(session,body,false,async(client,member,_scope,project)=>{if(await companyPreparedMediaRecoveryAuthorized(client,member,{eventId:body.eventId,projectId:project.id,environment}))return true;await assertLegacyProjectChannel(client,member,project.id);const found=(await client.query(`SELECT e.id FROM public."WebhookEvent" e JOIN public."WhatsAppConnection" c ON c."projectId"=e."projectId" AND c.id=e.payload->>'channelId' WHERE e.id=$1 AND e."projectId"=$2 AND e.provider='meta-customer-v1'`,[body.eventId,project.id])).rows;if(found.length!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_UNAVAILABLE',404);return false;});

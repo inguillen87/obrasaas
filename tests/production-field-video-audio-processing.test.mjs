@@ -141,9 +141,10 @@ test('visual decoder rejection cancels and awaits its audio sibling rather than 
 test('audio integrity rejection cancels and awaits its visual sibling without saving even a failed receipt',async()=>{
  let closed=false;const f=fixture({extractAudio:async()=>{await new Promise(resolve=>setTimeout(resolve,5));throw new WorkspaceError('FIELD_MEDIA_INTEGRITY',503);},extractFrames:request=>new Promise((resolve,reject)=>{request.signal.addEventListener('abort',()=>{setTimeout(()=>{closed=true;reject(request.signal.reason);},5);},{once:true});})});await assert.rejects(f.media.process({},input),{code:'FIELD_MEDIA_INTEGRITY'});assert.equal(closed,true);assert.equal(f.counts.transcribe,0);assert.equal(f.counts.vision,0);noWrites(f);
 });
-for(const component of ['audio','visual'])test('shared deadline during '+component+' provider cannot be degraded into a partial receipt',async()=>{
- const pending=request=>new Promise((resolve,reject)=>{request.signal.addEventListener('abort',()=>reject(request.signal.reason),{once:true});});const keepAlive=setTimeout(()=>{},1000);
- try{const f=fixture({processTimeoutMs:25,...(component==='audio'?{onAudio:pending}:{onVision:pending})});await assert.rejects(f.media.process({},input),{code:'FIELD_MEDIA_PROCESSING_DEADLINE'});assert.equal(f.counts.vision,component==='audio'?0:1);noWrites(f);}finally{clearTimeout(keepAlive);}
+for(const component of ['audio','visual'])test('shared deadline during '+component+' provider cannot be degraded into a partial receipt',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});let started;const ready=new Promise(resolve=>{started=resolve;});
+ const pending=request=>new Promise((resolve,reject)=>{started();request.signal.addEventListener('abort',()=>reject(request.signal.reason),{once:true});});
+ const f=fixture({processTimeoutMs:25,...(component==='audio'?{onAudio:pending}:{onVision:pending})}),outcome=f.media.process({},input);await ready;t.mock.timers.tick(25);await assert.rejects(outcome,{code:'FIELD_MEDIA_PROCESSING_DEADLINE'});assert.equal(f.counts.transcribe,1);assert.equal(f.counts.vision,component==='audio'?0:1);noWrites(f);
 });
 test('task changed during providers stays untouched and invalidates later progress preparation',async()=>{
  const f=fixture({onAudio:(_request,c)=>{c.changeTask();return transcript;}}),e=await process(f);assert.equal(e.processing.result.progressDraft.task.revision,task.revision);assert.notEqual(f.getTask().revision,task.revision);assert.throws(()=>prepareVoiceProgressDraft({...e,status:'APPROVED'},f.getTask(),'worker-a'),/tarea cambió/);assert.equal(f.receipts.size,1);assert.ok(f.queries.every(sql=>!sql.includes('public."Task"')));
