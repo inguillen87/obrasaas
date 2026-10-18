@@ -21,6 +21,21 @@ test('partida preview restores the entire exact3cc contract without mutating the
 test('partida preview authenticates all current source bytes including the explicit declaration',()=>{
  assert.equal(verifyPlanPartidaPreviewCurrentSources(current(),read).nativeOrBrowserAcceptance,false);for(const row of expected.references)assert.equal(sha(read(row.path)),row.currentSha256);
 });
+test('compiled partida authority remains isolated from nested exported declaration mutation',()=>{
+ const contract=current(),row=expected.references[0],original=row.currentSha256,foreign=original==='f'.repeat(64)?'e'.repeat(64):'f'.repeat(64);verifyPlanPartidaPreviewCurrentSources(contract,read);
+ try{row.currentSha256=foreign;assert.equal(expected.references[0].currentSha256,foreign);const forged=current();forged[key].references[0].currentSha256=foreign;denied(()=>planPartidaPreviewCurrentSourcePin(forged,{path:row.path,sha256:foreign}));assert.equal(planPartidaPreviewCurrentSourcePin(contract,{path:row.path,sha256:original}),original);assert.equal(verifyPlanPartidaPreviewCurrentSources(contract,read).nativeOrBrowserAcceptance,false);}
+ finally{row.currentSha256=original;}
+});
+test('compiled partida authority never memoizes a mutable contract after a successful validation',()=>{
+ const contract=current();verifyPlanPartidaPreviewCurrentSources(contract,read);assert.equal(Object.isFrozen(contract),false);assert.equal(Object.isFrozen(contract[key].references[0]),false);contract[key].references[0].currentSha256='f'.repeat(64);denied(()=>verifyPlanPartidaPreviewCurrentSources(contract,read));
+ const historical=current();verifyPlanPartidaPreviewCurrentSources(historical,read);historical.blocks[0].step.run+='\ntrue';denied(()=>restorePlanPartidaPreviewPreviousContract(historical));
+});
+test('compiled partida authority rereads changed bytes from the same reader after a successful validation',()=>{
+ const contract=current(),target=expected.references[0].path;let changed=false,reads=0;const reader=file=>{if(file===target){reads++;return changed?Buffer.concat([read(file),Buffer.from('\n// changed after PASS\n')]):read(file);}return read(file);};verifyPlanPartidaPreviewCurrentSources(contract,reader);const priorReads=reads;changed=true;denied(()=>verifyPlanPartidaPreviewCurrentSources(contract,reader));assert.ok(reads>priorReads);
+});
+test('compiled partida authority still authenticates unchanged family bytes after a successful validation',()=>{
+ const contract=current(),family=expected.sourceFamilies[0],closure={files:[...family.currentFiles],externalImports:[...family.externalImports]},target=family.currentManifest.find(row=>row.sha256!=='REVIEWED_DECLARATION_TRUST_ANCHOR'&&!expected.references.some(ref=>ref.path===row.path));assert.ok(target);let changed=false,reads=0;const reader=file=>{if(file===target.path){reads++;return changed?Buffer.concat([read(file),Buffer.from('\n// family source changed after PASS\n')]):read(file);}return read(file);};verifyPlanPartidaPreviewActualClosure(contract,family.family,closure,reader);const priorReads=reads;changed=true;denied(()=>verifyPlanPartidaPreviewActualClosure(contract,family.family,closure,reader));assert.ok(reads>priorReads);
+});
 test('partida preview rejects declaration co tamper and historical contract mutation',()=>{
  for(const change of [c=>{c[key].previousContractSha256='f'.repeat(64);},c=>{c[key].references[0].currentSha256='f'.repeat(64);},c=>{c.blocks[0].step.run+='\ntrue';},c=>c.evidenceProducers.pop()]){const contract=current();change(contract);denied(()=>verifyPlanPartidaPreviewCurrentSources(contract,read));}
 });
