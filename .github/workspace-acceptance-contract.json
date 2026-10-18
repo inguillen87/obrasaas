@@ -23671,6 +23671,11 @@
         "path": "tests/production-focused-workspace-navigation.test.mjs",
         "previousSha256": "87ac26aa97c3efcb89bf2ce96abb0e9a2da9773f40fd3907f64815eaf8429b72",
         "currentSha256": "5f6614ed798d02be2b99de9267c2766ec61e8d1b4d46c3fefed3aa69832bde7e"
+      },
+      {
+        "path": "tests/production-integrated-identity-current-ci-lineage.test.mjs",
+        "previousSha256": "7563982646aebf713696686499ae5fdde8cc007fec3b28f448e728c7e7cda68d",
+        "currentSha256": "925cc5f64fdd5fb8cef7f1ea0d2b22eed7ac3f980f89828ed05cc3d6a476a8d1"
       }
     ],
     "validationPredecessors": [
@@ -23928,7 +23933,7 @@
     "validationSources": [
       {
         "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
-        "sha256": "f08121f2310fa0a74e56b803ae8d20b4a397467ce1c5da539d0a37fafdfca1b5"
+        "sha256": "911211c44e1aabefa20f001a020d257530e97ce7ffee8c27f807d2f48ea17590"
       },
       {
         "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",

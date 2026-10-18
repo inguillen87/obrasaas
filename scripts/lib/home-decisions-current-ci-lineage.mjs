@@ -5224,6 +5224,11 @@ export const IDENTITY_DESTINATION_UX_CURRENT_REVISION=Object.freeze({
       "path": "tests/production-focused-workspace-navigation.test.mjs",
       "previousSha256": "87ac26aa97c3efcb89bf2ce96abb0e9a2da9773f40fd3907f64815eaf8429b72",
       "currentSha256": "5f6614ed798d02be2b99de9267c2766ec61e8d1b4d46c3fefed3aa69832bde7e"
+    },
+    {
+      "path": "tests/production-integrated-identity-current-ci-lineage.test.mjs",
+      "previousSha256": "7563982646aebf713696686499ae5fdde8cc007fec3b28f448e728c7e7cda68d",
+      "currentSha256": "925cc5f64fdd5fb8cef7f1ea0d2b22eed7ac3f980f89828ed05cc3d6a476a8d1"
     }
   ],
   "validationPredecessors": [
