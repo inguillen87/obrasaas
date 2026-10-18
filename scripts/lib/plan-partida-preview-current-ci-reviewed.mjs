@@ -19,7 +19,7 @@ export const PLAN_PARTIDA_PREVIEW_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
       "previousSha256": "805bccca43cc197201dc6c97844ff153a8d2548fe3fd6ebe11d25953b3060a29",
-      "currentSha256": "46653e34f0b0ab46617578525e4f0b71e295f240eceeec87ccb0944cd5db21a8"
+      "currentSha256": "0f7f9ac5f194ece14a65c5a1ca80ada1bb695be26766a9fbe7fbdc19efc0be6f"
     },
     {
       "path": "scripts/lib/plan-compact-full-suite-ui.mjs",
@@ -119,7 +119,7 @@ export const PLAN_PARTIDA_PREVIEW_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-plan-import-source-curve-compact.test.mjs",
       "previousSha256": null,
-      "currentSha256": "7b6b0d38ae3736fa108694a95923d514f4f8afa89d48594a91e81ea25eb5e36c"
+      "currentSha256": "8ba6213138ea3c9ce16673dc76d314f0acdd6a8b7b5784f0b740d846b1a8a036"
     },
     {
       "path": "tests/production-plan-import-source-curve-native-labels.test.mjs",
@@ -2203,7 +2203,7 @@ export const PLAN_PARTIDA_PREVIEW_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
-          "sha256": "46653e34f0b0ab46617578525e4f0b71e295f240eceeec87ccb0944cd5db21a8"
+          "sha256": "0f7f9ac5f194ece14a65c5a1ca80ada1bb695be26766a9fbe7fbdc19efc0be6f"
         },
         {
           "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
@@ -3120,7 +3120,7 @@ export const PLAN_PARTIDA_PREVIEW_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
-          "sha256": "46653e34f0b0ab46617578525e4f0b71e295f240eceeec87ccb0944cd5db21a8"
+          "sha256": "0f7f9ac5f194ece14a65c5a1ca80ada1bb695be26766a9fbe7fbdc19efc0be6f"
         },
         {
           "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
