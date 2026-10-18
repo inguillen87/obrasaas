@@ -40,7 +40,9 @@ export function workspaceLocationView(location = '') {
 export function workspaceDestination(id) {
  return Object.hasOwn(destinations,id) ? {section:destinations[id][0],label:destinations[id][1]} : null;
 }
-export function workspaceViewAllowed(section, {role,canManageIntegrations=false,projectAvailable=true} = {}) {
+export function workspaceViewAllowed(section, {role,canManageIntegrations=false,projectAvailable=true,privatePresentationAvailable=false} = {}) {
+ // This is presentation-only self-service, supplied by the validated private selection.
+ if(projectAvailable===false&&privatePresentationAvailable===true&&['identidad','mi-whatsapp'].includes(section))return true;
  if(projectAvailable===false&&!['inicio','plan','recuperacion'].includes(section))return false;
  if (['inicio','cronograma','actividad','materiales','identidad','mi-whatsapp','recuperacion'].includes(section)) return true;
  if (section==='preparacion') return ['ADMIN','DIRECTOR'].includes(role);
