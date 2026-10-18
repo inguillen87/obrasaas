@@ -4261,7 +4261,7 @@ export function homeDecisionsCurrentSourcePin(contract,ref){
 }
 export function homeDecisionsValidationFiles(contract){
  const value=section(contract);if(!value)return[];restoreHomeDecisionsPreviousContract(contract);
- const wait=progressEvidenceWaitSection(contract),weekly=weeklyCypSection(contract);return [...new Set([...(wait?wait.reviewedSourceChanges.map(row=>row.path):[]),...customerPhoneSelectionValidationFiles(contract),...(weekly?['scripts/lib/plan-document-curve-fixture-copy.mjs',...weekly.validationSources.map(row=>row.path)]:[]),...[...value.reviewedSourceChanges,...value.validationDeltas,...value.validationSources].map(row=>row.path)])].sort();
+ const destination=identityDestinationUxSection(contract),wait=progressEvidenceWaitSection(contract),weekly=weeklyCypSection(contract);return [...new Set([...(destination?identityDestinationUxReferences(destination).map(row=>row.path):[]),...(wait?wait.reviewedSourceChanges.map(row=>row.path):[]),...customerPhoneSelectionValidationFiles(contract),...(weekly?['scripts/lib/plan-document-curve-fixture-copy.mjs',...weekly.validationSources.map(row=>row.path)]:[]),...[...value.reviewedSourceChanges,...value.validationDeltas,...value.validationSources].map(row=>row.path)])].sort();
 }
 // Only complete, reviewed AST nodes are projected. A changed identity guard,
 // query, role expression or unrelated statement remains in the historical AST.
@@ -4290,6 +4290,7 @@ export function verifyHomeDecisionsCurrentSources(contract,readSource){
  return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,historicalPinsPreserved:true,nativeOrBrowserAcceptance:false};
 }
 export function restoreHomeDecisionsSourceSet(family,files,contract){
+ files=restoreIdentityDestinationUxSourceSet(family,files,contract);
  const weekly=weeklyCypSection(contract)?.proofSourceDeltas.find(row=>row.family===family);if(weekly)files=previousPaths(files,weekly);
  const value=section(contract);if(!value)return files;restoreHomeDecisionsPreviousContract(contract);
  const delta=value.proofSourceDeltas.find(row=>row.family===family);return delta?previousPaths(files,delta):files;
@@ -4953,12 +4954,13 @@ export function restoreWeeklyCypConsumerSourceSet(family,files,contract){
  return previousPaths(files,delta);
 }
 export function weeklyCypProofSourceAdditions(spec){
- const delta=WEEKLY_CYP_CURRENT_REVISION.proofSourceDeltas.find(row=>row.id===spec?.id);if(!delta)return[];
+ const outer=identityDestinationUxProofSourceAdditions(spec);if(outer.length)spec={...spec,sourceFiles:spec.sourceFiles.filter(file=>!outer.includes(file))};
+ const delta=WEEKLY_CYP_CURRENT_REVISION.proofSourceDeltas.find(row=>row.id===spec?.id);if(!delta)return outer;
  const files=spec.sourceFiles;reject(Array.isArray(files)&&new Set(files).size===files.length&&same(files,[...files].sort()),'Distinct sorted weekly CyP source paths required');
- if(files.length===delta.currentCount&&sha(JSON.stringify(files))===delta.currentPathsSha256){previousPaths(files,delta);return [...delta.additions];}
+ if(files.length===delta.currentCount&&sha(JSON.stringify(files))===delta.currentPathsSha256){previousPaths(files,delta);return [...delta.additions,...outer];}
  // Older callers may already have removed this outer addition. Their own
  // immutable count/digest validators remain responsible for inherited sets.
- reject(files.length<delta.currentCount&&!delta.additions.some(file=>files.includes(file)),'Unknown weekly CyP source set: '+delta.id);return[];
+ reject(files.length<delta.currentCount&&!delta.additions.some(file=>files.includes(file)),'Unknown weekly CyP source set: '+delta.id);return outer;
 }
 export function verifyWeeklyCypCurrentSources(contract,readSource){
  verifyProgressEvidenceWaitCurrentSources(contract,readSource);
@@ -5158,18 +5160,20 @@ function progressEvidenceWaitSection(contract){
 }
 function progressEvidenceWaitReferences(value){return [...value.reviewedSourceChanges,...value.validationPredecessors.map(row=>({path:row.path,previousSha256:row.sha256,currentSha256:value.validationSources.find(ref=>ref.path===row.path).sha256}))];}
 export function restoreProgressEvidenceWaitPreviousContract(contract){
+ contract=restoreIdentityDestinationUxPreviousContract(contract);
  const value=progressEvidenceWaitSection(contract);if(!value)return contract;const previous=structuredClone(contract);delete previous[PROGRESS_EVIDENCE_WAIT_CURRENT_SECTION];
  reject(sha(JSON.stringify(previous,null,2)+'\n')===value.previousContractSha256,'The complete published5e25 monthly and weekly contract must restore exactly');return previous;
 }
 export function progressEvidenceWaitCurrentSourcePin(contract,ref){
- const value=progressEvidenceWaitSection(contract),row=value&&progressEvidenceWaitReferences(value).find(row=>row.path===ref.path);if(!row)return ref.sha256;
- reject([row.previousSha256,row.currentSha256].includes(ref.sha256),'Only exact published5e25 or progress evidence wait pins may advance: '+ref.path);return row.currentSha256;
+ ref={...ref,sha256:identityDestinationUxPreviousSourcePin(contract,ref)};const value=progressEvidenceWaitSection(contract),row=value&&progressEvidenceWaitReferences(value).find(row=>row.path===ref.path);if(!row)return identityDestinationUxCurrentSourcePin(contract,ref);
+ reject([row.previousSha256,row.currentSha256].includes(ref.sha256),'Only exact published5e25 or progress evidence wait pins may advance: '+ref.path);return identityDestinationUxCurrentSourcePin(contract,{...ref,sha256:row.currentSha256});
 }
-export function progressEvidenceWaitPreviousSourcePin(contract,ref){const value=progressEvidenceWaitSection(contract),row=value&&progressEvidenceWaitReferences(value).find(row=>row.path===ref.path);return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}
+export function progressEvidenceWaitPreviousSourcePin(contract,ref){ref={...ref,sha256:identityDestinationUxPreviousSourcePin(contract,ref)};const value=progressEvidenceWaitSection(contract),row=value&&progressEvidenceWaitReferences(value).find(row=>row.path===ref.path);return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}
 export function verifyProgressEvidenceWaitCurrentSources(contract,readSource){
+ verifyIdentityDestinationUxCurrentSources(contract,readSource);
  const value=progressEvidenceWaitSection(contract);if(!value)return null;restoreProgressEvidenceWaitPreviousContract(contract);reject(typeof readSource==='function','Progress evidence wait actual source reader required');
  const refs=progressEvidenceWaitReferences(value);reject(new Set(refs.map(row=>row.path)).size===refs.length,'Unique progress evidence wait sources required');
- for(const row of refs){const bytes=readSource(row.path);reject(safe(row.path)&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8')))&&sha(bytes.toString('utf8').replaceAll('\r\n','\n'))===row.currentSha256,'Stale current progress evidence wait source: '+row.path);}
+ for(const row of refs){const bytes=readSource(row.path);reject(safe(row.path)&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8')))&&sha(bytes.toString('utf8').replaceAll('\r\n','\n'))===identityDestinationUxCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}),'Stale current progress evidence wait source: '+row.path);}
  for(const row of value.proofSourceSets){const spec=contract.extension.proofs.find(spec=>spec.kind===row.kind);reject(Boolean(spec)&&spec.sourceFiles.length===row.count&&sha(JSON.stringify(spec.sourceFiles))===row.pathsSha256,'Unchanged progress evidence wait source set required: '+row.kind);}
  return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,sourceSetChanges:0,nativeOrBrowserAcceptance:false};
 }
@@ -5198,4 +5202,388 @@ export function validateProgressEvidenceWaitCompanyFacts(wait,core){
  const principal=wait.routePrincipal;k(principal,['organizationId','connectionId','routeId','routeEpoch','projectId','workerId','actorId','membershipId','assignmentRevision','bindingId'],'PROGRESS_WAIT_PRINCIPAL_SHAPE');
  r(principal.organizationId==='org-a'&&principal.connectionId==='channel-a'&&companyNativePattern(/^company_route_[a-f0-9]{64}$/,principal.routeId)&&Number.isSafeInteger(principal.routeEpoch)&&principal.routeEpoch>0&&principal.projectId===core.projectId&&principal.workerId==='worker-c'&&principal.actorId===core.progress.submittedBy&&principal.membershipId==='member'&&Number.isSafeInteger(principal.assignmentRevision)&&principal.assignmentRevision>0&&companyNativePattern(/^channel_binding_[a-f0-9]{32}$/,principal.bindingId),'PROGRESS_WAIT_PRINCIPAL');
  return {status:'PASS',syntheticOnly:true,realAcceptance:false};
+}
+
+export const IDENTITY_DESTINATION_UX_CURRENT_SECTION='identityDestinationUxCurrentRevision';
+export const IDENTITY_DESTINATION_UX_CURRENT_REVISION=Object.freeze({
+  "version": 1,
+  "predecessorCommit": "8c3060ba70d7f997c75c203a2948b4975db94bdf",
+  "previousContractSha256": "9511a06c538d2e11de2fdbbc9c947476f89da0402744201594772170fdfe518b",
+  "reviewedSourceChanges": [
+    {
+      "path": "src/app/(identity)/cuenta/workspace-client.js",
+      "previousSha256": "7f9612e2f92d582b1318c39d542060a9ab3d41df72e20511d659235601f10cb8",
+      "currentSha256": "e53ad474a3677243fbcaff6ce526c0983514d42e78c6daf60e73ba06d6f63bec"
+    },
+    {
+      "path": "src/app/(identity)/cuenta/workspace-view-routing.mjs",
+      "previousSha256": "1f5d2827d0ad76282331d77b368d19c260d355eb37b1f56860a5ac485a7c9793",
+      "currentSha256": "d02f2d11ec5ce4a1419ed79c9639cdad40174c236382853778fc984f071e4df4"
+    },
+    {
+      "path": "tests/production-focused-workspace-navigation.test.mjs",
+      "previousSha256": "87ac26aa97c3efcb89bf2ce96abb0e9a2da9773f40fd3907f64815eaf8429b72",
+      "currentSha256": "5f6614ed798d02be2b99de9267c2766ec61e8d1b4d46c3fefed3aa69832bde7e"
+    },
+    {
+      "path": "tests/production-integrated-identity-current-ci-lineage.test.mjs",
+      "previousSha256": "7563982646aebf713696686499ae5fdde8cc007fec3b28f448e728c7e7cda68d",
+      "currentSha256": "925cc5f64fdd5fb8cef7f1ea0d2b22eed7ac3f980f89828ed05cc3d6a476a8d1"
+    }
+  ],
+  "validationPredecessors": [
+    {
+      "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
+      "sha256": "7063a942c736b5fe35b40ad2eac018afdd188333a7792dda8b328ed9b860c1cd"
+    },
+    {
+      "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+      "sha256": "8088480f2864dc860f6e4dbf3f9a15a1f29c333cb2e7e4e246ee6b7a6fc4ce2a"
+    },
+    {
+      "path": "tests/production-integrated-identity-ui-producer-migration.test.mjs",
+      "sha256": "e3f47007ae8365064e8dc625aee4190fb44d8291a7e098cec0bcc8c19532282c"
+    }
+  ],
+  "browser": {
+    "producerSourceHistory": {
+      "previousBytes": 55811,
+      "currentBytes": 77713,
+      "inverseHunks": [
+        {
+          "currentOffsetCharacters": 4899,
+          "previousText": "copyGraph('src/app/(identity)/cuenta/workspace-client.js');copyGraph('src/app/(identity)/cuenta/workspace-recovery-journal.mjs');copyGraph('src/lib/participant-policy.mjs');\n",
+          "currentText": "copyGraph('src/app/(identity)/cuenta/workspace-client.js');copyGraph('src/app/(identity)/cuenta/workspace-recovery-journal.mjs');copyGraph('src/lib/participant-policy.mjs');copyGraph('src/app/(identity)/cuenta/onboarding-guide.js');\n"
+        },
+        {
+          "currentOffsetCharacters": 5793,
+          "previousText": "",
+          "currentText": "import {OnboardingGuide} from './(identity)/cuenta/onboarding-guide';\n"
+        },
+        {
+          "currentOffsetCharacters": 5986,
+          "previousText": " const [context,setContext]=useState('A');\n",
+          "currentText": " const [context,setContext]=useState('A'),[guideObservation,setGuideObservation]=useState(null);\n const observeGuide=useCallback(value=>setGuideObservation({context,value}),[context]);\n const initialProjectId=typeof window==='undefined'?'':new URL(window.location.href).searchParams.get('obra')||'';\n"
+        },
+        {
+          "currentOffsetCharacters": 6728,
+          "previousText": " return <main style={{maxWidth:1000,margin:'0 auto'}}><div><button onClick={()=>setContext('A')}>Contexto A</button><button onClick={()=>setContext('B')}>Contexto B</button></div><AccountWorkspace key={context} getSessionToken={token}/></main>;\n",
+          "currentText": " return <main style={{maxWidth:1000,margin:'0 auto'}}><div><button onClick={()=>setContext('A')}>Contexto A</button><button onClick={()=>setContext('B')}>Contexto B</button></div><OnboardingGuide key={\"guide-\"+context} orgId={\"fixture-\"+context} orgRole=\"org:member\" observation={guideObservation?.context===context?guideObservation.value:null}/><AccountWorkspace key={\"workspace-\"+context} getSessionToken={token} onGuideObservation={observeGuide} initialProjectId={initialProjectId}/></main>;\n"
+        },
+        {
+          "currentOffsetCharacters": 8320,
+          "previousText": "const scopeA='a'.repeat(64),scopeB='b'.repeat(64),revision='2026-10-01T11:00:00.000001',checks=[],pageErrors=[],requestErrors=[],screenshots=[];\n",
+          "currentText": "const scopeA='a'.repeat(64),scopeB='b'.repeat(64),revision='2026-10-01T11:00:00.000001',checks=[],destinationChecks=[],pageErrors=[],requestErrors=[],screenshots=[];\n"
+        },
+        {
+          "currentOffsetCharacters": 8681,
+          "previousText": "",
+          "currentText": "async function visibleElementClick(page,handle){\n // Open only necessary disclosures by clicking their visible native summary.\n // Never set details.open or bypass the rendered user navigation.\n for(let depth=0;depth<12;depth++){\n  const summary=await page.evaluateHandle(node=>{let outer=null;const ownSummary=node.tagName==='SUMMARY'?node.parentElement:null;for(let parent=node.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS'&&!parent.open&&parent!==ownSummary)outer=parent;return outer?[...outer.children].find(child=>child.tagName==='SUMMARY')||null:null;},handle);\n  const element=summary.asElement();if(!element){await summary.dispose();break;}\n  assert.ok(await page.evaluate(node=>node.isConnected&&node.getClientRects().length>0&&!node.closest('[hidden],[inert],[aria-hidden=\"true\"]'),element),'Disclosure summary must already be visible');await element.click();await summary.dispose();\n }\n assert.ok(await page.evaluate(node=>node.isConnected&&node.getClientRects().length>0&&!node.closest('[hidden],[inert],[aria-hidden=\"true\"]'),handle),'Click target must be visible in the current screen');\n await handle.click();\n}\n"
+        },
+        {
+          "currentOffsetCharacters": 10300,
+          "previousText": " if(hiddenScreen){const id={identidad:'participant-title','mi-whatsapp':'worker-channel-title',cronograma:'schedule-title',recuperacion:'workspace-recovery-title'}[hiddenScreen];assert.ok(id,'Known real destination for '+label);const menu='nav[aria-label=\"Navegación de la obra\"]';if((await page.viewport()).width<1100)await page.select(menu+' select',id);else{const selector=menu+' a[href=\"#'+id+'\"]';const anchor=await page.$(selector);assert.ok(anchor,'Real destination link');await anchor.click();await anchor.dispose();}await page.waitForFunction(section=>document.querySelector('[data-workspace-screen=\"'+section+'\"]')?.hidden===false,{timeout:15000},hiddenScreen);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}\n\n",
+          "currentText": " if(hiddenScreen){const id={identidad:'participant-title','mi-whatsapp':'worker-channel-title',cronograma:'schedule-title',recuperacion:'workspace-recovery-title'}[hiddenScreen];assert.ok(id,'Known real destination for '+label);await chooseWorkspaceView(page,id);}\n"
+        },
+        {
+          "currentOffsetCharacters": 11139,
+          "previousText": " await page.evaluate(button=>{for(let parent=button.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;},handle);\n await handle.asElement().click();await handle.dispose();\n",
+          "currentText": " await visibleElementClick(page,handle.asElement());await handle.dispose();\n}\nasync function chooseWorkspaceView(page,id){\n const own='nav[aria-label=\"Mi participación en la obra\"]';if(await page.$(own)){const anchor=await page.$(own+' a[href=\"#'+id+'\"]');assert.ok(anchor,'Private destination must be listed');await visibleElementClick(page,anchor);await anchor.dispose();await page.waitForFunction(target=>document.activeElement?.id===target,{timeout:15000},id);return;}\n const menu='nav[aria-label=\"Navegación de la obra\"]';if((await page.viewport()).width<1100)await page.select(menu+' select',id);else{const anchor=await page.$(menu+' a[href=\"#'+id+'\"]');assert.ok(anchor);await visibleElementClick(page,anchor);await anchor.dispose();}\n await page.waitForFunction(target=>document.activeElement?.id===target,{timeout:15000},id);\n"
+        },
+        {
+          "currentOffsetCharacters": 11976,
+          "previousText": "async function chooseWorkspaceView(page,id){const menu='nav[aria-label=\"Navegación de la obra\"]';if((await page.viewport()).width<1100)await page.select(menu+' select',id);else await page.click(menu+' a[href=\"#'+id+'\"]');await page.waitForFunction(target=>document.activeElement?.id===target,{timeout:15000},id);}\n",
+          "currentText": ""
+        },
+        {
+          "currentOffsetCharacters": 14441,
+          "previousText": "async function createPage(width,current,sharedContext=null){\n",
+          "currentText": "async function createPage(width,current,sharedContext=null,{initialPath=''}={}){\n assert.ok(initialPath===''||initialPath==='/?obra=p-a#worker-channel-title','Only the controlled same-origin project hint is allowed');\n"
+        },
+        {
+          "currentOffsetCharacters": 19111,
+          "previousText": "",
+          "currentText": "    if(current.destinationPaging===true&&projectId)(current.destinationProjectReads??=[]).push({actor,projectId,afterTask:url.searchParams.get('afterTask')});\n"
+        },
+        {
+          "currentOffsetCharacters": 19734,
+          "previousText": "    if(current.mode==='late-project'&&projectId==='p-a'||current.mode==='late-company'&&actor==='A'||current.holdWorkspaceProject===projectId){\n",
+          "currentText": "    if(current.mode==='late-project'&&projectId==='p-a'||current.mode==='late-company'&&actor==='A'||current.holdWorkspaceProject===projectId||current.holdWorkspacePage===projectId&&url.searchParams.has('afterTask')){\n"
+        },
+        {
+          "currentOffsetCharacters": 20331,
+          "previousText": "",
+          "currentText": "     if(current.destinationPaging===true){const after=url.searchParams.get('afterTask'),pageIndex=after?after.endsWith('-second')?2:1:0,record=pageIndex===0?task:{...task,id:task.id+(pageIndex===1?'-second':'-third'),title:task.title+(pageIndex===1?' segunda página':' tercera página')};return answer(request,200,{scope,project:{id:projectId,name:'Obra A',status:'ACTIVE'},roleLabel:'Consulta',canPlanSchedule:false,tasks:[record],totalTasks:3,nextCursor:pageIndex<2?record.id:null});}\n"
+        },
+        {
+          "currentOffsetCharacters": 23061,
+          "previousText": "",
+          "currentText": "    if(current.destinationHoldProfile===true)await new Promise(resolve=>(current.destinationHeldProfile??=[]).push(resolve));\n"
+        },
+        {
+          "currentOffsetCharacters": 23811,
+          "previousText": " await page.goto(origin,{waitUntil:'networkidle0'});await waitText(page,'Empresa de ensayo A');assert.equal(subscriptionReads.length,current.mode==='bootstrap'?1:0,'Only the bootstrap administrator consults closed subscription status');return {context,page};\n",
+          "currentText": " await page.goto(origin+initialPath,{waitUntil:initialPath?'domcontentloaded':'networkidle0'});await waitText(page,'Empresa de ensayo A');assert.equal(subscriptionReads.length,current.mode==='bootstrap'?1:0,'Only the bootstrap administrator consults closed subscription status');return {context,page};\n"
+        },
+        {
+          "currentOffsetCharacters": 24917,
+          "previousText": "async function presentOwn(page){\n await click(page,'Consultar mi identidad');await waitText(page,'Persona de ensayo');await click(page,'Presentar mi identidad');\n",
+          "currentText": "async function prepareOwn(page,{consult=true}={}){\n if(consult)await click(page,'Consultar mi identidad');await waitText(page,'Persona de ensayo');await click(page,'Presentar mi identidad');\n"
+        },
+        {
+          "currentOffsetCharacters": 26015,
+          "previousText": " await click(page,'Presentar para revisión');await waitText(page,'El resultado quedó sin confirmar');\n",
+          "currentText": "}\nasync function presentOwn(page){await prepareOwn(page);await click(page,'Presentar para revisión');await waitText(page,'El resultado quedó sin confirmar');\n"
+        },
+        {
+          "currentOffsetCharacters": 34018,
+          "previousText": "",
+          "currentText": "async function privacyDisclosure(page,open){await chooseWorkspaceView(page,open?'worker-channel-title':'participant-title');}\n\n"
+        },
+        {
+          "currentOffsetCharacters": 34182,
+          "previousText": " await identityOnly(page);await page.evaluate(()=>{const summary=[...document.querySelectorAll('summary')].find(node=>node.textContent==='Mi WhatsApp y mis avisos');assertSummary(summary);function assertSummary(node){if(!node)throw Error('Own privacy section missing');node.parentElement.open=true;}});\n await page.waitForSelector('#worker-channel-title');\n",
+          "currentText": " await identityOnly(page);await privacyDisclosure(page,true);await page.waitForSelector('#worker-channel-title',{visible:true});\n"
+        },
+        {
+          "currentOffsetCharacters": 35457,
+          "previousText": " assert.ok(await page.$eval('summary',node=>node.getBoundingClientRect().height>=44),'Own privacy disclosure needs a44px touch target');\n",
+          "currentText": " assert.ok(await page.$eval('nav[aria-label=\"Mi participación en la obra\"] a[href=\"#worker-channel-title\"]',node=>node.getBoundingClientRect().height>=44),'Own privacy navigation needs a44px touch target');\n"
+        },
+        {
+          "currentOffsetCharacters": 53967,
+          "previousText": "",
+          "currentText": "\nconst destinationEntry='/?obra=p-a#worker-channel-title';\nconst destinationNames=['private-destination-initial-hash-held-canonical-mount-focus','private-destination-visible-guide-same-hash-and-browser-history','private-destination-context-change-cancels-held-private-mount','private-destination-revoked-canonical-access-and-history-stay-closed'];\nfunction destinationNetwork(current){\n const apiSequence=current.requests.map(row=>({path:row.path,method:row.method,actor:row.actor,projectId:row.projectId||null})),workerChannelGets=apiSequence.filter(row=>row.path==='/api/identity/worker-channel'&&row.method==='GET').length,totalPosts=apiSequence.filter(row=>row.method==='POST').length;\n assert.equal(workerChannelGets,0,'Navigation must not automatically read WhatsApp');assert.equal(totalPosts,0,'Navigation must not write');assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);assert.ok(apiSequence.every(row=>row.method==='GET'&&['/api/identity/workspace','/api/identity/participants'].includes(row.path)));\n return {apiSequence,workspaceGets:apiSequence.filter(row=>row.path==='/api/identity/workspace').length,participantGets:apiSequence.filter(row=>row.path==='/api/identity/participants').length,workerChannelGets,totalPosts,participantPosts:current.posts.length,channelPosts:current.channelPosts.length};\n}\nasync function destinationGeometry(page,id){\n await page.waitForFunction(target=>document.activeElement?.id===target&&document.getElementById(target)?.getClientRects().length>0,{timeout:15000},id);\n const geometry=await page.$eval('#'+id,node=>{const rect=node.getBoundingClientRect();return {id:node.id,visible:node.getClientRects().length>0,focused:document.activeElement===node,left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom,width:rect.width,height:rect.height,viewportWidth:innerWidth,viewportHeight:innerHeight,documentWidth:document.documentElement.scrollWidth,detailsOpen:node.closest('details')?.open??null,screen:node.closest('[data-workspace-screen]')?.dataset.workspaceScreen??null,screenHidden:node.closest('[data-workspace-screen]')?.hidden??null,otherPrivateScreenHidden:document.querySelector('[data-workspace-screen=\"'+(node.id==='worker-channel-title'?'identidad':'mi-whatsapp')+'\"]')?.hidden??null};});\n active.current.destinationGeometryObservation={...geometry};\n assert.equal(geometry.visible,true);assert.equal(geometry.focused,true);assert.ok(geometry.width>0&&geometry.height>0&&geometry.left>=0&&geometry.right<=geometry.viewportWidth+1&&geometry.top<geometry.viewportHeight&&geometry.bottom>0&&geometry.documentWidth<=geometry.viewportWidth);\n assert.equal(geometry.detailsOpen,null);assert.equal(geometry.screen,id==='worker-channel-title'?'mi-whatsapp':'identidad');assert.equal(geometry.screenHidden,false);assert.equal(geometry.otherPrivateScreenHidden,true);return geometry;\n}\nasync function noDestinationActivation(page){\n const forbidden=await page.evaluate(()=>{const panel=document.querySelector('[aria-labelledby=\"worker-channel-title\"]');if(!panel)return 0;const labels=['Generar código','Generar otro código','Revisar autorización de avisos','Guardar autorización','Continuar en WhatsApp','Copiar MENU','VINCULAR '];return [...panel.querySelectorAll('button,a,code')].filter(node=>node.matches('code,a[href*=\"wa.me\"]')||labels.some(label=>node.textContent.includes(label))).length;});assert.equal(forbidden,0);return forbidden;\n}\nasync function destinationScreenshot(page,name,width){\n const target=path.join(evidence,'destination-'+name+'-'+width+'.png');await page.screenshot({path:target,fullPage:true});const bytes=readFileSync(target);assert.ok(bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])));const pngWidth=bytes.readUInt32BE(16),height=bytes.readUInt32BE(20);assert.equal(pngWidth,width);assert.ok(height>0);return {path:path.relative(root,target).split(path.sep).join('/'),sha256:sha256(bytes),width:pngWidth,height};\n}\nasync function heldCanonical(current){for(let attempt=0;!current.held.length&&attempt<100;attempt++)await pause(20);assert.equal(current.held.length,1,'One canonical project GET must be held');}\nasync function guideDestination(page,id){\n const guide='section[aria-labelledby=\"onboarding-guide-title\"]';if(!await page.$('#onboarding-guide-content'))await click(page,'Abrir guía');\n const summary=await page.evaluateHandle(selector=>[...document.querySelector(selector).querySelectorAll('summary')].find(node=>node.textContent.trim()==='Elegir otro paso')||null,guide);assert.ok(summary.asElement());if(!await page.evaluate(node=>node.parentElement.open,summary))await visibleElementClick(page,summary.asElement());await summary.dispose();\n const position=id==='worker-channel-title'?9:id==='participant-title'?6:null;assert.ok(position);const button=await page.$(guide+' nav[aria-label=\"Pasos de inicio\"] button:nth-child('+position+')');assert.ok(button);await visibleElementClick(page,button);await button.dispose();\n await click(page,'Ir a este paso');await page.waitForFunction(target=>location.hash==='#'+target,{timeout:15000},id);return destinationGeometry(page,id);\n}\nasync function destinationDelayedMount(width){\n const current=newState('destination-delayed');current.holdWorkspaceProject='p-a';current.destinationHoldProfile=true;const {context,page}=await createPage(width,current,null,{initialPath:destinationEntry});await heldCanonical(current);\n assert.equal(await page.$('#worker-channel-title'),null);assert.equal(await page.$('#identity-access-title'),null);assert.equal(await page.evaluate(()=>location.hash),'#worker-channel-title');const beforeRelease={targetMounted:false,focused:false,heldCanonicalCount:current.held.length,...destinationNetwork(current)};\n current.holdWorkspaceProject=null;current.held.shift()();await identityOnly(page);for(let attempt=0;!current.destinationHeldProfile?.length&&attempt<100;attempt++)await pause(20);assert.equal(current.destinationHeldProfile?.length,1);const beforeProfileGeometry=await destinationGeometry(page,'worker-channel-title');current.destinationHoldProfile=false;current.destinationHeldProfile.shift()();await page.waitForFunction(()=>document.querySelector('[aria-labelledby=\"participant-title\"]')?.textContent.includes('Persona de ensayo'));await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const geometry=await destinationGeometry(page,'worker-channel-title'),profileRead={heldBeforeNavigation:true,releasedAfterNavigation:true,beforeGeometry:beforeProfileGeometry,afterGeometry:geometry},activationControls=await noDestinationActivation(page),network=destinationNetwork(current);assert.equal(network.workspaceGets,2);assert.equal(network.participantGets,1);const screenshot=await destinationScreenshot(page,'delayed',width);\n destinationChecks.push({name:destinationNames[0],width,status:'PASS',trigger:'INITIAL_HASH_AND_CANONICAL_PROJECT_HINT',initialPath:destinationEntry,beforeRelease,geometry,profileRead,activationControls,...network,screenshot});await context.close();\n}\nasync function destinationOperationalAppend(page,current){\n current.approved=true;current.destinationPaging=true;current.row={...current.row,kyc:{...current.row.kyc,status:'APPROVED'}};\n await click(page,'Comprobar habilitación de obra');await waitRecordedTask(page,'Tarea operativa p-a');await chooseWorkspaceView(page,'schedule-title');assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),1);\n current.holdWorkspacePage='p-a';const button=await page.$('#schedule-load-more');assert.ok(button);await button.hover();await page.mouse.down();\n const observe=()=>page.evaluate(()=>{const button=document.getElementById('schedule-load-more'),rect=button?.getBoundingClientRect();return {activeId:document.activeElement?.id||'',activeTagName:document.activeElement?.tagName||'',scrollY,taskCount:document.querySelectorAll('[data-task-id]').length,buttonMounted:Boolean(button),buttonDisabled:button?.disabled??null,rect:rect?{left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom,width:rect.width,height:rect.height}:null,viewportWidth:innerWidth,viewportHeight:innerHeight,firstTaskTop:document.querySelector('[data-task-id]')?.getBoundingClientRect().top??null};});\n const nativeFocus=row=>row.activeId==='schedule-load-more'&&row.activeTagName==='BUTTON'||row.activeId===''&&row.activeTagName==='BODY';\n const buttonBox=(row,visible)=>{assert.ok(row.rect&&Object.values(row.rect).every(Number.isFinite)&&row.rect.width>0&&row.rect.height>0);assert.ok(Number.isFinite(row.firstTaskTop));if(visible)assert.ok(row.rect.left>=0&&row.rect.right<=row.viewportWidth+1&&row.rect.top<row.viewportHeight&&row.rect.bottom>0,'OPERATIONAL_APPEND_BUTTON_VISIBLE');};\n const before=await observe();assert.equal(before.activeId,'schedule-load-more');assert.equal(before.activeTagName,'BUTTON');assert.equal(before.buttonDisabled,false);buttonBox(before,true);await page.mouse.up();await button.dispose();await heldCanonical(current);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const pending=await observe();current.destinationAppendObservation={before,pending,after:null};\n assert.ok(nativeFocus(pending),'OPERATIONAL_APPEND_FOCUS_DURING_READ');assert.equal(pending.buttonDisabled,true);buttonBox(pending,true);assert.ok(Math.abs(pending.rect.top-before.rect.top)<=3&&Math.abs(pending.rect.left-before.rect.left)<=3,'OPERATIONAL_APPEND_VIEWPORT_POSITION_DURING_READ');assert.equal(pending.taskCount,1);\n current.holdWorkspacePage=null;current.held.shift()();await settled(page);await page.waitForFunction(()=>document.querySelectorAll('[data-task-id]').length===2);const after=await observe();current.destinationAppendObservation.after=after;\n assert.ok(nativeFocus(after),'OPERATIONAL_APPEND_FOCUS_AFTER_READ');buttonBox(after,false);assert.equal(after.buttonDisabled,false);assert.equal(after.taskCount,2);assert.equal(after.buttonMounted,true);\n assert.deepEqual(current.destinationProjectReads,[{actor:'A',projectId:'p-a',afterTask:null},{actor:'A',projectId:'p-a',afterTask:'t-p-a'}]);\n return {canonicalAdmissionSimulated:true,totalTasks:3,projectReads:current.destinationProjectReads,before,pending,after};\n}\n\nasync function destinationPrivateDraft(page,current){\n await chooseWorkspaceView(page,'participant-title');await prepareOwn(page,{consult:false});const original=await page.$('[aria-labelledby=\"participant-title\"] form'),images=await page.$$eval('[aria-labelledby=\"participant-title\"] form fieldset img',nodes=>nodes.map(node=>node.src));assert.equal(images.length,2);\n const observe=async()=>{const facts=await page.evaluate(form=>{const capture=form.querySelector('[data-kyc-capture-step]'),choice=[...capture.querySelectorAll('label')].find(node=>node.textContent.includes('Leí el aviso y autorizo presentar estas imágenes'))?.querySelector('input');return {step:Number(capture.dataset.kycCaptureStep),consent:choice?.checked===true,formMounted:form.isConnected,formVisible:form.getClientRects().length>0,sameForm:form===document.querySelector('[aria-labelledby=\"participant-title\"] form'),imageCount:form.querySelectorAll('fieldset img').length};},original);const next=await page.$$eval('[aria-labelledby=\"participant-title\"] form fieldset img',nodes=>nodes.map(node=>node.src));return {...facts,sameImages:JSON.stringify(next)===JSON.stringify(images)};};\n const before=await observe();await chooseWorkspaceView(page,'worker-channel-title');const hidden=await observe();await chooseWorkspaceView(page,'participant-title');const after=await observe();\n for(const row of [before,hidden,after]){assert.equal(row.step,3);assert.equal(row.consent,true);assert.equal(row.formMounted,true);assert.equal(row.sameForm,true);assert.equal(row.imageCount,2);assert.equal(row.sameImages,true);}assert.equal(before.formVisible,true);assert.equal(hidden.formVisible,false);assert.equal(after.formVisible,true);assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);await click(page,'Cancelar');await original.dispose();await chooseWorkspaceView(page,'worker-channel-title');return {syntheticImagesOnly:true,submitted:false,before,hidden,after};\n}\nasync function destinationGuideHistory(width){\n const {current,context,page}=await startPrivacy(width,'NOT_SUBMITTED');const before=destinationNetwork(current);await privacyDisclosure(page,false);\n const history=[];history.push({action:'guide-private',hash:'#worker-channel-title',geometry:await guideDestination(page,'worker-channel-title')});await page.focus('nav[aria-label=\"Mi participación en la obra\"] a[href=\"#worker-channel-title\"]');assert.equal(await page.evaluate(()=>location.hash),'#worker-channel-title');\n history.push({action:'same-hash-reopen',hash:'#worker-channel-title',geometry:await guideDestination(page,'worker-channel-title')});history.push({action:'guide-identity',hash:'#participant-title',geometry:await guideDestination(page,'participant-title')});\n await page.goBack({waitUntil:'domcontentloaded'});assert.equal(await page.evaluate(()=>location.hash),'#worker-channel-title');history.push({action:'back',hash:'#worker-channel-title',geometry:await destinationGeometry(page,'worker-channel-title')});\n await page.goForward({waitUntil:'domcontentloaded'});assert.equal(await page.evaluate(()=>location.hash),'#participant-title');history.push({action:'forward',hash:'#participant-title',geometry:await destinationGeometry(page,'participant-title')});\n await page.goBack({waitUntil:'domcontentloaded'});history.push({action:'back-final',hash:'#worker-channel-title',geometry:await destinationGeometry(page,'worker-channel-title')});\n const navigationNetwork=destinationNetwork(current);assert.deepEqual(navigationNetwork,before,'Guide and same-document history must not read or write');const activationControls=await noDestinationActivation(page),draftPreservation=await destinationPrivateDraft(page,current),append=await destinationOperationalAppend(page,current),network=destinationNetwork(current),screenshot=await destinationScreenshot(page,'guide-history-append',width);\n destinationChecks.push({name:destinationNames[1],width,status:'PASS',trigger:'REAL_ONBOARDING_GUIDE',history,requestCountBefore:before.apiSequence.length,requestCountAfter:navigationNetwork.apiSequence.length,navigationNetwork,draftPreservation,append,activationControls,...network,screenshot});await context.close();\n}\nasync function destinationContextChange(width){\n const current=newState('destination-context');current.holdWorkspaceProject='p-a';const {context,page}=await createPage(width,current,null,{initialPath:destinationEntry});await heldCanonical(current);assert.equal(await page.$('#worker-channel-title'),null);\n await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');current.holdWorkspaceProject=null;current.held.shift()();await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await settled(page);await pause(150);\n const targetMounted=await page.$('#worker-channel-title')!==null,privateMounted=await page.$('#identity-access-title')!==null,oldFactsVisible=await page.evaluate(()=>/Persona de ensayo|Titular propio WhatsApp A|MUST NEVER RENDER|Tarea operativa p-a/.test(document.body.innerText));assert.equal(targetMounted,false);assert.equal(privateMounted,false);assert.equal(oldFactsVisible,false);safeReferences(await references(page),0);\n const network=destinationNetwork(current);assert.deepEqual(network.apiSequence.map(row=>[row.path,row.actor,row.projectId]),[['/api/identity/workspace','A',null],['/api/identity/workspace','A','p-a'],['/api/identity/workspace','B',null]]);const screenshot=await destinationScreenshot(page,'context',width);\n destinationChecks.push({name:destinationNames[2],width,status:'PASS',initialPath:destinationEntry,heldBeforeContextChange:true,releasedAfterContextChange:true,currentActor:'B',targetMounted,privateMounted,oldFactsVisible,activationControls:await noDestinationActivation(page),...network,screenshot});await context.close();\n}\nasync function destinationRevokedAccess(width){\n const current=newState('destination-revoked'),{context,page}=await createPage(width,current,null,{initialPath:destinationEntry});await identityOnly(page);const initialGeometry=await destinationGeometry(page,'worker-channel-title');await guideDestination(page,'participant-title');await guideDestination(page,'worker-channel-title');\n current.denialCode='WORKSPACE_MEMBERSHIP_REQUIRED';await click(page,'Comprobar habilitación de obra');await settled(page);await page.waitForFunction(()=>!document.getElementById('identity-access-title')&&!document.getElementById('worker-channel-title')&&!document.getElementById('participant-title'));\n const beforeHistory=destinationNetwork(current),history=[];for(const [method,hash]of [['goBack','#participant-title'],['goForward','#worker-channel-title']]){await page[method]({waitUntil:'domcontentloaded'});assert.equal(await page.evaluate(()=>location.hash),hash);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const targetMounted=await page.$('#worker-channel-title')!==null,privateMounted=await page.$('#identity-access-title')!==null;assert.equal(targetMounted,false);assert.equal(privateMounted,false);history.push({action:method,hash,targetMounted,privateMounted});}\n const network=destinationNetwork(current);assert.deepEqual(network,beforeHistory);assert.equal(network.workspaceGets,3);assert.equal(network.participantGets,1);const oldFactsVisible=await page.evaluate(()=>/Persona de ensayo|Titular propio WhatsApp A|MUST NEVER RENDER|Tarea operativa p-a/.test(document.body.innerText));assert.equal(oldFactsVisible,false);assert.equal(await page.$('form'),null);const screenshot=await destinationScreenshot(page,'revoked',width);\n destinationChecks.push({name:destinationNames[3],width,status:'PASS',initialPath:destinationEntry,initialGeometry,denialCode:current.denialCode,history,oldFactsVisible,activationControls:await noDestinationActivation(page),...network,screenshot});await context.close();\n}\n\n"
+        },
+        {
+          "currentOffsetCharacters": 73953,
+          "previousText": "",
+          "currentText": " assert.equal(checks.length,103,'Historical identity UI ledger must stay103');\n for(const width of [320,390,768,1280]){await destinationDelayedMount(width);await destinationGuideHistory(width);await destinationContextChange(width);await destinationRevokedAccess(width);}\n assert.equal(destinationChecks.length,16);assert.deepEqual(destinationChecks.map(row=>[row.width,row.name]),[320,390,768,1280].flatMap(width=>destinationNames.map(name=>[width,name])));\n"
+        },
+        {
+          "currentOffsetCharacters": 74871,
+          "previousText": " resultProof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',...identityBefore,widths:[320,390,768,1280],totalCheckCount:checks.length,checks,sourceManifest,harnessSha256,pageErrors,requestErrors,screenshots,actualPageReloadTested:true,nativeIndexedDbReceiptReferencesTested:true,automaticRecoveryPostCount:0,postgresExecuted:false,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,physicalWhatsAppVerified:false};\n",
+          "currentText": " resultProof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',...identityBefore,widths:[320,390,768,1280],totalCheckCount:checks.length,checks,sourceManifest,harnessSha256,pageErrors,requestErrors,screenshots,actualPageReloadTested:true,nativeIndexedDbReceiptReferencesTested:true,automaticRecoveryPostCount:0,postgresExecuted:false,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,physicalWhatsAppVerified:false,destinationNavigation:{version:1,widths:[320,390,768,1280],totalCheckCount:destinationChecks.length,checks:destinationChecks,limits:{syntheticSession:true,controlledHttp:true,realProviderCalls:0,productionDataWritten:false,realIdentityApproved:false}},combinedTotalCheckCount:checks.length+destinationChecks.length};\n"
+        },
+        {
+          "currentOffsetCharacters": 75876,
+          "previousText": " writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,checks,pageErrors,requestErrors,serverLog,active:active?{width:active.width,mode:active.current.mode,requests:active.current.requests,posts:active.current.posts.map(row=>({operationId:row.operationId,scope:row.scope,projectId:row.projectId})),dom}:null},null,2));throw error;\n",
+          "currentText": " writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,checks,pageErrors,requestErrors,serverLog,destinationChecks,active:active?{width:active.width,mode:active.current.mode,destinationAppendObservation:active.current.destinationAppendObservation||null,destinationGeometryObservation:active.current.destinationGeometryObservation||null,requests:active.current.requests,posts:active.current.posts.map(row=>({operationId:row.operationId,scope:row.scope,projectId:row.projectId})),dom}:null},null,2));throw error;\n"
+        },
+        {
+          "currentOffsetCharacters": 77293,
+          "previousText": "  writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:'PASS',checks:checks.length,pageErrors:pageErrors.length,requestErrors:requestErrors.length,evidence:path.join(evidence,'browser.json')}));\n",
+          "currentText": "  writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:'PASS',checks:checks.length,destinationChecks:destinationChecks.length,combinedChecks:checks.length+destinationChecks.length,pageErrors:pageErrors.length,requestErrors:requestErrors.length,evidence:path.join(evidence,'browser.json')}));\n"
+        }
+      ]
+    },
+    "producerDelta": {
+      "id": "identity-only-ui",
+      "producer": "scripts/verify-workspace-identity-only-ui.mjs",
+      "path": ".vercel/workspace-identity-only-evidence/browser.json",
+      "previousProducerSha256": "e11ed3c52c998f84c0e7ed21ebbe806a1aa8816007b7819203e7d6c4ef4add19",
+      "currentProducerSha256": "9e236a07c14417f23209a889de850820810f2ea978c1d44a4fe94688869ff3d8"
+    },
+    "sourceDelta": {
+      "id": "identity-only-ui",
+      "family": "UI_IDENTITY_ONLY",
+      "previousCount": 149,
+      "previousPathsSha256": "b10d37cab7e7bcf5c549a5c4af269495c2df6bfc0b6ef038d4456cbe2bcb776c",
+      "currentCount": 151,
+      "currentPathsSha256": "0003ee7f4ccd7a1e60f8c4d2bb1135c330a9a51fb5079796b1ebe1adfa4e7411",
+      "additions": [
+        "src/app/(identity)/cuenta/onboarding-guide.js",
+        "src/app/(identity)/cuenta/onboarding-guide.module.css"
+      ]
+    },
+    "historicalCheckCount": 103,
+    "historicalCheckNamesSha256": "202e8d5a761476cf756a6e62a25e549e708cdc32814cb6dfd2fce309281a7268",
+    "supplementalCheckCount": 16,
+    "combinedTotalCheckCount": 119,
+    "widths": [
+      320,
+      390,
+      768,
+      1280
+    ],
+    "caseNames": [
+      "private-destination-initial-hash-held-canonical-mount-focus",
+      "private-destination-visible-guide-same-hash-and-browser-history",
+      "private-destination-context-change-cancels-held-private-mount",
+      "private-destination-revoked-canonical-access-and-history-stay-closed"
+    ],
+    "copyGraphAdditions": [
+      "src/app/(identity)/cuenta/onboarding-guide.js"
+    ],
+    "retainedScreenshots": [
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-delayed-320.png",
+        "width": 320
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-guide-history-append-320.png",
+        "width": 320
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-context-320.png",
+        "width": 320
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-revoked-320.png",
+        "width": 320
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-delayed-390.png",
+        "width": 390
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-guide-history-append-390.png",
+        "width": 390
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-context-390.png",
+        "width": 390
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-revoked-390.png",
+        "width": 390
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-delayed-768.png",
+        "width": 768
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-guide-history-append-768.png",
+        "width": 768
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-context-768.png",
+        "width": 768
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-revoked-768.png",
+        "width": 768
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-delayed-1280.png",
+        "width": 1280
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-guide-history-append-1280.png",
+        "width": 1280
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-context-1280.png",
+        "width": 1280
+      },
+      {
+        "path": ".vercel/workspace-identity-only-evidence/destination-revoked-1280.png",
+        "width": 1280
+      }
+    ]
+  },
+  "nativeOrBrowserAcceptance": false
+});
+deepFreeze(IDENTITY_DESTINATION_UX_CURRENT_REVISION);
+function identityDestinationUxSection(contract){
+ if(!plain(contract)||!Object.hasOwn(contract,IDENTITY_DESTINATION_UX_CURRENT_SECTION))return null;
+ const value=contract[IDENTITY_DESTINATION_UX_CURRENT_SECTION];exact(value,[...Object.keys(IDENTITY_DESTINATION_UX_CURRENT_REVISION),'validationSources'],'Exact identity destination UX companion required');
+ for(const[key,expected]of Object.entries(IDENTITY_DESTINATION_UX_CURRENT_REVISION))reject(same(value[key],expected),'Unreviewed identity destination UX declaration: '+key);
+ reject(Array.isArray(value.validationSources)&&same(value.validationSources.map(row=>row?.path),value.validationPredecessors.map(row=>row.path)),'Exact identity destination validators required');
+ for(const row of value.validationSources){exact(row,['path','sha256'],'Exact identity destination validation reference required');reject(hash(row.sha256),'Identity destination validation hash required');}return value;
+}
+function identityDestinationUxReferences(value){const p=value.browser.producerDelta;return [...value.reviewedSourceChanges,{path:p.producer,previousSha256:p.previousProducerSha256,currentSha256:p.currentProducerSha256},...value.validationPredecessors.map(row=>({path:row.path,previousSha256:row.sha256,currentSha256:value.validationSources.find(ref=>ref.path===row.path).sha256}))];}
+export function restoreIdentityDestinationUxPreviousContract(contract){
+ const value=identityDestinationUxSection(contract);if(!value)return contract;const previous=structuredClone(contract);delete previous[IDENTITY_DESTINATION_UX_CURRENT_SECTION];
+ const delta=value.browser.producerDelta,proofs=previous.extension?.proofs?.filter(row=>row.id===delta.id),records=previous.evidenceProducers?.filter(row=>row.path===delta.path&&row.producer===delta.producer);
+ reject(proofs?.length===1&&records?.length===1&&proofs[0].producer===delta.producer&&proofs[0].path===delta.path&&proofs[0].producerSha256===delta.currentProducerSha256&&records[0].producerSha256===delta.currentProducerSha256,'Exact current identity destination producer required');
+ reject(proofs[0].checkNames.length===value.browser.historicalCheckCount&&sha(JSON.stringify(proofs[0].checkNames))===value.browser.historicalCheckNamesSha256,'The exact historical103 identity ledger must stay unchanged');
+ proofs[0].producerSha256=delta.previousProducerSha256;records[0].producerSha256=delta.previousProducerSha256;
+ proofs[0].sourceFiles=previousPaths(proofs[0].sourceFiles,value.browser.sourceDelta);
+ reject(sha(JSON.stringify(previous,null,2)+'\n')===value.previousContractSha256,'The complete published8c306 contract must restore exactly');return previous;
+}
+export function identityDestinationUxCurrentSourcePin(contract,ref){const value=identityDestinationUxSection(contract),row=value&&identityDestinationUxReferences(value).find(row=>row.path===ref.path);if(!row)return ref.sha256;reject([row.previousSha256,row.currentSha256].includes(ref.sha256),'Only exact published8c306 or identity destination pins may advance: '+ref.path);return row.currentSha256;}
+export function identityDestinationUxPreviousSourcePin(contract,ref){const value=identityDestinationUxSection(contract),row=value&&identityDestinationUxReferences(value).find(row=>row.path===ref.path);return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}
+// Source-history projection for the explicit historical producer test only.
+// Current gates always read the original current bytes through readSource.
+export function restoreIdentityDestinationUxPreviousProducerText(contract,producer,bytes){
+ const value=identityDestinationUxSection(contract);reject(Boolean(value)&&producer===value.browser.producerDelta.producer&&Buffer.isBuffer(bytes),'Only the exact current identity destination producer may restore its published source');restoreIdentityDestinationUxPreviousContract(contract);const delta=value.browser.producerDelta,body=value.browser.producerSourceHistory,decoded=bytes.toString('utf8');reject(bytes.equals(Buffer.from(decoded)),'Current identity destination producer UTF-8 required');let text=decoded.replaceAll('\r\n','\n');reject(sha(text)===delta.currentProducerSha256&&Buffer.byteLength(text)===body.currentBytes,'Exact current identity destination producer body required');
+ for(const hunk of body.inverseHunks.toReversed()){const offset=hunk.currentOffsetCharacters;reject(text.slice(offset,offset+hunk.currentText.length)===hunk.currentText,'An exact identity destination source inverse hunk changed');text=text.slice(0,offset)+hunk.previousText+text.slice(offset+hunk.currentText.length);}
+ reject(sha(text)===delta.previousProducerSha256&&Buffer.byteLength(text)===body.previousBytes,'The entire published8c306 producer source must restore exactly');return Buffer.from(text);
+}
+export function verifyIdentityDestinationUxCurrentSources(contract,readSource){
+ const value=identityDestinationUxSection(contract);if(!value)return null;restoreIdentityDestinationUxPreviousContract(contract);reject(typeof readSource==='function','Actual identity destination source reader required');
+ const refs=identityDestinationUxReferences(value);reject(new Set(refs.map(row=>row.path)).size===refs.length,'Unique identity destination sources required');
+ for(const row of refs){const bytes=readSource(row.path);reject(safe(row.path)&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8')))&&sha(bytes.toString('utf8').replaceAll('\r\n','\n'))===row.currentSha256,'Stale current identity destination source: '+row.path);}
+ return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,nativeOrBrowserAcceptance:false};
+}
+export function identityDestinationUxProofSourceAdditions(spec){
+ const delta=IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.sourceDelta;if(spec?.id!==delta.id)return[];const files=spec.sourceFiles;
+ reject(Array.isArray(files)&&new Set(files).size===files.length&&same(files,[...files].sort()),'Distinct sorted identity destination source paths required');
+ if(files.length===delta.currentCount&&sha(JSON.stringify(files))===delta.currentPathsSha256){previousPaths(files,delta);return [...delta.additions];}
+ // An earlier phase may already have removed this outer addition; its exact
+ // immutable source matrix still validates that inherited set.
+ reject(files.length<delta.currentCount&&!delta.additions.some(file=>files.includes(file)),'Unknown identity destination source set');return[];
+}
+export function restoreIdentityDestinationUxSourceSet(family,files,contract){const value=identityDestinationUxSection(contract);if(!value)return files;restoreIdentityDestinationUxPreviousContract(contract);return family===value.browser.sourceDelta.family?previousPaths(files,value.browser.sourceDelta):files;}
+
+function identityDestinationRequired(ok,reason){if(!ok)throw Object.assign(new Error('Identity destination browser proof rejected: '+reason),{code:'IDENTITY_DESTINATION_UX_PROOF_REJECTED',reason});}
+function identityDestinationKeys(value,keys,reason){identityDestinationRequired(plain(value)&&same(Object.keys(value).sort(),keys.slice().sort()),reason);}
+const identityDestinationNetworkKeys=['apiSequence','workspaceGets','participantGets','workerChannelGets','totalPosts','participantPosts','channelPosts'];
+function identityDestinationExpectedSequence(mode){const row=(path,actor='A',projectId=null)=>({path:'/api/identity/'+path,method:'GET',actor,projectId}),initial=[row('workspace'),row('workspace','A','p-a'),row('participants','A','p-a')];return mode==='before'?initial.slice(0,2):mode==='context'?[...initial.slice(0,2),row('workspace','B')]:mode==='history'?[...initial,row('workspace','A','p-a'),row('workspace','A','p-a')]:mode==='revoked'?[...initial,row('workspace','A','p-a')]:initial;}
+function identityDestinationNetwork(value,mode){
+ const expected=identityDestinationExpectedSequence(mode),r=identityDestinationRequired;for(const row of value.apiSequence||[])identityDestinationKeys(row,['path','method','actor','projectId'],'API_ROW');
+ r(same(value.apiSequence,expected)&&value.workspaceGets===expected.filter(row=>row.path==='/api/identity/workspace').length&&value.participantGets===expected.filter(row=>row.path==='/api/identity/participants').length,'API_SEQUENCE');
+ r(['workerChannelGets','totalPosts','participantPosts','channelPosts'].every(key=>value[key]===0),'NO_AUTOMATIC_CHANNEL_OR_BUSINESS_IO');
+}
+function identityDestinationGeometry(value,width,id){
+ const r=identityDestinationRequired;identityDestinationKeys(value,['id','visible','focused','left','top','right','bottom','width','height','viewportWidth','viewportHeight','documentWidth','detailsOpen','screen','screenHidden','otherPrivateScreenHidden'],'GEOMETRY_SHAPE');
+ r(value.id===id&&value.visible===true&&value.focused===true&&value.viewportWidth===width&&value.viewportHeight===1050,'VISIBLE_FOCUSED_DESTINATION');
+ r(['left','top','right','bottom','width','height','documentWidth'].every(key=>Number.isFinite(value[key]))&&value.width>0&&value.height>0&&value.left>=0&&value.right<=width+1&&value.right>value.left&&value.bottom>value.top&&Math.abs(value.right-value.left-value.width)<=1&&Math.abs(value.bottom-value.top-value.height)<=1&&value.top<1050&&value.bottom>0&&value.documentWidth>0&&value.documentWidth<=width,'VIEWPORT_GEOMETRY');
+ r(value.detailsOpen===null&&value.screen===(id==='worker-channel-title'?'mi-whatsapp':'identidad')&&value.screenHidden===false&&value.otherPrivateScreenHidden===true,'EXACT_VISIBLE_PRIVATE_SCREEN');
+}
+function identityDestinationScreenshot(ref,expected,readEvidence){
+ const r=identityDestinationRequired;identityDestinationKeys(ref,['path','sha256','width','height'],'SCREENSHOT_SHAPE');r(ref.path===expected.path&&hash(ref.sha256)&&ref.width===expected.width&&Number.isSafeInteger(ref.height)&&ref.height>0,'SCREENSHOT_IDENTITY');
+ let bytes;try{bytes=readEvidence(ref.path);}catch{}r(Buffer.isBuffer(bytes)&&bytes.length>=24&&sha(bytes)===ref.sha256&&bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))&&bytes.toString('ascii',12,16)==='IHDR'&&bytes.readUInt32BE(16)===ref.width&&bytes.readUInt32BE(20)===ref.height,'SCREENSHOT_BYTES');
+}
+function identityDestinationAppendObservation(event,phase,width){
+ const r=identityDestinationRequired;identityDestinationKeys(event,['activeId','activeTagName','scrollY','taskCount','buttonMounted','buttonDisabled','rect','viewportWidth','viewportHeight','firstTaskTop'],'APPEND_OBSERVATION');const focus=event.activeTagName==='BUTTON'&&event.activeId==='schedule-load-more',body=event.activeTagName==='BODY'&&event.activeId==='';r((phase==='before'?focus:focus||body)&&Number.isFinite(event.scrollY)&&event.scrollY>=0&&event.taskCount===(phase==='after'?2:1)&&event.buttonMounted===true&&event.buttonDisabled===(phase==='pending')&&event.viewportWidth===width&&event.viewportHeight===1050&&Number.isFinite(event.firstTaskTop),'APPEND_NATIVE_FOCUS_AND_TASKS');
+ const box=event.rect;identityDestinationKeys(box,['left','top','right','bottom','width','height'],'APPEND_RECT_SHAPE');r(Object.values(box).every(Number.isFinite)&&box.width>0&&box.height>0&&box.right>box.left&&box.bottom>box.top&&Math.abs(box.right-box.left-box.width)<=1&&Math.abs(box.bottom-box.top-box.height)<=1,'APPEND_RECT');if(phase!=='after')r(box.left>=0&&box.right<=width+1&&box.top<1050&&box.bottom>0,'APPEND_BUTTON_VISIBLE_DURING_GET');
+}
+export function validateIdentityDestinationUxBrowserSupplement(proof,contract,{readSource,readEvidence}){
+ const value=identityDestinationUxSection(contract);if(!value)return proof;const n=value.browser,r=identityDestinationRequired,k=identityDestinationKeys,s=proof.destinationNavigation;
+ k(s,['version','widths','totalCheckCount','checks','limits'],'SUPPLEMENT_SHAPE');r(s.version===1&&same(s.widths,n.widths)&&s.totalCheckCount===16&&Array.isArray(s.checks)&&s.checks.length===16&&proof.combinedTotalCheckCount===119,'SUPPLEMENT_MATRIX');
+ const limits={syntheticSession:true,controlledHttp:true,realProviderCalls:0,productionDataWritten:false,realIdentityApproved:false};k(s.limits,Object.keys(limits),'SUPPLEMENT_LIMITS_SHAPE');r(same(s.limits,limits),'SUPPLEMENT_LIMITS');
+ r(typeof readSource==='function'&&typeof readEvidence==='function','ACTUAL_SOURCE_AND_SCREENSHOT_READERS');verifyIdentityDestinationUxCurrentSources(contract,readSource);
+ const producer=readSource(n.producerDelta.producer);r(Buffer.isBuffer(producer)&&sha(producer)===proof.harnessSha256,'ACTUAL_CURRENT_HARNESS');
+ r(Array.isArray(proof.sourceManifest)&&proof.sourceManifest.length===n.sourceDelta.currentCount,'ACTUAL_CURRENT_SOURCE_MANIFEST');const paths=[];for(const ref of proof.sourceManifest){k(ref,['path','sha256'],'SOURCE_REFERENCE');r(safe(ref.path)&&hash(ref.sha256),'SOURCE_REFERENCE');const bytes=readSource(ref.path);r(Buffer.isBuffer(bytes)&&sha(bytes)===ref.sha256,'CURRENT_SOURCE_BYTES');paths.push(ref.path);}r(new Set(paths).size===paths.length&&sha(JSON.stringify(paths.slice().sort()))===n.sourceDelta.currentPathsSha256,'EXACT_CURRENT_SOURCE_SET');
+ const common=['name','width','status','activationControls',...identityDestinationNetworkKeys,'screenshot'];
+ for(const[index,row]of s.checks.entries()){
+  const mode=index%4,width=n.widths[Math.floor(index/4)];r(row?.name===n.caseNames[mode]&&row.width===width&&row.status==='PASS'&&row.activationControls===0,'ORDERED_CURRENT_CASE');
+  if(mode===0){k(row,[...common,'trigger','initialPath','beforeRelease','geometry','profileRead'],'INITIAL_CASE_SHAPE');r(row.trigger==='INITIAL_HASH_AND_CANONICAL_PROJECT_HINT'&&row.initialPath==='/?obra=p-a#worker-channel-title','INITIAL_TRIGGER');k(row.beforeRelease,['targetMounted','focused','heldCanonicalCount',...identityDestinationNetworkKeys],'HELD_CANONICAL_SHAPE');r(row.beforeRelease.targetMounted===false&&row.beforeRelease.focused===false&&row.beforeRelease.heldCanonicalCount===1,'HELD_CANONICAL_BEFORE_RENDER');identityDestinationNetwork(row.beforeRelease,'before');identityDestinationNetwork(row,'initial');identityDestinationGeometry(row.geometry,width,'worker-channel-title');k(row.profileRead,['heldBeforeNavigation','releasedAfterNavigation','beforeGeometry','afterGeometry'],'DELAYED_PROFILE_SHAPE');r(row.profileRead.heldBeforeNavigation===true&&row.profileRead.releasedAfterNavigation===true,'DELAYED_PROFILE_OBSERVED');for(const phase of ['beforeGeometry','afterGeometry'])identityDestinationGeometry(row.profileRead[phase],width,'worker-channel-title');r(same(row.geometry,row.profileRead.afterGeometry),'DELAYED_PROFILE_FINAL_GEOMETRY');}
+  if(mode===1){
+   k(row,[...common,'trigger','history','requestCountBefore','requestCountAfter','navigationNetwork','append','draftPreservation'],'GUIDE_CASE_SHAPE');r(row.trigger==='REAL_ONBOARDING_GUIDE'&&row.requestCountBefore===3&&row.requestCountAfter===3,'REAL_GUIDE_NO_AUTOMATIC_IO');k(row.navigationNetwork,identityDestinationNetworkKeys,'NAVIGATION_NETWORK_SHAPE');identityDestinationNetwork(row.navigationNetwork,'initial');identityDestinationNetwork(row,'history');
+   const actions=['guide-private','same-hash-reopen','guide-identity','back','forward','back-final'],ids=['worker-channel-title','worker-channel-title','participant-title','worker-channel-title','participant-title','worker-channel-title'];r(Array.isArray(row.history)&&row.history.length===6,'HISTORY_MATRIX');for(const[i,event]of row.history.entries()){k(event,['action','hash','geometry'],'HISTORY_ROW');r(event.action===actions[i]&&event.hash==='#'+ids[i],'HISTORY_TRANSITION');identityDestinationGeometry(event.geometry,width,ids[i]);}
+   const d=row.draftPreservation;k(d,['syntheticImagesOnly','submitted','before','hidden','after'],'DRAFT_PRESERVATION_SHAPE');r(d.syntheticImagesOnly===true&&d.submitted===false,'LOCAL_SYNTHETIC_DRAFT_ONLY');for(const phase of ['before','hidden','after']){const event=d[phase];k(event,['step','consent','formMounted','formVisible','sameForm','imageCount','sameImages'],'DRAFT_OBSERVATION');r(event.step===3&&event.consent===true&&event.formMounted===true&&event.formVisible===(phase!=='hidden')&&event.sameForm===true&&event.imageCount===2&&event.sameImages===true,'DRAFT_IMAGES_AND_CONSENT_PRESERVED');}
+   const a=row.append;k(a,['canonicalAdmissionSimulated','totalTasks','projectReads','before','pending','after'],'APPEND_SHAPE');r(a.canonicalAdmissionSimulated===true&&a.totalTasks===3&&same(a.projectReads,[{actor:'A',projectId:'p-a',afterTask:null},{actor:'A',projectId:'p-a',afterTask:'t-p-a'}]),'ACTUAL_APPEND_CURSOR');for(const phase of ['before','pending','after'])identityDestinationAppendObservation(a[phase],phase,width);r(Math.abs(a.pending.rect.top-a.before.rect.top)<=3&&Math.abs(a.pending.rect.left-a.before.rect.left)<=3,'APPEND_VIEWPORT_ANCHOR_DURING_GET');
+  }
+  if(mode===2){k(row,[...common,'initialPath','heldBeforeContextChange','releasedAfterContextChange','currentActor','targetMounted','privateMounted','oldFactsVisible'],'CONTEXT_CASE_SHAPE');r(row.initialPath==='/?obra=p-a#worker-channel-title'&&row.heldBeforeContextChange===true&&row.releasedAfterContextChange===true&&row.currentActor==='B'&&row.targetMounted===false&&row.privateMounted===false&&row.oldFactsVisible===false,'CONTEXT_CANCELLATION');identityDestinationNetwork(row,'context');}
+  if(mode===3){k(row,[...common,'initialPath','initialGeometry','denialCode','history','oldFactsVisible'],'REVOKED_CASE_SHAPE');r(row.initialPath==='/?obra=p-a#worker-channel-title'&&row.denialCode==='WORKSPACE_MEMBERSHIP_REQUIRED'&&row.oldFactsVisible===false,'CANONICAL_REVOCATION');identityDestinationGeometry(row.initialGeometry,width,'worker-channel-title');r(Array.isArray(row.history)&&row.history.length===2,'REVOKED_HISTORY_MATRIX');for(const[i,event]of row.history.entries()){k(event,['action','hash','targetMounted','privateMounted'],'REVOKED_HISTORY_ROW');r(event.action===['goBack','goForward'][i]&&event.hash===['#participant-title','#worker-channel-title'][i]&&event.targetMounted===false&&event.privateMounted===false,'REVOKED_TARGET_STAYS_CLOSED');}identityDestinationNetwork(row,'revoked');}
+  identityDestinationScreenshot(row.screenshot,n.retainedScreenshots[index],readEvidence);
+ }
+ const previous={...proof};delete previous.destinationNavigation;delete previous.combinedTotalCheckCount;return previous;
+}
+// Validator-only fixtures remain in memory. They never emit or retag browser
+// evidence and do not certify actual UI, a customer session or identity.
+export function identityDestinationUxBrowserShadow(contract){
+ const value=identityDestinationUxSection(contract);if(!value)return {fields:{},evidence:new Map()};const n=value.browser,evidence=new Map(),network=mode=>{const apiSequence=identityDestinationExpectedSequence(mode);return {apiSequence,workspaceGets:apiSequence.filter(row=>row.path==='/api/identity/workspace').length,participantGets:apiSequence.filter(row=>row.path==='/api/identity/participants').length,workerChannelGets:0,totalPosts:0,participantPosts:0,channelPosts:0};},geometry=(width,id='worker-channel-title')=>({id,visible:true,focused:true,left:12,top:100,right:width-12,bottom:130,width:width-24,height:30,viewportWidth:width,viewportHeight:1050,documentWidth:width,detailsOpen:null,screen:id==='worker-channel-title'?'mi-whatsapp':'identidad',screenHidden:false,otherPrivateScreenHidden:true});
+ const checks=[];for(const width of n.widths)for(let mode=0;mode<4;mode++){
+  const index=checks.length,png=Buffer.alloc(24);Buffer.from([137,80,78,71,13,10,26,10]).copy(png);png.write('IHDR',12);png.writeUInt32BE(width,16);png.writeUInt32BE(1050,20);const screenshot={...n.retainedScreenshots[index],sha256:sha(png),height:1050};evidence.set(screenshot.path,png);
+  const common={name:n.caseNames[mode],width,status:'PASS',activationControls:0,...network(['initial','history','context','revoked'][mode]),screenshot};
+  if(mode===0)checks.push({...common,trigger:'INITIAL_HASH_AND_CANONICAL_PROJECT_HINT',initialPath:'/?obra=p-a#worker-channel-title',beforeRelease:{targetMounted:false,focused:false,heldCanonicalCount:1,...network('before')},geometry:geometry(width),profileRead:{heldBeforeNavigation:true,releasedAfterNavigation:true,beforeGeometry:geometry(width),afterGeometry:geometry(width)}});
+  if(mode===1){const actions=['guide-private','same-hash-reopen','guide-identity','back','forward','back-final'],ids=['worker-channel-title','worker-channel-title','participant-title','worker-channel-title','participant-title','worker-channel-title'],observation=phase=>{const top=phase==='after'?1300:phase==='pending'?902:900;return {activeId:phase==='before'?'schedule-load-more':'',activeTagName:phase==='before'?'BUTTON':'BODY',scrollY:phase==='pending'?1569:500,taskCount:phase==='after'?2:1,buttonMounted:true,buttonDisabled:phase==='pending',rect:{left:12,top,right:width-12,bottom:top+44,width:width-24,height:44},viewportWidth:width,viewportHeight:1050,firstTaskTop:1000};},draft=formVisible=>({step:3,consent:true,formMounted:true,formVisible,sameForm:true,imageCount:2,sameImages:true});checks.push({...common,trigger:'REAL_ONBOARDING_GUIDE',history:actions.map((action,i)=>({action,hash:'#'+ids[i],geometry:geometry(width,ids[i])})),requestCountBefore:3,requestCountAfter:3,navigationNetwork:network('initial'),draftPreservation:{syntheticImagesOnly:true,submitted:false,before:draft(true),hidden:draft(false),after:draft(true)},append:{canonicalAdmissionSimulated:true,totalTasks:3,projectReads:[{actor:'A',projectId:'p-a',afterTask:null},{actor:'A',projectId:'p-a',afterTask:'t-p-a'}],before:observation('before'),pending:observation('pending'),after:observation('after')}});}
+  if(mode===2)checks.push({...common,initialPath:'/?obra=p-a#worker-channel-title',heldBeforeContextChange:true,releasedAfterContextChange:true,currentActor:'B',targetMounted:false,privateMounted:false,oldFactsVisible:false});
+  if(mode===3)checks.push({...common,initialPath:'/?obra=p-a#worker-channel-title',initialGeometry:geometry(width),denialCode:'WORKSPACE_MEMBERSHIP_REQUIRED',history:[{action:'goBack',hash:'#participant-title',targetMounted:false,privateMounted:false},{action:'goForward',hash:'#worker-channel-title',targetMounted:false,privateMounted:false}],oldFactsVisible:false});
+ }
+ return {fields:{destinationNavigation:{version:1,widths:[...n.widths],totalCheckCount:16,checks,limits:{syntheticSession:true,controlledHttp:true,realProviderCalls:0,productionDataWritten:false,realIdentityApproved:false}},combinedTotalCheckCount:119},evidence,boundary:'VALIDATOR_ONLY_NOT_BROWSER_EXECUTION'};
 }

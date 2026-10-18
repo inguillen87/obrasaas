@@ -61,19 +61,22 @@ function copyGraph(relative){
   assert.ok(resolved,'Missing source dependency '+match[1]);copyGraph(path.relative(root,resolved));
  }
 }
-copyGraph('src/app/(identity)/cuenta/workspace-client.js');copyGraph('src/app/(identity)/cuenta/workspace-recovery-journal.mjs');copyGraph('src/lib/participant-policy.mjs');
+copyGraph('src/app/(identity)/cuenta/workspace-client.js');copyGraph('src/app/(identity)/cuenta/workspace-recovery-journal.mjs');copyGraph('src/lib/participant-policy.mjs');copyGraph('src/app/(identity)/cuenta/onboarding-guide.js');
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({name:'isolated-workspace-identity-only-ui',private:true}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#0b1c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
 writeFileSync(path.join(app,'page.js'),`'use client';
 import {useCallback,useEffect,useState} from 'react';
 import {AccountWorkspace} from './(identity)/cuenta/workspace-client';
+import {OnboardingGuide} from './(identity)/cuenta/onboarding-guide';
 import {browserRecoveryJournal} from './(identity)/cuenta/workspace-recovery-journal.mjs';
 export default function Page(){
- const [context,setContext]=useState('A');
+ const [context,setContext]=useState('A'),[guideObservation,setGuideObservation]=useState(null);
+ const observeGuide=useCallback(value=>setGuideObservation({context,value}),[context]);
+ const initialProjectId=typeof window==='undefined'?'':new URL(window.location.href).searchParams.get('obra')||'';
  const token=useCallback(async()=>{const captured=context;if(window.__tokenMode==='hold'){window.__tokenMode='normal';await new Promise((resolve,reject)=>{window.__releaseToken=resolve;window.__rejectToken=()=>reject(new Error('CONTROLLED_OLD_TOKEN_REJECTION'));});}return 'synthetic-current-'+captured;},[context]);
  useEffect(()=>{window.__references=scope=>browserRecoveryJournal.list(scope);return()=>{delete window.__references;};},[]);
- return <main style={{maxWidth:1000,margin:'0 auto'}}><div><button onClick={()=>setContext('A')}>Contexto A</button><button onClick={()=>setContext('B')}>Contexto B</button></div><AccountWorkspace key={context} getSessionToken={token}/></main>;
+ return <main style={{maxWidth:1000,margin:'0 auto'}}><div><button onClick={()=>setContext('A')}>Contexto A</button><button onClick={()=>setContext('B')}>Contexto B</button></div><OnboardingGuide key={"guide-"+context} orgId={"fixture-"+context} orgRole="org:member" observation={guideObservation?.context===context?guideObservation.value:null}/><AccountWorkspace key={"workspace-"+context} getSessionToken={token} onGuideObservation={observeGuide} initialProjectId={initialProjectId}/></main>;
 }`);
 const picturePath=path.join(fixture,'synthetic.png');
 writeFileSync(picturePath,Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==','base64'));
@@ -84,19 +87,32 @@ const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/
 let serverLog='',browser,active,resultProof,serverClosed=false;
 server.once('close',()=>{serverClosed=true;});
 for(const stream of [server.stdout,server.stderr])stream.on('data',value=>{serverLog=(serverLog+value.toString()).slice(-20000);});
-const scopeA='a'.repeat(64),scopeB='b'.repeat(64),revision='2026-10-01T11:00:00.000001',checks=[],pageErrors=[],requestErrors=[],screenshots=[];
+const scopeA='a'.repeat(64),scopeB='b'.repeat(64),revision='2026-10-01T11:00:00.000001',checks=[],destinationChecks=[],pageErrors=[],requestErrors=[],screenshots=[];
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function waitText(page,label){await page.waitForFunction(text=>document.body.innerText.includes(text),{timeout:15000},label);}
+async function visibleElementClick(page,handle){
+ // Open only necessary disclosures by clicking their visible native summary.
+ // Never set details.open or bypass the rendered user navigation.
+ for(let depth=0;depth<12;depth++){
+  const summary=await page.evaluateHandle(node=>{let outer=null;const ownSummary=node.tagName==='SUMMARY'?node.parentElement:null;for(let parent=node.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS'&&!parent.open&&parent!==ownSummary)outer=parent;return outer?[...outer.children].find(child=>child.tagName==='SUMMARY')||null:null;},handle);
+  const element=summary.asElement();if(!element){await summary.dispose();break;}
+  assert.ok(await page.evaluate(node=>node.isConnected&&node.getClientRects().length>0&&!node.closest('[hidden],[inert],[aria-hidden="true"]'),element),'Disclosure summary must already be visible');await element.click();await summary.dispose();
+ }
+ assert.ok(await page.evaluate(node=>node.isConnected&&node.getClientRects().length>0&&!node.closest('[hidden],[inert],[aria-hidden="true"]'),handle),'Click target must be visible in the current screen');
+ await handle.click();
+}
 async function click(page,label){
  const hiddenScreen=await page.evaluate(text=>{const matches=[...document.querySelectorAll('button')].filter(button=>!button.disabled&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text));if(matches.some(button=>!button.closest('[hidden]')))return null;return matches[0]?.closest('[data-workspace-screen]')?.dataset.workspaceScreen||null;},label);
- if(hiddenScreen){const id={identidad:'participant-title','mi-whatsapp':'worker-channel-title',cronograma:'schedule-title',recuperacion:'workspace-recovery-title'}[hiddenScreen];assert.ok(id,'Known real destination for '+label);const menu='nav[aria-label="Navegación de la obra"]';if((await page.viewport()).width<1100)await page.select(menu+' select',id);else{const selector=menu+' a[href="#'+id+'"]';const anchor=await page.$(selector);assert.ok(anchor,'Real destination link');await anchor.click();await anchor.dispose();}await page.waitForFunction(section=>document.querySelector('[data-workspace-screen="'+section+'"]')?.hidden===false,{timeout:15000},hiddenScreen);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));}
-
+ if(hiddenScreen){const id={identidad:'participant-title','mi-whatsapp':'worker-channel-title',cronograma:'schedule-title',recuperacion:'workspace-recovery-title'}[hiddenScreen];assert.ok(id,'Known real destination for '+label);await chooseWorkspaceView(page,id);}
  await page.waitForFunction(text=>[...document.querySelectorAll('button')].some(button=>!button.disabled&&!button.closest('[hidden]')&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),{timeout:15000},label);
  const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(button=>!button.disabled&&!button.closest('[hidden]')&&(button.textContent.trim()===text||button.hasAttribute('aria-pressed')&&button.querySelector('span')?.textContent.trim()===text)),label);
- await page.evaluate(button=>{for(let parent=button.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;},handle);
- await handle.asElement().click();await handle.dispose();
+ await visibleElementClick(page,handle.asElement());await handle.dispose();
 }
-async function chooseWorkspaceView(page,id){const menu='nav[aria-label="Navegación de la obra"]';if((await page.viewport()).width<1100)await page.select(menu+' select',id);else await page.click(menu+' a[href="#'+id+'"]');await page.waitForFunction(target=>document.activeElement?.id===target,{timeout:15000},id);}
+async function chooseWorkspaceView(page,id){
+ const own='nav[aria-label="Mi participación en la obra"]';if(await page.$(own)){const anchor=await page.$(own+' a[href="#'+id+'"]');assert.ok(anchor,'Private destination must be listed');await visibleElementClick(page,anchor);await anchor.dispose();await page.waitForFunction(target=>document.activeElement?.id===target,{timeout:15000},id);return;}
+ const menu='nav[aria-label="Navegación de la obra"]';if((await page.viewport()).width<1100)await page.select(menu+' select',id);else{const anchor=await page.$(menu+' a[href="#'+id+'"]');assert.ok(anchor);await visibleElementClick(page,anchor);await anchor.dispose();}
+ await page.waitForFunction(target=>document.activeElement?.id===target,{timeout:15000},id);
+}
 async function settled(page){await page.waitForFunction(()=>document.querySelector('[aria-labelledby="workspace-title"]')?.getAttribute('aria-busy')==='false');}
 async function identityOnly(page){
  await page.waitForSelector('#identity-access-title');await settled(page);
@@ -116,7 +132,8 @@ function ownChannel(current,projectId){
  if(!current.channelRows.has(projectId))current.channelRows.set(projectId,{workerId:projectId==='p-a'?'worker-fixture':'worker-second',name:projectId==='p-a'?'Titular propio WhatsApp A':'Titular propio WhatsApp A2',revision,phone:'+5491100001111',state:'REVIEW_REQUIRED',eligible:false,connectionNumber:null,challenge:null,binding:{id:'binding-synthetic',verifiedAt:'2026-10-07T12:00:00Z',revokedAt:null},templateConsent:{granted:false,canGrant:false,canRevoke:true,state:'REVIEW_REQUIRED'},identityCertified:false});
  return current.channelRows.get(projectId);
 }
-async function createPage(width,current,sharedContext=null){
+async function createPage(width,current,sharedContext=null,{initialPath=''}={}){
+ assert.ok(initialPath===''||initialPath==='/?obra=p-a#worker-channel-title','Only the controlled same-origin project hint is allowed');
  const context=sharedContext||await browser.createBrowserContext(),page=await context.newPage();active={width,current,page};const subscriptionReads=[];
  await page.setViewport({width,height:1050});page.on('pageerror',error=>pageErrors.push({width,mode:current.mode,error:error.message}));
  page.on('dialog',async dialog=>{assert.equal(dialog.type(),'beforeunload');current.acceptedReloadWarning=true;await dialog.accept();});
@@ -153,12 +170,14 @@ async function createPage(width,current,sharedContext=null){
    }
    if(url.pathname==='/api/identity/workspace'){
     assert.equal(request.method(),'GET');
+    if(current.destinationPaging===true&&projectId)(current.destinationProjectReads??=[]).push({actor,projectId,afterTask:url.searchParams.get('afterTask')});
     if(!projectId)return answer(request,200,{scope,organizationName:'Empresa de ensayo '+actor,role:current.mode==='bootstrap'?'ADMIN':current.mode==='director'?'DIRECTOR':'AUDITOR',roleLabel:current.mode==='bootstrap'?'Administrador':current.mode==='director'?'Director':'Consulta',canManageIntegrations:false,projects:actor==='A'?[{id:'p-a',name:'Obra A',status:'ACTIVE'},{id:'p-a2',name:'Obra A2',status:'ACTIVE'}]:[{id:'p-b',name:'Obra B',status:'ACTIVE'}]});
-    if(current.mode==='late-project'&&projectId==='p-a'||current.mode==='late-company'&&actor==='A'||current.holdWorkspaceProject===projectId){
+    if(current.mode==='late-project'&&projectId==='p-a'||current.mode==='late-company'&&actor==='A'||current.holdWorkspaceProject===projectId||current.holdWorkspacePage===projectId&&url.searchParams.has('afterTask')){
      await new Promise(resolve=>current.held.push(resolve));
     }
     if(actor==='B'||projectId==='p-a2'&&current.mode==='late-project'||current.approved&&projectId==='p-a'||current.approvedProjects?.includes(projectId)){
      const task={id:'t-'+projectId,title:'Tarea operativa '+projectId,status:'IN_PROGRESS',progress:37,startsOn:'2026-10-01',endsOn:'2026-10-05',revision};
+     if(current.destinationPaging===true){const after=url.searchParams.get('afterTask'),pageIndex=after?after.endsWith('-second')?2:1:0,record=pageIndex===0?task:{...task,id:task.id+(pageIndex===1?'-second':'-third'),title:task.title+(pageIndex===1?' segunda página':' tercera página')};return answer(request,200,{scope,project:{id:projectId,name:'Obra A',status:'ACTIVE'},roleLabel:'Consulta',canPlanSchedule:false,tasks:[record],totalTasks:3,nextCursor:pageIndex<2?record.id:null});}
      return answer(request,200,{scope,project:{id:projectId,name:actor==='B'?'Obra B':projectId==='p-a2'?'Obra A2':'Obra A',status:'ACTIVE'},roleLabel:'Consulta',canPlanSchedule:false,tasks:[task],totalTasks:current.mode==='revoke'?2:1,nextCursor:current.mode==='revoke'?task.id:null});
     }
     return answer(request,current.denialStatus,current.denialType==='application/json'?{code:current.denialCode,scope:scopeB,projectId:'untrusted-project',tasks:[{title:'MUST NEVER RENDER'}]}:'<html>Gateway denial</html>',current.denialType);
@@ -174,6 +193,7 @@ async function createPage(width,current,sharedContext=null){
      return answer(request,503,{code:'PARTICIPANT_OPERATION_UNCONFIRMED'});
     }
     if(url.searchParams.has('operationId')){const id=url.searchParams.get('operationId');current.receiptQueries.push(id);assert.ok(current.receipts.has(id));return answer(request,200,current.receipts.get(id));}
+    if(current.destinationHoldProfile===true)await new Promise(resolve=>(current.destinationHeldProfile??=[]).push(resolve));
     return answer(request,200,{scope,projectId,canManage:false,canInvite:false,canManageOfficeRoles:false,existingAccounts:[],records:[current.row],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE}});
    }
    if(url.pathname==='/api/identity/portfolio-overview')return answer(request,200,{scope,records:[],nextCursor:null});
@@ -181,7 +201,7 @@ async function createPage(width,current,sharedContext=null){
    return answer(request,503,{code:'CONTROLLED_MODULE_UNAVAILABLE'});
   }catch(error){requestErrors.push({mode:current.mode,message:error.message});try{await request.abort();}catch{}}
  });
- await page.goto(origin,{waitUntil:'networkidle0'});await waitText(page,'Empresa de ensayo A');assert.equal(subscriptionReads.length,current.mode==='bootstrap'?1:0,'Only the bootstrap administrator consults closed subscription status');return {context,page};
+ await page.goto(origin+initialPath,{waitUntil:initialPath?'domcontentloaded':'networkidle0'});await waitText(page,'Empresa de ensayo A');assert.equal(subscriptionReads.length,current.mode==='bootstrap'?1:0,'Only the bootstrap administrator consults closed subscription status');return {context,page};
 }
 async function references(page){return page.evaluate(async scopes=>({a:await window.__references(scopes[0]),b:await window.__references(scopes[1]),session:Object.values(sessionStorage),local:Object.values(localStorage)}),[scopeA,scopeB]);}
 function safeReferences(value,expected){
@@ -192,15 +212,16 @@ function safeReferences(value,expected){
 async function waitRecordedTask(page,label){
  await page.waitForFunction(text=>document.querySelector('[data-schedule-workbench]')?.textContent.includes(text),{timeout:15000},label);
 }
-async function presentOwn(page){
- await click(page,'Consultar mi identidad');await waitText(page,'Persona de ensayo');await click(page,'Presentar mi identidad');
+async function prepareOwn(page,{consult=true}={}){
+ if(consult)await click(page,'Consultar mi identidad');await waitText(page,'Persona de ensayo');await click(page,'Presentar mi identidad');
  for(const [title,label]of [['Frente del documento','Usar documento revisado'],['Fotografía del rostro','Usar fotografía revisada']]){
   const selector='fieldset[aria-label="'+title+'"]';await (await page.$(selector+' input[type=file]')).uploadFile(picturePath);await page.waitForSelector(selector+' img');await page.$eval(selector+' input[type=checkbox]',input=>input.click());await click(page,label);
   await page.waitForFunction(title=>[...document.querySelectorAll('fieldset')].find(field=>field.getAttribute('aria-label')===title)?.textContent.includes('Imagen revisada y lista'),{},title);
   if(title==='Frente del documento'){await click(page,'Continuar al dorso');await click(page,'Continuar sin dorso');}
  }
  await page.evaluate(()=>[...document.querySelectorAll('label')].find(label=>label.textContent.includes('Leí el aviso y autorizo presentar estas imágenes')).querySelector('input').click());
- await click(page,'Presentar para revisión');await waitText(page,'El resultado quedó sin confirmar');
+}
+async function presentOwn(page){await prepareOwn(page);await click(page,'Presentar para revisión');await waitText(page,'El resultado quedó sin confirmar');
 }
 async function privateFlow(width,{reload=false,director=false}={}){
  const current=newState(director?'director':'pending'),{context,page}=await createPage(width,current);
@@ -259,9 +280,10 @@ async function tokenHeld(width){
  assert.equal(current.requests.filter(row=>row.projectId==='p-a').length,0);assert.equal(await page.$('#identity-access-title'),null);
  await click(page,'Obra B');await waitRecordedTask(page,'Tarea operativa p-b');checks.push({name:'token-held-prior-company-never-dispatches-after-context-change',width});await context.close();
 }
+async function privacyDisclosure(page,open){await chooseWorkspaceView(page,open?'worker-channel-title':'participant-title');}
+
 async function privacySurface(page){
- await identityOnly(page);await page.evaluate(()=>{const summary=[...document.querySelectorAll('summary')].find(node=>node.textContent==='Mi WhatsApp y mis avisos');assertSummary(summary);function assertSummary(node){if(!node)throw Error('Own privacy section missing');node.parentElement.open=true;}});
- await page.waitForSelector('#worker-channel-title');
+ await identityOnly(page);await privacyDisclosure(page,true);await page.waitForSelector('#worker-channel-title',{visible:true});
 }
 async function restrictedChannel(page,{loaded=true}={}){
  await identityOnly(page);
@@ -271,7 +293,7 @@ async function restrictedChannel(page,{loaded=true}={}){
   return [...panel.querySelectorAll('p')].filter(node=>node.textContent.trim()).map(node=>{const foreground=luminance(getComputedStyle(node).color);let background=node;while(background.parentElement&&getComputedStyle(background).backgroundColor==='rgba(0, 0, 0, 0)')background=background.parentElement;const surface=luminance(getComputedStyle(background).backgroundColor);return {text:node.textContent.slice(0,50),ratio:(Math.max(foreground,surface)+.05)/(Math.min(foreground,surface)+.05)};});
  });
  for(const paragraph of paragraphContrasts)assert.ok(paragraph.ratio>=4.5,'Own privacy paragraph unreadable: '+paragraph.text+' contrast='+paragraph.ratio);
- assert.ok(await page.$eval('summary',node=>node.getBoundingClientRect().height>=44),'Own privacy disclosure needs a44px touch target');
+ assert.ok(await page.$eval('nav[aria-label="Mi participación en la obra"] a[href="#worker-channel-title"]',node=>node.getBoundingClientRect().height>=44),'Own privacy navigation needs a44px touch target');
  for(const forbidden of ['Generar código','Generar otro código','Revisar autorización de avisos','Guardar autorización','Continuar en WhatsApp','Copiar MENU','VINCULAR '])assert.ok(!text.includes(forbidden),'Activation action visible in own privacy: '+forbidden);
  assert.equal(await page.$('[aria-labelledby="worker-channel-title"] a[href*="wa.me"]'),null);assert.equal(await page.$('[aria-labelledby="worker-channel-title"] code'),null);
  if(loaded){const ids=await page.$$eval('[data-worker-channel]',nodes=>nodes.map(node=>node.getAttribute('data-worker-channel')));assert.deepEqual(ids,['worker-fixture']);assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Other worker'));}
@@ -402,6 +424,86 @@ async function privateApprovalNavigation(width){
  await context.close();await privateApprovalFocus(width);for(const outcome of ['resolve','reject','refresh'])await approvalTokenNavigationRace(width,outcome);
  checks.push({name:'own-APPROVED-requires-explicit-fresh-canonical-project-check-before-workspace',width});
 }
+
+const destinationEntry='/?obra=p-a#worker-channel-title';
+const destinationNames=['private-destination-initial-hash-held-canonical-mount-focus','private-destination-visible-guide-same-hash-and-browser-history','private-destination-context-change-cancels-held-private-mount','private-destination-revoked-canonical-access-and-history-stay-closed'];
+function destinationNetwork(current){
+ const apiSequence=current.requests.map(row=>({path:row.path,method:row.method,actor:row.actor,projectId:row.projectId||null})),workerChannelGets=apiSequence.filter(row=>row.path==='/api/identity/worker-channel'&&row.method==='GET').length,totalPosts=apiSequence.filter(row=>row.method==='POST').length;
+ assert.equal(workerChannelGets,0,'Navigation must not automatically read WhatsApp');assert.equal(totalPosts,0,'Navigation must not write');assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);assert.ok(apiSequence.every(row=>row.method==='GET'&&['/api/identity/workspace','/api/identity/participants'].includes(row.path)));
+ return {apiSequence,workspaceGets:apiSequence.filter(row=>row.path==='/api/identity/workspace').length,participantGets:apiSequence.filter(row=>row.path==='/api/identity/participants').length,workerChannelGets,totalPosts,participantPosts:current.posts.length,channelPosts:current.channelPosts.length};
+}
+async function destinationGeometry(page,id){
+ await page.waitForFunction(target=>document.activeElement?.id===target&&document.getElementById(target)?.getClientRects().length>0,{timeout:15000},id);
+ const geometry=await page.$eval('#'+id,node=>{const rect=node.getBoundingClientRect();return {id:node.id,visible:node.getClientRects().length>0,focused:document.activeElement===node,left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom,width:rect.width,height:rect.height,viewportWidth:innerWidth,viewportHeight:innerHeight,documentWidth:document.documentElement.scrollWidth,detailsOpen:node.closest('details')?.open??null,screen:node.closest('[data-workspace-screen]')?.dataset.workspaceScreen??null,screenHidden:node.closest('[data-workspace-screen]')?.hidden??null,otherPrivateScreenHidden:document.querySelector('[data-workspace-screen="'+(node.id==='worker-channel-title'?'identidad':'mi-whatsapp')+'"]')?.hidden??null};});
+ active.current.destinationGeometryObservation={...geometry};
+ assert.equal(geometry.visible,true);assert.equal(geometry.focused,true);assert.ok(geometry.width>0&&geometry.height>0&&geometry.left>=0&&geometry.right<=geometry.viewportWidth+1&&geometry.top<geometry.viewportHeight&&geometry.bottom>0&&geometry.documentWidth<=geometry.viewportWidth);
+ assert.equal(geometry.detailsOpen,null);assert.equal(geometry.screen,id==='worker-channel-title'?'mi-whatsapp':'identidad');assert.equal(geometry.screenHidden,false);assert.equal(geometry.otherPrivateScreenHidden,true);return geometry;
+}
+async function noDestinationActivation(page){
+ const forbidden=await page.evaluate(()=>{const panel=document.querySelector('[aria-labelledby="worker-channel-title"]');if(!panel)return 0;const labels=['Generar código','Generar otro código','Revisar autorización de avisos','Guardar autorización','Continuar en WhatsApp','Copiar MENU','VINCULAR '];return [...panel.querySelectorAll('button,a,code')].filter(node=>node.matches('code,a[href*="wa.me"]')||labels.some(label=>node.textContent.includes(label))).length;});assert.equal(forbidden,0);return forbidden;
+}
+async function destinationScreenshot(page,name,width){
+ const target=path.join(evidence,'destination-'+name+'-'+width+'.png');await page.screenshot({path:target,fullPage:true});const bytes=readFileSync(target);assert.ok(bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])));const pngWidth=bytes.readUInt32BE(16),height=bytes.readUInt32BE(20);assert.equal(pngWidth,width);assert.ok(height>0);return {path:path.relative(root,target).split(path.sep).join('/'),sha256:sha256(bytes),width:pngWidth,height};
+}
+async function heldCanonical(current){for(let attempt=0;!current.held.length&&attempt<100;attempt++)await pause(20);assert.equal(current.held.length,1,'One canonical project GET must be held');}
+async function guideDestination(page,id){
+ const guide='section[aria-labelledby="onboarding-guide-title"]';if(!await page.$('#onboarding-guide-content'))await click(page,'Abrir guía');
+ const summary=await page.evaluateHandle(selector=>[...document.querySelector(selector).querySelectorAll('summary')].find(node=>node.textContent.trim()==='Elegir otro paso')||null,guide);assert.ok(summary.asElement());if(!await page.evaluate(node=>node.parentElement.open,summary))await visibleElementClick(page,summary.asElement());await summary.dispose();
+ const position=id==='worker-channel-title'?9:id==='participant-title'?6:null;assert.ok(position);const button=await page.$(guide+' nav[aria-label="Pasos de inicio"] button:nth-child('+position+')');assert.ok(button);await visibleElementClick(page,button);await button.dispose();
+ await click(page,'Ir a este paso');await page.waitForFunction(target=>location.hash==='#'+target,{timeout:15000},id);return destinationGeometry(page,id);
+}
+async function destinationDelayedMount(width){
+ const current=newState('destination-delayed');current.holdWorkspaceProject='p-a';current.destinationHoldProfile=true;const {context,page}=await createPage(width,current,null,{initialPath:destinationEntry});await heldCanonical(current);
+ assert.equal(await page.$('#worker-channel-title'),null);assert.equal(await page.$('#identity-access-title'),null);assert.equal(await page.evaluate(()=>location.hash),'#worker-channel-title');const beforeRelease={targetMounted:false,focused:false,heldCanonicalCount:current.held.length,...destinationNetwork(current)};
+ current.holdWorkspaceProject=null;current.held.shift()();await identityOnly(page);for(let attempt=0;!current.destinationHeldProfile?.length&&attempt<100;attempt++)await pause(20);assert.equal(current.destinationHeldProfile?.length,1);const beforeProfileGeometry=await destinationGeometry(page,'worker-channel-title');current.destinationHoldProfile=false;current.destinationHeldProfile.shift()();await page.waitForFunction(()=>document.querySelector('[aria-labelledby="participant-title"]')?.textContent.includes('Persona de ensayo'));await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const geometry=await destinationGeometry(page,'worker-channel-title'),profileRead={heldBeforeNavigation:true,releasedAfterNavigation:true,beforeGeometry:beforeProfileGeometry,afterGeometry:geometry},activationControls=await noDestinationActivation(page),network=destinationNetwork(current);assert.equal(network.workspaceGets,2);assert.equal(network.participantGets,1);const screenshot=await destinationScreenshot(page,'delayed',width);
+ destinationChecks.push({name:destinationNames[0],width,status:'PASS',trigger:'INITIAL_HASH_AND_CANONICAL_PROJECT_HINT',initialPath:destinationEntry,beforeRelease,geometry,profileRead,activationControls,...network,screenshot});await context.close();
+}
+async function destinationOperationalAppend(page,current){
+ current.approved=true;current.destinationPaging=true;current.row={...current.row,kyc:{...current.row.kyc,status:'APPROVED'}};
+ await click(page,'Comprobar habilitación de obra');await waitRecordedTask(page,'Tarea operativa p-a');await chooseWorkspaceView(page,'schedule-title');assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),1);
+ current.holdWorkspacePage='p-a';const button=await page.$('#schedule-load-more');assert.ok(button);await button.hover();await page.mouse.down();
+ const observe=()=>page.evaluate(()=>{const button=document.getElementById('schedule-load-more'),rect=button?.getBoundingClientRect();return {activeId:document.activeElement?.id||'',activeTagName:document.activeElement?.tagName||'',scrollY,taskCount:document.querySelectorAll('[data-task-id]').length,buttonMounted:Boolean(button),buttonDisabled:button?.disabled??null,rect:rect?{left:rect.left,top:rect.top,right:rect.right,bottom:rect.bottom,width:rect.width,height:rect.height}:null,viewportWidth:innerWidth,viewportHeight:innerHeight,firstTaskTop:document.querySelector('[data-task-id]')?.getBoundingClientRect().top??null};});
+ const nativeFocus=row=>row.activeId==='schedule-load-more'&&row.activeTagName==='BUTTON'||row.activeId===''&&row.activeTagName==='BODY';
+ const buttonBox=(row,visible)=>{assert.ok(row.rect&&Object.values(row.rect).every(Number.isFinite)&&row.rect.width>0&&row.rect.height>0);assert.ok(Number.isFinite(row.firstTaskTop));if(visible)assert.ok(row.rect.left>=0&&row.rect.right<=row.viewportWidth+1&&row.rect.top<row.viewportHeight&&row.rect.bottom>0,'OPERATIONAL_APPEND_BUTTON_VISIBLE');};
+ const before=await observe();assert.equal(before.activeId,'schedule-load-more');assert.equal(before.activeTagName,'BUTTON');assert.equal(before.buttonDisabled,false);buttonBox(before,true);await page.mouse.up();await button.dispose();await heldCanonical(current);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const pending=await observe();current.destinationAppendObservation={before,pending,after:null};
+ assert.ok(nativeFocus(pending),'OPERATIONAL_APPEND_FOCUS_DURING_READ');assert.equal(pending.buttonDisabled,true);buttonBox(pending,true);assert.ok(Math.abs(pending.rect.top-before.rect.top)<=3&&Math.abs(pending.rect.left-before.rect.left)<=3,'OPERATIONAL_APPEND_VIEWPORT_POSITION_DURING_READ');assert.equal(pending.taskCount,1);
+ current.holdWorkspacePage=null;current.held.shift()();await settled(page);await page.waitForFunction(()=>document.querySelectorAll('[data-task-id]').length===2);const after=await observe();current.destinationAppendObservation.after=after;
+ assert.ok(nativeFocus(after),'OPERATIONAL_APPEND_FOCUS_AFTER_READ');buttonBox(after,false);assert.equal(after.buttonDisabled,false);assert.equal(after.taskCount,2);assert.equal(after.buttonMounted,true);
+ assert.deepEqual(current.destinationProjectReads,[{actor:'A',projectId:'p-a',afterTask:null},{actor:'A',projectId:'p-a',afterTask:'t-p-a'}]);
+ return {canonicalAdmissionSimulated:true,totalTasks:3,projectReads:current.destinationProjectReads,before,pending,after};
+}
+
+async function destinationPrivateDraft(page,current){
+ await chooseWorkspaceView(page,'participant-title');await prepareOwn(page,{consult:false});const original=await page.$('[aria-labelledby="participant-title"] form'),images=await page.$$eval('[aria-labelledby="participant-title"] form fieldset img',nodes=>nodes.map(node=>node.src));assert.equal(images.length,2);
+ const observe=async()=>{const facts=await page.evaluate(form=>{const capture=form.querySelector('[data-kyc-capture-step]'),choice=[...capture.querySelectorAll('label')].find(node=>node.textContent.includes('Leí el aviso y autorizo presentar estas imágenes'))?.querySelector('input');return {step:Number(capture.dataset.kycCaptureStep),consent:choice?.checked===true,formMounted:form.isConnected,formVisible:form.getClientRects().length>0,sameForm:form===document.querySelector('[aria-labelledby="participant-title"] form'),imageCount:form.querySelectorAll('fieldset img').length};},original);const next=await page.$$eval('[aria-labelledby="participant-title"] form fieldset img',nodes=>nodes.map(node=>node.src));return {...facts,sameImages:JSON.stringify(next)===JSON.stringify(images)};};
+ const before=await observe();await chooseWorkspaceView(page,'worker-channel-title');const hidden=await observe();await chooseWorkspaceView(page,'participant-title');const after=await observe();
+ for(const row of [before,hidden,after]){assert.equal(row.step,3);assert.equal(row.consent,true);assert.equal(row.formMounted,true);assert.equal(row.sameForm,true);assert.equal(row.imageCount,2);assert.equal(row.sameImages,true);}assert.equal(before.formVisible,true);assert.equal(hidden.formVisible,false);assert.equal(after.formVisible,true);assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);await click(page,'Cancelar');await original.dispose();await chooseWorkspaceView(page,'worker-channel-title');return {syntheticImagesOnly:true,submitted:false,before,hidden,after};
+}
+async function destinationGuideHistory(width){
+ const {current,context,page}=await startPrivacy(width,'NOT_SUBMITTED');const before=destinationNetwork(current);await privacyDisclosure(page,false);
+ const history=[];history.push({action:'guide-private',hash:'#worker-channel-title',geometry:await guideDestination(page,'worker-channel-title')});await page.focus('nav[aria-label="Mi participación en la obra"] a[href="#worker-channel-title"]');assert.equal(await page.evaluate(()=>location.hash),'#worker-channel-title');
+ history.push({action:'same-hash-reopen',hash:'#worker-channel-title',geometry:await guideDestination(page,'worker-channel-title')});history.push({action:'guide-identity',hash:'#participant-title',geometry:await guideDestination(page,'participant-title')});
+ await page.goBack({waitUntil:'domcontentloaded'});assert.equal(await page.evaluate(()=>location.hash),'#worker-channel-title');history.push({action:'back',hash:'#worker-channel-title',geometry:await destinationGeometry(page,'worker-channel-title')});
+ await page.goForward({waitUntil:'domcontentloaded'});assert.equal(await page.evaluate(()=>location.hash),'#participant-title');history.push({action:'forward',hash:'#participant-title',geometry:await destinationGeometry(page,'participant-title')});
+ await page.goBack({waitUntil:'domcontentloaded'});history.push({action:'back-final',hash:'#worker-channel-title',geometry:await destinationGeometry(page,'worker-channel-title')});
+ const navigationNetwork=destinationNetwork(current);assert.deepEqual(navigationNetwork,before,'Guide and same-document history must not read or write');const activationControls=await noDestinationActivation(page),draftPreservation=await destinationPrivateDraft(page,current),append=await destinationOperationalAppend(page,current),network=destinationNetwork(current),screenshot=await destinationScreenshot(page,'guide-history-append',width);
+ destinationChecks.push({name:destinationNames[1],width,status:'PASS',trigger:'REAL_ONBOARDING_GUIDE',history,requestCountBefore:before.apiSequence.length,requestCountAfter:navigationNetwork.apiSequence.length,navigationNetwork,draftPreservation,append,activationControls,...network,screenshot});await context.close();
+}
+async function destinationContextChange(width){
+ const current=newState('destination-context');current.holdWorkspaceProject='p-a';const {context,page}=await createPage(width,current,null,{initialPath:destinationEntry});await heldCanonical(current);assert.equal(await page.$('#worker-channel-title'),null);
+ await click(page,'Contexto B');await waitText(page,'Empresa de ensayo B');current.holdWorkspaceProject=null;current.held.shift()();await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await settled(page);await pause(150);
+ const targetMounted=await page.$('#worker-channel-title')!==null,privateMounted=await page.$('#identity-access-title')!==null,oldFactsVisible=await page.evaluate(()=>/Persona de ensayo|Titular propio WhatsApp A|MUST NEVER RENDER|Tarea operativa p-a/.test(document.body.innerText));assert.equal(targetMounted,false);assert.equal(privateMounted,false);assert.equal(oldFactsVisible,false);safeReferences(await references(page),0);
+ const network=destinationNetwork(current);assert.deepEqual(network.apiSequence.map(row=>[row.path,row.actor,row.projectId]),[['/api/identity/workspace','A',null],['/api/identity/workspace','A','p-a'],['/api/identity/workspace','B',null]]);const screenshot=await destinationScreenshot(page,'context',width);
+ destinationChecks.push({name:destinationNames[2],width,status:'PASS',initialPath:destinationEntry,heldBeforeContextChange:true,releasedAfterContextChange:true,currentActor:'B',targetMounted,privateMounted,oldFactsVisible,activationControls:await noDestinationActivation(page),...network,screenshot});await context.close();
+}
+async function destinationRevokedAccess(width){
+ const current=newState('destination-revoked'),{context,page}=await createPage(width,current,null,{initialPath:destinationEntry});await identityOnly(page);const initialGeometry=await destinationGeometry(page,'worker-channel-title');await guideDestination(page,'participant-title');await guideDestination(page,'worker-channel-title');
+ current.denialCode='WORKSPACE_MEMBERSHIP_REQUIRED';await click(page,'Comprobar habilitación de obra');await settled(page);await page.waitForFunction(()=>!document.getElementById('identity-access-title')&&!document.getElementById('worker-channel-title')&&!document.getElementById('participant-title'));
+ const beforeHistory=destinationNetwork(current),history=[];for(const [method,hash]of [['goBack','#participant-title'],['goForward','#worker-channel-title']]){await page[method]({waitUntil:'domcontentloaded'});assert.equal(await page.evaluate(()=>location.hash),hash);await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));const targetMounted=await page.$('#worker-channel-title')!==null,privateMounted=await page.$('#identity-access-title')!==null;assert.equal(targetMounted,false);assert.equal(privateMounted,false);history.push({action:method,hash,targetMounted,privateMounted});}
+ const network=destinationNetwork(current);assert.deepEqual(network,beforeHistory);assert.equal(network.workspaceGets,3);assert.equal(network.participantGets,1);const oldFactsVisible=await page.evaluate(()=>/Persona de ensayo|Titular propio WhatsApp A|MUST NEVER RENDER|Tarea operativa p-a/.test(document.body.innerText));assert.equal(oldFactsVisible,false);assert.equal(await page.$('form'),null);const screenshot=await destinationScreenshot(page,'revoked',width);
+ destinationChecks.push({name:destinationNames[3],width,status:'PASS',initialPath:destinationEntry,initialGeometry,denialCode:current.denialCode,history,oldFactsVisible,activationControls:await noDestinationActivation(page),...network,screenshot});await context.close();
+}
+
 try{
  let ready=false;for(let attempt=0;attempt<120;attempt++){if(server.exitCode!==null)throw Error('Fixture exited: '+serverLog);let response;try{response=await fetch(origin);}catch{}await response?.body?.cancel();if(response?.ok){ready=true;break;}if(response?.status>=500)throw Error('Fixture compilation failed: '+serverLog);await pause(500);}assert.ok(ready,'Fixture unavailable: '+serverLog);
  browser=await puppeteer.launch({headless:true,protocolTimeout:30000,...(process.platform==='win32'?{channel:'chrome'}:{}),args:['--no-sandbox','--disable-setuid-sandbox']});
@@ -416,14 +518,17 @@ try{
  }
  await privateFlow(390,{reload:true});await privateFlow(390,{director:true});await revocation(390,{ownDenied:true});await administratorBootstrap();
  for(const status of [401,409,500])await denial(390,{status,code:'PARTICIPANT_KYC_REVIEW_REQUIRED'});
+ assert.equal(checks.length,103,'Historical identity UI ledger must stay103');
+ for(const width of [320,390,768,1280]){await destinationDelayedMount(width);await destinationGuideHistory(width);await destinationContextChange(width);await destinationRevokedAccess(width);}
+ assert.equal(destinationChecks.length,16);assert.deepEqual(destinationChecks.map(row=>[row.width,row.name]),[320,390,768,1280].flatMap(width=>destinationNames.map(name=>[width,name])));
  assert.deepEqual(pageErrors,[]);assert.deepEqual(requestErrors,[]);
  assert.equal(sha256(sourceBytes('scripts/verify-workspace-identity-only-ui.mjs')),harnessSha256,'Harness changed during validation');
  for(const file of sourceManifest)assert.equal(sha256(sourceBytes(file.path)),file.sha256,'Copied UI source changed during validation: '+file.path);
  assert.deepEqual(sourceIdentity(),identityBefore,'Identity UI source context changed during validation');
- resultProof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',...identityBefore,widths:[320,390,768,1280],totalCheckCount:checks.length,checks,sourceManifest,harnessSha256,pageErrors,requestErrors,screenshots,actualPageReloadTested:true,nativeIndexedDbReceiptReferencesTested:true,automaticRecoveryPostCount:0,postgresExecuted:false,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,physicalWhatsAppVerified:false};
+ resultProof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',...identityBefore,widths:[320,390,768,1280],totalCheckCount:checks.length,checks,sourceManifest,harnessSha256,pageErrors,requestErrors,screenshots,actualPageReloadTested:true,nativeIndexedDbReceiptReferencesTested:true,automaticRecoveryPostCount:0,postgresExecuted:false,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,physicalWhatsAppVerified:false,destinationNavigation:{version:1,widths:[320,390,768,1280],totalCheckCount:destinationChecks.length,checks:destinationChecks,limits:{syntheticSession:true,controlledHttp:true,realProviderCalls:0,productionDataWritten:false,realIdentityApproved:false}},combinedTotalCheckCount:checks.length+destinationChecks.length};
 }catch(error){
  let dom;try{dom=await active?.page?.evaluate(()=>document.body.innerText);await active?.page?.screenshot({path:path.join(evidence,'failed.png'),fullPage:true});}catch{}
- writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,checks,pageErrors,requestErrors,serverLog,active:active?{width:active.width,mode:active.current.mode,requests:active.current.requests,posts:active.current.posts.map(row=>({operationId:row.operationId,scope:row.scope,projectId:row.projectId})),dom}:null},null,2));throw error;
+ writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,checks,pageErrors,requestErrors,serverLog,destinationChecks,active:active?{width:active.width,mode:active.current.mode,destinationAppendObservation:active.current.destinationAppendObservation||null,destinationGeometryObservation:active.current.destinationGeometryObservation||null,requests:active.current.requests,posts:active.current.posts.map(row=>({operationId:row.operationId,scope:row.scope,projectId:row.projectId})),dom}:null},null,2));throw error;
 }finally{
  await browser?.close();
  if(server.exitCode===null){if(process.platform==='win32')await new Promise(resolve=>{const kill=spawn('taskkill',['/PID',String(server.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});kill.on('exit',resolve);kill.on('error',resolve);});else{try{process.kill(-server.pid,'SIGTERM');}catch{}}}
@@ -433,6 +538,6 @@ try{
  if(resultProof){
   assert.deepEqual(sourceIdentity(),identityBefore,'Identity UI source changed before cleanup');
   const proof={...resultProof,fixtureRemoved:true,browserClosed:true,serverStopped:true};
-  writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:'PASS',checks:checks.length,pageErrors:pageErrors.length,requestErrors:requestErrors.length,evidence:path.join(evidence,'browser.json')}));
+  writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify({status:'PASS',checks:checks.length,destinationChecks:destinationChecks.length,combinedChecks:checks.length+destinationChecks.length,pageErrors:pageErrors.length,requestErrors:requestErrors.length,evidence:path.join(evidence,'browser.json')}));
  }
 }

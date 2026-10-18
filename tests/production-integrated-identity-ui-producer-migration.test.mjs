@@ -1,3 +1,4 @@
+import {restoreIdentityDestinationUxPreviousProducerText} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
@@ -17,6 +18,8 @@ import {verifyPlanMeasurementCurrentSources,restorePlanMeasurementPublishedGProd
 const root=new URL('../',import.meta.url),read=file=>readFileSync(new URL(file,root));
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const lf=value=>Buffer.from(value.toString('utf8').replaceAll('\r\n','\n'));
+const actualContract=JSON.parse(read('.github/workspace-acceptance-contract.json'));
+const publishedProducer=(file,bytes=read(file))=>actualContract.identityDestinationUxCurrentRevision?.browser.producerDelta.producer===file?restoreIdentityDestinationUxPreviousProducerText(actualContract,file,bytes):bytes;
 const fixture=authenticateIntegratedIdentityUiProducerMigrationSource(read(INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH));
 const denied=fn=>assert.throws(fn,{code:'INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED'});
 // This is a pure current-metadata shadow, not a native/browser result. Its
@@ -28,14 +31,14 @@ test('UI producer migration authenticates all nine exact source inverses and enu
  assert.equal(fixture.referenceHead,'86f2c484f3d4affb10d1852a320956c4c46aae99');assert.equal(fixture.reviewedHead,'600a0887691077748e82f06388a16187b56bf4c5');assert.equal(fixture.historicalProofsRewritten,false);
  assert.equal(fixture.producers.length,9);assert.deepEqual(INTEGRATED_IDENTITY_UI_PRODUCER_PATHS,fixture.producers.map(row=>row.path));assert.deepEqual(INTEGRATED_IDENTITY_UI_PRODUCER_PATHS,[...new Set(INTEGRATED_IDENTITY_UI_PRODUCER_PATHS)].sort());
  const c=current();assert.ok(c.integratedIdentityCurrentRevision.addedSources.some(row=>row.path===INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH&&row.sha256===INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_SHA256));assert.ok(c.integratedIdentityCurrentRevision.validationSources.some(row=>row.path===INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH));assert.ok(c.integratedIdentityCurrentRevision.validationSources.some(row=>row.path===fileURLToPath(import.meta.url).replaceAll('\\','/').split('/').slice(-2).join('/')));
- for(const row of fixture.producers){const raw=read(row.path),restored=restoreIntegratedIdentityUiProducerText(row.path,raw);assert.equal(sha(lf(raw)),row.currentSha256);assert.equal(lf(raw).length,row.currentBytes);assert.equal(sha(restored),row.previousSha256);assert.equal(restored.length,row.previousBytes);assert.equal(integratedIdentityCurrentSourcePin(c,{path:row.path,sha256:row.previousSha256}),row.currentSha256);}
+ for(const row of fixture.producers){const raw=publishedProducer(row.path),restored=restoreIntegratedIdentityUiProducerText(row.path,raw);assert.equal(sha(lf(raw)),row.currentSha256);assert.equal(lf(raw).length,row.currentBytes);assert.equal(sha(restored),row.previousSha256);assert.equal(restored.length,row.previousBytes);assert.equal(integratedIdentityCurrentSourcePin(c,{path:row.path,sha256:row.previousSha256}),row.currentSha256);}
 });
 test('UI producer history accepts exact LF and Windows CRLF without rewriting current raw sources',()=>{
- for(const row of fixture.producers){const before=read(row.path),currentLf=lf(before),old=restoreIntegratedIdentityUiProducerText(row.path,currentLf),windows=Buffer.from(currentLf.toString('utf8').replaceAll('\n','\r\n'));assert.deepEqual(restoreIntegratedIdentityUiProducerText(row.path,windows),old);assert.deepEqual(restoreIntegratedIdentityUiProducerText(row.path,old),old);assert.deepEqual(restoreIntegratedIdentityUiProducerText(row.path,Buffer.from(old.toString('utf8').replaceAll('\n','\r\n'))),old);assert.deepEqual(read(row.path),before);}
+ for(const row of fixture.producers){const before=read(row.path),currentLf=lf(publishedProducer(row.path,before)),old=restoreIntegratedIdentityUiProducerText(row.path,currentLf),windows=Buffer.from(currentLf.toString('utf8').replaceAll('\n','\r\n'));assert.deepEqual(restoreIntegratedIdentityUiProducerText(row.path,windows),old);assert.deepEqual(restoreIntegratedIdentityUiProducerText(row.path,old),old);assert.deepEqual(restoreIntegratedIdentityUiProducerText(row.path,Buffer.from(old.toString('utf8').replaceAll('\n','\r\n'))),old);assert.deepEqual(read(row.path),before);}
  assert.equal(authenticateIntegratedIdentityUiProducerMigrationSource(Buffer.from(lf(read(INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH)).toString('utf8').replaceAll('\n','\r\n'))).producers.length,9);
 });
 test('UI producer altered current historical missing and extra bytes remain rejected',()=>{
- for(const row of fixture.producers){const raw=read(row.path),old=restoreIntegratedIdentityUiProducerText(row.path,raw);for(const bytes of [null,Buffer.concat([raw,Buffer.from('\n')]),raw.subarray(1),Buffer.concat([old,Buffer.from('\n')]),old.subarray(1),Buffer.from([0xff])])denied(()=>restoreIntegratedIdentityUiProducerText(row.path,bytes));}
+ for(const row of fixture.producers){const raw=publishedProducer(row.path),old=restoreIntegratedIdentityUiProducerText(row.path,raw);for(const bytes of [null,Buffer.concat([raw,Buffer.from('\n')]),raw.subarray(1),Buffer.concat([old,Buffer.from('\n')]),old.subarray(1),Buffer.from([0xff])])denied(()=>restoreIntegratedIdentityUiProducerText(row.path,bytes));}
  denied(()=>restoreIntegratedIdentityUiProducerText('scripts/verify-clerk-access-ui.mjs',read(fixture.producers[0].path)));denied(()=>restoreIntegratedIdentityUiProducerText('scripts/foreign.mjs',Buffer.from('')));
 });
 test('UI producer migration rejects altered hash old body extra path hunk and encoding',()=>{
@@ -44,12 +47,12 @@ test('UI producer migration rejects altered hash old body extra path hunk and en
 });
 test('UI producer current gate denies every old-as-current source and missing substituted validation JSON',()=>{
  const c=JSON.parse(read('.github/workspace-acceptance-contract.json'));denied(()=>verifyIntegratedIdentityCurrentSources(current(),read));assert.equal(verifyIntegratedIdentityCurrentSources(c,read).historicalPinsPreserved,true);
- for(const row of fixture.producers){const old=restoreIntegratedIdentityUiProducerText(row.path,read(row.path));denied(()=>verifyIntegratedIdentityCurrentSources(c,file=>file===row.path?old:read(file)));denied(()=>verifyIntegratedIdentityCurrentSources(c,file=>file===row.path?null:read(file)));}
+ for(const row of fixture.producers){const old=restoreIntegratedIdentityUiProducerText(row.path,publishedProducer(row.path));denied(()=>verifyIntegratedIdentityCurrentSources(c,file=>file===row.path?old:read(file)));denied(()=>verifyIntegratedIdentityCurrentSources(c,file=>file===row.path?null:read(file)));}
  for(const value of [null,Buffer.from('{}'),Buffer.concat([read(INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH),Buffer.from('\n')])])denied(()=>verifyIntegratedIdentityCurrentSources(c,file=>file===INTEGRATED_IDENTITY_UI_PRODUCER_MIGRATION_PATH?value:read(file)));
 });
 test('current identity proof and evidence record share reviewed Git SHA with identical historical cases',()=>{
  const c=current(),previous=restoreIntegratedIdentityPreviousContract(c),old=previous.extension.proofs.find(row=>row.id==='identity-only-ui'),proof=c.extension.proofs.find(row=>row.id===old.id),record=c.evidenceProducers.find(row=>row.path===proof.path),row=fixture.producers.find(row=>row.path===proof.producer);
- assert.equal(old.producerSha256,row.previousSha256);assert.equal(proof.producerSha256,row.currentSha256);assert.equal(record.producerSha256,row.currentSha256);assert.equal(sha(lf(read(proof.producer))),proof.producerSha256);assert.deepEqual(proof.checkNames,old.checkNames);assert.equal(proof.checkNames.length,103);
+ assert.equal(old.producerSha256,row.previousSha256);assert.equal(proof.producerSha256,row.currentSha256);assert.equal(record.producerSha256,row.currentSha256);assert.equal(sha(lf(publishedProducer(proof.producer))),proof.producerSha256);assert.deepEqual(proof.checkNames,old.checkNames);assert.equal(proof.checkNames.length,103);
  assert.equal(integratedIdentityCurrentUiProducerPin(c,{path:proof.producer,sha256:proof.producerSha256}),proof.producerSha256);assert.equal(integratedIdentityCurrentSourcePin(c,{path:proof.producer,sha256:proof.producerSha256}),proof.producerSha256);
  for(const changed of [{path:proof.producer,sha256:'f'.repeat(64)},{path:fixture.producers[0].path,sha256:fixture.producers[0].currentSha256}])denied(()=>integratedIdentityCurrentUiProducerPin(c,changed));
  for(const row of fixture.producers.filter(row=>row.path!==proof.producer))denied(()=>integratedIdentityCurrentSourcePin(c,{path:row.path,sha256:row.currentSha256}));

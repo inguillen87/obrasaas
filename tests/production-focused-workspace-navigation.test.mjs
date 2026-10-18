@@ -48,3 +48,10 @@ test('company plan and recovery stay available before a project is selected',()=
  for(const section of ['identidad','cronograma','actividad','numero','accesos','compras'])assert.equal(workspaceViewAllowed(section,{role:'ADMIN',canManageIntegrations:true,projectAvailable:false}),false);
  assert.equal(workspaceViewAllowed('plan',{role:'WORKER',projectAvailable:false}),false);
 });
+
+test('a current private presentation admits only the two self-service destinations without operation',()=>{
+ const capability={role:'WORKER',projectAvailable:false,privatePresentationAvailable:true};
+ for(const section of ['identidad','mi-whatsapp'])assert.equal(workspaceViewAllowed(section,capability),true);
+ for(const section of ['cronograma','actividad','materiales','compras','numero','bandeja','preparacion','nueva-obra','clientes','accesos'])assert.equal(workspaceViewAllowed(section,{...capability,canManageIntegrations:true}),false);
+ for(const privatePresentationAvailable of [false,undefined,null,'true',1])for(const section of ['identidad','mi-whatsapp'])assert.equal(workspaceViewAllowed(section,{role:'WORKER',projectAvailable:false,privatePresentationAvailable}),false);
+});

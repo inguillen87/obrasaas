@@ -1,3 +1,4 @@
+import {IDENTITY_DESTINATION_UX_CURRENT_REVISION,validateIdentityDestinationUxBrowserSupplement,identityDestinationUxBrowserShadow} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {validateProgressEvidenceWaitNativeProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {WEEKLY_CYP_CURRENT_REVISION,verifyWeeklyCypCurrentSources,validateWeeklyCypImportUiProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {validateCompanyOnboardingUxNativeProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
@@ -23,7 +24,7 @@ import {TEST_FILE as PORTFOLIO_TEST_FILE,EXPECTED_TESTS as PORTFOLIO_TESTS,sourc
 import {KYC_EXPIRED_CURRENT_ADDITIONS,KYC_EXPIRED_CURRENT_VALIDATION_SOURCES,validateKycExpiredCurrentWorkspaceContract as validatePublishedKycWorkspaceContract,verifyKycExpiredCurrentSources as verifyPublishedKycSources} from '../../scripts/lib/kyc-expired-current-ci-lineage.mjs';
 import {PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES,planMeasurementCurrentDependencies,reconstructPublishedHContract,verifyPlanMeasurementCurrentSources,currentFieldPrivacyRevision,currentFieldPrivacySpecRevision} from '../../scripts/lib/plan-measurement-current-ci-lineage.mjs';
 
-export const EXPECTED_CONTRACT_SHA256="9511a06c538d2e11de2fdbbc9c947476f89da0402744201594772170fdfe518b";
+export const EXPECTED_CONTRACT_SHA256="6f2f60136a3d9ec69dd0a72aad062e802c8c76efddce55e058541d9303573a7e";
 function validateKycExpiredCurrentWorkspaceContract(contract){return validatePublishedKycWorkspaceContract(contract.planMeasurementCurrentLineage?reconstructPublishedHContract(contract):contract);}
 function verifyKycExpiredCurrentSources(section,readSource){
  const current=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));
@@ -845,7 +846,7 @@ export function validateExtensionProof(spec,bytes,{expectedHead,expectedTree,rea
  if(spec.kind==='UI_DOCUMENT_CURVE'){/* DOM/source/cleanup facts validated above. */}
  else if(spec.kind==='PG_PLAN_BASELINE'){/* Native facts and rich manifests validated above. */}
  else if(isCanonicalField(spec)){validateCanonicalFieldProof(spec,proof,readSource);}
- else if(isIdentity(spec)){validateIdentityProof(spec,proof,expectedHead);}
+ else if(isIdentity(spec)){try{proof=validateIdentityDestinationUxBrowserSupplement(proof,JSON.parse(readSource('.github/workspace-acceptance-contract.json')),{readSource,readEvidence});}catch(error){if(error.code==='IDENTITY_DESTINATION_UX_PROOF_REJECTED')deny('PROOF_IDENTITY_DESTINATION_'+error.reason);throw error;}validateIdentityProof(spec,proof,expectedHead);}
  else if(isPortfolio(spec)){validatePortfolioProof(spec,proof,{expectedHead,readEvidence});}
  else if(spec.kind==='PG_PREPARATION'||spec.kind==='UI_PREPARATION'){
   if(proof.sourceRevision!==expectedHead||proof.sourceState!=='EXACT_CI_SOURCE'||proof.trackedClean!==true)deny('PROOF_SOURCE_STATE');
@@ -1016,7 +1017,7 @@ export function currentProducerSourceFiles(spec,root){
  };
  if(spec.kind==='UNIT')return bankUnitSourceFiles(root);
  if(isIdentity(spec)){
-  const seeds=[...text.matchAll(/\bcopyGraph\('([^']+)'\)/g)].map(match=>match[1]);equal(seeds,['src/app/(identity)/cuenta/workspace-client.js','src/app/(identity)/cuenta/workspace-recovery-journal.mjs','src/lib/participant-policy.mjs'],'PROOF_IDENTITY_SOURCE_ROOTS');
+  const seeds=[...text.matchAll(/\bcopyGraph\('([^']+)'\)/g)].map(match=>match[1]);const destination=spec.producerSha256===IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.producerDelta.currentProducerSha256;equal(seeds,['src/app/(identity)/cuenta/workspace-client.js','src/app/(identity)/cuenta/workspace-recovery-journal.mjs','src/lib/participant-policy.mjs',...(destination?IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.copyGraphAdditions:[])],'PROOF_IDENTITY_SOURCE_ROOTS');
   assert.equal(text.split("import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';").length,2,'One explicit closed subscription fixture import');
   assert.equal(text.split("pinFixtureGraph('scripts/lib/company-subscription-ui-fixture.mjs');").length,2,'One exact closed subscription fixture dependency graph');
   return walk([...seeds,COMPANY_SUBSCRIPTION_UI_FIXTURE]);
@@ -1971,6 +1972,7 @@ export function provenance({root,lane,contract,expectedHead,workflowSha256,env=p
  }
 
   const extensionProofBindings=contract.extension.proofs.filter(p=>p.lane===lane).map(spec=>validateExtensionProof(spec,readFileSync(path.join(root,spec.path)),{expectedHead:actual,expectedTree,...clock,readSource,readEvidence:file=>readFileSync(path.join(root,cleanPath(file)))}));
+ if(lane==='workspace-ui'&&contract.identityDestinationUxCurrentRevision){const raw=JSON.parse(readFileSync(path.join(root,'.vercel/workspace-identity-only-evidence/browser.json')));validateIdentityDestinationRetainedScreenshots(files,raw.destinationNavigation?.checks?.map(row=>row.screenshot));}
  const record=seal({version:2,proofBindings:extensionProofBindings,lane,head:actual,...clock,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
  if(Buffer.byteLength(JSON.stringify(record))>400*1024)deny('PROVENANCE_LIMIT');
  assertLaneOutputSize(JSON.stringify(record));
@@ -1990,6 +1992,11 @@ export function validateWeeklyCypRetainedScreenshotBindings(files,expected=null)
  if(!Array.isArray(files))deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING');
  if(expected!==null&&(!Array.isArray(expected)||expected.length!==4||new Set(expected.map(row=>row.path)).size!==4))deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING');
  for(const declaration of WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots){const matches=files.filter(row=>row.path===declaration.path);if(matches.length!==1||!sha(matches[0].sha256)||!Number.isSafeInteger(matches[0].bytes)||matches[0].bytes<=24)deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING');if(expected){const bound=expected.find(row=>row.path===declaration.path);if(!bound||bound.sha256!==matches[0].sha256||bound.bytes!==matches[0].bytes)deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING');}}
+}
+export function validateIdentityDestinationRetainedScreenshots(files,expected=null){
+ const declared=IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.retainedScreenshots;if(expected&&JSON.stringify(expected.map(row=>row?.path))!==JSON.stringify(declared.map(row=>row.path)))deny('PROOF_IDENTITY_DESTINATION_SCREENSHOT_BINDING');
+ for(const[index,row]of declared.entries()){const matches=files.filter(file=>file.path===row.path);if(matches.length!==1||!sha(matches[0].sha256)||matches[0].bytes<24||expected&&matches[0].sha256!==expected[index].sha256)deny('PROOF_IDENTITY_DESTINATION_SCREENSHOT_BINDING');}
+ return true;
 }
 export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttempt,readSource}){
  validateContract(contract);if(!head(expectedHead)||!sha(workflowSha256)||!positive(runId)||!positive(runAttempt))deny('EXPECTED_IDENTITY_INVALID');
@@ -2022,6 +2029,7 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
   equal(record.requiredProducedEvidence,contract.lanes[lane].requiredProducedEvidence,'PRODUCED_EVIDENCE_CONTRACT');
   requireEvidence(record.files,record.requiredRetainedEvidence,'MISSING_REQUIRED_RETAINED_EVIDENCE');
   if(lane==='plans'&&contract.weeklyCypCurrentRevision)validateWeeklyCypRetainedScreenshotBindings(record.files);
+  if(lane==='workspace-ui'&&contract.identityDestinationUxCurrentRevision)validateIdentityDestinationRetainedScreenshots(record.files);
   if(!Array.isArray(record.producedNotUploaded)||record.producedNotUploaded.length!==record.requiredProducedEvidence.length)deny('MISSING_REQUIRED_PRODUCED_EVIDENCE');
   for(const file of record.producedNotUploaded){
    exactKeys(file,['path','sha256','bytes'],'INVALID_EVIDENCE_SHAPE');cleanPath(file.path);
@@ -2042,6 +2050,7 @@ function expectedNeeds(contract,expectedHead,workflowSha256,readSource){
  return Object.fromEntries(LANES.map((lane,i)=>{
   const owner=contract.lanes[lane],file=filename=>({path:filename,sha256:'1'.repeat(64),bytes:128}),files=owner.requiredRetainedEvidence.map(file);
   if(lane==='plans'&&contract.weeklyCypCurrentRevision)files.push(...WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots.map(row=>file(row.path)));
+  if(lane==='workspace-ui'&&contract.identityDestinationUxCurrentRevision)files.push(...IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.retainedScreenshots.map(row=>file(row.path)));
   const record=seal({version:2,proofBindings:proofBindings(contract,lane,owner.requiredRetainedEvidence.map(file),expectedHead,readSource),lane,head:expectedHead,runId:'100',runAttempt:'1',workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded:owner.requiredProducedEvidence.map(file),verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
   return [lane,{result:'success',outputs:{provenance:JSON.stringify(record),artifactId:String(i+1),artifactDigest:'2'.repeat(64)}}];
  }));
@@ -2414,7 +2423,8 @@ function identitySelftest(workflow,contract,root,currentContinuityChecks=[],curr
  // Shadow fixtures model Linux Git bytes. The native validator compares exact Git bytes.
  const readSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
  const proof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',sourceRevision:expectedHead,sourceState:'EXACT_CI_SOURCE',trackedClean:true,dirtyTrackedPaths:[],widths:[320,390,768,1280],totalCheckCount:IDENTITY_ONLY_CHECK_COUNT,checks:clone(IDENTITY_ONLY_CHECKS),sourceManifest:spec.sourceFiles.map(file=>({path:file,sha256:hash(readSource(file))})),harnessSha256:spec.producerSha256,pageErrors:[],requestErrors:[],screenshots:identityScreenshotNames.map(name=>IDENTITY_ARTIFACTS[0]+name),actualPageReloadTested:true,nativeIndexedDbReceiptReferencesTested:true,automaticRecoveryPostCount:0,postgresExecuted:false,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,physicalWhatsAppVerified:false,fixtureRemoved:true,browserClosed:true,serverStopped:true};
- const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource});
+ const destinationShadow=identityDestinationUxBrowserShadow(contract);Object.assign(proof,destinationShadow.fields);
+ const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource,readEvidence:file=>destinationShadow.evidence.get(file)||null});
  currentTemplateChecks.push(()=>ownTemplateClosureSelftest(spec,proof,root,validate));
  currentMonthlyChecks.push(()=>monthlyCurveClosureSelftest(spec,proof,root,validate));
  currentKycStatusChecks.push(()=>currentKycStatusClosureSelftest(spec,proof,root,validate));
