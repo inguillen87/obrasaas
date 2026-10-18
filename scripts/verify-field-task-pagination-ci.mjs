@@ -1,3 +1,7 @@
+import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,verifyWorksiteLiveHoursCurrentSources as worksiteSourceCheck0,verifyWorksiteLiveHoursActualClosure as worksiteSourceCheck1} from './lib/worksite-live-hours-current-ci-lineage.mjs';
+function checkWorksiteSource(action){try{return action();}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}}
+const verifyWorksiteLiveHoursCurrentSources=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck0(...args));
+const verifyWorksiteLiveHoursActualClosure=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck1(...args));
 import assert from 'node:assert/strict';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
@@ -47,14 +51,16 @@ export function fieldTaskPaginationCiLocalImports(value,file,readSource){
  }walk(tree.program);return imports;
 }
 export function fieldTaskPaginationCiSourceClosure(readSource){
- const ui=fieldTaskPaginationSourceClosure(readSource),files=new Set();
+ const ui=fieldTaskPaginationSourceClosure(readSource),files=new Set(),external=new Set(ui.externalImports);
  function visit(file){reject(safe(file),'Unsafe current dependency');if(files.has(file))return;const value=bytes(readSource,file);files.add(file);
   for(const ref of fieldTaskPaginationCiLocalImports(value,file,readSource)){
-   reject(!/^(?:https?:|file:|data:)/.test(ref),'Remote executable CI source is forbidden');if(!ref.startsWith('.')&&!ref.startsWith('@/'))continue;
+   reject(!/^(?:https?:|file:|data:)/.test(ref),'Remote executable CI source is forbidden');if(!ref.startsWith('.')&&!ref.startsWith('@/')){external.add(ref);continue;}
    const base=ref.startsWith('@/')?'src/'+ref.slice(2):path.posix.normalize(path.posix.join(path.posix.dirname(file),ref)),resolved=[base,base+'.js',base+'.mjs',base+'.css'].find(candidate=>readSource(candidate)!==null);reject(Boolean(resolved),'Missing actual dependency '+ref);visit(resolved);
   }
  }
- [...ui.files,producer,runner,...FIELD_TASK_PAGINATION_UNIT_FILES,'scripts/lib/owned-fixture-cleanup.mjs','package.json','package-lock.json'].forEach(visit);return [...files].sort();
+ [...ui.files,producer,runner,...FIELD_TASK_PAGINATION_UNIT_FILES,'scripts/lib/owned-fixture-cleanup.mjs','package.json','package-lock.json'].forEach(visit);const sorted=[...files].sort(),rawContract=readSource(contractPath);
+ if(Buffer.isBuffer(rawContract)){const contract=JSON.parse(rawContract);if(contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION])verifyWorksiteLiveHoursActualClosure(contract,FIELD_TASK_PAGINATION_CI_KIND,{files:sorted,externalImports:[...external].sort()},readSource);}
+ return sorted;
 }
 function currentMetadata(){const value=WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI;reject(value?.status==='REVIEWED_FROZEN_CURRENT_SOURCE'&&value.ciVersion===FIELD_TASK_PAGINATION_CI_VERSION&&value.rawVersion===1&&Array.isArray(value.checkNames)&&value.checkNames.length===33&&new Set(value.checkNames).size===33&&same(value.widths,FIELD_TASK_PAGE_WIDTHS)&&same(value.unitFiles,FIELD_TASK_PAGINATION_UNIT_FILES),'The frozen complete 33-check consumer matrix is required');return value;}
 export function fieldTaskPaginationUnitCases(readSource,file){
@@ -106,6 +112,7 @@ function validateRequests(requests,current){
 }
 export function validateFieldTaskPaginationCi(proof,{expectedHead,expectedTree,readSource,readEvidence,spec,runId,runAttempt}){
  const current=currentMetadata();reject(/^[a-f0-9]{40}$/.test(expectedHead)&&/^[a-f0-9]{40}$/.test(expectedTree)&&typeof readSource==='function'&&typeof readEvidence==='function','Exact immutable source and evidence readers required');
+ const sourceContract=JSON.parse(bytes(readSource,contractPath));if(sourceContract[WORKSITE_LIVE_HOURS_CURRENT_SECTION])verifyWorksiteLiveHoursCurrentSources(sourceContract,readSource);
  keys(proof,['version','status','sourceRevision','sourceTree','sourceState','trackedClean','ciRun','harnessSha256','sourceManifest','checks','rawBrowser','browserExecution','unitSuites','providerCalls','productionDataTouched','humanAccepted'],'CI envelope');
  reject(proof.version===FIELD_TASK_PAGINATION_CI_VERSION&&proof.status==='PASS'&&proof.sourceRevision===expectedHead&&proof.sourceTree===expectedTree&&proof.sourceState==='EXACT_CI_SOURCE'&&proof.trackedClean===true,'Current exact CI source required');
  keys(proof.ciRun,['repository','workflow','runId','runAttempt','event','job'],'CI identity');reject(proof.ciRun.repository==='inguillen87/obrasaas'&&proof.ciRun.workflow==='.github/workflows/workspace-acceptance.yml'&&proof.ciRun.job==='field'&&['push','workflow_dispatch'].includes(proof.ciRun.event)&&proof.ciRun.runId===Number(runId)&&proof.ciRun.runAttempt===Number(runAttempt)&&Number.isSafeInteger(proof.ciRun.runId)&&proof.ciRun.runId>0&&Number.isSafeInteger(proof.ciRun.runAttempt)&&proof.ciRun.runAttempt>0,'Actual field workflow run and attempt required');
@@ -131,7 +138,7 @@ export function validateFieldTaskPaginationCi(proof,{expectedHead,expectedTree,r
 async function main(){
  const[mode,...args]=process.argv.slice(2);reject(['browser','verify'].includes(mode)&&args.length===2&&args[0]==='--expected-head','Explicit browser or verification mode and expected head required');const root=process.cwd(),options=fieldTaskPaginationUiCiOptions(['--ci',...args],{environment:process.env});
  const git=args=>execFileSync('git',args,{cwd:root,maxBuffer:32*1024*1024,windowsHide:true}),head=git(['rev-parse','HEAD']).toString().trim(),tree=git(['rev-parse','HEAD^{tree}']).toString().trim();reject(head===options.expectedHead&&git(['status','--porcelain','--untracked-files=no']).toString()==='','Clean exact CI checkout required');
- const readSource=file=>{try{return git(['show',head+':'+file]);}catch{return null;}},readEvidence=file=>{if(!safe(file))return null;const name=path.join(root,file);return existsSync(name)&&lstatSync(name).isFile()?readFileSync(name):null;},contract=JSON.parse(bytes(readSource,contractPath));verifyWhatsappFieldContinuityCurrentSources(contract,readSource);
+ const readSource=file=>{try{return git(['show',head+':'+file]);}catch{return null;}},readEvidence=file=>{if(!safe(file))return null;const name=path.join(root,file);return existsSync(name)&&lstatSync(name).isFile()?readFileSync(name):null;},contract=JSON.parse(bytes(readSource,contractPath));verifyWhatsappFieldContinuityCurrentSources(contract,readSource);if(contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION])verifyWorksiteLiveHoursCurrentSources(contract,readSource);
  const spec=contract.extension.proofs.find(row=>row.id===FIELD_TASK_PAGINATION_CI_PROOF_ID),output=FIELD_TASK_PAGINATION_CI_EVIDENCE+'current-ci.json';reject(same(spec?.sourceFiles,fieldTaskPaginationCiSourceClosure(readSource)),'Reviewed complete current CI source closure required');const before=refs(spec.sourceFiles,readSource);
  const unchanged=()=>{reject(git(['rev-parse','HEAD']).toString().trim()===head&&git(['rev-parse','HEAD^{tree}']).toString().trim()===tree&&git(['status','--porcelain','--untracked-files=no']).toString()===''&&same(before,refs(spec.sourceFiles,readSource)),'Current source must remain unchanged');for(const row of before)reject(readFileSync(path.join(root,row.path)).equals(bytes(readSource,row.path)),'Actual executed checkout differs from current Git RAW source: '+row.path);};unchanged();
  if(mode==='browser'){

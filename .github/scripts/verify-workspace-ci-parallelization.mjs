@@ -1,3 +1,4 @@
+import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract,verifyWorksiteLiveHoursCurrentSources} from '../../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {IDENTITY_DESTINATION_UX_CURRENT_REVISION,validateIdentityDestinationUxBrowserSupplement,identityDestinationUxBrowserShadow} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {validateProgressEvidenceWaitNativeProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {WEEKLY_CYP_CURRENT_REVISION,verifyWeeklyCypCurrentSources,validateWeeklyCypImportUiProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
@@ -28,6 +29,7 @@ export const EXPECTED_CONTRACT_SHA256="6f2f60136a3d9ec69dd0a72aad062e802c8c76efd
 function validateKycExpiredCurrentWorkspaceContract(contract){return validatePublishedKycWorkspaceContract(contract.planMeasurementCurrentLineage?reconstructPublishedHContract(contract):contract);}
 function verifyKycExpiredCurrentSources(section,readSource){
  const current=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));
+ if(current[WORKSITE_LIVE_HOURS_CURRENT_SECTION]){try{verifyWorksiteLiveHoursCurrentSources(current,readSource);}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});throw error;}}
  try{verifyIntegratedIdentityCurrentSources(current,readSource);}catch(error){if(error.code==='INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});throw error;}
  if(current.planMeasurementCurrentLineage){if(canonical(current.kycExpiredCurrentComposition)!==canonical(section))throw Object.assign(new Error('Published KYC section changed'),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});return verifyPlanMeasurementCurrentSources(current,readSource);}
  return verifyPublishedKycSources(section,readSource);
@@ -1809,6 +1811,7 @@ function validateEvidenceContract(contract){
  if(Object.values(contract.lanes).flatMap(owner=>owner.optionalArtifactPatterns).length!==6)deny('OPTIONAL_ARTIFACT_COVERAGE');
 }
 export function validateContract(contract){
+ if(contract?.[WORKSITE_LIVE_HOURS_CURRENT_SECTION]){try{validateContract(restoreWorksiteLiveHoursPreviousContract(contract));}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')deny('PROOF_BINDING_SOURCE');throw error;}return contract;}
  if(contract?.whatsappFieldContinuityCurrentRevision){try{validateContract(restoreWhatsappFieldContinuityPreviousContract(contract));}catch(error){if(error.code==='WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED')deny('PROOF_BINDING_SOURCE');throw error;}return contract;}
  if(contract?.planMeasurementDocumentAssociationRevision){try{validateContract(restoreDocumentTaskAssociationPreviousContract(contract));}catch(error){if(error.code==='PLAN_MEASUREMENT_DOCUMENT_ASSOCIATION_CI_LINEAGE_REJECTED')deny('PROOF_BINDING_SOURCE');throw error;}return contract;}
  if(contract?.integratedIdentityCurrentRevision){try{validateIntegratedIdentityWorkspaceContract(contract);validateContract(restoreIntegratedIdentityPreviousContract(contract));}catch(error){if(error.code==='INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED')deny('PROOF_BINDING_SOURCE');throw error;}return contract;}
@@ -1836,8 +1839,14 @@ export function validateContract(contract){
  return contract;
 }
 export function loadContract(filename){
- const bytes=readFileSync(filename);if(hash(bytes)!==EXPECTED_CONTRACT_SHA256)deny('CONTRACT_CHECKSUM');
- return validateContract(JSON.parse(bytes.toString('utf8')));
+ const bytes=readFileSync(filename);let contract;try{contract=JSON.parse(bytes.toString('utf8'));}catch{deny('CONTRACT_CHECKSUM');}
+ // Keep the complete historical checksum. The separately authenticated outer
+ // declaration must restore those exact bytes; no self-referential new checksum.
+ if(hash(bytes)!==EXPECTED_CONTRACT_SHA256){
+  if(!contract?.[WORKSITE_LIVE_HOURS_CURRENT_SECTION])deny('CONTRACT_CHECKSUM');
+  try{if(hash(JSON.stringify(restoreWorksiteLiveHoursPreviousContract(contract),null,2)+'\n')!==EXPECTED_CONTRACT_SHA256)deny('CONTRACT_CHECKSUM');}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')deny('CONTRACT_CHECKSUM');throw error;}
+ }
+ return validateContract(contract);
 }
 export function buildWorkflow(contract){
  validateContract(contract);
@@ -2061,7 +2070,7 @@ export function kycExpiredCurrentCompositionSelftest(contract,root=process.cwd()
  const bad=(name,run)=>{assert.throws(run,error=>['KYC_EXPIRED_CURRENT_LINEAGE_REJECTED','PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code));checks.push({name:prefix+name,result:'PASS',expectedDenial:'KYC_EXPIRED_CURRENT_LINEAGE_REJECTED',boundary:'pure source/contract negative fixture'});};
  const readSource=file=>Buffer.from(readFileSync(path.join(root,file),'utf8').replaceAll('\r\n','\n'));
  good('all-published-contract-fields-byte-equivalent',()=>validateKycExpiredCurrentWorkspaceContract(contract));
- good('actual-production-and-native-125-source-closure',()=>{const result=verifyKycExpiredCurrentSources(section,readSource);assert.equal(result.publishedCurrentSourceCount??result.sourceCount,contract.planMeasurementCurrentLineage?127:125);assert.equal(result.sourceCount,contract.whatsappFieldContinuityCurrentRevision?.sourceSetDeltas.find(row=>row.family==='COMPACT').currentCount??contract.integratedIdentityCurrentRevision?.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount??contract.participantPreanalysisCurrentRevision?.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount??(contract.planMeasurementCurrentLineage?127:125));});
+ good('actual-production-and-native-125-source-closure',()=>{const result=verifyKycExpiredCurrentSources(section,readSource);assert.equal(result.publishedCurrentSourceCount??result.sourceCount,contract.planMeasurementCurrentLineage?127:125);assert.equal(result.sourceCount,contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]?.sourceSetDeltas.find(row=>row.family==='COMPACT')?.currentCount??contract.whatsappFieldContinuityCurrentRevision?.sourceSetDeltas.find(row=>row.family==='COMPACT').currentCount??contract.integratedIdentityCurrentRevision?.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount??contract.participantPreanalysisCurrentRevision?.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount??(contract.planMeasurementCurrentLineage?127:125));});
  good('old-117-source-corpus-plus-exact-eight-additions',()=>{assert.equal(section.previousSourceCount,117);assert.equal(section.sourceFiles.length,125);equal(section.sourceAdditions,KYC_EXPIRED_CURRENT_ADDITIONS,'PROOF_BINDING_SOURCE');});
  good('thirteen-historical-plus-prior-and-composed-contexts',()=>{assert.equal(section.historicalScenarioCount,13);assert.equal(section.historicalMeasurementCount,3);assert.equal(section.historicalPostCount,4);assert.equal(section.priorContextPostCount,1);assert.equal(section.composedCurrentPostCount,1);assert.equal(section.totalPostCount,6);});
  for(const [name,edit]of [

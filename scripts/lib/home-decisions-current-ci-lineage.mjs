@@ -1,3 +1,14 @@
+import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract as worksiteOuter0,worksiteLiveHoursCurrentSourcePin as worksiteOuter1,worksiteLiveHoursPreviousSourcePin as worksiteOuter2,restoreWorksiteLiveHoursSourceSet as worksiteOuter3,verifyWorksiteLiveHoursCurrentSources as worksiteOuter4,worksiteLiveHoursProofSourceAdditions as worksiteOuter5,restoreWorksiteLiveHoursPreviousProducerText as worksiteOuter6,worksiteLiveHoursValidationFiles as worksiteOuter7} from './worksite-live-hours-current-ci-lineage.mjs';
+// Preserve this consumer's established denial category at the outer revision boundary.
+function homeWorksiteOuterCall(fn,args){try{return fn(...args);}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}}
+const restoreWorksiteLiveHoursPreviousContract=(...args)=>homeWorksiteOuterCall(worksiteOuter0,args);
+const worksiteLiveHoursCurrentSourcePin=(...args)=>homeWorksiteOuterCall(worksiteOuter1,args);
+const worksiteLiveHoursPreviousSourcePin=(...args)=>homeWorksiteOuterCall(worksiteOuter2,args);
+const restoreWorksiteLiveHoursSourceSet=(...args)=>homeWorksiteOuterCall(worksiteOuter3,args);
+const verifyWorksiteLiveHoursCurrentSources=(...args)=>homeWorksiteOuterCall(worksiteOuter4,args);
+const worksiteLiveHoursProofSourceAdditions=(...args)=>homeWorksiteOuterCall(worksiteOuter5,args);
+const restoreWorksiteLiveHoursPreviousProducerText=(...args)=>homeWorksiteOuterCall(worksiteOuter6,args);
+const worksiteLiveHoursValidationFiles=(...args)=>homeWorksiteOuterCall(worksiteOuter7,args);
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {parse} from '@babel/parser';
@@ -4261,7 +4272,7 @@ export function homeDecisionsCurrentSourcePin(contract,ref){
 }
 export function homeDecisionsValidationFiles(contract){
  const value=section(contract);if(!value)return[];restoreHomeDecisionsPreviousContract(contract);
- const destination=identityDestinationUxSection(contract),wait=progressEvidenceWaitSection(contract),weekly=weeklyCypSection(contract);return [...new Set([...(destination?identityDestinationUxReferences(destination).map(row=>row.path):[]),...(wait?wait.reviewedSourceChanges.map(row=>row.path):[]),...customerPhoneSelectionValidationFiles(contract),...(weekly?['scripts/lib/plan-document-curve-fixture-copy.mjs',...weekly.validationSources.map(row=>row.path)]:[]),...[...value.reviewedSourceChanges,...value.validationDeltas,...value.validationSources].map(row=>row.path)])].sort();
+ const destination=identityDestinationUxSection(contract),wait=progressEvidenceWaitSection(contract),weekly=weeklyCypSection(contract);return [...new Set([...worksiteLiveHoursValidationFiles(contract),...(destination?identityDestinationUxReferences(destination).map(row=>row.path):[]),...(wait?wait.reviewedSourceChanges.map(row=>row.path):[]),...customerPhoneSelectionValidationFiles(contract),...(weekly?['scripts/lib/plan-document-curve-fixture-copy.mjs',...weekly.validationSources.map(row=>row.path)]:[]),...[...value.reviewedSourceChanges,...value.validationDeltas,...value.validationSources].map(row=>row.path)])].sort();
 }
 // Only complete, reviewed AST nodes are projected. A changed identity guard,
 // query, role expression or unrelated statement remains in the historical AST.
@@ -5174,7 +5185,7 @@ export function verifyProgressEvidenceWaitCurrentSources(contract,readSource){
  const value=progressEvidenceWaitSection(contract);if(!value)return null;restoreProgressEvidenceWaitPreviousContract(contract);reject(typeof readSource==='function','Progress evidence wait actual source reader required');
  const refs=progressEvidenceWaitReferences(value);reject(new Set(refs.map(row=>row.path)).size===refs.length,'Unique progress evidence wait sources required');
  for(const row of refs){const bytes=readSource(row.path);reject(safe(row.path)&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8')))&&sha(bytes.toString('utf8').replaceAll('\r\n','\n'))===identityDestinationUxCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}),'Stale current progress evidence wait source: '+row.path);}
- for(const row of value.proofSourceSets){const spec=contract.extension.proofs.find(spec=>spec.kind===row.kind);reject(Boolean(spec)&&spec.sourceFiles.length===row.count&&sha(JSON.stringify(spec.sourceFiles))===row.pathsSha256,'Unchanged progress evidence wait source set required: '+row.kind);}
+ for(const row of value.proofSourceSets){const spec=contract.extension.proofs.find(spec=>spec.kind===row.kind);reject(Boolean(spec),'Required progress evidence wait proof source set: '+row.kind);const previous=restoreWorksiteLiveHoursSourceSet(contract,row.kind,spec.sourceFiles);reject(previous.length===row.count&&sha(JSON.stringify(previous))===row.pathsSha256,'Unchanged progress evidence wait source set required: '+row.kind);}
  return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,sourceSetChanges:0,nativeOrBrowserAcceptance:false};
 }
 function progressWaitNativeRequired(ok,reason){if(!ok)throw Object.assign(new Error('Progress evidence wait native proof rejected: '+reason),{code:'PROGRESS_EVIDENCE_WAIT_NATIVE_PROOF_REJECTED',reason});}
@@ -5494,6 +5505,7 @@ function identityDestinationUxSection(contract){
 }
 function identityDestinationUxReferences(value){const p=value.browser.producerDelta;return [...value.reviewedSourceChanges,{path:p.producer,previousSha256:p.previousProducerSha256,currentSha256:p.currentProducerSha256},...value.validationPredecessors.map(row=>({path:row.path,previousSha256:row.sha256,currentSha256:value.validationSources.find(ref=>ref.path===row.path).sha256}))];}
 export function restoreIdentityDestinationUxPreviousContract(contract){
+ contract=restoreWorksiteLiveHoursPreviousContract(contract);
  const value=identityDestinationUxSection(contract);if(!value)return contract;const previous=structuredClone(contract);delete previous[IDENTITY_DESTINATION_UX_CURRENT_SECTION];
  const delta=value.browser.producerDelta,proofs=previous.extension?.proofs?.filter(row=>row.id===delta.id),records=previous.evidenceProducers?.filter(row=>row.path===delta.path&&row.producer===delta.producer);
  reject(proofs?.length===1&&records?.length===1&&proofs[0].producer===delta.producer&&proofs[0].path===delta.path&&proofs[0].producerSha256===delta.currentProducerSha256&&records[0].producerSha256===delta.currentProducerSha256,'Exact current identity destination producer required');
@@ -5502,30 +5514,38 @@ export function restoreIdentityDestinationUxPreviousContract(contract){
  proofs[0].sourceFiles=previousPaths(proofs[0].sourceFiles,value.browser.sourceDelta);
  reject(sha(JSON.stringify(previous,null,2)+'\n')===value.previousContractSha256,'The complete published8c306 contract must restore exactly');return previous;
 }
-export function identityDestinationUxCurrentSourcePin(contract,ref){const value=identityDestinationUxSection(contract),row=value&&identityDestinationUxReferences(value).find(row=>row.path===ref.path);if(!row)return ref.sha256;reject([row.previousSha256,row.currentSha256].includes(ref.sha256),'Only exact published8c306 or identity destination pins may advance: '+ref.path);return row.currentSha256;}
-export function identityDestinationUxPreviousSourcePin(contract,ref){const value=identityDestinationUxSection(contract),row=value&&identityDestinationUxReferences(value).find(row=>row.path===ref.path);return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}
+export function identityDestinationUxCurrentSourcePin(contract,ref){
+ ref={...ref,sha256:worksiteLiveHoursPreviousSourcePin(contract,ref)};
+ const value=identityDestinationUxSection(contract),row=value&&identityDestinationUxReferences(value).find(row=>row.path===ref.path);
+ if(row)reject([row.previousSha256,row.currentSha256].includes(ref.sha256),'Only exact published8c306 or identity destination pins may advance: '+ref.path);
+ return worksiteLiveHoursCurrentSourcePin(contract,{...ref,sha256:row?row.currentSha256:ref.sha256});
+}
+export function identityDestinationUxPreviousSourcePin(contract,ref){ref={...ref,sha256:worksiteLiveHoursPreviousSourcePin(contract,ref)};const value=identityDestinationUxSection(contract),row=value&&identityDestinationUxReferences(value).find(row=>row.path===ref.path);return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}
 // Source-history projection for the explicit historical producer test only.
 // Current gates always read the original current bytes through readSource.
 export function restoreIdentityDestinationUxPreviousProducerText(contract,producer,bytes){
+ if(contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]?.producerDeltas.some(row=>row.producer===producer))bytes=restoreWorksiteLiveHoursPreviousProducerText(contract,producer,bytes);
  const value=identityDestinationUxSection(contract);reject(Boolean(value)&&producer===value.browser.producerDelta.producer&&Buffer.isBuffer(bytes),'Only the exact current identity destination producer may restore its published source');restoreIdentityDestinationUxPreviousContract(contract);const delta=value.browser.producerDelta,body=value.browser.producerSourceHistory,decoded=bytes.toString('utf8');reject(bytes.equals(Buffer.from(decoded)),'Current identity destination producer UTF-8 required');let text=decoded.replaceAll('\r\n','\n');reject(sha(text)===delta.currentProducerSha256&&Buffer.byteLength(text)===body.currentBytes,'Exact current identity destination producer body required');
  for(const hunk of body.inverseHunks.toReversed()){const offset=hunk.currentOffsetCharacters;reject(text.slice(offset,offset+hunk.currentText.length)===hunk.currentText,'An exact identity destination source inverse hunk changed');text=text.slice(0,offset)+hunk.previousText+text.slice(offset+hunk.currentText.length);}
  reject(sha(text)===delta.previousProducerSha256&&Buffer.byteLength(text)===body.previousBytes,'The entire published8c306 producer source must restore exactly');return Buffer.from(text);
 }
 export function verifyIdentityDestinationUxCurrentSources(contract,readSource){
+ if(Object.hasOwn(contract,WORKSITE_LIVE_HOURS_CURRENT_SECTION))verifyWorksiteLiveHoursCurrentSources(contract,readSource);
  const value=identityDestinationUxSection(contract);if(!value)return null;restoreIdentityDestinationUxPreviousContract(contract);reject(typeof readSource==='function','Actual identity destination source reader required');
  const refs=identityDestinationUxReferences(value);reject(new Set(refs.map(row=>row.path)).size===refs.length,'Unique identity destination sources required');
- for(const row of refs){const bytes=readSource(row.path);reject(safe(row.path)&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8')))&&sha(bytes.toString('utf8').replaceAll('\r\n','\n'))===row.currentSha256,'Stale current identity destination source: '+row.path);}
+ for(const row of refs){const bytes=readSource(row.path);reject(safe(row.path)&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8')))&&sha(bytes.toString('utf8').replaceAll('\r\n','\n'))===worksiteLiveHoursCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}),'Stale current identity destination source: '+row.path);}
  return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,nativeOrBrowserAcceptance:false};
 }
 export function identityDestinationUxProofSourceAdditions(spec){
- const delta=IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.sourceDelta;if(spec?.id!==delta.id)return[];const files=spec.sourceFiles;
+ const live=worksiteLiveHoursProofSourceAdditions(spec);if(live.length)spec={...spec,sourceFiles:spec.sourceFiles.filter(file=>!live.includes(file))};
+ const delta=IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.sourceDelta;if(spec?.id!==delta.id)return live;const files=spec.sourceFiles;
  reject(Array.isArray(files)&&new Set(files).size===files.length&&same(files,[...files].sort()),'Distinct sorted identity destination source paths required');
- if(files.length===delta.currentCount&&sha(JSON.stringify(files))===delta.currentPathsSha256){previousPaths(files,delta);return [...delta.additions];}
+ if(files.length===delta.currentCount&&sha(JSON.stringify(files))===delta.currentPathsSha256){previousPaths(files,delta);return [...delta.additions,...live];}
  // An earlier phase may already have removed this outer addition; its exact
  // immutable source matrix still validates that inherited set.
- reject(files.length<delta.currentCount&&!delta.additions.some(file=>files.includes(file)),'Unknown identity destination source set');return[];
+ reject(files.length<delta.currentCount&&!delta.additions.some(file=>files.includes(file)),'Unknown identity destination source set');return live;
 }
-export function restoreIdentityDestinationUxSourceSet(family,files,contract){const value=identityDestinationUxSection(contract);if(!value)return files;restoreIdentityDestinationUxPreviousContract(contract);return family===value.browser.sourceDelta.family?previousPaths(files,value.browser.sourceDelta):files;}
+export function restoreIdentityDestinationUxSourceSet(family,files,contract){files=restoreWorksiteLiveHoursSourceSet(contract,family,files);const value=identityDestinationUxSection(contract);if(!value)return files;restoreIdentityDestinationUxPreviousContract(contract);return family===value.browser.sourceDelta.family?previousPaths(files,value.browser.sourceDelta):files;}
 
 function identityDestinationRequired(ok,reason){if(!ok)throw Object.assign(new Error('Identity destination browser proof rejected: '+reason),{code:'IDENTITY_DESTINATION_UX_PROOF_REJECTED',reason});}
 function identityDestinationKeys(value,keys,reason){identityDestinationRequired(plain(value)&&same(Object.keys(value).sort(),keys.slice().sort()),reason);}
@@ -5556,7 +5576,8 @@ export function validateIdentityDestinationUxBrowserSupplement(proof,contract,{r
  const limits={syntheticSession:true,controlledHttp:true,realProviderCalls:0,productionDataWritten:false,realIdentityApproved:false};k(s.limits,Object.keys(limits),'SUPPLEMENT_LIMITS_SHAPE');r(same(s.limits,limits),'SUPPLEMENT_LIMITS');
  r(typeof readSource==='function'&&typeof readEvidence==='function','ACTUAL_SOURCE_AND_SCREENSHOT_READERS');verifyIdentityDestinationUxCurrentSources(contract,readSource);
  const producer=readSource(n.producerDelta.producer);r(Buffer.isBuffer(producer)&&sha(producer)===proof.harnessSha256,'ACTUAL_CURRENT_HARNESS');
- r(Array.isArray(proof.sourceManifest)&&proof.sourceManifest.length===n.sourceDelta.currentCount,'ACTUAL_CURRENT_SOURCE_MANIFEST');const paths=[];for(const ref of proof.sourceManifest){k(ref,['path','sha256'],'SOURCE_REFERENCE');r(safe(ref.path)&&hash(ref.sha256),'SOURCE_REFERENCE');const bytes=readSource(ref.path);r(Buffer.isBuffer(bytes)&&sha(bytes)===ref.sha256,'CURRENT_SOURCE_BYTES');paths.push(ref.path);}r(new Set(paths).size===paths.length&&sha(JSON.stringify(paths.slice().sort()))===n.sourceDelta.currentPathsSha256,'EXACT_CURRENT_SOURCE_SET');
+ const currentDelta=contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]?.sourceSetDeltas.find(row=>row.family===n.sourceDelta.family);r(Array.isArray(proof.sourceManifest)&&proof.sourceManifest.length===(currentDelta?.currentCount??n.sourceDelta.currentCount),'ACTUAL_CURRENT_SOURCE_MANIFEST');const paths=[];for(const ref of proof.sourceManifest){k(ref,['path','sha256'],'SOURCE_REFERENCE');r(safe(ref.path)&&hash(ref.sha256),'SOURCE_REFERENCE');const bytes=readSource(ref.path);r(Buffer.isBuffer(bytes)&&sha(bytes)===ref.sha256,'CURRENT_SOURCE_BYTES');paths.push(ref.path);}r(new Set(paths).size===paths.length,'EXACT_CURRENT_SOURCE_SET');const ordered=paths.slice().sort();
+ let previousPaths;try{previousPaths=restoreWorksiteLiveHoursSourceSet(contract,n.sourceDelta.family,ordered);}catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')r(false,'EXACT_CURRENT_SOURCE_SET');throw error;}r(previousPaths.length===n.sourceDelta.currentCount&&sha(JSON.stringify(previousPaths))===n.sourceDelta.currentPathsSha256,'EXACT_HISTORICAL_SOURCE_SET');
  const common=['name','width','status','activationControls',...identityDestinationNetworkKeys,'screenshot'];
  for(const[index,row]of s.checks.entries()){
   const mode=index%4,width=n.widths[Math.floor(index/4)];r(row?.name===n.caseNames[mode]&&row.width===width&&row.status==='PASS'&&row.activationControls===0,'ORDERED_CURRENT_CASE');

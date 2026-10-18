@@ -1,3 +1,7 @@
+import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,verifyWorksiteLiveHoursCurrentSources as worksiteSourceCheck0,verifyWorksiteLiveHoursActualClosure as worksiteSourceCheck1} from './lib/worksite-live-hours-current-ci-lineage.mjs';
+function checkWorksiteSource(action){try{return action();}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}}
+const verifyWorksiteLiveHoursCurrentSources=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck0(...args));
+const verifyWorksiteLiveHoursActualClosure=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck1(...args));
 import {WORKSPACE_CONTINUITY_FOCUSED_UI} from './lib/workspace-continuity-current-ci-lineage.mjs';
 import {WHATSAPP_FIELD_CONTINUITY_FOCUSED_UI} from './lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import {HOME_DECISIONS_CURRENT_SECTION,normalizeHomeDecisionsFocusedRaw} from './lib/home-decisions-current-ci-lineage.mjs';
@@ -120,16 +124,18 @@ export function focusedWorkspaceCiLocalImports(value,file,readSource){
  }walk(ast.program);return found;
 }
 export function focusedWorkspaceCiSourceClosure(readSource){
- const ui=focusedWorkspaceUiSourceClosure(readSource),files=new Set(ui.files);
+ const ui=focusedWorkspaceUiSourceClosure(readSource),files=new Set(ui.files),external=new Set(ui.externalImports);
  function visit(file){reject(safe(file),'Unsafe CI dependency');if(files.has(file))return;const value=bytes(readSource,file);files.add(file);
   for(const ref of focusedWorkspaceCiLocalImports(value,file,readSource)){
-   if(!ref.startsWith('.')&&!ref.startsWith('@/')){reject(!/^(https?:|data:|file:)/.test(ref),'Remote CI executable import');continue;}
+   if(!ref.startsWith('.')&&!ref.startsWith('@/')){reject(!/^(https?:|data:|file:)/.test(ref),'Remote CI executable import');external.add(ref);continue;}
    const base=ref.startsWith('@/')?'src/'+ref.slice(2):path.posix.normalize(path.posix.join(path.posix.dirname(file),ref));
    const resolved=[base,base+'.js',base+'.mjs',base+'.css'].find(candidate=>readSource(candidate)!==null);reject(Boolean(resolved),'Missing actual CI import: '+ref);visit(resolved);
   }
  }
  for(const file of [producer,runner,...unitFiles,'scripts/lib/integrated-identity-current-ci-lineage.mjs','tests/production-integrated-identity-current-ci-lineage.test.mjs','src/app/(identity)/cuenta/page.js','src/app/(identity)/cuenta/workspace-identity.js','src/app/(identity)/cuenta/onboarding-guide.js','src/lib/identity-return-path.mjs','src/lib/participant-analysis-consent.mjs','src/lib/participant-kyc-image-set.mjs','src/lib/participant-policy.mjs','src/lib/workspace-policy.mjs','package.json','package-lock.json'])visit(file);
- return [...files].sort();
+ const sorted=[...files].sort(),rawContract=readSource(contractPath);
+ if(Buffer.isBuffer(rawContract)){const contract=JSON.parse(rawContract);if(contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION])verifyWorksiteLiveHoursActualClosure(contract,FOCUSED_WORKSPACE_CI_KIND,{files:sorted,externalImports:[...external].sort()},readSource);}
+ return sorted;
 }
 export function parseFocusedWorkspaceTap(input){
  const text=Buffer.isBuffer(input)?input.toString('utf8'):String(input),value={};
@@ -147,6 +153,7 @@ export function focusedWorkspaceUnitCases(readSource,file){
 export function validateFocusedWorkspaceCi(proof,{expectedHead,expectedTree,readSource,readEvidence,spec,runId,runAttempt}){
  const current=currentFocusedMetadata();
  reject(/^[a-f0-9]{40}$/.test(expectedHead)&&/^[a-f0-9]{40}$/.test(expectedTree)&&typeof readSource==='function'&&typeof readEvidence==='function','Immutable source identity and original evidence readers required');
+ const sourceContract=JSON.parse(bytes(readSource,contractPath));if(sourceContract[WORKSITE_LIVE_HOURS_CURRENT_SECTION])verifyWorksiteLiveHoursCurrentSources(sourceContract,readSource);
  keys(proof,['version','status','sourceRevision','sourceTree','sourceState','trackedClean','ciRun','harnessSha256','sourceManifest','checks','historicalCheckCount','continuityCheckLedger','historicalUnitSuiteCount','previousTotalCheckCount','taskPagingCheckLedger','rawBrowser','unitSuites','providerCalls','realClerkOrSsrVerified','productionDataTouched','humanAccepted'],'CI envelope');
  reject(proof.version===FOCUSED_WORKSPACE_CI_VERSION&&proof.status==='PASS'&&proof.sourceRevision===expectedHead&&proof.sourceTree===expectedTree&&proof.sourceState==='EXACT_CI_SOURCE'&&proof.trackedClean===true,'Current exact CI source required');
  keys(proof.ciRun,['repository','workflow','runId','runAttempt','event','job'],'CI identity');
@@ -183,7 +190,7 @@ async function main(){
  const git=argv=>execFileSync('git',argv,{cwd:root,maxBuffer:32*1024*1024,windowsHide:true}),head=git(['rev-parse','HEAD']).toString().trim(),tree=git(['rev-parse','HEAD^{tree}']).toString().trim();
  reject(head===options.expectedHead&&git(['status','--porcelain','--untracked-files=no']).toString()==='','Clean current CI checkout required');
  const readSource=file=>{try{return git(['show',head+':'+file]);}catch{return null;}},readEvidence=file=>{if(!safe(file))return null;const absolute=path.join(root,file);return existsSync(absolute)&&lstatSync(absolute).isFile()?readFileSync(absolute):null;};
- const contract=JSON.parse(bytes(readSource,contractPath)),{verifyIntegratedIdentityCurrentSources}=await import('./lib/integrated-identity-current-ci-lineage.mjs');verifyIntegratedIdentityCurrentSources(contract,readSource);
+ const contract=JSON.parse(bytes(readSource,contractPath)),{verifyIntegratedIdentityCurrentSources}=await import('./lib/integrated-identity-current-ci-lineage.mjs');verifyIntegratedIdentityCurrentSources(contract,readSource);if(contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION])verifyWorksiteLiveHoursCurrentSources(contract,readSource);
  const spec=contract.extension.proofs.find(row=>row.id===FOCUSED_WORKSPACE_CI_PROOF_ID),output=FOCUSED_WORKSPACE_CI_EVIDENCE+'current-ci.json';
  reject(same(spec?.sourceFiles,focusedWorkspaceCiSourceClosure(readSource)),'Reviewed current source closure required');
  const before=refs(spec.sourceFiles,readSource);
