@@ -18,7 +18,7 @@ export function copyWorksiteLiveHoursFixture({root,fixture,components,sourceMani
  const owned=realpathSync(fixture),directory=realpathSync(components);
  assert.ok(inside(owned,directory),'Only the owned fixture component directory may be changed');
  assert.ok(!lstatSync(components).isSymbolicLink(),'Fixture component directory must not be a link');
- const filenames=[...liveFiles,...(includeHours?['field-hours-report-panel.js']:[])],copied=[];
+ const filenames=[...liveFiles,...(includeHours?['field-hours-report-panel.js','field-hours-report-panel.module.css']:[])],copied=[];
  const record=file=>{const bytes=readFileSync(path.join(root,file)),entry={path:file,sha256:sha(bytes)},prior=sourceManifest.find(row=>row.path===file);if(prior)assert.equal(prior.sha256,entry.sha256,'Original-source hash may not be replaced: '+file);else sourceManifest.push(entry);return bytes;};
  for(const filename of filenames){
   const file=account+filename,target=path.join(directory,filename);
