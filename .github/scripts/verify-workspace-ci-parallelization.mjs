@@ -2,6 +2,8 @@ import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousCont
 import {IDENTITY_DESTINATION_UX_CURRENT_REVISION,validateIdentityDestinationUxBrowserSupplement,identityDestinationUxBrowserShadow} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {validateProgressEvidenceWaitNativeProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {WEEKLY_CYP_CURRENT_REVISION,verifyWeeklyCypCurrentSources,validateWeeklyCypImportUiProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
+import {validatePlanPartidaPreviewImportUiProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
+import {PLAN_PARTIDA_PREVIEW_CURRENT_SECTION,PLAN_PARTIDA_PREVIEW_CURRENT_REVISION} from '../../scripts/lib/plan-partida-preview-current-ci-lineage.mjs';
 import {validateCompanyOnboardingUxNativeProofBytes} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import {WHATSAPP_FIELD_CONTINUITY_CURRENT_REVISION,WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWhatsappFieldContinuityPreviousContract,verifyWhatsappFieldContinuityCurrentSources,whatsappFieldCompanyNativeSourceFiles,validateWhatsappFieldNeutralStepNative,whatsappFieldNeutralStepShadowFixture} from '../../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
@@ -1951,7 +1953,7 @@ export function provenance({root,lane,contract,expectedHead,workflowSha256,env=p
  // Preserve verified screenshot bytes through the existing narrow upload
  // pattern. The producer's private temporary paths remain original provenance.
  let weeklyUi=null;
- if(lane==='plans'&&contract.weeklyCypCurrentRevision){const bytes=readFileSync(path.join(root,'.vercel/private/plan-import-ui-validation.json'));weeklyUi={bytes,screenshots:retainWeeklyCypImportUiScreenshots({root,bytes,readSource,expectedHead:actual,expectedTree})};}
+ if(lane==='plans'&&contract.weeklyCypCurrentRevision){const bytes=readFileSync(path.join(root,'.vercel/private/plan-import-ui-validation.json'));weeklyUi={bytes,screenshots:(contract[PLAN_PARTIDA_PREVIEW_CURRENT_SECTION]?retainPlanPartidaPreviewUiScreenshots:retainWeeklyCypImportUiScreenshots)({root,bytes,readSource,expectedHead:actual,expectedTree})};}
  const files=collect(root,owner.artifacts);
  requireEvidence(files,owner.requiredRetainedEvidence,'MISSING_REQUIRED_RETAINED_EVIDENCE');
  const producedNotUploaded=collect(root,owner.requiredProducedEvidence);
@@ -1977,7 +1979,7 @@ export function provenance({root,lane,contract,expectedHead,workflowSha256,env=p
  if(weeklyUi){
   const uiPath='.vercel/private/plan-import-ui-validation.json',retained=files.find(file=>file.path===uiPath);
   if(!retained||retained.sha256!==hash(weeklyUi.bytes)||retained.bytes!==weeklyUi.bytes.length)deny('PROOF_WEEKLY_CYP_UI_FILE_BINDING');
-  validateWeeklyCypRetainedScreenshotBindings(files,weeklyUi.screenshots);
+  (contract[PLAN_PARTIDA_PREVIEW_CURRENT_SECTION]?validatePlanPartidaPreviewRetainedScreenshotBindings:validateWeeklyCypRetainedScreenshotBindings)(files,weeklyUi.screenshots);
  }
 
   const extensionProofBindings=contract.extension.proofs.filter(p=>p.lane===lane).map(spec=>validateExtensionProof(spec,readFileSync(path.join(root,spec.path)),{expectedHead:actual,expectedTree,...clock,readSource,readEvidence:file=>readFileSync(path.join(root,cleanPath(file)))}));
@@ -2001,6 +2003,19 @@ export function validateWeeklyCypRetainedScreenshotBindings(files,expected=null)
  if(!Array.isArray(files))deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING');
  if(expected!==null&&(!Array.isArray(expected)||expected.length!==4||new Set(expected.map(row=>row.path)).size!==4))deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING');
  for(const declaration of WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots){const matches=files.filter(row=>row.path===declaration.path);if(matches.length!==1||!sha(matches[0].sha256)||!Number.isSafeInteger(matches[0].bytes)||matches[0].bytes<=24)deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING');if(expected){const bound=expected.find(row=>row.path===declaration.path);if(!bound||bound.sha256!==matches[0].sha256||bound.bytes!==matches[0].bytes)deny('PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING');}}
+}
+// The old164 retention/decoder entry remains strict. Current record/gate uses
+// this separate180 entry only with the authenticated compiled outer contract.
+export function retainPlanPartidaPreviewUiScreenshots({root,bytes,readSource,expectedHead,expectedTree}){
+ const originals=new Map(),rootReal=realpathSync(root),readEvidence=file=>{const target=path.isAbsolute(file)?path.resolve(file):path.join(root,cleanPath(file)),relative=path.relative(rootReal,target).split(path.sep).join('/');cleanPath(relative);const stat=lstatSync(target);if(!stat.isFile()||stat.isSymbolicLink()||!realpathSync(target).startsWith(rootReal+path.sep))deny('PROOF_PLAN_PARTIDA_UI_SCREENSHOT_SOURCE');const data=readFileSync(target);originals.set(file,data);return data;};
+ try{validatePlanPartidaPreviewImportUiProofBytes(bytes,readSource,{expectedHead,expectedTree,expectedRoot:rootReal,readEvidence});}catch(error){if(['WEEKLY_CYP_UI_PROOF_REJECTED','PLAN_PARTIDA_PREVIEW_UI_PROOF_REJECTED','PLAN_PARTIDA_PREVIEW_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code))deny('PROOF_PLAN_PARTIDA_UI_BOUNDARY');throw error;}
+ const proof=JSON.parse(utf8(bytes)),retained=[],declarations=[...WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots.map(row=>({...row,kind:'investment'})),...PLAN_PARTIDA_PREVIEW_CURRENT_REVISION.browser.retainedTableScreenshots.map(row=>({...row,kind:'table'}))];
+ for(const row of declarations){const source=row.kind==='investment'?proof.investmentCurveChecks.find(item=>item.width===row.width)?.screenshot:proof.curveTableReadbacks.find(item=>item.width===row.width)?.screenshot?.path,data=originals.get(source),target=path.join(root,cleanPath(row.path));if(!Buffer.isBuffer(data)||!realpathSync(path.dirname(target)).startsWith(rootReal+path.sep))deny('PROOF_PLAN_PARTIDA_UI_SCREENSHOT_SOURCE');writeFileSync(target,data,{flag:'wx'});if(!readFileSync(target).equals(data))deny('PROOF_PLAN_PARTIDA_UI_SCREENSHOT_BINDING');retained.push({path:row.path,sha256:hash(data),bytes:data.length});}
+ return retained;
+}
+export function validatePlanPartidaPreviewRetainedScreenshotBindings(files,expected=null){
+ const tables=PLAN_PARTIDA_PREVIEW_CURRENT_REVISION.browser.retainedTableScreenshots,oldPaths=WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots.map(row=>row.path);if(expected!==null&&(!Array.isArray(expected)||expected.length!==8||new Set(expected.map(row=>row.path)).size!==8))deny('PROOF_PLAN_PARTIDA_UI_SCREENSHOT_BINDING');validateWeeklyCypRetainedScreenshotBindings(files,expected?expected.filter(row=>oldPaths.includes(row.path)):null);
+ for(const row of tables){const matches=files.filter(file=>file.path===row.path);if(matches.length!==1||!sha(matches[0].sha256)||!Number.isSafeInteger(matches[0].bytes)||matches[0].bytes<=45)deny('PROOF_PLAN_PARTIDA_UI_SCREENSHOT_BINDING');if(expected){const original=expected.find(file=>file.path===row.path);if(!original||original.sha256!==matches[0].sha256||original.bytes!==matches[0].bytes)deny('PROOF_PLAN_PARTIDA_UI_SCREENSHOT_BINDING');}}
 }
 export function validateIdentityDestinationRetainedScreenshots(files,expected=null){
  const declared=IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.retainedScreenshots;if(expected&&JSON.stringify(expected.map(row=>row?.path))!==JSON.stringify(declared.map(row=>row.path)))deny('PROOF_IDENTITY_DESTINATION_SCREENSHOT_BINDING');
@@ -2037,7 +2052,7 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
   equal(record.requiredRetainedEvidence,contract.lanes[lane].requiredRetainedEvidence,'RETAINED_EVIDENCE_CONTRACT');
   equal(record.requiredProducedEvidence,contract.lanes[lane].requiredProducedEvidence,'PRODUCED_EVIDENCE_CONTRACT');
   requireEvidence(record.files,record.requiredRetainedEvidence,'MISSING_REQUIRED_RETAINED_EVIDENCE');
-  if(lane==='plans'&&contract.weeklyCypCurrentRevision)validateWeeklyCypRetainedScreenshotBindings(record.files);
+  if(lane==='plans'&&contract.weeklyCypCurrentRevision)(contract[PLAN_PARTIDA_PREVIEW_CURRENT_SECTION]?validatePlanPartidaPreviewRetainedScreenshotBindings:validateWeeklyCypRetainedScreenshotBindings)(record.files);
   if(lane==='workspace-ui'&&contract.identityDestinationUxCurrentRevision)validateIdentityDestinationRetainedScreenshots(record.files);
   if(!Array.isArray(record.producedNotUploaded)||record.producedNotUploaded.length!==record.requiredProducedEvidence.length)deny('MISSING_REQUIRED_PRODUCED_EVIDENCE');
   for(const file of record.producedNotUploaded){
@@ -2059,6 +2074,7 @@ function expectedNeeds(contract,expectedHead,workflowSha256,readSource){
  return Object.fromEntries(LANES.map((lane,i)=>{
   const owner=contract.lanes[lane],file=filename=>({path:filename,sha256:'1'.repeat(64),bytes:128}),files=owner.requiredRetainedEvidence.map(file);
   if(lane==='plans'&&contract.weeklyCypCurrentRevision)files.push(...WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots.map(row=>file(row.path)));
+  if(lane==='plans'&&contract[PLAN_PARTIDA_PREVIEW_CURRENT_SECTION])files.push(...PLAN_PARTIDA_PREVIEW_CURRENT_REVISION.browser.retainedTableScreenshots.map(row=>file(row.path)));
   if(lane==='workspace-ui'&&contract.identityDestinationUxCurrentRevision)files.push(...IDENTITY_DESTINATION_UX_CURRENT_REVISION.browser.retainedScreenshots.map(row=>file(row.path)));
   const record=seal({version:2,proofBindings:proofBindings(contract,lane,owner.requiredRetainedEvidence.map(file),expectedHead,readSource),lane,head:expectedHead,runId:'100',runAttempt:'1',workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded:owner.requiredProducedEvidence.map(file),verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
   return [lane,{result:'success',outputs:{provenance:JSON.stringify(record),artifactId:String(i+1),artifactDigest:'2'.repeat(64)}}];

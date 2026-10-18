@@ -1,4 +1,5 @@
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract as worksiteOuter0,worksiteLiveHoursCurrentSourcePin as worksiteOuter1,worksiteLiveHoursPreviousSourcePin as worksiteOuter2,restoreWorksiteLiveHoursSourceSet as worksiteOuter3,verifyWorksiteLiveHoursCurrentSources as worksiteOuter4,worksiteLiveHoursProofSourceAdditions as worksiteOuter5,restoreWorksiteLiveHoursPreviousProducerText as worksiteOuter6,worksiteLiveHoursValidationFiles as worksiteOuter7} from './worksite-live-hours-current-ci-lineage.mjs';
+import {PLAN_PARTIDA_PREVIEW_CURRENT_REVISION,verifyPlanPartidaPreviewCurrentSources,validatePlanPartidaPreviewUiSupplement} from './plan-partida-preview-current-ci-lineage.mjs';
 // Preserve this consumer's established denial category at the outer revision boundary.
 function homeWorksiteOuterCall(fn,args){try{return fn(...args);}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}}
 const restoreWorksiteLiveHoursPreviousContract=(...args)=>homeWorksiteOuterCall(worksiteOuter0,args);
@@ -5002,11 +5003,14 @@ function weeklyUiSourceManifests(readSource){
  return {sourceManifest:files.slice(0,10),decisionSourceManifest:files.slice(10),spreadsheetSourceManifest:array.elements.map(node=>node.value),documentSourceManifest:['src/lib/plan-import-document-curve.mjs','scripts/lib/plan-document-curve-fixture-copy.mjs','src/lib/plan-import-cyp-curve.mjs'],linkSourceManifest:['src/lib/identity-return-path.mjs'],investmentSourceManifest:weeklyCypInvestmentUiSourceFiles(readSource)};
 }
 export function validateWeeklyCypImportUiProof(proof,readSource,{expectedHead,expectedTree,readEvidence}={}){
+ return validateWeeklyCypImportUiCore(proof,readSource,{expectedHead,expectedTree,readEvidence},null);
+}
+function validateWeeklyCypImportUiCore(proof,readSource,{expectedHead,expectedTree,readEvidence}={},currentBinding){
  const n=WEEKLY_CYP_CURRENT_REVISION.browser,r=weeklyUiRequired;
  r(plain(proof)&&proof.validated===true&&proof.synthetic===true&&proof.realProviderCalls===false&&proof.providerCalls===0&&proof.productionDataWritten===false&&proof.fixtureRemoved===true&&same(proof.errors,[]),'LIMITS');
  r(typeof expectedHead==='string'&&/^[a-f0-9]{40}$/.test(expectedHead)&&typeof expectedTree==='string'&&/^[a-f0-9]{40}$/.test(expectedTree)&&proof.sourceRevision===expectedHead&&proof.sourceTree===expectedTree&&proof.sourceState==='EXACT_CI_SOURCE'&&proof.trackedClean===true,'SOURCE_IDENTITY');
- const producer=weeklyUiRead(readSource,n.producer);r(sha(producer)===n.producerLfSha256&&proof.harnessSha256===n.producerLfSha256,'PRODUCER');
- r(same(proof.widths,n.widths)&&proof.baselineCheckCount===80&&proof.originalTotalCheckCount===96&&proof.totalCheckCount===164&&proof.planLinkSubcaseCount===40,'TOTALS');
+ const producerSha256=currentBinding?currentBinding.producerLfSha256:n.producerLfSha256,producer=weeklyUiRead(readSource,n.producer);r(sha(producer)===producerSha256&&proof.harnessSha256===producerSha256,'PRODUCER');
+ r(same(proof.widths,n.widths)&&proof.baselineCheckCount===80&&proof.originalTotalCheckCount===96&&proof.totalCheckCount===(currentBinding?180:164)&&proof.planLinkSubcaseCount===40,'TOTALS');
  for(const[field,modes]of Object.entries(n.historicalModes)){const expected=field==='calendarChecks'?modes.flatMap(mode=>n.widths.map(width=>({width,mode}))):n.widths.flatMap(width=>modes.map(mode=>({width,mode})));r(Array.isArray(proof[field])&&same(proof[field].map(row=>({width:row?.width,mode:row?.mode})),expected),'HISTORICAL_LEDGER_'+field);}
  r(Object.keys(n.historicalModes).reduce((sum,field)=>sum+proof[field].length,0)===160,'HISTORICAL_TOTAL');
  const manifests=weeklyUiSourceManifests(readSource);r(manifests.investmentSourceManifest.length===n.investmentSourceCount&&sha(JSON.stringify(manifests.investmentSourceManifest))===n.investmentSourcePathsSha256,'INVESTMENT_CLOSURE');
@@ -5023,6 +5027,14 @@ export function validateWeeklyCypImportUiProof(proof,readSource,{expectedHead,ex
  return {status:'PASS',historicalCheckCount:160,addedCheckCount:4,totalCheckCount:164,investmentSourceCount:n.investmentSourceCount,transport:'RECONSTRUCTED_NODE_FORMDATA_FROM_VERIFIED_BROWSER_FILE',nativePostgresExecuted:false,humanAccepted:false};
 }
 export function validateWeeklyCypImportUiProofBytes(bytes,readSource,options){let proof;try{proof=JSON.parse(bytes.toString('utf8'));weeklyUiRequired(Buffer.from(bytes.toString('utf8')).equals(bytes),'ENCODING');}catch(error){if(error.code==='WEEKLY_CYP_UI_PROOF_REJECTED')throw error;weeklyUiRequired(false,'JSON');}return validateWeeklyCypImportUiProof(proof,readSource,options);}
+// This separate entry binds the current producer before reusing the unchanged
+// historical journeys. The legacy entry above always requires its exact164 hash.
+export function validatePlanPartidaPreviewImportUiProofBytes(bytes,readSource,options={}){
+ let proof;try{proof=JSON.parse(bytes.toString('utf8'));weeklyUiRequired(Buffer.from(bytes.toString('utf8')).equals(bytes),'ENCODING');}catch(error){if(error.code==='WEEKLY_CYP_UI_PROOF_REJECTED')throw error;weeklyUiRequired(false,'JSON');}
+ const contract=JSON.parse(weeklyUiRead(readSource,'.github/workspace-acceptance-contract.json'));verifyPlanPartidaPreviewCurrentSources(contract,readSource);
+ validateWeeklyCypImportUiCore(proof,readSource,options,PLAN_PARTIDA_PREVIEW_CURRENT_REVISION.browser);
+ return validatePlanPartidaPreviewUiSupplement(proof,readSource,options);
+}
 // Validator-only shadow input. These buffers are never execution screenshots.
 export function weeklyCypImportUiShadowFixture(readSource,expectedHead,expectedTree){
  const n=WEEKLY_CYP_CURRENT_REVISION.browser,proof={validated:true,synthetic:true,realProviderCalls:false,providerCalls:0,productionDataWritten:false,fixtureRemoved:true,errors:[],sourceRevision:expectedHead,sourceTree:expectedTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,harnessSha256:n.producerLfSha256,widths:[...n.widths],baselineCheckCount:80,originalTotalCheckCount:96,totalCheckCount:164,planLinkSubcaseCount:40,fixtureTransforms:[]},evidence=new Map();

@@ -1,6 +1,17 @@
 import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {WORKSITE_LIVE_HOURS_CURRENT_REVISION} from './worksite-live-hours-current-ci-reviewed.mjs';
+import {PLAN_PARTIDA_PREVIEW_CURRENT_SECTION,restorePlanPartidaPreviewPreviousContract as preview0,planPartidaPreviewCurrentSourcePin as preview1,planPartidaPreviewPreviousSourcePin as preview2,restorePlanPartidaPreviewSourceSet as preview3,planPartidaPreviewProofSourceAdditions as preview4,verifyPlanPartidaPreviewCurrentSources as preview5,verifyPlanPartidaPreviewActualClosure as preview6,restorePlanPartidaPreviewClosure as preview7,planPartidaPreviewValidationFiles as preview8} from './plan-partida-preview-current-ci-lineage.mjs';
+function previewBoundary(fn,args){try{return fn(...args);}catch(error){if(error.code==='PLAN_PARTIDA_PREVIEW_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}}
+const restorePlanPartidaPreviewPreviousContract=(...args)=>previewBoundary(preview0,args);
+const planPartidaPreviewCurrentSourcePin=(...args)=>previewBoundary(preview1,args);
+const planPartidaPreviewPreviousSourcePin=(...args)=>previewBoundary(preview2,args);
+const restorePlanPartidaPreviewSourceSet=(...args)=>previewBoundary(preview3,args);
+const planPartidaPreviewProofSourceAdditions=(...args)=>previewBoundary(preview4,args);
+const verifyPlanPartidaPreviewCurrentSources=(...args)=>previewBoundary(preview5,args);
+const verifyPlanPartidaPreviewActualClosure=(...args)=>previewBoundary(preview6,args);
+const restorePlanPartidaPreviewClosure=(...args)=>previewBoundary(preview7,args);
+const planPartidaPreviewValidationFiles=(...args)=>previewBoundary(preview8,args);
 
 export const WORKSITE_LIVE_HOURS_CURRENT_SECTION='worksiteLiveHoursCurrentRevision';
 export const WORKSITE_LIVE_HOURS_DECLARATION_TRUST_ANCHOR='scripts/lib/worksite-live-hours-current-ci-reviewed.mjs';
@@ -81,6 +92,7 @@ export function createWorksiteLiveHoursRevisionGate(reviewed){
  }
  function references(){return compiledDeclaration().refs;}
  function restorePreviousContract(contract){
+  contract=restorePlanPartidaPreviewPreviousContract(contract);
   const value=section(contract,false);if(!value)return contract;const previous=structuredClone(contract);delete previous[WORKSITE_LIVE_HOURS_CURRENT_SECTION];
   for(const row of value.historicalCheckLedgers){const ledger=pointer(previous,row.contractPointer).value;reject(Array.isArray(ledger)&&ledger.length===row.count&&sha(JSON.stringify(ledger))===row.sha256,'Historical check names must remain exact');}
   for(const row of value.producerDeltas)for(const target of row.contractPointers){const at=pointer(previous,target);reject(at.value===row.currentSha256,'Exact current producer pin required');at.parent[at.key]=row.previousSha256;}
@@ -104,11 +116,11 @@ export function createWorksiteLiveHoursRevisionGate(reviewed){
  function verifyCurrentSources(contract,readSource){
   const value=section(contract);reject(typeof readSource==='function','Actual committed Git source reader required');restorePreviousContract(contract);
   reject(readUtf8(readSource,value.declarationTrustAnchorPath)===compiledDeclaration().text,'Actual reviewed declaration differs from the compiled trust anchor');
-  for(const row of references(value))reject(sha(readUtf8(readSource,row.path))===row.currentSha256,'Stale current source: '+row.path);
+  for(const row of references(value))reject(sha(readUtf8(readSource,row.path))===planPartidaPreviewCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}),'Stale current source: '+row.path);
   return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,reviewedReferenceCount:references(value).length,nativeOrBrowserAcceptance:false};
  }
  function verifyActualClosure(contract,family,closure,readSource){
-  const value=section(contract);restorePreviousContract(contract);const row=lookup(compiledDeclaration().families,family);reject(Boolean(row),'An explicitly reviewed consumer family is required');exact(closure,['files','externalImports'],'Actual AST closure result');sorted(closure.files,'Actual AST source paths must be distinct and sorted');reject(same(closure.files,row.currentFiles)&&same(closure.externalImports,row.externalImports),'Exact actual AST source/external closure required');reject(typeof readSource==='function','Actual committed Git source reader required for consumer contents');for(const ref of row.currentManifest){const text=readUtf8(readSource,ref.path);reject(ref.path===value.declarationTrustAnchorPath?text===compiledDeclaration().text:sha(text)===ref.sha256,'Stale actual consumer source: '+ref.path);}return {family,sourceCount:row.currentFiles.length,sourcePathsSha256:pathsHash(row.currentFiles),nativeOrBrowserAcceptance:false};
+  const value=section(contract);restorePreviousContract(contract);const row=lookup(compiledDeclaration().families,family);reject(Boolean(row),'An explicitly reviewed consumer family is required');exact(closure,['files','externalImports'],'Actual AST closure result');sorted(closure.files,'Actual AST source paths must be distinct and sorted');reject(same(closure.files,row.currentFiles)&&same(closure.externalImports,row.externalImports),'Exact actual AST source/external closure required');reject(typeof readSource==='function','Actual committed Git source reader required for consumer contents');for(const ref of row.currentManifest){const text=readUtf8(readSource,ref.path);reject(ref.path===value.declarationTrustAnchorPath?text===compiledDeclaration().text:sha(text)===planPartidaPreviewCurrentSourcePin(contract,{path:ref.path,sha256:ref.sha256}),'Stale actual consumer source: '+ref.path);}return {family,sourceCount:row.currentFiles.length,sourcePathsSha256:pathsHash(row.currentFiles),nativeOrBrowserAcceptance:false};
  }
  function validationFiles(contract){const value=section(contract,false);return value?[...new Set([...references(value).map(row=>row.path),value.declarationTrustAnchorPath])].sort():[];}
  function restorePreviousProducerText(contract,producer,bytes){
@@ -120,11 +132,11 @@ export function createWorksiteLiveHoursRevisionGate(reviewed){
 }
 const currentGate=createWorksiteLiveHoursRevisionGate(WORKSITE_LIVE_HOURS_CURRENT_REVISION);
 export const restoreWorksiteLiveHoursPreviousContract=currentGate.restorePreviousContract;
-export const worksiteLiveHoursCurrentSourcePin=currentGate.currentSourcePin;
-export const worksiteLiveHoursPreviousSourcePin=currentGate.previousSourcePin;
-export const restoreWorksiteLiveHoursSourceSet=currentGate.restoreSourceSet;
-export const verifyWorksiteLiveHoursCurrentSources=currentGate.verifyCurrentSources;
-export const verifyWorksiteLiveHoursActualClosure=currentGate.verifyActualClosure;
+export const worksiteLiveHoursCurrentSourcePin=(contract,ref)=>planPartidaPreviewCurrentSourcePin(contract,{...ref,sha256:currentGate.currentSourcePin(contract,{...ref,sha256:planPartidaPreviewPreviousSourcePin(contract,ref)})});
+export const worksiteLiveHoursPreviousSourcePin=(contract,ref)=>currentGate.previousSourcePin(contract,{...ref,sha256:planPartidaPreviewPreviousSourcePin(contract,ref)});
+export const restoreWorksiteLiveHoursSourceSet=(contract,family,files)=>currentGate.restoreSourceSet(contract,family,restorePlanPartidaPreviewSourceSet(contract,family,files));
+export const verifyWorksiteLiveHoursCurrentSources=(contract,readSource)=>{if(Object.hasOwn(contract,PLAN_PARTIDA_PREVIEW_CURRENT_SECTION))verifyPlanPartidaPreviewCurrentSources(contract,readSource);return currentGate.verifyCurrentSources(contract,readSource);};
+export const verifyWorksiteLiveHoursActualClosure=(contract,family,closure,readSource)=>{if(!Object.hasOwn(contract,PLAN_PARTIDA_PREVIEW_CURRENT_SECTION))return currentGate.verifyActualClosure(contract,family,closure,readSource);const result=verifyPlanPartidaPreviewActualClosure(contract,family,closure,readSource);currentGate.verifyActualClosure(contract,family,restorePlanPartidaPreviewClosure(contract,family,closure),readSource);return result;};
 export const restoreWorksiteLiveHoursPreviousProducerText=currentGate.restorePreviousProducerText;
-export const worksiteLiveHoursProofSourceAdditions=currentGate.proofSourceAdditions;
-export const worksiteLiveHoursValidationFiles=currentGate.validationFiles;
+export const worksiteLiveHoursProofSourceAdditions=spec=>{const added=planPartidaPreviewProofSourceAdditions(spec);return [...currentGate.proofSourceAdditions(added.length?{...spec,sourceFiles:spec.sourceFiles.filter(file=>!added.includes(file))}:spec),...added];};
+export const worksiteLiveHoursValidationFiles=contract=>[...new Set([...currentGate.validationFiles(contract),...planPartidaPreviewValidationFiles(contract)])].sort();

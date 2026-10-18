@@ -20,6 +20,14 @@ import {currentProducerSourceFiles,retainWeeklyCypImportUiScreenshots,validateWe
 const read=file=>existsSync(file)?readFileSync(file):null;
 const current=()=>JSON.parse(read('.github/workspace-acceptance-contract.json'));
 const sha=value=>createHash('sha256').update(value).digest('hex');
+// Historical decoder fixture ONLY. Current source gates keep using read().
+// Authenticate the current producer before substituting this explicit static
+// 164-source preimage inside the two historical decoder/retention tests.
+function historicalWeeklySource(file){
+ const actual=read(file),bytes=actual&&Buffer.from(actual.toString('utf8').replaceAll('\r\n','\n'));if(file!==weeklyExpected.browser.producer)return bytes;
+ assert.equal(sha(bytes),worksiteLiveHoursCurrentSourcePin(current(),{path:file,sha256:weeklyExpected.browser.producerLfSha256}));
+ const old=Buffer.from(readFileSync('tests/fixtures/plan-partida-preview-weekly-164-producer.txt','utf8').replaceAll('\r\n','\n'));assert.equal(sha(old),weeklyExpected.browser.producerLfSha256);return old;
+}
 const serialize=value=>JSON.stringify(value,null,2)+'\n';
 const denied=run=>assert.throws(run,{code:'HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED'});
 const syntax=value=>Array.isArray(value)?value.map(syntax):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).filter(([key])=>!['start','end','loc','extra','comments','leadingComments','innerComments','trailingComments'].includes(key)).map(([key,child])=>[key,syntax(child)])):value;
@@ -234,7 +242,7 @@ test('weekly CyP inverse rejects omitted reordered foreign same-count changed pr
 });
 
 test('weekly CyP browser decoder requires historical160 plus four canonical journeys and the actual31-source Node closure',()=>{
- const source=file=>{const bytes=read(file);return bytes&&Buffer.from(bytes.toString('utf8').replaceAll('\r\n','\n'));},head='a'.repeat(40),tree='b'.repeat(40),fixture=weeklyCypImportUiShadowFixture(source,head,tree),before=serialize(fixture.proof),validate=(proof,options={})=>validateWeeklyCypImportUiProofBytes(Buffer.from(JSON.stringify(proof)),source,{expectedHead:head,expectedTree:tree,readEvidence:file=>fixture.evidence.get(file),...options}),bad=edit=>{const proof=structuredClone(fixture.proof);edit(proof);assert.throws(()=>validate(proof),{code:'WEEKLY_CYP_UI_PROOF_REJECTED'});};
+ const source=historicalWeeklySource,head='a'.repeat(40),tree='b'.repeat(40),fixture=weeklyCypImportUiShadowFixture(source,head,tree),before=serialize(fixture.proof),validate=(proof,options={})=>validateWeeklyCypImportUiProofBytes(Buffer.from(JSON.stringify(proof)),source,{expectedHead:head,expectedTree:tree,readEvidence:file=>fixture.evidence.get(file),...options}),bad=edit=>{const proof=structuredClone(fixture.proof);edit(proof);assert.throws(()=>validate(proof),{code:'WEEKLY_CYP_UI_PROOF_REJECTED'});};
  assert.equal(fixture.boundary,'VALIDATOR_ONLY_NOT_BROWSER_EXECUTION');assert.equal(weeklyCypInvestmentUiSourceFiles(source).length,31);assert.equal(validate(fixture.proof).totalCheckCount,164);assert.equal(validate(fixture.proof).nativePostgresExecuted,false);assert.equal(serialize(fixture.proof),before);
  for(const field of Object.keys(weeklyExpected.browser.historicalModes)){bad(p=>p[field].pop());bad(p=>p[field].reverse());bad(p=>{p[field][0].mode='foreign-same-count';});}
  for(const edit of [p=>p.investmentCurveChecks.pop(),p=>p.investmentCurveChecks.reverse(),p=>{p.investmentCurveChecks[0].width=319;},p=>{p.investmentCurveChecks[0].taskSqlAttempts=1;},p=>{p.investmentCurveChecks[0].applyPosts=2;},p=>{p.investmentCurveChecks[0].recoveryReads=0;},p=>{p.investmentCurveChecks[0].acknowledgmentBoundToReview=false;},p=>{p.investmentCurveChecks[0].transport='unverified-json';},p=>{p.investmentCurveChecks[0].baselineEffects=true;},p=>{p.investmentCurveChecks[0].realProviderCalls=1;},p=>{p.investmentCurveChecks[0].sourceDownloads=1;},p=>{p.investmentCurveChecks[0].exactDifference='0.047';},p=>{p.investmentCurveChecks[0].sourceManifestContext.projectId='foreign-project';},p=>p.investmentSourceManifest.pop(),p=>{p.investmentSourceManifest[0].sha256='f'.repeat(64);},p=>{p.investmentSourceManifest[0].path='src/lib/foreign-same-count.mjs';},p=>p.fixtureTransforms.pop(),p=>{p.fixtureTransforms[1].copiedBeforeSha256='f'.repeat(64);},p=>{p.fixtureRemoved=false;},p=>{p.trackedClean=false;},p=>{p.sourceState='LOCAL_REVIEW_SOURCE';},p=>{p.totalCheckCount=160;}])bad(edit);
@@ -243,7 +251,7 @@ test('weekly CyP browser decoder requires historical160 plus four canonical jour
 });
 
 test('weekly CyP retains four byte-exact viewport PNGs through the existing narrow upload and rejects missing or changed bindings',()=>{
- const root=mkdtempSync(path.join(tmpdir(),'weekly-retained-png-')),source=file=>{const bytes=read(file);return bytes&&Buffer.from(bytes.toString('utf8').replaceAll('\r\n','\n'));},head='a'.repeat(40),tree='b'.repeat(40),fixture=weeklyCypImportUiShadowFixture(source,head,tree),bytes=Buffer.from(JSON.stringify(fixture.proof));
+ const root=mkdtempSync(path.join(tmpdir(),'weekly-retained-png-')),source=historicalWeeklySource,head='a'.repeat(40),tree='b'.repeat(40),fixture=weeklyCypImportUiShadowFixture(source,head,tree),bytes=Buffer.from(JSON.stringify(fixture.proof));
  try{
   for(const[file,data]of fixture.evidence){const target=path.join(root,file);mkdirSync(path.dirname(target),{recursive:true});writeFileSync(target,data);}
   const c=current(),old=restoreWeeklyCypPreviousContract(c),upload=yaml.load(read('.github/workflows/workspace-acceptance.yml').toString('utf8')).jobs.plans.steps.at(-1).with.path;
