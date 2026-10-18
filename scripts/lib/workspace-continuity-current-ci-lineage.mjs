@@ -6237,7 +6237,8 @@ export function verifyWorkspaceContinuityCurrentSources(contract,readSource){
  return{version:1,previousContractSha256:WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256,completeCheckpointRestored:true,historical49PinsPreserved:true,auxiliaryValidationSources:refs.map(row=>({...row})),nativeOrBrowserAcceptance:false};
 }
 export function restoreWorkspaceContinuitySourceSet(family,files,contract){
- const outerFamily=family==='FOCUSED_WORKSPACE_CI'?'UI_FOCUSED_WORKSPACE':family==='WORKSPACE_PG_PARTICIPANT_KYC_PREANALYSIS'?'PG_PARTICIPANT_KYC_PREANALYSIS':family==='WORKSPACE_PG_COMPANY_KYC'?'PG_COMPANY_KYC':family==='WORKSPACE_UI_IDENTITY_ONLY'?'UI_IDENTITY_ONLY':family;
+ // Enumerate only aliases already exported by the integrated/workspace API.
+ const aliases={FOCUSED_WORKSPACE_CI:'UI_FOCUSED_WORKSPACE',WORKSPACE_PG_PARTICIPANT_KYC_PREANALYSIS:'PG_PARTICIPANT_KYC_PREANALYSIS',WORKSPACE_PG_COMPANY_KYC:'PG_COMPANY_KYC',WORKSPACE_UI_IDENTITY_ONLY:'UI_IDENTITY_ONLY',WORKSPACE_UNIT:'UNIT',WORKSPACE_UI_BANK:'UI_BANK',WORKSPACE_UI_JOINT:'UI_JOINT',WORKSPACE_UI_CAUSAL:'UI_CAUSAL',WORKSPACE_PG_FIELD:'PG_FIELD',WORKSPACE_PG_OVERTIME:'PG_OVERTIME'},outerFamily=Object.hasOwn(aliases,family)?aliases[family]:family;
  files=restoreWhatsappFieldContinuitySourceSet(outerFamily,files,contract);
  const value=authenticatedSection(contract);if(!value)return files;const delta=[...value.sourceSetDeltas,...value.proofSourceDeltas].find(row=>row.family===family);if(!delta)return files;
  requireLineage(Array.isArray(files)&&new Set(files).size===files.length&&same(files,[...files].sort())&&files.length===delta.currentCount&&sha(JSON.stringify(files))===delta.currentPathsSha256,'Exact current continuity source set required: '+family);

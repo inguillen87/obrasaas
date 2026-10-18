@@ -1786,6 +1786,7 @@ export const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze({
         "src/app/(identity)/cuenta/company-channel-view.mjs",
         "src/app/(identity)/cuenta/field-hours-report-panel.js",
         "src/app/(identity)/cuenta/field-hours-report-panel.module.css",
+        "src/app/(identity)/cuenta/field-operations-panel.module.css",
         "src/app/(identity)/cuenta/field-overtime-view.js",
         "src/app/(identity)/cuenta/field-overtime-view.module.css",
         "src/app/(identity)/cuenta/own-company-number-view.mjs",
@@ -1893,6 +1894,10 @@ export const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze({
         {
           "path": "src/app/(identity)/cuenta/field-hours-report-panel.module.css",
           "sha256": "0c8eefb85891cade983a42b7f4463962319c9fe27c0c5d157011108255c2bd75"
+        },
+        {
+          "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
+          "sha256": "5ccd8b5beae691b9ab6ee2dc0c0ae876a5fdffe15d31d24c6807f117bd76949c"
         },
         {
           "path": "src/app/(identity)/cuenta/field-overtime-view.js",
@@ -2314,7 +2319,7 @@ export const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
-          "sha256": "2048b229461f5c7afc8f24aeca0c0e39f17356a84204d977e9358153fe9d8016"
+          "sha256": "805bccca43cc197201dc6c97844ff153a8d2548fe3fd6ebe11d25953b3060a29"
         },
         {
           "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
@@ -2322,7 +2327,7 @@ export const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/material-review-current-ci-lineage.mjs",
-          "sha256": "083738bfeebc34437708790608b126f7d81926fe1982aaf9e76aedbca783f211"
+          "sha256": "805e35504f147f017b4e70889c29c92175a4673f03916630319f6f25d040c4b4"
         },
         {
           "path": "scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs",
@@ -2342,11 +2347,11 @@ export const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
-          "sha256": "0f0f19ea4880f34aa7976626b3ab6630371bfd3542b15250f251f24774962060"
+          "sha256": "9451cba747fc27c014383884cc8e5567f37651fe1df7e1a96d670b25c4f8dc02"
         },
         {
           "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
-          "sha256": "f2cd0d5e0d8278d4f4076b2e0dbcf5ff0b31cf68a0cce0e5342c80698c9c1864"
+          "sha256": "8296df86e4021bb9ce1fed08e410408ee98ccc0b1b52ab40c58e4127de49fb95"
         },
         {
           "path": "scripts/lib/worksite-live-hours-current-ci-reviewed.mjs",
@@ -2354,7 +2359,7 @@ export const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/workspace-continuity-current-ci-lineage.mjs",
-          "sha256": "e6290ab4d9bb76dc2d6855726d785bba6054b4037d6ed726937345019b11b596"
+          "sha256": "cb26d5ea9922fb9a3fb72d1a35010229a1d4b49f4784783294a4d1d503fdc81a"
         },
         {
           "path": "scripts/verify-focused-workspace-ci.mjs",
@@ -3183,7 +3188,7 @@ export const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
-          "sha256": "2048b229461f5c7afc8f24aeca0c0e39f17356a84204d977e9358153fe9d8016"
+          "sha256": "805bccca43cc197201dc6c97844ff153a8d2548fe3fd6ebe11d25953b3060a29"
         },
         {
           "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
@@ -3195,7 +3200,7 @@ export const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/material-review-current-ci-lineage.mjs",
-          "sha256": "083738bfeebc34437708790608b126f7d81926fe1982aaf9e76aedbca783f211"
+          "sha256": "805e35504f147f017b4e70889c29c92175a4673f03916630319f6f25d040c4b4"
         },
         {
           "path": "scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs",
@@ -3223,11 +3228,11 @@ export const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
-          "sha256": "0f0f19ea4880f34aa7976626b3ab6630371bfd3542b15250f251f24774962060"
+          "sha256": "9451cba747fc27c014383884cc8e5567f37651fe1df7e1a96d670b25c4f8dc02"
         },
         {
           "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
-          "sha256": "f2cd0d5e0d8278d4f4076b2e0dbcf5ff0b31cf68a0cce0e5342c80698c9c1864"
+          "sha256": "8296df86e4021bb9ce1fed08e410408ee98ccc0b1b52ab40c58e4127de49fb95"
         },
         {
           "path": "scripts/lib/worksite-live-hours-current-ci-reviewed.mjs",
@@ -3235,7 +3240,7 @@ export const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/workspace-continuity-current-ci-lineage.mjs",
-          "sha256": "e6290ab4d9bb76dc2d6855726d785bba6054b4037d6ed726937345019b11b596"
+          "sha256": "cb26d5ea9922fb9a3fb72d1a35010229a1d4b49f4784783294a4d1d503fdc81a"
         },
         {
           "path": "scripts/verify-field-task-pagination-ci.mjs",
@@ -5840,6 +5845,18 @@ export const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze({
       "sha256": "911211c44e1aabefa20f001a020d257530e97ce7ffee8c27f807d2f48ea17590"
     },
     {
+      "path": "scripts/lib/material-review-current-ci-lineage.mjs",
+      "sha256": "083738bfeebc34437708790608b126f7d81926fe1982aaf9e76aedbca783f211"
+    },
+    {
+      "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
+      "sha256": "0f0f19ea4880f34aa7976626b3ab6630371bfd3542b15250f251f24774962060"
+    },
+    {
+      "path": "scripts/lib/workspace-continuity-current-ci-lineage.mjs",
+      "sha256": "e6290ab4d9bb76dc2d6855726d785bba6054b4037d6ed726937345019b11b596"
+    },
+    {
       "path": "scripts/verify-consumption-feedback-ci.mjs",
       "sha256": "c75e1bbf4412b2d307fcace6d276bb6c80ba16c6113aaa16cae171cbb0460c0d"
     },
@@ -5860,8 +5877,20 @@ export const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze({
       "sha256": "59af0297c0f75472f6682521ba338cd28357f5eb6270d67ed102191387b672ad"
     },
     {
+      "path": "tests/production-material-review-current-ci-lineage.test.mjs",
+      "sha256": "d4ff4dd321b7e7499cd2aed817abc0f5aab47b94e38d9d88c72d694d1768b0a1"
+    },
+    {
+      "path": "tests/production-meta-existing-api-plan-current-ci-lineage.test.mjs",
+      "sha256": "6559fc99b2e4c40762b8b3a9dfbb6b542847ac08ab54d39e7461035e33b513f2"
+    },
+    {
       "path": "tests/production-plan-measurement-ci.test.mjs",
       "sha256": "887f418e42483569c0a955c6969429d607e51fbf8c672c3fe986076e84c1cb5f"
+    },
+    {
+      "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
+      "sha256": "7f194c2913ba98b3551832bb40608f58473bf94603390b0810f67a75fb2a463f"
     }
   ],
   "newValidationPaths": [
@@ -5876,7 +5905,19 @@ export const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze({
     },
     {
       "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
-      "sha256": "2048b229461f5c7afc8f24aeca0c0e39f17356a84204d977e9358153fe9d8016"
+      "sha256": "805bccca43cc197201dc6c97844ff153a8d2548fe3fd6ebe11d25953b3060a29"
+    },
+    {
+      "path": "scripts/lib/material-review-current-ci-lineage.mjs",
+      "sha256": "805e35504f147f017b4e70889c29c92175a4673f03916630319f6f25d040c4b4"
+    },
+    {
+      "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
+      "sha256": "9451cba747fc27c014383884cc8e5567f37651fe1df7e1a96d670b25c4f8dc02"
+    },
+    {
+      "path": "scripts/lib/workspace-continuity-current-ci-lineage.mjs",
+      "sha256": "cb26d5ea9922fb9a3fb72d1a35010229a1d4b49f4784783294a4d1d503fdc81a"
     },
     {
       "path": "scripts/verify-consumption-feedback-ci.mjs",
@@ -5899,12 +5940,24 @@ export const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze({
       "sha256": "b8a85bd426a354c5914ed911d7dac70fd54a0b285ff90141d7c33d8592a29708"
     },
     {
+      "path": "tests/production-material-review-current-ci-lineage.test.mjs",
+      "sha256": "4ba9aaa0430bfc85cb7bc2e07b31c2f7868870a3c939357f7c6c6b9149f0d0fe"
+    },
+    {
+      "path": "tests/production-meta-existing-api-plan-current-ci-lineage.test.mjs",
+      "sha256": "dabe6caf8e2a216aa1d7160551431ce3e3b198b09b397f8c10edfeb9d9928650"
+    },
+    {
       "path": "tests/production-plan-measurement-ci.test.mjs",
       "sha256": "68fd8ecf6bc6351fc87a19db2c289688f306ed29b2c983c5da81e7ec3221aeab"
     },
     {
+      "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
+      "sha256": "ead294a9a4066f487b58cb8e9187ca9fee03ad0c29706c2dfb6006cb23a82a81"
+    },
+    {
       "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
-      "sha256": "f2cd0d5e0d8278d4f4076b2e0dbcf5ff0b31cf68a0cce0e5342c80698c9c1864"
+      "sha256": "8296df86e4021bb9ce1fed08e410408ee98ccc0b1b52ab40c58e4127de49fb95"
     },
     {
       "path": "tests/fixtures/worksite-live-hours-ci-lineage-fixture.mjs",

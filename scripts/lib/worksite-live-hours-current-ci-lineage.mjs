@@ -11,7 +11,7 @@ const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
-const safe=value=>typeof value==='string'&&(/^(?:src|scripts|tests|\.github)\//.test(value)||['package.json','package-lock.json','vercel.json','api/_biometric_core.py'].includes(value))&&!/[\\\x00-\x1f]/.test(value)&&path.posix.normalize(value)===value&&!value.split('/').includes('..');
+const safe=value=>typeof value==='string'&&(/^(?:src|scripts|tests|\.github)\//.test(value)||['package.json','package-lock.json','vercel.json','api/_biometric_core.py','.gitattributes'].includes(value))&&!/[\\\x00-\x1f]/.test(value)&&path.posix.normalize(value)===value&&!value.split('/').includes('..');
 const exact=(value,keys,reason)=>reject(plain(value)&&same(Object.keys(value).sort(),[...keys].sort()),reason);
 const sorted=(files,reason)=>reject(Array.isArray(files)&&files.every(safe)&&same(files,[...new Set(files)].sort()),reason);
 const pathsHash=files=>sha(JSON.stringify(files));

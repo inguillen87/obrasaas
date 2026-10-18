@@ -1,3 +1,4 @@
+import {restoreWorksiteLiveHoursSourceSet,worksiteLiveHoursPreviousSourcePin,worksiteLiveHoursCurrentSourcePin} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync,readdirSync} from 'node:fs';
@@ -18,7 +19,8 @@ test('API plan revision restores the whole published material contract and every
  assert.equal(sha(serialize(previous)),expected.previousContractSha256);assert.equal(expected.predecessorCommit,'5d0c4303cbced786f2ec8a0a10edaa72b3aff02d');assert.equal(Object.hasOwn(previous,key),false);assert.equal(serialize(contract),before);
  assert.deepEqual(previous.materialReviewCurrentRevision,contract.materialReviewCurrentRevision);
  for(const name of ['blocks','lanes','artifactPatterns','evidenceProducers','whatsappFieldContinuityCurrentRevision'])assert.deepEqual(previous[name],publishedHomePredecessor[name]);
- const focusedProducer=value=>value.evidenceProducers.find(row=>row.producer==='scripts/verify-focused-workspace-ci.mjs');assert.equal(focusedProducer(contract).producerSha256,'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24');assert.equal(focusedProducer(publishedHomePredecessor).producerSha256,'a4eb59cb781eeb9578e46ffcdec21833cce1ba79eb9f99e3543fda799dfc62f4');
+ const focusedProducer=value=>value.evidenceProducers.find(row=>row.producer==='scripts/verify-focused-workspace-ci.mjs');// Project only the authenticated outer pin for the historical assertion; read current source bytes below.
+ assert.equal(worksiteLiveHoursPreviousSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:focusedProducer(contract).producerSha256}),'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24');assert.equal(focusedProducer(contract).producerSha256,'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(worksiteLiveHoursCurrentSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24'}),'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(sha(read('scripts/verify-focused-workspace-ci.mjs').toString('utf8').replaceAll('\r\n','\n')),focusedProducer(contract).producerSha256);assert.equal(focusedProducer(publishedHomePredecessor).producerSha256,'a4eb59cb781eeb9578e46ffcdec21833cce1ba79eb9f99e3543fda799dfc62f4');
  assert.equal(sha(serialize(restoreMaterialReviewPreviousContract(contract))),'1bb5e262dac06377590ea983a9c800163726cb6510ae0fbbbdca17309253c6af');
 });
 
@@ -58,7 +60,7 @@ test('COMPANY gains only the new server module while every historical native mat
  const contract=current(),families=contract.whatsappFieldContinuityCurrentRevision.native.families;
  const company=existingApiPlanCurrentNativeSourceFiles(contract,'COMPANY',families.COMPANY.sourceFiles);assert.equal(company.length,236);assert.deepEqual(company.filter(file=>!families.COMPANY.sourceFiles.includes(file)),['src/lib/meta-existing-api-plan.mjs']);
  assert.deepEqual(existingApiPlanCurrentNativeSourceFiles(contract,'OWN',families.OWN.sourceFiles),families.OWN.sourceFiles);assert.equal(families.OWN.sourceFiles.length,139);
- const scan=directory=>readdirSync(directory,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?scan(directory+'/'+entry.name):[directory+'/'+entry.name]);assert.deepEqual(whatsappFieldCompanyNativeSourceFiles(read,scan('src/lib').sort()),company);
+ const scan=directory=>readdirSync(directory,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?scan(directory+'/'+entry.name):[directory+'/'+entry.name]);const actualCompany=whatsappFieldCompanyNativeSourceFiles(read,scan('src/lib').sort());assert.deepEqual(restoreWorksiteLiveHoursSourceSet(contract,'PG_COMPANY_KYC',actualCompany),company);assert.equal(actualCompany.length,237);assert.deepEqual(actualCompany,[...company,'src/lib/field-hours-report.mjs'].sort());
  for(const changed of [families.COMPANY.sourceFiles.slice(1),[...families.COMPANY.sourceFiles,families.COMPANY.sourceFiles[0]],company])denied(()=>existingApiPlanCurrentNativeSourceFiles(contract,'COMPANY',changed));
 });
 

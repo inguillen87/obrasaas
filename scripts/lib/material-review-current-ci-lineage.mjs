@@ -183,6 +183,58 @@ const filterBranch=node=>node?.type==='IfStatement'&&node.test?.type==='CallExpr
 // These projections preserve every pre-existing write, KYC, membership and
 // transport expression. Only the four explicitly reviewed read surfaces vanish.
 // Their digests were compared with the complete 3c853aa Git source, not a proof.
+// Exact inverse of the independently reviewed live/hours read-only additions.
+// This projects AST metadata, never historical source bytes. Unknown source
+// bodies receive no inverse and must still satisfy the original source/surface
+// checks. Each approved body must remove exactly its two reviewed nodes and
+// recover the entire predecessor AST before the inherited surface is checked.
+const WORKSITE_LIVE_HOURS_MATERIAL_AST=Object.freeze({
+  "src/lib/field-operations-http.mjs": {
+    "previousSourceSha256": "abcb0371eb77495ca5a5e8c82d0d6d8d53aa89508af783be31406a884bdb93ea",
+    "currentSourceSha256": "df60181e3d852efe42d86a284ced3c0ff9cf4c7fbcaf863de8da4d47c2f7aeaf",
+    "previousAstSha256": "a30efc1e1fae7b1ace855b1e75edd882d9100db6934124c7aed3f501bf457d24",
+    "removedNodes": [
+      {
+        "type": "ImportDeclaration",
+        "sha256": "c636f56a3e2ddaf65ace3524beaef471948d2e1e702de64229b9d24639a5ac19"
+      },
+      {
+        "type": "IfStatement",
+        "sha256": "fa8a55ba9ed0bfff00ac152e25a30d1d7bbe9618e6b1b77eb2fc35d74aceb0ca"
+      }
+    ]
+  },
+  "src/lib/field-operations-store.mjs": {
+    "previousSourceSha256": "62d83e35824cff2c8b722c2b379b6d5485b1249452d578415e13a019a5588bcd",
+    "currentSourceSha256": "dbf96641349efae61808a2d66a02d491ad06e2226885e6efa928dba53ce5034e",
+    "previousAstSha256": "96bd56b857493a2231bef9647d62a17b8a689e75b79b83ce8f6bc121b1e59894",
+    "removedNodes": [
+      {
+        "type": "ImportDeclaration",
+        "sha256": "2ce43abc39ef43a3552c456ba01e2f348f74b032350c6b62f00d63e9b6c1220d"
+      },
+      {
+        "type": "ObjectMethod",
+        "sha256": "c620c0d42d81d37615bb5206be09459b21ef2ae7921a7d8829bdb424a466899b"
+      }
+    ]
+  }
+});
+const materialSurfaceSyntax=value=>Array.isArray(value)?value.map(materialSurfaceSyntax):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).filter(([key])=>!ignored.has(key)).map(([key,child])=>[key,materialSurfaceSyntax(child)])):value;
+function worksiteLiveHoursLegacyMaterialAst(file,bytes,tree){
+ const row=WORKSITE_LIVE_HOURS_MATERIAL_AST[file];if(!row||sha(bytes.toString('utf8').replaceAll('\r\n','\n'))!==row.currentSourceSha256)return tree;
+ const removed=new Set();
+ function restore(node){
+  if(Array.isArray(node))return node.map(restore).filter(value=>value!==null);
+  if(!node||typeof node!=='object')return node;
+  const candidates=row.removedNodes.filter(ref=>ref.type===node.type);
+  if(candidates.length){const digest=sha(JSON.stringify(materialSurfaceSyntax(node))),matched=candidates.find(ref=>ref.sha256===digest);if(matched){reject(!removed.has(digest),'Repeated live/hours read AST node: '+file);removed.add(digest);return null;}}
+  return Object.fromEntries(Object.entries(node).map(([key,child])=>[key,restore(child)]));
+ }
+ const previous=restore(tree);reject(removed.size===row.removedNodes.length,'Incomplete exact live/hours read AST inverse: '+file);
+ reject(sha(JSON.stringify(materialSurfaceSyntax(previous)))===row.previousAstSha256,'Live/hours inverse changed predecessor business syntax: '+file);return previous;
+}
+
 export function materialReviewUnchangedSurface(file,bytes){
  const mode=({
   'src/lib/material-inventory.mjs':'MATERIAL_READS',
@@ -192,7 +244,7 @@ export function materialReviewUnchangedSurface(file,bytes){
  })[file];
  if(!mode)return null;
  reject(Buffer.isBuffer(bytes),'Actual reviewed source bytes required');
- const parsed=parse(bytes.toString('utf8'),{sourceType:'module'}),tree=mode==='INVENTORY_COUNTS'?homeDecisionsLegacyOperationsAst(parsed):parsed;
+ const parsed=worksiteLiveHoursLegacyMaterialAst(file,bytes,parse(bytes.toString('utf8'),{sourceType:'module'})),tree=mode==='INVENTORY_COUNTS'?homeDecisionsLegacyOperationsAst(parsed):parsed;
  function project(node){
   if(Array.isArray(node))return node.map(project).filter(value=>value!==null);
   if(!node||typeof node!=='object')return node;

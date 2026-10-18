@@ -4960,6 +4960,7 @@ export function restoreWeeklyCypPreviousContract(contract){
 export function weeklyCypCurrentSourcePin(contract,ref){ref={...ref,sha256:progressEvidenceWaitPreviousSourcePin(contract,ref)};const value=weeklyCypSection(contract),row=value&&weeklyCypReferences(value).find(row=>row.path===ref.path);if(!row)return progressEvidenceWaitCurrentSourcePin(contract,ref);reject([row.previousSha256,row.currentSha256,...(row.authenticatedPreviousAliases||[])].includes(ref.sha256),'Only exact published0ac or weekly CyP pins may advance: '+ref.path);return progressEvidenceWaitCurrentSourcePin(contract,{...ref,sha256:row.currentSha256});}
 export function weeklyCypPreviousSourcePin(contract,ref){ref={...ref,sha256:progressEvidenceWaitPreviousSourcePin(contract,ref)};const value=weeklyCypSection(contract),row=value&&weeklyCypReferences(value).find(row=>row.path===ref.path);return row&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}
 export function restoreWeeklyCypConsumerSourceSet(family,files,contract){
+ files=restoreWorksiteLiveHoursSourceSet(contract,family,files);
  const value=weeklyCypSection(contract);if(!value)return files;restoreWeeklyCypPreviousContract(contract);
  const delta=value.consumerSourceDeltas.find(row=>row.family===family);reject(Boolean(delta),'One exact weekly CyP consumer source family required: '+family);
  return previousPaths(files,delta);
