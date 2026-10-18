@@ -13035,6 +13035,19 @@ export function whatsappFieldCompanyNativeSourceFiles(readSource,libraryFiles){
  requireLineage(same(previousFiles,expectedFiles),'Exact complete current COMPANY path set required');for(const file of files)requireLineage(Buffer.isBuffer(readSource(file)),'Missing actual COMPANY source: '+file);return files;
 }
 
+// Extend only a complete authenticated API-layer native set. The old matrix
+// stays immutable; current raw receipts carry the exact outer source union.
+function currentWorksiteNativeSourceFiles(contract,familyName,previous){
+ if(!contract?.[WORKSITE_LIVE_HOURS_CURRENT_SECTION])return previous;
+ const family=familyName==='COMPANY'?'PG_COMPANY_KYC':'COMPACT';
+ const delta=contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===family);
+ requireLineage(delta&&Array.isArray(delta.additions),'An exact current native companion delta is required');
+ const current=[...previous,...delta.additions].sort();
+ const restored=restoreWorksiteLiveHoursSourceSet(contract,family,current);
+ requireLineage(same(restored,previous),'The complete historical native matrix must restore exactly');
+ return current;
+}
+
 // Additional native observations are mandatory under this current contract.
 // Original13/17/4 matrices, leases and raw proofs remain independently checked
 // by their existing validators; this guard never replaces those checks.
@@ -13070,7 +13083,7 @@ export function validateWhatsappFieldNeutralStepNative(proof,familyName,contract
  });
  requireLineage(same(projected,family.caseMatrix),'Every fixed current native observation must equal its reviewed matrix');
  const producer=readSource(family.producer);requireLineage(Buffer.isBuffer(producer)&&sha(producer.toString('utf8').replaceAll('\r\n','\n'))===family.producerSha256&&proof.harnessSha256===sha(producer),'Actual native harness must equal the current source reader');
- const currentNativeFiles=existingApiPlanCurrentNativeSourceFiles(contract,familyName,family.sourceFiles);
+ const currentNativeFiles=currentWorksiteNativeSourceFiles(contract,familyName,existingApiPlanCurrentNativeSourceFiles(contract,familyName,family.sourceFiles));
  requireLineage(Array.isArray(proof.sourceManifest)&&proof.sourceManifest.length===currentNativeFiles.length&&same(proof.sourceManifest.map(row=>row?.path).sort(),currentNativeFiles),'The complete current native source manifest is required');
  for(const row of proof.sourceManifest){exactKeys(row,['path','sha256'],'native source reference');const bytes=readSource(row.path);requireLineage(Buffer.isBuffer(bytes)&&row.sha256===sha(bytes),'Stale native source bytes: '+row.path);}
  return{version:1,status:'PASS',family:familyName,currentCases:family.caseNames.length,currentNativeSourceCount:currentNativeFiles.length,historicalCasesPreserved:familyName==='COMPANY'?17:4,rawProofTransformed:false,sourceLeaseExtended:false,identityOrProviderAccepted:false};

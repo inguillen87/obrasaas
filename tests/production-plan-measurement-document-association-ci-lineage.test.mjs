@@ -1,3 +1,4 @@
+import {restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {restoreWorkspaceContinuityPreviousContract} from '../scripts/lib/workspace-continuity-current-ci-lineage.mjs';
 import {restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {restoreWhatsappFieldContinuityPreviousContract,restoreWhatsappFieldContinuitySourceSet} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
@@ -17,6 +18,16 @@ import {PLAN_MEASUREMENT_NATIVE_CHECKS} from '../scripts/verify-plan-measurement
 import {validateParticipantKycPreanalysisCi} from '../scripts/verify-participant-kyc-preanalysis-ci.mjs';
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),read=file=>existsSync(file)?readFileSync(file):null,current=()=>JSON.parse(read('.github/workspace-acceptance-contract.json')),bytes=value=>Buffer.from(JSON.stringify(value,null,2)+'\n'),reject=run=>assert.throws(run,{code:'PLAN_MEASUREMENT_DOCUMENT_ASSOCIATION_CI_LINEAGE_REJECTED'});
 
+
+// This projection authenticates the current outer set before retaining the
+// exact historical count/hash assertions belonging to the earlier CI revision.
+function historicalCompactFiles(files,contract){
+ const historical=restoreWorksiteLiveHoursSourceSet(contract,'COMPACT',files);
+ assert.equal(historical.length,139);assert.equal(sha(JSON.stringify(historical)),'cd474d8e9a3b754daaeef61f986e31f1c92997a8423cd9a14c06d43ea706dbea');
+ assert.equal(files.length,140);assert.deepEqual(files,[...historical,'src/lib/field-hours-report.mjs'].sort());
+ return historical;
+}
+
 test('document association outer inverse restores complete a203 before every historical checkpoint and original H49',()=>{
  const contract=current(),before=JSON.stringify(contract),prior=restoreDocumentTaskAssociationPreviousContract(contract);
  assert.equal(sha(bytes(prior)),previousSha);assert.deepEqual(prior,checkpoint);assert.equal(JSON.stringify(contract),before);
@@ -30,7 +41,7 @@ test('document association outer inverse restores complete a203 before every his
 
 test('new source closure metadata retains native118 and published113 AI115 compact137 G127 H125 and117',()=>{
  const contract=current(),value=verifyPlanMeasurementCurrentSources(contract,read);
- const files=kycExpiredCurrentSourceFiles(read),previousCurrentFiles=restoreWhatsappFieldContinuitySourceSet('COMPACT',files,contract),delta=contract.whatsappFieldContinuityCurrentRevision.sourceSetDeltas.find(row=>row.family==='COMPACT');assert.equal(previousCurrentFiles.length,137);assert.equal(sha(JSON.stringify(previousCurrentFiles)),'ab60b810e098f47892e1a17cb01ce1f7f8e1796c1687776b528100e62cb3083f');assert.equal(delta.currentCount,139);assert.equal(value.sourceCount,files.length);assert.equal(value.sourceCount,delta.currentCount);assert.equal(sha(JSON.stringify(files)),delta.currentPathsSha256);assert.equal(value.publishedCurrentSourceCount,127);assert.equal(value.previousSourceCount,125);assert.equal(value.historicalSourceCount,117);
+ const files=kycExpiredCurrentSourceFiles(read),historicalFiles=historicalCompactFiles(files,contract),previousCurrentFiles=restoreWhatsappFieldContinuitySourceSet('COMPACT',files,contract),delta=contract.whatsappFieldContinuityCurrentRevision.sourceSetDeltas.find(row=>row.family==='COMPACT');assert.equal(previousCurrentFiles.length,137);assert.equal(sha(JSON.stringify(previousCurrentFiles)),'ab60b810e098f47892e1a17cb01ce1f7f8e1796c1687776b528100e62cb3083f');assert.equal(delta.currentCount,139);assert.equal(value.sourceCount,files.length);assert.equal(historicalFiles.length,delta.currentCount);assert.equal(sha(JSON.stringify(historicalFiles)),delta.currentPathsSha256);assert.equal(value.publishedCurrentSourceCount,127);assert.equal(value.previousSourceCount,125);assert.equal(value.historicalSourceCount,117);
  assert.equal(measurement.nativeCurrentCount,118);assert.equal(measurement.aiNativeCount,115);assert.equal(measurement.publishedNativeCount,113);
  assert.equal(measurement.nativeCount,17);assert.deepEqual(measurement.nativeCheckNames.slice(0,11),PLAN_MEASUREMENT_NATIVE_CHECKS);assert.equal(measurement.nativePreviousCount,11);assert.equal(measurement.uiPreviousCount,19);assert.equal(measurement.uiCount,25);assert.equal(measurement.previousUiVersion,'plan-measurement-ui-v2');assert.equal(measurement.uiVersion,'plan-measurement-ui-v3');
 });

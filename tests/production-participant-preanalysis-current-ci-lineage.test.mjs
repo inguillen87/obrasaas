@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {PARTICIPANT_PREANALYSIS_CURRENT_REVISION,PARTICIPANT_PREANALYSIS_VALIDATION_PATHS,restoreParticipantPreanalysisPreviousContract,participantPreanalysisCurrentSourcePin,verifyParticipantPreanalysisCurrentSources,validateParticipantPreanalysisWorkspaceContract} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {PARTICIPANT_KYC_PREANALYSIS_CHECKS,participantPreanalysisSourceManifest} from '../scripts/verify-participant-kyc-preanalysis-postgres.mjs';
-import {parseParticipantPreanalysisTap,validateParticipantKycPreanalysisNative,validateParticipantKycPreanalysisCi,PARTICIPANT_PREANALYSIS_CI_VERSION} from '../scripts/verify-participant-kyc-preanalysis-ci.mjs';
+import {participantPreanalysisNativeSourceClosure,parseParticipantPreanalysisTap,validateParticipantKycPreanalysisNative,validateParticipantKycPreanalysisCi,PARTICIPANT_PREANALYSIS_CI_VERSION} from '../scripts/verify-participant-kyc-preanalysis-ci.mjs';
 import {restoreOoxmlAccountingPreviousContract} from '../scripts/lib/ooxml-accounting-current-ci-lineage.mjs';
 import {reconstructPublishedHContract} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';
 import {restoreIntegratedIdentityPreviousContract} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
@@ -114,4 +114,49 @@ test('foreign CI head tree repository run attempt event and raw evidence cannot 
 });
 test('unit source omission changed case order skipped TAP and a foreign current source remain denied by the envelope',()=>{
  for(const edit of [f=>{f.proof.unitSuites.pop();},f=>{f.proof.unitSuites[1].sourceSha256='f'.repeat(64);},f=>{f.proof.unitSuites[0].result.caseNames.reverse();},f=>{f.proof.unitSuites[1].tap.path=f.proof.unitSuites[0].tap.path;},f=>{f.proof.sourceManifest.pop();},f=>{f.proof.sourceManifest[0].path='src/lib/foreign.mjs';},f=>{f.proof.checks.pop();}]){const f=ciShadow();edit(f);denied(()=>f.validate());}
+});
+
+
+const nativeEnvelopeRejected=run=>assert.throws(run,{code:'PARTICIPANT_PREANALYSIS_CI_REJECTED'});
+function resealRawNative(f,edit,{resealSourceDigest=true}={}){
+ const value=JSON.parse(f.evidence.get(f.proof.rawNative.path));edit(value);
+ if(resealSourceDigest)value.sourceDigest=sha(JSON.stringify(value.sourceManifest));
+ const raw=Buffer.from(JSON.stringify(value,null,2)+'\n');f.evidence.set(f.proof.rawNative.path,raw);
+ f.proof.rawNative={...f.proof.rawNative,bytes:raw.length,sha256:sha(raw)};return value;
+}
+test('current native AST146 preserves historical145 within full CI241 and leaves raw native bytes untouched',()=>{
+ const f=ciShadow(),contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),historical=structuredClone(contract.participantPreanalysisCurrentRevision.nativeSourceFiles),current=participantPreanalysisNativeSourceClosure(f.context.readSource),rawBefore=Buffer.from(f.evidence.get(f.proof.rawNative.path)),referenceBefore=structuredClone(f.proof.rawNative),proofBefore=JSON.stringify(f.proof);
+ assert.equal(historical.length,145);assert.equal(current.length,146);assert.deepEqual(current,[...historical,'src/lib/field-hours-report.mjs'].sort());assert.deepEqual(nativeSourceFiles,current);assert.equal(f.context.spec.sourceFiles.length,241);assert.ok(current.every(file=>f.context.spec.sourceFiles.includes(file)));
+ const result=f.validate();assert.equal(result.nativeSourceCount,146);assert.equal(result.sourceReferences,241);assert.equal(result.nativeProofRewritten,false);assert.equal(result.rawNativeSha256,sha(rawBefore));assert.equal(f.evidence.get(f.proof.rawNative.path).equals(rawBefore),true);assert.deepEqual(f.proof.rawNative,referenceBefore);assert.equal(JSON.stringify(f.proof),proofBefore);assert.deepEqual(contract.participantPreanalysisCurrentRevision.nativeSourceFiles,historical);
+});
+test('resealing an omitted current native source historical145 or same-count foreign path cannot satisfy the envelope',()=>{
+ const historical=JSON.parse(read('.github/workspace-acceptance-contract.json')).participantPreanalysisCurrentRevision.nativeSourceFiles;
+ for(const kind of ['omit-field-hours','historical145','same-count-foreign']){
+  const f=ciShadow(),fake='tests/production-participant-preanalysis-current-ci-lineage.test.mjs';
+  assert.equal(nativeSourceFiles.includes(fake),false);assert.equal(f.context.spec.sourceFiles.includes(fake),true);
+  const value=resealRawNative(f,p=>{if(kind==='same-count-foreign'){const source=read(fake);p.sourceManifest=p.sourceManifest.map(row=>row.path==='src/lib/field-hours-report.mjs'?{path:fake,bytes:source.length,sha256:sha(source)}:row).sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0);}else p.sourceManifest=p.sourceManifest.filter(row=>kind==='historical145'?historical.includes(row.path):row.path!=='src/lib/field-hours-report.mjs');});
+  assert.equal(value.sourceManifest.length,kind==='same-count-foreign'?146:145);assert.equal(f.proof.rawNative.sha256,sha(f.evidence.get(f.proof.rawNative.path)));nativeEnvelopeRejected(()=>f.validate());
+ }
+});
+test('a resealed native digest or source hash still requires the actual current raw source bytes',()=>{
+ for(const kind of ['digest','source-hash']){
+  const f=ciShadow();resealRawNative(f,p=>{if(kind==='digest')p.sourceDigest='f'.repeat(64);else p.sourceManifest.find(row=>row.path==='src/lib/field-hours-report.mjs').sha256='f'.repeat(64);},{resealSourceDigest:kind!=='digest'});
+  assert.equal(f.proof.rawNative.sha256,sha(f.evidence.get(f.proof.rawNative.path)));nativeEnvelopeRejected(()=>f.validate());
+ }
+});
+test('an altered current native reader cannot certify an unchanged envelope or unchanged raw evidence',()=>{
+ const f=ciShadow(),readOriginal=f.context.readSource,rawBefore=Buffer.from(f.evidence.get(f.proof.rawNative.path));
+ f.context.readSource=file=>file==='src/lib/field-hours-report.mjs'?Buffer.concat([readOriginal(file),Buffer.from('\n// changed current native dependency\n')]):readOriginal(file);
+ denied(()=>f.validate());assert.equal(f.evidence.get(f.proof.rawNative.path).equals(rawBefore),true);
+});
+test('native AST roots and authenticated contract roots remain mandatory under attempted substitution',()=>{
+ const roots=['scripts/verify-participant-kyc-preanalysis-postgres.mjs','src/app/api/identity/participants/route.js','src/app/api/meta/customer-process/route.js'],f=ciShadow(),readOriginal=f.context.readSource;
+ for(const rootFile of roots)nativeEnvelopeRejected(()=>participantPreanalysisNativeSourceClosure(file=>file===rootFile?null:readOriginal(file)));
+ nativeEnvelopeRejected(()=>participantPreanalysisNativeSourceClosure(file=>file===roots[0]?Buffer.concat([readOriginal(file),Buffer.from('\nexport const hidden=()=>import(unboundedNativeRoot);\n')]):readOriginal(file)));
+ for(const kind of ['historical-root-omitted','full-ci-root-omitted']){
+  const changed=ciShadow(),contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),source=changed.context.readSource;
+  if(kind==='historical-root-omitted')contract.participantPreanalysisCurrentRevision.nativeSourceFiles=contract.participantPreanalysisCurrentRevision.nativeSourceFiles.filter(file=>file!==roots[1]);
+  else contract.extension.proofs.find(row=>row.id===changed.context.spec.id).sourceFiles=changed.context.spec.sourceFiles.filter(file=>file!==roots[1]);
+  changed.context.readSource=file=>file==='.github/workspace-acceptance-contract.json'?Buffer.from(JSON.stringify(contract,null,2)+'\n'):source(file);denied(()=>changed.validate());
+ }
 });

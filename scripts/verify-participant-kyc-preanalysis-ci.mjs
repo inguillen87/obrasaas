@@ -58,6 +58,35 @@ export function participantPreanalysisCiSourceClosure(readSource){
  return [...files].sort();
 }
 
+// The native receipt retains its original raw manifest. Derive its CURRENT
+// import graph independently; the historical revision list is not its runtime
+// closure after a reviewed outer feature adds a transitive source.
+export function participantPreanalysisNativeSourceClosure(readSource){
+ const files=new Set(['api/_biometric_core.py','package.json','package-lock.json']);
+ function visit(file){
+  requireProof(safe(file),'Unsafe current CI source path');if(files.has(file))return;
+  const value=bytes(readSource,file);files.add(file);if(!/\.[cm]?jsx?$/.test(file))return;
+  const ast=parse(value.toString('utf8'),{sourceType:'unambiguous',plugins:['jsx'],createImportExpressions:true}),imports=[];
+  function walk(node){
+   if(!node||typeof node!=='object')return;
+   const dynamic=node.type==='ImportExpression'||node.type==='CallExpression'&&node.callee?.type==='Import';
+   const ref=['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration','ImportExpression'].includes(node.type)?node.source:dynamic?node.arguments[0]:null;
+   if(ref){requireProof(ref.type==='StringLiteral','Unbounded current CI source import: '+file);imports.push(ref.value);}
+   for(const item of Object.values(node))if(Array.isArray(item))item.forEach(walk);else if(item&&typeof item==='object')walk(item);
+  }
+  walk(ast.program);
+  for(const ref of imports){
+   if(!ref.startsWith('.')){requireProof(!/^(?:https?:|file:|data:)/.test(ref),'Remote source import is forbidden');continue;}
+   const base=path.posix.normalize(path.posix.join(path.posix.dirname(file),ref));requireProof(safe(base),'Source import escapes repository');
+   const target=[base,base+'.js',base+'.mjs',base+'.css',base+'/index.js'].find(candidate=>Buffer.isBuffer(readSource(candidate)));
+   requireProof(Boolean(target),'Missing current source import: '+file+' '+ref);visit(target);
+  }
+ }
+ [nativeProducer,'src/app/api/identity/participants/route.js','src/app/api/meta/customer-process/route.js'].forEach(visit);
+ for(const file of files)bytes(readSource,file);
+ return [...files].sort();
+}
+
 export function parseParticipantPreanalysisTap(input){
  requireProof(Buffer.isBuffer(input),'TAP bytes required');const text=input.toString('utf8');
  requireProof(input.equals(Buffer.from(text))&&!/^not ok\b/m.test(text),'Unit TAP reports failure');
@@ -104,7 +133,9 @@ export function validateParticipantKycPreanalysisCi(proof,{expectedHead,expected
  requireProof(same(proof.sourceManifest,refs(spec.sourceFiles,readSource)),'Every current CI source reference must match raw Git bytes');
  const raw=proof.rawNative;keys(raw,['path','bytes','sha256'],'raw native reference');requireProof(raw.path===PARTICIPANT_PREANALYSIS_EVIDENCE+'native-original.json'&&hash(raw.sha256),'Original native proof reference required');
  const nativeBytes=bytes(readEvidence,raw.path);requireProof(nativeBytes.length===raw.bytes&&sha(nativeBytes)===raw.sha256,'Raw native evidence changed');
- const native=JSON.parse(nativeBytes),result=validateParticipantKycPreanalysisNative(native,{readSource,nativeSourceFiles:revision.nativeSourceFiles});
+ const native=JSON.parse(nativeBytes),nativeFiles=participantPreanalysisNativeSourceClosure(readSource);
+ requireProof(revision.nativeSourceFiles.every(file=>nativeFiles.includes(file))&&nativeFiles.every(file=>spec.sourceFiles.includes(file)),'Historical native roots and complete current native closure must remain covered');
+ const result=validateParticipantKycPreanalysisNative(native,{readSource,nativeSourceFiles:nativeFiles});
  requireProof(Array.isArray(proof.unitSuites)&&same(proof.unitSuites.map(row=>row.file),revision.unitSuites.map(row=>row.file)),'Every frozen backend and UI unit suite must execute');
  for(const [index,suite]of proof.unitSuites.entries()){
   keys(suite,['file','sourceSha256','exitCode','tap','result'],'unit suite');keys(suite.tap,['path','bytes','sha256'],'unit TAP');

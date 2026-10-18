@@ -1,3 +1,4 @@
+import {restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {restoreParticipantPreanalysisPreviousContract,restoreParticipantPreanalysisSourceSet} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {restoreIntegratedIdentitySourceSet} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import {restoreWhatsappFieldContinuitySourceSet} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
@@ -13,6 +14,16 @@ const contract=JSON.parse(read('.github/workspace-acceptance-contract.json'));
 const denied=run=>assert.throws(run,{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});
 const changed=edit=>{const value=structuredClone(contract);edit(value);denied(()=>verifyPlanMeasurementCurrentSources(value,read));};
 
+
+// This projection authenticates the current outer set before retaining the
+// exact historical count/hash assertions belonging to the earlier CI revision.
+function historicalCompactFiles(files,contract){
+ const historical=restoreWorksiteLiveHoursSourceSet(contract,'COMPACT',files);
+ assert.equal(historical.length,139);assert.equal(sha(JSON.stringify(historical)),'cd474d8e9a3b754daaeef61f986e31f1c92997a8423cd9a14c06d43ea706dbea');
+ assert.equal(files.length,140);assert.deepEqual(files,[...historical,'src/lib/field-hours-report.mjs'].sort());
+ return historical;
+}
+
 test('outbound revision restores the complete exact P contract before L K I G H history',()=>{
  const prior=restoreFieldOutboundPreviousContract(contract);
  assert.equal(sha(JSON.stringify(prior,null,2)+'\n'),FIELD_OUTBOUND_CURRENT_REVISION.previousContractSha256);
@@ -24,9 +35,9 @@ test('outbound source validation uses actual current bytes and certifies no nati
  const result=verifyFieldOutboundCurrentSources(contract,read);
  assert.equal(result.nativeAcceptance,false);assert.equal(result.historicalPinsPreserved,true);
  const lineage=verifyPlanMeasurementCurrentSources(contract,read);assert.equal(lineage.publishedCurrentSourceCount,127);
- const actualFiles=kycExpiredCurrentSourceFiles(read),checkpointFiles=restoreIntegratedIdentitySourceSet('COMPACT',actualFiles,contract);
+ const actualFiles=kycExpiredCurrentSourceFiles(read),historicalFiles=historicalCompactFiles(actualFiles,contract),checkpointFiles=restoreIntegratedIdentitySourceSet('COMPACT',actualFiles,contract);
  assert.equal(checkpointFiles.length,contract.participantPreanalysisCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);
- const outer=contract.whatsappFieldContinuityCurrentRevision.sourceSetDeltas.find(row=>row.family==='COMPACT'),previousCurrentFiles=restoreWhatsappFieldContinuitySourceSet('COMPACT',actualFiles,contract);assert.equal(outer.previousCount,137);assert.equal(outer.currentCount,139);assert.deepEqual(outer.additions,['scripts/lib/kyc-neutral-step-guidance-native.mjs','scripts/lib/kyc-neutral-step-guidance-own-native.mjs']);assert.equal(sha(JSON.stringify(actualFiles)),outer.currentPathsSha256);assert.equal(previousCurrentFiles.length,137);assert.equal(sha(JSON.stringify(previousCurrentFiles)),'ab60b810e098f47892e1a17cb01ce1f7f8e1796c1687776b528100e62cb3083f');assert.equal(previousCurrentFiles.length,contract.integratedIdentityCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);assert.equal(lineage.sourceCount,actualFiles.length);assert.equal(lineage.sourceCount,outer.currentCount);
+ const outer=contract.whatsappFieldContinuityCurrentRevision.sourceSetDeltas.find(row=>row.family==='COMPACT'),previousCurrentFiles=restoreWhatsappFieldContinuitySourceSet('COMPACT',actualFiles,contract);assert.equal(outer.previousCount,137);assert.equal(outer.currentCount,139);assert.deepEqual(outer.additions,['scripts/lib/kyc-neutral-step-guidance-native.mjs','scripts/lib/kyc-neutral-step-guidance-own-native.mjs']);assert.equal(sha(JSON.stringify(historicalFiles)),outer.currentPathsSha256);assert.equal(previousCurrentFiles.length,137);assert.equal(sha(JSON.stringify(previousCurrentFiles)),'ab60b810e098f47892e1a17cb01ce1f7f8e1796c1687776b528100e62cb3083f');assert.equal(previousCurrentFiles.length,contract.integratedIdentityCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount);assert.equal(lineage.sourceCount,actualFiles.length);assert.equal(historicalFiles.length,outer.currentCount);
 });
 test('original eight reviewed H source pins stay immutable and only two explicit current pins advance',()=>{
  assert.deepEqual(contract.kycExpiredCurrentComposition.reviewedSources,KYC_EXPIRED_CURRENT_REVIEWED_SOURCES);

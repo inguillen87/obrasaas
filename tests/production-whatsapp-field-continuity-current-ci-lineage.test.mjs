@@ -1,17 +1,18 @@
+import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import checkpoint from './fixtures/whatsapp-field-continuity-contract-052.json' with {type:'json'};
-import {WHATSAPP_FIELD_CONTINUITY_SECTION as section,WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256 as previousSha,WHATSAPP_FIELD_CONTINUITY_CHECKPOINT_PATH as checkpointPath,composeWhatsappFieldContinuityContract,restoreWhatsappFieldContinuityPreviousContract,whatsappFieldContinuityCurrentSourcePin,whatsappFieldContinuityValidationFiles,verifyWhatsappFieldContinuityCurrentSources,restoreWhatsappFieldContinuitySourceSet,whatsappFieldContinuityProofSourceAdditions} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
+import {WHATSAPP_FIELD_CONTINUITY_SECTION as section,WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256 as previousSha,WHATSAPP_FIELD_CONTINUITY_CHECKPOINT_PATH as checkpointPath,composeWhatsappFieldContinuityContract,restoreWhatsappFieldContinuityPreviousContract,whatsappFieldContinuityCurrentSourcePin,whatsappFieldContinuityValidationFiles,verifyWhatsappFieldContinuityCurrentSources,restoreWhatsappFieldContinuitySourceSet,whatsappFieldContinuityProofSourceAdditions,WHATSAPP_FIELD_CONTINUITY_NATIVE,validateWhatsappFieldNeutralStepNative,whatsappFieldNeutralStepShadowFixture} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import {restoreWorkspaceContinuityPreviousContract} from '../scripts/lib/workspace-continuity-current-ci-lineage.mjs';
 import {restoreDocumentTaskAssociationPreviousContract} from '../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
 import {restoreIntegratedIdentityPreviousContract} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import {restoreParticipantPreanalysisPreviousContract,preloadParticipantPreanalysisConsumerSources} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {restoreOoxmlAccountingPreviousContract} from '../scripts/lib/ooxml-accounting-current-ci-lineage.mjs';
 import {reconstructPublishedHContract} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';
-import {existingApiPlanProofSourceAdditions} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
+import {existingApiPlanProofSourceAdditions,existingApiPlanCurrentNativeSourceFiles} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
 import {restoreMaterialReviewPreviousContract,materialReviewCurrentSourcePin} from '../scripts/lib/material-review-current-ci-lineage.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex'),serialize=value=>Buffer.from(JSON.stringify(value,null,2)+'\n');
@@ -64,4 +65,23 @@ test('unrelated contract records cannot be smuggled through a valid outer revisi
  const contract=current();for(const key of ['packageLockSha256','requirementsSha256','sourceWorkflowGitBlobSha256']){const changed=structuredClone(contract);changed[key]='d'.repeat(64);denied(()=>restoreWhatsappFieldContinuityPreviousContract(changed));}
  const changed=structuredClone(contract);changed[section].unreviewedTolerance=true;denied(()=>restoreWhatsappFieldContinuityPreviousContract(changed));assert.equal(JSON.stringify(checkpoint).includes('unreviewedTolerance'),false);
  const foreignNamespace=structuredClone(contract);foreignNamespace[section].addedArtifactPattern='.vercel/field-task-pagination-ci-evidence/';foreignNamespace[section].addedProof.path=foreignNamespace[section].addedArtifactPattern+'current-ci.json';foreignNamespace[section].addedEvidenceProducer.path=foreignNamespace[section].addedProof.path;denied(()=>composeWhatsappFieldContinuityContract(foreignNamespace[section]));
+});
+
+for(const familyName of ['COMPANY','OWN'])test('current native '+familyName+' receipt binds the exact live-hours union and rejects historical or resealed manifests',()=>{
+ const contract=current(),family=WHATSAPP_FIELD_CONTINUITY_NATIVE.families[familyName],kind=familyName==='COMPANY'?'PG_COMPANY_KYC':'COMPACT';
+ const previous=existingApiPlanCurrentNativeSourceFiles(contract,familyName,family.sourceFiles),delta=contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===kind);
+ assert.equal(previous.length,familyName==='COMPANY'?236:139);assert.equal(previous.length,delta.previousCount);assert.equal(sha(JSON.stringify(previous)),delta.previousPathsSha256);
+ assert.deepEqual(delta.additions,['src/lib/field-hours-report.mjs']);const files=[...previous,...delta.additions].sort();
+ assert.equal(files.length,familyName==='COMPANY'?237:140);assert.equal(files.length,delta.currentCount);assert.equal(sha(JSON.stringify(files)),delta.currentPathsSha256);assert.deepEqual(restoreWorksiteLiveHoursSourceSet(contract,kind,files),previous);
+ const proof={harnessSha256:sha(read(family.producer)),sourceManifest:files.map(path=>({path,sha256:sha(read(path))})),[family.dtoField]:whatsappFieldNeutralStepShadowFixture(familyName)};
+ const before=JSON.stringify(proof),contractBefore=JSON.stringify(contract),value=validateWhatsappFieldNeutralStepNative(proof,familyName,contract,read);
+ assert.equal(value.currentNativeSourceCount,delta.currentCount);assert.equal(value.rawProofTransformed,false);assert.equal(value.identityOrProviderAccepted,false);assert.equal(JSON.stringify(proof),before);assert.equal(JSON.stringify(contract),contractBefore);
+ const rejectProof=edit=>{const changed=structuredClone(proof);edit(changed);denied(()=>validateWhatsappFieldNeutralStepNative(changed,familyName,contract,read));};
+ rejectProof(p=>{p.sourceManifest=p.sourceManifest.filter(row=>row.path!=='src/lib/field-hours-report.mjs');});
+ rejectProof(p=>{p.sourceManifest=previous.map(path=>({path,sha256:sha(read(path))}));});
+ rejectProof(p=>{p.sourceManifest.find(row=>row.path==='src/lib/field-hours-report.mjs').path='src/lib/foreign-native-source.mjs';});
+ rejectProof(p=>{p.sourceManifest.push({...p.sourceManifest[0]});});
+ rejectProof(p=>{p.sourceManifest.find(row=>row.path==='src/lib/field-hours-report.mjs').sha256='f'.repeat(64);});
+ const coTampered=structuredClone(contract),coDelta=coTampered[WORKSITE_LIVE_HOURS_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===kind);coDelta.currentCount=previous.length;coDelta.currentPathsSha256=sha(JSON.stringify(previous));coDelta.additions=[];
+ const shortened={...proof,sourceManifest:previous.map(path=>({path,sha256:sha(read(path))}))};denied(()=>validateWhatsappFieldNeutralStepNative(shortened,familyName,coTampered,read));
 });

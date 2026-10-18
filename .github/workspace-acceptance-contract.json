@@ -1549,7 +1549,7 @@
       "retained": true,
       "blockId": 63,
       "lane": "people",
-      "producerSha256": "1b420bfd0ef59638c6caa23cee4e54a4e6b4df69616b43f2782375118ea52198",
+      "producerSha256": "1924e2cfb1aca511c692913ea9bde8115e145dd45a133757038a088fbb37363b",
       "sourceBasis": "EXPECTED_HEAD_GIT_BYTES"
     },
     {
@@ -3597,7 +3597,7 @@
         "path": ".vercel/private/participant-kyc-preanalysis-evidence/current-ci.json",
         "kind": "PG_PARTICIPANT_KYC_PREANALYSIS",
         "producer": "scripts/verify-participant-kyc-preanalysis-ci.mjs",
-        "producerSha256": "1b420bfd0ef59638c6caa23cee4e54a4e6b4df69616b43f2782375118ea52198",
+        "producerSha256": "1924e2cfb1aca511c692913ea9bde8115e145dd45a133757038a088fbb37363b",
         "sourceFiles": [
           ".github/scripts/verify-workspace-ci-parallelization.mjs",
           "api/_biometric_core.py",
@@ -24257,6 +24257,31 @@
             }
           ]
         }
+      },
+      {
+        "producer": "scripts/verify-participant-kyc-preanalysis-ci.mjs",
+        "previousSha256": "1b420bfd0ef59638c6caa23cee4e54a4e6b4df69616b43f2782375118ea52198",
+        "currentSha256": "1924e2cfb1aca511c692913ea9bde8115e145dd45a133757038a088fbb37363b",
+        "contractPointers": [
+          "/extension/proofs/18/producerSha256",
+          "/evidenceProducers/71/producerSha256"
+        ],
+        "sourceHistory": {
+          "previousBytes": 18297,
+          "currentBytes": 20641,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 4975,
+              "currentText": "// The native receipt retains its original raw manifest. Derive its CURRENT\n// import graph independently; the historical revision list is not its runtime\n// closure after a reviewed outer feature adds a transitive source.\nexport function participantPreanalysisNativeSourceClosure(readSource){\n const files=new Set(['api/_biometric_core.py','package.json','package-lock.json']);\n function visit(file){\n  requireProof(safe(file),'Unsafe current CI source path');if(files.has(file))return;\n  const value=bytes(readSource,file);files.add(file);if(!/\\.[cm]?jsx?$/.test(file))return;\n  const ast=parse(value.toString('utf8'),{sourceType:'unambiguous',plugins:['jsx'],createImportExpressions:true}),imports=[];\n  function walk(node){\n   if(!node||typeof node!=='object')return;\n   const dynamic=node.type==='ImportExpression'||node.type==='CallExpression'&&node.callee?.type==='Import';\n   const ref=['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration','ImportExpression'].includes(node.type)?node.source:dynamic?node.arguments[0]:null;\n   if(ref){requireProof(ref.type==='StringLiteral','Unbounded current CI source import: '+file);imports.push(ref.value);}\n   for(const item of Object.values(node))if(Array.isArray(item))item.forEach(walk);else if(item&&typeof item==='object')walk(item);\n  }\n  walk(ast.program);\n  for(const ref of imports){\n   if(!ref.startsWith('.')){requireProof(!/^(?:https?:|file:|data:)/.test(ref),'Remote source import is forbidden');continue;}\n   const base=path.posix.normalize(path.posix.join(path.posix.dirname(file),ref));requireProof(safe(base),'Source import escapes repository');\n   const target=[base,base+'.js',base+'.mjs',base+'.css',base+'/index.js'].find(candidate=>Buffer.isBuffer(readSource(candidate)));\n   requireProof(Boolean(target),'Missing current source import: '+file+' '+ref);visit(target);\n  }\n }\n [nativeProducer,'src/app/api/identity/participants/route.js','src/app/api/meta/customer-process/route.js'].forEach(visit);\n for(const file of files)bytes(readSource,file);\n return [...files].sort();\n}\n\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 14268,
+              "currentText": " const native=JSON.parse(nativeBytes),nativeFiles=participantPreanalysisNativeSourceClosure(readSource);\n requireProof(revision.nativeSourceFiles.every(file=>nativeFiles.includes(file))&&nativeFiles.every(file=>spec.sourceFiles.includes(file)),'Historical native roots and complete current native closure must remain covered');\n const result=validateParticipantKycPreanalysisNative(native,{readSource,nativeSourceFiles:nativeFiles});\n",
+              "previousText": " const native=JSON.parse(nativeBytes),result=validateParticipantKycPreanalysisNative(native,{readSource,nativeSourceFiles:revision.nativeSourceFiles});\n"
+            }
+          ]
+        }
       }
     ],
     "sourceSetDeltas": [
@@ -24444,6 +24469,28 @@
         "additions": [
           "src/lib/field-hours-report.mjs"
         ]
+      },
+      {
+        "family": "ORGANIZATION_USAGE",
+        "previousCount": 120,
+        "previousPathsSha256": "05bbc5d54c631590c7eb566e00f3df237a54d5ddf6d31b80b426e82aeb33d716",
+        "currentCount": 121,
+        "currentPathsSha256": "61c6ff93f2afbcd4d561e3e635927c240ac09100ee79616901ddbd24fb60010b",
+        "additions": [
+          "src/lib/field-hours-report.mjs"
+        ],
+        "contractPointer": null
+      },
+      {
+        "family": "KYC_REPLY_FEEDBACK",
+        "previousCount": 116,
+        "previousPathsSha256": "7da31ffc588909c21b24419726df66542847e84574eb77cf0f0abfc0360f6d74",
+        "currentCount": 117,
+        "currentPathsSha256": "c065cec9a54b9acb73f0cd9b84517326f9686222f7609c0401ad4b7b6bbb6f7c",
+        "additions": [
+          "src/lib/field-hours-report.mjs"
+        ],
+        "contractPointer": null
       }
     ],
     "sourceFamilies": [
@@ -26322,7 +26369,7 @@
           },
           {
             "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
-            "sha256": "9451cba747fc27c014383884cc8e5567f37651fe1df7e1a96d670b25c4f8dc02"
+            "sha256": "5960b4acedd880ac0a49f157e57007863c2478ad218e504eb81bf993ad54b147"
           },
           {
             "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
@@ -27203,7 +27250,7 @@
           },
           {
             "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
-            "sha256": "9451cba747fc27c014383884cc8e5567f37651fe1df7e1a96d670b25c4f8dc02"
+            "sha256": "5960b4acedd880ac0a49f157e57007863c2478ad218e504eb81bf993ad54b147"
           },
           {
             "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
@@ -27431,7 +27478,7 @@
           },
           {
             "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
-            "sha256": "d55968747a2bfc23f02de49d0418374665e2db7e156cfa0356c21145cc9c83b4"
+            "sha256": "8b7cf36fabeb3f577edf5070124beca9b5f282eb0e2b17a66005541087374eeb"
           },
           {
             "path": "tests/production-worksite-task-selector.test.mjs",
@@ -29741,6 +29788,1244 @@
             "sha256": "48f9b9d63552285d3df733e0d173a19b0166d815d6b0259001876fef993092fa"
           }
         ]
+      },
+      {
+        "family": "ORGANIZATION_USAGE",
+        "currentFiles": [
+          "package-lock.json",
+          "package.json",
+          "scripts/fixtures/canonical-participant-kyc.mjs",
+          "scripts/lib/company-channel-disposable-fixture.mjs",
+          "scripts/lib/disposable-postgres-cleanup.mjs",
+          "scripts/verify-organization-usage-postgres.mjs",
+          "src/app/(identity)/cuenta/private-bank-account-format.mjs",
+          "src/lib/bindx-civil-data-client.mjs",
+          "src/lib/brand-assets.mjs",
+          "src/lib/canonical-invited-account.mjs",
+          "src/lib/company-channel-connection.mjs",
+          "src/lib/company-channel-kyc.mjs",
+          "src/lib/company-channel-routing.mjs",
+          "src/lib/company-channel-schema.mjs",
+          "src/lib/company-entitlement.mjs",
+          "src/lib/company-onboarding-policy.mjs",
+          "src/lib/company-phone-format.mjs",
+          "src/lib/employee-intake-channel-continuity.mjs",
+          "src/lib/field-hours-report.mjs",
+          "src/lib/field-media-privacy.mjs",
+          "src/lib/field-media.mjs",
+          "src/lib/field-operations-policy.mjs",
+          "src/lib/field-operations-store.mjs",
+          "src/lib/field-overtime-policy.mjs",
+          "src/lib/field-overtime-store.mjs",
+          "src/lib/field-report-feedback.mjs",
+          "src/lib/field-shift-summary.mjs",
+          "src/lib/geo.js",
+          "src/lib/legacy-access-boundary.js",
+          "src/lib/material-inventory.mjs",
+          "src/lib/meta-callback-diagnostics.mjs",
+          "src/lib/meta-channel-binding.mjs",
+          "src/lib/meta-cloud-protocol.mjs",
+          "src/lib/meta-customer-app-projection.mjs",
+          "src/lib/meta-customer-callback.mjs",
+          "src/lib/meta-customer-coexistence.mjs",
+          "src/lib/meta-customer-credentials.mjs",
+          "src/lib/meta-customer-inbox-review.mjs",
+          "src/lib/meta-customer-outbound.mjs",
+          "src/lib/meta-customer-permissions.mjs",
+          "src/lib/meta-customer-processing.mjs",
+          "src/lib/meta-customer-provider.mjs",
+          "src/lib/meta-customer-templates.mjs",
+          "src/lib/meta-development-pilot-policy.mjs",
+          "src/lib/meta-employee-intake.mjs",
+          "src/lib/meta-field-bridge.mjs",
+          "src/lib/meta-field-conversation.mjs",
+          "src/lib/meta-kyc-challenge.mjs",
+          "src/lib/meta-kyc-conversation.mjs",
+          "src/lib/meta-kyc-current-image.mjs",
+          "src/lib/meta-kyc-identity.mjs",
+          "src/lib/meta-kyc-rejection-policy.mjs",
+          "src/lib/meta-kyc-rejection.mjs",
+          "src/lib/meta-own-company-policy.mjs",
+          "src/lib/meta-plan-import-conversation.mjs",
+          "src/lib/meta-plan-import-origin.mjs",
+          "src/lib/meta-plan-import-transport.mjs",
+          "src/lib/meta-test-recipient-binding.mjs",
+          "src/lib/meta-whatsapp-transport.mjs",
+          "src/lib/organization-resource-usage-policy.mjs",
+          "src/lib/organization-resource-usage-store.mjs",
+          "src/lib/organization-usage-http.mjs",
+          "src/lib/organization-usage-policy.mjs",
+          "src/lib/organization-usage-store.mjs",
+          "src/lib/participant-account-discovery.mjs",
+          "src/lib/participant-admission.mjs",
+          "src/lib/participant-analysis-consent.mjs",
+          "src/lib/participant-approved-identity.mjs",
+          "src/lib/participant-bank-account.mjs",
+          "src/lib/participant-bank-format.mjs",
+          "src/lib/participant-bank-vault.mjs",
+          "src/lib/participant-channel-kyc.mjs",
+          "src/lib/participant-civil-policy.mjs",
+          "src/lib/participant-civil-store.mjs",
+          "src/lib/participant-kyc-chat-attempt.mjs",
+          "src/lib/participant-kyc-chat-closure.mjs",
+          "src/lib/participant-kyc-chat-copy.mjs",
+          "src/lib/participant-kyc-image-set.mjs",
+          "src/lib/participant-kyc-notice-links.mjs",
+          "src/lib/participant-kyc-preanalysis-policy.mjs",
+          "src/lib/participant-onboarding-authority.mjs",
+          "src/lib/participant-onboarding-current-kyc.mjs",
+          "src/lib/participant-onboarding-delivery.mjs",
+          "src/lib/participant-onboarding-intent.mjs",
+          "src/lib/participant-onboarding-policy.mjs",
+          "src/lib/participant-onboarding-reactive.mjs",
+          "src/lib/participant-policy.mjs",
+          "src/lib/participant-store.mjs",
+          "src/lib/participant-verified-office.mjs",
+          "src/lib/person-worksite-journey.mjs",
+          "src/lib/pilot-media.mjs",
+          "src/lib/plan-baseline-policy.mjs",
+          "src/lib/plan-import-analyzer.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-document-curve.mjs",
+          "src/lib/plan-import-monthly-curve.mjs",
+          "src/lib/plan-import-ooxml.mjs",
+          "src/lib/plan-import-policy.mjs",
+          "src/lib/plan-import-store.mjs",
+          "src/lib/plan-measurement-policy.mjs",
+          "src/lib/plan-measurement-source.mjs",
+          "src/lib/private-image-upload.mjs",
+          "src/lib/procurement-quantity.js",
+          "src/lib/progress-measurement-quantity.js",
+          "src/lib/site-register-policy.mjs",
+          "src/lib/site-register-store.mjs",
+          "src/lib/task-progress-measurement.js",
+          "src/lib/video-audio-extractor.mjs",
+          "src/lib/video-frame-extractor.mjs",
+          "src/lib/voice-progress-draft.mjs",
+          "src/lib/whatsapp/field-worker-intent-policy.js",
+          "src/lib/whatsapp/obra-intent-policy.js",
+          "src/lib/whatsapp/operational-proposal-decision-policy.js",
+          "src/lib/whatsapp/project-workspace-profile.js",
+          "src/lib/whatsapp/template-review-policy.js",
+          "src/lib/whatsapp/tenant-workspace-policy.js",
+          "src/lib/worker-channel-consent-policy.mjs",
+          "src/lib/worker-channel-identity.mjs",
+          "src/lib/workspace-policy.mjs",
+          "src/lib/workspace-store.mjs",
+          "tests/fixtures/plan-import-ooxml-synthetic.mjs"
+        ],
+        "externalImports": [
+          "@babel/parser",
+          "ffmpeg-static",
+          "node:assert/strict",
+          "node:child_process",
+          "node:crypto",
+          "node:fs",
+          "node:fs/promises",
+          "node:os",
+          "node:path",
+          "node:perf_hooks",
+          "node:url",
+          "node:zlib",
+          "pg",
+          "saxes",
+          "yauzl"
+        ],
+        "currentManifest": [
+          {
+            "path": "package-lock.json",
+            "sha256": "dfa3ff3914547f35828a0b697e6007c6cf856546be86bf8a7810cdce59e60449"
+          },
+          {
+            "path": "package.json",
+            "sha256": "6b7918c67edddee946d9455aa71913987f54f8abe441e0c3e560560a89061c4d"
+          },
+          {
+            "path": "scripts/fixtures/canonical-participant-kyc.mjs",
+            "sha256": "09928b417f3319d76ba34fac91f89a1888f3a8e613bfde3775cac424cc441ccb"
+          },
+          {
+            "path": "scripts/lib/company-channel-disposable-fixture.mjs",
+            "sha256": "717d87a6fb1dd7f6a8b2a2d19cd3b2fee652d536e958bd833bf8431c31076138"
+          },
+          {
+            "path": "scripts/lib/disposable-postgres-cleanup.mjs",
+            "sha256": "df8d9f36b79cdd5f2d940c0dc4bbc88acbb0bec6e66c9ee5ae93ad5c6e4ab89e"
+          },
+          {
+            "path": "scripts/verify-organization-usage-postgres.mjs",
+            "sha256": "c75c023c6e8de0104b56e259545401e891d88de362bca9f444717b58c149c52b"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/private-bank-account-format.mjs",
+            "sha256": "4dcf7f2de2f49f97f155e14128b20815f538d659d5e82806fa45a18d541adeea"
+          },
+          {
+            "path": "src/lib/bindx-civil-data-client.mjs",
+            "sha256": "20da64b82d14fb3d4055b9852ed8712d33b01d1bc9f50709cb55084c7d0433a2"
+          },
+          {
+            "path": "src/lib/brand-assets.mjs",
+            "sha256": "7da49f3f4d8c2f9d2cce36cc2902b5f46e044b98e67bace09e240f5b007fd4c1"
+          },
+          {
+            "path": "src/lib/canonical-invited-account.mjs",
+            "sha256": "94652997c4e6717e875041c859de9caaaeeabd9d166666d9dfbf899c51d98c7b"
+          },
+          {
+            "path": "src/lib/company-channel-connection.mjs",
+            "sha256": "f2c44860383bb49df67f7999fbe3c0a5aa57c91ebbde0cf9a3b5b367784f2c45"
+          },
+          {
+            "path": "src/lib/company-channel-kyc.mjs",
+            "sha256": "5b46276ad3aa5d656a0027be4a6bf58aa3fba4f557dd86e0c13d0d5b0cecba85"
+          },
+          {
+            "path": "src/lib/company-channel-routing.mjs",
+            "sha256": "9ed740dbb4ae1ca7d44171f176f0001d824b056a0f17a8f58ed1ea5a5a2e2f68"
+          },
+          {
+            "path": "src/lib/company-channel-schema.mjs",
+            "sha256": "96c0385fa3b6d60c8d1f92ca38dcdf32e7779f1200512806bf6d220e6be57022"
+          },
+          {
+            "path": "src/lib/company-entitlement.mjs",
+            "sha256": "65d41dfb796ef12be38b1220a99ccd3dfe277419a5e5a27e125beb29fe7e2cde"
+          },
+          {
+            "path": "src/lib/company-onboarding-policy.mjs",
+            "sha256": "cf557c7837d6264c78207028c668f8f8a2218f9632a8092cfcb8692ef11053d1"
+          },
+          {
+            "path": "src/lib/company-phone-format.mjs",
+            "sha256": "67b31114f517253961c6a774210f157867b1e2e318e6b700089eef03ef1b7209"
+          },
+          {
+            "path": "src/lib/employee-intake-channel-continuity.mjs",
+            "sha256": "59dffe3800f26cd979bd12c4cff0010ca72779e1dc62030a6f0117b6ef3fb64d"
+          },
+          {
+            "path": "src/lib/field-hours-report.mjs",
+            "sha256": "b55b767d61278bde31cb9ce4ef64faee5320fc7fe1b1bcc54559860bb4576731"
+          },
+          {
+            "path": "src/lib/field-media-privacy.mjs",
+            "sha256": "5ec7fc7dd71f9303a42bfb4889e02541de8a3cf356e8e1203cfeeefd56220515"
+          },
+          {
+            "path": "src/lib/field-media.mjs",
+            "sha256": "940e681d1430fc211093b16f5407637fcd31d270a3d99234f748fe7db73cc0bb"
+          },
+          {
+            "path": "src/lib/field-operations-policy.mjs",
+            "sha256": "01eb863d7db4446eeb8dab990d7e0602a19d581d5615a0b1e5d50c02f3d70173"
+          },
+          {
+            "path": "src/lib/field-operations-store.mjs",
+            "sha256": "dbf96641349efae61808a2d66a02d491ad06e2226885e6efa928dba53ce5034e"
+          },
+          {
+            "path": "src/lib/field-overtime-policy.mjs",
+            "sha256": "76848bd0861d6cecccb682b774599f03d3fe1322eed3cc58f5f1db5d9b1e24f8"
+          },
+          {
+            "path": "src/lib/field-overtime-store.mjs",
+            "sha256": "f29b67fff29949d5a8b14c4aed3f484ae1ce16d2ed42de486a6d5868361b1526"
+          },
+          {
+            "path": "src/lib/field-report-feedback.mjs",
+            "sha256": "70b966ae5f382abe6b5446daf1092c3f66b8f46f80ce5a0c006cffeba1cfa64c"
+          },
+          {
+            "path": "src/lib/field-shift-summary.mjs",
+            "sha256": "41f47aa7a0826ba1fe29b554c7575ec60c9861f0c18c863f06e8c3d00cb0f83c"
+          },
+          {
+            "path": "src/lib/geo.js",
+            "sha256": "fa47424540f953adf56e0c3069780c0c8876a2f69e944a80caddefa974b5b6bf"
+          },
+          {
+            "path": "src/lib/legacy-access-boundary.js",
+            "sha256": "e1af7e83dac3c18bcf3b235d111d936d6dd6167925a3e1459d70a33913035370"
+          },
+          {
+            "path": "src/lib/material-inventory.mjs",
+            "sha256": "4b599d273c4cadcdf76202554757583152da8c11b0a754be386bffb830f0c65b"
+          },
+          {
+            "path": "src/lib/meta-callback-diagnostics.mjs",
+            "sha256": "b16fcfbeabe02b119d0337485504490a0c8e60363e841e378ae4c7722816d3bc"
+          },
+          {
+            "path": "src/lib/meta-channel-binding.mjs",
+            "sha256": "0ba9e9de3b6dcca46524ab2df22236dbbcd5be5e6cef571df1ec47a01633672e"
+          },
+          {
+            "path": "src/lib/meta-cloud-protocol.mjs",
+            "sha256": "c6d5f1e1b4119dd2529860e3bd61a1b22d602f71ad301b2f04cec3ab4bbbed3c"
+          },
+          {
+            "path": "src/lib/meta-customer-app-projection.mjs",
+            "sha256": "7b4b95712f143555a0e23b8ac98fc0e1d2f108e9fbefb4e861d20d9b464ef003"
+          },
+          {
+            "path": "src/lib/meta-customer-callback.mjs",
+            "sha256": "da90e3ed097c287a7c080d05daf5e4b0c0bb82544d2f7dab4cb1ee99880c3fd0"
+          },
+          {
+            "path": "src/lib/meta-customer-coexistence.mjs",
+            "sha256": "30f5b950284b953fa853b37514cd768660cfc505a6e979ec51c947b6edce40da"
+          },
+          {
+            "path": "src/lib/meta-customer-credentials.mjs",
+            "sha256": "44a05a0b46417de835eb289882b0b2c6d71158f207c16c48228f1ac4b67cca0f"
+          },
+          {
+            "path": "src/lib/meta-customer-inbox-review.mjs",
+            "sha256": "250bd69c487dc8dffed5500c1ca0f9adb77843352902c41e4a63da7656bf2eaa"
+          },
+          {
+            "path": "src/lib/meta-customer-outbound.mjs",
+            "sha256": "84a249b3777d3be843b20b09d0c6cd81b6fab7415dc22f124477d87475eead09"
+          },
+          {
+            "path": "src/lib/meta-customer-permissions.mjs",
+            "sha256": "ce3671bd46af8e487c45319facbca8e6b522620fd16ee3163e5048b5ecb6585d"
+          },
+          {
+            "path": "src/lib/meta-customer-processing.mjs",
+            "sha256": "e4a52dbd2ce86793b66c4af5963c288b13d7b2b2f656c4c6f795bcac8074f4ad"
+          },
+          {
+            "path": "src/lib/meta-customer-provider.mjs",
+            "sha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f"
+          },
+          {
+            "path": "src/lib/meta-customer-templates.mjs",
+            "sha256": "ca9e491b8b1b4c25c89585408cb53eae13e2423fdf48a93deed0846126e1c46c"
+          },
+          {
+            "path": "src/lib/meta-development-pilot-policy.mjs",
+            "sha256": "6f3a854898ea28d108341f35fe7f5f23facf3d574e586b96a2343a8038cc8c79"
+          },
+          {
+            "path": "src/lib/meta-employee-intake.mjs",
+            "sha256": "77dc9f64814f995d21084606d705f26af65de4f4f9bea25a0f37a0d8dba1b928"
+          },
+          {
+            "path": "src/lib/meta-field-bridge.mjs",
+            "sha256": "79c961cf91f988e5d913cfb241a887c26a78d49e04ebf2c5fbb2bf6a74bc809b"
+          },
+          {
+            "path": "src/lib/meta-field-conversation.mjs",
+            "sha256": "2da5b4a58e4f62a912d4df4bd93574c9907c6561123fe5ffabdd12420b72047f"
+          },
+          {
+            "path": "src/lib/meta-kyc-challenge.mjs",
+            "sha256": "f5a03ec770e6d85de095393bf38c331c0803a7fe3c7f1b72a2addd9cac7484eb"
+          },
+          {
+            "path": "src/lib/meta-kyc-conversation.mjs",
+            "sha256": "75870a6359385ae83df0d154b57c3f6738f2bde62fbe4974da7e38e5b0de2902"
+          },
+          {
+            "path": "src/lib/meta-kyc-current-image.mjs",
+            "sha256": "03ef3966025f520b373e937a6230f846185f3b4845830da5a38c0d8f02e155c2"
+          },
+          {
+            "path": "src/lib/meta-kyc-identity.mjs",
+            "sha256": "295f87ecb3b4586313a4f9c48a2d5c9acf8fa263682d99d44a966be243af2319"
+          },
+          {
+            "path": "src/lib/meta-kyc-rejection-policy.mjs",
+            "sha256": "e6c96aba8077d75e152f45dc49fe32d41e103658d4bff4281c8c8a98e3fff0c1"
+          },
+          {
+            "path": "src/lib/meta-kyc-rejection.mjs",
+            "sha256": "5477adafd994a54c9e7bbcc196b6af4fbe0b9cc03ab563775b8258290e31f3d0"
+          },
+          {
+            "path": "src/lib/meta-own-company-policy.mjs",
+            "sha256": "7db3875cd0f31fec077f4d9a4f8875be1ddf4a5772acff4559069ae950ff0821"
+          },
+          {
+            "path": "src/lib/meta-plan-import-conversation.mjs",
+            "sha256": "6f3c261cb2cde943e0202ab5097d664958f5702975cdf5914aeac35e5a1bac1c"
+          },
+          {
+            "path": "src/lib/meta-plan-import-origin.mjs",
+            "sha256": "cdb619d1709a982323c9892383def1428db2ade771babdb18e4032b3535d953e"
+          },
+          {
+            "path": "src/lib/meta-plan-import-transport.mjs",
+            "sha256": "e42f48f0175dd697bac3de61d7d9893d35c2b1696c1ae276a4698eb3c36a4634"
+          },
+          {
+            "path": "src/lib/meta-test-recipient-binding.mjs",
+            "sha256": "2aea6f5815bd2d90fe891b45a79b48d339a3eebc681ac40b3347244e546c4b66"
+          },
+          {
+            "path": "src/lib/meta-whatsapp-transport.mjs",
+            "sha256": "f99569c7f587e9be1268aa254d2368226346a7ebf7e48fa6ca63a0064cf41310"
+          },
+          {
+            "path": "src/lib/organization-resource-usage-policy.mjs",
+            "sha256": "089ac1ee2ca6afd30aab1d0abd38274698ca56991d1c5225ea8e44c8b9fdc449"
+          },
+          {
+            "path": "src/lib/organization-resource-usage-store.mjs",
+            "sha256": "869502cd3b11d1625c4dbb843ebc53d92e43dd21d13fcb53f22538684ec4f2ef"
+          },
+          {
+            "path": "src/lib/organization-usage-http.mjs",
+            "sha256": "3c6ac61cd20a9743926e159aaf2662f1963ec56d8ca89c86f3a3ffdbd5bf2f20"
+          },
+          {
+            "path": "src/lib/organization-usage-policy.mjs",
+            "sha256": "94997530d6c1fd420f0233172b07f8ba7dd7546a2ac9af75eaa30736400237ae"
+          },
+          {
+            "path": "src/lib/organization-usage-store.mjs",
+            "sha256": "9497c32b76ffda1d5456267d4fcdc90b674618df1d60bd84dbbd7bc3b2827347"
+          },
+          {
+            "path": "src/lib/participant-account-discovery.mjs",
+            "sha256": "11b37ca397fdb195aac7addc1c16842fb28a9c83a73a82a57bf2791ed3038738"
+          },
+          {
+            "path": "src/lib/participant-admission.mjs",
+            "sha256": "2cbb466e49d742cd23da1bb85a4e89b7e411dc724c8d1f2eb66b39717f283dd9"
+          },
+          {
+            "path": "src/lib/participant-analysis-consent.mjs",
+            "sha256": "7f7d371914d1e46ac799cd1683afdc0418186c15a20156e697ecd879c81bf8c1"
+          },
+          {
+            "path": "src/lib/participant-approved-identity.mjs",
+            "sha256": "834d81e70cedbd967ff84d880ea9d697c2168d2220fb23d9eb14c1aba1cdbbf1"
+          },
+          {
+            "path": "src/lib/participant-bank-account.mjs",
+            "sha256": "29980527a6eda3bbc0125098a4b616082034a71fb1afb772ff87f476bc0ce981"
+          },
+          {
+            "path": "src/lib/participant-bank-format.mjs",
+            "sha256": "ebbb206a14eaac57230b53ec1afae99c4be60c8739baf0d1d047d4a47ba464db"
+          },
+          {
+            "path": "src/lib/participant-bank-vault.mjs",
+            "sha256": "06e990ab79c896628756f3c74a50dcc7e8062f4fa296f56a31e4150b5badc16a"
+          },
+          {
+            "path": "src/lib/participant-channel-kyc.mjs",
+            "sha256": "2ac9414429238162a9b16d4adea421df0bff9fb93ea4fbf2f9d6677f2659fb2d"
+          },
+          {
+            "path": "src/lib/participant-civil-policy.mjs",
+            "sha256": "e180a64c788d6cd20e766cb4fd32dbba1c7cb3954c01405ac8675ec023eef278"
+          },
+          {
+            "path": "src/lib/participant-civil-store.mjs",
+            "sha256": "5f440c0c76ca67b87a7e5d4e90e7a48f18ea3603b16434b35beeddd3bdf168a4"
+          },
+          {
+            "path": "src/lib/participant-kyc-chat-attempt.mjs",
+            "sha256": "d3f0a65f866fa027ee008963fcb6ffcad0cd33de94cace7603cf40bc78c21aeb"
+          },
+          {
+            "path": "src/lib/participant-kyc-chat-closure.mjs",
+            "sha256": "4a6a368910de95582c2baabc70bab7f4b4afa4413e8ebdb75a1e8b867c098a19"
+          },
+          {
+            "path": "src/lib/participant-kyc-chat-copy.mjs",
+            "sha256": "d886219584d5e8b9d9db1ad16a36c726f6982fa0e8400c3be51af2623574ab96"
+          },
+          {
+            "path": "src/lib/participant-kyc-image-set.mjs",
+            "sha256": "190ce2560286a58d42668da7b912aeabcfa76ee14086503bf1609304e5f0e8fb"
+          },
+          {
+            "path": "src/lib/participant-kyc-notice-links.mjs",
+            "sha256": "1a10acf655796ebf4f08175158ea3dc2a1d0a0fdb3d13bb88573d6a0e5f4375e"
+          },
+          {
+            "path": "src/lib/participant-kyc-preanalysis-policy.mjs",
+            "sha256": "8c5286a0a5d41364e92e60f2ce2ba96caccc8667960f966b5caead37acafab49"
+          },
+          {
+            "path": "src/lib/participant-onboarding-authority.mjs",
+            "sha256": "dad5d9fd0a61c493ff02331d5333982627cdeb3a7addb74a3c86d44da931f916"
+          },
+          {
+            "path": "src/lib/participant-onboarding-current-kyc.mjs",
+            "sha256": "232fecca4f6cf775e5151ec460560e0c1abd6646dc3c532140cabe26dfb42119"
+          },
+          {
+            "path": "src/lib/participant-onboarding-delivery.mjs",
+            "sha256": "615592cc1a6215e24c48e8873a27211421853f99ca9093e6f490f77532b3d013"
+          },
+          {
+            "path": "src/lib/participant-onboarding-intent.mjs",
+            "sha256": "07114f6066e10617357c4e5d8e2db2b9dc846e5f4cffbc5aef09f2b7bfada9de"
+          },
+          {
+            "path": "src/lib/participant-onboarding-policy.mjs",
+            "sha256": "59409797ce3e13b7cfe63fe21d8d7e2c848ee49e0766015939242a9f43687c03"
+          },
+          {
+            "path": "src/lib/participant-onboarding-reactive.mjs",
+            "sha256": "666a8c27f3ab7d6fdbe66c91f22ace4e25b04b98e865f401d19c72212916104d"
+          },
+          {
+            "path": "src/lib/participant-policy.mjs",
+            "sha256": "7f3969ab1ebac5f01696149d76337199eb64c2fd09015c44c07e8b7e7088d62f"
+          },
+          {
+            "path": "src/lib/participant-store.mjs",
+            "sha256": "2296495e366b9ea0c2511066584e93ddf1cff51b5eefd05c6121d2143d78f5c9"
+          },
+          {
+            "path": "src/lib/participant-verified-office.mjs",
+            "sha256": "4922f392490aa6d49b8a8a45a56ac0b03831a8ad2efe89ce1e3adfd77d603d89"
+          },
+          {
+            "path": "src/lib/person-worksite-journey.mjs",
+            "sha256": "d3174df793150125c0b6a5d9f37d56336e72cab1efb43a361065b78ac54c210a"
+          },
+          {
+            "path": "src/lib/pilot-media.mjs",
+            "sha256": "55e35757cea03c312df68cebad100ee8b7d904b418eca9082359ea34e68f8fa9"
+          },
+          {
+            "path": "src/lib/plan-baseline-policy.mjs",
+            "sha256": "e9217a41a87057f437439420d56f3b7a0f973ae37c250c07b335634fef308560"
+          },
+          {
+            "path": "src/lib/plan-import-analyzer.mjs",
+            "sha256": "0427c7fbdf0ba27b07c328661e52731c996e0a7b5f0749dcc6207410b28c52bb"
+          },
+          {
+            "path": "src/lib/plan-import-cyp-curve.mjs",
+            "sha256": "7e1d6c9d87df5e74e0a340361e1e66fdf0cfd5c82f1e44030ba2e85b5fa9c342"
+          },
+          {
+            "path": "src/lib/plan-import-document-curve.mjs",
+            "sha256": "7f63d62b9f1ae6d139c627a978ef56d7eafea0e0f4271167daa4c00bf7fda013"
+          },
+          {
+            "path": "src/lib/plan-import-monthly-curve.mjs",
+            "sha256": "6ce785f9c24c47f0e291b0bac40bd96a691fae68a309e4cb7a1917db31f9e6b6"
+          },
+          {
+            "path": "src/lib/plan-import-ooxml.mjs",
+            "sha256": "a146b9b300086bd8f44af6549d75611f7ac542a6c6c2f9eddf099cd8fc0f9251"
+          },
+          {
+            "path": "src/lib/plan-import-policy.mjs",
+            "sha256": "f2d73b8c58df571fb0dc6e5d76e2fb5d60daffa6ed6a41bc2be3c7e536458696"
+          },
+          {
+            "path": "src/lib/plan-import-store.mjs",
+            "sha256": "455c06e64301b2679e1278cc288cd4b06c875a222339e15c6720c58bc1f011c2"
+          },
+          {
+            "path": "src/lib/plan-measurement-policy.mjs",
+            "sha256": "3d6b0bce58a7f89612878310f534d8cf02f6a222c778cd4294b415c1f61157b7"
+          },
+          {
+            "path": "src/lib/plan-measurement-source.mjs",
+            "sha256": "ecf33b67a333d8ce73bfb51610218a1658cd94a26b62eb35d2290b795f826f36"
+          },
+          {
+            "path": "src/lib/private-image-upload.mjs",
+            "sha256": "1eaeda2fa79104cfe00a8736c466d8568d216c8682bd44031d3bf9d4f35e3f60"
+          },
+          {
+            "path": "src/lib/procurement-quantity.js",
+            "sha256": "53439844051cc1dbd679220d695e60e54bc1629b2f1ddb33fc125981da9326b3"
+          },
+          {
+            "path": "src/lib/progress-measurement-quantity.js",
+            "sha256": "e194f461d482dec666c090a19aabbd3498bc08964cbbbc31b8db6eeb39cb1be2"
+          },
+          {
+            "path": "src/lib/site-register-policy.mjs",
+            "sha256": "d529c4f2225e0ec851ef7df60f8c5b182a88b384958ebfd15b194683d1590434"
+          },
+          {
+            "path": "src/lib/site-register-store.mjs",
+            "sha256": "6b744c86f47dbb6dc081132675888615d76421701f96151b00646b5e1d2529c6"
+          },
+          {
+            "path": "src/lib/task-progress-measurement.js",
+            "sha256": "10361a0e30df34f9c90f915d9fdbfc0912a610ab3ce851503c32549b7049a8b9"
+          },
+          {
+            "path": "src/lib/video-audio-extractor.mjs",
+            "sha256": "0c85dfd39c10fdb782eca4fe57dc665c29bd7211ab7aba0dda3f8945abcb1988"
+          },
+          {
+            "path": "src/lib/video-frame-extractor.mjs",
+            "sha256": "33425a184cf097884982c43a90e3b515726027adbeb51c2cdbfc794e79dee6e6"
+          },
+          {
+            "path": "src/lib/voice-progress-draft.mjs",
+            "sha256": "56ddbad919a1ad77e13105f1a125914674c1a149a88e28fa2f8b831a4d14bd69"
+          },
+          {
+            "path": "src/lib/whatsapp/field-worker-intent-policy.js",
+            "sha256": "0fdf205af1c2185a16f99c4f1aaba6c36d95722ea914915a0eefe6a10d443ef9"
+          },
+          {
+            "path": "src/lib/whatsapp/obra-intent-policy.js",
+            "sha256": "cd01054ba81be6552f58dc91758e08166ea099482f28355cae570d15f3ccf8da"
+          },
+          {
+            "path": "src/lib/whatsapp/operational-proposal-decision-policy.js",
+            "sha256": "996ed641c090267679ce0fc3cb7a23f39b31ce88e761135feb0dd0c852eb74fc"
+          },
+          {
+            "path": "src/lib/whatsapp/project-workspace-profile.js",
+            "sha256": "e13473baa4ca5b4dc9851bb202f400ba174ccbfce2589be65ce8458aafa998f4"
+          },
+          {
+            "path": "src/lib/whatsapp/template-review-policy.js",
+            "sha256": "0ec4a7e544f8c2c2409d2c84ecf69fab663334dd5a5cef0ee1b1cbec82de0a08"
+          },
+          {
+            "path": "src/lib/whatsapp/tenant-workspace-policy.js",
+            "sha256": "d3416ff993fbfd70f75404166cdcd8f0b9b2e5a6741f6cde03725aab16abcd5e"
+          },
+          {
+            "path": "src/lib/worker-channel-consent-policy.mjs",
+            "sha256": "95c8393e7f2603694c5c15cfe34c9eead43007927aed0d5b633859b14c7448a9"
+          },
+          {
+            "path": "src/lib/worker-channel-identity.mjs",
+            "sha256": "1cddd58a2cd656abaca25752481fe1ca760d2bcd385a0fffbe0e685c15d59e0a"
+          },
+          {
+            "path": "src/lib/workspace-policy.mjs",
+            "sha256": "ba51cc5c4a6e4f5ce1c9382cae2c8ea903ab4373668c05384c7f1e9253c7041e"
+          },
+          {
+            "path": "src/lib/workspace-store.mjs",
+            "sha256": "5f25092121a31a06eefa59d69866db82fa3cd28afdcbd0e066e52d916478bc50"
+          },
+          {
+            "path": "tests/fixtures/plan-import-ooxml-synthetic.mjs",
+            "sha256": "4157135abf5798807025a18abd121c7fdbc7be2a5e0099084bbb02ea28f20931"
+          }
+        ]
+      },
+      {
+        "family": "KYC_REPLY_FEEDBACK",
+        "currentFiles": [
+          "package-lock.json",
+          "package.json",
+          "scripts/lib/company-channel-disposable-fixture.mjs",
+          "scripts/lib/disposable-postgres-cleanup.mjs",
+          "scripts/verify-company-kyc-rejection-feedback-postgres.mjs",
+          "src/app/(identity)/cuenta/private-bank-account-format.mjs",
+          "src/lib/bindx-civil-data-client.mjs",
+          "src/lib/brand-assets.mjs",
+          "src/lib/canonical-invited-account.mjs",
+          "src/lib/company-channel-connection.mjs",
+          "src/lib/company-channel-kyc.mjs",
+          "src/lib/company-channel-routing.mjs",
+          "src/lib/company-channel-schema.mjs",
+          "src/lib/company-entitlement.mjs",
+          "src/lib/company-onboarding-policy.mjs",
+          "src/lib/company-phone-format.mjs",
+          "src/lib/employee-intake-channel-continuity.mjs",
+          "src/lib/field-hours-report.mjs",
+          "src/lib/field-media-privacy.mjs",
+          "src/lib/field-media.mjs",
+          "src/lib/field-operations-policy.mjs",
+          "src/lib/field-operations-store.mjs",
+          "src/lib/field-overtime-policy.mjs",
+          "src/lib/field-overtime-store.mjs",
+          "src/lib/field-report-feedback.mjs",
+          "src/lib/field-shift-summary.mjs",
+          "src/lib/geo.js",
+          "src/lib/legacy-access-boundary.js",
+          "src/lib/material-inventory.mjs",
+          "src/lib/meta-callback-diagnostics.mjs",
+          "src/lib/meta-channel-binding.mjs",
+          "src/lib/meta-cloud-protocol.mjs",
+          "src/lib/meta-customer-app-projection.mjs",
+          "src/lib/meta-customer-callback.mjs",
+          "src/lib/meta-customer-coexistence.mjs",
+          "src/lib/meta-customer-credentials.mjs",
+          "src/lib/meta-customer-inbox-review.mjs",
+          "src/lib/meta-customer-outbound.mjs",
+          "src/lib/meta-customer-permissions.mjs",
+          "src/lib/meta-customer-processing.mjs",
+          "src/lib/meta-customer-provider.mjs",
+          "src/lib/meta-customer-templates.mjs",
+          "src/lib/meta-development-pilot-policy.mjs",
+          "src/lib/meta-employee-intake.mjs",
+          "src/lib/meta-field-bridge.mjs",
+          "src/lib/meta-field-conversation.mjs",
+          "src/lib/meta-kyc-bridge.mjs",
+          "src/lib/meta-kyc-challenge.mjs",
+          "src/lib/meta-kyc-conversation.mjs",
+          "src/lib/meta-kyc-current-image.mjs",
+          "src/lib/meta-kyc-identity.mjs",
+          "src/lib/meta-kyc-outbound.mjs",
+          "src/lib/meta-kyc-rejection-policy.mjs",
+          "src/lib/meta-kyc-rejection.mjs",
+          "src/lib/meta-own-company-policy.mjs",
+          "src/lib/meta-plan-import-conversation.mjs",
+          "src/lib/meta-plan-import-origin.mjs",
+          "src/lib/meta-plan-import-transport.mjs",
+          "src/lib/meta-test-recipient-binding.mjs",
+          "src/lib/meta-whatsapp-transport.mjs",
+          "src/lib/organization-resource-usage-policy.mjs",
+          "src/lib/organization-usage-policy.mjs",
+          "src/lib/participant-account-discovery.mjs",
+          "src/lib/participant-admission.mjs",
+          "src/lib/participant-analysis-consent.mjs",
+          "src/lib/participant-approved-identity.mjs",
+          "src/lib/participant-bank-account.mjs",
+          "src/lib/participant-bank-format.mjs",
+          "src/lib/participant-bank-vault.mjs",
+          "src/lib/participant-channel-kyc.mjs",
+          "src/lib/participant-civil-policy.mjs",
+          "src/lib/participant-civil-store.mjs",
+          "src/lib/participant-kyc-chat-attempt.mjs",
+          "src/lib/participant-kyc-chat-closure.mjs",
+          "src/lib/participant-kyc-chat-copy.mjs",
+          "src/lib/participant-kyc-image-set.mjs",
+          "src/lib/participant-kyc-notice-links.mjs",
+          "src/lib/participant-kyc-preanalysis-policy.mjs",
+          "src/lib/participant-onboarding-authority.mjs",
+          "src/lib/participant-onboarding-current-kyc.mjs",
+          "src/lib/participant-onboarding-delivery.mjs",
+          "src/lib/participant-onboarding-intent.mjs",
+          "src/lib/participant-onboarding-policy.mjs",
+          "src/lib/participant-onboarding-reactive.mjs",
+          "src/lib/participant-policy.mjs",
+          "src/lib/participant-store.mjs",
+          "src/lib/participant-verified-office.mjs",
+          "src/lib/person-worksite-journey.mjs",
+          "src/lib/pilot-media.mjs",
+          "src/lib/plan-baseline-policy.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-document-curve.mjs",
+          "src/lib/plan-import-monthly-curve.mjs",
+          "src/lib/plan-import-ooxml.mjs",
+          "src/lib/plan-import-policy.mjs",
+          "src/lib/plan-import-store.mjs",
+          "src/lib/plan-measurement-policy.mjs",
+          "src/lib/plan-measurement-source.mjs",
+          "src/lib/private-image-upload.mjs",
+          "src/lib/procurement-quantity.js",
+          "src/lib/progress-measurement-quantity.js",
+          "src/lib/site-register-policy.mjs",
+          "src/lib/site-register-store.mjs",
+          "src/lib/task-progress-measurement.js",
+          "src/lib/video-audio-extractor.mjs",
+          "src/lib/video-frame-extractor.mjs",
+          "src/lib/voice-progress-draft.mjs",
+          "src/lib/whatsapp/field-worker-intent-policy.js",
+          "src/lib/whatsapp/obra-intent-policy.js",
+          "src/lib/whatsapp/operational-proposal-decision-policy.js",
+          "src/lib/whatsapp/project-workspace-profile.js",
+          "src/lib/whatsapp/template-review-policy.js",
+          "src/lib/whatsapp/tenant-workspace-policy.js",
+          "src/lib/worker-channel-consent-policy.mjs",
+          "src/lib/worker-channel-identity.mjs",
+          "src/lib/workspace-policy.mjs",
+          "src/lib/workspace-store.mjs"
+        ],
+        "externalImports": [
+          "@babel/parser",
+          "ffmpeg-static",
+          "node:assert/strict",
+          "node:child_process",
+          "node:crypto",
+          "node:fs",
+          "node:fs/promises",
+          "node:os",
+          "node:path",
+          "node:perf_hooks",
+          "node:url",
+          "node:zlib",
+          "pg",
+          "saxes",
+          "yauzl"
+        ],
+        "currentManifest": [
+          {
+            "path": "package-lock.json",
+            "sha256": "dfa3ff3914547f35828a0b697e6007c6cf856546be86bf8a7810cdce59e60449"
+          },
+          {
+            "path": "package.json",
+            "sha256": "6b7918c67edddee946d9455aa71913987f54f8abe441e0c3e560560a89061c4d"
+          },
+          {
+            "path": "scripts/lib/company-channel-disposable-fixture.mjs",
+            "sha256": "717d87a6fb1dd7f6a8b2a2d19cd3b2fee652d536e958bd833bf8431c31076138"
+          },
+          {
+            "path": "scripts/lib/disposable-postgres-cleanup.mjs",
+            "sha256": "df8d9f36b79cdd5f2d940c0dc4bbc88acbb0bec6e66c9ee5ae93ad5c6e4ab89e"
+          },
+          {
+            "path": "scripts/verify-company-kyc-rejection-feedback-postgres.mjs",
+            "sha256": "a64cd0fa267dda98f9c9430327ab39f2cfec304fadc7fddb6c804ba41091ba32"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/private-bank-account-format.mjs",
+            "sha256": "4dcf7f2de2f49f97f155e14128b20815f538d659d5e82806fa45a18d541adeea"
+          },
+          {
+            "path": "src/lib/bindx-civil-data-client.mjs",
+            "sha256": "20da64b82d14fb3d4055b9852ed8712d33b01d1bc9f50709cb55084c7d0433a2"
+          },
+          {
+            "path": "src/lib/brand-assets.mjs",
+            "sha256": "7da49f3f4d8c2f9d2cce36cc2902b5f46e044b98e67bace09e240f5b007fd4c1"
+          },
+          {
+            "path": "src/lib/canonical-invited-account.mjs",
+            "sha256": "94652997c4e6717e875041c859de9caaaeeabd9d166666d9dfbf899c51d98c7b"
+          },
+          {
+            "path": "src/lib/company-channel-connection.mjs",
+            "sha256": "f2c44860383bb49df67f7999fbe3c0a5aa57c91ebbde0cf9a3b5b367784f2c45"
+          },
+          {
+            "path": "src/lib/company-channel-kyc.mjs",
+            "sha256": "5b46276ad3aa5d656a0027be4a6bf58aa3fba4f557dd86e0c13d0d5b0cecba85"
+          },
+          {
+            "path": "src/lib/company-channel-routing.mjs",
+            "sha256": "9ed740dbb4ae1ca7d44171f176f0001d824b056a0f17a8f58ed1ea5a5a2e2f68"
+          },
+          {
+            "path": "src/lib/company-channel-schema.mjs",
+            "sha256": "96c0385fa3b6d60c8d1f92ca38dcdf32e7779f1200512806bf6d220e6be57022"
+          },
+          {
+            "path": "src/lib/company-entitlement.mjs",
+            "sha256": "65d41dfb796ef12be38b1220a99ccd3dfe277419a5e5a27e125beb29fe7e2cde"
+          },
+          {
+            "path": "src/lib/company-onboarding-policy.mjs",
+            "sha256": "cf557c7837d6264c78207028c668f8f8a2218f9632a8092cfcb8692ef11053d1"
+          },
+          {
+            "path": "src/lib/company-phone-format.mjs",
+            "sha256": "67b31114f517253961c6a774210f157867b1e2e318e6b700089eef03ef1b7209"
+          },
+          {
+            "path": "src/lib/employee-intake-channel-continuity.mjs",
+            "sha256": "59dffe3800f26cd979bd12c4cff0010ca72779e1dc62030a6f0117b6ef3fb64d"
+          },
+          {
+            "path": "src/lib/field-hours-report.mjs",
+            "sha256": "b55b767d61278bde31cb9ce4ef64faee5320fc7fe1b1bcc54559860bb4576731"
+          },
+          {
+            "path": "src/lib/field-media-privacy.mjs",
+            "sha256": "5ec7fc7dd71f9303a42bfb4889e02541de8a3cf356e8e1203cfeeefd56220515"
+          },
+          {
+            "path": "src/lib/field-media.mjs",
+            "sha256": "940e681d1430fc211093b16f5407637fcd31d270a3d99234f748fe7db73cc0bb"
+          },
+          {
+            "path": "src/lib/field-operations-policy.mjs",
+            "sha256": "01eb863d7db4446eeb8dab990d7e0602a19d581d5615a0b1e5d50c02f3d70173"
+          },
+          {
+            "path": "src/lib/field-operations-store.mjs",
+            "sha256": "dbf96641349efae61808a2d66a02d491ad06e2226885e6efa928dba53ce5034e"
+          },
+          {
+            "path": "src/lib/field-overtime-policy.mjs",
+            "sha256": "76848bd0861d6cecccb682b774599f03d3fe1322eed3cc58f5f1db5d9b1e24f8"
+          },
+          {
+            "path": "src/lib/field-overtime-store.mjs",
+            "sha256": "f29b67fff29949d5a8b14c4aed3f484ae1ce16d2ed42de486a6d5868361b1526"
+          },
+          {
+            "path": "src/lib/field-report-feedback.mjs",
+            "sha256": "70b966ae5f382abe6b5446daf1092c3f66b8f46f80ce5a0c006cffeba1cfa64c"
+          },
+          {
+            "path": "src/lib/field-shift-summary.mjs",
+            "sha256": "41f47aa7a0826ba1fe29b554c7575ec60c9861f0c18c863f06e8c3d00cb0f83c"
+          },
+          {
+            "path": "src/lib/geo.js",
+            "sha256": "fa47424540f953adf56e0c3069780c0c8876a2f69e944a80caddefa974b5b6bf"
+          },
+          {
+            "path": "src/lib/legacy-access-boundary.js",
+            "sha256": "e1af7e83dac3c18bcf3b235d111d936d6dd6167925a3e1459d70a33913035370"
+          },
+          {
+            "path": "src/lib/material-inventory.mjs",
+            "sha256": "4b599d273c4cadcdf76202554757583152da8c11b0a754be386bffb830f0c65b"
+          },
+          {
+            "path": "src/lib/meta-callback-diagnostics.mjs",
+            "sha256": "b16fcfbeabe02b119d0337485504490a0c8e60363e841e378ae4c7722816d3bc"
+          },
+          {
+            "path": "src/lib/meta-channel-binding.mjs",
+            "sha256": "0ba9e9de3b6dcca46524ab2df22236dbbcd5be5e6cef571df1ec47a01633672e"
+          },
+          {
+            "path": "src/lib/meta-cloud-protocol.mjs",
+            "sha256": "c6d5f1e1b4119dd2529860e3bd61a1b22d602f71ad301b2f04cec3ab4bbbed3c"
+          },
+          {
+            "path": "src/lib/meta-customer-app-projection.mjs",
+            "sha256": "7b4b95712f143555a0e23b8ac98fc0e1d2f108e9fbefb4e861d20d9b464ef003"
+          },
+          {
+            "path": "src/lib/meta-customer-callback.mjs",
+            "sha256": "da90e3ed097c287a7c080d05daf5e4b0c0bb82544d2f7dab4cb1ee99880c3fd0"
+          },
+          {
+            "path": "src/lib/meta-customer-coexistence.mjs",
+            "sha256": "30f5b950284b953fa853b37514cd768660cfc505a6e979ec51c947b6edce40da"
+          },
+          {
+            "path": "src/lib/meta-customer-credentials.mjs",
+            "sha256": "44a05a0b46417de835eb289882b0b2c6d71158f207c16c48228f1ac4b67cca0f"
+          },
+          {
+            "path": "src/lib/meta-customer-inbox-review.mjs",
+            "sha256": "250bd69c487dc8dffed5500c1ca0f9adb77843352902c41e4a63da7656bf2eaa"
+          },
+          {
+            "path": "src/lib/meta-customer-outbound.mjs",
+            "sha256": "84a249b3777d3be843b20b09d0c6cd81b6fab7415dc22f124477d87475eead09"
+          },
+          {
+            "path": "src/lib/meta-customer-permissions.mjs",
+            "sha256": "ce3671bd46af8e487c45319facbca8e6b522620fd16ee3163e5048b5ecb6585d"
+          },
+          {
+            "path": "src/lib/meta-customer-processing.mjs",
+            "sha256": "e4a52dbd2ce86793b66c4af5963c288b13d7b2b2f656c4c6f795bcac8074f4ad"
+          },
+          {
+            "path": "src/lib/meta-customer-provider.mjs",
+            "sha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f"
+          },
+          {
+            "path": "src/lib/meta-customer-templates.mjs",
+            "sha256": "ca9e491b8b1b4c25c89585408cb53eae13e2423fdf48a93deed0846126e1c46c"
+          },
+          {
+            "path": "src/lib/meta-development-pilot-policy.mjs",
+            "sha256": "6f3a854898ea28d108341f35fe7f5f23facf3d574e586b96a2343a8038cc8c79"
+          },
+          {
+            "path": "src/lib/meta-employee-intake.mjs",
+            "sha256": "77dc9f64814f995d21084606d705f26af65de4f4f9bea25a0f37a0d8dba1b928"
+          },
+          {
+            "path": "src/lib/meta-field-bridge.mjs",
+            "sha256": "79c961cf91f988e5d913cfb241a887c26a78d49e04ebf2c5fbb2bf6a74bc809b"
+          },
+          {
+            "path": "src/lib/meta-field-conversation.mjs",
+            "sha256": "2da5b4a58e4f62a912d4df4bd93574c9907c6561123fe5ffabdd12420b72047f"
+          },
+          {
+            "path": "src/lib/meta-kyc-bridge.mjs",
+            "sha256": "33368028c42baf9f720390de4fc03cbed1448368079415850a41f3adadfebed3"
+          },
+          {
+            "path": "src/lib/meta-kyc-challenge.mjs",
+            "sha256": "f5a03ec770e6d85de095393bf38c331c0803a7fe3c7f1b72a2addd9cac7484eb"
+          },
+          {
+            "path": "src/lib/meta-kyc-conversation.mjs",
+            "sha256": "75870a6359385ae83df0d154b57c3f6738f2bde62fbe4974da7e38e5b0de2902"
+          },
+          {
+            "path": "src/lib/meta-kyc-current-image.mjs",
+            "sha256": "03ef3966025f520b373e937a6230f846185f3b4845830da5a38c0d8f02e155c2"
+          },
+          {
+            "path": "src/lib/meta-kyc-identity.mjs",
+            "sha256": "295f87ecb3b4586313a4f9c48a2d5c9acf8fa263682d99d44a966be243af2319"
+          },
+          {
+            "path": "src/lib/meta-kyc-outbound.mjs",
+            "sha256": "e0766080e345b3777fc87a6f8014a34073beb48a3c9205aa4c1cb49251b4e589"
+          },
+          {
+            "path": "src/lib/meta-kyc-rejection-policy.mjs",
+            "sha256": "e6c96aba8077d75e152f45dc49fe32d41e103658d4bff4281c8c8a98e3fff0c1"
+          },
+          {
+            "path": "src/lib/meta-kyc-rejection.mjs",
+            "sha256": "5477adafd994a54c9e7bbcc196b6af4fbe0b9cc03ab563775b8258290e31f3d0"
+          },
+          {
+            "path": "src/lib/meta-own-company-policy.mjs",
+            "sha256": "7db3875cd0f31fec077f4d9a4f8875be1ddf4a5772acff4559069ae950ff0821"
+          },
+          {
+            "path": "src/lib/meta-plan-import-conversation.mjs",
+            "sha256": "6f3c261cb2cde943e0202ab5097d664958f5702975cdf5914aeac35e5a1bac1c"
+          },
+          {
+            "path": "src/lib/meta-plan-import-origin.mjs",
+            "sha256": "cdb619d1709a982323c9892383def1428db2ade771babdb18e4032b3535d953e"
+          },
+          {
+            "path": "src/lib/meta-plan-import-transport.mjs",
+            "sha256": "e42f48f0175dd697bac3de61d7d9893d35c2b1696c1ae276a4698eb3c36a4634"
+          },
+          {
+            "path": "src/lib/meta-test-recipient-binding.mjs",
+            "sha256": "2aea6f5815bd2d90fe891b45a79b48d339a3eebc681ac40b3347244e546c4b66"
+          },
+          {
+            "path": "src/lib/meta-whatsapp-transport.mjs",
+            "sha256": "f99569c7f587e9be1268aa254d2368226346a7ebf7e48fa6ca63a0064cf41310"
+          },
+          {
+            "path": "src/lib/organization-resource-usage-policy.mjs",
+            "sha256": "089ac1ee2ca6afd30aab1d0abd38274698ca56991d1c5225ea8e44c8b9fdc449"
+          },
+          {
+            "path": "src/lib/organization-usage-policy.mjs",
+            "sha256": "94997530d6c1fd420f0233172b07f8ba7dd7546a2ac9af75eaa30736400237ae"
+          },
+          {
+            "path": "src/lib/participant-account-discovery.mjs",
+            "sha256": "11b37ca397fdb195aac7addc1c16842fb28a9c83a73a82a57bf2791ed3038738"
+          },
+          {
+            "path": "src/lib/participant-admission.mjs",
+            "sha256": "2cbb466e49d742cd23da1bb85a4e89b7e411dc724c8d1f2eb66b39717f283dd9"
+          },
+          {
+            "path": "src/lib/participant-analysis-consent.mjs",
+            "sha256": "7f7d371914d1e46ac799cd1683afdc0418186c15a20156e697ecd879c81bf8c1"
+          },
+          {
+            "path": "src/lib/participant-approved-identity.mjs",
+            "sha256": "834d81e70cedbd967ff84d880ea9d697c2168d2220fb23d9eb14c1aba1cdbbf1"
+          },
+          {
+            "path": "src/lib/participant-bank-account.mjs",
+            "sha256": "29980527a6eda3bbc0125098a4b616082034a71fb1afb772ff87f476bc0ce981"
+          },
+          {
+            "path": "src/lib/participant-bank-format.mjs",
+            "sha256": "ebbb206a14eaac57230b53ec1afae99c4be60c8739baf0d1d047d4a47ba464db"
+          },
+          {
+            "path": "src/lib/participant-bank-vault.mjs",
+            "sha256": "06e990ab79c896628756f3c74a50dcc7e8062f4fa296f56a31e4150b5badc16a"
+          },
+          {
+            "path": "src/lib/participant-channel-kyc.mjs",
+            "sha256": "2ac9414429238162a9b16d4adea421df0bff9fb93ea4fbf2f9d6677f2659fb2d"
+          },
+          {
+            "path": "src/lib/participant-civil-policy.mjs",
+            "sha256": "e180a64c788d6cd20e766cb4fd32dbba1c7cb3954c01405ac8675ec023eef278"
+          },
+          {
+            "path": "src/lib/participant-civil-store.mjs",
+            "sha256": "5f440c0c76ca67b87a7e5d4e90e7a48f18ea3603b16434b35beeddd3bdf168a4"
+          },
+          {
+            "path": "src/lib/participant-kyc-chat-attempt.mjs",
+            "sha256": "d3f0a65f866fa027ee008963fcb6ffcad0cd33de94cace7603cf40bc78c21aeb"
+          },
+          {
+            "path": "src/lib/participant-kyc-chat-closure.mjs",
+            "sha256": "4a6a368910de95582c2baabc70bab7f4b4afa4413e8ebdb75a1e8b867c098a19"
+          },
+          {
+            "path": "src/lib/participant-kyc-chat-copy.mjs",
+            "sha256": "d886219584d5e8b9d9db1ad16a36c726f6982fa0e8400c3be51af2623574ab96"
+          },
+          {
+            "path": "src/lib/participant-kyc-image-set.mjs",
+            "sha256": "190ce2560286a58d42668da7b912aeabcfa76ee14086503bf1609304e5f0e8fb"
+          },
+          {
+            "path": "src/lib/participant-kyc-notice-links.mjs",
+            "sha256": "1a10acf655796ebf4f08175158ea3dc2a1d0a0fdb3d13bb88573d6a0e5f4375e"
+          },
+          {
+            "path": "src/lib/participant-kyc-preanalysis-policy.mjs",
+            "sha256": "8c5286a0a5d41364e92e60f2ce2ba96caccc8667960f966b5caead37acafab49"
+          },
+          {
+            "path": "src/lib/participant-onboarding-authority.mjs",
+            "sha256": "dad5d9fd0a61c493ff02331d5333982627cdeb3a7addb74a3c86d44da931f916"
+          },
+          {
+            "path": "src/lib/participant-onboarding-current-kyc.mjs",
+            "sha256": "232fecca4f6cf775e5151ec460560e0c1abd6646dc3c532140cabe26dfb42119"
+          },
+          {
+            "path": "src/lib/participant-onboarding-delivery.mjs",
+            "sha256": "615592cc1a6215e24c48e8873a27211421853f99ca9093e6f490f77532b3d013"
+          },
+          {
+            "path": "src/lib/participant-onboarding-intent.mjs",
+            "sha256": "07114f6066e10617357c4e5d8e2db2b9dc846e5f4cffbc5aef09f2b7bfada9de"
+          },
+          {
+            "path": "src/lib/participant-onboarding-policy.mjs",
+            "sha256": "59409797ce3e13b7cfe63fe21d8d7e2c848ee49e0766015939242a9f43687c03"
+          },
+          {
+            "path": "src/lib/participant-onboarding-reactive.mjs",
+            "sha256": "666a8c27f3ab7d6fdbe66c91f22ace4e25b04b98e865f401d19c72212916104d"
+          },
+          {
+            "path": "src/lib/participant-policy.mjs",
+            "sha256": "7f3969ab1ebac5f01696149d76337199eb64c2fd09015c44c07e8b7e7088d62f"
+          },
+          {
+            "path": "src/lib/participant-store.mjs",
+            "sha256": "2296495e366b9ea0c2511066584e93ddf1cff51b5eefd05c6121d2143d78f5c9"
+          },
+          {
+            "path": "src/lib/participant-verified-office.mjs",
+            "sha256": "4922f392490aa6d49b8a8a45a56ac0b03831a8ad2efe89ce1e3adfd77d603d89"
+          },
+          {
+            "path": "src/lib/person-worksite-journey.mjs",
+            "sha256": "d3174df793150125c0b6a5d9f37d56336e72cab1efb43a361065b78ac54c210a"
+          },
+          {
+            "path": "src/lib/pilot-media.mjs",
+            "sha256": "55e35757cea03c312df68cebad100ee8b7d904b418eca9082359ea34e68f8fa9"
+          },
+          {
+            "path": "src/lib/plan-baseline-policy.mjs",
+            "sha256": "e9217a41a87057f437439420d56f3b7a0f973ae37c250c07b335634fef308560"
+          },
+          {
+            "path": "src/lib/plan-import-cyp-curve.mjs",
+            "sha256": "7e1d6c9d87df5e74e0a340361e1e66fdf0cfd5c82f1e44030ba2e85b5fa9c342"
+          },
+          {
+            "path": "src/lib/plan-import-document-curve.mjs",
+            "sha256": "7f63d62b9f1ae6d139c627a978ef56d7eafea0e0f4271167daa4c00bf7fda013"
+          },
+          {
+            "path": "src/lib/plan-import-monthly-curve.mjs",
+            "sha256": "6ce785f9c24c47f0e291b0bac40bd96a691fae68a309e4cb7a1917db31f9e6b6"
+          },
+          {
+            "path": "src/lib/plan-import-ooxml.mjs",
+            "sha256": "a146b9b300086bd8f44af6549d75611f7ac542a6c6c2f9eddf099cd8fc0f9251"
+          },
+          {
+            "path": "src/lib/plan-import-policy.mjs",
+            "sha256": "f2d73b8c58df571fb0dc6e5d76e2fb5d60daffa6ed6a41bc2be3c7e536458696"
+          },
+          {
+            "path": "src/lib/plan-import-store.mjs",
+            "sha256": "455c06e64301b2679e1278cc288cd4b06c875a222339e15c6720c58bc1f011c2"
+          },
+          {
+            "path": "src/lib/plan-measurement-policy.mjs",
+            "sha256": "3d6b0bce58a7f89612878310f534d8cf02f6a222c778cd4294b415c1f61157b7"
+          },
+          {
+            "path": "src/lib/plan-measurement-source.mjs",
+            "sha256": "ecf33b67a333d8ce73bfb51610218a1658cd94a26b62eb35d2290b795f826f36"
+          },
+          {
+            "path": "src/lib/private-image-upload.mjs",
+            "sha256": "1eaeda2fa79104cfe00a8736c466d8568d216c8682bd44031d3bf9d4f35e3f60"
+          },
+          {
+            "path": "src/lib/procurement-quantity.js",
+            "sha256": "53439844051cc1dbd679220d695e60e54bc1629b2f1ddb33fc125981da9326b3"
+          },
+          {
+            "path": "src/lib/progress-measurement-quantity.js",
+            "sha256": "e194f461d482dec666c090a19aabbd3498bc08964cbbbc31b8db6eeb39cb1be2"
+          },
+          {
+            "path": "src/lib/site-register-policy.mjs",
+            "sha256": "d529c4f2225e0ec851ef7df60f8c5b182a88b384958ebfd15b194683d1590434"
+          },
+          {
+            "path": "src/lib/site-register-store.mjs",
+            "sha256": "6b744c86f47dbb6dc081132675888615d76421701f96151b00646b5e1d2529c6"
+          },
+          {
+            "path": "src/lib/task-progress-measurement.js",
+            "sha256": "10361a0e30df34f9c90f915d9fdbfc0912a610ab3ce851503c32549b7049a8b9"
+          },
+          {
+            "path": "src/lib/video-audio-extractor.mjs",
+            "sha256": "0c85dfd39c10fdb782eca4fe57dc665c29bd7211ab7aba0dda3f8945abcb1988"
+          },
+          {
+            "path": "src/lib/video-frame-extractor.mjs",
+            "sha256": "33425a184cf097884982c43a90e3b515726027adbeb51c2cdbfc794e79dee6e6"
+          },
+          {
+            "path": "src/lib/voice-progress-draft.mjs",
+            "sha256": "56ddbad919a1ad77e13105f1a125914674c1a149a88e28fa2f8b831a4d14bd69"
+          },
+          {
+            "path": "src/lib/whatsapp/field-worker-intent-policy.js",
+            "sha256": "0fdf205af1c2185a16f99c4f1aaba6c36d95722ea914915a0eefe6a10d443ef9"
+          },
+          {
+            "path": "src/lib/whatsapp/obra-intent-policy.js",
+            "sha256": "cd01054ba81be6552f58dc91758e08166ea099482f28355cae570d15f3ccf8da"
+          },
+          {
+            "path": "src/lib/whatsapp/operational-proposal-decision-policy.js",
+            "sha256": "996ed641c090267679ce0fc3cb7a23f39b31ce88e761135feb0dd0c852eb74fc"
+          },
+          {
+            "path": "src/lib/whatsapp/project-workspace-profile.js",
+            "sha256": "e13473baa4ca5b4dc9851bb202f400ba174ccbfce2589be65ce8458aafa998f4"
+          },
+          {
+            "path": "src/lib/whatsapp/template-review-policy.js",
+            "sha256": "0ec4a7e544f8c2c2409d2c84ecf69fab663334dd5a5cef0ee1b1cbec82de0a08"
+          },
+          {
+            "path": "src/lib/whatsapp/tenant-workspace-policy.js",
+            "sha256": "d3416ff993fbfd70f75404166cdcd8f0b9b2e5a6741f6cde03725aab16abcd5e"
+          },
+          {
+            "path": "src/lib/worker-channel-consent-policy.mjs",
+            "sha256": "95c8393e7f2603694c5c15cfe34c9eead43007927aed0d5b633859b14c7448a9"
+          },
+          {
+            "path": "src/lib/worker-channel-identity.mjs",
+            "sha256": "1cddd58a2cd656abaca25752481fe1ca760d2bcd385a0fffbe0e685c15d59e0a"
+          },
+          {
+            "path": "src/lib/workspace-policy.mjs",
+            "sha256": "ba51cc5c4a6e4f5ce1c9382cae2c8ea903ab4373668c05384c7f1e9253c7041e"
+          },
+          {
+            "path": "src/lib/workspace-store.mjs",
+            "sha256": "5f25092121a31a06eefa59d69866db82fa3cd28afdcbd0e066e52d916478bc50"
+          }
+        ]
       }
     ],
     "historicalCheckLedgers": [
@@ -29836,8 +31121,20 @@
         "sha256": "c75e1bbf4412b2d307fcace6d276bb6c80ba16c6113aaa16cae171cbb0460c0d"
       },
       {
+        "path": "scripts/verify-kyc-reply-feedback-ci.mjs",
+        "sha256": "5ad4d5c5bda1584c20385d3f2564a97f35edd26f5d23d1a144f83910767bba8c"
+      },
+      {
+        "path": "scripts/verify-organization-usage-ci.mjs",
+        "sha256": "369a8f571cdb987127aff88067703868ee5638af7a7cc0968a198cc31fcf3805"
+      },
+      {
         "path": "scripts/verify-plan-measurement-ci.mjs",
         "sha256": "f2d1c3d288fcdb238b0706600e541edd6ea3a7f48a68dfd2603d3d4eaf837cbb"
+      },
+      {
+        "path": "tests/production-field-outbound-current-ci-lineage.test.mjs",
+        "sha256": "e132c85a3b4439ab6ea314907c82422fdddcaeb8aee9ca72e5dc0037784722be"
       },
       {
         "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
@@ -29846,6 +31143,14 @@
       {
         "path": "tests/production-integrated-identity-current-ci-lineage.test.mjs",
         "sha256": "925cc5f64fdd5fb8cef7f1ea0d2b22eed7ac3f980f89828ed05cc3d6a476a8d1"
+      },
+      {
+        "path": "tests/production-kyc-reply-feedback-ci.test.mjs",
+        "sha256": "2fa8d14f7872d20342f1bdafec73cd9e008a729b034f7a29a339b9f0cb3efe66"
+      },
+      {
+        "path": "tests/production-kyc-reply-feedback-current-lineage.test.mjs",
+        "sha256": "367cd32ed160358daeebb1f98040e174d5892efdda4ee5888252e45a6ec7cdb6"
       },
       {
         "path": "tests/production-material-consumption-feedback-ci.test.mjs",
@@ -29860,17 +31165,38 @@
         "sha256": "6559fc99b2e4c40762b8b3a9dfbb6b542847ac08ab54d39e7461035e33b513f2"
       },
       {
+        "path": "tests/production-ooxml-accounting-current-ci-lineage.test.mjs",
+        "sha256": "54d7eecb5adfa295bb71d6e85c682cc62becae79f45def26da360c6e89181105"
+      },
+      {
+        "path": "tests/production-organization-usage-ci.test.mjs",
+        "sha256": "5ac1d06ca215b96a9e07e0acdb2464a255154850fcf0a58822de4ef846d8085c"
+      },
+      {
+        "path": "tests/production-participant-preanalysis-current-ci-lineage.test.mjs",
+        "sha256": "12e14b7574906a4492b73437feea48478e2e05447456fdd7fbbce11eb61a5fa5"
+      },
+      {
         "path": "tests/production-plan-measurement-ci.test.mjs",
         "sha256": "887f418e42483569c0a955c6969429d607e51fbf8c672c3fe986076e84c1cb5f"
       },
       {
         "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
         "sha256": "7f194c2913ba98b3551832bb40608f58473bf94603390b0810f67a75fb2a463f"
+      },
+      {
+        "path": "tests/production-plan-measurement-document-association-ci-lineage.test.mjs",
+        "sha256": "4145a4398f3c4b4c4d1226983cbf8d95313c8c7f5e59ec544b897344f794fb91"
+      },
+      {
+        "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
+        "sha256": "d55968747a2bfc23f02de49d0418374665e2db7e156cfa0356c21145cc9c83b4"
       }
     ],
     "newValidationPaths": [
       "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
       "tests/fixtures/worksite-live-hours-ci-lineage-fixture.mjs",
+      "tests/production-workspace-ci-consumer-projections.test.mjs",
       "tests/production-workspace-live-hours-current-ci-lineage.test.mjs"
     ],
     "validationSources": [
@@ -29888,7 +31214,7 @@
       },
       {
         "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
-        "sha256": "9451cba747fc27c014383884cc8e5567f37651fe1df7e1a96d670b25c4f8dc02"
+        "sha256": "5960b4acedd880ac0a49f157e57007863c2478ad218e504eb81bf993ad54b147"
       },
       {
         "path": "scripts/lib/workspace-continuity-current-ci-lineage.mjs",
@@ -29899,8 +31225,20 @@
         "sha256": "860684a236deb8608f191b6247f88d7bab428175eb5c90757940bd624c8eb25e"
       },
       {
+        "path": "scripts/verify-kyc-reply-feedback-ci.mjs",
+        "sha256": "c07f34ff0f4d49325b1fae912bec581d183cd2b2ee21214840b3ff9c6a900dc3"
+      },
+      {
+        "path": "scripts/verify-organization-usage-ci.mjs",
+        "sha256": "2c4fd6d8f3ee66c4c8291dd6c345ff149932193b9c196feec4edf8b939fff81c"
+      },
+      {
         "path": "scripts/verify-plan-measurement-ci.mjs",
         "sha256": "314cfdc84accb072c82ef9de3dc13557a7594e8b1461031aa71a79d94b7de35d"
+      },
+      {
+        "path": "tests/production-field-outbound-current-ci-lineage.test.mjs",
+        "sha256": "ca1f7fa23d0247aa994693eeec90ae019c20408e6e97ea9496507904cd8bc631"
       },
       {
         "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
@@ -29909,6 +31247,14 @@
       {
         "path": "tests/production-integrated-identity-current-ci-lineage.test.mjs",
         "sha256": "c0e1179a42bc106ad08b24e20470670c61b0b83b52c62cf4533322ce1ae6a157"
+      },
+      {
+        "path": "tests/production-kyc-reply-feedback-ci.test.mjs",
+        "sha256": "854f34aff294e610915ce9078a1739121c646ba4f985ba20c7873c8c8826beaf"
+      },
+      {
+        "path": "tests/production-kyc-reply-feedback-current-lineage.test.mjs",
+        "sha256": "8cc78b2332c9c280cb45d8805baeae2371f209801394b9cc758312e7ef8a8d71"
       },
       {
         "path": "tests/production-material-consumption-feedback-ci.test.mjs",
@@ -29923,6 +31269,18 @@
         "sha256": "dabe6caf8e2a216aa1d7160551431ce3e3b198b09b397f8c10edfeb9d9928650"
       },
       {
+        "path": "tests/production-ooxml-accounting-current-ci-lineage.test.mjs",
+        "sha256": "35a12ce84a67245d0c96a059c741c8eff29711d71896be1774b88c76e975be55"
+      },
+      {
+        "path": "tests/production-organization-usage-ci.test.mjs",
+        "sha256": "3c7bf063ae845ddc4cd7104b9dd205fb221863094264d161654c7526060f34fb"
+      },
+      {
+        "path": "tests/production-participant-preanalysis-current-ci-lineage.test.mjs",
+        "sha256": "b509f96f600364d0327b4d3c2ac411fc2b32137b5e38fb4c2d47e3bf046cbd06"
+      },
+      {
         "path": "tests/production-plan-measurement-ci.test.mjs",
         "sha256": "68fd8ecf6bc6351fc87a19db2c289688f306ed29b2c983c5da81e7ec3221aeab"
       },
@@ -29931,12 +31289,24 @@
         "sha256": "ead294a9a4066f487b58cb8e9187ca9fee03ad0c29706c2dfb6006cb23a82a81"
       },
       {
+        "path": "tests/production-plan-measurement-document-association-ci-lineage.test.mjs",
+        "sha256": "af5cd5fb58a541ef56c737dd947c16f608f585e18a6162796ca804054090e3e2"
+      },
+      {
+        "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
+        "sha256": "8b7cf36fabeb3f577edf5070124beca9b5f282eb0e2b17a66005541087374eeb"
+      },
+      {
         "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
         "sha256": "0d152bf95e2544e2536531acedf94200850c3060311b209d565b753aa857bdc1"
       },
       {
         "path": "tests/fixtures/worksite-live-hours-ci-lineage-fixture.mjs",
         "sha256": "a01775906e901028c8223e8f4da282c91379242caa26607576ab5da33409c162"
+      },
+      {
+        "path": "tests/production-workspace-ci-consumer-projections.test.mjs",
+        "sha256": "37081fd4255eef1f4b7934ebf6669b4c8ac56cdfbf37b46d62b7be19456d601a"
       },
       {
         "path": "tests/production-workspace-live-hours-current-ci-lineage.test.mjs",
