@@ -63,3 +63,16 @@ test('an exact family and exact source bytes cannot conceal an altered historica
 test('the compiled production declaration is structurally valid and preloads the actual new server and workflow-matched test',()=>{
  const files=worksiteLiveHoursValidationFiles({[key]:WORKSITE_LIVE_HOURS_CURRENT_REVISION});assert.ok(files.includes('src/lib/field-hours-report.mjs'));assert.ok(files.includes('tests/production-workspace-live-hours-current-ci-lineage.test.mjs'));assert.ok(files.includes('scripts/lib/worksite-live-hours-current-ci-reviewed.mjs'));assert.equal(files.includes('tests/production-worksite-live-hours-current-ci-lineage.test.mjs'),false);
 });
+
+test('compiling immutable metadata never caches changed source bytes for the same reader callback',()=>{
+ const f=fixture(),reader=f.readSource;assert.equal(f.gate.verifyCurrentSources(f.contract,reader).completePreviousContractRestored,true);f.sources.set(f.changed,Buffer.from('export const changedAfterValidation=true;\n'));denied(()=>f.gate.verifyCurrentSources(f.contract,reader));
+});
+test('compiling immutable metadata never caches unchanged family bytes for the same reader callback',()=>{
+ const f=fixture(),reader=f.readSource,closure={files:f.familyFiles,externalImports:[]};assert.equal(f.gate.verifyActualClosure(f.contract,'FIELD_NATIVE',closure,reader).sourceCount,3);f.sources.set(f.unchanged,Buffer.from('export const changedAfterValidation=true;\n'));denied(()=>f.gate.verifyActualClosure(f.contract,'FIELD_NATIVE',closure,reader));
+});
+test('nested companion mutation after successful validation is checked freshly on the same contract',()=>{
+ const f=fixture();assert.equal(f.gate.verifyCurrentSources(f.contract,f.readSource).completePreviousContractRestored,true);f.contract[key].sourceFamilies[0].currentManifest[0].sha256='f'.repeat(64);denied(()=>f.gate.verifyCurrentSources(f.contract,f.readSource));
+});
+test('the compiled declaration owns a deep frozen clone even after the callers nested input changes',()=>{
+ const f=fixture();assert.equal(f.gate.verifyCurrentSources(f.contract,f.readSource).completePreviousContractRestored,true);f.reviewed.sourceFamilies[0].currentManifest[0].sha256='f'.repeat(64);f.reviewed.validationSources[0].sha256='e'.repeat(64);assert.equal(f.gate.verifyCurrentSources(f.contract,f.readSource).completePreviousContractRestored,true);
+});

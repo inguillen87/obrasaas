@@ -26326,7 +26326,7 @@
           },
           {
             "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
-            "sha256": "8296df86e4021bb9ce1fed08e410408ee98ccc0b1b52ab40c58e4127de49fb95"
+            "sha256": "0d152bf95e2544e2536531acedf94200850c3060311b209d565b753aa857bdc1"
           },
           {
             "path": "scripts/lib/worksite-live-hours-current-ci-reviewed.mjs",
@@ -27207,7 +27207,7 @@
           },
           {
             "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
-            "sha256": "8296df86e4021bb9ce1fed08e410408ee98ccc0b1b52ab40c58e4127de49fb95"
+            "sha256": "0d152bf95e2544e2536531acedf94200850c3060311b209d565b753aa857bdc1"
           },
           {
             "path": "scripts/lib/worksite-live-hours-current-ci-reviewed.mjs",
@@ -29916,7 +29916,7 @@
       },
       {
         "path": "tests/production-material-review-current-ci-lineage.test.mjs",
-        "sha256": "4ba9aaa0430bfc85cb7bc2e07b31c2f7868870a3c939357f7c6c6b9149f0d0fe"
+        "sha256": "3064ebedd2ab050d4d2e1326643d9b4d83d699a3a1f08489fe89b1bfadf45069"
       },
       {
         "path": "tests/production-meta-existing-api-plan-current-ci-lineage.test.mjs",
@@ -29932,7 +29932,7 @@
       },
       {
         "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
-        "sha256": "8296df86e4021bb9ce1fed08e410408ee98ccc0b1b52ab40c58e4127de49fb95"
+        "sha256": "0d152bf95e2544e2536531acedf94200850c3060311b209d565b753aa857bdc1"
       },
       {
         "path": "tests/fixtures/worksite-live-hours-ci-lineage-fixture.mjs",
@@ -29940,7 +29940,7 @@
       },
       {
         "path": "tests/production-workspace-live-hours-current-ci-lineage.test.mjs",
-        "sha256": "17bf07eaf0a077e0f0efb48197d644131fb1be7c84a89182ebd18f3dd943bd05"
+        "sha256": "70f5040d5ad26285ce39d3c586bd658cbbc347722429648e6bd9fae8f5e7f69c"
       }
     ],
     "declarationTrustAnchorPath": "scripts/lib/worksite-live-hours-current-ci-reviewed.mjs",

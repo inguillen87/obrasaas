@@ -1,4 +1,4 @@
-import {worksiteLiveHoursPreviousSourcePin,worksiteLiveHoursCurrentSourcePin} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
+import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursSourceSet,worksiteLiveHoursPreviousSourcePin,worksiteLiveHoursCurrentSourcePin} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
@@ -25,7 +25,15 @@ test('materials revision restores the whole published predecessor and preserves 
  const focusedProducer=value=>value.extension.proofs.find(row=>row.id==='focused-workspace-ui');// Project only the authenticated outer pin for the historical assertion; read current source bytes below.
  assert.equal(worksiteLiveHoursPreviousSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:focusedProducer(contract).producerSha256}),'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24');assert.equal(focusedProducer(contract).producerSha256,'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(worksiteLiveHoursCurrentSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24'}),'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(sha(read('scripts/verify-focused-workspace-ci.mjs').toString('utf8').replaceAll('\r\n','\n')),focusedProducer(contract).producerSha256);assert.equal(focusedProducer(publishedMaterialCurrent).producerSha256,'a4eb59cb781eeb9578e46ffcdec21833cce1ba79eb9f99e3543fda799dfc62f4');
  const {ciSourceFiles:priorCi,...priorPreanalysis}=previous.participantPreanalysisCurrentRevision,{ciSourceFiles:currentCi,...currentPreanalysis}=contract.participantPreanalysisCurrentRevision;
- assert.deepEqual(priorPreanalysis,currentPreanalysis);assert.deepEqual(currentCi,contract.extension.proofs.find(row=>row.id==='participant-kyc-preanalysis-postgres').sourceFiles);assert.equal(restoreExistingApiPlanPreviousContract(contract).participantPreanalysisCurrentRevision.ciSourceFiles.length,priorCi.length+1);
+ assert.deepEqual(priorPreanalysis,currentPreanalysis);
+ const proof=contract.extension.proofs.find(row=>row.id==='participant-kyc-preanalysis-postgres'),delta=contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family==='PG_PARTICIPANT_KYC_PREANALYSIS');
+ assert.equal(delta.contractPointer,'/extension/proofs/18/sourceFiles');assert.equal(proof.kind,delta.family);
+ // Compare historical metadata only after the authenticated outer projection.
+ assert.deepEqual(currentCi,restoreWorksiteLiveHoursSourceSet(contract,delta.family,proof.sourceFiles));
+ assert.equal(currentCi.length,delta.previousCount);assert.equal(sha(JSON.stringify(currentCi)),delta.previousPathsSha256);
+ const additions=['scripts/lib/worksite-live-hours-current-ci-lineage.mjs','scripts/lib/worksite-live-hours-current-ci-reviewed.mjs','src/lib/field-hours-report.mjs'];
+ assert.deepEqual(delta.additions,additions);assert.deepEqual(proof.sourceFiles,[...currentCi,...additions].sort());assert.equal(proof.sourceFiles.length,delta.currentCount);assert.equal(sha(JSON.stringify(proof.sourceFiles)),delta.currentPathsSha256);
+ assert.equal(restoreExistingApiPlanPreviousContract(contract).participantPreanalysisCurrentRevision.ciSourceFiles.length,priorCi.length+1);
 });
 
 test('source validation authenticates actual current bytes without certifying native browser or human operation',()=>{

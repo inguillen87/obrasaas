@@ -63,11 +63,23 @@ function priorPaths(current,row){
 // fixed companion declaration, never a declaration supplied by the contract.
 export function createWorksiteLiveHoursRevisionGate(reviewed){
  const expected=deepFreeze(structuredClone(reviewed));
+ // Only this private, deeply frozen clone may be compiled. Current contracts,
+ // source-reader results and source bytes are never memoized.
+ let compiled=null;
+ function compiledDeclaration(){
+  if(compiled)return compiled;
+  validateReviewed(expected);
+  const refs=deepFreeze([...expected.reviewedSourceChanges,...expected.newSources.map(row=>({path:row.path,previousSha256:null,currentSha256:row.sha256})),...expected.producerDeltas.map(row=>({path:row.producer,previousSha256:row.previousSha256,currentSha256:row.currentSha256})),...expected.validationSources.map(row=>({path:row.path,previousSha256:expected.validationPredecessors.find(prior=>prior.path===row.path)?.sha256??null,currentSha256:row.sha256}))]);
+  const index=(rows,key)=>Object.freeze(Object.fromEntries(rows.map(row=>[row[key],row])));
+  compiled=Object.freeze({keys:Object.freeze(Object.keys(expected)),fields:deepFreeze(Object.entries(expected).map(([key,value])=>[key,JSON.stringify(value)])),refs,refsByPath:index(refs,'path'),sourceSets:index(expected.sourceSetDeltas,'family'),families:index(expected.sourceFamilies,'family'),producers:index(expected.producerDeltas,'producer'),text:declarationText(expected)});
+  return compiled;
+ }
+ const lookup=(index,key)=>typeof key==='string'&&Object.hasOwn(index,key)?index[key]:undefined;
  function section(contract,required=true){
   reject(plain(contract),'Contract must be an object');if(!Object.hasOwn(contract,WORKSITE_LIVE_HOURS_CURRENT_SECTION)){reject(!required,'Current live/hours companion is required');return null;}
-  validateReviewed(expected);const value=contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION];exact(value,Object.keys(expected),'Exact current companion keys');for(const [key,wanted]of Object.entries(expected))reject(same(value[key],wanted),'Unreviewed companion declaration: '+key);return value;
+  const fixed=compiledDeclaration(),value=contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION];exact(value,fixed.keys,'Exact current companion keys');for(const [key,wanted]of fixed.fields)reject(JSON.stringify(value[key])===wanted,'Unreviewed companion declaration: '+key);return value;
  }
- function references(value){return [...value.reviewedSourceChanges,...value.newSources.map(row=>({path:row.path,previousSha256:null,currentSha256:row.sha256})),...value.producerDeltas.map(row=>({path:row.producer,previousSha256:row.previousSha256,currentSha256:row.currentSha256})),...value.validationSources.map(row=>({path:row.path,previousSha256:value.validationPredecessors.find(prior=>prior.path===row.path)?.sha256??null,currentSha256:row.sha256}))];}
+ function references(){return compiledDeclaration().refs;}
  function restorePreviousContract(contract){
   const value=section(contract,false);if(!value)return contract;const previous=structuredClone(contract);delete previous[WORKSITE_LIVE_HOURS_CURRENT_SECTION];
   for(const row of value.historicalCheckLedgers){const ledger=pointer(previous,row.contractPointer).value;reject(Array.isArray(ledger)&&ledger.length===row.count&&sha(JSON.stringify(ledger))===row.sha256,'Historical check names must remain exact');}
@@ -76,13 +88,13 @@ export function createWorksiteLiveHoursRevisionGate(reviewed){
   reject(sha(JSON.stringify(previous,null,2)+'\n')===value.previousContractSha256,'Complete predecessor contract must restore exactly');return previous;
  }
  function currentSourcePin(contract,ref){
-  const value=section(contract,false);if(!value)return ref.sha256;reject(plain(ref)&&safe(ref.path)&&hash(ref.sha256),'Exact source pin reference required');const row=references(value).find(row=>row.path===ref.path);if(!row)return ref.sha256;
+  const value=section(contract,false);if(!value)return ref.sha256;reject(plain(ref)&&safe(ref.path)&&hash(ref.sha256),'Exact source pin reference required');const row=lookup(compiledDeclaration().refsByPath,ref.path);if(!row)return ref.sha256;
   reject([row.previousSha256,row.currentSha256].filter(Boolean).includes(ref.sha256),'Only reviewed predecessor/current source pins may advance: '+ref.path);return row.currentSha256;
  }
- function previousSourcePin(contract,ref){const value=section(contract,false);if(!value)return ref.sha256;const row=references(value).find(row=>row.path===ref.path);return row&&row.previousSha256&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}
- function restoreSourceSet(contract,family,files){const value=section(contract,false);if(!value)return files;restorePreviousContract(contract);const row=value.sourceSetDeltas.find(row=>row.family===family);if(!row)return files;sorted(files,'Actual source set must be distinct and sorted');if(files.length===row.previousCount&&pathsHash(files)===row.previousPathsSha256)return [...files];return priorPaths(files,row);}
+ function previousSourcePin(contract,ref){const value=section(contract,false);if(!value)return ref.sha256;const row=lookup(compiledDeclaration().refsByPath,ref.path);return row&&row.previousSha256&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}
+ function restoreSourceSet(contract,family,files){const value=section(contract,false);if(!value)return files;restorePreviousContract(contract);const row=lookup(compiledDeclaration().sourceSets,family);if(!row)return files;sorted(files,'Actual source set must be distinct and sorted');if(files.length===row.previousCount&&pathsHash(files)===row.previousPathsSha256)return [...files];return priorPaths(files,row);}
  function proofSourceAdditions(spec){
-  validateReviewed(expected);const row=expected.sourceSetDeltas.find(row=>row.family===spec?.kind);if(!row)return[];const files=spec.sourceFiles;sorted(files,'Distinct sorted proof source paths required');
+  const row=lookup(compiledDeclaration().sourceSets,spec?.kind);if(!row)return[];const files=spec.sourceFiles;sorted(files,'Distinct sorted proof source paths required');
   if(files.length===row.currentCount&&pathsHash(files)===row.currentPathsSha256){priorPaths(files,row);return [...row.additions];}
   if(files.length===row.previousCount&&pathsHash(files)===row.previousPathsSha256)return[];
   // Earlier historical layers authenticate their own immutable source matrix.
@@ -91,16 +103,16 @@ export function createWorksiteLiveHoursRevisionGate(reviewed){
  }
  function verifyCurrentSources(contract,readSource){
   const value=section(contract);reject(typeof readSource==='function','Actual committed Git source reader required');restorePreviousContract(contract);
-  reject(readUtf8(readSource,value.declarationTrustAnchorPath)===declarationText(expected),'Actual reviewed declaration differs from the compiled trust anchor');
+  reject(readUtf8(readSource,value.declarationTrustAnchorPath)===compiledDeclaration().text,'Actual reviewed declaration differs from the compiled trust anchor');
   for(const row of references(value))reject(sha(readUtf8(readSource,row.path))===row.currentSha256,'Stale current source: '+row.path);
   return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,reviewedReferenceCount:references(value).length,nativeOrBrowserAcceptance:false};
  }
  function verifyActualClosure(contract,family,closure,readSource){
-  const value=section(contract);restorePreviousContract(contract);const row=value.sourceFamilies.find(row=>row.family===family);reject(Boolean(row),'An explicitly reviewed consumer family is required');exact(closure,['files','externalImports'],'Actual AST closure result');sorted(closure.files,'Actual AST source paths must be distinct and sorted');reject(same(closure.files,row.currentFiles)&&same(closure.externalImports,row.externalImports),'Exact actual AST source/external closure required');reject(typeof readSource==='function','Actual committed Git source reader required for consumer contents');for(const ref of row.currentManifest){const text=readUtf8(readSource,ref.path);reject(ref.path===value.declarationTrustAnchorPath?text===declarationText(expected):sha(text)===ref.sha256,'Stale actual consumer source: '+ref.path);}return {family,sourceCount:row.currentFiles.length,sourcePathsSha256:pathsHash(row.currentFiles),nativeOrBrowserAcceptance:false};
+  const value=section(contract);restorePreviousContract(contract);const row=lookup(compiledDeclaration().families,family);reject(Boolean(row),'An explicitly reviewed consumer family is required');exact(closure,['files','externalImports'],'Actual AST closure result');sorted(closure.files,'Actual AST source paths must be distinct and sorted');reject(same(closure.files,row.currentFiles)&&same(closure.externalImports,row.externalImports),'Exact actual AST source/external closure required');reject(typeof readSource==='function','Actual committed Git source reader required for consumer contents');for(const ref of row.currentManifest){const text=readUtf8(readSource,ref.path);reject(ref.path===value.declarationTrustAnchorPath?text===compiledDeclaration().text:sha(text)===ref.sha256,'Stale actual consumer source: '+ref.path);}return {family,sourceCount:row.currentFiles.length,sourcePathsSha256:pathsHash(row.currentFiles),nativeOrBrowserAcceptance:false};
  }
  function validationFiles(contract){const value=section(contract,false);return value?[...new Set([...references(value).map(row=>row.path),value.declarationTrustAnchorPath])].sort():[];}
  function restorePreviousProducerText(contract,producer,bytes){
-  const value=section(contract);restorePreviousContract(contract);const row=value.producerDeltas.find(row=>row.producer===producer);reject(Boolean(row)&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'Only a bound producer UTF-8 source may restore');let text=bytes.toString('utf8').replaceAll('\r\n','\n');reject(sha(text)===row.currentSha256&&Buffer.byteLength(text)===row.sourceHistory.currentBytes,'Exact current producer bytes required');
+  const value=section(contract);restorePreviousContract(contract);const row=lookup(compiledDeclaration().producers,producer);reject(Boolean(row)&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'Only a bound producer UTF-8 source may restore');let text=bytes.toString('utf8').replaceAll('\r\n','\n');reject(sha(text)===row.currentSha256&&Buffer.byteLength(text)===row.sourceHistory.currentBytes,'Exact current producer bytes required');
   for(const h of [...row.sourceHistory.inverseHunks].reverse()){const at=h.currentOffsetCharacters;reject(text.slice(at,at+h.currentText.length)===h.currentText,'Exact current inverse hunk required');text=text.slice(0,at)+h.previousText+text.slice(at+h.currentText.length);}
   reject(sha(text)===row.previousSha256&&Buffer.byteLength(text)===row.sourceHistory.previousBytes,'Entire predecessor producer must restore exactly');return Buffer.from(text);
  }
