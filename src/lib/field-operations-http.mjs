@@ -2,6 +2,7 @@ import { WorkspaceError, workspaceId, operationId, requireWorkspaceIdentity, dig
 import { boundedBody } from './workspace-http.mjs';
 import { boundedFieldMultipart } from './field-media.mjs';
 import { canApproveProgress } from './field-operations-policy.mjs';
+import {fieldHoursCsv} from './field-hours-report.mjs';
 export const fieldHeaders={'Cache-Control':'private, no-store, max-age=0','Vary':'Cookie, Authorization','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow'};
 const reply=(body,status=200)=>Response.json(body,{status,headers:fieldHeaders});
 async function identity(request,verify) {
@@ -22,6 +23,14 @@ export function createFieldHandlers({verify,operations}) {
     const session=await identity(request,verify),params=new URL(request.url).searchParams;
     if(request.method==='POST'){if(params.size)throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await operations.save(session,await boundedBody(request)));}
     if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
+    if(['hoursFrom','hoursUntil','hoursTimeZone','hoursFormat','expectedHoursDigest'].some(key=>params.has(key))){
+      const input=context(params,['hoursFrom','hoursUntil','hoursTimeZone','hoursFormat','expectedHoursDigest']),format=params.get('hoursFormat');
+      if(!['json','csv'].includes(format)||params.size!==(format==='csv'?7:6)||!['hoursFrom','hoursUntil','hoursTimeZone','hoursFormat'].every(key=>params.has(key))||format==='json'&&params.has('expectedHoursDigest')||format==='csv'&&!/^[a-f0-9]{64}$/.test(params.get('expectedHoursDigest')||''))throw new WorkspaceError('FIELD_QUERY_INVALID');
+      const report=await operations.hoursReport(session,{...input,period:{fromDate:params.get('hoursFrom'),untilDate:params.get('hoursUntil'),timeZone:params.get('hoursTimeZone')}});
+      if(format==='json')return reply(report);
+      const file=fieldHoursCsv(report,params.get('expectedHoursDigest'));
+      return new Response(file.csv,{headers:{...fieldHeaders,'Content-Type':'text/csv; charset=utf-8','Content-Disposition':`attachment; filename="${file.filename}"`,'Content-Security-Policy':"default-src 'none'; sandbox",'X-ObraSaaS-Hours-Digest':file.digest}});
+    }
     const input=context(params,['operationId','proposalId','afterMovement','afterConsumption','consumptionId','afterAdjustment','adjustmentId','inventoryFilter','shiftId','closingEventId','journeyCursor','reviewSection','reviewFilter','afterReview','reviewId','reviewAccessStamp']);
     if(params.has('inventoryFilter')){
       const keys=['afterMovement','afterConsumption','consumptionId','afterAdjustment','adjustmentId'],selected=keys.filter(key=>params.has(key)),inventoryFilter=params.get('inventoryFilter');

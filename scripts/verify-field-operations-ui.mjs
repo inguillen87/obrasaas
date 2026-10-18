@@ -11,6 +11,7 @@ import {createVoiceProgressDraft} from '../src/lib/voice-progress-draft.mjs';
 import {fieldMediaAnalysisConsent,fieldVideoAnalysisConsent} from '../src/lib/field-media-privacy.mjs';
 import {FIELD_PROGRESS_PENDING_EVENT} from '../src/app/(identity)/cuenta/field-review-page-view.mjs';
 import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
+import {copyWorksiteLiveHoursFixture} from './lib/worksite-live-hours-fixture-copy.mjs';
 const qrDecoderBodyLimit=4*1024*1024;
 function productionJsQrBody(bytes){return bytes.length>0&&bytes.length<=qrDecoderBodyLimit&&/jsqr\/dist\/jsQR\.js/.test(bytes.toString('utf8'))&&/function\s+jsQR\s*\(/.test(bytes.toString('utf8'));}
 assert.equal(productionJsQrBody(Buffer.from('/* jsqr.js */')),false,'A jsqr filename without the module body cannot prove decoder loading');
@@ -25,6 +26,7 @@ mkdirSync(path.join(fixture,'src/lib'),{recursive:true});copyFileSync(path.join(
 for(const file of ["src/lib/field-media.mjs","src/lib/field-operations-policy.mjs","src/lib/field-operations-store.mjs","src/lib/meta-cloud-protocol.mjs","src/lib/private-image-upload.mjs","src/lib/progress-measurement-quantity.js","src/lib/site-register-policy.mjs","src/lib/site-register-store.mjs","src/lib/workspace-policy.mjs"])sourceManifest.push({path:file,sha256:createHash('sha256').update(readFileSync(path.join(root,file))).digest('hex')});
 for(const file of ['voice-progress-draft.mjs','progress-measurement-quantity.js','task-progress-measurement.js']){const source='src/lib/'+file;copyFileSync(path.join(root,source),path.join(fixture,source));if(!sourceManifest.some(row=>row.path===source))sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(path.join(root,source))).digest('hex')});}
 for(const file of ['task-progress-measurement-view.mjs','task-progress-measurement-editor.js','task-progress-measurement-editor.module.css']){const source='src/app/(identity)/cuenta/'+file,destination=path.join(components,file);copyFileSync(path.join(root,source),destination);assert.deepEqual(readFileSync(path.join(root,source)),readFileSync(destination));sourceManifest.push({path:source,sha256:createHash('sha256').update(readFileSync(destination)).digest('hex')});}
+copyWorksiteLiveHoursFixture({root,fixture,components,sourceManifest,includeHours:true});
 assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
 const documentCurveSourceManifest=[];
 const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(components),sourceManifest:documentCurveSourceManifest});

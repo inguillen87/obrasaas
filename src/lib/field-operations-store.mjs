@@ -12,6 +12,7 @@ import {createFieldOvertime} from './field-overtime-store.mjs';
 import {assertApprovedParticipantKyc} from './participant-approved-identity.mjs';
 import {TASK_MEASUREMENT_VERSION,publicTaskMeasurement,deriveTaskMeasurement,assertMeasurementConfiguration} from './task-progress-measurement.js';
 import {readOwnFieldReports} from './field-report-feedback.mjs';
+import {readFieldHoursReport} from './field-hours-report.mjs';
 
 const revision = name => `to_char(${name},'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const newId = prefix => prefix+'_'+randomUUID().replaceAll('-','');
@@ -193,6 +194,15 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
         if(current.length!==1||current[0].id!==project.id)throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
         const catalog=inventoryCatalog(current[0]);
         return {scope,projectId:project.id,projectRevision:current[0].revision,inventory:{version:1,catalogVersion:catalog.catalogVersion,catalogHash:inventoryCatalogHash(catalog),catalogLimit:MATERIAL_CATALOG_LIMIT,materials:catalog.materials}};
+      });
+    },
+    hoursReport(session,context) {
+      return run(session,context,false,async(client,member,scope,project)=>{
+        if(member.channelProof)throw new WorkspaceError('OVERTIME_WEB_ONLY',403);
+        // Reuse the existing decision predicate and canonical project admission.
+        // No identity exception, field-user bypass or new authorization engine.
+        if(!canDecideOvertime(member.role))throw new WorkspaceError('FIELD_HOURS_PERMISSION_REQUIRED',403);
+        return readFieldHoursReport(client,{project,scope,period:context.period});
       });
     },
     async read(session,context) {
