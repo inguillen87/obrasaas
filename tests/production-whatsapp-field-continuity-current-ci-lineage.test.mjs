@@ -67,7 +67,7 @@ test('unrelated contract records cannot be smuggled through a valid outer revisi
  const foreignNamespace=structuredClone(contract);foreignNamespace[section].addedArtifactPattern='.vercel/field-task-pagination-ci-evidence/';foreignNamespace[section].addedProof.path=foreignNamespace[section].addedArtifactPattern+'current-ci.json';foreignNamespace[section].addedEvidenceProducer.path=foreignNamespace[section].addedProof.path;denied(()=>composeWhatsappFieldContinuityContract(foreignNamespace[section]));
 });
 
-for(const familyName of ['COMPANY','OWN'])test('current native '+familyName+' receipt binds the exact live-hours union and rejects historical or resealed manifests',()=>{
+function assertCurrentNativeReceipt(familyName){
  const contract=current(),family=WHATSAPP_FIELD_CONTINUITY_NATIVE.families[familyName],kind=familyName==='COMPANY'?'PG_COMPANY_KYC':'COMPACT';
  const previous=existingApiPlanCurrentNativeSourceFiles(contract,familyName,family.sourceFiles),delta=contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===kind);
  assert.equal(previous.length,familyName==='COMPANY'?236:139);assert.equal(previous.length,delta.previousCount);assert.equal(sha(JSON.stringify(previous)),delta.previousPathsSha256);
@@ -84,4 +84,7 @@ for(const familyName of ['COMPANY','OWN'])test('current native '+familyName+' re
  rejectProof(p=>{p.sourceManifest.find(row=>row.path==='src/lib/field-hours-report.mjs').sha256='f'.repeat(64);});
  const coTampered=structuredClone(contract),coDelta=coTampered[WORKSITE_LIVE_HOURS_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===kind);coDelta.currentCount=previous.length;coDelta.currentPathsSha256=sha(JSON.stringify(previous));coDelta.additions=[];
  const shortened={...proof,sourceManifest:previous.map(path=>({path,sha256:sha(read(path))}))};denied(()=>validateWhatsappFieldNeutralStepNative(shortened,familyName,coTampered,read));
-});
+}
+
+test("current native COMPANY receipt binds the exact live-hours union and rejects historical or resealed manifests",()=>assertCurrentNativeReceipt("COMPANY"));
+test("current native OWN receipt binds the exact live-hours union and rejects historical or resealed manifests",()=>assertCurrentNativeReceipt("OWN"));

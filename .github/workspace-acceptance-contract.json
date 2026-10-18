@@ -27478,7 +27478,7 @@
           },
           {
             "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
-            "sha256": "8b7cf36fabeb3f577edf5070124beca9b5f282eb0e2b17a66005541087374eeb"
+            "sha256": "43e1b60497a81d1598674fc3500b8ed47fa9be807c03788641ff5cf12c129521"
           },
           {
             "path": "tests/production-worksite-task-selector.test.mjs",
@@ -31294,7 +31294,7 @@
       },
       {
         "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
-        "sha256": "8b7cf36fabeb3f577edf5070124beca9b5f282eb0e2b17a66005541087374eeb"
+        "sha256": "43e1b60497a81d1598674fc3500b8ed47fa9be807c03788641ff5cf12c129521"
       },
       {
         "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
@@ -31306,7 +31306,7 @@
       },
       {
         "path": "tests/production-workspace-ci-consumer-projections.test.mjs",
-        "sha256": "37081fd4255eef1f4b7934ebf6669b4c8ac56cdfbf37b46d62b7be19456d601a"
+        "sha256": "b63b67c71dce654db47fad94dcbe7e37563bd6ff5b019601f4d5b8c4dc6b8b10"
       },
       {
         "path": "tests/production-workspace-live-hours-current-ci-lineage.test.mjs",
