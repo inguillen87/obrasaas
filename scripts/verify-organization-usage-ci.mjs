@@ -1,3 +1,4 @@
+import {PLAN_PARTIDA_PREVIEW_CURRENT_SECTION,verifyPlanPartidaPreviewActualClosure} from './lib/plan-partida-preview-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,verifyWorksiteLiveHoursCurrentSources as worksiteSourceCheck0,verifyWorksiteLiveHoursActualClosure as worksiteSourceCheck1} from './lib/worksite-live-hours-current-ci-lineage.mjs';
 function checkWorksiteSource(action){try{return action();}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')requireProof(false,error.message);throw error;}}
 const verifyWorksiteLiveHoursCurrentSources=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck0(...args));
@@ -91,7 +92,7 @@ export function validateOrganizationUsageCi({expectedHead,head,sourceTree,tracke
  requireProof(uploads===6,'Exact observed synthetic upload count');
  for(const [index,label] of labels.entries())requireProof(counts.get(label)===requestCounts[index]&&posts.get(label)===(index>=8?1:0),'Complete bounded request observations for '+label);
  const browser=organizationUsageCiSourceClosure(readSource,{ui:true}),contract=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));let publishedUiFiles;
- try{publishedUiFiles=restoreWeeklyCypConsumerSourceSet('ORGANIZATION_USAGE_UI',browser.files,contract);}catch(error){requireProof(false,error.message);}
+ try{if(Object.hasOwn(contract,PLAN_PARTIDA_PREVIEW_CURRENT_SECTION))verifyPlanPartidaPreviewActualClosure(contract,'ORGANIZATION_USAGE_UI',browser,readSource);publishedUiFiles=restoreWeeklyCypConsumerSourceSet('ORGANIZATION_USAGE_UI',browser.files,contract);}catch(error){requireProof(false,error.message);}
  requireProof(publishedUiFiles.length===26,'Complete published 26-source UI graph');manifest(ui.sourceManifest,browser.files,readSource,'UI');manifest(ui.dependencyManifest,dependencies,readSource,'UI dependencies');same(ui.externalImports,browser.externalImports,'Browser packages match actual JSX');
  const fixture=organizationUsageCiSourceClosure(readSource,{fixture:true});same(fixture.files,['scripts/lib/company-subscription-ui-fixture.mjs','src/lib/company-subscription-catalog.mjs','src/lib/workspace-policy.mjs'],'Complete current three-source Node fixture graph');manifest(ui.fixtureSourceManifest,fixture.files,readSource,'UI fixture');
  requireProof(ui.harnessSha256===sha(readSource(uiHarness))&&ui.cleanupHelperSha256===sha(readSource(cleanupHelper)),'UI and cleanup producer Git bytes');

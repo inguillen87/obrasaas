@@ -12,7 +12,7 @@ const planId='plan_draft_'+'a'.repeat(64),projectId='project-synthetic',scope='b
 const props={projectId,scope,initialPlanId:planId,canonicalAccess:true,getSessionToken:()=>assert.fail('Real session provider forbidden')};
 const row={title:'Tarea de la fuente',startsOn:null,endsOn:null,evidence:'Fila sintética',uncertainty:'Comparar con la fuente',sourceIssueReviewed:false};
 const draft=extra=>({id:planId,revision:1,status:'READY',rows:[{...row}],warnings:[],source:{contentType:'application/pdf',bytes:20,sha256:'c'.repeat(64)},sourceAvailable:false,existingTaskCount:0,...extra});
-const listing=(canApprove=true,rows=[])=>({scope,projectId,canApprove,drafts:rows});
+const listing=(canApprove=true,rows=[])=>({scope,projectId,canApprove,drafts:rows,truncated:false});
 const detail=extra=>({scope,projectId,draft:draft(extra)});
 const deferred=()=>{let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};};
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
@@ -20,25 +20,26 @@ function nodes(tree,predicate,result=[]){if(!tree||typeof tree!=='object')return
 const fileInput=tree=>{const value=nodes(tree,node=>node.type==='input'&&node.props.type==='file')[0];assert.ok(value);return value;};
 
 const hooks=`
-let states=[],refs=[],effects=[],memos=[],pending=[],stateCursor=0,refCursor=0,effectCursor=0,memoCursor=0;
+let states=[],refs=[],effects=[],memos=[],layouts=[],pending=[],layoutPending=[],stateCursor=0,refCursor=0,effectCursor=0,memoCursor=0,layoutCursor=0;
 const same=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((value,i)=>Object.is(value,b[i]));
 const useState=initial=>{const i=stateCursor++;if(!(i in states))states[i]=typeof initial==='function'?initial():initial;return [states[i],value=>{states[i]=typeof value==='function'?value(states[i]):value;}];};
 const useRef=initial=>{const i=refCursor++;return refs[i]??(refs[i]={current:initial});};
+const useMemo=(factory,deps)=>{const i=memoCursor++;if(!memos[i]||!same(memos[i].deps,deps))memos[i]={value:factory(),deps:[...deps]};return memos[i].value;};
 const useCallback=(fn,deps)=>{const i=memoCursor++;if(!memos[i]||!same(memos[i].deps,deps))memos[i]={fn,deps};return memos[i].fn;};
-const useEffect=(fn,deps)=>{const i=effectCursor++;if(!effects[i]||!same(effects[i].deps,deps))pending.push({i,fn,deps});};const useLayoutEffect=useEffect;
+const useEffect=(fn,deps)=>{const i=effectCursor++;if(!effects[i]||!same(effects[i].deps,deps))pending.push({i,fn,deps});};const useLayoutEffect=(fn,deps)=>{const i=layoutCursor++;if(!layouts[i]||!same(layouts[i].deps,deps))layoutPending.push({i,fn,deps});};
 const styles={},identityStyles={};
-const cursors=()=>{stateCursor=refCursor=effectCursor=memoCursor=0;pending=[];};
-export const flushEffects=()=>{const next=pending;pending=[];for(const {i,fn,deps} of next){effects[i]?.cleanup?.();effects[i]={deps,cleanup:fn()};}};
-export const unmount=()=>{for(const effect of effects)effect?.cleanup?.();effects=[];pending=[];};
+const cursors=()=>{stateCursor=refCursor=effectCursor=memoCursor=layoutCursor=0;pending=[];layoutPending=[];};
+export const flushEffects=()=>{const nextLayouts=layoutPending;layoutPending=[];for(const {i,fn,deps} of nextLayouts){layouts[i]?.cleanup?.();layouts[i]={deps:[...deps],cleanup:fn()};}const next=pending;pending=[];for(const {i,fn,deps} of next){effects[i]?.cleanup?.();effects[i]={deps,cleanup:fn()};}};
+export const unmount=()=>{for(const layout of layouts)layout?.cleanup?.();for(const effect of effects)effect?.cleanup?.();layouts=[];effects=[];layoutPending=[];pending=[];};
 `;
 const stateNames=text=>[...text.matchAll(/\[([A-Za-z]+),set[A-Za-z]+\]=useState/g)].map(match=>match[1]);
-function resetExport(names){return `export const reset=(seed={})=>{states=[];refs=[];effects=[];memos=[];pending=[];for(const [key,value] of Object.entries(seed)){const i=${JSON.stringify(names)}.indexOf(key);if(i>=0)states[i]=value;}};export const snapshot=()=>Object.fromEntries(${JSON.stringify(names)}.map((key,i)=>[key,states[i]]));`;}
+function resetExport(names){return `export const reset=(seed={})=>{states=[];refs=[];effects=[];memos=[];layouts=[];pending=[];layoutPending=[];for(const [key,value] of Object.entries(seed)){const i=${JSON.stringify(names)}.indexOf(key);if(i>=0)states[i]=value;}};export const snapshot=()=>Object.fromEntries(${JSON.stringify(names)}.map((key,i)=>[key,states[i]]));`;}
 await loadBindings();
-async function compile(text,prefix,extra){const result=await transform('import React from '+JSON.stringify(reactUrl)+';import {planImportUsageView,planImportPreservation} from '+JSON.stringify(usageHelperUrl)+';import {planDocumentDraftView,documentCurveReviewValue,documentCurveValuesEqual,DOCUMENT_CURVE_PROFILE,PLAN_CYP_INVESTMENT_PROFILE,planInvestmentDraftView} from '+JSON.stringify(new URL('plan-source-curve.mjs',accountRoot).href)+';'+hooks+prefix+text+extra,{filename:'actual-plan-link-components.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});return import('data:text/javascript;base64,'+Buffer.from(result.code).toString('base64'));}
+async function compile(text,prefix,extra){const result=await transform('import React from '+JSON.stringify(reactUrl)+';import {planImportUsageView,planImportPreservation} from '+JSON.stringify(usageHelperUrl)+';import {planDocumentDraftView,documentCurveReviewValue,documentCurveValuesEqual,DOCUMENT_CURVE_PROFILE,PLAN_CYP_INVESTMENT_PROFILE,planInvestmentDraftView} from '+JSON.stringify(new URL('plan-source-curve.mjs',accountRoot).href)+';import {planPartidaMeasurementCatalog,planPartidaMeasurementRequestCurrent} from '+JSON.stringify(new URL('plan-partida-measurement-preview.mjs',accountRoot).href)+';'+hooks+prefix+text+extra,{filename:'actual-plan-link-components.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});return import('data:text/javascript;base64,'+Buffer.from(result.code).toString('base64'));}
 
 const panelSource=source('plan-import-panel.js');
 const panelMocks=`
-const FileUp=()=>null,FileCheck2=()=>null,Download=()=>null,TriangleAlert=()=>null,PlanSourceCurve=()=>null;
+const FileUp=()=>null,FileCheck2=()=>null,Download=()=>null,TriangleAlert=()=>null,PlanSourceCurve=()=>null,PlanPartidaSourcePreview=()=>null;
 const calendarSuggestionBinding=()=>null,buildPlanCalendarSuggestions=()=>null,applyPlanCalendarSuggestions=()=>null;
 let events=new Map();const window={addEventListener(name,callback){events.set(name,callback);},removeEventListener(name,callback){if(events.get(name)===callback)events.delete(name);}},document={visibilityState:'visible',addEventListener(){},removeEventListener(){}},sessionStorage={},BroadcastChannel=undefined;
 let calls=[],queue=[],journalEntries=[],journalWait=null;

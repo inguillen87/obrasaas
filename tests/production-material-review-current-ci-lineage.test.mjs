@@ -1,3 +1,4 @@
+import {PLAN_PARTIDA_PREVIEW_CURRENT_SECTION,restorePlanPartidaPreviewSourceSet} from '../scripts/lib/plan-partida-preview-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursSourceSet,worksiteLiveHoursPreviousSourcePin,worksiteLiveHoursCurrentSourcePin} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -28,11 +29,16 @@ test('materials revision restores the whole published predecessor and preserves 
  assert.deepEqual(priorPreanalysis,currentPreanalysis);
  const proof=contract.extension.proofs.find(row=>row.id==='participant-kyc-preanalysis-postgres'),delta=contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family==='PG_PARTICIPANT_KYC_PREANALYSIS');
  assert.equal(delta.contractPointer,'/extension/proofs/18/sourceFiles');assert.equal(proof.kind,delta.family);
+ const outer=contract[PLAN_PARTIDA_PREVIEW_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===proof.kind),worksiteProofFiles=restorePlanPartidaPreviewSourceSet(contract,proof.kind,proof.sourceFiles);
+ const previewAdditions=['scripts/lib/plan-partida-preview-current-ci-lineage.mjs','scripts/lib/plan-partida-preview-current-ci-reviewed.mjs'];
+ assert.equal(outer.contractPointer,delta.contractPointer);assert.equal(outer.previousCount,241);assert.ok(outer.currentCount>=243);assert.ok(previewAdditions.every(file=>outer.additions.includes(file)));assert.equal(outer.currentCount,outer.previousCount+outer.additions.length);
+ assert.equal(worksiteProofFiles.length,outer.previousCount);assert.equal(sha(JSON.stringify(worksiteProofFiles)),outer.previousPathsSha256);
+ assert.equal(proof.sourceFiles.length,outer.currentCount);assert.equal(sha(JSON.stringify(proof.sourceFiles)),outer.currentPathsSha256);assert.deepEqual(proof.sourceFiles,[...worksiteProofFiles,...outer.additions].sort());
  // Compare historical metadata only after the authenticated outer projection.
  assert.deepEqual(currentCi,restoreWorksiteLiveHoursSourceSet(contract,delta.family,proof.sourceFiles));
  assert.equal(currentCi.length,delta.previousCount);assert.equal(sha(JSON.stringify(currentCi)),delta.previousPathsSha256);
  const additions=['scripts/lib/worksite-live-hours-current-ci-lineage.mjs','scripts/lib/worksite-live-hours-current-ci-reviewed.mjs','src/lib/field-hours-report.mjs'];
- assert.deepEqual(delta.additions,additions);assert.deepEqual(proof.sourceFiles,[...currentCi,...additions].sort());assert.equal(proof.sourceFiles.length,delta.currentCount);assert.equal(sha(JSON.stringify(proof.sourceFiles)),delta.currentPathsSha256);
+ assert.deepEqual(delta.additions,additions);assert.deepEqual(worksiteProofFiles,[...currentCi,...additions].sort());assert.equal(worksiteProofFiles.length,delta.currentCount);assert.equal(sha(JSON.stringify(worksiteProofFiles)),delta.currentPathsSha256);
  assert.equal(restoreExistingApiPlanPreviousContract(contract).participantPreanalysisCurrentRevision.ciSourceFiles.length,priorCi.length+1);
 });
 

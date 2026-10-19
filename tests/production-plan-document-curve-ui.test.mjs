@@ -18,17 +18,25 @@ ${from('createWorkspaceRecoveryJournal,recoveryResult,planImportCommandDigest,pl
 ${from('planImportUsageView,planImportPreservation','plan-import-usage-view.mjs')}
 ${from('planDocumentDraftView,documentCurveReviewValue,documentCurveValuesEqual,DOCUMENT_CURVE_PROFILE,PLAN_CYP_INVESTMENT_PROFILE,planInvestmentDraftView','plan-source-curve.mjs')}
 ${from('calendarSuggestionBinding,buildPlanCalendarSuggestions,applyPlanCalendarSuggestions','plan-import-calendar-suggestions.mjs')}
+${from('planPartidaMeasurementCatalog,planPartidaMeasurementRequestCurrent','plan-partida-measurement-preview.mjs')}
 let states=[],refs=[],stateCursor=0,refCursor=0,scenario,rows,lifecycle,browserRecoveryJournal,loseAck=null,lastWireError=null;
+// Restore memo identity and commit layout ownership before invoking actual handlers.
+let memos=[],layouts=[],memoCursor=0,layoutCursor=0,layoutQueue=[];
+const sameDeps=(left,right)=>Array.isArray(left)&&Array.isArray(right)&&left.length===right.length&&left.every((value,index)=>Object.is(value,right[index]));
+const useMemo=(factory,deps)=>{const index=memoCursor++,previous=memos[index];if(previous&&sameDeps(previous.deps,deps))return previous.value;const value=factory();memos[index]={deps:[...deps],value};return value;};
+const useLayoutEffect=(effect,deps)=>{const index=layoutCursor++,previous=layouts[index];if(previous&&sameDeps(previous.deps,deps))return;layoutQueue.push(()=>{previous?.cleanup?.();layouts[index]={deps:[...deps],cleanup:effect()};});};
+const resetLayoutHooks=()=>{for(const entry of layouts)entry?.cleanup?.();memos=[];layouts=[];layoutQueue=[];};
+const renderWithLayout=(component,props)=>{stateCursor=refCursor=memoCursor=layoutCursor=0;layoutQueue=[];const tree=component(props);for(const commit of layoutQueue)commit();layoutQueue=[];return tree;};
 const useState=initial=>{const i=stateCursor++;if(!(i in states))states[i]=initial;return [states[i],v=>{states[i]=typeof v==='function'?v(states[i]):v;}];};
 const useRef=initial=>refs[refCursor++]??(refs[refCursor-1]={current:initial}),useEffect=()=>{},useCallback=v=>v,useWorkspaceRequest=()=>lifecycle.request;
-const styles={},FileUp=()=>null,FileCheck2=()=>null,Download=()=>null,TriangleAlert=()=>null,PlanSourceCurve=()=>null,DocumentCurveEvidence=()=>null,RECOVERY_EVENT='synthetic-document-recovery';
-export function setup(seed,controller){states=[];refs=[];scenario=controller;loseAck=null;rows=new Map();for(const [key,v] of Object.entries(seed))states[${JSON.stringify(stateNames)}.indexOf(key)]=v;
+const styles={},FileUp=()=>null,FileCheck2=()=>null,Download=()=>null,TriangleAlert=()=>null,PlanSourceCurve=()=>null,DocumentCurveEvidence=()=>null,PlanPartidaSourcePreview=()=>null,RECOVERY_EVENT='synthetic-document-recovery';
+export function setup(seed,controller){resetLayoutHooks();states=[];refs=[];scenario=controller;loseAck=null;rows=new Map();for(const [key,v] of Object.entries(seed))states[${JSON.stringify(stateNames)}.indexOf(key)]=v;
  const storage={get length(){return rows.size;},key:i=>[...rows.keys()][i]??null,getItem:key=>rows.get(key)??null,setItem:(key,v)=>rows.set(key,v),removeItem:key=>rows.delete(key)};
  browserRecoveryJournal=createWorkspaceRecoveryJournal({getStorage:()=>storage,now:()=>1});
  lifecycle=createWorkspaceRequestLifecycle(async()=> 'synthetic-document-ui-session',{journal:browserRecoveryJournal,fetchImpl:async(url,options)=>{let result;try{result=await scenario.handle(url,options);}catch(error){lastWireError=error.stack;throw error;}let action;try{action=typeof options.body==='string'?JSON.parse(options.body).action:null;}catch{}if(loseAck!==null&&action===loseAck){loseAck=null;throw new TypeError('Lost synthetic commit acknowledgement');}return Response.json(result.value,{status:result.status});}});
 }
-export const render=props=>{stateCursor=refCursor=0;return PlanImportPanel(props);};
-export const editor=props=>{stateCursor=refCursor=0;return DocumentCurveReview(props);};
+export const render=props=>renderWithLayout(PlanImportPanel,props);
+export const editor=props=>renderWithLayout(DocumentCurveReview,props);
 export const state=()=>Object.fromEntries(${JSON.stringify(stateNames)}.map((name,i)=>[name,states[i]]));
 export const loseNextAck=action=>{loseAck=action;};
 export const references=()=>[...rows.values()].map(JSON.parse);

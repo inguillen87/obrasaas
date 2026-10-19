@@ -1,3 +1,4 @@
+import {PLAN_PARTIDA_PREVIEW_CURRENT_SECTION,restorePlanPartidaPreviewSourceSet} from '../scripts/lib/plan-partida-preview-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
@@ -126,8 +127,13 @@ function resealRawNative(f,edit,{resealSourceDigest=true}={}){
 }
 test('current native AST146 preserves historical145 within full CI241 and leaves raw native bytes untouched',()=>{
  const f=ciShadow(),contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),historical=structuredClone(contract.participantPreanalysisCurrentRevision.nativeSourceFiles),current=participantPreanalysisNativeSourceClosure(f.context.readSource),rawBefore=Buffer.from(f.evidence.get(f.proof.rawNative.path)),referenceBefore=structuredClone(f.proof.rawNative),proofBefore=JSON.stringify(f.proof);
- assert.equal(historical.length,145);assert.equal(current.length,146);assert.deepEqual(current,[...historical,'src/lib/field-hours-report.mjs'].sort());assert.deepEqual(nativeSourceFiles,current);assert.equal(f.context.spec.sourceFiles.length,241);assert.ok(current.every(file=>f.context.spec.sourceFiles.includes(file)));
- const result=f.validate();assert.equal(result.nativeSourceCount,146);assert.equal(result.sourceReferences,241);assert.equal(result.nativeProofRewritten,false);assert.equal(result.rawNativeSha256,sha(rawBefore));assert.equal(f.evidence.get(f.proof.rawNative.path).equals(rawBefore),true);assert.deepEqual(f.proof.rawNative,referenceBefore);assert.equal(JSON.stringify(f.proof),proofBefore);assert.deepEqual(contract.participantPreanalysisCurrentRevision.nativeSourceFiles,historical);
+ const outer=contract[PLAN_PARTIDA_PREVIEW_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===f.context.spec.kind),historicalFullCi=restorePlanPartidaPreviewSourceSet(contract,f.context.spec.kind,f.context.spec.sourceFiles);
+ const previewAdditions=['scripts/lib/plan-partida-preview-current-ci-lineage.mjs','scripts/lib/plan-partida-preview-current-ci-reviewed.mjs'];
+ assert.equal(outer.contractPointer,'/extension/proofs/18/sourceFiles');assert.equal(outer.previousCount,241);assert.ok(outer.currentCount>=243);assert.ok(previewAdditions.every(file=>outer.additions.includes(file)));assert.equal(outer.currentCount,outer.previousCount+outer.additions.length);
+ assert.equal(historicalFullCi.length,241);assert.equal(sha(JSON.stringify(historicalFullCi)),outer.previousPathsSha256);
+ assert.equal(f.context.spec.sourceFiles.length,outer.currentCount);assert.equal(sha(JSON.stringify(f.context.spec.sourceFiles)),outer.currentPathsSha256);assert.deepEqual(f.context.spec.sourceFiles,[...historicalFullCi,...outer.additions].sort());
+ assert.equal(historical.length,145);assert.equal(current.length,146);assert.deepEqual(current,[...historical,'src/lib/field-hours-report.mjs'].sort());assert.deepEqual(nativeSourceFiles,current);assert.ok(current.every(file=>historicalFullCi.includes(file)));assert.ok(current.every(file=>f.context.spec.sourceFiles.includes(file)));
+ const result=f.validate();assert.equal(result.nativeSourceCount,146);assert.equal(result.sourceReferences,outer.currentCount);assert.equal(result.nativeProofRewritten,false);assert.equal(result.rawNativeSha256,sha(rawBefore));assert.equal(f.evidence.get(f.proof.rawNative.path).equals(rawBefore),true);assert.deepEqual(f.proof.rawNative,referenceBefore);assert.equal(JSON.stringify(f.proof),proofBefore);assert.deepEqual(contract.participantPreanalysisCurrentRevision.nativeSourceFiles,historical);
 });
 test('resealing an omitted current native source historical145 or same-count foreign path cannot satisfy the envelope',()=>{
  const historical=JSON.parse(read('.github/workspace-acceptance-contract.json')).participantPreanalysisCurrentRevision.nativeSourceFiles;

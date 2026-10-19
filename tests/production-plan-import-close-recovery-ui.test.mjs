@@ -15,19 +15,27 @@ ${importFrom('createWorkspaceRecoveryJournal,recoveryResult,planImportCommandDig
 ${importFrom('planImportUsageView,planImportPreservation','plan-import-usage-view.mjs')}
 ${importFrom('planDocumentDraftView,documentCurveReviewValue,documentCurveValuesEqual,DOCUMENT_CURVE_PROFILE,PLAN_CYP_INVESTMENT_PROFILE,planInvestmentDraftView','plan-source-curve.mjs')}
 ${importFrom('calendarSuggestionBinding,buildPlanCalendarSuggestions,applyPlanCalendarSuggestions','plan-import-calendar-suggestions.mjs')}
+${importFrom('planPartidaMeasurementCatalog,planPartidaMeasurementRequestCurrent','plan-partida-measurement-preview.mjs')}
 let states=[],refs=[],stateCursor=0,refCursor=0,calls=[],responses=[],lifecycle,browserRecoveryJournal;
+// Restore memo identity and commit layout ownership before invoking actual handlers.
+let memos=[],layouts=[],memoCursor=0,layoutCursor=0,layoutQueue=[];
+const sameDeps=(left,right)=>Array.isArray(left)&&Array.isArray(right)&&left.length===right.length&&left.every((value,index)=>Object.is(value,right[index]));
+const useMemo=(factory,deps)=>{const index=memoCursor++,previous=memos[index];if(previous&&sameDeps(previous.deps,deps))return previous.value;const value=factory();memos[index]={deps:[...deps],value};return value;};
+const useLayoutEffect=(effect,deps)=>{const index=layoutCursor++,previous=layouts[index];if(previous&&sameDeps(previous.deps,deps))return;layoutQueue.push(()=>{previous?.cleanup?.();layouts[index]={deps:[...deps],cleanup:effect()};});};
+const resetLayoutHooks=()=>{for(const entry of layouts)entry?.cleanup?.();memos=[];layouts=[];layoutQueue=[];};
+const renderWithLayout=(component,props)=>{stateCursor=refCursor=memoCursor=layoutCursor=0;layoutQueue=[];const tree=component(props);for(const commit of layoutQueue)commit();layoutQueue=[];return tree;};
 const useState=initial=>{const i=stateCursor++;if(!(i in states))states[i]=typeof initial==='function'?initial():initial;return [states[i],next=>{states[i]=typeof next==='function'?next(states[i]):next;}];};
 const useRef=initial=>{const i=refCursor++;return refs[i]??(refs[i]={current:initial});};
 const useEffect=()=>{},useCallback=fn=>fn,useWorkspaceRequest=()=>lifecycle.request;
-const styles={},FileUp=()=>null,FileCheck2=()=>null,Download=()=>null,TriangleAlert=()=>null,PlanSourceCurve=()=>null,RECOVERY_EVENT='controlled-recovery';
+const styles={},FileUp=()=>null,FileCheck2=()=>null,Download=()=>null,TriangleAlert=()=>null,PlanSourceCurve=()=>null,PlanPartidaSourcePreview=()=>null,RECOVERY_EVENT='controlled-recovery';
 `;
 const suffix=`
-export function reset(seed,responsesForCase){states=[];refs=[];calls=[];responses=[...responsesForCase];for(const [name,value] of Object.entries(seed))states[${JSON.stringify(stateNames)}.indexOf(name)]=value;
+export function reset(seed,responsesForCase){resetLayoutHooks();states=[];refs=[];calls=[];responses=[...responsesForCase];for(const [name,value] of Object.entries(seed))states[${JSON.stringify(stateNames)}.indexOf(name)]=value;
  const records=new Map(),storage={get length(){return records.size;},key:index=>[...records.keys()][index]??null,getItem:key=>records.get(key)??null,setItem:(key,value)=>records.set(key,value),removeItem:key=>records.delete(key)};
  browserRecoveryJournal=createWorkspaceRecoveryJournal({getStorage:()=>storage,now:()=>1});
  lifecycle=createWorkspaceRequestLifecycle(async()=> 'synthetic-close-recovery-session',{journal:browserRecoveryJournal,fetchImpl:async(url,options)=>{const next=responses.shift();if(!next)throw Error('Unexpected synthetic HTTP');const method=options.method||'GET';if(method!==next.method)throw Error('Unexpected synthetic method');calls.push({url,method,operationId:typeof options.body?.get==='function'?options.body.get('operationId'):typeof options.body==='string'?JSON.parse(options.body).operationId:new URL(url,'http://synthetic.invalid').searchParams.get('operationId')});return new Response(JSON.stringify(next.body),{status:next.status??200,headers:{'Content-Type':'application/json'}});}});
 }
-export const render=props=>{stateCursor=refCursor=0;return PlanImportPanel(props);};
+export const render=props=>renderWithLayout(PlanImportPanel,props);
 export const snapshot=()=>Object.fromEntries(${JSON.stringify(stateNames)}.map((name,i)=>[name,states[i]]));
 export const ref=name=>refs[${JSON.stringify(refNames)}.indexOf(name)];
 export const requests=()=>calls;

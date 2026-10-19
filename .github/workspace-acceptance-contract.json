@@ -31372,7 +31372,7 @@
       {
         "path": "scripts/lib/plan-partida-preview-current-ci-lineage.mjs",
         "previousSha256": null,
-        "currentSha256": "ca6aaf932d4072e6101071407ab55b7477394d6b669529d89eac6964e67851f2"
+        "currentSha256": "66fa40633e2900a35073bed5b8f6a48b3402e3ab34703b3d47af3b68ae90fd08"
       },
       {
         "path": "scripts/lib/plan-partida-source-preview-ui.mjs",
@@ -31383,6 +31383,11 @@
         "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
         "previousSha256": "0d152bf95e2544e2536531acedf94200850c3060311b209d565b753aa857bdc1",
         "currentSha256": "86c626156b82419640b4dc45520a7dcca330810949a346ae60f50566a136f2e6"
+      },
+      {
+        "path": "scripts/verify-organization-usage-ci.mjs",
+        "previousSha256": "2c4fd6d8f3ee66c4c8291dd6c345ff149932193b9c196feec4edf8b939fff81c",
+        "currentSha256": "e9a029aaff921501d500245c3917e5c2d2ce075ae644628e9336ccffd791a043"
       },
       {
         "path": "scripts/verify-plan-import-ui.mjs",
@@ -31453,6 +31458,41 @@
         "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
         "previousSha256": "2cfcfb2c07f4df01e72ca65ae33928849521ddfaa89434b9610752a4f98d0978",
         "currentSha256": "511f6c45d33d66a22a7f583fd48c7ea7d4933dab26473d2106ece15056e4f6c7"
+      },
+      {
+        "path": "tests/production-material-review-current-ci-lineage.test.mjs",
+        "previousSha256": "3064ebedd2ab050d4d2e1326643d9b4d83d699a3a1f08489fe89b1bfadf45069",
+        "currentSha256": "a9d434e05848d2d2170d57a9410c8ddeecf4585949a645cb1fdf0480b2e58db9"
+      },
+      {
+        "path": "tests/production-organization-usage-ci.test.mjs",
+        "previousSha256": "3c7bf063ae845ddc4cd7104b9dd205fb221863094264d161654c7526060f34fb",
+        "currentSha256": "1f4aa949f2d05d83239560a4fa18223bfb910e85439ba14124882490bc8f36c3"
+      },
+      {
+        "path": "tests/production-participant-preanalysis-current-ci-lineage.test.mjs",
+        "previousSha256": "b509f96f600364d0327b4d3c2ac411fc2b32137b5e38fb4c2d47e3bf046cbd06",
+        "currentSha256": "568a07b2a88be7c9a0f217ce2b49fc61dbdeca8d6d1891dc63d0752f0efff9b4"
+      },
+      {
+        "path": "tests/production-plan-document-curve-ui.test.mjs",
+        "previousSha256": "69e68ca387312e68ada099180ce68f008d3dd2766dd38d2ac35a6825841aaa7e",
+        "currentSha256": "aea2b808c7d1648576813dcb4ffd73eb53942dc22b7cff35a98a81645fd6c0eb"
+      },
+      {
+        "path": "tests/production-plan-import-calendar-ui.test.mjs",
+        "previousSha256": "5e319c16136365f5d8e108e8a8dda2a5ca3d81fd843c5cccc0c5c1882e578f61",
+        "currentSha256": "9623993c9315115e712520e1b003bb347074de27d392eb5794f1fa14427c56f2"
+      },
+      {
+        "path": "tests/production-plan-import-close-recovery-ui.test.mjs",
+        "previousSha256": "053ff5c7ea05940c44cd3939f0d6bb03deca89a78a072976303e1400475b8c91",
+        "currentSha256": "a1968341ab5b43a8d0bf4a3ef8011b69d07d647a31d6b85ba6b2a0944448de77"
+      },
+      {
+        "path": "tests/production-plan-import-link-ui.test.mjs",
+        "previousSha256": "abe11eec43692260e656456909a9d80d08be30a4cf5ff1298769d6a100febdd1",
+        "currentSha256": "19a55f361e6ccf2db4460504664abd39141c835e80b04133385cd778bc210cad"
       },
       {
         "path": "tests/production-plan-import-source-curve-compact.test.mjs",
@@ -31564,6 +31604,21 @@
         "previousPathsSha256": "94ccefda3d5812e411dce447d80164c4c0ef9a2011f9eade0dd16fdffa706fec",
         "currentCount": 169,
         "currentPathsSha256": "f6391decdcdcb680c3bd8bd220493e224e4fc1aea4ad53188f54b07216f711ad",
+        "additions": [
+          "src/app/(identity)/cuenta/plan-partida-measurement-preview.js",
+          "src/app/(identity)/cuenta/plan-partida-measurement-preview.mjs",
+          "src/app/(identity)/cuenta/plan-partida-source-preview.js",
+          "src/app/(identity)/cuenta/plan-partida-source-preview.mjs",
+          "src/app/(identity)/cuenta/plan-partida-source-preview.module.css"
+        ]
+      },
+      {
+        "family": "ORGANIZATION_USAGE_UI",
+        "contractPointer": null,
+        "previousCount": 27,
+        "previousPathsSha256": "ba289e890f0f4c12aee451e19f4e5b8e3880c39df935dbba2eb243e8f45601e0",
+        "currentCount": 32,
+        "currentPathsSha256": "a4e57eaf7735e71a357a95cefd5e87fb554199f7d190b85057a8f415ef8f3b08",
         "additions": [
           "src/app/(identity)/cuenta/plan-partida-measurement-preview.js",
           "src/app/(identity)/cuenta/plan-partida-measurement-preview.mjs",
@@ -33569,7 +33624,7 @@
           },
           {
             "path": "scripts/lib/plan-partida-preview-current-ci-lineage.mjs",
-            "sha256": "ca6aaf932d4072e6101071407ab55b7477394d6b669529d89eac6964e67851f2"
+            "sha256": "66fa40633e2900a35073bed5b8f6a48b3402e3ab34703b3d47af3b68ae90fd08"
           },
           {
             "path": "scripts/lib/plan-partida-preview-current-ci-reviewed.mjs",
@@ -34498,7 +34553,7 @@
           },
           {
             "path": "scripts/lib/plan-partida-preview-current-ci-lineage.mjs",
-            "sha256": "ca6aaf932d4072e6101071407ab55b7477394d6b669529d89eac6964e67851f2"
+            "sha256": "66fa40633e2900a35073bed5b8f6a48b3402e3ab34703b3d47af3b68ae90fd08"
           },
           {
             "path": "scripts/lib/plan-partida-preview-current-ci-reviewed.mjs",
@@ -38386,6 +38441,181 @@
           {
             "path": "src/lib/workspace-store.mjs",
             "sha256": "5f25092121a31a06eefa59d69866db82fa3cd28afdcbd0e066e52d916478bc50"
+          }
+        ]
+      },
+      {
+        "family": "ORGANIZATION_USAGE_UI",
+        "previousExternalImports": [
+          "lucide-react",
+          "react"
+        ],
+        "currentFiles": [
+          "src/app/(identity)/cuenta/company-channel-view.mjs",
+          "src/app/(identity)/cuenta/company-subscription-panel.js",
+          "src/app/(identity)/cuenta/company-subscription-panel.module.css",
+          "src/app/(identity)/cuenta/company-subscription-view.mjs",
+          "src/app/(identity)/cuenta/company-usage-panel.js",
+          "src/app/(identity)/cuenta/company-usage-view.mjs",
+          "src/app/(identity)/cuenta/own-company-number-view.mjs",
+          "src/app/(identity)/cuenta/own-company-templates-view.mjs",
+          "src/app/(identity)/cuenta/participant-office-account-view.mjs",
+          "src/app/(identity)/cuenta/plan-baseline-view.mjs",
+          "src/app/(identity)/cuenta/plan-import-calendar-suggestions.mjs",
+          "src/app/(identity)/cuenta/plan-import-panel.js",
+          "src/app/(identity)/cuenta/plan-import-panel.module.css",
+          "src/app/(identity)/cuenta/plan-import-usage-view.mjs",
+          "src/app/(identity)/cuenta/plan-partida-measurement-preview.js",
+          "src/app/(identity)/cuenta/plan-partida-measurement-preview.mjs",
+          "src/app/(identity)/cuenta/plan-partida-source-preview.js",
+          "src/app/(identity)/cuenta/plan-partida-source-preview.mjs",
+          "src/app/(identity)/cuenta/plan-partida-source-preview.module.css",
+          "src/app/(identity)/cuenta/plan-source-curve.js",
+          "src/app/(identity)/cuenta/plan-source-curve.mjs",
+          "src/app/(identity)/cuenta/plan-source-curve.module.css",
+          "src/app/(identity)/cuenta/private-bank-account-format.mjs",
+          "src/app/(identity)/cuenta/site-purchase-view.mjs",
+          "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
+          "src/app/(identity)/cuenta/workspace-recovery-storage.mjs",
+          "src/app/(identity)/cuenta/workspace-request-lifecycle.js",
+          "src/app/(identity)/cuenta/workspace-request-lifecycle.mjs",
+          "src/app/(identity)/cuenta/workspace-session-request.mjs",
+          "src/lib/company-entitlement.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-document-curve.mjs"
+        ],
+        "externalImports": [
+          "lucide-react",
+          "react"
+        ],
+        "currentManifest": [
+          {
+            "path": "src/app/(identity)/cuenta/company-channel-view.mjs",
+            "sha256": "c79c473999e444b84e2a1d58e0d03f030069c24f9749f2c84450318b0b237e4d"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/company-subscription-panel.js",
+            "sha256": "0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/company-subscription-panel.module.css",
+            "sha256": "fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/company-subscription-view.mjs",
+            "sha256": "d009632c97d18084a1907bd7dedcf140f1a5d4ee0b55dd95f33d83be152dfc9c"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/company-usage-panel.js",
+            "sha256": "01beddb3b88861bda1549169cc885bc682bd5446e4289521e5a36a6386ac37aa"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/company-usage-view.mjs",
+            "sha256": "27cb4b607405186f57d70ffa7d78b1b2f9456486a4bfeb40b0157c9c52a2dc29"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/own-company-number-view.mjs",
+            "sha256": "6940f11e30d2958d7f6771463ce28ca83c0e2d2f41e81aa220c8efe669580300"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/own-company-templates-view.mjs",
+            "sha256": "3bf758b150336613a437e2b01d3b6a79645a024b771f1515f4ec2ae58a1b8bc3"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/participant-office-account-view.mjs",
+            "sha256": "f2716f72297a1277946bafa03a82d4c1fb7f2fcff7f4c4bbe155a86ed7e4e379"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/plan-baseline-view.mjs",
+            "sha256": "0c696eba748a7441440e23be5085dc42d4954427def5adc1e2de686b4b11711d"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/plan-import-calendar-suggestions.mjs",
+            "sha256": "be73d51220557e395295700a238024d9896ef627a305718518214fc7bd227457"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/plan-import-panel.js",
+            "sha256": "d74f0cdff0da1c173bc2ef566fed973ca02dd6bcc449aa8c3842d5109954d5f6"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/plan-import-panel.module.css",
+            "sha256": "c64771e75e83b6708ede012f90636bac1d13c19a3c1088c685513e702cc69061"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/plan-import-usage-view.mjs",
+            "sha256": "666668e0267f77599f191ca5ffa038da11232ad8bb08806d2b46d9193994a186"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/plan-partida-measurement-preview.js",
+            "sha256": "e68aa0851e4d415408c21df76d3716c4e4196925223c155a96194d7db85566d8"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/plan-partida-measurement-preview.mjs",
+            "sha256": "f30a1c21396f61a1808446d9660554132b5df654e633d128dfe2f76336a9adc5"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/plan-partida-source-preview.js",
+            "sha256": "0869d7e7a5efe5e05e7b5f5f729da9e58d9f106329e31baf6ea79cabf990d3a9"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/plan-partida-source-preview.mjs",
+            "sha256": "fcd3a41c62138e77fc026c6651a0a228d9f4507b0a87c82a3b113b0e4fc26e8d"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/plan-partida-source-preview.module.css",
+            "sha256": "da7cfec61d043d0f217e706701994fb41ed1973733ccd37a35698f743aefd9ee"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/plan-source-curve.js",
+            "sha256": "b0f1ef1fee082e82f18d4bd2fb13377b27d8f9849e831f2c34120164f93f9a12"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/plan-source-curve.mjs",
+            "sha256": "689402d373744d159a62e2e5975ddfdf79053c528a838879dd5df3e43a0efdc9"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/plan-source-curve.module.css",
+            "sha256": "92f94328baac3fb0416002db12b5c19923fc28e6f89cb625df10038e0a96a180"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/private-bank-account-format.mjs",
+            "sha256": "4dcf7f2de2f49f97f155e14128b20815f538d659d5e82806fa45a18d541adeea"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/site-purchase-view.mjs",
+            "sha256": "58ebd978e8e39423901cb811ecf2ab851160b78f7cd5cb441075d66d7819dee9"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
+            "sha256": "060e128b54eefdadfbabac45c3ec696934f5e74d79b9e26e905081128e8e99c5"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/workspace-recovery-storage.mjs",
+            "sha256": "d8cf1e7e8d88d66f722aaf52deb45f95829c226468d3f37a2b23d171cc1ecbb8"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/workspace-request-lifecycle.js",
+            "sha256": "b3004538de2cc7cbc829bf5518c4f4b2a5eb2935d0b4e60f9c88840c8ede3797"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/workspace-request-lifecycle.mjs",
+            "sha256": "590cd7691d8b6beb82929bdd18dd9909c2d2cfa1c3d4111ff4d478d57daf532f"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/workspace-session-request.mjs",
+            "sha256": "29d294ac1d973317d6a3df225a64a8a9115c6ea51c587f297114e7992af97520"
+          },
+          {
+            "path": "src/lib/company-entitlement.mjs",
+            "sha256": "65d41dfb796ef12be38b1220a99ccd3dfe277419a5e5a27e125beb29fe7e2cde"
+          },
+          {
+            "path": "src/lib/plan-import-cyp-curve.mjs",
+            "sha256": "7e1d6c9d87df5e74e0a340361e1e66fdf0cfd5c82f1e44030ba2e85b5fa9c342"
+          },
+          {
+            "path": "src/lib/plan-import-document-curve.mjs",
+            "sha256": "7f63d62b9f1ae6d139c627a978ef56d7eafea0e0f4271167daa4c00bf7fda013"
           }
         ]
       }
