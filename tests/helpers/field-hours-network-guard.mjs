@@ -1,0 +1,13 @@
+import http from 'node:http';
+import https from 'node:https';
+import net from 'node:net';
+import tls from 'node:tls';
+import dgram from 'node:dgram';
+import {syncBuiltinESMExports} from 'node:module';
+const state={active:true,attempts:[]};
+const deny=kind=>(...args)=>{state.attempts.push({kind,argumentType:typeof args[0]});throw new Error('HOURS_EXPORT_TEST_NETWORK_FORBIDDEN: '+kind);};
+globalThis.__hoursExportNetworkGuard=state;
+globalThis.fetch=deny('fetch');
+http.request=deny('http.request');http.get=deny('http.get');https.request=deny('https.request');https.get=deny('https.get');
+net.connect=deny('net.connect');net.createConnection=deny('net.createConnection');net.Socket.prototype.connect=deny('socket.connect');tls.connect=deny('tls.connect');dgram.createSocket=deny('dgram.createSocket');
+syncBuiltinESMExports();

@@ -1,0 +1,78 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createWorksiteLiveHoursRevisionGate,verifyWorksiteLiveHoursCurrentSources,worksiteLiveHoursValidationFiles} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
+import {WORKSITE_LIVE_HOURS_CURRENT_REVISION} from '../scripts/lib/worksite-live-hours-current-ci-reviewed.mjs';
+import {sourceRevisionFixture,clone,serialize,sha} from './fixtures/worksite-live-hours-ci-lineage-fixture.mjs';
+const key='worksiteLiveHoursCurrentRevision',denied=run=>assert.throws(run,{code:'WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED'});
+const fixture=()=>{const f=sourceRevisionFixture();return {...f,gate:createWorksiteLiveHoursRevisionGate(f.reviewed)};};
+
+test('the complete predecessor contract and exact historical checks restore without input mutation',()=>{
+ const f=fixture(),before=serialize(f.contract),old=f.gate.restorePreviousContract(f.contract);assert.deepEqual(old,f.previous);assert.equal(serialize(f.contract),before);assert.deepEqual(old.extension.proofs[0].checkNames,f.contract.extension.proofs[0].checkNames);assert.deepEqual(old.blocks,f.contract.blocks);assert.equal(Object.hasOwn(old,key),false);
+});
+test('current verification binds every changed, added, producer and validator source and never declares acceptance',()=>{
+ const f=fixture(),result=f.gate.verifyCurrentSources(f.contract,f.readSource);assert.equal(result.completePreviousContractRestored,true);assert.equal(result.previousContractSha256,sha(serialize(f.previous)));assert.equal(result.reviewedReferenceCount,5);assert.equal(result.nativeOrBrowserAcceptance,false);
+});
+test('LF and CRLF checkouts compare against the same reviewed committed text',()=>{
+ const f=fixture();assert.equal(f.gate.verifyCurrentSources(f.contract,file=>Buffer.from(f.readSource(file).toString().replaceAll('\n','\r\n'))).completePreviousContractRestored,true);
+});
+for(const file of [...sourceRevisionFixture().sources.keys()].filter(file=>file!==sourceRevisionFixture().unchanged))for(const kind of ['missing','changed'])test(kind+' source cannot be resealed by another proof: '+file,()=>{
+ const f=fixture();denied(()=>f.gate.verifyCurrentSources(f.contract,path=>path===file?(kind==='missing'?null:Buffer.from('unreviewed replacement')):f.readSource(path)));
+});
+test('invalid UTF-8 source is refused before normalization can hide replacement bytes',()=>{const f=fixture();denied(()=>f.gate.verifyCurrentSources(f.contract,file=>file===f.changed?Buffer.from([0xff]):f.readSource(file)));});
+test('only exact previous/current pins advance for a changed source',()=>{
+ const f=fixture(),row=f.reviewed.reviewedSourceChanges[0];for(const pin of [row.previousSha256,row.currentSha256])assert.equal(f.gate.currentSourcePin(f.contract,{path:f.changed,sha256:pin}),row.currentSha256);denied(()=>f.gate.currentSourcePin(f.contract,{path:f.changed,sha256:'f'.repeat(64)}));assert.equal(f.gate.previousSourcePin(f.contract,{path:f.changed,sha256:row.currentSha256}),row.previousSha256);
+});
+test('a new source has no fictional predecessor alias',()=>{const f=fixture(),row=f.reviewed.newSources[0];assert.equal(f.gate.currentSourcePin(f.contract,row),row.sha256);denied(()=>f.gate.currentSourcePin(f.contract,{path:f.added,sha256:'0'.repeat(64)}));});
+test('undeclared unrelated pins remain owned by their original validators',()=>{const f=fixture(),row={path:'src/lib/old-unrelated.mjs',sha256:'e'.repeat(64)};assert.equal(f.gate.currentSourcePin(f.contract,row),row.sha256);});
+test('the exact additive current source set restores its historical set',()=>{const f=fixture();assert.deepEqual(f.gate.restoreSourceSet(f.contract,'FIELD_NATIVE',f.currentFiles),[f.changed,f.unchanged].sort());assert.deepEqual(f.gate.restoreSourceSet(f.contract,'UNRELATED',f.currentFiles),f.currentFiles);});
+for(const change of [files=>files.slice(0,-1),files=>[...files,'src/lib/foreign.mjs'].sort(),files=>[...files].reverse(),files=>[...files,files[0]]])test('missing injected unsorted or duplicate current source paths fail closed '+change.toString(),()=>{const f=fixture();denied(()=>f.gate.restoreSourceSet(f.contract,'FIELD_NATIVE',change(f.currentFiles)));});
+test('independent normalizers can restore the exact predecessor set twice without accepting a guessed historical set',()=>{const f=fixture(),once=f.gate.restoreSourceSet(f.contract,'FIELD_NATIVE',f.currentFiles);assert.deepEqual(f.gate.restoreSourceSet(f.contract,'FIELD_NATIVE',once),once);denied(()=>f.gate.restoreSourceSet(f.contract,'FIELD_NATIVE',['src/lib/unreviewed-old.mjs']));});
+test('typed proof additions project only the exact reviewed current set and retain all historical check ownership',()=>{
+ const f=fixture();assert.deepEqual(f.gate.proofSourceAdditions({kind:'FIELD_NATIVE',sourceFiles:f.currentFiles}),[f.added]);assert.deepEqual(f.gate.proofSourceAdditions({kind:'FIELD_NATIVE',sourceFiles:[f.changed,f.unchanged].sort()}),[]);assert.deepEqual(f.gate.proofSourceAdditions({kind:'UNRELATED',sourceFiles:f.currentFiles}),[]);denied(()=>f.gate.proofSourceAdditions({kind:'FIELD_NATIVE',sourceFiles:[f.changed,'src/lib/foreign.mjs'].sort()}));denied(()=>f.gate.proofSourceAdditions({kind:'FIELD_NATIVE',sourceFiles:[f.added,'src/lib/foreign.mjs'].sort()}));
+});
+test('actual AST closure must contain every and only reviewed path/external import',()=>{
+ const f=fixture();assert.equal(f.gate.verifyActualClosure(f.contract,'FIELD_NATIVE',{files:f.familyFiles,externalImports:[]},f.readSource).sourceCount,3);
+ for(const closure of [{files:[f.changed],externalImports:[]},{files:[...f.familyFiles,'src/lib/injected.mjs'].sort(),externalImports:[]},{files:f.familyFiles,externalImports:['remote-package']},{files:f.familyFiles,externalImports:[],ignored:true}])denied(()=>f.gate.verifyActualClosure(f.contract,'FIELD_NATIVE',closure,f.readSource));denied(()=>f.gate.verifyActualClosure(f.contract,'UNREVIEWED',{files:f.familyFiles,externalImports:[]},f.readSource));
+});
+for(const change of [contract=>contract.extension.proofs[0].checkNames.reverse(),contract=>contract.blocks[0].commands.push('hidden new command'),contract=>contract.unrelatedHistoricalMetadata.mustStay='tampered',contract=>contract.extension.proofs[0].producerSha256='a'.repeat(64),contract=>contract.extension.proofs[0].sourceFiles.pop()])test('historical ledger metadata or pin changes cannot hide behind the companion '+change.toString(),()=>{const f=fixture(),bad=clone(f.contract);change(bad);denied(()=>f.gate.restorePreviousContract(bad));});
+for(const change of [section=>section.accepted=true,section=>section.nativeOrBrowserAcceptance=true,section=>section.reviewedSourceChanges[0].currentSha256='a'.repeat(64),section=>section.sourceSetDeltas[0].currentCount=99,section=>section.newSources.push({path:'src/lib/foreign.mjs',sha256:'b'.repeat(64)}),section=>section.validationSources.pop(),section=>section.validationSources[0].path='scripts/unreviewed-validator.mjs'])test('self declared extra authority count source or validator is refused '+change.toString(),()=>{const f=fixture(),bad=clone(f.contract);change(bad[key]);denied(()=>f.gate.verifyCurrentSources(bad,f.readSource));});
+test('co-tampering current validator bytes and its contract hash cannot redefine compiled validator pins',()=>{
+ const f=fixture(),bad=clone(f.contract),replacement=Buffer.from('export const maliciousValidator=true;\n');bad[key].validationSources[0].sha256=sha(replacement);denied(()=>f.gate.verifyCurrentSources(bad,file=>file===f.validator?replacement:f.readSource(file)));
+});
+test('the declaration is an explicit canonical-source trust anchor, not a self-hash supplied by the proof',()=>{
+ const f=fixture();assert.equal(f.gate.validationFiles(f.contract).includes(f.anchor),true);assert.equal(f.reviewed.validationSources.some(row=>row.path===f.anchor),false);denied(()=>f.gate.verifyCurrentSources(f.contract,file=>file===f.anchor?Buffer.from(f.readSource(file).toString()+'// changed anchor'):f.readSource(file)));
+});
+test('actual family contents include unchanged sources absent from the changed-source reference list',()=>{
+ const f=fixture(),closure={files:f.familyFiles,externalImports:[]};assert.equal(f.reviewed.reviewedSourceChanges.some(row=>row.path===f.unchanged),false);denied(()=>f.gate.verifyActualClosure(f.contract,'FIELD_NATIVE',closure,file=>file===f.unchanged?Buffer.from('export const altered=true;'):f.readSource(file)));denied(()=>f.gate.verifyActualClosure(f.contract,'FIELD_NATIVE',closure));
+});
+test('a missing current companion cannot validate current source even though historical normalization is a no-op',()=>{const f=fixture();assert.equal(f.gate.restorePreviousContract(f.previous),f.previous);denied(()=>f.gate.verifyCurrentSources(f.previous,f.readSource));});
+test('unfinalized declarations refuse current verification instead of filling guessed hashes or counts',()=>{const f=fixture(),draft=clone(f.reviewed);draft.status='DRAFT_AWAITING_FINAL_SOURCE_FREEZE';draft.previousContractSha256=null;const contract=clone(f.contract);contract[key]={...draft,validationSources:f.contract[key].validationSources};denied(()=>createWorksiteLiveHoursRevisionGate(draft).verifyCurrentSources(contract,f.readSource));});
+test('synthetic declarations are never a production companion trust anchor',()=>{const f=fixture();denied(()=>verifyWorksiteLiveHoursCurrentSources(f.contract,f.readSource));});
+test('mutating the declaration after gate creation cannot change its reviewed trust anchor',()=>{const f=fixture();f.reviewed.reviewedSourceChanges[0].currentSha256='f'.repeat(64);assert.equal(f.gate.verifyCurrentSources(f.contract,f.readSource).completePreviousContractRestored,true);});
+test('inverse producer history restores all bytes and rejects tampered or unbound producer text',()=>{const f=fixture();assert.equal(f.gate.restorePreviousProducerText(f.contract,f.producer,Buffer.from(f.newProducer)).toString(),f.oldProducer);denied(()=>f.gate.restorePreviousProducerText(f.contract,f.producer,Buffer.from(f.newProducer+'// extra')));denied(()=>f.gate.restorePreviousProducerText(f.contract,'scripts/unbound.mjs',Buffer.from(f.newProducer)));});
+for(const change of [spec=>spec.newSources[0].path='../escape.mjs',spec=>spec.newSources[0].path='src/../escape.mjs',spec=>spec.newValidationPaths.push(spec.newValidationPaths[0]),spec=>spec.newSources.push({path:spec.reviewedSourceChanges[0].path,sha256:'b'.repeat(64)}),spec=>spec.sourceSetDeltas[0].contractPointer='/extension/proofs/0/checkNames',spec=>spec.producerDeltas[0].contractPointers=['/extension/proofs/0/checkNames'],spec=>spec.sourceSetDeltas[0].currentCount=9])test('unsafe or internally inconsistent reviewed declarations are rejected '+change.toString(),()=>{const f=fixture(),spec=clone(f.reviewed);change(spec);const contract=clone(f.contract);contract[key]={...spec,validationSources:f.contract[key].validationSources};denied(()=>createWorksiteLiveHoursRevisionGate(spec).verifyCurrentSources(contract,f.readSource));});
+test('package manifests and the exact existing deployment and biometric inputs remain valid while other root files are refused',()=>{
+ const f=fixture(),reviewed=clone(f.reviewed),sources=new Map(f.sources),packageFiles=['api/_biometric_core.py','package-lock.json','package.json','vercel.json'];for(const file of packageFiles)sources.set(file,Buffer.from('{"private":true}\n'));
+ reviewed.sourceFamilies.push({family:'PACKAGE_INPUTS',currentFiles:packageFiles,externalImports:[],currentManifest:packageFiles.map(path=>({path,sha256:sha(sources.get(path))}))});const contract=clone(f.contract);contract[key]=reviewed;sources.set(f.anchor,Buffer.from('// Exact reviewed current-source declaration; this file is the explicit trust anchor.\nexport const WORKSITE_LIVE_HOURS_CURRENT_REVISION=Object.freeze('+JSON.stringify(reviewed,null,2)+');\n'));
+ const gate=createWorksiteLiveHoursRevisionGate(reviewed),readSource=file=>sources.get(file)??null;assert.equal(gate.verifyCurrentSources(contract,readSource).completePreviousContractRestored,true);assert.equal(gate.verifyActualClosure(contract,'PACKAGE_INPUTS',{files:packageFiles,externalImports:[]},readSource).sourceCount,4);
+ const unsafe=clone(reviewed);unsafe.sourceFamilies.at(-1).currentFiles=['.env'];unsafe.sourceFamilies.at(-1).currentManifest=[{path:'.env',sha256:'a'.repeat(64)}];const bad=clone(contract);bad[key]=unsafe;denied(()=>createWorksiteLiveHoursRevisionGate(unsafe).verifyCurrentSources(bad,readSource));
+});
+test('an exact family and exact source bytes cannot conceal an altered historical contract',()=>{
+ const f=fixture(),bad=clone(f.contract);bad.unrelatedHistoricalMetadata.mustStay='changed';denied(()=>f.gate.verifyActualClosure(bad,'FIELD_NATIVE',{files:f.familyFiles,externalImports:[]},f.readSource));
+});
+test('the compiled production declaration is structurally valid and preloads the actual new server and workflow-matched test',()=>{
+ const files=worksiteLiveHoursValidationFiles({[key]:WORKSITE_LIVE_HOURS_CURRENT_REVISION});assert.ok(files.includes('src/lib/field-hours-report.mjs'));assert.ok(files.includes('tests/production-workspace-live-hours-current-ci-lineage.test.mjs'));assert.ok(files.includes('scripts/lib/worksite-live-hours-current-ci-reviewed.mjs'));assert.equal(files.includes('tests/production-worksite-live-hours-current-ci-lineage.test.mjs'),false);
+});
+
+test('compiling immutable metadata never caches changed source bytes for the same reader callback',()=>{
+ const f=fixture(),reader=f.readSource;assert.equal(f.gate.verifyCurrentSources(f.contract,reader).completePreviousContractRestored,true);f.sources.set(f.changed,Buffer.from('export const changedAfterValidation=true;\n'));denied(()=>f.gate.verifyCurrentSources(f.contract,reader));
+});
+test('compiling immutable metadata never caches unchanged family bytes for the same reader callback',()=>{
+ const f=fixture(),reader=f.readSource,closure={files:f.familyFiles,externalImports:[]};assert.equal(f.gate.verifyActualClosure(f.contract,'FIELD_NATIVE',closure,reader).sourceCount,3);f.sources.set(f.unchanged,Buffer.from('export const changedAfterValidation=true;\n'));denied(()=>f.gate.verifyActualClosure(f.contract,'FIELD_NATIVE',closure,reader));
+});
+test('nested companion mutation after successful validation is checked freshly on the same contract',()=>{
+ const f=fixture();assert.equal(f.gate.verifyCurrentSources(f.contract,f.readSource).completePreviousContractRestored,true);f.contract[key].sourceFamilies[0].currentManifest[0].sha256='f'.repeat(64);denied(()=>f.gate.verifyCurrentSources(f.contract,f.readSource));
+});
+test('the compiled declaration owns a deep frozen clone even after the callers nested input changes',()=>{
+ const f=fixture();assert.equal(f.gate.verifyCurrentSources(f.contract,f.readSource).completePreviousContractRestored,true);f.reviewed.sourceFamilies[0].currentManifest[0].sha256='f'.repeat(64);f.reviewed.validationSources[0].sha256='e'.repeat(64);assert.equal(f.gate.verifyCurrentSources(f.contract,f.readSource).completePreviousContractRestored,true);
+});

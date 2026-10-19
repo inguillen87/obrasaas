@@ -193,6 +193,18 @@ export async function readPlanMeasurementOoxml(bytes,contentType){
   return {format:cyp?'CYP_PARTIDAS':'COTIZACION_PARTIDAS',worksheets};
  }catch(error){if(error instanceof WorkspaceError)throw error;fail();}finally{book?.close();}
 }
+// Opt-in budget observations share the bounded ZIP/XML/style reader. Neither
+// the legacy readers nor SOURCE_QUANTITIES_V1 gain financial fields.
+export async function readPlanBudgetOoxml(bytes,contentType){
+ let book;
+ try{
+  book=await workbook(bytes,contentType);
+  if(!book.has('Plan de trabajo')||!book.has('CyP Integral completo')||book.has('Cotización'))fail('PLAN_IMPORT_SPREADSHEET_PROFILE_REQUIRED');
+  const declarations=[['Plan de trabajo',['A','B','C','D','E','F']],['CyP Integral completo',['B','C','D','E','G','H','K','L','M','N','O']]],worksheets=[];
+  for(const [name,columns] of declarations){const allowed=new Set(columns),cells=await book.measurementSheet(name,columns);worksheets.push({name,visible:true,cells:[...cells.values()].filter(cell=>allowed.has(/^([A-Z]+)/.exec(cell.address)[1]))});}
+  return {format:'CYP_PARTIDAS',worksheets};
+ }catch(error){if(error instanceof WorkspaceError)throw error;fail();}finally{book?.close();}
+}
 export async function validatePlanOoxml(bytes,contentType) {
  let value;try{value=await workbook(bytes,contentType);return true;}catch(error){if(error instanceof WorkspaceError)throw error;fail();}finally{value?.close();}
 }

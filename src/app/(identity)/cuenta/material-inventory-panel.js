@@ -1,6 +1,8 @@
 'use client';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import {useWorkspaceRequest} from './workspace-request-lifecycle';
+import {collectRetainedPages,retainedRows,liveContextChanged,liveReadSignature} from './workspace-live-read.mjs';
+import {useWorksiteLiveRefresh,WorksiteLiveRefreshStatus} from './workspace-live-refresh';
 import {WorksiteTaskSelector} from './worksite-task-selector';
 import {inventoryAccessDenied,inventorySnapshot,inventoryOutcome,mergeInventoryRows,mergeInventoryPage,inventoryAfterRecorded,inventoryPendingCounts,inventoryVisiblePage,INVENTORY_PENDING_EVENT,consumptionTraceability,inventoryReceiptPresentation} from './material-inventory-view.mjs';
 import styles from './material-inventory-panel.module.css';
@@ -46,9 +48,10 @@ async function api(request,params,options,validate){
  });if(retained)throw retained;return result;
 }
 export function MaterialInventoryPanel(props){return <InventoryInner key={props.scope+':'+props.projectId} {...props}/>;}
-function InventoryInner({projectId,scope,tasks=[],taskPaging,onLoadMoreTasks,onTaskReadBusy,onPending,getSessionToken}){
+function InventoryInner({projectId,scope,active=false,backgroundBlocked=false,tasks=[],taskPaging,onLoadMoreTasks,onTaskReadBusy,onPending,getSessionToken}){
  const request=useWorkspaceRequest(getSessionToken),[data,setData]=useState(null),[opened,setOpened]=useState(false),[busy,setBusy]=useState(false),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[notice,setNotice]=useState(''),[receipt,setReceipt]=useState(''),[blocked,setBlocked]=useState(false),[needsReview,setNeedsReview]=useState(false),[reviewLoaded,setReviewLoaded]=useState(false),[reviewed,setReviewed]=useState(false),[queueCurrent,setQueueCurrent]=useState(false),[pendingRequested,setPendingRequested]=useState(false);
  const alive=useRef(true),epoch=useRef(0),editor=useRef(null),abort=useRef(null),pendingNavigation=useRef(null),control=useRef(null),draftAction=draft?.action;
+ const [livePageChanged,setLivePageChanged]=useState(false);
  const [recordKind,setRecordKind]=useState('consumptions'),[recordPages,setRecordPages]=useState({consumptions:0,adjustments:0}),recordHeading=useRef(null),focusRecords=useRef(false);
  control.current={busy,draft,attempt};
  useEffect(()=>{alive.current=true;const ref=epoch;return()=>{alive.current=false;ref.current++;abort.current?.abort();};},[]);
@@ -68,6 +71,7 @@ function InventoryInner({projectId,scope,tasks=[],taskPaging,onLoadMoreTasks,onT
  pendingNavigation.current=()=>{setPendingRequested(true);if(control.current.busy||control.current.draft||control.current.attempt){setNotice('Conservamos tu operación en curso. Terminá o cancelá el borrador, o comprobá su recibo, antes de abrir los materiales por revisar.');return;}load(false,'PENDING');};
  async function consult(params,options={}){return api(request,{projectId,scope,...params},options,v=>inventorySnapshot(v,{projectId,scope,...params},{history:Boolean(params.inventoryFilter||params.afterConsumption||params.afterAdjustment||params.afterMovement||params.consumptionId||params.adjustmentId)}));}
  async function load(more=false,requestedFilter=null){
+  if(more&&livePageChanged){setNotice('La cola cambió. Actualizá el inventario para incorporar los registros nuevos antes de cargar otra página.');return;}
   if(control.current.busy||control.current.attempt||(more||requestedFilter)&&control.current.draft)return;control.current.busy=true;const n=++epoch.current,c=new AbortController();abort.current?.abort();abort.current=c;setBusy(true);setOpened(true);setNotice('');if(!more&&draft){setNeedsReview(true);setReviewLoaded(false);setReviewed(false);}
    try{
     const target=!more&&draft?.row?.id,targetKey=stockReview?'adjustmentId':'consumptionId',cursorKey={movements:'afterMovement',consumptions:'afterConsumption',adjustments:'afterAdjustment'}[more],cursor={movements:inventory?.nextMovementCursor,consumptions:inventory?.nextConsumptionCursor,adjustments:inventory?.nextAdjustmentCursor}[more];
@@ -80,7 +84,7 @@ function InventoryInner({projectId,scope,tasks=[],taskPaging,onLoadMoreTasks,onT
     if(!alive.current||epoch.current!==n)return;setBlocked(false);
     if(more){let merged,restarted=false;try{merged=mergeInventoryPage(data,result,{projectId,scope,...params},more);}catch(error){if(error.code!=='INVENTORY_QUEUE_CHANGED')throw error;const current=await consult({inventoryFilter:'PENDING'},{signal:c.signal});if(!alive.current||epoch.current!==n)return;merged={...data,...current,inventory:current.inventory};restarted=true;setNotice(error.message);}setData(merged);setQueueCurrent(true);if(restarted)setRecordPages({consumptions:0,adjustments:0});else if(more!=='movements'){focusRecords.current=true;setRecordKind(more);setRecordPages(old=>({...old,[more]:Math.floor(data.inventory[more].length/10)}));}}
     else if(target){const current=result.inventory[stockReview?'adjustments':'consumptions'][0];setDraft(old=>old?.row?.id===target?{...old,row:current}:old);setData(old=>({...old,inventory:{...old.inventory,materials:result.inventory.materials,catalogVersion:result.inventory.catalogVersion,catalogHash:result.inventory.catalogHash,priorReceipts:result.inventory.priorReceipts,priorReceiptsTruncated:result.inventory.priorReceiptsTruncated}}));setQueueCurrent(false);}
-    else{setData(result);setQueueCurrent(true);setPendingRequested(false);setRecordPages({consumptions:0,adjustments:0});if(!result.inventory.consumptions.length&&result.inventory.adjustments.length)setRecordKind('adjustments');}
+    else{setData(result);setLivePageChanged(false);setQueueCurrent(true);setPendingRequested(false);setRecordPages({consumptions:0,adjustments:0});if(!result.inventory.consumptions.length&&result.inventory.adjustments.length)setRecordKind('adjustments');}
     if(draft){setNeedsReview(true);setReviewLoaded(true);setReviewed(false);setNotice('Registro vigente consultado. Revisá tu selección y el estado antes de continuar; conservamos tus campos.');}
   }catch(error){if(alive.current&&epoch.current===n&&error.name!=='AbortError'){setQueueCurrent(false);deny(error);setNotice(error.message);}}finally{if(alive.current&&epoch.current===n){control.current.busy=false;setBusy(false);}}
  }
@@ -110,8 +114,54 @@ function InventoryInner({projectId,scope,tasks=[],taskPaging,onLoadMoreTasks,onT
  }
   async function save(event){event.preventDefault();if(disabled||!draft||needsReview&&(!reviewed||!reviewLoaded))return;let payload={...draft.payload};if(needsReview){payload.catalogHash=inventory.catalogHash;if(draft.action==='ADD_MATERIAL')payload.revision=data.projectRevision;else if(draft.row){const current=draft.row;if(!current||(['DECIDE_CONSUMPTION','DECIDE_STOCK_ADJUSTMENT'].includes(draft.action)?!current.canDecide:!current.canReverse)){setNotice('El estado vigente no permite esta acción. Conservamos el motivo; volvé para elegir otra operación.');return;}payload.revision=current.revision;}}await send({operationId:crypto.randomUUID(),projectId,scope,action:draft.action,payload});}
  async function recover(){if(control.current.busy||!attempt)return;control.current.busy=true;const n=++epoch.current,command=attempt;setBusy(true);setRetryAllowed(false);setNotice('');try{const result=await api(request,{projectId,scope,operationId:command.operationId},{},v=>inventoryOutcome(v,command));if(!alive.current||epoch.current!==n)return;if(result.state==='RECORDED')await confirmed(result,n);else{setRetryAllowed(Boolean(command.payload)&&!blocked);setNotice('No se observa un recibo todavía. Podés comprobar otra vez o reintentar exactamente el mismo intento.');}}catch(error){if(alive.current&&epoch.current===n){deny(error);setNotice(error.message);}}finally{if(alive.current&&epoch.current===n){control.current.busy=false;setBusy(false);}}}
+ const liveInventoryContext=useRef(null);
+ const liveInventoryBlocked=backgroundBlocked||disabled||Boolean(draft);
+ useLayoutEffect(()=>{liveInventoryContext.current={data,kind:recordKind,epoch:epoch.current,blocked:liveInventoryBlocked,pageChanged:livePageChanged};});
+ const inventoryLive=useWorksiteLiveRefresh({
+  contextKey:[scope,projectId,'inventory'].join(':'),viewKey:recordKind,
+  enabled:active&&opened&&Boolean(data),
+  blocked:liveInventoryBlocked,
+  read:async signal=>{
+   const captured=liveInventoryContext.current;
+   if(!captured.data||captured.blocked)throw new DOMException('Consulta cancelada.','AbortError');
+   const current=()=>{const value=liveInventoryContext.current;return alive.current&&epoch.current===captured.epoch&&!control.current.busy&&!control.current.draft&&!control.current.attempt&&value.data===captured.data&&value.kind===captured.kind&&!value.blocked;};
+   const consultCurrent=params=>{if(!current()||signal.aborted)throw new DOMException('Consulta cancelada.','AbortError');return consult(params,{signal,requestTimeoutMs:15000});};
+   const base=await consultCurrent({}),prior=captured.data.inventory;
+   if(!/^[a-f0-9]{64}$/.test(base.reviewAccessStamp||'')||base.reviewAccessStamp!==captured.data.reviewAccessStamp||base.inventory.canManage!==prior.canManage)throw liveContextChanged();
+   const filter=prior.canManage?(prior.inventoryFilter||'PENDING'):null;
+   const head=filter?await consultCurrent({inventoryFilter:filter}):base,kind=captured.kind,cursorKey=kind==='consumptions'?'afterConsumption':'afterAdjustment',nextKey=kind==='consumptions'?'nextConsumptionCursor':'nextAdjustmentCursor';
+   const baseIds=new Set(base.inventory[kind].map(row=>row.id)),baseCovers=prior[kind].every(row=>baseIds.has(row.id));
+   if(!prior.canManage&&!baseCovers)throw Object.assign(new Error('El historial personal supera esta consulta reciente. Conservamos las páginas abiertas; consultá el historial explícitamente para actualizarlo.'),{code:'WORKSITE_LIVE_READ_INCOMPLETE'});
+   let firstAll=baseCovers?base:!filter||filter==='ALL'?head:null;
+   const result=await collectRetainedPages({ids:prior[kind].map(row=>row.id),signal,isCurrent:current,readPage:async cursor=>{
+    const params={...(prior.canManage?{inventoryFilter:'ALL'}:{}),...(cursor?{[cursorKey]:cursor}:{})};
+    const page=!cursor&&firstAll?firstAll:await consultCurrent(params);firstAll=null;
+    if(page.inventory.canManage!==prior.canManage)throw liveContextChanged();
+    return {rows:page.inventory[kind],cursor:page.inventory[nextKey],data:page};
+   }});
+   if(!current()||signal.aborted)throw new DOMException('Consulta cancelada.','AbortError');
+   const finalBase=await consultCurrent({});
+   if(finalBase.reviewAccessStamp!==base.reviewAccessStamp||finalBase.inventory.canManage!==prior.canManage)throw liveContextChanged();
+   if(finalBase.projectRevision!==base.projectRevision||liveReadSignature(finalBase.inventory)!==liveReadSignature(base.inventory))throw Object.assign(new Error('Los saldos o la fuente cambiaron durante la consulta. Conservamos las páginas abiertas; volvé a comprobarlos.'),{code:'WORKSITE_LIVE_READ_INCOMPLETE'});
+   return {captured,base:finalBase,head,kind,...result};
+  },
+  apply:value=>{
+   const current=liveInventoryContext.current,captured=value.captured;
+   if(!alive.current||epoch.current!==captured.epoch||control.current.busy||control.current.draft||control.current.attempt||current.data!==captured.data||current.kind!==captured.kind||current.epoch!==captured.epoch||current.blocked)return false;
+   const prior=captured.data.inventory,head=value.head.inventory,ids=new Set(prior[value.kind].map(row=>row.id)),rows=retainedRows(prior[value.kind],value.rows,{pending:prior.inventoryFilter==='PENDING',stateKey:'state'});
+   const updates=captured.pageChanged||head[value.kind].some(row=>!ids.has(row.id))||value.unloadedRows.some(row=>prior.inventoryFilter!=='PENDING'||row.state==='PENDING')||JSON.stringify(head.pendingCounts)!==JSON.stringify(prior.pendingCounts)||rows.length!==prior[value.kind].length;
+   setData(old=>old===captured.data?{...old,projectRevision:value.base.projectRevision,inventory:{...old.inventory,materials:value.base.inventory.materials,catalogVersion:value.base.inventory.catalogVersion,catalogHash:value.base.inventory.catalogHash,...(head.pendingCounts?{pendingCounts:head.pendingCounts}:{}),[value.kind]:rows}}:old);
+   setQueueCurrent(true);if(updates)setLivePageChanged(true);
+   return {updates,message:updates?'Cambió la cola de materiales. Se actualizaron los saldos y los estados consultados; actualizá el inventario para incorporar registros nuevos y continuar la paginación.':''};
+  },
+  getAuthorityStamp:()=>epoch.current,
+  isCurrent:stamp=>{const current=liveInventoryContext.current;return epoch.current===stamp&&!control.current.busy&&!control.current.draft&&!control.current.attempt&&current.data===data&&current.kind===recordKind&&!current.blocked;},
+  isAuthorityCurrent:stamp=>alive.current&&epoch.current===stamp&&liveInventoryContext.current.data===data,
+  onAccessRejected:error=>{if(!alive.current||liveInventoryContext.current.data!==data)return false;deny(error);setNotice('Tu acceso cambió. Volvé a consultar el inventario antes de continuar.');}
+ });
  return <section className={styles.panel} aria-labelledby="inventory-title">
   <div className={styles.heading}><div><p className={styles.eyebrow}>MATERIALES</p><h3 id="inventory-title">Inventario y consumo</h3></div><button type="button" disabled={busy||Boolean(attempt)} onClick={()=>load()}>{draft?'Consultar inventario vigente':opened?'Actualizar inventario':'Abrir inventario'}</button></div>
+  {active&&opened&&<WorksiteLiveRefreshStatus refresh={inventoryLive} paused={liveInventoryBlocked} label={recordKind==='consumptions'?'Saldos y consumos':'Saldos y existencias'} manual={()=>load()} manualLabel="Consultar inventario actual"/>}
   <p className={styles.caption}>Consultá las existencias recibidas y proponé el material utilizado en obra. Cada consumo necesita la revisión de otro responsable para descontar stock.</p>
   <p className={styles.status} role="status" aria-live="polite">{busy?'Consultando o guardando…':notice}</p>
   {pendingRequested&&(draft||attempt)&&<p className={styles.notice}>Materiales por revisar espera a que termines esta operación. Tus campos y la referencia del recibo se conservan.</p>}

@@ -8,6 +8,7 @@ import {normalizeFieldCommand} from '../src/lib/field-operations-policy.mjs';
 import {normalizePurchase} from '../src/lib/site-purchase-policy.mjs';
 import {parseProcurementQuantity,formatProcurementQuantity,subtractProcurementQuantities,sumProcurementQuantities} from '../src/lib/procurement-quantity.js';
 import {copyPlanDocumentCurveFixture} from './lib/plan-document-curve-fixture-copy.mjs';
+import {copyWorksiteLiveHoursFixture} from './lib/worksite-live-hours-fixture-copy.mjs';
 import {inventoryQuery} from '../src/app/(identity)/cuenta/material-inventory-view.mjs';
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),output=path.resolve(root,'.vercel/material-inventory-evidence');mkdirSync(output,{recursive:true});
@@ -15,6 +16,7 @@ const fixture=mkdtempSync(path.join(root,'.vercel/inventory-ui-')),app=path.join
 const files=['material-inventory-panel.js','worksite-task-selector.js','worksite-task-selector.module.css','material-inventory-panel.module.css','material-inventory-view.mjs','operations-status-panel.js','operations-status-panel.module.css','site-purchase-panel.js','site-purchase-panel.module.css','site-purchase-view.mjs','workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','workspace-recovery-journal.mjs','participant-office-account-view.mjs','own-company-number-view.mjs','own-company-templates-view.mjs', 'private-bank-account-format.mjs','company-channel-view.mjs','workspace-recovery-storage.mjs','workspace-recovery-panel.js','workspace.module.css','template-send-view.mjs','plan-baseline-view.mjs','plan-source-curve.mjs'];
 for(const file of files)copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
 const sourceManifest=files.map(file=>({path:'src/app/(identity)/cuenta/'+file,sha256:createHash('sha256').update(readFileSync(path.join(app,file))).digest('hex')}));
+copyWorksiteLiveHoursFixture({root,fixture,components:app,sourceManifest,includeHours:false});
 const documentCurveSourceManifest=[];
 const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(app),sourceManifest:documentCurveSourceManifest});
 for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}

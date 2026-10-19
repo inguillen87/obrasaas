@@ -14,6 +14,7 @@ const stateNames=[...source.matchAll(/\[([A-Za-z]+),set[A-Za-z]+\]=useState/g)].
 const importer=(names,file,base=account)=>`import {${names}} from ${JSON.stringify(new URL(file,base).href)};`;
 const prefix=`import React from ${JSON.stringify(import.meta.resolve('react'))};
 ${importer('createWorkspaceRequestLifecycle','workspace-request-lifecycle.mjs')}
+${importer('collectRetainedPages,retainedRows,liveContextChanged','workspace-live-read.mjs')}
 ${importer('createWorkspaceRecoveryJournal,FIELD_OVERTIME_RECOVERY_ACTIONS','workspace-recovery-journal.mjs')}
 ${importer('fieldMediaAttemptReference,fieldMediaHeldOutcome,fieldMediaHeldMessage,fieldMediaEvidenceHeld,fieldMediaReviewEligible','field-media-held-view.mjs')}
 ${importer('fieldReviewPage,mergeFieldReviewRows','field-review-page-view.mjs')}
@@ -25,6 +26,9 @@ let states=[],refs=[],stateCursor=0,refCursor=0,calls=[],responses=[],lifecycle,
 const useState=initial=>{const i=stateCursor++;if(!(i in states))states[i]=typeof initial==='function'?initial():initial;return [states[i],next=>{states[i]=typeof next==='function'?next(states[i]):next;}];};
 const useRef=initial=>{const i=refCursor++;return refs[i]??(refs[i]={current:initial});};
 const useEffect=()=>{},useLayoutEffect=()=>{},useWorkspaceRequest=()=>lifecycle.request;
+// Historical held-media cases: live scheduling and sibling hours UI are outside this harness.
+const useWorksiteLiveRefresh=()=>({status:{state:'IDLE',checkedAt:null,updates:false},check(){throw Error('Live refresh is outside the held-media fixture');}});
+const WorksiteLiveRefreshStatus=()=>null,FieldHoursReportPanel=()=>null;
 const styles={},FieldMediaCapture=()=>null,FieldMediaPreview=()=>null,FieldQrCapture=()=>null,PrivateWorkspaceDownload=()=>null,FieldOvertimeJourney=()=>null,FieldOvertimeForm=()=>null,VoiceProgressDraftView=()=>null;
 `;
 const suffix=`

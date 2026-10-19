@@ -47,6 +47,7 @@ jobs:
           import {readFileSync,writeFileSync,existsSync,readdirSync} from 'node:fs';
           import path from 'node:path';
           import {parse} from '@babel/parser';
+          import {verifyPlanBudgetCurrentSources,planBudgetValidationFiles} from './scripts/lib/plan-budget-current-ci-lineage.mjs';
           const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
           const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
           assert.equal(git('rev-parse','HEAD'),process.env.GITHUB_SHA);
@@ -66,16 +67,37 @@ jobs:
           }
           roots.forEach(visit);
           const sourceManifest=[...files].sort().map(file=>{const committed=execFileSync('git',['show','HEAD:'+file]);assert.deepEqual(readFileSync(file),committed);return {path:file,sha256:hash(committed)};});
-          // Preserve the original 45-path set and bind its six added dependencies.
-          const additions=['src/lib/organization-resource-usage-policy.mjs','src/lib/organization-resource-usage-store.mjs','src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs','src/lib/plan-measurement-policy.mjs','src/lib/plan-measurement-source.mjs'];
-          assert.equal(sourceManifest.length,51);
-          const previousPaths=sourceManifest.map(ref=>ref.path).filter(file=>!additions.includes(file));assert.equal(previousPaths.length,45);
-          assert.equal(hash(JSON.stringify(previousPaths)),'7b80374f19fbef78313555d34f04ebe46d415a0005e60cb2feed08079896bdb1');
+          // Authenticate the current Budget companion before its one explicit projection.
+          // sourceManifest stays the complete raw current AST closure, including Budget.
+          const committedCache=new Map(),readCommitted=file=>{assert.ok(typeof file==='string'&&path.posix.normalize(file)===file&&!path.posix.isAbsolute(file)&&!/[\\:\x00-\x1f]/.test(file)&&!file.split('/').includes('..'));if(!committedCache.has(file))committedCache.set(file,execFileSync('git',['show','HEAD:'+file],{maxBuffer:16*1024*1024}));return committedCache.get(file);};
+          const currentContract=JSON.parse(readCommitted('.github/workspace-acceptance-contract.json'));
+          function projectCompanyUsageSources(manifest,contract,readSource){
+            const authenticated=verifyPlanBudgetCurrentSources(contract,readSource),budgetPath='src/lib/plan-budget-source.mjs',paths=manifest.map(ref=>ref.path);
+            assert.deepEqual(paths,[...new Set(paths)].sort(),'The complete actual source paths must be unique and ordered');
+            const delta=contract.planBudgetCurrentRevision.sourceSetDeltas.find(row=>row.family==='UNIT');assert.deepEqual(delta?.additions,[budgetPath],'Only the authenticated Budget source addition may be projected');
+            assert.ok(paths.includes(budgetPath),'The current Budget source is required before historical projection');
+            for(const ref of manifest){assert.deepEqual(Object.keys(ref).sort(),['path','sha256']);assert.equal(ref.sha256,hash(readSource(ref.path)),'Actual source hash must match its complete raw committed bytes');}
+            const historical=manifest.filter(ref=>ref.path!==budgetPath),additions=['src/lib/organization-resource-usage-policy.mjs','src/lib/organization-resource-usage-store.mjs','src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs','src/lib/plan-measurement-policy.mjs','src/lib/plan-measurement-source.mjs'];
+            assert.equal(historical.length,51,'The complete historical closure remains fifty-one paths');
+            assert.ok(additions.every(file=>historical.some(ref=>ref.path===file)),'Every one of the six original additions remains required');
+            const previousPaths=historical.map(ref=>ref.path).filter(file=>!additions.includes(file));assert.equal(previousPaths.length,45);
+            assert.equal(hash(JSON.stringify(previousPaths)),'7b80374f19fbef78313555d34f04ebe46d415a0005e60cb2feed08079896bdb1');
+            const source=manifest.find(ref=>ref.path===budgetPath);
+            return {version:'company-usage-proxy-budget-source-v1',state:'AUTHENTICATED_SOURCE_ONLY',actualSourceCount:manifest.length,actualPathsSha256:hash(JSON.stringify(paths)),historicalSourceCount:historical.length,historicalPathsSha256:hash(JSON.stringify(historical.map(ref=>ref.path))),originalSourceCount:previousPaths.length,originalPathsSha256:hash(JSON.stringify(previousPaths)),budgetSource:{path:source.path,rawSha256:source.sha256},budgetPreviousContractSha256:authenticated.previousContractSha256};
+          }
+          const sourceProjection=projectCompanyUsageSources(sourceManifest,currentContract,readCommitted),budgetPath='src/lib/plan-budget-source.mjs';
+          assert.throws(()=>projectCompanyUsageSources(sourceManifest.filter(ref=>ref.path!==budgetPath),currentContract,readCommitted),/The current Budget source is required before historical projection/);
+          const forgedContract=structuredClone(currentContract);forgedContract.planBudgetCurrentRevision.references.find(ref=>ref.path===budgetPath).currentSha256='0'.repeat(64);
+          assert.throws(()=>projectCompanyUsageSources(sourceManifest,forgedContract,readCommitted),error=>error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'&&error.reason==='IMMUTABLE_COMPANION');
+          const alteredBytes=Buffer.concat([readCommitted(budgetPath),Buffer.from('\n// Synthetic source substitution must fail.\n')]),alteredRead=file=>file===budgetPath?alteredBytes:readCommitted(file),resealedManifest=sourceManifest.map(ref=>ref.path===budgetPath?{...ref,sha256:hash(alteredBytes)}:ref);
+          assert.throws(()=>projectCompanyUsageSources(resealedManifest,currentContract,alteredRead),error=>error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'&&error.reason==='CURRENT_SOURCE_'+budgetPath);
+          const sourceProjectionNegativeChecks=['omitted-current-budget-source','resealed-current-companion','resealed-source-and-raw-manifest'];
+          const budgetValidationSourceManifest=[...new Set(['.github/workspace-acceptance-contract.json',...planBudgetValidationFiles(currentContract)])].sort().map(file=>{const committed=readCommitted(file);assert.deepEqual(readFileSync(file),committed);return {path:file,sha256:hash(committed)};});
           const apiRouteInventory=git('ls-files','src/app/api').split('\n').filter(file=>file.endsWith('/route.js')).sort();
           function visitRoutes(folder){return readdirSync(folder,{withFileTypes:true}).flatMap(item=>item.isDirectory()?visitRoutes(path.posix.join(folder,item.name)):item.name==='route.js'?[path.posix.join(folder,item.name)]:[]);}
           assert.deepEqual(visitRoutes('src/app/api').sort(),apiRouteInventory);
           assert.ok(apiRouteInventory.includes('src/app/api/identity/company-usage/route.js'));
-          writeFileSync('.vercel/private/company-usage-proxy-ci/before.json',JSON.stringify({version:1,sourceRevision:git('rev-parse','HEAD'),sourceTree:git('rev-parse','HEAD^{tree}'),sourceManifest,apiRouteInventory})+'\n');
+          writeFileSync('.vercel/private/company-usage-proxy-ci/before.json',JSON.stringify({version:1,sourceRevision:git('rev-parse','HEAD'),sourceTree:git('rev-parse','HEAD^{tree}'),sourceManifest,apiRouteInventory,sourceProjection,sourceProjectionNegativeChecks,budgetValidationSourceManifest})+'\n');
           NODE
       - name: Real proxy, signed synthetic session and canonical mock store regressions
         run: |
@@ -92,6 +114,7 @@ jobs:
           import {readFileSync,writeFileSync,existsSync,readdirSync} from 'node:fs';
           import path from 'node:path';
           import {parse} from '@babel/parser';
+          import {verifyPlanBudgetCurrentSources,planBudgetValidationFiles} from './scripts/lib/plan-budget-current-ci-lineage.mjs';
           const git=(...args)=>execFileSync('git',args,{encoding:'utf8'}).trim();
           const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
           assert.equal(git('rev-parse','HEAD'),process.env.GITHUB_SHA);
@@ -111,23 +134,45 @@ jobs:
           }
           roots.forEach(visit);
           const sourceManifest=[...files].sort().map(file=>{const committed=execFileSync('git',['show','HEAD:'+file]);assert.deepEqual(readFileSync(file),committed);return {path:file,sha256:hash(committed)};});
-          // Preserve the original 45-path set and bind its six added dependencies.
-          const additions=['src/lib/organization-resource-usage-policy.mjs','src/lib/organization-resource-usage-store.mjs','src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs','src/lib/plan-measurement-policy.mjs','src/lib/plan-measurement-source.mjs'];
-          assert.equal(sourceManifest.length,51);
-          const previousPaths=sourceManifest.map(ref=>ref.path).filter(file=>!additions.includes(file));assert.equal(previousPaths.length,45);
-          assert.equal(hash(JSON.stringify(previousPaths)),'7b80374f19fbef78313555d34f04ebe46d415a0005e60cb2feed08079896bdb1');
+          // Authenticate the current Budget companion before its one explicit projection.
+          // sourceManifest stays the complete raw current AST closure, including Budget.
+          const committedCache=new Map(),readCommitted=file=>{assert.ok(typeof file==='string'&&path.posix.normalize(file)===file&&!path.posix.isAbsolute(file)&&!/[\\:\x00-\x1f]/.test(file)&&!file.split('/').includes('..'));if(!committedCache.has(file))committedCache.set(file,execFileSync('git',['show','HEAD:'+file],{maxBuffer:16*1024*1024}));return committedCache.get(file);};
+          const currentContract=JSON.parse(readCommitted('.github/workspace-acceptance-contract.json'));
+          function projectCompanyUsageSources(manifest,contract,readSource){
+            const authenticated=verifyPlanBudgetCurrentSources(contract,readSource),budgetPath='src/lib/plan-budget-source.mjs',paths=manifest.map(ref=>ref.path);
+            assert.deepEqual(paths,[...new Set(paths)].sort(),'The complete actual source paths must be unique and ordered');
+            const delta=contract.planBudgetCurrentRevision.sourceSetDeltas.find(row=>row.family==='UNIT');assert.deepEqual(delta?.additions,[budgetPath],'Only the authenticated Budget source addition may be projected');
+            assert.ok(paths.includes(budgetPath),'The current Budget source is required before historical projection');
+            for(const ref of manifest){assert.deepEqual(Object.keys(ref).sort(),['path','sha256']);assert.equal(ref.sha256,hash(readSource(ref.path)),'Actual source hash must match its complete raw committed bytes');}
+            const historical=manifest.filter(ref=>ref.path!==budgetPath),additions=['src/lib/organization-resource-usage-policy.mjs','src/lib/organization-resource-usage-store.mjs','src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs','src/lib/plan-measurement-policy.mjs','src/lib/plan-measurement-source.mjs'];
+            assert.equal(historical.length,51,'The complete historical closure remains fifty-one paths');
+            assert.ok(additions.every(file=>historical.some(ref=>ref.path===file)),'Every one of the six original additions remains required');
+            const previousPaths=historical.map(ref=>ref.path).filter(file=>!additions.includes(file));assert.equal(previousPaths.length,45);
+            assert.equal(hash(JSON.stringify(previousPaths)),'7b80374f19fbef78313555d34f04ebe46d415a0005e60cb2feed08079896bdb1');
+            const source=manifest.find(ref=>ref.path===budgetPath);
+            return {version:'company-usage-proxy-budget-source-v1',state:'AUTHENTICATED_SOURCE_ONLY',actualSourceCount:manifest.length,actualPathsSha256:hash(JSON.stringify(paths)),historicalSourceCount:historical.length,historicalPathsSha256:hash(JSON.stringify(historical.map(ref=>ref.path))),originalSourceCount:previousPaths.length,originalPathsSha256:hash(JSON.stringify(previousPaths)),budgetSource:{path:source.path,rawSha256:source.sha256},budgetPreviousContractSha256:authenticated.previousContractSha256};
+          }
+          const sourceProjection=projectCompanyUsageSources(sourceManifest,currentContract,readCommitted),budgetPath='src/lib/plan-budget-source.mjs';
+          assert.throws(()=>projectCompanyUsageSources(sourceManifest.filter(ref=>ref.path!==budgetPath),currentContract,readCommitted),/The current Budget source is required before historical projection/);
+          const forgedContract=structuredClone(currentContract);forgedContract.planBudgetCurrentRevision.references.find(ref=>ref.path===budgetPath).currentSha256='0'.repeat(64);
+          assert.throws(()=>projectCompanyUsageSources(sourceManifest,forgedContract,readCommitted),error=>error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'&&error.reason==='IMMUTABLE_COMPANION');
+          const alteredBytes=Buffer.concat([readCommitted(budgetPath),Buffer.from('\n// Synthetic source substitution must fail.\n')]),alteredRead=file=>file===budgetPath?alteredBytes:readCommitted(file),resealedManifest=sourceManifest.map(ref=>ref.path===budgetPath?{...ref,sha256:hash(alteredBytes)}:ref);
+          assert.throws(()=>projectCompanyUsageSources(resealedManifest,currentContract,alteredRead),error=>error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'&&error.reason==='CURRENT_SOURCE_'+budgetPath);
+          const sourceProjectionNegativeChecks=['omitted-current-budget-source','resealed-current-companion','resealed-source-and-raw-manifest'];
+          const budgetValidationSourceManifest=[...new Set(['.github/workspace-acceptance-contract.json',...planBudgetValidationFiles(currentContract)])].sort().map(file=>{const committed=readCommitted(file);assert.deepEqual(readFileSync(file),committed);return {path:file,sha256:hash(committed)};});
           const apiRouteInventory=git('ls-files','src/app/api').split('\n').filter(file=>file.endsWith('/route.js')).sort();
           function visitRoutes(folder){return readdirSync(folder,{withFileTypes:true}).flatMap(item=>item.isDirectory()?visitRoutes(path.posix.join(folder,item.name)):item.name==='route.js'?[path.posix.join(folder,item.name)]:[]);}
           assert.deepEqual(visitRoutes('src/app/api').sort(),apiRouteInventory);
           const before=JSON.parse(readFileSync('.vercel/private/company-usage-proxy-ci/before.json','utf8'));
           assert.equal(before.sourceRevision,process.env.GITHUB_SHA);assert.equal(before.sourceTree,git('rev-parse','HEAD^{tree}'));
           assert.deepEqual(sourceManifest,before.sourceManifest);assert.deepEqual(apiRouteInventory,before.apiRouteInventory);
+          assert.deepEqual(sourceProjection,before.sourceProjection);assert.deepEqual(sourceProjectionNegativeChecks,before.sourceProjectionNegativeChecks);assert.deepEqual(budgetValidationSourceManifest,before.budgetValidationSourceManifest);
           const tapBytes=readFileSync('.vercel/private/company-usage-proxy-ci/tests.tap'),tap=tapBytes.toString('utf8');
           const totals={};for(const key of ['tests','suites','pass','fail','cancelled','skipped','todo']){const matches=[...tap.matchAll(new RegExp('^# '+key+' (\\d+)$','gm'))];assert.equal(matches.length,1);totals[key]=Number(matches[0][1]);assert.ok(Number.isSafeInteger(totals[key]));}
           assert.equal(totals.tests,163);assert.equal(totals.pass,totals.tests);for(const key of ['suites','fail','cancelled','skipped','todo'])assert.equal(totals[key],0);
           const plans=[...tap.matchAll(/^1\.\.(\d+)$/gm)];assert.equal(plans.length,1);assert.equal(Number(plans[0][1]),totals.tests);
           const cases=[...tap.matchAll(/^ok (\d+) - (.+)$/gm)];assert.equal(cases.length,totals.tests);cases.forEach((value,index)=>assert.equal(Number(value[1]),index+1));assert.equal(new Set(cases.map(value=>value[2])).size,totals.tests);assert.doesNotMatch(tap,/^not ok |# (?:SKIP|TODO)\b/gm);
-          writeFileSync('.vercel/private/company-usage-proxy-ci/source.json',JSON.stringify({version:'company-usage-proxy-ci-v1',status:'PASS',sourceRevision:before.sourceRevision,sourceTree:before.sourceTree,trackedClean:true,sourceManifest,sourceCount:sourceManifest.length,apiRouteInventory,testSuites:['production-company-usage-proxy','production-access-boundary','production-verified-session','production-organization-usage'],tapSha256:hash(tapBytes),totals,testTransport:'local-signed-synthetic-session-and-mock-canonical-database',realProviderRequests:null,nativePostgresExecuted:false,productionDataWritten:false,productionSessionAccepted:false,publicationConfirmed:false})+'\n');
+          writeFileSync('.vercel/private/company-usage-proxy-ci/source.json',JSON.stringify({version:'company-usage-proxy-ci-v1',status:'PASS',sourceRevision:before.sourceRevision,sourceTree:before.sourceTree,trackedClean:true,sourceManifest,sourceCount:sourceManifest.length,sourceProjection,sourceProjectionNegativeChecks,budgetValidationSourceManifest,apiRouteInventory,testSuites:['production-company-usage-proxy','production-access-boundary','production-verified-session','production-organization-usage'],tapSha256:hash(tapBytes),totals,testTransport:'local-signed-synthetic-session-and-mock-canonical-database',realProviderRequests:null,nativePostgresExecuted:false,productionDataWritten:false,productionSessionAccepted:false,publicationConfirmed:false})+'\n');
           NODE
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()

@@ -157,26 +157,32 @@ test('responsive chart motion has an explicit reduced motion override and scroll
 });
 
 const panelSource=readFileSync(new URL('../src/app/(identity)/cuenta/plan-import-panel.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
+const budgetSource=readFileSync(new URL('../src/app/(identity)/cuenta/plan-partida-budget-preview.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
 const stateNames=[...panelSource.matchAll(/\[([A-Za-z]+),set[A-Za-z]+\]=useState/g)].map(match=>match[1]);
 const panelHooks=`import React from ${JSON.stringify(reactUrl)};
+import {planPartidaMeasurementCatalog,planPartidaMeasurementRequestCurrent} from ${JSON.stringify(new URL('../src/app/(identity)/cuenta/plan-partida-measurement-preview.mjs',import.meta.url).href)};
+import {PLAN_BUDGET_SOURCE_PROFILE,PLAN_BUDGET_SOURCE_CONSENT,planPartidaBudgetCatalog,planPartidaBudgetDescriptor,planPartidaBudgetCandidate,validatePlanPartidaBudgetDetail,resolvePlanPartidaBudgetRow,planPartidaBudgetNotices} from ${JSON.stringify(new URL('../src/app/(identity)/cuenta/plan-partida-budget-preview.mjs',import.meta.url).href)};
 import {planImportUsageView,planImportPreservation} from ${JSON.stringify(new URL('../src/app/(identity)/cuenta/plan-import-usage-view.mjs',import.meta.url).href)};
 import {planDocumentDraftView,documentCurveReviewValue,documentCurveValuesEqual,DOCUMENT_CURVE_PROFILE,PLAN_CYP_INVESTMENT_PROFILE,planInvestmentDraftView} from ${JSON.stringify(helperUrl)};
 const styles={},stateNames=${JSON.stringify(stateNames)};
-let states=[],refs=[],stateCursor=0,refCursor=0,queue=[];
+let states=[],refs=[],memos=[],layouts=[],stateCursor=0,refCursor=0,memoCursor=0,layoutCursor=0,layoutQueue=[],queue=[];
+const sameDeps=(left,right)=>Array.isArray(left)&&Array.isArray(right)&&left.length===right.length&&left.every((value,index)=>Object.is(value,right[index]));
+const useMemo=(factory,deps)=>{const index=memoCursor++,previous=memos[index];if(previous&&sameDeps(previous.deps,deps))return previous.value;const value=factory();memos[index]={deps:[...deps],value};return value;};
+const useLayoutEffect=(effect,deps)=>{const index=layoutCursor++,previous=layouts[index];if(previous&&sameDeps(previous.deps,deps))return;layoutQueue.push(()=>{previous?.cleanup?.();layouts[index]={deps:[...deps],cleanup:effect()};});};
 const useState=initial=>{const index=stateCursor++;if(!(index in states))states[index]=initial;return [states[index],value=>{states[index]=typeof value==='function'?value(states[index]):value;}];};
 const useRef=initial=>{const index=refCursor++;return refs[index]??(refs[index]={current:initial});};
 const useEffect=()=>{},useCallback=value=>value;
-const FileUp=()=>null,FileCheck2=()=>null,Download=()=>null,TriangleAlert=()=>null,PlanSourceCurve=()=>React.createElement('div',{'data-source-curve':true});
+const FileUp=()=>null,FileCheck2=()=>null,Download=()=>null,TriangleAlert=()=>null,PlanSourceCurve=()=>React.createElement('div',{'data-source-curve':true}),PlanPartidaSourcePreview=()=>React.createElement('div',{'data-partida-preview-boundary':true});
 const useWorkspaceRequest=()=>async(url,options,consume)=>{const next=queue.shift();if(!next)throw new Error('Unexpected request in private panel test');if(next.error)throw next.error;return consume({ok:(next.status??200)<400,status:next.status??200,json:async()=>{if(next.jsonError)throw next.jsonError;return next.wait?await next.wait:next.data;},blob:async()=>next.blobWait?await next.blobWait:new Blob(['synthetic'])});};
 const browserRecoveryJournal={list:async()=>[],migratePlanImportAttempt:async()=>{}},RECOVERY_EVENT='synthetic-recovery',recoveryResult=(reference,data)=>data?.draft?{state:'RECORDED'}:null,planImportCommandDigest=async()=>"a".repeat(64),planImportUploadFormDigest=async()=>"b".repeat(64);
 `;
-const panelCompiled=await transform(panelHooks+panelSource+`
-export const reset=()=>{states=[];refs=[];queue=[];};export const respond=value=>queue.push(value);export const seed=value=>{for(const [key,item] of Object.entries(value)){const index=stateNames.indexOf(key);if(index<0)throw new Error('Unknown panel state');states[index]=item;}};
+const panelCompiled=await transform(panelHooks+budgetSource+panelSource+`
+export const reset=()=>{for(const entry of layouts)entry?.cleanup?.();states=[];refs=[];memos=[];layouts=[];queue=[];layoutQueue=[];};export const respond=value=>queue.push(value);export const seed=value=>{for(const [key,item] of Object.entries(value)){const index=stateNames.indexOf(key);if(index<0)throw new Error('Unknown panel state');states[index]=item;}};
 export const snapshot=()=>Object.fromEntries(stateNames.map((name,index)=>[name,states[index]]));export const references=()=>refs;export const queued=()=>queue.length;
-export const render=props=>{stateCursor=0;refCursor=0;return PlanImportPanel(props);};
+export const render=props=>{stateCursor=0;refCursor=0;memoCursor=0;layoutCursor=0;layoutQueue=[];const tree=PlanImportPanel(props);for(const commit of layoutQueue)commit();layoutQueue=[];return tree;};
 `,{filename:'plan-import-panel.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});
 const panel=await import('data:text/javascript;base64,'+Buffer.from(panelCompiled.code).toString('base64'));
-const panelContext={projectId:'project-synthetic',scope:'c'.repeat(64),getSessionToken:async()=>assert.fail('No provider call is permitted')};
+const panelContext={projectId:'project-synthetic',scope:'c'.repeat(64),canonicalAccess:true,getSessionToken:async()=>assert.fail('No provider call is permitted')};
 const privateDraft=()=>({id:'draft-synthetic',revision:1,status:'READY',createdAt:'2026-01-01T00:00:00Z',sourceAvailable:true,source:{sha256:'d'.repeat(64),contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'},warnings:[],rows:[{sourceRowId:'Plan y curva Meses!A10',title:'Rubro sintético',startsOn:'2026-01-01',endsOn:'2026-01-02',evidence:'Fuente sintética',uncertainty:''}],spreadsheet:{version:3,rowCount:1,worksheet:'Plan y curva Meses',detailRowsExcluded:0,periodOrdinals:[1,2,3],items:[],curve:curve(),reviewed:true}});
 const textContent=node=>node===null||node===undefined||typeof node==='boolean'?'':typeof node==='string'||typeof node==='number'?String(node):Array.isArray(node)?node.map(textContent).join(''):textContent(node.props?.children);
 const buttonText=node=>elements(node,element=>element.type==='button').map(element=>[element,textContent(element)]);
@@ -202,7 +208,7 @@ function consultSavedDraft(tree){
 }
 const assertPrivateCleared=()=>{
  const current=panel.snapshot();assert.equal(current.draft,null);assert.deepEqual(current.rows,[]);assert.equal(current.file,null);assert.equal(current.receipt,null);assert.equal(current.reason,'');assert.equal(current.consent,false);assert.equal(current.approved,false);assert.equal(current.spreadsheetSelection,'');assert.equal(current.retryAllowed,false);
- const tree=panel.render(panelContext);assert.equal(elements(tree,node=>node.type==='fieldset').length,0);assert.equal(elements(tree,node=>typeof node.type==='function'&&node.type.name==='PlanSourceCurve').length,0);
+ const tree=panel.render(panelContext);assert.equal(elements(tree,node=>node.type==='fieldset').length,0);assert.equal(elements(tree,node=>typeof node.type==='function'&&node.type.name==='PlanSourceCurve').length,0);assert.equal(elements(tree,node=>typeof node.type==='function'&&node.type.name==='PlanPartidaSourcePreview').length,0);
  return current;
 };
 
@@ -225,7 +231,7 @@ test('CyP profile remains a separate ADMIN/DIRECTOR opt-in with explicit financi
  let tree=panel.render(panelContext),option=elements(tree,node=>node.type==='option'&&node.props.value==='CYP_PARTIDAS_CURVE')[0];assert.equal(option.props.disabled,true);
  panel.seed({canApprove:true});tree=panel.render(panelContext);option=elements(tree,node=>node.type==='option'&&node.props.value==='CYP_PARTIDAS_CURVE')[0];assert.equal(option.props.disabled,false);
  const select=elements(tree,node=>node.type==='select')[0];select.props.onChange({target:{value:'CYP_PARTIDAS_CURVE'}});tree=panel.render(panelContext);const text=textContent(tree);assert.match(text,/curva completa de inversión prevista de CyP/);assert.match(text,/no se recalculan fórmulas/);assert.equal(panel.snapshot().consent,false);
- const draft=await cypPrivateDraft();tree=await openPanel(draft);const component=elements(tree,node=>typeof node.type==='function'&&node.type.name==='PlanSourceCurve')[0];assert.equal(component.props.profile,'CYP_PARTIDAS_CURVE');assert.equal(elements(tree,node=>node.type==='fieldset').length,20);assert.match(textContent(tree),/Código original: A\.1\.1\.1/);assert.doesNotMatch(textContent(tree),/Rubro original: /);
+ const draft=await cypPrivateDraft();tree=await openPanel(draft);const component=elements(tree,node=>typeof node.type==='function'&&node.type.name==='PlanPartidaSourcePreview')[0];assert.ok(component);assert.equal(component.props.draft.spreadsheet.profile,'CYP_PARTIDAS_CURVE');assert.equal(component.props.draft.id,draft.id);assert.deepEqual(component.props.draft.spreadsheet,draft.spreadsheet);assert.equal(component.props.projectId,panelContext.projectId);assert.equal(component.props.scope,panelContext.scope);assert.equal(component.props.mayConsultMeasurement,true);assert.equal(elements(tree,node=>node.type==='fieldset').length,20);assert.match(textContent(tree),/Código original: A\.1\.1\.1/);assert.doesNotMatch(textContent(tree),/Rubro original: /);
 });
 
 test('CyP panel purges financial RAM and listings on downgrade and blocks late private results while preserving recovery references',async()=>{

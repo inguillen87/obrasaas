@@ -161,6 +161,11 @@ jobs:
           npx eslint scripts/verify-plan-document-curve-ui.mjs scripts/lib/plan-document-curve-ui-fixture.mjs scripts/lib/plan-document-curve-fixture-copy.mjs tests/production-plan-document-curve*.test.mjs tests/production-plan-import-document-curve*.test.mjs tests/fixtures/plan-import-document-curve-synthetic.mjs --max-warnings 0
           node --test tests/production-plan-document-curve*.test.mjs
           node scripts/verify-plan-document-curve-ui.mjs --expected-head "$GITHUB_SHA" .vercel/private/plan-document-curve-evidence/current-browser.json
+      - name: Read-only budget source contracts and exact synthetic browser supplement
+        run: |
+          npx eslint src/lib/plan-budget-source.mjs scripts/lib/plan-budget-*.mjs scripts/verify-plan-budget-ui.mjs tests/fixtures/plan-budget-source-synthetic.mjs tests/fixtures/plan-budget-store-synthetic.mjs tests/production-plan-budget*.test.mjs --max-warnings 0
+          node --test tests/production-plan-budget*.test.mjs
+          node scripts/verify-plan-budget-ui.mjs --expected-head "$GITHUB_SHA"
       - name: Record bounded synthetic provenance
         id: provenance
         run: node .github/scripts/verify-workspace-ci-parallelization.mjs provenance --lane plans --expected-head "$GITHUB_SHA"
@@ -177,6 +182,7 @@ jobs:
             .vercel/private/workspace-plan-recovery-ui-validation.json
             .vercel/private/approved-plan-baseline-evidence/
             .vercel/private/plan-document-curve-evidence/
+            .vercel/private/plan-budget-ui-ci.json
             .vercel/workspace-ci-evidence/lane-plans.json
           include-hidden-files: true
           retention-days: 7

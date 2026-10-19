@@ -1,10 +1,12 @@
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {PLAN_PARTIDA_PREVIEW_CURRENT_SECTION,restorePlanPartidaPreviewSourceSet} from '../scripts/lib/plan-partida-preview-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
-import {PARTICIPANT_PREANALYSIS_CURRENT_REVISION,PARTICIPANT_PREANALYSIS_VALIDATION_PATHS,restoreParticipantPreanalysisPreviousContract,participantPreanalysisCurrentSourcePin,verifyParticipantPreanalysisCurrentSources,validateParticipantPreanalysisWorkspaceContract} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
+import {PARTICIPANT_PREANALYSIS_CURRENT_REVISION,PARTICIPANT_PREANALYSIS_VALIDATION_PATHS,PARTICIPANT_PREANALYSIS_EVIDENCE,restoreParticipantPreanalysisPreviousContract,participantPreanalysisCurrentSourcePin,verifyParticipantPreanalysisCurrentSources,validateParticipantPreanalysisWorkspaceContract} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {PARTICIPANT_KYC_PREANALYSIS_CHECKS,participantPreanalysisSourceManifest} from '../scripts/verify-participant-kyc-preanalysis-postgres.mjs';
-import {parseParticipantPreanalysisTap,validateParticipantKycPreanalysisNative,validateParticipantKycPreanalysisCi,PARTICIPANT_PREANALYSIS_CI_VERSION} from '../scripts/verify-participant-kyc-preanalysis-ci.mjs';
+import {participantPreanalysisNativeSourceClosure,parseParticipantPreanalysisTap,validateParticipantKycPreanalysisNative,validateParticipantKycPreanalysisCi,PARTICIPANT_PREANALYSIS_CI_VERSION} from '../scripts/verify-participant-kyc-preanalysis-ci.mjs';
 import {restoreOoxmlAccountingPreviousContract} from '../scripts/lib/ooxml-accounting-current-ci-lineage.mjs';
 import {reconstructPublishedHContract} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';
 import {restoreIntegratedIdentityPreviousContract} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
@@ -16,6 +18,19 @@ const sha=value=>createHash('sha256').update(value).digest('hex');
 const root=new URL('../',import.meta.url),read=file=>{const bytes=readFileSync(new URL(file,root));return file==='scripts/verify-participant-kyc-preanalysis-ci.mjs'?Buffer.from(bytes.toString().replaceAll('\r\n','\n')):bytes;};
 const denied=run=>assert.throws(run,error=>['PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED','PARTICIPANT_PREANALYSIS_CI_REJECTED'].includes(error.code));
 const nativeSource=participantPreanalysisSourceManifest(),nativeSourceFiles=nativeSource.map(row=>row.path);
+// Authenticate current bytes once, then project metadata only for old oracles.
+// Every native/CI shadow and source reader below still uses the actual source.
+const authenticatedContract=JSON.parse(read('.github/workspace-acceptance-contract.json'));
+verifyPlanBudgetCurrentSources(authenticatedContract,read);
+const beforeBudgetContract=restorePlanBudgetPreviousContract(authenticatedContract);
+assert.equal(sha(JSON.stringify(beforeBudgetContract,null,2)+'\n'),'8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839');
+const originalPreanalysisContract=restoreIntegratedIdentityPreviousContract(beforeBudgetContract);
+assert.equal(sha(JSON.stringify(originalPreanalysisContract,null,2)+'\n'),'3c1a184f2e6839bba6bd7116ccf6c062fbb015500ec4900583dbd15f82fe7270');
+function currentAndOriginalMetadataDenied(edit,validate=restoreParticipantPreanalysisPreviousContract){
+ for(const snapshot of [authenticatedContract,originalPreanalysisContract]){
+  const changed=structuredClone(snapshot);edit(changed);denied(()=>validate(changed));
+ }
+}
 // Pure adversarial validator inputs. These shadows do not execute PostgreSQL,
 // a provider, a private-document read or personal consent/identity acceptance.
 const shadow=()=>({version:1,status:'PASS',postgresExecuted:true,failure:null,
@@ -74,7 +89,7 @@ test('pending or foreign revision bindings cannot authorize source bytes before 
  assert.equal(PARTICIPANT_PREANALYSIS_CURRENT_REVISION.status,'REVIEWED_FROZEN_CURRENT_SOURCE');
  assert.deepEqual(contract.participantPreanalysisCurrentRevision.validationSources.map(row=>row.path),PARTICIPANT_PREANALYSIS_VALIDATION_PATHS);
  for(const edit of [value=>{value.status='PENDING_FINAL_SOURCE_FREEZE';},value=>{value.referenceHead='f'.repeat(40);},value=>{value.referenceTree='f'.repeat(40);},value=>{value.previousContractSha256='f'.repeat(64);},value=>{value.reviewedSourceChanges.pop();},value=>{value.consumerSourceDeltas[0].additions.pop();}]){
-  const changed=structuredClone(contract);edit(changed.participantPreanalysisCurrentRevision);denied(()=>restoreParticipantPreanalysisPreviousContract(changed));
+  currentAndOriginalMetadataDenied(value=>edit(value.participantPreanalysisCurrentRevision));
  }
  denied(()=>participantPreanalysisCurrentSourcePin(contract,{path:'src/lib/meta-kyc-identity.mjs',sha256:'f'.repeat(64)}));
 });
@@ -87,14 +102,39 @@ test('every current preanalysis source pin and native producer rejects independe
 });
 
 test('omitted delta source or new proof block cannot be concealed by an otherwise current contract',()=>{
- const contract=JSON.parse(read('.github/workspace-acceptance-contract.json'));
- for(const edit of [value=>{value.extension.proofs.pop();},value=>{value.blocks.pop();},value=>{value.lanes.people.blocks.pop();},value=>{value.blocks.push(structuredClone(value.blocks.find(row=>row.id===63)));},value=>{value.extension.proofs.push(structuredClone(value.extension.proofs.find(row=>row.kind==='PG_PARTICIPANT_KYC_PREANALYSIS')));},value=>{value.artifactPatterns.pop();},value=>{value.extension.proofs.find(row=>row.id===value.participantPreanalysisCurrentRevision.proofSourceDeltas[0].id).sourceFiles.pop();}]){const changed=structuredClone(contract);edit(changed);denied(()=>restoreParticipantPreanalysisPreviousContract(changed));}
+ for(const edit of [
+  value=>{value.extension.proofs=value.extension.proofs.filter(row=>row.kind!=='PG_PARTICIPANT_KYC_PREANALYSIS');},
+  value=>{value.blocks=value.blocks.filter(row=>row.id!==63);},
+  value=>{value.lanes.people.blocks=value.lanes.people.blocks.filter(id=>id!==63);},
+  value=>{value.blocks.push(structuredClone(value.blocks.find(row=>row.id===63)));},
+  value=>{value.extension.proofs.push(structuredClone(value.extension.proofs.find(row=>row.kind==='PG_PARTICIPANT_KYC_PREANALYSIS')));},
+  value=>{assert.ok(value.artifactPatterns.includes(PARTICIPANT_PREANALYSIS_EVIDENCE));value.artifactPatterns=value.artifactPatterns.filter(row=>row!==PARTICIPANT_PREANALYSIS_EVIDENCE);},
+  value=>{const delta=value.participantPreanalysisCurrentRevision.proofSourceDeltas[0],spec=value.extension.proofs.find(row=>row.id===delta.id),file=delta.additions.at(-1);assert.ok(spec.sourceFiles.includes(file));spec.sourceFiles=spec.sourceFiles.filter(path=>path!==file);}
+ ])currentAndOriginalMetadataDenied(edit);
 });
 
 test('block63 binds all actual native source roots and the reviewed CI leaves without claiming PG execution',()=>{
- for(const kind of ['proof','block']){const changed=JSON.parse(read('.github/workspace-acceptance-contract.json')),target=kind==='proof'?changed.extension.proofs.find(row=>row.kind==='PG_PARTICIPANT_KYC_PREANALYSIS'):changed.blocks.find(row=>row.id===63);target.unreviewed=true;denied(()=>validateParticipantPreanalysisWorkspaceContract(changed));}
+ for(const kind of ['proof','block'])currentAndOriginalMetadataDenied(value=>{const target=kind==='proof'?value.extension.proofs.find(row=>row.kind==='PG_PARTICIPANT_KYC_PREANALYSIS'):value.blocks.find(row=>row.id===63);target.unreviewed=true;},validateParticipantPreanalysisWorkspaceContract);
  const contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),result=validateParticipantPreanalysisWorkspaceContract(contract);
- assert.equal(result.nativeSourceCount,142);assert.equal(result.nativeCheckCount,19);assert.equal(result.nativeAcceptance,false);const checkpoint=restoreIntegratedIdentityPreviousContract(contract);assert.equal(checkpoint.blocks.length,57);assert.equal(checkpoint.extension.proofs.length,19);const previousWa=restoreWhatsappFieldContinuityPreviousContract(contract);assert.equal(previousWa.blocks.length,58);assert.equal(previousWa.extension.proofs.length,20);assert.equal(contract.blocks.length,59);assert.equal(contract.extension.proofs.length,21);assert.deepEqual(contract.blocks.slice(0,58),previousWa.blocks);assert.equal(contract.blocks.at(-1).id,65);assert.equal(contract.extension.proofs.at(-1).kind,'UI_FIELD_TASK_PAGINATION');
+ assert.equal(result.nativeSourceCount,142);assert.equal(result.nativeCheckCount,19);assert.equal(result.nativeAcceptance,false);const checkpoint=restoreIntegratedIdentityPreviousContract(contract);assert.equal(checkpoint.blocks.length,57);assert.equal(checkpoint.extension.proofs.length,19);const previousWa=restoreWhatsappFieldContinuityPreviousContract(contract);assert.equal(previousWa.blocks.length,58);assert.equal(previousWa.extension.proofs.length,20);const beforeBudget=restorePlanBudgetPreviousContract(contract);assert.equal(beforeBudget.blocks.length,59);assert.equal(beforeBudget.extension.proofs.length,21);assert.deepEqual(beforeBudget.blocks.slice(0,58),previousWa.blocks);assert.equal(beforeBudget.blocks.at(-1).id,65);assert.equal(beforeBudget.extension.proofs.at(-1).kind,'UI_FIELD_TASK_PAGINATION');const ownership=contract[PLAN_BUDGET_CURRENT_SECTION].ownership;assert.deepEqual(contract.blocks,[...beforeBudget.blocks,ownership.block]);
+ // Current sources and the complete immutable Budget inverse are required before
+ // projecting only the inherited proof sourceFiles to their pre-Budget oracles.
+ verifyPlanBudgetCurrentSources(contract,read);
+ const projectedProofs=contract.extension.proofs.map((spec,index)=>{
+  const historical=beforeBudget.extension.proofs[index];if(!historical)return spec;
+  assert.equal(spec.id,historical.id);assert.equal(spec.kind,historical.kind);
+  const delta=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.contractPointer==='/extension/proofs/'+index+'/sourceFiles');
+  if(delta){
+   assert.equal(delta.family,spec.kind);
+   assert.equal(spec.sourceFiles.length,delta.currentCount);
+   assert.equal(sha(JSON.stringify(spec.sourceFiles)),delta.currentPathsSha256);
+   assert.equal(historical.sourceFiles.length,delta.previousCount);
+   assert.equal(sha(JSON.stringify(historical.sourceFiles)),delta.previousPathsSha256);
+   assert.deepEqual(spec.sourceFiles,[...historical.sourceFiles,...delta.additions].sort());
+  }else assert.deepEqual(spec.sourceFiles,historical.sourceFiles);
+  return {...spec,sourceFiles:restorePlanBudgetSourceSet(contract,spec.kind,spec.sourceFiles)};
+ });
+ assert.deepEqual(projectedProofs,[...beforeBudget.extension.proofs,ownership.proof]);
 });
 
 function ciShadow(){
@@ -114,4 +154,57 @@ test('foreign CI head tree repository run attempt event and raw evidence cannot 
 });
 test('unit source omission changed case order skipped TAP and a foreign current source remain denied by the envelope',()=>{
  for(const edit of [f=>{f.proof.unitSuites.pop();},f=>{f.proof.unitSuites[1].sourceSha256='f'.repeat(64);},f=>{f.proof.unitSuites[0].result.caseNames.reverse();},f=>{f.proof.unitSuites[1].tap.path=f.proof.unitSuites[0].tap.path;},f=>{f.proof.sourceManifest.pop();},f=>{f.proof.sourceManifest[0].path='src/lib/foreign.mjs';},f=>{f.proof.checks.pop();}]){const f=ciShadow();edit(f);denied(()=>f.validate());}
+});
+
+
+const nativeEnvelopeRejected=run=>assert.throws(run,{code:'PARTICIPANT_PREANALYSIS_CI_REJECTED'});
+function resealRawNative(f,edit,{resealSourceDigest=true}={}){
+ const value=JSON.parse(f.evidence.get(f.proof.rawNative.path));edit(value);
+ if(resealSourceDigest)value.sourceDigest=sha(JSON.stringify(value.sourceManifest));
+ const raw=Buffer.from(JSON.stringify(value,null,2)+'\n');f.evidence.set(f.proof.rawNative.path,raw);
+ f.proof.rawNative={...f.proof.rawNative,bytes:raw.length,sha256:sha(raw)};return value;
+}
+test('current native AST146 preserves historical145 within full CI241 and leaves raw native bytes untouched',()=>{
+ const f=ciShadow(),contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),historical=structuredClone(contract.participantPreanalysisCurrentRevision.nativeSourceFiles),current=participantPreanalysisNativeSourceClosure(f.context.readSource),rawBefore=Buffer.from(f.evidence.get(f.proof.rawNative.path)),referenceBefore=structuredClone(f.proof.rawNative),proofBefore=JSON.stringify(f.proof);
+ const outer=contract[PLAN_PARTIDA_PREVIEW_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===f.context.spec.kind),budget=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===f.context.spec.kind),beforeBudgetFullCi=restorePlanBudgetSourceSet(contract,f.context.spec.kind,f.context.spec.sourceFiles),historicalFullCi=restorePlanPartidaPreviewSourceSet(contract,f.context.spec.kind,f.context.spec.sourceFiles);
+ const beforeBudgetNative=current.filter(file=>!budget.additions.includes(file)),nativeBudgetAdditions=current.filter(file=>budget.additions.includes(file));
+ const previewAdditions=['scripts/lib/plan-partida-preview-current-ci-lineage.mjs','scripts/lib/plan-partida-preview-current-ci-reviewed.mjs'];
+ assert.equal(outer.contractPointer,'/extension/proofs/18/sourceFiles');assert.equal(outer.previousCount,241);assert.ok(outer.currentCount>=243);assert.ok(previewAdditions.every(file=>outer.additions.includes(file)));assert.equal(outer.currentCount,outer.previousCount+outer.additions.length);
+ assert.equal(historicalFullCi.length,241);assert.equal(sha(JSON.stringify(historicalFullCi)),outer.previousPathsSha256);
+ assert.equal(beforeBudgetFullCi.length,outer.currentCount);assert.equal(sha(JSON.stringify(beforeBudgetFullCi)),outer.currentPathsSha256);assert.deepEqual(beforeBudgetFullCi,[...historicalFullCi,...outer.additions].sort());
+ assert.equal(f.context.spec.sourceFiles.length,budget.currentCount);assert.equal(sha(JSON.stringify(f.context.spec.sourceFiles)),budget.currentPathsSha256);assert.deepEqual(f.context.spec.sourceFiles,[...beforeBudgetFullCi,...budget.additions].sort());
+ assert.equal(historical.length,145);assert.equal(beforeBudgetNative.length,146);assert.deepEqual(beforeBudgetNative,[...historical,'src/lib/field-hours-report.mjs'].sort());assert.ok(nativeBudgetAdditions.includes('src/lib/plan-budget-source.mjs'));assert.deepEqual(nativeBudgetAdditions,budget.additions.filter(file=>current.includes(file)));assert.deepEqual(current,[...beforeBudgetNative,...nativeBudgetAdditions].sort());assert.deepEqual(nativeSourceFiles,current);assert.ok(beforeBudgetNative.every(file=>historicalFullCi.includes(file)));assert.ok(current.every(file=>f.context.spec.sourceFiles.includes(file)));
+ const result=f.validate();assert.equal(result.nativeSourceCount,current.length);assert.equal(result.sourceReferences,budget.currentCount);assert.equal(result.nativeProofRewritten,false);assert.equal(result.rawNativeSha256,sha(rawBefore));assert.equal(f.evidence.get(f.proof.rawNative.path).equals(rawBefore),true);assert.deepEqual(f.proof.rawNative,referenceBefore);assert.equal(JSON.stringify(f.proof),proofBefore);assert.deepEqual(contract.participantPreanalysisCurrentRevision.nativeSourceFiles,historical);
+});
+test('resealing an omitted current native source historical145 or same-count foreign path cannot satisfy the envelope',()=>{
+ const historical=JSON.parse(read('.github/workspace-acceptance-contract.json')).participantPreanalysisCurrentRevision.nativeSourceFiles;
+ for(const kind of ['omit-field-hours','omit-budget','historical145','same-count-foreign']){
+  const f=ciShadow(),fake='tests/production-participant-preanalysis-current-ci-lineage.test.mjs';
+  assert.equal(nativeSourceFiles.includes(fake),false);assert.equal(f.context.spec.sourceFiles.includes(fake),true);
+  const value=resealRawNative(f,p=>{if(kind==='same-count-foreign'){const source=read(fake);p.sourceManifest=p.sourceManifest.map(row=>row.path==='src/lib/field-hours-report.mjs'?{path:fake,bytes:source.length,sha256:sha(source)}:row).sort((a,b)=>a.path<b.path?-1:a.path>b.path?1:0);}else p.sourceManifest=p.sourceManifest.filter(row=>kind==='historical145'?historical.includes(row.path):row.path!==(kind==='omit-budget'?'src/lib/plan-budget-source.mjs':'src/lib/field-hours-report.mjs'));});
+  assert.equal(value.sourceManifest.length,kind==='same-count-foreign'?nativeSourceFiles.length:kind==='historical145'?historical.length:nativeSourceFiles.length-1);assert.equal(f.proof.rawNative.sha256,sha(f.evidence.get(f.proof.rawNative.path)));nativeEnvelopeRejected(()=>f.validate());
+ }
+});
+test('a resealed native digest or source hash still requires the actual current raw source bytes',()=>{
+ for(const kind of ['digest','source-hash']){
+  const f=ciShadow();resealRawNative(f,p=>{if(kind==='digest')p.sourceDigest='f'.repeat(64);else p.sourceManifest.find(row=>row.path==='src/lib/field-hours-report.mjs').sha256='f'.repeat(64);},{resealSourceDigest:kind!=='digest'});
+  assert.equal(f.proof.rawNative.sha256,sha(f.evidence.get(f.proof.rawNative.path)));nativeEnvelopeRejected(()=>f.validate());
+ }
+});
+test('an altered current native reader cannot certify an unchanged envelope or unchanged raw evidence',()=>{
+ const f=ciShadow(),readOriginal=f.context.readSource,rawBefore=Buffer.from(f.evidence.get(f.proof.rawNative.path));
+ f.context.readSource=file=>file==='src/lib/field-hours-report.mjs'?Buffer.concat([readOriginal(file),Buffer.from('\n// changed current native dependency\n')]):readOriginal(file);
+ denied(()=>f.validate());assert.equal(f.evidence.get(f.proof.rawNative.path).equals(rawBefore),true);
+});
+test('native AST roots and authenticated contract roots remain mandatory under attempted substitution',()=>{
+ const roots=['scripts/verify-participant-kyc-preanalysis-postgres.mjs','src/app/api/identity/participants/route.js','src/app/api/meta/customer-process/route.js'],f=ciShadow(),readOriginal=f.context.readSource;
+ for(const rootFile of roots)nativeEnvelopeRejected(()=>participantPreanalysisNativeSourceClosure(file=>file===rootFile?null:readOriginal(file)));
+ nativeEnvelopeRejected(()=>participantPreanalysisNativeSourceClosure(file=>file===roots[0]?Buffer.concat([readOriginal(file),Buffer.from('\nexport const hidden=()=>import(unboundedNativeRoot);\n')]):readOriginal(file)));
+ for(const kind of ['historical-root-omitted','full-ci-root-omitted']){
+  const changed=ciShadow(),contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),source=changed.context.readSource;
+  if(kind==='historical-root-omitted')contract.participantPreanalysisCurrentRevision.nativeSourceFiles=contract.participantPreanalysisCurrentRevision.nativeSourceFiles.filter(file=>file!==roots[1]);
+  else contract.extension.proofs.find(row=>row.id===changed.context.spec.id).sourceFiles=changed.context.spec.sourceFiles.filter(file=>file!==roots[1]);
+  changed.context.readSource=file=>file==='.github/workspace-acceptance-contract.json'?Buffer.from(JSON.stringify(contract,null,2)+'\n'):source(file);denied(()=>changed.validate());
+  const original=structuredClone(originalPreanalysisContract);if(kind==='historical-root-omitted')original.participantPreanalysisCurrentRevision.nativeSourceFiles=original.participantPreanalysisCurrentRevision.nativeSourceFiles.filter(file=>file!==roots[1]);else original.extension.proofs.find(row=>row.kind==='PG_PARTICIPANT_KYC_PREANALYSIS').sourceFiles=original.extension.proofs.find(row=>row.kind==='PG_PARTICIPANT_KYC_PREANALYSIS').sourceFiles.filter(file=>file!==roots[1]);denied(()=>validateParticipantPreanalysisWorkspaceContract(original));
+ }
 });
