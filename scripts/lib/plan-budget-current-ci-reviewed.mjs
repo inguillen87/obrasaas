@@ -12,7 +12,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": ".github/scripts/verify-workspace-ci-parallelization.mjs",
       "previousSha256": "8d65b7fb1446dc0533f69097ae28598a7c748f50c19eb586614ce078bf3aebac",
-      "currentSha256": "e1dc93452c5893ea6654ee73b8707e4612f6483817beaa99e46274ee2f27aacd"
+      "currentSha256": "6ab7d571c9d9a1e66c530f3f31013b7d80a5d5d02936fc1b4af1b5cd2316ab44"
     },
     {
       "path": ".github/workflows/company-usage-proxy.yml",

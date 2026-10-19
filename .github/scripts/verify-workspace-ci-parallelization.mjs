@@ -2673,4 +2673,17 @@ function main(){
  }
  deny('UNKNOWN_COMMAND');
 }
-if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){try{main();}catch(error){console.error(JSON.stringify({state:'FAIL',code:error.code||'VERIFIER_FAILED'}));process.exitCode=1;}}
+// Opt-in CLI failure formatting only: never changes or executes a selftest check.
+export function selftestErrorDiagnostics(error,argv){
+ try{
+  if(!Array.isArray(argv)||argv[0]!=='selftest'||options(argv.slice(1))['diagnostic-errors']!=='code-stack-v1')return {};
+  const operators=['strictEqual','notStrictEqual','deepStrictEqual','notDeepStrictEqual','deepEqual','notDeepEqual','==','!=','===','!==','throws','doesNotThrow','rejects','doesNotReject','match','doesNotMatch','fail','ifError','ok'];
+  let operator=null,stack=null;
+  try{const value=error?.operator;if(typeof value==='string'&&operators.includes(value))operator=value;}catch{}
+  try{const value=error?.stack;if(typeof value==='string')stack=value;}catch{}
+  // Reject whole data-URL frames before truncation; never serialize the header.
+  const frames=stack===null?[]:stack.split(/\r?\n/).filter(line=>/^\s*at /.test(line)&&!line.toLowerCase().includes('data:')).slice(0,8).map(line=>line.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g,'').trimStart().slice(0,512));
+  return {diagnosticErrors:'code-stack-v1',operator,frames};
+ }catch{return {};}
+}
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){try{main();}catch(error){console.error(JSON.stringify({state:'FAIL',code:error.code||'VERIFIER_FAILED',...selftestErrorDiagnostics(error,process.argv.slice(2))}));process.exitCode=1;}}
