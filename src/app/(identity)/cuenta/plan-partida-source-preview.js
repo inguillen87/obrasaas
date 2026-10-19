@@ -2,12 +2,13 @@
 import {useId,useState} from 'react';
 import {PlanSourceCurve} from './plan-source-curve';
 import {PlanPartidaMeasurementPreview} from './plan-partida-measurement-preview';
+import {PlanPartidaBudgetPreview} from './plan-partida-budget-preview';
 import {planPartidaSourcePreview,planPartidaPreviewSelection,planPartidaSourceShare} from './plan-partida-source-preview.mjs';
 import styles from './plan-partida-source-preview.module.css';
 
 const views=[['DIAGRAM','Diagrama'],['CURVE','Curva'],['QUANTITIES','Cómputo']];
 
-export function PlanPartidaSourcePreview({draft,reviewRows,projectId,scope,disabled=false,measurementCatalog=null,mayConsultMeasurement=false,onConsultMeasurements}){
+export function PlanPartidaSourcePreview({draft,reviewRows,projectId,scope,disabled=false,measurementCatalog=null,mayConsultMeasurement=false,onConsultMeasurements,budgetCatalog=null,onReadBudget}){
  const id=useId(),[choice,setChoice]=useState({});
  let view,current;
  try{view=planPartidaSourcePreview(draft,{projectId,scope,reviewRows});if(view)current=planPartidaPreviewSelection(view,choice);}catch{return <p className={styles.unavailable} role="status">No se puede comprobar la vista por partida con esta fuente. Las correcciones y decisiones del importador siguen separadas.</p>;}
@@ -39,6 +40,7 @@ export function PlanPartidaSourcePreview({draft,reviewRows,projectId,scope,disab
     {view.curve?<PlanSourceCurve curve={view.curve} profile={view.profile} status={view.status} sourceRowCount={view.items.length} selectedRowCount={view.retainedCodes?.length} compact/>:<p className={styles.unavailable} data-partida-curve-unavailable>Este borrador físico no incluye una curva financiera. No se deduce inversión desde la distribución semanal; la fuente financiera se revisa por separado.</p>}
    </>}
    {current.tab==='QUANTITIES'&&<PlanPartidaMeasurementPreview catalog={measurementCatalog} view={view} selected={selected} mayConsult={mayConsultMeasurement} disabled={disabled} onConsult={onConsultMeasurements}/>}
+   {current.tab==='QUANTITIES'&&<PlanPartidaBudgetPreview catalog={budgetCatalog} view={view} selected={selected} mayConsult={mayConsultMeasurement} disabled={disabled} onRead={onReadBudget} onRefresh={onConsultMeasurements}/>}
   </div>
   <details className={styles.provenance} data-partida-source-details><summary>Procedencia y selección de la partida</summary><p>Agrupador: {selected.parentCode}. {view.retainedCodes===null?'Selección del borrador sin comprobar.':retained?'Incluida en las filas del borrador.':'Fuera de las filas del borrador; el original se conserva.'} {view.items.length} partidas en la fuente completa.</p><p>{selected.sourceRange}</p><p>Archivo SHA-256: <code>{view.sourceSha256}</code></p><p>El avance registrado se consulta en el Gantt de la obra. Las correcciones del título, fechas, exclusiones y aprobaciones del borrador se deciden en el importador; esta consulta conserva los originales.</p></details>
  </section>;

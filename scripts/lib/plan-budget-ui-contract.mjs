@@ -1,0 +1,99 @@
+import {createHash} from 'node:crypto';
+import path from 'node:path';
+import {parse} from '@babel/parser';
+import {validatePlanPartidaPreviewImportUiProofBytes} from './home-decisions-current-ci-lineage.mjs';
+import {planBudgetUiSyntheticFixture} from '../../tests/fixtures/plan-budget-ui-synthetic.mjs';
+import {verifyPlanPartidaPreviewPng} from './plan-partida-preview-current-ci-lineage.mjs';
+
+export const PLAN_BUDGET_UI_PROOF_PATH='.vercel/private/plan-budget-ui-validation.json';
+export const PLAN_BUDGET_UI_HISTORICAL_PATH='.vercel/private/plan-import-ui-validation.json';
+export const PLAN_BUDGET_UI_WIDTHS=Object.freeze([320,390,768,1280]);
+export const PLAN_BUDGET_UI_MODES=Object.freeze(['UPLOAD_ADMIN','UPLOAD_DIRECTOR','THREE_VIEWS_EXACT_JOIN','AMBIGUOUS_SOURCE','TRUNCATED_LIST','ROLE_DOWNGRADE','HTML_403','CONTEXT_LATE_SUCCESS','OLD_OWNER_LATE_403','DETAIL_FALSE_AUTHORITY']);
+export const PLAN_BUDGET_UI_MATRIX=Object.freeze(PLAN_BUDGET_UI_WIDTHS.flatMap(width=>PLAN_BUDGET_UI_MODES.filter(mode=>mode==='UPLOAD_DIRECTOR'?width===1280:['UPLOAD_ADMIN','THREE_VIEWS_EXACT_JOIN'].includes(mode)||[320,1280].includes(width)).map(mode=>Object.freeze({mode,width}))));
+export const PLAN_BUDGET_UI_SOURCE_ROOTS=Object.freeze(['package-lock.json','package.json','scripts/lib/plan-budget-browser-ui.mjs','scripts/lib/plan-budget-ui-contract.mjs','scripts/verify-plan-import-ui.mjs','scripts/verify-plan-budget-ui.mjs','src/app/(identity)/cuenta/plan-import-panel.js','src/app/(identity)/cuenta/workspace-recovery-panel.js']);
+const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+const safe=file=>typeof file==='string'&&file.length>0&&path.posix.normalize(file)===file&&!path.posix.isAbsolute(file)&&!/[\\:\x00-\x1f]/.test(file)&&!file.split('/').includes('..');
+const digest=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
+const revision=value=>typeof value==='string'&&/^[a-f0-9]{40}$/.test(value);
+const count=value=>Number.isSafeInteger(value)&&value>=0;
+const reject=(ok,reason)=>{if(!ok)throw Object.assign(new Error('Budget browser supplement rejected: '+reason),{code:'PLAN_BUDGET_UI_REJECTED',reason});};
+const keys=(value,names,reason)=>reject(plain(value)&&same(Object.keys(value).sort(),[...names].sort()),reason);
+const text=value=>typeof value==='string'&&value.length>0&&value.length<=200&&!/[<>\x00-\x1f]/.test(value);
+export const planBudgetUiRetainedScreenshotPath=({mode,width})=>'.vercel/private/plan-import-ui-budget-'+mode.toLowerCase()+'-'+width+'.png';
+const screenshotPath=planBudgetUiRetainedScreenshotPath;
+
+// Only the caller's authenticated Git/source reader supplies bytes. Neither a
+// proof nor an uploaded workbook may choose roots, code, or a source resolver.
+export function planBudgetUiSourceBinding(readSource){
+ reject(typeof readSource==='function','SOURCE_READER');const files=new Map(),externalImports=new Set(),cache=new Map();
+ const read=file=>{reject(safe(file),'SOURCE_PATH');if(cache.has(file))return cache.get(file);let bytes;try{bytes=readSource(file);}catch{}if(!Buffer.isBuffer(bytes)){cache.set(file,null);return null;}reject(bytes.length<=8*1024*1024&&Buffer.from(bytes.toString('utf8')).equals(bytes),'SOURCE_UTF8');const normalized=Buffer.from(bytes.toString('utf8').replaceAll('\r\n','\n'));cache.set(file,normalized);return normalized;};
+ const resolve=(owner,specifier)=>{if(!specifier.startsWith('.')){reject(!specifier.startsWith('/')&&(!/^[A-Za-z][A-Za-z0-9+.-]*:/.test(specifier)||specifier.startsWith('node:')),'IMPORT_SPECIFIER');externalImports.add(specifier);return null;}const base=path.posix.normalize(path.posix.join(path.posix.dirname(owner),specifier)),candidates=/\.(?:[cm]?js|jsx|json|css)$/.test(base)?[base]:[base+'.js',base+'.mjs',base+'.jsx',base+'.cjs',base+'.json',base+'/index.js',base+'/index.mjs'];for(const candidate of candidates)if(safe(candidate)&&read(candidate))return candidate;reject(false,'IMPORT_MISSING_'+owner);};
+ function visit(file){if(files.has(file))return;const bytes=read(file);reject(Boolean(bytes),'SOURCE_MISSING_'+file);files.set(file,{path:file,sha256:hash(bytes)});if(file.endsWith('.css')){reject(!/@import\b|url\s*\(/i.test(bytes.toString('utf8')),'CSS_DEPENDENCY_'+file);return;}if(!/\.(?:[cm]?js|jsx)$/.test(file))return;let ast;try{ast=parse(bytes.toString('utf8'),{sourceType:'unambiguous',plugins:['jsx'],createImportExpressions:true});}catch{reject(false,'SOURCE_AST_'+file);}
+  const dependency=specifier=>{reject(typeof specifier==='string'&&specifier.length>0,'STATIC_IMPORT_'+file);const resolved=resolve(file,specifier);if(resolved)visit(resolved);};
+  const walk=node=>{if(!node||typeof node!=='object')return;if(Array.isArray(node)){node.forEach(walk);return;}if(['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration'].includes(node.type)&&node.source)dependency(node.source.value);if(node.type==='ImportExpression')dependency(node.source?.value);if(node.type==='CallExpression'&&(node.callee?.type==='Import'||node.callee?.type==='Identifier'&&node.callee.name==='require'))dependency(node.arguments?.length===1?node.arguments[0]?.value:null);for(const [name,child]of Object.entries(node))if(!['loc','start','end','tokens','comments'].includes(name)&&child&&typeof child==='object')walk(child);};walk(ast.program);
+ }
+ PLAN_BUDGET_UI_SOURCE_ROOTS.forEach(visit);const sourceManifest=[...files.keys()].sort().map(file=>files.get(file));reject(sourceManifest.length<=1000,'SOURCE_COUNT');return {sourceManifest,externalImports:[...externalImports].sort(),sourceManifestSha256:hash(Buffer.from(JSON.stringify(sourceManifest)))};
+}
+
+function historical(bytes,{expectedHead,expectedTree,allowLocalReview=false}){
+ reject(Buffer.isBuffer(bytes)&&bytes.length>0&&bytes.length<=4*1024*1024,'HISTORICAL_BYTES');let old;try{old=JSON.parse(bytes.toString('utf8'));}catch{reject(false,'HISTORICAL_JSON');}
+ reject(old.validated===true&&old.synthetic===true&&old.fullSuite===true&&old.focusedScenario===null&&old.qaScope==='FULL_ORIGINAL180_ADAPTED_TO_REVIEWED_COMPACT_CONTROLS'&&old.totalCheckCount===180&&old.baselineCheckCount===80&&old.originalTotalCheckCount===96&&old.planLinkSubcaseCount===40,'HISTORICAL180');
+ reject(revision(expectedHead)&&revision(expectedTree)&&old.sourceRevision===expectedHead&&old.sourceTree===expectedTree,'HISTORICAL_REVISION');
+ reject(old.sourceState==='EXACT_CI_SOURCE'&&old.trackedClean===true||allowLocalReview&&old.sourceState==='LOCAL_REVIEW_SOURCE','HISTORICAL_SOURCE_STATE');
+ reject(old.providerCalls===0&&old.productionDataWritten===false&&old.fixtureRemoved===true&&same(old.errors,[])&&same(old.widths,PLAN_BUDGET_UI_WIDTHS),'HISTORICAL_BOUNDARY');return old;
+}
+
+export function createPlanBudgetUiProof({historicalBytes,checks,sourceBinding,cleanup}){
+ const old=JSON.parse(historicalBytes.toString('utf8'));
+ return {version:'plan-budget-ui-v1',status:'PASS',environment:'isolated-browser-current-importer-synthetic-http-store-blob',sourceRevision:old.sourceRevision,sourceTree:old.sourceTree,sourceState:old.sourceState,trackedClean:old.trackedClean,widths:[...PLAN_BUDGET_UI_WIDTHS],totalCheckCount:23,combinedCheckCount:203,historical:{path:PLAN_BUDGET_UI_HISTORICAL_PATH,sha256:hash(historicalBytes),bytes:historicalBytes.length,checks:180},producerSha256:old.harnessSha256,sourceBinding,checks,cleanup,limits:{syntheticWorkbookOnly:true,postgresExecuted:false,realProviderCalls:0,productionDataWritten:false,realIdentityDocuments:false,financialApproval:false,humanAccepted:false}};
+}
+
+export function validatePlanBudgetUiSupplementBytes(bytes,readSource,{expectedHead,expectedTree,readEvidence,allowLocalReview=false}={}){
+ reject(Buffer.isBuffer(bytes)&&bytes.length>0&&bytes.length<=512*1024&&Buffer.from(bytes.toString('utf8')).equals(bytes),'PROOF_BYTES');let proof;try{proof=JSON.parse(bytes.toString('utf8'));}catch{reject(false,'PROOF_JSON');}
+ keys(proof,['version','status','environment','sourceRevision','sourceTree','sourceState','trackedClean','widths','totalCheckCount','combinedCheckCount','historical','producerSha256','sourceBinding','checks','cleanup','limits'],'PROOF_SHAPE');
+ reject(proof.version==='plan-budget-ui-v1'&&proof.status==='PASS'&&proof.environment==='isolated-browser-current-importer-synthetic-http-store-blob','PROOF_VERSION');
+ reject(revision(expectedHead)&&revision(expectedTree)&&proof.sourceRevision===expectedHead&&proof.sourceTree===expectedTree,'SOURCE_REVISION');
+ reject(proof.sourceState==='EXACT_CI_SOURCE'&&proof.trackedClean===true||allowLocalReview&&proof.sourceState==='LOCAL_REVIEW_SOURCE','SOURCE_STATE');
+ reject(same(proof.widths,PLAN_BUDGET_UI_WIDTHS)&&proof.totalCheckCount===23&&proof.combinedCheckCount===203,'CHECK_TOTAL');
+ const binding=planBudgetUiSourceBinding(readSource);reject(same(proof.sourceBinding,binding),'ACTUAL_SOURCE_BINDING');reject(proof.producerSha256===binding.sourceManifest.find(ref=>ref.path==='scripts/verify-plan-import-ui.mjs')?.sha256,'PRODUCER_HASH');
+ keys(proof.historical,['path','sha256','bytes','checks'],'HISTORICAL_REFERENCE');reject(proof.historical.path===PLAN_BUDGET_UI_HISTORICAL_PATH&&proof.historical.checks===180&&digest(proof.historical.sha256)&&count(proof.historical.bytes)&&typeof readEvidence==='function','HISTORICAL_REFERENCE');let oldBytes;try{oldBytes=readEvidence(PLAN_BUDGET_UI_HISTORICAL_PATH);}catch{}reject(Buffer.isBuffer(oldBytes)&&oldBytes.length===proof.historical.bytes&&hash(oldBytes)===proof.historical.sha256,'HISTORICAL_BINDING');const old=historical(oldBytes,{expectedHead,expectedTree,allowLocalReview});reject(old.harnessSha256===proof.producerSha256&&old.sourceState===proof.sourceState&&old.trackedClean===proof.trackedClean,'HISTORICAL_SAME_PRODUCER');
+ reject(same(proof.cleanup,{browserClosed:true,serverClosed:true,fixtureRemoved:true}),'CLEANUP');reject(same(proof.limits,{syntheticWorkbookOnly:true,postgresExecuted:false,realProviderCalls:0,productionDataWritten:false,realIdentityDocuments:false,financialApproval:false,humanAccepted:false}),'LIMITS');
+ reject(Array.isArray(proof.checks)&&proof.checks.length===23&&same(proof.checks.map(row=>({mode:row.mode,width:row.width})),PLAN_BUDGET_UI_MATRIX),'CHECK_MATRIX');let sourceSha=null;const images=[],fixture=planBudgetUiSyntheticFixture();
+ for(const row of proof.checks){
+  keys(row,['mode','width','synthetic','actualHttpStoreAnalyzer','postgres','sourceSha256','sourceRows','setup','observed','requests','responses','lateOutcome','geometry','screenshot','domReadbacks','viewReadbacks','finalDom','readOnly','sourceDownload','privateStorageChecked','acceptance'],'CHECK_SHAPE');
+  reject(row.synthetic===true&&row.actualHttpStoreAnalyzer===true&&row.postgres===false&&row.sourceRows===190&&row.readOnly===true&&row.sourceDownload===false&&row.privateStorageChecked===true&&row.acceptance===false&&digest(row.sourceSha256)&&(!sourceSha||sourceSha===row.sourceSha256),'CHECK_BOUNDARY');sourceSha=row.sourceSha256;reject(sourceSha===fixture.sha256,'SYNTHETIC_FIXTURE_SHA');
+  keys(row.setup,['analysis','put','taskWrites'],'SETUP_SHAPE');keys(row.observed,['put','analysis','uploads','taskWrites','providerCalls','exactDetailReads'],'OBSERVED_SHAPE');reject(Object.values(row.setup).every(count)&&Object.values(row.observed).every(count)&&row.setup.taskWrites===0&&row.observed.taskWrites===0&&row.observed.providerCalls===0,'NO_SIDE_EFFECTS');
+  const upload=row.mode.startsWith('UPLOAD_');reject(row.observed.uploads===(upload?1:0)&&row.observed.analysis===row.setup.analysis+(upload?1:0)&&row.observed.put===row.setup.put+(upload?1:0),'NO_REANALYSIS');reject(Array.isArray(row.requests)&&row.requests.length>0&&row.requests.length<=30&&Array.isArray(row.responses)&&row.responses.length>0&&row.responses.length<=30,'HTTP_LOG');
+  for(const request of row.requests){keys(request,['method','projectId','scope','draftId','operationId'],'REQUEST_SHAPE');reject(['GET','POST'].includes(request.method)&&[null,'budget-project','project-other-fixture'].includes(request.projectId)&&(request.scope===null||request.scope==='d'.repeat(64))&&(request.draftId===null||text(request.draftId))&&(request.operationId===null||text(request.operationId)),'REQUEST_BOUNDARY');}
+  reject(row.requests.filter(request=>request.method==='POST').length===(upload?1:0),'POST_COUNT');for(const response of row.responses){keys(response,['method','status','path','bytes'],'RESPONSE_SHAPE');reject(['GET','POST'].includes(response.method)&&[200,403].includes(response.status)&&response.path==='/api/identity/plan-import'&&count(response.bytes)&&response.bytes<=2*1024*1024+65536,'RESPONSE_BOUNDARY');}
+  if(['AMBIGUOUS_SOURCE','TRUNCATED_LIST'].includes(row.mode))reject(row.observed.exactDetailReads===0,'UNRESOLVED_DETAIL');else reject(row.observed.exactDetailReads>0,'EXACT_DETAIL_REQUIRED');
+  if(['CONTEXT_LATE_SUCCESS','OLD_OWNER_LATE_403'].includes(row.mode))reject(['RESPONSE_DELIVERED','REQUEST_CANCELLED'].includes(row.lateOutcome),'LATE_OUTCOME');else reject(row.lateOutcome===null,'UNEXPECTED_LATE_OUTCOME');
+  if(row.geometry!==null){keys(row.geometry,['left','right','width','minimumTarget'],'GEOMETRY_SHAPE');reject(Object.values(row.geometry).every(Number.isFinite)&&row.geometry.left>=0&&row.geometry.right<=row.width+1&&row.geometry.width>0&&row.geometry.minimumTarget>=44,'GEOMETRY');}
+  if(upload||row.mode==='THREE_VIEWS_EXACT_JOIN'||row.mode==='OLD_OWNER_LATE_403')reject(row.geometry!==null,'VISIBLE_BUDGET_GEOMETRY');
+
+  reject(Array.isArray(row.domReadbacks)&&Array.isArray(row.viewReadbacks),'DOM_READBACKS');for(const value of row.domReadbacks){keys(value,['code','sourceRowId','physicalSourceRowId','quantity','unit','price','amount'],'DOM_ROW_SHAPE');const expected=fixture.rows.find(item=>item.code===value.code);reject(Boolean(expected)&&same(value,{code:expected.code,sourceRowId:expected.sourceRowId,physicalSourceRowId:expected.physicalSourceRowId,quantity:expected.quantity,unit:expected.unit,price:expected.unitPrice,amount:expected.amount}),'DOM_SOURCE_VALUES');}
+  const d=row.finalDom;keys(d,['budgetVisible','privateValueNodes','privateEvidenceNodes','privateTextPresent','status','currentProject','selectedCode','permissionFeedback','authorityFeedback','storagePrivateMaterial'],'DOM_FINAL_SHAPE');reject(['budgetVisible','privateTextPresent','permissionFeedback','authorityFeedback','storagePrivateMaterial'].every(key=>typeof d[key]==='boolean')&&count(d.privateValueNodes)&&count(d.privateEvidenceNodes)&&[null,'budget-project','project-other-fixture'].includes(d.currentProject)&&(d.selectedCode===null||fixture.rows.some(item=>item.code===d.selectedCode))&&[null,'BOUND','UNREAD','CHECKING','NO_ACCESS_OR_LIST','NO_MATCH','INCOMPLETE_LIST','AMBIGUOUS','CONTEXT_MISMATCH','SOURCE_UNAVAILABLE','SOURCE_MISMATCH','DIGEST_MISMATCH','UNCONFIRMED'].includes(d.status),'DOM_FINAL_TYPES');reject(d.storagePrivateMaterial===false,'PRIVATE_STORAGE');
+  const visible=upload||['THREE_VIEWS_EXACT_JOIN','OLD_OWNER_LATE_403'].includes(row.mode);if(visible){reject(d.budgetVisible===true&&d.privateValueNodes===3&&d.privateEvidenceNodes===1&&d.privateTextPresent===true&&d.status==='BOUND'&&d.currentProject==='budget-project'&&row.domReadbacks.length>=2,'VISIBLE_FINAL_DOM');}else reject(d.privateValueNodes===0&&d.privateEvidenceNodes===0&&d.privateTextPresent===false&&d.status!=='BOUND','PRIVATE_DOM_CLEARED');
+  if(upload)reject(row.domReadbacks[0]?.code===fixture.rows[0].code&&row.domReadbacks.at(-1)?.code===fixture.rows.at(-1).code&&d.selectedCode===fixture.rows.at(-1).code,'UPLOAD_FIRST_LAST');
+  if(row.mode==='THREE_VIEWS_EXACT_JOIN'){const first=row.domReadbacks[0],expected=fixture.rows.find(item=>item.code===first?.code);reject(Boolean(expected)&&same(row.viewReadbacks,['DIAGRAM','CURVE','QUANTITIES'].map(view=>({view,code:expected.code,sourceSha256:fixture.sha256,sourceRange:expected.sourceRange})))&&d.selectedCode===fixture.conflictCode&&row.domReadbacks.at(-1)?.code===fixture.conflictCode,'THREE_VIEW_SOURCE_JOIN');}else reject(row.viewReadbacks.length===0,'UNEXPECTED_VIEW_READBACK');
+  if(['AMBIGUOUS_SOURCE','TRUNCATED_LIST'].includes(row.mode))reject(d.status===(row.mode==='AMBIGUOUS_SOURCE'?'AMBIGUOUS':'INCOMPLETE_LIST')&&row.domReadbacks.length===0,'UNRESOLVED_DOM');
+  if(row.mode==='HTML_403')reject(d.permissionFeedback===true&&row.responses.some(response=>response.status===403)&&row.domReadbacks.length>=1,'HTML403_DOM');
+  if(row.mode==='DETAIL_FALSE_AUTHORITY')reject(d.authorityFeedback===true&&row.domReadbacks.length===0,'AUTHORITY_DOM');
+  if(row.mode==='ROLE_DOWNGRADE')reject(row.domReadbacks.length>=1,'ROLE_PRIOR_OPEN_DOM');
+  if(row.mode==='CONTEXT_LATE_SUCCESS')reject(d.currentProject==='project-other-fixture'&&row.domReadbacks.length===0,'LATE_CONTEXT_DOM');
+  if(row.mode==='OLD_OWNER_LATE_403')reject(row.domReadbacks.at(-1)?.code===row.domReadbacks[0]?.code&&d.selectedCode===row.domReadbacks[0]?.code,'OLD_OWNER_CURRENT_DOM');
+  const shot=row.screenshot;keys(shot,['path','sha256','bytes','width','height','captureKind','cssWidth','cssHeight','viewportWidth','viewportHeight'],'SCREENSHOT_SHAPE');reject(shot.path===screenshotPath(row)&&digest(shot.sha256)&&count(shot.bytes)&&shot.bytes>45&&count(shot.width)&&shot.width>=200&&shot.width<=row.width+1&&count(shot.height)&&shot.height>=80&&shot.height<=10000&&['BUDGET_ELEMENT','VIEWPORT'].includes(shot.captureKind)&&Number.isFinite(shot.cssWidth)&&Number.isFinite(shot.cssHeight)&&Math.abs(shot.width-shot.cssWidth)<=2&&Math.abs(shot.height-shot.cssHeight)<=2&&shot.viewportWidth===row.width&&shot.viewportHeight===1000,'SCREENSHOT_REFERENCE');reject(shot.captureKind===(d.budgetVisible?'BUDGET_ELEMENT':'VIEWPORT')&&(shot.captureKind!=='VIEWPORT'||shot.width===row.width&&shot.height===1000)&&(row.geometry===null||Math.abs(shot.cssWidth-row.geometry.width)<=2),'SCREENSHOT_GEOMETRY');let image;try{image=readEvidence(shot.path);}catch{}reject(Buffer.isBuffer(image)&&image.length===shot.bytes&&hash(image)===shot.sha256,'SCREENSHOT_BYTES');verifyPlanPartidaPreviewPng(image,shot.width,shot.height);images.push({path:planBudgetUiRetainedScreenshotPath(row),sourcePath:shot.path,sha256:shot.sha256,bytes:shot.bytes});
+ }
+ return {status:'PASS_SUPPLEMENT_ONLY',budgetChecks:23,historicalBytesBound:true,historicalFullVerified:false,screenshots:images,sourceCount:binding.sourceManifest.length,nativePostgresExecuted:false,humanAccepted:false};
+}
+
+// The public typed/CLI entrypoint always composes the unchanged complete180
+// decoder. The supplement-only entry never claims to have verified180 or203.
+export function validatePlanBudgetUiProofBytes(bytes,readSource,options={}){
+ reject(typeof options.readEvidence==='function','HISTORICAL_REFERENCE');let historicalBytes;try{const original=options.readEvidence(PLAN_BUDGET_UI_HISTORICAL_PATH);if(Buffer.isBuffer(original))historicalBytes=Buffer.from(original);}catch{}reject(Buffer.isBuffer(historicalBytes),'HISTORICAL_BYTES');
+ const snapshotOptions={...options,readEvidence:file=>file===PLAN_BUDGET_UI_HISTORICAL_PATH?historicalBytes:options.readEvidence(file)},result=validatePlanBudgetUiSupplementBytes(bytes,readSource,snapshotOptions);reject(typeof options.expectedRoot==='string'&&path.isAbsolute(options.expectedRoot),'EXPECTED_ROOT');
+ try{validatePlanPartidaPreviewImportUiProofBytes(historicalBytes,readSource,{expectedHead:options.expectedHead,expectedTree:options.expectedTree,expectedRoot:options.expectedRoot,readEvidence:file=>snapshotOptions.readEvidence(path.isAbsolute(file)?path.relative(options.expectedRoot,file).split(path.sep).join('/'):file)});}catch{reject(false,'HISTORICAL_FULL180');}
+ return {...result,status:'PASS',historicalFullVerified:true,historicalChecks:180,combinedChecks:203};
+}

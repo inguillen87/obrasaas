@@ -17,3 +17,4 @@
 
 /* HTML labels retain native 12px text; the 48 SVG shapes are unchanged. */
 .weekChart svg{max-width:calc(150px * 480 / 92);margin-inline:auto}.nativeMonths{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));width:100%;max-width:calc(150px * 480 / 92);margin:0 auto;font-size:12px;line-height:18px;text-align:center;color:#edf5fb}.nativeMonths>span{min-width:0;white-space:nowrap}.nativeAxis{font-size:12px;line-height:18px;text-align:center;color:#c1d0df;margin:4px 0 0}
+.budgetSelector{display:grid;gap:6px;min-width:0}.budgetSelector select{min-height:44px;max-width:100%;width:100%;box-sizing:border-box;background:#091626;color:#edf5fb;border:1px solid #54708a;border-radius:6px;padding:8px;font:inherit}.budgetEvidence{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;font-size:.78rem;line-height:1.5;background:#091626;padding:10px;border-radius:6px}

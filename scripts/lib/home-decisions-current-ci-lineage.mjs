@@ -1,3 +1,4 @@
+import {planBudgetCurrentBrowserBinding} from './plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract as worksiteOuter0,worksiteLiveHoursCurrentSourcePin as worksiteOuter1,worksiteLiveHoursPreviousSourcePin as worksiteOuter2,restoreWorksiteLiveHoursSourceSet as worksiteOuter3,verifyWorksiteLiveHoursCurrentSources as worksiteOuter4,worksiteLiveHoursProofSourceAdditions as worksiteOuter5,restoreWorksiteLiveHoursPreviousProducerText as worksiteOuter6,worksiteLiveHoursValidationFiles as worksiteOuter7} from './worksite-live-hours-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_REVISION,verifyPlanPartidaPreviewCurrentSources,validatePlanPartidaPreviewUiSupplement} from './plan-partida-preview-current-ci-lineage.mjs';
 // Preserve this consumer's established denial category at the outer revision boundary.
@@ -5013,7 +5014,7 @@ function validateWeeklyCypImportUiCore(proof,readSource,{expectedHead,expectedTr
  r(same(proof.widths,n.widths)&&proof.baselineCheckCount===80&&proof.originalTotalCheckCount===96&&proof.totalCheckCount===(currentBinding?180:164)&&proof.planLinkSubcaseCount===40,'TOTALS');
  for(const[field,modes]of Object.entries(n.historicalModes)){const expected=field==='calendarChecks'?modes.flatMap(mode=>n.widths.map(width=>({width,mode}))):n.widths.flatMap(width=>modes.map(mode=>({width,mode})));r(Array.isArray(proof[field])&&same(proof[field].map(row=>({width:row?.width,mode:row?.mode})),expected),'HISTORICAL_LEDGER_'+field);}
  r(Object.keys(n.historicalModes).reduce((sum,field)=>sum+proof[field].length,0)===160,'HISTORICAL_TOTAL');
- const manifests=weeklyUiSourceManifests(readSource);r(manifests.investmentSourceManifest.length===n.investmentSourceCount&&sha(JSON.stringify(manifests.investmentSourceManifest))===n.investmentSourcePathsSha256,'INVESTMENT_CLOSURE');
+ const manifests=weeklyUiSourceManifests(readSource);r(manifests.investmentSourceManifest.length===(currentBinding?.investmentSourceCount??n.investmentSourceCount)&&sha(JSON.stringify(manifests.investmentSourceManifest))===(currentBinding?.investmentSourcePathsSha256??n.investmentSourcePathsSha256),'INVESTMENT_CLOSURE');
  for(const[field,files]of Object.entries(manifests)){r(Array.isArray(proof[field])&&same(proof[field].map(row=>row?.path).sort(),[...files].sort()),'MANIFEST_'+field);for(const row of proof[field]){weeklyUiKeys(row,['path','sha256'],'MANIFEST_REFERENCE');r(hash(row.sha256)&&sha(weeklyUiRead(readSource,row.path))===row.sha256,'SOURCE_BYTES');}}
  r(Array.isArray(proof.fixtureTransforms)&&proof.fixtureTransforms.length===2,'COPY_CHAIN');let generated=weeklyUiRead(readSource,'src/app/(identity)/cuenta/plan-source-curve.mjs');const original=generated;
  for(const[index,dependency]of WEEKLY_CYP_CURRENT_REVISION.documentCurveCopy.dependencies.entries()){const before=generated,needle='../../../lib/'+path.posix.basename(dependency);r(before.toString('utf8').split(needle).length===2,'COPY_IMPORT');generated=Buffer.from(before.toString('utf8').replace(needle,'./'+path.posix.basename(dependency)));r(same(proof.fixtureTransforms[index],{path:'src/app/(identity)/cuenta/plan-source-curve.mjs',kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:sha(original),copiedBeforeSha256:sha(before),fixtureSha256:sha(generated),fixtureRelativePath:'app/plan-source-curve.mjs',dependencySourcePath:dependency,dependencyFixturePath:'app/'+path.posix.basename(dependency)}),'COPY_CHAIN');}
@@ -5032,7 +5033,7 @@ export function validateWeeklyCypImportUiProofBytes(bytes,readSource,options){le
 export function validatePlanPartidaPreviewImportUiProofBytes(bytes,readSource,options={}){
  let proof;try{proof=JSON.parse(bytes.toString('utf8'));weeklyUiRequired(Buffer.from(bytes.toString('utf8')).equals(bytes),'ENCODING');}catch(error){if(error.code==='WEEKLY_CYP_UI_PROOF_REJECTED')throw error;weeklyUiRequired(false,'JSON');}
  const contract=JSON.parse(weeklyUiRead(readSource,'.github/workspace-acceptance-contract.json'));verifyPlanPartidaPreviewCurrentSources(contract,readSource);
- validateWeeklyCypImportUiCore(proof,readSource,options,PLAN_PARTIDA_PREVIEW_CURRENT_REVISION.browser);
+ validateWeeklyCypImportUiCore(proof,readSource,options,planBudgetCurrentBrowserBinding(contract,PLAN_PARTIDA_PREVIEW_CURRENT_REVISION.browser));
  return validatePlanPartidaPreviewUiSupplement(proof,readSource,options);
 }
 // Validator-only shadow input. These buffers are never execution screenshots.
