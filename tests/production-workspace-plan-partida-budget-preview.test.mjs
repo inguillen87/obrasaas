@@ -100,9 +100,26 @@ const props=f=>({entry:f.catalog.entries[0],owner:f.owner,...context,view:f.view
 
 test('real component waits for explicit detail GET and renders literal original values with no decision controls',async()=>{
  const f=await fixture();let reads=0;const p={...props(f),onRead:async()=>{reads++;return f.draft;}};ui.reset();let tree=ui.render(p);assert.doesNotMatch(renderToStaticMarkup(tree),/999\.0000|17\.25000|2\.5000/);assert.equal(reads,0);await consult(tree);const markup=html(p);assert.equal(reads,1);assert.match(markup,/999\.0000/);assert.match(markup,/m2 /);assert.match(markup,/Moneda sin confirmar/);assert.match(markup,/2023/);assert.doesNotMatch(markup,/<input|type="submit"|>Aplicar|>Aprobar|>Guardar correcciones/);assert.match(markup,/Celdas, fórmulas y procedencia/);assert.doesNotMatch(markup,/<details[^>]*\bopen[=> ]/);
+ assert.equal((markup.match(/data-budget-evidence-field=/g)||[]).length,12);
+ for(const label of ['Campo','Origen','Referencia','Estado'])assert.ok(markup.includes('<th scope="col">'+label+'</th>'));
+ for(const origin of ['Cómputo','Plan'])assert.equal((markup.match(new RegExp('data-label="Origen">'+origin+'</td>','g'))||[]).length,6);
+ for(const label of ['Código','Descripción','Unidad','Cantidad','Precio unitario','Importe de partida'])assert.equal((markup.match(new RegExp('<summary>'+label+'</summary>','g'))||[]).length,2);
+ const row=ui.snapshot().result.source.rows.find(item=>item.code===f.selected.code);assert.ok(row);
+ for(const literal of [row.originalRawUnit,row.budget.cells.quantity.rawValue,row.plan.cells.quantity.formulaText]){assert.equal(typeof literal,'string');const exact=renderToStaticMarkup(React.createElement('code',null,literal)).replace(/^<code>|<\/code>$/g,'');assert.ok(markup.includes(exact));}
+ assert.match(markup,/Formato y atributos originales/);assert.match(markup,/Resultado guardado en el archivo/);assert.match(markup,/Referencia y comparación con el cómputo/);assert.match(markup,/sin aprobación/);
+ assert.doesNotMatch(markup,/<pre\b|"(?:referenceMatches|cacheMatchesBudget|formulaAttributes)"\s*:/);
+
 });
 test('real component shows the empty-cache quantity conflict and keeps controls outside approved totals',async()=>{
  const f=await fixture({conflict:true}),p=props(f);ui.reset();await consult(ui.render(p));const markup=html(p);assert.match(markup,/data-budget-quantity-conflict/);assert.match(markup,/M76/);assert.match(markup,/sin valor numérico guardado/);assert.match(markup,/No sustituimos ni adoptamos cantidades/);assert.match(markup,/Agrupadores, indirectos y controles separados/);assert.match(markup,/No se suman a las partidas/);assert.equal(ui.snapshot().result.source.stockWrites,false);
+ const row=ui.snapshot().result.source.rows.find(item=>item.code===f.selected.code);assert.ok(row);assert.equal(row.plan.links.quantity.reference.address,'M76');assert.equal(row.plan.links.quantity.referenceMatches,false);
+ assert.match(markup,/Referencia pendiente de revisión/);assert.match(markup,/La referencia no coincide o no pudo resolverse/);assert.match(markup,/No se pudo comparar; falta un valor numérico legible/);assert.ok(markup.includes(row.budget.cells.quantity.address));assert.match(markup,/Vacío en el archivo/);assert.doesNotMatch(markup,/<pre\b/);
+ // SSR has no native disclosure state: these checks prove unmounting of all
+ // rendered evidence on current authority/context changes, not browser opening.
+ for(const change of [{mayConsult:false},{owner:{},projectId:'project-other'}]){
+  ui.reset();await consult(ui.render(p));const authorized=html(p);assert.match(authorized,/data-budget-evidence-field/);assert.match(authorized,/Fórmula original/);assert.match(authorized,/999\.0000/);
+  const purged=html({...p,...change});assert.doesNotMatch(purged,/data-budget-evidence(?:[=> -]|-field)|data-budget-quantity|data-budget-unit-price|data-budget-line-amount|999\.0000|17\.25000|Fórmula original|Huella del estilo original/);assert.equal(ui.snapshot(),null);
+ }
 });
 test('common selected code changes resolve the already checked source without fetching another detail',async()=>{
  const f=await fixture(),p=props(f);let calls=0;p.onRead=async()=>{calls++;return f.draft;};ui.reset();await consult(ui.render(p));const first=html(p),next=html({...p,selected:f.view.items[1]});assert.match(first,new RegExp(f.selected.code.replaceAll('.','\\.')));assert.match(next,new RegExp(f.view.items[1].code.replaceAll('.','\\.')));assert.equal(calls,1);assert.match(next,/3\.7500/);

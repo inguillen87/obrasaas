@@ -21,13 +21,21 @@ assert.equal(sha(JSON.stringify(preBudgetContract,null,2)+'\n'),'8b19235b22aa3c2
 const outboundContract=restoreOoxmlAccountingPreviousContract(preBudgetContract);
 assert.equal(sha(JSON.stringify(outboundContract,null,2)+'\n'),OOXML_ACCOUNTING_CURRENT_REVISION.previousContractSha256);
 const denied=run=>assert.throws(run,{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});
-const changed=edit=>{
+const changed=(edit,{historicalShaOnly=false}={})=>{
  const value=structuredClone(contract);edit(value);denied(()=>verifyPlanMeasurementCurrentSources(value,read));
  // Independently retain the original outbound metadata inverse. An absent
  // historical optional companion remains a metadata no-op; the actual-current
  // verifier above must still deny it. This projection never supplies bytes.
  const previous=structuredClone(outboundContract);edit(previous);
- if(Object.hasOwn(previous,'fieldOutboundCurrentRevision'))denied(()=>restoreFieldOutboundPreviousContract(previous));
+ if(historicalShaOnly){
+  // This metadata inverse validates SHA shape and discards its own section;
+  // authenticating current source bytes is the separate denial above. A valid
+  // but stale SHA must not be called a historical metadata rejection.
+  assert.ok(Object.hasOwn(previous,'fieldOutboundCurrentRevision'));
+  const prior=restoreFieldOutboundPreviousContract(previous);
+  assert.equal(sha(JSON.stringify(prior,null,2)+'\n'),FIELD_OUTBOUND_CURRENT_REVISION.previousContractSha256);
+  assert.equal(Object.hasOwn(prior,'fieldOutboundCurrentRevision'),false);
+ }else if(Object.hasOwn(previous,'fieldOutboundCurrentRevision'))denied(()=>restoreFieldOutboundPreviousContract(previous));
  else assert.deepEqual(restoreFieldOutboundPreviousContract(previous),previous);
 };
 
@@ -87,7 +95,7 @@ test('source validation cannot replace its reader with a manifest or text shim',
 test('validation source path substitution duplication and stale pins fail closed',()=>{
  changed(value=>{value.fieldOutboundCurrentRevision.validationSources[0].path='scripts/foreign.mjs';});
  changed(value=>{value.fieldOutboundCurrentRevision.validationSources[1]=value.fieldOutboundCurrentRevision.validationSources[0];});
- changed(value=>{value.fieldOutboundCurrentRevision.validationSources[0].sha256='f'.repeat(64);});
+ changed(value=>{value.fieldOutboundCurrentRevision.validationSources[0].sha256='f'.repeat(64);},{historicalShaOnly:true});
 });
 test('original source lease simulated latency and source sets remain fixed',()=>{
  for(const key of Object.keys(FIELD_OUTBOUND_CURRENT_REVISION.limits))changed(value=>{value.fieldOutboundCurrentRevision.limits[key]++;});

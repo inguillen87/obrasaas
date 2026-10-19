@@ -3,7 +3,67 @@ import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'react';
 import {planPartidaBudgetCandidate,validatePlanPartidaBudgetDetail,resolvePlanPartidaBudgetRow,planPartidaBudgetNotices} from './plan-partida-budget-preview.mjs';
 import styles from './plan-partida-source-preview.module.css';
 
-function BudgetCell({source,cell,label}){return <details className={styles.provenance}><summary>{label} · {cell.address}</summary><pre className={styles.budgetEvidence}>{JSON.stringify({cell,style:source.styleTable[cell.styleRef]},null,2)}</pre></details>;}
+const budgetFieldLabels={code:'Código',title:'Descripción',unit:'Unidad',quantity:'Cantidad',unitPrice:'Precio unitario',lineAmount:'Importe de partida'};
+const budgetCellTypes={n:'Número',s:'Texto del archivo',inlineStr:'Texto del archivo',str:'Texto',e:'Error del archivo',b:'Valor lógico',d:'Fecha del archivo'};
+const budgetReferenceStates={RESOLVED:'Referencia leída',MISSING:'Sin referencia',UNSUPPORTED:'Referencia no resuelta',SHARED_MASTER_UNRESOLVED:'Fórmula compartida sin origen resuelto'};
+const budgetObservationStates={ABSENT:'Celda ausente',FORMULA_CACHE:'Fórmula con resultado guardado',FORMULA_WITHOUT_CACHE:'Fórmula sin resultado guardado',LITERAL:'Valor original guardado'};
+const budgetObservationIssues={CELL_ABSENT:'Celda ausente',FORMULA_CACHE_MISSING:'La fórmula no tiene resultado guardado',CELL_ERROR:'El archivo guarda un error',NON_NUMERIC_CELL_TYPE:'El tipo de celda no es numérico',SAVED_VALUE_MISSING:'Sin valor guardado',SHARED_MASTER_UNRESOLVED:'No se resolvió el origen de la fórmula compartida',FORMULA_SOURCE_UNRESOLVED:'La fórmula requiere revisión de su origen',NON_DECIMAL_SAVED_VALUE:'El valor guardado no es un número decimal legible'};
+function budgetLiteral(value){return value===null||value===undefined?<span>Sin valor guardado</span>:value===''?<span>Vacío en el archivo</span>:<code className={styles.budgetLiteral}>{value}</code>;}
+function budgetAttributes(value){return value===null?<span>Sin atributos guardados</span>:Object.keys(value).length?<dl className={styles.budgetAttributes}>{Object.entries(value).map(([key,item])=><div key={key}><dt><code>{key}</code></dt><dd>{budgetLiteral(item)}</dd></div>)}</dl>:<span>Sin atributos adicionales</span>;}
+function budgetCellEvidence(source,cell){
+ const format=source.styleTable[cell.styleRef];
+ return <>
+  <dl className={styles.budgetFieldFacts}>
+   <div><dt>Celda presente en el archivo</dt><dd>{cell.present?'Sí':'No'}</dd></div>
+   <div><dt>Contenido original</dt><dd>{budgetLiteral(cell.value)}</dd></div>
+   <div><dt>Valor guardado sin formato</dt><dd>{budgetLiteral(cell.rawValue)}</dd></div>
+   <div><dt>Tipo de contenido</dt><dd>{budgetCellTypes[cell.type]||'Tipo de contenido no declarado'}</dd></div>
+   <div><dt>Fórmula original</dt><dd>{cell.formulaAttributes===null?'Sin fórmula':budgetLiteral(cell.formulaText)}</dd></div>
+   <div><dt>Resultado guardado en el archivo</dt><dd>{cell.cachePresent?'Presente; no recalculado':'Ausente; no recalculado'}</dd></div>
+   <div><dt>Celdas combinadas</dt><dd>{cell.mergedRanges.length?cell.mergedRanges.map(range=><code key={range} className={styles.budgetReference}>{range}</code>):'Sin combinaciones guardadas'}</dd></div>
+  </dl>
+  {cell.sharedFormulaMaster&&<details className={styles.budgetFieldDetails}><summary>Origen de la fórmula compartida</summary><dl className={styles.budgetFieldFacts}><div><dt>Celda de origen</dt><dd>{budgetLiteral(cell.sharedFormulaMaster.address)}</dd></div><div><dt>Fórmula guardada en el origen</dt><dd>{budgetLiteral(cell.sharedFormulaMaster.text)}</dd></div><div><dt>Atributos originales de la fórmula de origen</dt><dd>{budgetAttributes(cell.sharedFormulaMaster.attributes)}</dd></div></dl></details>}
+  <details className={styles.budgetFieldDetails} data-budget-field-format><summary>Formato y atributos originales</summary>
+   <p className={styles.scope}>Se muestran tal como están guardados. El formato no confirma moneda ni cambia el valor.</p>
+   <dl className={styles.budgetFieldFacts}>
+    <div><dt>Formato de visualización</dt><dd>{budgetLiteral(format.formatCode)}</dd></div>
+    <div><dt>Formato tomado de</dt><dd>{{CELL:'Celda',ROW:'Fila',COLUMN:'Columna',DEFAULT:'Formato predeterminado del archivo',AMBIGUOUS:'Origen ambiguo; requiere revisión'}[format.source]}</dd></div>
+    <div><dt>Identificador del estilo</dt><dd>{budgetLiteral(format.index)}</dd></div>
+    <div><dt>Identificador del formato numérico</dt><dd>{budgetLiteral(format.numFmtId)}</dd></div>
+    <div><dt>Huella del estilo original</dt><dd>{budgetLiteral(cell.styleRef)}</dd></div>
+    <div><dt>Atributos de la fórmula</dt><dd>{budgetAttributes(cell.formulaAttributes)}</dd></div>
+    <div><dt>Atributos de la celda</dt><dd>{budgetAttributes(cell.cellAttributes)}</dd></div>
+    <div><dt>Atributos de la fila</dt><dd>{budgetAttributes(cell.rowAttributes)}</dd></div>
+    <div><dt>Atributos de las columnas</dt><dd>{cell.columnAttributes.length?cell.columnAttributes.map((attributes,index)=><div key={index}><p>Columna {index+1}</p>{budgetAttributes(attributes)}</div>):'Sin atributos de columna guardados'}</dd></div>
+    <div><dt>Atributos del formato</dt><dd>{budgetAttributes(format.attributes)}</dd></div>
+    <div><dt>Atributos del formato base</dt><dd>{budgetAttributes(format.baseAttributes)}</dd></div>
+   </dl>
+  </details>
+ </>;
+}
+function BudgetCell({source,cell,name,origin,worksheet,budgetWorksheet,link=null}){
+ const status=!cell.present?'Celda ausente':cell.type==='e'?'Error guardado en el archivo':cell.formulaAttributes!==null?(cell.cachePresent?'Fórmula con resultado guardado':'Fórmula sin resultado guardado'):cell.value===null?'Sin valor guardado':'Valor original guardado';
+ return <tr data-budget-evidence-field={origin+'-'+name}>
+  <th scope="row" data-label="Campo"><details className={styles.budgetFieldDetails} data-budget-field-detail><summary>{budgetFieldLabels[name]}</summary>{budgetCellEvidence(source,cell)}
+   {link&&<details className={styles.budgetFieldDetails}><summary>Referencia y comparación con el cómputo</summary><dl className={styles.budgetFieldFacts}>
+    <div><dt>Estado de la referencia</dt><dd>{budgetReferenceStates[link.reference.status]}</dd></div>
+    <div><dt>Referencia leída en Plan</dt><dd>{link.reference.address?<code className={styles.budgetReference}>{link.reference.worksheet}!{link.reference.address}</code>:'Sin referencia resuelta'}</dd></div>
+    <div><dt>Celda esperada en cómputo</dt><dd><code className={styles.budgetReference}>{budgetWorksheet}!{link.expectedAddress}</code></dd></div>
+    <div><dt>Coincidencia de referencia</dt><dd>{link.referenceMatches?'La referencia coincide; pendiente de revisión':'La referencia no coincide o no pudo resolverse'}</dd></div>
+    <div><dt>Comparación de valores guardados</dt><dd>{link.cacheMatchesBudget===true?'Coinciden; sin aprobación':link.cacheMatchesBudget===false?'Son diferentes; revisar ambas celdas':'No se pudo comparar; falta un valor numérico legible'}</dd></div>
+    <div><dt>Referencia por fórmula compartida</dt><dd>{link.reference.shared?'Sí':'No'}</dd></div>
+    <div><dt>Lectura guardada en Plan</dt><dd>{budgetObservationStates[link.observation.kind]}</dd></div>
+    <div><dt>Valor numérico leído en Plan</dt><dd>{budgetLiteral(link.observation.decimal)}</dd></div>
+    <div><dt>Valor presente en Plan</dt><dd>{link.observation.savedValuePresent?'Sí':'No'}</dd></div>
+    <div><dt>Resultado de fórmula presente en Plan</dt><dd>{link.observation.formulaCachePresent?'Sí':'No'}</dd></div>
+   </dl>{link.observation.issues.length>0&&<ul className={styles.issues}>{link.observation.issues.map(issue=><li key={issue}>{budgetObservationIssues[issue]}</li>)}</ul>}
+   {link.observedTarget&&<details className={styles.budgetFieldDetails}><summary>Otra celda referenciada: {link.observedTarget.address}</summary>{budgetCellEvidence(source,link.observedTarget)}</details>}</details>}
+  </details></th>
+  <td data-label="Origen">{origin}</td>
+  <td data-label="Referencia"><code className={styles.budgetReference}>{worksheet}!{cell.address}</code></td>
+  <td data-label="Estado">{status}{link&&<span className={styles.budgetReferenceState}>{link.referenceMatches?'Referencia coincidente; sin aprobar':'Referencia pendiente de revisión'}{link.cacheMatchesBudget===false?' · Valores diferentes':''}</span>}</td>
+ </tr>;
+}
 function BudgetReading({entry,initialDetail=null,owner,projectId,scope,view=null,selected=null,mayConsult=false,disabled=false,onRead,onRefresh}){
  const [answer,setAnswer]=useState(null),[choice,setChoice]=useState(''),active=useRef(null);
  const identity=useMemo(()=>({entry,owner,projectId,scope,mayConsult}),[entry,owner,projectId,scope,mayConsult]);
@@ -24,7 +84,12 @@ function BudgetReading({entry,initialDetail=null,owner,projectId,scope,view=null
    <p className={styles.scope} data-budget-month-base>Mes base declarado: {source.monthBase?.declaredText||'Sin mes base legible'}. Referencia de precios: {source.priceBasis?.declaredText||'Sin referencia legible'}. No se infiere moneda del símbolo $.</p>
    {(!row.plan.links.quantity.referenceMatches||row.plan.links.quantity.observation.decimal===null)&&<p className={styles.unavailable} data-budget-quantity-conflict>La cantidad de Plan no está confirmada: {row.plan.links.quantity.observation.decimal??'sin valor numérico guardado'}. Su referencia es {row.plan.links.quantity.reference.address||'no resuelta'}; el cómputo conserva {row.budget.cells.quantity.address}. No sustituimos ni adoptamos cantidades.</p>}
    {row.issues.length>0&&<details className={styles.provenance}><summary>{row.issues.length} observaciones de la fuente</summary><ul className={styles.issues}>{row.issues.map(issue=><li key={issue}>{issue}</li>)}</ul></details>}
-   <details className={styles.provenance} data-budget-evidence><summary>Celdas, fórmulas y procedencia</summary><p>{row.sourceRowId} · {row.physicalSourceRowId}. Cada fórmula conserva su caché, incluso si está vacía o no es numérica. No se recalculan fórmulas ni se convierten unidades.</p><p>Referencia de código: {row.plan.identityReference.worksheet}!{row.plan.identityReference.address}.</p>{Object.entries(row.budget.cells).map(([name,cell])=><BudgetCell key={'budget-'+name} source={source} cell={cell} label={'Cómputo: '+name}/>)}{Object.entries(row.plan.cells).map(([name,cell])=><BudgetCell key={'plan-'+name} source={source} cell={cell} label={'Plan: '+name}/>)}<pre className={styles.budgetEvidence}>{JSON.stringify(row.plan.links,null,2)}</pre><p>Borrador {entry.id}, revisión {entry.revision}. Fuente SHA-256: {source.sourceSha256}. Digest: {source.sourceDigest}. Es la lectura consultada, sin suscripción a cambios.</p></details>
+   <details className={styles.provenance} data-budget-evidence><summary>Celdas, fórmulas y procedencia</summary>
+    <p>{row.sourceRowId} · {row.physicalSourceRowId}. Cada fórmula conserva su resultado guardado, incluso si está vacío o no es numérico. No se recalculan fórmulas ni se convierten unidades.</p>
+    <p className={styles.scope}>Abrí un campo para consultar su valor original. Las coincidencias son observaciones del archivo, pendientes de revisión.</p>
+    <table className={styles.budgetSourceTable}><caption>Origen de los seis campos de esta partida en cómputo y Plan</caption><thead><tr><th scope="col">Campo</th><th scope="col">Origen</th><th scope="col">Referencia</th><th scope="col">Estado</th></tr></thead><tbody>{Object.entries(budgetFieldLabels).flatMap(([name])=>[<BudgetCell key={'budget-'+name} source={source} cell={row.budget.cells[name]} name={name} origin="Cómputo" worksheet={row.budget.worksheet}/>,<BudgetCell key={'plan-'+name} source={source} cell={row.plan.cells[name]} name={name} origin="Plan" worksheet={row.plan.worksheet} budgetWorksheet={row.budget.worksheet} link={row.plan.links[name]||null}/>])}</tbody></table>
+    <details className={styles.budgetFieldDetails}><summary>Identificación de esta lectura</summary><dl className={styles.budgetFieldFacts}><div><dt>Referencia del código en cómputo</dt><dd><code className={styles.budgetReference}>{row.plan.identityReference.worksheet}!{row.plan.identityReference.address}</code></dd></div><div><dt>Borrador</dt><dd>{budgetLiteral(entry.id)}</dd></div><div><dt>Revisión</dt><dd>{entry.revision}</dd></div><div><dt>Huella del archivo (SHA-256)</dt><dd>{budgetLiteral(source.sourceSha256)}</dd></div><div><dt>Huella de esta lectura</dt><dd>{budgetLiteral(source.sourceDigest)}</dd></div></dl><p className={styles.scope}>Es la lectura consultada, sin suscripción a cambios. No aprueba cantidades ni importes.</p></details>
+   </details>
    <details className={styles.provenance} data-budget-controls><summary>Agrupadores, indirectos y controles separados</summary><p>{source.nonPhysicalRows?.length||0} filas no físicas y {source.controlCells?.length||0} celdas de control. No se suman a las partidas ni se registra un total aprobado.</p><ul>{source.controlCells?.map(item=><li key={item.worksheet+'!'+item.address}>{item.code||'Sin código'} · {item.address}: <code>{item.observation?.decimal??'Sin valor numérico guardado'}</code> · {item.classification}</li>)}</ul></details>
   </>:<p className={styles.unavailable} role="status">{unavailable==='CHECKING'?'Comprobando el detalle y su huella…':unavailable==='UNREAD'?'Consultá el detalle privado de esta lectura para ver sus valores.':planPartidaBudgetNotices[unavailable]||planPartidaBudgetNotices.UNCONFIRMED}</p>}
   {mayConsult&&<div className={styles.measurementActions}><button type="button" data-budget-consult disabled={disabled||!entry.budgetDescriptor} onClick={consult}>{row?'Actualizar detalle del presupuesto':'Consultar detalle del presupuesto'}</button>{onRefresh&&<button type="button" disabled={disabled} onClick={onRefresh}>Actualizar estado de la lectura</button>}</div>}
