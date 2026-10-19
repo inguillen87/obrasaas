@@ -157,9 +157,11 @@ test('responsive chart motion has an explicit reduced motion override and scroll
 });
 
 const panelSource=readFileSync(new URL('../src/app/(identity)/cuenta/plan-import-panel.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
+const budgetSource=readFileSync(new URL('../src/app/(identity)/cuenta/plan-partida-budget-preview.js',import.meta.url),'utf8').replace(/^import .*;\r?\n/gm,'');
 const stateNames=[...panelSource.matchAll(/\[([A-Za-z]+),set[A-Za-z]+\]=useState/g)].map(match=>match[1]);
 const panelHooks=`import React from ${JSON.stringify(reactUrl)};
 import {planPartidaMeasurementCatalog,planPartidaMeasurementRequestCurrent} from ${JSON.stringify(new URL('../src/app/(identity)/cuenta/plan-partida-measurement-preview.mjs',import.meta.url).href)};
+import {PLAN_BUDGET_SOURCE_PROFILE,PLAN_BUDGET_SOURCE_CONSENT,planPartidaBudgetCatalog,planPartidaBudgetDescriptor,planPartidaBudgetCandidate,validatePlanPartidaBudgetDetail,resolvePlanPartidaBudgetRow,planPartidaBudgetNotices} from ${JSON.stringify(new URL('../src/app/(identity)/cuenta/plan-partida-budget-preview.mjs',import.meta.url).href)};
 import {planImportUsageView,planImportPreservation} from ${JSON.stringify(new URL('../src/app/(identity)/cuenta/plan-import-usage-view.mjs',import.meta.url).href)};
 import {planDocumentDraftView,documentCurveReviewValue,documentCurveValuesEqual,DOCUMENT_CURVE_PROFILE,PLAN_CYP_INVESTMENT_PROFILE,planInvestmentDraftView} from ${JSON.stringify(helperUrl)};
 const styles={},stateNames=${JSON.stringify(stateNames)};
@@ -174,7 +176,7 @@ const FileUp=()=>null,FileCheck2=()=>null,Download=()=>null,TriangleAlert=()=>nu
 const useWorkspaceRequest=()=>async(url,options,consume)=>{const next=queue.shift();if(!next)throw new Error('Unexpected request in private panel test');if(next.error)throw next.error;return consume({ok:(next.status??200)<400,status:next.status??200,json:async()=>{if(next.jsonError)throw next.jsonError;return next.wait?await next.wait:next.data;},blob:async()=>next.blobWait?await next.blobWait:new Blob(['synthetic'])});};
 const browserRecoveryJournal={list:async()=>[],migratePlanImportAttempt:async()=>{}},RECOVERY_EVENT='synthetic-recovery',recoveryResult=(reference,data)=>data?.draft?{state:'RECORDED'}:null,planImportCommandDigest=async()=>"a".repeat(64),planImportUploadFormDigest=async()=>"b".repeat(64);
 `;
-const panelCompiled=await transform(panelHooks+panelSource+`
+const panelCompiled=await transform(panelHooks+budgetSource+panelSource+`
 export const reset=()=>{for(const entry of layouts)entry?.cleanup?.();states=[];refs=[];memos=[];layouts=[];queue=[];layoutQueue=[];};export const respond=value=>queue.push(value);export const seed=value=>{for(const [key,item] of Object.entries(value)){const index=stateNames.indexOf(key);if(index<0)throw new Error('Unknown panel state');states[index]=item;}};
 export const snapshot=()=>Object.fromEntries(stateNames.map((name,index)=>[name,states[index]]));export const references=()=>refs;export const queued=()=>queue.length;
 export const render=props=>{stateCursor=0;refCursor=0;memoCursor=0;layoutCursor=0;layoutQueue=[];const tree=PlanImportPanel(props);for(const commit of layoutQueue)commit();layoutQueue=[];return tree;};

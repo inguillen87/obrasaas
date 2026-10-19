@@ -7,6 +7,7 @@ import {loadBindings,transform} from 'next/dist/build/swc/index.js';
 // Execute the actual panel handlers with the real request lifecycle, command
 // digests and recovery journal. Only React scheduling and HTTP are controlled.
 const account=new URL('../src/app/(identity)/cuenta/',import.meta.url),source=readFileSync(new URL('plan-import-panel.js',account),'utf8').replace(/^import .*;\r?\n/gm,'');
+const budgetSource=readFileSync(new URL('plan-partida-budget-preview.js',account),'utf8').replace(/^import .*;\r?\n/gm,'');
 const stateNames=[...source.matchAll(/\[([A-Za-z]+),set[A-Za-z]+\]=useState/g)].map(match=>match[1]),refNames=[...source.matchAll(/([A-Za-z]+)=useRef\(/g)].map(match=>match[1]);
 const importFrom=(names,file)=>`import {${names}} from ${JSON.stringify(new URL(file,account).href)};`;
 const prefix=`import React from ${JSON.stringify(import.meta.resolve('react'))};
@@ -16,6 +17,7 @@ ${importFrom('planImportUsageView,planImportPreservation','plan-import-usage-vie
 ${importFrom('planDocumentDraftView,documentCurveReviewValue,documentCurveValuesEqual,DOCUMENT_CURVE_PROFILE,PLAN_CYP_INVESTMENT_PROFILE,planInvestmentDraftView','plan-source-curve.mjs')}
 ${importFrom('calendarSuggestionBinding,buildPlanCalendarSuggestions,applyPlanCalendarSuggestions','plan-import-calendar-suggestions.mjs')}
 ${importFrom('planPartidaMeasurementCatalog,planPartidaMeasurementRequestCurrent','plan-partida-measurement-preview.mjs')}
+${importFrom('PLAN_BUDGET_SOURCE_PROFILE,PLAN_BUDGET_SOURCE_CONSENT,planPartidaBudgetCatalog,planPartidaBudgetDescriptor,planPartidaBudgetCandidate,validatePlanPartidaBudgetDetail,resolvePlanPartidaBudgetRow,planPartidaBudgetNotices','plan-partida-budget-preview.mjs')}
 let states=[],refs=[],stateCursor=0,refCursor=0,calls=[],responses=[],lifecycle,browserRecoveryJournal;
 // Restore memo identity and commit layout ownership before invoking actual handlers.
 let memos=[],layouts=[],memoCursor=0,layoutCursor=0,layoutQueue=[];
@@ -42,7 +44,7 @@ export const requests=()=>calls;
 export const durable=scope=>browserRecoveryJournal.list(scope);
 `;
 await loadBindings();
-const compiled=await transform(prefix+source+suffix,{filename:'actual-plan-import-close-recovery.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}}),panel=await import('data:text/javascript;base64,'+Buffer.from(compiled.code).toString('base64'));
+const compiled=await transform(prefix+budgetSource+source+suffix,{filename:'actual-plan-import-close-recovery.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}}),panel=await import('data:text/javascript;base64,'+Buffer.from(compiled.code).toString('base64'));
 const scope='a'.repeat(64),projectId='project-synthetic',props={scope,projectId,getSessionToken:()=>assert.fail('Real session forbidden')};
 const row={title:'Corrección local sintética',startsOn:'2026-10-15',endsOn:'2026-10-16',evidence:'Página sintética 1',uncertainty:''};
 const originalRow={...row,title:'Título sintético anterior'},draftId='plan_draft_'+'b'.repeat(64),usage=state=>({version:1,receiptId:'organization_usage_'+'c'.repeat(64),state,coverageState:'TRIAL_CURRENT'});

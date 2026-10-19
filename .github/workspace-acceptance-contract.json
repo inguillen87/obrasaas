@@ -38961,6 +38961,31 @@
         "currentSha256": "11ca0baca1ab24ab1e25370fab6654dab0bbc975012126d6218fb5fafb209371"
       },
       {
+        "path": "tests/production-plan-document-curve-ui.test.mjs",
+        "previousSha256": "aea2b808c7d1648576813dcb4ffd73eb53942dc22b7cff35a98a81645fd6c0eb",
+        "currentSha256": "da786706686ee622377094ffded125607d2ec4db3a7dbdc70212e5006cf30a4b"
+      },
+      {
+        "path": "tests/production-plan-import-calendar-ui.test.mjs",
+        "previousSha256": "9623993c9315115e712520e1b003bb347074de27d392eb5794f1fa14427c56f2",
+        "currentSha256": "9eca05c38d8074297ea75be72f24e323e68103d292f4ed3d30ccc5afae679746"
+      },
+      {
+        "path": "tests/production-plan-import-close-recovery-ui.test.mjs",
+        "previousSha256": "a1968341ab5b43a8d0bf4a3ef8011b69d07d647a31d6b85ba6b2a0944448de77",
+        "currentSha256": "f38560b719db87ff6f87f364e59b01b2bf533cca4ed4f79f6a1daef1719d2668"
+      },
+      {
+        "path": "tests/production-plan-import-link-ui.test.mjs",
+        "previousSha256": "19a55f361e6ccf2db4460504664abd39141c835e80b04133385cd778bc210cad",
+        "currentSha256": "9e71f5c832e45ce7e36f311f08834ad2237c622317d8f176e93f8e761fbf3193"
+      },
+      {
+        "path": "tests/production-plan-source-curve-ui.test.mjs",
+        "previousSha256": "30f9ecb970983cc4d9872feb7e89f301c1c6c899bda91055f7262dd2922bcb13",
+        "currentSha256": "aa7fc15132d80cb9378cbcbf32312cf6aff20b95e7d2bb35cf96390657c3d0f0"
+      },
+      {
         "path": "tests/production-workspace-plan-partida-budget-preview.test.mjs",
         "previousSha256": null,
         "currentSha256": "f27a954b1fd28b8ed56c32a50319862d8c000c1dadaac50818df3e5db8236a6c"

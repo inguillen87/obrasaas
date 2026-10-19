@@ -10,6 +10,7 @@ import {cypInvestmentFixture} from './fixtures/plan-import-cyp-curve-synthetic.m
 import {createPlanImportAnalyzer} from '../src/lib/plan-import-analyzer.mjs';
 const account=new URL('../src/app/(identity)/cuenta/',import.meta.url),reactUrl=import.meta.resolve('react');
 const source=readFileSync(new URL('plan-import-panel.js',account),'utf8').replace(/^import .*;\r?\n/gm,'');
+const budgetSource=readFileSync(new URL('plan-partida-budget-preview.js',account),'utf8').replace(/^import .*;\r?\n/gm,'');
 const stateNames=[...source.matchAll(/\[([A-Za-z]+),set[A-Za-z]+\]=useState/g)].map(m=>m[1]);
 const from=(names,file)=>`import {${names}} from ${JSON.stringify(new URL(file,account).href)};`;
 const prefix=`import React from ${JSON.stringify(reactUrl)};
@@ -19,6 +20,7 @@ ${from('planImportUsageView,planImportPreservation','plan-import-usage-view.mjs'
 ${from('planDocumentDraftView,documentCurveReviewValue,documentCurveValuesEqual,DOCUMENT_CURVE_PROFILE,PLAN_CYP_INVESTMENT_PROFILE,planInvestmentDraftView','plan-source-curve.mjs')}
 ${from('calendarSuggestionBinding,buildPlanCalendarSuggestions,applyPlanCalendarSuggestions','plan-import-calendar-suggestions.mjs')}
 ${from('planPartidaMeasurementCatalog,planPartidaMeasurementRequestCurrent','plan-partida-measurement-preview.mjs')}
+${from('PLAN_BUDGET_SOURCE_PROFILE,PLAN_BUDGET_SOURCE_CONSENT,planPartidaBudgetCatalog,planPartidaBudgetDescriptor,planPartidaBudgetCandidate,validatePlanPartidaBudgetDetail,resolvePlanPartidaBudgetRow,planPartidaBudgetNotices','plan-partida-budget-preview.mjs')}
 let states=[],refs=[],stateCursor=0,refCursor=0,scenario,rows,lifecycle,browserRecoveryJournal,loseAck=null,lastWireError=null;
 // Restore memo identity and commit layout ownership before invoking actual handlers.
 let memos=[],layouts=[],memoCursor=0,layoutCursor=0,layoutQueue=[];
@@ -43,7 +45,7 @@ export const references=()=>[...rows.values()].map(JSON.parse);
 export const wireError=()=>lastWireError;
 `;
 await loadBindings();
-const compiled=await transform(prefix+source,{filename:'plan-document-ui-actual.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});
+const compiled=await transform(prefix+budgetSource+source,{filename:'plan-document-ui-actual.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});
 const ui=await import('data:text/javascript;base64,'+Buffer.from(compiled.code).toString('base64'));
 const props={scope:'a'.repeat(64),projectId:'project_synthetic',canonicalAccess:true,getSessionToken:async()=>'synthetic'};
 const file=()=>new File([DOCUMENT_CURVE_UI_PDF],'synthetic-financial.pdf',{type:'application/pdf'});
