@@ -1,3 +1,5 @@
+import {OOXML_ACCOUNTING_CURRENT_REVISION,restoreOoxmlAccountingPreviousContract} from '../scripts/lib/ooxml-accounting-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {restoreParticipantPreanalysisPreviousContract,restoreParticipantPreanalysisSourceSet} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {restoreIntegratedIdentitySourceSet} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
@@ -11,16 +13,32 @@ import {verifyPlanMeasurementCurrentSources,reconstructPublishedHContract} from 
 import {KYC_EXPIRED_CURRENT_REVIEWED_SOURCES,kycExpiredCurrentSourceFiles} from '../scripts/lib/kyc-expired-current-ci-lineage.mjs';
 const root=new URL('../',import.meta.url),read=file=>readFileSync(new URL(file,root)),sha=value=>createHash('sha256').update(value).digest('hex');
 const contract=JSON.parse(read('.github/workspace-acceptance-contract.json'));
+// Authenticate the actual current companion before projecting metadata only.
+// No historical source body is returned by this reader or used as current proof.
+verifyPlanBudgetCurrentSources(contract,read);
+const preBudgetContract=restorePlanBudgetPreviousContract(contract);
+assert.equal(sha(JSON.stringify(preBudgetContract,null,2)+'\n'),'8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839');
+const outboundContract=restoreOoxmlAccountingPreviousContract(preBudgetContract);
+assert.equal(sha(JSON.stringify(outboundContract,null,2)+'\n'),OOXML_ACCOUNTING_CURRENT_REVISION.previousContractSha256);
 const denied=run=>assert.throws(run,{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});
-const changed=edit=>{const value=structuredClone(contract);edit(value);denied(()=>verifyPlanMeasurementCurrentSources(value,read));};
+const changed=edit=>{
+ const value=structuredClone(contract);edit(value);denied(()=>verifyPlanMeasurementCurrentSources(value,read));
+ // Independently retain the original outbound metadata inverse. An absent
+ // historical optional companion remains a metadata no-op; the actual-current
+ // verifier above must still deny it. This projection never supplies bytes.
+ const previous=structuredClone(outboundContract);edit(previous);
+ if(Object.hasOwn(previous,'fieldOutboundCurrentRevision'))denied(()=>restoreFieldOutboundPreviousContract(previous));
+ else assert.deepEqual(restoreFieldOutboundPreviousContract(previous),previous);
+};
 
 
 // This projection authenticates the current outer set before retaining the
 // exact historical count/hash assertions belonging to the earlier CI revision.
 function historicalCompactFiles(files,contract){
+ const beforeBudget=restorePlanBudgetSourceSet(contract,'COMPACT',files);
  const historical=restoreWorksiteLiveHoursSourceSet(contract,'COMPACT',files);
  assert.equal(historical.length,139);assert.equal(sha(JSON.stringify(historical)),'cd474d8e9a3b754daaeef61f986e31f1c92997a8423cd9a14c06d43ea706dbea');
- assert.equal(files.length,140);assert.deepEqual(files,[...historical,'src/lib/field-hours-report.mjs'].sort());
+ assert.equal(beforeBudget.length,140);assert.deepEqual(beforeBudget,[...historical,'src/lib/field-hours-report.mjs'].sort());
  return historical;
 }
 
@@ -81,4 +99,14 @@ test('the previous P contract remains preserved as metadata and is not a current
  const prior=restoreFieldOutboundPreviousContract(contract);
  denied(()=>verifyPlanMeasurementCurrentSources(prior,read));
  assert.equal(verifyFieldOutboundCurrentSources(prior,read),null);
+});
+
+test('Budget outer denial retains the legacy outbound category and cannot authorize an old companion or tampered current module',()=>{
+ const changed=structuredClone(contract);changed[PLAN_BUDGET_CURRENT_SECTION].references[0].currentSha256='f'.repeat(64);
+ assert.throws(()=>verifyPlanBudgetCurrentSources(changed,read),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason:'IMMUTABLE_COMPANION'});
+ denied(()=>verifyFieldOutboundCurrentSources(changed,read));denied(()=>verifyPlanMeasurementCurrentSources(changed,read));
+ const file='src/lib/plan-budget-source.mjs',tampered=path=>path===file?Buffer.concat([read(path),Buffer.from('\n// Changed current Budget module\n')]):read(path);
+ assert.throws(()=>verifyPlanBudgetCurrentSources(contract,tampered),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason:'CURRENT_SOURCE_'+file});
+ denied(()=>verifyFieldOutboundCurrentSources(contract,tampered));denied(()=>verifyPlanMeasurementCurrentSources(contract,tampered));
+ denied(()=>verifyFieldOutboundCurrentSources(preBudgetContract,read));denied(()=>verifyPlanMeasurementCurrentSources(preBudgetContract,read));
 });

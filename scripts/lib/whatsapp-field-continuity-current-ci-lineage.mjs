@@ -1,3 +1,4 @@
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet} from './plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursSourceSet as worksiteSourceSet0} from './worksite-live-hours-current-ci-lineage.mjs';
 import {restoreMaterialReviewPreviousContract as materialOuter0,materialReviewCurrentSourcePin as materialOuter1,verifyMaterialReviewCurrentSources as materialOuter2,materialReviewValidationFiles as materialOuter3,restoreMaterialReviewSourceSet as materialOuter4,materialReviewProofSourceAdditions as materialOuter5} from './material-review-current-ci-lineage.mjs';
 import {existingApiPlanCurrentNativeSourceFiles as planNative0,existingApiPlanNativeSourceFilesFromReader as planNative1} from './meta-existing-api-plan-current-ci-lineage.mjs';
@@ -13038,13 +13039,25 @@ export function whatsappFieldCompanyNativeSourceFiles(readSource,libraryFiles){
 // Extend only a complete authenticated API-layer native set. The old matrix
 // stays immutable; current raw receipts carry the exact outer source union.
 function currentWorksiteNativeSourceFiles(contract,familyName,previous){
- if(!contract?.[WORKSITE_LIVE_HOURS_CURRENT_SECTION])return previous;
- const family=familyName==='COMPANY'?'PG_COMPANY_KYC':'COMPACT';
- const delta=contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===family);
- requireLineage(delta&&Array.isArray(delta.additions),'An exact current native companion delta is required');
- const current=[...previous,...delta.additions].sort();
- const restored=restoreWorksiteLiveHoursSourceSet(contract,family,current);
- requireLineage(same(restored,previous),'The complete historical native matrix must restore exactly');
+ const family=familyName==='COMPANY'?'PG_COMPANY_KYC':'COMPACT';let current=previous;
+ if(contract?.[WORKSITE_LIVE_HOURS_CURRENT_SECTION]){
+  const delta=contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===family);
+  requireLineage(delta&&Array.isArray(delta.additions),'An exact current native companion delta is required');
+  current=[...previous,...delta.additions].sort();
+  const restored=restoreWorksiteLiveHoursSourceSet(contract,family,current);
+  requireLineage(same(restored,previous),'The complete historical native matrix must restore exactly');
+ }
+ if(contract?.[PLAN_BUDGET_CURRENT_SECTION]){
+  try{
+   // Authenticate the complete outer declaration and its inverse before using
+   // its delta. The raw native proof remains the full actual source manifest.
+   restorePlanBudgetPreviousContract(contract);
+   const delta=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===family);
+   requireLineage(delta&&Array.isArray(delta.additions),'An exact Budget native companion delta is required');
+   const next=[...current,...delta.additions].sort(),restored=restorePlanBudgetSourceSet(contract,family,next);
+   requireLineage(same(restored,current),'The complete pre-Budget native matrix must restore exactly');current=next;
+  }catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
+ }
  return current;
 }
 

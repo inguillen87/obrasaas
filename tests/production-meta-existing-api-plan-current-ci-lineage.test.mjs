@@ -1,3 +1,4 @@
+import {restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet,worksiteLiveHoursPreviousSourcePin,worksiteLiveHoursCurrentSourcePin} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,6 +14,7 @@ const current=()=>JSON.parse(read('.github/workspace-acceptance-contract.json'))
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const serialize=value=>JSON.stringify(value,null,2)+'\n';
 const denied=run=>assert.throws(run,{code:'EXISTING_API_PLAN_CURRENT_CI_LINEAGE_REJECTED'});
+const deniedMetadata=edit=>{const contract=current(),historical=restorePlanBudgetPreviousContract(contract);edit(historical);denied(()=>restoreExistingApiPlanPreviousContract(historical));edit(contract);denied(()=>restoreExistingApiPlanPreviousContract(contract));};
 
 test('API plan revision restores the whole published material contract and every inherited proof',()=>{
  const contract=current(),before=serialize(contract),publishedHomePredecessor=restoreHomeDecisionsPreviousContract(contract),previous=restoreExistingApiPlanPreviousContract(contract);
@@ -60,7 +62,7 @@ test('COMPANY gains only the new server module while every historical native mat
  const contract=current(),families=contract.whatsappFieldContinuityCurrentRevision.native.families;
  const company=existingApiPlanCurrentNativeSourceFiles(contract,'COMPANY',families.COMPANY.sourceFiles);assert.equal(company.length,236);assert.deepEqual(company.filter(file=>!families.COMPANY.sourceFiles.includes(file)),['src/lib/meta-existing-api-plan.mjs']);
  assert.deepEqual(existingApiPlanCurrentNativeSourceFiles(contract,'OWN',families.OWN.sourceFiles),families.OWN.sourceFiles);assert.equal(families.OWN.sourceFiles.length,139);
- const scan=directory=>readdirSync(directory,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?scan(directory+'/'+entry.name):[directory+'/'+entry.name]);const actualCompany=whatsappFieldCompanyNativeSourceFiles(read,scan('src/lib').sort());assert.deepEqual(restoreWorksiteLiveHoursSourceSet(contract,'PG_COMPANY_KYC',actualCompany),company);assert.equal(actualCompany.length,237);assert.deepEqual(actualCompany,[...company,'src/lib/field-hours-report.mjs'].sort());
+ const scan=directory=>readdirSync(directory,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?scan(directory+'/'+entry.name):[directory+'/'+entry.name]);const budgetCompany=whatsappFieldCompanyNativeSourceFiles(read,scan('src/lib').sort());assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);const actualCompany=restorePlanBudgetSourceSet(contract,'PG_COMPANY_KYC',budgetCompany);assert.deepEqual(budgetCompany,[...actualCompany,'src/lib/plan-budget-source.mjs'].sort());assert.deepEqual(restoreWorksiteLiveHoursSourceSet(contract,'PG_COMPANY_KYC',actualCompany),company);assert.equal(actualCompany.length,237);assert.deepEqual(actualCompany,[...company,'src/lib/field-hours-report.mjs'].sort());
  for(const changed of [families.COMPANY.sourceFiles.slice(1),[...families.COMPANY.sourceFiles,families.COMPANY.sourceFiles[0]],company])denied(()=>existingApiPlanCurrentNativeSourceFiles(contract,'COMPANY',changed));
 });
 
@@ -73,5 +75,5 @@ test('the local native proof requires all 38 historical and three additive obser
 
 test('contract declarations and historical fields cannot be altered or resealed by callers',()=>{
  assert.throws(()=>expected.proofSourceDeltas[0].additions.push('src/lib/foreign.mjs'),TypeError);assert.throws(()=>{expected.reviewedSourceChanges[0].currentSha256='0'.repeat(64);},TypeError);
- for(const change of [c=>c[key].reviewedSourceChanges.pop(),c=>c[key].addedSources.pop(),c=>c[key].nativeOrBrowserAcceptance=true,c=>c[key].previousContractSha256='0'.repeat(64),c=>c[key].unreviewed=true,c=>c.blocks[0].step.run+='\ntrue',c=>c.extension.proofs[0].sourceFiles.pop(),c=>c[key].validationSources[0].path='scripts/foreign.mjs']){const contract=current();change(contract);denied(()=>restoreExistingApiPlanPreviousContract(contract));}
+ for(const change of [c=>c[key].reviewedSourceChanges.pop(),c=>c[key].addedSources.pop(),c=>c[key].nativeOrBrowserAcceptance=true,c=>c[key].previousContractSha256='0'.repeat(64),c=>c[key].unreviewed=true,c=>c.blocks[0].step.run+='\ntrue',c=>c.extension.proofs[0].sourceFiles.pop(),c=>c[key].validationSources[0].path='scripts/foreign.mjs']){deniedMetadata(change);}
 });

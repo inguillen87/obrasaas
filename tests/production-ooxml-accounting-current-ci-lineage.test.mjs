@@ -1,3 +1,4 @@
+import {restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {restoreParticipantPreanalysisPreviousContract,restoreParticipantPreanalysisSourceSet} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {restoreWhatsappFieldContinuitySourceSet} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
@@ -15,13 +16,16 @@ import {companyKycOutboundCompactCiSourceClosure} from '../scripts/verify-compan
 const root=new URL('../',import.meta.url),read=file=>{try{return readFileSync(new URL(file,root));}catch(error){if(error.code==='ENOENT'||error.code==='EISDIR')return null;throw error;}},sha=value=>createHash('sha256').update(value).digest('hex');
 const contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),previous=restoreParticipantPreanalysisPreviousContract(contract);
 const denied=run=>assert.throws(run,{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});
-const changed=edit=>{const value=structuredClone(contract);edit(value);denied(()=>verifyPlanMeasurementCurrentSources(value,read));};
+const changed=edit=>{const historical=restorePlanBudgetPreviousContract(contract);edit(historical);if(Object.hasOwn(historical,'ooxmlAccountingCurrentRevision'))denied(()=>restoreOoxmlAccountingPreviousContract(historical));else assert.equal(restoreOoxmlAccountingPreviousContract(historical),historical);const value=structuredClone(contract);edit(value);denied(()=>verifyPlanMeasurementCurrentSources(value,read));};
 const changes=[...OOXML_ACCOUNTING_CURRENT_REVISION.reviewedSourceChanges,...OOXML_ACCOUNTING_CURRENT_REVISION.validationDeltas];
 
 
 // This projection authenticates the current outer set before retaining the
 // exact historical count/hash assertions belonging to the earlier CI revision.
-function historicalCompactFiles(files,contract){
+function historicalCompactFiles(actualFiles,contract){
+ assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
+ const files=restorePlanBudgetSourceSet(contract,'COMPACT',actualFiles);
+ assert.deepEqual(actualFiles,[...files,'src/lib/plan-budget-source.mjs'].sort());
  const historical=restoreWorksiteLiveHoursSourceSet(contract,'COMPACT',files);
  assert.equal(historical.length,139);assert.equal(sha(JSON.stringify(historical)),'cd474d8e9a3b754daaeef61f986e31f1c92997a8423cd9a14c06d43ea706dbea');
  assert.equal(files.length,140);assert.deepEqual(files,[...historical,'src/lib/field-hours-report.mjs'].sort());

@@ -1,3 +1,4 @@
+import {restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,planBudgetCompiledProof} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import test from 'node:test';
@@ -18,6 +19,9 @@ import {restoreMaterialReviewPreviousContract,materialReviewCurrentSourcePin} fr
 const sha=value=>createHash('sha256').update(value).digest('hex'),serialize=value=>Buffer.from(JSON.stringify(value,null,2)+'\n');
 const read=file=>existsSync(file)?readFileSync(file):null,current=()=>JSON.parse(read('.github/workspace-acceptance-contract.json'));
 const denied=run=>assert.throws(run,{code:'WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'});
+// Retain the current outer rejection and independently reach the original WA
+// metadata oracle through the authenticated complete pre-budget inverse.
+const deniedMetadata=edit=>{const contract=current(),historical=restorePlanBudgetPreviousContract(contract);edit(historical);denied(()=>restoreWhatsappFieldContinuityPreviousContract(historical));edit(contract);denied(()=>restoreWhatsappFieldContinuityPreviousContract(contract));};
 
 test('WA field inverse restores exact published052 then all previous checkpoints and original49 pins',()=>{
  const contract=current(),before=JSON.stringify(contract),restored=restoreWhatsappFieldContinuityPreviousContract(contract);
@@ -27,7 +31,8 @@ test('WA field inverse restores exact published052 then all previous checkpoints
 });
 
 test('the59th block ID65 and independent21st proof preserve every previous command and all eight lanes',()=>{
- const contract=current(),previous=restoreMaterialReviewPreviousContract(contract),revision=previous[section];assert.deepEqual(composeWhatsappFieldContinuityContract(revision),previous);
+ const actual=current(),contract=restorePlanBudgetPreviousContract(actual),previous=restoreMaterialReviewPreviousContract(contract),revision=previous[section];assert.deepEqual(composeWhatsappFieldContinuityContract(revision),previous);
+ assert.equal(verifyPlanBudgetCurrentSources(actual,read).nativeOrBrowserAcceptance,false);const budget=actual.planBudgetCurrentRevision;assert.deepEqual(actual.blocks,[...contract.blocks,budget.ownership.block]);assert.deepEqual(actual.extension.proofs.at(-1),planBudgetCompiledProof(actual));const inheritedProofs=actual.extension.proofs.slice(0,-1).map(spec=>({...spec,sourceFiles:restorePlanBudgetSourceSet(actual,spec.kind,spec.sourceFiles)}));assert.deepEqual(inheritedProofs,contract.extension.proofs);
  assert.deepEqual(contract.blocks.slice(0,58),checkpoint.blocks);assert.equal(contract.blocks.length,59);assert.equal(contract.blocks.at(-1).id,65);assert.equal(new Set(contract.blocks.map(row=>row.id)).size,59);assert.equal(contract.extension.proofs.length,21);assert.equal(contract.artifactPatterns.length,63);
  assert.deepEqual(Object.keys(contract.lanes),Object.keys(checkpoint.lanes));assert.equal(Object.keys(contract.lanes).length,8);for(const name of Object.keys(contract.lanes).filter(name=>name!=='field'))assert.deepEqual(contract.lanes[name],checkpoint.lanes[name]);
  assert.deepEqual(contract.lanes.field.blocks,[...checkpoint.lanes.field.blocks,65]);assert.deepEqual(contract.artifactPatterns.slice(0,62),checkpoint.artifactPatterns);
@@ -49,7 +54,7 @@ test('only exact inherited and052 source aliases advance while current bytes can
 });
 
 test('omitted deltas foreign checkpoints modified old matrices and inconsistent producer records are denied',()=>{
- for(const edit of [c=>{c[section].reviewedSourceChanges.pop();},c=>{c[section].previousContractSha256='f'.repeat(64);},c=>{c.blocks[0].step.run+='\ntrue';},c=>{c.planMeasurementCurrentLineage.currentValidationSources.pop();},c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=checkpoint.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;},c=>{c.evidenceProducers.at(-1).producerSha256='f'.repeat(64);},c=>{c.lanes.field.blocks.pop();}]){const contract=current();edit(contract);denied(()=>restoreWhatsappFieldContinuityPreviousContract(contract));}
+ for(const edit of [c=>{c[section].reviewedSourceChanges.pop();},c=>{c[section].previousContractSha256='f'.repeat(64);},c=>{c.blocks[0].step.run+='\ntrue';},c=>{c.planMeasurementCurrentLineage.currentValidationSources.pop();},c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=checkpoint.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;},c=>{c.evidenceProducers.at(-1).producerSha256='f'.repeat(64);},c=>{c.lanes.field.blocks.pop();}]){deniedMetadata(edit);}
  const contract=current();denied(()=>verifyWhatsappFieldContinuityCurrentSources(contract,file=>file===checkpointPath?Buffer.from('{}'):read(file)));
 });
 
@@ -62,8 +67,8 @@ test('proof additions accept only authenticated historical context or the exact 
 });
 
 test('unrelated contract records cannot be smuggled through a valid outer revision',()=>{
- const contract=current();for(const key of ['packageLockSha256','requirementsSha256','sourceWorkflowGitBlobSha256']){const changed=structuredClone(contract);changed[key]='d'.repeat(64);denied(()=>restoreWhatsappFieldContinuityPreviousContract(changed));}
- const changed=structuredClone(contract);changed[section].unreviewedTolerance=true;denied(()=>restoreWhatsappFieldContinuityPreviousContract(changed));assert.equal(JSON.stringify(checkpoint).includes('unreviewedTolerance'),false);
+ const contract=current();for(const key of ['packageLockSha256','requirementsSha256','sourceWorkflowGitBlobSha256'])deniedMetadata(changed=>{changed[key]='d'.repeat(64);});
+ deniedMetadata(changed=>{changed[section].unreviewedTolerance=true;});assert.equal(JSON.stringify(checkpoint).includes('unreviewedTolerance'),false);
  const foreignNamespace=structuredClone(contract);foreignNamespace[section].addedArtifactPattern='.vercel/field-task-pagination-ci-evidence/';foreignNamespace[section].addedProof.path=foreignNamespace[section].addedArtifactPattern+'current-ci.json';foreignNamespace[section].addedEvidenceProducer.path=foreignNamespace[section].addedProof.path;denied(()=>composeWhatsappFieldContinuityContract(foreignNamespace[section]));
 });
 
@@ -71,19 +76,24 @@ function assertCurrentNativeReceipt(familyName){
  const contract=current(),family=WHATSAPP_FIELD_CONTINUITY_NATIVE.families[familyName],kind=familyName==='COMPANY'?'PG_COMPANY_KYC':'COMPACT';
  const previous=existingApiPlanCurrentNativeSourceFiles(contract,familyName,family.sourceFiles),delta=contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===kind);
  assert.equal(previous.length,familyName==='COMPANY'?236:139);assert.equal(previous.length,delta.previousCount);assert.equal(sha(JSON.stringify(previous)),delta.previousPathsSha256);
- assert.deepEqual(delta.additions,['src/lib/field-hours-report.mjs']);const files=[...previous,...delta.additions].sort();
- assert.equal(files.length,familyName==='COMPANY'?237:140);assert.equal(files.length,delta.currentCount);assert.equal(sha(JSON.stringify(files)),delta.currentPathsSha256);assert.deepEqual(restoreWorksiteLiveHoursSourceSet(contract,kind,files),previous);
+ assert.deepEqual(delta.additions,['src/lib/field-hours-report.mjs']);const worksiteFiles=[...previous,...delta.additions].sort();
+ assert.equal(worksiteFiles.length,familyName==='COMPANY'?237:140);assert.equal(worksiteFiles.length,delta.currentCount);assert.equal(sha(JSON.stringify(worksiteFiles)),delta.currentPathsSha256);assert.deepEqual(restoreWorksiteLiveHoursSourceSet(contract,kind,worksiteFiles),previous);
+ assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);const budget=contract.planBudgetCurrentRevision.sourceSetDeltas.find(row=>row.family===kind);assert.ok(budget);assert.deepEqual(budget.additions,['src/lib/plan-budget-source.mjs']);assert.equal(worksiteFiles.length,budget.previousCount);assert.equal(sha(JSON.stringify(worksiteFiles)),budget.previousPathsSha256);const files=[...worksiteFiles,...budget.additions].sort();assert.equal(files.length,budget.currentCount);assert.equal(sha(JSON.stringify(files)),budget.currentPathsSha256);assert.deepEqual(restorePlanBudgetSourceSet(contract,kind,files),worksiteFiles);
  const proof={harnessSha256:sha(read(family.producer)),sourceManifest:files.map(path=>({path,sha256:sha(read(path))})),[family.dtoField]:whatsappFieldNeutralStepShadowFixture(familyName)};
  const before=JSON.stringify(proof),contractBefore=JSON.stringify(contract),value=validateWhatsappFieldNeutralStepNative(proof,familyName,contract,read);
- assert.equal(value.currentNativeSourceCount,delta.currentCount);assert.equal(value.rawProofTransformed,false);assert.equal(value.identityOrProviderAccepted,false);assert.equal(JSON.stringify(proof),before);assert.equal(JSON.stringify(contract),contractBefore);
+ assert.equal(value.currentNativeSourceCount,budget.currentCount);assert.equal(value.rawProofTransformed,false);assert.equal(value.identityOrProviderAccepted,false);assert.equal(JSON.stringify(proof),before);assert.equal(JSON.stringify(contract),contractBefore);
  const rejectProof=edit=>{const changed=structuredClone(proof);edit(changed);denied(()=>validateWhatsappFieldNeutralStepNative(changed,familyName,contract,read));};
  rejectProof(p=>{p.sourceManifest=p.sourceManifest.filter(row=>row.path!=='src/lib/field-hours-report.mjs');});
  rejectProof(p=>{p.sourceManifest=previous.map(path=>({path,sha256:sha(read(path))}));});
  rejectProof(p=>{p.sourceManifest.find(row=>row.path==='src/lib/field-hours-report.mjs').path='src/lib/foreign-native-source.mjs';});
  rejectProof(p=>{p.sourceManifest.push({...p.sourceManifest[0]});});
  rejectProof(p=>{p.sourceManifest.find(row=>row.path==='src/lib/field-hours-report.mjs').sha256='f'.repeat(64);});
+ rejectProof(p=>{p.sourceManifest=p.sourceManifest.filter(row=>row.path!=='src/lib/plan-budget-source.mjs');});
+ rejectProof(p=>{p.sourceManifest.find(row=>row.path==='src/lib/plan-budget-source.mjs').sha256='f'.repeat(64);});
+ denied(()=>validateWhatsappFieldNeutralStepNative(proof,familyName,contract,path=>path==='src/lib/plan-budget-source.mjs'?Buffer.from('changed current Budget source'):read(path)));
  const coTampered=structuredClone(contract),coDelta=coTampered[WORKSITE_LIVE_HOURS_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===kind);coDelta.currentCount=previous.length;coDelta.currentPathsSha256=sha(JSON.stringify(previous));coDelta.additions=[];
  const shortened={...proof,sourceManifest:previous.map(path=>({path,sha256:sha(read(path))}))};denied(()=>validateWhatsappFieldNeutralStepNative(shortened,familyName,coTampered,read));
+ const historicalTampered=restorePlanBudgetPreviousContract(contract),historicalDelta=historicalTampered[WORKSITE_LIVE_HOURS_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===kind);historicalDelta.currentCount=previous.length;historicalDelta.currentPathsSha256=sha(JSON.stringify(previous));historicalDelta.additions=[];denied(()=>restoreWhatsappFieldContinuityPreviousContract(historicalTampered));
 }
 
 test("current native COMPANY receipt binds the exact live-hours union and rejects historical or resealed manifests",()=>assertCurrentNativeReceipt("COMPANY"));

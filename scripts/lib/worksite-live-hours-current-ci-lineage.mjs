@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {WORKSITE_LIVE_HOURS_CURRENT_REVISION} from './worksite-live-hours-current-ci-reviewed.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_SECTION,restorePlanPartidaPreviewPreviousContract as preview0,planPartidaPreviewCurrentSourcePin as preview1,planPartidaPreviewPreviousSourcePin as preview2,restorePlanPartidaPreviewSourceSet as preview3,planPartidaPreviewProofSourceAdditions as preview4,verifyPlanPartidaPreviewCurrentSources as preview5,verifyPlanPartidaPreviewActualClosure as preview6,restorePlanPartidaPreviewClosure as preview7,planPartidaPreviewValidationFiles as preview8} from './plan-partida-preview-current-ci-lineage.mjs';
-function previewBoundary(fn,args){try{return fn(...args);}catch(error){if(error.code==='PLAN_PARTIDA_PREVIEW_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}}
+function previewBoundary(fn,args){try{return fn(...args);}catch(error){if(['PLAN_PARTIDA_PREVIEW_CURRENT_CI_LINEAGE_REJECTED','PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code))reject(false,error.message);throw error;}}
 const restorePlanPartidaPreviewPreviousContract=(...args)=>previewBoundary(preview0,args);
 const planPartidaPreviewCurrentSourcePin=(...args)=>previewBoundary(preview1,args);
 const planPartidaPreviewPreviousSourcePin=(...args)=>previewBoundary(preview2,args);

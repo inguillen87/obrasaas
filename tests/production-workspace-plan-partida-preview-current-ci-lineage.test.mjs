@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {deflateSync} from 'node:zlib';
-import {PLAN_PARTIDA_PREVIEW_CURRENT_REVISION as expected,PLAN_PARTIDA_PREVIEW_CURRENT_SECTION as key,restorePlanPartidaPreviewPreviousContract,planPartidaPreviewCurrentSourcePin,verifyPlanPartidaPreviewCurrentSources,verifyPlanPartidaPreviewActualClosure,verifyPlanPartidaPreviewPng} from '../scripts/lib/plan-partida-preview-current-ci-lineage.mjs';
+import {PLAN_PARTIDA_PREVIEW_CURRENT_REVISION as expected,PLAN_PARTIDA_PREVIEW_CURRENT_SECTION as key,restorePlanPartidaPreviewPreviousContract,planPartidaPreviewCurrentSourcePin,verifyPlanPartidaPreviewCurrentSources,verifyPlanPartidaPreviewActualClosure,verifyPlanPartidaPreviewPng,validatePlanPartidaPreviewUiSupplement} from '../scripts/lib/plan-partida-preview-current-ci-lineage.mjs';
 import {WEEKLY_CYP_CURRENT_REVISION,weeklyCypImportUiShadowFixture,validateWeeklyCypImportUiProofBytes,validatePlanPartidaPreviewImportUiProofBytes} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {validatePlanPartidaPreviewRetainedScreenshotBindings} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';
 import {PLAN_BUDGET_CURRENT_REVISION,PLAN_BUDGET_CURRENT_SECTION,planBudgetCurrentSourcePin,planBudgetCurrentBrowserBinding} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
@@ -72,4 +72,22 @@ test('partida table retention requires all four new captures in addition to all 
 });
 test('partida table PNG validation decodes a synthetic RGB pixel and rejects truncated CRC or trailing bytes',()=>{
  const crc=bytes=>{let value=0xffffffff;for(const byte of bytes){value^=byte;for(let bit=0;bit<8;bit++)value=(value>>>1)^((value&1)?0xedb88320:0);}return(value^0xffffffff)>>>0;},chunk=(name,body)=>{const type=Buffer.from(name),head=Buffer.alloc(4),tail=Buffer.alloc(4);head.writeUInt32BE(body.length);tail.writeUInt32BE(crc(Buffer.concat([type,body])));return Buffer.concat([head,type,body,tail]);},header=Buffer.alloc(13);header.writeUInt32BE(1,0);header.writeUInt32BE(1,4);header[8]=8;header[9]=2;const png=Buffer.concat([Buffer.from('89504e470d0a1a0a','hex'),chunk('IHDR',header),chunk('IDAT',deflateSync(Buffer.from([0,255,0,0]))),chunk('IEND',Buffer.alloc(0))]);assert.equal(verifyPlanPartidaPreviewPng(png,1,1).sha256,sha(png));const wrongCrc=Buffer.from(png);wrongCrc[32]^=1;for(const bytes of [png.subarray(0,-1),wrongCrc,Buffer.concat([png,Buffer.from([0])])])assert.throws(()=>verifyPlanPartidaPreviewPng(bytes,1,1),{code:'PLAN_PARTIDA_PREVIEW_UI_PROOF_REJECTED'});
+});
+// These guard fixtures intentionally stop at the following matrix check. They do not claim a full180 PASS.
+function rawHarnessFixture(crlf=false){
+ const binding=planBudgetCurrentBrowserBinding(current(),expected.browser),raw=new Map(binding.harnessFiles.map(file=>[file,crlf?Buffer.from(read(file).toString('utf8').replaceAll('\n','\r\n')):read(file)]));
+ const reader=file=>raw.get(file)??read(file),proof={fullSuite:true,focusedScenario:null,qaScope:'FULL_ORIGINAL180_ADAPTED_TO_REVIEWED_COMPACT_CONTROLS',totalCheckCount:180,partidaPreviewHarnessManifest:binding.harnessFiles.map(path=>({path,sha256:sha(raw.get(path))})),sourcePreviewChecks:[]};
+ return {proof,reader,raw};
+}
+test('current180 harness evidence checks exact LF bytes before the preview matrix',()=>{
+ const {proof,reader}=rawHarnessFixture();assert.throws(()=>validatePlanPartidaPreviewUiSupplement(proof,reader),{code:'PLAN_PARTIDA_PREVIEW_UI_PROOF_REJECTED',reason:'SOURCE_PREVIEW_MATRIX'});
+});
+test('current180 harness evidence checks exact CRLF bytes before the preview matrix',()=>{
+ const {proof,reader}=rawHarnessFixture(true);assert.throws(()=>validatePlanPartidaPreviewUiSupplement(proof,reader),{code:'PLAN_PARTIDA_PREVIEW_UI_PROOF_REJECTED',reason:'SOURCE_PREVIEW_MATRIX'});
+});
+test('current180 harness evidence rejects a canonical LF digest for actual CRLF bytes',()=>{
+ const {proof,reader}=rawHarnessFixture(true);proof.partidaPreviewHarnessManifest[0].sha256=sha(read(proof.partidaPreviewHarnessManifest[0].path));assert.throws(()=>validatePlanPartidaPreviewUiSupplement(proof,reader),{code:'PLAN_PARTIDA_PREVIEW_UI_PROOF_REJECTED',reason:'HARNESS_BYTES'});
+});
+test('current180 harness evidence cannot authorize changed source by replacing its raw digest',()=>{
+ const {proof,reader,raw}=rawHarnessFixture(true),target=proof.partidaPreviewHarnessManifest[0];raw.set(target.path,Buffer.concat([raw.get(target.path),Buffer.from('\r\n// unreviewed helper change\r\n')]));target.sha256=sha(raw.get(target.path));denied(()=>validatePlanPartidaPreviewUiSupplement(proof,reader));
 });

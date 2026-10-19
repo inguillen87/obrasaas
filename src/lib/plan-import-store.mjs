@@ -85,8 +85,10 @@ export function createPlanImport({workspace,put,get,analyzer,usage=null,environm
   if(canApprovePlan(member.role)&&!member.channelProof)return;
   const sha256=typeof rowOrSha==='string'?rowOrSha:rowOrSha?.metadata?.source?.sha256||rowOrSha?.metadata?.sourceSha256||rowOrSha?.metadata?.outcome?.draft?.source?.sha256;
   if(!/^[a-f0-9]{64}$/.test(sha256||''))return;
-  const financial=(await client.query(`SELECT f.id,f.metadata FROM public."AuditLog" f WHERE f."organizationId"=$1 AND f."entityId"=$2 AND f.action='plan.import.draft' AND f.metadata->'source'->>'sha256'=$3 AND ${restrictedSourceSql('f')} LIMIT 1`,[member.organizationId,projectId,sha256])).rows;
-  if(financial.some(value=>value.metadata?.source?.sha256===sha256&&(privateCurve(value)||measurementSource(value))))fail('PLAN_IMPORT_PERMISSION_REQUIRED',403);
+  const financial=(await client.query(`SELECT f.id,f.metadata FROM public."AuditLog" f WHERE f."organizationId"=$1 AND f."entityId"=$2 AND f.action='plan.import.draft' AND f.metadata->'source'->>'sha256'=$3 AND ${canApprovePlan(member.role)?budgetSourceSql('f'):restrictedSourceSql('f')} LIMIT 1`,[member.organizationId,projectId,sha256])).rows;
+  // Authorized financial roles retain the existing document/curve channel flow;
+  // a stored budget source remains unavailable through every channel profile.
+  if(financial.some(value=>value.metadata?.source?.sha256===sha256&&(budgetSource(value)||!canApprovePlan(member.role)&&(privateCurve(value)||measurementSource(value)))))fail('PLAN_IMPORT_PERMISSION_REQUIRED',403);
  };
  const observedDraft=async(client,member,row,includeBudgetSource=false,budgetList=false)=>{curveAccess(member,row);if(investmentSource(row)){if(['READY','APPLIED','REJECTED'].includes(row.metadata.status))investmentDraft(row);if(row.metadata.investmentReview)await validateInvestmentReview(client,member,row);}if(documentSource(row)){if(['READY','APPLIED','REJECTED'].includes(row.metadata.status))documentDraft(row);if(row.metadata.reviewedCurve)await validateDocumentReview(client,member,row);}return publicDraft(usage&&row.metadata.usage&&typeof usage.projectProjection==='function'?{...row,metadata:{...row.metadata,usage:await usage.projectProjection(client,member,row)}}:row,includeBudgetSource,budgetList);};
  const permission=(member,approval=false)=>{if(!(approval?canApprovePlan(member.role):canImportPlan(member.role)))fail('PLAN_IMPORT_PERMISSION_REQUIRED',403);};

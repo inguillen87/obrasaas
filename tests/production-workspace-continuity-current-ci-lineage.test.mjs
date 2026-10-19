@@ -1,3 +1,4 @@
+import {restorePlanBudgetPreviousContract} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,6 +17,7 @@ import {reconstructPublishedHContract} from '../scripts/lib/plan-measurement-cur
 import {focusedWorkspaceCiSourceClosure,normalizeFocusedWorkspaceChecks,normalizeFocusedWorkspaceCurrentChecks} from '../scripts/verify-focused-workspace-ci.mjs';
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),read=file=>existsSync(file)?readFileSync(file):null,bytes=value=>Buffer.from(JSON.stringify(value,null,2)+'\n'),current=()=>JSON.parse(read('.github/workspace-acceptance-contract.json'));
 const reject=run=>assert.throws(run,{code:'WORKSPACE_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'});
+const rejectedMetadata=edit=>{const contract=current(),historical=restorePlanBudgetPreviousContract(contract);edit(historical);reject(()=>restoreWorkspaceContinuityPreviousContract(historical));edit(contract);reject(()=>restoreWorkspaceContinuityPreviousContract(contract));};
 const previousCurrent=()=>{const restored=restoreWhatsappFieldContinuityPreviousContract(current());assert.deepEqual(restored,whatsappCheckpoint);assert.equal(sha(bytes(restored)),whatsappPreviousSha);assert.equal(whatsappPreviousSha,'f7a72979af7b789d92333d4f631d6bbbccf247c5c04ce6edd88f64f70b6099bb');return restored;};
 
 test('continuity inverse restores complete immutable d5d before a203 AI OOXML and H without changing current',()=>{
@@ -51,7 +53,7 @@ test('only authenticated predecessor aliases advance and old or foreign bytes ca
 });
 
 test('omitted duplicate substituted and unreviewed outer deltas cannot reseal a historical contract',()=>{
- for(const mutate of [c=>{c[section].reviewedSourceChanges.pop();},c=>{c[section].validationDeltas.push({...c[section].validationDeltas[0]});},c=>{c[section].reviewedSourceChanges[0].currentSha256=c[section].reviewedSourceChanges[0].previousSha256;},c=>{c[section].addedSources[0].sha256='f'.repeat(64);},c=>{c[section].unexpected=true;},c=>{c.planMeasurementCurrentLineage.currentValidationSources[0].sha256='f'.repeat(64);},c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=checkpoint.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;},c=>{c.evidenceProducers.find(row=>row.path==='.vercel/private/focused-workspace-ui-evidence/current-ci.json').producerSha256='f'.repeat(64);}]){const contract=current();mutate(contract);reject(()=>restoreWorkspaceContinuityPreviousContract(contract));}
+ for(const mutate of [c=>{c[section].reviewedSourceChanges.pop();},c=>{c[section].validationDeltas.push({...c[section].validationDeltas[0]});},c=>{c[section].reviewedSourceChanges[0].currentSha256=c[section].reviewedSourceChanges[0].previousSha256;},c=>{c[section].addedSources[0].sha256='f'.repeat(64);},c=>{c[section].unexpected=true;},c=>{c.planMeasurementCurrentLineage.currentValidationSources[0].sha256='f'.repeat(64);},c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=checkpoint.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;},c=>{c.evidenceProducers.find(row=>row.path==='.vercel/private/focused-workspace-ui-evidence/current-ci.json').producerSha256='f'.repeat(64);}]){rejectedMetadata(mutate);}
 });
 
 test('CI import additions restore exact d5d source sets and old source sets cannot satisfy current acceptance',()=>{

@@ -1,5 +1,6 @@
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
-import {restoreWorkspaceContinuityPreviousContract} from '../scripts/lib/workspace-continuity-current-ci-lineage.mjs';
+import {WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWorkspaceContinuityPreviousContract} from '../scripts/lib/workspace-continuity-current-ci-lineage.mjs';
 import {restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {restoreWhatsappFieldContinuityPreviousContract,restoreWhatsappFieldContinuitySourceSet} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import {kycExpiredCurrentSourceFiles} from '../scripts/lib/kyc-expired-current-ci-lineage.mjs';
@@ -17,14 +18,23 @@ import {planMeasurementUiSourceClosure} from '../scripts/verify-plan-measurement
 import {PLAN_MEASUREMENT_NATIVE_CHECKS} from '../scripts/verify-plan-measurement-ci.mjs';
 import {validateParticipantKycPreanalysisCi} from '../scripts/verify-participant-kyc-preanalysis-ci.mjs';
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),read=file=>existsSync(file)?readFileSync(file):null,current=()=>JSON.parse(read('.github/workspace-acceptance-contract.json')),bytes=value=>Buffer.from(JSON.stringify(value,null,2)+'\n'),reject=run=>assert.throws(run,{code:'PLAN_MEASUREMENT_DOCUMENT_ASSOCIATION_CI_LINEAGE_REJECTED'});
+// Authenticate current source once; historical metadata never replaces read().
+const authenticatedContract=current();verifyPlanBudgetCurrentSources(authenticatedContract,read);
+const beforeBudgetContract=restorePlanBudgetPreviousContract(authenticatedContract);
+assert.equal(sha(bytes(beforeBudgetContract)),'8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839');
+const originalDocumentContract=restoreWorkspaceContinuityPreviousContract(beforeBudgetContract);
+assert.equal(sha(bytes(originalDocumentContract)),WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256);
+function currentAndOriginalDocumentDenied(mutate){for(const snapshot of [authenticatedContract,originalDocumentContract]){const changed=structuredClone(snapshot);mutate(changed);reject(()=>restoreDocumentTaskAssociationPreviousContract(changed));}}
+
 
 
 // This projection authenticates the current outer set before retaining the
 // exact historical count/hash assertions belonging to the earlier CI revision.
 function historicalCompactFiles(files,contract){
+ const beforeBudget=restorePlanBudgetSourceSet(contract,'COMPACT',files);
  const historical=restoreWorksiteLiveHoursSourceSet(contract,'COMPACT',files);
  assert.equal(historical.length,139);assert.equal(sha(JSON.stringify(historical)),'cd474d8e9a3b754daaeef61f986e31f1c92997a8423cd9a14c06d43ea706dbea');
- assert.equal(files.length,140);assert.deepEqual(files,[...historical,'src/lib/field-hours-report.mjs'].sort());
+ assert.equal(beforeBudget.length,140);assert.deepEqual(beforeBudget,[...historical,'src/lib/field-hours-report.mjs'].sort());
  return historical;
 }
 
@@ -61,24 +71,24 @@ test('only exact authenticated historical aliases advance and neither foreign no
 });
 
 test('a foreign old49 pin or omitted duplicate and unreviewed delta cannot reseal the outer contract',()=>{
- for(const mutate of [c=>{c.planMeasurementCurrentLineage.currentValidationSources[0].sha256='e'.repeat(64);},c=>{c[section].reviewedSourceChanges.pop();},c=>{c[section].reviewedSourceChanges.push({...c[section].reviewedSourceChanges[0]});},c=>{c[section].validationDeltas[0].currentSha256='e'.repeat(64);},c=>{c[section].unexpected=true;},c=>{c.extension.proofs[0].checkNames.push('not-reviewed');}]){const contract=current();mutate(contract);reject(()=>restoreDocumentTaskAssociationPreviousContract(contract));}
+ for(const mutate of [c=>{c.planMeasurementCurrentLineage.currentValidationSources[0].sha256='e'.repeat(64);},c=>{c[section].reviewedSourceChanges.pop();},c=>{c[section].reviewedSourceChanges.push({...c[section].reviewedSourceChanges[0]});},c=>{c[section].validationDeltas[0].currentSha256='e'.repeat(64);},c=>{c[section].unexpected=true;},c=>{c.extension.proofs[0].checkNames.push('not-reviewed');}])currentAndOriginalDocumentDenied(mutate);
 });
 
 test('UI node runtime17 restores the exact old14 without altering original manifests',()=>{
  const contract=current(),files=planMeasurementUiSourceClosure(read,{runtime:true}).files,before=JSON.stringify(files),restored=restoreDocumentTaskAssociationSourceSet('MEASUREMENT_UI_RUNTIME',files,contract);
- assert.equal(files.length,17);assert.equal(restored.length,14);assert.equal(sha(JSON.stringify(restored)),measurement.runtimePreviousPathsSha256);assert.equal(JSON.stringify(files),before);
+ const beforeBudget=restorePlanBudgetSourceSet(contract,'MEASUREMENT_UI_RUNTIME',files),budget=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family==='MEASUREMENT_UI_RUNTIME');assert.equal(beforeBudget.length,17);assert.equal(sha(JSON.stringify(beforeBudget)),budget.previousPathsSha256);assert.deepEqual(files,[...beforeBudget,...budget.additions].sort());assert.equal(restored.length,14);assert.equal(sha(JSON.stringify(restored)),measurement.runtimePreviousPathsSha256);assert.equal(JSON.stringify(files),before);
  for(const list of [restored,files.slice(1),[...files,files[0]],[...files.slice(1),'src/lib/foreign.mjs'].sort()])reject(()=>restoreDocumentTaskAssociationSourceSet('MEASUREMENT_UI_RUNTIME',list,contract));
 });
 
 test('CI-only import growth reconstructs exact a203 source sets and never expands a native manifest',()=>{
  const contract=current();for(const delta of contract[section].proofSourceDeltas){const spec=contract.extension.proofs.find(row=>row.id===delta.id),before=JSON.stringify(spec),old=restoreDocumentTaskAssociationSourceSet(delta.family,spec.sourceFiles,contract);
   assert.equal(old.length,delta.previousCount);assert.equal(sha(JSON.stringify(old)),delta.previousPathsSha256);assert.deepEqual(old,checkpoint.extension.proofs.find(row=>row.id===spec.id).sourceFiles);assert.equal(JSON.stringify(spec),before);
-  const changed=structuredClone(contract);changed.extension.proofs.find(row=>row.id===spec.id).sourceFiles=old;reject(()=>restoreDocumentTaskAssociationPreviousContract(changed));
+  const changed=structuredClone(contract);changed.extension.proofs.find(row=>row.id===spec.id).sourceFiles=old;reject(()=>restoreDocumentTaskAssociationPreviousContract(changed));const historical=structuredClone(originalDocumentContract);historical.extension.proofs.find(row=>row.id===spec.id).sourceFiles=old;reject(()=>restoreDocumentTaskAssociationPreviousContract(historical));
  }
  assert.deepEqual(contract.participantPreanalysisCurrentRevision.nativeSourceFiles,checkpoint.participantPreanalysisCurrentRevision.nativeSourceFiles);
  const id='participant-kyc-preanalysis-postgres',prior=checkpoint.extension.proofs.find(row=>row.id===id),inner=checkpoint.integratedIdentityCurrentRevision.proofSourceDeltas.find(row=>row.id===id),historic=prior.sourceFiles.filter(file=>!inner.additions.includes(file));
  assert.equal(historic.length,200);assert.equal(sha(JSON.stringify(historic)),inner.previousPathsSha256);
- const changed=structuredClone(contract),spec=changed.extension.proofs.find(row=>row.id===id);spec.sourceFiles=historic;reject(()=>restoreDocumentTaskAssociationPreviousContract(changed));
+ const changed=structuredClone(contract),spec=changed.extension.proofs.find(row=>row.id===id);spec.sourceFiles=historic;reject(()=>restoreDocumentTaskAssociationPreviousContract(changed));const historical=structuredClone(originalDocumentContract);historical.extension.proofs.find(row=>row.id===id).sourceFiles=historic;reject(()=>restoreDocumentTaskAssociationPreviousContract(historical));
  const source=file=>file==='.github/workspace-acceptance-contract.json'?bytes(changed):read(file);assert.throws(()=>preloadParticipantPreanalysisConsumerSources({readSource:source,readCheckout:source}),{code:'PLAN_MEASUREMENT_DOCUMENT_ASSOCIATION_CI_LINEAGE_REJECTED'});
  assert.throws(()=>validateParticipantKycPreanalysisCi({}, {expectedHead:'a'.repeat(40),expectedTree:'b'.repeat(40),readSource:read,readEvidence:()=>null,spec}),error=>error.code==='PARTICIPANT_PREANALYSIS_CI_REJECTED'&&error.message==='Only the exact committed proof spec may be validated');
 });

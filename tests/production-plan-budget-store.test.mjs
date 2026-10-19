@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {budgetStoreHarness,budgetContext as context,budgetSession as session,budgetSourceFile,budgetUploadInput,invalidBudgetZipSource} from './fixtures/plan-budget-store-synthetic.mjs';
 import {PLAN_BUDGET_SOURCE_CONSENT,PLAN_BUDGET_SOURCE_PURPOSE,PLAN_BUDGET_SOURCE_PROFILE,planBudgetSourceDigest,selectPlanBudgetSourceRow} from '../src/lib/plan-budget-source.mjs';
-import {PLAN_IMPORT_CYP_CONSENT} from '../src/lib/plan-import-policy.mjs';
+import {PLAN_IMPORT_CYP_CONSENT,PLAN_IMPORT_CYP_CURVE_CONSENT} from '../src/lib/plan-import-policy.mjs';
 import {documentCurveFixture} from './fixtures/plan-import-document-curve-synthetic.mjs';
 
 const reason='Consulta del presupuesto original sin aprobar ni aplicar importes.';
@@ -103,6 +103,29 @@ test('budget bytes remain private when a lower role switches to a historical phy
  h.setRole('ADMIN');assertDescriptor((await details(h,result.draft)).draft,source);assert.equal((await details(h,old.draft)).draft.budgetSource,undefined);
 });
 
+// Bounded historical sensitivity records only: no analyzed curve DTO or financial approval is fabricated.
+function sensitivityRecord(source,{id='synthetic-prior-curve',organizationId='budget-org',projectId=context.projectId,sha256=source.sha256,budget=false}={}){
+ return {id,organizationId,actorId:'budget-actor',projectId,action:'plan.import.draft',metadata:{version:1,projectId,syntheticSourceSensitivityFixture:true,source:{contentType:source.contentType,bytes:source.bytes.length,sha256},consent:{version:budget?PLAN_BUDGET_SOURCE_CONSENT:PLAN_IMPORT_CYP_CURVE_CONSENT},...(budget?{sourcePurpose:PLAN_BUDGET_SOURCE_PURPOSE}:{analysis:{spreadsheet:{version:4}}})}};
+}
+test('authorized channel roles find a later same SHA budget after an earlier financial curve with exact tenant project and hash filtering',async()=>{
+ for(const role of ['ADMIN','DIRECTOR']){
+  const h=budgetStoreHarness(),source=budgetSourceFile();h.setRole(role);
+  h.addLog(sensitivityRecord(source));
+  h.addLog(sensitivityRecord(source,{id:'synthetic-foreign-tenant-budget',organizationId:'foreign-org',budget:true}));
+  h.addLog(sensitivityRecord(source,{id:'synthetic-foreign-project-budget',projectId:'foreign-project',budget:true}));
+  h.addLog(sensitivityRecord(source,{id:'synthetic-other-hash-budget',sha256:source.sha256==='f'.repeat(64)?'e'.repeat(64):'f'.repeat(64),budget:true}));
+  const {result}=await uploaded(h,source);assert.equal([...h.state().logs.keys()][0],'synthetic-prior-curve');h.setChannelProof({channel:'WHATSAPP',synthetic:true});
+  const beforeIo={get:h.calls.get,put:h.calls.put,analyzer:h.calls.analyzer,storageConfiguration:h.calls.storageConfiguration},taskReads=h.calls.taskReads;
+  await rejectedWithoutWrites(h,()=>h.imports.attach(session,budgetUploadInput(source,{consent:PLAN_IMPORT_CYP_CONSENT})),'PLAN_IMPORT_PERMISSION_REQUIRED',403);
+  assert.deepEqual(h.calls.sensitivityReads.at(-1),{budgetOnly:true,organizationId:'budget-org',projectId:context.projectId,sourceSha256:source.sha256,rowIds:[result.draft.id]});
+  assert.deepEqual({get:h.calls.get,put:h.calls.put,analyzer:h.calls.analyzer,storageConfiguration:h.calls.storageConfiguration},beforeIo);assert.equal(h.calls.taskReads,taskReads);assertNoBusinessEffects(h);
+  const query=h.calls.sql.findLast(sql=>sql.startsWith('SELECT f.id,f.metadata FROM public."AuditLog" f ')),values=['budget-org',context.projectId,source.sha256];assert.ok(query.includes("f.\"organizationId\"=$1")&&query.includes("f.\"entityId\"=$2")&&query.includes("f.metadata->'source'->>'sha256'=$3")&&query.endsWith(' LIMIT 1'));
+  const noBudget=budgetStoreHarness();noBudget.setRole(role);noBudget.setChannelProof({channel:'WHATSAPP',synthetic:true});noBudget.addLog(sensitivityRecord(source));
+  const empty=await noBudget.workspace.projectOperation(session,context,false,client=>client.query(query,values));assert.deepEqual(empty.rows,[]);assert.deepEqual(noBudget.calls.sensitivityReads.at(-1).rowIds,[]);
+  const altered=query.replace("f.metadata->'analysis'->'budgetSource' IS NOT NULL","f.metadata->'analysis'->'otherSource' IS NOT NULL");assert.notEqual(altered,query);await assert.rejects(noBudget.workspace.projectOperation(session,context,false,client=>client.query(altered,values)),/Unexpected synthetic source-sensitivity predicate/);
+  assert.equal(noBudget.calls.get+noBudget.calls.put+noBudget.calls.analyzer+noBudget.calls.storageConfiguration+noBudget.calls.taskReads+noBudget.calls.taskWrites,0);assertNoBusinessEffects(noBudget);
+ }
+});
 test('ordinary, document and investment decision routes cannot mutate or apply a budget source',async()=>{
  const h=budgetStoreHarness(),{result}=await uploaded(h),draft=result.draft;
  const attempts=['EDIT','APPLY','REJECT'].map(action=>command(draft,action));

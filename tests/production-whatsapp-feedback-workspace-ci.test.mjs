@@ -1,3 +1,4 @@
+import {restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {WHATSAPP_FIELD_CONTINUITY_CURRENT_REVISION as waRevision,WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWhatsappFieldContinuityPreviousContract} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import {restoreExistingApiPlanPreviousContract,restoreExistingApiPlanSourceSet} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
 import {integratedIdentityPreviousProofChecks} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
@@ -18,6 +19,9 @@ const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const readSource=file=>Buffer.from(readFileSync(path.join(root,file),'utf8').replaceAll('\r\n','\n'));
 const additions=kind=>kind==='PG_COMPANY_KYC'?['src/lib/field-report-feedback.mjs','src/lib/meta-kyc-context-feedback.mjs','src/lib/meta-kyc-context-outbound.mjs','scripts/lib/kyc-context-feedback-native.mjs']:['src/lib/field-report-feedback.mjs'];
 const current=contract.extension.proofs.filter(spec=>Object.hasOwn(WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS,spec.kind));
+verifyPlanBudgetCurrentSources(contract,readSource);
+const beforeBudgetContract=restorePlanBudgetPreviousContract(contract);
+assert.equal(sha(JSON.stringify(beforeBudgetContract,null,2)+'\n'),'8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839');
 const predecessor=restoreWhatsappFieldContinuityPreviousContract(contract);
 assert.equal(sha(JSON.stringify(predecessor,null,2)+'\n'),WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256);
 // Only producer/check metadata is restored for the historical18 assertion.
@@ -66,7 +70,7 @@ test('the original thirteen company KYC groups remain immutable and all five nat
  for(const mutate of [value=>{value.checkNames[0]='redefined-original-authority';},value=>{value.checkNames.pop();},value=>{value.checkNames=value.checkNames.slice(0,13);}]){const changed=clone(spec);mutate(changed);assert.throws(()=>validateWhatsappFeedbackPreviousSourceLineage(changed),{code:'WHATSAPP_FEEDBACK_PREVIOUS_CHECK_LINEAGE'});}
  for(const mutate of [value=>{value.checkNames[13]='assumed-current-source';},value=>{value.checkNames[14]=value.checkNames[13];},value=>{value.checkNames.splice(13,5,...value.checkNames.slice(13).reverse());}]){const changed=clone(spec);mutate(changed);assert.throws(()=>validateWhatsappFeedbackPreviousSourceLineage(changed),{code:'WHATSAPP_FEEDBACK_CURRENT_CHECK_NAMES'});}
  const previous=predecessor.extension.proofs.find(row=>row.id===actual.id),delta=waRevision.currentProofChanges.find(row=>row.id===actual.id),normalized=spec;assert.equal(actual.producerSha256,delta.currentProducerSha256);assert.equal(previous.producerSha256,delta.previousProducerSha256);assert.notEqual(actual.producerSha256,previous.producerSha256);assert.deepEqual(normalized.sourceFiles,actual.sourceFiles);assert.equal(normalized.checkNames.length,18);assert.equal(previous.checkNames.length,19);assert.throws(()=>integratedIdentityPreviousProofChecks(actual),{code:'INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED'});
- for(const edit of [value=>{value.whatsappFieldContinuityCurrentRevision.currentProofChanges.find(row=>row.id===actual.id).previousProducerSha256='f'.repeat(64);},value=>{value.extension.proofs.find(row=>row.id===actual.id).producerSha256=previous.producerSha256;},value=>{value.whatsappFieldContinuityCurrentRevision.currentProofChanges.find(row=>row.id===actual.id).previousCheckNames.pop();}]){const value=clone(contract);edit(value);assert.throws(()=>restoreWhatsappFieldContinuityPreviousContract(value),{code:'WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'});}
+ for(const edit of [value=>{value.whatsappFieldContinuityCurrentRevision.currentProofChanges.find(row=>row.id===actual.id).previousProducerSha256='f'.repeat(64);},value=>{value.extension.proofs.find(row=>row.id===actual.id).producerSha256=previous.producerSha256;},value=>{value.whatsappFieldContinuityCurrentRevision.currentProofChanges.find(row=>row.id===actual.id).previousCheckNames.pop();}]){const value=clone(contract);edit(value);assert.throws(()=>restoreWhatsappFieldContinuityPreviousContract(value),{code:'WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'});const historical=clone(beforeBudgetContract);edit(historical);assert.throws(()=>restoreWhatsappFieldContinuityPreviousContract(historical),{code:'WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'});}
 });
 
 test('the outer proof rejects omitted foreign and wrong-hash additions before any native or provider declaration',()=>{

@@ -2103,7 +2103,17 @@ export function kycExpiredCurrentCompositionSelftest(contract,root=process.cwd()
  const bad=(name,run)=>{assert.throws(run,error=>['KYC_EXPIRED_CURRENT_LINEAGE_REJECTED','PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code));checks.push({name:prefix+name,result:'PASS',expectedDenial:'KYC_EXPIRED_CURRENT_LINEAGE_REJECTED',boundary:'pure source/contract negative fixture'});};
  const readSource=file=>Buffer.from(readFileSync(path.join(root,file),'utf8').replaceAll('\r\n','\n'));
  good('all-published-contract-fields-byte-equivalent',()=>validateKycExpiredCurrentWorkspaceContract(contract));
- good('actual-production-and-native-125-source-closure',()=>{const result=verifyKycExpiredCurrentSources(section,readSource);assert.equal(result.publishedCurrentSourceCount??result.sourceCount,contract.planMeasurementCurrentLineage?127:125);assert.equal(result.sourceCount,contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]?.sourceSetDeltas.find(row=>row.family==='COMPACT')?.currentCount??contract.whatsappFieldContinuityCurrentRevision?.sourceSetDeltas.find(row=>row.family==='COMPACT').currentCount??contract.integratedIdentityCurrentRevision?.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount??contract.participantPreanalysisCurrentRevision?.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount??(contract.planMeasurementCurrentLineage?127:125));});
+ good('actual-production-and-native-125-source-closure',()=>{
+  const result=verifyKycExpiredCurrentSources(section,readSource);assert.equal(result.publishedCurrentSourceCount??result.sourceCount,contract.planMeasurementCurrentLineage?127:125);
+  if(contract[PLAN_BUDGET_CURRENT_SECTION]){
+   // Authenticate a private snapshot before using the current COMPACT binding.
+   // The published127/125/117 lineage and the older fallback remain independent.
+   const current=clone(contract);verifyPlanBudgetCurrentSources(current,readSource);
+   const compact=current[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family==='COMPACT'),family=current[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family==='COMPACT');
+   assert.ok(compact&&family,'The authenticated current COMPACT delta and family are required');assert.equal(compact.currentCount,family.currentFiles.length);assert.equal(compact.currentPathsSha256,hash(canonical(family.currentFiles)));
+   assert.equal(result.sourceCount,compact.currentCount);assert.equal(result.sourcePathsSha256,compact.currentPathsSha256);
+  }else assert.equal(result.sourceCount,contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]?.sourceSetDeltas.find(row=>row.family==='COMPACT')?.currentCount??contract.whatsappFieldContinuityCurrentRevision?.sourceSetDeltas.find(row=>row.family==='COMPACT').currentCount??contract.integratedIdentityCurrentRevision?.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount??contract.participantPreanalysisCurrentRevision?.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount??(contract.planMeasurementCurrentLineage?127:125));
+ });
  good('old-117-source-corpus-plus-exact-eight-additions',()=>{assert.equal(section.previousSourceCount,117);assert.equal(section.sourceFiles.length,125);equal(section.sourceAdditions,KYC_EXPIRED_CURRENT_ADDITIONS,'PROOF_BINDING_SOURCE');});
  good('thirteen-historical-plus-prior-and-composed-contexts',()=>{assert.equal(section.historicalScenarioCount,13);assert.equal(section.historicalMeasurementCount,3);assert.equal(section.historicalPostCount,4);assert.equal(section.priorContextPostCount,1);assert.equal(section.composedCurrentPostCount,1);assert.equal(section.totalPostCount,6);});
  for(const [name,edit]of [

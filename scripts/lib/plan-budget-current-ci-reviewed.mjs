@@ -12,7 +12,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": ".github/scripts/verify-workspace-ci-parallelization.mjs",
       "previousSha256": "8d65b7fb1446dc0533f69097ae28598a7c748f50c19eb586614ce078bf3aebac",
-      "currentSha256": "fbde522ac5a985e3b496114617af684042581545ca081fe48f86882b2491289e"
+      "currentSha256": "e1dc93452c5893ea6654ee73b8707e4612f6483817beaa99e46274ee2f27aacd"
     },
     {
       "path": ".github/workflows/workspace-acceptance.yml",
@@ -42,7 +42,17 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/lib/plan-partida-preview-current-ci-lineage.mjs",
       "previousSha256": "66fa40633e2900a35073bed5b8f6a48b3402e3ab34703b3d47af3b68ae90fd08",
-      "currentSha256": "d9f7457c57f46bc99cfec6539c127c82e283858be862f69ccb2e628253d93e59"
+      "currentSha256": "141f5d6decf74d9dc126399ac955ac27874da785fd6c5df5f8af7bc0244d4e75"
+    },
+    {
+      "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
+      "previousSha256": "5960b4acedd880ac0a49f157e57007863c2478ad218e504eb81bf993ad54b147",
+      "currentSha256": "a1de3a73617de7c4eb2f9db8665650abe5798accb44b886cd8d2220fe5295bbf"
+    },
+    {
+      "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
+      "previousSha256": "86c626156b82419640b4dc45520a7dcca330810949a346ae60f50566a136f2e6",
+      "currentSha256": "c78c0792ec6c9142b76090bdffc65fc026a5b333a473e833a203981bec96f448"
     },
     {
       "path": "scripts/verify-plan-budget-ui.mjs",
@@ -53,6 +63,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "path": "scripts/verify-plan-import-ui.mjs",
       "previousSha256": "57534d93a1e0b675e11faec0750a51d1867f9c823e2b91a11143c0f8d297b38f",
       "currentSha256": "d85d5f2d21f3da43dcb66216d05798d9b2b5cdf2134b212be493a386a00301af"
+    },
+    {
+      "path": "scripts/verify-plan-measurement-ci.mjs",
+      "previousSha256": "314cfdc84accb072c82ef9de3dc13557a7594e8b1461031aa71a79d94b7de35d",
+      "currentSha256": "4a991e4ecc6bb25d8b0700afcdf68537cfd452b853d06a94f54f4a826ba644dd"
     },
     {
       "path": "src/app/(identity)/cuenta/plan-import-panel.js",
@@ -112,7 +127,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "src/lib/plan-import-store.mjs",
       "previousSha256": "455c06e64301b2679e1278cc288cd4b06c875a222339e15c6720c58bc1f011c2",
-      "currentSha256": "b672dffcccb3105dd30afdfcbebd53236ed61b1fc33359a59bdcbdea18eb423e"
+      "currentSha256": "da047723f790c0f5e7eeff855782e4db7463670d1875caf0bab1c6cce9b1a920"
     },
     {
       "path": "tests/fixtures/plan-budget-source-synthetic.mjs",
@@ -122,12 +137,77 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/fixtures/plan-budget-store-synthetic.mjs",
       "previousSha256": null,
-      "currentSha256": "5ba02260dc26e32a84af99f40afbd654382646ae688d6bbba8e0b409f23b25ba"
+      "currentSha256": "86f8ba219c29aa70298c9998b45cd0e66c888cc277690ad43c28f30d47fd88d1"
     },
     {
       "path": "tests/fixtures/plan-budget-ui-synthetic.mjs",
       "previousSha256": null,
       "currentSha256": "e6e03b516d0301717c3f8daa0711c46610efb672eb4c7e83efcaf69959903bb3"
+    },
+    {
+      "path": "tests/fixtures/plan-budget-weekly-164-runtime.json",
+      "previousSha256": null,
+      "currentSha256": "ac1e1e5f5d538b304987b1fd4ad6ebff766a7b2175ffc5b53cb785bc9917d416"
+    },
+    {
+      "path": "tests/production-company-kyc-outbound-compact-ci.test.mjs",
+      "previousSha256": "f5cf6fc2dd327058ca2e22196ab0bb9dfc436914f1eb39a0f1a8b8ef6b7c66f1",
+      "currentSha256": "900baee8384af0b1dd02f19cbb200406e9f0e3adc56a4ac67ff344ce2cb152e4"
+    },
+    {
+      "path": "tests/production-field-outbound-current-ci-lineage.test.mjs",
+      "previousSha256": "ca1f7fa23d0247aa994693eeec90ae019c20408e6e97ea9496507904cd8bc631",
+      "currentSha256": "94510dbc3a238c06a1ead9ff5c57a417a308e22b6673717f6d99798de36ee987"
+    },
+    {
+      "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
+      "previousSha256": "511f6c45d33d66a22a7f583fd48c7ea7d4933dab26473d2106ece15056e4f6c7",
+      "currentSha256": "008b9438410a4b744e55d692d0a37b3f4a41cb1016762bf16ce7c90b6e03d451"
+    },
+    {
+      "path": "tests/production-integrated-identity-current-ci-lineage.test.mjs",
+      "previousSha256": "c0e1179a42bc106ad08b24e20470670c61b0b83b52c62cf4533322ce1ae6a157",
+      "currentSha256": "ae696cde9e1e62aabbfaf043365c8805725de2cba558c80b630ea68a9ea649eb"
+    },
+    {
+      "path": "tests/production-kyc-reply-feedback-ci.test.mjs",
+      "previousSha256": "854f34aff294e610915ce9078a1739121c646ba4f985ba20c7873c8c8826beaf",
+      "currentSha256": "739b4bc21c9d7ecc0117df107e9e248bbd6aae5805c3c38e71643c8639b1535a"
+    },
+    {
+      "path": "tests/production-kyc-reply-feedback-current-lineage.test.mjs",
+      "previousSha256": "8cc78b2332c9c280cb45d8805baeae2371f209801394b9cc758312e7ef8a8d71",
+      "currentSha256": "c536c5c9defcb8bb02ce7b5a6a1a2c7832b536cda9104838e02e1a2acc97857a"
+    },
+    {
+      "path": "tests/production-material-consumption-feedback-ci.test.mjs",
+      "previousSha256": "b8a85bd426a354c5914ed911d7dac70fd54a0b285ff90141d7c33d8592a29708",
+      "currentSha256": "7c3544808428d015f6f12dc33e80b44f8dce824fc0dbc3ac37682563197e3e80"
+    },
+    {
+      "path": "tests/production-material-review-current-ci-lineage.test.mjs",
+      "previousSha256": "a9d434e05848d2d2170d57a9410c8ddeecf4585949a645cb1fdf0480b2e58db9",
+      "currentSha256": "bd936d0d32bf3498aea96829d47ecced848791512d2fa109db176fd287512d85"
+    },
+    {
+      "path": "tests/production-meta-existing-api-plan-current-ci-lineage.test.mjs",
+      "previousSha256": "dabe6caf8e2a216aa1d7160551431ce3e3b198b09b397f8c10edfeb9d9928650",
+      "currentSha256": "81ff15e21491a888febd8e2954ee9d5a3b018583056d0153ba4c3893ff563a1e"
+    },
+    {
+      "path": "tests/production-ooxml-accounting-current-ci-lineage.test.mjs",
+      "previousSha256": "35a12ce84a67245d0c96a059c741c8eff29711d71896be1774b88c76e975be55",
+      "currentSha256": "4c30719b0891e2295d0986cc3bb869b3f6b317032adcfcbf04a1fd36a68f0e18"
+    },
+    {
+      "path": "tests/production-organization-usage-ci.test.mjs",
+      "previousSha256": "1f4aa949f2d05d83239560a4fa18223bfb910e85439ba14124882490bc8f36c3",
+      "currentSha256": "b06e53cf706b97288cb6eb360226bbd7c72e0568cdb167408c482fae13ec7c6b"
+    },
+    {
+      "path": "tests/production-participant-preanalysis-current-ci-lineage.test.mjs",
+      "previousSha256": "568a07b2a88be7c9a0f217ce2b49fc61dbdeca8d6d1891dc63d0752f0efff9b4",
+      "currentSha256": "7b2ca60ee1a159b3c8a00c24f182b2755a3d9df48cf5b2a5f23b76f0289b6b06"
     },
     {
       "path": "tests/production-plan-budget-analyzer-http.test.mjs",
@@ -142,7 +222,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-plan-budget-store.test.mjs",
       "previousSha256": null,
-      "currentSha256": "c91c2dc6d12d45c3d52c298fd9978e77c9b529f8de75ed94421eafb4ffd68548"
+      "currentSha256": "f87d068344430bbdfc1adb21c93be5df6c7a72ab3c5d63c6c6fac59d92bf087b"
     },
     {
       "path": "tests/production-plan-budget-ui-contract.test.mjs",
@@ -165,14 +245,54 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "currentSha256": "f38560b719db87ff6f87f364e59b01b2bf533cca4ed4f79f6a1daef1719d2668"
     },
     {
+      "path": "tests/production-plan-import-document-curve-fixture-copy.test.mjs",
+      "previousSha256": "40953ff493ea8df1a28a4201bbb0903cff48240a1f8831d58ce7e05d3d08591d",
+      "currentSha256": "fc4f5e58dff8b37f63ff4ca1b8c5c99c702530581ff77ad778a49322318765d4"
+    },
+    {
       "path": "tests/production-plan-import-link-ui.test.mjs",
       "previousSha256": "19a55f361e6ccf2db4460504664abd39141c835e80b04133385cd778bc210cad",
       "currentSha256": "9e71f5c832e45ce7e36f311f08834ad2237c622317d8f176e93f8e761fbf3193"
     },
     {
+      "path": "tests/production-plan-measurement-ci.test.mjs",
+      "previousSha256": "68fd8ecf6bc6351fc87a19db2c289688f306ed29b2c983c5da81e7ec3221aeab",
+      "currentSha256": "437a174ac8a0240ea8495c140f4dd9021ac1915197db5503a4ae36dbf07f17b3"
+    },
+    {
+      "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
+      "previousSha256": "ead294a9a4066f487b58cb8e9187ca9fee03ad0c29706c2dfb6006cb23a82a81",
+      "currentSha256": "11cdf0fc8ec555bc424281c31d1b237df22cb1ade380d274e8bd2e0ce652624e"
+    },
+    {
+      "path": "tests/production-plan-measurement-document-association-ci-lineage.test.mjs",
+      "previousSha256": "af5cd5fb58a541ef56c737dd947c16f608f585e18a6162796ca804054090e3e2",
+      "currentSha256": "80fb2cec8442a2dfa47febb4d6ee736b4737a6435bde47c25a14dfa0b535be2d"
+    },
+    {
       "path": "tests/production-plan-source-curve-ui.test.mjs",
       "previousSha256": "30f9ecb970983cc4d9872feb7e89f301c1c6c899bda91055f7262dd2922bcb13",
       "currentSha256": "aa7fc15132d80cb9378cbcbf32312cf6aff20b95e7d2bb35cf96390657c3d0f0"
+    },
+    {
+      "path": "tests/production-whatsapp-feedback-workspace-ci.test.mjs",
+      "previousSha256": "6604b797f3466aad51028091fcddbcf3de1c86e9fec78b895c8156047d3f6c67",
+      "currentSha256": "4cbba761beac4b8a5d72560a20c5395ba50bc5cbcfd68000de96e5c20022e342"
+    },
+    {
+      "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
+      "previousSha256": "43e1b60497a81d1598674fc3500b8ed47fa9be807c03788641ff5cf12c129521",
+      "currentSha256": "a0e817f4f0ea3bae2a8042447a38ad099fb448a9ec8d34c0fd8e0b754685a497"
+    },
+    {
+      "path": "tests/production-workspace-ci-consumer-projections.test.mjs",
+      "previousSha256": "b63b67c71dce654db47fad94dcbe7e37563bd6ff5b019601f4d5b8c4dc6b8b10",
+      "currentSha256": "d5caf324e0b729aa859a5771ac395ccd1e7a81ca078b36a076e91f70eb26c887"
+    },
+    {
+      "path": "tests/production-workspace-continuity-current-ci-lineage.test.mjs",
+      "previousSha256": "991b357dbba1a4c69060bad450c536a6314ab99948c9baff5da5405fd3511c6c",
+      "currentSha256": "9764d78e78f38aafb242324d799b60b3c220e19d49cdf952b10b3b39e8a510cd"
     },
     {
       "path": "tests/production-workspace-plan-partida-budget-preview.test.mjs",
@@ -182,7 +302,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-workspace-plan-partida-preview-current-ci-lineage.test.mjs",
       "previousSha256": "593466da00f03fff06c19e2ac746fb14fb03371f4ceb96a2f4fc342de6e3de32",
-      "currentSha256": "af6325a03638925ecd3ee0a752e4b6a74b8789784b840264f8adebfdc8aaf18d"
+      "currentSha256": "8416207768df336e0e2665c10560aa4a7f731f0ef9951636b545002b0c272563"
     }
   ],
   "sourceSetDeltas": [
@@ -2967,7 +3087,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-partida-preview-current-ci-lineage.mjs",
-          "sha256": "d9f7457c57f46bc99cfec6539c127c82e283858be862f69ccb2e628253d93e59"
+          "sha256": "141f5d6decf74d9dc126399ac955ac27874da785fd6c5df5f8af7bc0244d4e75"
         },
         {
           "path": "scripts/lib/plan-partida-preview-current-ci-reviewed.mjs",
@@ -2975,11 +3095,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
-          "sha256": "5960b4acedd880ac0a49f157e57007863c2478ad218e504eb81bf993ad54b147"
+          "sha256": "a1de3a73617de7c4eb2f9db8665650abe5798accb44b886cd8d2220fe5295bbf"
         },
         {
           "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
-          "sha256": "86c626156b82419640b4dc45520a7dcca330810949a346ae60f50566a136f2e6"
+          "sha256": "c78c0792ec6c9142b76090bdffc65fc026a5b333a473e833a203981bec96f448"
         },
         {
           "path": "scripts/lib/worksite-live-hours-current-ci-reviewed.mjs",
@@ -3731,7 +3851,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "tests/production-integrated-identity-current-ci-lineage.test.mjs",
-          "sha256": "c0e1179a42bc106ad08b24e20470670c61b0b83b52c62cf4533322ce1ae6a157"
+          "sha256": "ae696cde9e1e62aabbfaf043365c8805725de2cba558c80b630ea68a9ea649eb"
         }
       ]
     },
@@ -3992,7 +4112,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-partida-preview-current-ci-lineage.mjs",
-          "sha256": "d9f7457c57f46bc99cfec6539c127c82e283858be862f69ccb2e628253d93e59"
+          "sha256": "141f5d6decf74d9dc126399ac955ac27874da785fd6c5df5f8af7bc0244d4e75"
         },
         {
           "path": "scripts/lib/plan-partida-preview-current-ci-reviewed.mjs",
@@ -4000,11 +4120,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
-          "sha256": "5960b4acedd880ac0a49f157e57007863c2478ad218e504eb81bf993ad54b147"
+          "sha256": "a1de3a73617de7c4eb2f9db8665650abe5798accb44b886cd8d2220fe5295bbf"
         },
         {
           "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
-          "sha256": "86c626156b82419640b4dc45520a7dcca330810949a346ae60f50566a136f2e6"
+          "sha256": "c78c0792ec6c9142b76090bdffc65fc026a5b333a473e833a203981bec96f448"
         },
         {
           "path": "scripts/lib/worksite-live-hours-current-ci-reviewed.mjs",
@@ -4228,7 +4348,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
-          "sha256": "43e1b60497a81d1598674fc3500b8ed47fa9be807c03788641ff5cf12c129521"
+          "sha256": "a0e817f4f0ea3bae2a8042447a38ad099fb448a9ec8d34c0fd8e0b754685a497"
         },
         {
           "path": "tests/production-worksite-task-selector.test.mjs",
@@ -4896,7 +5016,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/plan-import-store.mjs",
-          "sha256": "b672dffcccb3105dd30afdfcbebd53236ed61b1fc33359a59bdcbdea18eb423e"
+          "sha256": "da047723f790c0f5e7eeff855782e4db7463670d1875caf0bab1c6cce9b1a920"
         },
         {
           "path": "src/lib/plan-measurement-configuration.mjs",
@@ -5929,7 +6049,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/plan-import-store.mjs",
-          "sha256": "b672dffcccb3105dd30afdfcbebd53236ed61b1fc33359a59bdcbdea18eb423e"
+          "sha256": "da047723f790c0f5e7eeff855782e4db7463670d1875caf0bab1c6cce9b1a920"
         },
         {
           "path": "src/lib/plan-measurement-policy.mjs",
@@ -6976,7 +7096,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/plan-import-store.mjs",
-          "sha256": "b672dffcccb3105dd30afdfcbebd53236ed61b1fc33359a59bdcbdea18eb423e"
+          "sha256": "da047723f790c0f5e7eeff855782e4db7463670d1875caf0bab1c6cce9b1a920"
         },
         {
           "path": "src/lib/plan-measurement-policy.mjs",
@@ -7762,7 +7882,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/plan-import-store.mjs",
-          "sha256": "b672dffcccb3105dd30afdfcbebd53236ed61b1fc33359a59bdcbdea18eb423e"
+          "sha256": "da047723f790c0f5e7eeff855782e4db7463670d1875caf0bab1c6cce9b1a920"
         },
         {
           "path": "src/lib/plan-measurement-policy.mjs",
@@ -8516,7 +8636,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/plan-import-store.mjs",
-          "sha256": "b672dffcccb3105dd30afdfcbebd53236ed61b1fc33359a59bdcbdea18eb423e"
+          "sha256": "da047723f790c0f5e7eeff855782e4db7463670d1875caf0bab1c6cce9b1a920"
         },
         {
           "path": "src/lib/plan-measurement-policy.mjs",
@@ -8968,7 +9088,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-partida-preview-current-ci-lineage.mjs",
-          "sha256": "d9f7457c57f46bc99cfec6539c127c82e283858be862f69ccb2e628253d93e59"
+          "sha256": "141f5d6decf74d9dc126399ac955ac27874da785fd6c5df5f8af7bc0244d4e75"
         },
         {
           "path": "scripts/lib/plan-partida-preview-current-ci-reviewed.mjs",
@@ -8980,7 +9100,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
-          "sha256": "86c626156b82419640b4dc45520a7dcca330810949a346ae60f50566a136f2e6"
+          "sha256": "c78c0792ec6c9142b76090bdffc65fc026a5b333a473e833a203981bec96f448"
         },
         {
           "path": "scripts/lib/worksite-live-hours-current-ci-reviewed.mjs",
@@ -9184,7 +9304,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/plan-import-store.mjs",
-          "sha256": "b672dffcccb3105dd30afdfcbebd53236ed61b1fc33359a59bdcbdea18eb423e"
+          "sha256": "da047723f790c0f5e7eeff855782e4db7463670d1875caf0bab1c6cce9b1a920"
         },
         {
           "path": "src/lib/plan-measurement-policy.mjs",
@@ -9220,7 +9340,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "tests/fixtures/plan-budget-store-synthetic.mjs",
-          "sha256": "5ba02260dc26e32a84af99f40afbd654382646ae688d6bbba8e0b409f23b25ba"
+          "sha256": "86f8ba219c29aa70298c9998b45cd0e66c888cc277690ad43c28f30d47fd88d1"
         },
         {
           "path": "tests/fixtures/plan-budget-ui-synthetic.mjs",

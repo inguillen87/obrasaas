@@ -34,7 +34,7 @@ export function invalidBudgetZipSource(){
 export function budgetStoreHarness(){
  let logs=new Map(),tasks=new Map(),role='ADMIN',channelProof=null,afterGet=null,afterPut=null;
  const blobs=new Map(),clone=value=>structuredClone(value),result=rows=>({rows:clone(rows)});
- const calls={sql:[],operations:[],budgetProjections:[],get:0,put:0,analyzer:0,provider:0,providerConfiguration:0,storageConfiguration:0,taskReads:0,taskWrites:0};
+ const calls={sql:[],operations:[],budgetProjections:[],sensitivityReads:[],get:0,put:0,analyzer:0,provider:0,providerConfiguration:0,storageConfiguration:0,taskReads:0,taskWrites:0};
  const isBudget=row=>{const m=row.metadata||{};return m.sourcePurpose===PLAN_BUDGET_SOURCE_PURPOSE||m.consent?.version===PLAN_BUDGET_SOURCE_CONSENT||m.sourceConsent===PLAN_BUDGET_SOURCE_CONSENT||Boolean(m.analysis?.budgetSource)||m.outcome?.draft?.budgetImport===true;};
  const isRestricted=row=>{
   const m=row.metadata||{},purposes=[PLAN_BUDGET_SOURCE_PURPOSE,PLAN_MEASUREMENT_PURPOSE,DOCUMENT_CURVE_PURPOSE,PLAN_CYP_INVESTMENT_PURPOSE];
@@ -57,10 +57,19 @@ export function budgetStoreHarness(){
   for(const match of outer.matchAll(/COALESCE\((?:\w+\.)?metadata->'consent'->>'version',''\)\s+NOT IN\s*\(([^)]+)\)/g)){
    const excluded=[...match[1].matchAll(/'([^']+)'/g)].map(item=>item[1]);rows=rows.filter(row=>!excluded.includes(row.metadata.consent?.version));
   }
-  if(outer.includes('SELECT f.id,f.metadata')&&outer.includes('COALESCE('))rows=rows.filter(isRestricted);
+  const sensitivity=outer.startsWith('SELECT f.id,f.metadata FROM public."AuditLog" f ');let budgetOnly=false;
+  if(sensitivity){
+   const prefix='SELECT f.id,f.metadata FROM public."AuditLog" f WHERE f."organizationId"=$1 AND f."entityId"=$2 AND f.action=\'plan.import.draft\' AND f.metadata->\'source\'->>\'sha256\'=$3 AND ';
+   const budgetPredicate=`(COALESCE(f.metadata->>'sourcePurpose','')='${PLAN_BUDGET_SOURCE_PURPOSE}' OR COALESCE(f.metadata->'consent'->>'version','')='${PLAN_BUDGET_SOURCE_CONSENT}' OR COALESCE(f.metadata->>'sourceConsent','')='${PLAN_BUDGET_SOURCE_CONSENT}' OR f.metadata->'analysis'->'budgetSource' IS NOT NULL OR COALESCE(f.metadata->'outcome'->'draft'->>'budgetImport','')='true')`;
+   if(!outer.startsWith(prefix)||!outer.endsWith(' LIMIT 1'))throw Error('Unexpected synthetic source-sensitivity query');
+   const predicate=outer.slice(prefix.length,-' LIMIT 1'.length);budgetOnly=predicate===budgetPredicate;
+   if(!budgetOnly&&(!predicate.includes(budgetPredicate)||!predicate.includes(PLAN_MEASUREMENT_PURPOSE)||!predicate.includes(PLAN_IMPORT_MONTHLY_CURVE_CONSENT)))throw Error('Unexpected synthetic source-sensitivity predicate');
+   rows=rows.filter(budgetOnly?isBudget:isRestricted);
+  }
   if(sql.includes('AND NOT EXISTS'))rows=rows.filter(row=>![...logs.values()].some(other=>other.organizationId===row.organizationId&&other.projectId===row.projectId&&other.metadata.source?.sha256===row.metadata.source?.sha256&&isRestricted(other)));
   if(sql.includes('ORDER BY "createdAt" DESC,id DESC'))rows.sort((a,b)=>String(b.metadata.createdAt).localeCompare(String(a.metadata.createdAt))||b.id.localeCompare(a.id));
   const limit=sql.match(/LIMIT (\d+)/);if(limit)rows=rows.slice(0,Number(limit[1]));
+  if(sensitivity)calls.sensitivityReads.push({budgetOnly,organizationId:values[0],projectId:values[1],sourceSha256:values[2],rowIds:rows.map(row=>row.id)});
   return rows.map(row=>{
    const projected={...row,entityId:row.projectId};
    if(sql.includes("#- '{analysis,budgetSource}'")){
