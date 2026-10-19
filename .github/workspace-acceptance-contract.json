@@ -38841,6 +38841,11 @@
         "currentSha256": "ae44e43ec0202bffc3c729219fe9fdb6066363a970279f62cc4438d5d715ead5"
       },
       {
+        "path": "scripts/lib/material-review-current-ci-lineage.mjs",
+        "previousSha256": "805e35504f147f017b4e70889c29c92175a4673f03916630319f6f25d040c4b4",
+        "currentSha256": "9155e03f6c6831e8122263b73c16a724645fc5cd3ebcfdd950c0413543c12a64"
+      },
+      {
         "path": "scripts/lib/plan-budget-browser-ui.mjs",
         "previousSha256": null,
         "currentSha256": "67ca623eef0518314e53f7a92ec19f818f698b620f0e22833a27593e5a08f5a1"
@@ -38848,7 +38853,7 @@
       {
         "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
         "previousSha256": null,
-        "currentSha256": "859f8910be606f8c3e1f519385c1ee123d861b0b41c641482cc3f5ae4183e70f"
+        "currentSha256": "57864fdf5e3ca44dbcb02c98b06f645300527b8d1b1b689928f7f8aa53e476db"
       },
       {
         "path": "scripts/lib/plan-budget-ui-contract.mjs",
@@ -38906,6 +38911,26 @@
         "currentSha256": "8e86d0637c09d1a0fe907999997f4683f35bd4e17469e1dc36bd66ad75bd3552"
       },
       {
+        "path": "src/app/(identity)/cuenta/field-media-preview.js",
+        "previousSha256": "d39d47da18f60c69a38eee22b62929087a7cc0b379a620af8a83b62573161110",
+        "currentSha256": "61506157217af690aa3ea649a2472f99acc24ec96aa10eda3cc25d24a8108441"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/field-operations-panel.js",
+        "previousSha256": "69af7d8b95378f0b7f26f880eaec61d891c38744e9e6781eca9fe539776a91ed",
+        "currentSha256": "197fa68dacf6ad8adee77f55370363e1bdba63f442d7a7196c96ae95b8829fe7"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/material-inventory-panel.js",
+        "previousSha256": "0faadb854099ef161b9c869cc2b4c0aeb16d102e59fcaca8ef27fecd614d2924",
+        "currentSha256": "f910384fa3acc4326037b4a4b0c141c1712cb95845f14d8d975705463fecd2e2"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/material-inventory-view.mjs",
+        "previousSha256": "8b987424dd1db2332cbb26f792e51c8fea286bd5440f4d3235809e3869722b83",
+        "currentSha256": "8942cb9a2f3ed071a77a9e87ca3876fa16b1f819bcb74f395e4307f7c167605a"
+      },
+      {
         "path": "src/app/(identity)/cuenta/plan-import-panel.js",
         "previousSha256": "d74f0cdff0da1c173bc2ef566fed973ca02dd6bcc449aa8c3842d5109954d5f6",
         "currentSha256": "19b79557ed1fa8d5db6d1a46201d925ea1ffc601cedb100da42bfe0768410dbf"
@@ -38939,6 +38964,31 @@
         "path": "src/app/privacidad/identidad/page.js",
         "previousSha256": "7d69fb5e9327426e4ca9b7e856d38811babe5f43bfdad4b5bcb40266b88cc401",
         "currentSha256": "2b01990552d4ff067d389a75128b9d8290af15ccaeb69e5c06fac5e896998945"
+      },
+      {
+        "path": "src/lib/field-media.mjs",
+        "previousSha256": "940e681d1430fc211093b16f5407637fcd31d270a3d99234f748fe7db73cc0bb",
+        "currentSha256": "d221ab87c4639aadb6eb8788a7203cee072f6eb1deca40605fc3d02742ab9d65"
+      },
+      {
+        "path": "src/lib/field-operations-http.mjs",
+        "previousSha256": "df60181e3d852efe42d86a284ced3c0ff9cf4c7fbcaf863de8da4d47c2f7aeaf",
+        "currentSha256": "d3dffce08238141f672a8af0c1b956da15809e18608084b9bdf57d50ae166ceb"
+      },
+      {
+        "path": "src/lib/field-operations-policy.mjs",
+        "previousSha256": "01eb863d7db4446eeb8dab990d7e0602a19d581d5615a0b1e5d50c02f3d70173",
+        "currentSha256": "bb33655b622a081de656f24c2e369fe7a2e05a0a0a9da7ffe455c2f39fd8fbd5"
+      },
+      {
+        "path": "src/lib/field-operations-store.mjs",
+        "previousSha256": "dbf96641349efae61808a2d66a02d491ad06e2226885e6efa928dba53ce5034e",
+        "currentSha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
+      },
+      {
+        "path": "src/lib/material-inventory.mjs",
+        "previousSha256": "4b599d273c4cadcdf76202554757583152da8c11b0a754be386bffb830f0c65b",
+        "currentSha256": "3af0b0e9c9003d09582ec4e8b21d1e35746dd3839fc7f01071935b9a4ea95333"
       },
       {
         "path": "src/lib/meta-customer-coexistence.mjs",
@@ -39048,12 +39098,17 @@
       {
         "path": "tests/production-material-consumption-feedback-ci.test.mjs",
         "previousSha256": "b8a85bd426a354c5914ed911d7dac70fd54a0b285ff90141d7c33d8592a29708",
-        "currentSha256": "7c3544808428d015f6f12dc33e80b44f8dce824fc0dbc3ac37682563197e3e80"
+        "currentSha256": "c74a5abdab43a5cf20b9df52da56573e9e702e3af2eb556f838ac447d1583cd4"
+      },
+      {
+        "path": "tests/production-material-inventory-queue-panel.test.mjs",
+        "previousSha256": "55163e14985c43164dac680cf431b7dee79ed1c166ca0c1131003cf838078460",
+        "currentSha256": "a3df358d40d2a03571dcadac8e69f469698b9bfdfd14670554bc10df9ae6d3bb"
       },
       {
         "path": "tests/production-material-review-current-ci-lineage.test.mjs",
         "previousSha256": "a9d434e05848d2d2170d57a9410c8ddeecf4585949a645cb1fdf0480b2e58db9",
-        "currentSha256": "bd936d0d32bf3498aea96829d47ecced848791512d2fa109db176fd287512d85"
+        "currentSha256": "cd3f36d1a26c2b2c82a27537566b9221245a6747012bf9e641fc8c0d73ea565e"
       },
       {
         "path": "tests/production-meta-existing-api-plan-current-ci-lineage.test.mjs",
@@ -39178,7 +39233,7 @@
       {
         "path": "tests/production-workspace-plan-partida-preview-current-ci-lineage.test.mjs",
         "previousSha256": "593466da00f03fff06c19e2ac746fb14fb03371f4ceb96a2f4fc342de6e3de32",
-        "currentSha256": "8416207768df336e0e2665c10560aa4a7f731f0ef9951636b545002b0c272563"
+        "currentSha256": "16d48fb4c4f787ddc3fad0e6894d0dff38b95cd75f58d614110354d2758e982e"
       }
     ],
     "sourceSetDeltas": [
@@ -39377,6 +39432,18 @@
         "currentPathsSha256": "71259eec664a644d6eb0ed727b4980c71677104d31d58cef7c828caf85c16ce6",
         "additions": [
           "src/lib/plan-budget-source.mjs"
+        ]
+      },
+      {
+        "family": "CONSUMPTION_FEEDBACK_UI",
+        "contractPointer": null,
+        "previousCount": 26,
+        "previousPathsSha256": "710e01893f5a62e3889bdaddca949989edac48b312c75ea419ea822b744c864a",
+        "currentCount": 28,
+        "currentPathsSha256": "ac29e18d380c5706e620702b48fd9510f5d358bc857a5cb4a08d0c49561de16e",
+        "additions": [
+          "src/app/(identity)/cuenta/field-media-preview.js",
+          "src/app/(identity)/cuenta/field-operations-panel.module.css"
         ]
       },
       {
@@ -39913,11 +39980,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/field-media-preview.js",
-            "sha256": "d39d47da18f60c69a38eee22b62929087a7cc0b379a620af8a83b62573161110"
+            "sha256": "61506157217af690aa3ea649a2472f99acc24ec96aa10eda3cc25d24a8108441"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-            "sha256": "69af7d8b95378f0b7f26f880eaec61d891c38744e9e6781eca9fe539776a91ed"
+            "sha256": "197fa68dacf6ad8adee77f55370363e1bdba63f442d7a7196c96ae95b8829fe7"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -39949,7 +40016,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.js",
-            "sha256": "0faadb854099ef161b9c869cc2b4c0aeb16d102e59fcaca8ef27fecd614d2924"
+            "sha256": "f910384fa3acc4326037b4a4b0c141c1712cb95845f14d8d975705463fecd2e2"
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.module.css",
@@ -39957,7 +40024,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-view.mjs",
-            "sha256": "8b987424dd1db2332cbb26f792e51c8fea286bd5440f4d3235809e3869722b83"
+            "sha256": "8942cb9a2f3ed071a77a9e87ca3876fa16b1f819bcb74f395e4307f7c167605a"
           },
           {
             "path": "src/app/(identity)/cuenta/meta-existing-api-plan-view.mjs",
@@ -40369,19 +40436,19 @@
           },
           {
             "path": "src/lib/field-media.mjs",
-            "sha256": "940e681d1430fc211093b16f5407637fcd31d270a3d99234f748fe7db73cc0bb"
+            "sha256": "d221ab87c4639aadb6eb8788a7203cee072f6eb1deca40605fc3d02742ab9d65"
           },
           {
             "path": "src/lib/field-operations-http.mjs",
-            "sha256": "df60181e3d852efe42d86a284ced3c0ff9cf4c7fbcaf863de8da4d47c2f7aeaf"
+            "sha256": "d3dffce08238141f672a8af0c1b956da15809e18608084b9bdf57d50ae166ceb"
           },
           {
             "path": "src/lib/field-operations-policy.mjs",
-            "sha256": "01eb863d7db4446eeb8dab990d7e0602a19d581d5615a0b1e5d50c02f3d70173"
+            "sha256": "bb33655b622a081de656f24c2e369fe7a2e05a0a0a9da7ffe455c2f39fd8fbd5"
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "dbf96641349efae61808a2d66a02d491ad06e2226885e6efa928dba53ce5034e"
+            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -40409,7 +40476,7 @@
           },
           {
             "path": "src/lib/material-inventory.mjs",
-            "sha256": "4b599d273c4cadcdf76202554757583152da8c11b0a754be386bffb830f0c65b"
+            "sha256": "3af0b0e9c9003d09582ec4e8b21d1e35746dd3839fc7f01071935b9a4ea95333"
           },
           {
             "path": "src/lib/meta-cloud-protocol.mjs",
@@ -40676,11 +40743,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/field-media-preview.js",
-            "sha256": "d39d47da18f60c69a38eee22b62929087a7cc0b379a620af8a83b62573161110"
+            "sha256": "61506157217af690aa3ea649a2472f99acc24ec96aa10eda3cc25d24a8108441"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-            "sha256": "69af7d8b95378f0b7f26f880eaec61d891c38744e9e6781eca9fe539776a91ed"
+            "sha256": "197fa68dacf6ad8adee77f55370363e1bdba63f442d7a7196c96ae95b8829fe7"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -40955,19 +41022,19 @@
           },
           {
             "path": "src/lib/field-media.mjs",
-            "sha256": "940e681d1430fc211093b16f5407637fcd31d270a3d99234f748fe7db73cc0bb"
+            "sha256": "d221ab87c4639aadb6eb8788a7203cee072f6eb1deca40605fc3d02742ab9d65"
           },
           {
             "path": "src/lib/field-operations-http.mjs",
-            "sha256": "df60181e3d852efe42d86a284ced3c0ff9cf4c7fbcaf863de8da4d47c2f7aeaf"
+            "sha256": "d3dffce08238141f672a8af0c1b956da15809e18608084b9bdf57d50ae166ceb"
           },
           {
             "path": "src/lib/field-operations-policy.mjs",
-            "sha256": "01eb863d7db4446eeb8dab990d7e0602a19d581d5615a0b1e5d50c02f3d70173"
+            "sha256": "bb33655b622a081de656f24c2e369fe7a2e05a0a0a9da7ffe455c2f39fd8fbd5"
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "dbf96641349efae61808a2d66a02d491ad06e2226885e6efa928dba53ce5034e"
+            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -40991,7 +41058,7 @@
           },
           {
             "path": "src/lib/material-inventory.mjs",
-            "sha256": "4b599d273c4cadcdf76202554757583152da8c11b0a754be386bffb830f0c65b"
+            "sha256": "3af0b0e9c9003d09582ec4e8b21d1e35746dd3839fc7f01071935b9a4ea95333"
           },
           {
             "path": "src/lib/meta-cloud-protocol.mjs",
@@ -41336,19 +41403,19 @@
           },
           {
             "path": "src/lib/field-media.mjs",
-            "sha256": "940e681d1430fc211093b16f5407637fcd31d270a3d99234f748fe7db73cc0bb"
+            "sha256": "d221ab87c4639aadb6eb8788a7203cee072f6eb1deca40605fc3d02742ab9d65"
           },
           {
             "path": "src/lib/field-operations-http.mjs",
-            "sha256": "df60181e3d852efe42d86a284ced3c0ff9cf4c7fbcaf863de8da4d47c2f7aeaf"
+            "sha256": "d3dffce08238141f672a8af0c1b956da15809e18608084b9bdf57d50ae166ceb"
           },
           {
             "path": "src/lib/field-operations-policy.mjs",
-            "sha256": "01eb863d7db4446eeb8dab990d7e0602a19d581d5615a0b1e5d50c02f3d70173"
+            "sha256": "bb33655b622a081de656f24c2e369fe7a2e05a0a0a9da7ffe455c2f39fd8fbd5"
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "dbf96641349efae61808a2d66a02d491ad06e2226885e6efa928dba53ce5034e"
+            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -41372,7 +41439,7 @@
           },
           {
             "path": "src/lib/material-inventory.mjs",
-            "sha256": "4b599d273c4cadcdf76202554757583152da8c11b0a754be386bffb830f0c65b"
+            "sha256": "3af0b0e9c9003d09582ec4e8b21d1e35746dd3839fc7f01071935b9a4ea95333"
           },
           {
             "path": "src/lib/meta-cloud-protocol.mjs",
@@ -41935,7 +42002,7 @@
           },
           {
             "path": "scripts/lib/material-review-current-ci-lineage.mjs",
-            "sha256": "805e35504f147f017b4e70889c29c92175a4673f03916630319f6f25d040c4b4"
+            "sha256": "9155e03f6c6831e8122263b73c16a724645fc5cd3ebcfdd950c0413543c12a64"
           },
           {
             "path": "scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs",
@@ -41951,7 +42018,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "859f8910be606f8c3e1f519385c1ee123d861b0b41c641482cc3f5ae4183e70f"
+            "sha256": "57864fdf5e3ca44dbcb02c98b06f645300527b8d1b1b689928f7f8aa53e476db"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -42107,11 +42174,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/field-media-preview.js",
-            "sha256": "d39d47da18f60c69a38eee22b62929087a7cc0b379a620af8a83b62573161110"
+            "sha256": "61506157217af690aa3ea649a2472f99acc24ec96aa10eda3cc25d24a8108441"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-            "sha256": "69af7d8b95378f0b7f26f880eaec61d891c38744e9e6781eca9fe539776a91ed"
+            "sha256": "197fa68dacf6ad8adee77f55370363e1bdba63f442d7a7196c96ae95b8829fe7"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -42147,7 +42214,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.js",
-            "sha256": "0faadb854099ef161b9c869cc2b4c0aeb16d102e59fcaca8ef27fecd614d2924"
+            "sha256": "f910384fa3acc4326037b4a4b0c141c1712cb95845f14d8d975705463fecd2e2"
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.module.css",
@@ -42155,7 +42222,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-view.mjs",
-            "sha256": "8b987424dd1db2332cbb26f792e51c8fea286bd5440f4d3235809e3869722b83"
+            "sha256": "8942cb9a2f3ed071a77a9e87ca3876fa16b1f819bcb74f395e4307f7c167605a"
           },
           {
             "path": "src/app/(identity)/cuenta/meta-existing-api-plan-view.mjs",
@@ -42952,7 +43019,7 @@
           },
           {
             "path": "scripts/lib/material-review-current-ci-lineage.mjs",
-            "sha256": "805e35504f147f017b4e70889c29c92175a4673f03916630319f6f25d040c4b4"
+            "sha256": "9155e03f6c6831e8122263b73c16a724645fc5cd3ebcfdd950c0413543c12a64"
           },
           {
             "path": "scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs",
@@ -42972,7 +43039,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "859f8910be606f8c3e1f519385c1ee123d861b0b41c641482cc3f5ae4183e70f"
+            "sha256": "57864fdf5e3ca44dbcb02c98b06f645300527b8d1b1b689928f7f8aa53e476db"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -43044,11 +43111,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/field-media-preview.js",
-            "sha256": "d39d47da18f60c69a38eee22b62929087a7cc0b379a620af8a83b62573161110"
+            "sha256": "61506157217af690aa3ea649a2472f99acc24ec96aa10eda3cc25d24a8108441"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-            "sha256": "69af7d8b95378f0b7f26f880eaec61d891c38744e9e6781eca9fe539776a91ed"
+            "sha256": "197fa68dacf6ad8adee77f55370363e1bdba63f442d7a7196c96ae95b8829fe7"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -43076,7 +43143,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.js",
-            "sha256": "0faadb854099ef161b9c869cc2b4c0aeb16d102e59fcaca8ef27fecd614d2924"
+            "sha256": "f910384fa3acc4326037b4a4b0c141c1712cb95845f14d8d975705463fecd2e2"
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.module.css",
@@ -43084,7 +43151,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-view.mjs",
-            "sha256": "8b987424dd1db2332cbb26f792e51c8fea286bd5440f4d3235809e3869722b83"
+            "sha256": "8942cb9a2f3ed071a77a9e87ca3876fa16b1f819bcb74f395e4307f7c167605a"
           },
           {
             "path": "src/app/(identity)/cuenta/own-company-number-view.mjs",
@@ -43588,15 +43655,15 @@
           },
           {
             "path": "src/lib/field-media.mjs",
-            "sha256": "940e681d1430fc211093b16f5407637fcd31d270a3d99234f748fe7db73cc0bb"
+            "sha256": "d221ab87c4639aadb6eb8788a7203cee072f6eb1deca40605fc3d02742ab9d65"
           },
           {
             "path": "src/lib/field-operations-policy.mjs",
-            "sha256": "01eb863d7db4446eeb8dab990d7e0602a19d581d5615a0b1e5d50c02f3d70173"
+            "sha256": "bb33655b622a081de656f24c2e369fe7a2e05a0a0a9da7ffe455c2f39fd8fbd5"
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "dbf96641349efae61808a2d66a02d491ad06e2226885e6efa928dba53ce5034e"
+            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -43624,7 +43691,7 @@
           },
           {
             "path": "src/lib/material-inventory.mjs",
-            "sha256": "4b599d273c4cadcdf76202554757583152da8c11b0a754be386bffb830f0c65b"
+            "sha256": "3af0b0e9c9003d09582ec4e8b21d1e35746dd3839fc7f01071935b9a4ea95333"
           },
           {
             "path": "src/lib/meta-callback-diagnostics.mjs",
@@ -44625,15 +44692,15 @@
           },
           {
             "path": "src/lib/field-media.mjs",
-            "sha256": "940e681d1430fc211093b16f5407637fcd31d270a3d99234f748fe7db73cc0bb"
+            "sha256": "d221ab87c4639aadb6eb8788a7203cee072f6eb1deca40605fc3d02742ab9d65"
           },
           {
             "path": "src/lib/field-operations-policy.mjs",
-            "sha256": "01eb863d7db4446eeb8dab990d7e0602a19d581d5615a0b1e5d50c02f3d70173"
+            "sha256": "bb33655b622a081de656f24c2e369fe7a2e05a0a0a9da7ffe455c2f39fd8fbd5"
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "dbf96641349efae61808a2d66a02d491ad06e2226885e6efa928dba53ce5034e"
+            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -44661,7 +44728,7 @@
           },
           {
             "path": "src/lib/material-inventory.mjs",
-            "sha256": "4b599d273c4cadcdf76202554757583152da8c11b0a754be386bffb830f0c65b"
+            "sha256": "3af0b0e9c9003d09582ec4e8b21d1e35746dd3839fc7f01071935b9a4ea95333"
           },
           {
             "path": "src/lib/meta-callback-diagnostics.mjs",
@@ -45048,6 +45115,8 @@
         ],
         "currentFiles": [
           "src/app/(identity)/cuenta/company-channel-view.mjs",
+          "src/app/(identity)/cuenta/field-media-preview.js",
+          "src/app/(identity)/cuenta/field-operations-panel.module.css",
           "src/app/(identity)/cuenta/material-inventory-panel.js",
           "src/app/(identity)/cuenta/material-inventory-panel.module.css",
           "src/app/(identity)/cuenta/material-inventory-view.mjs",
@@ -45083,8 +45152,16 @@
             "sha256": "c79c473999e444b84e2a1d58e0d03f030069c24f9749f2c84450318b0b237e4d"
           },
           {
+            "path": "src/app/(identity)/cuenta/field-media-preview.js",
+            "sha256": "61506157217af690aa3ea649a2472f99acc24ec96aa10eda3cc25d24a8108441"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
+            "sha256": "5ccd8b5beae691b9ab6ee2dc0c0ae876a5fdffe15d31d24c6807f117bd76949c"
+          },
+          {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.js",
-            "sha256": "0faadb854099ef161b9c869cc2b4c0aeb16d102e59fcaca8ef27fecd614d2924"
+            "sha256": "f910384fa3acc4326037b4a4b0c141c1712cb95845f14d8d975705463fecd2e2"
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.module.css",
@@ -45092,7 +45169,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-view.mjs",
-            "sha256": "8b987424dd1db2332cbb26f792e51c8fea286bd5440f4d3235809e3869722b83"
+            "sha256": "8942cb9a2f3ed071a77a9e87ca3876fa16b1f819bcb74f395e4307f7c167605a"
           },
           {
             "path": "src/app/(identity)/cuenta/own-company-number-view.mjs",
@@ -45616,15 +45693,15 @@
           },
           {
             "path": "src/lib/field-media.mjs",
-            "sha256": "940e681d1430fc211093b16f5407637fcd31d270a3d99234f748fe7db73cc0bb"
+            "sha256": "d221ab87c4639aadb6eb8788a7203cee072f6eb1deca40605fc3d02742ab9d65"
           },
           {
             "path": "src/lib/field-operations-policy.mjs",
-            "sha256": "01eb863d7db4446eeb8dab990d7e0602a19d581d5615a0b1e5d50c02f3d70173"
+            "sha256": "bb33655b622a081de656f24c2e369fe7a2e05a0a0a9da7ffe455c2f39fd8fbd5"
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "dbf96641349efae61808a2d66a02d491ad06e2226885e6efa928dba53ce5034e"
+            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -45652,7 +45729,7 @@
           },
           {
             "path": "src/lib/material-inventory.mjs",
-            "sha256": "4b599d273c4cadcdf76202554757583152da8c11b0a754be386bffb830f0c65b"
+            "sha256": "3af0b0e9c9003d09582ec4e8b21d1e35746dd3839fc7f01071935b9a4ea95333"
           },
           {
             "path": "src/lib/meta-callback-diagnostics.mjs",
@@ -46442,15 +46519,15 @@
           },
           {
             "path": "src/lib/field-media.mjs",
-            "sha256": "940e681d1430fc211093b16f5407637fcd31d270a3d99234f748fe7db73cc0bb"
+            "sha256": "d221ab87c4639aadb6eb8788a7203cee072f6eb1deca40605fc3d02742ab9d65"
           },
           {
             "path": "src/lib/field-operations-policy.mjs",
-            "sha256": "01eb863d7db4446eeb8dab990d7e0602a19d581d5615a0b1e5d50c02f3d70173"
+            "sha256": "bb33655b622a081de656f24c2e369fe7a2e05a0a0a9da7ffe455c2f39fd8fbd5"
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "dbf96641349efae61808a2d66a02d491ad06e2226885e6efa928dba53ce5034e"
+            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -46478,7 +46555,7 @@
           },
           {
             "path": "src/lib/material-inventory.mjs",
-            "sha256": "4b599d273c4cadcdf76202554757583152da8c11b0a754be386bffb830f0c65b"
+            "sha256": "3af0b0e9c9003d09582ec4e8b21d1e35746dd3839fc7f01071935b9a4ea95333"
           },
           {
             "path": "src/lib/meta-callback-diagnostics.mjs",
@@ -47204,15 +47281,15 @@
           },
           {
             "path": "src/lib/field-media.mjs",
-            "sha256": "940e681d1430fc211093b16f5407637fcd31d270a3d99234f748fe7db73cc0bb"
+            "sha256": "d221ab87c4639aadb6eb8788a7203cee072f6eb1deca40605fc3d02742ab9d65"
           },
           {
             "path": "src/lib/field-operations-policy.mjs",
-            "sha256": "01eb863d7db4446eeb8dab990d7e0602a19d581d5615a0b1e5d50c02f3d70173"
+            "sha256": "bb33655b622a081de656f24c2e369fe7a2e05a0a0a9da7ffe455c2f39fd8fbd5"
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "dbf96641349efae61808a2d66a02d491ad06e2226885e6efa928dba53ce5034e"
+            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -47240,7 +47317,7 @@
           },
           {
             "path": "src/lib/material-inventory.mjs",
-            "sha256": "4b599d273c4cadcdf76202554757583152da8c11b0a754be386bffb830f0c65b"
+            "sha256": "3af0b0e9c9003d09582ec4e8b21d1e35746dd3839fc7f01071935b9a4ea95333"
           },
           {
             "path": "src/lib/meta-callback-diagnostics.mjs",
@@ -47940,7 +48017,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "859f8910be606f8c3e1f519385c1ee123d861b0b41c641482cc3f5ae4183e70f"
+            "sha256": "57864fdf5e3ca44dbcb02c98b06f645300527b8d1b1b689928f7f8aa53e476db"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",

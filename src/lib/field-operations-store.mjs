@@ -140,6 +140,21 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
     if(c?.version!==1||!Array.isArray(c.sectors))throw new WorkspaceError('FIELD_SITE_NOT_CONFIGURED',409);return c;
   }
   const latest=async(client,projectId,workerId)=>(await client.query(`SELECT id,"workerId",metadata,${revision('"checkedInAt"')} AS "recordedAt" FROM public."AttendanceEntry" WHERE "projectId"=$1 AND "workerId"=$2 AND metadata->'fieldOperations'->>'version'='1' ORDER BY (metadata->'fieldOperations'->>'sequence')::int DESC,id DESC LIMIT 1`,[projectId,workerId])).rows[0]||null;
+  async function ownAttendanceHeads(client,member,projectId,owned){
+    const ids=owned.filter(row=>row.metadata.participant.permissions?.attendance===true).map(row=>row.id);
+    // Same version predicate and per-worker order as latest(), without the
+    // history window. One read remains inside the canonical project snapshot.
+    const rows=ids.length?(await client.query(`SELECT DISTINCT ON ("workerId") id,"workerId",metadata FROM public."AttendanceEntry" WHERE "projectId"=$1 AND "workerId"=ANY($2::text[]) AND metadata->'fieldOperations'->>'version'='1' ORDER BY "workerId",(metadata->'fieldOperations'->>'sequence')::int DESC,id DESC`,[projectId,ids])).rows:[];
+    return ids.map(workerId=>{
+      const matches=rows.filter(row=>row.workerId===workerId),row=matches[0],event=row?.metadata?.fieldOperations;
+      if(!matches.length)return {workerId,status:'EMPTY',head:null};
+      const phase={CHECK_IN:'WORKING',BREAK_START:'ON_BREAK',BREAK_END:'WORKING',CHECK_OUT:'WORKING'};
+      // A reassigned person's previous author is not this account's history.
+      // Unknown or malformed state is never interpreted as a fresh check-in.
+      if(matches.length!==1||!workspaceId(row.id)||event?.version!==1||event.recordedBy!==member.actorId||!Object.hasOwn(phase,event.eventType)||phase[event.eventType]!==event.phase||!Number.isSafeInteger(event.sequence)||event.sequence<1||typeof event.recordedAt!=='string'||!Number.isFinite(Date.parse(event.recordedAt))||new Date(event.recordedAt).toISOString()!==event.recordedAt)return {workerId,status:'UNAVAILABLE',head:null};
+      return {workerId,status:'CURRENT',head:{id:row.id,eventType:event.eventType,phase:event.phase,sequence:event.sequence,recordedAt:event.recordedAt}};
+    });
+  }
   return {
     shift(session,context){return run(session,context,false,async(client,member,scope,project)=>({scope,...await overtime.readShift(client,member,session,project,context)}));},
     reviewPage(session,context) {
@@ -210,6 +225,7 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
         if(member.channelProof&&context.journeyCursor!==undefined)throw new WorkspaceError('OVERTIME_WEB_ONLY',403);
         const reviewer=canReviewField(member.role),workers=(await client.query(`SELECT id,name,active,metadata FROM public."Worker" WHERE "projectId"=$1 AND active=true ORDER BY id LIMIT 101`,[context.projectId])).rows;
         const access=await reviewAccess(client,member,session,context.projectId,scope),owned=access.owned.slice(0,101);
+        const selfAttendanceHeads=await ownAttendanceHeads(client,member,context.projectId,owned);
         const ids=reviewer?workers.map(w=>w.id):owned.filter(w=>w.metadata.participant.permissions?.report===true).map(w=>w.id),attendanceIds=reviewer?ids:owned.filter(w=>w.metadata.participant.permissions?.attendance===true).map(w=>w.id);
         const events=(await client.query(`SELECT id,"workerId",metadata,${revision('"checkedInAt"')} AS "recordedAt" FROM public."AttendanceEntry" WHERE "projectId"=$1 AND "workerId"=ANY($2::text[]) AND metadata->'fieldOperations'->>'version'='1' AND ($3::boolean OR metadata->'fieldOperations'->>'recordedBy'=$4) ORDER BY "checkedInAt" DESC,id DESC LIMIT 101`,[context.projectId,attendanceIds,reviewer,member.actorId])).rows;
         const media=(await client.query(`SELECT id,title,description,metadata,clock_timestamp() AS "readAt",${revision('"updatedAt"')} AS revision FROM public."Incident" WHERE "projectId"=$1 AND metadata->'fieldOperations'->>'kind'='EVIDENCE' AND ($2::boolean OR (metadata->'fieldOperations'->>'workerId'=ANY($3::text[]) AND metadata->'fieldOperations'->>'recordedBy'=$4)) ORDER BY "createdAt" DESC,id DESC LIMIT 101`,[context.projectId,reviewer,ids,member.actorId])).rows;
@@ -220,7 +236,7 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
         const projectRevision=(await client.query(`SELECT ${revision('"updatedAt"')} AS revision FROM public."Project" WHERE id=$1 AND "organizationId"=$2`,[context.projectId,member.organizationId])).rows[0].revision;
         return {scope,projectId:context.projectId,reviewAccessStamp:access.reviewAccessStamp,projectRevision,canConfigure:canApproveProgress(member.role),canReview:reviewer,canApproveProgress:canApproveProgress(member.role),
           ...(canApproveProgress(member.role)?{configurationRevision:project.metadata?.fieldOperations?.configRevision||null}:{}),
-          selfWorkers:owned.map(w=>({id:w.id,name:w.name,canReport:w.metadata.participant.permissions?.report===true,canAttendance:w.metadata.participant.permissions?.attendance===true})),workers:(reviewer?workers:owned).map(w=>({id:w.id,name:w.name})),
+          selfWorkers:owned.map(w=>({id:w.id,name:w.name,canReport:w.metadata.participant.permissions?.report===true,canAttendance:w.metadata.participant.permissions?.attendance===true})),selfAttendanceHeads,workers:(reviewer?workers:owned).map(w=>({id:w.id,name:w.name})),
           sectors:project.metadata?.fieldOperations?.sectors?.map(s=>({id:s.id,name:s.name,latitude:s.latitude,longitude:s.longitude,radius:s.radius}))||[],
           inventory:await readInventory(client,member,project,{workerIds:inventoryOwned.map(w=>w.id),reviewer:canApproveProgress(member.role)}),
           ...(member.channelProof?{}:{overtime:await overtime.journeys(client,member,session,project,owned.filter(w=>w.metadata.participant.permissions?.attendance===true).map(w=>w.id),{cursor:context.journeyCursor,scope})}),

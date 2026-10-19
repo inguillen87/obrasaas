@@ -68,8 +68,10 @@ export function normalizeFieldCommand(input) {
     recordKeys(p,['proposalId','revision','catalogHash','decision','reason']);if(!/^[a-f0-9]{64}$/.test(p.catalogHash||'')||!['APPROVE','REJECT'].includes(p.decision))throw new WorkspaceError('INVENTORY_INPUT_INVALID');
     payload={proposalId:id(p.proposalId),revision:siteRevision(p.revision),catalogHash:p.catalogHash,decision:p.decision,reason:siteText(p.reason,1000,8,true)};
   }else if(input.action==='PROPOSE_CONSUMPTION') {
-    recordKeys(p,['workerId','taskId','sectorId','materialId','catalogHash','quantity','reason']);if(p.taskId!==null&&!workspaceId(p.taskId)||!/^[a-f0-9]{64}$/.test(p.catalogHash||''))throw new WorkspaceError('INVENTORY_INPUT_INVALID');
-    payload={workerId:id(p.workerId),taskId:p.taskId,sectorId:id(p.sectorId),materialId:id(p.materialId),catalogHash:p.catalogHash,quantity:inventoryQuantity(p.quantity),reason:siteText(p.reason,1000,8,true)};
+    const attachments=Object.hasOwn(p||{},'evidenceIds');
+    recordKeys(p,['workerId','taskId','sectorId','materialId','catalogHash','quantity','reason',...(attachments?['evidenceIds']:[])]);if(p.taskId!==null&&!workspaceId(p.taskId)||!/^[a-f0-9]{64}$/.test(p.catalogHash||''))throw new WorkspaceError('INVENTORY_INPUT_INVALID');
+    if(attachments&&(!Array.isArray(p.evidenceIds)||p.evidenceIds.length>10||new Set(p.evidenceIds).size!==p.evidenceIds.length||p.evidenceIds.some(value=>!workspaceId(value))))throw new WorkspaceError('INVENTORY_EVIDENCE_INVALID');
+    payload={workerId:id(p.workerId),taskId:p.taskId,sectorId:id(p.sectorId),materialId:id(p.materialId),catalogHash:p.catalogHash,quantity:inventoryQuantity(p.quantity),reason:siteText(p.reason,1000,8,true),...(attachments&&p.evidenceIds.length?{evidenceIds:[...p.evidenceIds].sort()}:{})};
   }else if(['DECIDE_CONSUMPTION','REVERSE_CONSUMPTION'].includes(input.action)) {
     const review=input.action==='DECIDE_CONSUMPTION';recordKeys(p,['proposalId','revision','catalogHash','reason',...(review?['decision']:[])]);
     if(!/^[a-f0-9]{64}$/.test(p.catalogHash||'')||review&&!['APPROVE','REJECT'].includes(p.decision))throw new WorkspaceError('INVENTORY_INPUT_INVALID');
