@@ -82,11 +82,24 @@ export function createMetaCustomerCoexistence({workspace,provider,environment=pr
     if(s[kind]?.state!=='NOT_REQUESTED')return null;
     const leaseId=randomUUID(),step={state:'REQUEST_STARTED',leaseId,leaseExpiresAt:new Date(now()+60000).toISOString(),requestedAt:new Date(now()).toISOString()};
     await save(client,c,{...s,[kind]:step});
-    return {channelId:c.id,phoneNumberId:c.phoneNumberId,tokenDigest:digest(c.encryptedAccessToken),leaseId,token:decryptCustomerSecret(c.encryptedAccessToken,{organizationId:member.organizationId,projectId:project.id,purpose:'access-token',resourceId:c.phoneNumberId},environment)};
+    return {channelId:c.id,projectId:project.id,organizationId:member.organizationId,actorId:member.actorId,phoneNumberId:c.phoneNumberId,wabaId:c.whatsappBusinessId,tokenDigest:digest(c.encryptedAccessToken),consentDigest:digest(s.importConsent),leaseId,leaseExpiresAt:step.leaseExpiresAt,token:decryptCustomerSecret(c.encryptedAccessToken,{organizationId:member.organizationId,projectId:project.id,purpose:'access-token',resourceId:c.phoneNumberId},environment)};
    });
    if(!claim)continue;
    let result=null;
-   try{result=await provider.syncAppData({token:claim.token,phoneNumberId:claim.phoneNumberId,syncType:types[kind]});}catch{}
+   // Reauthorize the durable reservation in a new canonical transaction. Keep
+   // its actor/organization/project and connection locks through the POST;
+   // a detached preflight would leave the same revoke/rotation race open.
+   await within(session,body,async(client,member,_scope,project)=>{
+    const c=await bound(client,member,project,body),s=c.metadata.coexistence,step=s[kind];let fenceError=null;
+    const beforeExternal=()=>{
+     try{
+      customerSignupFlow(provider.readiness(),'BUSINESS_APP');
+      if(c.id!==claim.channelId||project.id!==claim.projectId||member.organizationId!==claim.organizationId||member.actorId!==claim.actorId||c.phoneNumberId!==claim.phoneNumberId||c.whatsappBusinessId!==claim.wabaId||digest(c.encryptedAccessToken)!==claim.tokenDigest||s.importConsent?.requestDigest!==requestDigest||digest(s.importConsent)!==claim.consentDigest||s.importConsent?.[kind]!==true||!(Date.parse(s.syncDeadlineAt)>now())||step?.leaseId!==claim.leaseId||step.state!=='REQUEST_STARTED'||step.leaseExpiresAt!==claim.leaseExpiresAt||!(Date.parse(step.leaseExpiresAt)>now()))throw new WorkspaceError('META_CUSTOMER_SYNC_LEASE_CHANGED',409);
+     }catch(error){fenceError=error;throw error;}
+    };
+    beforeExternal();
+    try{result=await provider.syncAppData({token:claim.token,phoneNumberId:claim.phoneNumberId,syncType:types[kind],beforeExternal,finalBeforeExternal:beforeExternal});}catch{if(fenceError)throw fenceError;}
+   });
    await within(session,body,async(client,member,_scope,project)=>{
     const c=await bound(client,member,project,body),s=c.metadata.coexistence,step=s[kind];
     if(c.id!==claim.channelId||digest(c.encryptedAccessToken)!==claim.tokenDigest||step?.leaseId!==claim.leaseId||!(step.state==='REQUEST_STARTED'||terminal.has(step.state)))throw new WorkspaceError('META_CUSTOMER_SYNC_LEASE_CHANGED',409);

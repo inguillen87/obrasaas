@@ -22,6 +22,8 @@ import {fieldOutboundCurrentSourcePin} from '../scripts/lib/field-outbound-curre
 import {currentProducerSourceFiles,retainWeeklyCypImportUiScreenshots,validateWeeklyCypRetainedScreenshotBindings} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';
 const read=file=>existsSync(file)?readFileSync(file):null;
 const current=()=>JSON.parse(read('.github/workspace-acceptance-contract.json'));
+// Decoder shadow only: the actual current producer requires all57 controls.
+const syncFenceNativeShadow=historical=>({checks:[...historical,...["native-sync-membership-changed-after-reservation-denies-POST-and-keeps-nonreplayable-receipt","native-sync-token-changed-after-reservation-denies-POST-and-keeps-nonreplayable-receipt","native-sync-lease-changed-after-reservation-denies-POST-and-keeps-nonreplayable-receipt","native-six-second-signed-callback-timeout-during-eight-second-accepted-sync-re-delivers-durably-and-idempotently-with-one-POST","native-six-second-signed-callback-timeout-during-eight-second-lost-sync-response-preserves-uncertainty-and-re-delivers-without-repeated-POST"]],slowSyncCallbackTimings:['accepted','response-lost'].map(variant=>({variant,firstCallbackStatus:503,retryStatus:200,firstCallbackElapsedMs:6000,postElapsedMs:8000,posts:1,reDeliveredSameSignedBytes:true,realProviderCalls:0}))});
 const sha=value=>createHash('sha256').update(value).digest('hex');
 // Historical decoder fixture ONLY. Current source gates keep using read().
 // Authenticate the current producer before substituting this explicit static
@@ -107,8 +109,8 @@ test('customer phone companion rejects omitted duplicated reordered and tampered
 });
 
 test('all52 current native controls are required before exact historical41 projection and the raw proof remains untouched',()=>{
- const contract=current(),previous=restoreCustomerPhoneSelectionPreviousContract(contract),old=previous.existingApiPlanCurrentRevision.native.currentCheckNames,checks=[...old,...phoneExpected.native.addedCheckNames],proof={status:'PASS',environment:'local-disposable-postgresql17',checks,realProviderCalls:0,physicalNumberTested:false,productionDataTouched:false},before=serialize(proof);
- assert.equal(old.length,41);assert.equal(phoneExpected.native.addedCheckNames.length,11);assert.equal(checks.length,52);
+ const contract=current(),previous=restoreCustomerPhoneSelectionPreviousContract(contract),old=previous.existingApiPlanCurrentRevision.native.currentCheckNames,checks=[...old,...phoneExpected.native.addedCheckNames],proof={status:'PASS',environment:'local-disposable-postgresql17',...syncFenceNativeShadow(checks),realProviderCalls:0,physicalNumberTested:false,productionDataTouched:false},before=serialize(proof);
+ assert.equal(old.length,41);assert.equal(phoneExpected.native.addedCheckNames.length,11);assert.equal(checks.length,52);assert.equal(proof.checks.length,57);denied(()=>normalizeCustomerPhoneSelectionNativeProof({...proof,checks},contract,read));
  assert.deepEqual(normalizeCustomerPhoneSelectionNativeProof(proof,contract,read),{...proof,checks:old});assert.equal(serialize(proof),before);
  const historical={...proof,checks:old};assert.equal(normalizeCustomerPhoneSelectionNativeProof(historical,previous,read),historical);
  for(const patch of [{checks:old},{checks:checks.slice(0,50)},{checks:checks.slice(1)},{checks:checks.slice(0,-1)},{checks:[...checks,checks.at(-1)]},{checks:[...checks.slice(0,-1),'foreign-same-count-control']},{checks:[...checks].reverse()},{realProviderCalls:1},{physicalNumberTested:true},{productionDataTouched:true},{status:'FAILED'},{environment:'production'}])denied(()=>normalizeCustomerPhoneSelectionNativeProof({...proof,...patch},contract,read));

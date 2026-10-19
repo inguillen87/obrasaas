@@ -10,7 +10,7 @@ import {metaCustomerReadiness,createMetaCustomerProvider} from '../src/lib/meta-
 import {createMetaCustomerInbox,createMetaCustomerCallbackHandlers} from '../src/lib/meta-customer-callback.mjs';
 import {createMetaCustomerProcessor} from '../src/lib/meta-customer-processing.mjs';
 import {createMetaCustomerAppProjection,META_APP_PROJECTION_PROVIDER} from '../src/lib/meta-customer-app-projection.mjs';
-import {META_APP_IMPORT_NOTICE_VERSION} from '../src/lib/meta-customer-coexistence.mjs';
+import {createMetaCustomerCoexistence,META_APP_IMPORT_NOTICE_VERSION} from '../src/lib/meta-customer-coexistence.mjs';
 import {encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
 import {customerChannelActive} from '../src/lib/meta-customer-outbound.mjs';
 import {OBRASAAS_META_CHANNEL} from '../src/lib/meta-channel-binding.mjs';
@@ -20,7 +20,7 @@ const database='obrasaas_coexistence_'+randomUUID().replaceAll('-','');assert.ma
 const environment={NEXT_PUBLIC_META_APP_ID:OBRASAAS_META_CHANNEL.appId,META_APP_SECRET:'synthetic-meta-app-secret-only',META_CONFIG_ID:'123456789123456',META_COEXISTENCE_CONFIG_ID:'123456789123457',META_GRAPH_API_VERSION:'v25.0',WHATSAPP_CREDENTIALS_ENCRYPTION_KEY:Buffer.alloc(32,42).toString('base64'),META_CUSTOMER_VERIFY_TOKEN:'synthetic-verify-token-'.repeat(2),META_EMBEDDED_SIGNUP_VERSION:'4',OBRASAAS_META_SIGNUP_RELEASE:'customer-self-service-v1',OBRASAAS_META_COEXISTENCE_RELEASE:'business-app-coexistence-v1'};
 const session=(user,org)=>({authenticated:true,verification:'clerk-production-jwt',userId:user,organizationId:org,organizationRole:'org:admin'}),owner=session('user_Owner','org_A'),foreign=session('user_Foreign','org_B');
 const admin=new Client({connectionString:source}),checks=[];let pool,created=false,clock=Date.now(),exchanges=0,subscriptions=0,registrations=0,syncHook=null,subscribeHook=null,fallbacks=0,sends=0;const syncCalls=[];
-const provider={readiness:()=>metaCustomerReadiness(environment),exchange:async()=>{exchanges++;return 'synthetic-token-only-new-1234567890';},inspect:async({wabaId,phoneNumberId})=>({phoneNumberId:phoneNumberId||wabaId.replace('88888888','99999999'),isOnBizApp:true,platformType:'CLOUD_API',registered:true,scopes:['whatsapp_business_management','whatsapp_business_messaging'],expiresAt:null,phoneStatus:'CONNECTED',displayPhoneNumber:'Synthetic',verifiedBusinessName:'Synthetic'}),subscribe:async()=>{subscriptions++;if(subscribeHook)await subscribeHook();return true;},register:async()=>{registrations++;throw new Error('Never register a business-app number');},syncAppData:async(params)=>{syncCalls.push(params.syncType);if(syncHook)return syncHook(params);return {requestId:'synthetic-request-'+syncCalls.length};}};
+const provider={readiness:()=>metaCustomerReadiness(environment),exchange:async()=>{exchanges++;return 'synthetic-token-only-new-1234567890';},inspect:async({wabaId,phoneNumberId})=>({phoneNumberId:phoneNumberId||wabaId.replace('88888888','99999999'),isOnBizApp:true,platformType:'CLOUD_API',registered:true,scopes:['whatsapp_business_management','whatsapp_business_messaging'],expiresAt:null,phoneStatus:'CONNECTED',displayPhoneNumber:'Synthetic',verifiedBusinessName:'Synthetic'}),subscribe:async()=>{subscriptions++;if(subscribeHook)await subscribeHook();return true;},register:async()=>{registrations++;throw new Error('Never register a business-app number');},syncAppData:async(params)=>{await params.beforeExternal?.();await params.finalBeforeExternal?.();syncCalls.push(params.syncType);if(syncHook)return syncHook(params);return {requestId:'synthetic-request-'+syncCalls.length};}};
 const inspectCalls=[],normalInspect=provider.inspect;let inspectResultHook=null,subscriptionInspectionHook=null,subscriptionInspections=0;
 provider.inspect=async params=>{inspectCalls.push({numberMode:params.numberMode,phoneNumberId:params.phoneNumberId});const result=await normalInspect(params);return inspectResultHook?inspectResultHook(result):result;};
 provider.inspectSubscription=async()=>{subscriptionInspections++;const result=subscriptionInspectionHook?await subscriptionInspectionHook():null;return typeof result==='boolean'?result:true;};
@@ -49,7 +49,15 @@ try{
  await pool.query(`ALTER TABLE "Organization" ADD COLUMN "subscriptionPlan" text NOT NULL DEFAULT 'TRIAL',ADD COLUMN "subscriptionStatus" text NOT NULL DEFAULT 'TRIALING',ADD COLUMN "trialEndsAt" timestamp;
   UPDATE "Organization" SET "trialEndsAt"=(clock_timestamp() AT TIME ZONE 'UTC')+interval '15 days';`);
  const manual=(await pool.query(`SELECT * FROM "CrmAccount"`)).rows;
- const workspace=createWorkspaceStore({connect:()=>pool.connect()}),service=createMetaCustomerOnboarding({workspace,provider,environment,now:()=>clock}),scope=(await workspace.list(owner)).scope,otherScope=(await workspace.list(foreign)).scope;
+ // A provider response cannot await a callback transaction that needs its
+ // own still-held channel lock. Start the signed callback concurrently, then
+ // drain it after dispatch COMMIT and before the separate response settlement.
+ let pendingSyncCallback=null;
+ const canonicalWorkspace=createWorkspaceStore({connect:()=>pool.connect()}),workspace={...canonicalWorkspace,integrationProject:async(...args)=>{
+  const result=await canonicalWorkspace.integrationProject(...args);
+  if(pendingSyncCallback){const pending=pendingSyncCallback;pendingSyncCallback=null;const settled=await pending;if(settled.error)throw settled.error;for(const id of settled.ids)await processor.process(id);}
+  return result;
+ }},service=createMetaCustomerOnboarding({workspace,provider,environment,now:()=>clock}),scope=(await workspace.list(owner)).scope,otherScope=(await workspace.list(foreign)).scope;
  const context=projectId=>({projectId,scope}),command=(projectId,action,extra={})=>({...context(projectId),action,operationId:randomUUID(),...extra});
  const begin=projectId=>service.command(owner,command(projectId,'begin',{preparedRevision:1}));
  const complete=(projectId,start,n)=>command(projectId,'complete',{signupId:start.signup.id,stateToken:start.stateToken,code:'synthetic-code-'+n,wabaId:'888888880'+n,phoneNumberId:null,signupEvent:'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING'});
@@ -77,7 +85,7 @@ try{
  const before=(await pool.query(`SELECT count(*)::int AS n FROM "WebhookEvent"`)).rows[0].n;await receive(envelope(1,'history',history('spoof',1)),{signed:false});assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "WebhookEvent"`)).rows[0].n,before);checks.push('bad-signature-and-cross-tenant-session-rejected-before-source-write');
  const notSelected=await receive(envelope(1,'history',history('notselected',1)));assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "WebhookEvent" WHERE provider=$1`,[META_APP_PROJECTION_PROVIDER])).rows[0].n,0);assert.equal((await processor.process(notSelected[0])).businessApplied,false);checks.push('history-without-explicit-tenant-consent-never-enters-private-projection');
  const sync=command('p-1','start_app_sync',{signupId:start.signup.id,contactsConsent:true,historyConsent:true,noticeVersion:META_APP_IMPORT_NOTICE_VERSION,confirmPreserveApp:true});
- syncHook=async({syncType})=>{assert.equal(syncType,'smb_app_state_sync');await receive(envelope(1,'smb_app_state_sync',contact()));throw new Error('Synthetic POST response lost after signed callback');};
+ syncHook=async({syncType})=>{assert.equal(syncType,'smb_app_state_sync');pendingSyncCallback=receive(envelope(1,'smb_app_state_sync',contact()),{process:false}).then(ids=>({ids}),error=>({error}));throw new Error('Synthetic POST response lost after signed callback arrival');};
  const uncertain=await service.command(owner,sync);assert.equal(uncertain.coexistence.contacts.state,'RECEIVING');assert.equal(uncertain.coexistence.contacts.records,1);assert.equal(uncertain.coexistence.history.state,'NOT_REQUESTED');assert.equal(uncertain.coexistence.canContinueImport,true);assert.deepEqual(syncCalls,['smb_app_state_sync']);
  await service.command(owner,sync);assert.equal(syncCalls.length,1);syncHook=null;
  const reordered=Object.fromEntries(Object.entries({...sync,action:'continue_app_sync'}).reverse());const continued=await service.command(owner,reordered);assert.equal(continued.coexistence.history.state,'REQUEST_ACCEPTED');assert.match(continued.coexistence.history.requestId,/synthetic-request/);assert.deepEqual(syncCalls,['smb_app_state_sync','history']);await service.command(owner,{...sync,action:'continue_app_sync'});assert.equal(syncCalls.length,2);checks.push('callback-before-lost-response-preserved-reordered-replay-no-post-explicit-continuation-only-unsent-history');
@@ -298,6 +306,111 @@ try{
  try{await assert.rejects(blockedPost.complete(blockedPostStart,blockedPost.phoneB),{code:'META_CUSTOMER_STATE_CHANGED'});}finally{await postHolder?.release();}
  const postRejected=await blockedPost.state();assert.equal(postHolder.observed,true);assert.equal(blockedPost.subscriptionPosts,0);assert.equal(blockedPost.registrationPosts,0);assert.deepEqual(await blockedPost.connection(),postBefore);assert.equal(postRejected.state,'REVIEW_REQUIRED');for(const key of ['id','codeDigest','encryptedToken','wabaId','phoneNumberId'])assert.equal(postRejected[key],postEscrow[key]);assert.deepEqual(postRejected.existingConnection,postEscrow.existingConnection);
  const postRecovered=await blockedPost.service.command(owner,command(blockedPost.projectId,'reconcile',{signupId:blockedPostStart.signup.id})),postFinal=await blockedPost.state();assert.equal(postRecovered.signup.state,'LINKED_PENDING_ACCEPTANCE');assert.equal(blockedPost.exchanges,1);assert.equal(blockedPost.subscriptionPosts,1);assert.equal(postFinal.encryptedToken,postEscrow.encryptedToken);assert.equal(postFinal.codeDigest,postEscrow.codeDigest);assert.equal((await blockedPost.connection()).id,postBefore.id);assert.equal((await blockedPost.connection()).enabled,true);checks.push('native-provider-real-existing-connection-row-lock-crosses-lease-denies-POST-preserves-provider-and-explicitly-recovers-same-escrow-without-exchange');
+
+ // Each mutation commits after the durable reservation and before a new
+ // canonical dispatch transaction. The real provider must emit zero POSTs.
+ for(const [n,kind,code] of [[26,'membership','WORKSPACE_MEMBERSHIP_REQUIRED'],[27,'token','META_CUSTOMER_SYNC_LEASE_CHANGED'],[28,'lease','META_CUSTOMER_SYNC_LEASE_CHANGED']]){
+  const projectId=await nativeProject(n),phoneNumberId='99988877'+n,wabaId='88899977'+n,signupId=randomUUID(),channelId='native-sync-'+n;
+  const state={id:signupId,actorId:'owner',organizationId:'company-a',numberMode:'BUSINESS_APP',state:'LINKED_PENDING_ACCEPTANCE',phoneNumberId,wabaId};
+  const credentials={organizationId:'company-a',projectId,purpose:'access-token',resourceId:phoneNumberId},encrypted=encryptCustomerSecret('synthetic-native-sync-token-'+n,credentials,environment);
+  await pool.query(`UPDATE "Project" SET metadata=metadata||jsonb_build_object('metaSignup',$2::jsonb) WHERE id=$1`,[projectId,JSON.stringify(state)]);
+  await pool.query(`INSERT INTO "WhatsAppConnection"(id,"projectId","phoneNumberId","whatsappBusinessId","encryptedAccessToken",enabled,metadata) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)`,[channelId,projectId,phoneNumberId,wabaId,encrypted,JSON.stringify({credentialFormat:'tenant-aad-v2',credentialOrganizationId:'company-a',customerSignupId:signupId,coexistence:{verified:true,syncDeadlineAt:new Date(clock+3600000).toISOString()}})]);
+  let claimWritten=false,changed=false,posts=0;
+  const nativeSyncWorkspace=createWorkspaceStore({connect:async()=>{const client=await pool.connect();return {release:(...args)=>client.release(...args),query:async(sql,values)=>{
+   if(sql.startsWith('UPDATE public."WhatsAppConnection"')&&values?.[0]===channelId&&JSON.parse(values[2]).coexistence?.history?.state==='REQUEST_STARTED')claimWritten=true;
+   const result=await client.query(sql,values);
+   if(sql==='COMMIT'&&claimWritten&&!changed){changed=true;
+    if(kind==='membership')await pool.query(`UPDATE "TenantMembership" SET status='REVOKED' WHERE id='m-owner'`);
+    if(kind==='token')await pool.query(`UPDATE "WhatsAppConnection" SET "encryptedAccessToken"=$2 WHERE id=$1`,[channelId,encryptCustomerSecret('synthetic-rotated-sync-token-'+n,credentials,environment)]);
+    if(kind==='lease')await pool.query(`UPDATE "WhatsAppConnection" SET metadata=jsonb_set(metadata,'{coexistence,history,leaseExpiresAt}',$2::jsonb) WHERE id=$1`,[channelId,JSON.stringify(new Date(clock-1).toISOString())]);
+   }return result;
+  }};}});
+  const nativeSyncProvider=createMetaCustomerProvider({environment,now:()=>clock,fetchImpl:async()=>{posts++;return Response.json({request_id:'synthetic-forbidden-post'});}}),nativeSync=createMetaCustomerCoexistence({workspace:nativeSyncWorkspace,provider:nativeSyncProvider,environment,now:()=>clock});
+  const input=command(projectId,'start_app_sync',{signupId,contactsConsent:false,historyConsent:true,noticeVersion:META_APP_IMPORT_NOTICE_VERSION,confirmPreserveApp:true});
+  try{await assert.rejects(nativeSync.command(owner,input),{code});}finally{if(kind==='membership')await pool.query(`UPDATE "TenantMembership" SET status='ACTIVE' WHERE id='m-owner'`);}
+  assert.equal(changed,true);assert.equal(posts,0);const retained=(await pool.query(`SELECT metadata,enabled FROM "WhatsAppConnection" WHERE id=$1`,[channelId])).rows[0];assert.equal(retained.metadata.coexistence.history.state,'REQUEST_STARTED');assert.equal(retained.enabled,false);
+  assert.deepEqual(await nativeSync.command(owner,input),{saved:true,replayed:true});assert.equal(posts,0);checks.push('native-sync-'+kind+'-changed-after-reservation-denies-POST-and-keeps-nonreplayable-receipt');
+ }
+
+ // Native timeout/re-delivery checks use real PostgreSQL time, not the
+ // injected application clock. Only HTTP is controlled; no Meta call is made.
+ const slowSyncTimings=[];
+ function slowSyncUntil(promise,signal){
+  return new Promise((resolve,reject)=>{
+   const abort=()=>{signal.removeEventListener('abort',abort);reject(signal.reason||new Error('Synthetic slow-sync aborted'));};
+   if(signal.aborted){abort();return;}
+   signal.addEventListener('abort',abort,{once:true});
+   Promise.resolve(promise).then(value=>{signal.removeEventListener('abort',abort);resolve(value);},error=>{signal.removeEventListener('abort',abort);reject(error);});
+  });
+ }
+ const slowSyncBound=(promise,milliseconds=25000)=>slowSyncUntil(promise,AbortSignal.timeout(milliseconds));
+ async function slowSyncPause(milliseconds,signal){let timer;try{await slowSyncUntil(new Promise(resolve=>{timer=setTimeout(resolve,milliseconds);}),signal);}finally{clearTimeout(timer);}}
+ async function slowSyncCallbackScenario(n,variant){
+  assert.ok(['accepted','response-lost'].includes(variant));
+  const projectId=await nativeProject(n),phoneNumberId='99988877'+n,wabaId='88899977'+n,signupId=randomUUID(),channelId='native-slow-sync-'+n;
+  const state={id:signupId,actorId:'owner',organizationId:'company-a',numberMode:'BUSINESS_APP',state:'LINKED_PENDING_ACCEPTANCE',phoneNumberId,wabaId};
+  const credentials={organizationId:'company-a',projectId,purpose:'access-token',resourceId:phoneNumberId},encrypted=encryptCustomerSecret('synthetic-slow-sync-token-'+n,credentials,environment);
+  await pool.query(`UPDATE "Project" SET metadata=metadata||jsonb_build_object('metaSignup',$2::jsonb) WHERE id=$1`,[projectId,JSON.stringify(state)]);
+  await pool.query(`INSERT INTO "WhatsAppConnection"(id,"projectId","phoneNumberId","whatsappBusinessId","encryptedAccessToken",enabled,metadata) VALUES($1,$2,$3,$4,$5,false,$6::jsonb)`,[channelId,projectId,phoneNumberId,wabaId,encrypted,JSON.stringify({credentialFormat:'tenant-aad-v2',credentialOrganizationId:'company-a',customerSignupId:signupId,coexistence:{verified:true,syncDeadlineAt:new Date(Date.now()+3600000).toISOString()}})]);
+  const caseAbort=new AbortController(),owned=[],callbackClients=[],wakeups=[],rejections=[];
+  let enterPost,releasePost,posts=0,postOpen=false,postStartedAt=null,postFinishedAt=null,firstElapsedMs=null;
+  const postEntered=new Promise(resolve=>{enterPost=resolve;}),postRelease=new Promise(resolve=>{releasePost=resolve;});
+  const slowProvider=createMetaCustomerProvider({environment,now:()=>Date.now(),fetchImpl:async(input,options)=>{
+   assert.equal(options.method,'POST');assert.equal(new URL(input).pathname,'/v25.0/'+phoneNumberId+'/smb_app_data');
+   assert.deepEqual(JSON.parse(options.body),{messaging_product:'whatsapp',sync_type:'history'});assert.ok(options.signal instanceof AbortSignal);posts++;assert.equal(posts,1);
+   const signal=AbortSignal.any([options.signal,caseAbort.signal]);postOpen=true;postStartedAt=performance.now();enterPost();
+   try{await slowSyncPause(8000,signal);await slowSyncUntil(postRelease,signal);if(variant==='response-lost')throw new Error('Synthetic sync response lost after one remote POST');return Response.json({request_id:'synthetic-slow-request-'+n});}
+   finally{postFinishedAt=performance.now();postOpen=false;}
+  }});
+  const slowWorkspace=createWorkspaceStore({connect:()=>pool.connect()}),slowService=createMetaCustomerCoexistence({workspace:slowWorkspace,provider:slowProvider,environment,now:()=>Date.now()});
+  const slowInbox=createMetaCustomerInbox({environment,connect:async()=>{
+   const client=await pool.connect(),trace={begun:false,committed:false,rolledBack:false,released:false,statementTimeoutConfigured:false,timeoutCode:null,timeoutAtProjectShare:false};callbackClients.push(trace);
+   return {release:(...args)=>{trace.released=true;client.release(...args);},query:async(sql,values)=>{
+    try{const result=await client.query(sql,values);if(sql==='BEGIN')trace.begun=true;if(sql==='COMMIT')trace.committed=true;if(sql==='ROLLBACK')trace.rolledBack=true;if(sql==="SET LOCAL statement_timeout='6000ms'")trace.statementTimeoutConfigured=true;return result;}
+    catch(error){trace.timeoutCode=error.code;trace.timeoutAtProjectShare=sql.includes('FROM public."Project"')&&sql.endsWith('FOR SHARE');throw error;}
+   }};
+  }});
+  const slowCallbacks=createMetaCustomerCallbackHandlers({inbox:slowInbox,environment,schedule:ids=>{wakeups.push([...ids]);},reportRejection:diagnostic=>{rejections.push(diagnostic);}});
+  const slowProjection=createMetaCustomerAppProjection({connect:()=>pool.connect(),provider:slowProvider,environment,now:()=>Date.now()});
+  const slowProcessor=createMetaCustomerProcessor({connect:()=>pool.connect(),environment,now:()=>Date.now(),dispatch:ctx=>slowProjection.execute(ctx),outbound:{send:async()=>{assert.fail('Imported slow-sync history must never send an outbound message');}}});
+  const payload={object:'whatsapp_business_account',entry:[{id:wabaId,changes:[{field:'history',value:{...history('slow_sync_'+n,1,100),metadata:{phone_number_id:phoneNumberId}}}]}]};
+  const signedBytes=Buffer.from(JSON.stringify(payload),'utf8'),signature='sha256='+createHmac('sha256',environment.META_APP_SECRET).update(signedBytes).digest('hex');
+  const callbackRequest=()=>new Request('https://obrasaas.com/api/meta/customer-callback',{method:'POST',headers:{'Content-Type':'application/json','x-hub-signature-256':signature},body:Buffer.from(signedBytes)});
+  const sourceRows=async()=>(await pool.query(`SELECT id,payload FROM "WebhookEvent" WHERE "projectId"=$1 ORDER BY id`,[projectId])).rows;
+  const connection=async()=>(await pool.query(`SELECT metadata,enabled FROM "WhatsAppConnection" WHERE id=$1`,[channelId])).rows[0];
+  const input=command(projectId,'start_app_sync',{signupId,contactsConsent:false,historyConsent:true,noticeVersion:META_APP_IMPORT_NOTICE_VERSION,confirmPreserveApp:true});
+  const started=slowService.command(owner,input).then(value=>({value}),error=>({error}));owned.push(started);
+  try{
+   await slowSyncBound(Promise.race([postEntered,started.then(result=>{throw result.error||new Error('Sync settled before controlled POST');})]));
+   assert.equal(postOpen,true);assert.equal((await connection()).metadata.coexistence.history.state,'REQUEST_STARTED');assert.equal((await sourceRows()).length,0);
+   const firstStartedAt=performance.now(),firstPending=slowCallbacks.POST(callbackRequest());owned.push(firstPending);const first=await slowSyncBound(firstPending,12000);firstElapsedMs=performance.now()-firstStartedAt;
+   assert.equal(first.status,503);assert.deepEqual(await first.json(),{received:false,code:'META_CUSTOMER_CALLBACK_UNCONFIRMED'});assert.equal(postOpen,true);assert.equal(posts,1);
+   assert.equal(callbackClients.length,1);assert.deepEqual(callbackClients[0],{begun:true,committed:false,rolledBack:true,released:true,statementTimeoutConfigured:true,timeoutCode:'57014',timeoutAtProjectShare:true});
+   assert.equal(rejections.length,1);assert.equal(rejections[0].stage,'RECORDING');assert.equal(rejections[0].signatureVerified,true);assert.equal(rejections[0].status,503);assert.equal(rejections[0].code,'META_CUSTOMER_CALLBACK_UNCONFIRMED');
+   assert.equal(wakeups.length,0);assert.equal((await sourceRows()).length,0);assert.ok(firstElapsedMs>=5900&&firstElapsedMs<12000,'Real six-second PostgreSQL statement timeout must be observed');
+   releasePost();const dispatched=await slowSyncBound(started);if(dispatched.error)throw dispatched.error;
+   assert.equal(postOpen,false);assert.equal(posts,1);const postElapsedMs=postFinishedAt-postStartedAt;assert.ok(postElapsedMs>=7900&&postElapsedMs<15000,'Controlled POST must outlast callback timeout but finish before provider timeout');
+   const beforeRetry=await connection();assert.equal(beforeRetry.enabled,false);assert.equal(beforeRetry.metadata.coexistence.contacts.state,'NOT_SELECTED');assert.equal(beforeRetry.metadata.coexistence.history.state,variant==='accepted'?'REQUEST_ACCEPTED':'REQUEST_UNKNOWN');
+   assert.deepEqual(dispatched.value,variant==='accepted'?{saved:true,replayed:false}:{saved:true,replayed:false,requiresReview:true});
+   assert.equal(beforeRetry.metadata.coexistence.history.requestId,variant==='accepted'?'synthetic-slow-request-'+n:undefined);
+   assert.equal((await sourceRows()).length,0);const reservedLease=beforeRetry.metadata.coexistence.history.leaseId;
+   assert.deepEqual(await slowService.command(owner,input),{saved:true,replayed:true});assert.deepEqual(await slowService.command(owner,{...input,action:'continue_app_sync'}),{saved:true,replayed:false});
+   assert.deepEqual(await connection(),beforeRetry);assert.equal(posts,1);assert.equal((await sourceRows()).length,0);
+   const retryPending=slowCallbacks.POST(callbackRequest());owned.push(retryPending);const retry=await slowSyncBound(retryPending,12000);assert.equal(retry.status,200);assert.deepEqual(await retry.json(),{received:true,durable:true,applied:false});
+   assert.equal(wakeups.length,1);assert.equal(wakeups[0].length,1);assert.equal(callbackClients.length,2);assert.equal(callbackClients[1].committed,true);assert.equal(callbackClients[1].rolledBack,false);assert.equal(callbackClients[1].released,true);
+   for(const id of wakeups[0]){const processing=slowProcessor.process(id);owned.push(processing);const applied=await slowSyncBound(processing);assert.equal(applied.businessApplied,false);assert.equal(applied.replySent,false);}
+   const afterRetry=await connection(),importedRows=await sourceRows();assert.equal(afterRetry.enabled,false);assert.equal(afterRetry.metadata.coexistence.history.state,'PROVIDER_COMPLETE_OBSERVED');assert.equal(afterRetry.metadata.coexistence.history.records,1);assert.equal(afterRetry.metadata.coexistence.history.leaseId,reservedLease);
+   assert.equal(importedRows.length,2);assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-v1'`,[projectId])).rows[0].n,1);assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "WebhookEvent" WHERE "projectId"=$1 AND provider=$2`,[projectId,META_APP_PROJECTION_PROVIDER])).rows[0].n,1);
+   const duplicatePending=slowCallbacks.POST(callbackRequest());owned.push(duplicatePending);const duplicate=await slowSyncBound(duplicatePending,12000);assert.equal(duplicate.status,200);assert.deepEqual(await duplicate.json(),{received:true,durable:true,applied:false});assert.equal(wakeups.length,2);assert.deepEqual(wakeups[1],wakeups[0]);
+   for(const id of wakeups[1]){const replay=slowProcessor.process(id);owned.push(replay);const repeated=await slowSyncBound(replay);assert.equal(repeated.done,true);assert.equal(repeated.businessApplied,false);assert.equal(repeated.replySent,false);}
+   assert.deepEqual(await sourceRows(),importedRows);assert.equal((await connection()).metadata.coexistence.history.records,1);
+   assert.deepEqual(await slowService.command(owner,input),{saved:true,replayed:true});assert.deepEqual(await slowService.command(owner,{...input,action:'continue_app_sync'}),{saved:true,replayed:false});assert.equal(posts,1);
+   assert.equal((await pool.query(`SELECT count(*)::int AS n FROM "WebhookEvent" WHERE "projectId"=$1 AND provider='meta-customer-outbound-v1'`,[projectId])).rows[0].n,0);assert.deepEqual((await pool.query(`SELECT metadata->'manualSales' AS value FROM "Project" WHERE id=$1`,[projectId])).rows[0].value,['sale-preserved']);
+   slowSyncTimings.push({variant,firstCallbackStatus:503,retryStatus:200,firstCallbackElapsedMs:Math.round(firstElapsedMs),postElapsedMs:Math.round(postElapsedMs),posts,reDeliveredSameSignedBytes:true,realProviderCalls:0});
+  }finally{releasePost();caseAbort.abort();await slowSyncBound(Promise.allSettled(owned),30000);assert.ok(callbackClients.every(trace=>trace.released));}
+ }
+ await slowSyncCallbackScenario(29,'accepted');checks.push('native-six-second-signed-callback-timeout-during-eight-second-accepted-sync-re-delivers-durably-and-idempotently-with-one-POST');
+ await slowSyncCallbackScenario(30,'response-lost');checks.push('native-six-second-signed-callback-timeout-during-eight-second-lost-sync-response-preserves-uncertainty-and-re-delivers-without-repeated-POST');
  const audit=(await pool.query(`SELECT metadata FROM "AuditLog"`)).rows;assert.doesNotMatch(JSON.stringify(audit),/Synthetic private history|5491112345678|synthetic-token|encryptedPayload/);
- const result={status:'PASS',environment:'local-disposable-postgresql17',checks,realProviderCalls:0,physicalNumberTested:false,productionDataTouched:false};mkdirSync('.vercel/meta-customer-evidence',{recursive:true});writeFileSync('.vercel/meta-customer-evidence/coexistence-postgres.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
+ const result={status:'PASS',environment:'local-disposable-postgresql17',checks,slowSyncCallbackTimings:slowSyncTimings,realProviderCalls:0,physicalNumberTested:false,productionDataTouched:false};mkdirSync('.vercel/meta-customer-evidence',{recursive:true});writeFileSync('.vercel/meta-customer-evidence/coexistence-postgres.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result));
 }finally{await closeDisposablePool(pool);if(created)await admin.query('DROP DATABASE "'+database+'"');await admin.end();}
