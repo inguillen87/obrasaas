@@ -178,11 +178,11 @@ jobs:
             .vercel/private/plan-import-postgres-validation.json
             .vercel/private/plan-import-boundary-validation.json
             .vercel/private/plan-import-ui-validation.json
-            .vercel/private/plan-budget-ui-ci.json
             .vercel/private/plan-import-ui-*.png
             .vercel/private/workspace-plan-recovery-ui-validation.json
             .vercel/private/approved-plan-baseline-evidence/
             .vercel/private/plan-document-curve-evidence/
+            .vercel/private/plan-budget-ui-ci.json
             .vercel/workspace-ci-evidence/lane-plans.json
           include-hidden-files: true
           retention-days: 7

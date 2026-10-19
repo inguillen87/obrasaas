@@ -38828,7 +38828,7 @@
       {
         "path": ".github/workflows/workspace-acceptance.yml",
         "previousSha256": "82075780c9ddb9530b47697ff0cacff6c4e73c0aba06999ab945151d7ff14858",
-        "currentSha256": "2507bd38734b21b14f231144493bee68fb8b5d63b2e937dd758163df585ca9c5"
+        "currentSha256": "c4901cffac7886050892a358181a66307986725653067f953e10e575f2e20cc4"
       },
       {
         "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
