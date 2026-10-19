@@ -18,11 +18,12 @@ import {planDocumentDraftView,planInvestmentDraftView} from '../src/app/(identit
 
 const context={projectId:'project-synthetic',scope:'a'.repeat(64)},mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const sha=value=>createHash('sha256').update(value).digest('hex');
-async function fixture({conflict=false,shared=false,hidden=false,unit='m2 '}={}){
+async function fixture({conflict=false,shared=false,hidden=false,unit='m2 ',planQuantity=null}={}){
  const {parts,rows}=budgetSourceFixtureParts({partidas:22,unit});
  if(shared)sharedPlanReference(parts,rows);
  if(hidden){parts[PLAN_SHEET_PART]=parts[PLAN_SHEET_PART].replace('<row r="'+rows[0].planRow+'">','<row r="'+rows[0].planRow+'" hidden="1">');parts['xl/worksheets/sheet2.xml']=parts['xl/worksheets/sheet2.xml'].replace('<row r="'+rows[0].budgetRow+'">','<row r="'+rows[0].budgetRow+'" hidden="1">');}
  if(conflict)putBudgetCell(parts,PLAN_SHEET_PART,'D'+rows[0].planRow,physicalNumericCell('D'+rows[0].planRow,'',{formula:"'CyP Integral completo'!M76"}));
+ if(planQuantity)putBudgetCell(parts,PLAN_SHEET_PART,'D'+rows[0].planRow,physicalNumericCell('D'+rows[0].planRow,planQuantity.value,{attributes:planQuantity.attributes||'',formula:Object.hasOwn(planQuantity,'formula')?planQuantity.formula:"'CyP Integral completo'!E"+rows[0].budgetRow}));
  const bytes=zipOoxmlFixture(parts),source=await extractPlanBudgetSource(bytes,mime),physical=await extractCypPlanOoxml(bytes,mime);
  const descriptor={version:2,profile:PLAN_BUDGET_SOURCE_PROFILE,purpose:PLAN_BUDGET_SOURCE_PURPOSE,projectId:context.projectId,sourceSha256:source.sourceSha256,sourceDigest:source.sourceDigest,measurementSourceDigest:source.measurementSourceDigest,rowCount:source.rows.length,currency:{code:null,status:'UNKNOWN'}};
  const draft={id:'budget-synthetic',revision:3,status:'READY',budgetImport:true,financialSource:true,rows:[],source:{sha256:sha(bytes),contentType:mime},budgetDescriptor:descriptor,budgetSource:source};
@@ -97,10 +98,13 @@ function nodes(tree,predicate,result=[]){if(!tree||typeof tree!=='object')return
 const html=props=>renderToStaticMarkup(ui.render(props));
 const consult=tree=>{const buttons=nodes(tree,node=>node.type==='button'&&Object.hasOwn(node.props,'data-budget-consult'));assert.equal(buttons.length,1);return buttons[0].props.onClick();};
 const props=f=>({entry:f.catalog.entries[0],owner:f.owner,...context,view:f.view,selected:f.selected,mayConsult:true,onRead:async()=>f.draft});
+function evidenceStatus(markup,origin,name){const start=markup.indexOf('data-budget-evidence-field="'+origin+'-'+name+'"');assert.ok(start>=0);const row=markup.slice(start,markup.indexOf('</tr>',start));const match=/<td data-label="Estado">([^<]*)/.exec(row);assert.ok(match);return match[1];}
 
 test('real component waits for explicit detail GET and renders literal original values with no decision controls',async()=>{
  const f=await fixture();let reads=0;const p={...props(f),onRead:async()=>{reads++;return f.draft;}};ui.reset();let tree=ui.render(p);assert.doesNotMatch(renderToStaticMarkup(tree),/999\.0000|17\.25000|2\.5000/);assert.equal(reads,0);await consult(tree);const markup=html(p);assert.equal(reads,1);assert.match(markup,/999\.0000/);assert.match(markup,/m2 /);assert.match(markup,/Moneda sin confirmar/);assert.match(markup,/2023/);assert.doesNotMatch(markup,/<input|type="submit"|>Aplicar|>Aprobar|>Guardar correcciones/);assert.match(markup,/Celdas, fórmulas y procedencia/);assert.doesNotMatch(markup,/<details[^>]*\bopen[=> ]/);
  assert.equal((markup.match(/data-budget-evidence-field=/g)||[]).length,12);
+ assert.equal(evidenceStatus(markup,'Plan','quantity'),'Fórmula con valor numérico guardado');assert.equal(evidenceStatus(markup,'Cómputo','quantity'),'Valor numérico guardado');assert.equal(evidenceStatus(markup,'Plan','code'),'Fórmula con resultado guardado');
+ for(const label of ['Agrupador de partidas','Costo monetario separado','Control sin clasificar','Código de clasificación original'])assert.ok(markup.includes(label));
  for(const label of ['Campo','Origen','Referencia','Estado'])assert.ok(markup.includes('<th scope="col">'+label+'</th>'));
  for(const origin of ['Cómputo','Plan'])assert.equal((markup.match(new RegExp('data-label="Origen">'+origin+'</td>','g'))||[]).length,6);
  for(const label of ['Código','Descripción','Unidad','Cantidad','Precio unitario','Importe de partida'])assert.equal((markup.match(new RegExp('<summary>'+label+'</summary>','g'))||[]).length,2);
@@ -113,6 +117,7 @@ test('real component waits for explicit detail GET and renders literal original 
 test('real component shows the empty-cache quantity conflict and keeps controls outside approved totals',async()=>{
  const f=await fixture({conflict:true}),p=props(f);ui.reset();await consult(ui.render(p));const markup=html(p);assert.match(markup,/data-budget-quantity-conflict/);assert.match(markup,/M76/);assert.match(markup,/sin valor numérico guardado/);assert.match(markup,/No sustituimos ni adoptamos cantidades/);assert.match(markup,/Agrupadores, indirectos y controles separados/);assert.match(markup,/No se suman a las partidas/);assert.equal(ui.snapshot().result.source.stockWrites,false);
  const row=ui.snapshot().result.source.rows.find(item=>item.code===f.selected.code);assert.ok(row);assert.equal(row.plan.links.quantity.reference.address,'M76');assert.equal(row.plan.links.quantity.referenceMatches,false);
+ assert.equal(evidenceStatus(markup,'Plan','quantity'),'Fórmula con resultado vacío');assert.match(markup,/Lectura guardada en Plan<\/dt><dd>Fórmula con resultado vacío/);assert.match(markup,/Plan · Cantidad: La referencia no coincide o no pudo resolverse/);assert.match(markup,/Código original de la observación/);assert.match(markup,/PLAN_QUANTITY_REFERENCE_UNRESOLVED/);
  assert.match(markup,/Referencia pendiente de revisión/);assert.match(markup,/La referencia no coincide o no pudo resolverse/);assert.match(markup,/No se pudo comparar; falta un valor numérico legible/);assert.ok(markup.includes(row.budget.cells.quantity.address));assert.match(markup,/Vacío en el archivo/);assert.doesNotMatch(markup,/<pre\b/);
  // SSR has no native disclosure state: these checks prove unmounting of all
  // rendered evidence on current authority/context changes, not browser opening.
@@ -120,6 +125,20 @@ test('real component shows the empty-cache quantity conflict and keeps controls 
   ui.reset();await consult(ui.render(p));const authorized=html(p);assert.match(authorized,/data-budget-evidence-field/);assert.match(authorized,/Fórmula original/);assert.match(authorized,/999\.0000/);
   const purged=html({...p,...change});assert.doesNotMatch(purged,/data-budget-evidence(?:[=> -]|-field)|data-budget-quantity|data-budget-unit-price|data-budget-line-amount|999\.0000|17\.25000|Fórmula original|Huella del estilo original/);assert.equal(ui.snapshot(),null);
  }
+ for(const [planQuantity,decimal,label]of [
+  [{value:'0'},'0','Fórmula con valor numérico guardado'],
+  [{value:''},null,'Fórmula con resultado vacío'],
+  [{value:null},null,'Fórmula sin resultado guardado'],
+  [{value:'pendiente'},null,'Fórmula sin resultado numérico legible'],
+  [{value:'0',attributes:' t="str"'},null,'Fórmula sin resultado numérico legible'],
+  [{value:'0',formula:null},'0','Valor numérico guardado'],
+  [{value:'',formula:null},null,'Valor guardado vacío'],
+  [{value:'pendiente',formula:null},null,'Sin valor numérico legible'],
+ ]){
+  const sample=await fixture({planQuantity}),original=structuredClone(sample.draft),current=props(sample);ui.reset();await consult(ui.render(current));const rendered=html(current),observed=ui.snapshot().result.source.rows[0];
+  assert.equal(observed.plan.links.quantity.observation.decimal,decimal);assert.equal(observed.plan.cells.quantity.rawValue,planQuantity.value);assert.equal(observed.plan.cells.quantity.cachePresent,planQuantity.value!==null);assert.equal(evidenceStatus(rendered,'Plan','quantity'),label);assert.equal(evidenceStatus(rendered,'Plan','code'),'Fórmula con resultado guardado');assert.match(rendered,/data-budget-quantity(?:="[^"]*")?>17\.25000</);assert.deepEqual(sample.draft,original);
+ }
+ const unknown=structuredClone(f.draft);unknown.budgetSource.rows[0].issues.push('SYNTHETIC_UNKNOWN_OBSERVATION');unknown.budgetSource.controlCells[0].classification='SYNTHETIC_UNKNOWN_CONTROL';unknown.budgetSource.sourceDigest=await planPartidaBudgetDigest(unknown.budgetSource);unknown.budgetDescriptor.sourceDigest=unknown.budgetSource.sourceDigest;const unknownProps={...p,entry:{...p.entry,budgetDescriptor:unknown.budgetDescriptor},onRead:async()=>unknown};ui.reset();await consult(ui.render(unknownProps));const unknownMarkup=html(unknownProps);assert.match(unknownMarkup,/Observación de la fuente no reconocida; revisá el código original/);assert.match(unknownMarkup,/Clasificación no reconocida; revisá el código original/);assert.match(unknownMarkup,/SYNTHETIC_UNKNOWN_OBSERVATION/);assert.match(unknownMarkup,/SYNTHETIC_UNKNOWN_CONTROL/);assert.doesNotMatch(unknownMarkup,/<details[^>]*\bopen[=> ]/);
 });
 test('common selected code changes resolve the already checked source without fetching another detail',async()=>{
  const f=await fixture(),p=props(f);let calls=0;p.onRead=async()=>{calls++;return f.draft;};ui.reset();await consult(ui.render(p));const first=html(p),next=html({...p,selected:f.view.items[1]});assert.match(first,new RegExp(f.selected.code.replaceAll('.','\\.')));assert.match(next,new RegExp(f.view.items[1].code.replaceAll('.','\\.')));assert.equal(calls,1);assert.match(next,/3\.7500/);
@@ -146,7 +165,7 @@ test('the actual shared request validator rejects missing or false detail author
 test('real panel keeps budget upload explicit and clears private catalogues before an early denial return',()=>{
  const panel=readFileSync(new URL('plan-import-panel.js',account),'utf8'),preview=readFileSync(new URL('plan-partida-source-preview.js',account),'utf8');parse(panel,{sourceType:'module',plugins:['jsx']});parse(preview,{sourceType:'module',plugins:['jsx']});
  const invalidate=panel.slice(panel.indexOf('const invalidatePrivate='),panel.indexOf('const request='));assert.ok(invalidate.indexOf('setBudgetCatalog(null)')<invalidate.indexOf('if(!active'));assert.ok(invalidate.indexOf('setSelectedBudgetOwner(null)')<invalidate.indexOf('if(!active'));assert.match(panel,/if\(selectedBudgetOwner&&selectedBudgetOwner!==measurementOwner\)\{setSelectedBudgetOwner\(null\);if\(draft\?\.budgetImport===true\)setDraft\(null\)/);assert.match(panel,/setFile\(null\);setConsent\(false\);setSpreadsheetSelection\(''\);setFileInputEpoch\(value=>value\+1\)/);assert.match(panel,/draft\.budgetImport===true\|\|action==='APPLY'/);assert.match(panel,/reviewable=draft\?\.status==='READY'&&draft\?\.budgetImport!==true/);assert.match(panel,/value=\{PLAN_BUDGET_SOURCE_PROFILE\} disabled=\{!canApprove\|\|canonicalAccess!==true\}/);assert.match(panel,/data\.canApprove!==true\)\{invalidatePrivate\(\)/);assert.match(panel,/<input key=\{fileInputEpoch\} ref=\{fileRef\} type="file"/);
- assert.match(preview,/\['DIAGRAM','Diagrama'\],\['CURVE','Curva'\],\['QUANTITIES','Cómputo'\]/);assert.match(preview,/current\.tab==='QUANTITIES'&&<PlanPartidaBudgetPreview/);assert.doesNotMatch(componentSource,/fetch\(|localStorage|sessionStorage|node:crypto|onApplied/);assert.match(panel,/La lectura se realiza localmente, sin recalcular fórmulas ni ejecutar macros\./);const consentCopy=panel.slice(panel.indexOf("?'Autorizo guardar este Excel privado y leer localmente su cómputo"),panel.indexOf(":investmentSelected?'Autorizo"));assert.ok(consentCopy.length>0);assert.doesNotMatch(consentCopy,/OpenAI|API/);
+ assert.match(preview,/\['DIAGRAM','Diagrama'\],\['CURVE','Curva'\],\['QUANTITIES','Cómputo'\]/);assert.match(preview,/current\.tab==='QUANTITIES'&&<PlanPartidaBudgetPreview/);assert.deepEqual([...preview.matchAll(/\{current\.tab==='QUANTITIES'&&<(PlanPartida(?:Budget|Measurement)Preview)\b/g)].map(match=>match[1]),['PlanPartidaBudgetPreview','PlanPartidaMeasurementPreview']);assert.doesNotMatch(componentSource,/fetch\(|localStorage|sessionStorage|node:crypto|onApplied/);assert.match(panel,/La lectura se realiza localmente, sin recalcular fórmulas ni ejecutar macros\./);const consentCopy=panel.slice(panel.indexOf("?'Autorizo guardar este Excel privado y leer localmente su cómputo"),panel.indexOf(":investmentSelected?'Autorizo"));assert.ok(consentCopy.length>0);assert.doesNotMatch(consentCopy,/OpenAI|API/);
 });
 test('the local focal process keeps the network guard active without outbound attempts',()=>{
  assert.equal(globalThis.__hoursExportNetworkGuard?.active,true);assert.deepEqual(globalThis.__hoursExportNetworkGuard.attempts,[]);

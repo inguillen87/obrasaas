@@ -116,7 +116,25 @@ test('omitted delta source or new proof block cannot be concealed by an otherwis
 test('block63 binds all actual native source roots and the reviewed CI leaves without claiming PG execution',()=>{
  for(const kind of ['proof','block'])currentAndOriginalMetadataDenied(value=>{const target=kind==='proof'?value.extension.proofs.find(row=>row.kind==='PG_PARTICIPANT_KYC_PREANALYSIS'):value.blocks.find(row=>row.id===63);target.unreviewed=true;},validateParticipantPreanalysisWorkspaceContract);
  const contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),result=validateParticipantPreanalysisWorkspaceContract(contract);
- assert.equal(result.nativeSourceCount,142);assert.equal(result.nativeCheckCount,19);assert.equal(result.nativeAcceptance,false);const checkpoint=restoreIntegratedIdentityPreviousContract(contract);assert.equal(checkpoint.blocks.length,57);assert.equal(checkpoint.extension.proofs.length,19);const previousWa=restoreWhatsappFieldContinuityPreviousContract(contract);assert.equal(previousWa.blocks.length,58);assert.equal(previousWa.extension.proofs.length,20);const beforeBudget=restorePlanBudgetPreviousContract(contract);assert.equal(beforeBudget.blocks.length,59);assert.equal(beforeBudget.extension.proofs.length,21);assert.deepEqual(beforeBudget.blocks.slice(0,58),previousWa.blocks);assert.equal(beforeBudget.blocks.at(-1).id,65);assert.equal(beforeBudget.extension.proofs.at(-1).kind,'UI_FIELD_TASK_PAGINATION');const ownership=contract[PLAN_BUDGET_CURRENT_SECTION].ownership;assert.deepEqual(contract.blocks,[...beforeBudget.blocks,ownership.block]);assert.deepEqual(contract.extension.proofs,[...beforeBudget.extension.proofs,ownership.proof]);
+ assert.equal(result.nativeSourceCount,142);assert.equal(result.nativeCheckCount,19);assert.equal(result.nativeAcceptance,false);const checkpoint=restoreIntegratedIdentityPreviousContract(contract);assert.equal(checkpoint.blocks.length,57);assert.equal(checkpoint.extension.proofs.length,19);const previousWa=restoreWhatsappFieldContinuityPreviousContract(contract);assert.equal(previousWa.blocks.length,58);assert.equal(previousWa.extension.proofs.length,20);const beforeBudget=restorePlanBudgetPreviousContract(contract);assert.equal(beforeBudget.blocks.length,59);assert.equal(beforeBudget.extension.proofs.length,21);assert.deepEqual(beforeBudget.blocks.slice(0,58),previousWa.blocks);assert.equal(beforeBudget.blocks.at(-1).id,65);assert.equal(beforeBudget.extension.proofs.at(-1).kind,'UI_FIELD_TASK_PAGINATION');const ownership=contract[PLAN_BUDGET_CURRENT_SECTION].ownership;assert.deepEqual(contract.blocks,[...beforeBudget.blocks,ownership.block]);
+ // Current sources and the complete immutable Budget inverse are required before
+ // projecting only the inherited proof sourceFiles to their pre-Budget oracles.
+ verifyPlanBudgetCurrentSources(contract,read);
+ const projectedProofs=contract.extension.proofs.map((spec,index)=>{
+  const historical=beforeBudget.extension.proofs[index];if(!historical)return spec;
+  assert.equal(spec.id,historical.id);assert.equal(spec.kind,historical.kind);
+  const delta=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.contractPointer==='/extension/proofs/'+index+'/sourceFiles');
+  if(delta){
+   assert.equal(delta.family,spec.kind);
+   assert.equal(spec.sourceFiles.length,delta.currentCount);
+   assert.equal(sha(JSON.stringify(spec.sourceFiles)),delta.currentPathsSha256);
+   assert.equal(historical.sourceFiles.length,delta.previousCount);
+   assert.equal(sha(JSON.stringify(historical.sourceFiles)),delta.previousPathsSha256);
+   assert.deepEqual(spec.sourceFiles,[...historical.sourceFiles,...delta.additions].sort());
+  }else assert.deepEqual(spec.sourceFiles,historical.sourceFiles);
+  return {...spec,sourceFiles:restorePlanBudgetSourceSet(contract,spec.kind,spec.sourceFiles)};
+ });
+ assert.deepEqual(projectedProofs,[...beforeBudget.extension.proofs,ownership.proof]);
 });
 
 function ciShadow(){

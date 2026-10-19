@@ -412,6 +412,12 @@ export function restorePlanMeasurementPublishedGProducerText(section,producer,va
  requireLineage(Boolean(prior)&&Buffer.isBuffer(value),'Only a reviewed legacy producer can be restored');
  if(INTEGRATED_IDENTITY_UI_PRODUCER_PATHS.includes(producer)){try{value=restoreIntegratedIdentityUiProducerText(producer,value);}catch{deny('The exact reviewed modular UI producer migration is required');}}
  const decoded=value.toString('utf8');requireLineage(value.equals(Buffer.from(decoded)),'Invalid legacy producer encoding');let text=decoded.replaceAll('\r\n','\n');
+ // Restore this one audited copy addition as producer history only. Current-source
+ // authentication still reads the actual complete producer before this inverse.
+ if(producer==='scripts/verify-plan-import-boundary.mjs'&&sha(text)!==prior.sha256){
+  requireLineage(sha(text)==='3885b3343011502123d7ec1996c8d230a630a97b8522bcca5c9b6f7a9b164c11','The current plan boundary producer must match its complete reviewed body');
+  const addition=",'plan-budget-source.mjs'";requireLineage(text.split(addition).length===2,'The single reviewed budget source copy is required');text=text.replace(addition,'');
+ }
  const revision=section.planImportRecoveryRetentionRevision;
  if(revision&&producer===revision.producer){
   requireLineage(sha(text)===revision.currentSha256,'The I producer differs from its audited current source');
