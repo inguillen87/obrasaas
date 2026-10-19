@@ -317,7 +317,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-workspace-plan-partida-budget-preview.test.mjs",
       "previousSha256": null,
-      "currentSha256": "fbf94a73ef4a9b8fe13e496c3276c1c46ec92459d1c8d6233a16ee8c9371b366"
+      "currentSha256": "dab53818dbbf7c543c28ac5bc3a808bf69f9f96abe6e5f322cb5963b9253b4ce"
     },
     {
       "path": "tests/production-workspace-plan-partida-preview-current-ci-lineage.test.mjs",

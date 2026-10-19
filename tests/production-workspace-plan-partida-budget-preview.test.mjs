@@ -18,19 +18,19 @@ import {planDocumentDraftView,planInvestmentDraftView} from '../src/app/(identit
 
 const context={projectId:'project-synthetic',scope:'a'.repeat(64)},mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const sha=value=>createHash('sha256').update(value).digest('hex');
-async function fixture({conflict=false,shared=false,hidden=false,unit='m2 ',planQuantity=null}={}){
+async function fixture({conflict=false,shared=false,hidden=false,unit='m2 ',planQuantity=null,physicalPreview=true}={}){
  const {parts,rows}=budgetSourceFixtureParts({partidas:22,unit});
  if(shared)sharedPlanReference(parts,rows);
  if(hidden){parts[PLAN_SHEET_PART]=parts[PLAN_SHEET_PART].replace('<row r="'+rows[0].planRow+'">','<row r="'+rows[0].planRow+'" hidden="1">');parts['xl/worksheets/sheet2.xml']=parts['xl/worksheets/sheet2.xml'].replace('<row r="'+rows[0].budgetRow+'">','<row r="'+rows[0].budgetRow+'" hidden="1">');}
  if(conflict)putBudgetCell(parts,PLAN_SHEET_PART,'D'+rows[0].planRow,physicalNumericCell('D'+rows[0].planRow,'',{formula:"'CyP Integral completo'!M76"}));
  if(planQuantity)putBudgetCell(parts,PLAN_SHEET_PART,'D'+rows[0].planRow,physicalNumericCell('D'+rows[0].planRow,planQuantity.value,{attributes:planQuantity.attributes||'',formula:Object.hasOwn(planQuantity,'formula')?planQuantity.formula:"'CyP Integral completo'!E"+rows[0].budgetRow}));
- const bytes=zipOoxmlFixture(parts),source=await extractPlanBudgetSource(bytes,mime),physical=await extractCypPlanOoxml(bytes,mime);
+ const bytes=zipOoxmlFixture(parts),source=await extractPlanBudgetSource(bytes,mime),physical=physicalPreview?await extractCypPlanOoxml(bytes,mime):null;
  const descriptor={version:2,profile:PLAN_BUDGET_SOURCE_PROFILE,purpose:PLAN_BUDGET_SOURCE_PURPOSE,projectId:context.projectId,sourceSha256:source.sourceSha256,sourceDigest:source.sourceDigest,measurementSourceDigest:source.measurementSourceDigest,rowCount:source.rows.length,currency:{code:null,status:'UNKNOWN'}};
  const draft={id:'budget-synthetic',revision:3,status:'READY',budgetImport:true,financialSource:true,rows:[],source:{sha256:sha(bytes),contentType:mime},budgetDescriptor:descriptor,budgetSource:source};
  const {budgetSource:ignored,...small}=draft;void ignored;
  const owner={},listing={...context,canApprove:true,truncated:false,drafts:[small]},catalog=planPartidaBudgetCatalog(listing,{...context,owner,canonicalAccess:true});
- const view=planPartidaSourcePreview({id:'physical-synthetic',revision:2,status:'READY',source:draft.source,rows:physical.rows,spreadsheet:physical.spreadsheet},context);
- return {source,draft,descriptor,owner,listing,catalog,view,selected:view.items[0]};
+ const view=physical?planPartidaSourcePreview({id:'physical-synthetic',revision:2,status:'READY',source:draft.source,rows:physical.rows,spreadsheet:physical.spreadsheet},context):null;
+ return {source,draft,descriptor,owner,listing,catalog,view,selected:view?.items[0]??null,bytes};
 }
 const validate=f=>validatePlanPartidaBudgetDetail(f.draft,{...context,descriptor:f.descriptor,expectedId:f.draft.id,expectedRevision:f.draft.revision});
 
@@ -135,7 +135,10 @@ test('real component shows the empty-cache quantity conflict and keeps controls 
   [{value:'',formula:null},null,'Valor guardado vacío'],
   [{value:'pendiente',formula:null},null,'Sin valor numérico legible'],
  ]){
-  const sample=await fixture({planQuantity}),original=structuredClone(sample.draft),current=props(sample);ui.reset();await consult(ui.render(current));const rendered=html(current),observed=ui.snapshot().result.source.rows[0];
+  // The production standalone budget reader does not require an admissible physical-plan preview.
+  const sample=await fixture({planQuantity,physicalPreview:false}),original=structuredClone(sample.draft),current=props(sample);assert.equal(sample.view,null);assert.equal(sample.selected,null);assert.equal(sample.draft.source.sha256,sha(sample.bytes));
+  if(planQuantity.value===null&&planQuantity.formula!==null)await assert.rejects(extractCypPlanOoxml(sample.bytes,mime),{code:'PLAN_IMPORT_SPREADSHEET_FORMULA_INVALID'});
+  ui.reset();await consult(ui.render(current));const rendered=html(current),observed=ui.snapshot().result.source.rows[0];
   assert.equal(observed.plan.links.quantity.observation.decimal,decimal);assert.equal(observed.plan.cells.quantity.rawValue,planQuantity.value);assert.equal(observed.plan.cells.quantity.cachePresent,planQuantity.value!==null);assert.equal(evidenceStatus(rendered,'Plan','quantity'),label);assert.equal(evidenceStatus(rendered,'Plan','code'),'Fórmula con resultado guardado');assert.match(rendered,/data-budget-quantity(?:="[^"]*")?>17\.25000</);assert.deepEqual(sample.draft,original);
  }
  const unknown=structuredClone(f.draft);unknown.budgetSource.rows[0].issues.push('SYNTHETIC_UNKNOWN_OBSERVATION');unknown.budgetSource.controlCells[0].classification='SYNTHETIC_UNKNOWN_CONTROL';unknown.budgetSource.sourceDigest=await planPartidaBudgetDigest(unknown.budgetSource);unknown.budgetDescriptor.sourceDigest=unknown.budgetSource.sourceDigest;const unknownProps={...p,entry:{...p.entry,budgetDescriptor:unknown.budgetDescriptor},onRead:async()=>unknown};ui.reset();await consult(ui.render(unknownProps));const unknownMarkup=html(unknownProps);assert.match(unknownMarkup,/Observación de la fuente no reconocida; revisá el código original/);assert.match(unknownMarkup,/Clasificación no reconocida; revisá el código original/);assert.match(unknownMarkup,/SYNTHETIC_UNKNOWN_OBSERVATION/);assert.match(unknownMarkup,/SYNTHETIC_UNKNOWN_CONTROL/);assert.doesNotMatch(unknownMarkup,/<details[^>]*\bopen[=> ]/);
