@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import {assertConsumptionEvidenceAccess} from './material-inventory.mjs';
 import { performance } from 'node:perf_hooks';
 import { WorkspaceError, workspaceId, operationId, digest } from './workspace-policy.mjs';
 import { siteText, siteRevision, recordKeys, cleanMetadata } from './site-register-policy.mjs';
@@ -408,8 +409,9 @@ export function createFieldMedia({operations,put,get,analyzer,usage=null,extract
       });
     },
     async download(session,input) {
-      if(!workspaceId(input.evidenceId))throw new WorkspaceError('FIELD_MEDIA_INPUT_INVALID');
-      const authorizedMedia=()=>run(session,input,false,async(client,member)=>{
+      if(!workspaceId(input.evidenceId)||input.consumptionId!==undefined&&!workspaceId(input.consumptionId))throw new WorkspaceError('FIELD_MEDIA_INPUT_INVALID');
+      const authorizedMedia=()=>run(session,input,false,async(client,member,scope,project)=>{
+        if(input.consumptionId!==undefined)await assertConsumptionEvidenceAccess(client,member,project,{consumptionId:input.consumptionId,evidenceId:input.evidenceId});
         const row=await operations.readEvidence(client,input.projectId,input.evidenceId),e=row.metadata.fieldOperations;
         if(!canReviewField(member.role)){
           if(e.recordedBy!==member.actorId)throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);

@@ -1,6 +1,7 @@
 import {WorkspaceError,digest,workspaceId} from './workspace-policy.mjs';
 import {MATERIAL_UNITS,siteText} from './site-register-policy.mjs';
 import {parseProcurementQuantity,formatProcurementQuantity,sumProcurementQuantities,subtractProcurementQuantities} from './procurement-quantity.js';
+import {assertApprovedParticipantKyc} from './participant-approved-identity.mjs';
 
 export const MATERIAL_CATALOG_LIMIT=200;
 export const MATERIAL_INVENTORY_ACTIONS=['ADD_MATERIAL','PROPOSE_CONSUMPTION','DECIDE_CONSUMPTION','REVERSE_CONSUMPTION','PROPOSE_STOCK_ADJUSTMENT','DECIDE_STOCK_ADJUSTMENT'];
@@ -78,6 +79,43 @@ export async function readConsumption(client,projectId,id,lock=false){
  const row=(await client.query(`SELECT id,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Incident" WHERE id=$1 AND "projectId"=$2 ${lock?'FOR UPDATE':''}`,[id,projectId])).rows[0],c=row?.metadata?.materialInventory;
  if(c?.version!==1||c.kind!=='CONSUMPTION'||!workspaceId(c.materialId)||!workspaceId(c.workerId)||!workspaceId(c.submittedBy)||!['PENDING','APPROVED','REJECTED','REVERSED'].includes(c.state))fail('INVENTORY_CONSUMPTION_UNAVAILABLE',404);
  return {row,consumption:{id:row.id,revision:row.revision,...c}};
+}
+function consumptionEvidenceBindings(consumption){
+ if(consumption.evidenceIds===undefined&&consumption.evidenceBindings===undefined)return [];
+ const ids=consumption.evidenceIds,bindings=consumption.evidenceBindings;
+ if(!Array.isArray(ids)||!ids.length||ids.length>10||new Set(ids).size!==ids.length||ids.some(id=>!workspaceId(id))||consumption.taskId!==null&&!workspaceId(consumption.taskId)||!Array.isArray(bindings)||bindings.length!==ids.length)fail('INVENTORY_EVIDENCE_UNAVAILABLE',404);
+ for(let index=0;index<ids.length;index++){
+  const binding=bindings[index],media=binding?.media;
+  if(binding?.id!==ids[index]||!media||!['image','audio'].includes(media.kind)||typeof media.contentType!=='string'||!media.contentType.startsWith(media.kind+'/')||!Number.isInteger(media.bytes)||media.bytes<1||media.bytes>3*1024*1024||!/^[a-f0-9]{64}$/.test(media.sha256||''))fail('INVENTORY_EVIDENCE_UNAVAILABLE',404);
+ }
+ return bindings;
+}
+async function consumptionEvidenceParticipant(client,member,project,consumption,lock){
+ const rows=(await client.query(`SELECT w.id,w.active,w.metadata,u."clerkUserId" AS "clerkUserId" FROM public."Worker" w JOIN public."PlatformUser" u ON u."clerkUserId"=w.metadata->'participant'->>'clerkUserId' JOIN public."TenantMembership" tm ON tm."userId"=u.id AND tm."organizationId"=$2 AND tm.status='ACTIVE' JOIN public."ProjectMembership" pm ON pm."tenantMembershipId"=tm.id AND pm."projectId"=w."projectId" AND pm.status='ACTIVE' WHERE w.id=$3 AND w."projectId"=$1 AND u.id=$4 AND w.active=true AND w.metadata->'participant'->>'version'='1' AND w.metadata->'participant'->>'status'='ACTIVE' AND w.metadata->'participant'->'permissions'->>'report'='true'${lock?' FOR SHARE OF w,u,tm,pm':''}`,[project.id,member.organizationId,consumption.workerId,consumption.submittedBy])).rows;
+ if(rows.length!==1)fail('INVENTORY_EVIDENCE_UNAVAILABLE',404);
+ await assertApprovedParticipantKyc(client,{...rows[0],projectId:project.id},{organizationId:member.organizationId,actorId:consumption.submittedBy,clerkUserId:rows[0].clerkUserId},{code:'INVENTORY_EVIDENCE_UNAVAILABLE'});
+}
+async function consumptionEvidenceRows(client,member,project,consumption,{lock=false,bindings=null}={}){
+ const ids=consumption.evidenceIds||[];if(!ids.length)return [];
+ await consumptionEvidenceParticipant(client,member,project,consumption,lock);
+ const result=[];
+ for(let index=0;index<ids.length;index++){
+  const row=(await client.query(`SELECT id,metadata FROM public."Incident" WHERE id=$1 AND "projectId"=$2${lock?' FOR SHARE':''}`,[ids[index],project.id])).rows[0],e=row?.metadata?.fieldOperations,m=e?.media;
+  if(row?.id!==ids[index]||e?.version!==1||e.kind!=='EVIDENCE'||e.workerId!==consumption.workerId||e.recordedBy!==consumption.submittedBy||e.taskId!==consumption.taskId||e.sectorId!==consumption.sectorId||e.review?.decision==='REJECT'||!['image','audio'].includes(m?.kind)||typeof m.contentType!=='string'||!m.contentType.startsWith(m.kind+'/')||!Number.isInteger(m.bytes)||m.bytes<1||m.bytes>3*1024*1024||!/^[a-f0-9]{64}$/.test(m.sha256||'')||!/^obrasaas\/field\/v1\/[a-f0-9]{64}\/evidence\.(jpg|png|webp|ogg|wav|mp3|m4a|webm)$/.test(m.pathname||''))fail('INVENTORY_EVIDENCE_UNAVAILABLE',404);
+  if(bindings&&['kind','contentType','bytes','sha256'].some(key=>bindings[index].media[key]!==m[key]))fail('INVENTORY_EVIDENCE_UNAVAILABLE',404);
+  result.push({id:row.id,media:{kind:m.kind,contentType:m.contentType,bytes:m.bytes,sha256:m.sha256}});
+ }
+ return result;
+}
+// Called within the existing project-authorized reader, before and after the
+// private Blob await. An ID alone is never permission to read an attachment.
+export async function assertConsumptionEvidenceAccess(client,member,project,{consumptionId,evidenceId}){
+ if(!workspaceId(consumptionId)||!workspaceId(evidenceId))fail('INVENTORY_EVIDENCE_UNAVAILABLE',404);
+ const {consumption}=await readConsumption(client,project.id,consumptionId);
+ if(!['ADMIN','DIRECTOR'].includes(member.role)&&consumption.submittedBy!==member.actorId)fail('INVENTORY_EVIDENCE_UNAVAILABLE',404);
+ const bindings=consumptionEvidenceBindings(consumption);
+ if(!bindings.some(binding=>binding.id===evidenceId))fail('INVENTORY_EVIDENCE_UNAVAILABLE',404);
+ await consumptionEvidenceRows(client,member,project,consumption,{bindings});
 }
 export const OWN_CONSUMPTION_PAGE_SIZE=5;
 const isoDate=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;
@@ -164,7 +202,8 @@ export async function applyInventoryFieldAction({client,member,session,project,c
   }
  if(command.action==='PROPOSE_CONSUMPTION'){
   await assertWorker(client,member,session,project.id,p.workerId,'report');const material=inventoryMaterial(state,p.materialId),sector=project.metadata?.fieldOperations?.sectors?.find(s=>s.id===p.sectorId);if(!sector)fail('FIELD_SECTOR_UNAVAILABLE',404);if(p.taskId!==null)await assertTask(client,project.id,p.taskId);
-  const id='consumption_'+digest([project.id,member.actorId,command.operationId]).slice(0,32),details={version:1,kind:'CONSUMPTION',state:'PENDING',materialId:material.id,materialName:material.name,proposalReceiptId:receiptId,unit:material.unit,quantity:p.quantity,catalogHash:p.catalogHash,workerId:p.workerId,taskId:p.taskId,sectorId:p.sectorId,reason:p.reason,submittedBy:member.actorId,submittedAt:at,source:member.channelProof?'participant-whatsapp':'participant-field',decision:null,reversal:null};
+  const linked=p.evidenceIds?.length?await consumptionEvidenceRows(client,member,project,{...p,submittedBy:member.actorId},{lock:true}):[];
+  const id='consumption_'+digest([project.id,member.actorId,command.operationId]).slice(0,32),details={version:1,kind:'CONSUMPTION',state:'PENDING',materialId:material.id,materialName:material.name,proposalReceiptId:receiptId,unit:material.unit,quantity:p.quantity,catalogHash:p.catalogHash,workerId:p.workerId,taskId:p.taskId,sectorId:p.sectorId,reason:p.reason,submittedBy:member.actorId,submittedAt:at,source:member.channelProof?'participant-whatsapp':'participant-field',decision:null,reversal:null,...(linked.length?{evidenceIds:p.evidenceIds,evidenceBindings:linked}:{})};
   await client.query(`INSERT INTO public."Incident"(id,"projectId",title,description,severity,status,reporter,metadata,"updatedAt") VALUES($1,$2,$3,$4,'INFO','open',$5,$6::jsonb,clock_timestamp())`,[id,project.id,'Consumo de '+material.name,p.reason,member.actorId,JSON.stringify({materialInventory:details})]);
   return {kind:'CONSUMPTION_PROPOSAL',consumption:(await readConsumption(client,project.id,id)).consumption,stockChanged:false};
  }
@@ -175,6 +214,7 @@ export async function applyInventoryFieldAction({client,member,session,project,c
   if(c.state!=='PENDING')fail('INVENTORY_ALREADY_DECIDED');if(p.decision==='APPROVE'&&c.catalogHash!==p.catalogHash)fail('INVENTORY_CATALOG_CHANGED');if(c.submittedBy===member.actorId)fail('FIELD_MAKER_CHECKER_REQUIRED',403);
   next.state=p.decision==='APPROVE'?'APPROVED':'REJECTED';next.decision={decision:p.decision,actorId:member.actorId,reason:p.reason,recordedAt:at,receiptId};
   if(p.decision==='APPROVE'){
+   const bindings=consumptionEvidenceBindings(c);if(bindings.length)await consumptionEvidenceRows(client,member,project,c,{lock:true,bindings});
    const active=(await client.query(`SELECT w.id FROM public."Worker" w JOIN public."PlatformUser" u ON u."clerkUserId"=w.metadata->'participant'->>'clerkUserId' JOIN public."TenantMembership" tm ON tm."userId"=u.id AND tm."organizationId"=$2 AND tm.status='ACTIVE' JOIN public."ProjectMembership" pm ON pm."tenantMembershipId"=tm.id AND pm."projectId"=w."projectId" AND pm.status='ACTIVE' WHERE w.id=$3 AND w."projectId"=$1 AND u.id=$4 AND w.active=true AND w.metadata->'participant'->>'status'='ACTIVE' AND w.metadata->'participant'->'kyc'->>'status'='APPROVED' AND w.metadata->'participant'->'permissions'->>'report'='true' FOR SHARE OF w,u,tm,pm`,[project.id,member.organizationId,c.workerId,c.submittedBy])).rows;if(active.length!==1)fail('FIELD_PARTICIPANT_REQUIRED',403);
    const balanceBefore=material.balance;changeInventoryBalance(material,c.quantity,'OUT');await saveInventoryCatalog(client,member,project,state);movement=await recordInventoryMovement(client,member,project,receiptId,{kind:'CONSUMPTION',direction:'OUT',materialId:material.id,unit:material.unit,quantity:c.quantity,balanceBefore,balanceAfter:material.balance,proposalId:row.id,catalogHash:p.catalogHash,submittedBy:c.submittedBy,reason:p.reason,recordedAt:at});next.decision.movementId=movement.id;
   }

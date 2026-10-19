@@ -16,12 +16,22 @@ export function inventoryQuery(value={}){return Object.fromEntries(queryKeys.map
 export function inventoryPendingCounts(value){const counts=value?.pendingCounts;return value?.canManage===true&&['PENDING','ALL'].includes(value.inventoryFilter)&&counts&&Object.keys(counts).sort().join('|')==='adjustments|consumptions'&&['consumptions','adjustments'].every(key=>Number.isSafeInteger(counts[key])&&counts[key]>=0)?counts:null;}
 function context(value,expected){if(value?.scope!==expected.scope||value.projectId!==expected.projectId)throw Object.assign(new Error('Cambió el contexto de esta obra. Volvé a consultarla con tu acceso vigente.'),{code:'WORKSPACE_CONTEXT_CHANGED'});}
 export const inventoryAccessDenied=error=>[401,403].includes(error?.status)||['WORKSPACE_CONTEXT_CHANGED','WORKSPACE_PROJECT_UNAVAILABLE'].includes(error?.code);
+export function consumptionEvidenceViews(consumption){
+ if(consumption?.evidenceIds===undefined&&consumption?.evidenceBindings===undefined)return [];
+ const ids=consumption?.evidenceIds,bindings=consumption?.evidenceBindings;
+ if(!Array.isArray(ids)||!ids.length||ids.length>10||new Set(ids).size!==ids.length||consumption.taskId!==null&&!id(consumption.taskId)||!Array.isArray(bindings)||bindings.length!==ids.length)fail();
+ return bindings.map((binding,index)=>{
+  const media=binding?.media;
+  if(!id(ids[index])||binding?.id!==ids[index]||!['image','audio'].includes(media?.kind)||typeof media.contentType!=='string'||!media.contentType.startsWith(media.kind+'/')||!Number.isInteger(media.bytes)||media.bytes<1||media.bytes>3*1024*1024||!hash(media.sha256))fail();
+  return {id:binding.id,revision:media.sha256,title:media.kind==='audio'?'Audio adjunto al consumo':'Foto adjunta al consumo',media:{kind:media.kind,contentType:media.contentType,bytes:media.bytes,sha256:media.sha256}};
+ });
+}
 export function mergeInventoryRows(previous,incoming){const merged=new Map(previous.map(row=>[row.id,row]));for(const row of incoming){const old=merged.get(row.id);if(!old||!row.revision||row.revision>=old.revision)merged.set(row.id,row);}return [...merged.values()];}
 export function inventoryVisiblePage(rows,page=0){const size=10,index=Math.min(Math.max(0,Number.isSafeInteger(page)?page:0),Math.max(0,Math.ceil(rows.length/size)-1)),start=index*size;return {rows:rows.slice(start,start+size),index,from:rows.length?start+1:0,to:Math.min(start+size,rows.length),hasPrevious:index>0,hasNext:start+size<rows.length};}
 export function inventoryState(value){
  if(value?.version!==1||!Number.isSafeInteger(value.catalogVersion)||value.catalogVersion<0||!hash(value.catalogHash)||value.catalogLimit!==200||typeof value.canManage!=='boolean'||!Array.isArray(value.materials)||value.materials.length>200||!Array.isArray(value.consumptions)||value.consumptions.length>100||typeof value.consumptionsTruncated!=='boolean'||value.nextConsumptionCursor!==null&&!id(value.nextConsumptionCursor)||!Array.isArray(value.movements)||value.movements.length>100||value.nextMovementCursor!==null&&!id(value.nextMovementCursor))fail();
  for(const m of value.materials)if(!id(m?.id)||!text(m.name)||!units.includes(m.unit)||typeof m.active!=='boolean'||!quantity(m.balance))fail();
- for(const c of value.consumptions)if(!id(c?.id)||!revision(c.revision)||!id(c.materialId)||!id(c.workerId)||!units.includes(c.unit)||!quantity(c.quantity)||!['PENDING','APPROVED','REJECTED','REVERSED'].includes(c.state)||typeof c.canDecide!=='boolean'||typeof c.canReverse!=='boolean'||!hash(c.catalogHash)||typeof c.reason!=='string')fail();
+ for(const c of value.consumptions){if(!id(c?.id)||!revision(c.revision)||!id(c.materialId)||!id(c.workerId)||!units.includes(c.unit)||!quantity(c.quantity)||!['PENDING','APPROVED','REJECTED','REVERSED'].includes(c.state)||typeof c.canDecide!=='boolean'||typeof c.canReverse!=='boolean'||!hash(c.catalogHash)||typeof c.reason!=='string')fail();consumptionEvidenceViews(c);}
  if(!Array.isArray(value.adjustments)||value.adjustments.length>100||value.nextAdjustmentCursor!==null&&!id(value.nextAdjustmentCursor)||!Array.isArray(value.priorReceipts)||value.priorReceipts.length>100||typeof value.priorReceiptsTruncated!=='boolean')fail();
  for(const c of value.adjustments)if(!adjustmentValid(c)||!revision(c.revision)||typeof c.canDecide!=='boolean')fail();
  for(const r of value.priorReceipts)if(!id(r?.requestId)||!uuid(r.receiptOperationId)||!quantity(r.quantity)||!units.includes(r.unit)||typeof r.deliveryReference!=='string'||typeof r.materialLabel!=='string')fail();

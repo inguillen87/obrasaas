@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
+import {parse} from '@babel/parser';
 import {MATERIAL_REVIEW_CURRENT_REVISION as expected,MATERIAL_REVIEW_CURRENT_SECTION as key,restoreMaterialReviewPreviousContract,restoreMaterialReviewSourceSet,materialReviewProofSourceAdditions,materialReviewCurrentSourcePin,materialReviewValidationFiles,verifyMaterialReviewCurrentSources,materialReviewUnchangedSurface} from '../scripts/lib/material-review-current-ci-lineage.mjs';
 import {verifyWhatsappFieldContinuityCurrentSources,whatsappFieldContinuityCurrentSourcePin} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import {restoreExistingApiPlanPreviousContract,existingApiPlanCurrentSourcePin} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
@@ -117,5 +118,31 @@ test('material CI closure inverses reject omitted duplicate old unsorted foreign
   }
   for(const edit of [value=>{value[key].proofSourceDeltas.pop();},value=>{value[key].proofSourceDeltas[0].additions.push('scripts/foreign-extra.mjs');},value=>{value[key].proofSourceDeltas[0].previousCount=value[key].proofSourceDeltas[0].currentCount;value[key].proofSourceDeltas[0].previousPathsSha256=value[key].proofSourceDeltas[0].currentPathsSha256;},value=>{value.extension.proofs.find(row=>row.id===delta.id).sourceFiles=prior.sourceFiles;},value=>{value.participantPreanalysisCurrentRevision.ciSourceFiles.pop();}]){const changed=structuredClone(contract);edit(changed);denied(()=>restoreMaterialReviewPreviousContract(changed));}
  }
+ }
+});
+
+
+test('exact attendance and consumption AST inverses preserve inherited material surfaces and reject altered omitted or unauthorized bodies',()=>{
+ const contract=current(),cases=[
+  ['src/lib/field-operations-http.mjs','d3dffce08238141f672a8af0c1b956da15809e18608084b9bdf57d50ae166ceb',"!workspaceId(params.get('consumptionId'))",'false',node=>node.type==='IfStatement'&&node.test?.type==='LogicalExpression'&&node.test.left?.type==='CallExpression'&&node.test.left.callee?.object?.name==='params'&&node.test.left.arguments?.[0]?.value==='consumptionId'],
+  ['src/lib/field-operations-store.mjs','8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604','event.recordedBy!==member.actorId','false',node=>node.type==='FunctionDeclaration'&&node.id?.name==='ownAttendanceHeads'],
+  ['src/lib/material-inventory.mjs','3af0b0e9c9003d09582ec4e8b21d1e35746dd3839fc7f01071935b9a4ea95333','e.recordedBy!==consumption.submittedBy','false',node=>node.type==='FunctionDeclaration'&&node.id?.name==='consumptionEvidenceBindings'],
+ ];
+ for(const[file,currentSha256,from,to,isRemoved]of cases){
+  const bytes=read(file),before=Buffer.from(bytes),text=bytes.toString('utf8'),surface=expected.reviewedSourceChanges.find(row=>row.path===file).unchangedSurfaceSha256;
+  assert.equal(sha(text.replaceAll('\r\n','\n')),currentSha256,'Exact approved current source '+file);
+  assert.equal(materialReviewUnchangedSurface(file,bytes),surface,'Entire inherited surface '+file);
+  assert.deepEqual(bytes,before,'Projection must not replace actual source bytes '+file);
+  assert.equal(text.split(from).length,2,'Unique authorization mutation '+file);
+  const matches=[];
+  function collect(node){if(Array.isArray(node)){for(const child of node)collect(child);return;}if(!node||typeof node!=='object')return;if(isRemoved(node))matches.push(node);for(const child of Object.values(node))collect(child);}
+  collect(parse(text,{sourceType:'module'}));assert.equal(matches.length,1,'Unique approved addition '+file);
+  const node=matches[0],omitted=text.slice(0,node.start)+text.slice(node.end);
+  for(const changed of [Buffer.from(text.replace(from,to)),Buffer.from(omitted)]){
+   assert.notEqual(materialReviewUnchangedSurface(file,changed),surface,'Altered or omitted new node cannot receive a predecessor identity '+file);
+   denied(()=>verifyMaterialReviewCurrentSources(contract,path=>path===file?changed:read(path)));
+  }
+  const unauthorized=Buffer.from(text+'\n// unreviewed current source bytes\n');
+  denied(()=>verifyMaterialReviewCurrentSources(contract,path=>path===file?unauthorized:read(path)));
  }
 });

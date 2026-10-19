@@ -62,9 +62,10 @@ export function createFieldMediaHandlers({verify,media}) {
       return reply(request.headers.get('content-type')?.startsWith('multipart/form-data;')?await media.attach(session,await boundedFieldMultipart(request)):await media.process(session,await boundedBody(request)));
     }
     if(request.method!=='GET')return reply({code:'METHOD_NOT_ALLOWED'},405);
-    const input=context(params,['operationId','evidenceId']);
+    const input=context(params,['operationId','evidenceId','consumptionId']);
+    if(params.has('consumptionId')&&(params.has('operationId')||!workspaceId(params.get('consumptionId'))))throw new WorkspaceError('FIELD_QUERY_INVALID');
     if(params.has('operationId')){if(!operationId(params.get('operationId'))||params.has('evidenceId')&&!workspaceId(params.get('evidenceId')))throw new WorkspaceError('FIELD_QUERY_INVALID');return reply(await media.status(session,{...input,operationId:params.get('operationId'),...(params.has('evidenceId')?{evidenceId:params.get('evidenceId')}:{})}));}
-    const file=await media.download(session,{...input,evidenceId:params.get('evidenceId')});
+    const file=await media.download(session,{...input,evidenceId:params.get('evidenceId'),...(params.has('consumptionId')?{consumptionId:params.get('consumptionId')}:{})});
     return new Response(file.bytes,{headers:{...fieldHeaders,'Content-Type':file.contentType,'Content-Length':String(file.bytes.length),'Content-Disposition':`attachment; filename="evidencia.${file.extension}"`,'Content-Security-Policy':"default-src 'none'; sandbox"}});
   }catch(error){return failed(error);}};
   return {GET:handle,POST:handle};
