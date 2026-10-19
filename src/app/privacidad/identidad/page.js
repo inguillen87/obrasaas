@@ -7,10 +7,10 @@ import {PARTICIPANT_IDENTITY_NOTICES_PATH,PARTICIPANT_IDENTITY_NOTICE_VERSIONS,p
 const canonical='https://obrasaas.com/privacidad/identidad';
 export const metadata={
  title:'Avisos de identidad | ObraSaaS',
- description:'Consultá el aviso completo de cada análisis opcional de identidad antes de elegir tu autorización.',
+ description:'Consultá los avisos de presentación y análisis de identidad antes de elegir tu autorización.',
  alternates:{canonical},
  robots:{index:false,follow:true,noarchive:true},
- openGraph:{title:'Avisos de identidad | ObraSaaS',description:'Información sobre los análisis opcionales de identidad y sus límites.',url:canonical,type:'website'},
+ openGraph:{title:'Avisos de identidad | ObraSaaS',description:'Información sobre la presentación de identidad, sus análisis opcionales y sus límites.',url:canonical,type:'website'},
 };
 
 export default async function IdentityNoticesPage({searchParams}){
@@ -28,7 +28,7 @@ export default async function IdentityNoticesPage({searchParams}){
     <section className={styles.hero} aria-labelledby="legal-title">
      <p className={styles.eyebrow}>TU INFORMACIÓN Y TUS OPCIONES</p>
      <h1 id="legal-title">Avisos de identidad</h1>
-     <p className={styles.lead}>Leé el aviso completo antes de elegir en el chat. Cada análisis es opcional y tiene una autorización independiente.</p>
+     <p className={styles.lead}>Leé el aviso completo antes de elegir en el chat. El uso del dorso y cada análisis tienen autorizaciones independientes.</p>
      <nav className={styles.documents} aria-label="Información legal"><Link href="/privacidad">Política de privacidad</Link><Link href="/terminos">Términos de uso</Link><Link href="/eliminacion-datos">Eliminación de datos</Link></nav>
     </section>
     <div className={styles.sections} style={{marginTop:32}}>
@@ -36,12 +36,12 @@ export default async function IdentityNoticesPage({searchParams}){
       <LegalSection id="aviso-completo" title={notice.title}>
        <p className={styles.updated}>Versión del aviso: <strong>{notice.version}</strong></p>
        <p data-identity-notice-text={notice.version}>{notice.text}</p>
-       <LegalNotice title="Tu elección se realiza en el chat"><p>Consultar esta página no autoriza ningún análisis ni cambia una autorización anterior. Volvé al chat para elegir. Podés continuar con revisión manual sin autorizar este análisis.</p></LegalNotice>
+       <LegalNotice title="Tu elección se realiza en el chat"><p>Consultar esta página no autoriza el uso de imágenes ni inicia análisis ni cambia una autorización anterior. Volvé al chat para elegir.</p><p>{notice.automatic?'Podés continuar con revisión manual sin autorizar este análisis.':'Si no querés incluir el dorso, podés cancelar en WhatsApp y usar la presentación web sin dorso.'}</p></LegalNotice>
       </LegalSection>
      ):(
       <LegalSection id="elegir-aviso" title="Elegí el aviso que querés consultar">
        {selection.status==='INVALID'&&<p role="status">No pudimos identificar un aviso válido en ese enlace. Podés consultar las opciones de esta página.</p>}
-       <p>Estos avisos explican qué datos se utilizan, cómo comienza cada análisis y cuáles son sus límites.</p>
+       <p>Estos avisos explican qué imágenes se guardan, cómo comienza cada análisis y cuáles son sus límites.</p>
        <ul>{PARTICIPANT_IDENTITY_NOTICE_VERSIONS.map(version=><li key={version}><Link href={participantIdentityNoticeUrl(version)}>{participantIdentityNotice(version).title}</Link></li>)}</ul>
       </LegalSection>
      )}

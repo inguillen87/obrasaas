@@ -4221,8 +4221,48 @@ export function verifyCustomerPhoneSelectionCurrentSources(contract,readSource){
  for(const row of refs){reject(safe(row.path)&&hash(row.previousSha256)&&hash(row.currentSha256),'Safe exact customer phone selection source pin required');const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current customer phone selection source: '+row.path);const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===participantDraftSafetyCurrentSourcePin(contract,{path:row.path,sha256:row.currentSha256}),'Stale current customer phone selection source: '+row.path);}
  return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,historicalPinsPreserved:true,nativeOrBrowserAcceptance:false};
 }
+// Decoder-only additive fence observations. This frozen ledger is independent
+// of caller DTOs; actual source authority still comes from the existing chain.
+const COEXISTENCE_DISPATCH_FENCE_NATIVE_REVIEW=Object.freeze({
+ producer:'scripts/verify-meta-customer-coexistence-postgres.mjs',
+ previousProducerLfSha256:'fd94401af9a07866a2cd28a355b7f2f69ef122cf3ae325690c8ffc35cb97092a',
+ currentProducerLfSha256:'463875f2b3a12df09847a2de5dcd2b3b87e0df7a043303ca76bb754266c7929f',
+ historicalCheckCount:52,historicalChecksSha256:'017a754bed3aba7d628c453bbe3dd2ac2bc39d7340d6452cdf6941c6f6d5bc6c',
+ supplementalCheckCount:5,supplementalChecksSha256:'ea567c7e6383371f509871eb0000f0a1d4fba726fb27127f4a2754dbd72c5967',
+ totalCheckCount:57,totalChecksSha256:'05624d5b0440a8f6fa7e80bdaccf76b4b1ba9902ab0b71f261cabdadb24ae45a',
+ addedCheckNames:Object.freeze([
+  'native-sync-membership-changed-after-reservation-denies-POST-and-keeps-nonreplayable-receipt',
+  'native-sync-token-changed-after-reservation-denies-POST-and-keeps-nonreplayable-receipt',
+  'native-sync-lease-changed-after-reservation-denies-POST-and-keeps-nonreplayable-receipt',
+  'native-six-second-signed-callback-timeout-during-eight-second-accepted-sync-re-delivers-durably-and-idempotently-with-one-POST',
+  'native-six-second-signed-callback-timeout-during-eight-second-lost-sync-response-preserves-uncertainty-and-re-delivers-without-repeated-POST'
+ ])
+});
+function normalizeCoexistenceDispatchFenceNativeProof(proof,contract,readSource){
+ const n=COEXISTENCE_DISPATCH_FENCE_NATIVE_REVIEW,pin=homeDecisionsCurrentSourcePin(contract,{path:n.producer,sha256:n.previousProducerLfSha256});
+ reject(pin===n.previousProducerLfSha256||pin===n.currentProducerLfSha256,'Only the authenticated historical or reviewed sync-fence producer is allowed');
+ const bytes=readSource(n.producer);reject(Buffer.isBuffer(bytes),'Current sync-fence producer bytes required');const captured=Buffer.from(bytes),source=captured.toString('utf8');
+ reject(captured.equals(Buffer.from(source))&&sha(source.replaceAll('\r\n','\n'))===pin,'Actual sync-fence producer must equal its authenticated source pin');
+ // A historical52 proof is eligible only when its actual source is historical.
+ if(pin===n.previousProducerLfSha256)return proof;
+ reject(plain(proof)&&same(Object.keys(proof).sort(),['status','environment','checks','slowSyncCallbackTimings','realProviderCalls','physicalNumberTested','productionDataTouched'].sort()),'Exact current sync-fence native proof shape required');
+ reject(proof.status==='PASS'&&proof.environment==='local-disposable-postgresql17'&&proof.realProviderCalls===0&&proof.physicalNumberTested===false&&proof.productionDataTouched===false,'Sync-fence proof cannot claim provider or human acceptance');
+ reject(Array.isArray(proof.checks)&&proof.checks.length===n.totalCheckCount&&sha(JSON.stringify(proof.checks))===n.totalChecksSha256,'All57 ordered sync-fence observations are required');
+ const historical=proof.checks.slice(0,n.historicalCheckCount),supplement=proof.checks.slice(n.historicalCheckCount);
+ reject(sha(JSON.stringify(historical))===n.historicalChecksSha256&&supplement.length===n.supplementalCheckCount&&same(supplement,n.addedCheckNames)&&sha(JSON.stringify(supplement))===n.supplementalChecksSha256&&new Set(supplement).size===n.supplementalCheckCount&&supplement.every(name=>!historical.includes(name)),'Exact52 historical and5 additive sync-fence controls required');
+ reject(Array.isArray(proof.slowSyncCallbackTimings)&&proof.slowSyncCallbackTimings.length===2,'Both slow callback observations are required');
+ for(const [index,variant]of ['accepted','response-lost'].entries()){
+  const row=proof.slowSyncCallbackTimings[index];reject(plain(row)&&same(Object.keys(row).sort(),['variant','firstCallbackStatus','retryStatus','firstCallbackElapsedMs','postElapsedMs','posts','reDeliveredSameSignedBytes','realProviderCalls'].sort()),'Exact slow callback observation shape required');
+  reject(row.variant===variant&&row.firstCallbackStatus===503&&row.retryStatus===200&&row.posts===1&&row.reDeliveredSameSignedBytes===true&&row.realProviderCalls===0,'Slow callback must fail before commit and re-deliver the same signed bytes once without another POST');
+  // The producer rounds durations after strict native5900/12000 and7900/15000 bounds.
+  reject(Number.isSafeInteger(row.firstCallbackElapsedMs)&&row.firstCallbackElapsedMs>=5900&&row.firstCallbackElapsedMs<=12000&&Number.isSafeInteger(row.postElapsedMs)&&row.postElapsedMs>=7900&&row.postElapsedMs<=15000&&row.postElapsedMs>=row.firstCallbackElapsedMs,'Real bounded callback and dispatch durations required');
+ }
+ // Only a derived DTO is projected; the original57-check artifact is never changed.
+ return {...proof,checks:[...historical]};
+}
 export function normalizeCustomerPhoneSelectionNativeProof(proof,contract,readSource){
  const value=phoneSelectionSection(contract);if(!value)return proof;verifyCustomerPhoneSelectionCurrentSources(contract,readSource);
+ proof=normalizeCoexistenceDispatchFenceNativeProof(proof,contract,readSource);
  const previous=restoreCustomerPhoneSelectionPreviousContract(contract),historical=previous.existingApiPlanCurrentRevision?.native?.currentCheckNames;
  reject(Array.isArray(historical)&&historical.length===value.native.previousCheckCount&&sha(JSON.stringify(historical))===value.native.previousCheckNamesSha256,'Exact41 historical API plan controls required');
  const complete=[...historical,...value.native.addedCheckNames];

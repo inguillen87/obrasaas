@@ -27,7 +27,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
       "previousSha256": "0f7f9ac5f194ece14a65c5a1ca80ada1bb695be26766a9fbe7fbdc19efc0be6f",
-      "currentSha256": "bbd4fde9121d85168a0fb85d5574d344f04e2fed61ef423c2d9c987db2e678f3"
+      "currentSha256": "ae44e43ec0202bffc3c729219fe9fdb6066363a970279f62cc4438d5d715ead5"
     },
     {
       "path": "scripts/lib/plan-budget-browser-ui.mjs",
@@ -65,6 +65,16 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "currentSha256": "c78c0792ec6c9142b76090bdffc65fc026a5b333a473e833a203981bec96f448"
     },
     {
+      "path": "scripts/verify-company-channel-postgres.mjs",
+      "previousSha256": "500d3b39c03295b1c10ea1aed48bcbb5d3171f39370947fc9e5d657f23985079",
+      "currentSha256": "d7314b1f7bc11d6cd5d56c6be2f4152ce6b8d3362c79418f16ae5ffaed9d4267"
+    },
+    {
+      "path": "scripts/verify-meta-customer-coexistence-postgres.mjs",
+      "previousSha256": "fd94401af9a07866a2cd28a355b7f2f69ef122cf3ae325690c8ffc35cb97092a",
+      "currentSha256": "463875f2b3a12df09847a2de5dcd2b3b87e0df7a043303ca76bb754266c7929f"
+    },
+    {
       "path": "scripts/verify-plan-budget-ui.mjs",
       "previousSha256": null,
       "currentSha256": "15c3bd2cc174a773dcc1a9e2aaa289cc60bb7a3b6f3a1a84606180d1bcaace60"
@@ -87,7 +97,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "src/app/(identity)/cuenta/plan-import-panel.js",
       "previousSha256": "d74f0cdff0da1c173bc2ef566fed973ca02dd6bcc449aa8c3842d5109954d5f6",
-      "currentSha256": "b43ad25fa65b1e10c6d6773f4c361821c3ed5f0da874f6725452310bbaa7615d"
+      "currentSha256": "19b79557ed1fa8d5db6d1a46201d925ea1ffc601cedb100da42bfe0768410dbf"
     },
     {
       "path": "src/app/(identity)/cuenta/plan-partida-budget-preview.js",
@@ -113,6 +123,31 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
       "previousSha256": "060e128b54eefdadfbabac45c3ec696934f5e74d79b9e26e905081128e8e99c5",
       "currentSha256": "3a8d1c517fb084df425198c84671f6b76bb1f659f9d0d4ed94945cd1046d8e64"
+    },
+    {
+      "path": "src/app/privacidad/identidad/page.js",
+      "previousSha256": "7d69fb5e9327426e4ca9b7e856d38811babe5f43bfdad4b5bcb40266b88cc401",
+      "currentSha256": "2b01990552d4ff067d389a75128b9d8290af15ccaeb69e5c06fac5e896998945"
+    },
+    {
+      "path": "src/lib/meta-customer-coexistence.mjs",
+      "previousSha256": "30f5b950284b953fa853b37514cd768660cfc505a6e979ec51c947b6edce40da",
+      "currentSha256": "2cf704b2d3842d4ff7ae48a438c1271ad610ccf4e92a6214d97338e91e999c8e"
+    },
+    {
+      "path": "src/lib/meta-customer-provider.mjs",
+      "previousSha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f",
+      "currentSha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+    },
+    {
+      "path": "src/lib/meta-kyc-conversation.mjs",
+      "previousSha256": "75870a6359385ae83df0d154b57c3f6738f2bde62fbe4974da7e38e5b0de2902",
+      "currentSha256": "5c947b605e585608812436ca0fb4ffd847ce5b936ca53d24d130df7311d32c86"
+    },
+    {
+      "path": "src/lib/participant-kyc-notice-links.mjs",
+      "previousSha256": "1a10acf655796ebf4f08175158ea3dc2a1d0a0fdb3d13bb88573d6a0e5f4375e",
+      "currentSha256": "3547f3fc2ebdefc2522971467d4c77498160dde7806a25bf9fa18c527c8658fc"
     },
     {
       "path": "src/lib/plan-budget-source.mjs",
@@ -182,7 +217,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
       "previousSha256": "511f6c45d33d66a22a7f583fd48c7ea7d4933dab26473d2106ece15056e4f6c7",
-      "currentSha256": "008b9438410a4b744e55d692d0a37b3f4a41cb1016762bf16ce7c90b6e03d451"
+      "currentSha256": "87c929ffdf3db12ad636bf27fcf7091edb9e0fbf1003210d6ac2450967ffe031"
     },
     {
       "path": "tests/production-integrated-identity-current-ci-lineage.test.mjs",
@@ -212,7 +247,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-meta-existing-api-plan-current-ci-lineage.test.mjs",
       "previousSha256": "dabe6caf8e2a216aa1d7160551431ce3e3b198b09b397f8c10edfeb9d9928650",
-      "currentSha256": "81ff15e21491a888febd8e2954ee9d5a3b018583056d0153ba4c3893ff563a1e"
+      "currentSha256": "00d21d855c36f8020bd1791ed3b48b90901f7e017c0611d2df33a3a13ab1978d"
     },
     {
       "path": "tests/production-ooxml-accounting-current-ci-lineage.test.mjs",
@@ -223,6 +258,16 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "path": "tests/production-organization-usage-ci.test.mjs",
       "previousSha256": "1f4aa949f2d05d83239560a4fa18223bfb910e85439ba14124882490bc8f36c3",
       "currentSha256": "b06e53cf706b97288cb6eb360226bbd7c72e0568cdb167408c482fae13ec7c6b"
+    },
+    {
+      "path": "tests/production-participant-kyc-notice-links.test.mjs",
+      "previousSha256": "f2096aceb507eec4782e3c457e49c11089805a92d09f13b9669c41e5c458e737",
+      "currentSha256": "55b7fa081cbdaea01487865e60d5390031e568a3c8dc1b59e2fff6126321183d"
+    },
+    {
+      "path": "tests/production-participant-kyc-notice-page.test.mjs",
+      "previousSha256": "4bbd193893af0f8fef000cfdc35276cff1caad796f7246372f3d874de40ea184",
+      "currentSha256": "59c99a827a02006aad99b55fa875861646c66fc9b324a0a1460d7b49dc0c9816"
     },
     {
       "path": "tests/production-participant-preanalysis-current-ci-lineage.test.mjs",
@@ -272,7 +317,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-plan-import-link-ui.test.mjs",
       "previousSha256": "19a55f361e6ccf2db4460504664abd39141c835e80b04133385cd778bc210cad",
-      "currentSha256": "9e71f5c832e45ce7e36f311f08834ad2237c622317d8f176e93f8e761fbf3193"
+      "currentSha256": "f26804d2dd582a4d0949c037a468543f1b132efa3fffc9203d9cbc5972690496"
     },
     {
       "path": "tests/production-plan-measurement-ci.test.mjs",
@@ -1233,7 +1278,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/plan-import-panel.js",
-          "sha256": "b43ad25fa65b1e10c6d6773f4c361821c3ed5f0da874f6725452310bbaa7615d"
+          "sha256": "19b79557ed1fa8d5db6d1a46201d925ea1ffc601cedb100da42bfe0768410dbf"
         },
         {
           "path": "src/app/(identity)/cuenta/plan-import-panel.module.css",
@@ -3071,7 +3116,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
-          "sha256": "bbd4fde9121d85168a0fb85d5574d344f04e2fed61ef423c2d9c987db2e678f3"
+          "sha256": "ae44e43ec0202bffc3c729219fe9fdb6066363a970279f62cc4438d5d715ead5"
         },
         {
           "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
@@ -3443,7 +3488,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/plan-import-panel.js",
-          "sha256": "b43ad25fa65b1e10c6d6773f4c361821c3ed5f0da874f6725452310bbaa7615d"
+          "sha256": "19b79557ed1fa8d5db6d1a46201d925ea1ffc601cedb100da42bfe0768410dbf"
         },
         {
           "path": "src/app/(identity)/cuenta/plan-import-panel.module.css",
@@ -4084,7 +4129,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
-          "sha256": "bbd4fde9121d85168a0fb85d5574d344f04e2fed61ef423c2d9c987db2e678f3"
+          "sha256": "ae44e43ec0202bffc3c729219fe9fdb6066363a970279f62cc4438d5d715ead5"
         },
         {
           "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
@@ -4792,7 +4837,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-coexistence.mjs",
-          "sha256": "30f5b950284b953fa853b37514cd768660cfc505a6e979ec51c947b6edce40da"
+          "sha256": "2cf704b2d3842d4ff7ae48a438c1271ad610ccf4e92a6214d97338e91e999c8e"
         },
         {
           "path": "src/lib/meta-customer-credentials.mjs",
@@ -4816,7 +4861,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f"
+          "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -4844,7 +4889,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "75870a6359385ae83df0d154b57c3f6738f2bde62fbe4974da7e38e5b0de2902"
+          "sha256": "5c947b605e585608812436ca0fb4ffd847ce5b936ca53d24d130df7311d32c86"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -4952,7 +4997,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/participant-kyc-notice-links.mjs",
-          "sha256": "1a10acf655796ebf4f08175158ea3dc2a1d0a0fdb3d13bb88573d6a0e5f4375e"
+          "sha256": "3547f3fc2ebdefc2522971467d4c77498160dde7806a25bf9fa18c527c8658fc"
         },
         {
           "path": "src/lib/participant-kyc-preanalysis-policy.mjs",
@@ -5829,7 +5874,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-coexistence.mjs",
-          "sha256": "30f5b950284b953fa853b37514cd768660cfc505a6e979ec51c947b6edce40da"
+          "sha256": "2cf704b2d3842d4ff7ae48a438c1271ad610ccf4e92a6214d97338e91e999c8e"
         },
         {
           "path": "src/lib/meta-customer-credentials.mjs",
@@ -5853,7 +5898,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f"
+          "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -5881,7 +5926,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "75870a6359385ae83df0d154b57c3f6738f2bde62fbe4974da7e38e5b0de2902"
+          "sha256": "5c947b605e585608812436ca0fb4ffd847ce5b936ca53d24d130df7311d32c86"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -5989,7 +6034,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/participant-kyc-notice-links.mjs",
-          "sha256": "1a10acf655796ebf4f08175158ea3dc2a1d0a0fdb3d13bb88573d6a0e5f4375e"
+          "sha256": "3547f3fc2ebdefc2522971467d4c77498160dde7806a25bf9fa18c527c8658fc"
         },
         {
           "path": "src/lib/participant-kyc-preanalysis-policy.mjs",
@@ -6820,7 +6865,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-coexistence.mjs",
-          "sha256": "30f5b950284b953fa853b37514cd768660cfc505a6e979ec51c947b6edce40da"
+          "sha256": "2cf704b2d3842d4ff7ae48a438c1271ad610ccf4e92a6214d97338e91e999c8e"
         },
         {
           "path": "src/lib/meta-customer-credentials.mjs",
@@ -6848,7 +6893,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f"
+          "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -6888,7 +6933,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "75870a6359385ae83df0d154b57c3f6738f2bde62fbe4974da7e38e5b0de2902"
+          "sha256": "5c947b605e585608812436ca0fb4ffd847ce5b936ca53d24d130df7311d32c86"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -7024,7 +7069,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/participant-kyc-notice-links.mjs",
-          "sha256": "1a10acf655796ebf4f08175158ea3dc2a1d0a0fdb3d13bb88573d6a0e5f4375e"
+          "sha256": "3547f3fc2ebdefc2522971467d4c77498160dde7806a25bf9fa18c527c8658fc"
         },
         {
           "path": "src/lib/participant-kyc-preanalysis-policy.mjs",
@@ -7646,7 +7691,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-coexistence.mjs",
-          "sha256": "30f5b950284b953fa853b37514cd768660cfc505a6e979ec51c947b6edce40da"
+          "sha256": "2cf704b2d3842d4ff7ae48a438c1271ad610ccf4e92a6214d97338e91e999c8e"
         },
         {
           "path": "src/lib/meta-customer-credentials.mjs",
@@ -7670,7 +7715,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f"
+          "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -7698,7 +7743,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "75870a6359385ae83df0d154b57c3f6738f2bde62fbe4974da7e38e5b0de2902"
+          "sha256": "5c947b605e585608812436ca0fb4ffd847ce5b936ca53d24d130df7311d32c86"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -7818,7 +7863,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/participant-kyc-notice-links.mjs",
-          "sha256": "1a10acf655796ebf4f08175158ea3dc2a1d0a0fdb3d13bb88573d6a0e5f4375e"
+          "sha256": "3547f3fc2ebdefc2522971467d4c77498160dde7806a25bf9fa18c527c8658fc"
         },
         {
           "path": "src/lib/participant-kyc-preanalysis-policy.mjs",
@@ -8408,7 +8453,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-coexistence.mjs",
-          "sha256": "30f5b950284b953fa853b37514cd768660cfc505a6e979ec51c947b6edce40da"
+          "sha256": "2cf704b2d3842d4ff7ae48a438c1271ad610ccf4e92a6214d97338e91e999c8e"
         },
         {
           "path": "src/lib/meta-customer-credentials.mjs",
@@ -8432,7 +8477,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f"
+          "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -8464,7 +8509,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "75870a6359385ae83df0d154b57c3f6738f2bde62fbe4974da7e38e5b0de2902"
+          "sha256": "5c947b605e585608812436ca0fb4ffd847ce5b936ca53d24d130df7311d32c86"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -8576,7 +8621,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/participant-kyc-notice-links.mjs",
-          "sha256": "1a10acf655796ebf4f08175158ea3dc2a1d0a0fdb3d13bb88573d6a0e5f4375e"
+          "sha256": "3547f3fc2ebdefc2522971467d4c77498160dde7806a25bf9fa18c527c8658fc"
         },
         {
           "path": "src/lib/participant-kyc-preanalysis-policy.mjs",
@@ -8871,7 +8916,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/plan-import-panel.js",
-          "sha256": "b43ad25fa65b1e10c6d6773f4c361821c3ed5f0da874f6725452310bbaa7615d"
+          "sha256": "19b79557ed1fa8d5db6d1a46201d925ea1ffc601cedb100da42bfe0768410dbf"
         },
         {
           "path": "src/app/(identity)/cuenta/plan-import-panel.module.css",
@@ -9076,7 +9121,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
-          "sha256": "bbd4fde9121d85168a0fb85d5574d344f04e2fed61ef423c2d9c987db2e678f3"
+          "sha256": "ae44e43ec0202bffc3c729219fe9fdb6066363a970279f62cc4438d5d715ead5"
         },
         {
           "path": "scripts/lib/plan-budget-browser-ui.mjs",
@@ -9160,7 +9205,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/plan-import-panel.js",
-          "sha256": "b43ad25fa65b1e10c6d6773f4c361821c3ed5f0da874f6725452310bbaa7615d"
+          "sha256": "19b79557ed1fa8d5db6d1a46201d925ea1ffc601cedb100da42bfe0768410dbf"
         },
         {
           "path": "src/app/(identity)/cuenta/plan-import-panel.module.css",

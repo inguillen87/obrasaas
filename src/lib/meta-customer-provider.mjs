@@ -364,11 +364,11 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    const result=await request(phoneNumberId+'/register',{token,method:'POST',body:{messaging_product:'whatsapp',pin},beforeExternal});
    if(result.success!==true)throw new WorkspaceError('META_CUSTOMER_REGISTRATION_UNCONFIRMED',503);return true;
   },
-  async syncAppData({token,phoneNumberId,syncType}){
+  async syncAppData({token,phoneNumberId,syncType,beforeExternal,finalBeforeExternal}){
    pilotAdapter('coexistence');
    if(!readiness(environment).flows?.BUSINESS_APP?.available)throw new WorkspaceError('META_CUSTOMER_COEXISTENCE_CONFIGURATION_PENDING',503);
-   if(!metaAssetId(phoneNumberId)||!['smb_app_state_sync','history'].includes(syncType))throw new WorkspaceError('META_CUSTOMER_SYNC_INPUT_INVALID');
-   const result=await request(phoneNumberId+'/smb_app_data',{token,method:'POST',body:{messaging_product:'whatsapp',sync_type:syncType}});
+   if(!metaAssetId(phoneNumberId)||!['smb_app_state_sync','history'].includes(syncType)||beforeExternal!==undefined&&typeof beforeExternal!=='function'||finalBeforeExternal!==undefined&&typeof finalBeforeExternal!=='function')throw new WorkspaceError('META_CUSTOMER_SYNC_INPUT_INVALID');
+   const result=await request(phoneNumberId+'/smb_app_data',{token,method:'POST',body:{messaging_product:'whatsapp',sync_type:syncType},beforeExternal,finalBeforeExternal});
    if(typeof result.request_id!=='string'||!result.request_id.length||result.request_id.length>200||/[\s\u0000-\u001f]/.test(result.request_id))throw new WorkspaceError('META_CUSTOMER_SYNC_UNCONFIRMED',503);
    return {requestId:result.request_id};
   },

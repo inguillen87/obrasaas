@@ -11,6 +11,8 @@ import {whatsappFieldCompanyNativeSourceFiles,verifyWhatsappFieldContinuityCurre
 import {currentProducerSourceFiles} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';
 const read=file=>existsSync(file)?readFileSync(file):null;
 const current=()=>JSON.parse(read('.github/workspace-acceptance-contract.json'));
+// Decoder shadow only: the actual current producer requires all57 controls.
+const syncFenceNativeShadow=historical=>({checks:[...historical,...["native-sync-membership-changed-after-reservation-denies-POST-and-keeps-nonreplayable-receipt","native-sync-token-changed-after-reservation-denies-POST-and-keeps-nonreplayable-receipt","native-sync-lease-changed-after-reservation-denies-POST-and-keeps-nonreplayable-receipt","native-six-second-signed-callback-timeout-during-eight-second-accepted-sync-re-delivers-durably-and-idempotently-with-one-POST","native-six-second-signed-callback-timeout-during-eight-second-lost-sync-response-preserves-uncertainty-and-re-delivers-without-repeated-POST"]],slowSyncCallbackTimings:['accepted','response-lost'].map(variant=>({variant,firstCallbackStatus:503,retryStatus:200,firstCallbackElapsedMs:6000,postElapsedMs:8000,posts:1,reDeliveredSameSignedBytes:true,realProviderCalls:0}))});
 const sha=value=>createHash('sha256').update(value).digest('hex');
 const serialize=value=>JSON.stringify(value,null,2)+'\n';
 const denied=run=>assert.throws(run,{code:'EXISTING_API_PLAN_CURRENT_CI_LINEAGE_REJECTED'});
@@ -67,8 +69,8 @@ test('COMPANY gains only the new server module while every historical native mat
 });
 
 test('the local native proof requires all 38 historical and three additive observations without acceptance claims',()=>{
- const contract=current(),proof={status:'PASS',environment:'local-disposable-postgresql17',checks:[...expected.native.currentCheckNames,...phoneExpected.native.addedCheckNames],realProviderCalls:0,physicalNumberTested:false,productionDataTouched:false};
- assert.equal(expected.native.previousCheckNames.length,38);assert.equal(expected.native.addedCheckNames.length,3);assert.deepEqual(expected.native.currentCheckNames.filter(name=>!expected.native.addedCheckNames.includes(name)),expected.native.previousCheckNames);assert.equal(expected.native.currentCheckNames.length,41);
+ const contract=current(),proof={status:'PASS',environment:'local-disposable-postgresql17',...syncFenceNativeShadow([...expected.native.currentCheckNames,...phoneExpected.native.addedCheckNames]),realProviderCalls:0,physicalNumberTested:false,productionDataTouched:false};
+ assert.equal(expected.native.previousCheckNames.length,38);assert.equal(expected.native.addedCheckNames.length,3);assert.deepEqual(expected.native.currentCheckNames.filter(name=>!expected.native.addedCheckNames.includes(name)),expected.native.previousCheckNames);assert.equal(expected.native.currentCheckNames.length,41);assert.equal(proof.checks.length,57);denied(()=>validateExistingApiPlanNativeProof({...proof,checks:proof.checks.slice(0,52)},contract,read));
  assert.deepEqual(validateExistingApiPlanNativeProof(proof,contract,read),{version:1,status:'PASS',historicalChecksPreserved:38,addedChecks:3,nativeOrBrowserAcceptance:false});
  for(const patch of [{checks:expected.native.currentCheckNames},{checks:proof.checks.slice(1)},{checks:[...proof.checks,proof.checks[0]]},{realProviderCalls:1},{physicalNumberTested:true},{productionDataTouched:true}])denied(()=>validateExistingApiPlanNativeProof({...proof,...patch},contract,read));
 });

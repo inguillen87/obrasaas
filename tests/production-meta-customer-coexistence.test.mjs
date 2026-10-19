@@ -2,13 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createMetaCustomerProvider,metaCustomerReadiness} from '../src/lib/meta-customer-provider.mjs';
 import {OBRASAAS_META_CHANNEL} from '../src/lib/meta-channel-binding.mjs';
-import {customerSignupFlow,publicCustomerCoexistence,customerLifecycleRecovery} from '../src/lib/meta-customer-coexistence.mjs';
+import {createMetaCustomerCoexistence,customerSignupFlow,publicCustomerCoexistence,customerLifecycleRecovery} from '../src/lib/meta-customer-coexistence.mjs';
 import {splitMetaCustomerEvents,verifyMetaCustomerSignature} from '../src/lib/meta-customer-callback.mjs';
 import {customerAppRecords} from '../src/lib/meta-customer-app-projection.mjs';
 import {customerInboxSnapshot,customerInboxEventTitle} from '../src/app/(identity)/cuenta/customer-inbox-view.mjs';
 import {metaOnboardingSnapshot} from '../src/app/(identity)/cuenta/meta-onboarding-readiness-view.mjs';
 import {publicCustomerActivation,customerActivationLifecycleReady} from '../src/lib/meta-customer-activation.mjs';
 import {customerChannelActive} from '../src/lib/meta-customer-outbound.mjs';
+import {createWorkspaceStore} from '../src/lib/workspace-store.mjs';
+import {WorkspaceError,scopeStamp} from '../src/lib/workspace-policy.mjs';
+import {encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
 const environment={NEXT_PUBLIC_META_APP_ID:OBRASAAS_META_CHANNEL.appId,META_APP_SECRET:'synthetic-secret-only-12345678',META_CONFIG_ID:'123456789012345',META_COEXISTENCE_CONFIG_ID:'123456789012346',META_GRAPH_API_VERSION:'v25.0',META_CUSTOMER_CREDENTIALS_KEY:Buffer.alloc(32,24).toString('base64'),META_EMBEDDED_SIGNUP_VERSION:'4',OBRASAAS_META_SIGNUP_RELEASE:'customer-self-service-v1',OBRASAAS_META_COEXISTENCE_RELEASE:'business-app-coexistence-v1',META_CUSTOMER_VERIFY_TOKEN:'synthetic-verify-token-only-'.repeat(2)};
 const debug={is_valid:true,app_id:OBRASAAS_META_CHANNEL.appId,scopes:['whatsapp_business_management','whatsapp_business_messaging'],granular_scopes:[{scope:'whatsapp_business_management',target_ids:['8888888801']}],expires_at:0};
 test('signed account lifecycle timestamps preserve replay but distinguish another offboard cycle',()=>{
@@ -185,4 +188,86 @@ test('optimistic coexistence/PIN and invalid import status cannot replace an aut
  const context={projectId:'p-a',scope:'a'.repeat(64)},base={...context,companyName:'Synthetic',projectName:'Synthetic',prepared:true,numberMode:'BUSINESS_APP',readiness:metaCustomerReadiness(environment),signup:{numberMode:'BUSINESS_APP',canRegister:false,registrationRequired:false,canRetryRegistration:false}};
  assert.equal(metaOnboardingSnapshot(base,context),base);assert.throws(()=>metaOnboardingSnapshot({...base,signup:{...base.signup,canRegister:true}},context));
  assert.throws(()=>metaOnboardingSnapshot({...base,readiness:{...base.readiness,flows:{...base.readiness.flows,BUSINESS_APP:{available:true,configId:null}}}},context));
+});
+
+// The real canonical integration guard and real provider are composed here.
+// Only PostgreSQL transport and Graph HTTP are controlled in-memory adapters;
+// these prospective cases are not a substitute for the disposable PG checks.
+function syncDispatchFixture({contacts=false,history=true,afterReservation,onPost}={}){
+ const env={...environment},session={authenticated:true,verification:'clerk-production-jwt',userId:'user_SyncOwner',organizationId:'org_SyncCompany',organizationRole:'org:admin'};
+ const clock={value:Date.parse('2026-10-20T10:00:00.000Z')},member={actorId:'sync-owner',membershipId:'sync-member',role:'ADMIN',organizationId:'sync-company',organizationName:'Synthetic',clerkRole:'org:admin'};
+ const project={id:'sync-project',name:'Synthetic',status:'ACTIVE',metadata:{metaSignup:{id:'sync-signup',actorId:member.actorId,organizationId:member.organizationId,numberMode:'BUSINESS_APP',state:'LINKED_PENDING_ACCEPTANCE',phoneNumberId:'9999999901',wabaId:'8888888801'}}};
+ const secretContext={organizationId:member.organizationId,projectId:project.id,purpose:'access-token',resourceId:project.metadata.metaSignup.phoneNumberId};
+ const connection={id:'sync-connection',projectId:project.id,phoneNumberId:secretContext.resourceId,whatsappBusinessId:project.metadata.metaSignup.wabaId,encryptedAccessToken:encryptCustomerSecret('synthetic-dispatch-token-only',secretContext,env),metadata:{credentialFormat:'tenant-aad-v2',credentialOrganizationId:member.organizationId,customerSignupId:'sync-signup',coexistence:{verified:true,syncDeadlineAt:new Date(clock.value+3600000).toISOString()}}};
+ const state={member,project,connection,memberActive:true,projectActive:true},calls=[],locks={open:false,member:false,project:false,connection:false};let reservationObserved=false;
+ const fixture={env,clock,state,calls,locks,secretContext};
+ const connect=async()=>{
+  let snapshot=null;
+  return {release(){assert.equal(locks.open,false);},async query(sql,args=[]){
+   if(sql.startsWith('BEGIN')){assert.equal(locks.open,false);snapshot=structuredClone(state);locks.open=true;return {rows:[],rowCount:0};}
+   if(sql.startsWith('SET LOCAL'))return {rows:[],rowCount:0};
+   if(sql==='COMMIT'){
+    locks.open=false;locks.member=false;locks.project=false;locks.connection=false;
+    const s=state.connection.metadata.coexistence;
+    if(!reservationObserved&&['contacts','history'].some(kind=>s[kind]?.state==='REQUEST_STARTED')){reservationObserved=true;if(afterReservation)await afterReservation(fixture);}
+    return {rows:[],rowCount:0};
+   }
+   if(sql==='ROLLBACK'){if(snapshot)Object.assign(state,structuredClone(snapshot));locks.open=false;locks.member=false;locks.project=false;locks.connection=false;return {rows:[],rowCount:0};}
+   if(sql.includes('FROM public."PlatformUser"')){assert.ok(sql.includes('FOR SHARE OF u,m,o'));locks.member=true;return {rows:state.memberActive?[structuredClone(state.member)]:[]};}
+   if(sql.startsWith('SELECT id,name,status::text AS status FROM public."Project"'))return {rows:state.projectActive&&args[0]===state.project.id&&args[1]===state.member.organizationId?[structuredClone(state.project)]:[]};
+   if(sql.includes('SELECT p.id,p.name,p.metadata')){assert.ok(sql.includes('FOR UPDATE OF p'));locks.project=true;return {rows:state.projectActive&&args[0]===state.project.id&&args[1]===state.member.organizationId?[structuredClone(state.project)]:[]};}
+   if(sql.startsWith('SELECT id,"projectId","phoneNumberId","whatsappBusinessId","encryptedAccessToken",metadata FROM public."WhatsAppConnection"')){assert.ok(sql.endsWith('FOR UPDATE'));locks.connection=true;return {rows:args[0]===state.connection.projectId?[structuredClone(state.connection)]:[]};}
+   if(sql.startsWith('UPDATE public."WhatsAppConnection"')){assert.ok(locks.connection);assert.equal(args[0],state.connection.id);assert.equal(args[1],state.connection.projectId);state.connection.metadata={...state.connection.metadata,...JSON.parse(args[2])};return {rows:[],rowCount:1};}
+   if(sql.startsWith('INSERT INTO public."AuditLog"'))return {rows:[],rowCount:1};
+   throw new Error('Unexpected canonical query in sync fixture: '+sql);
+  }};
+ };
+ fixture.graph=createMetaCustomerProvider({environment:env,now:()=>clock.value,fetchImpl:async(url,options)=>{
+  assert.deepEqual(locks,{open:true,member:true,project:true,connection:true},'Canonical authority must remain locked at actual HTTP dispatch');
+  assert.equal(options.method,'POST');assert.equal(new URL(url).pathname,'/v25.0/9999999901/smb_app_data');calls.push({method:options.method,body:JSON.parse(options.body)});
+  if(onPost)return onPost(fixture);return Response.json({request_id:'synthetic-request-'+calls.length});
+ }});
+ fixture.workspace=createWorkspaceStore({connect});fixture.service=createMetaCustomerCoexistence({workspace:fixture.workspace,provider:fixture.graph,environment:env,now:()=>clock.value});
+ fixture.body={action:'start_app_sync',operationId:'11111111-1111-4111-8111-111111111111',projectId:project.id,scope:scopeStamp(session,member),signupId:'sync-signup',contactsConsent:contacts,historyConsent:history,noticeVersion:'business-app-import-v1',confirmPreserveApp:true};
+ fixture.command=(patch={})=>fixture.service.command(session,{...fixture.body,...patch});return fixture;
+}
+test('sync dispatch keeps canonical locks across the real provider POST and never repeats an accepted reservation',async()=>{
+ const f=syncDispatchFixture({contacts:true});assert.deepEqual(await f.command(),{saved:true,replayed:false});assert.equal(f.calls.length,2);assert.deepEqual(f.calls.map(call=>call.body.sync_type),['smb_app_state_sync','history']);
+ assert.equal(f.state.connection.metadata.coexistence.contacts.state,'REQUEST_ACCEPTED');assert.equal(f.state.connection.metadata.coexistence.history.state,'REQUEST_ACCEPTED');assert.deepEqual(await f.command(),{saved:true,replayed:true});assert.equal(f.calls.length,2);
+ assert.doesNotMatch(JSON.stringify(f.calls),/synthetic-dispatch-token|pin|register/);
+});
+async function assertSyncReservationDenied(edit,code){
+ const f=syncDispatchFixture({afterReservation:edit});await assert.rejects(f.command(),{code});assert.equal(f.calls.length,0);assert.equal(f.locks.open,false);assert.equal(f.state.connection.metadata.coexistence.history.state,'REQUEST_STARTED');assert.notEqual(f.state.connection.metadata.coexistence.history.state,'REQUEST_ACCEPTED');
+}
+test('sync reservation denies membership revoked before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.state.memberActive=false;},'WORKSPACE_MEMBERSHIP_REQUIRED');});
+test('sync reservation denies office role removed before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.state.member.role='FINANCE';},'WORKSPACE_CONTEXT_CHANGED');});
+test('sync reservation denies canonical actor changed before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.state.member.actorId='other-owner';},'META_CUSTOMER_SYNC_UNAVAILABLE');});
+test('sync reservation denies tenant binding changed before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.state.connection.metadata.credentialOrganizationId='other-company';},'META_CUSTOMER_BINDING_INTEGRITY');});
+test('sync reservation denies connection replaced before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.state.connection.id='replacement';},'META_CUSTOMER_SYNC_LEASE_CHANGED');});
+test('sync reservation denies phone changed before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.state.connection.phoneNumberId='9999999902';},'META_CUSTOMER_BINDING_INTEGRITY');});
+test('sync reservation denies WABA changed before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.state.connection.whatsappBusinessId='8888888802';},'META_CUSTOMER_BINDING_INTEGRITY');});
+test('sync reservation denies token rotated before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.state.connection.encryptedAccessToken=encryptCustomerSecret('synthetic-rotated-token-only',f.secretContext,f.env);},'META_CUSTOMER_SYNC_LEASE_CHANGED');});
+test('sync reservation denies lease replaced before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.state.connection.metadata.coexistence.history.leaseId='replacement';},'META_CUSTOMER_SYNC_LEASE_CHANGED');});
+test('sync reservation denies lease expired before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.clock.value+=60001;},'META_CUSTOMER_SYNC_LEASE_CHANGED');});
+test('sync reservation denies lease malformed before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.state.connection.metadata.coexistence.history.leaseExpiresAt='invalid';},'META_CUSTOMER_SYNC_LEASE_CHANGED');});
+test('sync reservation denies consent withdrawn before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.state.connection.metadata.coexistence.importConsent.history=false;},'META_CUSTOMER_SYNC_LEASE_CHANGED');});
+test('sync reservation denies import window expired before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.clock.value+=3600001;},'META_CUSTOMER_SYNC_LEASE_CHANGED');});
+test('sync reservation denies lifecycle paused before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.state.connection.metadata.customerLifecycle={event:'account_offboarded',recovery:{state:'PAUSED'}};},'META_CUSTOMER_SYNC_PAUSED');});
+test('sync reservation denies signup closed before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{f.state.project.metadata.metaSignup.state='CANCELLED';},'META_CUSTOMER_SYNC_UNAVAILABLE');});
+test('sync reservation denies release closed before HTTP dispatch',async()=>{await assertSyncReservationDenied(f=>{delete f.env.OBRASAAS_META_COEXISTENCE_RELEASE;},'META_CUSTOMER_COEXISTENCE_CONFIGURATION_PENDING');});
+test('sync final-before-external fence catches expiry after the first provider hook with zero POSTs',async()=>{
+ const f=syncDispatchFixture(),send=f.graph.syncAppData.bind(f.graph);f.graph.syncAppData=params=>send({...params,beforeExternal:async()=>{await params.beforeExternal();f.clock.value+=60001;}});
+ await assert.rejects(f.command(),{code:'META_CUSTOMER_SYNC_LEASE_CHANGED'});assert.equal(f.calls.length,0);assert.equal(f.state.connection.metadata.coexistence.history.state,'REQUEST_STARTED');
+});
+test('sync lost HTTP response remains uncertain and cannot replay the already reserved remote request',async()=>{
+ const f=syncDispatchFixture({onPost:()=>{throw Error('Synthetic HTTP response lost');}});assert.deepEqual(await f.command(),{saved:true,replayed:false,requiresReview:true});assert.equal(f.calls.length,1);assert.equal(f.state.connection.metadata.coexistence.history.state,'REQUEST_UNKNOWN');
+ await f.command();await f.command({action:'continue_app_sync'});assert.equal(f.calls.length,1);
+});
+async function assertSyncProviderHookRejected(hook){
+ const f=provider({data:[]}),error=new WorkspaceError('SYNTHETIC_SYNC_FENCE_REJECTED',409);await assert.rejects(f.value.syncAppData({token:'synthetic-token-only',phoneNumberId:'9999999901',syncType:'history',[hook]:()=>{throw error;}}),caught=>caught===error);assert.equal(f.calls.length,0);
+}
+test('sync provider forwards rejecting beforeExternal unchanged and emits zero POSTs',async()=>{await assertSyncProviderHookRejected('beforeExternal');});
+test('sync provider forwards rejecting finalBeforeExternal unchanged and emits zero POSTs',async()=>{await assertSyncProviderHookRejected('finalBeforeExternal');});
+test('sync provider refuses malformed optional dispatch hooks before HTTP',async()=>{
+ const f=provider({data:[]});for(const hook of ['beforeExternal','finalBeforeExternal'])for(const value of [true,{},'callback'])await assert.rejects(f.value.syncAppData({token:'synthetic-token-only',phoneNumberId:'9999999901',syncType:'history',[hook]:value}),{code:'META_CUSTOMER_SYNC_INPUT_INVALID'});assert.equal(f.calls.length,0);
 });
