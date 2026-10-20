@@ -19,7 +19,38 @@ const expected=structuredClone(reviewed);let compiled=null;
 // The current field-review addition is a separate exact successor. Its source
 // sets return to the authenticated ad435 ledger before the thirteen WhatsApp
 // unions below are considered; the immutable 380e checkpoint is not rewritten.
+// Exact successor of the committed24128 catalog/picker source graph. Current
+// sets restore to that complete parent before attendance/ad435 and WhatsApp380e.
+function consumptionParentSourceSets(v){
+ const f=v.consumptionEvidenceRuntime;
+ exact(f,['version','parentHead','sourceAdditions','sourceSetAdvances','sourceHistory','materialNative','nativeOrHumanAcceptance'],'CONSUMPTION_EVIDENCE_KEYS');
+ const additions=['src/app/(identity)/cuenta/consumption-evidence-picker.js','src/app/(identity)/cuenta/consumption-evidence-picker.module.css','src/app/(identity)/cuenta/consumption-evidence-view.mjs','src/app/api/identity/consumption-evidence/route.js','src/lib/consumption-evidence-catalog.mjs','src/lib/consumption-evidence-http.mjs'];
+ reject(f.version===1&&f.parentHead==='24128f6fe6eaee16dad98025202db5bd905a6942'&&same(f.sourceAdditions,additions)&&f.nativeOrHumanAcceptance===false,'CONSUMPTION_EVIDENCE_PARENT');
+ const families=['UNIT','UI_BANK','UI_JOINT','UI_CAUSAL','PG_COMPANY_KYC','UI_IDENTITY_ONLY','PG_FIELD','PG_OVERTIME','PG_PARTICIPANT_KYC_PREANALYSIS','UI_FOCUSED_WORKSPACE','UI_FIELD_TASK_PAGINATION','LIVE_HOURS_RUNTIME','PLAN_MEASUREMENT','CONSUMPTION_FEEDBACK','CONSUMPTION_FEEDBACK_UI','COMPACT','ORGANIZATION_USAGE','KYC_REPLY_FEEDBACK'];
+ reject(Array.isArray(f.sourceSetAdvances)&&same(f.sourceSetAdvances.map(a=>a.family),families),'CONSUMPTION_EVIDENCE_EXACT_UNIONS');const parents=new Map();
+ for(const a of f.sourceSetAdvances){
+  exact(a,['family','previousDelta','additions'],'CONSUMPTION_EVIDENCE_ADVANCE_KEYS');const before=a.previousDelta;
+  exact(before,['family','contractPointer','previousCount','previousPathsSha256','currentCount','currentPathsSha256','additions'],'CONSUMPTION_EVIDENCE_PARENT_DELTA_KEYS');sorted(before.additions);sorted(a.additions);
+  const row=v.sourceSetDeltas.find(row=>row.family===a.family);
+  reject(row&&before.family===a.family&&a.additions.length>0&&a.additions.every(file=>additions.includes(file)&&!before.additions.includes(file))&&same(row,{...before,currentCount:before.currentCount+a.additions.length,currentPathsSha256:row.currentPathsSha256,additions:[...before.additions,...a.additions].sort()}),'CONSUMPTION_EVIDENCE_EXACT_UNION');parents.set(a.family,before);
+ }
+ const restored=v.sourceSetDeltas.map(row=>parents.get(row.family)||row);reject(sha(JSON.stringify(restored))==='822a71aaba8e8d711335a6a7fc3d17d2342fd0ace42579749888f621a6ca7203','CONSUMPTION_EVIDENCE_COMPLETE_PARENT_LEDGER');
+ const h=f.sourceHistory;exact(h,['path','previousSha256','currentSha256','previousBytes','currentBytes','inverseHunks'],'CONSUMPTION_EVIDENCE_HISTORY_KEYS');
+ reject(h.path==='src/lib/meta-consumption-evidence-catalog.mjs'&&h.previousSha256==='cd4eb1ccf8617060aa2bb352cc9467981f7d17649be8b24233413c133c407bff'&&hash(h.currentSha256)&&[h.previousBytes,h.currentBytes].every(n=>Number.isSafeInteger(n)&&n>0)&&Array.isArray(h.inverseHunks)&&h.inverseHunks.length===1,'CONSUMPTION_EVIDENCE_HISTORY');
+ const chunk=h.inverseHunks[0];exact(chunk,['currentOffsetCharacters','currentText','previousText'],'CONSUMPTION_EVIDENCE_HUNK_KEYS');reject(chunk.currentOffsetCharacters===0&&typeof chunk.currentText==='string'&&typeof chunk.previousText==='string'&&chunk.currentText!==chunk.previousText&&sha(chunk.currentText)===h.currentSha256&&sha(chunk.previousText)===h.previousSha256&&Buffer.byteLength(chunk.currentText)===h.currentBytes&&Buffer.byteLength(chunk.previousText)===h.previousBytes,'CONSUMPTION_EVIDENCE_COMPLETE_SOURCE_INVERSE');
+ const m=f.materialNative;exact(m,['producer','previousFiles','currentFiles','currentManifest','sourceHistory'],'CONSUMPTION_EVIDENCE_NATIVE_KEYS');sorted(m.previousFiles);sorted(m.currentFiles);
+ reject(m.producer==='scripts/verify-material-inventory-postgres.mjs'&&same(m.previousFiles,v.pilotWhatsAppRuntime.nativeSupplements[1].sourceManifestAdvance.currentFiles)&&same(m.currentFiles,[...m.previousFiles,'src/lib/consumption-evidence-catalog.mjs'].sort())&&same(m.currentManifest.map(ref=>ref.path),m.currentFiles),'CONSUMPTION_EVIDENCE_NATIVE_UNION');for(const ref of m.currentManifest){exact(ref,['path','sha256'],'CONSUMPTION_EVIDENCE_NATIVE_REFERENCE');reject(hash(ref.sha256),'CONSUMPTION_EVIDENCE_NATIVE_HASH');}
+ const advance=m.sourceHistory,parent=v.pilotWhatsAppRuntime.producerDeltas.find(row=>row.producer===m.producer);exact(advance,['parentHead','previousSha256','currentSha256','previousBytes','currentBytes','inverseHunks'],'MATERIAL_NATIVE_ADVANCE_KEYS');
+ reject(advance.parentHead==='1b654e24ff968014fb96adc56cf06b33ccf1599f'&&advance.previousSha256===parent.currentSha256&&advance.previousBytes===parent.sourceHistory.currentBytes&&hash(advance.currentSha256)&&advance.currentSha256!==advance.previousSha256&&Number.isSafeInteger(advance.currentBytes)&&advance.currentBytes>0&&Array.isArray(advance.inverseHunks)&&advance.inverseHunks.length===2&&m.currentManifest.find(ref=>ref.path===m.producer)?.sha256===advance.currentSha256,'MATERIAL_NATIVE_EXACT_PARENT_ADVANCE');
+ let end=0;for(const block of advance.inverseHunks){exact(block,['currentOffsetCharacters','currentText','previousText'],'MATERIAL_NATIVE_HUNK_KEYS');reject(Number.isSafeInteger(block.currentOffsetCharacters)&&block.currentOffsetCharacters>=end&&typeof block.currentText==='string'&&typeof block.previousText==='string'&&block.currentText!==block.previousText,'MATERIAL_NATIVE_ORDERED_HUNK');end=block.currentOffsetCharacters+block.currentText.length;}
+ return restored;
+}
+function consumptionParentFiles(files,row){
+ const a=expected.consumptionEvidenceRuntime.sourceSetAdvances.find(a=>a.family===row.family);if(!a)return files;
+ const parent=files.filter(file=>!a.additions.includes(file));reject(parent.length===a.previousDelta.currentCount&&sha(JSON.stringify(parent))===a.previousDelta.currentPathsSha256,'CONSUMPTION_EVIDENCE_EXACT_PARENT_SET_'+row.family);return parent;
+}
 function fieldReviewParentSourceSets(v){
+ const sourceSets=consumptionParentSourceSets(v);
  const f=v.attendanceReviewRuntime;
  exact(f,['version','parentHead','sourceAdditions','sourceSetAdvances','producer','nativeOrHumanAcceptance'],'ATTENDANCE_REVIEW_KEYS');
  reject(f.version===1&&f.parentHead==='ad435c1ac3cd6bdb43ee6b51051c0ec2af312adb'&&f.nativeOrHumanAcceptance===false&&same(f.sourceAdditions,['tests/production-field-attendance-review-query.test.mjs']),'ATTENDANCE_REVIEW_PARENT');
@@ -28,10 +59,10 @@ function fieldReviewParentSourceSets(v){
  for(const a of f.sourceSetAdvances){
   exact(a,['family','previousDelta','additions'],'ATTENDANCE_REVIEW_ADVANCE_KEYS');const before=a.previousDelta;
   exact(before,['family','contractPointer','previousCount','previousPathsSha256','currentCount','currentPathsSha256','additions'],'ATTENDANCE_REVIEW_PARENT_DELTA_KEYS');sorted(before.additions);sorted(a.additions);
-  const row=v.sourceSetDeltas.find(row=>row.family===a.family);
+  const row=sourceSets.find(row=>row.family===a.family);
   reject(row&&a.family===before.family&&a.additions.length>0&&a.additions.every(file=>f.sourceAdditions.includes(file))&&a.additions.every(file=>!before.additions.includes(file))&&same(row,{...before,currentCount:before.currentCount+a.additions.length,currentPathsSha256:row.currentPathsSha256,additions:[...before.additions,...a.additions].sort()}),'ATTENDANCE_REVIEW_EXACT_UNION');parents.set(a.family,before);
  }
- const restored=v.sourceSetDeltas.map(row=>parents.get(row.family)||row);
+ const restored=sourceSets.map(row=>parents.get(row.family)||row);
  reject(sha(JSON.stringify(restored))==='8296e6c92c896b1fe991aaaf9a66b38836c56c34bcb4d4321cdb263cac6432d4','ATTENDANCE_REVIEW_COMPLETE_PARENT_LEDGER');
  const row=f.producer;exact(row,['producer','previousSha256','currentSha256','contractPointers','sourceHistory'],'ATTENDANCE_REVIEW_PRODUCER_KEYS');
  reject(row.producer==='scripts/verify-field-operations-postgres.mjs'&&row.previousSha256==='c3cf9eed8983b9ab43ad9b11cf0f59af206b08ba70f5e6697133bb448b940662'&&row.currentSha256==='4eb11afda80e9274e3fecdc229d12f21d53d29d444e6932e44837f257800ccc2'&&same(row.contractPointers,['/extension/proofs/14/producerSha256']),'ATTENDANCE_REVIEW_PRODUCER_PINS');
@@ -41,7 +72,7 @@ function fieldReviewParentSourceSets(v){
  return restored;
 }
 function fieldReviewParentFiles(files,row){
- const a=expected.attendanceReviewRuntime.sourceSetAdvances.find(value=>value.family===row.family);if(!a)return files;
+ files=consumptionParentFiles(files,row);const a=expected.attendanceReviewRuntime.sourceSetAdvances.find(value=>value.family===row.family);if(!a)return files;
  const parent=files.filter(file=>!a.additions.includes(file));reject(parent.length===a.previousDelta.currentCount&&sha(JSON.stringify(parent))===a.previousDelta.currentPathsSha256,'ATTENDANCE_REVIEW_EXACT_PARENT_SET_'+row.family);return parent;
 }
 function pilotParentSourceSets(v){
@@ -64,14 +95,15 @@ function pilotParentFiles(files,row){
 }
 function compile(){
  if(compiled)return compiled;const v=expected;
- exact(v,['version','status','finalAstDerived','predecessorSource','previousContractSha256','references','sourceSetDeltas','sourceFamilies','ownership','browser','nativeOrBrowserAcceptance','pilotWhatsAppRuntime','attendanceReviewRuntime'],'COMPILED_KEYS');
+ exact(v,['version','status','finalAstDerived','predecessorSource','previousContractSha256','references','sourceSetDeltas','sourceFamilies','ownership','browser','nativeOrBrowserAcceptance','pilotWhatsAppRuntime','attendanceReviewRuntime','consumptionEvidenceRuntime'],'COMPILED_KEYS');
  reject(v.version===1&&v.status==='REVIEWED_SOURCE_ONLY'&&v.finalAstDerived===true&&v.previousContractSha256===previousHash&&v.nativeOrBrowserAcceptance===false,'FINAL_BINDINGS_PENDING');
  reject(same(v.predecessorSource,{baseCommit:'2148772241e9ed724d46a4e8f3f4888e4677fa1e',reviewedCorrectionResultSha256:'d0960e36ee385cf5d92e19bbf7b6798e1a832a29bffe9fe193bee57b58277463'}),'PREDECESSOR_SOURCE');
  reject(Array.isArray(v.references)&&v.references.length>=6&&Array.isArray(v.sourceSetDeltas)&&Array.isArray(v.sourceFamilies)&&v.sourceFamilies.length===16,'COMPLETE_BINDINGS');
  // Preserve the complete inherited delta ledger; only this AST-derived UI advance is authorized.
  const consumptionUiDelta={"family":"CONSUMPTION_FEEDBACK_UI","contractPointer":null,"previousCount":26,"previousPathsSha256":"710e01893f5a62e3889bdaddca949989edac48b312c75ea419ea822b744c864a","currentCount":28,"currentPathsSha256":"ac29e18d380c5706e620702b48fd9510f5d358bc857a5cb4a08d0c49561de16e","additions":["src/app/(identity)/cuenta/field-media-preview.js","src/app/(identity)/cuenta/field-operations-panel.module.css"]};
- reject(same(v.sourceSetDeltas.filter(row=>row?.family==='CONSUMPTION_FEEDBACK_UI'),[consumptionUiDelta])&&sha(JSON.stringify(pilotParentSourceSets(v).filter(row=>row?.family!=='CONSUMPTION_FEEDBACK_UI')))==='380e99f8cf321760f4b64c8e52810d4ceb9e0890d8059dce1ca549a568b56cbd','EXACT_CONSUMPTION_UI_ADVANCEMENT');
+ reject(same(consumptionParentSourceSets(v).filter(row=>row?.family==='CONSUMPTION_FEEDBACK_UI'),[consumptionUiDelta])&&sha(JSON.stringify(pilotParentSourceSets(v).filter(row=>row?.family!=='CONSUMPTION_FEEDBACK_UI')))==='380e99f8cf321760f4b64c8e52810d4ceb9e0890d8059dce1ca549a568b56cbd','EXACT_CONSUMPTION_UI_ADVANCEMENT');
  const refs=new Map(),sets=new Map(),families=new Map();for(const row of v.references){exact(row,['path','previousSha256','currentSha256'],'REFERENCE_KEYS');reject(safe(row.path)&&row.path!==anchor&&!refs.has(row.path)&&hash(row.currentSha256)&&(row.previousSha256===null||hash(row.previousSha256)),'REFERENCE');refs.set(row.path,row);}
+ for(const file of v.consumptionEvidenceRuntime.sourceAdditions)reject(refs.has(file),'CONSUMPTION_EVIDENCE_CURRENT_REFERENCE_'+file);reject(refs.get(v.consumptionEvidenceRuntime.sourceHistory.path)?.currentSha256===v.consumptionEvidenceRuntime.sourceHistory.currentSha256,'CONSUMPTION_EVIDENCE_CURRENT_WRAPPER_REFERENCE');reject(refs.get(v.consumptionEvidenceRuntime.materialNative.producer)?.currentSha256===v.consumptionEvidenceRuntime.materialNative.sourceHistory.currentSha256,'MATERIAL_NATIVE_CURRENT_REFERENCE');
  for(const row of v.sourceSetDeltas){exact(row,['family','contractPointer','previousCount','previousPathsSha256','currentCount','currentPathsSha256','additions'],'SOURCE_SET_KEYS');sorted(row.additions);reject(typeof row.family==='string'&&!sets.has(row.family)&&row.additions.length>0&&row.currentCount===row.previousCount+row.additions.length&&hash(row.previousPathsSha256)&&hash(row.currentPathsSha256)&&(row.contractPointer===null||/^\/extension\/proofs\/(?:[0-9]|1[0-9]|20)\/sourceFiles$/.test(row.contractPointer)),'SOURCE_SET');sets.set(row.family,row);}
  for(const row of v.sourceFamilies){exact(row,['family','previousFiles','previousExternalImports','currentFiles','externalImports','currentManifest'],'FAMILY_KEYS');sorted(row.previousFiles);sorted(row.currentFiles);reject(!families.has(row.family)&&Array.isArray(row.externalImports)&&Array.isArray(row.previousExternalImports)&&same(row.currentManifest.map(x=>x.path),row.currentFiles),'FAMILY');for(const ref of row.currentManifest){exact(ref,['path','sha256'],'MANIFEST_REFERENCE');reject(ref.path===anchor?ref.sha256==='REVIEWED_DECLARATION_TRUST_ANCHOR':hash(ref.sha256),'MANIFEST_DIGEST');}const delta=sets.get(row.family);if(delta)reject(same(previousFiles(row.currentFiles,delta),row.previousFiles),'FAMILY_SOURCE_DELTA_JOIN');families.set(row.family,row);}
  reject(families.has('PLAN_BUDGET_UI'),'BUDGET_FAMILY');
@@ -109,7 +141,7 @@ export function planBudgetRetainedScreenshotPaths(contract){const v=section(cont
 // Historical source reconstruction only. Actual receipts keep the current raw
 // harness hash and manifest; no old source is substituted into current readers.
 export function restorePlanBudgetPilotProducerText(contract,producer,bytes){
- const v=section(contract,true),row=v.pilotWhatsAppRuntime.producerDeltas.find(row=>row.producer===producer);reject(row&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'PILOT_SOURCE_READER');let text=bytes.toString('utf8').replaceAll('\r\n','\n');reject(sha(text)===row.currentSha256&&Buffer.byteLength(text)===row.sourceHistory.currentBytes,'PILOT_CURRENT_SOURCE');
+ const v=section(contract,true),row=v.pilotWhatsAppRuntime.producerDeltas.find(row=>row.producer===producer);if(producer===v.consumptionEvidenceRuntime.materialNative.producer)bytes=restorePlanBudgetMaterialNativeProducerText(contract,bytes);reject(row&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'PILOT_SOURCE_READER');let text=bytes.toString('utf8').replaceAll('\r\n','\n');reject(sha(text)===row.currentSha256&&Buffer.byteLength(text)===row.sourceHistory.currentBytes,'PILOT_CURRENT_SOURCE');
  for(const h of [...row.sourceHistory.inverseHunks].reverse()){const at=h.currentOffsetCharacters;reject(text.slice(at,at+h.currentText.length)===h.currentText,'PILOT_EXACT_SOURCE_HUNK');text=text.slice(0,at)+h.previousText+text.slice(at+h.currentText.length);}
  reject(sha(text)===row.previousSha256&&Buffer.byteLength(text)===row.sourceHistory.previousBytes,'PILOT_COMPLETE_SOURCE_INVERSE');return Buffer.from(text);
 }
@@ -119,15 +151,15 @@ export function normalizePlanBudgetPilotNativeProof(contract,producer,proof,read
  const v=section(contract);if(!v)return proof;verifyPlanBudgetCurrentSources(contract,readSource);const n=v.pilotWhatsAppRuntime.nativeSupplements.find(row=>row.producer===producer);reject(Boolean(n),'PILOT_NATIVE_PRODUCER');const bytes=read(readSource,producer);restorePlanBudgetPilotProducerText(contract,producer,bytes);
  reject(plain(proof)&&Array.isArray(proof.checks)&&same(proof.checks,[...n.previousCheckNames,...n.addedCheckNames]),'PILOT_COMPLETE_NATIVE_LEDGER');if(Object.hasOwn(proof,'checkCount'))reject(proof.checkCount===proof.checks.length,'PILOT_NATIVE_COUNT');
  const projected={...proof,checks:[...n.previousCheckNames]};if(Object.hasOwn(proof,'checkCount'))projected.checkCount=n.previousCheckNames.length;
- const m=n.sourceManifestAdvance;if(m){const actual=[];for(const ref of m.currentManifest){let bytes;try{bytes=readSource(ref.path);}catch{}reject(Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8')))&&sha(bytes.toString('utf8').replaceAll('\r\n','\n'))===ref.sha256,'PILOT_CURRENT_NATIVE_SOURCE_'+ref.path);actual.push({path:ref.path,sha256:sha(bytes)});}reject(same(proof.sourceManifest,actual)&&proof.harnessSha256===actual.find(ref=>ref.path===producer)?.sha256,'PILOT_COMPLETE_NATIVE_MANIFEST');projected.sourceManifest=proof.sourceManifest.filter(ref=>m.previousFiles.includes(ref.path));}
+ const parentManifest=n.sourceManifestAdvance,m=parentManifest?{...parentManifest,...v.consumptionEvidenceRuntime.materialNative}:null;if(m){const actual=[];for(const ref of m.currentManifest){let bytes;try{bytes=readSource(ref.path);}catch{}reject(Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8')))&&sha(bytes.toString('utf8').replaceAll('\r\n','\n'))===ref.sha256,'PILOT_CURRENT_NATIVE_SOURCE_'+ref.path);actual.push({path:ref.path,sha256:sha(bytes)});}reject(same(proof.sourceManifest,actual)&&proof.harnessSha256===actual.find(ref=>ref.path===producer)?.sha256,'PILOT_COMPLETE_NATIVE_MANIFEST');projected.sourceManifest=proof.sourceManifest.filter(ref=>parentManifest.previousFiles.includes(ref.path));}
  return projected;
 }
 
 // Current-to-parent projections are local data operations only. They never
 // replace the caller's actual source reader or declare native acceptance.
 export function restorePlanBudgetFieldReviewSourceSet(contract,family,files){
- if(!section(contract))return files;sorted(files);const a=expected.attendanceReviewRuntime.sourceSetAdvances.find(row=>row.family===family);if(!a)return [...files];
- const row=compile().sets.get(family);reject(Boolean(row),'ATTENDANCE_REVIEW_SOURCE_FAMILY');
+ if(!section(contract))return files;sorted(files);files=restorePlanBudgetConsumptionEvidenceSourceSet(contract,family,files);const a=expected.attendanceReviewRuntime.sourceSetAdvances.find(row=>row.family===family);if(!a)return [...files];
+ const row=consumptionParentSourceSets(expected).find(row=>row.family===family);reject(Boolean(row),'ATTENDANCE_REVIEW_SOURCE_FAMILY');
  if(files.length===a.previousDelta.currentCount&&sha(JSON.stringify(files))===a.previousDelta.currentPathsSha256)return [...files];
  reject(files.length===row.currentCount&&sha(JSON.stringify(files))===row.currentPathsSha256,'ATTENDANCE_REVIEW_CURRENT_SOURCE_SET');return fieldReviewParentFiles(files,row);
 }
@@ -151,4 +183,25 @@ export function restorePlanBudgetFieldReviewBusinessSource(file,bytes){
  reject(row.predecessorCommit==='ad435c1ac3cd6bdb43ee6b51051c0ec2af312adb'&&Buffer.byteLength(text)===row.currentBytes,'Exact field-review predecessor required: '+file);
  for(const h of [...row.inverseHunks].reverse()){const at=h.currentOffsetCharacters;reject(text.slice(at,at+h.currentText.length)===h.currentText,'Exact field-review source hunk required: '+file);text=text.slice(0,at)+h.previousText+text.slice(at+h.currentText.length);}
  reject(sha(text)===row.previousSourceSha256&&Buffer.byteLength(text)===row.previousBytes,'Complete field-review source inverse required: '+file);return Buffer.from(text);
+}
+
+// Local projections only; actual source readers and RAW native maps stay current.
+export function restorePlanBudgetConsumptionEvidenceSourceSet(contract,family,files){
+ if(!section(contract))return files;sorted(files);const a=expected.consumptionEvidenceRuntime.sourceSetAdvances.find(a=>a.family===family);if(!a)return [...files];
+ if(files.length===a.previousDelta.currentCount&&sha(JSON.stringify(files))===a.previousDelta.currentPathsSha256)return [...files];const row=compile().sets.get(family);
+ reject(row&&files.length===row.currentCount&&sha(JSON.stringify(files))===row.currentPathsSha256,'CONSUMPTION_EVIDENCE_CURRENT_SOURCE_SET');return consumptionParentFiles(files,row);
+}
+export function restorePlanBudgetConsumptionEvidenceSource(contract,file,bytes){
+ const v=section(contract,true),h=v.consumptionEvidenceRuntime.sourceHistory;if(file!==h.path)return bytes;
+ reject(Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'CONSUMPTION_EVIDENCE_SOURCE_READER');const text=bytes.toString('utf8').replaceAll('\r\n','\n');reject(sha(text)===h.currentSha256&&Buffer.byteLength(text)===h.currentBytes,'CONSUMPTION_EVIDENCE_CURRENT_SOURCE');
+ const chunk=h.inverseHunks[0];reject(text===chunk.currentText,'CONSUMPTION_EVIDENCE_EXACT_SOURCE_HUNK');const previous=Buffer.from(chunk.previousText);reject(sha(previous)===h.previousSha256&&previous.length===h.previousBytes,'CONSUMPTION_EVIDENCE_COMPLETE_SOURCE_INVERSE');return previous;
+}
+
+// Exact current material source to committed1b only. The unchanged pilot inverse
+// authenticates that complete parent before reconstructing its older history.
+export function restorePlanBudgetMaterialNativeProducerText(contract,bytes){
+ const h=section(contract,true).consumptionEvidenceRuntime.materialNative.sourceHistory;
+ reject(Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'MATERIAL_NATIVE_SOURCE_READER');let text=bytes.toString('utf8').replaceAll('\r\n','\n');reject(sha(text)===h.currentSha256&&Buffer.byteLength(text)===h.currentBytes,'MATERIAL_NATIVE_CURRENT_SOURCE');
+ for(const block of [...h.inverseHunks].reverse()){const at=block.currentOffsetCharacters;reject(text.slice(at,at+block.currentText.length)===block.currentText,'MATERIAL_NATIVE_EXACT_SOURCE_HUNK');text=text.slice(0,at)+block.previousText+text.slice(at+block.currentText.length);}
+ reject(sha(text)===h.previousSha256&&Buffer.byteLength(text)===h.previousBytes,'MATERIAL_NATIVE_COMPLETE_SOURCE_INVERSE');return Buffer.from(text);
 }

@@ -1653,6 +1653,7 @@
           "src/lib/company-entitlement.mjs",
           "src/lib/company-onboarding-policy.mjs",
           "src/lib/company-phone-format.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/employee-intake-channel-continuity.mjs",
           "src/lib/field-hours-report.mjs",
           "src/lib/field-media-privacy.mjs",
@@ -1945,6 +1946,7 @@
           "src/lib/company-entitlement.mjs",
           "src/lib/company-onboarding-policy.mjs",
           "src/lib/company-phone-format.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/employee-intake-channel-continuity.mjs",
           "src/lib/field-hours-report.mjs",
           "src/lib/field-media-privacy.mjs",
@@ -2150,6 +2152,7 @@
           "src/lib/company-entitlement.mjs",
           "src/lib/company-onboarding-policy.mjs",
           "src/lib/company-phone-format.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/employee-intake-channel-continuity.mjs",
           "src/lib/field-hours-report.mjs",
           "src/lib/field-media-privacy.mjs",
@@ -2308,6 +2311,7 @@
           "src/lib/company-entitlement.mjs",
           "src/lib/company-onboarding-policy.mjs",
           "src/lib/company-phone-format.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/employee-intake-channel-continuity.mjs",
           "src/lib/field-hours-report.mjs",
           "src/lib/field-media-privacy.mjs",
@@ -2466,6 +2470,8 @@
           "src/lib/constructor-crm-runtime.mjs",
           "src/lib/constructor-crm-schema.mjs",
           "src/lib/constructor-crm-store.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
+          "src/lib/consumption-evidence-http.mjs",
           "src/lib/customer-whatsapp-http.mjs",
           "src/lib/customer-whatsapp-setup.mjs",
           "src/lib/db.js",
@@ -2889,6 +2895,9 @@
           "src/app/(identity)/cuenta/constructor-crm-panel.js",
           "src/app/(identity)/cuenta/constructor-crm-panel.module.css",
           "src/app/(identity)/cuenta/constructor-crm-view.mjs",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+          "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
           "src/app/(identity)/cuenta/customer-inbox-panel.js",
           "src/app/(identity)/cuenta/customer-inbox-panel.module.css",
           "src/app/(identity)/cuenta/customer-inbox-view.mjs",
@@ -3171,6 +3180,7 @@
           "src/lib/company-entitlement.mjs",
           "src/lib/company-onboarding-policy.mjs",
           "src/lib/company-phone-format.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/employee-intake-channel-continuity.mjs",
           "src/lib/field-hours-report.mjs",
           "src/lib/field-media-privacy.mjs",
@@ -3381,6 +3391,7 @@
           "src/lib/company-entitlement.mjs",
           "src/lib/company-onboarding-policy.mjs",
           "src/lib/company-phone-format.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/employee-intake-channel-continuity.mjs",
           "src/lib/field-hours-report.mjs",
           "src/lib/field-media-privacy.mjs",
@@ -3749,6 +3760,7 @@
           "src/lib/company-entitlement.mjs",
           "src/lib/company-onboarding-policy.mjs",
           "src/lib/company-phone-format.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/employee-intake-channel-continuity.mjs",
           "src/lib/field-hours-report.mjs",
           "src/lib/field-media-privacy.mjs",
@@ -3971,6 +3983,9 @@
           "src/app/(identity)/cuenta/constructor-crm-panel.js",
           "src/app/(identity)/cuenta/constructor-crm-panel.module.css",
           "src/app/(identity)/cuenta/constructor-crm-view.mjs",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+          "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
           "src/app/(identity)/cuenta/customer-inbox-panel.js",
           "src/app/(identity)/cuenta/customer-inbox-panel.module.css",
           "src/app/(identity)/cuenta/customer-inbox-view.mjs",
@@ -4237,6 +4252,9 @@
           "scripts/verify-field-task-pagination-ci.mjs",
           "scripts/verify-field-task-pagination-ui.mjs",
           "src/app/(identity)/cuenta/company-channel-view.mjs",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+          "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
           "src/app/(identity)/cuenta/field-hours-report-panel.js",
           "src/app/(identity)/cuenta/field-hours-report-panel.module.css",
           "src/app/(identity)/cuenta/field-media-capture.js",
@@ -38855,7 +38873,7 @@
       {
         "path": "scripts/lib/attendance-review-current-ci-proof.mjs",
         "previousSha256": null,
-        "currentSha256": "111ae3206f3224bbc2f58ac3b9a77127fccdbf77c4cc59ddeec95b8ae01865f5"
+        "currentSha256": "f10522d94990f42ac643128cf19adcde5f6de300654bb08667c923b4804461aa"
       },
       {
         "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
@@ -38875,7 +38893,7 @@
       {
         "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
         "previousSha256": null,
-        "currentSha256": "834a40911ef64844f0db441a48cef5de235ae556c301308a62ff347f7106d678"
+        "currentSha256": "7a63b9f5fb8a3ad594344eb68dc25386a9426bc6a22bb5e355fb7a89466284a3"
       },
       {
         "path": "scripts/lib/plan-budget-ui-contract.mjs",
@@ -38925,12 +38943,12 @@
       {
         "path": "scripts/verify-material-inventory-postgres.mjs",
         "previousSha256": "56c2c4751825349b126d26bc48fcce0557f11b779f94b3fad45985f34bbc409b",
-        "currentSha256": "c046f5bae2f922bcf83b3f2dffc53ad36f10a9dcc1e57bbd73923176d1bf8093"
+        "currentSha256": "bfac7891dc752dc0cd600bc878b1f977a4947122bc4f2035866220654fd5c652"
       },
       {
         "path": "scripts/verify-material-inventory-ui.mjs",
         "previousSha256": "63713aae240745041b3ce9e1bd5e412a9a3a855c8e8c8ad738a3ad91cd6a5fa6",
-        "currentSha256": "ffcc82738e4620a196bab170b6ae9052df088297128273182cce8c785e6f9739"
+        "currentSha256": "743009920ced0edd5416a0976e67e394f24968baf24c1766f297d46f4585a38b"
       },
       {
         "path": "scripts/verify-meta-customer-coexistence-postgres.mjs",
@@ -38968,6 +38986,21 @@
         "currentSha256": "31f4dbf6f43f0c05840c51f3d92526426f0b44940a1b1434c0ed3da24c2a4990"
       },
       {
+        "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+        "previousSha256": null,
+        "currentSha256": "7eb0130b8f09f231406e68da05bf930abc10cf29967050ce3f4cb4794c2b4040"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+        "previousSha256": null,
+        "currentSha256": "bb26136d01a5237e41ed5bf765b017fac0de694d9169a7864b5189fa03c83148"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
+        "previousSha256": null,
+        "currentSha256": "f5fc82420392fbea73275c8ed3769885355f3b93f6c82e3a12e51cf34a4478a3"
+      },
+      {
         "path": "src/app/(identity)/cuenta/field-media-preview.js",
         "previousSha256": "d39d47da18f60c69a38eee22b62929087a7cc0b379a620af8a83b62573161110",
         "currentSha256": "61506157217af690aa3ea649a2472f99acc24ec96aa10eda3cc25d24a8108441"
@@ -38985,7 +39018,7 @@
       {
         "path": "src/app/(identity)/cuenta/material-inventory-panel.js",
         "previousSha256": "0faadb854099ef161b9c869cc2b4c0aeb16d102e59fcaca8ef27fecd614d2924",
-        "currentSha256": "f910384fa3acc4326037b4a4b0c141c1712cb95845f14d8d975705463fecd2e2"
+        "currentSha256": "d86379c89fedcde82cf3f60fbe70bb8def8544275da2bac0f6ba6b8bc7e7002f"
       },
       {
         "path": "src/app/(identity)/cuenta/material-inventory-view.mjs",
@@ -39038,9 +39071,24 @@
         "currentSha256": "dfce6eb468fee571af0d0f371e68848274f22198faf89c0a6cdd5df5edc7e7a9"
       },
       {
+        "path": "src/app/api/identity/consumption-evidence/route.js",
+        "previousSha256": null,
+        "currentSha256": "21f549fa48d286b514bac67daea5f80132c48ba4b26c9374fcaf8e0e68cafb47"
+      },
+      {
         "path": "src/app/privacidad/identidad/page.js",
         "previousSha256": "7d69fb5e9327426e4ca9b7e856d38811babe5f43bfdad4b5bcb40266b88cc401",
         "currentSha256": "2b01990552d4ff067d389a75128b9d8290af15ccaeb69e5c06fac5e896998945"
+      },
+      {
+        "path": "src/lib/consumption-evidence-catalog.mjs",
+        "previousSha256": null,
+        "currentSha256": "892950b23cb3c9d95fcb4593f33125538658da195ccf436f375901443657f0bf"
+      },
+      {
+        "path": "src/lib/consumption-evidence-http.mjs",
+        "previousSha256": null,
+        "currentSha256": "fe971f9faf9f8ced050120cc0addb5979cf4b198f253343eed7728a18b896414"
       },
       {
         "path": "src/lib/field-media.mjs",
@@ -39070,7 +39118,7 @@
       {
         "path": "src/lib/meta-consumption-evidence-catalog.mjs",
         "previousSha256": null,
-        "currentSha256": "cd4eb1ccf8617060aa2bb352cc9467981f7d17649be8b24233413c133c407bff"
+        "currentSha256": "bd846188e12757a71ce4f42ea9c6f806bddcd5443e81b1b515f4cecb0344f42c"
       },
       {
         "path": "src/lib/meta-customer-coexistence.mjs",
@@ -39178,9 +39226,29 @@
         "currentSha256": "900baee8384af0b1dd02f19cbb200406e9f0e3adc56a4ac67ff344ce2cb152e4"
       },
       {
+        "path": "tests/production-field-attendance-current-ci-proof.test.mjs",
+        "previousSha256": null,
+        "currentSha256": "6969cd4fb6d86baee0e2c9b04ab22e7142e79ef42ba97dc07735e99e9061b4b9"
+      },
+      {
         "path": "tests/production-field-attendance-review-query.test.mjs",
         "previousSha256": null,
         "currentSha256": "c0a2d6aa4d0b8418d23392ace1024b7654f153f2627326f95649f04d53279d17"
+      },
+      {
+        "path": "tests/production-field-consumption-evidence-catalog.test.mjs",
+        "previousSha256": null,
+        "currentSha256": "1713735b665ff2f85965a91f2c44ff5ec2ad3f1a2b846f9c7049be7b068c92a6"
+      },
+      {
+        "path": "tests/production-field-consumption-evidence-http.test.mjs",
+        "previousSha256": null,
+        "currentSha256": "57c7e288efc645ea146027d62c554a16ce50d0fe66b6fe3e0892063f8a83ab6b"
+      },
+      {
+        "path": "tests/production-field-consumption-evidence-picker.test.mjs",
+        "previousSha256": null,
+        "currentSha256": "734becbf14d64ee5d340f918b8edccf9caf84b47d5d7b405bb132e96071009c4"
       },
       {
         "path": "tests/production-field-outbound-current-ci-lineage.test.mjs",
@@ -39190,7 +39258,7 @@
       {
         "path": "tests/production-home-decisions-current-ci-lineage.test.mjs",
         "previousSha256": "511f6c45d33d66a22a7f583fd48c7ea7d4933dab26473d2106ece15056e4f6c7",
-        "currentSha256": "f75e45a89eae56fea683cc536adf7d31855ea7bdd59e9a91e55df5ee362ae267"
+        "currentSha256": "af785d722a002d4e97fd4c894d9e7084c91c51f8ad25b3c7087528f2d9934d74"
       },
       {
         "path": "tests/production-integrated-identity-current-ci-lineage.test.mjs",
@@ -39210,12 +39278,12 @@
       {
         "path": "tests/production-material-consumption-feedback-ci.test.mjs",
         "previousSha256": "b8a85bd426a354c5914ed911d7dac70fd54a0b285ff90141d7c33d8592a29708",
-        "currentSha256": "c74a5abdab43a5cf20b9df52da56573e9e702e3af2eb556f838ac447d1583cd4"
+        "currentSha256": "b8ab6ccc0ce1fc33e7b1d25335a6100e98c2f83f443e1657e0c5f0fee218bdfc"
       },
       {
         "path": "tests/production-material-inventory-queue-panel.test.mjs",
         "previousSha256": "55163e14985c43164dac680cf431b7dee79ed1c166ca0c1131003cf838078460",
-        "currentSha256": "a3df358d40d2a03571dcadac8e69f469698b9bfdfd14670554bc10df9ae6d3bb"
+        "currentSha256": "18c9ad1ea9c51f4efd118d84b1996e3af01d54b0f7a35d0a2ffb44600d08eca4"
       },
       {
         "path": "tests/production-material-review-current-ci-lineage.test.mjs",
@@ -39265,7 +39333,7 @@
       {
         "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
         "previousSha256": null,
-        "currentSha256": "f2cd8e64186550c13ea7d6c1397735d20c932d03bd3fa7705a61b8d254b77372"
+        "currentSha256": "b7407e42ba1aa17501a339229aa1e8c5fdf78d57120859029d4512b0badeebcf"
       },
       {
         "path": "tests/production-plan-budget-analyzer-http.test.mjs",
@@ -39360,7 +39428,7 @@
       {
         "path": "tests/production-workspace-plan-partida-preview-current-ci-lineage.test.mjs",
         "previousSha256": "593466da00f03fff06c19e2ac746fb14fb03371f4ceb96a2f4fc342de6e3de32",
-        "currentSha256": "2cbef1b11424a733a289f14759456ab87772fa4c2e5aebacbdce23c31d228042"
+        "currentSha256": "11ec5bc4e257f0e065c3f5a54ec5fbea4698bc208022bbed9509cf2e64477bb5"
       }
     ],
     "sourceSetDeltas": [
@@ -39369,9 +39437,10 @@
         "contractPointer": "/extension/proofs/0/sourceFiles",
         "previousCount": 140,
         "previousPathsSha256": "7104df28ae9391e6038819dee38a1ee1c8b40806a229ed63324943da39ced460",
-        "currentCount": 143,
-        "currentPathsSha256": "0e39cffeba6361257d6a2b975934991f03d380007a3677aa3186846753f8beae",
+        "currentCount": 144,
+        "currentPathsSha256": "7f07577a9b185fb080fccddb0ef9547298c01b9e2aee13059008c156c78e093f",
         "additions": [
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/meta-consumption-evidence-catalog.mjs",
           "src/lib/plan-budget-source.mjs",
           "src/lib/voice-consumption-draft.mjs"
@@ -39382,9 +39451,10 @@
         "contractPointer": "/extension/proofs/3/sourceFiles",
         "previousCount": 144,
         "previousPathsSha256": "e581ca81d4ea63b3573d296b1fea9b318c738df99657657526f94317d8b9fed2",
-        "currentCount": 147,
-        "currentPathsSha256": "2912d51071f550d1547a051d19b13e696df01852196816bb11f13a779f729e69",
+        "currentCount": 148,
+        "currentPathsSha256": "abd018765b5e1791ef2612c75cae495976b3c4c3a3a8fb08934307746e5a0318",
         "additions": [
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/meta-consumption-evidence-catalog.mjs",
           "src/lib/plan-budget-source.mjs",
           "src/lib/voice-consumption-draft.mjs"
@@ -39395,9 +39465,10 @@
         "contractPointer": "/extension/proofs/5/sourceFiles",
         "previousCount": 143,
         "previousPathsSha256": "3c7e4b0e5ccbd4d8488e0ba0ad75ccbabe8b683670eed3482e096d7b33cc7e32",
-        "currentCount": 146,
-        "currentPathsSha256": "0487bd587cdf0c564d510064d506eb7093290338be1b6b343fadf770944111f1",
+        "currentCount": 147,
+        "currentPathsSha256": "4a8e72a8c8df4896164ef21e716f4e9698665ce551d9a875ba6b40a061a165b1",
         "additions": [
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/meta-consumption-evidence-catalog.mjs",
           "src/lib/plan-budget-source.mjs",
           "src/lib/voice-consumption-draft.mjs"
@@ -39408,9 +39479,10 @@
         "contractPointer": "/extension/proofs/6/sourceFiles",
         "previousCount": 143,
         "previousPathsSha256": "3c7e4b0e5ccbd4d8488e0ba0ad75ccbabe8b683670eed3482e096d7b33cc7e32",
-        "currentCount": 146,
-        "currentPathsSha256": "0487bd587cdf0c564d510064d506eb7093290338be1b6b343fadf770944111f1",
+        "currentCount": 147,
+        "currentPathsSha256": "4a8e72a8c8df4896164ef21e716f4e9698665ce551d9a875ba6b40a061a165b1",
         "additions": [
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/meta-consumption-evidence-catalog.mjs",
           "src/lib/plan-budget-source.mjs",
           "src/lib/voice-consumption-draft.mjs"
@@ -39421,9 +39493,11 @@
         "contractPointer": "/extension/proofs/7/sourceFiles",
         "previousCount": 237,
         "previousPathsSha256": "649f11c2b82a4cfe38090cf6e1adcd1394a9cc719bf1c485bd3cd67a88f2c858",
-        "currentCount": 240,
-        "currentPathsSha256": "14f4750b50f68ffd496eacaffcd410544acf576d7c3b00b7a90a621544180113",
+        "currentCount": 242,
+        "currentPathsSha256": "a0da97ad1eb88d375eaa39d09a9c94516a17290f21aa4caeddfa40e2ee227c06",
         "additions": [
+          "src/lib/consumption-evidence-catalog.mjs",
+          "src/lib/consumption-evidence-http.mjs",
           "src/lib/meta-consumption-evidence-catalog.mjs",
           "src/lib/plan-budget-source.mjs",
           "src/lib/voice-consumption-draft.mjs"
@@ -39434,9 +39508,12 @@
         "contractPointer": "/extension/proofs/13/sourceFiles",
         "previousCount": 161,
         "previousPathsSha256": "8e0a4daa7b9829e96f8a984a846235038a541e2e0fbfe599d0a8b592222bb1c6",
-        "currentCount": 163,
-        "currentPathsSha256": "a086e210d1c155270a6ac40f481b150a0ca19ba1de2b42b097532badda3579c8",
+        "currentCount": 166,
+        "currentPathsSha256": "96f4a1a3ed0f458ce60e2f13e3c959f6cf0aef82741b281ae909ac1080796832",
         "additions": [
+          "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+          "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
           "src/app/(identity)/cuenta/plan-partida-budget-preview.js",
           "src/app/(identity)/cuenta/plan-partida-budget-preview.mjs"
         ]
@@ -39446,9 +39523,10 @@
         "contractPointer": "/extension/proofs/14/sourceFiles",
         "previousCount": 129,
         "previousPathsSha256": "32b4daffe18d479b78a644499d16034dc3f85442e5e84e4f7a2cc05c8b399c69",
-        "currentCount": 133,
-        "currentPathsSha256": "862157348d275beb0b84b2b4e4c7ab35cd644a560dff85594706ed98bd9aa571",
+        "currentCount": 134,
+        "currentPathsSha256": "19c54254b4b02db8c837bc891b15566d9c88d0ff8e28db5a7e2718eeb82be80a",
         "additions": [
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/meta-consumption-evidence-catalog.mjs",
           "src/lib/plan-budget-source.mjs",
           "src/lib/voice-consumption-draft.mjs",
@@ -39460,9 +39538,10 @@
         "contractPointer": "/extension/proofs/15/sourceFiles",
         "previousCount": 114,
         "previousPathsSha256": "19f1a9094ddee24870d3f3e2cd963b34fd85def12472e797cabef3af9aac64b5",
-        "currentCount": 117,
-        "currentPathsSha256": "380e16df944c2abb17f4980b6d1a8ea61ec6323c52a5d35133b7b503724fe340",
+        "currentCount": 118,
+        "currentPathsSha256": "81975af278830f88f046c3231d44b626f407af8cf0da6347dff8b69b27321290",
         "additions": [
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/meta-consumption-evidence-catalog.mjs",
           "src/lib/plan-budget-source.mjs",
           "src/lib/voice-consumption-draft.mjs"
@@ -39497,11 +39576,12 @@
         "contractPointer": "/extension/proofs/18/sourceFiles",
         "previousCount": 243,
         "previousPathsSha256": "404123db2d7b89f77f508aa9840a93803b878dfc9a9df5dbd9805d5f1426f1b9",
-        "currentCount": 248,
-        "currentPathsSha256": "a7ad4093d60af7472d3e539c951f19e92c5548a87b2541bbbca28c25867f7a0f",
+        "currentCount": 249,
+        "currentPathsSha256": "7516d625a5a29432e066d43b6ca5f2cb2414e45b49f8fda424c1bdf1d9667173",
         "additions": [
           "scripts/lib/plan-budget-current-ci-lineage.mjs",
           "scripts/lib/plan-budget-current-ci-reviewed.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/meta-consumption-evidence-catalog.mjs",
           "src/lib/plan-budget-source.mjs",
           "src/lib/voice-consumption-draft.mjs"
@@ -39512,11 +39592,14 @@
         "contractPointer": "/extension/proofs/19/sourceFiles",
         "previousCount": 199,
         "previousPathsSha256": "a8c90fd0e156e464f44cd5657d008e8e15b29fb4812d8b47a13f994235a22b8f",
-        "currentCount": 203,
-        "currentPathsSha256": "d588ea0f81285e32c609fd180ad9dacc7b48a65e22a52493eeb0c8d6e3c0355e",
+        "currentCount": 206,
+        "currentPathsSha256": "74b3310da3a2da4ddbbea756ee821122adc4e10c66e772a4bd6d45b84fb399f7",
         "additions": [
           "scripts/lib/plan-budget-current-ci-lineage.mjs",
           "scripts/lib/plan-budget-current-ci-reviewed.mjs",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+          "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
           "src/app/(identity)/cuenta/plan-partida-budget-preview.js",
           "src/app/(identity)/cuenta/plan-partida-budget-preview.mjs"
         ]
@@ -39526,11 +39609,14 @@
         "contractPointer": "/extension/proofs/20/sourceFiles",
         "previousCount": 75,
         "previousPathsSha256": "5624848f060138e2071b22e4bb606a9c5b726ab0c02cde39dc1fd8e0a1627895",
-        "currentCount": 77,
-        "currentPathsSha256": "419dfb46946cd37f2c5b6d1bc2f4e12c1cc29fbf7c8efd54cdde8cff7d822bb2",
+        "currentCount": 80,
+        "currentPathsSha256": "85a8ea38a98ee50fde8bf4aebfa49f99a0e9710e46ad26dec19f404cc487b008",
         "additions": [
           "scripts/lib/plan-budget-current-ci-lineage.mjs",
-          "scripts/lib/plan-budget-current-ci-reviewed.mjs"
+          "scripts/lib/plan-budget-current-ci-reviewed.mjs",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+          "src/app/(identity)/cuenta/consumption-evidence-view.mjs"
         ]
       },
       {
@@ -39538,9 +39624,12 @@
         "contractPointer": null,
         "previousCount": 169,
         "previousPathsSha256": "f6391decdcdcb680c3bd8bd220493e224e4fc1aea4ad53188f54b07216f711ad",
-        "currentCount": 171,
-        "currentPathsSha256": "11242316db77b273f3a59a4b444092d626a2d552a48c4e97a1ae32e8930fd176",
+        "currentCount": 174,
+        "currentPathsSha256": "c1e1ff4ed3a734b5e72ace4c9eab91e80ffe481b2fda677f3b2fd17a30990ba0",
         "additions": [
+          "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+          "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
           "src/app/(identity)/cuenta/plan-partida-budget-preview.js",
           "src/app/(identity)/cuenta/plan-partida-budget-preview.mjs"
         ]
@@ -39550,9 +39639,10 @@
         "contractPointer": null,
         "previousCount": 119,
         "previousPathsSha256": "bbd40a42f7adf860f4121321c30b21275832459282836839c363950bd6848596",
-        "currentCount": 122,
-        "currentPathsSha256": "49d4c2c3d58e45e81a15fe7b86a3792cf11c1e4e35b41bcc02b91a67ce6e25bd",
+        "currentCount": 123,
+        "currentPathsSha256": "502fadfa262e9ac89d413da31fa1138f8d53c16975ee01bf413750c4d6974e59",
         "additions": [
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/meta-consumption-evidence-catalog.mjs",
           "src/lib/plan-budget-source.mjs",
           "src/lib/voice-consumption-draft.mjs"
@@ -39574,9 +39664,10 @@
         "contractPointer": null,
         "previousCount": 116,
         "previousPathsSha256": "dd3c6b65b19b524342384c789468e113ccbacf527365ecee69bd45186f2bbc92",
-        "currentCount": 119,
-        "currentPathsSha256": "72a82cddb5d98cd8fbb4c73180be02f5a0da1804b223bbdff5723154e2416d07",
+        "currentCount": 120,
+        "currentPathsSha256": "b62fa487e25caecc5db0cb681089bf316ca67e36e601cf93879aa917ce4fca43",
         "additions": [
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/meta-consumption-evidence-catalog.mjs",
           "src/lib/plan-budget-source.mjs",
           "src/lib/voice-consumption-draft.mjs"
@@ -39587,9 +39678,12 @@
         "contractPointer": null,
         "previousCount": 26,
         "previousPathsSha256": "710e01893f5a62e3889bdaddca949989edac48b312c75ea419ea822b744c864a",
-        "currentCount": 28,
-        "currentPathsSha256": "ac29e18d380c5706e620702b48fd9510f5d358bc857a5cb4a08d0c49561de16e",
+        "currentCount": 31,
+        "currentPathsSha256": "effccda51257a09f1d036254ab15fe661da9f67f08dde0b133f6f987ac61fc33",
         "additions": [
+          "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+          "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
           "src/app/(identity)/cuenta/field-media-preview.js",
           "src/app/(identity)/cuenta/field-operations-panel.module.css"
         ]
@@ -39599,9 +39693,10 @@
         "contractPointer": null,
         "previousCount": 140,
         "previousPathsSha256": "95302675847ab612d6b3a9d5139991fce835d122e665c71373fa23be46c6435a",
-        "currentCount": 143,
-        "currentPathsSha256": "0a9dad18de039f23ec0803c52491bb034a48b7ccde6121fb220e55fba88580ae",
+        "currentCount": 144,
+        "currentPathsSha256": "c3511b05255d118e9c1533773d45ddadf7af91e3fb0aba53f4aa7a518dc224ee",
         "additions": [
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/meta-consumption-evidence-catalog.mjs",
           "src/lib/plan-budget-source.mjs",
           "src/lib/voice-consumption-draft.mjs"
@@ -39612,9 +39707,10 @@
         "contractPointer": null,
         "previousCount": 121,
         "previousPathsSha256": "61c6ff93f2afbcd4d561e3e635927c240ac09100ee79616901ddbd24fb60010b",
-        "currentCount": 124,
-        "currentPathsSha256": "d9c5c648aad1d3ca3eb3d7a19fac70428d0d9ad4817415a07f3306f76578bae8",
+        "currentCount": 125,
+        "currentPathsSha256": "e50b0aa358709f304edce45c0d5e64a1a7024c64111b92725f22c9da8290dd9d",
         "additions": [
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/meta-consumption-evidence-catalog.mjs",
           "src/lib/plan-budget-source.mjs",
           "src/lib/voice-consumption-draft.mjs"
@@ -39625,9 +39721,10 @@
         "contractPointer": null,
         "previousCount": 117,
         "previousPathsSha256": "c065cec9a54b9acb73f0cd9b84517326f9686222f7609c0401ad4b7b6bbb6f7c",
-        "currentCount": 120,
-        "currentPathsSha256": "d25e427d84aa9d85d9c25318e52fd57f9cc4f8dfaa2efadfee5a24f5b96b4882",
+        "currentCount": 121,
+        "currentPathsSha256": "d3f8f1a75f6c08fb55029879a7aee0cf6b8b8674a128df5c65067476caacd2a9",
         "additions": [
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/meta-consumption-evidence-catalog.mjs",
           "src/lib/plan-budget-source.mjs",
           "src/lib/voice-consumption-draft.mjs"
@@ -39847,6 +39944,9 @@
           "src/app/(identity)/cuenta/constructor-crm-panel.js",
           "src/app/(identity)/cuenta/constructor-crm-panel.module.css",
           "src/app/(identity)/cuenta/constructor-crm-view.mjs",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+          "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
           "src/app/(identity)/cuenta/customer-inbox-panel.js",
           "src/app/(identity)/cuenta/customer-inbox-panel.module.css",
           "src/app/(identity)/cuenta/customer-inbox-view.mjs",
@@ -40073,6 +40173,18 @@
             "sha256": "9e0520a9f15c86d9b79b85bad2067b4dcdba3c82b1d3e6b32b86f811f79bf885"
           },
           {
+            "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+            "sha256": "7eb0130b8f09f231406e68da05bf930abc10cf29967050ce3f4cb4794c2b4040"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+            "sha256": "bb26136d01a5237e41ed5bf765b017fac0de694d9169a7864b5189fa03c83148"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
+            "sha256": "f5fc82420392fbea73275c8ed3769885355f3b93f6c82e3a12e51cf34a4478a3"
+          },
+          {
             "path": "src/app/(identity)/cuenta/customer-inbox-panel.js",
             "sha256": "a933afae1cecb3e523d37904ee6f9543c958b738f6abbb4eb013cf12c1535909"
           },
@@ -40170,7 +40282,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.js",
-            "sha256": "f910384fa3acc4326037b4a4b0c141c1712cb95845f14d8d975705463fecd2e2"
+            "sha256": "d86379c89fedcde82cf3f60fbe70bb8def8544275da2bac0f6ba6b8bc7e7002f"
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.module.css",
@@ -41941,6 +42053,9 @@
           "src/app/(identity)/cuenta/constructor-crm-panel.js",
           "src/app/(identity)/cuenta/constructor-crm-panel.module.css",
           "src/app/(identity)/cuenta/constructor-crm-view.mjs",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+          "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
           "src/app/(identity)/cuenta/customer-inbox-panel.js",
           "src/app/(identity)/cuenta/customer-inbox-panel.module.css",
           "src/app/(identity)/cuenta/customer-inbox-view.mjs",
@@ -42172,7 +42287,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "834a40911ef64844f0db441a48cef5de235ae556c301308a62ff347f7106d678"
+            "sha256": "7a63b9f5fb8a3ad594344eb68dc25386a9426bc6a22bb5e355fb7a89466284a3"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -42265,6 +42380,18 @@
           {
             "path": "src/app/(identity)/cuenta/constructor-crm-view.mjs",
             "sha256": "9e0520a9f15c86d9b79b85bad2067b4dcdba3c82b1d3e6b32b86f811f79bf885"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+            "sha256": "7eb0130b8f09f231406e68da05bf930abc10cf29967050ce3f4cb4794c2b4040"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+            "sha256": "bb26136d01a5237e41ed5bf765b017fac0de694d9169a7864b5189fa03c83148"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
+            "sha256": "f5fc82420392fbea73275c8ed3769885355f3b93f6c82e3a12e51cf34a4478a3"
           },
           {
             "path": "src/app/(identity)/cuenta/customer-inbox-panel.js",
@@ -42368,7 +42495,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.js",
-            "sha256": "f910384fa3acc4326037b4a4b0c141c1712cb95845f14d8d975705463fecd2e2"
+            "sha256": "d86379c89fedcde82cf3f60fbe70bb8def8544275da2bac0f6ba6b8bc7e7002f"
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.module.css",
@@ -43074,6 +43201,9 @@
           "scripts/verify-field-task-pagination-ci.mjs",
           "scripts/verify-field-task-pagination-ui.mjs",
           "src/app/(identity)/cuenta/company-channel-view.mjs",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+          "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
           "src/app/(identity)/cuenta/field-hours-report-panel.js",
           "src/app/(identity)/cuenta/field-hours-report-panel.module.css",
           "src/app/(identity)/cuenta/field-media-capture.js",
@@ -43193,7 +43323,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "834a40911ef64844f0db441a48cef5de235ae556c301308a62ff347f7106d678"
+            "sha256": "7a63b9f5fb8a3ad594344eb68dc25386a9426bc6a22bb5e355fb7a89466284a3"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -43242,6 +43372,18 @@
           {
             "path": "src/app/(identity)/cuenta/company-channel-view.mjs",
             "sha256": "c79c473999e444b84e2a1d58e0d03f030069c24f9749f2c84450318b0b237e4d"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+            "sha256": "7eb0130b8f09f231406e68da05bf930abc10cf29967050ce3f4cb4794c2b4040"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+            "sha256": "bb26136d01a5237e41ed5bf765b017fac0de694d9169a7864b5189fa03c83148"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
+            "sha256": "f5fc82420392fbea73275c8ed3769885355f3b93f6c82e3a12e51cf34a4478a3"
           },
           {
             "path": "src/app/(identity)/cuenta/field-hours-report-panel.js",
@@ -43297,7 +43439,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.js",
-            "sha256": "f910384fa3acc4326037b4a4b0c141c1712cb95845f14d8d975705463fecd2e2"
+            "sha256": "d86379c89fedcde82cf3f60fbe70bb8def8544275da2bac0f6ba6b8bc7e7002f"
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.module.css",
@@ -43612,6 +43754,7 @@
           "src/lib/company-entitlement.mjs",
           "src/lib/company-onboarding-policy.mjs",
           "src/lib/company-phone-format.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/employee-intake-channel-continuity.mjs",
           "src/lib/field-hours-report.mjs",
           "src/lib/field-media-privacy.mjs",
@@ -43798,6 +43941,10 @@
             "sha256": "67b31114f517253961c6a774210f157867b1e2e318e6b700089eef03ef1b7209"
           },
           {
+            "path": "src/lib/consumption-evidence-catalog.mjs",
+            "sha256": "892950b23cb3c9d95fcb4593f33125538658da195ccf436f375901443657f0bf"
+          },
+          {
             "path": "src/lib/employee-intake-channel-continuity.mjs",
             "sha256": "59dffe3800f26cd979bd12c4cff0010ca72779e1dc62030a6f0117b6ef3fb64d"
           },
@@ -43863,7 +44010,7 @@
           },
           {
             "path": "src/lib/meta-consumption-evidence-catalog.mjs",
-            "sha256": "cd4eb1ccf8617060aa2bb352cc9467981f7d17649be8b24233413c133c407bff"
+            "sha256": "bd846188e12757a71ce4f42ea9c6f806bddcd5443e81b1b515f4cecb0344f42c"
           },
           {
             "path": "src/lib/meta-customer-app-projection.mjs",
@@ -44656,6 +44803,7 @@
           "src/lib/company-entitlement.mjs",
           "src/lib/company-onboarding-policy.mjs",
           "src/lib/company-phone-format.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/employee-intake-channel-continuity.mjs",
           "src/lib/field-hours-report.mjs",
           "src/lib/field-media-privacy.mjs",
@@ -44845,6 +44993,10 @@
             "sha256": "67b31114f517253961c6a774210f157867b1e2e318e6b700089eef03ef1b7209"
           },
           {
+            "path": "src/lib/consumption-evidence-catalog.mjs",
+            "sha256": "892950b23cb3c9d95fcb4593f33125538658da195ccf436f375901443657f0bf"
+          },
+          {
             "path": "src/lib/employee-intake-channel-continuity.mjs",
             "sha256": "59dffe3800f26cd979bd12c4cff0010ca72779e1dc62030a6f0117b6ef3fb64d"
           },
@@ -44910,7 +45062,7 @@
           },
           {
             "path": "src/lib/meta-consumption-evidence-catalog.mjs",
-            "sha256": "cd4eb1ccf8617060aa2bb352cc9467981f7d17649be8b24233413c133c407bff"
+            "sha256": "bd846188e12757a71ce4f42ea9c6f806bddcd5443e81b1b515f4cecb0344f42c"
           },
           {
             "path": "src/lib/meta-customer-app-projection.mjs",
@@ -45289,6 +45441,9 @@
         ],
         "currentFiles": [
           "src/app/(identity)/cuenta/company-channel-view.mjs",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+          "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+          "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
           "src/app/(identity)/cuenta/field-media-preview.js",
           "src/app/(identity)/cuenta/field-operations-panel.module.css",
           "src/app/(identity)/cuenta/material-inventory-panel.js",
@@ -45326,6 +45481,18 @@
             "sha256": "c79c473999e444b84e2a1d58e0d03f030069c24f9749f2c84450318b0b237e4d"
           },
           {
+            "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+            "sha256": "7eb0130b8f09f231406e68da05bf930abc10cf29967050ce3f4cb4794c2b4040"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+            "sha256": "bb26136d01a5237e41ed5bf765b017fac0de694d9169a7864b5189fa03c83148"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
+            "sha256": "f5fc82420392fbea73275c8ed3769885355f3b93f6c82e3a12e51cf34a4478a3"
+          },
+          {
             "path": "src/app/(identity)/cuenta/field-media-preview.js",
             "sha256": "61506157217af690aa3ea649a2472f99acc24ec96aa10eda3cc25d24a8108441"
           },
@@ -45335,7 +45502,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.js",
-            "sha256": "f910384fa3acc4326037b4a4b0c141c1712cb95845f14d8d975705463fecd2e2"
+            "sha256": "d86379c89fedcde82cf3f60fbe70bb8def8544275da2bac0f6ba6b8bc7e7002f"
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.module.css",
@@ -45622,6 +45789,7 @@
           "src/lib/company-entitlement.mjs",
           "src/lib/company-onboarding-policy.mjs",
           "src/lib/company-phone-format.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/employee-intake-channel-continuity.mjs",
           "src/lib/field-hours-report.mjs",
           "src/lib/field-media-privacy.mjs",
@@ -45856,6 +46024,10 @@
             "sha256": "67b31114f517253961c6a774210f157867b1e2e318e6b700089eef03ef1b7209"
           },
           {
+            "path": "src/lib/consumption-evidence-catalog.mjs",
+            "sha256": "892950b23cb3c9d95fcb4593f33125538658da195ccf436f375901443657f0bf"
+          },
+          {
             "path": "src/lib/employee-intake-channel-continuity.mjs",
             "sha256": "59dffe3800f26cd979bd12c4cff0010ca72779e1dc62030a6f0117b6ef3fb64d"
           },
@@ -45921,7 +46093,7 @@
           },
           {
             "path": "src/lib/meta-consumption-evidence-catalog.mjs",
-            "sha256": "cd4eb1ccf8617060aa2bb352cc9467981f7d17649be8b24233413c133c407bff"
+            "sha256": "bd846188e12757a71ce4f42ea9c6f806bddcd5443e81b1b515f4cecb0344f42c"
           },
           {
             "path": "src/lib/meta-customer-app-projection.mjs",
@@ -46497,6 +46669,7 @@
           "src/lib/company-entitlement.mjs",
           "src/lib/company-onboarding-policy.mjs",
           "src/lib/company-phone-format.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/employee-intake-channel-continuity.mjs",
           "src/lib/field-hours-report.mjs",
           "src/lib/field-media-privacy.mjs",
@@ -46692,6 +46865,10 @@
             "sha256": "67b31114f517253961c6a774210f157867b1e2e318e6b700089eef03ef1b7209"
           },
           {
+            "path": "src/lib/consumption-evidence-catalog.mjs",
+            "sha256": "892950b23cb3c9d95fcb4593f33125538658da195ccf436f375901443657f0bf"
+          },
+          {
             "path": "src/lib/employee-intake-channel-continuity.mjs",
             "sha256": "59dffe3800f26cd979bd12c4cff0010ca72779e1dc62030a6f0117b6ef3fb64d"
           },
@@ -46757,7 +46934,7 @@
           },
           {
             "path": "src/lib/meta-consumption-evidence-catalog.mjs",
-            "sha256": "cd4eb1ccf8617060aa2bb352cc9467981f7d17649be8b24233413c133c407bff"
+            "sha256": "bd846188e12757a71ce4f42ea9c6f806bddcd5443e81b1b515f4cecb0344f42c"
           },
           {
             "path": "src/lib/meta-customer-app-projection.mjs",
@@ -47276,6 +47453,7 @@
           "src/lib/company-entitlement.mjs",
           "src/lib/company-onboarding-policy.mjs",
           "src/lib/company-phone-format.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
           "src/lib/employee-intake-channel-continuity.mjs",
           "src/lib/field-hours-report.mjs",
           "src/lib/field-media-privacy.mjs",
@@ -47464,6 +47642,10 @@
             "sha256": "67b31114f517253961c6a774210f157867b1e2e318e6b700089eef03ef1b7209"
           },
           {
+            "path": "src/lib/consumption-evidence-catalog.mjs",
+            "sha256": "892950b23cb3c9d95fcb4593f33125538658da195ccf436f375901443657f0bf"
+          },
+          {
             "path": "src/lib/employee-intake-channel-continuity.mjs",
             "sha256": "59dffe3800f26cd979bd12c4cff0010ca72779e1dc62030a6f0117b6ef3fb64d"
           },
@@ -47529,7 +47711,7 @@
           },
           {
             "path": "src/lib/meta-consumption-evidence-catalog.mjs",
-            "sha256": "cd4eb1ccf8617060aa2bb352cc9467981f7d17649be8b24233413c133c407bff"
+            "sha256": "bd846188e12757a71ce4f42ea9c6f806bddcd5443e81b1b515f4cecb0344f42c"
           },
           {
             "path": "src/lib/meta-customer-app-projection.mjs",
@@ -48221,7 +48403,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "834a40911ef64844f0db441a48cef5de235ae556c301308a62ff347f7106d678"
+            "sha256": "7a63b9f5fb8a3ad594344eb68dc25386a9426bc6a22bb5e355fb7a89466284a3"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -50127,6 +50309,1195 @@
               "currentOffsetCharacters": 175168,
               "currentText": " proof={status:'PASS',harnessSha256,participantKycFixture:{sourceSha256:fixtureSourceSha256,records:kycFixture.records,syntheticPrivateCalls:kycFixture.calls,providerCalls:0,biometricIdentityCertified:false},environment:'disposable-local-postgresql'+databaseEngineVersion.split('.')[0],databaseEngineVersion,checks,reviewPaginationChecks,voiceProgressChecks,checkCount:checks.length,reviewPaginationCheckCount:reviewPaginationChecks.length,voiceProgressCheckCount:voiceProgressChecks.length,totalChecks:checks.length+reviewPaginationChecks.length+voiceProgressChecks.length+mediaLeaseChecks.length+videoAudioChecks.length+canonicalOwnFieldChecks.length+ownHistoryPrivacyChecks.length+attendanceReviewChecks.length,attendanceReviewChecks,attendanceReviewCheckCount:attendanceReviewChecks.length,canonicalOwnFieldChecks,canonicalOwnFieldCheckCount:canonicalOwnFieldChecks.length,ownHistoryPrivacy,sourceSha256,voiceProgressSourceSha256,mediaLeaseChecks,mediaLeaseCheckCount:mediaLeaseChecks.length,mediaLeaseSourceSha256,mediaLeaseSyntheticAdapterCalls,mediaLeaseFinalSqlBoundary,mediaLeaseClockBiasMs:[-86400000,86400000],mediaLeaseProviderCalls:0,mediaLeaseAdapters:{storage:'synthetic-private-objects',decoder:'synthetic-video-decoder-double-no-codec-acceptance',provider:'synthetic-responses',database:'real-disposable-postgresql'},videoAudioChecks,videoAudioCheckCount:videoAudioChecks.length,videoAudioSourceSha256,videoAudioSyntheticAdapterCalls,videoAudioBoundaryObservations,videoAudioProviderCalls:0,videoAudioFfmpegExecuted:false,videoAudioAdapters:{storage:'synthetic-private-objects-original-only',frameDecoder:'synthetic-frame-response-no-codec-acceptance',audioDecoder:'synthetic-canonical-pcm-and-metadata-no-codec-acceptance',provider:'synthetic-responses',database:'real-disposable-postgresql'},productionDataWritten:false,providerCalls:0,reviewPaginationProviderCalls:0,voiceProgressProviderCalls:0,voiceProgressSyntheticAdapterCalls:voiceAdapterCalls,mediaAdapters:'synthetic-isolated-objects-and-responses',physicalAttendanceAccepted:false,whatsAppTested:false};\n",
               "previousText": " proof={status:'PASS',harnessSha256,participantKycFixture:{sourceSha256:fixtureSourceSha256,records:kycFixture.records,syntheticPrivateCalls:kycFixture.calls,providerCalls:0,biometricIdentityCertified:false},environment:'disposable-local-postgresql'+databaseEngineVersion.split('.')[0],databaseEngineVersion,checks,reviewPaginationChecks,voiceProgressChecks,checkCount:checks.length,reviewPaginationCheckCount:reviewPaginationChecks.length,voiceProgressCheckCount:voiceProgressChecks.length,totalChecks:checks.length+reviewPaginationChecks.length+voiceProgressChecks.length+mediaLeaseChecks.length+videoAudioChecks.length+canonicalOwnFieldChecks.length+ownHistoryPrivacyChecks.length,canonicalOwnFieldChecks,canonicalOwnFieldCheckCount:canonicalOwnFieldChecks.length,ownHistoryPrivacy,sourceSha256,voiceProgressSourceSha256,mediaLeaseChecks,mediaLeaseCheckCount:mediaLeaseChecks.length,mediaLeaseSourceSha256,mediaLeaseSyntheticAdapterCalls,mediaLeaseFinalSqlBoundary,mediaLeaseClockBiasMs:[-86400000,86400000],mediaLeaseProviderCalls:0,mediaLeaseAdapters:{storage:'synthetic-private-objects',decoder:'synthetic-video-decoder-double-no-codec-acceptance',provider:'synthetic-responses',database:'real-disposable-postgresql'},videoAudioChecks,videoAudioCheckCount:videoAudioChecks.length,videoAudioSourceSha256,videoAudioSyntheticAdapterCalls,videoAudioBoundaryObservations,videoAudioProviderCalls:0,videoAudioFfmpegExecuted:false,videoAudioAdapters:{storage:'synthetic-private-objects-original-only',frameDecoder:'synthetic-frame-response-no-codec-acceptance',audioDecoder:'synthetic-canonical-pcm-and-metadata-no-codec-acceptance',provider:'synthetic-responses',database:'real-disposable-postgresql'},productionDataWritten:false,providerCalls:0,reviewPaginationProviderCalls:0,voiceProgressProviderCalls:0,voiceProgressSyntheticAdapterCalls:voiceAdapterCalls,mediaAdapters:'synthetic-isolated-objects-and-responses',physicalAttendanceAccepted:false,whatsAppTested:false};\n"
+            }
+          ]
+        }
+      },
+      "nativeOrHumanAcceptance": false
+    },
+    "consumptionEvidenceRuntime": {
+      "version": 1,
+      "parentHead": "24128f6fe6eaee16dad98025202db5bd905a6942",
+      "sourceAdditions": [
+        "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+        "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+        "src/app/(identity)/cuenta/consumption-evidence-view.mjs",
+        "src/app/api/identity/consumption-evidence/route.js",
+        "src/lib/consumption-evidence-catalog.mjs",
+        "src/lib/consumption-evidence-http.mjs"
+      ],
+      "sourceSetAdvances": [
+        {
+          "family": "UNIT",
+          "previousDelta": {
+            "family": "UNIT",
+            "contractPointer": "/extension/proofs/0/sourceFiles",
+            "previousCount": 140,
+            "previousPathsSha256": "7104df28ae9391e6038819dee38a1ee1c8b40806a229ed63324943da39ced460",
+            "currentCount": 143,
+            "currentPathsSha256": "0e39cffeba6361257d6a2b975934991f03d380007a3677aa3186846753f8beae",
+            "additions": [
+              "src/lib/meta-consumption-evidence-catalog.mjs",
+              "src/lib/plan-budget-source.mjs",
+              "src/lib/voice-consumption-draft.mjs"
+            ]
+          },
+          "additions": [
+            "src/lib/consumption-evidence-catalog.mjs"
+          ]
+        },
+        {
+          "family": "UI_BANK",
+          "previousDelta": {
+            "family": "UI_BANK",
+            "contractPointer": "/extension/proofs/3/sourceFiles",
+            "previousCount": 144,
+            "previousPathsSha256": "e581ca81d4ea63b3573d296b1fea9b318c738df99657657526f94317d8b9fed2",
+            "currentCount": 147,
+            "currentPathsSha256": "2912d51071f550d1547a051d19b13e696df01852196816bb11f13a779f729e69",
+            "additions": [
+              "src/lib/meta-consumption-evidence-catalog.mjs",
+              "src/lib/plan-budget-source.mjs",
+              "src/lib/voice-consumption-draft.mjs"
+            ]
+          },
+          "additions": [
+            "src/lib/consumption-evidence-catalog.mjs"
+          ]
+        },
+        {
+          "family": "UI_JOINT",
+          "previousDelta": {
+            "family": "UI_JOINT",
+            "contractPointer": "/extension/proofs/5/sourceFiles",
+            "previousCount": 143,
+            "previousPathsSha256": "3c7e4b0e5ccbd4d8488e0ba0ad75ccbabe8b683670eed3482e096d7b33cc7e32",
+            "currentCount": 146,
+            "currentPathsSha256": "0487bd587cdf0c564d510064d506eb7093290338be1b6b343fadf770944111f1",
+            "additions": [
+              "src/lib/meta-consumption-evidence-catalog.mjs",
+              "src/lib/plan-budget-source.mjs",
+              "src/lib/voice-consumption-draft.mjs"
+            ]
+          },
+          "additions": [
+            "src/lib/consumption-evidence-catalog.mjs"
+          ]
+        },
+        {
+          "family": "UI_CAUSAL",
+          "previousDelta": {
+            "family": "UI_CAUSAL",
+            "contractPointer": "/extension/proofs/6/sourceFiles",
+            "previousCount": 143,
+            "previousPathsSha256": "3c7e4b0e5ccbd4d8488e0ba0ad75ccbabe8b683670eed3482e096d7b33cc7e32",
+            "currentCount": 146,
+            "currentPathsSha256": "0487bd587cdf0c564d510064d506eb7093290338be1b6b343fadf770944111f1",
+            "additions": [
+              "src/lib/meta-consumption-evidence-catalog.mjs",
+              "src/lib/plan-budget-source.mjs",
+              "src/lib/voice-consumption-draft.mjs"
+            ]
+          },
+          "additions": [
+            "src/lib/consumption-evidence-catalog.mjs"
+          ]
+        },
+        {
+          "family": "PG_COMPANY_KYC",
+          "previousDelta": {
+            "family": "PG_COMPANY_KYC",
+            "contractPointer": "/extension/proofs/7/sourceFiles",
+            "previousCount": 237,
+            "previousPathsSha256": "649f11c2b82a4cfe38090cf6e1adcd1394a9cc719bf1c485bd3cd67a88f2c858",
+            "currentCount": 240,
+            "currentPathsSha256": "14f4750b50f68ffd496eacaffcd410544acf576d7c3b00b7a90a621544180113",
+            "additions": [
+              "src/lib/meta-consumption-evidence-catalog.mjs",
+              "src/lib/plan-budget-source.mjs",
+              "src/lib/voice-consumption-draft.mjs"
+            ]
+          },
+          "additions": [
+            "src/lib/consumption-evidence-catalog.mjs",
+            "src/lib/consumption-evidence-http.mjs"
+          ]
+        },
+        {
+          "family": "UI_IDENTITY_ONLY",
+          "previousDelta": {
+            "family": "UI_IDENTITY_ONLY",
+            "contractPointer": "/extension/proofs/13/sourceFiles",
+            "previousCount": 161,
+            "previousPathsSha256": "8e0a4daa7b9829e96f8a984a846235038a541e2e0fbfe599d0a8b592222bb1c6",
+            "currentCount": 163,
+            "currentPathsSha256": "a086e210d1c155270a6ac40f481b150a0ca19ba1de2b42b097532badda3579c8",
+            "additions": [
+              "src/app/(identity)/cuenta/plan-partida-budget-preview.js",
+              "src/app/(identity)/cuenta/plan-partida-budget-preview.mjs"
+            ]
+          },
+          "additions": [
+            "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+            "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+            "src/app/(identity)/cuenta/consumption-evidence-view.mjs"
+          ]
+        },
+        {
+          "family": "PG_FIELD",
+          "previousDelta": {
+            "family": "PG_FIELD",
+            "contractPointer": "/extension/proofs/14/sourceFiles",
+            "previousCount": 129,
+            "previousPathsSha256": "32b4daffe18d479b78a644499d16034dc3f85442e5e84e4f7a2cc05c8b399c69",
+            "currentCount": 133,
+            "currentPathsSha256": "862157348d275beb0b84b2b4e4c7ab35cd644a560dff85594706ed98bd9aa571",
+            "additions": [
+              "src/lib/meta-consumption-evidence-catalog.mjs",
+              "src/lib/plan-budget-source.mjs",
+              "src/lib/voice-consumption-draft.mjs",
+              "tests/production-field-attendance-review-query.test.mjs"
+            ]
+          },
+          "additions": [
+            "src/lib/consumption-evidence-catalog.mjs"
+          ]
+        },
+        {
+          "family": "PG_OVERTIME",
+          "previousDelta": {
+            "family": "PG_OVERTIME",
+            "contractPointer": "/extension/proofs/15/sourceFiles",
+            "previousCount": 114,
+            "previousPathsSha256": "19f1a9094ddee24870d3f3e2cd963b34fd85def12472e797cabef3af9aac64b5",
+            "currentCount": 117,
+            "currentPathsSha256": "380e16df944c2abb17f4980b6d1a8ea61ec6323c52a5d35133b7b503724fe340",
+            "additions": [
+              "src/lib/meta-consumption-evidence-catalog.mjs",
+              "src/lib/plan-budget-source.mjs",
+              "src/lib/voice-consumption-draft.mjs"
+            ]
+          },
+          "additions": [
+            "src/lib/consumption-evidence-catalog.mjs"
+          ]
+        },
+        {
+          "family": "PG_PARTICIPANT_KYC_PREANALYSIS",
+          "previousDelta": {
+            "family": "PG_PARTICIPANT_KYC_PREANALYSIS",
+            "contractPointer": "/extension/proofs/18/sourceFiles",
+            "previousCount": 243,
+            "previousPathsSha256": "404123db2d7b89f77f508aa9840a93803b878dfc9a9df5dbd9805d5f1426f1b9",
+            "currentCount": 248,
+            "currentPathsSha256": "a7ad4093d60af7472d3e539c951f19e92c5548a87b2541bbbca28c25867f7a0f",
+            "additions": [
+              "scripts/lib/plan-budget-current-ci-lineage.mjs",
+              "scripts/lib/plan-budget-current-ci-reviewed.mjs",
+              "src/lib/meta-consumption-evidence-catalog.mjs",
+              "src/lib/plan-budget-source.mjs",
+              "src/lib/voice-consumption-draft.mjs"
+            ]
+          },
+          "additions": [
+            "src/lib/consumption-evidence-catalog.mjs"
+          ]
+        },
+        {
+          "family": "UI_FOCUSED_WORKSPACE",
+          "previousDelta": {
+            "family": "UI_FOCUSED_WORKSPACE",
+            "contractPointer": "/extension/proofs/19/sourceFiles",
+            "previousCount": 199,
+            "previousPathsSha256": "a8c90fd0e156e464f44cd5657d008e8e15b29fb4812d8b47a13f994235a22b8f",
+            "currentCount": 203,
+            "currentPathsSha256": "d588ea0f81285e32c609fd180ad9dacc7b48a65e22a52493eeb0c8d6e3c0355e",
+            "additions": [
+              "scripts/lib/plan-budget-current-ci-lineage.mjs",
+              "scripts/lib/plan-budget-current-ci-reviewed.mjs",
+              "src/app/(identity)/cuenta/plan-partida-budget-preview.js",
+              "src/app/(identity)/cuenta/plan-partida-budget-preview.mjs"
+            ]
+          },
+          "additions": [
+            "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+            "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+            "src/app/(identity)/cuenta/consumption-evidence-view.mjs"
+          ]
+        },
+        {
+          "family": "UI_FIELD_TASK_PAGINATION",
+          "previousDelta": {
+            "family": "UI_FIELD_TASK_PAGINATION",
+            "contractPointer": "/extension/proofs/20/sourceFiles",
+            "previousCount": 75,
+            "previousPathsSha256": "5624848f060138e2071b22e4bb606a9c5b726ab0c02cde39dc1fd8e0a1627895",
+            "currentCount": 77,
+            "currentPathsSha256": "419dfb46946cd37f2c5b6d1bc2f4e12c1cc29fbf7c8efd54cdde8cff7d822bb2",
+            "additions": [
+              "scripts/lib/plan-budget-current-ci-lineage.mjs",
+              "scripts/lib/plan-budget-current-ci-reviewed.mjs"
+            ]
+          },
+          "additions": [
+            "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+            "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+            "src/app/(identity)/cuenta/consumption-evidence-view.mjs"
+          ]
+        },
+        {
+          "family": "LIVE_HOURS_RUNTIME",
+          "previousDelta": {
+            "family": "LIVE_HOURS_RUNTIME",
+            "contractPointer": null,
+            "previousCount": 169,
+            "previousPathsSha256": "f6391decdcdcb680c3bd8bd220493e224e4fc1aea4ad53188f54b07216f711ad",
+            "currentCount": 171,
+            "currentPathsSha256": "11242316db77b273f3a59a4b444092d626a2d552a48c4e97a1ae32e8930fd176",
+            "additions": [
+              "src/app/(identity)/cuenta/plan-partida-budget-preview.js",
+              "src/app/(identity)/cuenta/plan-partida-budget-preview.mjs"
+            ]
+          },
+          "additions": [
+            "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+            "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+            "src/app/(identity)/cuenta/consumption-evidence-view.mjs"
+          ]
+        },
+        {
+          "family": "PLAN_MEASUREMENT",
+          "previousDelta": {
+            "family": "PLAN_MEASUREMENT",
+            "contractPointer": null,
+            "previousCount": 119,
+            "previousPathsSha256": "bbd40a42f7adf860f4121321c30b21275832459282836839c363950bd6848596",
+            "currentCount": 122,
+            "currentPathsSha256": "49d4c2c3d58e45e81a15fe7b86a3792cf11c1e4e35b41bcc02b91a67ce6e25bd",
+            "additions": [
+              "src/lib/meta-consumption-evidence-catalog.mjs",
+              "src/lib/plan-budget-source.mjs",
+              "src/lib/voice-consumption-draft.mjs"
+            ]
+          },
+          "additions": [
+            "src/lib/consumption-evidence-catalog.mjs"
+          ]
+        },
+        {
+          "family": "CONSUMPTION_FEEDBACK",
+          "previousDelta": {
+            "family": "CONSUMPTION_FEEDBACK",
+            "contractPointer": null,
+            "previousCount": 116,
+            "previousPathsSha256": "dd3c6b65b19b524342384c789468e113ccbacf527365ecee69bd45186f2bbc92",
+            "currentCount": 119,
+            "currentPathsSha256": "72a82cddb5d98cd8fbb4c73180be02f5a0da1804b223bbdff5723154e2416d07",
+            "additions": [
+              "src/lib/meta-consumption-evidence-catalog.mjs",
+              "src/lib/plan-budget-source.mjs",
+              "src/lib/voice-consumption-draft.mjs"
+            ]
+          },
+          "additions": [
+            "src/lib/consumption-evidence-catalog.mjs"
+          ]
+        },
+        {
+          "family": "CONSUMPTION_FEEDBACK_UI",
+          "previousDelta": {
+            "family": "CONSUMPTION_FEEDBACK_UI",
+            "contractPointer": null,
+            "previousCount": 26,
+            "previousPathsSha256": "710e01893f5a62e3889bdaddca949989edac48b312c75ea419ea822b744c864a",
+            "currentCount": 28,
+            "currentPathsSha256": "ac29e18d380c5706e620702b48fd9510f5d358bc857a5cb4a08d0c49561de16e",
+            "additions": [
+              "src/app/(identity)/cuenta/field-media-preview.js",
+              "src/app/(identity)/cuenta/field-operations-panel.module.css"
+            ]
+          },
+          "additions": [
+            "src/app/(identity)/cuenta/consumption-evidence-picker.js",
+            "src/app/(identity)/cuenta/consumption-evidence-picker.module.css",
+            "src/app/(identity)/cuenta/consumption-evidence-view.mjs"
+          ]
+        },
+        {
+          "family": "COMPACT",
+          "previousDelta": {
+            "family": "COMPACT",
+            "contractPointer": null,
+            "previousCount": 140,
+            "previousPathsSha256": "95302675847ab612d6b3a9d5139991fce835d122e665c71373fa23be46c6435a",
+            "currentCount": 143,
+            "currentPathsSha256": "0a9dad18de039f23ec0803c52491bb034a48b7ccde6121fb220e55fba88580ae",
+            "additions": [
+              "src/lib/meta-consumption-evidence-catalog.mjs",
+              "src/lib/plan-budget-source.mjs",
+              "src/lib/voice-consumption-draft.mjs"
+            ]
+          },
+          "additions": [
+            "src/lib/consumption-evidence-catalog.mjs"
+          ]
+        },
+        {
+          "family": "ORGANIZATION_USAGE",
+          "previousDelta": {
+            "family": "ORGANIZATION_USAGE",
+            "contractPointer": null,
+            "previousCount": 121,
+            "previousPathsSha256": "61c6ff93f2afbcd4d561e3e635927c240ac09100ee79616901ddbd24fb60010b",
+            "currentCount": 124,
+            "currentPathsSha256": "d9c5c648aad1d3ca3eb3d7a19fac70428d0d9ad4817415a07f3306f76578bae8",
+            "additions": [
+              "src/lib/meta-consumption-evidence-catalog.mjs",
+              "src/lib/plan-budget-source.mjs",
+              "src/lib/voice-consumption-draft.mjs"
+            ]
+          },
+          "additions": [
+            "src/lib/consumption-evidence-catalog.mjs"
+          ]
+        },
+        {
+          "family": "KYC_REPLY_FEEDBACK",
+          "previousDelta": {
+            "family": "KYC_REPLY_FEEDBACK",
+            "contractPointer": null,
+            "previousCount": 117,
+            "previousPathsSha256": "c065cec9a54b9acb73f0cd9b84517326f9686222f7609c0401ad4b7b6bbb6f7c",
+            "currentCount": 120,
+            "currentPathsSha256": "d25e427d84aa9d85d9c25318e52fd57f9cc4f8dfaa2efadfee5a24f5b96b4882",
+            "additions": [
+              "src/lib/meta-consumption-evidence-catalog.mjs",
+              "src/lib/plan-budget-source.mjs",
+              "src/lib/voice-consumption-draft.mjs"
+            ]
+          },
+          "additions": [
+            "src/lib/consumption-evidence-catalog.mjs"
+          ]
+        }
+      ],
+      "sourceHistory": {
+        "path": "src/lib/meta-consumption-evidence-catalog.mjs",
+        "previousSha256": "cd4eb1ccf8617060aa2bb352cc9467981f7d17649be8b24233413c133c407bff",
+        "currentSha256": "bd846188e12757a71ce4f42ea9c6f806bddcd5443e81b1b515f4cecb0344f42c",
+        "previousBytes": 7362,
+        "currentBytes": 2061,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 0,
+            "currentText": "import {WorkspaceError,workspaceId} from './workspace-policy.mjs';\nimport {readConsumptionEvidenceCatalog} from './consumption-evidence-catalog.mjs';\n\nconst unavailable=()=>{throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);};\nfunction selectedChoice(state,message){\n const raw=message?.type==='interactive'?(message.interactive?.list_reply?.id||message.interactive?.button_reply?.id):null,match=/^obra:([a-f0-9]{20}):(\\d{1,2})$/.exec(raw||'');\n return match&&match[1]===state?.nonce?state.choices?.[Number(match[2])]?.value:null;\n}\n\n// The verified bridge still owns current principal/lease/task/sector authority.\n// Its internal retained-audio read and share locks keep their prior defaults.\nexport async function readMetaConsumptionEvidenceCatalog(client,{organizationId,projectId,workerId,actorId,state,message,tasks,sectors}){\n if([organizationId,projectId,workerId,actorId,state?.sectorId].some(value=>!workspaceId(value))||state.taskId!==null&&(!workspaceId(state.taskId)||!tasks?.some(task=>task.id===state.taskId))||!sectors?.some(sector=>sector.id===state.sectorId))unavailable();\n const ids=state.evidenceIds||[];if(!Array.isArray(ids)||ids.length>10||new Set(ids).size!==ids.length||ids.some(value=>!workspaceId(value)))unavailable();\n const choice=selectedChoice(state,message),page=state.step==='CONSUMPTION_EVIDENCE'?state.consumptionEvidencePage:null;\n const selected=state.step==='CONSUMPTION_EVIDENCE'&&choice&&!['NEXT_CONSUMPTION_EVIDENCE','PREVIOUS_CONSUMPTION_EVIDENCE','CONTINUE_CONSUMPTION','CLEAR_CONSUMPTION_EVIDENCE'].includes(choice)?[choice]:[];\n const retainedIds=[...ids,...selected,state.consumptionVoiceCandidate?.source?.evidenceId,state.consumptionVoice?.source?.evidenceId].filter(value=>value!==undefined&&value!==null);\n return readConsumptionEvidenceCatalog(client,{organizationId,projectId,workerId,actorId,taskId:state.taskId,sectorId:state.sectorId,page:page||null,direction:page?choice==='NEXT_CONSUMPTION_EVIDENCE'?'NEXT':choice==='PREVIOUS_CONSUMPTION_EVIDENCE'?'PREVIOUS':'REFRESH':'FIRST',retainedIds});\n}\n",
+            "previousText": "import {WorkspaceError,workspaceId,digest} from './workspace-policy.mjs';\n\nconst unavailable=()=>{throw new WorkspaceError('FIELD_EVIDENCE_UNAVAILABLE',404);};\nconst cursor=row=>({id:row.id,createdAt:row.createdAt});\nfunction validCursor(value){\n if(!value||Object.keys(value).sort().join('|')!=='createdAt|id'||!workspaceId(value.id)||typeof value.createdAt!=='string'||!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}$/.test(value.createdAt)||value.createdAt.startsWith('0000-'))return false;\n const parsed=new Date(value.createdAt+'Z');return Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,19)===value.createdAt.slice(0,19);\n}\nfunction selectedChoice(state,message){\n const raw=message?.type==='interactive'?(message.interactive?.list_reply?.id||message.interactive?.button_reply?.id):null,match=/^obra:([a-f0-9]{20}):(\\d{1,2})$/.exec(raw||'');\n return match&&match[1]===state?.nonce?state.choices?.[Number(match[2])]?.value:null;\n}\nfunction entry(row,context,withProcessing=false){\n const bytes=Number(row.mediaBytes);\n if(row.workerId!==context.workerId||row.taskId!==context.taskId||row.sectorId!==context.sectorId||!workspaceId(row.id)||typeof row.title!=='string'||row.title.length>500||!['image','audio'].includes(row.mediaKind)||typeof row.contentType!=='string'||!row.contentType.startsWith(row.mediaKind+'/')||!Number.isSafeInteger(bytes)||bytes<1||bytes>3*1024*1024||!/^[a-f0-9]{64}$/.test(row.mediaSha256||'')||!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}$/.test(row.revision||'')||!['PENDING','APPROVED'].includes(row.status))unavailable();\n return {id:row.id,title:row.title,taskId:row.taskId,workerId:row.workerId,sectorId:row.sectorId,revision:row.revision,status:row.status,media:{kind:row.mediaKind,contentType:row.contentType,bytes,sha256:row.mediaSha256},...(withProcessing&&row.mediaKind==='audio'?{processing:row.processing}:{} )};\n}\n\n// Called only by the verified bridge after live principal/lease/permission and\n// task/sector reads. Pagination and retained selections never widen ownership.\nexport async function readMetaConsumptionEvidenceCatalog(client,{organizationId,projectId,workerId,actorId,state,message,tasks,sectors}){\n if([organizationId,projectId,workerId,actorId,state?.sectorId].some(value=>!workspaceId(value))||state.taskId!==null&&(!workspaceId(state.taskId)||!tasks?.some(task=>task.id===state.taskId))||!sectors?.some(sector=>sector.id===state.sectorId))unavailable();\n const ids=state.evidenceIds||[];if(!Array.isArray(ids)||ids.length>10||new Set(ids).size!==ids.length||ids.some(value=>!workspaceId(value)))unavailable();\n const contextDigest=digest(['consumption-evidence-catalog-v1',organizationId,projectId,workerId,actorId,state.taskId,state.sectorId]),choice=selectedChoice(state,message),page=state.step==='CONSUMPTION_EVIDENCE'?state.consumptionEvidencePage:null,size=6;\n const field=`i.metadata->'fieldOperations'`,from=`public.\"Incident\" i JOIN public.\"Project\" p ON p.id=i.\"projectId\"`;\n const visible=`i.\"projectId\"=$1 AND p.\"organizationId\"=$5 AND p.status='ACTIVE' AND ${field}->>'version'='1' AND ${field}->>'kind'='EVIDENCE' AND ${field}->>'taskId' IS NOT DISTINCT FROM $2::text AND ${field}->>'workerId'=$3 AND ${field}->>'recordedBy'=$4 AND ${field}->>'sectorId'=$6 AND ${field}->'review'->>'decision' IS DISTINCT FROM 'REJECT' AND ${field}->'media'->>'kind' IN ('image','audio')`;\n const values=[projectId,state.taskId,workerId,actorId,organizationId,state.sectorId];let anchor=null,direction='FIRST';\n if(page){\n  if(page.contextDigest!==contextDigest||typeof page.hasPrevious!=='boolean'||typeof page.hasNext!=='boolean'||(page.first===null)!==(page.last===null)||page.first===null&&(page.hasPrevious||page.hasNext)||page.first!==null&&(!validCursor(page.first)||!validCursor(page.last)))unavailable();\n  if(page.first){\n   const anchors=(await client.query(`SELECT i.id,to_char(i.\"createdAt\",'YYYY-MM-DD\"T\"HH24:MI:SS.US') AS \"createdAt\" FROM ${from} WHERE ${visible} AND i.id=ANY($7::text[])`,[...values,[page.first.id,page.last.id]])).rows;\n   if(![page.first,page.last].every(value=>anchors.some(row=>row.id===value.id&&row.createdAt===value.createdAt)))unavailable();\n   direction=choice==='NEXT_CONSUMPTION_EVIDENCE'?'AFTER':choice==='PREVIOUS_CONSUMPTION_EVIDENCE'?'BEFORE':'INCLUSIVE';anchor=direction==='AFTER'?page.last:page.first;\n  }\n }\n const columns=`i.id,i.title,${field}->>'taskId' AS \"taskId\",${field}->>'workerId' AS \"workerId\",${field}->>'sectorId' AS \"sectorId\",${field}->'media'->>'kind' AS \"mediaKind\",${field}->'media'->>'contentType' AS \"contentType\",${field}->'media'->>'bytes' AS \"mediaBytes\",${field}->'media'->>'sha256' AS \"mediaSha256\",CASE WHEN ${field}->'review'->>'decision'='APPROVE' THEN 'APPROVED' ELSE 'PENDING' END AS status,to_char(i.\"updatedAt\",'YYYY-MM-DD\"T\"HH24:MI:SS.US') AS revision,to_char(i.\"createdAt\",'YYYY-MM-DD\"T\"HH24:MI:SS.US') AS \"createdAt\"`;\n const predicate=anchor?` AND (i.\"createdAt\",i.id) ${direction==='AFTER'?'<':direction==='BEFORE'?'>':'<='} ($7::timestamp,$8::text)`:'';\n const found=(await client.query(`SELECT ${columns} FROM ${from} WHERE ${visible}${predicate} ORDER BY i.\"createdAt\" ${direction==='BEFORE'?'ASC':'DESC'},i.id ${direction==='BEFORE'?'ASC':'DESC'} LIMIT ${size+1}`,anchor?[...values,anchor.createdAt,anchor.id]:values)).rows;\n const rows=found.slice(0,size);if(direction==='BEFORE')rows.reverse();let evidencePage={contextDigest,first:null,last:null,hasPrevious:false,hasNext:false};\n if(rows.length){const first=cursor(rows[0]),last=cursor(rows.at(-1)),bounds=(await client.query(`SELECT EXISTS(SELECT 1 FROM ${from} WHERE ${visible} AND (i.\"createdAt\",i.id)>($7::timestamp,$8::text)) AS \"hasPrevious\",EXISTS(SELECT 1 FROM ${from} WHERE ${visible} AND (i.\"createdAt\",i.id)<($9::timestamp,$10::text)) AS \"hasNext\"`,[...values,first.createdAt,first.id,last.createdAt,last.id])).rows[0];if(!bounds||typeof bounds.hasPrevious!=='boolean'||typeof bounds.hasNext!=='boolean')unavailable();evidencePage={contextDigest,first,last,...bounds};}\n const context={workerId,taskId:state.taskId,sectorId:state.sectorId},entries=rows.map(row=>entry(row,context)),evidence=entries.slice();\n const selected=state.step==='CONSUMPTION_EVIDENCE'&&choice&&!['NEXT_CONSUMPTION_EVIDENCE','PREVIOUS_CONSUMPTION_EVIDENCE','CONTINUE_CONSUMPTION','CLEAR_CONSUMPTION_EVIDENCE'].includes(choice)?[choice]:[];\n const retained=[...ids,...selected,state.consumptionVoiceCandidate?.source?.evidenceId,state.consumptionVoice?.source?.evidenceId].filter(value=>value!==undefined&&value!==null);if(retained.length>13||retained.some(value=>!workspaceId(value)))unavailable();\n const retainedIds=[...new Set(retained)].sort();\n if(retainedIds.length){\n  const fresh=(await client.query(`SELECT ${columns},CASE WHEN ${field}->'media'->>'kind'='audio' THEN ${field}->'processing' ELSE NULL END AS processing FROM ${from} WHERE ${visible} AND i.id=ANY($7::text[]) ORDER BY i.id FOR SHARE OF i`,[...values,retainedIds])).rows;\n  if(fresh.some(row=>!retainedIds.includes(row.id))||new Set(fresh.map(row=>row.id)).size!==fresh.length)unavailable();\n  const byId=new Map(fresh.map(row=>[row.id,entry(row,context,true)]));\n  for(const id of retainedIds){const index=evidence.findIndex(value=>value.id===id);if(index!==-1)evidence.splice(index,1);if(byId.has(id))evidence.push(byId.get(id));}\n }\n return {entries,evidence,page:evidencePage};\n}\n"
+          }
+        ]
+      },
+      "materialNative": {
+        "producer": "scripts/verify-material-inventory-postgres.mjs",
+        "previousFiles": [
+          "package-lock.json",
+          "package.json",
+          "scripts/fixtures/canonical-participant-kyc.mjs",
+          "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
+          "scripts/lib/disposable-postgres-cleanup.mjs",
+          "scripts/verify-material-inventory-postgres.mjs",
+          "src/app/(identity)/cuenta/material-inventory-view.mjs",
+          "src/app/(identity)/cuenta/private-bank-account-format.mjs",
+          "src/lib/bindx-civil-data-client.mjs",
+          "src/lib/brand-assets.mjs",
+          "src/lib/canonical-invited-account.mjs",
+          "src/lib/company-channel-connection.mjs",
+          "src/lib/company-channel-kyc.mjs",
+          "src/lib/company-channel-routing.mjs",
+          "src/lib/company-channel-schema.mjs",
+          "src/lib/company-entitlement.mjs",
+          "src/lib/company-onboarding-policy.mjs",
+          "src/lib/company-phone-format.mjs",
+          "src/lib/employee-intake-channel-continuity.mjs",
+          "src/lib/field-hours-report.mjs",
+          "src/lib/field-media-privacy.mjs",
+          "src/lib/field-media.mjs",
+          "src/lib/field-operations-http.mjs",
+          "src/lib/field-operations-policy.mjs",
+          "src/lib/field-operations-store.mjs",
+          "src/lib/field-overtime-policy.mjs",
+          "src/lib/field-overtime-store.mjs",
+          "src/lib/field-report-feedback.mjs",
+          "src/lib/field-shift-summary.mjs",
+          "src/lib/geo.js",
+          "src/lib/legacy-access-boundary.js",
+          "src/lib/material-inventory.mjs",
+          "src/lib/meta-callback-diagnostics.mjs",
+          "src/lib/meta-channel-binding.mjs",
+          "src/lib/meta-cloud-protocol.mjs",
+          "src/lib/meta-consumption-evidence-catalog.mjs",
+          "src/lib/meta-customer-app-projection.mjs",
+          "src/lib/meta-customer-callback.mjs",
+          "src/lib/meta-customer-coexistence.mjs",
+          "src/lib/meta-customer-credentials.mjs",
+          "src/lib/meta-customer-inbox-review.mjs",
+          "src/lib/meta-customer-outbound.mjs",
+          "src/lib/meta-customer-permissions.mjs",
+          "src/lib/meta-customer-processing.mjs",
+          "src/lib/meta-customer-provider.mjs",
+          "src/lib/meta-customer-templates.mjs",
+          "src/lib/meta-development-pilot-policy.mjs",
+          "src/lib/meta-employee-intake.mjs",
+          "src/lib/meta-field-bridge.mjs",
+          "src/lib/meta-field-conversation.mjs",
+          "src/lib/meta-kyc-challenge.mjs",
+          "src/lib/meta-kyc-conversation.mjs",
+          "src/lib/meta-kyc-current-image.mjs",
+          "src/lib/meta-kyc-identity.mjs",
+          "src/lib/meta-kyc-rejection-policy.mjs",
+          "src/lib/meta-kyc-rejection.mjs",
+          "src/lib/meta-own-company-policy.mjs",
+          "src/lib/meta-plan-import-conversation.mjs",
+          "src/lib/meta-plan-import-origin.mjs",
+          "src/lib/meta-plan-import-transport.mjs",
+          "src/lib/meta-test-recipient-binding.mjs",
+          "src/lib/meta-whatsapp-transport.mjs",
+          "src/lib/operations-status.mjs",
+          "src/lib/organization-resource-usage-policy.mjs",
+          "src/lib/organization-usage-policy.mjs",
+          "src/lib/participant-account-discovery.mjs",
+          "src/lib/participant-admission.mjs",
+          "src/lib/participant-analysis-consent.mjs",
+          "src/lib/participant-approved-identity.mjs",
+          "src/lib/participant-bank-account.mjs",
+          "src/lib/participant-bank-format.mjs",
+          "src/lib/participant-bank-vault.mjs",
+          "src/lib/participant-channel-kyc.mjs",
+          "src/lib/participant-civil-policy.mjs",
+          "src/lib/participant-civil-store.mjs",
+          "src/lib/participant-kyc-chat-attempt.mjs",
+          "src/lib/participant-kyc-chat-closure.mjs",
+          "src/lib/participant-kyc-chat-copy.mjs",
+          "src/lib/participant-kyc-image-set.mjs",
+          "src/lib/participant-kyc-notice-links.mjs",
+          "src/lib/participant-kyc-preanalysis-policy.mjs",
+          "src/lib/participant-onboarding-authority.mjs",
+          "src/lib/participant-onboarding-current-kyc.mjs",
+          "src/lib/participant-onboarding-delivery.mjs",
+          "src/lib/participant-onboarding-intent.mjs",
+          "src/lib/participant-onboarding-policy.mjs",
+          "src/lib/participant-onboarding-reactive.mjs",
+          "src/lib/participant-policy.mjs",
+          "src/lib/participant-store.mjs",
+          "src/lib/participant-verified-office.mjs",
+          "src/lib/person-worksite-journey.mjs",
+          "src/lib/pilot-media.mjs",
+          "src/lib/plan-baseline-policy.mjs",
+          "src/lib/plan-budget-source.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-document-curve.mjs",
+          "src/lib/plan-import-monthly-curve.mjs",
+          "src/lib/plan-import-ooxml.mjs",
+          "src/lib/plan-import-policy.mjs",
+          "src/lib/plan-import-store.mjs",
+          "src/lib/plan-measurement-policy.mjs",
+          "src/lib/plan-measurement-source.mjs",
+          "src/lib/private-image-upload.mjs",
+          "src/lib/procurement-money.js",
+          "src/lib/procurement-quantity.js",
+          "src/lib/production-identity-config.mjs",
+          "src/lib/progress-measurement-quantity.js",
+          "src/lib/site-purchase-policy.mjs",
+          "src/lib/site-purchase-store.mjs",
+          "src/lib/site-register-policy.mjs",
+          "src/lib/site-register-store.mjs",
+          "src/lib/task-progress-measurement.js",
+          "src/lib/video-audio-extractor.mjs",
+          "src/lib/video-frame-extractor.mjs",
+          "src/lib/voice-consumption-draft.mjs",
+          "src/lib/voice-progress-draft.mjs",
+          "src/lib/whatsapp/field-worker-intent-policy.js",
+          "src/lib/whatsapp/obra-intent-policy.js",
+          "src/lib/whatsapp/operational-proposal-decision-policy.js",
+          "src/lib/whatsapp/project-workspace-profile.js",
+          "src/lib/whatsapp/template-review-policy.js",
+          "src/lib/whatsapp/tenant-workspace-policy.js",
+          "src/lib/worker-channel-consent-policy.mjs",
+          "src/lib/worker-channel-identity.mjs",
+          "src/lib/workspace-http.mjs",
+          "src/lib/workspace-policy.mjs",
+          "src/lib/workspace-store.mjs",
+          "tests/production-material-inventory-review-queue.test.mjs",
+          "tests/production-material-inventory.test.mjs"
+        ],
+        "currentFiles": [
+          "package-lock.json",
+          "package.json",
+          "scripts/fixtures/canonical-participant-kyc.mjs",
+          "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
+          "scripts/lib/disposable-postgres-cleanup.mjs",
+          "scripts/verify-material-inventory-postgres.mjs",
+          "src/app/(identity)/cuenta/material-inventory-view.mjs",
+          "src/app/(identity)/cuenta/private-bank-account-format.mjs",
+          "src/lib/bindx-civil-data-client.mjs",
+          "src/lib/brand-assets.mjs",
+          "src/lib/canonical-invited-account.mjs",
+          "src/lib/company-channel-connection.mjs",
+          "src/lib/company-channel-kyc.mjs",
+          "src/lib/company-channel-routing.mjs",
+          "src/lib/company-channel-schema.mjs",
+          "src/lib/company-entitlement.mjs",
+          "src/lib/company-onboarding-policy.mjs",
+          "src/lib/company-phone-format.mjs",
+          "src/lib/consumption-evidence-catalog.mjs",
+          "src/lib/employee-intake-channel-continuity.mjs",
+          "src/lib/field-hours-report.mjs",
+          "src/lib/field-media-privacy.mjs",
+          "src/lib/field-media.mjs",
+          "src/lib/field-operations-http.mjs",
+          "src/lib/field-operations-policy.mjs",
+          "src/lib/field-operations-store.mjs",
+          "src/lib/field-overtime-policy.mjs",
+          "src/lib/field-overtime-store.mjs",
+          "src/lib/field-report-feedback.mjs",
+          "src/lib/field-shift-summary.mjs",
+          "src/lib/geo.js",
+          "src/lib/legacy-access-boundary.js",
+          "src/lib/material-inventory.mjs",
+          "src/lib/meta-callback-diagnostics.mjs",
+          "src/lib/meta-channel-binding.mjs",
+          "src/lib/meta-cloud-protocol.mjs",
+          "src/lib/meta-consumption-evidence-catalog.mjs",
+          "src/lib/meta-customer-app-projection.mjs",
+          "src/lib/meta-customer-callback.mjs",
+          "src/lib/meta-customer-coexistence.mjs",
+          "src/lib/meta-customer-credentials.mjs",
+          "src/lib/meta-customer-inbox-review.mjs",
+          "src/lib/meta-customer-outbound.mjs",
+          "src/lib/meta-customer-permissions.mjs",
+          "src/lib/meta-customer-processing.mjs",
+          "src/lib/meta-customer-provider.mjs",
+          "src/lib/meta-customer-templates.mjs",
+          "src/lib/meta-development-pilot-policy.mjs",
+          "src/lib/meta-employee-intake.mjs",
+          "src/lib/meta-field-bridge.mjs",
+          "src/lib/meta-field-conversation.mjs",
+          "src/lib/meta-kyc-challenge.mjs",
+          "src/lib/meta-kyc-conversation.mjs",
+          "src/lib/meta-kyc-current-image.mjs",
+          "src/lib/meta-kyc-identity.mjs",
+          "src/lib/meta-kyc-rejection-policy.mjs",
+          "src/lib/meta-kyc-rejection.mjs",
+          "src/lib/meta-own-company-policy.mjs",
+          "src/lib/meta-plan-import-conversation.mjs",
+          "src/lib/meta-plan-import-origin.mjs",
+          "src/lib/meta-plan-import-transport.mjs",
+          "src/lib/meta-test-recipient-binding.mjs",
+          "src/lib/meta-whatsapp-transport.mjs",
+          "src/lib/operations-status.mjs",
+          "src/lib/organization-resource-usage-policy.mjs",
+          "src/lib/organization-usage-policy.mjs",
+          "src/lib/participant-account-discovery.mjs",
+          "src/lib/participant-admission.mjs",
+          "src/lib/participant-analysis-consent.mjs",
+          "src/lib/participant-approved-identity.mjs",
+          "src/lib/participant-bank-account.mjs",
+          "src/lib/participant-bank-format.mjs",
+          "src/lib/participant-bank-vault.mjs",
+          "src/lib/participant-channel-kyc.mjs",
+          "src/lib/participant-civil-policy.mjs",
+          "src/lib/participant-civil-store.mjs",
+          "src/lib/participant-kyc-chat-attempt.mjs",
+          "src/lib/participant-kyc-chat-closure.mjs",
+          "src/lib/participant-kyc-chat-copy.mjs",
+          "src/lib/participant-kyc-image-set.mjs",
+          "src/lib/participant-kyc-notice-links.mjs",
+          "src/lib/participant-kyc-preanalysis-policy.mjs",
+          "src/lib/participant-onboarding-authority.mjs",
+          "src/lib/participant-onboarding-current-kyc.mjs",
+          "src/lib/participant-onboarding-delivery.mjs",
+          "src/lib/participant-onboarding-intent.mjs",
+          "src/lib/participant-onboarding-policy.mjs",
+          "src/lib/participant-onboarding-reactive.mjs",
+          "src/lib/participant-policy.mjs",
+          "src/lib/participant-store.mjs",
+          "src/lib/participant-verified-office.mjs",
+          "src/lib/person-worksite-journey.mjs",
+          "src/lib/pilot-media.mjs",
+          "src/lib/plan-baseline-policy.mjs",
+          "src/lib/plan-budget-source.mjs",
+          "src/lib/plan-import-cyp-curve.mjs",
+          "src/lib/plan-import-document-curve.mjs",
+          "src/lib/plan-import-monthly-curve.mjs",
+          "src/lib/plan-import-ooxml.mjs",
+          "src/lib/plan-import-policy.mjs",
+          "src/lib/plan-import-store.mjs",
+          "src/lib/plan-measurement-policy.mjs",
+          "src/lib/plan-measurement-source.mjs",
+          "src/lib/private-image-upload.mjs",
+          "src/lib/procurement-money.js",
+          "src/lib/procurement-quantity.js",
+          "src/lib/production-identity-config.mjs",
+          "src/lib/progress-measurement-quantity.js",
+          "src/lib/site-purchase-policy.mjs",
+          "src/lib/site-purchase-store.mjs",
+          "src/lib/site-register-policy.mjs",
+          "src/lib/site-register-store.mjs",
+          "src/lib/task-progress-measurement.js",
+          "src/lib/video-audio-extractor.mjs",
+          "src/lib/video-frame-extractor.mjs",
+          "src/lib/voice-consumption-draft.mjs",
+          "src/lib/voice-progress-draft.mjs",
+          "src/lib/whatsapp/field-worker-intent-policy.js",
+          "src/lib/whatsapp/obra-intent-policy.js",
+          "src/lib/whatsapp/operational-proposal-decision-policy.js",
+          "src/lib/whatsapp/project-workspace-profile.js",
+          "src/lib/whatsapp/template-review-policy.js",
+          "src/lib/whatsapp/tenant-workspace-policy.js",
+          "src/lib/worker-channel-consent-policy.mjs",
+          "src/lib/worker-channel-identity.mjs",
+          "src/lib/workspace-http.mjs",
+          "src/lib/workspace-policy.mjs",
+          "src/lib/workspace-store.mjs",
+          "tests/production-material-inventory-review-queue.test.mjs",
+          "tests/production-material-inventory.test.mjs"
+        ],
+        "currentManifest": [
+          {
+            "path": "package-lock.json",
+            "sha256": "dfa3ff3914547f35828a0b697e6007c6cf856546be86bf8a7810cdce59e60449"
+          },
+          {
+            "path": "package.json",
+            "sha256": "6b7918c67edddee946d9455aa71913987f54f8abe441e0c3e560560a89061c4d"
+          },
+          {
+            "path": "scripts/fixtures/canonical-participant-kyc.mjs",
+            "sha256": "09928b417f3319d76ba34fac91f89a1888f3a8e613bfde3775cac424cc441ccb"
+          },
+          {
+            "path": "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
+            "sha256": "01c8bd9e25665963ff44a70bcebda734c53c73a569aa4dafe70bd41c2c809e0f"
+          },
+          {
+            "path": "scripts/lib/disposable-postgres-cleanup.mjs",
+            "sha256": "df8d9f36b79cdd5f2d940c0dc4bbc88acbb0bec6e66c9ee5ae93ad5c6e4ab89e"
+          },
+          {
+            "path": "scripts/verify-material-inventory-postgres.mjs",
+            "sha256": "bfac7891dc752dc0cd600bc878b1f977a4947122bc4f2035866220654fd5c652"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/material-inventory-view.mjs",
+            "sha256": "8942cb9a2f3ed071a77a9e87ca3876fa16b1f819bcb74f395e4307f7c167605a"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/private-bank-account-format.mjs",
+            "sha256": "4dcf7f2de2f49f97f155e14128b20815f538d659d5e82806fa45a18d541adeea"
+          },
+          {
+            "path": "src/lib/bindx-civil-data-client.mjs",
+            "sha256": "20da64b82d14fb3d4055b9852ed8712d33b01d1bc9f50709cb55084c7d0433a2"
+          },
+          {
+            "path": "src/lib/brand-assets.mjs",
+            "sha256": "7da49f3f4d8c2f9d2cce36cc2902b5f46e044b98e67bace09e240f5b007fd4c1"
+          },
+          {
+            "path": "src/lib/canonical-invited-account.mjs",
+            "sha256": "94652997c4e6717e875041c859de9caaaeeabd9d166666d9dfbf899c51d98c7b"
+          },
+          {
+            "path": "src/lib/company-channel-connection.mjs",
+            "sha256": "f2c44860383bb49df67f7999fbe3c0a5aa57c91ebbde0cf9a3b5b367784f2c45"
+          },
+          {
+            "path": "src/lib/company-channel-kyc.mjs",
+            "sha256": "5b46276ad3aa5d656a0027be4a6bf58aa3fba4f557dd86e0c13d0d5b0cecba85"
+          },
+          {
+            "path": "src/lib/company-channel-routing.mjs",
+            "sha256": "9ed740dbb4ae1ca7d44171f176f0001d824b056a0f17a8f58ed1ea5a5a2e2f68"
+          },
+          {
+            "path": "src/lib/company-channel-schema.mjs",
+            "sha256": "96c0385fa3b6d60c8d1f92ca38dcdf32e7779f1200512806bf6d220e6be57022"
+          },
+          {
+            "path": "src/lib/company-entitlement.mjs",
+            "sha256": "65d41dfb796ef12be38b1220a99ccd3dfe277419a5e5a27e125beb29fe7e2cde"
+          },
+          {
+            "path": "src/lib/company-onboarding-policy.mjs",
+            "sha256": "cf557c7837d6264c78207028c668f8f8a2218f9632a8092cfcb8692ef11053d1"
+          },
+          {
+            "path": "src/lib/company-phone-format.mjs",
+            "sha256": "67b31114f517253961c6a774210f157867b1e2e318e6b700089eef03ef1b7209"
+          },
+          {
+            "path": "src/lib/consumption-evidence-catalog.mjs",
+            "sha256": "892950b23cb3c9d95fcb4593f33125538658da195ccf436f375901443657f0bf"
+          },
+          {
+            "path": "src/lib/employee-intake-channel-continuity.mjs",
+            "sha256": "59dffe3800f26cd979bd12c4cff0010ca72779e1dc62030a6f0117b6ef3fb64d"
+          },
+          {
+            "path": "src/lib/field-hours-report.mjs",
+            "sha256": "b55b767d61278bde31cb9ce4ef64faee5320fc7fe1b1bcc54559860bb4576731"
+          },
+          {
+            "path": "src/lib/field-media-privacy.mjs",
+            "sha256": "5ec7fc7dd71f9303a42bfb4889e02541de8a3cf356e8e1203cfeeefd56220515"
+          },
+          {
+            "path": "src/lib/field-media.mjs",
+            "sha256": "d221ab87c4639aadb6eb8788a7203cee072f6eb1deca40605fc3d02742ab9d65"
+          },
+          {
+            "path": "src/lib/field-operations-http.mjs",
+            "sha256": "cd1773bc3b9fba01821cd4494b8559bdcdcc3a4ce886228622bb800349dcfd39"
+          },
+          {
+            "path": "src/lib/field-operations-policy.mjs",
+            "sha256": "bb33655b622a081de656f24c2e369fe7a2e05a0a0a9da7ffe455c2f39fd8fbd5"
+          },
+          {
+            "path": "src/lib/field-operations-store.mjs",
+            "sha256": "517267adb96c69bce58350b98b3a4e335ca1304a72a824e35998590e95b8987c"
+          },
+          {
+            "path": "src/lib/field-overtime-policy.mjs",
+            "sha256": "76848bd0861d6cecccb682b774599f03d3fe1322eed3cc58f5f1db5d9b1e24f8"
+          },
+          {
+            "path": "src/lib/field-overtime-store.mjs",
+            "sha256": "f29b67fff29949d5a8b14c4aed3f484ae1ce16d2ed42de486a6d5868361b1526"
+          },
+          {
+            "path": "src/lib/field-report-feedback.mjs",
+            "sha256": "70b966ae5f382abe6b5446daf1092c3f66b8f46f80ce5a0c006cffeba1cfa64c"
+          },
+          {
+            "path": "src/lib/field-shift-summary.mjs",
+            "sha256": "41f47aa7a0826ba1fe29b554c7575ec60c9861f0c18c863f06e8c3d00cb0f83c"
+          },
+          {
+            "path": "src/lib/geo.js",
+            "sha256": "fa47424540f953adf56e0c3069780c0c8876a2f69e944a80caddefa974b5b6bf"
+          },
+          {
+            "path": "src/lib/legacy-access-boundary.js",
+            "sha256": "e1af7e83dac3c18bcf3b235d111d936d6dd6167925a3e1459d70a33913035370"
+          },
+          {
+            "path": "src/lib/material-inventory.mjs",
+            "sha256": "3af0b0e9c9003d09582ec4e8b21d1e35746dd3839fc7f01071935b9a4ea95333"
+          },
+          {
+            "path": "src/lib/meta-callback-diagnostics.mjs",
+            "sha256": "b16fcfbeabe02b119d0337485504490a0c8e60363e841e378ae4c7722816d3bc"
+          },
+          {
+            "path": "src/lib/meta-channel-binding.mjs",
+            "sha256": "0ba9e9de3b6dcca46524ab2df22236dbbcd5be5e6cef571df1ec47a01633672e"
+          },
+          {
+            "path": "src/lib/meta-cloud-protocol.mjs",
+            "sha256": "c6d5f1e1b4119dd2529860e3bd61a1b22d602f71ad301b2f04cec3ab4bbbed3c"
+          },
+          {
+            "path": "src/lib/meta-consumption-evidence-catalog.mjs",
+            "sha256": "bd846188e12757a71ce4f42ea9c6f806bddcd5443e81b1b515f4cecb0344f42c"
+          },
+          {
+            "path": "src/lib/meta-customer-app-projection.mjs",
+            "sha256": "7b4b95712f143555a0e23b8ac98fc0e1d2f108e9fbefb4e861d20d9b464ef003"
+          },
+          {
+            "path": "src/lib/meta-customer-callback.mjs",
+            "sha256": "da90e3ed097c287a7c080d05daf5e4b0c0bb82544d2f7dab4cb1ee99880c3fd0"
+          },
+          {
+            "path": "src/lib/meta-customer-coexistence.mjs",
+            "sha256": "2cf704b2d3842d4ff7ae48a438c1271ad610ccf4e92a6214d97338e91e999c8e"
+          },
+          {
+            "path": "src/lib/meta-customer-credentials.mjs",
+            "sha256": "44a05a0b46417de835eb289882b0b2c6d71158f207c16c48228f1ac4b67cca0f"
+          },
+          {
+            "path": "src/lib/meta-customer-inbox-review.mjs",
+            "sha256": "250bd69c487dc8dffed5500c1ca0f9adb77843352902c41e4a63da7656bf2eaa"
+          },
+          {
+            "path": "src/lib/meta-customer-outbound.mjs",
+            "sha256": "84a249b3777d3be843b20b09d0c6cd81b6fab7415dc22f124477d87475eead09"
+          },
+          {
+            "path": "src/lib/meta-customer-permissions.mjs",
+            "sha256": "ce3671bd46af8e487c45319facbca8e6b522620fd16ee3163e5048b5ecb6585d"
+          },
+          {
+            "path": "src/lib/meta-customer-processing.mjs",
+            "sha256": "e4a52dbd2ce86793b66c4af5963c288b13d7b2b2f656c4c6f795bcac8074f4ad"
+          },
+          {
+            "path": "src/lib/meta-customer-provider.mjs",
+            "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+          },
+          {
+            "path": "src/lib/meta-customer-templates.mjs",
+            "sha256": "ca9e491b8b1b4c25c89585408cb53eae13e2423fdf48a93deed0846126e1c46c"
+          },
+          {
+            "path": "src/lib/meta-development-pilot-policy.mjs",
+            "sha256": "6f3a854898ea28d108341f35fe7f5f23facf3d574e586b96a2343a8038cc8c79"
+          },
+          {
+            "path": "src/lib/meta-employee-intake.mjs",
+            "sha256": "72e80601323adbe35c9ec1f61e49e3428007da55e567c724ca8dce3c42de042b"
+          },
+          {
+            "path": "src/lib/meta-field-bridge.mjs",
+            "sha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955"
+          },
+          {
+            "path": "src/lib/meta-field-conversation.mjs",
+            "sha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d"
+          },
+          {
+            "path": "src/lib/meta-kyc-challenge.mjs",
+            "sha256": "f5a03ec770e6d85de095393bf38c331c0803a7fe3c7f1b72a2addd9cac7484eb"
+          },
+          {
+            "path": "src/lib/meta-kyc-conversation.mjs",
+            "sha256": "17d1e52e826dcaa899e2e6b846e2856c73f73b18b7abfe30e951de0de8623ef6"
+          },
+          {
+            "path": "src/lib/meta-kyc-current-image.mjs",
+            "sha256": "03ef3966025f520b373e937a6230f846185f3b4845830da5a38c0d8f02e155c2"
+          },
+          {
+            "path": "src/lib/meta-kyc-identity.mjs",
+            "sha256": "295f87ecb3b4586313a4f9c48a2d5c9acf8fa263682d99d44a966be243af2319"
+          },
+          {
+            "path": "src/lib/meta-kyc-rejection-policy.mjs",
+            "sha256": "e6c96aba8077d75e152f45dc49fe32d41e103658d4bff4281c8c8a98e3fff0c1"
+          },
+          {
+            "path": "src/lib/meta-kyc-rejection.mjs",
+            "sha256": "5477adafd994a54c9e7bbcc196b6af4fbe0b9cc03ab563775b8258290e31f3d0"
+          },
+          {
+            "path": "src/lib/meta-own-company-policy.mjs",
+            "sha256": "7db3875cd0f31fec077f4d9a4f8875be1ddf4a5772acff4559069ae950ff0821"
+          },
+          {
+            "path": "src/lib/meta-plan-import-conversation.mjs",
+            "sha256": "6f3c261cb2cde943e0202ab5097d664958f5702975cdf5914aeac35e5a1bac1c"
+          },
+          {
+            "path": "src/lib/meta-plan-import-origin.mjs",
+            "sha256": "cdb619d1709a982323c9892383def1428db2ade771babdb18e4032b3535d953e"
+          },
+          {
+            "path": "src/lib/meta-plan-import-transport.mjs",
+            "sha256": "e42f48f0175dd697bac3de61d7d9893d35c2b1696c1ae276a4698eb3c36a4634"
+          },
+          {
+            "path": "src/lib/meta-test-recipient-binding.mjs",
+            "sha256": "2aea6f5815bd2d90fe891b45a79b48d339a3eebc681ac40b3347244e546c4b66"
+          },
+          {
+            "path": "src/lib/meta-whatsapp-transport.mjs",
+            "sha256": "f99569c7f587e9be1268aa254d2368226346a7ebf7e48fa6ca63a0064cf41310"
+          },
+          {
+            "path": "src/lib/operations-status.mjs",
+            "sha256": "ce05f2b18facdaa2df35274004ee2111be366056ef1ff2c593660b8490782cd6"
+          },
+          {
+            "path": "src/lib/organization-resource-usage-policy.mjs",
+            "sha256": "089ac1ee2ca6afd30aab1d0abd38274698ca56991d1c5225ea8e44c8b9fdc449"
+          },
+          {
+            "path": "src/lib/organization-usage-policy.mjs",
+            "sha256": "94997530d6c1fd420f0233172b07f8ba7dd7546a2ac9af75eaa30736400237ae"
+          },
+          {
+            "path": "src/lib/participant-account-discovery.mjs",
+            "sha256": "11b37ca397fdb195aac7addc1c16842fb28a9c83a73a82a57bf2791ed3038738"
+          },
+          {
+            "path": "src/lib/participant-admission.mjs",
+            "sha256": "2cbb466e49d742cd23da1bb85a4e89b7e411dc724c8d1f2eb66b39717f283dd9"
+          },
+          {
+            "path": "src/lib/participant-analysis-consent.mjs",
+            "sha256": "7f7d371914d1e46ac799cd1683afdc0418186c15a20156e697ecd879c81bf8c1"
+          },
+          {
+            "path": "src/lib/participant-approved-identity.mjs",
+            "sha256": "834d81e70cedbd967ff84d880ea9d697c2168d2220fb23d9eb14c1aba1cdbbf1"
+          },
+          {
+            "path": "src/lib/participant-bank-account.mjs",
+            "sha256": "29980527a6eda3bbc0125098a4b616082034a71fb1afb772ff87f476bc0ce981"
+          },
+          {
+            "path": "src/lib/participant-bank-format.mjs",
+            "sha256": "ebbb206a14eaac57230b53ec1afae99c4be60c8739baf0d1d047d4a47ba464db"
+          },
+          {
+            "path": "src/lib/participant-bank-vault.mjs",
+            "sha256": "06e990ab79c896628756f3c74a50dcc7e8062f4fa296f56a31e4150b5badc16a"
+          },
+          {
+            "path": "src/lib/participant-channel-kyc.mjs",
+            "sha256": "2ac9414429238162a9b16d4adea421df0bff9fb93ea4fbf2f9d6677f2659fb2d"
+          },
+          {
+            "path": "src/lib/participant-civil-policy.mjs",
+            "sha256": "e180a64c788d6cd20e766cb4fd32dbba1c7cb3954c01405ac8675ec023eef278"
+          },
+          {
+            "path": "src/lib/participant-civil-store.mjs",
+            "sha256": "5f440c0c76ca67b87a7e5d4e90e7a48f18ea3603b16434b35beeddd3bdf168a4"
+          },
+          {
+            "path": "src/lib/participant-kyc-chat-attempt.mjs",
+            "sha256": "d3f0a65f866fa027ee008963fcb6ffcad0cd33de94cace7603cf40bc78c21aeb"
+          },
+          {
+            "path": "src/lib/participant-kyc-chat-closure.mjs",
+            "sha256": "4a6a368910de95582c2baabc70bab7f4b4afa4413e8ebdb75a1e8b867c098a19"
+          },
+          {
+            "path": "src/lib/participant-kyc-chat-copy.mjs",
+            "sha256": "d886219584d5e8b9d9db1ad16a36c726f6982fa0e8400c3be51af2623574ab96"
+          },
+          {
+            "path": "src/lib/participant-kyc-image-set.mjs",
+            "sha256": "190ce2560286a58d42668da7b912aeabcfa76ee14086503bf1609304e5f0e8fb"
+          },
+          {
+            "path": "src/lib/participant-kyc-notice-links.mjs",
+            "sha256": "3547f3fc2ebdefc2522971467d4c77498160dde7806a25bf9fa18c527c8658fc"
+          },
+          {
+            "path": "src/lib/participant-kyc-preanalysis-policy.mjs",
+            "sha256": "8c5286a0a5d41364e92e60f2ce2ba96caccc8667960f966b5caead37acafab49"
+          },
+          {
+            "path": "src/lib/participant-onboarding-authority.mjs",
+            "sha256": "dad5d9fd0a61c493ff02331d5333982627cdeb3a7addb74a3c86d44da931f916"
+          },
+          {
+            "path": "src/lib/participant-onboarding-current-kyc.mjs",
+            "sha256": "232fecca4f6cf775e5151ec460560e0c1abd6646dc3c532140cabe26dfb42119"
+          },
+          {
+            "path": "src/lib/participant-onboarding-delivery.mjs",
+            "sha256": "615592cc1a6215e24c48e8873a27211421853f99ca9093e6f490f77532b3d013"
+          },
+          {
+            "path": "src/lib/participant-onboarding-intent.mjs",
+            "sha256": "07114f6066e10617357c4e5d8e2db2b9dc846e5f4cffbc5aef09f2b7bfada9de"
+          },
+          {
+            "path": "src/lib/participant-onboarding-policy.mjs",
+            "sha256": "59409797ce3e13b7cfe63fe21d8d7e2c848ee49e0766015939242a9f43687c03"
+          },
+          {
+            "path": "src/lib/participant-onboarding-reactive.mjs",
+            "sha256": "666a8c27f3ab7d6fdbe66c91f22ace4e25b04b98e865f401d19c72212916104d"
+          },
+          {
+            "path": "src/lib/participant-policy.mjs",
+            "sha256": "7f3969ab1ebac5f01696149d76337199eb64c2fd09015c44c07e8b7e7088d62f"
+          },
+          {
+            "path": "src/lib/participant-store.mjs",
+            "sha256": "2296495e366b9ea0c2511066584e93ddf1cff51b5eefd05c6121d2143d78f5c9"
+          },
+          {
+            "path": "src/lib/participant-verified-office.mjs",
+            "sha256": "4922f392490aa6d49b8a8a45a56ac0b03831a8ad2efe89ce1e3adfd77d603d89"
+          },
+          {
+            "path": "src/lib/person-worksite-journey.mjs",
+            "sha256": "d3174df793150125c0b6a5d9f37d56336e72cab1efb43a361065b78ac54c210a"
+          },
+          {
+            "path": "src/lib/pilot-media.mjs",
+            "sha256": "55e35757cea03c312df68cebad100ee8b7d904b418eca9082359ea34e68f8fa9"
+          },
+          {
+            "path": "src/lib/plan-baseline-policy.mjs",
+            "sha256": "e9217a41a87057f437439420d56f3b7a0f973ae37c250c07b335634fef308560"
+          },
+          {
+            "path": "src/lib/plan-budget-source.mjs",
+            "sha256": "7ebeabf62d8fb89c6ab941b8130d196ca2e008959a9599f2db0c71d75dd3382a"
+          },
+          {
+            "path": "src/lib/plan-import-cyp-curve.mjs",
+            "sha256": "7e1d6c9d87df5e74e0a340361e1e66fdf0cfd5c82f1e44030ba2e85b5fa9c342"
+          },
+          {
+            "path": "src/lib/plan-import-document-curve.mjs",
+            "sha256": "7f63d62b9f1ae6d139c627a978ef56d7eafea0e0f4271167daa4c00bf7fda013"
+          },
+          {
+            "path": "src/lib/plan-import-monthly-curve.mjs",
+            "sha256": "6ce785f9c24c47f0e291b0bac40bd96a691fae68a309e4cb7a1917db31f9e6b6"
+          },
+          {
+            "path": "src/lib/plan-import-ooxml.mjs",
+            "sha256": "662abaa7523d74961c6873a8b0beb3eb7e3d3b52988fad9cc55e76c0e540a3bd"
+          },
+          {
+            "path": "src/lib/plan-import-policy.mjs",
+            "sha256": "1946b2793d0db11519d154acdb5bf0f7e8be5dc26ecd1971b846eed284d7d50f"
+          },
+          {
+            "path": "src/lib/plan-import-store.mjs",
+            "sha256": "da047723f790c0f5e7eeff855782e4db7463670d1875caf0bab1c6cce9b1a920"
+          },
+          {
+            "path": "src/lib/plan-measurement-policy.mjs",
+            "sha256": "3d6b0bce58a7f89612878310f534d8cf02f6a222c778cd4294b415c1f61157b7"
+          },
+          {
+            "path": "src/lib/plan-measurement-source.mjs",
+            "sha256": "ecf33b67a333d8ce73bfb51610218a1658cd94a26b62eb35d2290b795f826f36"
+          },
+          {
+            "path": "src/lib/private-image-upload.mjs",
+            "sha256": "1eaeda2fa79104cfe00a8736c466d8568d216c8682bd44031d3bf9d4f35e3f60"
+          },
+          {
+            "path": "src/lib/procurement-money.js",
+            "sha256": "29dd0333ed5e2ade853ec2c0a8d0907792cdfaac83d347b46576544c16b9bd29"
+          },
+          {
+            "path": "src/lib/procurement-quantity.js",
+            "sha256": "53439844051cc1dbd679220d695e60e54bc1629b2f1ddb33fc125981da9326b3"
+          },
+          {
+            "path": "src/lib/production-identity-config.mjs",
+            "sha256": "3738a8544a7e26af4f03befe9afd0dee3ec70ae0e8c89d456dd81a1b87dfdee1"
+          },
+          {
+            "path": "src/lib/progress-measurement-quantity.js",
+            "sha256": "e194f461d482dec666c090a19aabbd3498bc08964cbbbc31b8db6eeb39cb1be2"
+          },
+          {
+            "path": "src/lib/site-purchase-policy.mjs",
+            "sha256": "7a5532d2eebb05b8499a7e9d680f4a129f6d95f6dd7e9896fda858269cd25723"
+          },
+          {
+            "path": "src/lib/site-purchase-store.mjs",
+            "sha256": "f7c5f1f2244a8250d6b2daef07b6dd7c15ed1bda5cdee8ace9de8595dc0e2150"
+          },
+          {
+            "path": "src/lib/site-register-policy.mjs",
+            "sha256": "d529c4f2225e0ec851ef7df60f8c5b182a88b384958ebfd15b194683d1590434"
+          },
+          {
+            "path": "src/lib/site-register-store.mjs",
+            "sha256": "6b744c86f47dbb6dc081132675888615d76421701f96151b00646b5e1d2529c6"
+          },
+          {
+            "path": "src/lib/task-progress-measurement.js",
+            "sha256": "10361a0e30df34f9c90f915d9fdbfc0912a610ab3ce851503c32549b7049a8b9"
+          },
+          {
+            "path": "src/lib/video-audio-extractor.mjs",
+            "sha256": "0c85dfd39c10fdb782eca4fe57dc665c29bd7211ab7aba0dda3f8945abcb1988"
+          },
+          {
+            "path": "src/lib/video-frame-extractor.mjs",
+            "sha256": "33425a184cf097884982c43a90e3b515726027adbeb51c2cdbfc794e79dee6e6"
+          },
+          {
+            "path": "src/lib/voice-consumption-draft.mjs",
+            "sha256": "b9af424825674ca6f24a729e9ba89bae6e67adf433de10837a05e58900584c82"
+          },
+          {
+            "path": "src/lib/voice-progress-draft.mjs",
+            "sha256": "56ddbad919a1ad77e13105f1a125914674c1a149a88e28fa2f8b831a4d14bd69"
+          },
+          {
+            "path": "src/lib/whatsapp/field-worker-intent-policy.js",
+            "sha256": "0fdf205af1c2185a16f99c4f1aaba6c36d95722ea914915a0eefe6a10d443ef9"
+          },
+          {
+            "path": "src/lib/whatsapp/obra-intent-policy.js",
+            "sha256": "cd01054ba81be6552f58dc91758e08166ea099482f28355cae570d15f3ccf8da"
+          },
+          {
+            "path": "src/lib/whatsapp/operational-proposal-decision-policy.js",
+            "sha256": "996ed641c090267679ce0fc3cb7a23f39b31ce88e761135feb0dd0c852eb74fc"
+          },
+          {
+            "path": "src/lib/whatsapp/project-workspace-profile.js",
+            "sha256": "e13473baa4ca5b4dc9851bb202f400ba174ccbfce2589be65ce8458aafa998f4"
+          },
+          {
+            "path": "src/lib/whatsapp/template-review-policy.js",
+            "sha256": "0ec4a7e544f8c2c2409d2c84ecf69fab663334dd5a5cef0ee1b1cbec82de0a08"
+          },
+          {
+            "path": "src/lib/whatsapp/tenant-workspace-policy.js",
+            "sha256": "d3416ff993fbfd70f75404166cdcd8f0b9b2e5a6741f6cde03725aab16abcd5e"
+          },
+          {
+            "path": "src/lib/worker-channel-consent-policy.mjs",
+            "sha256": "95c8393e7f2603694c5c15cfe34c9eead43007927aed0d5b633859b14c7448a9"
+          },
+          {
+            "path": "src/lib/worker-channel-identity.mjs",
+            "sha256": "1cddd58a2cd656abaca25752481fe1ca760d2bcd385a0fffbe0e685c15d59e0a"
+          },
+          {
+            "path": "src/lib/workspace-http.mjs",
+            "sha256": "b4e56dcd8ecbbc40c9b5f7d0e610e6f16eeb69143d46397279044e69ca5b8429"
+          },
+          {
+            "path": "src/lib/workspace-policy.mjs",
+            "sha256": "ba51cc5c4a6e4f5ce1c9382cae2c8ea903ab4373668c05384c7f1e9253c7041e"
+          },
+          {
+            "path": "src/lib/workspace-store.mjs",
+            "sha256": "5f25092121a31a06eefa59d69866db82fa3cd28afdcbd0e066e52d916478bc50"
+          },
+          {
+            "path": "tests/production-material-inventory-review-queue.test.mjs",
+            "sha256": "22e981046a285a84ed2da2e5e187e006d4a503d9c3ae1852151f5644b23eac08"
+          },
+          {
+            "path": "tests/production-material-inventory.test.mjs",
+            "sha256": "2a80d93038308de209281839e8fdb1406d6ea99e2ff26f8c6c747b77506c2c61"
+          }
+        ],
+        "sourceHistory": {
+          "parentHead": "1b654e24ff968014fb96adc56cf06b33ccf1599f",
+          "previousSha256": "c046f5bae2f922bcf83b3f2dffc53ad36f10a9dcc1e57bbd73923176d1bf8093",
+          "currentSha256": "bfac7891dc752dc0cd600bc878b1f977a4947122bc4f2035866220654fd5c652",
+          "previousBytes": 73817,
+          "currentBytes": 73988,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 58880,
+              "currentText": "   const summary=await homeStatus.read(actor,{...context,view:'decisions'});assert.deepEqual(Object.keys(summary).sort(),['evidence','inventory','observedAt','projectId','proposals','scope','view']);assert.deepEqual(summary.evidence,{pending:0});assert.equal(summary.scope,context.scope);assert.equal(summary.projectId,reviewProjectId);assert.equal(summary.view,'decisions');assert.equal(new Date(summary.observedAt).toISOString(),summary.observedAt);assert.deepEqual(summary.proposals,{pending:2});assert.deepEqual(summary.inventory,{canManage:true,pendingCounts:{consumptions:202,adjustments:202}});\n   const full=await nativeStatus.read(actor,context);assert.deepEqual(summary.proposals,full.proposals);assert.deepEqual(summary.inventory,full.inventory);assert.equal(summary.evidence.pending,full.reports.evidencePending);\n",
+              "previousText": "   const summary=await homeStatus.read(actor,{...context,view:'decisions'});assert.deepEqual(Object.keys(summary).sort(),['inventory','observedAt','projectId','proposals','scope','view']);assert.equal(summary.scope,context.scope);assert.equal(summary.projectId,reviewProjectId);assert.equal(summary.view,'decisions');assert.equal(new Date(summary.observedAt).toISOString(),summary.observedAt);assert.deepEqual(summary.proposals,{pending:2});assert.deepEqual(summary.inventory,{canManage:true,pendingCounts:{consumptions:202,adjustments:202}});\n   const full=await nativeStatus.read(actor,context);assert.deepEqual(summary.proposals,full.proposals);assert.deepEqual(summary.inventory,full.inventory);\n"
+            },
+            {
+              "currentOffsetCharacters": 59710,
+              "currentText": "  const other=await homeStatus.read(foreign,{...foreignContext,view:'decisions'});assert.deepEqual(other.proposals,{pending:1});assert.deepEqual(other.inventory.pendingCounts,{consumptions:2,adjustments:1});assert.deepEqual(other.evidence,{pending:0});\n",
+              "previousText": "  const other=await homeStatus.read(foreign,{...foreignContext,view:'decisions'});assert.deepEqual(other.proposals,{pending:1});assert.deepEqual(other.inventory.pendingCounts,{consumptions:2,adjustments:1});\n"
             }
           ]
         }
