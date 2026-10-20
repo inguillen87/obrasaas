@@ -54,6 +54,12 @@ function fixture({untrustedCompactOptIn=false}={}){
 const workerWrites=f=>f.queries.filter(q=>q.sql.startsWith('UPDATE public."Worker"')).length;
 const proposalAudits=f=>[...f.audits.values()].filter(row=>row.action==='field.operation.recorded');
 
+test('explicit consumption cancellation does not require a retired task or sector evidence catalog',async()=>{
+ const f=fixture();await f.prepare();f.replaceConversation({taskId:'task-retired',taskRevision:'2026-10-15T12:00:00.123456'});f.project.metadata.fieldOperations.sectors=[];const before=f.queries.length;
+ const cancelled=await f.pick('CANCEL');assert.equal(cancelled.result.businessApplied,false);assert.match(cancelled.result.reply.body,/cancelada/);assert.equal(f.conversation(),null);assert.equal(f.records.length,0);assert.equal(proposalAudits(f).length,0);assert.equal(f.project.metadata.materialInventory.materials[0].balance,'25.000');assert.equal(f.external(),0);
+ assert.equal(f.queries.slice(before).some(q=>q.sql.includes('FROM public."Task"')||q.sql.includes('consumption-evidence-catalog')||q.sql.includes('AS "mediaKind"')),false);
+});
+
 test('catalog conflict retains exact original draft, encrypted deadline/principal/error and exact rejected-event replay',async()=>{
  const f=fixture(),{original,failed}=await f.reject();assert.equal(failed.result.code,'INVENTORY_CATALOG_CHANGED');assert.equal(failed.result.businessApplied,false);assert.deepEqual(f.envelope(),original);const r=f.recovery();assert.equal(r.deadline,original.expiresAt);assert.equal(r.suggestion.quantity,'2.000');assert.equal(r.lastError.code,'INVENTORY_CATALOG_CHANGED');assert.equal(r.firstError.receiptId,r.lastError.receiptId);assert.equal(f.records.length,0);assert.equal(proposalAudits(f).length,0);assert.equal(f.project.metadata.materialInventory.materials[0].balance,'25.000');const before=workerWrites(f),auditCount=f.audits.size;assert.deepEqual(await f.bridge.execute(failed.context),failed.result);assert.equal(workerWrites(f),before);assert.equal(f.audits.size,auditCount);assert.deepEqual(f.envelope(),original);assert.equal(f.external(),0);
 });

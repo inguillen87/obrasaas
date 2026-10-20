@@ -1,4 +1,4 @@
-import {planBudgetCurrentBrowserBinding} from './plan-budget-current-ci-lineage.mjs';
+import {planBudgetCurrentBrowserBinding,normalizePlanBudgetPilotNativeProof} from './plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract as worksiteOuter0,worksiteLiveHoursCurrentSourcePin as worksiteOuter1,worksiteLiveHoursPreviousSourcePin as worksiteOuter2,restoreWorksiteLiveHoursSourceSet as worksiteOuter3,verifyWorksiteLiveHoursCurrentSources as worksiteOuter4,worksiteLiveHoursProofSourceAdditions as worksiteOuter5,restoreWorksiteLiveHoursPreviousProducerText as worksiteOuter6,worksiteLiveHoursValidationFiles as worksiteOuter7} from './worksite-live-hours-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_REVISION,verifyPlanPartidaPreviewCurrentSources,validatePlanPartidaPreviewUiSupplement} from './plan-partida-preview-current-ci-lineage.mjs';
 // Preserve this consumer's established denial category at the outer revision boundary.
@@ -4379,10 +4379,11 @@ export function normalizeHomeDecisionsFocusedRaw(raw,{contract,readSource,readEv
 }
 export function validateHomeDecisionsNativeProof(proof,contract,readSource){
  const value=section(contract);if(!value)return null;verifyHomeDecisionsCurrentSources(contract,readSource);
+ const pilotCurrentChecks=proof?.checks?.length;try{proof=normalizePlanBudgetPilotNativeProof(contract,value.native.producer,proof,readSource);}catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')reject(false,'Pilot native supplement: '+error.reason);throw error;}
  reject(plain(proof)&&proof.status==='PASS'&&proof.environment==='disposable-localhost-canonical-material-inventory'&&same(proof.checks,value.native.currentCheckNames)&&proof.checkCount===value.native.currentCheckNames.length&&proof.providerCalls===0&&proof.productionDataTouched===false&&proof.humanAccepted===false&&proof.newTables===false&&proof.participantKycFixture?.identityCertified===false&&proof.participantKycFixture.providerCalls===0,'Exact inherited23 plus one local home decisions PostgreSQL observation required');
  reject(same(proof.materialReviewQueue,value.native.previousMaterialReviewQueue)&&same(proof.homeDecisions,value.native.homeDecisions),'Every inherited material queue fact and new home decisions fact required');
  reject(proof.harnessSha256===sha(readSource(value.native.producer))&&same(proof.sourceManifest,actualRefs(value.native.sourceFiles,readSource)), 'Exact actual native source manifest and producer required');
- return {version:1,status:'PASS',historicalChecksPreserved:value.native.previousCheckNames.length,addedChecks:value.native.addedCheckNames.length,nativeOrBrowserAcceptance:false};
+ return {version:1,status:'PASS',historicalChecksPreserved:value.native.previousCheckNames.length,addedChecks:value.native.addedCheckNames.length,pilotCurrentChecks,pilotAddedChecks:pilotCurrentChecks-proof.checks.length,nativeOrBrowserAcceptance:false};
 }
 export function validateHomeDecisionsFieldProof(proof,contract,readSource){
  const value=section(contract);if(!value)return null;verifyHomeDecisionsCurrentSources(contract,readSource);
@@ -5248,11 +5249,12 @@ export function validateProgressEvidenceWaitNativeProofBytes(bytes,contract,read
  r(Buffer.isBuffer(bytes)&&bytes.length>0&&bytes.length<=256*1024,'PROOF_BYTES');const text=bytes.toString('utf8');r(bytes.equals(Buffer.from(text)),'PROOF_UTF8');let proof;try{proof=JSON.parse(text);}catch{r(false,'PROOF_JSON');}
  r(plain(proof)&&same(Object.keys(proof).sort(),['status','environment','checks','provider','blob','outbound','productionDataWritten','realMetaRequests','physicalAttendanceAccepted','realHumanIdentityAccepted','cleanup'].sort()),'PROOF_SHAPE');
  r(proof.status==='PASS'&&proof.environment===n.environment&&proof.provider==='controlled-synthetic-media-only'&&proof.blob==='controlled-private-byte-store'&&proof.outbound==='controlled-no-send-result-only','PROOF_STATE');
+ const pilotCurrentChecks=proof.checks?.length;try{proof=normalizePlanBudgetPilotNativeProof(contract,n.producer,proof,readSource);}catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')r(false,'PILOT_SUPPLEMENT');throw error;}
  r(Array.isArray(proof.checks)&&proof.checks.length===n.totalCheckCount&&sha(JSON.stringify(proof.checks.slice(0,n.historicalCheckCount)))===n.historicalChecksSha256&&same(proof.checks.slice(n.historicalCheckCount),n.addedCheckNames),'EXACT_HISTORICAL_AND_CURRENT_CHECKS');
  r(proof.productionDataWritten===false&&proof.realMetaRequests===0&&proof.physicalAttendanceAccepted===false&&proof.realHumanIdentityAccepted===false,'PROOF_LIMITS');
  r(plain(proof.cleanup)&&same(Object.keys(proof.cleanup).sort(),['poolClosed','ownConnectionsClosed','databaseRemoved','adminClosed'].sort())&&Object.values(proof.cleanup).every(value=>value===true),'CLEANUP');
  try{verifyProgressEvidenceWaitCurrentSources(contract,readSource);}catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')r(false,'CURRENT_SOURCES');throw error;}
- return {status:'PASS',historicalChecks:n.historicalCheckCount,addedChecks:n.addedCheckNames.length,checks:n.totalCheckCount,syntheticOnly:true,realAcceptance:false};
+ return {status:'PASS',historicalChecks:n.historicalCheckCount,addedChecks:n.addedCheckNames.length,checks:n.totalCheckCount,pilotCurrentChecks,pilotAddedChecks:pilotCurrentChecks-proof.checks.length,syntheticOnly:true,realAcceptance:false};
 }
 function progressEvidenceWaitReaderContract(readSource){
  const bytes=companyNativeRead(readSource,'.github/workspace-acceptance-contract.json');let contract;try{contract=JSON.parse(bytes);}catch{companyNativeRequired(false,'CONTRACT_JSON');}return contract;

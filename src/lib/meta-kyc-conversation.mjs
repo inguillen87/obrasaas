@@ -10,22 +10,38 @@ export const META_KYC_CONVERSATION_TTL_MS=30*60*1000;
 export const EMPLOYEE_INTAKE_NOTICE_VERSION='employee-intake-v1';
 export const EMPLOYEE_INTAKE_NOTICE='Tu nombre, oficio solicitado, correo y teléfono se guardarán en privado para que el responsable de esta empresa revise tu solicitud y pueda invitarte a una obra. La solicitud no concede acceso ni verifica tu identidad. No envíes documentos todavía.';
 const intakeText=body=>({type:'text',body});
+const intakeAccountBody='Para entrar a tu cuenta, abrí https://obrasaas.com/cuenta e iniciá sesión. Allí verás tus obras y opciones según los permisos de tu cuenta. Este paso no vincula tu teléfono ni modifica accesos.';
+const intakeDraftSteps=['NAME','JOB','EMAIL','CONFIRM'];
+function intakeWelcome(state){
+ const next={...state,step:'WELCOME',resumeStep:state.step==='WELCOME'?state.resumeStep:state.step};
+ delete next.nonce;delete next.choices;return next;
+}
 function intakePrompt(state,eventId){
  const descriptions={NAME:'Hola. Para solicitar ingreso a esta empresa, respondé a este mensaje con tu nombre y apellido. No envíes documentos.',EMAIL:'Respondé a este mensaje con el correo que vas a usar para aceptar la invitación. El correo se comprobará al ingresar a tu cuenta.',WAITING_RESPONSIBLE:'Tu solicitud está guardada y pendiente del responsable. Todavía no tenés acceso. La invitación, la identidad y los permisos se revisan por separado.',ADMITTED:'Tu ficha ya está registrada.\n\nAbrí '+participantIdentityUrl()+' y seguí el próximo paso de tu participación.\n\nSi te enviaron una invitación, aceptala desde tu correo.\n\nPara presentar identidad por este chat, pedile al responsable el mensaje IDENTIDAD vigente y esperá las indicaciones antes de enviar documentos.\n\nLa identidad y los permisos se revisan por separado.',REJECTED:'El responsable cerró esta solicitud. No se habilitó acceso.',CANCELLED:'Solicitud cancelada. No se creó una cuenta ni se habilitó acceso.'};
- if(['JOB','CONFIRM'].includes(state.step)){
-  const rows=state.step==='JOB'?Object.entries(SITE_ROLES):[['CONFIRM','Enviar solicitud'],['CANCEL','Cancelar']];
+ if(['WELCOME','ADMITTED','JOB','CONFIRM'].includes(state.step)){
+  const rows=state.step==='WELCOME'?[['REQUEST_ACCESS','Solicitar ingreso a obra'],['ACCOUNT','Ya tengo cuenta']]:state.step==='ADMITTED'?[['ACCOUNT','Abrir mi cuenta'],['IDENTITY_GUIDANCE','Presentar identidad']]:state.step==='JOB'?Object.entries(SITE_ROLES):[['CONFIRM','Enviar solicitud'],['CANCEL','Cancelar']];
   const nonce=digest(['employee-intake-choice-v1',eventId,state.step]).slice(0,20);
-  return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body:state.step==='JOB'?'Elegí el oficio o función que solicitás. Un responsable decidirá la participación; esto no concede permisos.':EMPLOYEE_INTAKE_NOTICE+'\nNombre: '+state.name+'\nOficio solicitado: '+SITE_ROLES[state.job]+'\nCorreo: '+state.email,button:'Elegir',sections:[{title:'Solicitud de ingreso',rows:rows.map(([,title],index)=>({id:'intake:'+nonce+':'+index,title:title.slice(0,24)}))}]}};
+  return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body:state.step==='WELCOME'?'Hola, te damos la bienvenida a ObraSaaS. Elegí cómo querés continuar. No envíes documentos en este paso.':state.step==='ADMITTED'?'Tu ficha está registrada. Elegí cómo continuar. La identidad y los permisos se revisan por separado.':state.step==='JOB'?'Elegí el oficio o función que solicitás. Un responsable decidirá la participación; esto no concede permisos.':EMPLOYEE_INTAKE_NOTICE+'\nNombre: '+state.name+'\nOficio solicitado: '+SITE_ROLES[state.job]+'\nCorreo: '+state.email,button:'Elegir',sections:[{title:state.step==='WELCOME'?'Bienvenida':state.step==='ADMITTED'?'Tu participación':'Solicitud de ingreso',rows:rows.map(([,title],index)=>({id:'intake:'+nonce+':'+index,title:title.slice(0,24)}))}]}};
  }
  return {state,reply:intakeText(descriptions[state.step]||'Escribí ESTADO para consultar tu solicitud.')};
 }
-export function beginEmployeeIntakeConversation(eventId){return intakePrompt({version:1,step:'NAME',noticeVersion:EMPLOYEE_INTAKE_NOTICE_VERSION,noticeSha256:digest(EMPLOYEE_INTAKE_NOTICE),consent:false,name:null,job:null,email:null},eventId);}
+export function beginEmployeeIntakeConversation(eventId){return intakePrompt({version:1,step:'WELCOME',resumeStep:'NAME',noticeVersion:EMPLOYEE_INTAKE_NOTICE_VERSION,noticeSha256:digest(EMPLOYEE_INTAKE_NOTICE),consent:false,name:null,job:null,email:null},eventId);}
 export function planEmployeeIntakeConversation({message,state,eventId,promptConfirmed=false,draftTextConfirmed=false}){
- if(state?.version!==1||!['NAME','JOB','EMAIL','CONFIRM','WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(state.step))throw new WorkspaceError('EMPLOYEE_INTAKE_INTEGRITY',409);
+ if(state?.version!==1||!['WELCOME',...intakeDraftSteps,'WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(state.step)||state.step==='WELCOME'&&(!intakeDraftSteps.includes(state.resumeStep)||state.consent!==false))throw new WorkspaceError('EMPLOYEE_INTAKE_INTEGRITY',409);
  const body=message.type==='text'?message.text?.body?.trim():null;
- if(['WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(state.step))return intakePrompt(state,eventId);
+ if(['WAITING_RESPONSIBLE','REJECTED','CANCELLED'].includes(state.step))return intakePrompt(state,eventId);
+ if(state.step==='ADMITTED'){
+  const selection=message.type==='interactive'?(message.interactive?.list_reply?.id||message.interactive?.button_reply?.id):null,match=/^intake:([a-f0-9]{20}):(\d{1,2})$/.exec(selection||'');
+  if(!promptConfirmed||!match||match[1]!==state.nonce||!state.choices?.[Number(match[2])])return intakePrompt(state,eventId);
+  const next={...state};delete next.nonce;delete next.choices;
+  const selected=state.choices[Number(match[2])].value;
+  if(selected==='ACCOUNT')return {state:next,reply:intakeText(intakeAccountBody)};
+  if(selected==='IDENTITY_GUIDANCE')return {state:next,reply:intakeText('Para consultar tu identidad o ver el paso pendiente, abrí '+participantIdentityUrl()+'. Si preferís presentarla por este chat, pedile al responsable el mensaje IDENTIDAD vigente y esperá las indicaciones antes de enviar documentos. La presentación no habilita permisos.')};
+  return intakePrompt(state,eventId);
+ }
  if(body?.toUpperCase()==='CANCELAR')return intakePrompt({...state,step:'CANCELLED',consent:false},eventId);
- if(['HOLA','ESTADO','AYUDA'].includes(body?.toUpperCase())||!(promptConfirmed||draftTextConfirmed&&message.type==='text'&&['NAME','EMAIL'].includes(state.step)))return intakePrompt(state,eventId);
+ if(['HOLA','AYUDA','MENU','MENÚ'].includes(body?.toUpperCase()))return intakePrompt(intakeWelcome(state),eventId);
+ if(body?.toUpperCase()==='ESTADO'||!(promptConfirmed||draftTextConfirmed&&message.type==='text'&&['NAME','EMAIL'].includes(state.step)))return intakePrompt(state,eventId);
  const next={...state};delete next.nonce;delete next.choices;
  if(state.step==='NAME'){
   try{return intakePrompt({...next,name:siteText(body,100,2),step:'JOB'},eventId);}catch{return intakePrompt(state,eventId);}
@@ -37,6 +53,11 @@ export function planEmployeeIntakeConversation({message,state,eventId,promptConf
  const selection=message.interactive?.list_reply?.id||message.interactive?.button_reply?.id,match=/^intake:([a-f0-9]{20}):(\d{1,2})$/.exec(selection||'');
  if(!match||match[1]!==state.nonce||!state.choices?.[Number(match[2])])return intakePrompt(state,eventId);
  const selected=state.choices[Number(match[2])].value;
+ if(state.step==='WELCOME'){
+  if(selected==='ACCOUNT')return {state:next,reply:intakeText(intakeAccountBody)};
+  if(selected==='REQUEST_ACCESS'){const resumed={...next,step:state.resumeStep};delete resumed.resumeStep;return intakePrompt(resumed,eventId);}
+  return intakePrompt(state,eventId);
+ }
  if(state.step==='JOB'&&Object.hasOwn(SITE_ROLES,selected))return intakePrompt({...next,job:selected,step:'EMAIL'},eventId);
  if(state.step==='CONFIRM'&&selected==='CONFIRM')return intakePrompt({...next,consent:true,step:'WAITING_RESPONSIBLE',confirmationEventId:eventId},eventId);
  if(state.step==='CONFIRM'&&selected==='CANCEL')return intakePrompt({...next,consent:false,step:'CANCELLED'},eventId);
