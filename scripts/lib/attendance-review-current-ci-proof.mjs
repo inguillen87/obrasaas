@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import path from 'node:path';
-import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText} from './plan-budget-current-ci-lineage.mjs';
+import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSource} from './plan-budget-current-ci-lineage.mjs';
 
 // A decoder supplement, never a PostgreSQL execution or CI acceptance receipt.
 // These public source bindings are derived from the actual 7bc4243 producer and
@@ -8,6 +8,7 @@ import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducer
 const PRODUCER='scripts/verify-field-operations-postgres.mjs';
 const CURRENT_PRODUCER='4eb11afda80e9274e3fecdc229d12f21d53d29d444e6932e44837f257800ccc2';
 const PREVIOUS_PRODUCER='c3cf9eed8983b9ab43ad9b11cf0f59af206b08ba70f5e6697133bb448b940662';
+const CORE_SOURCE='src/lib/consumption-evidence-catalog.mjs';
 const QUERY_SOURCE='tests/production-field-attendance-review-query.test.mjs';
 export const ATTENDANCE_REVIEW_CHECK_NAMES=Object.freeze([
   "attendance-pending-older-than-101-resolved-events-is-complete-and-reviewable-for-current-authorized-roles-with-same-query-worker-names",
@@ -173,10 +174,10 @@ function snapshotReader(readSource){
  };
 }
 function currentSpec(spec){
- const files=Object.keys(SOURCE_BINDINGS).sort();
+ const files=[...Object.keys(SOURCE_BINDINGS),CORE_SOURCE].sort();
  return plain(spec)&&spec.kind==='PG_FIELD'&&spec.producer===PRODUCER&&spec.producerSha256===CURRENT_PRODUCER&&
   Array.isArray(spec.checkNames)&&spec.checkNames.length===67&&hash(JSON.stringify(spec.checkNames))===HISTORICAL_NAMES_SHA256&&
-  Array.isArray(spec.sourceFiles)&&same(spec.sourceFiles,files)&&hash(JSON.stringify(spec.sourceFiles))===SOURCE_PATHS_SHA256;
+  Array.isArray(spec.sourceFiles)&&same(spec.sourceFiles,files)&&hash(JSON.stringify(Object.keys(SOURCE_BINDINGS).sort()))===SOURCE_PATHS_SHA256&&hash(JSON.stringify(spec.sourceFiles))==='19c54254b4b02db8c837bc891b15566d9c88d0ff8e28db5a7e2718eeb82be80a';
 }
 // Declarative summary only. A caller must validate the RAW71 supplement first.
 export function attendanceReviewCurrentCheckCount(spec){return currentSpec(spec)?71:null;}
@@ -207,7 +208,7 @@ export function normalizeAttendanceReviewNativeProof(raw,contract,readSource,spe
  reject(runtime.producer?.producer===PRODUCER&&runtime.producer.currentSha256===CURRENT_PRODUCER&&runtime.producer.previousSha256===PREVIOUS_PRODUCER,'CURRENT_PRODUCER_BINDING');
  // Capture each current source once per invocation, never cache authorization or
  // mutable callers between calls. The same private bytes are authenticated/used.
- for(const [file,digest] of Object.entries(SOURCE_BINDINGS))reject(hash(lf(read(file)))===digest,'CURRENT_SOURCE_'+file);
+ for(const [file,digest] of Object.entries(SOURCE_BINDINGS)){const bytes=lf(read(file));let parent=bytes;if(file==='src/lib/meta-consumption-evidence-catalog.mjs')try{parent=restorePlanBudgetConsumptionEvidenceSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}reject(hash(parent)===digest,'CURRENT_SOURCE_'+file);}
  try{verifyPlanBudgetCurrentSources(c,read);const previous=restorePlanBudgetAttendanceReviewProducerText(c,read(PRODUCER));reject(Buffer.isBuffer(previous)&&hash(lf(previous))===PREVIOUS_PRODUCER,'PRODUCER_INVERSE');}catch(error){if(error.code==='ATTENDANCE_REVIEW_CURRENT_CI_PROOF_REJECTED')throw error;reject(false,'CURRENT_AUTHORITY');}
  reject(proof.status==='PASS'&&proof.harnessSha256===hash(read(PRODUCER)),'CURRENT_HARNESS');
  reject(proof.totalChecks===71&&proof.attendanceReviewCheckCount===4,'CURRENT_COUNTS');
@@ -222,12 +223,12 @@ export function normalizeAttendanceReviewNativeProof(raw,contract,readSource,spe
  reject(proof.productionDataWritten===false&&proof.databaseRemoved===true&&typeof proof.databaseEngineVersion==='string'&&proof.environment==='disposable-local-postgresql'+proof.databaseEngineVersion.split('.')[0],'NATIVE_BOUNDARY');
  reject(['providerCalls','reviewPaginationProviderCalls','voiceProgressProviderCalls','mediaLeaseProviderCalls','videoAudioProviderCalls'].every(key=>proof[key]===0)&&['physicalAttendanceAccepted','whatsAppTested','videoAudioFfmpegExecuted'].every(key=>proof[key]===false),'NATIVE_BOUNDARY');
  reject(!Object.hasOwn(proof,'sourceManifest'),'SOURCE_MAPS');
- const sets=sourceSets(read),union=new Set();reject(same(Object.values(sets).map(files=>files.length),[124,117,117,120,114]),'SOURCE_SETS');
+ const sets=sourceSets(read),union=new Set();reject(same(Object.values(sets).map(files=>files.length),[125,118,118,121,115]),'SOURCE_SETS');
  for(const [key,files] of Object.entries(sets)){
   const map=at(proof,key);reject(plain(map)&&same(Object.keys(map).sort(),files),'SOURCE_MAPS_'+key);
-  for(const file of files){reject(Object.hasOwn(SOURCE_BINDINGS,file)&&map[file]===hash(read(file)),'SOURCE_HASH_'+file);union.add(file);}
+  for(const file of files){reject((Object.hasOwn(SOURCE_BINDINGS,file)||file===CORE_SOURCE)&&map[file]===hash(read(file)),'SOURCE_HASH_'+file);union.add(file);}
  }
- reject(same([...union].sort(),spec.sourceFiles)&&union.size===133,'SOURCE_UNION');
+ reject(same([...union].sort(),spec.sourceFiles)&&union.size===134,'SOURCE_UNION');
  const projected=structuredClone(proof);delete projected.attendanceReviewChecks;delete projected.attendanceReviewCheckCount;projected.totalChecks=67;
  return projected;
 }

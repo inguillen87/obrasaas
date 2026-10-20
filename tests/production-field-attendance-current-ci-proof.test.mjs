@@ -32,7 +32,7 @@ function fixture(){
  for(const [key,countKey,count] of groups){proof[key]=spec.checkNames.map(row=>JSON.parse(row)).filter(row=>row.group===key).map(row=>row.name);proof[countKey]=count;}
  proof.attendanceReviewChecks=[...text.matchAll(/attendanceReviewChecks\.push\('([^']+)'\)/g)].map(row=>row[1]);proof.attendanceReviewCheckCount=4;
  assert.deepEqual(proof.attendanceReviewChecks,ATTENDANCE_REVIEW_CHECK_NAMES);
- assert.deepEqual([proof.sourceSha256,proof.voiceProgressSourceSha256,proof.mediaLeaseSourceSha256,proof.videoAudioSourceSha256,proof.participantKycFixture.sourceSha256].map(map=>Object.keys(map).length),[124,117,117,120,114]);
+ assert.deepEqual([proof.sourceSha256,proof.voiceProgressSourceSha256,proof.mediaLeaseSourceSha256,proof.videoAudioSourceSha256,proof.participantKycFixture.sourceSha256].map(map=>Object.keys(map).length),[125,118,118,121,115]);
  return {contract,spec,proof,reader:readSource};
 }
 function deny(edit){const f=fixture();edit(f);const before=structuredClone(f.proof);assert.throws(()=>normalizeAttendanceReviewNativeProof(f.proof,f.contract,f.reader,f.spec),{code});assert.deepEqual(f.proof,before);}
@@ -75,13 +75,13 @@ test('attendance supplement snapshots source buffers per call without caching mu
 });
 test('attendance historical delegation requires an explicit real prior producer and never certifies that delegated input',()=>{
  const f=fixture();verifyPlanBudgetCurrentSources(f.contract,readSource);const previous=restorePlanBudgetAttendanceReviewProducerText(f.contract,readSource(producer));
- const oldSpec={...f.spec,producerSha256:hash(previous),sourceFiles:f.spec.sourceFiles.filter(file=>file!==querySource)},input={status:'UNVALIDATED_HISTORICAL_INPUT',harnessSha256:hash(previous)};
+ const oldSpec={...f.spec,producerSha256:hash(previous),sourceFiles:f.spec.sourceFiles.filter(file=>file!==querySource&&file!=='src/lib/consumption-evidence-catalog.mjs')},input={status:'UNVALIDATED_HISTORICAL_INPUT',harnessSha256:hash(previous)};
  assert.equal(attendanceReviewCurrentCheckCount(oldSpec),null);
  const result=normalizeAttendanceReviewNativeProof(input,{},file=>file===producer?Buffer.from(previous):readSource(file),oldSpec);assert.deepEqual(result,input);assert.equal(result.status,'UNVALIDATED_HISTORICAL_INPUT');
 });
 test('attendance historical branch rejects the actual current producer behind an older spec',()=>{
  const f=fixture();verifyPlanBudgetCurrentSources(f.contract,readSource);const previous=restorePlanBudgetAttendanceReviewProducerText(f.contract,readSource(producer));
- const oldSpec={...f.spec,producerSha256:hash(previous),sourceFiles:f.spec.sourceFiles.filter(file=>file!==querySource)},input={harnessSha256:hash(previous)};
+ const oldSpec={...f.spec,producerSha256:hash(previous),sourceFiles:f.spec.sourceFiles.filter(file=>file!==querySource&&file!=='src/lib/consumption-evidence-catalog.mjs')},input={harnessSha256:hash(previous)};
  assert.throws(()=>normalizeAttendanceReviewNativeProof(input,{},readSource,oldSpec),{code});
 });
 test('attendance historical branch rejects the actual133 query source under any prior spec',()=>{
@@ -107,4 +107,10 @@ test('attendance real gate rejects altered additive arrays and counters before a
  denyGate(f=>{f.proof.attendanceReviewChecks.pop();});
  denyGate(f=>{f.proof.attendanceReviewChecks.reverse();});
  denyGate(f=>{f.proof.attendanceReviewCheckCount=3;});
+});
+
+test('attendance actual134 rejects a complete prior133 RAW71 receipt without the shared consumption core',()=>deny(f=>{for(const map of [f.proof.sourceSha256,f.proof.voiceProgressSourceSha256,f.proof.mediaLeaseSourceSha256,f.proof.videoAudioSourceSha256,f.proof.participantKycFixture.sourceSha256])delete map['src/lib/consumption-evidence-catalog.mjs'];}));
+test('attendance actual134 rejects resealed shared core bytes and the old wrapper under current source authority',()=>{
+ deny(f=>{const file='src/lib/consumption-evidence-catalog.mjs',bytes=Buffer.from('foreign shared core');f.reader=name=>name===file?bytes:readSource(name);for(const map of [f.proof.sourceSha256,f.proof.voiceProgressSourceSha256,f.proof.mediaLeaseSourceSha256,f.proof.videoAudioSourceSha256,f.proof.participantKycFixture.sourceSha256])map[file]=hash(bytes);});
+ deny(f=>{const file='src/lib/meta-consumption-evidence-catalog.mjs',bytes=Buffer.from(f.contract.planBudgetCurrentRevision.consumptionEvidenceRuntime.sourceHistory.inverseHunks[0].previousText);f.reader=name=>name===file?bytes:readSource(name);for(const map of [f.proof.sourceSha256,f.proof.voiceProgressSourceSha256,f.proof.mediaLeaseSourceSha256,f.proof.videoAudioSourceSha256,f.proof.participantKycFixture.sourceSha256])map[file]=hash(bytes);});
 });
