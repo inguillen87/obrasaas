@@ -47,7 +47,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
       "previousSha256": null,
-      "currentSha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597"
+      "currentSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
     },
     {
       "path": "scripts/lib/plan-budget-ui-contract.mjs",
@@ -487,7 +487,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
       "previousSha256": null,
-      "currentSha256": "ddc238a6e9c128a5df2e772ee702fc935903c2e03fcb8f3f29879412bf6e02c2"
+      "currentSha256": "7688f1cd24556f0fae85d722654096b6a1019c77c343f75ece01decb92267a62"
     },
     {
       "path": "tests/production-plan-budget-analyzer-http.test.mjs",
@@ -1780,11 +1780,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
-          "sha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511"
+          "sha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
-          "sha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a"
+          "sha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-overview.js",
@@ -2263,11 +2263,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
-          "sha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511"
+          "sha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
-          "sha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a"
+          "sha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
@@ -3441,7 +3441,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-          "sha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597"
+          "sha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -4013,11 +4013,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
-          "sha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511"
+          "sha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
-          "sha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a"
+          "sha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-overview.js",
@@ -4477,7 +4477,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-          "sha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597"
+          "sha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -4661,11 +4661,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
-          "sha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511"
+          "sha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
-          "sha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a"
+          "sha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
@@ -6712,11 +6712,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
-          "sha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511"
+          "sha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
-          "sha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a"
+          "sha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
@@ -9557,7 +9557,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-          "sha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597"
+          "sha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -12904,5 +12904,198 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         ]
       }
     }
+  },
+  "checkTimeRuntime": {
+    "version": 1,
+    "parentHead": "9537a0a68cfffff6c68de6f71696aca20ed94ae7",
+    "previousContractSha256": "18eaa0eec2d952cbfa130d1d245322e779c3b7eabffc704c453cdde834933c4c",
+    "sourceHistory": [
+      {
+        "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
+        "previousSha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511",
+        "currentSha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb",
+        "previousBytes": 3945,
+        "currentBytes": 4622,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 3939,
+            "currentText": "\n// Presentation of the browser's completed check, not a server observation or authority.\nexport function worksiteLiveCheckedAtLabel(value){\n const unknown='Fecha y hora sin confirmar';\n if(typeof value!=='string'||!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/.test(value))return unknown;\n const instant=new Date(value);\n if(!Number.isFinite(instant.getTime())||instant.toISOString()!==value)return unknown;\n try{return new Intl.DateTimeFormat('es-AR',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(instant)+' (hora de Argentina)';}\n catch{return unknown;}\n}\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
+        "previousSha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a",
+        "currentSha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d",
+        "previousBytes": 3320,
+        "currentBytes": 3383,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 79,
+            "currentText": "import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation,worksiteLiveCheckedAtLabel} from './workspace-live-refresh-controller.mjs';\n",
+            "previousText": "import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation} from './workspace-live-refresh-controller.mjs';\n"
+          },
+          {
+            "currentOffsetCharacters": 2741,
+            "currentText": " status.checkedAt!==null&&status.checkedAt!==undefined?label+' · última comprobación: '+worksiteLiveCheckedAtLabel(status.checkedAt)+'.':'Se comprobarán los cambios de esta obra cuando no haya una operación en curso.';\n",
+            "previousText": " status.checkedAt?label+' comprobada a las '+new Date(status.checkedAt).toLocaleTimeString('es-AR')+'.':'Se comprobarán los cambios de esta obra cuando no haya una operación en curso.';\n"
+          }
+        ]
+      },
+      {
+        "path": "tests/production-worksite-live-refresh-controller.test.mjs",
+        "previousSha256": "2774f4fe72e2f3ebc59e73f833e50ea46ad920fabb7e66460021ac82c5f5ed38",
+        "currentSha256": "0eb8588ff72a78a7c78d497e541794789f6599cdd8e739766b49c42d49ec2083",
+        "previousBytes": 8392,
+        "currentBytes": 10422,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 71,
+            "currentText": "import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation,worksiteLiveCheckedAtLabel} from '../src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs';\n",
+            "previousText": "import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation} from '../src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs';\n"
+          },
+          {
+            "currentOffsetCharacters": 8419,
+            "currentText": "\n\ntest('completed check shows an Argentine date and unambiguous24 hour time without changing the captured instant',()=>{\n const checkedAt='2026-10-20T21:59:13.000Z',label=worksiteLiveCheckedAtLabel(checkedAt);\n assert.match(label,/20\\/10\\/2026/);assert.match(label,/18:59:13/);assert.match(label,/\\(hora de Argentina\\)$/);\n assert.doesNotMatch(label,/06:59:13/);assert.equal(checkedAt,'2026-10-20T21:59:13.000Z');\n});\ntest('Argentine midnight changes the local date only at03 UTC and renders00 rather than24',()=>{\n const before=worksiteLiveCheckedAtLabel('2026-10-21T02:59:59.999Z'),midnight=worksiteLiveCheckedAtLabel('2026-10-21T03:00:00.000Z');\n assert.match(before,/20\\/10\\/2026/);assert.match(before,/23:59:59/);\n assert.match(midnight,/21\\/10\\/2026/);assert.match(midnight,/00:00:00/);assert.doesNotMatch(midnight,/24:00:00/);\n});\ntest('completed check formatting remains Argentine and24 hour under three different host formatting defaults',{concurrency:false},()=>{\n const original=Intl.DateTimeFormat;\n try{\n  for(const hostZone of ['UTC','Asia/Tokyo','America/Los_Angeles']){\n   // Keep the real Intl implementation; vary only its omitted-option defaults.\n   Intl.DateTimeFormat=function(locales,options){return new original(locales,{timeZone:hostZone,hourCycle:'h12',...options});};\n   const label=worksiteLiveCheckedAtLabel('2026-10-20T21:59:13.000Z');\n   assert.match(label,/20\\/10\\/2026/);assert.match(label,/18:59:13/);assert.match(label,/\\(hora de Argentina\\)$/);\n  }\n }finally{Intl.DateTimeFormat=original;}\n assert.equal(Intl.DateTimeFormat,original);\n});\ntest('missing noncanonical and impossible check instants never display epoch time or a normalized date',()=>{\n const hostile={toString(){throw Error('No coercion of an unconfirmed instant');}};\n for(const value of [undefined,null,0,NaN,hostile,'','not-an-instant','2026-02-30T21:59:13.000Z','2026-10-20T18:59:13.000-03:00','2026-10-20T21:59:13Z'])assert.equal(worksiteLiveCheckedAtLabel(value),'Fecha y hora sin confirmar');\n});\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "tests/production-workspace-overview-live.test.mjs",
+        "previousSha256": "15216ef5ce06e38b79d72f9c91c0ea9420aa69919aa0cc9d82dc9e681d070af7",
+        "currentSha256": "85ca04637782a57629198701b44b51f90d624ce028d175909703c07288471fea",
+        "previousBytes": 12347,
+        "currentBytes": 13420,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 2602,
+            "currentText": "export function render(props){si=0;ri=0;ei=0;return Decisions(props);}\nexport function renderRefreshStatus(props){return WorksiteLiveRefreshStatus(props);}`;\n",
+            "previousText": "export function render(props){si=0;ri=0;ei=0;return Decisions(props);}`;\n"
+          },
+          {
+            "currentOffsetCharacters": 2782,
+            "currentText": "const result=await transform(`import React from ${JSON.stringify(import.meta.resolve('react'))};import {createWorksiteLiveRefreshController as actualController,worksiteLiveRefreshPresentation,worksiteLiveCheckedAtLabel} from ${JSON.stringify(controllerUrl)};import {inventoryPendingCounts,INVENTORY_PENDING_EVENT} from ${JSON.stringify(inventoryUrl)};import {FIELD_EVIDENCE_PENDING_EVENT,FIELD_PROGRESS_PENDING_EVENT} from ${JSON.stringify(fieldUrl)};${harness}\\n${file('workspace-live-refresh.js')}\\n${file('workspace-overview.js')}`,{filename:'real-overview-live.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});\n",
+            "previousText": "const result=await transform(`import React from ${JSON.stringify(import.meta.resolve('react'))};import {createWorksiteLiveRefreshController as actualController,worksiteLiveRefreshPresentation} from ${JSON.stringify(controllerUrl)};import {inventoryPendingCounts,INVENTORY_PENDING_EVENT} from ${JSON.stringify(inventoryUrl)};import {FIELD_EVIDENCE_PENDING_EVENT,FIELD_PROGRESS_PENDING_EVENT} from ${JSON.stringify(fieldUrl)};${harness}\\n${file('workspace-live-refresh.js')}\\n${file('workspace-overview.js')}`,{filename:'real-overview-live.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});\n"
+          },
+          {
+            "currentOffsetCharacters": 12454,
+            "currentText": "\n\ntest('actual completed-check status renders the authentic Argentine formatter and does not turn an invalid instant into a time',()=>{\n const refresh={status:{state:'CURRENT',checkedAt:'2026-10-20T21:59:13.000Z',updates:false},check:()=>assert.fail('Rendering a status must not dispatch another check')};\n const render=()=>renderToStaticMarkup(component.renderRefreshStatus({refresh,label:'Cronograma'}));\n const checked=render();assert.match(checked,/Cronograma · última comprobación:/);assert.match(checked,/20\\/10\\/2026/);assert.match(checked,/18:59:13/);assert.match(checked,/\\(hora de Argentina\\)/);assert.match(checked,/Comprobar cambios/);assert.doesNotMatch(checked,/06:59:13/);\n refresh.status.checkedAt='unconfirmed';const invalid=render();assert.match(invalid,/Fecha y hora sin confirmar/);assert.doesNotMatch(invalid,/Invalid Date|1970|NaN/);\n refresh.status.checkedAt=null;assert.match(render(),/Se comprobarán los cambios de esta obra/);\n});\n",
+            "previousText": ""
+          }
+        ]
+      }
+    ],
+    "frozenLiveHoursPins": [
+      {
+        "index": 11,
+        "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
+        "sha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511"
+      },
+      {
+        "index": 12,
+        "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
+        "sha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a"
+      },
+      {
+        "index": 23,
+        "path": "tests/production-worksite-live-refresh-controller.test.mjs",
+        "sha256": "2774f4fe72e2f3ebc59e73f833e50ea46ad920fabb7e66460021ac82c5f5ed38"
+      }
+    ],
+    "referenceAdvances": [
+      {
+        "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+        "previousSha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597",
+        "currentSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
+      },
+      {
+        "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
+        "previousSha256": "ddc238a6e9c128a5df2e772ee702fc935903c2e03fcb8f3f29879412bf6e02c2",
+        "currentSha256": "7688f1cd24556f0fae85d722654096b6a1019c77c343f75ece01decb92267a62"
+      }
+    ],
+    "familyManifestAdvances": [
+      {
+        "family": "LIVE_HOURS_RUNTIME",
+        "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
+        "previousSha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511",
+        "currentSha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
+      },
+      {
+        "family": "LIVE_HOURS_RUNTIME",
+        "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
+        "previousSha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a",
+        "currentSha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
+      },
+      {
+        "family": "PILOT_LIVE_BROWSER",
+        "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
+        "previousSha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511",
+        "currentSha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
+      },
+      {
+        "family": "PILOT_LIVE_BROWSER",
+        "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
+        "previousSha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a",
+        "currentSha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
+      },
+      {
+        "family": "UI_FOCUSED_WORKSPACE",
+        "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+        "previousSha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597",
+        "currentSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
+      },
+      {
+        "family": "UI_FOCUSED_WORKSPACE",
+        "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
+        "previousSha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511",
+        "currentSha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
+      },
+      {
+        "family": "UI_FOCUSED_WORKSPACE",
+        "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
+        "previousSha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a",
+        "currentSha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
+      },
+      {
+        "family": "UI_FIELD_TASK_PAGINATION",
+        "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+        "previousSha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597",
+        "currentSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
+      },
+      {
+        "family": "UI_FIELD_TASK_PAGINATION",
+        "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
+        "previousSha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511",
+        "currentSha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
+      },
+      {
+        "family": "UI_FIELD_TASK_PAGINATION",
+        "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
+        "previousSha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a",
+        "currentSha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
+      },
+      {
+        "family": "CONSUMPTION_FEEDBACK_UI",
+        "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
+        "previousSha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511",
+        "currentSha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
+      },
+      {
+        "family": "CONSUMPTION_FEEDBACK_UI",
+        "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
+        "previousSha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a",
+        "currentSha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
+      },
+      {
+        "family": "PLAN_BUDGET_UI",
+        "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+        "previousSha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597",
+        "currentSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
+      }
+    ],
+    "nativeOrHumanAcceptance": false
   }
 });
