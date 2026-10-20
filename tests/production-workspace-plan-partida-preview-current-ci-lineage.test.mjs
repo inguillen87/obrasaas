@@ -96,8 +96,9 @@ test('current180 harness evidence cannot authorize changed source by replacing i
 test('budget consumption media UI admits only the exact reviewed closure and preserves all inherited deltas',()=>{
  const contract=current(),value=contract[PLAN_BUDGET_CURRENT_SECTION],delta=value.sourceSetDeltas.find(row=>row.family==='CONSUMPTION_FEEDBACK_UI'),family=value.sourceFamilies.find(row=>row.family==='CONSUMPTION_FEEDBACK_UI'),before=serialize(contract);
  assert.deepEqual(delta,{"family":"CONSUMPTION_FEEDBACK_UI","contractPointer":null,"previousCount":26,"previousPathsSha256":"710e01893f5a62e3889bdaddca949989edac48b312c75ea419ea822b744c864a","currentCount":28,"currentPathsSha256":"ac29e18d380c5706e620702b48fd9510f5d358bc857a5cb4a08d0c49561de16e","additions":["src/app/(identity)/cuenta/field-media-preview.js","src/app/(identity)/cuenta/field-operations-panel.module.css"]});
- assert.equal(sha(JSON.stringify(value.sourceSetDeltas.filter(row=>row.family!=='CONSUMPTION_FEEDBACK_UI'))),'380e99f8cf321760f4b64c8e52810d4ceb9e0890d8059dce1ca549a568b56cbd');
  assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
+ const parentDeltas=value.sourceSetDeltas.map(row=>value.pilotWhatsAppRuntime.sourceSetAdvances.find(advance=>advance.family===row.family)?.previousDelta||row);
+ assert.equal(sha(JSON.stringify(parentDeltas.filter(row=>row.family!=='CONSUMPTION_FEEDBACK_UI'))),'380e99f8cf321760f4b64c8e52810d4ceb9e0890d8059dce1ca549a568b56cbd');
  assert.equal(verifyPlanBudgetActualClosure(contract,family.family,{files:family.currentFiles,externalImports:family.externalImports},read).sourceCount,28);
  assert.equal(sha(serialize(restorePlanBudgetPreviousContract(contract))),'8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839');assert.equal(serialize(contract),before);
  const rejectBudget=run=>assert.throws(run,{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'});

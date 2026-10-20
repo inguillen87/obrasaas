@@ -8,6 +8,7 @@ import {canImportPlan} from './plan-import-policy.mjs';
 import {startMetaPlanImportConversation,continueMetaPlanImportConversation} from './meta-plan-import-conversation.mjs';
 import {voiceProgressDraftForEvidence,prepareVoiceProgressDraft,voiceProgressDraftReady,UNKNOWN_VOICE_VALUE,voiceQuantityScopeLabel,voiceProgressQuantityLabel,voiceProgressUnitLabel} from './voice-progress-draft.mjs';
 import {deriveTaskMeasurement} from './task-progress-measurement.js';
+import {createVoiceConsumptionDraft,voiceConsumptionDraftCurrent} from './voice-consumption-draft.mjs';
 
 const menuOptions=[['ATTEND_IN','Entrada'],['ATTEND_PAUSE','Iniciar pausa'],['ATTEND_RESUME','Volver de pausa'],['ATTEND_OUT','Salida'],['TASKS','Cronograma y tareas'],['MEDIA','Enviar evidencia'],['INCIDENT','Informar incidencia'],['MATERIAL','Pedir material'],['CONSUMPTION','Proponer consumo'],['PROGRESS','Proponer avance'],['PLAN_IMPORT','Importar cronograma'],['STATUS','Consultar estado']];
 const aliases={MENU:'MENU','MENÚ':'MENU',AYUDA:'MENU',HOLA:'MENU',ENTRADA:'ATTEND_IN',PAUSA:'ATTEND_PAUSE',VOLVER:'ATTEND_RESUME',SALIDA:'ATTEND_OUT',TAREAS:'TASKS',CRONOGRAMA:'TASKS',GANTT:'TASKS','IMPORTAR CRONOGRAMA':'PLAN_IMPORT','IMPORTAR PLAN':'PLAN_IMPORT',EVIDENCIA:'MEDIA',EVIDENCIAS:'OWN_EVIDENCE',AVANCES:'OWN_PROGRESS',INCIDENCIA:'INCIDENT',MATERIALES:'MATERIAL',CONSUMO:'CONSUMPTION',CONSUMOS:'OWN_CONSUMPTIONS',AVANCE:'PROGRESS',ESTADO:'STATUS',CANCELAR:'MENU'};
@@ -64,8 +65,32 @@ function chooseTask(state,eventId,facts,detail=''){
  return choices({...state,step:'TASK',taskPage:page},eventId,state.purpose==='TASKS'?scheduleReadBody(facts,detail):detail||'Elegí la tarea de este registro. Podés recorrer todas las páginas.',rows);
 }
 function consumptionMaterials(state,eventId,facts){const materials=facts.inventory?.materials?.filter(m=>m.active)||[];if(!materials.length)return state.consumptionRecovery?{state,preserveConversation:true,reply:text('El catálogo no tiene materiales disponibles. Conservamos el borrador y su plazo; pedí al responsable que revise el catálogo o descartalo con CANCELAR.') }:{state:null,reply:text('El responsable debe configurar el catálogo antes de proponer consumo. El stock no cambió.')};const offset=Math.min(state.materialOffset||0,Math.floor((materials.length-1)/8)*8),rows=materials.slice(offset,offset+8).map(m=>[m.id,m.name+' · '+m.unit]);if(offset>0)rows.push(['PREVIOUS','Materiales anteriores']);if(offset+8<materials.length)rows.push(['NEXT','Más materiales']);const previous=state.recoverySuggestion;return choices({...state,step:'CONSUMPTION_MATERIAL',materialOffset:offset},eventId,(previous?'Borrador anterior: '+previous.quantity+' '+previous.unit+' de '+previous.name+'. Es una sugerencia, sin conversión ni aplicación automática.\n':'')+'Elegí el material del catálogo vigente. La propuesta requiere revisión antes de descontar stock.',rows);}
+const consumptionContext=(state,facts)=>({projectId:facts.projectId,workerId:facts.workerId,taskId:state.taskId,sectorId:state.sectorId,catalogHash:state.catalogHash});
+const consumptionMaterial=state=>({id:state.materialId,name:state.name,unit:state.unit});
+const consumptionEvidence=(state,facts)=>facts.consumptionEvidenceCatalog?.evidence?.filter(e=>e.workerId===facts.workerId&&e.taskId===state.taskId&&e.sectorId===state.sectorId&&['image','audio'].includes(e.media?.kind)&&['PENDING','APPROVED'].includes(e.status))||[];
+function consumptionSelectionCurrent(state,facts){
+ const ids=state.evidenceIds||[],refs=state.consumptionEvidenceRefs||[];
+ if(!Array.isArray(ids)||ids.length>10||new Set(ids).size!==ids.length||!Array.isArray(refs)||refs.length!==ids.length)return false;
+ const available=consumptionEvidence(state,facts);
+ return ids.every((id,index)=>{const e=available.find(row=>row.id===id),ref=refs[index];return Boolean(e&&ref?.id===id&&ref.revision===e.revision&&ref.mediaSha256===e.media.sha256&&ref.kind===e.media.kind);});
+}
+function consumptionQuantityPrompt(state,eventId){
+ const next={...state,step:'CONSUMPTION_QUANTITY'};
+ if(state.consumptionRecovery&&state.recoverySuggestion.unit===state.unit)return choices({...next,step:'CONSUMPTION_RECOVERY_QUANTITY'},eventId,'Material elegido: '+state.name+'\nUnidad: '+state.unit+'\nCantidad anterior sugerida: '+state.recoverySuggestion.quantity+' '+state.recoverySuggestion.unit+'. Elegí si corresponde usarla.',[['KEEP_QUANTITY','Usar cantidad anterior'],['NEW_QUANTITY','Escribir otra cantidad']]);
+ return {state:next,reply:text('Material: '+state.name+'\nUnidad: '+state.unit+'\n'+(state.consumptionRecovery?'La unidad anterior era '+state.recoverySuggestion.unit+'. No convertimos la cantidad.\n':'')+'Escribí la cantidad consumida, con punto y hasta tres decimales.')};
+}
+function chooseConsumptionEvidence(state,eventId,facts){
+ const catalog=facts.consumptionEvidenceCatalog,ids=state.evidenceIds||[],page=catalog?.page||{first:null,last:null,hasPrevious:false,hasNext:false};
+ const available=consumptionEvidence(state,{...facts,consumptionEvidenceCatalog:{evidence:catalog?.entries||[]}});
+ if(!available.length&&!page.hasPrevious&&!page.hasNext&&!ids.length)return consumptionQuantityPrompt(state,eventId);
+ const rows=available.slice(0,6).map(e=>[e.id,(ids.includes(e.id)?'✓ ':'')+e.title,(e.media.kind==='audio'?'Audio':'Foto')+' · '+(e.status==='APPROVED'?'Revisada':'Pendiente de revisión')]);
+ rows.push(['CONTINUE_CONSUMPTION',ids.length?'Continuar con '+ids.length+' adjunto'+(ids.length===1?'':'s'):'Continuar sin adjuntos']);
+ if(ids.length)rows.push(['CLEAR_CONSUMPTION_EVIDENCE','Quitar todos los adjuntos']);
+ if(page.hasPrevious)rows.push(['PREVIOUS_CONSUMPTION_EVIDENCE','Evidencias anteriores']);if(page.hasNext)rows.push(['NEXT_CONSUMPTION_EVIDENCE','Más evidencias']);
+ return choices({...state,step:'CONSUMPTION_EVIDENCE',consumptionEvidencePage:page,evidenceIds:ids,consumptionEvidenceRefs:state.consumptionEvidenceRefs||[]},eventId,'Material: '+state.name+' · '+state.unit+'\nPodés adjuntar hasta 10 fotos o audios privados que ya guardaste en esta tarea y sector. Elegí para agregar o quitar. No se realiza un nuevo análisis; las fotos no determinan cantidades.\nAdjuntos elegidos: '+ids.length+'.',rows);
+}
 function consumptionReasonPrompt(state,eventId){return state.consumptionRecovery?choices({...state,step:'CONSUMPTION_RECOVERY_REASON'},eventId,'Motivo anterior: '+state.recoverySuggestion.reason.slice(0,550)+(state.recoverySuggestion.reason.length>550?'…':'')+'\nConfirmá si sigue correspondiendo al material y la cantidad elegidos.',[['KEEP_REASON','Usar motivo anterior'],['NEW_REASON','Escribir otro motivo']]):{state:{...state,step:'REASON'},reply:text('Explicá para qué se usó el material. Todavía no se descuenta stock.')};}
-function consumptionConfirmation(state,eventId){return confirm(state,eventId,'Consumo propuesto: '+state.quantity+' '+state.unit+' de '+state.name+'\nEl stock se conserva hasta revisión del responsable.\nMotivo: '+state.reason.slice(0,550)+(state.reason.length>550?'…':'')+'\n¿Guardar para revisión?');}
+function consumptionConfirmation(state,eventId){return confirm(state,eventId,'Consumo propuesto: '+state.quantity+' '+state.unit+' de '+state.name+'\nAdjuntos privados: '+(state.evidenceIds?.length||0)+'.\nEl stock cambia sólo si otra persona autorizada aprueba.\nMotivo: '+state.reason.slice(0,550)+(state.reason.length>550?'…':'')+'\n¿Guardar para revisión?');}
 const consumptionState=state=>({PENDING:'Pendiente de revisión',APPROVED:'Aprobado',REJECTED:'Rechazado',REVERSED:'Revertido'}[state]||'Estado no confirmado');
 const consumptionName=c=>c.materialName||'Material '+c.materialId;
 const consumptionReason=value=>value.length>600?value.slice(0,600)+'… (motivo completo en Mi cuenta)':value;
@@ -264,7 +289,7 @@ function planConversation({message,state,eventId,facts,now}){
   if(!permits('REPORT',facts))return denied('REPORT');
   if(alias==='CONSUMPTION'){
    const recovery=facts.consumptionRecovery,suggestion=recovery.suggestion,next={...active,consumptionRecovery:{version:1,id:recovery.id,deadline:recovery.deadline,contextDigest:recovery.contextDigest,rejectionReceiptId:recovery.lastError.receiptId},recoverySuggestion:suggestion,materialOffset:0};
-   for(const key of ['materialId','name','unit','catalogHash','quantity','reason'])delete next[key];
+   for(const key of ['materialId','name','unit','catalogHash','quantity','reason','consumptionVoice','consumptionVoiceCandidate'])delete next[key];
    const plan=consumptionMaterials(next,eventId,facts);recoveryCatalogPlans.add(plan);return plan;
   }
   if(alias||active.consumptionRecovery?.rejectionReceiptId!==facts.consumptionRecovery.lastError.receiptId)return {state:active,preserveConversation:true,reply:text('Conservamos el consumo pendiente, su mensaje original y su plazo. Respondé a ese mensaje con CONSUMO para volver a elegir material y revisar cantidad y motivo, o CANCELAR para descartarlo.')};
@@ -276,6 +301,10 @@ function planConversation({message,state,eventId,facts,now}){
  if(!active)return start('MENU',eventId,facts,now);
  if(active.purpose!=='MENU'&&!permits(active.purpose,facts))return denied(active.purpose);
  const s={...active};delete s.choices;delete s.nonce;
+ if(s.purpose==='CONSUMPTION'&&s.step==='CONFIRM'&&selected==='CANCEL')return {state:null,reply:text('Propuesta de consumo cancelada. No se modificó stock. Escribí MENU para continuar.')};
+ if(s.purpose==='CONSUMPTION'&&s.step!=='CONSUMPTION_EVIDENCE'&&(s.evidenceIds?.length||s.consumptionVoice)){
+  if(!consumptionSelectionCurrent(s,facts)||s.consumptionVoice&&!voiceConsumptionDraftCurrent(s.consumptionVoice,consumptionEvidence(s,facts).find(e=>e.id===s.consumptionVoice.source.evidenceId),consumptionMaterial(s),consumptionContext(s,facts)))return {state:active,preserveConversation:true,reply:text('Un adjunto o su transcripción cambió desde que preparaste este consumo. Conservamos el borrador y no guardamos la propuesta. Cancelalo para revisar los archivos vigentes antes de confirmar otro consumo.')};
+ }
  if(s.purpose==='PROGRESS'&&s.progressEvidenceWait){
   if(selected==='CANCEL')return {state:null,reply:text('Borrador de avance cancelado. La tarea no cambió. Escribí MENU para continuar.')};
   const fixed=s.progressEvidenceWait,task=facts.tasks.find(t=>t.id===s.taskId);
@@ -373,7 +402,7 @@ function planConversation({message,state,eventId,facts,now}){
  if(s.step==='MEDIA_NOTICE'){
   if(selected==='CANCEL')return {state:null,reply:text('Operación cancelada. Escribí MENU cuando quieras continuar.')};
   if(!['ANALYZE','SAVE_ONLY'].includes(selected))return mediaNotice(s,eventId);
-  return {state:{...s,step:'MEDIA',analysisConsent:fieldMediaAnalysisConsent(selected==='ANALYZE'),analysisConsentEventId:eventId},reply:text('Enviá una foto de hasta 2 MiB, o audio/video de hasta 3 MiB, de esta tarea y sector. '+(selected==='ANALYZE'?'Autorizaste el análisis asistido; el video se limita a cuatro cuadros sin audio.':'Se guardará en privado para revisión manual, sin enviarlo a OpenAI.'))};
+  return {state:{...s,step:'MEDIA',analysisConsent:fieldMediaAnalysisConsent(selected==='ANALYZE'),analysisConsentEventId:eventId},reply:text('Enviá una foto de hasta 2 MiB, o audio/video de hasta 3 MiB, de esta tarea y sector. '+(selected==='ANALYZE'?'Autorizaste el análisis asistido; el video se limita a cuatro cuadros sin audio.':'Se guardará en privado para revisión manual, sin análisis asistido.'))};
  }
  if(s.step==='MEDIA'){
   if(!validFieldMediaAnalysisConsent(s.analysisConsent)||s.analysisConsent.noticeVersion!==FIELD_MEDIA_PRIVACY_NOTICE_VERSION)return mediaNotice(s,eventId);
@@ -386,7 +415,27 @@ function planConversation({message,state,eventId,facts,now}){
  if(s.step==='MATERIAL_NAME'){s.name=siteText(body,160,2);return {state:{...s,step:'MATERIAL_QUANTITY'},reply:text('Escribí la cantidad exacta, por ejemplo 12 o 2.5. Usá punto para los decimales.')};}
  if(s.step==='MATERIAL_QUANTITY'){s.quantity=siteQuantity(body);return choices({...s,step:'MATERIAL_UNIT'},eventId,'Elegí la unidad.',MATERIAL_UNITS.map(u=>[u,u]));}
  if(s.step==='MATERIAL_UNIT'){if(!selected)return {state:active,reply:text('Elegí la unidad del menú anterior.')};s.unit=selected;return {state:{...s,step:'REASON'},reply:text('Explicá para qué necesitás el material. El pedido requiere autorización de compra.')};}
- if(s.step==='CONSUMPTION_MATERIAL'){if(selected==='NEXT'||selected==='PREVIOUS')return consumptionMaterials({...s,materialOffset:Math.max(0,(s.materialOffset||0)+(selected==='NEXT'?8:-8))},eventId,facts);const material=facts.inventory?.materials?.find(m=>m.id===selected&&m.active);if(!material)return {state:active,reply:text('Elegí un material del catálogo anterior.')};const next={...s,step:'CONSUMPTION_QUANTITY',materialId:material.id,name:material.name,unit:material.unit,catalogHash:facts.inventory.catalogHash};if(s.consumptionRecovery&&s.recoverySuggestion.unit===material.unit)return choices({...next,step:'CONSUMPTION_RECOVERY_QUANTITY'},eventId,'Material elegido: '+material.name+'\nUnidad: '+material.unit+'\nCantidad anterior sugerida: '+s.recoverySuggestion.quantity+' '+s.recoverySuggestion.unit+'. Elegí si corresponde usarla.',[['KEEP_QUANTITY','Usar cantidad anterior'],['NEW_QUANTITY','Escribir otra cantidad']]);return {state:next,reply:text('Material: '+material.name+'\nUnidad: '+material.unit+'\n'+(s.consumptionRecovery?'La unidad anterior era '+s.recoverySuggestion.unit+'. No convertimos la cantidad.\n':'')+'Escribí la cantidad consumida, con punto y hasta tres decimales.')};}
+ if(s.step==='CONSUMPTION_MATERIAL'){if(selected==='NEXT'||selected==='PREVIOUS')return consumptionMaterials({...s,materialOffset:Math.max(0,(s.materialOffset||0)+(selected==='NEXT'?8:-8))},eventId,facts);const material=facts.inventory?.materials?.find(m=>m.id===selected&&m.active);if(!material)return {state:active,reply:text('Elegí un material del catálogo anterior.')};return chooseConsumptionEvidence({...s,materialId:material.id,name:material.name,unit:material.unit,catalogHash:facts.inventory.catalogHash},eventId,facts);}
+ if(s.step==='CONSUMPTION_EVIDENCE'){
+  if(['NEXT_CONSUMPTION_EVIDENCE','PREVIOUS_CONSUMPTION_EVIDENCE'].includes(selected))return chooseConsumptionEvidence(s,eventId,facts);
+  if(selected==='CLEAR_CONSUMPTION_EVIDENCE'){delete s.consumptionVoice;delete s.consumptionVoiceCandidate;return chooseConsumptionEvidence({...s,evidenceIds:[],consumptionEvidenceRefs:[]},eventId,facts);}
+  if(selected==='CONTINUE_CONSUMPTION')return consumptionSelectionCurrent(s,facts)?consumptionQuantityPrompt(s,eventId):{state:active,preserveConversation:true,reply:text('Un adjunto dejó de estar disponible en este contexto. Quitá los adjuntos y elegí los archivos vigentes antes de continuar. No guardamos un consumo.')};
+  const e=consumptionEvidence(s,facts).find(row=>row.id===selected);if(!e)return {state:active,reply:text('Elegí un archivo o Continuar desde el mensaje vigente.')};
+  const ids=s.evidenceIds||[],refs=s.consumptionEvidenceRefs||[],index=ids.indexOf(e.id);
+  if(index!==-1){if(s.consumptionVoice?.source.evidenceId===e.id)delete s.consumptionVoice;return chooseConsumptionEvidence({...s,evidenceIds:ids.filter(id=>id!==e.id),consumptionEvidenceRefs:refs.filter(ref=>ref.id!==e.id)},eventId,facts);}
+  if(ids.length>=10)return {state:active,reply:text('Ya elegiste 10 adjuntos. Quitá uno antes de agregar otro, o continuá con los actuales.')};
+  s.evidenceIds=[...ids,e.id];s.consumptionEvidenceRefs=[...refs,{id:e.id,revision:e.revision,mediaSha256:e.media.sha256,kind:e.media.kind}];
+  const draft=createVoiceConsumptionDraft(e,consumptionMaterial(s),consumptionContext(s,facts));
+  if(!draft)return chooseConsumptionEvidence(s,eventId,facts);
+  return choices({...s,step:'CONSUMPTION_AUDIO_REVIEW',consumptionVoiceCandidate:draft},eventId,'Audio ya guardado · revisión del borrador\n'+draft.transcriptExcerpt+'\n'+(draft.quantity!==null?'Cantidad sugerida: '+draft.quantity+' '+s.unit+' de '+s.name+'.':'No se pudo confirmar una cantidad exacta para este material y unidad. Completala manualmente.')+'\nNo se modifica stock ni avance. Elegí cómo continuar.',[...(draft.quantity!==null?[['USE_CONSUMPTION_VOICE','Usar este borrador']]:[]),['ATTACH_CONSUMPTION_AUDIO','Sólo adjuntar el audio']]);
+ }
+ if(s.step==='CONSUMPTION_AUDIO_REVIEW'){
+  if(selected==='ATTACH_CONSUMPTION_AUDIO'){delete s.consumptionVoiceCandidate;return chooseConsumptionEvidence(s,eventId,facts);}
+  if(selected!=='USE_CONSUMPTION_VOICE')return {state:active,reply:text('Revisá el audio y elegí una opción del mensaje vigente. Todavía no se guardó un consumo.')};
+  const candidate={...s.consumptionVoiceCandidate,confirmed:true},e=consumptionEvidence(s,facts).find(row=>row.id===candidate.source?.evidenceId);
+  if(!voiceConsumptionDraftCurrent(candidate,e,consumptionMaterial(s),consumptionContext(s,facts)))return {state:active,preserveConversation:true,reply:text('El audio o su transcripción cambió. Conservamos el borrador sin guardar una propuesta. Cancelalo y revisá el archivo vigente.')};
+  delete s.consumptionVoiceCandidate;s.consumptionVoice=candidate;s.quantity=candidate.quantity;s.reason=candidate.reason;return consumptionConfirmation(s,eventId);
+ }
  if(s.step==='CONSUMPTION_RECOVERY_QUANTITY'){if(selected==='NEW_QUANTITY')return {state:{...s,step:'CONSUMPTION_QUANTITY'},reply:text('Escribí la cantidad consumida en '+s.unit+', con punto y hasta tres decimales.')};if(selected!=='KEEP_QUANTITY'||s.unit!==s.recoverySuggestion.unit)return {state:active,reply:text('Elegí una cantidad desde el mensaje vigente.')};s.quantity=inventoryQuantity(s.recoverySuggestion.quantity);return consumptionReasonPrompt(s,eventId);}
  if(s.step==='CONSUMPTION_QUANTITY'){s.quantity=inventoryQuantity(body);return consumptionReasonPrompt(s,eventId);}
  if(s.step==='CONSUMPTION_RECOVERY_REASON'){if(selected==='NEW_REASON')return {state:{...s,step:'REASON'},reply:text('Escribí el motivo vigente, de 8 a 1000 caracteres.')};if(selected!=='KEEP_REASON')return {state:active,reply:text('Elegí el motivo desde el mensaje vigente.')};s.reason=siteText(s.recoverySuggestion.reason,1000,8,true);return consumptionConfirmation(s,eventId);}
@@ -410,14 +459,14 @@ function planConversation({message,state,eventId,facts,now}){
   return chooseEvidence(s,eventId,facts);
  }
  if(s.step==='PROGRESS_EVIDENCE'){if(['NEXT_EVIDENCE','PREVIOUS_EVIDENCE'].includes(selected))return chooseEvidence(s,eventId,facts);if(!selected||!facts.evidence.some(e=>e.id===selected&&e.taskId===s.taskId&&e.status==='APPROVED'))return {state:active,...(s.progressEvidenceWait?{preserveConversation:true}:{}),reply:text(s.progressEvidenceWait?'Elegí una evidencia aprobada del mensaje vigente. Conservamos la medición; si la evidencia cambió, escribí CANCELAR antes de preparar otro borrador.':'Elegí una evidencia aprobada vigente del menú anterior. Si cambió, escribí AVANCE para consultar nuevamente.')};s.evidenceIds=[selected];return {state:{...s,step:'REASON'},reply:text('Explicá cómo mediste el avance o la cantidad ejecutada.')};}
- if(s.step==='REASON'){s.reason=siteText(body,s.purpose==='MATERIAL'?2000:1000,8,true);const m=s.measurementSummary;return confirm(s,eventId,(s.purpose==='MATERIAL'?'Pedido: '+s.quantity+' '+s.unit+' de '+s.name+'\nEsto no autoriza una compra.':s.purpose==='CONSUMPTION'?'Consumo propuesto: '+s.quantity+' '+s.unit+' de '+s.name+'\nEl stock se conserva hasta revisión del responsable.':m?'Acumulado aprobado: '+voiceProgressQuantityLabel(m.previous)+' '+voiceProgressUnitLabel(m.unit)+'\nAdicional propuesto: '+voiceProgressQuantityLabel(m.delta)+' '+voiceProgressUnitLabel(m.unit)+'\nNuevo acumulado: '+voiceProgressQuantityLabel(m.executed)+' / '+voiceProgressQuantityLabel(m.baseline)+' '+voiceProgressUnitLabel(m.unit)+' · '+m.progress+'%\nLa tarea conserva su avance hasta aprobación.':'Avance propuesto: '+s.progress+'%'+(s.quantity!==null?' · '+s.quantity+' / '+s.baseline+' '+s.unit:'')+'\nLa tarea conserva su avance hasta aprobación.')+'\nMotivo: '+s.reason.slice(0,550)+(s.reason.length>550?'…':'')+'\n¿Guardar para revisión?');}
+ if(s.step==='REASON'){s.reason=siteText(body,s.purpose==='MATERIAL'?2000:1000,8,true);if(s.purpose==='CONSUMPTION')return consumptionConfirmation(s,eventId);const m=s.measurementSummary;return confirm(s,eventId,(s.purpose==='MATERIAL'?'Pedido: '+s.quantity+' '+s.unit+' de '+s.name+'\nEsto no autoriza una compra.':m?'Acumulado aprobado: '+voiceProgressQuantityLabel(m.previous)+' '+voiceProgressUnitLabel(m.unit)+'\nAdicional propuesto: '+voiceProgressQuantityLabel(m.delta)+' '+voiceProgressUnitLabel(m.unit)+'\nNuevo acumulado: '+voiceProgressQuantityLabel(m.executed)+' / '+voiceProgressQuantityLabel(m.baseline)+' '+voiceProgressUnitLabel(m.unit)+' · '+m.progress+'%\nLa tarea conserva su avance hasta aprobación.':'Avance propuesto: '+s.progress+'%'+(s.quantity!==null?' · '+s.quantity+' / '+s.baseline+' '+s.unit:'')+'\nLa tarea conserva su avance hasta aprobación.')+'\nMotivo: '+s.reason.slice(0,550)+(s.reason.length>550?'…':'')+'\n¿Guardar para revisión?');}
  if(s.step==='CONFIRM'){
   if(selected==='CANCEL')return {state:null,reply:text('Operación cancelada. Escribí MENU para continuar.')};
   if(selected!=='CONFIRM')return {state:active,reply:text('Elegí Guardar o Cancelar en el menú anterior.')};
   if(s.purpose==='ATTENDANCE')return {state:null,command:{action:'ATTENDANCE',payload:{workerId:facts.workerId,eventType:s.eventType,expectedEventId:s.expectedEventId,sectorId:s.sectorId,qrToken:null,location:s.location||null}}};
   if(s.purpose==='INCIDENT')return {state:null,command:{action:'REPORT_INCIDENT',payload:{workerId:facts.workerId,taskId:s.taskId,sectorId:s.sectorId,title:s.title,description:s.description,severity:s.severity,evidenceIds:[]}}};
   if(s.purpose==='MATERIAL')return {state:null,command:{action:'REQUEST_MATERIAL',payload:{workerId:facts.workerId,taskId:s.taskId,sectorId:s.sectorId,name:s.name,quantity:s.quantity,unit:s.unit,reason:s.reason,evidenceIds:[]}}};
-  if(s.purpose==='CONSUMPTION')return {state:null,command:{action:'PROPOSE_CONSUMPTION',payload:{workerId:facts.workerId,taskId:s.taskId,sectorId:s.sectorId,materialId:s.materialId,catalogHash:s.catalogHash,quantity:s.quantity,reason:s.reason}}};
+  if(s.purpose==='CONSUMPTION')return {state:null,command:{action:'PROPOSE_CONSUMPTION',payload:{workerId:facts.workerId,taskId:s.taskId,sectorId:s.sectorId,materialId:s.materialId,catalogHash:s.catalogHash,quantity:s.quantity,reason:s.reason,...(s.evidenceIds?.length?{evidenceIds:[...s.evidenceIds]}:{})}}};
   if(s.purpose==='PROGRESS')return {state:null,command:{action:'PROPOSE_PROGRESS',payload:s.measurement?{workerId:facts.workerId,taskId:s.taskId,revision:s.taskRevision,measurement:s.measurement,reason:s.reason,evidenceIds:s.evidenceIds}:{workerId:facts.workerId,taskId:s.taskId,revision:s.taskRevision,progress:s.progress,quantity:s.quantity,baseline:s.baseline,unit:s.unit,reason:s.reason,evidenceIds:s.evidenceIds}}};
  }
  return start('MENU',eventId,facts,now);
