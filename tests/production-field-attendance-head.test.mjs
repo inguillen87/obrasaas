@@ -89,7 +89,7 @@ const prefix=`import React from ${JSON.stringify(import.meta.resolve('react'))};
 ${importer('createWorkspaceRequestLifecycle','workspace-request-lifecycle.mjs')}
 ${importer('collectRetainedPages,retainedRows,liveContextChanged','workspace-live-read.mjs')}
 ${importer('FIELD_OVERTIME_RECOVERY_ACTIONS','workspace-recovery-journal.mjs')}
-${importer('FIELD_PROGRESS_PENDING_EVENT,fieldReviewPage,mergeFieldReviewRows','field-review-page-view.mjs')}
+${importer('FIELD_PROGRESS_PENDING_EVENT,FIELD_EVIDENCE_PENDING_EVENT,fieldReviewPage,mergeFieldReviewRows','field-review-page-view.mjs')}
 ${importer('fieldMediaAttemptReference,fieldMediaHeldOutcome,fieldMediaHeldMessage,fieldMediaEvidenceHeld,fieldMediaReviewEligible','field-media-held-view.mjs')}
 ${importer('taskMeasurementView,measurementProposalPreview,measurementProposalPayload,prepareMeasuredVoiceProgress,measuredQuantityLabel,measurementConfirmation,measurementConfirmationMatches','task-progress-measurement-view.mjs')}
 ${importer('voiceProgressDraftReady,voiceProgressUnitLabel','voice-progress-draft.mjs',lib)}
@@ -100,17 +100,17 @@ const useState=initial=>{const index=stateCursor++;if(!(index in states))states[
 const useRef=initial=>{const index=refCursor++;return refs[index]??(refs[index]={current:initial});};
 const useEffect=(callback,deps)=>{const index=effectCursor++,previous=effects[index];if(!previous||deps===undefined||deps.some((value,i)=>value!==previous.deps?.[i]))pendingEffects.push(()=>{previous?.cleanup?.();effects[index]={deps,cleanup:callback()};});};
 const useLayoutEffect=useEffect,useWorkspaceRequest=()=>lifecycle.request;
-const window={addEventListener(){},removeEventListener(){}};
+const handlers=new Map();const window={addEventListener(name,handler){handlers.set(name,handler);},removeEventListener(name,handler){if(handlers.get(name)===handler)handlers.delete(name);}};
 const useWorksiteLiveRefresh=()=>({status:{state:'IDLE',checkedAt:null,updates:false},check(){throw Error('No live scheduling in attendance fixture');}});
 const styles={},WorksiteLiveRefreshStatus=()=>null,WorksiteTaskSelector=()=>null,FieldMediaCapture=()=>null,FieldMediaPreview=()=>null,FieldQrCapture=()=>null,PrivateWorkspaceDownload=()=>null,FieldOvertimeJourney=()=>null,FieldOvertimeForm=()=>null,FieldHoursReportPanel=()=>null,VoiceProgressDraftView=()=>null;
 `;
 const suffix=`
 export function unmount(){for(const effect of effects)effect?.cleanup?.();lifecycle?.abort();}
 export function reset(seed,replies=[]){unmount();states=[];refs=[];effects=[];calls=[];responses=[...replies];for(const [name,value]of Object.entries(seed)){const index=${JSON.stringify(stateNames)}.indexOf(name);if(index<0)throw Error('Unknown state '+name);states[index]=value;}
- lifecycle=createWorkspaceRequestLifecycle(async()=> 'synthetic-attendance-token',{fetchImpl:async(url,options)=>{calls.push({url,method:options.method||'GET'});const next=responses.shift();if(!next)throw Error('Unexpected HTTP');return new Response(JSON.stringify(next.body),{status:next.status??200,headers:{'Content-Type':'application/json'}});}});
+ lifecycle=createWorkspaceRequestLifecycle(async()=> 'synthetic-attendance-token',{fetchImpl:async(url,options)=>{calls.push({url,method:options.method||'GET',...(options.body?{body:JSON.parse(options.body)}:{})});const next=responses.shift();if(!next)throw Error('Unexpected HTTP');return new Response(JSON.stringify(next.body),{status:next.status??200,headers:{'Content-Type':'application/json'}});}});
 }
 export function render(props){stateCursor=refCursor=effectCursor=0;pendingEffects=[];const tree=FieldOperationsPanelInner(props);for(const effect of pendingEffects)effect();return tree;}
-export const snapshot=()=>Object.fromEntries(${JSON.stringify(stateNames)}.map((name,index)=>[name,states[index]]));export const requests=()=>calls;
+export const dispatch=(name,detail)=>handlers.get(name)?.({detail});export const snapshot=()=>Object.fromEntries(${JSON.stringify(stateNames)}.map((name,index)=>[name,states[index]]));export const requests=()=>calls;
 `;
 await loadBindings();
 const compiled=await transform(prefix+source+suffix,{filename:'actual-attendance-head-panel.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}}),panel=await import('data:text/javascript;base64,'+Buffer.from(compiled.code).toString('base64'));
@@ -149,4 +149,42 @@ test('a denied or wrong-context refresh clears the actual panel head and prepare
   panel.reset({opened:true,tab:'JOURNEY',data:page},[response]);let tree=panel.render(props(page));button(tree,'Salida').props.onClick();tree=panel.render(props(page));assert.ok(panel.snapshot().draft);
   await button(tree,'Actualizar').props.onClick();tree=panel.render(props(page));assert.equal(panel.snapshot().data,null);assert.equal(panel.snapshot().draft,null);assert.equal(nodes(tree,node=>node.type==='button'&&attendanceButtons.includes(text(node))).length,0);assert.deepEqual(panel.requests().map(call=>call.method),['GET']);panel.unmount();
  }
+});
+
+
+const oldAttendance=(id='older-pending')=>({id,workerId:'worker-outside-window',workerName:'Ficha anterior de la obra',version:1,eventType:'CHECK_IN',phase:'WORKING',sequence:1,shiftId:'old-shift',sectorId:'sector-a',sectorName:'Acceso anterior',qrStatus:'NOT_PROVIDED',verificationStatus:'REVIEW_REQUIRED',recordedBy:'actor-other',recordedAt:'2026-10-01T11:00:00.000Z',location:null,review:null});
+const attendancePage=(base,records,extra={})=>({scope:base.scope,projectId:base.projectId,reviewAccessStamp:base.reviewAccessStamp,reviewSection:'ATTENDANCE',reviewFilter:'PENDING',afterReview:null,reviewId:null,records,total:records.length,nextCursor:null,canReview:base.canReview,canApproveProgress:base.canApproveProgress,...extra});
+
+test('actual attendance queue recovers an old pending event and name outside both recent windows without changing own head',async()=>{
+ const f=fixture();f.state.ledger.push(f.event(),...Array.from({length:101},(_,index)=>f.event({id:'recent-'+index,workerId:'worker-other',actor:'actor-other',at:index+1})));
+ const base=await f.readField(),old=oldAttendance(),head=structuredClone(base.selfAttendanceHeads);
+ panel.reset({opened:true,tab:'JOURNEY',data:base},[{body:attendancePage(base,[old])}]);let tree=panel.render(props(base));
+ await button(tree,'Consultar pendientes').props.onClick();tree=panel.render(props(base));
+ assert.match(text(tree),/1 de 1 fichajes en esta consulta/);assert.match(text(tree),/Ficha anterior de la obra/);
+ assert.equal(panel.snapshot().data.attendance.some(row=>row.id===old.id),true);assert.deepEqual(panel.snapshot().data.selfAttendanceHeads,head);
+ button(tree,'Revisar fichaje').props.onClick();tree=panel.render(props(base));assert.equal(panel.snapshot().draft.payload.eventId,old.id);
+ assert.equal(panel.snapshot().draft.action,'REVIEW_ATTENDANCE');assert.equal(button(tree,'Guardar con recibo').props.disabled,false);
+ const request=new URL(panel.requests()[0].url,'https://example.test');assert.equal(request.searchParams.get('reviewSection'),'ATTENDANCE');assert.equal(request.searchParams.get('reviewFilter'),'PENDING');assert.equal(request.searchParams.get('reviewAccessStamp'),base.reviewAccessStamp);assert.deepEqual(panel.requests().map(call=>call.method),['GET']);panel.unmount();
+});
+
+test('actual attendance decision conflict keeps the reason and directed readback prevents deciding an already reviewed old row',async()=>{
+ const f=fixture(),base=await f.readField(),old=oldAttendance(),reviewed={...old,review:{decision:'REJECT',reason:'Revisión guardada por otra persona',actorId:'another-reviewer',recordedAt:'2026-10-20T12:00:00.000Z'}};
+ panel.reset({opened:true,tab:'JOURNEY',data:base},[{body:attendancePage(base,[old])},{status:409,body:{saved:false,code:'FIELD_ALREADY_REVIEWED'}},{body:attendancePage(base,[reviewed],{reviewFilter:'ALL',reviewId:old.id})}]);let tree=panel.render(props(base));
+ await button(tree,'Consultar pendientes').props.onClick();tree=panel.render(props(base));button(tree,'Revisar fichaje').props.onClick();tree=panel.render(props(base));
+ const reason=nodes(tree,node=>node.type==='textarea'&&node.props.maxLength===1000);assert.equal(reason.length,1);reason[0].props.onChange({target:{value:'Ubicación comprobada con el responsable'}});tree=panel.render(props(base));
+ await nodes(tree,node=>node.type==='form')[0].props.onSubmit({preventDefault(){}});tree=panel.render(props(base));
+ assert.equal(panel.snapshot().attempt,null);assert.equal(panel.snapshot().draft.payload.reason,'Ubicación comprobada con el responsable');assert.equal(button(tree,'Guardar con recibo').props.disabled,true);
+ await button(tree,'Consultar registro vigente').props.onClick();tree=panel.render(props(base));assert.match(text(tree),/Revisión rechazada/);assert.equal(button(tree,'Guardar con recibo').props.disabled,true);
+ assert.equal(panel.snapshot().draft.payload.reason,'Ubicación comprobada con el responsable');assert.equal(panel.snapshot().draft.payload.revision,undefined);
+ const sent=panel.requests();assert.deepEqual(sent.map(call=>call.method),['GET','POST','GET']);assert.equal(sent[1].body.action,'REVIEW_ATTENDANCE');assert.equal(sent[1].body.payload.eventId,old.id);assert.equal(new URL(sent[2].url,'https://example.test').searchParams.get('reviewId'),old.id);panel.unmount();
+});
+
+test('evidence pending navigation uses a fresh scoped GET and never replaces an attendance draft',async()=>{
+ const f=fixture(),base=await f.readField(),draft={key:'kept-draft',action:'REVIEW_ATTENDANCE',payload:{eventId:'pending',decision:'APPROVE',reason:'Motivo que se debe conservar'}};
+ panel.reset({opened:true,tab:'JOURNEY',data:base,draft});panel.render(props(base));
+ panel.dispatch('obrasaas:evidence-pending',{scope:'wrong',projectId:base.projectId});assert.equal(panel.snapshot().evidencePendingRequested,false);
+ panel.dispatch('obrasaas:evidence-pending',{scope:base.scope,projectId:base.projectId});let tree=panel.render(props(base));assert.deepEqual(panel.snapshot().draft,draft);assert.equal(panel.snapshot().evidencePendingRequested,true);assert.equal(button(tree,'Abrir evidencias por revisar').props.disabled,true);assert.deepEqual(panel.requests(),[]);panel.unmount();
+ const evidence={...attendancePage(base,[]),reviewSection:'EVIDENCE'};
+ panel.reset({},[{body:base},{body:evidence}]);panel.render(props(base));await panel.dispatch('obrasaas:evidence-pending',{scope:base.scope,projectId:base.projectId});tree=panel.render(props(base));
+ assert.equal(panel.snapshot().tab,'EVIDENCE');assert.equal(panel.snapshot().opened,true);assert.equal(panel.snapshot().evidencePendingRequested,false);assert.deepEqual(panel.requests().map(call=>call.method),['GET','GET']);assert.match(panel.requests()[1].url,/reviewSection=EVIDENCE/);panel.unmount();
 });
