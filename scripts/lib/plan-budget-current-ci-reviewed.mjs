@@ -75,6 +75,16 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "currentSha256": "d7314b1f7bc11d6cd5d56c6be2f4152ce6b8d3362c79418f16ae5ffaed9d4267"
     },
     {
+      "path": "scripts/verify-field-operations-ui.mjs",
+      "previousSha256": "c32dab6e6c5ba4619a04a2edada3a8656b22455f3a8e6a96d2bdf3b340d2d38f",
+      "currentSha256": "e73541c962d7dab349b4ce3425591472ecce51b7ad1b74bdb483adacd786a5cc"
+    },
+    {
+      "path": "scripts/verify-material-inventory-ui.mjs",
+      "previousSha256": "63713aae240745041b3ce9e1bd5e412a9a3a855c8e8c8ad738a3ad91cd6a5fa6",
+      "currentSha256": "ffcc82738e4620a196bab170b6ae9052df088297128273182cce8c785e6f9739"
+    },
+    {
       "path": "scripts/verify-meta-customer-coexistence-postgres.mjs",
       "previousSha256": "fd94401af9a07866a2cd28a355b7f2f69ef122cf3ae325690c8ffc35cb97092a",
       "currentSha256": "463875f2b3a12df09847a2de5dcd2b3b87e0df7a043303ca76bb754266c7929f"
@@ -98,6 +108,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "path": "scripts/verify-plan-measurement-ci.mjs",
       "previousSha256": "314cfdc84accb072c82ef9de3dc13557a7594e8b1461031aa71a79d94b7de35d",
       "currentSha256": "8e86d0637c09d1a0fe907999997f4683f35bd4e17469e1dc36bd66ad75bd3552"
+    },
+    {
+      "path": "scripts/verify-workspace-ui.mjs",
+      "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
+      "currentSha256": "31f4dbf6f43f0c05840c51f3d92526426f0b44940a1b1434c0ed3da24c2a4990"
     },
     {
       "path": "src/app/(identity)/cuenta/field-media-preview.js",
