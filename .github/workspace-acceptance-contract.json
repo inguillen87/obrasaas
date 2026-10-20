@@ -38893,7 +38893,7 @@
       {
         "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
         "previousSha256": null,
-        "currentSha256": "afddc7c9974b89e6ffdc4aad8681ba14921968b201a9679fd13cc35bb22d6965"
+        "currentSha256": "7a63b9f5fb8a3ad594344eb68dc25386a9426bc6a22bb5e355fb7a89466284a3"
       },
       {
         "path": "scripts/lib/plan-budget-ui-contract.mjs",
@@ -38943,7 +38943,7 @@
       {
         "path": "scripts/verify-material-inventory-postgres.mjs",
         "previousSha256": "56c2c4751825349b126d26bc48fcce0557f11b779f94b3fad45985f34bbc409b",
-        "currentSha256": "c046f5bae2f922bcf83b3f2dffc53ad36f10a9dcc1e57bbd73923176d1bf8093"
+        "currentSha256": "bfac7891dc752dc0cd600bc878b1f977a4947122bc4f2035866220654fd5c652"
       },
       {
         "path": "scripts/verify-material-inventory-ui.mjs",
@@ -39333,7 +39333,7 @@
       {
         "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
         "previousSha256": null,
-        "currentSha256": "f30b40dfd377f77c49c2bec806d9cc83c1ee50fa3bc91e02a8b1fdb89a58b8e3"
+        "currentSha256": "b7407e42ba1aa17501a339229aa1e8c5fdf78d57120859029d4512b0badeebcf"
       },
       {
         "path": "tests/production-plan-budget-analyzer-http.test.mjs",
@@ -42287,7 +42287,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "afddc7c9974b89e6ffdc4aad8681ba14921968b201a9679fd13cc35bb22d6965"
+            "sha256": "7a63b9f5fb8a3ad594344eb68dc25386a9426bc6a22bb5e355fb7a89466284a3"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -43323,7 +43323,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "afddc7c9974b89e6ffdc4aad8681ba14921968b201a9679fd13cc35bb22d6965"
+            "sha256": "7a63b9f5fb8a3ad594344eb68dc25386a9426bc6a22bb5e355fb7a89466284a3"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -48403,7 +48403,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "afddc7c9974b89e6ffdc4aad8681ba14921968b201a9679fd13cc35bb22d6965"
+            "sha256": "7a63b9f5fb8a3ad594344eb68dc25386a9426bc6a22bb5e355fb7a89466284a3"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -50983,7 +50983,7 @@
           },
           {
             "path": "scripts/verify-material-inventory-postgres.mjs",
-            "sha256": "c046f5bae2f922bcf83b3f2dffc53ad36f10a9dcc1e57bbd73923176d1bf8093"
+            "sha256": "bfac7891dc752dc0cd600bc878b1f977a4947122bc4f2035866220654fd5c652"
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-view.mjs",
@@ -51481,7 +51481,26 @@
             "path": "tests/production-material-inventory.test.mjs",
             "sha256": "2a80d93038308de209281839e8fdb1406d6ea99e2ff26f8c6c747b77506c2c61"
           }
-        ]
+        ],
+        "sourceHistory": {
+          "parentHead": "1b654e24ff968014fb96adc56cf06b33ccf1599f",
+          "previousSha256": "c046f5bae2f922bcf83b3f2dffc53ad36f10a9dcc1e57bbd73923176d1bf8093",
+          "currentSha256": "bfac7891dc752dc0cd600bc878b1f977a4947122bc4f2035866220654fd5c652",
+          "previousBytes": 73817,
+          "currentBytes": 73988,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 58880,
+              "currentText": "   const summary=await homeStatus.read(actor,{...context,view:'decisions'});assert.deepEqual(Object.keys(summary).sort(),['evidence','inventory','observedAt','projectId','proposals','scope','view']);assert.deepEqual(summary.evidence,{pending:0});assert.equal(summary.scope,context.scope);assert.equal(summary.projectId,reviewProjectId);assert.equal(summary.view,'decisions');assert.equal(new Date(summary.observedAt).toISOString(),summary.observedAt);assert.deepEqual(summary.proposals,{pending:2});assert.deepEqual(summary.inventory,{canManage:true,pendingCounts:{consumptions:202,adjustments:202}});\n   const full=await nativeStatus.read(actor,context);assert.deepEqual(summary.proposals,full.proposals);assert.deepEqual(summary.inventory,full.inventory);assert.equal(summary.evidence.pending,full.reports.evidencePending);\n",
+              "previousText": "   const summary=await homeStatus.read(actor,{...context,view:'decisions'});assert.deepEqual(Object.keys(summary).sort(),['inventory','observedAt','projectId','proposals','scope','view']);assert.equal(summary.scope,context.scope);assert.equal(summary.projectId,reviewProjectId);assert.equal(summary.view,'decisions');assert.equal(new Date(summary.observedAt).toISOString(),summary.observedAt);assert.deepEqual(summary.proposals,{pending:2});assert.deepEqual(summary.inventory,{canManage:true,pendingCounts:{consumptions:202,adjustments:202}});\n   const full=await nativeStatus.read(actor,context);assert.deepEqual(summary.proposals,full.proposals);assert.deepEqual(summary.inventory,full.inventory);\n"
+            },
+            {
+              "currentOffsetCharacters": 59710,
+              "currentText": "  const other=await homeStatus.read(foreign,{...foreignContext,view:'decisions'});assert.deepEqual(other.proposals,{pending:1});assert.deepEqual(other.inventory.pendingCounts,{consumptions:2,adjustments:1});assert.deepEqual(other.evidence,{pending:0});\n",
+              "previousText": "  const other=await homeStatus.read(foreign,{...foreignContext,view:'decisions'});assert.deepEqual(other.proposals,{pending:1});assert.deepEqual(other.inventory.pendingCounts,{consumptions:2,adjustments:1});\n"
+            }
+          ]
+        }
       },
       "nativeOrHumanAcceptance": false
     }

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {PLAN_BUDGET_CURRENT_REVISION as reviewed,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,restorePlanBudgetPilotProducerText,normalizePlanBudgetPilotNativeProof,restorePlanBudgetFieldReviewSourceSet,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSourceSet,restorePlanBudgetConsumptionEvidenceSource} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_REVISION as reviewed,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,restorePlanBudgetPilotProducerText,normalizePlanBudgetPilotNativeProof,restorePlanBudgetFieldReviewSourceSet,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSourceSet,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetMaterialNativeProducerText} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 const read=file=>readFileSync(file),c=()=>JSON.parse(read('.github/workspace-acceptance-contract.json')),sha=b=>createHash('sha256').update(b).digest('hex'),serialize=v=>JSON.stringify(v,null,2)+'\n',p=reviewed.pilotWhatsAppRuntime;
 const deny=run=>assert.throws(run,{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'});
 const native=n=>({checks:[...n.previousCheckNames,...n.addedCheckNames],checkCount:n.previousCheckNames.length+n.addedCheckNames.length,...(n.sourceManifestAdvance?{sourceManifest:reviewed.consumptionEvidenceRuntime.materialNative.currentFiles.map(path=>({path,sha256:sha(read(path))})),harnessSha256:sha(read(n.producer))}:{})});
@@ -58,4 +58,15 @@ test('shared catalog wrapper reconstructs only the authentic24128 source and can
 });
 test('material native130 requires the new shared core and rejects a complete old129 receipt or a resealed core reader',()=>{
  const n=p.nativeSupplements[1],raw=native(n),core='src/lib/consumption-evidence-catalog.mjs';assert.equal(raw.sourceManifest.length,130);assert.ok(raw.sourceManifest.some(ref=>ref.path===core));const old=structuredClone(raw);old.sourceManifest=old.sourceManifest.filter(ref=>ref.path!==core);deny(()=>normalizePlanBudgetPilotNativeProof(c(),n.producer,old,read));const forged=structuredClone(raw),bytes=Buffer.from('foreign core');forged.sourceManifest.find(ref=>ref.path===core).sha256=sha(bytes);deny(()=>normalizePlanBudgetPilotNativeProof(c(),n.producer,forged,file=>file===core?bytes:read(file)));
+});
+
+test('material Home successor restores the exact1b producer before the unchanged historical pilot inverse',()=>{
+ const contract=c(),runtime=reviewed.consumptionEvidenceRuntime.materialNative,h=runtime.sourceHistory,raw=read(runtime.producer),before=Buffer.from(raw),parent=restorePlanBudgetMaterialNativeProducerText(contract,raw);verifyPlanBudgetCurrentSources(contract,read);
+ assert.equal(h.parentHead,'1b654e24ff968014fb96adc56cf06b33ccf1599f');assert.equal(sha(parent),'c046f5bae2f922bcf83b3f2dffc53ad36f10a9dcc1e57bbd73923176d1bf8093');assert.equal(p.producerDeltas[2].currentSha256,sha(parent));assert.equal(sha(restorePlanBudgetPilotProducerText(contract,runtime.producer,raw)),p.producerDeltas[2].previousSha256);assert.deepEqual(raw,before);
+});
+test('material Home successor rejects old parent bytes and stale or caller resealed current130 native receipts',()=>{
+ const contract=c(),runtime=reviewed.consumptionEvidenceRuntime.materialNative,raw=read(runtime.producer),parent=restorePlanBudgetMaterialNativeProducerText(contract,raw),n=p.nativeSupplements[1];
+ for(const bytes of [parent,raw.subarray(1),Buffer.concat([raw,Buffer.from('\n')]),Buffer.from('foreign material producer')])deny(()=>restorePlanBudgetMaterialNativeProducerText(contract,bytes));
+ const stale=native(n);stale.harnessSha256=sha(parent);stale.sourceManifest.find(ref=>ref.path===runtime.producer).sha256=sha(parent);deny(()=>normalizePlanBudgetPilotNativeProof(contract,runtime.producer,stale,read));deny(()=>normalizePlanBudgetPilotNativeProof(contract,runtime.producer,stale,file=>file===runtime.producer?parent:read(file)));
+ for(const edit of [h=>h.inverseHunks.pop(),h=>h.inverseHunks.reverse(),h=>{h.inverseHunks[0].currentText+='foreign';},h=>{h.previousSha256='f'.repeat(64);}]){const forged=c();edit(forged.planBudgetCurrentRevision.consumptionEvidenceRuntime.materialNative.sourceHistory);deny(()=>verifyPlanBudgetCurrentSources(forged,read));}
 });
