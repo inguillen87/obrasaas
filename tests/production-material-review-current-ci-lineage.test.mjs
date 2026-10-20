@@ -158,8 +158,17 @@ test('field review sources reconstruct the exact parent material surface without
   const anchor=row.path.endsWith('http.mjs')?"'EVIDENCE','PROGRESS','ATTENDANCE'":row.path.endsWith('store.mjs')?"attendance?'attendance':'report'":'totals.evidencePending';
   assert.ok(text.includes(anchor));
   const changed=Buffer.from(text.replace(anchor,row.path.endsWith('http.mjs')?"'EVIDENCE','PROGRESS'":row.path.endsWith('store.mjs')?"attendance?'report':'report'":'totals.pending'));
-  assert.notEqual(materialReviewUnchangedSurface(row.path,changed),surface);
+  assert.notEqual(sha(changed),row.currentSourceSha256,'The field-review mutation must change actual bytes '+row.path);
+  assert.deepEqual(restoreMaterialReviewFieldReviewSource(row.path,changed),changed,'An unreviewed current edit cannot be rewritten as a different parent body '+row.path);
   denied(()=>verifyMaterialReviewCurrentSources(contract,file=>file===row.path?changed:read(file)));
+  // Reverting HTTP ATTENDANCE reproduces the exact approved parent: its old
+  // surface may legitimately match, while current-source authentication denies it.
+  // Independently mutate a retained identity/business guard to test that surface.
+  const guard=row.path.endsWith('store.mjs')?'if(proposed.progress<current.progress)':'requireWorkspaceIdentity(session)';
+  assert.equal(text.split(guard).length,2,'Unique retained authority guard '+row.path);
+  const authorityChanged=Buffer.from(text.replace(guard,row.path.endsWith('store.mjs')?'if(false)':'void session'));
+  assert.notEqual(materialReviewUnchangedSurface(row.path,authorityChanged),surface,'Changed inherited guard must change the historical surface '+row.path);
+  denied(()=>verifyMaterialReviewCurrentSources(contract,file=>file===row.path?authorityChanged:read(file)));
   denied(()=>verifyMaterialReviewCurrentSources(contract,file=>file===row.path?Buffer.concat([bytes,Buffer.from('\n// foreign field-review source\n')]):read(file)));
  }
 });

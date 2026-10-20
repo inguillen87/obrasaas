@@ -12,7 +12,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": ".github/scripts/verify-workspace-ci-parallelization.mjs",
       "previousSha256": "8d65b7fb1446dc0533f69097ae28598a7c748f50c19eb586614ce078bf3aebac",
-      "currentSha256": "74a4a80e1feac74e9242355717d12652042e1792ea6eb5050fcf3722d4e5932e"
+      "currentSha256": "b2788a2dd967624c1a2548ff32242a17a2fefffbaa6836e74efdc8132d69e1df"
     },
     {
       "path": ".github/workflows/company-usage-proxy.yml",
@@ -392,7 +392,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-material-review-current-ci-lineage.test.mjs",
       "previousSha256": "a9d434e05848d2d2170d57a9410c8ddeecf4585949a645cb1fdf0480b2e58db9",
-      "currentSha256": "0813dc4cdea29eb554ebc5fc4f7bf8e52bd802125c8456366bdebbe82a914f5e"
+      "currentSha256": "f712f12c2396e2bc87ab108f0bd63a4caf0dd7faacfc21cde5cafdfeaa564db3"
     },
     {
       "path": "tests/production-meta-existing-api-plan-current-ci-lineage.test.mjs",

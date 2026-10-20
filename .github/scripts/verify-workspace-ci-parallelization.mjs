@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths} from '../../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetFieldReviewSourceSet} from '../../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {normalizeAttendanceReviewNativeProof,attendanceReviewCurrentCheckCount,ATTENDANCE_REVIEW_CHECK_NAMES} from '../../scripts/lib/attendance-review-current-ci-proof.mjs';
 import {PLAN_BUDGET_UI_MATRIX,validatePlanBudgetUiProofBytes,planBudgetUiSourceBinding,planBudgetUiRetainedScreenshotPath} from '../../scripts/lib/plan-budget-ui-contract.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract,verifyWorksiteLiveHoursCurrentSources} from '../../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
@@ -587,9 +587,18 @@ function validateCanonicalFieldKycFixture(fixture,sourceMap=false){
  if(fixture.syntheticPrivateCalls.privatePuts!==fixture.records.length*2||fixture.syntheticPrivateCalls.privateReads!==fixture.records.length*6)deny('PROOF_FIELD_KYC_FIXTURE');
  for(const record of fixture.records){exactKeys(record,['projectId','workerId','submissionId','submissionReceiptId','reviewReceiptId','actorId','reviewerActorId','contentHash','canonicalAdmissionConfirmed','identityCertified','providerCalls'],'PROOF_FIELD_KYC_FIXTURE');if(record.canonicalAdmissionConfirmed!==true||record.identityCertified!==false||record.providerCalls!==0||!sha(record.contentHash)||typeof record.actorId!=='string'||typeof record.reviewerActorId!=='string'||!record.actorId||!record.reviewerActorId||record.actorId===record.reviewerActorId||!/^participant_[a-f0-9]{64}$/.test(record.submissionReceiptId)||!/^participant_[a-f0-9]{64}$/.test(record.reviewReceiptId))deny('PROOF_FIELD_KYC_FIXTURE');}
 }
-function fieldPrivacySpecRevision(spec){try{return currentFieldPrivacySpecRevision(spec);}catch{deny('PROOF_FIELD_PRIVACY_REVISION');}}
-function validateFieldHistoryPrivacy(spec,proof){
- const revision=fieldPrivacySpecRevision(spec);
+function fieldPrivacySpecRevision(spec,readSource){try{
+ let privacySpec=spec;
+ if(attendanceReviewCurrentCheckCount(spec)!==null){
+  const contract=JSON.parse(utf8(readSource('.github/workspace-acceptance-contract.json')));
+  verifyPlanBudgetCurrentSources(contract,readSource);
+  const parent=restorePlanBudgetAttendanceReviewProducerText(contract,readSource(spec.producer));
+  privacySpec={...spec,producerSha256:hash(parent),sourceFiles:restorePlanBudgetFieldReviewSourceSet(contract,'PG_FIELD',spec.sourceFiles)};
+ }
+ return currentFieldPrivacySpecRevision(privacySpec);
+}catch{deny('PROOF_FIELD_PRIVACY_REVISION');}}
+function validateFieldHistoryPrivacy(spec,proof,readSource){
+ const revision=fieldPrivacySpecRevision(spec,readSource);
  if(!revision){if(Object.hasOwn(proof,'ownHistoryPrivacy'))deny('PROOF_FIELD_PRIVACY_REVISION');return null;}
  const value=proof.ownHistoryPrivacy,common=['version','currentAccountKycCanonical','originalAuthorRestored','reviewerRoles','readBusinessWrites','participantKycFixture'];
  exactKeys(value,spec.kind==='PG_FIELD'?[...common,'checks','deniedBeforePrivateRead','postReadAuthorityRaces','providerCalls']:[...common,'sameWorkerReassigned','newAuthorOwnShiftWithForeignPredecessorReadable'],'PROOF_FIELD_HISTORY_PRIVACY');
@@ -603,7 +612,7 @@ function validateFieldHistoryPrivacy(spec,proof){
 }
 function validateCanonicalFieldProof(spec,proof,readSource){
  const fixture=proof.participantKycFixture;validateCanonicalFieldKycFixture(fixture,spec.kind==='PG_FIELD');if(proof.providerCalls!==0)deny('PROOF_PROVIDER_IO');
- const revision=validateFieldHistoryPrivacy(spec,proof),sets=canonicalFieldSourceSets(spec,readSource);
+ const revision=validateFieldHistoryPrivacy(spec,proof,readSource),sets=canonicalFieldSourceSets(spec,readSource);
  if(spec.kind==='PG_OVERTIME'){
   if(proof.environment!=='disposable-random-schema-on-approved-local-postgres'||!/^obrasaas_overtime_[a-f0-9]{32}$/.test(proof.schema)||proof.disposableSchemaRemoved!==true)deny('PROOF_CLEANUP');
   if(proof.newOvertimeEnum!==false||proof.paymentEngineUsed!==false||proof.humanAccepted!==false)deny('PROOF_PROVIDER_IO');equal(proof.sqlFailures,[],'PROOF_SQL_ERRORS');equal(proof.checks,spec.checkNames,'PROOF_CHECK_NAMES');equal(proof.sourceManifest.map(ref=>ref.path).toSorted(),sets.sourceManifest,'PROOF_SOURCE_MANIFEST');
@@ -2413,7 +2422,7 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],
    for(const [group,countKey,count] of FIELD_CHECK_GROUPS){proof[group]=spec.checkNames.map(row=>JSON.parse(row)).filter(row=>row.group===group).map(row=>row.name);proof[countKey]=count;}
    Object.assign(proof,{environment:'disposable-local-postgresql17',databaseEngineVersion:'17.6',databaseRemoved:true,totalChecks:spec.checkNames.length,productionDataWritten:false,reviewPaginationProviderCalls:0,voiceProgressProviderCalls:0,mediaLeaseProviderCalls:0,videoAudioProviderCalls:0,physicalAttendanceAccepted:false,whatsAppTested:false,videoAudioFfmpegExecuted:false});
   }else Object.assign(proof,{environment:'disposable-random-schema-on-approved-local-postgres',schema:'obrasaas_overtime_'+'a'.repeat(32),disposableSchemaRemoved:true,realBusinessDatabaseUsed:false,newOvertimeEnum:false,paymentEngineUsed:false,humanAccepted:false,sqlFailures:[],checks:[...spec.checkNames],sourceManifest:sets.sourceManifest.map(file=>({file,sha256:hash(readSource(file))}))});
-  const privacyRevision=fieldPrivacySpecRevision(spec);if(privacyRevision){
+  const privacyRevision=fieldPrivacySpecRevision(spec,readSource);if(privacyRevision){
    const privacyFixture=clone(fixture);delete privacyFixture.sourceSha256;
    proof.ownHistoryPrivacy={version:1,currentAccountKycCanonical:true,originalAuthorRestored:true,reviewerRoles:['ADMIN','DIRECTOR','SITE_MANAGER'],readBusinessWrites:0,participantKycFixture:privacyFixture};
    if(spec.kind==='PG_FIELD')Object.assign(proof.ownHistoryPrivacy,{checks:privacyRevision.addedChecks.map(value=>JSON.parse(value).name),deniedBeforePrivateRead:true,postReadAuthorityRaces:['REASSIGNED','REVOKED'],providerCalls:0});
