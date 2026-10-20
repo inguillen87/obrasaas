@@ -199,9 +199,35 @@ try{
  const protectedRoster=await workerRow(success.beforeWorker.id),tamperedRoster=structuredClone(protectedRoster);tamperedRoster.metadata.employeeIntakeAdmission.rosterSource.snapshotDigest='f'.repeat(64);await restoreRoster(tamperedRoster);
  try{const tampered=await workerRow(protectedRoster.id),before=await intakeProjection();await assert.rejects(customerJobTransaction(connect,client=>employeeIntakeAcceptedPermissions(client,tampered,{organizationId:'org-a',projectId:'project-c'})),{code:'EMPLOYEE_INTAKE_INTEGRITY'});assert.equal(await intakeProjection(),before);}finally{await restoreRoster(protectedRoster);}
  checks.push('real-PG-existing-roster-provenance-tamper-denies-accepted-permissions');
+ // Withdrawal assertions run before the inherited destructive channel checks;
+ // their two literal labels are appended after the inherited33 to preserve that ledger exactly.
+ const originalIntakeEnvelope=payload=>{const original={...payload};delete original.employeeIntake;return original;};
+ {
+  const pending=await consented('15550001051'),workersBefore=(await query('SELECT count(*)::int AS n FROM public."Worker"')).rows[0].n,identityBefore=syntheticIdentityCalls.length,auditsBefore=await auditCount(),source=structuredClone(originalIntakeEnvelope(pending.payload));
+  const withdrawalId=await advance('CANCELAR',{sender:pending.state.sender.slice(1)}),withdrawn=await state(pending.id);
+  assert.equal(withdrawn.status,'CANCELLED');assert.equal(withdrawn.step,'CANCELLED');assert.equal(withdrawn.consent,false);assert.equal(withdrawn.revision,pending.state.revision+1);
+  for(const key of ['applicationId','name','job','email','createdAt','expiresAt','submittedAt','confirmationEventId'])assert.deepEqual(withdrawn[key],pending.state[key]);
+  assert.deepEqual(originalIntakeEnvelope((await query(`SELECT payload FROM public."WebhookEvent" WHERE id=$1`,[pending.id])).rows[0].payload),source);
+  assert.equal((await query(`SELECT count(*)::int AS n FROM public."WebhookEvent" WHERE id=$1 AND "projectId"='project-a' AND provider='meta-customer-v1' AND payload->'employeeIntake'->>'status' IN ('WAITING_RESPONSIBLE','ADMITTED')`,[pending.id])).rows[0].n,0);
+  assert.equal((await query('SELECT count(*)::int AS n FROM public."Worker"')).rows[0].n,workersBefore);assert.equal(await auditCount(),auditsBefore);assert.equal(syntheticIdentityCalls.length,identityBefore);
+  const protectedRows=(await query(`SELECT to_jsonb(e) AS value FROM public."WebhookEvent" e WHERE id=ANY($1::text[]) ORDER BY id`,[[pending.id,withdrawalId,customerOutboundId(withdrawalId)]])).rows,beforeReplaySends=sends,replayed=await processor.process(withdrawalId);
+  // A completed processor replay reports the original send outcome; the send counter and rows must stay unchanged.
+  assert.equal(replayed.done,true);assert.equal(replayed.businessApplied,false);assert.equal(replayed.replySent,true);assert.equal(sends,beforeReplaySends);assert.deepEqual((await query(`SELECT to_jsonb(e) AS value FROM public."WebhookEvent" e WHERE id=ANY($1::text[]) ORDER BY id`,[[pending.id,withdrawalId,customerOutboundId(withdrawalId)]])).rows,protectedRows);
+  for(const expectedRevision of [pending.state.revision,withdrawn.revision])await rejectedExisting({input:command('ADMIT_EMPLOYEE_INTAKE',{applicationId:pending.id,expectedRevision,job:'WORKER',permissions:{attendance:true,report:true},confirmed:true})});
+  assert.deepEqual(await state(pending.id),withdrawn);assert.equal((await query('SELECT count(*)::int AS n FROM public."Worker"')).rows[0].n,workersBefore);assert.equal(syntheticIdentityCalls.length,identityBefore);
+ }
+ {
+  const pending=await consented('15550001052'),input=command('ADMIT_EMPLOYEE_INTAKE',{applicationId:pending.id,expectedRevision:pending.state.revision,job:'WORKER',permissions:{attendance:true,report:true},confirmed:true}),saved=await store.save(owner,input);
+  assert.equal(saved.state,'RECORDED');const worker=await workerRow(saved.workerId),admitted=await state(pending.id),auditsBefore=await auditCount(),identityBefore=syntheticIdentityCalls.length,workersBefore=(await query('SELECT count(*)::int AS n FROM public."Worker"')).rows[0].n,source=originalIntakeEnvelope((await query(`SELECT payload FROM public."WebhookEvent" WHERE id=$1`,[pending.id])).rows[0].payload);
+  await advance('CANCELAR',{sender:pending.state.sender.slice(1)});const after=await state(pending.id);
+  assert.equal(after.status,'ADMITTED');assert.equal(after.step,'ADMITTED');assert.equal(after.consent,true);assert.deepEqual(after.admission,admitted.admission);assert.deepEqual(await workerRow(saved.workerId),worker);assert.equal(await auditCount(),auditsBefore);assert.equal(syntheticIdentityCalls.length,identityBefore);assert.equal((await query('SELECT count(*)::int AS n FROM public."Worker"')).rows[0].n,workersBefore);
+  assert.deepEqual(await customerJobTransaction(connect,client=>employeeIntakeAcceptedPermissions(client,worker,{organizationId:'org-a',projectId:'project-c'})),{attendance:true,report:true});assert.deepEqual(originalIntakeEnvelope((await query(`SELECT payload FROM public."WebhookEvent" WHERE id=$1`,[pending.id])).rows[0].payload),source);
+ }
  const suspended=await consented('15550001003');assert.equal((await channelCommand('SUSPEND')).state,'RECORDED');await denyPending(suspended);assert.equal((await channelCommand('ACTIVATE')).state,'RECORDED');await denyPending(suspended);checks.push('real-PG-canonical-SUSPEND-ACTIVATE-never-revives-policy-or-WAITING-consent');
  const reassigned=await consented('15550001004');assert.equal((await channelCommand('REVOKE','project-c')).state,'RECORDED');await denyPending(reassigned);assert.equal((await channelCommand('ASSIGN','project-c')).state,'RECORDED');await denyPending(reassigned);checks.push('real-PG-canonical-REVOKE-ASSIGN-never-revives-policy-or-WAITING-consent');
  const anchorRevoked=await consented('15550001005');assert.equal((await channelCommand('REVOKE','project-a')).state,'RECORDED');assert.equal((await query(`SELECT status FROM public."WhatsAppChannelProjectAssignment" WHERE "connectionId"='channel-a' AND "projectId"='project-c'`)).rows[0].status,'ACTIVE');await denyPending(anchorRevoked);checks.push('real-PG-anchor-REVOKE-denies-WAITING-admission-with-destination-still-ACTIVE');
+ checks.push('real-PG-signed-pending-withdrawal-preserves-original-envelope-replays-once-and-denies-old-and-current-admission-revisions');
+ checks.push('real-PG-admission-first-CANCELAR-preserves-person-and-reviewed-permissions-without-revocation');
  assert.equal(networkCalls,0);assert.deepEqual(sqlFailures,[]);
 }finally{
  globalThis.fetch=originalFetch;try{await closeDisposablePool(pool);if(created){assert.match(schema,/^obrasaas_employee_intake_[a-f0-9]{32}$/);await admin.query('DROP SCHEMA '+quoted+' CASCADE');schemaRemoved=true;}}finally{await admin.end();}

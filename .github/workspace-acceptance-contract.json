@@ -1627,7 +1627,7 @@
         "path": ".vercel/participant-bank-intake-contract-evidence/proof.json",
         "kind": "UNIT",
         "producer": "scripts/verify-participant-bank-intake-contracts.mjs",
-        "producerSha256": "470cdeddcce7ddf8117ca4bffeb45fc2733135aac59b399b468fd915b4b5628f",
+        "producerSha256": "c63d8d5b6888e5d7dd8d0f8d4230df7f5ad2c9d132379e2b8484990e2dc9a0a1",
         "sourceFiles": [
           "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
           "src/app/(identity)/cuenta/company-channel-view.mjs",
@@ -1824,7 +1824,7 @@
         "path": ".vercel/private/employee-intake-postgres.json",
         "kind": "PG_INTAKE",
         "producer": "scripts/verify-employee-intake-postgres.mjs",
-        "producerSha256": "66e406926448dc904316728d33c1d1f6cbc38a356e13bc0adee535b0c8427caf",
+        "producerSha256": "4a2cc72604c0fbc8544844bde8062e5b5983f23a99a7c6336dc204ae24038e12",
         "sourceFiles": [
           "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
           "scripts/lib/company-channel-disposable-fixture.mjs",
@@ -38858,7 +38858,7 @@
       {
         "path": ".github/scripts/verify-workspace-ci-parallelization.mjs",
         "previousSha256": "8d65b7fb1446dc0533f69097ae28598a7c748f50c19eb586614ce078bf3aebac",
-        "currentSha256": "b2788a2dd967624c1a2548ff32242a17a2fefffbaa6836e74efdc8132d69e1df"
+        "currentSha256": "7f6e61638298e3df1d291c429cc4349a7fa0d1c7b68d1efca43851c2dd7b9307"
       },
       {
         "path": ".github/workflows/company-usage-proxy.yml",
@@ -38873,7 +38873,7 @@
       {
         "path": "scripts/lib/attendance-review-current-ci-proof.mjs",
         "previousSha256": null,
-        "currentSha256": "f10522d94990f42ac643128cf19adcde5f6de300654bb08667c923b4804461aa"
+        "currentSha256": "41c08553c902a71c4976d10c94146437974ad37057c4fbdc75411573c884d20d"
       },
       {
         "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
@@ -38893,7 +38893,7 @@
       {
         "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
         "previousSha256": null,
-        "currentSha256": "7a63b9f5fb8a3ad594344eb68dc25386a9426bc6a22bb5e355fb7a89466284a3"
+        "currentSha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597"
       },
       {
         "path": "scripts/lib/plan-budget-ui-contract.mjs",
@@ -38928,7 +38928,7 @@
       {
         "path": "scripts/verify-employee-intake-postgres.mjs",
         "previousSha256": "d571468725a6679b4f03ea78c5a7be187514f616c2e2248d66e62b97dafe1284",
-        "currentSha256": "66e406926448dc904316728d33c1d1f6cbc38a356e13bc0adee535b0c8427caf"
+        "currentSha256": "4a2cc72604c0fbc8544844bde8062e5b5983f23a99a7c6336dc204ae24038e12"
       },
       {
         "path": "scripts/verify-field-operations-postgres.mjs",
@@ -39148,7 +39148,7 @@
       {
         "path": "src/lib/meta-kyc-conversation.mjs",
         "previousSha256": "75870a6359385ae83df0d154b57c3f6738f2bde62fbe4974da7e38e5b0de2902",
-        "currentSha256": "17d1e52e826dcaa899e2e6b846e2856c73f73b18b7abfe30e951de0de8623ef6"
+        "currentSha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892"
       },
       {
         "path": "src/lib/operations-status.mjs",
@@ -39228,7 +39228,7 @@
       {
         "path": "tests/production-field-attendance-current-ci-proof.test.mjs",
         "previousSha256": null,
-        "currentSha256": "6969cd4fb6d86baee0e2c9b04ab22e7142e79ef42ba97dc07735e99e9061b4b9"
+        "currentSha256": "765477c84ba9899783cb5f0840d63bae4b129d936a9154ec1e26f97f5c85eed1"
       },
       {
         "path": "tests/production-field-attendance-review-query.test.mjs",
@@ -39333,7 +39333,7 @@
       {
         "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
         "previousSha256": null,
-        "currentSha256": "b7407e42ba1aa17501a339229aa1e8c5fdf78d57120859029d4512b0badeebcf"
+        "currentSha256": "ddc238a6e9c128a5df2e772ee702fc935903c2e03fcb8f3f29879412bf6e02c2"
       },
       {
         "path": "tests/production-plan-budget-analyzer-http.test.mjs",
@@ -42287,7 +42287,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "7a63b9f5fb8a3ad594344eb68dc25386a9426bc6a22bb5e355fb7a89466284a3"
+            "sha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -43323,7 +43323,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "7a63b9f5fb8a3ad594344eb68dc25386a9426bc6a22bb5e355fb7a89466284a3"
+            "sha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -44074,7 +44074,7 @@
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "17d1e52e826dcaa899e2e6b846e2856c73f73b18b7abfe30e951de0de8623ef6"
+            "sha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -45126,7 +45126,7 @@
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "17d1e52e826dcaa899e2e6b846e2856c73f73b18b7abfe30e951de0de8623ef6"
+            "sha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -46173,7 +46173,7 @@
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "17d1e52e826dcaa899e2e6b846e2856c73f73b18b7abfe30e951de0de8623ef6"
+            "sha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -46998,7 +46998,7 @@
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "17d1e52e826dcaa899e2e6b846e2856c73f73b18b7abfe30e951de0de8623ef6"
+            "sha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -47779,7 +47779,7 @@
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "17d1e52e826dcaa899e2e6b846e2856c73f73b18b7abfe30e951de0de8623ef6"
+            "sha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -48403,7 +48403,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "7a63b9f5fb8a3ad594344eb68dc25386a9426bc6a22bb5e355fb7a89466284a3"
+            "sha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -51171,7 +51171,7 @@
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "17d1e52e826dcaa899e2e6b846e2856c73f73b18b7abfe30e951de0de8623ef6"
+            "sha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -51503,6 +51503,253 @@
         }
       },
       "nativeOrHumanAcceptance": false
+    },
+    "intakeWithdrawalRuntime": {
+      "version": 1,
+      "parentHead": "6058085dcd906251352a7a2cee75bce51d74ae57",
+      "conversation": {
+        "path": "src/lib/meta-kyc-conversation.mjs",
+        "previousSha256": "17d1e52e826dcaa899e2e6b846e2856c73f73b18b7abfe30e951de0de8623ef6",
+        "currentSha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892",
+        "previousBytes": 16729,
+        "currentBytes": 16932,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 1808,
+            "currentText": " const descriptions={NAME:'Hola. Para solicitar ingreso a esta empresa, respondé a este mensaje con tu nombre y apellido. No envíes documentos.',EMAIL:'Respondé a este mensaje con el correo que vas a usar para aceptar la invitación. El correo se comprobará al ingresar a tu cuenta.',WAITING_RESPONSIBLE:'Tu solicitud está guardada y pendiente del responsable. Todavía no tenés acceso. La invitación, la identidad y los permisos se revisan por separado. Para retirar esta solicitud pendiente, escribí CANCELAR.',ADMITTED:'Tu ficha ya está registrada.\\n\\nAbrí '+participantIdentityUrl()+' y seguí el próximo paso de tu participación.\\n\\nSi te enviaron una invitación, aceptala desde tu correo.\\n\\nPara presentar identidad por este chat, pedile al responsable el mensaje IDENTIDAD vigente y esperá las indicaciones antes de enviar documentos.\\n\\nLa identidad y los permisos se revisan por separado.',REJECTED:'El responsable cerró esta solicitud. No se habilitó acceso.',CANCELLED:'Solicitud cancelada. No se creó una cuenta ni se habilitó acceso.'};\n",
+            "previousText": " const descriptions={NAME:'Hola. Para solicitar ingreso a esta empresa, respondé a este mensaje con tu nombre y apellido. No envíes documentos.',EMAIL:'Respondé a este mensaje con el correo que vas a usar para aceptar la invitación. El correo se comprobará al ingresar a tu cuenta.',WAITING_RESPONSIBLE:'Tu solicitud está guardada y pendiente del responsable. Todavía no tenés acceso. La invitación, la identidad y los permisos se revisan por separado.',ADMITTED:'Tu ficha ya está registrada.\\n\\nAbrí '+participantIdentityUrl()+' y seguí el próximo paso de tu participación.\\n\\nSi te enviaron una invitación, aceptala desde tu correo.\\n\\nPara presentar identidad por este chat, pedile al responsable el mensaje IDENTIDAD vigente y esperá las indicaciones antes de enviar documentos.\\n\\nLa identidad y los permisos se revisan por separado.',REJECTED:'El responsable cerró esta solicitud. No se habilitó acceso.',CANCELLED:'Solicitud cancelada. No se creó una cuenta ni se habilitó acceso.'};\n"
+          },
+          {
+            "currentOffsetCharacters": 5025,
+            "currentText": " if(state.step==='WAITING_RESPONSIBLE'&&body?.toUpperCase()==='CANCELAR')return intakePrompt({...state,step:'CANCELLED',consent:false},eventId);\n",
+            "previousText": ""
+          }
+        ]
+      },
+      "producer": {
+        "producer": "scripts/verify-employee-intake-postgres.mjs",
+        "previousSha256": "66e406926448dc904316728d33c1d1f6cbc38a356e13bc0adee535b0c8427caf",
+        "currentSha256": "4a2cc72604c0fbc8544844bde8062e5b5983f23a99a7c6336dc204ae24038e12",
+        "contractPointers": [
+          "/extension/proofs/2/producerSha256"
+        ],
+        "sourceHistory": {
+          "previousBytes": 56521,
+          "currentBytes": 61226,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 54346,
+              "currentText": " // Withdrawal assertions run before the inherited destructive channel checks;\n // their two literal labels are appended after the inherited33 to preserve that ledger exactly.\n const originalIntakeEnvelope=payload=>{const original={...payload};delete original.employeeIntake;return original;};\n {\n  const pending=await consented('15550001051'),workersBefore=(await query('SELECT count(*)::int AS n FROM public.\"Worker\"')).rows[0].n,identityBefore=syntheticIdentityCalls.length,auditsBefore=await auditCount(),source=structuredClone(originalIntakeEnvelope(pending.payload));\n  const withdrawalId=await advance('CANCELAR',{sender:pending.state.sender.slice(1)}),withdrawn=await state(pending.id);\n  assert.equal(withdrawn.status,'CANCELLED');assert.equal(withdrawn.step,'CANCELLED');assert.equal(withdrawn.consent,false);assert.equal(withdrawn.revision,pending.state.revision+1);\n  for(const key of ['applicationId','name','job','email','createdAt','expiresAt','submittedAt','confirmationEventId'])assert.deepEqual(withdrawn[key],pending.state[key]);\n  assert.deepEqual(originalIntakeEnvelope((await query(`SELECT payload FROM public.\"WebhookEvent\" WHERE id=$1`,[pending.id])).rows[0].payload),source);\n  assert.equal((await query(`SELECT count(*)::int AS n FROM public.\"WebhookEvent\" WHERE id=$1 AND \"projectId\"='project-a' AND provider='meta-customer-v1' AND payload->'employeeIntake'->>'status' IN ('WAITING_RESPONSIBLE','ADMITTED')`,[pending.id])).rows[0].n,0);\n  assert.equal((await query('SELECT count(*)::int AS n FROM public.\"Worker\"')).rows[0].n,workersBefore);assert.equal(await auditCount(),auditsBefore);assert.equal(syntheticIdentityCalls.length,identityBefore);\n  const protectedRows=(await query(`SELECT to_jsonb(e) AS value FROM public.\"WebhookEvent\" e WHERE id=ANY($1::text[]) ORDER BY id`,[[pending.id,withdrawalId,customerOutboundId(withdrawalId)]])).rows,beforeReplaySends=sends,replayed=await processor.process(withdrawalId);\n  // A completed processor replay reports the original send outcome; the send counter and rows must stay unchanged.\n  assert.equal(replayed.done,true);assert.equal(replayed.businessApplied,false);assert.equal(replayed.replySent,true);assert.equal(sends,beforeReplaySends);assert.deepEqual((await query(`SELECT to_jsonb(e) AS value FROM public.\"WebhookEvent\" e WHERE id=ANY($1::text[]) ORDER BY id`,[[pending.id,withdrawalId,customerOutboundId(withdrawalId)]])).rows,protectedRows);\n  for(const expectedRevision of [pending.state.revision,withdrawn.revision])await rejectedExisting({input:command('ADMIT_EMPLOYEE_INTAKE',{applicationId:pending.id,expectedRevision,job:'WORKER',permissions:{attendance:true,report:true},confirmed:true})});\n  assert.deepEqual(await state(pending.id),withdrawn);assert.equal((await query('SELECT count(*)::int AS n FROM public.\"Worker\"')).rows[0].n,workersBefore);assert.equal(syntheticIdentityCalls.length,identityBefore);\n }\n {\n  const pending=await consented('15550001052'),input=command('ADMIT_EMPLOYEE_INTAKE',{applicationId:pending.id,expectedRevision:pending.state.revision,job:'WORKER',permissions:{attendance:true,report:true},confirmed:true}),saved=await store.save(owner,input);\n  assert.equal(saved.state,'RECORDED');const worker=await workerRow(saved.workerId),admitted=await state(pending.id),auditsBefore=await auditCount(),identityBefore=syntheticIdentityCalls.length,workersBefore=(await query('SELECT count(*)::int AS n FROM public.\"Worker\"')).rows[0].n,source=originalIntakeEnvelope((await query(`SELECT payload FROM public.\"WebhookEvent\" WHERE id=$1`,[pending.id])).rows[0].payload);\n  await advance('CANCELAR',{sender:pending.state.sender.slice(1)});const after=await state(pending.id);\n  assert.equal(after.status,'ADMITTED');assert.equal(after.step,'ADMITTED');assert.equal(after.consent,true);assert.deepEqual(after.admission,admitted.admission);assert.deepEqual(await workerRow(saved.workerId),worker);assert.equal(await auditCount(),auditsBefore);assert.equal(syntheticIdentityCalls.length,identityBefore);assert.equal((await query('SELECT count(*)::int AS n FROM public.\"Worker\"')).rows[0].n,workersBefore);\n  assert.deepEqual(await customerJobTransaction(connect,client=>employeeIntakeAcceptedPermissions(client,worker,{organizationId:'org-a',projectId:'project-c'})),{attendance:true,report:true});assert.deepEqual(originalIntakeEnvelope((await query(`SELECT payload FROM public.\"WebhookEvent\" WHERE id=$1`,[pending.id])).rows[0].payload),source);\n }\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 59909,
+              "currentText": " checks.push('real-PG-signed-pending-withdrawal-preserves-original-envelope-replays-once-and-denies-old-and-current-admission-revisions');\n checks.push('real-PG-admission-first-CANCELAR-preserves-person-and-reviewed-permissions-without-revocation');\n",
+              "previousText": ""
+            }
+          ]
+        }
+      },
+      "native": {
+        "previousCheckNames": [
+          "default-off-signed-source-no-send-no-person",
+          "real-PG-signed-plain-name-email-current-sealed-outbox-time-fence-no-person-or-grant",
+          "actual-signed-callback-processor-context-consent-encrypted-durable-original-source",
+          "real-PG-canonical-additive-ASSIGN-retains-policy-digest-and-WAITING-signed-consent-bytes",
+          "real-PG-additive-proof-nonnumeric-revision-fails-closed-without-SQL-cast-error",
+          "real-PG-additive-proof-overflow-revision-fails-closed-without-SQL-cast-error",
+          "real-PG-additive-proof-maximum-ten-digits-revision-fails-closed-without-SQL-cast-error",
+          "real-PG-additive-proof-missing-confirmed-baseline-denies-unchanged-WAITING",
+          "real-PG-additive-proof-duplicate-revision-denies-unchanged-WAITING",
+          "source-replay-no-second-send-and-private-inbox-tenant-denial",
+          "real-PG-old-signed-routing-revision-remains-rejected-after-only-addition",
+          "real-PG-concurrent-canonical-add-person-A-credential-B-destination-one-receipt",
+          "real-PG-focused-admission-worker-beyond-page-100-marker-one-plus-one-readonly-mismatch-404",
+          "real-PG-focused-current-consent-outbox-delivery-projection-without-resend-or-grant",
+          "real-PG-existing-assignment-and-restore-preserve-reviewed-permissions",
+          "exact-stale-decision-terminal-receipt-without-second-person",
+          "role-ABA-identical-stamp-receipt-shape-invalidates-old-policy",
+          "actual-PG-committed-policy-ACK-loss-recovery-without-post-repeat",
+          "real-PG-existing-roster-candidate-current-snapshot-readonly-no-selection",
+          "real-PG-create-with-existing-contact-keeps-duplicate-denial",
+          "real-PG-existing-choice-snapshot-or-current-row-change-terminal-rejection",
+          "real-PG-existing-choice-registration-provenance-missing-foreign-duplicate-denial",
+          "real-PG-existing-choice-normalized-contact-ambiguity-denies-without-SQL-error",
+          "real-PG-existing-choice-stripped-participation-and-prior-admission-ledger-denial",
+          "real-PG-existing-choice-current-eligibility-markers-deny-preserving-source-consent",
+          "real-PG-existing-choice-preserves-roster-signed-consent-one-receipt-no-grant",
+          "real-PG-existing-choice-different-operations-one-admission-one-rejection",
+          "real-PG-existing-choice-audit-failure-rolls-back-worker-and-intake",
+          "real-PG-existing-choice-committed-ACK-loss-readback-without-write-repeat",
+          "real-PG-existing-roster-provenance-tamper-denies-accepted-permissions",
+          "real-PG-canonical-SUSPEND-ACTIVATE-never-revives-policy-or-WAITING-consent",
+          "real-PG-canonical-REVOKE-ASSIGN-never-revives-policy-or-WAITING-consent",
+          "real-PG-anchor-REVOKE-denies-WAITING-admission-with-destination-still-ACTIVE"
+        ],
+        "addedCheckNames": [
+          "real-PG-signed-pending-withdrawal-preserves-original-envelope-replays-once-and-denies-old-and-current-admission-revisions",
+          "real-PG-admission-first-CANCELAR-preserves-person-and-reviewed-permissions-without-revocation"
+        ],
+        "previousChecksSha256": "b94453e059a81b27d0fbb8e73ccc1f19bad17136edbb9f8feb8e984c1914bfbc",
+        "currentChecksSha256": "3bbf09a4c735337b23c71ab1573677b19054503c5f84d438eb2017d6d2062be9",
+        "sourceCount": 32,
+        "sourcePathsSha256": "f1570f201a21092710528999618e24149ae9d478ddd2c832c007f1b29f40e5a6",
+        "currentManifest": [
+          {
+            "path": "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
+            "sha256": "01c8bd9e25665963ff44a70bcebda734c53c73a569aa4dafe70bd41c2c809e0f"
+          },
+          {
+            "path": "scripts/lib/company-channel-disposable-fixture.mjs",
+            "sha256": "717d87a6fb1dd7f6a8b2a2d19cd3b2fee652d536e958bd833bf8431c31076138"
+          },
+          {
+            "path": "scripts/lib/company-channel-migration.mjs",
+            "sha256": "1ffb93c704636434f36b52367d3d21d8615ce9b516f350956c414c917e9d33c7"
+          },
+          {
+            "path": "scripts/lib/disposable-postgres-cleanup.mjs",
+            "sha256": "df8d9f36b79cdd5f2d940c0dc4bbc88acbb0bec6e66c9ee5ae93ad5c6e4ab89e"
+          },
+          {
+            "path": "src/lib/bindx-civil-data-client.mjs",
+            "sha256": "20da64b82d14fb3d4055b9852ed8712d33b01d1bc9f50709cb55084c7d0433a2"
+          },
+          {
+            "path": "src/lib/company-channel-connection.mjs",
+            "sha256": "f2c44860383bb49df67f7999fbe3c0a5aa57c91ebbde0cf9a3b5b367784f2c45"
+          },
+          {
+            "path": "src/lib/company-channel-kyc.mjs",
+            "sha256": "5b46276ad3aa5d656a0027be4a6bf58aa3fba4f557dd86e0c13d0d5b0cecba85"
+          },
+          {
+            "path": "src/lib/company-channel-schema.mjs",
+            "sha256": "96c0385fa3b6d60c8d1f92ca38dcdf32e7779f1200512806bf6d220e6be57022"
+          },
+          {
+            "path": "src/lib/company-channel-store.mjs",
+            "sha256": "300c5e7e0abe65b97b86a200c6cc72444b9c65ce375d61975c56f5abbc6a453b"
+          },
+          {
+            "path": "src/lib/employee-intake-channel-continuity.mjs",
+            "sha256": "59dffe3800f26cd979bd12c4cff0010ca72779e1dc62030a6f0117b6ef3fb64d"
+          },
+          {
+            "path": "src/lib/meta-cloud-protocol.mjs",
+            "sha256": "c6d5f1e1b4119dd2529860e3bd61a1b22d602f71ad301b2f04cec3ab4bbbed3c"
+          },
+          {
+            "path": "src/lib/meta-customer-callback.mjs",
+            "sha256": "da90e3ed097c287a7c080d05daf5e4b0c0bb82544d2f7dab4cb1ee99880c3fd0"
+          },
+          {
+            "path": "src/lib/meta-customer-credentials.mjs",
+            "sha256": "44a05a0b46417de835eb289882b0b2c6d71158f207c16c48228f1ac4b67cca0f"
+          },
+          {
+            "path": "src/lib/meta-customer-outbound.mjs",
+            "sha256": "84a249b3777d3be843b20b09d0c6cd81b6fab7415dc22f124477d87475eead09"
+          },
+          {
+            "path": "src/lib/meta-customer-processing.mjs",
+            "sha256": "e4a52dbd2ce86793b66c4af5963c288b13d7b2b2f656c4c6f795bcac8074f4ad"
+          },
+          {
+            "path": "src/lib/meta-employee-intake.mjs",
+            "sha256": "72e80601323adbe35c9ec1f61e49e3428007da55e567c724ca8dce3c42de042b"
+          },
+          {
+            "path": "src/lib/meta-kyc-conversation.mjs",
+            "sha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892"
+          },
+          {
+            "path": "src/lib/meta-kyc-outbound.mjs",
+            "sha256": "e0766080e345b3777fc87a6f8014a34073beb48a3c9205aa4c1cb49251b4e589"
+          },
+          {
+            "path": "src/lib/participant-account-discovery.mjs",
+            "sha256": "11b37ca397fdb195aac7addc1c16842fb28a9c83a73a82a57bf2791ed3038738"
+          },
+          {
+            "path": "src/lib/participant-civil-policy.mjs",
+            "sha256": "e180a64c788d6cd20e766cb4fd32dbba1c7cb3954c01405ac8675ec023eef278"
+          },
+          {
+            "path": "src/lib/participant-civil-store.mjs",
+            "sha256": "5f440c0c76ca67b87a7e5d4e90e7a48f18ea3603b16434b35beeddd3bdf168a4"
+          },
+          {
+            "path": "src/lib/participant-onboarding-authority.mjs",
+            "sha256": "dad5d9fd0a61c493ff02331d5333982627cdeb3a7addb74a3c86d44da931f916"
+          },
+          {
+            "path": "src/lib/participant-onboarding-current-kyc.mjs",
+            "sha256": "232fecca4f6cf775e5151ec460560e0c1abd6646dc3c532140cabe26dfb42119"
+          },
+          {
+            "path": "src/lib/participant-onboarding-reactive.mjs",
+            "sha256": "666a8c27f3ab7d6fdbe66c91f22ace4e25b04b98e865f401d19c72212916104d"
+          },
+          {
+            "path": "src/lib/participant-policy.mjs",
+            "sha256": "7f3969ab1ebac5f01696149d76337199eb64c2fd09015c44c07e8b7e7088d62f"
+          },
+          {
+            "path": "src/lib/participant-store.mjs",
+            "sha256": "2296495e366b9ea0c2511066584e93ddf1cff51b5eefd05c6121d2143d78f5c9"
+          },
+          {
+            "path": "src/lib/plan-measurement-policy.mjs",
+            "sha256": "3d6b0bce58a7f89612878310f534d8cf02f6a222c778cd4294b415c1f61157b7"
+          },
+          {
+            "path": "src/lib/plan-measurement-source.mjs",
+            "sha256": "ecf33b67a333d8ce73bfb51610218a1658cd94a26b62eb35d2290b795f826f36"
+          },
+          {
+            "path": "src/lib/site-register-policy.mjs",
+            "sha256": "d529c4f2225e0ec851ef7df60f8c5b182a88b384958ebfd15b194683d1590434"
+          },
+          {
+            "path": "src/lib/site-register-store.mjs",
+            "sha256": "6b744c86f47dbb6dc081132675888615d76421701f96151b00646b5e1d2529c6"
+          },
+          {
+            "path": "src/lib/workspace-policy.mjs",
+            "sha256": "ba51cc5c4a6e4f5ce1c9382cae2c8ea903ab4373668c05384c7f1e9253c7041e"
+          },
+          {
+            "path": "src/lib/workspace-store.mjs",
+            "sha256": "5f25092121a31a06eefa59d69866db82fa3cd28afdcbd0e066e52d916478bc50"
+          }
+        ]
+      },
+      "nativeOrHumanAcceptance": false,
+      "unitProducer": {
+        "producer": "scripts/verify-participant-bank-intake-contracts.mjs",
+        "previousSha256": "470cdeddcce7ddf8117ca4bffeb45fc2733135aac59b399b468fd915b4b5628f",
+        "currentSha256": "c63d8d5b6888e5d7dd8d0f8d4230df7f5ad2c9d132379e2b8484990e2dc9a0a1",
+        "contractPointers": [
+          "/extension/proofs/0/producerSha256"
+        ],
+        "sourceHistory": {
+          "previousBytes": 7081,
+          "currentBytes": 7082,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 932,
+              "currentText": " 'tests/production-employee-intake.test.mjs':100,\n",
+              "previousText": " 'tests/production-employee-intake.test.mjs':95,\n"
+            },
+            {
+              "currentOffsetCharacters": 1297,
+              "currentText": "export const EXPECTED_TOTAL_TESTS=294;\n",
+              "previousText": "export const EXPECTED_TOTAL_TESTS=289;\n"
+            }
+          ]
+        }
+      }
     }
   }
 }

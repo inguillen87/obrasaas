@@ -269,3 +269,50 @@ for(const permissions of [{attendance:true,report:false},{attendance:false,repor
  w.metadata.participant={version:1,status:'INVITED',clerkUserId:null,permissions:{attendance:false,report:false},invitation:{id:invitationId,email:'person@example.invalid',state:'SENT',providerId:'orginv_IntakeSynthetic',expiresAt:new Date(f.now.getTime()+86400000).toISOString()},kyc:{version:1,status:'NOT_SUBMITTED'}};
  const human={authenticated:true,verification:'clerk-production-jwt',userId:'user_Person',organizationId:f.session.organizationId,organizationRole:'org:member'};const accepted=await f.store.join(human,{invitationId,operationId:randomUUID()},{accept:true});assert.equal(accepted.joined,true);assert.deepEqual(f.workers.get(w.id).metadata.participant.permissions,permissions);assert.equal(f.workers.get(w.id).metadata.participant.kyc.status,'NOT_SUBMITTED');
 });
+
+
+const intakeAnchorState=(f,applicationId)=>JSON.parse(decryptCustomerSecret(f.events.get(applicationId).payload.employeeIntake.encryptedState,{organizationId:f.project.organizationId,projectId:f.project.id,purpose:'employee-intake',resourceId:applicationId},f.environment));
+const intakeOriginalEnvelope=payload=>{const original={...payload};delete original.employeeIntake;return original;};
+
+test('a signed pending-request withdrawal is discoverable after its draft deadline and removes only the private request from review',async()=>{
+ const f=employeeIntakeFixture(),submitted=await f.submit(),anchor=f.events.get(submitted.applicationId),original=structuredClone(intakeOriginalEnvelope(anchor.payload)),connection=structuredClone(f.connection.metadata),audits=structuredClone([...f.audits]);
+ const previous=f.outbounds.get(customerOutboundId(submitted.lastEventId)),request=JSON.parse(decryptCustomerSecret(previous.payload.encryptedPayload,{organizationId:f.connection.organizationId,projectId:f.project.id,purpose:'outbound',resourceId:previous.id},f.environment));
+ assert.match(request.message.body,/Para retirar esta solicitud pendiente, escrib\u00ed CANCELAR/);assert.equal((await f.read()).records.length,1);
+ f.now.setTime(Date.parse(submitted.expiresAt)+1000);
+ const {result}=await f.execute(' cancelar ',{reply:false}),cancelled=intakeAnchorState(f,submitted.applicationId);
+ assert.equal(cancelled.step,'CANCELLED');assert.equal(cancelled.status,'CANCELLED');assert.equal(cancelled.consent,false);assert.equal(cancelled.revision,submitted.revision+1);assert.equal(result.businessApplied,false);assert.match(result.reply.body,/Solicitud cancelada/);
+ for(const key of ['applicationId','name','job','email','createdAt','expiresAt','submittedAt','confirmationEventId'])assert.deepEqual(cancelled[key],submitted[key],key);
+ assert.deepEqual(intakeOriginalEnvelope(f.events.get(submitted.applicationId).payload),original);assert.equal((await f.read()).records.length,0);assert.equal(f.workers.size,0);assert.deepEqual([...f.audits],audits);assert.deepEqual(f.connection.metadata,connection);assert.equal(f.controls.providerCalls,0);
+});
+
+test('exact signed withdrawal replay recovers the same sealed result and outbox without another transition or send',async()=>{
+ const f=employeeIntakeFixture(),submitted=await f.submit(),{context,result}=await f.execute('CANCELAR');
+ const before={events:structuredClone([...f.events]),audits:structuredClone([...f.audits]),workers:structuredClone([...f.workers]),outbounds:structuredClone([...f.outbounds]),sends:f.controls.sends,state:intakeAnchorState(f,submitted.applicationId)};
+ assert.deepEqual(await f.bridge.execute(context),result);const replay=await f.outbound.send(context,result.reply,{purpose:'EMPLOYEE_INTAKE'});assert.equal(replay.replayed,true);
+ assert.deepEqual([...f.events],before.events);assert.deepEqual([...f.audits],before.audits);assert.deepEqual([...f.workers],before.workers);assert.deepEqual([...f.outbounds],before.outbounds);assert.equal(f.controls.sends,before.sends);assert.deepEqual(intakeAnchorState(f,submitted.applicationId),before.state);assert.equal(f.controls.providerCalls,0);
+});
+
+test('withdrawn requests cannot be admitted with either the old pending revision or the current cancelled revision',async()=>{
+ const f=employeeIntakeFixture(),submitted=await f.submit();await f.execute('CANCELAR');const cancelled=intakeAnchorState(f,submitted.applicationId),original=structuredClone(f.events.get(submitted.applicationId).payload);
+ for(const expectedRevision of [submitted.revision,cancelled.revision]){
+  const input=f.command('ADMIT_EMPLOYEE_INTAKE',{applicationId:submitted.applicationId,expectedRevision,job:'WORKER',permissions:{attendance:true,report:true},confirmed:true}),result=await f.store.save(f.session,input);
+  assert.equal(result.saved,false);assert.equal(result.state,'REJECTED');assert.equal(result.code,'EMPLOYEE_INTAKE_REVISION_CHANGED');assert.equal(result.permissionsGranted,false);assert.equal(result.workerId,null);assert.equal(result.personReceiptId,null);
+  assert.deepEqual(await f.store.status(f.session,{projectId:f.target.id,scope:f.scope,operationId:input.operationId}),result);assert.deepEqual(f.events.get(submitted.applicationId).payload,original);
+ }
+ assert.equal(f.workers.size,0);assert.equal((await f.read()).records.length,0);assert.equal([...f.audits.values()].some(row=>row.action==='site.register.changed'),false);assert.equal(f.controls.providerCalls,0);
+});
+
+test('a new signed HOLA after withdrawal starts a separate unconsented welcome without resurrecting the original request',async()=>{
+ const f=employeeIntakeFixture(),submitted=await f.submit();await f.execute('CANCELAR');const withdrawn=structuredClone(f.events.get(submitted.applicationId).payload);
+ const {context,result}=await f.execute('HOLA',{reply:false}),fresh=intakeAnchorState(f,context.eventId);
+ assert.equal(result.kind,'EMPLOYEE_INTAKE');assert.notEqual(fresh.applicationId,submitted.applicationId);assert.equal(fresh.applicationId,context.eventId);assert.equal(fresh.status,'WELCOME');assert.equal(fresh.step,'WELCOME');assert.equal(fresh.resumeStep,'NAME');assert.equal(fresh.consent,false);assert.equal(fresh.revision,1);
+ for(const key of ['name','job','email'])assert.equal(fresh[key],null,key);
+ assert.deepEqual(f.events.get(submitted.applicationId).payload,withdrawn);assert.equal((await f.read()).records.length,0);assert.equal(f.workers.size,0);assert.equal(f.controls.providerCalls,0);
+});
+
+test('CANCELAR arriving after human admission preserves the admitted person and reviewed permissions instead of undoing admission',async()=>{
+ const f=employeeIntakeFixture(),submitted=await f.submit(),saved=await f.store.save(f.session,f.command('ADMIT_EMPLOYEE_INTAKE',{applicationId:submitted.applicationId,expectedRevision:submitted.revision,job:'WORKER',permissions:{attendance:true,report:true},confirmed:true}));
+ const before={worker:structuredClone(f.workers.get(saved.workerId)),state:intakeAnchorState(f,submitted.applicationId),audits:structuredClone([...f.audits]),connection:structuredClone(f.connection.metadata)},result=(await f.execute('CANCELAR')).result,after=intakeAnchorState(f,submitted.applicationId);
+ assertAdmittedGuidance(result.reply);assert.doesNotMatch(result.reply.body,/Solicitud cancelada/);assert.equal(after.step,'ADMITTED');assert.equal(after.status,'ADMITTED');assert.equal(after.consent,true);assert.deepEqual(after.admission,before.state.admission);assert.deepEqual(f.workers.get(saved.workerId),before.worker);assert.deepEqual([...f.audits],before.audits);assert.deepEqual(f.connection.metadata,before.connection);assert.equal(result.businessApplied,false);
+ assert.deepEqual(await employeeIntakeAcceptedPermissions({query:f.query},f.workers.get(saved.workerId),{organizationId:f.member.organizationId,projectId:f.target.id}),{attendance:true,report:true});assert.equal((await f.read()).records[0].status,'ADMITTED');assert.equal(f.workers.size,1);assert.equal(f.controls.providerCalls,0);
+});
