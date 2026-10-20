@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useLayoutEffect,useRef,useState} from 'react';
-import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation} from './workspace-live-refresh-controller.mjs';
+import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation,worksiteLiveCheckedAtLabel} from './workspace-live-refresh-controller.mjs';
 
 // Existing authenticated GETs; canonical authority and data commits use separate fences.
 export function useWorksiteLiveRefresh({contextKey,viewKey='',enabled,blocked,read,apply,isCurrent,isAuthorityCurrent,getAuthorityStamp,onAccessRejected}){
@@ -26,6 +26,6 @@ export function WorksiteLiveRefreshStatus({refresh,paused=false,label='Consulta'
  status.state==='HIDDEN'?'La consulta automática está en pausa mientras esta pestaña no está visible.':
  ['STALE','LIMITED'].includes(status.state)?status.message:
  status.updates?status.message||'Hay registros nuevos para consultar. Las páginas abiertas siguen conservadas.':
- status.checkedAt?label+' comprobada a las '+new Date(status.checkedAt).toLocaleTimeString('es-AR')+'.':'Se comprobarán los cambios de esta obra cuando no haya una operación en curso.';
+ status.checkedAt!==null&&status.checkedAt!==undefined?label+' · última comprobación: '+worksiteLiveCheckedAtLabel(status.checkedAt)+'.':'Se comprobarán los cambios de esta obra cuando no haya una operación en curso.';
  return <div data-worksite-live-refresh={status.state==='ACCESS'?'ACCESS':paused?'PAUSED':status.state}><p role="status">{text}</p>{!paused&&status.state!=='CONSULTING'&&status.state!=='ACCESS'&&<button type="button" onClick={refresh.check}>Comprobar cambios</button>}{!paused&&status.updates&&manual&&<button type="button" onClick={manual}>{manualLabel||'Consultar registros nuevos'}</button>}</div>;
 }

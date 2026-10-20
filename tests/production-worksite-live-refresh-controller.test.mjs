@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation} from '../src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs';
+import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation,worksiteLiveCheckedAtLabel} from '../src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs';
 function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
 function fixture(overrides={}){
  let time=1800000000000,next=0,visible=true,online=true,source=1,authorityEpoch=0;
@@ -102,4 +102,32 @@ test('a new draft in the same authority epoch still honors a known late 401',asy
  const wait=deferred();const f=fixture({read:()=>wait.promise});const run=f.controller.check();
  f.spec.blocked=true;f.controller.pause();wait.reject(Object.assign(new Error('current epoch denied'),{status:401}));
  await run;assert.equal(f.counts.apply,0);assert.equal(f.counts.deny,1);assert.equal(f.states.at(-1).state,'ACCESS');assert.equal(f.timers.size,0);f.controller.dispose();
+});
+
+
+test('completed check shows an Argentine date and unambiguous24 hour time without changing the captured instant',()=>{
+ const checkedAt='2026-10-20T21:59:13.000Z',label=worksiteLiveCheckedAtLabel(checkedAt);
+ assert.match(label,/20\/10\/2026/);assert.match(label,/18:59:13/);assert.match(label,/\(hora de Argentina\)$/);
+ assert.doesNotMatch(label,/06:59:13/);assert.equal(checkedAt,'2026-10-20T21:59:13.000Z');
+});
+test('Argentine midnight changes the local date only at03 UTC and renders00 rather than24',()=>{
+ const before=worksiteLiveCheckedAtLabel('2026-10-21T02:59:59.999Z'),midnight=worksiteLiveCheckedAtLabel('2026-10-21T03:00:00.000Z');
+ assert.match(before,/20\/10\/2026/);assert.match(before,/23:59:59/);
+ assert.match(midnight,/21\/10\/2026/);assert.match(midnight,/00:00:00/);assert.doesNotMatch(midnight,/24:00:00/);
+});
+test('completed check formatting remains Argentine and24 hour under three different host formatting defaults',{concurrency:false},()=>{
+ const original=Intl.DateTimeFormat;
+ try{
+  for(const hostZone of ['UTC','Asia/Tokyo','America/Los_Angeles']){
+   // Keep the real Intl implementation; vary only its omitted-option defaults.
+   Intl.DateTimeFormat=function(locales,options){return new original(locales,{timeZone:hostZone,hourCycle:'h12',...options});};
+   const label=worksiteLiveCheckedAtLabel('2026-10-20T21:59:13.000Z');
+   assert.match(label,/20\/10\/2026/);assert.match(label,/18:59:13/);assert.match(label,/\(hora de Argentina\)$/);
+  }
+ }finally{Intl.DateTimeFormat=original;}
+ assert.equal(Intl.DateTimeFormat,original);
+});
+test('missing noncanonical and impossible check instants never display epoch time or a normalized date',()=>{
+ const hostile={toString(){throw Error('No coercion of an unconfirmed instant');}};
+ for(const value of [undefined,null,0,NaN,hostile,'','not-an-instant','2026-02-30T21:59:13.000Z','2026-10-20T18:59:13.000-03:00','2026-10-20T21:59:13Z'])assert.equal(worksiteLiveCheckedAtLabel(value),'Fecha y hora sin confirmar');
 });
