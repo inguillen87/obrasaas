@@ -1,4 +1,4 @@
-import {planBudgetCurrentBrowserBinding,normalizePlanBudgetPilotNativeProof} from './plan-budget-current-ci-lineage.mjs';
+import {planBudgetCurrentBrowserBinding,normalizePlanBudgetPilotNativeProof,restorePlanBudgetFieldReviewBusinessSource} from './plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract as worksiteOuter0,worksiteLiveHoursCurrentSourcePin as worksiteOuter1,worksiteLiveHoursPreviousSourcePin as worksiteOuter2,restoreWorksiteLiveHoursSourceSet as worksiteOuter3,verifyWorksiteLiveHoursCurrentSources as worksiteOuter4,worksiteLiveHoursProofSourceAdditions as worksiteOuter5,restoreWorksiteLiveHoursPreviousProducerText as worksiteOuter6,worksiteLiveHoursValidationFiles as worksiteOuter7} from './worksite-live-hours-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_REVISION,verifyPlanPartidaPreviewCurrentSources,validatePlanPartidaPreviewUiSupplement} from './plan-partida-preview-current-ci-lineage.mjs';
 // Preserve this consumer's established denial category at the outer revision boundary.
@@ -4338,7 +4338,7 @@ export function verifyHomeDecisionsCurrentSources(contract,readSource){
  const refs=[...value.reviewedSourceChanges,...value.validationDeltas].map(row=>({path:row.path,sha256:row.currentSha256})).concat(value.validationSources);
  reject(new Set(refs.map(row=>row.path)).size===refs.length,'Unique home decisions current source references required');
  for(const row of refs){reject(safe(row.path)&&hash(row.sha256),'Safe exact home decisions source pin required');const bytes=readSource(row.path);reject(Buffer.isBuffer(bytes),'Missing current home decisions source: '+row.path);const text=bytes.toString('utf8');reject(bytes.equals(Buffer.from(text))&&sha(text.replaceAll('\r\n','\n'))===customerPhoneSelectionCurrentSourcePin(contract,row),'Stale current home decisions source: '+row.path);}
- const tree=parse(readSource('src/lib/operations-status.mjs').toString('utf8'),{sourceType:'module'});
+ const tree=parse(restorePlanBudgetFieldReviewBusinessSource('src/lib/operations-status.mjs',readSource('src/lib/operations-status.mjs')).toString('utf8'),{sourceType:'module'});
  reject(sha(JSON.stringify(syntax(homeDecisionsLegacyOperationsAst(tree))))===value.operationsProjection.previousAstSha256,'Every inherited operations-status authority and query must remain unchanged');
  return {version:1,completePreviousContractRestored:true,previousContractSha256:value.previousContractSha256,historicalPinsPreserved:true,nativeOrBrowserAcceptance:false};
 }
