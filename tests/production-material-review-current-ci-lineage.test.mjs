@@ -1,4 +1,5 @@
-import {restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {verifyHomeDecisionsCurrentSources} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
+import {restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,planBudgetCurrentSourcePin} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_SECTION,restorePlanPartidaPreviewSourceSet} from '../scripts/lib/plan-partida-preview-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursSourceSet,worksiteLiveHoursPreviousSourcePin,worksiteLiveHoursCurrentSourcePin} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import test from 'node:test';
@@ -6,7 +7,7 @@ import assert from 'node:assert/strict';
 import {readFileSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {parse} from '@babel/parser';
-import {MATERIAL_REVIEW_CURRENT_REVISION as expected,MATERIAL_REVIEW_CURRENT_SECTION as key,restoreMaterialReviewPreviousContract,restoreMaterialReviewSourceSet,materialReviewProofSourceAdditions,materialReviewCurrentSourcePin,materialReviewValidationFiles,verifyMaterialReviewCurrentSources,materialReviewUnchangedSurface} from '../scripts/lib/material-review-current-ci-lineage.mjs';
+import {MATERIAL_REVIEW_CURRENT_REVISION as expected,MATERIAL_REVIEW_CURRENT_SECTION as key,restoreMaterialReviewPreviousContract,restoreMaterialReviewSourceSet,materialReviewProofSourceAdditions,materialReviewCurrentSourcePin,materialReviewValidationFiles,verifyMaterialReviewCurrentSources,materialReviewUnchangedSurface,restoreMaterialReviewFieldReviewSource} from '../scripts/lib/material-review-current-ci-lineage.mjs';
 import {verifyWhatsappFieldContinuityCurrentSources,whatsappFieldContinuityCurrentSourcePin} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import {restoreExistingApiPlanPreviousContract,existingApiPlanCurrentSourcePin} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
 import {currentProducerSourceFiles} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';
@@ -130,7 +131,8 @@ test('exact attendance and consumption AST inverses preserve inherited material 
  ];
  for(const[file,currentSha256,from,to,isRemoved]of cases){
   const bytes=read(file),before=Buffer.from(bytes),text=bytes.toString('utf8'),surface=expected.reviewedSourceChanges.find(row=>row.path===file).unchangedSurfaceSha256;
-  assert.equal(sha(text.replaceAll('\r\n','\n')),currentSha256,'Exact approved current source '+file);
+  assert.equal(sha(restoreMaterialReviewFieldReviewSource(file,bytes).toString('utf8').replaceAll('\r\n','\n')),currentSha256,'Exact approved predecessor source '+file);
+  assert.equal(sha(text.replaceAll('\r\n','\n')),planBudgetCurrentSourcePin(contract,{path:file,sha256:contract.planBudgetCurrentRevision.references.find(row=>row.path===file).previousSha256}),'Exact approved current source '+file);
   assert.equal(materialReviewUnchangedSurface(file,bytes),surface,'Entire inherited surface '+file);
   assert.deepEqual(bytes,before,'Projection must not replace actual source bytes '+file);
   assert.equal(text.split(from).length,2,'Unique authorization mutation '+file);
@@ -144,5 +146,20 @@ test('exact attendance and consumption AST inverses preserve inherited material 
   }
   const unauthorized=Buffer.from(text+'\n// unreviewed current source bytes\n');
   denied(()=>verifyMaterialReviewCurrentSources(contract,path=>path===file?unauthorized:read(path)));
+ }
+});
+
+test('field review sources reconstruct the exact parent material surface without changing current bytes or accepting unreviewed edits',()=>{
+ const contract=current();assert.equal(verifyHomeDecisionsCurrentSources(contract,read).nativeOrBrowserAcceptance,false,'Real Home source verification restores its historical operations AST from actual status bytes');
+ const cases=[{"path":"src/lib/field-operations-http.mjs","predecessorCommit":"ad435c1ac3cd6bdb43ee6b51051c0ec2af312adb","previousSourceSha256":"d3dffce08238141f672a8af0c1b956da15809e18608084b9bdf57d50ae166ceb","currentSourceSha256":"cd1773bc3b9fba01821cd4494b8559bdcdcc3a4ce886228622bb800349dcfd39","previousBytes":13747,"currentBytes":13760},{"path":"src/lib/field-operations-store.mjs","predecessorCommit":"ad435c1ac3cd6bdb43ee6b51051c0ec2af312adb","previousSourceSha256":"8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604","currentSourceSha256":"517267adb96c69bce58350b98b3a4e335ca1304a72a824e35998590e95b8987c","previousBytes":54880,"currentBytes":57154},{"path":"src/lib/operations-status.mjs","predecessorCommit":"ad435c1ac3cd6bdb43ee6b51051c0ec2af312adb","previousSourceSha256":"cdee54c539106c384a92c70c730c91cd3058e872d5d855c57150b8ad246e666a","currentSourceSha256":"ce05f2b18facdaa2df35274004ee2111be366056ef1ff2c593660b8490782cd6","previousBytes":10576,"currentBytes":10989}];
+ for(const row of cases){
+  const bytes=read(row.path),before=Buffer.from(bytes),text=bytes.toString('utf8').replaceAll('\r\n','\n'),surface=expected.reviewedSourceChanges.find(ref=>ref.path===row.path).unchangedSurfaceSha256;
+  assert.equal(sha(text),row.currentSourceSha256);assert.equal(sha(restoreMaterialReviewFieldReviewSource(row.path,bytes)),row.previousSourceSha256);assert.equal(materialReviewUnchangedSurface(row.path,bytes),surface);assert.deepEqual(bytes,before);
+  const anchor=row.path.endsWith('http.mjs')?"'EVIDENCE','PROGRESS','ATTENDANCE'":row.path.endsWith('store.mjs')?"attendance?'attendance':'report'":'totals.evidencePending';
+  assert.ok(text.includes(anchor));
+  const changed=Buffer.from(text.replace(anchor,row.path.endsWith('http.mjs')?"'EVIDENCE','PROGRESS'":row.path.endsWith('store.mjs')?"attendance?'report':'report'":'totals.pending'));
+  assert.notEqual(materialReviewUnchangedSurface(row.path,changed),surface);
+  denied(()=>verifyMaterialReviewCurrentSources(contract,file=>file===row.path?changed:read(file)));
+  denied(()=>verifyMaterialReviewCurrentSources(contract,file=>file===row.path?Buffer.concat([bytes,Buffer.from('\n// foreign field-review source\n')]):read(file)));
  }
 });

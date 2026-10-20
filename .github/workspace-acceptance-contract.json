@@ -3152,7 +3152,7 @@
         "path": ".vercel/field-operations-evidence/postgres.json",
         "kind": "PG_FIELD",
         "producer": "scripts/verify-field-operations-postgres.mjs",
-        "producerSha256": "c3cf9eed8983b9ab43ad9b11cf0f59af206b08ba70f5e6697133bb448b940662",
+        "producerSha256": "4eb11afda80e9274e3fecdc229d12f21d53d29d444e6932e44837f257800ccc2",
         "sourceFiles": [
           "scripts/fixtures/canonical-participant-kyc.mjs",
           "scripts/verify-field-operations-postgres.mjs",
@@ -3274,6 +3274,7 @@
           "src/lib/worker-channel-identity.mjs",
           "src/lib/workspace-policy.mjs",
           "src/lib/workspace-store.mjs",
+          "tests/production-field-attendance-review-query.test.mjs",
           "tests/production-field-canonical-kyc.test.mjs",
           "tests/production-field-media-lease.test.mjs",
           "tests/production-field-media-privacy-v2.test.mjs",
@@ -38839,7 +38840,7 @@
       {
         "path": ".github/scripts/verify-workspace-ci-parallelization.mjs",
         "previousSha256": "8d65b7fb1446dc0533f69097ae28598a7c748f50c19eb586614ce078bf3aebac",
-        "currentSha256": "9522f2d4b0c04c51b02491f0aac1c16ff9b8585568c00322045a2c8724b000cc"
+        "currentSha256": "74a4a80e1feac74e9242355717d12652042e1792ea6eb5050fcf3722d4e5932e"
       },
       {
         "path": ".github/workflows/company-usage-proxy.yml",
@@ -38852,14 +38853,19 @@
         "currentSha256": "c4901cffac7886050892a358181a66307986725653067f953e10e575f2e20cc4"
       },
       {
+        "path": "scripts/lib/attendance-review-current-ci-proof.mjs",
+        "previousSha256": null,
+        "currentSha256": "111ae3206f3224bbc2f58ac3b9a77127fccdbf77c4cc59ddeec95b8ae01865f5"
+      },
+      {
         "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
         "previousSha256": "0f7f9ac5f194ece14a65c5a1ca80ada1bb695be26766a9fbe7fbdc19efc0be6f",
-        "currentSha256": "2b41d4eda5b1511c9a1761f853c2cfd37614cc60f505cbcdc77f11a3bb95f869"
+        "currentSha256": "bd61edf4351e0d3b8f7857cb26cdc169162dca5400467f2f9fbfbd5853903503"
       },
       {
         "path": "scripts/lib/material-review-current-ci-lineage.mjs",
         "previousSha256": "805e35504f147f017b4e70889c29c92175a4673f03916630319f6f25d040c4b4",
-        "currentSha256": "9155e03f6c6831e8122263b73c16a724645fc5cd3ebcfdd950c0413543c12a64"
+        "currentSha256": "54bafcc5ec399197f2b3b22e6dcf2f0aa31ff18f0d2727688954533f8dc4ecc7"
       },
       {
         "path": "scripts/lib/plan-budget-browser-ui.mjs",
@@ -38869,7 +38875,7 @@
       {
         "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
         "previousSha256": null,
-        "currentSha256": "4843175db67d3e1ebbfb3323d469d9026182fbea0dcb8b9513ecd0d9c6346ed3"
+        "currentSha256": "834a40911ef64844f0db441a48cef5de235ae556c301308a62ff347f7106d678"
       },
       {
         "path": "scripts/lib/plan-budget-ui-contract.mjs",
@@ -38902,9 +38908,24 @@
         "currentSha256": "d7314b1f7bc11d6cd5d56c6be2f4152ce6b8d3362c79418f16ae5ffaed9d4267"
       },
       {
+        "path": "scripts/verify-employee-intake-postgres.mjs",
+        "previousSha256": "d571468725a6679b4f03ea78c5a7be187514f616c2e2248d66e62b97dafe1284",
+        "currentSha256": "66e406926448dc904316728d33c1d1f6cbc38a356e13bc0adee535b0c8427caf"
+      },
+      {
+        "path": "scripts/verify-field-operations-postgres.mjs",
+        "previousSha256": "c3cf9eed8983b9ab43ad9b11cf0f59af206b08ba70f5e6697133bb448b940662",
+        "currentSha256": "4eb11afda80e9274e3fecdc229d12f21d53d29d444e6932e44837f257800ccc2"
+      },
+      {
         "path": "scripts/verify-field-operations-ui.mjs",
         "previousSha256": "c32dab6e6c5ba4619a04a2edada3a8656b22455f3a8e6a96d2bdf3b340d2d38f",
         "currentSha256": "e73541c962d7dab349b4ce3425591472ecce51b7ad1b74bdb483adacd786a5cc"
+      },
+      {
+        "path": "scripts/verify-material-inventory-postgres.mjs",
+        "previousSha256": "56c2c4751825349b126d26bc48fcce0557f11b779f94b3fad45985f34bbc409b",
+        "currentSha256": "c046f5bae2f922bcf83b3f2dffc53ad36f10a9dcc1e57bbd73923176d1bf8093"
       },
       {
         "path": "scripts/verify-material-inventory-ui.mjs",
@@ -38915,6 +38936,11 @@
         "path": "scripts/verify-meta-customer-coexistence-postgres.mjs",
         "previousSha256": "fd94401af9a07866a2cd28a355b7f2f69ef122cf3ae325690c8ffc35cb97092a",
         "currentSha256": "463875f2b3a12df09847a2de5dcd2b3b87e0df7a043303ca76bb754266c7929f"
+      },
+      {
+        "path": "scripts/verify-meta-field-bridge-postgres.mjs",
+        "previousSha256": "1580fcf08d81f0778cb4240215060d51f321671eba2d1b2d72aac7f800d3ee63",
+        "currentSha256": "79b904814356166aac925e6d38d9b4a16a1f7009432b963b48d7c5a3f71aa62d"
       },
       {
         "path": "scripts/verify-plan-budget-ui.mjs",
@@ -38949,7 +38975,12 @@
       {
         "path": "src/app/(identity)/cuenta/field-operations-panel.js",
         "previousSha256": "69af7d8b95378f0b7f26f880eaec61d891c38744e9e6781eca9fe539776a91ed",
-        "currentSha256": "197fa68dacf6ad8adee77f55370363e1bdba63f442d7a7196c96ae95b8829fe7"
+        "currentSha256": "5477d459da2e68688ce3bcf68f8f928ab0a4155144696abb2736f0c511fcd455"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/field-review-page-view.mjs",
+        "previousSha256": "18f3616144c03aacf9c9859ae210150d92f6838de7332cee2550fa5fe91603fb",
+        "currentSha256": "a1187150e0a3344666418b0191a898a6cf019ad2e8e5c46be2be721aee969634"
       },
       {
         "path": "src/app/(identity)/cuenta/material-inventory-panel.js",
@@ -38987,9 +39018,24 @@
         "currentSha256": "301f578a68afa6878e67341f02a47b405444cea63eb6ae44eb86241b1c0da799"
       },
       {
+        "path": "src/app/(identity)/cuenta/workspace-client.js",
+        "previousSha256": "2fe5a56a7caf7d46f11e4292d2e145e3e72072198a09f9951ace42c2613e8db9",
+        "currentSha256": "300e6c7f293ecc102b313c395d6e23fb520618435cf7cf5fe78e8c333e9f7cf8"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/workspace-overview.js",
+        "previousSha256": "456e78d9e5c729182e65cd30141af37a5a6571d05261896ab5e19e39c4951c1b",
+        "currentSha256": "b895bbe6bd6a0186f8600edd7e335b2239dc6f05c43f6c7c514a02a1a6964fc2"
+      },
+      {
         "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
         "previousSha256": "060e128b54eefdadfbabac45c3ec696934f5e74d79b9e26e905081128e8e99c5",
         "currentSha256": "3a8d1c517fb084df425198c84671f6b76bb1f659f9d0d4ed94945cd1046d8e64"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/workspace.module.css",
+        "previousSha256": "339fee2591a341bbb7839a19d55a5c298c728ef1de38a2efc3680999f4636db4",
+        "currentSha256": "dfce6eb468fee571af0d0f371e68848274f22198faf89c0a6cdd5df5edc7e7a9"
       },
       {
         "path": "src/app/privacidad/identidad/page.js",
@@ -39004,7 +39050,7 @@
       {
         "path": "src/lib/field-operations-http.mjs",
         "previousSha256": "df60181e3d852efe42d86a284ced3c0ff9cf4c7fbcaf863de8da4d47c2f7aeaf",
-        "currentSha256": "d3dffce08238141f672a8af0c1b956da15809e18608084b9bdf57d50ae166ceb"
+        "currentSha256": "cd1773bc3b9fba01821cd4494b8559bdcdcc3a4ce886228622bb800349dcfd39"
       },
       {
         "path": "src/lib/field-operations-policy.mjs",
@@ -39014,12 +39060,17 @@
       {
         "path": "src/lib/field-operations-store.mjs",
         "previousSha256": "dbf96641349efae61808a2d66a02d491ad06e2226885e6efa928dba53ce5034e",
-        "currentSha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
+        "currentSha256": "517267adb96c69bce58350b98b3a4e335ca1304a72a824e35998590e95b8987c"
       },
       {
         "path": "src/lib/material-inventory.mjs",
         "previousSha256": "4b599d273c4cadcdf76202554757583152da8c11b0a754be386bffb830f0c65b",
         "currentSha256": "3af0b0e9c9003d09582ec4e8b21d1e35746dd3839fc7f01071935b9a4ea95333"
+      },
+      {
+        "path": "src/lib/meta-consumption-evidence-catalog.mjs",
+        "previousSha256": null,
+        "currentSha256": "cd4eb1ccf8617060aa2bb352cc9467981f7d17649be8b24233413c133c407bff"
       },
       {
         "path": "src/lib/meta-customer-coexistence.mjs",
@@ -39032,9 +39083,29 @@
         "currentSha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
       },
       {
+        "path": "src/lib/meta-employee-intake.mjs",
+        "previousSha256": "77dc9f64814f995d21084606d705f26af65de4f4f9bea25a0f37a0d8dba1b928",
+        "currentSha256": "72e80601323adbe35c9ec1f61e49e3428007da55e567c724ca8dce3c42de042b"
+      },
+      {
+        "path": "src/lib/meta-field-bridge.mjs",
+        "previousSha256": "79c961cf91f988e5d913cfb241a887c26a78d49e04ebf2c5fbb2bf6a74bc809b",
+        "currentSha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955"
+      },
+      {
+        "path": "src/lib/meta-field-conversation.mjs",
+        "previousSha256": "2da5b4a58e4f62a912d4df4bd93574c9907c6561123fe5ffabdd12420b72047f",
+        "currentSha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d"
+      },
+      {
         "path": "src/lib/meta-kyc-conversation.mjs",
         "previousSha256": "75870a6359385ae83df0d154b57c3f6738f2bde62fbe4974da7e38e5b0de2902",
         "currentSha256": "17d1e52e826dcaa899e2e6b846e2856c73f73b18b7abfe30e951de0de8623ef6"
+      },
+      {
+        "path": "src/lib/operations-status.mjs",
+        "previousSha256": "cdee54c539106c384a92c70c730c91cd3058e872d5d855c57150b8ad246e666a",
+        "currentSha256": "ce05f2b18facdaa2df35274004ee2111be366056ef1ff2c593660b8490782cd6"
       },
       {
         "path": "src/lib/participant-kyc-notice-links.mjs",
@@ -39072,6 +39143,11 @@
         "currentSha256": "da047723f790c0f5e7eeff855782e4db7463670d1875caf0bab1c6cce9b1a920"
       },
       {
+        "path": "src/lib/voice-consumption-draft.mjs",
+        "previousSha256": null,
+        "currentSha256": "b9af424825674ca6f24a729e9ba89bae6e67adf433de10837a05e58900584c82"
+      },
+      {
         "path": "tests/fixtures/plan-budget-source-synthetic.mjs",
         "previousSha256": null,
         "currentSha256": "bf66364fbf41037c535c33b3aac59c750c2e19bf2a757c6564ac47b51665f241"
@@ -39100,6 +39176,11 @@
         "path": "tests/production-company-kyc-outbound-compact-ci.test.mjs",
         "previousSha256": "f5cf6fc2dd327058ca2e22196ab0bb9dfc436914f1eb39a0f1a8b8ef6b7c66f1",
         "currentSha256": "900baee8384af0b1dd02f19cbb200406e9f0e3adc56a4ac67ff344ce2cb152e4"
+      },
+      {
+        "path": "tests/production-field-attendance-review-query.test.mjs",
+        "previousSha256": null,
+        "currentSha256": "c0a2d6aa4d0b8418d23392ace1024b7654f153f2627326f95649f04d53279d17"
       },
       {
         "path": "tests/production-field-outbound-current-ci-lineage.test.mjs",
@@ -39139,7 +39220,7 @@
       {
         "path": "tests/production-material-review-current-ci-lineage.test.mjs",
         "previousSha256": "a9d434e05848d2d2170d57a9410c8ddeecf4585949a645cb1fdf0480b2e58db9",
-        "currentSha256": "cd3f36d1a26c2b2c82a27537566b9221245a6747012bf9e641fc8c0d73ea565e"
+        "currentSha256": "0813dc4cdea29eb554ebc5fc4f7bf8e52bd802125c8456366bdebbe82a914f5e"
       },
       {
         "path": "tests/production-meta-existing-api-plan-current-ci-lineage.test.mjs",
@@ -39147,9 +39228,19 @@
         "currentSha256": "00d21d855c36f8020bd1791ed3b48b90901f7e017c0611d2df33a3a13ab1978d"
       },
       {
+        "path": "tests/production-meta-routing-discovery.test.mjs",
+        "previousSha256": "42e273574d66cb692ba391c1d278a69b7adda3b12b7c0319603a8a8024054b8f",
+        "currentSha256": "2d7f5673b05bddda2e1b34bb455d3f2b019b6ba6b23551c793202b414072e174"
+      },
+      {
         "path": "tests/production-ooxml-accounting-current-ci-lineage.test.mjs",
         "previousSha256": "35a12ce84a67245d0c96a059c741c8eff29711d71896be1774b88c76e975be55",
         "currentSha256": "4128c77d310d613cfa22f7480bd00ca041686507fb3619aafe941419144bdb86"
+      },
+      {
+        "path": "tests/production-operations-status.test.mjs",
+        "previousSha256": "4185d2b01cd1a142b846ee05067e38ae4dad60f90ae7dc0288f19cdddd77adf9",
+        "currentSha256": "7768477fc2c986e252a4546ca74c8ce191e55dc2e03b88356dc4aad4c0ecd416"
       },
       {
         "path": "tests/production-organization-usage-ci.test.mjs",
@@ -39170,6 +39261,11 @@
         "path": "tests/production-participant-preanalysis-current-ci-lineage.test.mjs",
         "previousSha256": "568a07b2a88be7c9a0f217ce2b49fc61dbdeca8d6d1891dc63d0752f0efff9b4",
         "currentSha256": "ea91b9b98adffaf408f85d60982577ba4befe044fa3d0f1a34c0d1daa017c574"
+      },
+      {
+        "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
+        "previousSha256": null,
+        "currentSha256": "f2cd8e64186550c13ea7d6c1397735d20c932d03bd3fa7705a61b8d254b77372"
       },
       {
         "path": "tests/production-plan-budget-analyzer-http.test.mjs",
@@ -39264,57 +39360,7 @@
       {
         "path": "tests/production-workspace-plan-partida-preview-current-ci-lineage.test.mjs",
         "previousSha256": "593466da00f03fff06c19e2ac746fb14fb03371f4ceb96a2f4fc342de6e3de32",
-        "currentSha256": "7a886631a16270624e0206d870514d6757bc85ef38a3f1087d19910b2db3879a"
-      },
-      {
-        "path": "src/lib/meta-employee-intake.mjs",
-        "previousSha256": "77dc9f64814f995d21084606d705f26af65de4f4f9bea25a0f37a0d8dba1b928",
-        "currentSha256": "72e80601323adbe35c9ec1f61e49e3428007da55e567c724ca8dce3c42de042b"
-      },
-      {
-        "path": "src/lib/meta-field-conversation.mjs",
-        "previousSha256": "2da5b4a58e4f62a912d4df4bd93574c9907c6561123fe5ffabdd12420b72047f",
-        "currentSha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d"
-      },
-      {
-        "path": "src/lib/meta-field-bridge.mjs",
-        "previousSha256": "79c961cf91f988e5d913cfb241a887c26a78d49e04ebf2c5fbb2bf6a74bc809b",
-        "currentSha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955"
-      },
-      {
-        "path": "tests/production-meta-routing-discovery.test.mjs",
-        "previousSha256": "42e273574d66cb692ba391c1d278a69b7adda3b12b7c0319603a8a8024054b8f",
-        "currentSha256": "2d7f5673b05bddda2e1b34bb455d3f2b019b6ba6b23551c793202b414072e174"
-      },
-      {
-        "path": "src/lib/meta-consumption-evidence-catalog.mjs",
-        "previousSha256": null,
-        "currentSha256": "cd4eb1ccf8617060aa2bb352cc9467981f7d17649be8b24233413c133c407bff"
-      },
-      {
-        "path": "src/lib/voice-consumption-draft.mjs",
-        "previousSha256": null,
-        "currentSha256": "b9af424825674ca6f24a729e9ba89bae6e67adf433de10837a05e58900584c82"
-      },
-      {
-        "path": "scripts/verify-employee-intake-postgres.mjs",
-        "previousSha256": "d571468725a6679b4f03ea78c5a7be187514f616c2e2248d66e62b97dafe1284",
-        "currentSha256": "66e406926448dc904316728d33c1d1f6cbc38a356e13bc0adee535b0c8427caf"
-      },
-      {
-        "path": "scripts/verify-meta-field-bridge-postgres.mjs",
-        "previousSha256": "1580fcf08d81f0778cb4240215060d51f321671eba2d1b2d72aac7f800d3ee63",
-        "currentSha256": "79b904814356166aac925e6d38d9b4a16a1f7009432b963b48d7c5a3f71aa62d"
-      },
-      {
-        "path": "scripts/verify-material-inventory-postgres.mjs",
-        "previousSha256": "56c2c4751825349b126d26bc48fcce0557f11b779f94b3fad45985f34bbc409b",
-        "currentSha256": "c046f5bae2f922bcf83b3f2dffc53ad36f10a9dcc1e57bbd73923176d1bf8093"
-      },
-      {
-        "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
-        "previousSha256": null,
-        "currentSha256": "021f2847f9973ee8df04849e9a836825631f5f418a363fc1940febacf0ad4b26"
+        "currentSha256": "2cbef1b11424a733a289f14759456ab87772fa4c2e5aebacbdce23c31d228042"
       }
     ],
     "sourceSetDeltas": [
@@ -39400,12 +39446,13 @@
         "contractPointer": "/extension/proofs/14/sourceFiles",
         "previousCount": 129,
         "previousPathsSha256": "32b4daffe18d479b78a644499d16034dc3f85442e5e84e4f7a2cc05c8b399c69",
-        "currentCount": 132,
-        "currentPathsSha256": "da275796b1e85d7228a4a11c56a497dca519bc588660ca25145b6e7520340a5a",
+        "currentCount": 133,
+        "currentPathsSha256": "862157348d275beb0b84b2b4e4c7ab35cd644a560dff85594706ed98bd9aa571",
         "additions": [
           "src/lib/meta-consumption-evidence-catalog.mjs",
           "src/lib/plan-budget-source.mjs",
-          "src/lib/voice-consumption-draft.mjs"
+          "src/lib/voice-consumption-draft.mjs",
+          "tests/production-field-attendance-review-query.test.mjs"
         ]
       },
       {
@@ -40091,7 +40138,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-            "sha256": "197fa68dacf6ad8adee77f55370363e1bdba63f442d7a7196c96ae95b8829fe7"
+            "sha256": "5477d459da2e68688ce3bcf68f8f928ab0a4155144696abb2736f0c511fcd455"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -40115,7 +40162,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/field-review-page-view.mjs",
-            "sha256": "18f3616144c03aacf9c9859ae210150d92f6838de7332cee2550fa5fe91603fb"
+            "sha256": "a1187150e0a3344666418b0191a898a6cf019ad2e8e5c46be2be721aee969634"
           },
           {
             "path": "src/app/(identity)/cuenta/kyc-photo-preparation.js",
@@ -40459,7 +40506,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-client.js",
-            "sha256": "2fe5a56a7caf7d46f11e4292d2e145e3e72072198a09f9951ace42c2613e8db9"
+            "sha256": "300e6c7f293ecc102b313c395d6e23fb520618435cf7cf5fe78e8c333e9f7cf8"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-read.mjs",
@@ -40475,7 +40522,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-overview.js",
-            "sha256": "456e78d9e5c729182e65cd30141af37a5a6571d05261896ab5e19e39c4951c1b"
+            "sha256": "b895bbe6bd6a0186f8600edd7e335b2239dc6f05c43f6c7c514a02a1a6964fc2"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
@@ -40523,7 +40570,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/workspace.module.css",
-            "sha256": "339fee2591a341bbb7839a19d55a5c298c728ef1de38a2efc3680999f4636db4"
+            "sha256": "dfce6eb468fee571af0d0f371e68848274f22198faf89c0a6cdd5df5edc7e7a9"
           },
           {
             "path": "src/lib/company-entitlement.mjs",
@@ -40547,7 +40594,7 @@
           },
           {
             "path": "src/lib/field-operations-http.mjs",
-            "sha256": "d3dffce08238141f672a8af0c1b956da15809e18608084b9bdf57d50ae166ceb"
+            "sha256": "cd1773bc3b9fba01821cd4494b8559bdcdcc3a4ce886228622bb800349dcfd39"
           },
           {
             "path": "src/lib/field-operations-policy.mjs",
@@ -40555,7 +40602,7 @@
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
+            "sha256": "517267adb96c69bce58350b98b3a4e335ca1304a72a824e35998590e95b8987c"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -40854,7 +40901,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-            "sha256": "197fa68dacf6ad8adee77f55370363e1bdba63f442d7a7196c96ae95b8829fe7"
+            "sha256": "5477d459da2e68688ce3bcf68f8f928ab0a4155144696abb2736f0c511fcd455"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -40878,7 +40925,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/field-review-page-view.mjs",
-            "sha256": "18f3616144c03aacf9c9859ae210150d92f6838de7332cee2550fa5fe91603fb"
+            "sha256": "a1187150e0a3344666418b0191a898a6cf019ad2e8e5c46be2be721aee969634"
           },
           {
             "path": "src/app/(identity)/cuenta/own-company-number-view.mjs",
@@ -40942,7 +40989,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-client.js",
-            "sha256": "2fe5a56a7caf7d46f11e4292d2e145e3e72072198a09f9951ace42c2613e8db9"
+            "sha256": "300e6c7f293ecc102b313c395d6e23fb520618435cf7cf5fe78e8c333e9f7cf8"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-read.mjs",
@@ -41117,7 +41164,7 @@
           },
           {
             "path": "scripts/verify-field-operations-postgres.mjs",
-            "sha256": "c3cf9eed8983b9ab43ad9b11cf0f59af206b08ba70f5e6697133bb448b940662"
+            "sha256": "4eb11afda80e9274e3fecdc229d12f21d53d29d444e6932e44837f257800ccc2"
           },
           {
             "path": "src/lib/field-hours-report.mjs",
@@ -41133,7 +41180,7 @@
           },
           {
             "path": "src/lib/field-operations-http.mjs",
-            "sha256": "d3dffce08238141f672a8af0c1b956da15809e18608084b9bdf57d50ae166ceb"
+            "sha256": "cd1773bc3b9fba01821cd4494b8559bdcdcc3a4ce886228622bb800349dcfd39"
           },
           {
             "path": "src/lib/field-operations-policy.mjs",
@@ -41141,7 +41188,7 @@
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
+            "sha256": "517267adb96c69bce58350b98b3a4e335ca1304a72a824e35998590e95b8987c"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -41514,7 +41561,7 @@
           },
           {
             "path": "src/lib/field-operations-http.mjs",
-            "sha256": "d3dffce08238141f672a8af0c1b956da15809e18608084b9bdf57d50ae166ceb"
+            "sha256": "cd1773bc3b9fba01821cd4494b8559bdcdcc3a4ce886228622bb800349dcfd39"
           },
           {
             "path": "src/lib/field-operations-policy.mjs",
@@ -41522,7 +41569,7 @@
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
+            "sha256": "517267adb96c69bce58350b98b3a4e335ca1304a72a824e35998590e95b8987c"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -42101,7 +42148,7 @@
           },
           {
             "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
-            "sha256": "2b41d4eda5b1511c9a1761f853c2cfd37614cc60f505cbcdc77f11a3bb95f869"
+            "sha256": "bd61edf4351e0d3b8f7857cb26cdc169162dca5400467f2f9fbfbd5853903503"
           },
           {
             "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
@@ -42109,7 +42156,7 @@
           },
           {
             "path": "scripts/lib/material-review-current-ci-lineage.mjs",
-            "sha256": "9155e03f6c6831e8122263b73c16a724645fc5cd3ebcfdd950c0413543c12a64"
+            "sha256": "54bafcc5ec399197f2b3b22e6dcf2f0aa31ff18f0d2727688954533f8dc4ecc7"
           },
           {
             "path": "scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs",
@@ -42125,7 +42172,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "4843175db67d3e1ebbfb3323d469d9026182fbea0dcb8b9513ecd0d9c6346ed3"
+            "sha256": "834a40911ef64844f0db441a48cef5de235ae556c301308a62ff347f7106d678"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -42285,7 +42332,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-            "sha256": "197fa68dacf6ad8adee77f55370363e1bdba63f442d7a7196c96ae95b8829fe7"
+            "sha256": "5477d459da2e68688ce3bcf68f8f928ab0a4155144696abb2736f0c511fcd455"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -42309,7 +42356,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/field-review-page-view.mjs",
-            "sha256": "18f3616144c03aacf9c9859ae210150d92f6838de7332cee2550fa5fe91603fb"
+            "sha256": "a1187150e0a3344666418b0191a898a6cf019ad2e8e5c46be2be721aee969634"
           },
           {
             "path": "src/app/(identity)/cuenta/invitation-entry.js",
@@ -42673,7 +42720,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-client.js",
-            "sha256": "2fe5a56a7caf7d46f11e4292d2e145e3e72072198a09f9951ace42c2613e8db9"
+            "sha256": "300e6c7f293ecc102b313c395d6e23fb520618435cf7cf5fe78e8c333e9f7cf8"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-identity.js",
@@ -42693,7 +42740,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-overview.js",
-            "sha256": "456e78d9e5c729182e65cd30141af37a5a6571d05261896ab5e19e39c4951c1b"
+            "sha256": "b895bbe6bd6a0186f8600edd7e335b2239dc6f05c43f6c7c514a02a1a6964fc2"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
@@ -42741,7 +42788,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/workspace.module.css",
-            "sha256": "339fee2591a341bbb7839a19d55a5c298c728ef1de38a2efc3680999f4636db4"
+            "sha256": "dfce6eb468fee571af0d0f371e68848274f22198faf89c0a6cdd5df5edc7e7a9"
           },
           {
             "path": "src/app/(identity)/identity-load-guard.js",
@@ -43114,7 +43161,7 @@
           },
           {
             "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
-            "sha256": "2b41d4eda5b1511c9a1761f853c2cfd37614cc60f505cbcdc77f11a3bb95f869"
+            "sha256": "bd61edf4351e0d3b8f7857cb26cdc169162dca5400467f2f9fbfbd5853903503"
           },
           {
             "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
@@ -43126,7 +43173,7 @@
           },
           {
             "path": "scripts/lib/material-review-current-ci-lineage.mjs",
-            "sha256": "9155e03f6c6831e8122263b73c16a724645fc5cd3ebcfdd950c0413543c12a64"
+            "sha256": "54bafcc5ec399197f2b3b22e6dcf2f0aa31ff18f0d2727688954533f8dc4ecc7"
           },
           {
             "path": "scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs",
@@ -43146,7 +43193,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "4843175db67d3e1ebbfb3323d469d9026182fbea0dcb8b9513ecd0d9c6346ed3"
+            "sha256": "834a40911ef64844f0db441a48cef5de235ae556c301308a62ff347f7106d678"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -43222,7 +43269,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.js",
-            "sha256": "197fa68dacf6ad8adee77f55370363e1bdba63f442d7a7196c96ae95b8829fe7"
+            "sha256": "5477d459da2e68688ce3bcf68f8f928ab0a4155144696abb2736f0c511fcd455"
           },
           {
             "path": "src/app/(identity)/cuenta/field-operations-panel.module.css",
@@ -43246,7 +43293,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/field-review-page-view.mjs",
-            "sha256": "18f3616144c03aacf9c9859ae210150d92f6838de7332cee2550fa5fe91603fb"
+            "sha256": "a1187150e0a3344666418b0191a898a6cf019ad2e8e5c46be2be721aee969634"
           },
           {
             "path": "src/app/(identity)/cuenta/material-inventory-panel.js",
@@ -43772,7 +43819,7 @@
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
+            "sha256": "517267adb96c69bce58350b98b3a4e335ca1304a72a824e35998590e95b8987c"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -44819,7 +44866,7 @@
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
+            "sha256": "517267adb96c69bce58350b98b3a4e335ca1304a72a824e35998590e95b8987c"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -45376,7 +45423,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/workspace.module.css",
-            "sha256": "339fee2591a341bbb7839a19d55a5c298c728ef1de38a2efc3680999f4636db4"
+            "sha256": "dfce6eb468fee571af0d0f371e68848274f22198faf89c0a6cdd5df5edc7e7a9"
           },
           {
             "path": "src/lib/plan-import-cyp-curve.mjs",
@@ -45830,7 +45877,7 @@
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
+            "sha256": "517267adb96c69bce58350b98b3a4e335ca1304a72a824e35998590e95b8987c"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -46666,7 +46713,7 @@
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
+            "sha256": "517267adb96c69bce58350b98b3a4e335ca1304a72a824e35998590e95b8987c"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -47438,7 +47485,7 @@
           },
           {
             "path": "src/lib/field-operations-store.mjs",
-            "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
+            "sha256": "517267adb96c69bce58350b98b3a4e335ca1304a72a824e35998590e95b8987c"
           },
           {
             "path": "src/lib/field-overtime-policy.mjs",
@@ -48166,7 +48213,7 @@
           },
           {
             "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
-            "sha256": "2b41d4eda5b1511c9a1761f853c2cfd37614cc60f505cbcdc77f11a3bb95f869"
+            "sha256": "bd61edf4351e0d3b8f7857cb26cdc169162dca5400467f2f9fbfbd5853903503"
           },
           {
             "path": "scripts/lib/plan-budget-browser-ui.mjs",
@@ -48174,7 +48221,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "4843175db67d3e1ebbfb3323d469d9026182fbea0dcb8b9513ecd0d9c6346ed3"
+            "sha256": "834a40911ef64844f0db441a48cef5de235ae556c301308a62ff347f7106d678"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -48338,7 +48385,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/workspace.module.css",
-            "sha256": "339fee2591a341bbb7839a19d55a5c298c728ef1de38a2efc3680999f4636db4"
+            "sha256": "dfce6eb468fee571af0d0f371e68848274f22198faf89c0a6cdd5df5edc7e7a9"
           },
           {
             "path": "src/lib/organization-resource-usage-policy.mjs",
@@ -49596,7 +49643,7 @@
               },
               {
                 "path": "src/lib/field-operations-http.mjs",
-                "sha256": "d3dffce08238141f672a8af0c1b956da15809e18608084b9bdf57d50ae166ceb"
+                "sha256": "cd1773bc3b9fba01821cd4494b8559bdcdcc3a4ce886228622bb800349dcfd39"
               },
               {
                 "path": "src/lib/field-operations-policy.mjs",
@@ -49604,7 +49651,7 @@
               },
               {
                 "path": "src/lib/field-operations-store.mjs",
-                "sha256": "8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604"
+                "sha256": "517267adb96c69bce58350b98b3a4e335ca1304a72a824e35998590e95b8987c"
               },
               {
                 "path": "src/lib/field-overtime-policy.mjs",
@@ -49756,7 +49803,7 @@
               },
               {
                 "path": "src/lib/operations-status.mjs",
-                "sha256": "cdee54c539106c384a92c70c730c91cd3058e872d5d855c57150b8ad246e666a"
+                "sha256": "ce05f2b18facdaa2df35274004ee2111be366056ef1ff2c593660b8490782cd6"
               },
               {
                 "path": "src/lib/organization-resource-usage-policy.mjs",
@@ -50026,6 +50073,64 @@
           }
         }
       ],
+      "nativeOrHumanAcceptance": false
+    },
+    "attendanceReviewRuntime": {
+      "version": 1,
+      "parentHead": "ad435c1ac3cd6bdb43ee6b51051c0ec2af312adb",
+      "sourceAdditions": [
+        "tests/production-field-attendance-review-query.test.mjs"
+      ],
+      "sourceSetAdvances": [
+        {
+          "family": "PG_FIELD",
+          "previousDelta": {
+            "family": "PG_FIELD",
+            "contractPointer": "/extension/proofs/14/sourceFiles",
+            "previousCount": 129,
+            "previousPathsSha256": "32b4daffe18d479b78a644499d16034dc3f85442e5e84e4f7a2cc05c8b399c69",
+            "currentCount": 132,
+            "currentPathsSha256": "da275796b1e85d7228a4a11c56a497dca519bc588660ca25145b6e7520340a5a",
+            "additions": [
+              "src/lib/meta-consumption-evidence-catalog.mjs",
+              "src/lib/plan-budget-source.mjs",
+              "src/lib/voice-consumption-draft.mjs"
+            ]
+          },
+          "additions": [
+            "tests/production-field-attendance-review-query.test.mjs"
+          ]
+        }
+      ],
+      "producer": {
+        "producer": "scripts/verify-field-operations-postgres.mjs",
+        "previousSha256": "c3cf9eed8983b9ab43ad9b11cf0f59af206b08ba70f5e6697133bb448b940662",
+        "currentSha256": "4eb11afda80e9274e3fecdc229d12f21d53d29d444e6932e44837f257800ccc2",
+        "contractPointers": [
+          "/extension/proofs/14/producerSha256"
+        ],
+        "sourceHistory": {
+          "previousBytes": 164764,
+          "currentBytes": 177609,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 1933,
+              "currentText": " const admin=new Client({connectionString:url.toString()});let pool,created=false,proof;const checks=[],reviewPaginationChecks=[],voiceProgressChecks=[],mediaLeaseChecks=[],videoAudioChecks=[],canonicalOwnFieldChecks=[],attendanceReviewChecks=[];\n",
+              "previousText": " const admin=new Client({connectionString:url.toString()});let pool,created=false,proof;const checks=[],reviewPaginationChecks=[],voiceProgressChecks=[],mediaLeaseChecks=[],videoAudioChecks=[],canonicalOwnFieldChecks=[];\n"
+            },
+            {
+              "currentOffsetCharacters": 158943,
+              "currentText": "  // New attendance review controls keep every historical ledger intact. The\n  // original pair is written through ATTENDANCE; bulk rows are explicit local\n  // query fixtures, never evidence of physical attendance or payable hours.\n  const attendanceAdaptersBefore={putCount,getCount,providerCalls};\n  const attendanceConfig=await operations.save(owner,reviewCommand(owner,'CONFIGURE_SITE',{revision:(await operations.read(owner,reviewContext(owner))).projectRevision,sectors:[{id:'review-attendance-sector',name:'Synthetic attendance review sector',latitude:0,longitude:0,radius:100}]}));\n  assert.equal(attendanceConfig.qrTokens.length,1);\n  const attendanceReviewCommand=(eventType,expectedEventId)=>reviewCommand(worker,'ATTENDANCE',{workerId:'wr-a',eventType,expectedEventId,sectorId:'review-attendance-sector',qrToken:null,location:{latitude:0,longitude:0,accuracy:5,capturedAt:new Date().toISOString(),noticeVersion:'field-location-v1'}});\n  // The historical lost-COMMIT case intentionally left this person's p-a journey open. Keep that guard, then close through the existing canonical transition before moving sites.\n  const secondSiteDeniedBefore=await ownFieldState();await assert.rejects(operations.save(worker,attendanceReviewCommand('CHECK_IN',null)),{code:'ATTENDANCE_PERSON_JOURNEY_OPEN',status:409});assert.deepEqual(await ownFieldState(),secondSiteDeniedBefore);\n  const primaryBeforeTransfer=await read(worker),primaryHead=primaryBeforeTransfer.selfAttendanceHeads.find(row=>row.workerId==='w-a'),primarySector=primaryBeforeTransfer.sectors.find(row=>row.id==='sector-main');assert.equal(primaryHead.status,'CURRENT');assert.equal(primaryHead.head.eventType,'CHECK_IN');assert.equal(primaryHead.head.id,last.id);assert.ok(primarySector);assert.equal(primarySector.latitude,0);assert.equal(primarySector.longitude,0);\n  const closePrimaryInput=attendance(worker,'CHECK_OUT',primaryHead.head.id,{sectorId:primarySector.id,qrToken:null}),primaryClosed=await operations.save(worker,closePrimaryInput);assert.equal(primaryClosed.event.eventType,'CHECK_OUT');assert.equal((await read(worker)).selfAttendanceHeads.find(row=>row.workerId==='w-a').head.id,primaryClosed.event.id);assert.equal((await operations.save(worker,closePrimaryInput)).replayed,true);\n  const oldAttendanceEntry=(await operations.save(worker,attendanceReviewCommand('CHECK_IN',null))).event;\n  const oldAttendanceExit=(await operations.save(worker,attendanceReviewCommand('CHECK_OUT',oldAttendanceEntry.id))).event;\n  for(const event of [oldAttendanceEntry,oldAttendanceExit])assert.equal(event.verificationStatus,'REVIEW_REQUIRED');\n  await pool.query(`INSERT INTO \"AttendanceEntry\"(id,\"projectId\",\"workerId\",status,source,\"checkedInAt\",metadata) SELECT 'attendance-resolved-'||lpad(n::text,4,'0'),\"projectId\",\"workerId\",status,source,'2099-01-01 00:00:00.123456',jsonb_set(metadata,'{fieldOperations,review}',$2::jsonb) FROM \"AttendanceEntry\" CROSS JOIN generate_series(1,101) AS n WHERE id=$1`,[oldAttendanceExit.id,JSON.stringify({decision:'APPROVE',reason:'Synthetic resolved query fixture only',actorId:'owner',recordedAt:'2099-01-01T00:00:01.000Z'})]);\n  const attendanceReviewInput=(s,filter='PENDING',extra={})=>({...reviewContext(s),reviewSection:'ATTENDANCE',reviewFilter:filter,...extra});\n  const attendancePage=(s,filter='PENDING',extra={})=>operations.reviewPage(s,attendanceReviewInput(s,filter,extra));\n  const oldAttendancePage=await attendancePage(director),oldAttendanceBase=await operations.read(director,reviewContext(director));\n  assert.equal(oldAttendanceBase.attendance.some(row=>row.id===oldAttendanceEntry.id),false);\n  assert.deepEqual(oldAttendancePage.records.map(row=>row.id),[oldAttendanceExit.id,oldAttendanceEntry.id]);assert.equal(oldAttendancePage.total,2);assert.equal(oldAttendancePage.nextCursor,null);\n  assert.ok(oldAttendancePage.records.every(row=>row.workerName==='wr-a'));\n  for(const reviewer of [owner,director,manager]){const page=await attendancePage(reviewer);assert.equal(page.canReview,true);assert.ok(page.records.some(row=>row.id===oldAttendanceEntry.id));}\n  await pool.query(`INSERT INTO \"Worker\"(id,\"projectId\",name,phone,role,metadata,\"updatedAt\") SELECT 'aa-attendance-display-'||lpad(n::text,4,'0'),'p-review','Synthetic display row without account','synthetic-no-contact-'||n,'WORKER','{}',clock_timestamp() FROM generate_series(1,101) AS n`);\n  try{\n    assert.equal((await operations.read(director,reviewContext(director))).workers.some(row=>row.id==='wr-a'),false);\n    assert.deepEqual((await attendancePage(director)).records.map(row=>[row.id,row.workerName]),oldAttendancePage.records.map(row=>[row.id,row.workerName]));\n  }finally{await pool.query(`DELETE FROM \"Worker\" WHERE \"projectId\"='p-review' AND id=ANY($1::text[])`,[Array.from({length:101},(_,n)=>'aa-attendance-display-'+String(n+1).padStart(4,'0'))]);}\n  attendanceReviewChecks.push('attendance-pending-older-than-101-resolved-events-is-complete-and-reviewable-for-current-authorized-roles-with-same-query-worker-names');\n\n  await pool.query(`INSERT INTO \"AttendanceEntry\"(id,\"projectId\",\"workerId\",status,source,\"checkedInAt\",metadata) SELECT 'attendance-pending-'||lpad(n::text,4,'0'),\"projectId\",\"workerId\",status,source,'2099-02-01 00:00:00.123456',metadata FROM \"AttendanceEntry\" CROSS JOIN generate_series(1,201) AS n WHERE id=$1`,[oldAttendanceExit.id]);\n  const attendanceState=async()=>(await pool.query(`SELECT (SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM \"AttendanceEntry\" a WHERE \"projectId\"='p-review') AS attendance,(SELECT count(*)::int FROM \"AuditLog\") AS audits,(SELECT to_jsonb(p) FROM \"Project\" p WHERE id='p-review') AS project,(SELECT to_jsonb(t) FROM \"Task\" t WHERE id='task-review') AS task`)).rows;\n  const beforeAttendanceReads=await attendanceState(),attendanceSql=[];\n  const countedAttendanceWorkspace=createWorkspaceStore({connect:async()=>{const c=await pool.connect();return {release:bad=>c.release(bad),query:(sql,args)=>{if(sql.includes('public.\"AttendanceEntry\"'))attendanceSql.push(sql);return c.query(sql,args);}};}});\n  const firstAttendancePage=await createFieldOperations({workspace:countedAttendanceWorkspace}).reviewPage(director,attendanceReviewInput(director));\n  assert.equal(attendanceSql.length,2);assert.equal(attendanceSql.filter(sql=>sql.includes('LEFT JOIN public.\"Worker\"')).length,1);assert.equal(firstAttendancePage.records.length,100);assert.equal(firstAttendancePage.total,203);\n  const expectedAttendanceIds=[...Array.from({length:201},(_,n)=>'attendance-pending-'+String(n+1).padStart(4,'0')).reverse(),oldAttendanceExit.id,oldAttendanceEntry.id];\n  const receivedAttendanceIds=[];let attendanceCursor=null,attendanceStamp=null,attendancePages=0;\n  do{const page=await attendancePage(director,'PENDING',attendanceCursor?{afterReview:attendanceCursor,reviewAccessStamp:attendanceStamp}:{});assert.equal(page.total,203);assert.ok(page.records.length<=100);assert.ok(page.records.every(row=>row.verificationStatus==='REVIEW_REQUIRED'&&row.review===null));receivedAttendanceIds.push(...page.records.map(row=>row.id));attendanceCursor=page.nextCursor;attendanceStamp=page.reviewAccessStamp;attendancePages++;}while(attendanceCursor);\n  assert.equal(attendancePages,3);assert.deepEqual(receivedAttendanceIds,expectedAttendanceIds);assert.equal(new Set(receivedAttendanceIds).size,203);\n  const directedAttendance=await attendancePage(director,'ALL',{reviewId:oldAttendanceEntry.id,reviewAccessStamp:attendanceStamp});assert.equal(directedAttendance.total,1);assert.equal(directedAttendance.nextCursor,null);assert.deepEqual(directedAttendance.records.map(row=>row.id),[oldAttendanceEntry.id]);\n  const allAttendance=await attendancePage(director,'ALL');assert.equal(allAttendance.total,304);assert.equal(allAttendance.records.length,100);assert.equal(allAttendance.nextCursor,allAttendance.records.at(-1).id);assert.deepEqual(await attendanceState(),beforeAttendanceReads);\n  attendanceReviewChecks.push('attendance-203-pending-keyset-pages-preserve-equal-microsecond-order-exact-total-directed-old-row-and-readonly-two-query-joined-names-without-N-plus-one');\n\n  const ownedAttendance=await attendancePage(worker);assert.equal(ownedAttendance.canReview,false);assert.equal(ownedAttendance.total,203);\n  assert.deepEqual((await attendancePage(otherWorker)).records,[]);\n  await pool.query(`UPDATE \"AttendanceEntry\" SET metadata=jsonb_set(metadata,'{fieldOperations,recordedBy}','\"worker2\"') WHERE id='attendance-pending-0201'`);\n  try{\n    assert.equal((await attendancePage(worker)).total,202);\n    for(const selector of ['afterReview','reviewId'])await assert.rejects(attendancePage(worker,selector==='reviewId'?'ALL':'PENDING',{[selector]:'attendance-pending-0201',reviewAccessStamp:ownedAttendance.reviewAccessStamp}),{code:'FIELD_REVIEW_CURSOR_UNAVAILABLE',status:404});\n    assert.equal((await attendancePage(director,'ALL',{reviewId:'attendance-pending-0201',reviewAccessStamp:attendanceStamp})).records.length,1);\n  }finally{await pool.query(`UPDATE \"AttendanceEntry\" SET metadata=jsonb_set(metadata,'{fieldOperations,recordedBy}','\"worker\"') WHERE id='attendance-pending-0201'`);}\n  for(const selector of ['afterReview','reviewId'])for(const id of [exit.event.id,'unknown-attendance'])await assert.rejects(attendancePage(director,selector==='reviewId'?'ALL':'PENDING',{[selector]:id,reviewAccessStamp:attendanceStamp}),{code:'FIELD_REVIEW_CURSOR_UNAVAILABLE',status:404});\n  await assert.rejects(operations.reviewPage(foreign,attendanceReviewInput(foreign)),{code:'WORKSPACE_PROJECT_UNAVAILABLE',status:404});\n  await assert.rejects(operations.reviewPage(worker,{...attendanceReviewInput(worker),scope:scopes[director.userId]}),{code:'WORKSPACE_CONTEXT_CHANGED',status:409});\n  const ownAttendanceMetadata=(await pool.query(`SELECT metadata FROM \"Worker\" WHERE id='wr-a'`)).rows[0].metadata;\n  try{\n    await pool.query(`UPDATE \"Worker\" SET metadata=jsonb_set(metadata,'{participant,permissions,attendance}','false') WHERE id='wr-a'`);\n    await assert.rejects(attendancePage(worker,'PENDING',{afterReview:oldAttendanceEntry.id,reviewAccessStamp:ownedAttendance.reviewAccessStamp}),{code:'WORKSPACE_CONTEXT_CHANGED',status:409});\n    assert.equal((await attendancePage(worker)).total,0);\n  }finally{await pool.query(`UPDATE \"Worker\" SET metadata=$1::jsonb WHERE id='wr-a'`,[JSON.stringify(ownAttendanceMetadata)]);}\n  try{await pool.query(`UPDATE \"TenantMembership\" SET status='REVOKED' WHERE id='director-m'`);await assert.rejects(attendancePage(director),{code:'WORKSPACE_MEMBERSHIP_REQUIRED',status:403});}finally{await pool.query(`UPDATE \"TenantMembership\" SET status='ACTIVE' WHERE id='director-m'`);}\n  assert.deepEqual(await attendanceState(),beforeAttendanceReads);\n  attendanceReviewChecks.push('attendance-review-current-tenant-project-role-author-and-field-permission-scope-revocation-denials-never-write-ledger-or-receipts');\n\n  const attendanceDecision=reviewCommand(director,'REVIEW_ATTENDANCE',{eventId:oldAttendanceEntry.id,decision:'APPROVE',reason:'Synthetic independent review of old canonical attendance.'});\n  await assert.rejects(operations.save(worker,{...attendanceDecision,...reviewContext(worker),operationId:randomUUID()}),{code:'FIELD_PERMISSION_REQUIRED',status:403});\n  const attendanceDecisions=await Promise.all([operations.save(director,attendanceDecision),operations.save(director,attendanceDecision)]);assert.equal(attendanceDecisions.filter(row=>!row.replayed).length,1);\n  const attendanceReadback=await attendancePage(director,'ALL',{reviewId:oldAttendanceEntry.id,reviewAccessStamp:attendanceStamp});assert.equal(attendanceReadback.records[0].review.decision,'APPROVE');\n  assert.equal((await pool.query(`SELECT count(*)::int AS n FROM \"AuditLog\" WHERE metadata->>'command'='REVIEW_ATTENDANCE' AND metadata->'outcome'->'event'->>'id'=$1`,[oldAttendanceEntry.id])).rows[0].n,1);\n  assert.equal((await attendancePage(director)).total,202);assert.deepEqual((await attendancePage(director,'PENDING',{afterReview:oldAttendanceEntry.id,reviewAccessStamp:attendanceStamp})).records,[]);\n  const afterAttendanceDecision=await attendanceState();await assert.rejects(operations.save(director,{...attendanceDecision,operationId:randomUUID()}),{code:'FIELD_ALREADY_REVIEWED',status:409});assert.deepEqual(await attendanceState(),afterAttendanceDecision);\n  assert.deepEqual({putCount,getCount,providerCalls},attendanceAdaptersBefore);\n  attendanceReviewChecks.push('attendance-old-row-decision-is-independent-current-authorized-atomic-once-under-replay-and-remains-a-usable-cursor-after-review');\n  assert.equal(attendanceReviewChecks.length,4);\n  const databaseEngineVersion=(await pool.query('SHOW server_version')).rows[0].server_version;\n const sourceFiles=['src/lib/workspace-store.mjs','src/lib/workspace-policy.mjs','src/lib/field-operations-store.mjs','src/lib/field-operations-policy.mjs','src/lib/field-operations-http.mjs','src/app/api/identity/field-operations/route.js','src/app/(identity)/cuenta/field-review-page-view.mjs','src/app/(identity)/cuenta/field-operations-panel.js','tests/production-field-review-pagination.test.mjs','tests/production-field-attendance-review-query.test.mjs','tests/production-field-canonical-kyc.test.mjs','scripts/verify-field-operations-postgres.mjs','scripts/verify-field-operations-ui.mjs','vercel.json'];\n",
+              "previousText": " const databaseEngineVersion=(await pool.query('SHOW server_version')).rows[0].server_version;\n const sourceFiles=['src/lib/workspace-store.mjs','src/lib/workspace-policy.mjs','src/lib/field-operations-store.mjs','src/lib/field-operations-policy.mjs','src/lib/field-operations-http.mjs','src/app/api/identity/field-operations/route.js','src/app/(identity)/cuenta/field-review-page-view.mjs','src/app/(identity)/cuenta/field-operations-panel.js','tests/production-field-review-pagination.test.mjs','tests/production-field-canonical-kyc.test.mjs','scripts/verify-field-operations-postgres.mjs','scripts/verify-field-operations-ui.mjs','vercel.json'];\n"
+            },
+            {
+              "currentOffsetCharacters": 175168,
+              "currentText": " proof={status:'PASS',harnessSha256,participantKycFixture:{sourceSha256:fixtureSourceSha256,records:kycFixture.records,syntheticPrivateCalls:kycFixture.calls,providerCalls:0,biometricIdentityCertified:false},environment:'disposable-local-postgresql'+databaseEngineVersion.split('.')[0],databaseEngineVersion,checks,reviewPaginationChecks,voiceProgressChecks,checkCount:checks.length,reviewPaginationCheckCount:reviewPaginationChecks.length,voiceProgressCheckCount:voiceProgressChecks.length,totalChecks:checks.length+reviewPaginationChecks.length+voiceProgressChecks.length+mediaLeaseChecks.length+videoAudioChecks.length+canonicalOwnFieldChecks.length+ownHistoryPrivacyChecks.length+attendanceReviewChecks.length,attendanceReviewChecks,attendanceReviewCheckCount:attendanceReviewChecks.length,canonicalOwnFieldChecks,canonicalOwnFieldCheckCount:canonicalOwnFieldChecks.length,ownHistoryPrivacy,sourceSha256,voiceProgressSourceSha256,mediaLeaseChecks,mediaLeaseCheckCount:mediaLeaseChecks.length,mediaLeaseSourceSha256,mediaLeaseSyntheticAdapterCalls,mediaLeaseFinalSqlBoundary,mediaLeaseClockBiasMs:[-86400000,86400000],mediaLeaseProviderCalls:0,mediaLeaseAdapters:{storage:'synthetic-private-objects',decoder:'synthetic-video-decoder-double-no-codec-acceptance',provider:'synthetic-responses',database:'real-disposable-postgresql'},videoAudioChecks,videoAudioCheckCount:videoAudioChecks.length,videoAudioSourceSha256,videoAudioSyntheticAdapterCalls,videoAudioBoundaryObservations,videoAudioProviderCalls:0,videoAudioFfmpegExecuted:false,videoAudioAdapters:{storage:'synthetic-private-objects-original-only',frameDecoder:'synthetic-frame-response-no-codec-acceptance',audioDecoder:'synthetic-canonical-pcm-and-metadata-no-codec-acceptance',provider:'synthetic-responses',database:'real-disposable-postgresql'},productionDataWritten:false,providerCalls:0,reviewPaginationProviderCalls:0,voiceProgressProviderCalls:0,voiceProgressSyntheticAdapterCalls:voiceAdapterCalls,mediaAdapters:'synthetic-isolated-objects-and-responses',physicalAttendanceAccepted:false,whatsAppTested:false};\n",
+              "previousText": " proof={status:'PASS',harnessSha256,participantKycFixture:{sourceSha256:fixtureSourceSha256,records:kycFixture.records,syntheticPrivateCalls:kycFixture.calls,providerCalls:0,biometricIdentityCertified:false},environment:'disposable-local-postgresql'+databaseEngineVersion.split('.')[0],databaseEngineVersion,checks,reviewPaginationChecks,voiceProgressChecks,checkCount:checks.length,reviewPaginationCheckCount:reviewPaginationChecks.length,voiceProgressCheckCount:voiceProgressChecks.length,totalChecks:checks.length+reviewPaginationChecks.length+voiceProgressChecks.length+mediaLeaseChecks.length+videoAudioChecks.length+canonicalOwnFieldChecks.length+ownHistoryPrivacyChecks.length,canonicalOwnFieldChecks,canonicalOwnFieldCheckCount:canonicalOwnFieldChecks.length,ownHistoryPrivacy,sourceSha256,voiceProgressSourceSha256,mediaLeaseChecks,mediaLeaseCheckCount:mediaLeaseChecks.length,mediaLeaseSourceSha256,mediaLeaseSyntheticAdapterCalls,mediaLeaseFinalSqlBoundary,mediaLeaseClockBiasMs:[-86400000,86400000],mediaLeaseProviderCalls:0,mediaLeaseAdapters:{storage:'synthetic-private-objects',decoder:'synthetic-video-decoder-double-no-codec-acceptance',provider:'synthetic-responses',database:'real-disposable-postgresql'},videoAudioChecks,videoAudioCheckCount:videoAudioChecks.length,videoAudioSourceSha256,videoAudioSyntheticAdapterCalls,videoAudioBoundaryObservations,videoAudioProviderCalls:0,videoAudioFfmpegExecuted:false,videoAudioAdapters:{storage:'synthetic-private-objects-original-only',frameDecoder:'synthetic-frame-response-no-codec-acceptance',audioDecoder:'synthetic-canonical-pcm-and-metadata-no-codec-acceptance',provider:'synthetic-responses',database:'real-disposable-postgresql'},productionDataWritten:false,providerCalls:0,reviewPaginationProviderCalls:0,voiceProgressProviderCalls:0,voiceProgressSyntheticAdapterCalls:voiceAdapterCalls,mediaAdapters:'synthetic-isolated-objects-and-responses',physicalAttendanceAccepted:false,whatsAppTested:false};\n"
+            }
+          ]
+        }
+      },
       "nativeOrHumanAcceptance": false
     }
   }

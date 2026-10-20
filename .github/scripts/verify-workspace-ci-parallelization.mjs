@@ -1,4 +1,5 @@
 import {PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths} from '../../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {normalizeAttendanceReviewNativeProof,attendanceReviewCurrentCheckCount,ATTENDANCE_REVIEW_CHECK_NAMES} from '../../scripts/lib/attendance-review-current-ci-proof.mjs';
 import {PLAN_BUDGET_UI_MATRIX,validatePlanBudgetUiProofBytes,planBudgetUiSourceBinding,planBudgetUiRetainedScreenshotPath} from '../../scripts/lib/plan-budget-ui-contract.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract,verifyWorksiteLiveHoursCurrentSources} from '../../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {IDENTITY_DESTINATION_UX_CURRENT_REVISION,validateIdentityDestinationUxBrowserSupplement,identityDestinationUxBrowserShadow} from '../../scripts/lib/home-decisions-current-ci-lineage.mjs';
@@ -459,7 +460,7 @@ function budgetScreenshotSummary(files){
  if(!Array.isArray(files))deny('PROOF_BUDGET_UI_SCREENSHOT_BINDING');const selected=PLAN_BUDGET_UI_MATRIX.map(row=>{const path=planBudgetUiRetainedScreenshotPath(row),matches=files.filter(file=>file.path===path);if(matches.length!==1||!sha(matches[0].sha256)||!Number.isSafeInteger(matches[0].bytes)||matches[0].bytes<=45)deny('PROOF_BUDGET_UI_SCREENSHOT_BINDING');return {path,sha256:matches[0].sha256,bytes:matches[0].bytes};});
  return {cases:23,screenshots:23,screenshotManifestSha256:hash(canonical(selected))};
 }
-function summary(spec,files=null){if(spec.kind===PLAN_BUDGET_CI_KIND)return budgetScreenshotSummary(files);return spec.kind===FIELD_TASK_PAGINATION_CI_KIND?spec.checkNames.length:spec.kind===FOCUSED_WORKSPACE_CI_KIND?spec.checkNames.length:spec.kind===PARTICIPANT_PREANALYSIS_KIND?spec.checkNames.length:spec.kind==='UI_DOCUMENT_CURVE'?DOCUMENT_CURVE_UI_CHECKS.length:spec.kind==='PG_PLAN_BASELINE'?spec.checkNames.length:isCanonicalField(spec)?spec.checkNames.length:isIdentity(spec)?IDENTITY_ONLY_CHECK_COUNT:spec.kind==='PORTFOLIO_UNIT'?PORTFOLIO_TESTS:spec.kind==='UI_PORTFOLIO'?4*PORTFOLIO_MODES.length:spec.kind==='PG_PORTFOLIO'?spec.checkNames.length:spec.kind==='PG_PREPARATION'?spec.checkNames.length:spec.kind==='UI_PREPARATION'?4*PREPARATION_MODES.length:spec.kind==='UNIT'?{suites:TEST_SUITES.length,tests:EXPECTED_TOTAL_TESTS,recovery:7,corporateKyc:EXPECTED_SUITE_COUNTS['tests/production-company-channel-kyc.test.mjs'],nextSteps:EXPECTED_SUITE_COUNTS['tests/production-participant-onboarding-next-step.test.mjs']}:['PG_COMPANY_KYC','PG_INTAKE'].includes(spec.kind)?spec.checkNames.length:spec.kind==='UI_CAUSAL'?0:spec.kind==='UI_JOINT'?8:spec.kind==='UI_INTAKE'?4*INTAKE_UI_MODES.length:spec.kind.startsWith('UI_')?32:spec.kind==='PG_BANK'?10:8;}
+function summary(spec,files=null){if(spec.kind===PLAN_BUDGET_CI_KIND)return budgetScreenshotSummary(files);return spec.kind===FIELD_TASK_PAGINATION_CI_KIND?spec.checkNames.length:spec.kind===FOCUSED_WORKSPACE_CI_KIND?spec.checkNames.length:spec.kind===PARTICIPANT_PREANALYSIS_KIND?spec.checkNames.length:spec.kind==='UI_DOCUMENT_CURVE'?DOCUMENT_CURVE_UI_CHECKS.length:spec.kind==='PG_PLAN_BASELINE'?spec.checkNames.length:isCanonicalField(spec)?(attendanceReviewCurrentCheckCount(spec)??spec.checkNames.length):isIdentity(spec)?IDENTITY_ONLY_CHECK_COUNT:spec.kind==='PORTFOLIO_UNIT'?PORTFOLIO_TESTS:spec.kind==='UI_PORTFOLIO'?4*PORTFOLIO_MODES.length:spec.kind==='PG_PORTFOLIO'?spec.checkNames.length:spec.kind==='PG_PREPARATION'?spec.checkNames.length:spec.kind==='UI_PREPARATION'?4*PREPARATION_MODES.length:spec.kind==='UNIT'?{suites:TEST_SUITES.length,tests:EXPECTED_TOTAL_TESTS,recovery:7,corporateKyc:EXPECTED_SUITE_COUNTS['tests/production-company-channel-kyc.test.mjs'],nextSteps:EXPECTED_SUITE_COUNTS['tests/production-participant-onboarding-next-step.test.mjs']}:['PG_COMPANY_KYC','PG_INTAKE'].includes(spec.kind)?spec.checkNames.length:spec.kind==='UI_CAUSAL'?0:spec.kind==='UI_JOINT'?8:spec.kind==='UI_INTAKE'?4*INTAKE_UI_MODES.length:spec.kind.startsWith('UI_')?32:spec.kind==='PG_BANK'?10:8;}
 function validateExtension(contract){
  const extension=contract.extension;exactKeys(extension,['baseHead','baselineBlocksSha256','baselineOwnershipSha256','baselineProducersSha256','proofs'],'EXTENSION_SHAPE');
  if(extension.baseHead!=='a4b79d7a7f75427ed1d0b0e1e9b247e1188adf3f')deny('EXTENSION_BASE');
@@ -612,7 +613,7 @@ function validateCanonicalFieldProof(spec,proof,readSource){
   if(proof.physicalAttendanceAccepted!==false||proof.whatsAppTested!==false||proof.videoAudioFfmpegExecuted!==false)deny('PROOF_PROVIDER_IO');
   for(const [group,countKey,count] of FIELD_CHECK_GROUPS){if(!Array.isArray(proof[group])||proof[group].length!==count||proof[countKey]!==count)deny('PROOF_CHECK_NAMES');}
   const allChecks=FIELD_CHECK_GROUPS.flatMap(([group])=>proof[group].map(name=>canonical({group,name})));if(revision)allChecks.push(...proof.ownHistoryPrivacy.checks.map(name=>canonical({group:'ownHistoryPrivacy.checks',name})));
-  equal(allChecks,spec.checkNames,'PROOF_CHECK_NAMES');equal(proof.canonicalOwnFieldChecks,FIELD_CANONICAL_CHECKS,'PROOF_CHECK_NAMES');if(proof.totalChecks!==(revision?.currentCheckCount??66))deny('PROOF_CHECK_NAMES');
+  equal(allChecks,spec.checkNames,'PROOF_CHECK_NAMES');equal(proof.canonicalOwnFieldChecks,FIELD_CANONICAL_CHECKS,'PROOF_CHECK_NAMES');if(proof.totalChecks!==(attendanceReviewCurrentCheckCount(spec)??revision?.currentCheckCount??66))deny('PROOF_CHECK_NAMES');
   for(const [key,files] of Object.entries(sets)){const map=key==='fixture'?fixture.sourceSha256:proof[key];equal(Object.keys(map).toSorted(),files,'PROOF_FIELD_SOURCE_MAP');}
  }
 }
@@ -860,6 +861,7 @@ export function validateExtensionProof(spec,bytes,{expectedHead,expectedTree,rea
  }
  if(!head(expectedHead)||typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');let proof;try{proof=JSON.parse(utf8(bytes));}catch(error){if(error.code)throw error;deny('PROOF_JSON');}if(!proof||typeof proof!=='object'||Array.isArray(proof))deny('PROOF_SHAPE');
  const expectedStatus=spec.kind==='UI_CAUSAL'?'EXPECTED_CAUSAL_FAILURE':'PASS',actualStatus=spec.kind==='UI_PORTFOLIO'?(proof.state==='PASS_LOCAL_UI_NOT_RELEASE_ACCEPTANCE'?'PASS':'FAIL'):spec.kind==='PG_PREPARATION'?(proof.ok===true?'PASS':'FAIL'):spec.kind==='UI_PREPARATION'?(proof.validated===true?'PASS':'FAIL'):proof.status;if(actualStatus!==expectedStatus)deny('PROOF_STATUS');if((spec.kind==='PG_OVERTIME'?proof.realBusinessDatabaseUsed:['PG_COMPANY_KYC','PG_PORTFOLIO'].includes(spec.kind)?proof.productionDataTouched:proof.productionDataWritten)!==false)deny('PROOF_PRODUCTION_BOUNDARY');
+ const canonicalFieldRaw=spec.kind==='PG_FIELD'?structuredClone(proof):null;
  if(isCanonicalField(spec))proof.sourceManifest=canonicalFieldManifest(spec,proof);
  const producerBytes=readSource(spec.producer);if(!Buffer.isBuffer(producerBytes)||hash(producerBytes)!==spec.producerSha256||proof.harnessSha256!==spec.producerSha256)deny('PROOF_HARNESS_SOURCE');
  if(spec.kind==='UI_DOCUMENT_CURVE')validateDocumentCurveUiProof(spec,proof,{expectedHead,expectedTree,readSource,readEvidence});
@@ -870,7 +872,10 @@ export function validateExtensionProof(spec,bytes,{expectedHead,expectedTree,rea
  if(proof.sourceRevision!==undefined&&proof.sourceRevision!==expectedHead)deny('PROOF_SOURCE_HEAD');
  if(spec.kind==='UI_DOCUMENT_CURVE'){/* DOM/source/cleanup facts validated above. */}
  else if(spec.kind==='PG_PLAN_BASELINE'){/* Native facts and rich manifests validated above. */}
- else if(isCanonicalField(spec)){validateCanonicalFieldProof(spec,proof,readSource);}
+ else if(isCanonicalField(spec)){
+  validateCanonicalFieldProof(spec,proof,readSource);
+  if(spec.kind==='PG_FIELD')normalizeAttendanceReviewNativeProof(canonicalFieldRaw,JSON.parse(utf8(readSource('.github/workspace-acceptance-contract.json'))),readSource,spec);
+ }
  else if(isIdentity(spec)){try{proof=validateIdentityDestinationUxBrowserSupplement(proof,JSON.parse(readSource('.github/workspace-acceptance-contract.json')),{readSource,readEvidence});}catch(error){if(error.code==='IDENTITY_DESTINATION_UX_PROOF_REJECTED')deny('PROOF_IDENTITY_DESTINATION_'+error.reason);throw error;}validateIdentityProof(spec,proof,expectedHead);}
  else if(isPortfolio(spec)){validatePortfolioProof(spec,proof,{expectedHead,readEvidence});}
  else if(spec.kind==='PG_PREPARATION'||spec.kind==='UI_PREPARATION'){
@@ -2414,10 +2419,11 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],
    if(spec.kind==='PG_FIELD')Object.assign(proof.ownHistoryPrivacy,{checks:privacyRevision.addedChecks.map(value=>JSON.parse(value).name),deniedBeforePrivateRead:true,postReadAuthorityRaces:['REASSIGNED','REVOKED'],providerCalls:0});
    else Object.assign(proof.ownHistoryPrivacy,{sameWorkerReassigned:true,newAuthorOwnShiftWithForeignPredecessorReadable:true});
   }
+  if(attendanceReviewCurrentCheckCount(spec)!==null)Object.assign(proof,{attendanceReviewChecks:[...ATTENDANCE_REVIEW_CHECK_NAMES],attendanceReviewCheckCount:ATTENDANCE_REVIEW_CHECK_NAMES.length,totalChecks:attendanceReviewCurrentCheckCount(spec)});
   const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
   currentKycStatusChecks.push(()=>currentKycStatusClosureSelftest(spec,proof,root,validate));
    currentWhatsappPlanChecks.push(()=>whatsappPlanImportClosureSelftest(spec,proof,root,validate));
-  good(spec.id+'-complete-current-proof',()=>assert.equal(validate(proof).checks,privacyRevision?.currentCheckCount??(spec.kind==='PG_FIELD'?66:29)));
+  good(spec.id+'-complete-current-proof',()=>assert.equal(validate(proof).checks,attendanceReviewCurrentCheckCount(spec)??privacyRevision?.currentCheckCount??(spec.kind==='PG_FIELD'?66:29)));
   good(spec.id+'-current-manifest-closure-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));
   currentReactiveChecks.push(()=>{
    const start=checks.length,previous=REACTIVE_SOURCE_COUNTS[spec.kind]-1;
