@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {normalizeAttendanceReviewNativeProof,attendanceReviewCurrentCheckCount,ATTENDANCE_REVIEW_CHECK_NAMES} from '../scripts/lib/attendance-review-current-ci-proof.mjs';
-import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetIntakeWithdrawalSource} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {validateExtensionProof} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';
 
 // Portable public-source decoder shadows only. These tests neither import a
@@ -113,4 +113,12 @@ test('attendance actual134 rejects a complete prior133 RAW71 receipt without the
 test('attendance actual134 rejects resealed shared core bytes and the old wrapper under current source authority',()=>{
  deny(f=>{const file='src/lib/consumption-evidence-catalog.mjs',bytes=Buffer.from('foreign shared core');f.reader=name=>name===file?bytes:readSource(name);for(const map of [f.proof.sourceSha256,f.proof.voiceProgressSourceSha256,f.proof.mediaLeaseSourceSha256,f.proof.videoAudioSourceSha256,f.proof.participantKycFixture.sourceSha256])map[file]=hash(bytes);});
  deny(f=>{const file='src/lib/meta-consumption-evidence-catalog.mjs',bytes=Buffer.from(f.contract.planBudgetCurrentRevision.consumptionEvidenceRuntime.sourceHistory.inverseHunks[0].previousText);f.reader=name=>name===file?bytes:readSource(name);for(const map of [f.proof.sourceSha256,f.proof.voiceProgressSourceSha256,f.proof.mediaLeaseSourceSha256,f.proof.videoAudioSourceSha256,f.proof.participantKycFixture.sourceSha256])map[file]=hash(bytes);});
+});
+
+test('attendance frozen source comparison accepts only authenticated withdrawal bytes projected to complete6058',()=>{
+ const f=fixture(),file='src/lib/meta-kyc-conversation.mjs',current=readSource(file),parent=restorePlanBudgetIntakeWithdrawalSource(f.contract,file,current),before=structuredClone(f.proof);assert.notEqual(hash(parent),hash(current));assert.equal(hash(parent),f.contract.planBudgetCurrentRevision.intakeWithdrawalRuntime.conversation.previousSha256);normalizeAttendanceReviewNativeProof(f.proof,f.contract,f.reader,f.spec);assert.deepEqual(f.proof,before);deny(g=>{g.reader=name=>name===file?parent:readSource(name);});
+});
+test('attendance all five RAW maps retain current withdrawal hashes and reject prior or forged source bytes',()=>{
+ const file='src/lib/meta-kyc-conversation.mjs';for(const key of ['sourceSha256','voiceProgressSourceSha256','mediaLeaseSourceSha256','videoAudioSourceSha256','participantKycFixture'])deny(f=>{const map=key==='participantKycFixture'?f.proof.participantKycFixture.sourceSha256:f.proof[key];assert.ok(Object.hasOwn(map,file));map[file]=f.contract.planBudgetCurrentRevision.intakeWithdrawalRuntime.conversation.previousSha256;});
+ deny(f=>{const bytes=Buffer.from('forged withdrawal conversation');for(const map of [f.proof.sourceSha256,f.proof.voiceProgressSourceSha256,f.proof.mediaLeaseSourceSha256,f.proof.videoAudioSourceSha256,f.proof.participantKycFixture.sourceSha256])map[file]=hash(bytes);f.reader=name=>name===file?bytes:readSource(name);});
 });

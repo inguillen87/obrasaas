@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import path from 'node:path';
-import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSource} from './plan-budget-current-ci-lineage.mjs';
+import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetIntakeWithdrawalSource} from './plan-budget-current-ci-lineage.mjs';
 
 // A decoder supplement, never a PostgreSQL execution or CI acceptance receipt.
 // These public source bindings are derived from the actual 7bc4243 producer and
@@ -208,7 +208,7 @@ export function normalizeAttendanceReviewNativeProof(raw,contract,readSource,spe
  reject(runtime.producer?.producer===PRODUCER&&runtime.producer.currentSha256===CURRENT_PRODUCER&&runtime.producer.previousSha256===PREVIOUS_PRODUCER,'CURRENT_PRODUCER_BINDING');
  // Capture each current source once per invocation, never cache authorization or
  // mutable callers between calls. The same private bytes are authenticated/used.
- for(const [file,digest] of Object.entries(SOURCE_BINDINGS)){const bytes=lf(read(file));let parent=bytes;if(file==='src/lib/meta-consumption-evidence-catalog.mjs')try{parent=restorePlanBudgetConsumptionEvidenceSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}reject(hash(parent)===digest,'CURRENT_SOURCE_'+file);}
+ for(const [file,digest] of Object.entries(SOURCE_BINDINGS)){const bytes=lf(read(file));let parent=bytes;if(file==='src/lib/meta-consumption-evidence-catalog.mjs')try{parent=restorePlanBudgetConsumptionEvidenceSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}if(file==='src/lib/meta-kyc-conversation.mjs')try{parent=restorePlanBudgetIntakeWithdrawalSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}reject(hash(parent)===digest,'CURRENT_SOURCE_'+file);}
  try{verifyPlanBudgetCurrentSources(c,read);const previous=restorePlanBudgetAttendanceReviewProducerText(c,read(PRODUCER));reject(Buffer.isBuffer(previous)&&hash(lf(previous))===PREVIOUS_PRODUCER,'PRODUCER_INVERSE');}catch(error){if(error.code==='ATTENDANCE_REVIEW_CURRENT_CI_PROOF_REJECTED')throw error;reject(false,'CURRENT_AUTHORITY');}
  reject(proof.status==='PASS'&&proof.harnessSha256===hash(read(PRODUCER)),'CURRENT_HARNESS');
  reject(proof.totalChecks===71&&proof.attendanceReviewCheckCount===4,'CURRENT_COUNTS');
