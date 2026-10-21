@@ -176,6 +176,7 @@ function CompanySubscriptionContent({scope,getSessionToken,locked = false,onPend
   }
   const selected = view?.offers.find(offer => offer.id === current?.selected);
   const decisionsDisabled = busy || locked || !current?.storageReady || Boolean(pending);
+  const referencesOnly = Boolean(view && !view.offers.some(offer => offer.termsReady));
   return <section className={styles.panel} aria-labelledby={headingId} aria-busy={busy} data-company-subscription>
     <div className={styles.heading}>
       <div><p className={styles.eyebrow}>SUSCRIPCIÓN DE EMPRESA</p><h3 id={headingId}><CreditCard size={21} aria-hidden="true"/>Plan y pago</h3><p>Una suscripción para toda tu empresa. Consultá la prueba, el pago y la renovación.</p></div>
@@ -192,8 +193,21 @@ function CompanySubscriptionContent({scope,getSessionToken,locked = false,onPend
         {view.attempt && <div><dt>Abono elegido</dt><dd>{view.attempt.priceLabel} por mes</dd></div>}
       </dl>
       <CompanyUsagePanel scope={scope} organizationId={view.organizationId} getSessionToken={getSessionToken} locked={locked}/>
-      {!view.configurationReady && <div className={styles.setup} data-subscription-setup><ShieldCheck size={22} aria-hidden="true"/><div><h4>El pago en línea todavía no está habilitado</h4><p>Los precios son informativos. La aceptación de condiciones y el cobro se confirman por separado.</p></div></div>}
-      <form onSubmit={acceptOffer} className={styles.purchase} data-commercial-offers>
+      {!view.configurationReady && !referencesOnly && <div className={styles.setup} data-subscription-setup><ShieldCheck size={22} aria-hidden="true"/><div><h4>El pago en línea todavía no está habilitado</h4><p>Los precios son informativos. La aceptación de condiciones y el cobro se confirman por separado.</p></div></div>}
+      {referencesOnly ? <div className={styles.purchase} data-commercial-offers data-commercial-references>
+        <fieldset className={styles.offers}>
+          <legend>Planes de referencia</legend>
+          <div className={styles.offerGrid}>{view.offers.map(offer => <article className={styles.offer} style={{cursor:'default'}} key={offer.id}>
+            <h4 className={styles.offerHeading}>{offer.planLabel}</h4>
+            <span className={styles.price}>{offer.priceLabel}<small>{offer.periodLabel}</small></span>
+            {offer.taxTreatment !== null && <span className={styles.tax}>{offer.taxLabel}</span>}
+          </article>)}</div>
+        </fieldset>
+        <p className={styles.note} data-commercial-pending>La contratación todavía requiere confirmar las condiciones finales y la forma de pago.</p>
+        <div className={styles.included}><Check size={18} aria-hidden="true"/><p>Un único abono para toda la empresa, sin adicionales automáticos.</p></div>
+        <a className={pending?styles.secondary:styles.primary} href="mailto:info@obrasaas.com" data-company-plan-support>Consultar contratación</a>
+        <details className={`${styles.note} ${styles.conditions}`} data-commercial-pending-details><summary>Ver condiciones de contratación</summary><p>Antes de contratar, se confirmarán los impuestos, los servicios incluidos y las condiciones del plan.</p><p>La consulta abre un borrador de correo para que lo revises y envíes.</p></details>
+      </div> : <form onSubmit={acceptOffer} className={styles.purchase} data-commercial-offers>
         <fieldset className={styles.offers} disabled={decisionsDisabled}>
           <legend>Elegí el plan de tu empresa</legend>
           <div className={styles.offerGrid}>{view.offers.map(offer => <label className={`${styles.offer} ${current?.selected === offer.id?styles.selected:''}`} key={offer.id}>
@@ -210,7 +224,7 @@ function CompanySubscriptionContent({scope,getSessionToken,locked = false,onPend
         </div>}
         <button type="submit" className={styles.primary} disabled={decisionsDisabled || !selected?.canAccept || !current?.confirmed}>Aceptar condiciones{selected?` de ${selected.planLabel}`:''}<Check size={17} aria-hidden="true"/></button>
         <p className={styles.note}>Aceptar condiciones registra tu decisión. El pago requiere un paso posterior.</p>
-      </form>
+      </form>}
       {view.acceptance?.current && <div className={styles.accepted} data-offer-acceptance><h4>Condiciones aceptadas · {view.acceptance.offer.planLabel}</h4><p>{view.acceptance.offer.priceLabel} por empresa / mes · {view.acceptance.offer.termsVersion}</p><p className={styles.terms}>{view.acceptance.offer.taxTreatment}</p><p className={styles.terms}>{view.acceptance.offer.includedTerms}</p><details><summary>Consultar las condiciones aceptadas</summary><div className={styles.terms}>{view.acceptance.offer.termsText}</div></details>{view.canBegin?<form onSubmit={begin} data-subscription-begin><button type="submit" className={styles.primary} disabled={decisionsDisabled}>Continuar con {view.acceptance.offer.planLabel}<ArrowUpRight size={17} aria-hidden="true"/></button><p className={styles.note}>Revisarás y autorizarás el pago en Mercado Pago. La autorización se comprueba por separado del pago.</p></form>:<p className={styles.note}>{!view.configurationReady?'El pago en línea todavía no está habilitado.':view.attempt?'Consultá el intento de pago actual para continuar.':'La oferta requiere una nueva consulta antes de iniciar el pago.'}</p>}</div>}
       {view.configurationReady && view.attempt?.checkoutUrl && !pending && <div className={styles.checkout}><h4>Continuá tu suscripción en Mercado Pago</h4><p>{view.attempt.planLabel} · {view.attempt.priceLabel} por mes. El pago se confirmará al comprobar el resultado.</p><p>{view.attempt.taxLabel}</p><p>Renovación mensual. Un único abono, sin adicionales automáticos.</p><a className={styles.primary} href={view.attempt.checkoutUrl} target="_blank" rel="noopener noreferrer" referrerPolicy="no-referrer">Continuar en Mercado Pago<ArrowUpRight size={17} aria-hidden="true"/></a><button type="button" className={styles.secondary} disabled={busy} onClick={checkPayment}>Ya volví · comprobar pago</button></div>}
       {view.attempt && (!view.attempt.checkoutUrl || !view.configurationReady) && !pending && <div className={styles.payment}><button type="button" className={styles.secondary} disabled={busy} onClick={checkPayment}>Comprobar pago y renovación</button></div>}
