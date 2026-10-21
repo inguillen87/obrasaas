@@ -1,6 +1,6 @@
 ObraSaaS private facial assistance - model and upstream attribution
 
-YuNet face_detection_yunet_2023mar.onnx: OpenCV Zoo, Apache-2.0.
+YuNet face_detection_yunet_2023mar.onnx: OpenCV Zoo, MIT.
 https://huggingface.co/opencv/face_detection_yunet/tree/3cc26e7f1014a5ee5d74a42acee58bafc9d0a310
 
 SFace face_recognition_sface_2021dec.onnx: OpenCV Zoo, Apache-2.0.
@@ -11,7 +11,8 @@ Upstream: https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/tree/b6d5f0
 ONNX conversion distributed by garciafido/agilface:
 https://huggingface.co/garciafido/minifasnet-v2-anti-spoofing-onnx/tree/d29c87568ca9b5662da803b10f217c4db20b142b
 
-The Apache-2.0 license is included as biometric-model-license.txt.
+The Apache-2.0 license for SFace and MiniFASNetV2 is included as biometric-model-license.txt.
+The exact pinned YuNet MIT license is included as biometric-yunet-MIT-license.txt.
 Immutable revisions and SHA-256 checksums are enforced in _biometric_core.py.
 No remote model code is executed. No identity images are uploaded to Hugging Face.
 
