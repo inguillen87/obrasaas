@@ -63,6 +63,7 @@ export function restorePlanBudgetPilotIntegrationPreviousContract(contract){sect
 export function restorePlanBudgetPilotIntegrationSource(contract,file,bytes){section(contract,true);return integrationParentSource(file,bytes);}
 
 const currentExpected=structuredClone(reviewed),expected=integrationParentRevision(currentExpected);let compiled=null;
+const currentExpectedJson=JSON.stringify(currentExpected);
 // Bounded current pilot advancement. The complete parent ledger remains pinned;
 // this declaration never grants business authority or certifies a native run.
 // The current field-review addition is a separate exact successor. Its source
@@ -338,7 +339,7 @@ function compile(){
  for(const row of b.retainedScreenshots)reject(same(Object.keys(row).sort(),['mode','path','width'])&&['UPLOAD_ADMIN','UPLOAD_DIRECTOR','THREE_VIEWS_EXACT_JOIN','AMBIGUOUS_SOURCE','TRUNCATED_LIST','ROLE_DOWNGRADE','HTML_403','CONTEXT_LATE_SUCCESS','OLD_OWNER_LATE_403','DETAIL_FALSE_AUTHORITY'].includes(row.mode)&&[320,390,768,1280].includes(row.width)&&row.path==='.vercel/private/plan-import-ui-budget-'+row.mode.toLowerCase()+'-'+row.width+'.png','SCREENSHOT');
  compiled={refs,sets,families,text:declaration(v)};return compiled;
 }
-function section(contract,required=false){reject(plain(contract),'CONTRACT');if(!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION)){reject(!required,'BUDGET_COMPANION_REQUIRED');return null;}compile();reject(same(contract[PLAN_BUDGET_CURRENT_SECTION],currentExpected),'IMMUTABLE_COMPANION');return expected;}
+function section(contract,required=false){reject(plain(contract),'CONTRACT');if(!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION)){reject(!required,'BUDGET_COMPANION_REQUIRED');return null;}compile();reject(JSON.stringify(contract[PLAN_BUDGET_CURRENT_SECTION])===currentExpectedJson,'IMMUTABLE_COMPANION');return expected;}
 function previousFiles(files,row){sorted(files);reject(files.length===row.currentCount&&sha(JSON.stringify(files))===row.currentPathsSha256&&row.additions.every(file=>files.includes(file)),'CURRENT_SOURCE_SET_'+row.family);pilotParentFiles(files,row);const old=files.filter(file=>!row.additions.includes(file));reject(old.length===row.previousCount&&sha(JSON.stringify(old))===row.previousPathsSha256,'PREVIOUS_SOURCE_SET_'+row.family);return old;}
 export function restorePlanBudgetPreviousContract(contract){
  const v=section(contract);if(!v)return contract;const out=restorePlanBudgetCheckTimePreviousContract(contract),o=v.ownership;delete out[PLAN_BUDGET_CURRENT_SECTION];

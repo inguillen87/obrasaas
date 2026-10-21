@@ -29,9 +29,10 @@ export function prepareWorksiteLivePilotFixture({root,fixture,sourceManifest}){
  function visit(node,parent){if(!node||typeof node!=='object')return;if(node.type==='VariableDeclarator'&&node.id?.type==='Identifier'){const list=decls.get(node.id.name)||[];list.push({node,parent});decls.set(node.id.name,list);}for(const value of Object.values(node)){if(Array.isArray(value))value.forEach(child=>visit(child,node));else if(value&&typeof value==='object')visit(value,node);}}
  visit(ast);
  const one=name=>{const matches=decls.get(name)||[];assert.equal(matches.length,1,'One current canonical declaration '+name);return matches[0];};
- const live=one('scheduleLive'),context=one('scheduleLiveContext');assert.equal(live.node.init?.callee?.name,'useWorksiteLiveRefresh');
+ const live=one('scheduleLive'),context=one('scheduleLiveContext'),blocked=one('scheduleLiveBlocked');assert.equal(live.node.init?.callee?.name,'useWorksiteLiveRefresh');
  // Includes the committed useLayoutEffect context update added during lint review.
- const schedule=source.slice(context.parent.start,live.parent.end);
+ assert.ok(blocked.parent.start<context.parent.start,'The production blocked declaration must precede the context');
+ const schedule=source.slice(blocked.parent.start,live.parent.end);
  assert.match(schedule,/useLayoutEffect/);assert.match(schedule,/scheduleLiveContext\.current=/);
  const topNames=['endpoint','messages','describe','query'],top=topNames.map(name=>source.slice(one(name).parent.start,one(name).parent.end));
  const requestNodes=ast.program.body.filter(node=>node.type==='FunctionDeclaration'&&node.id?.name==='requestWorkspace');assert.equal(requestNodes.length,1);top.push(source.slice(requestNodes[0].start,requestNodes[0].end));
@@ -49,7 +50,7 @@ ${top.join('\n')}
 const initial=${JSON.stringify(initial)},fixtureAccount={scope:initial.scope,officeReviewOnly:false};
 export default function LivePilot(){
  const [view,setView]=useState(initial),[activeSection,setActiveSection]=useState('cronograma'),[contextLocked,setContextLocked]=useState(false),[access,setAccess]=useState(false);
- const account=fixtureAccount,loading=false,observationEpoch=1,generation=useRef(1),mounted=useRef(true);
+ const account=fixtureAccount,loading=false,planReadbackMatches=false,observationEpoch=1,generation=useRef(1),mounted=useRef(true);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
  const getSessionToken=useCallback(async()=> 'synthetic-pilot-'+window.__pilotActor,[]),transport=useWorkspaceRequest(getSessionToken);
  const request=useCallback((suffix='',options={})=>requestWorkspace(transport,suffix,options),[transport]);
