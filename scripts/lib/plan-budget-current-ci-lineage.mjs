@@ -5,6 +5,8 @@ export {PLAN_BUDGET_CURRENT_REVISION} from './plan-budget-current-ci-reviewed.mj
 export const PLAN_BUDGET_CURRENT_SECTION='planBudgetCurrentRevision';
 export const PLAN_BUDGET_CI_KIND='UI_PLAN_BUDGET_SOURCE';
 export const PLAN_BUDGET_CI_PROOF_PATH='.vercel/private/plan-budget-ui-ci.json';
+// Historical bodies remain private and unchanged after export-keyword removal.
+function createAuthenticatedParentGate(reviewed){
 const anchor='scripts/lib/plan-budget-current-ci-reviewed.mjs',previousHash='8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839';
 const declaration=value=>'// Exact budget-source CI declaration; compiler fills immutable reviewed source bindings.\nexport const PLAN_BUDGET_CURRENT_REVISION=Object.freeze('+JSON.stringify(value,null,2)+');\n';
 const sha=value=>createHash('sha256').update(value).digest('hex'),same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value),hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -59,8 +61,8 @@ function verifyIntegrationActualSources(contract,reader){
 }
 function integrationAdvancedPin(ref){const h=currentExpected.pilotIntegrationRuntime.sourceHistory.find(row=>row.path===ref.path);return h&&ref.sha256===h.previousSha256?h.currentSha256:ref.sha256;}
 function integrationInputPin(ref){const h=currentExpected.pilotIntegrationRuntime.sourceHistory.find(row=>row.path===ref.path);return h&&ref.sha256===h.currentSha256?{...ref,sha256:h.previousSha256}:ref;}
-export function restorePlanBudgetPilotIntegrationPreviousContract(contract){section(contract,true);return integrationParentContract(contract);}
-export function restorePlanBudgetPilotIntegrationSource(contract,file,bytes){section(contract,true);return integrationParentSource(file,bytes);}
+function restorePlanBudgetPilotIntegrationPreviousContract(contract){section(contract,true);return integrationParentContract(contract);}
+function restorePlanBudgetPilotIntegrationSource(contract,file,bytes){section(contract,true);return integrationParentSource(file,bytes);}
 
 const currentExpected=structuredClone(reviewed),expected=integrationParentRevision(currentExpected);let compiled=null;
 const currentExpectedJson=JSON.stringify(currentExpected);
@@ -144,7 +146,7 @@ function pilotParentFiles(files,row){
  const parent=fieldReviewParentFiles(files,row).filter(file=>!p.sourceAdditions.includes(file));reject(parent.length===a.previousDelta.currentCount&&sha(JSON.stringify(parent))===a.previousDelta.currentPathsSha256,'PILOT_EXACT_PARENT_SET_'+row.family);
 }
 // This exact current successor preserves every inherited source set and ledger.
-export const INTAKE_WITHDRAWAL_CHECK_NAMES=Object.freeze([
+const INTAKE_WITHDRAWAL_CHECK_NAMES=Object.freeze([
  'real-PG-signed-pending-withdrawal-preserves-original-envelope-replays-once-and-denies-old-and-current-admission-revisions',
  'real-PG-admission-first-CANCELAR-preserves-person-and-reviewed-permissions-without-revocation'
 ]);
@@ -172,18 +174,18 @@ function intakeWithdrawalSpec(spec){
  const f=compile()&&expected.intakeWithdrawalRuntime,n=f.native;
  return spec?.kind==='PG_INTAKE'&&spec.producer===f.producer.producer&&spec.producerSha256===f.producer.currentSha256&&same(spec.checkNames,n.previousCheckNames)&&same(spec.sourceFiles,n.currentManifest.map(row=>row.path));
 }
-export function intakeWithdrawalCurrentCheckCount(spec){return intakeWithdrawalSpec(spec)?35:null;}
+function intakeWithdrawalCurrentCheckCount(spec){return intakeWithdrawalSpec(spec)?35:null;}
 function restoreIntakeWithdrawalText(h,bytes,reason){
  reject(Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'INTAKE_'+reason+'_SOURCE_READER');let text=bytes.toString('utf8').replaceAll('\r\n','\n');reject(sha(text)===h.currentSha256&&Buffer.byteLength(text)===h.currentBytes,'INTAKE_'+reason+'_CURRENT_SOURCE');
  for(const block of [...h.inverseHunks].reverse()){const at=block.currentOffsetCharacters;reject(text.slice(at,at+block.currentText.length)===block.currentText,'INTAKE_'+reason+'_EXACT_SOURCE_HUNK');text=text.slice(0,at)+block.previousText+text.slice(at+block.currentText.length);}
  reject(sha(text)===h.previousSha256&&Buffer.byteLength(text)===h.previousBytes,'INTAKE_'+reason+'_COMPLETE_SOURCE_INVERSE');return Buffer.from(text);
 }
-export function restorePlanBudgetIntakeWithdrawalSource(contract,file,bytes){bytes=integrationParentSource(file,bytes,true);const h=section(contract,true).intakeWithdrawalRuntime.conversation;return file===h.path?restoreIntakeWithdrawalText(h,bytes,'CONVERSATION'):bytes;}
-export function restorePlanBudgetIntakeWithdrawalProducerText(contract,bytes){const p=section(contract,true).intakeWithdrawalRuntime.producer;return restoreIntakeWithdrawalText({...p.sourceHistory,previousSha256:p.previousSha256,currentSha256:p.currentSha256},bytes,'PRODUCER');}
-export function restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,bytes){const p=section(contract,true).intakeWithdrawalRuntime.unitProducer;return restoreIntakeWithdrawalText({...p.sourceHistory,previousSha256:p.previousSha256,currentSha256:p.currentSha256},bytes,'UNIT_PRODUCER');}
+function restorePlanBudgetIntakeWithdrawalSource(contract,file,bytes){bytes=integrationParentSource(file,bytes,true);const h=section(contract,true).intakeWithdrawalRuntime.conversation;return file===h.path?restoreIntakeWithdrawalText(h,bytes,'CONVERSATION'):bytes;}
+function restorePlanBudgetIntakeWithdrawalProducerText(contract,bytes){const p=section(contract,true).intakeWithdrawalRuntime.producer;return restoreIntakeWithdrawalText({...p.sourceHistory,previousSha256:p.previousSha256,currentSha256:p.currentSha256},bytes,'PRODUCER');}
+function restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,bytes){const p=section(contract,true).intakeWithdrawalRuntime.unitProducer;return restoreIntakeWithdrawalText({...p.sourceHistory,previousSha256:p.previousSha256,currentSha256:p.currentSha256},bytes,'UNIT_PRODUCER');}
 // Actual source bytes and the complete35 ledger authenticate before the clone
 // is projected solely for the unchanged33-check historical consumer.
-export function normalizePlanBudgetIntakeWithdrawalNativeProof(raw,contract,readSource,spec){
+function normalizePlanBudgetIntakeWithdrawalNativeProof(raw,contract,readSource,spec){
  const current=compile()&&expected.intakeWithdrawalRuntime,historical=contract?.planBudgetCurrentRevision?.intakeWithdrawalRuntime===undefined;
  const captured=new Map(),reader=file=>{if(!captured.has(file)){let bytes;try{bytes=readSource(file);}catch{}reject(Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'INTAKE_SOURCE_READER_'+file);captured.set(file,Buffer.from(bytes));}return Buffer.from(captured.get(file));};
  if(historical){
@@ -256,9 +258,9 @@ function verifyTrialExpirySources(v,reader){for(const h of v.trialExpiryNoticeRu
 function trialExpiryAdvancedPin(ref){const r=expected.trialExpiryNoticeRuntime,a=[...r.sourceAliases,...r.referenceAdvances,r.validationSourceAdvance].find(a=>a.path===ref.path);if(a?.path===r.validationSourceAdvance.path)reject([a.previousSha256,a.currentSha256].includes(ref.sha256),'TRIAL_EXPIRY_EXACT_VALIDATION_PIN');return a&&ref.sha256===a.previousSha256?a.currentSha256:ref.sha256;}
 function trialExpiryPreviousPin(ref){const r=expected.trialExpiryNoticeRuntime,a=[...r.sourceAliases,...r.referenceAdvances,r.validationSourceAdvance].find(a=>a.path===ref.path);if(!a)return ref.sha256;exact(ref,['path','sha256'],'TRIAL_EXPIRY_PREVIOUS_PIN');reject([a.previousSha256,a.currentSha256].includes(ref.sha256),'TRIAL_EXPIRY_EXACT_PREVIOUS_PIN');return a.previousSha256;}
 function trialExpiryCurrentNativeManifest(v,manifest){return manifest.map(ref=>{const a=v.trialExpiryNoticeRuntime.sourceAliases.find(a=>a.path===ref.path);if(!a)return ref;reject(ref.sha256===a.previousSha256,'TRIAL_EXPIRY_NATIVE_PARENT_'+ref.path);return {...ref,sha256:a.currentSha256};}).map(ref=>({...ref,sha256:integrationAdvancedPin(ref)}));}
-export function restorePlanBudgetTrialExpiryNoticePreviousContract(contract){const v=section(contract,true);return trialExpiryParentContract(contract,v.trialExpiryNoticeRuntime);}
-export function restorePlanBudgetTrialExpiryNoticeSource(contract,file,bytes){const v=section(contract,true);reject(TRIAL_EXPIRY_SOURCES.some(row=>row.path===file),'TRIAL_EXPIRY_BUSINESS_SOURCE');trialExpiryParentContract(contract,v.trialExpiryNoticeRuntime);return trialExpirySource(v.trialExpiryNoticeRuntime,file,bytes);}
-export function restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,file,bytes){const v=section(contract,true);reject([TRIAL_EXPIRY_REFERENCES[0].path,TRIAL_EXPIRY_VALIDATION.path].includes(file),'TRIAL_EXPIRY_VALIDATOR_SOURCE');trialExpiryParentContract(contract,v.trialExpiryNoticeRuntime);return trialExpirySource(v.trialExpiryNoticeRuntime,file,bytes);}
+function restorePlanBudgetTrialExpiryNoticePreviousContract(contract){const v=section(contract,true);return trialExpiryParentContract(contract,v.trialExpiryNoticeRuntime);}
+function restorePlanBudgetTrialExpiryNoticeSource(contract,file,bytes){const v=section(contract,true);reject(TRIAL_EXPIRY_SOURCES.some(row=>row.path===file),'TRIAL_EXPIRY_BUSINESS_SOURCE');trialExpiryParentContract(contract,v.trialExpiryNoticeRuntime);return trialExpirySource(v.trialExpiryNoticeRuntime,file,bytes);}
+function restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,file,bytes){const v=section(contract,true);reject([TRIAL_EXPIRY_REFERENCES[0].path,TRIAL_EXPIRY_VALIDATION.path].includes(file),'TRIAL_EXPIRY_VALIDATOR_SOURCE');trialExpiryParentContract(contract,v.trialExpiryNoticeRuntime);return trialExpirySource(v.trialExpiryNoticeRuntime,file,bytes);}
 
 
 // Closed binding successor of9248. No accepted Time9537 history is rewritten.
@@ -282,8 +284,8 @@ function measurementPrivacyParentContract(contract,r){const out=trialExpiryParen
 function measurementPrivacySource(r,file,bytes){if(file==='scripts/lib/plan-budget-current-ci-lineage.mjs')bytes=trialExpirySource(expected.trialExpiryNoticeRuntime,file,bytes);const h=r.sourceHistory.find(a=>a.path===file);reject(h&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'MEASUREMENT_PRIVACY_UTF8_SOURCE');let text=bytes.toString('utf8').replaceAll('\r\n','\n');reject(sha(text)===h.currentSha256&&Buffer.byteLength(text)===h.currentBytes,'MEASUREMENT_PRIVACY_CURRENT_SOURCE_'+file);for(const b of [...h.inverseHunks].reverse()){const at=b.currentOffsetCharacters;reject(text.slice(at,at+b.currentText.length)===b.currentText,'MEASUREMENT_PRIVACY_EXACT_HUNK_'+file);text=text.slice(0,at)+b.previousText+text.slice(at+b.currentText.length);}reject(sha(text)===h.previousSha256&&Buffer.byteLength(text)===h.previousBytes,'MEASUREMENT_PRIVACY_COMPLETE_SOURCE_INVERSE_'+file);return Buffer.from(text);}
 function verifyMeasurementPrivacySources(v,reader){for(const h of v.measurementPrivacyRuntime.sourceHistory)measurementPrivacySource(v.measurementPrivacyRuntime,h.path,read(reader,h.path));const ref=v.measurementPrivacyRuntime.validationSource;reject(sha(trialExpirySource(v.trialExpiryNoticeRuntime,ref.path,read(reader,ref.path)))===ref.sha256,'MEASUREMENT_PRIVACY_VALIDATION_BYTES');}
 function measurementPrivacyAdvancedPin(ref){const h=expected.measurementPrivacyRuntime.referenceAdvances.find(h=>h.path===ref.path);return h&&ref.sha256===h.previousSha256?h.currentSha256:ref.sha256;}
-export function restorePlanBudgetMeasurementPrivacyPreviousContract(contract){const v=section(contract,true);return measurementPrivacyParentContract(contract,v.measurementPrivacyRuntime);}
-export function restorePlanBudgetMeasurementPrivacySource(contract,file,bytes){return measurementPrivacySource(section(contract,true).measurementPrivacyRuntime,file,bytes);}
+function restorePlanBudgetMeasurementPrivacyPreviousContract(contract){const v=section(contract,true);return measurementPrivacyParentContract(contract,v.measurementPrivacyRuntime);}
+function restorePlanBudgetMeasurementPrivacySource(contract,file,bytes){return measurementPrivacySource(section(contract,true).measurementPrivacyRuntime,file,bytes);}
 
 // Exact display-only successor of Git9537. Current readers always retain actual
 // bytes; only fully authenticated local values may project into older lineage.
@@ -304,11 +306,11 @@ function checkTimeSource(r,file,bytes){
  for(const b of [...h.inverseHunks].reverse()){const at=b.currentOffsetCharacters;reject(text.slice(at,at+b.currentText.length)===b.currentText,'CHECK_TIME_EXACT_HUNK_'+file);text=text.slice(0,at)+b.previousText+text.slice(at+b.currentText.length);}
  reject(sha(text)===h.previousSha256&&Buffer.byteLength(text)===h.previousBytes,'CHECK_TIME_COMPLETE_SOURCE_INVERSE_'+file);return Buffer.from(text);
 }
-export function restorePlanBudgetCheckTimeSource(contract,file,bytes){return checkTimeSource(section(contract,true).checkTimeRuntime,file,bytes);}
+function restorePlanBudgetCheckTimeSource(contract,file,bytes){return checkTimeSource(section(contract,true).checkTimeRuntime,file,bytes);}
 function verifyCheckTimeSources(v,readSource){for(const h of v.checkTimeRuntime.sourceHistory)checkTimeSource(v.checkTimeRuntime,h.path,read(readSource,h.path));}
 // Authenticate the entire parent contract before the existing9537→8b inverse.
 // No historical source text is ever installed as the caller's current reader.
-export function restorePlanBudgetCheckTimePreviousContract(contract){
+function restorePlanBudgetCheckTimePreviousContract(contract){
  const v=section(contract,true),r=v.checkTimeRuntime,out=measurementPrivacyParentContract(contract,v.measurementPrivacyRuntime),p=out[PLAN_BUDGET_CURRENT_SECTION];
  for(const pin of r.frozenLiveHoursPins)reject(same(out.worksiteLiveHoursCurrentRevision?.newSources?.[pin.index],{path:pin.path,sha256:pin.sha256}),'CHECK_TIME_FROZEN_LIVE_HOURS_PIN');
  delete p.checkTimeRuntime;
@@ -341,7 +343,7 @@ function compile(){
 }
 function section(contract,required=false){reject(plain(contract),'CONTRACT');if(!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION)){reject(!required,'BUDGET_COMPANION_REQUIRED');return null;}compile();reject(JSON.stringify(contract[PLAN_BUDGET_CURRENT_SECTION])===currentExpectedJson,'IMMUTABLE_COMPANION');return expected;}
 function previousFiles(files,row){sorted(files);reject(files.length===row.currentCount&&sha(JSON.stringify(files))===row.currentPathsSha256&&row.additions.every(file=>files.includes(file)),'CURRENT_SOURCE_SET_'+row.family);pilotParentFiles(files,row);const old=files.filter(file=>!row.additions.includes(file));reject(old.length===row.previousCount&&sha(JSON.stringify(old))===row.previousPathsSha256,'PREVIOUS_SOURCE_SET_'+row.family);return old;}
-export function restorePlanBudgetPreviousContract(contract){
+function restorePlanBudgetPreviousContract(contract){
  const v=section(contract);if(!v)return contract;const out=restorePlanBudgetCheckTimePreviousContract(contract),o=v.ownership;delete out[PLAN_BUDGET_CURRENT_SECTION];
  for(const intake of [v.intakeWithdrawalRuntime.producer,v.intakeWithdrawalRuntime.unitProducer])for(const pointer of intake.contractPointers){const index=Number(/^\/extension\/proofs\/(\d+)\/producerSha256$/.exec(pointer)[1]),spec=out.extension.proofs[index];reject(spec?.producer===intake.producer&&spec.producerSha256===intake.currentSha256,'INTAKE_CURRENT_PRODUCER');spec.producerSha256=intake.previousSha256;}
  for(const row of [...v.pilotWhatsAppRuntime.producerDeltas,v.attendanceReviewRuntime.producer])for(const pointer of row.contractPointers){const index=Number(/^\/extension\/proofs\/(\d+)\/producerSha256$/.exec(pointer)[1]),spec=out.extension.proofs[index];reject(spec?.producer===row.producer&&spec.producerSha256===row.currentSha256,'PILOT_CURRENT_PRODUCER');spec.producerSha256=row.previousSha256;}
@@ -354,26 +356,26 @@ export function restorePlanBudgetPreviousContract(contract){
 // remains mandatory at validate/verify/restore boundaries; caller data is never an oracle.
 function parentPlanBudgetCurrentSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;exact(ref,['path','sha256'],'SOURCE_PIN');ref={...ref,sha256:trialExpiryAdvancedPin({...ref,sha256:measurementPrivacyAdvancedPin(ref)})};const time=(compile()&&expected.checkTimeRuntime.sourceHistory).find(row=>row.path===ref.path);if(time){reject([time.previousSha256,time.currentSha256].includes(ref.sha256),'CHECK_TIME_EXACT_SOURCE_PIN');return time.currentSha256;}const row=compile().refs.get(ref.path);if(!row)return ref.sha256;reject([row.previousSha256,row.currentSha256].filter(Boolean).includes(ref.sha256),'EXACT_PREVIOUS_CURRENT_PIN_'+ref.path);return row.currentSha256;}
 function parentPlanBudgetPreviousSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;ref={...ref,sha256:trialExpiryPreviousPin({...ref,sha256:measurementPrivacyAdvancedPin(ref)})};const time=(compile()&&expected.checkTimeRuntime.sourceHistory).find(row=>row.path===ref.path);if(time){exact(ref,['path','sha256'],'CHECK_TIME_PREVIOUS_SOURCE_PIN');reject([time.previousSha256,time.currentSha256].includes(ref.sha256),'CHECK_TIME_EXACT_PREVIOUS_PIN');return time.previousSha256;}const row=compile().refs.get(ref.path);return row?.previousSha256&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}
-export function restorePlanBudgetSourceSet(contract,family,files){if(!section(contract))return files;const row=compile().sets.get(family);if(!row)return files;sorted(files);if(files.length===row.previousCount&&sha(JSON.stringify(files))===row.previousPathsSha256)return [...files];return previousFiles(files,row);}
-export function planBudgetProofSourceAdditions(spec){const row=compile().sets.get(spec?.kind);if(!row)return[];sorted(spec.sourceFiles);const files=spec.sourceFiles;if(files.length===row.currentCount&&sha(JSON.stringify(files))===row.currentPathsSha256){previousFiles(files,row);return [...row.additions];}if(files.length===row.previousCount&&sha(JSON.stringify(files))===row.previousPathsSha256)return[];reject(files.length<row.previousCount&&!row.additions.some(file=>files.includes(file)),'UNKNOWN_EARLIER_SOURCE_SET');return[];}
-export function verifyPlanBudgetCurrentSources(contract,readSource){const v=section(contract,true);verifyIntegrationActualSources(contract,readSource);readSource=integrationParentReader(readSource);verifyTrialExpirySources(v,readSource);verifyMeasurementPrivacySources(v,readSource);verifyCheckTimeSources(v,readSource);restorePlanBudgetPreviousContract(contract);reject(read(readSource,anchor).toString()===compile().text,'DECLARATION_BYTES');for(const row of v.references)reject(sha(read(readSource,row.path))===row.currentSha256,'CURRENT_SOURCE_'+row.path);for(const row of v.pilotWhatsAppRuntime.producerDeltas)restorePlanBudgetPilotProducerText(contract,row.producer,read(readSource,row.producer));restorePlanBudgetAttendanceReviewProducerText(contract,read(readSource,v.attendanceReviewRuntime.producer.producer));restorePlanBudgetIntakeWithdrawalSource(contract,v.intakeWithdrawalRuntime.conversation.path,read(readSource,v.intakeWithdrawalRuntime.conversation.path));restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,read(readSource,v.intakeWithdrawalRuntime.unitProducer.producer));return {completePreviousContractRestored:true,previousContractSha256:previousHash,referenceCount:currentExpected.references.length,nativeOrBrowserAcceptance:false};}
-export function verifyPlanBudgetActualClosure(contract,family,closure,readSource){const v=section(contract,true);verifyIntegrationActualSources(contract,readSource);const actual=currentExpected.sourceFamilies.find(row=>row.family===family);reject(Boolean(actual),'INTEGRATION_CURRENT_FAMILY');for(const ref of actual.currentManifest){const bytes=read(readSource,ref.path);reject(ref.path===anchor?bytes.toString()===declaration(currentExpected):sha(bytes)===ref.sha256,'INTEGRATION_CURRENT_FAMILY_SOURCE_'+ref.path);}readSource=integrationParentReader(readSource);verifyTrialExpirySources(v,readSource);verifyMeasurementPrivacySources(v,readSource);verifyCheckTimeSources(v,readSource);restorePlanBudgetPreviousContract(contract);const row=compile().families.get(family);reject(Boolean(row),'EXPLICIT_FAMILY');exact(closure,['files','externalImports'],'CLOSURE_KEYS');reject(same(closure.files,row.currentFiles)&&same(closure.externalImports,row.externalImports),'EXACT_CURRENT_CLOSURE');for(const ref of row.currentManifest){const bytes=read(readSource,ref.path);reject(ref.path===anchor?bytes.toString()===compile().text:sha(bytes)===ref.sha256,'CURRENT_FAMILY_SOURCE_'+ref.path);}return {family,sourceCount:row.currentFiles.length,sourcePathsSha256:sha(JSON.stringify(row.currentFiles)),nativeOrBrowserAcceptance:false};}
-export function restorePlanBudgetClosure(contract,family,closure){if(!section(contract))return closure;const row=compile().families.get(family);reject(Boolean(row),'EXPLICIT_FAMILY');reject(same(closure.files,row.currentFiles)&&same(closure.externalImports,row.externalImports),'EXACT_CURRENT_CLOSURE');return {files:[...row.previousFiles],externalImports:[...row.previousExternalImports]};}
-export function planBudgetValidationFiles(contract){const v=section(contract);return v?[...new Set([anchor,...currentExpected.references.map(row=>row.path),...v.checkTimeRuntime.sourceHistory.map(row=>row.path),v.measurementPrivacyRuntime.validationSource.path])].sort():[];}
-export function planBudgetCurrentBrowserBinding(contract,fallback){const v=section(contract);return v?{...fallback,producerLfSha256:v.browser.producerLfSha256,investmentSourceCount:v.browser.investmentSourceCount,investmentSourcePathsSha256:v.browser.investmentSourcePathsSha256}:fallback;}
-export function planBudgetCompiledProof(contract){const v=section(contract,true);restorePlanBudgetPreviousContract(contract);return structuredClone(v.ownership.proof);}
-export function planBudgetRetainedScreenshotPaths(contract){const v=section(contract,true);return v.browser.retainedScreenshots.map(row=>row.path);}
+function restorePlanBudgetSourceSet(contract,family,files){if(!section(contract))return files;const row=compile().sets.get(family);if(!row)return files;sorted(files);if(files.length===row.previousCount&&sha(JSON.stringify(files))===row.previousPathsSha256)return [...files];return previousFiles(files,row);}
+function planBudgetProofSourceAdditions(spec){const row=compile().sets.get(spec?.kind);if(!row)return[];sorted(spec.sourceFiles);const files=spec.sourceFiles;if(files.length===row.currentCount&&sha(JSON.stringify(files))===row.currentPathsSha256){previousFiles(files,row);return [...row.additions];}if(files.length===row.previousCount&&sha(JSON.stringify(files))===row.previousPathsSha256)return[];reject(files.length<row.previousCount&&!row.additions.some(file=>files.includes(file)),'UNKNOWN_EARLIER_SOURCE_SET');return[];}
+function verifyPlanBudgetCurrentSources(contract,readSource){const v=section(contract,true);verifyIntegrationActualSources(contract,readSource);readSource=integrationParentReader(readSource);verifyTrialExpirySources(v,readSource);verifyMeasurementPrivacySources(v,readSource);verifyCheckTimeSources(v,readSource);restorePlanBudgetPreviousContract(contract);reject(read(readSource,anchor).toString()===compile().text,'DECLARATION_BYTES');for(const row of v.references)reject(sha(read(readSource,row.path))===row.currentSha256,'CURRENT_SOURCE_'+row.path);for(const row of v.pilotWhatsAppRuntime.producerDeltas)restorePlanBudgetPilotProducerText(contract,row.producer,read(readSource,row.producer));restorePlanBudgetAttendanceReviewProducerText(contract,read(readSource,v.attendanceReviewRuntime.producer.producer));restorePlanBudgetIntakeWithdrawalSource(contract,v.intakeWithdrawalRuntime.conversation.path,read(readSource,v.intakeWithdrawalRuntime.conversation.path));restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,read(readSource,v.intakeWithdrawalRuntime.unitProducer.producer));return {completePreviousContractRestored:true,previousContractSha256:previousHash,referenceCount:currentExpected.references.length,nativeOrBrowserAcceptance:false};}
+function verifyPlanBudgetActualClosure(contract,family,closure,readSource){const v=section(contract,true);verifyIntegrationActualSources(contract,readSource);const actual=currentExpected.sourceFamilies.find(row=>row.family===family);reject(Boolean(actual),'INTEGRATION_CURRENT_FAMILY');for(const ref of actual.currentManifest){const bytes=read(readSource,ref.path);reject(ref.path===anchor?bytes.toString()===declaration(currentExpected):sha(bytes)===ref.sha256,'INTEGRATION_CURRENT_FAMILY_SOURCE_'+ref.path);}readSource=integrationParentReader(readSource);verifyTrialExpirySources(v,readSource);verifyMeasurementPrivacySources(v,readSource);verifyCheckTimeSources(v,readSource);restorePlanBudgetPreviousContract(contract);const row=compile().families.get(family);reject(Boolean(row),'EXPLICIT_FAMILY');exact(closure,['files','externalImports'],'CLOSURE_KEYS');reject(same(closure.files,row.currentFiles)&&same(closure.externalImports,row.externalImports),'EXACT_CURRENT_CLOSURE');for(const ref of row.currentManifest){const bytes=read(readSource,ref.path);reject(ref.path===anchor?bytes.toString()===compile().text:sha(bytes)===ref.sha256,'CURRENT_FAMILY_SOURCE_'+ref.path);}return {family,sourceCount:row.currentFiles.length,sourcePathsSha256:sha(JSON.stringify(row.currentFiles)),nativeOrBrowserAcceptance:false};}
+function restorePlanBudgetClosure(contract,family,closure){if(!section(contract))return closure;const row=compile().families.get(family);reject(Boolean(row),'EXPLICIT_FAMILY');reject(same(closure.files,row.currentFiles)&&same(closure.externalImports,row.externalImports),'EXACT_CURRENT_CLOSURE');return {files:[...row.previousFiles],externalImports:[...row.previousExternalImports]};}
+function planBudgetValidationFiles(contract){const v=section(contract);return v?[...new Set([anchor,...currentExpected.references.map(row=>row.path),...v.checkTimeRuntime.sourceHistory.map(row=>row.path),v.measurementPrivacyRuntime.validationSource.path])].sort():[];}
+function planBudgetCurrentBrowserBinding(contract,fallback){const v=section(contract);return v?{...fallback,producerLfSha256:v.browser.producerLfSha256,investmentSourceCount:v.browser.investmentSourceCount,investmentSourcePathsSha256:v.browser.investmentSourcePathsSha256}:fallback;}
+function planBudgetCompiledProof(contract){const v=section(contract,true);restorePlanBudgetPreviousContract(contract);return structuredClone(v.ownership.proof);}
+function planBudgetRetainedScreenshotPaths(contract){const v=section(contract,true);return v.browser.retainedScreenshots.map(row=>row.path);}
 
 // Historical source reconstruction only. Actual receipts keep the current raw
 // harness hash and manifest; no old source is substituted into current readers.
-export function restorePlanBudgetPilotProducerText(contract,producer,bytes){
+function restorePlanBudgetPilotProducerText(contract,producer,bytes){
  const v=section(contract,true),row=v.pilotWhatsAppRuntime.producerDeltas.find(row=>row.producer===producer);if(producer===v.intakeWithdrawalRuntime.producer.producer)bytes=restorePlanBudgetIntakeWithdrawalProducerText(contract,bytes);if(producer===v.consumptionEvidenceRuntime.materialNative.producer)bytes=restorePlanBudgetMaterialNativeProducerText(contract,bytes);reject(row&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'PILOT_SOURCE_READER');let text=bytes.toString('utf8').replaceAll('\r\n','\n');reject(sha(text)===row.currentSha256&&Buffer.byteLength(text)===row.sourceHistory.currentBytes,'PILOT_CURRENT_SOURCE');
  for(const h of [...row.sourceHistory.inverseHunks].reverse()){const at=h.currentOffsetCharacters;reject(text.slice(at,at+h.currentText.length)===h.currentText,'PILOT_EXACT_SOURCE_HUNK');text=text.slice(0,at)+h.previousText+text.slice(at+h.currentText.length);}
  reject(sha(text)===row.previousSha256&&Buffer.byteLength(text)===row.sourceHistory.previousBytes,'PILOT_COMPLETE_SOURCE_INVERSE');return Buffer.from(text);
 }
 // Require the new producer's complete 48/26 ledger before projecting only for
 // its existing historical decoder. This never mutates or relabels the raw proof.
-export function normalizePlanBudgetPilotNativeProof(contract,producer,proof,readSource){
+function normalizePlanBudgetPilotNativeProof(contract,producer,proof,readSource){
  const v=section(contract);if(!v)return proof;verifyPlanBudgetCurrentSources(contract,readSource);const n=v.pilotWhatsAppRuntime.nativeSupplements.find(row=>row.producer===producer);reject(Boolean(n),'PILOT_NATIVE_PRODUCER');const bytes=read(readSource,producer);restorePlanBudgetPilotProducerText(contract,producer,bytes);
  reject(plain(proof)&&Array.isArray(proof.checks)&&same(proof.checks,[...n.previousCheckNames,...n.addedCheckNames]),'PILOT_COMPLETE_NATIVE_LEDGER');if(Object.hasOwn(proof,'checkCount'))reject(proof.checkCount===proof.checks.length,'PILOT_NATIVE_COUNT');
  const projected={...proof,checks:[...n.previousCheckNames]};if(Object.hasOwn(proof,'checkCount'))projected.checkCount=n.previousCheckNames.length;
@@ -383,13 +385,13 @@ export function normalizePlanBudgetPilotNativeProof(contract,producer,proof,read
 
 // Current-to-parent projections are local data operations only. They never
 // replace the caller's actual source reader or declare native acceptance.
-export function restorePlanBudgetFieldReviewSourceSet(contract,family,files){
+function restorePlanBudgetFieldReviewSourceSet(contract,family,files){
  if(!section(contract))return files;sorted(files);files=restorePlanBudgetConsumptionEvidenceSourceSet(contract,family,files);const a=expected.attendanceReviewRuntime.sourceSetAdvances.find(row=>row.family===family);if(!a)return [...files];
  const row=consumptionParentSourceSets(expected).find(row=>row.family===family);reject(Boolean(row),'ATTENDANCE_REVIEW_SOURCE_FAMILY');
  if(files.length===a.previousDelta.currentCount&&sha(JSON.stringify(files))===a.previousDelta.currentPathsSha256)return [...files];
  reject(files.length===row.currentCount&&sha(JSON.stringify(files))===row.currentPathsSha256,'ATTENDANCE_REVIEW_CURRENT_SOURCE_SET');return fieldReviewParentFiles(files,row);
 }
-export function restorePlanBudgetAttendanceReviewProducerText(contract,bytes){
+function restorePlanBudgetAttendanceReviewProducerText(contract,bytes){
  const v=section(contract,true),row=v.attendanceReviewRuntime.producer;reject(Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'ATTENDANCE_REVIEW_SOURCE_READER');let text=bytes.toString('utf8').replaceAll('\r\n','\n');
  reject(sha(text)===row.currentSha256&&Buffer.byteLength(text)===row.sourceHistory.currentBytes,'ATTENDANCE_REVIEW_CURRENT_SOURCE');
  for(const h of [...row.sourceHistory.inverseHunks].reverse()){const at=h.currentOffsetCharacters;reject(text.slice(at,at+h.currentText.length)===h.currentText,'ATTENDANCE_REVIEW_EXACT_SOURCE_HUNK');text=text.slice(0,at)+h.previousText+text.slice(at+h.currentText.length);}
@@ -400,7 +402,7 @@ export function restorePlanBudgetAttendanceReviewProducerText(contract,bytes){
 // The actual source reader is never substituted; only fully authenticated LF
 // bytes reach this historical AST projection. The complete parent digest must match.
 const FIELD_REVIEW_BUSINESS_SOURCE=Object.freeze({"src/lib/field-operations-http.mjs":{"predecessorCommit":"ad435c1ac3cd6bdb43ee6b51051c0ec2af312adb","previousSourceSha256":"d3dffce08238141f672a8af0c1b956da15809e18608084b9bdf57d50ae166ceb","currentSourceSha256":"cd1773bc3b9fba01821cd4494b8559bdcdcc3a4ce886228622bb800349dcfd39","previousBytes":13747,"currentBytes":13760,"inverseHunks":[{"currentOffsetCharacters":4559,"currentText":"      if([...params.keys()].some(key=>!['projectId','scope','reviewSection','reviewFilter','afterReview','reviewId','reviewAccessStamp'].includes(key))||!['EVIDENCE','PROGRESS','ATTENDANCE'].includes(params.get('reviewSection'))||!['PENDING','ALL'].includes(params.get('reviewFilter'))||['afterReview','reviewId'].some(key=>params.has(key)&&!workspaceId(params.get(key)))||params.has('afterReview')&&params.has('reviewId')||params.has('reviewId')&&params.get('reviewFilter')!=='ALL'||['afterReview','reviewId','reviewAccessStamp'].some(key=>params.has(key))&&!/^[a-f0-9]{64}$/.test(params.get('reviewAccessStamp')||''))throw new WorkspaceError('FIELD_QUERY_INVALID');\n","previousText":"      if([...params.keys()].some(key=>!['projectId','scope','reviewSection','reviewFilter','afterReview','reviewId','reviewAccessStamp'].includes(key))||!['EVIDENCE','PROGRESS'].includes(params.get('reviewSection'))||!['PENDING','ALL'].includes(params.get('reviewFilter'))||['afterReview','reviewId'].some(key=>params.has(key)&&!workspaceId(params.get(key)))||params.has('afterReview')&&params.has('reviewId')||params.has('reviewId')&&params.get('reviewFilter')!=='ALL'||['afterReview','reviewId','reviewAccessStamp'].some(key=>params.has(key))&&!/^[a-f0-9]{64}$/.test(params.get('reviewAccessStamp')||''))throw new WorkspaceError('FIELD_QUERY_INVALID');\n"}]},"src/lib/field-operations-store.mjs":{"predecessorCommit":"ad435c1ac3cd6bdb43ee6b51051c0ec2af312adb","previousSourceSha256":"8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604","currentSourceSha256":"517267adb96c69bce58350b98b3a4e335ca1304a72a824e35998590e95b8987c","previousBytes":54880,"currentBytes":57154,"inverseHunks":[{"currentOffsetCharacters":20398,"currentText":"      if(!['EVIDENCE','PROGRESS','ATTENDANCE'].includes(reviewSection)||!['PENDING','ALL'].includes(reviewFilter)||[afterReview,reviewId].some(value=>value!==null&&!workspaceId(value))||afterReview&&reviewId||reviewId&&reviewFilter!=='ALL'||(afterReview||reviewId||expectedAccess!==undefined)&&!/^[a-f0-9]{64}$/.test(expectedAccess||''))throw new WorkspaceError('FIELD_QUERY_INVALID');\n","previousText":"      if(!['EVIDENCE','PROGRESS'].includes(reviewSection)||!['PENDING','ALL'].includes(reviewFilter)||[afterReview,reviewId].some(value=>value!==null&&!workspaceId(value))||afterReview&&reviewId||reviewId&&reviewFilter!=='ALL'||(afterReview||reviewId||expectedAccess!==undefined)&&!/^[a-f0-9]{64}$/.test(expectedAccess||''))throw new WorkspaceError('FIELD_QUERY_INVALID');\n"},{"currentOffsetCharacters":21101,"currentText":"        const reviewer=canReviewField(member.role),attendance=reviewSection==='ATTENDANCE',owned=access.owned.filter(row=>row.metadata.participant.permissions?.[attendance?'attendance':'report']===true).map(row=>row.id);\n        if(attendance){\n          // Review the canonical ledger independently of the recent history and\n          // worker display windows. Names share this read-only project snapshot.\n          const visible=`a.\"projectId\"=$1 AND a.metadata->'fieldOperations'->>'version'='1' AND ($2::boolean OR (a.\"workerId\"=ANY($3::text[]) AND a.metadata->'fieldOperations'->>'recordedBy'=$4))`,values=[context.projectId,reviewer,owned,member.actorId];\n          // Validate against ALL visible events, so a decision does not retire a\n          // cursor before the next pending page or a directed readback.\n          if(afterReview||reviewId){const found=(await client.query(`SELECT a.id FROM public.\"AttendanceEntry\" a WHERE ${visible} AND a.id=$5`,[...values,afterReview||reviewId])).rows;if(found.length!==1)throw new WorkspaceError('FIELD_REVIEW_CURSOR_UNAVAILABLE',404);}\n          const pending=`a.metadata->'fieldOperations'->>'verificationStatus'='REVIEW_REQUIRED' AND (a.metadata->'fieldOperations'->'review' IS NULL OR a.metadata->'fieldOperations'->'review'='null'::jsonb)`,filtered=visible+(reviewFilter==='PENDING'?` AND ${pending}`:'');\n          const rows=(await client.query(`SELECT a.id,a.\"workerId\",a.metadata,${revision('a.\"checkedInAt\"')} AS \"recordedAt\",w.name AS \"workerName\" FROM public.\"AttendanceEntry\" a LEFT JOIN public.\"Worker\" w ON w.id=a.\"workerId\" AND w.\"projectId\"=a.\"projectId\" WHERE ${filtered} AND ($5::text IS NULL OR (a.\"checkedInAt\",a.id)<(SELECT \"checkedInAt\",id FROM public.\"AttendanceEntry\" WHERE \"projectId\"=$1 AND id=$5)) AND ($6::text IS NULL OR a.id=$6) ORDER BY a.\"checkedInAt\" DESC,a.id DESC LIMIT 101`,[...values,afterReview,reviewId])).rows;\n          const total=reviewId?rows.length:(await client.query(`SELECT count(*)::int AS total FROM public.\"AttendanceEntry\" a WHERE ${filtered}`,values)).rows[0].total;\n          return {scope,projectId:context.projectId,reviewAccessStamp,reviewSection,reviewFilter,afterReview,reviewId,records:rows.slice(0,100).map(row=>({...publicEvent(row),workerName:row.workerName||null})),total,nextCursor:rows.length>100?rows[99].id:null,canReview:reviewer,canApproveProgress:canApproveProgress(member.role)};\n        }\n","previousText":"        const reviewer=canReviewField(member.role),owned=access.owned.filter(row=>row.metadata.participant.permissions?.report===true).map(row=>row.id);\n"}]},"src/lib/operations-status.mjs":{"predecessorCommit":"ad435c1ac3cd6bdb43ee6b51051c0ec2af312adb","previousSourceSha256":"cdee54c539106c384a92c70c730c91cd3058e872d5d855c57150b8ad246e666a","currentSourceSha256":"ce05f2b18facdaa2df35274004ee2111be366056ef1ff2c593660b8490782cd6","previousBytes":10576,"currentBytes":10989,"inverseHunks":[{"currentOffsetCharacters":959,"currentText":"   const totals=(await client.query(`SELECT count(*)::int AS pending,\n     (SELECT count(*)::int FROM public.\"Incident\" WHERE \"projectId\"=$1 AND metadata->'fieldOperations'->>'version'='1' AND metadata->'fieldOperations'->>'kind'='EVIDENCE' AND (metadata->'fieldOperations'->'review' IS NULL OR metadata->'fieldOperations'->'review'='null'::jsonb)) AS \"evidencePending\"\n     FROM public.\"OperationalProposal\" WHERE \"projectId\"=$1 AND type='TASK_PROGRESS' AND \"sourceProvider\"='account-field' AND status='PENDING' AND \"expiresAt\">transaction_timestamp() AND action->>'fieldOperationsVersion'='1'`,[context.projectId])).rows[0];\n   if(!totals||![totals.pending,totals.evidencePending].every(value=>Number.isSafeInteger(value)&&value>=0))throw new WorkspaceError('OPERATIONS_STATUS_UNAVAILABLE',503);\n","previousText":"   const pending=(await client.query(`SELECT count(*)::int AS pending FROM public.\"OperationalProposal\" WHERE \"projectId\"=$1 AND type='TASK_PROGRESS' AND \"sourceProvider\"='account-field' AND status='PENDING' AND \"expiresAt\">transaction_timestamp() AND action->>'fieldOperationsVersion'='1'`,[context.projectId])).rows[0]?.pending;\n   if(!Number.isSafeInteger(pending)||pending<0)throw new WorkspaceError('OPERATIONS_STATUS_UNAVAILABLE',503);\n"},{"currentOffsetCharacters":1852,"currentText":"   return {scope,projectId:context.projectId,view:'decisions',observedAt:new Date().toISOString(),evidence:{pending:totals.evidencePending},proposals:{pending:totals.pending},inventory:{canManage:true,pendingCounts}};\n","previousText":"   return {scope,projectId:context.projectId,view:'decisions',observedAt:new Date().toISOString(),proposals:{pending},inventory:{canManage:true,pendingCounts}};\n"}]}});
-export function restorePlanBudgetFieldReviewBusinessSource(file,bytes){
+function restorePlanBudgetFieldReviewBusinessSource(file,bytes){
  const row=FIELD_REVIEW_BUSINESS_SOURCE[file];
  if(!row)return bytes;
  reject(Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'Actual UTF8 field-review source required: '+file);
@@ -412,12 +414,12 @@ export function restorePlanBudgetFieldReviewBusinessSource(file,bytes){
 }
 
 // Local projections only; actual source readers and RAW native maps stay current.
-export function restorePlanBudgetConsumptionEvidenceSourceSet(contract,family,files){
+function restorePlanBudgetConsumptionEvidenceSourceSet(contract,family,files){
  if(!section(contract))return files;sorted(files);const a=expected.consumptionEvidenceRuntime.sourceSetAdvances.find(a=>a.family===family);if(!a)return [...files];
  if(files.length===a.previousDelta.currentCount&&sha(JSON.stringify(files))===a.previousDelta.currentPathsSha256)return [...files];const row=compile().sets.get(family);
  reject(row&&files.length===row.currentCount&&sha(JSON.stringify(files))===row.currentPathsSha256,'CONSUMPTION_EVIDENCE_CURRENT_SOURCE_SET');return consumptionParentFiles(files,row);
 }
-export function restorePlanBudgetConsumptionEvidenceSource(contract,file,bytes){
+function restorePlanBudgetConsumptionEvidenceSource(contract,file,bytes){
  const v=section(contract,true),h=v.consumptionEvidenceRuntime.sourceHistory;if(file!==h.path)return bytes;
  reject(Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'CONSUMPTION_EVIDENCE_SOURCE_READER');const text=bytes.toString('utf8').replaceAll('\r\n','\n');reject(sha(text)===h.currentSha256&&Buffer.byteLength(text)===h.currentBytes,'CONSUMPTION_EVIDENCE_CURRENT_SOURCE');
  const chunk=h.inverseHunks[0];reject(text===chunk.currentText,'CONSUMPTION_EVIDENCE_EXACT_SOURCE_HUNK');const previous=Buffer.from(chunk.previousText);reject(sha(previous)===h.previousSha256&&previous.length===h.previousBytes,'CONSUMPTION_EVIDENCE_COMPLETE_SOURCE_INVERSE');return previous;
@@ -425,12 +427,191 @@ export function restorePlanBudgetConsumptionEvidenceSource(contract,file,bytes){
 
 // Exact current material source to committed1b only. The unchanged pilot inverse
 // authenticates that complete parent before reconstructing its older history.
-export function restorePlanBudgetMaterialNativeProducerText(contract,bytes){
+function restorePlanBudgetMaterialNativeProducerText(contract,bytes){
  const h=section(contract,true).consumptionEvidenceRuntime.materialNative.sourceHistory;
  reject(Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'MATERIAL_NATIVE_SOURCE_READER');let text=bytes.toString('utf8').replaceAll('\r\n','\n');reject(sha(text)===h.currentSha256&&Buffer.byteLength(text)===h.currentBytes,'MATERIAL_NATIVE_CURRENT_SOURCE');
  for(const block of [...h.inverseHunks].reverse()){const at=block.currentOffsetCharacters;reject(text.slice(at,at+block.currentText.length)===block.currentText,'MATERIAL_NATIVE_EXACT_SOURCE_HUNK');text=text.slice(0,at)+block.previousText+text.slice(at+block.currentText.length);}
  reject(sha(text)===h.previousSha256&&Buffer.byteLength(text)===h.previousBytes,'MATERIAL_NATIVE_COMPLETE_SOURCE_INVERSE');return Buffer.from(text);
 }
 
-export function planBudgetCurrentSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;return integrationAdvancedPin({path:ref.path,sha256:parentPlanBudgetCurrentSourcePin(contract,integrationInputPin(ref))});}
-export function planBudgetPreviousSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;return parentPlanBudgetPreviousSourcePin(contract,integrationInputPin(ref));}
+function planBudgetCurrentSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;return integrationAdvancedPin({path:ref.path,sha256:parentPlanBudgetCurrentSourcePin(contract,integrationInputPin(ref))});}
+function planBudgetPreviousSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;return parentPlanBudgetPreviousSourcePin(contract,integrationInputPin(ref));}
+
+return Object.freeze({restorePlanBudgetPilotIntegrationPreviousContract,restorePlanBudgetPilotIntegrationSource,intakeWithdrawalCurrentCheckCount,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetIntakeWithdrawalProducerText,restorePlanBudgetIntakeWithdrawalUnitProducerText,normalizePlanBudgetIntakeWithdrawalNativeProof,restorePlanBudgetTrialExpiryNoticePreviousContract,restorePlanBudgetTrialExpiryNoticeSource,restorePlanBudgetTrialExpiryNoticeValidatorSource,restorePlanBudgetMeasurementPrivacyPreviousContract,restorePlanBudgetMeasurementPrivacySource,restorePlanBudgetCheckTimeSource,restorePlanBudgetCheckTimePreviousContract,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,planBudgetProofSourceAdditions,verifyPlanBudgetCurrentSources,verifyPlanBudgetActualClosure,restorePlanBudgetClosure,planBudgetValidationFiles,planBudgetCurrentBrowserBinding,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths,restorePlanBudgetPilotProducerText,normalizePlanBudgetPilotNativeProof,restorePlanBudgetFieldReviewSourceSet,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetFieldReviewBusinessSource,restorePlanBudgetConsumptionEvidenceSourceSet,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetMaterialNativeProducerText,planBudgetCurrentSourcePin,planBudgetPreviousSourcePin,INTAKE_WITHDRAWAL_CHECK_NAMES});
+}
+
+// Private proposal fragment. The installed module must use its actual reviewed
+// companion and actual source reader. This file is not executed by preparation.
+const acceptanceKey=PLAN_BUDGET_CURRENT_SECTION,acceptanceRevision='pilotAcceptanceRuntime';
+const acceptanceAnchor='scripts/lib/plan-budget-current-ci-reviewed.mjs';
+const acceptanceContractPath='.github/workspace-acceptance-contract.json';
+const acceptanceParentHash='a89d1a6c820b811359af23359e587f9110e7341bfa0c2b558b5ee452d9ac1042';
+const acceptanceParentDeclarationHash='e1be620f5040e7cba3ebaa0fc34190da0d0d2e1e7a164014e8c2ec3ba17f2a3c';
+const acceptanceSha=value=>createHash('sha256').update(value).digest('hex');
+const acceptanceSerialize=value=>JSON.stringify(value,null,2)+'\n';
+const acceptanceSame=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const acceptancePlain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+const acceptanceReject=(ok,reason)=>{if(!ok)throw Object.assign(new Error('Budget current CI lineage rejected: '+reason),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason});};
+const acceptanceSafe=file=>typeof file==='string'&&file.length>0&&path.posix.normalize(file)===file&&!path.posix.isAbsolute(file)&&!/[\\:\x00-\x1f]/.test(file)&&!file.split('/').includes('..');
+const acceptanceDeclaration=value=>'// Exact budget-source CI declaration; compiler fills immutable reviewed source bindings.\nexport const PLAN_BUDGET_CURRENT_REVISION=Object.freeze('+JSON.stringify(value,null,2)+');\n';
+const acceptanceExpected=structuredClone(reviewed),acceptanceExpectedJson=JSON.stringify(acceptanceExpected);
+const acceptanceRuntime=acceptanceExpected[acceptanceRevision];
+acceptanceReject(acceptancePlain(acceptanceRuntime)&&acceptanceRuntime.version===1&&acceptanceRuntime.parentHead==='1b3315b0054a3f84447c64ba674403e3fe74eb79'&&acceptanceRuntime.previousContractSha256===acceptanceParentHash&&acceptanceRuntime.nativeOrHumanAcceptance===false,'ACCEPTANCE_PARENT');
+acceptanceReject(acceptanceSame(Object.keys(acceptanceRuntime).sort(),['version','parentHead','previousContractSha256','sourceAliases','referenceAdvances','sourceHistory','familyAdvances','proofSourceSetAdvances','contractPatches','nativeOrHumanAcceptance'].sort()),'ACCEPTANCE_KEYS');
+for(const name of ['sourceAliases','referenceAdvances','sourceHistory','familyAdvances','proofSourceSetAdvances','contractPatches'])acceptanceReject(Array.isArray(acceptanceRuntime[name]),'ACCEPTANCE_ARRAY_'+name);
+function acceptancePointer(value,pointer){
+ acceptanceReject(typeof pointer==='string'&&/^\/(?:planBudgetCurrentRevision\/(?:references(?:\/\d+\/currentSha256)?|sourceFamilies\/\d+\/(?:currentFiles|externalImports|currentManifest))|extension\/proofs\/\d+\/(?:sourceFiles|producerSha256))$/.test(pointer),'ACCEPTANCE_POINTER');
+ const parts=pointer.slice(1).split('/');let at=value;
+ for(const part of parts.slice(0,-1)){acceptanceReject(at!==null&&typeof at==='object'&&Object.hasOwn(at,part),'ACCEPTANCE_POINTER');at=at[part];}
+ const key=parts.at(-1);acceptanceReject(at!==null&&typeof at==='object'&&Object.hasOwn(at,key),'ACCEPTANCE_POINTER');return {at,key};
+}
+function acceptanceApplyInverse(out,patches){
+ for(const patch of [...patches].reverse()){
+  acceptanceReject(acceptancePlain(patch)&&acceptanceSame(Object.keys(patch).sort(),['pointer','previous','current'].sort()),'ACCEPTANCE_PATCH_KEYS');
+  const target=acceptancePointer(out,patch.pointer);acceptanceReject(acceptanceSame(target.at[target.key],patch.current),'ACCEPTANCE_PATCH_CURRENT_VALUE');target.at[target.key]=structuredClone(patch.previous);
+ }
+ return out;
+}
+// This private value is pinned to the literal complete 1b declaration. No public
+// function or mutable caller can supply the legacy gate's expected declaration.
+const acceptanceParentContainer={[acceptanceKey]:structuredClone(acceptanceExpected)};
+delete acceptanceParentContainer[acceptanceKey][acceptanceRevision];
+acceptanceApplyInverse(acceptanceParentContainer,acceptanceRuntime.contractPatches.filter(row=>row.pointer.startsWith('/'+acceptanceKey+'/')));
+const acceptanceParentExpected=acceptanceParentContainer[acceptanceKey];
+acceptanceReject(acceptanceSha(acceptanceDeclaration(acceptanceParentExpected))===acceptanceParentDeclarationHash,'ACCEPTANCE_COMPLETE_1B_DECLARATION');
+const acceptanceParentGate=createAuthenticatedParentGate(acceptanceParentExpected);
+const acceptanceHistories=new Map();
+for(const history of acceptanceRuntime.sourceHistory){
+ acceptanceReject(acceptancePlain(history)&&acceptanceSafe(history.path)&&!acceptanceHistories.has(history.path),'ACCEPTANCE_HISTORY_PATH');
+ acceptanceReject(acceptanceSame(Object.keys(history).sort(),['path','status','previousSha256','currentSha256','previousBytes','currentBytes','inverseHunks'].sort()),'ACCEPTANCE_HISTORY_KEYS');
+ acceptanceReject(/^[a-f0-9]{64}$/.test(history.currentSha256||'')&&(history.previousSha256===null||/^[a-f0-9]{64}$/.test(history.previousSha256||''))&&Number.isSafeInteger(history.currentBytes)&&history.currentBytes>0&&Number.isSafeInteger(history.previousBytes)&&history.previousBytes>=0&&Array.isArray(history.inverseHunks)&&history.inverseHunks.length>0,'ACCEPTANCE_HISTORY_PIN');
+ acceptanceReject(history.status===(history.previousSha256===null?'ADDED':'MODIFIED')&&(history.previousSha256===null?history.previousBytes===0:history.previousBytes>0),'ACCEPTANCE_HISTORY_STATUS');
+ let end=0;for(const hunk of history.inverseHunks){acceptanceReject(acceptancePlain(hunk)&&acceptanceSame(Object.keys(hunk).sort(),['currentOffsetCharacters','currentText','previousText'].sort())&&Number.isSafeInteger(hunk.currentOffsetCharacters)&&hunk.currentOffsetCharacters>=end&&typeof hunk.currentText==='string'&&typeof hunk.previousText==='string'&&hunk.currentText!==hunk.previousText,'ACCEPTANCE_ORDERED_HUNKS');end=hunk.currentOffsetCharacters+hunk.currentText.length;}
+ acceptanceReject(acceptanceExpected.references.filter(ref=>ref.path===history.path&&ref.currentSha256===history.currentSha256).length===1,'ACCEPTANCE_CURRENT_HISTORY_REFERENCE');acceptanceHistories.set(history.path,history);
+}
+function acceptanceParentContract(contract,required=false){
+ acceptanceReject(acceptancePlain(contract),'CONTRACT');
+ if(!Object.hasOwn(contract,acceptanceKey)){acceptanceReject(!required,'BUDGET_COMPANION_REQUIRED');return contract;}
+ acceptanceReject(JSON.stringify(contract[acceptanceKey])===acceptanceExpectedJson,'IMMUTABLE_COMPANION');
+ const out=structuredClone(contract);delete out[acceptanceKey][acceptanceRevision];acceptanceApplyInverse(out,acceptanceRuntime.contractPatches);
+ acceptanceReject(acceptanceSha(acceptanceSerialize(out))===acceptanceParentHash,'ACCEPTANCE_COMPLETE_1B_CONTRACT');return out;
+}
+// These lookups make no claim about full-contract or current-source authority.
+// Serialize each caller section afresh; only expected metadata is private/cached.
+function acceptanceMetadataSection(contract,required=false){
+ acceptanceReject(acceptancePlain(contract),'CONTRACT');if(!Object.hasOwn(contract,acceptanceKey)){acceptanceReject(!required,'BUDGET_COMPANION_REQUIRED');return false;}
+ acceptanceReject(JSON.stringify(contract[acceptanceKey])===acceptanceExpectedJson,'IMMUTABLE_COMPANION');return true;
+}
+const acceptanceMetadataCarrier=Object.freeze({[acceptanceKey]:acceptanceParentExpected});
+function acceptanceBytes(bytes,file){
+ acceptanceReject(acceptanceSafe(file)&&Buffer.isBuffer(bytes)&&Buffer.from(bytes.toString('utf8')).equals(bytes),'ACCEPTANCE_UTF8_SOURCE_'+file);return Buffer.from(bytes.toString('utf8').replaceAll('\r\n','\n'));
+}
+function acceptanceParentSource(file,bytes){
+ const history=acceptanceHistories.get(file);if(!history)return bytes;
+ let text=acceptanceBytes(bytes,file).toString('utf8');acceptanceReject(acceptanceSha(text)===history.currentSha256&&Buffer.byteLength(text)===history.currentBytes,'ACCEPTANCE_CURRENT_SOURCE_'+file);
+ for(const hunk of [...history.inverseHunks].reverse()){const at=hunk.currentOffsetCharacters;acceptanceReject(text.slice(at,at+hunk.currentText.length)===hunk.currentText,'ACCEPTANCE_EXACT_SOURCE_HUNK_'+file);text=text.slice(0,at)+hunk.previousText+text.slice(at+hunk.currentText.length);}
+ acceptanceReject(Buffer.byteLength(text)===history.previousBytes&&(history.previousSha256===null?text==='':acceptanceSha(text)===history.previousSha256),'ACCEPTANCE_COMPLETE_SOURCE_INVERSE_'+file);return history.previousSha256===null?null:Buffer.from(text);
+}
+function acceptanceRead(reader,file){let bytes;acceptanceReject(typeof reader==='function','SOURCE_READER');try{bytes=reader(file);}catch{}return acceptanceBytes(bytes,file);}
+function acceptanceReader(contract,parent,reader){
+ const text=acceptanceSerialize(contract),parentText=acceptanceSerialize(parent);
+ return file=>{
+  const bytes=acceptanceRead(reader,file);
+  if(file===acceptanceContractPath){acceptanceReject(bytes.toString('utf8')===text,'ACCEPTANCE_CONTRACT_BYTES');return Buffer.from(parentText);}
+  if(file===acceptanceAnchor){acceptanceReject(bytes.toString('utf8')===acceptanceDeclaration(acceptanceExpected),'ACCEPTANCE_DECLARATION_BYTES');return Buffer.from(acceptanceDeclaration(acceptanceParentExpected));}
+  return acceptanceParentSource(file,bytes);
+ };
+}
+function acceptanceVerifyActual(contract,parent,reader){
+ acceptanceReject(acceptanceRead(reader,acceptanceContractPath).toString('utf8')===acceptanceSerialize(contract),'ACCEPTANCE_CONTRACT_BYTES');
+ acceptanceReject(acceptanceRead(reader,acceptanceAnchor).toString('utf8')===acceptanceDeclaration(acceptanceExpected),'ACCEPTANCE_DECLARATION_BYTES');
+ for(const ref of acceptanceExpected.references)acceptanceReject(acceptanceSha(acceptanceRead(reader,ref.path))===ref.currentSha256,'ACCEPTANCE_CURRENT_REFERENCE_'+ref.path);
+ for(const history of acceptanceRuntime.sourceHistory)acceptanceParentSource(history.path,acceptanceRead(reader,history.path));
+ acceptanceReject(acceptanceSha(acceptanceSerialize(parent))===acceptanceParentHash,'ACCEPTANCE_COMPLETE_1B_CONTRACT');
+}
+function acceptanceProofSet(family){
+ const advance=acceptanceRuntime.proofSourceSetAdvances.find(row=>row.kind===family);if(!advance)return null;
+ const patches=acceptanceRuntime.contractPatches.filter(row=>/^\/extension\/proofs\/\d+\/sourceFiles$/.test(row.pointer)&&row.current.length===advance.currentCount&&row.previous.length===advance.previousCount&&acceptanceSame(row.current.filter(file=>!row.previous.includes(file)),advance.additions)&&acceptanceSame(row.previous.filter(file=>!row.current.includes(file)),advance.removals));
+ acceptanceReject(patches.length>0&&patches.every(row=>acceptanceSame(row.current,patches[0].current)&&acceptanceSame(row.previous,patches[0].previous)),'ACCEPTANCE_EXACT_SOURCE_SET_JOIN');return {advance,...patches[0]};
+}
+function acceptanceProjectedSet(family){
+ const proof=acceptanceProofSet(family),current=acceptanceExpected.sourceFamilies.find(row=>row.family===family),previous=acceptanceParentExpected.sourceFamilies.find(row=>row.family===family);
+ if(!current||!previous||acceptanceSame(current.currentFiles,previous.currentFiles))return proof;
+ const row={current:current.currentFiles,previous:previous.currentFiles,advance:{additions:current.currentFiles.filter(file=>!previous.currentFiles.includes(file)),removals:previous.currentFiles.filter(file=>!current.currentFiles.includes(file))}};
+ acceptanceReject(!proof||acceptanceSame(proof.current,row.current)&&acceptanceSame(proof.previous,row.previous),'ACCEPTANCE_FAMILY_PROOF_SOURCE_SET_JOIN');return row;
+}
+function acceptancePreviousFiles(family,files){
+ const row=acceptanceProjectedSet(family);if(!row)return files;
+ acceptanceReject(Array.isArray(files)&&files.every(acceptanceSafe)&&acceptanceSame(files,[...new Set(files)].sort()),'SORTED_SOURCE_PATHS');
+ if(acceptanceSame(files,row.current))return [...row.previous];
+ // Earlier exact path sets remain the unchanged legacy metadata validator's
+ // responsibility. A mixed set containing a new outer source is never allowed.
+ acceptanceReject(!row.advance.additions.some(file=>files.includes(file)),'ACCEPTANCE_CURRENT_SOURCE_SET_'+family);return files;
+}
+function acceptanceSourceCall(name,contract,file,bytes){const parent=acceptanceParentContract(contract,true);return acceptanceParentGate[name](parent,file,acceptanceParentSource(file,bytes));}
+function acceptanceProducerCall(name,contract,file,bytes){const parent=acceptanceParentContract(contract,true);return acceptanceParentGate[name](parent,acceptanceParentSource(file,bytes));}
+function acceptanceContractCall(name,contract,...args){return acceptanceParentGate[name](acceptanceParentContract(contract),...args);}
+
+export const INTAKE_WITHDRAWAL_CHECK_NAMES=acceptanceParentGate.INTAKE_WITHDRAWAL_CHECK_NAMES;
+export function restorePlanBudgetAcceptancePreviousContract(contract){return acceptanceParentContract(contract,true);}
+export function restorePlanBudgetPilotIntegrationPreviousContract(contract){return acceptanceContractCall('restorePlanBudgetPilotIntegrationPreviousContract',contract);}
+export function restorePlanBudgetPilotIntegrationSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetPilotIntegrationSource',contract,file,bytes);}
+export function restorePlanBudgetTrialExpiryNoticePreviousContract(contract){return acceptanceContractCall('restorePlanBudgetTrialExpiryNoticePreviousContract',contract);}
+export function restorePlanBudgetTrialExpiryNoticeSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetTrialExpiryNoticeSource',contract,file,bytes);}
+export function restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetTrialExpiryNoticeValidatorSource',contract,file,bytes);}
+export function restorePlanBudgetMeasurementPrivacyPreviousContract(contract){return acceptanceContractCall('restorePlanBudgetMeasurementPrivacyPreviousContract',contract);}
+export function restorePlanBudgetMeasurementPrivacySource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetMeasurementPrivacySource',contract,file,bytes);}
+export function restorePlanBudgetCheckTimePreviousContract(contract){return acceptanceContractCall('restorePlanBudgetCheckTimePreviousContract',contract);}
+export function restorePlanBudgetCheckTimeSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetCheckTimeSource',contract,file,bytes);}
+export function restorePlanBudgetPreviousContract(contract){return acceptanceContractCall('restorePlanBudgetPreviousContract',contract);}
+export function restorePlanBudgetIntakeWithdrawalSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetIntakeWithdrawalSource',contract,file,bytes);}
+export function restorePlanBudgetIntakeWithdrawalProducerText(contract,bytes){return acceptanceProducerCall('restorePlanBudgetIntakeWithdrawalProducerText',contract,acceptanceParentExpected.intakeWithdrawalRuntime.producer.producer,bytes);}
+export function restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,bytes){return acceptanceProducerCall('restorePlanBudgetIntakeWithdrawalUnitProducerText',contract,acceptanceParentExpected.intakeWithdrawalRuntime.unitProducer.producer,bytes);}
+export function restorePlanBudgetMaterialNativeProducerText(contract,bytes){return acceptanceProducerCall('restorePlanBudgetMaterialNativeProducerText',contract,acceptanceParentExpected.consumptionEvidenceRuntime.materialNative.producer,bytes);}
+export function restorePlanBudgetAttendanceReviewProducerText(contract,bytes){return acceptanceProducerCall('restorePlanBudgetAttendanceReviewProducerText',contract,acceptanceParentExpected.attendanceReviewRuntime.producer.producer,bytes);}
+export function restorePlanBudgetConsumptionEvidenceSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetConsumptionEvidenceSource',contract,file,bytes);}
+export function restorePlanBudgetPilotProducerText(contract,producer,bytes){const parent=acceptanceParentContract(contract,true);return acceptanceParentGate.restorePlanBudgetPilotProducerText(parent,producer,acceptanceParentSource(producer,bytes));}
+export function restorePlanBudgetFieldReviewBusinessSource(file,bytes){return acceptanceParentGate.restorePlanBudgetFieldReviewBusinessSource(file,acceptanceParentSource(file,bytes));}
+export function restorePlanBudgetSourceSet(contract,family,files){const parent=acceptanceParentContract(contract);return acceptanceParentGate.restorePlanBudgetSourceSet(parent,family,Object.hasOwn(contract,acceptanceKey)?acceptancePreviousFiles(family,files):files);}
+export function restorePlanBudgetFieldReviewSourceSet(contract,family,files){const parent=acceptanceParentContract(contract);return acceptanceParentGate.restorePlanBudgetFieldReviewSourceSet(parent,family,Object.hasOwn(contract,acceptanceKey)?acceptancePreviousFiles(family,files):files);}
+export function restorePlanBudgetConsumptionEvidenceSourceSet(contract,family,files){const parent=acceptanceParentContract(contract);return acceptanceParentGate.restorePlanBudgetConsumptionEvidenceSourceSet(parent,family,Object.hasOwn(contract,acceptanceKey)?acceptancePreviousFiles(family,files):files);}
+export function planBudgetProofSourceAdditions(spec){
+ const row=acceptanceProjectedSet(spec?.kind);if(!row)return acceptanceParentGate.planBudgetProofSourceAdditions(spec);
+ if(acceptanceSame(spec.sourceFiles,row.current))return [...new Set([...acceptanceParentGate.planBudgetProofSourceAdditions({...spec,sourceFiles:[...row.previous]}),...row.advance.additions])].sort();
+ acceptanceReject(Array.isArray(spec.sourceFiles)&&!row.advance.additions.some(file=>spec.sourceFiles.includes(file)),'ACCEPTANCE_CURRENT_SOURCE_SET_'+spec.kind);return acceptanceParentGate.planBudgetProofSourceAdditions(spec);
+}
+export function intakeWithdrawalCurrentCheckCount(spec){return acceptanceParentGate.intakeWithdrawalCurrentCheckCount(spec);}
+export function verifyPlanBudgetCurrentSources(contract,reader){
+ const parent=acceptanceParentContract(contract,true);acceptanceVerifyActual(contract,parent,reader);
+ const result=acceptanceParentGate.verifyPlanBudgetCurrentSources(parent,acceptanceReader(contract,parent,reader));acceptanceParentContract(contract,true);return {...result,referenceCount:acceptanceExpected.references.length};
+}
+export function verifyPlanBudgetActualClosure(contract,family,closure,reader){
+ const parent=acceptanceParentContract(contract,true);acceptanceVerifyActual(contract,parent,reader);
+ const current=acceptanceExpected.sourceFamilies.find(row=>row.family===family),previous=acceptanceParentExpected.sourceFamilies.find(row=>row.family===family);
+ acceptanceReject(Boolean(current&&previous),'ACCEPTANCE_CURRENT_FAMILY');acceptanceReject(acceptancePlain(closure)&&acceptanceSame(Object.keys(closure).sort(),['files','externalImports'].sort())&&acceptanceSame(closure.files,current.currentFiles)&&acceptanceSame(closure.externalImports,current.externalImports),'ACCEPTANCE_EXACT_CURRENT_CLOSURE');
+ for(const ref of current.currentManifest){const bytes=acceptanceRead(reader,ref.path);acceptanceReject(ref.path===acceptanceAnchor?bytes.toString('utf8')===acceptanceDeclaration(acceptanceExpected):acceptanceSha(bytes)===ref.sha256,'ACCEPTANCE_CURRENT_FAMILY_SOURCE_'+ref.path);}
+ acceptanceParentGate.verifyPlanBudgetActualClosure(parent,family,{files:[...previous.currentFiles],externalImports:[...previous.externalImports]},acceptanceReader(contract,parent,reader));acceptanceParentContract(contract,true);
+ return {family,sourceCount:current.currentFiles.length,sourcePathsSha256:acceptanceSha(JSON.stringify(current.currentFiles)),nativeOrBrowserAcceptance:false};
+}
+export function restorePlanBudgetClosure(contract,family,closure){
+ const parent=acceptanceParentContract(contract);if(!Object.hasOwn(contract,acceptanceKey))return acceptanceParentGate.restorePlanBudgetClosure(parent,family,closure);
+ const current=acceptanceExpected.sourceFamilies.find(row=>row.family===family),previous=acceptanceParentExpected.sourceFamilies.find(row=>row.family===family);acceptanceReject(Boolean(current&&previous)&&acceptancePlain(closure)&&acceptanceSame(closure.files,current.currentFiles)&&acceptanceSame(closure.externalImports,current.externalImports),'ACCEPTANCE_EXACT_CURRENT_CLOSURE');
+ return acceptanceParentGate.restorePlanBudgetClosure(parent,family,{files:[...previous.currentFiles],externalImports:[...previous.externalImports]});
+}
+export function planBudgetValidationFiles(contract){return acceptanceMetadataSection(contract)?[...new Set([acceptanceAnchor,...acceptanceExpected.references.map(row=>row.path),...acceptanceParentExpected.checkTimeRuntime.sourceHistory.map(row=>row.path),acceptanceParentExpected.measurementPrivacyRuntime.validationSource.path])].sort():[];}
+export function planBudgetCurrentBrowserBinding(contract,fallback){if(!acceptanceMetadataSection(contract))return fallback;const value=acceptanceExpected.browser;return {...fallback,producerLfSha256:value.producerLfSha256,investmentSourceCount:value.investmentSourceCount,investmentSourcePathsSha256:value.investmentSourcePathsSha256};}
+export function planBudgetCompiledProof(contract){return acceptanceContractCall('planBudgetCompiledProof',contract);}
+export function planBudgetRetainedScreenshotPaths(contract){acceptanceMetadataSection(contract,true);return acceptanceExpected.browser.retainedScreenshots.map(row=>row.path);}
+function acceptanceInputPin(ref){const history=acceptanceHistories.get(ref.path);return history&&history.previousSha256!==null&&ref.sha256===history.currentSha256?{...ref,sha256:history.previousSha256}:ref;}
+export function planBudgetCurrentSourcePin(contract,ref){if(!acceptancePlain(contract)||!Object.hasOwn(contract,acceptanceKey))return ref.sha256;const value=acceptanceParentGate.planBudgetCurrentSourcePin(acceptanceMetadataCarrier,acceptanceInputPin(ref)),history=acceptanceHistories.get(ref.path);return history&&history.previousSha256===value?history.currentSha256:value;}
+export function planBudgetPreviousSourcePin(contract,ref){if(!acceptancePlain(contract)||!Object.hasOwn(contract,acceptanceKey))return ref.sha256;return acceptanceParentGate.planBudgetPreviousSourcePin(acceptanceMetadataCarrier,acceptanceInputPin(ref));}
+// Native proofs remain RAW. Existing 32/130 sources do not intersect this outer
+// revision's changed bodies; no sourceManifest/harness hash or check is relabelled.
+export function normalizePlanBudgetPilotNativeProof(contract,producer,proof,reader){
+ const parent=acceptanceParentContract(contract);if(!Object.hasOwn(contract,acceptanceKey))return acceptanceParentGate.normalizePlanBudgetPilotNativeProof(parent,producer,proof,reader);
+ acceptanceVerifyActual(contract,parent,reader);const result=acceptanceParentGate.normalizePlanBudgetPilotNativeProof(parent,producer,proof,acceptanceReader(contract,parent,reader));acceptanceParentContract(contract,true);return result;
+}
+export function normalizePlanBudgetIntakeWithdrawalNativeProof(raw,contract,reader,spec){
+ const parent=acceptanceParentContract(contract);if(!Object.hasOwn(contract,acceptanceKey))return acceptanceParentGate.normalizePlanBudgetIntakeWithdrawalNativeProof(raw,parent,reader,spec);
+ acceptanceVerifyActual(contract,parent,reader);const result=acceptanceParentGate.normalizePlanBudgetIntakeWithdrawalNativeProof(raw,parent,acceptanceReader(contract,parent,reader),spec);acceptanceParentContract(contract,true);return result;
+}
