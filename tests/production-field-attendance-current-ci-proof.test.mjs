@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {normalizeAttendanceReviewNativeProof,attendanceReviewCurrentCheckCount,ATTENDANCE_REVIEW_CHECK_NAMES} from '../scripts/lib/attendance-review-current-ci-proof.mjs';
-import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetIntakeWithdrawalSource} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetTrialExpiryNoticeSource} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {validateExtensionProof} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';
 
 // Portable public-source decoder shadows only. These tests neither import a
@@ -121,4 +121,29 @@ test('attendance frozen source comparison accepts only authenticated withdrawal 
 test('attendance all five RAW maps retain current withdrawal hashes and reject prior or forged source bytes',()=>{
  const file='src/lib/meta-kyc-conversation.mjs';for(const key of ['sourceSha256','voiceProgressSourceSha256','mediaLeaseSourceSha256','videoAudioSourceSha256','participantKycFixture'])deny(f=>{const map=key==='participantKycFixture'?f.proof.participantKycFixture.sourceSha256:f.proof[key];assert.ok(Object.hasOwn(map,file));map[file]=f.contract.planBudgetCurrentRevision.intakeWithdrawalRuntime.conversation.previousSha256;});
  deny(f=>{const bytes=Buffer.from('forged withdrawal conversation');for(const map of [f.proof.sourceSha256,f.proof.voiceProgressSourceSha256,f.proof.mediaLeaseSourceSha256,f.proof.videoAudioSourceSha256,f.proof.participantKycFixture.sourceSha256])map[file]=hash(bytes);f.reader=name=>name===file?bytes:readSource(name);});
+});
+
+
+const trialNoticeParentSources={
+ 'src/lib/participant-onboarding-authority.mjs':'dad5d9fd0a61c493ff02331d5333982627cdeb3a7addb74a3c86d44da931f916',
+ 'src/lib/participant-onboarding-reactive.mjs':'666a8c27f3ab7d6fdbe66c91f22ace4e25b04b98e865f401d19c72212916104d'
+};
+const rawMaps=proof=>[proof.sourceSha256,proof.voiceProgressSourceSha256,proof.mediaLeaseSourceSha256,proof.videoAudioSourceSha256,proof.participantKycFixture.sourceSha256];
+test('attendance authenticates both current expiry-notice bodies before their exact efb8 historical source comparison',()=>{
+ const f=fixture(),before=structuredClone(f.proof);
+ for(const [file,parentSha] of Object.entries(trialNoticeParentSources)){const current=readSource(file),parent=restorePlanBudgetTrialExpiryNoticeSource(f.contract,file,current);assert.ok(Buffer.isBuffer(parent));assert.notEqual(hash(parent),hash(current));assert.equal(hash(parent),parentSha);for(const map of rawMaps(f.proof)){assert.ok(Object.hasOwn(map,file));assert.equal(map[file],hash(current));}}
+ const result=normalizeAttendanceReviewNativeProof(f.proof,f.contract,f.reader,f.spec);assert.equal(result.totalChecks,67);assert.deepEqual(f.proof,before);assert.deepEqual(rawMaps(result),rawMaps(before));
+});
+test('attendance current RAW134 rejects either prior expiry-notice hash in every authentic source map',()=>{
+ for(const [file,parentSha] of Object.entries(trialNoticeParentSources))for(let index=0;index<5;index++)deny(f=>{const map=rawMaps(f.proof)[index];assert.ok(Object.hasOwn(map,file));map[file]=parentSha;});
+});
+test('attendance rejects parent or forged expiry-notice bytes even when all RAW maps self-report matching hashes',()=>{
+ for(const file of Object.keys(trialNoticeParentSources)){
+  const f=fixture(),parent=restorePlanBudgetTrialExpiryNoticeSource(f.contract,file,readSource(file));
+  for(const bytes of [parent,Buffer.from('unreviewed expiry-notice source')])deny(g=>{g.reader=name=>name===file?Buffer.from(bytes):readSource(name);for(const map of rawMaps(g.proof))map[file]=hash(bytes);});
+ }
+});
+test('attendance current expiry-notice sources require the intact authenticated runtime and cannot fall back to an older contract',()=>{
+ deny(f=>{delete f.contract.planBudgetCurrentRevision.trialExpiryNoticeRuntime;});
+ deny(f=>{f.contract.planBudgetCurrentRevision.trialExpiryNoticeRuntime={version:1};});
 });
