@@ -47,7 +47,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
       "previousSha256": null,
-      "currentSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
+      "currentSha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
     },
     {
       "path": "scripts/lib/plan-budget-ui-contract.mjs",
@@ -57,7 +57,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
       "previousSha256": "19addbc7ba23c963c2a1a9fae59fbc8cb2658f94d345cc7b731a5d9648dce818",
-      "currentSha256": "d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9"
+      "currentSha256": "65642417a3c8b03d605df967e9699e2d482d2dc3f0753ef767e8ff00ffda3cd1"
     },
     {
       "path": "scripts/lib/plan-partida-preview-current-ci-lineage.mjs",
@@ -542,7 +542,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
       "previousSha256": "ead294a9a4066f487b58cb8e9187ca9fee03ad0c29706c2dfb6006cb23a82a81",
-      "currentSha256": "19704b7e14b3405d0aa1348fd24ddeeae67cac5dc5a52d20bb6936ebf1e98816"
+      "currentSha256": "6844fd87bb71bcb1f702256951bf5a8549bdfb90641068f2df02e000985bec59"
     },
     {
       "path": "tests/production-plan-measurement-document-association-ci-lineage.test.mjs",
@@ -3441,7 +3441,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-          "sha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
+          "sha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -4477,7 +4477,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-          "sha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
+          "sha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -4485,7 +4485,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
-          "sha256": "d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9"
+          "sha256": "65642417a3c8b03d605df967e9699e2d482d2dc3f0753ef767e8ff00ffda3cd1"
         },
         {
           "path": "scripts/lib/plan-measurement-document-association-ci-lineage.mjs",
@@ -9557,7 +9557,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-          "sha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
+          "sha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -13096,6 +13096,353 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "currentSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
       }
     ],
+    "nativeOrHumanAcceptance": false
+  },
+  "measurementPrivacyRuntime": {
+    "version": 1,
+    "parentHead": "9248b8c521456f586dd8ffb3226136ff6828011a",
+    "previousContractSha256": "eeebf3df17dfc1ab432101c2137b75742323bdce85d3412c67582c84f0cd0c7e",
+    "referenceAdvances": [
+      {
+        "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+        "previousSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e",
+        "currentSha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
+      },
+      {
+        "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
+        "previousSha256": "d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9",
+        "currentSha256": "65642417a3c8b03d605df967e9699e2d482d2dc3f0753ef767e8ff00ffda3cd1"
+      },
+      {
+        "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
+        "previousSha256": "19704b7e14b3405d0aa1348fd24ddeeae67cac5dc5a52d20bb6936ebf1e98816",
+        "currentSha256": "6844fd87bb71bcb1f702256951bf5a8549bdfb90641068f2df02e000985bec59"
+      }
+    ],
+    "familyManifestAdvances": [
+      {
+        "family": "UI_FOCUSED_WORKSPACE",
+        "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+        "previousSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e",
+        "currentSha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
+      },
+      {
+        "family": "UI_FIELD_TASK_PAGINATION",
+        "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+        "previousSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e",
+        "currentSha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
+      },
+      {
+        "family": "UI_FIELD_TASK_PAGINATION",
+        "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
+        "previousSha256": "d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9",
+        "currentSha256": "65642417a3c8b03d605df967e9699e2d482d2dc3f0753ef767e8ff00ffda3cd1"
+      },
+      {
+        "family": "PLAN_BUDGET_UI",
+        "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+        "previousSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e",
+        "currentSha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
+      }
+    ],
+    "sourceHistory": [
+      {
+        "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+        "previousSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e",
+        "currentSha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e",
+        "previousBytes": 63480,
+        "currentBytes": 70288,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 26361,
+            "currentText": "Closed binding successor of9248. No accepted Time9537 history is rewritten.\nfunction measurementPrivacyDeclaration(v,refs){\n const r=v.measurementPrivacyRuntime;\n exact(r,['version','parentHead','previousContractSha256','referenceAdvances','familyManifestAdvances','sourceHistory','validationSource','nativeOrHumanAcceptance'],'MEASUREMENT_PRIVACY_KEYS');\n reject(r.version===1&&r.parentHead==='9248b8c521456f586dd8ffb3226136ff6828011a'&&r.previousContractSha256==='eeebf3df17dfc1ab432101c2137b75742323bdce85d3412c67582c84f0cd0c7e'&&r.nativeOrHumanAcceptance===false,'MEASUREMENT_PRIVACY_PARENT');\n const predecessors=[{path:'scripts/lib/plan-budget-current-ci-lineage.mjs',previousSha256:'f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e'},{path:'scripts/lib/plan-measurement-current-ci-lineage.mjs',previousSha256:'d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9'},{path:'tests/production-plan-measurement-current-ci-lineage.test.mjs',previousSha256:'19704b7e14b3405d0aa1348fd24ddeeae67cac5dc5a52d20bb6936ebf1e98816'}];\n reject(Array.isArray(r.referenceAdvances)&&same(r.referenceAdvances.map(a=>({path:a.path,previousSha256:a.previousSha256})),predecessors),'MEASUREMENT_PRIVACY_EXACT_REFERENCES');\n for(const a of r.referenceAdvances){exact(a,['path','previousSha256','currentSha256'],'MEASUREMENT_PRIVACY_REFERENCE_KEYS');reject(hash(a.currentSha256)&&a.currentSha256!==a.previousSha256&&refs.get(a.path)?.currentSha256===a.currentSha256,'MEASUREMENT_PRIVACY_CURRENT_REFERENCE');}\n reject(Array.isArray(r.sourceHistory)&&same(r.sourceHistory.map(h=>({path:h.path,previousSha256:h.previousSha256,currentSha256:h.currentSha256})),r.referenceAdvances),'MEASUREMENT_PRIVACY_EXACT_HISTORY');\n for(const h of r.sourceHistory){exact(h,['path','previousSha256','currentSha256','previousBytes','currentBytes','inverseHunks'],'MEASUREMENT_PRIVACY_HISTORY_KEYS');reject([h.previousBytes,h.currentBytes].every(n=>Number.isSafeInteger(n)&&n>0)&&Array.isArray(h.inverseHunks)&&h.inverseHunks.length>0,'MEASUREMENT_PRIVACY_HISTORY_BOUNDS');let end=0;for(const b of h.inverseHunks){exact(b,['currentOffsetCharacters','currentText','previousText'],'MEASUREMENT_PRIVACY_HUNK_KEYS');reject(Number.isSafeInteger(b.currentOffsetCharacters)&&b.currentOffsetCharacters>=end&&typeof b.currentText==='string'&&typeof b.previousText==='string'&&b.currentText!==b.previousText,'MEASUREMENT_PRIVACY_ORDERED_HUNKS');end=b.currentOffsetCharacters+b.currentText.length;}}\n exact(r.validationSource,['path','sha256'],'MEASUREMENT_PRIVACY_VALIDATION_KEYS');reject(r.validationSource.path==='tests/production-plan-measurement-current-source-binding.test.mjs'&&hash(r.validationSource.sha256)&&!refs.has(r.validationSource.path),'MEASUREMENT_PRIVACY_VALIDATION_SOURCE');\n const expectedFamilies=[['UI_FOCUSED_WORKSPACE','scripts/lib/plan-budget-current-ci-lineage.mjs'],['UI_FIELD_TASK_PAGINATION','scripts/lib/plan-budget-current-ci-lineage.mjs'],['UI_FIELD_TASK_PAGINATION','scripts/lib/plan-measurement-current-ci-lineage.mjs'],['PLAN_BUDGET_UI','scripts/lib/plan-budget-current-ci-lineage.mjs']];\n reject(Array.isArray(r.familyManifestAdvances)&&same(r.familyManifestAdvances.map(a=>[a.family,a.path]),expectedFamilies),'MEASUREMENT_PRIVACY_EXACT_FAMILIES');\n for(const a of r.familyManifestAdvances){exact(a,['family','path','previousSha256','currentSha256'],'MEASUREMENT_PRIVACY_FAMILY_KEYS');const h=r.referenceAdvances.find(h=>h.path===a.path);reject(h&&a.previousSha256===h.previousSha256&&a.currentSha256===h.currentSha256&&v.sourceFamilies.find(f=>f.family===a.family)?.currentManifest.find(h=>h.path===a.path)?.sha256===a.currentSha256,'MEASUREMENT_PRIVACY_FAMILY_JOIN');}\n return measurementPrivacyParentRevision(v,r);\n}\nfunction measurementPrivacyParentRevision(value,r){const parent=structuredClone(value);delete parent.measurementPrivacyRuntime;for(const a of r.referenceAdvances){const ref=parent.references.find(h=>h.path===a.path);reject(ref?.currentSha256===a.currentSha256,'MEASUREMENT_PRIVACY_REFERENCE_RESTORE');ref.currentSha256=a.previousSha256;}for(const a of r.familyManifestAdvances){const ref=parent.sourceFamilies.find(f=>f.family===a.family)?.currentManifest.find(h=>h.path===a.path);reject(ref?.sha256===a.currentSha256,'MEASUREMENT_PRIVACY_FAMILY_RESTORE');ref.sha256=a.previousSha256;}return parent;}\nfunction measurementPrivacyParentContract(contract,r){const out=structuredClone(contract);out[PLAN_BUDGET_CURRENT_SECTION]=measurementPrivacyParentRevision(out[PLAN_BUDGET_CURRENT_SECTION],r);reject(sha(JSON.stringify(out,null,2)+'\\n')===r.previousContractSha256,'MEASUREMENT_PRIVACY_COMPLETE_9248_CONTRACT');return out;}\nfunction measurementPrivacySource(r,file,bytes){const h=r.sourceHistory.find(a=>a.path===file);reject(h&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'MEASUREMENT_PRIVACY_UTF8_SOURCE');let text=bytes.toString('utf8').replaceAll('\\r\\n','\\n');reject(sha(text)===h.currentSha256&&Buffer.byteLength(text)===h.currentBytes,'MEASUREMENT_PRIVACY_CURRENT_SOURCE_'+file);for(const b of [...h.inverseHunks].reverse()){const at=b.currentOffsetCharacters;reject(text.slice(at,at+b.currentText.length)===b.currentText,'MEASUREMENT_PRIVACY_EXACT_HUNK_'+file);text=text.slice(0,at)+b.previousText+text.slice(at+b.currentText.length);}reject(sha(text)===h.previousSha256&&Buffer.byteLength(text)===h.previousBytes,'MEASUREMENT_PRIVACY_COMPLETE_SOURCE_INVERSE_'+file);return Buffer.from(text);}\nfunction verifyMeasurementPrivacySources(v,reader){for(const h of v.measurementPrivacyRuntime.sourceHistory)measurementPrivacySource(v.measurementPrivacyRuntime,h.path,read(reader,h.path));const ref=v.measurementPrivacyRuntime.validationSource;reject(sha(read(reader,ref.path))===ref.sha256,'MEASUREMENT_PRIVACY_VALIDATION_BYTES');}\nfunction measurementPrivacyAdvancedPin(ref){const h=expected.measurementPrivacyRuntime.referenceAdvances.find(h=>h.path===ref.path);return h&&ref.sha256===h.previousSha256?h.currentSha256:ref.sha256;}\nexport function restorePlanBudgetMeasurementPrivacyPreviousContract(contract){const v=section(contract,true);return measurementPrivacyParentContract(contract,v.measurementPrivacyRuntime);}\nexport function restorePlanBudgetMeasurementPrivacySource(contract,file,bytes){return measurementPrivacySource(section(contract,true).measurementPrivacyRuntime,file,bytes);}\n\n// ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 37821,
+            "currentText": "mea",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 37825,
+            "currentText": "",
+            "previousText": "truct"
+          },
+          {
+            "currentOffsetCharacters": 37828,
+            "currentText": "mentPrivacyParent",
+            "previousText": "d"
+          },
+          {
+            "currentOffsetCharacters": 37846,
+            "currentText": "",
+            "previousText": "l"
+          },
+          {
+            "currentOffsetCharacters": 37848,
+            "currentText": "tract",
+            "previousText": "e"
+          },
+          {
+            "currentOffsetCharacters": 37862,
+            "currentText": ",v.measurementPrivacyRuntime",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 39083,
+            "currentText": "Runtime','measurementPrivacy",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 41463,
+            "currentText": "onst timeParent=measurementPrivacyDeclaration(v,refs);c",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 41538,
+            "currentText": "timeParent",
+            "previousText": "v"
+          },
+          {
+            "currentOffsetCharacters": 41549,
+            "currentText": "new Map(timeParent.",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 41571,
+            "currentText": "erence",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 41578,
+            "currentText": ".map(row=>[row.path,row]))",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 48725,
+            "currentText": "ref={...ref,sha256:measurementPrivacyAdvancedPin(ref)};",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 49375,
+            "currentText": ";ref={...ref,sha256:measurementPrivacyAdvancedPin(ref)}",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 50810,
+            "currentText": "MeasurementPrivacySources(v,readSource);verify",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 51929,
+            "currentText": "e);verifyMeasurementPrivacySources(v,readSourc",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 53242,
+            "currentText": ",v.measurementPrivacyRuntime.validationSource.path",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
+        "previousSha256": "d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9",
+        "currentSha256": "65642417a3c8b03d605df967e9699e2d482d2dc3f0753ef767e8ff00ffda3cd1",
+        "previousBytes": 71750,
+        "currentBytes": 72730,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 0,
+            "currentText": "import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetAttendanceReviewProducerText} from './plan-budget-current-ci-lineage.mjs';\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 66199,
+            "currentText": ",privacyContract=restoreFieldOutboundPreviousContract(contract)",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 66962,
+            "currentText": "\n  ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 66977,
+            "currentText": "ontract.extension.proofs.find(row=>row.id===delta.id),privacySpec=privacyC",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 67141,
+            "currentText": "priva",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 67147,
+            "currentText": "yC",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 67157,
+            "currentText": "privacyS",
+            "previousText": "s"
+          },
+          {
+            "currentOffsetCharacters": 67170,
+            "currentText": "\n  ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 67185,
+            "currentText": "\n   // L comparisons use its complete authenticated parent metadata. Current\n   // readers, contract fields and native manifests are never substituted.\n   ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 67389,
+            "currentText": "weeklyCypCurrentSourcePin(contract,{path:spec.producer,sha256:",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 67472,
+            "currentText": "})",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 67545,
+            "currentText": "\n   let comparisonBytes=bytes(readSource,spec.producer);\n   if(Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION)&&spec.producer===contract[PLAN_BUDGET_CURRENT_SECTION].attendanceReviewRuntime.producer.producer)comparisonBytes=restorePlanBudgetAttendanceReviewProducerText(contract,comparisonBytes);\n   requireLineage(sha(comparisonBytes.toString('utf8').replaceAll('\\r\\n','\\n'))===privacy.currentSha256,'Authenticated L producer comparison must restore exactly: '+delta.id);\n   ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 68096,
+            "currentText": "priva",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 68102,
+            "currentText": "yC",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 68126,
+            "currentText": "comparisonB",
+            "previousText": "b"
+          },
+          {
+            "currentOffsetCharacters": 68141,
+            "currentText": "",
+            "previousText": "(readSource,spec.producer)"
+          },
+          {
+            "currentOffsetCharacters": 68250,
+            "currentText": "\n  ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 68545,
+            "currentText": "\n ",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
+        "previousSha256": "19704b7e14b3405d0aa1348fd24ddeeae67cac5dc5a52d20bb6936ebf1e98816",
+        "currentSha256": "6844fd87bb71bcb1f702256951bf5a8549bdfb90641068f2df02e000985bec59",
+        "previousBytes": 34169,
+        "currentBytes": 34616,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 127,
+            "currentText": ",restorePlanBudgetAttendanceReviewProducerText",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 4905,
+            "currentText": ";\nconst lProducerBytes=row=>{const actual=read(row.producer);return row.kind==='PG_FIELD'?restorePlanBudgetAttendanceReviewProducerText(contract,actual):actual;}",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 28278,
+            "currentText": "originalLC",
+            "previousText": "c"
+          },
+          {
+            "currentOffsetCharacters": 28498,
+            "currentText": "originalLC",
+            "previousText": "c"
+          },
+          {
+            "currentOffsetCharacters": 28571,
+            "currentText": "originalLC",
+            "previousText": "c"
+          },
+          {
+            "currentOffsetCharacters": 31151,
+            "currentText": "comparison=lProducerBytes(row),",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 31187,
+            "currentText": "compa",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 31193,
+            "currentText": "ison",
+            "previousText": "aw"
+          },
+          {
+            "currentOffsetCharacters": 31324,
+            "currentText": "originalLC",
+            "previousText": "c"
+          },
+          {
+            "currentOffsetCharacters": 31355,
+            "currentText": "compa",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 31361,
+            "currentText": "ison",
+            "previousText": "aw"
+          },
+          {
+            "currentOffsetCharacters": 31796,
+            "currentText": "originalLC",
+            "previousText": "c"
+          },
+          {
+            "currentOffsetCharacters": 31850,
+            "currentText": "compa",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 31856,
+            "currentText": "ison",
+            "previousText": "aw"
+          },
+          {
+            "currentOffsetCharacters": 31926,
+            "currentText": "originalLC",
+            "previousText": "c"
+          },
+          {
+            "currentOffsetCharacters": 32044,
+            "currentText": "originalLC",
+            "previousText": "c"
+          },
+          {
+            "currentOffsetCharacters": 32135,
+            "currentText": "));if(row.kind==='PG_FIELD')denied(()=>restorePlanMeasurementPublishedKPrivacyProducerText(originalLContract,row.producer,raw",
+            "previousText": ""
+          }
+        ]
+      }
+    ],
+    "validationSource": {
+      "path": "tests/production-plan-measurement-current-source-binding.test.mjs",
+      "sha256": "7378845d2cc3892a8369dd4858112568abf24d725950ee3e3e28b5aba4e98a49"
+    },
     "nativeOrHumanAcceptance": false
   }
 });
