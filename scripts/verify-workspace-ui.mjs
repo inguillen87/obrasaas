@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,readFileSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,readFileSync,lstatSync,realpathSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
-import {spawn} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
 import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-preparation-format.mjs';
 import {respondClosedCompanySubscription} from './lib/company-subscription-ui-fixture.mjs';
@@ -38,9 +38,44 @@ writeFileSync(path.join(fixture,'next.config.mjs'),`export default {turbopack:{r
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:16,background:'#0b1c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
 writeFileSync(path.join(app,'page.js'),`'use client';import {useCallback,useState} from 'react';import {OnboardingGuide} from './(identity)/cuenta/onboarding-guide';import {AccountWorkspace} from './(identity)/cuenta/workspace-client';import {browserRecoveryJournal} from './(identity)/cuenta/workspace-recovery-journal.mjs';const token=async()=>{if(window.__failNextToken){window.__failNextToken=false;throw new Error('private SDK diagnostic');}if(window.__holdToken)await new Promise(resolve=>{window.__resolveToken=resolve;});return 'synthetic-active-tab-A';};export default function Page(){const [visible,setVisible]=useState(true),[observation,setObservation]=useState(null);const observed=useCallback(value=>{window.__guideObservation=value;setObservation(value);},[]);if(typeof window!=='undefined')window.__prepareWorkspaceReference=body=>browserRecoveryJournal.prepare('/api/identity/task-creation',{method:'POST',body:JSON.stringify(body)});if(typeof window!=='undefined')window.__workspaceReferences=value=>browserRecoveryJournal.list(value);return <main style={{maxWidth:1000,margin:'0 auto'}}><OnboardingGuide orgId="org_fixture" orgRole="org:admin" observation={observation}/><button onClick={()=>setVisible(false)}>Desmontar ensayo</button>{visible?<AccountWorkspace getSessionToken={token} onGuideObservation={observed}/>:<p>Ensayo desmontado</p>}</main>}`);
 const port=3108,origin='http://127.0.0.1:'+port;
-const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
+const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],windowsHide:true,detached:process.platform!=='win32'});
+let serverDrained=false;
+const serverClosed=new Promise(resolve=>server.once('close',()=>{serverDrained=true;resolve();}));
+async function bounded(promise,label){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(label)),10000);})]);}finally{clearTimeout(timer);}}
+function ownedAlive(child){if(child.exitCode!==null||child.signalCode!==null)return false;try{process.kill(child.pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}}
+function ownedClosed(child){return (child.exitCode!==null||child.signalCode!==null)&&child.stdio.every(stream=>!stream||stream.destroyed)?Promise.resolve():new Promise(resolve=>child.once('close',resolve));}
+function terminateOwned(child,group=false,signal='SIGKILL'){
+ assert.ok(Number.isSafeInteger(child.pid)&&child.pid>0);
+ if(process.platform==='win32'){if(!ownedAlive(child))return;const stopped=spawnSync('taskkill.exe',['/PID',String(child.pid),'/T','/F'],{stdio:'ignore',windowsHide:true,timeout:10000});if(stopped.status!==0&&ownedAlive(child))throw Error('OWNED_PROCESS_TREE_CLOSE_FAILED');}
+ else if(group){try{process.kill(-child.pid,signal);}catch(error){if(error.code!=='ESRCH')throw error;}}
+ else if(ownedAlive(child))assert.ok(child.kill(signal),'The owned process must receive its shutdown signal');
+}
+async function stopOwnedBrowser(){
+ const child=browser?.process(),closed=child?ownedClosed(child):Promise.resolve();
+ try{await bounded(browser?.close(),'OWNED_BROWSER_CLOSE_TIMEOUT');}catch{browser?.disconnect();if(child)terminateOwned(child);}
+ if(child&&ownedAlive(child))terminateOwned(child);
+ await bounded(closed,'OWNED_BROWSER_DRAIN_TIMEOUT');if(child)assert.equal(ownedAlive(child),false);
+}
+async function stopHarnessServer(){
+ if(serverDrained)return;
+ assert.ok(server.spawnargs.includes(fixture),'Only the spawned fixture tree may be stopped');terminateOwned(server,true,'SIGTERM');
+ try{await bounded(serverClosed,'OWNED_NEXT_CLOSE_TIMEOUT');}catch(error){terminateOwned(server,true);await bounded(serverClosed,'OWNED_NEXT_FORCE_DRAIN_TIMEOUT');throw error;}
+}
+function removeOwnedFixture(){
+ const parent=path.resolve(root,'.vercel');assert.ok(path.isAbsolute(fixture)&&path.dirname(path.resolve(fixture))===parent);
+ assert.equal(lstatSync(parent).isSymbolicLink(),false);assert.equal(lstatSync(fixture).isSymbolicLink(),false);
+ const resolvedParent=realpathSync(parent),resolvedFixture=realpathSync(fixture),same=(a,b)=>process.platform==='win32'?a.toLowerCase()===b.toLowerCase():a===b;
+ assert.ok(same(parent,resolvedParent)&&same(path.resolve(fixture),resolvedFixture));assert.equal(path.dirname(resolvedFixture),resolvedParent);
+ rmSync(resolvedFixture,{recursive:true,force:true});assert.equal(existsSync(fixture),false);
+}
+async function cleanupHarness(){
+ const failures=[];for(const stop of [stopOwnedBrowser,stopHarnessServer])try{await stop();}catch(error){failures.push(error);}
+ const processesClosed=failures.length===0;if(processesClosed)try{removeOwnedFixture();}catch(error){failures.push(error);}
+ const record={processesClosed,fixtureRemoved:!existsSync(fixture),primaryFailure:primaryFailure?.message||null,errors:failures.map(error=>error.message)};writeFileSync(path.join(evidence,'browser-cleanup.json'),JSON.stringify(record,null,2));
+ if(failures.length)throw new AggregateError([...(primaryFailure?[primaryFailure]:[]),...failures],'WORKSPACE_UI_CLEANUP_FAILED');
+}
 let serverLog='';for(const stream of [server.stdout,server.stderr])stream.on('data',value=>{serverLog=(serverLog+value.toString()).slice(-20000);});
-let browser;const checks=[],pageErrors=[];
+let browser,proof,primaryFailure;const checks=[],pageErrors=[];
 const scope='a'.repeat(64),revision='2026-09-30T12:00:00.123456';
 const baseTask=()=>({id:'task-a',title:'Mampostería · sector norte',status:'IN_PROGRESS',progress:37,startsOn:'2026-10-01',endsOn:'2026-10-05',revision});
 const text=page=>page.evaluate(()=>document.body.innerText);
@@ -929,18 +964,19 @@ async function guideObservationScenario(width){
 async function guideHttpDenialScenario(width,action,denial){
  const mode=`guide-http-${action}-${denial}`,context=await browser.createBrowserContext(),page=await context.newPage();
  await page.setViewport({width,height:1100,hasTouch:width<768,isMobile:width<768});page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
- const requests=[],posts=[];let denyWorkspace=false,projectReads=0,receiptReads=0;
+ const requests=[],posts=[];let denyWorkspace=false,projectReads=0,receiptReads=0,phase='preparation';
+ const httpTasks=[baseTask(),...Array.from({length:99},(_,index)=>({...baseTask(),id:'guide-http-task-'+(index+1)}))],httpCursor=httpTasks.at(-1).id;
  await page.setRequestInterception(true);page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('External request forbidden');}
   if(!url.pathname.startsWith('/api/identity/'))return request.continue();
-  requests.push({path:url.pathname,method:request.method()});assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+  requests.push({sequence:requests.length+1,phase,path:url.pathname,method:request.method(),query:url.search});assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
   if(request.method()!=='GET'){posts.push(request.postData());throw Error('HTML denial fixture permits GET only');}
   let body;
   if(url.pathname==='/api/identity/workspace'){
    if(!url.search)body={scope,organizationName:'Empresa de guía HTTP sintética',role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:false,canManageIntegrations:false,projects:[{id:'p-a',name:'Obra de prueba A'}],projectsTruncated:false};
    else{assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');projectReads++;
     if(denyWorkspace)return request.respond({status:denial,contentType:'text/html',headers:{'Cache-Control':'no-store'},body:'<html><body>private gateway diagnostic</body></html>'});
-    body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:false,tasks:[baseTask()],totalTasks:2,nextCursor:'synthetic-guide-http-cursor'};
+    body={scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:false,tasks:httpTasks,totalTasks:101,nextCursor:httpCursor};
    }
   }else if(url.pathname==='/api/identity/worker-channel')body={scope,projectId:'p-a',channelReady:true,truncated:false,records:[{workerId:'own-worker',name:'Persona sintética',revision,state:'VERIFIED',eligible:true,binding:{id:'guide-http-binding',verifiedAt:'2026-10-01T12:00:00Z',revokedAt:null}}]};
   else if(url.pathname==='/api/identity/task-creation'){
@@ -951,20 +987,22 @@ async function guideHttpDenialScenario(width,action,denial){
  }catch(error){pageErrors.push({mode,width,message:error.message});await request.abort().catch(()=>{});}});
  try{
   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de guía HTTP sintética');
-  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');await showGuide(page);
+  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());await page.waitForSelector('[data-task-id="task-a"]');await page.waitForSelector('[data-worksite-live-refresh="CURRENT"]');await showGuide(page);
   await showWorkspaceSection(page,'worker-channel-title');await click(page,'Consultar vinculación');await page.waitForFunction(()=>window.__guideObservation?.channel?.ownLinked===true);assert.match(await guideStatus(page),/Tu vínculo personal está vigente/);
-  denyWorkspace=true;
-  if(action==='append'){await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');}
-  else{await page.evaluate(body=>window.__prepareWorkspaceReference(body),{scope,projectId:'p-a',operationId:'11111111-1111-4111-8111-111111111111'});await showWorkspaceSection(page,'workspace-recovery-title');await waitText(page,'Operaciones por comprobar');await showWorkspaceSection(page,'workspace-recovery-title');await click(page,'Comprobar recibo');}
+  if(action==='append'){await showWorkspaceSection(page,'schedule-title');await page.waitForSelector('[data-worksite-live-refresh="CURRENT"]');}
+  else{await page.evaluate(body=>window.__prepareWorkspaceReference(body),{scope,projectId:'p-a',operationId:'11111111-1111-4111-8111-111111111111'});await showWorkspaceSection(page,'workspace-recovery-title');await waitText(page,'Operaciones por comprobar');}
+  await page.waitForNetworkIdle({idleTime:0,concurrency:0,timeout:15000});const preparedProjectReads=projectReads;assert.ok(preparedProjectReads>=1,'A canonical project read must precede the denial action');
+  phase='action';denyWorkspace=true;await click(page,action==='append'?'Cargar más tareas':'Comprobar recibo');
   await page.waitForSelector('[data-guide-observation="UNAVAILABLE"]',{timeout:6000});
   assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),0);assert.equal(await page.$('#worker-channel-title'),null);assert.equal(await page.$('#participant-title'),null);
   assert.equal(await page.$$eval('button',nodes=>nodes.filter(node=>node.textContent.includes('Obra de prueba A')).length),0);
   assert.ok(!(await guideStatus(page)).includes('Empresa consultada'));assert.ok(!(await guideStatus(page)).includes('Tu vínculo personal está vigente'));
   assert.ok(!(await text(page)).includes('private gateway diagnostic'));assert.ok(!(await text(page)).includes('Unexpected token'));
-  assert.equal(projectReads,2);assert.equal(receiptReads,action==='readback'?1:0);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  const actionProjectReads=requests.filter(request=>request.phase==='action'&&request.path==='/api/identity/workspace'&&new URLSearchParams(request.query).has('projectId'));
+  assert.equal(projectReads-preparedProjectReads,1,'The explicit action must make exactly one additional project GET');assert.equal(actionProjectReads.length,1);assert.equal(new URLSearchParams(actionProjectReads[0].query).get('afterTask'),action==='append'?httpCursor:null);assert.equal(receiptReads,action==='readback'?1:0);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await page.screenshot({path:path.join(evidence,`workspace-${mode}-${width}.png`),fullPage:true});
-  checks.push({mode,width,projectReads,receiptReads,posts:0,htmlDenialClearsAccount:true,htmlDenialClearsView:true,htmlDenialClearsGuideFacts:true,currentToken:true});
- }catch(error){await page.screenshot({path:path.join(evidence,`workspace-${mode}-${width}-failure.png`),fullPage:true}).catch(()=>{});throw error;}
+  checks.push({mode,width,projectReads,actionProjectReads:actionProjectReads.length,receiptReads,posts:0,htmlDenialClearsAccount:true,htmlDenialClearsView:true,htmlDenialClearsGuideFacts:true,currentToken:true,requests});
+ }catch(error){error.workspaceUiDiagnostic={diagnostic:'guide-http-denial-primary-failure',mode,width,phase,projectReads,receiptReads,posts:posts.length,requests};await page.screenshot({path:path.join(evidence,`workspace-${mode}-${width}-failure.png`),fullPage:true}).catch(()=>{});throw error;}
  finally{await context.close();}
 }
 
@@ -1066,7 +1104,7 @@ try{
  for(const width of [320,390,768,1280])for(const uncertain of [false,true])await mobileImportNavigationScenario(width,uncertain);
  }
  assert.deepEqual(pageErrors,[]);
- const proof={status:'PASS',fullSuite:!process.env.WORKSPACE_UI_SCENARIO,focusedScenario:process.env.WORKSPACE_UI_SCENARIO||null,environment:'isolated-browser-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,pageErrors,sourceManifest,harnessSha256,productionLoginVerified:false,productionDataWritten:false,physicalWhatsAppVerified:false,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
- writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
-}catch(error){writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,diagnostic:error.workspaceUiDiagnostic||null,checks,pageErrors,sourceManifest,harnessSha256,serverLog,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms},null,2));throw error;}
-finally{await browser?.close();try{if(process.platform!=='win32')process.kill(-server.pid,'SIGTERM');else server.kill();}catch{}await new Promise(resolve=>setTimeout(resolve,500));assert.equal(path.dirname(path.resolve(fixture)),path.resolve(root,'.vercel'));rmSync(fixture,{recursive:true,force:true});}
+ proof={status:'PASS',fullSuite:!process.env.WORKSPACE_UI_SCENARIO,focusedScenario:process.env.WORKSPACE_UI_SCENARIO||null,environment:'isolated-browser-with-intercepted-synthetic-api',widths:[320,390,768,1280],checks,pageErrors,sourceManifest,harnessSha256,productionLoginVerified:false,productionDataWritten:false,physicalWhatsAppVerified:false,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
+}catch(error){primaryFailure=error;writeFileSync(path.join(evidence,'browser-failure.json'),JSON.stringify({status:'FAILED',message:error.message,diagnostic:error.workspaceUiDiagnostic||null,checks,pageErrors,sourceManifest,harnessSha256,serverLog,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms},null,2));throw error;}
+finally{await cleanupHarness();}
+writeFileSync(path.join(evidence,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));

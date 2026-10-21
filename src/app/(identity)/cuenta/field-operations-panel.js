@@ -126,7 +126,7 @@ function FieldOperationsPanelInner({projectId,scope,active=false,backgroundBlock
      try{
        const snapshot=freshProgress?await api(sessionRequest,endpoint,{projectId,scope},{requestTimeoutMs:15000},value=>scoped(value,true)):data;
        if(!mounted.current||sequence!==epoch.current)return;
-       if(freshProgress&&(snapshot.canReview!==true||reviewSection==='PROGRESS'&&snapshot.canApproveProgress!==true))throw Object.assign(new Error('Tu cuenta no tiene permiso para revisar esta cola.'),{code:'FIELD_PERMISSION_REQUIRED',status:403});
+       if(freshProgress&&(snapshot.canReview!==true||reviewSection==='PROGRESS'&&snapshot.canApproveProgress!==true))throw Object.assign(new Error(snapshot.canReview!==true?'Tu cuenta no tiene permiso para revisar esta cola.':messages.FIELD_PROGRESS_PERMISSION_REQUIRED),{code:'FIELD_PERMISSION_REQUIRED',status:403});
        if(!/^[a-f0-9]{64}$/.test(snapshot.reviewAccessStamp||''))throw Object.assign(new Error('Tu acceso cambió. Volvé a consultar la obra antes de recuperar estos registros.'),{code:'WORKSPACE_CONTEXT_CHANGED'});
        const query={projectId,scope,reviewAccessStamp:snapshot.reviewAccessStamp,reviewSection,reviewFilter,...(more?{afterReview:previous.nextCursor}:{}),...(reviewId?{reviewId}:{})};
        const result=await api(sessionRequest,endpoint,query,{requestTimeoutMs:15000},value=>fieldReviewPage(value,query));if(!mounted.current||sequence!==epoch.current)return;
