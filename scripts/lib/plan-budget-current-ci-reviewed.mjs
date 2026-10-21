@@ -57,7 +57,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
       "previousSha256": "19addbc7ba23c963c2a1a9fae59fbc8cb2658f94d345cc7b731a5d9648dce818",
-      "currentSha256": "65642417a3c8b03d605df967e9699e2d482d2dc3f0753ef767e8ff00ffda3cd1"
+      "currentSha256": "25bf8dde7ad684dc9795a0b013ae4c35fc35c96a2dfad537113062ea6a090f0c"
     },
     {
       "path": "scripts/lib/plan-partida-preview-current-ci-lineage.mjs",
@@ -542,7 +542,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
       "previousSha256": "ead294a9a4066f487b58cb8e9187ca9fee03ad0c29706c2dfb6006cb23a82a81",
-      "currentSha256": "6844fd87bb71bcb1f702256951bf5a8549bdfb90641068f2df02e000985bec59"
+      "currentSha256": "289f44dcb536e1f8c7c6757c4ad40fc45c5e8b1c120fb28cb296fdd34222e7a2"
     },
     {
       "path": "tests/production-plan-measurement-document-association-ci-lineage.test.mjs",
@@ -4485,7 +4485,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
-          "sha256": "65642417a3c8b03d605df967e9699e2d482d2dc3f0753ef767e8ff00ffda3cd1"
+          "sha256": "25bf8dde7ad684dc9795a0b013ae4c35fc35c96a2dfad537113062ea6a090f0c"
         },
         {
           "path": "scripts/lib/plan-measurement-document-association-ci-lineage.mjs",
@@ -13111,12 +13111,12 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
         "previousSha256": "d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9",
-        "currentSha256": "65642417a3c8b03d605df967e9699e2d482d2dc3f0753ef767e8ff00ffda3cd1"
+        "currentSha256": "25bf8dde7ad684dc9795a0b013ae4c35fc35c96a2dfad537113062ea6a090f0c"
       },
       {
         "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
         "previousSha256": "19704b7e14b3405d0aa1348fd24ddeeae67cac5dc5a52d20bb6936ebf1e98816",
-        "currentSha256": "6844fd87bb71bcb1f702256951bf5a8549bdfb90641068f2df02e000985bec59"
+        "currentSha256": "289f44dcb536e1f8c7c6757c4ad40fc45c5e8b1c120fb28cb296fdd34222e7a2"
       }
     ],
     "familyManifestAdvances": [
@@ -13136,7 +13136,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "family": "UI_FIELD_TASK_PAGINATION",
         "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
         "previousSha256": "d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9",
-        "currentSha256": "65642417a3c8b03d605df967e9699e2d482d2dc3f0753ef767e8ff00ffda3cd1"
+        "currentSha256": "25bf8dde7ad684dc9795a0b013ae4c35fc35c96a2dfad537113062ea6a090f0c"
       },
       {
         "family": "PLAN_BUDGET_UI",
@@ -13248,98 +13248,138 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
         "previousSha256": "d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9",
-        "currentSha256": "65642417a3c8b03d605df967e9699e2d482d2dc3f0753ef767e8ff00ffda3cd1",
+        "currentSha256": "25bf8dde7ad684dc9795a0b013ae4c35fc35c96a2dfad537113062ea6a090f0c",
         "previousBytes": 71750,
-        "currentBytes": 72730,
+        "currentBytes": 73398,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 0,
-            "currentText": "import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetAttendanceReviewProducerText} from './plan-budget-current-ci-lineage.mjs';\n",
+            "currentText": "import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetIntakeWithdrawalUnitProducerText} from './plan-budget-current-ci-lineage.mjs';\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 66199,
+            "currentOffsetCharacters": 66249,
             "currentText": ",privacyContract=restoreFieldOutboundPreviousContract(contract)",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 66962,
+            "currentOffsetCharacters": 67012,
             "currentText": "\n  ",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 66977,
+            "currentOffsetCharacters": 67027,
             "currentText": "ontract.extension.proofs.find(row=>row.id===delta.id),privacySpec=privacyC",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 67141,
+            "currentOffsetCharacters": 67191,
             "currentText": "priva",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 67147,
+            "currentOffsetCharacters": 67197,
             "currentText": "yC",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 67157,
+            "currentOffsetCharacters": 67207,
             "currentText": "privacyS",
             "previousText": "s"
           },
           {
-            "currentOffsetCharacters": 67170,
+            "currentOffsetCharacters": 67220,
             "currentText": "\n  ",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 67185,
+            "currentOffsetCharacters": 67235,
             "currentText": "\n   // L comparisons use its complete authenticated parent metadata. Current\n   // readers, contract fields and native manifests are never substituted.\n   ",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 67389,
+            "currentOffsetCharacters": 67439,
             "currentText": "weeklyCypCurrentSourcePin(contract,{path:spec.producer,sha256:",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 67472,
+            "currentOffsetCharacters": 67522,
             "currentText": "})",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 67545,
+            "currentOffsetCharacters": 67595,
             "currentText": "\n   let comparisonBytes=bytes(readSource,spec.producer);\n   if(Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION)&&spec.producer===contract[PLAN_BUDGET_CURRENT_SECTION].attendanceReviewRuntime.producer.producer)comparisonBytes=restorePlanBudgetAttendanceReviewProducerText(contract,comparisonBytes);\n   requireLineage(sha(comparisonBytes.toString('utf8').replaceAll('\\r\\n','\\n'))===privacy.currentSha256,'Authenticated L producer comparison must restore exactly: '+delta.id);\n   ",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 68096,
+            "currentOffsetCharacters": 68146,
             "currentText": "priva",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 68102,
+            "currentOffsetCharacters": 68152,
             "currentText": "yC",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 68126,
+            "currentOffsetCharacters": 68176,
             "currentText": "comparisonB",
             "previousText": "b"
           },
           {
-            "currentOffsetCharacters": 68141,
+            "currentOffsetCharacters": 68191,
             "currentText": "",
             "previousText": "(readSource,spec.producer)"
           },
           {
-            "currentOffsetCharacters": 68250,
+            "currentOffsetCharacters": 68300,
             "currentText": "\n  ",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 68545,
-            "currentText": "\n ",
+            "currentOffsetCharacters": 68308,
+            "currentText": "{\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 68311,
+            "currentText": "  let compa",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 68323,
+            "currentText": "",
+            "previousText": "equ"
+          },
+          {
+            "currentOffsetCharacters": 68324,
+            "currentText": "so",
+            "previousText": "reLi"
+          },
+          {
+            "currentOffsetCharacters": 68327,
+            "currentText": "Sh",
+            "previousText": "e"
+          },
+          {
+            "currentOffsetCharacters": 68330,
+            "currentText": "=",
+            "previousText": "ge("
+          },
+          {
+            "currentOffsetCharacters": 68362,
+            "currentText": ";\n   if(delta.id==='bank-intake-units'&&Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION)){\n    const unit=contract[PLAN_BUDGET_CURRENT_SECTION].intakeWithdrawalRuntime.unitProducer;\n    requireLineage(spec.kind==='UNIT'&&spec.producer===unit.producer&&spec.producerSha256===unit.currentSha256&&comparisonSha===unit.currentSha256&&delta.currentProducerSha256===unit.previousSha256,'The exact current UNIT producer and its G parent must remain joined');\n    comparisonSha=sha(restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,bytes(readSource,spec.producer)));\n   }\n   requireLineage(comparisonSha",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 69209,
+            "currentText": "\n  ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 69214,
+            "currentText": " }\n",
             "previousText": ""
           }
         ]
@@ -13347,92 +13387,117 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
         "previousSha256": "19704b7e14b3405d0aa1348fd24ddeeae67cac5dc5a52d20bb6936ebf1e98816",
-        "currentSha256": "6844fd87bb71bcb1f702256951bf5a8549bdfb90641068f2df02e000985bec59",
+        "currentSha256": "289f44dcb536e1f8c7c6757c4ad40fc45c5e8b1c120fb28cb296fdd34222e7a2",
         "previousBytes": 34169,
-        "currentBytes": 34616,
+        "currentBytes": 34870,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 127,
-            "currentText": ",restorePlanBudgetAttendanceReviewProducerText",
+            "currentText": ",restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetPilotProducerText",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 4905,
+            "currentOffsetCharacters": 4940,
             "currentText": ";\nconst lProducerBytes=row=>{const actual=read(row.producer);return row.kind==='PG_FIELD'?restorePlanBudgetAttendanceReviewProducerText(contract,actual):actual;}",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 28278,
+            "currentOffsetCharacters": 14034,
+            "currentText": "const ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 14041,
+            "currentText": "c",
+            "previousText": "sser"
+          },
+          {
+            "currentOffsetCharacters": 14043,
+            "currentText": "",
+            "previousText": ".eq"
+          },
+          {
+            "currentOffsetCharacters": 14046,
+            "currentText": "=",
+            "previousText": "(sha("
+          },
+          {
+            "currentOffsetCharacters": 14066,
+            "currentText": ",comparison=spec.kind==='PG_INTAKE'?restorePlanBudgetPilotProducerText(contract,spec.producer,actual):actual;assert.equal(sha(actual.toString('utf8').replaceAll('\\r\\n','\\n')),spec.producerSha256);assert.equal(sha(comparison",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 28532,
             "currentText": "originalLC",
             "previousText": "c"
           },
           {
-            "currentOffsetCharacters": 28498,
+            "currentOffsetCharacters": 28752,
             "currentText": "originalLC",
             "previousText": "c"
           },
           {
-            "currentOffsetCharacters": 28571,
+            "currentOffsetCharacters": 28825,
             "currentText": "originalLC",
             "previousText": "c"
           },
           {
-            "currentOffsetCharacters": 31151,
+            "currentOffsetCharacters": 31405,
             "currentText": "comparison=lProducerBytes(row),",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 31187,
+            "currentOffsetCharacters": 31441,
             "currentText": "compa",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 31193,
+            "currentOffsetCharacters": 31447,
             "currentText": "ison",
             "previousText": "aw"
           },
           {
-            "currentOffsetCharacters": 31324,
+            "currentOffsetCharacters": 31578,
             "currentText": "originalLC",
             "previousText": "c"
           },
           {
-            "currentOffsetCharacters": 31355,
+            "currentOffsetCharacters": 31609,
             "currentText": "compa",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 31361,
+            "currentOffsetCharacters": 31615,
             "currentText": "ison",
             "previousText": "aw"
           },
           {
-            "currentOffsetCharacters": 31796,
+            "currentOffsetCharacters": 32050,
             "currentText": "originalLC",
             "previousText": "c"
           },
           {
-            "currentOffsetCharacters": 31850,
+            "currentOffsetCharacters": 32104,
             "currentText": "compa",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 31856,
+            "currentOffsetCharacters": 32110,
             "currentText": "ison",
             "previousText": "aw"
           },
           {
-            "currentOffsetCharacters": 31926,
+            "currentOffsetCharacters": 32180,
             "currentText": "originalLC",
             "previousText": "c"
           },
           {
-            "currentOffsetCharacters": 32044,
+            "currentOffsetCharacters": 32298,
             "currentText": "originalLC",
             "previousText": "c"
           },
           {
-            "currentOffsetCharacters": 32135,
+            "currentOffsetCharacters": 32389,
             "currentText": "));if(row.kind==='PG_FIELD')denied(()=>restorePlanMeasurementPublishedKPrivacyProducerText(originalLContract,row.producer,raw",
             "previousText": ""
           }
@@ -13441,7 +13506,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     ],
     "validationSource": {
       "path": "tests/production-plan-measurement-current-source-binding.test.mjs",
-      "sha256": "7378845d2cc3892a8369dd4858112568abf24d725950ee3e3e28b5aba4e98a49"
+      "sha256": "e3d963f9740e4d17b3d4e15bcf9b6c34adc569fb988493ec7b10268a42514779"
     },
     "nativeOrHumanAcceptance": false
   }

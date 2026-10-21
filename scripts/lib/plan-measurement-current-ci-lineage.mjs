@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetAttendanceReviewProducerText} from './plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetIntakeWithdrawalUnitProducerText} from './plan-budget-current-ci-lineage.mjs';
 import {restoreWeeklyCypPreviousContract,weeklyCypCurrentSourcePin} from './home-decisions-current-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
 import {INTEGRATED_IDENTITY_UI_PRODUCER_PATHS,restoreIntegratedIdentityUiProducerText} from './integrated-identity-current-ci-lineage.mjs';
@@ -559,7 +559,15 @@ export function verifyPlanMeasurementCurrentSources(contract,readSource){
    if(Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION)&&spec.producer===contract[PLAN_BUDGET_CURRENT_SECTION].attendanceReviewRuntime.producer.producer)comparisonBytes=restorePlanBudgetAttendanceReviewProducerText(contract,comparisonBytes);
    requireLineage(sha(comparisonBytes.toString('utf8').replaceAll('\r\n','\n'))===privacy.currentSha256,'Authenticated L producer comparison must restore exactly: '+delta.id);
    requireLineage(sha(restorePlanMeasurementPublishedKPrivacyProducerText(privacyContract,spec.producer,comparisonBytes))===delta.currentProducerSha256,'Restored K field producer differs from the original G lineage: '+delta.id);
-  }else requireLineage(lfSha(readSource,spec.producer)===weeklyCypCurrentSourcePin(contract,{path:spec.producer,sha256:fieldOutboundCurrentSourcePin(priorValidationContract,{path:spec.producer,sha256:delta.currentProducerSha256})}),'Current producer is not the reviewed Git source: '+delta.id);
+  }else{
+   let comparisonSha=lfSha(readSource,spec.producer);
+   if(delta.id==='bank-intake-units'&&Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION)){
+    const unit=contract[PLAN_BUDGET_CURRENT_SECTION].intakeWithdrawalRuntime.unitProducer;
+    requireLineage(spec.kind==='UNIT'&&spec.producer===unit.producer&&spec.producerSha256===unit.currentSha256&&comparisonSha===unit.currentSha256&&delta.currentProducerSha256===unit.previousSha256,'The exact current UNIT producer and its G parent must remain joined');
+    comparisonSha=sha(restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,bytes(readSource,spec.producer)));
+   }
+   requireLineage(comparisonSha===weeklyCypCurrentSourcePin(contract,{path:spec.producer,sha256:fieldOutboundCurrentSourcePin(priorValidationContract,{path:spec.producer,sha256:delta.currentProducerSha256})}),'Current producer is not the reviewed Git source: '+delta.id);
+  }
  }
  return {version:PLAN_MEASUREMENT_CURRENT_CI_VERSION,publishedContractSha256:sha(JSON.stringify(prior,null,2)+'\n'),sourceCount:currentCompactFiles.length,publishedCurrentSourceCount:127,previousSourceCount:125,historicalSourceCount:117,sourcePathsSha256:digest(currentCompactFiles),sourceAdditions:[...PLAN_MEASUREMENT_CURRENT_SOURCES]};
  }catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
