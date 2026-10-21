@@ -252,9 +252,17 @@ async function viewportScenario(width) {
   const state = await makePage('viewport-'+width,{width,kind:'closed'});
   try {
     await state.page.emulateMediaFeatures([{name:'prefers-reduced-motion',value:'reduce'}]);
-    await waitText(state.page,'El pago en línea todavía no está habilitado');const closed = await layout(state.page,width);
-    assert.equal(await state.page.$$eval('section input[type="checkbox"],section a',nodes => nodes.length),0);assert.ok((await panelText(state.page)).includes('USD 149,00'));assert.ok((await panelText(state.page)).includes('USD 349,00'));
-    await state.page.click('input[type="radio"][value="pro-monthly"]');await waitText(state.page,'pendientes de aprobación');assert.equal(await state.page.$$eval('section input[type="checkbox"]',nodes => nodes.length),0);assert.equal(state.requests.filter(row => row.method === 'POST').length,0);
+    await waitText(state.page,'Planes de referencia');const closed = await layout(state.page,width),closedText = await panelText(state.page);
+    assert.ok(closedText.includes('USD 149,00'));assert.ok(closedText.includes('USD 349,00'));assert.ok(closedText.includes('por empresa / mes'));assert.ok(closedText.includes('sin adicionales automáticos'));assert.ok(!closedText.includes('pendientes de aprobación'));assert.ok(!closedText.includes('Tratamiento de impuestos pendiente'));
+    assert.equal(await state.page.$$eval('section input[type="radio"],section input[type="checkbox"],section form',nodes => nodes.length),0);assert.equal(await state.page.$$eval('section button',nodes => nodes.filter(node => node.textContent.includes('Aceptar condiciones')).length),0);
+    assert.deepEqual(await state.page.$$eval('section a',nodes => nodes.map(node => ({text:node.textContent,href:node.getAttribute('href')}))),[{text:'Consultar contratación',href:'mailto:info@obrasaas.com'}]);
+    assert.equal(await state.page.$$eval('[data-commercial-pending]',nodes => nodes.length),1);assert.equal(await state.page.$eval('[data-commercial-pending]',node => node.textContent),'La contratación todavía requiere confirmar las condiciones finales y la forma de pago.');
+    assert.equal(await state.page.$eval('[data-commercial-pending-details]',node => node.open),false);
+    const summaryTarget = await state.page.$eval('[data-commercial-pending-details] summary',node => {const rect = node.getBoundingClientRect();return {width:rect.width,height:rect.height};});assert.ok(summaryTarget.width >= 44 && summaryTarget.height >= 44,'Pending conditions summary has a 44px target');
+    if (width === 390) await screenshot(state.page,'closed-390.png',width);
+    await state.page.focus('[data-company-plan-support]');await state.page.keyboard.press('Tab');
+    assert.deepEqual(await state.page.$eval('[data-commercial-pending-details] summary',node => {const style = getComputedStyle(node);return {focused:document.activeElement === node,focusVisible:node.matches(':focus-visible'),outlineStyle:style.outlineStyle,outlineWidth:style.outlineWidth,outlineOffset:style.outlineOffset};}),{focused:true,focusVisible:true,outlineStyle:'solid',outlineWidth:'3px',outlineOffset:'3px'});
+    await state.page.keyboard.press('Enter');assert.equal(await state.page.$eval('[data-commercial-pending-details]',node => node.open),true);assert.equal(await state.page.$eval('[data-commercial-pending-details]',node => node.textContent.includes('los impuestos, los servicios incluidos y las condiciones del plan.')),true);assert.equal(state.requests.filter(row => row.method === 'POST').length,0);
     state.setKind('ready');await click(state.page,'Actualizar estado');await idle(state.page);await waitText(state.page,'Elegí el plan de tu empresa');
     const ready = await layout(state.page,width);await choose(state);const review = await layout(state.page,width);
     assert.equal(await state.page.$eval('[data-commercial-offers] label',node => getComputedStyle(node).transitionDuration),'0s');await screenshot(state.page,`review-${width}.png`,width);
