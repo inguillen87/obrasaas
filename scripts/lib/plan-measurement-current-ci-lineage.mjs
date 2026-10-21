@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetIntakeWithdrawalUnitProducerText} from './plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetAcceptancePreviousSource,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetIntakeWithdrawalUnitProducerText} from './plan-budget-current-ci-lineage.mjs';
 import {restoreWeeklyCypPreviousContract,weeklyCypCurrentSourcePin} from './home-decisions-current-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
 import {INTEGRATED_IDENTITY_UI_PRODUCER_PATHS,restoreIntegratedIdentityUiProducerText} from './integrated-identity-current-ci-lineage.mjs';
@@ -548,7 +548,11 @@ export function verifyPlanMeasurementCurrentSources(contract,readSource){
  const priorValidationContract=restoreWeeklyCypPreviousContract(contract),privacyContract=restoreFieldOutboundPreviousContract(contract);
  const currentCompactFiles=validatePlanMeasurementCompactSourceLineage(kycExpiredCurrentSourceFiles(readSource),contract);
  for(const ref of [...KYC_EXPIRED_CURRENT_REVIEWED_SOURCES,...section.currentValidationSources])requireLineage(lfSha(readSource,ref.path)===weeklyCypCurrentSourcePin(contract,{...ref,sha256:fieldOutboundCurrentSourcePin(priorValidationContract,ref)}),'Stale current source bytes: '+ref.path);
- for(const ref of section.legacyProducerSources)requireLineage(sha(restorePlanMeasurementPublishedGProducerText(section,ref.path,bytes(readSource,ref.path)))===ref.sha256,'A published G producer body changed: '+ref.path);
+ for(const ref of section.legacyProducerSources){
+  const actualBytes=bytes(readSource,ref.path);
+  const comparisonBytes=contract[PLAN_BUDGET_CURRENT_SECTION]?.pilotAcceptanceRuntime?restorePlanBudgetAcceptancePreviousSource(contract,ref.path,actualBytes):actualBytes;
+  requireLineage(sha(restorePlanMeasurementPublishedGProducerText(section,ref.path,comparisonBytes))===ref.sha256,'A published G producer body changed: '+ref.path);
+ }
  for(const delta of PLAN_MEASUREMENT_CURRENT_PROOF_CHANGES){
   const spec=contract.extension.proofs.find(row=>row.id===delta.id),privacySpec=privacyContract.extension.proofs.find(row=>row.id===delta.id),privacy=currentFieldPrivacyRevision(privacyContract,privacySpec);
   if(privacy){

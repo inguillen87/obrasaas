@@ -440,8 +440,8 @@ function planBudgetPreviousSourcePin(contract,ref){if(!plain(contract)||!Object.
 return Object.freeze({restorePlanBudgetPilotIntegrationPreviousContract,restorePlanBudgetPilotIntegrationSource,intakeWithdrawalCurrentCheckCount,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetIntakeWithdrawalProducerText,restorePlanBudgetIntakeWithdrawalUnitProducerText,normalizePlanBudgetIntakeWithdrawalNativeProof,restorePlanBudgetTrialExpiryNoticePreviousContract,restorePlanBudgetTrialExpiryNoticeSource,restorePlanBudgetTrialExpiryNoticeValidatorSource,restorePlanBudgetMeasurementPrivacyPreviousContract,restorePlanBudgetMeasurementPrivacySource,restorePlanBudgetCheckTimeSource,restorePlanBudgetCheckTimePreviousContract,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,planBudgetProofSourceAdditions,verifyPlanBudgetCurrentSources,verifyPlanBudgetActualClosure,restorePlanBudgetClosure,planBudgetValidationFiles,planBudgetCurrentBrowserBinding,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths,restorePlanBudgetPilotProducerText,normalizePlanBudgetPilotNativeProof,restorePlanBudgetFieldReviewSourceSet,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetFieldReviewBusinessSource,restorePlanBudgetConsumptionEvidenceSourceSet,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetMaterialNativeProducerText,planBudgetCurrentSourcePin,planBudgetPreviousSourcePin,INTAKE_WITHDRAWAL_CHECK_NAMES});
 }
 
-// Private proposal fragment. The installed module must use its actual reviewed
-// companion and actual source reader. This file is not executed by preparation.
+// Canonical outer source bridge. Actual reviewed metadata and current readers
+// authenticate the complete Git1b parent before historical projections.
 const acceptanceKey=PLAN_BUDGET_CURRENT_SECTION,acceptanceRevision='pilotAcceptanceRuntime';
 const acceptanceAnchor='scripts/lib/plan-budget-current-ci-reviewed.mjs';
 const acceptanceContractPath='.github/workspace-acceptance-contract.json';
@@ -554,6 +554,9 @@ function acceptanceContractCall(name,contract,...args){return acceptanceParentGa
 
 export const INTAKE_WITHDRAWAL_CHECK_NAMES=acceptanceParentGate.INTAKE_WITHDRAWAL_CHECK_NAMES;
 export function restorePlanBudgetAcceptancePreviousContract(contract){return acceptanceParentContract(contract,true);}
+export function restorePlanBudgetAcceptancePreviousSource(contract,file,bytes){
+ acceptanceParentContract(contract,true);return acceptanceParentSource(file,acceptanceBytes(bytes,file));
+}
 export function restorePlanBudgetPilotIntegrationPreviousContract(contract){return acceptanceContractCall('restorePlanBudgetPilotIntegrationPreviousContract',contract);}
 export function restorePlanBudgetPilotIntegrationSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetPilotIntegrationSource',contract,file,bytes);}
 export function restorePlanBudgetTrialExpiryNoticePreviousContract(contract){return acceptanceContractCall('restorePlanBudgetTrialExpiryNoticePreviousContract',contract);}
@@ -605,13 +608,22 @@ export function planBudgetRetainedScreenshotPaths(contract){acceptanceMetadataSe
 function acceptanceInputPin(ref){const history=acceptanceHistories.get(ref.path);return history&&history.previousSha256!==null&&ref.sha256===history.currentSha256?{...ref,sha256:history.previousSha256}:ref;}
 export function planBudgetCurrentSourcePin(contract,ref){if(!acceptancePlain(contract)||!Object.hasOwn(contract,acceptanceKey))return ref.sha256;const value=acceptanceParentGate.planBudgetCurrentSourcePin(acceptanceMetadataCarrier,acceptanceInputPin(ref)),history=acceptanceHistories.get(ref.path);return history&&history.previousSha256===value?history.currentSha256:value;}
 export function planBudgetPreviousSourcePin(contract,ref){if(!acceptancePlain(contract)||!Object.hasOwn(contract,acceptanceKey))return ref.sha256;return acceptanceParentGate.planBudgetPreviousSourcePin(acceptanceMetadataCarrier,acceptanceInputPin(ref));}
-// Native proofs remain RAW. Existing 32/130 sources do not intersect this outer
-// revision's changed bodies; no sourceManifest/harness hash or check is relabelled.
+// Native proof hashes bind RAW bytes. Only this adapter preserves owned RAW
+// copies for unchanged files; metadata and changed bodies retain exact inverses.
+// Every access reads the actual callback afresh, after full current authentication.
+function acceptanceNativeReader(contract,parent,reader){
+ const projected=acceptanceReader(contract,parent,reader);
+ return file=>{
+  if(file===acceptanceContractPath||file===acceptanceAnchor||acceptanceHistories.has(file))return projected(file);
+  let bytes;acceptanceReject(typeof reader==='function','SOURCE_READER');try{bytes=reader(file);}catch{}
+  acceptanceReject(acceptanceSafe(file)&&Buffer.isBuffer(bytes)&&Buffer.from(bytes.toString('utf8')).equals(bytes),'ACCEPTANCE_UTF8_SOURCE_'+file);return Buffer.from(bytes);
+ };
+}
 export function normalizePlanBudgetPilotNativeProof(contract,producer,proof,reader){
  const parent=acceptanceParentContract(contract);if(!Object.hasOwn(contract,acceptanceKey))return acceptanceParentGate.normalizePlanBudgetPilotNativeProof(parent,producer,proof,reader);
- acceptanceVerifyActual(contract,parent,reader);const result=acceptanceParentGate.normalizePlanBudgetPilotNativeProof(parent,producer,proof,acceptanceReader(contract,parent,reader));acceptanceParentContract(contract,true);return result;
+ acceptanceVerifyActual(contract,parent,reader);const result=acceptanceParentGate.normalizePlanBudgetPilotNativeProof(parent,producer,proof,acceptanceNativeReader(contract,parent,reader));acceptanceParentContract(contract,true);return result;
 }
 export function normalizePlanBudgetIntakeWithdrawalNativeProof(raw,contract,reader,spec){
  const parent=acceptanceParentContract(contract);if(!Object.hasOwn(contract,acceptanceKey))return acceptanceParentGate.normalizePlanBudgetIntakeWithdrawalNativeProof(raw,parent,reader,spec);
- acceptanceVerifyActual(contract,parent,reader);const result=acceptanceParentGate.normalizePlanBudgetIntakeWithdrawalNativeProof(raw,parent,acceptanceReader(contract,parent,reader),spec);acceptanceParentContract(contract,true);return result;
+ acceptanceVerifyActual(contract,parent,reader);const result=acceptanceParentGate.normalizePlanBudgetIntakeWithdrawalNativeProof(raw,parent,acceptanceNativeReader(contract,parent,reader),spec);acceptanceParentContract(contract,true);return result;
 }

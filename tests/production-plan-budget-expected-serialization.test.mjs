@@ -9,7 +9,8 @@ import {
  PLAN_BUDGET_CURRENT_SECTION as key,PLAN_BUDGET_CURRENT_REVISION as reviewed,
  planBudgetRetainedScreenshotPaths,planBudgetValidationFiles,planBudgetCurrentBrowserBinding,
  planBudgetCurrentSourcePin,planBudgetPreviousSourcePin,restorePlanBudgetSourceSet,
- restorePlanBudgetPreviousContract,restorePlanBudgetAcceptancePreviousContract,verifyPlanBudgetCurrentSources,
+ restorePlanBudgetPreviousContract,restorePlanBudgetAcceptancePreviousContract,restorePlanBudgetAcceptancePreviousSource,verifyPlanBudgetCurrentSources,
+ normalizePlanBudgetPilotNativeProof,normalizePlanBudgetIntakeWithdrawalNativeProof,
 } from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 
 // Current cases use actual public helpers and actual current contract. The final
@@ -130,4 +131,72 @@ test('pin aliases retain private-index semantics while metadata and authority va
  for(const run of [()=>planBudgetValidationFiles(value),()=>planBudgetCurrentBrowserBinding(value,{}),()=>planBudgetRetainedScreenshotPaths(value)])denied(run,'IMMUTABLE_COMPANION');
  denied(()=>restorePlanBudgetPreviousContract(value),'IMMUTABLE_COMPANION');let reads=0;
  denied(()=>verifyPlanBudgetCurrentSources(value,()=>{reads++;throw new Error('No reader may run before caller authentication');}),'IMMUTABLE_COMPANION');assert.equal(reads,0);
+});
+
+
+test('acceptance source inverse authenticates current workspace recovery bytes before a local Git1b comparison',()=>{
+ const value=current(),before=serialize(value),file='scripts/verify-workspace-plan-recovery-ui.mjs',bytes=readFileSync(new URL('../'+file,import.meta.url)),captured=Buffer.from(bytes);
+ const expected='ef7a5f0e099e468d5f0ec903ae78f6b9df4cf8dc48e1ed272e7ef9e31010c6c8',first=restorePlanBudgetAcceptancePreviousSource(value,file,bytes);
+ assert.ok(Buffer.isBuffer(first));assert.equal(sha(first),expected);assert.equal(first.length,61975);assert.deepEqual(bytes,captured);assert.equal(serialize(value),before);
+ const malformed=current();malformed[key]=null;
+ for(const [caller,reason] of [[null,'CONTRACT'],[{},'BUDGET_COMPANION_REQUIRED'],[malformed,'IMMUTABLE_COMPANION']]){
+  const callerBefore=serialize(caller);denied(()=>restorePlanBudgetAcceptancePreviousSource(caller,file,bytes),reason);
+  assert.equal(serialize(caller),callerBefore);assert.deepEqual(bytes,captured);
+ }
+ const old=Buffer.from(first);
+ for(const invalid of [old,bytes.subarray(1),Buffer.concat([bytes,Buffer.from('\n// foreign current workspace recovery source\n')])]){
+  const invalidBefore=Buffer.from(invalid);denied(()=>restorePlanBudgetAcceptancePreviousSource(value,file,invalid),'ACCEPTANCE_CURRENT_SOURCE_'+file);
+  assert.deepEqual(invalid,invalidBefore);assert.deepEqual(bytes,captured);assert.equal(serialize(value),before);
+ }
+ first.fill(0);const next=restorePlanBudgetAcceptancePreviousSource(value,file,bytes);
+ assert.notEqual(next,first);assert.equal(sha(next),expected);assert.equal(next.length,61975);assert.deepEqual(bytes,captured);assert.equal(serialize(value),before);
+ const unrelated=structuredClone(value);unrelated.sourceCommit='f'.repeat(40);const unrelatedBefore=serialize(unrelated);
+ denied(()=>restorePlanBudgetAcceptancePreviousSource(unrelated,file,bytes),'ACCEPTANCE_COMPLETE_1B_CONTRACT');
+ assert.equal(serialize(unrelated),unrelatedBefore);assert.equal(serialize(value),before);assert.deepEqual(bytes,captured);
+});
+
+test('native proofs retain actual RAW LF and CRLF hashes through the local acceptance bridge without mutating inputs',()=>{
+ const value=current(),before=serialize(value),runtime=value[key],intake=runtime.intakeWithdrawalRuntime,material=runtime.consumptionEvidenceRuntime.materialNative;
+ const supplement=runtime.pilotWhatsAppRuntime.nativeSupplements.find(row=>row.producer===material.producer),spec=value.extension.proofs.find(row=>row.kind==='PG_INTAKE');
+ const alias=runtime.trialExpiryNoticeRuntime.sourceAliases[0],nativeFiles=new Set([...intake.native.currentManifest.map(row=>row.path),...material.currentFiles,intake.producer.producer]);
+ assert.equal(intake.native.currentManifest.length,32);assert.equal(material.currentFiles.length,130);
+ for(const history of runtime.pilotAcceptanceRuntime.sourceHistory)assert.equal(nativeFiles.has(history.path),false);
+ assert.equal(spec.producerSha256,intake.producer.currentSha256);assert.deepEqual(spec.sourceFiles,intake.native.currentManifest.map(row=>row.path));assert.deepEqual(spec.checkNames,intake.native.previousCheckNames);
+ for(const eol of ['\n','\r\n']){
+  let tamper=null;const observed=[];
+  const reader=file=>{
+   const actual=readFileSync(new URL('../'+file,import.meta.url));let bytes=Buffer.from(actual);
+   if(nativeFiles.has(file))bytes=Buffer.from(actual.toString('utf8').replaceAll('\r\n','\n').replaceAll('\n',eol));
+   if(file===tamper)bytes=Buffer.concat([bytes,Buffer.from('\n// foreign native current bytes\n')]);
+   if(nativeFiles.has(file))observed.push({bytes,digest:sha(bytes)});return bytes;
+  };
+  const proofs=[
+   {name:'intake',producer:intake.producer.producer,oldHarness:intake.producer.previousSha256,reason:'INTAKE_CURRENT_HARNESS',sourceReason:'INTAKE_CURRENT_SOURCE_'+alias.path,
+    raw:{checks:[...intake.native.previousCheckNames,...intake.native.addedCheckNames],checkCount:35,totalCheckCount:35,sourceManifest:intake.native.currentManifest.map(row=>({path:row.path,sha256:sha(reader(row.path))})),harnessSha256:sha(reader(intake.producer.producer))}},
+   {name:'material',producer:material.producer,oldHarness:material.sourceHistory.previousSha256,reason:'PILOT_COMPLETE_NATIVE_MANIFEST',sourceReason:'PILOT_COMPLETE_NATIVE_MANIFEST',
+    raw:{checks:[...supplement.previousCheckNames,...supplement.addedCheckNames],checkCount:26,sourceManifest:material.currentFiles.map(path=>({path,sha256:sha(reader(path))})),harnessSha256:sha(reader(material.producer))}},
+  ];
+  const run=entry=>entry.name==='intake'?normalizePlanBudgetIntakeWithdrawalNativeProof(entry.raw,value,reader,spec):normalizePlanBudgetPilotNativeProof(value,entry.producer,entry.raw,reader);
+  for(const entry of proofs){
+   const captured=serialize(entry.raw),result=run(entry);
+   assert.equal(serialize(entry.raw),captured);assert.equal(serialize(value),before);assert.equal(result.harnessSha256,entry.raw.harnessSha256);
+   if(entry.name==='intake'){assert.deepEqual(result.sourceManifest,entry.raw.sourceManifest);assert.deepEqual(result.checks,intake.native.previousCheckNames);assert.equal(result.checkCount,33);assert.equal(result.totalCheckCount,33);}
+   else{assert.deepEqual(result.sourceManifest,entry.raw.sourceManifest.filter(row=>supplement.sourceManifestAdvance.previousFiles.includes(row.path)));assert.equal(result.sourceManifest.length,125);assert.deepEqual(result.checks,supplement.previousCheckNames);assert.equal(result.checkCount,24);}
+   for(const digest of [entry.oldHarness,'f'.repeat(64)]){
+    const invalid={...entry,raw:structuredClone(entry.raw)};assert.notEqual(digest,invalid.raw.harnessSha256);invalid.raw.harnessSha256=digest;const invalidBefore=serialize(invalid.raw);
+    denied(()=>run(invalid),entry.reason);assert.equal(serialize(invalid.raw),invalidBefore);assert.equal(serialize(entry.raw),captured);
+   }
+   for(const digest of [alias.previousSha256,'f'.repeat(64)]){
+    const invalid={...entry,raw:structuredClone(entry.raw)},row=invalid.raw.sourceManifest.find(row=>row.path===alias.path);assert.ok(row);assert.notEqual(digest,row.sha256);row.sha256=digest;const invalidBefore=serialize(invalid.raw);
+    denied(()=>run(invalid),entry.sourceReason);assert.equal(serialize(invalid.raw),invalidBefore);assert.equal(serialize(entry.raw),captured);
+   }
+   assert.ok(runtime.references.some(row=>row.path===entry.producer));tamper=entry.producer;
+   denied(()=>run(entry),'ACCEPTANCE_CURRENT_REFERENCE_'+entry.producer);tamper=null;
+   assert.equal(serialize(entry.raw),captured);assert.equal(serialize(value),before);
+  }
+  const incomplete={...proofs[0],raw:structuredClone(proofs[0].raw)};incomplete.raw.checks.pop();const incompleteBefore=serialize(incomplete.raw);
+  denied(()=>run(incomplete),'INTAKE_CHECK_NAMES');assert.equal(serialize(incomplete.raw),incompleteBefore);
+  for(const record of observed)assert.equal(sha(record.bytes),record.digest);
+ }
+ assert.equal(serialize(value),before);
 });
