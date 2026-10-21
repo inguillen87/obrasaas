@@ -38893,7 +38893,7 @@
       {
         "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
         "previousSha256": null,
-        "currentSha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597"
+        "currentSha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
       },
       {
         "path": "scripts/lib/plan-budget-ui-contract.mjs",
@@ -38903,7 +38903,7 @@
       {
         "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
         "previousSha256": "19addbc7ba23c963c2a1a9fae59fbc8cb2658f94d345cc7b731a5d9648dce818",
-        "currentSha256": "d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9"
+        "currentSha256": "25bf8dde7ad684dc9795a0b013ae4c35fc35c96a2dfad537113062ea6a090f0c"
       },
       {
         "path": "scripts/lib/plan-partida-preview-current-ci-lineage.mjs",
@@ -39333,7 +39333,7 @@
       {
         "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
         "previousSha256": null,
-        "currentSha256": "ddc238a6e9c128a5df2e772ee702fc935903c2e03fcb8f3f29879412bf6e02c2"
+        "currentSha256": "7688f1cd24556f0fae85d722654096b6a1019c77c343f75ece01decb92267a62"
       },
       {
         "path": "tests/production-plan-budget-analyzer-http.test.mjs",
@@ -39388,7 +39388,7 @@
       {
         "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
         "previousSha256": "ead294a9a4066f487b58cb8e9187ca9fee03ad0c29706c2dfb6006cb23a82a81",
-        "currentSha256": "19704b7e14b3405d0aa1348fd24ddeeae67cac5dc5a52d20bb6936ebf1e98816"
+        "currentSha256": "289f44dcb536e1f8c7c6757c4ad40fc45c5e8b1c120fb28cb296fdd34222e7a2"
       },
       {
         "path": "tests/production-plan-measurement-document-association-ci-lineage.test.mjs",
@@ -40626,11 +40626,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
-            "sha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511"
+            "sha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
-            "sha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a"
+            "sha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-overview.js",
@@ -41109,11 +41109,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
-            "sha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511"
+            "sha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
-            "sha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a"
+            "sha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
@@ -42287,7 +42287,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597"
+            "sha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -42859,11 +42859,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
-            "sha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511"
+            "sha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
-            "sha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a"
+            "sha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-overview.js",
@@ -43323,7 +43323,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597"
+            "sha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -43331,7 +43331,7 @@
           },
           {
             "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
-            "sha256": "d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9"
+            "sha256": "25bf8dde7ad684dc9795a0b013ae4c35fc35c96a2dfad537113062ea6a090f0c"
           },
           {
             "path": "scripts/lib/plan-measurement-document-association-ci-lineage.mjs",
@@ -43507,11 +43507,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
-            "sha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511"
+            "sha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
-            "sha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a"
+            "sha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
@@ -45558,11 +45558,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
-            "sha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511"
+            "sha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
-            "sha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a"
+            "sha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
           },
           {
             "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
@@ -48403,7 +48403,7 @@
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597"
+            "sha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -51750,6 +51750,611 @@
           ]
         }
       }
+    },
+    "checkTimeRuntime": {
+      "version": 1,
+      "parentHead": "9537a0a68cfffff6c68de6f71696aca20ed94ae7",
+      "previousContractSha256": "18eaa0eec2d952cbfa130d1d245322e779c3b7eabffc704c453cdde834933c4c",
+      "sourceHistory": [
+        {
+          "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
+          "previousSha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511",
+          "currentSha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb",
+          "previousBytes": 3945,
+          "currentBytes": 4622,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 3939,
+              "currentText": "\n// Presentation of the browser's completed check, not a server observation or authority.\nexport function worksiteLiveCheckedAtLabel(value){\n const unknown='Fecha y hora sin confirmar';\n if(typeof value!=='string'||!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/.test(value))return unknown;\n const instant=new Date(value);\n if(!Number.isFinite(instant.getTime())||instant.toISOString()!==value)return unknown;\n try{return new Intl.DateTimeFormat('es-AR',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(instant)+' (hora de Argentina)';}\n catch{return unknown;}\n}\n",
+              "previousText": ""
+            }
+          ]
+        },
+        {
+          "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
+          "previousSha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a",
+          "currentSha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d",
+          "previousBytes": 3320,
+          "currentBytes": 3383,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 79,
+              "currentText": "import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation,worksiteLiveCheckedAtLabel} from './workspace-live-refresh-controller.mjs';\n",
+              "previousText": "import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation} from './workspace-live-refresh-controller.mjs';\n"
+            },
+            {
+              "currentOffsetCharacters": 2741,
+              "currentText": " status.checkedAt!==null&&status.checkedAt!==undefined?label+' · última comprobación: '+worksiteLiveCheckedAtLabel(status.checkedAt)+'.':'Se comprobarán los cambios de esta obra cuando no haya una operación en curso.';\n",
+              "previousText": " status.checkedAt?label+' comprobada a las '+new Date(status.checkedAt).toLocaleTimeString('es-AR')+'.':'Se comprobarán los cambios de esta obra cuando no haya una operación en curso.';\n"
+            }
+          ]
+        },
+        {
+          "path": "tests/production-worksite-live-refresh-controller.test.mjs",
+          "previousSha256": "2774f4fe72e2f3ebc59e73f833e50ea46ad920fabb7e66460021ac82c5f5ed38",
+          "currentSha256": "0eb8588ff72a78a7c78d497e541794789f6599cdd8e739766b49c42d49ec2083",
+          "previousBytes": 8392,
+          "currentBytes": 10422,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 71,
+              "currentText": "import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation,worksiteLiveCheckedAtLabel} from '../src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs';\n",
+              "previousText": "import {createWorksiteLiveRefreshController,worksiteLiveRefreshPresentation} from '../src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs';\n"
+            },
+            {
+              "currentOffsetCharacters": 8419,
+              "currentText": "\n\ntest('completed check shows an Argentine date and unambiguous24 hour time without changing the captured instant',()=>{\n const checkedAt='2026-10-20T21:59:13.000Z',label=worksiteLiveCheckedAtLabel(checkedAt);\n assert.match(label,/20\\/10\\/2026/);assert.match(label,/18:59:13/);assert.match(label,/\\(hora de Argentina\\)$/);\n assert.doesNotMatch(label,/06:59:13/);assert.equal(checkedAt,'2026-10-20T21:59:13.000Z');\n});\ntest('Argentine midnight changes the local date only at03 UTC and renders00 rather than24',()=>{\n const before=worksiteLiveCheckedAtLabel('2026-10-21T02:59:59.999Z'),midnight=worksiteLiveCheckedAtLabel('2026-10-21T03:00:00.000Z');\n assert.match(before,/20\\/10\\/2026/);assert.match(before,/23:59:59/);\n assert.match(midnight,/21\\/10\\/2026/);assert.match(midnight,/00:00:00/);assert.doesNotMatch(midnight,/24:00:00/);\n});\ntest('completed check formatting remains Argentine and24 hour under three different host formatting defaults',{concurrency:false},()=>{\n const original=Intl.DateTimeFormat;\n try{\n  for(const hostZone of ['UTC','Asia/Tokyo','America/Los_Angeles']){\n   // Keep the real Intl implementation; vary only its omitted-option defaults.\n   Intl.DateTimeFormat=function(locales,options){return new original(locales,{timeZone:hostZone,hourCycle:'h12',...options});};\n   const label=worksiteLiveCheckedAtLabel('2026-10-20T21:59:13.000Z');\n   assert.match(label,/20\\/10\\/2026/);assert.match(label,/18:59:13/);assert.match(label,/\\(hora de Argentina\\)$/);\n  }\n }finally{Intl.DateTimeFormat=original;}\n assert.equal(Intl.DateTimeFormat,original);\n});\ntest('missing noncanonical and impossible check instants never display epoch time or a normalized date',()=>{\n const hostile={toString(){throw Error('No coercion of an unconfirmed instant');}};\n for(const value of [undefined,null,0,NaN,hostile,'','not-an-instant','2026-02-30T21:59:13.000Z','2026-10-20T18:59:13.000-03:00','2026-10-20T21:59:13Z'])assert.equal(worksiteLiveCheckedAtLabel(value),'Fecha y hora sin confirmar');\n});\n",
+              "previousText": ""
+            }
+          ]
+        },
+        {
+          "path": "tests/production-workspace-overview-live.test.mjs",
+          "previousSha256": "15216ef5ce06e38b79d72f9c91c0ea9420aa69919aa0cc9d82dc9e681d070af7",
+          "currentSha256": "85ca04637782a57629198701b44b51f90d624ce028d175909703c07288471fea",
+          "previousBytes": 12347,
+          "currentBytes": 13420,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 2602,
+              "currentText": "export function render(props){si=0;ri=0;ei=0;return Decisions(props);}\nexport function renderRefreshStatus(props){return WorksiteLiveRefreshStatus(props);}`;\n",
+              "previousText": "export function render(props){si=0;ri=0;ei=0;return Decisions(props);}`;\n"
+            },
+            {
+              "currentOffsetCharacters": 2782,
+              "currentText": "const result=await transform(`import React from ${JSON.stringify(import.meta.resolve('react'))};import {createWorksiteLiveRefreshController as actualController,worksiteLiveRefreshPresentation,worksiteLiveCheckedAtLabel} from ${JSON.stringify(controllerUrl)};import {inventoryPendingCounts,INVENTORY_PENDING_EVENT} from ${JSON.stringify(inventoryUrl)};import {FIELD_EVIDENCE_PENDING_EVENT,FIELD_PROGRESS_PENDING_EVENT} from ${JSON.stringify(fieldUrl)};${harness}\\n${file('workspace-live-refresh.js')}\\n${file('workspace-overview.js')}`,{filename:'real-overview-live.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});\n",
+              "previousText": "const result=await transform(`import React from ${JSON.stringify(import.meta.resolve('react'))};import {createWorksiteLiveRefreshController as actualController,worksiteLiveRefreshPresentation} from ${JSON.stringify(controllerUrl)};import {inventoryPendingCounts,INVENTORY_PENDING_EVENT} from ${JSON.stringify(inventoryUrl)};import {FIELD_EVIDENCE_PENDING_EVENT,FIELD_PROGRESS_PENDING_EVENT} from ${JSON.stringify(fieldUrl)};${harness}\\n${file('workspace-live-refresh.js')}\\n${file('workspace-overview.js')}`,{filename:'real-overview-live.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});\n"
+            },
+            {
+              "currentOffsetCharacters": 12454,
+              "currentText": "\n\ntest('actual completed-check status renders the authentic Argentine formatter and does not turn an invalid instant into a time',()=>{\n const refresh={status:{state:'CURRENT',checkedAt:'2026-10-20T21:59:13.000Z',updates:false},check:()=>assert.fail('Rendering a status must not dispatch another check')};\n const render=()=>renderToStaticMarkup(component.renderRefreshStatus({refresh,label:'Cronograma'}));\n const checked=render();assert.match(checked,/Cronograma · última comprobación:/);assert.match(checked,/20\\/10\\/2026/);assert.match(checked,/18:59:13/);assert.match(checked,/\\(hora de Argentina\\)/);assert.match(checked,/Comprobar cambios/);assert.doesNotMatch(checked,/06:59:13/);\n refresh.status.checkedAt='unconfirmed';const invalid=render();assert.match(invalid,/Fecha y hora sin confirmar/);assert.doesNotMatch(invalid,/Invalid Date|1970|NaN/);\n refresh.status.checkedAt=null;assert.match(render(),/Se comprobarán los cambios de esta obra/);\n});\n",
+              "previousText": ""
+            }
+          ]
+        }
+      ],
+      "frozenLiveHoursPins": [
+        {
+          "index": 11,
+          "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
+          "sha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511"
+        },
+        {
+          "index": 12,
+          "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
+          "sha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a"
+        },
+        {
+          "index": 23,
+          "path": "tests/production-worksite-live-refresh-controller.test.mjs",
+          "sha256": "2774f4fe72e2f3ebc59e73f833e50ea46ad920fabb7e66460021ac82c5f5ed38"
+        }
+      ],
+      "referenceAdvances": [
+        {
+          "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+          "previousSha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597",
+          "currentSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
+        },
+        {
+          "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
+          "previousSha256": "ddc238a6e9c128a5df2e772ee702fc935903c2e03fcb8f3f29879412bf6e02c2",
+          "currentSha256": "7688f1cd24556f0fae85d722654096b6a1019c77c343f75ece01decb92267a62"
+        }
+      ],
+      "familyManifestAdvances": [
+        {
+          "family": "LIVE_HOURS_RUNTIME",
+          "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
+          "previousSha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511",
+          "currentSha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
+        },
+        {
+          "family": "LIVE_HOURS_RUNTIME",
+          "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
+          "previousSha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a",
+          "currentSha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
+        },
+        {
+          "family": "PILOT_LIVE_BROWSER",
+          "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
+          "previousSha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511",
+          "currentSha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
+        },
+        {
+          "family": "PILOT_LIVE_BROWSER",
+          "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
+          "previousSha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a",
+          "currentSha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
+        },
+        {
+          "family": "UI_FOCUSED_WORKSPACE",
+          "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+          "previousSha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597",
+          "currentSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
+        },
+        {
+          "family": "UI_FOCUSED_WORKSPACE",
+          "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
+          "previousSha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511",
+          "currentSha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
+        },
+        {
+          "family": "UI_FOCUSED_WORKSPACE",
+          "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
+          "previousSha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a",
+          "currentSha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
+        },
+        {
+          "family": "UI_FIELD_TASK_PAGINATION",
+          "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+          "previousSha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597",
+          "currentSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
+        },
+        {
+          "family": "UI_FIELD_TASK_PAGINATION",
+          "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
+          "previousSha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511",
+          "currentSha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
+        },
+        {
+          "family": "UI_FIELD_TASK_PAGINATION",
+          "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
+          "previousSha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a",
+          "currentSha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
+        },
+        {
+          "family": "CONSUMPTION_FEEDBACK_UI",
+          "path": "src/app/(identity)/cuenta/workspace-live-refresh-controller.mjs",
+          "previousSha256": "a61c2d017bc8dadb79fab4b0630b0404b65132d355e153bcb6a2042f5fd49511",
+          "currentSha256": "f350dc6f9888af4d42e2f3faef6eb78fe58b1e5d0f4f5e66c9f971fea83ccadb"
+        },
+        {
+          "family": "CONSUMPTION_FEEDBACK_UI",
+          "path": "src/app/(identity)/cuenta/workspace-live-refresh.js",
+          "previousSha256": "78b056667e89f56fd9e1185c3addc6a8d40b331a0cd82146cbba17771662510a",
+          "currentSha256": "6434d9f004332bc670abfeed5dc5e98edd6d20d8010d7ec95f6ad2135083198d"
+        },
+        {
+          "family": "PLAN_BUDGET_UI",
+          "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+          "previousSha256": "66f58fe1a4e9ed93da214243d6ff6d94038ed2151a2c0b9b765c517007462597",
+          "currentSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e"
+        }
+      ],
+      "nativeOrHumanAcceptance": false
+    },
+    "measurementPrivacyRuntime": {
+      "version": 1,
+      "parentHead": "9248b8c521456f586dd8ffb3226136ff6828011a",
+      "previousContractSha256": "eeebf3df17dfc1ab432101c2137b75742323bdce85d3412c67582c84f0cd0c7e",
+      "referenceAdvances": [
+        {
+          "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+          "previousSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e",
+          "currentSha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
+        },
+        {
+          "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
+          "previousSha256": "d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9",
+          "currentSha256": "25bf8dde7ad684dc9795a0b013ae4c35fc35c96a2dfad537113062ea6a090f0c"
+        },
+        {
+          "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
+          "previousSha256": "19704b7e14b3405d0aa1348fd24ddeeae67cac5dc5a52d20bb6936ebf1e98816",
+          "currentSha256": "289f44dcb536e1f8c7c6757c4ad40fc45c5e8b1c120fb28cb296fdd34222e7a2"
+        }
+      ],
+      "familyManifestAdvances": [
+        {
+          "family": "UI_FOCUSED_WORKSPACE",
+          "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+          "previousSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e",
+          "currentSha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
+        },
+        {
+          "family": "UI_FIELD_TASK_PAGINATION",
+          "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+          "previousSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e",
+          "currentSha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
+        },
+        {
+          "family": "UI_FIELD_TASK_PAGINATION",
+          "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
+          "previousSha256": "d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9",
+          "currentSha256": "25bf8dde7ad684dc9795a0b013ae4c35fc35c96a2dfad537113062ea6a090f0c"
+        },
+        {
+          "family": "PLAN_BUDGET_UI",
+          "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+          "previousSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e",
+          "currentSha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e"
+        }
+      ],
+      "sourceHistory": [
+        {
+          "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+          "previousSha256": "f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e",
+          "currentSha256": "007cece11a0b31c7cd2123702b883897019f3af613c9ccaaf680659aa0bb623e",
+          "previousBytes": 63480,
+          "currentBytes": 70288,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 26361,
+              "currentText": "Closed binding successor of9248. No accepted Time9537 history is rewritten.\nfunction measurementPrivacyDeclaration(v,refs){\n const r=v.measurementPrivacyRuntime;\n exact(r,['version','parentHead','previousContractSha256','referenceAdvances','familyManifestAdvances','sourceHistory','validationSource','nativeOrHumanAcceptance'],'MEASUREMENT_PRIVACY_KEYS');\n reject(r.version===1&&r.parentHead==='9248b8c521456f586dd8ffb3226136ff6828011a'&&r.previousContractSha256==='eeebf3df17dfc1ab432101c2137b75742323bdce85d3412c67582c84f0cd0c7e'&&r.nativeOrHumanAcceptance===false,'MEASUREMENT_PRIVACY_PARENT');\n const predecessors=[{path:'scripts/lib/plan-budget-current-ci-lineage.mjs',previousSha256:'f018098ba7e12e3b7d144e0ae1ca6ce49af6895dfef372f7cee51ed5083eae8e'},{path:'scripts/lib/plan-measurement-current-ci-lineage.mjs',previousSha256:'d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9'},{path:'tests/production-plan-measurement-current-ci-lineage.test.mjs',previousSha256:'19704b7e14b3405d0aa1348fd24ddeeae67cac5dc5a52d20bb6936ebf1e98816'}];\n reject(Array.isArray(r.referenceAdvances)&&same(r.referenceAdvances.map(a=>({path:a.path,previousSha256:a.previousSha256})),predecessors),'MEASUREMENT_PRIVACY_EXACT_REFERENCES');\n for(const a of r.referenceAdvances){exact(a,['path','previousSha256','currentSha256'],'MEASUREMENT_PRIVACY_REFERENCE_KEYS');reject(hash(a.currentSha256)&&a.currentSha256!==a.previousSha256&&refs.get(a.path)?.currentSha256===a.currentSha256,'MEASUREMENT_PRIVACY_CURRENT_REFERENCE');}\n reject(Array.isArray(r.sourceHistory)&&same(r.sourceHistory.map(h=>({path:h.path,previousSha256:h.previousSha256,currentSha256:h.currentSha256})),r.referenceAdvances),'MEASUREMENT_PRIVACY_EXACT_HISTORY');\n for(const h of r.sourceHistory){exact(h,['path','previousSha256','currentSha256','previousBytes','currentBytes','inverseHunks'],'MEASUREMENT_PRIVACY_HISTORY_KEYS');reject([h.previousBytes,h.currentBytes].every(n=>Number.isSafeInteger(n)&&n>0)&&Array.isArray(h.inverseHunks)&&h.inverseHunks.length>0,'MEASUREMENT_PRIVACY_HISTORY_BOUNDS');let end=0;for(const b of h.inverseHunks){exact(b,['currentOffsetCharacters','currentText','previousText'],'MEASUREMENT_PRIVACY_HUNK_KEYS');reject(Number.isSafeInteger(b.currentOffsetCharacters)&&b.currentOffsetCharacters>=end&&typeof b.currentText==='string'&&typeof b.previousText==='string'&&b.currentText!==b.previousText,'MEASUREMENT_PRIVACY_ORDERED_HUNKS');end=b.currentOffsetCharacters+b.currentText.length;}}\n exact(r.validationSource,['path','sha256'],'MEASUREMENT_PRIVACY_VALIDATION_KEYS');reject(r.validationSource.path==='tests/production-plan-measurement-current-source-binding.test.mjs'&&hash(r.validationSource.sha256)&&!refs.has(r.validationSource.path),'MEASUREMENT_PRIVACY_VALIDATION_SOURCE');\n const expectedFamilies=[['UI_FOCUSED_WORKSPACE','scripts/lib/plan-budget-current-ci-lineage.mjs'],['UI_FIELD_TASK_PAGINATION','scripts/lib/plan-budget-current-ci-lineage.mjs'],['UI_FIELD_TASK_PAGINATION','scripts/lib/plan-measurement-current-ci-lineage.mjs'],['PLAN_BUDGET_UI','scripts/lib/plan-budget-current-ci-lineage.mjs']];\n reject(Array.isArray(r.familyManifestAdvances)&&same(r.familyManifestAdvances.map(a=>[a.family,a.path]),expectedFamilies),'MEASUREMENT_PRIVACY_EXACT_FAMILIES');\n for(const a of r.familyManifestAdvances){exact(a,['family','path','previousSha256','currentSha256'],'MEASUREMENT_PRIVACY_FAMILY_KEYS');const h=r.referenceAdvances.find(h=>h.path===a.path);reject(h&&a.previousSha256===h.previousSha256&&a.currentSha256===h.currentSha256&&v.sourceFamilies.find(f=>f.family===a.family)?.currentManifest.find(h=>h.path===a.path)?.sha256===a.currentSha256,'MEASUREMENT_PRIVACY_FAMILY_JOIN');}\n return measurementPrivacyParentRevision(v,r);\n}\nfunction measurementPrivacyParentRevision(value,r){const parent=structuredClone(value);delete parent.measurementPrivacyRuntime;for(const a of r.referenceAdvances){const ref=parent.references.find(h=>h.path===a.path);reject(ref?.currentSha256===a.currentSha256,'MEASUREMENT_PRIVACY_REFERENCE_RESTORE');ref.currentSha256=a.previousSha256;}for(const a of r.familyManifestAdvances){const ref=parent.sourceFamilies.find(f=>f.family===a.family)?.currentManifest.find(h=>h.path===a.path);reject(ref?.sha256===a.currentSha256,'MEASUREMENT_PRIVACY_FAMILY_RESTORE');ref.sha256=a.previousSha256;}return parent;}\nfunction measurementPrivacyParentContract(contract,r){const out=structuredClone(contract);out[PLAN_BUDGET_CURRENT_SECTION]=measurementPrivacyParentRevision(out[PLAN_BUDGET_CURRENT_SECTION],r);reject(sha(JSON.stringify(out,null,2)+'\\n')===r.previousContractSha256,'MEASUREMENT_PRIVACY_COMPLETE_9248_CONTRACT');return out;}\nfunction measurementPrivacySource(r,file,bytes){const h=r.sourceHistory.find(a=>a.path===file);reject(h&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'MEASUREMENT_PRIVACY_UTF8_SOURCE');let text=bytes.toString('utf8').replaceAll('\\r\\n','\\n');reject(sha(text)===h.currentSha256&&Buffer.byteLength(text)===h.currentBytes,'MEASUREMENT_PRIVACY_CURRENT_SOURCE_'+file);for(const b of [...h.inverseHunks].reverse()){const at=b.currentOffsetCharacters;reject(text.slice(at,at+b.currentText.length)===b.currentText,'MEASUREMENT_PRIVACY_EXACT_HUNK_'+file);text=text.slice(0,at)+b.previousText+text.slice(at+b.currentText.length);}reject(sha(text)===h.previousSha256&&Buffer.byteLength(text)===h.previousBytes,'MEASUREMENT_PRIVACY_COMPLETE_SOURCE_INVERSE_'+file);return Buffer.from(text);}\nfunction verifyMeasurementPrivacySources(v,reader){for(const h of v.measurementPrivacyRuntime.sourceHistory)measurementPrivacySource(v.measurementPrivacyRuntime,h.path,read(reader,h.path));const ref=v.measurementPrivacyRuntime.validationSource;reject(sha(read(reader,ref.path))===ref.sha256,'MEASUREMENT_PRIVACY_VALIDATION_BYTES');}\nfunction measurementPrivacyAdvancedPin(ref){const h=expected.measurementPrivacyRuntime.referenceAdvances.find(h=>h.path===ref.path);return h&&ref.sha256===h.previousSha256?h.currentSha256:ref.sha256;}\nexport function restorePlanBudgetMeasurementPrivacyPreviousContract(contract){const v=section(contract,true);return measurementPrivacyParentContract(contract,v.measurementPrivacyRuntime);}\nexport function restorePlanBudgetMeasurementPrivacySource(contract,file,bytes){return measurementPrivacySource(section(contract,true).measurementPrivacyRuntime,file,bytes);}\n\n// ",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 37821,
+              "currentText": "mea",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 37825,
+              "currentText": "",
+              "previousText": "truct"
+            },
+            {
+              "currentOffsetCharacters": 37828,
+              "currentText": "mentPrivacyParent",
+              "previousText": "d"
+            },
+            {
+              "currentOffsetCharacters": 37846,
+              "currentText": "",
+              "previousText": "l"
+            },
+            {
+              "currentOffsetCharacters": 37848,
+              "currentText": "tract",
+              "previousText": "e"
+            },
+            {
+              "currentOffsetCharacters": 37862,
+              "currentText": ",v.measurementPrivacyRuntime",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 39083,
+              "currentText": "Runtime','measurementPrivacy",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 41463,
+              "currentText": "onst timeParent=measurementPrivacyDeclaration(v,refs);c",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 41538,
+              "currentText": "timeParent",
+              "previousText": "v"
+            },
+            {
+              "currentOffsetCharacters": 41549,
+              "currentText": "new Map(timeParent.",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 41571,
+              "currentText": "erence",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 41578,
+              "currentText": ".map(row=>[row.path,row]))",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 48725,
+              "currentText": "ref={...ref,sha256:measurementPrivacyAdvancedPin(ref)};",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 49375,
+              "currentText": ";ref={...ref,sha256:measurementPrivacyAdvancedPin(ref)}",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 50810,
+              "currentText": "MeasurementPrivacySources(v,readSource);verify",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 51929,
+              "currentText": "e);verifyMeasurementPrivacySources(v,readSourc",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 53242,
+              "currentText": ",v.measurementPrivacyRuntime.validationSource.path",
+              "previousText": ""
+            }
+          ]
+        },
+        {
+          "path": "scripts/lib/plan-measurement-current-ci-lineage.mjs",
+          "previousSha256": "d8fb88fffd808ba4fa0ceeb561a8224589adf1f01a4258ee896d8a94dd3e93c9",
+          "currentSha256": "25bf8dde7ad684dc9795a0b013ae4c35fc35c96a2dfad537113062ea6a090f0c",
+          "previousBytes": 71750,
+          "currentBytes": 73398,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 0,
+              "currentText": "import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetIntakeWithdrawalUnitProducerText} from './plan-budget-current-ci-lineage.mjs';\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 66249,
+              "currentText": ",privacyContract=restoreFieldOutboundPreviousContract(contract)",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 67012,
+              "currentText": "\n  ",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 67027,
+              "currentText": "ontract.extension.proofs.find(row=>row.id===delta.id),privacySpec=privacyC",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 67191,
+              "currentText": "priva",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 67197,
+              "currentText": "yC",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 67207,
+              "currentText": "privacyS",
+              "previousText": "s"
+            },
+            {
+              "currentOffsetCharacters": 67220,
+              "currentText": "\n  ",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 67235,
+              "currentText": "\n   // L comparisons use its complete authenticated parent metadata. Current\n   // readers, contract fields and native manifests are never substituted.\n   ",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 67439,
+              "currentText": "weeklyCypCurrentSourcePin(contract,{path:spec.producer,sha256:",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 67522,
+              "currentText": "})",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 67595,
+              "currentText": "\n   let comparisonBytes=bytes(readSource,spec.producer);\n   if(Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION)&&spec.producer===contract[PLAN_BUDGET_CURRENT_SECTION].attendanceReviewRuntime.producer.producer)comparisonBytes=restorePlanBudgetAttendanceReviewProducerText(contract,comparisonBytes);\n   requireLineage(sha(comparisonBytes.toString('utf8').replaceAll('\\r\\n','\\n'))===privacy.currentSha256,'Authenticated L producer comparison must restore exactly: '+delta.id);\n   ",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 68146,
+              "currentText": "priva",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 68152,
+              "currentText": "yC",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 68176,
+              "currentText": "comparisonB",
+              "previousText": "b"
+            },
+            {
+              "currentOffsetCharacters": 68191,
+              "currentText": "",
+              "previousText": "(readSource,spec.producer)"
+            },
+            {
+              "currentOffsetCharacters": 68300,
+              "currentText": "\n  ",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 68308,
+              "currentText": "{\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 68311,
+              "currentText": "  let compa",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 68323,
+              "currentText": "",
+              "previousText": "equ"
+            },
+            {
+              "currentOffsetCharacters": 68324,
+              "currentText": "so",
+              "previousText": "reLi"
+            },
+            {
+              "currentOffsetCharacters": 68327,
+              "currentText": "Sh",
+              "previousText": "e"
+            },
+            {
+              "currentOffsetCharacters": 68330,
+              "currentText": "=",
+              "previousText": "ge("
+            },
+            {
+              "currentOffsetCharacters": 68362,
+              "currentText": ";\n   if(delta.id==='bank-intake-units'&&Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION)){\n    const unit=contract[PLAN_BUDGET_CURRENT_SECTION].intakeWithdrawalRuntime.unitProducer;\n    requireLineage(spec.kind==='UNIT'&&spec.producer===unit.producer&&spec.producerSha256===unit.currentSha256&&comparisonSha===unit.currentSha256&&delta.currentProducerSha256===unit.previousSha256,'The exact current UNIT producer and its G parent must remain joined');\n    comparisonSha=sha(restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,bytes(readSource,spec.producer)));\n   }\n   requireLineage(comparisonSha",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 69209,
+              "currentText": "\n  ",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 69214,
+              "currentText": " }\n",
+              "previousText": ""
+            }
+          ]
+        },
+        {
+          "path": "tests/production-plan-measurement-current-ci-lineage.test.mjs",
+          "previousSha256": "19704b7e14b3405d0aa1348fd24ddeeae67cac5dc5a52d20bb6936ebf1e98816",
+          "currentSha256": "289f44dcb536e1f8c7c6757c4ad40fc45c5e8b1c120fb28cb296fdd34222e7a2",
+          "previousBytes": 34169,
+          "currentBytes": 34870,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 127,
+              "currentText": ",restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetPilotProducerText",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 4940,
+              "currentText": ";\nconst lProducerBytes=row=>{const actual=read(row.producer);return row.kind==='PG_FIELD'?restorePlanBudgetAttendanceReviewProducerText(contract,actual):actual;}",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 14034,
+              "currentText": "const ",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 14041,
+              "currentText": "c",
+              "previousText": "sser"
+            },
+            {
+              "currentOffsetCharacters": 14043,
+              "currentText": "",
+              "previousText": ".eq"
+            },
+            {
+              "currentOffsetCharacters": 14046,
+              "currentText": "=",
+              "previousText": "(sha("
+            },
+            {
+              "currentOffsetCharacters": 14066,
+              "currentText": ",comparison=spec.kind==='PG_INTAKE'?restorePlanBudgetPilotProducerText(contract,spec.producer,actual):actual;assert.equal(sha(actual.toString('utf8').replaceAll('\\r\\n','\\n')),spec.producerSha256);assert.equal(sha(comparison",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 28532,
+              "currentText": "originalLC",
+              "previousText": "c"
+            },
+            {
+              "currentOffsetCharacters": 28752,
+              "currentText": "originalLC",
+              "previousText": "c"
+            },
+            {
+              "currentOffsetCharacters": 28825,
+              "currentText": "originalLC",
+              "previousText": "c"
+            },
+            {
+              "currentOffsetCharacters": 31405,
+              "currentText": "comparison=lProducerBytes(row),",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 31441,
+              "currentText": "compa",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 31447,
+              "currentText": "ison",
+              "previousText": "aw"
+            },
+            {
+              "currentOffsetCharacters": 31578,
+              "currentText": "originalLC",
+              "previousText": "c"
+            },
+            {
+              "currentOffsetCharacters": 31609,
+              "currentText": "compa",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 31615,
+              "currentText": "ison",
+              "previousText": "aw"
+            },
+            {
+              "currentOffsetCharacters": 32050,
+              "currentText": "originalLC",
+              "previousText": "c"
+            },
+            {
+              "currentOffsetCharacters": 32104,
+              "currentText": "compa",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 32110,
+              "currentText": "ison",
+              "previousText": "aw"
+            },
+            {
+              "currentOffsetCharacters": 32180,
+              "currentText": "originalLC",
+              "previousText": "c"
+            },
+            {
+              "currentOffsetCharacters": 32298,
+              "currentText": "originalLC",
+              "previousText": "c"
+            },
+            {
+              "currentOffsetCharacters": 32389,
+              "currentText": "));if(row.kind==='PG_FIELD')denied(()=>restorePlanMeasurementPublishedKPrivacyProducerText(originalLContract,row.producer,raw",
+              "previousText": ""
+            }
+          ]
+        }
+      ],
+      "validationSource": {
+        "path": "tests/production-plan-measurement-current-source-binding.test.mjs",
+        "sha256": "e3d963f9740e4d17b3d4e15bcf9b6c34adc569fb988493ec7b10268a42514779"
+      },
+      "nativeOrHumanAcceptance": false
     }
   }
 }

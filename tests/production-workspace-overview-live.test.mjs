@@ -24,9 +24,10 @@ const CustomEvent=class{constructor(type,options){this.type=type;this.detail=opt
 const createWorksiteLiveRefreshController=options=>actualController({...options,setTimer:(fn,delay)=>bridge.setTimer(fn,delay),clearTimer:id=>bridge.timers.delete(id),now:()=>bridge.now,random:()=>.5});
 export function unmount(){for(const effect of effects)effect?.cleanup?.();effects=[];}
 export function reset(value){unmount();bridge=value;states=[];refs=[];effects=[];}
-export function render(props){si=0;ri=0;ei=0;return Decisions(props);}`;
+export function render(props){si=0;ri=0;ei=0;return Decisions(props);}
+export function renderRefreshStatus(props){return WorksiteLiveRefreshStatus(props);}`;
 await loadBindings();
-const result=await transform(`import React from ${JSON.stringify(import.meta.resolve('react'))};import {createWorksiteLiveRefreshController as actualController,worksiteLiveRefreshPresentation} from ${JSON.stringify(controllerUrl)};import {inventoryPendingCounts,INVENTORY_PENDING_EVENT} from ${JSON.stringify(inventoryUrl)};import {FIELD_EVIDENCE_PENDING_EVENT,FIELD_PROGRESS_PENDING_EVENT} from ${JSON.stringify(fieldUrl)};${harness}\n${file('workspace-live-refresh.js')}\n${file('workspace-overview.js')}`,{filename:'real-overview-live.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});
+const result=await transform(`import React from ${JSON.stringify(import.meta.resolve('react'))};import {createWorksiteLiveRefreshController as actualController,worksiteLiveRefreshPresentation,worksiteLiveCheckedAtLabel} from ${JSON.stringify(controllerUrl)};import {inventoryPendingCounts,INVENTORY_PENDING_EVENT} from ${JSON.stringify(inventoryUrl)};import {FIELD_EVIDENCE_PENDING_EVENT,FIELD_PROGRESS_PENDING_EVENT} from ${JSON.stringify(fieldUrl)};${harness}\n${file('workspace-live-refresh.js')}\n${file('workspace-overview.js')}`,{filename:'real-overview-live.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});
 const component=await import('data:text/javascript;base64,'+Buffer.from(result.code).toString('base64'));
 const scope='a'.repeat(64),projectId='project-a';
 const payload=(evidence=149,project=projectId)=>({scope,projectId:project,view:'decisions',observedAt:'2026-10-20T16:00:00.000Z',evidence:{pending:evidence},proposals:{pending:237},inventory:{canManage:true,pendingCounts:{consumptions:132,adjustments:4}}});
@@ -99,4 +100,13 @@ test('role withdrawal and unmount abort owned reads and prevent late data or nav
 
 test('confirmed zero evidence remains an explicit count and an ignored stale access callback does not purge it',async()=>{
  const {state,props}=setup();state.responses.push(payload(0));const tree=await ready(props);assert.match(renderToStaticMarkup(tree),/>0</);props.onAccessRejected=()=>false;component.render(props);state.responses.push(new Response('{}',{status:403}));state.now+=5000;find(component.render(props),'button','Actualizar pendientes').props.onClick();await settle();assert.match(html(props),/>0</);assert.doesNotMatch(html(props),/Tu acceso cambió/);component.unmount();
+});
+
+
+test('actual completed-check status renders the authentic Argentine formatter and does not turn an invalid instant into a time',()=>{
+ const refresh={status:{state:'CURRENT',checkedAt:'2026-10-20T21:59:13.000Z',updates:false},check:()=>assert.fail('Rendering a status must not dispatch another check')};
+ const render=()=>renderToStaticMarkup(component.renderRefreshStatus({refresh,label:'Cronograma'}));
+ const checked=render();assert.match(checked,/Cronograma · última comprobación:/);assert.match(checked,/20\/10\/2026/);assert.match(checked,/18:59:13/);assert.match(checked,/\(hora de Argentina\)/);assert.match(checked,/Comprobar cambios/);assert.doesNotMatch(checked,/06:59:13/);
+ refresh.status.checkedAt='unconfirmed';const invalid=render();assert.match(invalid,/Fecha y hora sin confirmar/);assert.doesNotMatch(invalid,/Invalid Date|1970|NaN/);
+ refresh.status.checkedAt=null;assert.match(render(),/Se comprobarán los cambios de esta obra/);
 });
