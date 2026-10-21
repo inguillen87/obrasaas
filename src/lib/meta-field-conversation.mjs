@@ -302,6 +302,7 @@ function planConversation({message,state,eventId,facts,now}){
  if(active.purpose!=='MENU'&&!permits(active.purpose,facts))return denied(active.purpose);
  const s={...active};delete s.choices;delete s.nonce;
  if(s.purpose==='CONSUMPTION'&&s.step==='CONFIRM'&&selected==='CANCEL')return {state:null,reply:text('Propuesta de consumo cancelada. No se modificó stock. Escribí MENU para continuar.')};
+ if(s.purpose==='PROGRESS'&&s.step==='CONFIRM'&&!s.progressEvidenceWait&&selected==='CANCEL')return {state:null,reply:text('Operación cancelada. Escribí MENU para continuar.')};
  if(s.purpose==='CONSUMPTION'&&s.step!=='CONSUMPTION_EVIDENCE'&&(s.evidenceIds?.length||s.consumptionVoice)){
   if(!consumptionSelectionCurrent(s,facts)||s.consumptionVoice&&!voiceConsumptionDraftCurrent(s.consumptionVoice,consumptionEvidence(s,facts).find(e=>e.id===s.consumptionVoice.source.evidenceId),consumptionMaterial(s),consumptionContext(s,facts)))return {state:active,preserveConversation:true,reply:text('Un adjunto o su transcripción cambió desde que preparaste este consumo. Conservamos el borrador y no guardamos la propuesta. Cancelalo para revisar los archivos vigentes antes de confirmar otro consumo.')};
  }
