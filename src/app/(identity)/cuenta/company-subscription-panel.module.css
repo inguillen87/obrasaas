@@ -62,6 +62,8 @@
 .purchase>.primary{margin-top:16px}
 .review+.primary{margin-top:0}
 .note{margin:10px 0 0;color:#58717e;font-size:.8rem;line-height:1.65}
+.conditions summary{min-height:44px;padding:12px 0;cursor:pointer;color:#234b5c;font-size:.88rem;font-weight:650}
+.conditions summary:focus-visible{outline:3px solid #3b89a9;outline-offset:3px}
 .checkout{margin-top:20px;padding-top:20px;border-top:1px solid #e1e9ed}
 .checkout .primary,.checkout .secondary{margin-top:14px;margin-right:10px}
 .payment{margin-top:18px}

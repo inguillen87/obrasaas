@@ -20,13 +20,14 @@ const admittedGuidanceFixture=async()=>{
  return {f,worker};
 };
 const assertAdmittedGuidance=reply=>{
- assert.equal(reply.type,'text');assert.match(reply.body,/\n\nAbrí https:\/\/obrasaas\.com\/cuenta/);assert.match(reply.body,/Si te enviaron una invitación, aceptala desde tu correo/);assert.match(reply.body,/\n\nPara presentar identidad por este chat, pedile al responsable el mensaje IDENTIDAD vigente/);assert.match(reply.body,/esperá las indicaciones antes de enviar documentos/);assert.match(reply.body,/La identidad y los permisos se revisan por separado/);
+ assert.equal(reply.type,'interactive');assert.equal(reply.body,'Tu ficha está registrada. Elegí una opción para continuar.');assert.deepEqual(reply.sections.flatMap(section=>section.rows.map(row=>row.title)),['Abrir mi cuenta','Consultar identidad']);
  assert.doesNotMatch(reply.body,/identidad (?:está |fue )?aprobada|permisos habilitados|(?:IDENTIDAD|VINCULAR) [A-Za-z0-9_-]{43}/);
 };
 async function priorAdmittedPlanner(){
  const moduleUrl=new URL('../src/lib/meta-kyc-conversation.mjs',import.meta.url),source=await readFile(moduleUrl,'utf8'),pattern=/ADMITTED:'[^']*'/g;
  assert.equal([...source.matchAll(pattern)].length,1);
- const mutant=source.replace(pattern,"ADMITTED:'Tu ficha ya está registrada. Consultá el próximo paso en tu cuenta de ObraSaaS. La identidad y los permisos se revisan por separado.'").replace(/from (['"])(\.\.?\/[^'"]+)\1/g,(_all,_quote,relative)=>'from '+JSON.stringify(new URL(relative,moduleUrl).href));
+ const menu="if(['ADMITTED','JOB','CONFIRM'].includes(state.step)){";assert.equal(source.split(menu).length,2);
+ const mutant=source.replace(pattern,"ADMITTED:'Tu ficha ya está registrada. Consultá el próximo paso en tu cuenta de ObraSaaS. La identidad y los permisos se revisan por separado.'").replace(menu,"if(state.step==='ADMITTED')return {state,reply:intakeText(descriptions.ADMITTED)};\n "+menu).replace(/from (['"])(\.\.?\/[^'"]+)\1/g,(_all,_quote,relative)=>'from '+JSON.stringify(new URL(relative,moduleUrl).href));
  return (await import('data:text/javascript;base64,'+Buffer.from(mutant).toString('base64'))).planEmployeeIntakeConversation;
 }
 

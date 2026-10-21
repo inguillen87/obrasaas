@@ -39003,7 +39003,7 @@
       {
         "path": "src/lib/meta-kyc-conversation.mjs",
         "previousSha256": "75870a6359385ae83df0d154b57c3f6738f2bde62fbe4974da7e38e5b0de2902",
-        "currentSha256": "5c947b605e585608812436ca0fb4ffd847ce5b936ca53d24d130df7311d32c86"
+        "currentSha256": "2ba67025781ab2f6cd629ec3643060c4ab04b2b8fd7cd50ac87c6973c6d083f5"
       },
       {
         "path": "src/lib/participant-kyc-notice-links.mjs",
@@ -39234,6 +39234,16 @@
         "path": "tests/production-workspace-plan-partida-preview-current-ci-lineage.test.mjs",
         "previousSha256": "593466da00f03fff06c19e2ac746fb14fb03371f4ceb96a2f4fc342de6e3de32",
         "currentSha256": "16d48fb4c4f787ddc3fad0e6894d0dff38b95cd75f58d614110354d2758e982e"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/company-subscription-panel.js",
+        "previousSha256": "0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749",
+        "currentSha256": "b439d95c9e48f4b0ef83bd6ca93efac56dc059a8b50b508475d9d5e29af4b6dc"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/company-subscription-panel.module.css",
+        "previousSha256": "fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e",
+        "currentSha256": "678a18a7ad87f8312a7ad9e8267709297653e7572ea4b537ac42b6959b3a523a"
       }
     ],
     "sourceSetDeltas": [
@@ -39888,11 +39898,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/company-subscription-panel.js",
-            "sha256": "0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749"
+            "sha256": "b439d95c9e48f4b0ef83bd6ca93efac56dc059a8b50b508475d9d5e29af4b6dc"
           },
           {
             "path": "src/app/(identity)/cuenta/company-subscription-panel.module.css",
-            "sha256": "fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e"
+            "sha256": "678a18a7ad87f8312a7ad9e8267709297653e7572ea4b537ac42b6959b3a523a"
           },
           {
             "path": "src/app/(identity)/cuenta/company-subscription-view.mjs",
@@ -42082,11 +42092,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/company-subscription-panel.js",
-            "sha256": "0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749"
+            "sha256": "b439d95c9e48f4b0ef83bd6ca93efac56dc059a8b50b508475d9d5e29af4b6dc"
           },
           {
             "path": "src/app/(identity)/cuenta/company-subscription-panel.module.css",
-            "sha256": "fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e"
+            "sha256": "678a18a7ad87f8312a7ad9e8267709297653e7572ea4b537ac42b6959b3a523a"
           },
           {
             "path": "src/app/(identity)/cuenta/company-subscription-view.mjs",
@@ -43767,7 +43777,7 @@
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "5c947b605e585608812436ca0fb4ffd847ce5b936ca53d24d130df7311d32c86"
+            "sha256": "2ba67025781ab2f6cd629ec3643060c4ab04b2b8fd7cd50ac87c6973c6d083f5"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -44804,7 +44814,7 @@
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "5c947b605e585608812436ca0fb4ffd847ce5b936ca53d24d130df7311d32c86"
+            "sha256": "2ba67025781ab2f6cd629ec3643060c4ab04b2b8fd7cd50ac87c6973c6d083f5"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -45821,7 +45831,7 @@
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "5c947b605e585608812436ca0fb4ffd847ce5b936ca53d24d130df7311d32c86"
+            "sha256": "2ba67025781ab2f6cd629ec3643060c4ab04b2b8fd7cd50ac87c6973c6d083f5"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -46631,7 +46641,7 @@
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "5c947b605e585608812436ca0fb4ffd847ce5b936ca53d24d130df7311d32c86"
+            "sha256": "2ba67025781ab2f6cd629ec3643060c4ab04b2b8fd7cd50ac87c6973c6d083f5"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -47397,7 +47407,7 @@
           },
           {
             "path": "src/lib/meta-kyc-conversation.mjs",
-            "sha256": "5c947b605e585608812436ca0fb4ffd847ce5b936ca53d24d130df7311d32c86"
+            "sha256": "2ba67025781ab2f6cd629ec3643060c4ab04b2b8fd7cd50ac87c6973c6d083f5"
           },
           {
             "path": "src/lib/meta-kyc-current-image.mjs",
@@ -47764,11 +47774,11 @@
           },
           {
             "path": "src/app/(identity)/cuenta/company-subscription-panel.js",
-            "sha256": "0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749"
+            "sha256": "b439d95c9e48f4b0ef83bd6ca93efac56dc059a8b50b508475d9d5e29af4b6dc"
           },
           {
             "path": "src/app/(identity)/cuenta/company-subscription-panel.module.css",
-            "sha256": "fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e"
+            "sha256": "678a18a7ad87f8312a7ad9e8267709297653e7572ea4b537ac42b6959b3a523a"
           },
           {
             "path": "src/app/(identity)/cuenta/company-subscription-view.mjs",
