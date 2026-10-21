@@ -244,7 +244,7 @@ function trialExpiryParentRevision(value,r){
  for(const a of r.familyManifestAdvances){const ref=parent.sourceFamilies.find(f=>f.family===a.family)?.currentManifest.find(h=>h.path===a.path);reject(ref?.sha256===a.currentSha256,'TRIAL_EXPIRY_FAMILY_RESTORE');ref.sha256=a.previousSha256;}
  reject(value.references.length===117&&parent.references.length===115,'TRIAL_EXPIRY_REFERENCE_COUNTS');return parent;
 }
-function trialExpiryParentContract(contract,r){contract=integrationParentContract(contract);const out=structuredClone(contract);out[PLAN_BUDGET_CURRENT_SECTION]=trialExpiryParentRevision(out[PLAN_BUDGET_CURRENT_SECTION],r);reject(sha(JSON.stringify(out,null,2)+'\n')===r.previousContractSha256,'TRIAL_EXPIRY_COMPLETE_EFB8_CONTRACT');return out;}
+function trialExpiryParentContract(contract,r){const out=integrationParentContract(contract);out[PLAN_BUDGET_CURRENT_SECTION]=trialExpiryParentRevision(out[PLAN_BUDGET_CURRENT_SECTION],r);reject(sha(JSON.stringify(out,null,2)+'\n')===r.previousContractSha256,'TRIAL_EXPIRY_COMPLETE_EFB8_CONTRACT');return out;}
 function trialExpirySource(r,file,bytes){
  bytes=integrationParentSource(file,bytes,true);
  const h=r.sourceHistory.find(a=>a.path===file);reject(h&&Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'TRIAL_EXPIRY_UTF8_SOURCE');let text=bytes.toString('utf8').replaceAll('\r\n','\n');
