@@ -151,13 +151,16 @@ async function resolveParticipantAuthority(client,intent,{environment=process.en
  // trial, invitation or grant expiring during earlier reads rolls back send.
  const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now;
  const entitlement=companyWhatsappOnboardingEntitlement(organization,{now});
- if(!entitlement.allowed)fail(entitlement.reasonCode,403);
+ if(!entitlement.allowed&&!['COMPANY_ENTITLEMENT_TRIAL_EXPIRED','COMPANY_ENTITLEMENT_PAID_PERIOD_EXPIRED'].includes(entitlement.reasonCode))fail(entitlement.reasonCode,403);
  if(!(now instanceof Date)||!Number.isFinite(now.getTime())||p.status==='INVITED'&&(!timestamp(i.expiresAt)||Date.parse(i.expiresAt)<=now.getTime())||Date.parse(authorization.recordedAt)>now.getTime())fail('PARTICIPANT_ONBOARDING_INVITATION_EXPIRED',410);
  if(kycAuthority.review&&Date.parse(kycAuthority.review.recordedAt)>now.getTime())fail('PARTICIPANT_ONBOARDING_KYC_REJECTION_REQUIRED',409);
  if(origin&&[kycAuthority.submittedAt,kycAuthority.completedAt,kycAuthority.adoptedAt,kycAuthority.reviewedAt].filter(Boolean).some(value=>Date.parse(value)>now.getTime()))fail();
  assertWorkerCustomerConnection(connection,intent.organizationId,project.id,now.getTime(),{operational:true,environment});
  if(!customerChannelActive(connection,now.getTime(),{environment}))fail('PARTICIPANT_ONBOARDING_CHANNEL_REQUIRED',403);
  if(!origin)checkedChallenge(worker,member,connection,expected,now);
+ // Neutral availability feedback may observe an expired period only after
+ // the same invitation, connection, channel and challenge guards succeeded.
+ if(!entitlement.allowed)fail(entitlement.reasonCode,403);
  const authorityDigest=digest([origin?'participant-reactive-kyc-status-authority-v1':'participant-onboarding-authority-v1',stable({intent,member,projectId:project.id,worker:{id:worker.id,phone:worker.phone,status:p.status,clerkUserId:p.clerkUserId||null,invitation:i,kycAuthority},proof,consent:authorization,connection:{id:connection.id,anchorProjectId:connection.projectId,targetProjectId:project.id,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,grantDigest:companyKycGrantDigest(connection),ownerRevision:connection.company?.revision||null,assignmentRevision:connection.company?.assignmentRevision||null,projectOnlyOwner:connection.projectOnlyOwner||null},subscription:{plan:organization.subscriptionPlan,status:organization.subscriptionStatus,trialEndsAt:organization.trialEndsAt instanceof Date?organization.trialEndsAt.toISOString():organization.trialEndsAt},trail:trail.map(row=>row.id)})]);
  if(expected&&expected.authorityDigest!==authorityDigest)fail();
  return {member,project,worker,connection,now,entitlement,authorityDigest,company:Boolean(connection.company),...(origin?{own,organization,status:kycAuthority.status}:{})};
