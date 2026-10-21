@@ -136,12 +136,12 @@ test('new messages from a verified linked sender bypass welcome even when intake
 test('admitted unlinked participation offers a concise contextual menu and both choices leave identity and permissions unchanged',async()=>{
  const {f,worker}=await admitted(),before={worker:structuredClone(worker),audits:structuredClone([...f.audits]),connection:structuredClone(f.connection)};
  const menu=await f.execute('HOLA');assert.equal(menu.result.reply.type,'interactive');
- assert.deepEqual(menu.result.reply.sections.flatMap(section=>section.rows.map(row=>row.title)),['Abrir mi cuenta','Presentar identidad']);
+ assert.deepEqual(menu.result.reply.sections.flatMap(section=>section.rows.map(row=>row.title)),['Abrir mi cuenta','Consultar identidad']);
  assert.ok(menu.result.reply.body.length<180);assert.doesNotMatch(menu.result.reply.body,/https:|IDENTIDAD [A-Za-z0-9_-]{43}|nombre y apellido/);
  const account=await f.choose('ACCOUNT');assert.deepEqual(account.result.reply.body.match(/https:\/\/\S+/g),['https://obrasaas.com/cuenta']);
  assert.equal(f.state().step,'ADMITTED');await f.execute('MENU');const identity=await f.choose('IDENTITY_GUIDANCE');
  assert.match(identity.result.reply.body,/https:\/\/obrasaas\.com\/cuenta\?seccion=identidad#participant-title/);assert.match(identity.result.reply.body,/mensaje IDENTIDAD vigente/);
- assert.match(identity.result.reply.body,/esperá las indicaciones antes de enviar documentos/);assert.doesNotMatch(identity.result.reply.body,/IDENTIDAD [A-Za-z0-9_-]{43}/);
+ assert.match(identity.result.reply.body,/Esperá las indicaciones antes de enviar documentos/);assert.doesNotMatch(identity.result.reply.body,/IDENTIDAD [A-Za-z0-9_-]{43}/);
  assert.equal(f.state().step,'ADMITTED');assert.deepEqual(f.workers.get(worker.id),before.worker);assert.deepEqual([...f.audits],before.audits);assert.deepEqual(f.connection,before.connection);
 });
 

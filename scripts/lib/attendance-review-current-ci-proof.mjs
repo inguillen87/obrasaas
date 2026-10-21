@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import path from 'node:path';
-import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetTrialExpiryNoticeSource} from './plan-budget-current-ci-lineage.mjs';
+import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetTrialExpiryNoticeSource,restorePlanBudgetPilotIntegrationSource} from './plan-budget-current-ci-lineage.mjs';
 
 // A decoder supplement, never a PostgreSQL execution or CI acceptance receipt.
 // These public source bindings are derived from the actual 7bc4243 producer and
@@ -229,7 +229,7 @@ export function normalizeAttendanceReviewNativeProof(raw,contract,readSource,spe
  // Authenticate the complete current RAW134 maps before comparing a source
  // with its historical133 binding. All restorations use these same snapshotted
  // current bytes; the RAW maps and the returned historical67 copy retain them.
- for(const [file,digest] of Object.entries(SOURCE_BINDINGS)){const bytes=lf(read(file));let parent=bytes;if(file==='src/lib/meta-consumption-evidence-catalog.mjs')try{parent=restorePlanBudgetConsumptionEvidenceSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}if(file==='src/lib/meta-kyc-conversation.mjs')try{parent=restorePlanBudgetIntakeWithdrawalSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}if(file==='src/lib/participant-onboarding-authority.mjs'||file==='src/lib/participant-onboarding-reactive.mjs')try{parent=restorePlanBudgetTrialExpiryNoticeSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}reject(hash(parent)===digest,'CURRENT_SOURCE_'+file);}
+ for(const [file,digest] of Object.entries(SOURCE_BINDINGS)){const bytes=lf(read(file));let parent=restorePlanBudgetPilotIntegrationSource(c,file,bytes);if(file==='src/lib/meta-consumption-evidence-catalog.mjs')try{parent=restorePlanBudgetConsumptionEvidenceSource(c,file,parent);}catch{reject(false,'CURRENT_SOURCE_'+file);}if(file==='src/lib/meta-kyc-conversation.mjs')try{parent=restorePlanBudgetIntakeWithdrawalSource(c,file,parent);}catch{reject(false,'CURRENT_SOURCE_'+file);}if(file==='src/lib/participant-onboarding-authority.mjs'||file==='src/lib/participant-onboarding-reactive.mjs')try{parent=restorePlanBudgetTrialExpiryNoticeSource(c,file,parent);}catch{reject(false,'CURRENT_SOURCE_'+file);}reject(hash(parent)===digest,'CURRENT_SOURCE_'+file);}
  const projected=structuredClone(proof);delete projected.attendanceReviewChecks;delete projected.attendanceReviewCheckCount;projected.totalChecks=67;
  return projected;
 }

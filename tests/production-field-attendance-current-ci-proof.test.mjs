@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import {createHash} from 'node:crypto';
 import {normalizeAttendanceReviewNativeProof,attendanceReviewCurrentCheckCount,ATTENDANCE_REVIEW_CHECK_NAMES} from '../scripts/lib/attendance-review-current-ci-proof.mjs';
-import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetTrialExpiryNoticeSource} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetTrialExpiryNoticeSource,restorePlanBudgetPilotIntegrationSource} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {validateExtensionProof} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';
 
 // Portable public-source decoder shadows only. These tests neither import a
@@ -117,6 +117,9 @@ test('attendance actual134 rejects resealed shared core bytes and the old wrappe
 
 test('attendance frozen source comparison accepts only authenticated withdrawal bytes projected to complete6058',()=>{
  const f=fixture(),file='src/lib/meta-kyc-conversation.mjs',current=readSource(file),parent=restorePlanBudgetIntakeWithdrawalSource(f.contract,file,current),before=structuredClone(f.proof);assert.notEqual(hash(parent),hash(current));assert.equal(hash(parent),f.contract.planBudgetCurrentRevision.intakeWithdrawalRuntime.conversation.previousSha256);normalizeAttendanceReviewNativeProof(f.proof,f.contract,f.reader,f.spec);assert.deepEqual(f.proof,before);deny(g=>{g.reader=name=>name===file?parent:readSource(name);});
+ for(const [path,previousSha256] of Object.entries({'src/lib/meta-field-bridge.mjs':'7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955','src/lib/meta-field-conversation.mjs':'c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d'})){
+  const actual=readSource(path),captured=Buffer.from(actual),comparison65d=restorePlanBudgetPilotIntegrationSource(f.contract,path,actual);assert.equal(hash(comparison65d),previousSha256);assert.notEqual(hash(actual),previousSha256);assert.deepEqual(actual,captured);let maps=0;for(const map of rawMaps(f.proof))if(Object.hasOwn(map,path)){assert.equal(map[path],hash(actual));maps++;}assert.ok(maps>0);deny(g=>{g.reader=name=>name===path?comparison65d:readSource(name);});
+ }
 });
 test('attendance all five RAW maps retain current withdrawal hashes and reject prior or forged source bytes',()=>{
  const file='src/lib/meta-kyc-conversation.mjs';for(const key of ['sourceSha256','voiceProgressSourceSha256','mediaLeaseSourceSha256','videoAudioSourceSha256','participantKycFixture'])deny(f=>{const map=key==='participantKycFixture'?f.proof.participantKycFixture.sourceSha256:f.proof[key];assert.ok(Object.hasOwn(map,file));map[file]=f.contract.planBudgetCurrentRevision.intakeWithdrawalRuntime.conversation.previousSha256;});

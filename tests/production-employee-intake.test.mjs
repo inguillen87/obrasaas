@@ -20,7 +20,7 @@ const admittedGuidanceFixture=async()=>{
  return {f,worker};
 };
 const assertAdmittedGuidance=reply=>{
- assert.equal(reply.type,'interactive');assert.match(reply.body,/Tu ficha está registrada/);assert.match(reply.body,/La identidad y los permisos se revisan por separado/);assert.deepEqual(reply.sections.flatMap(section=>section.rows.map(row=>row.title)),['Abrir mi cuenta','Presentar identidad']);
+ assert.equal(reply.type,'interactive');assert.equal(reply.body,'Tu ficha está registrada. Elegí una opción para continuar.');assert.deepEqual(reply.sections.flatMap(section=>section.rows.map(row=>row.title)),['Abrir mi cuenta','Consultar identidad']);
  assert.doesNotMatch(reply.body,/identidad (?:está |fue )?aprobada|permisos habilitados|(?:IDENTIDAD|VINCULAR) [A-Za-z0-9_-]{43}/);
 };
 async function priorAdmittedPlanner(){

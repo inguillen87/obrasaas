@@ -27,7 +27,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/lib/attendance-review-current-ci-proof.mjs",
       "previousSha256": null,
-      "currentSha256": "999d5daeecd597f87d01dcad2fb84701d443636d86d812eaf66ad09bb20a4805"
+      "currentSha256": "3191d1245ed225a4e2da0b9ffea779ed71744fa614a9329e6d90e23c340a6501"
     },
     {
       "path": "scripts/lib/home-decisions-current-ci-lineage.mjs",
@@ -47,7 +47,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
       "previousSha256": null,
-      "currentSha256": "40f82005d0fbca72d1491f0100a8395f61dcbe1455f3eaf086c39e12d1a2dcdb"
+      "currentSha256": "90bfa69a4e902dfab785ec10f210d6b0d0a21fe3992c3995c6b0e122748dab99"
     },
     {
       "path": "scripts/lib/plan-budget-ui-contract.mjs",
@@ -292,17 +292,17 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "src/lib/meta-field-bridge.mjs",
       "previousSha256": "79c961cf91f988e5d913cfb241a887c26a78d49e04ebf2c5fbb2bf6a74bc809b",
-      "currentSha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955"
+      "currentSha256": "aae13ca6ac50e48f5ad383a042b58d65c8779666061f000b57a6b97e7d281586"
     },
     {
       "path": "src/lib/meta-field-conversation.mjs",
       "previousSha256": "2da5b4a58e4f62a912d4df4bd93574c9907c6561123fe5ffabdd12420b72047f",
-      "currentSha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d"
+      "currentSha256": "0cc4ca71bbb588142ad9d20b44c6db683fa23327ddafb50f7b81a53f89fc1515"
     },
     {
       "path": "src/lib/meta-kyc-conversation.mjs",
       "previousSha256": "75870a6359385ae83df0d154b57c3f6738f2bde62fbe4974da7e38e5b0de2902",
-      "currentSha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892"
+      "currentSha256": "e06f151f1551a3aab393c83dd5429760f686af63293490570c25841e264cd645"
     },
     {
       "path": "src/lib/operations-status.mjs",
@@ -392,7 +392,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-field-attendance-current-ci-proof.test.mjs",
       "previousSha256": null,
-      "currentSha256": "bb73abaf901512de92b8afdbd47c0e8a589af63ef8bb038d410d850122877237"
+      "currentSha256": "77fec910b50db6b95e60723188f3c1d4900eef96c9bc43b395228ebc8163da7f"
     },
     {
       "path": "tests/production-field-attendance-review-query.test.mjs",
@@ -497,7 +497,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
       "previousSha256": null,
-      "currentSha256": "a489da83106dbd282d81007330f42aaa741a75ded10fbd2dcff4fcbba894ced0"
+      "currentSha256": "a479f91466d460927670a3d78745b75b8bb0d9abd514c00cbe1134be5b34d378"
     },
     {
       "path": "tests/production-plan-budget-analyzer-http.test.mjs",
@@ -593,6 +593,21 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "path": "tests/production-workspace-plan-partida-preview-current-ci-lineage.test.mjs",
       "previousSha256": "593466da00f03fff06c19e2ac746fb14fb03371f4ceb96a2f4fc342de6e3de32",
       "currentSha256": "11ec5bc4e257f0e065c3f5a54ec5fbea4698bc208022bbed9509cf2e64477bb5"
+    },
+    {
+      "path": "src/app/(identity)/cuenta/company-subscription-panel.js",
+      "previousSha256": "0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749",
+      "currentSha256": "b439d95c9e48f4b0ef83bd6ca93efac56dc059a8b50b508475d9d5e29af4b6dc"
+    },
+    {
+      "path": "src/app/(identity)/cuenta/company-subscription-panel.module.css",
+      "previousSha256": "fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e",
+      "currentSha256": "678a18a7ad87f8312a7ad9e8267709297653e7572ea4b537ac42b6959b3a523a"
+    },
+    {
+      "path": "tests/production-meta-field.test.mjs",
+      "previousSha256": "fdc0ddf2cf5fab717654860bdd89543a70c161cb9fac7ab3fdd0cbc96d1c1e18",
+      "currentSha256": "bb5d1a186eea14d0bc12e53eaa436ea0e5af2853d47d0c6ce22f93172ebe00ca"
     }
   ],
   "sourceSetDeltas": [
@@ -1306,11 +1321,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/company-subscription-panel.js",
-          "sha256": "0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749"
+          "sha256": "b439d95c9e48f4b0ef83bd6ca93efac56dc059a8b50b508475d9d5e29af4b6dc"
         },
         {
           "path": "src/app/(identity)/cuenta/company-subscription-panel.module.css",
-          "sha256": "fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e"
+          "sha256": "678a18a7ad87f8312a7ad9e8267709297653e7572ea4b537ac42b6959b3a523a"
         },
         {
           "path": "src/app/(identity)/cuenta/company-subscription-view.mjs",
@@ -3451,7 +3466,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-          "sha256": "40f82005d0fbca72d1491f0100a8395f61dcbe1455f3eaf086c39e12d1a2dcdb"
+          "sha256": "90bfa69a4e902dfab785ec10f210d6b0d0a21fe3992c3995c6b0e122748dab99"
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -3515,11 +3530,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/company-subscription-panel.js",
-          "sha256": "0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749"
+          "sha256": "b439d95c9e48f4b0ef83bd6ca93efac56dc059a8b50b508475d9d5e29af4b6dc"
         },
         {
           "path": "src/app/(identity)/cuenta/company-subscription-panel.module.css",
-          "sha256": "fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e"
+          "sha256": "678a18a7ad87f8312a7ad9e8267709297653e7572ea4b537ac42b6959b3a523a"
         },
         {
           "path": "src/app/(identity)/cuenta/company-subscription-view.mjs",
@@ -4487,7 +4502,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-          "sha256": "40f82005d0fbca72d1491f0100a8395f61dcbe1455f3eaf086c39e12d1a2dcdb"
+          "sha256": "90bfa69a4e902dfab785ec10f210d6b0d0a21fe3992c3995c6b0e122748dab99"
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -5226,11 +5241,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-field-bridge.mjs",
-          "sha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955"
+          "sha256": "aae13ca6ac50e48f5ad383a042b58d65c8779666061f000b57a6b97e7d281586"
         },
         {
           "path": "src/lib/meta-field-conversation.mjs",
-          "sha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d"
+          "sha256": "0cc4ca71bbb588142ad9d20b44c6db683fa23327ddafb50f7b81a53f89fc1515"
         },
         {
           "path": "src/lib/meta-kyc-challenge.mjs",
@@ -5238,7 +5253,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892"
+          "sha256": "e06f151f1551a3aab393c83dd5429760f686af63293490570c25841e264cd645"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -6278,11 +6293,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-field-bridge.mjs",
-          "sha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955"
+          "sha256": "aae13ca6ac50e48f5ad383a042b58d65c8779666061f000b57a6b97e7d281586"
         },
         {
           "path": "src/lib/meta-field-conversation.mjs",
-          "sha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d"
+          "sha256": "0cc4ca71bbb588142ad9d20b44c6db683fa23327ddafb50f7b81a53f89fc1515"
         },
         {
           "path": "src/lib/meta-kyc-challenge.mjs",
@@ -6290,7 +6305,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892"
+          "sha256": "e06f151f1551a3aab393c83dd5429760f686af63293490570c25841e264cd645"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -7313,11 +7328,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-field-bridge.mjs",
-          "sha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955"
+          "sha256": "aae13ca6ac50e48f5ad383a042b58d65c8779666061f000b57a6b97e7d281586"
         },
         {
           "path": "src/lib/meta-field-conversation.mjs",
-          "sha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d"
+          "sha256": "0cc4ca71bbb588142ad9d20b44c6db683fa23327ddafb50f7b81a53f89fc1515"
         },
         {
           "path": "src/lib/meta-kyc-bridge.mjs",
@@ -7337,7 +7352,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892"
+          "sha256": "e06f151f1551a3aab393c83dd5429760f686af63293490570c25841e264cd645"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -8150,11 +8165,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-field-bridge.mjs",
-          "sha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955"
+          "sha256": "aae13ca6ac50e48f5ad383a042b58d65c8779666061f000b57a6b97e7d281586"
         },
         {
           "path": "src/lib/meta-field-conversation.mjs",
-          "sha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d"
+          "sha256": "0cc4ca71bbb588142ad9d20b44c6db683fa23327ddafb50f7b81a53f89fc1515"
         },
         {
           "path": "src/lib/meta-kyc-challenge.mjs",
@@ -8162,7 +8177,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892"
+          "sha256": "e06f151f1551a3aab393c83dd5429760f686af63293490570c25841e264cd645"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -8927,11 +8942,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-field-bridge.mjs",
-          "sha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955"
+          "sha256": "aae13ca6ac50e48f5ad383a042b58d65c8779666061f000b57a6b97e7d281586"
         },
         {
           "path": "src/lib/meta-field-conversation.mjs",
-          "sha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d"
+          "sha256": "0cc4ca71bbb588142ad9d20b44c6db683fa23327ddafb50f7b81a53f89fc1515"
         },
         {
           "path": "src/lib/meta-kyc-bridge.mjs",
@@ -8943,7 +8958,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-kyc-conversation.mjs",
-          "sha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892"
+          "sha256": "e06f151f1551a3aab393c83dd5429760f686af63293490570c25841e264cd645"
         },
         {
           "path": "src/lib/meta-kyc-current-image.mjs",
@@ -9314,11 +9329,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/company-subscription-panel.js",
-          "sha256": "0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749"
+          "sha256": "b439d95c9e48f4b0ef83bd6ca93efac56dc059a8b50b508475d9d5e29af4b6dc"
         },
         {
           "path": "src/app/(identity)/cuenta/company-subscription-panel.module.css",
-          "sha256": "fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e"
+          "sha256": "678a18a7ad87f8312a7ad9e8267709297653e7572ea4b537ac42b6959b3a523a"
         },
         {
           "path": "src/app/(identity)/cuenta/company-subscription-view.mjs",
@@ -9567,7 +9582,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-          "sha256": "40f82005d0fbca72d1491f0100a8395f61dcbe1455f3eaf086c39e12d1a2dcdb"
+          "sha256": "90bfa69a4e902dfab785ec10f210d6b0d0a21fe3992c3995c6b0e122748dab99"
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -13697,6 +13712,473 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "currentOffsetCharacters": 0,
             "currentText": "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport {readFileSync} from 'node:fs';\nimport path from 'node:path';\nimport {fileURLToPath} from 'node:url';\nimport {createHash} from 'node:crypto';\nimport {verifyWorksiteLiveHoursCurrentSources} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';\nimport {verifyIntegratedIdentityCurrentSources} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';\nimport {verifyPlanMeasurementCurrentSources,currentFieldPrivacyRevision,restorePlanMeasurementPublishedKPrivacyProducerText} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';\nimport {restoreFieldOutboundPreviousContract} from '../scripts/lib/field-outbound-current-ci-lineage.mjs';\nimport {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetMeasurementPrivacyPreviousContract,restorePlanBudgetMeasurementPrivacySource,restorePlanBudgetCheckTimePreviousContract,restorePlanBudgetPreviousContract,planBudgetValidationFiles,restorePlanBudgetIntakeWithdrawalUnitProducerText,restorePlanBudgetTrialExpiryNoticeSource,restorePlanBudgetTrialExpiryNoticeValidatorSource} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';\nimport {gate} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';\nconst root=fileURLToPath(new URL('../',import.meta.url)),read=file=>Buffer.from(readFileSync(path.join(root,file),'utf8').replaceAll('\\r\\n','\\n')),sha=value=>createHash('sha256').update(value).digest('hex'),serialize=value=>JSON.stringify(value,null,2)+'\\n',current=()=>JSON.parse(read('.github/workspace-acceptance-contract.json'));\n// Intentionally missing lane records. Reaching its exact rejection proves only\n// the real gate's prior source-binding stage, never aggregate/CI acceptance.\nconst input=(contract,readSource=read)=>({contract,readSource,needs:{},expectedHead:'a'.repeat(40),workflowSha256:'b'.repeat(64),runId:'100',runAttempt:'1'});\nconst bindingDenied=(contract,reader=read)=>assert.throws(()=>gate(input(contract,reader)),{code:'PROOF_BINDING_SOURCE'});\ntest('current source binding executes the three actual outer verifiers without projecting the reader or contract',()=>{\n const contract=current(),before=serialize(contract);verifyPlanBudgetCurrentSources(contract,read);assert.ok(verifyWorksiteLiveHoursCurrentSources(contract,read));assert.ok(verifyIntegratedIdentityCurrentSources(contract,read));const result=verifyPlanMeasurementCurrentSources(contract,read);assert.equal(result.publishedCurrentSourceCount,127);assert.equal(result.sourceCount,contract.planBudgetCurrentRevision.sourceSetDeltas.find(row=>row.family==='COMPACT').currentCount);assert.equal(serialize(contract),before);\n});\ntest('the real aggregate gate passes source binding and still rejects an intentionally absent lane matrix',()=>{assert.throws(()=>gate(input(current())),{code:'MISSING_OR_EXTRA_LANE'});});\ntest('attendance producer comparison uses the complete authenticated L parent while the frozen L selector rejects the current producer',()=>{\n const contract=current(),before=serialize(contract),spec=contract.extension.proofs.find(row=>row.kind==='PG_FIELD'),raw=read(spec.producer),rawBefore=Buffer.from(raw),runtime=contract.planBudgetCurrentRevision.attendanceReviewRuntime.producer,parent=restoreFieldOutboundPreviousContract(contract),parentSpec=parent.extension.proofs.find(row=>row.id===spec.id);\n assert.equal(sha(raw),runtime.currentSha256);assert.equal(runtime.currentSha256,'4eb11afda80e9274e3fecdc229d12f21d53d29d444e6932e44837f257800ccc2');assert.throws(()=>currentFieldPrivacyRevision(contract,spec),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});\n const comparison=restorePlanBudgetAttendanceReviewProducerText(contract,raw),revision=currentFieldPrivacyRevision(parent,parentSpec);assert.equal(sha(comparison),runtime.previousSha256);assert.equal(sha(comparison),revision.currentSha256);assert.equal(revision.currentSha256,'c3cf9eed8983b9ab43ad9b11cf0f59af206b08ba70f5e6697133bb448b940662');assert.equal(sha(restorePlanMeasurementPublishedKPrivacyProducerText(parent,spec.producer,comparison)),revision.previousSha256);assert.deepEqual(raw,rawBefore);assert.deepEqual(read(spec.producer),rawBefore);assert.equal(serialize(contract),before);\n});\ntest('the binding successor restores complete9248 before9537 and eight-b while three current validator bodies remain authenticated',()=>{\n const contract=current(),before=serialize(contract),r=contract.planBudgetCurrentRevision.measurementPrivacyRuntime,parent=restorePlanBudgetMeasurementPrivacyPreviousContract(contract);assert.equal(planBudgetValidationFiles(contract).includes(r.validationSource.path),true);assert.equal(r.parentHead,'9248b8c521456f586dd8ffb3226136ff6828011a');assert.equal(sha(serialize(parent)),'eeebf3df17dfc1ab432101c2137b75742323bdce85d3412c67582c84f0cd0c7e');assert.equal(sha(serialize(restorePlanBudgetCheckTimePreviousContract(contract))),'18eaa0eec2d952cbfa130d1d245322e779c3b7eabffc704c453cdde834933c4c');assert.equal(sha(serialize(restorePlanBudgetPreviousContract(contract))),'8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839');assert.equal(parent.planBudgetCurrentRevision.references.length,115);assert.equal(parent.planBudgetCurrentRevision.sourceSetDeltas.length,22);assert.equal(parent.planBudgetCurrentRevision.sourceFamilies.length,16);\n verifyPlanBudgetCurrentSources(contract,read);\n const trial=contract.planBudgetCurrentRevision.trialExpiryNoticeRuntime,advance=trial.validationSourceAdvance;\n assert.equal(r.validationSource.sha256,'e3d963f9740e4d17b3d4e15bcf9b6c34adc569fb988493ec7b10268a42514779');\n assert.deepEqual(advance,{path:r.validationSource.path,previousSha256:r.validationSource.sha256,currentSha256:sha(read(r.validationSource.path))});\n assert.deepEqual(trial.sourceHistory.map(h=>h.path),['src/lib/participant-onboarding-authority.mjs','src/lib/participant-onboarding-reactive.mjs','scripts/lib/plan-budget-current-ci-lineage.mjs',r.validationSource.path]);\n assert.deepEqual(trial.sourceHistory.map(({path,previousSha256,currentSha256})=>({path,previousSha256,currentSha256})),[...trial.sourceAliases,trial.referenceAdvances[0],advance]);\n for(const h of trial.sourceHistory){const raw=read(h.path),rawBefore=Buffer.from(raw),old=h.path.startsWith('src/lib/')?restorePlanBudgetTrialExpiryNoticeSource(contract,h.path,raw):restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,h.path,raw);assert.equal(sha(raw),h.currentSha256);assert.equal(sha(old),h.previousSha256);assert.deepEqual(raw,rawBefore);}\n for(const h of r.sourceHistory){const raw=read(h.path),rawBefore=Buffer.from(raw),comparison=h.path==='scripts/lib/plan-budget-current-ci-lineage.mjs'?restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,h.path,raw):raw,old=restorePlanBudgetMeasurementPrivacySource(contract,h.path,raw);assert.equal(sha(comparison),h.currentSha256);assert.equal(sha(old),h.previousSha256);assert.deepEqual(raw,rawBefore);bindingDenied(contract,file=>file===h.path?old:read(file));}assert.equal(serialize(contract),before);\n});\ntest('current source binding refuses old foreign resealed or omitted producer and successor validation bytes',()=>{\n const contract=current(),spec=contract.extension.proofs.find(row=>row.kind==='PG_FIELD'),raw=read(spec.producer),old=restorePlanBudgetAttendanceReviewProducerText(contract,raw);for(const value of [old,Buffer.concat([raw,Buffer.from('\\n// foreign current producer\\n')])])bindingDenied(contract,file=>file===spec.producer?value:read(file));\n const unit=contract.planBudgetCurrentRevision.intakeWithdrawalRuntime.unitProducer,unitSpec=contract.extension.proofs.find(row=>row.id==='bank-intake-units'),unitBytes=read(unit.producer),unitParent=restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,unitBytes);assert.equal(unitSpec.producerSha256,unit.currentSha256);assert.equal(sha(unitBytes),unit.currentSha256);assert.equal(sha(unitParent),unit.previousSha256);assert.equal(unit.previousSha256,'470cdeddcce7ddf8117ca4bffeb45fc2733135aac59b399b468fd915b4b5628f');\n for(const value of [unitParent,Buffer.concat([unitBytes,Buffer.from('\\n// altered current UNIT producer\\n')])])bindingDenied(contract,file=>file===unit.producer?value:read(file));\n const resealed=structuredClone(contract);resealed.planBudgetCurrentRevision.intakeWithdrawalRuntime.unitProducer.currentSha256=sha(unitParent);bindingDenied(resealed,file=>file==='.github/workspace-acceptance-contract.json'?Buffer.from(serialize(resealed)):file===unit.producer?unitParent:read(file));\n const validation=contract.planBudgetCurrentRevision.measurementPrivacyRuntime.validationSource.path;for(const value of [null,Buffer.from('foreign regression source')])bindingDenied(contract,file=>file===validation?value:read(file));\n const validationParent=restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,validation,read(validation));assert.equal(sha(validationParent),'e3d963f9740e4d17b3d4e15bcf9b6c34adc569fb988493ec7b10268a42514779');bindingDenied(contract,file=>file===validation?validationParent:read(file));\n for(const edit of [r=>r.sourceHistory.pop(),r=>r.sourceHistory.reverse(),r=>{r.sourceHistory[0].inverseHunks[0].currentText+='foreign';},r=>r.referenceAdvances.pop(),r=>r.familyManifestAdvances.pop(),r=>{r.validationSource.sha256='f'.repeat(64);},r=>{delete r.validationSource.sha256;},r=>{r.previousContractSha256='f'.repeat(64);},r=>{r.sourceHistory[0].currentSha256=sha(old);}]){const changed=structuredClone(contract);edit(changed.planBudgetCurrentRevision.measurementPrivacyRuntime);bindingDenied(changed,file=>file==='.github/workspace-acceptance-contract.json'?Buffer.from(serialize(changed)):read(file));}\n});\n",
             "previousText": "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport {readFileSync} from 'node:fs';\nimport path from 'node:path';\nimport {fileURLToPath} from 'node:url';\nimport {createHash} from 'node:crypto';\nimport {verifyWorksiteLiveHoursCurrentSources} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';\nimport {verifyIntegratedIdentityCurrentSources} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';\nimport {verifyPlanMeasurementCurrentSources,currentFieldPrivacyRevision,restorePlanMeasurementPublishedKPrivacyProducerText} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';\nimport {restoreFieldOutboundPreviousContract} from '../scripts/lib/field-outbound-current-ci-lineage.mjs';\nimport {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetMeasurementPrivacyPreviousContract,restorePlanBudgetMeasurementPrivacySource,restorePlanBudgetCheckTimePreviousContract,restorePlanBudgetPreviousContract,planBudgetValidationFiles,restorePlanBudgetIntakeWithdrawalUnitProducerText} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';\nimport {gate} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';\nconst root=fileURLToPath(new URL('../',import.meta.url)),read=file=>Buffer.from(readFileSync(path.join(root,file),'utf8').replaceAll('\\r\\n','\\n')),sha=value=>createHash('sha256').update(value).digest('hex'),serialize=value=>JSON.stringify(value,null,2)+'\\n',current=()=>JSON.parse(read('.github/workspace-acceptance-contract.json'));\n// Intentionally missing lane records. Reaching its exact rejection proves only\n// the real gate's prior source-binding stage, never aggregate/CI acceptance.\nconst input=(contract,readSource=read)=>({contract,readSource,needs:{},expectedHead:'a'.repeat(40),workflowSha256:'b'.repeat(64),runId:'100',runAttempt:'1'});\nconst bindingDenied=(contract,reader=read)=>assert.throws(()=>gate(input(contract,reader)),{code:'PROOF_BINDING_SOURCE'});\ntest('current source binding executes the three actual outer verifiers without projecting the reader or contract',()=>{\n const contract=current(),before=serialize(contract);verifyPlanBudgetCurrentSources(contract,read);assert.ok(verifyWorksiteLiveHoursCurrentSources(contract,read));assert.ok(verifyIntegratedIdentityCurrentSources(contract,read));const result=verifyPlanMeasurementCurrentSources(contract,read);assert.equal(result.publishedCurrentSourceCount,127);assert.equal(result.sourceCount,contract.planBudgetCurrentRevision.sourceSetDeltas.find(row=>row.family==='COMPACT').currentCount);assert.equal(serialize(contract),before);\n});\ntest('the real aggregate gate passes source binding and still rejects an intentionally absent lane matrix',()=>{assert.throws(()=>gate(input(current())),{code:'MISSING_OR_EXTRA_LANE'});});\ntest('attendance producer comparison uses the complete authenticated L parent while the frozen L selector rejects the current producer',()=>{\n const contract=current(),before=serialize(contract),spec=contract.extension.proofs.find(row=>row.kind==='PG_FIELD'),raw=read(spec.producer),rawBefore=Buffer.from(raw),runtime=contract.planBudgetCurrentRevision.attendanceReviewRuntime.producer,parent=restoreFieldOutboundPreviousContract(contract),parentSpec=parent.extension.proofs.find(row=>row.id===spec.id);\n assert.equal(sha(raw),runtime.currentSha256);assert.equal(runtime.currentSha256,'4eb11afda80e9274e3fecdc229d12f21d53d29d444e6932e44837f257800ccc2');assert.throws(()=>currentFieldPrivacyRevision(contract,spec),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});\n const comparison=restorePlanBudgetAttendanceReviewProducerText(contract,raw),revision=currentFieldPrivacyRevision(parent,parentSpec);assert.equal(sha(comparison),runtime.previousSha256);assert.equal(sha(comparison),revision.currentSha256);assert.equal(revision.currentSha256,'c3cf9eed8983b9ab43ad9b11cf0f59af206b08ba70f5e6697133bb448b940662');assert.equal(sha(restorePlanMeasurementPublishedKPrivacyProducerText(parent,spec.producer,comparison)),revision.previousSha256);assert.deepEqual(raw,rawBefore);assert.deepEqual(read(spec.producer),rawBefore);assert.equal(serialize(contract),before);\n});\ntest('the binding successor restores complete9248 before9537 and eight-b while three current validator bodies remain authenticated',()=>{\n const contract=current(),before=serialize(contract),r=contract.planBudgetCurrentRevision.measurementPrivacyRuntime,parent=restorePlanBudgetMeasurementPrivacyPreviousContract(contract);assert.equal(planBudgetValidationFiles(contract).includes(r.validationSource.path),true);assert.equal(r.parentHead,'9248b8c521456f586dd8ffb3226136ff6828011a');assert.equal(sha(serialize(parent)),'eeebf3df17dfc1ab432101c2137b75742323bdce85d3412c67582c84f0cd0c7e');assert.equal(sha(serialize(restorePlanBudgetCheckTimePreviousContract(contract))),'18eaa0eec2d952cbfa130d1d245322e779c3b7eabffc704c453cdde834933c4c');assert.equal(sha(serialize(restorePlanBudgetPreviousContract(contract))),'8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839');assert.equal(parent.planBudgetCurrentRevision.references.length,115);assert.equal(parent.planBudgetCurrentRevision.sourceSetDeltas.length,22);assert.equal(parent.planBudgetCurrentRevision.sourceFamilies.length,16);\n for(const h of r.sourceHistory){const raw=read(h.path),old=restorePlanBudgetMeasurementPrivacySource(contract,h.path,raw);assert.equal(sha(raw),h.currentSha256);assert.equal(sha(old),h.previousSha256);bindingDenied(contract,file=>file===h.path?old:read(file));}assert.equal(serialize(contract),before);\n});\ntest('current source binding refuses old foreign resealed or omitted producer and successor validation bytes',()=>{\n const contract=current(),spec=contract.extension.proofs.find(row=>row.kind==='PG_FIELD'),raw=read(spec.producer),old=restorePlanBudgetAttendanceReviewProducerText(contract,raw);for(const value of [old,Buffer.concat([raw,Buffer.from('\\n// foreign current producer\\n')])])bindingDenied(contract,file=>file===spec.producer?value:read(file));\n const unit=contract.planBudgetCurrentRevision.intakeWithdrawalRuntime.unitProducer,unitSpec=contract.extension.proofs.find(row=>row.id==='bank-intake-units'),unitBytes=read(unit.producer),unitParent=restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,unitBytes);assert.equal(unitSpec.producerSha256,unit.currentSha256);assert.equal(sha(unitBytes),unit.currentSha256);assert.equal(sha(unitParent),unit.previousSha256);assert.equal(unit.previousSha256,'470cdeddcce7ddf8117ca4bffeb45fc2733135aac59b399b468fd915b4b5628f');\n for(const value of [unitParent,Buffer.concat([unitBytes,Buffer.from('\\n// altered current UNIT producer\\n')])])bindingDenied(contract,file=>file===unit.producer?value:read(file));\n const resealed=structuredClone(contract);resealed.planBudgetCurrentRevision.intakeWithdrawalRuntime.unitProducer.currentSha256=sha(unitParent);bindingDenied(resealed,file=>file==='.github/workspace-acceptance-contract.json'?Buffer.from(serialize(resealed)):file===unit.producer?unitParent:read(file));\n const validation=contract.planBudgetCurrentRevision.measurementPrivacyRuntime.validationSource.path;for(const value of [null,Buffer.from('foreign regression source')])bindingDenied(contract,file=>file===validation?value:read(file));\n for(const edit of [r=>r.sourceHistory.pop(),r=>r.sourceHistory.reverse(),r=>{r.sourceHistory[0].inverseHunks[0].currentText+='foreign';},r=>r.referenceAdvances.pop(),r=>r.familyManifestAdvances.pop(),r=>{r.validationSource.sha256='f'.repeat(64);},r=>{delete r.validationSource.sha256;},r=>{r.previousContractSha256='f'.repeat(64);},r=>{r.sourceHistory[0].currentSha256=sha(old);}]){const changed=structuredClone(contract);edit(changed.planBudgetCurrentRevision.measurementPrivacyRuntime);bindingDenied(changed,file=>file==='.github/workspace-acceptance-contract.json'?Buffer.from(serialize(changed)):read(file));}\n});\n"
+          }
+        ]
+      }
+    ],
+    "nativeOrHumanAcceptance": false
+  },
+  "pilotIntegrationRuntime": {
+    "version": 1,
+    "parentHead": "65d7962b9638ca7931d01cdb499583127779aeb3",
+    "previousContractSha256": "6cb040ad517b8a87b86a0466f23fe822dd570227392aff6209eeff037e840c71",
+    "sourceAliases": [
+      {
+        "path": "src/app/(identity)/cuenta/company-subscription-panel.js",
+        "previousSha256": "0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749",
+        "currentSha256": "b439d95c9e48f4b0ef83bd6ca93efac56dc059a8b50b508475d9d5e29af4b6dc"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/company-subscription-panel.module.css",
+        "previousSha256": "fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e",
+        "currentSha256": "678a18a7ad87f8312a7ad9e8267709297653e7572ea4b537ac42b6959b3a523a"
+      },
+      {
+        "path": "tests/production-meta-field.test.mjs",
+        "previousSha256": "fdc0ddf2cf5fab717654860bdd89543a70c161cb9fac7ab3fdd0cbc96d1c1e18",
+        "currentSha256": "bb5d1a186eea14d0bc12e53eaa436ea0e5af2853d47d0c6ce22f93172ebe00ca"
+      }
+    ],
+    "referenceAdvances": [
+      {
+        "path": "scripts/lib/attendance-review-current-ci-proof.mjs",
+        "previousSha256": "999d5daeecd597f87d01dcad2fb84701d443636d86d812eaf66ad09bb20a4805",
+        "currentSha256": "3191d1245ed225a4e2da0b9ffea779ed71744fa614a9329e6d90e23c340a6501"
+      },
+      {
+        "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+        "previousSha256": "40f82005d0fbca72d1491f0100a8395f61dcbe1455f3eaf086c39e12d1a2dcdb",
+        "currentSha256": "90bfa69a4e902dfab785ec10f210d6b0d0a21fe3992c3995c6b0e122748dab99"
+      },
+      {
+        "path": "src/lib/meta-field-bridge.mjs",
+        "previousSha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955",
+        "currentSha256": "aae13ca6ac50e48f5ad383a042b58d65c8779666061f000b57a6b97e7d281586"
+      },
+      {
+        "path": "src/lib/meta-field-conversation.mjs",
+        "previousSha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d",
+        "currentSha256": "0cc4ca71bbb588142ad9d20b44c6db683fa23327ddafb50f7b81a53f89fc1515"
+      },
+      {
+        "path": "src/lib/meta-kyc-conversation.mjs",
+        "previousSha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892",
+        "currentSha256": "e06f151f1551a3aab393c83dd5429760f686af63293490570c25841e264cd645"
+      },
+      {
+        "path": "tests/production-field-attendance-current-ci-proof.test.mjs",
+        "previousSha256": "bb73abaf901512de92b8afdbd47c0e8a589af63ef8bb038d410d850122877237",
+        "currentSha256": "77fec910b50db6b95e60723188f3c1d4900eef96c9bc43b395228ebc8163da7f"
+      },
+      {
+        "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
+        "previousSha256": "a489da83106dbd282d81007330f42aaa741a75ded10fbd2dcff4fcbba894ced0",
+        "currentSha256": "a479f91466d460927670a3d78745b75b8bb0d9abd514c00cbe1134be5b34d378"
+      }
+    ],
+    "validationSourceAdvance": {
+      "path": "tests/production-plan-measurement-current-source-binding.test.mjs",
+      "previousSha256": "5f59acca1c079f393c681979b951f660709c67dcba7bedeff319cbdc9743f8ec",
+      "currentSha256": "91c7bf35bbd5a7b4f786ab688b0a9026a59b2f9bdf5b7e2c366935daf8047f8a"
+    },
+    "familyManifestAdvances": [
+      {
+        "family": "LIVE_HOURS_RUNTIME",
+        "path": "src/app/(identity)/cuenta/company-subscription-panel.js",
+        "previousSha256": "0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749",
+        "currentSha256": "b439d95c9e48f4b0ef83bd6ca93efac56dc059a8b50b508475d9d5e29af4b6dc"
+      },
+      {
+        "family": "LIVE_HOURS_RUNTIME",
+        "path": "src/app/(identity)/cuenta/company-subscription-panel.module.css",
+        "previousSha256": "fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e",
+        "currentSha256": "678a18a7ad87f8312a7ad9e8267709297653e7572ea4b537ac42b6959b3a523a"
+      },
+      {
+        "family": "UI_FOCUSED_WORKSPACE",
+        "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+        "previousSha256": "40f82005d0fbca72d1491f0100a8395f61dcbe1455f3eaf086c39e12d1a2dcdb",
+        "currentSha256": "90bfa69a4e902dfab785ec10f210d6b0d0a21fe3992c3995c6b0e122748dab99"
+      },
+      {
+        "family": "UI_FOCUSED_WORKSPACE",
+        "path": "src/app/(identity)/cuenta/company-subscription-panel.js",
+        "previousSha256": "0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749",
+        "currentSha256": "b439d95c9e48f4b0ef83bd6ca93efac56dc059a8b50b508475d9d5e29af4b6dc"
+      },
+      {
+        "family": "UI_FOCUSED_WORKSPACE",
+        "path": "src/app/(identity)/cuenta/company-subscription-panel.module.css",
+        "previousSha256": "fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e",
+        "currentSha256": "678a18a7ad87f8312a7ad9e8267709297653e7572ea4b537ac42b6959b3a523a"
+      },
+      {
+        "family": "UI_FIELD_TASK_PAGINATION",
+        "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+        "previousSha256": "40f82005d0fbca72d1491f0100a8395f61dcbe1455f3eaf086c39e12d1a2dcdb",
+        "currentSha256": "90bfa69a4e902dfab785ec10f210d6b0d0a21fe3992c3995c6b0e122748dab99"
+      },
+      {
+        "family": "PLAN_MEASUREMENT",
+        "path": "src/lib/meta-field-bridge.mjs",
+        "previousSha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955",
+        "currentSha256": "aae13ca6ac50e48f5ad383a042b58d65c8779666061f000b57a6b97e7d281586"
+      },
+      {
+        "family": "PLAN_MEASUREMENT",
+        "path": "src/lib/meta-field-conversation.mjs",
+        "previousSha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d",
+        "currentSha256": "0cc4ca71bbb588142ad9d20b44c6db683fa23327ddafb50f7b81a53f89fc1515"
+      },
+      {
+        "family": "PLAN_MEASUREMENT",
+        "path": "src/lib/meta-kyc-conversation.mjs",
+        "previousSha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892",
+        "currentSha256": "e06f151f1551a3aab393c83dd5429760f686af63293490570c25841e264cd645"
+      },
+      {
+        "family": "CONSUMPTION_FEEDBACK",
+        "path": "src/lib/meta-field-bridge.mjs",
+        "previousSha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955",
+        "currentSha256": "aae13ca6ac50e48f5ad383a042b58d65c8779666061f000b57a6b97e7d281586"
+      },
+      {
+        "family": "CONSUMPTION_FEEDBACK",
+        "path": "src/lib/meta-field-conversation.mjs",
+        "previousSha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d",
+        "currentSha256": "0cc4ca71bbb588142ad9d20b44c6db683fa23327ddafb50f7b81a53f89fc1515"
+      },
+      {
+        "family": "CONSUMPTION_FEEDBACK",
+        "path": "src/lib/meta-kyc-conversation.mjs",
+        "previousSha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892",
+        "currentSha256": "e06f151f1551a3aab393c83dd5429760f686af63293490570c25841e264cd645"
+      },
+      {
+        "family": "COMPACT",
+        "path": "src/lib/meta-field-bridge.mjs",
+        "previousSha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955",
+        "currentSha256": "aae13ca6ac50e48f5ad383a042b58d65c8779666061f000b57a6b97e7d281586"
+      },
+      {
+        "family": "COMPACT",
+        "path": "src/lib/meta-field-conversation.mjs",
+        "previousSha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d",
+        "currentSha256": "0cc4ca71bbb588142ad9d20b44c6db683fa23327ddafb50f7b81a53f89fc1515"
+      },
+      {
+        "family": "COMPACT",
+        "path": "src/lib/meta-kyc-conversation.mjs",
+        "previousSha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892",
+        "currentSha256": "e06f151f1551a3aab393c83dd5429760f686af63293490570c25841e264cd645"
+      },
+      {
+        "family": "ORGANIZATION_USAGE",
+        "path": "src/lib/meta-field-bridge.mjs",
+        "previousSha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955",
+        "currentSha256": "aae13ca6ac50e48f5ad383a042b58d65c8779666061f000b57a6b97e7d281586"
+      },
+      {
+        "family": "ORGANIZATION_USAGE",
+        "path": "src/lib/meta-field-conversation.mjs",
+        "previousSha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d",
+        "currentSha256": "0cc4ca71bbb588142ad9d20b44c6db683fa23327ddafb50f7b81a53f89fc1515"
+      },
+      {
+        "family": "ORGANIZATION_USAGE",
+        "path": "src/lib/meta-kyc-conversation.mjs",
+        "previousSha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892",
+        "currentSha256": "e06f151f1551a3aab393c83dd5429760f686af63293490570c25841e264cd645"
+      },
+      {
+        "family": "KYC_REPLY_FEEDBACK",
+        "path": "src/lib/meta-field-bridge.mjs",
+        "previousSha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955",
+        "currentSha256": "aae13ca6ac50e48f5ad383a042b58d65c8779666061f000b57a6b97e7d281586"
+      },
+      {
+        "family": "KYC_REPLY_FEEDBACK",
+        "path": "src/lib/meta-field-conversation.mjs",
+        "previousSha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d",
+        "currentSha256": "0cc4ca71bbb588142ad9d20b44c6db683fa23327ddafb50f7b81a53f89fc1515"
+      },
+      {
+        "family": "KYC_REPLY_FEEDBACK",
+        "path": "src/lib/meta-kyc-conversation.mjs",
+        "previousSha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892",
+        "currentSha256": "e06f151f1551a3aab393c83dd5429760f686af63293490570c25841e264cd645"
+      },
+      {
+        "family": "ORGANIZATION_USAGE_UI",
+        "path": "src/app/(identity)/cuenta/company-subscription-panel.js",
+        "previousSha256": "0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749",
+        "currentSha256": "b439d95c9e48f4b0ef83bd6ca93efac56dc059a8b50b508475d9d5e29af4b6dc"
+      },
+      {
+        "family": "ORGANIZATION_USAGE_UI",
+        "path": "src/app/(identity)/cuenta/company-subscription-panel.module.css",
+        "previousSha256": "fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e",
+        "currentSha256": "678a18a7ad87f8312a7ad9e8267709297653e7572ea4b537ac42b6959b3a523a"
+      },
+      {
+        "family": "PLAN_BUDGET_UI",
+        "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+        "previousSha256": "40f82005d0fbca72d1491f0100a8395f61dcbe1455f3eaf086c39e12d1a2dcdb",
+        "currentSha256": "90bfa69a4e902dfab785ec10f210d6b0d0a21fe3992c3995c6b0e122748dab99"
+      }
+    ],
+    "sourceHistory": [
+      {
+        "path": "scripts/lib/attendance-review-current-ci-proof.mjs",
+        "previousSha256": "999d5daeecd597f87d01dcad2fb84701d443636d86d812eaf66ad09bb20a4805",
+        "currentSha256": "3191d1245ed225a4e2da0b9ffea779ed71744fa614a9329e6d90e23c340a6501",
+        "previousBytes": 25594,
+        "currentBytes": 25685,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 70,
+            "currentText": "import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetTrialExpiryNoticeSource,restorePlanBudgetPilotIntegrationSource} from './plan-budget-current-ci-lineage.mjs';\n",
+            "previousText": "import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetTrialExpiryNoticeSource} from './plan-budget-current-ci-lineage.mjs';\n"
+          },
+          {
+            "currentOffsetCharacters": 24754,
+            "currentText": " for(const [file,digest] of Object.entries(SOURCE_BINDINGS)){const bytes=lf(read(file));let parent=restorePlanBudgetPilotIntegrationSource(c,file,bytes);if(file==='src/lib/meta-consumption-evidence-catalog.mjs')try{parent=restorePlanBudgetConsumptionEvidenceSource(c,file,parent);}catch{reject(false,'CURRENT_SOURCE_'+file);}if(file==='src/lib/meta-kyc-conversation.mjs')try{parent=restorePlanBudgetIntakeWithdrawalSource(c,file,parent);}catch{reject(false,'CURRENT_SOURCE_'+file);}if(file==='src/lib/participant-onboarding-authority.mjs'||file==='src/lib/participant-onboarding-reactive.mjs')try{parent=restorePlanBudgetTrialExpiryNoticeSource(c,file,parent);}catch{reject(false,'CURRENT_SOURCE_'+file);}reject(hash(parent)===digest,'CURRENT_SOURCE_'+file);}\n",
+            "previousText": " for(const [file,digest] of Object.entries(SOURCE_BINDINGS)){const bytes=lf(read(file));let parent=bytes;if(file==='src/lib/meta-consumption-evidence-catalog.mjs')try{parent=restorePlanBudgetConsumptionEvidenceSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}if(file==='src/lib/meta-kyc-conversation.mjs')try{parent=restorePlanBudgetIntakeWithdrawalSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}if(file==='src/lib/participant-onboarding-authority.mjs'||file==='src/lib/participant-onboarding-reactive.mjs')try{parent=restorePlanBudgetTrialExpiryNoticeSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}reject(hash(parent)===digest,'CURRENT_SOURCE_'+file);}\n"
+          }
+        ]
+      },
+      {
+        "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
+        "previousSha256": "40f82005d0fbca72d1491f0100a8395f61dcbe1455f3eaf086c39e12d1a2dcdb",
+        "currentSha256": "90bfa69a4e902dfab785ec10f210d6b0d0a21fe3992c3995c6b0e122748dab99",
+        "previousBytes": 80194,
+        "currentBytes": 90144,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 1975,
+            "currentText": "// Exact successor of Git65d. Current proofs retain actual bytes and maps;\n// these inverses are local values for the unchanged historical validators.\nfunction integrationParentRevision(value){\n const r=value.pilotIntegrationRuntime;\n exact(r,['version','parentHead','previousContractSha256','sourceAliases','referenceAdvances','validationSourceAdvance','familyManifestAdvances','sourceHistory','nativeOrHumanAcceptance'],'INTEGRATION_KEYS');\n reject(r.version===1&&r.parentHead==='65d7962b9638ca7931d01cdb499583127779aeb3'&&r.previousContractSha256==='6cb040ad517b8a87b86a0466f23fe822dd570227392aff6209eeff037e840c71'&&r.nativeOrHumanAcceptance===false,'INTEGRATION_PARENT');\n const predecessors=[{\"path\":\"scripts/lib/attendance-review-current-ci-proof.mjs\",\"previousSha256\":\"999d5daeecd597f87d01dcad2fb84701d443636d86d812eaf66ad09bb20a4805\"},{\"path\":\"scripts/lib/plan-budget-current-ci-lineage.mjs\",\"previousSha256\":\"40f82005d0fbca72d1491f0100a8395f61dcbe1455f3eaf086c39e12d1a2dcdb\"},{\"path\":\"src/app/(identity)/cuenta/company-subscription-panel.js\",\"previousSha256\":\"0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749\"},{\"path\":\"src/app/(identity)/cuenta/company-subscription-panel.module.css\",\"previousSha256\":\"fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e\"},{\"path\":\"src/lib/meta-field-bridge.mjs\",\"previousSha256\":\"7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955\"},{\"path\":\"src/lib/meta-field-conversation.mjs\",\"previousSha256\":\"c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d\"},{\"path\":\"src/lib/meta-kyc-conversation.mjs\",\"previousSha256\":\"14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892\"},{\"path\":\"tests/production-field-attendance-current-ci-proof.test.mjs\",\"previousSha256\":\"bb73abaf901512de92b8afdbd47c0e8a589af63ef8bb038d410d850122877237\"},{\"path\":\"tests/production-meta-field.test.mjs\",\"previousSha256\":\"fdc0ddf2cf5fab717654860bdd89543a70c161cb9fac7ab3fdd0cbc96d1c1e18\"},{\"path\":\"tests/production-pilot-whatsapp-current-lineage.test.mjs\",\"previousSha256\":\"a489da83106dbd282d81007330f42aaa741a75ded10fbd2dcff4fcbba894ced0\"},{\"path\":\"tests/production-plan-measurement-current-source-binding.test.mjs\",\"previousSha256\":\"5f59acca1c079f393c681979b951f660709c67dcba7bedeff319cbdc9743f8ec\"}];\n const byPath=new Map(predecessors.map(row=>[row.path,row.previousSha256]));\n const aliases=['src/app/(identity)/cuenta/company-subscription-panel.js','src/app/(identity)/cuenta/company-subscription-panel.module.css','tests/production-meta-field.test.mjs'];\n const validation='tests/production-plan-measurement-current-source-binding.test.mjs';\n const advances=predecessors.map(row=>row.path).filter(file=>!aliases.includes(file)&&file!==validation);\n reject(Array.isArray(r.sourceAliases)&&same(r.sourceAliases.map(row=>row.path),aliases)&&Array.isArray(r.referenceAdvances)&&same(r.referenceAdvances.map(row=>row.path),advances),'INTEGRATION_EXACT_REFERENCES');\n exact(r.validationSourceAdvance,['path','previousSha256','currentSha256'],'INTEGRATION_VALIDATION_KEYS');reject(r.validationSourceAdvance.path===validation,'INTEGRATION_VALIDATION');\n const refs=[...r.sourceAliases,...r.referenceAdvances,r.validationSourceAdvance];\n for(const row of refs){exact(row,['path','previousSha256','currentSha256'],'INTEGRATION_REFERENCE_KEYS');reject(row.previousSha256===byPath.get(row.path)&&hash(row.currentSha256)&&row.currentSha256!==row.previousSha256,'INTEGRATION_REFERENCE_PIN');}\n reject(Array.isArray(r.sourceHistory)&&same(r.sourceHistory.map(row=>row.path),predecessors.map(row=>row.path)),'INTEGRATION_EXACT_HISTORY');\n for(const h of r.sourceHistory){exact(h,['path','previousSha256','currentSha256','previousBytes','currentBytes','inverseHunks'],'INTEGRATION_HISTORY_KEYS');const ref=refs.find(row=>row.path===h.path);reject(ref&&h.previousSha256===ref.previousSha256&&h.currentSha256===ref.currentSha256&&[h.previousBytes,h.currentBytes].every(n=>Number.isSafeInteger(n)&&n>0)&&Array.isArray(h.inverseHunks)&&h.inverseHunks.length>0,'INTEGRATION_HISTORY_PIN');let end=0;for(const b of h.inverseHunks){exact(b,['currentOffsetCharacters','currentText','previousText'],'INTEGRATION_HUNK_KEYS');reject(Number.isSafeInteger(b.currentOffsetCharacters)&&b.currentOffsetCharacters>=end&&typeof b.currentText==='string'&&typeof b.previousText==='string'&&b.currentText!==b.previousText,'INTEGRATION_ORDERED_HUNKS');end=b.currentOffsetCharacters+b.currentText.length;}}\n const pairs=value.sourceFamilies.flatMap(f=>f.currentManifest.filter(row=>byPath.has(row.path)).map(row=>[f.family,row.path]));\n reject(Array.isArray(r.familyManifestAdvances)&&same(r.familyManifestAdvances.map(row=>[row.family,row.path]),pairs),'INTEGRATION_EXACT_FAMILIES');\n const parent=structuredClone(value);delete parent.pilotIntegrationRuntime;\n for(const row of r.sourceAliases){const found=parent.references.filter(ref=>ref.path===row.path);reject(found.length===1&&same(found[0],row),'INTEGRATION_ADDED_ALIAS');parent.references=parent.references.filter(ref=>ref.path!==row.path);}\n for(const row of r.referenceAdvances){const ref=parent.references.find(ref=>ref.path===row.path);reject(ref?.currentSha256===row.currentSha256,'INTEGRATION_REFERENCE_RESTORE');ref.currentSha256=row.previousSha256;}\n reject(!parent.references.some(row=>row.path===validation),'INTEGRATION_VALIDATION_OUTSIDE_REFERENCES');\n for(const row of r.familyManifestAdvances){exact(row,['family','path','previousSha256','currentSha256'],'INTEGRATION_FAMILY_KEYS');const h=refs.find(ref=>ref.path===row.path),ref=parent.sourceFamilies.find(f=>f.family===row.family)?.currentManifest.find(ref=>ref.path===row.path);reject(h&&h.previousSha256===row.previousSha256&&h.currentSha256===row.currentSha256&&ref?.sha256===row.currentSha256,'INTEGRATION_FAMILY_JOIN');ref.sha256=row.previousSha256;}\n reject(value.references.length===120&&parent.references.length===117&&parent.sourceFamilies.length===16,'INTEGRATION_SOURCE_COUNTS');return parent;\n}\nfunction integrationParentContract(contract){\n const out=structuredClone(contract);out[PLAN_BUDGET_CURRENT_SECTION]=integrationParentRevision(out[PLAN_BUDGET_CURRENT_SECTION]);\n reject(sha(JSON.stringify(out,null,2)+'\\n')===currentExpected.pilotIntegrationRuntime.previousContractSha256,'INTEGRATION_COMPLETE_65D_CONTRACT');return out;\n}\nfunction integrationParentSource(file,bytes,allowParent=false){\n const h=currentExpected.pilotIntegrationRuntime.sourceHistory.find(row=>row.path===file);if(!h)return bytes;\n reject(Buffer.isBuffer(bytes)&&bytes.equals(Buffer.from(bytes.toString('utf8'))),'INTEGRATION_UTF8_SOURCE_'+file);let text=bytes.toString('utf8').replaceAll('\\r\\n','\\n');\n if(allowParent&&sha(text)===h.previousSha256&&Buffer.byteLength(text)===h.previousBytes)return Buffer.from(text);\n reject(sha(text)===h.currentSha256&&Buffer.byteLength(text)===h.currentBytes,'INTEGRATION_CURRENT_SOURCE_'+file);\n for(const b of [...h.inverseHunks].reverse()){const at=b.currentOffsetCharacters;reject(text.slice(at,at+b.currentText.length)===b.currentText,'INTEGRATION_EXACT_HUNK_'+file);text=text.slice(0,at)+b.previousText+text.slice(at+b.currentText.length);}\n reject(sha(text)===h.previousSha256&&Buffer.byteLength(text)===h.previousBytes,'INTEGRATION_COMPLETE_SOURCE_INVERSE_'+file);return Buffer.from(text);\n}\nfunction integrationParentReader(reader){return file=>file===anchor?Buffer.from(declaration(expected)):integrationParentSource(file,reader(file));}\nfunction verifyIntegrationActualSources(contract,reader){\n integrationParentContract(contract);reject(read(reader,anchor).toString()===declaration(currentExpected),'INTEGRATION_DECLARATION_BYTES');\n for(const row of currentExpected.references)reject(sha(read(reader,row.path))===row.currentSha256,'INTEGRATION_CURRENT_REFERENCE_'+row.path);\n for(const row of currentExpected.pilotIntegrationRuntime.sourceHistory)integrationParentSource(row.path,read(reader,row.path));\n}\nfunction integrationAdvancedPin(ref){const h=currentExpected.pilotIntegrationRuntime.sourceHistory.find(row=>row.path===ref.path);return h&&ref.sha256===h.previousSha256?h.currentSha256:ref.sha256;}\nfunction integrationInputPin(ref){const h=currentExpected.pilotIntegrationRuntime.sourceHistory.find(row=>row.path===ref.path);return h&&ref.sha256===h.currentSha256?{...ref,sha256:h.previousSha256}:ref;}\nexport function restorePlanBudgetPilotIntegrationPreviousContract(contract){section(contract,true);return integrationParentContract(contract);}\nexport function restorePlanBudgetPilotIntegrationSource(contract,file,bytes){section(contract,true);return integrationParentSource(file,bytes);}\n\nconst currentExpected=structuredClone(reviewed),expected=integrationParentRevision(currentExpected);let compiled=null;\n",
+            "previousText": "const expected=structuredClone(reviewed);let compiled=null;\n"
+          },
+          {
+            "currentOffsetCharacters": 31135,
+            "currentText": "export function restorePlanBudgetIntakeWithdrawalSource(contract,file,bytes){bytes=integrationParentSource(file,bytes,true);const h=section(contract,true).intakeWithdrawalRuntime.conversation;return file===h.path?restoreIntakeWithdrawalText(h,bytes,'CONVERSATION'):bytes;}\n",
+            "previousText": "export function restorePlanBudgetIntakeWithdrawalSource(contract,file,bytes){const h=section(contract,true).intakeWithdrawalRuntime.conversation;return file===h.path?restoreIntakeWithdrawalText(h,bytes,'CONVERSATION'):bytes;}\n"
+          },
+          {
+            "currentOffsetCharacters": 41199,
+            "currentText": "function trialExpiryParentContract(contract,r){contract=integrationParentContract(contract);const out=structuredClone(contract);out[PLAN_BUDGET_CURRENT_SECTION]=trialExpiryParentRevision(out[PLAN_BUDGET_CURRENT_SECTION],r);reject(sha(JSON.stringify(out,null,2)+'\\n')===r.previousContractSha256,'TRIAL_EXPIRY_COMPLETE_EFB8_CONTRACT');return out;}\n",
+            "previousText": "function trialExpiryParentContract(contract,r){const out=structuredClone(contract);out[PLAN_BUDGET_CURRENT_SECTION]=trialExpiryParentRevision(out[PLAN_BUDGET_CURRENT_SECTION],r);reject(sha(JSON.stringify(out,null,2)+'\\n')===r.previousContractSha256,'TRIAL_EXPIRY_COMPLETE_EFB8_CONTRACT');return out;}\n"
+          },
+          {
+            "currentOffsetCharacters": 41587,
+            "currentText": " bytes=integrationParentSource(file,bytes,true);\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 43324,
+            "currentText": "function trialExpiryCurrentNativeManifest(v,manifest){return manifest.map(ref=>{const a=v.trialExpiryNoticeRuntime.sourceAliases.find(a=>a.path===ref.path);if(!a)return ref;reject(ref.sha256===a.previousSha256,'TRIAL_EXPIRY_NATIVE_PARENT_'+ref.path);return {...ref,sha256:a.currentSha256};}).map(ref=>({...ref,sha256:integrationAdvancedPin(ref)}));}\n",
+            "previousText": "function trialExpiryCurrentNativeManifest(v,manifest){return manifest.map(ref=>{const a=v.trialExpiryNoticeRuntime.sourceAliases.find(a=>a.path===ref.path);if(!a)return ref;reject(ref.sha256===a.previousSha256,'TRIAL_EXPIRY_NATIVE_PARENT_'+ref.path);return {...ref,sha256:a.currentSha256};});}\n"
+          },
+          {
+            "currentOffsetCharacters": 64118,
+            "currentText": "function section(contract,required=false){reject(plain(contract),'CONTRACT');if(!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION)){reject(!required,'BUDGET_COMPANION_REQUIRED');return null;}compile();reject(same(contract[PLAN_BUDGET_CURRENT_SECTION],currentExpected),'IMMUTABLE_COMPANION');return expected;}\n",
+            "previousText": "function section(contract,required=false){reject(plain(contract),'CONTRACT');if(!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION)){reject(!required,'BUDGET_COMPANION_REQUIRED');return null;}compile();reject(same(contract[PLAN_BUDGET_CURRENT_SECTION],expected),'IMMUTABLE_COMPANION');return expected;}\n"
+          },
+          {
+            "currentOffsetCharacters": 67118,
+            "currentText": "function parentPlanBudgetCurrentSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;exact(ref,['path','sha256'],'SOURCE_PIN');ref={...ref,sha256:trialExpiryAdvancedPin({...ref,sha256:measurementPrivacyAdvancedPin(ref)})};const time=(compile()&&expected.checkTimeRuntime.sourceHistory).find(row=>row.path===ref.path);if(time){reject([time.previousSha256,time.currentSha256].includes(ref.sha256),'CHECK_TIME_EXACT_SOURCE_PIN');return time.currentSha256;}const row=compile().refs.get(ref.path);if(!row)return ref.sha256;reject([row.previousSha256,row.currentSha256].filter(Boolean).includes(ref.sha256),'EXACT_PREVIOUS_CURRENT_PIN_'+ref.path);return row.currentSha256;}\nfunction parentPlanBudgetPreviousSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;ref={...ref,sha256:trialExpiryPreviousPin({...ref,sha256:measurementPrivacyAdvancedPin(ref)})};const time=(compile()&&expected.checkTimeRuntime.sourceHistory).find(row=>row.path===ref.path);if(time){exact(ref,['path','sha256'],'CHECK_TIME_PREVIOUS_SOURCE_PIN');reject([time.previousSha256,time.currentSha256].includes(ref.sha256),'CHECK_TIME_EXACT_PREVIOUS_PIN');return time.previousSha256;}const row=compile().refs.get(ref.path);return row?.previousSha256&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}\n",
+            "previousText": "export function planBudgetCurrentSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;exact(ref,['path','sha256'],'SOURCE_PIN');ref={...ref,sha256:trialExpiryAdvancedPin({...ref,sha256:measurementPrivacyAdvancedPin(ref)})};const time=(compile()&&expected.checkTimeRuntime.sourceHistory).find(row=>row.path===ref.path);if(time){reject([time.previousSha256,time.currentSha256].includes(ref.sha256),'CHECK_TIME_EXACT_SOURCE_PIN');return time.currentSha256;}const row=compile().refs.get(ref.path);if(!row)return ref.sha256;reject([row.previousSha256,row.currentSha256].filter(Boolean).includes(ref.sha256),'EXACT_PREVIOUS_CURRENT_PIN_'+ref.path);return row.currentSha256;}\nexport function planBudgetPreviousSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;ref={...ref,sha256:trialExpiryPreviousPin({...ref,sha256:measurementPrivacyAdvancedPin(ref)})};const time=(compile()&&expected.checkTimeRuntime.sourceHistory).find(row=>row.path===ref.path);if(time){exact(ref,['path','sha256'],'CHECK_TIME_PREVIOUS_SOURCE_PIN');reject([time.previousSha256,time.currentSha256].includes(ref.sha256),'CHECK_TIME_EXACT_PREVIOUS_PIN');return time.previousSha256;}const row=compile().refs.get(ref.path);return row?.previousSha256&&ref.sha256===row.currentSha256?row.previousSha256:ref.sha256;}\n"
+          },
+          {
+            "currentOffsetCharacters": 69367,
+            "currentText": "export function verifyPlanBudgetCurrentSources(contract,readSource){const v=section(contract,true);verifyIntegrationActualSources(contract,readSource);readSource=integrationParentReader(readSource);verifyTrialExpirySources(v,readSource);verifyMeasurementPrivacySources(v,readSource);verifyCheckTimeSources(v,readSource);restorePlanBudgetPreviousContract(contract);reject(read(readSource,anchor).toString()===compile().text,'DECLARATION_BYTES');for(const row of v.references)reject(sha(read(readSource,row.path))===row.currentSha256,'CURRENT_SOURCE_'+row.path);for(const row of v.pilotWhatsAppRuntime.producerDeltas)restorePlanBudgetPilotProducerText(contract,row.producer,read(readSource,row.producer));restorePlanBudgetAttendanceReviewProducerText(contract,read(readSource,v.attendanceReviewRuntime.producer.producer));restorePlanBudgetIntakeWithdrawalSource(contract,v.intakeWithdrawalRuntime.conversation.path,read(readSource,v.intakeWithdrawalRuntime.conversation.path));restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,read(readSource,v.intakeWithdrawalRuntime.unitProducer.producer));return {completePreviousContractRestored:true,previousContractSha256:previousHash,referenceCount:currentExpected.references.length,nativeOrBrowserAcceptance:false};}\nexport function verifyPlanBudgetActualClosure(contract,family,closure,readSource){const v=section(contract,true);verifyIntegrationActualSources(contract,readSource);const actual=currentExpected.sourceFamilies.find(row=>row.family===family);reject(Boolean(actual),'INTEGRATION_CURRENT_FAMILY');for(const ref of actual.currentManifest){const bytes=read(readSource,ref.path);reject(ref.path===anchor?bytes.toString()===declaration(currentExpected):sha(bytes)===ref.sha256,'INTEGRATION_CURRENT_FAMILY_SOURCE_'+ref.path);}readSource=integrationParentReader(readSource);verifyTrialExpirySources(v,readSource);verifyMeasurementPrivacySources(v,readSource);verifyCheckTimeSources(v,readSource);restorePlanBudgetPreviousContract(contract);const row=compile().families.get(family);reject(Boolean(row),'EXPLICIT_FAMILY');exact(closure,['files','externalImports'],'CLOSURE_KEYS');reject(same(closure.files,row.currentFiles)&&same(closure.externalImports,row.externalImports),'EXACT_CURRENT_CLOSURE');for(const ref of row.currentManifest){const bytes=read(readSource,ref.path);reject(ref.path===anchor?bytes.toString()===compile().text:sha(bytes)===ref.sha256,'CURRENT_FAMILY_SOURCE_'+ref.path);}return {family,sourceCount:row.currentFiles.length,sourcePathsSha256:sha(JSON.stringify(row.currentFiles)),nativeOrBrowserAcceptance:false};}\n",
+            "previousText": "export function verifyPlanBudgetCurrentSources(contract,readSource){const v=section(contract,true);verifyTrialExpirySources(v,readSource);verifyMeasurementPrivacySources(v,readSource);verifyCheckTimeSources(v,readSource);restorePlanBudgetPreviousContract(contract);reject(read(readSource,anchor).toString()===compile().text,'DECLARATION_BYTES');for(const row of v.references)reject(sha(read(readSource,row.path))===row.currentSha256,'CURRENT_SOURCE_'+row.path);for(const row of v.pilotWhatsAppRuntime.producerDeltas)restorePlanBudgetPilotProducerText(contract,row.producer,read(readSource,row.producer));restorePlanBudgetAttendanceReviewProducerText(contract,read(readSource,v.attendanceReviewRuntime.producer.producer));restorePlanBudgetIntakeWithdrawalSource(contract,v.intakeWithdrawalRuntime.conversation.path,read(readSource,v.intakeWithdrawalRuntime.conversation.path));restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,read(readSource,v.intakeWithdrawalRuntime.unitProducer.producer));return {completePreviousContractRestored:true,previousContractSha256:previousHash,referenceCount:v.references.length,nativeOrBrowserAcceptance:false};}\nexport function verifyPlanBudgetActualClosure(contract,family,closure,readSource){const v=section(contract,true);verifyTrialExpirySources(v,readSource);verifyMeasurementPrivacySources(v,readSource);verifyCheckTimeSources(v,readSource);restorePlanBudgetPreviousContract(contract);const row=compile().families.get(family);reject(Boolean(row),'EXPLICIT_FAMILY');exact(closure,['files','externalImports'],'CLOSURE_KEYS');reject(same(closure.files,row.currentFiles)&&same(closure.externalImports,row.externalImports),'EXACT_CURRENT_CLOSURE');for(const ref of row.currentManifest){const bytes=read(readSource,ref.path);reject(ref.path===anchor?bytes.toString()===compile().text:sha(bytes)===ref.sha256,'CURRENT_FAMILY_SOURCE_'+ref.path);}return {family,sourceCount:row.currentFiles.length,sourcePathsSha256:sha(JSON.stringify(row.currentFiles)),nativeOrBrowserAcceptance:false};}\n"
+          },
+          {
+            "currentOffsetCharacters": 72350,
+            "currentText": "export function planBudgetValidationFiles(contract){const v=section(contract);return v?[...new Set([anchor,...currentExpected.references.map(row=>row.path),...v.checkTimeRuntime.sourceHistory.map(row=>row.path),v.measurementPrivacyRuntime.validationSource.path])].sort():[];}\n",
+            "previousText": "export function planBudgetValidationFiles(contract){const v=section(contract);return v?[...new Set([anchor,...v.references.map(row=>row.path),...v.checkTimeRuntime.sourceHistory.map(row=>row.path),v.measurementPrivacyRuntime.validationSource.path])].sort():[];}\n"
+          },
+          {
+            "currentOffsetCharacters": 89640,
+            "currentText": "\nexport function planBudgetCurrentSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;return integrationAdvancedPin({path:ref.path,sha256:parentPlanBudgetCurrentSourcePin(contract,integrationInputPin(ref))});}\nexport function planBudgetPreviousSourcePin(contract,ref){if(!plain(contract)||!Object.hasOwn(contract,PLAN_BUDGET_CURRENT_SECTION))return ref.sha256;return parentPlanBudgetPreviousSourcePin(contract,integrationInputPin(ref));}\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "src/app/(identity)/cuenta/company-subscription-panel.js",
+        "previousSha256": "0b208fdcbea4900bd6adf86ad80f8524b5afa647d78a24fbf5731d3d7d79c749",
+        "currentSha256": "b439d95c9e48f4b0ef83bd6ca93efac56dc059a8b50b508475d9d5e29af4b6dc",
+        "previousBytes": 22163,
+        "currentBytes": 23755,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 13331,
+            "currentText": "  const referencesOnly = Boolean(view && !view.offers.some(offer => offer.termsReady));\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 15461,
+            "currentText": "      {!view.configurationReady && !referencesOnly && <div className={styles.setup} data-subscription-setup><ShieldCheck size={22} aria-hidden=\"true\"/><div><h4>El pago en línea todavía no está habilitado</h4><p>Los precios son informativos. La aceptación de condiciones y el cobro se confirman por separado.</p></div></div>}\n      {referencesOnly ? <div className={styles.purchase} data-commercial-offers data-commercial-references>\n        <fieldset className={styles.offers}>\n          <legend>Planes de referencia</legend>\n          <div className={styles.offerGrid}>{view.offers.map(offer => <article className={styles.offer} style={{cursor:'default'}} key={offer.id}>\n            <h4 className={styles.offerHeading}>{offer.planLabel}</h4>\n            <span className={styles.price}>{offer.priceLabel}<small>{offer.periodLabel}</small></span>\n            {offer.taxTreatment !== null && <span className={styles.tax}>{offer.taxLabel}</span>}\n          </article>)}</div>\n        </fieldset>\n        <p className={styles.note} data-commercial-pending>La contratación todavía requiere confirmar las condiciones finales y la forma de pago.</p>\n        <div className={styles.included}><Check size={18} aria-hidden=\"true\"/><p>Un único abono para toda la empresa, sin adicionales automáticos.</p></div>\n        <a className={pending?styles.secondary:styles.primary} href=\"mailto:info@obrasaas.com\" data-company-plan-support>Consultar contratación</a>\n        <details className={`${styles.note} ${styles.conditions}`} data-commercial-pending-details><summary>Ver condiciones de contratación</summary><p>Antes de contratar, se confirmarán los impuestos, los servicios incluidos y las condiciones del plan.</p><p>La consulta abre un borrador de correo para que lo revises y envíes.</p></details>\n      </div> : <form onSubmit={acceptOffer} className={styles.purchase} data-commercial-offers>\n",
+            "previousText": "      {!view.configurationReady && <div className={styles.setup} data-subscription-setup><ShieldCheck size={22} aria-hidden=\"true\"/><div><h4>El pago en línea todavía no está habilitado</h4><p>Los precios son informativos. La aceptación de condiciones y el cobro se confirman por separado.</p></div></div>}\n      <form onSubmit={acceptOffer} className={styles.purchase} data-commercial-offers>\n"
+          },
+          {
+            "currentOffsetCharacters": 19959,
+            "currentText": "      </form>}\n",
+            "previousText": "      </form>\n"
+          }
+        ]
+      },
+      {
+        "path": "src/app/(identity)/cuenta/company-subscription-panel.module.css",
+        "previousSha256": "fdede43a09f48b011f7e3cb184ea16bf0be0e98069e7a953b71b8e391b3dfa3e",
+        "currentSha256": "678a18a7ad87f8312a7ad9e8267709297653e7572ea4b537ac42b6959b3a523a",
+        "previousBytes": 7342,
+        "currentBytes": 7536,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 5604,
+            "currentText": ".conditions summary{min-height:44px;padding:12px 0;cursor:pointer;color:#234b5c;font-size:.88rem;font-weight:650}\n.conditions summary:focus-visible{outline:3px solid #3b89a9;outline-offset:3px}\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "src/lib/meta-field-bridge.mjs",
+        "previousSha256": "7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955",
+        "currentSha256": "aae13ca6ac50e48f5ad383a042b58d65c8779666061f000b57a6b97e7d281586",
+        "previousBytes": 86413,
+        "currentBytes": 86445,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 56557,
+            "currentText": "  const progressWithdrawal=Boolean(activeState?.purpose==='PROGRESS'&&(activeState.progressEvidenceWait||activeState.step==='CONFIRM')&&selectedChoice(activeState,r.proof.value)==='CANCEL');\n",
+            "previousText": "  const progressWithdrawal=Boolean(activeState?.purpose==='PROGRESS'&&activeState.progressEvidenceWait&&selectedChoice(activeState,r.proof.value)==='CANCEL');\n"
+          }
+        ]
+      },
+      {
+        "path": "src/lib/meta-field-conversation.mjs",
+        "previousSha256": "c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d",
+        "currentSha256": "0cc4ca71bbb588142ad9d20b44c6db683fa23327ddafb50f7b81a53f89fc1515",
+        "previousBytes": 73742,
+        "currentBytes": 73922,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 45184,
+            "currentText": " if(s.purpose==='PROGRESS'&&s.step==='CONFIRM'&&!s.progressEvidenceWait&&selected==='CANCEL')return {state:null,reply:text('Operación cancelada. Escribí MENU para continuar.')};\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "src/lib/meta-kyc-conversation.mjs",
+        "previousSha256": "14960607758ad6481e7b32ee356357e16dc8bbc95d03ffb3b64cc1f9e7775892",
+        "currentSha256": "e06f151f1551a3aab393c83dd5429760f686af63293490570c25841e264cd645",
+        "previousBytes": 16932,
+        "currentBytes": 16964,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 2922,
+            "currentText": "  const rows=state.step==='WELCOME'?[['REQUEST_ACCESS','Solicitar ingreso a obra'],['ACCOUNT','Ya tengo cuenta']]:state.step==='ADMITTED'?[['ACCOUNT','Abrir mi cuenta'],['IDENTITY_GUIDANCE','Consultar identidad']]:state.step==='JOB'?Object.entries(SITE_ROLES):[['CONFIRM','Enviar solicitud'],['CANCEL','Cancelar']];\n",
+            "previousText": "  const rows=state.step==='WELCOME'?[['REQUEST_ACCESS','Solicitar ingreso a obra'],['ACCOUNT','Ya tengo cuenta']]:state.step==='ADMITTED'?[['ACCOUNT','Abrir mi cuenta'],['IDENTITY_GUIDANCE','Presentar identidad']]:state.step==='JOB'?Object.entries(SITE_ROLES):[['CONFIRM','Enviar solicitud'],['CANCEL','Cancelar']];\n"
+          },
+          {
+            "currentOffsetCharacters": 3322,
+            "currentText": "  return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body:state.step==='WELCOME'?'Hola, te damos la bienvenida a ObraSaaS. Elegí cómo querés continuar. No envíes documentos en este paso.':state.step==='ADMITTED'?'Tu ficha está registrada. Elegí una opción para continuar.':state.step==='JOB'?'Elegí el oficio o función que solicitás. Un responsable decidirá la participación; esto no concede permisos.':EMPLOYEE_INTAKE_NOTICE+'\\nNombre: '+state.name+'\\nOficio solicitado: '+SITE_ROLES[state.job]+'\\nCorreo: '+state.email,button:'Elegir',sections:[{title:state.step==='WELCOME'?'Bienvenida':state.step==='ADMITTED'?'Tu participación':'Solicitud de ingreso',rows:rows.map(([,title],index)=>({id:'intake:'+nonce+':'+index,title:title.slice(0,24)}))}]}};\n",
+            "previousText": "  return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body:state.step==='WELCOME'?'Hola, te damos la bienvenida a ObraSaaS. Elegí cómo querés continuar. No envíes documentos en este paso.':state.step==='ADMITTED'?'Tu ficha está registrada. Elegí cómo continuar. La identidad y los permisos se revisan por separado.':state.step==='JOB'?'Elegí el oficio o función que solicitás. Un responsable decidirá la participación; esto no concede permisos.':EMPLOYEE_INTAKE_NOTICE+'\\nNombre: '+state.name+'\\nOficio solicitado: '+SITE_ROLES[state.job]+'\\nCorreo: '+state.email,button:'Elegir',sections:[{title:state.step==='WELCOME'?'Bienvenida':state.step==='ADMITTED'?'Tu participación':'Solicitud de ingreso',rows:rows.map(([,title],index)=>({id:'intake:'+nonce+':'+index,title:title.slice(0,24)}))}]}};\n"
+          },
+          {
+            "currentOffsetCharacters": 5703,
+            "currentText": "  if(selected==='ACCOUNT')return {state:next,reply:intakeText('Abrí tu cuenta e iniciá sesión:\\nhttps://obrasaas.com/cuenta\\n\\nAllí podés consultar tus obras y accesos.')};\n  if(selected==='IDENTITY_GUIDANCE')return {state:next,reply:intakeText('Consultá tu identidad y el paso pendiente:\\n'+participantIdentityUrl()+'\\n\\nPara enviarla por este chat, pedile al responsable el mensaje IDENTIDAD vigente. Esperá las indicaciones antes de enviar documentos. Presentar identidad no habilita permisos.')};\n",
+            "previousText": "  if(selected==='ACCOUNT')return {state:next,reply:intakeText(intakeAccountBody)};\n  if(selected==='IDENTITY_GUIDANCE')return {state:next,reply:intakeText('Para consultar tu identidad o ver el paso pendiente, abrí '+participantIdentityUrl()+'. Si preferís presentarla por este chat, pedile al responsable el mensaje IDENTIDAD vigente y esperá las indicaciones antes de enviar documentos. La presentación no habilita permisos.')};\n"
+          }
+        ]
+      },
+      {
+        "path": "tests/production-field-attendance-current-ci-proof.test.mjs",
+        "previousSha256": "bb73abaf901512de92b8afdbd47c0e8a589af63ef8bb038d410d850122877237",
+        "currentSha256": "77fec910b50db6b95e60723188f3c1d4900eef96c9bc43b395228ebc8163da7f",
+        "previousBytes": 19029,
+        "currentBytes": 19806,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 351,
+            "currentText": "import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetTrialExpiryNoticeSource,restorePlanBudgetPilotIntegrationSource} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';\n",
+            "previousText": "import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetTrialExpiryNoticeSource} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';\n"
+          },
+          {
+            "currentOffsetCharacters": 15833,
+            "currentText": " for(const [path,previousSha256] of Object.entries({'src/lib/meta-field-bridge.mjs':'7f3bb80ba828e202f24e1d768b855131642dcc89fde39fcac4b81d64aa632955','src/lib/meta-field-conversation.mjs':'c68887db8fa04f5806d1c0f4c29e829befb89931b8371041ad65334deb1dab4d'})){\n  const actual=readSource(path),captured=Buffer.from(actual),comparison65d=restorePlanBudgetPilotIntegrationSource(f.contract,path,actual);assert.equal(hash(comparison65d),previousSha256);assert.notEqual(hash(actual),previousSha256);assert.deepEqual(actual,captured);let maps=0;for(const map of rawMaps(f.proof))if(Object.hasOwn(map,path)){assert.equal(map[path],hash(actual));maps++;}assert.ok(maps>0);deny(g=>{g.reader=name=>name===path?comparison65d:readSource(name);});\n }\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "tests/production-meta-field.test.mjs",
+        "previousSha256": "fdc0ddf2cf5fab717654860bdd89543a70c161cb9fac7ab3fdd0cbc96d1c1e18",
+        "currentSha256": "bb5d1a186eea14d0bc12e53eaa436ea0e5af2853d47d0c6ce22f93172ebe00ca",
+        "previousBytes": 44133,
+        "currentBytes": 48879,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 27298,
+            "currentText": "function ordinaryMeasuredConfirmation(){\n const current={...measuredWaitFacts(),evidence:[reviewedPhoto]},extra={facts:current},tasks=say('AVANCE',null,extra),sectors=pickValue(tasks,'task-a',extra),scope=pickValue(sectors,'sector-a',extra),quantity=pickValue(scope,'DELTA',extra),evidence=say('1',quantity.state,extra),reason=pickValue(evidence,'evidence-a',extra),confirmation=say('Verifiqué la cantidad adicional en este sector.',reason.state,extra);\n assert.equal(confirmation.state.step,'CONFIRM');assert.equal(confirmation.state.progressEvidenceWait,undefined);assert.deepEqual(confirmation.state.choices.map(choice=>choice.value),['CONFIRM','CANCEL']);\n return {current,evidence,confirmation};\n}\ntest('current ordinary progress cancellation discards changed evidence or task without weakening save validation',()=>{\n const {current,confirmation}=ordinaryMeasuredConfirmation(),before=JSON.stringify(confirmation.state),task=current.tasks[0],saved=pickValue(confirmation,'CONFIRM',{facts:current});\n assert.deepEqual(saved.command,{action:'PROPOSE_PROGRESS',payload:{workerId:'worker-a',taskId:'task-a',revision:task.revision,measurement:{mode:'DELTA',quantity:'1.0000'},reason:'Verifiqué la cantidad adicional en este sector.',evidenceIds:['evidence-a']}});\n for(const changed of [{...current,evidence:[]},{...current,tasks:[{...task,revision:'2026-10-01T12:02:00.000001'}]},{...current,tasks:[]}]){\n  const blocked=pickValue(confirmation,'CONFIRM',{facts:changed});assert.deepEqual(blocked.state,confirmation.state);assert.equal(blocked.command,undefined);\n  const cancelled=pickValue(confirmation,'CANCEL',{facts:changed});assert.equal(cancelled.state,null);assert.equal(cancelled.command,undefined);assert.equal(cancelled.media,undefined);assert.equal(cancelled.planImport,undefined);assert.equal(cancelled.reply.body,'Operación cancelada. Escribí MENU para continuar.');assert.equal(JSON.stringify(confirmation.state),before);\n }\n});\ntest('current ordinary voice confirmation can cancel a changed audio while saving still requires its reviewed source',()=>{\n const enhanced=voiceFacts(),{extra,review}=startVoice(enhanced),measurement=pickValue(review,'USE',extra),reason=say('2.5 / 10 M2',measurement.state,extra),confirmation=say('Verifiqué el audio y la cantidad acumulada.',reason.state,extra),before=JSON.stringify(confirmation.state),changed={...enhanced,evidence:[{...enhanced.evidence[0],revision:'2026-10-01T12:00:00.123460'}]};\n assert.equal(confirmation.state.progressEvidenceWait,undefined);assert.ok(confirmation.state.sourceVoice);\n const blocked=pickValue(confirmation,'CONFIRM',{facts:changed});assert.deepEqual(blocked.state,confirmation.state);assert.equal(blocked.command,undefined);assert.match(blocked.reply.body,/cambió/);\n const cancelled=pickValue(confirmation,'CANCEL',{facts:changed});assert.equal(cancelled.state,null);assert.equal(cancelled.command,undefined);assert.equal(cancelled.media,undefined);assert.equal(cancelled.planImport,undefined);assert.equal(JSON.stringify(confirmation.state),before);\n});\ntest('ordinary progress cancellation still requires its current nonce live draft and report permission',()=>{\n const {current,evidence,confirmation}=ordinaryMeasuredConfirmation(),changed={...current,evidence:[]},before=JSON.stringify(confirmation.state),nonce=confirmation.state.nonce,foreignNonce=(nonce[0]==='a'?'b':'a')+nonce.slice(1),staleIds=[evidence.reply.sections[0].rows[0].id,'obra:'+foreignNonce+':1','obra:'+nonce+':99'];\n for(const id of staleIds){const stopped=run({type:'interactive',interactive:{type:'list_reply',list_reply:{id}}},confirmation.state,{facts:changed});assert.deepEqual(stopped.state,confirmation.state);assert.match(stopped.reply.body,/paso anterior/);assert.equal(stopped.command,undefined);assert.equal(stopped.media,undefined);}\n const expired=pickValue(confirmation,'CANCEL',{facts:changed,state:{...confirmation.state,expiresAt:now.toISOString()}});assert.equal(expired.state,null);assert.match(expired.reply.body,/paso anterior/);assert.equal(expired.command,undefined);assert.equal(expired.media,undefined);assert.notEqual(expired.reply.body,'Operación cancelada. Escribí MENU para continuar.');\n const denied=pickValue(confirmation,'CANCEL',{facts:{...changed,permissions:{attendance:true,report:false}}});assert.equal(denied.state,null);assert.match(denied.reply.body,/permisos/);assert.equal(denied.command,undefined);assert.equal(denied.media,undefined);assert.notEqual(denied.reply.body,'Operación cancelada. Escribí MENU para continuar.');\n const typed=say('CANCELAR',confirmation.state,{facts:changed});assert.equal(typed.state.purpose,'MENU');assert.equal(typed.command,undefined);assert.equal(JSON.stringify(confirmation.state),before);\n});\n\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
+        "previousSha256": "a489da83106dbd282d81007330f42aaa741a75ded10fbd2dcff4fcbba894ced0",
+        "currentSha256": "a479f91466d460927670a3d78745b75b8bb0d9abd514c00cbe1134be5b34d378",
+        "previousBytes": 45689,
+        "currentBytes": 46234,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 373,
+            "currentText": "import {PLAN_BUDGET_CURRENT_REVISION as reviewed,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,restorePlanBudgetPilotProducerText,normalizePlanBudgetPilotNativeProof,restorePlanBudgetFieldReviewSourceSet,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSourceSet,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetMaterialNativeProducerText,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetIntakeWithdrawalProducerText,normalizePlanBudgetIntakeWithdrawalNativeProof,intakeWithdrawalCurrentCheckCount,INTAKE_WITHDRAWAL_CHECK_NAMES,restorePlanBudgetIntakeWithdrawalUnitProducerText,restorePlanBudgetCheckTimeSource,restorePlanBudgetCheckTimePreviousContract,planBudgetCurrentSourcePin,planBudgetPreviousSourcePin,verifyPlanBudgetActualClosure,planBudgetValidationFiles,restorePlanBudgetTrialExpiryNoticePreviousContract,restorePlanBudgetTrialExpiryNoticeSource,restorePlanBudgetTrialExpiryNoticeValidatorSource,restorePlanBudgetPilotIntegrationPreviousContract,restorePlanBudgetPilotIntegrationSource} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';\n",
+            "previousText": "import {PLAN_BUDGET_CURRENT_REVISION as reviewed,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,restorePlanBudgetPilotProducerText,normalizePlanBudgetPilotNativeProof,restorePlanBudgetFieldReviewSourceSet,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSourceSet,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetMaterialNativeProducerText,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetIntakeWithdrawalProducerText,normalizePlanBudgetIntakeWithdrawalNativeProof,intakeWithdrawalCurrentCheckCount,INTAKE_WITHDRAWAL_CHECK_NAMES,restorePlanBudgetIntakeWithdrawalUnitProducerText,restorePlanBudgetCheckTimeSource,restorePlanBudgetCheckTimePreviousContract,planBudgetCurrentSourcePin,planBudgetPreviousSourcePin,verifyPlanBudgetActualClosure,planBudgetValidationFiles,restorePlanBudgetTrialExpiryNoticePreviousContract,restorePlanBudgetTrialExpiryNoticeSource,restorePlanBudgetTrialExpiryNoticeValidatorSource} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';\n"
+          },
+          {
+            "currentOffsetCharacters": 37227,
+            "currentText": " const parent65d=restorePlanBudgetPilotIntegrationPreviousContract(contract),parent=restorePlanBudgetTrialExpiryNoticePreviousContract(contract);assert.equal(sha(serialize(parent65d)),'6cb040ad517b8a87b86a0466f23fe822dd570227392aff6209eeff037e840c71');assert.equal(sha(serialize(parent)),'22669e9212813ccd711dbfb554e17d274bad7007db8c3dfdbc08bdbbc1847266');assert.equal(parent.planBudgetCurrentRevision.references.length,115);assert.equal(parent65d.planBudgetCurrentRevision.references.length,117);assert.equal(r.sourceAliases.length,2);assert.equal(r.sourceHistory.length,4);\n",
+            "previousText": " const parent=restorePlanBudgetTrialExpiryNoticePreviousContract(contract);assert.equal(sha(serialize(parent)),'22669e9212813ccd711dbfb554e17d274bad7007db8c3dfdbc08bdbbc1847266');assert.equal(parent.planBudgetCurrentRevision.references.length,115);assert.equal(contract.planBudgetCurrentRevision.references.length,117);assert.equal(r.sourceAliases.length,2);assert.equal(r.sourceHistory.length,4);\n"
+          },
+          {
+            "currentOffsetCharacters": 38876,
+            "currentText": " for(const a of [r.referenceAdvances[0],r.validationSourceAdvance]){const bytes=read(a.path),captured=Buffer.from(bytes),comparison65d=restorePlanBudgetPilotIntegrationSource(contract,a.path,bytes),old=restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,a.path,bytes);assert.equal(sha(comparison65d),a.currentSha256);assert.equal(sha(old),a.previousSha256);assert.deepEqual(bytes,captured);}assert.deepEqual(parent.planBudgetCurrentRevision.measurementPrivacyRuntime.validationSource,{path:r.validationSourceAdvance.path,sha256:r.validationSourceAdvance.previousSha256});assert.equal(r.validationSourceAdvance.previousSha256,'e3d963f9740e4d17b3d4e15bcf9b6c34adc569fb988493ec7b10268a42514779');assert.equal(planBudgetValidationFiles(contract).includes(r.validationSourceAdvance.path),true);assert.equal(parent65d.planBudgetCurrentRevision.references.some(row=>row.path===r.validationSourceAdvance.path),false);const currentValidation=reviewed.pilotIntegrationRuntime.sourceHistory.find(row=>row.path===r.validationSourceAdvance.path);assert.ok(currentValidation);assert.equal(currentValidation.previousSha256,r.validationSourceAdvance.currentSha256);assert.equal(planBudgetCurrentSourcePin(contract,{path:r.validationSourceAdvance.path,sha256:r.validationSourceAdvance.previousSha256}),currentValidation.currentSha256);assert.equal(planBudgetPreviousSourcePin(contract,{path:r.validationSourceAdvance.path,sha256:r.validationSourceAdvance.currentSha256}),r.validationSourceAdvance.previousSha256);\n",
+            "previousText": " for(const a of [r.referenceAdvances[0],r.validationSourceAdvance]){const bytes=read(a.path),captured=Buffer.from(bytes),old=restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,a.path,bytes);assert.equal(sha(bytes.toString('utf8').replaceAll('\\r\\n','\\n')),a.currentSha256);assert.equal(sha(old),a.previousSha256);assert.deepEqual(bytes,captured);}assert.deepEqual(parent.planBudgetCurrentRevision.measurementPrivacyRuntime.validationSource,{path:r.validationSourceAdvance.path,sha256:r.validationSourceAdvance.previousSha256});assert.equal(r.validationSourceAdvance.previousSha256,'e3d963f9740e4d17b3d4e15bcf9b6c34adc569fb988493ec7b10268a42514779');assert.equal(planBudgetValidationFiles(contract).includes(r.validationSourceAdvance.path),true);assert.equal(contract.planBudgetCurrentRevision.references.some(row=>row.path===r.validationSourceAdvance.path),false);assert.equal(planBudgetCurrentSourcePin(contract,{path:r.validationSourceAdvance.path,sha256:r.validationSourceAdvance.previousSha256}),r.validationSourceAdvance.currentSha256);assert.equal(planBudgetPreviousSourcePin(contract,{path:r.validationSourceAdvance.path,sha256:r.validationSourceAdvance.currentSha256}),r.validationSourceAdvance.previousSha256);\n"
+          }
+        ]
+      },
+      {
+        "path": "tests/production-plan-measurement-current-source-binding.test.mjs",
+        "previousSha256": "5f59acca1c079f393c681979b951f660709c67dcba7bedeff319cbdc9743f8ec",
+        "currentSha256": "91c7bf35bbd5a7b4f786ab688b0a9026a59b2f9bdf5b7e2c366935daf8047f8a",
+        "previousBytes": 9689,
+        "currentBytes": 11791,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 741,
+            "currentText": "import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetMeasurementPrivacyPreviousContract,restorePlanBudgetMeasurementPrivacySource,restorePlanBudgetCheckTimePreviousContract,restorePlanBudgetPreviousContract,planBudgetValidationFiles,restorePlanBudgetIntakeWithdrawalUnitProducerText,restorePlanBudgetTrialExpiryNoticeSource,restorePlanBudgetTrialExpiryNoticeValidatorSource,restorePlanBudgetPilotIntegrationPreviousContract,restorePlanBudgetPilotIntegrationSource,planBudgetCurrentSourcePin,planBudgetPreviousSourcePin} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';\n",
+            "previousText": "import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetMeasurementPrivacyPreviousContract,restorePlanBudgetMeasurementPrivacySource,restorePlanBudgetCheckTimePreviousContract,restorePlanBudgetPreviousContract,planBudgetValidationFiles,restorePlanBudgetIntakeWithdrawalUnitProducerText,restorePlanBudgetTrialExpiryNoticeSource,restorePlanBudgetTrialExpiryNoticeValidatorSource} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';\n"
+          },
+          {
+            "currentOffsetCharacters": 2861,
+            "currentText": " const parent65d=restorePlanBudgetPilotIntegrationPreviousContract(contract),runtime=contract.planBudgetCurrentRevision.pilotIntegrationRuntime;assert.equal(sha(serialize(parent65d)),'6cb040ad517b8a87b86a0466f23fe822dd570227392aff6209eeff037e840c71');assert.equal(runtime.sourceHistory.length,11);for(const h of runtime.sourceHistory){const actual=read(h.path),captured=Buffer.from(actual),previous=restorePlanBudgetPilotIntegrationSource(contract,h.path,actual);assert.equal(sha(actual),h.currentSha256);assert.equal(sha(previous),h.previousSha256);assert.equal(previous.length,h.previousBytes);assert.deepEqual(actual,captured);for(const invalid of [previous,actual.subarray(1),Buffer.concat([actual,Buffer.from('\\n// foreign integration source\\n')])])assert.throws(()=>restorePlanBudgetPilotIntegrationSource(contract,h.path,invalid),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'});}assert.equal(serialize(contract),before);\n const pin=runtime.sourceHistory.find(h=>h.path==='tests/production-meta-field.test.mjs');for(const absent of [null,{}, {other:true}])for(const digest of [pin.previousSha256,pin.currentSha256])for(const resolver of [planBudgetCurrentSourcePin,planBudgetPreviousSourcePin])assert.equal(resolver(absent,{path:pin.path,sha256:digest}),digest);\n const file='src/lib/meta-field-conversation.mjs',previous=restorePlanBudgetPilotIntegrationSource(contract,file,read(file)),reads=new Map();assert.throws(()=>verifyPlanBudgetCurrentSources(contract,p=>{const count=(reads.get(p)||0)+1;reads.set(p,count);return p===file&&count>=3?previous:read(p);}),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'});assert.equal(reads.get(file),3);verifyPlanBudgetCurrentSources(contract,read);assert.equal(serialize(contract),before);\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 7524,
+            "currentText": " assert.deepEqual(advance,{path:r.validationSource.path,previousSha256:r.validationSource.sha256,currentSha256:sha(restorePlanBudgetPilotIntegrationSource(contract,r.validationSource.path,read(r.validationSource.path)))});\n",
+            "previousText": " assert.deepEqual(advance,{path:r.validationSource.path,previousSha256:r.validationSource.sha256,currentSha256:sha(read(r.validationSource.path))});\n"
+          },
+          {
+            "currentOffsetCharacters": 8152,
+            "currentText": " for(const h of trial.sourceHistory){const raw=read(h.path),rawBefore=Buffer.from(raw),comparison65d=restorePlanBudgetPilotIntegrationSource(contract,h.path,raw),old=h.path.startsWith('src/lib/')?restorePlanBudgetTrialExpiryNoticeSource(contract,h.path,raw):restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,h.path,raw);assert.equal(sha(comparison65d),h.currentSha256);assert.equal(sha(old),h.previousSha256);assert.deepEqual(raw,rawBefore);}\n for(const h of r.sourceHistory){const raw=read(h.path),rawBefore=Buffer.from(raw),comparison=h.path==='scripts/lib/plan-budget-current-ci-lineage.mjs'?restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,h.path,raw):restorePlanBudgetPilotIntegrationSource(contract,h.path,raw),old=restorePlanBudgetMeasurementPrivacySource(contract,h.path,raw);assert.equal(sha(comparison),h.currentSha256);assert.equal(sha(old),h.previousSha256);assert.deepEqual(raw,rawBefore);bindingDenied(contract,file=>file===h.path?old:read(file));}assert.equal(serialize(contract),before);\n",
+            "previousText": " for(const h of trial.sourceHistory){const raw=read(h.path),rawBefore=Buffer.from(raw),old=h.path.startsWith('src/lib/')?restorePlanBudgetTrialExpiryNoticeSource(contract,h.path,raw):restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,h.path,raw);assert.equal(sha(raw),h.currentSha256);assert.equal(sha(old),h.previousSha256);assert.deepEqual(raw,rawBefore);}\n for(const h of r.sourceHistory){const raw=read(h.path),rawBefore=Buffer.from(raw),comparison=h.path==='scripts/lib/plan-budget-current-ci-lineage.mjs'?restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,h.path,raw):raw,old=restorePlanBudgetMeasurementPrivacySource(contract,h.path,raw);assert.equal(sha(comparison),h.currentSha256);assert.equal(sha(old),h.previousSha256);assert.deepEqual(raw,rawBefore);bindingDenied(contract,file=>file===h.path?old:read(file));}assert.equal(serialize(contract),before);\n"
           }
         ]
       }
