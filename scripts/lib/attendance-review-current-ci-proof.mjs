@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import path from 'node:path';
-import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetIntakeWithdrawalSource} from './plan-budget-current-ci-lineage.mjs';
+import {verifyPlanBudgetCurrentSources,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetTrialExpiryNoticeSource} from './plan-budget-current-ci-lineage.mjs';
 
 // A decoder supplement, never a PostgreSQL execution or CI acceptance receipt.
 // These public source bindings are derived from the actual 7bc4243 producer and
@@ -206,9 +206,6 @@ export function normalizeAttendanceReviewNativeProof(raw,contract,readSource,spe
  reject(plain(runtime)&&currentSpec(spec),'CURRENT_SPEC');
  const declared=c.extension?.proofs?.filter(value=>value?.kind==='PG_FIELD');reject(declared?.length===1&&same(Object.keys(declared[0]).sort(),Object.keys(spec).sort())&&Object.keys(spec).every(key=>same(declared[0][key],spec[key])),'CURRENT_SPEC_BINDING');
  reject(runtime.producer?.producer===PRODUCER&&runtime.producer.currentSha256===CURRENT_PRODUCER&&runtime.producer.previousSha256===PREVIOUS_PRODUCER,'CURRENT_PRODUCER_BINDING');
- // Capture each current source once per invocation, never cache authorization or
- // mutable callers between calls. The same private bytes are authenticated/used.
- for(const [file,digest] of Object.entries(SOURCE_BINDINGS)){const bytes=lf(read(file));let parent=bytes;if(file==='src/lib/meta-consumption-evidence-catalog.mjs')try{parent=restorePlanBudgetConsumptionEvidenceSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}if(file==='src/lib/meta-kyc-conversation.mjs')try{parent=restorePlanBudgetIntakeWithdrawalSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}reject(hash(parent)===digest,'CURRENT_SOURCE_'+file);}
  try{verifyPlanBudgetCurrentSources(c,read);const previous=restorePlanBudgetAttendanceReviewProducerText(c,read(PRODUCER));reject(Buffer.isBuffer(previous)&&hash(lf(previous))===PREVIOUS_PRODUCER,'PRODUCER_INVERSE');}catch(error){if(error.code==='ATTENDANCE_REVIEW_CURRENT_CI_PROOF_REJECTED')throw error;reject(false,'CURRENT_AUTHORITY');}
  reject(proof.status==='PASS'&&proof.harnessSha256===hash(read(PRODUCER)),'CURRENT_HARNESS');
  reject(proof.totalChecks===71&&proof.attendanceReviewCheckCount===4,'CURRENT_COUNTS');
@@ -229,6 +226,10 @@ export function normalizeAttendanceReviewNativeProof(raw,contract,readSource,spe
   for(const file of files){reject((Object.hasOwn(SOURCE_BINDINGS,file)||file===CORE_SOURCE)&&map[file]===hash(read(file)),'SOURCE_HASH_'+file);union.add(file);}
  }
  reject(same([...union].sort(),spec.sourceFiles)&&union.size===134,'SOURCE_UNION');
+ // Authenticate the complete current RAW134 maps before comparing a source
+ // with its historical133 binding. All restorations use these same snapshotted
+ // current bytes; the RAW maps and the returned historical67 copy retain them.
+ for(const [file,digest] of Object.entries(SOURCE_BINDINGS)){const bytes=lf(read(file));let parent=bytes;if(file==='src/lib/meta-consumption-evidence-catalog.mjs')try{parent=restorePlanBudgetConsumptionEvidenceSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}if(file==='src/lib/meta-kyc-conversation.mjs')try{parent=restorePlanBudgetIntakeWithdrawalSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}if(file==='src/lib/participant-onboarding-authority.mjs'||file==='src/lib/participant-onboarding-reactive.mjs')try{parent=restorePlanBudgetTrialExpiryNoticeSource(c,file,bytes);}catch{reject(false,'CURRENT_SOURCE_'+file);}reject(hash(parent)===digest,'CURRENT_SOURCE_'+file);}
  const projected=structuredClone(proof);delete projected.attendanceReviewChecks;delete projected.attendanceReviewCheckCount;projected.totalChecks=67;
  return projected;
 }
