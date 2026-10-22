@@ -21,8 +21,9 @@ export function sessionTokenFromHeaders(headers) {
   const token = tokens[0].slice('__session='.length);
   return token.length <= MAX_TOKEN_LENGTH && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token) ? token : null;
 }
-export function createSessionVerifier(keyResolver, { now = () => new Date(), includeOrganization = false } = {}) {
+export function createSessionVerifier(keyResolver, { now = () => new Date(), includeOrganization = false, rejectImpersonation = false } = {}) {
   if (typeof keyResolver !== 'function') throw new TypeError('An explicit trusted key resolver is required');
+  if (typeof rejectImpersonation !== 'boolean') throw new TypeError('An explicit boolean impersonation policy is required');
   return async function verify(headers, environment = process.env) {
     const config = sessionIdentityConfig(environment);
     if (!config.configured) return denied('IDENTITY_CONFIGURATION_PENDING');
@@ -44,12 +45,14 @@ export function createSessionVerifier(keyResolver, { now = () => new Date(), inc
           payload.exp <= payload.iat || payload.exp - payload.iat > 300 || payload.nbf > payload.exp ||
           (payload.sts !== undefined && payload.sts !== 'active') ||
           (payload.v !== undefined && ![1,2].includes(payload.v))) return denied('SESSION_INVALID');
+      if (rejectImpersonation && Object.hasOwn(payload, 'act')) return denied('SESSION_IMPERSONATION_REJECTED');
       // Canonical database membership and per-project authorization are checked
       // independently by the workspace store. No claim enables global legacy data.
       const organization = includeOrganization && payload.act === undefined
         ? organizationFromVerifiedClaims(payload) : null;
       return { authenticated: true, userId: payload.sub, sessionId: payload.sid,
         expiresAt: payload.exp, verification: 'clerk-production-jwt', businessAccessEnabled: false,
+        ...(rejectImpersonation ? { impersonationRejected: true } : {}),
         ...(organization || {}) };
     } catch (error) {
       const unavailable = ['ERR_JWKS_TIMEOUT','ERR_JWKS_INVALID','ECONNRESET','ENOTFOUND','ETIMEDOUT'].includes(error?.code) ||
@@ -60,6 +63,7 @@ export function createSessionVerifier(keyResolver, { now = () => new Date(), inc
 }
 export const verifyProductionSession = createSessionVerifier(productionKeys);
 export const verifyWorkspaceSession = createSessionVerifier(productionKeys, { includeOrganization: true });
+export const verifyPlatformSession = createSessionVerifier(productionKeys, { rejectImpersonation: true });
 export async function sessionCheckResponse(request, verify = verifyProductionSession) {
   const result = await verify(request.headers);
   const code = result.authenticated ? 200 : ['IDENTITY_CONFIGURATION_PENDING','IDENTITY_PROVIDER_UNAVAILABLE'].includes(result.code) ? 503 : 401;

@@ -30,6 +30,26 @@ for(const key of Object.keys(config))test('public configuration mismatch still b
 test('valid RSA-signed session from correct issuer authenticates without granting business access',async()=>{
   const result=await verify(req(await sign()),config);assert.equal(result.authenticated,true);assert.equal(result.userId,'user_test123');assert.equal(result.expiresAt,NOW+55);assert.equal(result.businessAccessEnabled,false);
 });
+
+test('strict platform verifier authenticates only a direct signed session without changing default outputs',async()=>{
+  const strict=createSessionVerifier(localKeys,{now:()=>new Date(NOW*1000),rejectImpersonation:true});
+  const headers=req(await sign()),ordinary=await verify(headers,config),platform=await strict(headers,config);
+  assert.equal(Object.hasOwn(ordinary,'impersonationRejected'),false);
+  assert.equal(platform.authenticated,true);assert.equal(platform.impersonationRejected,true);
+  assert.equal(platform.userId,ordinary.userId);assert.equal(platform.businessAccessEnabled,false);
+  assert.equal(Object.hasOwn(platform,'act'),false);
+});
+
+for(const act of [{sub:'user_operator'},null,false,'delegated'])test('strict platform verifier rejects every signed act claim '+JSON.stringify(act),async()=>{
+  const strict=createSessionVerifier(localKeys,{now:()=>new Date(NOW*1000),rejectImpersonation:true}),headers=req(await sign({...claims(),act}));
+  const result=await strict(headers,config);assert.equal(result.authenticated,false);assert.equal(result.code,'SESSION_IMPERSONATION_REJECTED');
+  assert.equal((await verify(headers,config)).authenticated,true);
+  assert.equal(Object.hasOwn(result,'impersonationRejected'),false);
+});
+
+test('a nonboolean strict impersonation option cannot silently select another policy',()=>{
+  for(const rejectImpersonation of [null,0,1,'false',{}])assert.throws(()=>createSessionVerifier(localKeys,{rejectImpersonation}),TypeError);
+});
 for(const [name,patch] of [
   ['wrong issuer',{iss:'https://other.clerk.accounts.dev'}],['wrong party',{azp:'https://evil.example'}],
   ['missing party',{azp:undefined}],['third-party audience',{aud:'another-application'}],['future not-before',{nbf:NOW+20}],

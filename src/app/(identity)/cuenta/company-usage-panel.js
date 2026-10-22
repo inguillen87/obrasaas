@@ -34,6 +34,7 @@ function CompanyUsageContent({scope,organizationId,getSessionToken,locked=false}
   {view&&<>
    <dl className={styles.facts}>
     <div><dt>Cobertura actual</dt><dd>{view.coverage.label}{view.coverage.endsLabel&&<><br/>{view.coverage.startsLabel?`${view.coverage.startsLabel} a ${view.coverage.endsLabel}`:`Hasta ${view.coverage.endsLabel}`}</>}</dd></div>
+    {view.pilotCoverage&&<div><dt>Habilitación del piloto</dt><dd>{view.pilotCoverage.label}<br/>Hasta {view.pilotCoverage.expiresLabel}. Se aplica sólo al documento previsto para esta prueba.</dd></div>}
     <div><dt>Análisis con medición del proveedor</dt><dd>{view.summary.observedLabel}</dd></div>
     <div><dt>Reservas registradas</dt><dd>{view.summary.reservedLabel}</dd></div>
     <div><dt>Resultados por comprobar</dt><dd>{view.summary.pendingLabel}</dd></div>
