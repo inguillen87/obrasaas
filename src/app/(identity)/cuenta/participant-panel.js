@@ -2,7 +2,7 @@
 import {useCallback,useEffect,useLayoutEffect,useRef,useState,useSyncExternalStore} from 'react';
 import {participantOnboardingNextStep,participantKycChatCapabilities,participantKycChatPresentation,participantOnboardingDeliveryView,participantOnboardingContactNotice,participantOnboardingWhatsAppConsent,participantKycReviewImages,participantDocumentBackNotice,participantKycHistoricalReceipt} from './participant-onboarding-next-step.mjs';
 
-import {browserRecoveryJournal,RECOVERY_EVENT,recoveryQuery,recoveryResult,PARTICIPANT_INTAKE_RECOVERY_ACTIONS} from './workspace-recovery-journal.mjs';
+import {browserRecoveryJournal,RECOVERY_EVENT,recoveryQuery,recoveryResult,PARTICIPANT_INTAKE_RECOVERY_ACTIONS,wasCaptureQualityRejected} from './workspace-recovery-journal.mjs';
 import {PRIVATE_BANK_ACTIONS} from './private-bank-account-format.mjs';
 import {EmployeeIntakePanel} from './employee-intake-panel.js';
 import {employeeIntakeInvitationQuery,employeeIntakeInvitationPreparation} from './employee-intake-continuity.mjs';
@@ -89,8 +89,10 @@ function useParticipantRequest(getSessionToken){
  return async function api(params,options={},resource=endpoint,image=false,validate=value=>value){
   if(typeof getSessionToken!=='function')throw Object.assign(new Error('Tu sesión terminó. Volvé a ingresar.'),{status:401,code:'SESSION_REQUIRED',requestDispatched:false});
   const requestTimeoutMs=options.requestTimeoutMs??(options.method==='POST'?30000:params?.operationId?15000:20000);
+  let captureSubmission=false;if(options.method==='POST'&&resource===endpoint){try{const command=JSON.parse(options.body);captureSubmission=Boolean(command&&typeof command==='object'&&!Array.isArray(command)&&!Object.hasOwn(command,'action')&&Object.hasOwn(command,'front')&&Object.hasOwn(command,'selfie'));}catch{/* Malformed commands keep the normal validation path. */}}
   let retainedError;
-  const result=await request(resource+(params?'?'+new URLSearchParams(params):''),{...options,requestTimeoutMs},async response=>{
+  const requestUrl=resource+(params?'?'+new URLSearchParams(params):'');let result;
+  try{result=await request(requestUrl,{...options,requestTimeoutMs},async response=>{
    if(!response.ok){let value;try{value=await response.json();}catch{/* HTML denials must preserve the HTTP status. */}const receivedCode=value?.code||(response.status===401?'SESSION_REQUIRED':undefined),captureUnconfirmed=Boolean(captureQualityFeedback(receivedCode)&&!captureQualityRejection(value,response.status)),code=captureUnconfirmed?'PARTICIPANT_OPERATION_UNCONFIRMED':receivedCode,error=Object.assign(new Error(captureQualityFeedback(code)?.message||errors[code]||(response.status===401?'Tu sesión terminó. Volvé a ingresar.':response.status===403||['WORKSPACE_CONTEXT_CHANGED','WORKSPACE_PROJECT_UNAVAILABLE'].includes(code)?'Tu acceso cambió. Volvé a consultar cuando se restablezca.':'No se pudo confirmar la operación. Comprobá el estado antes de repetirla.')),{status:response.status,code});
     let officeAssignment=false;if(options.method==='POST'){try{officeAssignment=JSON.parse(options.body)?.action===PARTICIPANT_OFFICE_ASSIGN_ACTION;}catch{/* The server rejects malformed commands. */}}if(officeAssignment)error.result=value;
     // A dispatched denial may follow a committed invitation or KYC write.
@@ -99,7 +101,12 @@ function useParticipantRequest(getSessionToken){
    }
    const value=image?await response.blob():await response.json();
    try{return validate(value);}catch(error){if(options.method==='POST'){retainedError=Object.assign(error,{retainAttempt:true});return undefined;}throw error;}
-  });
+  });}catch(error){
+   // Correction is available only after the journal validated the actual HTTP
+   // envelope and released this exact attempt. A JSON code alone is not proof.
+   if(options.method==='POST'&&resource===endpoint&&error.requestDispatched!==false&&(captureSubmission&&[422,503].includes(error.status)||typeof error.code==='string'&&error.code.startsWith('PARTICIPANT_CAPTURE_'))&&!await wasCaptureQualityRejected(error,requestUrl,options))throw Object.assign(new Error('El resultado quedó sin confirmar. Comprobá el mismo intento antes de volver a enviar.'),{status:error.status,code:'PARTICIPANT_OPERATION_UNCONFIRMED',retainAttempt:true});
+   throw error;
+  }
   if(retainedError)throw retainedError;
   return result;
  };

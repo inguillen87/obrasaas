@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createWorkspaceRecoveryJournal,recoveryQuery,recoveryResult,validateWorkspaceRecoveryStoredEntry,WORKSPACE_RECOVERY_PREFIX,wasCompanyPhoneRevisionRejected} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
+import {createWorkspaceRecoveryJournal,recoveryQuery,recoveryResult,validateWorkspaceRecoveryStoredEntry,WORKSPACE_RECOVERY_PREFIX,wasCompanyPhoneRevisionRejected,wasCaptureQualityRejected} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
 import {createWorkspaceRequestLifecycle} from '../src/app/(identity)/cuenta/workspace-request-lifecycle.mjs';
 const scope='a'.repeat(64),other='b'.repeat(64),operationId='01234567-89ab-4cde-8fab-0123456789ab';
 const secondId='01234567-89ab-4cde-8fab-0123456789ac';
@@ -400,6 +400,18 @@ test('a matching portrait error code at HTTP 422 cannot bypass the observed prec
   await j.captureResponse(ticket,captureQualityUrl,options,new Response(JSON.stringify(body),{status:422,headers:{'content-type':mode==='wrong-mime'?'text/html':'application/json'}}),{signal:controller.signal,isActive:()=>true});
   if(mode==='aborted-after')controller.abort();await j.settle(ticket,null,captureQualityError({status:422,code:mode==='normalized-error'?'PARTICIPANT_OPERATION_UNCONFIRMED':code}));
   assert.deepEqual([...s.rows],before,mode);await assert.rejects(j.prepare(captureQualityUrl,captureQualityOptions({operationId:secondId})),{code:'WORKSPACE_RECOVERY_REQUIRED'},mode);
+ }
+});
+
+test('capture correction proof is private to its settled error and exact current command after confirmed removal',async()=>{
+ for(const mode of ['valid','no-observation','failed-cleanup','cancelled','reloaded']){
+  const s=storage(),j=journal(s),options=captureQualityOptions(),original=await j.prepare(captureQualityUrl,options),current=mode==='reloaded'?journal(s):j,ticket=mode==='reloaded'?await current.prepare(captureQualityUrl,options):original,controller=new AbortController(),code='PARTICIPANT_CAPTURE_DOCUMENT_FRONT_DOCUMENT_PORTRAIT_UNCONFIRMED',error=captureQualityError({status:422,code});
+  if(mode!=='no-observation')await current.captureResponse(ticket,captureQualityUrl,options,captureQualityResponse(code,422),{signal:controller.signal,isActive:()=>true});
+  if(mode==='failed-cleanup')s.removeItem=()=>{throw Error('Controlled removal failure');};if(mode==='cancelled')controller.abort();await current.settle(ticket,null,error);
+  assert.equal(await wasCaptureQualityRejected(error,captureQualityUrl,options),mode==='valid',mode);
+  if(mode==='valid'){error.code='PARTICIPANT_CAPTURE_SELFIE_IMAGE_BLURRED';assert.equal(await wasCaptureQualityRejected(error,captureQualityUrl,options),false);error.code=code;error.status=503;assert.equal(await wasCaptureQualityRejected(error,captureQualityUrl,options),false);error.status=422;assert.equal(await wasCaptureQualityRejected(error,captureQualityUrl,options),true);}
+  assert.equal(await wasCaptureQualityRejected({...error},captureQualityUrl,options),false);assert.equal(await wasCaptureQualityRejected(error,captureQualityUrl+'?scope='+scope,options),false);
+  for(const patch of [{operationId:secondId},{front:'changed-image-bytes'},{scope:other},{projectId:'other-project'}])assert.equal(await wasCaptureQualityRejected(error,captureQualityUrl,captureQualityOptions(patch)),false);
  }
 });
 

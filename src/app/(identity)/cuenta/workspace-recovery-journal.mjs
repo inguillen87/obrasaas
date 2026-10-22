@@ -526,6 +526,11 @@ async function rejectedCaptureQualityIdentity(url,options,entry){
   return {inputDigest};
 }
 const companyPhoneRejectedErrors=new WeakMap();
+const captureQualityRejectedErrors=new WeakMap();
+export async function wasCaptureQualityRejected(error,url,options){
+  const proof=error&&typeof error==='object'?captureQualityRejectedErrors.get(error):null;if(!proof||error.status!==proof.status||error.code!==proof.code)return false;
+  try{const body=options?.body,method=options?.method,current=await rejectedCaptureQualityIdentity(url,options,proof.entry);return Boolean(current&&current.inputDigest===proof.identity.inputDigest&&options?.body===body&&options?.method===method&&error.status===proof.status&&error.code===proof.code);}catch{return false;}
+}
 export async function wasCompanyPhoneRevisionRejected(error,url,options){
   const proof=error&&typeof error==='object'?companyPhoneRejectedErrors.get(error):null;if(!proof)return false;
   try{const current=await rejectedCompanyPhoneIdentity(url,options,proof.entry);return Boolean(current&&current.inputDigest===proof.identity.inputDigest);}catch{return false;}
@@ -685,11 +690,11 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       if(error){
         if(captureQuality?.rejected&&!ticket.existed&&ticket.entry.resource==='participants'&&sameScheduleEntry(ticket.entry,captureQuality.entry)&&error.status===captureQuality.rejected.status&&error.code===captureQuality.rejected.code&&error.requestDispatched!==false&&captureQualityObservationActive(captureQuality.observation)){
           let current;try{current=await rejectedCaptureQualityIdentity(captureQuality.request.url,captureQuality.request.options,captureQuality.entry);}catch{}
-          if(current?.inputDigest===captureQuality.identity.inputDigest&&captureQualityObservationActive(captureQuality.observation))await remove(captureQuality.entry,captureQuality.observation);return;
+          if(current?.inputDigest===captureQuality.identity.inputDigest&&captureQualityObservationActive(captureQuality.observation)&&await remove(captureQuality.entry,captureQuality.observation)&&captureQualityObservationActive(captureQuality.observation))captureQualityRejectedErrors.set(error,{entry:captureQuality.entry,identity:captureQuality.identity,status:error.status,code:error.code});return;
         }
         // A capture code alone is not proof that no image was committed. Do
         // not let the general 4xx cleanup bypass the exact observed envelope.
-        if(captureQuality&&error.requestDispatched!==false&&typeof error.code==='string'&&(error.code.startsWith('PARTICIPANT_CAPTURE_')||error.code==='PARTICIPANT_OPERATION_UNCONFIRMED'))return;
+        if(captureQuality&&error.requestDispatched!==false&&(error.status===422||error.status===503||typeof error.code==='string'&&(error.code.startsWith('PARTICIPANT_CAPTURE_')||error.code==='PARTICIPANT_OPERATION_UNCONFIRMED')))return;
         if(ticket.entry.resource==='field-operations'&&ticket.entry.action===fieldMeasurementAction){if(!ticket.existed&&(error.requestDispatched===false||error.definitiveConfigurationRejection===true))await remove(ticket.entry);return;}
         if(companyPhone?.rejected===true&&!ticket.existed&&ticket.entry.resource==='company-onboarding'&&sameScheduleEntry(ticket.entry,companyPhone.entry)&&error.status===409&&error.code==='COMPANY_PHONE_CONFLICT'&&error.requestDispatched!==false&&!companyPhone.observation.signal?.aborted&&companyPhone.observation.isActive()){
           if(await remove(companyPhone.entry,companyPhone.observation)&&!companyPhone.observation.signal?.aborted&&companyPhone.observation.isActive())companyPhoneRejectedErrors.set(error,{entry:companyPhone.entry,identity:companyPhone.identity});return;
