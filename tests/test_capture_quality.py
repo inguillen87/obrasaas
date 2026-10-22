@@ -52,6 +52,12 @@ def synthetic_card():
     return image
 
 
+def synthetic_card_with_portrait_detail():
+    image = synthetic_card()
+    image.paste(textured_photo().crop((0, 0, 150, 230)), (145, 175))
+    return image
+
+
 class Detector:
     def __init__(self, boxes):
         self.boxes, self.input_sizes, self.calls = boxes, [], 0
@@ -141,14 +147,57 @@ class CaptureQualityTest(unittest.TestCase):
         self.assert_result(result, request, "RETAKE_REQUIRED")
         self.assertIn("IMAGE_BLURRED", result["reasonCodes"])
 
-    def test_document_candidate_does_not_claim_dni_type_or_side_or_require_face(self):
+    def test_document_back_geometry_does_not_claim_dni_type_or_require_face(self):
         with patch("api._biometric_core.load_quality_detector") as detector, patch("api._biometric_core.load_models") as paired:
-            for kind in ("DOCUMENT_FRONT", "DOCUMENT_BACK"):
-                request = payload(synthetic_card(), kind)
-                result = evaluate_capture_quality(request)
-                self.assert_result(result, request, "QUALITY_PASS")
+            request = payload(synthetic_card(), "DOCUMENT_BACK")
+            result = evaluate_capture_quality(request)
+            self.assert_result(result, request, "QUALITY_PASS")
             detector.assert_not_called()
             paired.assert_not_called()
+
+    def test_document_front_requires_one_usable_portrait_inside_card(self):
+        request = payload(synthetic_card_with_portrait_detail(), "DOCUMENT_FRONT")
+        cases = [None, [], [(40, 60, 80, 110), (180, 60, 80, 110)],
+                 [(0, 60, 80, 110)], [(-10, 60, 80, 110)], [(60, 60, 25, 35)]]
+        for boxes in cases:
+            detector = Detector(boxes)
+            result = evaluate_capture_quality(request, detector=detector)
+            self.assert_result(result, request, "RETAKE_REQUIRED")
+            self.assertEqual(result["reasonCodes"], ["DOCUMENT_PORTRAIT_UNCONFIRMED"])
+            self.assertEqual(detector.calls, 1)
+        # The rectangle still satisfies BACK geometry; portrait presence does
+        # not classify either side or establish document authenticity.
+        back = {**request, "kind": "DOCUMENT_BACK"}
+        self.assert_result(evaluate_capture_quality(back), back, "QUALITY_PASS")
+
+    def test_document_portrait_detail_has_own_floor_and_never_loads_identity_models(self):
+        request = payload(synthetic_card_with_portrait_detail(), "DOCUMENT_FRONT")
+        detector = Detector([(45, 70, 48, 70)])
+        decode_image(base64.b64decode(request["image"]["data"]), "image/png")
+        with patch("api._biometric_core.load_models") as paired, \
+             patch("api._biometric_core.model_file") as model_file, \
+             patch("api._biometric_core.tempfile.NamedTemporaryFile") as temporary, \
+             patch("pathlib.Path.write_bytes") as writes, \
+             patch("urllib.request.urlopen") as network:
+            result = evaluate_capture_quality(request, detector=detector)
+            self.assert_result(result, request, "QUALITY_PASS")
+            for port in (paired, model_file, temporary, writes, network):
+                port.assert_not_called()
+        self.assertNotRegex(json.dumps(result), "embedding|faceSimilarity|captureRiskSignal|data|crop|text")
+        flat = payload(synthetic_card(), "DOCUMENT_FRONT")
+        result = evaluate_capture_quality(flat, detector=Detector([(45, 70, 48, 70)]))
+        self.assert_result(result, flat, "RETAKE_REQUIRED")
+        self.assertEqual(result["reasonCodes"], ["DOCUMENT_PORTRAIT_UNCONFIRMED"])
+
+    def test_document_portrait_service_failure_and_malformed_output_stay_uncertain(self):
+        request = payload(synthetic_card_with_portrait_detail(), "DOCUMENT_FRONT")
+        with patch("api._biometric_core.load_quality_detector", side_effect=BiometricError("BIOMETRIC_MODEL_UNAVAILABLE", 503)):
+            result = evaluate_capture_quality(request)
+            self.assert_result(result, request, "UNCERTAIN")
+            self.assertEqual(result["reasonCodes"], ["QUALITY_SERVICE_UNAVAILABLE"])
+        result = evaluate_capture_quality(request, detector=Detector([(float("nan"), 60, 80, 110)]))
+        self.assert_result(result, request, "UNCERTAIN")
+        self.assertEqual(result["reasonCodes"], ["QUALITY_SERVICE_UNAVAILABLE"])
 
     def test_unconfirmed_document_frame_is_uncertain_and_not_accepted(self):
         noise = np.random.default_rng(42).integers(60, 190, size=(480, 640, 3), dtype=np.uint8)

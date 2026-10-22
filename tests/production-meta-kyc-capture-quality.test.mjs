@@ -22,6 +22,14 @@ test('capture quality disclosure is additive and preserves historical notice ver
  for(const captureImageSetVersion of [undefined,2]){const plan=beginMetaKycConversation('notice-quality',{captureImageSetVersion});customerReplyMessage(plan.reply);assert.ok(plan.reply.body.includes(CAPTURE_QUALITY_NOTICE));assert.ok(plan.reply.body.includes(PARTICIPANT_NOTICE));assert.equal(plan.state.noticeVersion,PARTICIPANT_NOTICE_VERSION);assert.equal(plan.state.noticeSha256,digest(PARTICIPANT_NOTICE));assert.equal(plan.state.consent,false);assert.equal(plan.state.ocrConsent,false);assert.equal(plan.state.biometricConsent,false);assert.doesNotMatch(CAPTURE_QUALITY_NOTICE,/OpenAI|OpenCV|ONNX|YuNet/);}
 });
 
+test('an unreadable document portrait returns WhatsApp to FRONT without storing images or approving a person',async()=>{
+ const f=kycMemoryFixture({active:true,captureImageSetVersion:2});await f.toConfirmation();const before=f.state(),permissions=structuredClone(f.worker.metadata.participant.permissions);
+ f.controls.quality=async value=>({...await syntheticCaptureQuality(value),state:'RETAKE_REQUIRED',reasonCodes:['DOCUMENT_PORTRAIT_UNCONFIRMED']});
+ const failed=await f.choose('Guardar identidad'),after=f.state();safeReply(failed.result);noSubmission(f,permissions);sameNotices(after,before);
+ assert.equal(after.step,'FRONT');assert.equal(after.front,null);assert.equal(after.back,null);assert.equal(after.selfie,null);assert.equal(after.confirmationEventId,null);assert.match(failed.result.reply.body,/foto del rostro/);
+ const downloads=f.controls.downloads;assert.deepEqual(await f.bridge.execute(failed.context),failed.result);assert.equal(f.controls.downloads,downloads);noSubmission(f,permissions);
+});
+
 for(const captureImageSetVersion of [undefined,2])for(const [kind,field,step]of [['DOCUMENT_FRONT','front','FRONT'],...(captureImageSetVersion===2?[['DOCUMENT_BACK','back','BACK']]:[]),['SELFIE','selfie','SELFIE']])test(`quality retake of ${kind} in ${captureImageSetVersion===2?'three':'two'} images preserves valid predecessors and requires fresh descendants`,async()=>{
  const f=kycMemoryFixture({active:true,captureImageSetVersion});await f.toConfirmation();const before=f.state(),permissions=structuredClone(f.worker.metadata.participant.permissions);let rejected=true,checks=0;
  f.controls.quality=async value=>{checks++;const result=await syntheticCaptureQuality(value);return rejected&&value.kind===kind?{...result,state:'RETAKE_REQUIRED',reasonCodes:['IMAGE_BLURRED']}:result;};

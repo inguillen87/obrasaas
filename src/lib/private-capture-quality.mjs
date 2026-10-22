@@ -4,7 +4,7 @@ import {decodePrivateImage,MAX_PRIVATE_IMAGE_BYTES} from './private-image-upload
 export const CAPTURE_QUALITY_NOTICE_VERSION='participant-capture-quality-v1';
 export const CAPTURE_QUALITY_MODEL_MANIFEST_SHA256='49b52aefe0f0247ff19b0445af1ab173550163d701fd2a2dd7959289bbbd42e3';
 export const CAPTURE_QUALITY_REASON_CODES=Object.freeze([
- 'DOCUMENT_FRAME_UNCONFIRMED','DOCUMENT_OUT_OF_FRAME','DOCUMENT_TOO_SMALL',
+ 'DOCUMENT_FRAME_UNCONFIRMED','DOCUMENT_OUT_OF_FRAME','DOCUMENT_TOO_SMALL','DOCUMENT_PORTRAIT_UNCONFIRMED',
  'FACE_OUT_OF_FRAME','FACE_TOO_SMALL','IMAGE_BLURRED','IMAGE_DECODE_FAILED',
  'IMAGE_LOW_CONTRAST','IMAGE_TOO_BRIGHT','IMAGE_TOO_DARK','IMAGE_TOO_SMALL',
  'QUALITY_SERVICE_UNAVAILABLE','SINGLE_FACE_REQUIRED',
@@ -37,6 +37,7 @@ async function boundedJson(response){
 
 function validResult(value,payload){
  if(!exact(value,RESPONSE_FIELDS)||value.version!==1||value.mode!==MODE||value.kind!==payload.kind||value.imageSha256!==payload.image.sha256||value.modelManifestSha256!==CAPTURE_QUALITY_MODEL_MANIFEST_SHA256||value.identityCertified!==false||value.livenessVerified!==false||value.documentAuthenticityVerified!==false||!Array.isArray(value.reasonCodes)||value.reasonCodes.length>REASONS.size||value.reasonCodes.some(reason=>!REASONS.has(reason))||new Set(value.reasonCodes).size!==value.reasonCodes.length)return false;
+ if(value.reasonCodes.includes('DOCUMENT_PORTRAIT_UNCONFIRMED')&&value.kind!=='DOCUMENT_FRONT')return false;
  if(value.state==='QUALITY_PASS')return value.reasonCodes.length===0;
  if(value.state==='RETAKE_REQUIRED')return value.reasonCodes.length>0&&value.reasonCodes.every(reason=>!UNCERTAIN_REASONS.has(reason));
  return value.state==='UNCERTAIN'&&value.reasonCodes.length===1&&UNCERTAIN_REASONS.has(value.reasonCodes[0]);

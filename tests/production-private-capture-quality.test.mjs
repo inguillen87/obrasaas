@@ -27,7 +27,13 @@ test('all capture kinds retain native pass retake and uncertainty reasons withou
   const value={...input,kind},expected=output(value,state,reasons);assert.deepEqual(await factory(async()=>Response.json(expected)).assess(value),expected);
  }
  const uncertainFrame=output(input,'UNCERTAIN',['DOCUMENT_FRAME_UNCONFIRMED']);assert.deepEqual(await factory(async()=>Response.json(uncertainFrame)).assess(input),uncertainFrame);
- assert.equal(CAPTURE_QUALITY_NOTICE_VERSION,'participant-capture-quality-v1');assert.equal(CAPTURE_QUALITY_MODEL_MANIFEST_SHA256,'49b52aefe0f0247ff19b0445af1ab173550163d701fd2a2dd7959289bbbd42e3');assert.equal(Object.isFrozen(CAPTURE_QUALITY_REASON_CODES),true);assert.equal(CAPTURE_QUALITY_REASON_CODES.length,13);
+ assert.equal(CAPTURE_QUALITY_NOTICE_VERSION,'participant-capture-quality-v1');assert.equal(CAPTURE_QUALITY_MODEL_MANIFEST_SHA256,'49b52aefe0f0247ff19b0445af1ab173550163d701fd2a2dd7959289bbbd42e3');assert.equal(Object.isFrozen(CAPTURE_QUALITY_REASON_CODES),true);assert.equal(CAPTURE_QUALITY_REASON_CODES.length,14);
+});
+
+test('portrait retake belongs only to the document front and preserves the no-certification result',async()=>{
+ const expected=output(input,'RETAKE_REQUIRED',['DOCUMENT_PORTRAIT_UNCONFIRMED']);
+ assert.deepEqual(await factory(async()=>Response.json(expected)).assess(input),expected);
+ for(const kind of ['DOCUMENT_BACK','SELFIE']){const value={...input,kind};uncertain(await factory(async()=>Response.json(output(value,'RETAKE_REQUIRED',['DOCUMENT_PORTRAIT_UNCONFIRMED']))).assess(value),'CAPTURE_QUALITY_RESULT_UNCONFIRMED');}
 });
 
 test('explicit consent and an exact single-image input are required before any private request',async()=>{

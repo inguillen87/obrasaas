@@ -511,8 +511,8 @@ async function rejectedCompanyPhoneIdentity(url,options,entry){
 }
 // Inline so the shared journal's copied browser graph stays unchanged. Only
 // this pre-storage image gate has this exact response and closed reason set.
-const captureQualityRejectionReasons=new Set(['DOCUMENT_FRAME_UNCONFIRMED','DOCUMENT_OUT_OF_FRAME','DOCUMENT_TOO_SMALL','FACE_OUT_OF_FRAME','FACE_TOO_SMALL','IMAGE_BLURRED','IMAGE_DECODE_FAILED','IMAGE_LOW_CONTRAST','IMAGE_TOO_BRIGHT','IMAGE_TOO_DARK','IMAGE_TOO_SMALL','QUALITY_SERVICE_UNAVAILABLE','SINGLE_FACE_REQUIRED']);
-const captureQualityRejectionCode=value=>typeof value==='string'&&['DOCUMENT_FRONT','DOCUMENT_BACK','SELFIE'].some(kind=>value.startsWith('PARTICIPANT_CAPTURE_'+kind+'_')&&captureQualityRejectionReasons.has(value.slice(('PARTICIPANT_CAPTURE_'+kind+'_').length)));
+const captureQualityRejectionReasons=new Set(['DOCUMENT_FRAME_UNCONFIRMED','DOCUMENT_OUT_OF_FRAME','DOCUMENT_TOO_SMALL','DOCUMENT_PORTRAIT_UNCONFIRMED','FACE_OUT_OF_FRAME','FACE_TOO_SMALL','IMAGE_BLURRED','IMAGE_DECODE_FAILED','IMAGE_LOW_CONTRAST','IMAGE_TOO_BRIGHT','IMAGE_TOO_DARK','IMAGE_TOO_SMALL','QUALITY_SERVICE_UNAVAILABLE','SINGLE_FACE_REQUIRED']);
+const captureQualityRejectionCode=value=>typeof value==='string'&&['DOCUMENT_FRONT','DOCUMENT_BACK','SELFIE'].some(kind=>{const prefix='PARTICIPANT_CAPTURE_'+kind+'_',reason=value.slice(prefix.length);return value.startsWith(prefix)&&captureQualityRejectionReasons.has(reason)&&(reason!=='DOCUMENT_PORTRAIT_UNCONFIRMED'||kind==='DOCUMENT_FRONT');});
 const captureQualityObservationActive=observation=>{try{return Boolean(observation?.signal&&!observation.signal.aborted&&typeof observation.isActive==='function'&&observation.isActive()===true);}catch{return false;}};
 async function rejectedCaptureQualityIdentity(url,options,entry){
   if(url!=='/api/identity/participants'||options?.method!=='POST'||entry?.resource!=='participants'||typeof options.body!=='string')return null;
@@ -687,6 +687,9 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
           let current;try{current=await rejectedCaptureQualityIdentity(captureQuality.request.url,captureQuality.request.options,captureQuality.entry);}catch{}
           if(current?.inputDigest===captureQuality.identity.inputDigest&&captureQualityObservationActive(captureQuality.observation))await remove(captureQuality.entry,captureQuality.observation);return;
         }
+        // A capture code alone is not proof that no image was committed. Do
+        // not let the general 4xx cleanup bypass the exact observed envelope.
+        if(captureQuality&&error.requestDispatched!==false&&typeof error.code==='string'&&(error.code.startsWith('PARTICIPANT_CAPTURE_')||error.code==='PARTICIPANT_OPERATION_UNCONFIRMED'))return;
         if(ticket.entry.resource==='field-operations'&&ticket.entry.action===fieldMeasurementAction){if(!ticket.existed&&(error.requestDispatched===false||error.definitiveConfigurationRejection===true))await remove(ticket.entry);return;}
         if(companyPhone?.rejected===true&&!ticket.existed&&ticket.entry.resource==='company-onboarding'&&sameScheduleEntry(ticket.entry,companyPhone.entry)&&error.status===409&&error.code==='COMPANY_PHONE_CONFLICT'&&error.requestDispatched!==false&&!companyPhone.observation.signal?.aborted&&companyPhone.observation.isActive()){
           if(await remove(companyPhone.entry,companyPhone.observation)&&!companyPhone.observation.signal?.aborted&&companyPhone.observation.isActive())companyPhoneRejectedErrors.set(error,{entry:companyPhone.entry,identity:companyPhone.identity});return;

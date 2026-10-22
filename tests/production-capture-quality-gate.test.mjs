@@ -30,6 +30,15 @@ test('a failure on the final image blocks every Blob and the KYC record',async()
  const feedback=captureQualityFeedback('PARTICIPANT_CAPTURE_DOCUMENT_BACK_IMAGE_BLURRED');assert.equal(feedback.kind,'DOCUMENT_BACK');assert.match(feedback.message,/dorso/);assert.match(feedback.message,/todavía no se guardó/);
 });
 
+test('an unconfirmed document portrait rejects the front before any image or submission is saved',async()=>{
+ const images=fixture(),seen=[],gate=createCaptureQualityGate({assess:async input=>{seen.push(input.kind);return {...pass(input),state:'RETAKE_REQUIRED',reasonCodes:['DOCUMENT_PORTRAIT_UNCONFIRMED']};}}),flow=presentation(gate,images);
+ await assert.rejects(flow.run(),denied('PARTICIPANT_CAPTURE_DOCUMENT_FRONT_DOCUMENT_PORTRAIT_UNCONFIRMED',422));
+ assert.deepEqual(seen,['DOCUMENT_FRONT']);assert.deepEqual(flow.effects,{blob:0,record:0});
+ const feedback=captureQualityFeedback('PARTICIPANT_CAPTURE_DOCUMENT_FRONT_DOCUMENT_PORTRAIT_UNCONFIRMED');
+ assert.equal(feedback.kind,'DOCUMENT_FRONT');assert.match(feedback.message,/foto del rostro/);assert.match(feedback.message,/todavía no se guardó/);assert.doesNotMatch(feedback.message,/OpenAI|OpenCV|ONNX|YuNet|Hugging Face/);
+ for(const kind of ['DOCUMENT_BACK','SELFIE'])assert.equal(captureQualityFeedback('PARTICIPANT_CAPTURE_'+kind+'_DOCUMENT_PORTRAIT_UNCONFIRMED'),null);
+});
+
 test('source kind digest manifest and certification tampering never authorize persistence',async()=>{
  for(const patch of [{kind:'SELFIE'},{imageSha256:'0'.repeat(64)},{modelManifestSha256:'0'.repeat(64)},{identityCertified:true},{livenessVerified:true},{documentAuthenticityVerified:true},{version:2},{mode:'other'},{image:'private-image'},{reasonCodes:['IMAGE_BLURRED']},{reasonCodes:['UNKNOWN_REASON']},{state:'APPROVED'}]){
   const flow=presentation(createCaptureQualityGate({assess:async input=>({...pass(input),...patch})}),fixture());await assert.rejects(flow.run(),error=>error instanceof WorkspaceError&&error.code.startsWith('PARTICIPANT_CAPTURE_DOCUMENT_FRONT_'));assert.deepEqual(flow.effects,{blob:0,record:0});

@@ -384,6 +384,25 @@ test('an observed pre-storage quality 503 clears only its new capture reference 
  }
 });
 
+test('document portrait retake clears only its own new reference while a foreign image kind remains uncertain',async()=>{
+ for(const kind of ['DOCUMENT_FRONT','DOCUMENT_BACK','SELFIE']){
+  const s=storage(),j=journal(s),options=captureQualityOptions(),ticket=await j.prepare(captureQualityUrl,options),before=[...s.rows],code='PARTICIPANT_CAPTURE_'+kind+'_DOCUMENT_PORTRAIT_UNCONFIRMED';
+  await j.captureResponse(ticket,captureQualityUrl,options,captureQualityResponse(code,422),captureQualityObservation());await j.settle(ticket,null,captureQualityError({status:422,code}));
+  if(kind==='DOCUMENT_FRONT'){assert.equal((await j.list(scope)).length,0);const next=await j.prepare(captureQualityUrl,captureQualityOptions({operationId:secondId}));assert.equal(next.existed,false);}
+  else {assert.deepEqual([...s.rows],before);await assert.rejects(j.prepare(captureQualityUrl,captureQualityOptions({operationId:secondId})),{code:'WORKSPACE_RECOVERY_REQUIRED'});}
+ }
+});
+
+test('a matching portrait error code at HTTP 422 cannot bypass the observed precommit envelope',async()=>{
+ for(const mode of ['code-only','normalized-error','extra-receipt','wrong-mime','aborted-after']){
+  const s=storage(),j=journal(s),options=captureQualityOptions(),ticket=await j.prepare(captureQualityUrl,options),before=[...s.rows],code='PARTICIPANT_CAPTURE_DOCUMENT_FRONT_DOCUMENT_PORTRAIT_UNCONFIRMED',controller=new AbortController();
+  const body=['code-only','normalized-error'].includes(mode)?{code}:{saved:false,identityCertified:false,code,...(mode==='extra-receipt'?{receiptId:'not-a-precommit-result'}:{})};
+  await j.captureResponse(ticket,captureQualityUrl,options,new Response(JSON.stringify(body),{status:422,headers:{'content-type':mode==='wrong-mime'?'text/html':'application/json'}}),{signal:controller.signal,isActive:()=>true});
+  if(mode==='aborted-after')controller.abort();await j.settle(ticket,null,captureQualityError({status:422,code:mode==='normalized-error'?'PARTICIPANT_OPERATION_UNCONFIRMED':code}));
+  assert.deepEqual([...s.rows],before,mode);await assert.rejects(j.prepare(captureQualityUrl,captureQualityOptions({operationId:secondId})),{code:'WORKSPACE_RECOVERY_REQUIRED'},mode);
+ }
+});
+
 test('capture quality 503 requires an exact actual response and a matching complete current KYC command',async()=>{
  const modes=['no-response','consumer-flags','saved-true','certified','extra-response','array','wrong-code','wrong-kind','truncated','oversized','invalid-utf8','wrong-mime','misleading-mime','redirected','foreign-url','wrong-path','response-query','content-length','no-signal','no-active','status-200','status-401','status-403','status-409','status-500','wrong-endpoint','query','GET','scope','project','uuid','worker','revision','front','selfie','notice','consent','action','extra-command'];
  for(const mode of modes){

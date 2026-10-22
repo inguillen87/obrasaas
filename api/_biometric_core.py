@@ -32,7 +32,7 @@ CAPTURE_QUALITY_REASONS = frozenset({
     "IMAGE_DECODE_FAILED", "IMAGE_TOO_SMALL", "IMAGE_TOO_DARK", "IMAGE_TOO_BRIGHT",
     "IMAGE_LOW_CONTRAST", "IMAGE_BLURRED", "SINGLE_FACE_REQUIRED", "FACE_TOO_SMALL",
     "FACE_OUT_OF_FRAME", "DOCUMENT_FRAME_UNCONFIRMED", "DOCUMENT_TOO_SMALL",
-    "DOCUMENT_OUT_OF_FRAME", "QUALITY_SERVICE_UNAVAILABLE",
+    "DOCUMENT_OUT_OF_FRAME", "DOCUMENT_PORTRAIT_UNCONFIRMED", "QUALITY_SERVICE_UNAVAILABLE",
 })
 
 
@@ -195,8 +195,39 @@ def _capture_pixels(gray):
     return reasons
 
 
-def _document_capture(image):
-    """Locate a rectangular card candidate, not a DNI type/side/authenticity."""
+def _document_portrait(image, polygon, bounds, detector):
+    """Confirm one usable printed portrait; never compare or identify its face."""
+    import cv2
+    import numpy as np
+    x, y, box_w, box_h = bounds
+    candidate = image[y:y + box_h, x:x + box_w]
+    detector = detector if detector is not None else load_quality_detector()
+    detector.setInputSize((box_w, box_h))
+    _, faces = detector.detect(candidate)
+    if faces is None or len(faces) != 1:
+        return "RETAKE_REQUIRED", ["DOCUMENT_PORTRAIT_UNCONFIRMED"]
+    detected = np.asarray(faces[0], dtype=float)
+    if detected.ndim != 1 or detected.size != 15 or not np.isfinite(detected).all() or not 0.90 <= detected[-1] <= 1:
+        return "UNCERTAIN", ["QUALITY_SERVICE_UNAVAILABLE"]
+    face_x, face_y, face_w, face_h = (float(value) for value in detected[:4])
+    # A printed portrait is smaller than a selfie. The 40px floor is checked
+    # against public-face synthetic cards, independently of selfie area rules.
+    if min(face_w, face_h) < 40 or face_x < 0 or face_y < 0 or face_x + face_w > box_w or face_y + face_h > box_h:
+        return "RETAKE_REQUIRED", ["DOCUMENT_PORTRAIT_UNCONFIRMED"]
+    margin = max(2, min(box_w, box_h) * 0.01)
+    corners = ((face_x, face_y), (face_x + face_w, face_y),
+               (face_x, face_y + face_h), (face_x + face_w, face_y + face_h))
+    if any(cv2.pointPolygonTest(polygon, (x + px, y + py), True) < margin for px, py in corners):
+        return "RETAKE_REQUIRED", ["DOCUMENT_PORTRAIT_UNCONFIRMED"]
+    gray = cv2.cvtColor(candidate, cv2.COLOR_BGR2GRAY)
+    portrait = gray[int(face_y):math.ceil(face_y + face_h), int(face_x):math.ceil(face_x + face_w)]
+    if _capture_pixels(portrait):
+        return "RETAKE_REQUIRED", ["DOCUMENT_PORTRAIT_UNCONFIRMED"]
+    return "QUALITY_PASS", []
+
+
+def _document_capture(image, require_portrait=False, detector=None):
+    """Locate a card candidate and optional portrait, never classify a DNI."""
     import cv2
     height, width = image.shape[:2]
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -219,10 +250,10 @@ def _document_capture(image):
         if area < width * height * 0.04:
             continue
         x, y, box_w, box_h = cv2.boundingRect(polygon)
-        candidates.append((area, x, y, box_w, box_h))
+        candidates.append((area, x, y, box_w, box_h, polygon))
     if not candidates:
         return "UNCERTAIN", ["DOCUMENT_FRAME_UNCONFIRMED"]
-    area, x, y, box_w, box_h = max(candidates)
+    area, x, y, box_w, box_h, polygon = max(candidates, key=lambda value: value[0])
     if area < width * height * 0.18:
         return "RETAKE_REQUIRED", ["DOCUMENT_TOO_SMALL"]
     margin_x, margin_y = max(3, round(width * 0.015)), max(3, round(height * 0.015))
@@ -231,7 +262,11 @@ def _document_capture(image):
     inset = max(2, round(min(box_w, box_h) * 0.025))
     crop = gray[y + inset:y + box_h - inset, x + inset:x + box_w - inset]
     reasons = _capture_pixels(crop)
-    return ("RETAKE_REQUIRED", reasons) if reasons else ("QUALITY_PASS", [])
+    if reasons:
+        return "RETAKE_REQUIRED", reasons
+    if require_portrait:
+        return _document_portrait(image, polygon, (x, y, box_w, box_h), detector)
+    return "QUALITY_PASS", []
 
 
 def evaluate_capture_quality(payload, detector=None):
@@ -260,7 +295,7 @@ def evaluate_capture_quality(payload, detector=None):
         return _quality_result(payload, "RETAKE_REQUIRED", reasons)
     if payload["kind"] != "SELFIE":
         try:
-            state, reasons = _document_capture(image)
+            state, reasons = _document_capture(image, require_portrait=payload["kind"] == "DOCUMENT_FRONT", detector=detector)
             return _quality_result(payload, state, reasons)
         except Exception:
             return _quality_result(payload, "UNCERTAIN", ["QUALITY_SERVICE_UNAVAILABLE"])
