@@ -1,3 +1,4 @@
+import {syntheticCaptureQuality} from './capture-quality-synthetic.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {kycMemoryFixture} from './meta-kyc-chat-memory.mjs';
@@ -110,7 +111,7 @@ export async function companyKycMemoryFixture({active=false,grantLifetimeMs=null
  f.audits.set(exteriorId,{id:exteriorId,organizationId:target.organizationId,actorId:f.issuer.actorId,action:'participant.operation.recorded',entityType:'Worker',entityId:f.worker.id,metadata:{version:1,projectId:target.id,kind:'PREPARE_KYC_CHAT',requestDigest:digest(['fixture-PREPARE_KYC_CHAT',prepareOperationId,target.id,f.worker.id]),challengeReceiptId:prepared.receiptId,expiresAt:prepared.expiresAt}});
  const provider={downloadMedia:async({beforeExternal})=>{await beforeExternal();control.graph++;if(control.afterGraph)await control.afterGraph();await beforeExternal();control.cdn++;return {contentType:'image/png',bytes:lifecyclePng};},sendReply:async()=>{f.controls.sends++;if(control.afterSend)await control.afterSend();return {messageId:'wamid.CorporateKycReply_'+f.controls.sends};}};
  const upload=createParticipantChannelKycUploader({put:f.blob.put,get:f.blob.get,environment:()=>f.environment});
- const deposit=createParticipantChannelKycDeposit({connect,resolveAuthority:resolveMetaKycAuthority,upload,environment:f.environment});
+ const deposit=createParticipantChannelKycDeposit({assessCaptureQuality:value=>(f.controls.quality||syntheticCaptureQuality)(value),connect,resolveAuthority:resolveMetaKycAuthority,upload,environment:f.environment});
  const bridge=createMetaKycBridge({connect,provider,deposit,environment:f.environment}),outbound=createMetaKycOutbound({connect,provider,environment:f.environment});
  const receive=(message,{sender=f.worker.phone.slice(1),contextId=lastReplyId,company=true}={})=>{
   counter++;const id='customer_webhook_'+digest(['company-kyc-fixture',counter]),value={id:'wamid.CorporateKycMessage_'+counter,from:sender,timestamp:String(Math.floor(f.now.getTime()/1000)+counter),...(typeof message==='string'?{type:'text',text:{body:message}}:message),...(contextId?{context:{id:contextId}}:{})};
@@ -128,6 +129,6 @@ export async function companyKycMemoryFixture({active=false,grantLifetimeMs=null
   findInvitation:async value=>{identityCalls.findInvitation++;assert.deepEqual(value,{organizationId:clerkOrganizationId,invitationId});return {id:'orginv_Synthetic',email,role:'org:member',state:'accepted',expiresAt:f.worker.metadata.participant.invitation.expiresAt,invitationId};},
   verifyMembership:async value=>{identityCalls.verifyMembership++;assert.deepEqual(value,{userId:session.userId,organizationId:clerkOrganizationId,invitationId});return {role:'org:member'};}
  };
- const participant=createParticipantStore({workspace:{},connect,identity,environment:f.environment}),join=(operationId=randomUUID())=>participant.join(session,{invitationId,operationId},{accept:true});
+ const participant=createParticipantStore({assessCaptureQuality:value=>(f.controls.quality||syntheticCaptureQuality)(value),workspace:{},connect,identity,environment:f.environment}),join=(operationId=randomUUID())=>participant.join(session,{invitationId,operationId},{accept:true});
  return {...f,anchor,target,owner,code,control,query,connect,provider,upload,deposit,bridge,outbound,receive,state,execute,choose,image,toConfirmation,participant,join,session,identityCalls};
 }

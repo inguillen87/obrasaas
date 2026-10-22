@@ -1,3 +1,4 @@
+import {syntheticCaptureQuality} from './lib/synthetic-capture-quality.mjs';
 import assert from 'node:assert/strict';
 import {createHash,createHmac,randomUUID} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
@@ -43,7 +44,7 @@ function readCiSourceState(){
 }
 const initialSourceState=readCiSourceState();
 const sources=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(e=>e.isDirectory()?sources(relative+'/'+e.name):[relative+'/'+e.name]);
-const sourceManifest=[...sources('src/lib'),'src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/disposable-postgres-cleanup.mjs'].map(file=>({path:file,sha256:sha(readFileSync(file))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
+const sourceManifest=[...sources('src/lib'),'scripts/lib/synthetic-capture-quality.mjs','src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/disposable-postgres-cleanup.mjs'].map(file=>({path:file,sha256:sha(readFileSync(file))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
 function assertStableSource(){for(const source of sourceManifest)assert.equal(sha(readFileSync(source.path)),source.sha256);assert.equal(sha(readFileSync(new URL(import.meta.url))),harnessSha256);assert.deepEqual(readCiSourceState(),initialSourceState);}
 const admin=new Client({connectionString:url.href}),environment={...lifecycleEnvironment},a={...lifecycleTenants[0],anchorProjectId:'onboarding-anchor-a',projectId:'onboarding-target-b',channelId:'onboarding-channel-a'},b={...lifecycleTenants[1],projectId:'onboarding-foreign'},clerk=createControlledLifecycleClerk(),graph=createControlledLifecycleGraph(environment),blob=createControlledLifecycleBlob(),checks=[];
 let pool,created=false,schemaRemoved=false,passed=false,networkCalls=0,lastReplyId=null,sequence=0,loseClosureCommit=false;
@@ -82,10 +83,10 @@ try{
    if(input.organizationId===a.clerkOrganizationId&&input.userId?.length===1&&input.userId[0]===a.workerUserId){const accepted=[...clerk.invitations.values()].filter(row=>row.organizationId===input.organizationId&&row.emailAddress===a.workerEmail&&row.status==='accepted');assert.equal(accepted.length,1);assert.equal(page.totalCount,1);assert.equal(page.data[0].publicUserData.userId,a.workerUserId);return {...page,data:[{...page.data[0],publicMetadata:{...page.data[0].publicMetadata,...accepted[0].publicMetadata}}]};}
    return page;
   }}};};
-  const workspace=createWorkspaceStore({connect}),identity=createParticipantIdentityProvider({client:clerkClient,environment:()=>environment}),participant=createParticipantStore({workspace,connect,identity,prepareKycChat:prepareMetaKycChallenge,environment});
+  const workspace=createWorkspaceStore({connect}),identity=createParticipantIdentityProvider({client:clerkClient,environment:()=>environment}),participant=createParticipantStore({assessCaptureQuality:syntheticCaptureQuality,workspace,connect,identity,prepareKycChat:prepareMetaKycChallenge,environment});
  const scope=(await workspace.list(owner)).scope,otherScope=(await workspace.list(other)).scope,foreignScope=(await workspace.list(foreign)).scope;
  const context={scope,projectId:a.projectId},command=(action,payload)=>({...context,operationId:randomUUID(),action,payload});
- const provider={...createMetaCustomerProvider({environment,fetchImpl:graph.fetchImpl}),downloadMedia:async()=>{throw Error('ONBOARDING_PARTIAL_CAPTURE_MUST_NOT_DOWNLOAD');}},upload=createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment}),deposit=createParticipantChannelKycDeposit({connect,resolveAuthority:resolveMetaKycAuthority,upload,environment}),bridge=createMetaKycBridge({connect,provider,deposit,environment}),outbound=createMetaKycOutbound({connect,provider,environment});
+ const provider={...createMetaCustomerProvider({environment,fetchImpl:graph.fetchImpl}),downloadMedia:async()=>{throw Error('ONBOARDING_PARTIAL_CAPTURE_MUST_NOT_DOWNLOAD');}},upload=createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment}),deposit=createParticipantChannelKycDeposit({assessCaptureQuality:syntheticCaptureQuality,connect,resolveAuthority:resolveMetaKycAuthority,upload,environment}),bridge=createMetaKycBridge({connect,provider,deposit,environment}),outbound=createMetaKycOutbound({connect,provider,environment});
  const processor=createMetaCustomerProcessor({connect,environment,authorizationCodes:[...META_KYC_AUTHORIZATION_CODES,...EMPLOYEE_INTAKE_AUTHORIZATION_CODES],dispatch:async c=>(await bridge.executeIntake(c))||(await bridge.execute(c)),outbound:{send:(c,reply,{purpose})=>outbound.send(c,reply,{purpose})}}),callback=createMetaCustomerCallbackHandlers({inbox:createMetaCustomerInbox({connect,environment}),environment,schedule:()=>{}});
  async function push(message,{replyId=lastReplyId,signed=true}={}){
   sequence++;const value={id:'wamid.OnboardingRecovery_'+randomUUID().replaceAll('-',''),from:a.sender,timestamp:String(Math.floor(Date.now()/1000)+sequence),...(typeof message==='string'?{type:'text',text:{body:message}}:message),...(replyId?{context:{id:replyId}}:{})};

@@ -1,5 +1,6 @@
 'use client';
 import {KycPhotoPreparation} from './kyc-photo-preparation';
+import {CAPTURE_QUALITY_NOTICE} from '../../../lib/capture-quality-policy.mjs';
 import styles from './participant-kyc-capture.module.css';
 const steps=['Frente del documento','Dorso del documento','Selfie'];
 export function ParticipantKycCapture({active=true,step,onStep,value,notices,backAvailable,locked,onFile,onBackConsent,onEdit}){
@@ -25,6 +26,7 @@ export function ParticipantKycCapture({active=true,step,onStep,value,notices,bac
    <KycPhotoPreparation kind="selfie" active={active&&step===2} disabled={locked} onChange={(file,options)=>onFile('selfie',file,options)}/>
    <div className={styles.checklist} aria-label="Imágenes preparadas"><span>{value.front?'✓':'○'} Frente</span><span>{value.backConsent===true?(value.back?'✓ Dorso':'○ Dorso'):'Dorso omitido'}</span><span>{value.selfie?'✓':'○'} Selfie</span></div>
    <details className={styles.privacy}><summary>Leer el aviso de presentación</summary><p>{notices.privacyNotice.text}</p><a href="/privacidad" target="_blank" rel="noopener noreferrer">Política de privacidad ↗</a></details>
+   <p className={styles.note}>{CAPTURE_QUALITY_NOTICE}</p>
    <label className={styles.choice}><input required={step===2} type="checkbox" disabled={locked} checked={value.consent} onChange={event=>onEdit('consent',event.target.checked)}/><span>Leí el aviso y autorizo presentar estas imágenes para su revisión.</span></label>
    {(notices.externalOcrNotice||notices.privateBiometricNotice)&&<details className={styles.optional}><summary>Opciones de análisis de la presentación</summary>
     <p>Estas opciones son independientes y podés continuar sin activarlas.</p>

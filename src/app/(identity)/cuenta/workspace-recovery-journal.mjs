@@ -509,6 +509,22 @@ async function rejectedCompanyPhoneIdentity(url,options,entry){
   let inputDigest;try{inputDigest=await sha256(new TextEncoder().encode(JSON.stringify(['company-phone-rejection-command-v1',body.action,entry.scope,entry.projectId,entry.operationId,body.expectedClerkOrganizationId,body.expectedRevision,body.companyPhone,body.confirmDeclaration])));}catch{throw unavailable();}
   return {inputDigest};
 }
+// Inline so the shared journal's copied browser graph stays unchanged. Only
+// this pre-storage image gate has this exact response and closed reason set.
+const captureQualityRejectionReasons=new Set(['DOCUMENT_FRAME_UNCONFIRMED','DOCUMENT_OUT_OF_FRAME','DOCUMENT_TOO_SMALL','FACE_OUT_OF_FRAME','FACE_TOO_SMALL','IMAGE_BLURRED','IMAGE_DECODE_FAILED','IMAGE_LOW_CONTRAST','IMAGE_TOO_BRIGHT','IMAGE_TOO_DARK','IMAGE_TOO_SMALL','QUALITY_SERVICE_UNAVAILABLE','SINGLE_FACE_REQUIRED']);
+const captureQualityRejectionCode=value=>typeof value==='string'&&['DOCUMENT_FRONT','DOCUMENT_BACK','SELFIE'].some(kind=>value.startsWith('PARTICIPANT_CAPTURE_'+kind+'_')&&captureQualityRejectionReasons.has(value.slice(('PARTICIPANT_CAPTURE_'+kind+'_').length)));
+const captureQualityObservationActive=observation=>{try{return Boolean(observation?.signal&&!observation.signal.aborted&&typeof observation.isActive==='function'&&observation.isActive()===true);}catch{return false;}};
+async function rejectedCaptureQualityIdentity(url,options,entry){
+  if(url!=='/api/identity/participants'||options?.method!=='POST'||entry?.resource!=='participants'||typeof options.body!=='string')return null;
+  let body;try{body=JSON.parse(options.body);}catch{return null;}
+  if(!body||typeof body!=='object'||Array.isArray(body))return null;
+  const ocr=['ocrConsent','ocrNoticeVersion'].some(key=>Object.hasOwn(body,key)),biometric=['biometricConsent','biometricNoticeVersion'].some(key=>Object.hasOwn(body,key)),back=['back','backConsent','backNoticeVersion','backNoticeSha256'].some(key=>Object.hasOwn(body,key));
+  const keys=['operationId','projectId','scope','workerId','revision','noticeVersion','consent','front','selfie',...(ocr?['ocrConsent','ocrNoticeVersion']:[]),...(biometric?['biometricConsent','biometricNoticeVersion']:[]),...(back?['back','backConsent','backNoticeVersion','backNoticeSha256']:[])];
+  const image=value=>typeof value==='string'&&value.length>0&&value.length<=Math.ceil(2*1024*1024/3)*4+64;
+  if(!existingApiPlanExact(body,keys)||body.scope!==entry.scope||body.projectId!==entry.projectId||!uuid(body.operationId)||body.operationId.toLowerCase()!==entry.operationId||!id(body.workerId)||typeof body.revision!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(body.revision)||body.noticeVersion!=='participant-kyc-v1'||body.consent!==true||!image(body.front)||!image(body.selfie)||ocr&&(typeof body.ocrConsent!=='boolean'||!['participant-external-ocr-v1','participant-external-ocr-v2'].includes(body.ocrNoticeVersion))||biometric&&(typeof body.biometricConsent!=='boolean'||!['participant-private-biometric-v1','participant-private-biometric-v2'].includes(body.biometricNoticeVersion))||back&&(!image(body.back)||body.backConsent!==true||body.backNoticeVersion!=='participant-kyc-document-back-v1'||!scopeValid(body.backNoticeSha256)))return null;
+  let inputDigest;try{inputDigest=await sha256(new TextEncoder().encode(JSON.stringify(['participant-capture-quality-rejection-v1',canonicalPlanCommand(body)])));}catch{throw unavailable();}
+  return {inputDigest};
+}
 const companyPhoneRejectedErrors=new WeakMap();
 export async function wasCompanyPhoneRevisionRejected(error,url,options){
   const proof=error&&typeof error==='object'?companyPhoneRejectedErrors.get(error):null;if(!proof)return false;
@@ -516,7 +532,7 @@ export async function wasCompanyPhoneRevisionRejected(error,url,options){
 }
 export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.now,notify=()=>{},withLock}) {
   const scheduleTickets=new WeakMap(),scheduleReferences=new Map(),attendanceTickets=new WeakMap(),attendanceReferences=new Map();
-  const companyPhoneTickets=new WeakMap();
+  const companyPhoneTickets=new WeakMap(),captureQualityTickets=new WeakMap();
   // getStorage is retained only for controlled in-memory tests. The browser uses
   // one transactional adapter; receipt policy remains in this factory.
   const storageOperation=withStorage||((mode,scope,callback,signal)=>{
@@ -578,6 +594,7 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       const entry=await reference(url,options,now());if(!entry)return null;
       const scheduleIdentity=await rejectedScheduleIdentity(url,options,entry),attendanceIdentity=await rejectedAttendanceIdentity(url,options,entry);
       const companyPhoneIdentity=await rejectedCompanyPhoneIdentity(url,options,entry);
+      const captureQualityIdentity=await rejectedCaptureQualityIdentity(url,options,entry);
       const reserve=()=>access('readwrite',entry.scope,s=>{
       if(options.signal?.aborted)throw Object.assign(new DOMException('La consulta se canceló.','AbortError'),{requestDispatched:false});
       const current=readEntries(s,entry.scope),existing=current.find(row=>keyOf(row)===keyOf(entry));
@@ -611,9 +628,31 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
         if(original&&sameScheduleEntry(ticket.entry,original.entry)&&original.identity.inputDigest===attendanceIdentity.inputDigest)attendanceTickets.set(ticket,{...original,rejected:false});
       }
       if(companyPhoneIdentity&&!ticket.existed)companyPhoneTickets.set(ticket,{entry:{...ticket.entry},identity:companyPhoneIdentity,rejected:false});
+      if(captureQualityIdentity&&!ticket.existed)captureQualityTickets.set(ticket,{entry:{...ticket.entry},identity:captureQualityIdentity});
       if(!ticket.existed)notify();return ticket;
     },
     async captureResponse(ticket,url,options,response,observation={}){
+      const quality=captureQualityTickets.get(ticket);
+      if(quality){
+        const {signal,isActive}=observation;let reader,onAbort;
+        try{
+          if(!captureQualityObservationActive(observation)||![422,503].includes(response?.status)||response.redirected===true||response.headers.get('content-type')?.split(';',1)[0].trim().toLowerCase()!=='application/json')return;
+          if(response.url){const received=new URL(response.url);if(!globalThis.location||received.origin!==globalThis.location.origin||received.pathname!==url||received.search||received.hash)return;}
+          const length=response.headers.get('content-length');if(length!==null&&(!/^\d+$/.test(length)||Number(length)>4096))return;
+          const current=await rejectedCaptureQualityIdentity(url,options,quality.entry);if(!current||current.inputDigest!==quality.identity.inputDigest||!captureQualityObservationActive(observation))return;
+          reader=response.clone().body?.getReader();if(!reader)return;
+          let rejectAbort;const aborted=new Promise((_,reject)=>{rejectAbort=reject;});
+          onAbort=()=>{rejectAbort(new DOMException('La consulta se canceló.','AbortError'));reader.cancel().catch(()=>{});response.body?.cancel().catch(()=>{});};
+          signal.addEventListener('abort',onAbort,{once:true});if(signal.aborted){reader.cancel().catch(()=>{});response.body?.cancel().catch(()=>{});return;}
+          const decoder=new TextDecoder('utf-8',{fatal:true});let text='',bytes=0;
+          while(true){const part=await Promise.race([reader.read(),aborted]);if(part.done)break;if(!(part.value instanceof Uint8Array))return;bytes+=part.value.byteLength;if(bytes>4096)return;text+=decoder.decode(part.value,{stream:true});}
+          text+=decoder.decode();const body=JSON.parse(text),after=await rejectedCaptureQualityIdentity(url,options,quality.entry);
+          if(!captureQualityObservationActive(observation)||!after||after.inputDigest!==quality.identity.inputDigest||!existingApiPlanExact(body,['saved','identityCertified','code'])||body.saved!==false||body.identityCertified!==false||!captureQualityRejectionCode(body.code))return;
+          quality.rejected={status:response.status,code:body.code};quality.observation={signal,isActive};quality.request={url,options};
+        }catch{/* An unreadable or interrupted response cannot release a capture. */}
+        finally{if(onAbort)signal?.removeEventListener('abort',onAbort);if(reader){reader.cancel().catch(()=>{});try{reader.releaseLock();}catch{}}}
+        return;
+      }
       const {signal,isActive=()=>true}=observation;
       const companyPhone=companyPhoneTickets.has(ticket),prepared=companyPhoneTickets.get(ticket)||scheduleTickets.get(ticket)||attendanceTickets.get(ticket),attendance=attendanceTickets.has(ticket);
       if(companyPhone){
@@ -642,7 +681,12 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       if(!ticket)return;
       const schedule=scheduleTickets.get(ticket),attendance=attendanceTickets.get(ticket);scheduleTickets.delete(ticket);attendanceTickets.delete(ticket);
       const companyPhone=companyPhoneTickets.get(ticket);companyPhoneTickets.delete(ticket);
+      const captureQuality=captureQualityTickets.get(ticket);captureQualityTickets.delete(ticket);
       if(error){
+        if(captureQuality?.rejected&&!ticket.existed&&ticket.entry.resource==='participants'&&sameScheduleEntry(ticket.entry,captureQuality.entry)&&error.status===captureQuality.rejected.status&&error.code===captureQuality.rejected.code&&error.requestDispatched!==false&&captureQualityObservationActive(captureQuality.observation)){
+          let current;try{current=await rejectedCaptureQualityIdentity(captureQuality.request.url,captureQuality.request.options,captureQuality.entry);}catch{}
+          if(current?.inputDigest===captureQuality.identity.inputDigest&&captureQualityObservationActive(captureQuality.observation))await remove(captureQuality.entry,captureQuality.observation);return;
+        }
         if(ticket.entry.resource==='field-operations'&&ticket.entry.action===fieldMeasurementAction){if(!ticket.existed&&(error.requestDispatched===false||error.definitiveConfigurationRejection===true))await remove(ticket.entry);return;}
         if(companyPhone?.rejected===true&&!ticket.existed&&ticket.entry.resource==='company-onboarding'&&sameScheduleEntry(ticket.entry,companyPhone.entry)&&error.status===409&&error.code==='COMPANY_PHONE_CONFLICT'&&error.requestDispatched!==false&&!companyPhone.observation.signal?.aborted&&companyPhone.observation.isActive()){
           if(await remove(companyPhone.entry,companyPhone.observation)&&!companyPhone.observation.signal?.aborted&&companyPhone.observation.isActive())companyPhoneRejectedErrors.set(error,{entry:companyPhone.entry,identity:companyPhone.identity});return;

@@ -11,17 +11,51 @@ import {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync,existsSync,symli
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {pathToFileURL,fileURLToPath} from 'node:url';
-import {copyPlanDocumentCurveFixture,DOCUMENT_CURVE_FIXTURE_SOURCES} from '../scripts/lib/plan-document-curve-fixture-copy.mjs';
+import {copyPlanDocumentCurveFixture,DOCUMENT_CURVE_FIXTURE_SOURCES,CAPTURE_QUALITY_FIXTURE_SOURCES} from '../scripts/lib/plan-document-curve-fixture-copy.mjs';
 const root=process.cwd(),sha=b=>createHash('sha256').update(b).digest('hex');
 const pureSources=[DOCUMENT_CURVE_FIXTURE_SOURCES[1],DOCUMENT_CURVE_FIXTURE_SOURCES[3]];
 function flattened(source){let text=source.toString('utf8');for(const file of pureSources)text=text.replace('../../../lib/'+path.basename(file),'./'+path.basename(file));return Buffer.from(text);}
-function transformChain(transforms,source){assert.equal(transforms.length,2);let before=source;for(const [index,file]of pureSources.entries()){const after=Buffer.from(before.toString('utf8').replace('../../../lib/'+path.basename(file),'./'+path.basename(file)));assert.deepEqual(transforms[index],{path:DOCUMENT_CURVE_FIXTURE_SOURCES[0],kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:sha(source),copiedBeforeSha256:sha(before),fixtureSha256:sha(after),fixtureRelativePath:'app/plan-source-curve.mjs',dependencySourcePath:file,dependencyFixturePath:'app/'+path.basename(file)});before=after;}return before;}
+function transformChain(transforms,source){
+ assert.ok(transforms.length>=2&&transforms.length<=4);let before=source;
+ for(const [index,file]of pureSources.entries()){const after=Buffer.from(before.toString('utf8').replace('../../../lib/'+path.basename(file),'./'+path.basename(file)));assert.deepEqual(transforms[index],{path:DOCUMENT_CURVE_FIXTURE_SOURCES[0],kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:sha(source),copiedBeforeSha256:sha(before),fixtureSha256:sha(after),fixtureRelativePath:'app/plan-source-curve.mjs',dependencySourcePath:file,dependencyFixturePath:'app/'+path.basename(file)});before=after;}
+ const capture=transforms.slice(2);assert.equal(new Set(capture.map(row=>row.path)).size,capture.length);
+ for(const row of capture){
+  assert.ok(CAPTURE_QUALITY_FIXTURE_SOURCES.slice(1).includes(row.path),'Only the explicit capture components may receive an additional relocation');
+  const original=readFileSync(path.join(root,row.path)),rewritten=Buffer.from(original.toString('utf8').replace('../../../lib/capture-quality-policy.mjs','./capture-quality-policy.mjs'));
+  assert.notDeepEqual(original,rewritten);assert.deepEqual(row,{path:row.path,kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:sha(original),copiedBeforeSha256:sha(original),fixtureSha256:sha(rewritten),fixtureRelativePath:'app/'+path.basename(row.path),dependencySourcePath:CAPTURE_QUALITY_FIXTURE_SOURCES[0],dependencyFixturePath:'app/capture-quality-policy.mjs'});
+ }
+ return before;
+}
 function fixture(flat=false){const owned=mkdtempSync(path.join(tmpdir(),'document-copy-owned-')),components=flat?path.join(owned,'app'):path.join(owned,'src/app/(identity)/cuenta');mkdirSync(components,{recursive:true});writeFileSync(path.join(components,'plan-source-curve.mjs'),readFileSync(path.join(root,DOCUMENT_CURVE_FIXTURE_SOURCES[0])));return {root,fixture:owned,components,sourceManifest:[]};}
 test('hierarchical fixture copies actual pure module and original view without rewriting either',()=>{
  const f=fixture();try{const result=copyPlanDocumentCurveFixture(f);assert.equal(result.sourceCurveCopiedExactly,true);assert.deepEqual(result.fixtureTransforms,[]);assert.deepEqual(readFileSync(result.moduleFixturePath),readFileSync(path.join(root,DOCUMENT_CURVE_FIXTURE_SOURCES[1])));assert.equal(result.moduleFixturePaths.length,2);for(const moduleCopy of result.moduleFixturePaths){assert.equal(moduleCopy.copiedExactly,true);assert.deepEqual(readFileSync(moduleCopy.fixturePath),readFileSync(path.join(root,moduleCopy.sourcePath)));}assert.deepEqual(readFileSync(path.join(f.components,'plan-source-curve.mjs')),readFileSync(path.join(root,DOCUMENT_CURVE_FIXTURE_SOURCES[0])));assert.deepEqual(f.sourceManifest.map(r=>r.path),[...DOCUMENT_CURVE_FIXTURE_SOURCES]);}finally{rmSync(f.fixture,{recursive:true,force:true});}
 });
 test('flat fixture records original and relocated hashes and changes only the exact approved import',()=>{
  const f=fixture(true);try{const result=copyPlanDocumentCurveFixture(f),source=readFileSync(path.join(root,DOCUMENT_CURVE_FIXTURE_SOURCES[0])),target=readFileSync(path.join(f.components,'plan-source-curve.mjs'));assert.equal(result.sourceCurveCopiedExactly,false);assert.deepEqual(target,transformChain(result.fixtureTransforms,source));assert.deepEqual(target,flattened(source));assert.equal(f.sourceManifest.find(r=>r.path===DOCUMENT_CURVE_FIXTURE_SOURCES[0]).sha256,sha(source));for(const moduleCopy of result.moduleFixturePaths)assert.deepEqual(readFileSync(moduleCopy.fixturePath),readFileSync(path.join(root,moduleCopy.sourcePath)));assert.ok(existsSync(result.moduleFixturePath));}finally{rmSync(f.fixture,{recursive:true,force:true});}
+});
+
+test('capture quality imports retain complete original manifests and exact copy/relocation evidence in both fixture layouts',()=>{
+ for(const flat of [false,true]){
+  const f=fixture(flat),originals=new Map(CAPTURE_QUALITY_FIXTURE_SOURCES.map(file=>[file,readFileSync(path.join(root,file))]));
+  try{
+   for(const file of CAPTURE_QUALITY_FIXTURE_SOURCES.slice(1))writeFileSync(path.join(f.components,path.basename(file)),originals.get(file));
+   const result=copyPlanDocumentCurveFixture(f);assert.equal(result.moduleFixturePaths.length,3);assert.equal(result.fixtureTransforms.length,flat?4:0);
+   for(const moduleCopy of result.moduleFixturePaths){assert.equal(moduleCopy.copiedExactly,true);assert.deepEqual(readFileSync(moduleCopy.fixturePath),readFileSync(path.join(root,moduleCopy.sourcePath)));}
+   for(const file of CAPTURE_QUALITY_FIXTURE_SOURCES){assert.equal(f.sourceManifest.find(row=>row.path===file)?.sha256,sha(originals.get(file)));assert.deepEqual(readFileSync(path.join(root,file)),originals.get(file));}
+   for(const file of CAPTURE_QUALITY_FIXTURE_SOURCES.slice(1)){const copied=readFileSync(path.join(f.components,path.basename(file))),expected=flat?Buffer.from(originals.get(file).toString('utf8').replace('../../../lib/capture-quality-policy.mjs','./capture-quality-policy.mjs')):originals.get(file);assert.deepEqual(copied,expected);}
+   if(flat)transformChain(result.fixtureTransforms,readFileSync(path.join(root,DOCUMENT_CURVE_FIXTURE_SOURCES[0])));
+  }finally{rmSync(f.fixture,{recursive:true,force:true});}
+ }
+});
+test('changed capture component bytes fail before copying the quality policy or accepting a relocated digest as original source',()=>{
+ const f=fixture(true);try{
+  for(const file of CAPTURE_QUALITY_FIXTURE_SOURCES.slice(1))writeFileSync(path.join(f.components,path.basename(file)),readFileSync(path.join(root,file)));
+  fs.appendFileSync(path.join(f.components,'participant-kyc-capture.js'),'\n// controlled fixture mutation');assert.throws(()=>copyPlanDocumentCurveFixture(f),/Verify copied capture source/);assert.equal(existsSync(path.join(f.components,'capture-quality-policy.mjs')),false);
+ }finally{rmSync(f.fixture,{recursive:true,force:true});}
+ const g=fixture(true);try{
+  for(const file of CAPTURE_QUALITY_FIXTURE_SOURCES.slice(1))writeFileSync(path.join(g.components,path.basename(file)),readFileSync(path.join(root,file)));
+  g.sourceManifest.push({path:CAPTURE_QUALITY_FIXTURE_SOURCES[0],sha256:'f'.repeat(64)});assert.throws(()=>copyPlanDocumentCurveFixture(g),/Manifest always binds original/);
+ }finally{rmSync(g.fixture,{recursive:true,force:true});}
 });
 test('changed copied source or a fixture digest substituted for source digest is rejected',()=>{
  const f=fixture(true);try{writeFileSync(path.join(f.components,'plan-source-curve.mjs'),readFileSync(path.join(root,DOCUMENT_CURVE_FIXTURE_SOURCES[0]))+'\n// changed fixture');assert.throws(()=>copyPlanDocumentCurveFixture(f),/Verify copied source/);assert.equal(f.sourceManifest.length,0);assert.equal(existsSync(path.join(f.components,'plan-import-document-curve.mjs')),false);}finally{rmSync(f.fixture,{recursive:true,force:true});}
@@ -33,6 +67,14 @@ test('the helper will not write through a symlink or to another fixture root',()
 test('omitting actual module copy cannot produce a valid exact-copy receipt',async()=>{
  const source=readFileSync(new URL('../scripts/lib/plan-document-curve-fixture-copy.mjs',import.meta.url),'utf8'),needle='writeFileSync(moduleTarget,moduleBytes);';assert.equal(source.split(needle).length,2);
  for(const replacement of ['// Actual module copy deliberately omitted.',"if(file!=='src/lib/plan-import-cyp-curve.mjs')writeFileSync(moduleTarget,moduleBytes);"]){const f=fixture(),mutantDir=mkdtempSync(path.join(tmpdir(),'document-copy-mutant-'));try{const mutantFile=path.join(mutantDir,'mutant.mjs');writeFileSync(mutantFile,source.replace(needle,replacement));const mutant=await import(pathToFileURL(mutantFile));assert.throws(()=>mutant.copyPlanDocumentCurveFixture(f),{code:'ENOENT'});assert.equal(f.sourceManifest.length,0);}finally{rmSync(f.fixture,{recursive:true,force:true});rmSync(mutantDir,{recursive:true,force:true});}}
+});
+test('omitting the actual capture quality module copy cannot emit an exact-copy receipt',async()=>{
+ const source=readFileSync(new URL('../scripts/lib/plan-document-curve-fixture-copy.mjs',import.meta.url),'utf8'),needle='writeFileSync(moduleTarget,bytes);';assert.equal(source.split(needle).length,2);
+ const f=fixture(true),mutantDir=mkdtempSync(path.join(tmpdir(),'document-copy-mutant-'));
+ try{
+  for(const file of CAPTURE_QUALITY_FIXTURE_SOURCES.slice(1))writeFileSync(path.join(f.components,path.basename(file)),readFileSync(path.join(root,file)));
+  const mutantFile=path.join(mutantDir,'mutant.mjs');writeFileSync(mutantFile,source.replace(needle,'/* Actual capture quality copy deliberately omitted. */'));const mutant=await import(pathToFileURL(mutantFile));assert.throws(()=>mutant.copyPlanDocumentCurveFixture(f),{code:'ENOENT'});assert.equal(f.sourceManifest.length,0);
+ }finally{rmSync(f.fixture,{recursive:true,force:true});rmSync(mutantDir,{recursive:true,force:true});}
 });
 
 test('actual typed manual producers emit their complete source manifest after real fixture copying',()=>{
@@ -48,9 +90,9 @@ test('actual typed manual producers emit their complete source manifest after re
    const context={...fs,assert,path,createHash,Buffer,process:{cwd:()=>root,env:{},argv:[],platform:process.platform},execFileSync:(_command,args)=>args[0]==='rev-parse'?'a'.repeat(40)+'\n':'',mkdtempSync:()=>{const value=mkdtempSync(path.join(tmpdir(),'document-emitter-owned-'));owned.push(value);return value;},copyPlanDocumentCurveFixture:args=>{const result=copyPlanDocumentCurveFixture(args);if(omit)args.sourceManifest.splice(0,args.sourceManifest.length);return result;}};
    try{const result=runInNewContext(preamble+'\nJSON.stringify({sourceManifest:typeof sourceManifest!=="undefined"?sourceManifest:sourceProof.sourceManifest,fixtureTransforms:documentCurveFixtureTransforms});',context,{timeout:10000}),emitted=JSON.parse(result);return emitted;}finally{for(const directory of owned){assert.ok(path.resolve(directory).startsWith(path.resolve(tmpdir())+path.sep)&&path.basename(directory).startsWith('document-emitter-owned-'));rmSync(directory,{recursive:true,force:true});}}
   }
-  const actual=execute(false),names=actual.sourceManifest.map(ref=>ref.path).sort();assert.deepEqual(names,[...spec.sourceFiles].sort());assert.equal(new Set(names).size,names.length);for(const ref of actual.sourceManifest)assert.equal(ref.sha256,sha(readFileSync(path.join(root,ref.path))));
+  const captureQualitySources=[...(spec.sourceFiles.includes('src/app/(identity)/cuenta/kyc-photo-preparation.js')?['src/app/(identity)/cuenta/kyc-image-quality.mjs']:[]),...(CAPTURE_QUALITY_FIXTURE_SOURCES.slice(1).some(file=>spec.sourceFiles.includes(file))?[CAPTURE_QUALITY_FIXTURE_SOURCES[0]]:[])],actual=execute(false),names=actual.sourceManifest.map(ref=>ref.path).sort();assert.deepEqual(names,[...spec.sourceFiles,...captureQualitySources].sort(),'Previous complete manifest plus exactly the capture quality dependencies used by this producer');assert.equal(new Set(names).size,names.length);for(const ref of actual.sourceManifest)assert.equal(ref.sha256,sha(readFileSync(path.join(root,ref.path))));
   transformChain(actual.fixtureTransforms,readFileSync(path.join(root,DOCUMENT_CURVE_FIXTURE_SOURCES[0])));
-  const mutant=execute(true),mutantNames=mutant.sourceManifest.map(ref=>ref.path).sort();assert.deepEqual(names.filter(file=>!mutantNames.includes(file)),DOCUMENT_CURVE_FIXTURE_SOURCES.slice(1).sort());assert.throws(()=>assert.deepEqual(mutantNames,names));
+  const mutant=execute(true),mutantNames=mutant.sourceManifest.map(ref=>ref.path).sort();assert.deepEqual(names.filter(file=>!mutantNames.includes(file)),[...DOCUMENT_CURVE_FIXTURE_SOURCES.slice(1),...captureQualitySources.filter(file=>file===CAPTURE_QUALITY_FIXTURE_SOURCES[0])].sort());assert.throws(()=>assert.deepEqual(mutantNames,names));
  }
 });
 

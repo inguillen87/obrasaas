@@ -21,7 +21,7 @@ const harnesses=[
  'scripts/verify-participants-ui.mjs',
 ];
 const entries=['participant-panel.js','kyc-photo-preparation.js'];
-const omissions=['kyc-camera-session.mjs','participant-kyc-capture.js','participant-kyc-capture.module.css','participant-kyc-preanalysis-view.mjs'];
+const omissions=['kyc-camera-session.mjs','kyc-image-quality.mjs','capture-quality-policy.mjs','participant-kyc-capture.js','participant-kyc-capture.module.css','participant-kyc-preanalysis-view.mjs'];
 function inside(parent,target){const relative=path.relative(parent,target);return relative!==''&&relative!=='..'&&!relative.startsWith('..'+path.sep)&&!path.isAbsolute(relative);}
 function walk(node,visit){if(!node||typeof node!=='object')return;visit(node);for(const [key,value]of Object.entries(node)){if(['loc','start','end','extra','comments','tokens'].includes(key))continue;if(Array.isArray(value))value.forEach(child=>walk(child,visit));else if(value&&typeof value==='object')walk(value,visit);}}
 const ast=source=>parse(source,{sourceType:'module',plugins:['jsx']});

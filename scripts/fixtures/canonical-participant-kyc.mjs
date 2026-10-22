@@ -1,3 +1,4 @@
+import {syntheticCaptureQuality} from '../lib/synthetic-capture-quality.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID,createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
@@ -27,7 +28,7 @@ export function createCanonicalParticipantKycFixture({workspace,connect,query}) 
     return {url:'https://fixture.private.blob.vercel-storage.com/'+pathname,pathname};
   };
   const uploader=createPrivateImageUploader({put,get,environment:()=>({PRIVATE_MEDIA_PROVIDER:'vercel-blob',BLOB_READ_WRITE_TOKEN:'synthetic-canonical-kyc-fixture'})});
-  const store=createParticipantStore({workspace,connect,upload:uploader.uploadImageToBlob,get});
+  const store=createParticipantStore({assessCaptureQuality:syntheticCaptureQuality,workspace,connect,upload:uploader.uploadImageToBlob,get});
   const row=async(projectId,workerId)=>(await query(`SELECT id,"projectId",active,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Worker" WHERE id=$1 AND "projectId"=$2`,[workerId,projectId])).rows[0];
   async function approve({projectId,workerId,actor,reviewer}) {
     assert.notEqual(actor.userId,reviewer.userId,'The human reviewer is another synthetic account');
@@ -69,7 +70,7 @@ export function canonicalParticipantKycSourceFiles() {
     const source=readFileSync(file,'utf8');
     for(const match of source.matchAll(/(?:import|export)\s[^;]*?from\s*['"](\.[^'"]+)['"]/g)) {
       const dependency=posix.normalize(posix.join(posix.dirname(file),match[1]));
-      assert.ok(dependency.startsWith('src/')||dependency.startsWith('scripts/fixtures/'));
+      assert.ok(dependency.startsWith('src/')||dependency.startsWith('scripts/fixtures/')||dependency==='scripts/lib/synthetic-capture-quality.mjs');
       visit(dependency);
     }
   }

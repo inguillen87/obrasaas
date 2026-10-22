@@ -1,3 +1,4 @@
+import {syntheticCaptureQuality} from './lib/synthetic-capture-quality.mjs';
 import assert from 'node:assert/strict';
 import {createHash,createHmac,randomUUID} from 'node:crypto';
 import {deflateSync} from 'node:zlib';
@@ -83,7 +84,7 @@ try{
  const identity=createParticipantIdentityProvider({client:clerk.client,environment:()=>environment});
  const upload=createPrivateImageUploader({get:blob.get,put:blob.put,environment:()=>environment});
  const channelUpload=createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment});
- const participants=createParticipantStore({workspace,connect,identity,upload:upload.uploadImageToBlob,get:blob.get,prepareKycChat:prepareMetaKycChallenge});
+ const participants=createParticipantStore({assessCaptureQuality:syntheticCaptureQuality,workspace,connect,identity,upload:upload.uploadImageToBlob,get:blob.get,prepareKycChat:prepareMetaKycChallenge});
  const channel=createWorkerChannelStore({workspace}),operations=createFieldOperations({workspace});
  const analyzer={analyzePhoto:async()=>{analyses++;return {success:true,status:'ANALYZED_UNREVIEWED',aiAnalysis:'Controlled synthetic analysis; human review required.',requiresHumanReview:true};},transcribeAudio:async()=>({success:false,code:'SYNTHETIC_AUDIO_NOT_REQUESTED'})};
  const media=createFieldMedia({operations,get:blob.get,put:blob.put,analyzer,environment:()=>environment});
@@ -91,7 +92,7 @@ try{
  const runtime=()=>{
   const bridge=createMetaFieldBridge({connect,environment,provider,get:blob.get,put:blob.put,analyzer});
   const outbound=createMetaCustomerOutbound({connect,resolveIdentity:resolveWorkerChannelIdentity,provider,environment});
-  const deposit=createParticipantChannelKycDeposit({connect,resolveAuthority:resolveMetaKycAuthority,upload:channelUpload,environment});
+  const deposit=createParticipantChannelKycDeposit({assessCaptureQuality:syntheticCaptureQuality,connect,resolveAuthority:resolveMetaKycAuthority,upload:channelUpload,environment});
   const kycBridge=createMetaKycBridge({connect,provider,deposit,environment}),kycOutbound=createMetaKycOutbound({connect,provider,environment});
   const processor=createMetaCustomerProcessor({connect,dispatch:async context=>(await kycBridge.execute(context))||bridge.execute(context),authorizationCodes:META_KYC_AUTHORIZATION_CODES,outbound:{send:(context,reply,{purpose}={})=>purpose==='KYC_CAPTURE'?kycOutbound.send(context,reply):outbound.send(context,reply),observeStatus:(...args)=>outbound.observeStatus(...args)},environment});
   return {bridge,outbound,processor};

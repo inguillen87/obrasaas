@@ -1,3 +1,4 @@
+import {syntheticCaptureQuality} from './fixtures/capture-quality-synthetic.mjs';
 import test from 'node:test';
 import {companyKycMemoryFixture} from './fixtures/company-kyc-memory.mjs';
 import {createParticipantChannelKycUploader,createParticipantChannelKycDeposit} from '../src/lib/participant-channel-kyc.mjs';
@@ -78,7 +79,7 @@ for(const stage of ['initial-get','put'])test('private uploader '+stage+' suspen
  const upload=createParticipantChannelKycUploader({environment:()=>f.environment,
   get:async(...args)=>{gets++;const result=await f.blob.get(...args);if(stage==='initial-get')f.controls.projectAssignmentActive=false;return result;},
   put:async(...args)=>{puts++;const result=await f.blob.put(...args);if(stage==='put')f.controls.projectAssignmentActive=false;return result;}});
- const deposit=createParticipantChannelKycDeposit({connect:f.connect,resolveAuthority:resolveMetaKycAuthority,upload,environment:f.environment});
+ const deposit=createParticipantChannelKycDeposit({assessCaptureQuality:syntheticCaptureQuality,connect:f.connect,resolveAuthority:resolveMetaKycAuthority,upload,environment:f.environment});
  const bridge=createMetaKycBridge({connect:f.connect,provider:f.provider,deposit,environment:f.environment}),s=f.state(),context=f.receive({type:'interactive',interactive:{list_reply:{id:'kyc:'+s.nonce+':0'}}});
  await assert.rejects(bridge.execute(context),{code:'META_KYC_CHALLENGE_REVOKED'});
  assert.equal(gets,1);assert.equal(puts,stage==='put'?1:0);assert.equal(f.worker.metadata.participant.kyc.status,'NOT_SUBMITTED');

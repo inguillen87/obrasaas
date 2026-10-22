@@ -11,6 +11,7 @@ import {createEmployeeIntakeBridge} from './meta-employee-intake.mjs';
 import {participantOcrNotice,participantBiometricNotice} from './participant-analysis-consent.mjs';
 import {participantIdentityUrl} from './participant-kyc-chat-copy.mjs';
 import {recordCurrentImageContext,assertCurrentImageBytes} from './meta-kyc-current-image.mjs';
+import {captureQualityFeedback} from './capture-quality-policy.mjs';
 
 
 const text=body=>({type:'text',body});
@@ -73,7 +74,22 @@ export function createMetaKycBridge({connect,provider,deposit,scheduleAnalysis=(
    return within(async client=>{const r=await resolve(client,context,{deposit:true});if(r.recorded)return r.recorded;return record(client,r,replyResult(text('No pudimos validar las imágenes. No se presentó la identidad. Volvé a enviar el frente del documento como imagen nítida de hasta 2 MB; '+(r.state.captureImageSetVersion===2?'después pediremos el dorso y una selfie nueva.':'después pediremos una selfie nueva.')+' Escribí CANCELAR para terminar.')),{...r.state,step:'FRONT',front:null,selfie:null,...(r.state.captureImageSetVersion===2?{back:null}:{}),confirmationEventId:null});});
   }
    if(beforeExternal)await beforeExternal();
-   outcome=await deposit.deposit(context,{operationId:metaKycOperationId(context.eventId),noticeVersion:state.noticeVersion,noticeSha256:state.noticeSha256,consent:state.consent,ocrConsent:state.ocrConsent,ocrNoticeVersion:state.ocrNoticeVersion,biometricConsent:state.biometricConsent,biometricNoticeVersion:state.biometricNoticeVersion,...(state.captureImageSetVersion===2?{captureImageSetVersion:2,backConsent:state.backConsent,backNoticeVersion:state.backNoticeVersion,backNoticeSha256:state.backNoticeSha256}:{}),...images});
+   try{outcome=await deposit.deposit(context,{operationId:metaKycOperationId(context.eventId),noticeVersion:state.noticeVersion,noticeSha256:state.noticeSha256,consent:state.consent,ocrConsent:state.ocrConsent,ocrNoticeVersion:state.ocrNoticeVersion,biometricConsent:state.biometricConsent,biometricNoticeVersion:state.biometricNoticeVersion,...(state.captureImageSetVersion===2?{captureImageSetVersion:2,backConsent:state.backConsent,backNoticeVersion:state.backNoticeVersion,backNoticeSha256:state.backNoticeSha256}:{}),...images});}
+   catch(error){
+    const feedback=error instanceof WorkspaceError&&[422,503].includes(error.status)?captureQualityFeedback(error.code):null,field=feedback&&({DOCUMENT_FRONT:'front',DOCUMENT_BACK:'back',SELFIE:'selfie'})[feedback.kind];
+    if(!feedback||!state[field]||field==='back'&&state.captureImageSetVersion!==2)throw error;
+    return within(async client=>{
+     const r=await resolve(client,context,{deposit:true});if(r.recorded)return r.recorded;
+     if(digest(r.state)!==digest(state))throw new WorkspaceError('META_KYC_COMPANY_AUTHORITY_CHANGED',409);
+     const unavailable=error.status===503||feedback.reason==='QUALITY_SERVICE_UNAVAILABLE',next={...r.state,confirmationEventId:null};delete next.nonce;delete next.choices;
+     if(unavailable)next.step='CONFIRM';
+     else if(field==='front'){next.step='FRONT';next.front=null;next.selfie=null;if(next.captureImageSetVersion===2)next.back=null;}
+     else if(field==='back'){next.step='BACK';next.back=null;next.selfie=null;}
+     else {next.step='SELFIE';next.selfie=null;}
+     const plan=planMetaKycConversation({message:{type:'text',text:{body:'ESTADO'}},state:next,eventId:r.event.id}),message=unavailable?captureQualityFeedback('PARTICIPANT_CAPTURE_'+feedback.kind+'_QUALITY_SERVICE_UNAVAILABLE').message:feedback.message;
+     return record(client,r,replyResult({...plan.reply,body:message+'\n\n'+plan.reply.body}),plan.state);
+    });
+   }
   }
    const completed=await within(async client=>{
    const r=await resolve(client,context,{deposit:true});if(r.recorded)return r.recorded;

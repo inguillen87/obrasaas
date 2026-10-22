@@ -1,0 +1,13 @@
+# Capture quality before private persistence
+
+The account and WhatsApp submitters validate the complete image set before the first ObraSaaS Blob upload. A rejected or unavailable check creates no KYC submission or private image Blob. WhatsApp already retains the attachment sent by its user; this gate does not claim to remove that upstream message.
+
+The browser checks resolution (320 px short side and 480 px long side), extreme exposure, clipping and missing detail before enabling local review. The live view offers light and sharpness guidance without automatic capture. Files remain local until the participant chooses to submit and supplies the existing presentation consent.
+
+The signed private worker decodes the actual bytes, verifies their digest, and checks exposure, contrast, sharpness and resolution. Document checks locate an in-frame rectangular card candidate and inspect its detail. They do not classify a DNI, confirm its side, read its contents or authenticate it. Selfie checks use the pinned face detector to require one sufficiently large, fully framed face; this is not face recognition or proof of life. An uncertain frame or unavailable model blocks persistence rather than accepting an unanalysed image.
+
+The application rechecks current actor, participant, source and revision authority before each assessment and at the final boundary. The successful quality receipt contains only image hashes, policy/model manifest versions and explicit false identity/liveness/authenticity flags. Prior submissions and their historical consent hashes remain unchanged. Optional document reading and facial comparison retain their separate notices and permissions; a quality pass grants no attendance, reporting, WhatsApp or employment access.
+
+A retake response in WhatsApp returns to the failed step and invalidates dependent later images. A temporary service failure keeps the image references but requires a fresh confirmation nonce; replay of the same event does not download, analyse or send twice. Web retakes open the relevant capture step and preserve the local draft. Known precommit quality failures, including a 503 service outage, allow correction/retry without inventing an uncertain saved receipt.
+
+Tests use explicit synthetic CV adapters where native business fixtures contain signature-only images. Those passes prove orchestration and source fencing, not real vision inference. Python pixel tests and the separately pinned public model verifier exercise vision behavior without customer documents. Production deployment and real participant acceptance must be reported separately.

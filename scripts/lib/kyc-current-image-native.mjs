@@ -1,3 +1,4 @@
+import {syntheticCaptureQuality} from './synthetic-capture-quality.mjs';
 import assert from 'node:assert/strict';
 import {createHash,createHmac,randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
@@ -47,7 +48,7 @@ export function currentImageSyntheticPng(index){
 // Additive test module called only inside the existing owned random schema.
 // It owns no cluster/database/schema and cannot contact a real provider.
 export async function verifyKycCurrentImageNative({query,connect,provider,environment,graph,blob,base,ownerSession,checks}){
- const localSources=['scripts/lib/kyc-current-image-native.mjs','scripts/verify-company-channel-kyc-postgres.mjs','package.json','package-lock.json'].map(path=>({path,sha256:sha(readFileSync(path))}));
+ const localSources=['scripts/lib/kyc-current-image-native.mjs','scripts/lib/synthetic-capture-quality.mjs','scripts/verify-company-channel-kyc-postgres.mjs','package.json','package-lock.json'].map(path=>({path,sha256:sha(readFileSync(path))}));
  const cases=[],trace=[],fixtureIds=[],originalSender=graph.assets.get(base.key).sender;
  const stats=()=>({puts:blob.puts(),downloads:graph.assets.get(base.key).downloads,sends:graph.assets.get(base.key).sends});
  let fixtureNumber=0,clockOffsetMs=0,commitFault=null,commitGate=null,depositAckLost=false;
@@ -66,13 +67,13 @@ export async function verifyKycCurrentImageNative({query,connect,provider,enviro
   }};
  };
  const makeProcessor=({afterReserve=async()=>{},scheduleAnalysis}={})=>{
-  const upload=createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment}),deposit=createParticipantChannelKycDeposit({connect:trackedConnect,resolveAuthority:resolveMetaKycAuthority,upload,environment});
+  const upload=createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment}),deposit=createParticipantChannelKycDeposit({assessCaptureQuality:syntheticCaptureQuality,connect:trackedConnect,resolveAuthority:resolveMetaKycAuthority,upload,environment});
   const bridge=createMetaKycBridge({connect:trackedConnect,provider,deposit,environment,...(scheduleAnalysis?{scheduleAnalysis}:{})}),outbound=createMetaKycOutbound({connect:trackedConnect,provider,environment,afterReserve});
   const forbidden=async()=>{throw Error('CURRENT_IMAGE_UNRELATED_LANE_REACHED');},other={execute:forbidden,send:forbidden,observeStatus:forbidden};
   return createMetaCustomerProductionProcessor({connect:trackedConnect,environment,kycBridge:bridge,kycOutbound:outbound,fieldBridge:other,fieldOutbound:other,companyBridge:other,companyOutbound:other,appProjection:other,isCompany:forbidden,deferAuthorization:async()=>false,rejectedKyc:createMetaKycRejection({connect:trackedConnect,provider,environment}),expiredKyc:createMetaKycExpiryFeedback({connect:trackedConnect,provider,environment}),contextKyc:createMetaKycContextFeedback({connect:trackedConnect,provider,environment}),authorizationCodes:[...META_KYC_AUTHORIZATION_CODES,'META_KYC_EXPIRY_FEEDBACK_DENIED','META_KYC_CONTEXT_FEEDBACK_DENIED','COMPANY_CHANNEL_SOURCE_REQUIRED']});
  };
  const processor=makeProcessor(),callback=createMetaCustomerCallbackHandlers({inbox:createMetaCustomerInbox({connect:trackedConnect,environment}),environment,schedule:()=>{}});
- const workspace=createWorkspaceStore({connect:trackedConnect}),store=createParticipantStore({workspace,connect:trackedConnect,prepareKycChat:prepareMetaKycChallenge,environment});
+ const workspace=createWorkspaceStore({connect:trackedConnect}),store=createParticipantStore({assessCaptureQuality:syntheticCaptureQuality,workspace,connect:trackedConnect,prepareKycChat:prepareMetaKycChallenge,environment});
  const readWorker=async f=>(await query(`SELECT *,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM "Worker" WHERE id=$1`,[f.workerId])).rows[0];
  const readState=async f=>{const w=await readWorker(f),c=w.metadata.participant.kycChatChallenge;return JSON.parse(decryptCustomerSecret(w.metadata.participant.kycChatConversation.encryptedState,{organizationId:f.organizationId,projectId:f.anchorProjectId,purpose:'kyc-chat-conversation',resourceId:c.id},environment));};
  const outbox=async id=>(await query(`SELECT * FROM "WebhookEvent" WHERE id=$1`,[customerOutboundId(id)])).rows[0];

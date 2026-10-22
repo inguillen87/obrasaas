@@ -1,3 +1,4 @@
+import {syntheticCaptureQuality} from './lib/synthetic-capture-quality.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID, createHash, createHmac} from 'node:crypto';
 import {existsSync, readFileSync, mkdirSync, writeFileSync} from 'node:fs';
@@ -195,7 +196,7 @@ export async function verifyParticipantKycPreanalysisPostgres(environment = proc
     }
     const workspace = createWorkspaceStore({connect}), usage = createOrganizationUsage({workspace, connect});
     const uploader = createPrivateImageUploader({get, put: blob.put, environment: () => nativeEnvironment});
-    const store = createParticipantStore({workspace, connect, upload: uploader.uploadImageToBlob, get, environment: nativeEnvironment});
+    const store = createParticipantStore({assessCaptureQuality:syntheticCaptureQuality,workspace, connect, upload: uploader.uploadImageToBlob, get, environment: nativeEnvironment});
     const analyzer = createPilotMediaAnalyzer({environment: () => ({OPENAI_API_KEY: 'synthetic-preanalysis-no-provider-access'}), fetchImpl: liveFetch});
     const service = createParticipantKycPreanalysis({connect, get, analyzer, assessBiometrics: biometrics, usage, readiness: () => readiness});
     async function submit({ocr = true, biometric = false, legacy = false, back = false} = {}) {
@@ -448,7 +449,7 @@ export async function verifyParticipantKycPreanalysisPostgres(environment = proc
       mediaIds.forEach((mediaId, index) => graph.addMedia('a', mediaId, mediaBytes[index]));
       const provider = createMetaCustomerProvider({environment: nativeEnvironment, fetchImpl: graph.fetchImpl});
       const channelUpload = createParticipantChannelKycUploader({get, put: blob.put, environment: () => nativeEnvironment});
-      const deposit = createParticipantChannelKycDeposit({connect, resolveAuthority: resolveMetaKycAuthority, upload: channelUpload, environment: nativeEnvironment});
+      const deposit = createParticipantChannelKycDeposit({assessCaptureQuality:syntheticCaptureQuality,connect, resolveAuthority: resolveMetaKycAuthority, upload: channelUpload, environment: nativeEnvironment});
       const bridge = createMetaKycBridge({connect, provider, deposit, environment: nativeEnvironment, scheduleAnalysis: ref => whatsappWakeups.push(ref)});
       const outbound = createMetaKycOutbound({connect, provider, environment: nativeEnvironment});
       const processor = createMetaCustomerProcessor({connect, environment: nativeEnvironment, authorizationCodes: META_KYC_AUTHORIZATION_CODES,

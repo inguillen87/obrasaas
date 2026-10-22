@@ -5,6 +5,7 @@ import {PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE,PARTICIPANT_WHATSAPP_DOCUMENT_
 import {participantOcrNotice,participantBiometricNotice,PARTICIPANT_AUTO_OCR_NOTICE_VERSION,PARTICIPANT_AUTO_BIOMETRIC_NOTICE_VERSION} from './participant-analysis-consent.mjs';
 import {SITE_ROLES,siteText} from './site-register-policy.mjs';
 import {participantIdentityUrl} from './participant-kyc-chat-copy.mjs';
+import {CAPTURE_QUALITY_NOTICE} from './capture-quality-policy.mjs';
 
 export const META_KYC_CONVERSATION_TTL_MS=30*60*1000;
 export const EMPLOYEE_INTAKE_NOTICE_VERSION='employee-intake-v1';
@@ -68,7 +69,7 @@ const text=body=>({type:'text',body});
 const hints={FRONT:'Enviá el frente completo del documento, con los datos legibles y sin reflejos.',BACK:'Enviá el dorso completo del documento, con los datos legibles y sin reflejos.',SELFIE:'Enviá una selfie con tu rostro solo, de frente y bien iluminado. La selfie es una foto estática y no comprueba prueba de vida.'};
 function choices(state,eventId,body,rows){const nonce=digest(['meta-kyc-choice-v1',eventId,state.step]).slice(0,20);return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body,button:'Elegir',sections:[{title:'Identidad',rows:rows.map(([,title],index)=>({id:'kyc:'+nonce+':'+index,title}))}]}};}
 function prompt(state,eventId){
- if(state.step==='CONSENT')return choices(state,eventId,'Vamos a presentar tu identidad en '+(state.captureImageSetVersion===2?'3 pasos: frente, dorso y selfie.':'2 pasos: documento y selfie.')+' Antes de enviar fotos, elegí tus autorizaciones.\n\n'+PARTICIPANT_NOTICE+'\nEste recorrido sólo presenta imágenes; no habilita permisos. Podés cancelar antes de guardar.',[['CONSENT','Autorizar imágenes'],['CANCEL','Cancelar']]);
+ if(state.step==='CONSENT')return choices(state,eventId,'Vamos a presentar tu identidad en '+(state.captureImageSetVersion===2?'3 pasos: frente, dorso y selfie.':'2 pasos: documento y selfie.')+' Antes de enviar fotos, elegí tus autorizaciones.\n\n'+PARTICIPANT_NOTICE+'\n\n'+CAPTURE_QUALITY_NOTICE+'\nEste recorrido sólo presenta imágenes; no habilita permisos. Podés cancelar antes de guardar.',[['CONSENT','Autorizar imágenes'],['CANCEL','Cancelar']]);
  if(state.step==='BACK_CONSENT')return choices(state,eventId,state.ocrNoticeVersion===PARTICIPANT_AUTO_OCR_NOTICE_VERSION?participantIdentityNoticeSummary(PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION):PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE,[['BACK_CONSENT','Autorizar dorso'],['CANCEL','Cancelar']]);
  if(state.step==='OCR')return choices(state,eventId,participantIdentityNoticeSummary(state.ocrNoticeVersion)||participantOcrNotice(state.ocrNoticeVersion)?.text||PARTICIPANT_OCR_NOTICE,[['OCR_YES','Con lectura asistida'],['OCR_NO','Sin lectura asistida'],['CANCEL','Cancelar']]);
  if(state.step==='BIOMETRIC')return choices(state,eventId,participantIdentityNoticeSummary(state.biometricNoticeVersion)||participantBiometricNotice(state.biometricNoticeVersion)?.text||PARTICIPANT_BIOMETRIC_NOTICE,[['BIOMETRIC_YES','Con comparación facial'],['BIOMETRIC_NO','Sin comparación facial'],['CANCEL','Cancelar']]);
