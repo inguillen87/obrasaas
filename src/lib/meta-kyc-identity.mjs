@@ -1,3 +1,4 @@
+import {PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION} from './participant-analysis-consent.mjs';
 import {participantOcrNotice,participantBiometricNotice} from './participant-analysis-consent.mjs';
 import {WorkspaceError,digest} from './workspace-policy.mjs';
 import {decodeSignedCustomerEvent} from './meta-customer-processing.mjs';
@@ -116,14 +117,16 @@ async function resolveMetaKycContext(client,context,{deposit=false,outbound=fals
 async function finishMetaKycAuthority(client,context,r,{deposit,outbound,environment}){
  const {event,project,worker,challenge,payload:finalPayload,now}=r;
  if(challenge.captureImageSetVersion!==undefined&&challenge.captureImageSetVersion!==2)fail('META_KYC_CHALLENGE_REJECTED');
+ if(challenge.analysisConsentVersion!==undefined&&![1,2,3].includes(challenge.analysisConsentVersion))fail('META_KYC_CHALLENGE_REJECTED');
  if(challenge.captureImageSetVersion===2){
   const prepared=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "actorId"=$2 AND "entityType"='Worker' AND "entityId"=$3 AND action='participant.kyc_chat.prepared' AND metadata->>'challengeId'=$4`,[project.organizationId,challenge.issuerActorId,worker.id,challenge.id])).rows;
-  if(prepared.length!==1||prepared[0].metadata?.version!==1||prepared[0].metadata.projectId!==project.id||prepared[0].metadata.captureImageSetVersion!==2||prepared[0].metadata.expiresAt!==challenge.expiresAt||!/^[a-f0-9]{64}$/.test(prepared[0].metadata.requestDigest||''))fail('META_KYC_CHALLENGE_REJECTED');
+  if(prepared.length!==1||prepared[0].metadata?.version!==1||prepared[0].metadata.projectId!==project.id||prepared[0].metadata.captureImageSetVersion!==2||challenge.analysisConsentVersion===3&&prepared[0].metadata.analysisConsentVersion!==3||prepared[0].metadata.expiresAt!==challenge.expiresAt||!/^[a-f0-9]{64}$/.test(prepared[0].metadata.requestDigest||''))fail('META_KYC_CHALLENGE_REJECTED');
  }
 
  if(r.companyKyc&&challenge.status==='PENDING'&&(deposit||outbound))fail('META_KYC_CHALLENGE_REJECTED');
  r.state=readMetaKycConversation(r,environment);
  if(r.state&&r.state.captureImageSetVersion!==challenge.captureImageSetVersion)fail('META_KYC_CHALLENGE_REJECTED');
+ if(r.state&&(challenge.analysisConsentVersion===3?(r.state.analysisConsentVersion!==3||r.state.biometricNoticeVersion!==PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION||r.state.biometricNoticeSha256!==participantBiometricNotice(PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION).sha256):(r.state.analysisConsentVersion===3||r.state.biometricNoticeVersion===PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION)))fail('META_KYC_CHALLENGE_REJECTED');
  const prior=(await client.query(`SELECT metadata FROM public."AuditLog" WHERE id=$1 AND "organizationId"=$2 AND "entityId"=$3 AND action='participant.kyc_chat.dispatched'`,[metaKycDispatchReceiptId(event.id),project.organizationId,worker.id])).rows[0];
  if(prior){if(prior.metadata.payloadDigest!==context.payloadDigest||prior.metadata.challengeId!==challenge.id)fail('META_KYC_CHALLENGE_REJECTED');r.recorded=readMetaKycValue(r,'kyc-chat-dispatch',metaKycDispatchReceiptId(event.id),prior.metadata.encryptedResult,environment);if(r.recorded?.kind!=='KYC_CHAT'||r.recorded.identityStatus!=='LIMITED_KYC_UPLOAD'||prior.metadata.replyDigest!==digest(r.recorded.reply))fail('META_KYC_CHALLENGE_REJECTED');}
  await prepareCurrentImageContext(client,r,environment);

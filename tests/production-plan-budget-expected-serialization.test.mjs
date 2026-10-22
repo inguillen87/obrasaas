@@ -10,7 +10,7 @@ import {
  planBudgetRetainedScreenshotPaths,planBudgetValidationFiles,planBudgetCurrentBrowserBinding,
  planBudgetCurrentSourcePin,planBudgetPreviousSourcePin,restorePlanBudgetSourceSet,
  restorePlanBudgetPreviousContract,restorePlanBudgetAcceptancePreviousContract,restorePlanBudgetAcceptancePreviousSource,verifyPlanBudgetCurrentSources,
- normalizePlanBudgetPilotNativeProof,normalizePlanBudgetIntakeWithdrawalNativeProof,
+ restoreCaptureRuntimePreviousSource,withCaptureRuntimePreviousSources,createCaptureRuntimeGate,
 } from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 
 // Current cases use actual public helpers and actual current contract. The final
@@ -98,9 +98,10 @@ test('pin aliases preserve the early return when the caller has no Budget compan
 
 test('the separately authenticated literal Git1b helper retains the original complete65d denial',()=>{
  const value=current(),parent=restorePlanBudgetAcceptancePreviousContract(value);
+ verifyPlanBudgetCurrentSources(value,file=>readFileSync(new URL('../'+file,import.meta.url)));
  assert.equal(sha(serialize(parent)),'a89d1a6c820b811359af23359e587f9110e7341bfa0c2b558b5ee452d9ac1042');
  const sourcePath='scripts/lib/plan-budget-current-ci-lineage.mjs',history=value[key].pilotAcceptanceRuntime.sourceHistory.find(row=>row.path===sourcePath);
- const bytes=readFileSync(new URL('../'+sourcePath,import.meta.url));let text=bytes.toString('utf8').replaceAll('\r\n','\n');
+ const actualBytes=readFileSync(new URL('../'+sourcePath,import.meta.url)),bytes=restoreCaptureRuntimePreviousSource(value,sourcePath,actualBytes);let text=bytes.toString('utf8').replaceAll('\r\n','\n');
  assert.equal(sha(text),history.currentSha256);assert.equal(Buffer.byteLength(text),history.currentBytes);
  // Retained inverse bytes construct an owned HISTORICAL fixture. The exact Git1b
  // digest independently pins the complete body; it is never a current reader.
@@ -155,7 +156,22 @@ test('acceptance source inverse authenticates current workspace recovery bytes b
  assert.equal(serialize(unrelated),unrelatedBefore);assert.equal(serialize(value),before);assert.deepEqual(bytes,captured);
 });
 
-test('native proofs retain actual RAW LF and CRLF hashes through the local acceptance bridge without mutating inputs',()=>{
+
+// These synthetic cases exercise the literal Git731 checkpoint only. Current
+// source authority uses the unchanged physical reader before and after this
+// synchronous boundary. No synthetic receipt is supplied to current adapters.
+function historical731Test(name,run){test('literal Git731 checkpoint: '+name,()=>{
+ const actual=current(),physicalRead=file=>readFileSync(new URL('../'+file,import.meta.url));
+ return withCaptureRuntimePreviousSources(actual,physicalRead,(parent,parentRead)=>{
+  assert.equal(sha(serialize(parent)),'d5ef59b111dd3e25b8f08854d3e8e4df4838a7913e3e22b76299c1916b9913d2');
+  assert.equal(sha(restoreCaptureRuntimePreviousSource(actual,'scripts/lib/plan-budget-current-ci-lineage.mjs',physicalRead('scripts/lib/plan-budget-current-ci-lineage.mjs'))),'0ba932090392ee957357d303ac8c4acd11fec9da46b4f01a9e5390e47d563510');
+  // The factory checks its literal parent body pin before returning these APIs.
+  const api=createCaptureRuntimeGate(actual[key]).parentGate;
+  return run({...api,current:()=>structuredClone(parent),readCaptureParent:parentRead});
+ });
+});}
+
+historical731Test('native proofs retain actual RAW LF and CRLF hashes through the local acceptance bridge without mutating inputs',({current,readCaptureParent,normalizePlanBudgetPilotNativeProof,normalizePlanBudgetIntakeWithdrawalNativeProof})=>{
  const value=current(),before=serialize(value),runtime=value[key],intake=runtime.intakeWithdrawalRuntime,material=runtime.consumptionEvidenceRuntime.materialNative;
  const supplement=runtime.pilotWhatsAppRuntime.nativeSupplements.find(row=>row.producer===material.producer),spec=value.extension.proofs.find(row=>row.kind==='PG_INTAKE');
  const alias=runtime.trialExpiryNoticeRuntime.sourceAliases[0],nativeFiles=new Set([...intake.native.currentManifest.map(row=>row.path),...material.currentFiles,intake.producer.producer]);
@@ -165,7 +181,7 @@ test('native proofs retain actual RAW LF and CRLF hashes through the local accep
  for(const eol of ['\n','\r\n']){
   let tamper=null;const observed=[];
   const reader=file=>{
-   const actual=readFileSync(new URL('../'+file,import.meta.url));let bytes=Buffer.from(actual);
+   const actual=readCaptureParent(file);let bytes=Buffer.from(actual);
    if(nativeFiles.has(file))bytes=Buffer.from(actual.toString('utf8').replaceAll('\r\n','\n').replaceAll('\n',eol));
    if(file===tamper)bytes=Buffer.concat([bytes,Buffer.from('\n// foreign native current bytes\n')]);
    if(nativeFiles.has(file))observed.push({bytes,digest:sha(bytes)});return bytes;

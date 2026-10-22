@@ -1,4 +1,5 @@
 import {createPrivateCaptureQuality} from './private-capture-quality.mjs';
+import {createPrivateBiometricAnalyzer} from './private-biometric-analyzer.mjs';
 import {get,put} from '@vercel/blob';
 import {after} from 'next/server';
 import {productionParticipantKycPreanalysis} from './participant-kyc-preanalysis-runtime.mjs';
@@ -36,7 +37,8 @@ const isCompany=context=>customerJobTransaction(connectWorkspace,client=>resolve
 const bridge=createMetaFieldBridge({connect:connectWorkspace,resolveIdentity:resolveWorkerChannelIdentity,provider,put,get,analyzer,planAnalyzer,usage:productionOrganizationUsage});
 const upload=createParticipantChannelKycUploader({put,get});
 const captureQuality=createPrivateCaptureQuality();
-const deposit=createParticipantChannelKycDeposit({assessCaptureQuality:input=>captureQuality.assess(input),connect:connectWorkspace,resolveAuthority:resolveMetaKycAuthority,upload});
+const biometricAnalyzer=createPrivateBiometricAnalyzer();
+const deposit=createParticipantChannelKycDeposit({assessBiometrics:(input,options)=>biometricAnalyzer.analyzeBiometricPair(input,options),assessCaptureQuality:input=>captureQuality.assess(input),connect:connectWorkspace,resolveAuthority:resolveMetaKycAuthority,upload});
 const kycBridge=createMetaKycBridge({connect:connectWorkspace,provider,deposit,scheduleAnalysis:reference=>after(async()=>{try{await productionParticipantKycPreanalysis.process(reference);}catch{console.error('PARTICIPANT_ANALYSIS_UNCONFIRMED');}})});
 const kycOutbound=createMetaKycOutbound({connect:connectWorkspace,provider});
 const kycRejection=createMetaKycRejection({connect:connectWorkspace,provider});

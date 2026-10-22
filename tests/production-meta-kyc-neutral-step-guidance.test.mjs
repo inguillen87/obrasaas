@@ -37,7 +37,7 @@ for(const command of ['HOLA','ESTADO','MENU','MENÚ'])for(const step of ['CONSEN
  await t.adapter.send(t.context,result.reply);assert.equal(t.requests.length,1);unchanged(t,before);assert.deepEqual(await t.adapter.feedback(t.context,{recoverOnly:true}),result);await t.adapter.send(t.context,result.reply);assert.equal(t.requests.length,1);unchanged(t,before);
 });
 test('neutral guidance also retains an invited person without inventing an accepted account',async()=>{
- const t=await fixture('FRONT','  menú  ',{active:false}),before=snapshot(t),value=await t.adapter.feedback(t.context,{staleOnly:true});assert.equal(value.kind,'KYC_CONTEXT_FEEDBACK');await t.adapter.send(t.context,value.reply);assert.equal(t.f.worker.metadata.participant.status,'INVITED');assert.equal(t.requests.length,1);unchanged(t,before);
+ const t=await fixture('FRONT','  menú  ',{active:false,historicalChallengeVersion:2}),before=snapshot(t),value=await t.adapter.feedback(t.context,{staleOnly:true});assert.equal(value.kind,'KYC_CONTEXT_FEEDBACK');await t.adapter.send(t.context,value.reply);assert.equal(t.f.worker.metadata.participant.status,'INVITED');assert.equal(t.requests.length,1);unchanged(t,before);
 });
 for(const body of ['AYUDA','HOLA!','ESTADO IDENTIDAD','CONSUMO','IDENTIDAD '+'a'.repeat(43),'VINCULAR '+'b'.repeat(43)])test('unquoted '+body.split(' ')[0]+' is not silently broadened into neutral step authority',async()=>{
  const t=await fixture('FRONT',body),before=snapshot(t),audits=t.f.audits.size;assert.equal(await t.adapter.feedback(t.context,{staleOnly:true}),null);assert.equal(t.f.audits.size,audits);assert.equal(t.requests.length,0);unchanged(t,before);

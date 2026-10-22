@@ -2,9 +2,15 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {PLAN_BUDGET_CURRENT_REVISION as reviewed} from './plan-budget-current-ci-reviewed.mjs';
 export {PLAN_BUDGET_CURRENT_REVISION} from './plan-budget-current-ci-reviewed.mjs';
-export const PLAN_BUDGET_CURRENT_SECTION='planBudgetCurrentRevision';
-export const PLAN_BUDGET_CI_KIND='UI_PLAN_BUDGET_SOURCE';
-export const PLAN_BUDGET_CI_PROOF_PATH='.vercel/private/plan-budget-ui-ci.json';
+// Literal Git731565 parent: only import declarations and export keywords removed.
+function createCaptureQualityParentGate(reviewed){
+
+
+
+
+const PLAN_BUDGET_CURRENT_SECTION='planBudgetCurrentRevision';
+const PLAN_BUDGET_CI_KIND='UI_PLAN_BUDGET_SOURCE';
+const PLAN_BUDGET_CI_PROOF_PATH='.vercel/private/plan-budget-ui-ci.json';
 // Historical bodies remain private and unchanged after export-keyword removal.
 function createAuthenticatedParentGate(reviewed){
 const anchor='scripts/lib/plan-budget-current-ci-reviewed.mjs',previousHash='8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839';
@@ -552,43 +558,43 @@ function acceptanceSourceCall(name,contract,file,bytes){const parent=acceptanceP
 function acceptanceProducerCall(name,contract,file,bytes){const parent=acceptanceParentContract(contract,true);return acceptanceParentGate[name](parent,acceptanceParentSource(file,bytes));}
 function acceptanceContractCall(name,contract,...args){return acceptanceParentGate[name](acceptanceParentContract(contract),...args);}
 
-export const INTAKE_WITHDRAWAL_CHECK_NAMES=acceptanceParentGate.INTAKE_WITHDRAWAL_CHECK_NAMES;
-export function restorePlanBudgetAcceptancePreviousContract(contract){return acceptanceParentContract(contract,true);}
-export function restorePlanBudgetAcceptancePreviousSource(contract,file,bytes){
+const INTAKE_WITHDRAWAL_CHECK_NAMES=acceptanceParentGate.INTAKE_WITHDRAWAL_CHECK_NAMES;
+function restorePlanBudgetAcceptancePreviousContract(contract){return acceptanceParentContract(contract,true);}
+function restorePlanBudgetAcceptancePreviousSource(contract,file,bytes){
  acceptanceParentContract(contract,true);return acceptanceParentSource(file,acceptanceBytes(bytes,file));
 }
-export function restorePlanBudgetPilotIntegrationPreviousContract(contract){return acceptanceContractCall('restorePlanBudgetPilotIntegrationPreviousContract',contract);}
-export function restorePlanBudgetPilotIntegrationSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetPilotIntegrationSource',contract,file,bytes);}
-export function restorePlanBudgetTrialExpiryNoticePreviousContract(contract){return acceptanceContractCall('restorePlanBudgetTrialExpiryNoticePreviousContract',contract);}
-export function restorePlanBudgetTrialExpiryNoticeSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetTrialExpiryNoticeSource',contract,file,bytes);}
-export function restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetTrialExpiryNoticeValidatorSource',contract,file,bytes);}
-export function restorePlanBudgetMeasurementPrivacyPreviousContract(contract){return acceptanceContractCall('restorePlanBudgetMeasurementPrivacyPreviousContract',contract);}
-export function restorePlanBudgetMeasurementPrivacySource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetMeasurementPrivacySource',contract,file,bytes);}
-export function restorePlanBudgetCheckTimePreviousContract(contract){return acceptanceContractCall('restorePlanBudgetCheckTimePreviousContract',contract);}
-export function restorePlanBudgetCheckTimeSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetCheckTimeSource',contract,file,bytes);}
-export function restorePlanBudgetPreviousContract(contract){return acceptanceContractCall('restorePlanBudgetPreviousContract',contract);}
-export function restorePlanBudgetIntakeWithdrawalSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetIntakeWithdrawalSource',contract,file,bytes);}
-export function restorePlanBudgetIntakeWithdrawalProducerText(contract,bytes){return acceptanceProducerCall('restorePlanBudgetIntakeWithdrawalProducerText',contract,acceptanceParentExpected.intakeWithdrawalRuntime.producer.producer,bytes);}
-export function restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,bytes){return acceptanceProducerCall('restorePlanBudgetIntakeWithdrawalUnitProducerText',contract,acceptanceParentExpected.intakeWithdrawalRuntime.unitProducer.producer,bytes);}
-export function restorePlanBudgetMaterialNativeProducerText(contract,bytes){return acceptanceProducerCall('restorePlanBudgetMaterialNativeProducerText',contract,acceptanceParentExpected.consumptionEvidenceRuntime.materialNative.producer,bytes);}
-export function restorePlanBudgetAttendanceReviewProducerText(contract,bytes){return acceptanceProducerCall('restorePlanBudgetAttendanceReviewProducerText',contract,acceptanceParentExpected.attendanceReviewRuntime.producer.producer,bytes);}
-export function restorePlanBudgetConsumptionEvidenceSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetConsumptionEvidenceSource',contract,file,bytes);}
-export function restorePlanBudgetPilotProducerText(contract,producer,bytes){const parent=acceptanceParentContract(contract,true);return acceptanceParentGate.restorePlanBudgetPilotProducerText(parent,producer,acceptanceParentSource(producer,bytes));}
-export function restorePlanBudgetFieldReviewBusinessSource(file,bytes){return acceptanceParentGate.restorePlanBudgetFieldReviewBusinessSource(file,acceptanceParentSource(file,bytes));}
-export function restorePlanBudgetSourceSet(contract,family,files){const parent=acceptanceParentContract(contract);return acceptanceParentGate.restorePlanBudgetSourceSet(parent,family,Object.hasOwn(contract,acceptanceKey)?acceptancePreviousFiles(family,files):files);}
-export function restorePlanBudgetFieldReviewSourceSet(contract,family,files){const parent=acceptanceParentContract(contract);return acceptanceParentGate.restorePlanBudgetFieldReviewSourceSet(parent,family,Object.hasOwn(contract,acceptanceKey)?acceptancePreviousFiles(family,files):files);}
-export function restorePlanBudgetConsumptionEvidenceSourceSet(contract,family,files){const parent=acceptanceParentContract(contract);return acceptanceParentGate.restorePlanBudgetConsumptionEvidenceSourceSet(parent,family,Object.hasOwn(contract,acceptanceKey)?acceptancePreviousFiles(family,files):files);}
-export function planBudgetProofSourceAdditions(spec){
+function restorePlanBudgetPilotIntegrationPreviousContract(contract){return acceptanceContractCall('restorePlanBudgetPilotIntegrationPreviousContract',contract);}
+function restorePlanBudgetPilotIntegrationSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetPilotIntegrationSource',contract,file,bytes);}
+function restorePlanBudgetTrialExpiryNoticePreviousContract(contract){return acceptanceContractCall('restorePlanBudgetTrialExpiryNoticePreviousContract',contract);}
+function restorePlanBudgetTrialExpiryNoticeSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetTrialExpiryNoticeSource',contract,file,bytes);}
+function restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetTrialExpiryNoticeValidatorSource',contract,file,bytes);}
+function restorePlanBudgetMeasurementPrivacyPreviousContract(contract){return acceptanceContractCall('restorePlanBudgetMeasurementPrivacyPreviousContract',contract);}
+function restorePlanBudgetMeasurementPrivacySource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetMeasurementPrivacySource',contract,file,bytes);}
+function restorePlanBudgetCheckTimePreviousContract(contract){return acceptanceContractCall('restorePlanBudgetCheckTimePreviousContract',contract);}
+function restorePlanBudgetCheckTimeSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetCheckTimeSource',contract,file,bytes);}
+function restorePlanBudgetPreviousContract(contract){return acceptanceContractCall('restorePlanBudgetPreviousContract',contract);}
+function restorePlanBudgetIntakeWithdrawalSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetIntakeWithdrawalSource',contract,file,bytes);}
+function restorePlanBudgetIntakeWithdrawalProducerText(contract,bytes){return acceptanceProducerCall('restorePlanBudgetIntakeWithdrawalProducerText',contract,acceptanceParentExpected.intakeWithdrawalRuntime.producer.producer,bytes);}
+function restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,bytes){return acceptanceProducerCall('restorePlanBudgetIntakeWithdrawalUnitProducerText',contract,acceptanceParentExpected.intakeWithdrawalRuntime.unitProducer.producer,bytes);}
+function restorePlanBudgetMaterialNativeProducerText(contract,bytes){return acceptanceProducerCall('restorePlanBudgetMaterialNativeProducerText',contract,acceptanceParentExpected.consumptionEvidenceRuntime.materialNative.producer,bytes);}
+function restorePlanBudgetAttendanceReviewProducerText(contract,bytes){return acceptanceProducerCall('restorePlanBudgetAttendanceReviewProducerText',contract,acceptanceParentExpected.attendanceReviewRuntime.producer.producer,bytes);}
+function restorePlanBudgetConsumptionEvidenceSource(contract,file,bytes){return acceptanceSourceCall('restorePlanBudgetConsumptionEvidenceSource',contract,file,bytes);}
+function restorePlanBudgetPilotProducerText(contract,producer,bytes){const parent=acceptanceParentContract(contract,true);return acceptanceParentGate.restorePlanBudgetPilotProducerText(parent,producer,acceptanceParentSource(producer,bytes));}
+function restorePlanBudgetFieldReviewBusinessSource(file,bytes){return acceptanceParentGate.restorePlanBudgetFieldReviewBusinessSource(file,acceptanceParentSource(file,bytes));}
+function restorePlanBudgetSourceSet(contract,family,files){const parent=acceptanceParentContract(contract);return acceptanceParentGate.restorePlanBudgetSourceSet(parent,family,Object.hasOwn(contract,acceptanceKey)?acceptancePreviousFiles(family,files):files);}
+function restorePlanBudgetFieldReviewSourceSet(contract,family,files){const parent=acceptanceParentContract(contract);return acceptanceParentGate.restorePlanBudgetFieldReviewSourceSet(parent,family,Object.hasOwn(contract,acceptanceKey)?acceptancePreviousFiles(family,files):files);}
+function restorePlanBudgetConsumptionEvidenceSourceSet(contract,family,files){const parent=acceptanceParentContract(contract);return acceptanceParentGate.restorePlanBudgetConsumptionEvidenceSourceSet(parent,family,Object.hasOwn(contract,acceptanceKey)?acceptancePreviousFiles(family,files):files);}
+function planBudgetProofSourceAdditions(spec){
  const row=acceptanceProjectedSet(spec?.kind);if(!row)return acceptanceParentGate.planBudgetProofSourceAdditions(spec);
  if(acceptanceSame(spec.sourceFiles,row.current))return [...new Set([...acceptanceParentGate.planBudgetProofSourceAdditions({...spec,sourceFiles:[...row.previous]}),...row.advance.additions])].sort();
  acceptanceReject(Array.isArray(spec.sourceFiles)&&!row.advance.additions.some(file=>spec.sourceFiles.includes(file)),'ACCEPTANCE_CURRENT_SOURCE_SET_'+spec.kind);return acceptanceParentGate.planBudgetProofSourceAdditions(spec);
 }
-export function intakeWithdrawalCurrentCheckCount(spec){return acceptanceParentGate.intakeWithdrawalCurrentCheckCount(spec);}
-export function verifyPlanBudgetCurrentSources(contract,reader){
+function intakeWithdrawalCurrentCheckCount(spec){return acceptanceParentGate.intakeWithdrawalCurrentCheckCount(spec);}
+function verifyPlanBudgetCurrentSources(contract,reader){
  const parent=acceptanceParentContract(contract,true);acceptanceVerifyActual(contract,parent,reader);
  const result=acceptanceParentGate.verifyPlanBudgetCurrentSources(parent,acceptanceReader(contract,parent,reader));acceptanceParentContract(contract,true);return {...result,referenceCount:acceptanceExpected.references.length};
 }
-export function verifyPlanBudgetActualClosure(contract,family,closure,reader){
+function verifyPlanBudgetActualClosure(contract,family,closure,reader){
  const parent=acceptanceParentContract(contract,true);acceptanceVerifyActual(contract,parent,reader);
  const current=acceptanceExpected.sourceFamilies.find(row=>row.family===family),previous=acceptanceParentExpected.sourceFamilies.find(row=>row.family===family);
  acceptanceReject(Boolean(current&&previous),'ACCEPTANCE_CURRENT_FAMILY');acceptanceReject(acceptancePlain(closure)&&acceptanceSame(Object.keys(closure).sort(),['files','externalImports'].sort())&&acceptanceSame(closure.files,current.currentFiles)&&acceptanceSame(closure.externalImports,current.externalImports),'ACCEPTANCE_EXACT_CURRENT_CLOSURE');
@@ -596,18 +602,18 @@ export function verifyPlanBudgetActualClosure(contract,family,closure,reader){
  acceptanceParentGate.verifyPlanBudgetActualClosure(parent,family,{files:[...previous.currentFiles],externalImports:[...previous.externalImports]},acceptanceReader(contract,parent,reader));acceptanceParentContract(contract,true);
  return {family,sourceCount:current.currentFiles.length,sourcePathsSha256:acceptanceSha(JSON.stringify(current.currentFiles)),nativeOrBrowserAcceptance:false};
 }
-export function restorePlanBudgetClosure(contract,family,closure){
+function restorePlanBudgetClosure(contract,family,closure){
  const parent=acceptanceParentContract(contract);if(!Object.hasOwn(contract,acceptanceKey))return acceptanceParentGate.restorePlanBudgetClosure(parent,family,closure);
  const current=acceptanceExpected.sourceFamilies.find(row=>row.family===family),previous=acceptanceParentExpected.sourceFamilies.find(row=>row.family===family);acceptanceReject(Boolean(current&&previous)&&acceptancePlain(closure)&&acceptanceSame(closure.files,current.currentFiles)&&acceptanceSame(closure.externalImports,current.externalImports),'ACCEPTANCE_EXACT_CURRENT_CLOSURE');
  return acceptanceParentGate.restorePlanBudgetClosure(parent,family,{files:[...previous.currentFiles],externalImports:[...previous.externalImports]});
 }
-export function planBudgetValidationFiles(contract){return acceptanceMetadataSection(contract)?[...new Set([acceptanceAnchor,...acceptanceExpected.references.map(row=>row.path),...acceptanceParentExpected.checkTimeRuntime.sourceHistory.map(row=>row.path),acceptanceParentExpected.measurementPrivacyRuntime.validationSource.path])].sort():[];}
-export function planBudgetCurrentBrowserBinding(contract,fallback){if(!acceptanceMetadataSection(contract))return fallback;const value=acceptanceExpected.browser;return {...fallback,producerLfSha256:value.producerLfSha256,investmentSourceCount:value.investmentSourceCount,investmentSourcePathsSha256:value.investmentSourcePathsSha256};}
-export function planBudgetCompiledProof(contract){return acceptanceContractCall('planBudgetCompiledProof',contract);}
-export function planBudgetRetainedScreenshotPaths(contract){acceptanceMetadataSection(contract,true);return acceptanceExpected.browser.retainedScreenshots.map(row=>row.path);}
+function planBudgetValidationFiles(contract){return acceptanceMetadataSection(contract)?[...new Set([acceptanceAnchor,...acceptanceExpected.references.map(row=>row.path),...acceptanceParentExpected.checkTimeRuntime.sourceHistory.map(row=>row.path),acceptanceParentExpected.measurementPrivacyRuntime.validationSource.path])].sort():[];}
+function planBudgetCurrentBrowserBinding(contract,fallback){if(!acceptanceMetadataSection(contract))return fallback;const value=acceptanceExpected.browser;return {...fallback,producerLfSha256:value.producerLfSha256,investmentSourceCount:value.investmentSourceCount,investmentSourcePathsSha256:value.investmentSourcePathsSha256};}
+function planBudgetCompiledProof(contract){return acceptanceContractCall('planBudgetCompiledProof',contract);}
+function planBudgetRetainedScreenshotPaths(contract){acceptanceMetadataSection(contract,true);return acceptanceExpected.browser.retainedScreenshots.map(row=>row.path);}
 function acceptanceInputPin(ref){const history=acceptanceHistories.get(ref.path);return history&&history.previousSha256!==null&&ref.sha256===history.currentSha256?{...ref,sha256:history.previousSha256}:ref;}
-export function planBudgetCurrentSourcePin(contract,ref){if(!acceptancePlain(contract)||!Object.hasOwn(contract,acceptanceKey))return ref.sha256;const value=acceptanceParentGate.planBudgetCurrentSourcePin(acceptanceMetadataCarrier,acceptanceInputPin(ref)),history=acceptanceHistories.get(ref.path);return history&&history.previousSha256===value?history.currentSha256:value;}
-export function planBudgetPreviousSourcePin(contract,ref){if(!acceptancePlain(contract)||!Object.hasOwn(contract,acceptanceKey))return ref.sha256;return acceptanceParentGate.planBudgetPreviousSourcePin(acceptanceMetadataCarrier,acceptanceInputPin(ref));}
+function planBudgetCurrentSourcePin(contract,ref){if(!acceptancePlain(contract)||!Object.hasOwn(contract,acceptanceKey))return ref.sha256;const value=acceptanceParentGate.planBudgetCurrentSourcePin(acceptanceMetadataCarrier,acceptanceInputPin(ref)),history=acceptanceHistories.get(ref.path);return history&&history.previousSha256===value?history.currentSha256:value;}
+function planBudgetPreviousSourcePin(contract,ref){if(!acceptancePlain(contract)||!Object.hasOwn(contract,acceptanceKey))return ref.sha256;return acceptanceParentGate.planBudgetPreviousSourcePin(acceptanceMetadataCarrier,acceptanceInputPin(ref));}
 // Native proof hashes bind RAW bytes. Only this adapter preserves owned RAW
 // copies for unchanged files; metadata and changed bodies retain exact inverses.
 // Every access reads the actual callback afresh, after full current authentication.
@@ -619,11 +625,299 @@ function acceptanceNativeReader(contract,parent,reader){
   acceptanceReject(acceptanceSafe(file)&&Buffer.isBuffer(bytes)&&Buffer.from(bytes.toString('utf8')).equals(bytes),'ACCEPTANCE_UTF8_SOURCE_'+file);return Buffer.from(bytes);
  };
 }
-export function normalizePlanBudgetPilotNativeProof(contract,producer,proof,reader){
+function normalizePlanBudgetPilotNativeProof(contract,producer,proof,reader){
  const parent=acceptanceParentContract(contract);if(!Object.hasOwn(contract,acceptanceKey))return acceptanceParentGate.normalizePlanBudgetPilotNativeProof(parent,producer,proof,reader);
  acceptanceVerifyActual(contract,parent,reader);const result=acceptanceParentGate.normalizePlanBudgetPilotNativeProof(parent,producer,proof,acceptanceNativeReader(contract,parent,reader));acceptanceParentContract(contract,true);return result;
 }
-export function normalizePlanBudgetIntakeWithdrawalNativeProof(raw,contract,reader,spec){
+function normalizePlanBudgetIntakeWithdrawalNativeProof(raw,contract,reader,spec){
  const parent=acceptanceParentContract(contract);if(!Object.hasOwn(contract,acceptanceKey))return acceptanceParentGate.normalizePlanBudgetIntakeWithdrawalNativeProof(raw,parent,reader,spec);
  acceptanceVerifyActual(contract,parent,reader);const result=acceptanceParentGate.normalizePlanBudgetIntakeWithdrawalNativeProof(raw,parent,acceptanceNativeReader(contract,parent,reader),spec);acceptanceParentContract(contract,true);return result;
 }
+
+return Object.freeze({PLAN_BUDGET_CURRENT_REVISION:reviewed,PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,INTAKE_WITHDRAWAL_CHECK_NAMES,restorePlanBudgetAcceptancePreviousContract,restorePlanBudgetAcceptancePreviousSource,restorePlanBudgetPilotIntegrationPreviousContract,restorePlanBudgetPilotIntegrationSource,restorePlanBudgetTrialExpiryNoticePreviousContract,restorePlanBudgetTrialExpiryNoticeSource,restorePlanBudgetTrialExpiryNoticeValidatorSource,restorePlanBudgetMeasurementPrivacyPreviousContract,restorePlanBudgetMeasurementPrivacySource,restorePlanBudgetCheckTimePreviousContract,restorePlanBudgetCheckTimeSource,restorePlanBudgetPreviousContract,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetIntakeWithdrawalProducerText,restorePlanBudgetIntakeWithdrawalUnitProducerText,restorePlanBudgetMaterialNativeProducerText,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetPilotProducerText,restorePlanBudgetFieldReviewBusinessSource,restorePlanBudgetSourceSet,restorePlanBudgetFieldReviewSourceSet,restorePlanBudgetConsumptionEvidenceSourceSet,planBudgetProofSourceAdditions,intakeWithdrawalCurrentCheckCount,verifyPlanBudgetCurrentSources,verifyPlanBudgetActualClosure,restorePlanBudgetClosure,planBudgetValidationFiles,planBudgetCurrentBrowserBinding,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths,planBudgetCurrentSourcePin,planBudgetPreviousSourcePin,normalizePlanBudgetPilotNativeProof,normalizePlanBudgetIntakeWithdrawalNativeProof});
+}
+
+// Current capture-runtime boundary. Historical parent bodies above are unchanged.
+
+export const CAPTURE_QUALITY_PARENT='731565e11ce8d67e6a4310f491273626fe73c6f9';
+export const CAPTURE_QUALITY_PARENT_CONTRACT_SHA256='d5ef59b111dd3e25b8f08854d3e8e4df4838a7913e3e22b76299c1916b9913d2';
+export const CAPTURE_QUALITY_PARENT_DECLARATION_SHA256='cb5b5dbe197defccf1f8ee7c166ccc8e750c339ea612c015e80856cc34dee63f';
+export const CAPTURE_QUALITY_PARENT_COMPILER_SHA256='0ba932090392ee957357d303ac8c4acd11fec9da46b4f01a9e5390e47d563510';
+export const CAPTURE_QUALITY_COMPILER_STATE='CURRENT_RUNTIME_EXACT_PARENT_WRAPPER';
+const section='planBudgetCurrentRevision',revision='captureQualityRuntime';
+const contractPath='.github/workspace-acceptance-contract.json',anchor='scripts/lib/plan-budget-current-ci-reviewed.mjs';
+const serialize=value=>JSON.stringify(value,null,2)+'\n',same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),sha=value=>createHash('sha256').update(value).digest('hex');
+const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value),hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
+const reject=(ok,reason)=>{if(!ok)throw Object.assign(new Error('Capture quality lineage rejected: '+reason),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason});};
+const exact=(value,keys,reason)=>reject(plain(value)&&same(Object.keys(value).sort(),[...keys].sort()),reason);
+const safe=file=>typeof file==='string'&&file.length>0&&path.posix.normalize(file)===file&&!path.posix.isAbsolute(file)&&!/[\\:\x00-\x1f]/.test(file)&&!file.split('/').includes('..');
+const bytes=(value,file)=>{reject(Buffer.isBuffer(value)&&Buffer.from(value.toString('utf8')).equals(value),'UTF8_'+file);return Buffer.from(value.toString('utf8').replaceAll('\r\n','\n'));};
+const declaration=value=>'// Exact budget-source CI declaration; compiler fills immutable reviewed source bindings.\nexport const PLAN_BUDGET_CURRENT_REVISION=Object.freeze('+JSON.stringify(value,null,2)+');\n';
+const sorted=(files,reason)=>reject(Array.isArray(files)&&files.every(safe)&&same(files,[...new Set(files)].sort()),reason);
+const bridges=new WeakSet();
+export const isCaptureQualityBridge=value=>bridges.has(value);
+const pointer=(value,key)=>{
+ reject(typeof key==='string'&&/^\/(?:planBudgetCurrentRevision\/(?:references(?:\/\d+\/currentSha256)?|sourceFamilies\/\d+\/(?:currentFiles|externalImports|currentManifest))|extension\/proofs\/\d+\/(?:sourceFiles|producerSha256))$/.test(key),'PATCH_POINTER');
+ const parts=key.slice(1).split('/');let owner=value;for(const part of parts.slice(0,-1)){reject(owner!==null&&typeof owner==='object'&&Object.hasOwn(owner,part),'PATCH_POINTER');owner=owner[part];}const final=parts.at(-1);reject(owner!==null&&typeof owner==='object'&&Object.hasOwn(owner,final),'PATCH_POINTER');return{owner,key:final};
+};
+
+// The public wrapper binds this gate to the compiled reviewed declaration.
+// Source authentication and native business oracles retain separate scopes.
+export function createCaptureRuntimeGate(reviewed){
+ reject(plain(reviewed),'CONSTRUCTOR');
+ reject(sha(createCaptureQualityParentGate.toString().replaceAll('\r\n','\n')+'\n')==='18ddf75e7f7849728670140880f318b7fc904c51b40eebb7286716a297ad064f','AUTHENTICATED_LITERAL_PARENT_FACTORY');
+ const expected=structuredClone(reviewed),runtime=expected[revision],expectedJson=JSON.stringify(expected);
+ exact(runtime,['version','parentHead','previousContractSha256','previousDeclarationSha256','sourceAliases','referenceAdvances','sourceHistory','familyAdvances','proofSourceSetAdvances','contractPatches','workflowAdditions','workflowParentSemanticSha256','nativeSourceAdvances','browserSourceAdvances','nativeOrHumanAcceptance'],'RUNTIME_KEYS');
+ reject(runtime.version===1&&runtime.parentHead===CAPTURE_QUALITY_PARENT&&runtime.previousContractSha256===CAPTURE_QUALITY_PARENT_CONTRACT_SHA256&&runtime.previousDeclarationSha256===CAPTURE_QUALITY_PARENT_DECLARATION_SHA256&&runtime.nativeOrHumanAcceptance===false,'PARENT');
+ for(const key of ['sourceAliases','referenceAdvances','sourceHistory','familyAdvances','proofSourceSetAdvances','contractPatches','workflowAdditions'])reject(Array.isArray(runtime[key]),'ARRAY_'+key);
+ reject(hash(runtime.workflowParentSemanticSha256),'WORKFLOW_PARENT_PIN');
+ const inverse=value=>{for(const patch of [...runtime.contractPatches].reverse()){exact(patch,['pointer','previous','current'],'PATCH_KEYS');const target=pointer(value,patch.pointer);reject(same(target.owner[target.key],patch.current),'PATCH_CURRENT');target.owner[target.key]=structuredClone(patch.previous);}return value;};
+ const parentContainer={[section]:structuredClone(expected)};delete parentContainer[section][revision];
+ for(const patch of [...runtime.contractPatches].reverse().filter(row=>row.pointer.startsWith('/'+section+'/'))){const target=pointer(parentContainer,patch.pointer);reject(same(target.owner[target.key],patch.current),'PARENT_DECLARATION_PATCH');target.owner[target.key]=structuredClone(patch.previous);}
+ const parentExpected=parentContainer[section];reject(sha(declaration(parentExpected))===CAPTURE_QUALITY_PARENT_DECLARATION_SHA256,'COMPLETE_PARENT_DECLARATION');
+ const parentGate=createCaptureQualityParentGate(structuredClone(parentExpected));
+ const freezePinMetadata=value=>{if(value&&typeof value==='object'){Object.values(value).forEach(freezePinMetadata);Object.freeze(value);}return value;};
+ const parentPinCarrier=freezePinMetadata({[section]:structuredClone(parentExpected)});
+ const histories=new Map(),references=new Map();
+ for(const ref of expected.references){reject(safe(ref.path)&&hash(ref.currentSha256)&&!references.has(ref.path),'REFERENCE');references.set(ref.path,ref);}
+ for(const row of runtime.sourceHistory){
+  exact(row,['path','status','previousSha256','currentSha256','previousBytes','currentBytes','inverseHunks'],'HISTORY_KEYS');
+  reject(safe(row.path)&&row.path!==anchor&&row.path!==contractPath&&!histories.has(row.path)&&hash(row.currentSha256)&&(row.previousSha256===null||hash(row.previousSha256)),'HISTORY_PATH');
+  reject(row.status===(row.previousSha256===null?'ADDED':'MODIFIED')&&Number.isSafeInteger(row.previousBytes)&&row.previousBytes>=0&&Number.isSafeInteger(row.currentBytes)&&row.currentBytes>0&&Array.isArray(row.inverseHunks)&&row.inverseHunks.length>0,'HISTORY_SHAPE');
+  reject(row.previousSha256===null?row.previousBytes===0:row.previousBytes>0&&row.previousSha256!==row.currentSha256,'HISTORY_PARENT');
+  let end=0;for(const hunk of row.inverseHunks){exact(hunk,['currentOffsetCharacters','currentText','previousText'],'HUNK_KEYS');reject(Number.isSafeInteger(hunk.currentOffsetCharacters)&&hunk.currentOffsetCharacters>=end&&typeof hunk.currentText==='string'&&typeof hunk.previousText==='string'&&hunk.currentText!==hunk.previousText,'ORDERED_HUNKS');end=hunk.currentOffsetCharacters+hunk.currentText.length;}
+  reject(references.get(row.path)?.currentSha256===row.currentSha256,'CURRENT_HISTORY_REFERENCE');histories.set(row.path,row);
+ }
+ const advances=[...runtime.referenceAdvances,...runtime.sourceAliases];reject(advances.length===histories.size&&new Set(advances.map(row=>row.path)).size===advances.length,'COMPLETE_REFERENCE_ADVANCES');
+ for(const ref of advances){exact(ref,['path','previousSha256','currentSha256'],'ADVANCE_KEYS');const history=histories.get(ref.path);reject(history&&ref.previousSha256===history.previousSha256&&ref.currentSha256===history.currentSha256,'ADVANCE_HISTORY');const previous=parentExpected.references.find(row=>row.path===ref.path);reject(runtime.referenceAdvances.includes(ref)?previous?.currentSha256===ref.previousSha256:!previous,'EXACT_PREVIOUS_REFERENCE');}
+ const changedFamilies=expected.sourceFamilies.filter(family=>!same(family,parentExpected.sourceFamilies.find(row=>row.family===family.family))).map(family=>family.family);
+ reject(same(runtime.familyAdvances.map(row=>row.family),changedFamilies),'COMPLETE_FAMILY_ADVANCES');
+ for(const row of runtime.familyAdvances){exact(row,['family','previousCount','currentCount','additions','removals'],'FAMILY_ADVANCE_KEYS');const prior=parentExpected.sourceFamilies.find(family=>family.family===row.family),current=expected.sourceFamilies.find(family=>family.family===row.family);sorted(row.additions,'FAMILY_ADDITIONS');sorted(row.removals,'FAMILY_REMOVALS');sorted(current?.currentFiles,'CURRENT_FAMILY_FILES');reject(prior&&current&&same(current.currentManifest.map(ref=>ref.path),current.currentFiles)&&current.currentManifest.every(ref=>ref.path===anchor||hash(ref.sha256))&&row.previousCount===prior.currentFiles.length&&row.currentCount===current.currentFiles.length&&row.removals.length===0&&same([...prior.currentFiles,...row.additions].sort(),current.currentFiles),'EXACT_ADDITIVE_FAMILY');}
+ for(const row of runtime.proofSourceSetAdvances){exact(row,['id','kind','previousFiles','currentFiles','additions','removals'],'PROOF_ADVANCE_KEYS');for(const key of ['previousFiles','currentFiles','additions','removals'])sorted(row[key],'PROOF_'+key);reject(row.removals.length===0&&same([...row.previousFiles,...row.additions].sort(),row.currentFiles),'EXACT_ADDITIVE_PROOF');}
+ const proofPatches=runtime.contractPatches.filter(row=>/^\/extension\/proofs\/\d+\/sourceFiles$/.test(row.pointer));reject(proofPatches.length===runtime.proofSourceSetAdvances.length&&new Set(runtime.proofSourceSetAdvances.map(row=>row.id)).size===runtime.proofSourceSetAdvances.length,'COMPLETE_PROOF_ADVANCES');
+ for(const row of runtime.workflowAdditions){exact(row,['lane','index','step'],'WORKFLOW_ADDITION_KEYS');reject(typeof row.lane==='string'&&Number.isSafeInteger(row.index)&&row.index>=0&&plain(row.step)&&typeof row.step.run==='string'&&row.step.run.length>0,'WORKFLOW_ADDITION');}
+ reject(runtime.workflowAdditions.length===0||histories.has('.github/workflows/workspace-acceptance.yml'),'WORKFLOW_CURRENT_SOURCE_HISTORY');
+ function metadata(contract){reject(plain(contract),'CONTRACT');reject(Object.hasOwn(contract,section),'BUDGET_COMPANION_REQUIRED');reject(JSON.stringify(contract[section])===expectedJson,'IMMUTABLE_COMPANION');}
+ function restoreParentContract(contract){metadata(contract);for(const patch of proofPatches){const index=Number(patch.pointer.split('/')[3]),spec=contract.extension?.proofs?.[index],row=runtime.proofSourceSetAdvances.find(value=>value.id===spec?.id);reject(row&&row.kind===spec.kind&&same(row.previousFiles,patch.previous)&&same(row.currentFiles,patch.current),'EXACT_PROOF_PATCH_JOIN');}for(const patch of runtime.contractPatches.filter(row=>/^\/extension\/proofs\/\d+\/producerSha256$/.test(row.pointer))){const spec=contract.extension?.proofs?.[Number(patch.pointer.split('/')[3])];reject(spec&&patch.current===references.get(spec.producer)?.currentSha256,'EXACT_PRODUCER_REFERENCE_JOIN');}const out=structuredClone(contract);delete out[section][revision];inverse(out);if(sha(serialize(out))!==CAPTURE_QUALITY_PARENT_CONTRACT_SHA256){parentGate.restorePlanBudgetAcceptancePreviousContract(out);reject(false,'COMPLETE_PARENT_CONTRACT');}return out;}
+ function restorePreviousSource(file,value){const original=bytes(value,file),history=histories.get(file);if(!history)return Buffer.from(value);let text=original.toString('utf8');reject(sha(original)===history.currentSha256&&original.length===history.currentBytes,'CURRENT_SOURCE_'+file);for(const hunk of [...history.inverseHunks].reverse()){const at=hunk.currentOffsetCharacters;reject(text.slice(at,at+hunk.currentText.length)===hunk.currentText,'EXACT_HUNK_'+file);text=text.slice(0,at)+hunk.previousText+text.slice(at+hunk.currentText.length);}const previous=Buffer.from(text);reject(previous.length===history.previousBytes&&(history.previousSha256===null?previous.length===0:sha(previous)===history.previousSha256),'COMPLETE_SOURCE_INVERSE_'+file);return history.previousSha256===null?null:previous;}
+ const read=(reader,file)=>{reject(safe(file)&&typeof reader==='function','SOURCE_READER');const value=reader(file);bytes(value,file);return Buffer.from(value);};
+ function verifyActual(contract,reader){
+  const parent=restoreParentContract(contract);reject(bytes(read(reader,contractPath),contractPath).toString('utf8')===serialize(contract),'CURRENT_CONTRACT_BYTES');reject(bytes(read(reader,anchor),anchor).toString('utf8')===declaration(expected),'CURRENT_DECLARATION_BYTES');
+  for(const ref of expected.references)reject(sha(bytes(read(reader,ref.path),ref.path))===ref.currentSha256,'CURRENT_REFERENCE_'+ref.path);for(const file of histories.keys())restorePreviousSource(file,read(reader,file));for(const pin of browserAdvance.currentLfManifest)reject(sha(bytes(read(reader,pin.path),pin.path))===pin.sha256,'CURRENT_BROWSER_SOURCE_'+pin.path);return parent;
+ }
+ function projectedReader(contract,parent,reader){return file=>{const value=read(reader,file);if(file===contractPath){reject(bytes(value,file).toString('utf8')===serialize(contract),'CURRENT_CONTRACT_BYTES');return Buffer.from(serialize(parent));}if(file===anchor){reject(bytes(value,file).toString('utf8')===declaration(expected),'CURRENT_DECLARATION_BYTES');return Buffer.from(declaration(parentExpected));}return restorePreviousSource(file,value);};}
+ function verifyCurrentSources(contract,reader){return withVerifiedParentReader(contract,reader,(parent,_projected,parentVerifyResult)=>{return{...parentVerifyResult,referenceCount:expected.references.length,captureQualityParentRestored:true,nativeOrHumanAcceptance:false};});}
+ const activeScopes=[];
+ function withVerifiedParentReader(contract,reader,run){reject(typeof run==='function','PARENT_READER_CALLBACK');const initialContract=JSON.stringify(contract),parent=verifyActual(contract,reader),parentJson=JSON.stringify(parent),projected=projectedReader(contract,parent,reader);const parentVerifyResult=structuredClone(parentGate.verifyPlanBudgetCurrentSources(parent,projected));const scope={outerContract:contract,outerReader:reader,parentJson};activeScopes.push(scope);try{const result=run(parent,projected,structuredClone(parentVerifyResult));reject(!result||typeof result.then!=='function','SYNCHRONOUS_PARENT_CALLBACK_REQUIRED');return result;}finally{reject(activeScopes.pop()===scope,'OWNED_SYNCHRONOUS_SCOPE');reject(JSON.stringify(contract)===initialContract&&JSON.stringify(parent)===parentJson,'CONTRACT_AND_PARENT_UNCHANGED');verifyActual(contract,reader);}}
+ function historicalAuthority(name,contract,reader,...args){const scope=activeScopes.at(-1);reject(scope&&scope.parentJson===JSON.stringify(contract),'CURRENT_CAPTURE_RUNTIME_REQUIRED');verifyActual(scope.outerContract,scope.outerReader);try{return parentGate[name](contract,...args,reader);}finally{verifyActual(scope.outerContract,scope.outerReader);}}
+ function verifyActualClosure(contract,family,closure,reader){const parent=verifyActual(contract,reader),current=expected.sourceFamilies.find(row=>row.family===family),previous=parentExpected.sourceFamilies.find(row=>row.family===family);exact(closure,['files','externalImports'],'CLOSURE_KEYS');reject(current&&previous&&same(closure.files,current.currentFiles)&&same(closure.externalImports,current.externalImports),'EXACT_CURRENT_CLOSURE');for(const ref of current.currentManifest){const value=bytes(read(reader,ref.path),ref.path);reject(ref.path===anchor?value.toString('utf8')===declaration(expected):sha(value)===ref.sha256,'CURRENT_FAMILY_SOURCE_'+ref.path);}parentGate.verifyPlanBudgetActualClosure(parent,family,{files:[...previous.currentFiles],externalImports:[...previous.externalImports]},projectedReader(contract,parent,reader));verifyActual(contract,reader);return{family,sourceCount:current.currentFiles.length,sourcePathsSha256:sha(JSON.stringify(current.currentFiles)),nativeOrBrowserAcceptance:false};}
+ function applyWorkflowAdditions(parentWorkflow){reject(sha(JSON.stringify(parentWorkflow))===runtime.workflowParentSemanticSha256,'EXACT_PARENT_WORKFLOW');const out=structuredClone(parentWorkflow);for(const row of runtime.workflowAdditions){reject(Array.isArray(out.jobs?.[row.lane]?.steps)&&row.index<=out.jobs[row.lane].steps.length,'WORKFLOW_INSERTION');out.jobs[row.lane].steps.splice(row.index,0,structuredClone(row.step));}const restored=structuredClone(out);for(const row of [...runtime.workflowAdditions].reverse()){reject(same(restored.jobs[row.lane].steps[row.index],row.step),'WORKFLOW_EXACT_ADDITION');restored.jobs[row.lane].steps.splice(row.index,1);}reject(same(restored,parentWorkflow),'COMPLETE_PARENT_WORKFLOW');return out;}
+ reject(Array.isArray(runtime.nativeSourceAdvances)&&same(runtime.nativeSourceAdvances.map(row=>row.kind),['MATERIAL','PG_BANK','PG_INTAKE','PG_FIELD','PG_COMPANY_KYC']),'EXACT_NATIVE_ADAPTER_KINDS');
+ for(const row of runtime.nativeSourceAdvances){
+  exact(row,['kind','producer','proofPath','previousProducerLfSha256','currentProducerLfSha256','previousFiles','currentFiles','currentLfManifest','nested'],'NATIVE_ADVANCE_KEYS');const material=row.kind==='MATERIAL',binding={MATERIAL:['scripts/verify-material-inventory-postgres.mjs','.vercel/material-inventory-evidence/postgres.json'],PG_BANK:['scripts/verify-private-bank-account-postgres.mjs','.vercel/private-bank-evidence/postgres.json'],PG_INTAKE:['scripts/verify-employee-intake-postgres.mjs','.vercel/private/employee-intake-postgres.json'],PG_FIELD:['scripts/verify-field-operations-postgres.mjs','.vercel/field-operations-evidence/postgres.json'],PG_COMPANY_KYC:['scripts/verify-company-channel-kyc-postgres.mjs','.vercel/company-kyc-evidence/postgres.json']},[producer,proofPath]=binding[row.kind],proofAdvance=runtime.proofSourceSetAdvances.find(value=>value.kind===row.kind);
+  reject(row.producer===producer&&row.proofPath===proofPath&&hash(row.previousProducerLfSha256)&&hash(row.currentProducerLfSha256)&&row.currentProducerLfSha256===references.get(producer)?.currentSha256,'EXACT_NATIVE_PRODUCER');sorted(row.previousFiles,'NATIVE_PREVIOUS_FILES');sorted(row.currentFiles,'NATIVE_CURRENT_FILES');reject(row.previousFiles.every(file=>row.currentFiles.includes(file)),'ADDITIVE_NATIVE_FILES');reject(same(row.previousFiles,material?parentExpected.consumptionEvidenceRuntime.materialNative.currentFiles:proofAdvance?.previousFiles),'EXACT_NATIVE_PREVIOUS_SET');if(!material)reject(same(row.currentFiles,proofAdvance.currentFiles),'COMPANY_CURRENT_PROOF_SET_JOIN');
+  reject(Array.isArray(row.currentLfManifest)&&same(row.currentLfManifest.map(value=>value.path),[...new Set([...row.currentFiles,producer])].sort()),'COMPLETE_NATIVE_LF_MANIFEST');for(const pin of row.currentLfManifest){exact(pin,['path','sha256'],'NATIVE_LF_PIN_KEYS');reject(hash(pin.sha256)&&(!references.has(pin.path)||references.get(pin.path).currentSha256===pin.sha256),'NATIVE_REFERENCE_JOIN');}reject(row.currentLfManifest.find(pin=>pin.path===producer)?.sha256===row.currentProducerLfSha256,'NATIVE_PRODUCER_LF_JOIN');reject(row.previousProducerLfSha256===(histories.get(producer)?.previousSha256??parentExpected.references.find(pin=>pin.path===producer)?.currentSha256),'NATIVE_PREVIOUS_PRODUCER_JOIN');reject(row.kind==='PG_COMPANY_KYC'?plain(row.nested):row.nested===null||row.kind==='PG_FIELD'&&plain(row.nested),'EXACT_NATIVE_NESTED_MODE');
+ }
+ reject(Array.isArray(runtime.browserSourceAdvances)&&runtime.browserSourceAdvances.length===1,'EXACT_BROWSER_ADVANCE');
+ const browserAdvance=runtime.browserSourceAdvances[0],browserParent=parentExpected.browser,browserFamily=expected.sourceFamilies.find(row=>row.family==='PLAN_BUDGET_UI'),browserFamilyAdvance=runtime.familyAdvances.find(row=>row.family==='PLAN_BUDGET_UI');
+ exact(browserAdvance,['kind','producer','previousProducerLfSha256','currentProducerLfSha256','previousFiles','currentFiles','additions','currentLfManifest'],'BROWSER_ADVANCE_KEYS');
+ reject(browserAdvance.kind==='WEEKLY_CYP_INVESTMENT_UI'&&browserAdvance.producer===browserParent.producer&&browserAdvance.previousProducerLfSha256===browserParent.producerLfSha256&&hash(browserAdvance.currentProducerLfSha256),'EXACT_BROWSER_PRODUCER');
+ for(const key of ['previousFiles','currentFiles','additions'])sorted(browserAdvance[key],'BROWSER_'+key);
+ reject(browserAdvance.previousFiles.length===browserParent.investmentSourceCount&&sha(JSON.stringify(browserAdvance.previousFiles))===browserParent.investmentSourcePathsSha256,'EXACT_PREVIOUS_BROWSER_SOURCE_SET');
+ reject(browserFamily&&browserFamilyAdvance&&same([...browserAdvance.previousFiles,...browserAdvance.additions].sort(),browserAdvance.currentFiles)&&same(browserAdvance.additions,browserFamilyAdvance.additions)&&browserAdvance.currentFiles.every(file=>browserFamily.currentFiles.includes(file)),'EXACT_ADDITIVE_BROWSER_SOURCE_SET');
+ reject(Array.isArray(browserAdvance.currentLfManifest)&&same(browserAdvance.currentLfManifest.map(row=>row.path),[...new Set([...browserAdvance.currentFiles,browserAdvance.producer])].sort()),'COMPLETE_BROWSER_LF_MANIFEST');
+ for(const pin of browserAdvance.currentLfManifest){exact(pin,['path','sha256'],'BROWSER_LF_PIN_KEYS');reject(hash(pin.sha256)&&browserFamily.currentManifest.find(row=>row.path===pin.path)?.sha256===pin.sha256&&(!references.has(pin.path)||references.get(pin.path).currentSha256===pin.sha256),'BROWSER_FAMILY_AND_REFERENCE_JOIN');}
+ reject(browserAdvance.currentLfManifest.find(row=>row.path===browserAdvance.producer)?.sha256===browserAdvance.currentProducerLfSha256,'EXACT_CURRENT_BROWSER_PRODUCER');
+ function browserBinding(contract,fallback){const previous=parentGate.planBudgetCurrentBrowserBinding(restoreParentContract(contract),fallback);return{...previous,producerLfSha256:browserAdvance.currentProducerLfSha256,investmentSourceCount:browserAdvance.currentFiles.length,investmentSourcePathsSha256:sha(JSON.stringify(browserAdvance.currentFiles))};}
+ function isCurrent(contract){return plain(contract)&&plain(contract[section])&&Object.hasOwn(contract[section],revision);}
+ function immediateSource(contract,file,value){metadata(contract);return restorePreviousSource(file,value);}
+ function sourceCall(name,contract,file,value){const parent=restoreParentContract(contract);return parentGate[name](parent,file,restorePreviousSource(file,value));}
+ function producerCall(name,contract,file,value){const parent=restoreParentContract(contract);return parentGate[name](parent,restorePreviousSource(file,value));}
+ function contractCall(name,contract,...args){return parentGate[name](restoreParentContract(contract),...args);}
+ function projectedSet(family){
+  const current=expected.sourceFamilies.find(row=>row.family===family),previous=parentExpected.sourceFamilies.find(row=>row.family===family),proof=runtime.proofSourceSetAdvances.find(row=>row.kind===family);
+  if(current&&proof)reject(same(current.currentFiles,proof.currentFiles)&&same(previous.currentFiles,proof.previousFiles),'FAMILY_AND_PROOF_SOURCE_SET_JOIN_'+family);
+  return current?{current:current.currentFiles,previous:previous.currentFiles,additions:current.currentFiles.filter(file=>!previous.currentFiles.includes(file))}:proof?{current:proof.currentFiles,previous:proof.previousFiles,additions:proof.additions}:null;
+ }
+ function previousFiles(family,files){const row=projectedSet(family);if(!row)return structuredClone(files);if(same(files,row.current))return [...row.previous];reject(Array.isArray(files)&&!row.additions.some(file=>files.includes(file)),'EXACT_CURRENT_SOURCE_SET_'+family);return [...files];}
+ function setCall(name,contract,family,files){return parentGate[name](restoreParentContract(contract),family,previousFiles(family,files));}
+ function restoreClosure(contract,family,closure){const parent=restoreParentContract(contract),current=expected.sourceFamilies.find(row=>row.family===family),previous=parentExpected.sourceFamilies.find(row=>row.family===family);exact(closure,['files','externalImports'],'CLOSURE_KEYS');reject(current&&previous&&same(closure.files,current.currentFiles)&&same(closure.externalImports,current.externalImports),'EXACT_CURRENT_CLOSURE');return parentGate.restorePlanBudgetClosure(parent,family,{files:[...previous.currentFiles],externalImports:[...previous.externalImports]});}
+ function currentSpec(spec){const row=runtime.proofSourceSetAdvances.find(row=>row.kind===spec?.kind),producer=histories.get(spec?.producer);if(!row&&!producer)return structuredClone(spec);reject(plain(spec)&&Array.isArray(spec.sourceFiles),'CURRENT_SPEC');if(row)reject(same(spec.sourceFiles,row.currentFiles),'EXACT_CURRENT_SPEC_SOURCE_SET_'+spec.kind);if(producer)reject(spec.producerSha256===producer.currentSha256,'EXACT_CURRENT_SPEC_PRODUCER_'+spec.kind);return {...structuredClone(spec),...(row?{sourceFiles:[...row.previousFiles]}:{}),...(producer?{producerSha256:producer.previousSha256}:{})};}
+ function proofSourceAdditions(spec){const row=projectedSet(spec?.kind);if(!row)return parentGate.planBudgetProofSourceAdditions(spec);if(same(spec.sourceFiles,row.current))return [...new Set([...parentGate.planBudgetProofSourceAdditions(currentSpec(spec)),...row.additions])].sort();reject(Array.isArray(spec.sourceFiles)&&!row.additions.some(file=>spec.sourceFiles.includes(file)),'EXACT_CURRENT_SOURCE_SET_'+spec.kind);return parentGate.planBudgetProofSourceAdditions(spec);}
+ function intakeCurrentCheckCount(spec){const row=projectedSet(spec?.kind);if(!row)return parentGate.intakeWithdrawalCurrentCheckCount(spec);if(same(spec.sourceFiles,row.current))return parentGate.intakeWithdrawalCurrentCheckCount(currentSpec(spec));reject(Array.isArray(spec.sourceFiles)&&!row.additions.some(file=>spec.sourceFiles.includes(file)),'EXACT_CURRENT_SOURCE_SET_'+spec.kind);return parentGate.intakeWithdrawalCurrentCheckCount(spec);}
+ function compiledProof(contract){const parent=restoreParentContract(contract),prior=parentGate.planBudgetCompiledProof(parent);if(!prior)return prior;const actual=contract.extension?.proofs?.find(row=>row.id===prior.id||row.kind===prior.kind);if(!actual)return prior;reject(same(currentSpec(actual),prior),'EXACT_COMPILED_PROOF_JOIN');return structuredClone(actual);}
+ function sourcePin(contract,ref,previous=false){
+  // Pin aliases intentionally use the private compiled index, as historical
+  // callers do. This lookup is not contract or source acceptance.
+  reject(plain(ref)&&safe(ref.path)&&hash(ref.sha256),'SOURCE_PIN');const history=histories.get(ref.path),input=history&&history.previousSha256!==null&&ref.sha256===history.currentSha256?{...ref,sha256:history.previousSha256}:ref;
+  if(history?.previousSha256===null&&ref.sha256===history.currentSha256)return previous?null:history.currentSha256;
+  const value=parentGate[previous?'planBudgetPreviousSourcePin':'planBudgetCurrentSourcePin'](parentPinCarrier,input);return !previous&&history&&history.previousSha256===value?history.currentSha256:value;
+ }
+ function knownBusinessSource(file,value){const history=histories.get(file);if(!history)return parentGate.restorePlanBudgetFieldReviewBusinessSource(file,Buffer.from(value));const normalized=bytes(value,file);let projected;if(sha(normalized)===history.currentSha256)projected=restorePreviousSource(file,value);else{reject(history.previousSha256!==null&&sha(normalized)===history.previousSha256&&normalized.length===history.previousBytes,'EXACT_CURRENT_OR_LITERAL_PARENT_BUSINESS_SOURCE_'+file);projected=Buffer.from(value);}return parentGate.restorePlanBudgetFieldReviewBusinessSource(file,projected);}
+ function validationFiles(contract){const parent=restoreParentContract(contract);return [...new Set([anchor,...expected.references.map(row=>row.path),...parentGate.planBudgetValidationFiles(parent)])].sort();}
+ function proofSourceSet(contract,kind){restoreParentContract(contract);const spec=contract.extension?.proofs?.find(row=>row.kind===kind);reject(spec&&Array.isArray(spec.sourceFiles),'EXACT_CURRENT_PROOF_KIND');return [...spec.sourceFiles];}
+ function workflowAdditions(contract){restoreParentContract(contract);return structuredClone(runtime.workflowAdditions);}
+ function exactNativeProof(proof,contract,reader,producer){
+  const proofPath=producer==='scripts/verify-employee-intake-postgres.mjs'?'.vercel/private/employee-intake-postgres.json':producer==='scripts/verify-meta-field-bridge-postgres.mjs'?'.vercel/meta-field-evidence/postgres.json':producer==='scripts/verify-material-inventory-postgres.mjs'?'.vercel/material-inventory-evidence/postgres.json':null;
+  reject(proofPath,'EXACT_CURRENT_NATIVE_PRODUCER');let initial;try{initial=read(reader,proofPath);}catch{reject(false,'ACTUAL_NATIVE_PROOF_BYTES');}let parsed;try{parsed=JSON.parse(initial);}catch{reject(false,'ACTUAL_NATIVE_PROOF_JSON');}reject(same(parsed,proof)&&proof?.status==='PASS','ACTUAL_NATIVE_PROOF_BYTES');return{proofPath,raw:Buffer.from(initial),json:JSON.stringify(proof),owned:structuredClone(proof)};
+ }
+ function nativeManifest(proof,producer,reader,files){
+  reject(hash(proof.harnessSha256)&&sha(read(reader,producer))===proof.harnessSha256&&Array.isArray(proof.sourceManifest),'ACTUAL_NATIVE_RAW_PRODUCER_AND_MANIFEST');const seen=new Map();for(const row of proof.sourceManifest){exact(row,['path','sha256'],'NATIVE_SOURCE_ROW');reject(safe(row.path)&&hash(row.sha256)&&!seen.has(row.path),'NATIVE_SOURCE_ROW');seen.set(row.path,row.sha256);}reject(same([...seen.keys()].sort(),files),'EXACT_NATIVE_SOURCE_SET');for(const [file,pin]of seen)reject(sha(read(reader,file))===pin,'ACTUAL_NATIVE_RAW_SOURCE_'+file);
+ }
+ function finishNative(snapshot,proof,reader){reject(JSON.stringify(proof)===snapshot.json&&read(reader,snapshot.proofPath).equals(snapshot.raw),'NATIVE_INPUT_AND_RAW_BYTES_UNCHANGED');}
+ function intakeNative(raw,contract,reader,spec){
+  const producer='scripts/verify-employee-intake-postgres.mjs',parent=restoreParentContract(contract),before=JSON.stringify(contract),parentSpec=currentSpec(spec);reject(spec?.kind==='PG_INTAKE'&&spec.producer===producer,'EXACT_INTAKE_SPEC');const files=proofSourceSet(contract,'PG_INTAKE');reject(same(spec.sourceFiles,files),'EXACT_INTAKE_SOURCE_JOIN');const snapshot=exactNativeProof(raw,contract,reader,producer);nativeManifest(snapshot.owned,producer,reader,files);
+  const result=withVerifiedParentReader(contract,reader,(previous,projectedReader)=>{const projected=structuredClone(snapshot.owned);projected.harnessSha256=sha(projectedReader(producer));projected.sourceManifest=parentSpec.sourceFiles.map(path=>({path,sha256:sha(projectedReader(path))}));const restored={...projected,harnessSha256:snapshot.owned.harnessSha256,sourceManifest:snapshot.owned.sourceManifest};reject(same(restored,snapshot.owned),'ONLY_INTAKE_SOURCE_FIELDS_PROJECTED');return parentGate.normalizePlanBudgetIntakeWithdrawalNativeProof(projected,previous,projectedReader,parentSpec);});
+  reject(JSON.stringify(contract)===before&&same(parent,restoreParentContract(contract)),'NATIVE_CONTRACT_UNCHANGED');nativeManifest(snapshot.owned,producer,reader,files);finishNative(snapshot,raw,reader);return result;
+ }
+ function pilotNative(contract,producer,proof,reader){
+  restoreParentContract(contract);
+  const snapshot=exactNativeProof(proof,contract,reader,producer);
+  if(producer==='scripts/verify-material-inventory-postgres.mjs')return materialNative(contract,proof,reader,snapshot);
+  reject(producer==='scripts/verify-meta-field-bridge-postgres.mjs','EXACT_PILOT_NATIVE_PRODUCER');
+  const result=withVerifiedParentReader(contract,reader,(parent,projected)=>parentGate.normalizePlanBudgetPilotNativeProof(parent,producer,structuredClone(snapshot.owned),projected));finishNative(snapshot,proof,reader);return result;
+ }
+ function materialNative(contract,proof,reader,snapshot){const descriptor=runtime.nativeSourceAdvances.find(row=>row.kind==='MATERIAL'),producer=descriptor.producer;const verify=()=>{nativeManifest(snapshot.owned,producer,reader,descriptor.currentFiles);for(const pin of descriptor.currentLfManifest)reject(sha(bytes(read(reader,pin.path),pin.path))===pin.sha256,'ACTUAL_NATIVE_LF_SOURCE_'+pin.path);};verify();const result=withVerifiedParentReader(contract,reader,(parent,projectedReader)=>{const projected=structuredClone(snapshot.owned);projected.sourceManifest=descriptor.previousFiles.map(path=>({path,sha256:sha(projectedReader(path))}));projected.harnessSha256=sha(projectedReader(producer));reject(sha(bytes(projectedReader(producer),producer))===descriptor.previousProducerLfSha256,'EXACT_MATERIAL_PREVIOUS_PRODUCER');const restored={...projected,sourceManifest:snapshot.owned.sourceManifest,harnessSha256:snapshot.owned.harnessSha256};reject(same(restored,snapshot.owned),'ONLY_MATERIAL_SOURCE_FIELDS_PROJECTED');return parentGate.normalizePlanBudgetPilotNativeProof(parent,producer,projected,projectedReader);});verify();finishNative(snapshot,proof,reader);return result;}
+ function companyNative(contract,proof,reader,readEvidence,normalizeParent){restoreParentContract(contract);const descriptor=runtime.nativeSourceAdvances.find(row=>row.kind==='PG_COMPANY_KYC');reject(typeof readEvidence==='function'&&typeof normalizeParent==='function','ACTUAL_COMPANY_EVIDENCE_AND_ORACLE_REQUIRED');const{kind,nested,...top}=descriptor;return createCaptureCompanyNestedAdapter({version:2,top:{version:1,...top},currentImageManifest:structuredClone(nested)}).normalize({contract,proof,reader,readEvidence,bridge,normalizeParent});}
+ function extensionNative(contract,spec,proof,reader,readEvidence,callback){
+  const parent=restoreParentContract(contract),actual=contract.extension?.proofs?.find(row=>row.id===spec?.id),previous=parent.extension?.proofs?.find(row=>row.id===spec?.id);reject(actual&&previous&&same(actual,spec)&&['PG_BANK','PG_INTAKE','PG_FIELD','PG_COMPANY_KYC'].includes(spec.kind),'EXACT_EXTENSION_NATIVE_SPEC');reject(typeof readEvidence==='function'&&typeof callback==='function','ACTUAL_EXTENSION_EVIDENCE_AND_ORACLE_REQUIRED');
+  if(spec.kind==='PG_COMPANY_KYC')return companyNative(contract,proof,reader,readEvidence,(parentContract,producer,projected,parentReader)=>{reject(producer===spec.producer,'EXACT_COMPANY_CALLBACK_PRODUCER');return callback(parentContract,structuredClone(previous),projected,parentReader);});
+  if(spec.kind==='PG_FIELD')return fieldNative(contract,spec,proof,reader,readEvidence,callback,previous);
+  const initialRaw=readEvidence(spec.path);reject(Buffer.isBuffer(initialRaw)&&Buffer.from(initialRaw.toString('utf8')).equals(initialRaw),'ACTUAL_EXTENSION_NATIVE_PROOF_BYTES');let parsed;try{parsed=JSON.parse(initialRaw);}catch{reject(false,'ACTUAL_EXTENSION_NATIVE_PROOF_JSON');}reject(same(parsed,proof)&&proof?.status==='PASS','EXACT_EXTENSION_NATIVE_PROOF');const owned=structuredClone(parsed),json=JSON.stringify(parsed),raw=Buffer.from(initialRaw);nativeManifest(owned,spec.producer,reader,spec.sourceFiles);
+  const descriptor=runtime.nativeSourceAdvances.find(row=>row.kind===spec.kind);reject(descriptor&&same(descriptor.currentFiles,spec.sourceFiles)&&descriptor.currentProducerLfSha256===spec.producerSha256,'EXTENSION_NATIVE_DESCRIPTOR_JOIN');const verifyLf=()=>{for(const pin of descriptor.currentLfManifest)reject(sha(bytes(read(reader,pin.path),pin.path))===pin.sha256,'ACTUAL_EXTENSION_SOURCE_LF_'+pin.path);};verifyLf();
+  const result=withVerifiedParentReader(contract,reader,(parentContract,parentReader)=>{const projected=structuredClone(owned);projected.harnessSha256=sha(parentReader(spec.producer));projected.sourceManifest=previous.sourceFiles.map(path=>({path,sha256:sha(parentReader(path))}));reject(same({...projected,harnessSha256:owned.harnessSha256,sourceManifest:owned.sourceManifest},owned),'ONLY_EXTENSION_NATIVE_SOURCE_FIELDS_PROJECTED');return callback(parentContract,structuredClone(previous),projected,parentReader);});
+  nativeManifest(owned,spec.producer,reader,spec.sourceFiles);verifyLf();const final=readEvidence(spec.path);reject(Buffer.isBuffer(final)&&final.equals(raw)&&JSON.stringify(proof)===json,'EXTENSION_NATIVE_INPUT_AND_RAW_UNCHANGED');return result;
+ }
+ function fieldNative(contract,spec,proof,reader,readEvidence,callback,previous){
+  const descriptor=runtime.nativeSourceAdvances.find(row=>row.kind==='PG_FIELD'),nested=descriptor.nested;exact(nested,['maps'],'FIELD_MAP_DESCRIPTOR_KEYS');reject(Array.isArray(nested.maps)&&same(nested.maps.map(row=>row.field),['sourceSha256','voiceProgressSourceSha256','mediaLeaseSourceSha256','videoAudioSourceSha256','participantKycFixture.sourceSha256']),'EXACT_FIELD_MAP_NAMES');
+  const field=(value,name)=>name==='participantKycFixture.sourceSha256'?value.participantKycFixture?.sourceSha256:value[name],setField=(value,name,map)=>{if(name==='participantKycFixture.sourceSha256')value.participantKycFixture.sourceSha256=map;else value[name]=map;};
+  for(const map of nested.maps){exact(map,['field','previousFiles','currentFiles','currentLfManifest'],'FIELD_MAP_KEYS');sorted(map.previousFiles,'FIELD_PREVIOUS_MAP_FILES');sorted(map.currentFiles,'FIELD_CURRENT_MAP_FILES');reject(map.previousFiles.every(file=>map.currentFiles.includes(file))&&same(map.currentLfManifest.map(row=>row.path),map.currentFiles),'EXACT_ADDITIVE_FIELD_MAP');for(const row of map.currentLfManifest){exact(row,['path','sha256'],'FIELD_LF_ROW');reject(descriptor.currentLfManifest.find(pin=>pin.path===row.path)?.sha256===row.sha256,'FIELD_TOP_LF_JOIN');}}
+  reject(same([...new Set(nested.maps.flatMap(row=>row.currentFiles))].sort(),spec.sourceFiles)&&same([...new Set(nested.maps.flatMap(row=>row.previousFiles))].sort(),previous.sourceFiles),'FIELD_MAPS_COMPLETE_CURRENT_AND_PREVIOUS_UNIONS');
+  const initial=readEvidence(spec.path);reject(Buffer.isBuffer(initial)&&Buffer.from(initial.toString('utf8')).equals(initial),'ACTUAL_FIELD_RAW_PROOF');let parsed;try{parsed=JSON.parse(initial);}catch{reject(false,'ACTUAL_FIELD_PROOF_JSON');}reject(same(parsed,proof)&&proof?.status==='PASS'&&!Object.hasOwn(proof,'sourceManifest'),'ACTUAL_FIELD_FIVE_MAP_PROOF');const owned=structuredClone(parsed),json=JSON.stringify(parsed),raw=Buffer.from(initial);
+  const verify=()=>{reject(hash(owned.harnessSha256)&&sha(read(reader,spec.producer))===owned.harnessSha256,'ACTUAL_FIELD_RAW_HARNESS');for(const map of nested.maps){const rows=field(owned,map.field);reject(plain(rows)&&same(Object.keys(rows).sort(),map.currentFiles),'EXACT_FIELD_RAW_MAP_'+map.field);for(const file of map.currentFiles)reject(hash(rows[file])&&sha(read(reader,file))===rows[file],'ACTUAL_FIELD_RAW_SOURCE_'+file);}for(const pin of descriptor.currentLfManifest)reject(sha(bytes(read(reader,pin.path),pin.path))===pin.sha256,'ACTUAL_FIELD_LF_SOURCE_'+pin.path);};verify();
+  const result=withVerifiedParentReader(contract,reader,(parent,parentReader)=>{const projected=structuredClone(owned);for(const map of nested.maps)setField(projected,map.field,Object.fromEntries(map.previousFiles.map(file=>[file,sha(parentReader(file))])));projected.harnessSha256=sha(parentReader(spec.producer));const business=structuredClone(projected);for(const map of nested.maps)setField(business,map.field,structuredClone(field(owned,map.field)));business.harnessSha256=owned.harnessSha256;reject(same(business,owned),'ONLY_EXACT_FIELD_MAPS_AND_HARNESS_PROJECTED');return callback(parent,structuredClone(previous),projected,parentReader);});verify();const final=readEvidence(spec.path);reject(Buffer.isBuffer(final)&&final.equals(raw)&&JSON.stringify(proof)===json,'FIELD_INPUT_AND_RAW_UNCHANGED');return result;
+ }
+ const bridge=Object.freeze({parentGate,parentExpected:structuredClone(parentExpected),isCurrent,restoreParentContract,restorePreviousSource:immediateSource,verifyCurrentSources,withVerifiedParentReader,historicalAuthority,verifyActualClosure,applyWorkflowAdditions,sourceCall,producerCall,contractCall,setCall,restoreClosure,proofSourceAdditions,compiledProof,sourcePin,knownBusinessSource,validationFiles,proofSourceSet,workflowAdditions,browserBinding,intakeCurrentCheckCount,intakeNative,pilotNative,companyNative,extensionNative});bridges.add(bridge);return bridge;
+
+}
+
+
+const createCompanyKycNativeAdapter=(()=>{
+
+// An explicit proposal for the COMPANY proof shape already emitted by this
+// producer. This does not authorize the manifest-only META field proof: that
+// separate proof requires a canonical fresh-lane capability or added source
+// binding, and remains blocked rather than silently rebased.
+const producer='scripts/verify-company-channel-kyc-postgres.mjs',proofPath='.vercel/company-kyc-evidence/postgres.json';
+const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),sha=value=>createHash('sha256').update(value).digest('hex'),hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
+const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value),safe=file=>typeof file==='string'&&path.posix.normalize(file)===file&&!path.posix.isAbsolute(file)&&!/[\\:\x00-\x1f]/.test(file)&&!file.split('/').includes('..');
+const reject=(ok,reason)=>{if(!ok)throw Object.assign(new Error('Capture quality native adapter rejected: '+reason),{code:'CAPTURE_QUALITY_NATIVE_SOURCE_REJECTED',reason});};
+const exact=(value,keys,reason)=>reject(plain(value)&&same(Object.keys(value).sort(),[...keys].sort()),reason),sorted=(files,reason)=>reject(Array.isArray(files)&&files.every(safe)&&same(files,[...new Set(files)].sort()),reason);
+const lf=value=>Buffer.from(value.toString('utf8').replaceAll('\r\n','\n'));
+
+function createCompanyKycNativeAdapter(input){
+ const descriptor=structuredClone(input);exact(descriptor,['version','producer','proofPath','previousProducerLfSha256','currentProducerLfSha256','previousFiles','currentFiles','currentLfManifest'],'DESCRIPTOR_KEYS');
+ reject(descriptor.version===1&&descriptor.producer===producer&&descriptor.proofPath===proofPath&&hash(descriptor.previousProducerLfSha256)&&hash(descriptor.currentProducerLfSha256),'EXACT_COMPANY_PRODUCER');
+ sorted(descriptor.previousFiles,'PREVIOUS_FILES');sorted(descriptor.currentFiles,'CURRENT_FILES');reject(descriptor.previousFiles.length>0&&descriptor.previousFiles.every(file=>descriptor.currentFiles.includes(file)),'ADDITIVE_SOURCE_FILES');
+ reject(Array.isArray(descriptor.currentLfManifest)&&same(descriptor.currentLfManifest.map(row=>row.path),[...new Set([...descriptor.currentFiles,producer])].sort()),'COMPLETE_LF_MANIFEST');
+ for(const row of descriptor.currentLfManifest){exact(row,['path','sha256'],'LF_ROW');reject(hash(row.sha256),'LF_HASH');}
+ const expected=new Map(descriptor.currentLfManifest.map(row=>[row.path,row.sha256]));reject(expected.get(producer)===descriptor.currentProducerLfSha256,'PRODUCER_MANIFEST_JOIN');
+ return Object.freeze({
+  normalize({contract,proof,reader,readEvidence,bridge,normalizeParent}={}){
+   // These ports and actual receipt bytes are required before either oracle.
+   reject(typeof reader==='function'&&typeof readEvidence==='function'&&typeof normalizeParent==='function','ACTUAL_BYTE_READERS_REQUIRED');reject(isCaptureQualityBridge(bridge),'AUTHENTICATED_BRIDGE_REQUIRED');
+   const raw=readEvidence(proofPath);reject(Buffer.isBuffer(raw)&&raw.length>0&&Buffer.from(raw.toString('utf8')).equals(raw),'ACTUAL_PROOF_BYTES_REQUIRED');let actual;try{actual=JSON.parse(raw);}catch{reject(false,'ACTUAL_PROOF_JSON');}
+   reject(plain(proof)&&same(actual,proof)&&proof.status==='PASS','EXACT_CURRENT_PROOF');const ownedProof=structuredClone(actual),initialProofJson=JSON.stringify(actual),initialRaw=Buffer.from(raw);reject(Array.isArray(ownedProof.sourceManifest)&&hash(ownedProof.harnessSha256),'CURRENT_PROOF_SOURCE_BINDING_REQUIRED');
+   const rows=new Map();for(const row of ownedProof.sourceManifest){exact(row,['path','sha256'],'CURRENT_PROOF_SOURCE_ROW');reject(safe(row.path)&&hash(row.sha256)&&!rows.has(row.path),'CURRENT_PROOF_SOURCE_ROW');rows.set(row.path,row.sha256);}
+   reject(same([...rows.keys()].sort(),descriptor.currentFiles),'EXACT_CURRENT_PROOF_SOURCE_SET');
+   const verifyRaw=()=>{for(const [file,expectedLf]of expected){const value=reader(file);reject(Buffer.isBuffer(value)&&Buffer.from(value.toString('utf8')).equals(value)&&sha(lf(value))===expectedLf,'ACTUAL_CURRENT_LF_SOURCE_'+file);reject(sha(value)===(file===producer?ownedProof.harnessSha256:rows.get(file)),'ACTUAL_CURRENT_RAW_SOURCE_'+file);}};
+   verifyRaw();
+   const result=bridge.withVerifiedParentReader(contract,reader,(parentContract,parentReader)=>{
+    const previousProducer=parentReader(producer);reject(Buffer.isBuffer(previousProducer)&&sha(lf(previousProducer))===descriptor.previousProducerLfSha256,'EXACT_PREVIOUS_PRODUCER');
+    const projected=structuredClone(ownedProof),prior=new Set(descriptor.previousFiles);projected.sourceManifest=ownedProof.sourceManifest.filter(row=>prior.has(row.path)).map(row=>({path:row.path,sha256:sha(parentReader(row.path))}));projected.harnessSha256=sha(previousProducer);
+    reject(same(projected.sourceManifest.map(row=>row.path).sort(),descriptor.previousFiles),'EXACT_PREVIOUS_PROOF_SOURCE_SET');
+    const restoredBusiness={...projected,sourceManifest:ownedProof.sourceManifest,harnessSha256:ownedProof.harnessSha256};reject(same(restoredBusiness,ownedProof),'ONLY_SOURCE_BINDING_FIELDS_PROJECTED');
+    const normalized=normalizeParent(parentContract,producer,projected,parentReader);reject(!normalized||typeof normalized.then!=='function','SYNCHRONOUS_NATIVE_CALLBACK_REQUIRED');return normalized;
+   });
+   verifyRaw();const finalRaw=readEvidence(proofPath);reject(Buffer.isBuffer(finalRaw)&&finalRaw.equals(initialRaw)&&JSON.stringify(proof)===initialProofJson,'ACTUAL_PROOF_BYTES_AND_INPUT_UNCHANGED');return result;
+  },
+  limits:Object.freeze({producer,proofPath,trackedCompilerIntegrated:false,currentReceiptExecuted:false,freshLaneAuthorityIntegrated:false,metadataOnlyAccepted:false,metaFieldProofAccepted:false,nativeOrHumanAcceptance:false}),
+ });
+}
+
+return createCompanyKycNativeAdapter;
+})();
+const createCaptureCompanyNestedAdapter=(()=>{
+
+// Exact adapter for the five actual CURRENT helper RAW references. The real
+// 17-case ledger and every business fact survive byte-for-byte as JSON data.
+const helper='scripts/lib/kyc-current-image-native.mjs',synthetic='scripts/lib/synthetic-capture-quality.mjs',producer='scripts/verify-company-channel-kyc-postgres.mjs',previousFiles=[helper,producer,'package.json','package-lock.json'],currentFiles=[helper,synthetic,producer,'package.json','package-lock.json'];
+const sha=value=>createHash('sha256').update(value).digest('hex'),lf=value=>Buffer.from(value.toString('utf8').replaceAll('\r\n','\n')),same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value),plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+const reject=(ok,reason)=>{if(!ok)throw Object.assign(new Error('COMPANY CURRENT nested source adapter rejected: '+reason),{code:'CAPTURE_QUALITY_COMPANY_NESTED_SOURCE_REJECTED',reason});};
+function createCompanyNestedNativeAdapter(input){
+ const descriptor=structuredClone(input);reject(plain(descriptor)&&same(Object.keys(descriptor).sort(),['version','top','currentImageManifest'].sort())&&descriptor.version===2,'EXACT_V2_DESCRIPTOR');const nested=descriptor.currentImageManifest;reject(plain(nested)&&same(Object.keys(nested).sort(),['previousFiles','currentFiles','currentLfManifest'].sort())&&same(nested.previousFiles,previousFiles)&&same(nested.currentFiles,currentFiles),'EXACT_NESTED_PATHS');reject(Array.isArray(nested.currentLfManifest)&&same(nested.currentLfManifest.map(row=>row.path),currentFiles)&&nested.currentLfManifest.every(row=>plain(row)&&same(Object.keys(row).sort(),['path','sha256'])&&hash(row.sha256)),'EXACT_NESTED_LF_MANIFEST');const top=createCompanyKycNativeAdapter(descriptor.top),topPins=new Map(descriptor.top.currentLfManifest.map(row=>[row.path,row.sha256]));for(const row of nested.currentLfManifest)if(topPins.has(row.path))reject(topPins.get(row.path)===row.sha256,'NESTED_TOP_PIN_JOIN');
+ return Object.freeze({normalize({contract,proof,reader,readEvidence,bridge,normalizeParent}={}){
+  reject(typeof reader==='function'&&typeof readEvidence==='function'&&typeof normalizeParent==='function','ACTUAL_READERS_AND_ORACLE_REQUIRED');const initialRaw=readEvidence(descriptor.top.proofPath);reject(Buffer.isBuffer(initialRaw)&&Buffer.from(initialRaw.toString('utf8')).equals(initialRaw),'ACTUAL_PROOF_BYTES');let owned;try{owned=JSON.parse(initialRaw);}catch{reject(false,'PROOF_JSON');}reject(same(owned,proof),'EXACT_PROOF_INPUT');const initialJson=JSON.stringify(owned),ownedRaw=Buffer.from(initialRaw),native=owned.currentImageNative;reject(plain(native)&&Array.isArray(native.sourceManifest)&&same(native.sourceManifest.map(row=>row?.path),currentFiles),'COMPLETE_ACTUAL_NESTED_SOURCE_SET');
+  const verify=()=>{for(const[index,pin]of nested.currentLfManifest.entries()){const row=native.sourceManifest[index],value=reader(pin.path);reject(plain(row)&&same(Object.keys(row).sort(),['path','sha256'])&&hash(row.sha256)&&Buffer.isBuffer(value)&&Buffer.from(value.toString('utf8')).equals(value)&&sha(lf(value))===pin.sha256&&sha(value)===row.sha256,'ACTUAL_NESTED_RAW_AND_LF_'+pin.path);}};verify();
+  const result=top.normalize({contract,proof,reader,readEvidence,bridge,normalizeParent:(parentContract,producer,topProjected,parentReader)=>{
+   const projected=structuredClone(topProjected);projected.currentImageNative.sourceManifest=previousFiles.map(path=>({path,sha256:sha(parentReader(path))}));
+   const restoreNested=structuredClone(projected);restoreNested.currentImageNative.sourceManifest=topProjected.currentImageNative.sourceManifest;reject(same(restoreNested,topProjected),'ONLY_EXACT_NESTED_SOURCE_FIELD_PROJECTED');return normalizeParent(parentContract,producer,projected,parentReader);
+  }});
+  verify();const finalRaw=readEvidence(descriptor.top.proofPath);reject(Buffer.isBuffer(finalRaw)&&finalRaw.equals(ownedRaw)&&JSON.stringify(proof)===initialJson,'NESTED_PROOF_AND_INPUT_UNCHANGED');return result;
+ },limits:Object.freeze({scope:'EXACT_COMPANY_CURRENT_SOURCE_BINDING_ONLY',businessFactsProjected:false,caseFactsProjected:false,trackedCompilerIntegrated:false,fullEightLaneCiAccepted:false,sourceAuthorityAccepted:false,nativeOrHumanAcceptance:false})});
+}
+
+return createCompanyNestedNativeAdapter;
+})();
+
+export const PLAN_BUDGET_CURRENT_SECTION='planBudgetCurrentRevision';
+export const PLAN_BUDGET_CI_KIND='UI_PLAN_BUDGET_SOURCE';
+export const PLAN_BUDGET_CI_PROOF_PATH='.vercel/private/plan-budget-ui-ci.json';
+const captureRuntime=reviewed.captureQualityRuntime?createCaptureRuntimeGate(reviewed):null;
+const captureParent=captureRuntime?captureRuntime.parentGate:createCaptureQualityParentGate(reviewed);
+const captureActive=contract=>Boolean(captureRuntime?.isCurrent(contract));
+export const INTAKE_WITHDRAWAL_CHECK_NAMES=captureParent.INTAKE_WITHDRAWAL_CHECK_NAMES;
+export function restoreCaptureRuntimePreviousContract(contract){return captureActive(contract)?captureRuntime.restoreParentContract(contract):structuredClone(contract);}
+export function restoreCaptureRuntimePreviousSource(contract,file,raw){return captureActive(contract)?captureRuntime.restorePreviousSource(contract,file,raw):Buffer.from(raw);}
+export function withCaptureRuntimePreviousSources(contract,reader,callback){if(captureActive(contract))return captureRuntime.withVerifiedParentReader(contract,reader,callback);reject(!captureRuntime,'CURRENT_CAPTURE_RUNTIME_REQUIRED');const before=JSON.stringify(contract);captureParent.verifyPlanBudgetCurrentSources(contract,reader);const result=callback(structuredClone(contract),reader);reject(!result||typeof result.then!=='function','SYNCHRONOUS_PARENT_CALLBACK_REQUIRED');reject(JSON.stringify(contract)===before,'CONTRACT_UNCHANGED');captureParent.verifyPlanBudgetCurrentSources(contract,reader);return result;}
+export function captureRuntimeProofSourceSet(contract,kind){if(captureActive(contract))return captureRuntime.proofSourceSet(contract,kind);const spec=contract.extension?.proofs?.find(row=>row.kind===kind);reject(spec&&Array.isArray(spec.sourceFiles),'EXACT_CURRENT_PROOF_KIND');return [...spec.sourceFiles];}
+export function captureRuntimeWorkflowAdditions(contract){return captureActive(contract)?captureRuntime.workflowAdditions(contract):[];}
+export function verifyCaptureRuntimeCurrentSources(contract,reader){return captureActive(contract)?captureRuntime.verifyCurrentSources(contract,reader):captureRuntime?captureRuntime.historicalAuthority('verifyPlanBudgetCurrentSources',contract,reader):captureParent.verifyPlanBudgetCurrentSources(contract,reader);}
+export function restorePlanBudgetAcceptancePreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetAcceptancePreviousContract',contract):captureParent.restorePlanBudgetAcceptancePreviousContract(contract);}
+export function restorePlanBudgetAcceptancePreviousSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetAcceptancePreviousSource',contract,file,raw):captureParent.restorePlanBudgetAcceptancePreviousSource(contract,file,raw);}
+export function restorePlanBudgetPilotIntegrationPreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetPilotIntegrationPreviousContract',contract):captureParent.restorePlanBudgetPilotIntegrationPreviousContract(contract);}
+export function restorePlanBudgetPilotIntegrationSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetPilotIntegrationSource',contract,file,raw):captureParent.restorePlanBudgetPilotIntegrationSource(contract,file,raw);}
+export function restorePlanBudgetTrialExpiryNoticePreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetTrialExpiryNoticePreviousContract',contract):captureParent.restorePlanBudgetTrialExpiryNoticePreviousContract(contract);}
+export function restorePlanBudgetTrialExpiryNoticeSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetTrialExpiryNoticeSource',contract,file,raw):captureParent.restorePlanBudgetTrialExpiryNoticeSource(contract,file,raw);}
+export function restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetTrialExpiryNoticeValidatorSource',contract,file,raw):captureParent.restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,file,raw);}
+export function restorePlanBudgetMeasurementPrivacyPreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetMeasurementPrivacyPreviousContract',contract):captureParent.restorePlanBudgetMeasurementPrivacyPreviousContract(contract);}
+export function restorePlanBudgetMeasurementPrivacySource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetMeasurementPrivacySource',contract,file,raw):captureParent.restorePlanBudgetMeasurementPrivacySource(contract,file,raw);}
+export function restorePlanBudgetCheckTimePreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetCheckTimePreviousContract',contract):captureParent.restorePlanBudgetCheckTimePreviousContract(contract);}
+export function restorePlanBudgetCheckTimeSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetCheckTimeSource',contract,file,raw):captureParent.restorePlanBudgetCheckTimeSource(contract,file,raw);}
+export function restorePlanBudgetPreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetPreviousContract',contract):captureParent.restorePlanBudgetPreviousContract(contract);}
+export function restorePlanBudgetIntakeWithdrawalSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetIntakeWithdrawalSource',contract,file,raw):captureParent.restorePlanBudgetIntakeWithdrawalSource(contract,file,raw);}
+export function restorePlanBudgetIntakeWithdrawalProducerText(contract,raw){return captureActive(contract)?captureRuntime.producerCall('restorePlanBudgetIntakeWithdrawalProducerText',contract,'scripts/verify-employee-intake-postgres.mjs',raw):captureParent.restorePlanBudgetIntakeWithdrawalProducerText(contract,raw);}
+export function restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,raw){return captureActive(contract)?captureRuntime.producerCall('restorePlanBudgetIntakeWithdrawalUnitProducerText',contract,'scripts/verify-participant-bank-intake-contracts.mjs',raw):captureParent.restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,raw);}
+export function restorePlanBudgetMaterialNativeProducerText(contract,raw){return captureActive(contract)?captureRuntime.producerCall('restorePlanBudgetMaterialNativeProducerText',contract,'scripts/verify-material-inventory-postgres.mjs',raw):captureParent.restorePlanBudgetMaterialNativeProducerText(contract,raw);}
+export function restorePlanBudgetAttendanceReviewProducerText(contract,raw){return captureActive(contract)?captureRuntime.producerCall('restorePlanBudgetAttendanceReviewProducerText',contract,'scripts/verify-field-operations-postgres.mjs',raw):captureParent.restorePlanBudgetAttendanceReviewProducerText(contract,raw);}
+export function restorePlanBudgetConsumptionEvidenceSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetConsumptionEvidenceSource',contract,file,raw):captureParent.restorePlanBudgetConsumptionEvidenceSource(contract,file,raw);}
+export function restorePlanBudgetPilotProducerText(contract,producer,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetPilotProducerText',contract,producer,raw):captureParent.restorePlanBudgetPilotProducerText(contract,producer,raw);}
+export function restorePlanBudgetFieldReviewBusinessSource(file,raw){return captureRuntime?captureRuntime.knownBusinessSource(file,raw):captureParent.restorePlanBudgetFieldReviewBusinessSource(file,raw);}
+export function restorePlanBudgetSourceSet(contract,family,files){return captureActive(contract)?captureRuntime.setCall('restorePlanBudgetSourceSet',contract,family,files):captureParent.restorePlanBudgetSourceSet(contract,family,files);}
+export function restorePlanBudgetFieldReviewSourceSet(contract,family,files){return captureActive(contract)?captureRuntime.setCall('restorePlanBudgetFieldReviewSourceSet',contract,family,files):captureParent.restorePlanBudgetFieldReviewSourceSet(contract,family,files);}
+export function restorePlanBudgetConsumptionEvidenceSourceSet(contract,family,files){return captureActive(contract)?captureRuntime.setCall('restorePlanBudgetConsumptionEvidenceSourceSet',contract,family,files):captureParent.restorePlanBudgetConsumptionEvidenceSourceSet(contract,family,files);}
+export function planBudgetProofSourceAdditions(spec){return captureRuntime?captureRuntime.proofSourceAdditions(spec):captureParent.planBudgetProofSourceAdditions(spec);}
+export function intakeWithdrawalCurrentCheckCount(spec){return captureRuntime?captureRuntime.intakeCurrentCheckCount(spec):captureParent.intakeWithdrawalCurrentCheckCount(spec);}
+export function verifyPlanBudgetCurrentSources(contract,reader){return verifyCaptureRuntimeCurrentSources(contract,reader);}
+export function verifyPlanBudgetActualClosure(contract,family,closure,reader){return captureActive(contract)?captureRuntime.verifyActualClosure(contract,family,closure,reader):captureRuntime?captureRuntime.historicalAuthority('verifyPlanBudgetActualClosure',contract,reader,family,closure):captureParent.verifyPlanBudgetActualClosure(contract,family,closure,reader);}
+export function restorePlanBudgetClosure(contract,family,closure){return captureActive(contract)?captureRuntime.restoreClosure(contract,family,closure):captureParent.restorePlanBudgetClosure(contract,family,closure);}
+export function planBudgetValidationFiles(contract){return captureActive(contract)?captureRuntime.validationFiles(contract):captureParent.planBudgetValidationFiles(contract);}
+export function planBudgetCurrentBrowserBinding(contract,fallback){return captureActive(contract)?captureRuntime.browserBinding(contract,fallback):captureParent.planBudgetCurrentBrowserBinding(contract,fallback);}
+export function planBudgetCompiledProof(contract){return captureActive(contract)?captureRuntime.compiledProof(contract):captureParent.planBudgetCompiledProof(contract);}
+export function planBudgetRetainedScreenshotPaths(contract){return captureActive(contract)?captureRuntime.contractCall('planBudgetRetainedScreenshotPaths',contract):captureParent.planBudgetRetainedScreenshotPaths(contract);}
+export function planBudgetCurrentSourcePin(contract,ref){return captureActive(contract)?captureRuntime.sourcePin(contract,ref):captureParent.planBudgetCurrentSourcePin(contract,ref);}
+export function planBudgetPreviousSourcePin(contract,ref){return captureActive(contract)?captureRuntime.sourcePin(contract,ref,true):captureParent.planBudgetPreviousSourcePin(contract,ref);}
+export function normalizePlanBudgetPilotNativeProof(contract,producer,proof,reader){return captureActive(contract)?captureRuntime.pilotNative(contract,producer,proof,reader):captureParent.normalizePlanBudgetPilotNativeProof(contract,producer,proof,reader);}
+export function normalizePlanBudgetIntakeWithdrawalNativeProof(raw,contract,reader,spec){return captureActive(contract)?captureRuntime.intakeNative(raw,contract,reader,spec):captureParent.normalizePlanBudgetIntakeWithdrawalNativeProof(raw,contract,reader,spec);}
+export function normalizeCaptureRuntimeCompanyNativeProof(contract,proof,reader,readEvidence,normalizeParent){reject(captureActive(contract),'CURRENT_CAPTURE_COMPANY_RUNTIME_REQUIRED');return captureRuntime.companyNative(contract,proof,reader,readEvidence,normalizeParent);}
+export function normalizeCaptureRuntimeNativeProof(contract,spec,proof,reader,readEvidence,callback){reject(captureActive(contract),'CURRENT_CAPTURE_NATIVE_RUNTIME_REQUIRED');return captureRuntime.extensionNative(contract,spec,proof,reader,readEvidence,callback);}

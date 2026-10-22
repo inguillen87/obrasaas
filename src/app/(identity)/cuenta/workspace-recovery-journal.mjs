@@ -341,6 +341,7 @@ function measurementRecoveryOutcome(entry,result){
 export function recoveryResult(entry, result) {
   if(!valid(entry)||result?.scope!==entry.scope)return null;
   if(result.projectId!==undefined&&result.projectId!==entry.projectId)return null;
+  if(entry.resource==='participants'&&result?.state==='FACIAL_PRECOMMIT')return facialPrecommitOutcome(entry,result);
   if(entry.resource==='field-operations'&&entry.action===fieldMeasurementAction)return measurementRecoveryOutcome(entry,result);
   if(entry.resource==='office-review')return officeReviewReceiptOutcome(result,entry);
   if(entry.resource==='project-creation')return projectCreationReceiptOutcome(result,entry);
@@ -519,12 +520,62 @@ async function rejectedCaptureQualityIdentity(url,options,entry){
   let body;try{body=JSON.parse(options.body);}catch{return null;}
   if(!body||typeof body!=='object'||Array.isArray(body))return null;
   const ocr=['ocrConsent','ocrNoticeVersion'].some(key=>Object.hasOwn(body,key)),biometric=['biometricConsent','biometricNoticeVersion'].some(key=>Object.hasOwn(body,key)),back=['back','backConsent','backNoticeVersion','backNoticeSha256'].some(key=>Object.hasOwn(body,key));
-  const keys=['operationId','projectId','scope','workerId','revision','noticeVersion','consent','front','selfie',...(ocr?['ocrConsent','ocrNoticeVersion']:[]),...(biometric?['biometricConsent','biometricNoticeVersion']:[]),...(back?['back','backConsent','backNoticeVersion','backNoticeSha256']:[])];
+  const precommit=body.biometricNoticeVersion==='participant-private-biometric-v3',manualFrom=precommit&&Object.hasOwn(body,'biometricManualFromOperationId');
+  const keys=['operationId','projectId','scope','workerId','revision','noticeVersion','consent','front','selfie',...(ocr?['ocrConsent','ocrNoticeVersion']:[]),...(biometric?['biometricConsent','biometricNoticeVersion']:[]),...(back?['back','backConsent','backNoticeVersion','backNoticeSha256']:[]),...(precommit?['biometricMode',...(manualFrom?['biometricManualFromOperationId']:[])]:[])];
   const image=value=>typeof value==='string'&&value.length>0&&value.length<=Math.ceil(2*1024*1024/3)*4+64;
-  if(!existingApiPlanExact(body,keys)||body.scope!==entry.scope||body.projectId!==entry.projectId||!uuid(body.operationId)||body.operationId.toLowerCase()!==entry.operationId||!id(body.workerId)||typeof body.revision!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(body.revision)||body.noticeVersion!=='participant-kyc-v1'||body.consent!==true||!image(body.front)||!image(body.selfie)||ocr&&(typeof body.ocrConsent!=='boolean'||!['participant-external-ocr-v1','participant-external-ocr-v2'].includes(body.ocrNoticeVersion))||biometric&&(typeof body.biometricConsent!=='boolean'||!['participant-private-biometric-v1','participant-private-biometric-v2'].includes(body.biometricNoticeVersion))||back&&(!image(body.back)||body.backConsent!==true||body.backNoticeVersion!=='participant-kyc-document-back-v1'||!scopeValid(body.backNoticeSha256)))return null;
-  let inputDigest;try{inputDigest=await sha256(new TextEncoder().encode(JSON.stringify(['participant-capture-quality-rejection-v1',canonicalPlanCommand(body)])));}catch{throw unavailable();}
+  if(!existingApiPlanExact(body,keys)||body.scope!==entry.scope||body.projectId!==entry.projectId||!uuid(body.operationId)||body.operationId.toLowerCase()!==entry.operationId||!id(body.workerId)||typeof body.revision!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}$/.test(body.revision)||body.noticeVersion!=='participant-kyc-v1'||body.consent!==true||!image(body.front)||!image(body.selfie)||ocr&&(typeof body.ocrConsent!=='boolean'||!['participant-external-ocr-v1','participant-external-ocr-v2'].includes(body.ocrNoticeVersion))||biometric&&(typeof body.biometricConsent!=='boolean'||!['participant-private-biometric-v1','participant-private-biometric-v2','participant-private-biometric-v3'].includes(body.biometricNoticeVersion))||back&&(!image(body.back)||body.backConsent!==true||body.backNoticeVersion!=='participant-kyc-document-back-v1'||!scopeValid(body.backNoticeSha256)))return null;
+  if(precommit&&(!['ASSISTED','MANUAL'].includes(body.biometricMode)||body.biometricConsent!==(body.biometricMode==='ASSISTED')||manualFrom&&(body.biometricMode!=='MANUAL'||!uuid(body.biometricManualFromOperationId)||body.biometricManualFromOperationId.toLowerCase()===body.operationId.toLowerCase())))return null;
+  let inputDigest;try{inputDigest=await sha256(new TextEncoder().encode(JSON.stringify([precommit?'participant-capture-quality-rejection-v2':'participant-capture-quality-rejection-v1',canonicalPlanCommand(body)])));}catch{throw unavailable();}
   return {inputDigest};
 }
+
+// A technical manual closure is not a saved KYC receipt. Only an observed,
+// bounded HTTP response may release its old browser reference.
+const facialManualClosedResults=new WeakMap();
+function facialPrecommitOutcome(entry,result){
+ const base=['scope','projectId','operationId','state','saved','definitive','facial'];
+ if(entry?.resource!=='participants'||entry.action!==undefined||!existingApiPlanExact(result,base)||result.scope!==entry.scope||result.projectId!==entry.projectId||result.operationId!==entry.operationId||result.state!=='FACIAL_PRECOMMIT'||result.saved!==false||result.definitive!==false)return null;
+ const f=result.facial,phases=['PREPARING','MODEL_UNKNOWN','PERSISTENCE_UNKNOWN','READY','REJECTED','CLOSED_MANUAL'],closed=f?.phase==='CLOSED_MANUAL';
+ if(!phases.includes(f?.phase)||!existingApiPlanExact(f,['phase','canContinueManual','privateObjectsMayExist',...(closed?['closedReceiptId','successorOperationId']:[])])||typeof f.canContinueManual!=='boolean'||typeof f.privateObjectsMayExist!=='boolean')return null;
+ if(closed&&(f.canContinueManual!==false||!/^participant_facial_[a-f0-9]{64}$/.test(f.closedReceiptId)||!uuid(f.successorOperationId)||f.successorOperationId!==f.successorOperationId.toLowerCase()||f.successorOperationId===entry.operationId))return null;
+ return {state:'FACIAL_PRECOMMIT',...f};
+}
+function facialLookupReference(url,options){
+ if(typeof url!=='string'||!url.startsWith('/api/identity/participants?')||options?.body!==undefined||options?.method!==undefined&&options.method!=='GET')return null;
+ const params=new URLSearchParams(url.slice(url.indexOf('?')+1)),keys=['scope','projectId','operationId'];
+ if(params.size!==3||[...params.keys()].some(key=>!keys.includes(key)||params.getAll(key).length!==1)||!scopeValid(params.get('scope'))||!id(params.get('projectId'))||!uuid(params.get('operationId'))||params.get('operationId')!==params.get('operationId').toLowerCase()||url.includes('#'))return null;
+ return {scope:params.get('scope'),projectId:params.get('projectId'),operationId:params.get('operationId')};
+}
+function manualFacialResolution(options,qualityIdentity){
+ if(!qualityIdentity||options?.method!=='POST'||typeof options.body!=='string')return null;
+ try{const body=JSON.parse(options.body);return body.biometricNoticeVersion==='participant-private-biometric-v3'&&body.biometricMode==='MANUAL'&&body.biometricConsent===false&&uuid(body.biometricManualFromOperationId)?body.biometricManualFromOperationId.toLowerCase():null;}catch{return null;}
+}
+async function facialClosedHttpBody(prepared,url,options,response,observation){
+ if(url!==prepared.url||!facialLookupReference(url,options)||!captureQualityObservationActive(observation)||response?.status!==200||response.redirected===true||response.headers?.get('content-type')?.split(';',1)[0].trim().toLowerCase()!=='application/json')return null;
+ const length=response.headers.get('content-length');if(length!==null&&(!/^\d+$/.test(length)||Number(length)>4096))return null;
+ try{if(response.url){if(!globalThis.location)return null;const target=new URL(url,globalThis.location.origin),actual=new URL(response.url);if(actual.href!==target.href||actual.origin!==globalThis.location.origin)return null;}}catch{return null;}
+ let reader,onAbort;
+ try{
+  reader=response.clone().body?.getReader();if(!reader)return null;
+  const {signal}=observation;let rejectAbort;const aborted=new Promise((_,reject)=>{rejectAbort=reject;});
+  onAbort=()=>{rejectAbort(new DOMException('La consulta se canceló.','AbortError'));void reader.cancel().catch(()=>{});};
+  signal.addEventListener('abort',onAbort,{once:true});if(signal.aborted)return null;
+  const decoder=new TextDecoder('utf-8',{fatal:true});let text='',bytes=0;
+  for(;;){const part=await Promise.race([reader.read(),aborted]);if(part.done)break;if(!(part.value instanceof Uint8Array))return null;bytes+=part.value.byteLength;if(bytes>4096)return null;text+=decoder.decode(part.value,{stream:true});}
+  text+=decoder.decode();const body=JSON.parse(text),current=facialLookupReference(url,options),outcome=facialPrecommitOutcome(prepared.entry,body);
+  if(!captureQualityObservationActive(observation)||!current||current.scope!==prepared.entry.scope||current.projectId!==prepared.entry.projectId||current.operationId!==prepared.entry.operationId||outcome?.phase!=='CLOSED_MANUAL')return null;
+  return {digest:await sha256(new TextEncoder().encode(JSON.stringify(canonicalPlanCommand(body)))),outcome,observation:{signal:observation.signal,isActive:observation.isActive}};
+ }catch{return null;}
+ finally{if(onAbort)observation.signal?.removeEventListener('abort',onAbort);if(reader){void reader.cancel().catch(()=>{});try{reader.releaseLock();}catch{}}}
+}
+export async function wasFacialManualReferenceClosed(value,context){
+ try{
+  const proof=value&&typeof value==='object'?facialManualClosedResults.get(value):null;
+  if(!proof||!existingApiPlanExact(context,['scope','projectId','operationId','successorOperationId'])||!captureQualityObservationActive(proof.observation)||context.scope!==proof.entry.scope||context.projectId!==proof.entry.projectId||context.operationId!==proof.entry.operationId||context.successorOperationId!==proof.successorOperationId||facialPrecommitOutcome(proof.entry,value)?.phase!=='CLOSED_MANUAL')return false;
+  return await sha256(new TextEncoder().encode(JSON.stringify(canonicalPlanCommand(value))))===proof.digest;
+ }catch{return false;}
+}
+
 const companyPhoneRejectedErrors=new WeakMap();
 const captureQualityRejectedErrors=new WeakMap();
 export async function wasCaptureQualityRejected(error,url,options){
@@ -537,7 +588,7 @@ export async function wasCompanyPhoneRevisionRejected(error,url,options){
 }
 export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.now,notify=()=>{},withLock}) {
   const scheduleTickets=new WeakMap(),scheduleReferences=new Map(),attendanceTickets=new WeakMap(),attendanceReferences=new Map();
-  const companyPhoneTickets=new WeakMap(),captureQualityTickets=new WeakMap();
+  const companyPhoneTickets=new WeakMap(),captureQualityTickets=new WeakMap(),facialLookupTickets=new WeakMap(),facialSubmissionTickets=new WeakMap();
   // getStorage is retained only for controlled in-memory tests. The browser uses
   // one transactional adapter; receipt policy remains in this factory.
   const storageOperation=withStorage||((mode,scope,callback,signal)=>{
@@ -596,6 +647,8 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       try{if(legacyStorage.getItem(key)===raw)legacyStorage.removeItem(key);}catch{/* The committed canonical reference remains available. */}
     },
     async prepare(url, options, {notifyConflict=true} = {}) {
+      const lookup=facialLookupReference(url,options);
+      if(lookup){const entry=(await list(lookup.scope)).find(row=>row.resource==='participants'&&row.action===undefined&&row.projectId===lookup.projectId&&row.operationId===lookup.operationId);if(!entry)return null;const ticket={entry,existed:true};facialLookupTickets.set(ticket,{entry:{...entry},url,observed:null});return ticket;}
       const entry=await reference(url,options,now());if(!entry)return null;
       const scheduleIdentity=await rejectedScheduleIdentity(url,options,entry),attendanceIdentity=await rejectedAttendanceIdentity(url,options,entry);
       const companyPhoneIdentity=await rejectedCompanyPhoneIdentity(url,options,entry);
@@ -607,7 +660,8 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       const pending=current.find(row=>row.resource===entry.resource&&(['company-channel','company-onboarding','project-creation'].includes(entry.resource)||row.projectId===entry.projectId)&&(entry.resource!=='meta-onboarding'||existingApiPlanAction(entry.action)||existingApiPlanAction(row.action)||entry.action==='reconcile'||row.eventId===entry.eventId));
       let resolution=false;
       if(entry.resource==='participants'&&typeof options.body==='string'){try{resolution=JSON.parse(options.body).action==='REVOKE';}catch{ /* The server rejects malformed commands. */ }}
-      if(pending&&!resolution)throw failure('WORKSPACE_RECOVERY_REQUIRED','Hay un envío anterior sin confirmar en este módulo. Comprobá su recibo en Operaciones por comprobar antes de iniciar otro.');
+      const manualFrom=manualFacialResolution(options,captureQualityIdentity),manualResolution=pending?.resource==='participants'&&pending.action===undefined&&pending.projectId===entry.projectId&&pending.operationId===manualFrom&&manualFrom!==entry.operationId;
+      if(pending&&!resolution&&!manualResolution)throw failure('WORKSPACE_RECOVERY_REQUIRED','Hay un envío anterior sin confirmar en este módulo. Comprobá su recibo en Operaciones por comprobar antes de iniciar otro.');
       if(current.length>=64)throw unavailable();
       s.setItem(keyOf(entry),JSON.stringify(entry));if(s.getItem(keyOf(entry))!==JSON.stringify(entry))throw unavailable();
       return {entry,existed:false};
@@ -634,9 +688,11 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
       }
       if(companyPhoneIdentity&&!ticket.existed)companyPhoneTickets.set(ticket,{entry:{...ticket.entry},identity:companyPhoneIdentity,rejected:false});
       if(captureQualityIdentity&&!ticket.existed)captureQualityTickets.set(ticket,{entry:{...ticket.entry},identity:captureQualityIdentity});
+      if(captureQualityIdentity&&JSON.parse(options.body).biometricNoticeVersion==='participant-private-biometric-v3')facialSubmissionTickets.set(ticket,true);
       if(!ticket.existed)notify();return ticket;
     },
     async captureResponse(ticket,url,options,response,observation={}){
+      const facial=facialLookupTickets.get(ticket);if(facial){facial.observed=await facialClosedHttpBody(facial,url,options,response,observation);return;}
       const quality=captureQualityTickets.get(ticket);
       if(quality){
         const {signal,isActive}=observation;let reader,onAbort;
@@ -684,14 +740,27 @@ export function createWorkspaceRecoveryJournal({getStorage,withStorage,now=Date.
     },
     async settle(ticket, result, error) {
       if(!ticket)return;
+      const facial=facialLookupTickets.get(ticket);facialLookupTickets.delete(ticket);
+      if(facial){
+        const observed=facial.observed,outcome=facialPrecommitOutcome(facial.entry,result);
+        if(!error&&observed&&outcome?.phase==='CLOSED_MANUAL'&&captureQualityObservationActive(observed.observation)){
+          let digest;try{digest=await sha256(new TextEncoder().encode(JSON.stringify(canonicalPlanCommand(result))));}catch{return;}
+          if(digest===observed.digest&&captureQualityObservationActive(observed.observation)&&await remove(facial.entry,observed.observation)&&captureQualityObservationActive(observed.observation))facialManualClosedResults.set(result,{entry:facial.entry,digest,successorOperationId:outcome.successorOperationId,observation:observed.observation});
+        }
+        return;
+      }
       const schedule=scheduleTickets.get(ticket),attendance=attendanceTickets.get(ticket);scheduleTickets.delete(ticket);attendanceTickets.delete(ticket);
       const companyPhone=companyPhoneTickets.get(ticket);companyPhoneTickets.delete(ticket);
       const captureQuality=captureQualityTickets.get(ticket);captureQualityTickets.delete(ticket);
+      const facialSubmission=facialSubmissionTickets.get(ticket);facialSubmissionTickets.delete(ticket);
       if(error){
         if(captureQuality?.rejected&&!ticket.existed&&ticket.entry.resource==='participants'&&sameScheduleEntry(ticket.entry,captureQuality.entry)&&error.status===captureQuality.rejected.status&&error.code===captureQuality.rejected.code&&error.requestDispatched!==false&&captureQualityObservationActive(captureQuality.observation)){
           let current;try{current=await rejectedCaptureQualityIdentity(captureQuality.request.url,captureQuality.request.options,captureQuality.entry);}catch{}
           if(current?.inputDigest===captureQuality.identity.inputDigest&&captureQualityObservationActive(captureQuality.observation)&&await remove(captureQuality.entry,captureQuality.observation)&&captureQualityObservationActive(captureQuality.observation))captureQualityRejectedErrors.set(error,{entry:captureQuality.entry,identity:captureQuality.identity,status:error.status,code:error.code});return;
         }
+        // A facial uncertainty or authority code after dispatch cannot release
+        // a v3 reference. Its durable stage must be reconciled independently.
+        if(facialSubmission&&error.requestDispatched!==false)return;
         // A capture code alone is not proof that no image was committed. Do
         // not let the general 4xx cleanup bypass the exact observed envelope.
         if(captureQuality&&error.requestDispatched!==false&&(error.status===422||error.status===503||typeof error.code==='string'&&(error.code.startsWith('PARTICIPANT_CAPTURE_')||error.code==='PARTICIPANT_OPERATION_UNCONFIRMED')))return;

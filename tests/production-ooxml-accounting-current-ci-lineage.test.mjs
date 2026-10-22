@@ -1,4 +1,4 @@
-import {restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {restoreCaptureRuntimePreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {PARTICIPANT_PREANALYSIS_CURRENT_REVISION,restoreParticipantPreanalysisPreviousContract,restoreParticipantPreanalysisSourceSet} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {restoreWhatsappFieldContinuitySourceSet} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
@@ -13,6 +13,7 @@ import {FIELD_OUTBOUND_CURRENT_REVISION,restoreFieldOutboundPreviousContract,fie
 import {verifyPlanMeasurementCurrentSources,reconstructPublishedHContract} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';
 import {companyKycOutboundCompactCiSourceClosure} from '../scripts/verify-company-kyc-outbound-compact-ci.mjs';
 
+const facialSources=["src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs"];
 const root=new URL('../',import.meta.url),read=file=>{try{return readFileSync(new URL(file,root));}catch(error){if(error.code==='ENOENT'||error.code==='EISDIR')return null;throw error;}},sha=value=>createHash('sha256').update(value).digest('hex');
 const contract=JSON.parse(read('.github/workspace-acceptance-contract.json'));
 assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
@@ -40,8 +41,11 @@ const changes=[...OOXML_ACCOUNTING_CURRENT_REVISION.reviewedSourceChanges,...OOX
 function historicalCompactFiles(actualFiles,contract){
  assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
  const files=restorePlanBudgetSourceSet(contract,'COMPACT',actualFiles);
- assert.deepEqual(actualFiles,[...files,'src/lib/plan-budget-source.mjs'].sort());
- const historical=restoreWorksiteLiveHoursSourceSet(contract,'COMPACT',files);
+ const revision=contract.planBudgetCurrentRevision,budget=revision.sourceSetDeltas.find(row=>row.family==='COMPACT'),current=revision.sourceFamilies.find(row=>row.family==='COMPACT'),parent=restoreCaptureRuntimePreviousContract(contract).planBudgetCurrentRevision.sourceFamilies.find(row=>row.family==='COMPACT'),capture=revision.captureQualityRuntime.familyAdvances.find(row=>row.family==='COMPACT');
+ const catalogs=['src/lib/consumption-evidence-catalog.mjs','src/lib/meta-consumption-evidence-catalog.mjs','src/lib/voice-consumption-draft.mjs'];
+ assert.deepEqual(budget.additions,['src/lib/plan-budget-source.mjs',...catalogs].sort());assert.equal(parent.currentFiles.length,144);assert.equal(parent.currentFiles.length,budget.currentCount);assert.equal(sha(JSON.stringify(parent.currentFiles)),budget.currentPathsSha256);assert.deepEqual(parent.currentFiles,[...files,...budget.additions].sort());
+ assert.deepEqual(capture.additions,[...['scripts/lib/synthetic-capture-quality.mjs','src/lib/capture-quality-gate.mjs','src/lib/capture-quality-policy.mjs','src/lib/organization-pilot-coverage.mjs','src/lib/platform-operator-authority.mjs','src/lib/private-capture-quality.mjs','src/lib/production-identity-config.mjs','src/lib/verified-session.mjs'],...facialSources].sort());assert.deepEqual(capture.removals,[]);assert.equal(capture.previousCount,144);assert.equal(capture.currentCount,155);assert.equal(actualFiles.length,155);assert.deepEqual(actualFiles,current.currentFiles);assert.deepEqual(actualFiles,[...parent.currentFiles,...capture.additions].sort());
+ const historical=restoreWorksiteLiveHoursSourceSet(contract,'COMPACT',actualFiles);
  assert.equal(historical.length,139);assert.equal(sha(JSON.stringify(historical)),'cd474d8e9a3b754daaeef61f986e31f1c92997a8423cd9a14c06d43ea706dbea');
  assert.equal(files.length,140);assert.deepEqual(files,[...historical,'src/lib/field-hours-report.mjs'].sort());
  return historical;

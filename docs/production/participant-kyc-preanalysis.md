@@ -1,4 +1,25 @@
-# Preanálisis automático de la presentación privada
+# Captura facial previa y preanálisis de la presentación privada
+
+## Presentaciones nuevas con comparación facial v3
+
+El aviso independiente `participant-private-biometric-v3` permite elegir entre comparación asistida y revisión manual. La selección es personal y explícita. El aviso, su huella y el modo forman parte de la fuente del intento; nunca se infieren de una opción anterior.
+
+La plataforma y WhatsApp utilizan el mismo coordinador. Primero comprueba el conjunto completo de imágenes: frente, selfie y dorso autorizado. Después, en modo asistido, registra el despacho durable y obtiene una señal facial privada antes de la primera subida a Blob. En modo manual no llama al modelo facial. Cada subida vuelve a comprobar autoridad, fuente y concesión. Worker, recibo, adopción del resultado facial y estado COMMITTED se registran en la misma transacción; el servicio de preanálisis no repite esa comparación. La lectura OCR autorizada conserva su etapa posterior independiente.
+
+Los nuevos desafíos de WhatsApp exigen una cuenta ACTIVE que ya aceptó su invitación. Se indica aceptar la invitación antes de pedir fotos. No se transfiere un intento entre el emisor de una invitación y la persona que la acepta. Los desafíos v1/v2 ya sellados conservan su versión y sus reglas de lectura; no se los actualiza automáticamente a v3.
+
+El intento utiliza AuditLog y bloqueos existentes; no agrega una base ni una tabla de biometría. Reserva y despacho ocurren antes de la inferencia; las funciones del coordinador reutilizan la transacción autorizada y no abren una conexión anidada. Los bytes enviados y los destinados a almacenamiento son copias propias comprobadas por hash después de cada espera. La capacidad de guardado sólo existe en el servidor y se invalida al cambiar la fuente, la autoridad o el intento.
+
+Un despacho sin resultado confirmado queda incierto y no vuelve a llamar al modelo por replay. La continuación manual requiere una acción explícita y una operación nueva vinculada al intento anterior. Su cierre técnico impide que una respuesta tardía del intento anterior guarde resultados. La respuesta de estado conserva el indicador de posibles objetos privados pendientes; un error no acredita que no se hayan subido imágenes.
+
+La recuperación del navegador conserva las fotos en RAM y una referencia de IDs cuando el resultado es incierto. Una respuesta de cierre manual sólo retira la referencia anterior si procede del HTTP observado, tiene el contexto y el sucesor correctos y pudo eliminarse esa referencia. No acredita por sí sola una identidad presentada. Una recarga pierde las fotos de RAM; el servidor conserva la referencia y la evidencia técnica, sin inventar una continuación automática con imágenes ausentes.
+
+La selfie debe mostrar una sola cara, sin sostener el documento. Las capturas y los consentimientos no se realizan automáticamente. En WhatsApp, Meta ya recibió los adjuntos: el control previo se refiere al almacenamiento privado de ObraSaaS y no elimina esos mensajes del proveedor.
+
+La detección de un retrato y la comparación facial son señales orientativas. No clasifican de forma fiable un DNI, no certifican autenticidad, prueba de vida, identidad civil ni permisos de obra. No se almacenan embeddings. Las pruebas de modelos con muestras públicas, los componentes con puertos sintéticos, PostgreSQL y el recorrido personal publicado tienen evidencias independientes; ninguna sustituye a las otras.
+
+## Presentaciones y consentimientos históricos v1/v2
+
 
 El preanálisis comienza después de guardar una nueva presentación web o de WhatsApp con autorización explícita v2. El usuario conserva elecciones independientes para OCR y comparación facial; no requiere un segundo clic de un responsable. La autorización v1 histórica conserva texto, huella y ejecución manual anteriores. No se actualizan presentaciones anteriores ni se realiza un barrido retroactivo.
 

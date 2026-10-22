@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,restoreCaptureRuntimePreviousContract,restorePlanBudgetAcceptancePreviousContract,withCaptureRuntimePreviousSources,planBudgetPreviousSourcePin,restorePlanBudgetIntakeWithdrawalUnitProducerText} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_SECTION,restorePlanPartidaPreviewSourceSet} from '../scripts/lib/plan-partida-preview-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -118,9 +118,15 @@ test('block63 binds all actual native source roots and the reviewed CI leaves wi
  const contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),result=validateParticipantPreanalysisWorkspaceContract(contract);
  assert.equal(result.nativeSourceCount,142);assert.equal(result.nativeCheckCount,19);assert.equal(result.nativeAcceptance,false);const checkpoint=restoreIntegratedIdentityPreviousContract(contract);assert.equal(checkpoint.blocks.length,57);assert.equal(checkpoint.extension.proofs.length,19);const previousWa=restoreWhatsappFieldContinuityPreviousContract(contract);assert.equal(previousWa.blocks.length,58);assert.equal(previousWa.extension.proofs.length,20);const beforeBudget=restorePlanBudgetPreviousContract(contract);assert.equal(beforeBudget.blocks.length,59);assert.equal(beforeBudget.extension.proofs.length,21);assert.deepEqual(beforeBudget.blocks.slice(0,58),previousWa.blocks);assert.equal(beforeBudget.blocks.at(-1).id,65);assert.equal(beforeBudget.extension.proofs.at(-1).kind,'UI_FIELD_TASK_PAGINATION');const ownership=contract[PLAN_BUDGET_CURRENT_SECTION].ownership;assert.deepEqual(contract.blocks,[...beforeBudget.blocks,ownership.block]);
  // Current sources and the complete immutable Budget inverse are required before
- // projecting only the inherited proof sourceFiles to their pre-Budget oracles.
+ // projecting inherited proof sourceFiles and producer pins to their pre-Budget oracles.
  verifyPlanBudgetCurrentSources(contract,read);
- const projectedProofs=contract.extension.proofs.map((spec,index)=>{
+ const captureParent=restoreCaptureRuntimePreviousContract(contract),budgetCheckpoint=restorePlanBudgetAcceptancePreviousContract(contract),captureRuntime=contract[PLAN_BUDGET_CURRENT_SECTION].captureQualityRuntime,acceptance=contract[PLAN_BUDGET_CURRENT_SECTION].pilotAcceptanceRuntime;
+ const actualProofsBefore=JSON.stringify(contract.extension.proofs);
+ const projectedProofs=contract.extension.proofs.map((actualSpec,index)=>{
+  const spec=budgetCheckpoint.extension.proofs[index],parentSpec=captureParent.extension.proofs[index],capture=captureRuntime.proofSourceSetAdvances.find(row=>row.kind===actualSpec.kind),accepted=acceptance.proofSourceSetAdvances.find(row=>row.kind===actualSpec.kind);
+  assert.equal(actualSpec.id,spec.id);assert.equal(parentSpec.id,spec.id);
+  if(capture){assert.deepEqual(actualSpec.sourceFiles,capture.currentFiles);assert.deepEqual(parentSpec.sourceFiles,capture.previousFiles);assert.deepEqual([...parentSpec.sourceFiles,...capture.additions].sort(),actualSpec.sourceFiles);assert.deepEqual(capture.removals,[]);}else assert.deepEqual(actualSpec.sourceFiles,parentSpec.sourceFiles);
+  if(accepted){assert.equal(spec.sourceFiles.length,accepted.previousCount);assert.equal(parentSpec.sourceFiles.length,accepted.currentCount);assert.deepEqual([...spec.sourceFiles,...accepted.additions].sort(),parentSpec.sourceFiles);assert.deepEqual(accepted.removals,[]);}else assert.deepEqual(parentSpec.sourceFiles,spec.sourceFiles);
   const historical=beforeBudget.extension.proofs[index];if(!historical)return spec;
   assert.equal(spec.id,historical.id);assert.equal(spec.kind,historical.kind);
   const delta=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.contractPointer==='/extension/proofs/'+index+'/sourceFiles');
@@ -132,9 +138,12 @@ test('block63 binds all actual native source roots and the reviewed CI leaves wi
    assert.equal(sha(JSON.stringify(historical.sourceFiles)),delta.previousPathsSha256);
    assert.deepEqual(spec.sourceFiles,[...historical.sourceFiles,...delta.additions].sort());
   }else assert.deepEqual(spec.sourceFiles,historical.sourceFiles);
-  return {...spec,sourceFiles:restorePlanBudgetSourceSet(contract,spec.kind,spec.sourceFiles)};
+  const unit=budgetCheckpoint[PLAN_BUDGET_CURRENT_SECTION].intakeWithdrawalRuntime.unitProducer;let producerSha256;
+  if(spec.producer===unit.producer){assert.equal(spec.producerSha256,unit.currentSha256);assert.equal(sha(restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,read(unit.producer)).toString('utf8').replaceAll('\r\n','\n')),unit.previousSha256);producerSha256=unit.previousSha256;}
+  else producerSha256=planBudgetPreviousSourcePin(contract,{path:spec.producer,sha256:spec.producerSha256});
+  return {...spec,producerSha256,sourceFiles:restorePlanBudgetSourceSet(contract,spec.kind,spec.sourceFiles)};
  });
- assert.deepEqual(projectedProofs,[...beforeBudget.extension.proofs,ownership.proof]);
+ assert.deepEqual(projectedProofs,[...beforeBudget.extension.proofs,ownership.proof]);assert.equal(JSON.stringify(contract.extension.proofs),actualProofsBefore);
 });
 
 function ciShadow(){
@@ -167,14 +176,19 @@ function resealRawNative(f,edit,{resealSourceDigest=true}={}){
 test('current native AST146 preserves historical145 within full CI241 and leaves raw native bytes untouched',()=>{
  const f=ciShadow(),contract=JSON.parse(read('.github/workspace-acceptance-contract.json')),historical=structuredClone(contract.participantPreanalysisCurrentRevision.nativeSourceFiles),current=participantPreanalysisNativeSourceClosure(f.context.readSource),rawBefore=Buffer.from(f.evidence.get(f.proof.rawNative.path)),referenceBefore=structuredClone(f.proof.rawNative),proofBefore=JSON.stringify(f.proof);
  const outer=contract[PLAN_PARTIDA_PREVIEW_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===f.context.spec.kind),budget=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===f.context.spec.kind),beforeBudgetFullCi=restorePlanBudgetSourceSet(contract,f.context.spec.kind,f.context.spec.sourceFiles),historicalFullCi=restorePlanPartidaPreviewSourceSet(contract,f.context.spec.kind,f.context.spec.sourceFiles);
- const beforeBudgetNative=current.filter(file=>!budget.additions.includes(file)),nativeBudgetAdditions=current.filter(file=>budget.additions.includes(file));
+ const parent=restoreCaptureRuntimePreviousContract(contract),parentSpec=parent.extension.proofs.find(row=>row.id===f.context.spec.id),budgetCheckpoint=restorePlanBudgetAcceptancePreviousContract(contract),budgetSpec=budgetCheckpoint.extension.proofs.find(row=>row.id===f.context.spec.id),capture=contract[PLAN_BUDGET_CURRENT_SECTION].captureQualityRuntime.proofSourceSetAdvances.find(row=>row.kind===f.context.spec.kind),acceptance=contract[PLAN_BUDGET_CURRENT_SECTION].pilotAcceptanceRuntime.proofSourceSetAdvances.find(row=>row.kind===f.context.spec.kind);
+ const parentNative=withCaptureRuntimePreviousSources(contract,f.context.readSource,(_parent,parentRead)=>participantPreanalysisNativeSourceClosure(parentRead)),captureNativeAdditions=capture.additions.filter(file=>current.includes(file));
+ assert.deepEqual(capture.currentFiles,f.context.spec.sourceFiles);assert.deepEqual(capture.previousFiles,parentSpec.sourceFiles);assert.deepEqual([...parentSpec.sourceFiles,...capture.additions].sort(),f.context.spec.sourceFiles);assert.deepEqual(capture.removals,[]);
+ assert.equal(budgetSpec.sourceFiles.length,acceptance.previousCount);assert.equal(parentSpec.sourceFiles.length,acceptance.currentCount);assert.deepEqual([...budgetSpec.sourceFiles,...acceptance.additions].sort(),parentSpec.sourceFiles);assert.deepEqual(acceptance.removals,[]);
+ assert.deepEqual(current,[...parentNative,...captureNativeAdditions].sort());assert.ok(parentNative.every(file=>current.includes(file)));
+ const beforeBudgetNative=parentNative.filter(file=>!budget.additions.includes(file)),nativeBudgetAdditions=parentNative.filter(file=>budget.additions.includes(file));
  const previewAdditions=['scripts/lib/plan-partida-preview-current-ci-lineage.mjs','scripts/lib/plan-partida-preview-current-ci-reviewed.mjs'];
  assert.equal(outer.contractPointer,'/extension/proofs/18/sourceFiles');assert.equal(outer.previousCount,241);assert.ok(outer.currentCount>=243);assert.ok(previewAdditions.every(file=>outer.additions.includes(file)));assert.equal(outer.currentCount,outer.previousCount+outer.additions.length);
  assert.equal(historicalFullCi.length,241);assert.equal(sha(JSON.stringify(historicalFullCi)),outer.previousPathsSha256);
  assert.equal(beforeBudgetFullCi.length,outer.currentCount);assert.equal(sha(JSON.stringify(beforeBudgetFullCi)),outer.currentPathsSha256);assert.deepEqual(beforeBudgetFullCi,[...historicalFullCi,...outer.additions].sort());
- assert.equal(f.context.spec.sourceFiles.length,budget.currentCount);assert.equal(sha(JSON.stringify(f.context.spec.sourceFiles)),budget.currentPathsSha256);assert.deepEqual(f.context.spec.sourceFiles,[...beforeBudgetFullCi,...budget.additions].sort());
- assert.equal(historical.length,145);assert.equal(beforeBudgetNative.length,146);assert.deepEqual(beforeBudgetNative,[...historical,'src/lib/field-hours-report.mjs'].sort());assert.ok(nativeBudgetAdditions.includes('src/lib/plan-budget-source.mjs'));assert.deepEqual(nativeBudgetAdditions,budget.additions.filter(file=>current.includes(file)));assert.deepEqual(current,[...beforeBudgetNative,...nativeBudgetAdditions].sort());assert.deepEqual(nativeSourceFiles,current);assert.ok(beforeBudgetNative.every(file=>historicalFullCi.includes(file)));assert.ok(current.every(file=>f.context.spec.sourceFiles.includes(file)));
- const result=f.validate();assert.equal(result.nativeSourceCount,current.length);assert.equal(result.sourceReferences,budget.currentCount);assert.equal(result.nativeProofRewritten,false);assert.equal(result.rawNativeSha256,sha(rawBefore));assert.equal(f.evidence.get(f.proof.rawNative.path).equals(rawBefore),true);assert.deepEqual(f.proof.rawNative,referenceBefore);assert.equal(JSON.stringify(f.proof),proofBefore);assert.deepEqual(contract.participantPreanalysisCurrentRevision.nativeSourceFiles,historical);
+ assert.equal(budgetSpec.sourceFiles.length,budget.currentCount);assert.equal(sha(JSON.stringify(budgetSpec.sourceFiles)),budget.currentPathsSha256);assert.deepEqual(budgetSpec.sourceFiles,[...beforeBudgetFullCi,...budget.additions].sort());
+ assert.equal(historical.length,145);assert.equal(beforeBudgetNative.length,146);assert.deepEqual(beforeBudgetNative,[...historical,'src/lib/field-hours-report.mjs'].sort());assert.ok(nativeBudgetAdditions.includes('src/lib/plan-budget-source.mjs'));assert.deepEqual(nativeBudgetAdditions,budget.additions.filter(file=>parentNative.includes(file)));assert.deepEqual(parentNative,[...beforeBudgetNative,...nativeBudgetAdditions].sort());assert.deepEqual(nativeSourceFiles,current);assert.ok(beforeBudgetNative.every(file=>historicalFullCi.includes(file)));assert.ok(current.every(file=>f.context.spec.sourceFiles.includes(file)));
+ const result=f.validate();assert.equal(result.nativeSourceCount,current.length);assert.equal(result.sourceReferences,f.context.spec.sourceFiles.length);assert.equal(result.nativeProofRewritten,false);assert.equal(result.rawNativeSha256,sha(rawBefore));assert.equal(f.evidence.get(f.proof.rawNative.path).equals(rawBefore),true);assert.deepEqual(f.proof.rawNative,referenceBefore);assert.equal(JSON.stringify(f.proof),proofBefore);assert.deepEqual(contract.participantPreanalysisCurrentRevision.nativeSourceFiles,historical);
 });
 test('resealing an omitted current native source historical145 or same-count foreign path cannot satisfy the envelope',()=>{
  const historical=JSON.parse(read('.github/workspace-acceptance-contract.json')).participantPreanalysisCurrentRevision.nativeSourceFiles;

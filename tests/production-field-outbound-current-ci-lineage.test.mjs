@@ -1,5 +1,5 @@
 import {OOXML_ACCOUNTING_CURRENT_REVISION,restoreOoxmlAccountingPreviousContract} from '../scripts/lib/ooxml-accounting-current-ci-lineage.mjs';
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,withCaptureRuntimePreviousSources,restorePlanBudgetAcceptancePreviousContract,restorePlanBudgetAcceptancePreviousSource} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {restoreParticipantPreanalysisPreviousContract,restoreParticipantPreanalysisSourceSet} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {restoreIntegratedIdentitySourceSet} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
@@ -7,6 +7,7 @@ import {restoreWhatsappFieldContinuitySourceSet} from '../scripts/lib/whatsapp-f
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createHash} from 'node:crypto';
+import path from 'node:path';
 import {readFileSync} from 'node:fs';
 import {FIELD_OUTBOUND_CURRENT_REVISION,restoreFieldOutboundPreviousContract,verifyFieldOutboundCurrentSources} from '../scripts/lib/field-outbound-current-ci-lineage.mjs';
 import {verifyPlanMeasurementCurrentSources,reconstructPublishedHContract} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';
@@ -114,7 +115,24 @@ test('Budget outer denial retains the legacy outbound category and cannot author
  assert.throws(()=>verifyPlanBudgetCurrentSources(changed,read),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason:'IMMUTABLE_COMPANION'});
  denied(()=>verifyFieldOutboundCurrentSources(changed,read));denied(()=>verifyPlanMeasurementCurrentSources(changed,read));
  const file='src/lib/plan-budget-source.mjs',tampered=path=>path===file?Buffer.concat([read(path),Buffer.from('\n// Changed current Budget module\n')]):read(path);
- assert.throws(()=>verifyPlanBudgetCurrentSources(contract,tampered),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason:'CURRENT_SOURCE_'+file});
+ assert.throws(()=>verifyPlanBudgetCurrentSources(contract,tampered),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason:'CURRENT_REFERENCE_'+file});
+ // CURRENT_SOURCE belongs to literal Git65d, below the 731/1b wrappers.
+ // Authenticate current sources before/after this synchronous local fixture.
+ withCaptureRuntimePreviousSources(contract,read,(parent,parentRead)=>{
+  const serialize=value=>JSON.stringify(value,null,2)+'\n',compiler='scripts/lib/plan-budget-current-ci-lineage.mjs',anchor='scripts/lib/plan-budget-current-ci-reviewed.mjs',contractPath='.github/workspace-acceptance-contract.json',oneB=restorePlanBudgetAcceptancePreviousContract(parent);
+  assert.equal(sha(serialize(oneB)),'a89d1a6c820b811359af23359e587f9110e7341bfa0c2b558b5ee452d9ac1042');
+  const declaration=value=>'// Exact budget-source CI declaration; compiler fills immutable reviewed source bindings.\nexport const PLAN_BUDGET_CURRENT_REVISION=Object.freeze('+JSON.stringify(value[PLAN_BUDGET_CURRENT_SECTION],null,2)+');\n';
+  const oneBRead=source=>{const raw=parentRead(source);if(source===contractPath){assert.equal(raw.toString('utf8'),serialize(parent));return Buffer.from(serialize(oneB));}if(source===anchor){assert.equal(raw.toString('utf8'),declaration(parent));return Buffer.from(declaration(oneB));}return restorePlanBudgetAcceptancePreviousSource(parent,source,raw);};
+  const literal=(raw,pin,transformedPin,checkpoint,names)=>{const text=raw.toString('utf8').replaceAll('\r\n','\n');assert.equal(sha(text),pin);const body=text.split('\n').filter(line=>!line.startsWith('import ')&&!line.startsWith('export {')).map(line=>line.startsWith('export ')?line.slice(7):line).join('\n');assert.equal(sha(body),transformedPin);return Function('reviewed','createHash','path',body+'\nreturn {'+names+'};')(checkpoint[PLAN_BUDGET_CURRENT_SECTION],createHash,path);};
+  const oneBApi=literal(oneBRead(compiler),'90bfa69a4e902dfab785ec10f210d6b0d0a21fe3992c3995c6b0e122748dab99','b8ae60979c1f1f0447bcef680474b8c2f93bd691f6b565dc01c11f1f33ee8c04',oneB,'verifyPlanBudgetCurrentSources,restorePlanBudgetPilotIntegrationPreviousContract,restorePlanBudgetPilotIntegrationSource');
+  assert.equal(oneBApi.verifyPlanBudgetCurrentSources(oneB,oneBRead).nativeOrBrowserAcceptance,false);
+  const checkpoint=oneBApi.restorePlanBudgetPilotIntegrationPreviousContract(oneB);assert.equal(sha(serialize(checkpoint)),'6cb040ad517b8a87b86a0466f23fe822dd570227392aff6209eeff037e840c71');
+  const previousRead=source=>{const raw=oneBRead(source);if(source===contractPath)return Buffer.from(serialize(checkpoint));if(source===anchor)return Buffer.from(declaration(checkpoint));return oneBApi.restorePlanBudgetPilotIntegrationSource(oneB,source,raw);};
+  const historical=literal(previousRead(compiler),'40f82005d0fbca72d1491f0100a8395f61dcbe1455f3eaf086c39e12d1a2dcdb','3313395315e24f3b042f6373128f468ef813814b60a5519c16d8e740a7475add',checkpoint,'verifyPlanBudgetCurrentSources');
+  assert.equal(historical.verifyPlanBudgetCurrentSources(checkpoint,previousRead).nativeOrBrowserAcceptance,false);
+  const previousTampered=source=>source===file?Buffer.concat([previousRead(source),Buffer.from('\n// Changed current Budget module\n')]):previousRead(source);
+  assert.throws(()=>historical.verifyPlanBudgetCurrentSources(checkpoint,previousTampered),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason:'CURRENT_SOURCE_'+file});
+ });
  denied(()=>verifyFieldOutboundCurrentSources(contract,tampered));denied(()=>verifyPlanMeasurementCurrentSources(contract,tampered));
  denied(()=>verifyFieldOutboundCurrentSources(preBudgetContract,read));denied(()=>verifyPlanMeasurementCurrentSources(preBudgetContract,read));
 });

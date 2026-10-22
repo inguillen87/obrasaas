@@ -9,7 +9,7 @@ import {customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
 import {createMetaCustomerProcessor} from '../src/lib/meta-customer-processing.mjs';
 
 for(const kind of ['PROJECT','COMPANY'])for(const active of [false,true])for(const expired of [false,true])test(`${kind} ${active?'ACTIVE':'INVITED'} ${expired?'expired':'live'} prior consent button gets one text feedback with full private state unchanged`,async()=>{
- const t=await contextFeedbackFixture(kind,{active,expired}),before=structuredClone(t.f.worker),audits=structuredClone([...t.f.audits]);
+ const t=await contextFeedbackFixture(kind,{active,expired,historicalChallengeVersion:active?undefined:2}),before=structuredClone(t.f.worker),audits=structuredClone([...t.f.audits]);
  const receipt=await t.adapter.feedback(t.context,{staleOnly:true});assert.equal(receipt.kind,'KYC_CONTEXT_FEEDBACK');assert.deepEqual(receipt.reply,META_KYC_CONTEXT_REPLY);assert.equal(receipt.businessApplied,false);assert.equal(receipt.reply.type,'text');assert.equal(t.requests.length,0);
  assert.equal((await t.adapter.send(t.context,receipt.reply)).state,'SENT');assert.equal(t.requests.length,1);assert.deepEqual(t.f.worker,before);unchangedMedia(t.f);for(const [id,a]of audits)assert.deepEqual(t.f.audits.get(id),a);
  assert.deepEqual(await t.adapter.feedback(t.context,{recoverOnly:true}),receipt);assert.equal((await t.adapter.send(t.context,receipt.reply)).replayed,true);assert.equal(t.requests.length,1);

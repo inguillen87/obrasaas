@@ -1,4 +1,5 @@
 import {planBudgetCurrentBrowserBinding,normalizePlanBudgetPilotNativeProof,restorePlanBudgetFieldReviewBusinessSource} from './plan-budget-current-ci-lineage.mjs';
+import {withCaptureRuntimePreviousSources} from './plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract as worksiteOuter0,worksiteLiveHoursCurrentSourcePin as worksiteOuter1,worksiteLiveHoursPreviousSourcePin as worksiteOuter2,restoreWorksiteLiveHoursSourceSet as worksiteOuter3,verifyWorksiteLiveHoursCurrentSources as worksiteOuter4,worksiteLiveHoursProofSourceAdditions as worksiteOuter5,restoreWorksiteLiveHoursPreviousProducerText as worksiteOuter6,worksiteLiveHoursValidationFiles as worksiteOuter7} from './worksite-live-hours-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_REVISION,verifyPlanPartidaPreviewCurrentSources,validatePlanPartidaPreviewUiSupplement} from './plan-partida-preview-current-ci-lineage.mjs';
 // Preserve this consumer's established denial category at the outer revision boundary.
@@ -5018,6 +5019,13 @@ export function weeklyCypProofSourceAdditions(spec){
  reject(files.length<delta.currentCount&&!delta.additions.some(file=>files.includes(file)),'Unknown weekly CyP source set: '+delta.id);return outer;
 }
 export function verifyWeeklyCypCurrentSources(contract,readSource){
+ if(contract?.planBudgetCurrentRevision?.captureQualityRuntime){
+  try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>verifyPreviousWeeklyCypCurrentSources(parent,parentRead));}
+  catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}
+ }
+ return verifyPreviousWeeklyCypCurrentSources(contract,readSource);
+}
+function verifyPreviousWeeklyCypCurrentSources(contract,readSource){
  verifyProgressEvidenceWaitCurrentSources(contract,readSource);
  const value=weeklyCypSection(contract);if(!value)return null;restoreWeeklyCypPreviousContract(contract);reject(typeof readSource==='function','Weekly CyP actual source reader required');
  const refs=weeklyCypReferences(value);reject(new Set(refs.map(row=>row.path)).size===refs.length,'Unique weekly CyP sources required');

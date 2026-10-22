@@ -1,4 +1,4 @@
-import {restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources,restoreCaptureRuntimePreviousContract,withCaptureRuntimePreviousSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {WHATSAPP_FIELD_CONTINUITY_CURRENT_REVISION as waRevision,WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWhatsappFieldContinuityPreviousContract} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import {restoreExistingApiPlanPreviousContract,restoreExistingApiPlanSourceSet} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
 import {integratedIdentityPreviousProofChecks} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
@@ -19,6 +19,15 @@ const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const readSource=file=>Buffer.from(readFileSync(path.join(root,file),'utf8').replaceAll('\r\n','\n'));
 const additions=kind=>kind==='PG_COMPANY_KYC'?['src/lib/field-report-feedback.mjs','src/lib/meta-kyc-context-feedback.mjs','src/lib/meta-kyc-context-outbound.mjs','scripts/lib/kyc-context-feedback-native.mjs']:['src/lib/field-report-feedback.mjs'];
 const current=contract.extension.proofs.filter(spec=>Object.hasOwn(WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS,spec.kind));
+// These metadata assertions retain their exact PR142/731 checkpoint. Actual
+// current collectors and the complete capture delta are asserted separately.
+const captureParent=restoreCaptureRuntimePreviousContract(contract),historicalCurrent=captureParent.extension.proofs.filter(spec=>Object.hasOwn(WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS,spec.kind));
+function assertCaptureSpecJoin(actual,previous){
+ const runtime=contract.planBudgetCurrentRevision.captureQualityRuntime,advance=runtime.proofSourceSetAdvances.find(row=>row.kind===actual.kind),producer=runtime.sourceHistory.find(row=>row.path===actual.producer);
+ assert.equal(actual.id,previous.id);assert.equal(actual.kind,previous.kind);assert.deepEqual(actual.checkNames,previous.checkNames);
+ if(advance){assert.deepEqual(advance.previousFiles,previous.sourceFiles);assert.deepEqual(advance.currentFiles,actual.sourceFiles);assert.deepEqual(advance.removals,[]);assert.deepEqual([...previous.sourceFiles,...advance.additions].sort(),actual.sourceFiles);}else assert.deepEqual(actual.sourceFiles,previous.sourceFiles);
+ if(producer){assert.equal(actual.producerSha256,producer.currentSha256);assert.equal(previous.producerSha256,producer.previousSha256);}else assert.equal(actual.producerSha256,previous.producerSha256);
+}
 verifyPlanBudgetCurrentSources(contract,readSource);
 const beforeBudgetContract=restorePlanBudgetPreviousContract(contract);
 assert.equal(sha(JSON.stringify(beforeBudgetContract,null,2)+'\n'),'8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839');
@@ -34,26 +43,30 @@ function previousCheckMetadata(spec){
 
 test('current execution graphs add only their real WhatsApp imports and preserve every published PR142 path set',()=>{
  assert.equal(current.length,7);
- for(const spec of current){
-  const prior=restoreParticipantPreanalysisPreviousContract(contract).extension.proofs.find(row=>row.id===spec.id);assert.equal(prior.sourceFiles.length,WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS[spec.kind]+additions(spec.kind).length+(contract.planMeasurementCurrentLineage?planMeasurementCurrentDependencies(spec.kind).length:0));assert.equal(spec.sourceFiles.length,prior.sourceFiles.length+participantPreanalysisProofSourceAdditions(spec).length);
+ for(const actual of current){
+  const spec=historicalCurrent.find(row=>row.id===actual.id);assert.ok(spec);assertCaptureSpecJoin(actual,spec);
+  const prior=restoreParticipantPreanalysisPreviousContract(captureParent).extension.proofs.find(row=>row.id===spec.id);assert.equal(prior.sourceFiles.length,WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS[spec.kind]+additions(spec.kind).length+(contract.planMeasurementCurrentLineage?planMeasurementCurrentDependencies(spec.kind).length:0));assert.equal(spec.sourceFiles.length,prior.sourceFiles.length+participantPreanalysisProofSourceAdditions(spec).length);
   assert.doesNotThrow(()=>validateWhatsappFeedbackPreviousSourceLineage(previousCheckMetadata(spec)));
-  assert.deepEqual(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted());
+  assert.deepEqual(currentProducerSourceFiles(actual,root),actual.sourceFiles.toSorted());
  }
 });
 
-test('missing duplicate substituted or historical-only current imports cannot retain a source binding',()=>{
- for(const spec of current)for(const file of additions(spec.kind)){
+test('published PR142 metadata and actual current collectors reject missing duplicate substituted or historical-only imports',()=>{
+ for(const spec of historicalCurrent)for(const file of additions(spec.kind)){
   for(const mutate of [value=>{value.sourceFiles=value.sourceFiles.filter(source=>source!==file);},value=>{value.sourceFiles.push(file);},value=>{value.sourceFiles[value.sourceFiles.indexOf(file)]='src/lib/foreign-whatsapp-feedback.mjs';}]){
    const changed=clone(spec);mutate(changed);assert.throws(()=>validateWhatsappFeedbackPreviousSourceLineage(changed),{code:'WHATSAPP_FEEDBACK_CURRENT_SOURCE_DEPENDENCIES'});
   }
  }
- for(const spec of current){const historical=clone(spec);historical.sourceFiles=historical.sourceFiles.filter(file=>!additions(spec.kind).includes(file));assert.throws(()=>validateWhatsappFeedbackPreviousSourceLineage(historical),{code:'WHATSAPP_FEEDBACK_CURRENT_SOURCE_DEPENDENCIES'});}
+ for(const spec of historicalCurrent){const historical=clone(spec);historical.sourceFiles=historical.sourceFiles.filter(file=>!additions(spec.kind).includes(file));assert.throws(()=>validateWhatsappFeedbackPreviousSourceLineage(historical),{code:'WHATSAPP_FEEDBACK_CURRENT_SOURCE_DEPENDENCIES'});}
+ for(const spec of current)for(const file of additions(spec.kind))for(const mutate of [value=>{value.sourceFiles=value.sourceFiles.filter(source=>source!==file);},value=>{value.sourceFiles.push(file);},value=>{value.sourceFiles[value.sourceFiles.indexOf(file)]='src/lib/foreign-whatsapp-feedback.mjs';}]){
+  const changed=clone(spec);mutate(changed);assert.throws(()=>currentProducerSourceFiles(changed,root),error=>error.code==='CAPTURE_QUALITY_COLLECTOR_REJECTED'&&error.reason==='EXACT_CURRENT_PROOF_SPEC');
+ }
 });
 
 test('same-count replacement of an older source cannot redefine the frozen PR142 path lineage',()=>{
- const published=restoreExistingApiPlanPreviousContract(contract);
- for(const spec of current){
-  const normalized=previousCheckMetadata({...spec,sourceFiles:restoreExistingApiPlanSourceSet(spec.kind,spec.sourceFiles,contract)});
+ const published=restoreExistingApiPlanPreviousContract(captureParent);
+ for(const spec of historicalCurrent){
+  const normalized=previousCheckMetadata({...spec,sourceFiles:restoreExistingApiPlanSourceSet(spec.kind,spec.sourceFiles,captureParent)});
   assert.deepEqual(normalized.sourceFiles,published.extension.proofs.find(row=>row.id===spec.id).sourceFiles);
   assert.doesNotThrow(()=>validateWhatsappFeedbackPreviousSourceLineage(normalized));
   const dependencies=[...additions(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(normalized)],historical=normalized.sourceFiles.filter(file=>!dependencies.includes(file));
@@ -65,18 +78,18 @@ test('same-count replacement of an older source cannot redefine the frozen PR142
  }
 });
 
-test('the original thirteen company KYC groups remain immutable and all five native context groups are required',()=>{
- const actual=current.find(value=>value.kind==='PG_COMPANY_KYC'),spec=previousCheckMetadata(actual);assert.equal(spec.checkNames.length,18);assert.equal(actual.checkNames.length,19);assert.deepEqual(actual.checkNames.slice(0,18),spec.checkNames);
+test('literal731 preserves the original thirteen company KYC groups and all five native context groups',()=>{
+ const actual=historicalCurrent.find(value=>value.kind==='PG_COMPANY_KYC'),spec=previousCheckMetadata(actual);assert.equal(spec.checkNames.length,18);assert.equal(actual.checkNames.length,19);assert.deepEqual(actual.checkNames.slice(0,18),spec.checkNames);
  for(const mutate of [value=>{value.checkNames[0]='redefined-original-authority';},value=>{value.checkNames.pop();},value=>{value.checkNames=value.checkNames.slice(0,13);}]){const changed=clone(spec);mutate(changed);assert.throws(()=>validateWhatsappFeedbackPreviousSourceLineage(changed),{code:'WHATSAPP_FEEDBACK_PREVIOUS_CHECK_LINEAGE'});}
  for(const mutate of [value=>{value.checkNames[13]='assumed-current-source';},value=>{value.checkNames[14]=value.checkNames[13];},value=>{value.checkNames.splice(13,5,...value.checkNames.slice(13).reverse());}]){const changed=clone(spec);mutate(changed);assert.throws(()=>validateWhatsappFeedbackPreviousSourceLineage(changed),{code:'WHATSAPP_FEEDBACK_CURRENT_CHECK_NAMES'});}
  const previous=predecessor.extension.proofs.find(row=>row.id===actual.id),delta=waRevision.currentProofChanges.find(row=>row.id===actual.id),normalized=spec;assert.equal(actual.producerSha256,delta.currentProducerSha256);assert.equal(previous.producerSha256,delta.previousProducerSha256);assert.notEqual(actual.producerSha256,previous.producerSha256);assert.deepEqual(normalized.sourceFiles,actual.sourceFiles);assert.equal(normalized.checkNames.length,18);assert.equal(previous.checkNames.length,19);assert.throws(()=>integratedIdentityPreviousProofChecks(actual),{code:'INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED'});
  for(const edit of [value=>{value.whatsappFieldContinuityCurrentRevision.currentProofChanges.find(row=>row.id===actual.id).previousProducerSha256='f'.repeat(64);},value=>{value.extension.proofs.find(row=>row.id===actual.id).producerSha256=previous.producerSha256;},value=>{value.whatsappFieldContinuityCurrentRevision.currentProofChanges.find(row=>row.id===actual.id).previousCheckNames.pop();}]){const value=clone(contract);edit(value);assert.throws(()=>restoreWhatsappFieldContinuityPreviousContract(value),{code:'WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'});const historical=clone(beforeBudgetContract);edit(historical);assert.throws(()=>restoreWhatsappFieldContinuityPreviousContract(historical),{code:'WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'});}
 });
 
-test('the outer proof rejects omitted foreign and wrong-hash additions before any native or provider declaration',()=>{
- const spec=current.find(value=>value.kind==='PG_COMPANY_KYC'),proof={status:'PASS',productionDataTouched:false,harnessSha256:sha(readSource(spec.producer)),sourceManifest:spec.sourceFiles.map(file=>({path:file,sha256:sha(readSource(file))}))};
+test('literal731 outer decoder rejects omitted foreign and wrong-hash additions; no native execution',()=>withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>{
+ const readSource=parentRead,spec=parent.extension.proofs.find(value=>value.kind==='PG_COMPANY_KYC'),proof={status:'PASS',productionDataTouched:false,harnessSha256:sha(readSource(spec.producer)),sourceManifest:spec.sourceFiles.map(file=>({path:file,sha256:sha(readSource(file))}))};
  for(const file of additions(spec.kind))for(const [code,mutate]of [['PROOF_SOURCE_MANIFEST',value=>{value.sourceManifest=value.sourceManifest.filter(ref=>ref.path!==file);}],['PROOF_SOURCE_MANIFEST',value=>{value.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-whatsapp-feedback.mjs';}],['PROOF_SOURCE_HASH',value=>{value.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);}]]){const changed=clone(proof);mutate(changed);assert.throws(()=>validateExtensionProof(spec,Buffer.from(JSON.stringify(changed)),{expectedHead:'a'.repeat(40),readSource}),{code});}
-});
+}));
 
 // This fixture validates the evidence contract; it never runs PostgreSQL or
 // produces a file that could be mistaken for a native execution receipt.
