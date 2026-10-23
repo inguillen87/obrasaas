@@ -22,6 +22,8 @@ import {PARTICIPANT_PREANALYSIS_KIND,restoreParticipantPreanalysisPreviousContra
 import {validateParticipantKycPreanalysisCi,participantPreanalysisCiSourceClosure} from '../../scripts/verify-participant-kyc-preanalysis-ci.mjs';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync,mkdirSync,readdirSync,lstatSync,realpathSync,mkdtempSync,rmSync,existsSync} from 'node:fs';
+import {writeSync as writeSelftestProgressSync} from 'node:fs';
+
 import {runInNewContext} from 'node:vm';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -1887,18 +1889,50 @@ if(spec.kind==='PG_COMPANY_KYC'&&contract.integratedIdentityCurrentRevision)proo
   });
 
 }
+
+ const selftestProgressToken043=selftestProgressStart("F2.extension-proof-fixture-iterations");
  for(const spec of contract.extension.proofs.filter(spec=>!['PG_PLAN_BASELINE','UI_DOCUMENT_CURVE',PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))) {
   const fixturePorts={validateExtensionProof,currentProducerSourceFiles,companyKycCurrentSourceClosureSelftest,companySubscriptionProofClosureSelftest,currentKycStatusClosureSelftest,documentCurveCopySelftest,monthlyCurveClosureSelftest,organizationUsageClosureSelftest,ownTemplateClosureSelftest,taskMeasurementProofClosureSelftest,whatsappPlanImportClosureSelftest,checks,currentCollectorName:spec.id+"-real-current-producer-source-manifest-exact",verifyCurrentCollector:()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST')};
   if(hasCaptureRuntime(contract)&&["PG_BANK","PG_INTAKE","PG_COMPANY_KYC"].includes(spec.kind))runCaptureNativeFixtureIteration(contract,readSource,spec,root,[...new Set([discoveryChecks,videoChecks,preparationChecks,preparationProofChecks,identityClosureChecks,billingClosureChecks,subscriptionClosureChecks,currentCompanyChecks,currentContinuityChecks,currentReactiveChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentWhatsappPlanChecks])],runCaptureExtensionFixtureBody,fixturePorts);
   else runCaptureExtensionFixtureBody(spec,contract,readSource,fixturePorts);
  }
+ selftestProgressEnd("F2.extension-proof-fixture-iterations",selftestProgressToken043);
+
+
+ const selftestProgressToken044=selftestProgressStart("F2.local.discoveryChecks-drain");
  for(const run of discoveryChecks)run();
+ selftestProgressEnd("F2.local.discoveryChecks-drain",selftestProgressToken044);
+
+
+ const selftestProgressToken045=selftestProgressStart("F2.local.videoChecks-drain");
  for(const run of videoChecks)run();
+ selftestProgressEnd("F2.local.videoChecks-drain",selftestProgressToken045);
+
+
+ const selftestProgressToken046=selftestProgressStart("F2.local.preparationChecks-drain");
  for(const run of preparationChecks)run();
+ selftestProgressEnd("F2.local.preparationChecks-drain",selftestProgressToken046);
+
+
+ const selftestProgressToken047=selftestProgressStart("F2.local.preparationProofChecks-drain");
  checks.push(...preparationProofChecks);
+ selftestProgressEnd("F2.local.preparationProofChecks-drain",selftestProgressToken047);
+
+
+ const selftestProgressToken048=selftestProgressStart("F2.local.identityClosureChecks-drain");
  for(const run of identityClosureChecks)run();
+ selftestProgressEnd("F2.local.identityClosureChecks-drain",selftestProgressToken048);
+
+
+ const selftestProgressToken049=selftestProgressStart("F2.local.billingClosureChecks-drain");
  for(const run of billingClosureChecks)run();
-  for(const run of subscriptionClosureChecks)checks.push(...run());
+ selftestProgressEnd("F2.local.billingClosureChecks-drain",selftestProgressToken049);
+
+
+ const selftestProgressToken050=selftestProgressStart("F2.local.subscriptionClosureChecks-drain");
+ for(const run of subscriptionClosureChecks)checks.push(...run());
+ selftestProgressEnd("F2.local.subscriptionClosureChecks-drain",selftestProgressToken050);
+
  return checks;
 }
 
@@ -2342,38 +2376,80 @@ export function kycExpiredCurrentCompositionSelftest(contract,root=process.cwd()
 export function selftest(workflow,contract,root=process.cwd()){
  // Preserve the original typed negative oracles on the complete authenticated
  // prior contract; the new outer revision has independent current-source negatives.
+
+ const selftestProgressToken003=selftestProgressStart("F0.restore-historical-fixture");
  const historicalContractForNegativeFixtures=restoreParticipantPreanalysisPreviousContract(contract);
+ selftestProgressEnd("F0.restore-historical-fixture",selftestProgressToken003);
+
  const checks=[];
  function good(name,run){run();checks.push({name,result:'PASS'});}
  function bad(name,code,run){assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code});}
  function badDecoder(name,code,run){bad(name,code,run);checks.at(-1).boundary=PURE_PROVENANCE_DECODER_BOUNDARY;}
+
+ const selftestProgressToken004=selftestProgressStart("F0.workflow-baseline-equivalence");
  good('yaml-parsed-and-full-baseline-equivalent',()=>equivalent(workflow,contract));
+ selftestProgressEnd("F0.workflow-baseline-equivalence",selftestProgressToken004);
+
+
+ const selftestProgressToken005=selftestProgressStart("F0.plan-budget-conditional-region");
  if(contract[PLAN_BUDGET_CURRENT_SECTION])checks.push(...planBudgetCurrentGateSelftest(workflow,contract,root));
+ selftestProgressEnd("F0.plan-budget-conditional-region",selftestProgressToken005);
+
+
+ const selftestProgressToken006=selftestProgressStart("F0.document-association-conditional-region");
  if(contract.planMeasurementDocumentAssociationRevision){
   good('document-association-complete-a203-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreDocumentTaskAssociationPreviousContract(contract),null,2)+'\n'),DOCUMENT_TASK_ASSOCIATION_PREVIOUS_CONTRACT_SHA256));
   good('document-association-current-source-leaves-independent-from-native-proofs',()=>verifyDocumentTaskAssociationCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
   for(const [name,edit]of [['old-source-relabelled-current',c=>{c.planMeasurementDocumentAssociationRevision.reviewedSourceChanges[0].currentSha256=c.planMeasurementDocumentAssociationRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.planMeasurementDocumentAssociationRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.planMeasurementDocumentAssociationRevision.previousContractSha256='f'.repeat(64);}],['historical49-pin-tampered',c=>{c.planMeasurementCurrentLineage.currentValidationSources[0].sha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('document-association-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}
  }
+ selftestProgressEnd("F0.document-association-conditional-region",selftestProgressToken006);
+
+
+ const selftestProgressToken007=selftestProgressStart("F0.workspace-continuity-conditional-region");
  if(contract.workspaceContinuityCurrentRevision){
   good('workspace-continuity-complete-d5d-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreWorkspaceContinuityPreviousContract(contract),null,2)+'\n'),WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256));
   good('workspace-continuity-current-source-independent-of-original-proofs',()=>verifyWorkspaceContinuityCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
   for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['evidence-producer-disagrees',c=>{c.evidenceProducers.find(row=>row.path==='.vercel/private/focused-workspace-ui-evidence/current-ci.json').producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}
  }
+ selftestProgressEnd("F0.workspace-continuity-conditional-region",selftestProgressToken007);
+
+
+ const selftestProgressToken008=selftestProgressStart("F0.whatsapp-field-conditional-region");
  if(contract.whatsappFieldContinuityCurrentRevision){
   good('whatsapp-field-complete052-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreWhatsappFieldContinuityPreviousContract(contract),null,2)+'\n'),WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256));
   good('whatsapp-field-current-source-independent-of-local-observations',()=>verifyWhatsappFieldContinuityCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
   good('whatsapp-field-independent21st-proof-and59th-block-ID65',()=>{const proof=contract.extension.proofs.find(row=>row.kind===FIELD_TASK_PAGINATION_CI_KIND);assert.equal(proof.blockId,65);assert.equal(proof.checkNames.length,33);assert.equal(restorePlanBudgetPreviousContract(contract).blocks.length,59);assert.equal(restorePlanBudgetPreviousContract(contract).extension.proofs.length,21);assert.equal(restoreWhatsappFieldContinuityPreviousContract(contract).blocks.length,58);});
   for(const[name,edit]of [['old-source-as-current',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign052-checkpoint',c=>{c.whatsappFieldContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['missing-pagination-proof',c=>{c.extension.proofs=c.extension.proofs.filter(row=>row.kind!==FIELD_TASK_PAGINATION_CI_KIND);}],['old-focused45-as-current',c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=restoreWhatsappFieldContinuityPreviousContract(contract).extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['pagination-record-mismatch',c=>{c.evidenceProducers.find(row=>row.blockId===65).producerSha256='f'.repeat(64);}]]){const value=clone(contract);edit(value);bad('whatsapp-field-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(value));}
  }
+ selftestProgressEnd("F0.whatsapp-field-conditional-region",selftestProgressToken008);
+
+
+ const selftestProgressToken009=selftestProgressStart("F0.kycExpiredCurrentCompositionSelftest");
  checks.push(...kycExpiredCurrentCompositionSelftest(contract,root));
+ selftestProgressEnd("F0.kycExpiredCurrentCompositionSelftest",selftestProgressToken009);
+
  const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
+
+ const selftestProgressToken010=selftestProgressStart("F0.integratedIdentityCurrentSelftest");
  checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource));
+ selftestProgressEnd("F0.integratedIdentityCurrentSelftest",selftestProgressToken010);
+
+
+ const selftestProgressToken011=selftestProgressStart("F1.expectedNeeds-input");
  const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedNeeds(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};
+ selftestProgressEnd("F1.expectedNeeds-input",selftestProgressToken011);
+
+
+ const selftestProgressToken012=selftestProgressStart("F1.public-gate-and-owned-decoder");
  bad('gate-source-resolver-required','PROOF_SOURCE_RESOLVER',()=>gate({...input,readSource:undefined}));
  let currentGateReport;
  good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);currentGateReport=gate(input);assert.equal(currentGateReport.commandBlocks,contract.blocks.length);});
  const decoder=ownedProvenanceDecoder(input,currentGateReport),decodeJsonCase=decoder.decode;decoder.variableFiles(checks,'provenance-decoder-main',needs,'bank-intake-units');decoder.coreChecks(checks,needs);
  good('gate-all-eight-lanes-and-additive-KYC-57',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
+ selftestProgressEnd("F1.public-gate-and-owned-decoder",selftestProgressToken012);
+
+
+ const selftestProgressToken013=selftestProgressStart("F1.lane-transport");
  const laneEnv=Object.fromEntries(LANES.map(lane=>[laneEnvironmentKey(lane),JSON.stringify(needs[lane])]));
  good('lane-environment-preserves-exact-eight-records',()=>equal(readLaneNeedsEnvironment({...laneEnv,PATH:'controlled'}),needs,'ENV_TRANSPORT_CHANGED'));
  good('lane-environment-still-runs-exact-gate',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate({...input,needs:readLaneNeedsEnvironment(laneEnv)}).commandBlocks,contract.blocks.length);});
@@ -2403,6 +2479,10 @@ export function selftest(workflow,contract,root=process.cwd()){
  bad('oversized-output-blocked-before-github-output','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('x'.repeat(LANE_OUTPUT_BYTES)));
  bad('escaped-output-size-uses-wire-bytes','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('"'.repeat(LANE_OUTPUT_BYTES/2)));
  bad('non-string-output-size-denied','PROVENANCE_LIMIT',()=>assertLaneOutputSize(null));
+ selftestProgressEnd("F1.lane-transport",selftestProgressToken013);
+
+
+ const selftestProgressToken014=selftestProgressStart("F1.provenance-and-workflow-negatives");
  for(const result of ['failure','cancelled','skipped']){const n=clone(needs);n.people.result=result;badDecoder('gate-'+result,'LANE_NOT_SUCCESS',()=>decodeJsonCase(n));}
  let n=clone(needs);delete n.meta;badDecoder('missing-lane','MISSING_OR_EXTRA_LANE',()=>decodeJsonCase(n));
  n=clone(needs);n.unexpected=n.meta;badDecoder('extra-lane','MISSING_OR_EXTRA_LANE',()=>decodeJsonCase(n));
@@ -2441,6 +2521,10 @@ export function selftest(workflow,contract,root=process.cwd()){
   ['always-green-gate',w=>{w.jobs.workspace.steps[4].run='true';}],
   ['changed-upload-path',w=>{w.jobs.channels.steps.at(-1).with.path+='.vercel/private/**\n';}]
  ]){const w=clone(original);edit(w);bad(name,'WORKFLOW_NOT_EQUIVALENT',()=>equivalent(w,contract));}
+ selftestProgressEnd("F1.provenance-and-workflow-negatives",selftestProgressToken014);
+
+
+ const selftestProgressToken015=selftestProgressStart("F1.artifact-and-retention-controls");
  good('all-historical-optional-PNGs-absent-with-required-weekly-captures-present',()=>assert.equal(gate(input).state,'PASS'));
  if(contract.weeklyCypCurrentRevision)for(const screenshot of WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots){const n=clone(needs),r=JSON.parse(n.plans.outputs.provenance);r.files=r.files.filter(file=>file.path!==screenshot.path);delete r.manifestSha256;n.plans.outputs.provenance=JSON.stringify(seal(r));bad('weekly-retained-capture-omitted-'+screenshot.width,'PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING',()=>gate({...input,needs:n}));}
  for(const lane of LANES)for(const pattern of contract.lanes[lane].optionalArtifactPatterns.filter(pattern=>!PORTFOLIO_ARTIFACTS.includes(pattern))){
@@ -2470,6 +2554,10 @@ export function selftest(workflow,contract,root=process.cwd()){
  altered('wrong-package-lock-digest','PROVENANCE_IDENTITY',r=>{r.packageLockSha256='c'.repeat(64);});
  altered('wrong-python-requirements-digest','PROVENANCE_IDENTITY',r=>{r.requirementsSha256='c'.repeat(64);});
  altered('produced-file-foreign','PRODUCED_EVIDENCE_NOT_OWNED',r=>{r.producedNotUploaded[0].path='.vercel/foreign-produced.json';});
+ selftestProgressEnd("F1.artifact-and-retention-controls",selftestProgressToken015);
+
+
+ const selftestProgressToken016=selftestProgressStart("F1.source-identity-and-overtime");
  for(const file of ['scripts/verify-participants-ui.mjs','src/lib/field-operations-store.mjs','AGENTS.md']){
   bad('dirty-tracked-source-'+file,'TRACKED_SOURCE_DIRTY',()=>assertSourceIdentity({expectedHead,actualHead:expectedHead,dirtyTrackedPaths:[file]}));
  }
@@ -2514,6 +2602,10 @@ export function selftest(workflow,contract,root=process.cwd()){
   const colliding=clone(historicalContractForNegativeFixtures);colliding.evidenceProducers.find(item=>item.path===producer.path).path=contract.evidenceProducers[0].path;
   bad('overtime-producer-path-collision-'+producer.path,'DUPLICATE_REQUIRED_EVIDENCE',()=>validateContract(colliding));
  }
+ selftestProgressEnd("F1.source-identity-and-overtime",selftestProgressToken016);
+
+
+ const selftestProgressToken017=selftestProgressStart("F1.dependency-fixtures");
  const packageLf=Buffer.from('{"controlledLock":1}\n'),requirementsLf=Buffer.from('controlled-fixture==1.0\n');
  const fixtureContract={packageLockSha256:hash(packageLf),requirementsSha256:hash(requirementsLf)};
  const fixtureDependencies={packageLockBytes:packageLf,requirementsBytes:requirementsLf,contract:fixtureContract};
@@ -2524,6 +2616,10 @@ export function selftest(workflow,contract,root=process.cwd()){
  bad('dependency-invalid-UTF8-denied','DEPENDENCY_TEXT_ENCODING',()=>assertDependencies({...fixtureDependencies,packageLockBytes:Buffer.from([0xff])}));
  bad('dependency-lone-CR-is-content','PACKAGE_LOCK_CHANGED',()=>assertDependencies({...fixtureDependencies,packageLockBytes:Buffer.from(packageLf.toString().replaceAll('\n','\r'))}));
  bad('dependency-BOM-is-content','PACKAGE_LOCK_CHANGED',()=>assertDependencies({...fixtureDependencies,packageLockBytes:Buffer.concat([Buffer.from([0xef,0xbb,0xbf]),packageLf])}));
+ selftestProgressEnd("F1.dependency-fixtures",selftestProgressToken017);
+
+
+ const selftestProgressToken018=selftestProgressStart("F1.filesystem-and-proof-binding-controls");
  const parent=path.resolve(root,'.vercel/workspace-ci-evidence');
  mkdirSync(parent,{recursive:true});
  const fixture=mkdtempSync(path.join(parent,'ci-gate-selftest-fixture-'));
@@ -2573,23 +2669,121 @@ export function selftest(workflow,contract,root=process.cwd()){
   const freshFixture=mkdtempSync(path.join(parent,'ci-bank-intake-selftest-fixture-'));
   try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
   finally{const resolved=path.resolve(freshFixture);assert.ok(path.dirname(resolved)===path.resolve(parent)&&path.basename(resolved).startsWith('ci-bank-intake-selftest-fixture-'));rmSync(resolved,{recursive:true,force:true});}
- const currentCompanyChecks=[],currentContinuityChecks=[],currentReactiveChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[],currentKycStatusChecks=[],currentCalendarChecks=[],currentWhatsappPlanChecks=[];checks.push(...extensionSelftest(contract,root,currentCompanyChecks,currentContinuityChecks,currentReactiveChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentWhatsappPlanChecks));checks.push(...portfolioSelftest(workflow,contract,root));for(const run of currentCompanyChecks)checks.push(...run());checks.push(...identitySelftest(workflow,contract,root,currentContinuityChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentCalendarChecks));checks.push(...canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks,currentKycStatusChecks,currentWhatsappPlanChecks));for(const run of currentContinuityChecks)checks.push(...run());for(const run of currentReactiveChecks)checks.push(...run());for(const run of currentTemplateChecks)checks.push(...run());
-  for(const [name,image] of [
+ selftestProgressEnd("F1.filesystem-and-proof-binding-controls",selftestProgressToken018);
+
+ const currentCompanyChecks=[],currentContinuityChecks=[],currentReactiveChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[],currentKycStatusChecks=[],currentCalendarChecks=[],currentWhatsappPlanChecks=[];
+ const selftestProgressToken019=selftestProgressStart("F2.extensionSelftest");
+ checks.push(...extensionSelftest(contract,root,currentCompanyChecks,currentContinuityChecks,currentReactiveChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentWhatsappPlanChecks));
+ selftestProgressEnd("F2.extensionSelftest",selftestProgressToken019);
+
+ const selftestProgressToken020=selftestProgressStart("F2.portfolioSelftest");
+ checks.push(...portfolioSelftest(workflow,contract,root));
+ selftestProgressEnd("F2.portfolioSelftest",selftestProgressToken020);
+
+ const selftestProgressToken021=selftestProgressStart("F2.currentCompanyChecks-drain");
+ for(const run of currentCompanyChecks)checks.push(...run());
+ selftestProgressEnd("F2.currentCompanyChecks-drain",selftestProgressToken021);
+
+ const selftestProgressToken022=selftestProgressStart("F2.identitySelftest");
+ checks.push(...identitySelftest(workflow,contract,root,currentContinuityChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentCalendarChecks));
+ selftestProgressEnd("F2.identitySelftest",selftestProgressToken022);
+
+ const selftestProgressToken023=selftestProgressStart("F2.canonicalFieldSelftest");
+ checks.push(...canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks,currentKycStatusChecks,currentWhatsappPlanChecks));
+ selftestProgressEnd("F2.canonicalFieldSelftest",selftestProgressToken023);
+
+ const selftestProgressToken024=selftestProgressStart("F2.currentContinuityChecks-drain");
+ for(const run of currentContinuityChecks)checks.push(...run());
+ selftestProgressEnd("F2.currentContinuityChecks-drain",selftestProgressToken024);
+
+ const selftestProgressToken025=selftestProgressStart("F2.currentReactiveChecks-drain");
+ for(const run of currentReactiveChecks)checks.push(...run());
+ selftestProgressEnd("F2.currentReactiveChecks-drain",selftestProgressToken025);
+
+ const selftestProgressToken026=selftestProgressStart("F2.currentTemplateChecks-drain");
+ for(const run of currentTemplateChecks)checks.push(...run());
+ selftestProgressEnd("F2.currentTemplateChecks-drain",selftestProgressToken026);
+
+
+ const selftestProgressToken027=selftestProgressStart("F2.postgres-service-image-negatives");
+ for(const [name,image] of [
    ['foreign-registry',POSTGRES_SERVICE_IMAGE.replace('docker.io','foreign.invalid')],
    ['changed-digest',POSTGRES_SERVICE_IMAGE.replace(/sha256:[a-f0-9]{64}$/,'sha256:'+'0'.repeat(64))],
    ['mutable-latest','docker.io/library/postgres:latest']
   ]){const changed=clone(historicalContractForNegativeFixtures);changed.workflow.services.postgres.image=image;bad('postgres-service-'+name+'-denied','POSTGRES_SERVICE_IMAGE',()=>validateContract(changed));}
+ selftestProgressEnd("F2.postgres-service-image-negatives",selftestProgressToken027);
+
+
+ const selftestProgressToken028=selftestProgressStart("F2.currentMonthlyChecks-drain");
  for(const run of currentMonthlyChecks)checks.push(...run());
+ selftestProgressEnd("F2.currentMonthlyChecks-drain",selftestProgressToken028);
+
+
+ const selftestProgressToken029=selftestProgressStart("F2.monthlyCurveContractSelftest");
  checks.push(...monthlyCurveContractSelftest(workflow,contract,root));
+ selftestProgressEnd("F2.monthlyCurveContractSelftest",selftestProgressToken029);
+
+
+ const selftestProgressToken030=selftestProgressStart("F2.currentKycStatusChecks-drain");
  for(const run of currentKycStatusChecks)checks.push(...run());
+ selftestProgressEnd("F2.currentKycStatusChecks-drain",selftestProgressToken030);
+
+
+ const selftestProgressToken031=selftestProgressStart("F2.calendarPreparationContractSelftest");
  checks.push(...calendarPreparationContractSelftest(workflow,contract,root));
+ selftestProgressEnd("F2.calendarPreparationContractSelftest",selftestProgressToken031);
+
+
+ const selftestProgressToken032=selftestProgressStart("F2.currentCalendarChecks-drain");
  for(const run of currentCalendarChecks)checks.push(...run());
-  checks.push(...whatsappPlanImportContractSelftest(workflow,contract,root));
-  for(const run of currentWhatsappPlanChecks)checks.push(...run());
-   checks.push(...companySubscriptionContractSelftest(contract));
-   checks.push(...taskMeasurementContractSelftest(contract));
-   checks.push(...organizationUsageContractSelftest(contract));
-   checks.push(...companyKycCurrentSourceContractSelftest(contract));checks.push(...planBaselineSelftest(workflow,contract,root));checks.push(...documentCurveUiSelftest(workflow,contract,root));checks.push(...documentCurveCurrentSourceLineageSelftest(contract,root));checks.push(...provenanceDecoderPublicIntegrationSelftest(workflow,contract,root));
+ selftestProgressEnd("F2.currentCalendarChecks-drain",selftestProgressToken032);
+
+
+ const selftestProgressToken033=selftestProgressStart("F2.whatsappPlanImportContractSelftest");
+ checks.push(...whatsappPlanImportContractSelftest(workflow,contract,root));
+ selftestProgressEnd("F2.whatsappPlanImportContractSelftest",selftestProgressToken033);
+
+
+ const selftestProgressToken034=selftestProgressStart("F2.currentWhatsappPlanChecks-drain");
+ for(const run of currentWhatsappPlanChecks)checks.push(...run());
+ selftestProgressEnd("F2.currentWhatsappPlanChecks-drain",selftestProgressToken034);
+
+
+ const selftestProgressToken035=selftestProgressStart("F3.companySubscriptionContractSelftest");
+ checks.push(...companySubscriptionContractSelftest(contract));
+ selftestProgressEnd("F3.companySubscriptionContractSelftest",selftestProgressToken035);
+
+
+ const selftestProgressToken036=selftestProgressStart("F3.taskMeasurementContractSelftest");
+ checks.push(...taskMeasurementContractSelftest(contract));
+ selftestProgressEnd("F3.taskMeasurementContractSelftest",selftestProgressToken036);
+
+
+ const selftestProgressToken037=selftestProgressStart("F3.organizationUsageContractSelftest");
+ checks.push(...organizationUsageContractSelftest(contract));
+ selftestProgressEnd("F3.organizationUsageContractSelftest",selftestProgressToken037);
+
+
+ const selftestProgressToken038=selftestProgressStart("F3.companyKycCurrentSourceContractSelftest");
+ checks.push(...companyKycCurrentSourceContractSelftest(contract));
+ selftestProgressEnd("F3.companyKycCurrentSourceContractSelftest",selftestProgressToken038);
+
+ const selftestProgressToken039=selftestProgressStart("F3.planBaselineSelftest");
+ checks.push(...planBaselineSelftest(workflow,contract,root));
+ selftestProgressEnd("F3.planBaselineSelftest",selftestProgressToken039);
+
+ const selftestProgressToken040=selftestProgressStart("F3.documentCurveUiSelftest");
+ checks.push(...documentCurveUiSelftest(workflow,contract,root));
+ selftestProgressEnd("F3.documentCurveUiSelftest",selftestProgressToken040);
+
+ const selftestProgressToken041=selftestProgressStart("F3.documentCurveCurrentSourceLineageSelftest");
+ checks.push(...documentCurveCurrentSourceLineageSelftest(contract,root));
+ selftestProgressEnd("F3.documentCurveCurrentSourceLineageSelftest",selftestProgressToken041);
+
+ const selftestProgressToken042=selftestProgressStart("F3.provenanceDecoderPublicIntegrationSelftest");
+ checks.push(...provenanceDecoderPublicIntegrationSelftest(workflow,contract,root));
+ selftestProgressEnd("F3.provenanceDecoderPublicIntegrationSelftest",selftestProgressToken042);
+
   return checks;
 }
 function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],currentKycStatusChecks=[],currentWhatsappPlanChecks=[]){
@@ -2878,9 +3072,33 @@ export function planBudgetCurrentGateSelftest(workflow,contract,root=process.cwd
 
 function writeJson(filename,value){mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,JSON.stringify(value,null,2)+'\n');}
 function options(argv){const parsed={};for(let i=0;i<argv.length;i+=2){if(!argv[i]?.startsWith('--')||!argv[i+1])deny('CLI_ARGUMENT');parsed[argv[i].slice(2)]=argv[i+1];}return parsed;}
+// CLI selftest diagnostics only: original calls and result rows remain unchanged.
+function selftestProgressStart(label){
+ try{
+  if(process.argv[2]!=='selftest'||!process.argv[1]||path.resolve(process.argv[1])!==fileURLToPath(import.meta.url))return null;
+  const started=process.hrtime.bigint(),line=JSON.stringify({state:'SELFTEST_PROGRESS',phase:'START',label})+'\n';
+  if(writeSelftestProgressSync(2,line)!==Buffer.byteLength(line))return null;
+  return started;
+ }catch{return null;}
+}
+function selftestProgressEnd(label,started){
+ if(started===null)return;
+ try{
+  const elapsedMs=Number((process.hrtime.bigint()-started)/1000000n);
+  writeSelftestProgressSync(2,JSON.stringify({state:'SELFTEST_PROGRESS',phase:'END',label,elapsedMs})+'\n');
+ }catch{}
+}
 function main(){
+
+ const selftestProgressToken001=selftestProgressStart("CLI.load-contract-workflow-options");
  const [mode,...args]=process.argv.slice(2),opts=options(args),root=path.resolve(opts.root||process.cwd()),contract=loadContract(path.resolve(root,opts.contract||contractPath)),file=path.resolve(root,opts.workflow||workflowPath),bytes=readFileSync(file),workflow=yaml.load(bytes.toString('utf8'));
+ selftestProgressEnd("CLI.load-contract-workflow-options",selftestProgressToken001);
+
+
+ const selftestProgressToken002=selftestProgressStart("CLI.equivalence-and-dependencies");
  equivalent(workflow,contract);dependencies(root,contract);
+ selftestProgressEnd("CLI.equivalence-and-dependencies",selftestProgressToken002);
+
  if(mode==='equivalence'){if(opts['expected-head'])identity(root,opts['expected-head']);console.log(JSON.stringify({state:'PASS',commandBlocks:contract.blocks.length,artifactPatterns:contract.artifactPatterns.length,lanes:8}));return;}
  if(mode==='selftest'){
   const sourceHead=opts['expected-head']?identity(root,opts['expected-head']):identity(root,execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim());

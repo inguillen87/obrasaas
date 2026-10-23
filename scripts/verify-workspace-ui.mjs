@@ -724,12 +724,23 @@ async function confirmedProgressScenario(mode,width){
  const proposal={id:'proposal-a',taskId:original.id,workerId:'worker-a',summary:'Avance medido sintético',status:'PENDING',revision:planningMode?'2026-10-02T09:00:00.000011':'2026-10-02T09:00:00.000005',progress:50,quantity:null,baseline:null,unit:null,reason:'Medición sintética revisada.',evidenceIds:['evidence-a']};
  const field={scope,projectId:'p-a',projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals:planningMode?[]:[proposal],evidence:[{id:'evidence-a',taskId:original.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Fuente sintética de la medición.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};
  const scheduleFacts=[];let phase='initial-project';
- const fieldFixture=progressReviewFixture(field,{name:'workspace-confirmed-progress-'+mode+'-'+width,getPhase:()=>phase,phases:planningMode?['planning-held','planning-live']:['field-before-command','creation-form-live','creation-readback-held','field-decision-callback','confirmed-readback-live','explicit-pagination-live']});
+ const fieldFixture=progressReviewFixture(field,{name:'workspace-confirmed-progress-'+mode+'-'+width,getPhase:()=>phase,phases:planningMode?['planning-held','planning-live']:['field-before-command','creation-form-live','creation-readback-held','field-decision-callback','confirmed-readback-live',...(mode==='callback'?['confirmed-callback-navigation-live']:[]),'explicit-pagination-live']});
  const projectQuery=cursor=>'?'+new URLSearchParams({projectId:'p-a',scope,...(cursor?{afterTask:cursor}:{})});
  const expectedPhaseReads=new Map();
  const assertPhaseReads=cursors=>{const expected=cursors.map(cursor=>({phase,method:'GET',path:'/api/identity/workspace',query:cursor==='ACCOUNT'?'':projectQuery(cursor)}));assert.deepEqual(scheduleFacts.filter(row=>row.phase===phase),expected);if(expectedPhaseReads.has(phase))assert.deepEqual(expectedPhaseReads.get(phase),expected);expectedPhaseReads.set(phase,expected);};
  const assertAllSchedulePhases=()=>{assert.deepEqual(scheduleFacts.filter(row=>!expectedPhaseReads.has(row.phase)),[],'Every workspace GET must belong to an asserted phase');for(const [name,expected]of expectedPhaseReads)assert.deepEqual(scheduleFacts.filter(row=>row.phase===name),expected,'No later GET may escape an already asserted phase '+name);};
  const waitRejectedLive=async()=>{await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:15000});assert.equal(await page.$eval('[data-worksite-live-refresh]',el=>el.dataset.worksiteLiveRefresh),'STALE');assert.match(await page.$eval('[data-worksite-live-refresh]',el=>el.innerText),/No pudimos actualizar esta consulta\. Conservamos los datos/);};
+ // Observe each real live GET before its trigger; cancellation drains a failed action's waiter.
+ const observeScheduleLiveRead=()=>{
+  const expectedPhase=phase,abort=new AbortController();
+  const request=page.waitForRequest(request=>{
+   const url=new URL(request.url());
+   if(url.origin!==origin||request.method()!=='GET'||url.pathname!=='/api/identity/workspace'||url.search!==projectQuery(null))return false;
+   assert.equal(phase,expectedPhase);assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');return true;
+  },{timeout:15000,signal:abort.signal});
+  request.catch(()=>{});
+  return {request,cancel:()=>abort.abort()};
+ };
  const posts=[];let creation=null,heldReadback=null,heldDecision=null,heldPlanning=null,readbackCount=0,preparationReads=0;
  let readbackStarted,decisionStarted,planningStarted;const readbackReady=new Promise(resolve=>{readbackStarted=resolve;}),decisionReady=new Promise(resolve=>{decisionStarted=resolve;}),planningReady=new Promise(resolve=>{planningStarted=resolve;});
  const respond=(request,body)=>request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
@@ -797,7 +808,18 @@ async function confirmedProgressScenario(mode,width){
   if(mode==='readback')await page.waitForFunction(()=>document.querySelector('[data-task-id="task-a"] [role="progressbar"]').getAttribute('aria-valuenow')==='50');
   assertPhaseReads([]);phase='confirmed-readback-live';await respond(heldReadback,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[readbackTask,created],totalTasks:3,nextCursor:created.id});
   await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cronograma actualizado desde los registros de la obra.');
-  if(mode==='callback'){await respond(heldDecision.request,heldDecision.outcome);await showWorkspaceSection(page,'field-title');await waitText(page,'Decisión guardada.');await showWorkspaceSection(page,'schedule-title');}
+  if(mode==='callback'){
+   // Confirmation clears the pending field operation while the schedule is visible.
+   const callbackRead=observeScheduleLiveRead();
+   try{await respond(heldDecision.request,heldDecision.outcome);await callbackRead.request;await waitRejectedLive();assertPhaseReads([null]);}
+   finally{callbackRead.cancel();await callbackRead.request.catch(()=>{});}
+   phase='confirmed-callback-navigation-live';
+   await showWorkspaceSection(page,'field-title');await waitText(page,'Decisión guardada.');
+   // Returning to the schedule enables its separate live check.
+   const navigationRead=observeScheduleLiveRead();
+   try{await showWorkspaceSection(page,'schedule-title');await navigationRead.request;}
+   finally{navigationRead.cancel();await navigationRead.request.catch(()=>{});}
+  }
   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Cargar más tareas'&&!button.disabled));
   await waitRejectedLive();assertPhaseReads([null]);
   const expected=mode==='readback'?50:70;

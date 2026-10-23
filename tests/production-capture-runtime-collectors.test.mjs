@@ -10,6 +10,11 @@ import * as budget from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {buildCaptureRuntimeWorkflow} from '../scripts/lib/capture-runtime-canonical-collectors.mjs';
 import {participantPreanalysisCiSourceClosure} from '../scripts/verify-participant-kyc-preanalysis-ci.mjs';
 import {verifyIntegratedIdentityCurrentSources} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
+import * as waLineage from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
+import {verifyWorkspaceContinuityCurrentSources} from '../scripts/lib/workspace-continuity-current-ci-lineage.mjs';
+import {verifyDocumentTaskAssociationCurrentSources} from '../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
+import {materialReviewCurrentSourcePin} from '../scripts/lib/material-review-current-ci-lineage.mjs';
+import {participantPreanalysisConsumerValidationFiles,participantPreanalysisConsumerSourceFiles} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 
 const root=path.resolve(fileURLToPath(new URL('../',import.meta.url)));
 const contractPath=path.join(root,'.github/workspace-acceptance-contract.json');
@@ -46,11 +51,62 @@ test('the real preanalysis emitter refuses a missing literal dependency instead 
 
 test('the actual integrated source verifier preserves the frozen copier oracle behind authenticated capture sources',()=>{
  const read=file=>{try{return readFileSync(path.join(root,file));}catch{return null;}};
+ const snapshot=JSON.stringify(contract),parent=budget.restoreCaptureRuntimePreviousContract(contract);
+ assert.equal(contract.whatsappFieldContinuityCurrentRevision.paginationUi.requestMatrix.length,108);
+ assert.equal(parent.whatsappFieldContinuityCurrentRevision.paginationUi.requestMatrix.length,99);
  assert.ok(verifyIntegratedIdentityCurrentSources(contract,read));
  const changed=structuredClone(contract);changed.planBudgetCurrentRevision.references[0].currentSha256='f'.repeat(64);
  assert.throws(()=>validateContract(changed),error=>error.code==='PROOF_BINDING_SOURCE');
  const copier='scripts/lib/plan-document-curve-fixture-copy.mjs';
  assert.throws(()=>verifyIntegratedIdentityCurrentSources(contract,file=>file===copier?Buffer.from('changed actual copier'):read(file)));
+ const rejected=error=>error.code==='INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED';
+ for(const edit of [value=>value.whatsappFieldContinuityCurrentRevision.paginationUi.requestMatrix.pop(),value=>{value.whatsappFieldContinuityCurrentRevision.paginationUi.commandEqualityGroups=[];}]){
+  const altered=structuredClone(contract);edit(altered);const alteredBytes=Buffer.from(JSON.stringify(altered,null,2)+'\n');
+  assert.throws(()=>verifyIntegratedIdentityCurrentSources(altered,file=>file==='.github/workspace-acceptance-contract.json'?alteredBytes:read(file)),rejected);
+ }
+ for(const file of ['scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs','scripts/verify-field-task-pagination-ui.mjs']){
+  const current=read(file),changed=Buffer.concat([current,Buffer.from('\n// controlled current source mutation\n')]);
+  assert.throws(()=>verifyIntegratedIdentityCurrentSources(contract,target=>target===file?changed:read(target)),error=>rejected(error)&&error.message.includes('CURRENT_REFERENCE_'+file),file);
+  assert.deepEqual(read(file),current);
+ }
+ let escapedParent,escapedReader;budget.withCaptureRuntimePreviousSources(contract,read,(historical,reader)=>{escapedParent=historical;escapedReader=reader;assert.equal(historical.whatsappFieldContinuityCurrentRevision.paginationUi.requestMatrix.length,99);});
+ assert.throws(()=>verifyIntegratedIdentityCurrentSources(escapedParent,escapedReader),{code:'INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED',message:/Capture quality lineage rejected: CURRENT_CAPTURE_RUNTIME_REQUIRED$/});
+ // Public lower-owner APIs must authenticate current v2 before invoking their
+ // unchanged legacy99 oracles; no accepted reader survives its owned callback.
+ assert.equal(contract.whatsappFieldContinuityCurrentRevision.paginationUi.rawVersion,2);
+ const owners=[
+  [waLineage.verifyWhatsappFieldContinuityCurrentSources,'WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED','scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs'],
+  [verifyWorkspaceContinuityCurrentSources,'WORKSPACE_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED','scripts/lib/workspace-continuity-current-ci-lineage.mjs'],
+  [verifyDocumentTaskAssociationCurrentSources,'PLAN_MEASUREMENT_DOCUMENT_ASSOCIATION_CI_LINEAGE_REJECTED','scripts/lib/plan-measurement-document-association-ci-lineage.mjs'],
+ ];
+ for(const[verify,code,source]of owners){
+  const trace=[],result=verify(contract,file=>{trace.push(file);return read(file);});
+  assert.equal(result.nativeOrBrowserAcceptance,false);assert.equal(result.completeCheckpointRestored,true);
+  const altered=structuredClone(contract);altered.whatsappFieldContinuityCurrentRevision.paginationUi.rawVersion=1;
+  const alteredBytes=Buffer.from(JSON.stringify(altered,null,2)+'\n');
+  assert.throws(()=>verify(altered,file=>file==='.github/workspace-acceptance-contract.json'?alteredBytes:read(file)),error=>error.code===code);
+  const original=read(source),poison=Buffer.concat([original,Buffer.from('\n// controlled lower-owner source drift\n')]);
+  assert.throws(()=>verify(contract,file=>file===source?poison:read(file)),error=>error.code===code&&error.message.includes('CURRENT_REFERENCE_'+source));
+  const reads=trace.filter(file=>file===source).length;assert.ok(reads>1,'The current owner source is reread across the owned scope');let seen=0;
+  assert.throws(()=>verify(contract,file=>file===source&&++seen===reads?poison:read(file)),error=>error.code===code&&error.message.includes('CURRENT_REFERENCE_'+source));
+  assert.equal(seen,reads,'Late source drift reaches the final real current-source fence');
+  assert.throws(()=>verify(escapedParent,escapedReader),error=>error.code===code&&/CURRENT_CAPTURE_RUNTIME_REQUIRED$/.test(error.message));
+  assert.deepEqual(read(source),original);
+ }
+ // Metadata helpers project only authenticated compiled contract data. They
+ // retain original current source-pin/family projection and claim no I/O proof.
+ const waValue=contract.whatsappFieldContinuityCurrentRevision,ref=waValue.reviewedSourceChanges[0];
+ assert.equal(waLineage.whatsappFieldContinuityCurrentSourcePin(contract,{path:ref.path,sha256:ref.previousSha256}),materialReviewCurrentSourcePin(contract,{path:ref.path,sha256:ref.currentSha256}));
+ assert.throws(()=>waLineage.whatsappFieldContinuityCurrentSourcePin(contract,{path:ref.path,sha256:'f'.repeat(64)}),{code:'WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'});
+ const files=participantPreanalysisConsumerValidationFiles(contract);
+ for(const file of [...budget.planBudgetValidationFiles(contract),...waLineage.whatsappFieldContinuityValidationFiles(contract)])assert.ok(files.includes(file),file);
+ const uiFamily=contract.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family==='CONSUMPTION_FEEDBACK_UI'),waDelta=waValue.sourceSetDeltas.find(row=>row.family==='CONSUMPTION_FEEDBACK_UI');
+ const uiPrevious=waLineage.restoreWhatsappFieldContinuitySourceSet('CONSUMPTION_FEEDBACK_UI',uiFamily.currentFiles,contract);
+ assert.equal(uiPrevious.length,waDelta.previousCount);assert.equal(sha(JSON.stringify(uiPrevious)),waDelta.previousPathsSha256);
+ const compact=contract.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family==='COMPACT'),preDelta=contract.participantPreanalysisCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT');
+ const priorCompact=participantPreanalysisConsumerSourceFiles('COMPACT',compact.currentFiles,read);
+ assert.equal(priorCompact.length,preDelta.previousCount);assert.equal(sha(JSON.stringify(priorCompact)),preDelta.previousPathsSha256);
+ assert.equal(JSON.stringify(contract),snapshot);
 });
 
 test('the complete historical workflow and all eight lanes survive only the exact declared quality step',()=>{

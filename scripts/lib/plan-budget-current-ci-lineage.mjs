@@ -667,6 +667,27 @@ const fieldPaginationOracleAdvanceV1=Object.freeze({
   Object.freeze({path:'scripts/verify-field-task-pagination-ui.mjs',previousSha256:'4b98ee409dfca7fa78ffac58c82796c9013f34286691e19e4993149ffd0ad604',currentSha256:'f5fb5468225bf0d0db4e084af6d500db78f61740985238eaa7c243bc902b8dba'}),
  ]),
 });
+// Only this exact old compiled declaration enables the preparation bootstrap.
+// It never authenticates old source bytes as current v2 execution.
+const fieldPaginationOracleReviewedV1Sha256='6ff7294132842d6a46c91c8b160222a3cd80776a58e263d5c620d6f7632c77cc';
+const fieldPaginationOracleAdvanceV2=Object.freeze({
+  "pointers": [
+    "/whatsappFieldContinuityCurrentRevision/paginationUi/rawVersion",
+    "/whatsappFieldContinuityCurrentRevision/paginationUi/requestMatrix",
+    "/whatsappFieldContinuityCurrentRevision/paginationUi/commandEqualityGroups"
+  ],
+  "previousRawVersion": 1,
+  "currentRawVersion": 2,
+  "previousMatrixSha256": "8bbce7584e6c2c838f178b1585ce708ac4d366e9217ab7306faaa5615578255e",
+  "currentMatrixSha256": "db9a5685375c203cbb7f5e5204cb0ee06abdb9966785fec68401a7cb9e26447f",
+  "previousGroupsSha256": "8bd39d017dc56bd79c72e2b2518979e7c9c385408e6eccae269ce177dbf375e9",
+  "currentGroupsSha256": "d0c69aaa8f06c2db70c45c7eeb66533022f87d89f18dd89fc24940cce63514f5",
+ sourcePins:Object.freeze([
+  Object.freeze({"path":"scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs","previousSha256":"a1de3a73617de7c4eb2f9db8665650abe5798accb44b886cd8d2220fe5295bbf","currentSha256":"34b6d5aabeb36566b3bb12bb4c464995432ac02b770206372b352cc25cd7841e"}),
+  Object.freeze({"path":"scripts/verify-field-task-pagination-ui.mjs","previousSha256":"4b98ee409dfca7fa78ffac58c82796c9013f34286691e19e4993149ffd0ad604","currentSha256":"65e64823c5a4e44af04d83f618ef34c6627338e4b384d4ea72b395cd9a8d35f7"}),
+  Object.freeze({"path":"scripts/verify-field-task-pagination-ci.mjs","previousSha256":"1e366a583be909323327524a8fe04db9eb962724ec5073bdf3eb36140ddcdecc","currentSha256":"fc18f1398b6ddd80863e76b86cd82951c606652e0d032e15c9364d21c336534a"}),
+ ]),
+});
 function fieldPaginationOraclePatches(patches){
  const selected=patches.filter(row=>typeof row?.pointer==='string'&&(row.pointer==='/whatsappFieldContinuityCurrentRevision'||row.pointer.startsWith('/whatsappFieldContinuityCurrentRevision/')));
  if(selected.length===0)return selected;
@@ -691,8 +712,32 @@ function fieldPaginationOraclePatches(patches){
  const previousPosts=matrix.previous.filter(row=>row.method==='POST'),currentPosts=matrix.current.filter(row=>row.method==='POST');reject(previousPosts.length===9&&same(previousPosts,currentPosts),'FIELD_PAGINATION_ORACLE_NINE_POSTS_UNCHANGED');
  return selected;
 }
+function fieldPaginationOraclePatchesV2(patches){
+ const selected=patches.filter(row=>typeof row?.pointer==='string'&&(row.pointer==='/whatsappFieldContinuityCurrentRevision'||row.pointer.startsWith('/whatsappFieldContinuityCurrentRevision/')));
+ reject(same(selected.map(row=>row.pointer),fieldPaginationOracleAdvanceV2.pointers),'FIELD_PAGINATION_ORACLE_PATCH_TRIPLE_V2');
+ for(const patch of selected)exact(patch,['pointer','previous','current'],'FIELD_PAGINATION_ORACLE_PATCH_KEYS');
+ const [version,matrix,groups]=selected;
+ reject(version.previous===fieldPaginationOracleAdvanceV2.previousRawVersion&&version.current===fieldPaginationOracleAdvanceV2.currentRawVersion,'FIELD_PAGINATION_ORACLE_EXACT_RAW_VERSION_V2');
+ reject(Array.isArray(matrix.previous)&&matrix.previous.length===99&&Array.isArray(matrix.current)&&matrix.current.length===108,'FIELD_PAGINATION_ORACLE_MATRIX_SHAPE');
+ reject(Array.isArray(groups.previous)&&groups.previous.length===7&&Array.isArray(groups.current)&&groups.current.length===9,'FIELD_PAGINATION_ORACLE_GROUP_SHAPE');
+ reject(sha(JSON.stringify(matrix.previous))===fieldPaginationOracleAdvanceV2.previousMatrixSha256&&sha(JSON.stringify(matrix.current))===fieldPaginationOracleAdvanceV2.currentMatrixSha256,'FIELD_PAGINATION_ORACLE_EXACT_MATRIX_V2');
+ reject(sha(JSON.stringify(groups.previous))===fieldPaginationOracleAdvanceV2.previousGroupsSha256&&sha(JSON.stringify(groups.current))===fieldPaginationOracleAdvanceV2.currentGroupsSha256,'FIELD_PAGINATION_ORACLE_EXACT_GROUPS_V2');
+ const expected=[],indexMap=[],added=[];
+ for(const[index,row]of matrix.previous.entries()){
+  indexMap[index]=expected.length;
+  if(row.mode==='consumption'&&row.path==='/api/identity/field-operations'&&row.method==='GET'){
+   const {responseStatus,...base}=row,observed={...base,inventoryFilter:null,responseStatus};expected.push(observed);added.push(expected.length);expected.push({...observed,inventoryFilter:'PENDING'});
+  }else expected.push(structuredClone(row));
+ }
+ reject(same(added,[10,23,36,49,62,75,85,95,105])&&same(matrix.current,expected),'FIELD_PAGINATION_ORACLE_EXACT_NINE_READ_ADVANCE');
+ reject(same(groups.current,[[80],[83],[87],[90],[93],[97],[100],[103],[107]])&&same(groups.current.flat(),matrix.current.flatMap((row,index)=>row.method==='POST'?[index]:[])),'FIELD_PAGINATION_ORACLE_EXACT_NINE_INDEPENDENT_POST_GROUPS_V2');
+ const removed=new Set(added),restored=matrix.current.flatMap((row,index)=>{if(removed.has(index))return[];const value=structuredClone(row);if(value.mode==='consumption'&&value.path==='/api/identity/field-operations'&&value.method==='GET'){reject(value.inventoryFilter===null,'FIELD_PAGINATION_ORACLE_BASE_FILTER');delete value.inventoryFilter;}return[value];});
+ reject(same(restored,matrix.previous),'FIELD_PAGINATION_ORACLE_COMPLETE_MATRIX_INVERSE');
+ const previousPosts=matrix.previous.filter(row=>row.method==='POST'),currentPosts=matrix.current.filter(row=>row.method==='POST');reject(previousPosts.length===9&&same(previousPosts,currentPosts),'FIELD_PAGINATION_ORACLE_NINE_POSTS_UNCHANGED');
+ return selected;
+}
 const pointer=(value,key)=>{
- reject(typeof key==='string'&&(/^\/(?:planBudgetCurrentRevision\/(?:references(?:\/\d+\/currentSha256)?|sourceFamilies\/\d+\/(?:currentFiles|externalImports|currentManifest))|extension\/proofs\/\d+\/(?:sourceFiles|producerSha256))$/.test(key)||fieldPaginationOracleAdvanceV1.pointers.includes(key)),'PATCH_POINTER');
+ reject(typeof key==='string'&&(/^\/(?:planBudgetCurrentRevision\/(?:references(?:\/\d+\/currentSha256)?|sourceFamilies\/\d+\/(?:currentFiles|externalImports|currentManifest))|extension\/proofs\/\d+\/(?:sourceFiles|producerSha256))$/.test(key)||fieldPaginationOracleAdvanceV2.pointers.includes(key)),'PATCH_POINTER');
  const parts=key.slice(1).split('/');let owner=value;for(const part of parts.slice(0,-1)){reject(owner!==null&&typeof owner==='object'&&Object.hasOwn(owner,part),'PATCH_POINTER');owner=owner[part];}const final=parts.at(-1);reject(owner!==null&&typeof owner==='object'&&Object.hasOwn(owner,final),'PATCH_POINTER');return{owner,key:final};
 };
 
@@ -705,7 +750,9 @@ export function createCaptureRuntimeGate(reviewed){
  exact(runtime,['version','parentHead','previousContractSha256','previousDeclarationSha256','sourceAliases','referenceAdvances','sourceHistory','familyAdvances','proofSourceSetAdvances','contractPatches','workflowAdditions','workflowParentSemanticSha256','nativeSourceAdvances','browserSourceAdvances','nativeOrHumanAcceptance'],'RUNTIME_KEYS');
  reject(runtime.version===1&&runtime.parentHead===CAPTURE_QUALITY_PARENT&&runtime.previousContractSha256===CAPTURE_QUALITY_PARENT_CONTRACT_SHA256&&runtime.previousDeclarationSha256===CAPTURE_QUALITY_PARENT_DECLARATION_SHA256&&runtime.nativeOrHumanAcceptance===false,'PARENT');
  for(const key of ['sourceAliases','referenceAdvances','sourceHistory','familyAdvances','proofSourceSetAdvances','contractPatches','workflowAdditions'])reject(Array.isArray(runtime[key]),'ARRAY_'+key);
- const paginationOraclePatches=fieldPaginationOraclePatches(runtime.contractPatches);
+ const paginationOracleV1=sha(declaration(expected))===fieldPaginationOracleReviewedV1Sha256;
+ const paginationOracleAdvance=paginationOracleV1?fieldPaginationOracleAdvanceV1:fieldPaginationOracleAdvanceV2;
+ const paginationOraclePatches=paginationOracleV1?fieldPaginationOraclePatches(runtime.contractPatches):fieldPaginationOraclePatchesV2(runtime.contractPatches);
  reject(hash(runtime.workflowParentSemanticSha256),'WORKFLOW_PARENT_PIN');
  const inverse=value=>{for(const patch of [...runtime.contractPatches].reverse()){exact(patch,['pointer','previous','current'],'PATCH_KEYS');const target=pointer(value,patch.pointer);reject(same(target.owner[target.key],patch.current),'PATCH_CURRENT');target.owner[target.key]=structuredClone(patch.previous);}return value;};
  const parentContainer={[section]:structuredClone(expected)};delete parentContainer[section][revision];
@@ -724,8 +771,8 @@ export function createCaptureRuntimeGate(reviewed){
   let end=0;for(const hunk of row.inverseHunks){exact(hunk,['currentOffsetCharacters','currentText','previousText'],'HUNK_KEYS');reject(Number.isSafeInteger(hunk.currentOffsetCharacters)&&hunk.currentOffsetCharacters>=end&&typeof hunk.currentText==='string'&&typeof hunk.previousText==='string'&&hunk.currentText!==hunk.previousText,'ORDERED_HUNKS');end=hunk.currentOffsetCharacters+hunk.currentText.length;}
   reject(references.get(row.path)?.currentSha256===row.currentSha256,'CURRENT_HISTORY_REFERENCE');histories.set(row.path,row);
  }
- if(paginationOraclePatches.length)for(const pin of fieldPaginationOracleAdvanceV1.sourcePins){const history=histories.get(pin.path);reject(history?.status==='MODIFIED'&&history.previousSha256===pin.previousSha256&&history.currentSha256===pin.currentSha256&&references.get(pin.path)?.currentSha256===pin.currentSha256,'FIELD_PAGINATION_ORACLE_EXACT_SOURCE_HISTORY_'+pin.path);}
- else reject(fieldPaginationOracleAdvanceV1.sourcePins.every(pin=>references.get(pin.path)?.currentSha256!==pin.currentSha256&&histories.get(pin.path)?.currentSha256!==pin.currentSha256),'FIELD_PAGINATION_ORACLE_PATCHES_REQUIRED');
+ if(paginationOraclePatches.length)for(const pin of paginationOracleAdvance.sourcePins){const history=histories.get(pin.path);reject(history?.status==='MODIFIED'&&history.previousSha256===pin.previousSha256&&history.currentSha256===pin.currentSha256&&references.get(pin.path)?.currentSha256===pin.currentSha256,'FIELD_PAGINATION_ORACLE_EXACT_SOURCE_HISTORY_'+pin.path);}
+ else reject(paginationOracleAdvance.sourcePins.every(pin=>references.get(pin.path)?.currentSha256!==pin.currentSha256&&histories.get(pin.path)?.currentSha256!==pin.currentSha256),'FIELD_PAGINATION_ORACLE_PATCHES_REQUIRED');
  const advances=[...runtime.referenceAdvances,...runtime.sourceAliases];reject(advances.length===histories.size&&new Set(advances.map(row=>row.path)).size===advances.length,'COMPLETE_REFERENCE_ADVANCES');
  for(const ref of advances){exact(ref,['path','previousSha256','currentSha256'],'ADVANCE_KEYS');const history=histories.get(ref.path);reject(history&&ref.previousSha256===history.previousSha256&&ref.currentSha256===history.currentSha256,'ADVANCE_HISTORY');const previous=parentExpected.references.find(row=>row.path===ref.path);reject(runtime.referenceAdvances.includes(ref)?previous?.currentSha256===ref.previousSha256:!previous,'EXACT_PREVIOUS_REFERENCE');}
  const changedFamilies=expected.sourceFamilies.filter(family=>!same(family,parentExpected.sourceFamilies.find(row=>row.family===family.family))).map(family=>family.family);

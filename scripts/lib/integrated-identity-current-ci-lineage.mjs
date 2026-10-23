@@ -1,4 +1,5 @@
 import {restoreWeeklyCypPreviousContract,weeklyCypCurrentSourcePin} from './home-decisions-current-ci-lineage.mjs';
+import {withCaptureRuntimePreviousSources} from './plan-budget-current-ci-lineage.mjs';
 import {restoreDocumentTaskAssociationPreviousContract as documentOuter0,documentTaskAssociationCurrentSourcePin as documentOuter1,verifyDocumentTaskAssociationCurrentSources as documentOuter2,restoreDocumentTaskAssociationSourceSet as documentOuter3,documentTaskAssociationProofSourceAdditions as documentOuter4} from './plan-measurement-document-association-ci-lineage.mjs';
 // Existing APIs keep their original precise denial category; the additive
 // module retains its distinct code when invoked directly. No error is accepted.
@@ -2077,6 +2078,13 @@ export function integratedIdentityCurrentUiProducerPin(contract,ref){
  requireLineage(change?.previousProducerSha256===row.previousSha256&&change?.currentProducerSha256===row.currentSha256&&ref.sha256===row.currentSha256&&proof?.producer===row.path&&proof?.producerSha256===row.currentSha256&&same(proof.checkNames,change.currentCheckNames),'Exact current identity UI proof binding required');return row.currentSha256;
 }
 export function verifyIntegratedIdentityCurrentSources(contract,readSource){
+ if(contract?.planBudgetCurrentRevision?.captureQualityRuntime){
+  try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>verifyPreviousIntegratedIdentityCurrentSources(parent,parentRead));}
+  catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
+ }
+ return verifyPreviousIntegratedIdentityCurrentSources(contract,readSource);
+}
+function verifyPreviousIntegratedIdentityCurrentSources(contract,readSource){
  try{
  verifyDocumentTaskAssociationCurrentSources(contract,readSource);
  const value=revision(contract);if(!value)return null;restoreIntegratedIdentityPreviousContract(contract);requireLineage(typeof readSource==='function','Current committed source reader required');

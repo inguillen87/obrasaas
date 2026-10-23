@@ -110,8 +110,32 @@ export async function verifyFieldTaskPaginationUi({args=process.argv.slice(2),en
  const snapshot=page=>page.$eval('form',form=>({heading:form.querySelector('h4')?.textContent,fields:[...form.querySelectorAll('input,textarea,select')].map(node=>({tag:node.tagName,type:node.type,value:node.value,checked:node.checked})),image:form.querySelector('img[alt="Vista previa local de la foto que se enviará"]')?.src||null,chosen:form.innerText.includes('Archivo elegido para guardar')}));
  async function settled(page,count){await page.waitForFunction(count=>{const node=document.querySelector('[data-worksite-task-selector]');return node?.innerText.includes(count+' de 205 tareas cargadas.')&&node.getAttribute('aria-busy')==='false';},{timeout:20000},count);}
  async function createCase(width,mode,{failPage=false,holdPage=false}={}){
-  const context=await browser.createBrowserContext(),page=await context.newPage(),facts=[];let failed=false,holding=false,releaseHold,holdUsed=false;
-  await page.evaluateOnNewDocument(()=>{window.__taskCommands=[];const original=window.fetch.bind(window);window.fetch=async(input,options)=>{if(options?.method==='POST'){const body=options.body;if(body instanceof FormData){const file=body.get('file'),bytes=new Uint8Array(await file.arrayBuffer()),digest=await crypto.subtle.digest('SHA-256',bytes);window.__taskCommands.push({operationId:body.get('operationId'),projectId:body.get('projectId'),scope:body.get('scope'),taskId:body.get('taskId'),caption:body.get('caption'),file:{name:file.name,type:file.type,size:file.size,sha256:[...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,'0')).join('')}});}else if(typeof body==='string')window.__taskCommands.push(JSON.parse(body));}return original(input,options);};});
+  const context=await browser.createBrowserContext(),page=await context.newPage(),facts=[];let failed=false,holding=false,releaseHold,holdUsed=false,observedPosts=0;
+  await page.evaluateOnNewDocument(({width,mode})=>{
+   window.__taskCommands=[];window.__taskCommandObservations=[];const original=window.fetch.bind(window);
+   window.fetch=async(input,options)=>{
+    if(options?.method==='POST'){
+     const url=new URL(input instanceof Request?input.url:String(input),location.href),body=options.body,authorization=new Headers(options.headers).get('authorization');
+     if(url.origin!==location.origin||url.search||authorization!=='Bearer controlled-task-page-token')throw Error('A command observation requires the actual scoped fixture transport');
+     const base={version:1,ordinal:window.__taskCommandObservations.length+1,width,mode,endpoint:url.pathname,method:'POST',authorization};let observation,command;
+     if(body instanceof FormData){
+      const fieldNames=['operationId','projectId','scope','workerId','taskId','sectorId','caption'],entries=[...body.entries()],expected=[...fieldNames,'file'].sort();
+      if(JSON.stringify(entries.map(([key])=>key).sort())!==JSON.stringify(expected))throw Error('Exact multipart fields without extra, duplicate or missing entries required');
+      const file=body.get('file');if(!(file instanceof File)||fieldNames.some(key=>typeof body.get(key)!=='string'))throw Error('Actual multipart strings and File required');
+      const bytes=new Uint8Array(await file.arrayBuffer()),digest=await crypto.subtle.digest('SHA-256',bytes);
+      if(JSON.stringify([...body.keys()].sort())!==JSON.stringify(expected)||entries.some(([key,value])=>body.getAll(key).length!==1||body.get(key)!==value))throw Error('Multipart changed while its file was observed');
+      const fields=Object.fromEntries(fieldNames.map(key=>[key,body.get(key)])),fileObservation={name:file.name,type:file.type,size:file.size,sha256:[...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,'0')).join('')};
+      observation={...base,bodyKind:'FORM_DATA_FIELDS_FILE_SHA256_V1',fields,file:fileObservation};command={...fields,file:fileObservation};
+     }else{
+      if(typeof body!=='string'||body.length===0)throw Error('Actual JSON UTF8 body required');
+      command=JSON.parse(body);observation={...base,bodyKind:'JSON_UTF8_V1',bodyUtf8:body};
+     }
+     // Snapshot this exact body before dispatching the same object/string.
+     window.__taskCommands.push(command);window.__taskCommandObservations.push({observation,claimed:false});
+    }
+    return original(input,options);
+   };
+  },{width,mode});
   await page.setViewport({width,height:1000,deviceScaleFactor:1});page.on('pageerror',error=>errors.push({width,mode,message:error.message}));await page.setRequestInterception(true);
   page.on('request',async request=>{try{const url=new URL(request.url());if(url.origin!==origin){guard(['data:','blob:'].includes(url.protocol),'No external browser requests');return request.continue();}if(!url.pathname.startsWith('/api/'))return request.continue();
    assert.equal(request.headers().authorization,'Bearer controlled-task-page-token');const fact={width,mode,path:url.pathname,method:request.method(),afterTask:url.searchParams.get('afterTask')};facts.push(fact);requests.push(fact);let body,status=200;
@@ -121,7 +145,20 @@ export async function verifyFieldTaskPaginationUi({args=process.argv.slice(2),en
     if(holdPage&&!holdUsed){holdUsed=true;holding=true;await new Promise(resolve=>{releaseHold=resolve;});holding=false;}
     if(failPage&&!failed){failed=true;status=503;body={saved:false,code:'WORKSPACE_OPERATION_UNCONFIRMED'};}else{const start=after==='task-0100'?100:200;body={scope,project:{id:projectId,name:'Obra sintética de paginación',status:'ACTIVE'},roleLabel:'Administrador',canPlanSchedule:true,tasks:rows.slice(start,start+100),totalTasks:205,nextCursor:start===100?'task-0200':null};}
    }else if(['/api/identity/field-operations','/api/identity/field-media'].includes(url.pathname)){
-    if(request.method()==='POST'){status=503;body={saved:false,code:'FIELD_OPERATION_UNCONFIRMED'};fact.bodySha256=sha(Buffer.from(request.postData()||''));fact.operationId=(request.postData()||'').match(/"operationId":"([^"]+)"/)?.[1]||null;}
+    if(request.method()==='POST'){
+     const ordinal=observedPosts+1,observation=await page.evaluate(ordinal=>{const entries=window.__taskCommandObservations;if(entries.length!==ordinal||entries[ordinal-1]?.claimed)throw Error('Each intercepted POST requires exactly one prior unclaimed fetch observation');const entry=entries[ordinal-1];entry.claimed=true;return entry.observation;},ordinal);
+     assert.equal(ordinal,1,'Each isolated uncertainty case dispatches only its original command');assert.equal(observation.ordinal,ordinal);assert.equal(observation.width,width);assert.equal(observation.mode,mode);assert.equal(observation.endpoint,url.pathname);assert.equal(observation.method,request.method());assert.equal(observation.authorization,request.headers().authorization);assert.equal(url.search,'');
+     let command,hashBytes;
+     if(observation.bodyKind==='FORM_DATA_FIELDS_FILE_SHA256_V1'){
+      assert.equal(url.pathname,'/api/identity/field-media');assert.match(request.headers()['content-type']||'',/^multipart\/form-data;\s*boundary=.+$/);
+      const fields=Object.fromEntries(['operationId','projectId','scope','workerId','taskId','sectorId','caption'].map(key=>[key,observation.fields[key]])),file=Object.fromEntries(['name','type','size','sha256'].map(key=>[key,observation.file[key]]));
+      command=fields;hashBytes=Buffer.from(JSON.stringify({version:1,bodyKind:'FORM_DATA_FIELDS_FILE_SHA256_V1',fields,file}));
+     }else{
+      assert.equal(observation.bodyKind,'JSON_UTF8_V1');assert.equal(url.pathname,'/api/identity/field-operations');assert.match(request.headers()['content-type']||'',/^application\/json(?:;|$)/);const actual=request.postData();assert.equal(typeof actual,'string');assert.ok(actual.length>0);assert.equal(observation.bodyUtf8,actual,'The observed JSON must equal this intercepted request body');command=JSON.parse(actual);hashBytes=Buffer.from(actual,'utf8');
+     }
+     assert.match(command.operationId,/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);assert.equal(command.projectId,projectId);assert.equal(command.scope,scope);
+     observedPosts++;fact.commandObservation=observation;fact.bodySha256=sha(hashBytes);fact.operationId=command.operationId;status=503;body={saved:false,code:'FIELD_OPERATION_UNCONFIRMED'};
+    }
     else {
      assert.equal(url.pathname,'/api/identity/field-operations');assert.equal(request.method(),'GET');assert.equal(url.searchParams.get('projectId'),projectId);assert.equal(url.searchParams.get('scope'),scope);
      const inventoryFilter=url.searchParams.get('inventoryFilter');assert.deepEqual([...url.searchParams.keys()].sort(),mode==='consumption'&&inventoryFilter!==null?['inventoryFilter','projectId','scope']:['projectId','scope']);
@@ -168,7 +205,7 @@ export async function verifyFieldTaskPaginationUi({args=process.argv.slice(2),en
   try{cleanupProof=await removeOwnedFixture(ownership,{serverClosedBeforeFixtureRemoval:serverClosed});}catch(error){failure||=error;cleanupProof=error.cleanupProof;}
  }
  let sourceBytesUnchanged=false;try{sourceBytesUnchanged=sourceManifest.every(source=>sha(readSource(source.path))===source.sha256);assert.equal(sourceBytesUnchanged,true);assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),head);assertCiSource();}catch(error){failure||=error;}
- const proof={version:1,status:failure?'FAIL':'PASS',sourceState:options.ci?'EXACT_CI_SOURCE':'LOCAL_REVIEW_SOURCE',...(options.ci?{trackedClean:true,ciRun:options.ciRun}:{}),sourceRevision:head,sourceTree:tree,checkedAt:new Date().toISOString(),sourceManifest,sourceBytesUnchanged,externalImports:closure.externalImports,widths:FIELD_TASK_PAGE_WIDTHS,checks,totalCheckCount:checks.length,requests,errors,screenshots,mediaActions,actualConsumerComponentsMounted:true,productionPagerFactoryReused:true,pagingActivatedWithKeyboard:true,syntheticOnly:true,providerCalls:0,productionDataTouched:false,humanAccepted:false,posts:requests.filter(fact=>fact.method==='POST').length,cleanup:{browserClosed,serverClosed,gracefulCloseAcknowledged:closeAck,fixtureRemoved:cleanupProof?.fixtureRemoved===true,fixtureCleanupProof:cleanupProof},...(failure?{failure:failure.message,serverLog}:{})};
+ const proof={version:2,status:failure?'FAIL':'PASS',sourceState:options.ci?'EXACT_CI_SOURCE':'LOCAL_REVIEW_SOURCE',...(options.ci?{trackedClean:true,ciRun:options.ciRun}:{}),sourceRevision:head,sourceTree:tree,checkedAt:new Date().toISOString(),sourceManifest,sourceBytesUnchanged,externalImports:closure.externalImports,widths:FIELD_TASK_PAGE_WIDTHS,checks,totalCheckCount:checks.length,requests,errors,screenshots,mediaActions,actualConsumerComponentsMounted:true,productionPagerFactoryReused:true,pagingActivatedWithKeyboard:true,syntheticOnly:true,providerCalls:0,productionDataTouched:false,humanAccepted:false,posts:requests.filter(fact=>fact.method==='POST').length,cleanup:{browserClosed,serverClosed,gracefulCloseAcknowledged:closeAck,fixtureRemoved:cleanupProof?.fixtureRemoved===true,fixtureCleanupProof:cleanupProof},...(failure?{failure:failure.message,serverLog}:{})};
  const target=path.join(output,'browser.json');writeFileSync(target,JSON.stringify(proof,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({status:proof.status,totalCheckCount:checks.length,target,sha256:sha(readFileSync(target)),cleanup:proof.cleanup}));if(failure)throw failure;return proof;
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))await verifyFieldTaskPaginationUi();

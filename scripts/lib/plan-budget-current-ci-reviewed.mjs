@@ -12,7 +12,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": ".github/scripts/verify-workspace-ci-parallelization.mjs",
       "previousSha256": "8d65b7fb1446dc0533f69097ae28598a7c748f50c19eb586614ce078bf3aebac",
-      "currentSha256": "e8d57f72c03c30f9beed27a1f46a52d78f5d9ec0834327354fdbbf6f02d25551"
+      "currentSha256": "c4485ca3f925f192eae3dff1914ade93d81e4556a394277c7b0c4f7e2c81d59e"
     },
     {
       "path": ".github/workflows/company-usage-proxy.yml",
@@ -47,7 +47,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
       "previousSha256": null,
-      "currentSha256": "cb3ae781d03275f7ea559c3a86e7f9297f557082036f0a0060b07310503af83b"
+      "currentSha256": "c7cefd94574478d1ba05928e2b8e9699302960c8fcecfd789ae7eae6d5f249bd"
     },
     {
       "path": "scripts/lib/plan-budget-ui-contract.mjs",
@@ -67,7 +67,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
       "previousSha256": "5960b4acedd880ac0a49f157e57007863c2478ad218e504eb81bf993ad54b147",
-      "currentSha256": "69ce909a5dc107718bfc91ece769bea47d96183bed51ce1ab7e1668dccc17b1b"
+      "currentSha256": "34b6d5aabeb36566b3bb12bb4c464995432ac02b770206372b352cc25cd7841e"
     },
     {
       "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
@@ -137,7 +137,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/verify-workspace-ui.mjs",
       "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-      "currentSha256": "e36fff6f6c079a5eeeab3b1c23f2dcfd4e397d3eac3e5a199cca4ad4075f6a28"
+      "currentSha256": "42849f2f3e0c435c72e809fc396fe58e64ecf39fe8ef1d0aed04f8e5e692df14"
     },
     {
       "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -657,7 +657,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/verify-participants-ui.mjs",
       "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-      "currentSha256": "cfac8f3c2db50426cf681812acf786e25892ff7894f86408f83307944f85c575"
+      "currentSha256": "3d955706b8b48a5dbce38e93af53b85c5f4573f8cb4b6715a1d66ae64e685254"
     },
     {
       "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -780,6 +780,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "currentSha256": "7a9e07366c4b5c660b967405aed86159e04397f293f2a1b2c7f3d858444aa081"
     },
     {
+      "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
+      "previousSha256": "aaf23ee0e97231520f29669136d969ffc513bd6b52067df751d3dc6cf9c86bb8",
+      "currentSha256": "98fc68d2304dd51281e4b2ab29d6b22613985d9d9dac033fe874a0fd38557f5e"
+    },
+    {
       "path": "scripts/lib/kyc-current-image-native.mjs",
       "previousSha256": "87ad6932bbb4ed264947b0ba527965080e4f38a7cc0bb0f945b471e88ee06bbb",
       "currentSha256": "377da2076f225bfabf975c95e9108be76aa137dedbd82ee7dc98de92f5a2e6e3"
@@ -805,9 +810,19 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "currentSha256": "f9125c97ff397d7cb058386080e7d842f59d7a5ed072bd87419615eebe135940"
     },
     {
+      "path": "scripts/lib/plan-measurement-document-association-ci-lineage.mjs",
+      "previousSha256": "0a14f5211348d30d3a16b441a126880aeed8c7e196973ecceda7ee00307f0ef4",
+      "currentSha256": "9db74547c7253914e09693835080ea38c148b139fd4d3e9fa582e30e45c0699c"
+    },
+    {
       "path": "scripts/lib/synthetic-capture-quality.mjs",
       "previousSha256": null,
       "currentSha256": "ca3114f1c6ffd88d321b1251ef1c502765b4ccb2c0be54915f0ee83e0668e420"
+    },
+    {
+      "path": "scripts/lib/workspace-continuity-current-ci-lineage.mjs",
+      "previousSha256": "cb26d5ea9922fb9a3fb72d1a35010229a1d4b49f4784783294a4d1d503fdc81a",
+      "currentSha256": "c714b11e3ea3b87cf698f62f9b2ab93e433ef06d3c0a29e23ff09ac26dab5d70"
     },
     {
       "path": "scripts/verify-company-channel-kyc-postgres.mjs",
@@ -825,9 +840,14 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "currentSha256": "283a91bcc1c17837cb41ec2ddd769ba87b7801b75e7cb5ee3af5496f04e800ce"
     },
     {
+      "path": "scripts/verify-field-task-pagination-ci.mjs",
+      "previousSha256": "1e366a583be909323327524a8fe04db9eb962724ec5073bdf3eb36140ddcdecc",
+      "currentSha256": "fc18f1398b6ddd80863e76b86cd82951c606652e0d032e15c9364d21c336534a"
+    },
+    {
       "path": "scripts/verify-field-task-pagination-ui.mjs",
       "previousSha256": "4b98ee409dfca7fa78ffac58c82796c9013f34286691e19e4993149ffd0ad604",
-      "currentSha256": "f5fb5468225bf0d0db4e084af6d500db78f61740985238eaa7c243bc902b8dba"
+      "currentSha256": "65e64823c5a4e44af04d83f618ef34c6627338e4b384d4ea72b395cd9a8d35f7"
     },
     {
       "path": "scripts/verify-meta-kyc-chat-postgres.mjs",
@@ -1107,7 +1127,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-capture-runtime-collectors.test.mjs",
       "previousSha256": null,
-      "currentSha256": "adc821e88a3331effd560029ab9621457ca3b6ead0cd87a26bc4502e5f070a8a"
+      "currentSha256": "feb58f80cf67eae81bcb781872ee75b44e69665050daf4d2188cd80f6203e4e6"
     },
     {
       "path": "tests/production-capture-runtime-lineage-boundary.test.mjs",
@@ -1133,6 +1153,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "path": "tests/production-employee-intake-kyc-routing.test.mjs",
       "previousSha256": "39e1879ea3cb1386b1cf05fd59eebc1bbc010fc64420481de87a0d9f6474b23b",
       "currentSha256": "b45c3ab9f7c896d765429311a0fd0bfa159a6cedc51d7704f6d888d1774f8159"
+    },
+    {
+      "path": "tests/production-field-task-pagination-ci.test.mjs",
+      "previousSha256": "0d8abfb43c696a007bbc676d8472599b24cc3d7edb465419f992d9811f988999",
+      "currentSha256": "0bc97707445edb25c0e9697fb067295fb1c3d1e03c4c643d44cf8f2867c8a871"
     },
     {
       "path": "tests/production-kyc-image-quality.test.mjs",
@@ -4199,7 +4224,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
-          "sha256": "aaf23ee0e97231520f29669136d969ffc513bd6b52067df751d3dc6cf9c86bb8"
+          "sha256": "98fc68d2304dd51281e4b2ab29d6b22613985d9d9dac033fe874a0fd38557f5e"
         },
         {
           "path": "scripts/lib/material-review-current-ci-lineage.mjs",
@@ -4219,7 +4244,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-          "sha256": "cb3ae781d03275f7ea559c3a86e7f9297f557082036f0a0060b07310503af83b"
+          "sha256": "c7cefd94574478d1ba05928e2b8e9699302960c8fcecfd789ae7eae6d5f249bd"
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -4227,7 +4252,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-measurement-document-association-ci-lineage.mjs",
-          "sha256": "0a14f5211348d30d3a16b441a126880aeed8c7e196973ecceda7ee00307f0ef4"
+          "sha256": "9db74547c7253914e09693835080ea38c148b139fd4d3e9fa582e30e45c0699c"
         },
         {
           "path": "scripts/lib/plan-partida-preview-current-ci-lineage.mjs",
@@ -4239,7 +4264,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
-          "sha256": "69ce909a5dc107718bfc91ece769bea47d96183bed51ce1ab7e1668dccc17b1b"
+          "sha256": "34b6d5aabeb36566b3bb12bb4c464995432ac02b770206372b352cc25cd7841e"
         },
         {
           "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
@@ -4251,7 +4276,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/workspace-continuity-current-ci-lineage.mjs",
-          "sha256": "cb26d5ea9922fb9a3fb72d1a35010229a1d4b49f4784783294a4d1d503fdc81a"
+          "sha256": "c714b11e3ea3b87cf698f62f9b2ab93e433ef06d3c0a29e23ff09ac26dab5d70"
         },
         {
           "path": "scripts/verify-focused-workspace-ci.mjs",
@@ -5239,7 +5264,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
-          "sha256": "aaf23ee0e97231520f29669136d969ffc513bd6b52067df751d3dc6cf9c86bb8"
+          "sha256": "98fc68d2304dd51281e4b2ab29d6b22613985d9d9dac033fe874a0fd38557f5e"
         },
         {
           "path": "scripts/lib/kyc-expired-current-ci-lineage.mjs",
@@ -5267,7 +5292,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-          "sha256": "cb3ae781d03275f7ea559c3a86e7f9297f557082036f0a0060b07310503af83b"
+          "sha256": "c7cefd94574478d1ba05928e2b8e9699302960c8fcecfd789ae7eae6d5f249bd"
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -5279,7 +5304,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-measurement-document-association-ci-lineage.mjs",
-          "sha256": "0a14f5211348d30d3a16b441a126880aeed8c7e196973ecceda7ee00307f0ef4"
+          "sha256": "9db74547c7253914e09693835080ea38c148b139fd4d3e9fa582e30e45c0699c"
         },
         {
           "path": "scripts/lib/plan-partida-preview-current-ci-lineage.mjs",
@@ -5291,7 +5316,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
-          "sha256": "69ce909a5dc107718bfc91ece769bea47d96183bed51ce1ab7e1668dccc17b1b"
+          "sha256": "34b6d5aabeb36566b3bb12bb4c464995432ac02b770206372b352cc25cd7841e"
         },
         {
           "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
@@ -5303,15 +5328,15 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/workspace-continuity-current-ci-lineage.mjs",
-          "sha256": "cb26d5ea9922fb9a3fb72d1a35010229a1d4b49f4784783294a4d1d503fdc81a"
+          "sha256": "c714b11e3ea3b87cf698f62f9b2ab93e433ef06d3c0a29e23ff09ac26dab5d70"
         },
         {
           "path": "scripts/verify-field-task-pagination-ci.mjs",
-          "sha256": "1e366a583be909323327524a8fe04db9eb962724ec5073bdf3eb36140ddcdecc"
+          "sha256": "fc18f1398b6ddd80863e76b86cd82951c606652e0d032e15c9364d21c336534a"
         },
         {
           "path": "scripts/verify-field-task-pagination-ui.mjs",
-          "sha256": "f5fb5468225bf0d0db4e084af6d500db78f61740985238eaa7c243bc902b8dba"
+          "sha256": "65e64823c5a4e44af04d83f618ef34c6627338e4b384d4ea72b395cd9a8d35f7"
         },
         {
           "path": "src/app/(identity)/cuenta/company-channel-view.mjs",
@@ -5527,7 +5552,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "tests/production-field-task-pagination-ci.test.mjs",
-          "sha256": "0d8abfb43c696a007bbc676d8472599b24cc3d7edb465419f992d9811f988999"
+          "sha256": "0bc97707445edb25c0e9697fb067295fb1c3d1e03c4c643d44cf8f2867c8a871"
         },
         {
           "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
@@ -10567,7 +10592,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-          "sha256": "cb3ae781d03275f7ea559c3a86e7f9297f557082036f0a0060b07310503af83b"
+          "sha256": "c7cefd94574478d1ba05928e2b8e9699302960c8fcecfd789ae7eae6d5f249bd"
         },
         {
           "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -25237,6 +25262,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "currentSha256": "7a9e07366c4b5c660b967405aed86159e04397f293f2a1b2c7f3d858444aa081"
       },
       {
+        "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
+        "previousSha256": "aaf23ee0e97231520f29669136d969ffc513bd6b52067df751d3dc6cf9c86bb8",
+        "currentSha256": "98fc68d2304dd51281e4b2ab29d6b22613985d9d9dac033fe874a0fd38557f5e"
+      },
+      {
         "path": "scripts/lib/kyc-current-image-native.mjs",
         "previousSha256": "87ad6932bbb4ed264947b0ba527965080e4f38a7cc0bb0f945b471e88ee06bbb",
         "currentSha256": "377da2076f225bfabf975c95e9108be76aa137dedbd82ee7dc98de92f5a2e6e3"
@@ -25262,9 +25292,19 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "currentSha256": "f9125c97ff397d7cb058386080e7d842f59d7a5ed072bd87419615eebe135940"
       },
       {
+        "path": "scripts/lib/plan-measurement-document-association-ci-lineage.mjs",
+        "previousSha256": "0a14f5211348d30d3a16b441a126880aeed8c7e196973ecceda7ee00307f0ef4",
+        "currentSha256": "9db74547c7253914e09693835080ea38c148b139fd4d3e9fa582e30e45c0699c"
+      },
+      {
         "path": "scripts/lib/synthetic-capture-quality.mjs",
         "previousSha256": null,
         "currentSha256": "ca3114f1c6ffd88d321b1251ef1c502765b4ccb2c0be54915f0ee83e0668e420"
+      },
+      {
+        "path": "scripts/lib/workspace-continuity-current-ci-lineage.mjs",
+        "previousSha256": "cb26d5ea9922fb9a3fb72d1a35010229a1d4b49f4784783294a4d1d503fdc81a",
+        "currentSha256": "c714b11e3ea3b87cf698f62f9b2ab93e433ef06d3c0a29e23ff09ac26dab5d70"
       },
       {
         "path": "scripts/verify-company-channel-kyc-postgres.mjs",
@@ -25282,9 +25322,14 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "currentSha256": "283a91bcc1c17837cb41ec2ddd769ba87b7801b75e7cb5ee3af5496f04e800ce"
       },
       {
+        "path": "scripts/verify-field-task-pagination-ci.mjs",
+        "previousSha256": "1e366a583be909323327524a8fe04db9eb962724ec5073bdf3eb36140ddcdecc",
+        "currentSha256": "fc18f1398b6ddd80863e76b86cd82951c606652e0d032e15c9364d21c336534a"
+      },
+      {
         "path": "scripts/verify-field-task-pagination-ui.mjs",
         "previousSha256": "4b98ee409dfca7fa78ffac58c82796c9013f34286691e19e4993149ffd0ad604",
-        "currentSha256": "f5fb5468225bf0d0db4e084af6d500db78f61740985238eaa7c243bc902b8dba"
+        "currentSha256": "65e64823c5a4e44af04d83f618ef34c6627338e4b384d4ea72b395cd9a8d35f7"
       },
       {
         "path": "scripts/verify-meta-kyc-chat-postgres.mjs",
@@ -25564,7 +25609,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "tests/production-capture-runtime-collectors.test.mjs",
         "previousSha256": null,
-        "currentSha256": "adc821e88a3331effd560029ab9621457ca3b6ead0cd87a26bc4502e5f070a8a"
+        "currentSha256": "feb58f80cf67eae81bcb781872ee75b44e69665050daf4d2188cd80f6203e4e6"
       },
       {
         "path": "tests/production-capture-runtime-lineage-boundary.test.mjs",
@@ -25590,6 +25635,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "tests/production-employee-intake-kyc-routing.test.mjs",
         "previousSha256": "39e1879ea3cb1386b1cf05fd59eebc1bbc010fc64420481de87a0d9f6474b23b",
         "currentSha256": "b45c3ab9f7c896d765429311a0fd0bfa159a6cedc51d7704f6d888d1774f8159"
+      },
+      {
+        "path": "tests/production-field-task-pagination-ci.test.mjs",
+        "previousSha256": "0d8abfb43c696a007bbc676d8472599b24cc3d7edb465419f992d9811f988999",
+        "currentSha256": "0bc97707445edb25c0e9697fb067295fb1c3d1e03c4c643d44cf8f2867c8a871"
       },
       {
         "path": "tests/production-kyc-image-quality.test.mjs",
@@ -25761,7 +25811,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": ".github/scripts/verify-workspace-ci-parallelization.mjs",
         "previousSha256": "7f6e61638298e3df1d291c429cc4349a7fa0d1c7b68d1efca43851c2dd7b9307",
-        "currentSha256": "e8d57f72c03c30f9beed27a1f46a52d78f5d9ec0834327354fdbbf6f02d25551"
+        "currentSha256": "c4485ca3f925f192eae3dff1914ade93d81e4556a394277c7b0c4f7e2c81d59e"
       },
       {
         "path": ".github/workflows/workspace-acceptance.yml",
@@ -25776,12 +25826,12 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
         "previousSha256": "0ba932090392ee957357d303ac8c4acd11fec9da46b4f01a9e5390e47d563510",
-        "currentSha256": "cb3ae781d03275f7ea559c3a86e7f9297f557082036f0a0060b07310503af83b"
+        "currentSha256": "c7cefd94574478d1ba05928e2b8e9699302960c8fcecfd789ae7eae6d5f249bd"
       },
       {
         "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
         "previousSha256": "a1de3a73617de7c4eb2f9db8665650abe5798accb44b886cd8d2220fe5295bbf",
-        "currentSha256": "69ce909a5dc107718bfc91ece769bea47d96183bed51ce1ab7e1668dccc17b1b"
+        "currentSha256": "34b6d5aabeb36566b3bb12bb4c464995432ac02b770206372b352cc25cd7841e"
       },
       {
         "path": "scripts/verify-employee-intake-postgres.mjs",
@@ -25841,7 +25891,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "scripts/verify-participants-ui.mjs",
         "previousSha256": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-        "currentSha256": "cfac8f3c2db50426cf681812acf786e25892ff7894f86408f83307944f85c575"
+        "currentSha256": "3d955706b8b48a5dbce38e93af53b85c5f4573f8cb4b6715a1d66ae64e685254"
       },
       {
         "path": "scripts/verify-plan-import-boundary.mjs",
@@ -25851,7 +25901,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "scripts/verify-workspace-ui.mjs",
         "previousSha256": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
-        "currentSha256": "e36fff6f6c079a5eeeab3b1c23f2dcfd4e397d3eac3e5a199cca4ad4075f6a28"
+        "currentSha256": "42849f2f3e0c435c72e809fc396fe58e64ecf39fe8ef1d0aed04f8e5e692df14"
       },
       {
         "path": "src/app/(identity)/cuenta/kyc-photo-preparation.js",
@@ -26039,9 +26089,9 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": ".github/scripts/verify-workspace-ci-parallelization.mjs",
         "status": "MODIFIED",
         "previousSha256": "7f6e61638298e3df1d291c429cc4349a7fa0d1c7b68d1efca43851c2dd7b9307",
-        "currentSha256": "e8d57f72c03c30f9beed27a1f46a52d78f5d9ec0834327354fdbbf6f02d25551",
+        "currentSha256": "c4485ca3f925f192eae3dff1914ade93d81e4556a394277c7b0c4f7e2c81d59e",
         "previousBytes": 408348,
-        "currentBytes": 464025,
+        "currentBytes": 473691,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 508,
@@ -26049,232 +26099,402 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 59456,
+            "currentOffsetCharacters": 4452,
+            "currentText": "import {writeSync as writeSelftestProgressSync} from 'node:fs';\n\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 59521,
             "currentText": ",contract=null){\n if(contract&&hasCaptureRuntime(contract)&&['PG_COMPANY_KYC','PG_BANK','PG_INTAKE','PG_FIELD'].includes(spec.kind)){\n  equal(contract.extension.proofs.find(row=>row.id===spec.id),spec,'PROOF_NATIVE_CURRENT_SPEC');\n  const parent=captureBudget.restoreCaptureRuntimePreviousContract(contract),parentSpec=parent.extension.proofs.find(row=>row.id===spec.id);\n  if(!parentSpec)deny('PROOF_NATIVE_PARENT_SPEC');\n  return summary(parentSpec,files);\n }\n ",
             "previousText": "){"
           },
           {
-            "currentOffsetCharacters": 131760,
+            "currentOffsetCharacters": 131825,
             "currentText": "previousD",
             "previousText": "d"
           },
           {
-            "currentOffsetCharacters": 133112,
+            "currentOffsetCharacters": 133177,
             "currentText": "\n// The historical two-dependency oracle remains literal. This adapter binds\n// its exact helper inverse and the current copier's additional RAW rows.\nconst CAPTURE_DOCUMENT_COPY_HELPER_LF='f9125c97ff397d7cb058386080e7d842f59d7a5ed072bd87419615eebe135940';\nconst CAPTURE_DOCUMENT_COPY_PRODUCERS=Object.freeze({\n UI_INTAKE:['scripts/verify-employee-intake-ui.mjs','d8ee5bb420d2f46415cb4bf2ac6973a3d7b1eb03d7cde0baece00e64692f8043','files',true],\n UI_JOINT:['scripts/verify-participant-bank-intake-ui.mjs','3166df0525e9363f07487ff924b53ab73b1a571673b5bc3f71cf1446d27ba7b5','files',true],\n UI_CAUSAL:['scripts/verify-participant-bank-intake-ui.mjs','3166df0525e9363f07487ff924b53ab73b1a571673b5bc3f71cf1446d27ba7b5','files',true],\n UI_PREPARATION:['scripts/verify-project-preparation-ui.mjs','cd5c76caa731d7df4e73298adcf76096deab7935d3cc08efa916815b55a9a727','copiedFiles',false],\n UI_PORTFOLIO:['scripts/verify-portfolio-overview-ui.mjs','516d3399aaa8d437208cede178fd06de177d241a3b17bfc29013974624f6e8d1','files',false]\n});\nfunction documentCurveCopyShadow(readSource,spec){\n const rawContract=readSource('.github/workspace-acceptance-contract.json'),contract=JSON.parse(utf8(rawContract));\n // Even the historical branch is only callable in the explicit owned scope.\n captureBudget.verifyPlanBudgetCurrentSources(contract,readSource);\n if(!hasCaptureRuntime(contract))return previousDocumentCurveCopyShadow(readSource);\n return captureBudget.withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>{\n  const declared=contract.extension.proofs.find(row=>row.kind===spec?.kind),descriptor=CAPTURE_DOCUMENT_COPY_PRODUCERS[spec?.kind];\n  if(!declared||!descriptor)deny('PROOF_DOCUMENT_CURVE_COPY');equal(spec,declared,'PROOF_DOCUMENT_CURVE_COPY');\n  const used=new Map(),raw=file=>{const value=readSource(file);if(!Buffer.isBuffer(value))deny('PROOF_DOCUMENT_CURVE_COPY');const owned=Buffer.from(value);if(used.has(file)&&!used.get(file).equals(owned))deny('PROOF_DOCUMENT_CURVE_COPY');used.set(file,owned);return owned;};\n  const lf=value=>Buffer.from(utf8(value).replaceAll('\\r\\n','\\n')),helper=raw(DOCUMENT_CURVE_COPY_HELPER),previousHelper=parentRead(DOCUMENT_CURVE_COPY_HELPER);\n  if(hash(lf(helper))!==CAPTURE_DOCUMENT_COPY_HELPER_LF||hash(previousHelper)!==WEEKLY_CYP_CURRENT_REVISION.documentCurveCopy.helperLfSha256)deny('PROOF_DOCUMENT_CURVE_COPY');\n  const inverse=captureBudget.restoreCaptureRuntimePreviousSource(contract,DOCUMENT_CURVE_COPY_HELPER,helper);if(!inverse.equals(previousHelper))deny('PROOF_DOCUMENT_CURVE_COPY');\n  const [producer,producerLf,filesName,capture]=descriptor,producerRaw=raw(producer);if(spec.producer!==producer||spec.producerSha256!==producerLf||hash(lf(producerRaw))!==producerLf)deny('PROOF_DOCUMENT_CURVE_COPY');\n  const ast=parse(utf8(producerRaw),{sourceType:'module'}),imports=ast.program.body.filter(node=>node.type==='ImportDeclaration'&&node.source.value==='./lib/plan-document-curve-fixture-copy.mjs');\n  if(imports.length!==1||!imports[0].specifiers.some(node=>node.type==='ImportSpecifier'&&node.imported.name==='copyPlanDocumentCurveFixture'&&node.local.name==='copyPlanDocumentCurveFixture'))deny('PROOF_DOCUMENT_CURVE_COPY');\n  const declarations=ast.program.body.flatMap(node=>node.type==='VariableDeclaration'?node.declarations:[]),files=declarations.filter(node=>node.id.type==='Identifier'&&node.id.name===filesName);\n  if(files.length!==1||files[0].init?.type!=='ArrayExpression'||files[0].init.elements.some(node=>node?.type!=='StringLiteral'))deny('PROOF_DOCUMENT_CURVE_COPY');\n  const names=files[0].init.elements.map(node=>node.value),captureFiles=['participant-panel.js','participant-kyc-capture.js'];if(names.filter(name=>name==='plan-source-curve.mjs').length!==1||captureFiles.some(name=>names.includes(name)!==capture))deny('PROOF_DOCUMENT_CURVE_COPY');\n  // Only the helper is projected. Actual curve source/dependency RAW bytes\n  // continue through the original oracle and retain the original transforms.\n  const expected=previousDocumentCurveCopyShadow(file=>file===DOCUMENT_CURVE_COPY_HELPER?previousHelper:raw(file));\n  expected.documentCurveSourceManifest=expected.documentCurveSourceManifest.map(row=>row.path===DOCUMENT_CURVE_COPY_HELPER?{path:row.path,sha256:hash(helper)}:row);\n  if(capture){\n   const dependency='src/lib/capture-quality-policy.mjs',needle='../../../lib/capture-quality-policy.mjs';\n   raw(dependency);const components=captureFiles.map(name=>'src/app/(identity)/cuenta/'+name);\n   expected.documentCurveSourceManifest.push(...[dependency,...components].map(file=>({path:file,sha256:hash(raw(file))})));\n   for(const file of components){const original=raw(file),text=utf8(original);if(text.split(needle).length!==2||!new RegExp('\\\\bfrom\\\\s+[\\x27\\x22]'+needle.replaceAll('.','\\\\.')+'[\\x27\\x22]').test(text))deny('PROOF_DOCUMENT_CURVE_COPY');const generated=Buffer.from(text.replace(needle,'./capture-quality-policy.mjs'));expected.fixtureTransforms.push({path:file,kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:hash(original),copiedBeforeSha256:hash(original),fixtureSha256:hash(generated),fixtureRelativePath:'app/'+path.posix.basename(file),dependencySourcePath:dependency,dependencyFixturePath:'app/capture-quality-policy.mjs'});}\n  }\n  for(const[file,owned]of used){const value=readSource(file);if(!Buffer.isBuffer(value)||!value.equals(owned))deny('PROOF_DOCUMENT_CURVE_COPY');}\n  equal(parent.extension.proofs.find(row=>row.kind===spec.kind).producer,producer,'PROOF_DOCUMENT_CURVE_COPY');\n  return expected;\n });\n}\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 138869,
+            "currentOffsetCharacters": 138934,
             "currentText": ",spec",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 141038,
+            "currentOffsetCharacters": 141103,
             "currentText": ">=2){bad('cyp-module-omitted',p=>{p.documentCurveSourceManifest=p.documentCurveSourceManifest.filter(row=>row.path!=='src/lib/plan-import-cyp-curve.mjs');});bad('second-relocation-omitted',p=>{p.fixtureTransforms.splice(1,1",
             "previousText": "===2){bad('cyp-module-omitted',p=>{p.documentCurveSourceManifest=p.documentCurveSourceManifest.filter(row=>row.path!=='src/lib/plan-import-cyp-curve.mjs');});bad('second-relocation-omitted',p=>{p.fixtureTransforms.pop("
           },
           {
-            "currentOffsetCharacters": 141551,
+            "currentOffsetCharacters": 141616,
             "currentText": "options){\n const {readSource,readEvidence,expectedHead}=options;\n if(['PG_COMPANY_KYC','PG_BANK','PG_INTAKE','PG_FIELD'].includes(spec.kind)&&typeof readSource==='function'){\n  const rawContract=readSource('.github/workspace-acceptance-contract.json');\n  const contract=Buffer.isBuffer(rawContract)?JSON.parse(utf8(rawContract)):null;\n  captureBudget.verifyCaptureRuntimeCurrentSources(contract,readSource);\n  if(hasCaptureRuntime(contract)){\n   if(!head(expectedHead))deny('PROOF_SOURCE_RESOLVER');\n   const owned=Buffer.from(bytes);let proof;try{proof=JSON.parse(utf8(owned));}catch(error){if(error.code)throw error;deny('PROOF_JSON');}\n   // Bind every artifact read to the exact caller-owned RAW bytes. Rechecking\n   // only at the endpoints would miss an A/B/A artifact-reader substitution.\n   const boundEvidence=file=>{\n    let actual;try{actual=typeof readEvidence==='function'?readEvidence(file):null;}catch(error){if(file===spec.path)deny('PROOF_NATIVE_RAW_BINDING');throw error;}\n    if(file===spec.path&&(!Buffer.isBuffer(actual)||!actual.equals(owned)))deny('PROOF_NATIVE_RAW_BINDING');\n    return actual;\n   };\n   boundEvidence(spec.path);\n   const result=captureBudget.normalizeCaptureRuntimeNativeProof(contract,spec,proof,readSource,boundEvidence,(parent,parentSpec,projected,parentRead)=>{\n    equal(parent.extension.proofs.find(row=>row.kind===spec.kind),parentSpec,'PROOF_NATIVE_PARENT_SPEC');\n    return validatePreviousExtensionProof(parentSpec,Buffer.from(JSON.stringify(projected)),{...options,readSource:parentRead,readEvidence:boundEvidence});\n   });\n   boundEvidence(spec.path);\n   if(!bytes.equals(owned))deny('PROOF_NATIVE_INPUT_CHANGED');\n   const manifest=spec.kind==='PG_FIELD'?canonicalFieldManifest(spec,proof):proof.sourceManifest;\n   return {...result,harnessSha256:spec.producerSha256,sourceManifestSha256:manifestDigest(manifest),sourceReferences:spec.sourceFiles.length,proofSha256:hash(owned),bytes:owned.length,checks:summary(spec,null,contract)};\n  }\n }\n return validatePreviousExtensionProof(spec,bytes,options);\n}\nfunction validatePreviousExtensionProof(spec,bytes,",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 158211,
+            "currentOffsetCharacters": 158276,
             "currentText": ",contract",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 158313,
+            "currentOffsetCharacters": 158378,
             "currentText": "return assertProofBindingsWithExpected(bindings,contract,lane,()=>proofBindings(contract,lane,files,expectedHead,readSource));",
             "previousText": "if(!Array.isArray(bindings))deny('PROOF_BINDINGS');const specs=contract.extension.proofs.filter(p=>p.lane===lane);equal(bindings.map(b=>b?.id),specs.map(p=>p.id),'PROOF_BINDINGS');const expectedBindings=proofBindings(contract,lane,files,expectedHead,readSource);for(const [index,binding] of bindings.entries()){exactKeys(binding,['id','path','producer','kind','result','sourceRevision','harnessSha256','sourceManifestSha256','sourceReferences','proofSha256','bytes','checks'],'PROOF_BINDING_SHAPE');const expected=expectedBindings[index];if(!sha(binding.sourceManifestSha256)||binding.sourceManifestSha256!==expected.sourceManifestSha256)deny('PROOF_BINDING_SOURCE');equal(binding,expected,'PROOF_BINDING_IDENTITY');if(binding.bytes<1)deny('PROOF_BINDING_EMPTY');}"
           },
           {
-            "currentOffsetCharacters": 158442,
+            "currentOffsetCharacters": 158507,
             "currentText": "function assertProofBindingsWithExpected(bindings,contract,lane,expectedBindingsForLane){\n if(!Array.isArray(bindings))deny('PROOF_BINDINGS');const specs=contract.extension.proofs.filter(p=>p.lane===lane);equal(bindings.map(b=>b?.id),specs.map(p=>p.id),'PROOF_BINDINGS');const expectedBindings=expectedBindingsForLane();for(const [index,binding] of bindings.entries()){exactKeys(binding,['id','path','producer','kind','result','sourceRevision','harnessSha256','sourceManifestSha256','sourceReferences','proofSha256','bytes','checks'],'PROOF_BINDING_SHAPE');const expected=expectedBindings[index];if(!sha(binding.sourceManifestSha256)||binding.sourceManifestSha256!==expected.sourceManifestSha256)deny('PROOF_BINDING_SOURCE');equal(binding,expected,'PROOF_BINDING_IDENTITY');if(binding.bytes<1)deny('PROOF_BINDING_EMPTY');}\n}\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 177751,
+            "currentOffsetCharacters": 177816,
             "currentText": " return captureRuntimeProducerSourceFiles({spec,root,legacyCollect:previousProducerSourceFiles,collectParentCompany:whatsappFieldCompanyNativeSourceFiles});\n}\nfunction previousProducerSourceFiles(spec,root){\n if(spec.kind===PLAN_BUDGET_CI_KIND)return planBudgetUiSourceBinding(file=>readFileSync(path.join(root,file))).sourceManifest.map(row=>row.path);\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 242661,
+            "currentOffsetCharacters": 242726,
             "currentText": "unction runCaptureExtensionFixtureBody(spec,contract,readSource,fixturePorts){\nconst {validateExtensionProof,currentProducerSourceFiles,companyKycCurrentSourceClosureSelftest,companySubscriptionProofClosureSelftest,currentKycStatusClosureSelftest,documentCurveCopySelftest,monthlyCurveClosureSelftest,organizationUsageClosureSelftest,ownTemplateClosureSelftest,taskMeasurementProofClosureSelftest,whatsappPlanImportClosureSelftest}=fixturePorts;\n",
             "previousText": "or(const spec of contract.extension.proofs.filter(spec=>!['PG_PLAN_BASELINE','UI_DOCUMENT_CURVE',PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){"
           },
           {
-            "currentOffsetCharacters": 247893,
+            "currentOffsetCharacters": 247958,
             "currentText": ",spec",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 249468,
+            "currentOffsetCharacters": 249533,
             "currentText": "fixturePorts.verifyCurrentCollector(",
             "previousText": "equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'"
           },
           {
-            "currentOffsetCharacters": 297675,
-            "currentText": "\n}\n for(const spec of contract.extension.proofs.filter(spec=>!['PG_PLAN_BASELINE','UI_DOCUMENT_CURVE',PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))) {\n  const fixturePorts={validateExtensionProof,currentProducerSourceFiles,companyKycCurrentSourceClosureSelftest,companySubscriptionProofClosureSelftest,currentKycStatusClosureSelftest,documentCurveCopySelftest,monthlyCurveClosureSelftest,organizationUsageClosureSelftest,ownTemplateClosureSelftest,taskMeasurementProofClosureSelftest,whatsappPlanImportClosureSelftest,checks,currentCollectorName:spec.id+\"-real-current-producer-source-manifest-exact\",verifyCurrentCollector:()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST')};\n  if(hasCaptureRuntime(contract)&&[\"PG_BANK\",\"PG_INTAKE\",\"PG_COMPANY_KYC\"].includes(spec.kind))runCaptureNativeFixtureIteration(contract,readSource,spec,root,[...new Set([discoveryChecks,videoChecks,preparationChecks,preparationProofChecks,identityClosureChecks,billingClosureChecks,subscriptionClosureChecks,currentCompanyChecks,currentContinuityChecks,currentReactiveChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentWhatsappPlanChecks])],runCaptureExtensionFixtureBody,fixturePorts);\n  else runCaptureExtensionFixtureBody(spec,contract,readSource,fixturePorts);\n",
+            "currentOffsetCharacters": 297740,
+            "currentText": "\n}\n\n const selftestProgressToken043=selftestProgressStart(\"F2.extension-proof-fixture-iterations\");\n for(const spec of contract.extension.proofs.filter(spec=>!['PG_PLAN_BASELINE','UI_DOCUMENT_CURVE',PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))) {\n  const fixturePorts={validateExtensionProof,currentProducerSourceFiles,companyKycCurrentSourceClosureSelftest,companySubscriptionProofClosureSelftest,currentKycStatusClosureSelftest,documentCurveCopySelftest,monthlyCurveClosureSelftest,organizationUsageClosureSelftest,ownTemplateClosureSelftest,taskMeasurementProofClosureSelftest,whatsappPlanImportClosureSelftest,checks,currentCollectorName:spec.id+\"-real-current-producer-source-manifest-exact\",verifyCurrentCollector:()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST')};\n  if(hasCaptureRuntime(contract)&&[\"PG_BANK\",\"PG_INTAKE\",\"PG_COMPANY_KYC\"].includes(spec.kind))runCaptureNativeFixtureIteration(contract,readSource,spec,root,[...new Set([discoveryChecks,videoChecks,preparationChecks,preparationProofChecks,identityClosureChecks,billingClosureChecks,subscriptionClosureChecks,currentCompanyChecks,currentContinuityChecks,currentReactiveChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentWhatsappPlanChecks])],runCaptureExtensionFixtureBody,fixturePorts);\n  else runCaptureExtensionFixtureBody(spec,contract,readSource,fixturePorts);\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 304719,
+            "currentOffsetCharacters": 299307,
+            "currentText": " selftestProgressEnd(\"F2.extension-proof-fixture-iterations\",selftestProgressToken043);\n\n\n const selftestProgressToken044=selftestProgressStart(\"F2.local.discoveryChecks-drain\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 299527,
+            "currentText": " selftestProgressEnd(\"F2.local.discoveryChecks-drain\",selftestProgressToken044);\n\n\n const selftestProgressToken045=selftestProgressStart(\"F2.local.videoChecks-drain\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 299732,
+            "currentText": " selftestProgressEnd(\"F2.local.videoChecks-drain\",selftestProgressToken045);\n\n\n const selftestProgressToken046=selftestProgressStart(\"F2.local.preparationChecks-drain\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 299945,
+            "currentText": " selftestProgressEnd(\"F2.local.preparationChecks-drain\",selftestProgressToken046);\n\n\n const selftestProgressToken047=selftestProgressStart(\"F2.local.preparationProofChecks-drain\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 300167,
+            "currentText": " selftestProgressEnd(\"F2.local.preparationProofChecks-drain\",selftestProgressToken047);\n\n\n const selftestProgressToken048=selftestProgressStart(\"F2.local.identityClosureChecks-drain\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 300399,
+            "currentText": " selftestProgressEnd(\"F2.local.identityClosureChecks-drain\",selftestProgressToken048);\n\n\n const selftestProgressToken049=selftestProgressStart(\"F2.local.billingClosureChecks-drain\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 300629,
+            "currentText": "selftestProgressEnd(\"F2.local.billingClosureChecks-drain\",selftestProgressToken049);\n\n\n const selftestProgressToken050=selftestProgressStart(\"F2.local.subscriptionClosureChecks-drain\");\n for(const run of subscriptionClosureChecks)checks.push(...run());\n selftestProgressEnd(\"F2.local.subscriptionClosureChecks-drain\",selftestProgressToken050);\n",
+            "previousText": " for(const run of subscriptionClosureChecks)checks.push(...run());"
+          },
+          {
+            "currentOffsetCharacters": 306225,
             "currentText": " if(hasCaptureRuntime(contract)){try{validateContract(captureBudget.restoreCaptureRuntimePreviousContract(contract));}catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')deny('PROOF_BINDING_SOURCE');throw error;}return contract;}\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 309112,
+            "currentOffsetCharacters": 310618,
             "currentText": " const checksumContract=hasCaptureRuntime(contract)?captureBudget.restoreCaptureRuntimePreviousContract(contract):contract;\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 309448,
+            "currentOffsetCharacters": 310954,
             "currentText": "hecksumContract?.[WORKSITE_LIVE_HOURS_CURRENT_SECTION])deny('CONTRACT_CHECKSUM');\n  try{if(hash(JSON.stringify(restoreWorksiteLiveHoursPreviousContract(checksumC",
             "previousText": "ontract?.[WORKSITE_LIVE_HOURS_CURRENT_SECTION])deny('CONTRACT_CHECKSUM');\n  try{if(hash(JSON.stringify(restoreWorksiteLiveHoursPreviousContract(c"
           },
           {
-            "currentOffsetCharacters": 309887,
+            "currentOffsetCharacters": 311393,
             "currentText": " if(hasCaptureRuntime(contract))return buildCaptureRuntimeWorkflow(contract,buildWorkflow(captureBudget.restoreCaptureRuntimePreviousContract(contract)));\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 318837,
+            "currentOffsetCharacters": 320343,
             "currentText": "const nativeReader=file=>file===nativePath?readFileSync(path.join(root,nativePath)):readSource(file);\n  try{validateProgressEvidenceWaitNativeProofBytes(nativeBytes,contract,nativeReader);}catch(error){if(error.code==='PROGRESS_EVIDENCE_WAIT_NATIVE_PROOF_REJECTED')deny('PROOF_PROGRESS_WAIT_BOUNDARY');throw error;}\n  if(!readFileSync(path.join(root,nativePath)).equals(nativeBytes))deny('PROOF_PROGRESS_WAIT_FILE_BINDING');",
             "previousText": "try{validateProgressEvidenceWaitNativeProofBytes(nativeBytes,contract,readSource);}catch(error){if(error.code==='PROGRESS_EVIDENCE_WAIT_NATIVE_PROOF_REJECTED')deny('PROOF_PROGRESS_WAIT_BOUNDARY');throw error;}"
           },
           {
-            "currentOffsetCharacters": 319754,
+            "currentOffsetCharacters": 321260,
             "currentText": "if(hasCaptureRuntime(contract)){const proof=JSON.parse(nativeBytes);normalizeCaptureCompanyCoreNativeProof({contract,proof,root,readSource,readEvidence:file=>{if(file!==nativePath)return null;const fresh=readFileSync(path.join(root,nativePath));if(!fresh.equals(nativeBytes))deny('PROOF_COMPANY_CORE_FILE_BINDING');return fresh;},normalizeLegacy:(projected,reader)=>validateCompanyOnboardingUxNativeProofBytes(Buffer.from(JSON.stringify(projected)),reader)});}else validateCompanyOnboardingUxNativeProofBytes(nativeBytes,readSource);}catch(error){if(error.code==='COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED'||error.code==='CAPTURE_QUALITY_COLLECTOR",
             "previousText": "validateCompanyOnboardingUxNativeProofBytes(nativeBytes,readSource);}catch(error){if(error.code==='COMPANY_ONBOARDING_UX_NATIVE_PROOF"
           },
           {
-            "currentOffsetCharacters": 328957,
+            "currentOffsetCharacters": 330463,
             "currentText": " return evaluateGateRecords({needs,contract,expectedHead,workflowSha256,runId,runAttempt},{assertBindings:(bindings,lane,files)=>assertProofBindings(bindings,contract,lane,files,expectedHead,readSource),verifierDigest:verifierSha256});\n}\nfunction evaluateGateRecords({needs,contract,expectedHead,workflowSha256,runId,runAttempt},{assertBindings,verifierDigest}){\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 330677,
+            "currentOffsetCharacters": 332183,
             "currentText": "Digest",
             "previousText": "Sha256"
           },
           {
-            "currentOffsetCharacters": 333387,
+            "currentOffsetCharacters": 334893,
             "currentText": "Bindings(record.proofBindings,lane,record.files",
             "previousText": "ProofBindings(record.proofBindings,contract,lane,record.files,expectedHead,readSource"
           },
           {
-            "currentOffsetCharacters": 334020,
+            "currentOffsetCharacters": 335526,
             "currentText": "Digest",
             "previousText": "Sha256"
           },
           {
-            "currentOffsetCharacters": 336181,
+            "currentOffsetCharacters": 337687,
             "currentText": "const PURE_PROVENANCE_DECODER_BOUNDARY='pure provenance decoder; not public gate integration; not native or human acceptance';\nfunction freezeProvenanceFixture(value){\n if(value&&typeof value==='object'){for(const child of Object.values(value))freezeProvenanceFixture(child);Object.freeze(value);}return value;\n}\n// Only selftests call this private factory, after their actual current gate\n// positive. Its owned expectations never enter the public gate or a source scope.\nfunction ownedProvenanceDecoder(input,authenticatedReport){\n assert.equal(authenticatedReport.state,'PASS');assert.equal(authenticatedReport.head,input.expectedHead);equal(authenticatedReport.lanes.map(row=>row.lane),LANES,'DECODER_FIXTURE_LANES');\n const context=freezeProvenanceFixture(clone({contract:input.contract,expectedHead:input.expectedHead,workflowSha256:input.workflowSha256,runId:input.runId,runAttempt:input.runAttempt}));\n const fields=['id','path','producer','kind','result','sourceRevision','harnessSha256','sourceManifestSha256','sourceReferences'];\n const owned=freezeProvenanceFixture(Object.fromEntries(authenticatedReport.lanes.map(row=>[\n  row.lane,row.proofBindings.map(binding=>Object.fromEntries(fields.map(key=>[key,clone(binding[key])]))),\n ])));\n const digest=authenticatedReport.verifierSha256;assert.ok(sha(digest));\n for(const lane of LANES)equal(owned[lane].map(row=>row.id),context.contract.extension.proofs.filter(spec=>spec.lane===lane).map(spec=>spec.id),'DECODER_FIXTURE_BINDINGS');\n const expected=(lane,files)=>context.contract.extension.proofs.filter(spec=>spec.lane===lane).map((spec,index)=>({...owned[lane][index],proofSha256:files.find(file=>file.path===spec.path).sha256,bytes:files.find(file=>file.path===spec.path).bytes,checks:summary(spec,files,context.contract)}));\n const assertBindings=(bindings,lane,files)=>assertProofBindingsWithExpected(bindings,context.contract,lane,()=>expected(lane,files));\n const decode=needs=>evaluateGateRecords({...context,needs},{assertBindings,verifierDigest:()=>digest});\n const check=(checks,name,code,run)=>{if(code)assert.throws(run,error=>error.code===code);else run();checks.push({name,result:'PASS',...(code?{expectedDenial:code}:{}),boundary:PURE_PROVENANCE_DECODER_BOUNDARY});};\n return Object.freeze({decode,\n  variableFiles(checks,prefix,needs,specId){\n   const spec=context.contract.extension.proofs.find(row=>row.id===specId);assert.ok(spec);\n   for(const field of ['sha256','bytes']){const value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance),file=record.files.find(row=>row.path===spec.path);assert.ok(file);file[field]=field==='sha256'?'f'.repeat(64):file.bytes+1;value[spec.lane].outputs.provenance=JSON.stringify(seal(unseal(record)));check(checks,prefix+'-current-files-'+field+'-resealed','PROOF_BINDING_IDENTITY',()=>decode(value));}\n  },\n  coreChecks(checks,needs){\n   const lane=LANES[0],record=JSON.parse(needs[lane].outputs.provenance),bindings=clone(record.proofBindings);let calls=0;\n   for(const [name,value]of [['not-array',null],['wrong-ids',[]]])check(checks,'provenance-decoder-lazy-'+name,'PROOF_BINDINGS',()=>{try{assertProofBindingsWithExpected(value,context.contract,lane,()=>{calls++;return expected(lane,record.files);});}finally{assert.equal(calls,0);}});\n   const malformed=clone(bindings);malformed[0].extra=true;\n   check(checks,'provenance-decoder-shape-after-factory','PROOF_BINDING_SHAPE',()=>{calls=0;try{assertProofBindingsWithExpected(malformed,context.contract,lane,()=>{calls++;return expected(lane,record.files);});}finally{assert.equal(calls,1);}});\n   const sentinel=Object.assign(new Error('Controlled expected-binding failure'),{code:'DECODER_EXPECTED_FACTORY_SENTINEL'});\n   check(checks,'provenance-decoder-factory-error-before-shape','DECODER_EXPECTED_FACTORY_SENTINEL',()=>assertProofBindingsWithExpected(malformed,context.contract,lane,()=>{throw sentinel;}));\n   check(checks,'provenance-decoder-verifier-nine-calls-on-pass',null,()=>{calls=0;const result=evaluateGateRecords({...context,needs},{assertBindings,verifierDigest:()=>{calls++;return digest;}});assert.equal(result.state,'PASS');assert.equal(calls,9);});\n   check(checks,'provenance-decoder-wrong-head-short-circuits-verifier','PROVENANCE_IDENTITY',()=>{const value=clone(needs),first=JSON.parse(value[lane].outputs.provenance);first.head='f'.repeat(40);value[lane].outputs.provenance=JSON.stringify(seal(unseal(first)));calls=0;try{evaluateGateRecords({...context,needs:value},{assertBindings,verifierDigest:()=>{calls++;return digest;}});}finally{assert.equal(calls,0);}});\n  },\n });\n}\nfunction provenanceDecoderPublicIntegrationSelftest(workflow,contract,root){\n const checks=[],expectedHead='a'.repeat(40),workflowSha256=hash(canonical(workflow)),readSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\\r\\n','\\n'));\n // A separate CURRENT matrix. Never derive these 22 rows from a historical\n // native fixture, whose proof family and source counts are intentionally older.\n const needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};\n const ids=['bank-intake-units','bank-postgres','intake-postgres','bank-ui','intake-ui','joint-ui','joint-causal','company-kyc-postgres','project-preparation-postgres','project-preparation-ui','portfolio-units','portfolio-ui','portfolio-postgres','identity-only-ui','field-canonical-postgres','overtime-canonical-postgres','plan-baseline-postgres','document-curve-ui','participant-kyc-preanalysis-postgres','focused-workspace-ui','field-task-pagination-ui','budget-source-ui'];\n equal(contract.extension.proofs.map(spec=>spec.id),ids,'PUBLIC_GATE_INTEGRATION_CATALOG');\n const good=(name,run)=>{run();checks.push({name,result:'PASS',boundary:'public current gate integration; no native or human acceptance'});};\n const bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code,boundary:'public current gate integration; no native or human acceptance'});};\n for(const id of ids){const spec=contract.extension.proofs.find(row=>row.id===id),value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance);record.proofBindings.find(row=>row.id===id).sourceManifestSha256='f'.repeat(64);value[spec.lane].outputs.provenance=JSON.stringify(seal(unseal(record)));let reads=0;bad('public-gate-binding-valid64-wrong-'+id,'PROOF_BINDING_SOURCE',()=>{try{gate({...input,needs:value,readSource:file=>{reads++;return readSource(file);}});}finally{assert.ok(reads>0);}});}\n const producer=contract.extension.proofs[0].producer,actual=readSource(producer),changed=Buffer.concat([actual,Buffer.from('\\n// controlled public gate source mutation\\n')]);let altered=false;\n const mutable=file=>file===producer&&altered?changed:readSource(file);\n good('public-gate-same-reader-initial-success',()=>assert.equal(gate({...input,readSource:mutable}).state,'PASS'));\n altered=true;bad('public-gate-same-reader-change-after-success','PROOF_BINDING_SOURCE',()=>gate({...input,readSource:mutable}));altered=false;\n good('public-gate-valid-reader-recovers-without-cache',()=>assert.equal(gate({...input,readSource:mutable}).state,'PASS'));\n const afterPrefix=extra=>{const value=clone(needs),outputs=value[LANES[0]].outputs,original=outputs.provenance,record=JSON.parse(original);record.proofBindings[0].extra=true;const malformed=JSON.stringify(seal(unseal(record)));altered=false;Object.defineProperty(outputs,'provenance',{enumerable:true,get(){altered=true;return malformed;}});return {...input,...extra,needs:value,readSource:mutable};};\n bad('public-gate-source-denial-after-prefix-before-binding-shape','PROOF_HARNESS_SOURCE',()=>gate(afterPrefix({})));\n for(const field of ['skipSourceValidation','sourceAlreadyVerified','expectedBindings','bindingForLane','assertBindings'])bad('public-gate-extra-port-fields-cannot-bypass-'+field,'PROOF_HARNESS_SOURCE',()=>gate(afterPrefix({[field]:()=>[]})));\n good('public-gate-private-export-set-unchanged',()=>{const ast=parse(readFileSync(path.join(root,script),'utf8'),{sourceType:'module'});assert.equal(ast.program.body.some(node=>node.type==='ExportDefaultDeclaration'||node.type==='ExportAllDeclaration'||node.type==='ExportNamedDeclaration'&&node.source!==null),false);const actual=ast.program.body.filter(node=>node.type==='ExportNamedDeclaration').flatMap(node=>node.declaration?.id?[node.declaration.id.name]:node.declaration?.declarations?node.declaration.declarations.map(row=>row.id.name):node.specifiers.map(row=>row.exported.name));equal(actual,['EXPECTED_CONTRACT_SHA256','WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS','IDENTITY_ONLY_CHECKS','LANES','validateCompanyKycContextNativeProof','validateDocumentCurveUiContract','validateExtensionProof','validatePlanBaselineContract','currentProducerSourceFiles','validateWhatsappFeedbackPreviousSourceLineage','cleanPath','assertSourceIdentity','validateContract','loadContract','buildWorkflow','equivalent','assertFreshEvidence','canonicalDependencyTextSha256','assertDependencies','assertLaneOutputSize','readLaneNeedsEnvironment','provenance','retainWeeklyCypImportUiScreenshots','validateWeeklyCypRetainedScreenshotBindings','retainPlanPartidaPreviewUiScreenshots','validatePlanPartidaPreviewRetainedScreenshotBindings','validateIdentityDestinationRetainedScreenshots','gate','kycExpiredCurrentCompositionSelftest','selftest','planBudgetCurrentGateSelftest','selftestErrorDiagnostics'],'PUBLIC_GATE_EXPORT_SET');});\n return checks;\n}\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 347448,
+            "currentOffsetCharacters": 348954,
             "currentText": "\n   if(hasCaptureRuntime(current)){\n    const parent=captureBudget.restoreCaptureRuntimePreviousContract(current),prior=parent[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family==='COMPACT');\n    const advance=current[PLAN_BUDGET_CURRENT_SECTION].captureQualityRuntime.familyAdvances.find(row=>row.family==='COMPACT');\n    assert.ok(prior&&advance,'The exact parent COMPACT family and additive capture delta are required');\n    assert.equal(compact.currentCount,prior.currentFiles.length);assert.equal(compact.currentPathsSha256,hash(canonical(prior.currentFiles)));\n    assert.equal(advance.previousCount,prior.currentFiles.length);assert.equal(advance.currentCount,family.currentFiles.length);\n    assert.deepEqual(advance.removals,[]);assert.deepEqual([...prior.currentFiles,...advance.additions].sort(),family.currentFiles);\n   }else{assert.equal(compact.currentCount,family.currentFiles.length);assert.equal(compact.currentPathsSha256,hash(canonical(family.currentFiles)));}\n   assert.equal(result.sourceCount,family.currentFiles.length);assert.equal(result.sourcePathsSha256,hash(canonical(family.currentFiles))",
             "previousText": "assert.equal(compact.currentCount,family.currentFiles.length);assert.equal(compact.currentPathsSha256,hash(canonical(family.currentFiles)));\n   assert.equal(result.sourceCount,compact.currentCount);assert.equal(result.sourcePathsSha256,compact.currentPathsSha256"
           },
           {
-            "currentOffsetCharacters": 352805,
-            "currentText": " function badDecoder(name,code,run){bad(name,code,run);checks.at(-1).boundary=PURE_PROVENANCE_DECODER_BOUNDARY;}\n",
+            "currentOffsetCharacters": 353995,
+            "currentText": "\n const selftestProgressToken003=selftestProgressStart(\"F0.restore-historical-fixture\");\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 358481,
+            "currentOffsetCharacters": 354186,
+            "currentText": " selftestProgressEnd(\"F0.restore-historical-fixture\",selftestProgressToken003);\n\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 354481,
+            "currentText": " function badDecoder(name,code,run){bad(name,code,run);checks.at(-1).boundary=PURE_PROVENANCE_DECODER_BOUNDARY;}\n\n const selftestProgressToken004=selftestProgressStart(\"F0.workflow-baseline-equivalence\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 354771,
+            "currentText": " selftestProgressEnd(\"F0.workflow-baseline-equivalence\",selftestProgressToken004);\n\n\n const selftestProgressToken005=selftestProgressStart(\"F0.plan-budget-conditional-region\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 355061,
+            "currentText": " selftestProgressEnd(\"F0.plan-budget-conditional-region\",selftestProgressToken005);\n\n\n const selftestProgressToken006=selftestProgressStart(\"F0.document-association-conditional-region\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 356479,
+            "currentText": " selftestProgressEnd(\"F0.document-association-conditional-region\",selftestProgressToken006);\n\n\n const selftestProgressToken007=selftestProgressStart(\"F0.workspace-continuity-conditional-region\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 358150,
+            "currentText": " selftestProgressEnd(\"F0.workspace-continuity-conditional-region\",selftestProgressToken007);\n\n\n const selftestProgressToken008=selftestProgressStart(\"F0.whatsapp-field-conditional-region\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 360359,
+            "currentText": " selftestProgressEnd(\"F0.whatsapp-field-conditional-region\",selftestProgressToken008);\n\n\n const selftestProgressToken009=selftestProgressStart(\"F0.kycExpiredCurrentCompositionSelftest\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 360616,
+            "currentText": " selftestProgressEnd(\"F0.kycExpiredCurrentCompositionSelftest\",selftestProgressToken009);\n\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 360824,
+            "currentText": "\n const selftestProgressToken010=selftestProgressStart(\"F0.integratedIdentityCurrentSelftest\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 360995,
+            "currentText": " selftestProgressEnd(\"F0.integratedIdentityCurrentSelftest\",selftestProgressToken010);\n\n\n const selftestProgressToken011=selftestProgressStart(\"F1.expectedNeeds-input\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 361437,
+            "currentText": " selftestProgressEnd(\"F1.expectedNeeds-input\",selftestProgressToken011);\n\n\n const selftestProgressToken012=selftestProgressStart(\"F1.public-gate-and-owned-decoder\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 361709,
             "currentText": "let currentGateReport;\n good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);currentGateReport=gate(input);assert.equal(currentGateReport.commandBlocks,contract.blocks.length);});\n const decoder=ownedProvenanceDecoder(input,currentGateReport),decodeJsonCase=decoder.decode;decoder.variableFiles(checks,'provenance-decoder-main',needs,'bank-intake-units');decoder.coreChecks(checks,needs",
             "previousText": "good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);}"
           },
           {
-            "currentOffsetCharacters": 362726,
-            "currentText": "Decoder('gate-'+result,'LANE_NOT_SUCCESS',()=>decodeJsonCase(n));}\n let n=clone(needs);delete n.meta;badDecoder('missing-lane','MISSING_OR_EXTRA_LANE',()=>decodeJsonCase(n));\n n=clone(needs);n.unexpected=n.meta;badDecoder('extra-lane','MISSING_OR_EXTRA_LANE',()=>decodeJsonCase(n));\n n=clone(needs);n.meta.outputs.artifactId='';badDecoder('missing-artifact','MISSING_ARTIFACT',()=>decodeJsonCase(n));\n n=clone(needs);delete n.meta.outputs.provenance;badDecoder('missing-output','MISSING_LANE_OUTPUT',()=>decodeJsonCase(n));\n n=clone(needs);n.meta.outputs.artifactDigest='';badDecoder('missing-artifact-digest','MISSING_ARTIFACT',()=>decodeJsonCase(n));\n n=clone(needs);n.meta.outputs.artifactId=n.contracts.outputs.artifactId;badDecoder('artifact-id-collision','ARTIFACT_COLLISION',()=>decodeJsonCase(n));\n function altered(name,code,edit){const n=clone(needs),r=JSON.parse(n.people.outputs.provenance);edit(r);delete r.manifestSha256;n.people.outputs.provenance=JSON.stringify(seal(r));badDecoder(name,code,()=>decodeJsonCase(n",
-            "previousText": "('gate-'+result,'LANE_NOT_SUCCESS',()=>gate({...input,needs:n}));}\n let n=clone(needs);delete n.meta;bad('missing-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));\n n=clone(needs);n.unexpected=n.meta;bad('extra-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));\n n=clone(needs);n.meta.outputs.artifactId='';bad('missing-artifact','MISSING_ARTIFACT',()=>gate({...input,needs:n}));\n n=clone(needs);delete n.meta.outputs.provenance;bad('missing-output','MISSING_LANE_OUTPUT',()=>gate({...input,needs:n}));\n n=clone(needs);n.meta.outputs.artifactDigest='';bad('missing-artifact-digest','MISSING_ARTIFACT',()=>gate({...input,needs:n}));\n n=clone(needs);n.meta.outputs.artifactId=n.contracts.outputs.artifactId;bad('artifact-id-collision','ARTIFACT_COLLISION',()=>gate({...input,needs:n}));\n function altered(name,code,edit){const n=clone(needs),r=JSON.parse(n.people.outputs.provenance);edit(r);delete r.manifestSha256;n.people.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>gate({...input,needs:n}"
+            "currentOffsetCharacters": 362455,
+            "currentText": " selftestProgressEnd(\"F1.public-gate-and-owned-decoder\",selftestProgressToken012);\n\n\n const selftestProgressToken013=selftestProgressStart(\"F1.lane-transport\");\n",
+            "previousText": ""
           },
           {
-            "currentOffsetCharacters": 365360,
+            "currentOffsetCharacters": 366013,
+            "currentText": "selftestProgressEnd(\"F1.lane-transport\",selftestProgressToken013);\n\n\n const selftestProgressToken014=selftestProgressStart(\"F1.provenance-and-workflow-negatives\");\n for(const result of ['failure','cancelled','skipped']){const n=clone(needs);n.people.result=result;badDecoder('gate-'+result,'LANE_NOT_SUCCESS',()=>decodeJsonCase(n));}\n let n=clone(needs);delete n.meta;badDecoder('missing-lane','MISSING_OR_EXTRA_LANE',()=>decodeJsonCase(n));\n n=clone(needs);n.unexpected=n.meta;badDecoder('extra-lane','MISSING_OR_EXTRA_LANE',()=>decodeJsonCase(n));\n n=clone(needs);n.meta.outputs.artifactId='';badDecoder('missing-artifact','MISSING_ARTIFACT',()=>decodeJsonCase(n));\n n=clone(needs);delete n.meta.outputs.provenance;badDecoder('missing-output','MISSING_LANE_OUTPUT',()=>decodeJsonCase(n));\n n=clone(needs);n.meta.outputs.artifactDigest='';badDecoder('missing-artifact-digest','MISSING_ARTIFACT',()=>decodeJsonCase(n));\n n=clone(needs);n.meta.outputs.artifactId=n.contracts.outputs.artifactId;badDecoder('artifact-id-collision','ARTIFACT_COLLISION',()=>decodeJsonCase(n));\n function altered(name,code,edit){const n=clone(needs),r=JSON.parse(n.people.outputs.provenance);edit(r);delete r.manifestSha256;n.people.outputs.provenance=JSON.stringify(seal(r));badDecoder(name,code,()=>decodeJsonCase(n",
+            "previousText": "for(const result of ['failure','cancelled','skipped']){const n=clone(needs);n.people.result=result;bad('gate-'+result,'LANE_NOT_SUCCESS',()=>gate({...input,needs:n}));}\n let n=clone(needs);delete n.meta;bad('missing-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));\n n=clone(needs);n.unexpected=n.meta;bad('extra-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));\n n=clone(needs);n.meta.outputs.artifactId='';bad('missing-artifact','MISSING_ARTIFACT',()=>gate({...input,needs:n}));\n n=clone(needs);delete n.meta.outputs.provenance;bad('missing-output','MISSING_LANE_OUTPUT',()=>gate({...input,needs:n}));\n n=clone(needs);n.meta.outputs.artifactDigest='';bad('missing-artifact-digest','MISSING_ARTIFACT',()=>gate({...input,needs:n}));\n n=clone(needs);n.meta.outputs.artifactId=n.contracts.outputs.artifactId;bad('artifact-id-collision','ARTIFACT_COLLISION',()=>gate({...input,needs:n}));\n function altered(name,code,edit){const n=clone(needs),r=JSON.parse(n.people.outputs.provenance);edit(r);delete r.manifestSha256;n.people.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>gate({...input,needs:n}"
+          },
+          {
+            "currentOffsetCharacters": 368914,
             "currentText": "Decoder('empty-provenance','INVALID_PROVENANCE_SHAPE',()=>decodeJsonCase(n));\n n=clone(needs);let r=JSON.parse(n.people.outputs.provenance);r.files[0].bytes++;n.people.outputs.provenance=JSON.stringify(r);badDecoder('unsealed-provenance-change','PROVENANCE_DIGEST',()=>decodeJsonCase(n",
             "previousText": "('empty-provenance','INVALID_PROVENANCE_SHAPE',()=>gate({...input,needs:n}));\n n=clone(needs);let r=JSON.parse(n.people.outputs.provenance);r.files[0].bytes++;n.people.outputs.provenance=JSON.stringify(r);bad('unsealed-provenance-change','PROVENANCE_DIGEST',()=>gate({...input,needs:n}"
           },
           {
-            "currentOffsetCharacters": 372843,
+            "currentOffsetCharacters": 369942,
+            "currentText": " selftestProgressEnd(\"F1.provenance-and-workflow-negatives\",selftestProgressToken014);\n\n\n const selftestProgressToken015=selftestProgressStart(\"F1.artifact-and-retention-controls\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 373419,
+            "currentText": " selftestProgressEnd(\"F1.artifact-and-retention-controls\",selftestProgressToken015);\n\n\n const selftestProgressToken016=selftestProgressStart(\"F1.source-identity-and-overtime\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 376756,
             "currentText": "Decoder(name,code,()=>decodeJsonCase(n",
             "previousText": "(name,code,()=>gate({...input,needs:n}"
           },
           {
-            "currentOffsetCharacters": 377821,
+            "currentOffsetCharacters": 378268,
+            "currentText": " selftestProgressEnd(\"F1.source-identity-and-overtime\",selftestProgressToken016);\n\n\n const selftestProgressToken017=selftestProgressStart(\"F1.dependency-fixtures\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 380079,
+            "currentText": " selftestProgressEnd(\"F1.dependency-fixtures\",selftestProgressToken017);\n\n\n const selftestProgressToken018=selftestProgressStart(\"F1.filesystem-and-proof-binding-controls\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 382073,
             "currentText": "const decoderSpecs=contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec));equal(decoderSpecs.map(spec=>spec.id),['bank-intake-units','bank-postgres','intake-postgres','bank-ui','intake-ui','joint-ui','joint-causal','company-kyc-postgres','project-preparation-postgres','project-preparation-ui','plan-baseline-postgres','document-curve-ui'],'DECODER_EXTENSION_CATALOG');\n  for(const spec of decoderSpecs",
             "previousText": "for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))"
           },
           {
-            "currentOffsetCharacters": 379533,
+            "currentOffsetCharacters": 383785,
             "currentText": "Decoder(spec.id+'-'+name,code,()=>decodeJsonCase(n",
             "previousText": "(spec.id+'-'+name,code,()=>gate({...input,needs:n}"
           },
           {
-            "currentOffsetCharacters": 384936,
-            "currentText": "checks.push(...provenanceDecoderPublicIntegrationSelftest(workflow,contract,root));",
+            "currentOffsetCharacters": 386733,
+            "currentText": "selftestProgressEnd(\"F1.filesystem-and-proof-binding-controls\",selftestProgressToken018);\n\n const currentCompanyChecks=[],currentContinuityChecks=[],currentReactiveChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[],currentKycStatusChecks=[],currentCalendarChecks=[],currentWhatsappPlanChecks=[];\n const selftestProgressToken019=selftestProgressStart(\"F2.extensionSelftest\");\n checks.push(...extensionSelftest(contract,root,currentCompanyChecks,currentContinuityChecks,currentReactiveChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentWhatsappPlanChecks));\n selftestProgressEnd(\"F2.extensionSelftest\",selftestProgressToken019);\n\n const selftestProgressToken020=selftestProgressStart(\"F2.portfolioSelftest\");\n checks.push(...portfolioSelftest(workflow,contract,root));\n selftestProgressEnd(\"F2.portfolioSelftest\",selftestProgressToken020);\n\n const selftestProgressToken021=selftestProgressStart(\"F2.currentCompanyChecks-drain\");\n for(const run of currentCompanyChecks)checks.push(...run());\n selftestProgressEnd(\"F2.currentCompanyChecks-drain\",selftestProgressToken021);\n\n const selftestProgressToken022=selftestProgressStart(\"F2.identitySelftest\");\n checks.push(...identitySelftest(workflow,contract,root,currentContinuityChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentCalendarChecks));\n selftestProgressEnd(\"F2.identitySelftest\",selftestProgressToken022);\n\n const selftestProgressToken023=selftestProgressStart(\"F2.canonicalFieldSelftest\");\n checks.push(...canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks,currentKycStatusChecks,currentWhatsappPlanChecks));\n selftestProgressEnd(\"F2.canonicalFieldSelftest\",selftestProgressToken023);\n\n const selftestProgressToken024=selftestProgressStart(\"F2.currentContinuityChecks-drain\");\n for(const run of currentContinuityChecks)checks.push(...run());\n selftestProgressEnd(\"F2.currentContinuityChecks-drain\",selftestProgressToken024);\n\n const selftestProgressToken025=selftestProgressStart(\"F2.currentReactiveChecks-drain\");\n for(const run of currentReactiveChecks)checks.push(...run());\n selftestProgressEnd(\"F2.currentReactiveChecks-drain\",selftestProgressToken025);\n\n const selftestProgressToken026=selftestProgressStart(\"F2.currentTemplateChecks-drain\");\n for(const run of currentTemplateChecks)checks.push(...run());\n selftestProgressEnd(\"F2.currentTemplateChecks-drain\",selftestProgressToken026);\n\n\n const selftestProgressToken027=selftestProgressStart(\"F2.postgres-service-image-negatives\");\n",
+            "previousText": "const currentCompanyChecks=[],currentContinuityChecks=[],currentReactiveChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[],currentKycStatusChecks=[],currentCalendarChecks=[],currentWhatsappPlanChecks=[];checks.push(...extensionSelftest(contract,root,currentCompanyChecks,currentContinuityChecks,currentReactiveChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentWhatsappPlanChecks));checks.push(...portfolioSelftest(workflow,contract,root));for(const run of currentCompanyChecks)checks.push(...run());checks.push(...identitySelftest(workflow,contract,root,currentContinuityChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentCalendarChecks));checks.push(...canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks,currentKycStatusChecks,currentWhatsappPlanChecks));for(const run of currentContinuityChecks)checks.push(...run());for(const run of currentReactiveChecks)checks.push(...run());for(const run of currentTemplateChecks)checks.push(...run());\n "
+          },
+          {
+            "currentOffsetCharacters": 389745,
+            "currentText": " selftestProgressEnd(\"F2.postgres-service-image-negatives\",selftestProgressToken027);\n\n\n const selftestProgressToken028=selftestProgressStart(\"F2.currentMonthlyChecks-drain\");\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 385760,
+            "currentOffsetCharacters": 389983,
+            "currentText": " selftestProgressEnd(\"F2.currentMonthlyChecks-drain\",selftestProgressToken028);\n\n\n const selftestProgressToken029=selftestProgressStart(\"F2.monthlyCurveContractSelftest\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 390226,
+            "currentText": " selftestProgressEnd(\"F2.monthlyCurveContractSelftest\",selftestProgressToken029);\n\n\n const selftestProgressToken030=selftestProgressStart(\"F2.currentKycStatusChecks-drain\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 390464,
+            "currentText": " selftestProgressEnd(\"F2.currentKycStatusChecks-drain\",selftestProgressToken030);\n\n\n const selftestProgressToken031=selftestProgressStart(\"F2.calendarPreparationContractSelftest\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 390723,
+            "currentText": " selftestProgressEnd(\"F2.calendarPreparationContractSelftest\",selftestProgressToken031);\n\n\n const selftestProgressToken032=selftestProgressStart(\"F2.currentCalendarChecks-drain\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 390967,
+            "currentText": "selftestProgressEnd(\"F2.currentCalendarChecks-drain\",selftestProgressToken032);\n\n\n const selftestProgressToken033=selftestProgressStart(\"F2.whatsappPlanImportContractSelftest\");\n checks.push(...whatsappPlanImportContractSelftest(workflow,contract,root));\n selftestProgressEnd(\"F2.whatsappPlanImportContractSelftest\",selftestProgressToken033);\n\n\n const selftestProgressToken034=selftestProgressStart(\"F2.currentWhatsappPlanChecks-drain\");\n for(const run of currentWhatsappPlanChecks)checks.push(...run());\n selftestProgressEnd(\"F2.currentWhatsappPlanChecks-drain\",selftestProgressToken034);\n\n\n const selftestProgressToken035=selftestProgressStart(\"F3.companySubscriptionContractSelftest\");\n checks.push(...companySubscriptionContractSelftest(contract));\n selftestProgressEnd(\"F3.companySubscriptionContractSelftest\",selftestProgressToken035);\n\n\n const selftestProgressToken036=selftestProgressStart(\"F3.taskMeasurementContractSelftest\");\n checks.push(...taskMeasurementContractSelftest(contract));\n selftestProgressEnd(\"F3.taskMeasurementContractSelftest\",selftestProgressToken036);\n\n\n const selftestProgressToken037=selftestProgressStart(\"F3.organizationUsageContractSelftest\");\n checks.push(...organizationUsageContractSelftest(contract));\n selftestProgressEnd(\"F3.organizationUsageContractSelftest\",selftestProgressToken037);\n\n\n const selftestProgressToken038=selftestProgressStart(\"F3.companyKycCurrentSourceContractSelftest\");\n checks.push(...companyKycCurrentSourceContractSelftest(contract));\n selftestProgressEnd(\"F3.companyKycCurrentSourceContractSelftest\",selftestProgressToken038);\n\n const selftestProgressToken039=selftestProgressStart(\"F3.planBaselineSelftest\");\n checks.push(...planBaselineSelftest(workflow,contract,root));\n selftestProgressEnd(\"F3.planBaselineSelftest\",selftestProgressToken039);\n\n const selftestProgressToken040=selftestProgressStart(\"F3.documentCurveUiSelftest\");\n checks.push(...documentCurveUiSelftest(workflow,contract,root));\n selftestProgressEnd(\"F3.documentCurveUiSelftest\",selftestProgressToken040);\n\n const selftestProgressToken041=selftestProgressStart(\"F3.documentCurveCurrentSourceLineageSelftest\");\n checks.push(...documentCurveCurrentSourceLineageSelftest(contract,root));\n selftestProgressEnd(\"F3.documentCurveCurrentSourceLineageSelftest\",selftestProgressToken041);\n\n const selftestProgressToken042=selftestProgressStart(\"F3.provenanceDecoderPublicIntegrationSelftest\");\n checks.push(...provenanceDecoderPublicIntegrationSelftest(workflow,contract,root));\n selftestProgressEnd(\"F3.provenanceDecoderPublicIntegrationSelftest\",selftestProgressToken042);\n",
+            "previousText": " checks.push(...whatsappPlanImportContractSelftest(workflow,contract,root));\n  for(const run of currentWhatsappPlanChecks)checks.push(...run());\n   checks.push(...companySubscriptionContractSelftest(contract));\n   checks.push(...taskMeasurementContractSelftest(contract));\n   checks.push(...organizationUsageContractSelftest(contract));\n   checks.push(...companyKycCurrentSourceContractSelftest(contract));checks.push(...planBaselineSelftest(workflow,contract,root));checks.push(...documentCurveUiSelftest(workflow,contract,root));checks.push(...documentCurveCurrentSourceLineageSelftest(contract,root));"
+          },
+          {
+            "currentOffsetCharacters": 394309,
             "currentText": "aggregateReadSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\\r\\n','\\n'));\n const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,aggregateReadSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:aggregateReadSource};\n const decoderSpecs=contract.extension.proofs.filter(isCanonicalField);equal(decoderSpecs.map(spec=>spec.id),['field-canonical-postgres','overtime-canonical-postgres'],'DECODER_FIELD_CATALOG');\n let currentGateReport;good('canonical-field-public-gate-current-eight-lanes',()=>{currentGateReport=gate(input);assert.equal(currentGateReport.state,'PASS');});checks.at(-1).boundary='public current gate integration; no native or human acceptance';\n const decoder=ownedProvenanceDecoder(input,currentGateReport),decodeJsonCase=decoder.decode;decoder.variableFiles(checks,'provenance-decoder-canonical-field',needs,'field-canonical-postgres');\n const badDecoder=(name,code,run)=>{bad(name,code,run);checks.at(-1).boundary=PURE_PROVENANCE_DECODER_BOUNDARY;};\n for(const spec of decoderSpecs){\n  for(const [name,code,edit] of [\n   ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],\n   ['binding-source','PROOF_BINDING_SOURCE',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceManifestSha256='f'.repeat(64);}],\n   ['binding-harness','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).harnessSha256='f'.repeat(64);}],\n   ['binding-checks','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).checks=0;}],\n   ['evidence-omitted','MISSING_REQUIRED_RETAINED_EVIDENCE',r=>{r.files=r.files.filter(f=>f.path!==spec.path);}]\n  ]){const value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance);edit(record);delete record.manifestSha256;value[spec.lane].outputs.provenance=JSON.stringify(seal(record));badDecoder(spec.id+'-'+name,code,()=>decodeJsonCase(value));}\n }\n\n function runCaptureFieldFixtureBody(spec,contract,readSource,fixturePorts){\nconst {validateExtensionProof,currentProducerSourceFiles,currentKycStatusClosureSelftest,whatsappPlanImportClosureSelftest}=fixturePorts;\n",
             "previousText": "workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};\n for(const spec of contract.extension.proofs.filter(isCanonicalField)){"
           },
           {
-            "currentOffsetCharacters": 391443,
+            "currentOffsetCharacters": 399992,
             "currentText": "fixturePorts.verifyCurrentCollector(",
             "previousText": "equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'"
           },
           {
-            "currentOffsetCharacters": 400533,
+            "currentOffsetCharacters": 409082,
             "currentText": "",
             "previousText": "  for(const [name,code,edit] of [\n   ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],\n   ['binding-source','PROOF_BINDING_SOURCE',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceManifestSha256='f'.repeat(64);}],\n   ['binding-harness','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).harnessSha256='f'.repeat(64);}],\n   ['binding-checks','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).checks=0;}],\n   ['evidence-omitted','MISSING_REQUIRED_RETAINED_EVIDENCE',r=>{r.files=r.files.filter(f=>f.path!==spec.path);}]\n  ]){const value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance);edit(record);delete record.manifestSha256;value[spec.lane].outputs.provenance=JSON.stringify(seal(record));bad(spec.id+'-'+name,code,()=>gate({...input,needs:value}));}\n"
           },
           {
-            "currentOffsetCharacters": 401612,
+            "currentOffsetCharacters": 410161,
             "currentText": "\n}\n for(const spec of contract.extension.proofs.filter(isCanonicalField)) {\n  const fixturePorts={validateExtensionProof,currentProducerSourceFiles,companyKycCurrentSourceClosureSelftest,companySubscriptionProofClosureSelftest,currentKycStatusClosureSelftest,documentCurveCopySelftest,monthlyCurveClosureSelftest,organizationUsageClosureSelftest,ownTemplateClosureSelftest,taskMeasurementProofClosureSelftest,whatsappPlanImportClosureSelftest,checks,currentCollectorName:spec.id+\"-current-manifest-closure-exact\",verifyCurrentCollector:()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST')};\n  if(hasCaptureRuntime(contract)&&[\"PG_FIELD\"].includes(spec.kind))runCaptureNativeFixtureIteration(contract,readSource,spec,root,[...new Set([currentReactiveChecks,currentKycStatusChecks,currentWhatsappPlanChecks])],runCaptureFieldFixtureBody,fixturePorts);\n  else runCaptureFieldFixtureBody(spec,contract,readSource,fixturePorts);\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 410065,
+            "currentOffsetCharacters": 418614,
             "currentText": "let currentGateReport;\n good('gate-binds-103-checks',()=>{currentGateReport=gate(input);assert.equal(currentGateReport.lanes.find(lane=>lane.lane==='workspace-ui').proofBindings.find(binding=>binding.id===spec.id).checks,IDENTITY_ONLY_CHECK_COUNT);});\n const decoder=ownedProvenanceDecoder(input,currentGateReport),decodeJsonCase=decoder.decode;decoder.variableFiles(checks,'provenance-decoder-identity',needs,'identity-only-ui');\n const badDecoder=(name,code,run)=>{bad(name,code,run);checks.at(-1).boundary=PURE_PROVENANCE_DECODER_BOUNDARY;}",
             "previousText": "good('gate-binds-103-checks',()=>assert.equal(gate(input).lanes.find(lane=>lane.lane==='workspace-ui').proofBindings.find(binding=>binding.id===spec.id).checks,IDENTITY_ONLY_CHECK_COUNT))"
           },
           {
-            "currentOffsetCharacters": 411766,
+            "currentOffsetCharacters": 420315,
             "currentText": "Decoder(name,code,()=>decodeJsonCase(value",
             "previousText": "(name,code,()=>gate({...input,needs:value}"
           },
           {
-            "currentOffsetCharacters": 417228,
+            "currentOffsetCharacters": 425777,
             "currentText": ",spec",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 423640,
+            "currentOffsetCharacters": 432189,
             "currentText": " equal(specs.map(spec=>spec.id),['portfolio-units','portfolio-ui','portfolio-postgres'],'DECODER_PORTFOLIO_CATALOG');\n let currentGateReport;good('portfolio-public-gate-current-eight-lanes',()=>{currentGateReport=gate(input);assert.equal(currentGateReport.state,'PASS');});checks.at(-1).boundary='public current gate integration; no native or human acceptance';\n const decoder=ownedProvenanceDecoder(input,currentGateReport),decodeJsonCase=decoder.decode;decoder.variableFiles(checks,'provenance-decoder-portfolio',needs,'portfolio-units');\n const badDecoder=(name,code,run)=>{bad(name,code,run);checks.at(-1).boundary=PURE_PROVENANCE_DECODER_BOUNDARY;};\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 425366,
+            "currentOffsetCharacters": 433915,
             "currentText": "Decoder(spec.id+'-'+name,code,()=>decodeJsonCase(value",
             "previousText": "(spec.id+'-'+name,code,()=>gate({...input,needs:value}"
           },
           {
-            "currentOffsetCharacters": 428289,
+            "currentOffsetCharacters": 436838,
             "currentText": "decodeJsonCase(copy),error=>error.code===code);checks.push({name:'budget-current-'+name,result:'PASS',expectedDenial:code,boundary:PURE_PROVENANCE_DECODER_BOUNDARY",
             "previousText": "gate({...input,needs:copy}),error=>error.code===code);checks.push({name:'budget-current-'+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial aggregate shadow'"
           },
           {
-            "currentOffsetCharacters": 428757,
+            "currentOffsetCharacters": 437306,
             "currentText": "let currentGateReport;good('all23-pngs-bound-in-aggregate',()=>{currentGateReport=gate(input);});\n const decoder=ownedProvenanceDecoder(input,currentGateReport),decodeJsonCase=decoder.decode;decoder.variableFiles(checks,'provenance-decoder-budget',needs,'budget-source-ui'",
             "previousText": "good('all23-pngs-bound-in-aggregate',()=>gate(input)"
           },
           {
-            "currentOffsetCharacters": 434936,
+            "currentOffsetCharacters": 438770,
+            "currentText": "// CLI selftest diagnostics only: original calls and result rows remain unchanged.\nfunction selftestProgressStart(label){\n try{\n  if(process.argv[2]!=='selftest'||!process.argv[1]||path.resolve(process.argv[1])!==fileURLToPath(import.meta.url))return null;\n  const started=process.hrtime.bigint(),line=JSON.stringify({state:'SELFTEST_PROGRESS',phase:'START',label})+'\\n';\n  if(writeSelftestProgressSync(2,line)!==Buffer.byteLength(line))return null;\n  return started;\n }catch{return null;}\n}\nfunction selftestProgressEnd(label,started){\n if(started===null)return;\n try{\n  const elapsedMs=Number((process.hrtime.bigint()-started)/1000000n);\n  writeSelftestProgressSync(2,JSON.stringify({state:'SELFTEST_PROGRESS',phase:'END',label,elapsedMs})+'\\n');\n }catch{}\n}\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 439548,
+            "currentText": "\n const selftestProgressToken001=selftestProgressStart(\"CLI.load-contract-workflow-options\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 439940,
+            "currentText": " selftestProgressEnd(\"CLI.load-contract-workflow-options\",selftestProgressToken001);\n\n\n const selftestProgressToken002=selftestProgressStart(\"CLI.equivalence-and-dependencies\");\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 440178,
+            "currentText": " selftestProgressEnd(\"CLI.equivalence-and-dependencies\",selftestProgressToken002);\n\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 444602,
             "currentText": "\n// Static copies of the existing selftest-only helper bodies. Explicit fixture\n// ports below never change the public current collector or native entrypoint.\nfunction captureNativeFixtureSelftestHelpers(readFileSync,currentProducerSourceFiles){\nfunction companyKycCurrentSourceClosureSelftest(spec,proof,root,validate){\n if(spec.kind!=='PG_COMPANY_KYC')return [];\n  const dependencies=[...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(spec)],checks=[],prefix=spec.id+'-expiry-current-source-';if(!dependencies.length)return checks;\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure source and shadow proof; no PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial shadow proof'});};\n good('actual-emitter-and-declared-corpus-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));\n good('previous-209-path-lineage-immutable',()=>{const previous=spec.sourceFiles.filter(file=>!dependencies.includes(file)).toSorted();assert.equal(previous.length,209);validateCompanyKycPreviousSourceLineage(spec);});\n for(const file of dependencies){\n  good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-expiry-source.mjs';assert.equal(p.sourceManifest.length,spec.sourceFiles.length);});\n }\n  mutate('initial-210-emitter-omission-cannot-certify-AST-closure','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==COMPANY_KYC_FORMAT_CLOSURE_SOURCE&&!planBaselineDependenciesFor(spec.kind).includes(ref.path)&&!currentWhatsappFeedbackDependenciesFor(spec.kind).includes(ref.path)&&!planMeasurementCurrentDependencies(spec.kind).includes(ref.path)&&!participantPreanalysisProofSourceAdditions(spec).includes(ref.path));assert.equal(p.sourceManifest.length,210);});\n mutate('previous-209-manifest-cannot-certify-expiry','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!dependencies.includes(ref.path));assert.equal(p.sourceManifest.length,209);});\n mutate('previous-reviewed-producer-cannot-certify-current-native-groups','PROOF_HARNESS_SOURCE',p=>{p.harnessSha256=COMPANY_KYC_EXPIRY_PREVIOUS_PRODUCER_SHA256;});\n return checks;\n}\nfunction companySubscriptionProofClosureSelftest(spec,proof,root,validate){\n const dependencies=companySubscriptionProofDependenciesFor(spec.kind),checks=[],prefix=spec.id+'-company-subscription-';if(!dependencies.length)return checks;\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};\n good('exact-current-producer-closure',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));\n for(const file of dependencies){\n  good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-company-subscription.mjs';assert.equal(p.sourceManifest.length,spec.sourceFiles.length);});\n }\n if(isIdentity(spec)){\n  mutate('previous-same-count-billing-mount-denied','PROOF_SOURCE_MANIFEST',p=>{for(const [index,file]of COMPANY_SUBSCRIPTION_UI_SOURCES.entries())p.sourceManifest.find(ref=>ref.path===file).path=PREVIOUS_COMPANY_BILLING_UI_SOURCES[index];assert.equal(p.sourceManifest.length,spec.sourceFiles.length);});\n  mutate('previous-117-manifest-without-closed-fixture-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...companySubscriptionFixtureDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(spec)].includes(ref.path));assert.equal(p.sourceManifest.length,117);});\n }\n  else mutate('previous-191-source-manifest-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...taskMeasurementDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(spec)].includes(ref.path));assert.equal(p.sourceManifest.length,191);});\n return checks;\n}\nfunction currentKycStatusClosureSelftest(spec,proof,root,validate){\n const dependencies=currentKycStatusDependenciesFor(spec.kind);if(!dependencies.length)return [];\n const previousCount=CURRENT_KYC_STATUS_BASE_COUNTS[spec.kind]??CURRENT_KYC_FEEDBACK_ONLY_BASE_COUNTS[spec.kind];assert.ok(Number.isSafeInteger(previousCount));\n const checks=[],prefix=spec.id+'-current-kyc-status-';\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure CURRENT source fixture; no PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',boundary:'pure adversarial CURRENT source fixture'});};\n const rewrite=(value,file,{remove=false,replacement=null,changedHash=false}={})=>{\n  let changed=0;\n  if(spec.kind==='PG_FIELD'){\n   for(const map of [value.sourceSha256,value.voiceProgressSourceSha256,value.mediaLeaseSourceSha256,value.videoAudioSourceSha256,value.participantKycFixture.sourceSha256])if(Object.hasOwn(map,file)){\n    const original=map[file];if(remove||replacement)delete map[file];if(replacement)map[replacement]=original;if(changedHash)map[file]='f'.repeat(64);changed++;\n   }\n  }else{\n   const key=spec.kind==='PG_OVERTIME'?'file':'path';\n   value.sourceManifest=value.sourceManifest.filter(ref=>{if(ref[key]!==file)return true;changed++;if(replacement)ref[key]=replacement;if(changedHash)ref.sha256='f'.repeat(64);return !remove;});\n  }\n  assert.ok(changed>0,'CURRENT source exists in shadow manifest: '+file);\n };\n good('exact-additive-count-and-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+calendarPreparationDependenciesFor(spec.kind).length+whatsappPlanImportDependenciesFor(spec.kind).length+organizationUsageDependenciesFor(spec.kind).length+proofFixtureDependenciesFor(spec.kind).length+civilDataDependenciesFor(spec.kind).length+companyKycCurrentSourceClosureDependenciesFor(spec.kind).length+companySubscriptionBackendDependenciesFor(spec.kind).length+companySubscriptionFixtureDependenciesFor(spec.kind).length+taskMeasurementDependenciesFor(spec.kind).length+planBaselineDependenciesFor(spec.kind).length+planMeasurementCurrentDependencies(spec.kind).length+participantPreanalysisProofSourceAdditions(spec).length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});\n for(const file of dependencies){\n  good('source-pinned-'+file,()=>assert.ok(spec.sourceFiles.includes(file)));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{remove:true}));\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',value=>rewrite(value,file,{changedHash:true}));\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{replacement:'src/lib/foreign-current-kyc-source.mjs'}));\n }\n mutate('previous-current-manifest-cannot-certify-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of [...dependencies,...calendarPreparationDependenciesFor(spec.kind),...whatsappPlanImportDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...companySubscriptionBackendDependenciesFor(spec.kind),...companySubscriptionFixtureDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(spec)])rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,previousCount);});\n const replyDependencies=currentKycReplyFeedbackDependenciesFor(spec.kind);\n if(replyDependencies.length)mutate('previous-reply-manifest-cannot-certify-delivery-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of replyDependencies)rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,spec.sourceFiles.length-replyDependencies.length);});\n checks.push(...organizationUsageClosureSelftest(spec,proof,root,validate));\n return checks;\n}\nfunction documentCurveCopySelftest(spec,proof,validate){\n if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO','UI_JOINT','UI_CAUSAL'].includes(spec.kind))return [];\n const checks=[],bad=(name,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');checks.push({name:spec.id+'-document-copy-'+name,result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure source/relocation shadow; no UI execution'});};\n bad('source-map-missing',p=>{delete p.documentCurveSourceManifest;});bad('source-map-substituted',p=>{p.documentCurveSourceManifest[1].path='src/lib/foreign-document-curve.mjs';});bad('source-map-stale',p=>{p.documentCurveSourceManifest[1].sha256='f'.repeat(64);});bad('source-map-duplicate',p=>{p.documentCurveSourceManifest[1]=clone(p.documentCurveSourceManifest[0]);});bad('relocation-missing',p=>{p.fixtureTransforms=[];});\n for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('relocation-'+key,p=>{p.fixtureTransforms[0][key]='f'.repeat(64);});bad('relocation-foreign-root',p=>{p.fixtureTransforms[0].fixtureRelativePath='../foreign.mjs';});bad('relocation-wrong-module',p=>{p.fixtureTransforms[0].dependencySourcePath='src/lib/foreign-document-curve.mjs';});bad('relocation-untracked-fields',p=>{p.fixtureTransforms[0].exactCopied=true;});\n if(proof.fixtureTransforms.length===2){bad('cyp-module-omitted',p=>{p.documentCurveSourceManifest=p.documentCurveSourceManifest.filter(row=>row.path!=='src/lib/plan-import-cyp-curve.mjs');});bad('second-relocation-omitted',p=>{p.fixtureTransforms.pop();});bad('relocations-reordered',p=>{p.fixtureTransforms.reverse();});for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('second-relocation-'+key,p=>{p.fixtureTransforms[1][key]='f'.repeat(64);});}\n return checks;\n}\nfunction monthlyCurveClosureSelftest(spec,proof,root,validate){\n const dependencies=monthlyCurveDependenciesFor(spec.kind),checks=[],prefix=spec.id+'-monthly-source-curve-';\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure shadow proof; no PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure shadow proof'});};\n good('additive-count-and-real-source-closure',()=>{assert.equal(spec.sourceFiles.length,currentOwnTemplateSourceCount(spec.kind,spec));equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});\n for(const file of dependencies){\n  good('source-pinned-'+file,()=>assert.ok(spec.sourceFiles.includes(file)));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-monthly-source-curve.mjs';assert.equal(p.sourceManifest.length,currentOwnTemplateSourceCount(spec.kind,spec));});\n }\n mutate('previous-manifest-cannot-certify-v3','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...currentPlanDependenciesFor(spec.kind),...participantPreanalysisProofSourceAdditions(spec),...officeAccountDependenciesFor(spec.kind),...currentKycStatusDependenciesFor(spec.kind),...companySubscriptionBackendDependenciesFor(spec.kind),...companySubscriptionFixtureDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,OWN_TEMPLATE_SOURCE_COUNTS[spec.kind]);});\n return checks;\n}\nfunction organizationUsageClosureSelftest(spec,proof,root,validate){\n  const dependencies=[...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...commercialAcceptanceDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(spec)];if(!dependencies.length)return [];\n const previousCount=ORGANIZATION_USAGE_PREVIOUS_SOURCE_COUNTS[spec.kind]??CIVIL_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-organization-usage-';\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure CURRENT source fixture; no PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial CURRENT source fixture'});};\n const rewrite=(value,file,{remove=false,replacement=null,changedHash=false}={})=>{\n  let changed=0;\n  if(spec.kind==='PG_FIELD'){\n   for(const map of [value.sourceSha256,value.voiceProgressSourceSha256,value.mediaLeaseSourceSha256,value.videoAudioSourceSha256,value.participantKycFixture.sourceSha256])if(Object.hasOwn(map,file)){\n    const original=map[file];if(remove||replacement)delete map[file];if(replacement)map[replacement]=original;if(changedHash)map[file]='f'.repeat(64);changed++;\n   }\n  }else{\n   const key=spec.kind==='PG_OVERTIME'?'file':'path';\n   value.sourceManifest=value.sourceManifest.filter(ref=>{if(ref[key]!==file)return true;changed++;if(replacement)ref[key]=replacement;if(changedHash)ref.sha256='f'.repeat(64);return !remove;});\n  }\n  assert.ok(changed>0,'CURRENT organization usage source exists: '+file);\n };\n good('exact-additive-count-and-real-AST-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});\n  if(civilDataDependenciesFor(spec.kind).length+companyKycCurrentSourceClosureDependenciesFor(spec.kind).length)good('civil-current-count-and-closure-exact',()=>assert.equal(spec.sourceFiles.length,CIVIL_PREVIOUS_SOURCE_COUNTS[spec.kind]+civilDataDependenciesFor(spec.kind).length+companyKycCurrentSourceClosureDependenciesFor(spec.kind).length+commercialAcceptanceDependenciesFor(spec.kind).length+planBaselineDependenciesFor(spec.kind).length+currentWhatsappFeedbackDependenciesFor(spec.kind).length+planMeasurementCurrentDependencies(spec.kind).length+participantPreanalysisProofSourceAdditions(spec).length));\n for(const file of dependencies){\n  good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{remove:true}));\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',value=>rewrite(value,file,{changedHash:true}));\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',value=>{rewrite(value,file,{replacement:'src/lib/foreign-organization-usage-source.mjs'});assert.equal(isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length,previousCount+dependencies.length);});\n }\n mutate('previous-current-manifest-cannot-certify-usage','PROOF_SOURCE_MANIFEST',value=>{for(const file of dependencies)rewrite(value,file,{remove:true});assert.equal(isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length,previousCount);});\n return checks;\n}\nfunction ownTemplateClosureSelftest(spec,proof,root,validate){\n const dependencies=ownTemplateDependenciesFor(spec.kind);if(!dependencies.length)return [];\n const checks=[],prefix=spec.id+'-own-template-';\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure shadow fixture, no Git/PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure shadow fixture'});};\n good('current-exact-count-and-real-producer-closure',()=>{assert.equal(spec.sourceFiles.length,currentOwnTemplateSourceCount(spec.kind,spec));equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});\n for(const file of dependencies){\n  good('current-source-pinned-'+file,()=>assert.ok(spec.sourceFiles.includes(file)));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-own-template-source.mjs';assert.equal(p.sourceManifest.length,currentOwnTemplateSourceCount(spec.kind,spec));});\n }\n mutate('previous-manifest-cannot-certify-current-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!dependencies.includes(ref.path));assert.equal(p.sourceManifest.length,currentOwnTemplateSourceCount(spec.kind,spec)-dependencies.length);});\n return checks;\n}\nfunction taskMeasurementProofClosureSelftest(spec,proof,root,validate){\n const dependencies=taskMeasurementDependenciesFor(spec.kind),checks=[],prefix=spec.id+'-task-measurement-';if(!dependencies.length)return checks;\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};\n const rewrite=(value,file,{remove=false,replacement=null,changedHash=false}={})=>{\n  let changed=0;\n  if(spec.kind==='PG_FIELD'){\n   for(const map of [value.sourceSha256,value.voiceProgressSourceSha256,value.mediaLeaseSourceSha256,value.videoAudioSourceSha256,value.participantKycFixture.sourceSha256])if(Object.hasOwn(map,file)){const previous=map[file];if(remove||replacement)delete map[file];if(replacement)map[replacement]=previous;if(changedHash)map[file]='f'.repeat(64);changed++;}\n  }else{const key=spec.kind==='PG_OVERTIME'?'file':'path';value.sourceManifest=value.sourceManifest.filter(ref=>{if(ref[key]!==file)return true;changed++;if(replacement)ref[key]=replacement;if(changedHash)ref.sha256='f'.repeat(64);return !remove;});}\n  assert.ok(changed>0,'Current task measurement source exists in proof: '+file);\n };\n good('exact-current-producer-closure',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));\n for(const file of dependencies){\n  good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{remove:true}));\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',value=>rewrite(value,file,{changedHash:true}));\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{replacement:'src/lib/foreign-task-measurement.mjs'}));\n }\n return checks;\n}\nfunction whatsappPlanImportClosureSelftest(spec,proof,root,validate){\n const dependencies=whatsappPlanImportDependenciesFor(spec.kind),subscriptionDependencies=[...companySubscriptionBackendDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind),...currentKycReplyFeedbackDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(spec)],previousCount=WHATSAPP_PLAN_IMPORT_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-whatsapp-plan-import-';\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};\n const rewrite=(value,file,{remove=false,replacement=null,changedHash=false}={})=>{\n  let changed=0;\n  if(spec.kind==='PG_FIELD'){\n   for(const map of [value.sourceSha256,value.voiceProgressSourceSha256,value.mediaLeaseSourceSha256,value.videoAudioSourceSha256,value.participantKycFixture.sourceSha256])if(Object.hasOwn(map,file)){\n    const original=map[file];if(remove||replacement)delete map[file];if(replacement)map[replacement]=original;if(changedHash)map[file]='f'.repeat(64);changed++;\n   }\n  }else{\n   const key=spec.kind==='PG_OVERTIME'?'file':'path';\n   value.sourceManifest=value.sourceManifest.filter(ref=>{if(ref[key]!==file)return true;changed++;if(replacement)ref[key]=replacement;if(changedHash)ref.sha256='f'.repeat(64);return !remove;});\n  }\n  assert.ok(changed>0,'WhatsApp plan source exists in shadow proof: '+file);\n };\n good('exact-additive-count-and-real-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+subscriptionDependencies.length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});\n for(const file of dependencies){\n  good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>rewrite(p,file,{remove:true}));\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>rewrite(p,file,{changedHash:true}));\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{rewrite(p,file,{replacement:'src/lib/foreign-whatsapp-plan-import.mjs'});assert.equal(isCanonicalField(spec)?canonicalFieldManifest(spec,p).length:p.sourceManifest.length,previousCount+dependencies.length+subscriptionDependencies.length);});\n }\n mutate('previous-current-manifest-cannot-certify-whatsapp-import','PROOF_SOURCE_MANIFEST',p=>{for(const file of [...dependencies,...subscriptionDependencies])rewrite(p,file,{remove:true});assert.equal(isCanonicalField(spec)?canonicalFieldManifest(spec,p).length:p.sourceManifest.length,previousCount);});\n return checks;\n}\nreturn {companyKycCurrentSourceClosureSelftest,companySubscriptionProofClosureSelftest,currentKycStatusClosureSelftest,documentCurveCopySelftest,monthlyCurveClosureSelftest,organizationUsageClosureSelftest,ownTemplateClosureSelftest,taskMeasurementProofClosureSelftest,whatsappPlanImportClosureSelftest};\n}\n\n// Only declared synthetic native fixtures use this checkpoint boundary. Actual\n// collectors, aggregate inputs and current native proof verification stay current.\nfunction runCaptureNativeFixtureIteration(actualContract,actualRead,currentSpec,root,queues,run,actualPorts){\n assert.equal(typeof actualRead,'function');\n // The old FIELD shadow uses a local buffer cache. It must never supply the\n // new authority boundary: obtain fresh physical text for every scope read.\n const readCurrentPhysical=file=>{const value=readFileSync(path.join(root,sourcePath(file))),text=value.toString('utf8');assert.ok(value.equals(Buffer.from(text)));return Buffer.from(text.replaceAll('\\r\\n','\\n'));};\n const start=queues.map(queue=>queue.length),checks=actualPorts.checks,checkStart=checks.length,currentCollectorName=actualPorts.currentCollectorName;\n const mark=rows=>rows.map(row=>row.name===currentCollectorName?row:{...row,checkpoint:'literal Git731 synthetic native fixture'});\n return captureBudget.withCaptureRuntimePreviousSources(actualContract,readCurrentPhysical,(parent,parentRead)=>{\n  assert.equal(hash(JSON.stringify(parent,null,2)+'\\n'),'d5ef59b111dd3e25b8f08854d3e8e4df4838a7913e3e22b76299c1916b9913d2');\n  const parentJson=JSON.stringify(parent),parentSpec=parent.extension.proofs.find(row=>row.id===currentSpec.id),advance=actualContract.planBudgetCurrentRevision.captureQualityRuntime.proofSourceSetAdvances.find(row=>row.kind===currentSpec.kind);\n  assert.ok(parentSpec&&advance);equal(parentSpec.sourceFiles,advance.previousFiles,'PROOF_SOURCE_MANIFEST');equal(currentSpec.sourceFiles,advance.currentFiles,'PROOF_SOURCE_MANIFEST');\n  const fixtureReadFileSync=(filename,options)=>{\n   assert.equal(typeof filename,'string');const absolute=path.resolve(filename),relative=path.relative(root,absolute).split(path.sep).join('/');sourcePath(relative);assert.ok(absolute.startsWith(path.resolve(root)+path.sep));\n   const value=parentRead(relative);assert.ok(Buffer.isBuffer(value));const encoding=typeof options==='string'?options:options?.encoding;return encoding?value.toString(encoding):Buffer.from(value);\n  };\n  const fixtureCollector=(spec,sourceRoot)=>{\n   assert.equal(path.resolve(sourceRoot),path.resolve(root));equal(spec,parentSpec,'PROOF_SOURCE_MANIFEST');\n   // Derive the physical current graph independently first; only its exact\n   // authenticated additive set may project to the literal checkpoint graph.\n   const files=currentProducerSourceFiles(currentSpec,root);equal(files,advance.currentFiles,'PROOF_SOURCE_MANIFEST');return [...advance.previousFiles];\n  };\n  const ports={...actualPorts,...captureNativeFixtureSelftestHelpers(fixtureReadFileSync,fixtureCollector),validateExtensionProof:validatePreviousExtensionProof,currentProducerSourceFiles:fixtureCollector};\n  const result=run(parentSpec,parent,parentRead,ports);assert.ok(!result||typeof result.then!=='function','Synthetic fixture iteration must remain synchronous');\n  for(let index=checkStart;index<checks.length;index++)checks[index]=mark([checks[index]])[0];\n  for(const[index,queue]of queues.entries())for(let at=start[index];at<queue.length;at++)if(typeof queue[at]==='function'){\n   const callback=queue[at];queue[at]=()=>captureBudget.withCaptureRuntimePreviousSources(actualContract,readCurrentPhysical,()=>{\n    assert.equal(JSON.stringify(parent),parentJson,'The owned fixture parent must remain unchanged');\n    try{const value=callback();assert.ok(!value||typeof value.then!=='function','Deferred fixture callback must remain synchronous');return Array.isArray(value)?mark(value):value;}\n    finally{assert.equal(JSON.stringify(parent),parentJson,'The owned fixture parent must remain unchanged');}\n   });\n  }\n  return result;\n });\n}\n",
             "previousText": ""
           }
@@ -26486,6 +26706,26 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         ]
       },
       {
+        "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
+        "status": "MODIFIED",
+        "previousSha256": "aaf23ee0e97231520f29669136d969ffc513bd6b52067df751d3dc6cf9c86bb8",
+        "currentSha256": "98fc68d2304dd51281e4b2ab29d6b22613985d9d9dac033fe874a0fd38557f5e",
+        "previousBytes": 145045,
+        "currentBytes": 145638,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 116,
+            "currentText": "import {withCaptureRuntimePreviousSources} from './plan-budget-current-ci-lineage.mjs';\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 132437,
+            "currentText": " if(contract?.planBudgetCurrentRevision?.captureQualityRuntime){\n  try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>verifyPreviousIntegratedIdentityCurrentSources(parent,parentRead));}\n  catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}\n }\n return verifyPreviousIntegratedIdentityCurrentSources(contract,readSource);\n}\nfunction verifyPreviousIntegratedIdentityCurrentSources(contract,readSource){\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
         "path": "scripts/lib/kyc-current-image-native.mjs",
         "status": "MODIFIED",
         "previousSha256": "87ad6932bbb4ed264947b0ba527965080e4f38a7cc0bb0f945b471e88ee06bbb",
@@ -26624,9 +26864,9 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
         "status": "MODIFIED",
         "previousSha256": "0ba932090392ee957357d303ac8c4acd11fec9da46b4f01a9e5390e47d563510",
-        "currentSha256": "cb3ae781d03275f7ea559c3a86e7f9297f557082036f0a0060b07310503af83b",
+        "currentSha256": "c7cefd94574478d1ba05928e2b8e9699302960c8fcecfd789ae7eae6d5f249bd",
         "previousBytes": 115661,
-        "currentBytes": 183909,
+        "currentBytes": 189029,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 250,
@@ -26680,7 +26920,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "currentOffsetCharacters": 115517,
-            "currentText": "\nreturn Object.freeze({PLAN_BUDGET_CURRENT_REVISION:reviewed,PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,INTAKE_WITHDRAWAL_CHECK_NAMES,restorePlanBudgetAcceptancePreviousContract,restorePlanBudgetAcceptancePreviousSource,restorePlanBudgetPilotIntegrationPreviousContract,restorePlanBudgetPilotIntegrationSource,restorePlanBudgetTrialExpiryNoticePreviousContract,restorePlanBudgetTrialExpiryNoticeSource,restorePlanBudgetTrialExpiryNoticeValidatorSource,restorePlanBudgetMeasurementPrivacyPreviousContract,restorePlanBudgetMeasurementPrivacySource,restorePlanBudgetCheckTimePreviousContract,restorePlanBudgetCheckTimeSource,restorePlanBudgetPreviousContract,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetIntakeWithdrawalProducerText,restorePlanBudgetIntakeWithdrawalUnitProducerText,restorePlanBudgetMaterialNativeProducerText,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetPilotProducerText,restorePlanBudgetFieldReviewBusinessSource,restorePlanBudgetSourceSet,restorePlanBudgetFieldReviewSourceSet,restorePlanBudgetConsumptionEvidenceSourceSet,planBudgetProofSourceAdditions,intakeWithdrawalCurrentCheckCount,verifyPlanBudgetCurrentSources,verifyPlanBudgetActualClosure,restorePlanBudgetClosure,planBudgetValidationFiles,planBudgetCurrentBrowserBinding,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths,planBudgetCurrentSourcePin,planBudgetPreviousSourcePin,normalizePlanBudgetPilotNativeProof,normalizePlanBudgetIntakeWithdrawalNativeProof});\n}\n\n// Current capture-runtime boundary. Historical parent bodies above are unchanged.\n\nexport const CAPTURE_QUALITY_PARENT='731565e11ce8d67e6a4310f491273626fe73c6f9';\nexport const CAPTURE_QUALITY_PARENT_CONTRACT_SHA256='d5ef59b111dd3e25b8f08854d3e8e4df4838a7913e3e22b76299c1916b9913d2';\nexport const CAPTURE_QUALITY_PARENT_DECLARATION_SHA256='cb5b5dbe197defccf1f8ee7c166ccc8e750c339ea612c015e80856cc34dee63f';\nexport const CAPTURE_QUALITY_PARENT_COMPILER_SHA256='0ba932090392ee957357d303ac8c4acd11fec9da46b4f01a9e5390e47d563510';\nexport const CAPTURE_QUALITY_COMPILER_STATE='CURRENT_RUNTIME_EXACT_PARENT_WRAPPER';\nconst section='planBudgetCurrentRevision',revision='captureQualityRuntime';\nconst contractPath='.github/workspace-acceptance-contract.json',anchor='scripts/lib/plan-budget-current-ci-reviewed.mjs';\nconst serialize=value=>JSON.stringify(value,null,2)+'\\n',same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),sha=value=>createHash('sha256').update(value).digest('hex');\nconst plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value),hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);\nconst reject=(ok,reason)=>{if(!ok)throw Object.assign(new Error('Capture quality lineage rejected: '+reason),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason});};\nconst exact=(value,keys,reason)=>reject(plain(value)&&same(Object.keys(value).sort(),[...keys].sort()),reason);\nconst safe=file=>typeof file==='string'&&file.length>0&&path.posix.normalize(file)===file&&!path.posix.isAbsolute(file)&&!/[\\\\:\\x00-\\x1f]/.test(file)&&!file.split('/').includes('..');\nconst bytes=(value,file)=>{reject(Buffer.isBuffer(value)&&Buffer.from(value.toString('utf8')).equals(value),'UTF8_'+file);return Buffer.from(value.toString('utf8').replaceAll('\\r\\n','\\n'));};\nconst declaration=value=>'// Exact budget-source CI declaration; compiler fills immutable reviewed source bindings.\\nexport const PLAN_BUDGET_CURRENT_REVISION=Object.freeze('+JSON.stringify(value,null,2)+');\\n';\nconst sorted=(files,reason)=>reject(Array.isArray(files)&&files.every(safe)&&same(files,[...new Set(files)].sort()),reason);\nconst bridges=new WeakSet();\nexport const isCaptureQualityBridge=value=>bridges.has(value);\n// One reviewed oracle-data advance. It grants neither native nor browser proof.\n// The current pair is exact; descendants and alternate current matrices fail.\nconst fieldPaginationOracleAdvanceV1=Object.freeze({\n pointers:Object.freeze(['/whatsappFieldContinuityCurrentRevision/paginationUi/requestMatrix','/whatsappFieldContinuityCurrentRevision/paginationUi/commandEqualityGroups']),\n previousMatrixSha256:'8bbce7584e6c2c838f178b1585ce708ac4d366e9217ab7306faaa5615578255e',currentMatrixSha256:'db9a5685375c203cbb7f5e5204cb0ee06abdb9966785fec68401a7cb9e26447f',\n previousGroupsSha256:'8bd39d017dc56bd79c72e2b2518979e7c9c385408e6eccae269ce177dbf375e9',currentGroupsSha256:'574432d259b731e489f7f34139c8cc2b7bb7e9aaa24b5be1e84c46d8bfd70373',\n sourcePins:Object.freeze([\n  Object.freeze({path:'scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs',previousSha256:'a1de3a73617de7c4eb2f9db8665650abe5798accb44b886cd8d2220fe5295bbf',currentSha256:'69ce909a5dc107718bfc91ece769bea47d96183bed51ce1ab7e1668dccc17b1b'}),\n  Object.freeze({path:'scripts/verify-field-task-pagination-ui.mjs',previousSha256:'4b98ee409dfca7fa78ffac58c82796c9013f34286691e19e4993149ffd0ad604',currentSha256:'f5fb5468225bf0d0db4e084af6d500db78f61740985238eaa7c243bc902b8dba'}),\n ]),\n});\nfunction fieldPaginationOraclePatches(patches){\n const selected=patches.filter(row=>typeof row?.pointer==='string'&&(row.pointer==='/whatsappFieldContinuityCurrentRevision'||row.pointer.startsWith('/whatsappFieldContinuityCurrentRevision/')));\n if(selected.length===0)return selected;\n reject(same(selected.map(row=>row.pointer),fieldPaginationOracleAdvanceV1.pointers),'FIELD_PAGINATION_ORACLE_PATCH_PAIR');\n for(const patch of selected)exact(patch,['pointer','previous','current'],'FIELD_PAGINATION_ORACLE_PATCH_KEYS');\n const [matrix,groups]=selected;\n reject(Array.isArray(matrix.previous)&&matrix.previous.length===99&&Array.isArray(matrix.current)&&matrix.current.length===108,'FIELD_PAGINATION_ORACLE_MATRIX_SHAPE');\n reject(Array.isArray(groups.previous)&&groups.previous.length===7&&Array.isArray(groups.current)&&groups.current.length===7,'FIELD_PAGINATION_ORACLE_GROUP_SHAPE');\n reject(sha(JSON.stringify(matrix.previous))===fieldPaginationOracleAdvanceV1.previousMatrixSha256&&sha(JSON.stringify(matrix.current))===fieldPaginationOracleAdvanceV1.currentMatrixSha256,'FIELD_PAGINATION_ORACLE_EXACT_MATRIX_V1');\n reject(sha(JSON.stringify(groups.previous))===fieldPaginationOracleAdvanceV1.previousGroupsSha256&&sha(JSON.stringify(groups.current))===fieldPaginationOracleAdvanceV1.currentGroupsSha256,'FIELD_PAGINATION_ORACLE_EXACT_GROUPS_V1');\n const expected=[],indexMap=[],added=[];\n for(const[index,row]of matrix.previous.entries()){\n  indexMap[index]=expected.length;\n  if(row.mode==='consumption'&&row.path==='/api/identity/field-operations'&&row.method==='GET'){\n   const {responseStatus,...base}=row,observed={...base,inventoryFilter:null,responseStatus};expected.push(observed);added.push(expected.length);expected.push({...observed,inventoryFilter:'PENDING'});\n  }else expected.push(structuredClone(row));\n }\n reject(same(added,[10,23,36,49,62,75,85,95,105])&&same(matrix.current,expected),'FIELD_PAGINATION_ORACLE_EXACT_NINE_READ_ADVANCE');\n reject(same(groups.current,groups.previous.map(group=>group.map(index=>indexMap[index]))),'FIELD_PAGINATION_ORACLE_GROUP_REINDEX');\n const removed=new Set(added),restored=matrix.current.flatMap((row,index)=>{if(removed.has(index))return[];const value=structuredClone(row);if(value.mode==='consumption'&&value.path==='/api/identity/field-operations'&&value.method==='GET'){reject(value.inventoryFilter===null,'FIELD_PAGINATION_ORACLE_BASE_FILTER');delete value.inventoryFilter;}return[value];});\n reject(same(restored,matrix.previous),'FIELD_PAGINATION_ORACLE_COMPLETE_MATRIX_INVERSE');\n const previousPosts=matrix.previous.filter(row=>row.method==='POST'),currentPosts=matrix.current.filter(row=>row.method==='POST');reject(previousPosts.length===9&&same(previousPosts,currentPosts),'FIELD_PAGINATION_ORACLE_NINE_POSTS_UNCHANGED');\n return selected;\n}\nconst pointer=(value,key)=>{\n reject(typeof key==='string'&&(/^\\/(?:planBudgetCurrentRevision\\/(?:references(?:\\/\\d+\\/currentSha256)?|sourceFamilies\\/\\d+\\/(?:currentFiles|externalImports|currentManifest))|extension\\/proofs\\/\\d+\\/(?:sourceFiles|producerSha256))$/.test(key)||fieldPaginationOracleAdvanceV1.pointers.includes(key)),'PATCH_POINTER');\n const parts=key.slice(1).split('/');let owner=value;for(const part of parts.slice(0,-1)){reject(owner!==null&&typeof owner==='object'&&Object.hasOwn(owner,part),'PATCH_POINTER');owner=owner[part];}const final=parts.at(-1);reject(owner!==null&&typeof owner==='object'&&Object.hasOwn(owner,final),'PATCH_POINTER');return{owner,key:final};\n};\n\n// The public wrapper binds this gate to the compiled reviewed declaration.\n// Source authentication and native business oracles retain separate scopes.\nexport function createCaptureRuntimeGate(reviewed){\n reject(plain(reviewed),'CONSTRUCTOR');\n reject(sha(createCaptureQualityParentGate.toString().replaceAll('\\r\\n','\\n')+'\\n')==='18ddf75e7f7849728670140880f318b7fc904c51b40eebb7286716a297ad064f','AUTHENTICATED_LITERAL_PARENT_FACTORY');\n const expected=structuredClone(reviewed),runtime=expected[revision],expectedJson=JSON.stringify(expected);\n exact(runtime,['version','parentHead','previousContractSha256','previousDeclarationSha256','sourceAliases','referenceAdvances','sourceHistory','familyAdvances','proofSourceSetAdvances','contractPatches','workflowAdditions','workflowParentSemanticSha256','nativeSourceAdvances','browserSourceAdvances','nativeOrHumanAcceptance'],'RUNTIME_KEYS');\n reject(runtime.version===1&&runtime.parentHead===CAPTURE_QUALITY_PARENT&&runtime.previousContractSha256===CAPTURE_QUALITY_PARENT_CONTRACT_SHA256&&runtime.previousDeclarationSha256===CAPTURE_QUALITY_PARENT_DECLARATION_SHA256&&runtime.nativeOrHumanAcceptance===false,'PARENT');\n for(const key of ['sourceAliases','referenceAdvances','sourceHistory','familyAdvances','proofSourceSetAdvances','contractPatches','workflowAdditions'])reject(Array.isArray(runtime[key]),'ARRAY_'+key);\n const paginationOraclePatches=fieldPaginationOraclePatches(runtime.contractPatches);\n reject(hash(runtime.workflowParentSemanticSha256),'WORKFLOW_PARENT_PIN');\n const inverse=value=>{for(const patch of [...runtime.contractPatches].reverse()){exact(patch,['pointer','previous','current'],'PATCH_KEYS');const target=pointer(value,patch.pointer);reject(same(target.owner[target.key],patch.current),'PATCH_CURRENT');target.owner[target.key]=structuredClone(patch.previous);}return value;};\n const parentContainer={[section]:structuredClone(expected)};delete parentContainer[section][revision];\n for(const patch of [...runtime.contractPatches].reverse().filter(row=>row.pointer.startsWith('/'+section+'/'))){const target=pointer(parentContainer,patch.pointer);reject(same(target.owner[target.key],patch.current),'PARENT_DECLARATION_PATCH');target.owner[target.key]=structuredClone(patch.previous);}\n const parentExpected=parentContainer[section];reject(sha(declaration(parentExpected))===CAPTURE_QUALITY_PARENT_DECLARATION_SHA256,'COMPLETE_PARENT_DECLARATION');\n const parentGate=createCaptureQualityParentGate(structuredClone(parentExpected));\n const freezePinMetadata=value=>{if(value&&typeof value==='object'){Object.values(value).forEach(freezePinMetadata);Object.freeze(value);}return value;};\n const parentPinCarrier=freezePinMetadata({[section]:structuredClone(parentExpected)});\n const histories=new Map(),references=new Map();\n for(const ref of expected.references){reject(safe(ref.path)&&hash(ref.currentSha256)&&!references.has(ref.path),'REFERENCE');references.set(ref.path,ref);}\n for(const row of runtime.sourceHistory){\n  exact(row,['path','status','previousSha256','currentSha256','previousBytes','currentBytes','inverseHunks'],'HISTORY_KEYS');\n  reject(safe(row.path)&&row.path!==anchor&&row.path!==contractPath&&!histories.has(row.path)&&hash(row.currentSha256)&&(row.previousSha256===null||hash(row.previousSha256)),'HISTORY_PATH');\n  reject(row.status===(row.previousSha256===null?'ADDED':'MODIFIED')&&Number.isSafeInteger(row.previousBytes)&&row.previousBytes>=0&&Number.isSafeInteger(row.currentBytes)&&row.currentBytes>0&&Array.isArray(row.inverseHunks)&&row.inverseHunks.length>0,'HISTORY_SHAPE');\n  reject(row.previousSha256===null?row.previousBytes===0:row.previousBytes>0&&row.previousSha256!==row.currentSha256,'HISTORY_PARENT');\n  let end=0;for(const hunk of row.inverseHunks){exact(hunk,['currentOffsetCharacters','currentText','previousText'],'HUNK_KEYS');reject(Number.isSafeInteger(hunk.currentOffsetCharacters)&&hunk.currentOffsetCharacters>=end&&typeof hunk.currentText==='string'&&typeof hunk.previousText==='string'&&hunk.currentText!==hunk.previousText,'ORDERED_HUNKS');end=hunk.currentOffsetCharacters+hunk.currentText.length;}\n  reject(references.get(row.path)?.currentSha256===row.currentSha256,'CURRENT_HISTORY_REFERENCE');histories.set(row.path,row);\n }\n if(paginationOraclePatches.length)for(const pin of fieldPaginationOracleAdvanceV1.sourcePins){const history=histories.get(pin.path);reject(history?.status==='MODIFIED'&&history.previousSha256===pin.previousSha256&&history.currentSha256===pin.currentSha256&&references.get(pin.path)?.currentSha256===pin.currentSha256,'FIELD_PAGINATION_ORACLE_EXACT_SOURCE_HISTORY_'+pin.path);}\n else reject(fieldPaginationOracleAdvanceV1.sourcePins.every(pin=>references.get(pin.path)?.currentSha256!==pin.currentSha256&&histories.get(pin.path)?.currentSha256!==pin.currentSha256),'FIELD_PAGINATION_ORACLE_PATCHES_REQUIRED');\n const advances=[...runtime.referenceAdvances,...runtime.sourceAliases];reject(advances.length===histories.size&&new Set(advances.map(row=>row.path)).size===advances.length,'COMPLETE_REFERENCE_ADVANCES');\n for(const ref of advances){exact(ref,['path','previousSha256','currentSha256'],'ADVANCE_KEYS');const history=histories.get(ref.path);reject(history&&ref.previousSha256===history.previousSha256&&ref.currentSha256===history.currentSha256,'ADVANCE_HISTORY');const previous=parentExpected.references.find(row=>row.path===ref.path);reject(runtime.referenceAdvances.includes(ref)?previous?.currentSha256===ref.previousSha256:!previous,'EXACT_PREVIOUS_REFERENCE');}\n const changedFamilies=expected.sourceFamilies.filter(family=>!same(family,parentExpected.sourceFamilies.find(row=>row.family===family.family))).map(family=>family.family);\n reject(same(runtime.familyAdvances.map(row=>row.family),changedFamilies),'COMPLETE_FAMILY_ADVANCES');\n for(const row of runtime.familyAdvances){exact(row,['family','previousCount','currentCount','additions','removals'],'FAMILY_ADVANCE_KEYS');const prior=parentExpected.sourceFamilies.find(family=>family.family===row.family),current=expected.sourceFamilies.find(family=>family.family===row.family);sorted(row.additions,'FAMILY_ADDITIONS');sorted(row.removals,'FAMILY_REMOVALS');sorted(current?.currentFiles,'CURRENT_FAMILY_FILES');reject(prior&&current&&same(current.currentManifest.map(ref=>ref.path),current.currentFiles)&&current.currentManifest.every(ref=>ref.path===anchor||hash(ref.sha256))&&row.previousCount===prior.currentFiles.length&&row.currentCount===current.currentFiles.length&&row.removals.length===0&&same([...prior.currentFiles,...row.additions].sort(),current.currentFiles),'EXACT_ADDITIVE_FAMILY');}\n for(const row of runtime.proofSourceSetAdvances){exact(row,['id','kind','previousFiles','currentFiles','additions','removals'],'PROOF_ADVANCE_KEYS');for(const key of ['previousFiles','currentFiles','additions','removals'])sorted(row[key],'PROOF_'+key);reject(row.removals.length===0&&same([...row.previousFiles,...row.additions].sort(),row.currentFiles),'EXACT_ADDITIVE_PROOF');}\n const proofPatches=runtime.contractPatches.filter(row=>/^\\/extension\\/proofs\\/\\d+\\/sourceFiles$/.test(row.pointer));reject(proofPatches.length===runtime.proofSourceSetAdvances.length&&new Set(runtime.proofSourceSetAdvances.map(row=>row.id)).size===runtime.proofSourceSetAdvances.length,'COMPLETE_PROOF_ADVANCES');\n for(const row of runtime.workflowAdditions){exact(row,['lane','index','step'],'WORKFLOW_ADDITION_KEYS');reject(typeof row.lane==='string'&&Number.isSafeInteger(row.index)&&row.index>=0&&plain(row.step)&&typeof row.step.run==='string'&&row.step.run.length>0,'WORKFLOW_ADDITION');}\n reject(runtime.workflowAdditions.length===0||histories.has('.github/workflows/workspace-acceptance.yml'),'WORKFLOW_CURRENT_SOURCE_HISTORY');\n function metadata(contract){reject(plain(contract),'CONTRACT');reject(Object.hasOwn(contract,section),'BUDGET_COMPANION_REQUIRED');reject(JSON.stringify(contract[section])===expectedJson,'IMMUTABLE_COMPANION');}\n function restoreParentContract(contract){metadata(contract);for(const patch of proofPatches){const index=Number(patch.pointer.split('/')[3]),spec=contract.extension?.proofs?.[index],row=runtime.proofSourceSetAdvances.find(value=>value.id===spec?.id);reject(row&&row.kind===spec.kind&&same(row.previousFiles,patch.previous)&&same(row.currentFiles,patch.current),'EXACT_PROOF_PATCH_JOIN');}for(const patch of runtime.contractPatches.filter(row=>/^\\/extension\\/proofs\\/\\d+\\/producerSha256$/.test(row.pointer))){const spec=contract.extension?.proofs?.[Number(patch.pointer.split('/')[3])];reject(spec&&patch.current===references.get(spec.producer)?.currentSha256,'EXACT_PRODUCER_REFERENCE_JOIN');}const out=structuredClone(contract);delete out[section][revision];inverse(out);if(sha(serialize(out))!==CAPTURE_QUALITY_PARENT_CONTRACT_SHA256){parentGate.restorePlanBudgetAcceptancePreviousContract(out);reject(false,'COMPLETE_PARENT_CONTRACT');}return out;}\n function restorePreviousSource(file,value){const original=bytes(value,file),history=histories.get(file);if(!history)return Buffer.from(value);let text=original.toString('utf8');reject(sha(original)===history.currentSha256&&original.length===history.currentBytes,'CURRENT_SOURCE_'+file);for(const hunk of [...history.inverseHunks].reverse()){const at=hunk.currentOffsetCharacters;reject(text.slice(at,at+hunk.currentText.length)===hunk.currentText,'EXACT_HUNK_'+file);text=text.slice(0,at)+hunk.previousText+text.slice(at+hunk.currentText.length);}const previous=Buffer.from(text);reject(previous.length===history.previousBytes&&(history.previousSha256===null?previous.length===0:sha(previous)===history.previousSha256),'COMPLETE_SOURCE_INVERSE_'+file);return history.previousSha256===null?null:previous;}\n const read=(reader,file)=>{reject(safe(file)&&typeof reader==='function','SOURCE_READER');const value=reader(file);bytes(value,file);return Buffer.from(value);};\n function verifyActual(contract,reader){\n  const parent=restoreParentContract(contract);reject(bytes(read(reader,contractPath),contractPath).toString('utf8')===serialize(contract),'CURRENT_CONTRACT_BYTES');reject(bytes(read(reader,anchor),anchor).toString('utf8')===declaration(expected),'CURRENT_DECLARATION_BYTES');\n  for(const ref of expected.references)reject(sha(bytes(read(reader,ref.path),ref.path))===ref.currentSha256,'CURRENT_REFERENCE_'+ref.path);for(const file of histories.keys())restorePreviousSource(file,read(reader,file));for(const pin of browserAdvance.currentLfManifest)reject(sha(bytes(read(reader,pin.path),pin.path))===pin.sha256,'CURRENT_BROWSER_SOURCE_'+pin.path);return parent;\n }\n function projectedReader(contract,parent,reader){return file=>{const value=read(reader,file);if(file===contractPath){reject(bytes(value,file).toString('utf8')===serialize(contract),'CURRENT_CONTRACT_BYTES');return Buffer.from(serialize(parent));}if(file===anchor){reject(bytes(value,file).toString('utf8')===declaration(expected),'CURRENT_DECLARATION_BYTES');return Buffer.from(declaration(parentExpected));}return restorePreviousSource(file,value);};}\n function verifyCurrentSources(contract,reader){return withVerifiedParentReader(contract,reader,(parent,_projected,parentVerifyResult)=>{return{...parentVerifyResult,referenceCount:expected.references.length,captureQualityParentRestored:true,nativeOrHumanAcceptance:false};});}\n const activeScopes=[];\n function withVerifiedParentReader(contract,reader,run){reject(typeof run==='function','PARENT_READER_CALLBACK');const initialContract=JSON.stringify(contract),parent=verifyActual(contract,reader),parentJson=JSON.stringify(parent),projected=projectedReader(contract,parent,reader);const parentVerifyResult=structuredClone(parentGate.verifyPlanBudgetCurrentSources(parent,projected));const scope={outerContract:contract,outerReader:reader,parentJson};activeScopes.push(scope);try{const result=run(parent,projected,structuredClone(parentVerifyResult));reject(!result||typeof result.then!=='function','SYNCHRONOUS_PARENT_CALLBACK_REQUIRED');return result;}finally{reject(activeScopes.pop()===scope,'OWNED_SYNCHRONOUS_SCOPE');reject(JSON.stringify(contract)===initialContract&&JSON.stringify(parent)===parentJson,'CONTRACT_AND_PARENT_UNCHANGED');verifyActual(contract,reader);}}\n function historicalAuthority(name,contract,reader,...args){const scope=activeScopes.at(-1);reject(scope&&scope.parentJson===JSON.stringify(contract),'CURRENT_CAPTURE_RUNTIME_REQUIRED');verifyActual(scope.outerContract,scope.outerReader);try{return parentGate[name](contract,...args,reader);}finally{verifyActual(scope.outerContract,scope.outerReader);}}\n function verifyActualClosure(contract,family,closure,reader){const parent=verifyActual(contract,reader),current=expected.sourceFamilies.find(row=>row.family===family),previous=parentExpected.sourceFamilies.find(row=>row.family===family);exact(closure,['files','externalImports'],'CLOSURE_KEYS');reject(current&&previous&&same(closure.files,current.currentFiles)&&same(closure.externalImports,current.externalImports),'EXACT_CURRENT_CLOSURE');for(const ref of current.currentManifest){const value=bytes(read(reader,ref.path),ref.path);reject(ref.path===anchor?value.toString('utf8')===declaration(expected):sha(value)===ref.sha256,'CURRENT_FAMILY_SOURCE_'+ref.path);}parentGate.verifyPlanBudgetActualClosure(parent,family,{files:[...previous.currentFiles],externalImports:[...previous.externalImports]},projectedReader(contract,parent,reader));verifyActual(contract,reader);return{family,sourceCount:current.currentFiles.length,sourcePathsSha256:sha(JSON.stringify(current.currentFiles)),nativeOrBrowserAcceptance:false};}\n function applyWorkflowAdditions(parentWorkflow){reject(sha(JSON.stringify(parentWorkflow))===runtime.workflowParentSemanticSha256,'EXACT_PARENT_WORKFLOW');const out=structuredClone(parentWorkflow);for(const row of runtime.workflowAdditions){reject(Array.isArray(out.jobs?.[row.lane]?.steps)&&row.index<=out.jobs[row.lane].steps.length,'WORKFLOW_INSERTION');out.jobs[row.lane].steps.splice(row.index,0,structuredClone(row.step));}const restored=structuredClone(out);for(const row of [...runtime.workflowAdditions].reverse()){reject(same(restored.jobs[row.lane].steps[row.index],row.step),'WORKFLOW_EXACT_ADDITION');restored.jobs[row.lane].steps.splice(row.index,1);}reject(same(restored,parentWorkflow),'COMPLETE_PARENT_WORKFLOW');return out;}\n reject(Array.isArray(runtime.nativeSourceAdvances)&&same(runtime.nativeSourceAdvances.map(row=>row.kind),['MATERIAL','PG_BANK','PG_INTAKE','PG_FIELD','PG_COMPANY_KYC']),'EXACT_NATIVE_ADAPTER_KINDS');\n for(const row of runtime.nativeSourceAdvances){\n  exact(row,['kind','producer','proofPath','previousProducerLfSha256','currentProducerLfSha256','previousFiles','currentFiles','currentLfManifest','nested'],'NATIVE_ADVANCE_KEYS');const material=row.kind==='MATERIAL',binding={MATERIAL:['scripts/verify-material-inventory-postgres.mjs','.vercel/material-inventory-evidence/postgres.json'],PG_BANK:['scripts/verify-private-bank-account-postgres.mjs','.vercel/private-bank-evidence/postgres.json'],PG_INTAKE:['scripts/verify-employee-intake-postgres.mjs','.vercel/private/employee-intake-postgres.json'],PG_FIELD:['scripts/verify-field-operations-postgres.mjs','.vercel/field-operations-evidence/postgres.json'],PG_COMPANY_KYC:['scripts/verify-company-channel-kyc-postgres.mjs','.vercel/company-kyc-evidence/postgres.json']},[producer,proofPath]=binding[row.kind],proofAdvance=runtime.proofSourceSetAdvances.find(value=>value.kind===row.kind);\n  reject(row.producer===producer&&row.proofPath===proofPath&&hash(row.previousProducerLfSha256)&&hash(row.currentProducerLfSha256)&&row.currentProducerLfSha256===references.get(producer)?.currentSha256,'EXACT_NATIVE_PRODUCER');sorted(row.previousFiles,'NATIVE_PREVIOUS_FILES');sorted(row.currentFiles,'NATIVE_CURRENT_FILES');reject(row.previousFiles.every(file=>row.currentFiles.includes(file)),'ADDITIVE_NATIVE_FILES');reject(same(row.previousFiles,material?parentExpected.consumptionEvidenceRuntime.materialNative.currentFiles:proofAdvance?.previousFiles),'EXACT_NATIVE_PREVIOUS_SET');if(!material)reject(same(row.currentFiles,proofAdvance.currentFiles),'COMPANY_CURRENT_PROOF_SET_JOIN');\n  reject(Array.isArray(row.currentLfManifest)&&same(row.currentLfManifest.map(value=>value.path),[...new Set([...row.currentFiles,producer])].sort()),'COMPLETE_NATIVE_LF_MANIFEST');for(const pin of row.currentLfManifest){exact(pin,['path','sha256'],'NATIVE_LF_PIN_KEYS');reject(hash(pin.sha256)&&(!references.has(pin.path)||references.get(pin.path).currentSha256===pin.sha256),'NATIVE_REFERENCE_JOIN');}reject(row.currentLfManifest.find(pin=>pin.path===producer)?.sha256===row.currentProducerLfSha256,'NATIVE_PRODUCER_LF_JOIN');reject(row.previousProducerLfSha256===(histories.get(producer)?.previousSha256??parentExpected.references.find(pin=>pin.path===producer)?.currentSha256),'NATIVE_PREVIOUS_PRODUCER_JOIN');reject(row.kind==='PG_COMPANY_KYC'?plain(row.nested):row.nested===null||row.kind==='PG_FIELD'&&plain(row.nested),'EXACT_NATIVE_NESTED_MODE');\n }\n reject(Array.isArray(runtime.browserSourceAdvances)&&runtime.browserSourceAdvances.length===1,'EXACT_BROWSER_ADVANCE');\n const browserAdvance=runtime.browserSourceAdvances[0],browserParent=parentExpected.browser,browserFamily=expected.sourceFamilies.find(row=>row.family==='PLAN_BUDGET_UI'),browserFamilyAdvance=runtime.familyAdvances.find(row=>row.family==='PLAN_BUDGET_UI');\n exact(browserAdvance,['kind','producer','previousProducerLfSha256','currentProducerLfSha256','previousFiles','currentFiles','additions','currentLfManifest'],'BROWSER_ADVANCE_KEYS');\n reject(browserAdvance.kind==='WEEKLY_CYP_INVESTMENT_UI'&&browserAdvance.producer===browserParent.producer&&browserAdvance.previousProducerLfSha256===browserParent.producerLfSha256&&hash(browserAdvance.currentProducerLfSha256),'EXACT_BROWSER_PRODUCER');\n for(const key of ['previousFiles','currentFiles','additions'])sorted(browserAdvance[key],'BROWSER_'+key);\n reject(browserAdvance.previousFiles.length===browserParent.investmentSourceCount&&sha(JSON.stringify(browserAdvance.previousFiles))===browserParent.investmentSourcePathsSha256,'EXACT_PREVIOUS_BROWSER_SOURCE_SET');\n reject(browserFamily&&browserFamilyAdvance&&same([...browserAdvance.previousFiles,...browserAdvance.additions].sort(),browserAdvance.currentFiles)&&same(browserAdvance.additions,browserFamilyAdvance.additions)&&browserAdvance.currentFiles.every(file=>browserFamily.currentFiles.includes(file)),'EXACT_ADDITIVE_BROWSER_SOURCE_SET');\n reject(Array.isArray(browserAdvance.currentLfManifest)&&same(browserAdvance.currentLfManifest.map(row=>row.path),[...new Set([...browserAdvance.currentFiles,browserAdvance.producer])].sort()),'COMPLETE_BROWSER_LF_MANIFEST');\n for(const pin of browserAdvance.currentLfManifest){exact(pin,['path','sha256'],'BROWSER_LF_PIN_KEYS');reject(hash(pin.sha256)&&browserFamily.currentManifest.find(row=>row.path===pin.path)?.sha256===pin.sha256&&(!references.has(pin.path)||references.get(pin.path).currentSha256===pin.sha256),'BROWSER_FAMILY_AND_REFERENCE_JOIN');}\n reject(browserAdvance.currentLfManifest.find(row=>row.path===browserAdvance.producer)?.sha256===browserAdvance.currentProducerLfSha256,'EXACT_CURRENT_BROWSER_PRODUCER');\n function browserBinding(contract,fallback){const previous=parentGate.planBudgetCurrentBrowserBinding(restoreParentContract(contract),fallback);return{...previous,producerLfSha256:browserAdvance.currentProducerLfSha256,investmentSourceCount:browserAdvance.currentFiles.length,investmentSourcePathsSha256:sha(JSON.stringify(browserAdvance.currentFiles))};}\n function isCurrent(contract){return plain(contract)&&plain(contract[section])&&Object.hasOwn(contract[section],revision);}\n function immediateSource(contract,file,value){metadata(contract);return restorePreviousSource(file,value);}\n function sourceCall(name,contract,file,value){const parent=restoreParentContract(contract);return parentGate[name](parent,file,restorePreviousSource(file,value));}\n function producerCall(name,contract,file,value){const parent=restoreParentContract(contract);return parentGate[name](parent,restorePreviousSource(file,value));}\n function contractCall(name,contract,...args){return parentGate[name](restoreParentContract(contract),...args);}\n function projectedSet(family){\n  const current=expected.sourceFamilies.find(row=>row.family===family),previous=parentExpected.sourceFamilies.find(row=>row.family===family),proof=runtime.proofSourceSetAdvances.find(row=>row.kind===family);\n  if(current&&proof)reject(same(current.currentFiles,proof.currentFiles)&&same(previous.currentFiles,proof.previousFiles),'FAMILY_AND_PROOF_SOURCE_SET_JOIN_'+family);\n  return current?{current:current.currentFiles,previous:previous.currentFiles,additions:current.currentFiles.filter(file=>!previous.currentFiles.includes(file))}:proof?{current:proof.currentFiles,previous:proof.previousFiles,additions:proof.additions}:null;\n }\n function previousFiles(family,files){const row=projectedSet(family);if(!row)return structuredClone(files);if(same(files,row.current))return [...row.previous];reject(Array.isArray(files)&&!row.additions.some(file=>files.includes(file)),'EXACT_CURRENT_SOURCE_SET_'+family);return [...files];}\n function setCall(name,contract,family,files){return parentGate[name](restoreParentContract(contract),family,previousFiles(family,files));}\n function restoreClosure(contract,family,closure){const parent=restoreParentContract(contract),current=expected.sourceFamilies.find(row=>row.family===family),previous=parentExpected.sourceFamilies.find(row=>row.family===family);exact(closure,['files','externalImports'],'CLOSURE_KEYS');reject(current&&previous&&same(closure.files,current.currentFiles)&&same(closure.externalImports,current.externalImports),'EXACT_CURRENT_CLOSURE');return parentGate.restorePlanBudgetClosure(parent,family,{files:[...previous.currentFiles],externalImports:[...previous.externalImports]});}\n function currentSpec(spec){const row=runtime.proofSourceSetAdvances.find(row=>row.kind===spec?.kind),producer=histories.get(spec?.producer);if(!row&&!producer)return structuredClone(spec);reject(plain(spec)&&Array.isArray(spec.sourceFiles),'CURRENT_SPEC');if(row)reject(same(spec.sourceFiles,row.currentFiles),'EXACT_CURRENT_SPEC_SOURCE_SET_'+spec.kind);if(producer)reject(spec.producerSha256===producer.currentSha256,'EXACT_CURRENT_SPEC_PRODUCER_'+spec.kind);return {...structuredClone(spec),...(row?{sourceFiles:[...row.previousFiles]}:{}),...(producer?{producerSha256:producer.previousSha256}:{})};}\n function proofSourceAdditions(spec){const row=projectedSet(spec?.kind);if(!row)return parentGate.planBudgetProofSourceAdditions(spec);if(same(spec.sourceFiles,row.current))return [...new Set([...parentGate.planBudgetProofSourceAdditions(currentSpec(spec)),...row.additions])].sort();reject(Array.isArray(spec.sourceFiles)&&!row.additions.some(file=>spec.sourceFiles.includes(file)),'EXACT_CURRENT_SOURCE_SET_'+spec.kind);return parentGate.planBudgetProofSourceAdditions(spec);}\n function intakeCurrentCheckCount(spec){const row=projectedSet(spec?.kind);if(!row)return parentGate.intakeWithdrawalCurrentCheckCount(spec);if(same(spec.sourceFiles,row.current))return parentGate.intakeWithdrawalCurrentCheckCount(currentSpec(spec));reject(Array.isArray(spec.sourceFiles)&&!row.additions.some(file=>spec.sourceFiles.includes(file)),'EXACT_CURRENT_SOURCE_SET_'+spec.kind);return parentGate.intakeWithdrawalCurrentCheckCount(spec);}\n function compiledProof(contract){const parent=restoreParentContract(contract),prior=parentGate.planBudgetCompiledProof(parent);if(!prior)return prior;const actual=contract.extension?.proofs?.find(row=>row.id===prior.id||row.kind===prior.kind);if(!actual)return prior;reject(same(currentSpec(actual),prior),'EXACT_COMPILED_PROOF_JOIN');return structuredClone(actual);}\n function sourcePin(contract,ref,previous=false){\n  // Pin aliases intentionally use the private compiled index, as historical\n  // callers do. This lookup is not contract or source acceptance.\n  reject(plain(ref)&&safe(ref.path)&&hash(ref.sha256),'SOURCE_PIN');const history=histories.get(ref.path),input=history&&history.previousSha256!==null&&ref.sha256===history.currentSha256?{...ref,sha256:history.previousSha256}:ref;\n  if(history?.previousSha256===null&&ref.sha256===history.currentSha256)return previous?null:history.currentSha256;\n  const value=parentGate[previous?'planBudgetPreviousSourcePin':'planBudgetCurrentSourcePin'](parentPinCarrier,input);return !previous&&history&&history.previousSha256===value?history.currentSha256:value;\n }\n function knownBusinessSource(file,value){const history=histories.get(file);if(!history)return parentGate.restorePlanBudgetFieldReviewBusinessSource(file,Buffer.from(value));const normalized=bytes(value,file);let projected;if(sha(normalized)===history.currentSha256)projected=restorePreviousSource(file,value);else{reject(history.previousSha256!==null&&sha(normalized)===history.previousSha256&&normalized.length===history.previousBytes,'EXACT_CURRENT_OR_LITERAL_PARENT_BUSINESS_SOURCE_'+file);projected=Buffer.from(value);}return parentGate.restorePlanBudgetFieldReviewBusinessSource(file,projected);}\n function validationFiles(contract){const parent=restoreParentContract(contract);return [...new Set([anchor,...expected.references.map(row=>row.path),...parentGate.planBudgetValidationFiles(parent)])].sort();}\n function proofSourceSet(contract,kind){restoreParentContract(contract);const spec=contract.extension?.proofs?.find(row=>row.kind===kind);reject(spec&&Array.isArray(spec.sourceFiles),'EXACT_CURRENT_PROOF_KIND');return [...spec.sourceFiles];}\n function workflowAdditions(contract){restoreParentContract(contract);return structuredClone(runtime.workflowAdditions);}\n function exactNativeProof(proof,contract,reader,producer){\n  const proofPath=producer==='scripts/verify-employee-intake-postgres.mjs'?'.vercel/private/employee-intake-postgres.json':producer==='scripts/verify-meta-field-bridge-postgres.mjs'?'.vercel/meta-field-evidence/postgres.json':producer==='scripts/verify-material-inventory-postgres.mjs'?'.vercel/material-inventory-evidence/postgres.json':null;\n  reject(proofPath,'EXACT_CURRENT_NATIVE_PRODUCER');let initial;try{initial=read(reader,proofPath);}catch{reject(false,'ACTUAL_NATIVE_PROOF_BYTES');}let parsed;try{parsed=JSON.parse(initial);}catch{reject(false,'ACTUAL_NATIVE_PROOF_JSON');}reject(same(parsed,proof)&&proof?.status==='PASS','ACTUAL_NATIVE_PROOF_BYTES');return{proofPath,raw:Buffer.from(initial),json:JSON.stringify(proof),owned:structuredClone(proof)};\n }\n function nativeManifest(proof,producer,reader,files){\n  reject(hash(proof.harnessSha256)&&sha(read(reader,producer))===proof.harnessSha256&&Array.isArray(proof.sourceManifest),'ACTUAL_NATIVE_RAW_PRODUCER_AND_MANIFEST');const seen=new Map();for(const row of proof.sourceManifest){exact(row,['path','sha256'],'NATIVE_SOURCE_ROW');reject(safe(row.path)&&hash(row.sha256)&&!seen.has(row.path),'NATIVE_SOURCE_ROW');seen.set(row.path,row.sha256);}reject(same([...seen.keys()].sort(),files),'EXACT_NATIVE_SOURCE_SET');for(const [file,pin]of seen)reject(sha(read(reader,file))===pin,'ACTUAL_NATIVE_RAW_SOURCE_'+file);\n }\n function finishNative(snapshot,proof,reader){reject(JSON.stringify(proof)===snapshot.json&&read(reader,snapshot.proofPath).equals(snapshot.raw),'NATIVE_INPUT_AND_RAW_BYTES_UNCHANGED');}\n function intakeNative(raw,contract,reader,spec){\n  const producer='scripts/verify-employee-intake-postgres.mjs',parent=restoreParentContract(contract),before=JSON.stringify(contract),parentSpec=currentSpec(spec);reject(spec?.kind==='PG_INTAKE'&&spec.producer===producer,'EXACT_INTAKE_SPEC');const files=proofSourceSet(contract,'PG_INTAKE');reject(same(spec.sourceFiles,files),'EXACT_INTAKE_SOURCE_JOIN');const snapshot=exactNativeProof(raw,contract,reader,producer);nativeManifest(snapshot.owned,producer,reader,files);\n  const result=withVerifiedParentReader(contract,reader,(previous,projectedReader)=>{const projected=structuredClone(snapshot.owned);projected.harnessSha256=sha(projectedReader(producer));projected.sourceManifest=parentSpec.sourceFiles.map(path=>({path,sha256:sha(projectedReader(path))}));const restored={...projected,harnessSha256:snapshot.owned.harnessSha256,sourceManifest:snapshot.owned.sourceManifest};reject(same(restored,snapshot.owned),'ONLY_INTAKE_SOURCE_FIELDS_PROJECTED');return parentGate.normalizePlanBudgetIntakeWithdrawalNativeProof(projected,previous,projectedReader,parentSpec);});\n  reject(JSON.stringify(contract)===before&&same(parent,restoreParentContract(contract)),'NATIVE_CONTRACT_UNCHANGED');nativeManifest(snapshot.owned,producer,reader,files);finishNative(snapshot,raw,reader);return result;\n }\n function pilotNative(contract,producer,proof,reader){\n  restoreParentContract(contract);\n  const snapshot=exactNativeProof(proof,contract,reader,producer);\n  if(producer==='scripts/verify-material-inventory-postgres.mjs')return materialNative(contract,proof,reader,snapshot);\n  reject(producer==='scripts/verify-meta-field-bridge-postgres.mjs','EXACT_PILOT_NATIVE_PRODUCER');\n  const result=withVerifiedParentReader(contract,reader,(parent,projected)=>parentGate.normalizePlanBudgetPilotNativeProof(parent,producer,structuredClone(snapshot.owned),projected));finishNative(snapshot,proof,reader);return result;\n }\n function materialNative(contract,proof,reader,snapshot){const descriptor=runtime.nativeSourceAdvances.find(row=>row.kind==='MATERIAL'),producer=descriptor.producer;const verify=()=>{nativeManifest(snapshot.owned,producer,reader,descriptor.currentFiles);for(const pin of descriptor.currentLfManifest)reject(sha(bytes(read(reader,pin.path),pin.path))===pin.sha256,'ACTUAL_NATIVE_LF_SOURCE_'+pin.path);};verify();const result=withVerifiedParentReader(contract,reader,(parent,projectedReader)=>{const projected=structuredClone(snapshot.owned);projected.sourceManifest=descriptor.previousFiles.map(path=>({path,sha256:sha(projectedReader(path))}));projected.harnessSha256=sha(projectedReader(producer));reject(sha(bytes(projectedReader(producer),producer))===descriptor.previousProducerLfSha256,'EXACT_MATERIAL_PREVIOUS_PRODUCER');const restored={...projected,sourceManifest:snapshot.owned.sourceManifest,harnessSha256:snapshot.owned.harnessSha256};reject(same(restored,snapshot.owned),'ONLY_MATERIAL_SOURCE_FIELDS_PROJECTED');return parentGate.normalizePlanBudgetPilotNativeProof(parent,producer,projected,projectedReader);});verify();finishNative(snapshot,proof,reader);return result;}\n function companyNative(contract,proof,reader,readEvidence,normalizeParent){restoreParentContract(contract);const descriptor=runtime.nativeSourceAdvances.find(row=>row.kind==='PG_COMPANY_KYC');reject(typeof readEvidence==='function'&&typeof normalizeParent==='function','ACTUAL_COMPANY_EVIDENCE_AND_ORACLE_REQUIRED');const{kind,nested,...top}=descriptor;return createCaptureCompanyNestedAdapter({version:2,top:{version:1,...top},currentImageManifest:structuredClone(nested)}).normalize({contract,proof,reader,readEvidence,bridge,normalizeParent});}\n function extensionNative(contract,spec,proof,reader,readEvidence,callback){\n  const parent=restoreParentContract(contract),actual=contract.extension?.proofs?.find(row=>row.id===spec?.id),previous=parent.extension?.proofs?.find(row=>row.id===spec?.id);reject(actual&&previous&&same(actual,spec)&&['PG_BANK','PG_INTAKE','PG_FIELD','PG_COMPANY_KYC'].includes(spec.kind),'EXACT_EXTENSION_NATIVE_SPEC');reject(typeof readEvidence==='function'&&typeof callback==='function','ACTUAL_EXTENSION_EVIDENCE_AND_ORACLE_REQUIRED');\n  if(spec.kind==='PG_COMPANY_KYC')return companyNative(contract,proof,reader,readEvidence,(parentContract,producer,projected,parentReader)=>{reject(producer===spec.producer,'EXACT_COMPANY_CALLBACK_PRODUCER');return callback(parentContract,structuredClone(previous),projected,parentReader);});\n  if(spec.kind==='PG_FIELD')return fieldNative(contract,spec,proof,reader,readEvidence,callback,previous);\n  const initialRaw=readEvidence(spec.path);reject(Buffer.isBuffer(initialRaw)&&Buffer.from(initialRaw.toString('utf8')).equals(initialRaw),'ACTUAL_EXTENSION_NATIVE_PROOF_BYTES');let parsed;try{parsed=JSON.parse(initialRaw);}catch{reject(false,'ACTUAL_EXTENSION_NATIVE_PROOF_JSON');}reject(same(parsed,proof)&&proof?.status==='PASS','EXACT_EXTENSION_NATIVE_PROOF');const owned=structuredClone(parsed),json=JSON.stringify(parsed),raw=Buffer.from(initialRaw);nativeManifest(owned,spec.producer,reader,spec.sourceFiles);\n  const descriptor=runtime.nativeSourceAdvances.find(row=>row.kind===spec.kind);reject(descriptor&&same(descriptor.currentFiles,spec.sourceFiles)&&descriptor.currentProducerLfSha256===spec.producerSha256,'EXTENSION_NATIVE_DESCRIPTOR_JOIN');const verifyLf=()=>{for(const pin of descriptor.currentLfManifest)reject(sha(bytes(read(reader,pin.path),pin.path))===pin.sha256,'ACTUAL_EXTENSION_SOURCE_LF_'+pin.path);};verifyLf();\n  const result=withVerifiedParentReader(contract,reader,(parentContract,parentReader)=>{const projected=structuredClone(owned);projected.harnessSha256=sha(parentReader(spec.producer));projected.sourceManifest=previous.sourceFiles.map(path=>({path,sha256:sha(parentReader(path))}));reject(same({...projected,harnessSha256:owned.harnessSha256,sourceManifest:owned.sourceManifest},owned),'ONLY_EXTENSION_NATIVE_SOURCE_FIELDS_PROJECTED');return callback(parentContract,structuredClone(previous),projected,parentReader);});\n  nativeManifest(owned,spec.producer,reader,spec.sourceFiles);verifyLf();const final=readEvidence(spec.path);reject(Buffer.isBuffer(final)&&final.equals(raw)&&JSON.stringify(proof)===json,'EXTENSION_NATIVE_INPUT_AND_RAW_UNCHANGED');return result;\n }\n function fieldNative(contract,spec,proof,reader,readEvidence,callback,previous){\n  const descriptor=runtime.nativeSourceAdvances.find(row=>row.kind==='PG_FIELD'),nested=descriptor.nested;exact(nested,['maps'],'FIELD_MAP_DESCRIPTOR_KEYS');reject(Array.isArray(nested.maps)&&same(nested.maps.map(row=>row.field),['sourceSha256','voiceProgressSourceSha256','mediaLeaseSourceSha256','videoAudioSourceSha256','participantKycFixture.sourceSha256']),'EXACT_FIELD_MAP_NAMES');\n  const field=(value,name)=>name==='participantKycFixture.sourceSha256'?value.participantKycFixture?.sourceSha256:value[name],setField=(value,name,map)=>{if(name==='participantKycFixture.sourceSha256')value.participantKycFixture.sourceSha256=map;else value[name]=map;};\n  for(const map of nested.maps){exact(map,['field','previousFiles','currentFiles','currentLfManifest'],'FIELD_MAP_KEYS');sorted(map.previousFiles,'FIELD_PREVIOUS_MAP_FILES');sorted(map.currentFiles,'FIELD_CURRENT_MAP_FILES');reject(map.previousFiles.every(file=>map.currentFiles.includes(file))&&same(map.currentLfManifest.map(row=>row.path),map.currentFiles),'EXACT_ADDITIVE_FIELD_MAP');for(const row of map.currentLfManifest){exact(row,['path','sha256'],'FIELD_LF_ROW');reject(descriptor.currentLfManifest.find(pin=>pin.path===row.path)?.sha256===row.sha256,'FIELD_TOP_LF_JOIN');}}\n  reject(same([...new Set(nested.maps.flatMap(row=>row.currentFiles))].sort(),spec.sourceFiles)&&same([...new Set(nested.maps.flatMap(row=>row.previousFiles))].sort(),previous.sourceFiles),'FIELD_MAPS_COMPLETE_CURRENT_AND_PREVIOUS_UNIONS');\n  const initial=readEvidence(spec.path);reject(Buffer.isBuffer(initial)&&Buffer.from(initial.toString('utf8')).equals(initial),'ACTUAL_FIELD_RAW_PROOF');let parsed;try{parsed=JSON.parse(initial);}catch{reject(false,'ACTUAL_FIELD_PROOF_JSON');}reject(same(parsed,proof)&&proof?.status==='PASS'&&!Object.hasOwn(proof,'sourceManifest'),'ACTUAL_FIELD_FIVE_MAP_PROOF');const owned=structuredClone(parsed),json=JSON.stringify(parsed),raw=Buffer.from(initial);\n  const verify=()=>{reject(hash(owned.harnessSha256)&&sha(read(reader,spec.producer))===owned.harnessSha256,'ACTUAL_FIELD_RAW_HARNESS');for(const map of nested.maps){const rows=field(owned,map.field);reject(plain(rows)&&same(Object.keys(rows).sort(),map.currentFiles),'EXACT_FIELD_RAW_MAP_'+map.field);for(const file of map.currentFiles)reject(hash(rows[file])&&sha(read(reader,file))===rows[file],'ACTUAL_FIELD_RAW_SOURCE_'+file);}for(const pin of descriptor.currentLfManifest)reject(sha(bytes(read(reader,pin.path),pin.path))===pin.sha256,'ACTUAL_FIELD_LF_SOURCE_'+pin.path);};verify();\n  const result=withVerifiedParentReader(contract,reader,(parent,parentReader)=>{const projected=structuredClone(owned);for(const map of nested.maps)setField(projected,map.field,Object.fromEntries(map.previousFiles.map(file=>[file,sha(parentReader(file))])));projected.harnessSha256=sha(parentReader(spec.producer));const business=structuredClone(projected);for(const map of nested.maps)setField(business,map.field,structuredClone(field(owned,map.field)));business.harnessSha256=owned.harnessSha256;reject(same(business,owned),'ONLY_EXACT_FIELD_MAPS_AND_HARNESS_PROJECTED');return callback(parent,structuredClone(previous),projected,parentReader);});verify();const final=readEvidence(spec.path);reject(Buffer.isBuffer(final)&&final.equals(raw)&&JSON.stringify(proof)===json,'FIELD_INPUT_AND_RAW_UNCHANGED');return result;\n }\n const bridge=Object.freeze({parentGate,parentExpected:structuredClone(parentExpected),isCurrent,restoreParentContract,restorePreviousSource:immediateSource,verifyCurrentSources,withVerifiedParentReader,historicalAuthority,verifyActualClosure,applyWorkflowAdditions,sourceCall,producerCall,contractCall,setCall,restoreClosure,proofSourceAdditions,compiledProof,sourcePin,knownBusinessSource,validationFiles,proofSourceSet,workflowAdditions,browserBinding,intakeCurrentCheckCount,intakeNative,pilotNative,companyNative,extensionNative});bridges.add(bridge);return bridge;\n\n}\n\n\nconst createCompanyKycNativeAdapter=(()=>{\n\n// An explicit proposal for the COMPANY proof shape already emitted by this\n// producer. This does not authorize the manifest-only META field proof: that\n// separate proof requires a canonical fresh-lane capability or added source\n// binding, and remains blocked rather than silently rebased.\nconst producer='scripts/verify-company-channel-kyc-postgres.mjs',proofPath='.vercel/company-kyc-evidence/postgres.json';\nconst same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),sha=value=>createHash('sha256').update(value).digest('hex'),hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);\nconst plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value),safe=file=>typeof file==='string'&&path.posix.normalize(file)===file&&!path.posix.isAbsolute(file)&&!/[\\\\:\\x00-\\x1f]/.test(file)&&!file.split('/').includes('..');\nconst reject=(ok,reason)=>{if(!ok)throw Object.assign(new Error('Capture quality native adapter rejected: '+reason),{code:'CAPTURE_QUALITY_NATIVE_SOURCE_REJECTED',reason});};\nconst exact=(value,keys,reason)=>reject(plain(value)&&same(Object.keys(value).sort(),[...keys].sort()),reason),sorted=(files,reason)=>reject(Array.isArray(files)&&files.every(safe)&&same(files,[...new Set(files)].sort()),reason);\nconst lf=value=>Buffer.from(value.toString('utf8').replaceAll('\\r\\n','\\n'));\n\nfunction createCompanyKycNativeAdapter(input){\n const descriptor=structuredClone(input);exact(descriptor,['version','producer','proofPath','previousProducerLfSha256','currentProducerLfSha256','previousFiles','currentFiles','currentLfManifest'],'DESCRIPTOR_KEYS');\n reject(descriptor.version===1&&descriptor.producer===producer&&descriptor.proofPath===proofPath&&hash(descriptor.previousProducerLfSha256)&&hash(descriptor.currentProducerLfSha256),'EXACT_COMPANY_PRODUCER');\n sorted(descriptor.previousFiles,'PREVIOUS_FILES');sorted(descriptor.currentFiles,'CURRENT_FILES');reject(descriptor.previousFiles.length>0&&descriptor.previousFiles.every(file=>descriptor.currentFiles.includes(file)),'ADDITIVE_SOURCE_FILES');\n reject(Array.isArray(descriptor.currentLfManifest)&&same(descriptor.currentLfManifest.map(row=>row.path),[...new Set([...descriptor.currentFiles,producer])].sort()),'COMPLETE_LF_MANIFEST');\n for(const row of descriptor.currentLfManifest){exact(row,['path','sha256'],'LF_ROW');reject(hash(row.sha256),'LF_HASH');}\n const expected=new Map(descriptor.currentLfManifest.map(row=>[row.path,row.sha256]));reject(expected.get(producer)===descriptor.currentProducerLfSha256,'PRODUCER_MANIFEST_JOIN');\n return Object.freeze({\n  normalize({contract,proof,reader,readEvidence,bridge,normalizeParent}={}){\n   // These ports and actual receipt bytes are required before either oracle.\n   reject(typeof reader==='function'&&typeof readEvidence==='function'&&typeof normalizeParent==='function','ACTUAL_BYTE_READERS_REQUIRED');reject(isCaptureQualityBridge(bridge),'AUTHENTICATED_BRIDGE_REQUIRED');\n   const raw=readEvidence(proofPath);reject(Buffer.isBuffer(raw)&&raw.length>0&&Buffer.from(raw.toString('utf8')).equals(raw),'ACTUAL_PROOF_BYTES_REQUIRED');let actual;try{actual=JSON.parse(raw);}catch{reject(false,'ACTUAL_PROOF_JSON');}\n   reject(plain(proof)&&same(actual,proof)&&proof.status==='PASS','EXACT_CURRENT_PROOF');const ownedProof=structuredClone(actual),initialProofJson=JSON.stringify(actual),initialRaw=Buffer.from(raw);reject(Array.isArray(ownedProof.sourceManifest)&&hash(ownedProof.harnessSha256),'CURRENT_PROOF_SOURCE_BINDING_REQUIRED');\n   const rows=new Map();for(const row of ownedProof.sourceManifest){exact(row,['path','sha256'],'CURRENT_PROOF_SOURCE_ROW');reject(safe(row.path)&&hash(row.sha256)&&!rows.has(row.path),'CURRENT_PROOF_SOURCE_ROW');rows.set(row.path,row.sha256);}\n   reject(same([...rows.keys()].sort(),descriptor.currentFiles),'EXACT_CURRENT_PROOF_SOURCE_SET');\n   const verifyRaw=()=>{for(const [file,expectedLf]of expected){const value=reader(file);reject(Buffer.isBuffer(value)&&Buffer.from(value.toString('utf8')).equals(value)&&sha(lf(value))===expectedLf,'ACTUAL_CURRENT_LF_SOURCE_'+file);reject(sha(value)===(file===producer?ownedProof.harnessSha256:rows.get(file)),'ACTUAL_CURRENT_RAW_SOURCE_'+file);}};\n   verifyRaw();\n   const result=bridge.withVerifiedParentReader(contract,reader,(parentContract,parentReader)=>{\n    const previousProducer=parentReader(producer);reject(Buffer.isBuffer(previousProducer)&&sha(lf(previousProducer))===descriptor.previousProducerLfSha256,'EXACT_PREVIOUS_PRODUCER');\n    const projected=structuredClone(ownedProof),prior=new Set(descriptor.previousFiles);projected.sourceManifest=ownedProof.sourceManifest.filter(row=>prior.has(row.path)).map(row=>({path:row.path,sha256:sha(parentReader(row.path))}));projected.harnessSha256=sha(previousProducer);\n    reject(same(projected.sourceManifest.map(row=>row.path).sort(),descriptor.previousFiles),'EXACT_PREVIOUS_PROOF_SOURCE_SET');\n    const restoredBusiness={...projected,sourceManifest:ownedProof.sourceManifest,harnessSha256:ownedProof.harnessSha256};reject(same(restoredBusiness,ownedProof),'ONLY_SOURCE_BINDING_FIELDS_PROJECTED');\n    const normalized=normalizeParent(parentContract,producer,projected,parentReader);reject(!normalized||typeof normalized.then!=='function','SYNCHRONOUS_NATIVE_CALLBACK_REQUIRED');return normalized;\n   });\n   verifyRaw();const finalRaw=readEvidence(proofPath);reject(Buffer.isBuffer(finalRaw)&&finalRaw.equals(initialRaw)&&JSON.stringify(proof)===initialProofJson,'ACTUAL_PROOF_BYTES_AND_INPUT_UNCHANGED');return result;\n  },\n  limits:Object.freeze({producer,proofPath,trackedCompilerIntegrated:false,currentReceiptExecuted:false,freshLaneAuthorityIntegrated:false,metadataOnlyAccepted:false,metaFieldProofAccepted:false,nativeOrHumanAcceptance:false}),\n });\n}\n\nreturn createCompanyKycNativeAdapter;\n})();\nconst createCaptureCompanyNestedAdapter=(()=>{\n\n// Exact adapter for the five actual CURRENT helper RAW references. The real\n// 17-case ledger and every business fact survive byte-for-byte as JSON data.\nconst helper='scripts/lib/kyc-current-image-native.mjs',synthetic='scripts/lib/synthetic-capture-quality.mjs',producer='scripts/verify-company-channel-kyc-postgres.mjs',previousFiles=[helper,producer,'package.json','package-lock.json'],currentFiles=[helper,synthetic,producer,'package.json','package-lock.json'];\nconst sha=value=>createHash('sha256').update(value).digest('hex'),lf=value=>Buffer.from(value.toString('utf8').replaceAll('\\r\\n','\\n')),same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value),plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);\nconst reject=(ok,reason)=>{if(!ok)throw Object.assign(new Error('COMPANY CURRENT nested source adapter rejected: '+reason),{code:'CAPTURE_QUALITY_COMPANY_NESTED_SOURCE_REJECTED',reason});};\nfunction createCompanyNestedNativeAdapter(input){\n const descriptor=structuredClone(input);reject(plain(descriptor)&&same(Object.keys(descriptor).sort(),['version','top','currentImageManifest'].sort())&&descriptor.version===2,'EXACT_V2_DESCRIPTOR');const nested=descriptor.currentImageManifest;reject(plain(nested)&&same(Object.keys(nested).sort(),['previousFiles','currentFiles','currentLfManifest'].sort())&&same(nested.previousFiles,previousFiles)&&same(nested.currentFiles,currentFiles),'EXACT_NESTED_PATHS');reject(Array.isArray(nested.currentLfManifest)&&same(nested.currentLfManifest.map(row=>row.path),currentFiles)&&nested.currentLfManifest.every(row=>plain(row)&&same(Object.keys(row).sort(),['path','sha256'])&&hash(row.sha256)),'EXACT_NESTED_LF_MANIFEST');const top=createCompanyKycNativeAdapter(descriptor.top),topPins=new Map(descriptor.top.currentLfManifest.map(row=>[row.path,row.sha256]));for(const row of nested.currentLfManifest)if(topPins.has(row.path))reject(topPins.get(row.path)===row.sha256,'NESTED_TOP_PIN_JOIN');\n return Object.freeze({normalize({contract,proof,reader,readEvidence,bridge,normalizeParent}={}){\n  reject(typeof reader==='function'&&typeof readEvidence==='function'&&typeof normalizeParent==='function','ACTUAL_READERS_AND_ORACLE_REQUIRED');const initialRaw=readEvidence(descriptor.top.proofPath);reject(Buffer.isBuffer(initialRaw)&&Buffer.from(initialRaw.toString('utf8')).equals(initialRaw),'ACTUAL_PROOF_BYTES');let owned;try{owned=JSON.parse(initialRaw);}catch{reject(false,'PROOF_JSON');}reject(same(owned,proof),'EXACT_PROOF_INPUT');const initialJson=JSON.stringify(owned),ownedRaw=Buffer.from(initialRaw),native=owned.currentImageNative;reject(plain(native)&&Array.isArray(native.sourceManifest)&&same(native.sourceManifest.map(row=>row?.path),currentFiles),'COMPLETE_ACTUAL_NESTED_SOURCE_SET');\n  const verify=()=>{for(const[index,pin]of nested.currentLfManifest.entries()){const row=native.sourceManifest[index],value=reader(pin.path);reject(plain(row)&&same(Object.keys(row).sort(),['path','sha256'])&&hash(row.sha256)&&Buffer.isBuffer(value)&&Buffer.from(value.toString('utf8')).equals(value)&&sha(lf(value))===pin.sha256&&sha(value)===row.sha256,'ACTUAL_NESTED_RAW_AND_LF_'+pin.path);}};verify();\n  const result=top.normalize({contract,proof,reader,readEvidence,bridge,normalizeParent:(parentContract,producer,topProjected,parentReader)=>{\n   const projected=structuredClone(topProjected);projected.currentImageNative.sourceManifest=previousFiles.map(path=>({path,sha256:sha(parentReader(path))}));\n   const restoreNested=structuredClone(projected);restoreNested.currentImageNative.sourceManifest=topProjected.currentImageNative.sourceManifest;reject(same(restoreNested,topProjected),'ONLY_EXACT_NESTED_SOURCE_FIELD_PROJECTED');return normalizeParent(parentContract,producer,projected,parentReader);\n  }});\n  verify();const finalRaw=readEvidence(descriptor.top.proofPath);reject(Buffer.isBuffer(finalRaw)&&finalRaw.equals(ownedRaw)&&JSON.stringify(proof)===initialJson,'NESTED_PROOF_AND_INPUT_UNCHANGED');return result;\n },limits:Object.freeze({scope:'EXACT_COMPANY_CURRENT_SOURCE_BINDING_ONLY',businessFactsProjected:false,caseFactsProjected:false,trackedCompilerIntegrated:false,fullEightLaneCiAccepted:false,sourceAuthorityAccepted:false,nativeOrHumanAcceptance:false})});\n}\n\nreturn createCompanyNestedNativeAdapter;\n})();\n\nexport const PLAN_BUDGET_CURRENT_SECTION='planBudgetCurrentRevision';\nexport const PLAN_BUDGET_CI_KIND='UI_PLAN_BUDGET_SOURCE';\nexport const PLAN_BUDGET_CI_PROOF_PATH='.vercel/private/plan-budget-ui-ci.json';\nconst captureRuntime=reviewed.captureQualityRuntime?createCaptureRuntimeGate(reviewed):null;\nconst captureParent=captureRuntime?captureRuntime.parentGate:createCaptureQualityParentGate(reviewed);\nconst captureActive=contract=>Boolean(captureRuntime?.isCurrent(contract));\nexport const INTAKE_WITHDRAWAL_CHECK_NAMES=captureParent.INTAKE_WITHDRAWAL_CHECK_NAMES;\nexport function restoreCaptureRuntimePreviousContract(contract){return captureActive(contract)?captureRuntime.restoreParentContract(contract):structuredClone(contract);}\nexport function restoreCaptureRuntimePreviousSource(contract,file,raw){return captureActive(contract)?captureRuntime.restorePreviousSource(contract,file,raw):Buffer.from(raw);}\nexport function withCaptureRuntimePreviousSources(contract,reader,callback){if(captureActive(contract))return captureRuntime.withVerifiedParentReader(contract,reader,callback);reject(!captureRuntime,'CURRENT_CAPTURE_RUNTIME_REQUIRED');const before=JSON.stringify(contract);captureParent.verifyPlanBudgetCurrentSources(contract,reader);const result=callback(structuredClone(contract),reader);reject(!result||typeof result.then!=='function','SYNCHRONOUS_PARENT_CALLBACK_REQUIRED');reject(JSON.stringify(contract)===before,'CONTRACT_UNCHANGED');captureParent.verifyPlanBudgetCurrentSources(contract,reader);return result;}\nexport function captureRuntimeProofSourceSet(contract,kind){if(captureActive(contract))return captureRuntime.proofSourceSet(contract,kind);const spec=contract.extension?.proofs?.find(row=>row.kind===kind);reject(spec&&Array.isArray(spec.sourceFiles),'EXACT_CURRENT_PROOF_KIND');return [...spec.sourceFiles];}\nexport function captureRuntimeWorkflowAdditions(contract){return captureActive(contract)?captureRuntime.workflowAdditions(contract):[];}\nexport function verifyCaptureRuntimeCurrentSources(contract,reader){return captureActive(contract)?captureRuntime.verifyCurrentSources(contract,reader):captureRuntime?captureRuntime.historicalAuthority('verifyPlanBudgetCurrentSources',contract,reader):captureParent.verifyPlanBudgetCurrentSources(contract,reader);}\nexport function restorePlanBudgetAcceptancePreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetAcceptancePreviousContract',contract):captureParent.restorePlanBudgetAcceptancePreviousContract(contract);}\nexport function restorePlanBudgetAcceptancePreviousSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetAcceptancePreviousSource',contract,file,raw):captureParent.restorePlanBudgetAcceptancePreviousSource(contract,file,raw);}\nexport function restorePlanBudgetPilotIntegrationPreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetPilotIntegrationPreviousContract',contract):captureParent.restorePlanBudgetPilotIntegrationPreviousContract(contract);}\nexport function restorePlanBudgetPilotIntegrationSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetPilotIntegrationSource',contract,file,raw):captureParent.restorePlanBudgetPilotIntegrationSource(contract,file,raw);}\nexport function restorePlanBudgetTrialExpiryNoticePreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetTrialExpiryNoticePreviousContract',contract):captureParent.restorePlanBudgetTrialExpiryNoticePreviousContract(contract);}\nexport function restorePlanBudgetTrialExpiryNoticeSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetTrialExpiryNoticeSource',contract,file,raw):captureParent.restorePlanBudgetTrialExpiryNoticeSource(contract,file,raw);}\nexport function restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetTrialExpiryNoticeValidatorSource',contract,file,raw):captureParent.restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,file,raw);}\nexport function restorePlanBudgetMeasurementPrivacyPreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetMeasurementPrivacyPreviousContract',contract):captureParent.restorePlanBudgetMeasurementPrivacyPreviousContract(contract);}\nexport function restorePlanBudgetMeasurementPrivacySource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetMeasurementPrivacySource',contract,file,raw):captureParent.restorePlanBudgetMeasurementPrivacySource(contract,file,raw);}\nexport function restorePlanBudgetCheckTimePreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetCheckTimePreviousContract',contract):captureParent.restorePlanBudgetCheckTimePreviousContract(contract);}\nexport function restorePlanBudgetCheckTimeSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetCheckTimeSource',contract,file,raw):captureParent.restorePlanBudgetCheckTimeSource(contract,file,raw);}\nexport function restorePlanBudgetPreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetPreviousContract',contract):captureParent.restorePlanBudgetPreviousContract(contract);}\nexport function restorePlanBudgetIntakeWithdrawalSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetIntakeWithdrawalSource',contract,file,raw):captureParent.restorePlanBudgetIntakeWithdrawalSource(contract,file,raw);}\nexport function restorePlanBudgetIntakeWithdrawalProducerText(contract,raw){return captureActive(contract)?captureRuntime.producerCall('restorePlanBudgetIntakeWithdrawalProducerText',contract,'scripts/verify-employee-intake-postgres.mjs',raw):captureParent.restorePlanBudgetIntakeWithdrawalProducerText(contract,raw);}\nexport function restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,raw){return captureActive(contract)?captureRuntime.producerCall('restorePlanBudgetIntakeWithdrawalUnitProducerText',contract,'scripts/verify-participant-bank-intake-contracts.mjs',raw):captureParent.restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,raw);}\nexport function restorePlanBudgetMaterialNativeProducerText(contract,raw){return captureActive(contract)?captureRuntime.producerCall('restorePlanBudgetMaterialNativeProducerText',contract,'scripts/verify-material-inventory-postgres.mjs',raw):captureParent.restorePlanBudgetMaterialNativeProducerText(contract,raw);}\nexport function restorePlanBudgetAttendanceReviewProducerText(contract,raw){return captureActive(contract)?captureRuntime.producerCall('restorePlanBudgetAttendanceReviewProducerText',contract,'scripts/verify-field-operations-postgres.mjs',raw):captureParent.restorePlanBudgetAttendanceReviewProducerText(contract,raw);}\nexport function restorePlanBudgetConsumptionEvidenceSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetConsumptionEvidenceSource',contract,file,raw):captureParent.restorePlanBudgetConsumptionEvidenceSource(contract,file,raw);}\nexport function restorePlanBudgetPilotProducerText(contract,producer,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetPilotProducerText',contract,producer,raw):captureParent.restorePlanBudgetPilotProducerText(contract,producer,raw);}\nexport function restorePlanBudgetFieldReviewBusinessSource(file,raw){return captureRuntime?captureRuntime.knownBusinessSource(file,raw):captureParent.restorePlanBudgetFieldReviewBusinessSource(file,raw);}\nexport function restorePlanBudgetSourceSet(contract,family,files){return captureActive(contract)?captureRuntime.setCall('restorePlanBudgetSourceSet',contract,family,files):captureParent.restorePlanBudgetSourceSet(contract,family,files);}\nexport function restorePlanBudgetFieldReviewSourceSet(contract,family,files){return captureActive(contract)?captureRuntime.setCall('restorePlanBudgetFieldReviewSourceSet',contract,family,files):captureParent.restorePlanBudgetFieldReviewSourceSet(contract,family,files);}\nexport function restorePlanBudgetConsumptionEvidenceSourceSet(contract,family,files){return captureActive(contract)?captureRuntime.setCall('restorePlanBudgetConsumptionEvidenceSourceSet',contract,family,files):captureParent.restorePlanBudgetConsumptionEvidenceSourceSet(contract,family,files);}\nexport function planBudgetProofSourceAdditions(spec){return captureRuntime?captureRuntime.proofSourceAdditions(spec):captureParent.planBudgetProofSourceAdditions(spec);}\nexport function intakeWithdrawalCurrentCheckCount(spec){return captureRuntime?captureRuntime.intakeCurrentCheckCount(spec):captureParent.intakeWithdrawalCurrentCheckCount(spec);}\nexport function verifyPlanBudgetCurrentSources(contract,reader){return verifyCaptureRuntimeCurrentSources(contract,reader);}\nexport function verifyPlanBudgetActualClosure(contract,family,closure,reader){return captureActive(contract)?captureRuntime.verifyActualClosure(contract,family,closure,reader):captureRuntime?captureRuntime.historicalAuthority('verifyPlanBudgetActualClosure',contract,reader,family,closure):captureParent.verifyPlanBudgetActualClosure(contract,family,closure,reader);}\nexport function restorePlanBudgetClosure(contract,family,closure){return captureActive(contract)?captureRuntime.restoreClosure(contract,family,closure):captureParent.restorePlanBudgetClosure(contract,family,closure);}\nexport function planBudgetValidationFiles(contract){return captureActive(contract)?captureRuntime.validationFiles(contract):captureParent.planBudgetValidationFiles(contract);}\nexport function planBudgetCurrentBrowserBinding(contract,fallback){return captureActive(contract)?captureRuntime.browserBinding(contract,fallback):captureParent.planBudgetCurrentBrowserBinding(contract,fallback);}\nexport function planBudgetCompiledProof(contract){return captureActive(contract)?captureRuntime.compiledProof(contract):captureParent.planBudgetCompiledProof(contract);}\nexport function planBudgetRetainedScreenshotPaths(contract){return captureActive(contract)?captureRuntime.contractCall('planBudgetRetainedScreenshotPaths',contract):captureParent.planBudgetRetainedScreenshotPaths(contract);}\nexport function planBudgetCurrentSourcePin(contract,ref){return captureActive(contract)?captureRuntime.sourcePin(contract,ref):captureParent.planBudgetCurrentSourcePin(contract,ref);}\nexport function planBudgetPreviousSourcePin(contract,ref){return captureActive(contract)?captureRuntime.sourcePin(contract,ref,true):captureParent.planBudgetPreviousSourcePin(contract,ref);}\nexport function normalizePlanBudgetPilotNativeProof(contract,producer,proof,reader){return captureActive(contract)?captureRuntime.pilotNative(contract,producer,proof,reader):captureParent.normalizePlanBudgetPilotNativeProof(contract,producer,proof,reader);}\nexport function normalizePlanBudgetIntakeWithdrawalNativeProof(raw,contract,reader,spec){return captureActive(contract)?captureRuntime.intakeNative(raw,contract,reader,spec):captureParent.normalizePlanBudgetIntakeWithdrawalNativeProof(raw,contract,reader,spec);}\nexport function normalizeCaptureRuntimeCompanyNativeProof(contract,proof,reader,readEvidence,normalizeParent){reject(captureActive(contract),'CURRENT_CAPTURE_COMPANY_RUNTIME_REQUIRED');return captureRuntime.companyNative(contract,proof,reader,readEvidence,normalizeParent);}\nexport function normalizeCaptureRuntimeNativeProof(contract,spec,proof,reader,readEvidence,callback){reject(captureActive(contract),'CURRENT_CAPTURE_NATIVE_RUNTIME_REQUIRED');return captureRuntime.extensionNative(contract,spec,proof,reader,readEvidence,callback);}\n",
+            "currentText": "\nreturn Object.freeze({PLAN_BUDGET_CURRENT_REVISION:reviewed,PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,INTAKE_WITHDRAWAL_CHECK_NAMES,restorePlanBudgetAcceptancePreviousContract,restorePlanBudgetAcceptancePreviousSource,restorePlanBudgetPilotIntegrationPreviousContract,restorePlanBudgetPilotIntegrationSource,restorePlanBudgetTrialExpiryNoticePreviousContract,restorePlanBudgetTrialExpiryNoticeSource,restorePlanBudgetTrialExpiryNoticeValidatorSource,restorePlanBudgetMeasurementPrivacyPreviousContract,restorePlanBudgetMeasurementPrivacySource,restorePlanBudgetCheckTimePreviousContract,restorePlanBudgetCheckTimeSource,restorePlanBudgetPreviousContract,restorePlanBudgetIntakeWithdrawalSource,restorePlanBudgetIntakeWithdrawalProducerText,restorePlanBudgetIntakeWithdrawalUnitProducerText,restorePlanBudgetMaterialNativeProducerText,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetConsumptionEvidenceSource,restorePlanBudgetPilotProducerText,restorePlanBudgetFieldReviewBusinessSource,restorePlanBudgetSourceSet,restorePlanBudgetFieldReviewSourceSet,restorePlanBudgetConsumptionEvidenceSourceSet,planBudgetProofSourceAdditions,intakeWithdrawalCurrentCheckCount,verifyPlanBudgetCurrentSources,verifyPlanBudgetActualClosure,restorePlanBudgetClosure,planBudgetValidationFiles,planBudgetCurrentBrowserBinding,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths,planBudgetCurrentSourcePin,planBudgetPreviousSourcePin,normalizePlanBudgetPilotNativeProof,normalizePlanBudgetIntakeWithdrawalNativeProof});\n}\n\n// Current capture-runtime boundary. Historical parent bodies above are unchanged.\n\nexport const CAPTURE_QUALITY_PARENT='731565e11ce8d67e6a4310f491273626fe73c6f9';\nexport const CAPTURE_QUALITY_PARENT_CONTRACT_SHA256='d5ef59b111dd3e25b8f08854d3e8e4df4838a7913e3e22b76299c1916b9913d2';\nexport const CAPTURE_QUALITY_PARENT_DECLARATION_SHA256='cb5b5dbe197defccf1f8ee7c166ccc8e750c339ea612c015e80856cc34dee63f';\nexport const CAPTURE_QUALITY_PARENT_COMPILER_SHA256='0ba932090392ee957357d303ac8c4acd11fec9da46b4f01a9e5390e47d563510';\nexport const CAPTURE_QUALITY_COMPILER_STATE='CURRENT_RUNTIME_EXACT_PARENT_WRAPPER';\nconst section='planBudgetCurrentRevision',revision='captureQualityRuntime';\nconst contractPath='.github/workspace-acceptance-contract.json',anchor='scripts/lib/plan-budget-current-ci-reviewed.mjs';\nconst serialize=value=>JSON.stringify(value,null,2)+'\\n',same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),sha=value=>createHash('sha256').update(value).digest('hex');\nconst plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value),hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);\nconst reject=(ok,reason)=>{if(!ok)throw Object.assign(new Error('Capture quality lineage rejected: '+reason),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason});};\nconst exact=(value,keys,reason)=>reject(plain(value)&&same(Object.keys(value).sort(),[...keys].sort()),reason);\nconst safe=file=>typeof file==='string'&&file.length>0&&path.posix.normalize(file)===file&&!path.posix.isAbsolute(file)&&!/[\\\\:\\x00-\\x1f]/.test(file)&&!file.split('/').includes('..');\nconst bytes=(value,file)=>{reject(Buffer.isBuffer(value)&&Buffer.from(value.toString('utf8')).equals(value),'UTF8_'+file);return Buffer.from(value.toString('utf8').replaceAll('\\r\\n','\\n'));};\nconst declaration=value=>'// Exact budget-source CI declaration; compiler fills immutable reviewed source bindings.\\nexport const PLAN_BUDGET_CURRENT_REVISION=Object.freeze('+JSON.stringify(value,null,2)+');\\n';\nconst sorted=(files,reason)=>reject(Array.isArray(files)&&files.every(safe)&&same(files,[...new Set(files)].sort()),reason);\nconst bridges=new WeakSet();\nexport const isCaptureQualityBridge=value=>bridges.has(value);\n// One reviewed oracle-data advance. It grants neither native nor browser proof.\n// The current pair is exact; descendants and alternate current matrices fail.\nconst fieldPaginationOracleAdvanceV1=Object.freeze({\n pointers:Object.freeze(['/whatsappFieldContinuityCurrentRevision/paginationUi/requestMatrix','/whatsappFieldContinuityCurrentRevision/paginationUi/commandEqualityGroups']),\n previousMatrixSha256:'8bbce7584e6c2c838f178b1585ce708ac4d366e9217ab7306faaa5615578255e',currentMatrixSha256:'db9a5685375c203cbb7f5e5204cb0ee06abdb9966785fec68401a7cb9e26447f',\n previousGroupsSha256:'8bd39d017dc56bd79c72e2b2518979e7c9c385408e6eccae269ce177dbf375e9',currentGroupsSha256:'574432d259b731e489f7f34139c8cc2b7bb7e9aaa24b5be1e84c46d8bfd70373',\n sourcePins:Object.freeze([\n  Object.freeze({path:'scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs',previousSha256:'a1de3a73617de7c4eb2f9db8665650abe5798accb44b886cd8d2220fe5295bbf',currentSha256:'69ce909a5dc107718bfc91ece769bea47d96183bed51ce1ab7e1668dccc17b1b'}),\n  Object.freeze({path:'scripts/verify-field-task-pagination-ui.mjs',previousSha256:'4b98ee409dfca7fa78ffac58c82796c9013f34286691e19e4993149ffd0ad604',currentSha256:'f5fb5468225bf0d0db4e084af6d500db78f61740985238eaa7c243bc902b8dba'}),\n ]),\n});\n// Only this exact old compiled declaration enables the preparation bootstrap.\n// It never authenticates old source bytes as current v2 execution.\nconst fieldPaginationOracleReviewedV1Sha256='6ff7294132842d6a46c91c8b160222a3cd80776a58e263d5c620d6f7632c77cc';\nconst fieldPaginationOracleAdvanceV2=Object.freeze({\n  \"pointers\": [\n    \"/whatsappFieldContinuityCurrentRevision/paginationUi/rawVersion\",\n    \"/whatsappFieldContinuityCurrentRevision/paginationUi/requestMatrix\",\n    \"/whatsappFieldContinuityCurrentRevision/paginationUi/commandEqualityGroups\"\n  ],\n  \"previousRawVersion\": 1,\n  \"currentRawVersion\": 2,\n  \"previousMatrixSha256\": \"8bbce7584e6c2c838f178b1585ce708ac4d366e9217ab7306faaa5615578255e\",\n  \"currentMatrixSha256\": \"db9a5685375c203cbb7f5e5204cb0ee06abdb9966785fec68401a7cb9e26447f\",\n  \"previousGroupsSha256\": \"8bd39d017dc56bd79c72e2b2518979e7c9c385408e6eccae269ce177dbf375e9\",\n  \"currentGroupsSha256\": \"d0c69aaa8f06c2db70c45c7eeb66533022f87d89f18dd89fc24940cce63514f5\",\n sourcePins:Object.freeze([\n  Object.freeze({\"path\":\"scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs\",\"previousSha256\":\"a1de3a73617de7c4eb2f9db8665650abe5798accb44b886cd8d2220fe5295bbf\",\"currentSha256\":\"34b6d5aabeb36566b3bb12bb4c464995432ac02b770206372b352cc25cd7841e\"}),\n  Object.freeze({\"path\":\"scripts/verify-field-task-pagination-ui.mjs\",\"previousSha256\":\"4b98ee409dfca7fa78ffac58c82796c9013f34286691e19e4993149ffd0ad604\",\"currentSha256\":\"65e64823c5a4e44af04d83f618ef34c6627338e4b384d4ea72b395cd9a8d35f7\"}),\n  Object.freeze({\"path\":\"scripts/verify-field-task-pagination-ci.mjs\",\"previousSha256\":\"1e366a583be909323327524a8fe04db9eb962724ec5073bdf3eb36140ddcdecc\",\"currentSha256\":\"fc18f1398b6ddd80863e76b86cd82951c606652e0d032e15c9364d21c336534a\"}),\n ]),\n});\nfunction fieldPaginationOraclePatches(patches){\n const selected=patches.filter(row=>typeof row?.pointer==='string'&&(row.pointer==='/whatsappFieldContinuityCurrentRevision'||row.pointer.startsWith('/whatsappFieldContinuityCurrentRevision/')));\n if(selected.length===0)return selected;\n reject(same(selected.map(row=>row.pointer),fieldPaginationOracleAdvanceV1.pointers),'FIELD_PAGINATION_ORACLE_PATCH_PAIR');\n for(const patch of selected)exact(patch,['pointer','previous','current'],'FIELD_PAGINATION_ORACLE_PATCH_KEYS');\n const [matrix,groups]=selected;\n reject(Array.isArray(matrix.previous)&&matrix.previous.length===99&&Array.isArray(matrix.current)&&matrix.current.length===108,'FIELD_PAGINATION_ORACLE_MATRIX_SHAPE');\n reject(Array.isArray(groups.previous)&&groups.previous.length===7&&Array.isArray(groups.current)&&groups.current.length===7,'FIELD_PAGINATION_ORACLE_GROUP_SHAPE');\n reject(sha(JSON.stringify(matrix.previous))===fieldPaginationOracleAdvanceV1.previousMatrixSha256&&sha(JSON.stringify(matrix.current))===fieldPaginationOracleAdvanceV1.currentMatrixSha256,'FIELD_PAGINATION_ORACLE_EXACT_MATRIX_V1');\n reject(sha(JSON.stringify(groups.previous))===fieldPaginationOracleAdvanceV1.previousGroupsSha256&&sha(JSON.stringify(groups.current))===fieldPaginationOracleAdvanceV1.currentGroupsSha256,'FIELD_PAGINATION_ORACLE_EXACT_GROUPS_V1');\n const expected=[],indexMap=[],added=[];\n for(const[index,row]of matrix.previous.entries()){\n  indexMap[index]=expected.length;\n  if(row.mode==='consumption'&&row.path==='/api/identity/field-operations'&&row.method==='GET'){\n   const {responseStatus,...base}=row,observed={...base,inventoryFilter:null,responseStatus};expected.push(observed);added.push(expected.length);expected.push({...observed,inventoryFilter:'PENDING'});\n  }else expected.push(structuredClone(row));\n }\n reject(same(added,[10,23,36,49,62,75,85,95,105])&&same(matrix.current,expected),'FIELD_PAGINATION_ORACLE_EXACT_NINE_READ_ADVANCE');\n reject(same(groups.current,groups.previous.map(group=>group.map(index=>indexMap[index]))),'FIELD_PAGINATION_ORACLE_GROUP_REINDEX');\n const removed=new Set(added),restored=matrix.current.flatMap((row,index)=>{if(removed.has(index))return[];const value=structuredClone(row);if(value.mode==='consumption'&&value.path==='/api/identity/field-operations'&&value.method==='GET'){reject(value.inventoryFilter===null,'FIELD_PAGINATION_ORACLE_BASE_FILTER');delete value.inventoryFilter;}return[value];});\n reject(same(restored,matrix.previous),'FIELD_PAGINATION_ORACLE_COMPLETE_MATRIX_INVERSE');\n const previousPosts=matrix.previous.filter(row=>row.method==='POST'),currentPosts=matrix.current.filter(row=>row.method==='POST');reject(previousPosts.length===9&&same(previousPosts,currentPosts),'FIELD_PAGINATION_ORACLE_NINE_POSTS_UNCHANGED');\n return selected;\n}\nfunction fieldPaginationOraclePatchesV2(patches){\n const selected=patches.filter(row=>typeof row?.pointer==='string'&&(row.pointer==='/whatsappFieldContinuityCurrentRevision'||row.pointer.startsWith('/whatsappFieldContinuityCurrentRevision/')));\n reject(same(selected.map(row=>row.pointer),fieldPaginationOracleAdvanceV2.pointers),'FIELD_PAGINATION_ORACLE_PATCH_TRIPLE_V2');\n for(const patch of selected)exact(patch,['pointer','previous','current'],'FIELD_PAGINATION_ORACLE_PATCH_KEYS');\n const [version,matrix,groups]=selected;\n reject(version.previous===fieldPaginationOracleAdvanceV2.previousRawVersion&&version.current===fieldPaginationOracleAdvanceV2.currentRawVersion,'FIELD_PAGINATION_ORACLE_EXACT_RAW_VERSION_V2');\n reject(Array.isArray(matrix.previous)&&matrix.previous.length===99&&Array.isArray(matrix.current)&&matrix.current.length===108,'FIELD_PAGINATION_ORACLE_MATRIX_SHAPE');\n reject(Array.isArray(groups.previous)&&groups.previous.length===7&&Array.isArray(groups.current)&&groups.current.length===9,'FIELD_PAGINATION_ORACLE_GROUP_SHAPE');\n reject(sha(JSON.stringify(matrix.previous))===fieldPaginationOracleAdvanceV2.previousMatrixSha256&&sha(JSON.stringify(matrix.current))===fieldPaginationOracleAdvanceV2.currentMatrixSha256,'FIELD_PAGINATION_ORACLE_EXACT_MATRIX_V2');\n reject(sha(JSON.stringify(groups.previous))===fieldPaginationOracleAdvanceV2.previousGroupsSha256&&sha(JSON.stringify(groups.current))===fieldPaginationOracleAdvanceV2.currentGroupsSha256,'FIELD_PAGINATION_ORACLE_EXACT_GROUPS_V2');\n const expected=[],indexMap=[],added=[];\n for(const[index,row]of matrix.previous.entries()){\n  indexMap[index]=expected.length;\n  if(row.mode==='consumption'&&row.path==='/api/identity/field-operations'&&row.method==='GET'){\n   const {responseStatus,...base}=row,observed={...base,inventoryFilter:null,responseStatus};expected.push(observed);added.push(expected.length);expected.push({...observed,inventoryFilter:'PENDING'});\n  }else expected.push(structuredClone(row));\n }\n reject(same(added,[10,23,36,49,62,75,85,95,105])&&same(matrix.current,expected),'FIELD_PAGINATION_ORACLE_EXACT_NINE_READ_ADVANCE');\n reject(same(groups.current,[[80],[83],[87],[90],[93],[97],[100],[103],[107]])&&same(groups.current.flat(),matrix.current.flatMap((row,index)=>row.method==='POST'?[index]:[])),'FIELD_PAGINATION_ORACLE_EXACT_NINE_INDEPENDENT_POST_GROUPS_V2');\n const removed=new Set(added),restored=matrix.current.flatMap((row,index)=>{if(removed.has(index))return[];const value=structuredClone(row);if(value.mode==='consumption'&&value.path==='/api/identity/field-operations'&&value.method==='GET'){reject(value.inventoryFilter===null,'FIELD_PAGINATION_ORACLE_BASE_FILTER');delete value.inventoryFilter;}return[value];});\n reject(same(restored,matrix.previous),'FIELD_PAGINATION_ORACLE_COMPLETE_MATRIX_INVERSE');\n const previousPosts=matrix.previous.filter(row=>row.method==='POST'),currentPosts=matrix.current.filter(row=>row.method==='POST');reject(previousPosts.length===9&&same(previousPosts,currentPosts),'FIELD_PAGINATION_ORACLE_NINE_POSTS_UNCHANGED');\n return selected;\n}\nconst pointer=(value,key)=>{\n reject(typeof key==='string'&&(/^\\/(?:planBudgetCurrentRevision\\/(?:references(?:\\/\\d+\\/currentSha256)?|sourceFamilies\\/\\d+\\/(?:currentFiles|externalImports|currentManifest))|extension\\/proofs\\/\\d+\\/(?:sourceFiles|producerSha256))$/.test(key)||fieldPaginationOracleAdvanceV2.pointers.includes(key)),'PATCH_POINTER');\n const parts=key.slice(1).split('/');let owner=value;for(const part of parts.slice(0,-1)){reject(owner!==null&&typeof owner==='object'&&Object.hasOwn(owner,part),'PATCH_POINTER');owner=owner[part];}const final=parts.at(-1);reject(owner!==null&&typeof owner==='object'&&Object.hasOwn(owner,final),'PATCH_POINTER');return{owner,key:final};\n};\n\n// The public wrapper binds this gate to the compiled reviewed declaration.\n// Source authentication and native business oracles retain separate scopes.\nexport function createCaptureRuntimeGate(reviewed){\n reject(plain(reviewed),'CONSTRUCTOR');\n reject(sha(createCaptureQualityParentGate.toString().replaceAll('\\r\\n','\\n')+'\\n')==='18ddf75e7f7849728670140880f318b7fc904c51b40eebb7286716a297ad064f','AUTHENTICATED_LITERAL_PARENT_FACTORY');\n const expected=structuredClone(reviewed),runtime=expected[revision],expectedJson=JSON.stringify(expected);\n exact(runtime,['version','parentHead','previousContractSha256','previousDeclarationSha256','sourceAliases','referenceAdvances','sourceHistory','familyAdvances','proofSourceSetAdvances','contractPatches','workflowAdditions','workflowParentSemanticSha256','nativeSourceAdvances','browserSourceAdvances','nativeOrHumanAcceptance'],'RUNTIME_KEYS');\n reject(runtime.version===1&&runtime.parentHead===CAPTURE_QUALITY_PARENT&&runtime.previousContractSha256===CAPTURE_QUALITY_PARENT_CONTRACT_SHA256&&runtime.previousDeclarationSha256===CAPTURE_QUALITY_PARENT_DECLARATION_SHA256&&runtime.nativeOrHumanAcceptance===false,'PARENT');\n for(const key of ['sourceAliases','referenceAdvances','sourceHistory','familyAdvances','proofSourceSetAdvances','contractPatches','workflowAdditions'])reject(Array.isArray(runtime[key]),'ARRAY_'+key);\n const paginationOracleV1=sha(declaration(expected))===fieldPaginationOracleReviewedV1Sha256;\n const paginationOracleAdvance=paginationOracleV1?fieldPaginationOracleAdvanceV1:fieldPaginationOracleAdvanceV2;\n const paginationOraclePatches=paginationOracleV1?fieldPaginationOraclePatches(runtime.contractPatches):fieldPaginationOraclePatchesV2(runtime.contractPatches);\n reject(hash(runtime.workflowParentSemanticSha256),'WORKFLOW_PARENT_PIN');\n const inverse=value=>{for(const patch of [...runtime.contractPatches].reverse()){exact(patch,['pointer','previous','current'],'PATCH_KEYS');const target=pointer(value,patch.pointer);reject(same(target.owner[target.key],patch.current),'PATCH_CURRENT');target.owner[target.key]=structuredClone(patch.previous);}return value;};\n const parentContainer={[section]:structuredClone(expected)};delete parentContainer[section][revision];\n for(const patch of [...runtime.contractPatches].reverse().filter(row=>row.pointer.startsWith('/'+section+'/'))){const target=pointer(parentContainer,patch.pointer);reject(same(target.owner[target.key],patch.current),'PARENT_DECLARATION_PATCH');target.owner[target.key]=structuredClone(patch.previous);}\n const parentExpected=parentContainer[section];reject(sha(declaration(parentExpected))===CAPTURE_QUALITY_PARENT_DECLARATION_SHA256,'COMPLETE_PARENT_DECLARATION');\n const parentGate=createCaptureQualityParentGate(structuredClone(parentExpected));\n const freezePinMetadata=value=>{if(value&&typeof value==='object'){Object.values(value).forEach(freezePinMetadata);Object.freeze(value);}return value;};\n const parentPinCarrier=freezePinMetadata({[section]:structuredClone(parentExpected)});\n const histories=new Map(),references=new Map();\n for(const ref of expected.references){reject(safe(ref.path)&&hash(ref.currentSha256)&&!references.has(ref.path),'REFERENCE');references.set(ref.path,ref);}\n for(const row of runtime.sourceHistory){\n  exact(row,['path','status','previousSha256','currentSha256','previousBytes','currentBytes','inverseHunks'],'HISTORY_KEYS');\n  reject(safe(row.path)&&row.path!==anchor&&row.path!==contractPath&&!histories.has(row.path)&&hash(row.currentSha256)&&(row.previousSha256===null||hash(row.previousSha256)),'HISTORY_PATH');\n  reject(row.status===(row.previousSha256===null?'ADDED':'MODIFIED')&&Number.isSafeInteger(row.previousBytes)&&row.previousBytes>=0&&Number.isSafeInteger(row.currentBytes)&&row.currentBytes>0&&Array.isArray(row.inverseHunks)&&row.inverseHunks.length>0,'HISTORY_SHAPE');\n  reject(row.previousSha256===null?row.previousBytes===0:row.previousBytes>0&&row.previousSha256!==row.currentSha256,'HISTORY_PARENT');\n  let end=0;for(const hunk of row.inverseHunks){exact(hunk,['currentOffsetCharacters','currentText','previousText'],'HUNK_KEYS');reject(Number.isSafeInteger(hunk.currentOffsetCharacters)&&hunk.currentOffsetCharacters>=end&&typeof hunk.currentText==='string'&&typeof hunk.previousText==='string'&&hunk.currentText!==hunk.previousText,'ORDERED_HUNKS');end=hunk.currentOffsetCharacters+hunk.currentText.length;}\n  reject(references.get(row.path)?.currentSha256===row.currentSha256,'CURRENT_HISTORY_REFERENCE');histories.set(row.path,row);\n }\n if(paginationOraclePatches.length)for(const pin of paginationOracleAdvance.sourcePins){const history=histories.get(pin.path);reject(history?.status==='MODIFIED'&&history.previousSha256===pin.previousSha256&&history.currentSha256===pin.currentSha256&&references.get(pin.path)?.currentSha256===pin.currentSha256,'FIELD_PAGINATION_ORACLE_EXACT_SOURCE_HISTORY_'+pin.path);}\n else reject(paginationOracleAdvance.sourcePins.every(pin=>references.get(pin.path)?.currentSha256!==pin.currentSha256&&histories.get(pin.path)?.currentSha256!==pin.currentSha256),'FIELD_PAGINATION_ORACLE_PATCHES_REQUIRED');\n const advances=[...runtime.referenceAdvances,...runtime.sourceAliases];reject(advances.length===histories.size&&new Set(advances.map(row=>row.path)).size===advances.length,'COMPLETE_REFERENCE_ADVANCES');\n for(const ref of advances){exact(ref,['path','previousSha256','currentSha256'],'ADVANCE_KEYS');const history=histories.get(ref.path);reject(history&&ref.previousSha256===history.previousSha256&&ref.currentSha256===history.currentSha256,'ADVANCE_HISTORY');const previous=parentExpected.references.find(row=>row.path===ref.path);reject(runtime.referenceAdvances.includes(ref)?previous?.currentSha256===ref.previousSha256:!previous,'EXACT_PREVIOUS_REFERENCE');}\n const changedFamilies=expected.sourceFamilies.filter(family=>!same(family,parentExpected.sourceFamilies.find(row=>row.family===family.family))).map(family=>family.family);\n reject(same(runtime.familyAdvances.map(row=>row.family),changedFamilies),'COMPLETE_FAMILY_ADVANCES');\n for(const row of runtime.familyAdvances){exact(row,['family','previousCount','currentCount','additions','removals'],'FAMILY_ADVANCE_KEYS');const prior=parentExpected.sourceFamilies.find(family=>family.family===row.family),current=expected.sourceFamilies.find(family=>family.family===row.family);sorted(row.additions,'FAMILY_ADDITIONS');sorted(row.removals,'FAMILY_REMOVALS');sorted(current?.currentFiles,'CURRENT_FAMILY_FILES');reject(prior&&current&&same(current.currentManifest.map(ref=>ref.path),current.currentFiles)&&current.currentManifest.every(ref=>ref.path===anchor||hash(ref.sha256))&&row.previousCount===prior.currentFiles.length&&row.currentCount===current.currentFiles.length&&row.removals.length===0&&same([...prior.currentFiles,...row.additions].sort(),current.currentFiles),'EXACT_ADDITIVE_FAMILY');}\n for(const row of runtime.proofSourceSetAdvances){exact(row,['id','kind','previousFiles','currentFiles','additions','removals'],'PROOF_ADVANCE_KEYS');for(const key of ['previousFiles','currentFiles','additions','removals'])sorted(row[key],'PROOF_'+key);reject(row.removals.length===0&&same([...row.previousFiles,...row.additions].sort(),row.currentFiles),'EXACT_ADDITIVE_PROOF');}\n const proofPatches=runtime.contractPatches.filter(row=>/^\\/extension\\/proofs\\/\\d+\\/sourceFiles$/.test(row.pointer));reject(proofPatches.length===runtime.proofSourceSetAdvances.length&&new Set(runtime.proofSourceSetAdvances.map(row=>row.id)).size===runtime.proofSourceSetAdvances.length,'COMPLETE_PROOF_ADVANCES');\n for(const row of runtime.workflowAdditions){exact(row,['lane','index','step'],'WORKFLOW_ADDITION_KEYS');reject(typeof row.lane==='string'&&Number.isSafeInteger(row.index)&&row.index>=0&&plain(row.step)&&typeof row.step.run==='string'&&row.step.run.length>0,'WORKFLOW_ADDITION');}\n reject(runtime.workflowAdditions.length===0||histories.has('.github/workflows/workspace-acceptance.yml'),'WORKFLOW_CURRENT_SOURCE_HISTORY');\n function metadata(contract){reject(plain(contract),'CONTRACT');reject(Object.hasOwn(contract,section),'BUDGET_COMPANION_REQUIRED');reject(JSON.stringify(contract[section])===expectedJson,'IMMUTABLE_COMPANION');}\n function restoreParentContract(contract){metadata(contract);for(const patch of proofPatches){const index=Number(patch.pointer.split('/')[3]),spec=contract.extension?.proofs?.[index],row=runtime.proofSourceSetAdvances.find(value=>value.id===spec?.id);reject(row&&row.kind===spec.kind&&same(row.previousFiles,patch.previous)&&same(row.currentFiles,patch.current),'EXACT_PROOF_PATCH_JOIN');}for(const patch of runtime.contractPatches.filter(row=>/^\\/extension\\/proofs\\/\\d+\\/producerSha256$/.test(row.pointer))){const spec=contract.extension?.proofs?.[Number(patch.pointer.split('/')[3])];reject(spec&&patch.current===references.get(spec.producer)?.currentSha256,'EXACT_PRODUCER_REFERENCE_JOIN');}const out=structuredClone(contract);delete out[section][revision];inverse(out);if(sha(serialize(out))!==CAPTURE_QUALITY_PARENT_CONTRACT_SHA256){parentGate.restorePlanBudgetAcceptancePreviousContract(out);reject(false,'COMPLETE_PARENT_CONTRACT');}return out;}\n function restorePreviousSource(file,value){const original=bytes(value,file),history=histories.get(file);if(!history)return Buffer.from(value);let text=original.toString('utf8');reject(sha(original)===history.currentSha256&&original.length===history.currentBytes,'CURRENT_SOURCE_'+file);for(const hunk of [...history.inverseHunks].reverse()){const at=hunk.currentOffsetCharacters;reject(text.slice(at,at+hunk.currentText.length)===hunk.currentText,'EXACT_HUNK_'+file);text=text.slice(0,at)+hunk.previousText+text.slice(at+hunk.currentText.length);}const previous=Buffer.from(text);reject(previous.length===history.previousBytes&&(history.previousSha256===null?previous.length===0:sha(previous)===history.previousSha256),'COMPLETE_SOURCE_INVERSE_'+file);return history.previousSha256===null?null:previous;}\n const read=(reader,file)=>{reject(safe(file)&&typeof reader==='function','SOURCE_READER');const value=reader(file);bytes(value,file);return Buffer.from(value);};\n function verifyActual(contract,reader){\n  const parent=restoreParentContract(contract);reject(bytes(read(reader,contractPath),contractPath).toString('utf8')===serialize(contract),'CURRENT_CONTRACT_BYTES');reject(bytes(read(reader,anchor),anchor).toString('utf8')===declaration(expected),'CURRENT_DECLARATION_BYTES');\n  for(const ref of expected.references)reject(sha(bytes(read(reader,ref.path),ref.path))===ref.currentSha256,'CURRENT_REFERENCE_'+ref.path);for(const file of histories.keys())restorePreviousSource(file,read(reader,file));for(const pin of browserAdvance.currentLfManifest)reject(sha(bytes(read(reader,pin.path),pin.path))===pin.sha256,'CURRENT_BROWSER_SOURCE_'+pin.path);return parent;\n }\n function projectedReader(contract,parent,reader){return file=>{const value=read(reader,file);if(file===contractPath){reject(bytes(value,file).toString('utf8')===serialize(contract),'CURRENT_CONTRACT_BYTES');return Buffer.from(serialize(parent));}if(file===anchor){reject(bytes(value,file).toString('utf8')===declaration(expected),'CURRENT_DECLARATION_BYTES');return Buffer.from(declaration(parentExpected));}return restorePreviousSource(file,value);};}\n function verifyCurrentSources(contract,reader){return withVerifiedParentReader(contract,reader,(parent,_projected,parentVerifyResult)=>{return{...parentVerifyResult,referenceCount:expected.references.length,captureQualityParentRestored:true,nativeOrHumanAcceptance:false};});}\n const activeScopes=[];\n function withVerifiedParentReader(contract,reader,run){reject(typeof run==='function','PARENT_READER_CALLBACK');const initialContract=JSON.stringify(contract),parent=verifyActual(contract,reader),parentJson=JSON.stringify(parent),projected=projectedReader(contract,parent,reader);const parentVerifyResult=structuredClone(parentGate.verifyPlanBudgetCurrentSources(parent,projected));const scope={outerContract:contract,outerReader:reader,parentJson};activeScopes.push(scope);try{const result=run(parent,projected,structuredClone(parentVerifyResult));reject(!result||typeof result.then!=='function','SYNCHRONOUS_PARENT_CALLBACK_REQUIRED');return result;}finally{reject(activeScopes.pop()===scope,'OWNED_SYNCHRONOUS_SCOPE');reject(JSON.stringify(contract)===initialContract&&JSON.stringify(parent)===parentJson,'CONTRACT_AND_PARENT_UNCHANGED');verifyActual(contract,reader);}}\n function historicalAuthority(name,contract,reader,...args){const scope=activeScopes.at(-1);reject(scope&&scope.parentJson===JSON.stringify(contract),'CURRENT_CAPTURE_RUNTIME_REQUIRED');verifyActual(scope.outerContract,scope.outerReader);try{return parentGate[name](contract,...args,reader);}finally{verifyActual(scope.outerContract,scope.outerReader);}}\n function verifyActualClosure(contract,family,closure,reader){const parent=verifyActual(contract,reader),current=expected.sourceFamilies.find(row=>row.family===family),previous=parentExpected.sourceFamilies.find(row=>row.family===family);exact(closure,['files','externalImports'],'CLOSURE_KEYS');reject(current&&previous&&same(closure.files,current.currentFiles)&&same(closure.externalImports,current.externalImports),'EXACT_CURRENT_CLOSURE');for(const ref of current.currentManifest){const value=bytes(read(reader,ref.path),ref.path);reject(ref.path===anchor?value.toString('utf8')===declaration(expected):sha(value)===ref.sha256,'CURRENT_FAMILY_SOURCE_'+ref.path);}parentGate.verifyPlanBudgetActualClosure(parent,family,{files:[...previous.currentFiles],externalImports:[...previous.externalImports]},projectedReader(contract,parent,reader));verifyActual(contract,reader);return{family,sourceCount:current.currentFiles.length,sourcePathsSha256:sha(JSON.stringify(current.currentFiles)),nativeOrBrowserAcceptance:false};}\n function applyWorkflowAdditions(parentWorkflow){reject(sha(JSON.stringify(parentWorkflow))===runtime.workflowParentSemanticSha256,'EXACT_PARENT_WORKFLOW');const out=structuredClone(parentWorkflow);for(const row of runtime.workflowAdditions){reject(Array.isArray(out.jobs?.[row.lane]?.steps)&&row.index<=out.jobs[row.lane].steps.length,'WORKFLOW_INSERTION');out.jobs[row.lane].steps.splice(row.index,0,structuredClone(row.step));}const restored=structuredClone(out);for(const row of [...runtime.workflowAdditions].reverse()){reject(same(restored.jobs[row.lane].steps[row.index],row.step),'WORKFLOW_EXACT_ADDITION');restored.jobs[row.lane].steps.splice(row.index,1);}reject(same(restored,parentWorkflow),'COMPLETE_PARENT_WORKFLOW');return out;}\n reject(Array.isArray(runtime.nativeSourceAdvances)&&same(runtime.nativeSourceAdvances.map(row=>row.kind),['MATERIAL','PG_BANK','PG_INTAKE','PG_FIELD','PG_COMPANY_KYC']),'EXACT_NATIVE_ADAPTER_KINDS');\n for(const row of runtime.nativeSourceAdvances){\n  exact(row,['kind','producer','proofPath','previousProducerLfSha256','currentProducerLfSha256','previousFiles','currentFiles','currentLfManifest','nested'],'NATIVE_ADVANCE_KEYS');const material=row.kind==='MATERIAL',binding={MATERIAL:['scripts/verify-material-inventory-postgres.mjs','.vercel/material-inventory-evidence/postgres.json'],PG_BANK:['scripts/verify-private-bank-account-postgres.mjs','.vercel/private-bank-evidence/postgres.json'],PG_INTAKE:['scripts/verify-employee-intake-postgres.mjs','.vercel/private/employee-intake-postgres.json'],PG_FIELD:['scripts/verify-field-operations-postgres.mjs','.vercel/field-operations-evidence/postgres.json'],PG_COMPANY_KYC:['scripts/verify-company-channel-kyc-postgres.mjs','.vercel/company-kyc-evidence/postgres.json']},[producer,proofPath]=binding[row.kind],proofAdvance=runtime.proofSourceSetAdvances.find(value=>value.kind===row.kind);\n  reject(row.producer===producer&&row.proofPath===proofPath&&hash(row.previousProducerLfSha256)&&hash(row.currentProducerLfSha256)&&row.currentProducerLfSha256===references.get(producer)?.currentSha256,'EXACT_NATIVE_PRODUCER');sorted(row.previousFiles,'NATIVE_PREVIOUS_FILES');sorted(row.currentFiles,'NATIVE_CURRENT_FILES');reject(row.previousFiles.every(file=>row.currentFiles.includes(file)),'ADDITIVE_NATIVE_FILES');reject(same(row.previousFiles,material?parentExpected.consumptionEvidenceRuntime.materialNative.currentFiles:proofAdvance?.previousFiles),'EXACT_NATIVE_PREVIOUS_SET');if(!material)reject(same(row.currentFiles,proofAdvance.currentFiles),'COMPANY_CURRENT_PROOF_SET_JOIN');\n  reject(Array.isArray(row.currentLfManifest)&&same(row.currentLfManifest.map(value=>value.path),[...new Set([...row.currentFiles,producer])].sort()),'COMPLETE_NATIVE_LF_MANIFEST');for(const pin of row.currentLfManifest){exact(pin,['path','sha256'],'NATIVE_LF_PIN_KEYS');reject(hash(pin.sha256)&&(!references.has(pin.path)||references.get(pin.path).currentSha256===pin.sha256),'NATIVE_REFERENCE_JOIN');}reject(row.currentLfManifest.find(pin=>pin.path===producer)?.sha256===row.currentProducerLfSha256,'NATIVE_PRODUCER_LF_JOIN');reject(row.previousProducerLfSha256===(histories.get(producer)?.previousSha256??parentExpected.references.find(pin=>pin.path===producer)?.currentSha256),'NATIVE_PREVIOUS_PRODUCER_JOIN');reject(row.kind==='PG_COMPANY_KYC'?plain(row.nested):row.nested===null||row.kind==='PG_FIELD'&&plain(row.nested),'EXACT_NATIVE_NESTED_MODE');\n }\n reject(Array.isArray(runtime.browserSourceAdvances)&&runtime.browserSourceAdvances.length===1,'EXACT_BROWSER_ADVANCE');\n const browserAdvance=runtime.browserSourceAdvances[0],browserParent=parentExpected.browser,browserFamily=expected.sourceFamilies.find(row=>row.family==='PLAN_BUDGET_UI'),browserFamilyAdvance=runtime.familyAdvances.find(row=>row.family==='PLAN_BUDGET_UI');\n exact(browserAdvance,['kind','producer','previousProducerLfSha256','currentProducerLfSha256','previousFiles','currentFiles','additions','currentLfManifest'],'BROWSER_ADVANCE_KEYS');\n reject(browserAdvance.kind==='WEEKLY_CYP_INVESTMENT_UI'&&browserAdvance.producer===browserParent.producer&&browserAdvance.previousProducerLfSha256===browserParent.producerLfSha256&&hash(browserAdvance.currentProducerLfSha256),'EXACT_BROWSER_PRODUCER');\n for(const key of ['previousFiles','currentFiles','additions'])sorted(browserAdvance[key],'BROWSER_'+key);\n reject(browserAdvance.previousFiles.length===browserParent.investmentSourceCount&&sha(JSON.stringify(browserAdvance.previousFiles))===browserParent.investmentSourcePathsSha256,'EXACT_PREVIOUS_BROWSER_SOURCE_SET');\n reject(browserFamily&&browserFamilyAdvance&&same([...browserAdvance.previousFiles,...browserAdvance.additions].sort(),browserAdvance.currentFiles)&&same(browserAdvance.additions,browserFamilyAdvance.additions)&&browserAdvance.currentFiles.every(file=>browserFamily.currentFiles.includes(file)),'EXACT_ADDITIVE_BROWSER_SOURCE_SET');\n reject(Array.isArray(browserAdvance.currentLfManifest)&&same(browserAdvance.currentLfManifest.map(row=>row.path),[...new Set([...browserAdvance.currentFiles,browserAdvance.producer])].sort()),'COMPLETE_BROWSER_LF_MANIFEST');\n for(const pin of browserAdvance.currentLfManifest){exact(pin,['path','sha256'],'BROWSER_LF_PIN_KEYS');reject(hash(pin.sha256)&&browserFamily.currentManifest.find(row=>row.path===pin.path)?.sha256===pin.sha256&&(!references.has(pin.path)||references.get(pin.path).currentSha256===pin.sha256),'BROWSER_FAMILY_AND_REFERENCE_JOIN');}\n reject(browserAdvance.currentLfManifest.find(row=>row.path===browserAdvance.producer)?.sha256===browserAdvance.currentProducerLfSha256,'EXACT_CURRENT_BROWSER_PRODUCER');\n function browserBinding(contract,fallback){const previous=parentGate.planBudgetCurrentBrowserBinding(restoreParentContract(contract),fallback);return{...previous,producerLfSha256:browserAdvance.currentProducerLfSha256,investmentSourceCount:browserAdvance.currentFiles.length,investmentSourcePathsSha256:sha(JSON.stringify(browserAdvance.currentFiles))};}\n function isCurrent(contract){return plain(contract)&&plain(contract[section])&&Object.hasOwn(contract[section],revision);}\n function immediateSource(contract,file,value){metadata(contract);return restorePreviousSource(file,value);}\n function sourceCall(name,contract,file,value){const parent=restoreParentContract(contract);return parentGate[name](parent,file,restorePreviousSource(file,value));}\n function producerCall(name,contract,file,value){const parent=restoreParentContract(contract);return parentGate[name](parent,restorePreviousSource(file,value));}\n function contractCall(name,contract,...args){return parentGate[name](restoreParentContract(contract),...args);}\n function projectedSet(family){\n  const current=expected.sourceFamilies.find(row=>row.family===family),previous=parentExpected.sourceFamilies.find(row=>row.family===family),proof=runtime.proofSourceSetAdvances.find(row=>row.kind===family);\n  if(current&&proof)reject(same(current.currentFiles,proof.currentFiles)&&same(previous.currentFiles,proof.previousFiles),'FAMILY_AND_PROOF_SOURCE_SET_JOIN_'+family);\n  return current?{current:current.currentFiles,previous:previous.currentFiles,additions:current.currentFiles.filter(file=>!previous.currentFiles.includes(file))}:proof?{current:proof.currentFiles,previous:proof.previousFiles,additions:proof.additions}:null;\n }\n function previousFiles(family,files){const row=projectedSet(family);if(!row)return structuredClone(files);if(same(files,row.current))return [...row.previous];reject(Array.isArray(files)&&!row.additions.some(file=>files.includes(file)),'EXACT_CURRENT_SOURCE_SET_'+family);return [...files];}\n function setCall(name,contract,family,files){return parentGate[name](restoreParentContract(contract),family,previousFiles(family,files));}\n function restoreClosure(contract,family,closure){const parent=restoreParentContract(contract),current=expected.sourceFamilies.find(row=>row.family===family),previous=parentExpected.sourceFamilies.find(row=>row.family===family);exact(closure,['files','externalImports'],'CLOSURE_KEYS');reject(current&&previous&&same(closure.files,current.currentFiles)&&same(closure.externalImports,current.externalImports),'EXACT_CURRENT_CLOSURE');return parentGate.restorePlanBudgetClosure(parent,family,{files:[...previous.currentFiles],externalImports:[...previous.externalImports]});}\n function currentSpec(spec){const row=runtime.proofSourceSetAdvances.find(row=>row.kind===spec?.kind),producer=histories.get(spec?.producer);if(!row&&!producer)return structuredClone(spec);reject(plain(spec)&&Array.isArray(spec.sourceFiles),'CURRENT_SPEC');if(row)reject(same(spec.sourceFiles,row.currentFiles),'EXACT_CURRENT_SPEC_SOURCE_SET_'+spec.kind);if(producer)reject(spec.producerSha256===producer.currentSha256,'EXACT_CURRENT_SPEC_PRODUCER_'+spec.kind);return {...structuredClone(spec),...(row?{sourceFiles:[...row.previousFiles]}:{}),...(producer?{producerSha256:producer.previousSha256}:{})};}\n function proofSourceAdditions(spec){const row=projectedSet(spec?.kind);if(!row)return parentGate.planBudgetProofSourceAdditions(spec);if(same(spec.sourceFiles,row.current))return [...new Set([...parentGate.planBudgetProofSourceAdditions(currentSpec(spec)),...row.additions])].sort();reject(Array.isArray(spec.sourceFiles)&&!row.additions.some(file=>spec.sourceFiles.includes(file)),'EXACT_CURRENT_SOURCE_SET_'+spec.kind);return parentGate.planBudgetProofSourceAdditions(spec);}\n function intakeCurrentCheckCount(spec){const row=projectedSet(spec?.kind);if(!row)return parentGate.intakeWithdrawalCurrentCheckCount(spec);if(same(spec.sourceFiles,row.current))return parentGate.intakeWithdrawalCurrentCheckCount(currentSpec(spec));reject(Array.isArray(spec.sourceFiles)&&!row.additions.some(file=>spec.sourceFiles.includes(file)),'EXACT_CURRENT_SOURCE_SET_'+spec.kind);return parentGate.intakeWithdrawalCurrentCheckCount(spec);}\n function compiledProof(contract){const parent=restoreParentContract(contract),prior=parentGate.planBudgetCompiledProof(parent);if(!prior)return prior;const actual=contract.extension?.proofs?.find(row=>row.id===prior.id||row.kind===prior.kind);if(!actual)return prior;reject(same(currentSpec(actual),prior),'EXACT_COMPILED_PROOF_JOIN');return structuredClone(actual);}\n function sourcePin(contract,ref,previous=false){\n  // Pin aliases intentionally use the private compiled index, as historical\n  // callers do. This lookup is not contract or source acceptance.\n  reject(plain(ref)&&safe(ref.path)&&hash(ref.sha256),'SOURCE_PIN');const history=histories.get(ref.path),input=history&&history.previousSha256!==null&&ref.sha256===history.currentSha256?{...ref,sha256:history.previousSha256}:ref;\n  if(history?.previousSha256===null&&ref.sha256===history.currentSha256)return previous?null:history.currentSha256;\n  const value=parentGate[previous?'planBudgetPreviousSourcePin':'planBudgetCurrentSourcePin'](parentPinCarrier,input);return !previous&&history&&history.previousSha256===value?history.currentSha256:value;\n }\n function knownBusinessSource(file,value){const history=histories.get(file);if(!history)return parentGate.restorePlanBudgetFieldReviewBusinessSource(file,Buffer.from(value));const normalized=bytes(value,file);let projected;if(sha(normalized)===history.currentSha256)projected=restorePreviousSource(file,value);else{reject(history.previousSha256!==null&&sha(normalized)===history.previousSha256&&normalized.length===history.previousBytes,'EXACT_CURRENT_OR_LITERAL_PARENT_BUSINESS_SOURCE_'+file);projected=Buffer.from(value);}return parentGate.restorePlanBudgetFieldReviewBusinessSource(file,projected);}\n function validationFiles(contract){const parent=restoreParentContract(contract);return [...new Set([anchor,...expected.references.map(row=>row.path),...parentGate.planBudgetValidationFiles(parent)])].sort();}\n function proofSourceSet(contract,kind){restoreParentContract(contract);const spec=contract.extension?.proofs?.find(row=>row.kind===kind);reject(spec&&Array.isArray(spec.sourceFiles),'EXACT_CURRENT_PROOF_KIND');return [...spec.sourceFiles];}\n function workflowAdditions(contract){restoreParentContract(contract);return structuredClone(runtime.workflowAdditions);}\n function exactNativeProof(proof,contract,reader,producer){\n  const proofPath=producer==='scripts/verify-employee-intake-postgres.mjs'?'.vercel/private/employee-intake-postgres.json':producer==='scripts/verify-meta-field-bridge-postgres.mjs'?'.vercel/meta-field-evidence/postgres.json':producer==='scripts/verify-material-inventory-postgres.mjs'?'.vercel/material-inventory-evidence/postgres.json':null;\n  reject(proofPath,'EXACT_CURRENT_NATIVE_PRODUCER');let initial;try{initial=read(reader,proofPath);}catch{reject(false,'ACTUAL_NATIVE_PROOF_BYTES');}let parsed;try{parsed=JSON.parse(initial);}catch{reject(false,'ACTUAL_NATIVE_PROOF_JSON');}reject(same(parsed,proof)&&proof?.status==='PASS','ACTUAL_NATIVE_PROOF_BYTES');return{proofPath,raw:Buffer.from(initial),json:JSON.stringify(proof),owned:structuredClone(proof)};\n }\n function nativeManifest(proof,producer,reader,files){\n  reject(hash(proof.harnessSha256)&&sha(read(reader,producer))===proof.harnessSha256&&Array.isArray(proof.sourceManifest),'ACTUAL_NATIVE_RAW_PRODUCER_AND_MANIFEST');const seen=new Map();for(const row of proof.sourceManifest){exact(row,['path','sha256'],'NATIVE_SOURCE_ROW');reject(safe(row.path)&&hash(row.sha256)&&!seen.has(row.path),'NATIVE_SOURCE_ROW');seen.set(row.path,row.sha256);}reject(same([...seen.keys()].sort(),files),'EXACT_NATIVE_SOURCE_SET');for(const [file,pin]of seen)reject(sha(read(reader,file))===pin,'ACTUAL_NATIVE_RAW_SOURCE_'+file);\n }\n function finishNative(snapshot,proof,reader){reject(JSON.stringify(proof)===snapshot.json&&read(reader,snapshot.proofPath).equals(snapshot.raw),'NATIVE_INPUT_AND_RAW_BYTES_UNCHANGED');}\n function intakeNative(raw,contract,reader,spec){\n  const producer='scripts/verify-employee-intake-postgres.mjs',parent=restoreParentContract(contract),before=JSON.stringify(contract),parentSpec=currentSpec(spec);reject(spec?.kind==='PG_INTAKE'&&spec.producer===producer,'EXACT_INTAKE_SPEC');const files=proofSourceSet(contract,'PG_INTAKE');reject(same(spec.sourceFiles,files),'EXACT_INTAKE_SOURCE_JOIN');const snapshot=exactNativeProof(raw,contract,reader,producer);nativeManifest(snapshot.owned,producer,reader,files);\n  const result=withVerifiedParentReader(contract,reader,(previous,projectedReader)=>{const projected=structuredClone(snapshot.owned);projected.harnessSha256=sha(projectedReader(producer));projected.sourceManifest=parentSpec.sourceFiles.map(path=>({path,sha256:sha(projectedReader(path))}));const restored={...projected,harnessSha256:snapshot.owned.harnessSha256,sourceManifest:snapshot.owned.sourceManifest};reject(same(restored,snapshot.owned),'ONLY_INTAKE_SOURCE_FIELDS_PROJECTED');return parentGate.normalizePlanBudgetIntakeWithdrawalNativeProof(projected,previous,projectedReader,parentSpec);});\n  reject(JSON.stringify(contract)===before&&same(parent,restoreParentContract(contract)),'NATIVE_CONTRACT_UNCHANGED');nativeManifest(snapshot.owned,producer,reader,files);finishNative(snapshot,raw,reader);return result;\n }\n function pilotNative(contract,producer,proof,reader){\n  restoreParentContract(contract);\n  const snapshot=exactNativeProof(proof,contract,reader,producer);\n  if(producer==='scripts/verify-material-inventory-postgres.mjs')return materialNative(contract,proof,reader,snapshot);\n  reject(producer==='scripts/verify-meta-field-bridge-postgres.mjs','EXACT_PILOT_NATIVE_PRODUCER');\n  const result=withVerifiedParentReader(contract,reader,(parent,projected)=>parentGate.normalizePlanBudgetPilotNativeProof(parent,producer,structuredClone(snapshot.owned),projected));finishNative(snapshot,proof,reader);return result;\n }\n function materialNative(contract,proof,reader,snapshot){const descriptor=runtime.nativeSourceAdvances.find(row=>row.kind==='MATERIAL'),producer=descriptor.producer;const verify=()=>{nativeManifest(snapshot.owned,producer,reader,descriptor.currentFiles);for(const pin of descriptor.currentLfManifest)reject(sha(bytes(read(reader,pin.path),pin.path))===pin.sha256,'ACTUAL_NATIVE_LF_SOURCE_'+pin.path);};verify();const result=withVerifiedParentReader(contract,reader,(parent,projectedReader)=>{const projected=structuredClone(snapshot.owned);projected.sourceManifest=descriptor.previousFiles.map(path=>({path,sha256:sha(projectedReader(path))}));projected.harnessSha256=sha(projectedReader(producer));reject(sha(bytes(projectedReader(producer),producer))===descriptor.previousProducerLfSha256,'EXACT_MATERIAL_PREVIOUS_PRODUCER');const restored={...projected,sourceManifest:snapshot.owned.sourceManifest,harnessSha256:snapshot.owned.harnessSha256};reject(same(restored,snapshot.owned),'ONLY_MATERIAL_SOURCE_FIELDS_PROJECTED');return parentGate.normalizePlanBudgetPilotNativeProof(parent,producer,projected,projectedReader);});verify();finishNative(snapshot,proof,reader);return result;}\n function companyNative(contract,proof,reader,readEvidence,normalizeParent){restoreParentContract(contract);const descriptor=runtime.nativeSourceAdvances.find(row=>row.kind==='PG_COMPANY_KYC');reject(typeof readEvidence==='function'&&typeof normalizeParent==='function','ACTUAL_COMPANY_EVIDENCE_AND_ORACLE_REQUIRED');const{kind,nested,...top}=descriptor;return createCaptureCompanyNestedAdapter({version:2,top:{version:1,...top},currentImageManifest:structuredClone(nested)}).normalize({contract,proof,reader,readEvidence,bridge,normalizeParent});}\n function extensionNative(contract,spec,proof,reader,readEvidence,callback){\n  const parent=restoreParentContract(contract),actual=contract.extension?.proofs?.find(row=>row.id===spec?.id),previous=parent.extension?.proofs?.find(row=>row.id===spec?.id);reject(actual&&previous&&same(actual,spec)&&['PG_BANK','PG_INTAKE','PG_FIELD','PG_COMPANY_KYC'].includes(spec.kind),'EXACT_EXTENSION_NATIVE_SPEC');reject(typeof readEvidence==='function'&&typeof callback==='function','ACTUAL_EXTENSION_EVIDENCE_AND_ORACLE_REQUIRED');\n  if(spec.kind==='PG_COMPANY_KYC')return companyNative(contract,proof,reader,readEvidence,(parentContract,producer,projected,parentReader)=>{reject(producer===spec.producer,'EXACT_COMPANY_CALLBACK_PRODUCER');return callback(parentContract,structuredClone(previous),projected,parentReader);});\n  if(spec.kind==='PG_FIELD')return fieldNative(contract,spec,proof,reader,readEvidence,callback,previous);\n  const initialRaw=readEvidence(spec.path);reject(Buffer.isBuffer(initialRaw)&&Buffer.from(initialRaw.toString('utf8')).equals(initialRaw),'ACTUAL_EXTENSION_NATIVE_PROOF_BYTES');let parsed;try{parsed=JSON.parse(initialRaw);}catch{reject(false,'ACTUAL_EXTENSION_NATIVE_PROOF_JSON');}reject(same(parsed,proof)&&proof?.status==='PASS','EXACT_EXTENSION_NATIVE_PROOF');const owned=structuredClone(parsed),json=JSON.stringify(parsed),raw=Buffer.from(initialRaw);nativeManifest(owned,spec.producer,reader,spec.sourceFiles);\n  const descriptor=runtime.nativeSourceAdvances.find(row=>row.kind===spec.kind);reject(descriptor&&same(descriptor.currentFiles,spec.sourceFiles)&&descriptor.currentProducerLfSha256===spec.producerSha256,'EXTENSION_NATIVE_DESCRIPTOR_JOIN');const verifyLf=()=>{for(const pin of descriptor.currentLfManifest)reject(sha(bytes(read(reader,pin.path),pin.path))===pin.sha256,'ACTUAL_EXTENSION_SOURCE_LF_'+pin.path);};verifyLf();\n  const result=withVerifiedParentReader(contract,reader,(parentContract,parentReader)=>{const projected=structuredClone(owned);projected.harnessSha256=sha(parentReader(spec.producer));projected.sourceManifest=previous.sourceFiles.map(path=>({path,sha256:sha(parentReader(path))}));reject(same({...projected,harnessSha256:owned.harnessSha256,sourceManifest:owned.sourceManifest},owned),'ONLY_EXTENSION_NATIVE_SOURCE_FIELDS_PROJECTED');return callback(parentContract,structuredClone(previous),projected,parentReader);});\n  nativeManifest(owned,spec.producer,reader,spec.sourceFiles);verifyLf();const final=readEvidence(spec.path);reject(Buffer.isBuffer(final)&&final.equals(raw)&&JSON.stringify(proof)===json,'EXTENSION_NATIVE_INPUT_AND_RAW_UNCHANGED');return result;\n }\n function fieldNative(contract,spec,proof,reader,readEvidence,callback,previous){\n  const descriptor=runtime.nativeSourceAdvances.find(row=>row.kind==='PG_FIELD'),nested=descriptor.nested;exact(nested,['maps'],'FIELD_MAP_DESCRIPTOR_KEYS');reject(Array.isArray(nested.maps)&&same(nested.maps.map(row=>row.field),['sourceSha256','voiceProgressSourceSha256','mediaLeaseSourceSha256','videoAudioSourceSha256','participantKycFixture.sourceSha256']),'EXACT_FIELD_MAP_NAMES');\n  const field=(value,name)=>name==='participantKycFixture.sourceSha256'?value.participantKycFixture?.sourceSha256:value[name],setField=(value,name,map)=>{if(name==='participantKycFixture.sourceSha256')value.participantKycFixture.sourceSha256=map;else value[name]=map;};\n  for(const map of nested.maps){exact(map,['field','previousFiles','currentFiles','currentLfManifest'],'FIELD_MAP_KEYS');sorted(map.previousFiles,'FIELD_PREVIOUS_MAP_FILES');sorted(map.currentFiles,'FIELD_CURRENT_MAP_FILES');reject(map.previousFiles.every(file=>map.currentFiles.includes(file))&&same(map.currentLfManifest.map(row=>row.path),map.currentFiles),'EXACT_ADDITIVE_FIELD_MAP');for(const row of map.currentLfManifest){exact(row,['path','sha256'],'FIELD_LF_ROW');reject(descriptor.currentLfManifest.find(pin=>pin.path===row.path)?.sha256===row.sha256,'FIELD_TOP_LF_JOIN');}}\n  reject(same([...new Set(nested.maps.flatMap(row=>row.currentFiles))].sort(),spec.sourceFiles)&&same([...new Set(nested.maps.flatMap(row=>row.previousFiles))].sort(),previous.sourceFiles),'FIELD_MAPS_COMPLETE_CURRENT_AND_PREVIOUS_UNIONS');\n  const initial=readEvidence(spec.path);reject(Buffer.isBuffer(initial)&&Buffer.from(initial.toString('utf8')).equals(initial),'ACTUAL_FIELD_RAW_PROOF');let parsed;try{parsed=JSON.parse(initial);}catch{reject(false,'ACTUAL_FIELD_PROOF_JSON');}reject(same(parsed,proof)&&proof?.status==='PASS'&&!Object.hasOwn(proof,'sourceManifest'),'ACTUAL_FIELD_FIVE_MAP_PROOF');const owned=structuredClone(parsed),json=JSON.stringify(parsed),raw=Buffer.from(initial);\n  const verify=()=>{reject(hash(owned.harnessSha256)&&sha(read(reader,spec.producer))===owned.harnessSha256,'ACTUAL_FIELD_RAW_HARNESS');for(const map of nested.maps){const rows=field(owned,map.field);reject(plain(rows)&&same(Object.keys(rows).sort(),map.currentFiles),'EXACT_FIELD_RAW_MAP_'+map.field);for(const file of map.currentFiles)reject(hash(rows[file])&&sha(read(reader,file))===rows[file],'ACTUAL_FIELD_RAW_SOURCE_'+file);}for(const pin of descriptor.currentLfManifest)reject(sha(bytes(read(reader,pin.path),pin.path))===pin.sha256,'ACTUAL_FIELD_LF_SOURCE_'+pin.path);};verify();\n  const result=withVerifiedParentReader(contract,reader,(parent,parentReader)=>{const projected=structuredClone(owned);for(const map of nested.maps)setField(projected,map.field,Object.fromEntries(map.previousFiles.map(file=>[file,sha(parentReader(file))])));projected.harnessSha256=sha(parentReader(spec.producer));const business=structuredClone(projected);for(const map of nested.maps)setField(business,map.field,structuredClone(field(owned,map.field)));business.harnessSha256=owned.harnessSha256;reject(same(business,owned),'ONLY_EXACT_FIELD_MAPS_AND_HARNESS_PROJECTED');return callback(parent,structuredClone(previous),projected,parentReader);});verify();const final=readEvidence(spec.path);reject(Buffer.isBuffer(final)&&final.equals(raw)&&JSON.stringify(proof)===json,'FIELD_INPUT_AND_RAW_UNCHANGED');return result;\n }\n const bridge=Object.freeze({parentGate,parentExpected:structuredClone(parentExpected),isCurrent,restoreParentContract,restorePreviousSource:immediateSource,verifyCurrentSources,withVerifiedParentReader,historicalAuthority,verifyActualClosure,applyWorkflowAdditions,sourceCall,producerCall,contractCall,setCall,restoreClosure,proofSourceAdditions,compiledProof,sourcePin,knownBusinessSource,validationFiles,proofSourceSet,workflowAdditions,browserBinding,intakeCurrentCheckCount,intakeNative,pilotNative,companyNative,extensionNative});bridges.add(bridge);return bridge;\n\n}\n\n\nconst createCompanyKycNativeAdapter=(()=>{\n\n// An explicit proposal for the COMPANY proof shape already emitted by this\n// producer. This does not authorize the manifest-only META field proof: that\n// separate proof requires a canonical fresh-lane capability or added source\n// binding, and remains blocked rather than silently rebased.\nconst producer='scripts/verify-company-channel-kyc-postgres.mjs',proofPath='.vercel/company-kyc-evidence/postgres.json';\nconst same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),sha=value=>createHash('sha256').update(value).digest('hex'),hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);\nconst plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value),safe=file=>typeof file==='string'&&path.posix.normalize(file)===file&&!path.posix.isAbsolute(file)&&!/[\\\\:\\x00-\\x1f]/.test(file)&&!file.split('/').includes('..');\nconst reject=(ok,reason)=>{if(!ok)throw Object.assign(new Error('Capture quality native adapter rejected: '+reason),{code:'CAPTURE_QUALITY_NATIVE_SOURCE_REJECTED',reason});};\nconst exact=(value,keys,reason)=>reject(plain(value)&&same(Object.keys(value).sort(),[...keys].sort()),reason),sorted=(files,reason)=>reject(Array.isArray(files)&&files.every(safe)&&same(files,[...new Set(files)].sort()),reason);\nconst lf=value=>Buffer.from(value.toString('utf8').replaceAll('\\r\\n','\\n'));\n\nfunction createCompanyKycNativeAdapter(input){\n const descriptor=structuredClone(input);exact(descriptor,['version','producer','proofPath','previousProducerLfSha256','currentProducerLfSha256','previousFiles','currentFiles','currentLfManifest'],'DESCRIPTOR_KEYS');\n reject(descriptor.version===1&&descriptor.producer===producer&&descriptor.proofPath===proofPath&&hash(descriptor.previousProducerLfSha256)&&hash(descriptor.currentProducerLfSha256),'EXACT_COMPANY_PRODUCER');\n sorted(descriptor.previousFiles,'PREVIOUS_FILES');sorted(descriptor.currentFiles,'CURRENT_FILES');reject(descriptor.previousFiles.length>0&&descriptor.previousFiles.every(file=>descriptor.currentFiles.includes(file)),'ADDITIVE_SOURCE_FILES');\n reject(Array.isArray(descriptor.currentLfManifest)&&same(descriptor.currentLfManifest.map(row=>row.path),[...new Set([...descriptor.currentFiles,producer])].sort()),'COMPLETE_LF_MANIFEST');\n for(const row of descriptor.currentLfManifest){exact(row,['path','sha256'],'LF_ROW');reject(hash(row.sha256),'LF_HASH');}\n const expected=new Map(descriptor.currentLfManifest.map(row=>[row.path,row.sha256]));reject(expected.get(producer)===descriptor.currentProducerLfSha256,'PRODUCER_MANIFEST_JOIN');\n return Object.freeze({\n  normalize({contract,proof,reader,readEvidence,bridge,normalizeParent}={}){\n   // These ports and actual receipt bytes are required before either oracle.\n   reject(typeof reader==='function'&&typeof readEvidence==='function'&&typeof normalizeParent==='function','ACTUAL_BYTE_READERS_REQUIRED');reject(isCaptureQualityBridge(bridge),'AUTHENTICATED_BRIDGE_REQUIRED');\n   const raw=readEvidence(proofPath);reject(Buffer.isBuffer(raw)&&raw.length>0&&Buffer.from(raw.toString('utf8')).equals(raw),'ACTUAL_PROOF_BYTES_REQUIRED');let actual;try{actual=JSON.parse(raw);}catch{reject(false,'ACTUAL_PROOF_JSON');}\n   reject(plain(proof)&&same(actual,proof)&&proof.status==='PASS','EXACT_CURRENT_PROOF');const ownedProof=structuredClone(actual),initialProofJson=JSON.stringify(actual),initialRaw=Buffer.from(raw);reject(Array.isArray(ownedProof.sourceManifest)&&hash(ownedProof.harnessSha256),'CURRENT_PROOF_SOURCE_BINDING_REQUIRED');\n   const rows=new Map();for(const row of ownedProof.sourceManifest){exact(row,['path','sha256'],'CURRENT_PROOF_SOURCE_ROW');reject(safe(row.path)&&hash(row.sha256)&&!rows.has(row.path),'CURRENT_PROOF_SOURCE_ROW');rows.set(row.path,row.sha256);}\n   reject(same([...rows.keys()].sort(),descriptor.currentFiles),'EXACT_CURRENT_PROOF_SOURCE_SET');\n   const verifyRaw=()=>{for(const [file,expectedLf]of expected){const value=reader(file);reject(Buffer.isBuffer(value)&&Buffer.from(value.toString('utf8')).equals(value)&&sha(lf(value))===expectedLf,'ACTUAL_CURRENT_LF_SOURCE_'+file);reject(sha(value)===(file===producer?ownedProof.harnessSha256:rows.get(file)),'ACTUAL_CURRENT_RAW_SOURCE_'+file);}};\n   verifyRaw();\n   const result=bridge.withVerifiedParentReader(contract,reader,(parentContract,parentReader)=>{\n    const previousProducer=parentReader(producer);reject(Buffer.isBuffer(previousProducer)&&sha(lf(previousProducer))===descriptor.previousProducerLfSha256,'EXACT_PREVIOUS_PRODUCER');\n    const projected=structuredClone(ownedProof),prior=new Set(descriptor.previousFiles);projected.sourceManifest=ownedProof.sourceManifest.filter(row=>prior.has(row.path)).map(row=>({path:row.path,sha256:sha(parentReader(row.path))}));projected.harnessSha256=sha(previousProducer);\n    reject(same(projected.sourceManifest.map(row=>row.path).sort(),descriptor.previousFiles),'EXACT_PREVIOUS_PROOF_SOURCE_SET');\n    const restoredBusiness={...projected,sourceManifest:ownedProof.sourceManifest,harnessSha256:ownedProof.harnessSha256};reject(same(restoredBusiness,ownedProof),'ONLY_SOURCE_BINDING_FIELDS_PROJECTED');\n    const normalized=normalizeParent(parentContract,producer,projected,parentReader);reject(!normalized||typeof normalized.then!=='function','SYNCHRONOUS_NATIVE_CALLBACK_REQUIRED');return normalized;\n   });\n   verifyRaw();const finalRaw=readEvidence(proofPath);reject(Buffer.isBuffer(finalRaw)&&finalRaw.equals(initialRaw)&&JSON.stringify(proof)===initialProofJson,'ACTUAL_PROOF_BYTES_AND_INPUT_UNCHANGED');return result;\n  },\n  limits:Object.freeze({producer,proofPath,trackedCompilerIntegrated:false,currentReceiptExecuted:false,freshLaneAuthorityIntegrated:false,metadataOnlyAccepted:false,metaFieldProofAccepted:false,nativeOrHumanAcceptance:false}),\n });\n}\n\nreturn createCompanyKycNativeAdapter;\n})();\nconst createCaptureCompanyNestedAdapter=(()=>{\n\n// Exact adapter for the five actual CURRENT helper RAW references. The real\n// 17-case ledger and every business fact survive byte-for-byte as JSON data.\nconst helper='scripts/lib/kyc-current-image-native.mjs',synthetic='scripts/lib/synthetic-capture-quality.mjs',producer='scripts/verify-company-channel-kyc-postgres.mjs',previousFiles=[helper,producer,'package.json','package-lock.json'],currentFiles=[helper,synthetic,producer,'package.json','package-lock.json'];\nconst sha=value=>createHash('sha256').update(value).digest('hex'),lf=value=>Buffer.from(value.toString('utf8').replaceAll('\\r\\n','\\n')),same=(a,b)=>JSON.stringify(a)===JSON.stringify(b),hash=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value),plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);\nconst reject=(ok,reason)=>{if(!ok)throw Object.assign(new Error('COMPANY CURRENT nested source adapter rejected: '+reason),{code:'CAPTURE_QUALITY_COMPANY_NESTED_SOURCE_REJECTED',reason});};\nfunction createCompanyNestedNativeAdapter(input){\n const descriptor=structuredClone(input);reject(plain(descriptor)&&same(Object.keys(descriptor).sort(),['version','top','currentImageManifest'].sort())&&descriptor.version===2,'EXACT_V2_DESCRIPTOR');const nested=descriptor.currentImageManifest;reject(plain(nested)&&same(Object.keys(nested).sort(),['previousFiles','currentFiles','currentLfManifest'].sort())&&same(nested.previousFiles,previousFiles)&&same(nested.currentFiles,currentFiles),'EXACT_NESTED_PATHS');reject(Array.isArray(nested.currentLfManifest)&&same(nested.currentLfManifest.map(row=>row.path),currentFiles)&&nested.currentLfManifest.every(row=>plain(row)&&same(Object.keys(row).sort(),['path','sha256'])&&hash(row.sha256)),'EXACT_NESTED_LF_MANIFEST');const top=createCompanyKycNativeAdapter(descriptor.top),topPins=new Map(descriptor.top.currentLfManifest.map(row=>[row.path,row.sha256]));for(const row of nested.currentLfManifest)if(topPins.has(row.path))reject(topPins.get(row.path)===row.sha256,'NESTED_TOP_PIN_JOIN');\n return Object.freeze({normalize({contract,proof,reader,readEvidence,bridge,normalizeParent}={}){\n  reject(typeof reader==='function'&&typeof readEvidence==='function'&&typeof normalizeParent==='function','ACTUAL_READERS_AND_ORACLE_REQUIRED');const initialRaw=readEvidence(descriptor.top.proofPath);reject(Buffer.isBuffer(initialRaw)&&Buffer.from(initialRaw.toString('utf8')).equals(initialRaw),'ACTUAL_PROOF_BYTES');let owned;try{owned=JSON.parse(initialRaw);}catch{reject(false,'PROOF_JSON');}reject(same(owned,proof),'EXACT_PROOF_INPUT');const initialJson=JSON.stringify(owned),ownedRaw=Buffer.from(initialRaw),native=owned.currentImageNative;reject(plain(native)&&Array.isArray(native.sourceManifest)&&same(native.sourceManifest.map(row=>row?.path),currentFiles),'COMPLETE_ACTUAL_NESTED_SOURCE_SET');\n  const verify=()=>{for(const[index,pin]of nested.currentLfManifest.entries()){const row=native.sourceManifest[index],value=reader(pin.path);reject(plain(row)&&same(Object.keys(row).sort(),['path','sha256'])&&hash(row.sha256)&&Buffer.isBuffer(value)&&Buffer.from(value.toString('utf8')).equals(value)&&sha(lf(value))===pin.sha256&&sha(value)===row.sha256,'ACTUAL_NESTED_RAW_AND_LF_'+pin.path);}};verify();\n  const result=top.normalize({contract,proof,reader,readEvidence,bridge,normalizeParent:(parentContract,producer,topProjected,parentReader)=>{\n   const projected=structuredClone(topProjected);projected.currentImageNative.sourceManifest=previousFiles.map(path=>({path,sha256:sha(parentReader(path))}));\n   const restoreNested=structuredClone(projected);restoreNested.currentImageNative.sourceManifest=topProjected.currentImageNative.sourceManifest;reject(same(restoreNested,topProjected),'ONLY_EXACT_NESTED_SOURCE_FIELD_PROJECTED');return normalizeParent(parentContract,producer,projected,parentReader);\n  }});\n  verify();const finalRaw=readEvidence(descriptor.top.proofPath);reject(Buffer.isBuffer(finalRaw)&&finalRaw.equals(ownedRaw)&&JSON.stringify(proof)===initialJson,'NESTED_PROOF_AND_INPUT_UNCHANGED');return result;\n },limits:Object.freeze({scope:'EXACT_COMPANY_CURRENT_SOURCE_BINDING_ONLY',businessFactsProjected:false,caseFactsProjected:false,trackedCompilerIntegrated:false,fullEightLaneCiAccepted:false,sourceAuthorityAccepted:false,nativeOrHumanAcceptance:false})});\n}\n\nreturn createCompanyNestedNativeAdapter;\n})();\n\nexport const PLAN_BUDGET_CURRENT_SECTION='planBudgetCurrentRevision';\nexport const PLAN_BUDGET_CI_KIND='UI_PLAN_BUDGET_SOURCE';\nexport const PLAN_BUDGET_CI_PROOF_PATH='.vercel/private/plan-budget-ui-ci.json';\nconst captureRuntime=reviewed.captureQualityRuntime?createCaptureRuntimeGate(reviewed):null;\nconst captureParent=captureRuntime?captureRuntime.parentGate:createCaptureQualityParentGate(reviewed);\nconst captureActive=contract=>Boolean(captureRuntime?.isCurrent(contract));\nexport const INTAKE_WITHDRAWAL_CHECK_NAMES=captureParent.INTAKE_WITHDRAWAL_CHECK_NAMES;\nexport function restoreCaptureRuntimePreviousContract(contract){return captureActive(contract)?captureRuntime.restoreParentContract(contract):structuredClone(contract);}\nexport function restoreCaptureRuntimePreviousSource(contract,file,raw){return captureActive(contract)?captureRuntime.restorePreviousSource(contract,file,raw):Buffer.from(raw);}\nexport function withCaptureRuntimePreviousSources(contract,reader,callback){if(captureActive(contract))return captureRuntime.withVerifiedParentReader(contract,reader,callback);reject(!captureRuntime,'CURRENT_CAPTURE_RUNTIME_REQUIRED');const before=JSON.stringify(contract);captureParent.verifyPlanBudgetCurrentSources(contract,reader);const result=callback(structuredClone(contract),reader);reject(!result||typeof result.then!=='function','SYNCHRONOUS_PARENT_CALLBACK_REQUIRED');reject(JSON.stringify(contract)===before,'CONTRACT_UNCHANGED');captureParent.verifyPlanBudgetCurrentSources(contract,reader);return result;}\nexport function captureRuntimeProofSourceSet(contract,kind){if(captureActive(contract))return captureRuntime.proofSourceSet(contract,kind);const spec=contract.extension?.proofs?.find(row=>row.kind===kind);reject(spec&&Array.isArray(spec.sourceFiles),'EXACT_CURRENT_PROOF_KIND');return [...spec.sourceFiles];}\nexport function captureRuntimeWorkflowAdditions(contract){return captureActive(contract)?captureRuntime.workflowAdditions(contract):[];}\nexport function verifyCaptureRuntimeCurrentSources(contract,reader){return captureActive(contract)?captureRuntime.verifyCurrentSources(contract,reader):captureRuntime?captureRuntime.historicalAuthority('verifyPlanBudgetCurrentSources',contract,reader):captureParent.verifyPlanBudgetCurrentSources(contract,reader);}\nexport function restorePlanBudgetAcceptancePreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetAcceptancePreviousContract',contract):captureParent.restorePlanBudgetAcceptancePreviousContract(contract);}\nexport function restorePlanBudgetAcceptancePreviousSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetAcceptancePreviousSource',contract,file,raw):captureParent.restorePlanBudgetAcceptancePreviousSource(contract,file,raw);}\nexport function restorePlanBudgetPilotIntegrationPreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetPilotIntegrationPreviousContract',contract):captureParent.restorePlanBudgetPilotIntegrationPreviousContract(contract);}\nexport function restorePlanBudgetPilotIntegrationSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetPilotIntegrationSource',contract,file,raw):captureParent.restorePlanBudgetPilotIntegrationSource(contract,file,raw);}\nexport function restorePlanBudgetTrialExpiryNoticePreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetTrialExpiryNoticePreviousContract',contract):captureParent.restorePlanBudgetTrialExpiryNoticePreviousContract(contract);}\nexport function restorePlanBudgetTrialExpiryNoticeSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetTrialExpiryNoticeSource',contract,file,raw):captureParent.restorePlanBudgetTrialExpiryNoticeSource(contract,file,raw);}\nexport function restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetTrialExpiryNoticeValidatorSource',contract,file,raw):captureParent.restorePlanBudgetTrialExpiryNoticeValidatorSource(contract,file,raw);}\nexport function restorePlanBudgetMeasurementPrivacyPreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetMeasurementPrivacyPreviousContract',contract):captureParent.restorePlanBudgetMeasurementPrivacyPreviousContract(contract);}\nexport function restorePlanBudgetMeasurementPrivacySource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetMeasurementPrivacySource',contract,file,raw):captureParent.restorePlanBudgetMeasurementPrivacySource(contract,file,raw);}\nexport function restorePlanBudgetCheckTimePreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetCheckTimePreviousContract',contract):captureParent.restorePlanBudgetCheckTimePreviousContract(contract);}\nexport function restorePlanBudgetCheckTimeSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetCheckTimeSource',contract,file,raw):captureParent.restorePlanBudgetCheckTimeSource(contract,file,raw);}\nexport function restorePlanBudgetPreviousContract(contract){return captureActive(contract)?captureRuntime.contractCall('restorePlanBudgetPreviousContract',contract):captureParent.restorePlanBudgetPreviousContract(contract);}\nexport function restorePlanBudgetIntakeWithdrawalSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetIntakeWithdrawalSource',contract,file,raw):captureParent.restorePlanBudgetIntakeWithdrawalSource(contract,file,raw);}\nexport function restorePlanBudgetIntakeWithdrawalProducerText(contract,raw){return captureActive(contract)?captureRuntime.producerCall('restorePlanBudgetIntakeWithdrawalProducerText',contract,'scripts/verify-employee-intake-postgres.mjs',raw):captureParent.restorePlanBudgetIntakeWithdrawalProducerText(contract,raw);}\nexport function restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,raw){return captureActive(contract)?captureRuntime.producerCall('restorePlanBudgetIntakeWithdrawalUnitProducerText',contract,'scripts/verify-participant-bank-intake-contracts.mjs',raw):captureParent.restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,raw);}\nexport function restorePlanBudgetMaterialNativeProducerText(contract,raw){return captureActive(contract)?captureRuntime.producerCall('restorePlanBudgetMaterialNativeProducerText',contract,'scripts/verify-material-inventory-postgres.mjs',raw):captureParent.restorePlanBudgetMaterialNativeProducerText(contract,raw);}\nexport function restorePlanBudgetAttendanceReviewProducerText(contract,raw){return captureActive(contract)?captureRuntime.producerCall('restorePlanBudgetAttendanceReviewProducerText',contract,'scripts/verify-field-operations-postgres.mjs',raw):captureParent.restorePlanBudgetAttendanceReviewProducerText(contract,raw);}\nexport function restorePlanBudgetConsumptionEvidenceSource(contract,file,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetConsumptionEvidenceSource',contract,file,raw):captureParent.restorePlanBudgetConsumptionEvidenceSource(contract,file,raw);}\nexport function restorePlanBudgetPilotProducerText(contract,producer,raw){return captureActive(contract)?captureRuntime.sourceCall('restorePlanBudgetPilotProducerText',contract,producer,raw):captureParent.restorePlanBudgetPilotProducerText(contract,producer,raw);}\nexport function restorePlanBudgetFieldReviewBusinessSource(file,raw){return captureRuntime?captureRuntime.knownBusinessSource(file,raw):captureParent.restorePlanBudgetFieldReviewBusinessSource(file,raw);}\nexport function restorePlanBudgetSourceSet(contract,family,files){return captureActive(contract)?captureRuntime.setCall('restorePlanBudgetSourceSet',contract,family,files):captureParent.restorePlanBudgetSourceSet(contract,family,files);}\nexport function restorePlanBudgetFieldReviewSourceSet(contract,family,files){return captureActive(contract)?captureRuntime.setCall('restorePlanBudgetFieldReviewSourceSet',contract,family,files):captureParent.restorePlanBudgetFieldReviewSourceSet(contract,family,files);}\nexport function restorePlanBudgetConsumptionEvidenceSourceSet(contract,family,files){return captureActive(contract)?captureRuntime.setCall('restorePlanBudgetConsumptionEvidenceSourceSet',contract,family,files):captureParent.restorePlanBudgetConsumptionEvidenceSourceSet(contract,family,files);}\nexport function planBudgetProofSourceAdditions(spec){return captureRuntime?captureRuntime.proofSourceAdditions(spec):captureParent.planBudgetProofSourceAdditions(spec);}\nexport function intakeWithdrawalCurrentCheckCount(spec){return captureRuntime?captureRuntime.intakeCurrentCheckCount(spec):captureParent.intakeWithdrawalCurrentCheckCount(spec);}\nexport function verifyPlanBudgetCurrentSources(contract,reader){return verifyCaptureRuntimeCurrentSources(contract,reader);}\nexport function verifyPlanBudgetActualClosure(contract,family,closure,reader){return captureActive(contract)?captureRuntime.verifyActualClosure(contract,family,closure,reader):captureRuntime?captureRuntime.historicalAuthority('verifyPlanBudgetActualClosure',contract,reader,family,closure):captureParent.verifyPlanBudgetActualClosure(contract,family,closure,reader);}\nexport function restorePlanBudgetClosure(contract,family,closure){return captureActive(contract)?captureRuntime.restoreClosure(contract,family,closure):captureParent.restorePlanBudgetClosure(contract,family,closure);}\nexport function planBudgetValidationFiles(contract){return captureActive(contract)?captureRuntime.validationFiles(contract):captureParent.planBudgetValidationFiles(contract);}\nexport function planBudgetCurrentBrowserBinding(contract,fallback){return captureActive(contract)?captureRuntime.browserBinding(contract,fallback):captureParent.planBudgetCurrentBrowserBinding(contract,fallback);}\nexport function planBudgetCompiledProof(contract){return captureActive(contract)?captureRuntime.compiledProof(contract):captureParent.planBudgetCompiledProof(contract);}\nexport function planBudgetRetainedScreenshotPaths(contract){return captureActive(contract)?captureRuntime.contractCall('planBudgetRetainedScreenshotPaths',contract):captureParent.planBudgetRetainedScreenshotPaths(contract);}\nexport function planBudgetCurrentSourcePin(contract,ref){return captureActive(contract)?captureRuntime.sourcePin(contract,ref):captureParent.planBudgetCurrentSourcePin(contract,ref);}\nexport function planBudgetPreviousSourcePin(contract,ref){return captureActive(contract)?captureRuntime.sourcePin(contract,ref,true):captureParent.planBudgetPreviousSourcePin(contract,ref);}\nexport function normalizePlanBudgetPilotNativeProof(contract,producer,proof,reader){return captureActive(contract)?captureRuntime.pilotNative(contract,producer,proof,reader):captureParent.normalizePlanBudgetPilotNativeProof(contract,producer,proof,reader);}\nexport function normalizePlanBudgetIntakeWithdrawalNativeProof(raw,contract,reader,spec){return captureActive(contract)?captureRuntime.intakeNative(raw,contract,reader,spec):captureParent.normalizePlanBudgetIntakeWithdrawalNativeProof(raw,contract,reader,spec);}\nexport function normalizeCaptureRuntimeCompanyNativeProof(contract,proof,reader,readEvidence,normalizeParent){reject(captureActive(contract),'CURRENT_CAPTURE_COMPANY_RUNTIME_REQUIRED');return captureRuntime.companyNative(contract,proof,reader,readEvidence,normalizeParent);}\nexport function normalizeCaptureRuntimeNativeProof(contract,spec,proof,reader,readEvidence,callback){reject(captureActive(contract),'CURRENT_CAPTURE_NATIVE_RUNTIME_REQUIRED');return captureRuntime.extensionNative(contract,spec,proof,reader,readEvidence,callback);}\n",
             "previousText": ""
           }
         ]
@@ -26721,6 +26961,26 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         ]
       },
       {
+        "path": "scripts/lib/plan-measurement-document-association-ci-lineage.mjs",
+        "status": "MODIFIED",
+        "previousSha256": "0a14f5211348d30d3a16b441a126880aeed8c7e196973ecceda7ee00307f0ef4",
+        "currentSha256": "9db74547c7253914e09693835080ea38c148b139fd4d3e9fa582e30e45c0699c",
+        "previousBytes": 23930,
+        "currentBytes": 24538,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 0,
+            "currentText": "import {withCaptureRuntimePreviousSources} from './plan-budget-current-ci-lineage.mjs';\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 20692,
+            "currentText": " if(contract?.planBudgetCurrentRevision?.captureQualityRuntime){\n  try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>verifyPreviousDocumentTaskAssociationCurrentSources(parent,parentRead));}\n  catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}\n }\n return verifyPreviousDocumentTaskAssociationCurrentSources(contract,readSource);\n}\nfunction verifyPreviousDocumentTaskAssociationCurrentSources(contract,readSource){\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
         "path": "scripts/lib/synthetic-capture-quality.mjs",
         "status": "ADDED",
         "previousSha256": null,
@@ -26739,134 +26999,174 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
         "status": "MODIFIED",
         "previousSha256": "a1de3a73617de7c4eb2f9db8665650abe5798accb44b886cd8d2220fe5295bbf",
-        "currentSha256": "69ce909a5dc107718bfc91ece769bea47d96183bed51ce1ab7e1668dccc17b1b",
+        "currentSha256": "34b6d5aabeb36566b3bb12bb4c464995432ac02b770206372b352cc25cd7841e",
         "previousBytes": 430955,
-        "currentBytes": 433238,
+        "currentBytes": 434110,
         "inverseHunks": [
           {
-            "currentOffsetCharacters": 126137,
+            "currentOffsetCharacters": 96,
+            "currentText": ",restoreCaptureRuntimePreviousContract,withCaptureRuntimePreviousSources",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 121873,
+            "currentText": "2",
+            "previousText": "1"
+          },
+          {
+            "currentOffsetCharacters": 126209,
             "currentText": "      \"inventoryFilter\": null,\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 126258,
+            "currentOffsetCharacters": 126330,
             "currentText": "      \"path\": \"/api/identity/field-operations\",\n      \"method\": \"GET\",\n      \"afterTask\": null,\n      \"inventoryFilter\": \"PENDING\",\n      \"responseStatus\": 200\n    },\n    {\n      \"width\": 320,\n      \"mode\": \"consumption\",\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 128619,
+            "currentOffsetCharacters": 128691,
             "currentText": "      \"inventoryFilter\": null,\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 128740,
+            "currentOffsetCharacters": 128812,
             "currentText": "      \"path\": \"/api/identity/field-operations\",\n      \"method\": \"GET\",\n      \"afterTask\": null,\n      \"inventoryFilter\": \"PENDING\",\n      \"responseStatus\": 200\n    },\n    {\n      \"width\": 390,\n      \"mode\": \"consumption\",\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 131111,
+            "currentOffsetCharacters": 131183,
             "currentText": "      \"inventoryFilter\": null,\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 131233,
+            "currentOffsetCharacters": 131305,
             "currentText": "      \"path\": \"/api/identity/field-operations\",\n      \"method\": \"GET\",\n      \"afterTask\": null,\n      \"inventoryFilter\": \"PENDING\",\n      \"responseStatus\": 200\n    },\n    {\n      \"width\": 1440,\n      \"mode\": \"consumption\",\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 133596,
+            "currentOffsetCharacters": 133668,
             "currentText": "      \"inventoryFilter\": null,\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 133717,
+            "currentOffsetCharacters": 133789,
             "currentText": "      \"path\": \"/api/identity/field-operations\",\n      \"method\": \"GET\",\n      \"afterTask\": null,\n      \"inventoryFilter\": \"PENDING\",\n      \"responseStatus\": 200\n    },\n    {\n      \"width\": 320,\n      \"mode\": \"consumption\",\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 136078,
+            "currentOffsetCharacters": 136150,
             "currentText": "      \"inventoryFilter\": null,\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 136199,
+            "currentOffsetCharacters": 136271,
             "currentText": "      \"path\": \"/api/identity/field-operations\",\n      \"method\": \"GET\",\n      \"afterTask\": null,\n      \"inventoryFilter\": \"PENDING\",\n      \"responseStatus\": 200\n    },\n    {\n      \"width\": 390,\n      \"mode\": \"consumption\",\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 138570,
+            "currentOffsetCharacters": 138642,
             "currentText": "      \"inventoryFilter\": null,\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 138692,
+            "currentOffsetCharacters": 138764,
             "currentText": "      \"path\": \"/api/identity/field-operations\",\n      \"method\": \"GET\",\n      \"afterTask\": null,\n      \"inventoryFilter\": \"PENDING\",\n      \"responseStatus\": 200\n    },\n    {\n      \"width\": 1440,\n      \"mode\": \"consumption\",\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 140479,
+            "currentOffsetCharacters": 140551,
             "currentText": "      \"inventoryFilter\": null,\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 140600,
+            "currentOffsetCharacters": 140672,
             "currentText": "      \"path\": \"/api/identity/field-operations\",\n      \"method\": \"GET\",\n      \"afterTask\": null,\n      \"inventoryFilter\": \"PENDING\",\n      \"responseStatus\": 200\n    },\n    {\n      \"width\": 320,\n      \"mode\": \"consumption\",\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 142386,
+            "currentOffsetCharacters": 142458,
             "currentText": "      \"inventoryFilter\": null,\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 142507,
+            "currentOffsetCharacters": 142579,
             "currentText": "      \"path\": \"/api/identity/field-operations\",\n      \"method\": \"GET\",\n      \"afterTask\": null,\n      \"inventoryFilter\": \"PENDING\",\n      \"responseStatus\": 200\n    },\n    {\n      \"width\": 390,\n      \"mode\": \"consumption\",\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 144300,
+            "currentOffsetCharacters": 144372,
             "currentText": "      \"inventoryFilter\": null,\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 144422,
+            "currentOffsetCharacters": 144494,
             "currentText": "      \"path\": \"/api/identity/field-operations\",\n      \"method\": \"GET\",\n      \"afterTask\": null,\n      \"inventoryFilter\": \"PENDING\",\n      \"responseStatus\": 200\n    },\n    {\n      \"width\": 1440,\n      \"mode\": \"consumption\",\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 145009,
-            "currentText": "80,\n      90,\n      100",
+            "currentOffsetCharacters": 145081,
+            "currentText": "80",
             "previousText": "74,\n      83,\n      92"
           },
           {
-            "currentOffsetCharacters": 145052,
+            "currentOffsetCharacters": 145103,
             "currentText": "83",
             "previousText": "77"
           },
           {
-            "currentOffsetCharacters": 145075,
+            "currentOffsetCharacters": 145126,
             "currentText": "7",
             "previousText": "0"
           },
           {
-            "currentOffsetCharacters": 145096,
-            "currentText": "93",
+            "currentOffsetCharacters": 145147,
+            "currentText": "90",
             "previousText": "86"
           },
           {
-            "currentOffsetCharacters": 145118,
-            "currentText": "97",
+            "currentOffsetCharacters": 145169,
+            "currentText": "93",
             "previousText": "89"
           },
           {
-            "currentOffsetCharacters": 145140,
-            "currentText": "103",
-            "previousText": "95"
+            "currentOffsetCharacters": 145192,
+            "currentText": "7",
+            "previousText": "5"
           },
           {
-            "currentOffsetCharacters": 145163,
-            "currentText": "107",
+            "currentOffsetCharacters": 145213,
+            "currentText": "100\n    ],\n    [\n      103\n    ],\n    [\n      107",
             "previousText": "98"
+          },
+          {
+            "currentOffsetCharacters": 409788,
+            "currentText": " if(contract?.planBudgetCurrentRevision?.captureQualityRuntime){\n  try{contract=restoreCaptureRuntimePreviousContract(contract);}\n  catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}\n }\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 417374,
+            "currentText": " if(contract?.planBudgetCurrentRevision?.captureQualityRuntime){\n  try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>verifyPreviousWhatsappFieldContinuityCurrentSources(parent,parentRead));}\n  catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}\n }\n return verifyPreviousWhatsappFieldContinuityCurrentSources(contract,readSource);\n}\nfunction verifyPreviousWhatsappFieldContinuityCurrentSources(contract,readSource){\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "scripts/lib/workspace-continuity-current-ci-lineage.mjs",
+        "status": "MODIFIED",
+        "previousSha256": "cb26d5ea9922fb9a3fb72d1a35010229a1d4b49f4784783294a4d1d503fdc81a",
+        "currentSha256": "c714b11e3ea3b87cf698f62f9b2ab93e433ef06d3c0a29e23ff09ac26dab5d70",
+        "previousBytes": 179811,
+        "currentBytes": 180407,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 0,
+            "currentText": "import {withCaptureRuntimePreviousSources} from './plan-budget-current-ci-lineage.mjs';\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 175842,
+            "currentText": " if(contract?.planBudgetCurrentRevision?.captureQualityRuntime){\n  try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>verifyPreviousWorkspaceContinuityCurrentSources(parent,parentRead));}\n  catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}\n }\n return verifyPreviousWorkspaceContinuityCurrentSources(contract,readSource);\n}\nfunction verifyPreviousWorkspaceContinuityCurrentSources(contract,readSource){\n",
+            "previousText": ""
           }
         ]
       },
@@ -27096,12 +27396,62 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         ]
       },
       {
+        "path": "scripts/verify-field-task-pagination-ci.mjs",
+        "status": "MODIFIED",
+        "previousSha256": "1e366a583be909323327524a8fe04db9eb962724ec5073bdf3eb36140ddcdecc",
+        "currentSha256": "fc18f1398b6ddd80863e76b86cd82951c606652e0d032e15c9364d21c336534a",
+        "previousBytes": 31564,
+        "currentBytes": 36766,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 1254,
+            "currentText": "import {withCaptureRuntimePreviousSources} from './lib/plan-budget-current-ci-lineage.mjs';\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 8445,
+            "currentText": "// Authenticate fresh outer bytes and the complete inverse before invoking a\n// frozen legacy source owner. Only that owned callback gets the parent reader;\n// v2 observations and provenance below keep their original current reader.\nfunction verifyFieldTaskPaginationSourceAuthority(contract,readSource){\n try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>{\n  verifyWhatsappFieldContinuityCurrentSources(parent,parentRead);\n  if(parent[WORKSITE_LIVE_HOURS_CURRENT_SECTION])verifyWorksiteLiveHoursCurrentSources(parent,parentRead);\n });}catch(error){if(['PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED','WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code))reject(false,error.message);throw error;}\n}\nfunction currentMetadata(){const value=WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI;reject(value?.status==='REVIEWED_FROZEN_CURRENT_SOURCE'&&value.ciVersion===FIELD_TASK_PAGINATION_CI_VERSION&&value.rawVersion===2",
+            "previousText": "function currentMetadata(){const value=WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI;reject(value?.status==='REVIEWED_FROZEN_CURRENT_SOURCE'&&value.ciVersion===FIELD_TASK_PAGINATION_CI_VERSION&&value.rawVersion===1"
+          },
+          {
+            "currentOffsetCharacters": 16697,
+            "currentText": "// Public pure validation of current request observations; no CI/source identity\n// or provider acceptance is inferred. The caller cannot supply a smaller oracle.\nexport function validateFieldTaskPaginationRequests(requests){\n const current=currentMetadata(),positions=[80,83,87,90,93,97,100,103,107];\n reject(current.requestMatrix.length===108&&current.postCount===9&&same(current.commandEqualityGroups,positions.map(index=>[index])),'The exact v2 complete request and independent command matrix is required');",
+            "previousText": "function validateRequests(requests,current){"
+          },
+          {
+            "currentOffsetCharacters": 17339,
+            "currentText": "uuid=value=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value),scope='a'.repeat(64),projectId='project-page-fixture';\n const descriptor={name:'synthetic-geometric.png',type:'image/png',size:68,sha256:'50a647596cc07caebc446ce8283a8c68cb502d3633518ee41202b2f23eb0f31c'};\n const projected=requests.map((row,index)=>{\n  const dynamic=row?.method==='POST'?['bodySha256','operationId','commandObservation']:[];keys(row,[...Object.keys(current.requestMatrix[index]),...dynamic],'request observation');\n  if(dynamic.length){\n   reject(/^[a-f0-9]{64}$/.test(row.bodySha256)&&uuid(row.operationId),'Actual canonical command UUID and exact body hash required');\n   const observation=row.commandObservation,base=['version','ordinal','width','mode','endpoint','method','authorization','bodyKind'],form=observation?.bodyKind==='FORM_DATA_FIELDS_FILE_SHA256_V1';\n   keys(observation,[...base,...(form?['fields','file']:['bodyUtf8'])],'command observation');\n   reject(observation.version===1&&observation.ordinal===1&&observation.width===row.width&&observation.mode===row.mode&&observation.endpoint===row.path&&observation.method==='POST'&&observation.authorization==='Bearer controlled-task-page-token','One actual prior same-page command must bind this exact intercepted transport');\n   let command,hashBytes;\n   if(form){\n    reject(row.mode==='evidence'&&row.path==='/api/identity/field-media','Multipart evidence endpoint and mode required');\n    const fieldNames=['operationId','projectId','scope','workerId','taskId','sectorId','caption'];keys(observation.fields,fieldNames,'multipart scalar');keys(observation.file,['name','type','size','sha256'],'multipart file');\n    const fields=Object.fromEntries(fieldNames.map(key=>[key,observation.fields[key]])),file=Object.fromEntries(['name','type','size','sha256'].map(key=>[key,observation.file[key]]));\n    reject(fieldNames.every(key=>typeof fields[key]==='string')&&uuid(fields.operationId)&&fields.projectId===projectId&&fields.scope===scope&&fields.workerId==='worker-fixture'&&fields.taskId==='task-0001'&&fields.sectorId==='sector-fixture'&&fields.caption==='Archivo sintético conservado durante la consulta.','Exact original multipart command fields required');\n    reject(same(file,descriptor),'The actual original geometric fixture file descriptor and bytes hash are required');\n    command=fields;hashBytes=Buffer.from(JSON.stringify({version:1,bodyKind:'FORM_DATA_FIELDS_FILE_SHA256_V1',fields,file}));\n   }else{\n    reject(observation.bodyKind==='JSON_UTF8_V1'&&['progress','consumption'].includes(row.mode)&&row.path==='/api/identity/field-operations'&&typeof observation.bodyUtf8==='string'&&observation.bodyUtf8.length>0&&Buffer.byteLength(observation.bodyUtf8,'utf8')<=8192,'Actual bounded JSON UTF8 body and endpoint required');\n    try{command=JSON.parse(observation.bodyUtf8);}catch{reject(false,'Observed JSON command must parse');}\n    keys(command,['operationId','projectId','scope','action','payload'],'observed JSON command');reject(JSON.stringify(command)===observation.bodyUtf8&&uuid(command.operationId)&&command.projectId===projectId&&command.scope===scope,'The original JSON serialization and scope must remain exact');\n    const progress=row.mode==='progress',expected=progress?{workerId:'worker-fixture',taskId:'task-0001',progress:25,quantity:'2.5',baseline:'10',unit:'M2',reason:'Medición sintética conservada durante la consulta.',evidenceIds:[],revision:'2026-10-16T12:00:00.000001'}:{workerId:'worker-fixture',taskId:null,sectorId:'sector-fixture',materialId:'material-fixture',catalogHash:'c'.repeat(64),quantity:'2.125',reason:'Consumo sintético conservado durante la consulta.',evidenceIds:[]};\n    reject(command.action===(progress?'PROPOSE_PROGRESS':'PROPOSE_CONSUMPTION'),'Exact original JSON action required');keys(command.payload,Object.keys(expected),'observed JSON payload');reject(Object.entries(expected).every(([key,value])=>same(command.payload[key],value)),'Every original JSON payload field must remain exact');hashBytes=Buffer.from(observation.bodyUtf8,'utf8');\n   }\n   reject(row.operationId===command.operationId&&row.bodySha256===sha(hashBytes),'The request UUID and hash must be recomputed from its actual observed command');\n  }\n  return Object.fromEntries(Object.entries(row).filter(([key])=>!dynamic.includes(key)));\n ",
+            "previousText": "projected=requests.map((row,index)=>{const dynamic=row?.method==='POST'?['bodySha256','operationId']:[];keys(row,[...Object.keys(current.requestMatrix[index]),...dynamic],'request observation');if(dynamic.length)reject(/^[a-f0-9]{64}$/.test(row.bodySha256)&&/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(row.operationId),'Actual canonical command UUID and exact body hash required');return Object.fromEntries(Object.entries(row).filter(([key])=>!dynamic.includes(key)));"
+          },
+          {
+            "currentOffsetCharacters": 22343,
+            "currentText": " return {requests:requests.length,posts:representatives.length,independentCommands:representatives.length,operationIds:representatives.map(row=>row.operationId)};\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 22937,
+            "currentText": "verifyFieldTaskPaginationSourceAuthority",
+            "previousText": "if(sourceContract[WORKSITE_LIVE_HOURS_CURRENT_SECTION])verifyWorksiteLiveHoursCurrentSources"
+          },
+          {
+            "currentOffsetCharacters": 28548,
+            "currentText": "FieldTaskPaginationRequests(raw.requests",
+            "previousText": "Requests(raw.requests,current"
+          },
+          {
+            "currentOffsetCharacters": 32620,
+            "currentText": "FieldTaskPaginationSourceAuthority",
+            "previousText": "WhatsappFieldContinuityCurrentSources(contract,readSource);if(contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION])verifyWorksiteLiveHoursCurrentSources"
+          }
+        ]
+      },
+      {
         "path": "scripts/verify-field-task-pagination-ui.mjs",
         "status": "MODIFIED",
         "previousSha256": "4b98ee409dfca7fa78ffac58c82796c9013f34286691e19e4993149ffd0ad604",
-        "currentSha256": "f5fb5468225bf0d0db4e084af6d500db78f61740985238eaa7c243bc902b8dba",
+        "currentSha256": "65e64823c5a4e44af04d83f618ef34c6627338e4b384d4ea72b395cd9a8d35f7",
         "previousBytes": 31428,
-        "currentBytes": 33050,
+        "currentBytes": 36812,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 537,
@@ -27109,14 +27459,24 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 19799,
-            "currentText": "\n     assert.equal(url.pathname,'/api/identity/field-operations');assert.equal(request.method(),'GET');assert.equal(url.searchParams.get('projectId'),projectId);assert.equal(url.searchParams.get('scope'),scope);\n     const inventoryFilter=url.searchParams.get('inventoryFilter');assert.deepEqual([...url.searchParams.keys()].sort(),mode==='consumption'&&inventoryFilter!==null?['inventoryFilter','projectId','scope']:['projectId','scope']);\n     if(mode==='consumption'){\n      assert.ok(inventoryFilter===null||inventoryFilter==='PENDING','Only the initial inventory and its pending queue are expected');fact.inventoryFilter=inventoryFilter;\n      const expected={projectId,scope,...(inventoryFilter===null?{}:{inventoryFilter})};\n      // The full synthetic inventory has no proposals. Counts are independent\n      // of the requested page and match the real inventory history contract.\n      body=inventoryFilter===null?{...baseData,inventory}:{scope,projectId,inventory:{...inventory,inventoryFilter,inventoryQuery:inventoryQuery(expected),pendingCounts:{consumptions:inventory.consumptions.filter(row=>row.state==='PENDING').length,adjustments:inventory.adjustments.filter(row=>row.state==='PENDING').length}}};\n      inventorySnapshot(body,expected,{history:inventoryFilter!==null});\n     }else body={...baseData,inventory};\n    ",
-            "previousText": "assert.equal(url.pathname,'/api/identity/field-operations');body={...baseData,inventory};"
+            "currentOffsetCharacters": 17064,
+            "currentText": ",observedPosts=0;\n  await page.evaluateOnNewDocument(({width,mode})=>{\n   window.__taskCommands=[];window.__taskCommandObservations=[];const original=window.fetch.bind(window);\n   window.fetch=async(input,options)=>{\n    if(options?.method==='POST'){\n     const url=new URL(input instanceof Request?input.url:String(input),location.href),body=options.body,authorization=new Headers(options.headers).get('authorization');\n     if(url.origin!==location.origin||url.search||authorization!=='Bearer controlled-task-page-token')throw Error('A command observation requires the actual scoped fixture transport');\n     const base={version:1,ordinal:window.__taskCommandObservations.length+1,width,mode,endpoint:url.pathname,method:'POST',authorization};let observation,command;\n     if(body instanceof FormData){\n      const fieldNames=['operationId','projectId','scope','workerId','taskId','sectorId','caption'],entries=[...body.entries()],expected=[...fieldNames,'file'].sort();\n      if(JSON.stringify(entries.map(([key])=>key).sort())!==JSON.stringify(expected))throw Error('Exact multipart fields without extra, duplicate or missing entries required');\n      const file=body.get('file');if(!(file instanceof File)||fieldNames.some(key=>typeof body.get(key)!=='string'))throw Error('Actual multipart strings and File required');\n      const bytes=new Uint8Array(await file.arrayBuffer()),digest=await crypto.subtle.digest('SHA-256',bytes);\n      if(JSON.stringify([...body.keys()].sort())!==JSON.stringify(expected)||entries.some(([key,value])=>body.getAll(key).length!==1||body.get(key)!==value))throw Error('Multipart changed while its file was observed');\n      const fields=Object.fromEntries(fieldNames.map(key=>[key,body.get(key)])),fileObservation={name:file.name,type:file.type,size:file.size,sha256:[...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,'0')).join('')};\n      observation={...base,bodyKind:'FORM_DATA_FIELDS_FILE_SHA256_V1',fields,file:fileObservation};command={...fields,file:fileObservation};\n     }else{\n      if(typeof body!=='string'||body.length===0)throw Error('Actual JSON UTF8 body required');\n      command=JSON.parse(body);observation={...base,bodyKind:'JSON_UTF8_V1',bodyUtf8:body};\n     }\n     // Snapshot this exact body before dispatching the same object/string.\n     window.__taskCommands.push(command);window.__taskCommandObservations.push({observation,claimed:false});\n    }\n    return original(input,options);\n   };\n  },{width,mode",
+            "previousText": ";\n  await page.evaluateOnNewDocument(()=>{window.__taskCommands=[];const original=window.fetch.bind(window);window.fetch=async(input,options)=>{if(options?.method==='POST'){const body=options.body;if(body instanceof FormData){const file=body.get('file'),bytes=new Uint8Array(await file.arrayBuffer()),digest=await crypto.subtle.digest('SHA-256',bytes);window.__taskCommands.push({operationId:body.get('operationId'),projectId:body.get('projectId'),scope:body.get('scope'),taskId:body.get('taskId'),caption:body.get('caption'),file:{name:file.name,type:file.type,size:file.size,sha256:[...new Uint8Array(digest)].map(value=>value.toString(16).padStart(2,'0')).join('')}});}else if(typeof body==='string')window.__taskCommands.push(JSON.parse(body));}return original(input,options);};"
           },
           {
-            "currentOffsetCharacters": 21730,
+            "currentOffsetCharacters": 21283,
+            "currentText": "\n     const ordinal=observedPosts+1,observation=await page.evaluate(ordinal=>{const entries=window.__taskCommandObservations;if(entries.length!==ordinal||entries[ordinal-1]?.claimed)throw Error('Each intercepted POST requires exactly one prior unclaimed fetch observation');const entry=entries[ordinal-1];entry.claimed=true;return entry.observation;},ordinal);\n     assert.equal(ordinal,1,'Each isolated uncertainty case dispatches only its original command');assert.equal(observation.ordinal,ordinal);assert.equal(observation.width,width);assert.equal(observation.mode,mode);assert.equal(observation.endpoint,url.pathname);assert.equal(observation.method,request.method());assert.equal(observation.authorization,request.headers().authorization);assert.equal(url.search,'');\n     let command,hashBytes;\n     if(observation.bodyKind==='FORM_DATA_FIELDS_FILE_SHA256_V1'){\n      assert.equal(url.pathname,'/api/identity/field-media');assert.match(request.headers()['content-type']||'',/^multipart\\/form-data;\\s*boundary=.+$/);\n      const fields=Object.fromEntries(['operationId','projectId','scope','workerId','taskId','sectorId','caption'].map(key=>[key,observation.fields[key]])),file=Object.fromEntries(['name','type','size','sha256'].map(key=>[key,observation.file[key]]));\n      command=fields;hashBytes=Buffer.from(JSON.stringify({version:1,bodyKind:'FORM_DATA_FIELDS_FILE_SHA256_V1',fields,file}));\n     }else{\n      assert.equal(observation.bodyKind,'JSON_UTF8_V1');assert.equal(url.pathname,'/api/identity/field-operations');assert.match(request.headers()['content-type']||'',/^application\\/json(?:;|$)/);const actual=request.postData();assert.equal(typeof actual,'string');assert.ok(actual.length>0);assert.equal(observation.bodyUtf8,actual,'The observed JSON must equal this intercepted request body');command=JSON.parse(actual);hashBytes=Buffer.from(actual,'utf8');\n     }\n     assert.match(command.operationId,/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);assert.equal(command.projectId,projectId);assert.equal(command.scope,scope);\n     observedPosts++;fact.commandObservation=observation;fact.bodySha256=sha(hashBytes);fact.operationId=command.operationId;status=503;body={saved:false,code:'FIELD_OPERATION_UNCONFIRMED'};\n    }\n    else {\n     assert.equal(url.pathname,'/api/identity/field-operations');assert.equal(request.method(),'GET');assert.equal(url.searchParams.get('projectId'),projectId);assert.equal(url.searchParams.get('scope'),scope);\n     const inventoryFilter=url.searchParams.get('inventoryFilter');assert.deepEqual([...url.searchParams.keys()].sort(),mode==='consumption'&&inventoryFilter!==null?['inventoryFilter','projectId','scope']:['projectId','scope']);\n     if(mode==='consumption'){\n      assert.ok(inventoryFilter===null||inventoryFilter==='PENDING','Only the initial inventory and its pending queue are expected');fact.inventoryFilter=inventoryFilter;\n      const expected={projectId,scope,...(inventoryFilter===null?{}:{inventoryFilter})};\n      // The full synthetic inventory has no proposals. Counts are independent\n      // of the requested page and match the real inventory history contract.\n      body=inventoryFilter===null?{...baseData,inventory}:{scope,projectId,inventory:{...inventory,inventoryFilter,inventoryQuery:inventoryQuery(expected),pendingCounts:{consumptions:inventory.consumptions.filter(row=>row.state==='PENDING').length,adjustments:inventory.adjustments.filter(row=>row.state==='PENDING').length}}};\n      inventorySnapshot(body,expected,{history:inventoryFilter!==null});\n     }else body={...baseData,inventory};\n    ",
+            "previousText": "status=503;body={saved:false,code:'FIELD_OPERATION_UNCONFIRMED'};fact.bodySha256=sha(Buffer.from(request.postData()||''));fact.operationId=(request.postData()||'').match(/\"operationId\":\"([^\"]+)\"/)?.[1]||null;}\n    else {assert.equal(url.pathname,'/api/identity/field-operations');body={...baseData,inventory};"
+          },
+          {
+            "currentOffsetCharacters": 25492,
             "currentText": "ssert.deepEqual(facts,[{width,mode,path:'/api/identity/field-operations',method:'GET',afterTask:null,inventoryFilter:null,responseStatus:200},{width,mode,path:'/api/identity/field-operations',method:'GET',afterTask:null,inventoryFilter:'PENDING',responseStatus:200}]);a",
             "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 35497,
+            "currentText": "2",
+            "previousText": "1"
           }
         ]
       },
@@ -27854,9 +28214,9 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "scripts/verify-participants-ui.mjs",
         "status": "MODIFIED",
         "previousSha256": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-        "currentSha256": "cfac8f3c2db50426cf681812acf786e25892ff7894f86408f83307944f85c575",
+        "currentSha256": "3d955706b8b48a5dbce38e93af53b85c5f4573f8cb4b6715a1d66ae64e685254",
         "previousBytes": 124573,
-        "currentBytes": 130335,
+        "currentBytes": 134242,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 1677,
@@ -27884,62 +28244,102 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "previousText": "=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==','base64'),picturePath=path.join(fixture,'synthetic.png');writeFileSync(picturePath,picture)"
           },
           {
-            "currentOffsetCharacters": 52981,
+            "currentOffsetCharacters": 16783,
+            "currentText": " const contextChangeRace=['late-private-image','late-private-file'].includes(mode);\n let heldNewActorRead=null,markNewActorRead;const newActorReadStarted=new Promise(resolve=>{markNewActorRead=resolve;});\n const waitNewActorRead=async()=>{let timer;try{await Promise.race([newActorReadStarted,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('The new actor canonical GET was not intercepted within 15 seconds')),15000);})]);}finally{clearTimeout(timer);}assert.ok(heldNewActorRead);};\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 19629,
+            "currentText": "query:url.search,projectId:url.searchParams.get('projectId'),workerId:url.searchParams.get('workerId'),imageId:url.searchParams.get('imageId'),",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 22969,
+            "currentText": "const body={scope:requestScope,projectId:denyRead&&mode==='review-load-crossed'?'project-other':projectId,canManage:!self,canInvite:!self,canManageOfficeRoles:false,existingAccounts:[],records:[requestScope===scope?row:{...row,name:'Otro actor de ensayo',invitation:null}],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE}};\n  if(contextChangeRace&&requestScope!==scope){assert.equal(request.method(),'GET');assert.equal(requestScope,'b'.repeat(64));assert.equal(requests.at(-1).actor,'C');assert.equal(url.pathname,'/api/identity/participants');assert.equal(url.searchParams.get('projectId'),projectId);assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(heldNewActorRead,null,'Only one new-context canonical read is expected before explicit continuation');requests.at(-1).resolution='HELD_NEW_CONTEXT';heldNewActorRead={request,body,index:requests.length-1};markNewActorRead();return;}\n  await request.respond({status:200,contentType:'application/json',body:JSON.stringify(body",
+            "previousText": "await request.respond({status:200,contentType:'application/json',body:JSON.stringify({scope:requestScope,projectId:denyRead&&mode==='review-load-crossed'?'project-other':projectId,canManage:!self,canInvite:!self,canManageOfficeRoles:false,existingAccounts:[],records:[requestScope===scope?row:{...row,name:'Otro actor de ensayo',invitation:null}],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE}}"
+          },
+          {
+            "currentOffsetCharacters": 30860,
+            "currentText": "waitNewActorRead();await ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 31973,
+            "currentText": "waitNewActorRead();await ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 33571,
+            "currentText": "if(contextChangeRace){assert.ok(heldNewActorRead);assert.equal(await page.$$eval('button',buttons=>buttons.find(button=>button.textContent.trim()==='Consultar participantes')?.disabled),true,'The new actor canonical read must remain busy while the old private callback resolves');}\n  else ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 34656,
+            "currentText": "...(contextChangeRace?{requests:requests.map(fact=>({...fact}))}:{}),",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 35446,
+            "currentText": "  if(contextChangeRace){\n   const held=heldNewActorRead;assert.ok(held);await held.request.respond({status:200,contentType:'application/json',body:JSON.stringify(held.body)});requests[held.index].resolution='RELEASED_NEW_CONTEXT';heldNewActorRead=null;\n   await wait(page,'Otro actor de ensayo');await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.trim()==='Consultar participantes'&&!button.disabled));\n   const current=await page.evaluate(()=>({cards:document.querySelectorAll('article').length,forms:document.querySelectorAll('form').length,images:document.querySelectorAll('img').length,text:document.body.innerText,urls:window.__privateUrls,revoked:window.__revokedPrivateUrls}));\n   assert.equal(current.cards,1,'The new authorized context must render its own profile');assert.equal(current.forms,0);assert.equal(current.images,0,'The late old-context callback must not attach a private image to the new profile');assert.ok(!current.text.includes('Persona de ensayo')&&!current.text.includes('synthetic-late-private-bytes'));assert.deepEqual(current.urls,visible.urls,'The old private callback must not allocate an object URL after unmount');assert.ok(current.urls.every(url=>current.revoked.includes(url)));assert.equal(posts.length,0);assert.deepEqual(receiptQueries,[]);\n   const newReads=requests.filter(fact=>fact.actor==='C');assert.equal(newReads.length,1);assert.deepEqual(newReads[0],{method:'GET',path:'/api/identity/participants',query:'?'+new URLSearchParams({projectId,scope:'b'.repeat(64)}),projectId,workerId:null,imageId:null,operationId:null,scope:'b'.repeat(64),actor:'C',resolution:'RELEASED_NEW_CONTEXT'});\n   const privateReads=requests.filter(fact=>fact.imageId!==null);assert.equal(privateReads.length,mode==='late-private-image'?1:0);assert.ok(privateReads.every(fact=>fact.actor==='A'&&fact.scope===scope&&fact.projectId===projectId));\n   accessObservations.push({width,mode,stage:'new-authorized-context-after-old-private-callback',cards:current.cards,forms:current.forms,images:current.images,posts:posts.length,requests:requests.map(fact=>({...fact})),oldPrivateUrlsRevoked:true,newPrivateUrlAllocated:false,storage:await privateStorage(page,0)});\n  }\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 56888,
             "currentText": " let identityPhase='ORIGINAL_A';const identityRequests=[],changedIdentityReads=[];\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 53500,
+            "currentOffsetCharacters": 57407,
             "currentText": "if(identityPhase==='CHANGED_C_READ_ONLY'){\n   assert.ok(['identity-cancel','request-cancel'].includes(mode));assert.equal(request.method(),'GET');assert.equal(url.pathname,'/api/identity/participants');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('projectId'),projectId);assert.equal(url.searchParams.get('scope'),'b'.repeat(64));assert.equal(request.postData(),undefined);assert.match(request.headers().authorization||'',/^Bearer synthetic-active-org-C-[a-f0-9-]{36}-\\d+$/);\n  }else assert.match(request.headers().authorization||'',/^Bearer synthetic-active-org-A-[a-f0-9-]{36}-\\d+$/);assert.ok(request.headers().cookie.includes('__session=synthetic-other-tab-org-B'));bearers.push(request.headers().authorization);let body,status=200;\n  if(['identity-cancel','request-cancel'].includes(mode))identityRequests.push({phase:identityPhase,path:url.pathname,method:request.method(),query:Object.fromEntries(url.searchParams)});\n  if(identityPhase==='CHANGED_C_READ_ONLY'){\n   assert.equal(changedIdentityReads.length,0,'The replacement identity performs exactly one initial read');changedIdentityReads.push({path:url.pathname,method:request.method(),projectId:url.searchParams.get('projectId'),scope:url.searchParams.get('scope'),responseStatus:403});\n   // The replacement identity has no configured access to the old project.\n   // Only its exact fresh GET is allowed; no command or old bearer is accepted.\n   await request.respond({status:403,contentType:'application/json',body:JSON.stringify({code:'PARTICIPANT_ACCESS_REQUIRED'}),headers:{'Cache-Control':'no-store'}});return;\n  }",
             "previousText": "assert.match(request.headers().authorization||'',/^Bearer synthetic-active-org-A-[a-f0-9-]{36}-\\d+$/);assert.ok(request.headers().cookie.includes('__session=synthetic-other-tab-org-B'));bearers.push(request.headers().authorization);let body,status=200;"
           },
           {
-            "currentOffsetCharacters": 68478,
+            "currentOffsetCharacters": 72385,
             "currentText": "// These review cases start from the automatic consultation; a second initial GET would advance their controlled refresh phases.\n if(reviewRefreshModes.includes(mode)){await wait(page,'Persona de ensayo');assert.equal(reads,1,'Review refresh starts from one automatic consultation');}else ",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 76974,
+            "currentOffsetCharacters": 80881,
             "currentText": "ssert.equal(await frontInput.evaluate(input=>input.disabled),false,'The visible identity screen must own an active capture input');await frontInput.uploadFile(undersizedPath);await wait(page,'La imagen es demasiado pequeña.');assert.equal(await page.$('fieldset[aria-label=\"Frente del documento\"] img'),null,'An undersized image must never become an acceptable preview');assert.equal(posts.length,0,'A rejected local image must not post identity data');a",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 88728,
+            "currentOffsetCharacters": 92635,
             "currentText": "RequestCount=(window.__heldRequestCount||0)+1;window.__held",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 89285,
+            "currentOffsetCharacters": 93192,
             "currentText": "identityPhase='CHANGED_C_READ_ONLY';",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 89782,
+            "currentOffsetCharacters": 93689,
             "currentText": "wait(page,'No hay un acceso activo');assert.deepEqual(changedIdentityReads,[{path:'/api/identity/participants',method:'GET',projectId,scope:'b'.repeat(64),responseStatus:403}]);\n   await new Promise(done=>setTimeout(done,100));assert.equal(posts.length,0);assert.equal((await page.$$('article')).length,0);\n   if(mode==='request-cancel'){assert.equal(await page.evaluate(()=>window.__heldRequestCount),1,'No second old/new-identity POST may be hidden by the controlled fetch hold');assert.match(await page.evaluate(()=>window.__heldBearer),/^Bearer synthetic-active-org-A-[a-f0-9-]{36}-\\d+$/);}\n   assert.equal(identityRequests.filter(row=>row.phase==='CHANGED_C_READ_ONLY').length,1);assert.ok(identityRequests.every(row=>row.method==='GET'),'No cancellation-mode command reached HTTP interception');\n   writeFileSync(path.join(evidence,mode+'-'+width+'-authority-requests.json'),JSON.stringify({mode,width,requests:identityRequests,oldMutationPosts:posts.length,heldOldPostCount:mode==='request-cancel'?await page.evaluate(()=>window.__heldRequestCount):0,replacementActorReply:403},null,2));\n   ",
             "previousText": "new Promise(done=>setTimeout(done,100));assert.equal(posts.length,0);assert.equal((await page.$$('article')).length,0);"
           },
           {
-            "currentOffsetCharacters": 100498,
+            "currentOffsetCharacters": 104405,
             "currentText": "await page.waitForFunction(workerId=>{const profile=document.querySelector('[data-participant-profile]'),primary=profile?.querySelector('[data-onboarding-primary]');return profile?.dataset.participantProfile===workerId&&primary instanceof HTMLButtonElement&&primary.checkVisibility()&&!primary.disabled;},{timeout:15000},row.id);\n  const primary=await page.$('[data-onboarding-primary]');if(width<768)await primary.tap();else{await primary.focus();assert.equal(await primary.evaluate(button=>document.activeElement===button),true,'The enabled onboarding action must own keyboard focus before Enter'",
             "previousText": "const primary=await page.$('[data-onboarding-primary]');if(width<768)await primary.tap();else{await primary.focus("
           },
           {
-            "currentOffsetCharacters": 104908,
+            "currentOffsetCharacters": 108815,
             "currentText": " async function selectProfile(workerId){\n  await page.waitForFunction(id=>{const select=[...document.querySelectorAll('select')].find(el=>el.labels?.[0]?.textContent.includes('Perfil de esta obra'));return Boolean(select&&!select.disabled&&[...select.options].some(option=>option.value===id&&!option.disabled));},{timeout:15000},workerId);\n  const handle=await page.evaluateHandle(()=>[...document.querySelectorAll('select')].find(el=>el.labels?.[0]?.textContent.includes('Perfil de esta obra')));\n  try{\n   assert.equal(await handle.evaluate(select=>select.checkVisibility()&&!select.disabled),true,'Changing profile must use a visible enabled selector');\n   assert.deepEqual(await handle.asElement().select(workerId),[workerId]);\n  }finally{await handle.dispose();}\n  await page.waitForFunction(id=>document.querySelector('[data-participant-profile]')?.dataset.participantProfile===id,{timeout:15000},workerId);\n }\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 109963,
+            "currentOffsetCharacters": 113870,
             "currentText": "selectProfile(other.id",
             "previousText": "page.evaluate(()=>{const el=[...document.querySelectorAll('select')].find(e=>e.labels?.[0]?.textContent.includes('Perfil de esta obra'));el.value='worker-second';el.dispatchEvent(new Event('change',{bubbles:true}));}"
           },
           {
-            "currentOffsetCharacters": 111286,
+            "currentOffsetCharacters": 115193,
             "currentText": "selectProfile(other.id",
             "previousText": "page.evaluate(()=>{const el=[...document.querySelectorAll('select')].find(e=>e.labels?.[0]?.textContent.includes('Perfil de esta obra'));el.value='worker-second';el.dispatchEvent(new Event('change',{bubbles:true}));}"
           },
           {
-            "currentOffsetCharacters": 122710,
+            "currentOffsetCharacters": 126617,
             "currentText": "// Real browser pixels must satisfy the same local exposure, detail and size checks as a selected file.\n // This deterministic fixture makes no claim to contain a document, a face or a verified identity.\n const maker=await browser.newPage();try{\n  const images=await maker.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=480;canvas.height=320;const context=canvas.getContext('2d'),pixels=context.createImageData(480,320);let seed=41;for(let index=0;index<pixels.data.length;index+=4){for(let channel=0;channel<3;channel++){seed=(seed*1664525+1013904223)>>>0;pixels.data[index+channel]=seed>>>24;}pixels.data[index+3]=255;}context.putImageData(pixels,0,0);const valid=canvas.toDataURL('image/png').split(',')[1];canvas.width=1;canvas.height=1;context.fillStyle='#888';context.fillRect(0,0,1,1);return{valid,undersized:canvas.toDataURL('image/png').split(',')[1]};});\n  picture=Buffer.from(images.valid,'base64');assert.ok(picture.length<1024*1024,'The readable fixture must preserve its original PNG bytes');assert.equal(picture.readUInt32BE(16),480);assert.equal(picture.readUInt32BE(20),320);writeFileSync(picturePath,picture);writeFileSync(undersizedPath,Buffer.from(images.undersized,'base64'));\n }finally{await maker.close();}\n if(focusedScenario){for(const width of selectedWidths)await (nextStepModes.includes(focusedScenario)?nextStepScenario(width,focusedScenario):['office','self','self-attendance-conflict'].includes(focusedScenario)?scenario(width,focusedScenario):backModes.includes(focusedScenario)?documentBackScenario(width,focusedScenario):accountModes.includes(focusedScenario)?accountDiscoveryScenario(width,focusedScenario):safetyModes.includes(focusedScenario)?safetyScenario(width,focusedScenario):revisionModes.includes(focusedScenario)||reviewRefresh",
             "previousText": "if(focusedScenario){for(const width of selectedWidths)await (nextStepModes.includes(focusedScenario)?nextStepScenario(width,focusedScenario):['office','self-attendance-conflict'].includes(focusedScenario)?scenario(width,focusedScenario):backModes.includes(focusedScenario)?documentBackScenario(width,focusedScenario):accountModes.includes(focusedScenario)?accountDiscoveryScenario(width,focusedScenario):safetyModes.includes(focusedScenario)?safetyScenario(width,focusedScenario):revision"
           }
@@ -28024,9 +28424,9 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "scripts/verify-workspace-ui.mjs",
         "status": "MODIFIED",
         "previousSha256": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
-        "currentSha256": "e36fff6f6c079a5eeeab3b1c23f2dcfd4e397d3eac3e5a199cca4ad4075f6a28",
+        "currentSha256": "42849f2f3e0c435c72e809fc396fe58e64ecf39fe8ef1d0aed04f8e5e692df14",
         "previousBytes": 182645,
-        "currentBytes": 202629,
+        "currentBytes": 203938,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 67152,
@@ -28090,241 +28490,246 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "currentOffsetCharacters": 106845,
-            "currentText": " const scheduleFacts=[];let phase='initial-project';\n const fieldFixture=progressReviewFixture(field,{name:'workspace-confirmed-progress-'+mode+'-'+width,getPhase:()=>phase,phases:planningMode?['planning-held','planning-live']:['field-before-command','creation-form-live','creation-readback-held','field-decision-callback','confirmed-readback-live','explicit-pagination-live']});\n const projectQuery=cursor=>'?'+new URLSearchParams({projectId:'p-a',scope,...(cursor?{afterTask:cursor}:{})});\n const expectedPhaseReads=new Map();\n const assertPhaseReads=cursors=>{const expected=cursors.map(cursor=>({phase,method:'GET',path:'/api/identity/workspace',query:cursor==='ACCOUNT'?'':projectQuery(cursor)}));assert.deepEqual(scheduleFacts.filter(row=>row.phase===phase),expected);if(expectedPhaseReads.has(phase))assert.deepEqual(expectedPhaseReads.get(phase),expected);expectedPhaseReads.set(phase,expected);};\n const assertAllSchedulePhases=()=>{assert.deepEqual(scheduleFacts.filter(row=>!expectedPhaseReads.has(row.phase)),[],'Every workspace GET must belong to an asserted phase');for(const [name,expected]of expectedPhaseReads)assert.deepEqual(scheduleFacts.filter(row=>row.phase===name),expected,'No later GET may escape an already asserted phase '+name);};\n const waitRejectedLive=async()=>{await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:15000});assert.equal(await page.$eval('[data-worksite-live-refresh]',el=>el.dataset.worksiteLiveRefresh),'STALE');assert.match(await page.$eval('[data-worksite-live-refresh]',el=>el.innerText),/No pudimos actualizar esta consulta\\. Conservamos los datos/);};\n",
+            "currentText": " const scheduleFacts=[];let phase='initial-project';\n const fieldFixture=progressReviewFixture(field,{name:'workspace-confirmed-progress-'+mode+'-'+width,getPhase:()=>phase,phases:planningMode?['planning-held','planning-live']:['field-before-command','creation-form-live','creation-readback-held','field-decision-callback','confirmed-readback-live',...(mode==='callback'?['confirmed-callback-navigation-live']:[]),'explicit-pagination-live']});\n const projectQuery=cursor=>'?'+new URLSearchParams({projectId:'p-a',scope,...(cursor?{afterTask:cursor}:{})});\n const expectedPhaseReads=new Map();\n const assertPhaseReads=cursors=>{const expected=cursors.map(cursor=>({phase,method:'GET',path:'/api/identity/workspace',query:cursor==='ACCOUNT'?'':projectQuery(cursor)}));assert.deepEqual(scheduleFacts.filter(row=>row.phase===phase),expected);if(expectedPhaseReads.has(phase))assert.deepEqual(expectedPhaseReads.get(phase),expected);expectedPhaseReads.set(phase,expected);};\n const assertAllSchedulePhases=()=>{assert.deepEqual(scheduleFacts.filter(row=>!expectedPhaseReads.has(row.phase)),[],'Every workspace GET must belong to an asserted phase');for(const [name,expected]of expectedPhaseReads)assert.deepEqual(scheduleFacts.filter(row=>row.phase===name),expected,'No later GET may escape an already asserted phase '+name);};\n const waitRejectedLive=async()=>{await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:15000});assert.equal(await page.$eval('[data-worksite-live-refresh]',el=>el.dataset.worksiteLiveRefresh),'STALE');assert.match(await page.$eval('[data-worksite-live-refresh]',el=>el.innerText),/No pudimos actualizar esta consulta\\. Conservamos los datos/);};\n // Observe each real live GET before its trigger; cancellation drains a failed action's waiter.\n const observeScheduleLiveRead=()=>{\n  const expectedPhase=phase,abort=new AbortController();\n  const request=page.waitForRequest(request=>{\n   const url=new URL(request.url());\n   if(url.origin!==origin||request.method()!=='GET'||url.pathname!=='/api/identity/workspace'||url.search!==projectQuery(null))return false;\n   assert.equal(phase,expectedPhase);assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');return true;\n  },{timeout:15000,signal:abort.signal});\n  request.catch(()=>{});\n  return {request,cancel:()=>abort.abort()};\n };\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 111352,
+            "currentOffsetCharacters": 112077,
             "currentText": "    assert.equal(request.method(),'GET');scheduleFacts.push({phase,method:request.method(),path:url.pathname,query:url.search});\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 111735,
+            "currentOffsetCharacters": 112460,
             "currentText": "request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('afterTask')?['afterTask','projectId','scope']:['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');\n    // Hold only the creation's explicit canonical readback. Later first-page\n    // live reads get the unchanged, deliberately incomplete rendering fixture.\n    if(creation&&!url.searchParams.has('afterTask')&&readbackCount===0){assert.equal(phase,'creation-readback-held');assert.equal(heldReadback,null);",
             "previousText": "url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');\n    if(creation&&!url.searchParams.has('afterTask')){"
           },
           {
-            "currentOffsetCharacters": 112661,
+            "currentOffsetCharacters": 113386,
             "currentText": "url.pathname==='/api/identity/field-operations'){const read=fieldFixture.inspect(request,url);if(request.method()==='GET'){assert.notEqual(read.kind,'RECEIPT','This scenario never recovers a receipt');return respond(request,read.body);}}\n   assert.equal(request.method(),'POST');assert.equal(url.search,''",
             "previousText": "request.method()==='GET')return respond(request,field"
           },
           {
-            "currentOffsetCharacters": 114777,
+            "currentOffsetCharacters": 115502,
             "currentText": "await waitRejectedLive();assertPhaseReads(['ACCOUNT',null,null]);phase='field-before-command';\n  if(planningMode){phase='planning-held';",
             "previousText": "if(planningMode){"
           },
           {
-            "currentOffsetCharacters": 115276,
+            "currentOffsetCharacters": 116001,
             "currentText": "planningMode){await page.waitForFunction(()=>document.querySelector('section[aria-labelledby=\"field-title\"] [data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='PAUSED',{timeout:15000});assert.deepEqual(fieldFixture.facts.map(row=>row.kind),['BASE']);}else await fieldFixture.waitCurrent(page);\n  assertPhaseReads([]);\n  if(!planningMode){phase='creation-form-live';await showWorkspaceSection(page,'schedule-title');await waitRejectedLive();assertPhaseReads([null]);await click(page,'Nueva tarea');await page.type('section[aria-label=\"Crear tarea de la obra\"] form input:not([type=\"date\"])',created.title);phase='creation-readback-held';await click(page,'Crear tarea');await readbackReady;assertPhaseReads([null]);phase='field-decision-callback'",
             "previousText": "!planningMode){await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type('section[aria-label=\"Crear tarea de la obra\"] form input:not([type=\"date\"])',created.title);await click(page,'Crear tarea');await readbackReady"
           },
           {
-            "currentOffsetCharacters": 116459,
+            "currentOffsetCharacters": 117184,
             "currentText": "ssertPhaseReads([]);phase='planning-live';await respond(heldPlanning.request,heldPlanning.outcome);await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');await waitRejectedLive();assertPhaseReads([null]",
             "previousText": "wait respond(heldPlanning.request,heldPlanning.outcome);await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado'"
           },
           {
-            "currentOffsetCharacters": 117419,
+            "currentOffsetCharacters": 118144,
             "currentText": "assertAllSchedulePhases();fieldFixture.assertComplete([]);assert.deepEqual(posts.map(row=>row.path),['/api/identity/workspace','/api/identity/field-operations']);",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 117946,
+            "currentOffsetCharacters": 118671,
             "currentText": "ssertPhaseReads([]);phase='confirmed-readback-live';a",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 118665,
+            "currentOffsetCharacters": 119043,
+            "currentText": "\n   // Confirmation clears the pending field operation while the schedule is visible.\n   const callbackRead=observeScheduleLiveRead();\n   try{await respond(heldDecision.request,heldDecision.outcome);await callbackRead.request;await waitRejectedLive();assertPhaseReads([null]);}\n   finally{callbackRead.cancel();await callbackRead.request.catch(()=>{});}\n   phase='confirmed-callback-navigation-live';\n   await showWorkspaceSection(page,'field-title');await waitText(page,'Decisión guardada.');\n   // Returning to the schedule enables its separate live check.\n   const navigationRead=observeScheduleLiveRead();\n   try{await showWorkspaceSection(page,'schedule-title');await navigationRead.request;}\n   finally{navigationRead.cancel();await navigationRead.request.catch(()=>{});}\n  ",
+            "previousText": "await respond(heldDecision.request,heldDecision.outcome);await showWorkspaceSection(page,'field-title');await waitText(page,'Decisión guardada.');await showWorkspaceSection(page,'schedule-title');"
+          },
+          {
+            "currentOffsetCharacters": 119974,
             "currentText": "  await waitRejectedLive();assertPhaseReads([null]);\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 119192,
+            "currentOffsetCharacters": 120501,
             "currentText": "phase='explicit-pagination-live';await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await page.waitForSelector('[data-task-id=\"tail-task\"]');await waitRejectedLive();assertPhaseReads([created.id,null]",
             "previousText": "await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await page.waitForSelector('[data-task-id=\"tail-task\"]'"
           },
           {
-            "currentOffsetCharacters": 119972,
+            "currentOffsetCharacters": 121281,
             "currentText": "assertAllSchedulePhases();fieldFixture.assertComplete([]);assert.deepEqual(posts.map(row=>row.path),['/api/identity/task-creation','/api/identity/field-operations']);checks.push((mode==='readback'?'schedule-delayed-readback-keeps-confirmed-progress-':'schedule-delayed-decision-callback-keeps-newer-get-')+width);\n }catch(error){error.workspaceUiDiagnostic={mode:'confirmed-progress-'+mode,width,phase,scheduleFacts,fieldFacts:fieldFixture.facts,readbackCount,preparationReads,postPaths:posts.map(row=>row.path)};await page.screenshot({path:path.join(evidence,`workspace-confirmed-progress-${mode}-failure-${width}.png`),fullPage:false}).catch(()=>{});throw error;}\n finally{for(const request of [heldReadback,heldDecision?.request,heldPlanning?.request])if(request&&!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});await context.close();fieldFixture.writ",
             "previousText": "checks.push((mode==='readback'?'schedule-delayed-readback-keeps-confirmed-progress-':'schedule-delayed-decision-callback-keeps-newer-get-')+width);\n }catch(error){await page.screenshot({path:path.join(evidence,`workspace-confirmed-progress-${mode}-failure-${width}.png`),fullPage:false}).catch(()=>{});throw error;}\n finally{for(const request of [heldReadback,heldDecision?.request,heldPlanning?.request])if(request&&!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});await context.clos"
           },
           {
-            "currentOffsetCharacters": 122530,
+            "currentOffsetCharacters": 123839,
             "currentText": "scheduleFacts=[];let phase='initial-project';\n const fieldFixture=progressReviewFixture(field,{name:mode+'-'+width,getPhase:()=>phase,phases:['field-decision-callback','inspect-unloaded-schedule','receipt-navigation-live','explicit-unloaded-pagination-live','loaded-task-navigation-live','final-schedule']});\n const projectQuery=cursor=>'?'+new URLSearchParams({projectId:'p-a',scope,...(cursor?{afterTask:cursor}:{})});\n const expectedPhaseReads=new Map();\n const assertPhaseReads=cursors=>{const expected=cursors.map(cursor=>({phase,method:'GET',path:'/api/identity/workspace',query:cursor==='ACCOUNT'?'':projectQuery(cursor)}));assert.deepEqual(scheduleFacts.filter(row=>row.phase===phase),expected);if(expectedPhaseReads.has(phase))assert.deepEqual(expectedPhaseReads.get(phase),expected);expectedPhaseReads.set(phase,expected);};\n const assertAllSchedulePhases=()=>{assert.deepEqual(scheduleFacts.filter(row=>!expectedPhaseReads.has(row.phase)),[],'Every workspace GET must belong to an asserted phase');for(const [name,expected]of expectedPhaseReads)assert.deepEqual(scheduleFacts.filter(row=>row.phase===name),expected,'No later GET may escape an already asserted phase '+name);};\n const waitRejectedLive=async()=>{await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:15000});assert.equal(await page.$eval('[data-worksite-live-refresh]',el=>el.dataset.worksiteLiveRefresh),'STALE');assert.match(await page.$eval('[data-worksite-live-refresh]',el=>el.innerText),/No pudimos actualizar esta consulta\\. Conservamos los datos/);};\n // Every workspace GET is retained. The cursor ledger counts every append\n // separately; selection and live first-page reads are fenced by phase.\n const posts=[],cursor",
             "previousText": "posts=[],schedule"
           },
           {
-            "currentOffsetCharacters": 125846,
+            "currentOffsetCharacters": 127155,
             "currentText": "    scheduleFacts.push({phase,method:request.method(),path:url.pathname,query:url.search});\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 126280,
+            "currentOffsetCharacters": 127589,
             "currentText": "assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('afterTask')?['afterTask','projectId','scope']:['projectId','scope']);if(url.searchParams.has('afterTask'))cursorReads.push({phase,method:request.method(),path:url.pathname,query:url.search}",
             "previousText": "scheduleReads.push([...url.searchParams]"
           },
           {
-            "currentOffsetCharacters": 126851,
+            "currentOffsetCharacters": 128160,
             "currentText": "",
             "previousText": "assert.equal(scheduleReads.length,1,'The approval and navigation never fetch the schedule automatically');"
           },
           {
-            "currentOffsetCharacters": 127106,
+            "currentOffsetCharacters": 128415,
             "currentText": "   const fieldRead=fieldFixture.inspect(request,url);\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 127193,
+            "currentOffsetCharacters": 128502,
             "currentText": "",
             "previousText": "    assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('operationId')?['operationId','projectId','scope']:['projectId','scope']);\n"
           },
           {
-            "currentOffsetCharacters": 127648,
+            "currentOffsetCharacters": 128957,
             "currentText": "Read.body",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 129889,
+            "currentOffsetCharacters": 131198,
             "currentText": "  await waitRejectedLive();assertPhaseReads(['ACCOUNT',null,null]);phase='field-decision-callback';\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 130441,
+            "currentOffsetCharacters": 131750,
             "currentText": "wait fieldFixture.waitCurrent(page);assert.equal(posts.length,0);assert.equal(cursorReads.length,0",
             "previousText": "ssert.equal(posts.length,0);assert.equal(scheduleReads.length,1"
           },
           {
-            "currentOffsetCharacters": 131365,
+            "currentOffsetCharacters": 132674,
             "currentText": "ssertPhaseReads([]);phase='inspect-unloaded-schedule';await showWorkspaceSection(page,'schedule-title');await waitRejectedLive();assertPhaseReads([null]);assert.equal(posts.length,1);assert.equal(cursorReads.length,0",
             "previousText": "wait showWorkspaceSection(page,'schedule-title');assert.equal(posts.length,1);assert.equal(scheduleReads.length,1"
           },
           {
-            "currentOffsetCharacters": 133205,
+            "currentOffsetCharacters": 134514,
             "currentText": "phase='receipt-navigation-live';await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.id==='schedule-load-more');await waitRejectedLive();assertPhaseReads([null]);assert.equal(await page.evaluate(()=>document.activeElement?.id),'schedule-load-more');assert.equal(cursorReads.length,0);\n   phase='explicit-unloaded-pagination-live';await page.keyboard.press('Enter');await page.waitForSelector('[data-task-id=\"task-outside\"]');await waitRejectedLive();assertPhaseReads([cursor,null]);assert.equal(cursorReads.length,1",
             "previousText": "await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.id==='schedule-load-more');assert.equal(await page.evaluate(()=>document.activeElement?.id),'schedule-load-more');assert.equal(scheduleReads.length,1);\n   await page.keyboard.press('Enter');await page.waitForSelector('[data-task-id=\"task-outside\"]');assert.equal(scheduleReads.length,2"
           },
           {
-            "currentOffsetCharacters": 135075,
+            "currentOffsetCharacters": 136384,
             "currentText": "phase='loaded-task-navigation-live';await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-outside');await waitRejectedLive();assertPhaseReads([null]);assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-outside');assert.equal(cursorReads.length,1",
             "previousText": "await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-outside');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-outside');assert.equal(scheduleReads.length,2"
           },
           {
-            "currentOffsetCharacters": 136058,
+            "currentOffsetCharacters": 137367,
             "currentText": "phase='final-schedule';await showWorkspaceSection(page,'schedule-title');await waitRejectedLive();assertPhaseReads(decision==='APPROVE'?[]:[null]);await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,mode+'-'+width+'.png')});\n  assert.equal(cursorReads.length,decision==='APPROVE'?1:0);assertAllSchedulePhases();fieldFixture.assertComplete(decision==='APPROVE'?[posts[0].operationId]:[]);checks.push((decision==='APPROVE'?'schedule-unloaded-progress-recovers-same-uuid-historical-25-current-50-and-loads-explicit-cursor-':'schedule-rejected-progress-with-task-does-not-claim-approval-')+width);\n }catch(error){error.workspaceUiDiagnostic={mode,width,phase,scheduleFacts,fieldFacts:fieldFixture.facts,cursorReads,receiptQueries,posts:posts.length};await page.screenshot({path:path.join(evidence,mode+'-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}\n finally{await context.close();fieldFixture.writ",
             "previousText": "await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,mode+'-'+width+'.png')});\n  checks.push((decision==='APPROVE'?'schedule-unloaded-progress-recovers-same-uuid-historical-25-current-50-and-loads-explicit-cursor-':'schedule-rejected-progress-with-task-does-not-claim-approval-')+width);\n }catch(error){await page.screenshot({path:path.join(evidence,mode+'-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}\n finally{await context.clos"
           },
           {
-            "currentOffsetCharacters": 139375,
+            "currentOffsetCharacters": 140684,
             "currentText": "scheduleFacts=[];let phase='initial-project';\n const fieldFixture=progressReviewFixture(field,{name:'workspace-receipt-'+mode+'-'+snapshotCase+'-'+width,getPhase:()=>phase,phases:['field-recovery-callback','snapshot-held-callback','snapshot-released-live','receipt-navigation-live','final-snapshot-schedule']});\n const projectQuery=cursor=>'?'+new URLSearchParams({projectId:'p-a',scope,...(cursor?{afterTask:cursor}:{})});\n const expectedPhaseReads=new Map();\n const assertPhaseReads=cursors=>{const expected=cursors.map(cursor=>({phase,method:'GET',path:'/api/identity/workspace',query:cursor==='ACCOUNT'?'':projectQuery(cursor)}));assert.deepEqual(scheduleFacts.filter(row=>row.phase===phase),expected);if(expectedPhaseReads.has(phase))assert.deepEqual(expectedPhaseReads.get(phase),expected);expectedPhaseReads.set(phase,expected);};\n const assertAllSchedulePhases=()=>{assert.deepEqual(scheduleFacts.filter(row=>!expectedPhaseReads.has(row.phase)),[],'Every workspace GET must belong to an asserted phase');for(const [name,expected]of expectedPhaseReads)assert.deepEqual(scheduleFacts.filter(row=>row.phase===name),expected,'No later GET may escape an already asserted phase '+name);};\n const waitRejectedLive=async()=>{await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:15000});assert.equal(await page.$eval('[data-worksite-live-refresh]',el=>el.dataset.worksiteLiveRefresh),'STALE');assert.match(await page.$eval('[data-worksite-live-refresh]',el=>el.innerText),/No pudimos actualizar esta consulta\\. Conservamos los datos/);};\n // All workspace GETs remain in scheduleFacts; no first-only counter.\n const posts=[],receiptQuerie",
             "previousText": "posts=[],receiptQueries=[],scheduleRead"
           },
           {
-            "currentOffsetCharacters": 142701,
+            "currentOffsetCharacters": 144010,
             "currentText": "    scheduleFacts.push({phase,method:request.method(),path:url.pathname,query:url.search});\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 143215,
+            "currentOffsetCharacters": 144524,
             "currentText": "",
             "previousText": "scheduleReads.push([...url.searchParams]);assert.equal(scheduleReads.length,1,'The loaded task changes only through the confirmed callback, without a schedule GET');"
           },
           {
-            "currentOffsetCharacters": 143483,
+            "currentOffsetCharacters": 144792,
             "currentText": "   const fieldRead=fieldFixture.inspect(request,url);\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 143570,
+            "currentOffsetCharacters": 144879,
             "currentText": "",
             "previousText": "    assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('operationId')?['operationId','projectId','scope']:['projectId','scope']);\n"
           },
           {
-            "currentOffsetCharacters": 144286,
+            "currentOffsetCharacters": 145595,
             "currentText": "fieldRead.kind,'BASE','Retain the explicit confirmed() base refresh, never a review page');assert.equal(heldRefresh,null);holdNextRefresh=false;heldRefresh=request;return;}\n    return respond(request,fieldRead.body",
             "previousText": "heldRefresh,null);holdNextRefresh=false;heldRefresh=request;return;}\n    return respond(request,field"
           },
           {
-            "currentOffsetCharacters": 145816,
+            "currentOffsetCharacters": 147125,
             "currentText": " liveExpected=>{\n  phase=liveExpected?'snapshot-released-live':'snapshot-held-callback';await showWorkspaceSection(page,'schedule-title');if(liveExpected)await waitRejectedLive();else await page.waitForSelector('[data-worksite-live-refresh=\"PAUSED\"]',{timeout:15000});assertPhaseReads(liveExpected?[null]:[]",
             "previousText": "()=>{\n  await showWorkspaceSection(page,'schedule-title'"
           },
           {
-            "currentOffsetCharacters": 147522,
+            "currentOffsetCharacters": 148831,
             "currentText": "",
             "previousText": "equal(scheduleReads.length,1);assert."
           },
           {
-            "currentOffsetCharacters": 148410,
+            "currentOffsetCharacters": 149719,
             "currentText": "  await waitRejectedLive();assertPhaseReads(['ACCOUNT',null,null]);phase='field-recovery-callback';\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 149520,
+            "currentOffsetCharacters": 150829,
             "currentText": "await fieldFixture.waitCurrent(page);",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 150770,
+            "currentOffsetCharacters": 152079,
             "currentText": "ssertPhaseReads([]);await assertCurrentSchedule(false",
             "previousText": "wait assertCurrentSchedule("
           },
           {
-            "currentOffsetCharacters": 152227,
+            "currentOffsetCharacters": 153536,
             "currentText": "true);assert.equal(posts.length,index+1);\n   if(mode==='loaded-current'){phase='receipt-navigation-live';await page.focus('[data-confirmed-progress=\"task-a\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-a');await waitRejectedLive();assertPhaseReads([null]);assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-a'",
             "previousText": ");assert.equal(posts.length,index+1);\n   if(mode==='loaded-current'){await page.focus('[data-confirmed-progress=\"task-a\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-a');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-a');assert.equal(scheduleReads.length,1"
           },
           {
-            "currentOffsetCharacters": 153122,
+            "currentOffsetCharacters": 154431,
             "currentText": "phase='final-snapshot-schedule';await showWorkspaceSection(page,'schedule-title');await waitRejectedLive();assertPhaseReads([null]);await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+snapshotCase+'-schedule-'+width+'.png')});assertAllSchedulePhases();fieldFixture.assertComplete(posts.map(input=>input.operationId));\n }catch(error){error.workspaceUiDiagnostic={mode,width,snapshotCase,phase,scheduleFacts,fieldFacts:fieldFixture.facts,receiptQueries,posts:posts.length};await page.screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}\n finally{if(heldRefresh&&!heldRefresh.isInterceptResolutionHandled())await heldRefresh.abort().catch(()=>{});await page.evaluate(()=>window.__loadedReceiptObserver?.disconnect()).catch(()=>{});await context.close();fieldFixture.writ",
             "previousText": "await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+snapshotCase+'-schedule-'+width+'.png')});\n }catch(error){await page.screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}\n finally{if(heldRefresh&&!heldRefresh.isInterceptResolutionHandled())await heldRefresh.abort().catch(()=>{});await page.evaluate(()=>window.__loadedReceiptObserver?.disconnect()).catch(()=>{});await context.clos"
           },
           {
-            "currentOffsetCharacters": 154499,
+            "currentOffsetCharacters": 155808,
             "currentText": " let phase='initial-load';\n const waitLiveRejection=async()=>{await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});assert.match(await page.$eval('[data-worksite-live-refresh]',element=>element.innerText),/No pudimos actualizar esta consulta\\. Conservamos los datos/);};\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 155406,
+            "currentOffsetCharacters": 156715,
             "currentText": "phase,",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 157527,
+            "currentOffsetCharacters": 158836,
             "currentText": "waitLiveRejection();const projectQuery='?'+new URLSearchParams({projectId:'p-a',scope});\n  assert.deepEqual(requests,[{phase:'initial-load',method:'GET',query:''},{phase:'initial-load',method:'GET',query:projectQuery},{phase:'initial-load',method:'GET',query:projectQuery}],'The initial synthetic project read includes one rejected live validation');\n  phase='held-pagination';await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await paginationStarted;await showWorkspaceSection(page,'schedule-title');await fill(page);\n  phase='confirm-newer-schedule';await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);\n  phase='late-page-return'",
             "previousText": "showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await paginationStarted;await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1)"
           },
           {
-            "currentOffsetCharacters": 159232,
+            "currentOffsetCharacters": 160541,
             "currentText": "wait waitLiveRejection();\n  assert.deepEqual(requests.filter(request=>request.method==='GET'),[{phase:'initial-load',method:'GET',query:''},{phase:'initial-load',method:'GET',query:projectQuery},{phase:'initial-load',method:'GET',query:projectQuery},{phase:'held-pagination',method:'GET',query:projectQuery+'&afterTask=held-page'},{phase:'late-page-return',method:'GET',query:projectQuery}],'The late append and rejected live validation must stay in the exact project and phases');\n  writeFileSync(path.join(evidence,'workspace-workbench-stale-page-requests-390.json'),JSON.stringify({requests,postCount:posts.length,confirmedDatesRetained:true,receiptRetained:true},null,2)",
             "previousText": "ssert.equal(requests.filter(request=>request.method==='GET').length,3"
           },
           {
-            "currentOffsetCharacters": 160344,
+            "currentOffsetCharacters": 161653,
             "currentText": "writeFileSync(path.join(evidence,'workspace-workbench-stale-page-failure-390.json'),JSON.stringify({phase,message:error.message,requests,postCount:posts.length},null,2));",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 186424,
+            "currentOffsetCharacters": 187733,
             "currentText": ",phase='prepare'",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 187338,
+            "currentOffsetCharacters": 188647,
             "currentText": ",phase",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 191034,
+            "currentOffsetCharacters": 192343,
             "currentText": "  phase='race';\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 192353,
+            "currentOffsetCharacters": 193662,
             "currentText": "  phase='denied';\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 194953,
+            "currentOffsetCharacters": 196262,
             "currentText": "// Live refresh may already have made another authorized read of project A.\n  // Fence the denial and explicit refresh instead of assuming a global total.\n  const afterDenial=requests.filter(row=>row.phase==='denied'&&row.method==='GET');assert.deepEqual(afterDenial,[],'A denied account must not automatically read projects, channels or refresh itself');\n  const selectedProjectReads=requests.filter(row=>row.path==='/api/identity/workspace'&&new URLSearchParams(row.query).get('projectId')==='p-b');assert.equal(selectedProjectReads.length,action==='project'?1:0,'The concurrent project selection must dispatch exactly once');\n  phase='refresh';await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);\n  const refreshReads=requests.filter(row=>row.phase==='refresh'&&row.method==='GET');assert.deepEqual(refreshReads.map(row=>({method:row.method,path:row.path,query:row.query})),[{method:'GET',path:'/api/identity/workspace',query:''}],'Explicit account refresh must not re-open an old project or channel');\n  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n  checks.push({mode,width,denial,format,action,posts:posts.length,projectReads,selectedProjectReads:selectedProjectReads.length,readsAfterDenial:afterDenial.length,explicitAccountRefreshes:refreshReads.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});\n }catch(error){error.workspaceUiDiagnostic={mode,width,denial,format,action,phase,workspaceReads,projectReads,posts:posts.length,requests};",
             "previousText": "await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);\n  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(projectReads,action==='project'?2:1);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n  checks.push({mode,width,denial,format,action,posts:posts.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});\n }catch(error){"
           }
@@ -29859,13 +30264,13 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "tests/production-capture-runtime-collectors.test.mjs",
         "status": "ADDED",
         "previousSha256": null,
-        "currentSha256": "adc821e88a3331effd560029ab9621457ca3b6ead0cd87a26bc4502e5f070a8a",
+        "currentSha256": "feb58f80cf67eae81bcb781872ee75b44e69665050daf4d2188cd80f6203e4e6",
         "previousBytes": 0,
-        "currentBytes": 9729,
+        "currentBytes": 16239,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 0,
-            "currentText": "import assert from 'node:assert/strict';\nimport {createHash} from 'node:crypto';\nimport {readFileSync} from 'node:fs';\nimport path from 'node:path';\nimport test from 'node:test';\nimport {fileURLToPath} from 'node:url';\nimport yaml from 'js-yaml';\nimport {buildWorkflow,currentProducerSourceFiles,equivalent,loadContract,validateContract} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';\nimport * as budget from '../scripts/lib/plan-budget-current-ci-lineage.mjs';\nimport {buildCaptureRuntimeWorkflow} from '../scripts/lib/capture-runtime-canonical-collectors.mjs';\nimport {participantPreanalysisCiSourceClosure} from '../scripts/verify-participant-kyc-preanalysis-ci.mjs';\nimport {verifyIntegratedIdentityCurrentSources} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';\n\nconst root=path.resolve(fileURLToPath(new URL('../',import.meta.url)));\nconst contractPath=path.join(root,'.github/workspace-acceptance-contract.json');\nconst contract=JSON.parse(readFileSync(contractPath));\nconst sha=value=>createHash('sha256').update(value).digest('hex');\nconst kinds=['PG_BANK','PG_INTAKE','UI_INTAKE','PG_FIELD','PG_PARTICIPANT_KYC_PREANALYSIS','PG_COMPANY_KYC','UI_FOCUSED_WORKSPACE','UI_FIELD_TASK_PAGINATION','UI_PLAN_BUDGET_SOURCE'];\n\nfor(const kind of kinds)test(kind+' current canonical collector derives the complete actual emitter and dependency set',()=>{\n const spec=contract.extension.proofs.find(row=>row.kind===kind);assert.ok(spec,'Current proof exists: '+kind);\n const files=currentProducerSourceFiles(spec,root);\n assert.deepEqual(files,spec.sourceFiles);\n if(kind==='PG_PARTICIPANT_KYC_PREANALYSIS')assert.deepEqual(participantPreanalysisCiSourceClosure(file=>{try{return readFileSync(path.join(root,file));}catch{return null;}}),files,'The real CI producer emits these rows itself');\n assert.equal(new Set(files).size,files.length);\n for(const file of files)assert.ok(readFileSync(path.join(root,file)).length>0);\n});\n\ntest('a current collector rejects forged proof specs, same-count substitutions and missing new dependencies',()=>{\n const spec=contract.extension.proofs.find(row=>row.kind==='PG_BANK');\n for(const mode of ['same-count-substitution','missing-new','stale-producer']){\n  const value=structuredClone(spec);\n  if(mode==='same-count-substitution')value.sourceFiles[0]='src/lib/unreviewed-substitution.mjs';\n  if(mode==='missing-new')value.sourceFiles=value.sourceFiles.filter(file=>file!=='src/lib/capture-quality-gate.mjs');\n  if(mode==='stale-producer')value.producerSha256='f'.repeat(64);\n  assert.throws(()=>currentProducerSourceFiles(value,root),error=>error.code==='CAPTURE_QUALITY_COLLECTOR_REJECTED'&&error.reason==='EXACT_CURRENT_PROOF_SPEC',mode);\n }\n});\n\ntest('the real preanalysis emitter refuses a missing literal dependency instead of accepting a consumer-decorated list',()=>{\n const owner='.github/scripts/verify-workspace-ci-parallelization.mjs';\n assert.throws(()=>participantPreanalysisCiSourceClosure(file=>{\n  try{const raw=readFileSync(path.join(root,file));return file===owner?Buffer.from(raw.toString('utf8').replace(\"'../../scripts/lib/capture-runtime-canonical-collectors.mjs'\",\"'../../scripts/lib/unbound-capture-collector.mjs'\")):raw;}catch{return null;}\n }),error=>error.code==='PARTICIPANT_PREANALYSIS_CI_REJECTED');\n});\n\ntest('the actual integrated source verifier preserves the frozen copier oracle behind authenticated capture sources',()=>{\n const read=file=>{try{return readFileSync(path.join(root,file));}catch{return null;}};\n assert.ok(verifyIntegratedIdentityCurrentSources(contract,read));\n const changed=structuredClone(contract);changed.planBudgetCurrentRevision.references[0].currentSha256='f'.repeat(64);\n assert.throws(()=>validateContract(changed),error=>error.code==='PROOF_BINDING_SOURCE');\n const copier='scripts/lib/plan-document-curve-fixture-copy.mjs';\n assert.throws(()=>verifyIntegratedIdentityCurrentSources(contract,file=>file===copier?Buffer.from('changed actual copier'):read(file)));\n});\n\ntest('the complete historical workflow and all eight lanes survive only the exact declared quality step',()=>{\n const parent=budget.restoreCaptureRuntimePreviousContract(contract),previous=buildWorkflow(parent),actual=buildWorkflow(contract);\n assert.equal(sha(JSON.stringify(previous)),'5700a2a48386409dff99edf94a7cc896c9d27198d0784fb06b1305df640ca891');\n const additions=budget.captureRuntimeWorkflowAdditions(contract),restored=structuredClone(actual);\n assert.equal(additions.length,1);\n assert.equal(additions[0].step.name,'Image capture quality before private persistence');\n for(const row of [...additions].reverse()){\n  assert.deepEqual(restored.jobs[row.lane].steps[row.index],row.step);\n  restored.jobs[row.lane].steps.splice(row.index,1);\n }\n assert.deepEqual(restored,previous);\n assert.equal(actual.jobs.workspace.needs.length,8);\n assert.deepEqual(actual.jobs.workspace.needs,previous.jobs.workspace.needs);\n assert.deepEqual(loadContract(contractPath),contract);\n assert.deepEqual(equivalent(yaml.load(readFileSync(path.join(root,'.github/workflows/workspace-acceptance.yml'),'utf8')),contract),{blocks:contract.blocks.length,artifactPatterns:contract.artifactPatterns.length,lanes:8});\n for(const edit of [workflow=>workflow.jobs.contracts.steps.shift(),workflow=>workflow.jobs.workspace.needs.pop()]){\n  const changed=structuredClone(previous);edit(changed);\n  assert.throws(()=>buildCaptureRuntimeWorkflow(contract,changed),error=>error.code==='CAPTURE_QUALITY_COLLECTOR_REJECTED'&&error.reason==='EXACT_PARENT_WORKFLOW');\n }\n});\n\ntest('the real preanalysis emitter binds all three facial audit and historical challenge fixtures',()=>{\n const fixtures=[\"tests/fixtures/meta-kyc-challenge-legacy-v2.mjs\",\"tests/fixtures/participant-facial-audit-memory.mjs\",\"tests/fixtures/participant-facial-chat-audit-memory.mjs\"];\n const read=file=>{try{return readFileSync(path.join(root,file));}catch{return null;}};\n const files=participantPreanalysisCiSourceClosure(read);assert.equal(files.length,273);\n for(const missing of fixtures){\n  assert.ok(files.includes(missing));\n  assert.throws(()=>participantPreanalysisCiSourceClosure(file=>file===missing?null:read(file)),error=>error.code==='PARTICIPANT_PREANALYSIS_CI_REJECTED',missing);\n }\n});\n\ntest('the current preanalysis emitter binds the exact pagination inventory edge and preserves its prior 270 paths',()=>{\n const owner='scripts/verify-field-task-pagination-ui.mjs',leaf='src/app/(identity)/cuenta/material-inventory-view.mjs',literal=\"'../src/app/(identity)/cuenta/material-inventory-view.mjs'\";\n const read=file=>{try{return readFileSync(path.join(root,file));}catch{return null;}};\n const additions=['scripts/verify-field-task-pagination-ci.mjs',owner,leaf];\n const files=participantPreanalysisCiSourceClosure(read),prior=files.filter(file=>!additions.includes(file));\n assert.equal(files.length,273);for(const file of additions)assert.equal(files.filter(row=>row===file).length,1);\n assert.equal(prior.length,270);assert.equal(sha(JSON.stringify(prior)),'2a09915ece2c8ede847ca9a7f7b9b2e80eeb9c5e4e336e0cbbb21f3395a5dad8');\n const main='.github/scripts/verify-workspace-ci-parallelization.mjs',mainLiteral=\"'../../scripts/verify-field-task-pagination-ci.mjs'\",source=read(owner).toString('utf8'),mainSource=read(main).toString('utf8');assert.equal(source.split(literal).length,2);assert.equal(mainSource.split(mainLiteral).length,2);\n for(const missing of additions)assert.throws(()=>participantPreanalysisCiSourceClosure(file=>file===missing?null:read(file)),error=>error.code==='PARTICIPANT_PREANALYSIS_CI_REJECTED',missing);\n for(const mode of ['substituted-field-literal','substituted-main-literal'])assert.throws(()=>participantPreanalysisCiSourceClosure(file=>{\n  if(mode==='substituted-field-literal'&&file===owner)return Buffer.from(source.replace(literal,\"'../src/app/(identity)/cuenta/project-preparation-format.mjs'\"));\n  if(mode==='substituted-main-literal'&&file===main)return Buffer.from(mainSource.replace(mainLiteral,\"'../../scripts/verify-focused-workspace-ci.mjs'\"));\n  return read(file);\n }),error=>error.code==='PARTICIPANT_PREANALYSIS_CI_REJECTED',mode);\n});\n\ntest('the current COMPANY collector binds the sealed legacy fixture row and its actual import',()=>{\n const spec=contract.extension.proofs.find(row=>row.kind==='PG_COMPANY_KYC'),fixture='tests/fixtures/meta-kyc-challenge-legacy-v2.mjs',files=currentProducerSourceFiles(spec,root);\n assert.equal(files.length,253);assert.ok(files.includes(fixture));assert.deepEqual(files,spec.sourceFiles);\n for(const mode of ['missing-fixture','extra-row']){const changed=structuredClone(spec);if(mode==='missing-fixture')changed.sourceFiles=changed.sourceFiles.filter(file=>file!==fixture);else changed.sourceFiles=[...changed.sourceFiles,'src/lib/unbound-company-source.mjs'].sort();assert.throws(()=>currentProducerSourceFiles(changed,root),error=>error.code==='CAPTURE_QUALITY_COLLECTOR_REJECTED'&&error.reason==='EXACT_CURRENT_PROOF_SPEC',mode);}\n const read=file=>{try{return readFileSync(path.join(root,file));}catch{return null;}},producer=spec.producer,raw=read(producer),from=\"'../tests/fixtures/meta-kyc-challenge-legacy-v2.mjs'\",to=\"'../tests/fixtures/company-kyc-memory.mjs'\";assert.equal(raw.toString('utf8').split(from).length,2);\n assert.throws(()=>budget.verifyCaptureRuntimeCurrentSources(contract,file=>file===producer?Buffer.from(raw.toString('utf8').replace(from,to)):read(file)),error=>error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'&&error.reason==='CURRENT_REFERENCE_'+producer);\n assert.throws(()=>budget.verifyCaptureRuntimeCurrentSources(contract,file=>file===fixture?null:read(file)),error=>error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED');\n});\n",
+            "currentText": "import assert from 'node:assert/strict';\nimport {createHash} from 'node:crypto';\nimport {readFileSync} from 'node:fs';\nimport path from 'node:path';\nimport test from 'node:test';\nimport {fileURLToPath} from 'node:url';\nimport yaml from 'js-yaml';\nimport {buildWorkflow,currentProducerSourceFiles,equivalent,loadContract,validateContract} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';\nimport * as budget from '../scripts/lib/plan-budget-current-ci-lineage.mjs';\nimport {buildCaptureRuntimeWorkflow} from '../scripts/lib/capture-runtime-canonical-collectors.mjs';\nimport {participantPreanalysisCiSourceClosure} from '../scripts/verify-participant-kyc-preanalysis-ci.mjs';\nimport {verifyIntegratedIdentityCurrentSources} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';\nimport * as waLineage from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';\nimport {verifyWorkspaceContinuityCurrentSources} from '../scripts/lib/workspace-continuity-current-ci-lineage.mjs';\nimport {verifyDocumentTaskAssociationCurrentSources} from '../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';\nimport {materialReviewCurrentSourcePin} from '../scripts/lib/material-review-current-ci-lineage.mjs';\nimport {participantPreanalysisConsumerValidationFiles,participantPreanalysisConsumerSourceFiles} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';\n\nconst root=path.resolve(fileURLToPath(new URL('../',import.meta.url)));\nconst contractPath=path.join(root,'.github/workspace-acceptance-contract.json');\nconst contract=JSON.parse(readFileSync(contractPath));\nconst sha=value=>createHash('sha256').update(value).digest('hex');\nconst kinds=['PG_BANK','PG_INTAKE','UI_INTAKE','PG_FIELD','PG_PARTICIPANT_KYC_PREANALYSIS','PG_COMPANY_KYC','UI_FOCUSED_WORKSPACE','UI_FIELD_TASK_PAGINATION','UI_PLAN_BUDGET_SOURCE'];\n\nfor(const kind of kinds)test(kind+' current canonical collector derives the complete actual emitter and dependency set',()=>{\n const spec=contract.extension.proofs.find(row=>row.kind===kind);assert.ok(spec,'Current proof exists: '+kind);\n const files=currentProducerSourceFiles(spec,root);\n assert.deepEqual(files,spec.sourceFiles);\n if(kind==='PG_PARTICIPANT_KYC_PREANALYSIS')assert.deepEqual(participantPreanalysisCiSourceClosure(file=>{try{return readFileSync(path.join(root,file));}catch{return null;}}),files,'The real CI producer emits these rows itself');\n assert.equal(new Set(files).size,files.length);\n for(const file of files)assert.ok(readFileSync(path.join(root,file)).length>0);\n});\n\ntest('a current collector rejects forged proof specs, same-count substitutions and missing new dependencies',()=>{\n const spec=contract.extension.proofs.find(row=>row.kind==='PG_BANK');\n for(const mode of ['same-count-substitution','missing-new','stale-producer']){\n  const value=structuredClone(spec);\n  if(mode==='same-count-substitution')value.sourceFiles[0]='src/lib/unreviewed-substitution.mjs';\n  if(mode==='missing-new')value.sourceFiles=value.sourceFiles.filter(file=>file!=='src/lib/capture-quality-gate.mjs');\n  if(mode==='stale-producer')value.producerSha256='f'.repeat(64);\n  assert.throws(()=>currentProducerSourceFiles(value,root),error=>error.code==='CAPTURE_QUALITY_COLLECTOR_REJECTED'&&error.reason==='EXACT_CURRENT_PROOF_SPEC',mode);\n }\n});\n\ntest('the real preanalysis emitter refuses a missing literal dependency instead of accepting a consumer-decorated list',()=>{\n const owner='.github/scripts/verify-workspace-ci-parallelization.mjs';\n assert.throws(()=>participantPreanalysisCiSourceClosure(file=>{\n  try{const raw=readFileSync(path.join(root,file));return file===owner?Buffer.from(raw.toString('utf8').replace(\"'../../scripts/lib/capture-runtime-canonical-collectors.mjs'\",\"'../../scripts/lib/unbound-capture-collector.mjs'\")):raw;}catch{return null;}\n }),error=>error.code==='PARTICIPANT_PREANALYSIS_CI_REJECTED');\n});\n\ntest('the actual integrated source verifier preserves the frozen copier oracle behind authenticated capture sources',()=>{\n const read=file=>{try{return readFileSync(path.join(root,file));}catch{return null;}};\n const snapshot=JSON.stringify(contract),parent=budget.restoreCaptureRuntimePreviousContract(contract);\n assert.equal(contract.whatsappFieldContinuityCurrentRevision.paginationUi.requestMatrix.length,108);\n assert.equal(parent.whatsappFieldContinuityCurrentRevision.paginationUi.requestMatrix.length,99);\n assert.ok(verifyIntegratedIdentityCurrentSources(contract,read));\n const changed=structuredClone(contract);changed.planBudgetCurrentRevision.references[0].currentSha256='f'.repeat(64);\n assert.throws(()=>validateContract(changed),error=>error.code==='PROOF_BINDING_SOURCE');\n const copier='scripts/lib/plan-document-curve-fixture-copy.mjs';\n assert.throws(()=>verifyIntegratedIdentityCurrentSources(contract,file=>file===copier?Buffer.from('changed actual copier'):read(file)));\n const rejected=error=>error.code==='INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED';\n for(const edit of [value=>value.whatsappFieldContinuityCurrentRevision.paginationUi.requestMatrix.pop(),value=>{value.whatsappFieldContinuityCurrentRevision.paginationUi.commandEqualityGroups=[];}]){\n  const altered=structuredClone(contract);edit(altered);const alteredBytes=Buffer.from(JSON.stringify(altered,null,2)+'\\n');\n  assert.throws(()=>verifyIntegratedIdentityCurrentSources(altered,file=>file==='.github/workspace-acceptance-contract.json'?alteredBytes:read(file)),rejected);\n }\n for(const file of ['scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs','scripts/verify-field-task-pagination-ui.mjs']){\n  const current=read(file),changed=Buffer.concat([current,Buffer.from('\\n// controlled current source mutation\\n')]);\n  assert.throws(()=>verifyIntegratedIdentityCurrentSources(contract,target=>target===file?changed:read(target)),error=>rejected(error)&&error.message.includes('CURRENT_REFERENCE_'+file),file);\n  assert.deepEqual(read(file),current);\n }\n let escapedParent,escapedReader;budget.withCaptureRuntimePreviousSources(contract,read,(historical,reader)=>{escapedParent=historical;escapedReader=reader;assert.equal(historical.whatsappFieldContinuityCurrentRevision.paginationUi.requestMatrix.length,99);});\n assert.throws(()=>verifyIntegratedIdentityCurrentSources(escapedParent,escapedReader),{code:'INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED',message:/Capture quality lineage rejected: CURRENT_CAPTURE_RUNTIME_REQUIRED$/});\n // Public lower-owner APIs must authenticate current v2 before invoking their\n // unchanged legacy99 oracles; no accepted reader survives its owned callback.\n assert.equal(contract.whatsappFieldContinuityCurrentRevision.paginationUi.rawVersion,2);\n const owners=[\n  [waLineage.verifyWhatsappFieldContinuityCurrentSources,'WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED','scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs'],\n  [verifyWorkspaceContinuityCurrentSources,'WORKSPACE_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED','scripts/lib/workspace-continuity-current-ci-lineage.mjs'],\n  [verifyDocumentTaskAssociationCurrentSources,'PLAN_MEASUREMENT_DOCUMENT_ASSOCIATION_CI_LINEAGE_REJECTED','scripts/lib/plan-measurement-document-association-ci-lineage.mjs'],\n ];\n for(const[verify,code,source]of owners){\n  const trace=[],result=verify(contract,file=>{trace.push(file);return read(file);});\n  assert.equal(result.nativeOrBrowserAcceptance,false);assert.equal(result.completeCheckpointRestored,true);\n  const altered=structuredClone(contract);altered.whatsappFieldContinuityCurrentRevision.paginationUi.rawVersion=1;\n  const alteredBytes=Buffer.from(JSON.stringify(altered,null,2)+'\\n');\n  assert.throws(()=>verify(altered,file=>file==='.github/workspace-acceptance-contract.json'?alteredBytes:read(file)),error=>error.code===code);\n  const original=read(source),poison=Buffer.concat([original,Buffer.from('\\n// controlled lower-owner source drift\\n')]);\n  assert.throws(()=>verify(contract,file=>file===source?poison:read(file)),error=>error.code===code&&error.message.includes('CURRENT_REFERENCE_'+source));\n  const reads=trace.filter(file=>file===source).length;assert.ok(reads>1,'The current owner source is reread across the owned scope');let seen=0;\n  assert.throws(()=>verify(contract,file=>file===source&&++seen===reads?poison:read(file)),error=>error.code===code&&error.message.includes('CURRENT_REFERENCE_'+source));\n  assert.equal(seen,reads,'Late source drift reaches the final real current-source fence');\n  assert.throws(()=>verify(escapedParent,escapedReader),error=>error.code===code&&/CURRENT_CAPTURE_RUNTIME_REQUIRED$/.test(error.message));\n  assert.deepEqual(read(source),original);\n }\n // Metadata helpers project only authenticated compiled contract data. They\n // retain original current source-pin/family projection and claim no I/O proof.\n const waValue=contract.whatsappFieldContinuityCurrentRevision,ref=waValue.reviewedSourceChanges[0];\n assert.equal(waLineage.whatsappFieldContinuityCurrentSourcePin(contract,{path:ref.path,sha256:ref.previousSha256}),materialReviewCurrentSourcePin(contract,{path:ref.path,sha256:ref.currentSha256}));\n assert.throws(()=>waLineage.whatsappFieldContinuityCurrentSourcePin(contract,{path:ref.path,sha256:'f'.repeat(64)}),{code:'WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'});\n const files=participantPreanalysisConsumerValidationFiles(contract);\n for(const file of [...budget.planBudgetValidationFiles(contract),...waLineage.whatsappFieldContinuityValidationFiles(contract)])assert.ok(files.includes(file),file);\n const uiFamily=contract.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family==='CONSUMPTION_FEEDBACK_UI'),waDelta=waValue.sourceSetDeltas.find(row=>row.family==='CONSUMPTION_FEEDBACK_UI');\n const uiPrevious=waLineage.restoreWhatsappFieldContinuitySourceSet('CONSUMPTION_FEEDBACK_UI',uiFamily.currentFiles,contract);\n assert.equal(uiPrevious.length,waDelta.previousCount);assert.equal(sha(JSON.stringify(uiPrevious)),waDelta.previousPathsSha256);\n const compact=contract.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family==='COMPACT'),preDelta=contract.participantPreanalysisCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT');\n const priorCompact=participantPreanalysisConsumerSourceFiles('COMPACT',compact.currentFiles,read);\n assert.equal(priorCompact.length,preDelta.previousCount);assert.equal(sha(JSON.stringify(priorCompact)),preDelta.previousPathsSha256);\n assert.equal(JSON.stringify(contract),snapshot);\n});\n\ntest('the complete historical workflow and all eight lanes survive only the exact declared quality step',()=>{\n const parent=budget.restoreCaptureRuntimePreviousContract(contract),previous=buildWorkflow(parent),actual=buildWorkflow(contract);\n assert.equal(sha(JSON.stringify(previous)),'5700a2a48386409dff99edf94a7cc896c9d27198d0784fb06b1305df640ca891');\n const additions=budget.captureRuntimeWorkflowAdditions(contract),restored=structuredClone(actual);\n assert.equal(additions.length,1);\n assert.equal(additions[0].step.name,'Image capture quality before private persistence');\n for(const row of [...additions].reverse()){\n  assert.deepEqual(restored.jobs[row.lane].steps[row.index],row.step);\n  restored.jobs[row.lane].steps.splice(row.index,1);\n }\n assert.deepEqual(restored,previous);\n assert.equal(actual.jobs.workspace.needs.length,8);\n assert.deepEqual(actual.jobs.workspace.needs,previous.jobs.workspace.needs);\n assert.deepEqual(loadContract(contractPath),contract);\n assert.deepEqual(equivalent(yaml.load(readFileSync(path.join(root,'.github/workflows/workspace-acceptance.yml'),'utf8')),contract),{blocks:contract.blocks.length,artifactPatterns:contract.artifactPatterns.length,lanes:8});\n for(const edit of [workflow=>workflow.jobs.contracts.steps.shift(),workflow=>workflow.jobs.workspace.needs.pop()]){\n  const changed=structuredClone(previous);edit(changed);\n  assert.throws(()=>buildCaptureRuntimeWorkflow(contract,changed),error=>error.code==='CAPTURE_QUALITY_COLLECTOR_REJECTED'&&error.reason==='EXACT_PARENT_WORKFLOW');\n }\n});\n\ntest('the real preanalysis emitter binds all three facial audit and historical challenge fixtures',()=>{\n const fixtures=[\"tests/fixtures/meta-kyc-challenge-legacy-v2.mjs\",\"tests/fixtures/participant-facial-audit-memory.mjs\",\"tests/fixtures/participant-facial-chat-audit-memory.mjs\"];\n const read=file=>{try{return readFileSync(path.join(root,file));}catch{return null;}};\n const files=participantPreanalysisCiSourceClosure(read);assert.equal(files.length,273);\n for(const missing of fixtures){\n  assert.ok(files.includes(missing));\n  assert.throws(()=>participantPreanalysisCiSourceClosure(file=>file===missing?null:read(file)),error=>error.code==='PARTICIPANT_PREANALYSIS_CI_REJECTED',missing);\n }\n});\n\ntest('the current preanalysis emitter binds the exact pagination inventory edge and preserves its prior 270 paths',()=>{\n const owner='scripts/verify-field-task-pagination-ui.mjs',leaf='src/app/(identity)/cuenta/material-inventory-view.mjs',literal=\"'../src/app/(identity)/cuenta/material-inventory-view.mjs'\";\n const read=file=>{try{return readFileSync(path.join(root,file));}catch{return null;}};\n const additions=['scripts/verify-field-task-pagination-ci.mjs',owner,leaf];\n const files=participantPreanalysisCiSourceClosure(read),prior=files.filter(file=>!additions.includes(file));\n assert.equal(files.length,273);for(const file of additions)assert.equal(files.filter(row=>row===file).length,1);\n assert.equal(prior.length,270);assert.equal(sha(JSON.stringify(prior)),'2a09915ece2c8ede847ca9a7f7b9b2e80eeb9c5e4e336e0cbbb21f3395a5dad8');\n const main='.github/scripts/verify-workspace-ci-parallelization.mjs',mainLiteral=\"'../../scripts/verify-field-task-pagination-ci.mjs'\",source=read(owner).toString('utf8'),mainSource=read(main).toString('utf8');assert.equal(source.split(literal).length,2);assert.equal(mainSource.split(mainLiteral).length,2);\n for(const missing of additions)assert.throws(()=>participantPreanalysisCiSourceClosure(file=>file===missing?null:read(file)),error=>error.code==='PARTICIPANT_PREANALYSIS_CI_REJECTED',missing);\n for(const mode of ['substituted-field-literal','substituted-main-literal'])assert.throws(()=>participantPreanalysisCiSourceClosure(file=>{\n  if(mode==='substituted-field-literal'&&file===owner)return Buffer.from(source.replace(literal,\"'../src/app/(identity)/cuenta/project-preparation-format.mjs'\"));\n  if(mode==='substituted-main-literal'&&file===main)return Buffer.from(mainSource.replace(mainLiteral,\"'../../scripts/verify-focused-workspace-ci.mjs'\"));\n  return read(file);\n }),error=>error.code==='PARTICIPANT_PREANALYSIS_CI_REJECTED',mode);\n});\n\ntest('the current COMPANY collector binds the sealed legacy fixture row and its actual import',()=>{\n const spec=contract.extension.proofs.find(row=>row.kind==='PG_COMPANY_KYC'),fixture='tests/fixtures/meta-kyc-challenge-legacy-v2.mjs',files=currentProducerSourceFiles(spec,root);\n assert.equal(files.length,253);assert.ok(files.includes(fixture));assert.deepEqual(files,spec.sourceFiles);\n for(const mode of ['missing-fixture','extra-row']){const changed=structuredClone(spec);if(mode==='missing-fixture')changed.sourceFiles=changed.sourceFiles.filter(file=>file!==fixture);else changed.sourceFiles=[...changed.sourceFiles,'src/lib/unbound-company-source.mjs'].sort();assert.throws(()=>currentProducerSourceFiles(changed,root),error=>error.code==='CAPTURE_QUALITY_COLLECTOR_REJECTED'&&error.reason==='EXACT_CURRENT_PROOF_SPEC',mode);}\n const read=file=>{try{return readFileSync(path.join(root,file));}catch{return null;}},producer=spec.producer,raw=read(producer),from=\"'../tests/fixtures/meta-kyc-challenge-legacy-v2.mjs'\",to=\"'../tests/fixtures/company-kyc-memory.mjs'\";assert.equal(raw.toString('utf8').split(from).length,2);\n assert.throws(()=>budget.verifyCaptureRuntimeCurrentSources(contract,file=>file===producer?Buffer.from(raw.toString('utf8').replace(from,to)):read(file)),error=>error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'&&error.reason==='CURRENT_REFERENCE_'+producer);\n assert.throws(()=>budget.verifyCaptureRuntimeCurrentSources(contract,file=>file===fixture?null:read(file)),error=>error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED');\n});\n",
             "previousText": ""
           }
         ]
@@ -30302,6 +30707,46 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "currentOffsetCharacters": 11353,
             "currentText": "REFERENCE_'+file});\n // CURRENT_SOURCE belongs to literal Git65d, below the 731/1b wrappers.\n // Authenticate current sources before/after this synchronous local fixture.\n withCaptureRuntimePreviousSources(contract,read,(parent,parentRead)=>{\n  const serialize=value=>JSON.stringify(value,null,2)+'\\n',compiler='scripts/lib/plan-budget-current-ci-lineage.mjs',anchor='scripts/lib/plan-budget-current-ci-reviewed.mjs',contractPath='.github/workspace-acceptance-contract.json',oneB=restorePlanBudgetAcceptancePreviousContract(parent);\n  assert.equal(sha(serialize(oneB)),'a89d1a6c820b811359af23359e587f9110e7341bfa0c2b558b5ee452d9ac1042');\n  const declaration=value=>'// Exact budget-source CI declaration; compiler fills immutable reviewed source bindings.\\nexport const PLAN_BUDGET_CURRENT_REVISION=Object.freeze('+JSON.stringify(value[PLAN_BUDGET_CURRENT_SECTION],null,2)+');\\n';\n  const oneBRead=source=>{const raw=parentRead(source);if(source===contractPath){assert.equal(raw.toString('utf8'),serialize(parent));return Buffer.from(serialize(oneB));}if(source===anchor){assert.equal(raw.toString('utf8'),declaration(parent));return Buffer.from(declaration(oneB));}return restorePlanBudgetAcceptancePreviousSource(parent,source,raw);};\n  const literal=(raw,pin,transformedPin,checkpoint,names)=>{const text=raw.toString('utf8').replaceAll('\\r\\n','\\n');assert.equal(sha(text),pin);const body=text.split('\\n').filter(line=>!line.startsWith('import ')&&!line.startsWith('export {')).map(line=>line.startsWith('export ')?line.slice(7):line).join('\\n');assert.equal(sha(body),transformedPin);return Function('reviewed','createHash','path',body+'\\nreturn {'+names+'};')(checkpoint[PLAN_BUDGET_CURRENT_SECTION],createHash,path);};\n  const oneBApi=literal(oneBRead(compiler),'90bfa69a4e902dfab785ec10f210d6b0d0a21fe3992c3995c6b0e122748dab99','b8ae60979c1f1f0447bcef680474b8c2f93bd691f6b565dc01c11f1f33ee8c04',oneB,'verifyPlanBudgetCurrentSources,restorePlanBudgetPilotIntegrationPreviousContract,restorePlanBudgetPilotIntegrationSource');\n  assert.equal(oneBApi.verifyPlanBudgetCurrentSources(oneB,oneBRead).nativeOrBrowserAcceptance,false);\n  const checkpoint=oneBApi.restorePlanBudgetPilotIntegrationPreviousContract(oneB);assert.equal(sha(serialize(checkpoint)),'6cb040ad517b8a87b86a0466f23fe822dd570227392aff6209eeff037e840c71');\n  const previousRead=source=>{const raw=oneBRead(source);if(source===contractPath)return Buffer.from(serialize(checkpoint));if(source===anchor)return Buffer.from(declaration(checkpoint));return oneBApi.restorePlanBudgetPilotIntegrationSource(oneB,source,raw);};\n  const historical=literal(previousRead(compiler),'40f82005d0fbca72d1491f0100a8395f61dcbe1455f3eaf086c39e12d1a2dcdb','3313395315e24f3b042f6373128f468ef813814b60a5519c16d8e740a7475add',checkpoint,'verifyPlanBudgetCurrentSources');\n  assert.equal(historical.verifyPlanBudgetCurrentSources(checkpoint,previousRead).nativeOrBrowserAcceptance,false);\n  const previousTampered=source=>source===file?Buffer.concat([previousRead(source),Buffer.from('\\n// Changed current Budget module\\n')]):previousRead(source);\n  assert.throws(()=>historical.verifyPlanBudgetCurrentSources(checkpoint,previousTampered),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason:'CURRENT_SOURCE_'+file});\n ",
             "previousText": "SOURCE_'+file"
+          }
+        ]
+      },
+      {
+        "path": "tests/production-field-task-pagination-ci.test.mjs",
+        "status": "MODIFIED",
+        "previousSha256": "0d8abfb43c696a007bbc676d8472599b24cc3d7edb465419f992d9811f988999",
+        "currentSha256": "0bc97707445edb25c0e9697fb067295fb1c3d1e03c4c643d44cf8f2867c8a871",
+        "previousBytes": 14204,
+        "currentBytes": 20870,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 795,
+            "currentText": "Requests,validateFieldTaskPagination",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 2591,
+            "currentText": "// Canned DTOs are synthetic acceptor inputs, never browser or CI observations.\n const requests=current.requestMatrix.map((row,index)=>{\n  const value=structuredClone(row);if(row.method!=='POST')return value;\n  assert.ok(requestGroup.has(index),'Every synthetic POST has an explicit current command group');\n  const operationId='00000000-0000-4000-8000-'+String(requestGroup.get(index)+1).padStart(12,'0');\n  const commandObservation={version:1,ordinal:1,width:row.width,mode:row.mode,endpoint:row.path,method:'POST',authorization:'Bearer controlled-task-page-token',bodyKind:row.mode==='evidence'?'FORM_DATA_FIELDS_FILE_SHA256_V1':'JSON_UTF8_V1'};\n  if(row.mode==='evidence'){\n   commandObservation.fields={operationId,projectId:'project-page-fixture',scope:'a'.repeat(64),workerId:'worker-fixture',taskId:'task-0001',sectorId:'sector-fixture',caption:'Archivo sintético conservado durante la consulta.'};\n   commandObservation.file={name:'synthetic-geometric.png',type:'image/png',size:68,sha256:'50a647596cc07caebc446ce8283a8c68cb502d3633518ee41202b2f23eb0f31c'};\n   value.bodySha256=sha(JSON.stringify({version:1,bodyKind:commandObservation.bodyKind,fields:commandObservation.fields,file:commandObservation.file}));\n  }else{\n   const action=row.mode==='progress'?'PROPOSE_PROGRESS':'PROPOSE_CONSUMPTION',payload=row.mode==='progress'?{workerId:'worker-fixture',taskId:'task-0001',progress:25,quantity:'2.5',baseline:'10',unit:'M2',reason:'Medición sintética conservada durante la consulta.',evidenceIds:[],revision:'2026-10-16T12:00:00.000001'}:{workerId:'worker-fixture',taskId:null,sectorId:'sector-fixture',materialId:'material-fixture',catalogHash:'c'.repeat(64),quantity:'2.125',reason:'Consumo sintético conservado durante la consulta.',evidenceIds:[]};\n   commandObservation.bodyUtf8=JSON.stringify({operationId,projectId:'project-page-fixture',scope:'a'.repeat(64),action,payload});value.bodySha256=sha(commandObservation.bodyUtf8);\n  }\n  value.operationId=operationId;value.commandObservation=commandObservation;return value;\n ",
+            "previousText": "const requests=current.requestMatrix.map((row,index)=>{const value=structuredClone(row);if(row.method==='POST'){const group=requestGroup.get(index);value.operationId='00000000-0000-4000-8000-'+String(group+1).padStart(12,'0');value.bodySha256=sha('synthetic exact body '+group);}return value;"
+          },
+          {
+            "currentOffsetCharacters": 4886,
+            "currentText": "current.rawVersion",
+            "previousText": "1"
+          },
+          {
+            "currentOffsetCharacters": 9899,
+            "currentText": "assert.equal(value.raw.version,2);assert.deepEqual(validateFieldTaskPaginationRequests(value.raw.requests),{requests:108,posts:9,independentCommands:9,operationIds:current.commandEqualityGroups.map(group=>value.raw.requests[group[0]].operationId)});",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 10293,
+            "currentText": "version=1;},r=>{r.",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 13514,
+            "currentText": " // The pure request acceptor needs no CI/source identity for these synthetic negatives.\n const post=(requests,mode)=>requests.find(row=>row.method==='POST'&&row.mode===mode);\n const rehash=row=>{const observation=row.commandObservation;row.bodySha256=observation.bodyKind==='JSON_UTF8_V1'?sha(observation.bodyUtf8):sha(JSON.stringify({version:1,bodyKind:observation.bodyKind,fields:observation.fields,file:observation.file}));};\n const changeJson=(row,edit)=>{const body=JSON.parse(row.commandObservation.bodyUtf8);edit(body);row.commandObservation.bodyUtf8=JSON.stringify(body);rehash(row);};\n const originalRequests=fixture().raw.requests,originalRequestsBefore=JSON.stringify(originalRequests);\n for(const edit of [\n  rows=>{delete post(rows,'evidence').commandObservation;},\n  rows=>{post(rows,'evidence').commandObservation.version=2;},\n  rows=>{post(rows,'evidence').commandObservation.ordinal=2;},\n  rows=>{post(rows,'evidence').commandObservation.width=321;},\n  rows=>{post(rows,'evidence').commandObservation.mode='progress';},\n  rows=>{post(rows,'evidence').commandObservation.endpoint='/api/identity/field-operations';},\n  rows=>{post(rows,'evidence').commandObservation.method='GET';},\n  rows=>{post(rows,'evidence').commandObservation.authorization='Bearer foreign-synthetic-token';},\n  rows=>{post(rows,'evidence').commandObservation.bodyKind='UNKNOWN';},\n  rows=>{post(rows,'evidence').operationId='ffffffff-ffff-4fff-8fff-ffffffffffff';},\n  rows=>{post(rows,'evidence').bodySha256='f'.repeat(64);},\n  rows=>{const row=post(rows,'evidence');row.commandObservation.fields.scope='f'.repeat(64);rehash(row);},\n  rows=>{const row=post(rows,'evidence');row.commandObservation.fields.projectId='foreign-project';rehash(row);},\n  rows=>{const row=post(rows,'evidence');row.commandObservation.fields.workerId='foreign-worker';rehash(row);},\n  rows=>{const row=post(rows,'evidence');row.commandObservation.fields.taskId='task-0205';rehash(row);},\n  rows=>{const row=post(rows,'evidence');row.commandObservation.fields.sectorId='foreign-sector';rehash(row);},\n  rows=>{const row=post(rows,'evidence');row.commandObservation.fields.caption='foreign synthetic caption';rehash(row);},\n  rows=>{const row=post(rows,'evidence');row.commandObservation.file.name='foreign.png';rehash(row);},\n  rows=>{const row=post(rows,'evidence');row.commandObservation.file.type='image/jpeg';rehash(row);},\n  rows=>{const row=post(rows,'evidence');row.commandObservation.file.size=69;rehash(row);},\n  rows=>{const row=post(rows,'evidence');row.commandObservation.file.sha256='f'.repeat(64);rehash(row);},\n  rows=>{changeJson(post(rows,'progress'),body=>{body.operationId='ffffffff-ffff-4fff-8fff-ffffffffffff';});},\n  rows=>{changeJson(post(rows,'progress'),body=>{body.scope='f'.repeat(64);});},\n  rows=>{changeJson(post(rows,'progress'),body=>{body.payload.taskId='task-0205';});},\n  rows=>{changeJson(post(rows,'progress'),body=>{body.payload.quantity='2.6';});},\n  rows=>{changeJson(post(rows,'consumption'),body=>{body.payload.materialId='foreign-material';});},\n  rows=>{changeJson(post(rows,'consumption'),body=>{body.payload.quantity='2.126';});},\n  rows=>{const first=post(rows,'evidence'),second=rows.filter(row=>row.method==='POST'&&row.mode==='evidence')[1];second.operationId=first.operationId;second.commandObservation.fields.operationId=first.operationId;rehash(second);},\n  rows=>{const row=post(rows,'progress');row.commandObservation.bodyUtf8+=' ';},\n  rows=>{post(rows,'evidence').commandObservation=null;},\n  rows=>{post(rows,'evidence').commandObservation.fields.extraAuthority=true;},\n  rows=>{delete post(rows,'evidence').commandObservation.fields.caption;},\n  rows=>{const row=post(rows,'evidence');row.commandObservation.fields=[['operationId',row.operationId],['operationId',row.operationId]];},\n  rows=>{post(rows,'evidence').commandObservation.file=null;},\n  rows=>{const row=post(rows,'progress');row.commandObservation.bodyUtf8='';rehash(row);},\n  rows=>{const row=post(rows,'progress'),text=row.commandObservation.bodyUtf8,body=JSON.parse(text);row.commandObservation.bodyUtf8='{\"operationId\":'+JSON.stringify(body.operationId)+','+text.slice(1);rehash(row);},\n  rows=>{const form=post(rows,'evidence'),json=post(rows,'progress');json.operationId=form.operationId;changeJson(json,body=>{body.operationId=form.operationId;});}\n ]){const requests=structuredClone(originalRequests);edit(requests);denied(()=>validateFieldTaskPaginationRequests(requests));}\n assert.equal(JSON.stringify(originalRequests),originalRequestsBefore,'Pure DTO negative fixtures must remain unchanged');\n",
+            "previousText": ""
           }
         ]
       },
@@ -36038,6 +36483,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     ],
     "contractPatches": [
       {
+        "pointer": "/whatsappFieldContinuityCurrentRevision/paginationUi/rawVersion",
+        "previous": 1,
+        "current": 2
+      },
+      {
         "pointer": "/whatsappFieldContinuityCurrentRevision/paginationUi/requestMatrix",
         "previous": [
           {
@@ -37747,9 +38197,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         ],
         "current": [
           [
-            80,
-            90,
-            100
+            80
           ],
           [
             83
@@ -37758,10 +38206,16 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             87
           ],
           [
+            90
+          ],
+          [
             93
           ],
           [
             97
+          ],
+          [
+            100
           ],
           [
             103
@@ -37774,7 +38228,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "pointer": "/planBudgetCurrentRevision/references/0/currentSha256",
         "previous": "7f6e61638298e3df1d291c429cc4349a7fa0d1c7b68d1efca43851c2dd7b9307",
-        "current": "e8d57f72c03c30f9beed27a1f46a52d78f5d9ec0834327354fdbbf6f02d25551"
+        "current": "c4485ca3f925f192eae3dff1914ade93d81e4556a394277c7b0c4f7e2c81d59e"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/2/currentSha256",
@@ -37789,12 +38243,12 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "pointer": "/planBudgetCurrentRevision/references/7/currentSha256",
         "previous": "0ba932090392ee957357d303ac8c4acd11fec9da46b4f01a9e5390e47d563510",
-        "current": "cb3ae781d03275f7ea559c3a86e7f9297f557082036f0a0060b07310503af83b"
+        "current": "c7cefd94574478d1ba05928e2b8e9699302960c8fcecfd789ae7eae6d5f249bd"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/11/currentSha256",
         "previous": "a1de3a73617de7c4eb2f9db8665650abe5798accb44b886cd8d2220fe5295bbf",
-        "current": "69ce909a5dc107718bfc91ece769bea47d96183bed51ce1ab7e1668dccc17b1b"
+        "current": "34b6d5aabeb36566b3bb12bb4c464995432ac02b770206372b352cc25cd7841e"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/14/currentSha256",
@@ -37854,7 +38308,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "pointer": "/planBudgetCurrentRevision/references/129/currentSha256",
         "previous": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-        "current": "cfac8f3c2db50426cf681812acf786e25892ff7894f86408f83307944f85c575"
+        "current": "3d955706b8b48a5dbce38e93af53b85c5f4573f8cb4b6715a1d66ae64e685254"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/22/currentSha256",
@@ -37864,7 +38318,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "pointer": "/planBudgetCurrentRevision/references/25/currentSha256",
         "previous": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
-        "current": "e36fff6f6c079a5eeeab3b1c23f2dcfd4e397d3eac3e5a199cca4ad4075f6a28"
+        "current": "42849f2f3e0c435c72e809fc396fe58e64ecf39fe8ef1d0aed04f8e5e692df14"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/132/currentSha256",
@@ -38022,7 +38476,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": ".github/scripts/verify-workspace-ci-parallelization.mjs",
             "previousSha256": "8d65b7fb1446dc0533f69097ae28598a7c748f50c19eb586614ce078bf3aebac",
-            "currentSha256": "e8d57f72c03c30f9beed27a1f46a52d78f5d9ec0834327354fdbbf6f02d25551"
+            "currentSha256": "c4485ca3f925f192eae3dff1914ade93d81e4556a394277c7b0c4f7e2c81d59e"
           },
           {
             "path": ".github/workflows/company-usage-proxy.yml",
@@ -38057,7 +38511,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
             "previousSha256": null,
-            "currentSha256": "cb3ae781d03275f7ea559c3a86e7f9297f557082036f0a0060b07310503af83b"
+            "currentSha256": "c7cefd94574478d1ba05928e2b8e9699302960c8fcecfd789ae7eae6d5f249bd"
           },
           {
             "path": "scripts/lib/plan-budget-ui-contract.mjs",
@@ -38077,7 +38531,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
             "previousSha256": "5960b4acedd880ac0a49f157e57007863c2478ad218e504eb81bf993ad54b147",
-            "currentSha256": "69ce909a5dc107718bfc91ece769bea47d96183bed51ce1ab7e1668dccc17b1b"
+            "currentSha256": "34b6d5aabeb36566b3bb12bb4c464995432ac02b770206372b352cc25cd7841e"
           },
           {
             "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
@@ -38147,7 +38601,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-workspace-ui.mjs",
             "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-            "currentSha256": "e36fff6f6c079a5eeeab3b1c23f2dcfd4e397d3eac3e5a199cca4ad4075f6a28"
+            "currentSha256": "42849f2f3e0c435c72e809fc396fe58e64ecf39fe8ef1d0aed04f8e5e692df14"
           },
           {
             "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -38667,7 +39121,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-participants-ui.mjs",
             "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-            "currentSha256": "cfac8f3c2db50426cf681812acf786e25892ff7894f86408f83307944f85c575"
+            "currentSha256": "3d955706b8b48a5dbce38e93af53b85c5f4573f8cb4b6715a1d66ae64e685254"
           },
           {
             "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -38744,7 +39198,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": ".github/scripts/verify-workspace-ci-parallelization.mjs",
             "previousSha256": "8d65b7fb1446dc0533f69097ae28598a7c748f50c19eb586614ce078bf3aebac",
-            "currentSha256": "e8d57f72c03c30f9beed27a1f46a52d78f5d9ec0834327354fdbbf6f02d25551"
+            "currentSha256": "c4485ca3f925f192eae3dff1914ade93d81e4556a394277c7b0c4f7e2c81d59e"
           },
           {
             "path": ".github/workflows/company-usage-proxy.yml",
@@ -38779,7 +39233,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
             "previousSha256": null,
-            "currentSha256": "cb3ae781d03275f7ea559c3a86e7f9297f557082036f0a0060b07310503af83b"
+            "currentSha256": "c7cefd94574478d1ba05928e2b8e9699302960c8fcecfd789ae7eae6d5f249bd"
           },
           {
             "path": "scripts/lib/plan-budget-ui-contract.mjs",
@@ -38799,7 +39253,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
             "previousSha256": "5960b4acedd880ac0a49f157e57007863c2478ad218e504eb81bf993ad54b147",
-            "currentSha256": "69ce909a5dc107718bfc91ece769bea47d96183bed51ce1ab7e1668dccc17b1b"
+            "currentSha256": "34b6d5aabeb36566b3bb12bb4c464995432ac02b770206372b352cc25cd7841e"
           },
           {
             "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
@@ -38869,7 +39323,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-workspace-ui.mjs",
             "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-            "currentSha256": "e36fff6f6c079a5eeeab3b1c23f2dcfd4e397d3eac3e5a199cca4ad4075f6a28"
+            "currentSha256": "42849f2f3e0c435c72e809fc396fe58e64ecf39fe8ef1d0aed04f8e5e692df14"
           },
           {
             "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -39389,7 +39843,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-participants-ui.mjs",
             "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-            "currentSha256": "cfac8f3c2db50426cf681812acf786e25892ff7894f86408f83307944f85c575"
+            "currentSha256": "3d955706b8b48a5dbce38e93af53b85c5f4573f8cb4b6715a1d66ae64e685254"
           },
           {
             "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -39512,6 +39966,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "currentSha256": "7a9e07366c4b5c660b967405aed86159e04397f293f2a1b2c7f3d858444aa081"
           },
           {
+            "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
+            "previousSha256": "aaf23ee0e97231520f29669136d969ffc513bd6b52067df751d3dc6cf9c86bb8",
+            "currentSha256": "98fc68d2304dd51281e4b2ab29d6b22613985d9d9dac033fe874a0fd38557f5e"
+          },
+          {
             "path": "scripts/lib/kyc-current-image-native.mjs",
             "previousSha256": "87ad6932bbb4ed264947b0ba527965080e4f38a7cc0bb0f945b471e88ee06bbb",
             "currentSha256": "377da2076f225bfabf975c95e9108be76aa137dedbd82ee7dc98de92f5a2e6e3"
@@ -39537,9 +39996,19 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "currentSha256": "f9125c97ff397d7cb058386080e7d842f59d7a5ed072bd87419615eebe135940"
           },
           {
+            "path": "scripts/lib/plan-measurement-document-association-ci-lineage.mjs",
+            "previousSha256": "0a14f5211348d30d3a16b441a126880aeed8c7e196973ecceda7ee00307f0ef4",
+            "currentSha256": "9db74547c7253914e09693835080ea38c148b139fd4d3e9fa582e30e45c0699c"
+          },
+          {
             "path": "scripts/lib/synthetic-capture-quality.mjs",
             "previousSha256": null,
             "currentSha256": "ca3114f1c6ffd88d321b1251ef1c502765b4ccb2c0be54915f0ee83e0668e420"
+          },
+          {
+            "path": "scripts/lib/workspace-continuity-current-ci-lineage.mjs",
+            "previousSha256": "cb26d5ea9922fb9a3fb72d1a35010229a1d4b49f4784783294a4d1d503fdc81a",
+            "currentSha256": "c714b11e3ea3b87cf698f62f9b2ab93e433ef06d3c0a29e23ff09ac26dab5d70"
           },
           {
             "path": "scripts/verify-company-channel-kyc-postgres.mjs",
@@ -39557,9 +40026,14 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "currentSha256": "283a91bcc1c17837cb41ec2ddd769ba87b7801b75e7cb5ee3af5496f04e800ce"
           },
           {
+            "path": "scripts/verify-field-task-pagination-ci.mjs",
+            "previousSha256": "1e366a583be909323327524a8fe04db9eb962724ec5073bdf3eb36140ddcdecc",
+            "currentSha256": "fc18f1398b6ddd80863e76b86cd82951c606652e0d032e15c9364d21c336534a"
+          },
+          {
             "path": "scripts/verify-field-task-pagination-ui.mjs",
             "previousSha256": "4b98ee409dfca7fa78ffac58c82796c9013f34286691e19e4993149ffd0ad604",
-            "currentSha256": "f5fb5468225bf0d0db4e084af6d500db78f61740985238eaa7c243bc902b8dba"
+            "currentSha256": "65e64823c5a4e44af04d83f618ef34c6627338e4b384d4ea72b395cd9a8d35f7"
           },
           {
             "path": "scripts/verify-meta-kyc-chat-postgres.mjs",
@@ -39839,7 +40313,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "tests/production-capture-runtime-collectors.test.mjs",
             "previousSha256": null,
-            "currentSha256": "adc821e88a3331effd560029ab9621457ca3b6ead0cd87a26bc4502e5f070a8a"
+            "currentSha256": "feb58f80cf67eae81bcb781872ee75b44e69665050daf4d2188cd80f6203e4e6"
           },
           {
             "path": "tests/production-capture-runtime-lineage-boundary.test.mjs",
@@ -39865,6 +40339,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "path": "tests/production-employee-intake-kyc-routing.test.mjs",
             "previousSha256": "39e1879ea3cb1386b1cf05fd59eebc1bbc010fc64420481de87a0d9f6474b23b",
             "currentSha256": "b45c3ab9f7c896d765429311a0fd0bfa159a6cedc51d7704f6d888d1774f8159"
+          },
+          {
+            "path": "tests/production-field-task-pagination-ci.test.mjs",
+            "previousSha256": "0d8abfb43c696a007bbc676d8472599b24cc3d7edb465419f992d9811f988999",
+            "currentSha256": "0bc97707445edb25c0e9697fb067295fb1c3d1e03c4c643d44cf8f2867c8a871"
           },
           {
             "path": "tests/production-kyc-image-quality.test.mjs",
@@ -44453,7 +44932,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
-            "sha256": "aaf23ee0e97231520f29669136d969ffc513bd6b52067df751d3dc6cf9c86bb8"
+            "sha256": "98fc68d2304dd51281e4b2ab29d6b22613985d9d9dac033fe874a0fd38557f5e"
           },
           {
             "path": "scripts/lib/material-review-current-ci-lineage.mjs",
@@ -44473,7 +44952,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "cb3ae781d03275f7ea559c3a86e7f9297f557082036f0a0060b07310503af83b"
+            "sha256": "c7cefd94574478d1ba05928e2b8e9699302960c8fcecfd789ae7eae6d5f249bd"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -44481,7 +44960,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "scripts/lib/plan-measurement-document-association-ci-lineage.mjs",
-            "sha256": "0a14f5211348d30d3a16b441a126880aeed8c7e196973ecceda7ee00307f0ef4"
+            "sha256": "9db74547c7253914e09693835080ea38c148b139fd4d3e9fa582e30e45c0699c"
           },
           {
             "path": "scripts/lib/plan-partida-preview-current-ci-lineage.mjs",
@@ -44493,7 +44972,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
-            "sha256": "69ce909a5dc107718bfc91ece769bea47d96183bed51ce1ab7e1668dccc17b1b"
+            "sha256": "34b6d5aabeb36566b3bb12bb4c464995432ac02b770206372b352cc25cd7841e"
           },
           {
             "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
@@ -44505,7 +44984,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "scripts/lib/workspace-continuity-current-ci-lineage.mjs",
-            "sha256": "cb26d5ea9922fb9a3fb72d1a35010229a1d4b49f4784783294a4d1d503fdc81a"
+            "sha256": "c714b11e3ea3b87cf698f62f9b2ab93e433ef06d3c0a29e23ff09ac26dab5d70"
           },
           {
             "path": "scripts/verify-focused-workspace-ci.mjs",
@@ -45620,7 +46099,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "scripts/lib/integrated-identity-current-ci-lineage.mjs",
-            "sha256": "aaf23ee0e97231520f29669136d969ffc513bd6b52067df751d3dc6cf9c86bb8"
+            "sha256": "98fc68d2304dd51281e4b2ab29d6b22613985d9d9dac033fe874a0fd38557f5e"
           },
           {
             "path": "scripts/lib/kyc-expired-current-ci-lineage.mjs",
@@ -45648,7 +46127,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "cb3ae781d03275f7ea559c3a86e7f9297f557082036f0a0060b07310503af83b"
+            "sha256": "c7cefd94574478d1ba05928e2b8e9699302960c8fcecfd789ae7eae6d5f249bd"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -45660,7 +46139,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "scripts/lib/plan-measurement-document-association-ci-lineage.mjs",
-            "sha256": "0a14f5211348d30d3a16b441a126880aeed8c7e196973ecceda7ee00307f0ef4"
+            "sha256": "9db74547c7253914e09693835080ea38c148b139fd4d3e9fa582e30e45c0699c"
           },
           {
             "path": "scripts/lib/plan-partida-preview-current-ci-lineage.mjs",
@@ -45672,7 +46151,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs",
-            "sha256": "69ce909a5dc107718bfc91ece769bea47d96183bed51ce1ab7e1668dccc17b1b"
+            "sha256": "34b6d5aabeb36566b3bb12bb4c464995432ac02b770206372b352cc25cd7841e"
           },
           {
             "path": "scripts/lib/worksite-live-hours-current-ci-lineage.mjs",
@@ -45684,15 +46163,15 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "scripts/lib/workspace-continuity-current-ci-lineage.mjs",
-            "sha256": "cb26d5ea9922fb9a3fb72d1a35010229a1d4b49f4784783294a4d1d503fdc81a"
+            "sha256": "c714b11e3ea3b87cf698f62f9b2ab93e433ef06d3c0a29e23ff09ac26dab5d70"
           },
           {
             "path": "scripts/verify-field-task-pagination-ci.mjs",
-            "sha256": "1e366a583be909323327524a8fe04db9eb962724ec5073bdf3eb36140ddcdecc"
+            "sha256": "fc18f1398b6ddd80863e76b86cd82951c606652e0d032e15c9364d21c336534a"
           },
           {
             "path": "scripts/verify-field-task-pagination-ui.mjs",
-            "sha256": "f5fb5468225bf0d0db4e084af6d500db78f61740985238eaa7c243bc902b8dba"
+            "sha256": "65e64823c5a4e44af04d83f618ef34c6627338e4b384d4ea72b395cd9a8d35f7"
           },
           {
             "path": "src/app/(identity)/cuenta/company-channel-view.mjs",
@@ -45908,7 +46387,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "tests/production-field-task-pagination-ci.test.mjs",
-            "sha256": "0d8abfb43c696a007bbc676d8472599b24cc3d7edb465419f992d9811f988999"
+            "sha256": "0bc97707445edb25c0e9697fb067295fb1c3d1e03c4c643d44cf8f2867c8a871"
           },
           {
             "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
@@ -53864,7 +54343,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-lineage.mjs",
-            "sha256": "cb3ae781d03275f7ea559c3a86e7f9297f557082036f0a0060b07310503af83b"
+            "sha256": "c7cefd94574478d1ba05928e2b8e9699302960c8fcecfd789ae7eae6d5f249bd"
           },
           {
             "path": "scripts/lib/plan-budget-current-ci-reviewed.mjs",
@@ -58034,6 +58513,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           "tests/production-focused-workspace-ui.test.mjs",
           "tests/production-integrated-identity-current-ci-lineage.test.mjs"
         ]
+      },
+      {
+        "pointer": "/extension/proofs/20/producerSha256",
+        "previous": "1e366a583be909323327524a8fe04db9eb962724ec5073bdf3eb36140ddcdecc",
+        "current": "fc18f1398b6ddd80863e76b86cd82951c606652e0d032e15c9364d21c336534a"
       },
       {
         "pointer": "/extension/proofs/21/sourceFiles",
