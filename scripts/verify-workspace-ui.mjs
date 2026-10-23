@@ -652,34 +652,66 @@ async function ganttVolumeScenario(width){
 }
 async function taskCreateScenario(mode){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width:390,height:1000});page.on('pageerror',error=>pageErrors.push({mode:'taskcreate-'+mode,width:390,message:error.message}));
- const posts=[];let record=null,applications=0,statusChecks=0,scheduleReadsAfterCommit=0;await page.setRequestInterception(true);
+ const posts=[],facts=[];let record=null,applications=0,statusChecks=0,scheduleReadsAfterCommit=0,readbackReads=0,liveReads=0,phase='prepare',heldReadback=null,heldLive=null;
+ let readbackStarted,liveStarted;const readbackReady=new Promise(resolve=>{readbackStarted=resolve;}),liveReady=new Promise(resolve=>{liveStarted=resolve;});
+ const projectQuery=new URLSearchParams({projectId:'p-a',scope}).toString(),authorization='Bearer synthetic-active-tab-A';
+ const expectedFact=(phase,path,method,query,responseStatus)=>({phase,path,method,query,authorization,responseStatus});
+ const initialFacts=[expectedFact('prepare','/api/identity/workspace','GET','',200),...Array.from({length:2},()=>expectedFact('prepare','/api/identity/workspace','GET',projectQuery,200))];
+ const respond=async held=>{held.fact.responseStatus=200;await held.request.respond({status:200,contentType:'application/json',body:JSON.stringify(held.body),headers:{'Cache-Control':'no-store'}});};
+ const waitLiveCurrent=()=>page.waitForFunction(()=>[...document.querySelectorAll('[data-worksite-live-refresh="CURRENT"]')].some(node=>node.getClientRects().length&&node.innerText.includes('Cronograma · última comprobación:')),{timeout:15000});
+ const writeLedger=(status,error=null)=>writeFileSync(path.join(evidence,'workspace-taskcreate-'+mode+'-390.json'),JSON.stringify({version:1,status,mode,width:390,phase,facts,posts:posts.length,applications,statusChecks,scheduleReadsAfterCommit,readbackReads,liveReads,syntheticOnly:true,...(error?{failure:error.message}:{})},null,2));
+ await page.setRequestInterception(true);
  page.on('request',async request=>{
   try{
    const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
    if(!['/api/identity/workspace','/api/identity/task-creation'].includes(url.pathname))return request.continue();assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');let status=200,body;
+   const fact={phase,path:url.pathname,method:request.method(),query:url.search.slice(1),authorization:request.headers().authorization,responseStatus:null};facts.push(fact);
    if(url.pathname==='/api/identity/workspace'){
-    if(!url.search)body={scope,organizationName:'Organización de prueba sintética',role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'},{id:'p-b',name:'Obra de prueba B'}],projectsTruncated:false};
-    else {assert.equal(url.searchParams.get('projectId'),'p-a');if(record)scheduleReadsAfterCommit++;body={scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:record?[baseTask(),record.task]:[baseTask()],totalTasks:record?2:1,nextCursor:null};}
+    assert.equal(request.method(),'GET');
+    if(!url.search){assert.equal(phase,'prepare');body={scope,organizationName:'Organización de prueba sintética',role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:true,projects:[{id:'p-a',name:'Obra de prueba A'},{id:'p-b',name:'Obra de prueba B'}],projectsTruncated:false};}
+    else {
+     assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(url.searchParams.get('scope'),scope);assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(fact.query,projectQuery);
+     body={scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:true,tasks:record?[baseTask(),record.task]:[baseTask()],totalTasks:record?2:1,nextCursor:null};
+     if(record){
+      scheduleReadsAfterCommit++;
+      if(phase==='receipt-readback'){assert.equal(readbackReads,0);assert.equal(heldReadback,null);readbackReads++;heldReadback={request,body,fact};readbackStarted();return;}
+      assert.equal(phase,'post-readback-live','Only the observed live refresh may follow the canonical receipt readback');assert.equal(liveReads,0);assert.equal(heldLive,null);liveReads++;heldLive={request,body,fact};liveStarted();return;
+     }
+     assert.equal(phase,'prepare','An unresolved task creation must not trigger another project read');
+    }
    }else if(request.method()==='POST'){
+    assert.equal(url.search,'');assert.ok(['first-command','retry-command'].includes(phase));
     const input=JSON.parse(request.postData());posts.push(input);assert.deepEqual(Object.keys(input).sort(),['operationId','projectId','scope','title','startsOn','endsOn'].sort());assert.equal(input.projectId,'p-a');assert.equal(input.scope,scope);assert.equal(input.title,'Tarea de ensayo recuperable');assert.equal(input.startsOn,'');assert.equal(input.endsOn,'');
-    if(mode==='not-arrived'&&posts.length===1){await request.abort('failed');return;}
+    if(mode==='not-arrived'&&posts.length===1){fact.responseStatus='ABORTED';await request.abort('failed');return;}
     else if(mode==='rollback'&&posts.length===1){status=503;body={code:'WORKSPACE_OPERATION_UNCONFIRMED'};}
-    else {applications++;record={scope,created:true,replayed:false,receiptId:'workspace_new_task_'+input.operationId,task:{id:'new-task',title:input.title,status:'BACKLOG',progress:0,startsOn:null,endsOn:null,revision:'2026-10-01T12:00:00.111111'}};body=record;if(mode==='uncertain'){status=503;body={code:'WORKSPACE_OPERATION_UNCONFIRMED'};}}
-   }else {statusChecks++;assert.equal(url.searchParams.get('operationId'),posts[0].operationId);body=record?{...record,state:'RECORDED'}:{scope,state:'NOT_OBSERVED',definitive:false};}
-   await request.respond({status,contentType:'application/json',body:JSON.stringify(body),headers:{'Cache-Control':'no-store'}});
-  }catch(error){pageErrors.push({mode:'taskcreate-'+mode,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
+    else {applications++;record={scope,created:true,replayed:false,receiptId:'workspace_new_task_'+input.operationId,task:{id:'new-task',title:input.title,status:'BACKLOG',progress:0,startsOn:null,endsOn:null,revision:'2026-10-01T12:00:00.111111'}};body=record;if(mode==='uncertain'){status=503;body={code:'WORKSPACE_OPERATION_UNCONFIRMED'};}else phase='receipt-readback';}
+   }else {
+    assert.equal(request.method(),'GET');assert.equal(phase,'receipt-check');assert.deepEqual([...url.searchParams.keys()].sort(),['operationId','projectId','scope']);assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(url.searchParams.get('scope'),scope);
+    statusChecks++;assert.equal(url.searchParams.get('operationId'),posts[0].operationId);assert.equal(fact.query,new URLSearchParams({projectId:'p-a',scope,operationId:posts[0].operationId}).toString());body=record?{...record,state:'RECORDED'}:{scope,state:'NOT_OBSERVED',definitive:false};if(record)phase='receipt-readback';
+   }
+   fact.responseStatus=status;await request.respond({status,contentType:'application/json',body:JSON.stringify(body),headers:{'Cache-Control':'no-store'}});
+  }catch(error){pageErrors.push({mode:'taskcreate-'+mode,phase,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
  });
- await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Organización de prueba sintética');await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Obra de prueba A')).click());await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type('form input:not([type="date"])','Tarea de ensayo recuperable');assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>!e.disabled)));
- if(mode==='draft-cancel'){await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('form')&&[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>!b.disabled));assert.equal(posts.length,0);checks.push('taskcreate-draft-locks-project-and-refresh-until-explicit-cancel');await context.close();return;}
- await click(page,'Crear tarea');await waitText(page,'La confirmación no llegó');assert.equal(posts.length,1);
- assert.ok(!(await text(page)).includes('Reintentar la misma creación'));
- assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));
- assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>e.disabled)));await click(page,'Comprobar tarea');
- if(mode==='uncertain'){await waitText(page,'Tarea creada y vinculada');assert.equal(posts.length,1);checks.push('taskcreate-uncertain-commit-recovers-without-second-post');}
- else {await waitText(page,'No se observa un recibo todavía');assert.equal(posts.length,1);assert.equal(await page.$eval('form input',e=>e.value),'Tarea de ensayo recuperable');assert.ok(await page.$eval('form input',e=>e.disabled));await click(page,'Reintentar la misma creación');await waitText(page,'Tarea creada y vinculada');assert.equal(posts.length,2);assert.deepEqual(posts[1],posts[0]);checks.push('taskcreate-'+mode+'-checked-then-exact-retry-once');}
- await page.waitForSelector('[data-task-id="new-task"]');assert.equal(statusChecks,1);assert.equal(applications,1);assert.equal(scheduleReadsAfterCommit,1);assert.equal(await page.$$eval('[data-task-id="new-task"]',nodes=>nodes.length),1);assert.ok((await text(page)).includes('Mostrando 2 de 2 tareas cargadas'));
- const createdProgress=await page.$eval('[data-task-id="new-task"]',element=>({text:element.innerText.replace(/\s+/g,' '),bars:[...element.querySelectorAll('[role="progressbar"]')].map(bar=>bar.getAttribute('aria-valuenow'))}));assert.ok(createdProgress.text.includes('Avance registrado: 0 %'));assert.deepEqual(createdProgress.bars,['0']);
- assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await context.close();
+ try{
+  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Organización de prueba sintética');await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Obra de prueba A')).click());await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mampostería');await showWorkspaceSection(page,'schedule-title');await waitLiveCurrent();assert.deepEqual(facts,initialFacts);
+  phase='draft';await click(page,'Nueva tarea');await page.type('form input:not([type="date"])','Tarea de ensayo recuperable');assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>!e.disabled)));
+  if(mode==='draft-cancel'){phase='draft-cancel';await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('form')&&[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>!b.disabled));assert.equal(posts.length,0);assert.deepEqual(facts,initialFacts);checks.push('taskcreate-draft-locks-project-and-refresh-until-explicit-cancel');writeLedger('PASS');return;}
+  phase='first-command';await click(page,'Crear tarea');await waitText(page,'La confirmación no llegó');assert.equal(posts.length,1);
+  assert.ok(!(await text(page)).includes('Reintentar la misma creación'));
+  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(b=>b.textContent==='Actualizar'||b.textContent.includes('Obra de prueba B')||b.textContent==='Planificar fechas').every(b=>b.disabled)));
+  assert.ok(await page.evaluate(()=>[...document.querySelectorAll('form input')].every(e=>e.disabled)));phase='receipt-check';await click(page,'Comprobar tarea');
+  if(mode==='uncertain'){await waitText(page,'Tarea creada y vinculada');assert.equal(posts.length,1);checks.push('taskcreate-uncertain-commit-recovers-without-second-post');}
+  else {await waitText(page,'No se observa un recibo todavía');assert.equal(posts.length,1);assert.equal(await page.$eval('form input',e=>e.value),'Tarea de ensayo recuperable');assert.ok(await page.$eval('form input',e=>e.disabled));phase='retry-command';await click(page,'Reintentar la misma creación');await waitText(page,'Tarea creada y vinculada');assert.equal(posts.length,2);assert.deepEqual(posts[1],posts[0]);checks.push('taskcreate-'+mode+'-checked-then-exact-retry-once');}
+  await bounded(readbackReady,'TASK_CREATE_RECEIPT_READBACK_NOT_DISPATCHED');assert.equal(readbackReads,1);assert.equal(liveReads,0);assert.equal(scheduleReadsAfterCommit,1);assert.equal(heldReadback.fact.responseStatus,null);
+  phase='post-readback-live';const canonical=heldReadback;heldReadback=null;await respond(canonical);await waitText(page,'Cronograma actualizado desde los registros de la obra.');await page.waitForSelector('[data-task-id="new-task"]');await bounded(liveReady,'TASK_CREATE_POST_READBACK_LIVE_NOT_DISPATCHED');assert.equal(heldLive.fact.responseStatus,null);
+  assert.equal(await page.evaluate(()=>[...document.querySelectorAll('[data-worksite-live-refresh="CONSULTING"]')].some(node=>node.getClientRects().length)),true,'The second project GET must be held while the visible live controller is consulting');
+  phase='live-response';const live=heldLive;heldLive=null;await respond(live);await waitLiveCurrent();await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:15000});phase='settled';
+  await page.waitForSelector('[data-task-id="new-task"]');assert.equal(statusChecks,1);assert.equal(applications,1);assert.equal(readbackReads,1);assert.equal(liveReads,1);assert.equal(scheduleReadsAfterCommit,2);assert.equal(await page.$$eval('[data-task-id="new-task"]',nodes=>nodes.length),1);assert.ok((await text(page)).includes('Mostrando 2 de 2 tareas cargadas'));
+  const expectedFacts=[...initialFacts,expectedFact('first-command','/api/identity/task-creation','POST','',mode==='not-arrived'?'ABORTED':503),expectedFact('receipt-check','/api/identity/task-creation','GET',new URLSearchParams({projectId:'p-a',scope,operationId:posts[0].operationId}).toString(),200),...(mode==='uncertain'?[]:[expectedFact('retry-command','/api/identity/task-creation','POST','',200)]),expectedFact('receipt-readback','/api/identity/workspace','GET',projectQuery,200),expectedFact('post-readback-live','/api/identity/workspace','GET',projectQuery,200)];assert.deepEqual(facts,expectedFacts,'Every original command, receipt query, canonical readback and later live GET must match its complete phase ledger');
+  const createdProgress=await page.$eval('[data-task-id="new-task"]',element=>({text:element.innerText.replace(/\s+/g,' '),bars:[...element.querySelectorAll('[role="progressbar"]')].map(bar=>bar.getAttribute('aria-valuenow'))}));assert.ok(createdProgress.text.includes('Avance registrado: 0 %'));assert.deepEqual(createdProgress.bars,['0']);
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));writeLedger('PASS');
+ }catch(error){error.workspaceUiDiagnostic={mode:'taskcreate-'+mode,width:390,phase,facts,posts:posts.length,applications,statusChecks,scheduleReadsAfterCommit,readbackReads,liveReads};writeLedger('FAIL',error);await page.screenshot({path:path.join(evidence,'workspace-taskcreate-'+mode+'-failure-390.png'),fullPage:true}).catch(()=>{});throw error;}
+ finally{for(const held of [heldReadback,heldLive])if(held&&!held.request.isInterceptResolutionHandled())await held.request.abort().catch(()=>{});await context.close();}
 }
 // These directors have no owned participant identity. Match reviewAccess()'s
 // producer preimage; task/proposal/schedule revisions do not rotate authority.

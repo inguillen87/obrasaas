@@ -15,6 +15,7 @@ import {verifyWorkspaceContinuityCurrentSources} from '../scripts/lib/workspace-
 import {verifyDocumentTaskAssociationCurrentSources} from '../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
 import {materialReviewCurrentSourcePin} from '../scripts/lib/material-review-current-ci-lineage.mjs';
 import {participantPreanalysisConsumerValidationFiles,participantPreanalysisConsumerSourceFiles} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
+import {restoreWeeklyCypConsumerSourceSet} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 
 const root=path.resolve(fileURLToPath(new URL('../',import.meta.url)));
 const contractPath=path.join(root,'.github/workspace-acceptance-contract.json');
@@ -101,7 +102,8 @@ test('the actual integrated source verifier preserves the frozen copier oracle b
  const files=participantPreanalysisConsumerValidationFiles(contract);
  for(const file of [...budget.planBudgetValidationFiles(contract),...waLineage.whatsappFieldContinuityValidationFiles(contract)])assert.ok(files.includes(file),file);
  const uiFamily=contract.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family==='CONSUMPTION_FEEDBACK_UI'),waDelta=waValue.sourceSetDeltas.find(row=>row.family==='CONSUMPTION_FEEDBACK_UI');
- const uiPrevious=waLineage.restoreWhatsappFieldContinuitySourceSet('CONSUMPTION_FEEDBACK_UI',uiFamily.currentFiles,contract);
+ assert.throws(()=>waLineage.restoreWhatsappFieldContinuitySourceSet('CONSUMPTION_FEEDBACK_UI',uiFamily.currentFiles,contract),{code:'WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'});
+ const uiPrevious=waLineage.restoreWhatsappFieldContinuitySourceSet('CONSUMPTION_FEEDBACK_UI',restoreWeeklyCypConsumerSourceSet('CONSUMPTION_FEEDBACK_UI',uiFamily.currentFiles,contract),contract);
  assert.equal(uiPrevious.length,waDelta.previousCount);assert.equal(sha(JSON.stringify(uiPrevious)),waDelta.previousPathsSha256);
  const compact=contract.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family==='COMPACT'),preDelta=contract.participantPreanalysisCurrentRevision.consumerSourceDeltas.find(row=>row.family==='COMPACT');
  const priorCompact=participantPreanalysisConsumerSourceFiles('COMPACT',compact.currentFiles,read);
