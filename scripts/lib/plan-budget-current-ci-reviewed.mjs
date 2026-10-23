@@ -137,7 +137,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/verify-workspace-ui.mjs",
       "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-      "currentSha256": "f11906a432d7f33bbbda7043423e196a42b230f96b0355c8d001e0f889a5590a"
+      "currentSha256": "47a5d2ef1df1f15837ed4359d8f7d7d2568524a642392ced7943e4e27056ed0c"
     },
     {
       "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -657,7 +657,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/verify-participants-ui.mjs",
       "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-      "currentSha256": "f5fc8d4aa4cbcac08690ecb4bca6b311a1812b10b3423056bb7d823e71e45ec0"
+      "currentSha256": "16c8b3a61abe0f4a7497912bb26c4571f1884417c276ad15e2bb1e7395ea6cc0"
     },
     {
       "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -25796,7 +25796,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "scripts/verify-participants-ui.mjs",
         "previousSha256": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-        "currentSha256": "f5fc8d4aa4cbcac08690ecb4bca6b311a1812b10b3423056bb7d823e71e45ec0"
+        "currentSha256": "16c8b3a61abe0f4a7497912bb26c4571f1884417c276ad15e2bb1e7395ea6cc0"
       },
       {
         "path": "scripts/verify-plan-import-boundary.mjs",
@@ -25806,7 +25806,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "scripts/verify-workspace-ui.mjs",
         "previousSha256": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
-        "currentSha256": "f11906a432d7f33bbbda7043423e196a42b230f96b0355c8d001e0f889a5590a"
+        "currentSha256": "47a5d2ef1df1f15837ed4359d8f7d7d2568524a642392ced7943e4e27056ed0c"
       },
       {
         "path": "src/app/(identity)/cuenta/kyc-photo-preparation.js",
@@ -27479,39 +27479,49 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "scripts/verify-participants-ui.mjs",
         "status": "MODIFIED",
         "previousSha256": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-        "currentSha256": "f5fc8d4aa4cbcac08690ecb4bca6b311a1812b10b3423056bb7d823e71e45ec0",
+        "currentSha256": "16c8b3a61abe0f4a7497912bb26c4571f1884417c276ad15e2bb1e7395ea6cc0",
         "previousBytes": 124573,
-        "currentBytes": 126240,
+        "currentBytes": 126770,
         "inverseHunks": [
           {
-            "currentOffsetCharacters": 2840,
-            "currentText": "','self",
+            "currentOffsetCharacters": 1677,
+            "currentText": "const reviewRefreshModes=['review-new-submission','review-conflict-new-submission','review-conflict-same-submission','review-conflict-refresh-503'];\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 4141,
+            "currentOffsetCharacters": 2812,
+            "currentText": "reviewRefreshModes.includes(focusedScenario)||accountModes.includes(focusedScenario)||backModes.includes(focusedScenario)||unsentTokenModes.includes(focusedScenario)||nextStepModes.includes(focusedScenario)||['office','self",
+            "previousText": "accountModes.includes(focusedScenario)||backModes.includes(focusedScenario)||unsentTokenModes.includes(focusedScenario)||nextStepModes.includes(focusedScenario)||['office"
+          },
+          {
+            "currentOffsetCharacters": 4336,
             "currentText": "kyc-image-quality.mjs','",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 7657,
+            "currentOffsetCharacters": 7852,
             "currentText": "active={true} ",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 9020,
+            "currentOffsetCharacters": 9215,
             "currentText": "Path=path.join(fixture,'synthetic.png'),undersizedPath=path.join(fixture,'undersized.png');let picture",
             "previousText": "=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==','base64'),picturePath=path.join(fixture,'synthetic.png');writeFileSync(picturePath,picture)"
           },
           {
-            "currentOffsetCharacters": 75012,
+            "currentOffsetCharacters": 67000,
+            "currentText": "// These review cases start from the automatic consultation; a second initial GET would advance their controlled refresh phases.\n if(reviewRefreshModes.includes(mode)){await wait(page,'Persona de ensayo');assert.equal(reads,1,'Review refresh starts from one automatic consultation');}else ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 75496,
             "currentText": "ssert.equal(await frontInput.evaluate(input=>input.disabled),false,'The visible identity screen must own an active capture input');await frontInput.uploadFile(undersizedPath);await wait(page,'La imagen es demasiado pequeña.');assert.equal(await page.$('fieldset[aria-label=\"Frente del documento\"] img'),null,'An undersized image must never become an acceptable preview');assert.equal(posts.length,0,'A rejected local image must not post identity data');a",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 118661,
-            "currentText": "// Real browser pixels must satisfy the same local exposure, detail and size checks as a selected file.\n // This deterministic fixture makes no claim to contain a document, a face or a verified identity.\n const maker=await browser.newPage();try{\n  const images=await maker.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=480;canvas.height=320;const context=canvas.getContext('2d'),pixels=context.createImageData(480,320);let seed=41;for(let index=0;index<pixels.data.length;index+=4){for(let channel=0;channel<3;channel++){seed=(seed*1664525+1013904223)>>>0;pixels.data[index+channel]=seed>>>24;}pixels.data[index+3]=255;}context.putImageData(pixels,0,0);const valid=canvas.toDataURL('image/png').split(',')[1];canvas.width=1;canvas.height=1;context.fillStyle='#888';context.fillRect(0,0,1,1);return{valid,undersized:canvas.toDataURL('image/png').split(',')[1]};});\n  picture=Buffer.from(images.valid,'base64');assert.ok(picture.length<1024*1024,'The readable fixture must preserve its original PNG bytes');assert.equal(picture.readUInt32BE(16),480);assert.equal(picture.readUInt32BE(20),320);writeFileSync(picturePath,picture);writeFileSync(undersizedPath,Buffer.from(images.undersized,'base64'));\n }finally{await maker.close();}\n if(focusedScenario){for(const width of selectedWidths)await (nextStepModes.includes(focusedScenario)?nextStepScenario(width,focusedScenario):['office','self",
-            "previousText": "if(focusedScenario){for(const width of selectedWidths)await (nextStepModes.includes(focusedScenario)?nextStepScenario(width,focusedScenario):['office"
+            "currentOffsetCharacters": 119145,
+            "currentText": "// Real browser pixels must satisfy the same local exposure, detail and size checks as a selected file.\n // This deterministic fixture makes no claim to contain a document, a face or a verified identity.\n const maker=await browser.newPage();try{\n  const images=await maker.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=480;canvas.height=320;const context=canvas.getContext('2d'),pixels=context.createImageData(480,320);let seed=41;for(let index=0;index<pixels.data.length;index+=4){for(let channel=0;channel<3;channel++){seed=(seed*1664525+1013904223)>>>0;pixels.data[index+channel]=seed>>>24;}pixels.data[index+3]=255;}context.putImageData(pixels,0,0);const valid=canvas.toDataURL('image/png').split(',')[1];canvas.width=1;canvas.height=1;context.fillStyle='#888';context.fillRect(0,0,1,1);return{valid,undersized:canvas.toDataURL('image/png').split(',')[1]};});\n  picture=Buffer.from(images.valid,'base64');assert.ok(picture.length<1024*1024,'The readable fixture must preserve its original PNG bytes');assert.equal(picture.readUInt32BE(16),480);assert.equal(picture.readUInt32BE(20),320);writeFileSync(picturePath,picture);writeFileSync(undersizedPath,Buffer.from(images.undersized,'base64'));\n }finally{await maker.close();}\n if(focusedScenario){for(const width of selectedWidths)await (nextStepModes.includes(focusedScenario)?nextStepScenario(width,focusedScenario):['office','self','self-attendance-conflict'].includes(focusedScenario)?scenario(width,focusedScenario):backModes.includes(focusedScenario)?documentBackScenario(width,focusedScenario):accountModes.includes(focusedScenario)?accountDiscoveryScenario(width,focusedScenario):safetyModes.includes(focusedScenario)?safetyScenario(width,focusedScenario):revisionModes.includes(focusedScenario)||reviewRefresh",
+            "previousText": "if(focusedScenario){for(const width of selectedWidths)await (nextStepModes.includes(focusedScenario)?nextStepScenario(width,focusedScenario):['office','self-attendance-conflict'].includes(focusedScenario)?scenario(width,focusedScenario):backModes.includes(focusedScenario)?documentBackScenario(width,focusedScenario):accountModes.includes(focusedScenario)?accountDiscoveryScenario(width,focusedScenario):safetyModes.includes(focusedScenario)?safetyScenario(width,focusedScenario):revision"
           }
         ]
       },
@@ -27594,32 +27604,97 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "scripts/verify-workspace-ui.mjs",
         "status": "MODIFIED",
         "previousSha256": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
-        "currentSha256": "f11906a432d7f33bbbda7043423e196a42b230f96b0355c8d001e0f889a5590a",
+        "currentSha256": "47a5d2ef1df1f15837ed4359d8f7d7d2568524a642392ced7943e4e27056ed0c",
         "previousBytes": 182645,
-        "currentBytes": 183871,
+        "currentBytes": 187763,
         "inverseHunks": [
           {
-            "currentOffsetCharacters": 167666,
+            "currentOffsetCharacters": 67152,
+            "currentText": " const requestFacts=rows=>rows.map(({method,path,query})=>({method,path,query}));\n const projectRead=(projectId,cursor=null)=>({method:'GET',path:'/api/identity/workspace',query:'?'+new URLSearchParams({projectId,scope,...(cursor?{afterTask:cursor}:{})})});\n // This rendering fixture intentionally includes malformed progress, short\n // pages and incomplete canonical metadata. Live refresh must reject it\n // without replacing the loaded tasks or accepting its invalid protocol.\n const waitLiveRejection=async()=>{await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});assert.match(await page.$eval('[data-worksite-live-refresh]',element=>element.innerText),/No pudimos actualizar esta consulta\\. Conservamos los datos/);};\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 68290,
+            "currentText": "phase,",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 70773,
+            "currentText": "await waitLiveRejection();\n  assert.deepEqual(requestFacts(requests),[{method:'GET',path:'/api/identity/workspace',query:''},projectRead('p-a'),projectRead('p-a')],'Opening the project includes its one eligible live read');\n  const initialRequests=requests.length;let localRequestBaseline=initialRequests;\n  const assertLocalControls=()=>{assert.equal(requests.length,localRequestBaseline",
+            "previousText": "const initialRequests=requests.length;\n  const assertLocalControls=()=>{assert.equal(requests.length,initialRequests"
+          },
+          {
+            "currentOffsetCharacters": 81774,
+            "currentText": "\n  phase='draft-cancel-live-resume';const beforeCancel=requests.length;await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('#schedule-edit-title'));await waitLiveRejection();\n  assert.deepEqual(requestFacts(requests.slice(beforeCancel)),[projectRead('p-a')],'Cancelling the draft resumes one canonical live eligibility read');assert.equal(posts.length,0);localRequestBaseline=requests.length",
+            "previousText": "await click(page,'Cancelar');await page.waitForFunction(()=>!document.querySelector('#schedule-edit-title'))"
+          },
+          {
+            "currentOffsetCharacters": 82546,
+            "currentText": "const beforePagination=requests.length;await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitWorkbenchTasks(page,['wb-page-two-match','wb-mamp-a']);\n  // The new generation rechecks the retained pages. Its first response is\n  // deliberately invalid for the canonical live-page protocol, so it must\n  // stop there and leave the explicitly merged task unchanged.\n  await waitLiveRejection();const paginationRequests=requests.slice(beforePagination);\n  assert.deepEqual(requestFacts(paginationRequests),[projectRead('p-a','controlled-page-2'),projectRead('p-a')],'One explicit append plus one rejected canonical live read');\n  assert.equal(new URL(origin+paginationRequests[0].path+paginationRequests[0].query).searchParams.get('afterTask'),'controlled-page-2');assert.equal(posts.length,0);\n  const afterPagination=requests.length",
+            "previousText": "await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitWorkbenchTasks(page,['wb-page-two-match','wb-mamp-a']);\n  assert.equal(requests.length,initialRequests+1);assert.equal(new URL(origin+requests.at(-1).path+requests.at(-1).query).searchParams.get('afterTask'),'controlled-page-2');assert.equal(posts.length,0)"
+          },
+          {
+            "currentOffsetCharacters": 84244,
+            "currentText": "afterPagination",
+            "previousText": "initialRequests+1"
+          },
+          {
+            "currentOffsetCharacters": 84585,
+            "currentText": "const beforeProject=requests.length;await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba B')).click());await waitWorkbenchTasks(page,['wb-project-b']);await waitLiveRejection();\n  assert.deepEqual(requestFacts(requests.slice(beforeProject)),[projectRead('p-b'),projectRead('p-b')],'Project selection and its one eligible live read stay in the new project'",
+            "previousText": "await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba B')).click());await waitWorkbenchTasks(page,['wb-project-b']);\n  assert.equal(requests.length,initialRequests+2"
+          },
+          {
+            "currentOffsetCharacters": 86996,
+            "currentText": "  writeFileSync(path.join(evidence,'workspace-workbench-requests-'+width+'.json'),JSON.stringify({width,initialRequests,requests,posts:posts.length,canonicalLiveFixtureRejected:true},null,2));\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 139633,
+            "currentText": " let phase='initial-load';\n const waitLiveRejection=async()=>{await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});assert.match(await page.$eval('[data-worksite-live-refresh]',element=>element.innerText),/No pudimos actualizar esta consulta\\. Conservamos los datos/);};\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 140540,
+            "currentText": "phase,",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 142661,
+            "currentText": "waitLiveRejection();const projectQuery='?'+new URLSearchParams({projectId:'p-a',scope});\n  assert.deepEqual(requests,[{phase:'initial-load',method:'GET',query:''},{phase:'initial-load',method:'GET',query:projectQuery},{phase:'initial-load',method:'GET',query:projectQuery}],'The initial synthetic project read includes one rejected live validation');\n  phase='held-pagination';await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await paginationStarted;await showWorkspaceSection(page,'schedule-title');await fill(page);\n  phase='confirm-newer-schedule';await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);\n  phase='late-page-return'",
+            "previousText": "showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await paginationStarted;await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1)"
+          },
+          {
+            "currentOffsetCharacters": 144366,
+            "currentText": "wait waitLiveRejection();\n  assert.deepEqual(requests.filter(request=>request.method==='GET'),[{phase:'initial-load',method:'GET',query:''},{phase:'initial-load',method:'GET',query:projectQuery},{phase:'initial-load',method:'GET',query:projectQuery},{phase:'held-pagination',method:'GET',query:projectQuery+'&afterTask=held-page'},{phase:'late-page-return',method:'GET',query:projectQuery}],'The late append and rejected live validation must stay in the exact project and phases');\n  writeFileSync(path.join(evidence,'workspace-workbench-stale-page-requests-390.json'),JSON.stringify({requests,postCount:posts.length,confirmedDatesRetained:true,receiptRetained:true},null,2)",
+            "previousText": "ssert.equal(requests.filter(request=>request.method==='GET').length,3"
+          },
+          {
+            "currentOffsetCharacters": 145478,
+            "currentText": "writeFileSync(path.join(evidence,'workspace-workbench-stale-page-failure-390.json'),JSON.stringify({phase,message:error.message,requests,postCount:posts.length},null,2));",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 171558,
             "currentText": ",phase='prepare'",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 168580,
+            "currentOffsetCharacters": 172472,
             "currentText": ",phase",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 172276,
+            "currentOffsetCharacters": 176168,
             "currentText": "  phase='race';\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 173595,
+            "currentOffsetCharacters": 177487,
             "currentText": "  phase='denied';\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 176195,
+            "currentOffsetCharacters": 180087,
             "currentText": "// Live refresh may already have made another authorized read of project A.\n  // Fence the denial and explicit refresh instead of assuming a global total.\n  const afterDenial=requests.filter(row=>row.phase==='denied'&&row.method==='GET');assert.deepEqual(afterDenial,[],'A denied account must not automatically read projects, channels or refresh itself');\n  const selectedProjectReads=requests.filter(row=>row.path==='/api/identity/workspace'&&new URLSearchParams(row.query).get('projectId')==='p-b');assert.equal(selectedProjectReads.length,action==='project'?1:0,'The concurrent project selection must dispatch exactly once');\n  phase='refresh';await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);\n  const refreshReads=requests.filter(row=>row.phase==='refresh'&&row.method==='GET');assert.deepEqual(refreshReads.map(row=>({method:row.method,path:row.path,query:row.query})),[{method:'GET',path:'/api/identity/workspace',query:''}],'Explicit account refresh must not re-open an old project or channel');\n  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n  checks.push({mode,width,denial,format,action,posts:posts.length,projectReads,selectedProjectReads:selectedProjectReads.length,readsAfterDenial:afterDenial.length,explicitAccountRefreshes:refreshReads.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});\n }catch(error){error.workspaceUiDiagnostic={mode,width,denial,format,action,phase,workspaceReads,projectReads,posts:posts.length,requests};",
             "previousText": "await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);\n  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(projectReads,action==='project'?2:1);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n  checks.push({mode,width,denial,format,action,posts:posts.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});\n }catch(error){"
           }
@@ -35404,7 +35479,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "pointer": "/planBudgetCurrentRevision/references/129/currentSha256",
         "previous": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-        "current": "f5fc8d4aa4cbcac08690ecb4bca6b311a1812b10b3423056bb7d823e71e45ec0"
+        "current": "16c8b3a61abe0f4a7497912bb26c4571f1884417c276ad15e2bb1e7395ea6cc0"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/22/currentSha256",
@@ -35414,7 +35489,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "pointer": "/planBudgetCurrentRevision/references/25/currentSha256",
         "previous": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
-        "current": "f11906a432d7f33bbbda7043423e196a42b230f96b0355c8d001e0f889a5590a"
+        "current": "47a5d2ef1df1f15837ed4359d8f7d7d2568524a642392ced7943e4e27056ed0c"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/132/currentSha256",
@@ -35697,7 +35772,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-workspace-ui.mjs",
             "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-            "currentSha256": "f11906a432d7f33bbbda7043423e196a42b230f96b0355c8d001e0f889a5590a"
+            "currentSha256": "47a5d2ef1df1f15837ed4359d8f7d7d2568524a642392ced7943e4e27056ed0c"
           },
           {
             "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -36217,7 +36292,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-participants-ui.mjs",
             "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-            "currentSha256": "f5fc8d4aa4cbcac08690ecb4bca6b311a1812b10b3423056bb7d823e71e45ec0"
+            "currentSha256": "16c8b3a61abe0f4a7497912bb26c4571f1884417c276ad15e2bb1e7395ea6cc0"
           },
           {
             "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -36419,7 +36494,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-workspace-ui.mjs",
             "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-            "currentSha256": "f11906a432d7f33bbbda7043423e196a42b230f96b0355c8d001e0f889a5590a"
+            "currentSha256": "47a5d2ef1df1f15837ed4359d8f7d7d2568524a642392ced7943e4e27056ed0c"
           },
           {
             "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -36939,7 +37014,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-participants-ui.mjs",
             "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-            "currentSha256": "f5fc8d4aa4cbcac08690ecb4bca6b311a1812b10b3423056bb7d823e71e45ec0"
+            "currentSha256": "16c8b3a61abe0f4a7497912bb26c4571f1884417c276ad15e2bb1e7395ea6cc0"
           },
           {
             "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
