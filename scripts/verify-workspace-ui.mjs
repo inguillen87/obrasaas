@@ -582,6 +582,19 @@ async function workbenchScenario(width){
 async function ganttVolumeScenario(width){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000,hasTouch:width<768});
  const mode='gantt-volume',requests=[],posts=[];page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
+ const projectRead=(cursor=null)=>({method:'GET',path:'/api/identity/workspace',query:'?'+new URLSearchParams({projectId:'p-a',scope,...(cursor?{afterTask:cursor}:{})})});
+ const expectedRequests=[{method:'GET',path:'/api/identity/workspace',query:''},projectRead(),projectRead(),projectRead('volume-page-2'),projectRead(),projectRead('volume-page-3'),projectRead()];
+ // This rendering fixture is deliberately incomplete for the canonical live
+ // protocol. Each new page resumes one live read, which must reject it and
+ // preserve the explicitly loaded rows rather than promote it to CURRENT.
+ const waitLiveRejection=async expectedCount=>{
+  await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});
+  assert.match(await page.$eval('[data-worksite-live-refresh]',element=>element.innerText),/No pudimos actualizar esta consulta\. Conservamos los datos/);
+  await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:15000});
+  assert.equal(await page.$eval('[data-worksite-live-refresh]',element=>element.dataset.worksiteLiveRefresh),'STALE');
+  assert.match(await page.$eval('[data-worksite-live-refresh]',element=>element.innerText),/No pudimos actualizar esta consulta\. Conservamos los datos/);
+  assert.deepEqual(requests,expectedRequests.slice(0,expectedCount));assert.equal(posts.length,0);
+ };
  const tasks=Array.from({length:240},(_,index)=>({...baseTask(),id:'volume-'+String(index).padStart(3,'0'),title:'Partida revisada '+(index+1),progress:index%101,startsOn:'2000-01-01',endsOn:'2100-12-31'}));
  await page.setRequestInterception(true);
  page.on('request',async request=>{
@@ -605,10 +618,10 @@ async function ganttVolumeScenario(width){
  try{
   await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de volumen sintético');
   await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());
-  await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mostrando 100 de 100 tareas cargadas');
-  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 200 de 200 tareas cargadas');
-  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 240 de 240 tareas cargadas');
-  assert.equal(requests.length,4);assert.equal(posts.length,0);
+  await showWorkspaceSection(page,'schedule-title');await waitText(page,'Mostrando 100 de 100 tareas cargadas');await waitLiveRejection(3);
+  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 200 de 200 tareas cargadas');await waitLiveRejection(5);
+  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 240 de 240 tareas cargadas');await waitLiveRejection(7);
+  assert.deepEqual(requests,expectedRequests);assert.equal(posts.length,0);
   assert.equal(await page.$$eval('[data-gantt-task-id]',elements=>elements.length),240);
   assert.equal(await page.$$eval('[data-task-id]',elements=>elements.length),240);
   assert.match(await page.$eval('[data-schedule-gantt]',element=>element.innerText),/Vista parcial: sólo tareas cargadas/);
@@ -631,7 +644,8 @@ async function ganttVolumeScenario(width){
   const last=await page.$eval('[data-gantt-task-id="volume-239"]',element=>({bottom:element.getBoundingClientRect().bottom,top:element.closest('[data-gantt-scroll]').getBoundingClientRect().top,height:element.closest('[data-gantt-scroll]').clientHeight}));
   assert.ok(last.bottom<=last.top+last.height+2);
   await (await page.$('[data-schedule-gantt]')).screenshot({path:path.join(evidence,'workspace-gantt-volume-'+width+'.png')});
-  assert.equal(requests.length,4);assert.equal(posts.length,0);
+  await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:15000});
+  assert.deepEqual(requests,expectedRequests,'Gantt zoom, interval and scroll controls must not make additional requests');assert.equal(posts.length,0);
   checks.push('gantt-240-paginated-rows-century-bounded-axis-all-zooms-contained-scroll-partial-readonly-'+width);
  }catch(error){await page.screenshot({path:path.join(evidence,'workspace-gantt-volume-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}
  finally{await context.close();}

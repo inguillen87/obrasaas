@@ -137,7 +137,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/verify-workspace-ui.mjs",
       "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-      "currentSha256": "47a5d2ef1df1f15837ed4359d8f7d7d2568524a642392ced7943e4e27056ed0c"
+      "currentSha256": "093e8e218b6f6a67ed3b23fea20cc1774bbb8be67f0bcbb35b832f7cf2720294"
     },
     {
       "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -657,7 +657,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/verify-participants-ui.mjs",
       "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-      "currentSha256": "16c8b3a61abe0f4a7497912bb26c4571f1884417c276ad15e2bb1e7395ea6cc0"
+      "currentSha256": "5d9a2b3b603eb104d6ffc50ce6fb4680f2f8ecd889cdd1d08d4cf244a385efff"
     },
     {
       "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -25796,7 +25796,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "scripts/verify-participants-ui.mjs",
         "previousSha256": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-        "currentSha256": "16c8b3a61abe0f4a7497912bb26c4571f1884417c276ad15e2bb1e7395ea6cc0"
+        "currentSha256": "5d9a2b3b603eb104d6ffc50ce6fb4680f2f8ecd889cdd1d08d4cf244a385efff"
       },
       {
         "path": "scripts/verify-plan-import-boundary.mjs",
@@ -25806,7 +25806,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "scripts/verify-workspace-ui.mjs",
         "previousSha256": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
-        "currentSha256": "47a5d2ef1df1f15837ed4359d8f7d7d2568524a642392ced7943e4e27056ed0c"
+        "currentSha256": "093e8e218b6f6a67ed3b23fea20cc1774bbb8be67f0bcbb35b832f7cf2720294"
       },
       {
         "path": "src/app/(identity)/cuenta/kyc-photo-preparation.js",
@@ -27589,9 +27589,9 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "scripts/verify-participants-ui.mjs",
         "status": "MODIFIED",
         "previousSha256": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-        "currentSha256": "16c8b3a61abe0f4a7497912bb26c4571f1884417c276ad15e2bb1e7395ea6cc0",
+        "currentSha256": "5d9a2b3b603eb104d6ffc50ce6fb4680f2f8ecd889cdd1d08d4cf244a385efff",
         "previousBytes": 124573,
-        "currentBytes": 126770,
+        "currentBytes": 127299,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 1677,
@@ -27629,7 +27629,22 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 119145,
+            "currentOffsetCharacters": 101872,
+            "currentText": " async function selectProfile(workerId){\n  await page.waitForFunction(id=>{const select=[...document.querySelectorAll('select')].find(el=>el.labels?.[0]?.textContent.includes('Perfil de esta obra'));return Boolean(select&&!select.disabled&&[...select.options].some(option=>option.value===id&&!option.disabled));},{timeout:15000},workerId);\n  const handle=await page.evaluateHandle(()=>[...document.querySelectorAll('select')].find(el=>el.labels?.[0]?.textContent.includes('Perfil de esta obra')));\n  try{\n   assert.equal(await handle.evaluate(select=>select.checkVisibility()&&!select.disabled),true,'Changing profile must use a visible enabled selector');\n   assert.deepEqual(await handle.asElement().select(workerId),[workerId]);\n  }finally{await handle.dispose();}\n  await page.waitForFunction(id=>document.querySelector('[data-participant-profile]')?.dataset.participantProfile===id,{timeout:15000},workerId);\n }\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 106927,
+            "currentText": "selectProfile(other.id",
+            "previousText": "page.evaluate(()=>{const el=[...document.querySelectorAll('select')].find(e=>e.labels?.[0]?.textContent.includes('Perfil de esta obra'));el.value='worker-second';el.dispatchEvent(new Event('change',{bubbles:true}));}"
+          },
+          {
+            "currentOffsetCharacters": 108250,
+            "currentText": "selectProfile(other.id",
+            "previousText": "page.evaluate(()=>{const el=[...document.querySelectorAll('select')].find(e=>e.labels?.[0]?.textContent.includes('Perfil de esta obra'));el.value='worker-second';el.dispatchEvent(new Event('change',{bubbles:true}));}"
+          },
+          {
+            "currentOffsetCharacters": 119674,
             "currentText": "// Real browser pixels must satisfy the same local exposure, detail and size checks as a selected file.\n // This deterministic fixture makes no claim to contain a document, a face or a verified identity.\n const maker=await browser.newPage();try{\n  const images=await maker.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=480;canvas.height=320;const context=canvas.getContext('2d'),pixels=context.createImageData(480,320);let seed=41;for(let index=0;index<pixels.data.length;index+=4){for(let channel=0;channel<3;channel++){seed=(seed*1664525+1013904223)>>>0;pixels.data[index+channel]=seed>>>24;}pixels.data[index+3]=255;}context.putImageData(pixels,0,0);const valid=canvas.toDataURL('image/png').split(',')[1];canvas.width=1;canvas.height=1;context.fillStyle='#888';context.fillRect(0,0,1,1);return{valid,undersized:canvas.toDataURL('image/png').split(',')[1]};});\n  picture=Buffer.from(images.valid,'base64');assert.ok(picture.length<1024*1024,'The readable fixture must preserve its original PNG bytes');assert.equal(picture.readUInt32BE(16),480);assert.equal(picture.readUInt32BE(20),320);writeFileSync(picturePath,picture);writeFileSync(undersizedPath,Buffer.from(images.undersized,'base64'));\n }finally{await maker.close();}\n if(focusedScenario){for(const width of selectedWidths)await (nextStepModes.includes(focusedScenario)?nextStepScenario(width,focusedScenario):['office','self','self-attendance-conflict'].includes(focusedScenario)?scenario(width,focusedScenario):backModes.includes(focusedScenario)?documentBackScenario(width,focusedScenario):accountModes.includes(focusedScenario)?accountDiscoveryScenario(width,focusedScenario):safetyModes.includes(focusedScenario)?safetyScenario(width,focusedScenario):revisionModes.includes(focusedScenario)||reviewRefresh",
             "previousText": "if(focusedScenario){for(const width of selectedWidths)await (nextStepModes.includes(focusedScenario)?nextStepScenario(width,focusedScenario):['office','self-attendance-conflict'].includes(focusedScenario)?scenario(width,focusedScenario):backModes.includes(focusedScenario)?documentBackScenario(width,focusedScenario):accountModes.includes(focusedScenario)?accountDiscoveryScenario(width,focusedScenario):safetyModes.includes(focusedScenario)?safetyScenario(width,focusedScenario):revision"
           }
@@ -27714,9 +27729,9 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "scripts/verify-workspace-ui.mjs",
         "status": "MODIFIED",
         "previousSha256": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
-        "currentSha256": "47a5d2ef1df1f15837ed4359d8f7d7d2568524a642392ced7943e4e27056ed0c",
+        "currentSha256": "093e8e218b6f6a67ed3b23fea20cc1774bbb8be67f0bcbb35b832f7cf2720294",
         "previousBytes": 182645,
-        "currentBytes": 187763,
+        "currentBytes": 189420,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 67152,
@@ -27759,52 +27774,67 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 139633,
+            "currentOffsetCharacters": 87924,
+            "currentText": " const projectRead=(cursor=null)=>({method:'GET',path:'/api/identity/workspace',query:'?'+new URLSearchParams({projectId:'p-a',scope,...(cursor?{afterTask:cursor}:{})})});\n const expectedRequests=[{method:'GET',path:'/api/identity/workspace',query:''},projectRead(),projectRead(),projectRead('volume-page-2'),projectRead(),projectRead('volume-page-3'),projectRead()];\n // This rendering fixture is deliberately incomplete for the canonical live\n // protocol. Each new page resumes one live read, which must reject it and\n // preserve the explicitly loaded rows rather than promote it to CURRENT.\n const waitLiveRejection=async expectedCount=>{\n  await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});\n  assert.match(await page.$eval('[data-worksite-live-refresh]',element=>element.innerText),/No pudimos actualizar esta consulta\\. Conservamos los datos/);\n  await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:15000});\n  assert.equal(await page.$eval('[data-worksite-live-refresh]',element=>element.dataset.worksiteLiveRefresh),'STALE');\n  assert.match(await page.$eval('[data-worksite-live-refresh]',element=>element.innerText),/No pudimos actualizar esta consulta\\. Conservamos los datos/);\n  assert.deepEqual(requests,expectedRequests.slice(0,expectedCount));assert.equal(posts.length,0);\n };\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 91601,
+            "currentText": "await waitLiveRejection(3);\n  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 200 de 200 tareas cargadas');await waitLiveRejection(5);\n  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 240 de 240 tareas cargadas');await waitLiveRejection(7);\n  assert.deepEqual(requests,expectedRequests",
+            "previousText": "\n  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 200 de 200 tareas cargadas');\n  await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await waitText(page,'Mostrando 240 de 240 tareas cargadas');\n  assert.equal(requests.length,4"
+          },
+          {
+            "currentOffsetCharacters": 94605,
+            "currentText": "wait page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:15000});\n  assert.deepEqual(requests,expectedRequests,'Gantt zoom, interval and scroll controls must not make additional requests'",
+            "previousText": "ssert.equal(requests.length,4"
+          },
+          {
+            "currentOffsetCharacters": 141290,
             "currentText": " let phase='initial-load';\n const waitLiveRejection=async()=>{await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});assert.match(await page.$eval('[data-worksite-live-refresh]',element=>element.innerText),/No pudimos actualizar esta consulta\\. Conservamos los datos/);};\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 140540,
+            "currentOffsetCharacters": 142197,
             "currentText": "phase,",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 142661,
+            "currentOffsetCharacters": 144318,
             "currentText": "waitLiveRejection();const projectQuery='?'+new URLSearchParams({projectId:'p-a',scope});\n  assert.deepEqual(requests,[{phase:'initial-load',method:'GET',query:''},{phase:'initial-load',method:'GET',query:projectQuery},{phase:'initial-load',method:'GET',query:projectQuery}],'The initial synthetic project read includes one rejected live validation');\n  phase='held-pagination';await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await paginationStarted;await showWorkspaceSection(page,'schedule-title');await fill(page);\n  phase='confirm-newer-schedule';await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);\n  phase='late-page-return'",
             "previousText": "showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await paginationStarted;await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1)"
           },
           {
-            "currentOffsetCharacters": 144366,
+            "currentOffsetCharacters": 146023,
             "currentText": "wait waitLiveRejection();\n  assert.deepEqual(requests.filter(request=>request.method==='GET'),[{phase:'initial-load',method:'GET',query:''},{phase:'initial-load',method:'GET',query:projectQuery},{phase:'initial-load',method:'GET',query:projectQuery},{phase:'held-pagination',method:'GET',query:projectQuery+'&afterTask=held-page'},{phase:'late-page-return',method:'GET',query:projectQuery}],'The late append and rejected live validation must stay in the exact project and phases');\n  writeFileSync(path.join(evidence,'workspace-workbench-stale-page-requests-390.json'),JSON.stringify({requests,postCount:posts.length,confirmedDatesRetained:true,receiptRetained:true},null,2)",
             "previousText": "ssert.equal(requests.filter(request=>request.method==='GET').length,3"
           },
           {
-            "currentOffsetCharacters": 145478,
+            "currentOffsetCharacters": 147135,
             "currentText": "writeFileSync(path.join(evidence,'workspace-workbench-stale-page-failure-390.json'),JSON.stringify({phase,message:error.message,requests,postCount:posts.length},null,2));",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 171558,
+            "currentOffsetCharacters": 173215,
             "currentText": ",phase='prepare'",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 172472,
+            "currentOffsetCharacters": 174129,
             "currentText": ",phase",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 176168,
+            "currentOffsetCharacters": 177825,
             "currentText": "  phase='race';\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 177487,
+            "currentOffsetCharacters": 179144,
             "currentText": "  phase='denied';\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 180087,
+            "currentOffsetCharacters": 181744,
             "currentText": "// Live refresh may already have made another authorized read of project A.\n  // Fence the denial and explicit refresh instead of assuming a global total.\n  const afterDenial=requests.filter(row=>row.phase==='denied'&&row.method==='GET');assert.deepEqual(afterDenial,[],'A denied account must not automatically read projects, channels or refresh itself');\n  const selectedProjectReads=requests.filter(row=>row.path==='/api/identity/workspace'&&new URLSearchParams(row.query).get('projectId')==='p-b');assert.equal(selectedProjectReads.length,action==='project'?1:0,'The concurrent project selection must dispatch exactly once');\n  phase='refresh';await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);\n  const refreshReads=requests.filter(row=>row.phase==='refresh'&&row.method==='GET');assert.deepEqual(refreshReads.map(row=>({method:row.method,path:row.path,query:row.query})),[{method:'GET',path:'/api/identity/workspace',query:''}],'Explicit account refresh must not re-open an old project or channel');\n  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n  checks.push({mode,width,denial,format,action,posts:posts.length,projectReads,selectedProjectReads:selectedProjectReads.length,readsAfterDenial:afterDenial.length,explicitAccountRefreshes:refreshReads.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});\n }catch(error){error.workspaceUiDiagnostic={mode,width,denial,format,action,phase,workspaceReads,projectReads,posts:posts.length,requests};",
             "previousText": "await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);\n  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(projectReads,action==='project'?2:1);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n  checks.push({mode,width,denial,format,action,posts:posts.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});\n }catch(error){"
           }
@@ -35589,7 +35619,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "pointer": "/planBudgetCurrentRevision/references/129/currentSha256",
         "previous": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-        "current": "16c8b3a61abe0f4a7497912bb26c4571f1884417c276ad15e2bb1e7395ea6cc0"
+        "current": "5d9a2b3b603eb104d6ffc50ce6fb4680f2f8ecd889cdd1d08d4cf244a385efff"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/22/currentSha256",
@@ -35599,7 +35629,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "pointer": "/planBudgetCurrentRevision/references/25/currentSha256",
         "previous": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
-        "current": "47a5d2ef1df1f15837ed4359d8f7d7d2568524a642392ced7943e4e27056ed0c"
+        "current": "093e8e218b6f6a67ed3b23fea20cc1774bbb8be67f0bcbb35b832f7cf2720294"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/132/currentSha256",
@@ -35882,7 +35912,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-workspace-ui.mjs",
             "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-            "currentSha256": "47a5d2ef1df1f15837ed4359d8f7d7d2568524a642392ced7943e4e27056ed0c"
+            "currentSha256": "093e8e218b6f6a67ed3b23fea20cc1774bbb8be67f0bcbb35b832f7cf2720294"
           },
           {
             "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -36402,7 +36432,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-participants-ui.mjs",
             "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-            "currentSha256": "16c8b3a61abe0f4a7497912bb26c4571f1884417c276ad15e2bb1e7395ea6cc0"
+            "currentSha256": "5d9a2b3b603eb104d6ffc50ce6fb4680f2f8ecd889cdd1d08d4cf244a385efff"
           },
           {
             "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -36604,7 +36634,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-workspace-ui.mjs",
             "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-            "currentSha256": "47a5d2ef1df1f15837ed4359d8f7d7d2568524a642392ced7943e4e27056ed0c"
+            "currentSha256": "093e8e218b6f6a67ed3b23fea20cc1774bbb8be67f0bcbb35b832f7cf2720294"
           },
           {
             "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -37124,7 +37154,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-participants-ui.mjs",
             "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-            "currentSha256": "16c8b3a61abe0f4a7497912bb26c4571f1884417c276ad15e2bb1e7395ea6cc0"
+            "currentSha256": "5d9a2b3b603eb104d6ffc50ce6fb4680f2f8ecd889cdd1d08d4cf244a385efff"
           },
           {
             "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
