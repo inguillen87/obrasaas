@@ -122,7 +122,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/verify-plan-import-boundary.mjs",
       "previousSha256": "86518c0dda14a18d04bf20c393f32014ba7af11e76fe507b5999c4ec25d4cd84",
-      "currentSha256": "3885b3343011502123d7ec1996c8d230a630a97b8522bcca5c9b6f7a9b164c11"
+      "currentSha256": "ee03e07918424ec2e55b2934714678b3d071b17484d5995c673f9ab438c8ad3f"
     },
     {
       "path": "scripts/verify-plan-import-ui.mjs",
@@ -282,7 +282,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "src/lib/meta-customer-provider.mjs",
       "previousSha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f",
-      "currentSha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+      "currentSha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
     },
     {
       "path": "src/lib/meta-employee-intake.mjs",
@@ -1162,7 +1162,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-own-company-runtime-provider.test.mjs",
       "previousSha256": "82a0450564cd57f1927fc93ac6b73b4c2be74e136c853d751b4bbe52a6f6b034",
-      "currentSha256": "adc91c307ffdeefbcb090783c9f16d373fadaf186e8b2b516cc98da7dc89e89a"
+      "currentSha256": "b60b285e24d53a11be9aafd977df986319ab524c8fab40eb76411a70d9a8aa5d"
     },
     {
       "path": "tests/production-participant-channel-kyc.test.mjs",
@@ -5989,7 +5989,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+          "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -7076,7 +7076,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+          "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -8151,7 +8151,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+          "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -9044,7 +9044,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+          "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -9867,7 +9867,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+          "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -25599,7 +25599,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "tests/production-own-company-runtime-provider.test.mjs",
         "previousSha256": "82a0450564cd57f1927fc93ac6b73b4c2be74e136c853d751b4bbe52a6f6b034",
-        "currentSha256": "adc91c307ffdeefbcb090783c9f16d373fadaf186e8b2b516cc98da7dc89e89a"
+        "currentSha256": "b60b285e24d53a11be9aafd977df986319ab524c8fab40eb76411a70d9a8aa5d"
       },
       {
         "path": "tests/production-participant-channel-kyc.test.mjs",
@@ -25799,6 +25799,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "currentSha256": "f5fc8d4aa4cbcac08690ecb4bca6b311a1812b10b3423056bb7d823e71e45ec0"
       },
       {
+        "path": "scripts/verify-plan-import-boundary.mjs",
+        "previousSha256": "3885b3343011502123d7ec1996c8d230a630a97b8522bcca5c9b6f7a9b164c11",
+        "currentSha256": "ee03e07918424ec2e55b2934714678b3d071b17484d5995c673f9ab438c8ad3f"
+      },
+      {
         "path": "scripts/verify-workspace-ui.mjs",
         "previousSha256": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
         "currentSha256": "f11906a432d7f33bbbda7043423e196a42b230f96b0355c8d001e0f889a5590a"
@@ -25826,7 +25831,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "src/lib/meta-customer-provider.mjs",
         "previousSha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2",
-        "currentSha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+        "currentSha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
       },
       {
         "path": "src/lib/meta-kyc-conversation.mjs",
@@ -27526,6 +27531,21 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         ]
       },
       {
+        "path": "scripts/verify-plan-import-boundary.mjs",
+        "status": "MODIFIED",
+        "previousSha256": "3885b3343011502123d7ec1996c8d230a630a97b8522bcca5c9b6f7a9b164c11",
+        "currentSha256": "ee03e07918424ec2e55b2934714678b3d071b17484d5995c673f9ab438c8ad3f",
+        "previousBytes": 7567,
+        "currentBytes": 7729,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 1878,
+            "currentText": ",'organization-pilot-coverage.mjs','participant-analysis-consent.mjs','participant-kyc-preanalysis-policy.mjs','pilot-media.mjs','platform-operator-authority.mjs'",
+            "previousText": ""
+          }
+        ]
+      },
+      {
         "path": "scripts/verify-private-bank-account-postgres.mjs",
         "status": "MODIFIED",
         "previousSha256": "0a4f6010711423ac51ca3d219973789609cf864c5ca88e19a42868cd43741f88",
@@ -28049,19 +28069,29 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "src/lib/meta-customer-provider.mjs",
         "status": "MODIFIED",
         "previousSha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2",
-        "currentSha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b",
+        "currentSha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b",
         "previousBytes": 56412,
-        "currentBytes": 56506,
+        "currentBytes": 56863,
         "inverseHunks": [
           {
-            "currentOffsetCharacters": 30766,
+            "currentOffsetCharacters": 1844,
+            "currentText": "function reportOwnPhoneRejection(stage){try{console.warn(JSON.stringify({event:'META_OWN_COMPANY_PHONE_REJECTED',version:1,stage}));}catch{}}\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 30908,
             "currentText": "phoneCodeVerified!==true||proof.",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 46066,
-            "currentText": "phoneCodeVerified:phone.code_verification_status==='VERIFIED',",
-            "previousText": ""
+            "currentOffsetCharacters": 44101,
+            "currentText": "{reportOwnPhoneRejection('VERIFICATION_STATUS');throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);}",
+            "previousText": "throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);"
+          },
+          {
+            "currentOffsetCharacters": 45946,
+            "currentText": "){reportOwnPhoneRejection('INSPECTION_SUPERSEDED');throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);}if(normalizeCompanyPhone(verified.displayPhoneNumber,true)!==ownPolicy.expectedPhoneE164){reportOwnPhoneRejection('DISPLAY_PHONE_MATCH');throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);}inspectedAssets=Object.freeze({capability:ownCapability,wabaId,phoneNumberId,inspectionPhase,registered:verified.registered,platformType:verified.platformType,phoneCodeVerified:phone.code_verification_status==='VERIFIED'",
+            "previousText": "||normalizeCompanyPhone(verified.displayPhoneNumber,true)!==ownPolicy.expectedPhoneE164)throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);inspectedAssets=Object.freeze({capability:ownCapability,wabaId,phoneNumberId,inspectionPhase,registered:verified.registered,platformType:verified.platformType"
           }
         ]
       },
@@ -30069,13 +30099,18 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "tests/production-own-company-runtime-provider.test.mjs",
         "status": "MODIFIED",
         "previousSha256": "82a0450564cd57f1927fc93ac6b73b4c2be74e136c853d751b4bbe52a6f6b034",
-        "currentSha256": "adc91c307ffdeefbcb090783c9f16d373fadaf186e8b2b516cc98da7dc89e89a",
+        "currentSha256": "b60b285e24d53a11be9aafd977df986319ab524c8fab40eb76411a70d9a8aa5d",
         "previousBytes": 19517,
-        "currentBytes": 20666,
+        "currentBytes": 23950,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 10126,
             "currentText": "for(const [name,status] of [['unverified','NOT_VERIFIED'],['missing',undefined]])test('ADMIN '+name+' phone verification cannot mint operational authority through a forged inspection DTO',async()=>{\n const f=await fixture();f.calls.length=0;if(status===undefined)delete f.phone.code_verification_status;else f.phone.code_verification_status=status;\n const inspection=await f.admin.inspect({token:f.token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId});\n assert.equal(inspection.registered,true);assert.equal(inspection.platformType,'CLOUD_API');assert.equal(Object.hasOwn(inspection,'phoneCodeVerified'),false);\n assert.throws(()=>f.admin.ownOperationalAuthority(inspection),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');\n inspection.phoneCodeVerified=true;inspection.code_verification_status='VERIFIED';\n assert.throws(()=>f.admin.ownOperationalAuthority(inspection),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');\n assert.throws(()=>f.admin.ownOperationalAuthority({...inspection}),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');\n assert.equal(f.calls.filter(call=>call.method==='POST').length,0);\n});\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 15998,
+            "currentText": "test('runtime verification status diagnostics contain only a fixed event and stage despite hostile provider data',async t=>{\n const logs=[];t.mock.method(console,'warn',value=>logs.push(value));\n for(const status of ['NOT_VERIFIED',undefined,'HOSTILE_PROVIDER_DATA']){\n  const f=await fixture();if(status===undefined)delete f.phone.code_verification_status;else f.phone.code_verification_status=status==='HOSTILE_PROVIDER_DATA'?[status,f.token,f.policy.expectedPhoneE164,f.policy.phoneNumberId].join('|'):status;\n  await assert.rejects(f.runtime(),error=>error.code==='META_OWN_COMPANY_PHONE_REJECTED');assert.equal(f.calls.filter(call=>call.method==='POST').length,0);\n }\n assert.ok(logs.every(value=>typeof value==='string'));assert.deepEqual(logs.map(value=>JSON.parse(value)),Array.from({length:3},()=>({event:'META_OWN_COMPANY_PHONE_REJECTED',version:1,stage:'VERIFICATION_STATUS'})));\n});\ntest('runtime display phone mismatch diagnostics never include the provider display or credentials',async t=>{\n const f=await fixture(),logs=[];t.mock.method(console,'warn',value=>logs.push(value));f.phone.display_phone_number='+5491100000001';f.phone.verified_name='HOSTILE_PROVIDER_NAME|'+f.token;\n await assert.rejects(f.runtime(),error=>error.code==='META_OWN_COMPANY_PHONE_REJECTED');assert.deepEqual(logs.map(value=>JSON.parse(value)),[{event:'META_OWN_COMPANY_PHONE_REJECTED',version:1,stage:'DISPLAY_PHONE_MATCH'}]);assert.equal(f.calls.filter(call=>call.method==='POST').length,0);\n});\ntest('superseded inspection diagnostics preserve rejection before normalizing the stale display', {timeout:5000},async t=>{\n const f=await fixture(),scoped=await f.runtime(),logs=[];t.mock.method(console,'warn',value=>logs.push(value));f.calls.length=0;f.phone.display_phone_number='HOSTILE_STALE_DISPLAY|'+f.token;\n let release,entered;const blocked=new Promise(resolve=>{release=resolve;}),observed=new Promise(resolve=>{entered=resolve;});let first=true;\n f.state.afterRead=async path=>{if(path===f.policy.wabaId+'/phone_numbers'&&first){first=false;entered();await blocked;}};\n const earlier=scoped.inspect({token:f.token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId}),denied=assert.rejects(earlier,error=>error.code==='META_OWN_COMPANY_PHONE_REJECTED');\n try{await observed;f.phone.display_phone_number=f.policy.expectedPhoneE164;await scoped.inspect({token:f.token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId});}finally{release();}\n await denied;assert.deepEqual(logs.map(value=>JSON.parse(value)),[{event:'META_OWN_COMPANY_PHONE_REJECTED',version:1,stage:'INSPECTION_SUPERSEDED'}]);assert.equal(f.calls.filter(call=>call.method==='POST').length,0);\n});\ntest('a failing private phone diagnostic reporter cannot change denials or permit a reply POST',async t=>{\n const warning=t.mock.method(console,'warn',()=>{throw Error('SYNTHETIC_PRIVATE_LOG_FAILURE');});\n for(const kind of ['verification','display']){const f=await fixture();if(kind==='verification')f.phone.code_verification_status='NOT_VERIFIED';else f.phone.display_phone_number='+5491100000001';await assert.rejects(f.runtime(),error=>error.code==='META_OWN_COMPANY_PHONE_REJECTED');assert.equal(f.calls.filter(call=>call.method==='POST').length,0);}\n assert.equal(warning.mock.callCount(),2);\n});\n",
             "previousText": ""
           }
         ]
@@ -35372,6 +35407,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "current": "f5fc8d4aa4cbcac08690ecb4bca6b311a1812b10b3423056bb7d823e71e45ec0"
       },
       {
+        "pointer": "/planBudgetCurrentRevision/references/22/currentSha256",
+        "previous": "3885b3343011502123d7ec1996c8d230a630a97b8522bcca5c9b6f7a9b164c11",
+        "current": "ee03e07918424ec2e55b2934714678b3d071b17484d5995c673f9ab438c8ad3f"
+      },
+      {
         "pointer": "/planBudgetCurrentRevision/references/25/currentSha256",
         "previous": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
         "current": "f11906a432d7f33bbbda7043423e196a42b230f96b0355c8d001e0f889a5590a"
@@ -35399,7 +35439,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "pointer": "/planBudgetCurrentRevision/references/54/currentSha256",
         "previous": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2",
-        "current": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+        "current": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/58/currentSha256",
@@ -35642,7 +35682,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-plan-import-boundary.mjs",
             "previousSha256": "86518c0dda14a18d04bf20c393f32014ba7af11e76fe507b5999c4ec25d4cd84",
-            "currentSha256": "3885b3343011502123d7ec1996c8d230a630a97b8522bcca5c9b6f7a9b164c11"
+            "currentSha256": "ee03e07918424ec2e55b2934714678b3d071b17484d5995c673f9ab438c8ad3f"
           },
           {
             "path": "scripts/verify-plan-import-ui.mjs",
@@ -35802,7 +35842,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "src/lib/meta-customer-provider.mjs",
             "previousSha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f",
-            "currentSha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+            "currentSha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
           },
           {
             "path": "src/lib/meta-employee-intake.mjs",
@@ -36364,7 +36404,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-plan-import-boundary.mjs",
             "previousSha256": "86518c0dda14a18d04bf20c393f32014ba7af11e76fe507b5999c4ec25d4cd84",
-            "currentSha256": "3885b3343011502123d7ec1996c8d230a630a97b8522bcca5c9b6f7a9b164c11"
+            "currentSha256": "ee03e07918424ec2e55b2934714678b3d071b17484d5995c673f9ab438c8ad3f"
           },
           {
             "path": "scripts/verify-plan-import-ui.mjs",
@@ -36524,7 +36564,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "src/lib/meta-customer-provider.mjs",
             "previousSha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f",
-            "currentSha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+            "currentSha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
           },
           {
             "path": "src/lib/meta-employee-intake.mjs",
@@ -37404,7 +37444,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "tests/production-own-company-runtime-provider.test.mjs",
             "previousSha256": "82a0450564cd57f1927fc93ac6b73b4c2be74e136c853d751b4bbe52a6f6b034",
-            "currentSha256": "adc91c307ffdeefbcb090783c9f16d373fadaf186e8b2b516cc98da7dc89e89a"
+            "currentSha256": "b60b285e24d53a11be9aafd977df986319ab524c8fab40eb76411a70d9a8aa5d"
           },
           {
             "path": "tests/production-participant-channel-kyc.test.mjs",
@@ -44349,7 +44389,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -45777,7 +45817,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -47499,7 +47539,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -48904,7 +48944,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -50186,7 +50226,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -56183,7 +56223,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -57414,7 +57454,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -58255,7 +58295,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+                  "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -59023,7 +59063,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+                  "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -59775,7 +59815,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+                  "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -60533,7 +60573,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+                  "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -61287,7 +61327,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+                  "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -62486,7 +62526,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
+            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
           },
           {
             "path": "src/lib/meta-customer-template-send-http.mjs",

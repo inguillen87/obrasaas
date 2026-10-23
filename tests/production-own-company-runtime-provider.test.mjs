@@ -108,6 +108,31 @@ test('serialized capabilities, ADMIN capability on v2 and foreign tokens fail be
 for(const [name,mutate] of [
  ['revoked token',f=>f.debug.is_valid=false],['different system user',f=>f.debug.user_id='990000001'],['unexpected scope',f=>f.debug.scopes.push('ads_read')],['contradictory granular targets',f=>f.debug.granular_scopes[1].target_ids=['990000001']],['changed token expiry',f=>f.debug.expires_at+=3600],['unknown data access expiry',f=>delete f.debug.data_access_expires_at],['unrepresentable token expiry',f=>f.debug.expires_at=Number.MAX_SAFE_INTEGER],['unrepresentable data access expiry',f=>f.debug.data_access_expires_at=Number.MAX_SAFE_INTEGER],['unowned system user',f=>f.state.missingEdge='system_users'],['unowned app',f=>f.state.missingEdge='owned_apps'],['unowned WABA',f=>f.state.missingEdge='owned_whatsapp_business_accounts'],['paged ownership',f=>f.state.pagingEdge='owned_apps'],['different declared phone',f=>f.phone.display_phone_number='+5491100000001'],['unverified phone',f=>f.phone.code_verification_status='NOT_VERIFIED'],['unregistered phone',f=>f.state.registered=false],['revoked subscription',f=>f.state.subscribed=false],
 ])test('fresh runtime verification denies '+name+' with zero POST',async()=>{const f=await fixture();f.afterAdministrativeExpiry();mutate(f);await assert.rejects(f.runtime());assert.equal(f.calls.filter(call=>call.method==='POST').length,0);});
+test('runtime verification status diagnostics contain only a fixed event and stage despite hostile provider data',async t=>{
+ const logs=[];t.mock.method(console,'warn',value=>logs.push(value));
+ for(const status of ['NOT_VERIFIED',undefined,'HOSTILE_PROVIDER_DATA']){
+  const f=await fixture();if(status===undefined)delete f.phone.code_verification_status;else f.phone.code_verification_status=status==='HOSTILE_PROVIDER_DATA'?[status,f.token,f.policy.expectedPhoneE164,f.policy.phoneNumberId].join('|'):status;
+  await assert.rejects(f.runtime(),error=>error.code==='META_OWN_COMPANY_PHONE_REJECTED');assert.equal(f.calls.filter(call=>call.method==='POST').length,0);
+ }
+ assert.ok(logs.every(value=>typeof value==='string'));assert.deepEqual(logs.map(value=>JSON.parse(value)),Array.from({length:3},()=>({event:'META_OWN_COMPANY_PHONE_REJECTED',version:1,stage:'VERIFICATION_STATUS'})));
+});
+test('runtime display phone mismatch diagnostics never include the provider display or credentials',async t=>{
+ const f=await fixture(),logs=[];t.mock.method(console,'warn',value=>logs.push(value));f.phone.display_phone_number='+5491100000001';f.phone.verified_name='HOSTILE_PROVIDER_NAME|'+f.token;
+ await assert.rejects(f.runtime(),error=>error.code==='META_OWN_COMPANY_PHONE_REJECTED');assert.deepEqual(logs.map(value=>JSON.parse(value)),[{event:'META_OWN_COMPANY_PHONE_REJECTED',version:1,stage:'DISPLAY_PHONE_MATCH'}]);assert.equal(f.calls.filter(call=>call.method==='POST').length,0);
+});
+test('superseded inspection diagnostics preserve rejection before normalizing the stale display', {timeout:5000},async t=>{
+ const f=await fixture(),scoped=await f.runtime(),logs=[];t.mock.method(console,'warn',value=>logs.push(value));f.calls.length=0;f.phone.display_phone_number='HOSTILE_STALE_DISPLAY|'+f.token;
+ let release,entered;const blocked=new Promise(resolve=>{release=resolve;}),observed=new Promise(resolve=>{entered=resolve;});let first=true;
+ f.state.afterRead=async path=>{if(path===f.policy.wabaId+'/phone_numbers'&&first){first=false;entered();await blocked;}};
+ const earlier=scoped.inspect({token:f.token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId}),denied=assert.rejects(earlier,error=>error.code==='META_OWN_COMPANY_PHONE_REJECTED');
+ try{await observed;f.phone.display_phone_number=f.policy.expectedPhoneE164;await scoped.inspect({token:f.token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId});}finally{release();}
+ await denied;assert.deepEqual(logs.map(value=>JSON.parse(value)),[{event:'META_OWN_COMPANY_PHONE_REJECTED',version:1,stage:'INSPECTION_SUPERSEDED'}]);assert.equal(f.calls.filter(call=>call.method==='POST').length,0);
+});
+test('a failing private phone diagnostic reporter cannot change denials or permit a reply POST',async t=>{
+ const warning=t.mock.method(console,'warn',()=>{throw Error('SYNTHETIC_PRIVATE_LOG_FAILURE');});
+ for(const kind of ['verification','display']){const f=await fixture();if(kind==='verification')f.phone.code_verification_status='NOT_VERIFIED';else f.phone.display_phone_number='+5491100000001';await assert.rejects(f.runtime(),error=>error.code==='META_OWN_COMPANY_PHONE_REJECTED');assert.equal(f.calls.filter(call=>call.method==='POST').length,0);}
+ assert.equal(warning.mock.callCount(),2);
+});
 test('second debug after ownership cannot change expiry or user and the runtime lease cannot expire during the audit',async()=>{
  for(const scenario of ['debug','lease']){
   const f=await fixture();let reads=0;f.state.afterRead=async path=>{if(scenario==='debug'&&path==='debug_token'&&++reads===2)f.debug.expires_at+=3600;if(scenario==='lease'&&path.endsWith('/owned_apps'))f.time+=60001;};
