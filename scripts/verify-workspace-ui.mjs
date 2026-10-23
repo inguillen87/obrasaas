@@ -1009,13 +1009,13 @@ async function guideHttpDenialScenario(width,action,denial){
 async function portfolioAccessRaceScenario(width,denial,format,action='project'){
  const mode=`portfolio-access-race-${action}-${denial}-${format}`,context=await browser.createBrowserContext(),page=await context.newPage();
  await page.setViewport({width,height:1100,hasTouch:width<768,isMobile:width<768});page.on('pageerror',error=>pageErrors.push({mode,width,message:error.message}));
- const requests=[],posts=[];let workspaceReads=0,projectReads=0,portfolioRequest=null,projectRequest=null,scheduleRequest=null;
+ const requests=[],posts=[];let workspaceReads=0,projectReads=0,portfolioRequest=null,projectRequest=null,scheduleRequest=null,phase='prepare';
  const refreshedScope='b'.repeat(64);
  const references=()=>page.evaluate(()=>new Promise((resolve,reject)=>{const open=indexedDB.open('obrasaas-pending-receipts-v1');open.onerror=()=>reject(open.error);open.onsuccess=()=>{const db=open.result,tx=db.transaction('references','readonly'),read=tx.objectStore('references').getAll();let rows;read.onsuccess=()=>{rows=read.result;};tx.oncomplete=()=>{db.close();resolve(JSON.stringify(rows));};tx.onerror=()=>{db.close();reject(tx.error);};};}));
  await page.setRequestInterception(true);page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('External request forbidden');}
   if(!url.pathname.startsWith('/api/identity/'))return request.continue();
-  requests.push({path:url.pathname,method:request.method(),query:url.search});assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+  requests.push({path:url.pathname,method:request.method(),query:url.search,phase});assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
   if(request.method()!=='GET'){
    assert.equal(action,'schedule');assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.method(),'POST');
    const payload=JSON.parse(request.postData());assert.equal(payload.scope,scope);assert.equal(payload.taskId,'task-a');assert.equal(payload.projectId,'p-a');assert.equal(payload.expectedRevision,revision);assert.equal(payload.startsOn,'2026-10-07');assert.equal(payload.endsOn,'2026-10-15');posts.push(payload);scheduleRequest=request;return;
@@ -1037,6 +1037,7 @@ async function portfolioAccessRaceScenario(width,denial,format,action='project')
   const retainedReferences=await references(),observedGeneration=await page.evaluate(()=>window.__guideObservation.generation);assert.ok(retainedReferences.includes('22222222-2222-4222-8222-222222222222'));
   await showWorkspaceSection(page,'workspace-home-title');await click(page,'Consultar resumen');await page.waitForFunction(()=>document.querySelector('#portfolio-overview-title')?.closest('section').getAttribute('aria-busy')==='true');
   for(let i=0;i<80&&!portfolioRequest;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.ok(portfolioRequest,'The portfolio read must be dispatched before the concurrent action');
+  phase='race';
   if(action==='project'){
    await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba B')).click());await page.waitForSelector('[data-guide-observation="CONSULTING"]');
    for(let i=0;i<40&&!projectRequest;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.ok(projectRequest,'The project read must be dispatched before access denial');
@@ -1047,6 +1048,7 @@ async function portfolioAccessRaceScenario(width,denial,format,action='project')
   }
   const pendingReferences=await references();if(action==='schedule')assert.ok(pendingReferences.includes(posts[0].operationId));
   await portfolioRequest.respond({status:denial,contentType:format==='html'?'text/html':'application/json',headers:{'Cache-Control':'no-store'},body:format==='html'?'<html><body>private gateway diagnostic</body></html>':JSON.stringify({code:'WORKSPACE_CONTEXT_CHANGED'})});
+  phase='denied';
   await page.waitForSelector('[data-guide-observation="UNAVAILABLE"]',{timeout:6000});
   assert.ok(await page.$$eval('button',nodes=>nodes.find(node=>node.textContent==='Actualizar')?.disabled===false),'An access denial must allow explicit account refresh');
   assert.equal(await page.$$eval('[data-task-id]',nodes=>nodes.length),0);assert.equal(await page.$('#worker-channel-title'),null);assert.equal(await page.$('#portfolio-overview-title'),null);
@@ -1060,10 +1062,15 @@ async function portfolioAccessRaceScenario(width,denial,format,action='project')
   else{const payload=posts[0];await scheduleRequest.respond({status:200,contentType:'application/json',body:JSON.stringify({scope,saved:true,replayed:false,task:{...baseTask(),startsOn:payload.startsOn,endsOn:payload.endsOn,revision:'2026-10-01T12:00:00.111111'},receipt:{id:'workspace_schedule_'+ 'b'.repeat(64),taskId:'task-a',recordedAt:'2026-10-01T12:00:00.111111',before:{startsOn:'2026-10-01',endsOn:'2026-10-05'},after:{startsOn:payload.startsOn,endsOn:payload.endsOn}}})}).catch(()=>{});}
   await new Promise(resolve=>setTimeout(resolve,180));assert.equal(await page.$eval('[data-guide-observation]',node=>node.dataset.guideObservation),'UNAVAILABLE');assert.ok(!(await text(page)).includes('respuesta anterior'));assert.ok(!(await text(page)).includes('Cambio confirmado'));assert.equal(posts.length,action==='schedule'?1:0);
   const survivingReferences=await references();assert.ok(survivingReferences.includes('22222222-2222-4222-8222-222222222222'));if(action==='schedule')assert.equal(survivingReferences,pendingReferences);else if(action==='project')assert.equal(survivingReferences,retainedReferences);
-  await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);
-  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(projectReads,action==='project'?2:1);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  checks.push({mode,width,denial,format,action,posts:posts.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});
- }catch(error){await page.screenshot({path:path.join(evidence,`workspace-${mode}-${width}-failure.png`),fullPage:true}).catch(()=>{});throw error;}
+  // Live refresh may already have made another authorized read of project A.
+  // Fence the denial and explicit refresh instead of assuming a global total.
+  const afterDenial=requests.filter(row=>row.phase==='denied'&&row.method==='GET');assert.deepEqual(afterDenial,[],'A denied account must not automatically read projects, channels or refresh itself');
+  const selectedProjectReads=requests.filter(row=>row.path==='/api/identity/workspace'&&new URLSearchParams(row.query).get('projectId')==='p-b');assert.equal(selectedProjectReads.length,action==='project'?1:0,'The concurrent project selection must dispatch exactly once');
+  phase='refresh';await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);
+  const refreshReads=requests.filter(row=>row.phase==='refresh'&&row.method==='GET');assert.deepEqual(refreshReads.map(row=>({method:row.method,path:row.path,query:row.query})),[{method:'GET',path:'/api/identity/workspace',query:''}],'Explicit account refresh must not re-open an old project or channel');
+  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  checks.push({mode,width,denial,format,action,posts:posts.length,projectReads,selectedProjectReads:selectedProjectReads.length,readsAfterDenial:afterDenial.length,explicitAccountRefreshes:refreshReads.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});
+ }catch(error){error.workspaceUiDiagnostic={mode,width,denial,format,action,phase,workspaceReads,projectReads,posts:posts.length,requests};await page.screenshot({path:path.join(evidence,`workspace-${mode}-${width}-failure.png`),fullPage:true}).catch(()=>{});throw error;}
  finally{await context.close();}
 }
 

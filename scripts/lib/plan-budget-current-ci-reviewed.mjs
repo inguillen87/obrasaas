@@ -137,7 +137,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/verify-workspace-ui.mjs",
       "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-      "currentSha256": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9"
+      "currentSha256": "f11906a432d7f33bbbda7043423e196a42b230f96b0355c8d001e0f889a5590a"
     },
     {
       "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -282,7 +282,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "src/lib/meta-customer-provider.mjs",
       "previousSha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f",
-      "currentSha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+      "currentSha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
     },
     {
       "path": "src/lib/meta-employee-intake.mjs",
@@ -537,7 +537,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-plan-import-document-curve-fixture-copy.test.mjs",
       "previousSha256": "40953ff493ea8df1a28a4201bbb0903cff48240a1f8831d58ce7e05d3d08591d",
-      "currentSha256": "3ff8de1c89cfdf1c5b0cd7705837fc0473a07d19afa1a028c506ef778aa6eac9"
+      "currentSha256": "8c66604116e99e72adb99d3de299ca5e6e3ecd0905fed18c39ab055a86280c4d"
     },
     {
       "path": "tests/production-plan-import-link-ui.test.mjs",
@@ -657,7 +657,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "scripts/verify-participants-ui.mjs",
       "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-      "currentSha256": "f0e85b43c71d26329a00cf96a43cd028f141de2609cae6c26589db6e7d1e4d03"
+      "currentSha256": "f5fc8d4aa4cbcac08690ecb4bca6b311a1812b10b3423056bb7d823e71e45ec0"
     },
     {
       "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -803,6 +803,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "path": "scripts/verify-company-kyc-outbound-compact-ci.mjs",
       "previousSha256": "d3a08f3d3c7027556cd2d517db29cb85b8b432f413de50079fd2f6cc46913b68",
       "currentSha256": "44e1d6910bda100af220f89bb7430f13df2e6380b9dee0a77d3e3d1feb9ee96d"
+    },
+    {
+      "path": "scripts/verify-field-overtime-ui.mjs",
+      "previousSha256": "75f293e39895b3c5b27b94b7d19bba9f82331f64f08f0a1ac0c95ff5437941f1",
+      "currentSha256": "283a91bcc1c17837cb41ec2ddd769ba87b7801b75e7cb5ee3af5496f04e800ce"
     },
     {
       "path": "scripts/verify-meta-kyc-chat-postgres.mjs",
@@ -1153,6 +1158,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "path": "tests/production-native-capture-quality-source-manifest.test.mjs",
       "previousSha256": null,
       "currentSha256": "8e8620b61893c89aa3326bfc759c8ba6fb94fa8fcb998bbd10ca006060034fa2"
+    },
+    {
+      "path": "tests/production-own-company-runtime-provider.test.mjs",
+      "previousSha256": "82a0450564cd57f1927fc93ac6b73b4c2be74e136c853d751b4bbe52a6f6b034",
+      "currentSha256": "adc91c307ffdeefbcb090783c9f16d373fadaf186e8b2b516cc98da7dc89e89a"
     },
     {
       "path": "tests/production-participant-channel-kyc.test.mjs",
@@ -5979,7 +5989,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+          "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -7066,7 +7076,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+          "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -8141,7 +8151,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+          "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -9034,7 +9044,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+          "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -9857,7 +9867,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+          "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -25232,6 +25242,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "currentSha256": "44e1d6910bda100af220f89bb7430f13df2e6380b9dee0a77d3e3d1feb9ee96d"
       },
       {
+        "path": "scripts/verify-field-overtime-ui.mjs",
+        "previousSha256": "75f293e39895b3c5b27b94b7d19bba9f82331f64f08f0a1ac0c95ff5437941f1",
+        "currentSha256": "283a91bcc1c17837cb41ec2ddd769ba87b7801b75e7cb5ee3af5496f04e800ce"
+      },
+      {
         "path": "scripts/verify-meta-kyc-chat-postgres.mjs",
         "previousSha256": "bb8fac0d2e50a62d0bbf9858ca111c912352a3cfbda5f558407771d4ca7adbfd",
         "currentSha256": "c22d4c293fc0d55111ba4d99e9416fd899326ef1d29f1170e477080b47cfa494"
@@ -25582,6 +25597,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "currentSha256": "8e8620b61893c89aa3326bfc759c8ba6fb94fa8fcb998bbd10ca006060034fa2"
       },
       {
+        "path": "tests/production-own-company-runtime-provider.test.mjs",
+        "previousSha256": "82a0450564cd57f1927fc93ac6b73b4c2be74e136c853d751b4bbe52a6f6b034",
+        "currentSha256": "adc91c307ffdeefbcb090783c9f16d373fadaf186e8b2b516cc98da7dc89e89a"
+      },
+      {
         "path": "tests/production-participant-channel-kyc.test.mjs",
         "previousSha256": "5d2bb0a5f57519abfe13a04c49771cfc93ce46bad41b2aa75292dd0012285a8a",
         "currentSha256": "7dabc1a420ecf181f6494fd30bb218b75c1c8fe93a30befeb797870a4d62e15f"
@@ -25776,7 +25796,12 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "scripts/verify-participants-ui.mjs",
         "previousSha256": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-        "currentSha256": "f0e85b43c71d26329a00cf96a43cd028f141de2609cae6c26589db6e7d1e4d03"
+        "currentSha256": "f5fc8d4aa4cbcac08690ecb4bca6b311a1812b10b3423056bb7d823e71e45ec0"
+      },
+      {
+        "path": "scripts/verify-workspace-ui.mjs",
+        "previousSha256": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
+        "currentSha256": "f11906a432d7f33bbbda7043423e196a42b230f96b0355c8d001e0f889a5590a"
       },
       {
         "path": "src/app/(identity)/cuenta/kyc-photo-preparation.js",
@@ -25797,6 +25822,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
         "previousSha256": "3a8d1c517fb084df425198c84671f6b76bb1f659f9d0d4ed94945cd1046d8e64",
         "currentSha256": "93380220ad21a0a679b88a47cdf4b6ca0f5444da4734610e85f5fdb8fc9dad6a"
+      },
+      {
+        "path": "src/lib/meta-customer-provider.mjs",
+        "previousSha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2",
+        "currentSha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
       },
       {
         "path": "src/lib/meta-kyc-conversation.mjs",
@@ -25891,7 +25921,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "tests/production-plan-import-document-curve-fixture-copy.test.mjs",
         "previousSha256": "fc4f5e58dff8b37f63ff4ca1b8c5c99c702530581ff77ad778a49322318765d4",
-        "currentSha256": "3ff8de1c89cfdf1c5b0cd7705837fc0473a07d19afa1a028c506ef778aa6eac9"
+        "currentSha256": "8c66604116e99e72adb99d3de299ca5e6e3ecd0905fed18c39ab055a86280c4d"
       },
       {
         "path": "tests/production-plan-measurement-ci.test.mjs",
@@ -26641,6 +26671,76 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         ]
       },
       {
+        "path": "scripts/verify-field-overtime-ui.mjs",
+        "status": "MODIFIED",
+        "previousSha256": "75f293e39895b3c5b27b94b7d19bba9f82331f64f08f0a1ac0c95ff5437941f1",
+        "currentSha256": "283a91bcc1c17837cb41ec2ddd769ba87b7801b75e7cb5ee3af5496f04e800ce",
+        "previousBytes": 36049,
+        "currentBytes": 37560,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 8130,
+            "currentText": "// The shift summary owns a separate time-zone form; scope command controls to its sibling draft.\nasync function labelInput(page,text,selector='input'){const handle=await page.evaluateHandle(({text,selector})=>[...document.querySelectorAll('section[aria-labelledby=\"field-title\"] > ",
+            "previousText": "async function labelInput(page,text,selector='input'){const handle=await page.evaluateHandle(({text,selector})=>[...document.querySelectorAll('"
+          },
+          {
+            "currentOffsetCharacters": 10918,
+            "currentText": ",hidden:Boolean(node.closest('details:not([open])'))})));assert.ok(inputs.every(input=>input.label),'All editable controls retain associated labels, including closed reports');assert.ok(inputs.filter(input=>!input.hidden).every(input=>input.font>=16&&input.label),'16px visible",
+            "previousText": "})));assert.ok(inputs.every(input=>input.font>=16&&input.label),'16px"
+          },
+          {
+            "currentOffsetCharacters": 20298,
+            "currentText": "assert.equal(await page.$('section[aria-labelledby=\"field-title\"] > form'),null,'Opening operations does not prepare an overtime command');",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 20586,
+            "currentText": "section[aria-labelledby=\"field-title\"] > form select')===document.activeElement&&document.querySelector('[data-worksite-switch]').disabled);await focusContrast(page);assert.equal(await page.$eval('section[aria-labelledby=\"field-title\"] > form select',node=>node.value),'');assert.equal(await page.$eval('section[aria-labelledby=\"field-title\"] > form select',node=>node===document.activeElement),true,'Keyboard CTA focuses first configuration control');assert.equal(await page.$eval('[data-worksite-switch]',node=>node.disabled),true);await page.select('section[aria-labelledby=\"field-title\"] > form select','MANUAL_REQUEST_ONLY');await typeLabel(page,'Zona horaria IANA confirmada',configured.timeZone);await page.click('section[aria-labelledby=\"field-title\"] > ",
+            "previousText": "form select')===document.activeElement&&document.querySelector('[data-worksite-switch]').disabled);await focusContrast(page);assert.equal(await page.$eval('form select',node=>node.value),'');assert.equal(await page.$eval('form select',node=>node===document.activeElement),true,'Keyboard CTA focuses first configuration control');assert.equal(await page.$eval('[data-worksite-switch]',node=>node.disabled),true);await page.select('form select','MANUAL_REQUEST_ONLY');await typeLabel(page,'Zona horaria IANA confirmada',configured.timeZone);await page.click('"
+          },
+          {
+            "currentOffsetCharacters": 22782,
+            "currentText": "section[aria-labelledby=\"field-title\"] > form select')===document.activeElement);await focusContrast(page);assert.equal(await page.$$eval('button',nodes=>nodes.find(node=>node.textContent==='Ver jornadas anteriores').disabled),true,'Paging cannot discard a draft');await page.select('section[aria-labelledby=\"field-title\"] > form select','APPROVE');await typeLabel(page,'Fundamento de la decisión','Fundamento sintético autorizado sobre pendiente antiguo.','textarea');await layout(page);assert.equal(posts.length,0);await click(page,'Guardar con recibo');\n  if(mode==='pagination-reload'){await waitText(page,'El resultado quedó sin confirmar.');assert.equal((await references(page)).length,1);assert.equal(await page.$$eval('button',nodes=>nodes.find(node=>node.textContent==='Ver jornadas anteriores').disabled),true,'Paging cannot move an unknown receipt context');const beforeReload=reads.length;await page.reload({waitUntil:'networkidle0'});await waitText(page,'Operaciones por comprobar');assert.equal(reads.length,beforeReload);assert.equal(posts.length,1);assert.equal(await page.$('section[aria-labelledby=\"field-title\"] > form'),null);assert.equal((await references(page))[0].action,'DECIDE_OVERTIME');await click(page,'Comprobar recibo');await waitText(page,'Guardado confirmado. La consulta no volvió a enviar la operación.');assert.equal((await references(page)).length,0);}else{await waitText(page,'Operación guardada con recibo.');await page.waitForFunction(()=>!document.querySelector('[data-worksite-switch]').disabled&&!document.querySelector('section[aria-labelledby=\"field-title\"] > ",
+            "previousText": "form select')===document.activeElement);await focusContrast(page);assert.equal(await page.$$eval('button',nodes=>nodes.find(node=>node.textContent==='Ver jornadas anteriores').disabled),true,'Paging cannot discard a draft');await page.select('form select','APPROVE');await typeLabel(page,'Fundamento de la decisión','Fundamento sintético autorizado sobre pendiente antiguo.','textarea');await layout(page);assert.equal(posts.length,0);await click(page,'Guardar con recibo');\n  if(mode==='pagination-reload'){await waitText(page,'El resultado quedó sin confirmar.');assert.equal((await references(page)).length,1);assert.equal(await page.$$eval('button',nodes=>nodes.find(node=>node.textContent==='Ver jornadas anteriores').disabled),true,'Paging cannot move an unknown receipt context');const beforeReload=reads.length;await page.reload({waitUntil:'networkidle0'});await waitText(page,'Operaciones por comprobar');assert.equal(reads.length,beforeReload);assert.equal(posts.length,1);assert.equal(await page.$('form'),null);assert.equal((await references(page))[0].action,'DECIDE_OVERTIME');await click(page,'Comprobar recibo');await waitText(page,'Guardado confirmado. La consulta no volvió a enviar la operación.');assert.equal((await references(page)).length,0);}else{await waitText(page,'Operación guardada con recibo.');await page.waitForFunction(()=>!document.querySelector('[data-worksite-switch]').disabled&&!document.querySelector('"
+          },
+          {
+            "currentOffsetCharacters": 25423,
+            "currentText": "section[aria-labelledby=\"field-title\"] > ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 26397,
+            "currentText": "section[aria-labelledby=\"field-title\"] > form textarea',node=>node.value),proposal.reason);assert.equal(await page.$eval('form button[type=submit]',node=>node.disabled),true);const beforeExact=reads.length;await keyboardClick(page,'Volver a consultar la jornada');await waitText(page,'La jornada o solicitud vigente cambió.');assert.equal(reads.length,beforeExact+1);assert.equal(await page.$eval('section[aria-labelledby=\"field-title\"] > ",
+            "previousText": "form textarea',node=>node.value),proposal.reason);assert.equal(await page.$eval('form button[type=submit]',node=>node.disabled),true);const beforeExact=reads.length;await keyboardClick(page,'Volver a consultar la jornada');await waitText(page,'La jornada o solicitud vigente cambió.');assert.equal(reads.length,beforeExact+1);assert.equal(await page.$eval('"
+          },
+          {
+            "currentOffsetCharacters": 27704,
+            "currentText": "section[aria-labelledby=\"field-title\"] > form input')===document.activeElement&&document.querySelector('[data-worksite-switch]').disabled);await focusContrast(page);const inputs=await page.$$eval('section[aria-labelledby=\"field-title\"] > form input',nodes=>nodes.map(node=>({value:node.value,focused:node===document.activeElement})));assert.deepEqual(inputs.map(input=>input.value),['',''],'No default requested quantity');assert.equal(inputs[0].focused,true);assert.equal(await page.$eval('[data-worksite-switch]',node=>node.disabled),true);await typeLabel(page,'Horas solicitadas','1');await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement.closest('label').textContent.includes('Minutos')),true);await typeLabel(page,'Minutos solicitados','0');await page.keyboard.press('Tab');assert.equal(await page.$eval('section[aria-labelledby=\"field-title\"] > ",
+            "previousText": "form input')===document.activeElement&&document.querySelector('[data-worksite-switch]').disabled);await focusContrast(page);const inputs=await page.$$eval('form input',nodes=>nodes.map(node=>({value:node.value,focused:node===document.activeElement})));assert.deepEqual(inputs.map(input=>input.value),['',''],'No default requested quantity');assert.equal(inputs[0].focused,true);assert.equal(await page.$eval('[data-worksite-switch]',node=>node.disabled),true);await typeLabel(page,'Horas solicitadas','1');await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement.closest('label').textContent.includes('Minutos')),true);await typeLabel(page,'Minutos solicitados','0');await page.keyboard.press('Tab');assert.equal(await page.$eval('"
+          },
+          {
+            "currentOffsetCharacters": 29674,
+            "currentText": "section[aria-labelledby=\"field-title\"] > ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 31629,
+            "currentText": "section[aria-labelledby=\"field-title\"] > ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 32060,
+            "currentText": "section[aria-labelledby=\"field-title\"] > ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 32916,
+            "currentText": "section[aria-labelledby=\"field-title\"] > form select')===document.activeElement&&document.querySelector('[data-worksite-switch]').disabled);await focusContrast(page);assert.equal(await page.$eval('section[aria-labelledby=\"field-title\"] > form select',node=>node.value),'');assert.equal(await page.$eval('section[aria-labelledby=\"field-title\"] > form select',node=>node===document.activeElement),true);const form=await page.$eval('section[aria-labelledby=\"field-title\"] > form',node=>node.textContent);for(const value of [workerName,summary.shiftId,summary.closingEventId,receiptId,'versión 1'])assert.ok(form.includes(value),'Exact review source '+value);if(mode==='stale')assert.equal(await page.$eval('section[aria-labelledby=\"field-title\"] > form option[value=APPROVE]',node=>node.disabled),true);await page.select('section[aria-labelledby=\"field-title\"] > form select',mode==='stale'?'REJECT':'APPROVE');await page.keyboard.press('Tab');assert.equal(await page.$eval('section[aria-labelledby=\"field-title\"] > ",
+            "previousText": "form select')===document.activeElement&&document.querySelector('[data-worksite-switch]').disabled);await focusContrast(page);assert.equal(await page.$eval('form select',node=>node.value),'');assert.equal(await page.$eval('form select',node=>node===document.activeElement),true);const form=await page.$eval('form',node=>node.textContent);for(const value of [workerName,summary.shiftId,summary.closingEventId,receiptId,'versión 1'])assert.ok(form.includes(value),'Exact review source '+value);if(mode==='stale')assert.equal(await page.$eval('form option[value=APPROVE]',node=>node.disabled),true);await page.select('form select',mode==='stale'?'REJECT':'APPROVE');await page.keyboard.press('Tab');assert.equal(await page.$eval('"
+          }
+        ]
+      },
+      {
         "path": "scripts/verify-meta-field-bridge-postgres.mjs",
         "status": "MODIFIED",
         "previousSha256": "79b904814356166aac925e6d38d9b4a16a1f7009432b963b48d7c5a3f71aa62d",
@@ -27374,14 +27474,39 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "scripts/verify-participants-ui.mjs",
         "status": "MODIFIED",
         "previousSha256": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-        "currentSha256": "f0e85b43c71d26329a00cf96a43cd028f141de2609cae6c26589db6e7d1e4d03",
+        "currentSha256": "f5fc8d4aa4cbcac08690ecb4bca6b311a1812b10b3423056bb7d823e71e45ec0",
         "previousBytes": 124573,
-        "currentBytes": 124597,
+        "currentBytes": 126240,
         "inverseHunks": [
           {
-            "currentOffsetCharacters": 4134,
+            "currentOffsetCharacters": 2840,
+            "currentText": "','self",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 4141,
             "currentText": "kyc-image-quality.mjs','",
             "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 7657,
+            "currentText": "active={true} ",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 9020,
+            "currentText": "Path=path.join(fixture,'synthetic.png'),undersizedPath=path.join(fixture,'undersized.png');let picture",
+            "previousText": "=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==','base64'),picturePath=path.join(fixture,'synthetic.png');writeFileSync(picturePath,picture)"
+          },
+          {
+            "currentOffsetCharacters": 75012,
+            "currentText": "ssert.equal(await frontInput.evaluate(input=>input.disabled),false,'The visible identity screen must own an active capture input');await frontInput.uploadFile(undersizedPath);await wait(page,'La imagen es demasiado pequeña.');assert.equal(await page.$('fieldset[aria-label=\"Frente del documento\"] img'),null,'An undersized image must never become an acceptable preview');assert.equal(posts.length,0,'A rejected local image must not post identity data');a",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 118661,
+            "currentText": "// Real browser pixels must satisfy the same local exposure, detail and size checks as a selected file.\n // This deterministic fixture makes no claim to contain a document, a face or a verified identity.\n const maker=await browser.newPage();try{\n  const images=await maker.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=480;canvas.height=320;const context=canvas.getContext('2d'),pixels=context.createImageData(480,320);let seed=41;for(let index=0;index<pixels.data.length;index+=4){for(let channel=0;channel<3;channel++){seed=(seed*1664525+1013904223)>>>0;pixels.data[index+channel]=seed>>>24;}pixels.data[index+3]=255;}context.putImageData(pixels,0,0);const valid=canvas.toDataURL('image/png').split(',')[1];canvas.width=1;canvas.height=1;context.fillStyle='#888';context.fillRect(0,0,1,1);return{valid,undersized:canvas.toDataURL('image/png').split(',')[1]};});\n  picture=Buffer.from(images.valid,'base64');assert.ok(picture.length<1024*1024,'The readable fixture must preserve its original PNG bytes');assert.equal(picture.readUInt32BE(16),480);assert.equal(picture.readUInt32BE(20),320);writeFileSync(picturePath,picture);writeFileSync(undersizedPath,Buffer.from(images.undersized,'base64'));\n }finally{await maker.close();}\n if(focusedScenario){for(const width of selectedWidths)await (nextStepModes.includes(focusedScenario)?nextStepScenario(width,focusedScenario):['office','self",
+            "previousText": "if(focusedScenario){for(const width of selectedWidths)await (nextStepModes.includes(focusedScenario)?nextStepScenario(width,focusedScenario):['office"
           }
         ]
       },
@@ -27442,6 +27567,41 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "currentOffsetCharacters": 10056,
             "currentText": "captureQualityCases\": len(quality_results), \"originalPublicSelfiePassed\": original_selfie_passed, \"documentClassifierVerified\": False, \"",
             "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "scripts/verify-workspace-ui.mjs",
+        "status": "MODIFIED",
+        "previousSha256": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
+        "currentSha256": "f11906a432d7f33bbbda7043423e196a42b230f96b0355c8d001e0f889a5590a",
+        "previousBytes": 182645,
+        "currentBytes": 183871,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 167666,
+            "currentText": ",phase='prepare'",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 168580,
+            "currentText": ",phase",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 172276,
+            "currentText": "  phase='race';\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 173595,
+            "currentText": "  phase='denied';\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 176195,
+            "currentText": "// Live refresh may already have made another authorized read of project A.\n  // Fence the denial and explicit refresh instead of assuming a global total.\n  const afterDenial=requests.filter(row=>row.phase==='denied'&&row.method==='GET');assert.deepEqual(afterDenial,[],'A denied account must not automatically read projects, channels or refresh itself');\n  const selectedProjectReads=requests.filter(row=>row.path==='/api/identity/workspace'&&new URLSearchParams(row.query).get('projectId')==='p-b');assert.equal(selectedProjectReads.length,action==='project'?1:0,'The concurrent project selection must dispatch exactly once');\n  phase='refresh';await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);\n  const refreshReads=requests.filter(row=>row.phase==='refresh'&&row.method==='GET');assert.deepEqual(refreshReads.map(row=>({method:row.method,path:row.path,query:row.query})),[{method:'GET',path:'/api/identity/workspace',query:''}],'Explicit account refresh must not re-open an old project or channel');\n  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n  checks.push({mode,width,denial,format,action,posts:posts.length,projectReads,selectedProjectReads:selectedProjectReads.length,readsAfterDenial:afterDenial.length,explicitAccountRefreshes:refreshReads.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});\n }catch(error){error.workspaceUiDiagnostic={mode,width,denial,format,action,phase,workspaceReads,projectReads,posts:posts.length,requests};",
+            "previousText": "await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);\n  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(projectReads,action==='project'?2:1);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n  checks.push({mode,width,denial,format,action,posts:posts.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});\n }catch(error){"
           }
         ]
       },
@@ -27882,6 +28042,26 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "currentOffsetCharacters": 3177,
             "currentText": "captureQuality=createPrivateCaptureQuality();\nconst biometricAnalyzer=createPrivateBiometricAnalyzer();\nconst deposit=createParticipantChannelKycDeposit({assessBiometrics:(input,options)=>biometricAnalyzer.analyzeBiometricPair(input,options),assessCaptureQuality:input=>captureQuality.assess(input),",
             "previousText": "deposit=createParticipantChannelKycDeposit({"
+          }
+        ]
+      },
+      {
+        "path": "src/lib/meta-customer-provider.mjs",
+        "status": "MODIFIED",
+        "previousSha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2",
+        "currentSha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b",
+        "previousBytes": 56412,
+        "currentBytes": 56506,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 30766,
+            "currentText": "phoneCodeVerified!==true||proof.",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 46066,
+            "currentText": "phoneCodeVerified:phone.code_verification_status==='VERIFIED',",
+            "previousText": ""
           }
         ]
       },
@@ -29886,6 +30066,21 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         ]
       },
       {
+        "path": "tests/production-own-company-runtime-provider.test.mjs",
+        "status": "MODIFIED",
+        "previousSha256": "82a0450564cd57f1927fc93ac6b73b4c2be74e136c853d751b4bbe52a6f6b034",
+        "currentSha256": "adc91c307ffdeefbcb090783c9f16d373fadaf186e8b2b516cc98da7dc89e89a",
+        "previousBytes": 19517,
+        "currentBytes": 20666,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 10126,
+            "currentText": "for(const [name,status] of [['unverified','NOT_VERIFIED'],['missing',undefined]])test('ADMIN '+name+' phone verification cannot mint operational authority through a forged inspection DTO',async()=>{\n const f=await fixture();f.calls.length=0;if(status===undefined)delete f.phone.code_verification_status;else f.phone.code_verification_status=status;\n const inspection=await f.admin.inspect({token:f.token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId});\n assert.equal(inspection.registered,true);assert.equal(inspection.platformType,'CLOUD_API');assert.equal(Object.hasOwn(inspection,'phoneCodeVerified'),false);\n assert.throws(()=>f.admin.ownOperationalAuthority(inspection),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');\n inspection.phoneCodeVerified=true;inspection.code_verification_status='VERIFIED';\n assert.throws(()=>f.admin.ownOperationalAuthority(inspection),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');\n assert.throws(()=>f.admin.ownOperationalAuthority({...inspection}),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');\n assert.equal(f.calls.filter(call=>call.method==='POST').length,0);\n});\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
         "path": "tests/production-participant-channel-kyc.test.mjs",
         "status": "MODIFIED",
         "previousSha256": "5d2bb0a5f57519abfe13a04c49771cfc93ce46bad41b2aa75292dd0012285a8a",
@@ -30369,9 +30564,9 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "tests/production-plan-import-document-curve-fixture-copy.test.mjs",
         "status": "MODIFIED",
         "previousSha256": "fc4f5e58dff8b37f63ff4ca1b8c5c99c702530581ff77ad778a49322318765d4",
-        "currentSha256": "3ff8de1c89cfdf1c5b0cd7705837fc0473a07d19afa1a028c506ef778aa6eac9",
+        "currentSha256": "8c66604116e99e72adb99d3de299ca5e6e3ecd0905fed18c39ab055a86280c4d",
         "previousBytes": 31554,
-        "currentBytes": 38467,
+        "currentBytes": 38479,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 66,
@@ -30415,11 +30610,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "currentOffsetCharacters": 16036,
-            "currentText": ",readRuntime=file=>readFileSync(path.join(root,file)),collected=found){if(collected.has(file))return;collected.add(file);const moduleAst=parse(readRuntime(file).toString('utf8'),{sourceType:'module'});function visit(node){if(!node||typeof node!=='object')return;let ref;if(['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration'].includes(node.type)&&node.source)ref=node.source.value;if(node.type==='ImportExpression'){assert.equal(node.source.type,'StringLiteral');ref=node.source.value;}if(node.type==='CallExpression'&&node.callee?.type==='Import'){assert.equal(node.arguments[0]?.type,'StringLiteral');ref=node.arguments[0].value;}if(ref?.startsWith('.')){const base=path.resolve(root,path.dirname(file),ref),resolved=[base,base+'.js',base+'.mjs',base+'.css',path.join(base,'index.js')].find(value=>existsSync(value)&&fs.lstatSync(value).isFile());assert.ok(resolved,'Resolved runtime import '+ref+' from '+file);assert.ok(resolved.startsWith(path.resolve(root)+path.sep));runtime(path.relative(root,resolved).split(path.sep).join('/'),readRuntime,collected);}for(const value of Object.values(node))if(Array.isArray(value))value.forEach(visit);else if(value&&typeof value==='object')visit(value);}visit(moduleAst.program);}\n ['src/proxy.js','src/app/api/identity/plan-import/route.js'].forEach(runtime);const expected=[...found].sort(),parentExpected=withCaptureRuntimePreviousSources(budgetContract,file=>readFileSync(path.join(root,file)),(_parent,parentRead)=>{const previous=new Set();['src/proxy.js','src/app/api/identity/plan-import/route.js'].forEach(file=>runtime(file,parentRead,previous));return [...previous].sort();}),captureAdditions=['src/lib/organization-pilot-coverage.mjs','src/lib/participant-analysis-consent.mjs','src/lib/participant-kyc-preanalysis-policy.mjs','src/lib/pilot-media.mjs','src/lib/platform-operator-authority.mjs'],physicalSources=['src/lib/plan-measurement-policy.mjs','src/lib/plan-measurement-source.mjs'],historicalExpected=parentExpected.filter(file=>file!==budgetModule),previous=historicalExpected.filter(file=>!physicalSources.includes(file));assert.equal(previous.length,31);assert.equal(sha(Buffer.from(JSON.stringify(previous))),'4182f284cebcadd3454c53105330c1d67bd1f3945d1e096ae02ed5b7d3b6a4cc');assert.deepEqual(expected.filter(file=>physicalSources.includes(file)),physicalSources);assert.equal(historicalExpected.length,33);assert.deepEqual(parentExpected,[...historicalExpected,budgetModule].sort());assert.deepEqual(expected,[...parentExpected,...captureAdditions].sort());assert.deepEqual(expected.filter(file=>!parentExpected.includes(file)),captureAdditions);assert.ok(parentExpected.every(file=>expected.includes(file)",
+            "currentText": ",readRuntime=file=>readFileSync(path.join(root,file)),collected=found){if(collected.has(file))return;collected.add(file);const moduleAst=parse(readRuntime(file).toString('utf8'),{sourceType:'module'});function visit(node){if(!node||typeof node!=='object')return;let ref;if(['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration'].includes(node.type)&&node.source)ref=node.source.value;if(node.type==='ImportExpression'){assert.equal(node.source.type,'StringLiteral');ref=node.source.value;}if(node.type==='CallExpression'&&node.callee?.type==='Import'){assert.equal(node.arguments[0]?.type,'StringLiteral');ref=node.arguments[0].value;}if(ref?.startsWith('.')){const base=path.resolve(root,path.dirname(file),ref),resolved=[base,base+'.js',base+'.mjs',base+'.css',path.join(base,'index.js')].find(value=>existsSync(value)&&fs.lstatSync(value).isFile());assert.ok(resolved,'Resolved runtime import '+ref+' from '+file);assert.ok(resolved.startsWith(path.resolve(root)+path.sep));runtime(path.relative(root,resolved).split(path.sep).join('/'),readRuntime,collected);}for(const value of Object.values(node))if(Array.isArray(value))value.forEach(visit);else if(value&&typeof value==='object')visit(value);}visit(moduleAst.program);}\n ['src/proxy.js','src/app/api/identity/plan-import/route.js'].forEach(file=>runtime(file));const expected=[...found].sort(),parentExpected=withCaptureRuntimePreviousSources(budgetContract,file=>readFileSync(path.join(root,file)),(_parent,parentRead)=>{const previous=new Set();['src/proxy.js','src/app/api/identity/plan-import/route.js'].forEach(file=>runtime(file,parentRead,previous));return [...previous].sort();}),captureAdditions=['src/lib/organization-pilot-coverage.mjs','src/lib/participant-analysis-consent.mjs','src/lib/participant-kyc-preanalysis-policy.mjs','src/lib/pilot-media.mjs','src/lib/platform-operator-authority.mjs'],physicalSources=['src/lib/plan-measurement-policy.mjs','src/lib/plan-measurement-source.mjs'],historicalExpected=parentExpected.filter(file=>file!==budgetModule),previous=historicalExpected.filter(file=>!physicalSources.includes(file));assert.equal(previous.length,31);assert.equal(sha(Buffer.from(JSON.stringify(previous))),'4182f284cebcadd3454c53105330c1d67bd1f3945d1e096ae02ed5b7d3b6a4cc');assert.deepEqual(expected.filter(file=>physicalSources.includes(file)),physicalSources);assert.equal(historicalExpected.length,33);assert.deepEqual(parentExpected,[...historicalExpected,budgetModule].sort());assert.deepEqual(expected,[...parentExpected,...captureAdditions].sort());assert.deepEqual(expected.filter(file=>!parentExpected.includes(file)),captureAdditions);assert.ok(parentExpected.every(file=>expected.includes(file)",
             "previousText": "){if(found.has(file))return;found.add(file);const moduleAst=parse(readFileSync(path.join(root,file),'utf8'),{sourceType:'module'});function visit(node){if(!node||typeof node!=='object')return;let ref;if(['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration'].includes(node.type)&&node.source)ref=node.source.value;if(node.type==='ImportExpression'){assert.equal(node.source.type,'StringLiteral');ref=node.source.value;}if(node.type==='CallExpression'&&node.callee?.type==='Import'){assert.equal(node.arguments[0]?.type,'StringLiteral');ref=node.arguments[0].value;}if(ref?.startsWith('.')){const base=path.resolve(root,path.dirname(file),ref),resolved=[base,base+'.js',base+'.mjs',base+'.css',path.join(base,'index.js')].find(value=>existsSync(value)&&fs.lstatSync(value).isFile());assert.ok(resolved,'Resolved runtime import '+ref+' from '+file);assert.ok(resolved.startsWith(path.resolve(root)+path.sep));runtime(path.relative(root,resolved).split(path.sep).join('/'));}for(const value of Object.values(node))if(Array.isArray(value))value.forEach(visit);else if(value&&typeof value==='object')visit(value);}visit(moduleAst.program);}\n ['src/proxy.js','src/app/api/identity/plan-import/route.js'].forEach(runtime);const expected=[...found].sort(),physicalSources=['src/lib/plan-measurement-policy.mjs','src/lib/plan-measurement-source.mjs'],historicalExpected=expected.filter(file=>file!==budgetModule),previous=historicalExpected.filter(file=>!physicalSources.includes(file));assert.equal(previous.length,31);assert.equal(sha(Buffer.from(JSON.stringify(previous))),'4182f284cebcadd3454c53105330c1d67bd1f3945d1e096ae02ed5b7d3b6a4cc');assert.deepEqual(expected.filter(file=>physicalSources.includes(file)),physicalSources);assert.equal(historicalExpected.length,33);assert.deepEqual(expected,[...historicalExpected,budgetModule].sort("
           },
           {
-            "currentOffsetCharacters": 21465,
+            "currentOffsetCharacters": 21477,
             "currentText": "&&!captureAdditions.includes(ref.path));assert.equal(oldHistorical.filter(ref=>!physicalSources.includes(ref.path)).length,30);assert.equal(oldHistorical.length,32);assert.deepEqual(old.records.map(ref=>ref.path).sort(),[...oldHistorical.map(ref=>ref.path),budgetModule,...captureAdditions].sort());assert.deepEqual(old.records.map(ref=>ref.path).sort(),expected.filter(file=>file!=='src/lib/plan-baseline-policy.mjs'",
             "previousText": ");assert.equal(oldHistorical.filter(ref=>!physicalSources.includes(ref.path)).length,30);assert.equal(oldHistorical.length,32);assert.deepEqual(old.records.map(ref=>ref.path).sort(),[...oldHistorical.map(ref=>ref.path),budgetModule].sort("
           }
@@ -35174,7 +35369,12 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "pointer": "/planBudgetCurrentRevision/references/129/currentSha256",
         "previous": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-        "current": "f0e85b43c71d26329a00cf96a43cd028f141de2609cae6c26589db6e7d1e4d03"
+        "current": "f5fc8d4aa4cbcac08690ecb4bca6b311a1812b10b3423056bb7d823e71e45ec0"
+      },
+      {
+        "pointer": "/planBudgetCurrentRevision/references/25/currentSha256",
+        "previous": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
+        "current": "f11906a432d7f33bbbda7043423e196a42b230f96b0355c8d001e0f889a5590a"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/132/currentSha256",
@@ -35195,6 +35395,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "pointer": "/planBudgetCurrentRevision/references/41/currentSha256",
         "previous": "3a8d1c517fb084df425198c84671f6b76bb1f659f9d0d4ed94945cd1046d8e64",
         "current": "93380220ad21a0a679b88a47cdf4b6ca0f5444da4734610e85f5fdb8fc9dad6a"
+      },
+      {
+        "pointer": "/planBudgetCurrentRevision/references/54/currentSha256",
+        "previous": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2",
+        "current": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/58/currentSha256",
@@ -35289,7 +35494,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "pointer": "/planBudgetCurrentRevision/references/105/currentSha256",
         "previous": "fc4f5e58dff8b37f63ff4ca1b8c5c99c702530581ff77ad778a49322318765d4",
-        "current": "3ff8de1c89cfdf1c5b0cd7705837fc0473a07d19afa1a028c506ef778aa6eac9"
+        "current": "8c66604116e99e72adb99d3de299ca5e6e3ecd0905fed18c39ab055a86280c4d"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/107/currentSha256",
@@ -35452,7 +35657,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-workspace-ui.mjs",
             "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-            "currentSha256": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9"
+            "currentSha256": "f11906a432d7f33bbbda7043423e196a42b230f96b0355c8d001e0f889a5590a"
           },
           {
             "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -35597,7 +35802,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "src/lib/meta-customer-provider.mjs",
             "previousSha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f",
-            "currentSha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+            "currentSha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
           },
           {
             "path": "src/lib/meta-employee-intake.mjs",
@@ -35852,7 +36057,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "tests/production-plan-import-document-curve-fixture-copy.test.mjs",
             "previousSha256": "40953ff493ea8df1a28a4201bbb0903cff48240a1f8831d58ce7e05d3d08591d",
-            "currentSha256": "3ff8de1c89cfdf1c5b0cd7705837fc0473a07d19afa1a028c506ef778aa6eac9"
+            "currentSha256": "8c66604116e99e72adb99d3de299ca5e6e3ecd0905fed18c39ab055a86280c4d"
           },
           {
             "path": "tests/production-plan-import-link-ui.test.mjs",
@@ -35972,7 +36177,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-participants-ui.mjs",
             "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-            "currentSha256": "f0e85b43c71d26329a00cf96a43cd028f141de2609cae6c26589db6e7d1e4d03"
+            "currentSha256": "f5fc8d4aa4cbcac08690ecb4bca6b311a1812b10b3423056bb7d823e71e45ec0"
           },
           {
             "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -36174,7 +36379,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-workspace-ui.mjs",
             "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-            "currentSha256": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9"
+            "currentSha256": "f11906a432d7f33bbbda7043423e196a42b230f96b0355c8d001e0f889a5590a"
           },
           {
             "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -36319,7 +36524,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "src/lib/meta-customer-provider.mjs",
             "previousSha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f",
-            "currentSha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+            "currentSha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
           },
           {
             "path": "src/lib/meta-employee-intake.mjs",
@@ -36574,7 +36779,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "tests/production-plan-import-document-curve-fixture-copy.test.mjs",
             "previousSha256": "40953ff493ea8df1a28a4201bbb0903cff48240a1f8831d58ce7e05d3d08591d",
-            "currentSha256": "3ff8de1c89cfdf1c5b0cd7705837fc0473a07d19afa1a028c506ef778aa6eac9"
+            "currentSha256": "8c66604116e99e72adb99d3de299ca5e6e3ecd0905fed18c39ab055a86280c4d"
           },
           {
             "path": "tests/production-plan-import-link-ui.test.mjs",
@@ -36694,7 +36899,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "scripts/verify-participants-ui.mjs",
             "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-            "currentSha256": "f0e85b43c71d26329a00cf96a43cd028f141de2609cae6c26589db6e7d1e4d03"
+            "currentSha256": "f5fc8d4aa4cbcac08690ecb4bca6b311a1812b10b3423056bb7d823e71e45ec0"
           },
           {
             "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -36840,6 +37045,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "path": "scripts/verify-company-kyc-outbound-compact-ci.mjs",
             "previousSha256": "d3a08f3d3c7027556cd2d517db29cb85b8b432f413de50079fd2f6cc46913b68",
             "currentSha256": "44e1d6910bda100af220f89bb7430f13df2e6380b9dee0a77d3e3d1feb9ee96d"
+          },
+          {
+            "path": "scripts/verify-field-overtime-ui.mjs",
+            "previousSha256": "75f293e39895b3c5b27b94b7d19bba9f82331f64f08f0a1ac0c95ff5437941f1",
+            "currentSha256": "283a91bcc1c17837cb41ec2ddd769ba87b7801b75e7cb5ee3af5496f04e800ce"
           },
           {
             "path": "scripts/verify-meta-kyc-chat-postgres.mjs",
@@ -37190,6 +37400,11 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "path": "tests/production-native-capture-quality-source-manifest.test.mjs",
             "previousSha256": null,
             "currentSha256": "8e8620b61893c89aa3326bfc759c8ba6fb94fa8fcb998bbd10ca006060034fa2"
+          },
+          {
+            "path": "tests/production-own-company-runtime-provider.test.mjs",
+            "previousSha256": "82a0450564cd57f1927fc93ac6b73b4c2be74e136c853d751b4bbe52a6f6b034",
+            "currentSha256": "adc91c307ffdeefbcb090783c9f16d373fadaf186e8b2b516cc98da7dc89e89a"
           },
           {
             "path": "tests/production-participant-channel-kyc.test.mjs",
@@ -44134,7 +44349,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -45562,7 +45777,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -47284,7 +47499,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -48689,7 +48904,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -49971,7 +50186,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -55968,7 +56183,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -57199,7 +57414,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -58040,7 +58255,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+                  "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -58808,7 +59023,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+                  "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -59560,7 +59775,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+                  "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -60318,7 +60533,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+                  "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -61072,7 +61287,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+                  "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -62271,7 +62486,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2"
+            "sha256": "dc17fe47765c43c17a2ded59bf797f478466ccd293727a9bd5be768f20c6b35b"
           },
           {
             "path": "src/lib/meta-customer-template-send-http.mjs",

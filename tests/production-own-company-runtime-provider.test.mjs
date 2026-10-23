@@ -78,6 +78,16 @@ test('registration-phase or superseded inspection cannot create an operational r
  assert.throws(()=>f.admin.ownOperationalAuthority(pre),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');assert.throws(()=>f.admin.ownOperationalAuthority(original),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');
  f.state.registered=false;const pending=await f.admin.inspect({token:f.token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId});assert.throws(()=>f.admin.ownOperationalAuthority(pending),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');assert.equal(f.calls.filter(call=>call.method==='POST').length,0);
 });
+for(const [name,status] of [['unverified','NOT_VERIFIED'],['missing',undefined]])test('ADMIN '+name+' phone verification cannot mint operational authority through a forged inspection DTO',async()=>{
+ const f=await fixture();f.calls.length=0;if(status===undefined)delete f.phone.code_verification_status;else f.phone.code_verification_status=status;
+ const inspection=await f.admin.inspect({token:f.token,wabaId:f.policy.wabaId,phoneNumberId:f.policy.phoneNumberId});
+ assert.equal(inspection.registered,true);assert.equal(inspection.platformType,'CLOUD_API');assert.equal(Object.hasOwn(inspection,'phoneCodeVerified'),false);
+ assert.throws(()=>f.admin.ownOperationalAuthority(inspection),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');
+ inspection.phoneCodeVerified=true;inspection.code_verification_status='VERIFIED';
+ assert.throws(()=>f.admin.ownOperationalAuthority(inspection),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');
+ assert.throws(()=>f.admin.ownOperationalAuthority({...inspection}),error=>error.code==='META_OWN_COMPANY_OWNER_UNVERIFIED');
+ assert.equal(f.calls.filter(call=>call.method==='POST').length,0);
+});
 test('runtime capability cannot import, mint provenance/authority, subscribe, register or access templates/coexistence',async()=>{
  const f=await fixture(),capability=await f.capability(),scoped=await f.runtime();f.calls.length=0;
  await assert.rejects(f.base.forOwnCapability({capability,token:f.token}),error=>error.code==='META_OWN_COMPANY_UNAVAILABLE');
