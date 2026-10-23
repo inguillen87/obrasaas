@@ -39103,7 +39103,7 @@
       {
         "path": "scripts/verify-workspace-ui.mjs",
         "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-        "currentSha256": "093e8e218b6f6a67ed3b23fea20cc1774bbb8be67f0bcbb35b832f7cf2720294"
+        "currentSha256": "39981d9f4007e30a0e84634e8f2f546012dc3a89d0572af5663e295487f3c200"
       },
       {
         "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -39623,7 +39623,7 @@
       {
         "path": "scripts/verify-participants-ui.mjs",
         "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-        "currentSha256": "5d9a2b3b603eb104d6ffc50ce6fb4680f2f8ecd889cdd1d08d4cf244a385efff"
+        "currentSha256": "df780f75a0634fe5801e92477f51c5e1ee5b1736ed6ee6d8db5fae16174d07f8"
       },
       {
         "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -39694,6 +39694,21 @@
         "path": "tests/production-workspace-recorded-readback-ui.test.mjs",
         "previousSha256": null,
         "currentSha256": "147f004ddb94dad5c3309eefcc3f46147de2151996b17aaeb1f4b888c675438e"
+      },
+      {
+        "path": ".github/scripts/observe-production-test-entry.mjs",
+        "previousSha256": null,
+        "currentSha256": "d831717d63180ec55242c447bce449e8946b768be3e21da13033326df6658641"
+      },
+      {
+        "path": ".github/scripts/verify-production-test-shards.py",
+        "previousSha256": null,
+        "currentSha256": "b7347aa8466cf134c25e44941d3f9d2f24c002868c92db388a5cc722d30fd2dc"
+      },
+      {
+        "path": ".github/workflows/production-boundary.yml",
+        "previousSha256": "072a3da3a12d25046584ffd1f5d4d2dc83879f0398291c182e21c4274f1ab2ea",
+        "currentSha256": "ed5c17c31b06af95e60afcc1bb71f1195c8a11d31ed69b30ff427f952d719ed7"
       },
       {
         "path": "api/_biometric_core.py",
@@ -64133,6 +64148,21 @@
       "previousDeclarationSha256": "cb5b5dbe197defccf1f8ee7c166ccc8e750c339ea612c015e80856cc34dee63f",
       "sourceAliases": [
         {
+          "path": ".github/scripts/observe-production-test-entry.mjs",
+          "previousSha256": null,
+          "currentSha256": "d831717d63180ec55242c447bce449e8946b768be3e21da13033326df6658641"
+        },
+        {
+          "path": ".github/scripts/verify-production-test-shards.py",
+          "previousSha256": null,
+          "currentSha256": "b7347aa8466cf134c25e44941d3f9d2f24c002868c92db388a5cc722d30fd2dc"
+        },
+        {
+          "path": ".github/workflows/production-boundary.yml",
+          "previousSha256": "072a3da3a12d25046584ffd1f5d4d2dc83879f0398291c182e21c4274f1ab2ea",
+          "currentSha256": "ed5c17c31b06af95e60afcc1bb71f1195c8a11d31ed69b30ff427f952d719ed7"
+        },
+        {
           "path": "api/_biometric_core.py",
           "previousSha256": "ce52249d0b783239cb3a205f41a731f9d1444c78c40120ebe41b6a851575d817",
           "currentSha256": "664cb74b9e1e2a440ebaed1abd6350e8489cf7c2e4d6ef1ff7ffa8fe27b76e75"
@@ -64762,7 +64792,7 @@
         {
           "path": "scripts/verify-participants-ui.mjs",
           "previousSha256": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-          "currentSha256": "5d9a2b3b603eb104d6ffc50ce6fb4680f2f8ecd889cdd1d08d4cf244a385efff"
+          "currentSha256": "df780f75a0634fe5801e92477f51c5e1ee5b1736ed6ee6d8db5fae16174d07f8"
         },
         {
           "path": "scripts/verify-plan-import-boundary.mjs",
@@ -64772,7 +64802,7 @@
         {
           "path": "scripts/verify-workspace-ui.mjs",
           "previousSha256": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
-          "currentSha256": "093e8e218b6f6a67ed3b23fea20cc1774bbb8be67f0bcbb35b832f7cf2720294"
+          "currentSha256": "39981d9f4007e30a0e84634e8f2f546012dc3a89d0572af5663e295487f3c200"
         },
         {
           "path": "src/app/(identity)/cuenta/kyc-photo-preparation.js",
@@ -64926,6 +64956,36 @@
         }
       ],
       "sourceHistory": [
+        {
+          "path": ".github/scripts/observe-production-test-entry.mjs",
+          "status": "ADDED",
+          "previousSha256": null,
+          "currentSha256": "d831717d63180ec55242c447bce449e8946b768be3e21da13033326df6658641",
+          "previousBytes": 0,
+          "currentBytes": 2372,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 0,
+              "currentText": "import { readFileSync, writeFileSync } from 'node:fs';\nimport { createHash } from 'node:crypto';\nimport path from 'node:path';\n\n// Observe native process-isolated test entries; never replace node:test or its exit.\nconst context = process.env.NODE_TEST_CONTEXT;\nconst output = process.env.BOUNDARY_UNIT_OUTPUT;\nconst error = code => {\n  try {\n    writeFileSync(path.join(output, `observer-error-${process.pid}.json`), JSON.stringify({ code }) + '\\n', { flag: 'wx' });\n  } catch { /* Missing evidence is rejected separately; preserve the native exit. */ }\n};\n\nif (context !== undefined) {\n  try {\n    if (context !== 'child-v8') throw new Error('OBSERVER_PROTOCOL');\n    if (!/^v24\\.\\d+\\.\\d+$/.test(process.version)) throw new Error('OBSERVER_NODE');\n    const manifest = JSON.parse(readFileSync(path.join(output, 'manifest.json'), 'utf8'));\n    if (manifest.nodeVersion !== process.version) throw new Error('OBSERVER_NODE');\n    const entry = typeof process.argv[1] === 'string'\n      ? path.relative(process.cwd(), path.resolve(process.argv[1])).replaceAll('\\\\', '/')\n      : '';\n    if (!entry || entry.startsWith('../') || path.isAbsolute(entry)) throw new Error('OBSERVER_ENTRY');\n    const expected = manifest.files.find(file => file.entry === entry);\n    if (!expected) throw new Error('OBSERVER_ENTRY');\n    const sourceSha256 = createHash('sha256').update(readFileSync(entry)).digest('hex');\n    if (sourceSha256 !== expected.sourceSha256) throw new Error('OBSERVER_SOURCE');\n    const startedAt = new Date().toISOString();\n    const receipt = { entry, pid: process.pid, sourceSha256, startedAt, exitCode: null };\n    const entryId = createHash('sha256').update(entry).digest('hex');\n    const prefix = path.join(output, 'entries', `entry-${process.pid}-${entryId}`);\n    writeFileSync(prefix + '.start.json', JSON.stringify(receipt) + '\\n', { flag: 'wx' });\n    process.on('exit', exitCode => {\n      try {\n        const finalSha256 = createHash('sha256').update(readFileSync(entry)).digest('hex');\n        writeFileSync(prefix + '.exit.json', JSON.stringify({ ...receipt, sourceSha256: finalSha256, exitCode }) + '\\n', { flag: 'wx' });\n      } catch { error('OBSERVER_EXIT'); }\n    });\n  } catch (cause) {\n    const code = typeof cause?.message === 'string' && /^OBSERVER_[A-Z]+$/.test(cause.message)\n      ? cause.message : 'OBSERVER_IO';\n    error(code);\n  }\n}\n",
+              "previousText": ""
+            }
+          ]
+        },
+        {
+          "path": ".github/scripts/verify-production-test-shards.py",
+          "status": "ADDED",
+          "previousSha256": null,
+          "currentSha256": "b7347aa8466cf134c25e44941d3f9d2f24c002868c92db388a5cc722d30fd2dc",
+          "previousBytes": 0,
+          "currentBytes": 9026,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 0,
+              "currentText": "\"\"\"Observe native Node sharding; do not schedule, replace or reinterpret tests.\"\"\"\nimport hashlib\nimport json\nimport os\nfrom pathlib import Path\nimport re\nimport subprocess\nimport sys\nimport xml.etree.ElementTree as ET\n\nSCHEMA = \"production-boundary-shard.v1\"\nTOTAL = 4\nEXPECTED_COUNT = 379\nOUTPUT = \".vercel/private/production-boundary-unit-shard\"\nDOWNLOADS = \".vercel/private/production-boundary-unit-artifacts\"\nMANIFEST_KEYS = {\"schema\", \"head\", \"runId\", \"runAttempt\", \"shard\", \"total\", \"nodeVersion\", \"files\"}\nRECEIPT_KEYS = {\"entry\", \"pid\", \"sourceSha256\", \"startedAt\", \"exitCode\"}\nHEX = re.compile(r\"[0-9a-f]{64}\\Z\")\nTIME = re.compile(r\"\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z\\Z\")\nRECEIPT_NAME = re.compile(r\"entry-([1-9][0-9]*)-([0-9a-f]{64})\\.(start|exit)\\.json\\Z\")\n\n\nclass Denied(Exception):\n    def __init__(self, code):\n        self.code = code\n        super().__init__(code)\n\n\ndef need(condition, code):\n    if not condition:\n        raise Denied(code)\n\n\ndef digest(data):\n    return hashlib.sha256(data).hexdigest()\n\n\ndef unique_object(pairs):\n    result = {}\n    for key, value in pairs:\n        need(key not in result, \"JSON_DUPLICATE_KEY\")\n        result[key] = value\n    return result\n\n\ndef read_json(file):\n    need(file.is_file() and not file.is_symlink(), \"EVIDENCE_FILE\")\n    need(file.stat().st_size <= 262144, \"EVIDENCE_SIZE\")\n    try:\n        return json.loads(file.read_text(encoding=\"utf-8\"), object_pairs_hook=unique_object,\n                          parse_constant=lambda _: (_ for _ in ()).throw(Denied(\"JSON_CONSTANT\")))\n    except (ValueError, UnicodeError):\n        raise Denied(\"JSON_INVALID\") from None\n\n\ndef exact_keys(value, keys, code):\n    need(type(value) is dict and set(value) == keys, code)\n\n\ndef node_version():\n    value = subprocess.check_output([\"node\", \"--version\"], text=True).strip()\n    need(re.fullmatch(r\"v24\\.\\d+\\.\\d+\", value) is not None, \"NODE_VERSION\")\n    return value\n\n\ndef production_context(root, environ):\n    head = subprocess.check_output([\"git\", \"rev-parse\", \"HEAD\"], cwd=root, text=True).strip()\n    need(re.fullmatch(r\"[0-9a-f]{40}\", head) is not None and head == environ.get(\"GITHUB_SHA\"), \"HEAD\")\n    run_id, attempt = environ.get(\"GITHUB_RUN_ID\", \"\"), environ.get(\"GITHUB_RUN_ATTEMPT\", \"\")\n    need(re.fullmatch(r\"[1-9][0-9]*\", run_id) is not None and re.fullmatch(r\"[1-9][0-9]*\", attempt) is not None, \"RUN_ID\")\n    tracked = subprocess.check_output([\"git\", \"ls-files\", \"-z\", \"--\", \"tests/production-*.test.mjs\"], cwd=root).decode().split(\"\\0\")\n    entries = sorted(entry for entry in tracked if entry)\n    need(len(entries) == EXPECTED_COUNT and all(re.fullmatch(r\"tests/production-[^/]+\\.test\\.mjs\", entry) for entry in entries), \"INVENTORY_COUNT\")\n    disk = sorted(file.relative_to(root).as_posix() for file in (root / \"tests\").glob(\"production-*.test.mjs\"))\n    need(entries == disk, \"INVENTORY_DISK\")\n    changed = subprocess.run([\"git\", \"diff\", \"--quiet\", \"HEAD\", \"--\", \"tests/production-*.test.mjs\"], cwd=root, check=False)\n    need(changed.returncode == 0, \"INVENTORY_CHANGED\")\n    files = []\n    for entry in entries:\n        file = root / entry\n        need(file.is_file() and not file.is_symlink(), \"SOURCE_FILE\")\n        files.append({\"entry\": entry, \"sourceSha256\": digest(file.read_bytes())})\n    return {\"head\": head, \"runId\": run_id, \"runAttempt\": attempt, \"nodeVersion\": node_version(), \"files\": files}\n\n\ndef prepare(root, environ):\n    context = production_context(root, environ)\n    shard = environ.get(\"BOUNDARY_UNIT_SHARD\", \"\")\n    need(shard in {\"1\", \"2\", \"3\", \"4\"}, \"SHARD_ID\")\n    relative = environ.get(\"BOUNDARY_UNIT_OUTPUT\", OUTPUT)\n    need(relative == OUTPUT, \"OUTPUT_SCOPE\")\n    output = root / relative\n    output.mkdir(parents=True, exist_ok=False)\n    (output / \"entries\").mkdir()\n    manifest = {\"schema\": SCHEMA, **context, \"shard\": int(shard), \"total\": TOTAL}\n    with (output / \"manifest.json\").open(\"x\", encoding=\"utf-8\", newline=\"\\n\") as handle:\n        json.dump(manifest, handle, separators=(\",\", \":\"))\n        handle.write(\"\\n\")\n    return {\"ok\": True, \"prepared\": EXPECTED_COUNT, \"shard\": int(shard), \"total\": TOTAL}\n\n\ndef validate_junit(file):\n    need(file.is_file() and not file.is_symlink(), \"JUNIT_FILE\")\n    need(file.stat().st_size <= 33554432, \"JUNIT_SIZE\")\n    raw = file.read_bytes()\n    need(b\"<!DOCTYPE\" not in raw and b\"<!ENTITY\" not in raw, \"JUNIT_ENTITY\")\n    try:\n        tree = ET.fromstring(raw)\n    except ET.ParseError:\n        raise Denied(\"JUNIT_INVALID\") from None\n    need(tree.tag == \"testsuites\" and len(list(tree.iter(\"testcase\"))) > 0, \"JUNIT_SHAPE\")\n    need(not list(tree.iter(\"failure\")) and not list(tree.iter(\"error\")), \"JUNIT_FAILURE\")\n    need(all(suite.get(\"failures\", \"0\") == \"0\" and suite.get(\"errors\", \"0\") == \"0\"\n             for suite in tree.iter(\"testsuite\")), \"JUNIT_FAILURE\")\n\n\ndef artifact_name(context, shard):\n    return f\"production-unit-{context['runId']}-{context['runAttempt']}-{shard}\"\n\n\ndef validate_evidence(downloads, expected):\n    \"\"\"Pure evidence validation. CLI supplies its fresh exact379 Git context.\"\"\"\n    need(downloads.is_dir() and not downloads.is_symlink(), \"ARTIFACT_ROOT\")\n    names = {artifact_name(expected, shard) for shard in range(1, TOTAL + 1)}\n    need({file.name for file in downloads.iterdir()} == names, \"ARTIFACT_SET\")\n    expected_files = expected[\"files\"]\n    source_by_entry = {file[\"entry\"]: file[\"sourceSha256\"] for file in expected_files}\n    need(len(source_by_entry) == len(expected_files), \"EXPECTED_DUPLICATE\")\n    seen = set()\n    for shard in range(1, TOTAL + 1):\n        artifact = downloads / artifact_name(expected, shard)\n        need(artifact.is_dir() and not artifact.is_symlink(), \"ARTIFACT_DIRECTORY\")\n        need({file.name for file in artifact.iterdir()} == {\"manifest.json\", \"native.junit.xml\", \"entries\"}, \"ARTIFACT_CONTENTS\")\n        manifest = read_json(artifact / \"manifest.json\")\n        exact_keys(manifest, MANIFEST_KEYS, \"MANIFEST_SHAPE\")\n        need(manifest[\"schema\"] == SCHEMA and type(manifest[\"shard\"]) is int and manifest[\"shard\"] == shard\n             and type(manifest[\"total\"]) is int and manifest[\"total\"] == TOTAL, \"MANIFEST_SHARD\")\n        for key in (\"head\", \"runId\", \"runAttempt\", \"nodeVersion\"):\n            need(manifest[key] == expected[key], \"MANIFEST_\" + key.upper())\n        need(manifest[\"files\"] == expected_files, \"MANIFEST_FILES\")\n        entries_dir = artifact / \"entries\"\n        need(entries_dir.is_dir() and not entries_dir.is_symlink(), \"ENTRIES_DIRECTORY\")\n        pairs = {}\n        for file in entries_dir.iterdir():\n            match = RECEIPT_NAME.fullmatch(file.name)\n            need(match is not None, \"ENTRY_FILENAME\")\n            receipt = read_json(file)\n            exact_keys(receipt, RECEIPT_KEYS, \"ENTRY_SHAPE\")\n            entry, pid = receipt[\"entry\"], receipt[\"pid\"]\n            need(type(entry) is str and entry in source_by_entry, \"ENTRY_EXTRA\")\n            need(type(pid) is int and pid > 0 and str(pid) == match[1], \"ENTRY_PID\")\n            need(digest(entry.encode()) == match[2], \"ENTRY_PATH_ID\")\n            need(type(receipt[\"sourceSha256\"]) is str and HEX.fullmatch(receipt[\"sourceSha256\"])\n                 and receipt[\"sourceSha256\"] == source_by_entry[entry], \"ENTRY_SOURCE\")\n            need(type(receipt[\"startedAt\"]) is str and TIME.fullmatch(receipt[\"startedAt\"]), \"ENTRY_TIME\")\n            if match[3] == \"start\":\n                need(receipt[\"exitCode\"] is None, \"ENTRY_START\")\n            else:\n                need(type(receipt[\"exitCode\"]) is int and receipt[\"exitCode\"] == 0, \"ENTRY_EXIT\")\n            key = (entry, pid)\n            pair = pairs.setdefault(key, {})\n            need(match[3] not in pair, \"ENTRY_DUPLICATE_RECEIPT\")\n            pair[match[3]] = receipt\n        need(len(pairs) > 0, \"SHARD_EMPTY\")\n        for (entry, _), pair in pairs.items():\n            need(set(pair) == {\"start\", \"exit\"}, \"ENTRY_PAIR\")\n            need({key: value for key, value in pair[\"start\"].items() if key != \"exitCode\"}\n                 == {key: value for key, value in pair[\"exit\"].items() if key != \"exitCode\"}, \"ENTRY_PAIR\")\n            need(entry not in seen, \"ENTRY_DUPLICATE\")\n            seen.add(entry)\n        validate_junit(artifact / \"native.junit.xml\")\n    need(seen == set(source_by_entry), \"ENTRY_MISSING\")\n    return {\"ok\": True, \"shards\": TOTAL, \"entries\": len(seen), \"disjoint\": True}\n\n\ndef main():\n    need(len(sys.argv) == 2 and sys.argv[1] in {\"prepare\", \"verify\"}, \"COMMAND\")\n    root = Path.cwd()\n    if sys.argv[1] == \"prepare\":\n        return prepare(root, os.environ)\n    expected = production_context(root, os.environ)\n    result = validate_evidence(root / DOWNLOADS, expected)\n    need(production_context(root, os.environ) == expected, \"SOURCE_CHANGED_DURING_VERIFY\")\n    return result\n\n\nif __name__ == \"__main__\":\n    try:\n        print(json.dumps(main(), separators=(\",\", \":\")))\n    except Denied as denied:\n        print(json.dumps({\"ok\": False, \"code\": denied.code}), file=sys.stderr)\n        sys.exit(1)\n",
+              "previousText": ""
+            }
+          ]
+        },
         {
           "path": ".github/scripts/verify-workspace-ci-parallelization.mjs",
           "status": "MODIFIED",
@@ -65168,6 +65228,36 @@
               "currentOffsetCharacters": 434936,
               "currentText": "\n// Static copies of the existing selftest-only helper bodies. Explicit fixture\n// ports below never change the public current collector or native entrypoint.\nfunction captureNativeFixtureSelftestHelpers(readFileSync,currentProducerSourceFiles){\nfunction companyKycCurrentSourceClosureSelftest(spec,proof,root,validate){\n if(spec.kind!=='PG_COMPANY_KYC')return [];\n  const dependencies=[...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(spec)],checks=[],prefix=spec.id+'-expiry-current-source-';if(!dependencies.length)return checks;\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure source and shadow proof; no PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial shadow proof'});};\n good('actual-emitter-and-declared-corpus-exact',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));\n good('previous-209-path-lineage-immutable',()=>{const previous=spec.sourceFiles.filter(file=>!dependencies.includes(file)).toSorted();assert.equal(previous.length,209);validateCompanyKycPreviousSourceLineage(spec);});\n for(const file of dependencies){\n  good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-expiry-source.mjs';assert.equal(p.sourceManifest.length,spec.sourceFiles.length);});\n }\n  mutate('initial-210-emitter-omission-cannot-certify-AST-closure','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==COMPANY_KYC_FORMAT_CLOSURE_SOURCE&&!planBaselineDependenciesFor(spec.kind).includes(ref.path)&&!currentWhatsappFeedbackDependenciesFor(spec.kind).includes(ref.path)&&!planMeasurementCurrentDependencies(spec.kind).includes(ref.path)&&!participantPreanalysisProofSourceAdditions(spec).includes(ref.path));assert.equal(p.sourceManifest.length,210);});\n mutate('previous-209-manifest-cannot-certify-expiry','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!dependencies.includes(ref.path));assert.equal(p.sourceManifest.length,209);});\n mutate('previous-reviewed-producer-cannot-certify-current-native-groups','PROOF_HARNESS_SOURCE',p=>{p.harnessSha256=COMPANY_KYC_EXPIRY_PREVIOUS_PRODUCER_SHA256;});\n return checks;\n}\nfunction companySubscriptionProofClosureSelftest(spec,proof,root,validate){\n const dependencies=companySubscriptionProofDependenciesFor(spec.kind),checks=[],prefix=spec.id+'-company-subscription-';if(!dependencies.length)return checks;\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};\n good('exact-current-producer-closure',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));\n for(const file of dependencies){\n  good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-company-subscription.mjs';assert.equal(p.sourceManifest.length,spec.sourceFiles.length);});\n }\n if(isIdentity(spec)){\n  mutate('previous-same-count-billing-mount-denied','PROOF_SOURCE_MANIFEST',p=>{for(const [index,file]of COMPANY_SUBSCRIPTION_UI_SOURCES.entries())p.sourceManifest.find(ref=>ref.path===file).path=PREVIOUS_COMPANY_BILLING_UI_SOURCES[index];assert.equal(p.sourceManifest.length,spec.sourceFiles.length);});\n  mutate('previous-117-manifest-without-closed-fixture-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...companySubscriptionFixtureDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(spec)].includes(ref.path));assert.equal(p.sourceManifest.length,117);});\n }\n  else mutate('previous-191-source-manifest-denied','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...dependencies,...taskMeasurementDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(spec)].includes(ref.path));assert.equal(p.sourceManifest.length,191);});\n return checks;\n}\nfunction currentKycStatusClosureSelftest(spec,proof,root,validate){\n const dependencies=currentKycStatusDependenciesFor(spec.kind);if(!dependencies.length)return [];\n const previousCount=CURRENT_KYC_STATUS_BASE_COUNTS[spec.kind]??CURRENT_KYC_FEEDBACK_ONLY_BASE_COUNTS[spec.kind];assert.ok(Number.isSafeInteger(previousCount));\n const checks=[],prefix=spec.id+'-current-kyc-status-';\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure CURRENT source fixture; no PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',boundary:'pure adversarial CURRENT source fixture'});};\n const rewrite=(value,file,{remove=false,replacement=null,changedHash=false}={})=>{\n  let changed=0;\n  if(spec.kind==='PG_FIELD'){\n   for(const map of [value.sourceSha256,value.voiceProgressSourceSha256,value.mediaLeaseSourceSha256,value.videoAudioSourceSha256,value.participantKycFixture.sourceSha256])if(Object.hasOwn(map,file)){\n    const original=map[file];if(remove||replacement)delete map[file];if(replacement)map[replacement]=original;if(changedHash)map[file]='f'.repeat(64);changed++;\n   }\n  }else{\n   const key=spec.kind==='PG_OVERTIME'?'file':'path';\n   value.sourceManifest=value.sourceManifest.filter(ref=>{if(ref[key]!==file)return true;changed++;if(replacement)ref[key]=replacement;if(changedHash)ref.sha256='f'.repeat(64);return !remove;});\n  }\n  assert.ok(changed>0,'CURRENT source exists in shadow manifest: '+file);\n };\n good('exact-additive-count-and-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+calendarPreparationDependenciesFor(spec.kind).length+whatsappPlanImportDependenciesFor(spec.kind).length+organizationUsageDependenciesFor(spec.kind).length+proofFixtureDependenciesFor(spec.kind).length+civilDataDependenciesFor(spec.kind).length+companyKycCurrentSourceClosureDependenciesFor(spec.kind).length+companySubscriptionBackendDependenciesFor(spec.kind).length+companySubscriptionFixtureDependenciesFor(spec.kind).length+taskMeasurementDependenciesFor(spec.kind).length+planBaselineDependenciesFor(spec.kind).length+planMeasurementCurrentDependencies(spec.kind).length+participantPreanalysisProofSourceAdditions(spec).length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});\n for(const file of dependencies){\n  good('source-pinned-'+file,()=>assert.ok(spec.sourceFiles.includes(file)));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{remove:true}));\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',value=>rewrite(value,file,{changedHash:true}));\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{replacement:'src/lib/foreign-current-kyc-source.mjs'}));\n }\n mutate('previous-current-manifest-cannot-certify-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of [...dependencies,...calendarPreparationDependenciesFor(spec.kind),...whatsappPlanImportDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...companySubscriptionBackendDependenciesFor(spec.kind),...companySubscriptionFixtureDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(spec)])rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,previousCount);});\n const replyDependencies=currentKycReplyFeedbackDependenciesFor(spec.kind);\n if(replyDependencies.length)mutate('previous-reply-manifest-cannot-certify-delivery-reader','PROOF_SOURCE_MANIFEST',value=>{for(const file of replyDependencies)rewrite(value,file,{remove:true});const count=isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length;assert.equal(count,spec.sourceFiles.length-replyDependencies.length);});\n checks.push(...organizationUsageClosureSelftest(spec,proof,root,validate));\n return checks;\n}\nfunction documentCurveCopySelftest(spec,proof,validate){\n if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO','UI_JOINT','UI_CAUSAL'].includes(spec.kind))return [];\n const checks=[],bad=(name,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');checks.push({name:spec.id+'-document-copy-'+name,result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure source/relocation shadow; no UI execution'});};\n bad('source-map-missing',p=>{delete p.documentCurveSourceManifest;});bad('source-map-substituted',p=>{p.documentCurveSourceManifest[1].path='src/lib/foreign-document-curve.mjs';});bad('source-map-stale',p=>{p.documentCurveSourceManifest[1].sha256='f'.repeat(64);});bad('source-map-duplicate',p=>{p.documentCurveSourceManifest[1]=clone(p.documentCurveSourceManifest[0]);});bad('relocation-missing',p=>{p.fixtureTransforms=[];});\n for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('relocation-'+key,p=>{p.fixtureTransforms[0][key]='f'.repeat(64);});bad('relocation-foreign-root',p=>{p.fixtureTransforms[0].fixtureRelativePath='../foreign.mjs';});bad('relocation-wrong-module',p=>{p.fixtureTransforms[0].dependencySourcePath='src/lib/foreign-document-curve.mjs';});bad('relocation-untracked-fields',p=>{p.fixtureTransforms[0].exactCopied=true;});\n if(proof.fixtureTransforms.length===2){bad('cyp-module-omitted',p=>{p.documentCurveSourceManifest=p.documentCurveSourceManifest.filter(row=>row.path!=='src/lib/plan-import-cyp-curve.mjs');});bad('second-relocation-omitted',p=>{p.fixtureTransforms.pop();});bad('relocations-reordered',p=>{p.fixtureTransforms.reverse();});for(const key of ['sourceSha256','copiedBeforeSha256','fixtureSha256'])bad('second-relocation-'+key,p=>{p.fixtureTransforms[1][key]='f'.repeat(64);});}\n return checks;\n}\nfunction monthlyCurveClosureSelftest(spec,proof,root,validate){\n const dependencies=monthlyCurveDependenciesFor(spec.kind),checks=[],prefix=spec.id+'-monthly-source-curve-';\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure shadow proof; no PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure shadow proof'});};\n good('additive-count-and-real-source-closure',()=>{assert.equal(spec.sourceFiles.length,currentOwnTemplateSourceCount(spec.kind,spec));equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});\n for(const file of dependencies){\n  good('source-pinned-'+file,()=>assert.ok(spec.sourceFiles.includes(file)));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-monthly-source-curve.mjs';assert.equal(p.sourceManifest.length,currentOwnTemplateSourceCount(spec.kind,spec));});\n }\n mutate('previous-manifest-cannot-certify-v3','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>![...currentPlanDependenciesFor(spec.kind),...participantPreanalysisProofSourceAdditions(spec),...officeAccountDependenciesFor(spec.kind),...currentKycStatusDependenciesFor(spec.kind),...companySubscriptionBackendDependenciesFor(spec.kind),...companySubscriptionFixtureDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind)].includes(ref.path));assert.equal(p.sourceManifest.length,OWN_TEMPLATE_SOURCE_COUNTS[spec.kind]);});\n return checks;\n}\nfunction organizationUsageClosureSelftest(spec,proof,root,validate){\n  const dependencies=[...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...commercialAcceptanceDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(spec)];if(!dependencies.length)return [];\n const previousCount=ORGANIZATION_USAGE_PREVIOUS_SOURCE_COUNTS[spec.kind]??CIVIL_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-organization-usage-';\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure CURRENT source fixture; no PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial CURRENT source fixture'});};\n const rewrite=(value,file,{remove=false,replacement=null,changedHash=false}={})=>{\n  let changed=0;\n  if(spec.kind==='PG_FIELD'){\n   for(const map of [value.sourceSha256,value.voiceProgressSourceSha256,value.mediaLeaseSourceSha256,value.videoAudioSourceSha256,value.participantKycFixture.sourceSha256])if(Object.hasOwn(map,file)){\n    const original=map[file];if(remove||replacement)delete map[file];if(replacement)map[replacement]=original;if(changedHash)map[file]='f'.repeat(64);changed++;\n   }\n  }else{\n   const key=spec.kind==='PG_OVERTIME'?'file':'path';\n   value.sourceManifest=value.sourceManifest.filter(ref=>{if(ref[key]!==file)return true;changed++;if(replacement)ref[key]=replacement;if(changedHash)ref.sha256='f'.repeat(64);return !remove;});\n  }\n  assert.ok(changed>0,'CURRENT organization usage source exists: '+file);\n };\n good('exact-additive-count-and-real-AST-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});\n  if(civilDataDependenciesFor(spec.kind).length+companyKycCurrentSourceClosureDependenciesFor(spec.kind).length)good('civil-current-count-and-closure-exact',()=>assert.equal(spec.sourceFiles.length,CIVIL_PREVIOUS_SOURCE_COUNTS[spec.kind]+civilDataDependenciesFor(spec.kind).length+companyKycCurrentSourceClosureDependenciesFor(spec.kind).length+commercialAcceptanceDependenciesFor(spec.kind).length+planBaselineDependenciesFor(spec.kind).length+currentWhatsappFeedbackDependenciesFor(spec.kind).length+planMeasurementCurrentDependencies(spec.kind).length+participantPreanalysisProofSourceAdditions(spec).length));\n for(const file of dependencies){\n  good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{remove:true}));\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',value=>rewrite(value,file,{changedHash:true}));\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',value=>{rewrite(value,file,{replacement:'src/lib/foreign-organization-usage-source.mjs'});assert.equal(isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length,previousCount+dependencies.length);});\n }\n mutate('previous-current-manifest-cannot-certify-usage','PROOF_SOURCE_MANIFEST',value=>{for(const file of dependencies)rewrite(value,file,{remove:true});assert.equal(isCanonicalField(spec)?canonicalFieldManifest(spec,value).length:value.sourceManifest.length,previousCount);});\n return checks;\n}\nfunction ownTemplateClosureSelftest(spec,proof,root,validate){\n const dependencies=ownTemplateDependenciesFor(spec.kind);if(!dependencies.length)return [];\n const checks=[],prefix=spec.id+'-own-template-';\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure shadow fixture, no Git/PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure shadow fixture'});};\n good('current-exact-count-and-real-producer-closure',()=>{assert.equal(spec.sourceFiles.length,currentOwnTemplateSourceCount(spec.kind,spec));equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});\n for(const file of dependencies){\n  good('current-source-pinned-'+file,()=>assert.ok(spec.sourceFiles.includes(file)));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>ref.path!==file);});\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>{p.sourceManifest.find(ref=>ref.path===file).sha256='f'.repeat(64);});\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.find(ref=>ref.path===file).path='src/lib/foreign-own-template-source.mjs';assert.equal(p.sourceManifest.length,currentOwnTemplateSourceCount(spec.kind,spec));});\n }\n mutate('previous-manifest-cannot-certify-current-source','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest=p.sourceManifest.filter(ref=>!dependencies.includes(ref.path));assert.equal(p.sourceManifest.length,currentOwnTemplateSourceCount(spec.kind,spec)-dependencies.length);});\n return checks;\n}\nfunction taskMeasurementProofClosureSelftest(spec,proof,root,validate){\n const dependencies=taskMeasurementDependenciesFor(spec.kind),checks=[],prefix=spec.id+'-task-measurement-';if(!dependencies.length)return checks;\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};\n const rewrite=(value,file,{remove=false,replacement=null,changedHash=false}={})=>{\n  let changed=0;\n  if(spec.kind==='PG_FIELD'){\n   for(const map of [value.sourceSha256,value.voiceProgressSourceSha256,value.mediaLeaseSourceSha256,value.videoAudioSourceSha256,value.participantKycFixture.sourceSha256])if(Object.hasOwn(map,file)){const previous=map[file];if(remove||replacement)delete map[file];if(replacement)map[replacement]=previous;if(changedHash)map[file]='f'.repeat(64);changed++;}\n  }else{const key=spec.kind==='PG_OVERTIME'?'file':'path';value.sourceManifest=value.sourceManifest.filter(ref=>{if(ref[key]!==file)return true;changed++;if(replacement)ref[key]=replacement;if(changedHash)ref.sha256='f'.repeat(64);return !remove;});}\n  assert.ok(changed>0,'Current task measurement source exists in proof: '+file);\n };\n good('exact-current-producer-closure',()=>equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST'));\n for(const file of dependencies){\n  good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{remove:true}));\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',value=>rewrite(value,file,{changedHash:true}));\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',value=>rewrite(value,file,{replacement:'src/lib/foreign-task-measurement.mjs'}));\n }\n return checks;\n}\nfunction whatsappPlanImportClosureSelftest(spec,proof,root,validate){\n const dependencies=whatsappPlanImportDependenciesFor(spec.kind),subscriptionDependencies=[...companySubscriptionBackendDependenciesFor(spec.kind),...taskMeasurementDependenciesFor(spec.kind),...currentKycReplyFeedbackDependenciesFor(spec.kind),...organizationUsageDependenciesFor(spec.kind),...proofFixtureDependenciesFor(spec.kind),...civilDataDependenciesFor(spec.kind),...companyKycCurrentSourceClosureDependenciesFor(spec.kind),...planBaselineDependenciesFor(spec.kind),...currentWhatsappFeedbackDependenciesFor(spec.kind),...planMeasurementCurrentDependencies(spec.kind),...participantPreanalysisProofSourceAdditions(spec)],previousCount=WHATSAPP_PLAN_IMPORT_PREVIOUS_SOURCE_COUNTS[spec.kind],checks=[],prefix=spec.id+'-whatsapp-plan-import-';\n const good=(name,run)=>{run();checks.push({name:prefix+name,result:'PASS',boundary:'pure current source proof; no PG/UI/provider execution'});};\n const mutate=(name,code,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code===code);checks.push({name:prefix+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial current source proof'});};\n const rewrite=(value,file,{remove=false,replacement=null,changedHash=false}={})=>{\n  let changed=0;\n  if(spec.kind==='PG_FIELD'){\n   for(const map of [value.sourceSha256,value.voiceProgressSourceSha256,value.mediaLeaseSourceSha256,value.videoAudioSourceSha256,value.participantKycFixture.sourceSha256])if(Object.hasOwn(map,file)){\n    const original=map[file];if(remove||replacement)delete map[file];if(replacement)map[replacement]=original;if(changedHash)map[file]='f'.repeat(64);changed++;\n   }\n  }else{\n   const key=spec.kind==='PG_OVERTIME'?'file':'path';\n   value.sourceManifest=value.sourceManifest.filter(ref=>{if(ref[key]!==file)return true;changed++;if(replacement)ref[key]=replacement;if(changedHash)ref.sha256='f'.repeat(64);return !remove;});\n  }\n  assert.ok(changed>0,'WhatsApp plan source exists in shadow proof: '+file);\n };\n good('exact-additive-count-and-real-producer-closure',()=>{assert.equal(spec.sourceFiles.length,previousCount+dependencies.length+subscriptionDependencies.length);equal(currentProducerSourceFiles(spec,root),spec.sourceFiles.toSorted(),'PROOF_SOURCE_MANIFEST');});\n for(const file of dependencies){\n  good('source-pinned-once-'+file,()=>assert.equal(spec.sourceFiles.filter(source=>source===file).length,1));\n  mutate('missing-source-'+file,'PROOF_SOURCE_MANIFEST',p=>rewrite(p,file,{remove:true}));\n  mutate('changed-source-hash-'+file,'PROOF_SOURCE_HASH',p=>rewrite(p,file,{changedHash:true}));\n  mutate('same-count-foreign-source-'+file,'PROOF_SOURCE_MANIFEST',p=>{rewrite(p,file,{replacement:'src/lib/foreign-whatsapp-plan-import.mjs'});assert.equal(isCanonicalField(spec)?canonicalFieldManifest(spec,p).length:p.sourceManifest.length,previousCount+dependencies.length+subscriptionDependencies.length);});\n }\n mutate('previous-current-manifest-cannot-certify-whatsapp-import','PROOF_SOURCE_MANIFEST',p=>{for(const file of [...dependencies,...subscriptionDependencies])rewrite(p,file,{remove:true});assert.equal(isCanonicalField(spec)?canonicalFieldManifest(spec,p).length:p.sourceManifest.length,previousCount);});\n return checks;\n}\nreturn {companyKycCurrentSourceClosureSelftest,companySubscriptionProofClosureSelftest,currentKycStatusClosureSelftest,documentCurveCopySelftest,monthlyCurveClosureSelftest,organizationUsageClosureSelftest,ownTemplateClosureSelftest,taskMeasurementProofClosureSelftest,whatsappPlanImportClosureSelftest};\n}\n\n// Only declared synthetic native fixtures use this checkpoint boundary. Actual\n// collectors, aggregate inputs and current native proof verification stay current.\nfunction runCaptureNativeFixtureIteration(actualContract,actualRead,currentSpec,root,queues,run,actualPorts){\n assert.equal(typeof actualRead,'function');\n // The old FIELD shadow uses a local buffer cache. It must never supply the\n // new authority boundary: obtain fresh physical text for every scope read.\n const readCurrentPhysical=file=>{const value=readFileSync(path.join(root,sourcePath(file))),text=value.toString('utf8');assert.ok(value.equals(Buffer.from(text)));return Buffer.from(text.replaceAll('\\r\\n','\\n'));};\n const start=queues.map(queue=>queue.length),checks=actualPorts.checks,checkStart=checks.length,currentCollectorName=actualPorts.currentCollectorName;\n const mark=rows=>rows.map(row=>row.name===currentCollectorName?row:{...row,checkpoint:'literal Git731 synthetic native fixture'});\n return captureBudget.withCaptureRuntimePreviousSources(actualContract,readCurrentPhysical,(parent,parentRead)=>{\n  assert.equal(hash(JSON.stringify(parent,null,2)+'\\n'),'d5ef59b111dd3e25b8f08854d3e8e4df4838a7913e3e22b76299c1916b9913d2');\n  const parentJson=JSON.stringify(parent),parentSpec=parent.extension.proofs.find(row=>row.id===currentSpec.id),advance=actualContract.planBudgetCurrentRevision.captureQualityRuntime.proofSourceSetAdvances.find(row=>row.kind===currentSpec.kind);\n  assert.ok(parentSpec&&advance);equal(parentSpec.sourceFiles,advance.previousFiles,'PROOF_SOURCE_MANIFEST');equal(currentSpec.sourceFiles,advance.currentFiles,'PROOF_SOURCE_MANIFEST');\n  const fixtureReadFileSync=(filename,options)=>{\n   assert.equal(typeof filename,'string');const absolute=path.resolve(filename),relative=path.relative(root,absolute).split(path.sep).join('/');sourcePath(relative);assert.ok(absolute.startsWith(path.resolve(root)+path.sep));\n   const value=parentRead(relative);assert.ok(Buffer.isBuffer(value));const encoding=typeof options==='string'?options:options?.encoding;return encoding?value.toString(encoding):Buffer.from(value);\n  };\n  const fixtureCollector=(spec,sourceRoot)=>{\n   assert.equal(path.resolve(sourceRoot),path.resolve(root));equal(spec,parentSpec,'PROOF_SOURCE_MANIFEST');\n   // Derive the physical current graph independently first; only its exact\n   // authenticated additive set may project to the literal checkpoint graph.\n   const files=currentProducerSourceFiles(currentSpec,root);equal(files,advance.currentFiles,'PROOF_SOURCE_MANIFEST');return [...advance.previousFiles];\n  };\n  const ports={...actualPorts,...captureNativeFixtureSelftestHelpers(fixtureReadFileSync,fixtureCollector),validateExtensionProof:validatePreviousExtensionProof,currentProducerSourceFiles:fixtureCollector};\n  const result=run(parentSpec,parent,parentRead,ports);assert.ok(!result||typeof result.then!=='function','Synthetic fixture iteration must remain synchronous');\n  for(let index=checkStart;index<checks.length;index++)checks[index]=mark([checks[index]])[0];\n  for(const[index,queue]of queues.entries())for(let at=start[index];at<queue.length;at++)if(typeof queue[at]==='function'){\n   const callback=queue[at];queue[at]=()=>captureBudget.withCaptureRuntimePreviousSources(actualContract,readCurrentPhysical,()=>{\n    assert.equal(JSON.stringify(parent),parentJson,'The owned fixture parent must remain unchanged');\n    try{const value=callback();assert.ok(!value||typeof value.then!=='function','Deferred fixture callback must remain synchronous');return Array.isArray(value)?mark(value):value;}\n    finally{assert.equal(JSON.stringify(parent),parentJson,'The owned fixture parent must remain unchanged');}\n   });\n  }\n  return result;\n });\n}\n",
               "previousText": ""
+            }
+          ]
+        },
+        {
+          "path": ".github/workflows/production-boundary.yml",
+          "status": "MODIFIED",
+          "previousSha256": "072a3da3a12d25046584ffd1f5d4d2dc83879f0398291c182e21c4274f1ab2ea",
+          "currentSha256": "ed5c17c31b06af95e60afcc1bb71f1195c8a11d31ed69b30ff427f952d719ed7",
+          "previousBytes": 13492,
+          "currentBytes": 16355,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 389,
+              "currentText": "  unit:\n    runs-on: ubuntu-latest\n    timeout-minutes: 45\n    strategy:\n      fail-fast: false\n      matrix:\n        shard: [1, 2, 3, 4]\n    services:\n      postgres:\n        image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193\n        env:\n          POSTGRES_USER: cutover_test\n          POSTGRES_PASSWORD: cutover_test\n          POSTGRES_DB: obrasaas_cutover_ci\n        ports: ['5432:5432']\n        options: >-\n          --health-cmd \"pg_isready -U cutover_test -d obrasaas_cutover_ci\"\n          --health-interval 5s --health-timeout 5s --health-retries 12\n    env:\n      NEXT_TELEMETRY_DISABLED: '1'\n      CUTOVER_TEST_DISPOSABLE: '1'\n      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci\n      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only\n      BOUNDARY_UNIT_OUTPUT: .vercel/private/production-boundary-unit-shard\n      BOUNDARY_UNIT_SHARD: ${{ matrix.shard }}\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          persist-credentials: false\n      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020\n        with:\n          node-version: 24\n          package-manager-cache: false\n      - run: npm ci --no-audit --no-fund\n      - name: Prepare exact production test manifest\n        run: python3 .github/scripts/verify-production-test-shards.py prepare\n      - name: Native production test shard\n        run: >-\n          node --test --test-shard=${{ matrix.shard }}/4\n          --import=./.github/scripts/observe-production-test-entry.mjs\n          --test-reporter=tap --test-reporter=junit\n          --test-reporter-destination=stdout\n          --test-reporter-destination=.vercel/private/production-boundary-unit-shard/native.junit.xml\n          tests/production-*.test.mjs\n      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\n        if: always()\n        with:\n          name: production-unit-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}\n          path: .vercel/private/production-boundary-unit-shard/\n          if-no-files-found: error\n          include-hidden-files: true\n          retention-days: 7\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 2672,
+              "currentText": "    needs: unit\n    if: ${{ always() }}\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 3526,
+              "currentText": "      - name: Require all native production test shards\n        env:\n          UNIT_RESULT: ${{ needs.unit.result }}\n        run: test \"$UNIT_RESULT\" = success\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 4012,
+              "currentText": "uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333\n        with:\n          pattern: production-unit-${{ github.run_id }}-${{ github.run_attempt }}-*\n          path: .vercel/private/production-boundary-unit-artifacts\n          merge-multiple: false\n          digest-mismatch: error\n      - name: Verify exact native shard entry coverage\n        run: python3 .github/scripts/verify-production-test-shards.py verify",
+              "previousText": "run: node --test tests/production-*.test.mjs"
             }
           ]
         },
@@ -66555,9 +66645,9 @@
           "path": "scripts/verify-participants-ui.mjs",
           "status": "MODIFIED",
           "previousSha256": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-          "currentSha256": "5d9a2b3b603eb104d6ffc50ce6fb4680f2f8ecd889cdd1d08d4cf244a385efff",
+          "currentSha256": "df780f75a0634fe5801e92477f51c5e1ee5b1736ed6ee6d8db5fae16174d07f8",
           "previousBytes": 124573,
-          "currentBytes": 127299,
+          "currentBytes": 127783,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 1677,
@@ -66595,22 +66685,27 @@
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 101872,
+              "currentOffsetCharacters": 97946,
+              "currentText": "await page.waitForFunction(workerId=>{const profile=document.querySelector('[data-participant-profile]'),primary=profile?.querySelector('[data-onboarding-primary]');return profile?.dataset.participantProfile===workerId&&primary instanceof HTMLButtonElement&&primary.checkVisibility()&&!primary.disabled;},{timeout:15000},row.id);\n  const primary=await page.$('[data-onboarding-primary]');if(width<768)await primary.tap();else{await primary.focus();assert.equal(await primary.evaluate(button=>document.activeElement===button),true,'The enabled onboarding action must own keyboard focus before Enter'",
+              "previousText": "const primary=await page.$('[data-onboarding-primary]');if(width<768)await primary.tap();else{await primary.focus("
+            },
+            {
+              "currentOffsetCharacters": 102356,
               "currentText": " async function selectProfile(workerId){\n  await page.waitForFunction(id=>{const select=[...document.querySelectorAll('select')].find(el=>el.labels?.[0]?.textContent.includes('Perfil de esta obra'));return Boolean(select&&!select.disabled&&[...select.options].some(option=>option.value===id&&!option.disabled));},{timeout:15000},workerId);\n  const handle=await page.evaluateHandle(()=>[...document.querySelectorAll('select')].find(el=>el.labels?.[0]?.textContent.includes('Perfil de esta obra')));\n  try{\n   assert.equal(await handle.evaluate(select=>select.checkVisibility()&&!select.disabled),true,'Changing profile must use a visible enabled selector');\n   assert.deepEqual(await handle.asElement().select(workerId),[workerId]);\n  }finally{await handle.dispose();}\n  await page.waitForFunction(id=>document.querySelector('[data-participant-profile]')?.dataset.participantProfile===id,{timeout:15000},workerId);\n }\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 106927,
+              "currentOffsetCharacters": 107411,
               "currentText": "selectProfile(other.id",
               "previousText": "page.evaluate(()=>{const el=[...document.querySelectorAll('select')].find(e=>e.labels?.[0]?.textContent.includes('Perfil de esta obra'));el.value='worker-second';el.dispatchEvent(new Event('change',{bubbles:true}));}"
             },
             {
-              "currentOffsetCharacters": 108250,
+              "currentOffsetCharacters": 108734,
               "currentText": "selectProfile(other.id",
               "previousText": "page.evaluate(()=>{const el=[...document.querySelectorAll('select')].find(e=>e.labels?.[0]?.textContent.includes('Perfil de esta obra'));el.value='worker-second';el.dispatchEvent(new Event('change',{bubbles:true}));}"
             },
             {
-              "currentOffsetCharacters": 119674,
+              "currentOffsetCharacters": 120158,
               "currentText": "// Real browser pixels must satisfy the same local exposure, detail and size checks as a selected file.\n // This deterministic fixture makes no claim to contain a document, a face or a verified identity.\n const maker=await browser.newPage();try{\n  const images=await maker.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=480;canvas.height=320;const context=canvas.getContext('2d'),pixels=context.createImageData(480,320);let seed=41;for(let index=0;index<pixels.data.length;index+=4){for(let channel=0;channel<3;channel++){seed=(seed*1664525+1013904223)>>>0;pixels.data[index+channel]=seed>>>24;}pixels.data[index+3]=255;}context.putImageData(pixels,0,0);const valid=canvas.toDataURL('image/png').split(',')[1];canvas.width=1;canvas.height=1;context.fillStyle='#888';context.fillRect(0,0,1,1);return{valid,undersized:canvas.toDataURL('image/png').split(',')[1]};});\n  picture=Buffer.from(images.valid,'base64');assert.ok(picture.length<1024*1024,'The readable fixture must preserve its original PNG bytes');assert.equal(picture.readUInt32BE(16),480);assert.equal(picture.readUInt32BE(20),320);writeFileSync(picturePath,picture);writeFileSync(undersizedPath,Buffer.from(images.undersized,'base64'));\n }finally{await maker.close();}\n if(focusedScenario){for(const width of selectedWidths)await (nextStepModes.includes(focusedScenario)?nextStepScenario(width,focusedScenario):['office','self','self-attendance-conflict'].includes(focusedScenario)?scenario(width,focusedScenario):backModes.includes(focusedScenario)?documentBackScenario(width,focusedScenario):accountModes.includes(focusedScenario)?accountDiscoveryScenario(width,focusedScenario):safetyModes.includes(focusedScenario)?safetyScenario(width,focusedScenario):revisionModes.includes(focusedScenario)||reviewRefresh",
               "previousText": "if(focusedScenario){for(const width of selectedWidths)await (nextStepModes.includes(focusedScenario)?nextStepScenario(width,focusedScenario):['office','self-attendance-conflict'].includes(focusedScenario)?scenario(width,focusedScenario):backModes.includes(focusedScenario)?documentBackScenario(width,focusedScenario):accountModes.includes(focusedScenario)?accountDiscoveryScenario(width,focusedScenario):safetyModes.includes(focusedScenario)?safetyScenario(width,focusedScenario):revision"
             }
@@ -66695,9 +66790,9 @@
           "path": "scripts/verify-workspace-ui.mjs",
           "status": "MODIFIED",
           "previousSha256": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
-          "currentSha256": "093e8e218b6f6a67ed3b23fea20cc1774bbb8be67f0bcbb35b832f7cf2720294",
+          "currentSha256": "39981d9f4007e30a0e84634e8f2f546012dc3a89d0572af5663e295487f3c200",
           "previousBytes": 182645,
-          "currentBytes": 189420,
+          "currentBytes": 196782,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 67152,
@@ -66755,52 +66850,202 @@
               "previousText": "ssert.equal(requests.length,4"
             },
             {
-              "currentOffsetCharacters": 141290,
+              "currentOffsetCharacters": 102776,
+              "currentText": " const scheduleFacts=[];let phase='initial-project';\n const projectQuery=cursor=>'?'+new URLSearchParams({projectId:'p-a',scope,...(cursor?{afterTask:cursor}:{})});\n const expectedPhaseReads=new Map();\n const assertPhaseReads=cursors=>{const expected=cursors.map(cursor=>({phase,method:'GET',path:'/api/identity/workspace',query:cursor==='ACCOUNT'?'':projectQuery(cursor)}));assert.deepEqual(scheduleFacts.filter(row=>row.phase===phase),expected);if(expectedPhaseReads.has(phase))assert.deepEqual(expectedPhaseReads.get(phase),expected);expectedPhaseReads.set(phase,expected);};\n const assertAllSchedulePhases=()=>{assert.deepEqual(scheduleFacts.filter(row=>!expectedPhaseReads.has(row.phase)),[],'Every workspace GET must belong to an asserted phase');for(const [name,expected]of expectedPhaseReads)assert.deepEqual(scheduleFacts.filter(row=>row.phase===name),expected,'No later GET may escape an already asserted phase '+name);};\n const waitRejectedLive=async()=>{await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:15000});assert.equal(await page.$eval('[data-worksite-live-refresh]',el=>el.dataset.worksiteLiveRefresh),'STALE');assert.match(await page.$eval('[data-worksite-live-refresh]',el=>el.innerText),/No pudimos actualizar esta consulta\\. Conservamos los datos/);};\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 106956,
+              "currentText": "    assert.equal(request.method(),'GET');scheduleFacts.push({phase,method:request.method(),path:url.pathname,query:url.search});\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 107339,
+              "currentText": "request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('afterTask')?['afterTask','projectId','scope']:['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');\n    // Hold only the creation's explicit canonical readback. Later first-page\n    // live reads get the unchanged, deliberately incomplete rendering fixture.\n    if(creation&&!url.searchParams.has('afterTask')&&readbackCount===0){assert.equal(phase,'creation-readback-held');assert.equal(heldReadback,null);",
+              "previousText": "url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');\n    if(creation&&!url.searchParams.has('afterTask')){"
+            },
+            {
+              "currentOffsetCharacters": 110129,
+              "currentText": "await waitRejectedLive();assertPhaseReads(['ACCOUNT',null,null]);phase='field-before-command';\n  if(planningMode){phase='planning-held';",
+              "previousText": "if(planningMode){"
+            },
+            {
+              "currentOffsetCharacters": 110625,
+              "currentText": "assertPhaseReads([]);\n  if(!planningMode){phase='creation-form-live';await showWorkspaceSection(page,'schedule-title');await waitRejectedLive();assertPhaseReads([null]);await click(page,'Nueva tarea');await page.type('section[aria-label=\"Crear tarea de la obra\"] form input:not([type=\"date\"])',created.title);phase='creation-readback-held';await click(page,'Crear tarea');await readbackReady;assertPhaseReads([null]);phase='field-decision-callback'",
+              "previousText": "if(!planningMode){await showWorkspaceSection(page,'schedule-title');await click(page,'Nueva tarea');await page.type('section[aria-label=\"Crear tarea de la obra\"] form input:not([type=\"date\"])',created.title);await click(page,'Crear tarea');await readbackReady"
+            },
+            {
+              "currentOffsetCharacters": 111501,
+              "currentText": "ssertPhaseReads([]);phase='planning-live';await respond(heldPlanning.request,heldPlanning.outcome);await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');await waitRejectedLive();assertPhaseReads([null]",
+              "previousText": "wait respond(heldPlanning.request,heldPlanning.outcome);await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado'"
+            },
+            {
+              "currentOffsetCharacters": 112461,
+              "currentText": "assertAllSchedulePhases();",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 112852,
+              "currentText": "ssertPhaseReads([]);phase='confirmed-readback-live';a",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 113571,
+              "currentText": "  await waitRejectedLive();assertPhaseReads([null]);\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 114098,
+              "currentText": "phase='explicit-pagination-live';await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await page.waitForSelector('[data-task-id=\"tail-task\"]');await waitRejectedLive();assertPhaseReads([created.id,null]",
+              "previousText": "await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await page.waitForSelector('[data-task-id=\"tail-task\"]'"
+            },
+            {
+              "currentOffsetCharacters": 114878,
+              "currentText": "assertAllSchedulePhases();checks.push((mode==='readback'?'schedule-delayed-readback-keeps-confirmed-progress-':'schedule-delayed-decision-callback-keeps-newer-get-')+width);\n }catch(error){error.workspaceUiDiagnostic={mode:'confirmed-progress-'+mode,width,phase,scheduleFacts,readbackCount,preparationReads,postPaths:posts.map(row=>row.path)};",
+              "previousText": "checks.push((mode==='readback'?'schedule-delayed-readback-keeps-confirmed-progress-':'schedule-delayed-decision-callback-keeps-newer-get-')+width);\n }catch(error){"
+            },
+            {
+              "currentOffsetCharacters": 117245,
+              "currentText": "scheduleFacts=[];let phase='initial-project';\n const projectQuery=cursor=>'?'+new URLSearchParams({projectId:'p-a',scope,...(cursor?{afterTask:cursor}:{})});\n const expectedPhaseReads=new Map();\n const assertPhaseReads=cursors=>{const expected=cursors.map(cursor=>({phase,method:'GET',path:'/api/identity/workspace',query:cursor==='ACCOUNT'?'':projectQuery(cursor)}));assert.deepEqual(scheduleFacts.filter(row=>row.phase===phase),expected);if(expectedPhaseReads.has(phase))assert.deepEqual(expectedPhaseReads.get(phase),expected);expectedPhaseReads.set(phase,expected);};\n const assertAllSchedulePhases=()=>{assert.deepEqual(scheduleFacts.filter(row=>!expectedPhaseReads.has(row.phase)),[],'Every workspace GET must belong to an asserted phase');for(const [name,expected]of expectedPhaseReads)assert.deepEqual(scheduleFacts.filter(row=>row.phase===name),expected,'No later GET may escape an already asserted phase '+name);};\n const waitRejectedLive=async()=>{await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:15000});assert.equal(await page.$eval('[data-worksite-live-refresh]',el=>el.dataset.worksiteLiveRefresh),'STALE');assert.match(await page.$eval('[data-worksite-live-refresh]',el=>el.innerText),/No pudimos actualizar esta consulta\\. Conservamos los datos/);};\n // Every workspace GET is retained. The cursor ledger counts every append\n // separately; selection and live first-page reads are fenced by phase.\n const posts=[],cursor",
+              "previousText": "posts=[],schedule"
+            },
+            {
+              "currentOffsetCharacters": 120298,
+              "currentText": "    scheduleFacts.push({phase,method:request.method(),path:url.pathname,query:url.search});\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 120732,
+              "currentText": "assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('afterTask')?['afterTask','projectId','scope']:['projectId','scope']);if(url.searchParams.has('afterTask'))cursorReads.push({phase,method:request.method(),path:url.pathname,query:url.search}",
+              "previousText": "scheduleReads.push([...url.searchParams]"
+            },
+            {
+              "currentOffsetCharacters": 121303,
+              "currentText": "",
+              "previousText": "assert.equal(scheduleReads.length,1,'The approval and navigation never fetch the schedule automatically');"
+            },
+            {
+              "currentOffsetCharacters": 124535,
+              "currentText": "  await waitRejectedLive();assertPhaseReads(['ACCOUNT',null,null]);phase='field-decision-callback';\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 125128,
+              "currentText": "cursorReads.length,0",
+              "previousText": "scheduleReads.length,1"
+            },
+            {
+              "currentOffsetCharacters": 125974,
+              "currentText": "ssertPhaseReads([]);phase='inspect-unloaded-schedule';await showWorkspaceSection(page,'schedule-title');await waitRejectedLive();assertPhaseReads([null]);assert.equal(posts.length,1);assert.equal(cursorReads.length,0",
+              "previousText": "wait showWorkspaceSection(page,'schedule-title');assert.equal(posts.length,1);assert.equal(scheduleReads.length,1"
+            },
+            {
+              "currentOffsetCharacters": 127814,
+              "currentText": "phase='receipt-navigation-live';await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.id==='schedule-load-more');await waitRejectedLive();assertPhaseReads([null]);assert.equal(await page.evaluate(()=>document.activeElement?.id),'schedule-load-more');assert.equal(cursorReads.length,0);\n   phase='explicit-unloaded-pagination-live';await page.keyboard.press('Enter');await page.waitForSelector('[data-task-id=\"task-outside\"]');await waitRejectedLive();assertPhaseReads([cursor,null]);assert.equal(cursorReads.length,1",
+              "previousText": "await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.id==='schedule-load-more');assert.equal(await page.evaluate(()=>document.activeElement?.id),'schedule-load-more');assert.equal(scheduleReads.length,1);\n   await page.keyboard.press('Enter');await page.waitForSelector('[data-task-id=\"task-outside\"]');assert.equal(scheduleReads.length,2"
+            },
+            {
+              "currentOffsetCharacters": 129684,
+              "currentText": "phase='loaded-task-navigation-live';await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-outside');await waitRejectedLive();assertPhaseReads([null]);assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-outside');assert.equal(cursorReads.length,1",
+              "previousText": "await page.focus('[data-confirmed-progress=\"task-outside\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-outside');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-outside');assert.equal(scheduleReads.length,2"
+            },
+            {
+              "currentOffsetCharacters": 130667,
+              "currentText": "phase='final-schedule';await showWorkspaceSection(page,'schedule-title');await waitRejectedLive();assertPhaseReads(decision==='APPROVE'?[]:[null]);await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,mode+'-'+width+'.png')});\n  assert.equal(cursorReads.length,decision==='APPROVE'?1:0);assertAllSchedulePhases();checks.push((decision==='APPROVE'?'schedule-unloaded-progress-recovers-same-uuid-historical-25-current-50-and-loads-explicit-cursor-':'schedule-rejected-progress-with-task-does-not-claim-approval-')+width);\n }catch(error){error.workspaceUiDiagnostic={mode,width,phase,scheduleFacts,cursorReads,receiptQueries,posts:posts.length};",
+              "previousText": "await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,mode+'-'+width+'.png')});\n  checks.push((decision==='APPROVE'?'schedule-unloaded-progress-recovers-same-uuid-historical-25-current-50-and-loads-explicit-cursor-':'schedule-rejected-progress-with-task-does-not-claim-approval-')+width);\n }catch(error){"
+            },
+            {
+              "currentOffsetCharacters": 133857,
+              "currentText": "scheduleFacts=[];let phase='initial-project';\n const projectQuery=cursor=>'?'+new URLSearchParams({projectId:'p-a',scope,...(cursor?{afterTask:cursor}:{})});\n const expectedPhaseReads=new Map();\n const assertPhaseReads=cursors=>{const expected=cursors.map(cursor=>({phase,method:'GET',path:'/api/identity/workspace',query:cursor==='ACCOUNT'?'':projectQuery(cursor)}));assert.deepEqual(scheduleFacts.filter(row=>row.phase===phase),expected);if(expectedPhaseReads.has(phase))assert.deepEqual(expectedPhaseReads.get(phase),expected);expectedPhaseReads.set(phase,expected);};\n const assertAllSchedulePhases=()=>{assert.deepEqual(scheduleFacts.filter(row=>!expectedPhaseReads.has(row.phase)),[],'Every workspace GET must belong to an asserted phase');for(const [name,expected]of expectedPhaseReads)assert.deepEqual(scheduleFacts.filter(row=>row.phase===name),expected,'No later GET may escape an already asserted phase '+name);};\n const waitRejectedLive=async()=>{await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:15000});assert.equal(await page.$eval('[data-worksite-live-refresh]',el=>el.dataset.worksiteLiveRefresh),'STALE');assert.match(await page.$eval('[data-worksite-live-refresh]',el=>el.innerText),/No pudimos actualizar esta consulta\\. Conservamos los datos/);};\n // All workspace GETs remain in scheduleFacts; no first-only counter.\n const posts=[],receiptQuerie",
+              "previousText": "posts=[],receiptQueries=[],scheduleRead"
+            },
+            {
+              "currentOffsetCharacters": 136917,
+              "currentText": "    scheduleFacts.push({phase,method:request.method(),path:url.pathname,query:url.search});\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 137431,
+              "currentText": "",
+              "previousText": "scheduleReads.push([...url.searchParams]);assert.equal(scheduleReads.length,1,'The loaded task changes only through the confirmed callback, without a schedule GET');"
+            },
+            {
+              "currentOffsetCharacters": 140122,
+              "currentText": " liveExpected=>{\n  phase=liveExpected?'snapshot-released-live':'snapshot-held-callback';await showWorkspaceSection(page,'schedule-title');if(liveExpected)await waitRejectedLive();else await page.waitForSelector('[data-worksite-live-refresh=\"PAUSED\"]',{timeout:15000});assertPhaseReads(liveExpected?[null]:[]",
+              "previousText": "()=>{\n  await showWorkspaceSection(page,'schedule-title'"
+            },
+            {
+              "currentOffsetCharacters": 141828,
+              "currentText": "",
+              "previousText": "equal(scheduleReads.length,1);assert."
+            },
+            {
+              "currentOffsetCharacters": 142716,
+              "currentText": "  await waitRejectedLive();assertPhaseReads(['ACCOUNT',null,null]);phase='field-recovery-callback';\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 145039,
+              "currentText": "ssertPhaseReads([]);await assertCurrentSchedule(false",
+              "previousText": "wait assertCurrentSchedule("
+            },
+            {
+              "currentOffsetCharacters": 146496,
+              "currentText": "true);assert.equal(posts.length,index+1);\n   if(mode==='loaded-current'){phase='receipt-navigation-live';await page.focus('[data-confirmed-progress=\"task-a\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-a');await waitRejectedLive();assertPhaseReads([null]);assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-a'",
+              "previousText": ");assert.equal(posts.length,index+1);\n   if(mode==='loaded-current'){await page.focus('[data-confirmed-progress=\"task-a\"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-a');assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-a');assert.equal(scheduleReads.length,1"
+            },
+            {
+              "currentOffsetCharacters": 147391,
+              "currentText": "phase='final-snapshot-schedule';await showWorkspaceSection(page,'schedule-title');await waitRejectedLive();assertPhaseReads([null]);await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+snapshotCase+'-schedule-'+width+'.png')});assertAllSchedulePhases();\n }catch(error){error.workspaceUiDiagnostic={mode,width,snapshotCase,phase,scheduleFacts,receiptQueries,posts:posts.length};",
+              "previousText": "await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby=\"schedule-title\"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+snapshotCase+'-schedule-'+width+'.png')});\n }catch(error){"
+            },
+            {
+              "currentOffsetCharacters": 148652,
               "currentText": " let phase='initial-load';\n const waitLiveRejection=async()=>{await page.waitForFunction(()=>document.querySelector('[data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='STALE',{timeout:15000});assert.match(await page.$eval('[data-worksite-live-refresh]',element=>element.innerText),/No pudimos actualizar esta consulta\\. Conservamos los datos/);};\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 142197,
+              "currentOffsetCharacters": 149559,
               "currentText": "phase,",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 144318,
+              "currentOffsetCharacters": 151680,
               "currentText": "waitLiveRejection();const projectQuery='?'+new URLSearchParams({projectId:'p-a',scope});\n  assert.deepEqual(requests,[{phase:'initial-load',method:'GET',query:''},{phase:'initial-load',method:'GET',query:projectQuery},{phase:'initial-load',method:'GET',query:projectQuery}],'The initial synthetic project read includes one rejected live validation');\n  phase='held-pagination';await showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await paginationStarted;await showWorkspaceSection(page,'schedule-title');await fill(page);\n  phase='confirm-newer-schedule';await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1);\n  phase='late-page-return'",
               "previousText": "showWorkspaceSection(page,'schedule-title');await click(page,'Cargar más tareas');await paginationStarted;await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await showWorkspaceSection(page,'schedule-title');await waitText(page,'Cambio confirmado');assert.equal(posts.length,1)"
             },
             {
-              "currentOffsetCharacters": 146023,
+              "currentOffsetCharacters": 153385,
               "currentText": "wait waitLiveRejection();\n  assert.deepEqual(requests.filter(request=>request.method==='GET'),[{phase:'initial-load',method:'GET',query:''},{phase:'initial-load',method:'GET',query:projectQuery},{phase:'initial-load',method:'GET',query:projectQuery},{phase:'held-pagination',method:'GET',query:projectQuery+'&afterTask=held-page'},{phase:'late-page-return',method:'GET',query:projectQuery}],'The late append and rejected live validation must stay in the exact project and phases');\n  writeFileSync(path.join(evidence,'workspace-workbench-stale-page-requests-390.json'),JSON.stringify({requests,postCount:posts.length,confirmedDatesRetained:true,receiptRetained:true},null,2)",
               "previousText": "ssert.equal(requests.filter(request=>request.method==='GET').length,3"
             },
             {
-              "currentOffsetCharacters": 147135,
+              "currentOffsetCharacters": 154497,
               "currentText": "writeFileSync(path.join(evidence,'workspace-workbench-stale-page-failure-390.json'),JSON.stringify({phase,message:error.message,requests,postCount:posts.length},null,2));",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 173215,
+              "currentOffsetCharacters": 180577,
               "currentText": ",phase='prepare'",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 174129,
+              "currentOffsetCharacters": 181491,
               "currentText": ",phase",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 177825,
+              "currentOffsetCharacters": 185187,
               "currentText": "  phase='race';\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 179144,
+              "currentOffsetCharacters": 186506,
               "currentText": "  phase='denied';\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 181744,
+              "currentOffsetCharacters": 189106,
               "currentText": "// Live refresh may already have made another authorized read of project A.\n  // Fence the denial and explicit refresh instead of assuming a global total.\n  const afterDenial=requests.filter(row=>row.phase==='denied'&&row.method==='GET');assert.deepEqual(afterDenial,[],'A denied account must not automatically read projects, channels or refresh itself');\n  const selectedProjectReads=requests.filter(row=>row.path==='/api/identity/workspace'&&new URLSearchParams(row.query).get('projectId')==='p-b');assert.equal(selectedProjectReads.length,action==='project'?1:0,'The concurrent project selection must dispatch exactly once');\n  phase='refresh';await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);\n  const refreshReads=requests.filter(row=>row.phase==='refresh'&&row.method==='GET');assert.deepEqual(refreshReads.map(row=>({method:row.method,path:row.path,query:row.query})),[{method:'GET',path:'/api/identity/workspace',query:''}],'Explicit account refresh must not re-open an old project or channel');\n  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n  checks.push({mode,width,denial,format,action,posts:posts.length,projectReads,selectedProjectReads:selectedProjectReads.length,readsAfterDenial:afterDenial.length,explicitAccountRefreshes:refreshReads.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});\n }catch(error){error.workspaceUiDiagnostic={mode,width,denial,format,action,phase,workspaceReads,projectReads,posts:posts.length,requests};",
               "previousText": "await click(page,'Actualizar');await waitText(page,'Empresa recién consultada');await page.waitForFunction(expected=>window.__guideObservation?.state==='OBSERVED'&&window.__guideObservation.scope===expected,{},refreshedScope);\n  assert.equal(await page.evaluate(()=>window.__guideObservation.channel),null);assert.equal(await page.evaluate(()=>window.__guideObservation.projectId),null);assert.equal(await references(),survivingReferences);assert.equal(workspaceReads,2);assert.equal(projectReads,action==='project'?2:1);assert.equal(posts.length,action==='schedule'?1:0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));\n  checks.push({mode,width,denial,format,action,posts:posts.length,refreshUnlocked:true,guideUnavailable:true,lateResponseRejected:true,lateTokenPostBlocked:action==='token',channelSnapshotCleared:true,referencesPreserved:true,explicitFreshScope:true});\n }catch(error){"
             }
@@ -74585,7 +74830,7 @@
         {
           "pointer": "/planBudgetCurrentRevision/references/129/currentSha256",
           "previous": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-          "current": "5d9a2b3b603eb104d6ffc50ce6fb4680f2f8ecd889cdd1d08d4cf244a385efff"
+          "current": "df780f75a0634fe5801e92477f51c5e1ee5b1736ed6ee6d8db5fae16174d07f8"
         },
         {
           "pointer": "/planBudgetCurrentRevision/references/22/currentSha256",
@@ -74595,7 +74840,7 @@
         {
           "pointer": "/planBudgetCurrentRevision/references/25/currentSha256",
           "previous": "ea7274ebecef1b87f6cd4ebb455ab3b48a6526ce00dc4b506af60302f22d33a9",
-          "current": "093e8e218b6f6a67ed3b23fea20cc1774bbb8be67f0bcbb35b832f7cf2720294"
+          "current": "39981d9f4007e30a0e84634e8f2f546012dc3a89d0572af5663e295487f3c200"
         },
         {
           "pointer": "/planBudgetCurrentRevision/references/132/currentSha256",
@@ -74878,7 +75123,7 @@
             {
               "path": "scripts/verify-workspace-ui.mjs",
               "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-              "currentSha256": "093e8e218b6f6a67ed3b23fea20cc1774bbb8be67f0bcbb35b832f7cf2720294"
+              "currentSha256": "39981d9f4007e30a0e84634e8f2f546012dc3a89d0572af5663e295487f3c200"
             },
             {
               "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -75398,7 +75643,7 @@
             {
               "path": "scripts/verify-participants-ui.mjs",
               "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-              "currentSha256": "5d9a2b3b603eb104d6ffc50ce6fb4680f2f8ecd889cdd1d08d4cf244a385efff"
+              "currentSha256": "df780f75a0634fe5801e92477f51c5e1ee5b1736ed6ee6d8db5fae16174d07f8"
             },
             {
               "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -75600,7 +75845,7 @@
             {
               "path": "scripts/verify-workspace-ui.mjs",
               "previousSha256": "cac2856aa357d6805da6438c995e5dd26748d5c92ab415ab2039b4508bbf79dd",
-              "currentSha256": "093e8e218b6f6a67ed3b23fea20cc1774bbb8be67f0bcbb35b832f7cf2720294"
+              "currentSha256": "39981d9f4007e30a0e84634e8f2f546012dc3a89d0572af5663e295487f3c200"
             },
             {
               "path": "src/app/(identity)/cuenta/consumption-evidence-picker.js",
@@ -76120,7 +76365,7 @@
             {
               "path": "scripts/verify-participants-ui.mjs",
               "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-              "currentSha256": "5d9a2b3b603eb104d6ffc50ce6fb4680f2f8ecd889cdd1d08d4cf244a385efff"
+              "currentSha256": "df780f75a0634fe5801e92477f51c5e1ee5b1736ed6ee6d8db5fae16174d07f8"
             },
             {
               "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -76191,6 +76436,21 @@
               "path": "tests/production-workspace-recorded-readback-ui.test.mjs",
               "previousSha256": null,
               "currentSha256": "147f004ddb94dad5c3309eefcc3f46147de2151996b17aaeb1f4b888c675438e"
+            },
+            {
+              "path": ".github/scripts/observe-production-test-entry.mjs",
+              "previousSha256": null,
+              "currentSha256": "d831717d63180ec55242c447bce449e8946b768be3e21da13033326df6658641"
+            },
+            {
+              "path": ".github/scripts/verify-production-test-shards.py",
+              "previousSha256": null,
+              "currentSha256": "b7347aa8466cf134c25e44941d3f9d2f24c002868c92db388a5cc722d30fd2dc"
+            },
+            {
+              "path": ".github/workflows/production-boundary.yml",
+              "previousSha256": "072a3da3a12d25046584ffd1f5d4d2dc83879f0398291c182e21c4274f1ab2ea",
+              "currentSha256": "ed5c17c31b06af95e60afcc1bb71f1195c8a11d31ed69b30ff427f952d719ed7"
             },
             {
               "path": "api/_biometric_core.py",
