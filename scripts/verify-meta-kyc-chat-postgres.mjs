@@ -12,6 +12,7 @@ import {createMetaCustomerProcessor} from '../src/lib/meta-customer-processing.m
 import {createMetaCustomerProvider} from '../src/lib/meta-customer-provider.mjs';
 import {createMetaCustomerOutbound,customerJobTransaction,customerOutboundId} from '../src/lib/meta-customer-outbound.mjs';
 import {prepareMetaKycChallenge} from '../src/lib/meta-kyc-challenge.mjs';
+import {prepareMetaKycChallenge as prepareHistoricalV2Challenge} from '../tests/fixtures/meta-kyc-challenge-legacy-v2.mjs';
 import {resolveMetaKycAuthority,readMetaKycConversation,META_KYC_AUTHORIZATION_CODES} from '../src/lib/meta-kyc-identity.mjs';
 import {createMetaKycBridge} from '../src/lib/meta-kyc-bridge.mjs';
 import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
@@ -37,7 +38,7 @@ let pool,created=false,loseDepositCommit=false,loseDispatchCommit=false,unexpect
 const originalFetch=globalThis.fetch;globalThis.fetch=async()=>{unexpectedNetworkCalls++;throw new Error('KYC_UNCONTROLLED_NETWORK_REJECTED');};
 const query=(sql,args)=>pool.query(sql,args);
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex'),root=process.cwd(),sources=relative=>readdirSync(path.join(root,relative),{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)).flatMap(entry=>entry.isDirectory()?sources(relative+'/'+entry.name):[relative+'/'+entry.name]);
-const sourceManifest=[...sources('src/lib'),'scripts/lib/synthetic-capture-quality.mjs','src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/kyc-context-feedback-native.mjs'].map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
+const sourceManifest=[...sources('src/lib'),'scripts/lib/synthetic-capture-quality.mjs','src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/kyc-context-feedback-native.mjs','tests/fixtures/meta-kyc-challenge-legacy-v2.mjs'].map(file=>({path:file,sha256:sha(readFileSync(path.join(root,file)))})),harnessSha256=sha(readFileSync(new URL(import.meta.url)));
 try{
  await admin.connect();await admin.query(`CREATE DATABASE "${database}"`);created=true;url.pathname='/'+database;
  pool=trackDisposablePool(new Pool({connectionString:url.toString(),max:8}));pool.on('connect',client=>ownedPids.add(client.processID));await query(lifecycleSchema);
@@ -79,7 +80,9 @@ try{
  async function challenge(t,{captureImageSetVersion}={}){return customerJobTransaction(connect,async client=>{
   const project=(await client.query(`SELECT id,"organizationId" FROM "Project" WHERE id=$1 FOR UPDATE`,[t.projectId])).rows[0],row=await worker(t);
   const member={actorId:t.ownerId,membershipId:'owner-member-'+t.key,organizationId:t.organizationId,role:'ADMIN'};
-  const prepared=await prepareMetaKycChallenge(client,member,project,{workerId:t.workerId,revision:row.revision,operationId:randomUUID()});
+  // Only these explicit historical two-image and schema2 scenarios use the
+  // sealed v2 emitter. Fresh ACTIVE expiry fixtures below keep the current API.
+  const prepared=await prepareHistoricalV2Challenge(client,member,project,{workerId:t.workerId,revision:row.revision,operationId:randomUUID()},{environment});
   if(captureImageSetVersion!==2){
    // Reconstruct a coherently issued pre-schema2 challenge for every original
    // two-image group. This fixture mutation is never a production option.
@@ -109,6 +112,14 @@ try{
   // the integrated closure verifier tests real cancellation and archival.
   await mutate(t,m=>{delete m.participant.kycChatChallenge;});
  };
+ // A fresh current challenge may not be issued for this INVITED legacy actor.
+ // Verify the real API rejection before seeding its already-issued v2 fixture.
+ const invitedCurrentBefore=await worker(a),invitedAuditBefore=(await query('SELECT * FROM "AuditLog" ORDER BY id')).rows,invitedIoBefore=counts(),invitedNetworkBefore=unexpectedNetworkCalls;
+ await assert.rejects(customerJobTransaction(connect,async client=>{
+  const project=(await client.query('SELECT id,"organizationId" FROM "Project" WHERE id=$1 FOR UPDATE',[a.projectId])).rows[0],member={actorId:a.ownerId,membershipId:'owner-member-'+a.key,organizationId:a.organizationId,role:'ADMIN'};
+  return prepareMetaKycChallenge(client,member,project,{workerId:a.workerId,revision:invitedCurrentBefore.revision,operationId:randomUUID()},{environment});
+ }),{code:'PARTICIPANT_FACIAL_ACCOUNT_ACCEPTANCE_REQUIRED',status:409});
+ assert.deepEqual(await worker(a),invitedCurrentBefore);assert.deepEqual((await query('SELECT * FROM "AuditLog" ORDER BY id')).rows,invitedAuditBefore);assert.deepEqual(counts(),invitedIoBefore);assert.equal(unexpectedNetworkCalls,invitedNetworkBefore);assert.deepEqual(graph.unexpected,[]);
  const initial=await challenge(a);assert.match(initial.code,/^IDENTIDAD [A-Za-z0-9_-]{43}$/);assert.equal(initial.codeUnavailable,false);
  const originalAudit=JSON.stringify((await query(`SELECT metadata FROM "AuditLog"`)).rows);assert.ok(!originalAudit.includes(initial.code));assert.equal((await worker(a)).metadata.participant.permissions.attendance,false);
  const baseline=counts();await receive(a,initial.code,{signature:false});assert.deepEqual(counts(),baseline);
@@ -232,7 +243,7 @@ try{
   let prepared,promptEvent;
   try{
    prepared=await customerJobTransaction(expiryConnect,async client=>{const member={actorId:t.ownerId,membershipId:'owner-member-'+t.key,organizationId:t.organizationId,role:'ADMIN'},input={projectId:t.projectId,workerId:t.workerId,revision:(await expiryWorker(t)).revision,operationId:randomUUID()};await prepareMetaKycChallenge.beforeProject(client,member,input);return prepareMetaKycChallenge(client,member,{id:t.projectId,organizationId:t.organizationId},input,{environment});});
-   assert.equal(prepared.captureImageSetVersion,2);promptEvent=await expiryReceive(t,prepared.code);assert.equal((await expiryProcessor.process(promptEvent)).replySent,true);
+   assert.equal(prepared.captureImageSetVersion,2);assert.equal((await expiryWorker(t)).metadata.participant.kycChatChallenge.analysisConsentVersion,3);promptEvent=await expiryReceive(t,prepared.code);assert.equal((await expiryProcessor.process(promptEvent)).replySent,true);
    if(advance){
     const original=(await query(`SELECT * FROM "WebhookEvent" WHERE id=$1`,[customerOutboundId(promptEvent)])).rows[0],row=await expiryWorker(t),c=row.metadata.participant.kycChatChallenge,s=JSON.parse(decryptCustomerSecret(row.metadata.participant.kycChatConversation.encryptedState,{organizationId:t.organizationId,projectId:c.companyKyc?.anchorProjectId||t.projectId,purpose:'kyc-chat-conversation',resourceId:c.id},environment));
     expiryClockOffset=-31*60000+2000;const next=await expiryReceive(t,{type:'interactive',interactive:{type:'list_reply',list_reply:{id:'kyc:'+s.nonce+':0'}}},original.outcome.messageId);assert.equal((await expiryProcessor.process(next)).replySent,true);

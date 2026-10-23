@@ -1,6 +1,6 @@
 import {PLAN_BUDGET_CURRENT_SECTION,PLAN_BUDGET_CI_KIND,PLAN_BUDGET_CI_PROOF_PATH,restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources,planBudgetCompiledProof,planBudgetRetainedScreenshotPaths,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetFieldReviewSourceSet,normalizePlanBudgetIntakeWithdrawalNativeProof,intakeWithdrawalCurrentCheckCount,INTAKE_WITHDRAWAL_CHECK_NAMES,restorePlanBudgetIntakeWithdrawalProducerText} from '../../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import * as captureBudget from '../../scripts/lib/plan-budget-current-ci-lineage.mjs';
-import {hasCaptureRuntime,captureRuntimeProducerSourceFiles,buildCaptureRuntimeWorkflow} from '../../scripts/lib/capture-runtime-canonical-collectors.mjs';
+import {hasCaptureRuntime,captureRuntimeProducerSourceFiles,buildCaptureRuntimeWorkflow,normalizeCaptureCompanyCoreNativeProof} from '../../scripts/lib/capture-runtime-canonical-collectors.mjs';
 import {normalizeAttendanceReviewNativeProof,attendanceReviewCurrentCheckCount,ATTENDANCE_REVIEW_CHECK_NAMES} from '../../scripts/lib/attendance-review-current-ci-proof.mjs';
 import {PLAN_BUDGET_UI_MATRIX,validatePlanBudgetUiProofBytes,planBudgetUiSourceBinding,planBudgetUiRetainedScreenshotPath} from '../../scripts/lib/plan-budget-ui-contract.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursPreviousContract,verifyWorksiteLiveHoursCurrentSources} from '../../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
@@ -2119,7 +2119,7 @@ export function provenance({root,lane,contract,expectedHead,workflowSha256,env=p
  if(lane==='channels'){
   const nativePath='.vercel/private/company-channel-postgres-proof.json',nativeBytes=readFileSync(path.join(root,nativePath)),retained=files.find(file=>file.path===nativePath);
   if(!retained||retained.sha256!==hash(nativeBytes)||retained.bytes!==nativeBytes.length)deny('PROOF_COMPANY_CORE_FILE_BINDING');
-  try{validateCompanyOnboardingUxNativeProofBytes(nativeBytes,readSource);}catch(error){if(error.code==='COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED')deny('PROOF_COMPANY_CORE_BOUNDARY');throw error;}
+  try{if(hasCaptureRuntime(contract)){const proof=JSON.parse(nativeBytes);normalizeCaptureCompanyCoreNativeProof({contract,proof,root,readSource,readEvidence:file=>{if(file!==nativePath)return null;const fresh=readFileSync(path.join(root,nativePath));if(!fresh.equals(nativeBytes))deny('PROOF_COMPANY_CORE_FILE_BINDING');return fresh;},normalizeLegacy:(projected,reader)=>validateCompanyOnboardingUxNativeProofBytes(Buffer.from(JSON.stringify(projected)),reader)});}else validateCompanyOnboardingUxNativeProofBytes(nativeBytes,readSource);}catch(error){if(error.code==='COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED'||error.code==='CAPTURE_QUALITY_COLLECTOR_REJECTED')deny('PROOF_COMPANY_CORE_BOUNDARY');throw error;}
  }
  // The same retained block12 browser bytes must contain all160 historical
  // journeys plus the four canonical v5 journeys. Viewport PNGs are read here;

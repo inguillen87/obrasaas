@@ -83,3 +83,12 @@ test('the real preanalysis emitter binds all three facial audit and historical c
   assert.throws(()=>participantPreanalysisCiSourceClosure(file=>file===missing?null:read(file)),error=>error.code==='PARTICIPANT_PREANALYSIS_CI_REJECTED',missing);
  }
 });
+
+test('the current COMPANY collector binds the sealed legacy fixture row and its actual import',()=>{
+ const spec=contract.extension.proofs.find(row=>row.kind==='PG_COMPANY_KYC'),fixture='tests/fixtures/meta-kyc-challenge-legacy-v2.mjs',files=currentProducerSourceFiles(spec,root);
+ assert.equal(files.length,253);assert.ok(files.includes(fixture));assert.deepEqual(files,spec.sourceFiles);
+ for(const mode of ['missing-fixture','extra-row']){const changed=structuredClone(spec);if(mode==='missing-fixture')changed.sourceFiles=changed.sourceFiles.filter(file=>file!==fixture);else changed.sourceFiles=[...changed.sourceFiles,'src/lib/unbound-company-source.mjs'].sort();assert.throws(()=>currentProducerSourceFiles(changed,root),error=>error.code==='CAPTURE_QUALITY_COLLECTOR_REJECTED'&&error.reason==='EXACT_CURRENT_PROOF_SPEC',mode);}
+ const read=file=>{try{return readFileSync(path.join(root,file));}catch{return null;}},producer=spec.producer,raw=read(producer),from="'../tests/fixtures/meta-kyc-challenge-legacy-v2.mjs'",to="'../tests/fixtures/company-kyc-memory.mjs'";assert.equal(raw.toString('utf8').split(from).length,2);
+ assert.throws(()=>budget.verifyCaptureRuntimeCurrentSources(contract,file=>file===producer?Buffer.from(raw.toString('utf8').replace(from,to)):read(file)),error=>error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'&&error.reason==='CURRENT_REFERENCE_'+producer);
+ assert.throws(()=>budget.verifyCaptureRuntimeCurrentSources(contract,file=>file===fixture?null:read(file)),error=>error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED');
+});
