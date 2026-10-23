@@ -77,11 +77,27 @@ test('the complete historical workflow and all eight lanes survive only the exac
 test('the real preanalysis emitter binds all three facial audit and historical challenge fixtures',()=>{
  const fixtures=["tests/fixtures/meta-kyc-challenge-legacy-v2.mjs","tests/fixtures/participant-facial-audit-memory.mjs","tests/fixtures/participant-facial-chat-audit-memory.mjs"];
  const read=file=>{try{return readFileSync(path.join(root,file));}catch{return null;}};
- const files=participantPreanalysisCiSourceClosure(read);assert.equal(files.length,270);
+ const files=participantPreanalysisCiSourceClosure(read);assert.equal(files.length,273);
  for(const missing of fixtures){
   assert.ok(files.includes(missing));
   assert.throws(()=>participantPreanalysisCiSourceClosure(file=>file===missing?null:read(file)),error=>error.code==='PARTICIPANT_PREANALYSIS_CI_REJECTED',missing);
  }
+});
+
+test('the current preanalysis emitter binds the exact pagination inventory edge and preserves its prior 270 paths',()=>{
+ const owner='scripts/verify-field-task-pagination-ui.mjs',leaf='src/app/(identity)/cuenta/material-inventory-view.mjs',literal="'../src/app/(identity)/cuenta/material-inventory-view.mjs'";
+ const read=file=>{try{return readFileSync(path.join(root,file));}catch{return null;}};
+ const additions=['scripts/verify-field-task-pagination-ci.mjs',owner,leaf];
+ const files=participantPreanalysisCiSourceClosure(read),prior=files.filter(file=>!additions.includes(file));
+ assert.equal(files.length,273);for(const file of additions)assert.equal(files.filter(row=>row===file).length,1);
+ assert.equal(prior.length,270);assert.equal(sha(JSON.stringify(prior)),'2a09915ece2c8ede847ca9a7f7b9b2e80eeb9c5e4e336e0cbbb21f3395a5dad8');
+ const main='.github/scripts/verify-workspace-ci-parallelization.mjs',mainLiteral="'../../scripts/verify-field-task-pagination-ci.mjs'",source=read(owner).toString('utf8'),mainSource=read(main).toString('utf8');assert.equal(source.split(literal).length,2);assert.equal(mainSource.split(mainLiteral).length,2);
+ for(const missing of additions)assert.throws(()=>participantPreanalysisCiSourceClosure(file=>file===missing?null:read(file)),error=>error.code==='PARTICIPANT_PREANALYSIS_CI_REJECTED',missing);
+ for(const mode of ['substituted-field-literal','substituted-main-literal'])assert.throws(()=>participantPreanalysisCiSourceClosure(file=>{
+  if(mode==='substituted-field-literal'&&file===owner)return Buffer.from(source.replace(literal,"'../src/app/(identity)/cuenta/project-preparation-format.mjs'"));
+  if(mode==='substituted-main-literal'&&file===main)return Buffer.from(mainSource.replace(mainLiteral,"'../../scripts/verify-focused-workspace-ci.mjs'"));
+  return read(file);
+ }),error=>error.code==='PARTICIPANT_PREANALYSIS_CI_REJECTED',mode);
 });
 
 test('the current COMPANY collector binds the sealed legacy fixture row and its actual import',()=>{

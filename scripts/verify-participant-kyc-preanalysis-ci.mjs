@@ -53,7 +53,7 @@ export function participantPreanalysisCiSourceClosure(readSource){
   for(const ref of contract.integratedIdentityCurrentRevision?.validationSources||[])visit(ref.path);
   for(const ref of contract.integratedIdentityCurrentRevision?.validationDeltas||[]){bytes(readSource,ref.path);files.add(ref.path);}
   if(contract.planBudgetCurrentRevision?.captureQualityRuntime){
-   // Two formerly bound leaves now import capture-runtime dependencies. Walk
+   // Formerly bound validation leaves now import current dependencies. Walk
    // their real literal edges so the emitted receipt includes the actual files;
    // the canonical consumer must never manufacture those missing RAW rows.
    const edges=[
@@ -61,6 +61,8 @@ export function participantPreanalysisCiSourceClosure(readSource){
     ['tests/production-meta-customer-composition.test.mjs','./fixtures/meta-kyc-context-feedback-memory.mjs','tests/fixtures/meta-kyc-context-feedback-memory.mjs'],
     ['tests/fixtures/meta-kyc-context-feedback-memory.mjs','./meta-kyc-chat-memory.mjs','tests/fixtures/meta-kyc-chat-memory.mjs'],
     ['tests/fixtures/meta-kyc-chat-memory.mjs','./capture-quality-synthetic.mjs','tests/fixtures/capture-quality-synthetic.mjs'],
+    ['.github/scripts/verify-workspace-ci-parallelization.mjs','../../scripts/verify-field-task-pagination-ci.mjs','scripts/verify-field-task-pagination-ci.mjs'],
+    ['scripts/verify-field-task-pagination-ui.mjs','../src/app/(identity)/cuenta/material-inventory-view.mjs','src/app/(identity)/cuenta/material-inventory-view.mjs'],
    ];
    for(const [owner,literal,target] of edges){
     requireProof(owner==='.github/scripts/verify-workspace-ci-parallelization.mjs'||files.has(owner),'Capture dependency owner must already be bound');

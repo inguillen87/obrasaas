@@ -681,6 +681,41 @@ async function taskCreateScenario(mode){
  const createdProgress=await page.$eval('[data-task-id="new-task"]',element=>({text:element.innerText.replace(/\s+/g,' '),bars:[...element.querySelectorAll('[role="progressbar"]')].map(bar=>bar.getAttribute('aria-valuenow'))}));assert.ok(createdProgress.text.includes('Avance registrado: 0 %'));assert.deepEqual(createdProgress.bars,['0']);
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await context.close();
 }
+// These directors have no owned participant identity. Match reviewAccess()'s
+// producer preimage; task/proposal/schedule revisions do not rotate authority.
+function progressReviewFixture(field,{name,getPhase,phases}){
+ assert.deepEqual(field.selfWorkers,[]);assert.equal(field.canReview,true);assert.equal(field.canApproveProgress,true);
+ field.reviewAccessStamp=createHash('sha256').update(JSON.stringify(['field-review-access-v1',field.scope,field.projectId,true,true,[]])).digest('hex');
+ const facts=[],allowedPhases=new Set(phases);let assertedFactCount=null;
+ const inspect=(request,url)=>{
+  const fact={phase:getPhase(),method:request.method(),path:url.pathname,query:url.search,authorization:request.headers().authorization};facts.push(fact);
+  assert.ok(allowedPhases.has(fact.phase),'Field request outside an explicit scenario phase');assert.equal(fact.path,'/api/identity/field-operations');assert.equal(fact.authorization,'Bearer synthetic-active-tab-A');
+  if(fact.method==='POST'){assert.equal(url.search,'');fact.kind='DECIDE_PROGRESS';return {kind:fact.kind};}
+  assert.equal(fact.method,'GET');assert.equal(url.searchParams.get('scope'),field.scope);assert.equal(url.searchParams.get('projectId'),field.projectId);
+  const keys=[...url.searchParams.keys()].sort();
+  if(url.searchParams.has('operationId')){assert.deepEqual(keys,['operationId','projectId','scope']);fact.kind='RECEIPT';fact.operationId=url.searchParams.get('operationId');return {kind:fact.kind};}
+  const access={reviewAccessStamp:field.reviewAccessStamp,canReview:field.canReview,canApproveProgress:field.canApproveProgress};
+  fact.access={...access};fact.proposals=field.proposals.map(({id,status,revision})=>({id,status,revision}));
+  if(!url.searchParams.has('reviewSection')){assert.deepEqual(keys,['projectId','scope']);fact.kind='BASE';return {kind:fact.kind,body:field};}
+  assert.deepEqual(keys,['projectId','reviewAccessStamp','reviewFilter','reviewSection','scope']);assert.equal(url.searchParams.get('reviewAccessStamp'),field.reviewAccessStamp);assert.equal(url.searchParams.get('reviewSection'),'PROGRESS');assert.equal(url.searchParams.get('reviewFilter'),'ALL');
+  assert.ok(facts.slice(0,-1).some(row=>row.kind==='BASE'),'A review read must follow a base authority snapshot');
+  const expected={scope:field.scope,projectId:field.projectId,reviewAccessStamp:field.reviewAccessStamp,reviewSection:'PROGRESS',reviewFilter:'ALL'};
+  const body={...expected,afterReview:null,reviewId:null,records:field.proposals.map(row=>({...row})),total:field.proposals.length,nextCursor:null,canReview:field.canReview,canApproveProgress:field.canApproveProgress};
+  fact.kind='PROGRESS_ALL';fact.access={...access};return {kind:fact.kind,body};
+ };
+ const waitCurrent=async page=>{
+  await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="field-title"] [data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='CURRENT',{timeout:15000});
+  assert.deepEqual(facts.map(row=>row.kind),['BASE','BASE','PROGRESS_ALL'],'Opening Avance must complete BASE then the live BASE and canonical PROGRESS/ALL before any command');
+ };
+ const assertComplete=operationIds=>{
+  assert.equal(facts[0]?.kind,'BASE');assert.equal(facts.filter(row=>row.method==='POST').length,1,'Exactly one field decision POST, without replay');
+  assert.deepEqual(facts.filter(row=>row.kind==='RECEIPT').map(row=>row.operationId),operationIds);
+  for(const fact of facts){assert.ok(allowedPhases.has(fact.phase));if(fact.access)assert.deepEqual(fact.access,{reviewAccessStamp:field.reviewAccessStamp,canReview:true,canApproveProgress:true});}
+  assertedFactCount=facts.length;
+ };
+ const write=()=>writeFileSync(path.join(evidence,name+'-field-ledger.json'),JSON.stringify({schema:'workspace-progress-field-fixture-ledger.v1',phases,authorityPreimage:['field-review-access-v1',field.scope,field.projectId,true,true,[]],assertedFactCount,complete:assertedFactCount!==null&&assertedFactCount===facts.length,facts},null,2)+'\n');
+ return {facts,inspect,waitCurrent,assertComplete,write};
+}
 async function confirmedProgressScenario(mode,width){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode:'confirmed-progress-'+mode,width,message:error.message}));
@@ -689,6 +724,7 @@ async function confirmedProgressScenario(mode,width){
  const proposal={id:'proposal-a',taskId:original.id,workerId:'worker-a',summary:'Avance medido sintético',status:'PENDING',revision:planningMode?'2026-10-02T09:00:00.000011':'2026-10-02T09:00:00.000005',progress:50,quantity:null,baseline:null,unit:null,reason:'Medición sintética revisada.',evidenceIds:['evidence-a']};
  const field={scope,projectId:'p-a',projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals:planningMode?[]:[proposal],evidence:[{id:'evidence-a',taskId:original.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Fuente sintética de la medición.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};
  const scheduleFacts=[];let phase='initial-project';
+ const fieldFixture=progressReviewFixture(field,{name:'workspace-confirmed-progress-'+mode+'-'+width,getPhase:()=>phase,phases:planningMode?['planning-held','planning-live']:['field-before-command','creation-form-live','creation-readback-held','field-decision-callback','confirmed-readback-live','explicit-pagination-live']});
  const projectQuery=cursor=>'?'+new URLSearchParams({projectId:'p-a',scope,...(cursor?{afterTask:cursor}:{})});
  const expectedPhaseReads=new Map();
  const assertPhaseReads=cursors=>{const expected=cursors.map(cursor=>({phase,method:'GET',path:'/api/identity/workspace',query:cursor==='ACCOUNT'?'':projectQuery(cursor)}));assert.deepEqual(scheduleFacts.filter(row=>row.phase===phase),expected);if(expectedPhaseReads.has(phase))assert.deepEqual(expectedPhaseReads.get(phase),expected);expectedPhaseReads.set(phase,expected);};
@@ -725,7 +761,8 @@ async function confirmedProgressScenario(mode,width){
     const tasks=url.searchParams.has('afterTask')?[{...created,id:'tail-task',title:'Última tarea autorizada'}]:[original];
     return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks,totalTasks:creation?3:1,nextCursor:null});
    }
-   if(request.method()==='GET')return respond(request,field);
+   if(url.pathname==='/api/identity/field-operations'){const read=fieldFixture.inspect(request,url);if(request.method()==='GET'){assert.notEqual(read.kind,'RECEIPT','This scenario never recovers a receipt');return respond(request,read.body);}}
+   assert.equal(request.method(),'POST');assert.equal(url.search,'');
    const input=JSON.parse(request.postData());posts.push({path:url.pathname,input});assert.equal(input.scope,scope);assert.equal(input.projectId,'p-a');
    if(url.pathname==='/api/identity/task-creation'){
     assert.equal(input.title,created.title);creation={scope,created:true,replayed:false,receiptId:'workspace_new_task_'+input.operationId,task:created};return respond(request,creation);
@@ -743,6 +780,7 @@ async function confirmedProgressScenario(mode,width){
   await waitRejectedLive();assertPhaseReads(['ACCOUNT',null,null]);phase='field-before-command';
   if(planningMode){phase='planning-held';await showWorkspaceSection(page,'schedule-title');await fill(page);await click(page,'Confirmar planificación');await planningReady;}
   await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label="Operaciones de campo"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');
+  if(planningMode){await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="field-title"] [data-worksite-live-refresh]')?.dataset.worksiteLiveRefresh==='PAUSED',{timeout:15000});assert.deepEqual(fieldFixture.facts.map(row=>row.kind),['BASE']);}else await fieldFixture.waitCurrent(page);
   assertPhaseReads([]);
   if(!planningMode){phase='creation-form-live';await showWorkspaceSection(page,'schedule-title');await waitRejectedLive();assertPhaseReads([null]);await click(page,'Nueva tarea');await page.type('section[aria-label="Crear tarea de la obra"] form input:not([type="date"])',created.title);phase='creation-readback-held';await click(page,'Crear tarea');await readbackReady;assertPhaseReads([null]);phase='field-decision-callback';}
   await showWorkspaceSection(page,'field-title');await click(page,'Decidir propuesta');await page.type('section[aria-labelledby="field-title"] form textarea','Aprobación sintética independiente.');await click(page,'Guardar con recibo');await decisionReady;
@@ -753,7 +791,7 @@ async function confirmedProgressScenario(mode,width){
    assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),['2026-10-07','2026-10-15']);
    assert.equal(posts.length,2);assert.equal(readbackCount,0);assert.ok((await text(page)).includes('1 de 1 tareas cargadas'));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,`workspace-confirmed-progress-planning-${width}.png`)});
-   assertAllSchedulePhases();checks.push('schedule-delayed-planning-reply-keeps-current-dates-and-progress-'+width);return;
+   assertAllSchedulePhases();fieldFixture.assertComplete([]);assert.deepEqual(posts.map(row=>row.path),['/api/identity/workspace','/api/identity/field-operations']);checks.push('schedule-delayed-planning-reply-keeps-current-dates-and-progress-'+width);return;
   }
   const readbackTask=mode==='readback'?original:{...original,revision:latestRevision,progress:70};
   if(mode==='readback')await page.waitForFunction(()=>document.querySelector('[data-task-id="task-a"] [role="progressbar"]').getAttribute('aria-valuenow')==='50');
@@ -770,9 +808,9 @@ async function confirmedProgressScenario(mode,width){
   assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),expected);assert.equal(posts.length,2);
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await showWorkspaceSection(page,'schedule-title');await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,`workspace-confirmed-progress-${mode}-${width}.png`)});
-  assertAllSchedulePhases();checks.push((mode==='readback'?'schedule-delayed-readback-keeps-confirmed-progress-':'schedule-delayed-decision-callback-keeps-newer-get-')+width);
- }catch(error){error.workspaceUiDiagnostic={mode:'confirmed-progress-'+mode,width,phase,scheduleFacts,readbackCount,preparationReads,postPaths:posts.map(row=>row.path)};await page.screenshot({path:path.join(evidence,`workspace-confirmed-progress-${mode}-failure-${width}.png`),fullPage:false}).catch(()=>{});throw error;}
- finally{for(const request of [heldReadback,heldDecision?.request,heldPlanning?.request])if(request&&!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});await context.close();}
+  assertAllSchedulePhases();fieldFixture.assertComplete([]);assert.deepEqual(posts.map(row=>row.path),['/api/identity/task-creation','/api/identity/field-operations']);checks.push((mode==='readback'?'schedule-delayed-readback-keeps-confirmed-progress-':'schedule-delayed-decision-callback-keeps-newer-get-')+width);
+ }catch(error){error.workspaceUiDiagnostic={mode:'confirmed-progress-'+mode,width,phase,scheduleFacts,fieldFacts:fieldFixture.facts,readbackCount,preparationReads,postPaths:posts.map(row=>row.path)};await page.screenshot({path:path.join(evidence,`workspace-confirmed-progress-${mode}-failure-${width}.png`),fullPage:false}).catch(()=>{});throw error;}
+ finally{for(const request of [heldReadback,heldDecision?.request,heldPlanning?.request])if(request&&!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});await context.close();fieldFixture.write();}
 }
 async function unloadedConfirmedProgressScenario(width,decision){
  const mode='confirmed-progress-unloaded-'+decision.toLowerCase(),context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
@@ -782,6 +820,7 @@ async function unloadedConfirmedProgressScenario(width,decision){
  const proposal={id:'proposal-outside',taskId:outside.id,workerId:'worker-a',summary:'Medición de la tarea de otra página',status:'PENDING',revision:'2026-10-02T09:00:00.000005',progress:25,quantity:null,baseline:null,unit:null,reason:'Medición sintética de otro participante.',evidenceIds:['evidence-outside']};
  const field={scope,projectId:'p-a',projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals:[proposal],evidence:[{id:'evidence-outside',taskId:outside.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Fuente revisada de otro participante.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};
  const scheduleFacts=[];let phase='initial-project';
+ const fieldFixture=progressReviewFixture(field,{name:mode+'-'+width,getPhase:()=>phase,phases:['field-decision-callback','inspect-unloaded-schedule','receipt-navigation-live','explicit-unloaded-pagination-live','loaded-task-navigation-live','final-schedule']});
  const projectQuery=cursor=>'?'+new URLSearchParams({projectId:'p-a',scope,...(cursor?{afterTask:cursor}:{})});
  const expectedPhaseReads=new Map();
  const assertPhaseReads=cursors=>{const expected=cursors.map(cursor=>({phase,method:'GET',path:'/api/identity/workspace',query:cursor==='ACCOUNT'?'':projectQuery(cursor)}));assert.deepEqual(scheduleFacts.filter(row=>row.phase===phase),expected);if(expectedPhaseReads.has(phase))assert.deepEqual(expectedPhaseReads.get(phase),expected);expectedPhaseReads.set(phase,expected);};
@@ -810,10 +849,10 @@ async function unloadedConfirmedProgressScenario(width,decision){
     return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[original],totalTasks:2,nextCursor:cursor});
    }
    assert.equal(url.pathname,'/api/identity/field-operations','No task-creation command may be issued');
+   const fieldRead=fieldFixture.inspect(request,url);
    if(request.method()==='GET'){
-    assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('operationId')?['operationId','projectId','scope']:['projectId','scope']);
     if(url.searchParams.has('operationId')){receiptQueries.push(url.searchParams.get('operationId'));assert.ok(recorded);assert.equal(receiptQueries.at(-1),posts[0].operationId);assert.equal(recorded.proposal.progress,25);assert.equal(recorded.task.progress,25);assert.equal(currentTask.progress,50);return respond(request,{state:'RECORDED',...recorded,replayed:true,task:currentTask,decisionTaskSnapshot:recorded.task});}
-    return respond(request,field);
+    return respond(request,fieldRead.body);
    }
    assert.equal(request.method(),'POST');assert.equal(url.search,'');const input=JSON.parse(request.postData());posts.push(input);assert.equal(posts.length,1);assert.equal(input.scope,scope);assert.equal(input.projectId,'p-a');assert.equal(input.action,'DECIDE_PROGRESS');assert.equal(input.payload.proposalId,proposal.id);assert.equal(input.payload.revision,proposal.revision);assert.equal(input.payload.decision,decision);assert.equal(input.payload.reason,'Decisión sintética de otra cuenta responsable.');assert.match(input.operationId,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
    field.proposals=[{...proposal,status:decision==='APPROVE'?'APPLIED':'REJECTED',revision:afterRevision}];
@@ -831,7 +870,7 @@ async function unloadedConfirmedProgressScenario(width,decision){
   await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="project-preparation-title"]')?.getAttribute('aria-busy')==='false',{timeout:15000});assert.equal(preparationReads,1);
   await waitRejectedLive();assertPhaseReads(['ACCOUNT',null,null]);phase='field-decision-callback';
   assert.equal((await page.$$('[data-task-id="task-outside"]')).length,0);assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),original.progress);
-  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label="Operaciones de campo"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');assert.equal(posts.length,0);assert.equal(cursorReads.length,0);
+  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label="Operaciones de campo"]');await click(page,'Avance');await waitText(page,'Decidir propuesta');await fieldFixture.waitCurrent(page);assert.equal(posts.length,0);assert.equal(cursorReads.length,0);
   await showWorkspaceSection(page,'field-title');await click(page,'Decidir propuesta');await page.waitForSelector('section[aria-labelledby="field-title"] form');await page.select('section[aria-labelledby="field-title"] form select',decision);await page.type('section[aria-labelledby="field-title"] form textarea','Decisión sintética de otra cuenta responsable.');assert.equal(posts.length,0);await click(page,'Guardar con recibo');
   if(decision==='APPROVE'){await waitText(page,'El resultado quedó sin confirmar.');assert.equal((await page.$$('[data-confirmed-progress]')).length,0);assert.equal(posts.length,1);await click(page,'Comprobar guardado');await waitText(page,'Avance aprobado con recibo.');assert.deepEqual(receiptQueries,[posts[0].operationId]);}
   else await waitText(page,'La propuesta fue rechazada.');
@@ -847,9 +886,9 @@ async function unloadedConfirmedProgressScenario(width,decision){
    await showWorkspaceSection(page,'field-title');await waitText(page,'Esta tarea está cargada en el cronograma.');phase='loaded-task-navigation-live';await page.focus('[data-confirmed-progress="task-outside"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-outside');await waitRejectedLive();assertPhaseReads([null]);assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-outside');assert.equal(cursorReads.length,1);assert.equal(posts.length,1);
   }else{assert.equal((await page.$$('[data-confirmed-progress]')).length,0);assert.equal(await page.$$eval('button',buttons=>buttons.filter(button=>button.textContent==='Ver en el cronograma').length),0);const fieldText=await page.$eval('section[aria-labelledby="field-title"]',element=>element.innerText);assert.ok(!fieldText.includes('avance aprobado en este recibo')&&!fieldText.includes('Avance aprobado con recibo.'));assert.deepEqual(receiptQueries,[]);}
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));phase='final-schedule';await showWorkspaceSection(page,'schedule-title');await waitRejectedLive();assertPhaseReads(decision==='APPROVE'?[]:[null]);await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,mode+'-'+width+'.png')});
-  assert.equal(cursorReads.length,decision==='APPROVE'?1:0);assertAllSchedulePhases();checks.push((decision==='APPROVE'?'schedule-unloaded-progress-recovers-same-uuid-historical-25-current-50-and-loads-explicit-cursor-':'schedule-rejected-progress-with-task-does-not-claim-approval-')+width);
- }catch(error){error.workspaceUiDiagnostic={mode,width,phase,scheduleFacts,cursorReads,receiptQueries,posts:posts.length};await page.screenshot({path:path.join(evidence,mode+'-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}
- finally{await context.close();}
+  assert.equal(cursorReads.length,decision==='APPROVE'?1:0);assertAllSchedulePhases();fieldFixture.assertComplete(decision==='APPROVE'?[posts[0].operationId]:[]);checks.push((decision==='APPROVE'?'schedule-unloaded-progress-recovers-same-uuid-historical-25-current-50-and-loads-explicit-cursor-':'schedule-rejected-progress-with-task-does-not-claim-approval-')+width);
+ }catch(error){error.workspaceUiDiagnostic={mode,width,phase,scheduleFacts,fieldFacts:fieldFixture.facts,cursorReads,receiptQueries,posts:posts.length};await page.screenshot({path:path.join(evidence,mode+'-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}
+ finally{await context.close();fieldFixture.write();}
 }
 async function receiptSnapshotCoverageScenario(width,mode){
  const cases=mode==='invalid-snapshot'?['explicit-null','malformed-progress']:['historical-snapshot'];
@@ -866,6 +905,7 @@ async function loadedReceiptSnapshotScenario(width,mode,snapshotCase){
  const proposals=cases.map((kind,index)=>({id:'proposal-snapshot-'+index,taskId:original.id,workerId:'worker-a',summary:'Medición sintética '+kind,status:'PENDING',revision:'2026-10-02T09:00:00.00000'+(index+5),progress:25,quantity:null,baseline:null,unit:null,reason:'Fuente sintética revisada por otra cuenta.',evidenceIds:['evidence-a']}));
  const field={scope,projectId:'p-a',projectRevision:beforeRevision,configurationRevision:null,canConfigure:true,canReview:true,canApproveProgress:true,selfWorkers:[],workers:[{id:'worker-a',name:'Participante sintético'}],sectors:[],attendance:[],incidents:[],materialRequests:[],truncated:false,proposals,evidence:[{id:'evidence-a',taskId:original.id,workerId:'worker-a',title:'Evidencia sintética aprobada',caption:'Evidencia para contrastar el recibo histórico.',status:'APPROVED',revision:beforeRevision,media:{kind:'image',contentType:'image/png',bytes:64,sha256:'b'.repeat(64)},processing:{status:'NOT_REQUESTED'}}]};
  const scheduleFacts=[];let phase='initial-project';
+ const fieldFixture=progressReviewFixture(field,{name:'workspace-receipt-'+mode+'-'+snapshotCase+'-'+width,getPhase:()=>phase,phases:['field-recovery-callback','snapshot-held-callback','snapshot-released-live','receipt-navigation-live','final-snapshot-schedule']});
  const projectQuery=cursor=>'?'+new URLSearchParams({projectId:'p-a',scope,...(cursor?{afterTask:cursor}:{})});
  const expectedPhaseReads=new Map();
  const assertPhaseReads=cursors=>{const expected=cursors.map(cursor=>({phase,method:'GET',path:'/api/identity/workspace',query:cursor==='ACCOUNT'?'':projectQuery(cursor)}));assert.deepEqual(scheduleFacts.filter(row=>row.phase===phase),expected);if(expectedPhaseReads.has(phase))assert.deepEqual(expectedPhaseReads.get(phase),expected);expectedPhaseReads.set(phase,expected);};
@@ -892,15 +932,15 @@ async function loadedReceiptSnapshotScenario(width,mode,snapshotCase){
     return respond(request,{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:true,tasks:[original,untouched],totalTasks:2,nextCursor:null});
    }
    assert.equal(url.pathname,'/api/identity/field-operations','No task creation command may be issued');
+   const fieldRead=fieldFixture.inspect(request,url);
    if(request.method()==='GET'){
-    assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('operationId')?['operationId','projectId','scope']:['projectId','scope']);
     if(url.searchParams.has('operationId')){
      assert.ok(recorded);const operationId=url.searchParams.get('operationId');assert.equal(operationId,recorded.input.operationId);receiptQueries.push(operationId);
      const snapshot=recorded.kind==='explicit-null'?null:recorded.kind==='malformed-progress'?{...historicalTask,progress:'25'}:historicalTask;
      const recovery={state:'RECORDED',...recorded.outcome,replayed:true,task:currentTask,decisionTaskSnapshot:snapshot};assert.ok(Object.hasOwn(recovery,'decisionTaskSnapshot'));assert.equal(recovery.task.progress,50);assert.equal(recovery.task.status,'BLOCKED');holdNextRefresh=true;return respond(request,recovery);
     }
-    if(holdNextRefresh){assert.equal(heldRefresh,null);holdNextRefresh=false;heldRefresh=request;return;}
-    return respond(request,field);
+    if(holdNextRefresh){assert.equal(fieldRead.kind,'BASE','Retain the explicit confirmed() base refresh, never a review page');assert.equal(heldRefresh,null);holdNextRefresh=false;heldRefresh=request;return;}
+    return respond(request,fieldRead.body);
    }
    assert.equal(request.method(),'POST');assert.equal(url.search,'');const input=JSON.parse(request.postData()),index=posts.length,proposal=proposals[index];assert.ok(proposal);posts.push(input);
    assert.equal(input.scope,scope);assert.equal(input.projectId,'p-a');assert.equal(input.action,'DECIDE_PROGRESS');assert.equal(input.payload.proposalId,proposal.id);assert.equal(input.payload.revision,proposal.revision);assert.equal(input.payload.decision,'APPROVE');assert.equal(input.payload.reason,'Decisión sintética '+cases[index]+'.');assert.match(input.operationId,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -922,7 +962,7 @@ async function loadedReceiptSnapshotScenario(width,mode,snapshotCase){
   await waitRejectedLive();assertPhaseReads(['ACCOUNT',null,null]);phase='field-recovery-callback';
   assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',element=>Number(element.getAttribute('aria-valuenow'))),0);assert.deepEqual(await page.$$eval('[data-task-id="task-a"] time',elements=>elements.map(element=>element.dateTime)),[original.startsOn,original.endsOn]);
   await page.evaluate(()=>{window.__loadedReceiptTrace=[];window.__loadedReceiptObserver=new MutationObserver(()=>{const row=document.querySelector('[data-task-id="task-a"]');if(row)window.__loadedReceiptTrace.push({progress:Number(row.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')),dates:[...row.querySelectorAll('time')].map(time=>time.dateTime)});});window.__loadedReceiptObserver.observe(document.querySelector('section[aria-labelledby="schedule-title"]'),{subtree:true,childList:true,attributes:true});});
-  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label="Operaciones de campo"]');await click(page,'Avance');
+  await showWorkspaceSection(page,'field-title');await click(page,'Abrir operaciones');await page.waitForSelector('nav[aria-label="Operaciones de campo"]');await click(page,'Avance');await fieldFixture.waitCurrent(page);
   for(const [index,kind] of cases.entries()){
    await page.waitForSelector('[data-field-proposal="proposal-snapshot-'+index+'"] button');await page.$eval('[data-field-proposal="proposal-snapshot-'+index+'"] button',element=>element.click());await page.waitForSelector('section[aria-labelledby="field-title"] form');await page.select('section[aria-labelledby="field-title"] form select','APPROVE');await page.type('section[aria-labelledby="field-title"] form textarea','Decisión sintética '+kind+'.');await click(page,'Guardar con recibo');
    await waitText(page,'El resultado quedó sin confirmar.');assert.equal(posts.length,index+1);assert.equal((await page.$$('[data-confirmed-progress]')).length,0);await click(page,'Comprobar guardado');await waitText(page,mode==='invalid-snapshot'?'Decisión guardada con recibo. Consultá el estado de la propuesta.':'Avance aprobado con recibo.');
@@ -937,9 +977,9 @@ async function loadedReceiptSnapshotScenario(width,mode,snapshotCase){
    if(mode==='loaded-current'){phase='receipt-navigation-live';await page.focus('[data-confirmed-progress="task-a"] button');await page.keyboard.press('Enter');await page.waitForFunction(()=>document.activeElement?.dataset.taskId==='task-a');await waitRejectedLive();assertPhaseReads([null]);assert.equal(await page.evaluate(()=>document.activeElement?.dataset.taskId),'task-a');assert.equal(posts.length,1);assert.ok((await page.$eval('[data-confirmed-progress="task-a"]',element=>element.textContent)).includes('25% de avance aprobado en este recibo'));}
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await showWorkspaceSection(page,'field-title');await (await page.$('section[aria-labelledby="field-title"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+kind+'-'+width+'.png')});
   }
-  phase='final-snapshot-schedule';await showWorkspaceSection(page,'schedule-title');await waitRejectedLive();assertPhaseReads([null]);await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+snapshotCase+'-schedule-'+width+'.png')});assertAllSchedulePhases();
- }catch(error){error.workspaceUiDiagnostic={mode,width,snapshotCase,phase,scheduleFacts,receiptQueries,posts:posts.length};await page.screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}
- finally{if(heldRefresh&&!heldRefresh.isInterceptResolutionHandled())await heldRefresh.abort().catch(()=>{});await page.evaluate(()=>window.__loadedReceiptObserver?.disconnect()).catch(()=>{});await context.close();}
+  phase='final-snapshot-schedule';await showWorkspaceSection(page,'schedule-title');await waitRejectedLive();assertPhaseReads([null]);await (await page.$('section[aria-labelledby="schedule-title"]')).screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-'+snapshotCase+'-schedule-'+width+'.png')});assertAllSchedulePhases();fieldFixture.assertComplete(posts.map(input=>input.operationId));
+ }catch(error){error.workspaceUiDiagnostic={mode,width,snapshotCase,phase,scheduleFacts,fieldFacts:fieldFixture.facts,receiptQueries,posts:posts.length};await page.screenshot({path:path.join(evidence,'workspace-receipt-'+mode+'-failure-'+width+'.png'),fullPage:false}).catch(()=>{});throw error;}
+ finally{if(heldRefresh&&!heldRefresh.isInterceptResolutionHandled())await heldRefresh.abort().catch(()=>{});await page.evaluate(()=>window.__loadedReceiptObserver?.disconnect()).catch(()=>{});await context.close();fieldFixture.write();}
 }
 async function stalePaginationScenario(){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width:390,height:1000});

@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {parse} from '@babel/parser';
 import puppeteer from 'puppeteer';
 import {captureOwnedFixture,removeOwnedFixture} from './lib/owned-fixture-cleanup.mjs';
+import {inventoryQuery,inventorySnapshot} from '../src/app/(identity)/cuenta/material-inventory-view.mjs';
 
 export const FIELD_TASK_PAGE_WIDTHS=Object.freeze([320,390,1440]);
 export const FIELD_TASK_PAGE_MODES=Object.freeze(['evidence','progress','material-request','consumption']);
@@ -121,12 +122,23 @@ export async function verifyFieldTaskPaginationUi({args=process.argv.slice(2),en
     if(failPage&&!failed){failed=true;status=503;body={saved:false,code:'WORKSPACE_OPERATION_UNCONFIRMED'};}else{const start=after==='task-0100'?100:200;body={scope,project:{id:projectId,name:'Obra sintética de paginación',status:'ACTIVE'},roleLabel:'Administrador',canPlanSchedule:true,tasks:rows.slice(start,start+100),totalTasks:205,nextCursor:start===100?'task-0200':null};}
    }else if(['/api/identity/field-operations','/api/identity/field-media'].includes(url.pathname)){
     if(request.method()==='POST'){status=503;body={saved:false,code:'FIELD_OPERATION_UNCONFIRMED'};fact.bodySha256=sha(Buffer.from(request.postData()||''));fact.operationId=(request.postData()||'').match(/"operationId":"([^"]+)"/)?.[1]||null;}
-    else {assert.equal(url.pathname,'/api/identity/field-operations');body={...baseData,inventory};}
+    else {
+     assert.equal(url.pathname,'/api/identity/field-operations');assert.equal(request.method(),'GET');assert.equal(url.searchParams.get('projectId'),projectId);assert.equal(url.searchParams.get('scope'),scope);
+     const inventoryFilter=url.searchParams.get('inventoryFilter');assert.deepEqual([...url.searchParams.keys()].sort(),mode==='consumption'&&inventoryFilter!==null?['inventoryFilter','projectId','scope']:['projectId','scope']);
+     if(mode==='consumption'){
+      assert.ok(inventoryFilter===null||inventoryFilter==='PENDING','Only the initial inventory and its pending queue are expected');fact.inventoryFilter=inventoryFilter;
+      const expected={projectId,scope,...(inventoryFilter===null?{}:{inventoryFilter})};
+      // The full synthetic inventory has no proposals. Counts are independent
+      // of the requested page and match the real inventory history contract.
+      body=inventoryFilter===null?{...baseData,inventory}:{scope,projectId,inventory:{...inventory,inventoryFilter,inventoryQuery:inventoryQuery(expected),pendingCounts:{consumptions:inventory.consumptions.filter(row=>row.state==='PENDING').length,adjustments:inventory.adjustments.filter(row=>row.state==='PENDING').length}}};
+      inventorySnapshot(body,expected,{history:inventoryFilter!==null});
+     }else body={...baseData,inventory};
+    }
    }else throw Error('Unexpected fixture API '+url.pathname);
    fact.responseStatus=status;await request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
   }catch(error){errors.push({width,mode,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
   await page.goto(origin+'/?mode='+mode,{waitUntil:'networkidle0',timeout:120000});await click(page,mode==='consumption'?'Abrir inventario':'Abrir operaciones');
-  if(mode==='consumption'){await click(page,'Proponer consumo');await field(page,'Sector','sector-fixture');await field(page,'Material del catálogo','material-fixture');await field(page,'Cantidad utilizada','2.125');await field(page,'Motivo o detalle','Consumo sintético conservado durante la consulta.');}
+  if(mode==='consumption'){await click(page,'Proponer consumo');assert.deepEqual(facts,[{width,mode,path:'/api/identity/field-operations',method:'GET',afterTask:null,inventoryFilter:null,responseStatus:200},{width,mode,path:'/api/identity/field-operations',method:'GET',afterTask:null,inventoryFilter:'PENDING',responseStatus:200}]);await field(page,'Sector','sector-fixture');await field(page,'Material del catálogo','material-fixture');await field(page,'Cantidad utilizada','2.125');await field(page,'Motivo o detalle','Consumo sintético conservado durante la consulta.');}
   else if(mode==='evidence'){await click(page,'Evidencia');await click(page,'Adjuntar evidencia');const input=await page.$('form input[type=file]');assert.ok(input);await input.uploadFile(imagePath);await page.waitForSelector('form img[alt="Vista previa local de la foto que se enviará"]');await click(page,'Usar este archivo');await field(page,'Qué muestra o registra','Archivo sintético conservado durante la consulta.');}
   else if(mode==='progress'){await click(page,'Avance');await click(page,'Proponer avance');await field(page,'Avance propuesto (%)','25');await field(page,'Cantidad ejecutada acumulada (opcional)','2.5');await field(page,'Cantidad base','10');await field(page,'Unidad','M2');await field(page,'Fundamento','Medición sintética conservada durante la consulta.');}
   else {await click(page,'Incidencias y materiales');await click(page,'Solicitar material');await field(page,'Material solicitado','Material sintético por consultar');await field(page,'Cantidad solicitada','2.125');await field(page,'Para qué hace falta','Pedido sintético conservado durante la consulta.');}

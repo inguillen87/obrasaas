@@ -4522,6 +4522,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 320,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -4618,6 +4628,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 390,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -4714,6 +4734,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 1440,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -4810,6 +4840,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 320,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -4906,6 +4946,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 390,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -5002,6 +5052,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 1440,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -5074,6 +5134,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 320,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -5146,6 +5216,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 390,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -5218,6 +5298,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 1440,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -5239,27 +5329,27 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
   ],
   "commandEqualityGroups": [
     [
-      74,
-      83,
-      92
+      80,
+      90,
+      100
     ],
     [
-      77
+      83
     ],
     [
-      80
+      87
     ],
     [
-      86
+      93
     ],
     [
-      89
+      97
     ],
     [
-      95
+      103
     ],
     [
-      98
+      107
     ]
   ],
   "postCount": 9,
