@@ -39588,7 +39588,7 @@
       {
         "path": "scripts/verify-mobile-identity-ui.mjs",
         "previousSha256": "af50ece90055a7ecec11e05359934c874576e2344e95f5b31cb7096255f38693",
-        "currentSha256": "44d5a193d06b99d4fb6ac39507e326bb59d9821c2d0c1a1484edbf720a80fd8f"
+        "currentSha256": "88e8a7e5a4795512526a304b41bd98d1e4bc9e5464b7f380ab12614c578dcd9b"
       },
       {
         "path": "scripts/verify-participant-ai-ui.mjs",
@@ -39643,12 +39643,12 @@
       {
         "path": "src/app/(identity)/cuenta/participant-kyc-capture.js",
         "previousSha256": "83ee427bbbecbf74aee901fd77c6981232a2cd07e235180566938c2c0201647d",
-        "currentSha256": "1da96eacaf5065164c9f73c52b0fd2326dc95f100930f6cbbab8df1dca7ed106"
+        "currentSha256": "4bb518abaa9fb4f013b4729b513d0d692e00328db479d85700595ce30725e863"
       },
       {
         "path": "src/app/(identity)/cuenta/participant-panel.js",
         "previousSha256": "a9d5934c7bda61c49362ac53cfb339a5d66497566f71415ecc4621686ce17519",
-        "currentSha256": "a1ae0d36225fccc7129a591d86a92f935bee8dd8d28d88f50f435ef6d54b0d06"
+        "currentSha256": "2a97de596cd518935f81422e415909c5ef9edd578ea2ae632ef2abc3556e3496"
       },
       {
         "path": "src/app/(identity)/cuenta/participant-panel.module.css",
@@ -40043,7 +40043,7 @@
       {
         "path": "tests/production-capture-quality-response-continuity.test.mjs",
         "previousSha256": null,
-        "currentSha256": "3d6ae114083029d04cf732c9d25890c555f4f65297d9cd69eea78702581896e2"
+        "currentSha256": "6ad6c89a4617ca6987d3ad925adc86c470e687e8d4e2052b7391fe57414e9eee"
       },
       {
         "path": "tests/production-capture-runtime-collectors.test.mjs",
@@ -41182,7 +41182,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/participant-kyc-capture.js",
-            "sha256": "1da96eacaf5065164c9f73c52b0fd2326dc95f100930f6cbbab8df1dca7ed106"
+            "sha256": "4bb518abaa9fb4f013b4729b513d0d692e00328db479d85700595ce30725e863"
           },
           {
             "path": "src/app/(identity)/cuenta/participant-kyc-capture.module.css",
@@ -41214,7 +41214,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/participant-panel.js",
-            "sha256": "a1ae0d36225fccc7129a591d86a92f935bee8dd8d28d88f50f435ef6d54b0d06"
+            "sha256": "2a97de596cd518935f81422e415909c5ef9edd578ea2ae632ef2abc3556e3496"
           },
           {
             "path": "src/app/(identity)/cuenta/participant-panel.module.css",
@@ -43467,7 +43467,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/participant-kyc-capture.js",
-            "sha256": "1da96eacaf5065164c9f73c52b0fd2326dc95f100930f6cbbab8df1dca7ed106"
+            "sha256": "4bb518abaa9fb4f013b4729b513d0d692e00328db479d85700595ce30725e863"
           },
           {
             "path": "src/app/(identity)/cuenta/participant-kyc-capture.module.css",
@@ -43499,7 +43499,7 @@
           },
           {
             "path": "src/app/(identity)/cuenta/participant-panel.js",
-            "sha256": "a1ae0d36225fccc7129a591d86a92f935bee8dd8d28d88f50f435ef6d54b0d06"
+            "sha256": "2a97de596cd518935f81422e415909c5ef9edd578ea2ae632ef2abc3556e3496"
           },
           {
             "path": "src/app/(identity)/cuenta/participant-panel.module.css",
@@ -64470,7 +64470,7 @@
         {
           "path": "tests/production-capture-quality-response-continuity.test.mjs",
           "previousSha256": null,
-          "currentSha256": "3d6ae114083029d04cf732c9d25890c555f4f65297d9cd69eea78702581896e2"
+          "currentSha256": "6ad6c89a4617ca6987d3ad925adc86c470e687e8d4e2052b7391fe57414e9eee"
         },
         {
           "path": "tests/production-capture-runtime-collectors.test.mjs",
@@ -64707,7 +64707,7 @@
         {
           "path": "scripts/verify-mobile-identity-ui.mjs",
           "previousSha256": "c667372d6495233f3ef1cbe86b7c56e36652ef944ca888fcde1763e4858fd780",
-          "currentSha256": "44d5a193d06b99d4fb6ac39507e326bb59d9821c2d0c1a1484edbf720a80fd8f"
+          "currentSha256": "88e8a7e5a4795512526a304b41bd98d1e4bc9e5464b7f380ab12614c578dcd9b"
         },
         {
           "path": "scripts/verify-participant-ai-ui.mjs",
@@ -64752,12 +64752,12 @@
         {
           "path": "src/app/(identity)/cuenta/participant-kyc-capture.js",
           "previousSha256": "556109c32d2f85be4b043513362d682ed7e14811a21a6f08200ac65c53af5d48",
-          "currentSha256": "1da96eacaf5065164c9f73c52b0fd2326dc95f100930f6cbbab8df1dca7ed106"
+          "currentSha256": "4bb518abaa9fb4f013b4729b513d0d692e00328db479d85700595ce30725e863"
         },
         {
           "path": "src/app/(identity)/cuenta/participant-panel.js",
           "previousSha256": "1ec30c252d7f0fa8d65905f66eeca76da1644778b9ad710da5487ab667759c82",
-          "currentSha256": "a1ae0d36225fccc7129a591d86a92f935bee8dd8d28d88f50f435ef6d54b0d06"
+          "currentSha256": "2a97de596cd518935f81422e415909c5ef9edd578ea2ae632ef2abc3556e3496"
         },
         {
           "path": "src/app/(identity)/cuenta/workspace-recovery-journal.mjs",
@@ -65740,42 +65740,87 @@
           "path": "scripts/verify-mobile-identity-ui.mjs",
           "status": "MODIFIED",
           "previousSha256": "c667372d6495233f3ef1cbe86b7c56e36652ef944ca888fcde1763e4858fd780",
-          "currentSha256": "44d5a193d06b99d4fb6ac39507e326bb59d9821c2d0c1a1484edbf720a80fd8f",
+          "currentSha256": "88e8a7e5a4795512526a304b41bd98d1e4bc9e5464b7f380ab12614c578dcd9b",
           "previousBytes": 40873,
-          "currentBytes": 43276,
+          "currentBytes": 49977,
           "inverseHunks": [
             {
-              "currentOffsetCharacters": 2112,
+              "currentOffsetCharacters": 386,
+              "currentText": "PARTICIPANT_DOCUMENT_BACK_NOTICE,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256,participantKycInput} from '../src/lib/participant-policy.mjs';\nimport {PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION,PARTICIPANT_AUTO_OCR_NOTICE_VERSION,participantBiometricNotice,participantOcrNotice} from '../src/lib/participant-analysis-consent",
+              "previousText": "participantKycInput} from '../src/lib/participant-policy"
+            },
+            {
+              "currentOffsetCharacters": 961,
+              "currentText": "qualityModes=['quality-retake-front','quality-retake-back','quality-retake-selfie'];\nconst widths=[320,390,768,1280],readModes=['local-read-cancel','local-read-timeout','local-read-abort','local-read-error','local-read-sync-error','local-read-context'],focusedScenario=process.env.MOBILE_IDENTITY_UI_SCENARIO||null;assert.ok(!focusedScenario||[...readModes,...qualityModes].includes(focusedScenario)||['local-read-recovery','quality-retakes'].includes(focusedScenario));assert.ok(!process.env.MOBILE_IDENTITY_UI_WIDTH||focusedScenario);const selectedWidths=process.env.MOBILE_IDENTITY_UI_WIDTH?[Number(process.env.MOBILE_IDENTITY_UI_WIDTH)]:focusedScenario==='quality-retakes'?[390,1280",
+              "previousText": "widths=[320,390,768,1280],readModes=['local-read-cancel','local-read-timeout','local-read-abort','local-read-error','local-read-sync-error','local-read-context'],focusedScenario=process.env.MOBILE_IDENTITY_UI_SCENARIO||null;assert.ok(!focusedScenario||readModes.includes(focusedScenario)||focusedScenario==='local-read-recovery');assert.ok(!process.env.MOBILE_IDENTITY_UI_WIDTH||focusedScenario);const selectedWidths=process.env.MOBILE_IDENTITY_UI_WIDTH?[Number(process.env.MOBILE_IDENTITY_UI_WIDTH)"
+            },
+            {
+              "currentOffsetCharacters": 2605,
               "currentText": "kyc-image-quality.mjs','",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 8428,
+              "currentOffsetCharacters": 3597,
+              "currentText": "participant-analysis-consent.mjs','",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 8956,
               "currentText": "tiny=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==','base64'),tinyPath=path.join(fixture,'synthetic-one-pixel.png'),smallPath=path.join(fixture,'synthetic-small-valid.png');writeFileSync(tinyPath,tiny);let small",
               "previousText": "small=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==','base64'),smallPath=path.join(fixture,'synthetic-small.png');writeFileSync(smallPath,small)"
             },
             {
-              "currentOffsetCharacters": 20623,
+              "currentOffsetCharacters": 9368,
+              "currentText": "back='fieldset[aria-label=\"Dorso del documento\"]',",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 16670,
+              "currentText": " const qualityField=qualityModes.includes(mode)?mode.slice('quality-retake-'.length):null,qualityKind=qualityField&&({front:'DOCUMENT_FRONT',back:'DOCUMENT_BACK',selfie:'SELFIE'})[qualityField];\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 19110,
+              "currentText": "...(qualityField?{documentBackNotice:{version:PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,text:PARTICIPANT_DOCUMENT_BACK_NOTICE,sha256:PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256},privateBiometricNotice:{version:PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION,text:participantBiometricNotice(PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION).text,timing:'BEFORE_PERSISTENCE'},externalOcrNotice:{version:PARTICIPANT_AUTO_OCR_NOTICE_VERSION,text:participantOcrNotice(PARTICIPANT_AUTO_OCR_NOTICE_VERSION).text}}:{}),",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 20443,
+              "currentText": "  if(qualityField){assert.ok(decoded.back.bytes.length<=1024*1024);assert.equal(input.biometricNoticeVersion,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION);assert.equal(input.biometricMode,'MANUAL');assert.equal(input.biometricConsent,false);assert.equal(input.backConsent,true);assert.equal(input.ocrConsent,false);assert.equal(Object.hasOwn(input,'captureRetakes'),false);await request.respond({status:422,contentType:'application/json',body:JSON.stringify({saved:false,identityCertified:false,code:'PARTICIPANT_CAPTURE_'+qualityKind+'_IMAGE_BLURRED'})});return;}\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 22466,
               "currentText": " if(mode==='tiny-rejected'){\n  await upload(page,front,tinyPath);await wait(page,'La imagen es demasiado pequeña. Tomá otra fotografía con al menos 320 píxeles en su lado menor y 480 en su lado mayor.');\n  assert.equal(await page.$(front+' img'),null);assert.equal(await disabled(page,'Presentar para revisión'),true);assert.equal(posts.length,0);assert.equal((await page.evaluate(()=>window.__mobileReferences())).length,0);assert.equal(await page.evaluate(()=>window.__kycTest.urls.length),0);assert.equal(await page.evaluate(()=>window.__kycTest.decodes),2);assert.equal(await page.evaluate(()=>window.__kycTest.closed),2);\n  assert.equal(await page.$eval(front,fieldset=>[...fieldset.querySelectorAll('button')].some(button=>['Usar documento revisado','Girar 90°','Descartar fotografía'].includes(button.textContent))),false);assert.equal(await page.$eval(front,fieldset=>!fieldset.querySelector('input[type=file]').disabled&&[...fieldset.querySelectorAll('button')].some(button=>button.textContent==='Usar cámara'&&!button.disabled)),true);await allRevoked(page);await noOverflow(page);await page.screenshot({path:path.join(evidence,'one-pixel-rejected-'+width+'.png'),fullPage:true});checks.push({id:'one-pixel-rejected-before-preview-or-post',width,allocatedDecoders:2,closedDecoders:2,automaticPosts:0,automaticCamera:0,referenceCreated:false});await context.close();return;\n }\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 26275,
+              "currentOffsetCharacters": 27347,
+              "currentText": " if(qualityField){\n  const selectors={front,back,selfie},target=selectors[qualityField],fields=['front','back','selfie'];\n  const chooseLabel=async text=>{const handle=await page.evaluateHandle(value=>[...document.querySelectorAll('label')].find(label=>label.textContent.includes(value)).querySelector('input'),text);try{assert.equal(await handle.evaluate(input=>input.checked),false);await handle.asElement().click();assert.equal(await handle.evaluate(input=>input.checked),true);}finally{await handle.dispose();}};\n  await upload(page,front,largePath);await review(page,front,'Usar documento revisado');await click(page,'Continuar al dorso');await wait(page,'Paso 2 de 3');await chooseLabel('Leí el aviso y autorizo agregar el dorso');await upload(page,back,largePath);await review(page,back,'Usar documento revisado');await click(page,'Continuar a la selfie');await wait(page,'Paso 3 de 3');await upload(page,selfie,largePath);await review(page,selfie,'Usar fotografía revisada');\n  assert.equal(await page.$$eval('input[name=\"biometric-mode\"]',inputs=>inputs.every(input=>!input.checked)),true);await chooseLabel('Presentar para revisión manual, sin comparación facial.');await chooseLabel('Leí el aviso y autorizo presentar estas imágenes para su revisión.');assert.equal(await disabled(page,'Presentar para revisión'),false);\n  const previews=Object.fromEntries(await Promise.all(fields.map(async field=>[field,await page.$eval(selectors[field]+' img',image=>image.src)])));\n  assert.equal(posts.length,0);await click(page,'Presentar para revisión');await wait(page,'La presentación todavía no se guardó.');await page.waitForSelector(target+' img',{hidden:true});await wait(page,'Paso '+({front:1,back:2,selfie:3})[qualityField]+' de 3');\n  assert.equal(posts.length,1);assert.equal(await page.$eval(target,fieldset=>fieldset.innerText.includes('Imagen revisada y lista para presentar.')),false);assert.equal(await page.$eval(target+' input[type=checkbox]',input=>input.checked).catch(()=>false),false);assert.equal(await disabled(page,'Presentar para revisión'),true);\n  for(const field of fields.filter(field=>field!==qualityField)){assert.equal(await page.$eval(selectors[field]+' img',image=>image.src),previews[field]);assert.equal(await page.$eval(selectors[field],fieldset=>fieldset.textContent.includes('Imagen revisada y lista para presentar.')),true);}\n  assert.ok((await page.evaluate(()=>window.__kycTest.revoked)).includes(previews[qualityField]));for(const field of fields.filter(field=>field!==qualityField))assert.equal((await page.evaluate(()=>window.__kycTest.revoked)).includes(previews[field]),false);\n  assert.equal(await page.$eval('input[name=\"biometric-mode\"]',input=>input.checked),true);assert.deepEqual(await page.evaluate(()=>window.__cameraRequests),[]);assert.equal((await page.evaluate(()=>window.__mobileReferences())).length,0);\n  await upload(page,target,smallPath);await review(page,target,qualityField==='selfie'?'Usar fotografía revisada':'Usar documento revisado');if(qualityField==='front'){await click(page,'Continuar al dorso');await click(page,'Continuar a la selfie');}else if(qualityField==='back')await click(page,'Continuar a la selfie');\n  assert.equal(await disabled(page,'Presentar para revisión'),false);assert.equal(posts.length,1);await click(page,'Presentar para revisión');await page.waitForFunction(selector=>!document.querySelector(selector+' img'),{},target);assert.equal(posts.length,2);for(const field of fields)if(field===qualityField)assert.notEqual(posts[1][field],posts[0][field]);else assert.equal(posts[1][field],posts[0][field]);for(const key of ['consent','backConsent','backNoticeVersion','backNoticeSha256','ocrConsent','ocrNoticeVersion','biometricMode','biometricConsent','biometricNoticeVersion'])assert.deepEqual(posts[1][key],posts[0][key]);assert.notEqual(posts[1].operationId,posts[0].operationId);assert.equal(row.kyc.status,'NOT_SUBMITTED');assert.equal(row.identityCertified,false);assert.equal(posts.some(input=>Object.hasOwn(input,'captureRetakes')),false);assert.deepEqual(await page.evaluate(()=>window.__cameraRequests),[]);assert.equal((await page.evaluate(()=>window.__mobileReferences())).length,0);\n  await noOverflow(page);await page.screenshot({path:path.join(evidence,'retake-'+width+'-'+qualityField+'.png'),fullPage:true});await click(page,'Cancelar');await allRevoked(page);checks.push({id:mode,width,noticeVersion:PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION,biometricMode:'MANUAL',rejectedPhotoReset:true,otherPreviewsPreserved:true,consentsPreserved:true,localMetadataSent:false,explicitPosts:2,automaticPosts:0,cameraRequests:0,identityAccepted:false});await context.close();return;\n }\n\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 32811,
               "currentText": "3:1);assert.equal(await page.evaluate(()=>window.__kycTest.decodes),mode==='replace-decode'?3:1);\n  if(mode==='replace-decode'){assert.equal(await page.$eval(front+' img',image=>image.naturalWidth),480",
               "previousText": "2:1);\n  if(mode==='replace-decode'){assert.equal(await page.$eval(front+' img',image=>image.naturalWidth),1"
             },
             {
-              "currentOffsetCharacters": 31789,
+              "currentOffsetCharacters": 38325,
               "currentText": "00&&document.querySelector(selector+' img').naturalHeight===600,{},front);const rotate=await page.evaluateHandle(selector=>[...document.querySelector(selector).querySelectorAll('button')].find(button=>button.textContent==='Girar 90°'),front);await rotate.asElement().click();await rotate.dispose();await page.waitForFunction(selector=>document.querySelector(selector+' img')?.naturalWidth===600&&document.querySelector(selector+' img')?.naturalHeight===400,{},front);await openPhotoDetails(page,front);await wait(page,'600 × 400",
               "previousText": "5&&document.querySelector(selector+' img').naturalHeight===90,{},front);const rotate=await page.evaluateHandle(selector=>[...document.querySelector(selector).querySelectorAll('button')].find(button=>button.textContent==='Girar 90°'),front);await rotate.asElement().click();await rotate.dispose();await page.waitForFunction(selector=>document.querySelector(selector+' img')?.naturalWidth===90&&document.querySelector(selector+' img')?.naturalHeight===45,{},front);await openPhotoDetails(page,front);await wait(page,'90 × 45"
             },
             {
-              "currentOffsetCharacters": 35945,
+              "currentOffsetCharacters": 42481,
               "currentText": "small=Buffer.from(await maker.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=480;canvas.height=320;const context=canvas.getContext('2d'),pixels=context.createImageData(480,320);let seed=41;for(let i=0;i<pixels.data.length;i+=4){for(let channel=0;channel<3;channel++){seed=(seed*1664525+1013904223)>>>0;pixels.data[i+channel]=seed>>>24;}pixels.data[i+3]=255;}context.putImageData(pixels,0,0);return canvas.toDataURL('image/png').split(',')[1];}),'base64');writeFileSync(smallPath,small);assert.ok(small.length<1024*1024);const large=await maker.evaluate(async()=>{const canvas=document.createElement('canvas');canvas.width=1800;canvas.height=1400;const context=canvas.getContext('2d'),pixels=context.createImageData(1800,1400);let seed=42;for(let i=0;i<pixels.data.length;i+=4){for(let channel=0;channel<3;channel++){seed=(seed*1664525+1013904223)>>>0;pixels.data[i+channel]=seed>>>24;}pixels.data[i+3]=255;}context.putImageData(pixels,0,0);const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));return new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.readAsDataURL(blob);});});const largePath=path.join(fixture,'synthetic-large.png');writeFileSync(largePath,Buffer.from(large,'base64'));assert.ok(readFileSync(largePath).length>1024*1024);await maker.close();\n const jpegMaker=await browser.newPage();await jpegMaker.goto(origin);const jpeg=Buffer.from(await jpegMaker.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=600;canvas.height=400;const context=canvas.getContext('2d'),pixels=context.createImageData(600,400);let seed=45;for(let y=0;y<400;y++)for(let x=0;x<600;x++){const at=(y*600+x)*4,base=x<300?[18,101,45]:[242,120,35];for(let channel=0;channel<3;channel++){seed=(seed*1664525+1013904223)>>>0;pixels.data[at+channel]=Math.max(0,Math.min(255,base[channel]+(seed>>>24)%81-40));}pixels.data[at+3]=255;}context.putImageData(pixels,0,0",
               "previousText": "const large=await maker.evaluate(async()=>{const canvas=document.createElement('canvas');canvas.width=1800;canvas.height=1400;const context=canvas.getContext('2d'),pixels=context.createImageData(1800,1400);let seed=42;for(let i=0;i<pixels.data.length;i+=4){for(let channel=0;channel<3;channel++){seed=(seed*1664525+1013904223)>>>0;pixels.data[i+channel]=seed>>>24;}pixels.data[i+3]=255;}context.putImageData(pixels,0,0);const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));return new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.readAsDataURL(blob);});});const largePath=path.join(fixture,'synthetic-large.png');writeFileSync(largePath,Buffer.from(large,'base64'));assert.ok(readFileSync(largePath).length>1024*1024);await maker.close();\n const jpegMaker=await browser.newPage();await jpegMaker.goto(origin);const jpeg=Buffer.from(await jpegMaker.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=90;canvas.height=45;const context=canvas.getContext('2d');context.fillStyle='#12652d';context.fillRect(0,0,45,45);context.fillStyle='#f27823';context.fillRect(45,0,45,45"
             },
             {
-              "currentOffsetCharacters": 38522,
+              "currentOffsetCharacters": 44906,
+              "currentText": "focusedScenario==='quality-retakes'?qualityModes:[focusedScenario])await scenario(width,mode,largePath);}else{\n for(const width of [390,1280])for(const mode of qualityModes)await scenario(width,mode,largePath);",
+              "previousText": "[focusedScenario])await scenario(width,mode,largePath);}else{"
+            },
+            {
+              "currentOffsetCharacters": 45207,
               "currentText": "tiny-rejected','",
               "previousText": ""
             }
@@ -66475,9 +66520,9 @@
           "path": "src/app/(identity)/cuenta/participant-kyc-capture.js",
           "status": "MODIFIED",
           "previousSha256": "556109c32d2f85be4b043513362d682ed7e14811a21a6f08200ac65c53af5d48",
-          "currentSha256": "1da96eacaf5065164c9f73c52b0fd2326dc95f100930f6cbbab8df1dca7ed106",
+          "currentSha256": "4bb518abaa9fb4f013b4729b513d0d692e00328db479d85700595ce30725e863",
           "previousBytes": 4864,
-          "currentBytes": 8850,
+          "currentBytes": 8991,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 75,
@@ -66486,26 +66531,36 @@
             },
             {
               "currentOffsetCharacters": 283,
-              "currentText": "const precommitFacialNotice='participant-private-biometric-v3';\nexport function participantFacialModeValid(value){return value?.biometricNoticeVersion!==precommitFacialNotice||['MANUAL','ASSISTED'].includes(value.biometricMode)&&value.biometricConsent===(value.biometricMode==='ASSISTED');}\nexport function participantFacialModePatch(value,mode){return value?.biometricNoticeVersion===precommitFacialNotice&&['MANUAL','ASSISTED'].includes(mode)?{biometricMode:mode,biometricConsent:mode==='ASSISTED'}:null;}\nconst facialUuid=value=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value);\nconst facialKeys=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')===[...keys].sort().join('|');\nexport function participantFacialStatusValid(value,command,{scope,projectId}){\n if(command?.biometricNoticeVersion!==precommitFacialNotice||!facialUuid(command.operationId)||!facialKeys(value,['scope','projectId','operationId','state','saved','definitive','facial'])||value.scope!==scope||value.projectId!==projectId||value.operationId!==command.operationId||value.state!=='FACIAL_PRECOMMIT'||value.saved!==false||value.definitive!==false)return false;\n const f=value.facial,closed=f?.phase==='CLOSED_MANUAL';\n return facialKeys(f,['phase','canContinueManual','privateObjectsMayExist',...(closed?['closedReceiptId','successorOperationId']:[])])&&['PREPARING','MODEL_UNKNOWN','PERSISTENCE_UNKNOWN','READY','REJECTED','CLOSED_MANUAL'].includes(f.phase)&&typeof f.canContinueManual==='boolean'&&typeof f.privateObjectsMayExist==='boolean'&&(!f.canContinueManual||['PREPARING','MODEL_UNKNOWN','PERSISTENCE_UNKNOWN','READY','REJECTED'].includes(f.phase))&&(!closed||!f.canContinueManual&&/^participant_facial_[a-f0-9]{64}$/.test(f.closedReceiptId)&&facialUuid(f.successorOperationId)&&f.successorOperationId!==value.operationId);\n}\nexport function participantFacialManualSuccessor(command,status,nextOperationId,context){\n if(!participantFacialStatusValid(status,command,context)||!status.facial.canContinueManual||!facialUuid(nextOperationId)||nextOperationId===command.operationId||!command.front||!command.selfie||command.backConsent===true&&!command.back)return null;\n return {...command,operationId:nextOperationId,biometricMode:'MANUAL',biometricConsent:false,biometricManualFromOperationId:command.operationId};\n}\nexport function ParticipantKycCapture({active=true,step,onStep,value,notices,backAvailable,locked,onFile,onBackConsent,onBiometricMode,onEdit}){\n const precommit=value.biometricNoticeVersion===precommitFacialNotice,matchingBiometricNotice=notices.privateBiometricNotice?.version===value.biometricNoticeVersion?notices.privateBiometricNotice:null;",
+              "currentText": "const precommitFacialNotice='participant-private-biometric-v3';\nexport function participantFacialModeValid(value){return value?.biometricNoticeVersion!==precommitFacialNotice||['MANUAL','ASSISTED'].includes(value.biometricMode)&&value.biometricConsent===(value.biometricMode==='ASSISTED');}\nexport function participantFacialModePatch(value,mode){return value?.biometricNoticeVersion===precommitFacialNotice&&['MANUAL','ASSISTED'].includes(mode)?{biometricMode:mode,biometricConsent:mode==='ASSISTED'}:null;}\nconst facialUuid=value=>typeof value==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value);\nconst facialKeys=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')===[...keys].sort().join('|');\nexport function participantFacialStatusValid(value,command,{scope,projectId}){\n if(command?.biometricNoticeVersion!==precommitFacialNotice||!facialUuid(command.operationId)||!facialKeys(value,['scope','projectId','operationId','state','saved','definitive','facial'])||value.scope!==scope||value.projectId!==projectId||value.operationId!==command.operationId||value.state!=='FACIAL_PRECOMMIT'||value.saved!==false||value.definitive!==false)return false;\n const f=value.facial,closed=f?.phase==='CLOSED_MANUAL';\n return facialKeys(f,['phase','canContinueManual','privateObjectsMayExist',...(closed?['closedReceiptId','successorOperationId']:[])])&&['PREPARING','MODEL_UNKNOWN','PERSISTENCE_UNKNOWN','READY','REJECTED','CLOSED_MANUAL'].includes(f.phase)&&typeof f.canContinueManual==='boolean'&&typeof f.privateObjectsMayExist==='boolean'&&(!f.canContinueManual||['PREPARING','MODEL_UNKNOWN','PERSISTENCE_UNKNOWN','READY','REJECTED'].includes(f.phase))&&(!closed||!f.canContinueManual&&/^participant_facial_[a-f0-9]{64}$/.test(f.closedReceiptId)&&facialUuid(f.successorOperationId)&&f.successorOperationId!==value.operationId);\n}\nexport function participantFacialManualSuccessor(command,status,nextOperationId,context){\n if(!participantFacialStatusValid(status,command,context)||!status.facial.canContinueManual||!facialUuid(nextOperationId)||nextOperationId===command.operationId||!command.front||!command.selfie||command.backConsent===true&&!command.back)return null;\n return {...command,operationId:nextOperationId,biometricMode:'MANUAL',biometricConsent:false,biometricManualFromOperationId:command.operationId};\n}\nexport function ParticipantKycCapture({active=true,step,onStep,captureRetakes={},value,notices,backAvailable,locked,onFile,onBackConsent,onBiometricMode,onEdit}){\n const precommit=value.biometricNoticeVersion===precommitFacialNotice,matchingBiometricNotice=notices.privateBiometricNotice?.version===value.biometricNoticeVersion?notices.privateBiometricNotice:null;",
               "previousText": "export function ParticipantKycCapture({active=true,step,onStep,value,notices,backAvailable,locked,onFile,onBackConsent,onEdit}){"
             },
             {
-              "currentOffsetCharacters": 5255,
-              "currentText": "   <p>Mostrá sólo tu rostro, de frente y con buena luz. No sostengas el documento en esta foto.</p>\n",
+              "currentOffsetCharacters": 3676,
+              "currentText": "ey={'front:'+(captureRetakes.front||0)} k",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 5969,
+              "currentOffsetCharacters": 4785,
+              "currentText": "ey={'back:'+(captureRetakes.back||0)} k",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 5357,
+              "currentText": "p>Mostrá sólo tu rostro, de frente y con buena luz. No sostengas el documento en esta foto.</p>\n   <KycPhotoPreparation key={'selfie:'+(captureRetakes.selfie||0)}",
+              "previousText": "KycPhotoPreparation"
+            },
+            {
+              "currentOffsetCharacters": 6110,
               "currentText": "   <p className={styles.note}>{CAPTURE_QUALITY_NOTICE}</p>\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 6299,
+              "currentOffsetCharacters": 6440,
               "currentText": "precommit&&<fieldset className={styles.privacy}><legend>Elegí cómo presentar las fotografías</legend><p>Las dos opciones requieren revisión humana y no habilitan permisos.</p><details><summary>Leer el aviso de comparación</summary><p>{matchingBiometricNotice?.text||'Conservamos el aviso de esta solicitud. Consultá el estado antes de cambiar este intento.'}</p></details><label className={styles.choice}><input required={step===2} type=\"radio\" name=\"biometric-mode\" disabled={locked} checked={value.biometricMode==='MANUAL'} onChange={()=>onBiometricMode('MANUAL')}/><span>Presentar para revisión manual, sin comparación facial.</span></label><label className={styles.choice}><input required={step===2} type=\"radio\" name=\"biometric-mode\" disabled={locked||!matchingBiometricNotice} checked={value.biometricMode==='ASSISTED'} onChange={()=>onBiometricMode('ASSISTED')}/><span>Autorizo comparar el frente y la selfie antes de guardar.</span></label></fieldset>}\n   {(notices.externalOcrNotice||!precommit&&",
               "previousText": "(notices.externalOcrNotice||"
             },
             {
-              "currentOffsetCharacters": 7967,
+              "currentOffsetCharacters": 8108,
               "currentText": "!precommit&&notices.privateBiometricNotice&&<div><details className={styles.privacy}><summary>Cómo se comparan las fotografías</summary><p>{matchingBiometricNotice?.text||'Este intento conserva el aviso que elegiste al prepararlo. Podés consultar su versión en la política de privacidad.'",
               "previousText": "notices.privateBiometricNotice&&<div><details className={styles.privacy}><summary>Cómo se comparan las fotografías</summary><p>{notices.privateBiometricNotice.text"
             }
@@ -66515,9 +66570,9 @@
           "path": "src/app/(identity)/cuenta/participant-panel.js",
           "status": "MODIFIED",
           "previousSha256": "1ec30c252d7f0fa8d65905f66eeca76da1644778b9ad710da5487ab667759c82",
-          "currentSha256": "a1ae0d36225fccc7129a591d86a92f935bee8dd8d28d88f50f435ef6d54b0d06",
+          "currentSha256": "2a97de596cd518935f81422e415909c5ef9edd578ea2ae632ef2abc3556e3496",
           "previousBytes": 106608,
-          "currentBytes": 114131,
+          "currentBytes": 114569,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 566,
@@ -66576,46 +66631,46 @@
             },
             {
               "currentOffsetCharacters": 50779,
-              "currentText": "command.biometricNoticeVersion==='participant-private-biometric-v3'?150000:['SUBMIT_KYC','PROCESS_KYC'].includes(draft.action)?55000:30000},endpoint,false,value=>operationResult(value,command));if(alive.current)await acceptResult(value,command);}catch(error){if(alive.current){const denied=hideDenied(error);if(!error.retainAttempt&&(error.requestDispatched===false||draft.action==='SUBMIT_KYC'&&Boolean(captureQualityFeedback(error.code))||(command.action===PARTICIPANT_OFFICE_ASSIGN_ACTION?participantOfficePrecommitRejected(error):error.status&&error.status<500))){setAttempt(null);const qualityFailure=draft.action==='SUBMIT_KYC'?captureQualityFeedback(error.code):null;if(qualityFailure&&qualityFailure.reason!=='QUALITY_SERVICE_UNAVAILABLE')setCaptureStep(({DOCUMENT_FRONT:0,DOCUMENT_BACK:1,SELFIE:2})[qualityFailure.kind]",
+              "currentText": "command.biometricNoticeVersion==='participant-private-biometric-v3'?150000:['SUBMIT_KYC','PROCESS_KYC'].includes(draft.action)?55000:30000},endpoint,false,value=>operationResult(value,command));if(alive.current)await acceptResult(value,command);}catch(error){if(alive.current){const denied=hideDenied(error);if(!error.retainAttempt&&(error.requestDispatched===false||draft.action==='SUBMIT_KYC'&&Boolean(captureQualityFeedback(error.code))||(command.action===PARTICIPANT_OFFICE_ASSIGN_ACTION?participantOfficePrecommitRejected(error):error.status&&error.status<500))){setAttempt(null);const qualityFailure=draft.action==='SUBMIT_KYC'?captureQualityFeedback(error.code):null;if(qualityFailure)retakeCapture(qualityFailure",
               "previousText": "['SUBMIT_KYC','PROCESS_KYC'].includes(draft.action)?55000:30000},endpoint,false,value=>operationResult(value,command));if(alive.current)await acceptResult(value,command);}catch(error){if(alive.current){const denied=hideDenied(error);if(!error.retainAttempt&&(error.requestDispatched===false||(command.action===PARTICIPANT_OFFICE_ASSIGN_ACTION?participantOfficePrecommitRejected(error):error.status&&error.status<500))){setAttempt(null"
             },
             {
-              "currentOffsetCharacters": 53347,
+              "currentOffsetCharacters": 53239,
               "currentText": "  else if(value.state==='FACIAL_PRECOMMIT'){setAccessBlocked(false);setFacialRecovery(value);setRetryAllowed(false);setNotice('El resultado de este intento sigue sin confirmar. Conservamos las fotos de esta pantalla y no repetimos automáticamente la comparación.'+(value.facial.privateObjectsMayExist?' Puede haber imágenes privadas pendientes de conciliar.':''));}\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 55217,
-              "currentText": "continueFacialManual(){\n  if(!attempt||busy||accessBlocked||hasBankPending||intakePending||!facialRecovery?.facial.canContinueManual)return;\n  const original=attempt,current=sequence.current;let command=null;setBusy(true);setRetryAllowed(false);\n  try{\n   const status=await api({projectId,scope,operationId:original.operationId},{},endpoint,false,value=>recovered(value,original));if(!alive.current||current!==sequence.current)return;\n   if(original.biometricManualFromOperationId&&!await closeFacialManualReference(original))throw changedContext();\n   const fresh=await api({projectId,scope},{},endpoint,false,value=>scoped(value,true));if(!alive.current||current!==sequence.current)return;const row=fresh.records.find(row=>row.id===original.workerId);if(!row?.revision)throw changedContext();\n   command=participantFacialManualSuccessor({...original,revision:row.revision},status,crypto.randomUUID(),{scope,projectId});if(!command)throw changedContext();setAttempt(command);setFacialRecovery(null);\n   const value=await api(null,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(command),requestTimeoutMs:150000},endpoint,false,value=>operationResult(value,command));if(alive.current&&current===sequence.current)await acceptResult(value,command);\n  }catch(error){if(alive.current&&current===sequence.current){\n   const feedback=command&&!error.retainAttempt?captureQualityFeedback(error.code):null;\n   if(feedback&&await closeFacialManualReference(command)){const payload={...command};for(const key of ['operationId','projectId','scope','biometricManualFromOperationId'])delete payload[key];setAttempt(null);setFacialRecovery(null);setDraft({action:'SUBMIT_KYC',payload});if(feedback.reason!=='QUALITY_SERVICE_UNAVAILABLE')setCaptureStep(({DOCUMENT_FRONT:0,DOCUMENT_BACK:1,SELFIE:2})[feedback.kind]);setNotice(error.message);}\n   else{hideDenied(error);setNotice('La continuación manual sigue sin confirmar. Conservamos las referencias; comprobá el mismo intento antes de volver a presentar.');}\n  }}finally{if(alive.current&&current===sequence.current)setBusy(false);}\n }\n async function retryExact(){if(!attempt||busy||['INVITE','SEND_ONBOARDING_WHATSAPP'].includes(attempt.action)||accessBlocked||!retryAllowed)return;setBusy(true);setRetryAllowed(false);try{const value=await api(null,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(attempt),requestTimeoutMs:attempt.biometricNoticeVersion==='participant-private-biometric-v3'?150000",
-              "previousText": "retryExact(){if(!attempt||busy||['INVITE','SEND_ONBOARDING_WHATSAPP'].includes(attempt.action)||accessBlocked||!retryAllowed)return;setBusy(true);setRetryAllowed(false);try{const value=await api(null,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(attempt),requestTimeoutMs"
+              "currentOffsetCharacters": 55094,
+              "currentText": "function retakeCapture(feedback,payload=null){\n  if(feedback.reason==='QUALITY_SERVICE_UNAVAILABLE')return;\n  const field=({DOCUMENT_FRONT:'front',DOCUMENT_BACK:'back',SELFIE:'selfie'})[feedback.kind];if(!field)return;\n  setDraft(prior=>{if(!payload&&prior?.action!=='SUBMIT_KYC')return prior;return {...prior,action:'SUBMIT_KYC',captureRetakes:{...prior?.captureRetakes,[field]:(prior?.captureRetakes?.[field]||0)+1},payload:{...(payload||prior.payload),[field]:''}};});\n  setCaptureStep(({front:0,back:1,selfie:2})[field]);\n }\n async function continueFacialManual(){\n  if(!attempt||busy||accessBlocked||hasBankPending||intakePending||!facialRecovery?.facial.canContinueManual)return;\n  const original=attempt,current=sequence.current;let command=null;setBusy(true);setRetryAllowed(false);\n  try{\n   const status=await api({projectId,scope,operationId:original.operationId},{},endpoint,false,value=>recovered(value,original));if(!alive.current||current!==sequence.current)return;\n   if(original.biometricManualFromOperationId&&!await closeFacialManualReference(original))throw changedContext();\n   const fresh=await api({projectId,scope},{},endpoint,false,value=>scoped(value,true));if(!alive.current||current!==sequence.current)return;const row=fresh.records.find(row=>row.id===original.workerId);if(!row?.revision)throw changedContext();\n   command=participantFacialManualSuccessor({...original,revision:row.revision},status,crypto.randomUUID(),{scope,projectId});if(!command)throw changedContext();setAttempt(command);setFacialRecovery(null);\n   const value=await api(null,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(command),requestTimeoutMs:150000},endpoint,false,value=>operationResult(value,command));if(alive.current&&current===sequence.current)await acceptResult(value,command);\n  }catch(error){if(alive.current&&current===sequence.current){\n   const feedback=command&&!error.retainAttempt?captureQualityFeedback(error.code):null;\n   if(feedback&&await closeFacialManualReference(command)){const payload={...command};for(const key of ['operationId','projectId','scope','biometricManualFromOperationId'])delete payload[key];setAttempt(null);setFacialRecovery(null);if(feedback.reason==='QUALITY_SERVICE_UNAVAILABLE')setDraft(prior=>({...prior,action:'SUBMIT_KYC',payload}));else retakeCapture(feedback,payload);setNotice(error.message);}\n   else{hideDenied(error);setNotice('La continuación manual sigue sin confirmar. Conservamos las referencias; comprobá el mismo intento antes de volver a presentar.');}\n  }}finally{if(alive.current&&current===sequence.current)setBusy(false);}\n }\n async function retryExact(){if(!attempt||busy||['INVITE','SEND_ONBOARDING_WHATSAPP'].includes(attempt.action)||accessBlocked||!retryAllowed)return;setBusy(true);setRetryAllowed(false);try{const value=await api(null,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(attempt),requestTimeoutMs:attempt.biometricNoticeVersion==='participant-private-biometric-v3'?150000",
+              "previousText": "async function retryExact(){if(!attempt||busy||['INVITE','SEND_ONBOARDING_WHATSAPP'].includes(attempt.action)||accessBlocked||!retryAllowed)return;setBusy(true);setRetryAllowed(false);try{const value=await api(null,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(attempt),requestTimeoutMs"
             },
             {
-              "currentOffsetCharacters": 59094,
+              "currentOffsetCharacters": 59494,
               "currentText": "if(action==='PREPARE_KYC_CHAT'&&row.status!=='ACTIVE'){setNotice('Primero esta persona debe aceptar la invitación recibida por correo e ingresar con su cuenta. Después podrás preparar el código de identidad. No le pidas fotografías todavía.');return;}",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 61713,
+              "currentOffsetCharacters": 62113,
               "currentText": ",...(data.privateBiometricNotice.version==='participant-private-biometric-v3'?{biometricMode:null}:{})",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 63262,
+              "currentOffsetCharacters": 63662,
               "currentText": " function chooseBiometricMode(mode){if(busy||attempt||durableReference||draft?.action!=='SUBMIT_KYC')return;const patch=participantFacialModePatch(draft.payload,mode);if(patch)setDraft(prior=>prior?{...prior,payload:{...prior.payload,...patch}}:prior);}\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 74942,
+              "currentOffsetCharacters": 75342,
               "currentText": "const manualClosed=result.state==='FACIAL_PRECOMMIT'&&result.facial?.phase==='CLOSED_MANUAL'&&await wasFacialManualReferenceClosed(result,{scope:ref.scope,projectId:ref.projectId,operationId:ref.operationId,successorOperationId:result.facial.successorOperationId});if(!alive.current||current!==sequence.current)return;setNotice(manualClosed?'El intento anterior quedó cerrado para una continuación manual. Este cierre técnico no confirma una presentación guardada ni la identidad; consultá el estado de la continuación para comprobar su recibo.':",
               "previousText": "setNotice("
             },
             {
-              "currentOffsetCharacters": 103777,
-              "currentText": "BiometricMode={chooseBiometricMode} on",
-              "previousText": ""
+              "currentOffsetCharacters": 103999,
+              "currentText": "captureRetakes={draft.captureRetakes} value={p} notices={data} backAvailable={Boolean(participantDocumentBackNotice(data.documentBackNotice))} locked={locked} onFile={chooseFile} onBackConsent={chooseDocumentBack} onBiometricMode={chooseBiometricMode",
+              "previousText": "value={p} notices={data} backAvailable={Boolean(participantDocumentBackNotice(data.documentBackNotice))} locked={locked} onFile={chooseFile} onBackConsent={chooseDocumentBack"
             },
             {
-              "currentOffsetCharacters": 106201,
+              "currentOffsetCharacters": 106639,
               "currentText": "!participantFacialModeValid(p)||p.backConsent===true&&!p.back))||draft.action==='SEND_ONBOARDING_WHATSAPP'&&(!draft.sendWhatsApp||!onboardingContactNotice)} type=\"submit\">{draft.action===PARTICIPANT_OFFICE_ASSIGN_ACTION?'Incorporar con estos permisos':draft.action==='INVITE'?'Enviar invitación':draft.action==='SEND_ONBOARDING_WHATSAPP'?'Guardar solicitud de envío':draft.action==='REVOKE_ONBOARDING_CONTACT'?'Confirmar retiro de autorización':draft.action==='SUBMIT_KYC'?'Presentar para revisión':draft.action==='PROCESS_KYC'?(reviewTarget?.kyc.ocrConsent?.allowed===true?'Leer texto del documento':'Comparar fotografías en privado'):draft.action==='PREPARE_KYC_CHAT'?'Crear código privado':draft.action==='CANCEL_KYC_CHAT'?'Confirmar cancelación':draft.action==='SET_OFFICE_ROLE'?'Guardar rol de empresa':draft.action==='SET_FIELD_PERMISSIONS'?'Guardar permisos de campo':'Guardar decisión'}</button><button type=\"button\" disabled={draft.action===PARTICIPANT_OFFICE_ASSIGN_ACTION?networkBusy||Boolean(attempt)||Boolean(durableReference):locked} onClick={()=>{invalidateAccountSelection();fileSequence.current++;fileRead.current?.cancel(null);setDraft(null);setRevisionReview(null);}}>{draft.action==='CANCEL_KYC_CHAT'?'Volver al perfil':'Cancelar'}</button></div>\n  </form>}{attempt&&<div className={styles.actions}>{(!data||draft?.action==='SUBMIT_KYC'||attempt.action===PARTICIPANT_OFFICE_ASSIGN_ACTION||attempt.action==='PROCESS_KYC')&&<button disabled={busy||hasBankPending||intakePending} type=\"button\" onClick={recover}>Comprobar el mismo intento</button>}{!['INVITE','SEND_ONBOARDING_WHATSAPP'].includes(attempt.action)&&!accessBlocked&&retryAllowed&&<button disabled={busy||hasBankPending||intakePending} type=\"button\" onClick={retryExact}>Reintentar exactamente esta solicitud</button>}{facialRecovery?.facial.canContinueManual&&<button disabled={busy||hasBankPending||intakePending||accessBlocked} type=\"button\" onClick={continueFacialManual}>Continuar para revisión manual, sin comparación facial",
               "previousText": "p.backConsent===true&&!p.back))||draft.action==='SEND_ONBOARDING_WHATSAPP'&&(!draft.sendWhatsApp||!onboardingContactNotice)} type=\"submit\">{draft.action===PARTICIPANT_OFFICE_ASSIGN_ACTION?'Incorporar con estos permisos':draft.action==='INVITE'?'Enviar invitación':draft.action==='SEND_ONBOARDING_WHATSAPP'?'Guardar solicitud de envío':draft.action==='REVOKE_ONBOARDING_CONTACT'?'Confirmar retiro de autorización':draft.action==='SUBMIT_KYC'?'Presentar para revisión':draft.action==='PROCESS_KYC'?(reviewTarget?.kyc.ocrConsent?.allowed===true?'Leer texto del documento':'Comparar fotografías en privado'):draft.action==='PREPARE_KYC_CHAT'?'Crear código privado':draft.action==='CANCEL_KYC_CHAT'?'Confirmar cancelación':draft.action==='SET_OFFICE_ROLE'?'Guardar rol de empresa':draft.action==='SET_FIELD_PERMISSIONS'?'Guardar permisos de campo':'Guardar decisión'}</button><button type=\"button\" disabled={draft.action===PARTICIPANT_OFFICE_ASSIGN_ACTION?networkBusy||Boolean(attempt)||Boolean(durableReference):locked} onClick={()=>{invalidateAccountSelection();fileSequence.current++;fileRead.current?.cancel(null);setDraft(null);setRevisionReview(null);}}>{draft.action==='CANCEL_KYC_CHAT'?'Volver al perfil':'Cancelar'}</button></div>\n  </form>}{attempt&&<div className={styles.actions}>{(!data||draft?.action==='SUBMIT_KYC'||attempt.action===PARTICIPANT_OFFICE_ASSIGN_ACTION||attempt.action==='PROCESS_KYC')&&<button disabled={busy||hasBankPending||intakePending} type=\"button\" onClick={recover}>Comprobar el mismo intento</button>}{!['INVITE','SEND_ONBOARDING_WHATSAPP'].includes(attempt.action)&&!accessBlocked&&retryAllowed&&<button disabled={busy||hasBankPending||intakePending} type=\"button\" onClick={retryExact}>Reintentar exactamente esta solicitud"
             }
@@ -67840,13 +67895,13 @@
           "path": "tests/production-capture-quality-response-continuity.test.mjs",
           "status": "ADDED",
           "previousSha256": null,
-          "currentSha256": "3d6ae114083029d04cf732c9d25890c555f4f65297d9cd69eea78702581896e2",
+          "currentSha256": "6ad6c89a4617ca6987d3ad925adc86c470e687e8d4e2052b7391fe57414e9eee",
           "previousBytes": 0,
-          "currentBytes": 9092,
+          "currentBytes": 15542,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 0,
-              "currentText": "import assert from 'node:assert/strict';\nimport {test} from 'node:test';\nimport {readFileSync} from 'node:fs';\nimport {parse} from '@babel/parser';\nimport {createWorkspaceRecoveryJournal,wasCaptureQualityRejected} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';\nimport {createWorkspaceRequestLifecycle} from '../src/app/(identity)/cuenta/workspace-request-lifecycle.mjs';\nimport {PARTICIPANT_OFFICE_ASSIGN_ACTION,participantOfficePrecommitRejected} from '../src/app/(identity)/cuenta/participant-office-account-view.mjs';\nimport {captureQualityFeedback,captureQualityRejection} from '../src/lib/capture-quality-policy.mjs';\n\n// Execute the actual hook's request consumer without React/DOM or a server.\n// Only its React hook adapter is replaced; the consumer body, transport,\n// journal, HTTP-envelope checks and rejection capability remain real source.\nconst source=readFileSync(new URL('../src/app/(identity)/cuenta/participant-panel.js',import.meta.url),'utf8');\nconst tree=parse(source,{sourceType:'module',plugins:['jsx']});\nconst hookNodes=tree.program.body.filter(node=>node.type==='FunctionDeclaration'&&node.id.name==='useParticipantRequest');\nassert.equal(hookNodes.length,1);\nfunction expression(name){\n const rows=tree.program.body.filter(node=>node.type==='VariableDeclaration').flatMap(node=>node.declarations).filter(node=>node.id.type==='Identifier'&&node.id.name===name);\n assert.equal(rows.length,1,name);return source.slice(rows[0].init.start,rows[0].init.end);\n}\nconst compile=new Function('useWorkspaceRequest','captureQualityFeedback','captureQualityRejection','wasCaptureQualityRejected','PARTICIPANT_OFFICE_ASSIGN_ACTION','participantOfficePrecommitRejected',\n `const endpoint=${expression('endpoint')};const errors=${expression('errors')};const accessDenied=${expression('accessDenied')};\\n${source.slice(hookNodes[0].start,hookNodes[0].end)}\\nreturn useParticipantRequest;`);\nconst endpoint='/api/identity/participants',scope='a'.repeat(64),operationId='01234567-89ab-4cde-8fab-0123456789ab',nextOperationId='01234567-89ab-4cde-8fab-0123456789ac';\nconst portraitCode='PARTICIPANT_CAPTURE_DOCUMENT_FRONT_DOCUMENT_PORTRAIT_UNCONFIRMED';\nconst unavailableCode='PARTICIPANT_CAPTURE_SELFIE_QUALITY_SERVICE_UNAVAILABLE';\nconst options=(extra={})=>({method:'POST',body:JSON.stringify({operationId,projectId:'quality-project',scope,workerId:'quality-worker',revision:'2026-10-22T12:00:00.000001',noticeVersion:'participant-kyc-v1',consent:true,front:'data:image/png;base64,c3ludGhldGljLWZyb250',selfie:'data:image/png;base64,c3ludGhldGljLXNlbGZpZQ==',...extra})});\nconst response=(code=portraitCode,status=422)=>Response.json({saved:false,identityCertified:false,code},{status});\nfunction storage(){const rows=new Map();return{rows,get length(){return rows.size;},key:index=>[...rows.keys()][index]??null,getItem:key=>rows.get(key)??null,setItem:(key,value)=>rows.set(key,value),removeItem:key=>rows.delete(key)};}\nfunction harness({store=storage(),fetchImpl=async()=>response(),afterObservation}={}){\n const journal=createWorkspaceRecoveryJournal({getStorage:()=>store,now:()=>123456});\n const port=afterObservation?{...journal,captureResponse:async(...args)=>{await journal.captureResponse(...args);await afterObservation(args);}}:journal;\n const runtime=createWorkspaceRequestLifecycle(async()=>'synthetic-session',{journal:port,fetchImpl});\n const buildParticipantRequest=compile(()=>runtime.request,captureQualityFeedback,captureQualityRejection,wasCaptureQualityRejected,PARTICIPANT_OFFICE_ASSIGN_ACTION,participantOfficePrecommitRejected);\n return{store,journal,runtime,api:buildParticipantRequest(async()=>'synthetic-session')};\n}\nasync function requestError(h,command){let caught;try{await h.api(null,command);}catch(error){caught=error;}assert.ok(caught,'The actual request consumer must reject this HTTP outcome');return caught;}\nfunction uncertain(error){assert.equal(error.code,'PARTICIPANT_OPERATION_UNCONFIRMED');assert.equal(error.retainAttempt,true);assert.doesNotMatch(error.message,/todavía no se guardó|Revisá el|foto del rostro|Revisá la selfie/);}\nasync function retained(h,error,command){\n uncertain(error);assert.equal((await h.journal.list(scope)).filter(row=>row.resource==='participants').length,1);\n assert.equal(await wasCaptureQualityRejected(error,endpoint,command),false);\n await assert.rejects(h.journal.prepare(endpoint,options({operationId:nextOperationId})),{code:'WORKSPACE_RECOVERY_REQUIRED'});\n const persisted=JSON.stringify([...h.store.rows]);for(const value of ['quality-worker','front','selfie','c3ludGhldGlj','inputDigest','synthetic-session'])assert.equal(persisted.includes(value),false,value);\n}\n\ntest('real participant request releases observed 422/503 captures and retains the prior 400 validation behavior',async()=>{\n for(const [status,code]of [[422,portraitCode],[503,unavailableCode]]){\n  const h=harness({fetchImpl:async()=>response(code,status)}),command=options(),before=command.body;\n  const history=await h.journal.prepare('/api/identity/field-media',{method:'POST',body:JSON.stringify({operationId:nextOperationId,scope,projectId:'history-project'})});\n  try{\n   const error=await requestError(h,command);assert.equal(error.status,status);assert.equal(error.code,code);assert.notEqual(error.retainAttempt,true);assert.equal(error.message,captureQualityFeedback(code).message);\n   assert.equal(await wasCaptureQualityRejected(error,endpoint,command),true);assert.equal(await wasCaptureQualityRejected({...error},endpoint,command),false);assert.equal(await wasCaptureQualityRejected(error,endpoint,options({front:'different-current-image'})),false);\n   assert.deepEqual(await h.journal.list(scope),[history.entry]);assert.equal(command.body,before);\n   const corrected=await h.journal.prepare(endpoint,options({operationId:nextOperationId,front:'corrected-local-image'}));assert.equal(corrected.existed,false);\n  }finally{h.runtime.abort();}\n }\n const h=harness({fetchImpl:async()=>Response.json({code:'PARTICIPANT_PRIVACY_REQUIRED'},{status:400})}),command=options();\n try{const error=await requestError(h,command);assert.equal(error.status,400);assert.equal(error.code,'PARTICIPANT_PRIVACY_REQUIRED');assert.notEqual(error.retainAttempt,true);assert.equal(await wasCaptureQualityRejected(error,endpoint,command),false);assert.equal((await h.journal.list(scope)).length,0);}finally{h.runtime.abort();}\n});\n\ntest('real consumer retains RAM and durable recovery for MIME size kind or envelope failures without false unsaved copy',async()=>{\n for(const mode of ['wrong-mime','oversized','foreign-kind','unknown-reason','code-only','extra-field','saved-true','wrong-status','empty-json','null-json','malformed-json','html','unrelated-code']){\n  const code=mode==='foreign-kind'?'PARTICIPANT_CAPTURE_DOCUMENT_BACK_DOCUMENT_PORTRAIT_UNCONFIRMED':mode==='unknown-reason'?'PARTICIPANT_CAPTURE_DOCUMENT_FRONT_UNKNOWN_REASON':mode==='unrelated-code'?'UNRECOGNIZED_DENIAL':portraitCode;\n  const body=mode==='empty-json'?{}:mode==='null-json'?null:mode==='code-only'?{code}:{saved:mode==='saved-true',identityCertified:false,code,...(mode==='extra-field'?{receiptId:'not-a-precommit-envelope'}:{})};\n  const bytes=mode==='malformed-json'?'{\"saved\":':mode==='html'?'<html>Unconfirmed response</html>':(mode==='oversized'?' '.repeat(4097):'')+JSON.stringify(body);\n  const h=harness({fetchImpl:async()=>new Response(bytes,{status:mode==='wrong-status'?409:422,headers:{'content-type':['wrong-mime','html'].includes(mode)?'text/html':'application/json'}})}),command=options();\n  try{await retained(h,await requestError(h,command),command);}finally{h.runtime.abort();}\n }\n});\n\ntest('an observed rejection cannot release a changed command or claim cleanup when durable removal fails',async()=>{\n for(const mode of ['operation-id','image-bytes','consent','remove-failed']){\n  const h=harness({afterObservation:async args=>{\n   if(mode==='remove-failed'){h.store.removeItem=()=>{throw Error('Controlled durable cleanup failure');};return;}\n   const command=JSON.parse(args[2].body);if(mode==='operation-id')command.operationId=nextOperationId;if(mode==='image-bytes')command.front='changed-after-observed-response';if(mode==='consent')command.consent=false;args[2].body=JSON.stringify(command);\n  }}),command=options();\n  try{await retained(h,await requestError(h,command),command);}finally{h.runtime.abort();}\n }\n});\n\ntest('a prior lost response survives a later valid retake in the same journal and after reload',async()=>{\n for(const reload of [false,true]){\n  let loseResponse=true;\n  let h=harness({fetchImpl:async()=>{if(loseResponse)throw new TypeError('Controlled lost HTTP confirmation');return response();}});\n  const command=options();\n  try{\n   const first=await requestError(h,command);assert.ok(first instanceof TypeError);assert.equal((await h.journal.list(scope)).length,1);loseResponse=false;\n   if(reload){const store=h.store;h.runtime.abort();h=harness({store,fetchImpl:async()=>response()});}\n   await retained(h,await requestError(h,command),command);\n  }finally{h.runtime.abort();}\n }\n});\n",
+              "currentText": "import assert from 'node:assert/strict';\nimport {test} from 'node:test';\nimport {readFileSync} from 'node:fs';\nimport {parse} from '@babel/parser';\nimport {createWorkspaceRecoveryJournal,wasCaptureQualityRejected} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';\nimport {createWorkspaceRequestLifecycle} from '../src/app/(identity)/cuenta/workspace-request-lifecycle.mjs';\nimport {PARTICIPANT_OFFICE_ASSIGN_ACTION,participantOfficePrecommitRejected} from '../src/app/(identity)/cuenta/participant-office-account-view.mjs';\nimport {captureQualityFeedback,captureQualityRejection} from '../src/lib/capture-quality-policy.mjs';\nimport {PARTICIPANT_AUTO_OCR_NOTICE_VERSION} from '../src/lib/participant-analysis-consent.mjs';\nimport {realUiHelpers,realDeclaration} from './fixtures/participant-facial-consumer-source.mjs';\nimport {participantDocumentBackNotice} from '../src/app/(identity)/cuenta/participant-onboarding-next-step.mjs';\nimport {PARTICIPANT_DOCUMENT_BACK_NOTICE,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256} from '../src/lib/participant-policy.mjs';\n\n// Execute the actual hook's request consumer without React/DOM or a server.\n// Only its React hook adapter is replaced; the consumer body, transport,\n// journal, HTTP-envelope checks and rejection capability remain real source.\nconst source=readFileSync(new URL('../src/app/(identity)/cuenta/participant-panel.js',import.meta.url),'utf8');\nconst tree=parse(source,{sourceType:'module',plugins:['jsx']});\nconst hookNodes=tree.program.body.filter(node=>node.type==='FunctionDeclaration'&&node.id.name==='useParticipantRequest');\nassert.equal(hookNodes.length,1);\nfunction expression(name){\n const rows=tree.program.body.filter(node=>node.type==='VariableDeclaration').flatMap(node=>node.declarations).filter(node=>node.id.type==='Identifier'&&node.id.name===name);\n assert.equal(rows.length,1,name);return source.slice(rows[0].init.start,rows[0].init.end);\n}\nconst compile=new Function('useWorkspaceRequest','captureQualityFeedback','captureQualityRejection','wasCaptureQualityRejected','PARTICIPANT_OFFICE_ASSIGN_ACTION','participantOfficePrecommitRejected',\n `const endpoint=${expression('endpoint')};const errors=${expression('errors')};const accessDenied=${expression('accessDenied')};\\n${source.slice(hookNodes[0].start,hookNodes[0].end)}\\nreturn useParticipantRequest;`);\nconst endpoint='/api/identity/participants',scope='a'.repeat(64),operationId='01234567-89ab-4cde-8fab-0123456789ab',nextOperationId='01234567-89ab-4cde-8fab-0123456789ac';\nconst portraitCode='PARTICIPANT_CAPTURE_DOCUMENT_FRONT_DOCUMENT_PORTRAIT_UNCONFIRMED';\nconst unavailableCode='PARTICIPANT_CAPTURE_SELFIE_QUALITY_SERVICE_UNAVAILABLE';\nconst options=(extra={})=>({method:'POST',body:JSON.stringify({operationId,projectId:'quality-project',scope,workerId:'quality-worker',revision:'2026-10-22T12:00:00.000001',noticeVersion:'participant-kyc-v1',consent:true,front:'data:image/png;base64,c3ludGhldGljLWZyb250',selfie:'data:image/png;base64,c3ludGhldGljLXNlbGZpZQ==',...extra})});\nconst response=(code=portraitCode,status=422)=>Response.json({saved:false,identityCertified:false,code},{status});\nfunction storage(){const rows=new Map();return{rows,get length(){return rows.size;},key:index=>[...rows.keys()][index]??null,getItem:key=>rows.get(key)??null,setItem:(key,value)=>rows.set(key,value),removeItem:key=>rows.delete(key)};}\nfunction harness({store=storage(),fetchImpl=async()=>response(),afterObservation}={}){\n const journal=createWorkspaceRecoveryJournal({getStorage:()=>store,now:()=>123456});\n const port=afterObservation?{...journal,captureResponse:async(...args)=>{await journal.captureResponse(...args);await afterObservation(args);}}:journal;\n const runtime=createWorkspaceRequestLifecycle(async()=>'synthetic-session',{journal:port,fetchImpl});\n const buildParticipantRequest=compile(()=>runtime.request,captureQualityFeedback,captureQualityRejection,wasCaptureQualityRejected,PARTICIPANT_OFFICE_ASSIGN_ACTION,participantOfficePrecommitRejected);\n return{store,journal,runtime,api:buildParticipantRequest(async()=>'synthetic-session')};\n}\nasync function requestError(h,command){let caught;try{await h.api(null,command);}catch(error){caught=error;}assert.ok(caught,'The actual request consumer must reject this HTTP outcome');return caught;}\nfunction uncertain(error){assert.equal(error.code,'PARTICIPANT_OPERATION_UNCONFIRMED');assert.equal(error.retainAttempt,true);assert.doesNotMatch(error.message,/todavía no se guardó|Revisá el|foto del rostro|Revisá la selfie/);}\nasync function retained(h,error,command){\n uncertain(error);assert.equal((await h.journal.list(scope)).filter(row=>row.resource==='participants').length,1);\n assert.equal(await wasCaptureQualityRejected(error,endpoint,command),false);\n await assert.rejects(h.journal.prepare(endpoint,options({operationId:nextOperationId})),{code:'WORKSPACE_RECOVERY_REQUIRED'});\n const persisted=JSON.stringify([...h.store.rows]);for(const value of ['quality-worker','front','selfie','c3ludGhldGlj','inputDigest','synthetic-session'])assert.equal(persisted.includes(value),false,value);\n}\n\ntest('real participant request releases observed 422/503 captures and retains the prior 400 validation behavior',async()=>{\n for(const [status,code]of [[422,portraitCode],[503,unavailableCode]]){\n  const h=harness({fetchImpl:async()=>response(code,status)}),command=options(),before=command.body;\n  const history=await h.journal.prepare('/api/identity/field-media',{method:'POST',body:JSON.stringify({operationId:nextOperationId,scope,projectId:'history-project'})});\n  try{\n   const error=await requestError(h,command);assert.equal(error.status,status);assert.equal(error.code,code);assert.notEqual(error.retainAttempt,true);assert.equal(error.message,captureQualityFeedback(code).message);\n   assert.equal(await wasCaptureQualityRejected(error,endpoint,command),true);assert.equal(await wasCaptureQualityRejected({...error},endpoint,command),false);assert.equal(await wasCaptureQualityRejected(error,endpoint,options({front:'different-current-image'})),false);\n   assert.deepEqual(await h.journal.list(scope),[history.entry]);assert.equal(command.body,before);\n   const corrected=await h.journal.prepare(endpoint,options({operationId:nextOperationId,front:'corrected-local-image'}));assert.equal(corrected.existed,false);\n  }finally{h.runtime.abort();}\n }\n const h=harness({fetchImpl:async()=>Response.json({code:'PARTICIPANT_PRIVACY_REQUIRED'},{status:400})}),command=options();\n try{const error=await requestError(h,command);assert.equal(error.status,400);assert.equal(error.code,'PARTICIPANT_PRIVACY_REQUIRED');assert.notEqual(error.retainAttempt,true);assert.equal(await wasCaptureQualityRejected(error,endpoint,command),false);assert.equal((await h.journal.list(scope)).length,0);}finally{h.runtime.abort();}\n});\n\ntest('real consumer retains RAM and durable recovery for MIME size kind or envelope failures without false unsaved copy',async()=>{\n for(const mode of ['wrong-mime','oversized','foreign-kind','unknown-reason','code-only','extra-field','saved-true','wrong-status','empty-json','null-json','malformed-json','html','unrelated-code']){\n  const code=mode==='foreign-kind'?'PARTICIPANT_CAPTURE_DOCUMENT_BACK_DOCUMENT_PORTRAIT_UNCONFIRMED':mode==='unknown-reason'?'PARTICIPANT_CAPTURE_DOCUMENT_FRONT_UNKNOWN_REASON':mode==='unrelated-code'?'UNRECOGNIZED_DENIAL':portraitCode;\n  const body=mode==='empty-json'?{}:mode==='null-json'?null:mode==='code-only'?{code}:{saved:mode==='saved-true',identityCertified:false,code,...(mode==='extra-field'?{receiptId:'not-a-precommit-envelope'}:{})};\n  const bytes=mode==='malformed-json'?'{\"saved\":':mode==='html'?'<html>Unconfirmed response</html>':(mode==='oversized'?' '.repeat(4097):'')+JSON.stringify(body);\n  const h=harness({fetchImpl:async()=>new Response(bytes,{status:mode==='wrong-status'?409:422,headers:{'content-type':['wrong-mime','html'].includes(mode)?'text/html':'application/json'}})}),command=options();\n  try{await retained(h,await requestError(h,command),command);}finally{h.runtime.abort();}\n }\n});\n\ntest('an observed rejection cannot release a changed command or claim cleanup when durable removal fails',async()=>{\n for(const mode of ['operation-id','image-bytes','consent','remove-failed']){\n  const h=harness({afterObservation:async args=>{\n   if(mode==='remove-failed'){h.store.removeItem=()=>{throw Error('Controlled durable cleanup failure');};return;}\n   const command=JSON.parse(args[2].body);if(mode==='operation-id')command.operationId=nextOperationId;if(mode==='image-bytes')command.front='changed-after-observed-response';if(mode==='consent')command.consent=false;args[2].body=JSON.stringify(command);\n  }}),command=options();\n  try{await retained(h,await requestError(h,command),command);}finally{h.runtime.abort();}\n }\n});\n\ntest('a prior lost response survives a later valid retake in the same journal and after reload',async()=>{\n for(const reload of [false,true]){\n  let loseResponse=true;\n  let h=harness({fetchImpl:async()=>{if(loseResponse)throw new TypeError('Controlled lost HTTP confirmation');return response();}});\n  const command=options();\n  try{\n   const first=await requestError(h,command);assert.ok(first instanceof TypeError);assert.equal((await h.journal.list(scope)).length,1);loseResponse=false;\n   if(reload){const store=h.store;h.runtime.abort();h=harness({store,fetchImpl:async()=>response()});}\n   await retained(h,await requestError(h,command),command);\n  }finally{h.runtime.abort();}\n }\n});\n\n// These are the actual panel handlers and shared local updater, with React\n// setters replaced by synchronous state ports. POST still traverses the real\n// hook, HTTP consumer, lifecycle and rejection proof used above.\nconst uiHelpers=realUiHelpers();\nfunction panelHandlerHarness({manual=false,fetchImpl}={}){\n const transport=harness({fetchImpl}),backNotice={version:PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,text:PARTICIPANT_DOCUMENT_BACK_NOTICE,sha256:PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256};\n const payload={...JSON.parse(options().body),back:'data:image/png;base64,c3ludGhldGljLWJhY2s=',backConsent:true,backNoticeVersion:backNotice.version,backNoticeSha256:backNotice.sha256,ocrConsent:false,ocrNoticeVersion:PARTICIPANT_AUTO_OCR_NOTICE_VERSION,biometricNoticeVersion:'participant-private-biometric-v3',biometricMode:'ASSISTED',biometricConsent:true};\n for(const key of ['operationId','projectId','scope'])delete payload[key];\n const original={operationId,projectId:'quality-project',scope,...payload},status={scope,projectId:'quality-project',operationId,state:'FACIAL_PRECOMMIT',saved:false,definitive:false,facial:{phase:'MODEL_UNKNOWN',canContinueManual:true,privateObjectsMayExist:false}};\n const state={draft:{action:'SUBMIT_KYC',captureRetakes:{front:2,back:3,selfie:4},payload:structuredClone(payload)},attempt:manual?original:null,step:2,posts:[],closedReferences:0,successes:0,busy:false};\n const ports={busy:false,accountRequest:{current:{controller:null}},attempt:state.attempt,durableReference:null,recoveryReady:true,draft:state.draft,revisionReview:null,accessBlocked:false,hasBankPending:false,intakePending:null,projectId:'quality-project',scope,endpoint,data:{documentBackNotice:backNotice},alive:{current:true},sequence:{current:1},facialRecovery:status,PARTICIPANT_OFFICE_ASSIGN_ACTION,participantOfficePrecommitRejected,captureQualityFeedback,participantDocumentBackNotice,...uiHelpers,crypto:{randomUUID:()=>nextOperationId},setAttempt:value=>{state.attempt=value;},setRetryAllowed:()=>{},setBusy:value=>{state.busy=value;},setNotice:value=>{state.notice=value;},setReceipt:()=>{},setFacialRecovery:()=>{},setDraft:update=>{state.draft=typeof update==='function'?update(state.draft):update;},setCaptureStep:value=>{state.step=value;},hideDenied:()=>false,changedContext:()=>Error('Unexpected context change'),closeFacialManualReference:async()=>{state.closedReferences++;return true;},acceptResult:async()=>{state.successes++;throw Error('A rejected capture cannot succeed');},operationResult:()=>{throw Error('A rejected response cannot be a receipt');},scoped:value=>value,recovered:value=>value,\n  api:async(context,request,...rest)=>{if(request?.method==='POST'){state.posts.push(JSON.parse(request.body));return transport.api(context,request,...rest);}return context?.operationId?status:{records:[{id:payload.workerId,revision:payload.revision}]};}};\n const bodies=['retakeCapture','save','continueFacialManual'].map(name=>realDeclaration('src/app/(identity)/cuenta/participant-panel.js',name)).join('\\n');\n const handlers=new Function(...Object.keys(ports),bodies+'\\nreturn {save,continueFacialManual};')(...Object.values(ports));\n return{state,transport,initial:structuredClone(state.draft),run:()=>manual?handlers.continueFacialManual():handlers.save({preventDefault(){}})};\n}\nfor(const manual of [false,true])for(const [kind,field,step]of [['DOCUMENT_FRONT','front',0],['DOCUMENT_BACK','back',1],['SELFIE','selfie',2]])test('real '+(manual?'manual-successor':'save')+' handler invalidates only the observed rejected '+kind+' and keeps reset metadata outside its command',async()=>{\n const h=panelHandlerHarness({manual,fetchImpl:async()=>response('PARTICIPANT_CAPTURE_'+kind+'_IMAGE_BLURRED',422)});\n try{await h.run();assert.equal(h.state.posts.length,1);const command=h.state.posts[0],expected={...command};for(const key of ['operationId','projectId','scope','biometricManualFromOperationId'])delete expected[key];expected[field]='';assert.deepEqual(h.state.draft.payload,expected);assert.deepEqual(h.state.draft.captureRetakes,{...h.initial.captureRetakes,[field]:h.initial.captureRetakes[field]+1});assert.equal(h.state.step,step);assert.equal(h.state.attempt,null);assert.equal(h.state.busy,false);assert.equal(h.state.successes,0);assert.equal(h.state.closedReferences,manual?1:0);assert.equal(Object.hasOwn(command,'captureRetakes'),false);assert.equal(JSON.stringify(command).includes('captureRetakes'),false);for(const other of ['front','back','selfie'].filter(value=>value!==field))assert.equal(h.state.draft.payload[other],h.initial.payload[other]);for(const key of ['consent','backConsent','backNoticeVersion','backNoticeSha256','ocrConsent','biometricNoticeVersion'])assert.equal(h.state.draft.payload[key],h.initial.payload[key]);assert.equal((await h.transport.journal.list(scope)).length,0);}finally{h.transport.runtime.abort();}\n});\nfor(const manual of [false,true])test('real '+(manual?'manual-successor':'save')+' handler keeps every image and preparation key for unavailable unconfirmed or unproven responses',async()=>{\n for(const mode of ['unavailable','unknown','malformed']){const h=panelHandlerHarness({manual,fetchImpl:async()=>mode==='unavailable'?response(unavailableCode,503):mode==='unknown'?Response.json({code:'PARTICIPANT_FACIAL_RESULT_UNCONFIRMED'},{status:503}):Response.json({},{status:422})});try{await h.run();assert.equal(h.state.posts.length,1);assert.equal(h.state.successes,0);assert.deepEqual(h.state.draft.captureRetakes,h.initial.captureRetakes);assert.equal(h.state.step,2);for(const field of ['front','back','selfie'])assert.equal(h.state.draft.payload[field],h.initial.payload[field]);if(mode==='unavailable'){assert.equal(h.state.attempt,null);assert.equal((await h.transport.journal.list(scope)).length,0);}else{assert.ok(h.state.attempt);assert.equal((await h.transport.journal.list(scope)).length,1);assert.equal(h.state.closedReferences,0);}}finally{h.transport.runtime.abort();}}\n});\n",
               "previousText": ""
             }
           ]
@@ -74050,7 +74105,7 @@
         {
           "pointer": "/planBudgetCurrentRevision/references/122/currentSha256",
           "previous": "c667372d6495233f3ef1cbe86b7c56e36652ef944ca888fcde1763e4858fd780",
-          "current": "44d5a193d06b99d4fb6ac39507e326bb59d9821c2d0c1a1484edbf720a80fd8f"
+          "current": "88e8a7e5a4795512526a304b41bd98d1e4bc9e5464b7f380ab12614c578dcd9b"
         },
         {
           "pointer": "/planBudgetCurrentRevision/references/123/currentSha256",
@@ -74095,12 +74150,12 @@
         {
           "pointer": "/planBudgetCurrentRevision/references/133/currentSha256",
           "previous": "556109c32d2f85be4b043513362d682ed7e14811a21a6f08200ac65c53af5d48",
-          "current": "1da96eacaf5065164c9f73c52b0fd2326dc95f100930f6cbbab8df1dca7ed106"
+          "current": "4bb518abaa9fb4f013b4729b513d0d692e00328db479d85700595ce30725e863"
         },
         {
           "pointer": "/planBudgetCurrentRevision/references/134/currentSha256",
           "previous": "1ec30c252d7f0fa8d65905f66eeca76da1644778b9ad710da5487ab667759c82",
-          "current": "a1ae0d36225fccc7129a591d86a92f935bee8dd8d28d88f50f435ef6d54b0d06"
+          "current": "2a97de596cd518935f81422e415909c5ef9edd578ea2ae632ef2abc3556e3496"
         },
         {
           "pointer": "/planBudgetCurrentRevision/references/41/currentSha256",
@@ -74848,7 +74903,7 @@
             {
               "path": "scripts/verify-mobile-identity-ui.mjs",
               "previousSha256": "af50ece90055a7ecec11e05359934c874576e2344e95f5b31cb7096255f38693",
-              "currentSha256": "44d5a193d06b99d4fb6ac39507e326bb59d9821c2d0c1a1484edbf720a80fd8f"
+              "currentSha256": "88e8a7e5a4795512526a304b41bd98d1e4bc9e5464b7f380ab12614c578dcd9b"
             },
             {
               "path": "scripts/verify-participant-ai-ui.mjs",
@@ -74903,12 +74958,12 @@
             {
               "path": "src/app/(identity)/cuenta/participant-kyc-capture.js",
               "previousSha256": "83ee427bbbecbf74aee901fd77c6981232a2cd07e235180566938c2c0201647d",
-              "currentSha256": "1da96eacaf5065164c9f73c52b0fd2326dc95f100930f6cbbab8df1dca7ed106"
+              "currentSha256": "4bb518abaa9fb4f013b4729b513d0d692e00328db479d85700595ce30725e863"
             },
             {
               "path": "src/app/(identity)/cuenta/participant-panel.js",
               "previousSha256": "a9d5934c7bda61c49362ac53cfb339a5d66497566f71415ecc4621686ce17519",
-              "currentSha256": "a1ae0d36225fccc7129a591d86a92f935bee8dd8d28d88f50f435ef6d54b0d06"
+              "currentSha256": "2a97de596cd518935f81422e415909c5ef9edd578ea2ae632ef2abc3556e3496"
             },
             {
               "path": "src/app/(identity)/cuenta/participant-panel.module.css",
@@ -75570,7 +75625,7 @@
             {
               "path": "scripts/verify-mobile-identity-ui.mjs",
               "previousSha256": "af50ece90055a7ecec11e05359934c874576e2344e95f5b31cb7096255f38693",
-              "currentSha256": "44d5a193d06b99d4fb6ac39507e326bb59d9821c2d0c1a1484edbf720a80fd8f"
+              "currentSha256": "88e8a7e5a4795512526a304b41bd98d1e4bc9e5464b7f380ab12614c578dcd9b"
             },
             {
               "path": "scripts/verify-participant-ai-ui.mjs",
@@ -75625,12 +75680,12 @@
             {
               "path": "src/app/(identity)/cuenta/participant-kyc-capture.js",
               "previousSha256": "83ee427bbbecbf74aee901fd77c6981232a2cd07e235180566938c2c0201647d",
-              "currentSha256": "1da96eacaf5065164c9f73c52b0fd2326dc95f100930f6cbbab8df1dca7ed106"
+              "currentSha256": "4bb518abaa9fb4f013b4729b513d0d692e00328db479d85700595ce30725e863"
             },
             {
               "path": "src/app/(identity)/cuenta/participant-panel.js",
               "previousSha256": "a9d5934c7bda61c49362ac53cfb339a5d66497566f71415ecc4621686ce17519",
-              "currentSha256": "a1ae0d36225fccc7129a591d86a92f935bee8dd8d28d88f50f435ef6d54b0d06"
+              "currentSha256": "2a97de596cd518935f81422e415909c5ef9edd578ea2ae632ef2abc3556e3496"
             },
             {
               "path": "src/app/(identity)/cuenta/participant-panel.module.css",
@@ -76025,7 +76080,7 @@
             {
               "path": "tests/production-capture-quality-response-continuity.test.mjs",
               "previousSha256": null,
-              "currentSha256": "3d6ae114083029d04cf732c9d25890c555f4f65297d9cd69eea78702581896e2"
+              "currentSha256": "6ad6c89a4617ca6987d3ad925adc86c470e687e8d4e2052b7391fe57414e9eee"
             },
             {
               "path": "tests/production-capture-runtime-collectors.test.mjs",
@@ -77537,7 +77592,7 @@
             },
             {
               "path": "src/app/(identity)/cuenta/participant-kyc-capture.js",
-              "sha256": "1da96eacaf5065164c9f73c52b0fd2326dc95f100930f6cbbab8df1dca7ed106"
+              "sha256": "4bb518abaa9fb4f013b4729b513d0d692e00328db479d85700595ce30725e863"
             },
             {
               "path": "src/app/(identity)/cuenta/participant-kyc-capture.module.css",
@@ -77569,7 +77624,7 @@
             },
             {
               "path": "src/app/(identity)/cuenta/participant-panel.js",
-              "sha256": "a1ae0d36225fccc7129a591d86a92f935bee8dd8d28d88f50f435ef6d54b0d06"
+              "sha256": "2a97de596cd518935f81422e415909c5ef9edd578ea2ae632ef2abc3556e3496"
             },
             {
               "path": "src/app/(identity)/cuenta/participant-panel.module.css",
@@ -80971,7 +81026,7 @@
             },
             {
               "path": "src/app/(identity)/cuenta/participant-kyc-capture.js",
-              "sha256": "1da96eacaf5065164c9f73c52b0fd2326dc95f100930f6cbbab8df1dca7ed106"
+              "sha256": "4bb518abaa9fb4f013b4729b513d0d692e00328db479d85700595ce30725e863"
             },
             {
               "path": "src/app/(identity)/cuenta/participant-kyc-capture.module.css",
@@ -81003,7 +81058,7 @@
             },
             {
               "path": "src/app/(identity)/cuenta/participant-panel.js",
-              "sha256": "a1ae0d36225fccc7129a591d86a92f935bee8dd8d28d88f50f435ef6d54b0d06"
+              "sha256": "2a97de596cd518935f81422e415909c5ef9edd578ea2ae632ef2abc3556e3496"
             },
             {
               "path": "src/app/(identity)/cuenta/participant-panel.module.css",

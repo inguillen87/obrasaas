@@ -6,6 +6,10 @@ import {createWorkspaceRecoveryJournal,wasCaptureQualityRejected} from '../src/a
 import {createWorkspaceRequestLifecycle} from '../src/app/(identity)/cuenta/workspace-request-lifecycle.mjs';
 import {PARTICIPANT_OFFICE_ASSIGN_ACTION,participantOfficePrecommitRejected} from '../src/app/(identity)/cuenta/participant-office-account-view.mjs';
 import {captureQualityFeedback,captureQualityRejection} from '../src/lib/capture-quality-policy.mjs';
+import {PARTICIPANT_AUTO_OCR_NOTICE_VERSION} from '../src/lib/participant-analysis-consent.mjs';
+import {realUiHelpers,realDeclaration} from './fixtures/participant-facial-consumer-source.mjs';
+import {participantDocumentBackNotice} from '../src/app/(identity)/cuenta/participant-onboarding-next-step.mjs';
+import {PARTICIPANT_DOCUMENT_BACK_NOTICE,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256} from '../src/lib/participant-policy.mjs';
 
 // Execute the actual hook's request consumer without React/DOM or a server.
 // Only its React hook adapter is replaced; the consumer body, transport,
@@ -88,4 +92,28 @@ test('a prior lost response survives a later valid retake in the same journal an
    await retained(h,await requestError(h,command),command);
   }finally{h.runtime.abort();}
  }
+});
+
+// These are the actual panel handlers and shared local updater, with React
+// setters replaced by synchronous state ports. POST still traverses the real
+// hook, HTTP consumer, lifecycle and rejection proof used above.
+const uiHelpers=realUiHelpers();
+function panelHandlerHarness({manual=false,fetchImpl}={}){
+ const transport=harness({fetchImpl}),backNotice={version:PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,text:PARTICIPANT_DOCUMENT_BACK_NOTICE,sha256:PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256};
+ const payload={...JSON.parse(options().body),back:'data:image/png;base64,c3ludGhldGljLWJhY2s=',backConsent:true,backNoticeVersion:backNotice.version,backNoticeSha256:backNotice.sha256,ocrConsent:false,ocrNoticeVersion:PARTICIPANT_AUTO_OCR_NOTICE_VERSION,biometricNoticeVersion:'participant-private-biometric-v3',biometricMode:'ASSISTED',biometricConsent:true};
+ for(const key of ['operationId','projectId','scope'])delete payload[key];
+ const original={operationId,projectId:'quality-project',scope,...payload},status={scope,projectId:'quality-project',operationId,state:'FACIAL_PRECOMMIT',saved:false,definitive:false,facial:{phase:'MODEL_UNKNOWN',canContinueManual:true,privateObjectsMayExist:false}};
+ const state={draft:{action:'SUBMIT_KYC',captureRetakes:{front:2,back:3,selfie:4},payload:structuredClone(payload)},attempt:manual?original:null,step:2,posts:[],closedReferences:0,successes:0,busy:false};
+ const ports={busy:false,accountRequest:{current:{controller:null}},attempt:state.attempt,durableReference:null,recoveryReady:true,draft:state.draft,revisionReview:null,accessBlocked:false,hasBankPending:false,intakePending:null,projectId:'quality-project',scope,endpoint,data:{documentBackNotice:backNotice},alive:{current:true},sequence:{current:1},facialRecovery:status,PARTICIPANT_OFFICE_ASSIGN_ACTION,participantOfficePrecommitRejected,captureQualityFeedback,participantDocumentBackNotice,...uiHelpers,crypto:{randomUUID:()=>nextOperationId},setAttempt:value=>{state.attempt=value;},setRetryAllowed:()=>{},setBusy:value=>{state.busy=value;},setNotice:value=>{state.notice=value;},setReceipt:()=>{},setFacialRecovery:()=>{},setDraft:update=>{state.draft=typeof update==='function'?update(state.draft):update;},setCaptureStep:value=>{state.step=value;},hideDenied:()=>false,changedContext:()=>Error('Unexpected context change'),closeFacialManualReference:async()=>{state.closedReferences++;return true;},acceptResult:async()=>{state.successes++;throw Error('A rejected capture cannot succeed');},operationResult:()=>{throw Error('A rejected response cannot be a receipt');},scoped:value=>value,recovered:value=>value,
+  api:async(context,request,...rest)=>{if(request?.method==='POST'){state.posts.push(JSON.parse(request.body));return transport.api(context,request,...rest);}return context?.operationId?status:{records:[{id:payload.workerId,revision:payload.revision}]};}};
+ const bodies=['retakeCapture','save','continueFacialManual'].map(name=>realDeclaration('src/app/(identity)/cuenta/participant-panel.js',name)).join('\n');
+ const handlers=new Function(...Object.keys(ports),bodies+'\nreturn {save,continueFacialManual};')(...Object.values(ports));
+ return{state,transport,initial:structuredClone(state.draft),run:()=>manual?handlers.continueFacialManual():handlers.save({preventDefault(){}})};
+}
+for(const manual of [false,true])for(const [kind,field,step]of [['DOCUMENT_FRONT','front',0],['DOCUMENT_BACK','back',1],['SELFIE','selfie',2]])test('real '+(manual?'manual-successor':'save')+' handler invalidates only the observed rejected '+kind+' and keeps reset metadata outside its command',async()=>{
+ const h=panelHandlerHarness({manual,fetchImpl:async()=>response('PARTICIPANT_CAPTURE_'+kind+'_IMAGE_BLURRED',422)});
+ try{await h.run();assert.equal(h.state.posts.length,1);const command=h.state.posts[0],expected={...command};for(const key of ['operationId','projectId','scope','biometricManualFromOperationId'])delete expected[key];expected[field]='';assert.deepEqual(h.state.draft.payload,expected);assert.deepEqual(h.state.draft.captureRetakes,{...h.initial.captureRetakes,[field]:h.initial.captureRetakes[field]+1});assert.equal(h.state.step,step);assert.equal(h.state.attempt,null);assert.equal(h.state.busy,false);assert.equal(h.state.successes,0);assert.equal(h.state.closedReferences,manual?1:0);assert.equal(Object.hasOwn(command,'captureRetakes'),false);assert.equal(JSON.stringify(command).includes('captureRetakes'),false);for(const other of ['front','back','selfie'].filter(value=>value!==field))assert.equal(h.state.draft.payload[other],h.initial.payload[other]);for(const key of ['consent','backConsent','backNoticeVersion','backNoticeSha256','ocrConsent','biometricNoticeVersion'])assert.equal(h.state.draft.payload[key],h.initial.payload[key]);assert.equal((await h.transport.journal.list(scope)).length,0);}finally{h.transport.runtime.abort();}
+});
+for(const manual of [false,true])test('real '+(manual?'manual-successor':'save')+' handler keeps every image and preparation key for unavailable unconfirmed or unproven responses',async()=>{
+ for(const mode of ['unavailable','unknown','malformed']){const h=panelHandlerHarness({manual,fetchImpl:async()=>mode==='unavailable'?response(unavailableCode,503):mode==='unknown'?Response.json({code:'PARTICIPANT_FACIAL_RESULT_UNCONFIRMED'},{status:503}):Response.json({},{status:422})});try{await h.run();assert.equal(h.state.posts.length,1);assert.equal(h.state.successes,0);assert.deepEqual(h.state.draft.captureRetakes,h.initial.captureRetakes);assert.equal(h.state.step,2);for(const field of ['front','back','selfie'])assert.equal(h.state.draft.payload[field],h.initial.payload[field]);if(mode==='unavailable'){assert.equal(h.state.attempt,null);assert.equal((await h.transport.journal.list(scope)).length,0);}else{assert.ok(h.state.attempt);assert.equal((await h.transport.journal.list(scope)).length,1);assert.equal(h.state.closedReferences,0);}}finally{h.transport.runtime.abort();}}
 });
