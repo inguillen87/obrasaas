@@ -147,3 +147,31 @@ export function normalizeCaptureCompanyCoreNativeProof({contract,proof,root,read
  try{legacy=normalizeLegacy(projected,readSource);fail(!legacy||typeof legacy.then!=='function','SYNCHRONOUS_ORACLE');fail(legacy?.status==='PASS'&&legacy.sourceReferences===238,'LEGACY_ORACLE_RESULT');}finally{fail(JSON.stringify(projected)===projectedBefore,'ORACLE_INPUT_UNCHANGED');sourceOnly();verify();}
  return {status:'PASS',checks:legacy.checks,coreChecks:legacy.coreChecks,sourceReferences:derived.length,historicalSourceReferences:238,sourceOnlyProjection:true,rawProofTransformed:false,syntheticOnly:true,realAcceptance:false};
 }
+
+// OWN carries its original complete RAW receipt. Only an owned copy of the
+// source fields enters the unchanged pre-capture neutral-guidance oracle.
+export function normalizeCaptureOwnNeutralNativeProof({contract,proof,readSource,readEvidence,normalizeLegacy}){
+ const producer='scripts/verify-company-kyc-outbound-compact-postgres.mjs',proofPath='.vercel/private/company-kyc-outbound-compact-postgres.json',fail=(ok,reason)=>reject(ok,'OWN_NEUTRAL_'+reason);
+ fail(hasCaptureRuntime(contract)&&typeof readSource==='function'&&typeof readEvidence==='function'&&typeof normalizeLegacy==='function','CURRENT_PORTS_REQUIRED');
+ const contractBefore=JSON.stringify(contract),proofBefore=JSON.stringify(proof),input=readEvidence(proofPath);fail(Buffer.isBuffer(input)&&input.length>0&&input.length<=512*1024&&Buffer.from(input.toString('utf8')).equals(input),'RAW_PROOF_BYTES');const raw=Buffer.from(input);let owned;try{owned=JSON.parse(raw);}catch{fail(false,'RAW_PROOF_JSON');}fail(owned?.status==='PASS'&&same(owned,proof)&&['LOCAL_REVIEW_SOURCE','EXACT_CI_SOURCE'].includes(owned.sourceState),'EXACT_RAW_PROOF');
+ const read=file=>{fail(safe(file),'SAFE_SOURCE');const value=readSource(file);fail(Buffer.isBuffer(value)&&Buffer.from(value.toString('utf8')).equals(value),'SOURCE_BYTES_'+file);return value;},section=contract.planBudgetCurrentRevision,currentFamily=section.sourceFamilies.find(row=>row.family==='COMPACT'),advance=section.captureQualityRuntime.familyAdvances.find(row=>row.family==='COMPACT');
+ const parent=budget.restoreCaptureRuntimePreviousContract(contract),parentFamily=parent.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family==='COMPACT');
+ fail(currentFamily&&parentFamily&&advance&&ordered(currentFamily.currentFiles)&&ordered(parentFamily.currentFiles)&&ordered(advance.additions),'EXACT_FAMILY_DESCRIPTOR');
+ fail(advance.previousCount===144&&advance.currentCount===155&&parentFamily.currentFiles.length===advance.previousCount&&currentFamily.currentFiles.length===advance.currentCount&&advance.additions.length===11&&same(advance.removals,[])&&same([...parentFamily.currentFiles,...advance.additions].sort(),currentFamily.currentFiles),'EXACT_144_TO_155_UNION');
+ const files=[...currentFamily.currentFiles],pins=new Map(files.map(file=>[file,sha(read(file))]));fail(files.includes(producer),'PRODUCER_IN_CURRENT_CLOSURE');
+ const verify=()=>{
+  fail(JSON.stringify(contract)===contractBefore&&JSON.stringify(proof)===proofBefore,'CALLER_UNCHANGED');budget.verifyCaptureRuntimeCurrentSources(contract,read);budget.verifyPlanBudgetActualClosure(contract,'COMPACT',{files,externalImports:[...currentFamily.externalImports]},read);
+  fail(Array.isArray(owned.sourceManifest)&&owned.sourceManifest.length===files.length,'CURRENT_RAW_COUNT');const seen=new Set();for(const row of owned.sourceManifest){fail(row&&same(Object.keys(row).sort(),['path','sha256'])&&safe(row.path)&&typeof row.sha256==='string'&&/^[a-f0-9]{64}$/.test(row.sha256)&&!seen.has(row.path),'CURRENT_RAW_ROW');seen.add(row.path);fail(pins.get(row.path)===row.sha256&&sha(read(row.path))===row.sha256,'CURRENT_RAW_SOURCE_'+row.path);}fail(same([...seen].sort(),files),'CURRENT_RAW_SET');fail(owned.harnessSha256===pins.get(producer)&&sha(read(producer))===owned.harnessSha256,'CURRENT_RAW_HARNESS');const fresh=readEvidence(proofPath);fail(Buffer.isBuffer(fresh)&&fresh.equals(raw),'RAW_UNCHANGED');
+ };
+ verify();let legacy;
+ try{
+  legacy=budget.withCaptureRuntimePreviousSources(contract,read,(historical,historicalRead)=>{
+   fail(same(historical,parent),'EXACT_PARENT_CONTRACT');const projected=structuredClone(owned);projected.sourceManifest=parentFamily.currentFiles.map(path=>({path,sha256:sha(historicalRead(path))}));projected.harnessSha256=sha(historicalRead(producer));
+   const sourceOnly=()=>fail(same({...projected,sourceManifest:owned.sourceManifest,harnessSha256:owned.harnessSha256},owned),'ONLY_SOURCE_FIELDS_PROJECTED');sourceOnly();const projectedBefore=JSON.stringify(projected);let result;
+   try{result=normalizeLegacy(projected,historical,historicalRead);fail(!result||typeof result.then!=='function','SYNCHRONOUS_ORACLE');fail(result?.status==='PASS'&&result.family==='OWN'&&result.currentNativeSourceCount===144&&result.currentCases===owned.neutralStepGuidanceNative?.cases?.length&&result.historicalCasesPreserved===4,'LEGACY_ORACLE_RESULT');}
+   finally{fail(JSON.stringify(projected)===projectedBefore,'ORACLE_INPUT_UNCHANGED');sourceOnly();verify();}
+   return result;
+  });
+ }finally{verify();}
+ return {...legacy,currentNativeSourceCount:files.length,historicalNativeSourceCount:parentFamily.currentFiles.length,sourceOnlyProjection:true,rawProofTransformed:false,sourceState:owned.sourceState,identityOrProviderAccepted:false};
+}
