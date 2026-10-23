@@ -572,7 +572,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
       "previousSha256": "43e1b60497a81d1598674fc3500b8ed47fa9be807c03788641ff5cf12c129521",
-      "currentSha256": "57b375c10cf2b8237ad8ecf66852ff2a159eb3753781d8a1516b59613b2eb1b6"
+      "currentSha256": "730bfb50b98001eddcc817fb0f813b8252db09bc5a554b06f027a7f40ed710a8"
     },
     {
       "path": "tests/production-workspace-ci-consumer-projections.test.mjs",
@@ -5511,7 +5511,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
-          "sha256": "57b375c10cf2b8237ad8ecf66852ff2a159eb3753781d8a1516b59613b2eb1b6"
+          "sha256": "730bfb50b98001eddcc817fb0f813b8252db09bc5a554b06f027a7f40ed710a8"
         },
         {
           "path": "tests/production-worksite-task-selector.test.mjs",
@@ -25951,7 +25951,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
         "previousSha256": "a0e817f4f0ea3bae2a8042447a38ad099fb448a9ec8d34c0fd8e0b754685a497",
-        "currentSha256": "57b375c10cf2b8237ad8ecf66852ff2a159eb3753781d8a1516b59613b2eb1b6"
+        "currentSha256": "730bfb50b98001eddcc817fb0f813b8252db09bc5a554b06f027a7f40ed710a8"
       },
       {
         "path": "tests/production-workspace-ci-consumer-projections.test.mjs",
@@ -31094,7 +31094,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
         "status": "MODIFIED",
         "previousSha256": "a0e817f4f0ea3bae2a8042447a38ad099fb448a9ec8d34c0fd8e0b754685a497",
-        "currentSha256": "57b375c10cf2b8237ad8ecf66852ff2a159eb3753781d8a1516b59613b2eb1b6",
+        "currentSha256": "730bfb50b98001eddcc817fb0f813b8252db09bc5a554b06f027a7f40ed710a8",
         "previousBytes": 18272,
         "currentBytes": 24183,
         "inverseHunks": [
@@ -31110,7 +31110,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "currentOffsetCharacters": 5857,
-            "currentText": "captureParent=restoreCaptureRuntimePreviousContract(actual),capture=actual.planBudgetCurrentRevision.captureQualityRuntime,company=actual.extension.proofs.find(spec=>spec.kind==='PG_COMPANY_KYC'),parentCompany=captureParent.extension.proofs.find(spec=>spec.id===company.id),companyCapture=capture.proofSourceSetAdvances.find(row=>row.id===company.id),producerRaw=read(company.producer);\n assert.equal(company.sourceFiles.length,252);assert.equal(parentCompany.sourceFiles.length,242);assert.deepEqual(companyCapture.previousFiles,parentCompany.sourceFiles);assert.deepEqual(companyCapture.currentFiles,company.sourceFiles);assert.deepEqual([...parentCompany.sourceFiles,...companyCapture.additions].sort(),company.sourceFiles);assert.deepEqual(companyCapture.removals,[]);assert.equal(sha(producerRaw.toString('utf8').replaceAll('\\r\\n','\\n')),company.producerSha256);assert.equal(sha(restoreCaptureRuntimePreviousSource(actual,company.producer,producerRaw)),parentCompany.producerSha256);\n const inheritedProofs=actual.extension.proofs.slice(0,-1).map(spec=>{const parent=captureParent.extension.proofs.find(row=>row.id===spec.id),advance=capture.proofSourceSetAdvances.find(row=>row.id===spec.id);assert.ok(parent);if(advance){assert.deepEqual(advance.previousFiles,parent.sourceFiles);assert.deepEqual(advance.currentFiles,spec.sourceFiles);assert.deepEqual([...parent.sourceFiles,...advance.additions].sort(),spec.sourceFiles);assert.deepEqual(advance.removals,[]);}else assert.deepEqual(spec.sourceFiles,parent.sourceFiles);const unit=captureParent.planBudgetCurrentRevision.intakeWithdrawalRuntime.unitProducer;let producerSha256;if(parent.producer===unit.producer){assert.equal(parent.producerSha256,unit.currentSha256);assert.equal(sha(restorePlanBudgetIntakeWithdrawalUnitProducerText(actual,read(unit.producer)).toString('utf8').replaceAll('\\r\\n','\\n')),unit.previousSha256);producerSha256=unit.previousSha256;}else producerSha256=planBudgetPreviousSourcePin(actual,{path:parent.producer,sha256:parent.producerSha256});return {...parent,producerSha256,sourceFiles:restorePlanBudgetSourceSet(actual,spec.kind,spec.sourceFiles)};}",
+            "currentText": "captureParent=restoreCaptureRuntimePreviousContract(actual),capture=actual.planBudgetCurrentRevision.captureQualityRuntime,company=actual.extension.proofs.find(spec=>spec.kind==='PG_COMPANY_KYC'),parentCompany=captureParent.extension.proofs.find(spec=>spec.id===company.id),companyCapture=capture.proofSourceSetAdvances.find(row=>row.id===company.id),producerRaw=read(company.producer);\n assert.equal(company.sourceFiles.length,253);assert.equal(parentCompany.sourceFiles.length,242);assert.deepEqual(companyCapture.previousFiles,parentCompany.sourceFiles);assert.deepEqual(companyCapture.currentFiles,company.sourceFiles);assert.deepEqual([...parentCompany.sourceFiles,...companyCapture.additions].sort(),company.sourceFiles);assert.deepEqual(companyCapture.removals,[]);assert.equal(sha(producerRaw.toString('utf8').replaceAll('\\r\\n','\\n')),company.producerSha256);assert.equal(sha(restoreCaptureRuntimePreviousSource(actual,company.producer,producerRaw)),parentCompany.producerSha256);\n const inheritedProofs=actual.extension.proofs.slice(0,-1).map(spec=>{const parent=captureParent.extension.proofs.find(row=>row.id===spec.id),advance=capture.proofSourceSetAdvances.find(row=>row.id===spec.id);assert.ok(parent);if(advance){assert.deepEqual(advance.previousFiles,parent.sourceFiles);assert.deepEqual(advance.currentFiles,spec.sourceFiles);assert.deepEqual([...parent.sourceFiles,...advance.additions].sort(),spec.sourceFiles);assert.deepEqual(advance.removals,[]);}else assert.deepEqual(spec.sourceFiles,parent.sourceFiles);const unit=captureParent.planBudgetCurrentRevision.intakeWithdrawalRuntime.unitProducer;let producerSha256;if(parent.producer===unit.producer){assert.equal(parent.producerSha256,unit.currentSha256);assert.equal(sha(restorePlanBudgetIntakeWithdrawalUnitProducerText(actual,read(unit.producer)).toString('utf8').replaceAll('\\r\\n','\\n')),unit.previousSha256);producerSha256=unit.previousSha256;}else producerSha256=planBudgetPreviousSourcePin(actual,{path:parent.producer,sha256:parent.producerSha256});return {...parent,producerSha256,sourceFiles:restorePlanBudgetSourceSet(actual,spec.kind,spec.sourceFiles)};}",
             "previousText": "inheritedProofs=actual.extension.proofs.slice(0,-1).map(spec=>({...spec,sourceFiles:restorePlanBudgetSourceSet(actual,spec.kind,spec.sourceFiles)})"
           },
           {
@@ -35744,7 +35744,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "pointer": "/planBudgetCurrentRevision/references/112/currentSha256",
         "previous": "a0e817f4f0ea3bae2a8042447a38ad099fb448a9ec8d34c0fd8e0b754685a497",
-        "current": "57b375c10cf2b8237ad8ecf66852ff2a159eb3753781d8a1516b59613b2eb1b6"
+        "current": "730bfb50b98001eddcc817fb0f813b8252db09bc5a554b06f027a7f40ed710a8"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/113/currentSha256",
@@ -36317,7 +36317,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
             "previousSha256": "43e1b60497a81d1598674fc3500b8ed47fa9be807c03788641ff5cf12c129521",
-            "currentSha256": "57b375c10cf2b8237ad8ecf66852ff2a159eb3753781d8a1516b59613b2eb1b6"
+            "currentSha256": "730bfb50b98001eddcc817fb0f813b8252db09bc5a554b06f027a7f40ed710a8"
           },
           {
             "path": "tests/production-workspace-ci-consumer-projections.test.mjs",
@@ -37039,7 +37039,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
             "previousSha256": "43e1b60497a81d1598674fc3500b8ed47fa9be807c03788641ff5cf12c129521",
-            "currentSha256": "57b375c10cf2b8237ad8ecf66852ff2a159eb3753781d8a1516b59613b2eb1b6"
+            "currentSha256": "730bfb50b98001eddcc817fb0f813b8252db09bc5a554b06f027a7f40ed710a8"
           },
           {
             "path": "tests/production-workspace-ci-consumer-projections.test.mjs",
@@ -43627,7 +43627,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
-            "sha256": "57b375c10cf2b8237ad8ecf66852ff2a159eb3753781d8a1516b59613b2eb1b6"
+            "sha256": "730bfb50b98001eddcc817fb0f813b8252db09bc5a554b06f027a7f40ed710a8"
           },
           {
             "path": "tests/production-worksite-task-selector.test.mjs",
