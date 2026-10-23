@@ -1008,7 +1008,10 @@ function validatePreviousExtensionProof(spec,bytes,{expectedHead,expectedTree,re
 }
 function proofBindings(contract,lane,files,expectedHead,readSource){verifyWhatsappPlanTestSources(contract,readSource);return contract.extension.proofs.filter(p=>p.lane===lane).map(spec=>{if(hash(readSource(spec.producer))!==spec.producerSha256)deny('PROOF_HARNESS_SOURCE');return {id:spec.id,path:spec.path,producer:spec.producer,kind:spec.kind,result:spec.kind==='UI_CAUSAL'?'EXPECTED_CAUSAL_FAILURE':'PASS',sourceRevision:expectedHead,harnessSha256:spec.producerSha256,sourceManifestSha256:expectedSourceDigest(spec,readSource),sourceReferences:spec.sourceFiles.length,proofSha256:files.find(f=>f.path===spec.path).sha256,bytes:files.find(f=>f.path===spec.path).bytes,checks:summary(spec,files,contract)};});}
 function assertProofBindings(bindings,contract,lane,files,expectedHead,readSource){
- if(!Array.isArray(bindings))deny('PROOF_BINDINGS');const specs=contract.extension.proofs.filter(p=>p.lane===lane);equal(bindings.map(b=>b?.id),specs.map(p=>p.id),'PROOF_BINDINGS');const expectedBindings=proofBindings(contract,lane,files,expectedHead,readSource);for(const [index,binding] of bindings.entries()){exactKeys(binding,['id','path','producer','kind','result','sourceRevision','harnessSha256','sourceManifestSha256','sourceReferences','proofSha256','bytes','checks'],'PROOF_BINDING_SHAPE');const expected=expectedBindings[index];if(!sha(binding.sourceManifestSha256)||binding.sourceManifestSha256!==expected.sourceManifestSha256)deny('PROOF_BINDING_SOURCE');equal(binding,expected,'PROOF_BINDING_IDENTITY');if(binding.bytes<1)deny('PROOF_BINDING_EMPTY');}
+ return assertProofBindingsWithExpected(bindings,contract,lane,()=>proofBindings(contract,lane,files,expectedHead,readSource));
+}
+function assertProofBindingsWithExpected(bindings,contract,lane,expectedBindingsForLane){
+ if(!Array.isArray(bindings))deny('PROOF_BINDINGS');const specs=contract.extension.proofs.filter(p=>p.lane===lane);equal(bindings.map(b=>b?.id),specs.map(p=>p.id),'PROOF_BINDINGS');const expectedBindings=expectedBindingsForLane();for(const [index,binding] of bindings.entries()){exactKeys(binding,['id','path','producer','kind','result','sourceRevision','harnessSha256','sourceManifestSha256','sourceReferences','proofSha256','bytes','checks'],'PROOF_BINDING_SHAPE');const expected=expectedBindings[index];if(!sha(binding.sourceManifestSha256)||binding.sourceManifestSha256!==expected.sourceManifestSha256)deny('PROOF_BINDING_SOURCE');equal(binding,expected,'PROOF_BINDING_IDENTITY');if(binding.bytes<1)deny('PROOF_BINDING_EMPTY');}
 }
 // Read producer manifests without executing PG, browsers or provider adapters.
 // Literal arrays and relative-import walks mirror the current producer rules;
@@ -2174,6 +2177,9 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
  validateContract(contract);if(!head(expectedHead)||!sha(workflowSha256)||!positive(runId)||!positive(runAttempt))deny('EXPECTED_IDENTITY_INVALID');
  if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');
  try{verifyKycExpiredCurrentSources(contract.kycExpiredCurrentComposition,readSource);}catch(error){if(['KYC_EXPIRED_CURRENT_LINEAGE_REJECTED','PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code))deny('PROOF_BINDING_SOURCE');throw error;}
+ return evaluateGateRecords({needs,contract,expectedHead,workflowSha256,runId,runAttempt},{assertBindings:(bindings,lane,files)=>assertProofBindings(bindings,contract,lane,files,expectedHead,readSource),verifierDigest:verifierSha256});
+}
+function evaluateGateRecords({needs,contract,expectedHead,workflowSha256,runId,runAttempt},{assertBindings,verifierDigest}){
  exactKeys(needs,LANES,'MISSING_OR_EXTRA_LANE');
  const paths=new Set(),artifacts=new Set();let fileCount=0;
  const records=[];
@@ -2185,7 +2191,7 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
   if(typeof job.outputs.provenance!=='string'||Buffer.byteLength(job.outputs.provenance)>400*1024)deny('PROVENANCE_LIMIT');
   let record;try{record=JSON.parse(job.outputs.provenance);}catch{deny('INVALID_PROVENANCE_JSON');}
   exactKeys(record,['version','lane','head','runId','runAttempt','workflowSha256','contractSha256','blockIds','commandDigests','artifactPatterns','requiredRetainedEvidence','requiredProducedEvidence','producedNotUploaded','verifierSha256','packageLockSha256','requirementsSha256','files','proofBindings','manifestSha256'],'INVALID_PROVENANCE_SHAPE');
-  if(record.version!==2||record.lane!==lane||record.head!==expectedHead||record.runId!==runId||record.runAttempt!==runAttempt||record.workflowSha256!==workflowSha256||record.contractSha256!==EXPECTED_CONTRACT_SHA256||record.verifierSha256!==verifierSha256()||record.packageLockSha256!==contract.packageLockSha256||record.requirementsSha256!==contract.requirementsSha256)deny('PROVENANCE_IDENTITY');
+  if(record.version!==2||record.lane!==lane||record.head!==expectedHead||record.runId!==runId||record.runAttempt!==runAttempt||record.workflowSha256!==workflowSha256||record.contractSha256!==EXPECTED_CONTRACT_SHA256||record.verifierSha256!==verifierDigest()||record.packageLockSha256!==contract.packageLockSha256||record.requirementsSha256!==contract.requirementsSha256)deny('PROVENANCE_IDENTITY');
   if(!sha(record.manifestSha256)||hash(JSON.stringify(unseal(record))+'\n')!==record.manifestSha256)deny('PROVENANCE_DIGEST');
   equal(record.blockIds,contract.lanes[lane].blocks,'BLOCK_COVERAGE');
   equal(record.commandDigests,record.blockIds.map(id=>currentCommandBlock(contract,id).commandSha256),'COMMAND_DIGEST');
@@ -2212,12 +2218,12 @@ export function gate({needs,contract,expectedHead,workflowSha256,runId,runAttemp
   }
   requireEvidence(record.producedNotUploaded,record.requiredProducedEvidence,'MISSING_REQUIRED_PRODUCED_EVIDENCE');
   if(record.files.reduce((n,item)=>n+item.bytes,0)>200*1024*1024)deny('EVIDENCE_LIMIT');
-  assertProofBindings(record.proofBindings,contract,lane,record.files,expectedHead,readSource);
+  assertBindings(record.proofBindings,lane,record.files);
   fileCount+=record.files.length;
   records.push({lane,artifactId:job.outputs.artifactId,artifactDigest:job.outputs.artifactDigest,manifestSha256:record.manifestSha256,fileCount:record.files.length,producedNotUploaded:record.producedNotUploaded,blockIds:record.blockIds,proofBindings:record.proofBindings});
  }
  equal(records.flatMap(record=>record.blockIds).sort((a,b)=>a-b),contract.blocks.map(block=>block.id),'TOTAL_BLOCK_COVERAGE');
- return {version:1,state:'PASS',head:expectedHead,runId,runAttempt,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,lanes:records,commandBlocks:contract.blocks.length,artifactPatterns:contract.artifactPatterns.length,requiredRetainedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredRetainedEvidence).length,producedNotUploadedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredProducedEvidence).length,fileCount};
+ return {version:1,state:'PASS',head:expectedHead,runId,runAttempt,workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierDigest(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,lanes:records,commandBlocks:contract.blocks.length,artifactPatterns:contract.artifactPatterns.length,requiredRetainedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredRetainedEvidence).length,producedNotUploadedFiles:Object.values(contract.lanes).flatMap(owner=>owner.requiredProducedEvidence).length,fileCount};
 }
 function expectedNeeds(contract,expectedHead,workflowSha256,readSource){
  return Object.fromEntries(LANES.map((lane,i)=>{
@@ -2229,6 +2235,63 @@ function expectedNeeds(contract,expectedHead,workflowSha256,readSource){
   const record=seal({version:2,proofBindings:proofBindings(contract,lane,files,expectedHead,readSource),lane,head:expectedHead,runId:'100',runAttempt:'1',workflowSha256,contractSha256:EXPECTED_CONTRACT_SHA256,blockIds:[...owner.blocks],commandDigests:owner.blocks.map(id=>currentCommandBlock(contract,id).commandSha256),artifactPatterns:[...owner.artifacts],requiredRetainedEvidence:[...owner.requiredRetainedEvidence],requiredProducedEvidence:[...owner.requiredProducedEvidence],producedNotUploaded:owner.requiredProducedEvidence.map(file),verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,files});
   return [lane,{result:'success',outputs:{provenance:JSON.stringify(record),artifactId:String(i+1),artifactDigest:'2'.repeat(64)}}];
  }));
+}
+const PURE_PROVENANCE_DECODER_BOUNDARY='pure provenance decoder; not public gate integration; not native or human acceptance';
+function freezeProvenanceFixture(value){
+ if(value&&typeof value==='object'){for(const child of Object.values(value))freezeProvenanceFixture(child);Object.freeze(value);}return value;
+}
+// Only selftests call this private factory, after their actual current gate
+// positive. Its owned expectations never enter the public gate or a source scope.
+function ownedProvenanceDecoder(input,authenticatedReport){
+ assert.equal(authenticatedReport.state,'PASS');assert.equal(authenticatedReport.head,input.expectedHead);equal(authenticatedReport.lanes.map(row=>row.lane),LANES,'DECODER_FIXTURE_LANES');
+ const context=freezeProvenanceFixture(clone({contract:input.contract,expectedHead:input.expectedHead,workflowSha256:input.workflowSha256,runId:input.runId,runAttempt:input.runAttempt}));
+ const fields=['id','path','producer','kind','result','sourceRevision','harnessSha256','sourceManifestSha256','sourceReferences'];
+ const owned=freezeProvenanceFixture(Object.fromEntries(authenticatedReport.lanes.map(row=>[
+  row.lane,row.proofBindings.map(binding=>Object.fromEntries(fields.map(key=>[key,clone(binding[key])]))),
+ ])));
+ const digest=authenticatedReport.verifierSha256;assert.ok(sha(digest));
+ for(const lane of LANES)equal(owned[lane].map(row=>row.id),context.contract.extension.proofs.filter(spec=>spec.lane===lane).map(spec=>spec.id),'DECODER_FIXTURE_BINDINGS');
+ const expected=(lane,files)=>context.contract.extension.proofs.filter(spec=>spec.lane===lane).map((spec,index)=>({...owned[lane][index],proofSha256:files.find(file=>file.path===spec.path).sha256,bytes:files.find(file=>file.path===spec.path).bytes,checks:summary(spec,files,context.contract)}));
+ const assertBindings=(bindings,lane,files)=>assertProofBindingsWithExpected(bindings,context.contract,lane,()=>expected(lane,files));
+ const decode=needs=>evaluateGateRecords({...context,needs},{assertBindings,verifierDigest:()=>digest});
+ const check=(checks,name,code,run)=>{if(code)assert.throws(run,error=>error.code===code);else run();checks.push({name,result:'PASS',...(code?{expectedDenial:code}:{}),boundary:PURE_PROVENANCE_DECODER_BOUNDARY});};
+ return Object.freeze({decode,
+  variableFiles(checks,prefix,needs,specId){
+   const spec=context.contract.extension.proofs.find(row=>row.id===specId);assert.ok(spec);
+   for(const field of ['sha256','bytes']){const value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance),file=record.files.find(row=>row.path===spec.path);assert.ok(file);file[field]=field==='sha256'?'f'.repeat(64):file.bytes+1;value[spec.lane].outputs.provenance=JSON.stringify(seal(unseal(record)));check(checks,prefix+'-current-files-'+field+'-resealed','PROOF_BINDING_IDENTITY',()=>decode(value));}
+  },
+  coreChecks(checks,needs){
+   const lane=LANES[0],record=JSON.parse(needs[lane].outputs.provenance),bindings=clone(record.proofBindings);let calls=0;
+   for(const [name,value]of [['not-array',null],['wrong-ids',[]]])check(checks,'provenance-decoder-lazy-'+name,'PROOF_BINDINGS',()=>{try{assertProofBindingsWithExpected(value,context.contract,lane,()=>{calls++;return expected(lane,record.files);});}finally{assert.equal(calls,0);}});
+   const malformed=clone(bindings);malformed[0].extra=true;
+   check(checks,'provenance-decoder-shape-after-factory','PROOF_BINDING_SHAPE',()=>{calls=0;try{assertProofBindingsWithExpected(malformed,context.contract,lane,()=>{calls++;return expected(lane,record.files);});}finally{assert.equal(calls,1);}});
+   const sentinel=Object.assign(new Error('Controlled expected-binding failure'),{code:'DECODER_EXPECTED_FACTORY_SENTINEL'});
+   check(checks,'provenance-decoder-factory-error-before-shape','DECODER_EXPECTED_FACTORY_SENTINEL',()=>assertProofBindingsWithExpected(malformed,context.contract,lane,()=>{throw sentinel;}));
+   check(checks,'provenance-decoder-verifier-nine-calls-on-pass',null,()=>{calls=0;const result=evaluateGateRecords({...context,needs},{assertBindings,verifierDigest:()=>{calls++;return digest;}});assert.equal(result.state,'PASS');assert.equal(calls,9);});
+   check(checks,'provenance-decoder-wrong-head-short-circuits-verifier','PROVENANCE_IDENTITY',()=>{const value=clone(needs),first=JSON.parse(value[lane].outputs.provenance);first.head='f'.repeat(40);value[lane].outputs.provenance=JSON.stringify(seal(unseal(first)));calls=0;try{evaluateGateRecords({...context,needs:value},{assertBindings,verifierDigest:()=>{calls++;return digest;}});}finally{assert.equal(calls,0);}});
+  },
+ });
+}
+function provenanceDecoderPublicIntegrationSelftest(workflow,contract,root){
+ const checks=[],expectedHead='a'.repeat(40),workflowSha256=hash(canonical(workflow)),readSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
+ // A separate CURRENT matrix. Never derive these 22 rows from a historical
+ // native fixture, whose proof family and source counts are intentionally older.
+ const needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
+ const ids=['bank-intake-units','bank-postgres','intake-postgres','bank-ui','intake-ui','joint-ui','joint-causal','company-kyc-postgres','project-preparation-postgres','project-preparation-ui','portfolio-units','portfolio-ui','portfolio-postgres','identity-only-ui','field-canonical-postgres','overtime-canonical-postgres','plan-baseline-postgres','document-curve-ui','participant-kyc-preanalysis-postgres','focused-workspace-ui','field-task-pagination-ui','budget-source-ui'];
+ equal(contract.extension.proofs.map(spec=>spec.id),ids,'PUBLIC_GATE_INTEGRATION_CATALOG');
+ const good=(name,run)=>{run();checks.push({name,result:'PASS',boundary:'public current gate integration; no native or human acceptance'});};
+ const bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code,boundary:'public current gate integration; no native or human acceptance'});};
+ for(const id of ids){const spec=contract.extension.proofs.find(row=>row.id===id),value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance);record.proofBindings.find(row=>row.id===id).sourceManifestSha256='f'.repeat(64);value[spec.lane].outputs.provenance=JSON.stringify(seal(unseal(record)));let reads=0;bad('public-gate-binding-valid64-wrong-'+id,'PROOF_BINDING_SOURCE',()=>{try{gate({...input,needs:value,readSource:file=>{reads++;return readSource(file);}});}finally{assert.ok(reads>0);}});}
+ const producer=contract.extension.proofs[0].producer,actual=readSource(producer),changed=Buffer.concat([actual,Buffer.from('\n// controlled public gate source mutation\n')]);let altered=false;
+ const mutable=file=>file===producer&&altered?changed:readSource(file);
+ good('public-gate-same-reader-initial-success',()=>assert.equal(gate({...input,readSource:mutable}).state,'PASS'));
+ altered=true;bad('public-gate-same-reader-change-after-success','PROOF_BINDING_SOURCE',()=>gate({...input,readSource:mutable}));altered=false;
+ good('public-gate-valid-reader-recovers-without-cache',()=>assert.equal(gate({...input,readSource:mutable}).state,'PASS'));
+ const afterPrefix=extra=>{const value=clone(needs),outputs=value[LANES[0]].outputs,original=outputs.provenance,record=JSON.parse(original);record.proofBindings[0].extra=true;const malformed=JSON.stringify(seal(unseal(record)));altered=false;Object.defineProperty(outputs,'provenance',{enumerable:true,get(){altered=true;return malformed;}});return {...input,...extra,needs:value,readSource:mutable};};
+ bad('public-gate-source-denial-after-prefix-before-binding-shape','PROOF_HARNESS_SOURCE',()=>gate(afterPrefix({})));
+ for(const field of ['skipSourceValidation','sourceAlreadyVerified','expectedBindings','bindingForLane','assertBindings'])bad('public-gate-extra-port-fields-cannot-bypass-'+field,'PROOF_HARNESS_SOURCE',()=>gate(afterPrefix({[field]:()=>[]})));
+ good('public-gate-private-export-set-unchanged',()=>{const ast=parse(readFileSync(path.join(root,script),'utf8'),{sourceType:'module'});assert.equal(ast.program.body.some(node=>node.type==='ExportDefaultDeclaration'||node.type==='ExportAllDeclaration'||node.type==='ExportNamedDeclaration'&&node.source!==null),false);const actual=ast.program.body.filter(node=>node.type==='ExportNamedDeclaration').flatMap(node=>node.declaration?.id?[node.declaration.id.name]:node.declaration?.declarations?node.declaration.declarations.map(row=>row.id.name):node.specifiers.map(row=>row.exported.name));equal(actual,['EXPECTED_CONTRACT_SHA256','WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS','IDENTITY_ONLY_CHECKS','LANES','validateCompanyKycContextNativeProof','validateDocumentCurveUiContract','validateExtensionProof','validatePlanBaselineContract','currentProducerSourceFiles','validateWhatsappFeedbackPreviousSourceLineage','cleanPath','assertSourceIdentity','validateContract','loadContract','buildWorkflow','equivalent','assertFreshEvidence','canonicalDependencyTextSha256','assertDependencies','assertLaneOutputSize','readLaneNeedsEnvironment','provenance','retainWeeklyCypImportUiScreenshots','validateWeeklyCypRetainedScreenshotBindings','retainPlanPartidaPreviewUiScreenshots','validatePlanPartidaPreviewRetainedScreenshotBindings','validateIdentityDestinationRetainedScreenshots','gate','kycExpiredCurrentCompositionSelftest','selftest','planBudgetCurrentGateSelftest','selftestErrorDiagnostics'],'PUBLIC_GATE_EXPORT_SET');});
+ return checks;
 }
 export function kycExpiredCurrentCompositionSelftest(contract,root=process.cwd()){
  const checks=[],section=contract.kycExpiredCurrentComposition,prefix='kyc-expired-current-composition-';
@@ -2283,6 +2346,7 @@ export function selftest(workflow,contract,root=process.cwd()){
  const checks=[];
  function good(name,run){run();checks.push({name,result:'PASS'});}
  function bad(name,code,run){assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code});}
+ function badDecoder(name,code,run){bad(name,code,run);checks.at(-1).boundary=PURE_PROVENANCE_DECODER_BOUNDARY;}
  good('yaml-parsed-and-full-baseline-equivalent',()=>equivalent(workflow,contract));
  if(contract[PLAN_BUDGET_CURRENT_SECTION])checks.push(...planBudgetCurrentGateSelftest(workflow,contract,root));
  if(contract.planMeasurementDocumentAssociationRevision){
@@ -2306,7 +2370,9 @@ export function selftest(workflow,contract,root=process.cwd()){
  checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource));
  const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedNeeds(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};
  bad('gate-source-resolver-required','PROOF_SOURCE_RESOLVER',()=>gate({...input,readSource:undefined}));
- good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
+ let currentGateReport;
+ good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);currentGateReport=gate(input);assert.equal(currentGateReport.commandBlocks,contract.blocks.length);});
+ const decoder=ownedProvenanceDecoder(input,currentGateReport),decodeJsonCase=decoder.decode;decoder.variableFiles(checks,'provenance-decoder-main',needs,'bank-intake-units');decoder.coreChecks(checks,needs);
  good('gate-all-eight-lanes-and-additive-KYC-57',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
  const laneEnv=Object.fromEntries(LANES.map(lane=>[laneEnvironmentKey(lane),JSON.stringify(needs[lane])]));
  good('lane-environment-preserves-exact-eight-records',()=>equal(readLaneNeedsEnvironment({...laneEnv,PATH:'controlled'}),needs,'ENV_TRANSPORT_CHANGED'));
@@ -2337,14 +2403,14 @@ export function selftest(workflow,contract,root=process.cwd()){
  bad('oversized-output-blocked-before-github-output','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('x'.repeat(LANE_OUTPUT_BYTES)));
  bad('escaped-output-size-uses-wire-bytes','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('"'.repeat(LANE_OUTPUT_BYTES/2)));
  bad('non-string-output-size-denied','PROVENANCE_LIMIT',()=>assertLaneOutputSize(null));
- for(const result of ['failure','cancelled','skipped']){const n=clone(needs);n.people.result=result;bad('gate-'+result,'LANE_NOT_SUCCESS',()=>gate({...input,needs:n}));}
- let n=clone(needs);delete n.meta;bad('missing-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));
- n=clone(needs);n.unexpected=n.meta;bad('extra-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));
- n=clone(needs);n.meta.outputs.artifactId='';bad('missing-artifact','MISSING_ARTIFACT',()=>gate({...input,needs:n}));
- n=clone(needs);delete n.meta.outputs.provenance;bad('missing-output','MISSING_LANE_OUTPUT',()=>gate({...input,needs:n}));
- n=clone(needs);n.meta.outputs.artifactDigest='';bad('missing-artifact-digest','MISSING_ARTIFACT',()=>gate({...input,needs:n}));
- n=clone(needs);n.meta.outputs.artifactId=n.contracts.outputs.artifactId;bad('artifact-id-collision','ARTIFACT_COLLISION',()=>gate({...input,needs:n}));
- function altered(name,code,edit){const n=clone(needs),r=JSON.parse(n.people.outputs.provenance);edit(r);delete r.manifestSha256;n.people.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>gate({...input,needs:n}));}
+ for(const result of ['failure','cancelled','skipped']){const n=clone(needs);n.people.result=result;badDecoder('gate-'+result,'LANE_NOT_SUCCESS',()=>decodeJsonCase(n));}
+ let n=clone(needs);delete n.meta;badDecoder('missing-lane','MISSING_OR_EXTRA_LANE',()=>decodeJsonCase(n));
+ n=clone(needs);n.unexpected=n.meta;badDecoder('extra-lane','MISSING_OR_EXTRA_LANE',()=>decodeJsonCase(n));
+ n=clone(needs);n.meta.outputs.artifactId='';badDecoder('missing-artifact','MISSING_ARTIFACT',()=>decodeJsonCase(n));
+ n=clone(needs);delete n.meta.outputs.provenance;badDecoder('missing-output','MISSING_LANE_OUTPUT',()=>decodeJsonCase(n));
+ n=clone(needs);n.meta.outputs.artifactDigest='';badDecoder('missing-artifact-digest','MISSING_ARTIFACT',()=>decodeJsonCase(n));
+ n=clone(needs);n.meta.outputs.artifactId=n.contracts.outputs.artifactId;badDecoder('artifact-id-collision','ARTIFACT_COLLISION',()=>decodeJsonCase(n));
+ function altered(name,code,edit){const n=clone(needs),r=JSON.parse(n.people.outputs.provenance);edit(r);delete r.manifestSha256;n.people.outputs.provenance=JSON.stringify(seal(r));badDecoder(name,code,()=>decodeJsonCase(n));}
  altered('wrong-source-sha','PROVENANCE_IDENTITY',r=>{r.head='c'.repeat(40);});
  altered('wrong-workflow-sha','PROVENANCE_IDENTITY',r=>{r.workflowSha256='c'.repeat(64);});
  altered('wrong-contract-sha','PROVENANCE_IDENTITY',r=>{r.contractSha256='c'.repeat(64);});
@@ -2363,8 +2429,8 @@ export function selftest(workflow,contract,root=process.cwd()){
  altered('traversal-relative','UNSAFE_PATH',r=>{r.files[0].path='.vercel/private/../foreign.json';});
  altered('traversal-absolute','UNSAFE_PATH',r=>{r.files[0].path='/tmp/foreign.json';});
  altered('traversal-backslash','UNSAFE_PATH',r=>{r.files[0].path='C:\\private\\foreign.json';});
- n=clone(needs);n.people.outputs.provenance='{}';bad('empty-provenance','INVALID_PROVENANCE_SHAPE',()=>gate({...input,needs:n}));
- n=clone(needs);let r=JSON.parse(n.people.outputs.provenance);r.files[0].bytes++;n.people.outputs.provenance=JSON.stringify(r);bad('unsealed-provenance-change','PROVENANCE_DIGEST',()=>gate({...input,needs:n}));
+ n=clone(needs);n.people.outputs.provenance='{}';badDecoder('empty-provenance','INVALID_PROVENANCE_SHAPE',()=>decodeJsonCase(n));
+ n=clone(needs);let r=JSON.parse(n.people.outputs.provenance);r.files[0].bytes++;n.people.outputs.provenance=JSON.stringify(r);badDecoder('unsealed-provenance-change','PROVENANCE_DIGEST',()=>decodeJsonCase(n));
  for(const [name,edit] of [
   ['omitted-workflow-block',w=>{w.jobs.people.steps.splice(6,1);}],
   ['duplicate-workflow-block',w=>{w.jobs.people.steps.splice(6,0,clone(w.jobs.people.steps[6]));}],
@@ -2434,7 +2500,7 @@ export function selftest(workflow,contract,root=process.cwd()){
   ['foreign-lane','EVIDENCE_PRODUCER_COVERAGE',c=>{c.lanes.field.blocks=c.lanes.field.blocks.filter(id=>id!==52);c.lanes.meta.blocks.push(52);}],
   ['changed-command','CONTRACT_COMMAND',c=>{c.blocks.find(block=>block.id===52).step.run+='\ntrue';}]
  ]){const c=clone(historicalContractForNegativeFixtures);edit(c);bad('overtime-52-'+name,code,()=>validateContract(c));}
- function alteredField(name,code,edit){const n=clone(needs),r=JSON.parse(n.field.outputs.provenance);edit(r);delete r.manifestSha256;n.field.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>gate({...input,needs:n}));}
+ function alteredField(name,code,edit){const n=clone(needs),r=JSON.parse(n.field.outputs.provenance);edit(r);delete r.manifestSha256;n.field.outputs.provenance=JSON.stringify(seal(r));badDecoder(name,code,()=>decodeJsonCase(n));}
  alteredField('overtime-52-omitted-from-provenance','BLOCK_COVERAGE',r=>{r.blockIds=r.blockIds.filter(id=>id!==52);});
  alteredField('overtime-52-duplicate-in-provenance','BLOCK_COVERAGE',r=>{r.blockIds.push(52);});
  alteredField('overtime-52-command-digest-changed','COMMAND_DIGEST',r=>{r.commandDigests[r.blockIds.indexOf(52)]='3'.repeat(64);});
@@ -2481,7 +2547,8 @@ export function selftest(workflow,contract,root=process.cwd()){
   const resolved=path.resolve(fixture);assert.ok(resolved.startsWith(parent+path.sep)&&path.basename(resolved).startsWith('ci-gate-selftest-fixture-'));
   rmSync(resolved,{recursive:true,force:true});
  }
-  for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){
+  const decoderSpecs=contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec));equal(decoderSpecs.map(spec=>spec.id),['bank-intake-units','bank-postgres','intake-postgres','bank-ui','intake-ui','joint-ui','joint-causal','company-kyc-postgres','project-preparation-postgres','project-preparation-ui','plan-baseline-postgres','document-curve-ui'],'DECODER_EXTENSION_CATALOG');
+  for(const spec of decoderSpecs){
    for(const [name,code,edit] of [
     ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
     ['binding-head','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceRevision='f'.repeat(40);}],
@@ -2490,7 +2557,7 @@ export function selftest(workflow,contract,root=process.cwd()){
     ['binding-source-manifest-valid64-wrong','PROOF_BINDING_SOURCE',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceManifestSha256='f'.repeat(64);}],
     ['binding-harness','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).harnessSha256='f'.repeat(64);}],
     ['binding-checks','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).checks=0;}]
-   ]){if(spec.kind==='UI_CAUSAL'&&name==='binding-checks')continue;const n=clone(needs),r=JSON.parse(n[spec.lane].outputs.provenance);edit(r);delete r.manifestSha256;n[spec.lane].outputs.provenance=JSON.stringify(seal(r));bad(spec.id+'-'+name,code,()=>gate({...input,needs:n}));}
+   ]){if(spec.kind==='UI_CAUSAL'&&name==='binding-checks')continue;const n=clone(needs),r=JSON.parse(n[spec.lane].outputs.provenance);edit(r);delete r.manifestSha256;n[spec.lane].outputs.provenance=JSON.stringify(seal(r));badDecoder(spec.id+'-'+name,code,()=>decodeJsonCase(n));}
    bad(spec.id+'-current-source-bytes-tampered','PROOF_BINDING_SOURCE',()=>gate({...input,readSource:file=>file===spec.sourceFiles[0]?Buffer.concat([shadowSource(file),Buffer.from('altered shadow source')]):shadowSource(file)}));
    // Keep this binding control independent from the causal fixture-presence
    // guard when its additive script source sorts before the application graph.
@@ -2522,7 +2589,7 @@ export function selftest(workflow,contract,root=process.cwd()){
    checks.push(...companySubscriptionContractSelftest(contract));
    checks.push(...taskMeasurementContractSelftest(contract));
    checks.push(...organizationUsageContractSelftest(contract));
-   checks.push(...companyKycCurrentSourceContractSelftest(contract));checks.push(...planBaselineSelftest(workflow,contract,root));checks.push(...documentCurveUiSelftest(workflow,contract,root));checks.push(...documentCurveCurrentSourceLineageSelftest(contract,root));
+   checks.push(...companyKycCurrentSourceContractSelftest(contract));checks.push(...planBaselineSelftest(workflow,contract,root));checks.push(...documentCurveUiSelftest(workflow,contract,root));checks.push(...documentCurveCurrentSourceLineageSelftest(contract,root));checks.push(...provenanceDecoderPublicIntegrationSelftest(workflow,contract,root));
   return checks;
 }
 function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],currentKycStatusChecks=[],currentWhatsappPlanChecks=[]){
@@ -2530,7 +2597,22 @@ function canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks=[],
  const readSource=file=>{if(!cache.has(file))cache.set(file,Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n')));return cache.get(file);};
  const good=(name,run)=>{run();checks.push({name,result:'PASS',boundary:'pure canonical field shadow fixture; no Git/PG/UI/provider execution'});};
  const bad=(name,code,run)=>{assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code,boundary:'pure canonical field shadow fixture'});};
- const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
+ const aggregateReadSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
+ const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,aggregateReadSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:aggregateReadSource};
+ const decoderSpecs=contract.extension.proofs.filter(isCanonicalField);equal(decoderSpecs.map(spec=>spec.id),['field-canonical-postgres','overtime-canonical-postgres'],'DECODER_FIELD_CATALOG');
+ let currentGateReport;good('canonical-field-public-gate-current-eight-lanes',()=>{currentGateReport=gate(input);assert.equal(currentGateReport.state,'PASS');});checks.at(-1).boundary='public current gate integration; no native or human acceptance';
+ const decoder=ownedProvenanceDecoder(input,currentGateReport),decodeJsonCase=decoder.decode;decoder.variableFiles(checks,'provenance-decoder-canonical-field',needs,'field-canonical-postgres');
+ const badDecoder=(name,code,run)=>{bad(name,code,run);checks.at(-1).boundary=PURE_PROVENANCE_DECODER_BOUNDARY;};
+ for(const spec of decoderSpecs){
+  for(const [name,code,edit] of [
+   ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
+   ['binding-source','PROOF_BINDING_SOURCE',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceManifestSha256='f'.repeat(64);}],
+   ['binding-harness','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).harnessSha256='f'.repeat(64);}],
+   ['binding-checks','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).checks=0;}],
+   ['evidence-omitted','MISSING_REQUIRED_RETAINED_EVIDENCE',r=>{r.files=r.files.filter(f=>f.path!==spec.path);}]
+  ]){const value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance);edit(record);delete record.manifestSha256;value[spec.lane].outputs.provenance=JSON.stringify(seal(record));badDecoder(spec.id+'-'+name,code,()=>decodeJsonCase(value));}
+ }
+
  function runCaptureFieldFixtureBody(spec,contract,readSource,fixturePorts){
 const {validateExtensionProof,currentProducerSourceFiles,currentKycStatusClosureSelftest,whatsappPlanImportClosureSelftest}=fixturePorts;
 
@@ -2598,13 +2680,6 @@ const {validateExtensionProof,currentProducerSourceFiles,currentKycStatusClosure
    for(const key of ['newOvertimeEnum','paymentEngineUsed','humanAccepted'])mutate('acceptance-'+key,'PROOF_PROVIDER_IO',p=>{p[key]=true;});
    mutate('SQL-failure','PROOF_SQL_ERRORS',p=>{p.sqlFailures=['shadow SQL failure'];});mutate('legacy-checks-short','PROOF_CHECK_NAMES',p=>{p.checks.pop();});mutate('legacy-checks-duplicate','PROOF_CHECK_NAMES',p=>{p.checks[0]=p.checks[1];});mutate('source-extra-attribute','PROOF_SOURCE_REFERENCE',p=>{p.sourceManifest[0].path=p.sourceManifest[0].file;});
   }
-  for(const [name,code,edit] of [
-   ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
-   ['binding-source','PROOF_BINDING_SOURCE',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceManifestSha256='f'.repeat(64);}],
-   ['binding-harness','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).harnessSha256='f'.repeat(64);}],
-   ['binding-checks','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).checks=0;}],
-   ['evidence-omitted','MISSING_REQUIRED_RETAINED_EVIDENCE',r=>{r.files=r.files.filter(f=>f.path!==spec.path);}]
-  ]){const value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance);edit(record);delete record.manifestSha256;value[spec.lane].outputs.provenance=JSON.stringify(seal(record));bad(spec.id+'-'+name,code,()=>gate({...input,needs:value}));}
   const changed=clone(restoreParticipantPreanalysisPreviousContract(contract));changed.evidenceProducers.find(record=>record.path===spec.path).baselineProducerGitBlobSha256=spec.producerSha256;bad(spec.id+'-historical-record-not-overwritten','EXTENSION_PRODUCER_CONTRACT',()=>validateContract(changed));
   const omitted=clone(restoreParticipantPreanalysisPreviousContract(contract));omitted.extension.proofs=omitted.extension.proofs.filter(p=>p.id!==spec.id);bad(spec.id+'-typed-proof-not-optional','EXTENSION_PROOF_COVERAGE',()=>validateContract(omitted));
   const parent=path.resolve(root,'.vercel/workspace-ci-evidence'),scratch=mkdtempSync(path.join(parent,'ci-canonical-field-selftest-'));
@@ -2668,7 +2743,10 @@ function identitySelftest(workflow,contract,root,currentContinuityChecks=[],curr
  mutate('source-duplicate','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.push(clone(p.sourceManifest[0]));});mutate('source-foreign','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest.push({path:'src/foreign.mjs',sha256:'f'.repeat(64)});});
  mutate('source-path-unsafe','PROOF_SOURCE_MANIFEST',p=>{p.sourceManifest[0].path='../private';});mutate('source-reference-extra-key','PROOF_SOURCE_REFERENCE',p=>{p.sourceManifest[0].ignored=true;});
  const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
- good('gate-binds-103-checks',()=>assert.equal(gate(input).lanes.find(lane=>lane.lane==='workspace-ui').proofBindings.find(binding=>binding.id===spec.id).checks,IDENTITY_ONLY_CHECK_COUNT));
+ let currentGateReport;
+ good('gate-binds-103-checks',()=>{currentGateReport=gate(input);assert.equal(currentGateReport.lanes.find(lane=>lane.lane==='workspace-ui').proofBindings.find(binding=>binding.id===spec.id).checks,IDENTITY_ONLY_CHECK_COUNT);});
+ const decoder=ownedProvenanceDecoder(input,currentGateReport),decodeJsonCase=decoder.decode;decoder.variableFiles(checks,'provenance-decoder-identity',needs,'identity-only-ui');
+ const badDecoder=(name,code,run)=>{bad(name,code,run);checks.at(-1).boundary=PURE_PROVENANCE_DECODER_BOUNDARY;};
  for(const [name,code,edit] of [
   ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
   ['binding-head','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceRevision='f'.repeat(40);}],
@@ -2678,7 +2756,7 @@ function identitySelftest(workflow,contract,root,currentContinuityChecks=[],curr
   ['binding-checks','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).checks=34;}],
   ['binding-closure-count','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceReferences--; }],
   ['evidence-omitted','MISSING_REQUIRED_RETAINED_EVIDENCE',r=>{r.files=r.files.filter(f=>f.path!==spec.path);}]
- ]){const value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance);edit(record);delete record.manifestSha256;value[spec.lane].outputs.provenance=JSON.stringify(seal(record));bad(name,code,()=>gate({...input,needs:value}));}
+ ]){const value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance);edit(record);delete record.manifestSha256;value[spec.lane].outputs.provenance=JSON.stringify(seal(record));badDecoder(name,code,()=>decodeJsonCase(value));}
  bad('current-source-tampered','PROOF_BINDING_SOURCE',()=>gate({...input,readSource:file=>file===spec.sourceFiles[0]?Buffer.concat([readSource(file),Buffer.from('changed identity source')]):readSource(file)}));
  for(const [name,code,edit] of [
   ['block-omitted','CONTRACT_BLOCKS',c=>{c.blocks=c.blocks.filter(block=>block.id!==60);}],
@@ -2753,6 +2831,10 @@ function portfolioSelftest(workflow,contract,root){
   }
  }
  const workflowSha256=hash(canonical(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource};
+ equal(specs.map(spec=>spec.id),['portfolio-units','portfolio-ui','portfolio-postgres'],'DECODER_PORTFOLIO_CATALOG');
+ let currentGateReport;good('portfolio-public-gate-current-eight-lanes',()=>{currentGateReport=gate(input);assert.equal(currentGateReport.state,'PASS');});checks.at(-1).boundary='public current gate integration; no native or human acceptance';
+ const decoder=ownedProvenanceDecoder(input,currentGateReport),decodeJsonCase=decoder.decode;decoder.variableFiles(checks,'provenance-decoder-portfolio',needs,'portfolio-units');
+ const badDecoder=(name,code,run)=>{bad(name,code,run);checks.at(-1).boundary=PURE_PROVENANCE_DECODER_BOUNDARY;};
  for(const spec of specs){
   for(const [name,code,edit] of [
    ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
@@ -2762,7 +2844,7 @@ function portfolioSelftest(workflow,contract,root){
    ['binding-harness','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).harnessSha256='f'.repeat(64);}],
    ['binding-checks','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).checks=0;}],
    ['evidence-omitted','MISSING_REQUIRED_RETAINED_EVIDENCE',r=>{r.files=r.files.filter(f=>f.path!==spec.path);}]
-  ]){const value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance);edit(record);delete record.manifestSha256;value[spec.lane].outputs.provenance=JSON.stringify(seal(record));bad(spec.id+'-'+name,code,()=>gate({...input,needs:value}));}
+  ]){const value=clone(needs),record=JSON.parse(value[spec.lane].outputs.provenance);edit(record);delete record.manifestSha256;value[spec.lane].outputs.provenance=JSON.stringify(seal(record));badDecoder(spec.id+'-'+name,code,()=>decodeJsonCase(value));}
   bad(spec.id+'-current-Git-source-altered','PROOF_BINDING_SOURCE',()=>gate({...input,readSource:file=>file===spec.sourceFiles.at(-1)?Buffer.concat([readSource(file),Buffer.from('changed shadow source')]):readSource(file)}));
  }
  for(const [name,code,edit] of [
@@ -2781,9 +2863,10 @@ function portfolioSelftest(workflow,contract,root){
 // Pure source/aggregate shadows: no browser, PostgreSQL or provider evidence.
 export function planBudgetCurrentGateSelftest(workflow,contract,root=process.cwd()){
  const checks=[],readSource=file=>Buffer.from(readFileSync(path.join(root,sourcePath(file)),'utf8').replaceAll('\r\n','\n')),expectedHead='a'.repeat(40),workflowSha256=hash(yaml.dump(workflow)),needs=expectedNeeds(contract,expectedHead,workflowSha256,readSource),input={contract,needs,expectedHead,runId:'100',runAttempt:'1',workflowSha256,readSource};
- const good=(name,run)=>{run();checks.push({name:'budget-current-'+name,result:'PASS',boundary:'pure source and aggregate shadow; no browser acceptance'});},bad=(name,code,change)=>{const copy=clone(needs),record=JSON.parse(copy.plans.outputs.provenance);change(record);copy.plans.outputs.provenance=JSON.stringify(seal(unseal(record)));assert.throws(()=>gate({...input,needs:copy}),error=>error.code===code);checks.push({name:'budget-current-'+name,result:'PASS',expectedDenial:code,boundary:'pure adversarial aggregate shadow'});};
+ const good=(name,run)=>{run();checks.push({name:'budget-current-'+name,result:'PASS',boundary:'pure source and aggregate shadow; no browser acceptance'});},bad=(name,code,change)=>{const copy=clone(needs),record=JSON.parse(copy.plans.outputs.provenance);change(record);copy.plans.outputs.provenance=JSON.stringify(seal(unseal(record)));assert.throws(()=>decodeJsonCase(copy),error=>error.code===code);checks.push({name:'budget-current-'+name,result:'PASS',expectedDenial:code,boundary:PURE_PROVENANCE_DECODER_BOUNDARY});};
  good('exact-corrected11-contract-inverse',()=>assert.equal(hash(JSON.stringify(restorePlanBudgetPreviousContract(contract),null,2)+'\n'),'8b19235b22aa3c208098283537511fe1c816f7ff86404790a98999f0e818f839'));
- good('all-current-sources-bound',()=>verifyPlanBudgetCurrentSources(contract,readSource));good('all23-pngs-bound-in-aggregate',()=>gate(input));
+ good('all-current-sources-bound',()=>verifyPlanBudgetCurrentSources(contract,readSource));let currentGateReport;good('all23-pngs-bound-in-aggregate',()=>{currentGateReport=gate(input);});
+ const decoder=ownedProvenanceDecoder(input,currentGateReport),decodeJsonCase=decoder.decode;decoder.variableFiles(checks,'provenance-decoder-budget',needs,'budget-source-ui');
  bad('budget-ci-json-omitted','MISSING_REQUIRED_RETAINED_EVIDENCE',r=>{r.files=r.files.filter(file=>file.path!==PLAN_BUDGET_CI_PROOF_PATH);});
  bad('one-png-omitted','PROOF_BUDGET_UI_SCREENSHOT_BINDING',r=>{r.files=r.files.filter(file=>file.path!==planBudgetRetainedScreenshotPaths(contract)[0]);});
  bad('same-png-duplicated','PATH_COLLISION',r=>{r.files.push(clone(r.files.find(file=>file.path===planBudgetRetainedScreenshotPaths(contract)[0])));});
