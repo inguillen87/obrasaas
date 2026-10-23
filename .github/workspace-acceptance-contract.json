@@ -2486,7 +2486,7 @@
         "path": ".vercel/company-kyc-evidence/postgres.json",
         "kind": "PG_COMPANY_KYC",
         "producer": "scripts/verify-company-channel-kyc-postgres.mjs",
-        "producerSha256": "980bf49267169440488f2a002f5c18d6efe6e98a10ce15570d0160fc700ce29c",
+        "producerSha256": "40c5c962bd1225fbee891a59e8c6ce9c7fd96adb159aaeefd767bacc3278e9ce",
         "sourceFiles": [
           "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
           "scripts/lib/kyc-context-feedback-native.mjs",
@@ -39288,7 +39288,7 @@
       {
         "path": "src/lib/participant-onboarding-reactive.mjs",
         "previousSha256": "666a8c27f3ab7d6fdbe66c91f22ace4e25b04b98e865f401d19c72212916104d",
-        "currentSha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+        "currentSha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
       },
       {
         "path": "src/lib/plan-budget-source.mjs",
@@ -39733,7 +39733,17 @@
       {
         "path": "scripts/lib/kyc-current-image-native.mjs",
         "previousSha256": "87ad6932bbb4ed264947b0ba527965080e4f38a7cc0bb0f945b471e88ee06bbb",
-        "currentSha256": "a1d3c61c34a852b1d7353218d8ef5455215318026de83e3d721d4fab0036ac2d"
+        "currentSha256": "377da2076f225bfabf975c95e9108be76aa137dedbd82ee7dc98de92f5a2e6e3"
+      },
+      {
+        "path": "scripts/lib/kyc-current-image-own-native.mjs",
+        "previousSha256": "2458c91bda08fe36d409e9c229c19f06dfe9d113aa8c8df4d6f11502b0d1e5fe",
+        "currentSha256": "d85aa019e64ecd6baf9bc918ea87f869e606768876aa37729905255472f6e190"
+      },
+      {
+        "path": "scripts/lib/kyc-neutral-step-guidance-native.mjs",
+        "previousSha256": "ddfd08e00f35b3f33254eed513d7bba81ec9791b23ca0d078362132fd24d546e",
+        "currentSha256": "c1900e9d80666a5f5c225208187dc129d6da2b00beb5d0f2619adae9ffffcf99"
       },
       {
         "path": "scripts/lib/participant-preanalysis-current-ci-lineage.mjs",
@@ -39753,7 +39763,7 @@
       {
         "path": "scripts/verify-company-channel-kyc-postgres.mjs",
         "previousSha256": "212a3f1ac6993954681a765635034ed0e48ac038db0ad3c6159df603ce049903",
-        "currentSha256": "980bf49267169440488f2a002f5c18d6efe6e98a10ce15570d0160fc700ce29c"
+        "currentSha256": "40c5c962bd1225fbee891a59e8c6ce9c7fd96adb159aaeefd767bacc3278e9ce"
       },
       {
         "path": "scripts/verify-meta-kyc-chat-postgres.mjs",
@@ -39768,7 +39778,7 @@
       {
         "path": "scripts/verify-own-company-number-postgres.mjs",
         "previousSha256": "22fc50c349d97da323a47c91e3f64f58b6ce9df54042a17ee2fecb5c7d4bf2b0",
-        "currentSha256": "7fff1b8522f78c153802135a0aee05857b2e59d7355aa90bae1d6f9dcf936572"
+        "currentSha256": "a7295bd908244e910e756acb7c1d48591445718ecc8d77b6d043c83cf0d69913"
       },
       {
         "path": "scripts/verify-participant-civil-postgres.mjs",
@@ -39783,17 +39793,17 @@
       {
         "path": "scripts/verify-participant-kyc-preanalysis-postgres.mjs",
         "previousSha256": "d2fabf981cd77c28ebf4be49867f07dcf1a23ae8616848e9c0c038b8291f83d8",
-        "currentSha256": "d38a71041c11d4387348debcc94def028c552a07fbc2ca6a3eaa4f0ba4ca2e2f"
+        "currentSha256": "0f3a541f3945af4ae0e96aab2dcd385ea6f68e429ad97aa8bc982366e72478d3"
       },
       {
         "path": "scripts/verify-participant-onboarding-recovery-postgres.mjs",
         "previousSha256": "8649cb1423461f52c1029a1510b1e98d1752c91ffd3178ac57694c3f136870d4",
-        "currentSha256": "23d471c717aeb1373f923ec95776a4e501444928a417781abc056fae361daa01"
+        "currentSha256": "12b0006e3d8037a24bc36070e0b773d313f86244961efe1cfdba1bef5bf384dc"
       },
       {
         "path": "scripts/verify-participant-reactive-onboarding-postgres.mjs",
         "previousSha256": "040611be2ff366f1cdd937e772ee3216e965952942988fd3a8590210f2404caa",
-        "currentSha256": "447c9d167f0a7da21bf6be52448023f2e5cd28e89b78635b6c774e73e32b60a4"
+        "currentSha256": "bdabb318de041cda2921796645dbfe3226a14c771d14d69a9714ae0b346d6f1b"
       },
       {
         "path": "scripts/verify-participants-postgres.mjs",
@@ -40166,6 +40176,11 @@
         "currentSha256": "ba11dac9108656574bebb7d842a364201a73a885d0eb2e5eee18d4f2be762b33"
       },
       {
+        "path": "tests/production-participant-onboarding-authority.test.mjs",
+        "previousSha256": "91ba06328f6b1e4b86cb8b0441df46d05a32dc1ebdcf158a66bd1c80f972be29",
+        "currentSha256": "242ef03e007bbaff3f65255795b08d3dc80177f5d761998ab038e05c91da75e7"
+      },
+      {
         "path": "tests/production-pilot-coverage-postgres-target.test.mjs",
         "previousSha256": null,
         "currentSha256": "66d750f46fa3a0ae0ac2773cc2342d0d9e9787aa18161ca06f968796d80c6642"
@@ -40188,7 +40203,7 @@
       {
         "path": "tests/production-private-biometric-precommit-wire.test.mjs",
         "previousSha256": null,
-        "currentSha256": "9e537299fde6a0f0fc2c877eb3a82fbe64403ea62fc94d408faae0c0a362d9de"
+        "currentSha256": "6a4906c5bbdf95a57ea2ee994b815f4f8e063aa8dd7f6c4e75ad20cb030037c1"
       },
       {
         "path": "tests/production-private-capture-quality.test.mjs",
@@ -45101,7 +45116,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+            "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -46188,7 +46203,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+            "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -46895,15 +46910,15 @@
           },
           {
             "path": "scripts/lib/kyc-current-image-native.mjs",
-            "sha256": "a1d3c61c34a852b1d7353218d8ef5455215318026de83e3d721d4fab0036ac2d"
+            "sha256": "377da2076f225bfabf975c95e9108be76aa137dedbd82ee7dc98de92f5a2e6e3"
           },
           {
             "path": "scripts/lib/kyc-current-image-own-native.mjs",
-            "sha256": "2458c91bda08fe36d409e9c229c19f06dfe9d113aa8c8df4d6f11502b0d1e5fe"
+            "sha256": "d85aa019e64ecd6baf9bc918ea87f869e606768876aa37729905255472f6e190"
           },
           {
             "path": "scripts/lib/kyc-neutral-step-guidance-native.mjs",
-            "sha256": "ddfd08e00f35b3f33254eed513d7bba81ec9791b23ca0d078362132fd24d546e"
+            "sha256": "c1900e9d80666a5f5c225208187dc129d6da2b00beb5d0f2619adae9ffffcf99"
           },
           {
             "path": "scripts/lib/kyc-neutral-step-guidance-own-native.mjs",
@@ -47315,7 +47330,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+            "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -48172,7 +48187,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+            "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -48987,7 +49002,7 @@
           },
           {
             "path": "src/lib/participant-onboarding-reactive.mjs",
-            "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+            "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
           },
           {
             "path": "src/lib/participant-policy.mjs",
@@ -64140,7 +64155,17 @@
         {
           "path": "scripts/lib/kyc-current-image-native.mjs",
           "previousSha256": "87ad6932bbb4ed264947b0ba527965080e4f38a7cc0bb0f945b471e88ee06bbb",
-          "currentSha256": "a1d3c61c34a852b1d7353218d8ef5455215318026de83e3d721d4fab0036ac2d"
+          "currentSha256": "377da2076f225bfabf975c95e9108be76aa137dedbd82ee7dc98de92f5a2e6e3"
+        },
+        {
+          "path": "scripts/lib/kyc-current-image-own-native.mjs",
+          "previousSha256": "2458c91bda08fe36d409e9c229c19f06dfe9d113aa8c8df4d6f11502b0d1e5fe",
+          "currentSha256": "d85aa019e64ecd6baf9bc918ea87f869e606768876aa37729905255472f6e190"
+        },
+        {
+          "path": "scripts/lib/kyc-neutral-step-guidance-native.mjs",
+          "previousSha256": "ddfd08e00f35b3f33254eed513d7bba81ec9791b23ca0d078362132fd24d546e",
+          "currentSha256": "c1900e9d80666a5f5c225208187dc129d6da2b00beb5d0f2619adae9ffffcf99"
         },
         {
           "path": "scripts/lib/participant-preanalysis-current-ci-lineage.mjs",
@@ -64160,7 +64185,7 @@
         {
           "path": "scripts/verify-company-channel-kyc-postgres.mjs",
           "previousSha256": "212a3f1ac6993954681a765635034ed0e48ac038db0ad3c6159df603ce049903",
-          "currentSha256": "980bf49267169440488f2a002f5c18d6efe6e98a10ce15570d0160fc700ce29c"
+          "currentSha256": "40c5c962bd1225fbee891a59e8c6ce9c7fd96adb159aaeefd767bacc3278e9ce"
         },
         {
           "path": "scripts/verify-meta-kyc-chat-postgres.mjs",
@@ -64175,7 +64200,7 @@
         {
           "path": "scripts/verify-own-company-number-postgres.mjs",
           "previousSha256": "22fc50c349d97da323a47c91e3f64f58b6ce9df54042a17ee2fecb5c7d4bf2b0",
-          "currentSha256": "7fff1b8522f78c153802135a0aee05857b2e59d7355aa90bae1d6f9dcf936572"
+          "currentSha256": "a7295bd908244e910e756acb7c1d48591445718ecc8d77b6d043c83cf0d69913"
         },
         {
           "path": "scripts/verify-participant-civil-postgres.mjs",
@@ -64190,17 +64215,17 @@
         {
           "path": "scripts/verify-participant-kyc-preanalysis-postgres.mjs",
           "previousSha256": "d2fabf981cd77c28ebf4be49867f07dcf1a23ae8616848e9c0c038b8291f83d8",
-          "currentSha256": "d38a71041c11d4387348debcc94def028c552a07fbc2ca6a3eaa4f0ba4ca2e2f"
+          "currentSha256": "0f3a541f3945af4ae0e96aab2dcd385ea6f68e429ad97aa8bc982366e72478d3"
         },
         {
           "path": "scripts/verify-participant-onboarding-recovery-postgres.mjs",
           "previousSha256": "8649cb1423461f52c1029a1510b1e98d1752c91ffd3178ac57694c3f136870d4",
-          "currentSha256": "23d471c717aeb1373f923ec95776a4e501444928a417781abc056fae361daa01"
+          "currentSha256": "12b0006e3d8037a24bc36070e0b773d313f86244961efe1cfdba1bef5bf384dc"
         },
         {
           "path": "scripts/verify-participant-reactive-onboarding-postgres.mjs",
           "previousSha256": "040611be2ff366f1cdd937e772ee3216e965952942988fd3a8590210f2404caa",
-          "currentSha256": "447c9d167f0a7da21bf6be52448023f2e5cd28e89b78635b6c774e73e32b60a4"
+          "currentSha256": "bdabb318de041cda2921796645dbfe3226a14c771d14d69a9714ae0b346d6f1b"
         },
         {
           "path": "scripts/verify-participants-postgres.mjs",
@@ -64573,6 +64598,11 @@
           "currentSha256": "ba11dac9108656574bebb7d842a364201a73a885d0eb2e5eee18d4f2be762b33"
         },
         {
+          "path": "tests/production-participant-onboarding-authority.test.mjs",
+          "previousSha256": "91ba06328f6b1e4b86cb8b0441df46d05a32dc1ebdcf158a66bd1c80f972be29",
+          "currentSha256": "242ef03e007bbaff3f65255795b08d3dc80177f5d761998ab038e05c91da75e7"
+        },
+        {
           "path": "tests/production-pilot-coverage-postgres-target.test.mjs",
           "previousSha256": null,
           "currentSha256": "66d750f46fa3a0ae0ac2773cc2342d0d9e9787aa18161ca06f968796d80c6642"
@@ -64595,7 +64625,7 @@
         {
           "path": "tests/production-private-biometric-precommit-wire.test.mjs",
           "previousSha256": null,
-          "currentSha256": "9e537299fde6a0f0fc2c877eb3a82fbe64403ea62fc94d408faae0c0a362d9de"
+          "currentSha256": "6a4906c5bbdf95a57ea2ee994b815f4f8e063aa8dd7f6c4e75ad20cb030037c1"
         },
         {
           "path": "tests/production-private-capture-quality.test.mjs",
@@ -64733,6 +64763,11 @@
           "path": "src/lib/participant-kyc-notice-links.mjs",
           "previousSha256": "3547f3fc2ebdefc2522971467d4c77498160dde7806a25bf9fa18c527c8658fc",
           "currentSha256": "768da7bdabe48cf98748989d2a05b0e49ae59e6a8256e5ac6befa5e2cd7dd9cc"
+        },
+        {
+          "path": "src/lib/participant-onboarding-reactive.mjs",
+          "previousSha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66",
+          "currentSha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
         },
         {
           "path": "tests/production-field-attendance-current-ci-proof.test.mjs",
@@ -65155,9 +65190,9 @@
           "path": "scripts/lib/kyc-current-image-native.mjs",
           "status": "MODIFIED",
           "previousSha256": "87ad6932bbb4ed264947b0ba527965080e4f38a7cc0bb0f945b471e88ee06bbb",
-          "currentSha256": "a1d3c61c34a852b1d7353218d8ef5455215318026de83e3d721d4fab0036ac2d",
+          "currentSha256": "377da2076f225bfabf975c95e9108be76aa137dedbd82ee7dc98de92f5a2e6e3",
           "previousBytes": 49091,
-          "currentBytes": 49298,
+          "currentBytes": 50509,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 0,
@@ -65165,18 +65200,98 @@
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 4603,
-              "currentText": "lib/synthetic-capture-quality.mjs','scripts/",
+              "currentOffsetCharacters": 1941,
+              "currentText": "PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION,",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 6610,
+              "currentOffsetCharacters": 4573,
+              "currentText": ",prepareHistoricalV2Challenge}){\n assert.equal(typeof prepareHistoricalV2Challenge,'function');\n assert.equal(sha(prepareHistoricalV2Challenge.toString().replaceAll('\\r\\n','\\n')),'933b22da52c5b8fc79801bd11a79083b8d04570da087f4c465c5c2ba91995397','HISTORICAL_V2_CHALLENGE_ORACLE_CHANGED');\n const localSources=['scripts/lib/kyc-current-image-native.mjs','scripts/lib/synthetic-capture-quality",
+              "previousText": "}){\n const localSources=['scripts/lib/kyc-current-image-native"
+            },
+            {
+              "currentOffsetCharacters": 6942,
               "currentText": "assessCaptureQuality:syntheticCaptureQuality,",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 8079,
+              "currentOffsetCharacters": 8411,
               "currentText": "assessCaptureQuality:syntheticCaptureQuality,",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 13610,
+              "currentText": ",historicalV2=false",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 15332,
+              "currentText": "// Only scenario17 seeds an already-issued v2 attempt; fresh captures use the current issuer.\n   const fixtureStore=historicalV2?createParticipantStore({assessCaptureQuality:syntheticCaptureQuality,workspace,connect:trackedConnect,prepareKycChat:prepareHistoricalV2Challenge,environment}):store;\n   const scope=(await workspace.list(ownerSession)).scope,prepared=await fixtureS",
+              "previousText": "const scope=(await workspace.list(ownerSession)).scope,prepared=await s"
+            },
+            {
+              "currentOffsetCharacters": 16171,
+              "currentText": "const issued=await readState(f);assert.equal(issued.analysisConsentVersion,historicalV2?undefined:3);assert.equal(issued.biometricNoticeVersion,historicalV2?PARTICIPANT_AUTO_BIOMETRIC_NOTICE_VERSION:PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION);\n   if(step!=='CONSENT')for(const title of ['Autorizar imágenes','Autorizar dorso','Sin lectura asistida',historicalV2?'Sin comparación facial':'Revisión manual'])await choose(f,title);\n   if(!historicalV2&&step!=='CONSENT'){assert.equal((await readState(f)).biometricMode,'MANUAL');assert.equal((await readState(f)).biometricConsent,false);}",
+              "previousText": "if(step!=='CONSENT')for(const title of ['Autorizar imágenes','Autorizar dorso','Sin lectura asistida','Sin comparación facial'])await choose(f,title);"
+            },
+            {
+              "currentOffsetCharacters": 21231,
+              "currentText": "assert.equal(before.analysisConsentVersion,3);assert.equal(before.biometricMode,'MANUAL');",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 23057,
+              "currentText": "Present",
+              "previousText": "Guard"
+            },
+            {
+              "currentOffsetCharacters": 34829,
+              "currentText": "Present",
+              "previousText": "Guard"
+            },
+            {
+              "currentOffsetCharacters": 35623,
+              "currentText": "Present",
+              "previousText": "Guard"
+            },
+            {
+              "currentOffsetCharacters": 37786,
+              "currentText": ",historicalV2:true",
+              "previousText": ""
+            }
+          ]
+        },
+        {
+          "path": "scripts/lib/kyc-current-image-own-native.mjs",
+          "status": "MODIFIED",
+          "previousSha256": "2458c91bda08fe36d409e9c229c19f06dfe9d113aa8c8df4d6f11502b0d1e5fe",
+          "currentSha256": "d85aa019e64ecd6baf9bc918ea87f869e606768876aa37729905255472f6e190",
+          "previousBytes": 19574,
+          "currentBytes": 19731,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 12154,
+              "currentText": "Revisión manual']){const {s}=await waitNext(f),wire=responses.get(customerOutboundId(s.lastEventId)).wire,choice=wire.interactive.action.sections.flatMap(x=>x.rows).find(x=>x.title===title);assert.ok(choice);const id=await receive(f,{type:'interactive',interactive:{type:'list_reply',list_reply:choice}},{quote:true});assert.equal((await processor.process(id)).replySent,true);}\n  assert.equal((await state(f)).step,'FRONT');assert.equal((await state(f)).analysisConsentVersion,3);assert.equal((await state(f)).biometricMode,'MANUAL');assert.equal((await state(f)).biometricConsent,false",
+              "previousText": "Sin comparación facial']){const {s}=await waitNext(f),wire=responses.get(customerOutboundId(s.lastEventId)).wire,choice=wire.interactive.action.sections.flatMap(x=>x.rows).find(x=>x.title===title);assert.ok(choice);const id=await receive(f,{type:'interactive',interactive:{type:'list_reply',list_reply:choice}},{quote:true});assert.equal((await processor.process(id)).replySent,true);}\n  assert.equal((await state(f)).step,'FRONT'"
+            }
+          ]
+        },
+        {
+          "path": "scripts/lib/kyc-neutral-step-guidance-native.mjs",
+          "status": "MODIFIED",
+          "previousSha256": "ddfd08e00f35b3f33254eed513d7bba81ec9791b23ca0d078362132fd24d546e",
+          "currentSha256": "c1900e9d80666a5f5c225208187dc129d6da2b00beb5d0f2619adae9ffffcf99",
+          "previousBytes": 24276,
+          "currentBytes": 24456,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 11762,
+              "currentText": "Revisión manu",
+              "previousText": "Sin comparación faci"
+            },
+            {
+              "currentOffsetCharacters": 12103,
+              "currentText": "assert.equal((await state(f)).analysisConsentVersion,3);assert.equal((await state(f)).biometricMode,phase==='CONSENT'?null:'MANUAL');assert.equal((await state(f)).biometricConsent,false);",
               "previousText": ""
             }
           ]
@@ -65325,9 +65440,9 @@
           "path": "scripts/verify-company-channel-kyc-postgres.mjs",
           "status": "MODIFIED",
           "previousSha256": "212a3f1ac6993954681a765635034ed0e48ac038db0ad3c6159df603ce049903",
-          "currentSha256": "980bf49267169440488f2a002f5c18d6efe6e98a10ce15570d0160fc700ce29c",
+          "currentSha256": "40c5c962bd1225fbee891a59e8c6ce9c7fd96adb159aaeefd767bacc3278e9ce",
           "previousBytes": 68513,
-          "currentBytes": 74183,
+          "currentBytes": 74212,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 0,
@@ -65377,6 +65492,11 @@
             {
               "currentOffsetCharacters": 63082,
               "currentText": "assert.equal((await expiryWorker(t)).metadata.participant.kycChatChallenge.analysisConsentVersion,3);",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 72313,
+              "currentText": ",prepareHistoricalV2Challenge",
               "previousText": ""
             }
           ]
@@ -65605,9 +65725,9 @@
           "path": "scripts/verify-own-company-number-postgres.mjs",
           "status": "MODIFIED",
           "previousSha256": "22fc50c349d97da323a47c91e3f64f58b6ce9df54042a17ee2fecb5c7d4bf2b0",
-          "currentSha256": "7fff1b8522f78c153802135a0aee05857b2e59d7355aa90bae1d6f9dcf936572",
+          "currentSha256": "a7295bd908244e910e756acb7c1d48591445718ecc8d77b6d043c83cf0d69913",
           "previousBytes": 101045,
-          "currentBytes": 101257,
+          "currentBytes": 102380,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 0,
@@ -65623,6 +65743,16 @@
               "currentOffsetCharacters": 21288,
               "currentText": "assessCaptureQuality:syntheticCaptureQuality,workspace,connect,identity,environment:environment}),upload=createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment}),deposit=createParticipantChannelKycDeposit({assessCaptureQuality:syntheticCaptureQuality,",
               "previousText": "workspace,connect,identity,environment:environment}),upload=createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment}),deposit=createParticipantChannelKycDeposit({"
+            },
+            {
+              "currentOffsetCharacters": 26662,
+              "currentText": "  const invitedSnapshot=await snapshot(id),invitedMedia={puts:blob.puts(),downloads};for(const alias of ['HOLA','ESTADO','MENU','MENÚ']){last=await execute(alias);assert.equal(last.result.replySent,true);assert.equal(last.wire.type,'text');assert.match(last.wire.text.body,/aceptá la invitación recibida por correo/);assert.ok(last.wire.text.body.includes('https://obrasaas.com/cuenta'));assert.equal((await worker(id)).metadata.participant.kycChatChallenge,undefined);assert.equal(await snapshot(id),invitedSnapshot);assert.deepEqual({puts:blob.puts(),downloads},invitedMedia);assert.equal(membershipReads,0);}\n  currentAccount={userId:'user_OwnReactiveAccepted',email};const invitation=(await worker(id)).metadata.participant.invitation;invitations.get(invitation.id).state='accepted';const joined=await participant.join({authenticated:true,verification:'clerk-production-jwt',userId:currentAccount.userId,organizationId:'org_A',organizationRole:'org:member'},{invitationId:invitation.id,operationId:randomUUID()},{accept:true});assert.equal(joined.joined,true);\n  assert.equal((await worker(id)).metadata.participant.status,'ACTIVE');assert.equal(membershipReads,1);\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 28101,
+              "currentText": "Revisión manual'])last=await execute(choice(last,title),{reply:last.messageId});\n  for(let i=0;i<3;i++)last=await execute({type:'image',image:{id:'150000099',mime_type:'image/png'}},{reply:last.messageId});last=await execute(choice(last,'Presentar identidad'),{reply:last.messageId});assert.equal(last.result.businessApplied,true);\n  const captured=await worker(id);assert.equal(captured.metadata.participant.kyc.status,'PENDING_REVIEW');assert.equal(captured.metadata.participant.status,'ACTIVE');assert.equal(captured.metadata.participant.kyc.biometricConsent.noticeVersion,'participant-private-biometric-v3');assert.equal(captured.metadata.participant.kyc.biometricConsent.allowed,false);assert.equal(captured.metadata.participant.kyc.biometricMode,'MANUAL');assert.equal(captured.metadata.participant.kyc.facialPrecommit.timing,'MANUAL_NO_FACIAL_COMPARISON');assert.equal(captured.metadata.participant.kycChatChallenge.status,'COMPLETED');assert.equal(blob.puts(),3);assert.equal(downloads,3);\n  const unchangedCapture=await snapshot(id);last=await execute('ESTADO');assert.equal(last.result.replySent,true);assert.equal((await recorded(last.eventId)).reactiveKycStatus.status,'PENDING_REVIEW');assert.equal(await snapshot(id),unchangedCapture);assert.equal(membershipReads,1);\n  checks.push('OWN-real-ACTIVATE-v2-grant-invited-email-guidance-independent-JOIN-before-current-v3-manual-capture-pending-review'",
+              "previousText": "Sin comparación facial'])last=await execute(choice(last,title),{reply:last.messageId});\n  for(let i=0;i<3;i++)last=await execute({type:'image',image:{id:'150000099',mime_type:'image/png'}},{reply:last.messageId});last=await execute(choice(last,'Guardar identidad'),{reply:last.messageId});assert.equal(last.result.businessApplied,true);\n  const captured=await worker(id);assert.equal(captured.metadata.participant.kyc.status,'PENDING_ACCOUNT_CLAIM');assert.equal(captured.metadata.participant.kycChatChallenge.status,'COMPLETED');assert.equal(blob.puts(),3);assert.equal(downloads,3);\n  const unchangedCapture=await snapshot(id);last=await execute('ESTADO');assert.equal(last.result.replySent,true);assert.equal((await recorded(last.eventId)).reactiveKycStatus.status,'PENDING_ACCOUNT_CLAIM');assert.equal(await snapshot(id),unchangedCapture);assert.equal(membershipReads,0);\n  checks.push('OWN-real-ACTIVATE-v2-grant-independent-intake-ADMIN-signed-capture-and-current-pending-account-status-without-account-or-grants');\n  currentAccount={userId:'user_OwnReactiveAccepted',email};const invitation=captured.metadata.participant.invitation;invitations.get(invitation.id).state='accepted';const joined=await participant.join({authenticated:true,verification:'clerk-production-jwt',userId:currentAccount.userId,organizationId:'org_A',organizationRole:'org:member'},{invitationId:invitation.id,operationId:randomUUID()},{accept:true});assert.equal(joined.joined,true"
             }
           ]
         },
@@ -65790,9 +65920,9 @@
           "path": "scripts/verify-participant-kyc-preanalysis-postgres.mjs",
           "status": "MODIFIED",
           "previousSha256": "d2fabf981cd77c28ebf4be49867f07dcf1a23ae8616848e9c0c038b8291f83d8",
-          "currentSha256": "d38a71041c11d4387348debcc94def028c552a07fbc2ca6a3eaa4f0ba4ca2e2f",
+          "currentSha256": "0f3a541f3945af4ae0e96aab2dcd385ea6f68e429ad97aa8bc982366e72478d3",
           "previousBytes": 61792,
-          "currentBytes": 61959,
+          "currentBytes": 62127,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 0,
@@ -65800,13 +65930,28 @@
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 20134,
+              "currentOffsetCharacters": 2162,
+              "currentText": " as prepareHistoricalV2Challenge} from '../tests/fixtures/meta-kyc-challenge-legacy-v2",
+              "previousText": "} from '../src/lib/meta-kyc-challenge"
+            },
+            {
+              "currentOffsetCharacters": 20183,
               "currentText": "assessCaptureQuality:syntheticCaptureQuality,",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 51354,
+              "currentOffsetCharacters": 51403,
               "currentText": "assessCaptureQuality:syntheticCaptureQuality,",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 52371,
+              "currentText": "HistoricalV2",
+              "previousText": "MetaKyc"
+            },
+            {
+              "currentOffsetCharacters": 52700,
+              "currentText": "      assert.equal((await row(tenant.workerId)).metadata.participant.kycChatChallenge.analysisConsentVersion, 2);\n",
               "previousText": ""
             }
           ]
@@ -65845,9 +65990,9 @@
           "path": "scripts/verify-participant-onboarding-recovery-postgres.mjs",
           "status": "MODIFIED",
           "previousSha256": "8649cb1423461f52c1029a1510b1e98d1752c91ffd3178ac57694c3f136870d4",
-          "currentSha256": "23d471c717aeb1373f923ec95776a4e501444928a417781abc056fae361daa01",
+          "currentSha256": "12b0006e3d8037a24bc36070e0b773d313f86244961efe1cfdba1bef5bf384dc",
           "previousBytes": 30012,
-          "currentBytes": 30223,
+          "currentBytes": 31428,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 0,
@@ -65855,19 +66000,54 @@
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 4806,
-              "currentText": "cripts/lib/synthetic-capture-quality.mjs','s",
+              "currentOffsetCharacters": 1171,
+              "currentText": "import {prepareMetaKycChallenge as prepareHistoricalV2Challenge} from '../tests/fixtures/meta-kyc-challenge-legacy-v2.mjs';\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 11635,
+              "currentOffsetCharacters": 4930,
+              "currentText": "cripts/lib/synthetic-capture-quality.mjs','src/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/disposable-postgres-cleanup.mjs','tests/fixtures/meta-kyc-challenge-legacy-v2",
+              "previousText": "rc/app/(identity)/cuenta/private-bank-account-format.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','scripts/lib/disposable-postgres-cleanup"
+            },
+            {
+              "currentOffsetCharacters": 11809,
+              "currentText": "assessCaptureQuality:syntheticCaptureQuality,workspace,connect,identity,prepareKycChat:prepareMetaKycChallenge,environment});\n const historicalParticipant=createParticipantStore({assessCaptureQuality:syntheticCaptureQuality,workspace,connect,identity,prepareKycChat:prepareHistoricalV2",
+              "previousText": "workspace,connect,identity,prepareKycChat:prepareMetaKyc"
+            },
+            {
+              "currentOffsetCharacters": 12713,
               "currentText": "assessCaptureQuality:syntheticCaptureQuality,",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 12355,
-              "currentText": "assessCaptureQuality:syntheticCaptureQuality,",
+              "currentOffsetCharacters": 16855,
+              "currentText": "const prepareHistorical=async()=>historicalParticipant.save(owner,command('PREPARE_KYC_CHAT',{workerId,revision:(await worker()).revision}));\n const invitedCurrentBefore=structuredClone(await worker());await assert.rejects(prepareCurrent(),{code:'PARTICIPANT_FACIAL_ACCOUNT_ACCEPTANCE_REQUIRED',status:409});assert.deepEqual(await worker(),invitedCurrentBefore);\n let prepared=await prepareHistorical();assert.equal((await worker()).metadata.participant.kycChatChallenge.analysisConsentVersion,2",
+              "previousText": "let prepared=await prepareCurrent("
+            },
+            {
+              "currentOffsetCharacters": 20554,
+              "currentText": "Historical();assert.equal((await worker()).metadata.participant.kycChatChallenge.analysisConsentVersion,2",
+              "previousText": "Current("
+            },
+            {
+              "currentOffsetCharacters": 25424,
+              "currentText": "assert.equal(freshChallenge.analysisConsentVersion,3);",
               "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 26899,
+              "currentText": "assert.equal((await worker()).metadata.participant.kycChatChallenge.analysisConsentVersion,3);",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 27332,
+              "currentText": "Revisión manu",
+              "previousText": "Sin comparación faci"
+            },
+            {
+              "currentOffsetCharacters": 27571,
+              "currentText": "Presentar identidad');assert.ok(confirm);const finalEvent=await push({type:'interactive',interactive:{type:'list_reply',list_reply:confirm}});await assert.rejects(processor.process(finalEvent),/ONBOARDING_PARTIAL_CAPTURE_MUST_NOT_DOWNLOAD/);\n const finalRow=await worker(),challenge=finalRow.metadata.participant.kycChatChallenge,finalState=JSON.parse(decryptCustomerSecret(finalRow.metadata.participant.kycChatConversation.encryptedState,{organizationId:a.organizationId,projectId:a.anchorProjectId,purpose:'kyc-chat-conversation',resourceId:challenge.id},environment));assert.equal(finalState.step,'FINALIZING');assert.equal(finalState.analysisConsentVersion,3);assert.equal(finalState.biometricMode,'MANUAL');assert.equal(finalState.biometricConsent,false",
+              "previousText": "Guardar identidad');assert.ok(confirm);const finalEvent=await push({type:'interactive',interactive:{type:'list_reply',list_reply:confirm}});await assert.rejects(processor.process(finalEvent),/ONBOARDING_PARTIAL_CAPTURE_MUST_NOT_DOWNLOAD/);\n const finalRow=await worker(),challenge=finalRow.metadata.participant.kycChatChallenge,finalState=JSON.parse(decryptCustomerSecret(finalRow.metadata.participant.kycChatConversation.encryptedState,{organizationId:a.organizationId,projectId:a.anchorProjectId,purpose:'kyc-chat-conversation',resourceId:challenge.id},environment));assert.equal(finalState.step,'FINALIZING'"
             }
           ]
         },
@@ -65875,9 +66055,9 @@
           "path": "scripts/verify-participant-reactive-onboarding-postgres.mjs",
           "status": "MODIFIED",
           "previousSha256": "040611be2ff366f1cdd937e772ee3216e965952942988fd3a8590210f2404caa",
-          "currentSha256": "447c9d167f0a7da21bf6be52448023f2e5cd28e89b78635b6c774e73e32b60a4",
+          "currentSha256": "bdabb318de041cda2921796645dbfe3226a14c771d14d69a9714ae0b346d6f1b",
           "previousBytes": 48193,
-          "currentBytes": 48409,
+          "currentBytes": 51662,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 0,
@@ -65893,6 +66073,76 @@
               "currentOffsetCharacters": 9445,
               "currentText": "assessCaptureQuality:syntheticCaptureQuality,workspace,connect,identity,environment}),upload=createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment}),deposit=createParticipantChannelKycDeposit({assessCaptureQuality:syntheticCaptureQuality,",
               "previousText": "workspace,connect,identity,environment}),upload=createParticipantChannelKycUploader({get:blob.get,put:blob.put,environment:()=>environment}),deposit=createParticipantChannelKycDeposit({"
+            },
+            {
+              "currentOffsetCharacters": 13009,
+              "currentText": "let initialMemberships=digest((await query(`SELECT * FROM public.\"TenantMembership\" ORDER BY id`)).rows),initialProjects=digest((await query(`SELECT * FROM public.\"ProjectMembership\" ORDER BY id`)).rows);\n async function admitted(sender,email,{permissions={attendance:true,report:false}}={}){let last=await execute('HOLA',{sender}),app=last.eventId;assert.equal((await state(app)).step,'WELCOME');last=await execute(choice(last,'Solicitar ingreso a obra'),{sender,reply:last.messageId});assert.equal((await state(app)).step,'NAME');last=await execute('Persona Sintética',{sender,reply:last.messageId});let s=await state(app);last=await execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':0'}}},{sender,reply:last.messageId});last=await execute(email,{sender,reply:last.messageId});s=await state(app);last=await execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':0'}}},{sender,reply:last.messageId});s=await state(app);assert.equal(s.status,'WAITING_RESPONSIBLE');const admitted=await store.save(owner,command('ADMIT_EMPLOYEE_INTAKE',{connectionId:'channel-a',applicationId:app,expectedRevision:s.revision,job:'WORKER',permissions",
+              "previousText": "const initialMemberships=digest((await query(`SELECT * FROM public.\"TenantMembership\" ORDER BY id`)).rows),initialProjects=digest((await query(`SELECT * FROM public.\"ProjectMembership\" ORDER BY id`)).rows);\n async function admitted(sender,email){let last=await execute('HOLA',{sender}),app=last.eventId;assert.equal((await state(app)).step,'WELCOME');last=await execute(choice(last,'Solicitar ingreso a obra'),{sender,reply:last.messageId});assert.equal((await state(app)).step,'NAME');last=await execute('Persona Sintética',{sender,reply:last.messageId});let s=await state(app);last=await execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':0'}}},{sender,reply:last.messageId});last=await execute(email,{sender,reply:last.messageId});s=await state(app);last=await execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':0'}}},{sender,reply:last.messageId});s=await state(app);assert.equal(s.status,'WAITING_RESPONSIBLE');const admitted=await store.save(owner,command('ADMIT_EMPLOYEE_INTAKE',{connectionId:'channel-a',applicationId:app,expectedRevision:s.revision,job:'WORKER',permissions:{attendance:true,report:false}"
+            },
+            {
+              "currentOffsetCharacters": 15528,
+              "currentText": "async function acceptCurrent(person,userId){const invited=await worker(person.id);assert.equal(invited.metadata.participant.status,'INVITED');acceptedAccount={userId,organizationId:'org_A',email:person.email};invitations.get(invited.metadata.participant.invitation.id).state='accepted';const joined=await store.join({authenticated:true,verification:'clerk-production-jwt',userId,organizationId:'org_A',organizationRole:'org:member'},{invitationId:invited.metadata.participant.invitation.id,operationId:randomUUID()},{accept:true});assert.equal(joined.joined,true);assert.equal((await worker(person.id)).metadata.participant.status,'ACTIVE');initialMemberships=digest((await query(`SELECT * FROM public.\"TenantMembership\" ORDER BY id`)).rows);initialProjects=digest((await query(`SELECT * FROM public.\"ProjectMembership\" ORDER BY id`)).rows);return joined;}\n const p=await admitted('15550001001','reactive-person@example.invalid',{permissions:{attendance:false,report:false}});\n const invitedGuidanceBefore=await snapshot(p.id),invitedPuts=blob.puts(),invitedDownloads=downloads;for(const alias of ['HOLA','ESTADO','MENU','MENÚ']){const guide=await execute(alias,{sender:p.sender});assert.equal(guide.result.replySent,true);assert.equal(guide.message.type,'text');assert.match(guide.message.body,/aceptá la invitación recibida por correo/);assert.ok(guide.message.body.includes('https://obrasaas.com/cuenta'));assert.equal((await worker(p.id)).metadata.participant.kycChatChallenge,undefined);assert.equal(await snapshot(p.id),invitedGuidanceBefore);assert.equal(blob.puts(),invitedPuts);assert.equal(downloads,invitedDownloads);assert.equal(membershipChecks,0);}\n const preJoinMetadata=structuredClone((await worker(p.id)).metadata),expiredInvitation=structuredClone(preJoinMetadata);expiredInvitation.participant.invitation.expiresAt=new Date(Date.now()-1000).toISOString();await failSame(p,'HOLA',{},()=>query(`UPDATE public.\"Worker\" SET metadata=$2::jsonb WHERE id=$1`,[p.id,JSON.stringify(expiredInvitation)]),()=>query(`UPDATE public.\"Worker\" SET metadata=$2::jsonb WHERE id=$1`,[p.id,JSON.stringify(preJoinMetadata)]));\n const firstAccepted=await acceptCurrent(p,'user_ReactiveFirst",
+              "previousText": "const p=await admitted('15550001001','reactive-person@example.invalid"
+            },
+            {
+              "currentOffsetCharacters": 20202,
+              "currentText": "",
+              "previousText": " const expired=structuredClone(invitedBase);expired.participant.invitation.expiresAt=new Date(Date.now()-1000).toISOString();await failSame(p,button1,{reply:last.messageId},()=>query(`UPDATE public.\"Worker\" SET metadata=$2::jsonb WHERE id=$1`,[p.id,JSON.stringify(expired)]),()=>query(`UPDATE public.\"Worker\" SET metadata=$2::jsonb WHERE id=$1`,[p.id,JSON.stringify(invitedBase)]));\n"
+            },
+            {
+              "currentOffsetCharacters": 22171,
+              "currentText": "ACTIVE');assert.equal(w.metadata.participant.clerkUserId,'user_ReactiveFirst');assert.deepEqual(w.metadata.participant.permissions,{attendance:false,report:false});assert.equal(w.metadata.participant.kycChatChallenge.status,'PENDING');assert.equal(w.metadata.participant.kycChatChallenge.analysisConsentVersion,3",
+              "previousText": "INVITED');assert.equal(w.metadata.participant.clerkUserId,null);assert.deepEqual(w.metadata.participant.permissions,{attendance:false,report:false});assert.equal(w.metadata.participant.kycChatChallenge.status,'PENDING'"
+            },
+            {
+              "currentOffsetCharacters": 25852,
+              "currentText": "Revisión manual'])last=await execute(choice(last,title),{sender:p.sender,reply:last.messageId});\n for(let i=0;i<3;i++)last=await execute({type:'image',image:{id:'150000001',mime_type:'image/png'}},{sender:p.sender,reply:last.messageId});last=await execute(choice(last,'Presentar identidad'),{sender:p.sender,reply:last.messageId});assert.equal(last.result.businessApplied,true);w=await worker(p.id);assert.equal(w.metadata.participant.kyc.status,'PENDING_REVIEW');assert.equal(w.metadata.participant.kyc.biometricConsent.noticeVersion,'participant-private-biometric-v3');assert.equal(w.metadata.participant.kyc.biometricConsent.allowed,false);assert.equal(w.metadata.participant.kyc.biometricMode,'MANUAL');assert.equal(w.metadata.participant.kyc.facialPrecommit.timing,'MANUAL_NO_FACIAL_COMPARISON');assert.equal(w.metadata.participant.status,'ACTIVE');assert.equal(w.metadata.participant.clerkUserId,'user_ReactiveFirst');assert.deepEqual(w.metadata.participant.permissions,{attendance:false,report:false});assert.equal(w.metadata.participant.kycChatChallenge.status,'COMPLETED');assert.equal(blob.puts(),3);assert.equal(downloads,3);const captureCount=(await query(`SELECT count(*)::int AS n FROM public.\"AuditLog\" WHERE \"entityId\"=$1 AND metadata->>'kind'='KYC_SUBMITTED'`,[p.id])).rows[0].n;assert.equal(captureCount,1);const delivered=sends;assert.equal((await processor.process(last.eventId)).done,true);assert.equal(sends,delivered);assert.equal(blob.puts(),3);checks.push('real-signed-current-v3-manual-3image-capture-after-JOIN-PENDING_REVIEW-no-chat-grant",
+              "previousText": "Sin comparación facial'])last=await execute(choice(last,title),{sender:p.sender,reply:last.messageId});\n for(let i=0;i<3;i++)last=await execute({type:'image',image:{id:'150000001',mime_type:'image/png'}},{sender:p.sender,reply:last.messageId});last=await execute(choice(last,'Guardar identidad'),{sender:p.sender,reply:last.messageId});assert.equal(last.result.businessApplied,true);w=await worker(p.id);assert.equal(w.metadata.participant.kyc.status,'PENDING_ACCOUNT_CLAIM');assert.equal(w.metadata.participant.status,'INVITED');assert.equal(w.metadata.participant.clerkUserId,null);assert.deepEqual(w.metadata.participant.permissions,{attendance:false,report:false});assert.equal(w.metadata.participant.kycChatChallenge.status,'COMPLETED');assert.equal(blob.puts(),3);assert.equal(downloads,3);const captureCount=(await query(`SELECT count(*)::int AS n FROM public.\"AuditLog\" WHERE \"entityId\"=$1 AND metadata->>'kind'='KYC_SUBMITTED'`,[p.id])).rows[0].n;assert.equal(captureCount,1);const delivered=sends;assert.equal((await processor.process(last.eventId)).done,true);assert.equal(sends,delivered);assert.equal(blob.puts(),3);checks.push('real-signed-3image-consent-capture-private-deposit-PENDING_ACCOUNT_CLAIM-no-permission"
+            },
+            {
+              "currentOffsetCharacters": 27916,
+              "currentText": "REVIEW');assert.match(observed.message.body,/revisión/i",
+              "previousText": "ACCOUNT_CLAIM');assert.match(observed.message.body,/Falta aceptar la invitación/"
+            },
+            {
+              "currentOffsetCharacters": 29015,
+              "currentText": "originalInvitationExpiry=captureMetadata.participant.invitation.expiresAt;await query(`UPDATE public.\"Worker\" SET metadata=jsonb_set(metadata,'{participant,invitation,expiresAt}','\"2000-01-01T00:00:00.000Z\"'::jsonb) WHERE id=$1`,[p.id]);const beforeAcceptedExpiry=await snapshot(p.id),acceptedExpiry=await execute('ESTADO',{sender:p.sender});assert.equal(acceptedExpiry.result.replySent,true);assert.equal((await recordedIntake(acceptedExpiry.eventId)).reactiveKycStatus.status,'PENDING_REVIEW');assert.equal(await snapshot(p.id),beforeAcceptedExpiry);assert.equal(blob.puts(),capturePuts);assert.equal(downloads,captureDownloads);",
+              "previousText": "invitationExpiry=new Date(Date.now()+60000).toISOString(),originalInvitationExpiry=captureMetadata.participant.invitation.expiresAt;\n await query(`UPDATE public.\"Worker\" SET metadata=jsonb_set(metadata,'{participant,invitation,expiresAt}',to_jsonb($2::text)) WHERE id=$1`,[p.id,invitationExpiry]);\n const beforeExpiryStatus=await snapshot(p.id),beforeExpirySends=sends,expiryStatusEvent=await push('ESTADO',{sender:p.sender});crossFinalClock={kind:'intake',eventId:expiryStatusEvent,expiresAt:invitationExpiry};\n const expiredStatus=await processor.process(expiryStatusEvent);assert.equal(expiredStatus.replySent,false);assert.equal(expiredStatus.businessApplied,false);assert.equal(expiredStatus.code,'EMPLOYEE_INTAKE_CONTEXT_REQUIRED');assert.equal(await snapshot(p.id),beforeExpiryStatus);assert.equal(sends,beforeExpirySends);assert.equal(blob.puts(),capturePuts);assert.equal(downloads,captureDownloads);assert.equal((await query(`SELECT payload FROM public.\"WebhookEvent\" WHERE id=$1`,[expiryStatusEvent])).rows[0].payload.employeeIntakeDispatch,undefined);\n "
+            },
+            {
+              "currentOffsetCharacters": 31385,
+              "currentText": "accepted-invitation-expiry-retains-account-and-trial-expiry-at-final-DB-clock-rolls-back-without-renewing');\n const p2=await admitted('15550001002','second@example.invalid',{permissions:{attendance:false,report:false}});await acceptCurrent(p2,'user_ReactiveSecond');let race=await execute('HOLA',{sender:p2.sender});const intent=participantOnboardingIntent((await worker(p2.id)).metadata.participant.onboardingDelivery);let releaseHeld,entered;const reached=new Promise(resolve=>{entered=resolve;}),release=new Promise(resolve=>{releaseHeld=resolve;});holdWorker={id:p2.id,entered,release};const reacting=execute(choice(race,'Presentar identidad'),{sender:p2.sender,reply:race.messageId});await reached;let backgroundReached;const bgReached=new Promise(resolve=>{backgroundReached=resolve;});const backgroundConnect=async()=>{const c=await connect();return {...c,query:async(sql,args)=>{if(sql.includes('pg_advisory_xact_lock')&&args?.[0]?.startsWith('person-worksite-journey-v1:'))backgroundReached();return c.query(sql,args);}};};const background=customerJobTransaction(backgroundConnect,c=>resolveParticipantOnboardingAuthority(c,intent,{environment})).then(()=>({allowed:true}),error=>({allowed:false,code:error.code}));await bgReached;try{let blocked=false;for(let i=0;i<50&&!blocked;i++){blocked=(await admin.query(`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE usename='cutover_test' AND datname='obrasaas_cutover_ci' AND wait_event='advisory') AS blocked`)).rows[0].blocked;if(!blocked)await new Promise(resolve=>setTimeout(resolve,10));}assert.equal(blocked,true,'Background canonical journey must wait on reactive tx');}finally{releaseHeld();}race=await reacting;assert.equal(race.result.replySent,true);const bg=await background;assert.equal(bg.allowed,false);assert.equal(bg.code,'PARTICIPANT_ONBOARDING_CHALLENGE_REQUIRED');const racedWorker=await worker(p2.id);assert.equal(racedWorker.metadata.participant.onboardingDelivery.state,'CANCELED');assert.equal((await query(`SELECT count(*)::int AS n FROM public.\"AuditLog\" WHERE \"entityId\"=$1 AND action='participant.kyc_chat.prepared'`,[p2.id])).rows[0].n,1);assert.equal((await query(`SELECT count(*)::int AS n FROM public.\"WebhookEvent\" WHERE id=$1`,[participantOnboardingOutboundId(intent)])).rows[0].n,0);checks.push('real-PG-shared-journey-lock-background-waits-rechecks-and-denies-second-challenge');\n assert.equal(digest((await query(`SELECT * FROM public.\"TenantMembership\" ORDER BY id`)).rows),initialMemberships);assert.equal(digest((await query(`SELECT * FROM public.\"ProjectMembership\" ORDER BY id`)).rows),initialProjects);for(const table of ['AttendanceEntry','Incident','OperationalProposal'])assert.equal((await query(`SELECT count(*)::int AS n FROM public.\"${table}\"`)).rows[0].n,0);assert.equal((await query(`SELECT count(*)::int AS n FROM public.\"WhatsAppCompanyEventRoute\"`)).rows[0].n,0);assert.equal((await query(`SELECT count(*)::int AS n FROM public.\"AuditLog\" WHERE metadata->>'kind' IN ('REVIEW_KYC','FIELD_PERMISSIONS_CHANGED')`)).rows[0].n,0);assert.equal((await query(`SELECT count(*)::int AS n FROM public.\"AuditLog\" WHERE metadata->>'kind'='INVITATION_ACCEPTED'`)).rows[0].n,2);assert.equal(networkCalls,0);assert.deepEqual(sqlFailures,[]);checks.push('only-two-explicit-JOINs-no-chat-accounts-memberships",
+              "previousText": "status-proof-invitation-and-trial-expiry-at-final-DB-clock-roll-back-dispatch-without-renewing-or-sending');\n const p2=await admitted('15550001002','second@example.invalid');let race=await execute('HOLA',{sender:p2.sender});const intent=participantOnboardingIntent((await worker(p2.id)).metadata.participant.onboardingDelivery);let releaseHeld,entered;const reached=new Promise(resolve=>{entered=resolve;}),release=new Promise(resolve=>{releaseHeld=resolve;});holdWorker={id:p2.id,entered,release};const reacting=execute(choice(race,'Presentar identidad'),{sender:p2.sender,reply:race.messageId});await reached;let backgroundReached;const bgReached=new Promise(resolve=>{backgroundReached=resolve;});const backgroundConnect=async()=>{const c=await connect();return {...c,query:async(sql,args)=>{if(sql.includes('pg_advisory_xact_lock')&&args?.[0]?.startsWith('person-worksite-journey-v1:'))backgroundReached();return c.query(sql,args);}};};const background=customerJobTransaction(backgroundConnect,c=>resolveParticipantOnboardingAuthority(c,intent,{environment})).then(()=>({allowed:true}),error=>({allowed:false,code:error.code}));await bgReached;try{let blocked=false;for(let i=0;i<50&&!blocked;i++){blocked=(await admin.query(`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE usename='cutover_test' AND datname='obrasaas_cutover_ci' AND wait_event='advisory') AS blocked`)).rows[0].blocked;if(!blocked)await new Promise(resolve=>setTimeout(resolve,10));}assert.equal(blocked,true,'Background canonical journey must wait on reactive tx');}finally{releaseHeld();}race=await reacting;assert.equal(race.result.replySent,true);const bg=await background;assert.equal(bg.allowed,false);assert.equal(bg.code,'PARTICIPANT_ONBOARDING_CHALLENGE_REQUIRED');const racedWorker=await worker(p2.id);assert.equal(racedWorker.metadata.participant.onboardingDelivery.state,'CANCELED');assert.equal((await query(`SELECT count(*)::int AS n FROM public.\"AuditLog\" WHERE \"entityId\"=$1 AND action='participant.kyc_chat.prepared'`,[p2.id])).rows[0].n,1);assert.equal((await query(`SELECT count(*)::int AS n FROM public.\"WebhookEvent\" WHERE id=$1`,[participantOnboardingOutboundId(intent)])).rows[0].n,0);checks.push('real-PG-shared-journey-lock-background-waits-rechecks-and-denies-second-challenge');\n assert.equal(digest((await query(`SELECT * FROM public.\"TenantMembership\" ORDER BY id`)).rows),initialMemberships);assert.equal(digest((await query(`SELECT * FROM public.\"ProjectMembership\" ORDER BY id`)).rows),initialProjects);for(const table of ['AttendanceEntry','Incident','OperationalProposal'])assert.equal((await query(`SELECT count(*)::int AS n FROM public.\"${table}\"`)).rows[0].n,0);assert.equal((await query(`SELECT count(*)::int AS n FROM public.\"WhatsAppCompanyEventRoute\"`)).rows[0].n,0);assert.equal((await query(`SELECT count(*)::int AS n FROM public.\"AuditLog\" WHERE metadata->>'kind' IN ('REVIEW_KYC','INVITATION_ACCEPTED','FIELD_PERMISSIONS_CHANGED')`)).rows[0].n,0);assert.equal(networkCalls,0);assert.deepEqual(sqlFailures,[]);checks.push('no-accounts-memberships-web-session"
+            },
+            {
+              "currentOffsetCharacters": 35577,
+              "currentText": "3",
+              "previousText": "1"
+            },
+            {
+              "currentOffsetCharacters": 38756,
+              "currentText": "equal(acceptedWorker.metadata.participant.kycChatChallenge.analysisConsentVersion,3);assert.",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 39197,
+              "currentText": "Revisión manu",
+              "previousText": "Sin comparación faci"
+            },
+            {
+              "currentOffsetCharacters": 39533,
+              "currentText": "Presentar identidad'),{sender:p3.sender,reply:acceptedReply.messageId});assert.equal(acceptedReply.result.businessApplied,true);\n acceptedWorker=await worker(p3.id);assert.equal(acceptedWorker.metadata.participant.status,'ACTIVE');assert.equal(acceptedWorker.metadata.participant.kyc.status,'PENDING_REVIEW');assert.equal(acceptedWorker.metadata.participant.kyc.biometricMode,'MANUAL');assert.equal(acceptedWorker.metadata.participant.kyc.biometricConsent.allowed,false);assert.equal(acceptedWorker.metadata.participant.kyc.biometricConsent.noticeVersion,'participant-private-biometric-v3');assert.equal(acceptedWorker.metadata.participant.kycChatChallenge.status,'COMPLETED');assert.equal(acceptedWorker.metadata.participant.clerkUserId,acceptedAccount.userId);assert.deepEqual(acceptedWorker.metadata.participant.permissions,accepted.participant.permissions);\n assert.equal(digest((await query(`SELECT * FROM public.\"PlatformUser\" ORDER BY id`)).rows),acceptedAccounts);assert.equal(digest((await query(`SELECT * FROM public.\"TenantMembership\" ORDER BY id`)).rows),acceptedMemberships);assert.equal(digest((await query(`SELECT * FROM public.\"ProjectMembership\" ORDER BY id`)).rows),acceptedProjects);assert.equal(membershipChecks,3",
+              "previousText": "Guardar identidad'),{sender:p3.sender,reply:acceptedReply.messageId});assert.equal(acceptedReply.result.businessApplied,true);\n acceptedWorker=await worker(p3.id);assert.equal(acceptedWorker.metadata.participant.status,'ACTIVE');assert.equal(acceptedWorker.metadata.participant.kyc.status,'PENDING_REVIEW');assert.equal(acceptedWorker.metadata.participant.kycChatChallenge.status,'COMPLETED');assert.equal(acceptedWorker.metadata.participant.clerkUserId,acceptedAccount.userId);assert.deepEqual(acceptedWorker.metadata.participant.permissions,accepted.participant.permissions);\n assert.equal(digest((await query(`SELECT * FROM public.\"PlatformUser\" ORDER BY id`)).rows),acceptedAccounts);assert.equal(digest((await query(`SELECT * FROM public.\"TenantMembership\" ORDER BY id`)).rows),acceptedMemberships);assert.equal(digest((await query(`SELECT * FROM public.\"ProjectMembership\" ORDER BY id`)).rows),acceptedProjects);assert.equal(membershipChecks,1"
+            },
+            {
+              "currentOffsetCharacters": 46401,
+              "currentText": "Current v3 starts only after account acceptance. Reopening that account\n // must replay the original receipt and never reattribute the existing capture.\n const currentAccountWorker=await worker(p.id),adoptedSnapshot=await snapshot(p.id),adoptedMetadata=structuredClone(currentAccountWorker.metadata),beforeAccountReplay=membershipChecks;\n const acceptedSession={authenticated:true,verification:'clerk-production-jwt',userId:'user_ReactiveFirst',organizationId:'org_A',organizationRole:'org:member'};\n const accountReplay=await store.join(acceptedSession,{invitationId:currentAccountWorker.metadata.participant.invitation.id});assert.equal(accountReplay.joined,true);assert.equal(accountReplay.replayed,true);assert.equal(accountReplay.receiptId,firstAccepted.receiptId);assert.equal(membershipChecks,beforeAccountReplay);assert.equal(await snapshot(p.id),adoptedSnapshot);\n await assert.rejects(store.join({...acceptedSession,userId:'user_ForeignReplay'},{invitationId:currentAccountWorker.metadata.participant.invitation.id}),{code:'PARTICIPANT_ACCESS_REQUIRED'});assert.equal(await snapshot(p.id),adoptedSnapshot);assert.equal(membershipChecks,beforeAccountReplay);\n const adoptedStatus=await execute('ESTADO',{sender:p.sender});assert.equal((await recordedIntake(adoptedStatus.eventId)).reactiveKycStatus.status,'PENDING_REVIEW');assert.match(adoptedStatus.message.body,/pendiente de revisión/);assert.equal(await snapshot(p.id),adoptedSnapshot);\n const captureReceiptId=adoptedMetadata.participant.kyc.channelCapture.receiptId,captureReceipt=(await query(`SELECT \"actorId\",metadata FROM public.\"AuditLog\" WHERE id=$1`,[captureReceiptId])).rows[0];assert.ok(captureReceipt);const acceptanceReceipt=(await query(`SELECT \"actorId\",metadata FROM public.\"AuditLog\" WHERE id=$1`,[firstAccepted.receiptId])).rows[0];assert.ok(acceptanceReceipt);assert.equal(captureReceipt.actorId,acceptanceReceipt.actorId);assert.equal(captureReceipt.metadata.status,'PENDING_REVIEW');assert.equal(captureReceipt.metadata.channelCapture.capturedParticipantClerkUserId,'user_ReactiveFirst');assert.equal((await query(`SELECT count(*)::int AS n FROM public.\"AuditLog\" WHERE \"entityId\"=$1 AND action='participant.kyc_chat.adopted'`,[p.id])).rows[0].n,0);\n await failSame(p,'ESTADO',{},()=>query(`UPDATE public.\"AuditLog\" SET \"actorId\"='foreign' WHERE id=$1`,[captureReceiptId]),()=>query(`UPDATE public.\"AuditLog\" SET \"actorId\"=$2 WHERE id=$1`,[captureReceiptId,captureReceipt.actorId]));\n checks.push('current-v3-account-replay-requires-original-actor-and-exact-capture-receipt",
+              "previousText": "A pre-account presentation proves the account transition with original\n // capture + current acceptance + adoption, then the separate reviewer acts.\n const invitedAfterCapture=await worker(p.id);acceptedAccount={userId:'user_LateAccepted',organizationId:'org_A',email:p.email};invitations.get(invitedAfterCapture.metadata.participant.invitation.id).state='accepted';\n const lateAccepted=await store.join({authenticated:true,verification:'clerk-production-jwt',userId:acceptedAccount.userId,organizationId:acceptedAccount.organizationId,organizationRole:'org:member'},{invitationId:invitedAfterCapture.metadata.participant.invitation.id,operationId:randomUUID()},{accept:true});assert.equal(lateAccepted.joined,true);\n const adoptedSnapshot=await snapshot(p.id),adoptedMetadata=structuredClone((await worker(p.id)).metadata),adoptedStatus=await execute('ESTADO',{sender:p.sender});assert.equal((await recordedIntake(adoptedStatus.eventId)).reactiveKycStatus.status,'PENDING_REVIEW');assert.match(adoptedStatus.message.body,/pendiente de revisión/);assert.equal(await snapshot(p.id),adoptedSnapshot);\n const adoptionId=lateAccepted.receiptId+'_kyc',adoption=(await query(`SELECT metadata FROM public.\"AuditLog\" WHERE id=$1`,[adoptionId])).rows[0];assert.ok(adoption);await failSame(p,'ESTADO',{},()=>query(`UPDATE public.\"AuditLog\" SET metadata=jsonb_set(metadata,'{captureReceiptId}','\"foreign-capture\"'::jsonb) WHERE id=$1`,[adoptionId]),()=>query(`UPDATE public.\"AuditLog\" SET metadata=$2::jsonb WHERE id=$1`,[adoptionId,JSON.stringify(adoption.metadata)]));\n checks.push('post-capture-account-acceptance-status-proves-original-actor-and-exact-adoption"
+            },
+            {
+              "currentOffsetCharacters": 51079,
+              "currentText": "account acceptance before current v3 manual capture, authenticated acceptance replay",
+              "previousText": "separate account acceptance before/after private capture"
             }
           ]
         },
@@ -66982,6 +67232,31 @@
             {
               "currentOffsetCharacters": 6781,
               "currentText": "await assertParticipantFacialPrecommitSource(client,k,proofs[0],{organizationId:a.organizationId,projectId:ref.projectId,workerId:row.id});",
+              "previousText": ""
+            }
+          ]
+        },
+        {
+          "path": "src/lib/participant-onboarding-reactive.mjs",
+          "status": "MODIFIED",
+          "previousSha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66",
+          "currentSha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7",
+          "previousBytes": 39226,
+          "currentBytes": 39775,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 26341,
+              "currentText": "function accountAcceptancePlan(r){return {state:r.state,reply:{type:'text',body:'Antes de presentar tu identidad, aceptá la invitación recibida por correo e ingresá con esa misma cuenta en https://obrasaas.com/cuenta. Después volvé a escribir HOLA. No envíes fotos ni documentos desde este paso.'}};}\n\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 29024,
+              "currentText": "{if(authority.worker.metadata.participant.status==='INVITED'){if(Object.hasOwn(r.payload.value,'context'))fail();return accountAcceptancePlan(r);}return offer(authority,r);}",
+              "previousText": "return offer(authority,r);"
+            },
+            {
+              "currentOffsetCharacters": 29603,
+              "currentText": " if(authority.worker.metadata.participant.status==='INVITED')return accountAcceptancePlan(r);\n",
               "previousText": ""
             }
           ]
@@ -68692,6 +68967,36 @@
           ]
         },
         {
+          "path": "tests/production-participant-onboarding-authority.test.mjs",
+          "status": "MODIFIED",
+          "previousSha256": "91ba06328f6b1e4b86cb8b0441df46d05a32dc1ebdcf158a66bd1c80f972be29",
+          "currentSha256": "242ef03e007bbaff3f65255795b08d3dc80177f5d761998ab038e05c91da75e7",
+          "previousBytes": 37793,
+          "currentBytes": 40387,
+          "inverseHunks": [
+            {
+              "currentOffsetCharacters": 28306,
+              "currentText": "{active=false}={}){\n const f=fixture({active}",
+              "previousText": "){\n const f=fixture("
+            },
+            {
+              "currentOffsetCharacters": 29704,
+              "currentText": "  if(sql.startsWith('SELECT u.id AS \"actorId\",tm.id AS \"membershipId\" FROM public.\"PlatformUser\" u JOIN public.\"TenantMembership\"')){f.controls.queries.push({sql,args:structuredClone(args)});assert.deepEqual(args,[f.own.clerkUserId,f.organization.id]);return rows(f.controls.ownActive?[{actorId:f.own.actorId,membershipId:f.own.membershipId}]:[]);}\n  if(sql.startsWith('SELECT id AS \"membershipId\"')&&sql.includes('WHERE id=$1 AND \"userId\"=$2')&&args[0]===f.own.membershipId){f.controls.queries.push({sql,args:structuredClone(args)});assert.deepEqual(args,[f.own.membershipId,f.own.actorId,f.organization.id]);return rows(f.controls.ownActive?[f.own]:[]);}\n",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 34947,
+              "currentText": "{active:true}",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 38482,
+              "currentText": "\n\ntest('an invited account receives acceptance guidance through each fresh alias without a challenge or writes',async()=>{\n for(const body of ['HOLA','ESTADO','MENU','MENÚ']){\n  const f=await expiredPeriodReactiveFixture(),before={worker:structuredClone(f.worker),audit:structuredClone([...f.audit]),state:structuredClone(f.r.state)},result=await f.plan(body);\n  assert.equal(result.state,f.r.state);assert.equal(result.reply.type,'text');\n  assert.match(result.reply.body,/aceptá la invitación recibida por correo/);assert.ok(result.reply.body.includes('https://obrasaas.com/cuenta'));assert.match(result.reply.body,/No envíes fotos ni documentos/);\n  assert.equal(result.reactiveOnboarding,undefined);assert.equal(result.reactiveKycStatus,undefined);assert.equal(f.worker.metadata.participant.kycChatChallenge,undefined);\n  assert.deepEqual(f.worker,before.worker);assert.deepEqual([...f.audit],before.audit);assert.deepEqual(f.r.state,before.state);assert.ok(f.controls.queries.every(({sql})=>/^SELECT\\b/.test(sql)));\n }\n});\n\ntest('acceptance guidance cannot turn an unconfirmed identity button into a successful reply',async()=>{\n const f=await expiredPeriodReactiveFixture(),before={worker:structuredClone(f.worker),audit:structuredClone([...f.audit]),state:structuredClone(f.r.state)};\n f.r.payload.value={...f.r.payload.value,type:'interactive',interactive:{list_reply:{id:'intake-kyc:'+'c'.repeat(40)}},context:{id:'wamid.UnconfirmedIdentityPrompt'}};delete f.r.payload.value.text;\n await assert.rejects(planReactiveOnboarding(f.client,f.r,f.pref,{promptConfirmed:false}),{code:'EMPLOYEE_INTAKE_CONTEXT_REQUIRED'});\n assert.deepEqual(f.worker,before.worker);assert.deepEqual([...f.audit],before.audit);assert.deepEqual(f.r.state,before.state);assert.ok(f.controls.queries.every(({sql})=>/^SELECT\\b/.test(sql)));assert.equal(f.worker.metadata.participant.kycChatChallenge,undefined);\n});\n",
+              "previousText": ""
+            }
+          ]
+        },
+        {
           "path": "tests/production-participant-preanalysis-current-ci-lineage.test.mjs",
           "status": "MODIFIED",
           "previousSha256": "ea91b9b98adffaf408f85d60982577ba4befe044fa3d0f1a34c0d1daa017c574",
@@ -69100,13 +69405,13 @@
           "path": "tests/production-private-biometric-precommit-wire.test.mjs",
           "status": "ADDED",
           "previousSha256": null,
-          "currentSha256": "9e537299fde6a0f0fc2c877eb3a82fbe64403ea62fc94d408faae0c0a362d9de",
+          "currentSha256": "6a4906c5bbdf95a57ea2ee994b815f4f8e063aa8dd7f6c4e75ad20cb030037c1",
           "previousBytes": 0,
-          "currentBytes": 14051,
+          "currentBytes": 22086,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 0,
-              "currentText": "import assert from 'node:assert/strict';\nimport {test} from 'node:test';\nimport {createHash,createHmac} from 'node:crypto';\nimport {createPrivateBiometricAnalyzer} from '../src/lib/private-biometric-analyzer.mjs';\nimport {participantOcrNotice,participantBiometricNotice,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_SHA256} from '../src/lib/participant-analysis-consent.mjs';\nimport {digest} from '../src/lib/workspace-policy.mjs';\nconst sha=value=>createHash('sha256').update(value).digest('hex');\nconst version='participant-private-biometric-v3',secret='11'.repeat(32),timestamp='1710000000',nonce='ab'.repeat(16);\nconst captures=()=>({front:{buffer:Buffer.from('owned-front-fixture'),mimeType:'image/jpeg'},selfie:{buffer:Buffer.from('owned-selfie-fixture'),mimeType:'image/jpeg'},consentVersion:version});\nconst resultFor=input=>({success:true,status:'ADVISORY_UNREVIEWED',faceSimilarity:0.38,captureRiskSignal:0.2,identityCertified:false,livenessVerified:false,documentAuthenticityVerified:false,measurementCalibrated:false,requiresHumanReview:true,provider:'private-opencv-onnx',modelManifestSha256:'c695e1a85db3ac933836562ce1f7d7e2b372ba2951dc9c4d0160b88cd448c860',frontSha256:sha(input.front.buffer),selfieSha256:sha(input.selfie.buffer)});\nconst ack=proof=>({dispatched:true,bodySha256:proof.bodySha256});\nconst factory=(input,calls,extra={})=>createPrivateBiometricAnalyzer({environment:{OBRASAAS_BIOMETRIC_SERVICE_KEY:secret},clock:()=>Number(timestamp)*1000,nonce:()=>nonce,fetchImpl:async(url,options)=>{calls.push({url,...options});return new Response(JSON.stringify(resultFor(input)),{headers:{'Content-Type':'application/json'}});},...extra});\ntest('historical analysis notice records retain their four immutable digests',()=>{\n const pins={\"participant-external-ocr-v1\":\"0e9715a7e47bf23679bf70571250c11d27ff03f687743f34496837fa384df143\",\"participant-external-ocr-v2\":\"aa3fa6f1a267c2384cfacc7b18a83401b1809d110139dcc16e6848f0d1dda865\",\"participant-private-biometric-v1\":\"dac01985b63bd18b521783f8ee9d855176c33a40ce99b78c5b464081fd5a645a\",\"participant-private-biometric-v2\":\"aea57d7294acec64602ea0dc7c8b4ab8a79a213849e1a1769e0218b007294537\"};\n for(const [key,pin]of Object.entries(pins)){const notice=(key.includes('-ocr-')?participantOcrNotice:participantBiometricNotice)(key);assert.equal(sha(JSON.stringify(notice)),pin);}\n});\ntest('new facial notice is optional before persistence and uses neutral product wording',()=>{\n const notice=participantBiometricNotice(version);assert.equal(notice.timing,'BEFORE_PERSISTENCE');assert.equal(notice.automatic,false);assert.equal(notice.sha256,digest(notice.text));assert.equal(notice.sha256,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_SHA256);assert.ok(Object.isFrozen(notice));assert.match(notice.text,/antes de guardar/);assert.match(notice.text,/revisión manual/);assert.doesNotMatch(notice.text,/OpenAI|Hugging|API/);\n});\ntest('legacy facial transport retains exact version one wire payload and HMAC for both consent versions',async()=>{\n for(const consentVersion of ['participant-private-biometric-v1','participant-private-biometric-v2']){const input={...captures(),consentVersion},calls=[];assert.deepEqual(await factory(input,calls).analyzeBiometricPair(input),resultFor(input));assert.equal(calls.length,1);const call=calls[0],image=value=>({data:value.buffer.toString('base64'),mimeType:value.mimeType,sha256:sha(value.buffer)}),body=JSON.stringify({version:1,consentVersion,front:image(input.front),selfie:image(input.selfie)});assert.equal(call.body,body);assert.equal(call.url,'https://obrasaas.com/api/internal/biometric-analysis');assert.equal(call.redirect,'error');assert.deepEqual(call.headers,{'Content-Type':'application/json','X-Obrasaas-Timestamp':timestamp,'X-Obrasaas-Nonce':nonce,'X-Obrasaas-Signature':createHmac('sha256',Buffer.from(secret,'hex')).update('obrasaas-biometric-v1\\n'+timestamp+'\\n'+nonce+'\\n'+sha(body)).digest('hex')});}\n});\ntest('new facial transport requires the server dispatch fence before any network call',async()=>{\n const input=captures(),calls=[];assert.equal((await factory(input,calls).analyzeBiometricPair(input)).code,'BIOMETRIC_DISPATCH_FENCE_REQUIRED');assert.equal(calls.length,0);\n});\ntest('invalid image or local configuration never reaches the dispatch fence',async()=>{\n for(const mode of ['mime','same-image','secret']){const input=captures(),calls=[];let fences=0;if(mode==='mime')input.front.mimeType='application/pdf';if(mode==='same-image')input.selfie.buffer=Buffer.from(input.front.buffer);const extra=mode==='secret'?{environment:{}}:{};const result=await factory(input,calls,extra).analyzeBiometricPair(input,{beforeDispatch:()=>{fences++;return{};}});assert.equal(result.success,false);assert.equal(calls.length,0);assert.equal(fences,0);}\n});\ntest('new dispatch binds the immutable image snapshot and receipt before returning conservative advice',async()=>{\n const input=captures(),calls=[],order=[];const service=factory(input,calls,{fetchImpl:async(url,options)=>{order.push('fetch');calls.push({url,...options});return new Response(JSON.stringify(resultFor(input)),{headers:{'Content-Type':'application/json'}});}});const result=await service.analyzeBiometricPair(input,{beforeDispatch:async proof=>{order.push('fence');assert.ok(Object.isFrozen(proof));assert.equal(proof.frontSha256,sha(input.front.buffer));assert.equal(proof.selfieSha256,sha(input.selfie.buffer));assert.equal(proof.noticeSha256,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_SHA256);return ack(proof);}});assert.deepEqual(order,['fence','fetch']);assert.deepEqual(result,resultFor(input));assert.equal(Object.keys(result).length,13);assert.equal(calls.length,1);\n});\ntest('a malformed dispatch acknowledgement or changed image cannot trigger transport',async()=>{\n for(const mode of ['false','extra','digest','mutation']){const input=captures(),calls=[];await assert.rejects(factory(input,calls).analyzeBiometricPair(input,{beforeDispatch:proof=>{if(mode==='false')return{dispatched:false,bodySha256:proof.bodySha256};if(mode==='extra')return{...ack(proof),saved:true};if(mode==='digest')return{dispatched:true,bodySha256:'0'.repeat(64)};input.front.buffer[0]^=1;return ack(proof);}}),error=>error.code===(mode==='mutation'?'BIOMETRIC_SOURCE_CHANGED':'BIOMETRIC_DISPATCH_UNCONFIRMED'));assert.equal(calls.length,0);}\n});\ntest('authority failures preserve the original error and never dispatch',async()=>{\n const input=captures(),calls=[],denial=Object.assign(new Error('source changed'),{code:'PARTICIPANT_REVISION_CHANGED'});await assert.rejects(factory(input,calls).analyzeBiometricPair(input,{beforeDispatch:()=>{throw denial;}}),error=>error===denial);assert.equal(calls.length,0);\n});\ntest('an expired dispatch fence cannot start a late inference after its promise resolves',async()=>{\n const input=captures(),calls=[];let release;const deferred=new Promise(resolve=>{release=resolve;});await assert.rejects(factory(input,calls,{timeoutMs:5}).analyzeBiometricPair(input,{beforeDispatch:()=>deferred}),error=>error.code==='BIOMETRIC_DISPATCH_UNCONFIRMED');release({dispatched:true,bodySha256:'0'.repeat(64)});await Promise.resolve();await Promise.resolve();assert.equal(calls.length,0);\n});\ntest('claims of certification or extra result fields are rejected after one request without retries',async()=>{\n for(const mode of ['certified','extra']){const input=captures(),calls=[];const service=factory(input,calls,{fetchImpl:async()=>{calls.push(true);const result=resultFor(input);if(mode==='certified')result.identityCertified=true;else result.saved=true;return new Response(JSON.stringify(result),{headers:{'Content-Type':'application/json'}});}});assert.equal((await service.analyzeBiometricPair(input,{beforeDispatch:ack})).code,'BIOMETRIC_RESULT_UNCONFIRMED');assert.equal(calls.length,1);}\n});\n\nimport {beginMetaKycConversation,planMetaKycConversation} from '../src/lib/meta-kyc-conversation.mjs';\nimport {customerReplyMessage} from '../src/lib/meta-customer-provider.mjs';\nfor(const mode of ['ASSISTED','MANUAL'])test('v3 '+mode+' serializes every personal choice and all three image prompts before explicit presentation',()=>{\n let serial=0,plan=beginMetaKycConversation('wire-'+mode+'-begin',{captureImageSetVersion:2,analysisConsentVersion:3});const observed=[];\n const event=()=> 'wire-'+mode+'-'+(++serial);\n function observe(value,step){assert.equal(value.state.step,step);assert.equal(value.deposit,undefined,'A prompt must never deposit automatically');assert.ok(value.reply);const wire=customerReplyMessage(value.reply);assert.equal(wire.type,value.reply.type);if(wire.type==='interactive'){assert.deepEqual(wire.interactive.action.sections,value.reply.sections);assert.equal(wire.interactive.body.text,value.reply.body);assert.ok(wire.interactive.action.sections.flatMap(section=>section.rows).every(row=>row.title.length<=24));}else{assert.equal(wire.text.body,value.reply.body);assert.equal(wire.text.preview_url,false);}observed.push(step);return value;}\n function choose(value){const matches=plan.state.choices.map((choice,index)=>({choice,index})).filter(row=>row.choice.value===value);assert.equal(matches.length,1);return planMetaKycConversation({state:plan.state,eventId:event(),message:{type:'interactive',interactive:{list_reply:{id:'kyc:'+plan.state.nonce+':'+matches[0].index}}}});}\n function image(id,mime_type){return planMetaKycConversation({state:plan.state,eventId:event(),message:{type:'image',image:{id,mime_type}}});}\n observe(plan,'CONSENT');assert.equal(plan.state.consent,false);assert.equal(plan.state.backConsent,false);assert.equal(plan.state.biometricConsent,false);assert.equal(plan.state.biometricMode,null);assert.equal(plan.state.biometricNoticeVersion,version);\n const early=image('150000010','image/jpeg');observe(early,'CONSENT');assert.equal(early.state.front,null);assert.equal(early.state.biometricMode,null);assert.equal(early.state.consent,false);\n plan=observe(choose('CONSENT'),'BACK_CONSENT');assert.equal(plan.state.consent,true);assert.equal(plan.state.biometricMode,null);\n plan=observe(choose('BACK_CONSENT'),'OCR');assert.equal(plan.state.backConsent,true);\n plan=observe(choose(mode==='ASSISTED'?'OCR_YES':'OCR_NO'),'BIOMETRIC');assert.equal(plan.state.ocrConsent,mode==='ASSISTED');assert.equal(plan.state.biometricConsent,false);assert.equal(plan.state.biometricMode,null);assert.equal(plan.state.choices.find(choice=>choice.value==='BIOMETRIC_YES').title,'Comparar fotografías');\n const beforeChoice=image('150000011','image/png');observe(beforeChoice,'BIOMETRIC');assert.equal(beforeChoice.state.front,null);assert.equal(beforeChoice.state.biometricConsent,false);assert.equal(beforeChoice.state.biometricMode,null);\n plan=observe(choose(mode==='ASSISTED'?'BIOMETRIC_YES':'BIOMETRIC_NO'),'FRONT');assert.equal(plan.state.biometricConsent,mode==='ASSISTED');assert.equal(plan.state.biometricMode,mode);assert.equal(plan.state.biometricNoticeSha256,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_SHA256);\n plan=observe(image('150000021','image/jpeg'),'BACK');const front=structuredClone(plan.state.front);assert.equal(plan.state.back,null);assert.equal(plan.state.selfie,null);\n plan=observe(image('150000022','image/png'),'SELFIE');const back=structuredClone(plan.state.back);assert.deepEqual(plan.state.front,front);assert.equal(plan.state.selfie,null);assert.match(plan.reply.body,/sólo tu rostro/);assert.match(plan.reply.body,/No sostengas el documento/);\n plan=observe(image('150000023','image/webp'),'CONFIRM');assert.deepEqual(plan.state.front,front);assert.deepEqual(plan.state.back,back);assert.equal(plan.state.selfie.mediaId,'150000023');assert.equal(plan.state.biometricConsent,mode==='ASSISTED');assert.equal(plan.state.biometricMode,mode);assert.match(plan.reply.body,mode==='ASSISTED'?/antes de guardarlas/:/sin comparación facial/);\n const reminder=planMetaKycConversation({state:plan.state,eventId:event(),message:{type:'text',text:{body:'ESTADO'}}});observe(reminder,'CONFIRM');assert.deepEqual(reminder.state.front,front);assert.deepEqual(reminder.state.back,back);\n const cancelled=planMetaKycConversation({state:plan.state,eventId:event(),message:{type:'text',text:{body:'CANCELAR'}}});assert.equal(cancelled.deposit,undefined);assert.equal(cancelled.cancelled,true);assert.equal(cancelled.state,null);assert.equal(customerReplyMessage(cancelled.reply).type,'text');\n const confirmed=choose('CONFIRM');assert.equal(confirmed.deposit,true);assert.equal(confirmed.state.step,'FINALIZING');assert.equal(confirmed.state.biometricMode,mode);assert.equal(confirmed.state.biometricConsent,mode==='ASSISTED');assert.deepEqual(confirmed.state.front,front);assert.deepEqual(confirmed.state.back,back);assert.equal(confirmed.reply,undefined);\n const finalReminder=planMetaKycConversation({state:confirmed.state,eventId:event(),message:{type:'text',text:{body:'CONTINUAR'}}});observe(finalReminder,'FINALIZING');assert.equal(finalReminder.preserveConversation,true);const finalStatus=planMetaKycConversation({state:confirmed.state,eventId:event(),message:{type:'text',text:{body:'ESTADO'}}});assert.equal(finalStatus.deposit,undefined);assert.equal(finalStatus.checkFacial,true);\n for(const phase of ['PREPARING','MODEL_UNKNOWN','PERSISTENCE_UNKNOWN','READY','REJECTED','CLOSED_MANUAL']){const state={...confirmed.state,step:'FACIAL_RECOVERY',facialRecovery:{operationId:'11111111-1111-4111-8111-111111111111',phase,canContinueManual:phase!=='CLOSED_MANUAL',privateObjectsMayExist:phase==='PERSISTENCE_UNKNOWN'}},recovery=planMetaKycConversation({state,eventId:event(),message:{type:'text',text:{body:'CONTINUAR'}}});observe(recovery,'FACIAL_RECOVERY');assert.equal(recovery.state.biometricMode,mode);assert.equal(recovery.state.biometricConsent,mode==='ASSISTED');assert.deepEqual(recovery.state.front,front);assert.deepEqual(recovery.state.back,back);}\n assert.ok(['CONSENT','BACK_CONSENT','OCR','BIOMETRIC','FRONT','BACK','SELFIE','CONFIRM','FINALIZING','FACIAL_RECOVERY'].every(step=>observed.includes(step)));assert.equal(observed.filter(step=>step==='FACIAL_RECOVERY').length,6);\n});\n",
+              "currentText": "import assert from 'node:assert/strict';\nimport {test} from 'node:test';\nimport {createHash,createHmac} from 'node:crypto';\nimport {createPrivateBiometricAnalyzer} from '../src/lib/private-biometric-analyzer.mjs';\nimport {participantOcrNotice,participantBiometricNotice,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_SHA256} from '../src/lib/participant-analysis-consent.mjs';\nimport {digest} from '../src/lib/workspace-policy.mjs';\nconst sha=value=>createHash('sha256').update(value).digest('hex');\nconst version='participant-private-biometric-v3',secret='11'.repeat(32),timestamp='1710000000',nonce='ab'.repeat(16);\nconst captures=()=>({front:{buffer:Buffer.from('owned-front-fixture'),mimeType:'image/jpeg'},selfie:{buffer:Buffer.from('owned-selfie-fixture'),mimeType:'image/jpeg'},consentVersion:version});\nconst resultFor=input=>({success:true,status:'ADVISORY_UNREVIEWED',faceSimilarity:0.38,captureRiskSignal:0.2,identityCertified:false,livenessVerified:false,documentAuthenticityVerified:false,measurementCalibrated:false,requiresHumanReview:true,provider:'private-opencv-onnx',modelManifestSha256:'c695e1a85db3ac933836562ce1f7d7e2b372ba2951dc9c4d0160b88cd448c860',frontSha256:sha(input.front.buffer),selfieSha256:sha(input.selfie.buffer)});\nconst ack=proof=>({dispatched:true,bodySha256:proof.bodySha256});\nconst factory=(input,calls,extra={})=>createPrivateBiometricAnalyzer({environment:{OBRASAAS_BIOMETRIC_SERVICE_KEY:secret},clock:()=>Number(timestamp)*1000,nonce:()=>nonce,fetchImpl:async(url,options)=>{calls.push({url,...options});return new Response(JSON.stringify(resultFor(input)),{headers:{'Content-Type':'application/json'}});},...extra});\ntest('historical analysis notice records retain their four immutable digests',()=>{\n const pins={\"participant-external-ocr-v1\":\"0e9715a7e47bf23679bf70571250c11d27ff03f687743f34496837fa384df143\",\"participant-external-ocr-v2\":\"aa3fa6f1a267c2384cfacc7b18a83401b1809d110139dcc16e6848f0d1dda865\",\"participant-private-biometric-v1\":\"dac01985b63bd18b521783f8ee9d855176c33a40ce99b78c5b464081fd5a645a\",\"participant-private-biometric-v2\":\"aea57d7294acec64602ea0dc7c8b4ab8a79a213849e1a1769e0218b007294537\"};\n for(const [key,pin]of Object.entries(pins)){const notice=(key.includes('-ocr-')?participantOcrNotice:participantBiometricNotice)(key);assert.equal(sha(JSON.stringify(notice)),pin);}\n});\ntest('new facial notice is optional before persistence and uses neutral product wording',()=>{\n const notice=participantBiometricNotice(version);assert.equal(notice.timing,'BEFORE_PERSISTENCE');assert.equal(notice.automatic,false);assert.equal(notice.sha256,digest(notice.text));assert.equal(notice.sha256,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_SHA256);assert.ok(Object.isFrozen(notice));assert.match(notice.text,/antes de guardar/);assert.match(notice.text,/revisión manual/);assert.doesNotMatch(notice.text,/OpenAI|Hugging|API/);\n});\ntest('legacy facial transport retains exact version one wire payload and HMAC for both consent versions',async()=>{\n for(const consentVersion of ['participant-private-biometric-v1','participant-private-biometric-v2']){const input={...captures(),consentVersion},calls=[];assert.deepEqual(await factory(input,calls).analyzeBiometricPair(input),resultFor(input));assert.equal(calls.length,1);const call=calls[0],image=value=>({data:value.buffer.toString('base64'),mimeType:value.mimeType,sha256:sha(value.buffer)}),body=JSON.stringify({version:1,consentVersion,front:image(input.front),selfie:image(input.selfie)});assert.equal(call.body,body);assert.equal(call.url,'https://obrasaas.com/api/internal/biometric-analysis');assert.equal(call.redirect,'error');assert.deepEqual(call.headers,{'Content-Type':'application/json','X-Obrasaas-Timestamp':timestamp,'X-Obrasaas-Nonce':nonce,'X-Obrasaas-Signature':createHmac('sha256',Buffer.from(secret,'hex')).update('obrasaas-biometric-v1\\n'+timestamp+'\\n'+nonce+'\\n'+sha(body)).digest('hex')});}\n});\ntest('new facial transport requires the server dispatch fence before any network call',async()=>{\n const input=captures(),calls=[];assert.equal((await factory(input,calls).analyzeBiometricPair(input)).code,'BIOMETRIC_DISPATCH_FENCE_REQUIRED');assert.equal(calls.length,0);\n});\ntest('invalid image or local configuration never reaches the dispatch fence',async()=>{\n for(const mode of ['mime','same-image','secret']){const input=captures(),calls=[];let fences=0;if(mode==='mime')input.front.mimeType='application/pdf';if(mode==='same-image')input.selfie.buffer=Buffer.from(input.front.buffer);const extra=mode==='secret'?{environment:{}}:{};const result=await factory(input,calls,extra).analyzeBiometricPair(input,{beforeDispatch:()=>{fences++;return{};}});assert.equal(result.success,false);assert.equal(calls.length,0);assert.equal(fences,0);}\n});\ntest('new dispatch binds the immutable image snapshot and receipt before returning conservative advice',async()=>{\n const input=captures(),calls=[],order=[];const service=factory(input,calls,{fetchImpl:async(url,options)=>{order.push('fetch');calls.push({url,...options});return new Response(JSON.stringify(resultFor(input)),{headers:{'Content-Type':'application/json'}});}});const result=await service.analyzeBiometricPair(input,{beforeDispatch:async proof=>{order.push('fence');assert.ok(Object.isFrozen(proof));assert.equal(proof.frontSha256,sha(input.front.buffer));assert.equal(proof.selfieSha256,sha(input.selfie.buffer));assert.equal(proof.noticeSha256,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_SHA256);return ack(proof);}});assert.deepEqual(order,['fence','fetch']);assert.deepEqual(result,resultFor(input));assert.equal(Object.keys(result).length,13);assert.equal(calls.length,1);\n});\ntest('a malformed dispatch acknowledgement or changed image cannot trigger transport',async()=>{\n for(const mode of ['false','extra','digest','mutation']){const input=captures(),calls=[];await assert.rejects(factory(input,calls).analyzeBiometricPair(input,{beforeDispatch:proof=>{if(mode==='false')return{dispatched:false,bodySha256:proof.bodySha256};if(mode==='extra')return{...ack(proof),saved:true};if(mode==='digest')return{dispatched:true,bodySha256:'0'.repeat(64)};input.front.buffer[0]^=1;return ack(proof);}}),error=>error.code===(mode==='mutation'?'BIOMETRIC_SOURCE_CHANGED':'BIOMETRIC_DISPATCH_UNCONFIRMED'));assert.equal(calls.length,0);}\n});\ntest('authority failures preserve the original error and never dispatch',async()=>{\n const input=captures(),calls=[],denial=Object.assign(new Error('source changed'),{code:'PARTICIPANT_REVISION_CHANGED'});await assert.rejects(factory(input,calls).analyzeBiometricPair(input,{beforeDispatch:()=>{throw denial;}}),error=>error===denial);assert.equal(calls.length,0);\n});\ntest('an expired dispatch fence cannot start a late inference after its promise resolves',async()=>{\n const input=captures(),calls=[];let release;const deferred=new Promise(resolve=>{release=resolve;});await assert.rejects(factory(input,calls,{timeoutMs:5}).analyzeBiometricPair(input,{beforeDispatch:()=>deferred}),error=>error.code==='BIOMETRIC_DISPATCH_UNCONFIRMED');release({dispatched:true,bodySha256:'0'.repeat(64)});await Promise.resolve();await Promise.resolve();assert.equal(calls.length,0);\n});\ntest('claims of certification or extra result fields are rejected after one request without retries',async()=>{\n for(const mode of ['certified','extra']){const input=captures(),calls=[];const service=factory(input,calls,{fetchImpl:async()=>{calls.push(true);const result=resultFor(input);if(mode==='certified')result.identityCertified=true;else result.saved=true;return new Response(JSON.stringify(result),{headers:{'Content-Type':'application/json'}});}});assert.equal((await service.analyzeBiometricPair(input,{beforeDispatch:ack})).code,'BIOMETRIC_RESULT_UNCONFIRMED');assert.equal(calls.length,1);}\n});\n\nimport {beginMetaKycConversation,planMetaKycConversation} from '../src/lib/meta-kyc-conversation.mjs';\nimport {customerReplyMessage} from '../src/lib/meta-customer-provider.mjs';\nfor(const mode of ['ASSISTED','MANUAL'])test('v3 '+mode+' serializes every personal choice and all three image prompts before explicit presentation',()=>{\n let serial=0,plan=beginMetaKycConversation('wire-'+mode+'-begin',{captureImageSetVersion:2,analysisConsentVersion:3});const observed=[];\n const event=()=> 'wire-'+mode+'-'+(++serial);\n function observe(value,step){assert.equal(value.state.step,step);assert.equal(value.deposit,undefined,'A prompt must never deposit automatically');assert.ok(value.reply);const wire=customerReplyMessage(value.reply);assert.equal(wire.type,value.reply.type);if(wire.type==='interactive'){assert.deepEqual(wire.interactive.action.sections,value.reply.sections);assert.equal(wire.interactive.body.text,value.reply.body);assert.ok(wire.interactive.action.sections.flatMap(section=>section.rows).every(row=>row.title.length<=24));}else{assert.equal(wire.text.body,value.reply.body);assert.equal(wire.text.preview_url,false);}observed.push(step);return value;}\n function choose(value){const matches=plan.state.choices.map((choice,index)=>({choice,index})).filter(row=>row.choice.value===value);assert.equal(matches.length,1);return planMetaKycConversation({state:plan.state,eventId:event(),message:{type:'interactive',interactive:{list_reply:{id:'kyc:'+plan.state.nonce+':'+matches[0].index}}}});}\n function image(id,mime_type){return planMetaKycConversation({state:plan.state,eventId:event(),message:{type:'image',image:{id,mime_type}}});}\n observe(plan,'CONSENT');assert.equal(plan.state.consent,false);assert.equal(plan.state.backConsent,false);assert.equal(plan.state.biometricConsent,false);assert.equal(plan.state.biometricMode,null);assert.equal(plan.state.biometricNoticeVersion,version);\n const early=image('150000010','image/jpeg');observe(early,'CONSENT');assert.equal(early.state.front,null);assert.equal(early.state.biometricMode,null);assert.equal(early.state.consent,false);\n plan=observe(choose('CONSENT'),'BACK_CONSENT');assert.equal(plan.state.consent,true);assert.equal(plan.state.biometricMode,null);\n plan=observe(choose('BACK_CONSENT'),'OCR');assert.equal(plan.state.backConsent,true);\n plan=observe(choose(mode==='ASSISTED'?'OCR_YES':'OCR_NO'),'BIOMETRIC');assert.equal(plan.state.ocrConsent,mode==='ASSISTED');assert.equal(plan.state.biometricConsent,false);assert.equal(plan.state.biometricMode,null);assert.equal(plan.state.choices.find(choice=>choice.value==='BIOMETRIC_YES').title,'Comparar fotografías');\n const beforeChoice=image('150000011','image/png');observe(beforeChoice,'BIOMETRIC');assert.equal(beforeChoice.state.front,null);assert.equal(beforeChoice.state.biometricConsent,false);assert.equal(beforeChoice.state.biometricMode,null);\n plan=observe(choose(mode==='ASSISTED'?'BIOMETRIC_YES':'BIOMETRIC_NO'),'FRONT');assert.equal(plan.state.biometricConsent,mode==='ASSISTED');assert.equal(plan.state.biometricMode,mode);assert.equal(plan.state.biometricNoticeSha256,PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_SHA256);\n plan=observe(image('150000021','image/jpeg'),'BACK');const front=structuredClone(plan.state.front);assert.equal(plan.state.back,null);assert.equal(plan.state.selfie,null);\n plan=observe(image('150000022','image/png'),'SELFIE');const back=structuredClone(plan.state.back);assert.deepEqual(plan.state.front,front);assert.equal(plan.state.selfie,null);assert.match(plan.reply.body,/sólo tu rostro/);assert.match(plan.reply.body,/No sostengas el documento/);\n plan=observe(image('150000023','image/webp'),'CONFIRM');assert.deepEqual(plan.state.front,front);assert.deepEqual(plan.state.back,back);assert.equal(plan.state.selfie.mediaId,'150000023');assert.equal(plan.state.biometricConsent,mode==='ASSISTED');assert.equal(plan.state.biometricMode,mode);assert.match(plan.reply.body,mode==='ASSISTED'?/antes de guardarlas/:/sin comparación facial/);\n const reminder=planMetaKycConversation({state:plan.state,eventId:event(),message:{type:'text',text:{body:'ESTADO'}}});observe(reminder,'CONFIRM');assert.deepEqual(reminder.state.front,front);assert.deepEqual(reminder.state.back,back);\n const cancelled=planMetaKycConversation({state:plan.state,eventId:event(),message:{type:'text',text:{body:'CANCELAR'}}});assert.equal(cancelled.deposit,undefined);assert.equal(cancelled.cancelled,true);assert.equal(cancelled.state,null);assert.equal(customerReplyMessage(cancelled.reply).type,'text');\n const confirmed=choose('CONFIRM');assert.equal(confirmed.deposit,true);assert.equal(confirmed.state.step,'FINALIZING');assert.equal(confirmed.state.biometricMode,mode);assert.equal(confirmed.state.biometricConsent,mode==='ASSISTED');assert.deepEqual(confirmed.state.front,front);assert.deepEqual(confirmed.state.back,back);assert.equal(confirmed.reply,undefined);\n const finalReminder=planMetaKycConversation({state:confirmed.state,eventId:event(),message:{type:'text',text:{body:'CONTINUAR'}}});observe(finalReminder,'FINALIZING');assert.equal(finalReminder.preserveConversation,true);const finalStatus=planMetaKycConversation({state:confirmed.state,eventId:event(),message:{type:'text',text:{body:'ESTADO'}}});assert.equal(finalStatus.deposit,undefined);assert.equal(finalStatus.checkFacial,true);\n for(const phase of ['PREPARING','MODEL_UNKNOWN','PERSISTENCE_UNKNOWN','READY','REJECTED','CLOSED_MANUAL']){const state={...confirmed.state,step:'FACIAL_RECOVERY',facialRecovery:{operationId:'11111111-1111-4111-8111-111111111111',phase,canContinueManual:phase!=='CLOSED_MANUAL',privateObjectsMayExist:phase==='PERSISTENCE_UNKNOWN'}},recovery=planMetaKycConversation({state,eventId:event(),message:{type:'text',text:{body:'CONTINUAR'}}});observe(recovery,'FACIAL_RECOVERY');assert.equal(recovery.state.biometricMode,mode);assert.equal(recovery.state.biometricConsent,mode==='ASSISTED');assert.deepEqual(recovery.state.front,front);assert.deepEqual(recovery.state.back,back);}\n assert.ok(['CONSENT','BACK_CONSENT','OCR','BIOMETRIC','FRONT','BACK','SELFIE','CONFIRM','FINALIZING','FACIAL_RECOVERY'].every(step=>observed.includes(step)));assert.equal(observed.filter(step=>step==='FACIAL_RECOVERY').length,6);\n});\n\nimport {readFileSync} from 'node:fs';\nimport {parse} from '@babel/parser';\nconst readNativeFixture=file=>readFileSync(new URL('../'+file,import.meta.url),'utf8');\nfunction nativeFixtureFunction(file,name){\n const source=readNativeFixture(file),tree=parse(source,{sourceType:'module'}),matches=[];\n function visit(node){if(!node||typeof node!=='object')return;if(node.type==='FunctionDeclaration'&&node.id?.name===name)matches.push(node);for(const [key,value]of Object.entries(node)){if(['loc','start','end','tokens','comments'].includes(key))continue;if(Array.isArray(value))value.forEach(visit);else if(value&&typeof value==='object')visit(value);}}\n visit(tree);assert.equal(matches.length,1,file+':'+name);return source.slice(matches[0].start,matches[0].end);\n}\nfunction nativeChoicePort(){\n let serial=0,plan=null,preparedVersion=3;const pending=new Map(),responses=new Map(),titles=[];\n const event=()=> 'native-choice-'+(++serial),outbound=id=>'outbound:'+id;\n function apply(message){const eventId=event();if(typeof message==='string')plan=beginMetaKycConversation(eventId,{captureImageSetVersion:2,analysisConsentVersion:preparedVersion});else plan=planMetaKycConversation({state:plan.state,eventId,message});assert.equal(plan.deposit,undefined,'Fixture preparation cannot submit identity');plan.state={...plan.state,lastEventId:eventId};responses.set(outbound(eventId),{wire:customerReplyMessage(plan.reply)});return{kind:'KYC_CHAT',replySent:true,businessApplied:false};}\n async function choose(_f,title){const wire=responses.get(outbound(plan.state.lastEventId)).wire,rows=wire.interactive.action.sections.flatMap(section=>section.rows),choices=rows.filter(row=>row.title===title);assert.equal(choices.length,1,'Missing exact canonical choice '+title);titles.push(title);return{result:apply({type:'interactive',interactive:{type:'list_reply',list_reply:choices[0]}})};}\n const store=version=>({save:async()=>{preparedVersion=version;return{captureImageSetVersion:2,challengeId:'native-choice-challenge',receiptId:'native-choice-prepared',code:'IDENTIDAD component-only'};}});\n const receive=async(_f,message)=>{const id=event();pending.set(id,message);return id;},processor={process:async id=>apply(pending.get(id))};\n return{choose,titles,store,state:async()=>plan.state,run:async(_f,message)=>({eventId:event(),result:apply(message)}),receive,processor,responses,outbound,waitNext:async()=>({s:plan.state}),query:async sql=>({rows:sql.startsWith('SELECT id FROM \"ProjectMembership\"')?[{id:'component-membership'}]:[]}),worker:async()=>({revision:'2026-10-22T12:00:00.000001'})};\n}\nfunction compileNativeFixture(file,name,ports,preamble=''){const names=Object.keys(ports);return new Function(...names,preamble+'\\n'+nativeFixtureFunction(file,name)+'\\nreturn '+name+';')(...names.map(key=>ports[key]));}\nfunction companyNativeFixture(){\n const port=nativeChoicePort(),historicalIssuer=()=>{},base={key:'component',organizationId:'component-org',anchorProjectId:'component-anchor'},asset={};\n const fixture=compileNativeFixture('scripts/lib/kyc-current-image-native.mjs','fixture',{assert,base,query:port.query,graph:{assets:new Map([['component',asset]]),addMedia:()=>{}},workspace:{list:async()=>({scope:'component-scope'})},ownerSession:{},store:port.store(3),readWorker:port.worker,run:port.run,choose:port.choose,readState:port.state,currentImageSyntheticPng:()=>Buffer.from('synthetic-component-only'),createParticipantStore:options=>{assert.equal(options.prepareKycChat,historicalIssuer);return port.store(2);},syntheticCaptureQuality:()=>{},trackedConnect:()=>{},prepareHistoricalV2Challenge:historicalIssuer,environment:{},PARTICIPANT_AUTO_BIOMETRIC_NOTICE_VERSION:'participant-private-biometric-v2',PARTICIPANT_PRECOMMIT_BIOMETRIC_NOTICE_VERSION:version,randomUUID:()=> '11111111-1111-4111-8111-111111111111'},'let fixtureNumber=0,clockOffsetMs=0;const fixtureIds=[];');\n return{fixture,port};\n}\ntest('CURRENT native COMPANY setup executes its real fixture body through the actual v3 manual choices',async()=>{\n const{fixture,port}=companyNativeFixture();await fixture();assert.deepEqual(port.titles,['Autorizar imágenes','Autorizar dorso','Sin lectura asistida','Revisión manual']);assert.equal((await port.state()).analysisConsentVersion,3);assert.equal((await port.state()).biometricMode,'MANUAL');assert.equal((await port.state()).biometricConsent,false);\n let plan={state:await port.state()};for(const [index,mime_type]of ['image/jpeg','image/png','image/webp'].entries()){plan=planMetaKycConversation({state:plan.state,eventId:'native-confirm-'+index,message:{type:'image',image:{id:'15000990'+index,mime_type}}});assert.equal(plan.deposit,undefined);}const wire=customerReplyMessage(plan.reply),rows=wire.interactive.action.sections.flatMap(section=>section.rows);assert.equal(rows.filter(row=>row.title==='Presentar identidad').length,1);assert.equal(rows.some(row=>row.title==='Guardar identidad'),false);\n // The native deposit/recovery bodies must all select this actual v3 row;\n // the separate, explicitly seeded v2 scenario retains its old choice.\n const source=readNativeFixture('scripts/lib/kyc-current-image-native.mjs'),[current,legacy]=source.split('  // INTEGRATED_CURRENT_PREANALYSIS_V2_BEGIN:');assert.ok(legacy);assert.equal((current.match(/'Presentar identidad'/g)||[]).length,3);assert.equal(current.includes(\"'Guardar identidad'\"),false);assert.ok(legacy.includes(\"fixture({step:'CONSENT',historicalV2:true})\"));assert.ok(legacy.includes(\"row.title==='Guardar identidad'\"));\n});\ntest('native automatic v2 scenario seeds only its explicitly historical fixture and keeps its previous choices',async()=>{\n const{fixture,port}=companyNativeFixture();await fixture({historicalV2:true});assert.deepEqual(port.titles,['Autorizar imágenes','Autorizar dorso','Sin lectura asistida','Sin comparación facial']);assert.equal((await port.state()).analysisConsentVersion,undefined);assert.equal((await port.state()).biometricNoticeVersion,'participant-private-biometric-v2');assert.equal(Object.hasOwn(await port.state(),'biometricMode'),false);\n});\ntest('CURRENT native OWN setup executes its real seed body through the actual v3 manual choices',async()=>{\n const port=nativeChoicePort(),seed=compileNativeFixture('scripts/lib/kyc-current-image-own-native.mjs','seed',{assert,pool:{query:port.query},participants:port.store(3),owner:{},scope:'component-scope',randomUUID:()=> '11111111-1111-4111-8111-111111111111',worker:port.worker,receive:port.receive,processor:port.processor,waitNext:port.waitNext,responses:port.responses,customerOutboundId:port.outbound,state:port.state},'const workerIds=[];');await seed(1);assert.equal((await port.state()).analysisConsentVersion,3);assert.equal((await port.state()).biometricMode,'MANUAL');assert.equal((await port.state()).biometricConsent,false);assert.equal((await port.state()).step,'FRONT');\n});\ntest('CURRENT neutral native COMPANY and OWN engines execute every real phase setup with explicit v3 manual consent',async()=>{\n for(const kind of ['COMPANY','OWN_COMPANY_RUNTIME'])for(const phase of ['CONSENT','FRONT','BACK','SELFIE','CONFIRM']){const port=nativeChoicePort(),fixture=compileNativeFixture('scripts/lib/kyc-neutral-step-guidance-native.mjs','fixture',{assert,prefix:'component-neutral',kind,base:{organizationId:'component-org',channelId:'component-channel'},query:port.query,withIssuanceClock:async(_offset,run)=>run(),workspace:{list:async()=>({scope:'component-scope'})},ownerSession:{},participants:port.store(3),worker:port.worker,receive:port.receive,processor:port.processor,state:port.state,choose:port.choose,ready:async()=>{},randomUUID:()=> '11111111-1111-4111-8111-111111111111'},'let sequence=0,clockOffsetMs=0;const fixtures=[];');await fixture({phase});const state=await port.state();assert.equal(state.step,phase);assert.equal(state.analysisConsentVersion,3);assert.equal(state.biometricMode,phase==='CONSENT'?null:'MANUAL');assert.equal(state.biometricConsent,false);assert.equal(state.consent,phase!=='CONSENT');}\n});\n",
               "previousText": ""
             }
           ]
@@ -73733,6 +74038,11 @@
           "current": "768da7bdabe48cf98748989d2a05b0e49ae59e6a8256e5ac6befa5e2cd7dd9cc"
         },
         {
+          "pointer": "/planBudgetCurrentRevision/references/62/currentSha256",
+          "previous": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66",
+          "current": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
+        },
+        {
           "pointer": "/planBudgetCurrentRevision/references/76/currentSha256",
           "previous": "77fec910b50db6b95e60723188f3c1d4900eef96c9bc43b395228ebc8163da7f",
           "current": "8b9d624b94e0561e1e9b0243e6cc442561768a6b6d3b6b8671604b81124664ea"
@@ -74153,7 +74463,7 @@
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
               "previousSha256": "666a8c27f3ab7d6fdbe66c91f22ace4e25b04b98e865f401d19c72212916104d",
-              "currentSha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+              "currentSha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
             },
             {
               "path": "src/lib/plan-budget-source.mjs",
@@ -74875,7 +75185,7 @@
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
               "previousSha256": "666a8c27f3ab7d6fdbe66c91f22ace4e25b04b98e865f401d19c72212916104d",
-              "currentSha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+              "currentSha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
             },
             {
               "path": "src/lib/plan-budget-source.mjs",
@@ -75320,7 +75630,17 @@
             {
               "path": "scripts/lib/kyc-current-image-native.mjs",
               "previousSha256": "87ad6932bbb4ed264947b0ba527965080e4f38a7cc0bb0f945b471e88ee06bbb",
-              "currentSha256": "a1d3c61c34a852b1d7353218d8ef5455215318026de83e3d721d4fab0036ac2d"
+              "currentSha256": "377da2076f225bfabf975c95e9108be76aa137dedbd82ee7dc98de92f5a2e6e3"
+            },
+            {
+              "path": "scripts/lib/kyc-current-image-own-native.mjs",
+              "previousSha256": "2458c91bda08fe36d409e9c229c19f06dfe9d113aa8c8df4d6f11502b0d1e5fe",
+              "currentSha256": "d85aa019e64ecd6baf9bc918ea87f869e606768876aa37729905255472f6e190"
+            },
+            {
+              "path": "scripts/lib/kyc-neutral-step-guidance-native.mjs",
+              "previousSha256": "ddfd08e00f35b3f33254eed513d7bba81ec9791b23ca0d078362132fd24d546e",
+              "currentSha256": "c1900e9d80666a5f5c225208187dc129d6da2b00beb5d0f2619adae9ffffcf99"
             },
             {
               "path": "scripts/lib/participant-preanalysis-current-ci-lineage.mjs",
@@ -75340,7 +75660,7 @@
             {
               "path": "scripts/verify-company-channel-kyc-postgres.mjs",
               "previousSha256": "212a3f1ac6993954681a765635034ed0e48ac038db0ad3c6159df603ce049903",
-              "currentSha256": "980bf49267169440488f2a002f5c18d6efe6e98a10ce15570d0160fc700ce29c"
+              "currentSha256": "40c5c962bd1225fbee891a59e8c6ce9c7fd96adb159aaeefd767bacc3278e9ce"
             },
             {
               "path": "scripts/verify-meta-kyc-chat-postgres.mjs",
@@ -75355,7 +75675,7 @@
             {
               "path": "scripts/verify-own-company-number-postgres.mjs",
               "previousSha256": "22fc50c349d97da323a47c91e3f64f58b6ce9df54042a17ee2fecb5c7d4bf2b0",
-              "currentSha256": "7fff1b8522f78c153802135a0aee05857b2e59d7355aa90bae1d6f9dcf936572"
+              "currentSha256": "a7295bd908244e910e756acb7c1d48591445718ecc8d77b6d043c83cf0d69913"
             },
             {
               "path": "scripts/verify-participant-civil-postgres.mjs",
@@ -75370,17 +75690,17 @@
             {
               "path": "scripts/verify-participant-kyc-preanalysis-postgres.mjs",
               "previousSha256": "d2fabf981cd77c28ebf4be49867f07dcf1a23ae8616848e9c0c038b8291f83d8",
-              "currentSha256": "d38a71041c11d4387348debcc94def028c552a07fbc2ca6a3eaa4f0ba4ca2e2f"
+              "currentSha256": "0f3a541f3945af4ae0e96aab2dcd385ea6f68e429ad97aa8bc982366e72478d3"
             },
             {
               "path": "scripts/verify-participant-onboarding-recovery-postgres.mjs",
               "previousSha256": "8649cb1423461f52c1029a1510b1e98d1752c91ffd3178ac57694c3f136870d4",
-              "currentSha256": "23d471c717aeb1373f923ec95776a4e501444928a417781abc056fae361daa01"
+              "currentSha256": "12b0006e3d8037a24bc36070e0b773d313f86244961efe1cfdba1bef5bf384dc"
             },
             {
               "path": "scripts/verify-participant-reactive-onboarding-postgres.mjs",
               "previousSha256": "040611be2ff366f1cdd937e772ee3216e965952942988fd3a8590210f2404caa",
-              "currentSha256": "447c9d167f0a7da21bf6be52448023f2e5cd28e89b78635b6c774e73e32b60a4"
+              "currentSha256": "bdabb318de041cda2921796645dbfe3226a14c771d14d69a9714ae0b346d6f1b"
             },
             {
               "path": "scripts/verify-participants-postgres.mjs",
@@ -75753,6 +76073,11 @@
               "currentSha256": "ba11dac9108656574bebb7d842a364201a73a885d0eb2e5eee18d4f2be762b33"
             },
             {
+              "path": "tests/production-participant-onboarding-authority.test.mjs",
+              "previousSha256": "91ba06328f6b1e4b86cb8b0441df46d05a32dc1ebdcf158a66bd1c80f972be29",
+              "currentSha256": "242ef03e007bbaff3f65255795b08d3dc80177f5d761998ab038e05c91da75e7"
+            },
+            {
               "path": "tests/production-pilot-coverage-postgres-target.test.mjs",
               "previousSha256": null,
               "currentSha256": "66d750f46fa3a0ae0ac2773cc2342d0d9e9787aa18161ca06f968796d80c6642"
@@ -75775,7 +76100,7 @@
             {
               "path": "tests/production-private-biometric-precommit-wire.test.mjs",
               "previousSha256": null,
-              "currentSha256": "9e537299fde6a0f0fc2c877eb3a82fbe64403ea62fc94d408faae0c0a362d9de"
+              "currentSha256": "6a4906c5bbdf95a57ea2ee994b815f4f8e063aa8dd7f6c4e75ad20cb030037c1"
             },
             {
               "path": "tests/production-private-capture-quality.test.mjs",
@@ -82806,7 +83131,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+              "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -84234,7 +84559,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+              "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -85588,15 +85913,15 @@
             },
             {
               "path": "scripts/lib/kyc-current-image-native.mjs",
-              "sha256": "a1d3c61c34a852b1d7353218d8ef5455215318026de83e3d721d4fab0036ac2d"
+              "sha256": "377da2076f225bfabf975c95e9108be76aa137dedbd82ee7dc98de92f5a2e6e3"
             },
             {
               "path": "scripts/lib/kyc-current-image-own-native.mjs",
-              "sha256": "2458c91bda08fe36d409e9c229c19f06dfe9d113aa8c8df4d6f11502b0d1e5fe"
+              "sha256": "d85aa019e64ecd6baf9bc918ea87f869e606768876aa37729905255472f6e190"
             },
             {
               "path": "scripts/lib/kyc-neutral-step-guidance-native.mjs",
-              "sha256": "ddfd08e00f35b3f33254eed513d7bba81ec9791b23ca0d078362132fd24d546e"
+              "sha256": "c1900e9d80666a5f5c225208187dc129d6da2b00beb5d0f2619adae9ffffcf99"
             },
             {
               "path": "scripts/lib/kyc-neutral-step-guidance-own-native.mjs",
@@ -86008,7 +86333,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+              "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -87377,7 +87702,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+              "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -88651,7 +88976,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+              "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -91964,7 +92289,7 @@
         {
           "pointer": "/extension/proofs/7/producerSha256",
           "previous": "212a3f1ac6993954681a765635034ed0e48ac038db0ad3c6159df603ce049903",
-          "current": "980bf49267169440488f2a002f5c18d6efe6e98a10ce15570d0160fc700ce29c"
+          "current": "40c5c962bd1225fbee891a59e8c6ce9c7fd96adb159aaeefd767bacc3278e9ce"
         },
         {
           "pointer": "/extension/proofs/13/sourceFiles",
@@ -94644,7 +94969,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+              "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -95176,7 +95501,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+              "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -95875,7 +96200,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+              "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -96716,7 +97041,7 @@
                   },
                   {
                     "path": "src/lib/participant-onboarding-reactive.mjs",
-                    "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+                    "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
                   },
                   {
                     "path": "src/lib/participant-policy.mjs",
@@ -97480,7 +97805,7 @@
                   },
                   {
                     "path": "src/lib/participant-onboarding-reactive.mjs",
-                    "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+                    "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
                   },
                   {
                     "path": "src/lib/participant-policy.mjs",
@@ -98232,7 +98557,7 @@
                   },
                   {
                     "path": "src/lib/participant-onboarding-reactive.mjs",
-                    "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+                    "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
                   },
                   {
                     "path": "src/lib/participant-policy.mjs",
@@ -98990,7 +99315,7 @@
                   },
                   {
                     "path": "src/lib/participant-onboarding-reactive.mjs",
-                    "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+                    "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
                   },
                   {
                     "path": "src/lib/participant-policy.mjs",
@@ -99744,7 +100069,7 @@
                   },
                   {
                     "path": "src/lib/participant-onboarding-reactive.mjs",
-                    "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+                    "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
                   },
                   {
                     "path": "src/lib/participant-policy.mjs",
@@ -99900,7 +100225,7 @@
           "producer": "scripts/verify-company-channel-kyc-postgres.mjs",
           "proofPath": ".vercel/company-kyc-evidence/postgres.json",
           "previousProducerLfSha256": "212a3f1ac6993954681a765635034ed0e48ac038db0ad3c6159df603ce049903",
-          "currentProducerLfSha256": "980bf49267169440488f2a002f5c18d6efe6e98a10ce15570d0160fc700ce29c",
+          "currentProducerLfSha256": "40c5c962bd1225fbee891a59e8c6ce9c7fd96adb159aaeefd767bacc3278e9ce",
           "previousFiles": [
             "scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs",
             "scripts/lib/kyc-context-feedback-native.mjs",
@@ -100411,11 +100736,11 @@
             },
             {
               "path": "scripts/lib/kyc-current-image-native.mjs",
-              "sha256": "a1d3c61c34a852b1d7353218d8ef5455215318026de83e3d721d4fab0036ac2d"
+              "sha256": "377da2076f225bfabf975c95e9108be76aa137dedbd82ee7dc98de92f5a2e6e3"
             },
             {
               "path": "scripts/lib/kyc-neutral-step-guidance-native.mjs",
-              "sha256": "ddfd08e00f35b3f33254eed513d7bba81ec9791b23ca0d078362132fd24d546e"
+              "sha256": "c1900e9d80666a5f5c225208187dc129d6da2b00beb5d0f2619adae9ffffcf99"
             },
             {
               "path": "scripts/lib/synthetic-capture-quality.mjs",
@@ -100423,7 +100748,7 @@
             },
             {
               "path": "scripts/verify-company-channel-kyc-postgres.mjs",
-              "sha256": "980bf49267169440488f2a002f5c18d6efe6e98a10ce15570d0160fc700ce29c"
+              "sha256": "40c5c962bd1225fbee891a59e8c6ce9c7fd96adb159aaeefd767bacc3278e9ce"
             },
             {
               "path": "src/app/(identity)/cuenta/private-bank-account-format.mjs",
@@ -101091,7 +101416,7 @@
             },
             {
               "path": "src/lib/participant-onboarding-reactive.mjs",
-              "sha256": "f3973cbc9904b167691bae685ed25420348fca135f2b56e80b7ca9791bf68b66"
+              "sha256": "9a9b464de255da2b3981a450107d914eaa098a74bced2851ae8d8227e1a9d8e7"
             },
             {
               "path": "src/lib/participant-policy.mjs",
@@ -101435,7 +101760,7 @@
             "currentLfManifest": [
               {
                 "path": "scripts/lib/kyc-current-image-native.mjs",
-                "sha256": "a1d3c61c34a852b1d7353218d8ef5455215318026de83e3d721d4fab0036ac2d"
+                "sha256": "377da2076f225bfabf975c95e9108be76aa137dedbd82ee7dc98de92f5a2e6e3"
               },
               {
                 "path": "scripts/lib/synthetic-capture-quality.mjs",
@@ -101443,7 +101768,7 @@
               },
               {
                 "path": "scripts/verify-company-channel-kyc-postgres.mjs",
-                "sha256": "980bf49267169440488f2a002f5c18d6efe6e98a10ce15570d0160fc700ce29c"
+                "sha256": "40c5c962bd1225fbee891a59e8c6ce9c7fd96adb159aaeefd767bacc3278e9ce"
               },
               {
                 "path": "package.json",

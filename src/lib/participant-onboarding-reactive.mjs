@@ -238,6 +238,8 @@ async function planReactiveParticipantStatus(client,r,pref,{environment}){
  return {state:r.state,reactiveKycStatus:proof,reply:reactiveParticipantStatusReply(a.status)};
 }
 
+function accountAcceptancePlan(r){return {state:r.state,reply:{type:'text',body:'Antes de presentar tu identidad, aceptá la invitación recibida por correo e ingresá con esa misma cuenta en https://obrasaas.com/cuenta. Después volvé a escribir HOLA. No envíes fotos ni documentos desde este paso.'}};}
+
 function offer(authority,r){
  const expiresAt=new Date(authority.reactiveExpiresAt).toISOString();
  const proof={version:1,kind:'PRESENT_IDENTITY',eventId:r.event.id,applicationId:r.anchor.id,nonce:randomBytes(20).toString('hex'),expiresAt,intent:participantOnboardingIntent(authority.worker.metadata.participant.onboardingDelivery),authorityDigest:authority.authorityDigest,admissionReceiptId:r.state.admission.receiptId};
@@ -262,8 +264,9 @@ export async function planReactiveOnboarding(client,r,pref,{environment=process.
   if(r.payload.value.type!=='text'||Object.hasOwn(r.payload.value,'context')||choice?.startsWith('intake-kyc:')||!expiredPeriodDenials.has(error))throw error;
   return {state:r.state,reply:unavailableReply};
  }
- if(!choice?.startsWith('intake-kyc:'))return offer(authority,r);
+ if(!choice?.startsWith('intake-kyc:')){if(authority.worker.metadata.participant.status==='INVITED'){if(Object.hasOwn(r.payload.value,'context'))fail();return accountAcceptancePlan(r);}return offer(authority,r);}
  if(!promptConfirmed||previous?.kind!=='PRESENT_IDENTITY'||choice!=='intake-kyc:'+previous.nonce||previous.eventId!==r.state.lastEventId||previous.applicationId!==r.anchor.id||previous.authorityDigest!==authority.authorityDigest||durableDigest(previous.intent)!==durableDigest(pref.intent)||!Number.isFinite(Date.parse(previous.expiresAt))||Date.parse(previous.expiresAt)<=authority.now.getTime())fail();
+ if(authority.worker.metadata.participant.status==='INVITED')return accountAcceptancePlan(r);
  const operationId=metaKycOperationId(r.event.id),prepared=await prepareMetaKycChallenge(client,authority.member,authority.project,{workerId:authority.worker.id,revision:authority.worker.revision,operationId},{environment});
  if(!prepared.code||prepared.codeUnavailable||!metaKycChallengeDigest(prepared.code))fail();
  const exteriorId=participantReceiptId(authority.member.actorId,authority.project.id,operationId),handoffId='reactive_onboarding_'+digest(['reactive-onboarding-v1',r.event.id]);

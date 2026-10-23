@@ -260,8 +260,8 @@ test('caller-supplied identity/recipient/expected fields are rejected before dat
 
 // Reuse the canonical authority fixture above. These extra rows model the
 // existing intake admission/discovery contracts, not a replacement resolver.
-async function expiredPeriodReactiveFixture(){
- const f=fixture(),applicationId='customer_webhook_'+'a'.repeat(64),eventId='customer_webhook_'+'b'.repeat(64),permissions={attendance:false,report:false};
+async function expiredPeriodReactiveFixture({active=false}={}){
+ const f=fixture({active}),applicationId='customer_webhook_'+'a'.repeat(64),eventId='customer_webhook_'+'b'.repeat(64),permissions={attendance:false,report:false};
  const admission={version:1,applicationId,workerId:f.worker.id,projectId:f.worker.projectId,actorId:f.issuer.actorId,email:f.invitation.email,receiptId:'admission_original',personReceiptId:'person_original',permissions};
  f.worker.metadata.employeeIntakeAdmission=structuredClone(admission);
  f.worker.metadata.participant.onboardingDelivery={version:1,...f.intent,state:'WAITING_CONFIGURATION',outboundId:null};
@@ -269,6 +269,8 @@ async function expiredPeriodReactiveFixture(){
  f.audit.set(admission.receiptId,{id:admission.receiptId,organizationId:f.organization.id,actorId:f.issuer.actorId,entityType:'WebhookEvent',entityId:applicationId,action:'participant.operation.recorded',metadata:{version:1,kind:'ADMIT_EMPLOYEE_INTAKE',projectId:f.worker.projectId,connectionId:f.connection.id,applicationId,workerId:f.worker.id,personReceiptId:admission.personReceiptId,permissionsGranted:false,approvedPermissionsDigest:durableDigest(permissions)}});
  const state={step:'ADMITTED',status:'ADMITTED',consent:true,admission},base=f.client.query.bind(f.client),rows=value=>({rows:structuredClone(value),rowCount:value.length});
  f.client.query=async(sql,args=[])=>{
+  if(sql.startsWith('SELECT u.id AS "actorId",tm.id AS "membershipId" FROM public."PlatformUser" u JOIN public."TenantMembership"')){f.controls.queries.push({sql,args:structuredClone(args)});assert.deepEqual(args,[f.own.clerkUserId,f.organization.id]);return rows(f.controls.ownActive?[{actorId:f.own.actorId,membershipId:f.own.membershipId}]:[]);}
+  if(sql.startsWith('SELECT id AS "membershipId"')&&sql.includes('WHERE id=$1 AND "userId"=$2')&&args[0]===f.own.membershipId){f.controls.queries.push({sql,args:structuredClone(args)});assert.deepEqual(args,[f.own.membershipId,f.own.actorId,f.organization.id]);return rows(f.controls.ownActive?[f.own]:[]);}
   if(f.controls.currentChannel){const current=f.controls.currentChannel,owner={...f.owner,connectionId:current.id,anchorProjectId:current.projectId};if(sql.includes('FROM public."WhatsAppCompanyChannel"')&&sql.includes('JOIN public."WhatsAppChannelProjectAssignment"')){f.controls.queries.push({sql,args:structuredClone(args)});assert.deepEqual(args,sql.includes('cc.revision=$3')?[owner.connectionId,f.organization.id,owner.revision,f.project.id,owner.assignmentRevision,owner.mode]:[f.organization.id,f.project.id]);return rows([owner]);}if(sql.startsWith('SELECT')&&sql.includes('FROM public."WhatsAppConnection"')){f.controls.queries.push({sql,args:structuredClone(args)});assert.deepEqual(args,[current.id,current.projectId]);return rows([current]);}}
   if(sql.startsWith('SELECT w.id,w."projectId",w.metadata FROM public."Worker"')){f.controls.queries.push({sql,args:structuredClone(args)});assert.deepEqual(args,[f.worker.id,f.worker.projectId,f.organization.id]);return rows([f.worker]);}
   if(sql.startsWith('SELECT id AS "membershipId"')&&sql.includes('WHERE id=$1 AND "userId"=$2')){f.controls.queries.push({sql,args:structuredClone(args)});assert.deepEqual(args,[f.issuer.membershipId,f.issuer.actorId,f.organization.id]);return rows(f.controls.issuerActive?[f.issuer]:[]);}
@@ -295,7 +297,7 @@ test('expired authenticated managed paid period gives the same neutral reply wit
  const f=await expiredPeriodReactiveFixture();Object.assign(f.organization,{subscriptionPlan:'PRO',subscriptionStatus:'ACTIVE',metadata:{companySubscription:{version:1,attemptId:'company_subscription_'+'1'.repeat(64),receiptId:'company_subscription_payment_'+'2'.repeat(64),providerResourceId:'synthetic-payment',cancelAtPeriodEnd:false,paidPeriod:{startsAt:new Date(f.now.getTime()-3600000).toISOString(),endsAt:f.now.toISOString()}}}});const before={worker:structuredClone(f.worker),audit:structuredClone([...f.audit]),state:structuredClone(f.r.state)};await assert.rejects(resolve(f),{code:'COMPANY_ENTITLEMENT_PAID_PERIOD_EXPIRED'});assertNeutralAvailability(f,await f.plan(),before);
 });
 test('current trial retains the original private identity offer instead of neutral availability feedback',async()=>{
- const f=await expiredPeriodReactiveFixture(),before=structuredClone(f.worker),result=await f.plan();assert.equal(result.reactiveOnboarding.kind,'PRESENT_IDENTITY');assert.equal(result.reply.type,'interactive');assert.match(result.reply.body,/Tu ficha está registrada/);assert.deepEqual(f.worker,before);
+ const f=await expiredPeriodReactiveFixture({active:true}),before=structuredClone(f.worker),result=await f.plan();assert.equal(result.reactiveOnboarding.kind,'PRESENT_IDENTITY');assert.equal(result.reply.type,'interactive');assert.match(result.reply.body,/Tu ficha está registrada/);assert.deepEqual(f.worker,before);
 });
 test('expired trial cannot turn a revoked issuer into availability feedback',async()=>{
  const f=await expiredPeriodReactiveFixture();f.organization.trialEndsAt=new Date(f.now);f.controls.issuerActive=false;await assert.rejects(f.plan(),{code:'EMPLOYEE_INTAKE_REVOKED'});
@@ -322,4 +324,22 @@ test('expired trial text with any supplied context remains denied instead of rec
 });
 test('expired trial cannot hide a changed target connection anchor or grant before neutral feedback',async()=>{
  for(const mutate of [c=>{c.id='connection_other';},c=>{c.projectId='project_other_anchor';},c=>{c.metadata.customerSignupId='signup_OtherSynthetic';}]){const f=await expiredPeriodReactiveFixture();f.organization.trialEndsAt=new Date(f.now);const current=structuredClone(f.connection);mutate(current);f.controls.currentChannel=current;await assert.rejects(f.plan(),{code:'EMPLOYEE_INTAKE_REVOKED'});}
+});
+
+
+test('an invited account receives acceptance guidance through each fresh alias without a challenge or writes',async()=>{
+ for(const body of ['HOLA','ESTADO','MENU','MENÚ']){
+  const f=await expiredPeriodReactiveFixture(),before={worker:structuredClone(f.worker),audit:structuredClone([...f.audit]),state:structuredClone(f.r.state)},result=await f.plan(body);
+  assert.equal(result.state,f.r.state);assert.equal(result.reply.type,'text');
+  assert.match(result.reply.body,/aceptá la invitación recibida por correo/);assert.ok(result.reply.body.includes('https://obrasaas.com/cuenta'));assert.match(result.reply.body,/No envíes fotos ni documentos/);
+  assert.equal(result.reactiveOnboarding,undefined);assert.equal(result.reactiveKycStatus,undefined);assert.equal(f.worker.metadata.participant.kycChatChallenge,undefined);
+  assert.deepEqual(f.worker,before.worker);assert.deepEqual([...f.audit],before.audit);assert.deepEqual(f.r.state,before.state);assert.ok(f.controls.queries.every(({sql})=>/^SELECT\b/.test(sql)));
+ }
+});
+
+test('acceptance guidance cannot turn an unconfirmed identity button into a successful reply',async()=>{
+ const f=await expiredPeriodReactiveFixture(),before={worker:structuredClone(f.worker),audit:structuredClone([...f.audit]),state:structuredClone(f.r.state)};
+ f.r.payload.value={...f.r.payload.value,type:'interactive',interactive:{list_reply:{id:'intake-kyc:'+'c'.repeat(40)}},context:{id:'wamid.UnconfirmedIdentityPrompt'}};delete f.r.payload.value.text;
+ await assert.rejects(planReactiveOnboarding(f.client,f.r,f.pref,{promptConfirmed:false}),{code:'EMPLOYEE_INTAKE_CONTEXT_REQUIRED'});
+ assert.deepEqual(f.worker,before.worker);assert.deepEqual([...f.audit],before.audit);assert.deepEqual(f.r.state,before.state);assert.ok(f.controls.queries.every(({sql})=>/^SELECT\b/.test(sql)));assert.equal(f.worker.metadata.participant.kycChatChallenge,undefined);
 });

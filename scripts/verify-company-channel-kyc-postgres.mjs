@@ -356,7 +356,7 @@ try{
   contextFeedbackNative=await verifyKycContextFeedbackNative({query,connect:expiryConnect,provider,environment,fixture:expiryFixture,receive:expiryReceive,readWorker:expiryWorker,stats:expiryStats,kind:expiryKind,checks});
  }finally{expiryGate?.release?.();expiryClockOffset=0;expiryTracing=false;graph.assets.get(expiryBase.key).sender=originalExpirySender;}
  expiryFeedbackNative=expiryEvidence;
- currentImageNative=await verifyKycCurrentImageNative({query,connect,provider,environment,graph,blob,base:a,ownerSession,checks});
+ currentImageNative=await verifyKycCurrentImageNative({query,connect,provider,environment,graph,blob,base:a,ownerSession,checks,prepareHistoricalV2Challenge});
  neutralStepGuidanceNative=await verifyKycNeutralStepGuidanceNative({query,connect,provider,environment,graph,base:a,ownerSession,workspace});
 
  const audits=JSON.stringify((await query(`SELECT metadata FROM "AuditLog"`)).rows);for(const forbidden of [a.token,'IDENTIDAD ','VINCULAR ','data:image'])assert.equal(audits.includes(forbidden),false);assert.equal(networkCalls,0);assert.deepEqual(graph.unexpected,[]);

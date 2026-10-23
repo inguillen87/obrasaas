@@ -23,7 +23,7 @@ import {createMetaCustomerInbox, createMetaCustomerCallbackHandlers, splitMetaCu
 import {createMetaCustomerProcessor} from '../src/lib/meta-customer-processing.mjs';
 import {createMetaKycBridge} from '../src/lib/meta-kyc-bridge.mjs';
 import {createMetaKycOutbound} from '../src/lib/meta-kyc-outbound.mjs';
-import {prepareMetaKycChallenge} from '../src/lib/meta-kyc-challenge.mjs';
+import {prepareMetaKycChallenge as prepareHistoricalV2Challenge} from '../tests/fixtures/meta-kyc-challenge-legacy-v2.mjs';
 import {resolveMetaKycAuthority, META_KYC_AUTHORIZATION_CODES} from '../src/lib/meta-kyc-identity.mjs';
 import {createParticipantChannelKycDeposit, createParticipantChannelKycUploader} from '../src/lib/participant-channel-kyc.mjs';
 import {encryptCustomerSecret} from '../src/lib/meta-customer-credentials.mjs';
@@ -455,9 +455,10 @@ export async function verifyParticipantKycPreanalysisPostgres(environment = proc
       const processor = createMetaCustomerProcessor({connect, environment: nativeEnvironment, authorizationCodes: META_KYC_AUTHORIZATION_CODES,
         dispatch: context => bridge.execute(context), outbound: {send: (context, reply, {purpose}) => outbound.send(context, reply, {purpose})}});
       const callback = createMetaCustomerCallbackHandlers({inbox: createMetaCustomerInbox({connect, environment: nativeEnvironment}), environment: nativeEnvironment, schedule: () => {}});
-      const code = await customerJobTransaction(connect, async client => prepareMetaKycChallenge(client,
+      const code = await customerJobTransaction(connect, async client => prepareHistoricalV2Challenge(client,
         {actorId: tenant.ownerId, membershipId: 'owner-member-a', organizationId: tenant.organizationId, role: 'ADMIN'},
         {id: tenant.projectId, organizationId: tenant.organizationId}, {workerId: tenant.workerId, revision: (await row(tenant.workerId)).revision, operationId: randomUUID()}));
+      assert.equal((await row(tenant.workerId)).metadata.participant.kycChatChallenge.analysisConsentVersion, 2);
       let sequence = 0;
       async function receive(message) {
         const value = {id: 'wamid.SyntheticPreanalysis_' + randomUUID().replaceAll('-', ''), from: tenant.sender, timestamp: String(Math.floor(Date.now() / 1000) - 60 + ++sequence),
