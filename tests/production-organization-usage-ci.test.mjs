@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restoreCaptureRuntimePreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,restoreCaptureRuntimePreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,verifyPlanBudgetActualClosure,withCaptureRuntimePreviousSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_SECTION,restorePlanPartidaPreviewSourceSet} from '../scripts/lib/plan-partida-preview-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursSourceSet,verifyWorksiteLiveHoursCurrentSources,verifyWorksiteLiveHoursActualClosure} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {restoreWeeklyCypConsumerSourceSet} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
@@ -21,10 +21,24 @@ const root=fileURLToPath(new URL('../',import.meta.url)),sources=Object.create(n
 const read=file=>{if(!existsSync(path.join(root,file)))return null;if(!Object.hasOwn(sources,file))sources[file]=readFileSync(path.join(root,file));return sources[file];};
 const native=organizationUsageCiSourceClosure(read),browser=organizationUsageCiSourceClosure(read,{ui:true}),nodeFixture=organizationUsageCiSourceClosure(read,{fixture:true});
 ['scripts/verify-organization-usage-ui.mjs','scripts/lib/owned-fixture-cleanup.mjs',PLAN_MEASUREMENT_CONSUMER_CI_HELPER,'package-lock.json','package.json'].forEach(read);
-const preanalysisPriorNative=participantPreanalysisConsumerSourceFiles('ORGANIZATION_USAGE',native.files,read);
-const integratedPriorNative=restoreIntegratedIdentitySourceSet('ORGANIZATION_USAGE',native.files,JSON.parse(read('.github/workspace-acceptance-contract.json')));
+// Current graphs are resolved by the original nullable physical reader.
+// Authenticate their complete RAW families before historical comparisons.
+const fixtureCurrentContract=JSON.parse(read('.github/workspace-acceptance-contract.json'));
+verifyPlanBudgetActualClosure(fixtureCurrentContract,'ORGANIZATION_USAGE',native,read);
+verifyPlanBudgetActualClosure(fixtureCurrentContract,'ORGANIZATION_USAGE_UI',browser,read);
+// The owned parent reader is strict: it never resolves optional file probes.
+// Parent family metadata is authenticated by C8 before this callback; only
+// historical assertion arrays leave it, never a reader or authority result.
+const {preanalysisPriorNative,integratedPriorNative,publishedBrowser}=withCaptureRuntimePreviousSources(fixtureCurrentContract,read,(parent,parentRead)=>{
+ const parentNative=parent[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family==='ORGANIZATION_USAGE'),parentBrowser=parent[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family==='ORGANIZATION_USAGE_UI');
+ assert.ok(parentNative&&parentBrowser);
+ return {
+  preanalysisPriorNative:participantPreanalysisConsumerSourceFiles('ORGANIZATION_USAGE',parentNative.currentFiles,parentRead),
+  integratedPriorNative:restoreIntegratedIdentitySourceSet('ORGANIZATION_USAGE',parentNative.currentFiles,parent),
+  publishedBrowser:restoreWeeklyCypConsumerSourceSet('ORGANIZATION_USAGE_UI',parentBrowser.currentFiles,parent)
+ };
+});
 const historicalNative=preanalysisPriorNative.filter(file=>!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file));
-const publishedBrowser=restoreWeeklyCypConsumerSourceSet('ORGANIZATION_USAGE_UI',browser.files,JSON.parse(read('.github/workspace-acceptance-contract.json')));
 // Physical CURRENT remains 136; only metadata is projected to the capture parent.
 // Synthetic fixtures below still bind the actual producer and every RAW source byte.
 function assertCaptureBudgetCurrent(contract,files){

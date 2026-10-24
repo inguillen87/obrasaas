@@ -1,5 +1,6 @@
 import {syntheticCaptureQuality} from './lib/synthetic-capture-quality.mjs';
 import assert from 'node:assert/strict';
+import {isIP} from 'node:net';
 import {randomUUID, createHash, createHmac} from 'node:crypto';
 import {existsSync, readFileSync, mkdirSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
@@ -68,6 +69,16 @@ export function participantPreanalysisDisposableTarget(environment = {}) {
   return url;
 }
 
+// The Node TCP peer is the admitted local endpoint. PostgreSQL reports its
+// own server bind, which may be the container address behind a loopback map.
+export function participantPreanalysisConnectedTransport(environment = {}, peer = {}) {
+  const target = participantPreanalysisDisposableTarget(environment);
+  const deny = () => {throw Object.assign(new Error('Observed local PostgreSQL TCP peer required'), {code: 'KYC_PREANALYSIS_TRANSPORT_REJECTED'});};
+  if (!peer || Object.getPrototypeOf(peer) !== Object.prototype || JSON.stringify(Object.keys(peer).sort()) !== JSON.stringify(['remoteAddress', 'remoteFamily', 'remotePort']) ||
+      peer.remoteAddress !== target.hostname || peer.remotePort !== Number(target.port) || peer.remoteFamily !== 'IPv4') deny();
+  return Object.freeze({source: 'NODE_NET_SOCKET_REMOTE', remoteAddress: peer.remoteAddress, remotePort: peer.remotePort, remoteFamily: peer.remoteFamily});
+}
+
 export function participantPreanalysisTargetSelfTest() {
   const local = {CUTOVER_TEST_DISPOSABLE: '1', CUTOVER_TEST_DATABASE_URL: 'postgresql://cutover_test@127.0.0.1:6549/obrasaas_cutover_ci'};
   assert.equal(participantPreanalysisDisposableTarget(local).hostname, '127.0.0.1');
@@ -115,7 +126,7 @@ export async function verifyParticipantKycPreanalysisPostgres(environment = proc
   const blob = createControlledLifecycleBlob(), webWakeups = [], whatsappWakeups = [];
   const counts = {unexpectedNetwork: 0, privateReads: 0, syntheticOpenAi: 0, syntheticBiometric: 0};
   const originalFetch = globalThis.fetch;
-  let pool, created = false, ownedOid = null, engine, ownership, activeCheck = null, failure = null;
+  let pool, created = false, ownedOid = null, engine, transport, ownership, activeCheck = null, failure = null;
   let getHook = null, fetchHook = null, providerMode = 'SUCCESS', readiness = {ocr: true, biometric: true}, webNumber = 0;
   const cleanup = {poolClosed: false, ownSessionsBeforeDrop: null, databaseRemoved: false, adminClosed: false, sourceBytesUnchanged: false};
   const query = (sql, values) => pool.query(sql, values);
@@ -176,9 +187,11 @@ export async function verifyParticipantKycPreanalysisPostgres(environment = proc
   globalThis.fetch = async () => {counts.unexpectedNetwork++; throw new Error('UNCONTROLLED_PREANALYSIS_NETWORK');};
   try {
     await admin.connect();
+    const stream = admin.connection.stream;
+    transport = participantPreanalysisConnectedTransport(environment, {remoteAddress: stream.remoteAddress, remotePort: stream.remotePort, remoteFamily: stream.remoteFamily});
     const boundary = (await admin.query(`SELECT current_database() AS database,session_user AS actor,current_user AS role,host(inet_server_addr()) AS host,inet_server_port() AS port,current_setting('server_version_num')::int AS version`)).rows[0];
     assert.equal(boundary.database, 'obrasaas_cutover_ci'); assert.equal(boundary.actor, 'cutover_test'); assert.equal(boundary.role, 'cutover_test');
-    assert.equal(boundary.host, '127.0.0.1'); assert.equal(boundary.port, Number(target.port)); assert.ok(boundary.version >= 170000 && boundary.version < 180000); engine = boundary;
+    assert.ok(typeof boundary.host === 'string' && isIP(boundary.host) > 0); assert.equal(boundary.port, Number(target.port)); assert.ok(boundary.version >= 170000 && boundary.version < 180000); engine = boundary;
     assert.equal((await admin.query('SELECT oid FROM pg_database WHERE datname=$1', [database])).rows.length, 0);
     await admin.query('CREATE DATABASE "' + database + '"'); created = true;
     ownership = (await admin.query(`SELECT d.oid,d.datname,pg_get_userbyid(d.datdba) AS owner FROM pg_database d WHERE d.datname=$1`, [database])).rows[0];
@@ -525,7 +538,7 @@ export async function verifyParticipantKycPreanalysisPostgres(environment = proc
   if (!cleanup.sourceBytesUnchanged) failure ||= {code: 'KYC_PREANALYSIS_NATIVE_SOURCE_CHANGED', name: 'Error'};
   if (created && !cleanup.databaseRemoved) failure ||= {code: 'KYC_PREANALYSIS_DATABASE_CLEANUP_UNCONFIRMED', name: 'Error'};
   return {version: 1, status: failure ? 'FAIL' : 'PASS', startedAt, finishedAt: new Date().toISOString(), postgresExecuted: Boolean(engine),
-    engine, ownership, ownedConnectionPids: [...observedPids].sort((a, b) => a - b), checks, completedCheckCount: checks.length, failure: failure ? {...failure, check: activeCheck} : null,
+    engine, transport, ownership, ownedConnectionPids: [...observedPids].sort((a, b) => a - b), checks, completedCheckCount: checks.length, failure: failure ? {...failure, check: activeCheck} : null,
     sourceManifest: sources, sourceDigest, harnessSha256: sha(readFileSync(fileURLToPath(import.meta.url))), blobManifest, cleanup, sqlFailures, lockObservations, counts,
     providerRequests: 0, productionDataWritten: false, realConsentOrIdentityVerified: false, humanApprovalPerformed: false,
     leaseFixtures: {normalServiceMs: 150000, expiryOnlyFixtureMs: 1000, sqlClockObservedBeforeRelease: true, productionLeaseConfigurationChanged: false},

@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetSourceSet,restoreCaptureRuntimePreviousContract,restorePlanBudgetConsumptionEvidenceSourceSet} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetSourceSet,restoreCaptureRuntimePreviousContract,restorePlanBudgetConsumptionEvidenceSourceSet,withCaptureRuntimePreviousSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {restoreWeeklyCypConsumerSourceSet} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {DOCUMENT_TASK_ASSOCIATION_MEASUREMENT,restoreDocumentTaskAssociationSourceSet} from '../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
@@ -13,7 +13,15 @@ import {validatePlanMeasurementCi,bindPlanMeasurementArtifacts,planMeasurementNa
 import {planMeasurementUiOptions,planMeasurementUiSourceIdentity} from '../scripts/verify-plan-measurement-ui.mjs';
 import {planMeasurementCiUnitFixture} from './fixtures/plan-measurement-ci-unit.mjs';
 const facialSources=["src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs"];
-const integratedPriorCount=fixture=>restoreIntegratedIdentitySourceSet('PLAN_MEASUREMENT',fixture.postgres.sourceManifest.map(ref=>ref.path),JSON.parse(fixture.gitSources['.github/workspace-acceptance-contract.json'])).length;
+const integratedPriorCount=fixture=>{
+ const contract=JSON.parse(fixture.gitSources['.github/workspace-acceptance-contract.json']),readSource=file=>fixture.gitSources[file]??null;
+ if(!contract[PLAN_BUDGET_CURRENT_SECTION]?.captureQualityRuntime)return restoreIntegratedIdentitySourceSet('PLAN_MEASUREMENT',fixture.postgres.sourceManifest.map(ref=>ref.path),contract).length;
+ return withCaptureRuntimePreviousSources(contract,readSource,(parent)=>{
+  const current=contract[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family==='PLAN_MEASUREMENT'),historical=parent[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family==='PLAN_MEASUREMENT');
+  assert.ok(current&&historical);assert.deepEqual(fixture.postgres.sourceManifest.map(ref=>ref.path),current.currentFiles);
+  return restoreIntegratedIdentitySourceSet('PLAN_MEASUREMENT',historical.currentFiles,parent).length;
+ });
+};
 // Explicit metadata projection for assertions about the published 11/19 suite.
 // It never changes or re-emits raw native/browser proof bytes as a v1 receipt.
 const historicalMeasurementCounts=(fixture,proof)=>{

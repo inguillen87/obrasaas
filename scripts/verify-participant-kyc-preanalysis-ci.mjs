@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {isIP} from 'node:net';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {readFileSync,mkdirSync,writeFileSync,existsSync} from 'node:fs';
 import path from 'node:path';
@@ -122,7 +123,9 @@ export function parseParticipantPreanalysisTap(input){
 export function validateParticipantKycPreanalysisNative(native,{readSource,nativeSourceFiles}){
  requireProof(native?.version===1&&native.status==='PASS'&&native.postgresExecuted===true&&native.failure===null,'Actual successful native PostgreSQL execution required');
  requireProof(native.completedCheckCount===PARTICIPANT_KYC_PREANALYSIS_CHECKS.length&&same(native.checks,PARTICIPANT_KYC_PREANALYSIS_CHECKS),'Every current native check must execute in order');
- requireProof(native.engine?.host==='127.0.0.1'&&[5432,6549].includes(native.engine?.port)&&native.engine.version>=170000&&native.engine.version<180000&&native.engine.database==='obrasaas_cutover_ci'&&native.engine.actor==='cutover_test'&&native.engine.role==='cutover_test','Owned local PostgreSQL17 engine required');
+ keys(native.transport,['source','remoteAddress','remotePort','remoteFamily'],'observed native TCP transport');
+ requireProof(native.transport.source==='NODE_NET_SOCKET_REMOTE'&&native.transport.remoteAddress==='127.0.0.1'&&native.transport.remoteFamily==='IPv4'&&[5432,6549].includes(native.transport.remotePort),'Observed local PostgreSQL TCP peer required');
+ requireProof(typeof native.engine?.host==='string'&&isIP(native.engine.host)>0&&native.engine.port===native.transport.remotePort&&[5432,6549].includes(native.engine.port)&&native.engine.version>=170000&&native.engine.version<180000&&native.engine.database==='obrasaas_cutover_ci'&&native.engine.actor==='cutover_test'&&native.engine.role==='cutover_test','Owned local PostgreSQL17 engine required');
  requireProof(/^obrasaas_kyc_preanalysis_[a-f0-9]{32}$/.test(native.ownership?.datname)&&Number.isInteger(native.ownership?.oid)&&native.ownership.owner==='cutover_test','Owned random child database required');
  requireProof(Array.isArray(native.ownedConnectionPids)&&native.ownedConnectionPids.length>0&&native.ownedConnectionPids.every(pid=>Number.isSafeInteger(pid)&&pid>0),'Observed native connection ownership required');
  requireProof(native.providerRequests===0&&native.productionDataWritten===false&&native.realConsentOrIdentityVerified===false&&native.humanApprovalPerformed===false&&native.counts?.unexpectedNetwork===0,'Closed synthetic provider and identity boundary required');

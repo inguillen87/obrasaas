@@ -40,7 +40,7 @@ function verifyKycExpiredCurrentSources(section,readSource){
  const current=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));
  if(current[WORKSITE_LIVE_HOURS_CURRENT_SECTION]){try{verifyWorksiteLiveHoursCurrentSources(current,readSource);}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});throw error;}}
  try{verifyIntegratedIdentityCurrentSources(current,readSource);}catch(error){if(error.code==='INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});throw error;}
- if(current.planMeasurementCurrentLineage){if(canonical(current.kycExpiredCurrentComposition)!==canonical(section))throw Object.assign(new Error('Published KYC section changed'),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});return hasCaptureRuntime(current)?captureBudget.withCaptureRuntimePreviousSources(current,readSource,(parent,parentRead)=>verifyPlanMeasurementCurrentSources(parent,parentRead)):verifyPlanMeasurementCurrentSources(current,readSource);}
+ if(current.planMeasurementCurrentLineage){if(canonical(current.kycExpiredCurrentComposition)!==canonical(section))throw Object.assign(new Error('Published KYC section changed'),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});if(hasCaptureRuntime(current)){try{return captureBudget.withCaptureRuntimePreviousSources(current,readSource,(parent,parentRead)=>verifyPlanMeasurementCurrentSources(parent,parentRead));}catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});throw error;}}return verifyPlanMeasurementCurrentSources(current,readSource);}
  return verifyPublishedKycSources(section,readSource);
 }
 const POSTGRES_SERVICE_IMAGE='docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
@@ -2418,8 +2418,8 @@ export function kycExpiredCurrentCompositionSelftest(contract,root=process.cwd()
     assert.equal(compact.currentCount,prior.currentFiles.length);assert.equal(compact.currentPathsSha256,hash(canonical(prior.currentFiles)));
     assert.equal(advance.previousCount,prior.currentFiles.length);assert.equal(advance.currentCount,family.currentFiles.length);
     assert.deepEqual(advance.removals,[]);assert.deepEqual([...prior.currentFiles,...advance.additions].sort(),family.currentFiles);
-   }else{assert.equal(compact.currentCount,family.currentFiles.length);assert.equal(compact.currentPathsSha256,hash(canonical(family.currentFiles)));}
-   assert.equal(result.sourceCount,family.currentFiles.length);assert.equal(result.sourcePathsSha256,hash(canonical(family.currentFiles)));
+    assert.equal(result.sourceCount,prior.currentFiles.length);assert.equal(result.sourcePathsSha256,hash(canonical(prior.currentFiles)));
+   }else{assert.equal(compact.currentCount,family.currentFiles.length);assert.equal(compact.currentPathsSha256,hash(canonical(family.currentFiles)));assert.equal(result.sourceCount,family.currentFiles.length);assert.equal(result.sourcePathsSha256,hash(canonical(family.currentFiles)));}
   }else assert.equal(result.sourceCount,contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]?.sourceSetDeltas.find(row=>row.family==='COMPACT')?.currentCount??contract.whatsappFieldContinuityCurrentRevision?.sourceSetDeltas.find(row=>row.family==='COMPACT').currentCount??contract.integratedIdentityCurrentRevision?.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount??contract.participantPreanalysisCurrentRevision?.consumerSourceDeltas.find(row=>row.family==='COMPACT').currentCount??(contract.planMeasurementCurrentLineage?127:125));
  });
  good('old-117-source-corpus-plus-exact-eight-additions',()=>{assert.equal(section.previousSourceCount,117);assert.equal(section.sourceFiles.length,125);equal(section.sourceAdditions,KYC_EXPIRED_CURRENT_ADDITIONS,'PROOF_BINDING_SOURCE');});
@@ -2501,7 +2501,7 @@ export function selftest(workflow,contract,root=process.cwd()){
  const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
 
  const selftestProgressToken010=selftestProgressStart("F0.integratedIdentityCurrentSelftest");
- checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource));
+ if(hasCaptureRuntime(contract))checks.push(...captureBudget.withCaptureRuntimePreviousSources(contract,shadowSource, (parent,parentRead)=>integratedIdentityCurrentSelftest(parent,parentRead)));else checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource));
  selftestProgressEnd("F0.integratedIdentityCurrentSelftest",selftestProgressToken010);
 
 

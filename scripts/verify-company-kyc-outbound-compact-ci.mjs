@@ -156,7 +156,24 @@ export function validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTre
  same(postgres.checks,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS,'Every native lease, revocation, seal and uncertain reply scenario required');
  const closure=companyKycOutboundCompactCiSourceClosure(readSource);validateManifest(postgres,closure.files,readSource);validateMeasurements(postgres);validateScenarios(postgres);validateContextFeedback(postgres);validateLatestExpiredComposition(postgres);
  let currentCompositionLineage,currentNeutralStepGuidance;
- try{const contract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH));currentCompositionLineage=contract.planMeasurementCurrentLineage?validatePlanMeasurementCurrentCompactReceipt(postgres,contract,readSource):validateKycExpiredCurrentReceipt(postgres,validateKycExpiredCurrentWorkspaceContract(contract),readSource);const current=validateIntegratedOwnCurrentNative(postgres,contract,readSource);if(current)currentCompositionLineage={...currentCompositionLineage,integratedCurrentImage:current};currentNeutralStepGuidance=hasCaptureRuntime(contract)?normalizeCaptureOwnNeutralNativeProof({contract,proof:postgres,readSource,readEvidence,normalizeLegacy:(projected,parent,parentRead)=>validateWhatsappFieldNeutralStepNative(projected,'OWN',parent,parentRead)}):validateWhatsappFieldNeutralStepNative(postgres,'OWN',contract,readSource);}catch(error){requireProof(false,['KYC_EXPIRED_CURRENT_LINEAGE_REJECTED','PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED','INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED','WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED','CAPTURE_QUALITY_COLLECTOR_REJECTED','PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code)?error.message:'Current KYC composition source contract could not be confirmed');}
+ try{
+  const contract=JSON.parse(sourceBytes(readSource,KYC_EXPIRED_CURRENT_CONTRACT_PATH));
+  const compareLegacy=(native,sourceContract,sourceReader)=>{
+   let lineage=sourceContract.planMeasurementCurrentLineage?validatePlanMeasurementCurrentCompactReceipt(native,sourceContract,sourceReader):validateKycExpiredCurrentReceipt(native,validateKycExpiredCurrentWorkspaceContract(sourceContract),sourceReader);
+   const image=validateIntegratedOwnCurrentNative(native,sourceContract,sourceReader);if(image)lineage={...lineage,integratedCurrentImage:image};return lineage;
+  };
+  if(hasCaptureRuntime(contract)){
+   let historicalLineage;
+   currentNeutralStepGuidance=normalizeCaptureOwnNeutralNativeProof({contract,proof:postgres,readSource,readEvidence,normalizeLegacy:(projected,parent,parentRead)=>{
+    historicalLineage=compareLegacy(projected,parent,parentRead);
+    return validateWhatsappFieldNeutralStepNative(projected,'OWN',parent,parentRead);
+   }});
+   currentCompositionLineage={...historicalLineage,sourceBasis:'AUTHENTICATED_PRE_CAPTURE_PARENT',currentNativeSourceCount:currentNeutralStepGuidance.currentNativeSourceCount,historicalNativeSourceCount:currentNeutralStepGuidance.historicalNativeSourceCount,sourceOnlyProjection:true,rawProofTransformed:false};
+  }else{
+   currentCompositionLineage=compareLegacy(postgres,contract,readSource);
+   currentNeutralStepGuidance=validateWhatsappFieldNeutralStepNative(postgres,'OWN',contract,readSource);
+  }
+ }catch(error){requireProof(false,['KYC_EXPIRED_CURRENT_LINEAGE_REJECTED','PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED','INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED','WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED','CAPTURE_QUALITY_COLLECTOR_REJECTED','PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'].includes(error.code)?error.message:'Current KYC composition source contract could not be confirmed');}
  return {version:COMPANY_KYC_OUTBOUND_COMPACT_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,trackedClean:true,sourceState:'EXACT_CI_SOURCE',nativeVersion:postgres.version,checks:[...postgres.checks],sourceCount:closure.files.length,harnessSha256:postgres.harnessSha256,measurements:postgres.measurements,scenarios:postgres.scenarios,syntheticMessagePostCount:postgres.syntheticMessagePostCount,contextFeedbackNative:postgres.contextFeedbackNative,latestExpiredContextNative:postgres.latestExpiredContextNative,totalSyntheticMessagePostCount:postgres.totalSyntheticMessagePostCount,currentCompositionLineage,...(currentNeutralStepGuidance?{neutralStepGuidanceNative:postgres.neutralStepGuidanceNative,currentNeutralStepGuidance}:{}),operativeDatabaseUsed:false,realProviderUsed:false,municipalOrIdentityAcceptance:false,leaseExtended:false,poolClosed:true,databaseRemoved:true,adminClosed:true};
 }
 function main(){

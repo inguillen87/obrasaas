@@ -5,7 +5,7 @@ import test from 'node:test';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {PARTICIPANT_PREANALYSIS_CURRENT_REVISION,PARTICIPANT_PREANALYSIS_VALIDATION_PATHS,PARTICIPANT_PREANALYSIS_EVIDENCE,restoreParticipantPreanalysisPreviousContract,participantPreanalysisCurrentSourcePin,verifyParticipantPreanalysisCurrentSources,validateParticipantPreanalysisWorkspaceContract} from '../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
-import {PARTICIPANT_KYC_PREANALYSIS_CHECKS,participantPreanalysisSourceManifest} from '../scripts/verify-participant-kyc-preanalysis-postgres.mjs';
+import {PARTICIPANT_KYC_PREANALYSIS_CHECKS,participantPreanalysisSourceManifest,participantPreanalysisConnectedTransport} from '../scripts/verify-participant-kyc-preanalysis-postgres.mjs';
 import {participantPreanalysisNativeSourceClosure,parseParticipantPreanalysisTap,validateParticipantKycPreanalysisNative,validateParticipantKycPreanalysisCi,PARTICIPANT_PREANALYSIS_CI_VERSION} from '../scripts/verify-participant-kyc-preanalysis-ci.mjs';
 import {restoreOoxmlAccountingPreviousContract} from '../scripts/lib/ooxml-accounting-current-ci-lineage.mjs';
 import {reconstructPublishedHContract} from '../scripts/lib/plan-measurement-current-ci-lineage.mjs';
@@ -35,6 +35,7 @@ function currentAndOriginalMetadataDenied(edit,validate=restoreParticipantPreana
 // a provider, a private-document read or personal consent/identity acceptance.
 const shadow=()=>({version:1,status:'PASS',postgresExecuted:true,failure:null,
  completedCheckCount:PARTICIPANT_KYC_PREANALYSIS_CHECKS.length,checks:[...PARTICIPANT_KYC_PREANALYSIS_CHECKS],
+ transport:{source:'NODE_NET_SOCKET_REMOTE',remoteAddress:'127.0.0.1',remotePort:5432,remoteFamily:'IPv4'},
  engine:{host:'127.0.0.1',port:5432,version:170006,database:'obrasaas_cutover_ci',actor:'cutover_test',role:'cutover_test'},ownership:{datname:'obrasaas_kyc_preanalysis_'+'a'.repeat(32),oid:12345,owner:'cutover_test'},ownedConnectionPids:[101],
  providerRequests:0,productionDataWritten:false,realConsentOrIdentityVerified:false,humanApprovalPerformed:false,counts:{unexpectedNetwork:0},
  sqlFailures:[],cleanup:{poolClosed:true,databaseRemoved:true,adminClosed:true,sourceBytesUnchanged:true,ownSessionsBeforeDrop:0},
@@ -45,6 +46,11 @@ const verify=proof=>validateParticipantKycPreanalysisNative(proof,{readSource:re
 
 test('native preanalysis validator binds every current source without claiming execution of the shadow',()=>{
  const result=verify(shadow());assert.equal(result.nativeCheckCount,PARTICIPANT_KYC_PREANALYSIS_CHECKS.length);assert.equal(result.realConsentOrIdentityVerified,false);
+ // Pure transport inputs and validator shadows are not PostgreSQL acceptance.
+ const environments=[{CUTOVER_TEST_DISPOSABLE:'1',CUTOVER_TEST_DATABASE_URL:'postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci'},{CUTOVER_TEST_DISPOSABLE:'1',CUTOVER_TEST_DATABASE_URL:'postgresql://cutover_test@127.0.0.1:6549/obrasaas_cutover_ci'}];
+ for(const environment of environments){const remotePort=Number(new URL(environment.CUTOVER_TEST_DATABASE_URL).port),peer={remoteAddress:'127.0.0.1',remotePort,remoteFamily:'IPv4'};assert.deepEqual(participantPreanalysisConnectedTransport(environment,peer),{source:'NODE_NET_SOCKET_REMOTE',...peer});for(const changed of [null,{}, {...peer,remoteAddress:'172.18.0.2'},{...peer,remoteAddress:'localhost'},{...peer,remoteAddress:'::ffff:127.0.0.1'},{...peer,remotePort:5433},{...peer,remotePort:String(remotePort)},{...peer,remoteFamily:'IPv6'},{...peer,extra:true}])assert.throws(()=>participantPreanalysisConnectedTransport(environment,changed),{code:'KYC_PREANALYSIS_TRANSPORT_REJECTED'});assert.throws(()=>participantPreanalysisConnectedTransport({...environment,VERCEL:'1'},peer),{code:'KYC_PREANALYSIS_TARGET_REJECTED'});}
+ const bridge=shadow();bridge.engine.host='172.18.0.2';assert.equal(verify(bridge).nativeCheckCount,PARTICIPANT_KYC_PREANALYSIS_CHECKS.length);
+ const local=shadow();local.engine.port=6549;local.transport.remotePort=6549;assert.equal(verify(local).nativeCheckCount,PARTICIPANT_KYC_PREANALYSIS_CHECKS.length);
  for(const file of ['api/_biometric_core.py','src/app/api/identity/participants/route.js','src/app/api/meta/customer-process/route.js','src/lib/participant-analysis-consent.mjs','src/lib/participant-kyc-preanalysis.mjs'])assert.ok(nativeSourceFiles.includes(file));
 });
 test('partial failed skipped reordered and duplicate native cases cannot certify current preanalysis',()=>{
@@ -54,7 +60,7 @@ test('native cleanup failure open sessions and SQL errors are retained as denial
  for(const edit of [p=>{p.cleanup.databaseRemoved=false;},p=>{p.cleanup.poolClosed=false;},p=>{p.cleanup.adminClosed=false;},p=>{p.cleanup.sourceBytesUnchanged=false;},p=>{p.cleanup.ownSessionsBeforeDrop=1;},p=>{p.cleanup.failureCode='FAILED';},p=>{p.sqlFailures.push({code:'XX000'});}]){const p=shadow();edit(p);denied(()=>verify(p));}
 });
 test('foreign database remote engine missing ownership and simulated lock acceptance are rejected',()=>{
- for(const edit of [p=>{p.engine.host='production.example';},p=>{p.engine.port=5433;},p=>{p.engine.version=160000;},p=>{p.ownership.datname='obrasaas_cutover_ci';},p=>{p.ownership.oid=null;},p=>{p.ownedConnectionPids=[];},p=>{p.lockObservations=[];},p=>{p.lockObservations[0].postgresReportedBlockingPid=false;}]){const p=shadow();edit(p);denied(()=>verify(p));}
+ for(const edit of [p=>{p.engine.host='production.example';},p=>{p.engine.port=5433;},p=>{p.engine.version=160000;},p=>{p.ownership.datname='obrasaas_cutover_ci';},p=>{p.ownership.oid=null;},p=>{p.ownedConnectionPids=[];},p=>{p.lockObservations=[];},p=>{p.lockObservations[0].postgresReportedBlockingPid=false;},p=>{delete p.transport;},p=>{p.transport.remoteAddress='172.18.0.2';},p=>{p.transport.remoteAddress='localhost';},p=>{p.transport.remoteAddress='::ffff:127.0.0.1';},p=>{p.transport.remotePort=5433;},p=>{p.transport.remotePort=6549;},p=>{p.transport.remoteFamily='IPv6';},p=>{p.transport.source='SQL_SERVER_ADDRESS';},p=>{p.transport.extra=true;}]){const p=shadow();edit(p);denied(()=>verify(p));}
 });
 test('a changed lease budget expiry fixture clock or production lease cannot pass',()=>{
  for(const [key,value]of [['normalServiceMs',150001],['expiryOnlyFixtureMs',60000],['sqlClockObservedBeforeRelease',false],['productionLeaseConfigurationChanged',true]]){const p=shadow();p.leaseFixtures[key]=value;denied(()=>verify(p));}

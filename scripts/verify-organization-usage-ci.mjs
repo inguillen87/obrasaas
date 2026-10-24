@@ -1,3 +1,4 @@
+import {PLAN_BUDGET_CURRENT_SECTION,withCaptureRuntimePreviousSources} from './lib/plan-budget-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_SECTION,verifyPlanPartidaPreviewActualClosure} from './lib/plan-partida-preview-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,verifyWorksiteLiveHoursCurrentSources as worksiteSourceCheck0,verifyWorksiteLiveHoursActualClosure as worksiteSourceCheck1} from './lib/worksite-live-hours-current-ci-lineage.mjs';
 function checkWorksiteSource(action){try{return action();}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')requireProof(false,error.message);throw error;}}
@@ -57,8 +58,28 @@ function provenance(proof,head,tree,label){
  requireProof(proof?.status==='PASS'&&proof.sourceRevision===head&&proof.sourceTree===tree&&proof.sourceState==='EXACT_CI_SOURCE'&&proof.trackedClean===true,label+' exact CI provenance');
  requireProof(proof.productionDataWritten===false,label+' production boundary');
 }
+// Only this source-lineage seam sees authenticated parent metadata. Business
+// DTOs and their CURRENT RAW manifests never enter a historical validator.
+function organizationHistoricalNativeLineage(contract,native,readSource,postgres,ui,verifyInputs){
+ if(!contract?.[PLAN_BUDGET_CURRENT_SECTION]?.captureQualityRuntime)return {historicalNativeFiles:participantPreanalysisConsumerSourceFiles('ORGANIZATION_USAGE',native.files,readSource),sourceLineage:validatePlanMeasurementConsumerSourceLineage({family:'ORGANIZATION_USAGE',files:native.files,readSource})};
+ const before={contract:JSON.stringify(contract),native:JSON.stringify(native),postgres:JSON.stringify(postgres),ui:JSON.stringify(ui)};
+ const verify=()=>{
+  if(verifyInputs)verifyInputs();
+  requireProof(JSON.stringify(contract)===before.contract&&JSON.stringify(native)===before.native&&JSON.stringify(postgres)===before.postgres&&JSON.stringify(ui)===before.ui,'Caller contract, closure and business DTOs changed during historical source validation');
+  verifyWorksiteLiveHoursCurrentSources(contract,readSource);verifyWorksiteLiveHoursActualClosure(contract,'ORGANIZATION_USAGE',native,readSource);
+  manifest(postgres.sourceManifest,native.files,readSource,'PostgreSQL');requireProof(postgres.harnessSha256===sha(readSource(pgHarness)),'Native producer Git bytes');
+ };
+ verify();
+ try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>{
+  const family=parent[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family==='ORGANIZATION_USAGE');requireProof(family&&Array.isArray(family.currentFiles),'Authenticated historical organization family required');
+  const files=[...family.currentFiles],historicalNativeFiles=participantPreanalysisConsumerSourceFiles('ORGANIZATION_USAGE',files,parentRead),legacy=validatePlanMeasurementConsumerSourceLineage({family:'ORGANIZATION_USAGE',files,readSource:parentRead});
+  requireProof(legacy.sourceCount===files.length,'Historical source result must retain its own parent count');
+  return {historicalNativeFiles,sourceLineage:{...legacy,sourceBasis:'AUTHENTICATED_PRE_CAPTURE_PARENT',currentSourceCount:native.files.length,historicalSourceCount:files.length,currentSourcePathsSha256:sha(JSON.stringify(native.files)),sourceOnlyProjection:true,callerDtosUnchanged:true}};
+ });}finally{verify();}
+}
 export function validateOrganizationUsageCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres,ui}){
  requireProof(revision(expectedHead)&&head===expectedHead&&revision(sourceTree)&&trackedClean===true,'Exact clean expected Git HEAD/tree');requireProof(gitSources&&typeof gitSources==='object'&&!Array.isArray(gitSources),'Committed source map');
+ const businessInputsBefore={postgres:JSON.stringify(postgres),ui:JSON.stringify(ui)},verifyBusinessInputs=()=>requireProof(JSON.stringify(postgres)===businessInputsBefore.postgres&&JSON.stringify(ui)===businessInputsBefore.ui,'Business DTOs changed during source validation');
  const readSource=file=>Object.hasOwn(gitSources,file)?gitSources[file]:null;
  for(const file of [pgHarness,uiHarness,cleanupHelper,...dependencies])requireProof(readSource(file)!=null,'Missing producer/helper/package: '+file);
  provenance(postgres,expectedHead,sourceTree,'PostgreSQL');provenance(ui,expectedHead,sourceTree,'UI');
@@ -69,7 +90,7 @@ export function validateOrganizationUsageCi({expectedHead,head,sourceTree,tracke
  requireProof(postgres.poolClosed===true&&postgres.databaseRemoved===true&&postgres.cleanup?.poolClosed===true&&postgres.cleanup.databaseRemoved===true,'Owned PostgreSQL cleanup');
  requireProof(Array.isArray(postgres.nativeLockObservations)&&postgres.nativeLockObservations.length===2,'Two native lock races');
  for(const [index,record] of postgres.nativeLockObservations.entries())requireProof(exact(record,['firstTransport','secondTransport','sameOrganization','differentProjects','waitingCount','waitingBeforeProject','bothCompleted'])&&record.firstTransport===['WEB','WHATSAPP'][index]&&record.secondTransport===['WHATSAPP','WEB'][index]&&record.sameOrganization===true&&record.differentProjects===true&&Number.isSafeInteger(record.waitingCount)&&record.waitingCount>=1&&record.waitingBeforeProject===true&&record.bothCompleted===true,'Native advisory-before-project ordering');
- const native=organizationUsageCiSourceClosure(readSource),currentSourceContract=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));if(currentSourceContract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]){verifyWorksiteLiveHoursCurrentSources(currentSourceContract,readSource);verifyWorksiteLiveHoursActualClosure(currentSourceContract,'ORGANIZATION_USAGE',native,readSource);}let historicalNativeFiles,sourceLineage;try{historicalNativeFiles=participantPreanalysisConsumerSourceFiles('ORGANIZATION_USAGE',native.files,readSource);sourceLineage=validatePlanMeasurementConsumerSourceLineage({family:'ORGANIZATION_USAGE',files:native.files,readSource});}catch(error){requireProof(false,error.message);}
+ const native=organizationUsageCiSourceClosure(readSource),currentSourceContract=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));if(currentSourceContract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]){verifyWorksiteLiveHoursCurrentSources(currentSourceContract,readSource);verifyWorksiteLiveHoursActualClosure(currentSourceContract,'ORGANIZATION_USAGE',native,readSource);}let historicalNativeFiles,sourceLineage;try{({historicalNativeFiles,sourceLineage}=organizationHistoricalNativeLineage(currentSourceContract,native,readSource,postgres,ui,verifyBusinessInputs));}catch(error){requireProof(false,error.message);}
  requireProof(historicalNativeFiles.length===115&&native.files.filter(file=>file===fieldReportSource).length===1,'Complete 115-source native closure with the own field report reader and source import');
  const previousNative=historicalNativeFiles.filter(file=>file!==fieldReportSource&&!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file));requireProof(previousNative.length===112&&sha(JSON.stringify(previousNative))===previousNativePathsSha256,'Preserved exact previous 112-source native lineage');
  manifest(postgres.sourceManifest,native.files,readSource,'PostgreSQL');requireProof(postgres.harnessSha256===sha(readSource(pgHarness)),'Native producer Git bytes');
@@ -97,6 +118,7 @@ export function validateOrganizationUsageCi({expectedHead,head,sourceTree,tracke
  const fixture=organizationUsageCiSourceClosure(readSource,{fixture:true});same(fixture.files,['scripts/lib/company-subscription-ui-fixture.mjs','src/lib/company-subscription-catalog.mjs','src/lib/workspace-policy.mjs'],'Complete current three-source Node fixture graph');manifest(ui.fixtureSourceManifest,fixture.files,readSource,'UI fixture');
  requireProof(ui.harnessSha256===sha(readSource(uiHarness))&&ui.cleanupHelperSha256===sha(readSource(cleanupHelper)),'UI and cleanup producer Git bytes');
  const cleanup=ui.cleanup;requireProof(cleanup?.browserClosed===true&&cleanup.serverClosed===true&&cleanup.gracefulCloseAcknowledged===true&&cleanup.fixtureRemoved===true&&cleanup.fixtureCleanupProof?.fixtureRemoved===true&&cleanup.fixtureCleanupProof.postcondition?.absent===true,'Owned browser/server/fixture cleanup');
+ verifyBusinessInputs();
  return {version:ORGANIZATION_USAGE_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{totalCheckCount:16,sourceCount:native.files.length,syntheticOpenAiRequests:11,nativeLockRaceCount:2,harnessSha256:postgres.harnessSha256,sourceLineage},ui:{totalCheckCount:14,sourceCount:browser.files.length,fixtureSourceCount:fixture.files.length,dependencyCount:2,widths:[...ORGANIZATION_USAGE_UI_WIDTHS],explicitSyntheticUploadCount:6,harnessSha256:ui.harnessSha256},providerRequests:0,productionDataWritten:false,paymentVerified:false,capacityContractPending:true,cost:null,productionLoginVerified:false,physicalDeviceAccepted:false};
 }
 function main(){

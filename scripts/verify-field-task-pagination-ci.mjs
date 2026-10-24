@@ -44,12 +44,12 @@ function controlledSelector(value,file,tree,node,readSource){
  const dependencyLockHistory=compilerContract?.planBudgetCurrentRevision?.captureQualityRuntime?.sourceHistory?.find(row=>row.path==='package-lock.json');
  let compilerLockMatches=lf(lockBytes)===declaration.packageLockSha256;
  if(dependencyLockHistory){
-  compilerLockMatches=withCaptureRuntimePreviousSources(compilerContract,readSource,(parent,parentRead)=>{
+  try{compilerLockMatches=withCaptureRuntimePreviousSources(compilerContract,readSource,(parent,parentRead)=>{
    const currentPin=planBudgetCurrentSourcePin(compilerContract,{path:'package-lock.json',sha256:declaration.packageLockSha256});
    reject(compilerContract.packageLockSha256===currentPin&&lf(lockBytes)===currentPin,'The actual current compiler lock must match its authenticated dependency advance');
    reject(parent.packageLockSha256===declaration.packageLockSha256&&lf(bytes(parentRead,'package-lock.json'))===declaration.packageLockSha256,'The controlled compiler transform must restore its exact literal731 lock');
    return true;
-  });
+  });}catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}
  }
  reject(lf(value)===declaration.sourceLfSha256&&compilerLockMatches,'Complete selector unit and compiler lock bytes must be reviewed');
  const expected=parse(selectorTransformPrefix,{sourceType:'module',createImportExpressions:true}).program.body,actual=tree.program.body.slice(0,expected.length),last=actual.at(-1);
