@@ -17,6 +17,7 @@ const planSourceTypes=['application/pdf','application/vnd.openxmlformats-officed
 const customerPhoneFields='id,display_phone_number,verified_name,code_verification_status,status,is_on_biz_app,platform_type';
 const customerPhonePageLimit=10,customerPhoneLimit=1000;
 const phoneCursor=value=>typeof value==='string'&&/^[A-Za-z0-9+/_=-]{1,2048}$/.test(value);
+function reportOwnPhoneRejection(stage){try{console.warn(JSON.stringify({event:'META_OWN_COMPANY_PHONE_REJECTED',version:1,stage}));}catch{}}
 function ownTokenVerified(debug,policy,now){
  const scopes=debug?.scopes,grants=debug?.granular_scopes;
  // OWN system-user grants may omit targets. The complete business ownership
@@ -232,7 +233,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
    },
    ownOperationalAuthority(verified){
     ownCompanyCapabilityPolicy(ownCapability,environment,now());config();const proof=ownInspections.get(verified),audit=ownAudits.get(ownAudit);
-    if(!proof||proof!==inspectedAssets||proof.capability!==ownCapability||proof.inspectionPhase!==META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL||proof.registered!==true||proof.platformType!=='CLOUD_API'||proof.tokenDigest!==audit?.tokenDigest||proof.systemUserId!==audit.systemUserId||Date.parse(proof.checkedAt)<now()-60000)throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);
+    if(!proof||proof!==inspectedAssets||proof.capability!==ownCapability||proof.inspectionPhase!==META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL||proof.registered!==true||proof.platformType!=='CLOUD_API'||proof.phoneCodeVerified!==true||proof.tokenDigest!==audit?.tokenDigest||proof.systemUserId!==audit.systemUserId||Date.parse(proof.checkedAt)<now()-60000)throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);
     return {tokenDigest:proof.tokenDigest,systemUserId:proof.systemUserId,tokenExpiresAt:proof.tokenExpiresAt,dataAccessExpiresAt:proof.dataAccessExpiresAt,checkedAt:proof.checkedAt};
    },
   assertWorkspace(context){if(pilotCapability){const current=assertDevelopmentPilotMember(pilotCapability,context,environment,now()),stored=context.project.metadata?.metaSignup?.developmentPilot;if(stored&&stored.policyDigest!==current.policyDigest)throw new WorkspaceError('META_DEVELOPMENT_PILOT_UNAVAILABLE',403);return current;}return null;},
@@ -318,7 +319,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
     else{if(matches.length>1)throw new WorkspaceError('META_CUSTOMER_PHONE_SELECTION_REQUIRED',409);if(!matches.length)throw new WorkspaceError('META_CUSTOMER_COMPANY_PHONE_MISMATCH',409);phone=matches[0];}
    }else phone=phoneNumberId?eligible.find(item=>String(item.id)===phoneNumberId):numberMode==='BUSINESS_APP'&&eligible.length===1?eligible[0]:null;
    if(!phone||!metaAssetId(String(phone.id)))throw new WorkspaceError(numberMode==='BUSINESS_APP'?'META_CUSTOMER_COEXISTENCE_PHONE_REQUIRED':'META_CUSTOMER_PHONE_WABA_MISMATCH',403);
-   if(ownCompanyCapabilityKind(ownCapability)==='RUNTIME'&&phone.code_verification_status!=='VERIFIED')throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);
+   if(ownCompanyCapabilityKind(ownCapability)==='RUNTIME'&&phone.code_verification_status!=='VERIFIED'){reportOwnPhoneRejection('VERIFICATION_STATUS');throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);}
    if(numberMode==='BUSINESS_APP'&&!customerBusinessApp&&eligible.length!==1)throw new WorkspaceError('META_CUSTOMER_PHONE_SELECTION_REQUIRED',409);
    if(pilotCapability&&(phone.is_on_biz_app!==false||!['CLOUD_API','NOT_APPLICABLE'].includes(phone.platform_type)||phone.platform_type==='NOT_APPLICABLE'&&phone.status==='CONNECTED'||inspectionPhase===META_CUSTOMER_INSPECTION_PHASE.OPERATIONAL&&(phone.platform_type!=='CLOUD_API'||phone.status!=='CONNECTED')))throw new WorkspaceError('META_DEVELOPMENT_PILOT_DEDICATED_UNVERIFIED',403);
    // Phone verification is not the Cloud API registration signal.
@@ -329,7 +330,7 @@ export function createMetaCustomerProvider({environment=process.env,fetchImpl=fe
     displayPhoneNumber:typeof phone.display_phone_number==='string'?phone.display_phone_number.slice(0,64):null,
     verifiedBusinessName:typeof phone.verified_name==='string'?phone.verified_name.slice(0,160):null};
    if(readiness===metaCustomerReadiness)assertMetaCustomerPhoneMode(verified,numberMode);
-    if(ownPolicy){if(sequence!==inspectionSequence||normalizeCompanyPhone(verified.displayPhoneNumber,true)!==ownPolicy.expectedPhoneE164)throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);inspectedAssets=Object.freeze({capability:ownCapability,wabaId,phoneNumberId,inspectionPhase,registered:verified.registered,platformType:verified.platformType,tokenDigest:customerTokenDigest(token),systemUserId:String(data.user_id),tokenExpiresAt:ownTokenExpiry(data),dataAccessExpiresAt:ownDataAccessExpiry(data),checkedAt:new Date(now()).toISOString()});ownInspections.set(verified,inspectedAssets);}
+    if(ownPolicy){if(sequence!==inspectionSequence){reportOwnPhoneRejection('INSPECTION_SUPERSEDED');throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);}if(normalizeCompanyPhone(verified.displayPhoneNumber,true)!==ownPolicy.expectedPhoneE164){reportOwnPhoneRejection('DISPLAY_PHONE_MATCH');throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);}inspectedAssets=Object.freeze({capability:ownCapability,wabaId,phoneNumberId,inspectionPhase,registered:verified.registered,platformType:verified.platformType,phoneCodeVerified:phone.code_verification_status==='VERIFIED',tokenDigest:customerTokenDigest(token),systemUserId:String(data.user_id),tokenExpiresAt:ownTokenExpiry(data),dataAccessExpiresAt:ownDataAccessExpiry(data),checkedAt:new Date(now()).toISOString()});ownInspections.set(verified,inspectedAssets);}
    if(!pilotCapability&&ownCompanyCapabilityKind(ownCapability)!=='RUNTIME'&&readiness===metaCustomerReadiness)registrationProofs.set(verified,{tokenDigest:customerTokenDigest(token),wabaId,phoneNumberId:verified.phoneNumberId,numberMode,inspectionPhase,expiresAt:now()+60000});
    if(pilotCapability){if(sequence!==inspectionSequence)throw new WorkspaceError('META_DEVELOPMENT_PILOT_OWNER_UNVERIFIED',403);inspectedAssets=Object.freeze({capability:pilotCapability,policyDigest:policy().policyDigest,wabaId,phoneNumberId:verified.phoneNumberId,inspectionPhase,registered:verified.registered,platformType:verified.platformType});pilotInspections.set(verified,inspectedAssets);}return verified;
   },

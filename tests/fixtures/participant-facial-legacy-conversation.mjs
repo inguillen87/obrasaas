@@ -1,0 +1,48 @@
+// Literal pre-v3 conversation functions from source LF SHA256 6b13b700893d70559d2bbe376306c1b56d79ae565f27420bb768b8eb019820d6.
+import {participantIdentityNoticeSummary} from '../../src/lib/participant-kyc-notice-links.mjs';
+import {digest,WorkspaceError} from '../../src/lib/workspace-policy.mjs';
+import {PARTICIPANT_NOTICE,PARTICIPANT_NOTICE_VERSION,PARTICIPANT_OCR_NOTICE,PARTICIPANT_OCR_NOTICE_VERSION,PARTICIPANT_BIOMETRIC_NOTICE,PARTICIPANT_BIOMETRIC_NOTICE_VERSION,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION,PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_SHA256} from '../../src/lib/participant-policy.mjs';
+import {participantOcrNotice,participantBiometricNotice,PARTICIPANT_AUTO_OCR_NOTICE_VERSION,PARTICIPANT_AUTO_BIOMETRIC_NOTICE_VERSION} from '../../src/lib/participant-analysis-consent.mjs';
+import {CAPTURE_QUALITY_NOTICE} from '../../src/lib/capture-quality-policy.mjs';
+const text=body=>({type:'text',body});
+const hints={FRONT:'Enviá el frente completo del documento, con los datos legibles y sin reflejos.',BACK:'Enviá el dorso completo del documento, con los datos legibles y sin reflejos.',SELFIE:'Enviá una selfie con tu rostro solo, de frente y bien iluminado. La selfie es una foto estática y no comprueba prueba de vida.'};
+function choices(state,eventId,body,rows){const nonce=digest(['meta-kyc-choice-v1',eventId,state.step]).slice(0,20);return {state:{...state,nonce,choices:rows.map(([value,title])=>({value,title}))},reply:{type:'interactive',body,button:'Elegir',sections:[{title:'Identidad',rows:rows.map(([,title],index)=>({id:'kyc:'+nonce+':'+index,title}))}]}};}
+function prompt(state,eventId){
+ if(state.step==='CONSENT')return choices(state,eventId,'Vamos a presentar tu identidad en '+(state.captureImageSetVersion===2?'3 pasos: frente, dorso y selfie.':'2 pasos: documento y selfie.')+' Antes de enviar fotos, elegí tus autorizaciones.\n\n'+PARTICIPANT_NOTICE+'\n\n'+CAPTURE_QUALITY_NOTICE+'\nEste recorrido sólo presenta imágenes; no habilita permisos. Podés cancelar antes de guardar.',[['CONSENT','Autorizar imágenes'],['CANCEL','Cancelar']]);
+ if(state.step==='BACK_CONSENT')return choices(state,eventId,state.ocrNoticeVersion===PARTICIPANT_AUTO_OCR_NOTICE_VERSION?participantIdentityNoticeSummary(PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION):PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE,[['BACK_CONSENT','Autorizar dorso'],['CANCEL','Cancelar']]);
+ if(state.step==='OCR')return choices(state,eventId,participantIdentityNoticeSummary(state.ocrNoticeVersion)||participantOcrNotice(state.ocrNoticeVersion)?.text||PARTICIPANT_OCR_NOTICE,[['OCR_YES','Con lectura asistida'],['OCR_NO','Sin lectura asistida'],['CANCEL','Cancelar']]);
+ if(state.step==='BIOMETRIC')return choices(state,eventId,participantIdentityNoticeSummary(state.biometricNoticeVersion)||participantBiometricNotice(state.biometricNoticeVersion)?.text||PARTICIPANT_BIOMETRIC_NOTICE,[['BIOMETRIC_YES','Con comparación facial'],['BIOMETRIC_NO','Sin comparación facial'],['CANCEL','Cancelar']]);
+ if(state.step==='CONFIRM')return choices(state,eventId,'Las '+(state.captureImageSetVersion===2?'tres':'dos')+' imágenes están preparadas para presentar. Un responsable debe revisarlas. La lectura asistida '+(state.ocrConsent?'quedará autorizada.':'no está autorizada.')+' La comparación facial '+(state.biometricConsent?'quedará autorizada.':'no está autorizada.')+' La selfie es una imagen estática y no comprueba prueba de vida. ¿Querés guardarlas?',[['CONFIRM','Guardar identidad'],['CANCEL','Cancelar']]);
+ const total=state.captureImageSetVersion===2?3:2,index=state.step==='FRONT'?1:state.step==='BACK'?2:total;
+ return {state,reply:text('Paso '+index+' de '+total+' · '+(state.step==='FRONT'?'Frente del documento':state.step==='BACK'?'Dorso del documento':'Selfie')+'\n\n'+hints[state.step]+' Enviá una sola imagen de hasta 2 MB'+(state.captureImageSetVersion===2?' y esperá la indicación del próximo paso antes de enviar otra.':', usando Responder sobre este mensaje.')+'\n\n'+(state.step==='BACK'?'El frente ya está preparado. ':state.step==='SELFIE'?(state.captureImageSetVersion===2?'El frente y el dorso ya están preparados. ':'El documento ya está preparado. '):'')+'Escribí CANCELAR para terminar sin presentar.')};
+}
+export function beginMetaKycConversation(eventId,{captureImageSetVersion,analysisConsentVersion}={}){if(captureImageSetVersion!==undefined&&captureImageSetVersion!==2)throw new WorkspaceError('META_KYC_CONVERSATION_REQUIRED',409);return prompt({version:1,...(captureImageSetVersion===2?{captureImageSetVersion:2,backConsent:false,backNoticeVersion:PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION,backNoticeSha256:PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_SHA256,back:null}:{}),step:'CONSENT',noticeVersion:PARTICIPANT_NOTICE_VERSION,noticeSha256:digest(PARTICIPANT_NOTICE),ocrNoticeVersion:analysisConsentVersion===2?PARTICIPANT_AUTO_OCR_NOTICE_VERSION:PARTICIPANT_OCR_NOTICE_VERSION,ocrNoticeSha256:participantOcrNotice(analysisConsentVersion===2?PARTICIPANT_AUTO_OCR_NOTICE_VERSION:PARTICIPANT_OCR_NOTICE_VERSION).sha256,biometricNoticeVersion:analysisConsentVersion===2?PARTICIPANT_AUTO_BIOMETRIC_NOTICE_VERSION:PARTICIPANT_BIOMETRIC_NOTICE_VERSION,biometricNoticeSha256:participantBiometricNotice(analysisConsentVersion===2?PARTICIPANT_AUTO_BIOMETRIC_NOTICE_VERSION:PARTICIPANT_BIOMETRIC_NOTICE_VERSION).sha256,consent:false,ocrConsent:false,biometricConsent:false,front:null,selfie:null},eventId);}
+export function planMetaKycConversation({message,state,eventId}){
+ if(!state||state.version!==1||state.captureImageSetVersion!==undefined&&state.captureImageSetVersion!==2||state.captureImageSetVersion===2&&(state.backNoticeVersion!==PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_VERSION||state.backNoticeSha256!==PARTICIPANT_WHATSAPP_DOCUMENT_BACK_NOTICE_SHA256))throw new WorkspaceError('META_KYC_CONVERSATION_REQUIRED',409);
+ if(!participantOcrNotice(state.ocrNoticeVersion)||state.ocrNoticeSha256!==participantOcrNotice(state.ocrNoticeVersion).sha256||!participantBiometricNotice(state.biometricNoticeVersion)||state.biometricNoticeSha256!==participantBiometricNotice(state.biometricNoticeVersion).sha256)throw new WorkspaceError('META_KYC_CONVERSATION_REQUIRED',409);
+ if(state.step==='FINALIZING')return {state,preserveConversation:true,reply:text('La presentación confirmada está pendiente de comprobar. Conservamos el mismo intento; no vuelvas a enviar imágenes ni inicies otro código. La confirmación ya fue recibida y no se puede cancelar desde este mensaje.')};
+ const body=message.type==='text'?message.text?.body?.trim().toUpperCase():null;
+ if(body==='CANCELAR')return {state:null,cancelled:true,reply:text('Presentación cancelada. No se presentaron imágenes ni se habilitaron permisos. Pedí al responsable otro código si querés empezar de nuevo.')};
+ if(body==='ESTADO'||body==='AYUDA')return prompt(state,eventId);
+ if(message.type==='image'&&['CONSENT','BACK_CONSENT','OCR','BIOMETRIC'].includes(state.step)){
+  const pending=prompt(state,eventId);return {...pending,reply:{...pending.reply,body:'Esta foto todavía no se guardó. Primero elegí una opción en este mensaje; después te pediremos cada imagen.\n\n'+pending.reply.body}};
+ }
+ const selection=message.type==='interactive'?(message.interactive?.list_reply?.id||message.interactive?.button_reply?.id):null;
+ let selected=null;
+ if(selection){const match=/^kyc:([a-f0-9]{20}):(\d{1,2})$/.exec(selection);if(!match||match[1]!==state.nonce||!state.choices?.[Number(match[2])])return prompt(state,eventId);selected=state.choices[Number(match[2])].value;}
+ if(selected==='CANCEL')return {state:null,cancelled:true,reply:text('Presentación cancelada. No se presentaron imágenes ni se habilitaron permisos.')};
+ const next={...state};delete next.nonce;delete next.choices;
+ if(state.step==='CONSENT')return selected==='CONSENT'?prompt({...next,step:state.captureImageSetVersion===2?'BACK_CONSENT':'OCR',consent:true},eventId):prompt(state,eventId);
+ if(state.step==='BACK_CONSENT')return selected==='BACK_CONSENT'?prompt({...next,step:'OCR',backConsent:true},eventId):prompt(state,eventId);
+ if(state.step==='OCR')return ['OCR_YES','OCR_NO'].includes(selected)?prompt({...next,step:'BIOMETRIC',ocrConsent:selected==='OCR_YES'},eventId):prompt(state,eventId);
+ if(state.step==='BIOMETRIC')return ['BIOMETRIC_YES','BIOMETRIC_NO'].includes(selected)?prompt({...next,step:'FRONT',biometricConsent:selected==='BIOMETRIC_YES'},eventId):prompt(state,eventId);
+ if(['FRONT','BACK','SELFIE'].includes(state.step)){
+  if(state.consent!==true||state.step==='BACK'&&(state.backConsent!==true||!state.front)||state.step==='SELFIE'&&(!state.front||state.captureImageSetVersion===2&&(state.backConsent!==true||!state.back)))throw new WorkspaceError('META_KYC_CONVERSATION_REQUIRED',409);
+  const image=message.type==='image'?message.image:null;
+  if(!/^\d{5,32}$/.test(image?.id||'')||!['image/jpeg','image/png','image/webp'].includes(image?.mime_type))return prompt(state,eventId);
+  const reference={eventId,mediaId:image.id,contentType:image.mime_type};
+  return prompt({...next,[state.step==='FRONT'?'front':state.step==='BACK'?'back':'selfie']:reference,step:state.step==='FRONT'?(state.captureImageSetVersion===2?'BACK':'SELFIE'):state.step==='BACK'?'SELFIE':'CONFIRM'},eventId);
+ }
+ if(state.step==='CONFIRM')return selected==='CONFIRM'&&state.consent===true&&state.front&&state.selfie&&(state.captureImageSetVersion!==2||state.backConsent===true&&state.back)?{state:{...next,step:'FINALIZING',confirmationEventId:eventId},deposit:true}:prompt(state,eventId);
+ throw new WorkspaceError('META_KYC_CONVERSATION_REQUIRED',409);
+}

@@ -52,6 +52,26 @@ export function participantPreanalysisCiSourceClosure(readSource){
   for(const ref of contract.participantPreanalysisCurrentRevision?.validationDeltas||[]){bytes(readSource,ref.path);files.add(ref.path);}
   for(const ref of contract.integratedIdentityCurrentRevision?.validationSources||[])visit(ref.path);
   for(const ref of contract.integratedIdentityCurrentRevision?.validationDeltas||[]){bytes(readSource,ref.path);files.add(ref.path);}
+  if(contract.planBudgetCurrentRevision?.captureQualityRuntime){
+   // Formerly bound validation leaves now import current dependencies. Walk
+   // their real literal edges so the emitted receipt includes the actual files;
+   // the canonical consumer must never manufacture those missing RAW rows.
+   const edges=[
+    ['.github/scripts/verify-workspace-ci-parallelization.mjs','../../scripts/lib/capture-runtime-canonical-collectors.mjs','scripts/lib/capture-runtime-canonical-collectors.mjs'],
+    ['tests/production-meta-customer-composition.test.mjs','./fixtures/meta-kyc-context-feedback-memory.mjs','tests/fixtures/meta-kyc-context-feedback-memory.mjs'],
+    ['tests/fixtures/meta-kyc-context-feedback-memory.mjs','./meta-kyc-chat-memory.mjs','tests/fixtures/meta-kyc-chat-memory.mjs'],
+    ['tests/fixtures/meta-kyc-chat-memory.mjs','./capture-quality-synthetic.mjs','tests/fixtures/capture-quality-synthetic.mjs'],
+    ['.github/scripts/verify-workspace-ci-parallelization.mjs','../../scripts/verify-field-task-pagination-ci.mjs','scripts/verify-field-task-pagination-ci.mjs'],
+    ['scripts/verify-field-task-pagination-ui.mjs','../src/app/(identity)/cuenta/material-inventory-view.mjs','src/app/(identity)/cuenta/material-inventory-view.mjs'],
+   ];
+   for(const [owner,literal,target] of edges){
+    requireProof(owner==='.github/scripts/verify-workspace-ci-parallelization.mjs'||files.has(owner),'Capture dependency owner must already be bound');
+    const tree=parse(bytes(readSource,owner).toString('utf8'),{sourceType:'module',plugins:['jsx'],createImportExpressions:true});
+    const matches=tree.program.body.filter(node=>['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration'].includes(node.type)&&node.source?.type==='StringLiteral'&&node.source.value===literal);
+    requireProof(matches.length===1&&path.posix.normalize(path.posix.join(path.posix.dirname(owner),literal))===target,'Exact current capture dependency edge required');
+    visit(target);
+   }
+  }
  }
  files.add('.github/scripts/verify-workspace-ci-parallelization.mjs');
  for(const file of files)bytes(readSource,file);

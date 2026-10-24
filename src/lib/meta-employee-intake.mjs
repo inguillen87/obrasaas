@@ -31,7 +31,7 @@ async function issuerTrail(client,organizationId,membershipId){return durableDig
 function readState(anchor,connection,environment){
  const envelope=anchor.payload?.[namespace];if(!envelope||envelope.version!==1||envelope.applicationId!==anchor.id||envelope.organizationId!==connection.organizationId||envelope.connectionId!==connection.id||!Number.isSafeInteger(envelope.revision)||envelope.revision<1||!/^([a-f0-9]{64})$/.test(envelope.senderKey||''))fail('EMPLOYEE_INTAKE_INTEGRITY');
  const state=unseal(connection,'employee-intake',anchor.id,envelope.encryptedState,environment);
- if(state.applicationId!==anchor.id||state.organizationId!==connection.organizationId||state.connectionId!==connection.id||state.revision!==envelope.revision||state.senderKey!==envelope.senderKey||state.status!==envelope.status||state.step!==state.status||!['NAME','JOB','EMAIL','CONFIRM','WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(state.status)||!/^\+[1-9]\d{7,14}$/.test(state.sender||'')||state.lastEventId!==envelope.lastEventId||!eventId(state.lastEventId)||state.noticeVersion!==EMPLOYEE_INTAKE_NOTICE_VERSION||state.noticeSha256!==digest(EMPLOYEE_INTAKE_NOTICE)||!Number.isFinite(Date.parse(state.expiresAt)))fail('EMPLOYEE_INTAKE_INTEGRITY');return state;
+ if(state.applicationId!==anchor.id||state.organizationId!==connection.organizationId||state.connectionId!==connection.id||state.revision!==envelope.revision||state.senderKey!==envelope.senderKey||state.status!==envelope.status||state.step!==state.status||!['WELCOME','NAME','JOB','EMAIL','CONFIRM','WAITING_RESPONSIBLE','ADMITTED','REJECTED','CANCELLED'].includes(state.status)||state.status==='WELCOME'&&(!['NAME','JOB','EMAIL','CONFIRM'].includes(state.resumeStep)||state.consent!==false)||!/^\+[1-9]\d{7,14}$/.test(state.sender||'')||state.lastEventId!==envelope.lastEventId||!eventId(state.lastEventId)||state.noticeVersion!==EMPLOYEE_INTAKE_NOTICE_VERSION||state.noticeSha256!==digest(EMPLOYEE_INTAKE_NOTICE)||!Number.isFinite(Date.parse(state.expiresAt)))fail('EMPLOYEE_INTAKE_INTEGRITY');return state;
 }
 async function writeState(client,anchor,connection,state,environment){
  const envelope={version:1,applicationId:anchor.id,organizationId:connection.organizationId,connectionId:connection.id,senderKey:state.senderKey,revision:state.revision,status:state.status,lastEventId:state.lastEventId,encryptedState:seal(connection,'employee-intake',anchor.id,state,environment)};
@@ -160,7 +160,7 @@ export async function resolveEmployeeIntakeAuthority(client,request,{environment
  let state=anchor.payload.employeeIntake?readState(anchor,connection,environment):null;
  // A human HOLA may restart only an incomplete expired/stale draft. The
  // original signed envelope and encrypted draft stay on their original event.
- if(state&&!event.payload.employeeIntakeDispatch&&hello&&['NAME','JOB','EMAIL','CONFIRM'].includes(state.status)&&(Date.parse(state.expiresAt)<=now.getTime()||state.policyDigest!==durableDigest(policy))){
+ if(state&&!event.payload.employeeIntakeDispatch&&hello&&['WELCOME','NAME','JOB','EMAIL','CONFIRM'].includes(state.status)&&(Date.parse(state.expiresAt)<=now.getTime()||state.policyDigest!==durableDigest(policy))){
   if(state.sender!==sender||state.senderKey!==key)fail('EMPLOYEE_INTAKE_INTEGRITY');
   await writeState(client,anchor,connection,{...state,revision:state.revision+1,step:'CANCELLED',status:'CANCELLED',cancelReason:Date.parse(state.expiresAt)<=now.getTime()?'EXPIRED':'POLICY_CHANGED'},environment);anchor=event;state=null;
  }

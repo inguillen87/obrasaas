@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createWorkspaceRecoveryJournal,recoveryQuery,recoveryResult,validateWorkspaceRecoveryStoredEntry,WORKSPACE_RECOVERY_PREFIX,wasCompanyPhoneRevisionRejected} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
+import {createWorkspaceRecoveryJournal,recoveryQuery,recoveryResult,validateWorkspaceRecoveryStoredEntry,WORKSPACE_RECOVERY_PREFIX,wasCompanyPhoneRevisionRejected,wasCaptureQualityRejected} from '../src/app/(identity)/cuenta/workspace-recovery-journal.mjs';
 import {createWorkspaceRequestLifecycle} from '../src/app/(identity)/cuenta/workspace-request-lifecycle.mjs';
 const scope='a'.repeat(64),other='b'.repeat(64),operationId='01234567-89ab-4cde-8fab-0123456789ab';
 const secondId='01234567-89ab-4cde-8fab-0123456789ac';
@@ -365,4 +365,97 @@ test('cancellation after a complete company phone capture or during removal comm
   const runtime=createWorkspaceRequestLifecycle(async()=>'controlled',{journal:j,fetchImpl:async()=>phone409Response()}),pending=runtime.request(phone409Url,options,async response=>{consumed++;if(phase==='consume'){entered.resolve();await release.promise;}return consumePhone409(response);});await entered.promise;const before=[...store.rows];runtime.abort();release.resolve();
   await assert.rejects(pending,error=>{observed=error;return phase==='consume'?error.name==='AbortError':error.status===409;});assert.equal(await wasCompanyPhoneRevisionRejected(observed,phone409Url,options),false);assert.equal(consumed,1);assert.deepEqual([...store.rows],before);assert.equal((await j.list(scope)).length,1);
  }
+});
+
+const captureQualityUrl='/api/identity/participants';
+const captureQualityCode='PARTICIPANT_CAPTURE_SELFIE_QUALITY_SERVICE_UNAVAILABLE';
+const captureQualityOptions=(patch={})=>({method:'POST',body:JSON.stringify({operationId,projectId:'p-a',scope,workerId:'worker-quality',revision:'2026-10-22T12:00:00.000001',noticeVersion:'participant-kyc-v1',consent:true,front:'data:image/png;base64,c3ludGhldGljLWZyb250',selfie:'data:image/png;base64,c3ludGhldGljLXNlbGZpZQ==',...patch})});
+const captureQualityError=(patch={})=>Object.assign(new Error('Controlled capture quality rejection'),{status:503,code:captureQualityCode,...patch});
+const captureQualityResponse=(code=captureQualityCode,status=503)=>Response.json({saved:false,identityCertified:false,code},{status});
+const captureQualityObservation=()=>({signal:new AbortController().signal,isActive:()=>true});
+async function consumeCaptureQuality(response){const value=await response.json();if(!response.ok)throw Object.assign(new Error('Observed capture response'),{status:response.status,code:value?.code});return value;}
+
+test('an observed pre-storage quality 503 clears only its new capture reference and enables a corrected new UUID',async()=>{
+ for(const status of [422,503]){
+  const s=storage(),j=journal(s),history=await j.prepare('/api/identity/field-media',command({operationId:secondId,projectId:'historical-project'})),otherTicket=await j.prepare(captureQualityUrl,captureQualityOptions({scope:other,projectId:'other-project',operationId:secondId})),before=[...s.rows],options=captureQualityOptions();let calls=0;
+  const runtime=createWorkspaceRequestLifecycle(async()=>'controlled-quality-session',{journal:j,fetchImpl:async(url,input)=>{calls++;assert.equal(url,captureQualityUrl);assert.equal(input.body,options.body);const entry=(await j.list(scope)).find(value=>value.resource==='participants');assert.deepEqual(Object.keys(entry).sort(),['createdAt','operationId','projectId','resource','scope','version']);const persisted=JSON.stringify([...s.rows]);for(const text of ['worker-quality','inputDigest','participant-kyc-v1','consent','front','selfie','c3ludGhldGlj','controlled-quality-session'])assert.equal(persisted.includes(text),false,text);return captureQualityResponse(status===422?'PARTICIPANT_CAPTURE_SELFIE_IMAGE_BLURRED':captureQualityCode,status);}});
+  await assert.rejects(runtime.request(captureQualityUrl,options,consumeCaptureQuality),{status,code:status===422?'PARTICIPANT_CAPTURE_SELFIE_IMAGE_BLURRED':captureQualityCode});assert.equal(calls,1);assert.deepEqual([...s.rows],before);assert.deepEqual(await j.list(scope),[history.entry]);assert.deepEqual(await j.list(other),[otherTicket.entry]);
+  const next=await j.prepare(captureQualityUrl,captureQualityOptions({operationId:'01234567-89ab-4cde-8fab-0123456789ad',revision:'2026-10-22T12:00:00.000002'}));assert.equal(next.existed,false);runtime.abort();
+ }
+});
+
+test('document portrait retake clears only its own new reference while a foreign image kind remains uncertain',async()=>{
+ for(const kind of ['DOCUMENT_FRONT','DOCUMENT_BACK','SELFIE']){
+  const s=storage(),j=journal(s),options=captureQualityOptions(),ticket=await j.prepare(captureQualityUrl,options),before=[...s.rows],code='PARTICIPANT_CAPTURE_'+kind+'_DOCUMENT_PORTRAIT_UNCONFIRMED';
+  await j.captureResponse(ticket,captureQualityUrl,options,captureQualityResponse(code,422),captureQualityObservation());await j.settle(ticket,null,captureQualityError({status:422,code}));
+  if(kind==='DOCUMENT_FRONT'){assert.equal((await j.list(scope)).length,0);const next=await j.prepare(captureQualityUrl,captureQualityOptions({operationId:secondId}));assert.equal(next.existed,false);}
+  else {assert.deepEqual([...s.rows],before);await assert.rejects(j.prepare(captureQualityUrl,captureQualityOptions({operationId:secondId})),{code:'WORKSPACE_RECOVERY_REQUIRED'});}
+ }
+});
+
+test('a matching portrait error code at HTTP 422 cannot bypass the observed precommit envelope',async()=>{
+ for(const mode of ['code-only','normalized-error','extra-receipt','wrong-mime','aborted-after']){
+  const s=storage(),j=journal(s),options=captureQualityOptions(),ticket=await j.prepare(captureQualityUrl,options),before=[...s.rows],code='PARTICIPANT_CAPTURE_DOCUMENT_FRONT_DOCUMENT_PORTRAIT_UNCONFIRMED',controller=new AbortController();
+  const body=['code-only','normalized-error'].includes(mode)?{code}:{saved:false,identityCertified:false,code,...(mode==='extra-receipt'?{receiptId:'not-a-precommit-result'}:{})};
+  await j.captureResponse(ticket,captureQualityUrl,options,new Response(JSON.stringify(body),{status:422,headers:{'content-type':mode==='wrong-mime'?'text/html':'application/json'}}),{signal:controller.signal,isActive:()=>true});
+  if(mode==='aborted-after')controller.abort();await j.settle(ticket,null,captureQualityError({status:422,code:mode==='normalized-error'?'PARTICIPANT_OPERATION_UNCONFIRMED':code}));
+  assert.deepEqual([...s.rows],before,mode);await assert.rejects(j.prepare(captureQualityUrl,captureQualityOptions({operationId:secondId})),{code:'WORKSPACE_RECOVERY_REQUIRED'},mode);
+ }
+});
+
+test('capture correction proof is private to its settled error and exact current command after confirmed removal',async()=>{
+ for(const mode of ['valid','no-observation','failed-cleanup','cancelled','reloaded']){
+  const s=storage(),j=journal(s),options=captureQualityOptions(),original=await j.prepare(captureQualityUrl,options),current=mode==='reloaded'?journal(s):j,ticket=mode==='reloaded'?await current.prepare(captureQualityUrl,options):original,controller=new AbortController(),code='PARTICIPANT_CAPTURE_DOCUMENT_FRONT_DOCUMENT_PORTRAIT_UNCONFIRMED',error=captureQualityError({status:422,code});
+  if(mode!=='no-observation')await current.captureResponse(ticket,captureQualityUrl,options,captureQualityResponse(code,422),{signal:controller.signal,isActive:()=>true});
+  if(mode==='failed-cleanup')s.removeItem=()=>{throw Error('Controlled removal failure');};if(mode==='cancelled')controller.abort();await current.settle(ticket,null,error);
+  assert.equal(await wasCaptureQualityRejected(error,captureQualityUrl,options),mode==='valid',mode);
+  if(mode==='valid'){error.code='PARTICIPANT_CAPTURE_SELFIE_IMAGE_BLURRED';assert.equal(await wasCaptureQualityRejected(error,captureQualityUrl,options),false);error.code=code;error.status=503;assert.equal(await wasCaptureQualityRejected(error,captureQualityUrl,options),false);error.status=422;assert.equal(await wasCaptureQualityRejected(error,captureQualityUrl,options),true);}
+  assert.equal(await wasCaptureQualityRejected({...error},captureQualityUrl,options),false);assert.equal(await wasCaptureQualityRejected(error,captureQualityUrl+'?scope='+scope,options),false);
+  for(const patch of [{operationId:secondId},{front:'changed-image-bytes'},{scope:other},{projectId:'other-project'}])assert.equal(await wasCaptureQualityRejected(error,captureQualityUrl,captureQualityOptions(patch)),false);
+ }
+});
+
+test('capture quality 503 requires an exact actual response and a matching complete current KYC command',async()=>{
+ const modes=['no-response','consumer-flags','saved-true','certified','extra-response','array','wrong-code','wrong-kind','truncated','oversized','invalid-utf8','wrong-mime','misleading-mime','redirected','foreign-url','wrong-path','response-query','content-length','no-signal','no-active','status-200','status-401','status-403','status-409','status-500','wrong-endpoint','query','GET','scope','project','uuid','worker','revision','front','selfie','notice','consent','action','extra-command'];
+ for(const mode of modes){
+  const s=storage(),j=journal(s),options=captureQualityOptions(),ticket=await j.prepare(captureQualityUrl,options),before=[...s.rows];let url=captureQualityUrl,input=options;
+  const patches={scope:{scope:other},project:{projectId:'p-b'},uuid:{operationId:secondId},worker:{workerId:'worker-other'},revision:{revision:'2026-10-22T12:00:00.000002'},front:{front:'different-front'},selfie:{selfie:'different-selfie'},notice:{noticeVersion:'old'},consent:{consent:false},action:{action:'SUBMIT_KYC'},'extra-command':{extra:'not-canonical'}};
+  if(patches[mode])input=captureQualityOptions(patches[mode]);if(mode==='wrong-endpoint')url='/api/identity/field-media';if(mode==='query')url+='?scope='+scope;if(mode==='GET')input={...input,method:'GET'};
+  if(!['no-response','consumer-flags'].includes(mode)){
+   let body={saved:false,identityCertified:false,code:captureQualityCode};if(mode==='saved-true')body.saved=true;if(mode==='certified')body.identityCertified=true;if(mode==='extra-response')body.receiptId='invented';if(mode==='array')body=[body];if(mode==='wrong-code')body.code='PARTICIPANT_OPERATION_UNCONFIRMED';if(mode==='wrong-kind')body.code='PARTICIPANT_CAPTURE_OTHER_QUALITY_SERVICE_UNAVAILABLE';
+   const bytes=mode==='truncated'?'{"saved":false':mode==='oversized'?' '.repeat(4097)+JSON.stringify(body):mode==='invalid-utf8'?new Uint8Array([0xff]):JSON.stringify(body),status=mode.startsWith('status-')?Number(mode.slice(7)):503;
+   const response=new Response(bytes,{status,headers:{'content-type':mode==='wrong-mime'?'text/html':mode==='misleading-mime'?'text/html; application/json':'application/json',...(mode==='content-length'?{'content-length':'5000'}:{})}}),observation=captureQualityObservation();
+   if(mode==='redirected')Object.defineProperty(response,'redirected',{value:true});if(['foreign-url','wrong-path','response-query'].includes(mode))Object.defineProperty(response,'url',{value:mode==='foreign-url'?'https://foreign.invalid/api/identity/participants':mode==='wrong-path'?'https://obrasaas.com/api/identity/field-media':'https://obrasaas.com/api/identity/participants?extra=1'});if(mode==='no-signal')delete observation.signal;if(mode==='no-active')delete observation.isActive;
+   await j.captureResponse(ticket,url,input,response,observation);
+  }
+  await j.settle(ticket,null,captureQualityError(mode==='consumer-flags'?{captureQualityRejected:true,precommitRejected:true}:{}));assert.deepEqual([...s.rows],before,mode);await assert.rejects(j.prepare(captureQualityUrl,captureQualityOptions({operationId:secondId})),{code:'WORKSPACE_RECOVERY_REQUIRED'},mode);
+ }
+});
+
+test('only the newly prepared KYC body shape can acquire capture-quality rejection proof',async()=>{
+ for(const patch of [{action:'SUBMIT_KYC'},{front:''},{selfie:null},{workerId:'invalid worker'},{revision:'invalid'},{noticeVersion:'old'},{consent:false},{ocrConsent:true},{biometricConsent:true},{back:'synthetic-back'},{extra:true}]){
+  const s=storage(),j=journal(s),options=captureQualityOptions(patch),ticket=await j.prepare(captureQualityUrl,options),before=[...s.rows];await j.captureResponse(ticket,captureQualityUrl,options,captureQualityResponse(),captureQualityObservation());await j.settle(ticket,null,captureQualityError());assert.deepEqual([...s.rows],before,JSON.stringify(patch));
+ }
+});
+
+test('capture quality proof cannot settle another ticket a changed reference or a changed command after observation',async()=>{
+ for(const mode of ['foreign-ticket','changed-entry','changed-command','inactive-before','inactive-after','aborted-before','aborted-after','wrong-error-status','wrong-error-code','network-error','repeat-settle','cleanup-failed']){
+  const s=storage(),j=journal(s),options=captureQualityOptions(),ticket=await j.prepare(captureQualityUrl,options),controller=new AbortController();let active=mode!=='inactive-before';if(mode==='aborted-before')controller.abort();if(mode==='changed-entry'){const key=s.key(0);s.setItem(key,JSON.stringify({...ticket.entry,projectId:'other-project'}));}const before=[...s.rows];
+  await j.captureResponse(ticket,captureQualityUrl,options,captureQualityResponse(),{signal:controller.signal,isActive:()=>active});if(mode==='changed-command')options.body=captureQualityOptions({front:'replacement-after-observed-response'}).body;if(mode==='inactive-after')active=false;if(mode==='aborted-after')controller.abort();if(mode==='cleanup-failed')s.removeItem=()=>{throw Error('Controlled cleanup failure');};if(mode==='repeat-settle')await j.settle(ticket,null,new TypeError('Earlier uncertain consumption'));
+  const error=mode==='network-error'?new TypeError('Uncertain body consumption'):captureQualityError(mode==='wrong-error-status'?{status:500}:mode==='wrong-error-code'?{code:'PARTICIPANT_OPERATION_UNCONFIRMED'}:{});await j.settle(mode==='foreign-ticket'?{entry:{...ticket.entry},existed:false}:ticket,null,error);assert.deepEqual([...s.rows],before,mode);
+ }
+});
+
+test('an earlier capture uncertainty survives a later quality 503 in the same journal or after reload',async()=>{
+ for(const reload of [false,true]){
+  const s=storage(),j=journal(s),options=captureQualityOptions(),original=await j.prepare(captureQualityUrl,options);await j.settle(original,null,new TypeError('Lost capture response'));const before=[...s.rows],current=reload?journal(storage(s.rows)):j,ticket=await current.prepare(captureQualityUrl,options);assert.equal(ticket.existed,true);await current.captureResponse(ticket,captureQualityUrl,options,captureQualityResponse(),captureQualityObservation());await current.settle(ticket,null,captureQualityError());assert.deepEqual(await current.list(scope),await j.list(scope));assert.deepEqual([...s.rows],before);await assert.rejects(current.prepare(captureQualityUrl,captureQualityOptions({operationId:secondId})),{code:'WORKSPACE_RECOVERY_REQUIRED'});
+ }
+});
+
+test('a hanging quality response cancels both branches and preserves the capture reference',async()=>{
+ const s=storage(),j=journal(s),options=captureQualityOptions(),ticket=await j.prepare(captureQualityUrl,options),controller=new AbortController(),entered=deferred(),cancelled=deferred();let originalCancelled=0,cloneCancelled=0;
+ const response=new Response(new ReadableStream({start(stream){stream.enqueue(new TextEncoder().encode('{"saved":false,"identityCertified":false'));},cancel(){cancelled.resolve();}}),{status:503,headers:{'content-type':'application/json'}}),nativeClone=response.clone.bind(response);
+ response.clone=()=>{const clone=nativeClone(),nativeCancel=response.body.cancel.bind(response.body),getReader=clone.body.getReader.bind(clone.body);response.body.cancel=(...args)=>{originalCancelled++;return nativeCancel(...args);};clone.body.getReader=()=>{const reader=getReader(),cancel=reader.cancel.bind(reader);reader.cancel=(...args)=>{cloneCancelled++;return cancel(...args);};entered.resolve();return reader;};return clone;};
+ const pending=j.captureResponse(ticket,captureQualityUrl,options,response,{signal:controller.signal,isActive:()=>true});await entered.promise;controller.abort();await pending;let timer;try{await Promise.race([cancelled.promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Quality response branches not cancelled')),1000);})]);}finally{clearTimeout(timer);}
+ await j.settle(ticket,null,captureQualityError());assert.ok(originalCancelled>=1);assert.ok(cloneCancelled>=1);assert.equal((await j.list(scope)).length,1);
 });

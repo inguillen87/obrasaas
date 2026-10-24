@@ -9,8 +9,10 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from api._biometric_core import BiometricError, MANIFEST_SHA, NOTICE_VERSION, evaluate, load_models
-from PIL import Image, ImageEnhance, ImageOps
+from api._biometric_core import (BiometricError, MANIFEST_SHA, NOTICE_VERSION, evaluate, load_models,
+                                CAPTURE_QUALITY_MODE, CAPTURE_QUALITY_NOTICE, CAPTURE_QUALITY_MODEL_SHA,
+                                decode_image, evaluate_capture_quality, load_quality_detector)
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 
 REVISION = "b6d5f04ad78778917853b25c778acef6d5626d15"
 SAMPLES = {"image_T1.jpg": "f4455149f488f76205fdee5499ec5261d08ef6279a1cff7b778ea85405331e94", "image_F1.jpg": "4b11b5d7a8a8e4a88f5f16a5426a0a7692e39e5bb45bb03b4ebe5e1606336860", "image_F2.jpg": "fbbea73450ae9d9bb555c8ccac77bf39d234261fe3be4190e3ed2999690c485f"}
@@ -26,6 +28,98 @@ def sample(name):
 
 def pack(raw):
     return {"data": base64.b64encode(raw).decode(), "mimeType": "image/jpeg", "sha256": hashlib.sha256(raw).hexdigest()}
+
+
+def quality_payload(photo, kind="SELFIE"):
+    output = io.BytesIO()
+    photo.save(output, format="JPEG", quality=95)
+    return {"version": 1, "mode": CAPTURE_QUALITY_MODE, "kind": kind,
+            "consentVersion": CAPTURE_QUALITY_NOTICE, "image": pack(output.getvalue())}
+
+
+def capture_quality_cases(front, detector):
+    results = []
+    original = {"version": 1, "mode": CAPTURE_QUALITY_MODE, "kind": "SELFIE",
+                "consentVersion": CAPTURE_QUALITY_NOTICE, "image": pack(front)}
+
+    def check(name, request, expected_state=None, reason=None):
+        result = evaluate_capture_quality(request, detector=detector)
+        assert result["imageSha256"] == request["image"]["sha256"]
+        assert result["modelManifestSha256"] == CAPTURE_QUALITY_MODEL_SHA
+        assert result["identityCertified"] is False and result["livenessVerified"] is False and result["documentAuthenticityVerified"] is False
+        if expected_state is not None:
+            assert result["state"] == expected_state, name + ": " + result["state"]
+        if reason is not None:
+            assert reason in result["reasonCodes"], name + ": " + str(result["reasonCodes"])
+        results.append({"case": name, "result": result})
+        return result
+
+    # Keep the original public sample unchanged. A retake is evidence of the
+    # quality rule, never relabelled as a successful real selfie capture.
+    original_result = check("original_public_sample_selfie_quality", original, "QUALITY_PASS")
+    photo = ImageOps.exif_transpose(Image.open(io.BytesIO(front))).convert("RGB")
+    blurred = photo.filter(ImageFilter.GaussianBlur(20))
+    check("public_sample_heavily_blurred", quality_payload(blurred), "RETAKE_REQUIRED", "IMAGE_BLURRED")
+
+    decoded = decode_image(front, "image/jpeg")
+    detector.setInputSize((decoded.shape[1], decoded.shape[0]))
+    _, detections = detector.detect(decoded)
+    assert detections is not None and len(detections) == 1, "PUBLIC_QUALITY_FIXTURE_REQUIRES_ONE_DETECTED_FACE"
+    # Derive a no-face negative without retaining the decoded image or crop.
+    # YuNet boxes are only transient geometry, never identity information.
+    no_face = Image.fromarray(decoded[:, :, ::-1])
+    draw = ImageDraw.Draw(no_face)
+    x, y, width, height = (float(value) for value in detections[0][:4])
+    draw.rectangle((max(0, int(x - 40)), max(0, int(y - 40)), min(no_face.width, int(x + width + 40)), min(no_face.height, int(y + height + 40))), fill=(128, 128, 128))
+    check("public_sample_face_removed", quality_payload(no_face), "RETAKE_REQUIRED", "SINGLE_FACE_REQUIRED")
+
+    tile = Image.fromarray(decoded[:, :, ::-1])
+    tile.thumbnail((1000, 1000))
+    multiple = Image.new("RGB", (tile.width * 2, tile.height), (128, 128, 128))
+    multiple.paste(tile, (0, 0))
+    multiple.paste(tile, (tile.width, 0))
+    check("public_sample_two_face_collage", quality_payload(multiple), "RETAKE_REQUIRED", "SINGLE_FACE_REQUIRED")
+
+    # Card geometry is synthetic and cannot establish document type or side.
+    # FRONT now additionally needs a usable portrait; BACK keeps geometry.
+    card = Image.new("RGB", (800, 600), (65, 75, 85))
+    draw = ImageDraw.Draw(card)
+    draw.rectangle((115, 125, 685, 475), fill=(205, 215, 220), outline=(15, 15, 15), width=5)
+    draw.rectangle((145, 175, 295, 405), fill=(105, 125, 140), outline=(40, 40, 40), width=3)
+    for line_y in range(175, 410, 22):
+        draw.line((325, line_y, 645, line_y), fill=(35, 40, 45), width=4)
+    check("synthetic_card_geometry_document_front", quality_payload(card, "DOCUMENT_FRONT"), "RETAKE_REQUIRED", "DOCUMENT_PORTRAIT_UNCONFIRMED")
+    check("synthetic_card_geometry_document_back", quality_payload(card, "DOCUMENT_BACK"), "QUALITY_PASS")
+    check("synthetic_card_heavily_blurred", quality_payload(card.filter(ImageFilter.GaussianBlur(20)), "DOCUMENT_FRONT"), "RETAKE_REQUIRED", "IMAGE_BLURRED")
+    check("synthetic_empty_document", quality_payload(Image.new("RGB", (800, 600), "white"), "DOCUMENT_BACK"), "RETAKE_REQUIRED", "IMAGE_TOO_BRIGHT")
+
+    # Only the portrait is derived from the hash-pinned public sample. These
+    # composites are not real documents, DNI specimens or identity evidence.
+    public_portrait = Image.fromarray(decoded[:, :, ::-1]).crop(
+        (int(x - width * 0.3), int(y - height * 0.4), int(x + width * 1.3), int(y + height * 1.35)))
+
+    def portrait_card(size):
+        candidate = card.copy()
+        candidate.paste(public_portrait.resize(size), (145, 175))
+        return candidate
+
+    # The smallest public portrait yields a face below the SELFIE 70px floor;
+    # it must remain a positive rather than a hidden reject-all document gate.
+    for size in ((150, 230), (90, 140), (75, 115)):
+        check("synthetic_public_portrait_card_" + str(size[0]), quality_payload(portrait_card(size), "DOCUMENT_FRONT"), "QUALITY_PASS")
+    for angle in (-5, 5):
+        rotated = portrait_card((110, 170)).rotate(angle, resample=Image.Resampling.BICUBIC, fillcolor=(65, 75, 85))
+        check("synthetic_public_portrait_card_rotation_" + str(angle), quality_payload(rotated, "DOCUMENT_FRONT"), "QUALITY_PASS")
+    blurred_portrait = card.copy()
+    blurred_portrait.paste(public_portrait.resize((150, 230)).filter(ImageFilter.GaussianBlur(12)), (145, 175))
+    check("synthetic_card_portrait_only_blurred", quality_payload(blurred_portrait, "DOCUMENT_FRONT"), "RETAKE_REQUIRED", "DOCUMENT_PORTRAIT_UNCONFIRMED")
+    multiple_portraits = portrait_card((110, 170))
+    multiple_portraits.paste(public_portrait.resize((110, 170)), (365, 175))
+    check("synthetic_card_two_public_portraits", quality_payload(multiple_portraits, "DOCUMENT_FRONT"), "RETAKE_REQUIRED", "DOCUMENT_PORTRAIT_UNCONFIRMED")
+    outside_portrait = card.copy()
+    outside_portrait.paste(public_portrait.resize((90, 110)), (10, 5))
+    check("synthetic_public_portrait_outside_card", quality_payload(outside_portrait, "DOCUMENT_FRONT"), "RETAKE_REQUIRED", "DOCUMENT_PORTRAIT_UNCONFIRMED")
+    return results, original_result["state"] == "QUALITY_PASS"
 
 
 def main():
@@ -47,11 +141,13 @@ def main():
             except BiometricError as error:
                 assert error.code in {"BIOMETRIC_SINGLE_FACE_REQUIRED", "BIOMETRIC_FACE_QUALITY_REQUIRED"}
                 results.append({"case": name, "safeRejection": error.code})
-    proof = {"actualModelInference": True, "provider": "private-opencv-onnx", "modelManifestSha256": MANIFEST_SHA, "publicSampleSourceRevision": REVISION, "customerDocumentsUsed": False, "productionInference": False, "humanAcceptance": False, "results": results}
+        quality_results, original_selfie_passed = capture_quality_cases(front, load_quality_detector(Path(directory)))
+    proof = {"actualModelInference": True, "provider": "private-opencv-onnx", "modelManifestSha256": MANIFEST_SHA, "publicSampleSourceRevision": REVISION, "customerDocumentsUsed": False, "productionInference": False, "humanAcceptance": False, "results": results,
+             "captureQuality": {"mode": CAPTURE_QUALITY_MODE, "modelManifestSha256": CAPTURE_QUALITY_MODEL_SHA, "actualYuNetInference": True, "originalPublicSelfiePassed": original_selfie_passed, "syntheticPublicPortraitPositiveCases": sum(case["case"].startswith("synthetic_public_portrait_card_") and case["result"]["state"] == "QUALITY_PASS" for case in quality_results), "realDocumentFixtureUsed": False, "documentClassifierVerified": False, "customerDocumentsUsed": False, "productionInference": False, "results": quality_results}}
     output = Path(".vercel/private/biometric-real-model-proof.json")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(proof, indent=2))
-    print(json.dumps({"actualModelInference": True, "cases": len(results), "sourceHashesVerified": True, "humanAcceptance": False}))
+    print(json.dumps({"actualModelInference": True, "cases": len(results), "captureQualityCases": len(quality_results), "originalPublicSelfiePassed": original_selfie_passed, "documentClassifierVerified": False, "sourceHashesVerified": True, "humanAcceptance": False}))
 
 
 if __name__ == "__main__":

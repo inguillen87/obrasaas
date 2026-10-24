@@ -94,10 +94,11 @@ export function employeeIntakeFixture(){
  const readState=anchor=>JSON.parse(decryptCustomerSecret(anchor.payload.employeeIntake.encryptedState,{organizationId:project.organizationId,projectId:project.id,purpose:'employee-intake',resourceId:anchor.id},environment));
  const state=()=>{const anchor=[...events.values()].find(e=>e.payload.employeeIntake);return anchor&&readState(anchor);};
  const execute=async(message,options)=>{const context=receive(message,options),result=await bridge.execute(context);if(result?.reply)await outbound.send(context,result.reply,{purpose:'EMPLOYEE_INTAKE'});return {context,result};};
- const choose=async value=>{const s=state(),index=s.choices.findIndex(row=>row.value===value);assert.ok(index>=0,value);return execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':'+index}}});};
+  const choose=async(value,options)=>{const s=state(),index=s.choices.findIndex(row=>row.value===value);assert.ok(index>=0,value);return execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':'+index}}},options);};
+  const startRequest=async options=>{await execute('HOLA',options);return choose('REQUEST_ACCESS',options);};
  const command=(action,payload,operationId=randomUUID())=>({scope,projectId:target.id,operationId,action,payload:{...(['CONFIGURE_EMPLOYEE_INTAKE','ADMIT_EMPLOYEE_INTAKE','REJECT_EMPLOYEE_INTAKE'].includes(action)?{connectionId:connection.id}:{}),...payload}});
  const configure=(enabled=true,revision=connection.metadata.employeeIntakePolicy?.revision||0)=>store.save(session,command('CONFIGURE_EMPLOYEE_INTAKE',{expectedRevision:revision,enabled,confirmed:true}));
- const submit=async()=>{await configure();await execute('HOLA');await execute('Persona Sintética');await choose('OWNER');await execute('person@example.invalid');await choose('CONFIRM');return state();};
+  const submit=async()=>{await configure();await startRequest();await execute('Persona Sintética');await choose('OWNER');await execute('person@example.invalid');await choose('CONFIRM');return state();};
  const read=()=>customerJobTransaction(connect,client=>readEmployeeIntake(client,member,target.id,environment));
- return {environment,now,scope,project,target,member,session,connection,events,outbounds,audits,workers,controls,query,connect,store,bridge,outbound,receive,execute,choose,state,command,configure,submit,read};
+  return {environment,now,scope,project,target,member,session,connection,events,outbounds,audits,workers,controls,query,connect,store,bridge,outbound,receive,execute,choose,startRequest,state,command,configure,submit,read};
 }

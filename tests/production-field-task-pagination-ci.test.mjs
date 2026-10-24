@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {fieldTaskPaginationUiCiOptions,fieldTaskPaginationSourceClosure} from '../scripts/verify-field-task-pagination-ui.mjs';
 import {WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI as current} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
-import {FIELD_TASK_PAGINATION_CI_VERSION,FIELD_TASK_PAGINATION_CI_KIND,FIELD_TASK_PAGINATION_CI_PROOF_ID,FIELD_TASK_PAGINATION_CI_EVIDENCE as prefix,FIELD_TASK_PAGINATION_UNIT_FILES,fieldTaskPaginationCiSourceClosure,fieldTaskPaginationCiLocalImports,fieldTaskPaginationUnitCases,parseFieldTaskPaginationTap,validateFieldTaskPaginationCi} from '../scripts/verify-field-task-pagination-ci.mjs';
+import {FIELD_TASK_PAGINATION_CI_VERSION,FIELD_TASK_PAGINATION_CI_KIND,FIELD_TASK_PAGINATION_CI_PROOF_ID,FIELD_TASK_PAGINATION_CI_EVIDENCE as prefix,FIELD_TASK_PAGINATION_UNIT_FILES,fieldTaskPaginationCiSourceClosure,fieldTaskPaginationCiLocalImports,fieldTaskPaginationUnitCases,parseFieldTaskPaginationTap,validateFieldTaskPaginationRequests,validateFieldTaskPaginationCi} from '../scripts/verify-field-task-pagination-ci.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex'),head='a'.repeat(40),tree='b'.repeat(40);
 const identity={repository:'inguillen87/obrasaas',workflow:'.github/workflows/workspace-acceptance.yml',runId:42,runAttempt:1,event:'workflow_dispatch',job:'field'};
@@ -18,9 +18,24 @@ function fixture(){
  const overrides=new Map(),evidence=new Map(),readSource=file=>{if(overrides.has(file))return overrides.get(file);return existsSync(file)&&lstatSync(file).isFile()?readFileSync(file):null;},refs=files=>files.map(path=>({path,sha256:sha(readSource(path))}));
  const sourceFiles=fieldTaskPaginationCiSourceClosure(readSource),spec={id:FIELD_TASK_PAGINATION_CI_PROOF_ID,lane:'field',blockId:65,path:prefix+'current-ci.json',kind:FIELD_TASK_PAGINATION_CI_KIND,producer:'scripts/verify-field-task-pagination-ci.mjs',producerSha256:sha(readSource('scripts/verify-field-task-pagination-ci.mjs')),sourceFiles,checkNames:[...current.checkNames]};
  const requestGroup=new Map();current.commandEqualityGroups.forEach((group,index)=>group.forEach(position=>requestGroup.set(position,index)));
- const requests=current.requestMatrix.map((row,index)=>{const value=structuredClone(row);if(row.method==='POST'){const group=requestGroup.get(index);value.operationId='00000000-0000-4000-8000-'+String(group+1).padStart(12,'0');value.bodySha256=sha('synthetic exact body '+group);}return value;});
+ // Canned DTOs are synthetic acceptor inputs, never browser or CI observations.
+ const requests=current.requestMatrix.map((row,index)=>{
+  const value=structuredClone(row);if(row.method!=='POST')return value;
+  assert.ok(requestGroup.has(index),'Every synthetic POST has an explicit current command group');
+  const operationId='00000000-0000-4000-8000-'+String(requestGroup.get(index)+1).padStart(12,'0');
+  const commandObservation={version:1,ordinal:1,width:row.width,mode:row.mode,endpoint:row.path,method:'POST',authorization:'Bearer controlled-task-page-token',bodyKind:row.mode==='evidence'?'FORM_DATA_FIELDS_FILE_SHA256_V1':'JSON_UTF8_V1'};
+  if(row.mode==='evidence'){
+   commandObservation.fields={operationId,projectId:'project-page-fixture',scope:'a'.repeat(64),workerId:'worker-fixture',taskId:'task-0001',sectorId:'sector-fixture',caption:'Archivo sintético conservado durante la consulta.'};
+   commandObservation.file={name:'synthetic-geometric.png',type:'image/png',size:68,sha256:'50a647596cc07caebc446ce8283a8c68cb502d3633518ee41202b2f23eb0f31c'};
+   value.bodySha256=sha(JSON.stringify({version:1,bodyKind:commandObservation.bodyKind,fields:commandObservation.fields,file:commandObservation.file}));
+  }else{
+   const action=row.mode==='progress'?'PROPOSE_PROGRESS':'PROPOSE_CONSUMPTION',payload=row.mode==='progress'?{workerId:'worker-fixture',taskId:'task-0001',progress:25,quantity:'2.5',baseline:'10',unit:'M2',reason:'Medición sintética conservada durante la consulta.',evidenceIds:[],revision:'2026-10-16T12:00:00.000001'}:{workerId:'worker-fixture',taskId:null,sectorId:'sector-fixture',materialId:'material-fixture',catalogHash:'c'.repeat(64),quantity:'2.125',reason:'Consumo sintético conservado durante la consulta.',evidenceIds:[]};
+   commandObservation.bodyUtf8=JSON.stringify({operationId,projectId:'project-page-fixture',scope:'a'.repeat(64),action,payload});value.bodySha256=sha(commandObservation.bodyUtf8);
+  }
+  value.operationId=operationId;value.commandObservation=commandObservation;return value;
+ });
  const closure=fieldTaskPaginationSourceClosure(readSource),rawFiles=[...new Set([...closure.files,'package.json','package-lock.json','scripts/verify-field-task-pagination-ui.mjs','scripts/lib/owned-fixture-cleanup.mjs'])].sort();
- const raw={version:1,status:'PASS',sourceState:'EXACT_CI_SOURCE',trackedClean:true,ciRun:structuredClone(identity),sourceRevision:head,sourceTree:tree,checkedAt:'2026-10-17T00:00:01.000Z',sourceManifest:refs(rawFiles),sourceBytesUnchanged:true,externalImports:closure.externalImports,widths:[320,390,1440],checks:[...current.checkNames],totalCheckCount:33,requests,errors:[],screenshots:[],mediaActions:[320,390,1440].map(width=>({width,buttons:current.mediaActionLabels.map(label=>({label,width:100,height:44,words:label.split(' ').map(word=>({word,lineRects:1}))}))})),actualConsumerComponentsMounted:true,productionPagerFactoryReused:true,pagingActivatedWithKeyboard:true,syntheticOnly:true,providerCalls:0,productionDataTouched:false,humanAccepted:false,posts:current.postCount,cleanup:{browserClosed:true,serverClosed:true,gracefulCloseAcknowledged:true,fixtureRemoved:true,fixtureCleanupProof:{fixtureRemoved:true,attempts:[{attempt:1,phase:'POSTCONDITION',postcondition:'ABSENT',removalAttempted:true,retryScheduled:false,rmCompleted:true}],postcondition:{absent:true}}}};
+ const raw={version:current.rawVersion,status:'PASS',sourceState:'EXACT_CI_SOURCE',trackedClean:true,ciRun:structuredClone(identity),sourceRevision:head,sourceTree:tree,checkedAt:'2026-10-17T00:00:01.000Z',sourceManifest:refs(rawFiles),sourceBytesUnchanged:true,externalImports:closure.externalImports,widths:[320,390,1440],checks:[...current.checkNames],totalCheckCount:33,requests,errors:[],screenshots:[],mediaActions:[320,390,1440].map(width=>({width,buttons:current.mediaActionLabels.map(label=>({label,width:100,height:44,words:label.split(' ').map(word=>({word,lineRects:1}))}))})),actualConsumerComponentsMounted:true,productionPagerFactoryReused:true,pagingActivatedWithKeyboard:true,syntheticOnly:true,providerCalls:0,productionDataTouched:false,humanAccepted:false,posts:current.postCount,cleanup:{browserClosed:true,serverClosed:true,gracefulCloseAcknowledged:true,fixtureRemoved:true,fixtureCleanupProof:{fixtureRemoved:true,attempts:[{attempt:1,phase:'POSTCONDITION',postcondition:'ABSENT',removalAttempted:true,retryScheduled:false,rmCompleted:true}],postcondition:{absent:true}}}};
  const rawPath=prefix+'run-synthetic/browser.json';for(const[index,name]of current.screenshotNames.entries()){const value=Buffer.from('synthetic screenshot bytes '+index),width=Number(/-(320|390|1440)\.png$/.exec(name)[1]);evidence.set(path.posix.dirname(rawPath)+'/'+name,value);raw.screenshots.push({path:name,sha256:sha(value),geometry:{width,scrollWidth:width}});}
  const unitSuites=FIELD_TASK_PAGINATION_UNIT_FILES.map((file,index)=>{const names=fieldTaskPaginationUnitCases(readSource,file),value=Buffer.from(['TAP version 13',...names.map((name,i)=>'ok '+(i+1)+' - '+name),'1..'+names.length,'# tests '+names.length,'# pass '+names.length,'# fail 0','# cancelled 0','# skipped 0','# todo 0',''].join('\n')),filePath=prefix+'unit-'+index+'.tap';evidence.set(filePath,value);return{file,sourceSha256:sha(readSource(file)),exitCode:0,tap:{path:filePath,bytes:value.length,sha256:sha(value)},result:parseFieldTaskPaginationTap(value)};});
  const logs={};for(const key of ['stdout','stderr']){const value=Buffer.from(key==='stdout'?'synthetic process observation\n':''),file=prefix+'browser.'+key+'.log';evidence.set(file,value);logs[key]={path:file,bytes:value.length,sha256:sha(value)};}
@@ -36,11 +51,11 @@ test('pagination CI entry requires explicit actual workflow lane source ref run 
 });
 
 test('complete pagination shadow binds all33 real-consumer observations source cases and original raw bytes',()=>{
- const value=fixture(),result=value.validate();assert.equal(result.status,'PASS');assert.equal(result.checks,33);assert.equal(result.originalBrowserRewritten,false);assert.equal(result.unitSuites,4);assert.equal(result.providerOrHumanAcceptance,false);assert.equal(value.raw.posts,9);
+ const value=fixture(),result=value.validate();assert.equal(result.status,'PASS');assert.equal(result.checks,33);assert.equal(result.originalBrowserRewritten,false);assert.equal(result.unitSuites,4);assert.equal(result.providerOrHumanAcceptance,false);assert.equal(value.raw.posts,9);assert.equal(value.raw.version,2);assert.deepEqual(validateFieldTaskPaginationRequests(value.raw.requests),{requests:108,posts:9,independentCommands:9,operationIds:current.commandEqualityGroups.map(group=>value.raw.requests[group[0]].operationId)});
 });
 
 test('local old source wrong run foreign attempt and shortened matrices cannot certify current pagination',()=>{
- for(const edit of [r=>{r.sourceState='LOCAL_REVIEW_SOURCE';},r=>{delete r.ciRun;},r=>{r.ciRun.runId=43;},r=>{r.ciRun.runAttempt=2;},r=>{r.sourceRevision='c'.repeat(40);},r=>{r.sourceTree='c'.repeat(40);},r=>{r.trackedClean=false;},r=>{r.checks.pop();r.totalCheckCount--;},r=>{r.checks=r.checks.slice(0,19);r.totalCheckCount=19;},r=>{r.widths=[390,1440];}]){const value=fixture();edit(value.raw);value.reseal();denied(value.validate);}
+ for(const edit of [r=>{r.version=1;},r=>{r.sourceState='LOCAL_REVIEW_SOURCE';},r=>{delete r.ciRun;},r=>{r.ciRun.runId=43;},r=>{r.ciRun.runAttempt=2;},r=>{r.sourceRevision='c'.repeat(40);},r=>{r.sourceTree='c'.repeat(40);},r=>{r.trackedClean=false;},r=>{r.checks.pop();r.totalCheckCount--;},r=>{r.checks=r.checks.slice(0,19);r.totalCheckCount=19;},r=>{r.widths=[390,1440];}]){const value=fixture();edit(value.raw);value.reseal();denied(value.validate);}
  const value=fixture();value.proof.ciRun.event='pull_request';denied(value.validate);
 });
 
@@ -57,6 +72,51 @@ test('the selector source transform is restricted to its exact unit origin compi
 
 test('cursor method status request order command UUID and exact unknown body are mandatory observations',()=>{
  for(const edit of [r=>{r.requests.pop();},r=>{r.requests.push(structuredClone(r.requests[0]));},r=>{[r.requests[0],r.requests[1]]=[r.requests[1],r.requests[0]];},r=>{r.requests.find(row=>row.afterTask).afterTask='foreign-cursor';},r=>{r.requests.find(row=>row.method==='GET').method='POST';},r=>{r.requests.find(row=>row.method==='POST').operationId='invalid';},r=>{r.requests.find(row=>row.method==='POST').bodySha256='invalid';},r=>{r.posts=0;},r=>{r.requests[0].extraAuthority=true;}]){const value=fixture();edit(value.raw);value.reseal();denied(value.validate);}
+ // The pure request acceptor needs no CI/source identity for these synthetic negatives.
+ const post=(requests,mode)=>requests.find(row=>row.method==='POST'&&row.mode===mode);
+ const rehash=row=>{const observation=row.commandObservation;row.bodySha256=observation.bodyKind==='JSON_UTF8_V1'?sha(observation.bodyUtf8):sha(JSON.stringify({version:1,bodyKind:observation.bodyKind,fields:observation.fields,file:observation.file}));};
+ const changeJson=(row,edit)=>{const body=JSON.parse(row.commandObservation.bodyUtf8);edit(body);row.commandObservation.bodyUtf8=JSON.stringify(body);rehash(row);};
+ const originalRequests=fixture().raw.requests,originalRequestsBefore=JSON.stringify(originalRequests);
+ for(const edit of [
+  rows=>{delete post(rows,'evidence').commandObservation;},
+  rows=>{post(rows,'evidence').commandObservation.version=2;},
+  rows=>{post(rows,'evidence').commandObservation.ordinal=2;},
+  rows=>{post(rows,'evidence').commandObservation.width=321;},
+  rows=>{post(rows,'evidence').commandObservation.mode='progress';},
+  rows=>{post(rows,'evidence').commandObservation.endpoint='/api/identity/field-operations';},
+  rows=>{post(rows,'evidence').commandObservation.method='GET';},
+  rows=>{post(rows,'evidence').commandObservation.authorization='Bearer foreign-synthetic-token';},
+  rows=>{post(rows,'evidence').commandObservation.bodyKind='UNKNOWN';},
+  rows=>{post(rows,'evidence').operationId='ffffffff-ffff-4fff-8fff-ffffffffffff';},
+  rows=>{post(rows,'evidence').bodySha256='f'.repeat(64);},
+  rows=>{const row=post(rows,'evidence');row.commandObservation.fields.scope='f'.repeat(64);rehash(row);},
+  rows=>{const row=post(rows,'evidence');row.commandObservation.fields.projectId='foreign-project';rehash(row);},
+  rows=>{const row=post(rows,'evidence');row.commandObservation.fields.workerId='foreign-worker';rehash(row);},
+  rows=>{const row=post(rows,'evidence');row.commandObservation.fields.taskId='task-0205';rehash(row);},
+  rows=>{const row=post(rows,'evidence');row.commandObservation.fields.sectorId='foreign-sector';rehash(row);},
+  rows=>{const row=post(rows,'evidence');row.commandObservation.fields.caption='foreign synthetic caption';rehash(row);},
+  rows=>{const row=post(rows,'evidence');row.commandObservation.file.name='foreign.png';rehash(row);},
+  rows=>{const row=post(rows,'evidence');row.commandObservation.file.type='image/jpeg';rehash(row);},
+  rows=>{const row=post(rows,'evidence');row.commandObservation.file.size=69;rehash(row);},
+  rows=>{const row=post(rows,'evidence');row.commandObservation.file.sha256='f'.repeat(64);rehash(row);},
+  rows=>{changeJson(post(rows,'progress'),body=>{body.operationId='ffffffff-ffff-4fff-8fff-ffffffffffff';});},
+  rows=>{changeJson(post(rows,'progress'),body=>{body.scope='f'.repeat(64);});},
+  rows=>{changeJson(post(rows,'progress'),body=>{body.payload.taskId='task-0205';});},
+  rows=>{changeJson(post(rows,'progress'),body=>{body.payload.quantity='2.6';});},
+  rows=>{changeJson(post(rows,'consumption'),body=>{body.payload.materialId='foreign-material';});},
+  rows=>{changeJson(post(rows,'consumption'),body=>{body.payload.quantity='2.126';});},
+  rows=>{const first=post(rows,'evidence'),second=rows.filter(row=>row.method==='POST'&&row.mode==='evidence')[1];second.operationId=first.operationId;second.commandObservation.fields.operationId=first.operationId;rehash(second);},
+  rows=>{const row=post(rows,'progress');row.commandObservation.bodyUtf8+=' ';},
+  rows=>{post(rows,'evidence').commandObservation=null;},
+  rows=>{post(rows,'evidence').commandObservation.fields.extraAuthority=true;},
+  rows=>{delete post(rows,'evidence').commandObservation.fields.caption;},
+  rows=>{const row=post(rows,'evidence');row.commandObservation.fields=[['operationId',row.operationId],['operationId',row.operationId]];},
+  rows=>{post(rows,'evidence').commandObservation.file=null;},
+  rows=>{const row=post(rows,'progress');row.commandObservation.bodyUtf8='';rehash(row);},
+  rows=>{const row=post(rows,'progress'),text=row.commandObservation.bodyUtf8,body=JSON.parse(text);row.commandObservation.bodyUtf8='{"operationId":'+JSON.stringify(body.operationId)+','+text.slice(1);rehash(row);},
+  rows=>{const form=post(rows,'evidence'),json=post(rows,'progress');json.operationId=form.operationId;changeJson(json,body=>{body.operationId=form.operationId;});}
+ ]){const requests=structuredClone(originalRequests);edit(requests);denied(()=>validateFieldTaskPaginationRequests(requests));}
+ assert.equal(JSON.stringify(originalRequests),originalRequestsBefore,'Pure DTO negative fixtures must remain unchanged');
 });
 
 test('actual browser process successful exit original logs and completion window cannot be forged by metadata',()=>{

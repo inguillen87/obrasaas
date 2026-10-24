@@ -1,8 +1,8 @@
-import {restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,withCaptureRuntimePreviousSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet,worksiteLiveHoursPreviousSourcePin,worksiteLiveHoursCurrentSourcePin} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,existsSync,readdirSync} from 'node:fs';
+import {readFileSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin,CUSTOMER_PHONE_SELECTION_CURRENT_REVISION as phoneExpected} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {EXISTING_API_PLAN_CURRENT_REVISION as expected,EXISTING_API_PLAN_CURRENT_SECTION as key,restoreExistingApiPlanPreviousContract,existingApiPlanCurrentSourcePin,existingApiPlanValidationFiles,verifyExistingApiPlanCurrentSources,restoreExistingApiPlanSourceSet,existingApiPlanProofSourceAdditions,existingApiPlanCurrentNativeSourceFiles,validateExistingApiPlanNativeProof} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
@@ -64,7 +64,19 @@ test('COMPANY gains only the new server module while every historical native mat
  const contract=current(),families=contract.whatsappFieldContinuityCurrentRevision.native.families;
  const company=existingApiPlanCurrentNativeSourceFiles(contract,'COMPANY',families.COMPANY.sourceFiles);assert.equal(company.length,236);assert.deepEqual(company.filter(file=>!families.COMPANY.sourceFiles.includes(file)),['src/lib/meta-existing-api-plan.mjs']);
  assert.deepEqual(existingApiPlanCurrentNativeSourceFiles(contract,'OWN',families.OWN.sourceFiles),families.OWN.sourceFiles);assert.equal(families.OWN.sourceFiles.length,139);
- const scan=directory=>readdirSync(directory,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?scan(directory+'/'+entry.name):[directory+'/'+entry.name]);const budgetCompany=whatsappFieldCompanyNativeSourceFiles(read,scan('src/lib').sort());assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);const actualCompany=restorePlanBudgetSourceSet(contract,'PG_COMPANY_KYC',budgetCompany);assert.deepEqual(budgetCompany,[...actualCompany,'src/lib/plan-budget-source.mjs'].sort());assert.deepEqual(restoreWorksiteLiveHoursSourceSet(contract,'PG_COMPANY_KYC',actualCompany),company);assert.equal(actualCompany.length,237);assert.deepEqual(actualCompany,[...company,'src/lib/field-hours-report.mjs'].sort());
+ assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
+ const actualSpec=contract.extension.proofs.find(row=>row.kind==='PG_COMPANY_KYC'),budgetCompany=currentProducerSourceFiles(actualSpec,process.cwd());
+ assert.deepEqual(budgetCompany,actualSpec.sourceFiles,'The actual current COMPANY emitter stays physical');
+ const parentCompany=withCaptureRuntimePreviousSources(contract,read,(parent,parentRead)=>{
+  const priorSpec=parent.extension.proofs.find(row=>row.kind==='PG_COMPANY_KYC'),libraries=priorSpec.sourceFiles.filter(file=>file.startsWith('src/lib/'));
+  const files=whatsappFieldCompanyNativeSourceFiles(parentRead,libraries);assert.deepEqual(files,priorSpec.sourceFiles,'The frozen COMPANY parser uses only its authenticated parent producer');return files;
+ });
+ const advance=contract.planBudgetCurrentRevision.captureQualityRuntime.proofSourceSetAdvances.find(row=>row.kind==='PG_COMPANY_KYC');
+ assert.deepEqual(advance.previousFiles,parentCompany);assert.deepEqual(advance.currentFiles,budgetCompany);assert.deepEqual(advance.removals,[]);assert.deepEqual([...parentCompany,...advance.additions].sort(),budgetCompany);
+ const actualCompany=restorePlanBudgetSourceSet(contract,'PG_COMPANY_KYC',budgetCompany),delta=contract.planBudgetCurrentRevision.sourceSetDeltas.find(row=>row.family==='PG_COMPANY_KYC');
+ assert.deepEqual(delta.additions,['src/lib/consumption-evidence-catalog.mjs','src/lib/consumption-evidence-http.mjs','src/lib/meta-consumption-evidence-catalog.mjs','src/lib/plan-budget-source.mjs','src/lib/voice-consumption-draft.mjs']);
+ assert.equal(actualCompany.length,delta.previousCount);assert.equal(sha(JSON.stringify(actualCompany)),delta.previousPathsSha256);assert.equal(parentCompany.length,delta.currentCount);assert.equal(sha(JSON.stringify(parentCompany)),delta.currentPathsSha256);assert.deepEqual(parentCompany,[...actualCompany,...delta.additions].sort());
+ assert.deepEqual(restoreWorksiteLiveHoursSourceSet(contract,'PG_COMPANY_KYC',actualCompany),company);assert.equal(actualCompany.length,237);assert.deepEqual(actualCompany,[...company,'src/lib/field-hours-report.mjs'].sort());
  for(const changed of [families.COMPANY.sourceFiles.slice(1),[...families.COMPANY.sourceFiles,families.COMPANY.sourceFiles[0]],company])denied(()=>existingApiPlanCurrentNativeSourceFiles(contract,'COMPANY',changed));
 });
 

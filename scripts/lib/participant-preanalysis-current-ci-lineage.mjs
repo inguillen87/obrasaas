@@ -1,6 +1,7 @@
 import {restoreWeeklyCypPreviousContract,weeklyCypCurrentSourcePin} from './home-decisions-current-ci-lineage.mjs';
 import {documentTaskAssociationValidationFiles} from './plan-measurement-document-association-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
+import {withCaptureRuntimePreviousSources} from './plan-budget-current-ci-lineage.mjs';
 import {restoreIntegratedIdentityPreviousContract as integratedRestore,integratedIdentityCurrentSourcePin as integratedPin,verifyIntegratedIdentityCurrentSources as integratedVerify,restoreIntegratedIdentitySourceSet as integratedSourceSet,integratedIdentityProofSourceAdditions as integratedAdditions} from './integrated-identity-current-ci-lineage.mjs';
 
 const sha=value=>createHash('sha256').update(value).digest('hex');
@@ -790,6 +791,10 @@ function revision(contract){
 export function participantPreanalysisCurrentRevision(contract){const value=revision(contract);return value?contract.participantPreanalysisCurrentRevision:null;}
 
 export function validateParticipantPreanalysisWorkspaceContract(contract){
+ try{return validatePreviousParticipantPreanalysisWorkspaceContract(contract);}
+ catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
+}
+function validatePreviousParticipantPreanalysisWorkspaceContract(contract){
  contract=restoreIntegratedIdentityPreviousContract(contract);
  const value=revision(contract);if(!value)return null;
  restoreParticipantPreanalysisPreviousContract(contract);
@@ -866,6 +871,13 @@ export function restoreParticipantPreanalysisSourceSet(family,files,contract){
 }
 
 export function verifyParticipantPreanalysisCurrentSources(contract,readSource){
+ if(contract?.planBudgetCurrentRevision?.captureQualityRuntime){
+  try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>verifyPreviousParticipantPreanalysisCurrentSources(parent,parentRead));}
+  catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
+ }
+ return verifyPreviousParticipantPreanalysisCurrentSources(contract,readSource);
+}
+function verifyPreviousParticipantPreanalysisCurrentSources(contract,readSource){
  try{
  verifyIntegratedIdentityCurrentSources(contract,readSource);
  const value=revision(contract);if(!value)return null;

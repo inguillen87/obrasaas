@@ -159,11 +159,23 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
     shift(session,context){return run(session,context,false,async(client,member,scope,project)=>({scope,...await overtime.readShift(client,member,session,project,context)}));},
     reviewPage(session,context) {
       const {reviewSection,reviewFilter,afterReview=null,reviewId=null,reviewAccessStamp:expectedAccess}=context;
-      if(!['EVIDENCE','PROGRESS'].includes(reviewSection)||!['PENDING','ALL'].includes(reviewFilter)||[afterReview,reviewId].some(value=>value!==null&&!workspaceId(value))||afterReview&&reviewId||reviewId&&reviewFilter!=='ALL'||(afterReview||reviewId||expectedAccess!==undefined)&&!/^[a-f0-9]{64}$/.test(expectedAccess||''))throw new WorkspaceError('FIELD_QUERY_INVALID');
+      if(!['EVIDENCE','PROGRESS','ATTENDANCE'].includes(reviewSection)||!['PENDING','ALL'].includes(reviewFilter)||[afterReview,reviewId].some(value=>value!==null&&!workspaceId(value))||afterReview&&reviewId||reviewId&&reviewFilter!=='ALL'||(afterReview||reviewId||expectedAccess!==undefined)&&!/^[a-f0-9]{64}$/.test(expectedAccess||''))throw new WorkspaceError('FIELD_QUERY_INVALID');
       return run(session,context,false,async(client,member,scope)=>{
         const access=await reviewAccess(client,member,session,context.projectId,scope),{reviewAccessStamp}=access;
         if(expectedAccess!==undefined&&expectedAccess!==reviewAccessStamp)throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);
-        const reviewer=canReviewField(member.role),owned=access.owned.filter(row=>row.metadata.participant.permissions?.report===true).map(row=>row.id);
+        const reviewer=canReviewField(member.role),attendance=reviewSection==='ATTENDANCE',owned=access.owned.filter(row=>row.metadata.participant.permissions?.[attendance?'attendance':'report']===true).map(row=>row.id);
+        if(attendance){
+          // Review the canonical ledger independently of the recent history and
+          // worker display windows. Names share this read-only project snapshot.
+          const visible=`a."projectId"=$1 AND a.metadata->'fieldOperations'->>'version'='1' AND ($2::boolean OR (a."workerId"=ANY($3::text[]) AND a.metadata->'fieldOperations'->>'recordedBy'=$4))`,values=[context.projectId,reviewer,owned,member.actorId];
+          // Validate against ALL visible events, so a decision does not retire a
+          // cursor before the next pending page or a directed readback.
+          if(afterReview||reviewId){const found=(await client.query(`SELECT a.id FROM public."AttendanceEntry" a WHERE ${visible} AND a.id=$5`,[...values,afterReview||reviewId])).rows;if(found.length!==1)throw new WorkspaceError('FIELD_REVIEW_CURSOR_UNAVAILABLE',404);}
+          const pending=`a.metadata->'fieldOperations'->>'verificationStatus'='REVIEW_REQUIRED' AND (a.metadata->'fieldOperations'->'review' IS NULL OR a.metadata->'fieldOperations'->'review'='null'::jsonb)`,filtered=visible+(reviewFilter==='PENDING'?` AND ${pending}`:'');
+          const rows=(await client.query(`SELECT a.id,a."workerId",a.metadata,${revision('a."checkedInAt"')} AS "recordedAt",w.name AS "workerName" FROM public."AttendanceEntry" a LEFT JOIN public."Worker" w ON w.id=a."workerId" AND w."projectId"=a."projectId" WHERE ${filtered} AND ($5::text IS NULL OR (a."checkedInAt",a.id)<(SELECT "checkedInAt",id FROM public."AttendanceEntry" WHERE "projectId"=$1 AND id=$5)) AND ($6::text IS NULL OR a.id=$6) ORDER BY a."checkedInAt" DESC,a.id DESC LIMIT 101`,[...values,afterReview,reviewId])).rows;
+          const total=reviewId?rows.length:(await client.query(`SELECT count(*)::int AS total FROM public."AttendanceEntry" a WHERE ${filtered}`,values)).rows[0].total;
+          return {scope,projectId:context.projectId,reviewAccessStamp,reviewSection,reviewFilter,afterReview,reviewId,records:rows.slice(0,100).map(row=>({...publicEvent(row),workerName:row.workerName||null})),total,nextCursor:rows.length>100?rows[99].id:null,canReview:reviewer,canApproveProgress:canApproveProgress(member.role)};
+        }
         const media=reviewSection==='EVIDENCE',table=media?'public."Incident"':'public."OperationalProposal"';
         const kind=media?`metadata->'fieldOperations'->>'version'='1' AND metadata->'fieldOperations'->>'kind'='EVIDENCE'`:`type='TASK_PROGRESS' AND "sourceProvider"='account-field' AND action->>'fieldOperationsVersion'='1'`;
         const owner=media?`metadata->'fieldOperations'->>'workerId'`:`"proposedByWorkerId"`;

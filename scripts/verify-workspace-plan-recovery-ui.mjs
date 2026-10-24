@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,readFileSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,readFileSync,lstatSync,realpathSync,existsSync} from 'node:fs';
 import path from 'node:path';
 import {spawn,spawnSync} from 'node:child_process';
 import puppeteer from 'puppeteer';
@@ -36,27 +36,49 @@ writeFileSync(path.join(app,'layout.js'),`export default function Layout({childr
 writeFileSync(path.join(app,'page.js'),`'use client';import {useCallback,useState} from 'react';import {AccountWorkspace} from './(identity)/cuenta/workspace-client';export default function Page(){const [context,setContext]=useState('A'),[visible,setVisible]=useState(true);const token=useCallback(async()=> 'synthetic-workspace-plan-'+context,[context]);return <main style={{maxWidth:1000,margin:'auto'}}><h2 id="onboarding-guide-title">Ensayo sintético de recuperación</h2><button onClick={()=>setContext('B')}>Cambiar contexto del ensayo</button><button onClick={()=>setVisible(false)}>Desmontar ensayo</button>{visible?<AccountWorkspace getSessionToken={token}/>:<p>Ensayo desmontado</p>}</main>}`);
 const sourceFile=path.join(fixture,'synthetic-schedule.pdf');writeFileSync(sourceFile,'%PDF-1.7\nSynthetic schedule fixture\n%%EOF');
 const invalidSourceFile=path.join(fixture,'invalid-schedule.pdf'),oversizedSourceFile=path.join(fixture,'oversized-schedule.pdf');writeFileSync(invalidSourceFile,'Invalid synthetic PDF bytes');writeFileSync(oversizedSourceFile,Buffer.alloc(4*1024*1024));
-const port=3179,origin='http://127.0.0.1:'+port,server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],windowsHide:true});
-const serverClosed=new Promise(resolve=>server.once('close',resolve));
-async function stopHarnessServer(){
- let deadline;
- try{
-  if(server.exitCode===null&&server.signalCode===null){
-   if(process.platform==='win32'){
-    // Node's Windows SIGTERM does not run Next's handler; stop only this owned tree.
-    const stopped=spawnSync('taskkill.exe',['/PID',String(server.pid),'/T','/F'],{stdio:'ignore',windowsHide:true,timeout:10000});
-    assert.equal(stopped.status,0,'The owned Next process tree must stop before fixture removal');
-   }else assert.ok(server.kill('SIGTERM'),'Next must receive its graceful shutdown signal');
-  }
-  await Promise.race([serverClosed,new Promise((_,reject)=>{deadline=setTimeout(()=>reject(new Error('WORKSPACE_PLAN_UI_SERVER_CLOSE_TIMEOUT')),10000);})]);
- }finally{clearTimeout(deadline);}
+const port=3179,origin='http://127.0.0.1:'+port,server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',fixture,'--webpack','--hostname','127.0.0.1','--port',String(port)],{cwd:root,env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],windowsHide:true,detached:process.platform!=='win32'});
+let serverDrained=false;
+const serverClosed=new Promise(resolve=>server.once('close',()=>{serverDrained=true;resolve();}));
+async function bounded(promise,label){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(label)),10000);})]);}finally{clearTimeout(timer);}}
+function ownedAlive(child){if(child.exitCode!==null||child.signalCode!==null)return false;try{process.kill(child.pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}}
+function ownedClosed(child){return (child.exitCode!==null||child.signalCode!==null)&&child.stdio.every(stream=>!stream||stream.destroyed)?Promise.resolve():new Promise(resolve=>child.once('close',resolve));}
+function terminateOwned(child,group=false,signal='SIGKILL'){
+ assert.ok(Number.isSafeInteger(child.pid)&&child.pid>0);
+ if(process.platform==='win32'){if(!ownedAlive(child))return;const stopped=spawnSync('taskkill.exe',['/PID',String(child.pid),'/T','/F'],{stdio:'ignore',windowsHide:true,timeout:10000});if(stopped.status!==0&&ownedAlive(child))throw Error('OWNED_PROCESS_TREE_CLOSE_FAILED');}
+ else if(group){try{process.kill(-child.pid,signal);}catch(error){if(error.code!=='ESRCH')throw error;}}
+ else if(ownedAlive(child))assert.ok(child.kill(signal),'The owned process must receive its shutdown signal');
 }
-let log='',browser;for(const stream of [server.stdout,server.stderr])stream.on('data',data=>{log=(log+data).slice(-18000);});
+async function stopOwnedBrowser(){
+ const child=browser?.process(),closed=child?ownedClosed(child):Promise.resolve();
+ try{await bounded(browser?.close(),'OWNED_BROWSER_CLOSE_TIMEOUT');}catch{browser?.disconnect();if(child)terminateOwned(child);}
+ if(child&&ownedAlive(child))terminateOwned(child);
+ await bounded(closed,'OWNED_BROWSER_DRAIN_TIMEOUT');if(child)assert.equal(ownedAlive(child),false);
+}
+async function stopHarnessServer(){
+ if(serverDrained)return;
+ assert.ok(server.spawnargs.includes(fixture),'Only the spawned fixture tree may be stopped');terminateOwned(server,true,'SIGTERM');
+ try{await bounded(serverClosed,'OWNED_NEXT_CLOSE_TIMEOUT');}catch(error){terminateOwned(server,true);await bounded(serverClosed,'OWNED_NEXT_FORCE_DRAIN_TIMEOUT');throw error;}
+}
+function removeOwnedFixture(){
+ const parent=path.resolve(evidence);assert.ok(path.isAbsolute(fixture)&&path.dirname(path.resolve(fixture))===parent);
+ assert.equal(lstatSync(parent).isSymbolicLink(),false);assert.equal(lstatSync(fixture).isSymbolicLink(),false);
+ const resolvedParent=realpathSync(parent),resolvedFixture=realpathSync(fixture),same=(a,b)=>process.platform==='win32'?a.toLowerCase()===b.toLowerCase():a===b;
+ assert.ok(same(parent,resolvedParent)&&same(path.resolve(fixture),resolvedFixture));assert.equal(path.dirname(resolvedFixture),resolvedParent);
+ rmSync(resolvedFixture,{recursive:true,force:true});assert.equal(existsSync(fixture),false);
+}
+async function cleanupHarness(){
+ const failures=[];for(const stop of [stopOwnedBrowser,stopHarnessServer])try{await stop();}catch(error){failures.push(error);}
+ const processesClosed=failures.length===0;if(processesClosed)try{removeOwnedFixture();}catch(error){failures.push(error);}
+ const record={processesClosed,fixtureRemoved:!existsSync(fixture),primaryFailure:primaryFailure?.message||null,errors:failures.map(error=>error.message)};writeFileSync(path.join(evidence,'workspace-plan-recovery-ui-cleanup.json'),JSON.stringify(record,null,2));
+ if(failures.length)throw new AggregateError([...(primaryFailure?[primaryFailure]:[]),...failures],'WORKSPACE_PLAN_UI_CLEANUP_FAILED');
+}
+let log='',browser,primaryFailure;for(const stream of [server.stdout,server.stderr])stream.on('data',data=>{log=(log+data).slice(-18000);});
 const scope='a'.repeat(64),scopeB='b'.repeat(64),projectId='project-plan-A',projectB='project-plan-B';
 const row={title:'Fundaciones importadas',startsOn:'2026-10-08',endsOn:'2026-10-10',evidence:'Fila sintética 1',uncertainty:''};
 const importedTask={id:'z-imported',...row,status:'BACKLOG',progress:0,revision:'2026-10-06T00:00:00.000001'};
 const existingTasks=Array.from({length:150},(_,index)=>({id:'existing-'+String(index+1).padStart(3,'0'),title:'Tarea registrada '+(index+1),status:'BACKLOG',progress:0,startsOn:'2026-10-01',endsOn:'2026-10-05',revision:'2026-10-05T00:00:00.000001'}));
 const widths=[320,390,768,1280],modes=['apply','recover-after-reload','read-failure','scope-mismatch','project-mismatch','context-change-read','unmount-read','task-recover-existing','task-recover-after-reload'],checks=[],errors=[];
+let activeScenario=null;
 const closureModes=['upload-not-observed','decision-not-observed','upload-denied-403','upload-context-409','decision-denied-403','decision-context-409','legacy-reference','legacy-conflict','global-recovery','global-read-failure','global-same-mount','invalid-source','oversized-source','upload-explicit-retry','decision-explicit-retry','upload-close-after-check','upload-lease-expiry','global-lease-expiry'];
 const selectedModes=process.env.PLAN_RECOVERY_UI_MODES?.split(',')||[...modes,...closureModes];assert.ok(selectedModes.length&&selectedModes.every(mode=>[...modes,...closureModes].includes(mode)));
 const waitText=(page,value)=>page.waitForFunction(expected=>document.body.innerText.includes(expected),{timeout:20000},value);
@@ -109,7 +131,8 @@ async function closeRetainedUncertainReview(page,posts){
 async function scenario(mode,width){
  const taskMode=mode.startsWith('task-');
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});page.on('pageerror',error=>errors.push({mode,width,message:error.message}));await page.setRequestInterception(true);
- let draft=null,receipt=null,applied=mode==='task-recover-existing',heldRead=null,readFailures=0;const posts=[],workspaceReads=[],recoveryReads=[],subscriptionReads=[];
+ let draft=null,receipt=null,applied=mode==='task-recover-existing',heldRead=null,readFailures=0,readbackArmed=false,readbackInjected=false,manualReadback=false;const posts=[],workspaceReads=[],recoveryReads=[],subscriptionReads=[];
+ activeScenario={mode,width,workspaceReads};
  const send=(request,body,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:JSON.stringify(body)});
  page.on('request',async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();throw Error('Unexpected external request');}if(!url.pathname.startsWith('/api/'))return request.continue();
@@ -128,12 +151,13 @@ async function scenario(mode,width){
    assert.equal(request.method(),'GET','Plan readback must never POST to workspace');
    if(!url.search)return send(request,{scope:activeB?scopeB:scope,organizationName:activeB?'Empresa del contexto B':'Empresa sintética de cronogramas',role:'ADMIN',roleLabel:'Administrador',canManageIntegrations:false,projects:[{id:activeB?projectB:projectId,name:activeB?'Obra del contexto B':'Obra paginada A'}],projectsTruncated:false});
    assert.equal(url.searchParams.get('scope'),activeB?scopeB:scope);assert.equal(url.searchParams.get('projectId'),activeB?projectB:projectId);
-   workspaceReads.push({scope:url.searchParams.get('scope'),projectId:url.searchParams.get('projectId'),afterTask:url.searchParams.get('afterTask'),applied});
-   if(activeB)return send(request,{scope:scopeB,project:{id:projectB,name:'Obra del contexto B'},canPlanSchedule:true,tasks:existingTasks.slice(0,7).map(task=>({...task,id:'context-B-'+task.id,title:'Tarea del contexto B'})),totalTasks:7,nextCursor:null});
+   workspaceReads.push({scope:url.searchParams.get('scope'),projectId:url.searchParams.get('projectId'),afterTask:url.searchParams.get('afterTask'),applied,phase:readbackArmed&&!url.searchParams.has('afterTask')?'recorded-readback':manualReadback?'manual-readback':readbackInjected?'after-failed-readback':'workspace'});
+   if(activeB)return send(request,{scope:scopeB,project:{id:projectB,name:'Obra del contexto B',status:'ACTIVE'},roleLabel:'Administrador',canPlanSchedule:true,tasks:existingTasks.slice(0,7).map(task=>({...task,id:'context-B-'+task.id,title:'Tarea del contexto B'})),totalTasks:7,nextCursor:null});
    const after=url.searchParams.get('afterTask'),all=[...existingTasks,...(applied?[importedTask]:[])];
    if(after)assert.equal(after,'existing-100');
-   const body={scope,project:{id:projectId,name:'Obra paginada A'},canPlanSchedule:true,tasks:after?all.slice(100):all.slice(0,100),totalTasks:all.length,nextCursor:after?null:'existing-100'};
-   const readback=applied&&!after&&workspaceReads.filter(read=>read.scope===scope).length===2;
+   const body={scope,project:{id:projectId,name:'Obra paginada A',status:'ACTIVE'},roleLabel:'Administrador',canPlanSchedule:true,tasks:after?all.slice(100):all.slice(0,100),totalTasks:all.length,nextCursor:after?null:'existing-100'};
+   const readback=readbackArmed&&!after;
+   if(readback){readbackArmed=false;readbackInjected=true;}
    if(readback&&['context-change-read','unmount-read'].includes(mode)){heldRead={request,body};return;}
    if(readback&&mode==='read-failure'){readFailures++;return send(request,{code:'WORKSPACE_QUERY_FAILED'},503);}
    if(readback&&mode==='scope-mismatch')return send(request,{...body,scope:scopeB,totalTasks:999});
@@ -158,6 +182,7 @@ async function scenario(mode,width){
    }
    const payload=JSON.parse(request.postData());posts.push(payload);assert.equal(payload.action,'APPLY');assert.equal(payload.scope,scope);assert.equal(payload.projectId,projectId);assert.equal(payload.draftId,draft.id);assert.equal(payload.expectedRevision,3);assert.deepEqual(payload.rows,[row]);assert.equal(applied,false,'Application may only happen once');
    applied=true;draft={...draft,revision:4,status:'APPLIED',rows:payload.rows};receipt={scope,projectId,saved:true,replayed:false,action:'APPLY',receiptId:'receipt-plan-A',draft,tasks:[importedTask]};
+   readbackArmed=['read-failure','scope-mismatch','project-mismatch','context-change-read','unmount-read'].includes(mode);
    if(mode==='recover-after-reload')return send(request,{code:'PLAN_IMPORT_UNCONFIRMED'},503);return send(request,receipt);
   }
   assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),projectId);
@@ -190,7 +215,8 @@ async function scenario(mode,width){
   await page.reload({waitUntil:'networkidle0'});await waitText(page,'Empresa sintética de cronogramas');await openProject(page);await assertCount(page,151);await waitText(page,'Intento pendiente de comprobación');await assertPlanBlockingNavigation(page,posts);await click(page,'Comprobar resultado');await waitText(page,'Cronograma actualizado desde los registros de la obra');await assertCount(page,151);assert.equal(recoveryReads.length,1);
  }else if(['read-failure','scope-mismatch','project-mismatch'].includes(mode)){
   await waitText(page,'no pudimos actualizar el cronograma');await waitText(page,'Recibo confirmado: receipt-plan-A');await assertCount(page,150);assert.ok(!await page.evaluate(()=>document.body.innerText.includes('999 tareas')));assert.equal(posts.length,2);
-  await click(page,'Volver a consultar el cronograma');await waitText(page,'Cronograma actualizado desde los registros de la obra');await assertCount(page,151);assert.equal(readFailures,mode==='read-failure'?1:0);
+  await page.waitForSelector('[data-worksite-live-refresh="PAUSED"]');assert.equal(readbackInjected,true,'The first canonical read after APPLY receives the intended fault');assert.equal(workspaceReads.filter(read=>read.phase==='recorded-readback').length,1);assert.equal(workspaceReads.filter(read=>read.phase==='after-failed-readback').length,0,'A failed readback cannot retry in the background');
+  manualReadback=true;await click(page,'Volver a consultar el cronograma');await waitText(page,'Cronograma actualizado desde los registros de la obra');await assertCount(page,151);assert.equal(readFailures,mode==='read-failure'?1:0);
  }else if(['context-change-read','unmount-read'].includes(mode)){
   await waitText(page,'Consultando el cronograma actualizado');await page.waitForFunction(()=>[...document.querySelectorAll('button')].find(button=>button.textContent==='Actualizar').disabled);assert.ok(heldRead,'Canonical read must be pending');
   if(mode==='context-change-read'){await click(page,'Cambiar contexto del ensayo');await waitText(page,'Empresa del contexto B');await openProject(page,projectB);await assertCount(page,7,7);}else{await click(page,'Desmontar ensayo');await waitText(page,'Ensayo desmontado');}
@@ -385,10 +411,7 @@ try{
  for(let attempt=0;attempt<90;attempt++){try{if((await fetch(origin)).ok)break;}catch{}if(server.exitCode!==null)throw Error(log);await new Promise(resolve=>setTimeout(resolve,500));if(attempt===89)throw Error(log);}
  browser=await puppeteer.launch({headless:'shell',args:['--no-sandbox']});for(const width of widths){for(const mode of modes.filter(mode=>selectedModes.includes(mode)))await scenario(mode,width);for(const mode of closureModes.filter(mode=>selectedModes.includes(mode)))await recoveryClosureScenario(mode,width);}
  assert.deepEqual(errors,[]);
-}catch(error){console.error(JSON.stringify({log,errors,checks}));throw error;}finally{
- await browser?.close();await stopHarnessServer();
- assert.ok(path.resolve(fixture).startsWith(path.resolve(evidence)+path.sep));rmSync(fixture,{recursive:true,force:true});
-}
+}catch(error){primaryFailure=error;console.error(JSON.stringify({log,errors,checks,activeScenario}));throw error;}finally{await cleanupHarness();}
 // A cleanup failure must exit nonzero without publishing a new successful proof.
 writeFileSync(path.join(evidence,'workspace-plan-recovery-ui-validation.json'),JSON.stringify({validated:true,synthetic:true,checkedAt:new Date().toISOString(),fullSuite:selectedModes.length===modes.length+closureModes.length,selectedModes,realProviderCalls:false,physicalPhoneAccepted:false,widths,checks,sourceManifest,harnessSha256,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms,serverClosedBeforeFixtureRemoval:true,fixtureRemoved:true},null,2)+'\n');
 console.log(JSON.stringify({validated:true,synthetic:true,realProviderCalls:false,checks:checks.length}));

@@ -1,3 +1,4 @@
+import {assertParticipantFacialPrecommitSource} from './participant-facial-policy.mjs';
 import {createHash,randomUUID} from 'node:crypto';
 import {WorkspaceError,workspaceId,digest} from './workspace-policy.mjs';
 import {participantKycInitialChannelCapture} from './participant-kyc-image-set.mjs';
@@ -37,7 +38,7 @@ export function createParticipantKycPreanalysis({connect,get,analyzer,assessBiom
   if(!row.active||p?.version!==1||!['ACTIVE','INVITED'].includes(p.status)||!['PENDING_REVIEW','PENDING_ACCOUNT_CLAIM'].includes(k?.status)||k.submissionId!==ref.submissionId||processing?.automatic!==true||stableDigest(processing.auto)!==stableDigest(a))fail();
   if(!processing.stages||Object.keys(processing.stages).sort().join('|')!=='biometric|ocr'||Object.values(processing.stages).some(stage=>!['PENDING','NOT_AUTHORIZED','COMPLETE','FAILED','WAITING_CONFIGURATION','HELD','DISPATCHED'].includes(stage?.state))||processing.nextCheckAt!==undefined&&processing.nextCheckAt!==null&&!instant(processing.nextCheckAt)||processing.status==='RUNNING'&&!instant(processing.expiresAt))fail();
   const proofs=(await client.query(`SELECT id,"organizationId","actorId",action,"entityType","entityId",metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND "entityType"='Worker' AND "entityId"=$2 AND action='participant.operation.recorded' AND metadata->>'kind'='KYC_SUBMITTED' AND metadata->>'submissionId'=$3 FOR SHARE`,[a.organizationId,row.id,k.submissionId])).rows;
-  if(proofs.length!==1)fail();const consent=assertParticipantPreanalysisSource(k,a,proofs[0],{organizationId:a.organizationId,projectId:ref.projectId,workerId:row.id});
+  if(proofs.length!==1)fail();const consent=assertParticipantPreanalysisSource(k,a,proofs[0],{organizationId:a.organizationId,projectId:ref.projectId,workerId:row.id});await assertParticipantFacialPrecommitSource(client,k,proofs[0],{organizationId:a.organizationId,projectId:ref.projectId,workerId:row.id});
   const capture=k.channelCapture===undefined?null:participantKycInitialChannelCapture(k.channelCapture);
   if(k.channelCapture!==undefined&&(!capture||capture.receiptId!==proofs[0].id||digest(proofs[0].metadata.channelCapture)!==digest(capture)))fail();
   if(capture?.accountClaimRequired){

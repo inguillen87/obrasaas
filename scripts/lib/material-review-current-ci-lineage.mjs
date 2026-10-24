@@ -1,3 +1,4 @@
+import {restorePlanBudgetFieldReviewBusinessSource as restoreMaterialReviewFieldReviewSource} from './plan-budget-current-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
 import {parse} from '@babel/parser';
 import {homeDecisionsLegacyOperationsAst} from './home-decisions-current-ci-lineage.mjs';
@@ -229,6 +230,7 @@ const ATTENDANCE_CONSUMPTION_MATERIAL_AST=Object.freeze({
   "src/lib/field-operations-store.mjs": {"predecessorCommit":"41c1494de1912d10101dd85621c89ef04499a306","previousSourceSha256":"dbf96641349efae61808a2d66a02d491ad06e2226885e6efa928dba53ce5034e","currentSourceSha256":"8f54edfb613fcf90f099015d42c89e993e5d3ca74f5bd11e9743830324547604","previousAstSha256":"691f12956c47b7e01d074af857932aa4637578ad59b4a0f3b135f5639397efbc","edits":[{"type":"FunctionDeclaration","sha256":"d3be8d429b2a694ec95a17ba1d686f04be4dd1d26f2677cf9cf3c5821710fbaa"},{"type":"VariableDeclaration","sha256":"f9a6a9a9cc96b11c50f62c060d0e47d6428c13f26ff08bd6db0a9caf681267a4"},{"type":"ObjectProperty","sha256":"e216c209acdf9a1339f04d1136cf855eaf517f07487ce2c44af654c7d0f118ab"}]},
   "src/lib/material-inventory.mjs": {"predecessorCommit":"41c1494de1912d10101dd85621c89ef04499a306","previousSourceSha256":"4b599d273c4cadcdf76202554757583152da8c11b0a754be386bffb830f0c65b","currentSourceSha256":"3af0b0e9c9003d09582ec4e8b21d1e35746dd3839fc7f01071935b9a4ea95333","previousAstSha256":"d108cfd535da36b0f28c588709f0b74647d2566229925f7581975318dd937670","edits":[{"type":"ImportDeclaration","sha256":"7bfceb81792d7e3e66a3ea3fc93ed514a5135d4e5e96ed03a47ee0f4737f9991"},{"type":"FunctionDeclaration","sha256":"6bb45bd8be0626abbeb1622d2bb8c683557c7f1d86cbaed27eb33e8e566b182f"},{"type":"FunctionDeclaration","sha256":"d6cc6a3ba1e9a6bfea5dbf48e90eb7e92ed94c27bbaf50626f743bbd305b5bba"},{"type":"FunctionDeclaration","sha256":"d44bc86d0b9eed71aefd4989c176f8515dfdfa37f435f19760b24fb737729b28"},{"type":"ExportNamedDeclaration","sha256":"3041ebbce9b08e0c46602c012b23f14347c05f7896d615c1653c2002a2e7c902"},{"type":"VariableDeclaration","sha256":"cb2ae2cb6fcbb25980dc357041c556c7e3f59762998944113c71c0ce5b44281b"},{"type":"SpreadElement","sha256":"7be3fdb0016cce8c44a74edea1099ed97363677b3ae6bd9c73d864c4efce0afb"},{"type":"VariableDeclaration","sha256":"3f5e73a85639aa3353bdbceafb2af1d5ed2c93c7513943da62e0c5d0f667989a"},{"type":"IfStatement","sha256":"3663468f0bdf539965eec6b6bc0fb04fe5d213ac04e7e8262950e3c0277d71d5"}]}
 });
+export {restorePlanBudgetFieldReviewBusinessSource as restoreMaterialReviewFieldReviewSource} from './plan-budget-current-ci-lineage.mjs';
 const materialSurfaceSyntax=value=>Array.isArray(value)?value.map(materialSurfaceSyntax):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).filter(([key])=>!ignored.has(key)).map(([key,child])=>[key,materialSurfaceSyntax(child)])):value;
 function attendanceConsumptionLegacyMaterialAst(file,bytes,tree){
  const sourceSha256=sha(bytes.toString('utf8').replaceAll('\r\n','\n')),row=ATTENDANCE_CONSUMPTION_MATERIAL_AST[file];
@@ -273,7 +275,7 @@ export function materialReviewUnchangedSurface(file,bytes){
  })[file];
  if(!mode)return null;
  reject(Buffer.isBuffer(bytes),'Actual reviewed source bytes required');
- const captured=attendanceConsumptionLegacyMaterialAst(file,bytes,parse(bytes.toString('utf8'),{sourceType:'module'}));
+ const projectedBytes=restoreMaterialReviewFieldReviewSource(file,bytes),captured=attendanceConsumptionLegacyMaterialAst(file,projectedBytes,parse(projectedBytes.toString('utf8'),{sourceType:'module'}));
  const parsed=worksiteLiveHoursLegacyMaterialAst(file,captured.sourceSha256,captured.tree),tree=mode==='INVENTORY_COUNTS'?homeDecisionsLegacyOperationsAst(parsed):parsed;
  function project(node){
   if(Array.isArray(node))return node.map(project).filter(value=>value!==null);
