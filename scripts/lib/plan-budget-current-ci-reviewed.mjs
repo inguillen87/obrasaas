@@ -282,7 +282,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": "src/lib/meta-customer-provider.mjs",
       "previousSha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f",
-      "currentSha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+      "currentSha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
     },
     {
       "path": "src/lib/meta-employee-intake.mjs",
@@ -737,7 +737,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
     {
       "path": ".github/scripts/verify-production-test-shards.py",
       "previousSha256": null,
-      "currentSha256": "6294850f2040a76cf417f78c4930607deeaae7cdd585bcad7c7c16efb7e47591"
+      "currentSha256": "f9bcdb1cea57eaa2df7daaaebd6073a7536fd6fabffe3601881e365191590ee8"
     },
     {
       "path": ".github/workflows/production-boundary.yml",
@@ -1378,6 +1378,46 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       "path": "scripts/verify-kyc-reply-feedback-ci.mjs",
       "previousSha256": "c07f34ff0f4d49325b1fae912bec581d183cd2b2ee21214840b3ff9c6a900dc3",
       "currentSha256": "2a05275b5047f4a1a69cbe5676e160318841bca3a558f09347d211496d188a8f"
+    },
+    {
+      "path": "src/lib/company-channel-http.mjs",
+      "previousSha256": "e0a5ff271543ad3f54deab699aa585213dc504fda92112e179743f2520a737f2",
+      "currentSha256": "be95404d1d4fcff3422138b7d92ac960fc5bfdc9bae4b6fcbecf961cb23ca148"
+    },
+    {
+      "path": "src/lib/company-channel-store.mjs",
+      "previousSha256": "300c5e7e0abe65b97b86a200c6cc72444b9c65ce375d61975c56f5abbc6a453b",
+      "currentSha256": "26686333bb7d5fcddf40b14f25b8c322e16ddef0d62690b2e6d1d1b4a6de2e72"
+    },
+    {
+      "path": "src/lib/meta-own-company-connection.mjs",
+      "previousSha256": "5bdf8a2c6b1333efe0a12481174e433cd58c9e1583ae0972f4cb090892eaaf84",
+      "currentSha256": "33ac37426beb73a142804bc6e6c903d0d18527282dfb590bf685b74e20df2bf5"
+    },
+    {
+      "path": "tests/fixtures/own-runtime-diagnostic.mjs",
+      "previousSha256": null,
+      "currentSha256": "00b02725ee130032a5ffe0f19c6d29e32bcbdd54285f8d42eeb3a75e876c815b"
+    },
+    {
+      "path": "tests/production-own-company-runtime-diagnostic.test.mjs",
+      "previousSha256": null,
+      "currentSha256": "332be4374b0d82752ee13f307af2b39b767d009a8b670b7fa5cdd0d93fd511bc"
+    },
+    {
+      "path": "src/app/(identity)/cuenta/own-company-number-panel.js",
+      "previousSha256": "d2146290e43adb77dc14b707787023a24ffe80c39e69eaa49fc876dcab3d267b",
+      "currentSha256": "6682c17bdb11ea4269540e3a4f14546e013d72869ba19c79a41312cbc65419bf"
+    },
+    {
+      "path": "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
+      "previousSha256": null,
+      "currentSha256": "a2b5b4fe2499168ee8afe10cc3aa767f56757b376531ab63e4c557b5ed26ea52"
+    },
+    {
+      "path": "tests/production-own-company-runtime-diagnostic-view.test.mjs",
+      "previousSha256": null,
+      "currentSha256": "b349d9d861f97af748dedd7f32963f29a83ca2b152f4a8cbe1a6157379f86bb7"
     }
   ],
   "sourceSetDeltas": [
@@ -1937,6 +1977,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "src/app/(identity)/cuenta/operations-status-panel.module.css",
         "src/app/(identity)/cuenta/own-company-number-panel.js",
         "src/app/(identity)/cuenta/own-company-number-view.mjs",
+        "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
         "src/app/(identity)/cuenta/own-company-templates-panel.js",
         "src/app/(identity)/cuenta/own-company-templates-view.mjs",
         "src/app/(identity)/cuenta/participant-account-discovery-format.mjs",
@@ -2294,11 +2335,15 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/own-company-number-panel.js",
-          "sha256": "d2146290e43adb77dc14b707787023a24ffe80c39e69eaa49fc876dcab3d267b"
+          "sha256": "6682c17bdb11ea4269540e3a4f14546e013d72869ba19c79a41312cbc65419bf"
         },
         {
           "path": "src/app/(identity)/cuenta/own-company-number-view.mjs",
           "sha256": "6940f11e30d2958d7f6771463ce28ca83c0e2d2f41e81aa220c8efe669580300"
+        },
+        {
+          "path": "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
+          "sha256": "a2b5b4fe2499168ee8afe10cc3aa767f56757b376531ab63e4c557b5ed26ea52"
         },
         {
           "path": "src/app/(identity)/cuenta/own-company-templates-panel.js",
@@ -4109,6 +4154,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "src/app/(identity)/cuenta/operations-status-panel.module.css",
         "src/app/(identity)/cuenta/own-company-number-panel.js",
         "src/app/(identity)/cuenta/own-company-number-view.mjs",
+        "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
         "src/app/(identity)/cuenta/own-company-templates-panel.js",
         "src/app/(identity)/cuenta/own-company-templates-view.mjs",
         "src/app/(identity)/cuenta/page.js",
@@ -4576,11 +4622,15 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/app/(identity)/cuenta/own-company-number-panel.js",
-          "sha256": "d2146290e43adb77dc14b707787023a24ffe80c39e69eaa49fc876dcab3d267b"
+          "sha256": "6682c17bdb11ea4269540e3a4f14546e013d72869ba19c79a41312cbc65419bf"
         },
         {
           "path": "src/app/(identity)/cuenta/own-company-number-view.mjs",
           "sha256": "6940f11e30d2958d7f6771463ce28ca83c0e2d2f41e81aa220c8efe669580300"
+        },
+        {
+          "path": "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
+          "sha256": "a2b5b4fe2499168ee8afe10cc3aa767f56757b376531ab63e4c557b5ed26ea52"
         },
         {
           "path": "src/app/(identity)/cuenta/own-company-templates-panel.js",
@@ -6090,7 +6140,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+          "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -7177,7 +7227,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+          "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -8128,7 +8178,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/company-channel-store.mjs",
-          "sha256": "300c5e7e0abe65b97b86a200c6cc72444b9c65ce375d61975c56f5abbc6a453b"
+          "sha256": "26686333bb7d5fcddf40b14f25b8c322e16ddef0d62690b2e6d1d1b4a6de2e72"
         },
         {
           "path": "src/lib/company-entitlement.mjs",
@@ -8252,7 +8302,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+          "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -8320,7 +8370,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-own-company-connection.mjs",
-          "sha256": "5bdf8a2c6b1333efe0a12481174e433cd58c9e1583ae0972f4cb090892eaaf84"
+          "sha256": "33ac37426beb73a142804bc6e6c903d0d18527282dfb590bf685b74e20df2bf5"
         },
         {
           "path": "src/lib/meta-own-company-policy.mjs",
@@ -9145,7 +9195,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+          "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -9968,7 +10018,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         },
         {
           "path": "src/lib/meta-customer-provider.mjs",
-          "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+          "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
         },
         {
           "path": "src/lib/meta-customer-templates.mjs",
@@ -25275,7 +25325,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": ".github/scripts/verify-production-test-shards.py",
         "previousSha256": null,
-        "currentSha256": "6294850f2040a76cf417f78c4930607deeaae7cdd585bcad7c7c16efb7e47591"
+        "currentSha256": "f9bcdb1cea57eaa2df7daaaebd6073a7536fd6fabffe3601881e365191590ee8"
       },
       {
         "path": ".github/workflows/production-boundary.yml",
@@ -25916,6 +25966,46 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "scripts/verify-kyc-reply-feedback-ci.mjs",
         "previousSha256": "c07f34ff0f4d49325b1fae912bec581d183cd2b2ee21214840b3ff9c6a900dc3",
         "currentSha256": "2a05275b5047f4a1a69cbe5676e160318841bca3a558f09347d211496d188a8f"
+      },
+      {
+        "path": "src/lib/company-channel-http.mjs",
+        "previousSha256": "e0a5ff271543ad3f54deab699aa585213dc504fda92112e179743f2520a737f2",
+        "currentSha256": "be95404d1d4fcff3422138b7d92ac960fc5bfdc9bae4b6fcbecf961cb23ca148"
+      },
+      {
+        "path": "src/lib/company-channel-store.mjs",
+        "previousSha256": "300c5e7e0abe65b97b86a200c6cc72444b9c65ce375d61975c56f5abbc6a453b",
+        "currentSha256": "26686333bb7d5fcddf40b14f25b8c322e16ddef0d62690b2e6d1d1b4a6de2e72"
+      },
+      {
+        "path": "src/lib/meta-own-company-connection.mjs",
+        "previousSha256": "5bdf8a2c6b1333efe0a12481174e433cd58c9e1583ae0972f4cb090892eaaf84",
+        "currentSha256": "33ac37426beb73a142804bc6e6c903d0d18527282dfb590bf685b74e20df2bf5"
+      },
+      {
+        "path": "tests/fixtures/own-runtime-diagnostic.mjs",
+        "previousSha256": null,
+        "currentSha256": "00b02725ee130032a5ffe0f19c6d29e32bcbdd54285f8d42eeb3a75e876c815b"
+      },
+      {
+        "path": "tests/production-own-company-runtime-diagnostic.test.mjs",
+        "previousSha256": null,
+        "currentSha256": "332be4374b0d82752ee13f307af2b39b767d009a8b670b7fa5cdd0d93fd511bc"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/own-company-number-panel.js",
+        "previousSha256": "d2146290e43adb77dc14b707787023a24ffe80c39e69eaa49fc876dcab3d267b",
+        "currentSha256": "6682c17bdb11ea4269540e3a4f14546e013d72869ba19c79a41312cbc65419bf"
+      },
+      {
+        "path": "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
+        "previousSha256": null,
+        "currentSha256": "a2b5b4fe2499168ee8afe10cc3aa767f56757b376531ab63e4c557b5ed26ea52"
+      },
+      {
+        "path": "tests/production-own-company-runtime-diagnostic-view.test.mjs",
+        "previousSha256": null,
+        "currentSha256": "b349d9d861f97af748dedd7f32963f29a83ca2b152f4a8cbe1a6157379f86bb7"
       }
     ],
     "referenceAdvances": [
@@ -26037,7 +26127,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "path": "src/lib/meta-customer-provider.mjs",
         "previousSha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2",
-        "currentSha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+        "currentSha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
       },
       {
         "path": "src/lib/meta-kyc-conversation.mjs",
@@ -26220,13 +26310,13 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": ".github/scripts/verify-production-test-shards.py",
         "status": "ADDED",
         "previousSha256": null,
-        "currentSha256": "6294850f2040a76cf417f78c4930607deeaae7cdd585bcad7c7c16efb7e47591",
+        "currentSha256": "f9bcdb1cea57eaa2df7daaaebd6073a7536fd6fabffe3601881e365191590ee8",
         "previousBytes": 0,
         "currentBytes": 9052,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 0,
-            "currentText": "\"\"\"Observe native Node sharding; do not schedule, replace or reinterpret tests.\"\"\"\nimport hashlib\nimport json\nimport os\nfrom pathlib import Path\nimport re\nimport subprocess\nimport sys\nimport xml.etree.ElementTree as ET\n\nSCHEMA = \"production-boundary-shard.v1\"\nTOTAL = 19\nEXPECTED_COUNT = 379\nOUTPUT = \".vercel/private/production-boundary-unit-shard\"\nDOWNLOADS = \".vercel/private/production-boundary-unit-artifacts\"\nMANIFEST_KEYS = {\"schema\", \"head\", \"runId\", \"runAttempt\", \"shard\", \"total\", \"nodeVersion\", \"files\"}\nRECEIPT_KEYS = {\"entry\", \"pid\", \"sourceSha256\", \"startedAt\", \"exitCode\"}\nHEX = re.compile(r\"[0-9a-f]{64}\\Z\")\nTIME = re.compile(r\"\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z\\Z\")\nRECEIPT_NAME = re.compile(r\"entry-([1-9][0-9]*)-([0-9a-f]{64})\\.(start|exit)\\.json\\Z\")\n\n\nclass Denied(Exception):\n    def __init__(self, code):\n        self.code = code\n        super().__init__(code)\n\n\ndef need(condition, code):\n    if not condition:\n        raise Denied(code)\n\n\ndef digest(data):\n    return hashlib.sha256(data).hexdigest()\n\n\ndef unique_object(pairs):\n    result = {}\n    for key, value in pairs:\n        need(key not in result, \"JSON_DUPLICATE_KEY\")\n        result[key] = value\n    return result\n\n\ndef read_json(file):\n    need(file.is_file() and not file.is_symlink(), \"EVIDENCE_FILE\")\n    need(file.stat().st_size <= 262144, \"EVIDENCE_SIZE\")\n    try:\n        return json.loads(file.read_text(encoding=\"utf-8\"), object_pairs_hook=unique_object,\n                          parse_constant=lambda _: (_ for _ in ()).throw(Denied(\"JSON_CONSTANT\")))\n    except (ValueError, UnicodeError):\n        raise Denied(\"JSON_INVALID\") from None\n\n\ndef exact_keys(value, keys, code):\n    need(type(value) is dict and set(value) == keys, code)\n\n\ndef node_version():\n    value = subprocess.check_output([\"node\", \"--version\"], text=True).strip()\n    need(re.fullmatch(r\"v24\\.\\d+\\.\\d+\", value) is not None, \"NODE_VERSION\")\n    return value\n\n\ndef production_context(root, environ):\n    head = subprocess.check_output([\"git\", \"rev-parse\", \"HEAD\"], cwd=root, text=True).strip()\n    need(re.fullmatch(r\"[0-9a-f]{40}\", head) is not None and head == environ.get(\"GITHUB_SHA\"), \"HEAD\")\n    run_id, attempt = environ.get(\"GITHUB_RUN_ID\", \"\"), environ.get(\"GITHUB_RUN_ATTEMPT\", \"\")\n    need(re.fullmatch(r\"[1-9][0-9]*\", run_id) is not None and re.fullmatch(r\"[1-9][0-9]*\", attempt) is not None, \"RUN_ID\")\n    tracked = subprocess.check_output([\"git\", \"ls-files\", \"-z\", \"--\", \"tests/production-*.test.mjs\"], cwd=root).decode().split(\"\\0\")\n    entries = sorted(entry for entry in tracked if entry)\n    need(len(entries) == EXPECTED_COUNT and all(re.fullmatch(r\"tests/production-[^/]+\\.test\\.mjs\", entry) for entry in entries), \"INVENTORY_COUNT\")\n    disk = sorted(file.relative_to(root).as_posix() for file in (root / \"tests\").glob(\"production-*.test.mjs\"))\n    need(entries == disk, \"INVENTORY_DISK\")\n    changed = subprocess.run([\"git\", \"diff\", \"--quiet\", \"HEAD\", \"--\", \"tests/production-*.test.mjs\"], cwd=root, check=False)\n    need(changed.returncode == 0, \"INVENTORY_CHANGED\")\n    files = []\n    for entry in entries:\n        file = root / entry\n        need(file.is_file() and not file.is_symlink(), \"SOURCE_FILE\")\n        files.append({\"entry\": entry, \"sourceSha256\": digest(file.read_bytes())})\n    return {\"head\": head, \"runId\": run_id, \"runAttempt\": attempt, \"nodeVersion\": node_version(), \"files\": files}\n\n\ndef prepare(root, environ):\n    context = production_context(root, environ)\n    shard = environ.get(\"BOUNDARY_UNIT_SHARD\", \"\")\n    need(shard in {str(index) for index in range(1, TOTAL + 1)}, \"SHARD_ID\")\n    relative = environ.get(\"BOUNDARY_UNIT_OUTPUT\", OUTPUT)\n    need(relative == OUTPUT, \"OUTPUT_SCOPE\")\n    output = root / relative\n    output.mkdir(parents=True, exist_ok=False)\n    (output / \"entries\").mkdir()\n    manifest = {\"schema\": SCHEMA, **context, \"shard\": int(shard), \"total\": TOTAL}\n    with (output / \"manifest.json\").open(\"x\", encoding=\"utf-8\", newline=\"\\n\") as handle:\n        json.dump(manifest, handle, separators=(\",\", \":\"))\n        handle.write(\"\\n\")\n    return {\"ok\": True, \"prepared\": EXPECTED_COUNT, \"shard\": int(shard), \"total\": TOTAL}\n\n\ndef validate_junit(file):\n    need(file.is_file() and not file.is_symlink(), \"JUNIT_FILE\")\n    need(file.stat().st_size <= 33554432, \"JUNIT_SIZE\")\n    raw = file.read_bytes()\n    need(b\"<!DOCTYPE\" not in raw and b\"<!ENTITY\" not in raw, \"JUNIT_ENTITY\")\n    try:\n        tree = ET.fromstring(raw)\n    except ET.ParseError:\n        raise Denied(\"JUNIT_INVALID\") from None\n    need(tree.tag == \"testsuites\" and len(list(tree.iter(\"testcase\"))) > 0, \"JUNIT_SHAPE\")\n    need(not list(tree.iter(\"failure\")) and not list(tree.iter(\"error\")), \"JUNIT_FAILURE\")\n    need(all(suite.get(\"failures\", \"0\") == \"0\" and suite.get(\"errors\", \"0\") == \"0\"\n             for suite in tree.iter(\"testsuite\")), \"JUNIT_FAILURE\")\n\n\ndef artifact_name(context, shard):\n    return f\"production-unit-{context['runId']}-{context['runAttempt']}-{shard}\"\n\n\ndef validate_evidence(downloads, expected):\n    \"\"\"Pure evidence validation. CLI supplies its fresh exact379 Git context.\"\"\"\n    need(downloads.is_dir() and not downloads.is_symlink(), \"ARTIFACT_ROOT\")\n    names = {artifact_name(expected, shard) for shard in range(1, TOTAL + 1)}\n    need({file.name for file in downloads.iterdir()} == names, \"ARTIFACT_SET\")\n    expected_files = expected[\"files\"]\n    source_by_entry = {file[\"entry\"]: file[\"sourceSha256\"] for file in expected_files}\n    need(len(source_by_entry) == len(expected_files), \"EXPECTED_DUPLICATE\")\n    seen = set()\n    for shard in range(1, TOTAL + 1):\n        artifact = downloads / artifact_name(expected, shard)\n        need(artifact.is_dir() and not artifact.is_symlink(), \"ARTIFACT_DIRECTORY\")\n        need({file.name for file in artifact.iterdir()} == {\"manifest.json\", \"native.junit.xml\", \"entries\"}, \"ARTIFACT_CONTENTS\")\n        manifest = read_json(artifact / \"manifest.json\")\n        exact_keys(manifest, MANIFEST_KEYS, \"MANIFEST_SHAPE\")\n        need(manifest[\"schema\"] == SCHEMA and type(manifest[\"shard\"]) is int and manifest[\"shard\"] == shard\n             and type(manifest[\"total\"]) is int and manifest[\"total\"] == TOTAL, \"MANIFEST_SHARD\")\n        for key in (\"head\", \"runId\", \"runAttempt\", \"nodeVersion\"):\n            need(manifest[key] == expected[key], \"MANIFEST_\" + key.upper())\n        need(manifest[\"files\"] == expected_files, \"MANIFEST_FILES\")\n        entries_dir = artifact / \"entries\"\n        need(entries_dir.is_dir() and not entries_dir.is_symlink(), \"ENTRIES_DIRECTORY\")\n        pairs = {}\n        for file in entries_dir.iterdir():\n            match = RECEIPT_NAME.fullmatch(file.name)\n            need(match is not None, \"ENTRY_FILENAME\")\n            receipt = read_json(file)\n            exact_keys(receipt, RECEIPT_KEYS, \"ENTRY_SHAPE\")\n            entry, pid = receipt[\"entry\"], receipt[\"pid\"]\n            need(type(entry) is str and entry in source_by_entry, \"ENTRY_EXTRA\")\n            need(type(pid) is int and pid > 0 and str(pid) == match[1], \"ENTRY_PID\")\n            need(digest(entry.encode()) == match[2], \"ENTRY_PATH_ID\")\n            need(type(receipt[\"sourceSha256\"]) is str and HEX.fullmatch(receipt[\"sourceSha256\"])\n                 and receipt[\"sourceSha256\"] == source_by_entry[entry], \"ENTRY_SOURCE\")\n            need(type(receipt[\"startedAt\"]) is str and TIME.fullmatch(receipt[\"startedAt\"]), \"ENTRY_TIME\")\n            if match[3] == \"start\":\n                need(receipt[\"exitCode\"] is None, \"ENTRY_START\")\n            else:\n                need(type(receipt[\"exitCode\"]) is int and receipt[\"exitCode\"] == 0, \"ENTRY_EXIT\")\n            key = (entry, pid)\n            pair = pairs.setdefault(key, {})\n            need(match[3] not in pair, \"ENTRY_DUPLICATE_RECEIPT\")\n            pair[match[3]] = receipt\n        need(len(pairs) > 0, \"SHARD_EMPTY\")\n        for (entry, _), pair in pairs.items():\n            need(set(pair) == {\"start\", \"exit\"}, \"ENTRY_PAIR\")\n            need({key: value for key, value in pair[\"start\"].items() if key != \"exitCode\"}\n                 == {key: value for key, value in pair[\"exit\"].items() if key != \"exitCode\"}, \"ENTRY_PAIR\")\n            need(entry not in seen, \"ENTRY_DUPLICATE\")\n            seen.add(entry)\n        validate_junit(artifact / \"native.junit.xml\")\n    need(seen == set(source_by_entry), \"ENTRY_MISSING\")\n    return {\"ok\": True, \"shards\": TOTAL, \"entries\": len(seen), \"disjoint\": True}\n\n\ndef main():\n    need(len(sys.argv) == 2 and sys.argv[1] in {\"prepare\", \"verify\"}, \"COMMAND\")\n    root = Path.cwd()\n    if sys.argv[1] == \"prepare\":\n        return prepare(root, os.environ)\n    expected = production_context(root, os.environ)\n    result = validate_evidence(root / DOWNLOADS, expected)\n    need(production_context(root, os.environ) == expected, \"SOURCE_CHANGED_DURING_VERIFY\")\n    return result\n\n\nif __name__ == \"__main__\":\n    try:\n        print(json.dumps(main(), separators=(\",\", \":\")))\n    except Denied as denied:\n        print(json.dumps({\"ok\": False, \"code\": denied.code}), file=sys.stderr)\n        sys.exit(1)\n",
+            "currentText": "\"\"\"Observe native Node sharding; do not schedule, replace or reinterpret tests.\"\"\"\nimport hashlib\nimport json\nimport os\nfrom pathlib import Path\nimport re\nimport subprocess\nimport sys\nimport xml.etree.ElementTree as ET\n\nSCHEMA = \"production-boundary-shard.v1\"\nTOTAL = 19\nEXPECTED_COUNT = 381\nOUTPUT = \".vercel/private/production-boundary-unit-shard\"\nDOWNLOADS = \".vercel/private/production-boundary-unit-artifacts\"\nMANIFEST_KEYS = {\"schema\", \"head\", \"runId\", \"runAttempt\", \"shard\", \"total\", \"nodeVersion\", \"files\"}\nRECEIPT_KEYS = {\"entry\", \"pid\", \"sourceSha256\", \"startedAt\", \"exitCode\"}\nHEX = re.compile(r\"[0-9a-f]{64}\\Z\")\nTIME = re.compile(r\"\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z\\Z\")\nRECEIPT_NAME = re.compile(r\"entry-([1-9][0-9]*)-([0-9a-f]{64})\\.(start|exit)\\.json\\Z\")\n\n\nclass Denied(Exception):\n    def __init__(self, code):\n        self.code = code\n        super().__init__(code)\n\n\ndef need(condition, code):\n    if not condition:\n        raise Denied(code)\n\n\ndef digest(data):\n    return hashlib.sha256(data).hexdigest()\n\n\ndef unique_object(pairs):\n    result = {}\n    for key, value in pairs:\n        need(key not in result, \"JSON_DUPLICATE_KEY\")\n        result[key] = value\n    return result\n\n\ndef read_json(file):\n    need(file.is_file() and not file.is_symlink(), \"EVIDENCE_FILE\")\n    need(file.stat().st_size <= 262144, \"EVIDENCE_SIZE\")\n    try:\n        return json.loads(file.read_text(encoding=\"utf-8\"), object_pairs_hook=unique_object,\n                          parse_constant=lambda _: (_ for _ in ()).throw(Denied(\"JSON_CONSTANT\")))\n    except (ValueError, UnicodeError):\n        raise Denied(\"JSON_INVALID\") from None\n\n\ndef exact_keys(value, keys, code):\n    need(type(value) is dict and set(value) == keys, code)\n\n\ndef node_version():\n    value = subprocess.check_output([\"node\", \"--version\"], text=True).strip()\n    need(re.fullmatch(r\"v24\\.\\d+\\.\\d+\", value) is not None, \"NODE_VERSION\")\n    return value\n\n\ndef production_context(root, environ):\n    head = subprocess.check_output([\"git\", \"rev-parse\", \"HEAD\"], cwd=root, text=True).strip()\n    need(re.fullmatch(r\"[0-9a-f]{40}\", head) is not None and head == environ.get(\"GITHUB_SHA\"), \"HEAD\")\n    run_id, attempt = environ.get(\"GITHUB_RUN_ID\", \"\"), environ.get(\"GITHUB_RUN_ATTEMPT\", \"\")\n    need(re.fullmatch(r\"[1-9][0-9]*\", run_id) is not None and re.fullmatch(r\"[1-9][0-9]*\", attempt) is not None, \"RUN_ID\")\n    tracked = subprocess.check_output([\"git\", \"ls-files\", \"-z\", \"--\", \"tests/production-*.test.mjs\"], cwd=root).decode().split(\"\\0\")\n    entries = sorted(entry for entry in tracked if entry)\n    need(len(entries) == EXPECTED_COUNT and all(re.fullmatch(r\"tests/production-[^/]+\\.test\\.mjs\", entry) for entry in entries), \"INVENTORY_COUNT\")\n    disk = sorted(file.relative_to(root).as_posix() for file in (root / \"tests\").glob(\"production-*.test.mjs\"))\n    need(entries == disk, \"INVENTORY_DISK\")\n    changed = subprocess.run([\"git\", \"diff\", \"--quiet\", \"HEAD\", \"--\", \"tests/production-*.test.mjs\"], cwd=root, check=False)\n    need(changed.returncode == 0, \"INVENTORY_CHANGED\")\n    files = []\n    for entry in entries:\n        file = root / entry\n        need(file.is_file() and not file.is_symlink(), \"SOURCE_FILE\")\n        files.append({\"entry\": entry, \"sourceSha256\": digest(file.read_bytes())})\n    return {\"head\": head, \"runId\": run_id, \"runAttempt\": attempt, \"nodeVersion\": node_version(), \"files\": files}\n\n\ndef prepare(root, environ):\n    context = production_context(root, environ)\n    shard = environ.get(\"BOUNDARY_UNIT_SHARD\", \"\")\n    need(shard in {str(index) for index in range(1, TOTAL + 1)}, \"SHARD_ID\")\n    relative = environ.get(\"BOUNDARY_UNIT_OUTPUT\", OUTPUT)\n    need(relative == OUTPUT, \"OUTPUT_SCOPE\")\n    output = root / relative\n    output.mkdir(parents=True, exist_ok=False)\n    (output / \"entries\").mkdir()\n    manifest = {\"schema\": SCHEMA, **context, \"shard\": int(shard), \"total\": TOTAL}\n    with (output / \"manifest.json\").open(\"x\", encoding=\"utf-8\", newline=\"\\n\") as handle:\n        json.dump(manifest, handle, separators=(\",\", \":\"))\n        handle.write(\"\\n\")\n    return {\"ok\": True, \"prepared\": EXPECTED_COUNT, \"shard\": int(shard), \"total\": TOTAL}\n\n\ndef validate_junit(file):\n    need(file.is_file() and not file.is_symlink(), \"JUNIT_FILE\")\n    need(file.stat().st_size <= 33554432, \"JUNIT_SIZE\")\n    raw = file.read_bytes()\n    need(b\"<!DOCTYPE\" not in raw and b\"<!ENTITY\" not in raw, \"JUNIT_ENTITY\")\n    try:\n        tree = ET.fromstring(raw)\n    except ET.ParseError:\n        raise Denied(\"JUNIT_INVALID\") from None\n    need(tree.tag == \"testsuites\" and len(list(tree.iter(\"testcase\"))) > 0, \"JUNIT_SHAPE\")\n    need(not list(tree.iter(\"failure\")) and not list(tree.iter(\"error\")), \"JUNIT_FAILURE\")\n    need(all(suite.get(\"failures\", \"0\") == \"0\" and suite.get(\"errors\", \"0\") == \"0\"\n             for suite in tree.iter(\"testsuite\")), \"JUNIT_FAILURE\")\n\n\ndef artifact_name(context, shard):\n    return f\"production-unit-{context['runId']}-{context['runAttempt']}-{shard}\"\n\n\ndef validate_evidence(downloads, expected):\n    \"\"\"Pure evidence validation. CLI supplies its fresh exact381 Git context.\"\"\"\n    need(downloads.is_dir() and not downloads.is_symlink(), \"ARTIFACT_ROOT\")\n    names = {artifact_name(expected, shard) for shard in range(1, TOTAL + 1)}\n    need({file.name for file in downloads.iterdir()} == names, \"ARTIFACT_SET\")\n    expected_files = expected[\"files\"]\n    source_by_entry = {file[\"entry\"]: file[\"sourceSha256\"] for file in expected_files}\n    need(len(source_by_entry) == len(expected_files), \"EXPECTED_DUPLICATE\")\n    seen = set()\n    for shard in range(1, TOTAL + 1):\n        artifact = downloads / artifact_name(expected, shard)\n        need(artifact.is_dir() and not artifact.is_symlink(), \"ARTIFACT_DIRECTORY\")\n        need({file.name for file in artifact.iterdir()} == {\"manifest.json\", \"native.junit.xml\", \"entries\"}, \"ARTIFACT_CONTENTS\")\n        manifest = read_json(artifact / \"manifest.json\")\n        exact_keys(manifest, MANIFEST_KEYS, \"MANIFEST_SHAPE\")\n        need(manifest[\"schema\"] == SCHEMA and type(manifest[\"shard\"]) is int and manifest[\"shard\"] == shard\n             and type(manifest[\"total\"]) is int and manifest[\"total\"] == TOTAL, \"MANIFEST_SHARD\")\n        for key in (\"head\", \"runId\", \"runAttempt\", \"nodeVersion\"):\n            need(manifest[key] == expected[key], \"MANIFEST_\" + key.upper())\n        need(manifest[\"files\"] == expected_files, \"MANIFEST_FILES\")\n        entries_dir = artifact / \"entries\"\n        need(entries_dir.is_dir() and not entries_dir.is_symlink(), \"ENTRIES_DIRECTORY\")\n        pairs = {}\n        for file in entries_dir.iterdir():\n            match = RECEIPT_NAME.fullmatch(file.name)\n            need(match is not None, \"ENTRY_FILENAME\")\n            receipt = read_json(file)\n            exact_keys(receipt, RECEIPT_KEYS, \"ENTRY_SHAPE\")\n            entry, pid = receipt[\"entry\"], receipt[\"pid\"]\n            need(type(entry) is str and entry in source_by_entry, \"ENTRY_EXTRA\")\n            need(type(pid) is int and pid > 0 and str(pid) == match[1], \"ENTRY_PID\")\n            need(digest(entry.encode()) == match[2], \"ENTRY_PATH_ID\")\n            need(type(receipt[\"sourceSha256\"]) is str and HEX.fullmatch(receipt[\"sourceSha256\"])\n                 and receipt[\"sourceSha256\"] == source_by_entry[entry], \"ENTRY_SOURCE\")\n            need(type(receipt[\"startedAt\"]) is str and TIME.fullmatch(receipt[\"startedAt\"]), \"ENTRY_TIME\")\n            if match[3] == \"start\":\n                need(receipt[\"exitCode\"] is None, \"ENTRY_START\")\n            else:\n                need(type(receipt[\"exitCode\"]) is int and receipt[\"exitCode\"] == 0, \"ENTRY_EXIT\")\n            key = (entry, pid)\n            pair = pairs.setdefault(key, {})\n            need(match[3] not in pair, \"ENTRY_DUPLICATE_RECEIPT\")\n            pair[match[3]] = receipt\n        need(len(pairs) > 0, \"SHARD_EMPTY\")\n        for (entry, _), pair in pairs.items():\n            need(set(pair) == {\"start\", \"exit\"}, \"ENTRY_PAIR\")\n            need({key: value for key, value in pair[\"start\"].items() if key != \"exitCode\"}\n                 == {key: value for key, value in pair[\"exit\"].items() if key != \"exitCode\"}, \"ENTRY_PAIR\")\n            need(entry not in seen, \"ENTRY_DUPLICATE\")\n            seen.add(entry)\n        validate_junit(artifact / \"native.junit.xml\")\n    need(seen == set(source_by_entry), \"ENTRY_MISSING\")\n    return {\"ok\": True, \"shards\": TOTAL, \"entries\": len(seen), \"disjoint\": True}\n\n\ndef main():\n    need(len(sys.argv) == 2 and sys.argv[1] in {\"prepare\", \"verify\"}, \"COMMAND\")\n    root = Path.cwd()\n    if sys.argv[1] == \"prepare\":\n        return prepare(root, os.environ)\n    expected = production_context(root, os.environ)\n    result = validate_evidence(root / DOWNLOADS, expected)\n    need(production_context(root, os.environ) == expected, \"SOURCE_CHANGED_DURING_VERIFY\")\n    return result\n\n\nif __name__ == \"__main__\":\n    try:\n        print(json.dumps(main(), separators=(\",\", \":\")))\n    except Denied as denied:\n        print(json.dumps({\"ok\": False, \"code\": denied.code}), file=sys.stderr)\n        sys.exit(1)\n",
             "previousText": ""
           }
         ]
@@ -29600,28 +29690,63 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "src/lib/meta-customer-provider.mjs",
         "status": "MODIFIED",
         "previousSha256": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2",
-        "currentSha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b",
+        "currentSha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594",
         "previousBytes": 56412,
-        "currentBytes": 56863,
+        "currentBytes": 61847,
         "inverseHunks": [
           {
-            "currentOffsetCharacters": 1844,
+            "currentOffsetCharacters": 1151,
+            "currentText": "// Opaque, module-private witnesses. Public DTOs/errors cannot mint these.\nconst ownRuntimeDiagnosticFrames=new WeakMap(),ownRuntimeDiagnosticResults=new WeakMap();\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 2009,
             "currentText": "function reportOwnPhoneRejection(stage){try{console.warn(JSON.stringify({event:'META_OWN_COMPANY_PHONE_REJECTED',version:1,stage}));}catch{}}\n",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 30908,
+            "currentOffsetCharacters": 4122,
+            "currentText": "\nexport function projectOwnCompanyRuntimeDiagnostic(value,{capability,connection,token,environment=process.env,now=Date.now()}={}){\n const proof=ownRuntimeDiagnosticResults.get(value);ownRuntimeDiagnosticResults.delete(value);\n if(!proof||proof.capability!==capability||proof.connection!==connection||proof.tokenDigest!==customerTokenDigest(token||'')||!Number.isSafeInteger(now)||now<proof.checkedAt||now-proof.startedAt>=60000)throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);\n const current=ownCompanyTransportPolicy(capability,environment,now),canonical=ownCompanyConnectionPolicy(connection,environment,now);\n if(ownCompanyCapabilityKind(capability)!=='RUNTIME'||current.connectionId!==connection.id||current.grantDigest!==canonical.grantDigest||current.tokenDigest!==proof.tokenDigest)throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);\n return proof.projection;\n}\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 14436,
+            "currentText": ",ownDiagnostic=null",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 25587,
+            "currentText": ",diagnostic=null",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 28732,
+            "currentText": ",ownDiagnostic:diagnostic});\n }\n\n async function ownConnectionProvider({capability,connection,token,beforeExternal},diagnostic=null){\n  const current=ownCompanyTransportPolicy(capability,environment,now()),canonical=ownCompanyConnectionPolicy(connection,environment,now()),runtime=Object.hasOwn(connection.metadata,'ownCompanyRuntime');\n  if(current.policyDigest!==canonical?.policyDigest||ownCompanyCapabilityKind(capability)!==(runtime?'RUNTIME':'ADMIN')||runtime&&(current.connectionId!==connection.id||current.grantDigest!==canonical.grantDigest||current.tokenDigest!==customerTokenDigest(token||'')))throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);\n  if(runtime&&typeof beforeExternal!=='function')throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);\n  const scoped=await auditOwnCapability(capability,token,runtime?beforeExternal:null,null,diagnostic),verified=await scoped.inspect({token,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,numberMode:'DEDICATED'});\n  if(runtime&&(verified.registered!==true||verified.platformType!=='CLOUD_API'||await scoped.inspectSubscription({token,wabaId:connection.whatsappBusinessId})!==true))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);return scoped;\n }\n function captureOwnRuntimePhone(phone,policy,token,sequence){\n  const frame=ownRuntimeDiagnosticFrames.get(ownDiagnostic);\n  if(!frame||frame.capability!==ownCapability||frame.tokenDigest!==customerTokenDigest(token)||frame.connection.phoneNumberId!==String(phone.id)||frame.connection.whatsappBusinessId!==policy.wabaId)return;\n  let normalized=null;try{normalized=normalizeCompanyPhone(phone.display_phone_number,true);}catch{}\n  const present=Object.hasOwn(phone,'code_verification_status');\n  const verification=present?['VERIFIED','NOT_VERIFIED','EXPIRED'].includes(phone.code_verification_status)?phone.code_verification_status:'OTHER':'MISSING';\n  const platform=phone.platform_type==null?'MISSING':['CLOUD_API','NOT_APPLICABLE'].includes(phone.platform_type)?phone.platform_type:'OTHER';\n  frame.inspection={sequence,current:()=>sequence===inspectionSequence,checkedAt:now(),projection:Object.freeze({codeVerificationPresent:present,codeVerificationState:verification,registered:phone.status==='CONNECTED'&&phone.platform_type==='CLOUD_API',platformState:platform,displayComparable:normalized!==null,displayMatchesExpected:normalized!==null&&normalized===policy.expectedPhoneE164})};\n }\n function rejectOwnPhone(stage,sequence){\n  reportOwnPhoneRejection(stage);const error=new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403),frame=ownRuntimeDiagnosticFrames.get(ownDiagnostic);\n  if(frame?.capability===ownCapability&&frame.inspection?.sequence===sequence)frame.rejection={error,stage,sequence};\n  throw error",
+            "previousText": "})"
+          },
+          {
+            "currentOffsetCharacters": 34794,
             "currentText": "phoneCodeVerified!==true||proof.",
             "previousText": ""
           },
           {
-            "currentOffsetCharacters": 44101,
-            "currentText": "{reportOwnPhoneRejection('VERIFICATION_STATUS');throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);}",
-            "previousText": "throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);"
+            "currentOffsetCharacters": 40788,
+            "currentText": "  async diagnoseOwnConnection({capability,connection,token,beforeExternal}){\n   if(ownCapability||pilotCapability||ownCompanyCapabilityKind(capability)!=='RUNTIME'||connection?.metadata?.ownCompanyRuntime?.version!==2||typeof beforeExternal!=='function')throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);\n   const current=ownCompanyTransportPolicy(capability,environment,now()),canonical=ownCompanyConnectionPolicy(connection,environment,now());\n   if(current.connectionId!==connection.id||current.grantDigest!==canonical.grantDigest||current.tokenDigest!==customerTokenDigest(token||''))throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);\n   const handle=Object.freeze({}),frame={capability,connection,tokenDigest:customerTokenDigest(token),startedAt:now(),inspection:null,rejection:null};\n   ownRuntimeDiagnosticFrames.set(handle,frame);\n   try{\n    let failure;try{await ownConnectionProvider({capability,connection,token,beforeExternal},handle);}catch(error){failure=error;}\n    await beforeExternal();ownCompanyTransportPolicy(capability,environment,now());\n    const observation=frame.inspection;\n    // Only this inspection's internally created error is an observation.\n    // A provider/adapter error with matching code/stage is never a witness.\n    if(!observation||!observation.current()||failure&&(frame.rejection?.error!==failure||frame.rejection.sequence!==observation.sequence))throw failure||new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);\n    if(now()<observation.checkedAt||now()-frame.startedAt>=60000)throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);\n    const projection=Object.freeze({version:1,kind:'OWN_COMPANY_RUNTIME_DIAGNOSTIC',readOnly:true,canManage:false,...observation.projection,observedAt:new Date(observation.checkedAt).toISOString(),checkedAt:new Date(now()).toISOString(),inspectionState:'CURRENT',operationalCheck:failure?'REJECTED':'PASSED',denialStage:failure?frame.rejection.stage:'NONE',accepted:false,roundTrip:'NOT_VERIFIED'});\n    const result=Object.freeze({});ownRuntimeDiagnosticResults.set(result,{capability,connection,tokenDigest:frame.tokenDigest,startedAt:frame.startedAt,checkedAt:now(),projection});return result;\n   }finally{ownRuntimeDiagnosticFrames.delete(handle);}\n  },\n",
+            "previousText": ""
           },
           {
-            "currentOffsetCharacters": 45946,
-            "currentText": "){reportOwnPhoneRejection('INSPECTION_SUPERSEDED');throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);}if(normalizeCompanyPhone(verified.displayPhoneNumber,true)!==ownPolicy.expectedPhoneE164){reportOwnPhoneRejection('DISPLAY_PHONE_MATCH');throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);}inspectedAssets=Object.freeze({capability:ownCapability,wabaId,phoneNumberId,inspectionPhase,registered:verified.registered,platformType:verified.platformType,phoneCodeVerified:phone.code_verification_status==='VERIFIED'",
+            "currentOffsetCharacters": 43251,
+            "currentText": "return ownConnectionProvider({capability,connection,token,beforeExternal})",
+            "previousText": "const current=ownCompanyTransportPolicy(capability,environment,now()),canonical=ownCompanyConnectionPolicy(connection,environment,now()),runtime=Object.hasOwn(connection.metadata,'ownCompanyRuntime');\n     if(current.policyDigest!==canonical?.policyDigest||ownCompanyCapabilityKind(capability)!==(runtime?'RUNTIME':'ADMIN')||runtime&&(current.connectionId!==connection.id||current.grantDigest!==canonical.grantDigest||current.tokenDigest!==customerTokenDigest(token||'')))throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);\n     if(runtime&&typeof beforeExternal!=='function')throw new WorkspaceError('META_OWN_COMPANY_UNAVAILABLE',403);\n     const scoped=await auditOwnCapability(capability,token,runtime?beforeExternal:null),verified=await scoped.inspect({token,wabaId:connection.whatsappBusinessId,phoneNumberId:connection.phoneNumberId,numberMode:'DEDICATED'});\n     if(runtime&&(verified.registered!==true||verified.platformType!=='CLOUD_API'||await scoped.inspectSubscription({token,wabaId:connection.whatsappBusinessId})!==true))throw new WorkspaceError('META_OWN_COMPANY_OWNER_UNVERIFIED',403);return scoped"
+          },
+          {
+            "currentOffsetCharacters": 49111,
+            "currentText": "Policy)captureOwnRuntimePhone(phone,ownPolicy,token,sequence);\n   if(ownCompanyCapabilityKind(ownCapability)==='RUNTIME'&&phone.code_verification_status!=='VERIFIED'){rejectOwnPhone('VERIFICATION_STATUS',sequence);}",
+            "previousText": "CompanyCapabilityKind(ownCapability)==='RUNTIME'&&phone.code_verification_status!=='VERIFIED')throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);"
+          },
+          {
+            "currentOffsetCharacters": 51058,
+            "currentText": "){rejectOwnPhone('INSPECTION_SUPERSEDED',sequence);}if(normalizeCompanyPhone(verified.displayPhoneNumber,true)!==ownPolicy.expectedPhoneE164){rejectOwnPhone('DISPLAY_PHONE_MATCH',sequence);}inspectedAssets=Object.freeze({capability:ownCapability,wabaId,phoneNumberId,inspectionPhase,registered:verified.registered,platformType:verified.platformType,phoneCodeVerified:phone.code_verification_status==='VERIFIED'",
             "previousText": "||normalizeCompanyPhone(verified.displayPhoneNumber,true)!==ownPolicy.expectedPhoneE164)throw new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403);inspectedAssets=Object.freeze({capability:ownCapability,wabaId,phoneNumberId,inspectionPhase,registered:verified.registered,platformType:verified.platformType"
           }
         ]
@@ -33715,15 +33840,231 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "previousText": ""
           }
         ]
+      },
+      {
+        "path": "src/lib/company-channel-http.mjs",
+        "status": "MODIFIED",
+        "previousSha256": "e0a5ff271543ad3f54deab699aa585213dc504fda92112e179743f2520a737f2",
+        "currentSha256": "be95404d1d4fcff3422138b7d92ac960fc5bfdc9bae4b6fcbecf961cb23ca148",
+        "previousBytes": 2093,
+        "currentBytes": 2118,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 1488,
+            "currentText": ",'OWN_RUNTIME_DIAGNOSTIC'",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "src/lib/company-channel-store.mjs",
+        "status": "MODIFIED",
+        "previousSha256": "300c5e7e0abe65b97b86a200c6cc72444b9c65ce375d61975c56f5abbc6a453b",
+        "currentSha256": "26686333bb7d5fcddf40b14f25b8c322e16ddef0d62690b2e6d1d1b4a6de2e72",
+        "previousBytes": 19173,
+        "currentBytes": 19350,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 9412,
+            "currentText": "   if(context.discovery==='OWN_RUNTIME_DIAGNOSTIC'){if(!ownConnection)fail('META_OWN_COMPANY_CONFIGURATION_PENDING',503);return ownConnection.diagnoseRuntime(session,context);}\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "src/lib/meta-own-company-connection.mjs",
+        "status": "MODIFIED",
+        "previousSha256": "5bdf8a2c6b1333efe0a12481174e433cd58c9e1583ae0972f4cb090892eaaf84",
+        "currentSha256": "33ac37426beb73a142804bc6e6c903d0d18527282dfb590bf685b74e20df2bf5",
+        "previousBytes": 34288,
+        "currentBytes": 38337,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 314,
+            "currentText": ",fenceOwnCompanyRuntime,ownCompanyCapabilityKind,ownCompanyTransportPolicy",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 828,
+            "currentText": ",projectOwnCompanyRuntimeDiagnostic",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 9247,
+            "currentText": "\n // A diagnostic may acquire canonical SHARE locks, but never writes a receipt,\n // channel, grant or marker. READ COMMITTED is intentional: READ ONLY cannot\n // acquire these locks, and REPEATABLE READ would hide revocation after await.\n async function runtimeDiagnosticSnapshot(session,context,expected=null){return within(session,context,true,async(client,member,scope)=>{\n  await requireCompanyChannelSchema(client);\n  const time=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now?.getTime();\n  if(!Number.isSafeInteger(time)||!Number.isSafeInteger(session.expiresAt)||session.expiresAt*1000<=time||member.role!=='ADMIN')fail('META_OWN_COMPANY_UNAVAILABLE',403);\n  const rows=(await client.query(`SELECT c.*,cc.revision,cc.mode FROM public.\"WhatsAppConnection\" c JOIN public.\"WhatsAppCompanyChannel\" cc ON cc.\"connectionId\"=c.id AND cc.\"organizationId\"=$2 AND cc.\"anchorProjectId\"=c.\"projectId\" WHERE c.\"projectId\"=$1`,[context.projectId,member.organizationId])).rows;\n  if(rows.length!==1)fail('META_OWN_COMPANY_UNAVAILABLE',403);\n  const connection=rows[0];\n  if(connection?.metadata?.ownCompanyRuntime?.version!==2||connection.mode!=='COMPANY')fail('META_OWN_COMPANY_UNAVAILABLE',403);\n  const policy=ownCompanyConnectionPolicy(connection,environment,time);\n  if(policy.actorId!==member.actorId||policy.organizationId!==member.organizationId||policy.projectId!==context.projectId||policy.clerkUserId!==session.userId||policy.clerkOrganizationId!==session.organizationId)fail('META_OWN_COMPANY_UNAVAILABLE',403);\n  const capability=await fenceOwnCompanyRuntime(client,connection,{environment,now:time});\n  if(ownCompanyCapabilityKind(capability)!=='RUNTIME')fail('META_OWN_COMPANY_UNAVAILABLE',403);\n  // Preserve issuer/project/connection lock order before the owner-channel lock.\n  const owners=(await client.query(`SELECT revision,mode FROM public.\"WhatsAppCompanyChannel\" WHERE \"connectionId\"=$1 AND \"organizationId\"=$2 AND \"anchorProjectId\"=$3 FOR SHARE`,[connection.id,member.organizationId,context.projectId])).rows;\n  if(owners.length!==1||owners[0].revision!==connection.revision||owners[0].mode!==connection.mode)fail('META_OWN_COMPANY_UNAVAILABLE',403);\n  if(expected){\n   ownCompanyTransportPolicy(expected.capability,environment,time);\n   if(scope!==expected.scope||connection.id!==expected.connection.id||connection.projectId!==expected.connection.projectId||connection.mode!==expected.connection.mode||connection.revision!==expected.connection.revision||connection.encryptedAccessToken!==expected.connection.encryptedAccessToken||policy.grantDigest!==expected.policy.grantDigest)fail('META_OWN_COMPANY_UNAVAILABLE',403);\n  }\n  return {connection,capability,policy,scope,time};\n });}\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 21340,
+            "currentText": "  async diagnoseRuntime(session,context){\n   const captured=await runtimeDiagnosticSnapshot(session,context);\n   const token=decryptCustomerSecret(captured.connection.encryptedAccessToken,{organizationId:captured.policy.organizationId,projectId:context.projectId,purpose:'access-token',resourceId:captured.connection.phoneNumberId},environment);\n   const beforeExternal=()=>runtimeDiagnosticSnapshot(session,context,captured);\n   let observation,providerFailure;\n   try{observation=await provider.diagnoseOwnConnection({capability:captured.capability,connection:captured.connection,token,beforeExternal});}catch(error){providerFailure=error;}\n   // Authority loss after the last GET dominates even a provider failure or a\n   // hostile adapter's fake observation. No partial result crosses this fence.\n   const final=await beforeExternal();\n   if(providerFailure)throw providerFailure;\n   const completedAt=Math.max(final.time,now());\n   if(!Number.isSafeInteger(completedAt)||session.expiresAt*1000<=completedAt)fail('META_OWN_COMPANY_UNAVAILABLE',403);\n   return projectOwnCompanyRuntimeDiagnostic(observation,{capability:captured.capability,connection:captured.connection,token,environment,now:completedAt});\n  },\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "tests/fixtures/own-runtime-diagnostic.mjs",
+        "status": "ADDED",
+        "previousSha256": null,
+        "currentSha256": "00b02725ee130032a5ffe0f19c6d29e32bcbdd54285f8d42eeb3a75e876c815b",
+        "previousBytes": 0,
+        "currentBytes": 4974,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 0,
+            "currentText": "import assert from 'node:assert/strict';\nimport {ownCompanyRuntimeFixture} from './own-company-runtime.mjs';\nimport {createOwnCompanyConnection} from '../../src/lib/meta-own-company-connection.mjs';\nimport {COMPANY_CHANNEL_SCHEMA_CONTRACT} from '../../src/lib/company-channel-schema.mjs';\nimport {digest,WorkspaceError} from '../../src/lib/workspace-policy.mjs';\n\n// Proposed fixture only. These imports resolve after the proposal is applied to\n// a reviewed checkout. It is not executable as this incomplete private mirror.\nexport async function ownRuntimeDiagnosticFixture(){\n const f=await ownCompanyRuntimeFixture();\n f.time=Date.parse(f.policy.expiresAt)+1;\n f.member=structuredClone(f.context.member);f.session={...f.context.session,expiresAt:Math.floor(f.time/1000)+300};\n f.request={projectId:f.policy.projectId,scope:'a'.repeat(64)};\n f.channelState={mode:'COMPANY',revision:2};f.schemaReady=true;f.projectPresent=true;f.channelPresent=true;\n f.operations=[];f.reads=[];f.afterQuery=null;\n const rows=value=>({rows:value});\n const client={async query(sql,args=[]){\n  f.reads.push({sql,args});assert.match(sql.trim(),/^SELECT\\b/i,'diagnostic cannot write');assert.doesNotMatch(sql,/\\bFOR\\s+UPDATE\\b/i);\n  let result;\n  if(sql==='SELECT clock_timestamp() AS now')result=rows([{now:new Date(f.time)}]);\n  else if(sql.includes('JOIN public.\"WhatsAppCompanyChannel\" cc'))result=rows(f.channelPresent?[{...structuredClone(f.connection),...f.channelState}]:[]);\n  else if(sql.startsWith('SELECT revision,mode FROM public.\"WhatsAppCompanyChannel\"')){\n   assert.deepEqual(args,[f.connection.id,f.member.organizationId,f.request.projectId]);result=rows(f.channelPresent?[{...f.channelState}]:[]);\n  }\n  else if(sql.includes('to_regclass'))result=rows([{present:f.schemaReady,count:1}]);\n  else if(sql.startsWith('SELECT\\n  (SELECT COALESCE(JSON_AGG(JSON_BUILD_OBJECT('))result=rows([{columns:[],keys:[],indexes:[],triggers:[]}]);\n  else if(sql.startsWith('SELECT version,contract,\"catalogFingerprint\",'))result=rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:digest({columns:[],keys:[],indexes:[],triggers:[]}),currentCatalog:{columns:[],keys:[],indexes:[],triggers:[]},catalog:args[1].map(conname=>({conname,convalidated:true})),indexes:args[2].map(relname=>({relname,indisvalid:true,indisready:true,indisunique:true})),triggers:args[3].map(tgname=>({tgname,tgenabled:'O'}))}]);\n  else if(sql.includes('information_schema.columns'))result=rows(sql.includes(\"column_name='catalogFingerprint'\")?[{count:1}]:[]);\n  else if(sql.includes('FROM public.\"WhatsAppCompanySchema\"'))result=rows([{version:1,contract:COMPANY_CHANNEL_SCHEMA_CONTRACT,catalogFingerprint:digest({columns:[],keys:[],indexes:[],triggers:[]})}]);\n  else if(sql.includes('FROM pg_constraint WHERE'))result=rows(args[0].map(conname=>({conname,convalidated:true})));\n  else if(sql.includes('FROM pg_index i JOIN pg_class c')&&!sql.includes('pg_get_indexdef'))result=rows(args[0].map(relname=>({relname,indisvalid:true,indisready:true,indisunique:true})));\n  else if(sql.includes('FROM pg_trigger WHERE'))result=rows(args[0].map(tgname=>({tgname,tgenabled:'O'})));\n  else if(sql.includes('pg_get_constraintdef')||sql.includes('pg_get_indexdef')||sql.includes('pg_get_triggerdef'))result=rows([]);\n  else result=await f.client.query(sql,args);\n  if(f.afterQuery)await f.afterQuery(sql,args);return result;\n }};\n const workspace={async organizationOperation(session,context,writable,callback,archived=false){\n  f.operations.push({writable,archived});\n  // This models the existing READ COMMITTED transaction with SHARE locks.\n  // Writable transaction mode is not permission for any diagnostic SQL write.\n  assert.equal(writable,true);assert.equal(archived,false);\n  if(context.scope!=='a'.repeat(64))throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);\n  if(!f.projectPresent||context.projectId!==f.policy.projectId)throw new WorkspaceError('WORKSPACE_PROJECT_UNAVAILABLE',404);\n  if(f.member.role!=='ADMIN'||f.member.officeReviewOnly===true)throw new WorkspaceError('WORKSPACE_ORGANIZATION_PERMISSION_REQUIRED',403);\n  return callback(client,f.member,f.request.scope);\n }};\n f.makeService=(provider=f.provider)=>createOwnCompanyConnection({workspace,provider,environment:f.environment,now:()=>f.time});\n f.service=f.makeService();f.diagnose=()=>f.service.diagnoseRuntime(f.session,f.request);\n f.runtimeInput=async()=>({capability:await f.capability(),connection:f.connection,token:f.token,beforeExternal:()=>f.beforeExternal(f.connection)});\n f.calls.length=0;f.queries.length=0;\n return f;\n}\n\nexport function assertDiagnosticNoEffects(f){\n assert.ok(f.calls.every(call=>call.method==='GET'));\n assert.equal(f.calls.filter(call=>call.method==='POST').length,0);\n assert.ok(f.reads.every(({sql})=>/^SELECT\\b/i.test(sql.trim())));\n assert.ok(f.queries.every(({sql})=>/^SELECT\\b/i.test(sql.trim())));\n assert.ok(f.operations.every(op=>op.writable===true&&op.archived===false));\n}\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "tests/production-own-company-runtime-diagnostic.test.mjs",
+        "status": "ADDED",
+        "previousSha256": null,
+        "currentSha256": "332be4374b0d82752ee13f307af2b39b767d009a8b670b7fa5cdd0d93fd511bc",
+        "previousBytes": 0,
+        "currentBytes": 12965,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 0,
+            "currentText": "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport {ownRuntimeDiagnosticFixture,assertDiagnosticNoEffects} from './fixtures/own-runtime-diagnostic.mjs';\nimport {projectOwnCompanyRuntimeDiagnostic} from '../src/lib/meta-customer-provider.mjs';\nimport {ownCompanyCapabilityKind,ownCompanyTransportPolicy} from '../src/lib/meta-own-company-policy.mjs';\nimport {createCompanyChannelHandlers} from '../src/lib/company-channel-http.mjs';\nimport {createCompanyChannelStore} from '../src/lib/company-channel-store.mjs';\nimport {WorkspaceError} from '../src/lib/workspace-policy.mjs';\n\n// Additive coverage; existing operational tests and assertions remain unchanged.\nconst keys=['version','kind','readOnly','canManage','codeVerificationPresent','codeVerificationState','registered','platformState','displayComparable','displayMatchesExpected','observedAt','checkedAt','inspectionState','operationalCheck','denialStage','accepted','roundTrip'].sort();\nfunction assertClosed(result,f){\n assert.deepEqual(Object.keys(result).sort(),keys);\n assert.equal(result.kind,'OWN_COMPANY_RUNTIME_DIAGNOSTIC');assert.equal(result.readOnly,true);assert.equal(result.canManage,false);assert.equal(result.accepted,false);assert.equal(result.roundTrip,'NOT_VERIFIED');\n for(const key of ['codeVerificationPresent','registered','displayComparable','displayMatchesExpected'])assert.equal(typeof result[key],'boolean');\n assert.ok(['VERIFIED','NOT_VERIFIED','EXPIRED','OTHER','MISSING'].includes(result.codeVerificationState));assert.ok(['CLOUD_API','NOT_APPLICABLE','OTHER','MISSING'].includes(result.platformState));\n assert.ok(['PASSED','REJECTED'].includes(result.operationalCheck));assert.ok(['NONE','VERIFICATION_STATUS','DISPLAY_PHONE_MATCH'].includes(result.denialStage));assert.equal(result.inspectionState,'CURRENT');\n for(const key of ['observedAt','checkedAt'])assert.equal(new Date(result[key]).toISOString(),result[key]);\n assert.ok(Object.values(result).every(value=>typeof value!=='function'&&typeof value!=='object'));\n const encoded=JSON.stringify(result);\n for(const privateValue of [f.token,f.connection.encryptedAccessToken,f.policy.phoneNumberId,f.policy.wabaId,f.policy.businessId,f.policy.expectedPhoneE164])assert.ok(!encoded.includes(privateValue));\n assertDiagnosticNoEffects(f);\n}\n\ntest('diagnostic observes the exact runtime tuple after setup expiry without durable changes or a transport provider',async()=>{\n const f=await ownRuntimeDiagnosticFixture(),before=structuredClone({connection:f.connection,receipt:f.receipt,controls:f.controls});\n for(const key of ['META_OWN_COMPANY_ACCESS_TOKEN','OBRASAAS_META_OWN_COMPANY_POLICY','OBRASAAS_META_OWN_COMPANY_RELEASE'])delete f.environment[key];\n const result=await f.diagnose();assertClosed(result,f);\n assert.equal(result.codeVerificationState,'VERIFIED');assert.equal(result.registered,true);assert.equal(result.platformState,'CLOUD_API');assert.equal(result.displayMatchesExpected,true);assert.equal(result.operationalCheck,'PASSED');assert.equal(result.denialStage,'NONE');\n assert.deepEqual({connection:f.connection,receipt:f.receipt,controls:f.controls},before);\n assert.ok(f.reads.some(({sql})=>/FOR SHARE/.test(sql)));\n assert.equal(result.sendReply,undefined);assert.equal(result.inspect,undefined);assert.equal(result.ownOperationalAuthority,undefined);\n});\n\nfor(const [name,value,expected] of [['absent',undefined,'MISSING'],['expired literal','EXPIRED','EXPIRED'],['not verified','NOT_VERIFIED','NOT_VERIFIED'],['hostile unknown','provider-private-name-and-token','OTHER']])test('diagnostic safely observes '+name+' while strict runtime remains rejected with zero POST',async t=>{\n t.mock.method(console,'warn',()=>{});\n const f=await ownRuntimeDiagnosticFixture();if(value===undefined)delete f.phone.code_verification_status;else f.phone.code_verification_status=value;\n const result=await f.diagnose();assertClosed(result,f);assert.equal(result.codeVerificationState,expected);assert.equal(result.codeVerificationPresent,value!==undefined);assert.equal(result.operationalCheck,'REJECTED');assert.equal(result.denialStage,'VERIFICATION_STATUS');assert.equal(result.registered,true);\n await assert.rejects(f.provider.forConnection(await f.runtimeInput()),{code:'META_OWN_COMPANY_PHONE_REJECTED'});assertDiagnosticNoEffects(f);\n});\n\ntest('display equality uses the current exact normalizer without returning the foreign display',async t=>{\n t.mock.method(console,'warn',()=>{});const f=await ownRuntimeDiagnosticFixture();f.phone.display_phone_number='+5491100000001';\n const result=await f.diagnose();assertClosed(result,f);assert.equal(result.displayComparable,true);assert.equal(result.displayMatchesExpected,false);assert.equal(result.denialStage,'DISPLAY_PHONE_MATCH');assert.ok(!JSON.stringify(result).includes(f.phone.display_phone_number));\n await assert.rejects(f.provider.forConnection(await f.runtimeInput()),{code:'META_OWN_COMPANY_PHONE_REJECTED'});assertDiagnosticNoEffects(f);\n});\n\ntest('a provider error never becomes a private diagnostic witness',async()=>{\n const f=await ownRuntimeDiagnosticFixture();f.state.failRead=f.policy.wabaId+'/phone_numbers';\n await assert.rejects(f.diagnose(),{code:'META_CUSTOMER_PROVIDER_REJECTED'});assertDiagnosticNoEffects(f);\n});\n\ntest('foreign adapter DTO and staged error cannot substitute for an internal inspection witness',async()=>{\n const f=await ownRuntimeDiagnosticFixture();\n for(const adapter of [{async diagnoseOwnConnection(){return {codeVerificationState:'VERIFIED',registered:true,denialStage:'NONE'};}},{async diagnoseOwnConnection(){throw Object.assign(new WorkspaceError('META_OWN_COMPANY_PHONE_REJECTED',403),{stage:'VERIFICATION_STATUS',projection:{registered:true},raw:'private'});}}]){\n  const service=f.makeService(adapter);await assert.rejects(service.diagnoseRuntime(f.session,f.request));\n }\n assert.equal(f.calls.length,0);assertDiagnosticNoEffects(f);\n});\n\nfor(const [name,revoke] of [['issuer',f=>{f.controls.issuerActive=false;}],['receipt',f=>{f.controls.receiptPresent=false;}],['channel',f=>{f.channelState.mode='SUSPENDED';}],['ciphertext',f=>{f.controls.current={...f.connection,encryptedAccessToken:f.connection.encryptedAccessToken+'x'};}],['session',f=>{f.session.expiresAt=Math.floor(f.time/1000);}]] )test('authority loss after the last provider GET dominates the valid witness: '+name,async()=>{\n const f=await ownRuntimeDiagnosticFixture(),adapter={async diagnoseOwnConnection(input){const witness=await f.provider.diagnoseOwnConnection(input);revoke(f);return witness;}};\n const service=f.makeService(adapter);await assert.rejects(service.diagnoseRuntime(f.session,f.request),{code:'META_OWN_COMPANY_UNAVAILABLE'});assert.ok(f.calls.length>0);assertDiagnosticNoEffects(f);\n});\n\ntest('authority loss dominates a simultaneous provider error and never returns a partial projection',async()=>{\n const f=await ownRuntimeDiagnosticFixture();f.state.failRead=f.policy.wabaId+'/phone_numbers';\n const service=f.makeService({async diagnoseOwnConnection(input){try{return await f.provider.diagnoseOwnConnection(input);}finally{f.controls.issuerActive=false;}}});\n await assert.rejects(service.diagnoseRuntime(f.session,f.request),{code:'META_OWN_COMPANY_UNAVAILABLE'});assertDiagnosticNoEffects(f);\n});\n\nfor(const key of ['META_APP_SECRET','META_CUSTOMER_CREDENTIALS_KEY'])test('missing configuration '+key+' produces no observation and no provider GET',async()=>{\n const f=await ownRuntimeDiagnosticFixture();delete f.environment[key];await assert.rejects(f.diagnose());assert.equal(f.calls.length,0);assertDiagnosticNoEffects(f);\n});\n\ntest('current role, original issuer, anchor, scope and session expiry are required before any provider GET',async()=>{\n for(const mutate of [f=>{f.member.role='DIRECTOR';},f=>{f.member.actorId='another-admin';},f=>{f.session.userId='user_Other';},f=>{f.request.projectId='another-project';},f=>{f.request.scope='b'.repeat(64);},f=>{f.session.expiresAt=Math.floor(f.time/1000);}]){\n  const f=await ownRuntimeDiagnosticFixture();mutate(f);await assert.rejects(f.diagnose());assert.equal(f.calls.length,0);assertDiagnosticNoEffects(f);\n }\n});\n\n// Each substitution receives its own fresh witness.\nfor(const [name,alter] of [\n ['copied opaque handle',async(f,input,witness)=>({value:{...witness},context:input})],\n ['different capability object',async(f,input,witness)=>({value:witness,context:{...input,capability:await f.capability()}})],\n ['different token',async(f,input,witness)=>({value:witness,context:{...input,token:'synthetic-different-token-for-negative-only'}})],\n ['copied connection object',async(f,input,witness)=>({value:witness,context:{...input,connection:{...input.connection}}})],\n])test('private diagnostic witness rejects '+name+' independently',async()=>{\n const f=await ownRuntimeDiagnosticFixture(),input=await f.runtimeInput(),witness=await f.provider.diagnoseOwnConnection(input);\n const changed=await alter(f,input,witness);\n assert.throws(()=>projectOwnCompanyRuntimeDiagnostic(changed.value,{...changed.context,environment:f.environment,now:f.time}),{code:'META_OWN_COMPANY_UNAVAILABLE'});\n assertDiagnosticNoEffects(f);\n});\n\ntest('a fresh private diagnostic witness projects a closed DTO once and then rejects replay',async()=>{\n const f=await ownRuntimeDiagnosticFixture(),input=await f.runtimeInput(),witness=await f.provider.diagnoseOwnConnection(input);\n assert.deepEqual(witness,{});assert.equal(Object.getPrototypeOf(witness),Object.prototype);\n const result=projectOwnCompanyRuntimeDiagnostic(witness,{...input,environment:f.environment,now:f.time});\n assertClosed(result,f);assert.equal(result.codeVerificationState,'VERIFIED');assert.equal(result.operationalCheck,'PASSED');\n assert.throws(()=>projectOwnCompanyRuntimeDiagnostic(witness,{...input,environment:f.environment,now:f.time}),{code:'META_OWN_COMPANY_UNAVAILABLE'});\n assertDiagnosticNoEffects(f);\n});\n\ntest('revocation after the first fake Graph GET prevents every later GET and POST without durable DB writes',async()=>{\n const f=await ownRuntimeDiagnosticFixture();\n f.state.afterRead=path=>{if(f.calls.length===1){assert.equal(path,'debug_token');f.controls.issuerActive=false;}};\n await assert.rejects(f.diagnose(),{code:'META_OWN_COMPANY_UNAVAILABLE'});\n assert.deepEqual(f.calls,[{path:'debug_token',method:'GET'}]);\n assertDiagnosticNoEffects(f);\n});\n\ntest('expiry of the original 60-second lease between result and final fence cannot be renewed by a new capability',async()=>{\n const f=await ownRuntimeDiagnosticFixture();let originalCapability,newCapability;\n const service=f.makeService({async diagnoseOwnConnection(input){\n  originalCapability=input.capability;\n  const witness=await f.provider.diagnoseOwnConnection(input);\n  f.time+=60001;\n  // A fresh canonical resolver can still mint its own bounded request lease.\n  // It must not substitute for the captured lease of the in-flight request.\n  newCapability=await f.capability();\n  return witness;\n }});\n await assert.rejects(service.diagnoseRuntime(f.session,f.request),{code:'META_OWN_COMPANY_UNAVAILABLE'});\n assert.equal(ownCompanyCapabilityKind(newCapability),'RUNTIME');\n assert.notEqual(newCapability,originalCapability);\n assert.doesNotThrow(()=>ownCompanyTransportPolicy(newCapability,f.environment,f.time));\n assert.throws(()=>ownCompanyTransportPolicy(originalCapability,f.environment,f.time),{code:'META_OWN_COMPANY_UNAVAILABLE'});\n assertDiagnosticNoEffects(f);\n});\n\ntest('non-phone provider denials are not silently upgraded to diagnostic success',async()=>{\n const f=await ownRuntimeDiagnosticFixture();f.state.subscribed=false;\n await assert.rejects(f.diagnose(),{code:'META_OWN_COMPANY_OWNER_UNVERIFIED'});assertDiagnosticNoEffects(f);\n});\n\ntest('the existing GET exposes only narrow discovery with sanitized failures, no-store and unchanged cross-site rejection',async()=>{\n const f=await ownRuntimeDiagnosticFixture(),store=createCompanyChannelStore({workspace:{},ownConnection:f.service,environment:f.environment}),handlers=createCompanyChannelHandlers({verify:async()=>f.session,store});\n const base='https://obrasaas.com/api/identity/company-channel?'+new URLSearchParams({...f.request,discovery:'OWN_RUNTIME_DIAGNOSTIC'});\n const success=await handlers.GET(new Request(base));assert.equal(success.status,200);assert.match(success.headers.get('cache-control'),/private, no-store/);assertClosed(await success.json(),f);\n for(const url of [base+'&discovery=OWN_RUNTIME_DIAGNOSTIC',base+'&operationId=11111111-1111-4111-8111-111111111111',base+'&stage=VERIFICATION_STATUS'])assert.equal((await handlers.GET(new Request(url))).status,400);\n assert.equal((await handlers.GET(new Request(base,{headers:{'sec-fetch-site':'cross-site'}}))).status,403);\n f.state.failRead='debug_token';const denied=await handlers.GET(new Request(base));assert.notEqual(denied.status,200);assert.deepEqual(Object.keys(await denied.json()).sort(),['code','saved']);assertDiagnosticNoEffects(f);\n});\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "src/app/(identity)/cuenta/own-company-number-panel.js",
+        "status": "MODIFIED",
+        "previousSha256": "d2146290e43adb77dc14b707787023a24ffe80c39e69eaa49fc876dcab3d267b",
+        "currentSha256": "6682c17bdb11ea4269540e3a4f14546e013d72869ba19c79a41312cbc65419bf",
+        "previousBytes": 25518,
+        "currentBytes": 29203,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 25,
+            "currentText": "Callback,use",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 624,
+            "currentText": "import {ownCompanyRuntimeDiagnostic,ownCompanyRuntimeDiagnosticContext,ownCompanyRuntimeDiagnosticCurrent,ownCompanyRuntimeDiagnosticAvailable,ownCompanyRuntimeDiagnosticExplain,ownCompanyRuntimeDiagnosticLabels} from './own-company-runtime-diagnostic-view.mjs';\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 2769,
+            "currentText": "[diagnostic,setDiagnostic]=useState(null),[diagnosticNotice,setDiagnosticNotice]=useState('');\n const alive=useRef(true),epoch=useRef(0),controller=useRef(null),editor=useRef(null),reference=useRef(null),attemptContext=useRef(null),localRequest=useRef(false),refreshReferences=useRef(async()=>{}),diagnosticSnapshot=useRef(null);\n const updateData=useCallback(value=>{diagnosticSnapshot.current=value;setData(value);setDiagnostic(null);setDiagnosticNotice('');},[]",
+            "previousText": "alive=useRef(true),epoch=useRef(0),controller=useRef(null),editor=useRef(null),reference=useRef(null),attemptContext=useRef(null),localRequest=useRef(false),refreshReferences=useRef(async()=>{}"
+          },
+          {
+            "currentOffsetCharacters": 4113,
+            "currentText": "Diagnostic(null);setDiagnosticNotice('');setNeedsRead(true);if(stored)update",
+            "previousText": "NeedsRead(true);if(stored)set"
+          },
+          {
+            "currentOffsetCharacters": 4594,
+            "currentText": ",updateData",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 5032,
+            "currentText": "update",
+            "previousText": "set"
+          },
+          {
+            "currentOffsetCharacters": 6896,
+            "currentText": ",updateData",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 7107,
+            "currentText": "update",
+            "previousText": "set"
+          },
+          {
+            "currentOffsetCharacters": 8221,
+            "currentText": "update",
+            "previousText": "set"
+          },
+          {
+            "currentOffsetCharacters": 8508,
+            "currentText": "update",
+            "previousText": "set"
+          },
+          {
+            "currentOffsetCharacters": 8958,
+            "currentText": "updateData(null);setReceipt(null);setConnectRecovery(null);setConfirmRecovery(false);setNeedsRead(true);setOpened(false);setNotice(attempt?'La referencia del intento sigue guardada para comprobarla.':'');}\n async function checkMeta(){\n  if(busy||localRequest.current||locked||draft)return;\n  const n=epoch.current+1;let captured;\n  const currentContext=()=>ownCompanyRuntimeDiagnosticContext(diagnosticSnapshot.current,{scope,projectId},{sequence:epoch.current,reference:reference.current});\n  try{captured=ownCompanyRuntimeDiagnosticContext(diagnosticSnapshot.current,{scope,projectId},{sequence:n,reference:reference.current});}catch{setDiagnostic(null);setDiagnosticNotice('Volvé a consultar el número antes de comprobar su estado en Meta.');return;}\n  epoch.current=n;const abort=new AbortController();controller.current?.abort();controller.current=abort;setBusy(true);setDiagnostic(null);setDiagnosticNotice('Consultando el estado en Meta…');\n  const current=()=>{if(!alive.current||epoch.current!==n)return false;try{return ownCompanyRuntimeDiagnosticCurrent(captured,currentContext());}catch{return false;}};\n  let handled=false;\n  try{const observation=await request({discovery:'OWN_RUNTIME_DIAGNOSTIC'},{signal:abort.signal,requestTimeoutMs:45000},ownCompanyRuntimeDiagnostic);if(current()){handled=true;setDiagnostic(observation);setDiagnosticNotice('');}}\n  catch(error){if(current()){handled=true;const message=ownCompanyRuntimeDiagnosticExplain(error);hideDenied(error);setDiagnosticNotice(message);if(ownCompanyNumberAccessDenied(error))setNotice(message);}}\n  finally{if(alive.current&&epoch.current===n){setBusy(false);if(!handled)setDiagnosticNotice('La consulta se descartó porque cambió el contexto. Volvé a consultar el número.');}}\n ",
+            "previousText": "setData(null);setReceipt(null);setConnectRecovery(null);setConfirmRecovery(false);setNeedsRead(true);setOpened(false);setNotice(attempt?'La referencia del intento sigue guardada para comprobarla.':'');"
+          },
+          {
+            "currentOffsetCharacters": 11053,
+            "currentText": "Diagnostic(null);setDiagnosticNotice('');set",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 13101,
+            "currentText": "update",
+            "previousText": "set"
+          },
+          {
+            "currentOffsetCharacters": 14388,
+            "currentText": "iagnostic(null);setDiagnosticNotice('');setD",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 15110,
+            "currentText": "update",
+            "previousText": "set"
+          },
+          {
+            "currentOffsetCharacters": 18023,
+            "currentText": " const diagnosticAvailable=ownCompanyRuntimeDiagnosticAvailable(data,{scope,projectId}),diagnosticLabels=diagnostic?ownCompanyRuntimeDiagnosticLabels(diagnostic):null;\n",
+            "previousText": ""
+          },
+          {
+            "currentOffsetCharacters": 25223,
+            "currentText": "    {diagnosticAvailable&&<div className={styles.channel} aria-labelledby=\"own-company-meta-check-title\"><div className={styles.channelHeading}><h4 id=\"own-company-meta-check-title\">Comprobación en Meta</h4><button type=\"button\" disabled={busy||locked||Boolean(draft)} onClick={checkMeta}><RefreshCw size={16} aria-hidden=\"true\"/>Comprobar estado en Meta</button></div><p className={styles.note}>Consulta el estado actual. No envía mensajes ni cambia la conexión.</p><p className={diagnosticNotice?styles.notice:styles.silent} role=\"status\" aria-live=\"polite\">{diagnosticNotice}</p>{diagnostic&&<><p className={styles.note}><strong>{diagnosticLabels.summary}</strong> · Observado el <OwnCompanyDateTime value={diagnostic.observedAt}/>.</p><dl className={styles.context}><div><dt>Verificación del número</dt><dd>{diagnosticLabels.verification}</dd></div><div><dt>Registro</dt><dd>{diagnosticLabels.registration}</dd></div><div><dt>Conexión</dt><dd>{diagnosticLabels.platform}</dd></div><div><dt>Número de la empresa</dt><dd>{diagnosticLabels.number}</dd></div></dl><p className={styles.note}>Este resultado no confirma el envío ni la recepción de mensajes. La prueba de conversación se comprueba por separado.</p></>}</div>}\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
+        "status": "ADDED",
+        "previousSha256": null,
+        "currentSha256": "a2b5b4fe2499168ee8afe10cc3aa767f56757b376531ab63e4c557b5ed26ea52",
+        "previousBytes": 0,
+        "currentBytes": 5756,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 0,
+            "currentText": "import {ownCompanyNumberSnapshot} from './own-company-number-view.mjs';\n\nconst shape=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).sort().join('|')===keys.slice().sort().join('|');\nconst timestamp=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))&&new Date(value).toISOString()===value;\nconst contextKeys=['scope','projectId','organizationId','actorId','connectionId','channelRevision','credentialExpiresAt','sequence','reference'];\nconst resultKeys=['version','kind','readOnly','canManage','codeVerificationPresent','codeVerificationState','registered','platformState','displayComparable','displayMatchesExpected','observedAt','checkedAt','inspectionState','operationalCheck','denialStage','accepted','roundTrip'];\nconst fail=()=>{throw Object.assign(new Error('No se pudo comprobar el estado actual en Meta.'),{code:'META_OWN_COMPANY_DIAGNOSTIC_UNCONFIRMED'});};\n\n// This DTO is an observation only. It never enters the setup snapshot or any\n// command builder, and cannot enable connection, activation or templates.\nexport function ownCompanyRuntimeDiagnostic(value){\n if(!shape(value,resultKeys)||value.version!==1||value.kind!=='OWN_COMPANY_RUNTIME_DIAGNOSTIC'||value.readOnly!==true||value.canManage!==false||value.accepted!==false||value.roundTrip!=='NOT_VERIFIED'||value.inspectionState!=='CURRENT'||!['PASSED','REJECTED'].includes(value.operationalCheck)||!['NONE','VERIFICATION_STATUS','DISPLAY_PHONE_MATCH'].includes(value.denialStage)||!['VERIFIED','NOT_VERIFIED','EXPIRED','OTHER','MISSING'].includes(value.codeVerificationState)||!['CLOUD_API','NOT_APPLICABLE','OTHER','MISSING'].includes(value.platformState)||['codeVerificationPresent','registered','displayComparable','displayMatchesExpected'].some(key=>typeof value[key]!=='boolean')||!timestamp(value.observedAt)||!timestamp(value.checkedAt)||Date.parse(value.checkedAt)<Date.parse(value.observedAt)||Date.parse(value.checkedAt)-Date.parse(value.observedAt)>=60000)fail();\n if(value.codeVerificationPresent!==(value.codeVerificationState!=='MISSING')||value.registered&&value.platformState!=='CLOUD_API'||value.displayMatchesExpected&&!value.displayComparable)fail();\n if(value.operationalCheck==='PASSED'&&(value.denialStage!=='NONE'||value.codeVerificationState!=='VERIFIED'||!value.registered||value.platformState!=='CLOUD_API'||!value.displayMatchesExpected))fail();\n if(value.operationalCheck==='REJECTED'&&(value.denialStage==='NONE'||value.denialStage==='VERIFICATION_STATUS'&&value.codeVerificationState==='VERIFIED'||value.denialStage==='DISPLAY_PHONE_MATCH'&&(value.codeVerificationState!=='VERIFIED'||value.displayMatchesExpected)))fail();\n return Object.freeze(Object.fromEntries(resultKeys.map(key=>[key,value[key]])));\n}\n\nexport function ownCompanyRuntimeDiagnosticContext(snapshot,expected,{sequence,reference=null,now=Date.now()}={}){\n ownCompanyNumberSnapshot(snapshot,expected);\n const channel=snapshot.channel,grant=snapshot.operationalGrant;\n if(!Number.isSafeInteger(sequence)||sequence<1||!Number.isSafeInteger(now)||snapshot.actor.role!=='ADMIN'||channel?.mode!=='COMPANY'||channel.enabled!==true||channel.connectionStatus!=='CONNECTED'||grant?.version!==2||grant.state!=='ACTIVE'||!timestamp(grant.credentialExpiresAt)||Date.parse(grant.credentialExpiresAt)<=now)fail();\n const referenceKey=reference===null?null:JSON.stringify([reference.version,reference.resource,reference.scope,reference.projectId,reference.operationId,reference.action,reference.connectionId,reference.createdAt]);\n return Object.freeze({scope:expected.scope,projectId:expected.projectId,organizationId:snapshot.organization.id,actorId:snapshot.actor.id,connectionId:channel.id,channelRevision:channel.revision,credentialExpiresAt:grant.credentialExpiresAt,sequence,reference:referenceKey});\n}\n\nexport function ownCompanyRuntimeDiagnosticCurrent(captured,current){\n return Boolean(shape(captured,contextKeys)&&shape(current,contextKeys)&&contextKeys.every(key=>captured[key]===current[key]));\n}\n\nexport function ownCompanyRuntimeDiagnosticAvailable(snapshot,expected,now=Date.now()){\n try{ownCompanyRuntimeDiagnosticContext(snapshot,expected,{sequence:1,now});return true;}catch{return false;}\n}\n\nexport function ownCompanyRuntimeDiagnosticExplain(error){\n if(error?.code==='SESSION_REQUIRED'||error?.status===401)return 'Tu sesión terminó. Volvé a ingresar para consultar.';\n if(error?.name==='AbortError')return 'La comprobación se canceló. Podés volver a consultarla.';\n if(error?.code==='META_OWN_COMPANY_CONFIGURATION_PENDING')return 'La comprobación en Meta no está disponible en este momento.';\n if([401,403].includes(error?.status)||['WORKSPACE_CONTEXT_CHANGED','WORKSPACE_PROJECT_UNAVAILABLE','META_OWN_COMPANY_CONTEXT_CHANGED'].includes(error?.code))return 'No se pudo comprobar el estado con tu acceso actual. Volvé a consultar el número.';\n return 'No se pudo completar la comprobación. Podés volver a consultarla.';\n}\n\nexport function ownCompanyRuntimeDiagnosticLabels(value){\n const diagnostic=ownCompanyRuntimeDiagnostic(value);\n return {verification:diagnostic.codeVerificationState==='VERIFIED'?'Verificación informada por Meta':diagnostic.codeVerificationState==='MISSING'?'Meta no informó la verificación':'Requiere revisión en Meta',registration:diagnostic.registered?'Registro informado por Meta':'Registro por revisar',platform:diagnostic.platformState==='CLOUD_API'?'Conexión en la nube':diagnostic.platformState==='MISSING'?'No informada por Meta':'Conexión por revisar',number:diagnostic.displayMatchesExpected?'Coincide con el número de la empresa':'No se pudo confirmar la coincidencia',summary:diagnostic.operationalCheck==='PASSED'?'Consulta completada':'Meta requiere revisión'};\n}\n",
+            "previousText": ""
+          }
+        ]
+      },
+      {
+        "path": "tests/production-own-company-runtime-diagnostic-view.test.mjs",
+        "status": "ADDED",
+        "previousSha256": null,
+        "currentSha256": "b349d9d861f97af748dedd7f32963f29a83ca2b152f4a8cbe1a6157379f86bb7",
+        "previousBytes": 0,
+        "currentBytes": 8837,
+        "inverseHunks": [
+          {
+            "currentOffsetCharacters": 0,
+            "currentText": "import test from 'node:test';\nimport assert from 'node:assert/strict';\nimport {ownCompanyRuntimeDiagnostic,ownCompanyRuntimeDiagnosticContext,ownCompanyRuntimeDiagnosticCurrent,ownCompanyRuntimeDiagnosticAvailable,ownCompanyRuntimeDiagnosticExplain,ownCompanyRuntimeDiagnosticLabels} from '../src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs';\nimport {ownCompanyNumberCanAct,ownCompanyNumberCommand} from '../src/app/(identity)/cuenta/own-company-number-view.mjs';\nimport {createWorkspaceRequestLifecycle} from '../src/app/(identity)/cuenta/workspace-request-lifecycle.mjs';\n\nconst time=Date.parse('2026-10-24T12:00:00.000Z'),scope='a'.repeat(64),expected={scope,projectId:'project-a',organizationId:'org_Test',actorId:'user_AdminA'};\nconst snapshot=()=>({version:1,kind:'OWN_COMPANY_STORED_RUNTIME',organization:{id:expected.organizationId,name:'Empresa sintética'},actor:{id:expected.actorId,role:'ADMIN'},scope,projectId:expected.projectId,readOnly:true,canManage:false,mode:'OWN_COMPANY',evidenceOrigin:'STORED_CANONICAL_RUNTIME',observedAt:new Date(time).toISOString(),configurationAuthorization:{state:'NOT_CURRENT'},channel:{id:'own-channel',anchorProjectId:expected.projectId,revision:4,mode:'COMPANY',displayPhoneNumber:'+5491100009999',connectionStatus:'CONNECTED',enabled:true},operationalGrant:{version:2,state:'ACTIVE',credentialExpiresAt:new Date(time+3600000).toISOString(),roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'},accepted:false,roundTrip:'NOT_VERIFIED'});\nconst result=()=>({version:1,kind:'OWN_COMPANY_RUNTIME_DIAGNOSTIC',readOnly:true,canManage:false,codeVerificationPresent:true,codeVerificationState:'VERIFIED',registered:true,platformState:'CLOUD_API',displayComparable:true,displayMatchesExpected:true,observedAt:new Date(time).toISOString(),checkedAt:new Date(time+1000).toISOString(),inspectionState:'CURRENT',operationalCheck:'PASSED',denialStage:'NONE',accepted:false,roundTrip:'NOT_VERIFIED'});\nconst context=(patch={})=>ownCompanyRuntimeDiagnosticContext(snapshot(),expected,{sequence:1,now:time,...patch});\n\ntest('client accepts a closed diagnostic observation without granting any setup action',()=>{\n const value=result(),projection=ownCompanyRuntimeDiagnostic(value);assert.deepEqual(projection,value);assert.notEqual(projection,value);assert.equal(Object.isFrozen(projection),true);\n for(const action of ['CONNECT_OWN_NUMBER','ACTIVATE_OWN_NUMBER']){assert.equal(ownCompanyNumberCanAct(projection,action,time),false);assert.throws(()=>ownCompanyNumberCommand(projection,{action},expected,{now:time}));}\n assert.equal(snapshot().canManage,false);assert.equal(ownCompanyRuntimeDiagnosticAvailable(snapshot(),expected,time),true);\n});\n\nfor(const state of ['NOT_VERIFIED','EXPIRED','OTHER','MISSING'])test('client preserves '+state+' as an observed rejected state without implying credential expiry or activation',()=>{\n const value={...result(),codeVerificationPresent:state!=='MISSING',codeVerificationState:state,operationalCheck:'REJECTED',denialStage:'VERIFICATION_STATUS'};\n const projection=ownCompanyRuntimeDiagnostic(value),labels=ownCompanyRuntimeDiagnosticLabels(projection);\n assert.equal(projection.codeVerificationState,state);assert.equal(projection.registered,true);assert.equal(labels.summary,'Meta requiere revisión');assert.doesNotMatch(JSON.stringify(labels),/credencial vencida|autorizado|activado|token|EXPIRED/);\n assert.equal(ownCompanyNumberCanAct(projection,'ACTIVATE_OWN_NUMBER',time),false);\n});\n\ntest('client permits an observed display mismatch while keeping the actual display absent',()=>{\n const projection=ownCompanyRuntimeDiagnostic({...result(),displayMatchesExpected:false,operationalCheck:'REJECTED',denialStage:'DISPLAY_PHONE_MATCH'});\n assert.equal(ownCompanyRuntimeDiagnosticLabels(projection).number,'No se pudo confirmar la coincidencia');assert.equal(Object.hasOwn(projection,'displayPhoneNumber'),false);\n});\n\ntest('client rejects unknown, private, writable, accepted or internally contradictory diagnostic fields',()=>{\n for(const patch of [{token:'private'},{displayPhoneNumber:'+5491100000001'},{phoneNumberId:'220000001'},{rawError:{stage:'VERIFICATION_STATUS'}},{grantDigest:'b'.repeat(64)},{canManage:true},{readOnly:false},{accepted:true},{roundTrip:'VERIFIED'},{inspectionState:'STALE'},{denialStage:'INSPECTION_SUPERSEDED'},{codeVerificationState:'NEW_PROVIDER_VALUE'},{platformState:'NEW_PLATFORM'},{registered:'true'},{codeVerificationPresent:false},{displayComparable:false},{platformState:'MISSING'},{operationalCheck:'REJECTED'},{denialStage:'VERIFICATION_STATUS'}])assert.throws(()=>ownCompanyRuntimeDiagnostic({...result(),...patch}),{code:'META_OWN_COMPANY_DIAGNOSTIC_UNCONFIRMED'});\n assert.throws(()=>ownCompanyRuntimeDiagnostic({...result(),codeVerificationPresent:false,codeVerificationState:'MISSING',operationalCheck:'REJECTED',denialStage:'DISPLAY_PHONE_MATCH',displayMatchesExpected:false}));\n});\n\ntest('diagnostic observation dates are canonical, ordered and bounded independently of device timezone',()=>{\n for(const patch of [{observedAt:'2026-10-24T12:00:00Z'},{checkedAt:'never'},{checkedAt:new Date(time-1).toISOString()},{checkedAt:new Date(time+60000).toISOString()}])assert.throws(()=>ownCompanyRuntimeDiagnostic({...result(),...patch}));\n assert.equal(ownCompanyRuntimeDiagnostic(result()).observedAt,new Date(time).toISOString());\n});\n\ntest('read context requires the current administrator, exact scope/project and active company grant',()=>{\n for(const patch of [{actor:{id:expected.actorId,role:'DIRECTOR'}},{scope:'b'.repeat(64)},{projectId:'project-b'},{channel:{...snapshot().channel,mode:'SUSPENDED'}},{channel:{...snapshot().channel,enabled:false}},{operationalGrant:{...snapshot().operationalGrant,state:'REVOKED'}}])assert.equal(ownCompanyRuntimeDiagnosticAvailable({...snapshot(),...patch},expected,time),false);\n assert.equal(ownCompanyRuntimeDiagnosticAvailable(snapshot(),expected,time+3600000),false);\n assert.throws(()=>ownCompanyRuntimeDiagnosticContext(snapshot(),expected,{sequence:0,now:time}));\n});\n\ntest('late diagnostic response is rejected after actor, organization, worksite, channel, reference or sequence changes',()=>{\n const captured=context();assert.equal(ownCompanyRuntimeDiagnosticCurrent(captured,context()),true);\n for(const patch of [{scope:'b'.repeat(64)},{projectId:'project-b'},{organizationId:'org_Other'},{actorId:'user_Other'},{connectionId:'other-channel'},{channelRevision:5},{credentialExpiresAt:new Date(time+7200000).toISOString()},{sequence:2},{reference:'a-new-reference'}])assert.equal(ownCompanyRuntimeDiagnosticCurrent(captured,{...captured,...patch}),false);\n assert.equal(ownCompanyRuntimeDiagnosticCurrent(captured,null),false);\n const reference={version:1,resource:'company-channel',scope,projectId:expected.projectId,operationId:'11111111-1111-4111-8111-111111111111',action:'ACTIVATE_OWN_NUMBER',connectionId:'own-channel',createdAt:time};\n assert.equal(ownCompanyRuntimeDiagnosticCurrent(context({reference}),context({reference:{...reference,createdAt:time+1}})),false);\n});\n\ntest('actual Clerk transport performs one explicit GET and a late body cannot cross the captured context',async()=>{\n let release,dispatched;const started=new Promise(resolve=>{dispatched=resolve;});\n const captured=context(),url='/api/identity/company-channel?'+new URLSearchParams({scope,projectId:expected.projectId,discovery:'OWN_RUNTIME_DIAGNOSTIC'}),calls=[];\n const lifecycle=createWorkspaceRequestLifecycle(async()=>'synthetic-current-clerk-token',{fetchImpl:async(request,options)=>{\n  calls.push({request,method:options.method,authorization:options.headers.get('Authorization'),cache:options.cache});dispatched();\n  await new Promise(resolve=>{release=resolve;});return Response.json(result());\n }});\n let current=context();const pending=lifecycle.request(url,{method:'GET',requestTimeoutMs:1000},async response=>ownCompanyRuntimeDiagnostic(await response.json())).then(value=>ownCompanyRuntimeDiagnosticCurrent(captured,current)?value:null);\n await started;current={...current,actorId:'user_Other',sequence:2};release();assert.equal(await pending,null);\n assert.deepEqual(calls,[{request:url,method:'GET',authorization:'Bearer synthetic-current-clerk-token',cache:'no-store'}]);lifecycle.abort();\n});\n\ntest('diagnostic errors use fixed actionable copy and never interpolate raw errors or stage labels',()=>{\n for(const error of [{code:'private-token-and-provider-payload'},{message:'private',stage:'VERIFICATION_STATUS'},{code:'META_OWN_COMPANY_UNAVAILABLE',status:403},{code:'META_OWN_COMPANY_CONFIGURATION_PENDING'},{name:'AbortError'}])assert.doesNotMatch(ownCompanyRuntimeDiagnosticExplain(error),/private|VERIFICATION_STATUS|token|autorización de configuración/);\n assert.match(ownCompanyRuntimeDiagnosticExplain({status:401}),/sesión/);\n});\n",
+            "previousText": ""
+          }
+        ]
       }
     ],
     "familyAdvances": [
       {
         "family": "LIVE_HOURS_RUNTIME",
         "previousCount": 175,
-        "currentCount": 177,
+        "currentCount": 178,
         "additions": [
           "src/app/(identity)/cuenta/kyc-image-quality.mjs",
+          "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
           "src/lib/capture-quality-policy.mjs"
         ],
         "removals": []
@@ -33763,9 +34104,10 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "family": "UI_FOCUSED_WORKSPACE",
         "previousCount": 207,
-        "currentCount": 209,
+        "currentCount": 210,
         "additions": [
           "src/app/(identity)/cuenta/kyc-image-quality.mjs",
+          "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
           "src/lib/capture-quality-policy.mjs"
         ],
         "removals": []
@@ -36184,6 +36526,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           "src/app/(identity)/cuenta/operations-status-panel.module.css",
           "src/app/(identity)/cuenta/own-company-number-panel.js",
           "src/app/(identity)/cuenta/own-company-number-view.mjs",
+          "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
           "src/app/(identity)/cuenta/own-company-templates-panel.js",
           "src/app/(identity)/cuenta/own-company-templates-view.mjs",
           "src/app/(identity)/cuenta/participant-account-discovery-format.mjs",
@@ -36296,6 +36639,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         ],
         "additions": [
           "src/app/(identity)/cuenta/kyc-image-quality.mjs",
+          "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
           "src/lib/capture-quality-policy.mjs"
         ],
         "removals": []
@@ -37707,6 +38051,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           "src/app/(identity)/cuenta/operations-status-panel.module.css",
           "src/app/(identity)/cuenta/own-company-number-panel.js",
           "src/app/(identity)/cuenta/own-company-number-view.mjs",
+          "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
           "src/app/(identity)/cuenta/own-company-templates-panel.js",
           "src/app/(identity)/cuenta/own-company-templates-view.mjs",
           "src/app/(identity)/cuenta/page.js",
@@ -37840,6 +38185,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         ],
         "additions": [
           "src/app/(identity)/cuenta/kyc-image-quality.mjs",
+          "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
           "src/lib/capture-quality-policy.mjs"
         ],
         "removals": []
@@ -39894,7 +40240,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
       {
         "pointer": "/planBudgetCurrentRevision/references/54/currentSha256",
         "previous": "102ae45ad7d0a1054d2c65cdbfa3a6a96accfcd982bebce8d6c32c7bf24b21a2",
-        "current": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+        "current": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
       },
       {
         "pointer": "/planBudgetCurrentRevision/references/58/currentSha256",
@@ -40297,7 +40643,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "src/lib/meta-customer-provider.mjs",
             "previousSha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f",
-            "currentSha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+            "currentSha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
           },
           {
             "path": "src/lib/meta-employee-intake.mjs",
@@ -41019,7 +41365,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": "src/lib/meta-customer-provider.mjs",
             "previousSha256": "b6cc572fb68ab4cb653ccee30cea754a6273b5631d13e61dd2c2f65535aa287f",
-            "currentSha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+            "currentSha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
           },
           {
             "path": "src/lib/meta-employee-intake.mjs",
@@ -41474,7 +41820,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           {
             "path": ".github/scripts/verify-production-test-shards.py",
             "previousSha256": null,
-            "currentSha256": "6294850f2040a76cf417f78c4930607deeaae7cdd585bcad7c7c16efb7e47591"
+            "currentSha256": "f9bcdb1cea57eaa2df7daaaebd6073a7536fd6fabffe3601881e365191590ee8"
           },
           {
             "path": ".github/workflows/production-boundary.yml",
@@ -42115,6 +42461,46 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
             "path": "scripts/verify-kyc-reply-feedback-ci.mjs",
             "previousSha256": "c07f34ff0f4d49325b1fae912bec581d183cd2b2ee21214840b3ff9c6a900dc3",
             "currentSha256": "2a05275b5047f4a1a69cbe5676e160318841bca3a558f09347d211496d188a8f"
+          },
+          {
+            "path": "src/lib/company-channel-http.mjs",
+            "previousSha256": "e0a5ff271543ad3f54deab699aa585213dc504fda92112e179743f2520a737f2",
+            "currentSha256": "be95404d1d4fcff3422138b7d92ac960fc5bfdc9bae4b6fcbecf961cb23ca148"
+          },
+          {
+            "path": "src/lib/company-channel-store.mjs",
+            "previousSha256": "300c5e7e0abe65b97b86a200c6cc72444b9c65ce375d61975c56f5abbc6a453b",
+            "currentSha256": "26686333bb7d5fcddf40b14f25b8c322e16ddef0d62690b2e6d1d1b4a6de2e72"
+          },
+          {
+            "path": "src/lib/meta-own-company-connection.mjs",
+            "previousSha256": "5bdf8a2c6b1333efe0a12481174e433cd58c9e1583ae0972f4cb090892eaaf84",
+            "currentSha256": "33ac37426beb73a142804bc6e6c903d0d18527282dfb590bf685b74e20df2bf5"
+          },
+          {
+            "path": "tests/fixtures/own-runtime-diagnostic.mjs",
+            "previousSha256": null,
+            "currentSha256": "00b02725ee130032a5ffe0f19c6d29e32bcbdd54285f8d42eeb3a75e876c815b"
+          },
+          {
+            "path": "tests/production-own-company-runtime-diagnostic.test.mjs",
+            "previousSha256": null,
+            "currentSha256": "332be4374b0d82752ee13f307af2b39b767d009a8b670b7fa5cdd0d93fd511bc"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/own-company-number-panel.js",
+            "previousSha256": "d2146290e43adb77dc14b707787023a24ffe80c39e69eaa49fc876dcab3d267b",
+            "currentSha256": "6682c17bdb11ea4269540e3a4f14546e013d72869ba19c79a41312cbc65419bf"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
+            "previousSha256": null,
+            "currentSha256": "a2b5b4fe2499168ee8afe10cc3aa767f56757b376531ab63e4c557b5ed26ea52"
+          },
+          {
+            "path": "tests/production-own-company-runtime-diagnostic-view.test.mjs",
+            "previousSha256": null,
+            "currentSha256": "b349d9d861f97af748dedd7f32963f29a83ca2b152f4a8cbe1a6157379f86bb7"
           }
         ]
       },
@@ -42355,6 +42741,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           "src/app/(identity)/cuenta/operations-status-panel.module.css",
           "src/app/(identity)/cuenta/own-company-number-panel.js",
           "src/app/(identity)/cuenta/own-company-number-view.mjs",
+          "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
           "src/app/(identity)/cuenta/own-company-templates-panel.js",
           "src/app/(identity)/cuenta/own-company-templates-view.mjs",
           "src/app/(identity)/cuenta/participant-account-discovery-format.mjs",
@@ -43404,11 +43791,15 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/own-company-number-panel.js",
-            "sha256": "d2146290e43adb77dc14b707787023a24ffe80c39e69eaa49fc876dcab3d267b"
+            "sha256": "6682c17bdb11ea4269540e3a4f14546e013d72869ba19c79a41312cbc65419bf"
           },
           {
             "path": "src/app/(identity)/cuenta/own-company-number-view.mjs",
             "sha256": "6940f11e30d2958d7f6771463ce28ca83c0e2d2f41e81aa220c8efe669580300"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
+            "sha256": "a2b5b4fe2499168ee8afe10cc3aa767f56757b376531ab63e4c557b5ed26ea52"
           },
           {
             "path": "src/app/(identity)/cuenta/own-company-templates-panel.js",
@@ -45559,6 +45950,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           "src/app/(identity)/cuenta/operations-status-panel.module.css",
           "src/app/(identity)/cuenta/own-company-number-panel.js",
           "src/app/(identity)/cuenta/own-company-number-view.mjs",
+          "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
           "src/app/(identity)/cuenta/own-company-templates-panel.js",
           "src/app/(identity)/cuenta/own-company-templates-view.mjs",
           "src/app/(identity)/cuenta/page.js",
@@ -46834,11 +47226,15 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/app/(identity)/cuenta/own-company-number-panel.js",
-            "sha256": "d2146290e43adb77dc14b707787023a24ffe80c39e69eaa49fc876dcab3d267b"
+            "sha256": "6682c17bdb11ea4269540e3a4f14546e013d72869ba19c79a41312cbc65419bf"
           },
           {
             "path": "src/app/(identity)/cuenta/own-company-number-view.mjs",
             "sha256": "6940f11e30d2958d7f6771463ce28ca83c0e2d2f41e81aa220c8efe669580300"
+          },
+          {
+            "path": "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
+            "sha256": "a2b5b4fe2499168ee8afe10cc3aa767f56757b376531ab63e4c557b5ed26ea52"
           },
           {
             "path": "src/app/(identity)/cuenta/own-company-templates-panel.js",
@@ -48944,7 +49340,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+            "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -50372,7 +50768,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+            "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -51970,7 +52366,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/company-channel-store.mjs",
-            "sha256": "300c5e7e0abe65b97b86a200c6cc72444b9c65ce375d61975c56f5abbc6a453b"
+            "sha256": "26686333bb7d5fcddf40b14f25b8c322e16ddef0d62690b2e6d1d1b4a6de2e72"
           },
           {
             "path": "src/lib/company-entitlement.mjs",
@@ -52094,7 +52490,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+            "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -52162,7 +52558,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-own-company-connection.mjs",
-            "sha256": "5bdf8a2c6b1333efe0a12481174e433cd58c9e1583ae0972f4cb090892eaaf84"
+            "sha256": "33ac37426beb73a142804bc6e6c903d0d18527282dfb590bf685b74e20df2bf5"
           },
           {
             "path": "src/lib/meta-own-company-policy.mjs",
@@ -53499,7 +53895,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+            "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -54781,7 +55177,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+            "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -58512,6 +58908,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           "src/app/(identity)/cuenta/operations-status-panel.module.css",
           "src/app/(identity)/cuenta/own-company-number-panel.js",
           "src/app/(identity)/cuenta/own-company-number-view.mjs",
+          "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
           "src/app/(identity)/cuenta/own-company-templates-panel.js",
           "src/app/(identity)/cuenta/own-company-templates-view.mjs",
           "src/app/(identity)/cuenta/participant-account-discovery-format.mjs",
@@ -59988,6 +60385,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           "src/app/(identity)/cuenta/operations-status-panel.module.css",
           "src/app/(identity)/cuenta/own-company-number-panel.js",
           "src/app/(identity)/cuenta/own-company-number-view.mjs",
+          "src/app/(identity)/cuenta/own-company-runtime-diagnostic-view.mjs",
           "src/app/(identity)/cuenta/own-company-templates-panel.js",
           "src/app/(identity)/cuenta/own-company-templates-view.mjs",
           "src/app/(identity)/cuenta/page.js",
@@ -60883,7 +61281,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+            "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -61523,7 +61921,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/company-channel-store.mjs",
-            "sha256": "300c5e7e0abe65b97b86a200c6cc72444b9c65ce375d61975c56f5abbc6a453b"
+            "sha256": "26686333bb7d5fcddf40b14f25b8c322e16ddef0d62690b2e6d1d1b4a6de2e72"
           },
           {
             "path": "src/lib/employee-intake-channel-continuity.mjs",
@@ -62114,7 +62512,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+            "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
           },
           {
             "path": "src/lib/meta-customer-templates.mjs",
@@ -62955,7 +63353,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+                  "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -63723,7 +64121,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+                  "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -64475,7 +64873,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+                  "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -65233,7 +65631,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+                  "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -65987,7 +66385,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
                 },
                 {
                   "path": "src/lib/meta-customer-provider.mjs",
-                  "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+                  "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
                 },
                 {
                   "path": "src/lib/meta-customer-templates.mjs",
@@ -66902,7 +67300,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/company-channel-http.mjs",
-            "sha256": "e0a5ff271543ad3f54deab699aa585213dc504fda92112e179743f2520a737f2"
+            "sha256": "be95404d1d4fcff3422138b7d92ac960fc5bfdc9bae4b6fcbecf961cb23ca148"
           },
           {
             "path": "src/lib/company-channel-kyc.mjs",
@@ -66918,7 +67316,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/company-channel-store.mjs",
-            "sha256": "300c5e7e0abe65b97b86a200c6cc72444b9c65ce375d61975c56f5abbc6a453b"
+            "sha256": "26686333bb7d5fcddf40b14f25b8c322e16ddef0d62690b2e6d1d1b4a6de2e72"
           },
           {
             "path": "src/lib/company-entitlement.mjs",
@@ -67186,7 +67584,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-customer-provider.mjs",
-            "sha256": "157ab6c73bc835250cc6bea2f3cef8a6bdf6dc04cd7bac4a6a27cea925f6796b"
+            "sha256": "93c30d36b4a5f3c9b453e907a4ff189dee73879987eb85952cfd2841c26e4594"
           },
           {
             "path": "src/lib/meta-customer-template-send-http.mjs",
@@ -67290,7 +67688,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "path": "src/lib/meta-own-company-connection.mjs",
-            "sha256": "5bdf8a2c6b1333efe0a12481174e433cd58c9e1583ae0972f4cb090892eaaf84"
+            "sha256": "33ac37426beb73a142804bc6e6c903d0d18527282dfb590bf685b74e20df2bf5"
           },
           {
             "path": "src/lib/meta-own-company-policy.mjs",

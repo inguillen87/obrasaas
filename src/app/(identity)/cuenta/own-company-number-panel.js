@@ -1,9 +1,10 @@
 'use client';
-import {useEffect,useRef,useState} from 'react';
+import {useCallback,useEffect,useRef,useState} from 'react';
 import {Building2,MessageCircle,RefreshCw,ShieldCheck,TriangleAlert} from 'lucide-react';
 import {useWorkspaceRequest} from './workspace-request-lifecycle';
 import {browserRecoveryJournal,RECOVERY_EVENT,recoveryResult} from './workspace-recovery-journal.mjs';
 import {OWN_COMPANY_ACTIONS,OWN_COMPANY_STATES,ownCompanyNumberSnapshot,ownCompanyNumberOutcome,ownCompanyNumberCommand,ownCompanyNumberRecoveryCommand,ownCompanyNumberCanAct,ownCompanyNumberFresh,ownCompanyNumberExplain,ownCompanyNumberAccessDenied} from './own-company-number-view.mjs';
+import {ownCompanyRuntimeDiagnostic,ownCompanyRuntimeDiagnosticContext,ownCompanyRuntimeDiagnosticCurrent,ownCompanyRuntimeDiagnosticAvailable,ownCompanyRuntimeDiagnosticExplain,ownCompanyRuntimeDiagnosticLabels} from './own-company-runtime-diagnostic-view.mjs';
 import styles from './company-channel-panel.module.css';
 const endpoint='/api/identity/company-channel';
 const labels={CONNECT_OWN_NUMBER:'Conectar número propio',ACTIVATE_OWN_NUMBER:'Activar conexión del número'};
@@ -23,24 +24,26 @@ function OwnCompanyNumberInner({projectId,scope,getSessionToken,onPending,locked
  const transport=useWorkspaceRequest(getSessionToken);
  const [opened,setOpened]=useState(false),[busy,setBusy]=useState(false),[data,setData]=useState(null),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[recoveryReady,setRecoveryReady]=useState(false),[needsRead,setNeedsRead]=useState(true),[notice,setNotice]=useState(''),[receipt,setReceipt]=useState(null);
  const [connectRecovery,setConnectRecovery]=useState(null),[originalSourceHead,setOriginalSourceHead]=useState(''),[confirmRecovery,setConfirmRecovery]=useState(false);
- const alive=useRef(true),epoch=useRef(0),controller=useRef(null),editor=useRef(null),reference=useRef(null),attemptContext=useRef(null),localRequest=useRef(false),refreshReferences=useRef(async()=>{});
+ const [diagnostic,setDiagnostic]=useState(null),[diagnosticNotice,setDiagnosticNotice]=useState('');
+ const alive=useRef(true),epoch=useRef(0),controller=useRef(null),editor=useRef(null),reference=useRef(null),attemptContext=useRef(null),localRequest=useRef(false),refreshReferences=useRef(async()=>{}),diagnosticSnapshot=useRef(null);
+ const updateData=useCallback(value=>{diagnosticSnapshot.current=value;setData(value);setDiagnostic(null);setDiagnosticNotice('');},[]);
  useEffect(()=>{alive.current=true;const generation=epoch;return()=>{alive.current=false;generation.current++;controller.current?.abort();attemptContext.current=null;};},[]);
  useEffect(()=>{onPending?.(busy||Boolean(draft)||opened&&(!recoveryReady||OWN_COMPANY_ACTIONS.includes(attempt?.action)));return()=>onPending?.(false);},[busy,draft,opened,recoveryReady,attempt,onPending]);
  const draftAction=draft?.action;
  useEffect(()=>{if(draftAction){editor.current?.focus({preventScroll:true});editor.current?.scrollIntoView({block:'start',behavior:'auto'});}},[draftAction]);
  useEffect(()=>{
   if(!data)return;const stored=data.kind==='OWN_COMPANY_STORED_RUNTIME',deadline=Date.parse(stored?data.operationalGrant.credentialExpiresAt:data.expiresAt);
-  const invalidate=()=>{if(!alive.current)return;epoch.current++;controller.current?.abort();setBusy(false);setDraft(null);setNeedsRead(true);if(stored)setData(null);setNotice(stored?'La credencial de esta consulta venció. Volvé a consultar el estado con tu acceso actual.':'La consulta venció. Volvé a consultar el número con tu acceso actual.');};
+  const invalidate=()=>{if(!alive.current)return;epoch.current++;controller.current?.abort();setBusy(false);setDraft(null);setDiagnostic(null);setDiagnosticNotice('');setNeedsRead(true);if(stored)updateData(null);setNotice(stored?'La credencial de esta consulta venció. Volvé a consultar el estado con tu acceso actual.':'La consulta venció. Volvé a consultar el número con tu acceso actual.');};
   let timer;const check=()=>{const remaining=deadline-Date.now();if(remaining<=0){invalidate();return;}timer=setTimeout(check,Math.min(remaining,2147483647));};
   check();return()=>clearTimeout(timer);
- },[data]);
+ },[data,updateData]);
  useEffect(()=>{
   let active=true,sequence=0,initializing=true;
   const read=async(initial=false,invalidate=false)=>{const n=++sequence;try{
    const entry=(await browserRecoveryJournal.list(scope)).find(row=>row.resource==='company-channel');
    if(!active||n!==sequence||localRequest.current)return;
    if(reference.current?.operationId!==entry?.operationId||invalidate){
-    epoch.current++;controller.current?.abort();setData(null);setDraft(null);setReceipt(null);setConnectRecovery(null);setConfirmRecovery(false);setOriginalSourceHead('');setNeedsRead(true);setBusy(false);
+    epoch.current++;controller.current?.abort();updateData(null);setDraft(null);setReceipt(null);setConnectRecovery(null);setConfirmRecovery(false);setOriginalSourceHead('');setNeedsRead(true);setBusy(false);
     if(reference.current?.operationId!==entry?.operationId)attemptContext.current=null;
     if(!initial)setNotice(entry?'Hay una decisión pendiente. Comprobala antes de continuar.':'La configuración pudo cambiar en otra pestaña. Volvé a consultar antes de otra decisión.');
    }
@@ -52,9 +55,9 @@ function OwnCompanyNumberInner({projectId,scope,getSessionToken,onPending,locked
   if(typeof BroadcastChannel==='function'){try{channel=new BroadcastChannel(RECOVERY_EVENT);channel.onmessage=event=>{if(event.data?.version===1&&event.data?.type==='invalidate')invalidated();};}catch{/* Focus and same-window invalidation remain available. */}}
   void read(true).finally(()=>{initializing=false;});window.addEventListener(RECOVERY_EVENT,invalidated);window.addEventListener('storage',invalidated);window.addEventListener('focus',refresh);document.addEventListener('visibilitychange',visible);
   return()=>{active=false;channel?.close();window.removeEventListener(RECOVERY_EVENT,invalidated);window.removeEventListener('storage',invalidated);window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',visible);};
- },[scope,projectId]);
+ },[scope,projectId,updateData]);
  function expected(){return {scope,projectId,...(data?{organizationId:data.organization.id,actorId:data.actor.id}:{})};}
- function hideDenied(error){if(!ownCompanyNumberAccessDenied(error))return;setData(null);setDraft(null);setReceipt(null);setConnectRecovery(null);setConfirmRecovery(false);setNeedsRead(true);attemptContext.current=null;}
+ function hideDenied(error){if(!ownCompanyNumberAccessDenied(error))return;updateData(null);setDraft(null);setReceipt(null);setConnectRecovery(null);setConfirmRecovery(false);setNeedsRead(true);attemptContext.current=null;}
  async function request(params,options,validate){
   let retained;
   const result=await transport(endpoint+(options.method==='POST'?'':'?'+new URLSearchParams({scope,projectId,...params})),options,async response=>{
@@ -68,17 +71,29 @@ function OwnCompanyNumberInner({projectId,scope,getSessionToken,onPending,locked
  }
  async function fetchSnapshot(n,signal){
   const snapshot=await request({discovery:'OWN_NUMBER'},{signal,requestTimeoutMs:15000},value=>ownCompanyNumberSnapshot(value,expected()));
-  if(alive.current&&epoch.current===n){setData(snapshot);setNeedsRead(!ownCompanyNumberFresh(snapshot));}return snapshot;
+  if(alive.current&&epoch.current===n){updateData(snapshot);setNeedsRead(!ownCompanyNumberFresh(snapshot));}return snapshot;
  }
  async function load(){
-  if(busy||localRequest.current)return;const n=++epoch.current,abort=new AbortController();controller.current?.abort();controller.current=abort;setOpened(true);setBusy(true);setData(null);setDraft(null);setNeedsRead(true);setNotice('');
+  if(busy||localRequest.current)return;const n=++epoch.current,abort=new AbortController();controller.current?.abort();controller.current=abort;setOpened(true);setBusy(true);updateData(null);setDraft(null);setNeedsRead(true);setNotice('');
   try{await fetchSnapshot(n,abort.signal);}catch(error){if(alive.current&&epoch.current===n){hideDenied(error);setNotice(ownCompanyNumberExplain(error.code)+' La consulta no cambia la configuración.');}}
   finally{if(alive.current&&epoch.current===n)setBusy(false);}
  }
- function close(){if(busy||localRequest.current)return;epoch.current++;controller.current?.abort();setDraft(null);setData(null);setReceipt(null);setConnectRecovery(null);setConfirmRecovery(false);setNeedsRead(true);setOpened(false);setNotice(attempt?'La referencia del intento sigue guardada para comprobarla.':'');}
+ function close(){if(busy||localRequest.current)return;epoch.current++;controller.current?.abort();setDraft(null);updateData(null);setReceipt(null);setConnectRecovery(null);setConfirmRecovery(false);setNeedsRead(true);setOpened(false);setNotice(attempt?'La referencia del intento sigue guardada para comprobarla.':'');}
+ async function checkMeta(){
+  if(busy||localRequest.current||locked||draft)return;
+  const n=epoch.current+1;let captured;
+  const currentContext=()=>ownCompanyRuntimeDiagnosticContext(diagnosticSnapshot.current,{scope,projectId},{sequence:epoch.current,reference:reference.current});
+  try{captured=ownCompanyRuntimeDiagnosticContext(diagnosticSnapshot.current,{scope,projectId},{sequence:n,reference:reference.current});}catch{setDiagnostic(null);setDiagnosticNotice('Volvé a consultar el número antes de comprobar su estado en Meta.');return;}
+  epoch.current=n;const abort=new AbortController();controller.current?.abort();controller.current=abort;setBusy(true);setDiagnostic(null);setDiagnosticNotice('Consultando el estado en Meta…');
+  const current=()=>{if(!alive.current||epoch.current!==n)return false;try{return ownCompanyRuntimeDiagnosticCurrent(captured,currentContext());}catch{return false;}};
+  let handled=false;
+  try{const observation=await request({discovery:'OWN_RUNTIME_DIAGNOSTIC'},{signal:abort.signal,requestTimeoutMs:45000},ownCompanyRuntimeDiagnostic);if(current()){handled=true;setDiagnostic(observation);setDiagnosticNotice('');}}
+  catch(error){if(current()){handled=true;const message=ownCompanyRuntimeDiagnosticExplain(error);hideDenied(error);setDiagnosticNotice(message);if(ownCompanyNumberAccessDenied(error))setNotice(message);}}
+  finally{if(alive.current&&epoch.current===n){setBusy(false);if(!handled)setDiagnosticNotice('La consulta se descartó porque cambió el contexto. Volvé a consultar el número.');}}
+ }
  function start(action){
   if(busy||localRequest.current||locked||attempt||!recoveryReady||needsRead||!ownCompanyNumberCanAct(data,action))return;
-  setDraft({action,connectionId:data.channel?.id||null,revision:data.channel?.revision||0,companyPhoneRevision:data.companyPhoneRevision,confirmOwnBusiness:false,confirmReplacement:false});setReceipt(null);setNotice('');
+  setDraft({action,connectionId:data.channel?.id||null,revision:data.channel?.revision||0,companyPhoneRevision:data.companyPhoneRevision,confirmOwnBusiness:false,confirmReplacement:false});setDiagnostic(null);setDiagnosticNotice('');setReceipt(null);setNotice('');
  }
  async function finish(result,n){
   reference.current=null;attemptContext.current=null;setAttempt(null);setDraft(null);setConnectRecovery(null);setConfirmRecovery(false);setOriginalSourceHead('');setNeedsRead(true);
@@ -94,7 +109,7 @@ function OwnCompanyNumberInner({projectId,scope,getSessionToken,onPending,locked
   try{
    const result=await request({},{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(command),signal:abort.signal,requestTimeoutMs:20000},value=>ownCompanyNumberOutcome(value,context,{post:true}));
    const outcome=recoveryResult(ref,result);if(!outcome)throw new Error('Uncorrelated result');
-   if(alive.current&&epoch.current===n){if(['RECORDED','REJECTED'].includes(outcome.state))await finish(result,n);else{setData(null);setDraft(null);setNeedsRead(true);setNotice('La activación sigue por comprobar. Consultá el resultado; no se volverá a enviar.');}}
+   if(alive.current&&epoch.current===n){if(['RECORDED','REJECTED'].includes(outcome.state))await finish(result,n);else{updateData(null);setDraft(null);setNeedsRead(true);setNotice('La activación sigue por comprobar. Consultá el resultado; no se volverá a enviar.');}}
   }catch(error){
    if(error.requestDispatched===false){try{const entry=(await browserRecoveryJournal.list(scope)).find(row=>row.resource==='company-channel');if(alive.current&&epoch.current===n){reference.current=entry||null;setAttempt(entry||null);if(entry?.operationId!==ref.operationId)attemptContext.current=null;}}catch{if(alive.current&&epoch.current===n)setRecoveryReady(false);}}
    if(alive.current&&epoch.current===n){hideDenied(error);setDraft(null);setNeedsRead(true);setNotice(error.requestDispatched===false?ownCompanyNumberExplain(error.code)+' La operación no se envió.':'La confirmación no llegó. Conservamos la referencia: comprobá su resultado antes de continuar.');}
@@ -103,12 +118,12 @@ function OwnCompanyNumberInner({projectId,scope,getSessionToken,onPending,locked
  }
  async function recover(){
   if(busy||localRequest.current||!attempt||attempt.projectId!==projectId||!OWN_COMPANY_ACTIONS.includes(attempt.action))return;
-  const n=++epoch.current,ref=attempt,abort=new AbortController();controller.current?.abort();controller.current=abort;localRequest.current=true;setBusy(true);setDraft(null);setConnectRecovery(null);setConfirmRecovery(false);setNotice('');
+  const n=++epoch.current,ref=attempt,abort=new AbortController();controller.current?.abort();controller.current=abort;localRequest.current=true;setBusy(true);setDiagnostic(null);setDiagnosticNotice('');setDraft(null);setConnectRecovery(null);setConfirmRecovery(false);setNotice('');
   const context=attemptContext.current?.operationId===ref.operationId?attemptContext.current:expected();
   try{
    const result=await request({operationId:ref.operationId},{signal:abort.signal,requestTimeoutMs:15000},value=>ownCompanyNumberOutcome(value,{...context,scope:ref.scope,projectId:ref.projectId,operationId:ref.operationId,action:ref.action,connectionId:ref.connectionId}));
    const outcome=recoveryResult(ref,result);if(!outcome)throw new Error('Uncorrelated result');
-   if(alive.current&&epoch.current===n){if(['RECORDED','REJECTED'].includes(outcome.state))await finish(result,n);else{setData(null);setNeedsRead(true);if(result.connectRecovery){setConnectRecovery(result);setOriginalSourceHead(result.connectRecovery.policySourceHead||'');setNotice('La conexión original no quedó registrada. Revisá la recuperación excepcional de este mismo intento.');}else setNotice(result.recovery==='EXPLICIT_REVIEW_REQUIRED'?'Meta fue consultado sin reenviar la activación. El responsable debe revisar este intento pendiente.':'El intento sigue sin un resultado definitivo. Su referencia se conserva; otra decisión queda bloqueada.');}}
+   if(alive.current&&epoch.current===n){if(['RECORDED','REJECTED'].includes(outcome.state))await finish(result,n);else{updateData(null);setNeedsRead(true);if(result.connectRecovery){setConnectRecovery(result);setOriginalSourceHead(result.connectRecovery.policySourceHead||'');setNotice('La conexión original no quedó registrada. Revisá la recuperación excepcional de este mismo intento.');}else setNotice(result.recovery==='EXPLICIT_REVIEW_REQUIRED'?'Meta fue consultado sin reenviar la activación. El responsable debe revisar este intento pendiente.':'El intento sigue sin un resultado definitivo. Su referencia se conserva; otra decisión queda bloqueada.');}}
   }catch(error){if(alive.current&&epoch.current===n){hideDenied(error);setNotice(ownCompanyNumberExplain(error.code)+' Conservamos la referencia para volver a comprobar.');}}
   finally{localRequest.current=false;if(alive.current&&epoch.current===n){setBusy(false);void refreshReferences.current();}}
  }
@@ -126,6 +141,7 @@ function OwnCompanyNumberInner({projectId,scope,getSessionToken,onPending,locked
  const canRecover=attempt&&attempt.projectId===projectId&&OWN_COMPANY_ACTIONS.includes(attempt.action);
  const canActivate=ownCompanyNumberCanAct(data,'ACTIVATE_OWN_NUMBER');
  const storedRuntime=data?.kind==='OWN_COMPANY_STORED_RUNTIME';
+ const diagnosticAvailable=ownCompanyRuntimeDiagnosticAvailable(data,{scope,projectId}),diagnosticLabels=diagnostic?ownCompanyRuntimeDiagnosticLabels(diagnostic):null;
  const numberStatus=storedRuntime?'Conexión guardada habilitada':data?.operationalGrant?({ACTIVE:'Conexión habilitada',REVOKED:'Operación revocada',EXPIRED:'Credencial vencida',UNAVAILABLE:'Operación por revisar'}[data.operationalGrant.state]):data?.connectionOwnVerified?(data.channel.enabled&&data.channel.connectionStatus==='CONNECTED'?'Conexión habilitada':'Conexión pendiente de activación'):data?.channel&&data.connectionMatchesAssets?'Conexión anterior por revisar':'Pendiente de conexión';
  return <section className={styles.panel} aria-labelledby="own-company-number-title" aria-busy={busy} data-own-company-number>
   <div className={styles.heading}><div><p className={styles.eyebrow}>NÚMERO DE LA EMPRESA</p><h3 id="own-company-number-title"><MessageCircle size={21} aria-hidden="true"/>Conectar nuestro WhatsApp</h3><p className={styles.intro}>Consultá el estado de nuestro WhatsApp y revisá la conexión antes de realizar cambios.</p></div><button type="button" className={!opened?styles.primary:undefined} disabled={busy} onClick={opened?close:load}>{opened?'Cerrar consulta':'Consultar estado del número'}</button></div>
@@ -141,6 +157,7 @@ function OwnCompanyNumberInner({projectId,scope,getSessionToken,onPending,locked
     <div className={styles.channel}><div className={styles.channelHeading}><h4>Estado del número</h4><span className={styles.badge}>{numberStatus}</span></div>{storedRuntime?<p className={styles.note}>Estado guardado consultado el <OwnCompanyDateTime value={data.observedAt}/>. Esta consulta no comprueba la disponibilidad actual en Meta.</p>:<><p className={styles.note}>{data.registered?'Registro del número comprobado en Meta.':'Completá el registro del número en Meta y volvé a consultar antes de activar.'} {data.subscribed?'Suscripción de la aplicación comprobada.':'La suscripción de la aplicación se comprobará al activar.'}</p>{data.channel&&!data.connectionMatchesAssets&&data.channel.mode!=='SUSPENDED'&&<p className={styles.warning}>Hay otro número en este canal. Revisalo y suspendelo en WhatsApp para varias obras antes de reemplazarlo.</p>}{data.channel&&data.connectionMatchesAssets&&!data.connectionOwnVerified&&!ownCompanyNumberCanAct(data,'CONNECT_OWN_NUMBER')&&<p className={styles.note}>Hay una conexión anterior de este número. Revisá su estado en WhatsApp para varias obras antes de preparar esta conexión.</p>}<div className={styles.actions}>{canActivate?<button type="button" disabled={disabled} onClick={()=>start('ACTIVATE_OWN_NUMBER')}>{labels.ACTIVATE_OWN_NUMBER}</button>:ownCompanyNumberCanAct(data,'CONNECT_OWN_NUMBER')&&<button type="button" disabled={disabled} onClick={()=>start('CONNECT_OWN_NUMBER')}>{data.channel&&!data.connectionMatchesAssets?'Revisar reemplazo del número':labels.CONNECT_OWN_NUMBER}</button>}</div></>}</div>
     {storedRuntime?<p className={styles.warning}>Autorización para configurar no vigente. El responsable debe revisar una nueva autorización antes de realizar cambios.</p>:<p className={styles.note}>Ventana de configuración hasta <OwnCompanyDateTime value={data.expiresAt}/>. Este plazo limita el alta y los cambios.</p>}
     {data.operationalGrant&&<p className={styles.note}>{data.operationalGrant.state==='ACTIVE'?'Autorización operativa vigente':data.operationalGrant.state==='REVOKED'?'Autorización operativa revocada':data.operationalGrant.state==='EXPIRED'?'Credencial de operación vencida':'Autorización operativa por revisar'}. {data.operationalGrant.credentialExpiresAt&&<>Vencimiento de credencial: <OwnCompanyDateTime value={data.operationalGrant.credentialExpiresAt}/>. </>}La operación requiere que Meta mantenga el acceso y que la empresa conserve este número.</p>}
+    {diagnosticAvailable&&<div className={styles.channel} aria-labelledby="own-company-meta-check-title"><div className={styles.channelHeading}><h4 id="own-company-meta-check-title">Comprobación en Meta</h4><button type="button" disabled={busy||locked||Boolean(draft)} onClick={checkMeta}><RefreshCw size={16} aria-hidden="true"/>Comprobar estado en Meta</button></div><p className={styles.note}>Consulta el estado actual. No envía mensajes ni cambia la conexión.</p><p className={diagnosticNotice?styles.notice:styles.silent} role="status" aria-live="polite">{diagnosticNotice}</p>{diagnostic&&<><p className={styles.note}><strong>{diagnosticLabels.summary}</strong> · Observado el <OwnCompanyDateTime value={diagnostic.observedAt}/>.</p><dl className={styles.context}><div><dt>Verificación del número</dt><dd>{diagnosticLabels.verification}</dd></div><div><dt>Registro</dt><dd>{diagnosticLabels.registration}</dd></div><div><dt>Conexión</dt><dd>{diagnosticLabels.platform}</dd></div><div><dt>Número de la empresa</dt><dd>{diagnosticLabels.number}</dd></div></dl><p className={styles.note}>Este resultado no confirma el envío ni la recepción de mensajes. La prueba de conversación se comprueba por separado.</p></>}</div>}
     <p className={styles.note}>El nombre y logo visibles en WhatsApp se administran en Meta. Conectar este número no cambia el perfil público de la empresa.</p>
     <div className={styles.capabilities}><strong>Prueba de conversación pendiente</strong><p>Después de habilitar la conexión, falta comprobar un mensaje recibido y su respuesta con un participante autorizado. La consulta y el recibo de configuración no acreditan esa prueba.</p><small>Las obras y permisos se revisan por separado en WhatsApp para varias obras.</small></div>
    </>}

@@ -1,11 +1,11 @@
 import {randomUUID} from 'node:crypto';
 import {WorkspaceError,workspaceId,operationId,digest} from './workspace-policy.mjs';
-import {createOwnCompanyCapability,readOwnCompanyPolicy,ownCompanyCapabilityPolicy,ownCompanyConnectionPolicy,ownCompanyPolicySourceDigest,createOwnCompanyRuntimeGrant,lockOwnCompanyIssuer} from './meta-own-company-policy.mjs';
+import {createOwnCompanyCapability,readOwnCompanyPolicy,ownCompanyCapabilityPolicy,ownCompanyConnectionPolicy,ownCompanyPolicySourceDigest,createOwnCompanyRuntimeGrant,lockOwnCompanyIssuer,fenceOwnCompanyRuntime,ownCompanyCapabilityKind,ownCompanyTransportPolicy} from './meta-own-company-policy.mjs';
 import {requireCompanyChannelSchema} from './company-channel-schema.mjs';
 import {assertCompanyChannelNoPending} from './company-channel-store.mjs';
 import {companyPhoneContract,assertCompanyPhoneMatch} from './company-onboarding-policy.mjs';
 import {encryptCustomerSecret,decryptCustomerSecret,customerContextCommitment} from './meta-customer-credentials.mjs';
-import {META_CUSTOMER_INSPECTION_PHASE} from './meta-customer-provider.mjs';
+import {META_CUSTOMER_INSPECTION_PHASE,projectOwnCompanyRuntimeDiagnostic} from './meta-customer-provider.mjs';
 
 export const OWN_COMPANY_ACTIONS=Object.freeze(['CONNECT_OWN_NUMBER','ACTIVATE_OWN_NUMBER']);
 export const OWN_COMPANY_CONNECT_RECOVERY='RECOVER_CONNECT_OWN_NUMBER';
@@ -59,6 +59,31 @@ export function createOwnCompanyConnection({workspace,provider,environment=proce
   const observedAt=new Date(now()).toISOString();ownCompanyConnectionPolicy(connection,environment,Date.parse(observedAt));
   return {version:1,kind:'OWN_COMPANY_STORED_RUNTIME',organization:{id:member.organizationId,name:member.organizationName},actor:{id:member.actorId,role:member.role},scope,projectId:context.projectId,readOnly:true,canManage:false,mode:'OWN_COMPANY',evidenceOrigin:'STORED_CANONICAL_RUNTIME',observedAt,configurationAuthorization:{state:'NOT_CURRENT'},channel:channelDto(connection),operationalGrant:{version:2,state:'ACTIVE',credentialExpiresAt:policy.validUntil,roundTrip:'NOT_VERIFIED',fieldJourney:'NOT_VERIFIED'},accepted:false,roundTrip:'NOT_VERIFIED'};
  });}
+
+ // A diagnostic may acquire canonical SHARE locks, but never writes a receipt,
+ // channel, grant or marker. READ COMMITTED is intentional: READ ONLY cannot
+ // acquire these locks, and REPEATABLE READ would hide revocation after await.
+ async function runtimeDiagnosticSnapshot(session,context,expected=null){return within(session,context,true,async(client,member,scope)=>{
+  await requireCompanyChannelSchema(client);
+  const time=(await client.query('SELECT clock_timestamp() AS now')).rows[0]?.now?.getTime();
+  if(!Number.isSafeInteger(time)||!Number.isSafeInteger(session.expiresAt)||session.expiresAt*1000<=time||member.role!=='ADMIN')fail('META_OWN_COMPANY_UNAVAILABLE',403);
+  const rows=(await client.query(`SELECT c.*,cc.revision,cc.mode FROM public."WhatsAppConnection" c JOIN public."WhatsAppCompanyChannel" cc ON cc."connectionId"=c.id AND cc."organizationId"=$2 AND cc."anchorProjectId"=c."projectId" WHERE c."projectId"=$1`,[context.projectId,member.organizationId])).rows;
+  if(rows.length!==1)fail('META_OWN_COMPANY_UNAVAILABLE',403);
+  const connection=rows[0];
+  if(connection?.metadata?.ownCompanyRuntime?.version!==2||connection.mode!=='COMPANY')fail('META_OWN_COMPANY_UNAVAILABLE',403);
+  const policy=ownCompanyConnectionPolicy(connection,environment,time);
+  if(policy.actorId!==member.actorId||policy.organizationId!==member.organizationId||policy.projectId!==context.projectId||policy.clerkUserId!==session.userId||policy.clerkOrganizationId!==session.organizationId)fail('META_OWN_COMPANY_UNAVAILABLE',403);
+  const capability=await fenceOwnCompanyRuntime(client,connection,{environment,now:time});
+  if(ownCompanyCapabilityKind(capability)!=='RUNTIME')fail('META_OWN_COMPANY_UNAVAILABLE',403);
+  // Preserve issuer/project/connection lock order before the owner-channel lock.
+  const owners=(await client.query(`SELECT revision,mode FROM public."WhatsAppCompanyChannel" WHERE "connectionId"=$1 AND "organizationId"=$2 AND "anchorProjectId"=$3 FOR SHARE`,[connection.id,member.organizationId,context.projectId])).rows;
+  if(owners.length!==1||owners[0].revision!==connection.revision||owners[0].mode!==connection.mode)fail('META_OWN_COMPANY_UNAVAILABLE',403);
+  if(expected){
+   ownCompanyTransportPolicy(expected.capability,environment,time);
+   if(scope!==expected.scope||connection.id!==expected.connection.id||connection.projectId!==expected.connection.projectId||connection.mode!==expected.connection.mode||connection.revision!==expected.connection.revision||connection.encryptedAccessToken!==expected.connection.encryptedAccessToken||policy.grantDigest!==expected.policy.grantDigest)fail('META_OWN_COMPANY_UNAVAILABLE',403);
+  }
+  return {connection,capability,policy,scope,time};
+ });}
  function fingerprint(input,member){const {securityPin,...safe}=input.payload;return digest({...input,payload:{...safe,...(Object.hasOwn(input.payload,'securityPin')?{securityPinCommitment:securityPin===null?null:customerContextCommitment(securityPin,{organizationId:member.organizationId,projectId:input.projectId,purpose:'own-number-pin',resourceId:input.operationId},environment)}:{})}});}
  async function sourceProvider(s,token=environment.META_OWN_COMPANY_ACCESS_TOKEN){const scoped=await provider.forOwnCapability({capability:s.capability,token}),verified=await scoped.inspect({token,wabaId:s.policy.wabaId,phoneNumberId:s.policy.phoneNumberId,numberMode:'DEDICATED',inspectionPhase:META_CUSTOMER_INSPECTION_PHASE.PRE_REGISTRATION});assertCompanyPhoneMatch(s.declared,s.project.organizationMetadata,verified.displayPhoneNumber);return {scoped,verified,token};}
  async function current(session,input,run){return within(session,input,true,async(client,member,scope)=>{const auth=await authority(client,member,session,input,true);await requireCompanyChannelSchema(client);return run(client,member,scope,auth);});}
@@ -97,6 +122,20 @@ export function createOwnCompanyConnection({workspace,provider,environment=proce
    });
  }
  return {
+  async diagnoseRuntime(session,context){
+   const captured=await runtimeDiagnosticSnapshot(session,context);
+   const token=decryptCustomerSecret(captured.connection.encryptedAccessToken,{organizationId:captured.policy.organizationId,projectId:context.projectId,purpose:'access-token',resourceId:captured.connection.phoneNumberId},environment);
+   const beforeExternal=()=>runtimeDiagnosticSnapshot(session,context,captured);
+   let observation,providerFailure;
+   try{observation=await provider.diagnoseOwnConnection({capability:captured.capability,connection:captured.connection,token,beforeExternal});}catch(error){providerFailure=error;}
+   // Authority loss after the last GET dominates even a provider failure or a
+   // hostile adapter's fake observation. No partial result crosses this fence.
+   const final=await beforeExternal();
+   if(providerFailure)throw providerFailure;
+   const completedAt=Math.max(final.time,now());
+   if(!Number.isSafeInteger(completedAt)||session.expiresAt*1000<=completedAt)fail('META_OWN_COMPANY_UNAVAILABLE',403);
+   return projectOwnCompanyRuntimeDiagnostic(observation,{capability:captured.capability,connection:captured.connection,token,environment,now:completedAt});
+  },
   async discover(session,context){
    let s;try{s=await snapshot(session,context);}catch(error){
     // Only a non-current setup policy admits durable v2 state observation.

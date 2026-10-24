@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 
 SCHEMA = "production-boundary-shard.v1"
 TOTAL = 19
-EXPECTED_COUNT = 379
+EXPECTED_COUNT = 381
 OUTPUT = ".vercel/private/production-boundary-unit-shard"
 DOWNLOADS = ".vercel/private/production-boundary-unit-artifacts"
 MANIFEST_KEYS = {"schema", "head", "runId", "runAttempt", "shard", "total", "nodeVersion", "files"}
@@ -119,7 +119,7 @@ def artifact_name(context, shard):
 
 
 def validate_evidence(downloads, expected):
-    """Pure evidence validation. CLI supplies its fresh exact379 Git context."""
+    """Pure evidence validation. CLI supplies its fresh exact381 Git context."""
     need(downloads.is_dir() and not downloads.is_symlink(), "ARTIFACT_ROOT")
     names = {artifact_name(expected, shard) for shard in range(1, TOTAL + 1)}
     need({file.name for file in downloads.iterdir()} == names, "ARTIFACT_SET")
