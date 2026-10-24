@@ -89,7 +89,7 @@ test('the actual integrated source verifier preserves the frozen copier oracle b
   const original=read(source),poison=Buffer.concat([original,Buffer.from('\n// controlled lower-owner source drift\n')]);
   assert.throws(()=>verify(contract,file=>file===source?poison:read(file)),error=>error.code===code&&error.message.includes('CURRENT_REFERENCE_'+source));
   const reads=trace.filter(file=>file===source).length;assert.ok(reads>1,'The current owner source is reread across the owned scope');let seen=0;
-  assert.throws(()=>verify(contract,file=>file===source&&++seen===reads?poison:read(file)),error=>error.code===code&&error.message.includes('CURRENT_REFERENCE_'+source));
+  assert.throws(()=>verify(contract,file=>file===source&&++seen===reads?poison:read(file)),error=>error.code===code&&error.message.includes('CURRENT_SOURCE_'+source));
   assert.equal(seen,reads,'Late source drift reaches the final real current-source fence');
   assert.throws(()=>verify(escapedParent,escapedReader),error=>error.code===code&&/CURRENT_CAPTURE_RUNTIME_REQUIRED$/.test(error.message));
   assert.deepEqual(read(source),original);

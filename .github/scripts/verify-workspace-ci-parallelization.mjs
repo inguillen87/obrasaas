@@ -455,7 +455,29 @@ const EXTENSION_PROOFS=[
  ['document-curve-ui','plans',62,'.vercel/private/plan-document-curve-evidence/current-browser.json','UI_DOCUMENT_CURVE']
 ];
 function sourcePath(value){if(typeof value!=='string'||value.length>500||/[\\\x00-\x1f]/.test(value)||value.startsWith('/')||value.split('/').some(part=>!part||part==='.'||part==='..'))deny('UNSAFE_SOURCE_PATH');return value;}
-function gitSource(root,expectedHead){if(!head(expectedHead))deny('EXPECTED_HEAD_INVALID');const cache=new Map();return filename=>{sourcePath(filename);if(!cache.has(filename))cache.set(filename,execFileSync('git',['show',expectedHead+':'+filename],{cwd:root,maxBuffer:8*1024*1024}));return cache.get(filename);};}
+function gitSource(root,expectedHead){if(!head(expectedHead))deny('EXPECTED_HEAD_INVALID');const committed=new Set(execFileSync('git',['ls-tree','-r','--name-only','-z',expectedHead],{cwd:root,maxBuffer:8*1024*1024}).toString('utf8').split('\0').filter(Boolean)),cache=new Map();return filename=>{sourcePath(filename);if(!committed.has(filename))return null;if(!cache.has(filename))cache.set(filename,execFileSync('git',['show',expectedHead+':'+filename],{cwd:root,maxBuffer:8*1024*1024}));return cache.get(filename);};}
+function gitSourceReaderSelftest(){
+ const checks=[],root='/owned-git-reader-unit-fixture',revision='a'.repeat(40),known='src/app/(identity)/cuenta/workspace-request-lifecycle.mjs',missing='src/app/(identity)/cuenta/workspace-request-lifecycle';
+ const unit=(name,run)=>{run();checks.push({name:'git-source-reader-'+name,result:'PASS',boundary:'pure gitSource function with closed Git stub; no filesystem, source authority or CI acceptance'});};
+ const fixture=(settings={})=>{
+  const calls=[],stored=Buffer.from('owned synthetic source bytes\n'),inventory=Buffer.from(known+'\0');
+  const closedExec=(command,args,options)=>{
+   assert.equal(command,'git');assert.equal(options.cwd,root);assert.equal(options.maxBuffer,8*1024*1024);assert.ok(Array.isArray(args));calls.push(args[0]);
+   if(args[0]==='ls-tree'){assert.equal(args.length,5);assert.equal(args[1],'-r');assert.equal(args[2],'--name-only');assert.equal(args[3],'-z');assert.equal(args[4],revision);if(settings.listError)throw settings.listError;return inventory;}
+   assert.equal(args[0],'show');assert.equal(args.length,2);assert.equal(args[1],revision+':'+known);if(settings.showError)throw settings.showError;return stored;
+  };
+  // The function under test is the real current lexical binding. Only its Git
+  // process boundary is replaced; path/head rejection functions remain real.
+  const create=runInNewContext('('+gitSource.toString()+')',{head,sourcePath,deny,Map,Set,Buffer,execFileSync:closedExec},{timeout:1000});return {create,calls,stored};
+ };
+ unit('confirmed-absent-without-show',()=>{const f=fixture(),reader=f.create(root,revision);assert.equal(reader(missing),null);assert.deepEqual(f.calls,['ls-tree']);});
+ unit('known-bytes-and-existing-cache',()=>{const f=fixture(),reader=f.create(root,revision);assert.equal(reader(known),f.stored);assert.equal(reader(known),f.stored);assert.deepEqual(f.calls,['ls-tree','show']);});
+ unit('unsafe-source-path-rejected',()=>{const f=fixture(),reader=f.create(root,revision);for(const file of ['../source.mjs','/source.mjs','src\\source.mjs','src//source.mjs','src/./source.mjs','src/../source.mjs','src/\nsource.mjs','x'.repeat(501),''])assert.throws(()=>reader(file),error=>error.code==='UNSAFE_SOURCE_PATH');assert.deepEqual(f.calls,['ls-tree']);});
+ unit('invalid-head-before-git',()=>{const f=fixture();assert.throws(()=>f.create(root,'not-a-commit'),error=>error.code==='EXPECTED_HEAD_INVALID');assert.deepEqual(f.calls,[]);});
+ unit('inventory-git-error-propagates',()=>{const sentinel=Object.assign(new Error('GIT_LIST_SENTINEL'),{code:'GIT_LIST_SENTINEL'}),f=fixture({listError:sentinel});assert.throws(()=>f.create(root,revision),error=>error===sentinel);assert.deepEqual(f.calls,['ls-tree']);});
+ unit('known-path-git-error-propagates',()=>{const sentinel=Object.assign(new Error('GIT_SHOW_SENTINEL'),{code:'GIT_SHOW_SENTINEL'}),f=fixture({showError:sentinel}),reader=f.create(root,revision);assert.throws(()=>reader(known),error=>error===sentinel);assert.throws(()=>reader(known),error=>error===sentinel);assert.deepEqual(f.calls,['ls-tree','show','show']);});
+ return checks;
+}
 function manifestDigest(references){return hash(canonical([...references].sort((a,b)=>a.path.localeCompare(b.path))));}
 function expectedSourceDigest(spec,readSource){if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');return manifestDigest(spec.sourceFiles.map(file=>{const bytes=readSource(file);if(!Buffer.isBuffer(bytes))deny('PROOF_SOURCE_BYTES');return {path:file,sha256:hash(bytes)};}));}
 const utf8=bytes=>{if(!Buffer.isBuffer(bytes))deny('PROOF_BYTES');const text=bytes.toString('utf8');if(!bytes.equals(Buffer.from(text)))deny('PROOF_ENCODING');return text;};
@@ -2525,13 +2547,17 @@ export function selftest(workflow,contract,root=process.cwd()){
 
 
  const selftestProgressToken015=selftestProgressStart("F1.artifact-and-retention-controls");
+ checks.push(...gitSourceReaderSelftest());
+ // Keep one fresh public gate call for this group. Artifact permutations below
+ // exercise the same pure decoder already owned by the authenticated F1 report;
+ // they do not cache, replace or claim current-source authentication.
  good('all-historical-optional-PNGs-absent-with-required-weekly-captures-present',()=>assert.equal(gate(input).state,'PASS'));
- if(contract.weeklyCypCurrentRevision)for(const screenshot of WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots){const n=clone(needs),r=JSON.parse(n.plans.outputs.provenance);r.files=r.files.filter(file=>file.path!==screenshot.path);delete r.manifestSha256;n.plans.outputs.provenance=JSON.stringify(seal(r));bad('weekly-retained-capture-omitted-'+screenshot.width,'PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING',()=>gate({...input,needs:n}));}
+ if(contract.weeklyCypCurrentRevision)for(const screenshot of WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots){const n=clone(needs),r=JSON.parse(n.plans.outputs.provenance);r.files=r.files.filter(file=>file.path!==screenshot.path);delete r.manifestSha256;n.plans.outputs.provenance=JSON.stringify(seal(r));badDecoder('weekly-retained-capture-omitted-'+screenshot.width,'PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING',()=>decodeJsonCase(n));}
  for(const lane of LANES)for(const pattern of contract.lanes[lane].optionalArtifactPatterns.filter(pattern=>!PORTFOLIO_ARTIFACTS.includes(pattern))){
   const n=clone(needs),r=JSON.parse(n[lane].outputs.provenance);
   r.files.push({path:pattern.replaceAll('*','fixture'),sha256:'4'.repeat(64),bytes:128});
   delete r.manifestSha256;n[lane].outputs.provenance=JSON.stringify(seal(r));
-  good('optional-PNG-present-'+lane,()=>assert.equal(gate({...input,needs:n}).state,'PASS'));
+  good('optional-PNG-present-'+lane,()=>assert.equal(decodeJsonCase(n).state,'PASS'));checks.at(-1).boundary=PURE_PROVENANCE_DECODER_BOUNDARY;
  }
  for(const lane of LANES)for(const filename of contract.lanes[lane].requiredRetainedEvidence.filter(filename=>!isPortfolioEvidence(filename))){
   const n=clone(needs),r=JSON.parse(n[lane].outputs.provenance);
@@ -2539,14 +2565,14 @@ export function selftest(workflow,contract,root=process.cwd()){
   if(!r.files.length){const owned=contract.lanes[lane].artifacts.find(pattern=>pattern.endsWith('/'));if(owned)r.files.push({path:owned+'diagnostic.json',sha256:'4'.repeat(64),bytes:128});}
   delete r.manifestSha256;n[lane].outputs.provenance=JSON.stringify(seal(r));
    const historicalEmpty=lane==='contracts'&&filename==='.vercel/private/biometric-real-model-proof.json';
-   bad((historicalEmpty?'missing-main-proof-with-other-artifact-':'missing-main-proof-')+lane+'-'+filename,r.files.length?'MISSING_REQUIRED_RETAINED_EVIDENCE':'EMPTY_EVIDENCE',()=>gate({...input,needs:n}));
-   if(historicalEmpty){const prior=clone(needs),empty=JSON.parse(prior[lane].outputs.provenance);empty.files=[];delete empty.manifestSha256;prior[lane].outputs.provenance=JSON.stringify(seal(empty));bad('missing-main-proof-'+lane+'-'+filename,'EMPTY_EVIDENCE',()=>gate({...input,needs:prior}));}
+   badDecoder((historicalEmpty?'missing-main-proof-with-other-artifact-':'missing-main-proof-')+lane+'-'+filename,r.files.length?'MISSING_REQUIRED_RETAINED_EVIDENCE':'EMPTY_EVIDENCE',()=>decodeJsonCase(n));
+   if(historicalEmpty){const prior=clone(needs),empty=JSON.parse(prior[lane].outputs.provenance);empty.files=[];delete empty.manifestSha256;prior[lane].outputs.provenance=JSON.stringify(seal(empty));badDecoder('missing-main-proof-'+lane+'-'+filename,'EMPTY_EVIDENCE',()=>decodeJsonCase(prior));}
  }
  for(const lane of LANES)for(const filename of contract.lanes[lane].requiredProducedEvidence){
   const n=clone(needs),r=JSON.parse(n[lane].outputs.provenance);
   r.producedNotUploaded=r.producedNotUploaded.filter(file=>file.path!==filename);
   delete r.manifestSha256;n[lane].outputs.provenance=JSON.stringify(seal(r));
-  bad('missing-produced-not-uploaded-'+filename,'MISSING_REQUIRED_PRODUCED_EVIDENCE',()=>gate({...input,needs:n}));
+  badDecoder('missing-produced-not-uploaded-'+filename,'MISSING_REQUIRED_PRODUCED_EVIDENCE',()=>decodeJsonCase(n));
  }
  altered('required-retained-list-omitted','RETAINED_EVIDENCE_CONTRACT',r=>{r.requiredRetainedEvidence.pop();});
  altered('required-produced-list-omitted','PRODUCED_EVIDENCE_CONTRACT',r=>{r.requiredProducedEvidence.pop();});
