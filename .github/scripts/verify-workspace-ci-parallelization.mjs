@@ -455,7 +455,27 @@ const EXTENSION_PROOFS=[
  ['document-curve-ui','plans',62,'.vercel/private/plan-document-curve-evidence/current-browser.json','UI_DOCUMENT_CURVE']
 ];
 function sourcePath(value){if(typeof value!=='string'||value.length>500||/[\\\x00-\x1f]/.test(value)||value.startsWith('/')||value.split('/').some(part=>!part||part==='.'||part==='..'))deny('UNSAFE_SOURCE_PATH');return value;}
-function gitSource(root,expectedHead){if(!head(expectedHead))deny('EXPECTED_HEAD_INVALID');const committed=new Set(execFileSync('git',['ls-tree','-r','--name-only','-z',expectedHead],{cwd:root,maxBuffer:8*1024*1024}).toString('utf8').split('\0').filter(Boolean)),cache=new Map();return filename=>{sourcePath(filename);if(!committed.has(filename))return null;if(!cache.has(filename))cache.set(filename,execFileSync('git',['show',expectedHead+':'+filename],{cwd:root,maxBuffer:8*1024*1024}));return cache.get(filename);};}
+function gitSource(root,expectedHead){
+ if(!head(expectedHead))deny('EXPECTED_HEAD_INVALID');
+ const committed=new Set(execFileSync('git',['ls-tree','-r','--name-only','-z',expectedHead],{cwd:root,maxBuffer:8*1024*1024}).toString('utf8').split('\0').filter(Boolean)),cache=new Map();
+ return filename=>{
+  sourcePath(filename);if(!committed.has(filename))return null;
+  if(!cache.has(filename)){
+   const object=expectedHead+':'+filename;let maxBuffer=8*1024*1024,metadataSize=null;
+   // Only this literal metadata object has a separate, explicitly bounded transport.
+   // Both commands address the same immutable commit:path; UI text limits are separate.
+   if(filename==='.github/workspace-acceptance-contract.json'){
+    const output=execFileSync('git',['cat-file','-s',object],{cwd:root,maxBuffer:128,windowsHide:true}).toString('utf8');
+    if(!/^(?:0|[1-9][0-9]*)\n$/.test(output))deny('GIT_SOURCE_METADATA_SIZE');
+    metadataSize=Number(output.slice(0,-1));if(!Number.isSafeInteger(metadataSize)||metadataSize>16*1024*1024)deny('GIT_SOURCE_METADATA_SIZE');maxBuffer=Math.max(1,metadataSize);
+   }
+   const value=execFileSync('git',['show',object],{cwd:root,maxBuffer});
+   if(metadataSize!==null){if(!Buffer.isBuffer(value)||value.length!==metadataSize)deny('GIT_SOURCE_METADATA_LENGTH');if(!value.equals(Buffer.from(value.toString('utf8'))))deny('GIT_SOURCE_METADATA_UTF8');}
+   cache.set(filename,value);
+  }
+  return cache.get(filename);
+ };
+}
 function gitSourceReaderSelftest(){
  const checks=[],root='/owned-git-reader-unit-fixture',revision='a'.repeat(40),known='src/app/(identity)/cuenta/workspace-request-lifecycle.mjs',missing='src/app/(identity)/cuenta/workspace-request-lifecycle';
  const unit=(name,run)=>{run();checks.push({name:'git-source-reader-'+name,result:'PASS',boundary:'pure gitSource function with closed Git stub; no filesystem, source authority or CI acceptance'});};
@@ -476,6 +496,28 @@ function gitSourceReaderSelftest(){
  unit('invalid-head-before-git',()=>{const f=fixture();assert.throws(()=>f.create(root,'not-a-commit'),error=>error.code==='EXPECTED_HEAD_INVALID');assert.deepEqual(f.calls,[]);});
  unit('inventory-git-error-propagates',()=>{const sentinel=Object.assign(new Error('GIT_LIST_SENTINEL'),{code:'GIT_LIST_SENTINEL'}),f=fixture({listError:sentinel});assert.throws(()=>f.create(root,revision),error=>error===sentinel);assert.deepEqual(f.calls,['ls-tree']);});
  unit('known-path-git-error-propagates',()=>{const sentinel=Object.assign(new Error('GIT_SHOW_SENTINEL'),{code:'GIT_SHOW_SENTINEL'}),f=fixture({showError:sentinel}),reader=f.create(root,revision);assert.throws(()=>reader(known),error=>error===sentinel);assert.throws(()=>reader(known),error=>error===sentinel);assert.deepEqual(f.calls,['ls-tree','show','show']);});
+
+ // Additional closed transport controls. The six existing reader controls above
+ // keep their original names and assertions; none is a source-authority claim.
+ const metadataFile='.github/workspace-acceptance-contract.json';
+ const metadataFixture=(settings={})=>{
+  const file=settings.file??metadataFile,calls=[],stored=settings.stored??Buffer.from('{"synthetic":true}\n');
+  const closedExec=(command,args,options)=>{
+   assert.equal(command,'git');assert.equal(options.cwd,root);calls.push(args[0]);
+   if(args[0]==='ls-tree'){assert.deepEqual(Array.from(args),['ls-tree','-r','--name-only','-z',revision]);assert.equal(options.maxBuffer,8*1024*1024);return Buffer.from(file+'\0');}
+   if(args[0]==='cat-file'){assert.equal(file,metadataFile);assert.deepEqual(Array.from(args),['cat-file','-s',revision+':'+file]);assert.equal(options.maxBuffer,128);if(settings.sizeError)throw settings.sizeError;return Buffer.from(settings.sizeText??String(settings.declaredSize??stored.length)+'\n');}
+   assert.deepEqual(Array.from(args),['show',revision+':'+file]);assert.equal(options.maxBuffer,file===metadataFile?Math.max(1,settings.declaredSize??stored.length):8*1024*1024);if(settings.showError)throw settings.showError;return stored;
+  };
+  const create=runInNewContext('('+gitSource.toString()+')',{head,sourcePath,deny,Map,Set,Buffer,execFileSync:closedExec},{timeout:1000});return{reader:create(root,revision),calls,stored,file};
+ };
+ unit('metadata-above-eight-MiB-uses-exact-bounded-object-size',()=>{for(const stored of [Buffer.alloc(0),Buffer.alloc(8*1024*1024+1,120),Buffer.alloc(16*1024*1024,120),Buffer.from([123,34,120,34,58,34,195,177,34,125,13,10])]){const f=metadataFixture({stored});assert.equal(f.reader(f.file),f.stored);assert.equal(f.reader(f.file),f.stored);assert.deepEqual(f.calls,['ls-tree','cat-file','show']);}});
+ unit('metadata-oversize-rejected-before-content-read',()=>{const f=metadataFixture({sizeText:String(16*1024*1024+1)+'\n'});assert.throws(()=>f.reader(f.file),error=>error.code==='GIT_SOURCE_METADATA_SIZE');assert.throws(()=>f.reader(f.file),error=>error.code==='GIT_SOURCE_METADATA_SIZE');assert.deepEqual(f.calls,['ls-tree','cat-file','cat-file']);});
+ unit('metadata-size-output-must-be-canonical',()=>{for(const sizeText of ['-1\n','01\n','1.5\n','1\r\n','1\nextra','not-a-size\n','9007199254740992\n','']){const f=metadataFixture({sizeText});assert.throws(()=>f.reader(f.file),error=>error.code==='GIT_SOURCE_METADATA_SIZE');assert.deepEqual(f.calls,['ls-tree','cat-file']);}});
+ unit('metadata-content-length-must-match-Git-size',()=>{const f=metadataFixture({declaredSize:99});assert.throws(()=>f.reader(f.file),error=>error.code==='GIT_SOURCE_METADATA_LENGTH');assert.throws(()=>f.reader(f.file),error=>error.code==='GIT_SOURCE_METADATA_LENGTH');assert.deepEqual(f.calls,['ls-tree','cat-file','show','cat-file','show']);});
+ unit('metadata-content-must-remain-exact-UTF8',()=>{const f=metadataFixture({stored:Buffer.from([255])});assert.throws(()=>f.reader(f.file),error=>error.code==='GIT_SOURCE_METADATA_UTF8');assert.throws(()=>f.reader(f.file),error=>error.code==='GIT_SOURCE_METADATA_UTF8');assert.deepEqual(f.calls,['ls-tree','cat-file','show','cat-file','show']);});
+ unit('metadata-size-Git-error-propagates',()=>{const sentinel=Object.assign(new Error('GIT_SIZE_SENTINEL'),{code:'GIT_SIZE_SENTINEL'}),f=metadataFixture({sizeError:sentinel});assert.throws(()=>f.reader(f.file),error=>error===sentinel);assert.throws(()=>f.reader(f.file),error=>error===sentinel);assert.deepEqual(f.calls,['ls-tree','cat-file','cat-file']);});
+ unit('metadata-show-Git-error-propagates-without-negative-cache',()=>{const sentinel=Object.assign(new Error('GIT_METADATA_SHOW_SENTINEL'),{code:'GIT_METADATA_SHOW_SENTINEL'}),f=metadataFixture({showError:sentinel});assert.throws(()=>f.reader(f.file),error=>error===sentinel);assert.throws(()=>f.reader(f.file),error=>error===sentinel);assert.deepEqual(f.calls,['ls-tree','cat-file','show','cat-file','show']);});
+ unit('metadata-exception-does-not-extend-to-neighbor-path',()=>{const sentinel=Object.assign(new Error('OUT_OF_PATH_EIGHT_MIB'),{code:'ENOBUFS'}),f=metadataFixture({file:metadataFile+'.copy',showError:sentinel});assert.throws(()=>f.reader(f.file),error=>error===sentinel);assert.deepEqual(f.calls,['ls-tree','show']);});
  return checks;
 }
 function manifestDigest(references){return hash(canonical([...references].sort((a,b)=>a.path.localeCompare(b.path))));}
