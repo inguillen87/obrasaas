@@ -39560,7 +39560,7 @@
       {
         "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
         "previousSha256": null,
-        "currentSha256": "1a29c5322fa25b6fca8d59a43f64ec035292f52bff7e383be784e8c798588a98"
+        "currentSha256": "8abf3bc1de5f09a3a34530e4eb5cfbcdab20c05e2b8ad63234f682df33b2aee3"
       },
       {
         "path": "tests/production-plan-budget-analyzer-http.test.mjs",
@@ -39630,7 +39630,7 @@
       {
         "path": "tests/production-whatsapp-feedback-workspace-ci.test.mjs",
         "previousSha256": "6604b797f3466aad51028091fcddbcf3de1c86e9fec78b895c8156047d3f6c67",
-        "currentSha256": "4464749fcd33f6f35e4d39fb02f1133ccdb56ad70cfaa9099080e3aa3b3ef0de"
+        "currentSha256": "4b3b96c7b9b6146b29a4cd043a7f3c82acf6d343a1b3cdc3e5a848aa8512715c"
       },
       {
         "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
@@ -39720,7 +39720,7 @@
       {
         "path": "scripts/verify-participants-ui.mjs",
         "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-        "currentSha256": "3d955706b8b48a5dbce38e93af53b85c5f4573f8cb4b6715a1d66ae64e685254"
+        "currentSha256": "69b550641c8ef786a695377f8a574a536eff0ff4feaaa4f6420f7d9136543759"
       },
       {
         "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -39800,12 +39800,12 @@
       {
         "path": ".github/scripts/verify-production-test-shards.py",
         "previousSha256": null,
-        "currentSha256": "2f0f7879666fa68ce91d29e2fce71f9c320e51e740f5907967ad20bef08fd1cb"
+        "currentSha256": "6294850f2040a76cf417f78c4930607deeaae7cdd585bcad7c7c16efb7e47591"
       },
       {
         "path": ".github/workflows/production-boundary.yml",
         "previousSha256": "072a3da3a12d25046584ffd1f5d4d2dc83879f0398291c182e21c4274f1ab2ea",
-        "currentSha256": "e7042bcb13af3b7b3a853a60e72aa86ca1021b1b41ee43bb2ce886646ada775f"
+        "currentSha256": "56ce6df5b673eddcc8b4d170d9f91669dd8d6455334e6b710175e344b06e9fca"
       },
       {
         "path": "api/_biometric_core.py",
@@ -39925,7 +39925,7 @@
       {
         "path": "scripts/verify-own-company-number-postgres.mjs",
         "previousSha256": "22fc50c349d97da323a47c91e3f64f58b6ce9df54042a17ee2fecb5c7d4bf2b0",
-        "currentSha256": "a7295bd908244e910e756acb7c1d48591445718ecc8d77b6d043c83cf0d69913"
+        "currentSha256": "21eeb88854837598afe911dd2b3f655b186d4bb1bea6af3d83249185a09f2141"
       },
       {
         "path": "scripts/verify-participant-civil-postgres.mjs",
@@ -40120,7 +40120,7 @@
       {
         "path": "src/proxy.js",
         "previousSha256": "0000111edc18de9181e16ebd12243dc585c563e196c43ad0027df6630d26efbb",
-        "currentSha256": "34835f86909997cb85248f80c50031aa4d76363a044ca7ac179efd471b6b9c2a"
+        "currentSha256": "ee30fdd1846c8342bdcbffb7d4eabee4151ae1bc49f36108dcdc565465282ef8"
       },
       {
         "path": "tests/fixtures/capture-quality-synthetic.mjs",
@@ -40295,7 +40295,7 @@
       {
         "path": "tests/production-participant-facial-consumer-modes.test.mjs",
         "previousSha256": null,
-        "currentSha256": "7437efb4389c11965232dd77ad8e8d066267a95483985010dabf1d06be7e08c7"
+        "currentSha256": "e640e8b521e1f4b4a6000f4fd6b242e6c965a78f141bed276a871fa5fe43adf4"
       },
       {
         "path": "tests/production-participant-facial-consumer-recovery.test.mjs",
@@ -64292,12 +64292,12 @@
         {
           "path": ".github/scripts/verify-production-test-shards.py",
           "previousSha256": null,
-          "currentSha256": "2f0f7879666fa68ce91d29e2fce71f9c320e51e740f5907967ad20bef08fd1cb"
+          "currentSha256": "6294850f2040a76cf417f78c4930607deeaae7cdd585bcad7c7c16efb7e47591"
         },
         {
           "path": ".github/workflows/production-boundary.yml",
           "previousSha256": "072a3da3a12d25046584ffd1f5d4d2dc83879f0398291c182e21c4274f1ab2ea",
-          "currentSha256": "e7042bcb13af3b7b3a853a60e72aa86ca1021b1b41ee43bb2ce886646ada775f"
+          "currentSha256": "56ce6df5b673eddcc8b4d170d9f91669dd8d6455334e6b710175e344b06e9fca"
         },
         {
           "path": "api/_biometric_core.py",
@@ -64417,7 +64417,7 @@
         {
           "path": "scripts/verify-own-company-number-postgres.mjs",
           "previousSha256": "22fc50c349d97da323a47c91e3f64f58b6ce9df54042a17ee2fecb5c7d4bf2b0",
-          "currentSha256": "a7295bd908244e910e756acb7c1d48591445718ecc8d77b6d043c83cf0d69913"
+          "currentSha256": "21eeb88854837598afe911dd2b3f655b186d4bb1bea6af3d83249185a09f2141"
         },
         {
           "path": "scripts/verify-participant-civil-postgres.mjs",
@@ -64612,7 +64612,7 @@
         {
           "path": "src/proxy.js",
           "previousSha256": "0000111edc18de9181e16ebd12243dc585c563e196c43ad0027df6630d26efbb",
-          "currentSha256": "34835f86909997cb85248f80c50031aa4d76363a044ca7ac179efd471b6b9c2a"
+          "currentSha256": "ee30fdd1846c8342bdcbffb7d4eabee4151ae1bc49f36108dcdc565465282ef8"
         },
         {
           "path": "tests/fixtures/capture-quality-synthetic.mjs",
@@ -64787,7 +64787,7 @@
         {
           "path": "tests/production-participant-facial-consumer-modes.test.mjs",
           "previousSha256": null,
-          "currentSha256": "7437efb4389c11965232dd77ad8e8d066267a95483985010dabf1d06be7e08c7"
+          "currentSha256": "e640e8b521e1f4b4a6000f4fd6b242e6c965a78f141bed276a871fa5fe43adf4"
         },
         {
           "path": "tests/production-participant-facial-consumer-recovery.test.mjs",
@@ -64974,7 +64974,7 @@
         {
           "path": "scripts/verify-participants-ui.mjs",
           "previousSha256": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-          "currentSha256": "3d955706b8b48a5dbce38e93af53b85c5f4573f8cb4b6715a1d66ae64e685254"
+          "currentSha256": "69b550641c8ef786a695377f8a574a536eff0ff4feaaa4f6420f7d9136543759"
         },
         {
           "path": "scripts/verify-plan-import-boundary.mjs",
@@ -65094,7 +65094,7 @@
         {
           "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
           "previousSha256": "3cd6cbb7c897ac8ac59f89975a2bc23756bdf94be6fba48cfa044ef2410d2b9a",
-          "currentSha256": "1a29c5322fa25b6fca8d59a43f64ec035292f52bff7e383be784e8c798588a98"
+          "currentSha256": "8abf3bc1de5f09a3a34530e4eb5cfbcdab20c05e2b8ad63234f682df33b2aee3"
         },
         {
           "path": "tests/production-plan-budget-expected-serialization.test.mjs",
@@ -65124,7 +65124,7 @@
         {
           "path": "tests/production-whatsapp-feedback-workspace-ci.test.mjs",
           "previousSha256": "4cbba761beac4b8a5d72560a20c5395ba50bc5cbcfd68000de96e5c20022e342",
-          "currentSha256": "4464749fcd33f6f35e4d39fb02f1133ccdb56ad70cfaa9099080e3aa3b3ef0de"
+          "currentSha256": "4b3b96c7b9b6146b29a4cd043a7f3c82acf6d343a1b3cdc3e5a848aa8512715c"
         },
         {
           "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
@@ -65172,13 +65172,13 @@
           "path": ".github/scripts/verify-production-test-shards.py",
           "status": "ADDED",
           "previousSha256": null,
-          "currentSha256": "2f0f7879666fa68ce91d29e2fce71f9c320e51e740f5907967ad20bef08fd1cb",
+          "currentSha256": "6294850f2040a76cf417f78c4930607deeaae7cdd585bcad7c7c16efb7e47591",
           "previousBytes": 0,
-          "currentBytes": 9046,
+          "currentBytes": 9052,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 0,
-              "currentText": "\"\"\"Observe native Node sharding; do not schedule, replace or reinterpret tests.\"\"\"\nimport hashlib\nimport json\nimport os\nfrom pathlib import Path\nimport re\nimport subprocess\nimport sys\nimport xml.etree.ElementTree as ET\n\nSCHEMA = \"production-boundary-shard.v1\"\nTOTAL = 8\nEXPECTED_COUNT = 379\nOUTPUT = \".vercel/private/production-boundary-unit-shard\"\nDOWNLOADS = \".vercel/private/production-boundary-unit-artifacts\"\nMANIFEST_KEYS = {\"schema\", \"head\", \"runId\", \"runAttempt\", \"shard\", \"total\", \"nodeVersion\", \"files\"}\nRECEIPT_KEYS = {\"entry\", \"pid\", \"sourceSha256\", \"startedAt\", \"exitCode\"}\nHEX = re.compile(r\"[0-9a-f]{64}\\Z\")\nTIME = re.compile(r\"\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z\\Z\")\nRECEIPT_NAME = re.compile(r\"entry-([1-9][0-9]*)-([0-9a-f]{64})\\.(start|exit)\\.json\\Z\")\n\n\nclass Denied(Exception):\n    def __init__(self, code):\n        self.code = code\n        super().__init__(code)\n\n\ndef need(condition, code):\n    if not condition:\n        raise Denied(code)\n\n\ndef digest(data):\n    return hashlib.sha256(data).hexdigest()\n\n\ndef unique_object(pairs):\n    result = {}\n    for key, value in pairs:\n        need(key not in result, \"JSON_DUPLICATE_KEY\")\n        result[key] = value\n    return result\n\n\ndef read_json(file):\n    need(file.is_file() and not file.is_symlink(), \"EVIDENCE_FILE\")\n    need(file.stat().st_size <= 262144, \"EVIDENCE_SIZE\")\n    try:\n        return json.loads(file.read_text(encoding=\"utf-8\"), object_pairs_hook=unique_object,\n                          parse_constant=lambda _: (_ for _ in ()).throw(Denied(\"JSON_CONSTANT\")))\n    except (ValueError, UnicodeError):\n        raise Denied(\"JSON_INVALID\") from None\n\n\ndef exact_keys(value, keys, code):\n    need(type(value) is dict and set(value) == keys, code)\n\n\ndef node_version():\n    value = subprocess.check_output([\"node\", \"--version\"], text=True).strip()\n    need(re.fullmatch(r\"v24\\.\\d+\\.\\d+\", value) is not None, \"NODE_VERSION\")\n    return value\n\n\ndef production_context(root, environ):\n    head = subprocess.check_output([\"git\", \"rev-parse\", \"HEAD\"], cwd=root, text=True).strip()\n    need(re.fullmatch(r\"[0-9a-f]{40}\", head) is not None and head == environ.get(\"GITHUB_SHA\"), \"HEAD\")\n    run_id, attempt = environ.get(\"GITHUB_RUN_ID\", \"\"), environ.get(\"GITHUB_RUN_ATTEMPT\", \"\")\n    need(re.fullmatch(r\"[1-9][0-9]*\", run_id) is not None and re.fullmatch(r\"[1-9][0-9]*\", attempt) is not None, \"RUN_ID\")\n    tracked = subprocess.check_output([\"git\", \"ls-files\", \"-z\", \"--\", \"tests/production-*.test.mjs\"], cwd=root).decode().split(\"\\0\")\n    entries = sorted(entry for entry in tracked if entry)\n    need(len(entries) == EXPECTED_COUNT and all(re.fullmatch(r\"tests/production-[^/]+\\.test\\.mjs\", entry) for entry in entries), \"INVENTORY_COUNT\")\n    disk = sorted(file.relative_to(root).as_posix() for file in (root / \"tests\").glob(\"production-*.test.mjs\"))\n    need(entries == disk, \"INVENTORY_DISK\")\n    changed = subprocess.run([\"git\", \"diff\", \"--quiet\", \"HEAD\", \"--\", \"tests/production-*.test.mjs\"], cwd=root, check=False)\n    need(changed.returncode == 0, \"INVENTORY_CHANGED\")\n    files = []\n    for entry in entries:\n        file = root / entry\n        need(file.is_file() and not file.is_symlink(), \"SOURCE_FILE\")\n        files.append({\"entry\": entry, \"sourceSha256\": digest(file.read_bytes())})\n    return {\"head\": head, \"runId\": run_id, \"runAttempt\": attempt, \"nodeVersion\": node_version(), \"files\": files}\n\n\ndef prepare(root, environ):\n    context = production_context(root, environ)\n    shard = environ.get(\"BOUNDARY_UNIT_SHARD\", \"\")\n    need(shard in {\"1\", \"2\", \"3\", \"4\", \"5\", \"6\", \"7\", \"8\"}, \"SHARD_ID\")\n    relative = environ.get(\"BOUNDARY_UNIT_OUTPUT\", OUTPUT)\n    need(relative == OUTPUT, \"OUTPUT_SCOPE\")\n    output = root / relative\n    output.mkdir(parents=True, exist_ok=False)\n    (output / \"entries\").mkdir()\n    manifest = {\"schema\": SCHEMA, **context, \"shard\": int(shard), \"total\": TOTAL}\n    with (output / \"manifest.json\").open(\"x\", encoding=\"utf-8\", newline=\"\\n\") as handle:\n        json.dump(manifest, handle, separators=(\",\", \":\"))\n        handle.write(\"\\n\")\n    return {\"ok\": True, \"prepared\": EXPECTED_COUNT, \"shard\": int(shard), \"total\": TOTAL}\n\n\ndef validate_junit(file):\n    need(file.is_file() and not file.is_symlink(), \"JUNIT_FILE\")\n    need(file.stat().st_size <= 33554432, \"JUNIT_SIZE\")\n    raw = file.read_bytes()\n    need(b\"<!DOCTYPE\" not in raw and b\"<!ENTITY\" not in raw, \"JUNIT_ENTITY\")\n    try:\n        tree = ET.fromstring(raw)\n    except ET.ParseError:\n        raise Denied(\"JUNIT_INVALID\") from None\n    need(tree.tag == \"testsuites\" and len(list(tree.iter(\"testcase\"))) > 0, \"JUNIT_SHAPE\")\n    need(not list(tree.iter(\"failure\")) and not list(tree.iter(\"error\")), \"JUNIT_FAILURE\")\n    need(all(suite.get(\"failures\", \"0\") == \"0\" and suite.get(\"errors\", \"0\") == \"0\"\n             for suite in tree.iter(\"testsuite\")), \"JUNIT_FAILURE\")\n\n\ndef artifact_name(context, shard):\n    return f\"production-unit-{context['runId']}-{context['runAttempt']}-{shard}\"\n\n\ndef validate_evidence(downloads, expected):\n    \"\"\"Pure evidence validation. CLI supplies its fresh exact379 Git context.\"\"\"\n    need(downloads.is_dir() and not downloads.is_symlink(), \"ARTIFACT_ROOT\")\n    names = {artifact_name(expected, shard) for shard in range(1, TOTAL + 1)}\n    need({file.name for file in downloads.iterdir()} == names, \"ARTIFACT_SET\")\n    expected_files = expected[\"files\"]\n    source_by_entry = {file[\"entry\"]: file[\"sourceSha256\"] for file in expected_files}\n    need(len(source_by_entry) == len(expected_files), \"EXPECTED_DUPLICATE\")\n    seen = set()\n    for shard in range(1, TOTAL + 1):\n        artifact = downloads / artifact_name(expected, shard)\n        need(artifact.is_dir() and not artifact.is_symlink(), \"ARTIFACT_DIRECTORY\")\n        need({file.name for file in artifact.iterdir()} == {\"manifest.json\", \"native.junit.xml\", \"entries\"}, \"ARTIFACT_CONTENTS\")\n        manifest = read_json(artifact / \"manifest.json\")\n        exact_keys(manifest, MANIFEST_KEYS, \"MANIFEST_SHAPE\")\n        need(manifest[\"schema\"] == SCHEMA and type(manifest[\"shard\"]) is int and manifest[\"shard\"] == shard\n             and type(manifest[\"total\"]) is int and manifest[\"total\"] == TOTAL, \"MANIFEST_SHARD\")\n        for key in (\"head\", \"runId\", \"runAttempt\", \"nodeVersion\"):\n            need(manifest[key] == expected[key], \"MANIFEST_\" + key.upper())\n        need(manifest[\"files\"] == expected_files, \"MANIFEST_FILES\")\n        entries_dir = artifact / \"entries\"\n        need(entries_dir.is_dir() and not entries_dir.is_symlink(), \"ENTRIES_DIRECTORY\")\n        pairs = {}\n        for file in entries_dir.iterdir():\n            match = RECEIPT_NAME.fullmatch(file.name)\n            need(match is not None, \"ENTRY_FILENAME\")\n            receipt = read_json(file)\n            exact_keys(receipt, RECEIPT_KEYS, \"ENTRY_SHAPE\")\n            entry, pid = receipt[\"entry\"], receipt[\"pid\"]\n            need(type(entry) is str and entry in source_by_entry, \"ENTRY_EXTRA\")\n            need(type(pid) is int and pid > 0 and str(pid) == match[1], \"ENTRY_PID\")\n            need(digest(entry.encode()) == match[2], \"ENTRY_PATH_ID\")\n            need(type(receipt[\"sourceSha256\"]) is str and HEX.fullmatch(receipt[\"sourceSha256\"])\n                 and receipt[\"sourceSha256\"] == source_by_entry[entry], \"ENTRY_SOURCE\")\n            need(type(receipt[\"startedAt\"]) is str and TIME.fullmatch(receipt[\"startedAt\"]), \"ENTRY_TIME\")\n            if match[3] == \"start\":\n                need(receipt[\"exitCode\"] is None, \"ENTRY_START\")\n            else:\n                need(type(receipt[\"exitCode\"]) is int and receipt[\"exitCode\"] == 0, \"ENTRY_EXIT\")\n            key = (entry, pid)\n            pair = pairs.setdefault(key, {})\n            need(match[3] not in pair, \"ENTRY_DUPLICATE_RECEIPT\")\n            pair[match[3]] = receipt\n        need(len(pairs) > 0, \"SHARD_EMPTY\")\n        for (entry, _), pair in pairs.items():\n            need(set(pair) == {\"start\", \"exit\"}, \"ENTRY_PAIR\")\n            need({key: value for key, value in pair[\"start\"].items() if key != \"exitCode\"}\n                 == {key: value for key, value in pair[\"exit\"].items() if key != \"exitCode\"}, \"ENTRY_PAIR\")\n            need(entry not in seen, \"ENTRY_DUPLICATE\")\n            seen.add(entry)\n        validate_junit(artifact / \"native.junit.xml\")\n    need(seen == set(source_by_entry), \"ENTRY_MISSING\")\n    return {\"ok\": True, \"shards\": TOTAL, \"entries\": len(seen), \"disjoint\": True}\n\n\ndef main():\n    need(len(sys.argv) == 2 and sys.argv[1] in {\"prepare\", \"verify\"}, \"COMMAND\")\n    root = Path.cwd()\n    if sys.argv[1] == \"prepare\":\n        return prepare(root, os.environ)\n    expected = production_context(root, os.environ)\n    result = validate_evidence(root / DOWNLOADS, expected)\n    need(production_context(root, os.environ) == expected, \"SOURCE_CHANGED_DURING_VERIFY\")\n    return result\n\n\nif __name__ == \"__main__\":\n    try:\n        print(json.dumps(main(), separators=(\",\", \":\")))\n    except Denied as denied:\n        print(json.dumps({\"ok\": False, \"code\": denied.code}), file=sys.stderr)\n        sys.exit(1)\n",
+              "currentText": "\"\"\"Observe native Node sharding; do not schedule, replace or reinterpret tests.\"\"\"\nimport hashlib\nimport json\nimport os\nfrom pathlib import Path\nimport re\nimport subprocess\nimport sys\nimport xml.etree.ElementTree as ET\n\nSCHEMA = \"production-boundary-shard.v1\"\nTOTAL = 19\nEXPECTED_COUNT = 379\nOUTPUT = \".vercel/private/production-boundary-unit-shard\"\nDOWNLOADS = \".vercel/private/production-boundary-unit-artifacts\"\nMANIFEST_KEYS = {\"schema\", \"head\", \"runId\", \"runAttempt\", \"shard\", \"total\", \"nodeVersion\", \"files\"}\nRECEIPT_KEYS = {\"entry\", \"pid\", \"sourceSha256\", \"startedAt\", \"exitCode\"}\nHEX = re.compile(r\"[0-9a-f]{64}\\Z\")\nTIME = re.compile(r\"\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z\\Z\")\nRECEIPT_NAME = re.compile(r\"entry-([1-9][0-9]*)-([0-9a-f]{64})\\.(start|exit)\\.json\\Z\")\n\n\nclass Denied(Exception):\n    def __init__(self, code):\n        self.code = code\n        super().__init__(code)\n\n\ndef need(condition, code):\n    if not condition:\n        raise Denied(code)\n\n\ndef digest(data):\n    return hashlib.sha256(data).hexdigest()\n\n\ndef unique_object(pairs):\n    result = {}\n    for key, value in pairs:\n        need(key not in result, \"JSON_DUPLICATE_KEY\")\n        result[key] = value\n    return result\n\n\ndef read_json(file):\n    need(file.is_file() and not file.is_symlink(), \"EVIDENCE_FILE\")\n    need(file.stat().st_size <= 262144, \"EVIDENCE_SIZE\")\n    try:\n        return json.loads(file.read_text(encoding=\"utf-8\"), object_pairs_hook=unique_object,\n                          parse_constant=lambda _: (_ for _ in ()).throw(Denied(\"JSON_CONSTANT\")))\n    except (ValueError, UnicodeError):\n        raise Denied(\"JSON_INVALID\") from None\n\n\ndef exact_keys(value, keys, code):\n    need(type(value) is dict and set(value) == keys, code)\n\n\ndef node_version():\n    value = subprocess.check_output([\"node\", \"--version\"], text=True).strip()\n    need(re.fullmatch(r\"v24\\.\\d+\\.\\d+\", value) is not None, \"NODE_VERSION\")\n    return value\n\n\ndef production_context(root, environ):\n    head = subprocess.check_output([\"git\", \"rev-parse\", \"HEAD\"], cwd=root, text=True).strip()\n    need(re.fullmatch(r\"[0-9a-f]{40}\", head) is not None and head == environ.get(\"GITHUB_SHA\"), \"HEAD\")\n    run_id, attempt = environ.get(\"GITHUB_RUN_ID\", \"\"), environ.get(\"GITHUB_RUN_ATTEMPT\", \"\")\n    need(re.fullmatch(r\"[1-9][0-9]*\", run_id) is not None and re.fullmatch(r\"[1-9][0-9]*\", attempt) is not None, \"RUN_ID\")\n    tracked = subprocess.check_output([\"git\", \"ls-files\", \"-z\", \"--\", \"tests/production-*.test.mjs\"], cwd=root).decode().split(\"\\0\")\n    entries = sorted(entry for entry in tracked if entry)\n    need(len(entries) == EXPECTED_COUNT and all(re.fullmatch(r\"tests/production-[^/]+\\.test\\.mjs\", entry) for entry in entries), \"INVENTORY_COUNT\")\n    disk = sorted(file.relative_to(root).as_posix() for file in (root / \"tests\").glob(\"production-*.test.mjs\"))\n    need(entries == disk, \"INVENTORY_DISK\")\n    changed = subprocess.run([\"git\", \"diff\", \"--quiet\", \"HEAD\", \"--\", \"tests/production-*.test.mjs\"], cwd=root, check=False)\n    need(changed.returncode == 0, \"INVENTORY_CHANGED\")\n    files = []\n    for entry in entries:\n        file = root / entry\n        need(file.is_file() and not file.is_symlink(), \"SOURCE_FILE\")\n        files.append({\"entry\": entry, \"sourceSha256\": digest(file.read_bytes())})\n    return {\"head\": head, \"runId\": run_id, \"runAttempt\": attempt, \"nodeVersion\": node_version(), \"files\": files}\n\n\ndef prepare(root, environ):\n    context = production_context(root, environ)\n    shard = environ.get(\"BOUNDARY_UNIT_SHARD\", \"\")\n    need(shard in {str(index) for index in range(1, TOTAL + 1)}, \"SHARD_ID\")\n    relative = environ.get(\"BOUNDARY_UNIT_OUTPUT\", OUTPUT)\n    need(relative == OUTPUT, \"OUTPUT_SCOPE\")\n    output = root / relative\n    output.mkdir(parents=True, exist_ok=False)\n    (output / \"entries\").mkdir()\n    manifest = {\"schema\": SCHEMA, **context, \"shard\": int(shard), \"total\": TOTAL}\n    with (output / \"manifest.json\").open(\"x\", encoding=\"utf-8\", newline=\"\\n\") as handle:\n        json.dump(manifest, handle, separators=(\",\", \":\"))\n        handle.write(\"\\n\")\n    return {\"ok\": True, \"prepared\": EXPECTED_COUNT, \"shard\": int(shard), \"total\": TOTAL}\n\n\ndef validate_junit(file):\n    need(file.is_file() and not file.is_symlink(), \"JUNIT_FILE\")\n    need(file.stat().st_size <= 33554432, \"JUNIT_SIZE\")\n    raw = file.read_bytes()\n    need(b\"<!DOCTYPE\" not in raw and b\"<!ENTITY\" not in raw, \"JUNIT_ENTITY\")\n    try:\n        tree = ET.fromstring(raw)\n    except ET.ParseError:\n        raise Denied(\"JUNIT_INVALID\") from None\n    need(tree.tag == \"testsuites\" and len(list(tree.iter(\"testcase\"))) > 0, \"JUNIT_SHAPE\")\n    need(not list(tree.iter(\"failure\")) and not list(tree.iter(\"error\")), \"JUNIT_FAILURE\")\n    need(all(suite.get(\"failures\", \"0\") == \"0\" and suite.get(\"errors\", \"0\") == \"0\"\n             for suite in tree.iter(\"testsuite\")), \"JUNIT_FAILURE\")\n\n\ndef artifact_name(context, shard):\n    return f\"production-unit-{context['runId']}-{context['runAttempt']}-{shard}\"\n\n\ndef validate_evidence(downloads, expected):\n    \"\"\"Pure evidence validation. CLI supplies its fresh exact379 Git context.\"\"\"\n    need(downloads.is_dir() and not downloads.is_symlink(), \"ARTIFACT_ROOT\")\n    names = {artifact_name(expected, shard) for shard in range(1, TOTAL + 1)}\n    need({file.name for file in downloads.iterdir()} == names, \"ARTIFACT_SET\")\n    expected_files = expected[\"files\"]\n    source_by_entry = {file[\"entry\"]: file[\"sourceSha256\"] for file in expected_files}\n    need(len(source_by_entry) == len(expected_files), \"EXPECTED_DUPLICATE\")\n    seen = set()\n    for shard in range(1, TOTAL + 1):\n        artifact = downloads / artifact_name(expected, shard)\n        need(artifact.is_dir() and not artifact.is_symlink(), \"ARTIFACT_DIRECTORY\")\n        need({file.name for file in artifact.iterdir()} == {\"manifest.json\", \"native.junit.xml\", \"entries\"}, \"ARTIFACT_CONTENTS\")\n        manifest = read_json(artifact / \"manifest.json\")\n        exact_keys(manifest, MANIFEST_KEYS, \"MANIFEST_SHAPE\")\n        need(manifest[\"schema\"] == SCHEMA and type(manifest[\"shard\"]) is int and manifest[\"shard\"] == shard\n             and type(manifest[\"total\"]) is int and manifest[\"total\"] == TOTAL, \"MANIFEST_SHARD\")\n        for key in (\"head\", \"runId\", \"runAttempt\", \"nodeVersion\"):\n            need(manifest[key] == expected[key], \"MANIFEST_\" + key.upper())\n        need(manifest[\"files\"] == expected_files, \"MANIFEST_FILES\")\n        entries_dir = artifact / \"entries\"\n        need(entries_dir.is_dir() and not entries_dir.is_symlink(), \"ENTRIES_DIRECTORY\")\n        pairs = {}\n        for file in entries_dir.iterdir():\n            match = RECEIPT_NAME.fullmatch(file.name)\n            need(match is not None, \"ENTRY_FILENAME\")\n            receipt = read_json(file)\n            exact_keys(receipt, RECEIPT_KEYS, \"ENTRY_SHAPE\")\n            entry, pid = receipt[\"entry\"], receipt[\"pid\"]\n            need(type(entry) is str and entry in source_by_entry, \"ENTRY_EXTRA\")\n            need(type(pid) is int and pid > 0 and str(pid) == match[1], \"ENTRY_PID\")\n            need(digest(entry.encode()) == match[2], \"ENTRY_PATH_ID\")\n            need(type(receipt[\"sourceSha256\"]) is str and HEX.fullmatch(receipt[\"sourceSha256\"])\n                 and receipt[\"sourceSha256\"] == source_by_entry[entry], \"ENTRY_SOURCE\")\n            need(type(receipt[\"startedAt\"]) is str and TIME.fullmatch(receipt[\"startedAt\"]), \"ENTRY_TIME\")\n            if match[3] == \"start\":\n                need(receipt[\"exitCode\"] is None, \"ENTRY_START\")\n            else:\n                need(type(receipt[\"exitCode\"]) is int and receipt[\"exitCode\"] == 0, \"ENTRY_EXIT\")\n            key = (entry, pid)\n            pair = pairs.setdefault(key, {})\n            need(match[3] not in pair, \"ENTRY_DUPLICATE_RECEIPT\")\n            pair[match[3]] = receipt\n        need(len(pairs) > 0, \"SHARD_EMPTY\")\n        for (entry, _), pair in pairs.items():\n            need(set(pair) == {\"start\", \"exit\"}, \"ENTRY_PAIR\")\n            need({key: value for key, value in pair[\"start\"].items() if key != \"exitCode\"}\n                 == {key: value for key, value in pair[\"exit\"].items() if key != \"exitCode\"}, \"ENTRY_PAIR\")\n            need(entry not in seen, \"ENTRY_DUPLICATE\")\n            seen.add(entry)\n        validate_junit(artifact / \"native.junit.xml\")\n    need(seen == set(source_by_entry), \"ENTRY_MISSING\")\n    return {\"ok\": True, \"shards\": TOTAL, \"entries\": len(seen), \"disjoint\": True}\n\n\ndef main():\n    need(len(sys.argv) == 2 and sys.argv[1] in {\"prepare\", \"verify\"}, \"COMMAND\")\n    root = Path.cwd()\n    if sys.argv[1] == \"prepare\":\n        return prepare(root, os.environ)\n    expected = production_context(root, os.environ)\n    result = validate_evidence(root / DOWNLOADS, expected)\n    need(production_context(root, os.environ) == expected, \"SOURCE_CHANGED_DURING_VERIFY\")\n    return result\n\n\nif __name__ == \"__main__\":\n    try:\n        print(json.dumps(main(), separators=(\",\", \":\")))\n    except Denied as denied:\n        print(json.dumps({\"ok\": False, \"code\": denied.code}), file=sys.stderr)\n        sys.exit(1)\n",
               "previousText": ""
             }
           ]
@@ -65627,27 +65627,27 @@
           "path": ".github/workflows/production-boundary.yml",
           "status": "MODIFIED",
           "previousSha256": "072a3da3a12d25046584ffd1f5d4d2dc83879f0398291c182e21c4274f1ab2ea",
-          "currentSha256": "e7042bcb13af3b7b3a853a60e72aa86ca1021b1b41ee43bb2ce886646ada775f",
+          "currentSha256": "56ce6df5b673eddcc8b4d170d9f91669dd8d6455334e6b710175e344b06e9fca",
           "previousBytes": 13492,
-          "currentBytes": 16392,
+          "currentBytes": 16436,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 389,
-              "currentText": "  unit:\n    runs-on: ubuntu-latest\n    timeout-minutes: 45\n    strategy:\n      fail-fast: false\n      matrix:\n        shard: [1, 2, 3, 4, 5, 6, 7, 8]\n    services:\n      postgres:\n        image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193\n        env:\n          POSTGRES_USER: cutover_test\n          POSTGRES_PASSWORD: cutover_test\n          POSTGRES_DB: obrasaas_cutover_ci\n        ports: ['5432:5432']\n        options: >-\n          --health-cmd \"pg_isready -U cutover_test -d obrasaas_cutover_ci\"\n          --health-interval 5s --health-timeout 5s --health-retries 12\n    env:\n      NEXT_TELEMETRY_DISABLED: '1'\n      CUTOVER_TEST_DISPOSABLE: '1'\n      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci\n      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only\n      BOUNDARY_UNIT_OUTPUT: .vercel/private/production-boundary-unit-shard\n      BOUNDARY_UNIT_SHARD: ${{ matrix.shard }}\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          persist-credentials: false\n          fetch-depth: 0\n      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020\n        with:\n          node-version: 24\n          package-manager-cache: false\n      - run: npm ci --no-audit --no-fund\n      - name: Prepare exact production test manifest\n        run: python3 .github/scripts/verify-production-test-shards.py prepare\n      - name: Native production test shard\n        run: >-\n          node --test --test-shard=${{ matrix.shard }}/8\n          --import=./.github/scripts/observe-production-test-entry.mjs\n          --test-reporter=tap --test-reporter=junit\n          --test-reporter-destination=stdout\n          --test-reporter-destination=.vercel/private/production-boundary-unit-shard/native.junit.xml\n          tests/production-*.test.mjs\n      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\n        if: always()\n        with:\n          name: production-unit-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}\n          path: .vercel/private/production-boundary-unit-shard/\n          if-no-files-found: error\n          include-hidden-files: true\n          retention-days: 7\n",
+              "currentText": "  unit:\n    runs-on: ubuntu-latest\n    timeout-minutes: 45\n    strategy:\n      fail-fast: false\n      matrix:\n        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]\n    services:\n      postgres:\n        image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193\n        env:\n          POSTGRES_USER: cutover_test\n          POSTGRES_PASSWORD: cutover_test\n          POSTGRES_DB: obrasaas_cutover_ci\n        ports: ['5432:5432']\n        options: >-\n          --health-cmd \"pg_isready -U cutover_test -d obrasaas_cutover_ci\"\n          --health-interval 5s --health-timeout 5s --health-retries 12\n    env:\n      NEXT_TELEMETRY_DISABLED: '1'\n      CUTOVER_TEST_DISPOSABLE: '1'\n      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci\n      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only\n      BOUNDARY_UNIT_OUTPUT: .vercel/private/production-boundary-unit-shard\n      BOUNDARY_UNIT_SHARD: ${{ matrix.shard }}\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n        with:\n          persist-credentials: false\n          fetch-depth: 0\n      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020\n        with:\n          node-version: 24\n          package-manager-cache: false\n      - run: npm ci --no-audit --no-fund\n      - name: Prepare exact production test manifest\n        run: python3 .github/scripts/verify-production-test-shards.py prepare\n      - name: Native production test shard\n        run: >-\n          node --test --test-shard=${{ matrix.shard }}/19\n          --import=./.github/scripts/observe-production-test-entry.mjs\n          --test-reporter=tap --test-reporter=junit\n          --test-reporter-destination=stdout\n          --test-reporter-destination=.vercel/private/production-boundary-unit-shard/native.junit.xml\n          tests/production-*.test.mjs\n      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a\n        if: always()\n        with:\n          name: production-unit-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}\n          path: .vercel/private/production-boundary-unit-shard/\n          if-no-files-found: error\n          include-hidden-files: true\n          retention-days: 7\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 2709,
+              "currentOffsetCharacters": 2753,
               "currentText": "    needs: unit\n    if: ${{ always() }}\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 3563,
+              "currentOffsetCharacters": 3607,
               "currentText": "      - name: Require all native production test shards\n        env:\n          UNIT_RESULT: ${{ needs.unit.result }}\n        run: test \"$UNIT_RESULT\" = success\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 4049,
+              "currentOffsetCharacters": 4093,
               "currentText": "uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333\n        with:\n          pattern: production-unit-${{ github.run_id }}-${{ github.run_attempt }}-*\n          path: .vercel/private/production-boundary-unit-artifacts\n          merge-multiple: false\n          digest-mismatch: error\n      - name: Verify exact native shard entry coverage\n        run: python3 .github/scripts/verify-production-test-shards.py verify",
               "previousText": "run: node --test tests/production-*.test.mjs"
             }
@@ -66827,9 +66827,9 @@
           "path": "scripts/verify-own-company-number-postgres.mjs",
           "status": "MODIFIED",
           "previousSha256": "22fc50c349d97da323a47c91e3f64f58b6ce9df54042a17ee2fecb5c7d4bf2b0",
-          "currentSha256": "a7295bd908244e910e756acb7c1d48591445718ecc8d77b6d043c83cf0d69913",
+          "currentSha256": "21eeb88854837598afe911dd2b3f655b186d4bb1bea6af3d83249185a09f2141",
           "previousBytes": 101045,
-          "currentBytes": 102380,
+          "currentBytes": 104220,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 0,
@@ -66855,6 +66855,36 @@
               "currentOffsetCharacters": 28101,
               "currentText": "Revisión manual'])last=await execute(choice(last,title),{reply:last.messageId});\n  for(let i=0;i<3;i++)last=await execute({type:'image',image:{id:'150000099',mime_type:'image/png'}},{reply:last.messageId});last=await execute(choice(last,'Presentar identidad'),{reply:last.messageId});assert.equal(last.result.businessApplied,true);\n  const captured=await worker(id);assert.equal(captured.metadata.participant.kyc.status,'PENDING_REVIEW');assert.equal(captured.metadata.participant.status,'ACTIVE');assert.equal(captured.metadata.participant.kyc.biometricConsent.noticeVersion,'participant-private-biometric-v3');assert.equal(captured.metadata.participant.kyc.biometricConsent.allowed,false);assert.equal(captured.metadata.participant.kyc.biometricMode,'MANUAL');assert.equal(captured.metadata.participant.kyc.facialPrecommit.timing,'MANUAL_NO_FACIAL_COMPARISON');assert.equal(captured.metadata.participant.kycChatChallenge.status,'COMPLETED');assert.equal(blob.puts(),3);assert.equal(downloads,3);\n  const unchangedCapture=await snapshot(id);last=await execute('ESTADO');assert.equal(last.result.replySent,true);assert.equal((await recorded(last.eventId)).reactiveKycStatus.status,'PENDING_REVIEW');assert.equal(await snapshot(id),unchangedCapture);assert.equal(membershipReads,1);\n  checks.push('OWN-real-ACTIVATE-v2-grant-invited-email-guidance-independent-JOIN-before-current-v3-manual-capture-pending-review'",
               "previousText": "Sin comparación facial'])last=await execute(choice(last,title),{reply:last.messageId});\n  for(let i=0;i<3;i++)last=await execute({type:'image',image:{id:'150000099',mime_type:'image/png'}},{reply:last.messageId});last=await execute(choice(last,'Guardar identidad'),{reply:last.messageId});assert.equal(last.result.businessApplied,true);\n  const captured=await worker(id);assert.equal(captured.metadata.participant.kyc.status,'PENDING_ACCOUNT_CLAIM');assert.equal(captured.metadata.participant.kycChatChallenge.status,'COMPLETED');assert.equal(blob.puts(),3);assert.equal(downloads,3);\n  const unchangedCapture=await snapshot(id);last=await execute('ESTADO');assert.equal(last.result.replySent,true);assert.equal((await recorded(last.eventId)).reactiveKycStatus.status,'PENDING_ACCOUNT_CLAIM');assert.equal(await snapshot(id),unchangedCapture);assert.equal(membershipReads,0);\n  checks.push('OWN-real-ACTIVATE-v2-grant-independent-intake-ADMIN-signed-capture-and-current-pending-account-status-without-account-or-grants');\n  currentAccount={userId:'user_OwnReactiveAccepted',email};const invitation=captured.metadata.participant.invitation;invitations.get(invitation.id).state='accepted';const joined=await participant.join({authenticated:true,verification:'clerk-production-jwt',userId:currentAccount.userId,organizationId:'org_A',organizationRole:'org:member'},{invitationId:invitation.id,operationId:randomUUID()},{accept:true});assert.equal(joined.joined,true"
+            },
+            {
+              "currentOffsetCharacters": 78461,
+              "currentText": ",leaseExpiryControl=null",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 79556,
+              "currentText": "\n  if(leaseExpiryControl?.eventId===eventId){\n   assert.equal(leaseExpiryControl.armed,true);\n   if(leaseExpiryControl.client===null)leaseExpiryControl.client=client;\n   else assert.equal(leaseExpiryControl.client,client,'The controlled ownership await must retain its one canonical transaction client');\n  }\n  ",
+              "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 82221,
+              "currentText": "Open the short source-lease window only after the actual ownership GET\n // entered with the nominal original lease. This preserves the real PostgreSQL\n // clock crossing without racing all preparation before owned_app",
+              "previousText": "Expire the original event's short lease during a real ownership await,\n // while the opaque provider capability's separate sixty-second lease live"
+            },
+            {
+              "currentOffsetCharacters": 83297,
+              "currentText": "leaseExpiryControl={eventId:shortLeaseEvent,armed:true,client:null}",
+              "previousText": "const shortened=(await pool.query(`UPDATE \"WebhookEvent\" SET \"leaseExpiresAt\"=LEAST(\"leaseExpiresAt\",clock_timestamp()+interval '1000 milliseconds') WHERE id=$1 AND status='PENDING' AND \"leaseToken\"=$2 RETURNING id,\"leaseToken\",\"leaseExpiresAt\",clock_timestamp() AS now`,[shortLeaseEvent,shortLeaseOriginal.leaseToken])).rows[0];\n  assert.equal(shortened.id,shortLeaseEvent);assert.equal(shortened.leaseToken,shortLeaseOriginal.leaseToken);shortLeaseDeadline=shortened.leaseExpiresAt;assert.ok(shortLeaseDeadline.getTime()>shortened.now.getTime());assert.ok(shortLeaseDeadline.getTime()<=shortLeaseOriginal.leaseExpiresAt.getTime());assert.ok(shortLeaseDeadline.getTime()-shortened.now.getTime()<=1000)"
+            },
+            {
+              "currentOffsetCharacters": 83489,
+              "currentText": "shortLeaseObserved=true;\n  assert.equal(leaseExpiryControl?.eventId,shortLeaseEvent);assert.equal(leaseExpiryControl.armed,true);const client=leaseExpiryControl.client;assert.ok(client&&typeof client.query==='function');\n  // runtimeIdentity owns this event's FOR UPDATE. Using another pool connection\n  // for UPDATE here would wait on this very transaction and self-deadlock.\n  const entered=(await client.query(`SELECT id,status::text AS status,\"leaseToken\",\"leaseExpiresAt\",clock_timestamp() AS now FROM \"WebhookEvent\" WHERE id=$1`,[shortLeaseEvent])).rows[0];\n  assert.equal(entered.id,shortLeaseEvent);assert.equal(entered.status,'PENDING');assert.equal(entered.leaseToken,shortLeaseOriginal.leaseToken);assert.equal(entered.leaseExpiresAt.getTime(),shortLeaseOriginal.leaseExpiresAt.getTime());assert.ok(entered.now.getTime()<shortLeaseOriginal.leaseExpiresAt.getTime(),'The ownership GET must begin before the unchanged nominal source deadline');\n  const shortened=(await client.query(`UPDATE \"WebhookEvent\" SET \"leaseExpiresAt\"=LEAST(\"leaseExpiresAt\",clock_timestamp()+interval '1000 milliseconds') WHERE id=$1 AND status='PENDING' AND \"leaseToken\"=$2 AND \"leaseExpiresAt\"=$3 RETURNING id,\"leaseToken\",\"leaseExpiresAt\",clock_timestamp() AS now`,[shortLeaseEvent,shortLeaseOriginal.leaseToken,shortLeaseOriginal.leaseExpiresAt])).rows[0];\n  assert.equal(shortened.id,shortLeaseEvent);assert.equal(shortened.leaseToken,shortLeaseOriginal.leaseToken);shortLeaseDeadline=shortened.leaseExpiresAt;assert.ok(shortLeaseDeadline.getTime()>shortened.now.getTime());assert.ok(shortLeaseDeadline.getTime()<=shortLeaseOriginal.leaseExpiresAt.getTime());assert.ok(shortLeaseDeadline.getTime()-shortened.now.getTime()<=1000);\n  await client.query(`SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM ($1::timestamptz-clock_timestamp())))+0.01)`,[shortLeaseDeadline]);\n  const observed=(await client",
+              "previousText": "const entered=(await pool.query('SELECT clock_timestamp() AS now')).rows[0].now;assert.ok(entered.getTime()<shortLeaseDeadline.getTime(),'The ownership GET must begin before the original shortened source deadline');shortLeaseObserved=true;\n  await pool.query(`SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM ($1::timestamptz-clock_timestamp())))+0.01)`,[shortLeaseDeadline]);\n  const observed=(await pool"
+            },
+            {
+              "currentOffsetCharacters": 86135,
+              "currentText": "leaseExpiryControl=null;}\n // The send transaction rolls its shortened deadline back. Processor failure\n // cleanup then clears the source lease in a separate transaction. Require\n // that actual cleanup before claiming an immediate retry can observe outbox.\n const shortLeaseAfterFailure=(await pool.query(`SELECT status::text AS status,\"lastError\",\"leaseToken\",\"leaseExpiresAt\" FROM \"WebhookEvent\" WHERE id=$1`,[shortLeaseEvent])).rows[0];\n assert.deepEqual(shortLeaseAfterFailure,{status:'PENDING',lastError:'META_CUSTOMER_INBOX_LEASE_CHANGED',leaseToken:null,leaseExpiresAt:null});",
+              "previousText": "}"
             }
           ]
         },
@@ -67337,9 +67367,9 @@
           "path": "scripts/verify-participants-ui.mjs",
           "status": "MODIFIED",
           "previousSha256": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-          "currentSha256": "3d955706b8b48a5dbce38e93af53b85c5f4573f8cb4b6715a1d66ae64e685254",
+          "currentSha256": "69b550641c8ef786a695377f8a574a536eff0ff4feaaa4f6420f7d9136543759",
           "previousBytes": 124573,
-          "currentBytes": 134242,
+          "currentBytes": 134377,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 1677,
@@ -67367,102 +67397,107 @@
               "previousText": "=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAAAAAA6fptVAAAACklEQVR4nGNgAAAAAgABSK+kcQAAAABJRU5ErkJggg==','base64'),picturePath=path.join(fixture,'synthetic.png');writeFileSync(picturePath,picture)"
             },
             {
-              "currentOffsetCharacters": 16783,
+              "currentOffsetCharacters": 9540,
+              "currentText": "\n const handle=await page.waitForFunction(text=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===text&&!button.disabled&&!button.closest('[hidden]'))||false,{timeout:15000},label);\n try{\n  const element=handle.asElement();assert.ok(element,'A test action must be an element: '+label);\n  await page.evaluate(node=>{for(let parent=node.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;},handle);\n  assert.equal(await handle.evaluate(button=>button.isConnected&&!button.disabled&&!button.closest('[hidden]')),true,'A test action must stay connected, enabled and unhidden: '+label);\n  assert.equal(await handle.evaluate(button=>button.checkVisibility()),true,'A test action must be visible: '+label);\n  await element.click();\n }finally{await handle.dispose();}\n",
+              "previousText": "await page.waitForFunction(text=>[...document.querySelectorAll('button')].some(button=>button.textContent.trim()===text&&!button.disabled&&!button.closest('[hidden]')),{timeout:15000},label);const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===text&&!button.disabled&&!button.closest('[hidden]')),label);await page.evaluate(node=>{for(let parent=node.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;},handle);assert.equal(await handle.evaluate(button=>button.checkVisibility()),true,'A test action must be visible: '+label);await handle.asElement().click();await handle.dispose();"
+            },
+            {
+              "currentOffsetCharacters": 16918,
               "currentText": " const contextChangeRace=['late-private-image','late-private-file'].includes(mode);\n let heldNewActorRead=null,markNewActorRead;const newActorReadStarted=new Promise(resolve=>{markNewActorRead=resolve;});\n const waitNewActorRead=async()=>{let timer;try{await Promise.race([newActorReadStarted,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('The new actor canonical GET was not intercepted within 15 seconds')),15000);})]);}finally{clearTimeout(timer);}assert.ok(heldNewActorRead);};\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 19629,
+              "currentOffsetCharacters": 19764,
               "currentText": "query:url.search,projectId:url.searchParams.get('projectId'),workerId:url.searchParams.get('workerId'),imageId:url.searchParams.get('imageId'),",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 22969,
+              "currentOffsetCharacters": 23104,
               "currentText": "const body={scope:requestScope,projectId:denyRead&&mode==='review-load-crossed'?'project-other':projectId,canManage:!self,canInvite:!self,canManageOfficeRoles:false,existingAccounts:[],records:[requestScope===scope?row:{...row,name:'Otro actor de ensayo',invitation:null}],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE}};\n  if(contextChangeRace&&requestScope!==scope){assert.equal(request.method(),'GET');assert.equal(requestScope,'b'.repeat(64));assert.equal(requests.at(-1).actor,'C');assert.equal(url.pathname,'/api/identity/participants');assert.equal(url.searchParams.get('projectId'),projectId);assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(heldNewActorRead,null,'Only one new-context canonical read is expected before explicit continuation');requests.at(-1).resolution='HELD_NEW_CONTEXT';heldNewActorRead={request,body,index:requests.length-1};markNewActorRead();return;}\n  await request.respond({status:200,contentType:'application/json',body:JSON.stringify(body",
               "previousText": "await request.respond({status:200,contentType:'application/json',body:JSON.stringify({scope:requestScope,projectId:denyRead&&mode==='review-load-crossed'?'project-other':projectId,canManage:!self,canInvite:!self,canManageOfficeRoles:false,existingAccounts:[],records:[requestScope===scope?row:{...row,name:'Otro actor de ensayo',invitation:null}],nextCursor:null,privacyNotice:{version:PARTICIPANT_NOTICE_VERSION,text:PARTICIPANT_NOTICE}}"
             },
             {
-              "currentOffsetCharacters": 30860,
+              "currentOffsetCharacters": 30995,
               "currentText": "waitNewActorRead();await ",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 31973,
+              "currentOffsetCharacters": 32108,
               "currentText": "waitNewActorRead();await ",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 33571,
+              "currentOffsetCharacters": 33706,
               "currentText": "if(contextChangeRace){assert.ok(heldNewActorRead);assert.equal(await page.$$eval('button',buttons=>buttons.find(button=>button.textContent.trim()==='Consultar participantes')?.disabled),true,'The new actor canonical read must remain busy while the old private callback resolves');}\n  else ",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 34656,
+              "currentOffsetCharacters": 34791,
               "currentText": "...(contextChangeRace?{requests:requests.map(fact=>({...fact}))}:{}),",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 35446,
+              "currentOffsetCharacters": 35581,
               "currentText": "  if(contextChangeRace){\n   const held=heldNewActorRead;assert.ok(held);await held.request.respond({status:200,contentType:'application/json',body:JSON.stringify(held.body)});requests[held.index].resolution='RELEASED_NEW_CONTEXT';heldNewActorRead=null;\n   await wait(page,'Otro actor de ensayo');await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.trim()==='Consultar participantes'&&!button.disabled));\n   const current=await page.evaluate(()=>({cards:document.querySelectorAll('article').length,forms:document.querySelectorAll('form').length,images:document.querySelectorAll('img').length,text:document.body.innerText,urls:window.__privateUrls,revoked:window.__revokedPrivateUrls}));\n   assert.equal(current.cards,1,'The new authorized context must render its own profile');assert.equal(current.forms,0);assert.equal(current.images,0,'The late old-context callback must not attach a private image to the new profile');assert.ok(!current.text.includes('Persona de ensayo')&&!current.text.includes('synthetic-late-private-bytes'));assert.deepEqual(current.urls,visible.urls,'The old private callback must not allocate an object URL after unmount');assert.ok(current.urls.every(url=>current.revoked.includes(url)));assert.equal(posts.length,0);assert.deepEqual(receiptQueries,[]);\n   const newReads=requests.filter(fact=>fact.actor==='C');assert.equal(newReads.length,1);assert.deepEqual(newReads[0],{method:'GET',path:'/api/identity/participants',query:'?'+new URLSearchParams({projectId,scope:'b'.repeat(64)}),projectId,workerId:null,imageId:null,operationId:null,scope:'b'.repeat(64),actor:'C',resolution:'RELEASED_NEW_CONTEXT'});\n   const privateReads=requests.filter(fact=>fact.imageId!==null);assert.equal(privateReads.length,mode==='late-private-image'?1:0);assert.ok(privateReads.every(fact=>fact.actor==='A'&&fact.scope===scope&&fact.projectId===projectId));\n   accessObservations.push({width,mode,stage:'new-authorized-context-after-old-private-callback',cards:current.cards,forms:current.forms,images:current.images,posts:posts.length,requests:requests.map(fact=>({...fact})),oldPrivateUrlsRevoked:true,newPrivateUrlAllocated:false,storage:await privateStorage(page,0)});\n  }\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 56888,
+              "currentOffsetCharacters": 57023,
               "currentText": " let identityPhase='ORIGINAL_A';const identityRequests=[],changedIdentityReads=[];\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 57407,
+              "currentOffsetCharacters": 57542,
               "currentText": "if(identityPhase==='CHANGED_C_READ_ONLY'){\n   assert.ok(['identity-cancel','request-cancel'].includes(mode));assert.equal(request.method(),'GET');assert.equal(url.pathname,'/api/identity/participants');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('projectId'),projectId);assert.equal(url.searchParams.get('scope'),'b'.repeat(64));assert.equal(request.postData(),undefined);assert.match(request.headers().authorization||'',/^Bearer synthetic-active-org-C-[a-f0-9-]{36}-\\d+$/);\n  }else assert.match(request.headers().authorization||'',/^Bearer synthetic-active-org-A-[a-f0-9-]{36}-\\d+$/);assert.ok(request.headers().cookie.includes('__session=synthetic-other-tab-org-B'));bearers.push(request.headers().authorization);let body,status=200;\n  if(['identity-cancel','request-cancel'].includes(mode))identityRequests.push({phase:identityPhase,path:url.pathname,method:request.method(),query:Object.fromEntries(url.searchParams)});\n  if(identityPhase==='CHANGED_C_READ_ONLY'){\n   assert.equal(changedIdentityReads.length,0,'The replacement identity performs exactly one initial read');changedIdentityReads.push({path:url.pathname,method:request.method(),projectId:url.searchParams.get('projectId'),scope:url.searchParams.get('scope'),responseStatus:403});\n   // The replacement identity has no configured access to the old project.\n   // Only its exact fresh GET is allowed; no command or old bearer is accepted.\n   await request.respond({status:403,contentType:'application/json',body:JSON.stringify({code:'PARTICIPANT_ACCESS_REQUIRED'}),headers:{'Cache-Control':'no-store'}});return;\n  }",
               "previousText": "assert.match(request.headers().authorization||'',/^Bearer synthetic-active-org-A-[a-f0-9-]{36}-\\d+$/);assert.ok(request.headers().cookie.includes('__session=synthetic-other-tab-org-B'));bearers.push(request.headers().authorization);let body,status=200;"
             },
             {
-              "currentOffsetCharacters": 72385,
+              "currentOffsetCharacters": 72520,
               "currentText": "// These review cases start from the automatic consultation; a second initial GET would advance their controlled refresh phases.\n if(reviewRefreshModes.includes(mode)){await wait(page,'Persona de ensayo');assert.equal(reads,1,'Review refresh starts from one automatic consultation');}else ",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 80881,
+              "currentOffsetCharacters": 81016,
               "currentText": "ssert.equal(await frontInput.evaluate(input=>input.disabled),false,'The visible identity screen must own an active capture input');await frontInput.uploadFile(undersizedPath);await wait(page,'La imagen es demasiado pequeña.');assert.equal(await page.$('fieldset[aria-label=\"Frente del documento\"] img'),null,'An undersized image must never become an acceptable preview');assert.equal(posts.length,0,'A rejected local image must not post identity data');a",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 92635,
+              "currentOffsetCharacters": 92770,
               "currentText": "RequestCount=(window.__heldRequestCount||0)+1;window.__held",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 93192,
+              "currentOffsetCharacters": 93327,
               "currentText": "identityPhase='CHANGED_C_READ_ONLY';",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 93689,
+              "currentOffsetCharacters": 93824,
               "currentText": "wait(page,'No hay un acceso activo');assert.deepEqual(changedIdentityReads,[{path:'/api/identity/participants',method:'GET',projectId,scope:'b'.repeat(64),responseStatus:403}]);\n   await new Promise(done=>setTimeout(done,100));assert.equal(posts.length,0);assert.equal((await page.$$('article')).length,0);\n   if(mode==='request-cancel'){assert.equal(await page.evaluate(()=>window.__heldRequestCount),1,'No second old/new-identity POST may be hidden by the controlled fetch hold');assert.match(await page.evaluate(()=>window.__heldBearer),/^Bearer synthetic-active-org-A-[a-f0-9-]{36}-\\d+$/);}\n   assert.equal(identityRequests.filter(row=>row.phase==='CHANGED_C_READ_ONLY').length,1);assert.ok(identityRequests.every(row=>row.method==='GET'),'No cancellation-mode command reached HTTP interception');\n   writeFileSync(path.join(evidence,mode+'-'+width+'-authority-requests.json'),JSON.stringify({mode,width,requests:identityRequests,oldMutationPosts:posts.length,heldOldPostCount:mode==='request-cancel'?await page.evaluate(()=>window.__heldRequestCount):0,replacementActorReply:403},null,2));\n   ",
               "previousText": "new Promise(done=>setTimeout(done,100));assert.equal(posts.length,0);assert.equal((await page.$$('article')).length,0);"
             },
             {
-              "currentOffsetCharacters": 104405,
+              "currentOffsetCharacters": 104540,
               "currentText": "await page.waitForFunction(workerId=>{const profile=document.querySelector('[data-participant-profile]'),primary=profile?.querySelector('[data-onboarding-primary]');return profile?.dataset.participantProfile===workerId&&primary instanceof HTMLButtonElement&&primary.checkVisibility()&&!primary.disabled;},{timeout:15000},row.id);\n  const primary=await page.$('[data-onboarding-primary]');if(width<768)await primary.tap();else{await primary.focus();assert.equal(await primary.evaluate(button=>document.activeElement===button),true,'The enabled onboarding action must own keyboard focus before Enter'",
               "previousText": "const primary=await page.$('[data-onboarding-primary]');if(width<768)await primary.tap();else{await primary.focus("
             },
             {
-              "currentOffsetCharacters": 108815,
+              "currentOffsetCharacters": 108950,
               "currentText": " async function selectProfile(workerId){\n  await page.waitForFunction(id=>{const select=[...document.querySelectorAll('select')].find(el=>el.labels?.[0]?.textContent.includes('Perfil de esta obra'));return Boolean(select&&!select.disabled&&[...select.options].some(option=>option.value===id&&!option.disabled));},{timeout:15000},workerId);\n  const handle=await page.evaluateHandle(()=>[...document.querySelectorAll('select')].find(el=>el.labels?.[0]?.textContent.includes('Perfil de esta obra')));\n  try{\n   assert.equal(await handle.evaluate(select=>select.checkVisibility()&&!select.disabled),true,'Changing profile must use a visible enabled selector');\n   assert.deepEqual(await handle.asElement().select(workerId),[workerId]);\n  }finally{await handle.dispose();}\n  await page.waitForFunction(id=>document.querySelector('[data-participant-profile]')?.dataset.participantProfile===id,{timeout:15000},workerId);\n }\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 113870,
+              "currentOffsetCharacters": 114005,
               "currentText": "selectProfile(other.id",
               "previousText": "page.evaluate(()=>{const el=[...document.querySelectorAll('select')].find(e=>e.labels?.[0]?.textContent.includes('Perfil de esta obra'));el.value='worker-second';el.dispatchEvent(new Event('change',{bubbles:true}));}"
             },
             {
-              "currentOffsetCharacters": 115193,
+              "currentOffsetCharacters": 115328,
               "currentText": "selectProfile(other.id",
               "previousText": "page.evaluate(()=>{const el=[...document.querySelectorAll('select')].find(e=>e.labels?.[0]?.textContent.includes('Perfil de esta obra'));el.value='worker-second';el.dispatchEvent(new Event('change',{bubbles:true}));}"
             },
             {
-              "currentOffsetCharacters": 126617,
+              "currentOffsetCharacters": 126752,
               "currentText": "// Real browser pixels must satisfy the same local exposure, detail and size checks as a selected file.\n // This deterministic fixture makes no claim to contain a document, a face or a verified identity.\n const maker=await browser.newPage();try{\n  const images=await maker.evaluate(()=>{const canvas=document.createElement('canvas');canvas.width=480;canvas.height=320;const context=canvas.getContext('2d'),pixels=context.createImageData(480,320);let seed=41;for(let index=0;index<pixels.data.length;index+=4){for(let channel=0;channel<3;channel++){seed=(seed*1664525+1013904223)>>>0;pixels.data[index+channel]=seed>>>24;}pixels.data[index+3]=255;}context.putImageData(pixels,0,0);const valid=canvas.toDataURL('image/png').split(',')[1];canvas.width=1;canvas.height=1;context.fillStyle='#888';context.fillRect(0,0,1,1);return{valid,undersized:canvas.toDataURL('image/png').split(',')[1]};});\n  picture=Buffer.from(images.valid,'base64');assert.ok(picture.length<1024*1024,'The readable fixture must preserve its original PNG bytes');assert.equal(picture.readUInt32BE(16),480);assert.equal(picture.readUInt32BE(20),320);writeFileSync(picturePath,picture);writeFileSync(undersizedPath,Buffer.from(images.undersized,'base64'));\n }finally{await maker.close();}\n if(focusedScenario){for(const width of selectedWidths)await (nextStepModes.includes(focusedScenario)?nextStepScenario(width,focusedScenario):['office','self','self-attendance-conflict'].includes(focusedScenario)?scenario(width,focusedScenario):backModes.includes(focusedScenario)?documentBackScenario(width,focusedScenario):accountModes.includes(focusedScenario)?accountDiscoveryScenario(width,focusedScenario):safetyModes.includes(focusedScenario)?safetyScenario(width,focusedScenario):revisionModes.includes(focusedScenario)||reviewRefresh",
               "previousText": "if(focusedScenario){for(const width of selectedWidths)await (nextStepModes.includes(focusedScenario)?nextStepScenario(width,focusedScenario):['office','self-attendance-conflict'].includes(focusedScenario)?scenario(width,focusedScenario):backModes.includes(focusedScenario)?documentBackScenario(width,focusedScenario):accountModes.includes(focusedScenario)?accountDiscoveryScenario(width,focusedScenario):safetyModes.includes(focusedScenario)?safetyScenario(width,focusedScenario):revision"
             }
@@ -69147,9 +69182,9 @@
           "path": "src/proxy.js",
           "status": "MODIFIED",
           "previousSha256": "0000111edc18de9181e16ebd12243dc585c563e196c43ad0027df6630d26efbb",
-          "currentSha256": "34835f86909997cb85248f80c50031aa4d76363a044ca7ac179efd471b6b9c2a",
+          "currentSha256": "ee30fdd1846c8342bdcbffb7d4eabee4151ae1bc49f36108dcdc565465282ef8",
           "previousBytes": 3575,
-          "currentBytes": 3734,
+          "currentBytes": 3888,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 563,
@@ -69157,9 +69192,14 @@
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 2330,
-              "currentText": " || platformPilotRoute(path,request.method)",
+              "currentOffsetCharacters": 905,
+              "currentText": "const consumptionEvidenceRoute=(path,method)=>path==='/api/identity/consumption-evidence'&&method==='GET';\n",
               "previousText": ""
+            },
+            {
+              "currentOffsetCharacters": 2191,
+              "currentText": "consumptionEvidenceRoute(path,request.method)||officeReviewRoute(path,request.method)||(verifiedWorkspaceRoutes.has(path)&&(!['/api/identity/plan-import','/api/identity/project-preparation'].includes(path)||['GET','POST'].includes(request.method)));\n  if (identityRoute(path) || workspaceRoute || platformPilotRoute(path,request.method)",
+              "previousText": "officeReviewRoute(path,request.method)||(verifiedWorkspaceRoutes.has(path)&&(!['/api/identity/plan-import','/api/identity/project-preparation'].includes(path)||['GET','POST'].includes(request.method)));\n  if (identityRoute(path) || workspaceRoute"
             }
           ]
         },
@@ -70537,13 +70577,13 @@
           "path": "tests/production-participant-facial-consumer-modes.test.mjs",
           "status": "ADDED",
           "previousSha256": null,
-          "currentSha256": "7437efb4389c11965232dd77ad8e8d066267a95483985010dabf1d06be7e08c7",
+          "currentSha256": "e640e8b521e1f4b4a6000f4fd6b242e6c965a78f141bed276a871fa5fe43adf4",
           "previousBytes": 0,
-          "currentBytes": 6967,
+          "currentBytes": 7097,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 0,
-              "currentText": "import assert from 'node:assert/strict';import test from 'node:test';import {actualModule,sourceText,realUiHelpers} from './fixtures/participant-facial-consumer-source.mjs';\nconst policy=await actualModule('src/lib/participant-policy.mjs'),conversation=await actualModule('src/lib/meta-kyc-conversation.mjs'),notices=await actualModule('src/lib/participant-kyc-notice-links.mjs'),oldConversation=await actualModule('tests/fixtures/participant-facial-legacy-conversation.mjs');\nconst PNG='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jNwAAAABJRU5ErkJggg==',scope='a'.repeat(64),version='participant-private-biometric-v3',operationId='00000000-0000-4000-8000-000000000001';\nconst body=()=>({operationId,projectId:'project1',scope,workerId:'worker1',revision:'2026-10-22T12:00:00.000001',noticeVersion:'participant-kyc-v1',consent:true,front:PNG,selfie:PNG,biometricNoticeVersion:version,biometricConsent:false,biometricMode:'MANUAL'});\nconst choose=(mod,p,index,eventId)=>mod.planMetaKycConversation({state:p.state,message:{type:'interactive',interactive:{list_reply:{id:'kyc:'+p.state.nonce+':'+index}}},eventId});\ntest('actual candidate policy requires v3 personal mode and exact consent pairing',()=>{for(const mode of ['MANUAL','ASSISTED']){const input={...body(),biometricMode:mode,biometricConsent:mode==='ASSISTED'},parsed=policy.participantKycInput(input);assert.equal(parsed.biometricMode,mode);assert.equal(parsed.biometricConsent,mode==='ASSISTED');}for(const change of [x=>delete x.biometricMode,x=>x.biometricMode='AUTO',x=>x.biometricConsent=true,x=>{x.biometricMode='ASSISTED';x.biometricConsent=false;}]){const input=body();change(input);assert.throws(()=>policy.participantKycInput(input));}});\ntest('manual successor requires explicit v3 MANUAL and a distinct valid original UUID',()=>{const x={...body(),biometricManualFromOperationId:'00000000-0000-4000-8000-000000000002'};assert.equal(policy.participantKycInput(x).biometricManualFromOperationId,x.biometricManualFromOperationId);for(const original of [operationId,'invalid'])assert.throws(()=>policy.participantKycInput({...x,biometricManualFromOperationId:original}));assert.throws(()=>policy.participantKycInput({...x,biometricMode:'ASSISTED',biometricConsent:true}));});\ntest('legacy policy requests remain accepted without mode and reject a v3-only field',()=>{for(const v of ['participant-private-biometric-v1','participant-private-biometric-v2']){const x={...body(),biometricNoticeVersion:v};delete x.biometricMode;const parsed=policy.participantKycInput(x);assert.equal(parsed.biometricNoticeVersion,v);assert.equal(Object.hasOwn(parsed,'biometricMode'),false);assert.throws(()=>policy.participantKycInput({...x,biometricMode:'MANUAL'}));assert.throws(()=>policy.participantKycInput({...x,biometricManualFromOperationId:'00000000-0000-4000-8000-000000000002'}));}});\ntest('v1/v2 actual candidate conversation begins and consent choices stay byte-identical',()=>{for(const analysisConsentVersion of [undefined,1,2])for(const captureImageSetVersion of [undefined,2]){let a=conversation.beginMetaKycConversation('event1',{analysisConsentVersion,captureImageSetVersion}),b=oldConversation.beginMetaKycConversation('event1',{analysisConsentVersion,captureImageSetVersion});assert.deepEqual(a,b);for(let i=2;i<7;i++){if(!['CONSENT','BACK_CONSENT','OCR','BIOMETRIC'].includes(a.state.step))break;a=choose(conversation,a,0,'event'+i);b=choose(oldConversation,b,0,'event'+i);assert.deepEqual(a,b);}}});\ntest('new WA v3 requires a deliberate MANUAL or ASSISTED choice and rejects a contradictory sealed state',()=>{for(const [index,mode]of [[0,'ASSISTED'],[1,'MANUAL']]){let p=conversation.beginMetaKycConversation('event1',{captureImageSetVersion:2,analysisConsentVersion:3});assert.equal(p.state.biometricMode,null);assert.equal(p.state.biometricConsent,false);for(let i=2;i<5;i++)p=choose(conversation,p,0,'event'+i);assert.equal(p.state.step,'BIOMETRIC');assert.doesNotMatch(p.reply.body,/OpenAI|Hugging|API|SFace|MiniFAS/);p=choose(conversation,p,index,'event5');assert.equal(p.state.step,'FRONT');assert.equal(p.state.biometricMode,mode);assert.equal(p.state.biometricConsent,mode==='ASSISTED');assert.throws(()=>conversation.planMetaKycConversation({state:{...p.state,biometricConsent:mode!=='ASSISTED'},message:{type:'text',text:{body:'ESTADO'}},eventId:'event6'}));}});\ntest('v3 notice links preserve the immutable v2 summary and expose a neutral before-save notice',()=>{const legacy=awaitBaselineSummary();assert.equal(notices.participantIdentityNoticeSummary('participant-private-biometric-v2'),legacy);const url=notices.participantIdentityNoticeUrl(version);assert.equal(new URL(url).searchParams.get('aviso'),version);assert.match(notices.participantIdentityNoticeSummary(version),/antes de guardarlas/);assert.doesNotMatch(notices.participantIdentityNoticeSummary(version),/OpenAI|Hugging|API|SFace|MiniFAS/);});\nfunction awaitBaselineSummary(){return 'La comparación privada del frente y tu selfie es opcional e independiente de la lectura del documento. Antes de elegir, leé el aviso completo: https://obrasaas.com/privacidad/identidad?aviso=participant-private-biometric-v2\\n\\nAl elegir «Con comparación facial» confirmás que leíste el aviso y autorizás el inicio automático al completar esta presentación. Podés elegir «Sin comparación facial» y continuar con revisión manual.\\n\\nEl resultado es orientativo: no certifica identidad ni prueba de vida y no concede permisos. Si el servicio no está disponible, queda pendiente.';}\ntest('actual pure UI helpers keep unselected v3 invalid and preserve photos while changing mode',()=>{const {participantFacialModeValid:valid,participantFacialModePatch:patch}=realUiHelpers(),input={...body(),front:'front-RAM',selfie:'selfie-RAM',back:'back-RAM',biometricMode:null};assert.equal(valid(input),false);for(const mode of ['MANUAL','ASSISTED']){const next={...input,...patch(input,mode)};assert.equal(valid(next),true);assert.equal(next.front,input.front);assert.equal(next.selfie,input.selfie);assert.equal(next.back,input.back);}assert.equal(patch({...input,biometricNoticeVersion:'participant-private-biometric-v2'},'MANUAL'),null);assert.equal(patch(input,'AUTO'),null);});\ntest('web offers only three capture kinds, requires a mode and asks for a solo face',()=>{const source=sourceText('src/app/(identity)/cuenta/participant-kyc-capture.js');assert.equal((source.match(/<KycPhotoPreparation kind=/g)||[]).length,3);assert.match(source,/Mostrá sólo tu rostro, de frente y con buena luz/);assert.match(source,/No sostengas el documento/);assert.match(source,/type=\"radio\" name=\"biometric-mode\"/);assert.match(sourceText('src/app/(identity)/cuenta/participant-panel.js'),/!participantFacialModeValid\\(p\\)/);assert.equal((source.match(/getUserMedia/g)||[]).length,(sourceText('src/app/(identity)/cuenta/participant-kyc-capture.js').match(/getUserMedia/g)||[]).length);});\n",
+              "currentText": "import assert from 'node:assert/strict';import test from 'node:test';import {actualModule,sourceText,realUiHelpers} from './fixtures/participant-facial-consumer-source.mjs';\nconst policy=await actualModule('src/lib/participant-policy.mjs'),conversation=await actualModule('src/lib/meta-kyc-conversation.mjs'),notices=await actualModule('src/lib/participant-kyc-notice-links.mjs'),oldConversation=await actualModule('tests/fixtures/participant-facial-legacy-conversation.mjs');\nconst PNG='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jNwAAAABJRU5ErkJggg==',scope='a'.repeat(64),version='participant-private-biometric-v3',operationId='00000000-0000-4000-8000-000000000001';\nconst body=()=>({operationId,projectId:'project1',scope,workerId:'worker1',revision:'2026-10-22T12:00:00.000001',noticeVersion:'participant-kyc-v1',consent:true,front:PNG,selfie:PNG,biometricNoticeVersion:version,biometricConsent:false,biometricMode:'MANUAL'});\nconst choose=(mod,p,index,eventId)=>mod.planMetaKycConversation({state:p.state,message:{type:'interactive',interactive:{list_reply:{id:'kyc:'+p.state.nonce+':'+index}}},eventId});\ntest('actual candidate policy requires v3 personal mode and exact consent pairing',()=>{for(const mode of ['MANUAL','ASSISTED']){const input={...body(),biometricMode:mode,biometricConsent:mode==='ASSISTED'},parsed=policy.participantKycInput(input);assert.equal(parsed.biometricMode,mode);assert.equal(parsed.biometricConsent,mode==='ASSISTED');}for(const change of [x=>delete x.biometricMode,x=>x.biometricMode='AUTO',x=>x.biometricConsent=true,x=>{x.biometricMode='ASSISTED';x.biometricConsent=false;}]){const input=body();change(input);assert.throws(()=>policy.participantKycInput(input));}});\ntest('manual successor requires explicit v3 MANUAL and a distinct valid original UUID',()=>{const x={...body(),biometricManualFromOperationId:'00000000-0000-4000-8000-000000000002'};assert.equal(policy.participantKycInput(x).biometricManualFromOperationId,x.biometricManualFromOperationId);for(const original of [operationId,'invalid'])assert.throws(()=>policy.participantKycInput({...x,biometricManualFromOperationId:original}));assert.throws(()=>policy.participantKycInput({...x,biometricMode:'ASSISTED',biometricConsent:true}));});\ntest('legacy policy requests remain accepted without mode and reject a v3-only field',()=>{for(const v of ['participant-private-biometric-v1','participant-private-biometric-v2']){const x={...body(),biometricNoticeVersion:v};delete x.biometricMode;const parsed=policy.participantKycInput(x);assert.equal(parsed.biometricNoticeVersion,v);assert.equal(Object.hasOwn(parsed,'biometricMode'),false);assert.throws(()=>policy.participantKycInput({...x,biometricMode:'MANUAL'}));assert.throws(()=>policy.participantKycInput({...x,biometricManualFromOperationId:'00000000-0000-4000-8000-000000000002'}));}});\ntest('v1/v2 actual candidate conversation begins and consent choices stay byte-identical',()=>{for(const analysisConsentVersion of [undefined,1,2])for(const captureImageSetVersion of [undefined,2]){let a=conversation.beginMetaKycConversation('event1',{analysisConsentVersion,captureImageSetVersion}),b=oldConversation.beginMetaKycConversation('event1',{analysisConsentVersion,captureImageSetVersion});assert.deepEqual(a,b);for(let i=2;i<7;i++){if(!['CONSENT','BACK_CONSENT','OCR','BIOMETRIC'].includes(a.state.step))break;a=choose(conversation,a,0,'event'+i);b=choose(oldConversation,b,0,'event'+i);assert.deepEqual(a,b);}}});\ntest('new WA v3 requires a deliberate MANUAL or ASSISTED choice and rejects a contradictory sealed state',()=>{for(const [index,mode]of [[0,'ASSISTED'],[1,'MANUAL']]){let p=conversation.beginMetaKycConversation('event1',{captureImageSetVersion:2,analysisConsentVersion:3});assert.equal(p.state.biometricMode,null);assert.equal(p.state.biometricConsent,false);for(let i=2;i<5;i++)p=choose(conversation,p,0,'event'+i);assert.equal(p.state.step,'BIOMETRIC');assert.doesNotMatch(p.reply.body,/OpenAI|Hugging|API|SFace|MiniFAS/);p=choose(conversation,p,index,'event5');assert.equal(p.state.step,'FRONT');assert.equal(p.state.biometricMode,mode);assert.equal(p.state.biometricConsent,mode==='ASSISTED');assert.throws(()=>conversation.planMetaKycConversation({state:{...p.state,biometricConsent:mode!=='ASSISTED'},message:{type:'text',text:{body:'ESTADO'}},eventId:'event6'}));}});\ntest('v3 notice links preserve the immutable v2 summary and expose a neutral before-save notice',()=>{const legacy=awaitBaselineSummary();assert.equal(notices.participantIdentityNoticeSummary('participant-private-biometric-v2'),legacy);const url=notices.participantIdentityNoticeUrl(version);assert.equal(new URL(url).searchParams.get('aviso'),version);assert.match(notices.participantIdentityNoticeSummary(version),/antes de guardarlas/);assert.doesNotMatch(notices.participantIdentityNoticeSummary(version),/OpenAI|Hugging|API|SFace|MiniFAS/);});\nfunction awaitBaselineSummary(){return 'La comparación privada del frente y tu selfie es opcional e independiente de la lectura del documento. Antes de elegir, leé el aviso completo: https://obrasaas.com/privacidad/identidad?aviso=participant-private-biometric-v2\\n\\nAl elegir «Con comparación facial» confirmás que leíste el aviso y autorizás el inicio automático al completar esta presentación. Podés elegir «Sin comparación facial» y continuar con revisión manual.\\n\\nEl resultado es orientativo: no certifica identidad ni prueba de vida y no concede permisos. Si el servicio no está disponible, queda pendiente.';}\ntest('actual pure UI helpers keep unselected v3 invalid and preserve photos while changing mode',()=>{const {participantFacialModeValid:valid,participantFacialModePatch:patch}=realUiHelpers(),input={...body(),front:'front-RAM',selfie:'selfie-RAM',back:'back-RAM',biometricMode:null};assert.equal(valid(input),false);for(const mode of ['MANUAL','ASSISTED']){const next={...input,...patch(input,mode)};assert.equal(valid(next),true);assert.equal(next.front,input.front);assert.equal(next.selfie,input.selfie);assert.equal(next.back,input.back);}assert.equal(patch({...input,biometricNoticeVersion:'participant-private-biometric-v2'},'MANUAL'),null);assert.equal(patch(input,'AUTO'),null);});\ntest('web offers only three capture kinds, requires a mode and asks for a solo face',()=>{const source=sourceText('src/app/(identity)/cuenta/participant-kyc-capture.js');assert.equal((source.match(/<KycPhotoPreparation\\b/g)||[]).length,3);assert.deepEqual([...source.matchAll(/<KycPhotoPreparation\\b[^>]*\\bkind=\"([^\"]+)\"/g)].map(match=>match[1]),['front','back','selfie']);assert.match(source,/Mostrá sólo tu rostro, de frente y con buena luz/);assert.match(source,/No sostengas el documento/);assert.match(source,/type=\"radio\" name=\"biometric-mode\"/);assert.match(sourceText('src/app/(identity)/cuenta/participant-panel.js'),/!participantFacialModeValid\\(p\\)/);assert.equal((source.match(/getUserMedia/g)||[]).length,(sourceText('src/app/(identity)/cuenta/participant-kyc-capture.js').match(/getUserMedia/g)||[]).length);});\n",
               "previousText": ""
             }
           ]
@@ -70792,9 +70832,9 @@
           "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
           "status": "MODIFIED",
           "previousSha256": "3cd6cbb7c897ac8ac59f89975a2bc23756bdf94be6fba48cfa044ef2410d2b9a",
-          "currentSha256": "1a29c5322fa25b6fca8d59a43f64ec035292f52bff7e383be784e8c798588a98",
+          "currentSha256": "8abf3bc1de5f09a3a34530e4eb5cfbcdab20c05e2b8ad63234f682df33b2aee3",
           "previousBytes": 51824,
-          "currentBytes": 55372,
+          "currentBytes": 55590,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 1663,
@@ -70872,7 +70912,12 @@
               "previousText": "test('real intake gate retains cleanup provider and SQL rejection codes after current withdrawal source authentication',("
             },
             {
-              "currentOffsetCharacters": 51940,
+              "currentOffsetCharacters": 46696,
+              "currentText": "captureParent=restoreCaptureRuntimePreviousSource(contract,a.path,bytes),currentPin=currentAliasExpected(boundary,a.path,a.currentSha256),old=restorePlanBudgetTrialExpiryNoticeSource(contract,a.path,bytes);assert.equal(sha(bytes.toString('utf8').replaceAll('\\r\\n','\\n')),currentPin);assert.equal(sha(captureParent.toString('utf8').replaceAll('\\r\\n','\\n')),a.currentSha256);assert.equal(sha(old),a.previousSha256);assert.equal(parent.planBudgetCurrentRevision.references.some(row=>row.path===a.path),false);assert.deepEqual(bytes,captured);assert.equal(planBudgetCurrentSourcePin(contract,{path:a.path,sha256:a.previousSha256}),currentPin",
+              "previousText": "old=restorePlanBudgetTrialExpiryNoticeSource(contract,a.path,bytes);assert.equal(sha(bytes.toString('utf8').replaceAll('\\r\\n','\\n')),a.currentSha256);assert.equal(sha(old),a.previousSha256);assert.equal(parent.planBudgetCurrentRevision.references.some(row=>row.path===a.path),false);assert.deepEqual(bytes,captured);assert.equal(planBudgetCurrentSourcePin(contract,{path:a.path,sha256:a.previousSha256}),a.currentSha256"
+            },
+            {
+              "currentOffsetCharacters": 52158,
               "currentText": "historical731Test('trial expiry current32 and130 manifests authenticate before historical ledger projection while RAW stays current',({intake,read,native,p,reviewed,normalizePlanBudgetIntakeWithdrawalNativeProof,normalizePlanBudgetPilotNativeProof,restorePlanBudgetTrialExpiryNoticeSource}",
               "previousText": "test('trial expiry current32 and130 manifests authenticate before historical ledger projection while RAW stays current',("
             }
@@ -71167,57 +71212,62 @@
           "path": "tests/production-whatsapp-feedback-workspace-ci.test.mjs",
           "status": "MODIFIED",
           "previousSha256": "4cbba761beac4b8a5d72560a20c5395ba50bc5cbcfd68000de96e5c20022e342",
-          "currentSha256": "4464749fcd33f6f35e4d39fb02f1133ccdb56ad70cfaa9099080e3aa3b3ef0de",
+          "currentSha256": "4b3b96c7b9b6146b29a4cd043a7f3c82acf6d343a1b3cdc3e5a848aa8512715c",
           "previousBytes": 13355,
-          "currentBytes": 15512,
+          "currentBytes": 16985,
           "inverseHunks": [
             {
               "currentOffsetCharacters": 72,
-              "currentText": ",restoreCaptureRuntimePreviousContract,withCaptureRuntimePreviousSources",
+              "currentText": ",restoreCaptureRuntimePreviousContract,withCaptureRuntimePreviousSources,restorePlanBudgetIntakeWithdrawalUnitProducerText,restorePlanBudgetAcceptancePreviousSource,restorePlanBudgetAttendanceReviewProducerText",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 2184,
+              "currentOffsetCharacters": 2322,
               "currentText": "// These metadata assertions retain their exact PR142/731 checkpoint. Actual\n// current collectors and the complete capture delta are asserted separately.\nconst captureParent=restoreCaptureRuntimePreviousContract(contract),historicalCurrent=captureParent.extension.proofs.filter(spec=>Object.hasOwn(WHATSAPP_FEEDBACK_PREVIOUS_SOURCE_COUNTS,spec.kind));\nfunction assertCaptureSpecJoin(actual,previous){\n const runtime=contract.planBudgetCurrentRevision.captureQualityRuntime,advance=runtime.proofSourceSetAdvances.find(row=>row.kind===actual.kind),producer=runtime.sourceHistory.find(row=>row.path===actual.producer);\n assert.equal(actual.id,previous.id);assert.equal(actual.kind,previous.kind);assert.deepEqual(actual.checkNames,previous.checkNames);\n if(advance){assert.deepEqual(advance.previousFiles,previous.sourceFiles);assert.deepEqual(advance.currentFiles,actual.sourceFiles);assert.deepEqual(advance.removals,[]);assert.deepEqual([...previous.sourceFiles,...advance.additions].sort(),actual.sourceFiles);}else assert.deepEqual(actual.sourceFiles,previous.sourceFiles);\n if(producer){assert.equal(actual.producerSha256,producer.currentSha256);assert.equal(previous.producerSha256,producer.previousSha256);}else assert.equal(actual.producerSha256,previous.producerSha256);\n}\n",
               "previousText": ""
             },
             {
-              "currentOffsetCharacters": 4915,
+              "currentOffsetCharacters": 4390,
+              "currentText": "// Compare producer metadata at its frozen before-Budget checkpoint. Current\n // paths, check names, collectors and the authenticated physical reader stay current.\n const actual=captureParent.extension.proofs.find(row=>row.id===spec.id),checkpoint=beforeBudgetContract.extension.proofs.find(row=>row.id===spec.id);assert.ok(actual);assert.ok(checkpoint);\n assert.equal(spec.kind,actual.kind);assert.equal(spec.producer,actual.producer);assert.equal(spec.producerSha256,actual.producerSha256);assert.deepEqual(spec.checkNames,actual.checkNames);assert.equal(checkpoint.kind,spec.kind);assert.equal(checkpoint.producer,spec.producer);\n const inverses={\n  'scripts/verify-participant-bank-intake-contracts.mjs':raw=>restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,raw),\n  'scripts/verify-participant-bank-intake-ui.mjs':raw=>restorePlanBudgetAcceptancePreviousSource(contract,'scripts/verify-participant-bank-intake-ui.mjs',raw),\n  'scripts/verify-field-operations-postgres.mjs':raw=>restorePlanBudgetAttendanceReviewProducerText(contract,raw),\n };\n let comparisonSha256=spec.producerSha256;\n if(Object.hasOwn(inverses,spec.producer)){assert.notEqual(spec.producerSha256,checkpoint.producerSha256);comparisonSha256=sha(inverses[spec.producer](readSource(spec.producer)));}\n assert.equal(comparisonSha256,checkpoint.producerSha256);\n if(delta){assert.equal(comparisonSha256,delta.currentProducerSha256);assert.deepEqual(spec.checkNames,delta.currentCheckNames);assert.equal(previous.producerSha256,delta.previousProducerSha256);assert.deepEqual(previous.checkNames,delta.previousCheckNames);}else{assert.equal(comparison",
+              "previousText": "if(delta){assert.equal(spec.producerSha256,delta.currentProducerSha256);assert.deepEqual(spec.checkNames,delta.currentCheckNames);assert.equal(previous.producerSha256,delta.previousProducerSha256);assert.deepEqual(previous.checkNames,delta.previousCheckNames);}else{assert.equal(spec.producer"
+            },
+            {
+              "currentOffsetCharacters": 6388,
               "currentText": "actual of current){\n  const spec=historicalCurrent.find(row=>row.id===actual.id);assert.ok(spec);assertCaptureSpecJoin(actual,spec);\n  const prior=restoreParticipantPreanalysisPreviousContract(captureParen",
               "previousText": "spec of current){\n  const prior=restoreParticipantPreanalysisPreviousContract(contrac"
             },
             {
-              "currentOffsetCharacters": 5652,
+              "currentOffsetCharacters": 7125,
               "currentText": "actual,root),actual",
               "previousText": "spec,root),spec"
             },
             {
-              "currentOffsetCharacters": 5711,
+              "currentOffsetCharacters": 7184,
               "currentText": "published PR142 metadata and actual current collectors reject missing duplicate substituted or historical-only imports',()=>{\n for(const spec of historicalC",
               "previousText": "missing duplicate substituted or historical-only current imports cannot retain a source binding',()=>{\n for(const spec of c"
             },
             {
-              "currentOffsetCharacters": 6358,
+              "currentOffsetCharacters": 7831,
               "currentText": "historicalCurrent){const historical=clone(spec);historical.sourceFiles=historical.sourceFiles.filter(file=>!additions(spec.kind).includes(file));assert.throws(()=>validateWhatsappFeedbackPreviousSourceLineage(historical),{code:'WHATSAPP_FEEDBACK_CURRENT_SOURCE_DEPENDENCIES'});}\n for(const spec of current)for(const file of additions(spec.kind))for(const mutate of [value=>{value.sourceFiles=value.sourceFiles.filter(source=>source!==file);},value=>{value.sourceFiles.push(file);},value=>{value.sourceFiles[value.sourceFiles.indexOf(file)]='src/lib/foreign-whatsapp-feedback.mjs';}]){\n  const changed=clone(spec);mutate(changed);assert.throws(()=>currentProducerSourceFiles(changed,root),error=>error.code==='CAPTURE_QUALITY_COLLECTOR_REJECTED'&&error.reason==='EXACT_CURRENT_PROOF_SPEC');\n ",
               "previousText": "current){const historical=clone(spec);historical.sourceFiles=historical.sourceFiles.filter(file=>!additions(spec.kind).includes(file));assert.throws(()=>validateWhatsappFeedbackPreviousSourceLineage(historical),{code:'WHATSAPP_FEEDBACK_CURRENT_SOURCE_DEPENDENCIES'});"
             },
             {
-              "currentOffsetCharacters": 7314,
+              "currentOffsetCharacters": 8787,
               "currentText": "aptureParent);\n for(const spec of historicalCurrent){\n  const normalized=previousCheckMetadata({...spec,sourceFiles:restoreExistingApiPlanSourceSet(spec.kind,spec.sourceFiles,captureParen",
               "previousText": "ontract);\n for(const spec of current){\n  const normalized=previousCheckMetadata({...spec,sourceFiles:restoreExistingApiPlanSourceSet(spec.kind,spec.sourceFiles,contrac"
             },
             {
-              "currentOffsetCharacters": 8587,
+              "currentOffsetCharacters": 10060,
               "currentText": "literal731 preserves the original thirteen company KYC groups and all five native context groups',()=>{\n const actual=historicalC",
               "previousText": "the original thirteen company KYC groups remain immutable and all five native context groups are required',()=>{\n const actual=c"
             },
             {
-              "currentOffsetCharacters": 11081,
+              "currentOffsetCharacters": 12554,
               "currentText": "literal731 outer decoder rejects omitted foreign and wrong-hash additions; no native execution',()=>withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>{\n const readSource=parentRead,spec=parent.extension.proofs",
               "previousText": "the outer proof rejects omitted foreign and wrong-hash additions before any native or provider declaration',()=>{\n const spec=current"
             },
             {
-              "currentOffsetCharacters": 12128,
+              "currentOffsetCharacters": 13601,
               "currentText": ")",
               "previousText": ""
             }
@@ -77781,7 +77831,7 @@
         {
           "pointer": "/planBudgetCurrentRevision/references/129/currentSha256",
           "previous": "7217de694cd81f1d5d692d6533711bbb4483304fc8aaae86447dc6e0b1a63a0e",
-          "current": "3d955706b8b48a5dbce38e93af53b85c5f4573f8cb4b6715a1d66ae64e685254"
+          "current": "69b550641c8ef786a695377f8a574a536eff0ff4feaaa4f6420f7d9136543759"
         },
         {
           "pointer": "/planBudgetCurrentRevision/references/22/currentSha256",
@@ -77901,7 +77951,7 @@
         {
           "pointer": "/planBudgetCurrentRevision/references/97/currentSha256",
           "previous": "3cd6cbb7c897ac8ac59f89975a2bc23756bdf94be6fba48cfa044ef2410d2b9a",
-          "current": "1a29c5322fa25b6fca8d59a43f64ec035292f52bff7e383be784e8c798588a98"
+          "current": "8abf3bc1de5f09a3a34530e4eb5cfbcdab20c05e2b8ad63234f682df33b2aee3"
         },
         {
           "pointer": "/planBudgetCurrentRevision/references/139/currentSha256",
@@ -77931,7 +77981,7 @@
         {
           "pointer": "/planBudgetCurrentRevision/references/111/currentSha256",
           "previous": "4cbba761beac4b8a5d72560a20c5395ba50bc5cbcfd68000de96e5c20022e342",
-          "current": "4464749fcd33f6f35e4d39fb02f1133ccdb56ad70cfaa9099080e3aa3b3ef0de"
+          "current": "4b3b96c7b9b6146b29a4cd043a7f3c82acf6d343a1b3cdc3e5a848aa8512715c"
         },
         {
           "pointer": "/planBudgetCurrentRevision/references/112/currentSha256",
@@ -78434,7 +78484,7 @@
             {
               "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
               "previousSha256": null,
-              "currentSha256": "1a29c5322fa25b6fca8d59a43f64ec035292f52bff7e383be784e8c798588a98"
+              "currentSha256": "8abf3bc1de5f09a3a34530e4eb5cfbcdab20c05e2b8ad63234f682df33b2aee3"
             },
             {
               "path": "tests/production-plan-budget-analyzer-http.test.mjs",
@@ -78504,7 +78554,7 @@
             {
               "path": "tests/production-whatsapp-feedback-workspace-ci.test.mjs",
               "previousSha256": "6604b797f3466aad51028091fcddbcf3de1c86e9fec78b895c8156047d3f6c67",
-              "currentSha256": "4464749fcd33f6f35e4d39fb02f1133ccdb56ad70cfaa9099080e3aa3b3ef0de"
+              "currentSha256": "4b3b96c7b9b6146b29a4cd043a7f3c82acf6d343a1b3cdc3e5a848aa8512715c"
             },
             {
               "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
@@ -78594,7 +78644,7 @@
             {
               "path": "scripts/verify-participants-ui.mjs",
               "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-              "currentSha256": "3d955706b8b48a5dbce38e93af53b85c5f4573f8cb4b6715a1d66ae64e685254"
+              "currentSha256": "69b550641c8ef786a695377f8a574a536eff0ff4feaaa4f6420f7d9136543759"
             },
             {
               "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -79156,7 +79206,7 @@
             {
               "path": "tests/production-pilot-whatsapp-current-lineage.test.mjs",
               "previousSha256": null,
-              "currentSha256": "1a29c5322fa25b6fca8d59a43f64ec035292f52bff7e383be784e8c798588a98"
+              "currentSha256": "8abf3bc1de5f09a3a34530e4eb5cfbcdab20c05e2b8ad63234f682df33b2aee3"
             },
             {
               "path": "tests/production-plan-budget-analyzer-http.test.mjs",
@@ -79226,7 +79276,7 @@
             {
               "path": "tests/production-whatsapp-feedback-workspace-ci.test.mjs",
               "previousSha256": "6604b797f3466aad51028091fcddbcf3de1c86e9fec78b895c8156047d3f6c67",
-              "currentSha256": "4464749fcd33f6f35e4d39fb02f1133ccdb56ad70cfaa9099080e3aa3b3ef0de"
+              "currentSha256": "4b3b96c7b9b6146b29a4cd043a7f3c82acf6d343a1b3cdc3e5a848aa8512715c"
             },
             {
               "path": "tests/production-whatsapp-field-continuity-current-ci-lineage.test.mjs",
@@ -79316,7 +79366,7 @@
             {
               "path": "scripts/verify-participants-ui.mjs",
               "previousSha256": "06b9708236f65daa7af76ad284f03f0dfa0d56454e98206ee9bd24a9e64df976",
-              "currentSha256": "3d955706b8b48a5dbce38e93af53b85c5f4573f8cb4b6715a1d66ae64e685254"
+              "currentSha256": "69b550641c8ef786a695377f8a574a536eff0ff4feaaa4f6420f7d9136543759"
             },
             {
               "path": "scripts/verify-workspace-plan-recovery-ui.mjs",
@@ -79396,12 +79446,12 @@
             {
               "path": ".github/scripts/verify-production-test-shards.py",
               "previousSha256": null,
-              "currentSha256": "2f0f7879666fa68ce91d29e2fce71f9c320e51e740f5907967ad20bef08fd1cb"
+              "currentSha256": "6294850f2040a76cf417f78c4930607deeaae7cdd585bcad7c7c16efb7e47591"
             },
             {
               "path": ".github/workflows/production-boundary.yml",
               "previousSha256": "072a3da3a12d25046584ffd1f5d4d2dc83879f0398291c182e21c4274f1ab2ea",
-              "currentSha256": "e7042bcb13af3b7b3a853a60e72aa86ca1021b1b41ee43bb2ce886646ada775f"
+              "currentSha256": "56ce6df5b673eddcc8b4d170d9f91669dd8d6455334e6b710175e344b06e9fca"
             },
             {
               "path": "api/_biometric_core.py",
@@ -79521,7 +79571,7 @@
             {
               "path": "scripts/verify-own-company-number-postgres.mjs",
               "previousSha256": "22fc50c349d97da323a47c91e3f64f58b6ce9df54042a17ee2fecb5c7d4bf2b0",
-              "currentSha256": "a7295bd908244e910e756acb7c1d48591445718ecc8d77b6d043c83cf0d69913"
+              "currentSha256": "21eeb88854837598afe911dd2b3f655b186d4bb1bea6af3d83249185a09f2141"
             },
             {
               "path": "scripts/verify-participant-civil-postgres.mjs",
@@ -79716,7 +79766,7 @@
             {
               "path": "src/proxy.js",
               "previousSha256": "0000111edc18de9181e16ebd12243dc585c563e196c43ad0027df6630d26efbb",
-              "currentSha256": "34835f86909997cb85248f80c50031aa4d76363a044ca7ac179efd471b6b9c2a"
+              "currentSha256": "ee30fdd1846c8342bdcbffb7d4eabee4151ae1bc49f36108dcdc565465282ef8"
             },
             {
               "path": "tests/fixtures/capture-quality-synthetic.mjs",
@@ -79891,7 +79941,7 @@
             {
               "path": "tests/production-participant-facial-consumer-modes.test.mjs",
               "previousSha256": null,
-              "currentSha256": "7437efb4389c11965232dd77ad8e8d066267a95483985010dabf1d06be7e08c7"
+              "currentSha256": "e640e8b521e1f4b4a6000f4fd6b242e6c965a78f141bed276a871fa5fe43adf4"
             },
             {
               "path": "tests/production-participant-facial-consumer-recovery.test.mjs",

@@ -9,7 +9,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 SCHEMA = "production-boundary-shard.v1"
-TOTAL = 8
+TOTAL = 19
 EXPECTED_COUNT = 379
 OUTPUT = ".vercel/private/production-boundary-unit-shard"
 DOWNLOADS = ".vercel/private/production-boundary-unit-artifacts"
@@ -86,7 +86,7 @@ def production_context(root, environ):
 def prepare(root, environ):
     context = production_context(root, environ)
     shard = environ.get("BOUNDARY_UNIT_SHARD", "")
-    need(shard in {"1", "2", "3", "4", "5", "6", "7", "8"}, "SHARD_ID")
+    need(shard in {str(index) for index in range(1, TOTAL + 1)}, "SHARD_ID")
     relative = environ.get("BOUNDARY_UNIT_OUTPUT", OUTPUT)
     need(relative == OUTPUT, "OUTPUT_SCOPE")
     output = root / relative

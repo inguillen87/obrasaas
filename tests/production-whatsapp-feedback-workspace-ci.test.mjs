@@ -1,4 +1,4 @@
-import {restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources,restoreCaptureRuntimePreviousContract,withCaptureRuntimePreviousSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {restorePlanBudgetPreviousContract,verifyPlanBudgetCurrentSources,restoreCaptureRuntimePreviousContract,withCaptureRuntimePreviousSources,restorePlanBudgetIntakeWithdrawalUnitProducerText,restorePlanBudgetAcceptancePreviousSource,restorePlanBudgetAttendanceReviewProducerText} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {WHATSAPP_FIELD_CONTINUITY_CURRENT_REVISION as waRevision,WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWhatsappFieldContinuityPreviousContract} from '../scripts/lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import {restoreExistingApiPlanPreviousContract,restoreExistingApiPlanSourceSet} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
 import {integratedIdentityPreviousProofChecks} from '../scripts/lib/integrated-identity-current-ci-lineage.mjs';
@@ -37,7 +37,19 @@ assert.equal(sha(JSON.stringify(predecessor,null,2)+'\n'),WHATSAPP_FIELD_CONTINU
 // The current source paths and every proof byte remain current.
 function previousCheckMetadata(spec){
  const previous=predecessor.extension.proofs.find(row=>row.id===spec.id),delta=waRevision.currentProofChanges.find(row=>row.id===spec.id);assert.ok(previous);
- if(delta){assert.equal(spec.producerSha256,delta.currentProducerSha256);assert.deepEqual(spec.checkNames,delta.currentCheckNames);assert.equal(previous.producerSha256,delta.previousProducerSha256);assert.deepEqual(previous.checkNames,delta.previousCheckNames);}else{assert.equal(spec.producerSha256,previous.producerSha256);assert.deepEqual(spec.checkNames,previous.checkNames);}
+ // Compare producer metadata at its frozen before-Budget checkpoint. Current
+ // paths, check names, collectors and the authenticated physical reader stay current.
+ const actual=captureParent.extension.proofs.find(row=>row.id===spec.id),checkpoint=beforeBudgetContract.extension.proofs.find(row=>row.id===spec.id);assert.ok(actual);assert.ok(checkpoint);
+ assert.equal(spec.kind,actual.kind);assert.equal(spec.producer,actual.producer);assert.equal(spec.producerSha256,actual.producerSha256);assert.deepEqual(spec.checkNames,actual.checkNames);assert.equal(checkpoint.kind,spec.kind);assert.equal(checkpoint.producer,spec.producer);
+ const inverses={
+  'scripts/verify-participant-bank-intake-contracts.mjs':raw=>restorePlanBudgetIntakeWithdrawalUnitProducerText(contract,raw),
+  'scripts/verify-participant-bank-intake-ui.mjs':raw=>restorePlanBudgetAcceptancePreviousSource(contract,'scripts/verify-participant-bank-intake-ui.mjs',raw),
+  'scripts/verify-field-operations-postgres.mjs':raw=>restorePlanBudgetAttendanceReviewProducerText(contract,raw),
+ };
+ let comparisonSha256=spec.producerSha256;
+ if(Object.hasOwn(inverses,spec.producer)){assert.notEqual(spec.producerSha256,checkpoint.producerSha256);comparisonSha256=sha(inverses[spec.producer](readSource(spec.producer)));}
+ assert.equal(comparisonSha256,checkpoint.producerSha256);
+ if(delta){assert.equal(comparisonSha256,delta.currentProducerSha256);assert.deepEqual(spec.checkNames,delta.currentCheckNames);assert.equal(previous.producerSha256,delta.previousProducerSha256);assert.deepEqual(previous.checkNames,delta.previousCheckNames);}else{assert.equal(comparisonSha256,previous.producerSha256);assert.deepEqual(spec.checkNames,previous.checkNames);}
  return {...spec,producerSha256:previous.producerSha256,checkNames:integratedIdentityPreviousProofChecks(previous)};
 }
 

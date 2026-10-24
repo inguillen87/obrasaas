@@ -48,7 +48,16 @@ async function bounded(promise,label){let timer;try{return await Promise.race([p
 const picturePath=path.join(fixture,'synthetic.png'),undersizedPath=path.join(fixture,'undersized.png');let picture;
 const invalidPath=path.join(fixture,'invalid.txt');writeFileSync(invalidPath,'This is not a photo');
 let browser,activePage,activeScenario;const errors=[],checks=[],accessObservations=[];
-async function click(page,label){await page.waitForFunction(text=>[...document.querySelectorAll('button')].some(button=>button.textContent.trim()===text&&!button.disabled&&!button.closest('[hidden]')),{timeout:15000},label);const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===text&&!button.disabled&&!button.closest('[hidden]')),label);await page.evaluate(node=>{for(let parent=node.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;},handle);assert.equal(await handle.evaluate(button=>button.checkVisibility()),true,'A test action must be visible: '+label);await handle.asElement().click();await handle.dispose();}
+async function click(page,label){
+ const handle=await page.waitForFunction(text=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===text&&!button.disabled&&!button.closest('[hidden]'))||false,{timeout:15000},label);
+ try{
+  const element=handle.asElement();assert.ok(element,'A test action must be an element: '+label);
+  await page.evaluate(node=>{for(let parent=node.parentElement;parent;parent=parent.parentElement)if(parent.tagName==='DETAILS')parent.open=true;},handle);
+  assert.equal(await handle.evaluate(button=>button.isConnected&&!button.disabled&&!button.closest('[hidden]')),true,'A test action must stay connected, enabled and unhidden: '+label);
+  assert.equal(await handle.evaluate(button=>button.checkVisibility()),true,'A test action must be visible: '+label);
+  await element.click();
+ }finally{await handle.dispose();}
+}
 async function wait(page,label){await page.waitForFunction(text=>document.body.innerText.includes(text),{timeout:20000},label);}
 async function waitUnsentFailureReady(page,{timeout=10000}={}){
  await page.waitForFunction(()=>{const send=[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Enviar invitación');return Boolean(send&&!send.disabled)&&!document.body.innerText.includes('Comprobar el mismo intento');},{timeout});

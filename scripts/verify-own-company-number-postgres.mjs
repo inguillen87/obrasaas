@@ -281,32 +281,50 @@ try{
   await pool.query(`DELETE FROM "AuditLog" WHERE id=$1`,[faultReceipt.id]);
  }
  await pool.query(`UPDATE "WhatsAppConnection" SET enabled=$2,"connectionStatus"=$3,metadata=$4::jsonb WHERE id=$1`,[c.id,faultFixture.enabled,faultFixture.connectionStatus,JSON.stringify(faultFixture.metadata)]);await pool.query(`UPDATE "WhatsAppCompanyChannel" SET mode=$2,revision=$3 WHERE "connectionId"=$1`,[c.id,faultFixture.mode,faultFixture.revision]);f.state.subscribed=true;runtime=await readChannel();
- let processorNow=f.time,dispatchEffects=0,outboundAfterReserve=async()=>{},dispatchFailure=null,projectUpdateLocks=0;
+ let processorNow=f.time,dispatchEffects=0,outboundAfterReserve=async()=>{},dispatchFailure=null,projectUpdateLocks=0,leaseExpiryControl=null;
  const inbox=createMetaCustomerInbox({connect,environment}),receive=async suffix=>(await inbox.record(splitMetaCustomerEvents({object:'whatsapp_business_account',entry:[{id:f.policy.wabaId,changes:[{field:'messages',value:{metadata:{phone_number_id:f.policy.phoneNumberId},messages:[{id:'wamid.SyntheticOwnProcessor_'+suffix,from:'5491100001111',timestamp:String(Math.floor(f.time/1000)),type:'text',text:{body:'ayuda'}}]}}]}]}),{signatureVerified:true})).eventIds[0];
  const runtimeIdentity=async(client,{eventId})=>{
   // Recipient routing is controlled, but the canonical Project UPDATE lock is
   // real. A second transaction taking OWN SHARE would wait on this same lock.
   const connection=(await client.query(`SELECT c.*,p."organizationId" FROM "WhatsAppConnection" c JOIN "Project" p ON p.id=c."projectId" WHERE c.id=$1 FOR UPDATE OF p`,[c.id])).rows[0];projectUpdateLocks++;await lockOwnCompanyIssuer(client,connection,{environment,now:processorNow});
-  const event=(await client.query(`SELECT * FROM "WebhookEvent" WHERE id=$1 FOR UPDATE`,[eventId])).rows[0];return {kind:'CHANNEL_VERIFIED',connection,event,project:{id:'project-a'},member:{organizationId:'org-a',actorId:'owner'},proof:decodeSignedCustomerEvent(event,connection,environment)};
+  const event=(await client.query(`SELECT * FROM "WebhookEvent" WHERE id=$1 FOR UPDATE`,[eventId])).rows[0];
+  if(leaseExpiryControl?.eventId===eventId){
+   assert.equal(leaseExpiryControl.armed,true);
+   if(leaseExpiryControl.client===null)leaseExpiryControl.client=client;
+   else assert.equal(leaseExpiryControl.client,client,'The controlled ownership await must retain its one canonical transaction client');
+  }
+  return {kind:'CHANNEL_VERIFIED',connection,event,project:{id:'project-a'},member:{organizationId:'org-a',actorId:'owner'},proof:decodeSignedCustomerEvent(event,connection,environment)};
  },processorProvider=createMetaCustomerProvider({environment,fetchImpl:f.fetchImpl,now:()=>processorNow}),processorOutbound=createMetaCustomerOutbound({connect,resolveIdentity:runtimeIdentity,provider:processorProvider,environment,now:()=>processorNow,afterReserve:()=>outboundAfterReserve()}),ownProcessor=createMetaCustomerProcessor({connect,environment,now:()=>processorNow,authorizationCodes:META_OWN_COMPANY_AUTHORIZATION_CODES,outbound:processorOutbound,dispatch:context=>customerJobTransaction(connect,async client=>{if(dispatchFailure)throw new WorkspaceError(dispatchFailure,503);await runtimeIdentity(client,context);dispatchEffects++;return {businessApplied:false,kind:'HELP',reply:{type:'text',body:'Synthetic own processor response'}};})});
  const durableEvent=await receive('DurableV2'),durablePosts=f.calls.filter(call=>call.method==='POST').length;processorNow=f.time+5*3600000;environment.VERCEL_GIT_COMMIT_SHA='c'.repeat(40);const durable=await ownProcessor.process(durableEvent);assert.equal(durable.processed,true);assert.equal(durable.replyState,'SENT');assert.equal(durable.replySent,true);assert.equal(f.calls.filter(call=>call.method==='POST').length,durablePosts+1);assert.equal((await ownProcessor.process(durableEvent)).done,true);assert.equal(f.calls.filter(call=>call.method==='POST').length,durablePosts+1);processorNow=f.time;environment.VERCEL_GIT_COMMIT_SHA=administrativeHead;checks.push('runtime-v2-real-inbox-processor-outbound-after-admin-expiry-and-future-source-one-reply-no-replay');
  const lockedEvent=await receive('SameTransactionProjectLock'),lockedPosts=f.calls.filter(call=>call.method==='POST').length,locksBefore=projectUpdateLocks,lockedResult=await ownProcessor.process(lockedEvent);assert.equal(lockedResult.replyState,'SENT');assert.equal(lockedResult.replySent,true);assert.ok(projectUpdateLocks>locksBefore);assert.equal((await pool.query(`SELECT outcome->>'state' AS state FROM "WebhookEvent" WHERE id=$1`,[customerOutboundId(lockedEvent)])).rows[0].state,'SENT');assert.equal((await ownProcessor.process(lockedEvent)).done,true);assert.equal(f.calls.filter(call=>call.method==='POST').length,lockedPosts+1);
- // Expire the original event's short lease during a real ownership await,
- // while the opaque provider capability's separate sixty-second lease lives.
+ // Open the short source-lease window only after the actual ownership GET
+ // entered with the nominal original lease. This preserves the real PostgreSQL
+ // clock crossing without racing all preparation before owned_apps.
  const shortLeaseEvent=await receive('ShortLeaseDuringOwnership'),shortLeasePosts=f.calls.filter(call=>call.method==='POST').length,shortLeaseAppClock=processorNow;let shortLeaseObserved=false,shortLeaseOriginal=null,shortLeaseDeadline=null;
  outboundAfterReserve=async()=>{
   shortLeaseOriginal=(await pool.query(`SELECT id,status::text AS status,"leaseToken","leaseExpiresAt",clock_timestamp() AS now FROM "WebhookEvent" WHERE id=$1`,[shortLeaseEvent])).rows[0];
   assert.equal(shortLeaseOriginal.id,shortLeaseEvent);assert.equal(shortLeaseOriginal.status,'PENDING');assert.equal(typeof shortLeaseOriginal.leaseToken,'string');assert.ok(shortLeaseOriginal.leaseToken);assert.ok(shortLeaseOriginal.leaseExpiresAt.getTime()>shortLeaseOriginal.now.getTime());assert.ok(shortLeaseOriginal.leaseExpiresAt.getTime()-shortLeaseOriginal.now.getTime()<=60000);
-  const shortened=(await pool.query(`UPDATE "WebhookEvent" SET "leaseExpiresAt"=LEAST("leaseExpiresAt",clock_timestamp()+interval '1000 milliseconds') WHERE id=$1 AND status='PENDING' AND "leaseToken"=$2 RETURNING id,"leaseToken","leaseExpiresAt",clock_timestamp() AS now`,[shortLeaseEvent,shortLeaseOriginal.leaseToken])).rows[0];
-  assert.equal(shortened.id,shortLeaseEvent);assert.equal(shortened.leaseToken,shortLeaseOriginal.leaseToken);shortLeaseDeadline=shortened.leaseExpiresAt;assert.ok(shortLeaseDeadline.getTime()>shortened.now.getTime());assert.ok(shortLeaseDeadline.getTime()<=shortLeaseOriginal.leaseExpiresAt.getTime());assert.ok(shortLeaseDeadline.getTime()-shortened.now.getTime()<=1000);
+  leaseExpiryControl={eventId:shortLeaseEvent,armed:true,client:null};
  };
  f.state.afterRead=async path=>{if(path===f.policy.businessId+'/owned_apps'){
-  assert.equal(shortLeaseObserved,false);const entered=(await pool.query('SELECT clock_timestamp() AS now')).rows[0].now;assert.ok(entered.getTime()<shortLeaseDeadline.getTime(),'The ownership GET must begin before the original shortened source deadline');shortLeaseObserved=true;
-  await pool.query(`SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM ($1::timestamptz-clock_timestamp())))+0.01)`,[shortLeaseDeadline]);
-  const observed=(await pool.query(`SELECT id,status::text AS status,"leaseToken","leaseExpiresAt",clock_timestamp() AS now FROM "WebhookEvent" WHERE id=$1`,[shortLeaseEvent])).rows[0];
+  assert.equal(shortLeaseObserved,false);shortLeaseObserved=true;
+  assert.equal(leaseExpiryControl?.eventId,shortLeaseEvent);assert.equal(leaseExpiryControl.armed,true);const client=leaseExpiryControl.client;assert.ok(client&&typeof client.query==='function');
+  // runtimeIdentity owns this event's FOR UPDATE. Using another pool connection
+  // for UPDATE here would wait on this very transaction and self-deadlock.
+  const entered=(await client.query(`SELECT id,status::text AS status,"leaseToken","leaseExpiresAt",clock_timestamp() AS now FROM "WebhookEvent" WHERE id=$1`,[shortLeaseEvent])).rows[0];
+  assert.equal(entered.id,shortLeaseEvent);assert.equal(entered.status,'PENDING');assert.equal(entered.leaseToken,shortLeaseOriginal.leaseToken);assert.equal(entered.leaseExpiresAt.getTime(),shortLeaseOriginal.leaseExpiresAt.getTime());assert.ok(entered.now.getTime()<shortLeaseOriginal.leaseExpiresAt.getTime(),'The ownership GET must begin before the unchanged nominal source deadline');
+  const shortened=(await client.query(`UPDATE "WebhookEvent" SET "leaseExpiresAt"=LEAST("leaseExpiresAt",clock_timestamp()+interval '1000 milliseconds') WHERE id=$1 AND status='PENDING' AND "leaseToken"=$2 AND "leaseExpiresAt"=$3 RETURNING id,"leaseToken","leaseExpiresAt",clock_timestamp() AS now`,[shortLeaseEvent,shortLeaseOriginal.leaseToken,shortLeaseOriginal.leaseExpiresAt])).rows[0];
+  assert.equal(shortened.id,shortLeaseEvent);assert.equal(shortened.leaseToken,shortLeaseOriginal.leaseToken);shortLeaseDeadline=shortened.leaseExpiresAt;assert.ok(shortLeaseDeadline.getTime()>shortened.now.getTime());assert.ok(shortLeaseDeadline.getTime()<=shortLeaseOriginal.leaseExpiresAt.getTime());assert.ok(shortLeaseDeadline.getTime()-shortened.now.getTime()<=1000);
+  await client.query(`SELECT pg_sleep(GREATEST(0,EXTRACT(EPOCH FROM ($1::timestamptz-clock_timestamp())))+0.01)`,[shortLeaseDeadline]);
+  const observed=(await client.query(`SELECT id,status::text AS status,"leaseToken","leaseExpiresAt",clock_timestamp() AS now FROM "WebhookEvent" WHERE id=$1`,[shortLeaseEvent])).rows[0];
   assert.equal(observed.id,shortLeaseEvent);assert.equal(observed.status,'PENDING');assert.equal(observed.leaseToken,shortLeaseOriginal.leaseToken);assert.equal(observed.leaseExpiresAt.getTime(),shortLeaseDeadline.getTime());assert.ok(observed.now.getTime()>=shortLeaseDeadline.getTime());assert.equal(processorNow,shortLeaseAppClock,'Only the real PostgreSQL clock crosses this source deadline');
  }};
- try{await assert.rejects(ownProcessor.process(shortLeaseEvent),e=>e.code==='META_CUSTOMER_INBOX_LEASE_CHANGED');}finally{f.state.afterRead=null;processorNow=f.time;outboundAfterReserve=async()=>{};}
+ try{await assert.rejects(ownProcessor.process(shortLeaseEvent),e=>e.code==='META_CUSTOMER_INBOX_LEASE_CHANGED');}finally{f.state.afterRead=null;processorNow=f.time;outboundAfterReserve=async()=>{};leaseExpiryControl=null;}
+ // The send transaction rolls its shortened deadline back. Processor failure
+ // cleanup then clears the source lease in a separate transaction. Require
+ // that actual cleanup before claiming an immediate retry can observe outbox.
+ const shortLeaseAfterFailure=(await pool.query(`SELECT status::text AS status,"lastError","leaseToken","leaseExpiresAt" FROM "WebhookEvent" WHERE id=$1`,[shortLeaseEvent])).rows[0];
+ assert.deepEqual(shortLeaseAfterFailure,{status:'PENDING',lastError:'META_CUSTOMER_INBOX_LEASE_CHANGED',leaseToken:null,leaseExpiresAt:null});
  assert.equal(shortLeaseObserved,true);const shortLeaseReservation=(await pool.query(`SELECT * FROM "WebhookEvent" WHERE id=$1`,[customerOutboundId(shortLeaseEvent)])).rows[0];assert.equal(shortLeaseReservation.outcome.state,'SEND_STARTED');assert.equal(shortLeaseReservation.status,'PENDING');assert.equal(f.calls.filter(call=>call.method==='POST').length,shortLeasePosts);assert.equal((await ownProcessor.process(shortLeaseEvent)).replyState,'SEND_STARTED');assert.deepEqual((await pool.query(`SELECT * FROM "WebhookEvent" WHERE id=$1`,[shortLeaseReservation.id])).rows[0],shortLeaseReservation);assert.equal(f.calls.filter(call=>call.method==='POST').length,shortLeasePosts);await pool.query(`DELETE FROM "WebhookEvent" WHERE id=ANY($1::text[])`,[[shortLeaseEvent,shortLeaseReservation.id]]);checks.push('runtime-v2-outbox-real-Project-UPDATE-and-OWN-fence-same-transaction-SENT-once-no-self-lock');
  // Exercise the real KYC/intake outbound transport under its resolver's
  // Project UPDATE. Its limited recipient/reply is controlled; no KYC, account
