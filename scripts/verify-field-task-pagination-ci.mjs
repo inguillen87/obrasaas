@@ -11,7 +11,7 @@ import {fileURLToPath} from 'node:url';
 import {parse} from '@babel/parser';
 import {fieldTaskPaginationSourceClosure,fieldTaskPaginationUiCiOptions,FIELD_TASK_PAGE_WIDTHS} from './verify-field-task-pagination-ui.mjs';
 import {WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI,verifyWhatsappFieldContinuityCurrentSources} from './lib/whatsapp-field-continuity-current-ci-lineage.mjs';
-import {withCaptureRuntimePreviousSources} from './lib/plan-budget-current-ci-lineage.mjs';
+import {withCaptureRuntimePreviousSources,planBudgetCurrentSourcePin} from './lib/plan-budget-current-ci-lineage.mjs';
 
 export const FIELD_TASK_PAGINATION_CI_VERSION='field-task-pagination-ci-v1';
 export const FIELD_TASK_PAGINATION_CI_KIND='UI_FIELD_TASK_PAGINATION';
@@ -39,7 +39,19 @@ function controlledSelector(value,file,tree,node,readSource){
  keys(declaration,['file','sourceLfSha256','kind','source','compiler','packageLockSha256'],'controlled selector transform');
  reject(declaration.file===selectorUnit&&declaration.kind==='SWC_SELECTOR_DATA_MODULE'&&declaration.source===selector&&declaration.compiler===compiler,'Only the exact selector compiler origin is permitted');
  const lf=value=>sha(value.toString('utf8').replaceAll('\r\n','\n'));
- reject(lf(value)===declaration.sourceLfSha256&&lf(bytes(readSource,'package-lock.json'))===declaration.packageLockSha256,'Complete selector unit and compiler lock bytes must be reviewed');
+ const lockBytes=bytes(readSource,'package-lock.json'),contractBytes=readSource(contractPath);
+ const compilerContract=Buffer.isBuffer(contractBytes)?JSON.parse(contractBytes):null;
+ const dependencyLockHistory=compilerContract?.planBudgetCurrentRevision?.captureQualityRuntime?.sourceHistory?.find(row=>row.path==='package-lock.json');
+ let compilerLockMatches=lf(lockBytes)===declaration.packageLockSha256;
+ if(dependencyLockHistory){
+  compilerLockMatches=withCaptureRuntimePreviousSources(compilerContract,readSource,(parent,parentRead)=>{
+   const currentPin=planBudgetCurrentSourcePin(compilerContract,{path:'package-lock.json',sha256:declaration.packageLockSha256});
+   reject(compilerContract.packageLockSha256===currentPin&&lf(lockBytes)===currentPin,'The actual current compiler lock must match its authenticated dependency advance');
+   reject(parent.packageLockSha256===declaration.packageLockSha256&&lf(bytes(parentRead,'package-lock.json'))===declaration.packageLockSha256,'The controlled compiler transform must restore its exact literal731 lock');
+   return true;
+  });
+ }
+ reject(lf(value)===declaration.sourceLfSha256&&compilerLockMatches,'Complete selector unit and compiler lock bytes must be reviewed');
  const expected=parse(selectorTransformPrefix,{sourceType:'module',createImportExpressions:true}).program.body,actual=tree.program.body.slice(0,expected.length),last=actual.at(-1);
  reject(same(shape(actual),shape(expected))&&last?.declarations?.[0]?.init?.argument===node,'The computed import must be the exact compiled.code base64 module');bytes(readSource,selector);return true;
 }

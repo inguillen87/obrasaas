@@ -79,3 +79,206 @@ test('the current browser binding joins exact39 investment leaves to historical3
  const leaf=files.find(file=>!c.planBudgetCurrentRevision.references.some(ref=>ref.path===file));assert.ok(leaf,'One exact browser leaf outside the common reference set is required');denied(()=>lineage.verifyPlanBudgetCurrentSources(c,file=>file===leaf?Buffer.concat([read(file),Buffer.from('\n// controlled browser leaf mutation\n')]):read(file)),'CURRENT_BROWSER_SOURCE_'+leaf);
  const omitted=structuredClone(c);delete omitted.planBudgetCurrentRevision.captureQualityRuntime.browserSourceAdvances;denied(()=>lineage.planBudgetCurrentBrowserBinding(omitted,{}),'IMMUTABLE_COMPANION');const stale=structuredClone(c.planBudgetCurrentRevision),old=stale.captureQualityRuntime.browserSourceAdvances[0];old.currentFiles=[...old.previousFiles];old.additions=[];denied(()=>lineage.createCaptureRuntimeGate(stale),'EXACT_ADDITIVE_BROWSER_SOURCE_SET');
 });
+
+// Dependency-source controls use current physical bytes and the public gate.
+// They do not run a provider, browser, compiler transform or CI lane.
+const dependencyLockFile='package-lock.json',dependencyLockRoot='/packageLockSha256',dependencyLiteral731='dfa3ff3914547f35828a0b697e6007c6cf856546be86bf8a7810cdce59e60449';
+function dependencyLockMutation(edit){const value=current();edit(value);const gate=lineage.createCaptureRuntimeGate(value.planBudgetCurrentRevision);return gate.restoreParentContract(value);}
+test('dependency lock CURRENT authenticates before its exact owned literal731 parent',()=>{
+ const value=current(),raw=read(dependencyLockFile),before=json(value),pin=lineage.planBudgetCurrentSourcePin(value,{path:dependencyLockFile,sha256:dependencyLiteral731});
+ assert.notEqual(pin,dependencyLiteral731);assert.equal(sha(raw.toString('utf8').replaceAll('\r\n','\n')),pin);assert.equal(value.packageLockSha256,pin);
+ lineage.withCaptureRuntimePreviousSources(value,read,(parent,parentRead)=>{assert.equal(parent.packageLockSha256,dependencyLiteral731);assert.equal(sha(parentRead(dependencyLockFile)),dependencyLiteral731);assert.equal(sha(json(parent)),'d5ef59b111dd3e25b8f08854d3e8e4df4838a7913e3e22b76299c1916b9913d2');});
+ assert.equal(json(value),before);assert.deepEqual(read(dependencyLockFile),raw);
+});
+test('dependency lock advance rejects an arbitrary extra root pointer',()=>{
+ denied(()=>dependencyLockMutation(value=>{value.unreviewedDependency='changed';value.planBudgetCurrentRevision.captureQualityRuntime.contractPatches.push({pointer:'/unreviewedDependency',previous:'old',current:'changed'});}),'PATCH_POINTER');
+});
+test('dependency lock advance cannot authorize the requirements root',()=>{
+ denied(()=>dependencyLockMutation(value=>{const previous=value.requirementsSha256;value.requirementsSha256='f'.repeat(64);value.planBudgetCurrentRevision.captureQualityRuntime.contractPatches.push({pointer:'/requirementsSha256',previous,current:value.requirementsSha256});}),'PATCH_POINTER');
+});
+test('dependency lock advance rejects a duplicate lock-root patch',()=>{
+ denied(()=>dependencyLockMutation(value=>{const patches=value.planBudgetCurrentRevision.captureQualityRuntime.contractPatches;patches.push(structuredClone(patches.find(row=>row.pointer===dependencyLockRoot)));}),'DEPENDENCY_LOCK_EXACT_CURRENT_PATCH');
+});
+test('dependency lock advance rejects a current root hash inconsistent with its history',()=>{
+ denied(()=>dependencyLockMutation(value=>{const patch=value.planBudgetCurrentRevision.captureQualityRuntime.contractPatches.find(row=>row.pointer===dependencyLockRoot);patch.current='f'.repeat(64);value.packageLockSha256=patch.current;}),'DEPENDENCY_LOCK_EXACT_CURRENT_PATCH');
+});
+test('dependency lock advance requires its MODIFIED source history',()=>{
+ denied(()=>dependencyLockMutation(value=>{const runtime=value.planBudgetCurrentRevision.captureQualityRuntime;runtime.sourceHistory=runtime.sourceHistory.filter(row=>row.path!==dependencyLockFile);}),'DEPENDENCY_LOCK_HISTORY_REQUIRED');
+});
+test('dependency lock reader mutation after an owned callback is rejected on the final reread',()=>{
+ const value=current(),raw=read(dependencyLockFile);let changed=false,called=false;
+ const reader=file=>file===dependencyLockFile&&changed?Buffer.concat([raw,Buffer.from(' ') ]):read(file);
+ denied(()=>lineage.withCaptureRuntimePreviousSources(value,reader,()=>{called=true;changed=true;}));assert.equal(called,true);assert.deepEqual(read(dependencyLockFile),raw);
+});
+
+const mobileValidationRoot='/integratedIdentityCurrentRevision/validationDeltas/25/currentSha256';
+test('mobile review advance cannot authorize another validation index',()=>{
+ denied(()=>dependencyLockMutation(value=>{value.planBudgetCurrentRevision.captureQualityRuntime.contractPatches.find(row=>row.pointer===mobileValidationRoot).pointer='/integratedIdentityCurrentRevision/validationDeltas/24/currentSha256';}),'MOBILE_REVIEW_PATCH_REQUIRED');
+});
+test('mobile review advance requires the exact current validation path',()=>{
+ denied(()=>dependencyLockMutation(value=>{value.integratedIdentityCurrentRevision.validationDeltas[25].path='scripts/foreign-mobile-review.mjs';}),'MOBILE_REVIEW_EXACT_VALIDATION_PATH_AND_CURRENT');
+});
+test('mobile review advance rejects a validation current hash inconsistent with the frozen current source',()=>{
+ denied(()=>dependencyLockMutation(value=>{value.integratedIdentityCurrentRevision.validationDeltas[25].currentSha256='f'.repeat(64);}),'MOBILE_REVIEW_EXACT_VALIDATION_PATH_AND_CURRENT');
+});
+
+const identityEvidenceAdvance='/evidenceProducers/68/producerSha256',identityBrowserAdvance='/identityDestinationUxCurrentRevision/browser/producerDelta/currentProducerSha256';
+test('identity-only evidence advance cannot authorize another evidence index',()=>{
+ denied(()=>dependencyLockMutation(value=>{value.planBudgetCurrentRevision.captureQualityRuntime.contractPatches.find(row=>row.pointer===identityEvidenceAdvance).pointer='/evidenceProducers/67/producerSha256';}),'IDENTITY_ONLY_EXACT_CURRENT_PATCHES');
+});
+test('identity-only evidence advance requires its exact producer path',()=>{
+ denied(()=>dependencyLockMutation(value=>{value.evidenceProducers[68].producer='scripts/foreign-identity-producer.mjs';}),'IDENTITY_ONLY_EXACT_EVIDENCE_AND_CURRENT');
+});
+test('identity-only evidence advance rejects an inconsistent current source hash',()=>{
+ denied(()=>dependencyLockMutation(value=>{value.evidenceProducers[68].producerSha256='f'.repeat(64);}),'IDENTITY_ONLY_EXACT_EVIDENCE_AND_CURRENT');
+});
+test('identity-only browser advance cannot authorize a nested alternate index',()=>{
+ denied(()=>dependencyLockMutation(value=>{value.planBudgetCurrentRevision.captureQualityRuntime.contractPatches.find(row=>row.pointer===identityBrowserAdvance).pointer='/identityDestinationUxCurrentRevision/browser/producerDelta/0/currentProducerSha256';}),'IDENTITY_ONLY_EXACT_CURRENT_PATCHES');
+});
+test('identity-only browser advance requires its exact producer path',()=>{
+ denied(()=>dependencyLockMutation(value=>{value.identityDestinationUxCurrentRevision.browser.producerDelta.producer='scripts/foreign-identity-producer.mjs';}),'IDENTITY_ONLY_EXACT_BROWSER_DELTA_AND_CURRENT');
+});
+test('identity-only browser advance rejects an inconsistent current source hash',()=>{
+ denied(()=>dependencyLockMutation(value=>{value.identityDestinationUxCurrentRevision.browser.producerDelta.currentProducerSha256='f'.repeat(64);}),'IDENTITY_ONLY_EXACT_BROWSER_DELTA_AND_CURRENT');
+});
+
+// The private Main selftest helper is compiled from its exact authenticated AST
+// for these unit controls. It has no export, source-reader cache or new loader.
+// Actual source authority and screenshots still use the public C8/Home methods.
+import {parse as parseIdentityFactsMain} from '@babel/parser';
+import {IDENTITY_ONLY_CHECKS as publicIdentityFactChecks,validateExtensionProof as validatePublicIdentityFactProof} from '../.github/scripts/verify-workspace-ci-parallelization.mjs';
+import {identityDestinationUxBrowserShadow as identityFactDestinationShadow,validateIdentityDestinationUxBrowserSupplement as validateIdentityFactSupplement} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
+
+const identityFactsMainPath='.github/scripts/verify-workspace-ci-parallelization.mjs';
+function identityFactsRead(file){const value=read(file);return Buffer.isBuffer(value)?Buffer.from(value.toString('utf8').replaceAll('\r\n','\n')):value;}
+function identityFactsFixture(){
+ const contract=current(),before=json(contract);lineage.verifyPlanBudgetCurrentSources(contract,identityFactsRead);
+ const source=identityFactsRead(identityFactsMainPath).toString('utf8'),tree=parseIdentityFactsMain(source,{sourceType:'module'}),declarations=new Map(),functions=new Map();
+ for(const top of tree.program.body){const n=top.type==='ExportNamedDeclaration'?top.declaration:top;if(n?.type==='VariableDeclaration')for(const d of n.declarations){if(d.id.type==='Identifier')declarations.set(d.id.name,'const '+source.slice(d.start,d.end)+';');}else if(n?.type==='FunctionDeclaration')functions.set(n.id.name,source.slice(n.start,n.end));}
+ const names=['IDENTITY_ARTIFACTS','IDENTITY_ONLY_CHECK_COUNT','identityPrivacyChecks','identityScreenshotNames','IDENTITY_ONLY_CHECKS','canonical','clone','deny','equal','exactKeys'],parts=names.map(name=>{assert.ok(declarations.has(name),name);return declarations.get(name);});
+ for(const name of ['validateIdentityProof','withIdentityScenarioFacts']){assert.ok(functions.has(name),name);parts.push(functions.get(name));}
+ parts.push('return {run:withIdentityScenarioFacts,checks:IDENTITY_ONLY_CHECKS,screenshots:identityScreenshotNames.map(name=>IDENTITY_ARTIFACTS[0]+name)};');
+ const tools=Function('assert','captureBudget','validateIdentityDestinationUxBrowserSupplement','"use strict";\n'+parts.join('\n'))(assert,lineage,validateIdentityFactSupplement);
+ assert.deepEqual(tools.checks,publicIdentityFactChecks);assert.equal(tools.checks.length,103);assert.equal(json(contract),before);
+ const spec=contract.extension.proofs.find(row=>row.kind==='UI_IDENTITY_ONLY'),expectedHead=contract.extension.baseHead,shadow=identityFactDestinationShadow(contract);
+ const proof={status:'PASS',environment:'isolated-browser-real-components-with-controlled-session-and-http',sourceRevision:expectedHead,sourceState:'EXACT_CI_SOURCE',trackedClean:true,dirtyTrackedPaths:[],widths:[320,390,768,1280],totalCheckCount:103,checks:structuredClone(tools.checks),sourceManifest:spec.sourceFiles.map(path=>({path,sha256:sha(identityFactsRead(path))})),harnessSha256:spec.producerSha256,pageErrors:[],requestErrors:[],screenshots:tools.screenshots,actualPageReloadTested:true,nativeIndexedDbReceiptReferencesTested:true,automaticRecoveryPostCount:0,postgresExecuted:false,realClerkLogin:false,realEmailDelivery:false,productionDataWritten:false,realProviderCalls:0,physicalWhatsAppVerified:false,fixtureRemoved:true,browserClosed:true,serverStopped:true,...shadow.fields};
+ const readEvidence=file=>shadow.evidence.get(file)||null;
+ const invoke=(callback,ports={})=>tools.run({contract,spec,proof,expectedHead,readSource:ports.readSource||identityFactsRead,readEvidence:ports.readEvidence||readEvidence},callback);
+ lineage.verifyPlanBudgetCurrentSources(contract,identityFactsRead);assert.equal(identityFactsRead(identityFactsMainPath).toString('utf8'),source);
+ return{contract,spec,proof,expectedHead,shadow,readEvidence,invoke};
+}
+const identityFactScopeDenied=(run,reason)=>assert.throws(run,error=>error.code==='SELFTEST_IDENTITY_FACT_SCOPE_REJECTED'&&error.reason===reason);
+
+test('identity fact scope rejects an omitted actual source before entering its pure callback',()=>{
+ const f=identityFactsFixture(),file=f.contract.planBudgetCurrentRevision.references[0].path;let entered=false;
+ assert.throws(()=>f.invoke(()=>{entered=true;},{readSource:p=>p===file?null:identityFactsRead(p)}),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'});assert.equal(entered,false);
+});
+test('identity fact scope rejects changed actual source bytes before entering its pure callback',()=>{
+ const f=identityFactsFixture(),file=f.contract.planBudgetCurrentRevision.references[0].path;let entered=false;
+ assert.throws(()=>f.invoke(()=>{entered=true;},{readSource:p=>p===file?Buffer.concat([identityFactsRead(p),Buffer.from(' ') ]):identityFactsRead(p)}),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'});assert.equal(entered,false);
+});
+test('identity fact scope requires actual screenshot RAW before any pure callback',()=>{
+ for(const replacement of [null,Buffer.from('foreign screenshot')]){const f=identityFactsFixture();let entered=false;assert.throws(()=>f.invoke(()=>{entered=true;},{readEvidence:()=>replacement}),{code:'IDENTITY_DESTINATION_UX_PROOF_REJECTED',reason:'SCREENSHOT_BYTES'});assert.equal(entered,false);}
+});
+test('identity fact scope final source authority still executes when its pure callback throws',()=>{
+ const f=identityFactsFixture(),file=f.contract.planBudgetCurrentRevision.references[0].path;let changed=false,entered=false;
+ const actual=p=>p===file&&changed?Buffer.concat([identityFactsRead(p),Buffer.from(' ') ]):identityFactsRead(p);
+ assert.throws(()=>f.invoke(()=>{entered=true;changed=true;throw new Error('controlled callback failure');},{readSource:actual}),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason:'CURRENT_REFERENCE_'+file});assert.equal(entered,true);
+});
+test('identity fact scope rereads screenshot RAW after pure callbacks instead of reusing acceptance',()=>{
+ const f=identityFactsFixture();let changed=false,lateReads=0;
+ const evidence=p=>{const raw=f.readEvidence(p);if(changed){lateReads++;return Buffer.concat([raw,Buffer.from(' ') ]);}return raw;};
+ assert.throws(()=>f.invoke(()=>{changed=true;},{readEvidence:evidence}),{code:'IDENTITY_DESTINATION_UX_PROOF_REJECTED',reason:'SCREENSHOT_BYTES'});assert.ok(lateReads>0);
+});
+test('identity fact scope propagates a genuine final source reader error',()=>{
+ const f=identityFactsFixture(),file=f.contract.planBudgetCurrentRevision.references[0].path,sentinel=Object.assign(new Error('controlled final source I/O'),{code:'CONTROLLED_IDENTITY_FACT_EIO'});let changed=false;
+ assert.throws(()=>f.invoke(()=>{changed=true;},{readSource:p=>{if(changed&&p===file)throw sentinel;return identityFactsRead(p);}}),error=>error===sentinel);
+});
+test('identity fact decoder and clone closure reject use after successful scope closure',()=>{
+ const f=identityFactsFixture();let escaped,copy;assert.equal(f.invoke(facts=>{escaped=facts;copy=facts.cloneProof();facts.validateFacts(copy);}),undefined);
+ identityFactScopeDenied(()=>escaped.cloneProof(),'CLOSED_SCOPE');identityFactScopeDenied(()=>escaped.validateFacts(copy),'CLOSED_SCOPE');
+});
+test('identity fact decoder and clone closure reject use after failed scope closure',()=>{
+ const f=identityFactsFixture(),sentinel=new Error('controlled pure callback failure');let escaped,copy;
+ assert.throws(()=>f.invoke(facts=>{escaped=facts;copy=facts.cloneProof();throw sentinel;}),error=>error===sentinel);
+ identityFactScopeDenied(()=>escaped.cloneProof(),'CLOSED_SCOPE');identityFactScopeDenied(()=>escaped.validateFacts(copy),'CLOSED_SCOPE');
+});
+test('identity fact scope rejects async callbacks and thenable returns without invoking a continuation',()=>{
+ const f=identityFactsFixture();let entered=false,thenCalls=0,escaped;
+ identityFactScopeDenied(()=>f.invoke(async()=>{entered=true;}),'ASYNC_CALLBACK');assert.equal(entered,false);
+ identityFactScopeDenied(()=>f.invoke(facts=>{escaped=facts;return{then(){thenCalls++;}};}),'SYNCHRONOUS_VOID_CALLBACK_REQUIRED');assert.equal(thenCalls,0);identityFactScopeDenied(()=>escaped.cloneProof(),'CLOSED_SCOPE');
+});
+test('identity fact scope keeps original119 and contract immutable and limits edits to checks',()=>{
+ const f=identityFactsFixture();identityFactScopeDenied(()=>f.invoke(facts=>{const changed=facts.cloneProof();changed.harnessSha256='f'.repeat(64);facts.validateFacts(changed);}),'ONLY_CHECKS_MUTABLE');
+ identityFactScopeDenied(()=>f.invoke(()=>{f.proof.harnessSha256='f'.repeat(64);}),'OBSERVED119_UNCHANGED');
+ const g=identityFactsFixture();assert.throws(()=>g.invoke(()=>{g.contract.sourceCommit='f'.repeat(40);}),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED',reason:'CONTRACT_AND_PARENT_UNCHANGED'});
+});
+test('identity fact scope preserves all206 omitted and altered scenario oracles on isolated clones',()=>{
+ const f=identityFactsFixture(),before=json(f.proof),names=[];
+ f.invoke(facts=>{for(const[index,row]of publicIdentityFactChecks.entries()){
+  const omitted=facts.cloneProof();omitted.checks.splice(index,1);assert.throws(()=>facts.validateFacts(omitted),{code:'PROOF_IDENTITY_CHECKS'});names.push('scenario-'+index+'-omitted');
+  const altered=facts.cloneProof();altered.checks[index]={...row,width:321};assert.throws(()=>facts.validateFacts(altered),{code:'PROOF_IDENTITY_CHECKS'});names.push('scenario-'+index+'-altered');
+ }});assert.equal(names.length,206);assert.equal(new Set(names).size,206);assert.equal(json(f.proof),before);
+});
+test('identity public validators still accept complete103 and reject first omitted and last altered scenarios',()=>{
+ const f=identityFactsFixture(),validate=proof=>validatePublicIdentityFactProof(f.spec,Buffer.from(JSON.stringify(proof)),{expectedHead:f.expectedHead,readSource:identityFactsRead,readEvidence:f.readEvidence});assert.equal(validate(f.proof).checks,103);
+ const omitted=structuredClone(f.proof);omitted.checks.splice(0,1);assert.throws(()=>validate(omitted),{code:'PROOF_IDENTITY_CHECKS'});
+ const altered=structuredClone(f.proof);altered.checks[altered.checks.length-1]={...altered.checks.at(-1),width:321};assert.throws(()=>validate(altered),{code:'PROOF_IDENTITY_CHECKS'});
+});
+
+// Exact eighteen protocol controls supplied by Field; only their import/root
+// entry is ported to this existing test file. No business oracle is changed.
+{
+ const home=Object.freeze({identityDestinationUxBrowserShadow:identityFactDestinationShadow,validateIdentityDestinationUxBrowserSupplement:validateIdentityFactSupplement});
+ const contract=JSON.parse(read(contractPath));
+const producer='scripts/verify-workspace-identity-only-ui.mjs',parentSha='9e236a07c14417f23209a889de850820810f2ea978c1d44a4fe94688869ff3d8';
+const history=contract.planBudgetCurrentRevision?.captureQualityRuntime?.sourceHistory?.filter(row=>row.path===producer)||[];
+assert.equal(history.length,1,'HOLD: final CURRENT producer history is not installed');assert.equal(history[0].status,'MODIFIED');assert.equal(history[0].previousSha256,parentSha);assert.equal(history[0].previousBytes,77713);
+function fixture(c=contract,reader=read){const shadow=home.identityDestinationUxBrowserShadow(c),spec=c.extension.proofs.find(row=>row.id==='identity-only-ui');assert.ok(spec);const proof={checks:[...spec.checkNames],totalCheckCount:spec.checkNames.length,harnessSha256:sha(reader(spec.producer)),sourceManifest:spec.sourceFiles.map(path=>({path,sha256:sha(reader(path))})),...shadow.fields};return{c,proof,evidence:shadow.evidence,reader,readEvidence:file=>shadow.evidence.get(file)||null};}
+const validate=f=>home.validateIdentityDestinationUxBrowserSupplement(f.proof,f.c,{readSource:f.reader,readEvidence:f.readEvidence});
+const denied=(f,reason)=>assert.throws(()=>validate(f),error=>error.code==='IDENTITY_DESTINATION_UX_PROOF_REJECTED'&&error.reason===reason);
+const current=(edit,reason)=>{const f=fixture();edit(f);denied(f,reason);};
+const row=f=>f.proof.destinationNavigation.checks[1],allGuideRows=f=>f.proof.destinationNavigation.checks.filter((_,index)=>index%4===1);
+const four=[null,null,'t-p-a',null].map(afterTask=>({actor:'A',projectId:'p-a',afterTask}));
+const two=[null,'t-p-a'].map(afterTask=>({actor:'A',projectId:'p-a',afterTask}));
+test('protocol2 exact four reads and seven network rows retain the observed input',()=>{const f=fixture(),before=JSON.stringify(f.proof);for(const r of allGuideRows(f)){assert.deepEqual(r.append.projectReads,four);assert.equal(r.apiSequence.length,7);assert.equal(r.workspaceGets,6);assert.equal(r.participantGets,1);assert.equal(r.totalPosts,0);}const result=validate(f);assert.equal(JSON.stringify(f.proof),before);assert.deepEqual(result.checks,f.proof.checks);assert.equal(result.totalCheckCount,103);assert.equal(Object.hasOwn(result,'destinationNavigation'),false);});
+test('protocol2 omitted project read is denied',()=>current(f=>row(f).append.projectReads.pop(),'ACTUAL_APPEND_CURSOR'));
+test('protocol2 reordered nonidentical cursor read is denied',()=>current(f=>{const a=row(f).append.projectReads;[a[1],a[2]]=[a[2],a[1]];},'ACTUAL_APPEND_CURSOR'));
+test('protocol2 additional project read is denied',()=>current(f=>row(f).append.projectReads.push(structuredClone(four[0])),'ACTUAL_APPEND_CURSOR'));
+test('protocol2 duplicate base cannot replace the append cursor',()=>current(f=>{row(f).append.projectReads[2]=structuredClone(four[0]);},'ACTUAL_APPEND_CURSOR'));
+test('protocol2 cannot reuse the historical two-read oracle',()=>current(f=>{row(f).append.projectReads=structuredClone(two);},'ACTUAL_APPEND_CURSOR'));
+test('protocol2 cannot reuse the historical five-row network oracle',()=>current(f=>{const r=row(f);r.apiSequence.splice(4,1);r.apiSequence.splice(5,1);r.workspaceGets-=2;},'API_SEQUENCE'));
+test('protocol2 extra network GET is denied',()=>current(f=>{const r=row(f);r.apiSequence.push(structuredClone(r.apiSequence[3]));r.workspaceGets++;},'API_SEQUENCE'));
+test('protocol2 network POST is denied',()=>current(f=>{const r=row(f);r.apiSequence[3].method='POST';r.totalPosts=1;},'API_SEQUENCE'));
+test('protocol2 foreign project in cursor facts is denied',()=>current(f=>{row(f).append.projectReads[2].projectId='p-b';},'ACTUAL_APPEND_CURSOR'));
+test('protocol2 changed observed harness hash is denied',()=>current(f=>{f.proof.harnessSha256='f'.repeat(64);},'ACTUAL_CURRENT_HARNESS'));
+test('protocol2 source history requires the exact producer predecessor',()=>{const f=fixture();f.c=structuredClone(f.c);f.c.planBudgetCurrentRevision.captureQualityRuntime.sourceHistory.find(row=>row.path===producer).previousSha256='f'.repeat(64);denied(f,'CURRENT_LIVE_SOURCE_HISTORY');});
+test('protocol2 changed current metadata pin cannot reduce authority',()=>{const f=fixture();f.c=structuredClone(f.c);f.c.planBudgetCurrentRevision.references.find(row=>row.path===producer).currentSha256='f'.repeat(64);denied(f,'CURRENT_LIVE_SOURCE_JOIN');});
+test('protocol2 changed source reader is denied before observations qualify',()=>{const f=fixture();f.reader=file=>file===producer?Buffer.concat([read(file),Buffer.from(' ')]):read(file);assert.throws(()=>validate(f),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'});});
+test('protocol2 source drift after evidence is denied by the final fresh reread',()=>{const f=fixture();let changed=false;f.reader=file=>file===producer&&changed?Buffer.concat([read(file),Buffer.from(' ')]):read(file);f.readEvidence=file=>{changed=true;return f.evidence.get(file)||null;};assert.throws(()=>validate(f),{code:'PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED'});assert.equal(changed,true);});
+test('protocol2 evidence callbacks cannot mutate the observed proof',()=>{const f=fixture();f.readEvidence=file=>{f.proof.unobservedExtra=true;return f.evidence.get(file)||null;};denied(f,'OBSERVED_PROOF_UNCHANGED');});
+test('owned historical protocol1 retains exactly two reads and five network rows',()=>lineage.withCaptureRuntimePreviousSources(contract,read,(parent,parentRead)=>{const f=fixture(parent,parentRead),before=JSON.stringify(f.proof);for(const r of allGuideRows(f)){assert.deepEqual(r.append.projectReads,two);assert.equal(r.apiSequence.length,5);}const result=validate(f);assert.deepEqual(result.checks,f.proof.checks);assert.equal(JSON.stringify(f.proof),before);}));
+test('owned historical protocol1 cannot accept current four-read facts',()=>lineage.withCaptureRuntimePreviousSources(contract,read,(parent,parentRead)=>{const f=fixture(parent,parentRead);row(f).append.projectReads=structuredClone(four);denied(f,'ACTUAL_APPEND_CURSOR');}));
+// Schema2 controls are additional; all eighteen preceding test nodes are exact.
+const delayedRows=f=>f.proof.destinationNavigation.checks.filter((_,index)=>index%4===0);
+const delayed=f=>f.proof.destinationNavigation.checks[0].profileRead;
+const currentProfileNavigation=[{hash:'#worker-channel-title',identityHidden:true,whatsappHidden:false,participantGets:0,heldProfileGets:0},{hash:'#participant-title',identityHidden:false,whatsappHidden:true,participantGets:1,heldProfileGets:1},{hash:'#worker-channel-title',identityHidden:true,whatsappHidden:false,participantGets:1,heldProfileGets:1}];
+test('protocol2 explicitly observes identity navigation with one held profile GET',()=>{const f=fixture();assert.equal(f.proof.destinationNavigation.version,2);for(const r of delayedRows(f)){assert.deepEqual(Object.keys(r.profileRead).sort(),['activation','noHiddenProfileReadBeforeNavigation','navigation','heldBeforeNavigation','releasedAfterNavigation','beforeGeometry','afterGeometry'].sort());assert.equal(r.profileRead.activation,'EXPLICIT_IDENTITY_NAVIGATION');assert.equal(r.profileRead.noHiddenProfileReadBeforeNavigation,true);assert.deepEqual(r.profileRead.navigation,currentProfileNavigation);assert.equal(r.participantGets,1);assert.equal(r.totalPosts,0);}const before=JSON.stringify(f.proof);validate(f);assert.equal(JSON.stringify(f.proof),before);});
+test('protocol2 cannot relabel its current observations as version1',()=>current(f=>{f.proof.destinationNavigation.version=1;},'SUPPLEMENT_MATRIX'));
+test('protocol2 cannot reuse the historical four-key delayed profile',()=>current(f=>{delete delayed(f).activation;delete delayed(f).noHiddenProfileReadBeforeNavigation;delete delayed(f).navigation;},'DELAYED_PROFILE_SHAPE'));
+test('protocol2 rejects profile activation without explicit identity navigation',()=>current(f=>{delayed(f).activation='HIDDEN_AUTOMATIC_READ';},'DELAYED_PROFILE_EXPLICIT_ACTIVATION'));
+test('protocol2 rejects a hidden profile read before navigation',()=>current(f=>{delayed(f).noHiddenProfileReadBeforeNavigation=false;},'DELAYED_PROFILE_EXPLICIT_ACTIVATION'));
+test('protocol2 requires the observed navigation array',()=>current(f=>{delayed(f).navigation=null;},'DELAYED_PROFILE_NAVIGATION'));
+test('protocol2 cannot omit a navigation snapshot',()=>current(f=>{delayed(f).navigation.splice(1,1);},'DELAYED_PROFILE_NAVIGATION'));
+test('protocol2 cannot reorder identity activation and return snapshots',()=>current(f=>{const a=delayed(f).navigation;[a[1],a[2]]=[a[2],a[1]];},'DELAYED_PROFILE_NAVIGATION'));
+test('protocol2 cannot append an unobserved navigation snapshot',()=>current(f=>{delayed(f).navigation.push(structuredClone(currentProfileNavigation[2]));},'DELAYED_PROFILE_NAVIGATION'));
+test('protocol2 navigation snapshots reject additional fields',()=>current(f=>{delayed(f).navigation[0].unobserved=true;},'DELAYED_PROFILE_NAVIGATION_ROW'));
+test('protocol2 requires zero participant GETs before identity activation',()=>current(f=>{delayed(f).navigation[0].participantGets=1;},'DELAYED_PROFILE_NAVIGATION'));
+test('protocol2 requires identity to remain hidden before activation',()=>current(f=>{delayed(f).navigation[0].identityHidden=false;},'DELAYED_PROFILE_NAVIGATION'));
+test('protocol2 requires a real held GET during the visible identity snapshot',()=>current(f=>{delayed(f).navigation[1].heldProfileGets=0;},'DELAYED_PROFILE_NAVIGATION'));
+test('protocol2 requires return to WhatsApp before profile release',()=>current(f=>{delayed(f).navigation[2].hash='#participant-title';},'DELAYED_PROFILE_NAVIGATION'));
+test('protocol2 preserves the original final geometry and focus guard',()=>current(f=>{delayed(f).afterGeometry.focused=false;},'VISIBLE_FOCUSED_DESTINATION'));
+test('owned historical protocol1 cannot relabel its observations as version2',()=>lineage.withCaptureRuntimePreviousSources(contract,read,(parent,parentRead)=>{const f=fixture(parent,parentRead);f.proof.destinationNavigation.version=2;denied(f,'SUPPLEMENT_MATRIX');}));
+test('owned historical protocol1 rejects the expanded current profile shape',()=>lineage.withCaptureRuntimePreviousSources(contract,read,(parent,parentRead)=>{const f=fixture(parent,parentRead);assert.equal(f.proof.destinationNavigation.version,1);assert.deepEqual(Object.keys(delayed(f)).sort(),['heldBeforeNavigation','releasedAfterNavigation','beforeGeometry','afterGeometry'].sort());Object.assign(delayed(f),{activation:'EXPLICIT_IDENTITY_NAVIGATION',noHiddenProfileReadBeforeNavigation:true,navigation:structuredClone(currentProfileNavigation)});denied(f,'DELAYED_PROFILE_SHAPE');}));
+
+}

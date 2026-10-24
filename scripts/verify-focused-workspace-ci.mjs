@@ -2,6 +2,7 @@ import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,verifyWorksiteLiveHoursCurrentSource
 function checkWorksiteSource(action){try{return action();}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}}
 const verifyWorksiteLiveHoursCurrentSources=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck0(...args));
 const verifyWorksiteLiveHoursActualClosure=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck1(...args));
+import {withCaptureRuntimePreviousSources,planBudgetCurrentSourcePin} from './lib/plan-budget-current-ci-lineage.mjs';
 import {WORKSPACE_CONTINUITY_FOCUSED_UI} from './lib/workspace-continuity-current-ci-lineage.mjs';
 import {WHATSAPP_FIELD_CONTINUITY_FOCUSED_UI} from './lib/whatsapp-field-continuity-current-ci-lineage.mjs';
 import {HOME_DECISIONS_CURRENT_SECTION,normalizeHomeDecisionsFocusedRaw} from './lib/home-decisions-current-ci-lineage.mjs';
@@ -110,7 +111,20 @@ function controlledBootstrapDependency(value,file,tree,node,readSource){
  if(file!==controlledBootstrapFixture||node.type!=='ImportExpression')return false;
  const rows=WORKSPACE_CONTINUITY_FOCUSED_UI.controlledSourceTransforms;reject(Array.isArray(rows)&&rows.length===1,'One reviewed source transform declaration required');const declaration=rows[0];keys(declaration,['file','sourceLfSha256','kind','source','compiler','packageLockSha256'],'controlled source transform');
  reject(declaration.file===controlledBootstrapFixture&&declaration.kind==='SWC_READY_BRANCH_DATA_MODULE'&&declaration.source===controlledBootstrapPanel&&declaration.compiler===controlledBootstrapCompiler&&typeof readSource==='function','Only the exact original bootstrap source transform is permitted');
- const canonicalHash=raw=>sha(Buffer.from(raw.toString('utf8').replaceAll('\r\n','\n')));reject(canonicalHash(value)===declaration.sourceLfSha256&&canonicalHash(bytes(readSource,'package-lock.json'))===declaration.packageLockSha256,'Controlled unit and compiler lock must equal their reviewed source bytes');
+ const canonicalHash=raw=>sha(Buffer.from(raw.toString('utf8').replaceAll('\r\n','\n')));
+ const lockBytes=bytes(readSource,'package-lock.json'),contractBytes=readSource(contractPath);
+ const compilerContract=Buffer.isBuffer(contractBytes)?JSON.parse(contractBytes):null;
+ const dependencyLockHistory=compilerContract?.planBudgetCurrentRevision?.captureQualityRuntime?.sourceHistory?.find(row=>row.path==='package-lock.json');
+ let compilerLockMatches=canonicalHash(lockBytes)===declaration.packageLockSha256;
+ if(dependencyLockHistory){
+  compilerLockMatches=withCaptureRuntimePreviousSources(compilerContract,readSource,(parent,parentRead)=>{
+   const currentPin=planBudgetCurrentSourcePin(compilerContract,{path:'package-lock.json',sha256:declaration.packageLockSha256});
+   reject(compilerContract.packageLockSha256===currentPin&&canonicalHash(lockBytes)===currentPin,'The actual current compiler lock must match its authenticated dependency advance');
+   reject(parent.packageLockSha256===declaration.packageLockSha256&&canonicalHash(bytes(parentRead,'package-lock.json'))===declaration.packageLockSha256,'The controlled compiler transform must restore its exact literal731 lock');
+   return true;
+  });
+ }
+ reject(canonicalHash(value)===declaration.sourceLfSha256&&compilerLockMatches,'Controlled unit and compiler lock must equal their reviewed source bytes');
  const expected=parse(controlledBootstrapTransformPrefix,{sourceType:'module',plugins:['jsx'],createImportExpressions:true}).program.body,actual=tree.program.body.slice(0,expected.length),last=actual.at(-1);
  reject(same(syntaxShape(actual),syntaxShape(expected))&&last?.type==='VariableDeclaration'&&last.kind==='const'&&last.declarations.length===1&&last.declarations[0].init?.type==='AwaitExpression'&&last.declarations[0].init.argument===node,'Only the exact local panel, resolved React, SWC JSX transform and compiled.code base64 module shape is permitted');
  bytes(readSource,controlledBootstrapPanel);return true;

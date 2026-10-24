@@ -2914,6 +2914,51 @@ const {validateExtensionProof,currentProducerSourceFiles,currentKycStatusClosure
  }
  return checks;
 }
+// Synthetic selftest facts only. Public proof validators keep their complete
+// current-source, RAW and screenshot path; no source reader escapes this scope.
+function withIdentityScenarioFacts({contract,spec,proof,expectedHead,readSource,readEvidence},run){
+ const rejectScope=(ok,reason)=>{if(!ok)throw Object.assign(new Error('Identity scenario fact scope rejected: '+reason),{code:'SELFTEST_IDENTITY_FACT_SCOPE_REJECTED',reason});};
+ const freeze=value=>{if(value&&typeof value==='object'){for(const child of Object.values(value))freeze(child);Object.freeze(value);}return value;};
+ rejectScope(typeof run==='function'&&typeof readSource==='function'&&typeof readEvidence==='function','ACTUAL_PORTS_AND_CALLBACK');
+ rejectScope(run.constructor?.name!=='AsyncFunction'&&run.constructor?.name!=='AsyncGeneratorFunction','ASYNC_CALLBACK');
+ rejectScope(spec?.kind==='UI_IDENTITY_ONLY'&&expectedHead===contract.extension.baseHead,'EXACT_IDENTITY_FIXTURE');
+ assert.deepEqual(spec,contract.extension.proofs.find(row=>row.kind==='UI_IDENTITY_ONLY'));
+ const originalProofJson=JSON.stringify(proof),originalContractJson=JSON.stringify(contract),originalSpecJson=JSON.stringify(spec);
+ const owned119=freeze(clone(proof)),owned119Json=JSON.stringify(owned119),ownedSpec=freeze(clone(spec));
+ let active=false;
+ return captureBudget.withCaptureRuntimePreviousSources(contract,readSource,()=>{
+  let baseline103=null,baseline103Json=null;
+  try{
+   // This is the unmodified public Home wrapper, including current source and
+   // actual screenshot reads. Its existing return consumes only the supplement.
+   baseline103=freeze(clone(validateIdentityDestinationUxBrowserSupplement(owned119,contract,{readSource,readEvidence})));
+   baseline103Json=JSON.stringify(baseline103);validateIdentityProof(ownedSpec,baseline103,expectedHead);
+   const requireActive=()=>rejectScope(active,'CLOSED_SCOPE');
+   const facts=Object.freeze({
+    cloneProof:()=>{requireActive();return clone(baseline103);},
+    validateFacts:value=>{requireActive();rejectScope(canonical({...value,checks:baseline103.checks})===canonical(baseline103),'ONLY_CHECKS_MUTABLE');validateIdentityProof(ownedSpec,value,expectedHead);},
+   });
+   active=true;
+   const result=run(facts);rejectScope(result===undefined,'SYNCHRONOUS_VOID_CALLBACK_REQUIRED');
+  }finally{
+   active=false;
+   try{
+    // Reread CURRENT sources and screenshot bytes through the public path even
+    // when a fact callback throws. Never reuse a previously accepted reader.
+    if(baseline103!==null){
+     const after=validateIdentityDestinationUxBrowserSupplement(owned119,contract,{readSource,readEvidence});
+     rejectScope(JSON.stringify(after)===baseline103Json,'BASELINE103_UNCHANGED');
+    }
+   }finally{
+    rejectScope(JSON.stringify(owned119)===owned119Json,'OWNED119_UNCHANGED');
+    rejectScope(JSON.stringify(proof)===originalProofJson,'OBSERVED119_UNCHANGED');
+    rejectScope(JSON.stringify(spec)===originalSpecJson,'SPEC_UNCHANGED');
+    rejectScope(JSON.stringify(contract)===originalContractJson,'CONTRACT_UNCHANGED');
+   }
+  }
+ });
+}
+
 function identitySelftest(workflow,contract,root,currentContinuityChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[],currentKycStatusChecks=[],currentCalendarChecks=[]){
  const checks=[],expectedHead=contract.extension.baseHead,spec=contract.extension.proofs.find(isIdentity);
  const good=(name,run)=>{run();checks.push({name:'identity-only-ui-'+name,result:'PASS',boundary:'pure identity shadow fixture; no Git/PG/UI/provider execution'});};
@@ -2945,10 +2990,16 @@ function identitySelftest(workflow,contract,root,currentContinuityChecks=[],curr
  for(const key of ['fixtureRemoved','browserClosed','serverStopped'])mutate('cleanup-'+key,'PROOF_CLEANUP',p=>{p[key]=false;});
  for(const key of ['pageErrors','requestErrors'])mutate('error-'+key,'PROOF_UI_ERRORS',p=>{p[key]=['shadow failure'];});
  mutate('wrong-width','PROOF_MATRIX',p=>{p.widths[0]=321;});mutate('wrong-total','PROOF_MATRIX',p=>{p.totalCheckCount=34;});
- for(const [index,row] of IDENTITY_ONLY_CHECKS.entries()){
-  mutate('scenario-'+index+'-omitted','PROOF_IDENTITY_CHECKS',p=>{p.checks.splice(index,1);});
-  mutate('scenario-'+index+'-altered','PROOF_IDENTITY_CHECKS',p=>{p.checks[index]={...row,width:321};});
- }
+ withIdentityScenarioFacts({contract,spec,proof,expectedHead,readSource,readEvidence:file=>destinationShadow.evidence.get(file)||null},({cloneProof,validateFacts})=>{
+  const mutateFacts=(name,code,edit)=>{const value=cloneProof();edit(value);bad(name,code,()=>validateFacts(value));checks.at(-1).boundary='pure identity fact decoder inside one fresh synchronous current-source and RAW scope; no native or human acceptance';};
+  for(const [index,row] of IDENTITY_ONLY_CHECKS.entries()){
+   mutateFacts('scenario-'+index+'-omitted','PROOF_IDENTITY_CHECKS',p=>{p.checks.splice(index,1);});
+   mutateFacts('scenario-'+index+'-altered','PROOF_IDENTITY_CHECKS',p=>{p.checks[index]={...row,width:321};});
+  }
+ });
+ // Two public integration anchors retain the complete current source/RAW path.
+ mutate('public-scenario-first-omitted','PROOF_IDENTITY_CHECKS',p=>{p.checks.splice(0,1);});
+ mutate('public-scenario-last-altered','PROOF_IDENTITY_CHECKS',p=>{p.checks[p.checks.length-1]={...p.checks.at(-1),width:321};});
  mutate('scenario-duplicated','PROOF_IDENTITY_CHECKS',p=>{p.checks[0]=clone(p.checks[1]);});mutate('scenario-extra','PROOF_IDENTITY_CHECKS',p=>{p.checks.push(clone(p.checks[0]));});
  mutate('scenario-reordered','PROOF_IDENTITY_CHECKS',p=>{p.checks.reverse();});mutate('scenario-extra-field','PROOF_IDENTITY_CHECKS',p=>{p.checks[0].accepted=true;});
  for(const key of ['actualPageReloadTested','nativeIndexedDbReceiptReferencesTested'])mutate('recovery-'+key,'PROOF_IDENTITY_RECOVERY',p=>{p[key]=false;});
