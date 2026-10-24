@@ -111,6 +111,42 @@ function validateOrganizationUsageUiDto(ui){
  for(const [index,label] of labels.entries())requireProof(counts.get(label)===requestCounts[index]&&posts.get(label)===(index>=8?1:0),'Complete bounded request observations for '+label);
 }
 
+// Denial only: LF pins establish eligibility; RAW copies never become authority.
+// An exotic source map keeps every existing caller read and late check in order.
+function earlySourceDescriptors(gitSources){
+ if(earlyDtoTypes.isProxy(gitSources))return null;
+ const prototype=Object.getPrototypeOf(gitSources);if(prototype!==Object.prototype&&prototype!==null)return null;
+ const descriptors=Object.getOwnPropertyDescriptors(gitSources),keys=Reflect.ownKeys(descriptors),bufferReadKeys=['toString','valueOf','length','byteLength','byteOffset','buffer','parent','offset','constructor','toJSON','slice','subarray','copy','equals',Symbol.toPrimitive,Symbol.iterator];
+ for(const key of keys){if(typeof key!=='string')return null;const row=descriptors[key];if(!Object.hasOwn(row,'value')||row.enumerable!==true||row.configurable!==true||row.writable!==true||earlyDtoTypes.isProxy(row.value)||!Buffer.isBuffer(row.value)||Object.getPrototypeOf(row.value)!==Buffer.prototype||bufferReadKeys.some(name=>Object.hasOwn(row.value,name)))return null;}
+ return descriptors;
+}
+function earlySourceCopy(buffer){
+ const length=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype),'length').get.call(buffer),copy=Buffer.alloc(length);
+ Uint8Array.prototype.set.call(copy,buffer);return copy;
+}
+function earlySourceText(copy){const text=copy.toString('utf8');return Buffer.from(text).equals(copy)?text:null;}
+function earlyCurrentFamily(contract,family){
+ const section=contract?.planBudgetCurrentRevision;if(!section?.captureQualityRuntime||!Array.isArray(section.sourceFamilies))return null;
+ const matches=section.sourceFamilies.filter(row=>row?.family===family);if(matches.length!==1)return null;
+ const {currentFiles:files,currentManifest:pins}=matches[0];if(!Array.isArray(files)||files.length===0||!Array.isArray(pins)||pins.length!==files.length)return null;
+ for(let index=0;index<files.length;index++){const file=files[index],pin=pins[index];if(typeof file!=='string'||!(dependencies.includes(file)||safePath(file))||index>0&&files[index-1]>=file||!pin||Object.keys(pin).sort().join('|')!=='path|sha256'||pin.path!==file||!hash(pin.sha256))return null;}
+ return {files,pins};
+}
+function earlyFamilyCopies(descriptors,families){
+ const pins=new Map();for(const family of families)for(const pin of family.pins){if(pins.has(pin.path)&&pins.get(pin.path)!==pin.sha256)return null;pins.set(pin.path,pin.sha256);}
+ const copies=new Map();try{for(const [file,pin]of pins){if(!Object.hasOwn(descriptors,file))return null;const copy=earlySourceCopy(descriptors[file].value),text=earlySourceText(copy);if(text===null||sha(Buffer.from(text.replaceAll('\r\n','\n')))!==pin)return null;copies.set(file,copy);}}catch{return null;}
+ return copies;
+}
+function preflightOrganizationUsageManifests(gitSources,postgres,ui,businessInputsBefore){
+ if(!ordinaryJsonDto(postgres)||!ordinaryJsonDto(ui))return;
+ const descriptors=earlySourceDescriptors(gitSources),contractPath='.github/workspace-acceptance-contract.json';if(!descriptors||!Object.hasOwn(descriptors,contractPath))return;
+ let contract;try{const text=earlySourceText(earlySourceCopy(descriptors[contractPath].value));if(text===null)return;contract=JSON.parse(text);}catch{return;}
+ const native=earlyCurrentFamily(contract,'ORGANIZATION_USAGE'),browser=earlyCurrentFamily(contract,'ORGANIZATION_USAGE_UI');if(!native||!browser)return;
+ const copies=earlyFamilyCopies(descriptors,[native,browser]);if(!copies||dependencies.some(file=>!copies.has(file)))return;
+ const ownedPostgres=JSON.parse(businessInputsBefore.postgres),ownedUi=JSON.parse(businessInputsBefore.ui),readPrivate=file=>copies.get(file);
+ manifest(ownedPostgres.sourceManifest,native.files,readPrivate,'PostgreSQL');manifest(ownedUi.sourceManifest,browser.files,readPrivate,'UI');manifest(ownedUi.dependencyManifest,dependencies,readPrivate,'UI dependencies');
+}
+
 export function validateOrganizationUsageCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres,ui}){
  requireProof(revision(expectedHead)&&head===expectedHead&&revision(sourceTree)&&trackedClean===true,'Exact clean expected Git HEAD/tree');requireProof(gitSources&&typeof gitSources==='object'&&!Array.isArray(gitSources),'Committed source map');
  const businessInputsBefore={postgres:JSON.stringify(postgres),ui:JSON.stringify(ui)},verifyBusinessInputs=()=>requireProof(JSON.stringify(postgres)===businessInputsBefore.postgres&&JSON.stringify(ui)===businessInputsBefore.ui,'Business DTOs changed during source validation');
@@ -126,6 +162,7 @@ export function validateOrganizationUsageCi({expectedHead,head,sourceTree,tracke
  for(const [index,record] of postgres.nativeLockObservations.entries())requireProof(exact(record,['firstTransport','secondTransport','sameOrganization','differentProjects','waitingCount','waitingBeforeProject','bothCompleted'])&&record.firstTransport===['WEB','WHATSAPP'][index]&&record.secondTransport===['WHATSAPP','WEB'][index]&&record.sameOrganization===true&&record.differentProjects===true&&Number.isSafeInteger(record.waitingCount)&&record.waitingCount>=1&&record.waitingBeforeProject===true&&record.bothCompleted===true,'Native advisory-before-project ordering');
  // All native DTO guards above keep their original priority. The same UI helper runs again below.
  if(ordinaryJsonDto(ui))validateOrganizationUsageUiDto(ui);
+ preflightOrganizationUsageManifests(gitSources,postgres,ui,businessInputsBefore);
  const native=organizationUsageCiSourceClosure(readSource),currentSourceContract=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));if(currentSourceContract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]){verifyWorksiteLiveHoursCurrentSources(currentSourceContract,readSource);verifyWorksiteLiveHoursActualClosure(currentSourceContract,'ORGANIZATION_USAGE',native,readSource);}let historicalNativeFiles,sourceLineage;try{({historicalNativeFiles,sourceLineage}=organizationHistoricalNativeLineage(currentSourceContract,native,readSource,postgres,ui,verifyBusinessInputs));}catch(error){requireProof(false,error.message);}
  requireProof(historicalNativeFiles.length===115&&native.files.filter(file=>file===fieldReportSource).length===1,'Complete 115-source native closure with the own field report reader and source import');
  const previousNative=historicalNativeFiles.filter(file=>file!==fieldReportSource&&!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file));requireProof(previousNative.length===112&&sha(JSON.stringify(previousNative))===previousNativePathsSha256,'Preserved exact previous 112-source native lineage');

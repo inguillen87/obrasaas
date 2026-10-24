@@ -159,6 +159,40 @@ function ordinaryJsonDto(value,ancestors=new Set()){
  ancestors.add(value);try{for(const key of keys){if(array&&key==='length')continue;const row=descriptors[key];if(!Object.hasOwn(row,'value')||row.enumerable!==true||array&&!/^(?:0|[1-9][0-9]*)$/.test(key)||!ordinaryJsonDto(row.value,ancestors))return false;}return true;}finally{ancestors.delete(value);}
 }
 
+// Denial only: LF pins establish eligibility; RAW copies never become authority.
+// An exotic source map keeps every existing caller read and late check in order.
+function earlySourceDescriptors(gitSources){
+ if(earlyDtoTypes.isProxy(gitSources))return null;
+ const prototype=Object.getPrototypeOf(gitSources);if(prototype!==Object.prototype&&prototype!==null)return null;
+ const descriptors=Object.getOwnPropertyDescriptors(gitSources),keys=Reflect.ownKeys(descriptors),bufferReadKeys=['toString','valueOf','length','byteLength','byteOffset','buffer','parent','offset','constructor','toJSON','slice','subarray','copy','equals',Symbol.toPrimitive,Symbol.iterator];
+ for(const key of keys){if(typeof key!=='string')return null;const row=descriptors[key];if(!Object.hasOwn(row,'value')||row.enumerable!==true||row.configurable!==true||row.writable!==true||earlyDtoTypes.isProxy(row.value)||!Buffer.isBuffer(row.value)||Object.getPrototypeOf(row.value)!==Buffer.prototype||bufferReadKeys.some(name=>Object.hasOwn(row.value,name)))return null;}
+ return descriptors;
+}
+function earlySourceCopy(buffer){
+ const length=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype),'length').get.call(buffer),copy=Buffer.alloc(length);
+ Uint8Array.prototype.set.call(copy,buffer);return copy;
+}
+function earlySourceText(copy){const text=copy.toString('utf8');return Buffer.from(text).equals(copy)?text:null;}
+function earlyCurrentFamily(contract,family){
+ const section=contract?.planBudgetCurrentRevision;if(!section?.captureQualityRuntime||!Array.isArray(section.sourceFamilies))return null;
+ const matches=section.sourceFamilies.filter(row=>row?.family===family);if(matches.length!==1)return null;
+ const {currentFiles:files,currentManifest:pins}=matches[0];if(!Array.isArray(files)||files.length===0||!Array.isArray(pins)||pins.length!==files.length)return null;
+ for(let index=0;index<files.length;index++){const file=files[index],pin=pins[index];if(typeof file!=='string'||!(['package.json','package-lock.json'].includes(file)||safeSource(file))||index>0&&files[index-1]>=file||!pin||Object.keys(pin).sort().join('|')!=='path|sha256'||pin.path!==file||!hash(pin.sha256))return null;}
+ return {files,pins};
+}
+function earlyFamilyCopies(descriptors,families){
+ const pins=new Map();for(const family of families)for(const pin of family.pins){if(pins.has(pin.path)&&pins.get(pin.path)!==pin.sha256)return null;pins.set(pin.path,pin.sha256);}
+ const copies=new Map();try{for(const [file,pin]of pins){if(!Object.hasOwn(descriptors,file))return null;const copy=earlySourceCopy(descriptors[file].value),text=earlySourceText(copy);if(text===null||sha(Buffer.from(text.replaceAll('\r\n','\n')))!==pin)return null;copies.set(file,copy);}}catch{return null;}
+ return copies;
+}
+function preflightCompanyKycOutboundCompactManifest(gitSources,postgres){
+ const descriptors=earlySourceDescriptors(gitSources);if(!descriptors||!Object.hasOwn(descriptors,KYC_EXPIRED_CURRENT_CONTRACT_PATH))return;
+ let contract;try{const text=earlySourceText(earlySourceCopy(descriptors[KYC_EXPIRED_CURRENT_CONTRACT_PATH].value));if(text===null)return;contract=JSON.parse(text);}catch{return;}
+ const family=earlyCurrentFamily(contract,'COMPACT');if(!family)return;
+ const copies=earlyFamilyCopies(descriptors,[family]);if(!copies||!copies.has(producer))return;
+ validateManifest(postgres,family.files,file=>copies.get(file));
+}
+
 export function validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres,readEvidence}){
  requireProof(revision(expectedHead)&&head===expectedHead&&revision(sourceTree)&&trackedClean===true,'Exact clean Git HEAD and tree required');
  requireProof(gitSources&&typeof gitSources==='object'&&!Array.isArray(gitSources),'Committed Git sources required');
@@ -169,7 +203,7 @@ export function validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTre
  same(postgres.checks,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS,'Every native lease, revocation, seal and uncertain reply scenario required');
  // Rejection only. The same original helpers still run after the fresh
  // actual AST closure and RAW manifest validation at their unchanged late point.
- if(ordinaryJsonDto(postgres)){validateMeasurements(postgres);validateScenarios(postgres);validateContextFeedback(postgres);validateLatestExpiredComposition(postgres);}
+ if(ordinaryJsonDto(postgres)){validateMeasurements(postgres);validateScenarios(postgres);validateContextFeedback(postgres);validateLatestExpiredComposition(postgres);preflightCompanyKycOutboundCompactManifest(gitSources,postgres);}
  const closure=companyKycOutboundCompactCiSourceClosure(readSource);validateManifest(postgres,closure.files,readSource);validateMeasurements(postgres);validateScenarios(postgres);validateContextFeedback(postgres);validateLatestExpiredComposition(postgres);
  let currentCompositionLineage,currentNeutralStepGuidance;
  try{

@@ -118,12 +118,14 @@ function controlledBootstrapDependency(value,file,tree,node,readSource){
  const dependencyLockHistory=compilerContract?.planBudgetCurrentRevision?.captureQualityRuntime?.sourceHistory?.find(row=>row.path==='package-lock.json');
  let compilerLockMatches=canonicalHash(lockBytes)===declaration.packageLockSha256;
  if(dependencyLockHistory){
+  try{
   compilerLockMatches=withCaptureRuntimePreviousSources(compilerContract,readSource,(parent,parentRead)=>{
    const currentPin=planBudgetCurrentSourcePin(compilerContract,{path:'package-lock.json',sha256:declaration.packageLockSha256});
    reject(compilerContract.packageLockSha256===currentPin&&canonicalHash(lockBytes)===currentPin,'The actual current compiler lock must match its authenticated dependency advance');
    reject(parent.packageLockSha256===declaration.packageLockSha256&&canonicalHash(bytes(parentRead,'package-lock.json'))===declaration.packageLockSha256,'The controlled compiler transform must restore its exact literal731 lock');
    return true;
   });
+  }catch(error){if(error?.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}
  }
  reject(canonicalHash(value)===declaration.sourceLfSha256&&compilerLockMatches,'Controlled unit and compiler lock must equal their reviewed source bytes');
  const expected=parse(controlledBootstrapTransformPrefix,{sourceType:'module',plugins:['jsx'],createImportExpressions:true}).program.body,actual=tree.program.body.slice(0,expected.length),last=actual.at(-1);

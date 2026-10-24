@@ -357,8 +357,22 @@ test('identity destination pins authenticate exact predecessor current and full 
 });
 function destinationDecoderShadow(){const c=current(),f=identityDestinationUxBrowserShadow(c),spec=c.extension.proofs.find(row=>row.id==='identity-only-ui'),proof={checks:['untouched core shadow marker'],totalCheckCount:103,harnessSha256:sha(read(spec.producer)),sourceManifest:spec.sourceFiles.map(path=>({path,sha256:sha(read(path))})),...f.fields};return {c,f,proof,validate:p=>validateIdentityDestinationUxBrowserSupplement(p,c,{readSource:read,readEvidence:path=>f.evidence.get(path)||null})};}
 test('the current identity producer restores exact published8c source solely for historical source tests while current gates keep raw bytes',()=>{
+ const actualContract=current(),actualSnapshot=serialize(actualContract),producer=destinationExpected.browser.producerDelta.producer,actualRaw=Buffer.from(read(producer));
+ const verifyActualCurrent=()=>{
+  assert.equal(serialize(actualContract),actualSnapshot);assert.deepEqual(read(producer),actualRaw);
+  const ref=actualContract.planBudgetCurrentRevision.references.find(row=>row.path===producer);assert.ok(ref);
+  const currentPin=planBudgetCurrentSourcePin(actualContract,{path:producer,sha256:ref.currentSha256});assert.equal(currentPin,ref.currentSha256);
+  assert.equal(sha(actualRaw.toString('utf8').replaceAll('\r\n','\n')),currentPin);
+  assert.equal(verifyIdentityDestinationUxCurrentSources(actualContract,read).nativeOrBrowserAcceptance,false);
+  assert.deepEqual(read(producer),actualRaw);assert.equal(serialize(actualContract),actualSnapshot);
+ };
+ verifyActualCurrent();
+ try{withCaptureRuntimePreviousSources(actualContract,read,(parent,parentRead)=>{
+  const current=()=>structuredClone(parent),read=parentRead;
  const c=current(),p=destinationExpected.browser.producerDelta.producer,raw=read(p),unchanged=sha(raw),previous=restoreIdentityDestinationUxPreviousProducerText(c,p,raw),body=destinationExpected.browser.producerSourceHistory;assert.equal(sha(previous),'e11ed3c52c998f84c0e7ed21ebbe806a1aa8816007b7819203e7d6c4ef4add19');assert.equal(previous.length,55811);assert.equal(body.previousBytes,previous.length);assert.equal(sha(read(p)),unchanged);assert.deepEqual(restoreIdentityDestinationUxPreviousProducerText(c,p,Buffer.from(raw.toString('utf8').replaceAll('\r\n','\n'))),previous);assert.deepEqual(restoreIdentityDestinationUxPreviousProducerText(c,p,Buffer.from(raw.toString('utf8').replaceAll('\r\n','\n').replaceAll('\n','\r\n'))),previous);
  for(const bytes of [null,previous,Buffer.concat([raw,Buffer.from('\n')]),raw.subarray(1),Buffer.from([255])])denied(()=>restoreIdentityDestinationUxPreviousProducerText(c,p,bytes));denied(()=>restoreIdentityDestinationUxPreviousProducerText(c,'scripts/foreign.mjs',raw));const changed=current();changed[destinationKey].browser.producerSourceHistory.inverseHunks.pop();denied(()=>restoreIdentityDestinationUxPreviousProducerText(changed,p,raw));assert.equal(verifyIdentityDestinationUxCurrentSources(c,read).nativeOrBrowserAcceptance,false);
+
+ });}finally{verifyActualCurrent();}
 });
 test('identity destination sixteen measured records strict append geometry network and PNG bytes validate before an immutable legacy103 projection',()=>{
  const s=destinationDecoderShadow(),before=serialize(s.proof),projected=s.validate(s.proof);assert.equal(s.f.boundary,'VALIDATOR_ONLY_NOT_BROWSER_EXECUTION');assert.equal(s.proof.destinationNavigation.checks.length,16);assert.equal(s.proof.combinedTotalCheckCount,119);assert.equal(Object.hasOwn(projected,'destinationNavigation'),false);assert.equal(Object.hasOwn(projected,'combinedTotalCheckCount'),false);assert.deepEqual(projected.checks,s.proof.checks);assert.deepEqual(projected.sourceManifest,s.proof.sourceManifest);assert.equal(serialize(s.proof),before);
