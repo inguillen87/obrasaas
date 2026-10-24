@@ -1,3 +1,4 @@
+import {types as earlyDtoTypes} from 'node:util';
 import {hasCaptureRuntime,normalizeCaptureOwnNeutralNativeProof} from './lib/capture-runtime-canonical-collectors.mjs';
 import {planBudgetValidationFiles} from './lib/plan-budget-current-ci-lineage.mjs';
 import {validateWhatsappFieldNeutralStepNative} from './lib/whatsapp-field-continuity-current-ci-lineage.mjs';
@@ -146,6 +147,18 @@ function validateLatestExpiredComposition(proof){
  requireProof(row.providerPosts===1&&row.replayedPosts===0&&row.replyState==='SENT'&&row.messageIdPresent===true&&row.workerWrites===0,'Latest-expired composition needs one synthetic POST, no replay and zero Worker writes');
  requireProof(proof.totalSyntheticMessagePostCount===proof.syntheticMessagePostCount+proof.contextFeedbackNative.measurement.providerPosts+row.providerPosts&&proof.totalSyntheticMessagePostCount===6,'Historical four, prior-context one and composed-current one need truthful independent counters');
 }
+// Denial-only checks apply to inert JSON data. Accessors, proxies, custom
+// prototypes, cycles and non-JSON values retain the original source-first order.
+function ordinaryJsonDto(value,ancestors=new Set()){
+ if(value===null||typeof value==='string'||typeof value==='boolean')return true;
+ if(typeof value==='number')return Number.isFinite(value);
+ if(typeof value!=='object'||earlyDtoTypes.isProxy(value)||ancestors.has(value))return false;
+ const array=Array.isArray(value),prototype=Object.getPrototypeOf(value);if(array?prototype!==Array.prototype:prototype!==Object.prototype&&prototype!==null)return false;
+ const descriptors=Object.getOwnPropertyDescriptors(value),keys=Reflect.ownKeys(descriptors);if(keys.some(key=>typeof key!=='string'))return false;
+ if(array&&(!Object.hasOwn(descriptors,'length')||!Number.isSafeInteger(descriptors.length.value)||descriptors.length.value<0||keys.length!==descriptors.length.value+1))return false;
+ ancestors.add(value);try{for(const key of keys){if(array&&key==='length')continue;const row=descriptors[key];if(!Object.hasOwn(row,'value')||row.enumerable!==true||array&&!/^(?:0|[1-9][0-9]*)$/.test(key)||!ordinaryJsonDto(row.value,ancestors))return false;}return true;}finally{ancestors.delete(value);}
+}
+
 export function validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres,readEvidence}){
  requireProof(revision(expectedHead)&&head===expectedHead&&revision(sourceTree)&&trackedClean===true,'Exact clean Git HEAD and tree required');
  requireProof(gitSources&&typeof gitSources==='object'&&!Array.isArray(gitSources),'Committed Git sources required');
@@ -154,6 +167,9 @@ export function validateCompanyKycOutboundCompactCi({expectedHead,head,sourceTre
  requireProof(postgres.provider==='controlled-synthetic-only'&&postgres.operativeDatabaseUsed===false&&postgres.realProviderUsed===false&&postgres.municipalOrIdentityAcceptance===false&&postgres.leaseExtended===false,'Native proof cannot certify operative data, providers, identity or an extended lease');
  requireProof(postgres.poolClosed===true&&postgres.databaseRemoved===true&&postgres.adminClosed===true,'Native pool, child database and administration connection cleanup required');
  same(postgres.checks,COMPANY_KYC_OUTBOUND_COMPACT_CHECKS,'Every native lease, revocation, seal and uncertain reply scenario required');
+ // Rejection only. The same original helpers still run after the fresh
+ // actual AST closure and RAW manifest validation at their unchanged late point.
+ if(ordinaryJsonDto(postgres)){validateMeasurements(postgres);validateScenarios(postgres);validateContextFeedback(postgres);validateLatestExpiredComposition(postgres);}
  const closure=companyKycOutboundCompactCiSourceClosure(readSource);validateManifest(postgres,closure.files,readSource);validateMeasurements(postgres);validateScenarios(postgres);validateContextFeedback(postgres);validateLatestExpiredComposition(postgres);
  let currentCompositionLineage,currentNeutralStepGuidance;
  try{

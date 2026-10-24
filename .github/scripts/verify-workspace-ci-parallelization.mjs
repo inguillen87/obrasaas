@@ -962,6 +962,21 @@ function validateDocumentCurveCopyProof(spec,proof,readSource){
  equal([...proof.documentCurveSourceManifest].sort((a,b)=>a.path.localeCompare(b.path)),expected.documentCurveSourceManifest.sort((a,b)=>a.path.localeCompare(b.path)),'PROOF_DOCUMENT_CURVE_COPY');
  if(proof.fixtureTransforms.length!==expected.fixtureTransforms.length)deny('PROOF_DOCUMENT_CURVE_COPY');proof.fixtureTransforms.forEach((row,index)=>exactKeys(row,Object.keys(expected.fixtureTransforms[index]),'PROOF_DOCUMENT_CURVE_COPY'));equal(proof.fixtureTransforms,expected.fixtureTransforms,'PROOF_DOCUMENT_CURVE_COPY');
 }
+// A causal control is applied after the separately authenticated import copy.
+// Keep the Git RAW source and the observed fixture preimage as distinct bytes.
+function causalBankFixtureSource(readSource,fixtureTransforms){
+ const source='src/app/(identity)/cuenta/participant-panel.js',raw=readSource(source);
+ if(!Buffer.isBuffer(raw)||!Array.isArray(fixtureTransforms))deny('PROOF_CAUSAL_TRANSFORM');
+ const originalGitRaw=Buffer.from(raw),rows=fixtureTransforms.filter(row=>row?.path===source);let reportedSource=Buffer.from(originalGitRaw);
+ if(rows.length){
+  if(rows.length!==1)deny('PROOF_CAUSAL_TRANSFORM');const row=rows[0],dependency='../../../lib/capture-quality-policy.mjs',text=utf8(originalGitRaw);
+  exactKeys(row,['path','kind','sourceSha256','copiedBeforeSha256','fixtureSha256','fixtureRelativePath','dependencySourcePath','dependencyFixturePath'],'PROOF_CAUSAL_TRANSFORM');
+  if(row.kind!=='FLATTENED_FIXTURE_RELATIVE_IMPORT'||row.sourceSha256!==hash(originalGitRaw)||row.copiedBeforeSha256!==hash(originalGitRaw)||row.fixtureRelativePath!=='app/participant-panel.js'||row.dependencySourcePath!=='src/lib/capture-quality-policy.mjs'||row.dependencyFixturePath!=='app/capture-quality-policy.mjs'||text.split(dependency).length!==2)deny('PROOF_CAUSAL_TRANSFORM');
+  reportedSource=Buffer.from(text.replace(dependency,'./capture-quality-policy.mjs'));if(hash(reportedSource)!==row.fixtureSha256)deny('PROOF_CAUSAL_TRANSFORM');
+ }
+ const final=readSource(source);if(!Buffer.isBuffer(final)||!final.equals(originalGitRaw))deny('PROOF_CAUSAL_TRANSFORM');
+ return {originalGitRaw,reportedSource};
+}
 function documentCurveCopySelftest(spec,proof,validate){
  if(!['UI_INTAKE','UI_PREPARATION','UI_PORTFOLIO','UI_JOINT','UI_CAUSAL'].includes(spec.kind))return [];
  const checks=[],bad=(name,edit)=>{const value=clone(proof);edit(value);assert.throws(()=>validate(value),error=>error.code==='PROOF_DOCUMENT_CURVE_COPY');checks.push({name:spec.id+'-document-copy-'+name,result:'PASS',expectedDenial:'PROOF_DOCUMENT_CURVE_COPY',boundary:'pure source/relocation shadow; no UI execution'});};
@@ -1073,7 +1088,7 @@ function validatePreviousExtensionProof(spec,bytes,{expectedHead,expectedTree,re
   if(spec.kind==='UI_JOINT'||spec.kind==='UI_CAUSAL'){
    if(proof.sourceRevision!==expectedHead||proof.sourceState!=='committed exact Git HEAD'||proof.trackedClean!==true)deny('PROOF_SOURCE_STATE');equal(proof.dirtyTrackedPaths,[],'PROOF_SOURCE_STATE');if(proof.realIdentityAccepted!==false)deny('PROOF_PROVIDER_IO');
    if(spec.kind==='UI_JOINT'){equal(proof.widths,[320,390,768,1280],'PROOF_MATRIX');matrix(proof.checks,proof.widths,['bank','intake']);if(proof.badTransform!==null||proof.causalFailure!==null||proof.checks.some(c=>c.parentAndSiblingBlocked!==true||c.ownRecoveryAndLocalCloseEnabled!==true||c.noFeedbackDeadlock!==true||c.automaticPost!==false||c.storagePrivate!==true))deny('PROOF_JOINT_GUARDS');}
-   else{equal(proof.widths,[320],'PROOF_MATRIX');equal(proof.checks,[],'PROOF_MATRIX');const transform=proof.badTransform,needle=CIVIL_CURRENT_BANK_LOCK,replacement=CIVIL_CURRENT_CAUSAL_BANK_LOCK;exactKeys(transform,['source','originalSha256','fixtureSha256','needle','replacement','runtimeSourceEdited'],'PROOF_CAUSAL_TRANSFORM');if(transform.source!=='src/app/(identity)/cuenta/participant-panel.js'||transform.needle!==needle||transform.replacement!==replacement||transform.runtimeSourceEdited!==false)deny('PROOF_CAUSAL_TRANSFORM');const original=readSource(transform.source),text=utf8(original);if(text.split(needle).length!==2||transform.originalSha256!==hash(original)||transform.fixtureSha256!==hash(Buffer.from(text.replace(needle,replacement))))deny('PROOF_CAUSAL_TRANSFORM');exactKeys(proof.causalFailure,['stage','message','expectedFailure'],'PROOF_CAUSAL_FAILURE');if(proof.causalFailure.stage!=='own-bank-save'||proof.causalFailure.expectedFailure!==true||typeof proof.causalFailure.message!=='string'||!proof.causalFailure.message.startsWith('own bank save must remain enabled while its own pending gates siblings'))deny('PROOF_CAUSAL_FAILURE');}
+   else{equal(proof.widths,[320],'PROOF_MATRIX');equal(proof.checks,[],'PROOF_MATRIX');const transform=proof.badTransform,needle=CIVIL_CURRENT_BANK_LOCK,replacement=CIVIL_CURRENT_CAUSAL_BANK_LOCK;exactKeys(transform,['source','originalSha256','fixtureSha256','needle','replacement','runtimeSourceEdited'],'PROOF_CAUSAL_TRANSFORM');if(transform.source!=='src/app/(identity)/cuenta/participant-panel.js'||transform.needle!==needle||transform.replacement!==replacement||transform.runtimeSourceEdited!==false)deny('PROOF_CAUSAL_TRANSFORM');const {reportedSource}=causalBankFixtureSource(readSource,proof.fixtureTransforms),text=utf8(reportedSource);if(text.split(needle).length!==2||transform.originalSha256!==hash(reportedSource)||transform.fixtureSha256!==hash(Buffer.from(text.replace(needle,replacement))))deny('PROOF_CAUSAL_TRANSFORM');exactKeys(proof.causalFailure,['stage','message','expectedFailure'],'PROOF_CAUSAL_FAILURE');if(proof.causalFailure.stage!=='own-bank-save'||proof.causalFailure.expectedFailure!==true||typeof proof.causalFailure.message!=='string'||!proof.causalFailure.message.startsWith('own bank save must remain enabled while its own pending gates siblings'))deny('PROOF_CAUSAL_FAILURE');}
   }
  }
  return {id:spec.id,path:spec.path,producer:spec.producer,kind:spec.kind,result:expectedStatus,sourceRevision:expectedHead,harnessSha256:spec.producerSha256,sourceManifestSha256:manifestDigest(proof.sourceManifest),sourceReferences:spec.sourceFiles.length,proofSha256:hash(bytes),bytes:bytes.length,checks:summary(spec)};
@@ -1668,6 +1683,7 @@ if(spec.kind==='PG_COMPANY_KYC'&&contract.integratedIdentityCurrentRevision)proo
    if(intakeWithdrawalCurrentCheckCount(spec)!==null)proof.checks.push(...INTAKE_WITHDRAWAL_CHECK_NAMES);
    const validate=value=>validateExtensionProof(spec,Buffer.from(JSON.stringify(value)),{expectedHead,readSource,readEvidence:file=>evidence.get(file)}),mutate=(name,code,edit)=>{const value=clone(proof);edit(value);bad(spec.id+'-'+name,code,()=>validate(value));};
   if(['UI_INTAKE','UI_PREPARATION','UI_JOINT','UI_CAUSAL'].includes(spec.kind))Object.assign(proof,documentCurveCopyShadow(readSource,spec));
+  if(spec.kind==='UI_CAUSAL'){const {reportedSource}=causalBankFixtureSource(readSource,proof.fixtureTransforms);proof.badTransform.originalSha256=hash(reportedSource);proof.badTransform.fixtureSha256=hash(Buffer.from(utf8(reportedSource).replace(proof.badTransform.needle,proof.badTransform.replacement)));}
   good(spec.id+'-complete-proof',()=>validate(proof));checks.push(...documentCurveCopySelftest(spec,proof,validate));
   if(['UI_JOINT','UI_CAUSAL'].includes(spec.kind))mutate('pre-document-relocation-harness-cannot-certify-current-source','PROOF_HARNESS_SOURCE',p=>{p.harnessSha256=JOINT_DOCUMENT_RELOCATION_PREVIOUS_PRODUCER_SHA256;});
   if(spec.kind==='PG_BANK')checks.push(...organizationUsageClosureSelftest(spec,proof,root,validate));

@@ -423,7 +423,15 @@ async function approvalTokenNavigationRace(width,outcome){
   await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');releaseCurrent();
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));await settled(page);
   assert.equal(await page.$eval('#schedule-title',node=>node.textContent),'Obra A');assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','Manual selection must cancel the previous focus request');
-  await click(page,'Actualizar');await waitText(page,'Empresa de ensayo A');await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');
+  // The company label can precede completion of refresh's canonical project GET.
+  // Observe this explicit account response, then wait for the rendered refresh
+  // to settle before finding/clicking the newly mounted project selector.
+  const [accountRefresh]=await Promise.all([page.waitForResponse(response=>{
+   const url=new URL(response.url());return url.origin===origin&&url.pathname==='/api/identity/workspace'&&!url.searchParams.has('projectId')&&response.request().method()==='GET';
+  },{timeout:15000}),click(page,'Actualizar')]);
+  assert.equal(accountRefresh.status(),200,'The explicit account refresh must complete');
+  await waitText(page,'Empresa de ensayo A');await settled(page);await waitRecordedTask(page,'Tarea operativa p-a');
+  await click(page,'Obra A');await waitRecordedTask(page,'Tarea operativa p-a');
   assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'worker-channel-title','A refreshed manual selection must not restore the consumed focus request');
   assert.equal(current.requests.filter(row=>row.path==='/api/identity/worker-channel').length,0);assert.equal(current.posts.length,0);assert.equal(current.channelPosts.length,0);
  }else{

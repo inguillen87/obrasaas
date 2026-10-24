@@ -1,4 +1,4 @@
-import {restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,withCaptureRuntimePreviousSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,withCaptureRuntimePreviousSources,planBudgetCurrentSourcePin} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet,worksiteLiveHoursPreviousSourcePin,worksiteLiveHoursCurrentSourcePin} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,7 +24,21 @@ test('API plan revision restores the whole published material contract and every
  assert.deepEqual(previous.materialReviewCurrentRevision,contract.materialReviewCurrentRevision);
  for(const name of ['blocks','lanes','artifactPatterns','evidenceProducers','whatsappFieldContinuityCurrentRevision'])assert.deepEqual(previous[name],publishedHomePredecessor[name]);
  const focusedProducer=value=>value.evidenceProducers.find(row=>row.producer==='scripts/verify-focused-workspace-ci.mjs');// Project only the authenticated outer pin for the historical assertion; read current source bytes below.
+ const focusedFile='scripts/verify-focused-workspace-ci.mjs',actualFocusedBytes=Buffer.from(read(focusedFile));
+ const verifyFocusedCurrent=()=>{
+  assert.equal(serialize(contract),before);assert.deepEqual(read(focusedFile),actualFocusedBytes);
+  assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
+  const ref=contract.planBudgetCurrentRevision.references.find(row=>row.path===focusedFile);assert.ok(ref);
+  const currentPin=planBudgetCurrentSourcePin(contract,{path:focusedFile,sha256:ref.currentSha256});
+  assert.equal(currentPin,ref.currentSha256);assert.equal(focusedProducer(contract).producerSha256,currentPin);
+  assert.equal(contract.extension.proofs.find(row=>row.producer===focusedFile).producerSha256,currentPin);
+  assert.equal(sha(actualFocusedBytes.toString('utf8').replaceAll('\r\n','\n')),currentPin);
+ };
+ verifyFocusedCurrent();
+ try{withCaptureRuntimePreviousSources(contract,read,(contract,read)=>{
+  const publishedHomePredecessor=restoreHomeDecisionsPreviousContract(contract);
  assert.equal(worksiteLiveHoursPreviousSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:focusedProducer(contract).producerSha256}),'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24');assert.equal(focusedProducer(contract).producerSha256,'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(worksiteLiveHoursCurrentSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24'}),'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(sha(read('scripts/verify-focused-workspace-ci.mjs').toString('utf8').replaceAll('\r\n','\n')),focusedProducer(contract).producerSha256);assert.equal(focusedProducer(publishedHomePredecessor).producerSha256,'a4eb59cb781eeb9578e46ffcdec21833cce1ba79eb9f99e3543fda799dfc62f4');
+ });}finally{verifyFocusedCurrent();}
  assert.equal(sha(serialize(restoreMaterialReviewPreviousContract(contract))),'1bb5e262dac06377590ea983a9c800163726cb6510ae0fbbbdca17309253c6af');
 });
 

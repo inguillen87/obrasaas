@@ -90,7 +90,7 @@ test('the capture inverse accepts current compiler bytes and rejects parent byte
 });
 
 test('unchanged parent-reader buffers retain owned RAW LF and CRLF bytes without becoming native evidence',()=>{
- const contract=current(),file='package.json';assert.equal(contract[section][revision].sourceHistory.some(row=>row.path===file),false);
+ const contract=current(),file='requirements.txt';assert.equal(sha(lf(read(file))),contract.requirementsSha256);assert.equal(contract[section][revision].sourceHistory.some(row=>row.path===file),false);
  // Explicit EOL port controls, not a substitute for the actual reader above.
  for(const eol of ['\n','\r\n']){
   const raw=Buffer.from(lf(read(file)).toString('utf8').replaceAll('\n',eol)),before=Buffer.from(raw);let calls=0;

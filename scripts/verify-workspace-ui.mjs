@@ -353,7 +353,7 @@ async function navigationScenario(role,width){
    if(url.pathname==='/api/identity/participants'){assert.equal(++participantReads,1);assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify({scope,projectId:'p-a',canManage:administrator,canInvite:administrator,canManageOfficeRoles:administrator,existingAccounts:[],records:[],privacyNotice:{version:'synthetic-navigation-notice',text:'Ensayo sin documentos ni permisos reales'}})});return;}
    assert.equal(url.pathname,'/api/identity/workspace');
    const tasks=Array.from({length:25},(_,index)=>index===0?baseTask():{...baseTask(),id:'task-nav-'+index,title:'Tarea de ensayo '+index});
-   const body=!url.search?{scope,organizationName:'Empresa de ensayo de navegación',role,roleLabel:administrator?'Administrador':'Auditor',canManageIntegrations:administrator,canPlanSchedule:administrator,projects:[{id:'p-a',name:'Obra de prueba A'},{id:'p-b',name:'Obra de prueba B'}],projectsTruncated:false}:{scope,project:{id:'p-a',name:'Obra de prueba A'},canPlanSchedule:administrator,tasks,totalTasks:tasks.length,nextCursor:null};
+   const body=!url.search?{scope,organizationName:'Empresa de ensayo de navegación',role,roleLabel:administrator?'Administrador':'Auditor',canManageIntegrations:administrator,canPlanSchedule:administrator,projects:[{id:'p-a',name:'Obra de prueba A'},{id:'p-b',name:'Obra de prueba B'}],projectsTruncated:false}:{scope,project:{id:'p-a',name:'Obra de prueba A',status:'ACTIVE'},roleLabel:administrator?'Administrador':'Auditor',canPlanSchedule:administrator,tasks,totalTasks:tasks.length,nextCursor:null};
    await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
   }catch(error){pageErrors.push({mode:'navigation-'+role,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
  });
@@ -378,7 +378,11 @@ async function navigationScenario(role,width){
  checks.push('navigation-authorized-canonical-destinations-keyboard-no-requests-'+role+'-'+width);
  await (await page.$(nav)).screenshot({path:path.join(evidence,'workspace-navigation-'+role+'-'+width+'.png')});
  if(administrator){
+  const preDraftRequestCount=requests.length;
   await click(page,'Planificar fechas');await page.waitForSelector('#schedule-edit-title');await page.waitForFunction(()=>document.activeElement.id==='schedule-edit-title',{timeout:15000});
+  await page.waitForFunction(()=>{const editor=document.getElementById('schedule-edit-title'),workspace=editor?.closest('section[aria-labelledby="workspace-title"]'),pending=document.querySelector('nav[aria-label="Navegación de la obra"] [role="status"] a[href="#schedule-edit-title"]'),controls=[...document.querySelectorAll('button')].filter(button=>button.textContent==='Actualizar'||button.textContent.includes('Obra de prueba B'));return Boolean(editor&&pending)&&controls.length>=2&&controls.every(button=>button.disabled)&&workspace?.querySelector(':scope > [data-worksite-live-refresh]')?.getAttribute('data-worksite-live-refresh')==='PAUSED';},{timeout:15000});
+  const lockedRequestCount=requests.length;
+  for(const row of requests.slice(initialRequestCount+participantReads,lockedRequestCount)){const url=new URL(row.path+row.query,origin);assert.equal(row.method,'GET','Only a canonical read may finish starting before the draft locks navigation');assert.equal(url.origin,origin);assert.equal(url.pathname,'/api/identity/workspace');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('projectId'),'p-a');assert.equal(url.searchParams.get('scope'),scope);}
   assert.equal(await page.evaluate(()=>document.activeElement.id),'schedule-edit-title');
   const editorGeometry=await page.$eval('#schedule-edit-title',element=>{const rect=element.getBoundingClientRect();return {top:rect.top,bottom:rect.bottom,viewportHeight:innerHeight,scrollY};});
   await page.screenshot({path:path.join(evidence,'workspace-editor-opening-'+width+'.png'),fullPage:false});
@@ -388,7 +392,7 @@ async function navigationScenario(role,width){
   await page.locator(nav+' a[href="#schedule-edit-title"]').click();await page.waitForFunction(()=>document.activeElement.id==='schedule-edit-title',{timeout:15000});
   assert.equal(await page.evaluate(()=>document.activeElement.id),'schedule-edit-title');
   assert.equal(await page.$eval('textarea',element=>element.value),'Planificación de ensayo que debe conservarse.');
-  assert.equal(requests.length,initialRequestCount+participantReads);assert.equal(posts.length,0);
+  assert.equal(requests.length,lockedRequestCount,JSON.stringify({phase:'locked-draft-navigation',preDraftRequestCount,lockedRequestCount,requests}));assert.equal(posts.length,0);
   assert.ok(await page.evaluate(()=>[...document.querySelectorAll('button')].filter(button=>button.textContent==='Actualizar'||button.textContent.includes('Obra de prueba B')).every(button=>button.disabled)));
   await assertClosedPendingNavigation(page,width,'schedule-edit-title',requests,posts);
   checks.push('long-schedule-editor-focus-and-pending-navigation-preserve-draft-'+width);
