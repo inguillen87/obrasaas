@@ -1,3 +1,4 @@
+import {verifyPlanBudgetCurrentSources,planBudgetCurrentSourcePin} from './lib/plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,verifyWorksiteLiveHoursCurrentSources as worksiteSourceCheck0,verifyWorksiteLiveHoursActualClosure as worksiteSourceCheck1} from './lib/worksite-live-hours-current-ci-lineage.mjs';
 function checkWorksiteSource(action){try{return action();}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}}
 const verifyWorksiteLiveHoursCurrentSources=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck0(...args));
@@ -32,15 +33,28 @@ const selectorUnit='tests/production-worksite-task-selector.test.mjs',selector='
 // import is permitted only in this exact source unit, with its full unit and
 // compiler lock hashes authenticated independently in the current revision.
 const selectorTransformPrefix="import assert from 'node:assert/strict';\nimport {readFileSync} from 'node:fs';\nimport test from 'node:test';\nimport React from 'react';\nimport {renderToStaticMarkup} from 'react-dom/server';\nimport {loadBindings,transform} from 'next/dist/build/swc/index.js';\n\n// Render the actual controlled selector with React. These tests cover markup\n// and displayed state; the owned browser fixture covers edits and paging.\nconst source=readFileSync(new URL('../src/app/(identity)/cuenta/worksite-task-selector.js',import.meta.url),'utf8');\nawait loadBindings();\nconst compiled=await transform(`import React from ${JSON.stringify(import.meta.resolve('react'))};\\n${source.replace(\"'use client';\",'').replace(\"from 'react'\",`from ${JSON.stringify(import.meta.resolve('react'))}`).replace(/^import styles from .*;\\r?\\n/m,\"const styles={selector:'selector',description:'description',error:'error',more:'more'};\\n\")}`,{filename:'actual-worksite-task-selector.js',jsc:{parser:{syntax:'ecmascript',jsx:true},target:'es2022',transform:{react:{runtime:'classic'}}},module:{type:'es6'}});\nconst {WorksiteTaskSelector}=await import('data:text/javascript;base64,'+Buffer.from(compiled.code).toString('base64'));\n";
+function withCurrentCompilerLock(readSource,legacyPin,run){
+ let suppliedMetadata;try{suppliedMetadata=readSource(contractPath);}catch{return run({bytes:bytes(readSource,'package-lock.json'),sha256:legacyPin});}
+ if(suppliedMetadata===null||suppliedMetadata===undefined)return run({bytes:bytes(readSource,'package-lock.json'),sha256:legacyPin});
+ reject(Buffer.isBuffer(suppliedMetadata),'Compiler lock contract bytes required');const metadata=Buffer.from(suppliedMetadata);let contract;try{contract=JSON.parse(metadata);}catch{reject(false,'Compiler lock contract must parse');}reject(plain(contract),'Compiler lock contract object required');
+ if(!Object.hasOwn(contract?.planBudgetCurrentRevision??{},'ownRuntimeDiagnosticAdvance'))return run({bytes:bytes(readSource,'package-lock.json'),sha256:legacyPin});
+ const current=action=>{try{return action();}catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}};
+ current(()=>verifyPlanBudgetCurrentSources(contract,readSource));
+ const before=Buffer.from(bytes(readSource,'package-lock.json')),wanted=current(()=>planBudgetCurrentSourcePin(contract,{path:'package-lock.json',sha256:legacyPin}));
+ try{return run({bytes:before,sha256:wanted});}
+ finally{current(()=>verifyPlanBudgetCurrentSources(contract,readSource));reject(bytes(readSource,contractPath).equals(metadata)&&bytes(readSource,'package-lock.json').equals(before),'Compiler lock or metadata RAW bytes changed during source inspection');}
+}
 function controlledSelector(value,file,tree,node,readSource){
  if(file!==selectorUnit||node.type!=='ImportExpression')return false;
  const declaration=WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI.controlledSourceTransform;
  keys(declaration,['file','sourceLfSha256','kind','source','compiler','packageLockSha256'],'controlled selector transform');
  reject(declaration.file===selectorUnit&&declaration.kind==='SWC_SELECTOR_DATA_MODULE'&&declaration.source===selector&&declaration.compiler===compiler,'Only the exact selector compiler origin is permitted');
+ return withCurrentCompilerLock(readSource,declaration.packageLockSha256,lock=>{
  const lf=value=>sha(value.toString('utf8').replaceAll('\r\n','\n'));
- reject(lf(value)===declaration.sourceLfSha256&&lf(bytes(readSource,'package-lock.json'))===declaration.packageLockSha256,'Complete selector unit and compiler lock bytes must be reviewed');
+ reject(lf(value)===declaration.sourceLfSha256&&lf(lock.bytes)===lock.sha256,'Complete selector unit and compiler lock bytes must be reviewed');
  const expected=parse(selectorTransformPrefix,{sourceType:'module',createImportExpressions:true}).program.body,actual=tree.program.body.slice(0,expected.length),last=actual.at(-1);
  reject(same(shape(actual),shape(expected))&&last?.declarations?.[0]?.init?.argument===node,'The computed import must be the exact compiled.code base64 module');bytes(readSource,selector);return true;
+ });
 }
 export function fieldTaskPaginationCiLocalImports(value,file,readSource){
  if(file.endsWith('.css')||file.endsWith('.json'))return[];

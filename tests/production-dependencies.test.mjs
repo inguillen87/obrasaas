@@ -17,7 +17,7 @@ function atLeast(value, minimum) {
 test('production Next uses the reviewed patched release and an identical lockfile', () => {
   const next = manifest.dependencies.next;
   assert.equal(version(next)[0], 16);
-  assert.ok(atLeast(next, '16.3.6'));
+  assert.ok(atLeast(next, '16.4.3'));
   assert.equal(lock.packages[''].dependencies.next, next);
   assert.equal(lock.packages['node_modules/next'].version, next);
   assert.match(lock.packages['node_modules/next'].integrity, /^sha512-/);
@@ -27,7 +27,7 @@ test('Next tooling is aligned without moving development lint into runtime depen
   assert.equal(lock.packages['node_modules/eslint-config-next'].version, manifest.dependencies.next);
   assert.equal(manifest.dependencies['eslint-config-next'], undefined);
 });
-for (const [name, minimum] of Object.entries({ 'fast-uri': '3.1.8', 'dompurify': '3.4.16', 'undici': '6.28.1', 'mysql2': '3.23.1', 'baseline-browser-mapping': '2.11.0', 'deepmerge-ts': '8.0.0' })) {
+for (const [name, minimum] of Object.entries({ 'fast-uri': '3.1.9', 'dompurify': '3.4.17', 'undici': '6.29.1', 'mysql2': '3.23.1', 'baseline-browser-mapping': '2.11.0', 'deepmerge-ts': '8.0.0' })) {
   test(`all resolved ${name} nodes satisfy the reviewed security floor`, () => {
     const installed = Object.entries(lock.packages).filter(([path]) => path.endsWith('node_modules/' + name));
     assert.ok(installed.length > 0);
