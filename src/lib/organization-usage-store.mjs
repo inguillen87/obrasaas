@@ -1,6 +1,7 @@
 import {WorkspaceError} from './workspace-policy.mjs';
 import {ORGANIZATION_USAGE_STATES,usageExact,usageDigest,usageHash,usageBinding,usageCoverage,usageInstant,organizationUsageId,normalizedUsage,publicUsageReceipt,usageModel,usageDecimal} from './organization-usage-policy.mjs';
 import {createOrganizationResourceUsage} from './organization-resource-usage-store.mjs';
+import {productionPilotResourceCoverage} from './organization-pilot-coverage.mjs';
 const fail=(code='ORGANIZATION_USAGE_UNCONFIRMED',status=503)=>{throw new WorkspaceError(code,status);};
 const companySql=`SELECT id,name,metadata,"subscriptionPlan"::text AS "subscriptionPlan","subscriptionStatus"::text AS "subscriptionStatus","trialEndsAt" AT TIME ZONE 'UTC' AS "trialEndsAt",clock_timestamp() AS "observedAt" FROM public."Organization" WHERE id=$1`;
 export function createOrganizationUsage({workspace,connect}={}){
@@ -36,7 +37,8 @@ export function createOrganizationUsage({workspace,connect}={}){
    const rows=(await client.query(`SELECT id,metadata FROM public."AuditLog" WHERE "organizationId"=$1 AND action='organization.usage.plan-import' ORDER BY metadata->>'updatedAt' DESC,id DESC LIMIT 21`,[member.organizationId])).rows;
    const resource=await resources.aggregate(client,member.organizationId);for(const key of ['total','reserved','pending','observed','unmeasured']){summary[key]+=resource.summary[key];if(!Number.isSafeInteger(summary[key]))fail();}for(const key of ['inputTokens','outputTokens','totalTokens']){summary[key]=String(BigInt(summary[key])+BigInt(resource.summary[key]));if(!usageDecimal(summary[key]))fail();}summary.audioSeconds=resource.summary.audioSeconds;
    const recent=[...rows.map(row=>{const value=publicUsageReceipt(row);return {...value,stage:'PLAN_OPENAI_EXTRACTION',measurement:{unit:value.state==='OBSERVED'?'TOKENS':'UNMEASURED',audioSeconds:null}};}),...resource.recent].sort((a,b)=>b.recordedAt.localeCompare(a.recordedAt)||b.receiptId.localeCompare(a.receiptId));
-   return {version:2,scope,organization:{id:c.id,name:c.name},observedAt:usageInstant(c.observedAt),capacity:{state:'CONTRACT_PENDING',cost:null},funding:{state:'UNCONFIRMED'},coverage:snapshot,summary,recent:recent.slice(0,20),truncated:recent.length>20};
+   const pilotCoverage=await productionPilotResourceCoverage.companyProjection(client,member.organizationId);
+   return {version:pilotCoverage?3:2,scope,organization:{id:c.id,name:c.name},observedAt:usageInstant(c.observedAt),capacity:{state:'CONTRACT_PENDING',cost:null},funding:{state:'UNCONFIRMED'},coverage:snapshot,summary,recent:recent.slice(0,20),truncated:recent.length>20,...(pilotCoverage?{pilotCoverage}:{})};
   });}
  };
 }

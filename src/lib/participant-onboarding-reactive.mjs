@@ -4,6 +4,7 @@ import {metaCustomerContentDigest as durableDigest} from './meta-customer-callba
 import {prepareCompanyKycProjects,companyKycGrantDigest} from './company-channel-kyc.mjs';
 import {lockPersonWorksiteJourney} from './person-worksite-journey.mjs';
 import {resolveParticipantOnboardingAuthority,resolveParticipantReactiveKycStatusAuthority} from './participant-onboarding-authority.mjs';
+import {companyConnectionForProject} from './company-channel-connection.mjs';
 import {assignment} from './worker-channel-identity.mjs';
 import {participantOnboardingIntent,participantOnboardingOutboundId,PARTICIPANT_ONBOARDING_NOTICE_VERSION,PARTICIPANT_ONBOARDING_NOTICE_SHA256} from './participant-onboarding-policy.mjs';
 import {prepareMetaKycChallenge,metaKycOperationId,metaKycChallengeDigest} from './meta-kyc-challenge.mjs';
@@ -16,6 +17,10 @@ const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)
 const eventId=value=>/^customer_webhook_[a-f0-9]{64}$/.test(value||'');
 const ttl=30*60*1000;
 const reactiveStatusPrelocks=new WeakMap();
+// Provenance of the exact canonical period denial; never a send capability.
+const expiredPeriodDenials=new WeakSet();
+const expiredPeriodCodes=new Set(['COMPANY_ENTITLEMENT_TRIAL_EXPIRED','COMPANY_ENTITLEMENT_PAID_PERIOD_EXPIRED']);
+const unavailableReply=Object.freeze({type:'text',body:'No pudimos continuar el alta por WhatsApp. No envíes documentos todavía. Pedile al responsable de la obra que revise tu alta. Podés consultar tu estado en https://obrasaas.com/cuenta.'});
 const revision=`to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision`;
 const unseal=(connection,purpose,id,value,environment)=>{try{return JSON.parse(decryptCustomerSecret(value,{organizationId:connection.organizationId,projectId:connection.projectId,purpose,resourceId:id},environment));}catch{fail('EMPLOYEE_INTAKE_INTEGRITY');}};
 function participantAccountState(part){
@@ -24,7 +29,7 @@ function participantAccountState(part){
  return null;
 }
 async function canonicalAuthority(client,intent,options){
- try{return await resolveParticipantOnboardingAuthority(client,intent,options);}catch(error){if(error instanceof WorkspaceError&&(/^(PARTICIPANT_ONBOARDING_|COMPANY_ENTITLEMENT_)/.test(error.code)||error.code==='PARTICIPANT_MANAGE_REQUIRED'))fail('EMPLOYEE_INTAKE_REVOKED');throw error;}
+ try{return await resolveParticipantOnboardingAuthority(client,intent,options);}catch(error){if(error instanceof WorkspaceError&&(/^(PARTICIPANT_ONBOARDING_|COMPANY_ENTITLEMENT_)/.test(error.code)||error.code==='PARTICIPANT_MANAGE_REQUIRED')){const denied=new WorkspaceError('EMPLOYEE_INTAKE_REVOKED',409);if(expiredPeriodCodes.has(error.code))expiredPeriodDenials.add(denied);throw denied;}throw error;}
 }
 
 // Discovery supplies IDs for lock ordering only. Re-read and authorize after
@@ -125,6 +130,10 @@ export async function reactiveOnboardingAuthority(client,r,pref,{environment=pro
  if(proof){
   if(proof.version!==1||proof.kind!=='KYC_START'||!eventId(proof.eventId)||proof.applicationId!==r.anchor.id||proof.admissionReceiptId!==r.state.admission.receiptId||durableDigest(proof.intent)!==durableDigest(pref.intent)||worker.metadata.participant.onboardingDelivery.state!=='CANCELED'||worker.metadata.participant.onboardingDelivery.code!=='PARTICIPANT_ONBOARDING_REACTIVE_HANDOFF'||worker.metadata.participant.onboardingDelivery.reactiveReceiptId!==proof.handoffReceiptId)fail();
  }else await unusedDelivery(client,r,worker,pref.intent);
+ // Bind the current target channel before any commercial denial can become
+ // neutral feedback. The later successful-authority equality stays intact.
+ const current=await companyConnectionForProject(client,r.connection.organizationId,pref.intent.targetProjectId,true);
+ if(!current||current.id!==r.connection.id||current.projectId!==r.project.id||current.organizationId!==r.connection.organizationId||companyKycGrantDigest(current)!==companyKycGrantDigest(r.connection))fail('EMPLOYEE_INTAKE_REVOKED');
  const authority=await canonicalAuthority(client,pref.intent,{environment,expected:proof?{authorityDigest:proof.authorityDigest,challengeId:proof.challengeId}:null});
  if(authority.connection.id!==r.connection.id||authority.connection.projectId!==r.project.id||authority.worker.id!==worker.id||authority.worker.phone!==r.sender||authority.connection.metadata?.developmentPilot)fail('EMPLOYEE_INTAKE_REVOKED');
  const org=(await client.query(`SELECT "trialEndsAt" FROM public."Organization" WHERE id=$1 FOR SHARE`,[pref.intent.organizationId])).rows;
@@ -229,6 +238,8 @@ async function planReactiveParticipantStatus(client,r,pref,{environment}){
  return {state:r.state,reactiveKycStatus:proof,reply:reactiveParticipantStatusReply(a.status)};
 }
 
+function accountAcceptancePlan(r){return {state:r.state,reply:{type:'text',body:'Antes de presentar tu identidad, aceptá la invitación recibida por correo e ingresá con esa misma cuenta en https://obrasaas.com/cuenta. Después volvé a escribir HOLA. No envíes fotos ni documentos desde este paso.'}};}
+
 function offer(authority,r){
  const expiresAt=new Date(authority.reactiveExpiresAt).toISOString();
  const proof={version:1,kind:'PRESENT_IDENTITY',eventId:r.event.id,applicationId:r.anchor.id,nonce:randomBytes(20).toString('hex'),expiresAt,intent:participantOnboardingIntent(authority.worker.metadata.participant.onboardingDelivery),authorityDigest:authority.authorityDigest,admissionReceiptId:r.state.admission.receiptId};
@@ -246,9 +257,16 @@ export async function planReactiveOnboarding(client,r,pref,{environment=process.
  if(!pref)return null;
  if(previous?.kind==='KYC_START')return null;
  if(!choice?.startsWith('intake-kyc:')&&!['HOLA','ESTADO','MENU','MENÚ'].includes(text))return null;
- const authority=await reactiveOnboardingAuthority(client,r,pref,{environment});
- if(!choice?.startsWith('intake-kyc:'))return offer(authority,r);
+ let authority;
+ try{authority=await reactiveOnboardingAuthority(client,r,pref,{environment});}catch(error){
+  // Only a fresh plain alias reaches this branch. Buttons and all other
+  // authorization failures retain their original denial; no challenge is made.
+  if(r.payload.value.type!=='text'||Object.hasOwn(r.payload.value,'context')||choice?.startsWith('intake-kyc:')||!expiredPeriodDenials.has(error))throw error;
+  return {state:r.state,reply:unavailableReply};
+ }
+ if(!choice?.startsWith('intake-kyc:')){if(authority.worker.metadata.participant.status==='INVITED'){if(Object.hasOwn(r.payload.value,'context'))fail();return accountAcceptancePlan(r);}return offer(authority,r);}
  if(!promptConfirmed||previous?.kind!=='PRESENT_IDENTITY'||choice!=='intake-kyc:'+previous.nonce||previous.eventId!==r.state.lastEventId||previous.applicationId!==r.anchor.id||previous.authorityDigest!==authority.authorityDigest||durableDigest(previous.intent)!==durableDigest(pref.intent)||!Number.isFinite(Date.parse(previous.expiresAt))||Date.parse(previous.expiresAt)<=authority.now.getTime())fail();
+ if(authority.worker.metadata.participant.status==='INVITED')return accountAcceptancePlan(r);
  const operationId=metaKycOperationId(r.event.id),prepared=await prepareMetaKycChallenge(client,authority.member,authority.project,{workerId:authority.worker.id,revision:authority.worker.revision,operationId},{environment});
  if(!prepared.code||prepared.codeUnavailable||!metaKycChallengeDigest(prepared.code))fail();
  const exteriorId=participantReceiptId(authority.member.actorId,authority.project.id,operationId),handoffId='reactive_onboarding_'+digest(['reactive-onboarding-v1',r.event.id]);

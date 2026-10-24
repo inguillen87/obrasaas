@@ -28,7 +28,7 @@ export default async function IdentityNoticesPage({searchParams}){
     <section className={styles.hero} aria-labelledby="legal-title">
      <p className={styles.eyebrow}>TU INFORMACIÓN Y TUS OPCIONES</p>
      <h1 id="legal-title">Avisos de identidad</h1>
-     <p className={styles.lead}>Leé el aviso completo antes de elegir en el chat. El uso del dorso y cada análisis tienen autorizaciones independientes.</p>
+     <p className={styles.lead}>Leé el aviso completo antes de elegir desde tu cuenta o en el chat. El uso del dorso y cada análisis tienen autorizaciones independientes.</p>
      <nav className={styles.documents} aria-label="Información legal"><Link href="/privacidad">Política de privacidad</Link><Link href="/terminos">Términos de uso</Link><Link href="/eliminacion-datos">Eliminación de datos</Link></nav>
     </section>
     <div className={styles.sections} style={{marginTop:32}}>
@@ -36,7 +36,7 @@ export default async function IdentityNoticesPage({searchParams}){
       <LegalSection id="aviso-completo" title={notice.title}>
        <p className={styles.updated}>Versión del aviso: <strong>{notice.version}</strong></p>
        <p data-identity-notice-text={notice.version}>{notice.text}</p>
-       <LegalNotice title="Tu elección se realiza en el chat"><p>Consultar esta página no autoriza el uso de imágenes ni inicia análisis ni cambia una autorización anterior. Volvé al chat para elegir.</p><p>{notice.automatic?'Podés continuar con revisión manual sin autorizar este análisis.':'Si no querés incluir el dorso, podés cancelar en WhatsApp y usar la presentación web sin dorso.'}</p></LegalNotice>
+       <LegalNotice title="Tu elección se realiza desde tu cuenta o en el chat"><p>Consultar esta página no autoriza el uso de imágenes ni inicia análisis ni cambia una autorización anterior. Volvé a tu cuenta o al chat donde empezaste para elegir.</p><p>{notice.timing==='BEFORE_PERSISTENCE'?'Si autorizás la comparación facial, se realiza antes de guardar esta presentación. Podés elegir la revisión manual sin autorizar esta asistencia.':notice.automatic?'Podés continuar con revisión manual sin autorizar este análisis.':'Si no querés incluir el dorso, podés cancelar en WhatsApp y usar la presentación web sin dorso.'}</p></LegalNotice>
       </LegalSection>
      ):(
       <LegalSection id="elegir-aviso" title="Elegí el aviso que querés consultar">

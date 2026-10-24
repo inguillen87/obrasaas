@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {isIP} from 'node:net';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {readFileSync,mkdirSync,writeFileSync,existsSync} from 'node:fs';
 import path from 'node:path';
@@ -52,6 +53,26 @@ export function participantPreanalysisCiSourceClosure(readSource){
   for(const ref of contract.participantPreanalysisCurrentRevision?.validationDeltas||[]){bytes(readSource,ref.path);files.add(ref.path);}
   for(const ref of contract.integratedIdentityCurrentRevision?.validationSources||[])visit(ref.path);
   for(const ref of contract.integratedIdentityCurrentRevision?.validationDeltas||[]){bytes(readSource,ref.path);files.add(ref.path);}
+  if(contract.planBudgetCurrentRevision?.captureQualityRuntime){
+   // Formerly bound validation leaves now import current dependencies. Walk
+   // their real literal edges so the emitted receipt includes the actual files;
+   // the canonical consumer must never manufacture those missing RAW rows.
+   const edges=[
+    ['.github/scripts/verify-workspace-ci-parallelization.mjs','../../scripts/lib/capture-runtime-canonical-collectors.mjs','scripts/lib/capture-runtime-canonical-collectors.mjs'],
+    ['tests/production-meta-customer-composition.test.mjs','./fixtures/meta-kyc-context-feedback-memory.mjs','tests/fixtures/meta-kyc-context-feedback-memory.mjs'],
+    ['tests/fixtures/meta-kyc-context-feedback-memory.mjs','./meta-kyc-chat-memory.mjs','tests/fixtures/meta-kyc-chat-memory.mjs'],
+    ['tests/fixtures/meta-kyc-chat-memory.mjs','./capture-quality-synthetic.mjs','tests/fixtures/capture-quality-synthetic.mjs'],
+    ['.github/scripts/verify-workspace-ci-parallelization.mjs','../../scripts/verify-field-task-pagination-ci.mjs','scripts/verify-field-task-pagination-ci.mjs'],
+    ['scripts/verify-field-task-pagination-ui.mjs','../src/app/(identity)/cuenta/material-inventory-view.mjs','src/app/(identity)/cuenta/material-inventory-view.mjs'],
+   ];
+   for(const [owner,literal,target] of edges){
+    requireProof(owner==='.github/scripts/verify-workspace-ci-parallelization.mjs'||files.has(owner),'Capture dependency owner must already be bound');
+    const tree=parse(bytes(readSource,owner).toString('utf8'),{sourceType:'module',plugins:['jsx'],createImportExpressions:true});
+    const matches=tree.program.body.filter(node=>['ImportDeclaration','ExportNamedDeclaration','ExportAllDeclaration'].includes(node.type)&&node.source?.type==='StringLiteral'&&node.source.value===literal);
+    requireProof(matches.length===1&&path.posix.normalize(path.posix.join(path.posix.dirname(owner),literal))===target,'Exact current capture dependency edge required');
+    visit(target);
+   }
+  }
  }
  files.add('.github/scripts/verify-workspace-ci-parallelization.mjs');
  for(const file of files)bytes(readSource,file);
@@ -102,7 +123,9 @@ export function parseParticipantPreanalysisTap(input){
 export function validateParticipantKycPreanalysisNative(native,{readSource,nativeSourceFiles}){
  requireProof(native?.version===1&&native.status==='PASS'&&native.postgresExecuted===true&&native.failure===null,'Actual successful native PostgreSQL execution required');
  requireProof(native.completedCheckCount===PARTICIPANT_KYC_PREANALYSIS_CHECKS.length&&same(native.checks,PARTICIPANT_KYC_PREANALYSIS_CHECKS),'Every current native check must execute in order');
- requireProof(native.engine?.host==='127.0.0.1'&&[5432,6549].includes(native.engine?.port)&&native.engine.version>=170000&&native.engine.version<180000&&native.engine.database==='obrasaas_cutover_ci'&&native.engine.actor==='cutover_test'&&native.engine.role==='cutover_test','Owned local PostgreSQL17 engine required');
+ keys(native.transport,['source','remoteAddress','remotePort','remoteFamily'],'observed native TCP transport');
+ requireProof(native.transport.source==='NODE_NET_SOCKET_REMOTE'&&native.transport.remoteAddress==='127.0.0.1'&&native.transport.remoteFamily==='IPv4'&&[5432,6549].includes(native.transport.remotePort),'Observed local PostgreSQL TCP peer required');
+ requireProof(typeof native.engine?.host==='string'&&isIP(native.engine.host)>0&&native.engine.port===native.transport.remotePort&&[5432,6549].includes(native.engine.port)&&native.engine.version>=170000&&native.engine.version<180000&&native.engine.database==='obrasaas_cutover_ci'&&native.engine.actor==='cutover_test'&&native.engine.role==='cutover_test','Owned local PostgreSQL17 engine required');
  requireProof(/^obrasaas_kyc_preanalysis_[a-f0-9]{32}$/.test(native.ownership?.datname)&&Number.isInteger(native.ownership?.oid)&&native.ownership.owner==='cutover_test','Owned random child database required');
  requireProof(Array.isArray(native.ownedConnectionPids)&&native.ownedConnectionPids.length>0&&native.ownedConnectionPids.every(pid=>Number.isSafeInteger(pid)&&pid>0),'Observed native connection ownership required');
  requireProof(native.providerRequests===0&&native.productionDataWritten===false&&native.realConsentOrIdentityVerified===false&&native.humanApprovalPerformed===false&&native.counts?.unexpectedNetwork===0,'Closed synthetic provider and identity boundary required');

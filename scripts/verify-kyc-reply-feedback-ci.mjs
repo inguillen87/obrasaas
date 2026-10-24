@@ -3,6 +3,7 @@ function checkWorksiteSource(action){try{return action();}catch(error){if(error.
 const verifyWorksiteLiveHoursCurrentSources=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck0(...args));
 const verifyWorksiteLiveHoursActualClosure=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck1(...args));
 import {createHash} from 'node:crypto';
+import {types as earlyDtoTypes} from 'node:util';
 import {participantPreanalysisConsumerSourceFiles,preloadParticipantPreanalysisConsumerSources} from './lib/participant-preanalysis-current-ci-lineage.mjs';
 import {execFileSync} from 'node:child_process';
 import {readFileSync,mkdirSync,writeFileSync,existsSync} from 'node:fs';
@@ -89,6 +90,63 @@ function uiChecks(proof){
  // the original GET; no second query is authorized by that held response.
  requireProof(proof.automaticPostCount===0&&Array.isArray(proof.apiRequests)&&proof.apiRequests.length===28&&proof.apiRequests.every(request=>request&&typeof request==='object'&&!Array.isArray(request)&&Object.keys(request).sort().join('|')==='challengeId|method|scope'&&request.method==='GET'&&request.scope==='a'.repeat(64)&&request.challengeId==='kyc_chat_'+'a'.repeat(32)),'UI diagnostics must use exactly the bounded original A/A readonly GET matrix');
 }
+// Denial-only checks apply to inert JSON data. Accessors, proxies, custom
+// prototypes, cycles and non-JSON values retain the original source-first order.
+function ordinaryJsonDto(value,ancestors=new Set()){
+ if(value===null||typeof value==='string'||typeof value==='boolean')return true;
+ if(typeof value==='number')return Number.isFinite(value);
+ if(typeof value!=='object'||earlyDtoTypes.isProxy(value)||ancestors.has(value))return false;
+ const array=Array.isArray(value),prototype=Object.getPrototypeOf(value);if(array?prototype!==Array.prototype:prototype!==Object.prototype&&prototype!==null)return false;
+ const descriptors=Object.getOwnPropertyDescriptors(value),keys=Reflect.ownKeys(descriptors);if(keys.some(key=>typeof key!=='string'))return false;
+ if(array&&(!Object.hasOwn(descriptors,'length')||!Number.isSafeInteger(descriptors.length.value)||descriptors.length.value<0||keys.length!==descriptors.length.value+1))return false;
+ ancestors.add(value);try{for(const key of keys){if(array&&key==='length')continue;const row=descriptors[key];if(!Object.hasOwn(row,'value')||row.enumerable!==true||array&&!/^(?:0|[1-9][0-9]*)$/.test(key)||!ordinaryJsonDto(row.value,ancestors))return false;}return true;}finally{ancestors.delete(value);}
+}
+
+// Denial only: LF pins establish eligibility; RAW copies never become authority.
+// An exotic source map keeps every existing caller read and late check in order.
+function earlySourceDescriptors(gitSources){
+ if(earlyDtoTypes.isProxy(gitSources))return null;
+ const prototype=Object.getPrototypeOf(gitSources);if(prototype!==Object.prototype&&prototype!==null)return null;
+ const descriptors=Object.getOwnPropertyDescriptors(gitSources),keys=Reflect.ownKeys(descriptors),bufferReadKeys=['toString','valueOf','length','byteLength','byteOffset','buffer','parent','offset','constructor','toJSON','slice','subarray','copy','equals',Symbol.toPrimitive,Symbol.iterator];
+ for(const key of keys){if(typeof key!=='string')return null;const row=descriptors[key];if(!Object.hasOwn(row,'value')||row.enumerable!==true||row.configurable!==true||row.writable!==true||earlyDtoTypes.isProxy(row.value)||!Buffer.isBuffer(row.value)||Object.getPrototypeOf(row.value)!==Buffer.prototype||bufferReadKeys.some(name=>Object.hasOwn(row.value,name)))return null;}
+ return descriptors;
+}
+function earlySourceCopy(buffer){
+ const length=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype),'length').get.call(buffer),copy=Buffer.alloc(length);
+ Uint8Array.prototype.set.call(copy,buffer);return copy;
+}
+function earlySourceText(copy){const text=copy.toString('utf8');return Buffer.from(text).equals(copy)?text:null;}
+function earlyCurrentFamily(contract,family){
+ const section=contract?.planBudgetCurrentRevision;if(!section?.captureQualityRuntime||!Array.isArray(section.sourceFamilies))return null;
+ const matches=section.sourceFamilies.filter(row=>row?.family===family);if(matches.length!==1)return null;
+ const {currentFiles:files,currentManifest:pins}=matches[0];if(!Array.isArray(files)||files.length===0||!Array.isArray(pins)||pins.length!==files.length)return null;
+ for(let index=0;index<files.length;index++){const file=files[index],pin=pins[index];if(typeof file!=='string'||!(['package.json','package-lock.json'].includes(file)||sourcePath(file))||index>0&&files[index-1]>=file||!pin||Object.keys(pin).sort().join('|')!=='path|sha256'||pin.path!==file||!hash(pin.sha256))return null;}
+ return {files,pins};
+}
+function earlyFamilyCopies(descriptors,families){
+ const pins=new Map();for(const family of families)for(const pin of family.pins){if(pins.has(pin.path)&&pins.get(pin.path)!==pin.sha256)return null;pins.set(pin.path,pin.sha256);}
+ const copies=new Map();try{for(const [file,pin]of pins){if(!Object.hasOwn(descriptors,file))return null;const copy=earlySourceCopy(descriptors[file].value),text=earlySourceText(copy);if(text===null||sha(Buffer.from(text.replaceAll('\r\n','\n')))!==pin)return null;copies.set(file,copy);}}catch{return null;}
+ return copies;
+}
+function preflightKycReplyUiDto(ui){
+ requireProof(ui.version===KYC_REPLY_FEEDBACK_UI_VERSION&&ui.environment==='isolated-localhost-next-exact-jsx-readonly-synthetic-api'&&ui.providerRequests===0&&ui.productionLoginVerified===false&&ui.physicalDeviceAccepted===false,'UI requires synthetic authentication, APIs and zero providers');
+ for(const key of ['pageErrors','interceptErrors','externalRequests'])requireProof(Array.isArray(ui[key])&&ui[key].length===0,'UI '+key+' must be empty');
+ const cleanup=ui.cleanup;requireProof(cleanup&&cleanup.browserClosed===true&&cleanup.serverClosed===true&&cleanup.gracefulCloseAcknowledged===true&&cleanup.fixtureRemoved===true&&cleanup.fixtureCleanupProof?.fixtureRemoved===true&&cleanup.fixtureCleanupProof?.postcondition?.absent===true,'Owned browser/server/fixture cleanup must be confirmed');
+ uiChecks(ui);
+}
+function preflightKycReplyFeedbackDenials(gitSources,postgres,ui){
+ if(!ordinaryJsonDto(postgres)||!ordinaryJsonDto(ui))return;
+ const descriptors=earlySourceDescriptors(gitSources),contractPath='.github/workspace-acceptance-contract.json';if(!descriptors||!Object.hasOwn(descriptors,contractPath))return;
+ let contract;try{const text=earlySourceText(earlySourceCopy(descriptors[contractPath].value));if(text===null)return;contract=JSON.parse(text);}catch{return;}
+ const native=earlyCurrentFamily(contract,'KYC_REPLY_FEEDBACK');if(!native)return;
+ const copies=earlyFamilyCopies(descriptors,[native]);if(!copies||!copies.has(pgHarness)||dependencies.some(file=>!copies.has(file)))return;
+ const privateRead=file=>copies.get(file);
+ manifest(postgres.sourceManifest,native.files,privateRead,'PostgreSQL');
+ requireProof(postgres.harnessSha256===sha(privateRead(pgHarness)),'Native producer must match committed Git bytes');
+ preflightKycReplyUiDto(ui);manifest(ui.dependencyManifest,dependencies,privateRead,'UI dependencies');
+ same(ui.externalImports,['react'],'UI package dependency boundary changed');
+}
+
 export function validateKycReplyFeedbackCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres,ui}){
  requireProof(revision(expectedHead)&&head===expectedHead&&revision(sourceTree)&&trackedClean===true,'Expected Git HEAD/tree and tracked source must be exact and clean');
  requireProof(gitSources&&typeof gitSources==='object'&&!Array.isArray(gitSources),'Committed Git blob map required');
@@ -99,6 +157,7 @@ export function validateKycReplyFeedbackCi({expectedHead,head,sourceTree,tracked
  requireProof(postgres.providerCalls===0&&postgres.mediaCalls===0&&postgres.depositCalls===0&&postgres.identityCertified===false&&postgres.permissionsGranted===false&&postgres.syntheticReplyCalls===COMPANY_KYC_REJECTION_SYNTHETIC_REPLY_COUNT,'Native callback/reply counters and identity boundary must match the closed fixture');
  requireProof(postgres.poolClosed===true&&postgres.databaseRemoved===true,'PostgreSQL pool and owned database cleanup must be confirmed');
  requireProof(postgres.totalCheckCount===8&&Array.isArray(postgres.checks),'PostgreSQL needs all eight native groups');same(postgres.checks,COMPANY_KYC_REJECTION_FEEDBACK_CHECKS,'Native signed-callback, limits and revocation checks must match the complete exported contract');
+ preflightKycReplyFeedbackDenials(gitSources,postgres,ui);
  const pg=kycReplyFeedbackSourceClosure(readSource),currentSourceContract=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));if(currentSourceContract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]){verifyWorksiteLiveHoursCurrentSources(currentSourceContract,readSource);verifyWorksiteLiveHoursActualClosure(currentSourceContract,'KYC_REPLY_FEEDBACK',pg,readSource);}let historicalNativeFiles,sourceLineage;try{historicalNativeFiles=participantPreanalysisConsumerSourceFiles('KYC_REPLY_FEEDBACK',pg.files,readSource);sourceLineage=validatePlanMeasurementConsumerSourceLineage({family:'KYC_REPLY_FEEDBACK',files:pg.files,readSource});}catch(error){requireProof(false,error.message);}requireProof(historicalNativeFiles.length===previousNativeSourceCount+1+PLAN_MEASUREMENT_CONSUMER_SOURCES.length&&pg.files.filter(file=>file===currentOwnReportSource).length===1,'Native CURRENT closure requires the original 108 sources, its exact own-report reader and two source import dependencies');
  const previous=historicalNativeFiles.filter(file=>file!==currentOwnReportSource&&!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file));requireProof(previous.length===previousNativeSourceCount&&sha(JSON.stringify(previous))===previousNativeSourcePathsSha256,'Native previous 108-path lineage must remain immutable');
  manifest(postgres.sourceManifest,pg.files,readSource,'PostgreSQL');requireProof(postgres.harnessSha256===sha(readSource(pgHarness)),'Native producer must match committed Git bytes');

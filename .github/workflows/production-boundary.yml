@@ -6,7 +6,62 @@ on:
 permissions:
   contents: read
 jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    services:
+      postgres:
+        image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      CUTOVER_TEST_DISPOSABLE: '1'
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+      BOUNDARY_UNIT_OUTPUT: .vercel/private/production-boundary-unit-shard
+      BOUNDARY_UNIT_SHARD: ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Prepare exact production test manifest
+        run: python3 .github/scripts/verify-production-test-shards.py prepare
+      - name: Native production test shard
+        run: >-
+          node --test --test-shard=${{ matrix.shard }}/19
+          --import=./.github/scripts/observe-production-test-entry.mjs
+          --test-reporter=tap --test-reporter=junit
+          --test-reporter-destination=stdout
+          --test-reporter-destination=.vercel/private/production-boundary-unit-shard/native.junit.xml
+          tests/production-*.test.mjs
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: production-unit-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: .vercel/private/production-boundary-unit-shard/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 7
   verify:
+    needs: unit
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
@@ -26,6 +81,10 @@ jobs:
       CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
       DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
     steps:
+      - name: Require all native production test shards
+        env:
+          UNIT_RESULT: ${{ needs.unit.result }}
+        run: test "$UNIT_RESULT" = success
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
@@ -34,7 +93,14 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
-      - run: node --test tests/production-*.test.mjs
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          pattern: production-unit-${{ github.run_id }}-${{ github.run_attempt }}-*
+          path: .vercel/private/production-boundary-unit-artifacts
+          merge-multiple: false
+          digest-mismatch: error
+      - name: Verify exact native shard entry coverage
+        run: python3 .github/scripts/verify-production-test-shards.py verify
       - name: Selected office-review connection and auditor guide
         run: |
           npx eslint src/lib/office-review-*.mjs "src/app/(identity)/cuenta/office-review-panel.js" "src/app/(identity)/cuenta/office-review-view.mjs" "src/app/(identity)/cuenta/onboarding-guide.js" "src/app/(identity)/cuenta/workspace-client.js" "src/app/(identity)/cuenta/workspace-recovery-journal.mjs" scripts/verify-office-review-*.mjs scripts/verify-onboarding-guide-ui.mjs tests/production-office-review*.test.mjs tests/production-workspace-guide-observation.test.mjs --max-warnings 0

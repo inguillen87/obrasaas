@@ -61,6 +61,7 @@ export function createCompanyChannelStore({workspace,ownConnection=null,ownTempl
   async read(session,context){
    if(context.discovery==='OWN_TEMPLATES'){if(!ownTemplates)fail('META_OWN_COMPANY_CONFIGURATION_PENDING',503);return ownTemplates.read(session,context);}
    if(context.discovery==='OWN_NUMBER'){if(!ownConnection)fail('META_OWN_COMPANY_CONFIGURATION_PENDING',503);return ownConnection.discover(session,context);}
+   if(context.discovery==='OWN_RUNTIME_DIAGNOSTIC'){if(!ownConnection)fail('META_OWN_COMPANY_CONFIGURATION_PENDING',503);return ownConnection.diagnoseRuntime(session,context);}
    if(context.operationId&&ownConnection){const own=await ownConnection.read(session,context);if(own)return own;}
    if(context.operationId&&ownTemplates){const own=await ownTemplates.readReceipt(session,context);if(own)return own;}
    if(!workspaceId(context.projectId)||!/^[a-f0-9]{64}$/.test(context.scope||'')||context.operationId!==undefined&&!operationId(context.operationId))fail('COMPANY_CHANNEL_INPUT_INVALID',400);

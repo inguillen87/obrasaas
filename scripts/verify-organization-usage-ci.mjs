@@ -1,9 +1,11 @@
+import {PLAN_BUDGET_CURRENT_SECTION,withCaptureRuntimePreviousSources} from './lib/plan-budget-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_SECTION,verifyPlanPartidaPreviewActualClosure} from './lib/plan-partida-preview-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,verifyWorksiteLiveHoursCurrentSources as worksiteSourceCheck0,verifyWorksiteLiveHoursActualClosure as worksiteSourceCheck1} from './lib/worksite-live-hours-current-ci-lineage.mjs';
 function checkWorksiteSource(action){try{return action();}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')requireProof(false,error.message);throw error;}}
 const verifyWorksiteLiveHoursCurrentSources=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck0(...args));
 const verifyWorksiteLiveHoursActualClosure=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck1(...args));
 import {createHash} from 'node:crypto';
+import {types as earlyDtoTypes} from 'node:util';
 import {restoreWeeklyCypConsumerSourceSet} from './lib/home-decisions-current-ci-lineage.mjs';
 import {participantPreanalysisConsumerSourceFiles,preloadParticipantPreanalysisConsumerSources} from './lib/participant-preanalysis-current-ci-lineage.mjs';
 import {execFileSync} from 'node:child_process';
@@ -57,24 +59,40 @@ function provenance(proof,head,tree,label){
  requireProof(proof?.status==='PASS'&&proof.sourceRevision===head&&proof.sourceTree===tree&&proof.sourceState==='EXACT_CI_SOURCE'&&proof.trackedClean===true,label+' exact CI provenance');
  requireProof(proof.productionDataWritten===false,label+' production boundary');
 }
-export function validateOrganizationUsageCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres,ui}){
- requireProof(revision(expectedHead)&&head===expectedHead&&revision(sourceTree)&&trackedClean===true,'Exact clean expected Git HEAD/tree');requireProof(gitSources&&typeof gitSources==='object'&&!Array.isArray(gitSources),'Committed source map');
- const readSource=file=>Object.hasOwn(gitSources,file)?gitSources[file]:null;
- for(const file of [pgHarness,uiHarness,cleanupHelper,...dependencies])requireProof(readSource(file)!=null,'Missing producer/helper/package: '+file);
- provenance(postgres,expectedHead,sourceTree,'PostgreSQL');provenance(ui,expectedHead,sourceTree,'UI');
- requireProof(postgres.version===ORGANIZATION_USAGE_PG_VERSION&&postgres.syntheticOnly===true&&postgres.postgresExecuted===true,'Native disposable execution');
- requireProof(ORGANIZATION_USAGE_PG_CHECKS.length===16&&postgres.totalCheckCount===16,'Complete sixteen native groups');same(postgres.checks,[...ORGANIZATION_USAGE_PG_CHECKS],'Exact ordered native group names');
- requireProof(postgres.providerRequests===0&&postgres.syntheticOpenAiRequests===11&&Number.isSafeInteger(postgres.syntheticReplyRequests)&&postgres.syntheticReplyRequests>=1,'Closed provider counters');
- requireProof(postgres.paymentAttempted===false&&postgres.paymentVerified===false&&postgres.capacityContractPending===true&&postgres.cost===null,'No merchant acceptance, approved capacity or invented price');
- requireProof(postgres.poolClosed===true&&postgres.databaseRemoved===true&&postgres.cleanup?.poolClosed===true&&postgres.cleanup.databaseRemoved===true,'Owned PostgreSQL cleanup');
- requireProof(Array.isArray(postgres.nativeLockObservations)&&postgres.nativeLockObservations.length===2,'Two native lock races');
- for(const [index,record] of postgres.nativeLockObservations.entries())requireProof(exact(record,['firstTransport','secondTransport','sameOrganization','differentProjects','waitingCount','waitingBeforeProject','bothCompleted'])&&record.firstTransport===['WEB','WHATSAPP'][index]&&record.secondTransport===['WHATSAPP','WEB'][index]&&record.sameOrganization===true&&record.differentProjects===true&&Number.isSafeInteger(record.waitingCount)&&record.waitingCount>=1&&record.waitingBeforeProject===true&&record.bothCompleted===true,'Native advisory-before-project ordering');
- const native=organizationUsageCiSourceClosure(readSource),currentSourceContract=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));if(currentSourceContract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]){verifyWorksiteLiveHoursCurrentSources(currentSourceContract,readSource);verifyWorksiteLiveHoursActualClosure(currentSourceContract,'ORGANIZATION_USAGE',native,readSource);}let historicalNativeFiles,sourceLineage;try{historicalNativeFiles=participantPreanalysisConsumerSourceFiles('ORGANIZATION_USAGE',native.files,readSource);sourceLineage=validatePlanMeasurementConsumerSourceLineage({family:'ORGANIZATION_USAGE',files:native.files,readSource});}catch(error){requireProof(false,error.message);}
- requireProof(historicalNativeFiles.length===115&&native.files.filter(file=>file===fieldReportSource).length===1,'Complete 115-source native closure with the own field report reader and source import');
- const previousNative=historicalNativeFiles.filter(file=>file!==fieldReportSource&&!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file));requireProof(previousNative.length===112&&sha(JSON.stringify(previousNative))===previousNativePathsSha256,'Preserved exact previous 112-source native lineage');
- manifest(postgres.sourceManifest,native.files,readSource,'PostgreSQL');requireProof(postgres.harnessSha256===sha(readSource(pgHarness)),'Native producer Git bytes');
- requireProof(['src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs'].every(file=>native.files.includes(file)),'Current native document curve dependency lineage');
- requireProof(['src/lib/participant-civil-store.mjs','src/lib/participant-civil-policy.mjs','src/lib/bindx-civil-data-client.mjs'].every(file=>native.files.includes(file)),'The current native lineage requires every durable civil source');
+// Only this source-lineage seam sees authenticated parent metadata. Business
+// DTOs and their CURRENT RAW manifests never enter a historical validator.
+function organizationHistoricalNativeLineage(contract,native,readSource,postgres,ui,verifyInputs){
+ if(!contract?.[PLAN_BUDGET_CURRENT_SECTION]?.captureQualityRuntime)return {historicalNativeFiles:participantPreanalysisConsumerSourceFiles('ORGANIZATION_USAGE',native.files,readSource),sourceLineage:validatePlanMeasurementConsumerSourceLineage({family:'ORGANIZATION_USAGE',files:native.files,readSource})};
+ const before={contract:JSON.stringify(contract),native:JSON.stringify(native),postgres:JSON.stringify(postgres),ui:JSON.stringify(ui)};
+ const verify=()=>{
+  if(verifyInputs)verifyInputs();
+  requireProof(JSON.stringify(contract)===before.contract&&JSON.stringify(native)===before.native&&JSON.stringify(postgres)===before.postgres&&JSON.stringify(ui)===before.ui,'Caller contract, closure and business DTOs changed during historical source validation');
+  verifyWorksiteLiveHoursCurrentSources(contract,readSource);verifyWorksiteLiveHoursActualClosure(contract,'ORGANIZATION_USAGE',native,readSource);
+  manifest(postgres.sourceManifest,native.files,readSource,'PostgreSQL');requireProof(postgres.harnessSha256===sha(readSource(pgHarness)),'Native producer Git bytes');
+ };
+ verify();
+ try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>{
+  const family=parent[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family==='ORGANIZATION_USAGE');requireProof(family&&Array.isArray(family.currentFiles),'Authenticated historical organization family required');
+  const files=[...family.currentFiles],historicalNativeFiles=participantPreanalysisConsumerSourceFiles('ORGANIZATION_USAGE',files,parentRead),legacy=validatePlanMeasurementConsumerSourceLineage({family:'ORGANIZATION_USAGE',files,readSource:parentRead});
+  requireProof(legacy.sourceCount===files.length,'Historical source result must retain its own parent count');
+  return {historicalNativeFiles,sourceLineage:{...legacy,sourceBasis:'AUTHENTICATED_PRE_CAPTURE_PARENT',currentSourceCount:native.files.length,historicalSourceCount:files.length,currentSourcePathsSha256:sha(JSON.stringify(native.files)),sourceOnlyProjection:true,callerDtosUnchanged:true}};
+ });}finally{verify();}
+}
+// Rejection-only UI preflight; no source authority, DTO or reader is cached.
+// Proxies/accessors/non-JSON retain the existing snapshot and source-check order.
+function ordinaryJsonDto(value,ancestors=new Set()){
+ if(value===null||typeof value==='string'||typeof value==='boolean')return true;
+ if(typeof value==='number')return Number.isFinite(value);
+ if(typeof value!=='object'||earlyDtoTypes.isProxy(value)||ancestors.has(value))return false;
+ const array=Array.isArray(value),prototype=Object.getPrototypeOf(value);
+ if(array?prototype!==Array.prototype:prototype!==Object.prototype&&prototype!==null)return false;
+ const descriptors=Object.getOwnPropertyDescriptors(value),keys=Reflect.ownKeys(descriptors);
+ if(keys.some(key=>typeof key!=='string'))return false;
+ if(array&&(!Object.hasOwn(descriptors,'length')||!Number.isSafeInteger(descriptors.length.value)||descriptors.length.value<0||keys.length!==descriptors.length.value+1))return false;
+ ancestors.add(value);try{for(const key of keys){if(array&&key==='length')continue;const row=descriptors[key];if(!Object.hasOwn(row,'value')||row.enumerable!==true||array&&!/^(?:0|[1-9][0-9]*)$/.test(key)||!ordinaryJsonDto(row.value,ancestors))return false;}return true;}finally{ancestors.delete(value);}
+}
+
+function validateOrganizationUsageUiDto(ui){
  requireProof(ui.version===ORGANIZATION_USAGE_UI_VERSION&&ui.environment==='isolated-localhost-next-exact-jsx-synthetic-api','Controlled real JSX fixture');
  for(const key of ['productionLoginVerified','realIdentityDocuments','realPlanDocuments','physicalDeviceAccepted'])requireProof(ui[key]===false,'No real acceptance claim: '+key);
  requireProof(ui.providerRequests===0&&ui.automaticPostCount===0&&ui.explicitSyntheticUploadCount===6,'Only six explicitly requested synthetic uploads');
@@ -91,12 +109,74 @@ export function validateOrganizationUsageCi({expectedHead,head,sourceTree,tracke
  for(const record of ui.apiRequests){requireProof(record&&Object.keys(record).every(key=>['label','path','method','scope','operationId'].includes(key))&&counts.has(record.label)&&['/api/identity/company-subscription','/api/identity/company-usage','/api/identity/plan-import'].includes(record.path)&&['GET','POST'].includes(record.method)&&['a'.repeat(64),'b'.repeat(64)].includes(record.scope),'Finite read API scope and metadata');counts.set(record.label,counts.get(record.label)+1);if(Object.hasOwn(record,'operationId'))requireProof(record.path==='/api/identity/plan-import'&&uuid(record.operationId)&&record.operationId===operations.get(record.label),'The HTTP and recovery receipt must identify the same case and attempt');if(record.method==='POST'){uploads++;posts.set(record.label,posts.get(record.label)+1);requireProof(record.path==='/api/identity/plan-import'&&uuid(record.operationId)&&record.operationId===operations.get(record.label),'Only the explicit synthetic source attempt for this case');}}
  requireProof(uploads===6,'Exact observed synthetic upload count');
  for(const [index,label] of labels.entries())requireProof(counts.get(label)===requestCounts[index]&&posts.get(label)===(index>=8?1:0),'Complete bounded request observations for '+label);
+}
+
+// Denial only: LF pins establish eligibility; RAW copies never become authority.
+// An exotic source map keeps every existing caller read and late check in order.
+function earlySourceDescriptors(gitSources){
+ if(earlyDtoTypes.isProxy(gitSources))return null;
+ const prototype=Object.getPrototypeOf(gitSources);if(prototype!==Object.prototype&&prototype!==null)return null;
+ const descriptors=Object.getOwnPropertyDescriptors(gitSources),keys=Reflect.ownKeys(descriptors),bufferReadKeys=['toString','valueOf','length','byteLength','byteOffset','buffer','parent','offset','constructor','toJSON','slice','subarray','copy','equals',Symbol.toPrimitive,Symbol.iterator];
+ for(const key of keys){if(typeof key!=='string')return null;const row=descriptors[key];if(!Object.hasOwn(row,'value')||row.enumerable!==true||row.configurable!==true||row.writable!==true||earlyDtoTypes.isProxy(row.value)||!Buffer.isBuffer(row.value)||Object.getPrototypeOf(row.value)!==Buffer.prototype||bufferReadKeys.some(name=>Object.hasOwn(row.value,name)))return null;}
+ return descriptors;
+}
+function earlySourceCopy(buffer){
+ const length=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype),'length').get.call(buffer),copy=Buffer.alloc(length);
+ Uint8Array.prototype.set.call(copy,buffer);return copy;
+}
+function earlySourceText(copy){const text=copy.toString('utf8');return Buffer.from(text).equals(copy)?text:null;}
+function earlyCurrentFamily(contract,family){
+ const section=contract?.planBudgetCurrentRevision;if(!section?.captureQualityRuntime||!Array.isArray(section.sourceFamilies))return null;
+ const matches=section.sourceFamilies.filter(row=>row?.family===family);if(matches.length!==1)return null;
+ const {currentFiles:files,currentManifest:pins}=matches[0];if(!Array.isArray(files)||files.length===0||!Array.isArray(pins)||pins.length!==files.length)return null;
+ for(let index=0;index<files.length;index++){const file=files[index],pin=pins[index];if(typeof file!=='string'||!(dependencies.includes(file)||safePath(file))||index>0&&files[index-1]>=file||!pin||Object.keys(pin).sort().join('|')!=='path|sha256'||pin.path!==file||!hash(pin.sha256))return null;}
+ return {files,pins};
+}
+function earlyFamilyCopies(descriptors,families){
+ const pins=new Map();for(const family of families)for(const pin of family.pins){if(pins.has(pin.path)&&pins.get(pin.path)!==pin.sha256)return null;pins.set(pin.path,pin.sha256);}
+ const copies=new Map();try{for(const [file,pin]of pins){if(!Object.hasOwn(descriptors,file))return null;const copy=earlySourceCopy(descriptors[file].value),text=earlySourceText(copy);if(text===null||sha(Buffer.from(text.replaceAll('\r\n','\n')))!==pin)return null;copies.set(file,copy);}}catch{return null;}
+ return copies;
+}
+function preflightOrganizationUsageManifests(gitSources,postgres,ui,businessInputsBefore){
+ if(!ordinaryJsonDto(postgres)||!ordinaryJsonDto(ui))return;
+ const descriptors=earlySourceDescriptors(gitSources),contractPath='.github/workspace-acceptance-contract.json';if(!descriptors||!Object.hasOwn(descriptors,contractPath))return;
+ let contract;try{const text=earlySourceText(earlySourceCopy(descriptors[contractPath].value));if(text===null)return;contract=JSON.parse(text);}catch{return;}
+ const native=earlyCurrentFamily(contract,'ORGANIZATION_USAGE'),browser=earlyCurrentFamily(contract,'ORGANIZATION_USAGE_UI');if(!native||!browser)return;
+ const copies=earlyFamilyCopies(descriptors,[native,browser]);if(!copies||dependencies.some(file=>!copies.has(file)))return;
+ const ownedPostgres=JSON.parse(businessInputsBefore.postgres),ownedUi=JSON.parse(businessInputsBefore.ui),readPrivate=file=>copies.get(file);
+ manifest(ownedPostgres.sourceManifest,native.files,readPrivate,'PostgreSQL');manifest(ownedUi.sourceManifest,browser.files,readPrivate,'UI');manifest(ownedUi.dependencyManifest,dependencies,readPrivate,'UI dependencies');
+}
+
+export function validateOrganizationUsageCi({expectedHead,head,sourceTree,trackedClean,gitSources,postgres,ui}){
+ requireProof(revision(expectedHead)&&head===expectedHead&&revision(sourceTree)&&trackedClean===true,'Exact clean expected Git HEAD/tree');requireProof(gitSources&&typeof gitSources==='object'&&!Array.isArray(gitSources),'Committed source map');
+ const businessInputsBefore={postgres:JSON.stringify(postgres),ui:JSON.stringify(ui)},verifyBusinessInputs=()=>requireProof(JSON.stringify(postgres)===businessInputsBefore.postgres&&JSON.stringify(ui)===businessInputsBefore.ui,'Business DTOs changed during source validation');
+ const readSource=file=>Object.hasOwn(gitSources,file)?gitSources[file]:null;
+ for(const file of [pgHarness,uiHarness,cleanupHelper,...dependencies])requireProof(readSource(file)!=null,'Missing producer/helper/package: '+file);
+ provenance(postgres,expectedHead,sourceTree,'PostgreSQL');provenance(ui,expectedHead,sourceTree,'UI');
+ requireProof(postgres.version===ORGANIZATION_USAGE_PG_VERSION&&postgres.syntheticOnly===true&&postgres.postgresExecuted===true,'Native disposable execution');
+ requireProof(ORGANIZATION_USAGE_PG_CHECKS.length===16&&postgres.totalCheckCount===16,'Complete sixteen native groups');same(postgres.checks,[...ORGANIZATION_USAGE_PG_CHECKS],'Exact ordered native group names');
+ requireProof(postgres.providerRequests===0&&postgres.syntheticOpenAiRequests===11&&Number.isSafeInteger(postgres.syntheticReplyRequests)&&postgres.syntheticReplyRequests>=1,'Closed provider counters');
+ requireProof(postgres.paymentAttempted===false&&postgres.paymentVerified===false&&postgres.capacityContractPending===true&&postgres.cost===null,'No merchant acceptance, approved capacity or invented price');
+ requireProof(postgres.poolClosed===true&&postgres.databaseRemoved===true&&postgres.cleanup?.poolClosed===true&&postgres.cleanup.databaseRemoved===true,'Owned PostgreSQL cleanup');
+ requireProof(Array.isArray(postgres.nativeLockObservations)&&postgres.nativeLockObservations.length===2,'Two native lock races');
+ for(const [index,record] of postgres.nativeLockObservations.entries())requireProof(exact(record,['firstTransport','secondTransport','sameOrganization','differentProjects','waitingCount','waitingBeforeProject','bothCompleted'])&&record.firstTransport===['WEB','WHATSAPP'][index]&&record.secondTransport===['WHATSAPP','WEB'][index]&&record.sameOrganization===true&&record.differentProjects===true&&Number.isSafeInteger(record.waitingCount)&&record.waitingCount>=1&&record.waitingBeforeProject===true&&record.bothCompleted===true,'Native advisory-before-project ordering');
+ // All native DTO guards above keep their original priority. The same UI helper runs again below.
+ if(ordinaryJsonDto(ui))validateOrganizationUsageUiDto(ui);
+ preflightOrganizationUsageManifests(gitSources,postgres,ui,businessInputsBefore);
+ const native=organizationUsageCiSourceClosure(readSource),currentSourceContract=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));if(currentSourceContract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]){verifyWorksiteLiveHoursCurrentSources(currentSourceContract,readSource);verifyWorksiteLiveHoursActualClosure(currentSourceContract,'ORGANIZATION_USAGE',native,readSource);}let historicalNativeFiles,sourceLineage;try{({historicalNativeFiles,sourceLineage}=organizationHistoricalNativeLineage(currentSourceContract,native,readSource,postgres,ui,verifyBusinessInputs));}catch(error){requireProof(false,error.message);}
+ requireProof(historicalNativeFiles.length===115&&native.files.filter(file=>file===fieldReportSource).length===1,'Complete 115-source native closure with the own field report reader and source import');
+ const previousNative=historicalNativeFiles.filter(file=>file!==fieldReportSource&&!PLAN_MEASUREMENT_CONSUMER_SOURCES.includes(file));requireProof(previousNative.length===112&&sha(JSON.stringify(previousNative))===previousNativePathsSha256,'Preserved exact previous 112-source native lineage');
+ manifest(postgres.sourceManifest,native.files,readSource,'PostgreSQL');requireProof(postgres.harnessSha256===sha(readSource(pgHarness)),'Native producer Git bytes');
+ requireProof(['src/lib/plan-baseline-policy.mjs','src/lib/plan-import-document-curve.mjs'].every(file=>native.files.includes(file)),'Current native document curve dependency lineage');
+ requireProof(['src/lib/participant-civil-store.mjs','src/lib/participant-civil-policy.mjs','src/lib/bindx-civil-data-client.mjs'].every(file=>native.files.includes(file)),'The current native lineage requires every durable civil source');
+ validateOrganizationUsageUiDto(ui);
  const browser=organizationUsageCiSourceClosure(readSource,{ui:true}),contract=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));let publishedUiFiles;
  try{if(Object.hasOwn(contract,PLAN_PARTIDA_PREVIEW_CURRENT_SECTION))verifyPlanPartidaPreviewActualClosure(contract,'ORGANIZATION_USAGE_UI',browser,readSource);publishedUiFiles=restoreWeeklyCypConsumerSourceSet('ORGANIZATION_USAGE_UI',browser.files,contract);}catch(error){requireProof(false,error.message);}
  requireProof(publishedUiFiles.length===26,'Complete published 26-source UI graph');manifest(ui.sourceManifest,browser.files,readSource,'UI');manifest(ui.dependencyManifest,dependencies,readSource,'UI dependencies');same(ui.externalImports,browser.externalImports,'Browser packages match actual JSX');
  const fixture=organizationUsageCiSourceClosure(readSource,{fixture:true});same(fixture.files,['scripts/lib/company-subscription-ui-fixture.mjs','src/lib/company-subscription-catalog.mjs','src/lib/workspace-policy.mjs'],'Complete current three-source Node fixture graph');manifest(ui.fixtureSourceManifest,fixture.files,readSource,'UI fixture');
  requireProof(ui.harnessSha256===sha(readSource(uiHarness))&&ui.cleanupHelperSha256===sha(readSource(cleanupHelper)),'UI and cleanup producer Git bytes');
  const cleanup=ui.cleanup;requireProof(cleanup?.browserClosed===true&&cleanup.serverClosed===true&&cleanup.gracefulCloseAcknowledged===true&&cleanup.fixtureRemoved===true&&cleanup.fixtureCleanupProof?.fixtureRemoved===true&&cleanup.fixtureCleanupProof.postcondition?.absent===true,'Owned browser/server/fixture cleanup');
+ verifyBusinessInputs();
  return {version:ORGANIZATION_USAGE_CI_VERSION,status:'PASS',sourceRevision:expectedHead,sourceTree,sourceState:'EXACT_CI_SOURCE',trackedClean:true,postgres:{totalCheckCount:16,sourceCount:native.files.length,syntheticOpenAiRequests:11,nativeLockRaceCount:2,harnessSha256:postgres.harnessSha256,sourceLineage},ui:{totalCheckCount:14,sourceCount:browser.files.length,fixtureSourceCount:fixture.files.length,dependencyCount:2,widths:[...ORGANIZATION_USAGE_UI_WIDTHS],explicitSyntheticUploadCount:6,harnessSha256:ui.harnessSha256},providerRequests:0,productionDataWritten:false,paymentVerified:false,capacityContractPending:true,cost:null,productionLoginVerified:false,physicalDeviceAccepted:false};
 }
 function main(){

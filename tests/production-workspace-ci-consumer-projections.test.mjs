@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,restoreCaptureRuntimePreviousContract} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -17,8 +17,13 @@ function assertCurrentNativeGraph(family,close,priorCount,publishedCount){
   assert.equal(delta.previousCount,priorCount);assert.equal(delta.currentCount,priorCount+1);assert.deepEqual(delta.additions,['src/lib/field-hours-report.mjs']);
   verifyPlanBudgetCurrentSources(value,read);
   const budgetDelta=value[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas.find(row=>row.family===family),beforeBudget=restorePlanBudgetSourceSet(value,family,actual.files);
-  assert.deepEqual(budgetDelta.additions,['src/lib/plan-budget-source.mjs']);
-  assert.equal(actual.files.length,budgetDelta.currentCount);assert.equal(sha(JSON.stringify(actual.files)),budgetDelta.currentPathsSha256);assert.deepEqual(actual.files,[...beforeBudget,...budgetDelta.additions].sort());
+  // The catalog delta belongs to the authenticated Git731 parent. Capture's
+  // present graph is checked independently and is never relabeled as that set.
+  const parent=restoreCaptureRuntimePreviousContract(value),parentFamily=parent[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family===family),currentFamily=value[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family===family),capture=value[PLAN_BUDGET_CURRENT_SECTION].captureQualityRuntime.familyAdvances.find(row=>row.family===family);
+  const catalogs=['src/lib/consumption-evidence-catalog.mjs','src/lib/meta-consumption-evidence-catalog.mjs','src/lib/voice-consumption-draft.mjs'];
+  assert.deepEqual(budgetDelta.additions,['src/lib/plan-budget-source.mjs',...catalogs].sort());assert.deepEqual(budgetDelta.additions.filter(file=>!catalogs.includes(file)),['src/lib/plan-budget-source.mjs']);
+  assert.equal(parentFamily.currentFiles.length,budgetDelta.currentCount);assert.equal(sha(JSON.stringify(parentFamily.currentFiles)),budgetDelta.currentPathsSha256);assert.deepEqual(parentFamily.currentFiles,[...beforeBudget,...budgetDelta.additions].sort());
+  assert.equal(capture.previousCount,parentFamily.currentFiles.length);assert.equal(capture.currentCount,currentFamily.currentFiles.length);assert.deepEqual(capture.removals,[]);assert.deepEqual([...parentFamily.currentFiles,...capture.additions].sort(),currentFamily.currentFiles);assert.deepEqual(actual.files,currentFamily.currentFiles);
   assert.equal(beforeBudget.length,delta.currentCount);assert.equal(sha(JSON.stringify(beforeBudget)),delta.currentPathsSha256);
   const previous=restoreWorksiteLiveHoursSourceSet(value,family,actual.files);assert.equal(previous.length,priorCount);assert.equal(sha(JSON.stringify(previous)),delta.previousPathsSha256);assert.deepEqual([...previous,...delta.additions].sort(),beforeBudget);
   assert.equal(participantPreanalysisConsumerSourceFiles(family,actual.files,read).length,publishedCount);

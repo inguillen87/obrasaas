@@ -1,3 +1,4 @@
+import {withCaptureRuntimePreviousSources} from './plan-budget-current-ci-lineage.mjs';
 import {restoreWorkspaceContinuityPreviousContract as continuity0,workspaceContinuityCurrentSourcePin as continuity1,verifyWorkspaceContinuityCurrentSources as continuity2,restoreWorkspaceContinuitySourceSet as continuity3,workspaceContinuityProofSourceAdditions as continuity4,workspaceContinuityValidationFiles as continuity5} from './workspace-continuity-current-ci-lineage.mjs';
 // Preserve the inherited API's precise rejection code. A new outer rejection
 // remains a rejection, and unrelated errors retain their original identity.
@@ -307,6 +308,13 @@ export function documentTaskAssociationValidationFiles(contract){
  return [...new Set([...outer,DOCUMENT_TASK_ASSOCIATION_CHECKPOINT_PATH,...value.reviewedSourceChanges.map(row=>row.path),...value.validationDeltas.map(row=>row.path),...value.addedSources.map(row=>row.path),...value.validationSources.map(row=>row.path)])].sort();
 }
 export function verifyDocumentTaskAssociationCurrentSources(contract,readSource){
+ if(contract?.planBudgetCurrentRevision?.captureQualityRuntime){
+  try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>verifyPreviousDocumentTaskAssociationCurrentSources(parent,parentRead));}
+  catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
+ }
+ return verifyPreviousDocumentTaskAssociationCurrentSources(contract,readSource);
+}
+function verifyPreviousDocumentTaskAssociationCurrentSources(contract,readSource){
  verifyWorkspaceContinuityCurrentSources(contract,readSource);
  const value=authenticatedSection(contract);if(!value)return null;requireLineage(typeof readSource==='function','Current committed source reader required');
  const original=readSource(DOCUMENT_TASK_ASSOCIATION_CHECKPOINT_PATH);requireLineage(Buffer.isBuffer(original)&&sha(original)===DOCUMENT_TASK_ASSOCIATION_PREVIOUS_CONTRACT_SHA256,'Original a203 RAW checkpoint bytes required');

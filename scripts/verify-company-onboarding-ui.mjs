@@ -1,8 +1,9 @@
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
-import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,realpathSync,readFileSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,copyFileSync,writeFileSync,rmSync,readdirSync,realpathSync,readFileSync,lstatSync,existsSync} from 'node:fs';
 import path from 'node:path';
-import {spawn} from 'node:child_process';
+import {spawn,spawnSync} from 'node:child_process';
+import {createServer} from 'node:net';
 import puppeteer from 'puppeteer';
 import {projectPreparationSnapshot} from '../src/app/(identity)/cuenta/project-preparation-format.mjs';
 import {createLocalJWKSet,generateKeyPair,exportJWK,SignJWT} from 'jose';
@@ -60,8 +61,43 @@ mkdirSync(path.join(app,'portfolio101'),{recursive:true});
 writeFileSync(path.join(app,'portfolio101/page.js'),`'use client';import {useCallback,useState} from 'react';import {AccountWorkspace} from '../(identity)/cuenta/workspace-client';export default function Page(){const [visible,setVisible]=useState(true),[context,setContext]=useState('A');const token=useCallback(async()=> 'synthetic-portfolio-'+context+'-'+(window.__portfolioTokenEpoch||1),[context]);const observed=useCallback(value=>{window.__portfolioGuide=value;},[]);if(typeof window!=='undefined'){window.__changePortfolioContext=()=>setContext('B');window.__unmountPortfolio=()=>setVisible(false);}return <main style={{maxWidth:1120,margin:'0 auto'}}>{visible?<AccountWorkspace getSessionToken={token} onGuideObservation={observed}/>:<p>Portfolio desmontado en ensayo</p>}</main>}`);
 const origin='http://127.0.0.1:3110';
 const server=spawn(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev',dir,'--webpack','--hostname','127.0.0.1','--port','3110'],{env:{...process.env,NEXT_TELEMETRY_DISABLED:'1'},stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
+let serverDrained=false,ownedNextTreeStopIssued=false;
+const serverClosed=new Promise(resolve=>server.once('close',()=>{serverDrained=true;resolve();}));
+async function cleanupBounded(promise,label){let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error(label)),10000);})]);}finally{clearTimeout(timer);}}
+function ownedAlive(child){if(child.exitCode!==null||child.signalCode!==null)return false;try{process.kill(child.pid,0);return true;}catch(error){if(error.code==='ESRCH')return false;throw error;}}
+function ownedClosed(child){return (child.exitCode!==null||child.signalCode!==null)&&child.stdio.every(stream=>!stream||stream.destroyed)?Promise.resolve():new Promise(resolve=>child.once('close',resolve));}
+function terminateOwned(child,group=false,signal='SIGKILL'){
+ assert.ok(Number.isSafeInteger(child.pid)&&child.pid>0);
+ if(process.platform==='win32'){if(!ownedAlive(child))return false;const stopped=spawnSync('taskkill.exe',['/PID',String(child.pid),'/T','/F'],{stdio:'ignore',windowsHide:true,timeout:10000});if(stopped.status!==0&&ownedAlive(child))throw Error('OWNED_PROCESS_TREE_CLOSE_FAILED');return stopped.status===0;}
+ if(group){try{process.kill(-child.pid,signal);return true;}catch(error){if(error.code!=='ESRCH')throw error;return false;}}
+ if(ownedAlive(child))assert.ok(child.kill(signal),'The owned process must receive its shutdown signal');return true;
+}
+async function stopOwnedBrowser(){
+ const child=browser?.process(),closed=child?ownedClosed(child):Promise.resolve();
+ try{await cleanupBounded(browser?.close(),'OWNED_BROWSER_CLOSE_TIMEOUT');}catch{browser?.disconnect();if(child)terminateOwned(child);}
+ if(child&&ownedAlive(child))terminateOwned(child);await cleanupBounded(closed,'OWNED_BROWSER_DRAIN_TIMEOUT');if(child)assert.equal(ownedAlive(child),false);
+}
+async function stopHarnessServer(){
+ if(serverDrained)return;
+ assert.ok(server.spawnargs.includes(dir),'Only the spawned fixture tree may be stopped');ownedNextTreeStopIssued=terminateOwned(server,true,'SIGTERM');
+ try{await cleanupBounded(serverClosed,'OWNED_NEXT_CLOSE_TIMEOUT');}catch(error){ownedNextTreeStopIssued=terminateOwned(server,true)||ownedNextTreeStopIssued;await cleanupBounded(serverClosed,'OWNED_NEXT_FORCE_DRAIN_TIMEOUT');throw error;}
+}
+const port3110Free=()=>new Promise((resolve,reject)=>{const probe=createServer();probe.once('error',reject);probe.listen({host:'127.0.0.1',port:3110,exclusive:true},()=>probe.close(error=>error?reject(error):resolve()));});
+function removeOwnedFixture(){
+ const absoluteParent=path.resolve(root,'.vercel');assert.ok(path.isAbsolute(dir)&&path.dirname(path.resolve(dir))===absoluteParent);assert.ok(path.basename(dir).startsWith('company-bootstrap-ui-'));
+ assert.equal(lstatSync(absoluteParent).isSymbolicLink(),false);assert.equal(lstatSync(dir).isSymbolicLink(),false);
+ const resolvedParent=realpathSync(absoluteParent),resolved=realpathSync(dir),same=(a,b)=>process.platform==='win32'?a.toLowerCase()===b.toLowerCase():a===b;
+ assert.ok(same(absoluteParent,resolvedParent)&&same(path.resolve(dir),resolved));assert.equal(path.dirname(resolved),resolvedParent);rmSync(resolved,{recursive:true,force:true});assert.equal(existsSync(dir),false);
+}
+async function cleanupHarness(){
+ const failures=[];for(const stop of [stopOwnedBrowser,stopHarnessServer])try{await stop();}catch(error){failures.push(error);}
+ let portFree=false;try{await cleanupBounded(port3110Free(),'OWNED_PORT_CLOSE_TIMEOUT');portFree=true;}catch(error){failures.push(error);}
+ const processesClosed=failures.length===0&&serverDrained&&ownedNextTreeStopIssued;if(processesClosed)try{removeOwnedFixture();}catch(error){failures.push(error);}
+ const record={processesClosed,serverCloseObserved:serverDrained,ownedNextTreeStopIssued,port3110Free:portFree,fixtureRemoved:!existsSync(dir),primaryFailure:primaryFailure?.message||null,errors:failures.map(error=>error.message)};writeFileSync(path.join(output,'browser-cleanup.json'),JSON.stringify(record,null,2));
+ if(failures.length||!processesClosed)throw new AggregateError([...(primaryFailure?[primaryFailure]:[]),...failures],'COMPANY_ONBOARDING_UI_CLEANUP_FAILED');
+}
 let log='';for(const stream of [server.stdout,server.stderr])stream.on('data',value=>{log=(log+value).slice(-16000);});
-let browser;const checks=[],errors=[],portfolioIntegrationChecks=[],organizationLockChecks=[];
+let browser,primaryFailure;const checks=[],errors=[],portfolioIntegrationChecks=[],organizationLockChecks=[],portfolioReadLedgers=[];
 const click=async(page,label)=>{const handle=await page.evaluateHandle(text=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()===text),label);assert.ok(handle.asElement(),'Missing button '+label);await handle.asElement().click();await handle.dispose();};
 const wait=(page,text)=>page.waitForFunction(value=>document.body.innerText.includes(value),{timeout:20000},text);
 async function canonicalCreatedTask(page,task){
@@ -102,10 +138,48 @@ async function scenario(mode,width=390){
  },{tokens:profileTokens,initialHung:mode==='initial-sdk-hung'});
  page.on('pageerror',error=>errors.push({mode,width,message:error.message}));await page.setRequestInterception(true);
   let created=false,result=null,tasks=[],taskReceipts=new Map(),expectedOrganization='org_BootstrapA';const posts=[],postBodies=[],taskPosts=[],external=[],recoveryIds=[],subscriptionReads=[];const scope='c'.repeat(64);
-  let releaseTaskReadback,markTaskReadbackStarted,taskReadbackHeld=false,taskReadbacks=0;
-  const taskReadbackBarrier=mode==='empty'?new Promise(resolve=>{releaseTaskReadback=resolve;}):null;
-  const taskReadbackStarted=mode==='empty'?new Promise(resolve=>{markTaskReadbackStarted=resolve;}):null;
- page.on('request',async request=>{
+  // Explicit canonical reads and the subsequent live controller have separate counters.
+  let phase='bootstrap',initialProjectReads=0,returnProjectReads=0,preparation=null,taskApplications=0,taskReadbackHeld=false,taskReadbacks=0,taskLiveReads=0,heldReadback=null,heldLive=null;
+  let markTaskReadbackStarted,markTaskLiveStarted;
+  const taskReadbackStarted=new Promise(resolve=>{markTaskReadbackStarted=resolve;}),taskLiveStarted=new Promise(resolve=>{markTaskLiveStarted=resolve;});
+  const facts=[],preparations=[],requestOutcomes=[],requestFacts=new WeakMap(),projectQuery='?'+new URLSearchParams({projectId:'project-test',scope}).toString(),authorization='Bearer synthetic-session-token';
+  const expectedFact=(phase,path,method,query)=>({phase,path,method,query,authorization,responseStatus:200});
+  let initialFacts=null,returnFacts=null;
+  const bounded=async(promise,label)=>{let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(label)),20000);})]);}finally{clearTimeout(timer);}};
+  const respondHeld=async held=>{assert.ok(held);await held.request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(held.body)});held.fact.responseStatus=200;};
+  const releaseTaskReadback=async()=>{const held=heldReadback;assert.ok(held);await respondHeld(held);heldReadback=null;};
+  const waitLiveCurrent=()=>page.waitForFunction(()=>[...document.querySelectorAll('[data-worksite-live-refresh="CURRENT"]')].some(node=>node.getClientRects().length&&node.innerText.includes('Cronograma · última comprobación:')),{timeout:20000});
+  const observeProjectRead=async action=>{
+   const abort=new AbortController(),observed=page.waitForRequest(request=>{const url=new URL(request.url());return url.origin===origin&&url.pathname==='/api/identity/workspace'&&url.search===projectQuery&&request.method()==='GET'&&request.headers().authorization===authorization;},{timeout:20000,signal:abort.signal});
+   observed.catch(()=>{});const acting=Promise.resolve().then(action);acting.catch(()=>{});
+   try{await Promise.all([observed,acting]);}finally{abort.abort();await Promise.allSettled([observed,acting]);}
+  };
+  const finishedRequest=request=>{const index=requestFacts.get(request);if(index!==undefined)requestOutcomes.push({index,outcome:'FINISHED'});};
+  const failedRequest=request=>{const index=requestFacts.get(request);if(index!==undefined)requestOutcomes.push({index,outcome:'FAILED',error:request.failure()?.errorText||null});};
+  page.on('requestfinished',finishedRequest);page.on('requestfailed',failedRequest);
+  const beginPreparation=async kind=>{
+   preparation={kind,startFact:facts.length};
+   await page.evaluate(()=>{
+    const states=[];let last=null;const read=()=>{const value={screens:[...document.querySelectorAll('[data-workspace-screen]:not([hidden])')].map(node=>node.dataset.workspaceScreen),live:[...document.querySelectorAll('[data-worksite-live-refresh]')].filter(node=>node.getClientRects().length).map(node=>node.dataset.worksiteLiveRefresh),refreshDisabled:document.querySelector('#workspace-refresh')?.disabled??null},key=JSON.stringify(value);if(key!==last){states.push({at:Date.now(),...value});last=key;}};
+    const observer=new MutationObserver(read);observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['hidden','disabled','aria-busy','data-worksite-live-refresh']});read();window.__stopCompanyPreparationObservation=()=>{read();observer.disconnect();delete window.__stopCompanyPreparationObservation;return states;};
+   });
+  };
+  const settlePreparation=async kind=>{
+   assert.equal(preparation?.kind,kind);await waitLiveCurrent();await page.waitForFunction(()=>document.querySelector('#workspace-refresh')?.disabled===false,{timeout:20000});await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:20000});
+   const states=await page.evaluate(()=>window.__stopCompanyPreparationObservation()),returned=kind==='return',projectReads=returned?returnProjectReads:initialProjectReads,rows=facts.slice(preparation.startFact),openPhase=returned?'return-project':'project-open',livePhase=returned?'return-preparation':'project-preparation';
+   assert.ok([2,3].includes(projectReads),'Preparation consists of one explicit selection and one live GET, plus at most one observed startup pause/recheck');
+   const expected=[expectedFact(openPhase,'/api/identity/workspace','GET',projectQuery),...Array.from({length:projectReads-1},()=>expectedFact(livePhase,'/api/identity/workspace','GET',projectQuery))];assert.deepEqual(rows,expected);
+   assert.ok(states.some(row=>row.screens.includes('cronograma')&&row.live.includes('CURRENT')&&row.refreshDisabled===false));const consulting=states.findIndex(row=>row.live.includes('CONSULTING')),current=states.findIndex((row,index)=>index>consulting&&row.screens.includes('cronograma')&&row.live.includes('CURRENT')&&row.refreshDisabled===false);assert.ok(consulting>=0&&current>consulting,'Preparation must observe the live controller CONSULTING before its completed CURRENT state');
+   const outcomes=requestOutcomes.filter(row=>row.index>=preparation.startFact&&row.index<facts.length),startupPause=states.some(row=>row.live.includes('PAUSED')&&row.refreshDisabled===true),startupAbort=outcomes.some(row=>row.outcome==='FAILED'&&row.error==='net::ERR_ABORTED');
+   if(projectReads===3)assert.ok(startupPause||startupAbort,'A second startup live GET requires an observed module pause or aborted request, never a blanket extra read allowance');
+   const record={kind,projectReads,expected,states,requestOutcomes:outcomes,startupPause,startupAbort};preparations.push(record);preparation=null;return record;
+  };
+  const writeLedger=(status,error=null)=>writeFileSync(path.join(output,'company-taskcreate-'+mode+'-'+width+'.json'),JSON.stringify({version:1,status,mode,width,phase,facts,preparations,requestOutcomes,taskPosts:taskPosts.length,taskApplications,initialProjectReads,returnProjectReads,taskReadbacks,taskLiveReads,syntheticOnly:true,...(error?{failure:error.message}:{})},null,2));
+  const assertCreationLedger=returned=>{
+   const expected=[...initialFacts,expectedFact('task-command','/api/identity/task-creation','POST',''),expectedFact('receipt-readback','/api/identity/workspace','GET',projectQuery),expectedFact('post-readback-live','/api/identity/workspace','GET',projectQuery),...(returned?returnFacts:[])];
+   assert.deepEqual(facts,expected,'Every account read, explicit project selection, single task POST, canonical receipt readback and later live GET must match its complete phase ledger');assert.equal(taskApplications,1);assert.equal(taskPosts.length,1);assert.equal(taskReceipts.size,1);assert.equal(taskReadbacks,returned?2:1);assert.equal(taskLiveReads,1);assert.equal(preparations.length,returned?2:1);
+  };
+ const intercept=async request=>{
   try{
    const url=new URL(request.url());
    if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();external.push(url.hostname);return request.abort();}
@@ -136,10 +210,18 @@ async function scenario(mode,width=390){
      assert.equal(created,true);assert.equal(request.method(),'GET');
      if(url.search){
       assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'project-test');
-      if(taskPosts.length){taskReadbacks++;if(taskReadbackBarrier&&!taskReadbackHeld){taskReadbackHeld=true;markTaskReadbackStarted();await taskReadbackBarrier;}}
+      assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.search,projectQuery);
      }
      body=!url.search?{scope,organizationName:result.companyName,roleLabel:'Administrador',role:'ADMIN',canPlanSchedule:true,canManageIntegrations:false,projects:[{id:'project-test',name:result.projectName}],projectsTruncated:false}:
-       {scope,project:{id:'project-test',name:result.projectName},roleLabel:'Administrador',canPlanSchedule:true,tasks,totalTasks:tasks.length,nextCursor:null};
+       {scope,project:{id:'project-test',name:result.projectName,status:'ACTIVE'},roleLabel:'Administrador',canPlanSchedule:true,tasks,totalTasks:tasks.length,nextCursor:null};
+     const fact={phase,path:url.pathname,method:request.method(),query:url.search,authorization:request.headers().authorization,responseStatus:null};requestFacts.set(request,facts.length);facts.push(fact);
+     if(!url.search)assert.ok(['bootstrap','return-account'].includes(phase));
+     else if(!taskPosts.length){assert.ok(['project-open','project-preparation'].includes(phase));initialProjectReads++;if(phase==='project-open'){assert.equal(initialProjectReads,1);phase='project-preparation';}else assert.ok(initialProjectReads>=2&&initialProjectReads<=3);}
+     else if(phase==='receipt-readback'){taskReadbacks++;assert.equal(taskReadbacks,1);assert.equal(heldReadback,null);taskReadbackHeld=true;heldReadback={request,body,fact};markTaskReadbackStarted();return;}
+     else if(phase==='post-readback-live'){taskLiveReads++;assert.equal(taskLiveReads,1);assert.equal(heldLive,null);heldLive={request,body,fact};markTaskLiveStarted();return;}
+     else if(phase==='return-project'){taskReadbacks++;assert.equal(taskReadbacks,2);assert.equal(++returnProjectReads,1);phase='return-preparation';}
+     else{assert.equal(phase,'return-preparation');assert.ok(++returnProjectReads>=2&&returnProjectReads<=3);}
+     await request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});fact.responseStatus=status;return;
    }else if(['/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname)){
     assert.equal(created,true);assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'project-test');
     body=url.pathname==='/api/identity/project-creation'?{scope,projectId:'project-test',canCreate:true}:{scope,projectId:'project-test',canManage:true,channels:[],invitations:[],candidates:[],truncated:false,candidatesLimited:false};
@@ -147,17 +229,19 @@ async function scenario(mode,width=390){
     assert.equal(created,true);assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'project-test');
     body=projectPreparationSnapshot({scope,projectId:'project-test',canManage:true,revision:0,detailsDigest:'b'.repeat(64),name:result.projectName,clientName:'',address:'',teams:[],slots:[],startStatus:'TO_CONFIRM',declarationOnly:true},{scope,projectId:'project-test'});
    }else if(url.pathname==='/api/identity/task-creation'){
-    assert.equal(created,true);const command=JSON.parse(request.postData());taskPosts.push(command);assert.equal(command.scope,scope);assert.equal(command.projectId,'project-test');
-    if(!taskReceipts.has(command.operationId)){const task={id:'new-task-'+tasks.length,title:command.title,startsOn:command.startsOn||null,endsOn:command.endsOn||null,progress:0,status:'BACKLOG',revision:'2026-10-01T13:00:00.123456'};tasks.push(task);taskReceipts.set(command.operationId,{scope,created:true,receiptId:'new-task-receipt',task});}
-    body=taskReceipts.get(command.operationId);
+    assert.equal(created,true);assert.equal(phase,'task-command');assert.equal(request.method(),'POST');assert.equal(url.search,'');const fact={phase,path:url.pathname,method:request.method(),query:url.search,authorization:request.headers().authorization,responseStatus:null};facts.push(fact);
+    const command=JSON.parse(request.postData());taskPosts.push(command);assert.equal(command.scope,scope);assert.equal(command.projectId,'project-test');assert.equal(taskPosts.length,1);
+    if(!taskReceipts.has(command.operationId)){taskApplications++;const task={id:'new-task-'+tasks.length,title:command.title,startsOn:command.startsOn||null,endsOn:command.endsOn||null,progress:0,status:'BACKLOG',revision:'2026-10-01T13:00:00.123456'};tasks.push(task);taskReceipts.set(command.operationId,{scope,created:true,receiptId:'new-task-receipt',task});}
+    body=taskReceipts.get(command.operationId);phase='receipt-readback';await request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});fact.responseStatus=status;return;
    }else throw new Error('Unexpected API '+url.pathname);
    await request.respond({status,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
   }catch(error){errors.push({mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
- });
+ };page.on('request',intercept);
+ try{
  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});
  if(mode==='initial-sdk-hung'){
   await wait(page,'Volver a comprobar');assert.equal(posts.length,0);await page.evaluate(()=>{window.__releaseSession();window.__sessionHung=false;window.__acceleratedDeadlines=false;});
-  await click(page,'Volver a comprobar');await wait(page,'Crear empresa y primera obra');assert.equal(posts.length,0);assert.equal(created,false);checks.push('initial-sdk-deadline-explicit-read-recovery-no-post');await context.close();return;
+  await click(page,'Volver a comprobar');await wait(page,'Crear empresa y primera obra');assert.equal(posts.length,0);assert.equal(created,false);checks.push('initial-sdk-deadline-explicit-read-recovery-no-post');return;
  }
  await wait(page,'Crear empresa y primera obra');
  await page.type('input[autocomplete="organization"]','Constructora de ensayo');await page.type('input[placeholder*="Edificio"]','Obra inicial de ensayo');
@@ -178,34 +262,34 @@ async function scenario(mode,width=390){
   await page.evaluate(kind=>window[kind](),profile?'__releaseProfile':'__releaseSession');await new Promise(resolve=>setTimeout(resolve,200));
   assert.equal(posts.length,0);assert.equal(created,false);assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('El espacio está creado'));
   if(mode==='late-session-context')assert.equal(await page.$eval('input[autocomplete="organization"]',input=>input.value),'');
-  checks.push(`${mode}-late-sdk-resolution-never-posts`);await context.close();return;
+  checks.push(`${mode}-late-sdk-resolution-never-posts`);return;
  }
  if(['session-hung','profile-hung'].includes(mode)){
   await wait(page,'El alta no se envió');assert.equal(posts.length,0);assert.equal(await page.$eval('input[autocomplete="organization"]',input=>input.value),'Constructora de ensayo');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));if(mode==='profile-hung')await page.screenshot({path:path.join(output,`company-sdk-recovery-${width}.png`),fullPage:true});
   await page.evaluate(kind=>{window[kind]();window.__sessionHung=false;window.__profileHung=false;window.__acceleratedDeadlines=false;},mode==='session-hung'?'__releaseSession':'__releaseProfile');
   await new Promise(resolve=>setTimeout(resolve,200));assert.equal(posts.length,0);
-  await click(page,'Reenviar mismo intento');await wait(page,'El espacio está creado');assert.equal(posts.length,1);assert.equal(posts[0].operationId,await page.evaluate(index=>window.__issuedIds[index],issuedBefore));assert.equal(recoveryIds.length,0);checks.push(`${mode}-bounded-prefetch-preserves-draft-uuid-explicit-retry`);await context.close();return;
+  await click(page,'Reenviar mismo intento');await wait(page,'El espacio está creado');assert.equal(posts.length,1);assert.equal(posts[0].operationId,await page.evaluate(index=>window.__issuedIds[index],issuedBefore));assert.equal(recoveryIds.length,0);checks.push(`${mode}-bounded-prefetch-preserves-draft-uuid-explicit-retry`);return;
  }
  if(mode==='denied'){
   await wait(page,'No se pudo confirmar tu correo verificado');assert.equal(created,false);assert.equal(posts.length,1);assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('El espacio está creado'));assert.equal(await page.$eval('input[autocomplete="organization"]',input=>input.value),'Constructora de ensayo');
   assert.equal(await page.$$eval('button',buttons=>buttons.some(button=>button.textContent==='Reenviar mismo intento')),false);await click(page,'Comprobar creación');await wait(page,'No se reenvía automáticamente');assert.equal(posts.length,1);
-  await click(page,'Reenviar mismo intento');await wait(page,'No se pudo confirmar tu correo verificado');assert.equal(posts.length,2);assert.equal(postBodies[0],postBodies[1]);assert.equal(created,false);checks.push('unverified-email-receipt-first-identical-retry-never-shows-company-created');await context.close();return;
+  await click(page,'Reenviar mismo intento');await wait(page,'No se pudo confirmar tu correo verificado');assert.equal(posts.length,2);assert.equal(postBodies[0],postBodies[1]);assert.equal(created,false);checks.push('unverified-email-receipt-first-identical-retry-never-shows-company-created');return;
  }
  if(mode.startsWith('reload-')){
   await wait(page,'No recibimos la confirmación');assert.equal(posts.length,1);const originalReceipt=result?.receiptId;await page.reload({waitUntil:'networkidle0'});
   if(mode==='reload-denied'){await wait(page,'Tu pertenencia a esta empresa no está habilitada');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo:'));assert.equal((await page.$$('form')).length,0);}
   else if(mode==='reload-not-committed'){await wait(page,'Crear empresa y primera obra');assert.equal(await page.$eval('input[autocomplete="organization"]',node=>node.value),'');assert.equal(await page.$eval('input[placeholder*="Edificio"]',node=>node.value),'');assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo:'));assert.equal(created,false);}
   else if(['reload-other-actor','reload-missing-receipt'].includes(mode)){await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Recibo: '+originalReceipt));}
-  else {await wait(page,'Alta confirmada');await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+originalReceipt);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);}
-  assert.equal(posts.length,1,'Reload performed another company POST');assert.equal(recoveryIds.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(output,`company-${mode}-${width}.png`),fullPage:true});checks.push(`${mode}-company-receipt-readonly-after-reload-${width}`);await context.close();return;
+  else {await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Alta confirmada');await wait(page,'Recibo: '+originalReceipt);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);}
+  assert.equal(posts.length,1,'Reload performed another company POST');assert.equal(recoveryIds.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(output,`company-${mode}-${width}.png`),fullPage:true});checks.push(`${mode}-company-receipt-readonly-after-reload-${width}`);return;
  }
  if(mode==='uncertain'){await wait(page,'No recibimos la confirmación');assert.equal(posts.length,1);await click(page,'Comprobar creación');}
  if(['no-arrival','rollback','expired-profile','profile-retry-unavailable','retry-not-authorized'].includes(mode)){
   await wait(page,'No recibimos la confirmación');assert.equal(posts.length,1);assert.equal(created,false);assert.equal(await page.$$eval('button',buttons=>buttons.some(button=>button.textContent==='Reenviar mismo intento')),false);
   if(mode==='expired-profile'){profileClock=epoch+70;await assert.rejects(verifyProfile(profileTokens[0],sessionIdentity),{code:'COMPANY_VERIFIED_PROFILE_REQUIRED'});}
   await click(page,'Comprobar creación');
-  if(mode==='retry-not-authorized'){await wait(page,'No se pudo comprobar el alta');assert.equal(await page.$$eval('button',buttons=>buttons.some(button=>button.textContent==='Reenviar mismo intento')),false);assert.equal(posts.length,1);checks.push('checked-absence-without-canCreate-never-authorizes-retry');await context.close();return;}
+  if(mode==='retry-not-authorized'){await wait(page,'No se pudo comprobar el alta');assert.equal(await page.$$eval('button',buttons=>buttons.some(button=>button.textContent==='Reenviar mismo intento')),false);assert.equal(posts.length,1);checks.push('checked-absence-without-canCreate-never-authorizes-retry');return;}
   await wait(page,'No se reenvía automáticamente');assert.equal(posts.length,1);assert.equal(created,false);assert.equal(await page.$eval('input[autocomplete="organization"]',input=>input.disabled),true);
   if(mode==='expired-profile'){assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(output,`company-expired-profile-recovery-${width}.png`),fullPage:true});}
   if(mode==='profile-retry-unavailable'){
@@ -215,11 +299,11 @@ async function scenario(mode,width=390){
   await click(page,'Reenviar mismo intento');await wait(page,'El espacio está creado');assert.equal(posts.length,2);assert.equal(postBodies[0],postBodies[1]);assert.equal(await page.evaluate(()=>window.__profileReads),mode==='profile-retry-unavailable'?3:2);checks.push(`${mode}-checked-absence-explicit-identical-retry-fresh-profile-proof`);
  }
  await wait(page,'El espacio está creado');assert.equal(posts.length,['no-arrival','rollback','expired-profile','profile-retry-unavailable'].includes(mode)?2:1);assert.equal(posts[0].initialTasks.length,mode==='planned'?1:0);assert.ok((await page.evaluate(()=>document.body.innerText)).includes('WhatsApp todavía no quedó conectado'));
- await click(page,'Entrar a mi obra');await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});await openCurrentFixtureProject(page);
+ await click(page,'Entrar a mi obra');await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent.includes('Obra inicial de ensayo')&&!button.disabled),{timeout:20000});await beginPreparation('initial');phase='project-open';await observeProjectRead(()=>openCurrentFixtureProject(page));const initialPreparation=await settlePreparation('initial');initialFacts=[expectedFact('bootstrap','/api/identity/workspace','GET',''),...initialPreparation.expected];assert.deepEqual(facts,initialFacts);phase='ready';
  if(mode==='planned'){await wait(page,'Replanteo de la obra');assert.ok((await page.evaluate(()=>document.body.innerText)).includes('0 %'));}
   else{
-   await wait(page,'no tiene tareas registradas');await click(page,'Nueva tarea');await page.waitForSelector('input[minlength="2"]',{visible:true,timeout:20000});await page.type('input[minlength="2"]','Primera tarea cargada después');
-   await click(page,'Crear tarea');await wait(page,'Tarea creada y vinculada');
+   await wait(page,'no tiene tareas registradas');phase='task-draft';await click(page,'Nueva tarea');await page.waitForSelector('input[minlength="2"]',{visible:true,timeout:20000});await page.type('input[minlength="2"]','Primera tarea cargada después');
+   phase='task-command';await click(page,'Crear tarea');await wait(page,'Tarea creada y vinculada');await bounded(taskReadbackStarted,'Canonical task readback was not observed');assert.equal(taskApplications,1);assert.equal(taskLiveReads,0);assert.equal(taskReadbacks,1);
    assert.equal(taskPosts.length,1);const createdTask=taskReceipts.get(taskPosts[0].operationId).task;assert.equal(createdTask.title,'Primera tarea cargada después');assert.equal(createdTask.progress,0);
    if(mode==='empty'){
     let readbackTimeout;try{await Promise.race([taskReadbackStarted,new Promise((_,reject)=>{readbackTimeout=setTimeout(()=>reject(new Error('Canonical task readback was not observed')),20000);})]);}finally{clearTimeout(readbackTimeout);}
@@ -227,14 +311,19 @@ async function scenario(mode,width=390){
     await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(button=>button.textContent==='Nueva tarea'&&button.disabled),{timeout:20000});
     assert.equal(await page.$$eval('article[data-task-id]',articles=>articles.length),0,'A task receipt is not a canonical schedule read');
     assert.equal(await page.$$eval('[role="progressbar"]',bars=>bars.length),0,'No recorded progress before canonical readback');
-    await wait(page,'Consultando el cronograma actualizado');assert.equal(taskPosts.length,1);releaseTaskReadback();
+    await wait(page,'Consultando el cronograma actualizado');assert.equal(taskPosts.length,1);
     checks.push(`empty-task-receipt-before-held-canonical-readback-${width}`);
    }
-   await canonicalCreatedTask(page,createdTask);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,1);
+   phase='post-readback-live';await releaseTaskReadback();await canonicalCreatedTask(page,createdTask);await bounded(taskLiveStarted,'Post-readback live refresh was not observed');
+   assert.equal(await page.evaluate(()=>[...document.querySelectorAll('[data-worksite-live-refresh="CONSULTING"]')].some(node=>node.getClientRects().length)),true,'The second project GET belongs to the visible live controller');
+   phase='settled';await respondHeld(heldLive);heldLive=null;await waitLiveCurrent();await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:20000});
+   await canonicalCreatedTask(page,createdTask);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,1);assert.equal(taskLiveReads,1);assertCreationLedger(false);
   }
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(external,[]);
-  if(mode==='empty'){const beforeReturn=posts.length;await page.reload({waitUntil:'networkidle0'});await wait(page,'Alta confirmada');await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Recibo: '+result.receiptId);assert.equal(posts.length,beforeReturn);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);await openCurrentFixtureProject(page);await canonicalCreatedTask(page,taskReceipts.get(taskPosts[0].operationId).task);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,2);checks.push(`ordinary-return-keeps-workspace-open-and-original-receipt-consultable-${width}`);}
- assert.ok(subscriptionReads.length>=1,'Created administrator consults closed subscription status');checks.push(`${mode}-company-to-workspace-${width}`);await context.close();
+  if(mode==='empty'){const beforeReturn=posts.length;phase='return-account';await page.reload({waitUntil:'networkidle0'});await page.waitForSelector('#workspace-title',{visible:true,timeout:20000});assert.ok(!(await page.evaluate(()=>document.body.innerText)).includes('Entrar a mi obra'));await page.click('summary');await wait(page,'Alta confirmada');await wait(page,'Recibo: '+result.receiptId);assert.equal(posts.length,beforeReturn);assert.equal(await page.evaluate(()=>window.__profileReads||0),0);await beginPreparation('return');phase='return-project';await observeProjectRead(()=>openCurrentFixtureProject(page));const returnPreparation=await settlePreparation('return');returnFacts=[expectedFact('return-account','/api/identity/workspace','GET',''),...returnPreparation.expected];phase='returned';await canonicalCreatedTask(page,taskReceipts.get(taskPosts[0].operationId).task);assert.equal(taskPosts.length,1);assert.equal(taskReadbacks,2);assert.equal(taskLiveReads,1);assertCreationLedger(true);checks.push(`ordinary-return-keeps-workspace-open-and-original-receipt-consultable-${width}`);}
+ assert.ok(subscriptionReads.length>=1,'Created administrator consults closed subscription status');checks.push(`${mode}-company-to-workspace-${width}`);if(taskPosts.length)writeLedger('PASS');
+ }catch(error){if(preparation){preparation.states=await page.evaluate(()=>window.__stopCompanyPreparationObservation?.()||[]).catch(()=>[]);preparation.incomplete=true;preparations.push(preparation);preparation=null;}error.companyOnboardingUiDiagnostic={mode,width,phase,facts,preparations,requestOutcomes,taskPosts:taskPosts.length,taskApplications,initialProjectReads,returnProjectReads,taskReadbacks,taskLiveReads};writeLedger('FAIL',error);throw error;}
+ finally{await page.evaluate(()=>window.__stopCompanyPreparationObservation?.()).catch(()=>{});page.off('request',intercept);page.off('requestfinished',finishedRequest);page.off('requestfailed',failedRequest);for(const held of [heldReadback,heldLive])if(held&&!held.request.isInterceptResolutionHandled())await held.request.abort().catch(()=>{});await context.close();}
 }
 async function companySelectorContext(width){
  const context=await browser.createBrowserContext(),page=await context.newPage();await page.setViewport({width,height:1000});
@@ -401,75 +490,114 @@ async function organizationDraftProtection(mode,width){
 const portfolioIntegrationModes=['success','401','403','404','503','retry503','wrong-scope','wrong-project','wrong-status','stale-context','stale-project','stale-callback','refresh-callback','reconsult-callback','locked','unmount'];
 async function portfolioThirdPage(mode,width){
  const context=await browser.createBrowserContext(),page=await context.newPage(),reads=[],writes=[],unexpected=[],held=[];
- const scope='a'.repeat(64),otherScope='b'.repeat(64),projectId='p-101';let project101Reads=0;
+ const scope='a'.repeat(64),otherScope='b'.repeat(64),projectId='p-101';let project101ForegroundReads=0,project101Reads=0,project101LiveReads=0,draftPauseObserved=false,currentAction=null;
+ const requestLedger=[],requestFacts=new Map(),actions=[];
+ const assertProjectCounts=()=>assert.equal(project101Reads,project101ForegroundReads+project101LiveReads);
+ const defer=()=>{let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};};
+ const bounded=async(promise,label)=>{let timer;try{return await Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(label)),20000);})]);}finally{clearTimeout(timer);}};
  const listed=n=>({id:'p-'+String(n).padStart(3,'0'),name:'Obra listada '+n,status:'ACTIVE'});
- const summarized=n=>({...listed(n),name:'Resumen obra '+n,totalTasks:2,completedTasks:0,inProgressTasks:0,blockedTasks:0,unscheduledTasks:2,nextEndsOn:null});
+ const summarized=n=>({...listed(n),name:'Resumen obra '+n,totalTasks:n===101?101:2,completedTasks:0,inProgressTasks:0,blockedTasks:0,unscheduledTasks:n===101?101:2,nextEndsOn:null});
  const task=(id,title)=>({id,title,status:'BACKLOG',progress:0,startsOn:null,endsOn:null,revision:'2026-10-01T12:00:00.123456'});
- const projectBody=(id,append=false)=>({scope,project:{id,name:'Obra canónica '+Number(id.slice(2)),status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:true,tasks:[task(id===projectId?(append?'task-101-b':'task-101-a'):'task-001','Actividad canónica '+(id===projectId?(append?'101 segunda':'101 primera'):'001'))],totalTasks:id===projectId?2:1,nextCursor:id===projectId&&!append?'task-101-a':null});
- const respond=(request,body,status=200)=>request.respond({status,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:JSON.stringify(body)});
+ const firstPageTasks=()=>[...Array.from({length:99},(_,i)=>task('task-101-'+String(i+1).padStart(3,'0'),'Actividad canónica 101 adicional '+(i+1))),task('task-101-a','Actividad canónica 101 primera')];
+ const firstPageTaskIds=Object.freeze(firstPageTasks().map(row=>row.id));
+ const projectBody=(id,append=false)=>({scope,project:{id,name:'Obra canónica '+Number(id.slice(2)),status:'ACTIVE'},roleLabel:'Jefe de obra',canPlanSchedule:true,tasks:id===projectId?(append?[task('task-101-b','Actividad canónica 101 segunda')]:firstPageTasks()):[task('task-001','Actividad canónica 001')],totalTasks:id===projectId?101:1,nextCursor:id===projectId&&!append?'task-101-a':null});
+ const responseShape=(body,status)=>({status,scope:body.scope??null,projectId:body.project?.id??null,projectStatus:body.project?.status??null,taskIds:Array.isArray(body.tasks)?body.tasks.map(row=>row.id):[],totalTasks:body.totalTasks??null,nextCursor:body.nextCursor??null});
+ const respond=async(request,body,status=200)=>{const fact=requestFacts.get(request),json=JSON.stringify(body);if(fact){fact.response=responseShape(body,status);fact.responseBodySha256=createHash('sha256').update(json).digest('hex');}await request.respond({status,contentType:'application/json',headers:{'Cache-Control':'private, no-store'},body:json});};
+ const finishedRequest=request=>{const fact=requestFacts.get(request);if(fact)fact.outcome='FINISHED';};
+ const failedRequest=request=>{const fact=requestFacts.get(request);if(fact){fact.outcome='FAILED';fact.failure=request.failure()?.errorText||'UNKNOWN';}};
+ const beginProjectAction=async(id,kind,trigger,expectLive=true)=>{
+  assert.ok(!currentAction||!currentAction.expectLive||currentAction.completed,'Finish the owned live read before another foreground action');
+  const cursor=kind==='paging'?'task-101-a':null,liveCursors=expectLive?(kind==='paging'?[null,'task-101-a']:[null]):[];
+  const authorization='Bearer synthetic-portfolio-A-'+await page.evaluate(()=>window.__portfolioTokenEpoch||1),action={ordinal:actions.length+1,kind,projectId:id,cursor,authorization,expectLive,foregroundRequired:kind!=='resume',foreground:kind==='resume'?null:defer(),foregroundFact:null,liveCursors,slots:liveCursors.map(()=>({...defer(),held:null})),liveFacts:[],completed:false};
+  actions.push(action);currentAction=action;await trigger();return action;
+ };
+ const projectFact=(request,id,cursor)=>{
+  const fact=requestFacts.get(request),action=currentAction;assert.ok(action,'Every project GET must follow its explicit foreground trigger');assert.equal(id,action.projectId);assert.equal(fact.authorization,action.authorization);
+  if(action.foregroundRequired&&!action.foregroundFact){assert.equal(cursor,action.cursor);fact.kind=action.kind;fact.action=action.ordinal;action.foregroundFact=fact;if(id===projectId)project101ForegroundReads++;action.foreground.resolve(fact);return {fact,action,live:false};}
+  assert.equal(action.expectLive,true,'No live GET or automatic retry follows an unconfirmed/denied selection');assert.equal(action.completed,false,'No hidden project refresh after the completed action');const index=action.liveFacts.length;assert.ok(index<action.liveCursors.length,'Only the retained task pages belong to this live cycle');assert.equal(cursor,action.liveCursors[index]);fact.kind=cursor===null?'live':'live-paging';fact.action=action.ordinal;action.liveFacts.push(fact);if(id===projectId)project101LiveReads++;return {fact,action,live:true,index};
+ };
+ const settleProjectAction=async action=>{
+  assert.equal(currentAction,action);assert.equal(action.expectLive,true);if(action.foregroundRequired)await bounded(action.foreground.promise,'Foreground project GET was not observed');const beforeForeground=project101ForegroundReads;
+  for(let i=0;i<action.slots.length;i++){
+   const held=await bounded(action.slots[i].promise,'Owned live project page was not observed');await page.waitForFunction(()=>[...document.querySelectorAll('[data-worksite-live-refresh="CONSULTING"]')].some(node=>node.getClientRects().length),{timeout:20000});action.liveFacts[i].observedLiveState='CONSULTING';
+   assert.equal(project101ForegroundReads,beforeForeground,'A live page is not a foreground selection, paging action or retry');assert.deepEqual(action.liveFacts.map(row=>row.cursor),action.liveCursors.slice(0,i+1));await respond(held.request,held.body);
+  }
+  await page.waitForFunction(()=>[...document.querySelectorAll('[data-worksite-live-refresh="CURRENT"]')].some(node=>node.getClientRects().length)&&document.querySelector('#workspace-refresh')?.disabled===false,{timeout:20000});await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:20000});
+  assert.equal(action.liveFacts.length,action.liveCursors.length);for(let i=0;i<action.liveFacts.length;i++)assert.deepEqual(action.liveFacts[i].response,responseShape(projectBody(action.projectId,action.liveCursors[i]!==null),200));
+  const expectedTasks=action.projectId!==projectId?['task-001']:action.kind==='paging'?[...firstPageTaskIds,'task-101-b']:firstPageTaskIds;assert.deepEqual(await page.$$eval('article[data-task-id]',nodes=>nodes.map(node=>node.dataset.taskId)),expectedTasks);assert.equal(project101ForegroundReads,beforeForeground);action.completed=true;action.observedCurrent=true;action.retainedTaskIds=expectedTasks;
+ };
+ const actionEvidence=()=>actions.map(action=>({ordinal:action.ordinal,kind:action.kind,foregroundRequired:action.foregroundRequired,projectId:action.projectId,cursor:action.cursor,authorization:action.authorization,foregroundIndex:action.foregroundFact?.index??null,expectedLiveCursors:action.liveCursors,liveIndexes:action.liveFacts.map(row=>row.index),completed:action.completed,observedCurrent:action.observedCurrent===true,retainedTaskIds:action.retainedTaskIds||[]}));
+ const assertRequestLedger=()=>{
+  const suffix=mode==='success'?['selection','live','paging','live','live-paging']:mode==='locked'?['selection','live','live','selection','live']:mode==='retry503'?['selection','retry','live']:['stale-callback','refresh-callback'].includes(mode)?['account']:mode==='reconsult-callback'?['portfolio']:mode==='stale-context'?['selection','account']:mode==='stale-project'?['selection','selection','live']:['selection'];
+  assert.deepEqual(requestLedger.map(row=>row.kind),['account','portfolio','portfolio','portfolio',...suffix]);assert.equal(requestLedger.length,reads.length);assert.equal(project101Reads,requestLedger.filter(row=>row.projectId===projectId).length);assert.equal(project101ForegroundReads,requestLedger.filter(row=>row.projectId===projectId&&['selection','retry','paging'].includes(row.kind)).length);assert.equal(project101LiveReads,requestLedger.filter(row=>row.projectId===projectId&&['live','live-paging'].includes(row.kind)).length);assert.equal(project101Reads,project101ForegroundReads+project101LiveReads);
+  for(const row of requestLedger){assert.ok(['FINISHED','FAILED'].includes(row.outcome));if(row.outcome==='FAILED')assert.equal(row.failure,'net::ERR_ABORTED');if(['live','live-paging'].includes(row.kind)){assert.equal(row.observedLiveState,'CONSULTING');assert.equal(row.response.status,200);}}
+  for(const action of actions){if(action.foregroundRequired)assert.ok(action.foregroundFact);else{assert.equal(action.kind,'resume');assert.equal(action.foregroundFact,null);}if(action.expectLive){assert.equal(action.completed,true);assert.equal(action.observedCurrent,true);assert.equal(action.liveFacts.length,action.liveCursors.length);}else assert.equal(action.liveFacts.length,0);}
+ };
  const releaseHeld=async()=>{assert.equal(held.length,1);const {request,body}=held[0];if(request.failure()?.errorText==='net::ERR_ABORTED')return;try{await respond(request,body);}catch(error){if(request.failure()?.errorText!=='net::ERR_ABORTED')throw error;}};
  const absent=async()=>{assert.equal(await page.$$eval('article[data-task-id]',nodes=>nodes.length),0);assert.equal(await page.$$eval('button[aria-pressed]',nodes=>nodes.filter(node=>node.textContent.includes('Obra canónica 101')).length),0);};
  const saveCallback=async()=>page.evaluate(()=>{const button=[...document.querySelectorAll('[aria-labelledby="portfolio-overview-title"] button')].find(node=>node.textContent==='Abrir Resumen obra 101'),key=Object.keys(button||{}).find(name=>name.startsWith('__reactProps$'));if(typeof button?.[key]?.onClick!=='function')throw new Error('Portfolio React handler unavailable');window.__savedPortfolioClick=button[key].onClick;});
  const tick=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  await page.setViewport({width,height:1000});await page.evaluateOnNewDocument(()=>{const uuid=crypto.randomUUID.bind(crypto);window.__portfolioIssuedIds=[];crypto.randomUUID=()=>{const id=uuid();window.__portfolioIssuedIds.push(id);return id;};});
  page.on('pageerror',error=>errors.push({mode:'portfolio101-'+mode,width,message:error.message}));await page.setRequestInterception(true);
- page.on('request',async request=>{try{
+ const intercept=async request=>{try{
   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();unexpected.push(url.hostname);return request.abort();}
   if(!url.pathname.startsWith('/api/'))return request.continue();
   if(request.method()!=='GET')writes.push({method:request.method(),path:url.pathname});
-  assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.method(),'GET');const authorization=request.headers().authorization;assert.match(authorization,/^Bearer synthetic-portfolio-[AB]-[12]$/);reads.push({query:url.search,authorization});
+  assert.equal(url.pathname,'/api/identity/workspace');assert.equal(request.method(),'GET');const authorization=request.headers().authorization;assert.match(authorization,/^Bearer synthetic-portfolio-[AB]-[12]$/);reads.push({query:url.search,authorization});const fact={index:requestLedger.length,kind:'UNCLASSIFIED',path:url.pathname,method:request.method(),query:url.search,authorization,projectId:url.searchParams.get('projectId'),cursor:url.searchParams.get('afterTask'),response:null,responseBodySha256:null,outcome:'PENDING'};requestLedger.push(fact);requestFacts.set(request,fact);
   const letter=authorization.includes('-B-')?'B':'A',currentScope=letter==='B'?otherScope:scope;
-  if(!url.search){return respond(request,{scope:currentScope,organizationName:'Empresa de cartera '+letter,role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:true,canManageIntegrations:false,projects:Array.from({length:100},(_,i)=>listed(i+1)),projectsTruncated:true});}
+  if(!url.search){fact.kind='account';return respond(request,{scope:currentScope,organizationName:'Empresa de cartera '+letter,role:'SITE_MANAGER',roleLabel:'Jefe de obra',canPlanSchedule:true,canManageIntegrations:false,projects:Array.from({length:100},(_,i)=>listed(i+1)),projectsTruncated:true});}
   assert.equal(url.searchParams.get('scope'),currentScope);
   if(url.searchParams.has('portfolio')){
    assert.equal(letter,'A');assert.equal(url.searchParams.get('portfolio'),'1');assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('afterProject')?['afterProject','portfolio','scope']:['portfolio','scope']);
-   const cursor=url.searchParams.get('afterProject');assert.ok([null,'p-050','p-100'].includes(cursor));const start=cursor===null?1:cursor==='p-050'?51:101,end=Math.min(start+49,101);
+   fact.kind='portfolio';const cursor=url.searchParams.get('afterProject');assert.ok([null,'p-050','p-100'].includes(cursor));assert.equal(url.search,'?'+new URLSearchParams({portfolio:'1',scope,...(cursor?{afterProject:cursor}:{})}));const start=cursor===null?1:cursor==='p-050'?51:101,end=Math.min(start+49,101);
    return respond(request,{scope,organizationName:'Empresa de cartera A',role:'SITE_MANAGER',projects:Array.from({length:end-start+1},(_,i)=>summarized(start+i)),nextCursor:end<101?'p-'+String(end).padStart(3,'0'):null});
   }
   assert.equal(letter,'A');const id=url.searchParams.get('projectId');assert.ok([projectId,'p-001'].includes(id));assert.deepEqual([...url.searchParams.keys()].sort(),url.searchParams.has('afterTask')?['afterTask','projectId','scope']:['projectId','scope']);
   if(id===projectId)project101Reads++;
-  const append=url.searchParams.has('afterTask');if(append)assert.equal(url.searchParams.get('afterTask'),'task-101-a');let body=projectBody(id,append);
+  const append=url.searchParams.has('afterTask');if(append)assert.equal(url.searchParams.get('afterTask'),'task-101-a');assert.equal(url.search,'?'+new URLSearchParams({projectId:id,scope,...(append?{afterTask:'task-101-a'}:{})}));const classified=projectFact(request,id,append?'task-101-a':null);let body=projectBody(id,append);
+   if(classified.live){const slot=classified.action.slots[classified.index];slot.held={request,body};slot.resolve(slot.held);return;}
   if(id===projectId){
    if(['stale-context','stale-project','unmount'].includes(mode)){held.push({request,body});return;}
-   if(['401','403','404','503'].includes(mode)||mode==='retry503'&&project101Reads===1){const status=mode==='retry503'?503:Number(mode);return respond(request,{saved:false,code:status===401?'SESSION_REQUIRED':status===403||status===404?'WORKSPACE_PROJECT_UNAVAILABLE':'WORKSPACE_OPERATION_UNCONFIRMED'},status);}
+   if(['401','403','404','503'].includes(mode)||mode==='retry503'&&project101ForegroundReads===1){const status=mode==='retry503'?503:Number(mode);return respond(request,{saved:false,code:status===401?'SESSION_REQUIRED':status===403||status===404?'WORKSPACE_PROJECT_UNAVAILABLE':'WORKSPACE_OPERATION_UNCONFIRMED'},status);}
    if(mode==='wrong-scope')body={...body,scope:otherScope};if(mode==='wrong-project')body={...body,project:{...body.project,id:'p-102'}};if(mode==='wrong-status')body={...body,project:{...body.project,status:'ARCHIVED'}};
   }
   return respond(request,body);
- }catch(error){errors.push({mode:'portfolio101-'+mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}});
+ }catch(error){errors.push({mode:'portfolio101-'+mode,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}};page.on('request',intercept);page.on('requestfinished',finishedRequest);page.on('requestfailed',failedRequest);
  try{
-  await page.goto(origin+'/portfolio101',{waitUntil:'networkidle0'});await wait(page,'Empresa de cartera A');assert.equal(reads.length,1);assert.equal(await page.$$eval('button[aria-pressed]',nodes=>nodes.filter(node=>node.textContent.includes('Obra listada')).length),100);assert.equal(project101Reads,0);
+  await page.goto(origin+'/portfolio101',{waitUntil:'networkidle0'});await wait(page,'Empresa de cartera A');assert.equal(reads.length,1);assert.equal(await page.$$eval('button[aria-pressed]',nodes=>nodes.filter(node=>node.textContent.includes('Obra listada')).length),100);assert.equal(project101ForegroundReads,0);assertProjectCounts();
   await click(page,'Consultar resumen');await wait(page,'50 obras consultadas');await click(page,'Consultar más obras');await wait(page,'100 obras consultadas');await click(page,'Consultar más obras');await wait(page,'101 obras consultadas');
-  assert.equal(reads.filter(row=>row.query.includes('portfolio=1')).length,3);assert.equal(project101Reads,0,'Summary never opens a project automatically');await saveCallback();
+  assert.equal(reads.filter(row=>row.query.includes('portfolio=1')).length,3);assert.equal(project101ForegroundReads,0,'Summary never opens a project automatically');assertProjectCounts();await saveCallback();
   assert.equal(await page.$$eval('button[aria-pressed]',nodes=>nodes.filter(node=>node.textContent.includes('Resumen obra 101')).length),0,'Summary label never authorizes an operational selector');
   const handle=await page.evaluateHandle(()=>[...document.querySelectorAll('[aria-labelledby="portfolio-overview-title"] button')].find(node=>node.textContent==='Abrir Resumen obra 101')),button=handle.asElement();assert.ok(button);assert.ok(await button.evaluate(node=>node.getBoundingClientRect().height>=44));await button.focus();
   if(['stale-callback','refresh-callback','reconsult-callback'].includes(mode)){
-   if(mode==='reconsult-callback'){await page.evaluate(()=>{[...document.querySelectorAll('[aria-labelledby="portfolio-overview-title"] button')].find(node=>node.textContent==='Actualizar resumen').click();window.__savedPortfolioClick();});await wait(page,'50 obras consultadas');assert.equal(project101Reads,0);}else if(mode==='stale-callback'){await page.evaluate(()=>window.__changePortfolioContext());await wait(page,'Empresa de cartera B');}else{await page.click('#workspace-refresh');await page.waitForFunction(()=>document.querySelector('#workspace-refresh')?.disabled===false&&!document.querySelector('[aria-labelledby="portfolio-overview-title"] article'));}
-   await page.evaluate(()=>window.__savedPortfolioClick());await tick();assert.equal(project101Reads,0);await absent();assert.equal(reads.filter(row=>row.query.includes('portfolio=1')).length,mode==='reconsult-callback'?4:3);
+   if(mode==='reconsult-callback'){await page.evaluate(()=>{[...document.querySelectorAll('[aria-labelledby="portfolio-overview-title"] button')].find(node=>node.textContent==='Actualizar resumen').click();window.__savedPortfolioClick();});await wait(page,'50 obras consultadas');assert.equal(project101ForegroundReads,0);assertProjectCounts();}else if(mode==='stale-callback'){await page.evaluate(()=>window.__changePortfolioContext());await wait(page,'Empresa de cartera B');}else{await page.click('#workspace-refresh');await page.waitForFunction(()=>document.querySelector('#workspace-refresh')?.disabled===false&&!document.querySelector('[aria-labelledby="portfolio-overview-title"] article'));}
+   await page.evaluate(()=>window.__savedPortfolioClick());await tick();assert.equal(project101ForegroundReads,0);assertProjectCounts();await absent();assert.equal(reads.filter(row=>row.query.includes('portfolio=1')).length,mode==='reconsult-callback'?4:3);
   }else if(mode==='locked'){
-   await page.evaluate(()=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes('Obra listada 1')&&!node.textContent.includes('Obra listada 10')).click());await openCurrentSection(page);await wait(page,'Actividad canónica 001');
-   await page.evaluate(()=>document.querySelector('article[data-task-id="task-001"] button').click());await page.type('form[aria-labelledby="schedule-edit-title"] textarea','Borrador de navegación conservado');
-   assert.equal(await button.evaluate(node=>node.disabled),true);await page.evaluate(()=>window.__savedPortfolioClick());await tick();assert.equal(project101Reads,0);assert.equal(await page.$eval('form[aria-labelledby="schedule-edit-title"] textarea',node=>node.value),'Borrador de navegación conservado');
-   await click(page,'Cancelar');await openCurrentSection(page,'workspace-home-title','inicio');await click(page,'Abrir Resumen obra 101');await openCurrentSection(page);await wait(page,'Actividad canónica 101 primera');assert.equal(project101Reads,1);
+   const prior=await beginProjectAction('p-001','selection',()=>page.evaluate(()=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes('Obra listada 1')&&!node.textContent.includes('Obra listada 10')).click()));await openCurrentSection(page);await wait(page,'Actividad canónica 001');await settleProjectAction(prior);
+   await page.evaluate(()=>document.querySelector('article[data-task-id="task-001"] button').click());await page.type('form[aria-labelledby="schedule-edit-title"] textarea','Borrador de navegación conservado');await page.waitForFunction(()=>[...document.querySelectorAll('[data-worksite-live-refresh="PAUSED"]')].some(node=>node.getClientRects().length),{timeout:20000});draftPauseObserved=true;
+   assert.equal(await button.evaluate(node=>node.disabled),true);await page.evaluate(()=>window.__savedPortfolioClick());await tick();assert.equal(project101ForegroundReads,0);assertProjectCounts();assert.equal(await page.$eval('form[aria-labelledby="schedule-edit-title"] textarea',node=>node.value),'Borrador de navegación conservado');
+   const resumed=await beginProjectAction('p-001','resume',()=>click(page,'Cancelar'));await settleProjectAction(resumed);await openCurrentSection(page,'workspace-home-title','inicio');const reopened=await beginProjectAction(projectId,'selection',()=>click(page,'Abrir Resumen obra 101'));await openCurrentSection(page);await wait(page,'Actividad canónica 101 primera');await settleProjectAction(reopened);assert.equal(project101ForegroundReads,1);assertProjectCounts();
   }else{
-   await page.keyboard.press('Enter');
+   const opened=await beginProjectAction(projectId,'selection',()=>page.keyboard.press('Enter'),!['stale-context','stale-project','unmount','401','403','404','503','retry503','wrong-scope','wrong-project','wrong-status'].includes(mode));
    if(['stale-context','stale-project','unmount'].includes(mode)){
     for(let i=0;i<800&&!held.length;i++)await new Promise(resolve=>setTimeout(resolve,25));assert.equal(held.length,1);await absent();
     if(mode==='stale-context'){await page.evaluate(()=>window.__changePortfolioContext());await wait(page,'Empresa de cartera B');}
     else if(mode==='unmount'){await page.evaluate(()=>window.__unmountPortfolio());await wait(page,'Portfolio desmontado');}
-    else{await page.evaluate(()=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes('Obra listada 1')&&!node.textContent.includes('Obra listada 10')).click());await openCurrentSection(page);await wait(page,'Actividad canónica 001');}
-    await releaseHeld();await tick();assert.equal(project101Reads,1);assert.equal(await page.$$eval('article[data-task-id="task-101-a"]',nodes=>nodes.length),0);assert.equal(await page.$$eval('button[aria-pressed]',nodes=>nodes.filter(node=>node.textContent.includes('Obra canónica 101')).length),0);if(mode==='stale-project'){await page.waitForFunction(()=>window.__portfolioGuide?.projectId==='p-001');assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),'p-001');}else assert.equal(await page.evaluate(()=>window.__portfolioGuide?.projectId||null),null);
+    else{const changed=await beginProjectAction('p-001','selection',()=>page.evaluate(()=>[...document.querySelectorAll('button[aria-pressed]')].find(node=>node.textContent.includes('Obra listada 1')&&!node.textContent.includes('Obra listada 10')).click()));await openCurrentSection(page);await wait(page,'Actividad canónica 001');await settleProjectAction(changed);}
+    await releaseHeld();await tick();assert.equal(project101ForegroundReads,1);assertProjectCounts();assert.equal(await page.$$eval('article[data-task-id="task-101-a"]',nodes=>nodes.length),0);assert.equal(await page.$$eval('article[data-task-id]',(nodes,ids)=>nodes.filter(node=>ids.includes(node.dataset.taskId)).length,firstPageTaskIds),0);assert.equal(await page.$$eval('button[aria-pressed]',nodes=>nodes.filter(node=>node.textContent.includes('Obra canónica 101')).length),0);if(mode==='stale-project'){await page.waitForFunction(()=>window.__portfolioGuide?.projectId==='p-001');assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),'p-001');}else assert.equal(await page.evaluate(()=>window.__portfolioGuide?.projectId||null),null);
    }else if(['401','403','404','503','retry503','wrong-scope','wrong-project','wrong-status'].includes(mode)){
-    await page.waitForFunction(()=>{const node=document.querySelector('[aria-labelledby="workspace-title"] > [role="status"]');return Boolean(node?.textContent.trim())&&document.querySelector('#workspace-refresh')?.disabled===false;});await absent();assert.equal(project101Reads,1);await tick();assert.equal(project101Reads,1,'No automatic retry after denial/error');
-    if(mode==='retry503'){await page.evaluate(()=>{window.__portfolioTokenEpoch=2;});await openCurrentSection(page,'workspace-home-title','inicio');await click(page,'Abrir Resumen obra 101');await openCurrentSection(page);await wait(page,'Actividad canónica 101 primera');assert.equal(project101Reads,2);assert.equal(reads.at(-1).authorization,'Bearer synthetic-portfolio-A-2');}
+    await page.waitForFunction(()=>{const node=document.querySelector('[aria-labelledby="workspace-title"] > [role="status"]');return Boolean(node?.textContent.trim())&&document.querySelector('#workspace-refresh')?.disabled===false;});await absent();assert.equal(project101ForegroundReads,1);assertProjectCounts();await tick();assert.equal(project101ForegroundReads,1,'No automatic retry after denial/error');assertProjectCounts();assert.equal(project101Reads,1,'No live GET or retry is hidden inside a denied foreground action');assert.equal(opened.liveFacts.length,0);
+    if(mode==='retry503'){await page.evaluate(()=>{window.__portfolioTokenEpoch=2;});await openCurrentSection(page,'workspace-home-title','inicio');const retried=await beginProjectAction(projectId,'retry',()=>click(page,'Abrir Resumen obra 101'));await openCurrentSection(page);await wait(page,'Actividad canónica 101 primera');await settleProjectAction(retried);assert.equal(project101ForegroundReads,2);assertProjectCounts();assert.equal(reads.at(-1).authorization,'Bearer synthetic-portfolio-A-2');}
     else if(['401','403'].includes(mode))assert.equal(await page.$$eval('[aria-labelledby="portfolio-overview-title"]',nodes=>nodes.length),0,'Authorization denial clears the account summary');
    }else{
-    await openCurrentSection(page);await wait(page,'Actividad canónica 101 primera');await page.waitForFunction(id=>window.__portfolioGuide?.projectId===id,{},projectId);assert.equal(project101Reads,1);assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),projectId);assert.equal(await page.$eval('button[aria-pressed="true"]',node=>node.textContent.includes('Obra canónica 101')),true);assert.ok((await page.$eval('[aria-labelledby="schedule-title"]',node=>node.innerText)).includes('1 de 2 tareas'));
-    await click(page,'Cargar más tareas');await wait(page,'Actividad canónica 101 segunda');assert.equal(project101Reads,2);assert.equal(await page.$$eval('article[data-task-id]',nodes=>nodes.length),2);assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),projectId);
+    await openCurrentSection(page);await wait(page,'Actividad canónica 101 primera');await page.waitForFunction(id=>window.__portfolioGuide?.projectId===id,{},projectId);await settleProjectAction(opened);assert.equal(project101ForegroundReads,1);assertProjectCounts();assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),projectId);assert.equal(await page.$eval('button[aria-pressed="true"]',node=>node.textContent.includes('Obra canónica 101')),true);assert.ok((await page.$eval('[aria-labelledby="schedule-title"]',node=>node.innerText)).includes('100 de 101 tareas'));
+    const appended=await beginProjectAction(projectId,'paging',()=>click(page,'Cargar más tareas'));await wait(page,'Actividad canónica 101 segunda');await settleProjectAction(appended);assert.equal(project101ForegroundReads,2);assertProjectCounts();assert.equal(await page.$$eval('article[data-task-id]',nodes=>nodes.length),101);assert.equal(await page.evaluate(()=>window.__portfolioGuide.projectId),projectId);
    }
   }
-  await handle.dispose();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(writes,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(await page.evaluate(()=>window.__portfolioIssuedIds),[]);assert.deepEqual(await page.evaluate(()=>[Object.keys(localStorage),Object.keys(sessionStorage)]),[[],[]]);
-  portfolioIntegrationChecks.push({mode,width,project101Reads,thirdPage:true,authenticatedGetOnly:true,canonicalViewOnly:true,currentContextOnly:true,selectionAfterCanonicalRead:true,automaticRetry:false,uuidIssued:0,mutations:0,providerCalls:0,horizontalOverflow:false});
- }finally{await context.close();}
+  await page.waitForNetworkIdle({idleTime:100,concurrency:0,timeout:20000});assertRequestLedger();if(mode==='locked')assert.equal(draftPauseObserved,true);await handle.dispose();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(writes,[]);assert.deepEqual(unexpected,[]);assert.deepEqual(await page.evaluate(()=>window.__portfolioIssuedIds),[]);assert.deepEqual(await page.evaluate(()=>[Object.keys(localStorage),Object.keys(sessionStorage)]),[[],[]]);
+  portfolioReadLedgers.push({mode,width,totalGetReads:requestLedger.length,project101Reads,project101ForegroundReads,project101LiveReads,requestLedger,actions:actionEvidence(),draftPauseObserved});
+  portfolioIntegrationChecks.push({mode,width,project101Reads,project101ForegroundReads,project101LiveReads,thirdPage:true,authenticatedGetOnly:true,canonicalViewOnly:true,currentContextOnly:true,selectionAfterCanonicalRead:true,automaticRetry:false,uuidIssued:0,mutations:0,providerCalls:0,horizontalOverflow:false});
+ }catch(error){error.companyOnboardingUiDiagnostic={mode:'portfolio101-'+mode,width,project101ForegroundReads,project101Reads,project101LiveReads,requestLedger,actions:actionEvidence()};throw error;}finally{page.off('request',intercept);for(const slot of actions.flatMap(action=>action.slots))if(slot.held&&!slot.held.request.isInterceptResolutionHandled())await slot.held.request.abort().catch(()=>{});for(const value of held)if(!value.request.isInterceptResolutionHandled())await value.request.abort().catch(()=>{});await context.close();page.off('requestfinished',finishedRequest);page.off('requestfailed',failedRequest);}
 }
 try{
  let ready=false;
@@ -489,9 +617,9 @@ try{
 for(const width of [320,390,768,1280])for(const mode of portfolioIntegrationModes)await portfolioThirdPage(mode,width);
 for(const width of [320,390,768,1280])for(const mode of organizationLockModes)await organizationDraftProtection(mode,width);}
  for(const width of [320,390,768,1280])for(const mode of ['reload-committed','reload-not-committed','reload-denied','reload-other-actor','reload-missing-receipt'])await scenario(mode,width);
- if(!process.env.COMPANY_ONBOARDING_UI_SUITE){assert.equal(portfolioIntegrationChecks.length,64);assert.equal(new Set(portfolioIntegrationChecks.map(row=>row.mode+':'+row.width)).size,64);for(const row of portfolioIntegrationChecks)assert.equal(row.project101Reads,['success','retry503'].includes(row.mode)?2:['stale-callback','refresh-callback','reconsult-callback'].includes(row.mode)?0:1);}
+ if(!process.env.COMPANY_ONBOARDING_UI_SUITE){assert.equal(portfolioIntegrationChecks.length,64);assert.equal(new Set(portfolioIntegrationChecks.map(row=>row.mode+':'+row.width)).size,64);for(const row of portfolioIntegrationChecks){assert.equal(row.project101ForegroundReads,['success','retry503'].includes(row.mode)?2:['stale-callback','refresh-callback','reconsult-callback'].includes(row.mode)?0:1);assert.equal(row.project101LiveReads,row.mode==='success'?3:['locked','retry503'].includes(row.mode)?1:0);assert.equal(row.project101Reads,row.project101ForegroundReads+row.project101LiveReads);}assert.equal(portfolioReadLedgers.length,64);}
  if(!process.env.COMPANY_ONBOARDING_UI_SUITE){assert.equal(organizationLockChecks.length,32);assert.equal(new Set(organizationLockChecks.map(row=>row.mode+':'+row.width)).size,32);for(const row of organizationLockChecks)assert.equal(row.postCount,['cancel','stale-observation'].includes(row.mode)?0:1);}
  assert.deepEqual(errors,[]);const proof={status:'PASS',environment:'actual-ui-with-intercepted-synthetic-services',checks,portfolioIntegration:{modes:portfolioIntegrationModes,widths:[320,390,768,1280],checks:portfolioIntegrationChecks,executed:!process.env.COMPANY_ONBOARDING_UI_SUITE},organizationDraftProtection:{modes:organizationLockModes,widths:[320,390,768,1280],checks:organizationLockChecks,executed:!process.env.COMPANY_ONBOARDING_UI_SUITE},sourceManifest,harnessSha256,widths:[320,390,768,1280],errors,profileExpiryVerification:'real-RS256-verifier-with-disposable-local-key-and-controlled-clock',sdkDeadlines:'controlled-accelerated-clock',realClerkLogin:false,physicalWhatsApp:false,productionDataWritten:false,documentCurveSourceManifest,fixtureTransforms:documentCurveFixtureTransforms};
  rmSync(path.join(output,'browser-failure.json'),{force:true});writeFileSync(path.join(output,'browser.json'),JSON.stringify(proof,null,2));console.log(JSON.stringify(proof));
-}catch(error){writeFileSync(path.join(output,'browser-failure.json'),JSON.stringify({message:error.message,errors,log},null,2));throw error;}
-finally{await browser?.close();try{if(process.platform!=='win32')process.kill(-server.pid,'SIGTERM');else server.kill();}catch{}await new Promise(done=>setTimeout(done,500));const resolved=realpathSync(dir);assert.equal(path.dirname(resolved),realpathSync(parent));assert.ok(path.basename(resolved).startsWith('company-bootstrap-ui-'));rmSync(resolved,{recursive:true,force:true});}
+}catch(error){primaryFailure=error;writeFileSync(path.join(output,'browser-failure.json'),JSON.stringify({message:error.message,errors,log,diagnostic:error.companyOnboardingUiDiagnostic??null},null,2));throw error;}
+finally{try{writeFileSync(path.join(output,'portfolio-read-ledger.json'),JSON.stringify({version:1,state:'CLOSED_SYNTHETIC_PORTFOLIO_REQUEST_LEDGER',fullHarnessReachedEnd:primaryFailure===undefined,cases:portfolioReadLedgers},null,2)+'\n');}finally{await cleanupHarness();}}

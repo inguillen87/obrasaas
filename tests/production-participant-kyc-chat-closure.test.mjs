@@ -11,7 +11,7 @@ import {createParticipantStore} from '../src/lib/participant-store.mjs';
 // Extends the existing signed/planner/Clerk-acceptance fixture only for the new
 // SQL statements. These tests do not claim PostgreSQL lock-race validation.
 async function fixture(options={}){
- const f=await companyKycMemoryFixture(options),sql=[],control={hook:null,finalClock:null,updates:0};
+ const f=await companyKycMemoryFixture({...options,historicalChallengeVersion:2}),sql=[],control={hook:null,finalClock:null,updates:0};
  // The older in-memory adapter used r1/r2 and omitted the real KYC version.
  // Model the actual SELECT to_char and canonical roster shape explicitly.
  f.worker.metadata.participant.kyc.version=1;
@@ -125,7 +125,7 @@ test('same closure UUID replays the immutable extra receipt once; changed reason
 });
 
 test('old exact closure replay after a fresh real PREPARE returns its own receipt without touching the new code, TTL, issuer or draft',async()=>{
- const f=await fixture(),command=f.input(),closed=await f.run(command),prepareClient={query:f.query};
+ const f=await fixture();await f.join();const command=f.input(),closed=await f.run(command),prepareClient={query:f.query};
  await prepareMetaKycChallenge.beforeProject(prepareClient,f.issuer,{projectId:f.target.id});
  const next=await prepareMetaKycChallenge(prepareClient,f.issuer,f.target,{operationId:randomUUID(),workerId:f.worker.id,revision:f.worker.revision}),fresh=structuredClone(f.worker.metadata),audits=structuredClone([...f.audits]),calls=f.io();
  assert.notEqual(fresh.participant.kycChatChallenge.id,command.payload.challengeId);assert.equal(next.saved,true);

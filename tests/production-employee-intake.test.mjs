@@ -26,7 +26,7 @@ const assertAdmittedGuidance=reply=>{
 async function priorAdmittedPlanner(){
  const moduleUrl=new URL('../src/lib/meta-kyc-conversation.mjs',import.meta.url),source=await readFile(moduleUrl,'utf8'),pattern=/ADMITTED:'[^']*'/g;
  assert.equal([...source.matchAll(pattern)].length,1);
- const menu="if(['ADMITTED','JOB','CONFIRM'].includes(state.step)){";assert.equal(source.split(menu).length,2);
+ const menu="if(['WELCOME','ADMITTED','JOB','CONFIRM'].includes(state.step)){";assert.equal(source.split(menu).length,2);
  const mutant=source.replace(pattern,"ADMITTED:'Tu ficha ya está registrada. Consultá el próximo paso en tu cuenta de ObraSaaS. La identidad y los permisos se revisan por separado.'").replace(menu,"if(state.step==='ADMITTED')return {state,reply:intakeText(descriptions.ADMITTED)};\n "+menu).replace(/from (['"])(\.\.?\/[^'"]+)\1/g,(_all,_quote,relative)=>'from '+JSON.stringify(new URL(relative,moduleUrl).href));
  return (await import('data:text/javascript;base64,'+Buffer.from(mutant).toString('base64'))).planEmployeeIntakeConversation;
 }
@@ -79,7 +79,7 @@ test('OFF is explicit and an unknown HOLA cannot create a person, actor or send'
  const f=employeeIntakeFixture();await assert.rejects(f.execute('HOLA'),{code:'EMPLOYEE_INTAKE_DISABLED'});assert.equal(f.controls.sends,0);assert.equal(f.workers.size,0);assert.equal(f.audits.size,0);
 });
 test('signed conversation consent is encrypted, retains original envelope and grants no office or field authority',async()=>{
- const f=employeeIntakeFixture();const s=await f.submit();assert.equal(s.status,'WAITING_RESPONSIBLE');assert.equal(s.job,'OWNER');assert.equal(s.consent,true);assert.equal(f.controls.sends,5);assert.equal(f.workers.size,0);
+ const f=employeeIntakeFixture();const s=await f.submit();assert.equal(s.status,'WAITING_RESPONSIBLE');assert.equal(s.job,'OWNER');assert.equal(s.consent,true);assert.equal(f.controls.sends,6);assert.equal(f.workers.size,0);
  const anchor=f.events.get(s.applicationId),before={encryptedPayload:anchor.payload.encryptedPayload,encryptedProof:anchor.payload.encryptedProof,payloadDigest:anchor.payload.payloadDigest};
  const text=JSON.stringify([...f.events]);for(const value of ['Persona Sintética','person@example.invalid','15550001001'])assert.equal(text.includes(value),false,value);
  const inbox=await f.read();assert.equal(inbox.records.length,1);assert.equal(inbox.records[0].phone,'+15550001001');assert.equal(inbox.records[0].workerId,null);assert.equal(f.controls.providerCalls,0);
@@ -109,33 +109,33 @@ test('challenge, binding and image messages stay outside guest authority after a
  const f=employeeIntakeFixture();await f.submit();for(const message of ['IDENTIDAD synthetic-code','VINCULAR synthetic-code',{type:'image',image:{id:'150000011',mime_type:'image/png'}}]){const c=f.receive(message);assert.equal(await customerJobTransaction(f.connect,client=>resolveEmployeeIntakeAuthority(client,c,{environment:f.environment})),null);}assert.equal(f.workers.size,0);
 });
 test('same-second free text and exact choice require a reply to the confirmed preceding prompt',async()=>{
- const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');await f.execute('Ambiguous name',{reply:false,timestamp:f.state().lastMessageTimestamp});assert.equal(f.state().step,'NAME');await f.execute('Persona Sintética');const s=f.state();await f.execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':0'}}},{reply:false});assert.equal(f.state().step,'JOB');assert.equal(f.state().consent,false);
+ const f=employeeIntakeFixture();await f.configure();await f.startRequest();await f.execute('Ambiguous name',{reply:false,timestamp:f.state().lastMessageTimestamp});assert.equal(f.state().step,'NAME');await f.execute('Persona Sintética');const s=f.state();await f.execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':0'}}},{reply:false});assert.equal(f.state().step,'JOB');assert.equal(f.state().consent,false);
 });
 const currentPrompt=f=>f.outbounds.get(customerOutboundId(f.state().lastEventId));
 const freshTimestamp=f=>Math.max(f.state().lastMessageTimestamp,Math.floor(Date.parse(currentPrompt(f).outcome.completedAt)/1000))+1;
 test('fresh signed plain name and email fill only unverified drafts, explicit choices and human admission still required',async()=>{
- const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');await f.execute('Persona Sintética',{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'JOB');assert.equal(f.state().name,'Persona Sintética');await f.choose('WORKER');await f.execute('Person@example.invalid',{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'CONFIRM');assert.equal(f.state().email,'person@example.invalid');assert.equal(f.state().consent,false);assert.equal(f.workers.size,0);assert.equal(f.controls.providerCalls,0);
+ const f=employeeIntakeFixture();await f.configure();await f.startRequest();await f.execute('Persona Sintética',{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'JOB');assert.equal(f.state().name,'Persona Sintética');await f.choose('WORKER');await f.execute('Person@example.invalid',{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'CONFIRM');assert.equal(f.state().email,'person@example.invalid');assert.equal(f.state().consent,false);assert.equal(f.workers.size,0);assert.equal(f.controls.providerCalls,0);
  const s=f.state();await f.execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':0'}}},{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'CONFIRM');assert.equal(f.state().consent,false);await f.choose('CONFIRM');assert.equal(f.state().step,'WAITING_RESPONSIBLE');assert.equal(f.workers.size,0);assert.equal(f.controls.providerCalls,0);
 });
 for(const context of [{id:'wamid.Wrong'}, {}, null, {id:''}, {id:1}])test('present incorrect or malformed context cannot use plain-text fallback '+JSON.stringify(context),async()=>{
- const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');await f.execute({type:'text',text:{body:'Persona Sintética'},context},{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'NAME');assert.equal(f.state().name,null);assert.equal(f.workers.size,0);
+ const f=employeeIntakeFixture();await f.configure();await f.startRequest();await f.execute({type:'text',text:{body:'Persona Sintética'},context},{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'NAME');assert.equal(f.state().name,null);assert.equal(f.workers.size,0);
 });
 for(const [name,change] of [
  ['unknown send',p=>{p.outcome.state='SEND_UNKNOWN';}],['rejected send',p=>{p.outcome.state='REJECTED';}],['failed status',p=>{p.outcome.providerStatus='failed';}],['deleted status',p=>{p.outcome.providerStatus='deleted';}],['missing send time',p=>{delete p.outcome.completedAt;p.outcome.state='STATUS_OBSERVED';}],['invalid send time',p=>{p.outcome.completedAt='invalid';}],['send time after inbound',p=>{p.outcome.completedAt=new Date(Date.now()+60000).toISOString();}],['wrong application',p=>{p.payload.applicationId='other';}],['wrong channel',p=>{p.payload.channelId='other';}],['wrong organization',p=>{p.payload.organizationId='other';}],['wrong preceding event',p=>{p.payload.eventId='other';}],['non-intake reservation',p=>{p.payload.employeeIntake=false;}]
 ])test(name+' denies plain draft advancement',async()=>{
- const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');const timestamp=freshTimestamp(f);change(currentPrompt(f));await f.execute('Persona Sintética',{reply:false,timestamp});assert.equal(f.state().step,'NAME');assert.equal(f.state().name,null);assert.equal(f.workers.size,0);assert.equal(f.controls.providerCalls,0);
+ const f=employeeIntakeFixture();await f.configure();await f.startRequest();const timestamp=freshTimestamp(f);change(currentPrompt(f));await f.execute('Persona Sintética',{reply:false,timestamp});assert.equal(f.state().step,'NAME');assert.equal(f.state().name,null);assert.equal(f.workers.size,0);assert.equal(f.controls.providerCalls,0);
 });
 for(const field of ['channelPurpose','applicationId','organizationId','channelId','to','eventId'])test('sealed prompt '+field+' mismatch denies plain draft advancement',async()=>{
- const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');const p=currentPrompt(f),aad={organizationId:f.connection.organizationId,projectId:f.connection.projectId,purpose:'outbound',resourceId:p.id},prepared=JSON.parse(decryptCustomerSecret(p.payload.encryptedPayload,aad,f.environment));prepared[field]='other';p.payload.encryptedPayload=encryptCustomerSecret(JSON.stringify(prepared),aad,f.environment);p.payload.requestDigest=digest(prepared);await f.execute('Persona Sintética',{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'NAME');assert.equal(f.workers.size,0);
+ const f=employeeIntakeFixture();await f.configure();await f.startRequest();const p=currentPrompt(f),aad={organizationId:f.connection.organizationId,projectId:f.connection.projectId,purpose:'outbound',resourceId:p.id},prepared=JSON.parse(decryptCustomerSecret(p.payload.encryptedPayload,aad,f.environment));prepared[field]='other';p.payload.encryptedPayload=encryptCustomerSecret(JSON.stringify(prepared),aad,f.environment);p.payload.requestDigest=digest(prepared);await f.execute('Persona Sintética',{reply:false,timestamp:freshTimestamp(f)});assert.equal(f.state().step,'NAME');assert.equal(f.workers.size,0);
 });
 test('corrupt sealed prompt rolls back draft and does not send or grant',async()=>{
- const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');const p=currentPrompt(f),timestamp=freshTimestamp(f),before=f.state();p.payload.requestDigest='0'.repeat(64);await assert.rejects(f.execute('Persona Sintética',{reply:false,timestamp}),{code:'EMPLOYEE_INTAKE_INTEGRITY'});assert.deepEqual(f.state(),before);assert.equal(f.controls.sends,1);assert.equal(f.workers.size,0);
+ const f=employeeIntakeFixture();await f.configure();await f.startRequest();const p=currentPrompt(f),timestamp=freshTimestamp(f),before=f.state();p.payload.requestDigest='0'.repeat(64);await assert.rejects(f.execute('Persona Sintética',{reply:false,timestamp}),{code:'EMPLOYEE_INTAKE_INTEGRITY'});assert.deepEqual(f.state(),before);assert.equal(f.controls.sends,2);assert.equal(f.workers.size,0);
 });
 test('concurrent fresh draft texts and source replay cannot skip role selection or duplicate a transition',async()=>{
- const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');const timestamp=freshTimestamp(f),a=f.receive('Persona Uno',{reply:false,timestamp}),b=f.receive('Persona Dos',{reply:false,timestamp});const first=await Promise.all([f.bridge.execute(a),f.bridge.execute(b)]);assert.equal(f.state().step,'JOB');assert.equal(f.state().name,'Persona Uno');assert.equal(f.state().consent,false);const before=f.state();assert.deepEqual(await f.bridge.execute(a),first[0]);assert.deepEqual(f.state(),before);assert.equal(f.workers.size,0);
+ const f=employeeIntakeFixture();await f.configure();await f.startRequest();const timestamp=freshTimestamp(f),a=f.receive('Persona Uno',{reply:false,timestamp}),b=f.receive('Persona Dos',{reply:false,timestamp});const first=await Promise.all([f.bridge.execute(a),f.bridge.execute(b)]);assert.equal(f.state().step,'JOB');assert.equal(f.state().name,'Persona Uno');assert.equal(f.state().consent,false);const before=f.state();assert.deepEqual(await f.bridge.execute(a),first[0]);assert.deepEqual(f.state(),before);assert.equal(f.workers.size,0);
 });
 test('unconfirmed outbound prompt cannot collect a name and an unknown send is never sent again',async()=>{
- const f=employeeIntakeFixture();await f.configure();f.controls.loseSendAck=true;const {context,result}=await f.execute('HOLA');assert.equal(f.controls.sends,1);const replay=await f.outbound.send(context,result.reply,{purpose:'EMPLOYEE_INTAKE'});assert.equal(replay.state,'SEND_UNKNOWN');assert.equal(f.controls.sends,1);await f.execute('Persona Sintética');assert.equal(f.state().step,'NAME');
+ const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');f.controls.loseSendAck=true;const {context,result}=await f.choose('REQUEST_ACCESS');assert.equal(f.controls.sends,2);const replay=await f.outbound.send(context,result.reply,{purpose:'EMPLOYEE_INTAKE'});assert.equal(replay.state,'SEND_UNKNOWN');assert.equal(f.controls.sends,2);await f.execute('Persona Sintética');assert.equal(f.state().step,'NAME');
 });
 test('duplicate signed delivery and concurrent HOLA keep one application and one outbound per source receipt',async()=>{
  const f=employeeIntakeFixture();await f.configure();const c=f.receive('HOLA');const results=await Promise.all([f.bridge.execute(c),f.bridge.execute(c)]);assert.deepEqual(results[0],results[1]);assert.equal(f.state().revision,1);await Promise.all(results.map(r=>f.outbound.send(c,r.reply,{purpose:'EMPLOYEE_INTAKE'})));assert.equal(f.controls.sends,1);assert.equal(f.outbounds.size,1);
@@ -166,7 +166,7 @@ test('cross-tenant, actor, scope, connection and sender references cannot be ado
  const other=f.receive('ESTADO',{sender:'15550001002'});assert.equal(await f.bridge.execute(other),null);assert.equal(f.workers.size,0);
 });
 test('conversation expiry is fixed and cancelled intake does not produce an inbox request',async()=>{
- const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');const expiry=f.state().expiresAt;f.now.setTime(f.now.getTime()+30000);await f.execute('Persona Sintética');assert.equal(f.state().expiresAt,expiry);f.now.setTime(Date.parse(expiry)+1);await assert.rejects(f.execute('ESTADO'),{code:'EMPLOYEE_INTAKE_EXPIRED'});
+ const f=employeeIntakeFixture();await f.configure();await f.startRequest();const expiry=f.state().expiresAt;f.now.setTime(f.now.getTime()+30000);await f.execute('Persona Sintética');assert.equal(f.state().expiresAt,expiry);f.now.setTime(Date.parse(expiry)+1);await assert.rejects(f.execute('ESTADO'),{code:'EMPLOYEE_INTAKE_EXPIRED'});
  const c=employeeIntakeFixture();await c.configure();await c.execute('HOLA');await c.execute('CANCELAR');assert.equal(c.state().consent,false);assert.equal((await c.read()).records.length,0);
 });
 test('concurrent responsible decisions serialize; the second exact operation is terminal with no second person',async()=>{
@@ -190,7 +190,7 @@ for(const action of ['CONFIGURE_EMPLOYEE_INTAKE','ADMIT_EMPLOYEE_INTAKE','REJECT
 
 for(const stage of ['draft','consent'])for(const interval of ['during-dispatch-update','after-dispatch-update'])test('DB-clock lease expiry '+interval+' rolls back '+stage+' and adds no dispatch',async()=>{
  const f=employeeIntakeFixture();await f.configure();let message='HOLA';
- if(stage==='consent'){await f.execute('HOLA');await f.execute('Persona Sintética');await f.choose('WORKER');await f.execute('person@example.invalid');const s=f.state();message={type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':'+s.choices.findIndex(row=>row.value==='CONFIRM')}}};}
+ if(stage==='consent'){await f.startRequest();await f.execute('Persona Sintética');await f.choose('WORKER');await f.execute('person@example.invalid');const s=f.state();message={type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':'+s.choices.findIndex(row=>row.value==='CONFIRM')}}};}
  const input=f.receive(message),before={events:structuredClone([...f.events]),audits:structuredClone([...f.audits]),workers:structuredClone([...f.workers]),outbounds:structuredClone([...f.outbounds])},sent=f.controls.sends;
  f.controls[interval==='during-dispatch-update'?'beforeDispatchWrite':'afterDispatchWrite']=async event=>{assert.equal(event.id,input.eventId);f.now.setTime(event.leaseExpiresAt.getTime()+1);};
  await assert.rejects(f.bridge.execute(input),{code:'META_CUSTOMER_INBOX_LEASE_CHANGED'});
@@ -208,7 +208,7 @@ for(const deadline of ['policy-grant','reply-window'])test('fresh DB-clock '+dea
 for(const stage of ['draft','consent'])for(const deadline of ['policy-grant','reply-window'])test(deadline+' expiry during final issuer-policy read rolls back '+stage+' and dispatch',async()=>{
  const f=employeeIntakeFixture();if(deadline==='policy-grant')f.connection.metadata.customerVerification.expiresAt=new Date(f.now.getTime()+61000).toISOString();await f.configure();
  const options=deadline==='reply-window'?{timestamp:Math.floor((f.now.getTime()-24*60*60*1000+1500)/1000)}:{};let message='HOLA';
- if(stage==='consent'){await f.execute('HOLA',options);await f.execute('Synthetic applicant',options);let s=f.state();await f.execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':'+s.choices.findIndex(row=>row.value==='WORKER')}}},options);await f.execute('person@example.invalid',options);s=f.state();message={type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':'+s.choices.findIndex(row=>row.value==='CONFIRM')}}};}
+ if(stage==='consent'){await f.startRequest(options);await f.execute('Synthetic applicant',options);let s=f.state();await f.execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':'+s.choices.findIndex(row=>row.value==='WORKER')}}},options);await f.execute('person@example.invalid',options);s=f.state();message={type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':'+s.choices.findIndex(row=>row.value==='CONFIRM')}}};}
  const input=f.receive(message,options),before={events:structuredClone([...f.events]),audits:structuredClone([...f.audits]),workers:structuredClone([...f.workers]),outbounds:structuredClone([...f.outbounds])},sent=f.controls.sends;let barriers=0;
  f.controls.afterDispatchWrite=async event=>{assert.equal(event.id,input.eventId);assert.ok(event.payload.employeeIntakeDispatch);assert.equal(f.state().consent,stage==='consent');f.controls.beforeIssuerTrail=async()=>{barriers++;f.controls.beforeIssuerTrail=null;f.now.setTime(f.now.getTime()+2000);};};
  await assert.rejects(f.bridge.execute(input),{code:deadline==='policy-grant'?'EMPLOYEE_INTAKE_REVOKED':'META_CUSTOMER_REPLY_WINDOW_CLOSED'});assert.equal(barriers,1);
@@ -225,10 +225,10 @@ test('an original sealed dispatch can replay only under its current source lease
  f.now.setTime(event.leaseExpiresAt.getTime()+1);await assert.rejects(f.bridge.execute(context),{code:'META_CUSTOMER_INBOX_LEASE_CHANGED'});assert.deepEqual(f.events.get(context.eventId).payload,payload);assert.equal(f.controls.sends,sent);assert.equal(f.controls.providerCalls,0);
 });
 test('only a new human HOLA restarts an expired incomplete draft, preserving its original signed event',async()=>{
- const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');const s=f.state(),original=structuredClone(f.events.get(s.applicationId).payload);f.now.setTime(Date.parse(s.expiresAt)+1);await assert.rejects(f.execute('Persona Sintética'),{code:'EMPLOYEE_INTAKE_EXPIRED'});const next=await f.execute('HOLA');assert.equal(next.result.kind,'EMPLOYEE_INTAKE');const old=f.events.get(s.applicationId);assert.equal(old.payload.employeeIntake.status,'CANCELLED');for(const key of ['encryptedPayload','encryptedProof','payloadDigest'])assert.equal(old.payload[key],original[key]);const current=f.events.get(next.context.eventId);assert.equal(current.payload.employeeIntake.status,'NAME');assert.notEqual(current.payload.employeeIntake.applicationId,s.applicationId);assert.equal((await f.read()).records.length,0);
+ const f=employeeIntakeFixture();await f.configure();await f.startRequest();const s=f.state(),original=structuredClone(f.events.get(s.applicationId).payload);f.now.setTime(Date.parse(s.expiresAt)+1);await assert.rejects(f.execute('Persona Sintética'),{code:'EMPLOYEE_INTAKE_EXPIRED'});const next=await f.execute('HOLA');assert.equal(next.result.kind,'EMPLOYEE_INTAKE');const old=f.events.get(s.applicationId);assert.equal(old.payload.employeeIntake.status,'CANCELLED');for(const key of ['encryptedPayload','encryptedProof','payloadDigest'])assert.equal(old.payload[key],original[key]);const current=f.events.get(next.context.eventId);assert.equal(current.payload.employeeIntake.status,'WELCOME');assert.notEqual(current.payload.employeeIntake.applicationId,s.applicationId);assert.equal((await f.read()).records.length,0);
 });
 test('current policy may restart only an incomplete draft, never an already consented pending request',async()=>{
- const f=employeeIntakeFixture();await f.configure();await f.execute('HOLA');const s=f.state();await f.configure();const next=await f.execute('HOLA');assert.equal(f.events.get(s.applicationId).payload.employeeIntake.status,'CANCELLED');assert.equal(f.events.get(next.context.eventId).payload.employeeIntake.status,'NAME');
+ const f=employeeIntakeFixture();await f.configure();await f.startRequest();const s=f.state();await f.configure();const next=await f.execute('HOLA');assert.equal(f.events.get(s.applicationId).payload.employeeIntake.status,'CANCELLED');assert.equal(f.events.get(next.context.eventId).payload.employeeIntake.status,'WELCOME');
  const pending=employeeIntakeFixture(),submitted=await pending.submit();await pending.configure();await assert.rejects(pending.execute('HOLA'),{code:'EMPLOYEE_INTAKE_REVOKED'});assert.equal(pending.state().applicationId,submitted.applicationId);assert.equal(pending.state().consent,true);
 });
 test('revocation or lease expiry during a provider await cannot commit a callback or resend the reserved reply',async()=>{
@@ -244,7 +244,7 @@ test('binding never converts an original sealed intake dispatch into an operatio
  const f=employeeIntakeFixture();await f.configure();const {context,result}=await f.execute('HOLA');f.controls.bound=true;assert.deepEqual(await f.bridge.execute(context),result);const replay=await f.outbound.send(context,result.reply,{purpose:'EMPLOYEE_INTAKE'});assert.equal(replay.replayed,true);assert.equal(f.controls.sends,1);assert.equal(f.workers.size,0);
 });
 test('same-second Meta timestamps advance only through the exact delivered prompt; an earlier timestamp is denied',async()=>{
- const f=employeeIntakeFixture();await f.configure();const timestamp=Math.floor(f.now.getTime()/1000);await f.execute('HOLA',{timestamp});await f.execute('Persona Sintética',{timestamp});assert.equal(f.state().step,'JOB');const s=f.state();await f.execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':0'}}},{timestamp});assert.equal(f.state().step,'EMAIL');await assert.rejects(f.execute('person@example.invalid',{timestamp:timestamp-1}),{code:'EMPLOYEE_INTAKE_MESSAGE_OUT_OF_ORDER'});assert.equal(f.state().step,'EMAIL');
+ const f=employeeIntakeFixture();await f.configure();const timestamp=Math.floor(f.now.getTime()/1000);await f.startRequest({timestamp});await f.execute('Persona Sintética',{timestamp});assert.equal(f.state().step,'JOB');const s=f.state();await f.execute({type:'interactive',interactive:{list_reply:{id:'intake:'+s.nonce+':0'}}},{timestamp});assert.equal(f.state().step,'EMAIL');await assert.rejects(f.execute('person@example.invalid',{timestamp:timestamp-1}),{code:'EMPLOYEE_INTAKE_MESSAGE_OUT_OF_ORDER'});assert.equal(f.state().step,'EMAIL');
 });
 for(const permissions of [{attendance:true,report:false},{attendance:false,report:true},{attendance:false,report:false}])test('canonical ASSIGN_EXISTING and RESTORE_ACCESS preserve human reviewed intake permissions '+JSON.stringify(permissions),async()=>{
  const f=employeeIntakeFixture(),s=await f.submit(),admitted=await f.store.save(f.session,f.command('ADMIT_EMPLOYEE_INTAKE',{applicationId:s.applicationId,expectedRevision:s.revision,job:'WORKER',permissions,confirmed:true})),w=f.workers.get(admitted.workerId);
@@ -268,4 +268,51 @@ for(const permissions of [{attendance:true,report:false},{attendance:false,repor
  const f=employeeIntakeFixture(),s=await f.submit(),admitted=await f.store.save(f.session,f.command('ADMIT_EMPLOYEE_INTAKE',{applicationId:s.applicationId,expectedRevision:s.revision,job:'WORKER',permissions,confirmed:true})),w=f.workers.get(admitted.workerId),invitationId='invite_'+'a'.repeat(32);
  w.metadata.participant={version:1,status:'INVITED',clerkUserId:null,permissions:{attendance:false,report:false},invitation:{id:invitationId,email:'person@example.invalid',state:'SENT',providerId:'orginv_IntakeSynthetic',expiresAt:new Date(f.now.getTime()+86400000).toISOString()},kyc:{version:1,status:'NOT_SUBMITTED'}};
  const human={authenticated:true,verification:'clerk-production-jwt',userId:'user_Person',organizationId:f.session.organizationId,organizationRole:'org:member'};const accepted=await f.store.join(human,{invitationId,operationId:randomUUID()},{accept:true});assert.equal(accepted.joined,true);assert.deepEqual(f.workers.get(w.id).metadata.participant.permissions,permissions);assert.equal(f.workers.get(w.id).metadata.participant.kyc.status,'NOT_SUBMITTED');
+});
+
+
+const intakeAnchorState=(f,applicationId)=>JSON.parse(decryptCustomerSecret(f.events.get(applicationId).payload.employeeIntake.encryptedState,{organizationId:f.project.organizationId,projectId:f.project.id,purpose:'employee-intake',resourceId:applicationId},f.environment));
+const intakeOriginalEnvelope=payload=>{const original={...payload};delete original.employeeIntake;return original;};
+
+test('a signed pending-request withdrawal is discoverable after its draft deadline and removes only the private request from review',async()=>{
+ const f=employeeIntakeFixture(),submitted=await f.submit(),anchor=f.events.get(submitted.applicationId),original=structuredClone(intakeOriginalEnvelope(anchor.payload)),connection=structuredClone(f.connection.metadata),audits=structuredClone([...f.audits]);
+ const previous=f.outbounds.get(customerOutboundId(submitted.lastEventId)),request=JSON.parse(decryptCustomerSecret(previous.payload.encryptedPayload,{organizationId:f.connection.organizationId,projectId:f.project.id,purpose:'outbound',resourceId:previous.id},f.environment));
+ assert.match(request.message.body,/Para retirar esta solicitud pendiente, escrib\u00ed CANCELAR/);assert.equal((await f.read()).records.length,1);
+ f.now.setTime(Date.parse(submitted.expiresAt)+1000);
+ const {result}=await f.execute(' cancelar ',{reply:false}),cancelled=intakeAnchorState(f,submitted.applicationId);
+ assert.equal(cancelled.step,'CANCELLED');assert.equal(cancelled.status,'CANCELLED');assert.equal(cancelled.consent,false);assert.equal(cancelled.revision,submitted.revision+1);assert.equal(result.businessApplied,false);assert.match(result.reply.body,/Solicitud cancelada/);
+ for(const key of ['applicationId','name','job','email','createdAt','expiresAt','submittedAt','confirmationEventId'])assert.deepEqual(cancelled[key],submitted[key],key);
+ assert.deepEqual(intakeOriginalEnvelope(f.events.get(submitted.applicationId).payload),original);assert.equal((await f.read()).records.length,0);assert.equal(f.workers.size,0);assert.deepEqual([...f.audits],audits);assert.deepEqual(f.connection.metadata,connection);assert.equal(f.controls.providerCalls,0);
+});
+
+test('exact signed withdrawal replay recovers the same sealed result and outbox without another transition or send',async()=>{
+ const f=employeeIntakeFixture(),submitted=await f.submit(),{context,result}=await f.execute('CANCELAR');
+ const before={events:structuredClone([...f.events]),audits:structuredClone([...f.audits]),workers:structuredClone([...f.workers]),outbounds:structuredClone([...f.outbounds]),sends:f.controls.sends,state:intakeAnchorState(f,submitted.applicationId)};
+ assert.deepEqual(await f.bridge.execute(context),result);const replay=await f.outbound.send(context,result.reply,{purpose:'EMPLOYEE_INTAKE'});assert.equal(replay.replayed,true);
+ assert.deepEqual([...f.events],before.events);assert.deepEqual([...f.audits],before.audits);assert.deepEqual([...f.workers],before.workers);assert.deepEqual([...f.outbounds],before.outbounds);assert.equal(f.controls.sends,before.sends);assert.deepEqual(intakeAnchorState(f,submitted.applicationId),before.state);assert.equal(f.controls.providerCalls,0);
+});
+
+test('withdrawn requests cannot be admitted with either the old pending revision or the current cancelled revision',async()=>{
+ const f=employeeIntakeFixture(),submitted=await f.submit();await f.execute('CANCELAR');const cancelled=intakeAnchorState(f,submitted.applicationId),original=structuredClone(f.events.get(submitted.applicationId).payload);
+ for(const expectedRevision of [submitted.revision,cancelled.revision]){
+  const input=f.command('ADMIT_EMPLOYEE_INTAKE',{applicationId:submitted.applicationId,expectedRevision,job:'WORKER',permissions:{attendance:true,report:true},confirmed:true}),result=await f.store.save(f.session,input);
+  assert.equal(result.saved,false);assert.equal(result.state,'REJECTED');assert.equal(result.code,'EMPLOYEE_INTAKE_REVISION_CHANGED');assert.equal(result.permissionsGranted,false);assert.equal(result.workerId,null);assert.equal(result.personReceiptId,null);
+  assert.deepEqual(await f.store.status(f.session,{projectId:f.target.id,scope:f.scope,operationId:input.operationId}),result);assert.deepEqual(f.events.get(submitted.applicationId).payload,original);
+ }
+ assert.equal(f.workers.size,0);assert.equal((await f.read()).records.length,0);assert.equal([...f.audits.values()].some(row=>row.action==='site.register.changed'),false);assert.equal(f.controls.providerCalls,0);
+});
+
+test('a new signed HOLA after withdrawal starts a separate unconsented welcome without resurrecting the original request',async()=>{
+ const f=employeeIntakeFixture(),submitted=await f.submit();await f.execute('CANCELAR');const withdrawn=structuredClone(f.events.get(submitted.applicationId).payload);
+ const {context,result}=await f.execute('HOLA',{reply:false}),fresh=intakeAnchorState(f,context.eventId);
+ assert.equal(result.kind,'EMPLOYEE_INTAKE');assert.notEqual(fresh.applicationId,submitted.applicationId);assert.equal(fresh.applicationId,context.eventId);assert.equal(fresh.status,'WELCOME');assert.equal(fresh.step,'WELCOME');assert.equal(fresh.resumeStep,'NAME');assert.equal(fresh.consent,false);assert.equal(fresh.revision,1);
+ for(const key of ['name','job','email'])assert.equal(fresh[key],null,key);
+ assert.deepEqual(f.events.get(submitted.applicationId).payload,withdrawn);assert.equal((await f.read()).records.length,0);assert.equal(f.workers.size,0);assert.equal(f.controls.providerCalls,0);
+});
+
+test('CANCELAR arriving after human admission preserves the admitted person and reviewed permissions instead of undoing admission',async()=>{
+ const f=employeeIntakeFixture(),submitted=await f.submit(),saved=await f.store.save(f.session,f.command('ADMIT_EMPLOYEE_INTAKE',{applicationId:submitted.applicationId,expectedRevision:submitted.revision,job:'WORKER',permissions:{attendance:true,report:true},confirmed:true}));
+ const before={worker:structuredClone(f.workers.get(saved.workerId)),state:intakeAnchorState(f,submitted.applicationId),audits:structuredClone([...f.audits]),connection:structuredClone(f.connection.metadata)},result=(await f.execute('CANCELAR')).result,after=intakeAnchorState(f,submitted.applicationId);
+ assertAdmittedGuidance(result.reply);assert.doesNotMatch(result.reply.body,/Solicitud cancelada/);assert.equal(after.step,'ADMITTED');assert.equal(after.status,'ADMITTED');assert.equal(after.consent,true);assert.deepEqual(after.admission,before.state.admission);assert.deepEqual(f.workers.get(saved.workerId),before.worker);assert.deepEqual([...f.audits],before.audits);assert.deepEqual(f.connection.metadata,before.connection);assert.equal(result.businessApplied,false);
+ assert.deepEqual(await employeeIntakeAcceptedPermissions({query:f.query},f.workers.get(saved.workerId),{organizationId:f.member.organizationId,projectId:f.target.id}),{attendance:true,report:true});assert.equal((await f.read()).records[0].status,'ADMITTED');assert.equal(f.workers.size,1);assert.equal(f.controls.providerCalls,0);
 });

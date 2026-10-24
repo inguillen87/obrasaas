@@ -61,8 +61,9 @@ async function fixture(){
  return Object.assign(f,{own,p,provider,connect,execute,configure,receipt,queries,bridge,outbound});
 }
 test('real intake planner and vaulted outbox continue after five hours/future SHA without creating a person, KYC or field permission',async()=>{
- const f=await fixture();await f.configure();const first=await f.execute('HOLA');assert.equal(f.state().step,'NAME');assert.equal(f.outbounds.get(customerOutboundId(first.context.eventId)).outcome.state,'SENT');
- await f.execute('Persona sintética');assert.equal(f.state().step,'JOB');assert.equal(f.workers.size,0);assert.equal(f.state().consent,false);assert.equal(f.state().admission,undefined);assert.equal(f.controls.providerCalls,0);assert.equal(f.p.calls.filter(c=>c.method==='POST'&&c.path.endsWith('/messages')).length,2);assert.equal(f.p.calls.filter(c=>c.method==='POST'&&!c.path.endsWith('/messages')).length,0);
+ const f=await fixture();await f.configure();const first=await f.execute('HOLA');assert.equal(f.state().step,'WELCOME');assert.equal(f.outbounds.get(customerOutboundId(first.context.eventId)).outcome.state,'SENT');
+ await f.execute({type:'interactive',interactive:{list_reply:{id:'intake:'+f.state().nonce+':0'}}});assert.equal(f.state().step,'NAME');
+ await f.execute('Persona sintética');assert.equal(f.state().step,'JOB');assert.equal(f.workers.size,0);assert.equal(f.state().consent,false);assert.equal(f.state().admission,undefined);assert.equal(f.controls.providerCalls,0);assert.equal(f.p.calls.filter(c=>c.method==='POST'&&c.path.endsWith('/messages')).length,3);assert.equal(f.p.calls.filter(c=>c.method==='POST'&&!c.path.endsWith('/messages')).length,0);
 });
 for(const [name,change] of [
  ['revoked runtime',f=>f.connection.metadata.ownCompanyRuntime={...f.connection.metadata.ownCompanyRuntime,state:'REVOKED'}],['expired credential',f=>f.now.setTime(Date.parse(f.connection.metadata.ownCompanyRuntime.validUntil))],['canonical issuer revocation',f=>f.own.issuerActive=false],['canonical declared number revision',f=>f.own.organizationMetadata={companyPhoneDeclaration:{...f.p.declaration,revision:2}}],['missing original activation receipt',f=>f.own.receiptPresent=false],

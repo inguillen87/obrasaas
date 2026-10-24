@@ -1,10 +1,12 @@
+import {types as earlyDtoTypes} from 'node:util';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,verifyWorksiteLiveHoursCurrentSources as worksiteSourceCheck0,verifyWorksiteLiveHoursActualClosure as worksiteSourceCheck1} from './lib/worksite-live-hours-current-ci-lineage.mjs';
 function checkWorksiteSource(action){try{return action();}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}}
 const verifyWorksiteLiveHoursCurrentSources=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck0(...args));
 const verifyWorksiteLiveHoursActualClosure=(...args)=>checkWorksiteSource(()=>worksiteSourceCheck1(...args));
+import {withCaptureRuntimePreviousSources,planBudgetCurrentSourcePin} from './lib/plan-budget-current-ci-lineage.mjs';
 import {WORKSPACE_CONTINUITY_FOCUSED_UI} from './lib/workspace-continuity-current-ci-lineage.mjs';
 import {WHATSAPP_FIELD_CONTINUITY_FOCUSED_UI} from './lib/whatsapp-field-continuity-current-ci-lineage.mjs';
-import {HOME_DECISIONS_CURRENT_SECTION,normalizeHomeDecisionsFocusedRaw} from './lib/home-decisions-current-ci-lineage.mjs';
+import {HOME_DECISIONS_CURRENT_SECTION,HOME_DECISIONS_CURRENT_REVISION as reviewedHomeDecisions,normalizeHomeDecisionsFocusedRaw} from './lib/home-decisions-current-ci-lineage.mjs';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {execFileSync,spawnSync} from 'node:child_process';
@@ -110,7 +112,22 @@ function controlledBootstrapDependency(value,file,tree,node,readSource){
  if(file!==controlledBootstrapFixture||node.type!=='ImportExpression')return false;
  const rows=WORKSPACE_CONTINUITY_FOCUSED_UI.controlledSourceTransforms;reject(Array.isArray(rows)&&rows.length===1,'One reviewed source transform declaration required');const declaration=rows[0];keys(declaration,['file','sourceLfSha256','kind','source','compiler','packageLockSha256'],'controlled source transform');
  reject(declaration.file===controlledBootstrapFixture&&declaration.kind==='SWC_READY_BRANCH_DATA_MODULE'&&declaration.source===controlledBootstrapPanel&&declaration.compiler===controlledBootstrapCompiler&&typeof readSource==='function','Only the exact original bootstrap source transform is permitted');
- const canonicalHash=raw=>sha(Buffer.from(raw.toString('utf8').replaceAll('\r\n','\n')));reject(canonicalHash(value)===declaration.sourceLfSha256&&canonicalHash(bytes(readSource,'package-lock.json'))===declaration.packageLockSha256,'Controlled unit and compiler lock must equal their reviewed source bytes');
+ const canonicalHash=raw=>sha(Buffer.from(raw.toString('utf8').replaceAll('\r\n','\n')));
+ const lockBytes=bytes(readSource,'package-lock.json'),contractBytes=readSource(contractPath);
+ const compilerContract=Buffer.isBuffer(contractBytes)?JSON.parse(contractBytes):null;
+ const dependencyLockHistory=compilerContract?.planBudgetCurrentRevision?.captureQualityRuntime?.sourceHistory?.find(row=>row.path==='package-lock.json');
+ let compilerLockMatches=canonicalHash(lockBytes)===declaration.packageLockSha256;
+ if(dependencyLockHistory){
+  try{
+  compilerLockMatches=withCaptureRuntimePreviousSources(compilerContract,readSource,(parent,parentRead)=>{
+   const currentPin=planBudgetCurrentSourcePin(compilerContract,{path:'package-lock.json',sha256:declaration.packageLockSha256});
+   reject(compilerContract.packageLockSha256===currentPin&&canonicalHash(lockBytes)===currentPin,'The actual current compiler lock must match its authenticated dependency advance');
+   reject(parent.packageLockSha256===declaration.packageLockSha256&&canonicalHash(bytes(parentRead,'package-lock.json'))===declaration.packageLockSha256,'The controlled compiler transform must restore its exact literal731 lock');
+   return true;
+  });
+  }catch(error){if(error?.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')reject(false,error.message);throw error;}
+ }
+ reject(canonicalHash(value)===declaration.sourceLfSha256&&compilerLockMatches,'Controlled unit and compiler lock must equal their reviewed source bytes');
  const expected=parse(controlledBootstrapTransformPrefix,{sourceType:'module',plugins:['jsx'],createImportExpressions:true}).program.body,actual=tree.program.body.slice(0,expected.length),last=actual.at(-1);
  reject(same(syntaxShape(actual),syntaxShape(expected))&&last?.type==='VariableDeclaration'&&last.kind==='const'&&last.declarations.length===1&&last.declarations[0].init?.type==='AwaitExpression'&&last.declarations[0].init.argument===node,'Only the exact local panel, resolved React, SWC JSX transform and compiled.code base64 module shape is permitted');
  bytes(readSource,controlledBootstrapPanel);return true;
@@ -150,9 +167,76 @@ export function focusedWorkspaceUnitCases(readSource,file){
  walk(ast.program);reject(cases.length>0&&new Set(cases).size===cases.length,'Distinct actual unit cases required');return cases;
 }
 
+// Denial-only checks apply to inert JSON data. Accessors, proxies, custom
+// prototypes, cycles and non-JSON values retain the original source-first order.
+function ordinaryJsonDto(value,ancestors=new Set()){
+ if(value===null||typeof value==='string'||typeof value==='boolean')return true;
+ if(typeof value==='number')return Number.isFinite(value);
+ if(typeof value!=='object'||earlyDtoTypes.isProxy(value)||ancestors.has(value))return false;
+ const array=Array.isArray(value),prototype=Object.getPrototypeOf(value);if(array?prototype!==Array.prototype:prototype!==Object.prototype&&prototype!==null)return false;
+ const descriptors=Object.getOwnPropertyDescriptors(value),keys=Reflect.ownKeys(descriptors);if(keys.some(key=>typeof key!=='string'))return false;
+ if(array&&(!Object.hasOwn(descriptors,'length')||!Number.isSafeInteger(descriptors.length.value)||descriptors.length.value<0||keys.length!==descriptors.length.value+1))return false;
+ ancestors.add(value);try{for(const key of keys){if(array&&key==='length')continue;const row=descriptors[key];if(!Object.hasOwn(row,'value')||row.enumerable!==true||array&&!/^(?:0|[1-9][0-9]*)$/.test(key)||!ordinaryJsonDto(row.value,ancestors))return false;}return true;}finally{ancestors.delete(value);}
+}
+
+// These copies are denial-only DTO predicates. The original complete late
+// predicates, source/SWC guards and evidence byte reads remain unchanged.
+function validateFocusedEnvelopeDto(proof,options,current){
+ const {expectedHead,expectedTree,spec,runId,runAttempt}=options;
+ keys(proof,['version','status','sourceRevision','sourceTree','sourceState','trackedClean','ciRun','harnessSha256','sourceManifest','checks','historicalCheckCount','continuityCheckLedger','historicalUnitSuiteCount','previousTotalCheckCount','taskPagingCheckLedger','rawBrowser','unitSuites','providerCalls','realClerkOrSsrVerified','productionDataTouched','humanAccepted'],'CI envelope');
+ reject(proof.version===FOCUSED_WORKSPACE_CI_VERSION&&proof.status==='PASS'&&proof.sourceRevision===expectedHead&&proof.sourceTree===expectedTree&&proof.sourceState==='EXACT_CI_SOURCE'&&proof.trackedClean===true,'Current exact CI source required');
+ keys(proof.ciRun,['repository','workflow','runId','runAttempt','event','job'],'CI identity');
+ reject(proof.ciRun.repository==='inguillen87/obrasaas'&&proof.ciRun.workflow==='.github/workflows/workspace-acceptance.yml'&&proof.ciRun.job==='workspace-ui'&&['push','workflow_dispatch'].includes(proof.ciRun.event)&&proof.ciRun.runId===Number(runId)&&proof.ciRun.runAttempt===Number(runAttempt)&&Number.isSafeInteger(proof.ciRun.runId)&&proof.ciRun.runId>0&&Number.isSafeInteger(proof.ciRun.runAttempt)&&proof.ciRun.runAttempt>0,'Original current workflow run and attempt required');
+ reject(spec?.id===FOCUSED_WORKSPACE_CI_PROOF_ID&&spec.kind===FOCUSED_WORKSPACE_CI_KIND&&spec.producer===runner&&spec.path===FOCUSED_WORKSPACE_CI_EVIDENCE+'current-ci.json'&&spec.lane==='workspace-ui'&&spec.blockId===64,'Original focused proof binding required');
+ reject(proof.harnessSha256===spec.producerSha256&&same(spec.checkNames,current.checkNames)&&same(proof.checks,spec.checkNames)&&proof.historicalCheckCount===current.previousCheckCount&&same(proof.continuityCheckLedger,current.continuityCheckNames)&&proof.historicalUnitSuiteCount===current.previousUnitFiles.length&&proof.previousTotalCheckCount===current.previousTotalCheckCount&&same(proof.taskPagingCheckLedger,current.taskPagingCheckNames),'Current runner and browser check matrix required');
+ reject(Array.isArray(proof.unitSuites)&&same(proof.unitSuites.map(row=>row?.file),unitFiles),'Every focused unit suite required');
+ reject(proof.providerCalls===0&&proof.realClerkOrSsrVerified===false&&proof.productionDataTouched===false&&proof.humanAccepted===false,'No real session or customer acceptance can be asserted');
+ keys(proof.rawBrowser,['path','bytes','sha256'],'original browser proof');reject(proof.rawBrowser.path.startsWith(FOCUSED_WORKSPACE_CI_EVIDENCE+'run-')&&proof.rawBrowser.path.endsWith('/browser.json'),'Owned original browser evidence required');
+}
+// The actual producer emits Home77. Only a throwaway DTO projection is used
+// here; it never replaces RAW evidence or the real authenticated normalizer.
+function focusedHomeDtoForDenial(raw){
+ const current=reviewedHomeDecisions.focusedUi;
+ reject(plain(raw)&&raw.totalCheckCount===current.currentCheckNames.length&&raw.expectedTotalCheckCount===current.currentCheckNames.length&&Array.isArray(raw.checks)&&raw.checks.length===current.currentCheckNames.length,'All77 current home decisions browser observations required');
+ reject(same(raw.checks.slice(current.previousCheckNames.length),current.addedCheckNames)&&same(raw.homeDecisionsWidths,current.widths)&&same(raw.homeDecisionsCheckLedger,current.addedCheckNames),'Exact18 additional home decisions observations and widths required');
+ reject(Array.isArray(raw.requests)&&raw.requests.length===current.currentRequestCount,'Complete current home decisions request matrix required');
+ const requests=raw.requests.map(row=>{reject(plain(row),'Actual current home decisions request facts required');const dynamic=row.mode==='wizard'&&row.method==='POST'?current.requestProjectionFieldsOmitted:[];reject(dynamic.every(key=>Object.hasOwn(row,key)),'Every original wizard correlation field is required');return Object.fromEntries(Object.entries(row).filter(([key])=>!dynamic.includes(key)));});
+ reject(sha(JSON.stringify(requests))===current.currentRequestMatrixSha256,'Current home decisions request facts changed');
+ reject(Array.isArray(raw.screenshots)&&same(raw.screenshots.map(row=>row?.path),current.screenshotNames),'Every inherited and home decisions screenshot required');
+ for(const row of raw.screenshots.slice(current.previousScreenshotNames.length)){
+  keys(row,['path','sha256','geometry'],'home decisions screenshot');keys(row.geometry,['width','height','scrollWidth','identityActionTop'],'home decisions viewport');
+  const width=Number(/^home-pending-decisions-(320|390|768|1440)\.png$/.exec(row.path)?.[1]);reject(current.widths.includes(width)&&row.geometry.width===width&&row.geometry.height===1000&&Number.isSafeInteger(row.geometry.scrollWidth)&&row.geometry.scrollWidth>0&&row.geometry.scrollWidth<=width+1&&(row.geometry.identityActionTop===null||Number.isFinite(row.geometry.identityActionTop)),'Home decisions must fit every measured viewport');
+ }
+ const previous={...raw,checks:raw.checks.slice(0,current.previousCheckNames.length),totalCheckCount:current.previousCheckNames.length,expectedTotalCheckCount:current.previousCheckNames.length,requests:current.previousRequestIndices.map(index=>raw.requests[index]),screenshots:raw.screenshots.slice(0,current.previousScreenshotNames.length)};
+ delete previous.homeDecisionsWidths;delete previous.homeDecisionsCheckLedger;return previous;
+}
+function validateFocusedBrowserDto(raw,proof,current,expectedHead,expectedTree){
+ keys(raw,['version','status','sourceState','ciRun','sourceRevision','sourceTree','trackedClean','checkedAt','widths','continuityWidths','historicalCheckCount','continuityCheckLedger','previousTotalCheckCount','taskPagingWidths','taskPagingCheckLedger','taskPagingFixture','expectedTotalCheckCount','bootstrapSourceManifest','bootstrapExternalImports','checks','totalCheckCount','sourceManifest','sourceBytesUnchanged','externalImports','requests','errors','screenshots','providerCalls','businessPosts','navigationPosts','productionDataTouched','actualAccountWorkspaceMounted','actualClerkOrSSRVerified','syntheticPixelsOnly','transport','cleanup'],'original browser');
+ reject(raw.version===current.rawVersion&&raw.status==='PASS'&&raw.sourceState==='EXACT_CI_SOURCE'&&raw.sourceRevision===expectedHead&&raw.sourceTree===expectedTree&&raw.trackedClean===true&&same(raw.ciRun,proof.ciRun),'Browser must execute on this actual CI source and identity');
+ reject(typeof raw.checkedAt==='string'&&Number.isFinite(Date.parse(raw.checkedAt))&&new Date(raw.checkedAt).toISOString()===raw.checkedAt,'Original browser completion timestamp required');
+ reject(same(raw.widths,FOCUSED_WORKSPACE_WIDTHS)&&same(raw.continuityWidths,current.continuityWidths)&&raw.historicalCheckCount===current.previousCheckCount&&raw.expectedTotalCheckCount===current.checkNames.length&&same(raw.continuityCheckLedger,current.continuityCheckNames)&&raw.totalCheckCount===current.checkNames.length&&same(normalizeFocusedWorkspaceCurrentChecks(raw.checks),proof.checks),'Both original widths and every current continuity observation required');
+ const fixture=raw.taskPagingFixture;keys(fixture,['version','route','actualParentAndPagerCopies','copiedSources','overrides','pageSha256','consumerAuthority','original45TreeUnmodified'],'actual parent task-page fixture');const expected=current.taskPagingFixture;
+ reject(fixture.version===1&&fixture.route==='/task-pages'&&fixture.actualParentAndPagerCopies===true&&fixture.original45TreeUnmodified===true&&fixture.pageSha256===expected.pageSha256&&fixture.consumerAuthority===expected.consumerAuthority,'The exact second tree and controlled-consumer boundary must remain explicit');
+ reject(raw.sourceBytesUnchanged===true&&raw.providerCalls===0&&raw.productionDataTouched===false&&raw.actualAccountWorkspaceMounted===true&&raw.actualClerkOrSSRVerified===false&&raw.syntheticPixelsOnly===true&&raw.navigationPosts===0&&raw.businessPosts===2&&same(raw.errors,[]),'Actual synthetic browser isolation required');
+ validateFocusedCurrentCleanup(raw.cleanup);
+ reject(Array.isArray(raw.requests)&&raw.requests.length>0&&raw.requests.every(row=>plain(row))&&raw.requests.filter(row=>row.method==='POST').length===2&&raw.requests.every(row=>row.method==='GET'||row.mode==='wizard'&&row.method==='POST'),'Only the two controlled final wizard requests are allowed');
+ validateFocusedCurrentRequests(raw.requests,current);
+ reject(Array.isArray(raw.screenshots)&&raw.screenshots.length>=26&&same(raw.screenshots.map(row=>row?.path),current.screenshotNames),'Every original and additive browser screenshot required');
+ for(const row of raw.screenshots){keys(row,['path','sha256','geometry'],'original screenshot');keys(row.geometry,['width','height','scrollWidth','identityActionTop'],'screenshot geometry');const width=Number(/-(320|390|1440)\.png$/.exec(row.path)?.[1]);reject(current.continuityWidths.includes(width)&&row.geometry.width===width&&row.geometry.height===1000&&Number.isSafeInteger(row.geometry.scrollWidth)&&row.geometry.scrollWidth>0&&(row.geometry.identityActionTop===null||Number.isFinite(row.geometry.identityActionTop)),'Actual screenshot viewport geometry required');if(row.path.startsWith('bootstrap-ready-'))reject(row.geometry.scrollWidth<=width+1,'The compact and disclosed bootstrap receipt must fit its measured viewport');reject(safe(row.path)&&path.posix.basename(row.path)===row.path,'Owned screenshot filename required');}
+}
+
 export function validateFocusedWorkspaceCi(proof,{expectedHead,expectedTree,readSource,readEvidence,spec,runId,runAttempt}){
  const current=currentFocusedMetadata();
  reject(/^[a-f0-9]{40}$/.test(expectedHead)&&/^[a-f0-9]{40}$/.test(expectedTree)&&typeof readSource==='function'&&typeof readEvidence==='function','Immutable source identity and original evidence readers required');
+ // No accepted envelope, RAW DTO or source result is cached across this block.
+ if(ordinaryJsonDto(proof)&&ordinaryJsonDto(spec)){
+  const dtoBefore={proof:JSON.stringify(proof),spec:JSON.stringify(spec)};
+  try{
+   validateFocusedEnvelopeDto(proof,{expectedHead,expectedTree,spec,runId,runAttempt},current);
+   const earlyRawBytes=bytes(readEvidence,proof.rawBrowser.path);reject(earlyRawBytes.length===proof.rawBrowser.bytes&&sha(earlyRawBytes)===proof.rawBrowser.sha256,'Original browser bytes changed');let earlyRaw;try{earlyRaw=JSON.parse(earlyRawBytes);}catch{reject(false,'Original browser JSON must parse');}
+   validateFocusedBrowserDto(focusedHomeDtoForDenial(earlyRaw),proof,current,expectedHead,expectedTree);
+  }finally{reject(JSON.stringify(proof)===dtoBefore.proof&&JSON.stringify(spec)===dtoBefore.spec,'Caller proof or specification changed during DTO preflight');}
+ }
  const sourceContract=JSON.parse(bytes(readSource,contractPath));if(sourceContract[WORKSITE_LIVE_HOURS_CURRENT_SECTION])verifyWorksiteLiveHoursCurrentSources(sourceContract,readSource);
  keys(proof,['version','status','sourceRevision','sourceTree','sourceState','trackedClean','ciRun','harnessSha256','sourceManifest','checks','historicalCheckCount','continuityCheckLedger','historicalUnitSuiteCount','previousTotalCheckCount','taskPagingCheckLedger','rawBrowser','unitSuites','providerCalls','realClerkOrSsrVerified','productionDataTouched','humanAccepted'],'CI envelope');
  reject(proof.version===FOCUSED_WORKSPACE_CI_VERSION&&proof.status==='PASS'&&proof.sourceRevision===expectedHead&&proof.sourceTree===expectedTree&&proof.sourceState==='EXACT_CI_SOURCE'&&proof.trackedClean===true,'Current exact CI source required');

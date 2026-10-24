@@ -1,3 +1,4 @@
+import {syntheticCaptureQuality} from './fixtures/capture-quality-synthetic.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -40,7 +41,7 @@ function fixture({role='SITE_MANAGER',concurrent=false,change='REVOKED'}={}){
   assert.fail('Unexpected canonical SQL: '+sql);
  }});
  const forbidden=()=>assert.fail('No real identity or private storage request is permitted');
- const store=createParticipantStore({workspace:createWorkspaceStore({connect}),connect,identity:{createInvitation:forbidden,findInvitation:forbidden,verifiedEmail:forbidden,verifyMembership:forbidden},get:forbidden,upload:async()=>{
+ const store=createParticipantStore({assessCaptureQuality:syntheticCaptureQuality,workspace:createWorkspaceStore({connect}),connect,identity:{createInvitation:forbidden,findInvitation:forbidden,verifiedEmail:forbidden,verifyMembership:forbidden},get:forbidden,upload:async()=>{
   assert.equal(concurrent,true,'A cached replay must not call upload');counts.symbolicUploads++;
   if(counts.symbolicUploads===2){visibleReceipt=true;changeCurrent();}
   // Symbolic return value only: no bytes are stored or sent anywhere.

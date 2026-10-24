@@ -1,3 +1,4 @@
+import {syntheticCaptureQuality} from './fixtures/capture-quality-synthetic.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID,createHash} from 'node:crypto';
@@ -9,6 +10,7 @@ import {PARTICIPANT_NOTICE_VERSION,PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,PART
 import {assertApprovedParticipantKyc} from '../src/lib/participant-approved-identity.mjs';
 import {participantOnboardingNextStep,participantKycReviewImages,participantKycHistoricalReceipt} from '../src/app/(identity)/cuenta/participant-onboarding-next-step.mjs';
 import {digest,WorkspaceError} from '../src/lib/workspace-policy.mjs';
+import {CAPTURE_QUALITY_NOTICE_VERSION,CAPTURE_QUALITY_MODEL_MANIFEST_SHA256} from '../src/lib/private-capture-quality.mjs';
 
 // Synthetic signatures and in-memory SQL/Blob adapters only. No real document,
 // database, account, credential, external provider or product write is used.
@@ -17,18 +19,18 @@ const png=mark=>Buffer.concat([Buffer.from('89504e470d0a1a0a','hex'),Buffer.from
 const pictures={front:png('synthetic-front'),selfie:png('synthetic-selfie'),back:png('synthetic-back')};
 const backChoice={back:pictures.back.toString('base64'),backConsent:true,backNoticeVersion:PARTICIPANT_DOCUMENT_BACK_NOTICE_VERSION,backNoticeSha256:PARTICIPANT_DOCUMENT_BACK_NOTICE_SHA256};
 const request=body=>new Request('https://obrasaas.com/api/identity/participants',{method:'POST',headers:{origin:'https://obrasaas.com','content-type':'application/json'},body:JSON.stringify(body)});
-function fixture(){
+function fixture({quality=syntheticCaptureQuality,onUpload=null}={}){
  const session={authenticated:true,verification:'clerk-production-jwt',userId:'user_Participant',organizationId:'org_Fixture',organizationRole:'org:member'};
  const member={actorId:'own-actor',clerkUserId:session.userId,membershipId:'own-membership',organizationId:'company-fixture',role:'AUDITOR'};
- const context={projectId:'project-fixture',scope:'a'.repeat(64)},audits=new Map(),blobs=new Map(),counts={upload:0,get:0,analyze:0,biometrics:0,writes:0,provider:0,sql:[],providerImages:[]};
+ const context={projectId:'project-fixture',scope:'a'.repeat(64)},audits=new Map(),blobs=new Map(),counts={upload:0,get:0,analyze:0,biometrics:0,writes:0,provider:0,quality:0,events:[],sql:[],providerImages:[]};
  let revision=1,onGet=null,corrupt=false;
  const row={id:'worker-fixture',projectId:context.projectId,name:'Synthetic participant',active:true,revision:'2026-10-01T00:00:00.000001',metadata:{participant:{version:1,status:'ACTIVE',clerkUserId:session.userId,permissions:{attendance:false,report:false},kyc:{status:'NOT_SUBMITTED',images:[]}}}};
  const client={query:async(sql,args=[])=>{
   counts.sql.push(sql);
   if(sql.startsWith('SELECT pg_advisory'))return {rows:[]};
   if(sql==='SELECT clock_timestamp() AS now')return {rows:[{now:new Date('2026-10-07T12:00:00.000Z')}]};
-  if(sql.startsWith('INSERT INTO public."AuditLog"')){assert.ok(!audits.has(args[0]));audits.set(args[0],{id:args[0],organizationId:args[1],actorId:args[2],entityType:args[3],entityId:args[4],metadata:JSON.parse(args[5])});return {rows:[]};}
-  if(sql.startsWith('UPDATE public."Worker"')){row.metadata=JSON.parse(args[2]);row.revision='2026-10-01T00:00:00.'+String(++revision).padStart(6,'0');counts.writes++;return {rows:[]};}
+  if(sql.startsWith('INSERT INTO public."AuditLog"')){counts.events.push('audit');assert.ok(!audits.has(args[0]));audits.set(args[0],{id:args[0],organizationId:args[1],actorId:args[2],entityType:args[3],entityId:args[4],metadata:JSON.parse(args[5])});return {rows:[]};}
+  if(sql.startsWith('UPDATE public."Worker"')){counts.events.push('write');row.metadata=JSON.parse(args[2]);row.revision='2026-10-01T00:00:00.'+String(++revision).padStart(6,'0');counts.writes++;return {rows:[]};}
   if(sql.includes('FROM public."AuditLog"')){
    const all=[...audits.values()];
    if(sql.includes("metadata->>'kind'='REVIEW_KYC'"))return {rows:all.filter(a=>a.actorId===args[1]&&a.metadata.kind==='REVIEW_KYC'&&a.metadata.submissionId===args[4]&&a.metadata.decision==='APPROVED')};
@@ -40,7 +42,8 @@ function fixture(){
   assert.fail('Unexpected synthetic SQL: '+sql);
  }};
  const workspace={projectOperation:async(active,input,_write,callback)=>{if(!active.authenticated||active.organizationId!==session.organizationId||input.projectId!==context.projectId||input.scope!==context.scope)throw new WorkspaceError('WORKSPACE_CONTEXT_CHANGED',409);return callback(client,member,context.scope);}};
- const store=createParticipantStore({workspace,upload:async(value,filename,type)=>{counts.upload++;const bytes=Buffer.from(value,'base64'),path='obrasaas/legacy-images/v1/'+digest(filename)+'/image.png',url='https://fixture.private.blob.vercel-storage.com/'+path;blobs.set(path,{bytes,type,url});return url;},get:async(path)=>{counts.get++;const blob=blobs.get(path);assert.ok(blob);onGet?.();return {statusCode:200,blob:{url:blob.url,size:blob.bytes.length,contentType:blob.type},stream:new Response(corrupt?png('corrupt'):blob.bytes).body};},analyzer:{analyzeDni:async input=>{counts.analyze++;counts.providerImages.push(Buffer.from(input.base64,'base64'));return {success:false,code:'AI_RESPONSE_UNCONFIRMED'};}},assessBiometrics:async input=>{counts.biometrics++;assert.deepEqual(Object.keys(input).sort(),['consentVersion','front','selfie']);assert.deepEqual(input.front.buffer,pictures.front);assert.deepEqual(input.selfie.buffer,pictures.selfie);return {success:false,code:'BIOMETRIC_RESULT_UNCONFIRMED'};}});
+ const assessCaptureQuality=async input=>{counts.quality++;counts.events.push('quality:'+input.kind);return quality(input,{session,member,row,counts});};
+ const store=createParticipantStore({assessCaptureQuality,workspace,upload:async(value,filename,type)=>{counts.events.push('upload');counts.upload++;const bytes=Buffer.from(value,'base64'),path='obrasaas/legacy-images/v1/'+digest(filename)+'/image.png',url='https://fixture.private.blob.vercel-storage.com/'+path;blobs.set(path,{bytes,type,url});await onUpload?.({session,member,row,counts});return url;},get:async(path)=>{counts.get++;const blob=blobs.get(path);assert.ok(blob);onGet?.();return {statusCode:200,blob:{url:blob.url,size:blob.bytes.length,contentType:blob.type},stream:new Response(corrupt?png('corrupt'):blob.bytes).body};},analyzer:{analyzeDni:async input=>{counts.analyze++;counts.providerImages.push(Buffer.from(input.base64,'base64'));return {success:false,code:'AI_RESPONSE_UNCONFIRMED'};}},assessBiometrics:async input=>{counts.biometrics++;assert.deepEqual(Object.keys(input).sort(),['consentVersion','front','selfie']);assert.deepEqual(input.front.buffer,pictures.front);assert.deepEqual(input.selfie.buffer,pictures.selfie);return {success:false,code:'BIOMETRIC_RESULT_UNCONFIRMED'};}});
  const body=(back=true,extra={})=>({operationId:randomUUID(),...context,workerId:row.id,revision:row.revision,noticeVersion:PARTICIPANT_NOTICE_VERSION,consent:true,front:pictures.front.toString('base64'),selfie:pictures.selfie.toString('base64'),...(back?backChoice:{}),...extra});
  const manager=()=>{session.userId='user_Reviewer';member.actorId='reviewer-actor';member.clerkUserId=session.userId;member.role='DIRECTOR';};
  const command=action=>({operationId:randomUUID(),...context,action,payload:{workerId:row.id,revision:row.revision,submissionId:row.metadata.participant.kyc.submissionId,...(action==='REVIEW_KYC'?{decision:'APPROVED',reason:'Synthetic manual review of all images.'}:{})}});
@@ -48,6 +51,45 @@ function fixture(){
  return {session,member,context,row,client,store,body,command,manager,audits,counts,handlers,setOnGet:fn=>{onGet=fn;},setCorrupt:()=>{corrupt=true;},download:imageId=>store.downloadKyc(session,{...context,workerId:row.id,imageId})};
 }
 
+test('web submission checks every capture before its first Blob and stores only matching hash quality proof',async()=>{
+ const f=fixture({quality:async(input,{counts})=>{assert.equal(counts.upload,0);assert.equal(counts.writes,0);return syntheticCaptureQuality(input);}}),body=f.body(),saved=await f.store.submitKyc(f.session,body),k=f.row.metadata.participant.kyc,receipt=f.audits.get(saved.receiptId),proof=k.captureQuality;
+ assert.deepEqual(f.counts.events,['quality:DOCUMENT_FRONT','quality:SELFIE','quality:DOCUMENT_BACK','upload','upload','upload','write','audit']);
+ assert.deepEqual(proof,{version:1,policyVersion:CAPTURE_QUALITY_NOTICE_VERSION,modelManifestSha256:CAPTURE_QUALITY_MODEL_MANIFEST_SHA256,images:k.images.map(image=>({kind:image.kind,imageSha256:image.sha256})),identityCertified:false,livenessVerified:false,documentAuthenticityVerified:false});
+ assert.deepEqual(receipt.metadata.captureQuality,proof);assert.notEqual(receipt.metadata.captureQuality,proof);assert.equal(f.audits.size,1);assert.equal(f.counts.quality,3);
+ const serialized=JSON.stringify(proof);assert.doesNotMatch(serialized,/data|base64|buffer|\.private\.blob|embedding|faceSimilarity|captureRiskSignal|workerId|nombre|dni/i);for(const bytes of Object.values(pictures))assert.ok(!serialized.includes(bytes.toString('base64')));
+ const effects={quality:f.counts.quality,upload:f.counts.upload,writes:f.counts.writes,audits:f.audits.size,events:[...f.counts.events]};assert.equal((await f.store.submitKyc(f.session,body)).replayed,true);assert.deepEqual({quality:f.counts.quality,upload:f.counts.upload,writes:f.counts.writes,audits:f.audits.size,events:f.counts.events},effects);
+});
+
+for(const mode of ['retake','unavailable'])test('web '+mode+' on the last capture creates no Blob submission or audit',async()=>{
+ const f=fixture({quality:async(input,{counts})=>{assert.equal(counts.upload,0);assert.equal(counts.writes,0);const result=await syntheticCaptureQuality(input);return input.kind==='DOCUMENT_BACK'?{...result,state:mode==='retake'?'RETAKE_REQUIRED':'UNCERTAIN',reasonCodes:[mode==='retake'?'IMAGE_BLURRED':'QUALITY_SERVICE_UNAVAILABLE']}:result;}}),before=structuredClone(f.row.metadata);
+ await assert.rejects(f.store.submitKyc(f.session,f.body()),{code:'PARTICIPANT_CAPTURE_DOCUMENT_BACK_'+(mode==='retake'?'IMAGE_BLURRED':'QUALITY_SERVICE_UNAVAILABLE'),status:mode==='retake'?422:503});
+ assert.deepEqual(f.counts.events,['quality:DOCUMENT_FRONT','quality:SELFIE','quality:DOCUMENT_BACK']);assert.equal(f.counts.quality,3);assert.equal(f.counts.upload,0);assert.equal(f.counts.writes,0);assert.equal(f.audits.size,0);assert.equal(f.counts.analyze,0);assert.equal(f.counts.biometrics,0);assert.deepEqual(f.row.metadata,before);
+});
+
+test('web authority revoked after the final quality response is rechecked before any Blob',async()=>{
+ const f=fixture({quality:async(input,{row,counts})=>{assert.equal(counts.upload,0);const result=await syntheticCaptureQuality(input);if(input.kind==='DOCUMENT_BACK')row.metadata.participant.status='REVOKED';return result;}});
+ await assert.rejects(f.store.submitKyc(f.session,f.body()),{code:'PARTICIPANT_ACCESS_REQUIRED',status:403});assert.deepEqual(f.counts.events,['quality:DOCUMENT_FRONT','quality:SELFIE','quality:DOCUMENT_BACK']);assert.equal(f.counts.quality,3);assert.equal(f.counts.upload,0);assert.equal(f.counts.writes,0);assert.equal(f.audits.size,0);assert.equal(f.row.metadata.participant.kyc.status,'NOT_SUBMITTED');assert.equal(f.row.metadata.participant.kyc.captureQuality,undefined);
+});
+
+test('a concurrent committed submission discovered during quality retains scope and replays without a second upload set',async()=>{
+ let f,body,started=false;
+ f=fixture({quality:async input=>{if(!started){started=true;await f.store.submitKyc(f.session,body);}return syntheticCaptureQuality(input);}});body=f.body();
+ const result=await f.store.submitKyc(f.session,body);
+ assert.equal(result.scope,f.context.scope);assert.equal(result.saved,true);assert.equal(result.replayed,true);assert.equal(result.participant.kyc.status,'PENDING_REVIEW');assert.equal(f.counts.upload,3);assert.equal(f.counts.writes,1);assert.equal(f.audits.size,1);assert.equal(f.counts.quality,4);
+});
+
+for(const mode of ['revoked','revision'])for(const afterUpload of [1,2])test('web '+mode+' after upload '+afterUpload+' prevents remaining private images',async()=>{
+ const f=fixture({onUpload:async({row,counts})=>{if(counts.upload!==afterUpload)return;if(mode==='revoked')row.metadata.participant.status='REVOKED';else row.revision='2026-10-01T00:00:00.999999';}});
+ await assert.rejects(f.store.submitKyc(f.session,f.body()),{code:mode==='revoked'?'PARTICIPANT_ACCESS_REQUIRED':'PARTICIPANT_REVISION_CHANGED',status:mode==='revoked'?403:409});
+ assert.equal(f.counts.quality,3);assert.equal(f.counts.upload,afterUpload);assert.equal(f.counts.writes,0);assert.equal(f.audits.size,0);assert.equal(f.counts.analyze,0);assert.equal(f.counts.biometrics,0);assert.equal(f.row.metadata.participant.kyc.status,'NOT_SUBMITTED');assert.deepEqual(f.row.metadata.participant.kyc.images,[]);assert.equal(f.row.metadata.participant.kyc.captureQuality,undefined);
+});
+
+test('web exact concurrent receipt between uploads replays before another private image',async()=>{
+ let f,body,started=false;f=fixture({onUpload:async()=>{if(started)return;started=true;await f.store.submitKyc(f.session,body);}});body=f.body();
+ const result=await f.store.submitKyc(f.session,body);
+ assert.equal(result.scope,f.context.scope);assert.equal(result.saved,true);assert.equal(result.replayed,true);assert.equal(result.participant.kyc.status,'PENDING_REVIEW');assert.equal(f.counts.upload,4);assert.equal(f.counts.writes,1);assert.equal(f.audits.size,1);assert.equal(f.counts.quality,6);assert.equal(f.counts.analyze,0);assert.equal(f.counts.biometrics,0);
+ const before={upload:f.counts.upload,writes:f.counts.writes,quality:f.counts.quality};assert.equal((await f.store.submitKyc(f.session,body)).replayed,true);assert.deepEqual({upload:f.counts.upload,writes:f.counts.writes,quality:f.counts.quality},before);
+});
 test('old exact two-image IDs, content hash, request digest and replay are unchanged',async()=>{
  const f=fixture(),body=f.body(false),input=participantKycInput(body),saved=await f.store.submitKyc(f.session,body),k=f.row.metadata.participant.kyc,receipt=f.audits.get(saved.receiptId);
  assert.deepEqual(k.images.map(i=>[i.id,i.kind]),[['document-front','DOCUMENT_FRONT'],['selfie','SELFIE']]);assert.equal(k.documentBackConsent,undefined);

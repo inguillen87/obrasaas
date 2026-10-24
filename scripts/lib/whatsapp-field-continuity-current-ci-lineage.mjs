@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet} from './plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,restoreCaptureRuntimePreviousContract,withCaptureRuntimePreviousSources} from './plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursSourceSet as worksiteSourceSet0} from './worksite-live-hours-current-ci-lineage.mjs';
 import {restoreMaterialReviewPreviousContract as materialOuter0,materialReviewCurrentSourcePin as materialOuter1,verifyMaterialReviewCurrentSources as materialOuter2,materialReviewValidationFiles as materialOuter3,restoreMaterialReviewSourceSet as materialOuter4,materialReviewProofSourceAdditions as materialOuter5} from './material-review-current-ci-lineage.mjs';
 import {existingApiPlanCurrentNativeSourceFiles as planNative0,existingApiPlanNativeSourceFilesFromReader as planNative1} from './meta-existing-api-plan-current-ci-lineage.mjs';
@@ -4396,7 +4396,7 @@ export const WHATSAPP_FIELD_CONTINUITY_FOCUSED_UI=deepFreeze({
 export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
   "status": "REVIEWED_FROZEN_CURRENT_SOURCE",
   "ciVersion": "field-task-pagination-ci-v1",
-  "rawVersion": 1,
+  "rawVersion": 2,
   "checkNames": [
     "real-form-keeps-draft-through-pages-2-and-3-evidence-320",
     "real-form-keeps-draft-through-pages-2-and-3-progress-320",
@@ -4522,6 +4522,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 320,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -4618,6 +4628,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 390,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -4714,6 +4734,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 1440,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -4810,6 +4840,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 320,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -4906,6 +4946,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 390,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -5002,6 +5052,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 1440,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -5074,6 +5134,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 320,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -5146,6 +5216,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 390,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -5218,6 +5298,16 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
       "path": "/api/identity/field-operations",
       "method": "GET",
       "afterTask": null,
+      "inventoryFilter": null,
+      "responseStatus": 200
+    },
+    {
+      "width": 1440,
+      "mode": "consumption",
+      "path": "/api/identity/field-operations",
+      "method": "GET",
+      "afterTask": null,
+      "inventoryFilter": "PENDING",
       "responseStatus": 200
     },
     {
@@ -5239,27 +5329,31 @@ export const WHATSAPP_FIELD_CONTINUITY_PAGINATION_UI=deepFreeze({
   ],
   "commandEqualityGroups": [
     [
-      74,
-      83,
-      92
-    ],
-    [
-      77
-    ],
-    [
       80
     ],
     [
-      86
+      83
     ],
     [
-      89
+      87
     ],
     [
-      95
+      90
     ],
     [
-      98
+      93
+    ],
+    [
+      97
+    ],
+    [
+      100
+    ],
+    [
+      103
+    ],
+    [
+      107
     ]
   ],
   "postCount": 9,
@@ -12939,6 +13033,10 @@ export const WHATSAPP_FIELD_CONTINUITY_CURRENT_REVISION=deepFreeze({
 });
 
 function section(contract){
+ if(contract?.planBudgetCurrentRevision?.captureQualityRuntime){
+  try{contract=restoreCaptureRuntimePreviousContract(contract);}
+  catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
+ }
  if(!plain(contract)||!Object.hasOwn(contract,WHATSAPP_FIELD_CONTINUITY_SECTION))return null;
  const value=contract[WHATSAPP_FIELD_CONTINUITY_SECTION],expected=WHATSAPP_FIELD_CONTINUITY_CURRENT_REVISION;
  requireLineage(expected.status==='REVIEWED_FROZEN_CURRENT_SOURCE','Current WA/field source is not frozen');
@@ -12992,6 +13090,13 @@ export function whatsappFieldContinuityValidationFiles(contract){
  return [...new Set([...materialReviewValidationFiles(contract),WHATSAPP_FIELD_CONTINUITY_CHECKPOINT_PATH,...value.reviewedSourceChanges.map(row=>row.path),...value.validationDeltas.map(row=>row.path),...value.addedSources.map(row=>row.path),...value.validationSources.map(row=>row.path)])].sort();
 }
 export function verifyWhatsappFieldContinuityCurrentSources(contract,readSource){
+ if(contract?.planBudgetCurrentRevision?.captureQualityRuntime){
+  try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>verifyPreviousWhatsappFieldContinuityCurrentSources(parent,parentRead));}
+  catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
+ }
+ return verifyPreviousWhatsappFieldContinuityCurrentSources(contract,readSource);
+}
+function verifyPreviousWhatsappFieldContinuityCurrentSources(contract,readSource){
  verifyMaterialReviewCurrentSources(contract,readSource);
  const value=authenticatedSection(contract);if(!value)return null;requireLineage(typeof readSource==='function','Current committed source reader required');
  const original=readSource(WHATSAPP_FIELD_CONTINUITY_CHECKPOINT_PATH);requireLineage(Buffer.isBuffer(original)&&sha(original)===WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256,'Exact original 052 GitLF checkpoint bytes required');

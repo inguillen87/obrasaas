@@ -1,4 +1,5 @@
 import {restoreWeeklyCypPreviousContract,weeklyCypCurrentSourcePin} from './home-decisions-current-ci-lineage.mjs';
+import {withCaptureRuntimePreviousSources,restoreCaptureRuntimePreviousContract,planBudgetCurrentSourcePin} from './plan-budget-current-ci-lineage.mjs';
 import {restoreDocumentTaskAssociationPreviousContract as documentOuter0,documentTaskAssociationCurrentSourcePin as documentOuter1,verifyDocumentTaskAssociationCurrentSources as documentOuter2,restoreDocumentTaskAssociationSourceSet as documentOuter3,documentTaskAssociationProofSourceAdditions as documentOuter4} from './plan-measurement-document-association-ci-lineage.mjs';
 // Existing APIs keep their original precise denial category; the additive
 // module retains its distinct code when invoked directly. No error is accepted.
@@ -2061,7 +2062,22 @@ export function restoreIntegratedIdentityPreviousContract(contract){
  requireLineage(same(contract,composeIntegratedIdentityContract(value)),'The integrated delta must restore the complete clean AI checkpoint exactly');return structuredClone(checkpoint);
 }
 export function integratedIdentityCurrentRevision(contract){return revision(contract);}
+// Metadata projection only: no source reader or current-byte acceptance lives here.
+function captureMetadataCall(contract,run){
+ const before=JSON.stringify(contract);
+ try{
+  const parent=restoreCaptureRuntimePreviousContract(contract),parentBefore=JSON.stringify(parent),result=run(parent);
+  requireLineage(JSON.stringify(parent)===parentBefore,'The exact Capture metadata parent must remain unchanged');return result;
+ }catch(error){if(error?.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
+ finally{requireLineage(JSON.stringify(contract)===before,'Current Capture metadata must remain unchanged');}
+}
 export function integratedIdentityCurrentSourcePin(contract,ref){
+ if(!contract?.planBudgetCurrentRevision?.captureQualityRuntime)return previousIntegratedIdentityCurrentSourcePin(contract,ref);
+ const before=JSON.stringify(ref);
+ try{return captureMetadataCall(contract,parent=>planBudgetCurrentSourcePin(contract,{...ref,sha256:previousIntegratedIdentityCurrentSourcePin(parent,ref)}));}
+ finally{requireLineage(JSON.stringify(ref)===before,'The original source pin must remain unchanged');}
+}
+function previousIntegratedIdentityCurrentSourcePin(contract,ref){
  const outerPin=documentTaskAssociationCurrentSourcePin(contract,ref);if(outerPin!==ref.sha256)return outerPin;
  const value=revision(contract);if(!value)return ref.sha256;const row=[...value.reviewedSourceChanges,...value.validationDeltas].find(row=>row.path===ref.path);if(!row)return ref.sha256;
  if(ref.path==='scripts/verify-workspace-identity-only-ui.mjs'&&ref.sha256===row.currentSha256)return integratedIdentityCurrentUiProducerPin(contract,ref);
@@ -2077,6 +2093,13 @@ export function integratedIdentityCurrentUiProducerPin(contract,ref){
  requireLineage(change?.previousProducerSha256===row.previousSha256&&change?.currentProducerSha256===row.currentSha256&&ref.sha256===row.currentSha256&&proof?.producer===row.path&&proof?.producerSha256===row.currentSha256&&same(proof.checkNames,change.currentCheckNames),'Exact current identity UI proof binding required');return row.currentSha256;
 }
 export function verifyIntegratedIdentityCurrentSources(contract,readSource){
+ if(contract?.planBudgetCurrentRevision?.captureQualityRuntime){
+  try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>verifyPreviousIntegratedIdentityCurrentSources(parent,parentRead));}
+  catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
+ }
+ return verifyPreviousIntegratedIdentityCurrentSources(contract,readSource);
+}
+function verifyPreviousIntegratedIdentityCurrentSources(contract,readSource){
  try{
  verifyDocumentTaskAssociationCurrentSources(contract,readSource);
  const value=revision(contract);if(!value)return null;restoreIntegratedIdentityPreviousContract(contract);requireLineage(typeof readSource==='function','Current committed source reader required');
@@ -2089,6 +2112,29 @@ export function verifyIntegratedIdentityCurrentSources(contract,readSource){
  }catch(error){if(error.code==='HOME_DECISIONS_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
 }
 export function restoreIntegratedIdentitySourceSet(family,files,contract){
+ if(!contract?.planBudgetCurrentRevision?.captureQualityRuntime)return previousRestoreIntegratedIdentitySourceSet(family,files,contract);
+ const before=JSON.stringify(files);
+ try{return captureMetadataCall(contract,parent=>{
+  const runtime=contract.planBudgetCurrentRevision.captureQualityRuntime,currentFamily=contract.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family===family),priorFamily=parent.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family===family);
+  const integratedDelta=INTEGRATED_IDENTITY_CURRENT_REVISION.proofSourceDeltas.find(row=>row.family===family);let currentFiles,previousFiles,additions;
+  if(currentFamily){
+   const advance=runtime.familyAdvances.find(row=>row.family===family);
+   requireLineage(Boolean(priorFamily)&&(!advance?same(currentFamily.currentFiles,priorFamily.currentFiles):advance.currentCount===currentFamily.currentFiles.length&&advance.previousCount===priorFamily.currentFiles.length&&same(advance.removals,[])),'Exact Capture family metadata projection required: '+family);
+   currentFiles=currentFamily.currentFiles;previousFiles=priorFamily.currentFiles;additions=advance?advance.additions:[];
+  }else if(integratedDelta){
+   const currentProof=contract.extension.proofs.find(row=>row.id===integratedDelta.id),priorProof=parent.extension.proofs.find(row=>row.id===integratedDelta.id),advance=runtime.proofSourceSetAdvances.find(row=>row.id===integratedDelta.id);
+   requireLineage(Boolean(currentProof)&&Boolean(priorProof)&&Boolean(advance)&&currentProof.kind===advance.kind&&priorProof.kind===advance.kind&&same(currentProof.sourceFiles,advance.currentFiles)&&same(priorProof.sourceFiles,advance.previousFiles),'Exact Capture workspace proof metadata projection required: '+family);
+   currentFiles=advance.currentFiles;previousFiles=advance.previousFiles;additions=advance.additions;
+  }
+  let projected=files;
+  if(currentFiles){
+   requireLineage(Array.isArray(files)&&same(files,currentFiles),'Exact Capture current source paths required: '+family);
+   projected=files.filter(file=>!additions.includes(file));requireLineage(same(projected,previousFiles),'Only declared Capture source additions may be projected: '+family);
+  }
+  return previousRestoreIntegratedIdentitySourceSet(family,projected,parent);
+ });}finally{requireLineage(JSON.stringify(files)===before,'The original current source paths must remain unchanged');}
+}
+function previousRestoreIntegratedIdentitySourceSet(family,files,contract){
  files=restoreDocumentTaskAssociationSourceSet(family,files,contract);
  const value=revision(contract);if(!value)return files;const delta=[...value.proofSourceDeltas,...value.consumerSourceDeltas].find(row=>row.family===family);if(!delta)return files;
  requireLineage(Array.isArray(files)&&files.length===delta.currentCount&&sha(JSON.stringify(files))===delta.currentPathsSha256,'Exact integrated current source set required: '+family);

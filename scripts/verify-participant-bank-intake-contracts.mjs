@@ -18,14 +18,14 @@ export const TEST_SUITES=[
 export const EXPECTED_SUITE_COUNTS=Object.freeze({
  'tests/production-participant-private-bank.test.mjs':20,
  'tests/production-private-bank-recovery.test.mjs':11,
- 'tests/production-employee-intake.test.mjs':95,
+ 'tests/production-employee-intake.test.mjs':100,
  'tests/production-employee-intake-recovery.test.mjs':4,
  'tests/production-participant-bank-intake-recovery.test.mjs':7,
  'tests/production-company-channel-kyc.test.mjs':89,
  'tests/production-participant-onboarding-next-step.test.mjs':38,
  'tests/production-employee-intake-assignment-continuity.test.mjs':25
 });
-export const EXPECTED_TOTAL_TESTS=289;
+export const EXPECTED_TOTAL_TESTS=294;
 export const RECOVERY_CASES=[
  ...['bank','intake'].flatMap(kind=>['lost-response','http403'].map(failure=>kind+' '+failure+' persists its typed reference across reload and rejects the sibling receipt before exact GET recovery')),
  ...['bank','intake'].map(kind=>kind+' nonterminal and cross-context responses retain unknown and never use the generic participant fallback'),

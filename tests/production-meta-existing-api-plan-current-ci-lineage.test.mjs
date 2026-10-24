@@ -1,8 +1,8 @@
-import {restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {restorePlanBudgetPreviousContract,restorePlanBudgetSourceSet,verifyPlanBudgetCurrentSources,withCaptureRuntimePreviousSources,planBudgetCurrentSourcePin} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {restoreWorksiteLiveHoursSourceSet,worksiteLiveHoursPreviousSourcePin,worksiteLiveHoursCurrentSourcePin} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,existsSync,readdirSync} from 'node:fs';
+import {readFileSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {restoreHomeDecisionsPreviousContract,homeDecisionsCurrentSourcePin,CUSTOMER_PHONE_SELECTION_CURRENT_REVISION as phoneExpected} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {EXISTING_API_PLAN_CURRENT_REVISION as expected,EXISTING_API_PLAN_CURRENT_SECTION as key,restoreExistingApiPlanPreviousContract,existingApiPlanCurrentSourcePin,existingApiPlanValidationFiles,verifyExistingApiPlanCurrentSources,restoreExistingApiPlanSourceSet,existingApiPlanProofSourceAdditions,existingApiPlanCurrentNativeSourceFiles,validateExistingApiPlanNativeProof} from '../scripts/lib/meta-existing-api-plan-current-ci-lineage.mjs';
@@ -24,7 +24,21 @@ test('API plan revision restores the whole published material contract and every
  assert.deepEqual(previous.materialReviewCurrentRevision,contract.materialReviewCurrentRevision);
  for(const name of ['blocks','lanes','artifactPatterns','evidenceProducers','whatsappFieldContinuityCurrentRevision'])assert.deepEqual(previous[name],publishedHomePredecessor[name]);
  const focusedProducer=value=>value.evidenceProducers.find(row=>row.producer==='scripts/verify-focused-workspace-ci.mjs');// Project only the authenticated outer pin for the historical assertion; read current source bytes below.
+ const focusedFile='scripts/verify-focused-workspace-ci.mjs',actualFocusedBytes=Buffer.from(read(focusedFile));
+ const verifyFocusedCurrent=()=>{
+  assert.equal(serialize(contract),before);assert.deepEqual(read(focusedFile),actualFocusedBytes);
+  assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
+  const ref=contract.planBudgetCurrentRevision.references.find(row=>row.path===focusedFile);assert.ok(ref);
+  const currentPin=planBudgetCurrentSourcePin(contract,{path:focusedFile,sha256:ref.currentSha256});
+  assert.equal(currentPin,ref.currentSha256);assert.equal(focusedProducer(contract).producerSha256,currentPin);
+  assert.equal(contract.extension.proofs.find(row=>row.producer===focusedFile).producerSha256,currentPin);
+  assert.equal(sha(actualFocusedBytes.toString('utf8').replaceAll('\r\n','\n')),currentPin);
+ };
+ verifyFocusedCurrent();
+ try{withCaptureRuntimePreviousSources(contract,read,(contract,read)=>{
+  const publishedHomePredecessor=restoreHomeDecisionsPreviousContract(contract);
  assert.equal(worksiteLiveHoursPreviousSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:focusedProducer(contract).producerSha256}),'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24');assert.equal(focusedProducer(contract).producerSha256,'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(worksiteLiveHoursCurrentSourcePin(contract,{path:'scripts/verify-focused-workspace-ci.mjs',sha256:'48650c362bfc0b9d8fd49976fbc4ae1a124776167c60ba08f60d2b163ee94e24'}),'532e37e994540a6fecd8c70d067730cddec4a66403686113cef4087828c2229c');assert.equal(sha(read('scripts/verify-focused-workspace-ci.mjs').toString('utf8').replaceAll('\r\n','\n')),focusedProducer(contract).producerSha256);assert.equal(focusedProducer(publishedHomePredecessor).producerSha256,'a4eb59cb781eeb9578e46ffcdec21833cce1ba79eb9f99e3543fda799dfc62f4');
+ });}finally{verifyFocusedCurrent();}
  assert.equal(sha(serialize(restoreMaterialReviewPreviousContract(contract))),'1bb5e262dac06377590ea983a9c800163726cb6510ae0fbbbdca17309253c6af');
 });
 
@@ -64,7 +78,19 @@ test('COMPANY gains only the new server module while every historical native mat
  const contract=current(),families=contract.whatsappFieldContinuityCurrentRevision.native.families;
  const company=existingApiPlanCurrentNativeSourceFiles(contract,'COMPANY',families.COMPANY.sourceFiles);assert.equal(company.length,236);assert.deepEqual(company.filter(file=>!families.COMPANY.sourceFiles.includes(file)),['src/lib/meta-existing-api-plan.mjs']);
  assert.deepEqual(existingApiPlanCurrentNativeSourceFiles(contract,'OWN',families.OWN.sourceFiles),families.OWN.sourceFiles);assert.equal(families.OWN.sourceFiles.length,139);
- const scan=directory=>readdirSync(directory,{withFileTypes:true}).flatMap(entry=>entry.isDirectory()?scan(directory+'/'+entry.name):[directory+'/'+entry.name]);const budgetCompany=whatsappFieldCompanyNativeSourceFiles(read,scan('src/lib').sort());assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);const actualCompany=restorePlanBudgetSourceSet(contract,'PG_COMPANY_KYC',budgetCompany);assert.deepEqual(budgetCompany,[...actualCompany,'src/lib/plan-budget-source.mjs'].sort());assert.deepEqual(restoreWorksiteLiveHoursSourceSet(contract,'PG_COMPANY_KYC',actualCompany),company);assert.equal(actualCompany.length,237);assert.deepEqual(actualCompany,[...company,'src/lib/field-hours-report.mjs'].sort());
+ assert.equal(verifyPlanBudgetCurrentSources(contract,read).nativeOrBrowserAcceptance,false);
+ const actualSpec=contract.extension.proofs.find(row=>row.kind==='PG_COMPANY_KYC'),budgetCompany=currentProducerSourceFiles(actualSpec,process.cwd());
+ assert.deepEqual(budgetCompany,actualSpec.sourceFiles,'The actual current COMPANY emitter stays physical');
+ const parentCompany=withCaptureRuntimePreviousSources(contract,read,(parent,parentRead)=>{
+  const priorSpec=parent.extension.proofs.find(row=>row.kind==='PG_COMPANY_KYC'),libraries=priorSpec.sourceFiles.filter(file=>file.startsWith('src/lib/'));
+  const files=whatsappFieldCompanyNativeSourceFiles(parentRead,libraries);assert.deepEqual(files,priorSpec.sourceFiles,'The frozen COMPANY parser uses only its authenticated parent producer');return files;
+ });
+ const advance=contract.planBudgetCurrentRevision.captureQualityRuntime.proofSourceSetAdvances.find(row=>row.kind==='PG_COMPANY_KYC');
+ assert.deepEqual(advance.previousFiles,parentCompany);assert.deepEqual(advance.currentFiles,budgetCompany);assert.deepEqual(advance.removals,[]);assert.deepEqual([...parentCompany,...advance.additions].sort(),budgetCompany);
+ const actualCompany=restorePlanBudgetSourceSet(contract,'PG_COMPANY_KYC',budgetCompany),delta=contract.planBudgetCurrentRevision.sourceSetDeltas.find(row=>row.family==='PG_COMPANY_KYC');
+ assert.deepEqual(delta.additions,['src/lib/consumption-evidence-catalog.mjs','src/lib/consumption-evidence-http.mjs','src/lib/meta-consumption-evidence-catalog.mjs','src/lib/plan-budget-source.mjs','src/lib/voice-consumption-draft.mjs']);
+ assert.equal(actualCompany.length,delta.previousCount);assert.equal(sha(JSON.stringify(actualCompany)),delta.previousPathsSha256);assert.equal(parentCompany.length,delta.currentCount);assert.equal(sha(JSON.stringify(parentCompany)),delta.currentPathsSha256);assert.deepEqual(parentCompany,[...actualCompany,...delta.additions].sort());
+ assert.deepEqual(restoreWorksiteLiveHoursSourceSet(contract,'PG_COMPANY_KYC',actualCompany),company);assert.equal(actualCompany.length,237);assert.deepEqual(actualCompany,[...company,'src/lib/field-hours-report.mjs'].sort());
  for(const changed of [families.COMPANY.sourceFiles.slice(1),[...families.COMPANY.sourceFiles,families.COMPANY.sourceFiles[0]],company])denied(()=>existingApiPlanCurrentNativeSourceFiles(contract,'COMPANY',changed));
 });
 

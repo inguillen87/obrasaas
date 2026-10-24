@@ -1,3 +1,4 @@
+import {withCaptureRuntimePreviousSources} from './plan-budget-current-ci-lineage.mjs';
 import {restoreWhatsappFieldContinuityPreviousContract as outer0,whatsappFieldContinuityCurrentSourcePin as outer1,verifyWhatsappFieldContinuityCurrentSources as outer2,restoreWhatsappFieldContinuitySourceSet as outer3,whatsappFieldContinuityProofSourceAdditions as outer4,whatsappFieldContinuityValidationFiles as outer5} from './whatsapp-field-continuity-current-ci-lineage.mjs';
 function outerCall(fn,args){try{return fn(...args);}catch(error){if(error.code==='WHATSAPP_FIELD_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'WORKSPACE_CONTINUITY_CURRENT_CI_LINEAGE_REJECTED'});throw error;}}
 const restoreWhatsappFieldContinuityPreviousContract=(...args)=>outerCall(outer0,args);
@@ -6229,6 +6230,13 @@ export function workspaceContinuityValidationFiles(contract){
  return [...new Set([...outer,WORKSPACE_CONTINUITY_CHECKPOINT_PATH,...value.reviewedSourceChanges.map(row=>row.path),...value.validationDeltas.map(row=>row.path),...value.addedSources.map(row=>row.path),...value.validationSources.map(row=>row.path)])].sort();
 }
 export function verifyWorkspaceContinuityCurrentSources(contract,readSource){
+ if(contract?.planBudgetCurrentRevision?.captureQualityRuntime){
+  try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>verifyPreviousWorkspaceContinuityCurrentSources(parent,parentRead));}
+  catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
+ }
+ return verifyPreviousWorkspaceContinuityCurrentSources(contract,readSource);
+}
+function verifyPreviousWorkspaceContinuityCurrentSources(contract,readSource){
  verifyWhatsappFieldContinuityCurrentSources(contract,readSource);
  const value=authenticatedSection(contract);if(!value)return null;requireLineage(typeof readSource==='function','Current committed source reader required');
  const original=readSource(WORKSPACE_CONTINUITY_CHECKPOINT_PATH);requireLineage(Buffer.isBuffer(original)&&sha(original)===WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256,'Original d5d RAW checkpoint bytes required');

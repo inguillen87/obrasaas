@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetSourceSet} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetSourceSet,restoreCaptureRuntimePreviousContract,restorePlanBudgetConsumptionEvidenceSourceSet,withCaptureRuntimePreviousSources} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {WORKSITE_LIVE_HOURS_CURRENT_SECTION,restoreWorksiteLiveHoursSourceSet} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {restoreWeeklyCypConsumerSourceSet} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {DOCUMENT_TASK_ASSOCIATION_MEASUREMENT,restoreDocumentTaskAssociationSourceSet} from '../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
@@ -12,7 +12,16 @@ import path from 'node:path';
 import {validatePlanMeasurementCi,bindPlanMeasurementArtifacts,planMeasurementNativeSourceClosure,planMeasurementUiHistoricalRequestMatrix,PLAN_MEASUREMENT_NATIVE_CHECKS,PLAN_MEASUREMENT_DOCUMENT_UI_CHECKS} from '../scripts/verify-plan-measurement-ci.mjs';
 import {planMeasurementUiOptions,planMeasurementUiSourceIdentity} from '../scripts/verify-plan-measurement-ui.mjs';
 import {planMeasurementCiUnitFixture} from './fixtures/plan-measurement-ci-unit.mjs';
-const integratedPriorCount=fixture=>restoreIntegratedIdentitySourceSet('PLAN_MEASUREMENT',fixture.postgres.sourceManifest.map(ref=>ref.path),JSON.parse(fixture.gitSources['.github/workspace-acceptance-contract.json'])).length;
+const facialSources=["src/lib/participant-facial-attempt.mjs","src/lib/participant-facial-policy.mjs","src/lib/participant-facial-precommit.mjs"];
+const integratedPriorCount=fixture=>{
+ const contract=JSON.parse(fixture.gitSources['.github/workspace-acceptance-contract.json']),readSource=file=>fixture.gitSources[file]??null;
+ if(!contract[PLAN_BUDGET_CURRENT_SECTION]?.captureQualityRuntime)return restoreIntegratedIdentitySourceSet('PLAN_MEASUREMENT',fixture.postgres.sourceManifest.map(ref=>ref.path),contract).length;
+ return withCaptureRuntimePreviousSources(contract,readSource,(parent)=>{
+  const current=contract[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family==='PLAN_MEASUREMENT'),historical=parent[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family==='PLAN_MEASUREMENT');
+  assert.ok(current&&historical);assert.deepEqual(fixture.postgres.sourceManifest.map(ref=>ref.path),current.currentFiles);
+  return restoreIntegratedIdentitySourceSet('PLAN_MEASUREMENT',historical.currentFiles,parent).length;
+ });
+};
 // Explicit metadata projection for assertions about the published 11/19 suite.
 // It never changes or re-emits raw native/browser proof bytes as a v1 receipt.
 const historicalMeasurementCounts=(fixture,proof)=>{
@@ -22,9 +31,21 @@ const historicalMeasurementCounts=(fixture,proof)=>{
 };
 // The current raw manifest remains untouched; only this assertion projects the
 // authenticated outer source addition back to the independently fixed 118 set.
+// The validator and RAW manifests remain current. Only these assertions project
+// the authenticated capture addition to its exact Budget checkpoint family.
+function captureParentFamilyFiles(contract,family,files){
+ const budget=contract[PLAN_BUDGET_CURRENT_SECTION],parent=restoreCaptureRuntimePreviousContract(contract),actualFamily=budget.sourceFamilies.find(row=>row.family===family),parentFamily=parent[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family===family),capture=budget.captureQualityRuntime.familyAdvances.find(row=>row.family===family),delta=budget.sourceSetDeltas.find(row=>row.family===family);
+ assert.ok(actualFamily&&parentFamily&&capture&&delta);assert.deepEqual(files,actualFamily.currentFiles);assert.deepEqual(capture,{family,previousCount:123,currentCount:130,additions:[...["scripts/lib/synthetic-capture-quality.mjs","src/lib/capture-quality-gate.mjs","src/lib/capture-quality-policy.mjs","src/lib/private-capture-quality.mjs"],...facialSources].sort(),removals:[]});
+ assert.equal(files.length,capture.currentCount);assert.equal(parentFamily.currentFiles.length,capture.previousCount);assert.deepEqual([...parentFamily.currentFiles,...capture.additions].sort(),files);assert.deepEqual(capture.removals,[]);
+ assert.equal(parentFamily.currentFiles.length,delta.currentCount);assert.equal(sha(JSON.stringify(parentFamily.currentFiles)),delta.currentPathsSha256);
+ return [...parentFamily.currentFiles];
+}
 const publishedWorksiteNativeCount=(fixture,proof)=>{
  const contract=JSON.parse(fixture.gitSources['.github/workspace-acceptance-contract.json']),files=fixture.postgres.sourceManifest.map(row=>row.path),previous=restoreWorksiteLiveHoursSourceSet(contract,'PLAN_MEASUREMENT',files),delta=contract[WORKSITE_LIVE_HOURS_CURRENT_SECTION]?.sourceSetDeltas.find(row=>row.family==='PLAN_MEASUREMENT');
- const beforeBudget=restorePlanBudgetSourceSet(contract,'PLAN_MEASUREMENT',files);assert.deepEqual(files,[...beforeBudget,'src/lib/plan-budget-source.mjs'].sort());
+ const parentFiles=captureParentFamilyFiles(contract,'PLAN_MEASUREMENT',files),budget=contract[PLAN_BUDGET_CURRENT_SECTION],consumption=budget.consumptionEvidenceRuntime.sourceSetAdvances.find(row=>row.family==='PLAN_MEASUREMENT'),pilot=budget.pilotWhatsAppRuntime.sourceSetAdvances.find(row=>row.family==='PLAN_MEASUREMENT').previousDelta,beforeConsumption=restorePlanBudgetConsumptionEvidenceSourceSet(contract,'PLAN_MEASUREMENT',files),budgetOnly=beforeConsumption.filter(file=>!budget.pilotWhatsAppRuntime.sourceAdditions.includes(file));
+ assert.deepEqual(consumption.additions,['src/lib/consumption-evidence-catalog.mjs']);assert.deepEqual(parentFiles,[...beforeConsumption,...consumption.additions].sort());assert.equal(beforeConsumption.length,consumption.previousDelta.currentCount);assert.equal(sha(JSON.stringify(beforeConsumption)),consumption.previousDelta.currentPathsSha256);
+ assert.deepEqual(budget.pilotWhatsAppRuntime.sourceAdditions,['src/lib/meta-consumption-evidence-catalog.mjs','src/lib/voice-consumption-draft.mjs']);assert.deepEqual(beforeConsumption,[...budgetOnly,...budget.pilotWhatsAppRuntime.sourceAdditions].sort());assert.equal(budgetOnly.length,pilot.currentCount);assert.equal(sha(JSON.stringify(budgetOnly)),pilot.currentPathsSha256);assert.deepEqual(pilot.additions,['src/lib/plan-budget-source.mjs']);
+ const beforeBudget=restorePlanBudgetSourceSet(contract,'PLAN_MEASUREMENT',files);assert.deepEqual(budgetOnly,[...beforeBudget,'src/lib/plan-budget-source.mjs'].sort());
  if(delta){assert.equal(delta.previousCount,118);assert.equal(delta.currentCount,119);assert.deepEqual(delta.additions,['src/lib/field-hours-report.mjs']);assert.deepEqual(proof.postgres.worksiteLiveHoursSourceLineage,delta);assert.equal(beforeBudget.length,119);assert.equal(proof.postgres.sourceCount,files.length);}
  return previous.length;
 };
@@ -113,7 +134,7 @@ test('artifact binding requires v2 current seventeen native and v3 twenty-five U
 
 test('Budget source additions remain complete in connected receipts and cannot be downgraded at artifact binding',()=>{
  const fixture=planMeasurementCiUnitFixture(),input=fixture.input(),proof=validatePlanMeasurementCi(input),contract=JSON.parse(fixture.gitSources['.github/workspace-acceptance-contract.json']),deltas=contract[PLAN_BUDGET_CURRENT_SECTION].sourceSetDeltas;
- assert.equal(proof.postgres.sourceCount,deltas.find(row=>row.family==='PLAN_MEASUREMENT').currentCount);assert.equal(proof.ui.runtimeSourceCount,deltas.find(row=>row.family==='MEASUREMENT_UI_RUNTIME').currentCount);
+ assert.equal(captureParentFamilyFiles(contract,'PLAN_MEASUREMENT',fixture.postgres.sourceManifest.map(row=>row.path)).length,deltas.find(row=>row.family==='PLAN_MEASUREMENT').currentCount);assert.equal(proof.ui.runtimeSourceCount,deltas.find(row=>row.family==='MEASUREMENT_UI_RUNTIME').currentCount);
  assert.equal(proof.postgres.sourceCount,fixture.postgres.sourceManifest.length);assert.equal(proof.ui.runtimeSourceCount,fixture.ui.runtimeSourceManifest.length);
  const artifacts=['postgres','ui'].map((kind,index)=>({kind,name:'plan-measurement-'+kind+'-'+fixture.head+'-2',id:100+index,archiveSha256:String(index+4).repeat(64),url:'https://github.com/inguillen87/obrasaas/actions/runs/123456789/artifacts/'+(100+index)})),bind=(value,readSource=file=>fixture.gitSources[file]??null)=>bindPlanMeasurementArtifacts({proofBytes:Buffer.from(JSON.stringify(value)),expectedHead:fixture.head,ciRun:fixture.ciRun,artifacts,readSource});
  assert.equal(bind(proof).status,'PASS');

@@ -56,7 +56,7 @@ test('rollback and an unbounded owner gap are rejected before trusting history',
 
 test('fresh signed HOLA uses the unchanged policy after a proven addition',async()=>{
  const f=employeeIntakeFixture();await f.configure();const policy=structuredClone(f.connection.metadata.employeeIntakePolicy);addCanonicalAddition(f);
- const result=await f.execute('HOLA');assert.equal(result.result.kind,'EMPLOYEE_INTAKE');assert.equal(f.state().step,'NAME');assert.deepEqual(f.connection.metadata.employeeIntakePolicy,policy);assert.equal(f.workers.size,0);
+ const result=await f.execute('HOLA');assert.equal(result.result.kind,'EMPLOYEE_INTAKE');assert.equal(f.state().step,'WELCOME');assert.equal(f.state().name,null);assert.deepEqual(f.connection.metadata.employeeIntakePolicy,policy);assert.equal(f.workers.size,0);
 });
 
 test('consented WAITING request keeps its original digest and signed source and remains admissible once',async()=>{

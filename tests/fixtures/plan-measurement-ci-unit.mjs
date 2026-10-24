@@ -1,17 +1,23 @@
 import {DOCUMENT_TASK_ASSOCIATION_MEASUREMENT} from '../../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
-import {participantPreanalysisConsumerSourceFiles} from '../../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
+import {verifyPlanBudgetActualClosure} from '../../scripts/lib/plan-budget-current-ci-lineage.mjs';
+import {verifyWorksiteLiveHoursCurrentSources} from '../../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 // In-memory validator fixtures only. These bytes are never CI/browser/PG evidence.
 import {readFileSync,existsSync,lstatSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
-import {PLAN_MEASUREMENT_NATIVE_CHECKS,PLAN_MEASUREMENT_UI_CASES,PLAN_MEASUREMENT_UI_LARGE_CASES,PLAN_MEASUREMENT_DOCUMENT_UI_ASSOCIATION,PLAN_MEASUREMENT_DOCUMENT_UI_CHECKS,planMeasurementDocumentNativeProof,planMeasurementNativeSourceClosure,planMeasurementUiRequestMatrix} from '../../scripts/verify-plan-measurement-ci.mjs';
-import {PLAN_MEASUREMENT_UI_VERSION,PLAN_MEASUREMENT_UI_WIDTHS,planMeasurementUiSourceClosure} from '../../scripts/verify-plan-measurement-ui.mjs';
+import {PLAN_MEASUREMENT_NATIVE_CHECKS,PLAN_MEASUREMENT_UI_CASES,PLAN_MEASUREMENT_UI_LARGE_CASES,PLAN_MEASUREMENT_DOCUMENT_UI_ASSOCIATION,PLAN_MEASUREMENT_DOCUMENT_UI_CHECKS,planMeasurementDocumentNativeProof,planMeasurementCiSourceClosures,planMeasurementUiRequestMatrix} from '../../scripts/verify-plan-measurement-ci.mjs';
+import {PLAN_MEASUREMENT_UI_VERSION,PLAN_MEASUREMENT_UI_WIDTHS} from '../../scripts/verify-plan-measurement-ui.mjs';
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 function buildPlanMeasurementCiSourceSnapshot(){
  const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),gitSources=Object.create(null),readSource=file=>{const target=path.join(root,file);if(!existsSync(target)||!lstatSync(target).isFile())return null;return gitSources[file]||=readFileSync(target);},manifest=files=>files.map(file=>({path:file,sha256:sha(readSource(file))}));
- const native=planMeasurementNativeSourceClosure(readSource),browser=planMeasurementUiSourceClosure(readSource),runtime=planMeasurementUiSourceClosure(readSource,{runtime:true}),head='1'.repeat(40),sourceTree='2'.repeat(40),ciRun={repository:'inguillen87/obrasaas',workflow:'Task measurement acceptance',runId:123456789,runAttempt:2,event:'push',headSha:head};
- participantPreanalysisConsumerSourceFiles('PLAN_MEASUREMENT',native.files,readSource);
+ // Preload the CURRENT Budget, Preview and Worksite validation leaves, then
+ // use the real CLI's three guarded source collectors before closing the map.
+ // Historical validation reads remain auxiliary CURRENT RAW sources.
+ const contract=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));
+ verifyWorksiteLiveHoursCurrentSources(contract,readSource);
+ const {nativeClosure:native,browserClosure:browser,runtimeClosure:runtime}=planMeasurementCiSourceClosures(readSource),head='1'.repeat(40),sourceTree='2'.repeat(40),ciRun={repository:'inguillen87/obrasaas',workflow:'Task measurement acceptance',runId:123456789,runAttempt:2,event:'push',headSha:head};
+ for(const [family,closure]of [['PLAN_MEASUREMENT',native],['MEASUREMENT_UI',browser],['MEASUREMENT_UI_RUNTIME',runtime]])verifyPlanBudgetActualClosure(contract,family,closure,readSource);
  for(const file of ['scripts/verify-plan-measurement-ci.mjs','.github/workflows/task-measurement.yml'])readSource(file);
  const postgres={status:'PASS',protocol:'plan-measurement-postgresql-v1',postgresExecuted:true,providerCalls:0,realIdentityDocuments:false,realSourceAccepted:false,productionDataWritten:false,databaseRemoved:true,poolClosed:true,adminClosed:true,pgStatActivityBeforeDrop:0,totalCheckCount:DOCUMENT_TASK_ASSOCIATION_MEASUREMENT.nativeCount,checks:[...PLAN_MEASUREMENT_NATIVE_CHECKS,...DOCUMENT_TASK_ASSOCIATION_MEASUREMENT.nativeCheckNames.slice(PLAN_MEASUREMENT_NATIVE_CHECKS.length)],documentAssociationNative:planMeasurementDocumentNativeProof(),sourceRevision:head,sourceState:'EXACT_CI_SOURCE',trackedClean:true,sourceManifest:manifest(native.files),harnessSha256:sha(readSource('scripts/verify-plan-measurement-postgres.mjs'))};
  const documentChecks=[...PLAN_MEASUREMENT_UI_WIDTHS.map(width=>({check:PLAN_MEASUREMENT_DOCUMENT_UI_CHECKS[0].check,width,before:{documentWidth:width,width,targets:[44,46]},after:{documentWidth:width,width,targets:[44,46]},posts:1,automaticAssociations:0,documentAssociation:{...PLAN_MEASUREMENT_DOCUMENT_UI_ASSOCIATION},sourceReferenceCollapsed:true,savedReferenceCollapsed:true,sourceReferenceDisclosed:true,taskReferenceDisclosed:true})),{check:PLAN_MEASUREMENT_DOCUMENT_UI_CHECKS[4].check,width:390,posts:1,blockedSubmissions:3,taskChangeReset:true,modeChangeReset:true,refreshReset:true,automaticConfirmations:0,documentAssociation:{...PLAN_MEASUREMENT_DOCUMENT_UI_ASSOCIATION,taskId:'document-task-b',taskRevision:'2026-10-14T12:00:01.000002'}},{check:PLAN_MEASUREMENT_DOCUMENT_UI_CHECKS[5].check,width:390,posts:2,readbacks:1,exactBodyRetry:true,exactUuidRetry:true,exactProofRetry:true,automaticRetries:0,documentAssociation:{...PLAN_MEASUREMENT_DOCUMENT_UI_ASSOCIATION}}];

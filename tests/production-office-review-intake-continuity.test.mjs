@@ -63,7 +63,8 @@ async function fixture({submitted=true,additionBeforeGreeting=false,additionAfte
 
 test('canonical continuing HOLA exposes only the stored read observation, preserving the WAITING application and policy',async()=>{
  const f=await fixture({additionBeforeGreeting:true}),before=structuredClone([...f.events]),policy=structuredClone(f.connection.metadata.employeeIntakePolicy),sends=f.controls.sends;
- assert.notEqual(f.source.id,f.applicationId);assert.equal(f.state().status,'WAITING_RESPONSIBLE');assert.equal(f.state().revision,6);
+ // The explicit WELCOME choice adds one persisted transition before the original intake steps.
+ assert.notEqual(f.source.id,f.applicationId);assert.equal(f.state().status,'WAITING_RESPONSIBLE');assert.equal(f.state().revision,7);
  const data=await f.review();
  assert.equal(data.items.length,1);assert.equal(data.items[0].id,f.source.id);assert.equal(data.items[0].replyState,'STATUS_OBSERVED');assert.equal(data.items[0].deliveryStatus,'read');
  assert.equal(data.readOnly,true);assert.equal(data.canSend,false);assert.equal(data.canManage,false);

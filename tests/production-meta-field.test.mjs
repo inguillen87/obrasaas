@@ -191,6 +191,33 @@ function waitingProgress(value='25%',current=facts,mode=null){
 function measuredWaitFacts(){return {...facts,tasks:[{...facts.tasks[0],progress:25,measurement:{version:'task-progress-measurement-v1',definitionId:'measurement-a',baseline:'10.0000',unit:'M2',executed:'2.5000',sourceReference:'Planilla sintética A-01',configuredAt:'2026-10-01T11:00:00.000Z',approvedProposalId:'previous-proposal',approvedAt:'2026-10-01T11:30:00.000Z'}}]};}
 const reviewedPhoto={id:'evidence-a',title:'Foto revisada',taskId:'task-a',status:'APPROVED'};
 
+function ordinaryMeasuredConfirmation(){
+ const current={...measuredWaitFacts(),evidence:[reviewedPhoto]},extra={facts:current},tasks=say('AVANCE',null,extra),sectors=pickValue(tasks,'task-a',extra),scope=pickValue(sectors,'sector-a',extra),quantity=pickValue(scope,'DELTA',extra),evidence=say('1',quantity.state,extra),reason=pickValue(evidence,'evidence-a',extra),confirmation=say('Verifiqué la cantidad adicional en este sector.',reason.state,extra);
+ assert.equal(confirmation.state.step,'CONFIRM');assert.equal(confirmation.state.progressEvidenceWait,undefined);assert.deepEqual(confirmation.state.choices.map(choice=>choice.value),['CONFIRM','CANCEL']);
+ return {current,evidence,confirmation};
+}
+test('current ordinary progress cancellation discards changed evidence or task without weakening save validation',()=>{
+ const {current,confirmation}=ordinaryMeasuredConfirmation(),before=JSON.stringify(confirmation.state),task=current.tasks[0],saved=pickValue(confirmation,'CONFIRM',{facts:current});
+ assert.deepEqual(saved.command,{action:'PROPOSE_PROGRESS',payload:{workerId:'worker-a',taskId:'task-a',revision:task.revision,measurement:{mode:'DELTA',quantity:'1.0000'},reason:'Verifiqué la cantidad adicional en este sector.',evidenceIds:['evidence-a']}});
+ for(const changed of [{...current,evidence:[]},{...current,tasks:[{...task,revision:'2026-10-01T12:02:00.000001'}]},{...current,tasks:[]}]){
+  const blocked=pickValue(confirmation,'CONFIRM',{facts:changed});assert.deepEqual(blocked.state,confirmation.state);assert.equal(blocked.command,undefined);
+  const cancelled=pickValue(confirmation,'CANCEL',{facts:changed});assert.equal(cancelled.state,null);assert.equal(cancelled.command,undefined);assert.equal(cancelled.media,undefined);assert.equal(cancelled.planImport,undefined);assert.equal(cancelled.reply.body,'Operación cancelada. Escribí MENU para continuar.');assert.equal(JSON.stringify(confirmation.state),before);
+ }
+});
+test('current ordinary voice confirmation can cancel a changed audio while saving still requires its reviewed source',()=>{
+ const enhanced=voiceFacts(),{extra,review}=startVoice(enhanced),measurement=pickValue(review,'USE',extra),reason=say('2.5 / 10 M2',measurement.state,extra),confirmation=say('Verifiqué el audio y la cantidad acumulada.',reason.state,extra),before=JSON.stringify(confirmation.state),changed={...enhanced,evidence:[{...enhanced.evidence[0],revision:'2026-10-01T12:00:00.123460'}]};
+ assert.equal(confirmation.state.progressEvidenceWait,undefined);assert.ok(confirmation.state.sourceVoice);
+ const blocked=pickValue(confirmation,'CONFIRM',{facts:changed});assert.deepEqual(blocked.state,confirmation.state);assert.equal(blocked.command,undefined);assert.match(blocked.reply.body,/cambió/);
+ const cancelled=pickValue(confirmation,'CANCEL',{facts:changed});assert.equal(cancelled.state,null);assert.equal(cancelled.command,undefined);assert.equal(cancelled.media,undefined);assert.equal(cancelled.planImport,undefined);assert.equal(JSON.stringify(confirmation.state),before);
+});
+test('ordinary progress cancellation still requires its current nonce live draft and report permission',()=>{
+ const {current,evidence,confirmation}=ordinaryMeasuredConfirmation(),changed={...current,evidence:[]},before=JSON.stringify(confirmation.state),nonce=confirmation.state.nonce,foreignNonce=(nonce[0]==='a'?'b':'a')+nonce.slice(1),staleIds=[evidence.reply.sections[0].rows[0].id,'obra:'+foreignNonce+':1','obra:'+nonce+':99'];
+ for(const id of staleIds){const stopped=run({type:'interactive',interactive:{type:'list_reply',list_reply:{id}}},confirmation.state,{facts:changed});assert.deepEqual(stopped.state,confirmation.state);assert.match(stopped.reply.body,/paso anterior/);assert.equal(stopped.command,undefined);assert.equal(stopped.media,undefined);}
+ const expired=pickValue(confirmation,'CANCEL',{facts:changed,state:{...confirmation.state,expiresAt:now.toISOString()}});assert.equal(expired.state,null);assert.match(expired.reply.body,/paso anterior/);assert.equal(expired.command,undefined);assert.equal(expired.media,undefined);assert.notEqual(expired.reply.body,'Operación cancelada. Escribí MENU para continuar.');
+ const denied=pickValue(confirmation,'CANCEL',{facts:{...changed,permissions:{attendance:true,report:false}}});assert.equal(denied.state,null);assert.match(denied.reply.body,/permisos/);assert.equal(denied.command,undefined);assert.equal(denied.media,undefined);assert.notEqual(denied.reply.body,'Operación cancelada. Escribí MENU para continuar.');
+ const typed=say('CANCELAR',confirmation.state,{facts:changed});assert.equal(typed.state.purpose,'MENU');assert.equal(typed.command,undefined);assert.equal(JSON.stringify(confirmation.state),before);
+});
+
 for(const [label,value,mode]of [['percentage','25%',null],['legacy quantity','2.5 / 10 M2',null],['daily quantity','1','DELTA'],['cumulative quantity','3.5','CUMULATIVE']])test('missing approved evidence retains '+label+' and its original deadline without a proposal',()=>{
  const current=mode?measuredWaitFacts():facts,result=waitingProgress(value,current,mode);
  assert.equal(result.state.step,'PROGRESS_EVIDENCE_WAIT');assert.equal(result.state.taskId,'task-a');assert.equal(result.state.sectorId,'sector-a');assert.equal(result.state.taskRevision,current.tasks[0].revision);assert.equal(result.state.expiresAt,progressDeadline);assert.deepEqual(result.state.progressEvidenceWait,{version:1,deadline:progressDeadline});
