@@ -1,4 +1,4 @@
-import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetAcceptancePreviousSource,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetIntakeWithdrawalUnitProducerText} from './plan-budget-current-ci-lineage.mjs';
+import {PLAN_BUDGET_CURRENT_SECTION,restorePlanBudgetAcceptancePreviousSource,restorePlanBudgetAttendanceReviewProducerText,restorePlanBudgetIntakeWithdrawalUnitProducerText,withCaptureRuntimePreviousSources} from './plan-budget-current-ci-lineage.mjs';
 import {restoreWeeklyCypPreviousContract,weeklyCypCurrentSourcePin} from './home-decisions-current-ci-lineage.mjs';
 import {createHash} from 'node:crypto';
 import {INTEGRATED_IDENTITY_UI_PRODUCER_PATHS,restoreIntegratedIdentityUiProducerText} from './integrated-identity-current-ci-lineage.mjs';
@@ -541,7 +541,34 @@ export function validatePlanMeasurementCompactSourceLineage(files,contract=null)
  for(const file of PLAN_MEASUREMENT_CURRENT_SOURCES)requireLineage(files.filter(value=>value===file).length===1,'Current compact source dependency omitted: '+file);
  const published=files.filter(file=>!PLAN_MEASUREMENT_CURRENT_SOURCES.includes(file));requireLineage(published.length===125&&digest(published)===PLAN_MEASUREMENT_CURRENT_COMPACT.previousSourcePathsSha256,'G127 must retain every H125 path');const historical=published.filter(file=>!KYC_EXPIRED_CURRENT_ADDITIONS.includes(file));requireLineage(historical.length===117&&digest(historical)===PLAN_MEASUREMENT_CURRENT_COMPACT.historicalSourcePathsSha256,'Original117 must remain immutable');return currentFiles;
 }
+// The public verifier authenticates the actual CURRENT graph and every family
+// source byte. Historical comparisons remain inside the owned C8 callback;
+// the source-only AST walker makes no claim about observed external imports.
 export function verifyPlanMeasurementCurrentSources(contract,readSource){
+ if(contract?.[PLAN_BUDGET_CURRENT_SECTION]?.captureQualityRuntime){
+  const currentContractBefore=JSON.stringify(contract);
+  try{return withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>{
+   const family='COMPACT';
+   const verifyCurrent=()=>{
+    requireLineage(JSON.stringify(contract)===currentContractBefore,'Current contract changed during source verification');
+    const files=kycExpiredCurrentSourceFiles(readSource),descriptor=contract[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family===family);
+    requireLineage(descriptor&&Array.isArray(descriptor.currentFiles)&&Array.isArray(descriptor.currentManifest),'Authenticated current compact family required');
+    same(files,descriptor.currentFiles,'Actual CURRENT compact AST paths differ from authenticated family');
+    same(descriptor.currentManifest.map(row=>row.path),files,'Complete CURRENT compact family manifest required');
+    for(const ref of descriptor.currentManifest)requireLineage(hash(ref.sha256)&&lfSha(readSource,ref.path)===ref.sha256,'Stale CURRENT compact family source: '+ref.path);
+    return files;
+   };
+   const currentFiles=verifyCurrent();
+   try{
+    const comparison=verifyPreviousPlanMeasurementCurrentSources(parent,parentRead),historical=parent[PLAN_BUDGET_CURRENT_SECTION].sourceFamilies.find(row=>row.family===family);
+    requireLineage(historical&&comparison.sourceCount===historical.currentFiles.length&&comparison.sourcePathsSha256===digest(historical.currentFiles),'Complete authenticated parent compact comparison required');
+    return {...comparison,sourceCount:currentFiles.length,sourcePathsSha256:digest(currentFiles),sourceBasis:'AUTHENTICATED_CURRENT_CAPTURE_FAMILY',comparisonSourceBasis:'AUTHENTICATED_PRE_CAPTURE_PARENT',comparisonSourceCount:comparison.sourceCount,comparisonSourcePathsSha256:comparison.sourcePathsSha256};
+   }finally{same(verifyCurrent(),currentFiles,'Actual CURRENT compact graph changed during historical comparison');}
+  });}catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')requireLineage(false,error.message);throw error;}
+ }
+ return verifyPreviousPlanMeasurementCurrentSources(contract,readSource);
+}
+function verifyPreviousPlanMeasurementCurrentSources(contract,readSource){
  try{
  verifyFieldOutboundCurrentSources(contract,readSource);
  const prior=reconstructPublishedHContract(contract),section=contract.planMeasurementCurrentLineage;

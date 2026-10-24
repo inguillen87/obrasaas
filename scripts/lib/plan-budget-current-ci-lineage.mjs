@@ -816,6 +816,8 @@ export function createCaptureRuntimeGate(reviewed){
   let end=0;for(const hunk of row.inverseHunks){exact(hunk,['currentOffsetCharacters','currentText','previousText'],'HUNK_KEYS');reject(Number.isSafeInteger(hunk.currentOffsetCharacters)&&hunk.currentOffsetCharacters>=end&&typeof hunk.currentText==='string'&&typeof hunk.previousText==='string'&&hunk.currentText!==hunk.previousText,'ORDERED_HUNKS');end=hunk.currentOffsetCharacters+hunk.currentText.length;}
   reject(references.get(row.path)?.currentSha256===row.currentSha256,'CURRENT_HISTORY_REFERENCE');histories.set(row.path,row);
  }
+ // A missing lock history must retain its own denial before position-bound producer checks.
+ if(runtime.contractPatches.some(row=>row?.pointer===dependencyLockPointer))reject(histories.get('package-lock.json')?.status==='MODIFIED','DEPENDENCY_LOCK_HISTORY_REQUIRED');
  const activeProducerRepairs=paginationOracleV1?[]:currentProducerRepairPairs;
  if(paginationOracleV1)reject(!runtime.contractPatches.some(row=>currentProducerRepairEvidencePointers.includes(row?.pointer)),'SEALED_V1_HAS_NO_CURRENT_PRODUCER_REPAIR');
  for(const pair of activeProducerRepairs){
