@@ -40,7 +40,7 @@ function verifyKycExpiredCurrentSources(section,readSource){
  const current=JSON.parse(readSource('.github/workspace-acceptance-contract.json'));
  if(current[WORKSITE_LIVE_HOURS_CURRENT_SECTION]){try{verifyWorksiteLiveHoursCurrentSources(current,readSource);}catch(error){if(error.code==='WORKSITE_LIVE_HOURS_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});throw error;}}
  try{verifyIntegratedIdentityCurrentSources(current,readSource);}catch(error){if(error.code==='INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED')throw Object.assign(new Error(error.message),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});throw error;}
- if(current.planMeasurementCurrentLineage){if(canonical(current.kycExpiredCurrentComposition)!==canonical(section))throw Object.assign(new Error('Published KYC section changed'),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});return verifyPlanMeasurementCurrentSources(current,readSource);}
+ if(current.planMeasurementCurrentLineage){if(canonical(current.kycExpiredCurrentComposition)!==canonical(section))throw Object.assign(new Error('Published KYC section changed'),{code:'PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'});return hasCaptureRuntime(current)?captureBudget.withCaptureRuntimePreviousSources(current,readSource,(parent,parentRead)=>verifyPlanMeasurementCurrentSources(parent,parentRead)):verifyPlanMeasurementCurrentSources(current,readSource);}
  return verifyPublishedKycSources(section,readSource);
 }
 const POSTGRES_SERVICE_IMAGE='docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193';
