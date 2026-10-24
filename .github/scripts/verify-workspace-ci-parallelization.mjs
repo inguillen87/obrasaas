@@ -639,6 +639,12 @@ function validateWhatsappPlanImportExtension(contract){
 }
 function verifyWhatsappPlanTestSources(contract,readSource){
  if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');
+ if(!hasCaptureRuntime(contract))return verifyPreviousWhatsappPlanTestSources(contract,readSource);
+ try{return captureBudget.withCaptureRuntimePreviousSources(contract,readSource,(parent,parentRead)=>verifyPreviousWhatsappPlanTestSources(parent,parentRead));}
+ catch(error){if(error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED')deny('WHATSAPP_PLAN_IMPORT_TEST_SOURCE_HASH');throw error;}
+}
+function verifyPreviousWhatsappPlanTestSources(contract,readSource){
+ if(typeof readSource!=='function')deny('PROOF_SOURCE_RESOLVER');
  for(const source of contract.whatsappPlanImport.testSources){const bytes=readSource(source.path);if(!Buffer.isBuffer(bytes))deny('PROOF_SOURCE_BYTES');let expected;try{expected=integratedIdentityCurrentSourcePin(contract,source);}catch(error){if(error.code==='INTEGRATED_IDENTITY_CURRENT_CI_LINEAGE_REJECTED')deny('WHATSAPP_PLAN_IMPORT_TEST_SOURCE_HASH');throw error;}if(hash(bytes)!==expected)deny('WHATSAPP_PLAN_IMPORT_TEST_SOURCE_HASH');}
 }
 const currentCommandBlock=(contract,id)=>id===12?{...contract.blocks.find(block=>block.id===id),...contract.calendarPreparation}:id===26?{...contract.blocks.find(block=>block.id===id),...contract.whatsappPlanImport}:contract.blocks.find(block=>block.id===id);
