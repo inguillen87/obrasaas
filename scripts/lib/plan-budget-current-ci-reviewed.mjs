@@ -12032,9 +12032,9 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
         "path": "tests/production-kyc-reply-feedback-current-lineage.test.mjs",
         "status": "MODIFIED",
         "previousSha256": "c536c5c9defcb8bb02ce7b5a6a1a2c7832b536cda9104838e02e1a2acc97857a",
-        "currentSha256": "1d8eb49af8bb545652a2001d1b19f336817aee9de34a2742647d2c5a9270b947",
+        "currentSha256": "d5becf5157d6eb087585f444228f51f22f06b6fd225d06848be6c7131be09528",
         "previousBytes": 17591,
-        "currentBytes": 19026,
+        "currentBytes": 19152,
         "inverseHunks": [
           {
             "currentOffsetCharacters": 5451,
@@ -12048,7 +12048,7 @@ export const PLAN_BUDGET_CURRENT_REVISION=Object.freeze({
           },
           {
             "currentOffsetCharacters": 17829,
-            "currentText": " const before=JSON.stringify(contract),budget=contract.planBudgetCurrentRevision,family=budget.sourceFamilies.find(row=>row.family==='COMPACT'),delta=budget.sourceSetDeltas.find(row=>row.family==='COMPACT'),materials=['src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'];\n assert.equal(delta.currentCount,141);assert.equal(delta.currentPathsSha256,'78ace2186e2a52f6a789ee8b51319080b5171420e465b4a63c03d52c5d0d294f');assert.equal(family.currentFiles.length,144);assert.deepEqual(family.currentFiles,currentFiles);\n for(const change of [...materials.map(file=>files=>files.filter(value=>value!==file)),files=>files.filter(file=>!materials.includes(file)),files=>files.map(file=>file===materials[0]?'src/lib/foreign-same-count-material.mjs':file).sort()]){\n  const changed=structuredClone(contract),current=changed.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family==='COMPACT');current.currentFiles=change(current.currentFiles);\n  assert.throws(()=>kycExpiredCurrentCompositionSelftest(changed,root),error=>error.code==='PLAN_BUDGET_CURRENT_CI_LINEAGE_REJECTED');\n }\n assert.equal(JSON.stringify(contract),before);\n",
+            "currentText": " const before=JSON.stringify(contract),budget=contract.planBudgetCurrentRevision,family=budget.sourceFamilies.find(row=>row.family==='COMPACT'),delta=budget.sourceSetDeltas.find(row=>row.family==='COMPACT'),materials=['src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'];\n assert.equal(delta.currentCount,141);assert.equal(delta.currentPathsSha256,'78ace2186e2a52f6a789ee8b51319080b5171420e465b4a63c03d52c5d0d294f');assert.equal(family.currentFiles.length,144);assert.deepEqual(family.currentFiles,currentFiles);\n for(const change of [...materials.map(file=>files=>files.filter(value=>value!==file)),files=>files.filter(file=>!materials.includes(file)),files=>files.map(file=>file===materials[0]?'src/lib/foreign-same-count-material.mjs':file).sort()]){\n  const changed=structuredClone(contract),current=changed.planBudgetCurrentRevision.sourceFamilies.find(row=>row.family==='COMPACT');current.currentFiles=change(current.currentFiles);\n  assert.throws(()=>kycExpiredCurrentCompositionSelftest(changed,root),error=>error.code==='PLAN_MEASUREMENT_CURRENT_CI_LINEAGE_REJECTED'&&error.message==='Worksite live/hours source revision rejected: Budget current CI lineage rejected: IMMUTABLE_COMPANION');\n }\n assert.equal(JSON.stringify(contract),before);\n",
             "previousText": ""
           }
         ]
