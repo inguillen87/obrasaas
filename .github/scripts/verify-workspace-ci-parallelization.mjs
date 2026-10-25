@@ -12,12 +12,12 @@ import {WHATSAPP_FIELD_CONTINUITY_CURRENT_REVISION,WHATSAPP_FIELD_CONTINUITY_PRE
 import {FIELD_TASK_PAGINATION_CI_KIND,validateFieldTaskPaginationCi,fieldTaskPaginationCiSourceClosure} from '../../scripts/verify-field-task-pagination-ci.mjs';
 import {WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256,restoreWorkspaceContinuityPreviousContract,verifyWorkspaceContinuityCurrentSources} from '../../scripts/lib/workspace-continuity-current-ci-lineage.mjs';
 import {DOCUMENT_TASK_ASSOCIATION_PREVIOUS_CONTRACT_SHA256,restoreDocumentTaskAssociationPreviousContract,verifyDocumentTaskAssociationCurrentSources} from '../../scripts/lib/plan-measurement-document-association-ci-lineage.mjs';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {INTEGRATED_IDENTITY_CURRENT_REVISION,integratedIdentityCurrentSourcePin,restoreIntegratedIdentityPreviousContract,validateIntegratedIdentityWorkspaceContract,verifyIntegratedIdentityCurrentSources,validateIntegratedCompanyCurrentNative,integratedCompanyCurrentShadowFixture,integratedIdentityCurrentSelftest,integratedIdentityPreviousProofChecks} from '../../scripts/lib/integrated-identity-current-ci-lineage.mjs';
 import {FOCUSED_WORKSPACE_CI_KIND,validateFocusedWorkspaceCi,focusedWorkspaceCiSourceClosure} from '../../scripts/verify-focused-workspace-ci.mjs';
 import {PARTICIPANT_PREANALYSIS_KIND,restoreParticipantPreanalysisPreviousContract,validateParticipantPreanalysisWorkspaceContract,participantPreanalysisProofSourceAdditions,restoreParticipantPreanalysisSourceSet} from '../../scripts/lib/participant-preanalysis-current-ci-lineage.mjs';
 import {validateParticipantKycPreanalysisCi,participantPreanalysisCiSourceClosure} from '../../scripts/verify-participant-kyc-preanalysis-ci.mjs';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,fork} from 'node:child_process';
 import {readFileSync,writeFileSync,mkdirSync,readdirSync,lstatSync,realpathSync,mkdtempSync,rmSync,existsSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import path from 'node:path';
@@ -2655,13 +2655,629 @@ export function planBudgetCurrentGateSelftest(workflow,contract,root=process.cwd
 
 function writeJson(filename,value){mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,JSON.stringify(value,null,2)+'\n');}
 function options(argv){const parsed={};for(let i=0;i<argv.length;i+=2){if(!argv[i]?.startsWith('--')||!argv[i+1])deny('CLI_ARGUMENT');parsed[argv[i].slice(2)]=argv[i+1];}return parsed;}
-function main(){
- const [mode,...args]=process.argv.slice(2),opts=options(args),root=path.resolve(opts.root||process.cwd()),contract=loadContract(path.resolve(root,opts.contract||contractPath)),file=path.resolve(root,opts.workflow||workflowPath),bytes=readFileSync(file),workflow=yaml.load(bytes.toString('utf8'));
+function selftestWorkerA(workflow,contract,root,tracker){
+const historicalContractForNegativeFixtures=restoreParticipantPreanalysisPreviousContract(contract);
+const checks=[];
+function good(name,run){run();checks.push({name,result:'PASS'});}
+function bad(name,code,run){assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code});}
+let phaseStart;
+tracker.mark("F0",4);phaseStart=checks.length;
+good('yaml-parsed-and-full-baseline-equivalent',()=>equivalent(workflow,contract));
+if(contract[PLAN_BUDGET_CURRENT_SECTION])checks.push(...planBudgetCurrentGateSelftest(workflow,contract,root));
+if(contract.planMeasurementDocumentAssociationRevision){
+  good('document-association-complete-a203-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreDocumentTaskAssociationPreviousContract(contract),null,2)+'\n'),DOCUMENT_TASK_ASSOCIATION_PREVIOUS_CONTRACT_SHA256));
+  good('document-association-current-source-leaves-independent-from-native-proofs',()=>verifyDocumentTaskAssociationCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
+  for(const [name,edit]of [['old-source-relabelled-current',c=>{c.planMeasurementDocumentAssociationRevision.reviewedSourceChanges[0].currentSha256=c.planMeasurementDocumentAssociationRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.planMeasurementDocumentAssociationRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.planMeasurementDocumentAssociationRevision.previousContractSha256='f'.repeat(64);}],['historical49-pin-tampered',c=>{c.planMeasurementCurrentLineage.currentValidationSources[0].sha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('document-association-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}
+ }
+if(contract.workspaceContinuityCurrentRevision){
+  good('workspace-continuity-complete-d5d-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreWorkspaceContinuityPreviousContract(contract),null,2)+'\n'),WORKSPACE_CONTINUITY_PREVIOUS_CONTRACT_SHA256));
+  good('workspace-continuity-current-source-independent-of-original-proofs',()=>verifyWorkspaceContinuityCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
+  for(const[name,edit]of [['old-source-relabelled-current',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.workspaceContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.workspaceContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign-checkpoint',c=>{c.workspaceContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['old-focused20-as-current',c=>{const prior=restoreWorkspaceContinuityPreviousContract(contract);c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=prior.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['evidence-producer-disagrees',c=>{c.evidenceProducers.find(row=>row.path==='.vercel/private/focused-workspace-ui-evidence/current-ci.json').producerSha256='f'.repeat(64);}]]){const changed=clone(contract);edit(changed);bad('workspace-continuity-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(changed));}
+ }
+if(contract.whatsappFieldContinuityCurrentRevision){
+  good('whatsapp-field-complete052-checkpoint-restored',()=>assert.equal(hash(JSON.stringify(restoreWhatsappFieldContinuityPreviousContract(contract),null,2)+'\n'),WHATSAPP_FIELD_CONTINUITY_PREVIOUS_CONTRACT_SHA256));
+  good('whatsapp-field-current-source-independent-of-local-observations',()=>verifyWhatsappFieldContinuityCurrentSources(contract,file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'))));
+  good('whatsapp-field-independent21st-proof-and59th-block-ID65',()=>{const proof=contract.extension.proofs.find(row=>row.kind===FIELD_TASK_PAGINATION_CI_KIND);assert.equal(proof.blockId,65);assert.equal(proof.checkNames.length,33);assert.equal(restorePlanBudgetPreviousContract(contract).blocks.length,59);assert.equal(restorePlanBudgetPreviousContract(contract).extension.proofs.length,21);assert.equal(restoreWhatsappFieldContinuityPreviousContract(contract).blocks.length,58);});
+  for(const[name,edit]of [['old-source-as-current',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].currentSha256=c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges[0].previousSha256;}],['source-delta-omitted',c=>{c.whatsappFieldContinuityCurrentRevision.reviewedSourceChanges.pop();}],['foreign052-checkpoint',c=>{c.whatsappFieldContinuityCurrentRevision.previousContractSha256='f'.repeat(64);}],['missing-pagination-proof',c=>{c.extension.proofs=c.extension.proofs.filter(row=>row.kind!==FIELD_TASK_PAGINATION_CI_KIND);}],['old-focused45-as-current',c=>{c.extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames=restoreWhatsappFieldContinuityPreviousContract(contract).extension.proofs.find(row=>row.id==='focused-workspace-ui').checkNames;}],['pagination-record-mismatch',c=>{c.evidenceProducers.find(row=>row.blockId===65).producerSha256='f'.repeat(64);}]]){const value=clone(contract);edit(value);bad('whatsapp-field-'+name,'PROOF_BINDING_SOURCE',()=>validateContract(value));}
+ }
+checks.push(...kycExpiredCurrentCompositionSelftest(contract,root));
+const shadowSource=file=>Buffer.from(utf8(readFileSync(path.join(root,sourcePath(file)))).replaceAll('\r\n','\n'));
+checks.push(...integratedIdentityCurrentSelftest(contract,shadowSource));
+tracker.mark("F0",11,"end");
+tracker.segments.push({phase:"F0",rows:checks.slice(phaseStart)});
+tracker.mark("F1",12);phaseStart=checks.length;
+const original=buildWorkflow(contract),expectedHead='a'.repeat(40),workflowSha256='b'.repeat(64),needs=expectedNeeds(contract,expectedHead,workflowSha256,shadowSource),input={needs,contract,expectedHead,workflowSha256,runId:'100',runAttempt:'1',readSource:shadowSource};
+bad('gate-source-resolver-required','PROOF_SOURCE_RESOLVER',()=>gate({...input,readSource:undefined}));
+good('gate-all-eight-lanes-and-50-blocks',()=>{assert.equal(contract.blocks.filter(block=>block.id<=56).length,50);assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
+good('gate-all-eight-lanes-and-additive-KYC-57',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate(input).commandBlocks,contract.blocks.length);});
+const laneEnv=Object.fromEntries(LANES.map(lane=>[laneEnvironmentKey(lane),JSON.stringify(needs[lane])]));
+good('lane-environment-preserves-exact-eight-records',()=>equal(readLaneNeedsEnvironment({...laneEnv,PATH:'controlled'}),needs,'ENV_TRANSPORT_CHANGED'));
+good('lane-environment-still-runs-exact-gate',()=>{assert.equal(restoreParticipantPreanalysisPreviousContract(contract).blocks.length,56);assert.equal(gate({...input,needs:readLaneNeedsEnvironment(laneEnv)}).commandBlocks,contract.blocks.length);});
+bad('legacy-aggregate-environment-denied','LEGACY_AGGREGATE_ENV_DENIED',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_NEEDS_JSON:JSON.stringify(needs)}));
+const missingEnv={...laneEnv};
+delete missingEnv.WORKSPACE_LANE_META_JSON;
+bad('missing-lane-environment-denied','LANE_ENV_COVERAGE',()=>readLaneNeedsEnvironment(missingEnv));
+bad('extra-lane-environment-denied','LANE_ENV_COVERAGE',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_UNKNOWN_JSON:'{}'}));
+bad('invalid-lane-environment-json-denied','INVALID_LANE_ENV_JSON',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:'{'}));
+bad('empty-lane-environment-denied','LANE_ENV_LIMIT',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:''}));
+bad('non-string-lane-environment-denied','LANE_ENV_LIMIT',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:17}));
+bad('null-lane-job-denied','INVALID_LANE_JOB_SHAPE',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:'null'}));
+bad('array-lane-job-denied','INVALID_LANE_JOB_SHAPE',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:'[]'}));
+bad('extra-lane-job-field-denied','INVALID_LANE_JOB_SHAPE',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:JSON.stringify({...needs.meta,extra:true})}));
+bad('oversized-lane-environment-denied','LANE_ENV_LIMIT',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:'x'.repeat(LANE_ENV_BYTES+1)}));
+bad('invalid-lane-environment-unicode-denied','LANE_ENV_ENCODING',()=>readLaneNeedsEnvironment({...laneEnv,WORKSPACE_LANE_META_JSON:'"\ud800"'}));
+good('lane-output-size-bounds-every-fixture',()=>{
+  for(const lane of LANES)assert.ok(assertLaneOutputSize(needs[lane].outputs.provenance)<LANE_OUTPUT_BYTES);
+  const overhead=assertLaneOutputSize(''),boundary='x'.repeat(92*1024-overhead);
+  assert.equal(assertLaneOutputSize(boundary),92*1024);
+  assert.throws(()=>assertLaneOutputSize(boundary+'x'),error=>error.code==='LANE_OUTPUT_TRANSPORT_LIMIT');
+  assert.throws(()=>assertLaneOutputSize('ñ'.repeat(46*1024)),error=>error.code==='LANE_OUTPUT_TRANSPORT_LIMIT');
+  const padded={...laneEnv},key=laneEnvironmentKey('people');padded[key]+=' '.repeat(96*1024-Buffer.byteLength(padded[key]));
+  equal(readLaneNeedsEnvironment(padded),needs,'PADDED_LANE_ENVIRONMENT');
+  assert.ok(Buffer.byteLength(key+'='+padded[key])+1<128*1024);
+  assert.throws(()=>readLaneNeedsEnvironment({...padded,[key]:padded[key]+' '}),error=>error.code==='LANE_ENV_LIMIT');
+ });
+bad('oversized-output-blocked-before-github-output','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('x'.repeat(LANE_OUTPUT_BYTES)));
+bad('escaped-output-size-uses-wire-bytes','LANE_OUTPUT_TRANSPORT_LIMIT',()=>assertLaneOutputSize('"'.repeat(LANE_OUTPUT_BYTES/2)));
+bad('non-string-output-size-denied','PROVENANCE_LIMIT',()=>assertLaneOutputSize(null));
+for(const result of ['failure','cancelled','skipped']){const n=clone(needs);n.people.result=result;bad('gate-'+result,'LANE_NOT_SUCCESS',()=>gate({...input,needs:n}));}
+let n=clone(needs);
+delete n.meta;
+bad('missing-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));
+n=clone(needs);
+n.unexpected=n.meta;
+bad('extra-lane','MISSING_OR_EXTRA_LANE',()=>gate({...input,needs:n}));
+n=clone(needs);
+n.meta.outputs.artifactId='';
+bad('missing-artifact','MISSING_ARTIFACT',()=>gate({...input,needs:n}));
+n=clone(needs);
+delete n.meta.outputs.provenance;
+bad('missing-output','MISSING_LANE_OUTPUT',()=>gate({...input,needs:n}));
+n=clone(needs);
+n.meta.outputs.artifactDigest='';
+bad('missing-artifact-digest','MISSING_ARTIFACT',()=>gate({...input,needs:n}));
+n=clone(needs);
+n.meta.outputs.artifactId=n.contracts.outputs.artifactId;
+bad('artifact-id-collision','ARTIFACT_COLLISION',()=>gate({...input,needs:n}));
+function altered(name,code,edit){const n=clone(needs),r=JSON.parse(n.people.outputs.provenance);edit(r);delete r.manifestSha256;n.people.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>gate({...input,needs:n}));}
+altered('wrong-source-sha','PROVENANCE_IDENTITY',r=>{r.head='c'.repeat(40);});
+altered('wrong-workflow-sha','PROVENANCE_IDENTITY',r=>{r.workflowSha256='c'.repeat(64);});
+altered('wrong-contract-sha','PROVENANCE_IDENTITY',r=>{r.contractSha256='c'.repeat(64);});
+altered('wrong-run','PROVENANCE_IDENTITY',r=>{r.runId='101';});
+altered('old-attempt','PROVENANCE_IDENTITY',r=>{r.runAttempt='2';});
+altered('omitted-block','BLOCK_COVERAGE',r=>{r.blockIds.pop();});
+altered('duplicate-block','BLOCK_COVERAGE',r=>{r.blockIds.push(r.blockIds[0]);});
+altered('changed-command','COMMAND_DIGEST',r=>{r.commandDigests[0]='3'.repeat(64);});
+altered('omitted-artifact-pattern','ARTIFACT_PATTERN_COVERAGE',r=>{r.artifactPatterns.pop();});
+altered('omitted-evidence-file','MISSING_REQUIRED_RETAINED_EVIDENCE',r=>{r.files.pop();});
+altered('empty-evidence','EMPTY_EVIDENCE',r=>{r.files=[];});
+altered('invalid-file-digest','INVALID_EVIDENCE_DIGEST',r=>{r.files[0].sha256='';});
+altered('oversized-file','INVALID_EVIDENCE_DIGEST',r=>{r.files[0].bytes=64*1024*1024+1;});
+altered('duplicate-evidence-path','PATH_COLLISION',r=>{r.files.push(clone(r.files[0]));});
+altered('foreign-artifact-path','PATH_NOT_OWNED',r=>{r.files[0].path='.vercel/private/foreign.json';});
+altered('traversal-relative','UNSAFE_PATH',r=>{r.files[0].path='.vercel/private/../foreign.json';});
+altered('traversal-absolute','UNSAFE_PATH',r=>{r.files[0].path='/tmp/foreign.json';});
+altered('traversal-backslash','UNSAFE_PATH',r=>{r.files[0].path='C:\\private\\foreign.json';});
+n=clone(needs);
+n.people.outputs.provenance='{}';
+bad('empty-provenance','INVALID_PROVENANCE_SHAPE',()=>gate({...input,needs:n}));
+n=clone(needs);
+let r=JSON.parse(n.people.outputs.provenance);
+r.files[0].bytes++;
+n.people.outputs.provenance=JSON.stringify(r);
+bad('unsealed-provenance-change','PROVENANCE_DIGEST',()=>gate({...input,needs:n}));
+for(const [name,edit] of [
+  ['omitted-workflow-block',w=>{w.jobs.people.steps.splice(6,1);}],
+  ['duplicate-workflow-block',w=>{w.jobs.people.steps.splice(6,0,clone(w.jobs.people.steps[6]));}],
+  ['changed-workflow-command',w=>{w.jobs.plans.steps[6].run+='\ntrue';}],
+  ['changed-service',w=>{w.jobs.field.services.postgres.image='postgres:latest';}],
+  ['changed-trigger',w=>{w.on.push.branches=['master'];}],
+  ['missing-needed-lane',w=>{w.jobs.workspace.needs.pop();}],
+  ['always-green-gate',w=>{w.jobs.workspace.steps[4].run='true';}],
+  ['changed-upload-path',w=>{w.jobs.channels.steps.at(-1).with.path+='.vercel/private/**\n';}]
+ ]){const w=clone(original);edit(w);bad(name,'WORKFLOW_NOT_EQUIVALENT',()=>equivalent(w,contract));}
+good('all-historical-optional-PNGs-absent-with-required-weekly-captures-present',()=>assert.equal(gate(input).state,'PASS'));
+if(contract.weeklyCypCurrentRevision)for(const screenshot of WEEKLY_CYP_CURRENT_REVISION.browser.retainedScreenshots){const n=clone(needs),r=JSON.parse(n.plans.outputs.provenance);r.files=r.files.filter(file=>file.path!==screenshot.path);delete r.manifestSha256;n.plans.outputs.provenance=JSON.stringify(seal(r));bad('weekly-retained-capture-omitted-'+screenshot.width,'PROOF_WEEKLY_CYP_UI_SCREENSHOT_BINDING',()=>gate({...input,needs:n}));}
+for(const lane of LANES)for(const pattern of contract.lanes[lane].optionalArtifactPatterns.filter(pattern=>!PORTFOLIO_ARTIFACTS.includes(pattern))){
+  const n=clone(needs),r=JSON.parse(n[lane].outputs.provenance);
+  r.files.push({path:pattern.replaceAll('*','fixture'),sha256:'4'.repeat(64),bytes:128});
+  delete r.manifestSha256;n[lane].outputs.provenance=JSON.stringify(seal(r));
+  good('optional-PNG-present-'+lane,()=>assert.equal(gate({...input,needs:n}).state,'PASS'));
+ }
+for(const lane of LANES)for(const filename of contract.lanes[lane].requiredRetainedEvidence.filter(filename=>!isPortfolioEvidence(filename))){
+  const n=clone(needs),r=JSON.parse(n[lane].outputs.provenance);
+  r.files=r.files.filter(file=>file.path!==filename);
+  if(!r.files.length){const owned=contract.lanes[lane].artifacts.find(pattern=>pattern.endsWith('/'));if(owned)r.files.push({path:owned+'diagnostic.json',sha256:'4'.repeat(64),bytes:128});}
+  delete r.manifestSha256;n[lane].outputs.provenance=JSON.stringify(seal(r));
+   const historicalEmpty=lane==='contracts'&&filename==='.vercel/private/biometric-real-model-proof.json';
+   bad((historicalEmpty?'missing-main-proof-with-other-artifact-':'missing-main-proof-')+lane+'-'+filename,r.files.length?'MISSING_REQUIRED_RETAINED_EVIDENCE':'EMPTY_EVIDENCE',()=>gate({...input,needs:n}));
+   if(historicalEmpty){const prior=clone(needs),empty=JSON.parse(prior[lane].outputs.provenance);empty.files=[];delete empty.manifestSha256;prior[lane].outputs.provenance=JSON.stringify(seal(empty));bad('missing-main-proof-'+lane+'-'+filename,'EMPTY_EVIDENCE',()=>gate({...input,needs:prior}));}
+ }
+for(const lane of LANES)for(const filename of contract.lanes[lane].requiredProducedEvidence){
+  const n=clone(needs),r=JSON.parse(n[lane].outputs.provenance);
+  r.producedNotUploaded=r.producedNotUploaded.filter(file=>file.path!==filename);
+  delete r.manifestSha256;n[lane].outputs.provenance=JSON.stringify(seal(r));
+  bad('missing-produced-not-uploaded-'+filename,'MISSING_REQUIRED_PRODUCED_EVIDENCE',()=>gate({...input,needs:n}));
+ }
+altered('required-retained-list-omitted','RETAINED_EVIDENCE_CONTRACT',r=>{r.requiredRetainedEvidence.pop();});
+altered('required-produced-list-omitted','PRODUCED_EVIDENCE_CONTRACT',r=>{r.requiredProducedEvidence.pop();});
+altered('wrong-helper-digest','PROVENANCE_IDENTITY',r=>{r.verifierSha256='c'.repeat(64);});
+altered('wrong-package-lock-digest','PROVENANCE_IDENTITY',r=>{r.packageLockSha256='c'.repeat(64);});
+altered('wrong-python-requirements-digest','PROVENANCE_IDENTITY',r=>{r.requirementsSha256='c'.repeat(64);});
+altered('produced-file-foreign','PRODUCED_EVIDENCE_NOT_OWNED',r=>{r.producedNotUploaded[0].path='.vercel/foreign-produced.json';});
+for(const file of ['scripts/verify-participants-ui.mjs','src/lib/field-operations-store.mjs','AGENTS.md']){
+  bad('dirty-tracked-source-'+file,'TRACKED_SOURCE_DIRTY',()=>assertSourceIdentity({expectedHead,actualHead:expectedHead,dirtyTrackedPaths:[file]}));
+ }
+bad('dirty-staged-source','TRACKED_SOURCE_DIRTY',()=>assertSourceIdentity({expectedHead,actualHead:expectedHead,dirtyTrackedPaths:['src/lib/verified-session.mjs']}));
+bad('source-HEAD-mismatch-before-provenance','SOURCE_HEAD_MISMATCH',()=>assertSourceIdentity({expectedHead,actualHead:'c'.repeat(40),dirtyTrackedPaths:[]}));
+good('clean-source-identity',()=>assert.equal(assertSourceIdentity({expectedHead,actualHead:expectedHead,dirtyTrackedPaths:[]}),expectedHead));
+const wrongLane=clone(historicalContractForNegativeFixtures),wa='.vercel/customer-whatsapp-evidence/';
+wrongLane.lanes.meta.artifacts=wrongLane.lanes.meta.artifacts.filter(pattern=>pattern!==wa);
+wrongLane.lanes['workspace-ui'].artifacts.push(wa);
+bad('wrong-upload-lane-for-canonical-producer','RETAINED_EVIDENCE_NOT_OWNED',()=>validateContract(wrongLane));
+const wrongProducer=clone(historicalContractForNegativeFixtures);
+wrongProducer.evidenceProducers[0].producer='scripts/verify-workspace-ui.mjs';
+bad('wrong-principal-proof-producer','EVIDENCE_PRODUCER_COVERAGE',()=>validateContract(wrongProducer));
+const overtimeProducers=contract.evidenceProducers.filter(producer=>producer.blockId===52);
+good('overtime-block-52-three-canonical-proofs',()=>{
+  equal(overtimeProducers.map(producer=>({path:producer.path,lane:producer.lane,retained:producer.retained})),[
+   {path:'.vercel/private/field-overtime-unit-proof.json',lane:'field',retained:true},
+   {path:'.vercel/private/field-overtime-postgres-proof.json',lane:'field',retained:true},
+   {path:'.vercel/private/field-overtime-ui-proof.json',lane:'field',retained:true}
+  ],'OVERTIME_PRODUCER_CONTRACT');
+  const overtimeHistoricalContract=contract.whatsappFieldContinuityCurrentRevision?restoreWhatsappFieldContinuityPreviousContract(contract):contract;
+  equal(overtimeHistoricalContract.lanes.field.blocks,[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
+  equal(contract.lanes.field.blocks,contract.whatsappFieldContinuityCurrentRevision?[20,39,40,52,65]:[20,39,40,52],'OVERTIME_BLOCK_ASSIGNMENT');
+ });
+for(const [name,code,edit] of [
+  ['omitted','CONTRACT_BLOCKS',c=>{c.blocks=c.blocks.filter(block=>block.id!==52);}],
+  ['duplicate','CONTRACT_BLOCKS',c=>{c.blocks.push(clone(c.blocks.find(block=>block.id===52)));}],
+  ['duplicate-assignment','CONTRACT_COVERAGE',c=>{c.lanes.field.blocks.push(52);}],
+  ['foreign-lane','EVIDENCE_PRODUCER_COVERAGE',c=>{c.lanes.field.blocks=c.lanes.field.blocks.filter(id=>id!==52);c.lanes.meta.blocks.push(52);}],
+  ['changed-command','CONTRACT_COMMAND',c=>{c.blocks.find(block=>block.id===52).step.run+='\ntrue';}]
+ ]){const c=clone(historicalContractForNegativeFixtures);edit(c);bad('overtime-52-'+name,code,()=>validateContract(c));}
+function alteredField(name,code,edit){const n=clone(needs),r=JSON.parse(n.field.outputs.provenance);edit(r);delete r.manifestSha256;n.field.outputs.provenance=JSON.stringify(seal(r));bad(name,code,()=>gate({...input,needs:n}));}
+alteredField('overtime-52-omitted-from-provenance','BLOCK_COVERAGE',r=>{r.blockIds=r.blockIds.filter(id=>id!==52);});
+alteredField('overtime-52-duplicate-in-provenance','BLOCK_COVERAGE',r=>{r.blockIds.push(52);});
+alteredField('overtime-52-command-digest-changed','COMMAND_DIGEST',r=>{r.commandDigests[r.blockIds.indexOf(52)]='3'.repeat(64);});
+for(const producer of overtimeProducers){
+  const omitted=clone(historicalContractForNegativeFixtures);omitted.evidenceProducers=omitted.evidenceProducers.filter(item=>item.path!==producer.path);
+  bad('overtime-producer-omitted-'+producer.path,'EVIDENCE_PRODUCER_COVERAGE',()=>validateContract(omitted));
+  const notRetained=clone(historicalContractForNegativeFixtures);notRetained.evidenceProducers.find(item=>item.path===producer.path).retained=false;
+  bad('overtime-producer-not-retained-'+producer.path,'RETAINED_PRODUCER_COVERAGE',()=>validateContract(notRetained));
+  const foreign=clone(historicalContractForNegativeFixtures);foreign.evidenceProducers.find(item=>item.path===producer.path).lane='meta';
+  bad('overtime-producer-foreign-lane-'+producer.path,'EVIDENCE_PRODUCER_COVERAGE',()=>validateContract(foreign));
+  const colliding=clone(historicalContractForNegativeFixtures);colliding.evidenceProducers.find(item=>item.path===producer.path).path=contract.evidenceProducers[0].path;
+  bad('overtime-producer-path-collision-'+producer.path,'DUPLICATE_REQUIRED_EVIDENCE',()=>validateContract(colliding));
+ }
+const packageLf=Buffer.from('{"controlledLock":1}\n'),requirementsLf=Buffer.from('controlled-fixture==1.0\n');
+const fixtureContract={packageLockSha256:hash(packageLf),requirementsSha256:hash(requirementsLf)};
+const fixtureDependencies={packageLockBytes:packageLf,requirementsBytes:requirementsLf,contract:fixtureContract};
+good('canonical-dependencies-LF-accepted',()=>equal(assertDependencies(fixtureDependencies),fixtureContract,'DEPENDENCY_FIXTURE_RESULT'));
+good('canonical-dependencies-CRLF-accepted',()=>equal(assertDependencies({...fixtureDependencies,packageLockBytes:Buffer.from(packageLf.toString().replaceAll('\n','\r\n')),requirementsBytes:Buffer.from(requirementsLf.toString().replaceAll('\n','\r\n'))}),fixtureContract,'DEPENDENCY_FIXTURE_RESULT'));
+bad('dependency-package-content-altered','PACKAGE_LOCK_CHANGED',()=>assertDependencies({...fixtureDependencies,packageLockBytes:Buffer.from('{"controlledLock":2}\n')}));
+bad('dependency-requirements-content-altered','PYTHON_REQUIREMENTS_CHANGED',()=>assertDependencies({...fixtureDependencies,requirementsBytes:Buffer.from('controlled-fixture==2.0\n')}));
+bad('dependency-invalid-UTF8-denied','DEPENDENCY_TEXT_ENCODING',()=>assertDependencies({...fixtureDependencies,packageLockBytes:Buffer.from([0xff])}));
+bad('dependency-lone-CR-is-content','PACKAGE_LOCK_CHANGED',()=>assertDependencies({...fixtureDependencies,packageLockBytes:Buffer.from(packageLf.toString().replaceAll('\n','\r'))}));
+bad('dependency-BOM-is-content','PACKAGE_LOCK_CHANGED',()=>assertDependencies({...fixtureDependencies,packageLockBytes:Buffer.concat([Buffer.from([0xef,0xbb,0xbf]),packageLf])}));
+const parent=path.resolve(root,'.vercel/workspace-ci-evidence');
+mkdirSync(parent,{recursive:true});
+const fixture=mkdtempSync(path.join(parent,'ci-gate-selftest-fixture-'));
+const ownedFile=relative=>{cleanPath(relative);const filename=path.resolve(fixture,relative);assert.ok(filename.startsWith(fixture+path.sep));return filename;};
+try{
+  good('filesystem-preflight-clean-retained-and-produced',()=>assert.equal(assertFreshEvidence({root:fixture,lane:'people',contract}).state,'PASS'));
+  for(const lane of LANES)for(const filename of contract.lanes[lane].requiredProducedEvidence){
+   const target=ownedFile(filename);mkdirSync(path.dirname(target),{recursive:true});writeFileSync(target,'controlled stale evidence; not a real producer proof');
+   bad('filesystem-preflight-stale-produced-'+filename,'STALE_EVIDENCE',()=>assertFreshEvidence({root:fixture,lane,contract}));
+   rmSync(target);
+  }
+  const retained=ownedFile(contract.lanes.people.requiredRetainedEvidence[0]);mkdirSync(path.dirname(retained),{recursive:true});writeFileSync(retained,'controlled stale retained evidence');
+  bad('filesystem-preflight-stale-main-retained','STALE_EVIDENCE',()=>assertFreshEvidence({root:fixture,lane:'people',contract}));
+  rmSync(retained);
+  for(const producer of overtimeProducers){
+   const target=ownedFile(producer.path);mkdirSync(path.dirname(target),{recursive:true});writeFileSync(target,'controlled stale overtime proof');
+   bad('filesystem-preflight-stale-overtime-'+producer.path,'STALE_EVIDENCE',()=>assertFreshEvidence({root:fixture,lane:'field',contract}));
+   rmSync(target);
+  }
+ }finally{
+  const resolved=path.resolve(fixture);assert.ok(resolved.startsWith(parent+path.sep)&&path.basename(resolved).startsWith('ci-gate-selftest-fixture-'));
+  rmSync(resolved,{recursive:true,force:true});
+ }
+for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){
+   for(const [name,code,edit] of [
+    ['binding-omitted','PROOF_BINDINGS',r=>{r.proofBindings=r.proofBindings.filter(b=>b.id!==spec.id);}],
+    ['binding-head','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceRevision='f'.repeat(40);}],
+    ['binding-proof-digest','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).proofSha256='f'.repeat(64);}],
+    ['binding-source-manifest','PROOF_BINDING_SOURCE',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceManifestSha256='invalid';}],
+    ['binding-source-manifest-valid64-wrong','PROOF_BINDING_SOURCE',r=>{r.proofBindings.find(b=>b.id===spec.id).sourceManifestSha256='f'.repeat(64);}],
+    ['binding-harness','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).harnessSha256='f'.repeat(64);}],
+    ['binding-checks','PROOF_BINDING_IDENTITY',r=>{r.proofBindings.find(b=>b.id===spec.id).checks=0;}]
+   ]){if(spec.kind==='UI_CAUSAL'&&name==='binding-checks')continue;const n=clone(needs),r=JSON.parse(n[spec.lane].outputs.provenance);edit(r);delete r.manifestSha256;n[spec.lane].outputs.provenance=JSON.stringify(seal(r));bad(spec.id+'-'+name,code,()=>gate({...input,needs:n}));}
+   bad(spec.id+'-current-source-bytes-tampered','PROOF_BINDING_SOURCE',()=>gate({...input,readSource:file=>file===spec.sourceFiles[0]?Buffer.concat([shadowSource(file),Buffer.from('altered shadow source')]):shadowSource(file)}));
+   // Keep this binding control independent from the causal fixture-presence
+   // guard when its additive script source sorts before the application graph.
+   const sourceIndex=spec.sourceFiles.findIndex(file=>!proofFixtureDependenciesFor(spec.kind).includes(file)&&!planBaselineDependenciesFor(spec.kind).includes(file)&&(spec.kind!=='PG_PLAN_BASELINE'||![...PLAN_BASELINE_SOURCE_ROOTS,...PLAN_BASELINE_BACKEND_SOURCES,'package.json','package-lock.json'].includes(file))&&(spec.kind!=='UI_DOCUMENT_CURVE'||![...DOCUMENT_CURVE_UI_RENDER_ROOTS,DOCUMENT_CURVE_UI_FIXTURE_ROOT,DOCUMENT_CURVE_SOURCE,'scripts/lib/owned-fixture-cleanup.mjs','package.json','package-lock.json'].includes(file)));assert.ok(sourceIndex>=0);
+   const changedPath=clone(contract);changedPath.extension.proofs.find(p=>p.id===spec.id).sourceFiles[sourceIndex]=spec.kind==='PG_PLAN_BASELINE'?'src/lib/geo.js':spec.producer;bad(spec.id+'-current-source-path-tampered','PROOF_BINDING_SOURCE',()=>gate({...input,contract:changedPath}));
+  }
+for(const id of [53,54,55,56,57,61,62])for(const [name,code,edit] of [
+   ['omitted','CONTRACT_BLOCKS',c=>{c.blocks=c.blocks.filter(b=>b.id!==id);}],
+   ['duplicate','CONTRACT_BLOCKS',c=>{c.blocks.push(clone(c.blocks.find(b=>b.id===id)));}],
+   ['command-changed','CONTRACT_COMMAND',c=>{c.blocks.find(b=>b.id===id).step.run+='\ntrue';}]
+  ]){const c=clone(historicalContractForNegativeFixtures);edit(c);bad('extension-block-'+id+'-'+name,code,()=>validateContract(c));}
+const changedBaseline=clone(historicalContractForNegativeFixtures);
+changedBaseline.blocks[0].step.run+='\ntrue';
+changedBaseline.blocks[0].commandSha256=hash(changedBaseline.blocks[0].step.run);
+bad('old-block-changed-with-recomputed-digest','BASELINE_BLOCKS_CHANGED',()=>validateContract(changedBaseline));
+const freshFixture=mkdtempSync(path.join(parent,'ci-bank-intake-selftest-fixture-'));
+try{for(const spec of contract.extension.proofs.filter(spec=>![PARTICIPANT_PREANALYSIS_KIND,FOCUSED_WORKSPACE_CI_KIND,FIELD_TASK_PAGINATION_CI_KIND,PLAN_BUDGET_CI_KIND].includes(spec.kind)&&!isPortfolio(spec)&&!isIdentity(spec)&&!isCanonicalField(spec))){const filename=path.join(freshFixture,spec.path);mkdirSync(path.dirname(filename),{recursive:true});writeFileSync(filename,'shadow stale evidence\n');bad(spec.id+'-stale-main-before-execution','STALE_EVIDENCE',()=>assertFreshEvidence({root:freshFixture,lane:spec.lane,contract}));rmSync(filename);}}
+  finally{const resolved=path.resolve(freshFixture);assert.ok(path.dirname(resolved)===path.resolve(parent)&&path.basename(resolved).startsWith('ci-bank-intake-selftest-fixture-'));rmSync(resolved,{recursive:true,force:true});}
+tracker.mark("F1",135,"end");
+tracker.segments.push({phase:"F1",rows:checks.slice(phaseStart)});
+tracker.mark("F3",153);phaseStart=checks.length;
+checks.push(...companySubscriptionContractSelftest(contract));
+checks.push(...taskMeasurementContractSelftest(contract));
+checks.push(...organizationUsageContractSelftest(contract));
+checks.push(...companyKycCurrentSourceContractSelftest(contract));
+checks.push(...planBaselineSelftest(workflow,contract,root));
+checks.push(...documentCurveUiSelftest(workflow,contract,root));
+checks.push(...documentCurveCurrentSourceLineageSelftest(contract,root));
+tracker.mark("F3",159,"end");
+tracker.segments.push({phase:"F3",rows:checks.slice(phaseStart)});
+return checks;
+}
+
+function selftestWorkerB(workflow,contract,root,tracker){
+const historicalContractForNegativeFixtures=restoreParticipantPreanalysisPreviousContract(contract);
+const checks=[];
+function good(name,run){run();checks.push({name,result:'PASS'});}
+function bad(name,code,run){assert.throws(run,error=>error.code===code);checks.push({name,result:'PASS',expectedDenial:code});}
+let phaseStart;
+void historicalContractForNegativeFixtures;void good;void bad;
+tracker.mark("F2",136);phaseStart=checks.length;
+const currentCompanyChecks=[],currentContinuityChecks=[],currentReactiveChecks=[],currentTemplateChecks=[],currentMonthlyChecks=[],currentKycStatusChecks=[],currentCalendarChecks=[],currentWhatsappPlanChecks=[];
+tracker.mark("F2",136,"end");
+tracker.mark("F2",137);
+checks.push(...extensionSelftest(contract,root,currentCompanyChecks,currentContinuityChecks,currentReactiveChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentWhatsappPlanChecks));
+tracker.mark("F2",137,"end");
+tracker.mark("F2",138);
+checks.push(...portfolioSelftest(workflow,contract,root));
+tracker.mark("F2",138,"end");
+tracker.mark("F2",139);
+for(const run of currentCompanyChecks)checks.push(...run());
+tracker.mark("F2",139,"end");
+tracker.mark("F2",140);
+checks.push(...identitySelftest(workflow,contract,root,currentContinuityChecks,currentTemplateChecks,currentMonthlyChecks,currentKycStatusChecks,currentCalendarChecks));
+tracker.mark("F2",140,"end");
+tracker.mark("F2",141);
+checks.push(...canonicalFieldSelftest(workflow,contract,root,currentReactiveChecks,currentKycStatusChecks,currentWhatsappPlanChecks));
+tracker.mark("F2",141,"end");
+tracker.mark("F2",142);
+for(const run of currentContinuityChecks)checks.push(...run());
+tracker.mark("F2",142,"end");
+tracker.mark("F2",143);
+for(const run of currentReactiveChecks)checks.push(...run());
+tracker.mark("F2",143,"end");
+tracker.mark("F2",144);
+for(const run of currentTemplateChecks)checks.push(...run());
+tracker.mark("F2",144,"end");
+tracker.mark("F2",145);
+for(const [name,image] of [
+   ['foreign-registry',POSTGRES_SERVICE_IMAGE.replace('docker.io','foreign.invalid')],
+   ['changed-digest',POSTGRES_SERVICE_IMAGE.replace(/sha256:[a-f0-9]{64}$/,'sha256:'+'0'.repeat(64))],
+   ['mutable-latest','docker.io/library/postgres:latest']
+  ]){const changed=clone(historicalContractForNegativeFixtures);changed.workflow.services.postgres.image=image;bad('postgres-service-'+name+'-denied','POSTGRES_SERVICE_IMAGE',()=>validateContract(changed));}
+tracker.mark("F2",145,"end");
+tracker.mark("F2",146);
+for(const run of currentMonthlyChecks)checks.push(...run());
+tracker.mark("F2",146,"end");
+tracker.mark("F2",147);
+checks.push(...monthlyCurveContractSelftest(workflow,contract,root));
+tracker.mark("F2",147,"end");
+tracker.mark("F2",148);
+for(const run of currentKycStatusChecks)checks.push(...run());
+tracker.mark("F2",148,"end");
+tracker.mark("F2",149);
+checks.push(...calendarPreparationContractSelftest(workflow,contract,root));
+tracker.mark("F2",149,"end");
+tracker.mark("F2",150);
+for(const run of currentCalendarChecks)checks.push(...run());
+tracker.mark("F2",150,"end");
+tracker.mark("F2",151);
+checks.push(...whatsappPlanImportContractSelftest(workflow,contract,root));
+tracker.mark("F2",151,"end");
+tracker.mark("F2",152);
+for(const run of currentWhatsappPlanChecks)checks.push(...run());
+tracker.mark("F2",152,"end");
+tracker.segments.push({phase:"F2",rows:checks.slice(phaseStart)});
+return checks;
+}
+
+const SELFTEST_WORKER_PROTOCOL=Object.freeze({
+ version:1,phases:Object.freeze(['F0','F1','F2','F3']),
+ workers:Object.freeze({A:Object.freeze(['F0','F1','F3']),B:Object.freeze(['F2'])}),
+ statements:Object.freeze({F0:Object.freeze([4,11]),F1:Object.freeze([12,135]),F2:Object.freeze([136,152]),F3:Object.freeze([153,159])}),
+ chunkRows:64,packetBytes:1024*1024,maxRows:1000000,stdioBytes:8*1024*1024,
+ startMs:30000,finishMs:30000,defaultBudgetMs:70*60*1000,maxBudgetMs:74*60*1000,
+});
+
+function snapshotSelftestPhysicalSource(root,expectedHead,execution){
+ const fail=code=>{throw Object.assign(new Error(code),{code});};
+ const sha=value=>createHash('sha256').update(value).digest('hex');
+ const git=(...args)=>execFileSync('git',args,{cwd:root,encoding:'utf8',maxBuffer:40*1024*1024});
+ if(!/^[a-f0-9]{40}$/.test(expectedHead||''))fail('SELFTEST_SOURCE_HEAD');
+ if(!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(execution.session||'')||!Number.isSafeInteger(execution.parentPid)||execution.parentPid<=0)fail('SELFTEST_SESSION');
+ root=path.resolve(root);
+ if(realpathSync(root)!==root)fail('SELFTEST_SOURCE_ROOT');
+ if(git('rev-parse','HEAD').trim()!==expectedHead)fail('SELFTEST_SOURCE_HEAD');
+ if(git('status','--porcelain=v1','--untracked-files=all')!=='')fail('SELFTEST_SOURCE_DIRTY');
+ const paths=git('ls-files','-z').split('\0').filter(Boolean).sort();
+ if(!paths.length||paths.length>1000000||new Set(paths).size!==paths.length)fail('SELFTEST_SOURCE_MEMBERSHIP');
+ const manifest=paths.map(file=>{
+  if(path.isAbsolute(file)||file.split('/').some(part=>!part||part==='.'||part==='..')||file.includes('\\'))fail('SELFTEST_SOURCE_PATH');
+  const full=path.resolve(root,file),stat=lstatSync(full);
+  if(!full.startsWith(root+path.sep)||!stat.isFile()||stat.isSymbolicLink()||realpathSync(full)!==full)fail('SELFTEST_SOURCE_PATH');
+  const raw=readFileSync(full);return{path:file,bytes:raw.length,sha256:sha(raw)};
+ });
+ const files=new Map(manifest.map(row=>[row.path,row]));
+ const relative=full=>{const value=path.relative(root,path.resolve(root,full)).split(path.sep).join('/');if(!files.has(value))fail('SELFTEST_SOURCE_REQUIRED');return value;};
+ const mainPath=relative(fileURLToPath(import.meta.url)),workflowPath=relative(execution.workflowFile||'.github/workflows/workspace-acceptance.yml'),contractPath=relative(execution.contractFile||'.github/workspace-acceptance-contract.json');
+ if(mainPath!=='.github/scripts/verify-workspace-ci-parallelization.mjs')fail('SELFTEST_SOURCE_MAIN');
+ for(const file of ['package-lock.json','requirements.txt'])if(!files.has(file))fail('SELFTEST_SOURCE_REQUIRED');
+ let run={kind:'LOCAL',runId:null,runAttempt:null,repository:null,workflowRef:null,workflowSha:null,event:null,job:null};
+ if(process.env.GITHUB_ACTIONS==='true'){
+  if(!/^[1-9][0-9]*$/.test(process.env.GITHUB_RUN_ID||'')||!/^[1-9][0-9]*$/.test(process.env.GITHUB_RUN_ATTEMPT||'')||!process.env.GITHUB_REPOSITORY||!process.env.GITHUB_WORKFLOW_REF||!/^[a-f0-9]{40}$/.test(process.env.GITHUB_WORKFLOW_SHA||'')||!process.env.GITHUB_EVENT_NAME||!process.env.GITHUB_JOB)fail('SELFTEST_RUN_CONTEXT');
+  run={kind:'GITHUB_ACTIONS',runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,repository:process.env.GITHUB_REPOSITORY,workflowRef:process.env.GITHUB_WORKFLOW_REF,workflowSha:process.env.GITHUB_WORKFLOW_SHA,event:process.env.GITHUB_EVENT_NAME,job:process.env.GITHUB_JOB};
+ }else if(process.env.GITHUB_RUN_ID||process.env.GITHUB_RUN_ATTEMPT)fail('SELFTEST_PARTIAL_RUN_CONTEXT');
+ const context={version:1,session:execution.session,parentPid:execution.parentPid,root,sourceHead:expectedHead,sourceTree:git('rev-parse','HEAD^{tree}').trim(),sources:manifest.length,sourcesSha256:sha(JSON.stringify(manifest)),mainPath,mainSha256:files.get(mainPath).sha256,workflowPath,workflowSha256:files.get(workflowPath).sha256,contractPath,contractSha256:files.get(contractPath).sha256,packageLockSha256:files.get('package-lock.json').sha256,requirementsSha256:files.get('requirements.txt').sha256,nodeVersion:process.version,run};
+ return{root,context,contextSha256:sha(JSON.stringify(context)),manifest,execution:{session:execution.session,parentPid:execution.parentPid,workflowFile:workflowPath,contractFile:contractPath}};
+}
+
+function verifySelftestPhysicalSourceFinal(before){
+ const current=snapshotSelftestPhysicalSource(before.root,before.context.sourceHead,before.execution);
+ if(JSON.stringify(current.context)!==JSON.stringify(before.context)||JSON.stringify(current.manifest)!==JSON.stringify(before.manifest))throw Object.assign(new Error('SELFTEST_SOURCE_CHANGED'),{code:'SELFTEST_SOURCE_CHANGED'});
+ return current.contextSha256;
+}
+
+function validateSelftestWorkerPacket(packet,binding){
+ const fail=code=>{throw Object.assign(new Error(code),{code});};
+ const plain=value=>value!==null&&typeof value==='object'&&!Array.isArray(value)&&(Object.getPrototypeOf(value)===Object.prototype||Object.getPrototypeOf(value)===null);
+ const keys=(value,wanted)=>{if(!plain(value)||Object.keys(value).length!==wanted.length||wanted.some(key=>!Object.hasOwn(value,key)))fail('SELFTEST_IPC_SHAPE');};
+ const sha=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
+ const integer=(value,min,max)=>Number.isSafeInteger(value)&&value>=min&&value<=max;
+ const base=['version','kind','worker','session','contextSha256','pid','parentPid'];
+ let serialized;try{serialized=JSON.stringify(packet);}catch{fail('SELFTEST_IPC_SERIALIZATION');}
+ if(!plain(packet)||typeof serialized!=='string'||Buffer.byteLength(serialized)>SELFTEST_WORKER_PROTOCOL.packetBytes)fail('SELFTEST_IPC_LIMIT');
+ if(packet.version!==1||packet.worker!==binding.worker||packet.session!==binding.context.session||packet.contextSha256!==binding.contextSha256||packet.parentPid!==binding.context.parentPid||packet.pid!==binding.pid||!integer(packet.pid,1,Number.MAX_SAFE_INTEGER))fail('SELFTEST_IPC_FOREIGN');
+ const phases=SELFTEST_WORKER_PROTOCOL.workers[binding.worker];if(!phases)fail('SELFTEST_IPC_WORKER');
+ if(packet.kind==='ready'){keys(packet,base);return packet;}
+ if(packet.kind==='progress'){
+  keys(packet,[...base,'phase','statement','stage','elapsedNs']);
+  const range=SELFTEST_WORKER_PROTOCOL.statements[packet.phase];
+  if(!phases.includes(packet.phase)||!range||!integer(packet.statement,range[0],range[1])||!['start','end'].includes(packet.stage)||typeof packet.elapsedNs!=='string'||!/^[0-9]{1,24}$/.test(packet.elapsedNs))fail('SELFTEST_IPC_PROGRESS');return packet;
+ }
+ if(packet.kind==='receipt'){
+  keys(packet,[...base,'phase','count','rowsSha256']);
+  if(!phases.includes(packet.phase)||!integer(packet.count,1,SELFTEST_WORKER_PROTOCOL.maxRows)||!sha(packet.rowsSha256))fail('SELFTEST_IPC_RECEIPT');return packet;
+ }
+ if(packet.kind==='rows'){
+  keys(packet,[...base,'phase','chunk','rows']);
+  if(!phases.includes(packet.phase)||!integer(packet.chunk,0,SELFTEST_WORKER_PROTOCOL.maxRows)||!Array.isArray(packet.rows)||packet.rows.length<1||packet.rows.length>SELFTEST_WORKER_PROTOCOL.chunkRows)fail('SELFTEST_IPC_ROWS');
+  for(const row of packet.rows){
+   if(!plain(row)||!Object.hasOwn(row,'name')||!Object.hasOwn(row,'result')||Object.keys(row).some(key=>!['name','result','boundary','expectedDenial'].includes(key))||row.result!=='PASS'||typeof row.name!=='string'||!row.name||row.name.length>8192)fail('SELFTEST_IPC_ROW');
+   for(const key of ['boundary','expectedDenial'])if(Object.hasOwn(row,key)&&(typeof row[key]!=='string'||!row[key]||row[key].length>8192))fail('SELFTEST_IPC_ROW');
+  }return packet;
+ }
+ if(packet.kind==='done'){
+  keys(packet,[...base,'phases','count','rowsSha256','sourceFinalSha256']);
+  if(JSON.stringify(packet.phases)!==JSON.stringify(phases)||!integer(packet.count,1,SELFTEST_WORKER_PROTOCOL.maxRows)||!sha(packet.rowsSha256)||packet.sourceFinalSha256!==binding.contextSha256)fail('SELFTEST_IPC_DONE');return packet;
+ }
+ if(packet.kind==='failure'){
+  keys(packet,[...base,'scope','phase','statement','error','sourceFinalSha256']);
+  if(!['oracle','source','preflight','protocol'].includes(packet.scope)||packet.phase!==null&&!phases.includes(packet.phase)||packet.statement!==null&&!integer(packet.statement,0,159)||packet.scope==='oracle'&&packet.phase===null||packet.sourceFinalSha256!==null&&packet.sourceFinalSha256!==binding.contextSha256)fail('SELFTEST_IPC_FAILURE');
+  keys(packet.error,['code','operator','frames']);
+  if(typeof packet.error.code!=='string'||!packet.error.code||packet.error.code.length>256||packet.error.operator!==null&&(typeof packet.error.operator!=='string'||packet.error.operator.length>64)||!Array.isArray(packet.error.frames)||packet.error.frames.length>8||packet.error.frames.some(frame=>typeof frame!=='string'||frame.length>512||frame.toLowerCase().includes('data:')))fail('SELFTEST_IPC_FAILURE');return packet;
+ }
+ fail('SELFTEST_IPC_KIND');
+}
+
+function mergeSelftestWorkerChecks(records){
+ const fail=code=>{throw Object.assign(new Error(code),{code});};
+ const sha=value=>createHash('sha256').update(value).digest('hex');
+ if(!Array.isArray(records)||records.length!==2)fail('SELFTEST_WORKERS_INCOMPLETE');
+ const phases=new Map();
+ for(const worker of ['A','B']){
+  const matches=records.filter(record=>record.worker===worker);if(matches.length!==1)fail('SELFTEST_WORKERS_DUPLICATE');const record=matches[0];
+  if(!record.ready||!record.closed||!record.disconnected||record.code!==0||record.signal!==null||record.executionError||record.terminal?.kind!=='done')fail('SELFTEST_WORKER_NOT_SUCCESS');
+  const expected=SELFTEST_WORKER_PROTOCOL.workers[worker];if(record.phases.size!==expected.length)fail('SELFTEST_PHASE_MISSING');
+  const own=[];
+  for(const phase of expected){const item=record.phases.get(phase);if(!item||!item.receipt||item.rows.length!==item.receipt.count||sha(JSON.stringify(item.rows))!==item.receipt.rowsSha256||phases.has(phase))fail('SELFTEST_PHASE_INTEGRITY');phases.set(phase,item.rows);own.push(...item.rows);}
+  if(record.terminal.count!==own.length||record.terminal.rowsSha256!==sha(JSON.stringify(own)))fail('SELFTEST_EXECUTION_RECEIPT');
+ }
+ if(phases.size!==4)fail('SELFTEST_PHASE_COVERAGE');
+ return SELFTEST_WORKER_PROTOCOL.phases.flatMap(phase=>phases.get(phase));
+}
+
+function runParallelSelftest(root,options){
+ return (async()=>{
+  const fail=(code,extra={})=>Object.assign(new Error(code),{code,...extra});
+  const sha=value=>createHash('sha256').update(value).digest('hex');
+  if(process.env.NODE_OPTIONS||process.env.NODE_PATH)throw fail('SELFTEST_NODE_PRELOAD');
+  const execution={session:randomUUID(),parentPid:process.pid,workflowFile:options.workflowFile,contractFile:options.contractFile};
+  const before=snapshotSelftestPhysicalSource(root,options.expectedHead,execution);
+  const budget=options.timeoutMs??SELFTEST_WORKER_PROTOCOL.defaultBudgetMs;
+  if(!Number.isSafeInteger(budget)||budget<50||budget>SELFTEST_WORKER_PROTOCOL.maxBudgetMs)throw fail('SELFTEST_BUDGET');
+  const parent=path.join(before.root,'.vercel','workspace-ci-evidence');mkdirSync(parent,{recursive:true});
+  if(realpathSync(parent)!==parent)throw fail('SELFTEST_SCRATCH_ROOT');
+  const privateRoot=path.join(before.root,'.vercel','private');mkdirSync(privateRoot,{recursive:true});
+  if(realpathSync(privateRoot)!==privateRoot)throw fail('SELFTEST_REPORT_ROOT');
+  const report=mkdtempSync(path.join(privateRoot,'selftest-workers-'+before.context.sourceHead.slice(0,8)+'-'+(before.context.run.runId||'local')+'-'+(before.context.run.runAttempt||'0')+'-'+execution.session.slice(0,8)+'-'));
+  const records=[],pending=[];let startupFailure=null,sourceFailure=null,cancellation=null,deadline;
+  const stop=record=>{
+   if(record.closed||record.stopRequested)return;
+   record.stopRequested=true;
+   try{record.child.kill('SIGTERM');}catch(error){record.executionError??=fail('SELFTEST_CHILD_STOP',{cause:error});}
+   record.forceTimer=setTimeout(()=>{if(!record.closed)try{record.child.kill('SIGKILL');}catch(error){record.executionError??=fail('SELFTEST_CHILD_STOP',{cause:error});}},1000);
+  };
+  const stopAll=()=>records.forEach(stop);
+  const latch=(record,error)=>{record.executionError??=error;stopAll();};
+  const send=(record,kind)=>{
+   const message={version:1,kind,worker:record.worker,session:execution.session,contextSha256:before.contextSha256,parentPid:process.pid,pid:record.child.pid};
+   const observation={kind,settled:false,callbackCompleted:false,cancelled:false,error:null};record.sendObservations.push(observation);
+   record.sendWaits.push(new Promise(resolve=>{
+    const finish=(error,origin)=>{
+     if(observation.settled)return;observation.settled=true;observation.callbackCompleted=origin==='callback';observation.cancelled=origin==='cancel';observation.error=error?.code||null;clearTimeout(timer);
+     if(error)latch(record,error);resolve();
+    };
+    const timer=setTimeout(()=>finish(fail('SELFTEST_PARENT_SEND_TIMEOUT'),'timeout'),SELFTEST_WORKER_PROTOCOL.finishMs);
+    record.cancelSends.push(error=>finish(error,'cancel'));
+    try{record.child.send(message,error=>finish(error?fail('SELFTEST_PARENT_SEND',{cause:error}):null,'callback'));}catch(error){finish(fail('SELFTEST_PARENT_SEND',{cause:error}),'throw');}
+   }));
+  };
+  const cancel=signal=>{
+   cancellation??=fail('SELFTEST_PARENT_CANCELLED',{signal});
+   for(const record of records){record.executionError??=cancellation;for(const cancelSend of record.cancelSends)cancelSend(cancellation);}stopAll();
+  };
+  const onSigint=()=>cancel('SIGINT'),onSigterm=()=>cancel('SIGTERM');
+  process.on('SIGINT',onSigint);process.on('SIGTERM',onSigterm);
+  const start=worker=>{
+   const args=['selftest-worker','--root',before.root,'--expected-head',before.context.sourceHead,'--workflow',before.context.workflowPath,'--contract',before.context.contractPath,'--worker',worker,'--session',execution.session,'--parent-pid',String(process.pid)];
+   const child=fork(fileURLToPath(import.meta.url),args,{cwd:before.root,env:{...process.env,NODE_OPTIONS:'',NODE_PATH:''},execArgv:[],serialization:'json',stdio:['ignore','pipe','pipe','ipc'],detached:false,windowsHide:true});
+   const record={worker,child,ready:false,phases:new Map(),phaseIndex:0,progress:[],terminal:null,executionError:null,closed:false,disconnected:false,code:null,signal:null,stopRequested:false,stdout:[],stderr:[],stdoutBytes:0,stderrBytes:0,ioOverflow:false,forceTimer:null,sendObservations:[],sendWaits:[],cancelSends:[]};
+   records.push(record);
+   const phases=SELFTEST_WORKER_PROTOCOL.workers[worker];
+   pending.push(new Promise(resolve=>{
+    child.on('disconnect',()=>{record.disconnected=true;});
+    child.on('error',error=>{latch(record,fail('SELFTEST_CHILD_ERROR',{cause:error}));});
+    for(const stream of ['stdout','stderr']){
+     if(!child[stream]){latch(record,fail('SELFTEST_CHILD_PIPE'));continue;}
+     child[stream].on('error',error=>latch(record,fail('SELFTEST_CHILD_PIPE',{cause:error})));
+     child[stream].on('data',chunk=>{
+     const value=Buffer.from(chunk);record[stream+'Bytes']+=value.length;
+     if(record[stream+'Bytes']>SELFTEST_WORKER_PROTOCOL.stdioBytes){record.ioOverflow=true;latch(record,fail('SELFTEST_CHILD_OUTPUT_LIMIT'));return;}
+     record[stream].push(value);
+     });
+    }
+    child.on('message',value=>{
+     try{
+      const packet=validateSelftestWorkerPacket(value,{worker,pid:child.pid,context:before.context,contextSha256:before.contextSha256});
+      if(record.terminal)throw fail('SELFTEST_IPC_AFTER_TERMINAL');
+      if(packet.kind==='ready'){
+       if(record.ready)throw fail('SELFTEST_IPC_REPLAY');record.ready=true;send(record,'start');return;
+      }
+      if(!record.ready)throw fail('SELFTEST_IPC_NOT_READY');
+      if(packet.kind==='progress'){
+       if(record.progress.length>=256)throw fail('SELFTEST_IPC_PROGRESS_LIMIT');record.progress.push(packet);return;
+      }
+      if(packet.kind==='receipt'){
+       if(packet.phase!==phases[record.phaseIndex]||record.phases.has(packet.phase))throw fail('SELFTEST_IPC_PHASE_ORDER');
+       record.phases.set(packet.phase,{receipt:packet,rows:[],nextChunk:0});return;
+      }
+      if(packet.kind==='rows'){
+       const phase=record.phases.get(packet.phase);
+       if(packet.phase!==phases[record.phaseIndex]||!phase||packet.chunk!==phase.nextChunk||packet.rows.length!==Math.min(SELFTEST_WORKER_PROTOCOL.chunkRows,phase.receipt.count-phase.rows.length))throw fail('SELFTEST_IPC_CHUNK_ORDER');
+       phase.nextChunk++;phase.rows.push(...packet.rows);
+       if(phase.rows.length===phase.receipt.count){if(sha(JSON.stringify(phase.rows))!==phase.receipt.rowsSha256)throw fail('SELFTEST_IPC_ROWS_DIGEST');record.phaseIndex++;}return;
+      }
+      if(packet.kind==='done'){
+       const own=phases.flatMap(phase=>record.phases.get(phase)?.rows||[]);
+       if(record.phaseIndex!==phases.length||record.phases.size!==phases.length||packet.count!==own.length||packet.rowsSha256!==sha(JSON.stringify(own)))throw fail('SELFTEST_EXECUTION_RECEIPT');
+      }else if(packet.kind==='failure'){
+       if(packet.scope==='oracle'&&(packet.phase!==phases[record.phaseIndex]||packet.sourceFinalSha256!==before.contextSha256))throw fail('SELFTEST_IPC_FAILURE_ORDER');
+      }else throw fail('SELFTEST_IPC_KIND');
+      record.terminal=packet;send(record,'finish');
+     }catch(error){latch(record,error);}
+    });
+    child.once('close',(code,signal)=>{
+     record.closed=true;record.code=code;record.signal=signal;clearTimeout(record.forceTimer);
+     if(!record.disconnected||signal!==null||!record.terminal||code!==(record.terminal.kind==='done'?0:1))record.executionError??=fail('SELFTEST_CHILD_CLOSE');
+     if(record.executionError)stopAll();resolve(record);
+    });
+   }));
+  };
+  try{
+   deadline=setTimeout(()=>{for(const record of records){record.executionError??=fail('SELFTEST_TIMEOUT');for(const cancelSend of record.cancelSends)cancelSend(record.executionError);}stopAll();},budget);
+   try{start('A');start('B');}catch(error){startupFailure=fail('SELFTEST_FORK_FAILED',{cause:error});stopAll();}
+   await Promise.allSettled(pending);await Promise.allSettled(records.flatMap(record=>record.sendWaits));
+  }finally{
+   stopAll();await Promise.allSettled(pending);await Promise.allSettled(records.flatMap(record=>record.sendWaits));clearTimeout(deadline);process.off('SIGINT',onSigint);process.off('SIGTERM',onSigterm);
+   try{verifySelftestPhysicalSourceFinal(before);}catch(error){sourceFailure=error;}
+   for(const record of records){
+    writeFileSync(path.join(report,record.worker+'.stdout.log'),Buffer.concat(record.stdout),{flag:'wx'});
+    writeFileSync(path.join(report,record.worker+'.stderr.log'),Buffer.concat(record.stderr),{flag:'wx'});
+   }
+   writeFileSync(path.join(report,'execution.json'),JSON.stringify({version:1,context:before.context,contextSha256:before.contextSha256,startupFailure:startupFailure?.code||null,sourceFinalFailure:sourceFailure?.code||null,cancellation:cancellation?{code:cancellation.code,signal:cancellation.signal}:null,workers:records.map(record=>({worker:record.worker,pid:record.child.pid,closed:record.closed,disconnected:record.disconnected,code:record.code,signal:record.signal,executionFailure:record.executionError?.code||null,terminal:record.terminal,receipts:[...record.phases.values()].map(phase=>phase.receipt),progress:record.progress,parentSends:record.sendObservations,stdoutBytes:record.stdoutBytes,stderrBytes:record.stderrBytes,ioOverflow:record.ioOverflow}))},null,2)+'\n',{flag:'wx'});
+  }
+  if(sourceFailure)throw sourceFailure;if(startupFailure)throw startupFailure;if(cancellation)throw cancellation;
+  const invalid=records.find(record=>record.executionError);if(invalid)throw invalid.executionError;
+  const failed=records.filter(record=>record.terminal?.kind==='failure');
+  if(failed.length){
+   failed.sort((a,b)=>{const priority=record=>record.terminal.scope==='oracle'?SELFTEST_WORKER_PROTOCOL.phases.indexOf(record.terminal.phase):-1;return priority(a)-priority(b)||a.worker.localeCompare(b.worker);});
+   const error=failed[0].terminal.error,denial=fail(error.code,{operator:error.operator,worker:failed[0].worker,phase:failed[0].terminal.phase});denial.stack=error.code+'\n'+error.frames.join('\n');throw denial;
+  }
+  return mergeSelftestWorkerChecks(records);
+ })();
+}
+
+async function selftestWorkerMain(opts){
+ const fail=code=>{throw Object.assign(new Error(code),{code});};
+ const expected=['root','expected-head','workflow','contract','worker','session','parent-pid'];
+ if(Object.keys(opts).length!==expected.length||expected.some(key=>!Object.hasOwn(opts,key))||!['A','B'].includes(opts.worker)||!process.send||!process.connected||process.execArgv.length||process.env.NODE_OPTIONS||process.env.NODE_PATH||Number(opts['parent-pid'])!==process.ppid)throw fail('SELFTEST_WORKER_ENTRY');
+ const before=snapshotSelftestPhysicalSource(opts.root,opts['expected-head'],{session:opts.session,parentPid:process.ppid,workflowFile:opts.workflow,contractFile:opts.contract});
+ const binding={worker:opts.worker,pid:process.pid,context:before.context,contextSha256:before.contextSha256},base={version:1,worker:opts.worker,session:opts.session,contextSha256:before.contextSha256,pid:process.pid,parentPid:process.ppid};
+ const send=packet=>new Promise((resolve,reject)=>{try{validateSelftestWorkerPacket(packet,binding);process.send(packet,error=>error?reject(error):resolve());}catch(error){reject(error);}});
+ let pendingControl=null,controlError=null;
+ const controlFailure=error=>{controlError??=error;pendingControl?.finish(error);};
+ const onControl=value=>{
+  const keys=['version','kind','worker','session','contextSha256','parentPid','pid'];
+  if(!pendingControl||!value||typeof value!=='object'||Object.keys(value).length!==keys.length||keys.some(key=>!Object.hasOwn(value,key))||value.kind!==pendingControl.kind||value.version!==1||value.worker!==opts.worker||value.session!==opts.session||value.contextSha256!==before.contextSha256||value.parentPid!==process.ppid||value.pid!==process.pid)controlFailure(fail('SELFTEST_PARENT_CONTROL'));
+  else pendingControl.finish();
+ };
+ const onDisconnect=()=>controlFailure(fail('SELFTEST_PARENT_DISCONNECTED'));
+ process.on('message',onControl);process.on('disconnect',onDisconnect);
+ const control=kind=>{
+  let cancel;const promise=new Promise((resolve,reject)=>{
+   if(controlError){reject(controlError);return;}
+   if(pendingControl){reject(fail('SELFTEST_CONTROL_OVERLAP'));return;}
+   const timer=setTimeout(()=>finish(fail('SELFTEST_CONTROL_TIMEOUT')),kind==='start'?SELFTEST_WORKER_PROTOCOL.startMs:SELFTEST_WORKER_PROTOCOL.finishMs);
+   const finish=error=>{clearTimeout(timer);pendingControl=null;error?reject(error):resolve();};
+   pendingControl={kind,finish};cancel=()=>finish(fail('SELFTEST_CONTROL_CANCELLED'));
+  });
+  // The send callback may reject before the awaited control; own its rejection now.
+  promise.catch(()=>{});return{promise,cancel:()=>cancel?.()};
+ };
+ let waitingControl=null;
+ let terminal,scope='preflight';const tracker={segments:[],phase:null,statement:null,started:process.hrtime.bigint(),progress:[]};
+ try{
+  waitingControl=control('start');await send({...base,kind:'ready'});await waitingControl.promise;waitingControl=null;
+  const contract=loadContract(path.resolve(before.root,before.context.contractPath)),workflow=yaml.load(readFileSync(path.resolve(before.root,before.context.workflowPath),'utf8'));equivalent(workflow,contract);dependencies(before.root,contract);
+  tracker.mark=(phase,statement,stage='start')=>{tracker.phase=phase;tracker.statement=statement;tracker.progress.push({...base,kind:'progress',phase,statement,stage,elapsedNs:String(process.hrtime.bigint()-tracker.started)});};
+  scope='oracle';const checks=(opts.worker==='A'?selftestWorkerA:selftestWorkerB)(workflow,contract,before.root,tracker),owned=tracker.segments.flatMap(segment=>segment.rows);
+  if(controlError)throw controlError;
+  if(JSON.stringify(checks)!==JSON.stringify(owned))throw fail('SELFTEST_LOCAL_SEGMENT_COVERAGE');
+  terminal={...base,kind:'done',phases:[...SELFTEST_WORKER_PROTOCOL.workers[opts.worker]],count:checks.length,rowsSha256:createHash('sha256').update(JSON.stringify(checks)).digest('hex'),sourceFinalSha256:null};
+ }catch(error){waitingControl?.cancel();waitingControl=null;const diagnostic=selftestErrorDiagnostics(error,['selftest','--diagnostic-errors','code-stack-v1']);terminal={...base,kind:'failure',scope,phase:tracker.phase,statement:tracker.statement,error:{code:typeof error.code==='string'?error.code:'VERIFIER_FAILED',operator:diagnostic.operator??null,frames:diagnostic.frames||[]},sourceFinalSha256:null};}
+ try{terminal.sourceFinalSha256=verifySelftestPhysicalSourceFinal(before);}catch(error){terminal={...base,kind:'failure',scope:'source',phase:null,statement:null,error:{code:error.code||'SELFTEST_SOURCE_CHANGED',operator:null,frames:[]},sourceFinalSha256:null};}
+ try{
+  for(const packet of tracker.progress)await send(packet);
+  for(const segment of tracker.segments){
+   const rows=segment.rows;await send({...base,kind:'receipt',phase:segment.phase,count:rows.length,rowsSha256:createHash('sha256').update(JSON.stringify(rows)).digest('hex')});
+   for(let offset=0;offset<rows.length;offset+=SELFTEST_WORKER_PROTOCOL.chunkRows)await send({...base,kind:'rows',phase:segment.phase,chunk:offset/SELFTEST_WORKER_PROTOCOL.chunkRows,rows:rows.slice(offset,offset+SELFTEST_WORKER_PROTOCOL.chunkRows)});
+  }
+  waitingControl=control('finish');await send(terminal);await waitingControl.promise;waitingControl=null;process.exitCode=terminal.kind==='done'?0:1;
+  process.off('message',onControl);process.off('disconnect',onDisconnect);process.disconnect();
+ }catch(error){waitingControl?.cancel();process.off('message',onControl);process.off('disconnect',onDisconnect);process.exitCode=1;if(process.connected)process.disconnect();throw error;}
+}
+
+async function main(){
+ const [mode,...args]=process.argv.slice(2),opts=options(args);
+ if(mode==='selftest-worker'){await selftestWorkerMain(opts);return;}
+ const root=path.resolve(opts.root||process.cwd()),contract=loadContract(path.resolve(root,opts.contract||contractPath)),file=path.resolve(root,opts.workflow||workflowPath),bytes=readFileSync(file),workflow=yaml.load(bytes.toString('utf8'));
  equivalent(workflow,contract);dependencies(root,contract);
  if(mode==='equivalence'){if(opts['expected-head'])identity(root,opts['expected-head']);console.log(JSON.stringify({state:'PASS',commandBlocks:contract.blocks.length,artifactPatterns:contract.artifactPatterns.length,lanes:8}));return;}
  if(mode==='selftest'){
+  if(opts['execution-mode']&&!['parallel','serial-reference'].includes(opts['execution-mode']))deny('CLI_ARGUMENT');
   const sourceHead=opts['expected-head']?identity(root,opts['expected-head']):identity(root,execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim());
-   const checks=selftest(workflow,contract,root),output=path.resolve(root,opts.output||'.vercel/workspace-ci-evidence/selftest.json');writeJson(output,{version:1,state:'PASS',head:sourceHead,workflowSha256:hash(bytes),contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,checks});
+   const checks=opts['execution-mode']==='serial-reference'?selftest(workflow,contract,root):await runParallelSelftest(root,{expectedHead:sourceHead,workflowFile:file,contractFile:path.resolve(root,opts.contract||contractPath)}),output=path.resolve(root,opts.output||'.vercel/workspace-ci-evidence/selftest.json');writeJson(output,{version:1,state:'PASS',head:sourceHead,workflowSha256:hash(bytes),contractSha256:EXPECTED_CONTRACT_SHA256,verifierSha256:verifierSha256(),packageLockSha256:contract.packageLockSha256,requirementsSha256:contract.requirementsSha256,checks});
   const escape=value=>value.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');
   writeFileSync(output.replace(/\.json$/,'.xml'),`<?xml version="1.0" encoding="UTF-8"?>\n<testsuite name="workspace-ci-private-design" tests="${checks.length}" failures="0">${checks.map(check=>`<testcase name="${escape(check.name)}"/>`).join('')}</testsuite>\n`);
   console.log(JSON.stringify({state:'PASS',checks:checks.length,commandBlocks:contract.blocks.length,artifactPatterns:contract.artifactPatterns.length,lanes:8}));return;
@@ -2696,4 +3312,4 @@ export function selftestErrorDiagnostics(error,argv){
   return {diagnosticErrors:'code-stack-v1',operator,frames};
  }catch{return {};}
 }
-if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){try{main();}catch(error){console.error(JSON.stringify({state:'FAIL',code:error.code||'VERIFIER_FAILED',...selftestErrorDiagnostics(error,process.argv.slice(2))}));process.exitCode=1;}}
+if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){try{await main();}catch(error){console.error(JSON.stringify({state:'FAIL',code:error.code||'VERIFIER_FAILED',...selftestErrorDiagnostics(error,process.argv.slice(2))}));process.exitCode=1;}}
