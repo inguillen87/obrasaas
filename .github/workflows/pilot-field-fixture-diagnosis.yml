@@ -1,0 +1,42 @@
+name: Isolated canonical journey fixture corrections
+on:
+  push:
+    branches: ['operations/pilot-ci-diagnosis-20261024']
+    paths:
+      - '.github/workflows/pilot-field-fixture-diagnosis.yml'
+      - 'scripts/verify-field-operations-ui.mjs'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Journey transitions
+        run: node scripts/verify-field-operations-ui.mjs
+        env:
+          FIELD_UI_FOCUS: journey-transitions
+      - name: Journey canonical sequence
+        run: node scripts/verify-field-operations-ui.mjs
+        env:
+          FIELD_UI_FOCUS: journey-sequence
+      - name: Journey per-worker selection
+        run: node scripts/verify-field-operations-ui.mjs
+        env:
+          FIELD_UI_FOCUS: journey-multiple
+      - name: Attendance revision recovery on four widths
+        run: node scripts/verify-field-operations-ui.mjs
+        env:
+          FIELD_UI_FOCUS: attendance-revision
