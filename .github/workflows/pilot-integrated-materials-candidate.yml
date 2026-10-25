@@ -1,0 +1,475 @@
+# PRIVATE REVIEWABLE PROPOSAL: literal bfe after Root reported66/20/43/lint6 PASS.
+# No workflow from this proposal has been applied, dispatched or executed.
+name: Integrated materials physical candidate validation
+on:
+  push:
+    branches: ['operations/integrated-materials-candidate-20261025']
+    paths: ['.github/workflows/pilot-integrated-materials-candidate.yml']
+permissions:
+  contents: read
+env:
+  SOURCE_REVISION: 'bfe716875698ec9c03b1e0c9d916749592e9a41c'
+jobs:
+  pg-execution:
+    name: Execution PostgreSQL and canonical material regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+        working-directory: candidate
+    services:
+      postgres:
+        image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+      EVIDENCE_DIR: .vercel/private/materials-candidate-ci/pg-execution/${{ github.run_id }}-${{ github.run_attempt }}
+      CUTOVER_TEST_DISPOSABLE: '1'
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+      FIELD_EXECUTION_TEST_DISPOSABLE: '1'
+      FIELD_EXECUTION_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+    steps:
+      - name: Reject an unreviewed or foreign source target
+        working-directory: .
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_EVENT_NAME" == "push" ]]
+          [[ "$GITHUB_REF" == "refs/heads/operations/integrated-materials-candidate-20261025" ]]
+          [[ "$SOURCE_REVISION" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$SOURCE_REVISION" != "472cc6c4d97d7386d413ef882387763d2e226608" ]]
+          [[ "$SOURCE_REVISION" != "$GITHUB_SHA" ]]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: workflow-source
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.SOURCE_REVISION }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24.21.0'
+          package-manager-cache: false
+      - name: Record actual Ops and physical source identities before dependencies
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import {createHash} from 'node:crypto';
+          import {execFileSync} from 'node:child_process';
+          const sha=b=>createHash('sha256').update(b).digest('hex');
+          const git=(cwd,...a)=>execFileSync('git',a,{cwd,encoding:'utf8',maxBuffer:40*1024*1024}).trim();
+          assert.equal(process.version,'v24.21.0');
+          assert.match(process.env.SOURCE_REVISION,/^[a-f0-9]{40}$/);
+          assert.notEqual(process.env.SOURCE_REVISION,'472cc6c4d97d7386d413ef882387763d2e226608','472 failed canonical64; a separately reviewed successor is required');
+          assert.notEqual(process.env.SOURCE_REVISION,process.env.GITHUB_SHA,'Source must remain distinct from the Ops event');
+          assert.equal(process.env.GITHUB_ACTIONS,'true');
+          assert.equal(process.env.GITHUB_EVENT_NAME,'push');
+          assert.equal(process.env.GITHUB_REF,'refs/heads/operations/integrated-materials-candidate-20261025');
+          assert.match(process.env.GITHUB_RUN_ID,/^[1-9][0-9]*$/);
+          assert.match(process.env.GITHUB_RUN_ATTEMPT,/^[1-9][0-9]*$/);
+          const root=process.cwd(),ops=path.resolve(root,'../workflow-source');
+          assert.equal(git(root,'rev-parse','HEAD'),process.env.SOURCE_REVISION);
+          assert.equal(git(ops,'rev-parse','HEAD'),process.env.GITHUB_SHA);
+          assert.equal(git(root,'status','--porcelain=v1','--untracked-files=all'),'');
+          assert.equal(git(ops,'status','--porcelain=v1','--untracked-files=all'),'');
+          const section=JSON.parse(fs.readFileSync('.github/workspace-acceptance-contract.json')).planBudgetCurrentRevision,own=section.ownRuntimeDiagnosticAdvance;
+          assert.equal(own.sourceChanges.length,58);assert.equal(own.sourceChanges.filter(r=>r.status==='MODIFIED').length,40);assert.equal(own.sourceChanges.filter(r=>r.status==='ADDED').length,18);assert.equal(own.retainedDependencies.length,5);assert.equal(section.references.length,85);assert.equal(section.sourceSetDeltas.length,22);
+          const validation=[...new Set(['scripts/lib/plan-budget-current-ci-reviewed.mjs',...section.references.map(r=>r.path),...own.sourceChanges.map(r=>r.path),...own.retainedDependencies.map(r=>r.path),'src/lib/participant-admission.mjs','src/lib/procurement-quantity.js','src/lib/progress-measurement-quantity.js','src/lib/task-progress-measurement.js'])];assert.equal(validation.length,137);
+          const files=execFileSync('git',['ls-files','-z'],{encoding:'utf8'}).split('\0').filter(Boolean).sort();
+          assert.equal(files.length,1380,'Review source-count changes before updating this workflow');
+          assert.equal(files.filter(f=>/^tests\/production-[^/]+\.test\.mjs$/.test(f)).length,348);
+          const manifest=files.map(file=>{const full=path.resolve(file),s=fs.lstatSync(full);assert.ok(s.isFile()&&!s.isSymbolicLink());assert.equal(fs.realpathSync(full),full);const bytes=fs.readFileSync(full);return {path:file,bytes:bytes.length,rawSha256:sha(bytes),lfSha256:sha(Buffer.from(bytes.toString('utf8').replaceAll('\r\n','\n')))};});
+          const folder=process.env.EVIDENCE_DIR;fs.mkdirSync(folder,{recursive:true});
+          fs.writeFileSync(path.join(folder,'sources-before.json'),JSON.stringify(manifest,null,2)+'\n',{flag:'wx'});
+          const workflowPath='.github/workflows/pilot-integrated-materials-candidate.yml';
+          const context={version:1,sourceHead:process.env.SOURCE_REVISION,sourceTree:git(root,'rev-parse','HEAD^{tree}'),opsEventHead:process.env.GITHUB_SHA,workflowHead:process.env.GITHUB_WORKFLOW_SHA||null,workflowRef:process.env.GITHUB_WORKFLOW_REF,workflowSha256:sha(fs.readFileSync(path.join(ops,workflowPath))),runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,job:process.env.GITHUB_JOB,physicalTrackedFiles:files.length,productionTestFiles:348,ownSourceChanges:58,ownRetainedDependencies:5,boundedValidationFiles:137,authority:'physical checked-out source, no projected source reader',limits:{production:false,realProvider:false,realClerk:false,humanAcceptance:false}};
+          fs.writeFileSync(path.join(folder,'context.json'),JSON.stringify(context,null,2)+'\n',{flag:'wx'});
+          console.log(JSON.stringify(context));
+          NODE
+      - name: Install only the source lockfile dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate current public Main contract and exact producer lists
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import yaml from 'js-yaml';
+          import {loadContract,equivalent,currentProducerSourceFiles} from './.github/scripts/verify-workspace-ci-parallelization.mjs';
+          const root=process.cwd(),contract=loadContract(path.join(root,'.github/workspace-acceptance-contract.json'));
+          equivalent(yaml.load(fs.readFileSync('.github/workflows/workspace-acceptance.yml','utf8')),contract);
+          assert.equal(contract.extension.proofs.length,22);
+          const actual=contract.extension.proofs.map(spec=>{const files=currentProducerSourceFiles(spec,root);assert.deepEqual(files,spec.sourceFiles,spec.id);return {id:spec.id,kind:spec.kind,files};});
+          fs.writeFileSync(path.join(process.env.EVIDENCE_DIR,'public-source-lists.json'),JSON.stringify({state:'PASS',physicalSource:true,MainSelftestExecuted:false,contractLoaded:true,workflowEquivalent:true,proofs:actual},null,2)+'\n',{flag:'wx'});
+          console.log(JSON.stringify({state:'PASS',publicMainLoad:true,workflowEquivalent:true,exactProducerLists:actual.length,selftest:false}));
+          NODE
+      - name: Disposable target guards
+        run: |
+          set -euo pipefail
+          node scripts/verify-field-execution-postgres.mjs --guard-self-test 2>&1 | tee "$EVIDENCE_DIR/target-guards.original.log"
+      - name: Run all 23 reference regression files without a test filter
+        run: |
+          set -euo pipefail
+          node --test --test-reporter=tap tests/production-field-execution-policy.test.mjs tests/production-field-execution-store.test.mjs tests/production-field-execution-view.test.mjs tests/production-meta-field-execution.test.mjs tests/production-field-operations.test.mjs tests/production-company-field-operations.test.mjs tests/production-material-inventory.test.mjs tests/production-material-inventory-review-queue.test.mjs tests/production-material-inventory-traceability-view.test.mjs tests/production-material-inventory-queue-view.test.mjs tests/production-material-inventory-queue-panel.test.mjs tests/production-worksite-task-selector.test.mjs tests/production-field-overtime-recovery.test.mjs tests/production-field-overtime-privacy.test.mjs tests/production-task-progress-measurement.test.mjs tests/production-task-progress-measurement-recovery.test.mjs tests/production-task-progress-measurement-jsonb.test.mjs tests/production-task-progress-measurement-cancellation.test.mjs tests/production-progress-measurement-quantity.test.mjs tests/production-meta-field-outbound-disclosure.test.mjs tests/production-field-report-feedback.test.mjs tests/production-material-consumption-feedback.test.mjs tests/production-material-consumption-draft-recovery.test.mjs 2>&1 | tee "$EVIDENCE_DIR/regressions.original.tap"
+      - name: Execute original PostgreSQL harness and retain its complete output
+        run: |
+          set -euo pipefail
+          node scripts/verify-field-execution-postgres.mjs --run 2>&1 | tee "$EVIDENCE_DIR/execution-postgres.original.log"
+      - name: Bind original execution proof to actual source files
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import {createHash} from 'node:crypto';
+          const sha=b=>createHash('sha256').update(b).digest('hex'),read=file=>fs.readFileSync(file);
+          const checkManifest=rows=>{assert.ok(Array.isArray(rows)&&rows.length>0);assert.equal(new Set(rows.map(r=>r.path)).size,rows.length);for(const row of rows){assert.ok(typeof row.path==='string'&&!path.isAbsolute(row.path)&&!row.path.split('/').includes('..'));assert.equal(sha(read(row.path)),row.sha256,row.path);}};
+          const tap=read(path.join(process.env.EVIDENCE_DIR,'regressions.original.tap')).toString('utf8');
+          for(const [label,value] of Object.entries({tests:414,pass:414,fail:0,cancelled:0,skipped:0,todo:0})){const rows=[...tap.matchAll(new RegExp('^# '+label+' ([0-9]+)$','gm'))];assert.equal(rows.length,1,'One complete TAP summary: '+label);assert.equal(Number(rows[0][1]),value,'Reference regression summary: '+label);}
+          const raw=read(path.join(process.env.EVIDENCE_DIR,'execution-postgres.original.log')).toString('utf8');
+          const line=raw.trimEnd().split('\n').at(-1),p=JSON.parse(line);
+          assert.equal(p.status,'PASS');assert.equal(p.environment,'disposable-loopback-new-database');assert.equal(p.checkCount,17);assert.equal(p.checks.length,17);assert.equal(p.productionDataTouched,false);assert.equal(p.providerCalls,0);assert.equal(p.humanAccepted,false);checkManifest(p.sourceManifest);assert.equal(p.harnessSha256,sha(read('scripts/verify-field-execution-postgres.mjs')));
+          fs.writeFileSync(path.join(process.env.EVIDENCE_DIR,'execution-proof.original.json'),line+'\n',{flag:'wx'});
+          console.log(JSON.stringify({state:'PASS',referenceRegressionTests:414,actualPostgresChecks:p.checkCount,realProviders:0,humanAcceptance:false}));
+          NODE
+      - name: Verify every tracked source remained byte-identical
+        if: always()
+        env:
+          PRIOR_JOB_STATUS: ${{ job.status }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import {createHash} from 'node:crypto';
+          import {execFileSync} from 'node:child_process';
+          const folder=process.env.EVIDENCE_DIR,sha=b=>createHash('sha256').update(b).digest('hex');
+          let failure=null;
+          try {
+           const before=JSON.parse(fs.readFileSync(path.join(folder,'sources-before.json')));
+           const files=execFileSync('git',['ls-files','-z'],{encoding:'utf8'}).split('\0').filter(Boolean).sort();
+           assert.deepEqual(files,before.map(r=>r.path));
+           for(const row of before){const file=path.resolve(row.path),s=fs.lstatSync(file);assert.ok(s.isFile()&&!s.isSymbolicLink());assert.equal(fs.realpathSync(file),file);const bytes=fs.readFileSync(file);assert.equal(bytes.length,row.bytes,row.path);assert.equal(sha(bytes),row.rawSha256,row.path);}
+           assert.equal(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),process.env.SOURCE_REVISION);
+           assert.equal(execFileSync('git',['status','--porcelain=v1','--untracked-files=all'],{encoding:'utf8'}),'');
+          } catch(error){failure={message:error.message,code:error.code||null};}
+          fs.mkdirSync(folder,{recursive:true});
+          fs.writeFileSync(path.join(folder,'source-fence-final.json'),JSON.stringify({state:failure?'FAIL':'PASS',scope:'tracked source integrity only; consult original producer exit and job status',priorJobStatus:process.env.PRIOR_JOB_STATUS,sourceHead:process.env.SOURCE_REVISION,runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,job:process.env.GITHUB_JOB,failure},null,2)+'\n');
+          const outputRoots=[folder,...(process.env.GITHUB_JOB==='inventory-ui'?['.vercel/material-inventory-evidence']:process.env.GITHUB_JOB==='company-native-pg'?['.vercel/private/company-channel-postgres-proof.json']:[])],outputs=[];
+          function visit(file){if(!fs.existsSync(file))return;const stat=fs.lstatSync(file);assert.ok(!stat.isSymbolicLink());if(stat.isDirectory()){for(const name of fs.readdirSync(file).sort())visit(path.join(file,name));}else{assert.ok(stat.isFile());outputs.push({path:file,bytes:stat.size,sha256:sha(fs.readFileSync(file))});}}
+          outputRoots.forEach(visit);
+          fs.writeFileSync(path.join(folder,'outputs-manifest.json'),JSON.stringify({sourceHead:process.env.SOURCE_REVISION,opsEventHead:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,job:process.env.GITHUB_JOB,priorJobStatus:process.env.PRIOR_JOB_STATUS,files:outputs},null,2)+'\n',{flag:'wx'});
+          if(failure)throw new Error('Final physical source fence failed: '+failure.message);
+          NODE
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: materials-pg-execution-${{ env.SOURCE_REVISION }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            candidate/.vercel/private/materials-candidate-ci/pg-execution/${{ github.run_id }}-${{ github.run_attempt }}/
+
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  company-native-pg:
+    name: Native company full 54 PostgreSQL checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+        working-directory: candidate
+    services:
+      postgres:
+        image: docker.io/library/postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+        env:
+          POSTGRES_USER: cutover_test
+          POSTGRES_PASSWORD: cutover_test
+          POSTGRES_DB: obrasaas_cutover_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cutover_test -d obrasaas_cutover_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+      EVIDENCE_DIR: .vercel/private/materials-candidate-ci/company-native-pg/${{ github.run_id }}-${{ github.run_attempt }}
+      CUTOVER_TEST_DISPOSABLE: '1'
+      CUTOVER_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+      FIELD_EXECUTION_TEST_DISPOSABLE: '1'
+      FIELD_EXECUTION_TEST_DATABASE_URL: postgresql://cutover_test:cutover_test@127.0.0.1:5432/obrasaas_cutover_ci
+    steps:
+      - name: Reject an unreviewed or foreign source target
+        working-directory: .
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_EVENT_NAME" == "push" ]]
+          [[ "$GITHUB_REF" == "refs/heads/operations/integrated-materials-candidate-20261025" ]]
+          [[ "$SOURCE_REVISION" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$SOURCE_REVISION" != "472cc6c4d97d7386d413ef882387763d2e226608" ]]
+          [[ "$SOURCE_REVISION" != "$GITHUB_SHA" ]]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: workflow-source
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.SOURCE_REVISION }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24.21.0'
+          package-manager-cache: false
+      - name: Record actual Ops and physical source identities before dependencies
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import {createHash} from 'node:crypto';
+          import {execFileSync} from 'node:child_process';
+          const sha=b=>createHash('sha256').update(b).digest('hex');
+          const git=(cwd,...a)=>execFileSync('git',a,{cwd,encoding:'utf8',maxBuffer:40*1024*1024}).trim();
+          assert.equal(process.version,'v24.21.0');
+          assert.match(process.env.SOURCE_REVISION,/^[a-f0-9]{40}$/);
+          assert.notEqual(process.env.SOURCE_REVISION,'472cc6c4d97d7386d413ef882387763d2e226608','472 failed canonical64; a separately reviewed successor is required');
+          assert.notEqual(process.env.SOURCE_REVISION,process.env.GITHUB_SHA,'Source must remain distinct from the Ops event');
+          assert.equal(process.env.GITHUB_ACTIONS,'true');
+          assert.equal(process.env.GITHUB_EVENT_NAME,'push');
+          assert.equal(process.env.GITHUB_REF,'refs/heads/operations/integrated-materials-candidate-20261025');
+          assert.match(process.env.GITHUB_RUN_ID,/^[1-9][0-9]*$/);
+          assert.match(process.env.GITHUB_RUN_ATTEMPT,/^[1-9][0-9]*$/);
+          const root=process.cwd(),ops=path.resolve(root,'../workflow-source');
+          assert.equal(git(root,'rev-parse','HEAD'),process.env.SOURCE_REVISION);
+          assert.equal(git(ops,'rev-parse','HEAD'),process.env.GITHUB_SHA);
+          assert.equal(git(root,'status','--porcelain=v1','--untracked-files=all'),'');
+          assert.equal(git(ops,'status','--porcelain=v1','--untracked-files=all'),'');
+          const section=JSON.parse(fs.readFileSync('.github/workspace-acceptance-contract.json')).planBudgetCurrentRevision,own=section.ownRuntimeDiagnosticAdvance;
+          assert.equal(own.sourceChanges.length,58);assert.equal(own.sourceChanges.filter(r=>r.status==='MODIFIED').length,40);assert.equal(own.sourceChanges.filter(r=>r.status==='ADDED').length,18);assert.equal(own.retainedDependencies.length,5);assert.equal(section.references.length,85);assert.equal(section.sourceSetDeltas.length,22);
+          const validation=[...new Set(['scripts/lib/plan-budget-current-ci-reviewed.mjs',...section.references.map(r=>r.path),...own.sourceChanges.map(r=>r.path),...own.retainedDependencies.map(r=>r.path),'src/lib/participant-admission.mjs','src/lib/procurement-quantity.js','src/lib/progress-measurement-quantity.js','src/lib/task-progress-measurement.js'])];assert.equal(validation.length,137);
+          const files=execFileSync('git',['ls-files','-z'],{encoding:'utf8'}).split('\0').filter(Boolean).sort();
+          assert.equal(files.length,1380,'Review source-count changes before updating this workflow');
+          assert.equal(files.filter(f=>/^tests\/production-[^/]+\.test\.mjs$/.test(f)).length,348);
+          const manifest=files.map(file=>{const full=path.resolve(file),s=fs.lstatSync(full);assert.ok(s.isFile()&&!s.isSymbolicLink());assert.equal(fs.realpathSync(full),full);const bytes=fs.readFileSync(full);return {path:file,bytes:bytes.length,rawSha256:sha(bytes),lfSha256:sha(Buffer.from(bytes.toString('utf8').replaceAll('\r\n','\n')))};});
+          const folder=process.env.EVIDENCE_DIR;fs.mkdirSync(folder,{recursive:true});
+          fs.writeFileSync(path.join(folder,'sources-before.json'),JSON.stringify(manifest,null,2)+'\n',{flag:'wx'});
+          const workflowPath='.github/workflows/pilot-integrated-materials-candidate.yml';
+          const context={version:1,sourceHead:process.env.SOURCE_REVISION,sourceTree:git(root,'rev-parse','HEAD^{tree}'),opsEventHead:process.env.GITHUB_SHA,workflowHead:process.env.GITHUB_WORKFLOW_SHA||null,workflowRef:process.env.GITHUB_WORKFLOW_REF,workflowSha256:sha(fs.readFileSync(path.join(ops,workflowPath))),runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,job:process.env.GITHUB_JOB,physicalTrackedFiles:files.length,productionTestFiles:348,ownSourceChanges:58,ownRetainedDependencies:5,boundedValidationFiles:137,authority:'physical checked-out source, no projected source reader',limits:{production:false,realProvider:false,realClerk:false,humanAcceptance:false}};
+          fs.writeFileSync(path.join(folder,'context.json'),JSON.stringify(context,null,2)+'\n',{flag:'wx'});
+          console.log(JSON.stringify(context));
+          NODE
+      - name: Install only the source lockfile dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Execute the original Native company PostgreSQL producer
+        run: |
+          set -euo pipefail
+          node scripts/verify-company-channel-postgres.mjs 2>&1 | tee "$EVIDENCE_DIR/company-native-postgres.original.log"
+      - name: Verify full Native output, cleanup and actual 243-source manifest
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import {createHash} from 'node:crypto';
+          const sha=b=>createHash('sha256').update(b).digest('hex'),read=file=>fs.readFileSync(file);
+          const checkManifest=rows=>{assert.ok(Array.isArray(rows)&&rows.length>0);assert.equal(new Set(rows.map(r=>r.path)).size,rows.length);for(const row of rows){assert.ok(typeof row.path==='string'&&!path.isAbsolute(row.path)&&!row.path.split('/').includes('..'));assert.equal(sha(read(row.path)),row.sha256,row.path);}};
+          const p=JSON.parse(read('.vercel/private/company-channel-postgres-proof.json'));
+          assert.equal(p.status,'PASS');assert.equal(p.checkCount,54);assert.equal(p.checks.length,54);assert.equal(p.disposableDatabase,true);assert.equal(p.databaseRemoved,true);assert.equal(p.production,false);assert.equal(p.provider,'controlled-synthetic-only');assert.equal(p.composedFieldCore.status,'PASS');assert.equal(p.composedFieldCore.limits.realProviderCalls,0);assert.equal(p.composedFieldCore.limits.realAcceptance,false);assert.equal(p.sourceManifest.length,243);checkManifest(p.sourceManifest);assert.equal(p.harnessSha256,sha(read('scripts/verify-company-channel-postgres.mjs')));
+          console.log(JSON.stringify({state:'PASS',nativeChecks:p.checkCount,physicalSourceCount:p.sourceManifest.length,supplementalChecks:p.supplementalCheckCount,databaseRemoved:p.databaseRemoved,humanAcceptance:false}));
+          NODE
+      - name: Verify every tracked source remained byte-identical
+        if: always()
+        env:
+          PRIOR_JOB_STATUS: ${{ job.status }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import {createHash} from 'node:crypto';
+          import {execFileSync} from 'node:child_process';
+          const folder=process.env.EVIDENCE_DIR,sha=b=>createHash('sha256').update(b).digest('hex');
+          let failure=null;
+          try {
+           const before=JSON.parse(fs.readFileSync(path.join(folder,'sources-before.json')));
+           const files=execFileSync('git',['ls-files','-z'],{encoding:'utf8'}).split('\0').filter(Boolean).sort();
+           assert.deepEqual(files,before.map(r=>r.path));
+           for(const row of before){const file=path.resolve(row.path),s=fs.lstatSync(file);assert.ok(s.isFile()&&!s.isSymbolicLink());assert.equal(fs.realpathSync(file),file);const bytes=fs.readFileSync(file);assert.equal(bytes.length,row.bytes,row.path);assert.equal(sha(bytes),row.rawSha256,row.path);}
+           assert.equal(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),process.env.SOURCE_REVISION);
+           assert.equal(execFileSync('git',['status','--porcelain=v1','--untracked-files=all'],{encoding:'utf8'}),'');
+          } catch(error){failure={message:error.message,code:error.code||null};}
+          fs.mkdirSync(folder,{recursive:true});
+          fs.writeFileSync(path.join(folder,'source-fence-final.json'),JSON.stringify({state:failure?'FAIL':'PASS',scope:'tracked source integrity only; consult original producer exit and job status',priorJobStatus:process.env.PRIOR_JOB_STATUS,sourceHead:process.env.SOURCE_REVISION,runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,job:process.env.GITHUB_JOB,failure},null,2)+'\n');
+          const outputRoots=[folder,...(process.env.GITHUB_JOB==='inventory-ui'?['.vercel/material-inventory-evidence']:process.env.GITHUB_JOB==='company-native-pg'?['.vercel/private/company-channel-postgres-proof.json']:[])],outputs=[];
+          function visit(file){if(!fs.existsSync(file))return;const stat=fs.lstatSync(file);assert.ok(!stat.isSymbolicLink());if(stat.isDirectory()){for(const name of fs.readdirSync(file).sort())visit(path.join(file,name));}else{assert.ok(stat.isFile());outputs.push({path:file,bytes:stat.size,sha256:sha(fs.readFileSync(file))});}}
+          outputRoots.forEach(visit);
+          fs.writeFileSync(path.join(folder,'outputs-manifest.json'),JSON.stringify({sourceHead:process.env.SOURCE_REVISION,opsEventHead:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,job:process.env.GITHUB_JOB,priorJobStatus:process.env.PRIOR_JOB_STATUS,files:outputs},null,2)+'\n',{flag:'wx'});
+          if(failure)throw new Error('Final physical source fence failed: '+failure.message);
+          NODE
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: materials-company-native-pg-${{ env.SOURCE_REVISION }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            candidate/.vercel/private/materials-candidate-ci/company-native-pg/${{ github.run_id }}-${{ github.run_attempt }}/
+            candidate/.vercel/private/company-channel-postgres-proof.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+  inventory-ui:
+    name: Inventory UI FULL, four widths and exact copy provenance
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: bash
+        working-directory: candidate
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+      EVIDENCE_DIR: .vercel/private/materials-candidate-ci/inventory-ui/${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Reject an unreviewed or foreign source target
+        working-directory: .
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_EVENT_NAME" == "push" ]]
+          [[ "$GITHUB_REF" == "refs/heads/operations/integrated-materials-candidate-20261025" ]]
+          [[ "$SOURCE_REVISION" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$SOURCE_REVISION" != "472cc6c4d97d7386d413ef882387763d2e226608" ]]
+          [[ "$SOURCE_REVISION" != "$GITHUB_SHA" ]]
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: workflow-source
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.SOURCE_REVISION }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24.21.0'
+          package-manager-cache: false
+      - name: Record actual Ops and physical source identities before dependencies
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import {createHash} from 'node:crypto';
+          import {execFileSync} from 'node:child_process';
+          const sha=b=>createHash('sha256').update(b).digest('hex');
+          const git=(cwd,...a)=>execFileSync('git',a,{cwd,encoding:'utf8',maxBuffer:40*1024*1024}).trim();
+          assert.equal(process.version,'v24.21.0');
+          assert.match(process.env.SOURCE_REVISION,/^[a-f0-9]{40}$/);
+          assert.notEqual(process.env.SOURCE_REVISION,'472cc6c4d97d7386d413ef882387763d2e226608','472 failed canonical64; a separately reviewed successor is required');
+          assert.notEqual(process.env.SOURCE_REVISION,process.env.GITHUB_SHA,'Source must remain distinct from the Ops event');
+          assert.equal(process.env.GITHUB_ACTIONS,'true');
+          assert.equal(process.env.GITHUB_EVENT_NAME,'push');
+          assert.equal(process.env.GITHUB_REF,'refs/heads/operations/integrated-materials-candidate-20261025');
+          assert.match(process.env.GITHUB_RUN_ID,/^[1-9][0-9]*$/);
+          assert.match(process.env.GITHUB_RUN_ATTEMPT,/^[1-9][0-9]*$/);
+          const root=process.cwd(),ops=path.resolve(root,'../workflow-source');
+          assert.equal(git(root,'rev-parse','HEAD'),process.env.SOURCE_REVISION);
+          assert.equal(git(ops,'rev-parse','HEAD'),process.env.GITHUB_SHA);
+          assert.equal(git(root,'status','--porcelain=v1','--untracked-files=all'),'');
+          assert.equal(git(ops,'status','--porcelain=v1','--untracked-files=all'),'');
+          const section=JSON.parse(fs.readFileSync('.github/workspace-acceptance-contract.json')).planBudgetCurrentRevision,own=section.ownRuntimeDiagnosticAdvance;
+          assert.equal(own.sourceChanges.length,58);assert.equal(own.sourceChanges.filter(r=>r.status==='MODIFIED').length,40);assert.equal(own.sourceChanges.filter(r=>r.status==='ADDED').length,18);assert.equal(own.retainedDependencies.length,5);assert.equal(section.references.length,85);assert.equal(section.sourceSetDeltas.length,22);
+          const validation=[...new Set(['scripts/lib/plan-budget-current-ci-reviewed.mjs',...section.references.map(r=>r.path),...own.sourceChanges.map(r=>r.path),...own.retainedDependencies.map(r=>r.path),'src/lib/participant-admission.mjs','src/lib/procurement-quantity.js','src/lib/progress-measurement-quantity.js','src/lib/task-progress-measurement.js'])];assert.equal(validation.length,137);
+          const files=execFileSync('git',['ls-files','-z'],{encoding:'utf8'}).split('\0').filter(Boolean).sort();
+          assert.equal(files.length,1380,'Review source-count changes before updating this workflow');
+          assert.equal(files.filter(f=>/^tests\/production-[^/]+\.test\.mjs$/.test(f)).length,348);
+          const manifest=files.map(file=>{const full=path.resolve(file),s=fs.lstatSync(full);assert.ok(s.isFile()&&!s.isSymbolicLink());assert.equal(fs.realpathSync(full),full);const bytes=fs.readFileSync(full);return {path:file,bytes:bytes.length,rawSha256:sha(bytes),lfSha256:sha(Buffer.from(bytes.toString('utf8').replaceAll('\r\n','\n')))};});
+          const folder=process.env.EVIDENCE_DIR;fs.mkdirSync(folder,{recursive:true});
+          fs.writeFileSync(path.join(folder,'sources-before.json'),JSON.stringify(manifest,null,2)+'\n',{flag:'wx'});
+          const workflowPath='.github/workflows/pilot-integrated-materials-candidate.yml';
+          const context={version:1,sourceHead:process.env.SOURCE_REVISION,sourceTree:git(root,'rev-parse','HEAD^{tree}'),opsEventHead:process.env.GITHUB_SHA,workflowHead:process.env.GITHUB_WORKFLOW_SHA||null,workflowRef:process.env.GITHUB_WORKFLOW_REF,workflowSha256:sha(fs.readFileSync(path.join(ops,workflowPath))),runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,job:process.env.GITHUB_JOB,physicalTrackedFiles:files.length,productionTestFiles:348,ownSourceChanges:58,ownRetainedDependencies:5,boundedValidationFiles:137,authority:'physical checked-out source, no projected source reader',limits:{production:false,realProvider:false,realClerk:false,humanAcceptance:false}};
+          fs.writeFileSync(path.join(folder,'context.json'),JSON.stringify(context,null,2)+'\n',{flag:'wx'});
+          console.log(JSON.stringify(context));
+          NODE
+      - name: Install only the source lockfile dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Execute every original Inventory UI scenario without FOCUS
+        run: |
+          set -euo pipefail
+          test -z "${MATERIAL_INVENTORY_UI_FOCUS+x}"
+          node scripts/verify-material-inventory-ui.mjs 2>&1 | tee "$EVIDENCE_DIR/inventory-ui.original.log"
+      - name: Verify all 108 scenarios and six original copies with three exact relocations
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import {createHash} from 'node:crypto';
+          const sha=b=>createHash('sha256').update(b).digest('hex'),read=file=>fs.readFileSync(file);
+          const checkManifest=rows=>{assert.ok(Array.isArray(rows)&&rows.length>0);assert.equal(new Set(rows.map(r=>r.path)).size,rows.length);for(const row of rows){assert.ok(typeof row.path==='string'&&!path.isAbsolute(row.path)&&!row.path.split('/').includes('..'));assert.equal(sha(read(row.path)),row.sha256,row.path);}};
+          const p=JSON.parse(read('.vercel/material-inventory-evidence/browser.json')),copy=JSON.parse(read('.vercel/material-inventory-evidence/execution-fixture-sources.json'));
+          assert.equal(p.status,'PASS');assert.equal(p.focus,null);assert.deepEqual(p.widths,[320,390,768,1280]);assert.equal(p.providerCalls,0);assert.equal(p.productionDataTouched,false);assert.equal(p.humanAccepted,false);checkManifest(p.sourceManifest);
+          const modes=["normal","uncertain","invalid-result","catalog-conflict","catalog-reconsult-failure","missing-session","denial","pagination","consumption-pages","post-denial-close","post-denial-reload","stock-opening","stock-count","stock-receipt","stock-reject","stock-pages","consumption-context","consumption-context-legacy","queue-default","queue-filter","queue-draft-navigation","queue-attempt-navigation","queue-directed","queue-stale-counts","queue-anchor-change","queue-other-kind-change","queue-head-replacement"],expected=[320,390,768,1280].flatMap(width=>modes.map(mode=>({width,mode})));
+          assert.equal(p.checkCount,108);assert.equal(p.checks.length,108);assert.deepEqual(p.checks.map(({width,mode})=>({width,mode})),expected);
+          assert.equal(copy.acceptance,false);assert.equal(copy.applicationSourceChanged,false);assert.equal(copy.copiedFiles.length,6);assert.equal(copy.fixtureTransforms.length,3);
+          const account=['src/app/(identity)/cuenta/field-execution-mandate-panel.js','src/app/(identity)/cuenta/field-execution-mandate-panel.module.css','src/app/(identity)/cuenta/field-execution-view.mjs'],deps=['src/lib/procurement-quantity.js','src/lib/progress-measurement-quantity.js','src/lib/task-progress-measurement.js'];
+          assert.deepEqual(copy.copiedFiles.map(r=>r.sourcePath).sort(),[...account,...deps].sort());
+          for(const row of copy.copiedFiles){assert.equal(row.sourceSha256,sha(read(row.sourcePath)));assert.equal(row.fixtureRelativePath,'app/'+path.basename(row.sourcePath));assert.equal(p.sourceManifest.find(r=>r.path===row.sourcePath).sha256,row.sourceSha256);}
+          const source=read(account[2]);let generated=source;
+          for(const [i,dep] of deps.entries()){const before=generated,needle='../../../lib/'+path.basename(dep);assert.equal(before.toString().split(needle).length,2);generated=Buffer.from(before.toString().replace(needle,'./'+path.basename(dep)));assert.deepEqual(copy.fixtureTransforms[i],{path:account[2],kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:sha(source),copiedBeforeSha256:sha(before),fixtureSha256:sha(generated),fixtureRelativePath:'app/field-execution-view.mjs',dependencySourcePath:dep,dependencyFixturePath:'app/'+path.basename(dep)});}
+          assert.equal(copy.originalSourceSha256,sha(source));assert.equal(copy.generatedFixtureSha256,sha(generated));assert.notEqual(copy.generatedFixtureSha256,copy.originalSourceSha256);
+          console.log(JSON.stringify({state:'PASS',scope:'FULL controlled Inventory UI',scenarios:108,widths:p.widths,exactCopies:6,exactRelocations:3,originalProofRetained:true,humanAcceptance:false}));
+          NODE
+      - name: Verify every tracked source remained byte-identical
+        if: always()
+        env:
+          PRIOR_JOB_STATUS: ${{ job.status }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import path from 'node:path';
+          import {createHash} from 'node:crypto';
+          import {execFileSync} from 'node:child_process';
+          const folder=process.env.EVIDENCE_DIR,sha=b=>createHash('sha256').update(b).digest('hex');
+          let failure=null;
+          try {
+           const before=JSON.parse(fs.readFileSync(path.join(folder,'sources-before.json')));
+           const files=execFileSync('git',['ls-files','-z'],{encoding:'utf8'}).split('\0').filter(Boolean).sort();
+           assert.deepEqual(files,before.map(r=>r.path));
+           for(const row of before){const file=path.resolve(row.path),s=fs.lstatSync(file);assert.ok(s.isFile()&&!s.isSymbolicLink());assert.equal(fs.realpathSync(file),file);const bytes=fs.readFileSync(file);assert.equal(bytes.length,row.bytes,row.path);assert.equal(sha(bytes),row.rawSha256,row.path);}
+           assert.equal(execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),process.env.SOURCE_REVISION);
+           assert.equal(execFileSync('git',['status','--porcelain=v1','--untracked-files=all'],{encoding:'utf8'}),'');
+          } catch(error){failure={message:error.message,code:error.code||null};}
+          fs.mkdirSync(folder,{recursive:true});
+          fs.writeFileSync(path.join(folder,'source-fence-final.json'),JSON.stringify({state:failure?'FAIL':'PASS',scope:'tracked source integrity only; consult original producer exit and job status',priorJobStatus:process.env.PRIOR_JOB_STATUS,sourceHead:process.env.SOURCE_REVISION,runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,job:process.env.GITHUB_JOB,failure},null,2)+'\n');
+          const outputRoots=[folder,...(process.env.GITHUB_JOB==='inventory-ui'?['.vercel/material-inventory-evidence']:process.env.GITHUB_JOB==='company-native-pg'?['.vercel/private/company-channel-postgres-proof.json']:[])],outputs=[];
+          function visit(file){if(!fs.existsSync(file))return;const stat=fs.lstatSync(file);assert.ok(!stat.isSymbolicLink());if(stat.isDirectory()){for(const name of fs.readdirSync(file).sort())visit(path.join(file,name));}else{assert.ok(stat.isFile());outputs.push({path:file,bytes:stat.size,sha256:sha(fs.readFileSync(file))});}}
+          outputRoots.forEach(visit);
+          fs.writeFileSync(path.join(folder,'outputs-manifest.json'),JSON.stringify({sourceHead:process.env.SOURCE_REVISION,opsEventHead:process.env.GITHUB_SHA,runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,job:process.env.GITHUB_JOB,priorJobStatus:process.env.PRIOR_JOB_STATUS,files:outputs},null,2)+'\n',{flag:'wx'});
+          if(failure)throw new Error('Final physical source fence failed: '+failure.message);
+          NODE
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: materials-inventory-ui-${{ env.SOURCE_REVISION }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            candidate/.vercel/private/materials-candidate-ci/inventory-ui/${{ github.run_id }}-${{ github.run_attempt }}/
+            candidate/.vercel/material-inventory-evidence/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
