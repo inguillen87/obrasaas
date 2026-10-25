@@ -1,7 +1,7 @@
-name: Mobile identity gallery camera and three-image diagnosis
+name: Mobile identity complete and rotation disclosure diagnosis
 on:
   push:
-    branches: ['operations/mobile-identity-camera-fix-20261025']
+    branches: ['operations/mobile-identity-rotation-disclosure-fix-20261025']
     paths:
       - '.github/workflows/pilot-mobile-identity-camera-diagnosis.yml'
       - 'scripts/verify-mobile-identity-ui.mjs'
@@ -18,12 +18,9 @@ jobs:
           - name: mobile-identity-full
             mode: full
             command: node scripts/verify-mobile-identity-ui.mjs
-          - name: three-images-four-widths
-            mode: three-images
-            command: MOBILE_IDENTITY_UI_SCENARIO=three-images node scripts/verify-mobile-identity-ui.mjs
-          - name: inactive-camera-four-widths
-            mode: inactive-guard
-            command: MOBILE_IDENTITY_UI_SCENARIO=inactive-guard node scripts/verify-mobile-identity-ui.mjs
+          - name: rotation-disclosures-four-widths
+            mode: rotation-disclosures
+            command: MOBILE_IDENTITY_UI_SCENARIO=rotation-disclosures node scripts/verify-mobile-identity-ui.mjs
     name: ${{ matrix.name }}
     env:
       NEXT_TELEMETRY_DISABLED: '1'
@@ -37,12 +34,12 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Require the exact reviewed camera and three-image harness
-        run: test "$(sha256sum scripts/verify-mobile-identity-ui.mjs | cut -d ' ' -f 1)" = '8aa2b9493b10c4fc87769297fa8b1236b8d47993d11bf39ee4497d71e26eae64'
+      - name: Require the exact reviewed disclosure harness
+        run: test "$(sha256sum scripts/verify-mobile-identity-ui.mjs | cut -d ' ' -f 1)" = 'bf33d3b6ce4d611d67805df35a102992cad18ceee3a417b25cb2030b4d1b5d0a'
       - run: npm ci --no-audit --no-fund
-      - name: Execute the declared real-component synthetic scope
+      - name: Execute the declared synthetic real-component scope
         run: ${{ matrix.command }}
-      - name: Check scope and retain human and device acceptance limits
+      - name: Verify complete or focal disclosure scope
         env:
           EXPECTED_MODE: ${{ matrix.mode }}
         run: |
@@ -50,24 +47,21 @@ jobs:
           import assert from 'node:assert/strict';
           import {readFileSync} from 'node:fs';
           const p=JSON.parse(readFileSync('.vercel/mobile-identity-evidence/browser.json','utf8'));
-          assert.equal(p.status,'PASS');assert.equal(p.harnessSha256,'8aa2b9493b10c4fc87769297fa8b1236b8d47993d11bf39ee4497d71e26eae64');assert.equal(p.errors.length,0);
-          assert.deepEqual(p.widths,[320,390,768,1280]);
-          assert.equal(p.fullSuite,process.env.EXPECTED_MODE==='full');
-          assert.equal(p.focusedScenario,process.env.EXPECTED_MODE==='full'?null:process.env.EXPECTED_MODE);
+          const full=process.env.EXPECTED_MODE==='full';
+          assert.equal(p.status,'PASS');assert.equal(p.harnessSha256,'bf33d3b6ce4d611d67805df35a102992cad18ceee3a417b25cb2030b4d1b5d0a');assert.equal(p.errors.length,0);
+          assert.deepEqual(p.widths,[320,390,768,1280]);assert.equal(p.fullSuite,full);
+          assert.equal(p.focusedScenario,full?null:'rotation-disclosures');
           assert.equal(p.limitations.physicalPhone,false);assert.equal(p.limitations.realHumanIdentityAccepted,false);assert.equal(p.limitations.realProviderWrites,false);
-          if(process.env.EXPECTED_MODE!=='inactive-guard'){
-            const three=p.checks.filter(row=>row.id==='three-images');assert.equal(three.length,4);assert.deepEqual(three.map(row=>row.width).sort((a,b)=>a-b),[320,390,768,1280]);
-            for(const row of three){assert.equal(row.physicalCameraOpened,false);assert.deepEqual(row.cameraConstraints.map(request=>request.video.facingMode.ideal),['environment','user']);}
-            const bodies=p.postBodies.filter(row=>row.mode==='three-images');assert.equal(bodies.length,4);for(const row of bodies){assert.equal(row.imageCount,3);assert.equal(row.backConsent,true);assert.equal(row.consent,true);}
-          }
-          if(process.env.EXPECTED_MODE!=='three-images'){
-            const inactive=p.checks.filter(row=>row.id==='inactive-guard');assert.equal(inactive.length,4);for(const row of inactive){assert.equal(row.cameraRequests,0);assert.equal(row.automaticPosts,0);assert.equal(row.decodes,0);assert.equal(row.active,false);}
-          }
+          const normals=p.checks.filter(row=>row.id==='normal'),orientations=p.checks.filter(row=>row.id==='orientation'),opened=p.checks.filter(row=>row.id==='rotation-image-details-opened');
+          assert.equal(normals.length,4);assert.equal(orientations.length,full?1:4);assert.equal(opened.length,full?5:8);
+          for(const row of opened){assert.equal(row.ownFieldset,true);assert.equal(row.open,true);assert.equal(row.activatedBy,'native-browser-click');}
+          for(const mode of [normals,...(!full?[orientations]:[])])assert.deepEqual(mode.map(row=>row.width).sort((a,b)=>a-b),[320,390,768,1280]);
+          if(full){const three=p.checks.filter(row=>row.id==='three-images'),inactive=p.checks.filter(row=>row.id==='inactive-guard');assert.equal(three.length,4);assert.equal(inactive.length,4);for(const row of inactive){assert.equal(row.cameraRequests,0);assert.equal(row.automaticPosts,0);assert.equal(row.decodes,0);assert.equal(row.active,false);}for(const row of three){assert.equal(row.physicalCameraOpened,false);assert.deepEqual(row.cameraConstraints.map(request=>request.video.facingMode.ideal),['environment','user']);}const bodies=p.postBodies.filter(row=>row.mode==='three-images');assert.equal(bodies.length,4);for(const row of bodies){assert.equal(row.imageCount,3);assert.equal(row.backConsent,true);assert.equal(row.consent,true);}}
           JS
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:
-          name: mobile-identity-camera-${{ github.run_id }}-${{ matrix.name }}
+          name: mobile-identity-disclosure-${{ github.run_id }}-${{ matrix.name }}
           path: .vercel/mobile-identity-evidence/
           include-hidden-files: true
           retention-days: 7
