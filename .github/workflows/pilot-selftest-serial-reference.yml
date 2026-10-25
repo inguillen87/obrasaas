@@ -16,12 +16,13 @@ jobs:
       SERIAL_REFERENCE_HEAD: '6c550fa0e6fe73ee68af376c3e5bf1ba04cf88df'
       SERIAL_REFERENCE_TREE: '0fcd7eb0f4cc7c77b4f39b69821d17119ca13f26'
       SERIAL_REFERENCE_MAIN_SHA256: '9522f2d4b0c04c51b02491f0aac1c16ff9b8585568c00322045a2c8724b000cc'
-      SERIAL_REFERENCE_EVIDENCE: ${{ runner.temp }}/obrasaas-original-serial-reference
     steps:
       - name: Require the literal reviewed release target and a fresh audit directory
         shell: bash
         run: |
           set -euo pipefail
+          SERIAL_REFERENCE_EVIDENCE="$RUNNER_TEMP/obrasaas-original-serial-reference"
+          printf 'SERIAL_REFERENCE_EVIDENCE=%s\n' "$SERIAL_REFERENCE_EVIDENCE" >> "$GITHUB_ENV"
           [[ "$SERIAL_REFERENCE_HEAD" =~ ^[a-f0-9]{40}$ ]]
           [[ "$SERIAL_REFERENCE_TREE" =~ ^[a-f0-9]{40}$ ]]
           [[ "$SERIAL_REFERENCE_MAIN_SHA256" =~ ^[a-f0-9]{64}$ ]]
