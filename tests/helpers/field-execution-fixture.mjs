@@ -24,6 +24,7 @@ export function fieldExecutionFixture({measured=false,balance='10.000'}={}){
   if(sql.includes('SELECT w.id,w.active,w.metadata')){const principal=Object.values(members).find(row=>row.clerkUserId===state.worker.metadata.participant.clerkUserId);return result(state.worker.active&&principal&&state.worker.metadata.participant.status==='ACTIVE'&&state.worker.metadata.participant.permissions.report&&args[0]===state.worker.id?[{...state.worker,...principal,id:state.worker.id}]:[]);}
   if(sql.includes('FROM public."Worker" w')&&sql.includes('JOIN public."Project"'))return result(state.issuerBound?[{id:'bound-origin'}]:[]);
   if(sql.includes('FROM public."ProjectMembership"'))return result(state.issuerAssigned?[{id:'assignment'}]:[]);
+  if(sql.startsWith('SELECT id,name,active,metadata FROM public."Worker"')&&sql.includes('ORDER BY id LIMIT 101'))return result(state.worker.active&&state.worker.metadata.participant.permissions.report&&state.worker.metadata.participant.kyc.status==='APPROVED'?[state.worker]:[]);
   if(sql.includes('FROM public."Worker"')&&sql.includes("metadata->'participant'->>'clerkUserId'")){
    if(sql.includes('permissions'))return result(state.worker.active&&state.worker.metadata.participant.status==='ACTIVE'&&state.worker.metadata.participant.permissions[args[3]||'report']&&state.worker.metadata.participant.clerkUserId===args[2]?[state.worker]:[]);
    return result(state.issuerWorker?[{...state.worker,id:'issuer-worker'}]:[]);
@@ -37,6 +38,7 @@ export function fieldExecutionFixture({measured=false,balance='10.000'}={}){
    if(sql.includes("'KYC_SUBMITTED'"))return result(state.submissionPresent?[{id:'submission',metadata:{contentHash}}]:[]);
    const action=['field.operation.recorded','field.execution.mandate','field.execution.applied'].find(action=>sql.includes("action='"+action+"'"));
    assert.ok(action,'Unexpected audit SELECT: '+sql);
+   if(sql.includes('ORDER BY "createdAt" DESC,id DESC LIMIT 101'))return result(state.audits.filter(row=>row.organizationId===args[0]&&row.entityId===args[1]&&row.action===action&&(action==='field.execution.mandate'?row.metadata.state==='ACTIVE'&&(args[2]||row.metadata.reporterActorId===args[3]):args[3]||row.actorId===args[4]&&row.metadata.command==='REPORT_EXECUTION')).slice().reverse().slice(0,101));
    return result(state.audits.filter(row=>row.id===args[0]&&row.organizationId===args[1]&&row.action===action&&(action==='field.operation.recorded'?row.actorId===args[2]:row.entityId===args[2])));
   }
   let changed=false;

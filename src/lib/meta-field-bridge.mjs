@@ -15,6 +15,9 @@ import {createMetaPlanImportTransport} from './meta-plan-import-transport.mjs';
 import {metaPlanImportContextDigest,metaPlanImportPromptMatches} from './meta-plan-import-origin.mjs';
 import {canImportPlan} from './plan-import-policy.mjs';
 import {publicTaskMeasurement} from './task-progress-measurement.js';
+import {normalizeFieldCommand} from './field-operations-policy.mjs';
+import {beforeExecutionProject} from './field-execution-store.mjs';
+import {metaFieldExecutionAcknowledgement} from './meta-field-execution-conversation.mjs';
 
 export function metaFieldOperationId(eventId,purpose){const h=digest(['meta-field-operation-v1',eventId,purpose]);return `${h.slice(0,8)}-${h.slice(8,12)}-4${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;}
 const receiptId=eventId=>'meta_field_'+digest(['meta-field-dispatch-v1',eventId]);
@@ -93,7 +96,7 @@ const replyAuthorityKeys=['version','source','eventId','payloadDigest','organiza
 const replyAuthorityValues=authority=>replyAuthorityKeys.map(key=>[key,authority[key]]);
 export const metaFieldReplyAuthorityDigest=authority=>digest(replyAuthorityValues(authority));
 const replyAuthorityCommitment=(r,authority,kind,recoveryContext=null,recoveryDeadline=null,environment=process.env)=>customerContextCommitment(JSON.stringify([replyAuthorityValues(authority),kind,recoveryContext,recoveryDeadline]),{organizationId:r.member.organizationId,projectId:r.project.id,purpose:'field-reply-authority',resourceId:receiptId(r.event.id)},environment);
-const reportReplyKinds=new Set(['CONSUMPTION_PROPOSAL','CONSUMPTION_READ','CONSUMPTION_RECOVERY','FIELD_REPORT_READ','PROGRESS_PROPOSAL','INCIDENT_REPORT','MATERIAL_REQUEST','EVIDENCE','MEDIA_REVIEW_REQUIRED','MEDIA_CONTEXT_REVIEW']);
+const reportReplyKinds=new Set(['EXECUTION_APPLIED','CONSUMPTION_PROPOSAL','CONSUMPTION_READ','CONSUMPTION_RECOVERY','FIELD_REPORT_READ','PROGRESS_PROPOSAL','INCIDENT_REPORT','MATERIAL_REQUEST','EVIDENCE','MEDIA_REVIEW_REQUIRED','MEDIA_CONTEXT_REVIEW']);
 const genericReplyKinds=new Set(['CHANNEL_BOUND','STALE_CONVERSATION']);
 const companyReplyKinds=new Set(['WORKSITE_SELECTION','STALE_WORKSITE_SELECTION','WORKSITE_SELECTED','WORKSITE_CONFIRM','WORKSITE_PENDING','WORKSITE_DRAFT_PENDING','WORKSITE_INPUT_CONTEXT_REQUIRED','WORKSITE_SELECTION_REQUIRED','COMPANY_ADAPTER_DISABLED','WORKSITE_DRAFT_CANCELLED']);
 function canonicalReplyDisclosure(result){if(result.kind==='INPUT_REVIEW')return typeof result.code==='string'&&result.code.startsWith('ATTENDANCE_')?'ATTENDANCE':'GENERIC';if(result.kind===recoveryCancelled)return 'WITHDRAWAL';if(result.kind==='CONSUMPTION_RECOVERY'&&result.code===recoveryExpired)return 'GENERIC';if(result.kind==='ATTENDANCE')return 'ATTENDANCE';if(reportReplyKinds.has(result.kind))return 'REPORT';if(genericReplyKinds.has(result.kind))return 'GENERIC';if(['PLAN_IMPORT_CONTEXT_REQUIRED','PLAN_IMPORT_REFERENCE_EXPIRED','PLAN_IMPORT_SOURCE_REVIEW','PLAN_IMPORT_DRAFT'].includes(result.kind))return 'PLAN_IMPORT';throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);}
@@ -207,6 +210,7 @@ export function inspectMetaFieldConsumptionRecovery(r){
 export function createMetaFieldBridge({connect,environment=process.env,resolveIdentity=resolveWorkerChannelIdentity,provider,put,get,analyzer,planAnalyzer,usage=null,protocol=META_CUSTOMER_PROTOCOL,attendanceOnly=false}){
  resolveMetaCloudProtocol(protocol);
  const lockedResolutions=new WeakMap();
+ const executionPreparations=new WeakSet(),executionFrames=new WeakMap();
  const within=run=>customerJobTransaction(connect,async client=>{
   const resolutions=new Set();lockedResolutions.set(client,resolutions);
   try{return await run(client);}finally{for(const resolved of resolutions)releaseLockedWorkerChannelIdentity(resolved);lockedResolutions.delete(client);}
@@ -224,7 +228,9 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   if(!state)return null;
   const fixed=state.consumptionRecovery,progressDeadline=progressEvidenceDeadline(r,state);
   if(fixed&&(fixed.version!==1||fixed.contextDigest!==r.principalDigest||!Number.isFinite(Date.parse(fixed.deadline))||fixed.deadline!==state.expiresAt))throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
-  const value={...state,version:1,lastEventId:r.event.id,lastMessageTimestamp:r.proof.value.timestamp,lastReceivedAt:new Date(r.event.createdAt).toISOString(),expiresAt:fixed?fixed.deadline:progressDeadline||new Date(r.now.getTime()+15*60000).toISOString(),bindingId:r.channelBinding.id};
+  const executionDeadline=state.purpose==='EXECUTION'?state.executionDeadline:null;
+  if(executionDeadline&&(!Number.isFinite(Date.parse(executionDeadline))||new Date(executionDeadline).toISOString()!==executionDeadline||Date.parse(executionDeadline)>r.now.getTime()+900000))throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);
+  const value={...state,version:1,lastEventId:r.event.id,lastMessageTimestamp:r.proof.value.timestamp,lastReceivedAt:new Date(r.event.createdAt).toISOString(),expiresAt:fixed?fixed.deadline:executionDeadline||progressDeadline||new Date(r.now.getTime()+15*60000).toISOString(),bindingId:r.channelBinding.id};
   return {version:1,lastEventId:value.lastEventId,lastMessageTimestamp:value.lastMessageTimestamp,lastReceivedAt:value.lastReceivedAt,expiresAt:value.expiresAt,bindingId:value.bindingId,encryptedState:seal(r,'field-conversation',r.worker.id,value)};
  }
  async function resolve(client,context,permission=null,beforeProject){
@@ -288,8 +294,11 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
  function assertPrepared(r,prepared){if(mediaIdentity(r)!==prepared.identityDigest||r.project.id!==prepared.projectId||r.scope!==prepared.scope||Boolean(r.companyProjection)!==prepared.corporate)throw new WorkspaceError('META_CHANNEL_MEDIA_CONTEXT_CHANGED',409);}
  function operations(client,r){
   const session={userId:r.member.clerkUserId},member={...r.member,role:'AUDITOR',channelProof:{provider:protocol.provider,eventId:r.event.id,channelId:r.connection.id,payloadDigest:r.event.payload.payloadDigest,bindingId:r.channelBinding.id}};
-  const workspace={projectOperation:async(s,input,writable,callback)=>{
+  const workspace={projectOperation:async(s,input,writable,callback,beforeProject)=>{
    if(s!==session||input.projectId!==r.project.id||input.scope!==r.scope)throw new WorkspaceError('META_CHANNEL_CONTEXT_CHANGED',409);
+   // The execution hook already ran inside the canonical resolver, before
+   // its Project locks, in the second transaction. Never run it late here.
+   if(input.action==='REPORT_EXECUTION'&&(!beforeProject||executionFrames.get(r)!==digest(input)))throw new WorkspaceError('FIELD_EXECUTION_AUTHORITY_FENCE_REQUIRED',403);
    // Channel actions have participant permissions even when the same human
    // holds an office role. Review and approval are restricted to the web UI.
    // Each canonical recovery guard ends with its own fresh source/lease/clock.
@@ -398,6 +407,13 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   const activeState=state?.version===1&&Date.parse(state.expiresAt)>r.now.getTime()&&(!action||r.proof.value.text?.body?.trim().toUpperCase()==='HOLA'&&state.purpose!=='MENU')?state:null;
   const progressWithdrawal=Boolean(activeState?.purpose==='PROGRESS'&&activeState.progressEvidenceWait&&selectedChoice(activeState,r.proof.value)==='CANCEL');
   const replyPrefix=attendanceOnly||r.companyProjection?'Obra: '+r.project.name+'\n':'',facts={projectName:r.project.name,projectId:limited?null:r.project.id,replyBodyLimit:Math.max(0,1024-replyPrefix.length),workerId:r.worker.id,permissions:limited?{attendance:r.worker.metadata.participant.permissions.attendance,report:false}:r.worker.metadata.participant.permissions,attendanceOnly:limited,inventory:data.inventory,...(!catalogOnly?{sectors:data.sectors,evidence:data.evidence,proposals:data.proposals,latest:data.attendance.filter(e=>e.workerId===r.worker.id).sort((a,b)=>b.sequence-a.sequence)[0]||null}:{}),mediaReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaFieldMediaContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId},planImportRole:plans.configured&&!limited?r.member.role:null,planImportReferenceContext:{eventId:r.event.id,payloadDigest:r.event.payload.payloadDigest,contextDigest:metaPlanImportContextDigest(r),sourceProjectId:r.sourceProjectId||r.event.projectId}};
+  const executionRead=!limited&&facts.permissions.report===true&&(state?.purpose==='EXECUTION'||state?.purpose==='OWN_EXECUTIONS'||['EXECUTION','OWN_EXECUTIONS'].includes(action)||state?.step==='MENU'&&selectedChoice(state,r.proof.value)==='EXECUTION');
+  if(executionRead){
+   facts.execution=await service.executionView(session,{projectId:r.project.id,scope:r.scope});
+   const ids=[...new Set([...facts.execution.mandates.map(m=>m.taskId),...facts.execution.receipts.map(row=>row.execution?.taskId),state?.taskId].filter(workspaceId))].slice(0,101);
+   facts.executionTasks=(await client.query(`SELECT ${taskColumns} FROM public."Task" WHERE "projectId"=$1 AND id=ANY($2::text[]) ORDER BY id LIMIT 101`,[r.project.id,ids])).rows.map(publicTask);
+   facts.executionEvidence=state?.taskId?(await client.query(`SELECT id,title,metadata,to_char("updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS revision FROM public."Incident" WHERE "projectId"=$1 AND metadata->'fieldOperations'->>'version'='1' AND metadata->'fieldOperations'->>'kind'='EVIDENCE' AND metadata->'fieldOperations'->>'workerId'=$2 AND metadata->'fieldOperations'->>'taskId'=$3 AND metadata->'fieldOperations'->>'sectorId'=$4 AND metadata->'fieldOperations'->>'recordedBy'=$5 AND metadata->'fieldOperations'->'review'->>'decision'='APPROVE' ORDER BY "createdAt" DESC,id DESC LIMIT 101`,[r.project.id,r.worker.id,state.taskId,state.sectorId,r.member.actorId])).rows.map(row=>({id:row.id,title:row.title,revision:row.revision,taskId:row.metadata.fieldOperations.taskId,workerId:row.metadata.fieldOperations.workerId,sectorId:row.metadata.fieldOperations.sectorId,status:'APPROVED'})):[];
+  }
   if(recovery)facts.consumptionRecovery=recovery;
   if(state?.purpose==='PLAN_IMPORT'&&Date.parse(state.expiresAt)>r.now.getTime()&&action!=='TASKS'&&!['HOLA','ESTADO','MENU','AYUDA'].includes(r.proof.value.text?.body?.trim().toUpperCase())&&!await metaPlanImportPromptMatches(client,r,state,environment))return {done:await record(client,r,result(r,'PLAN_IMPORT_CONTEXT_REQUIRED',text('Respondé al mensaje vigente del cronograma para enviar el archivo o elegir su autorización. Conservamos el paso y no guardamos ni analizamos archivos.')),state,{preserveConversation:true})};
   let plan;
@@ -444,6 +460,10 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
    return prepareMedia(client,r,plan.media,plan.state);
   }
   if(plan.command){
+   if(plan.command.action==='REPORT_EXECUTION'){
+    if(!canonicalFieldResolvers.has(resolveIdentity))throw new WorkspaceError('FIELD_EXECUTION_AUTHORITY_FENCE_REQUIRED',403);
+    const prepared={execution:true,command:normalizeFieldCommand({projectId:r.project.id,scope:r.scope,operationId:metaFieldOperationId(r.event.id,'REPORT_EXECUTION'),...plan.command}),stateDigest:digest(state),state,identityDigest:mediaIdentity(r),projectId:r.project.id,workerId:r.worker.id,scope:r.scope};executionPreparations.add(prepared);return prepared;
+   }
    assertDevelopmentPilotAdapter(r.connection,plan.command.action==='ATTENDANCE'?'attendance':'progress');
    const required=permissionFor(plan.command.action);if(facts.permissions[required]!==true)throw new WorkspaceError('WORKER_CHANNEL_PERMISSION_REQUIRED',403);
    // A failed command must not leave partial effects before its friendly error.
@@ -469,6 +489,27 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
   return {done:await record(client,r,result(r,cancelledRecovery?recoveryCancelled:recovery?'CONSUMPTION_RECOVERY':plan.reportRead?'FIELD_REPORT_READ':plan.consumptionRead?'CONSUMPTION_READ':'CONVERSATION',plan.reply),plan.state,{disclosure:metaFieldPlanDisclosure(plan),recovery,allowRecoveryExpired:cancelling||cancelledRecovery,preserveConversation:plan.preserveConversation===true||Boolean(recovery&&plan.state===state)||((limited||Boolean(r.companyProjection))&&state&& !['MENU','OWN_CONSUMPTIONS','OWN_EVIDENCE','OWN_PROGRESS'].includes(state.purpose)&&r.proof.value.type==='text'&&r.proof.value.text?.body?.trim().toUpperCase()==='ESTADO')})};
  }
  const plans=createMetaPlanImportTransport({within,resolve,saved,record,result,seal,unseal,commitFence,operationIdFor:metaFieldOperationId,environment,protocol,provider,put,get,analyzer:planAnalyzer,usage,writePending:async(client,r,state)=>{await client.query(`UPDATE public."Worker" SET metadata=$3::jsonb,"updatedAt"=clock_timestamp() WHERE id=$1 AND "projectId"=$2`,[r.worker.id,r.project.id,JSON.stringify({...r.worker.metadata,fieldChannelConversation:conversationEnvelope(r,state)})]);}});
+ const executionErrors=new Set(['META_CHANNEL_EXECUTION_DRAFT_EXPIRED','FIELD_EXECUTION_ISSUER_UNAVAILABLE','FIELD_EXECUTION_MANDATE_UNAVAILABLE','FIELD_EXECUTION_MANDATE_REVOKED','FIELD_EXECUTION_MANDATE_CHANGED','FIELD_EXECUTION_MANDATE_EXPIRED','FIELD_EXECUTION_MANDATE_SCOPE','FIELD_EXECUTION_MATERIAL_SCOPE','FIELD_EXECUTION_PROGRESS_SCOPE','FIELD_EXECUTION_ALLOWANCE_EXCEEDED','FIELD_EXECUTION_REPORT_CONFLICT','INVENTORY_STOCK_INSUFFICIENT','INVENTORY_CATALOG_CHANGED','INVENTORY_UNIT_MISMATCH','FIELD_REVISION_CHANGED','FIELD_EVIDENCE_NOT_APPROVED','FIELD_MEASUREMENT_CHANGED']);
+ async function executeExecution(context,prepared){
+  if(!executionPreparations.has(prepared))throw new WorkspaceError('FIELD_EXECUTION_AUTHORITY_FENCE_REQUIRED',403);executionPreparations.delete(prepared);
+  try{return await within(async client=>{
+   const r=await resolve(client,context,'report',(sqlClient,member)=>beforeExecutionProject(sqlClient,{...member,channelProof:{provider:protocol.provider}},prepared.command));
+   if(mediaIdentity(r)!==prepared.identityDigest||r.project.id!==prepared.projectId||r.worker.id!==prepared.workerId||r.scope!==prepared.scope||digest(conversation(r))!==prepared.stateDigest||selectedChoice(conversation(r),r.proof.value)!=='CONFIRM'||conversation(r)?.step!=='EXECUTION_CONFIRM')throw new WorkspaceError('META_CHANNEL_CONTEXT_CHANGED',409);
+   if(!Number.isFinite(Date.parse(prepared.state.executionDeadline))||Date.parse(prepared.state.executionDeadline)<=r.now.getTime())throw new WorkspaceError('META_CHANNEL_EXECUTION_DRAFT_EXPIRED',409);
+   const previous=await saved(client,r);if(previous)return previous;
+   executionFrames.set(r,digest(prepared.command));
+   try{const {session,service}=operations(client,r),outcome=await service.save(session,prepared.command),recorded=await record(client,r,result(r,'EXECUTION_APPLIED',text(metaFieldExecutionAcknowledgement(outcome,r.project.name)),{businessApplied:outcome.effectsApplied===true,receiptId:outcome.receiptId,reviewState:'RECORDED'}),null);
+    await commitFence(client,r);
+    // Every automatic execution, including a single-worksite ordinary channel,
+    // closes on the physical leased inbox row after all business/reply writes.
+    const source=(await client.query(`SELECT id,clock_timestamp() AS now FROM public."WebhookEvent" WHERE id=$1 AND provider=$2 AND "projectId"=$3 AND status='PENDING' AND "leaseToken"=$4 AND "leaseExpiresAt">clock_timestamp()`,[r.event.id,protocol.provider,r.sourceProjectId||r.event.projectId,r.event.leaseToken])).rows;
+    if(source.length!==1)throw new WorkspaceError('META_CUSTOMER_INBOX_LEASE_CHANGED',409);const now=source[0].now;if(Date.parse(prepared.state.executionDeadline)<=now.getTime())throw new WorkspaceError('META_CHANNEL_EXECUTION_DRAFT_EXPIRED',409);if(outcome.effectsApplied&&Date.parse(outcome.execution.validUntil)<=now.getTime())throw new WorkspaceError('FIELD_EXECUTION_MANDATE_EXPIRED',409);return recorded;
+   }finally{executionFrames.delete(r);}
+  });}catch(error){
+   if(!executionErrors.has(error.code))throw error;
+   return within(async client=>{const r=await resolve(client,context,'report');if(mediaIdentity(r)!==prepared.identityDigest||digest(conversation(r))!==prepared.stateDigest)throw new WorkspaceError('META_CHANNEL_CONTEXT_CHANGED',409);const previous=await saved(client,r);if(previous)return previous;return record(client,r,result(r,'INPUT_REVIEW',text('No se aplicó esta ejecución: el mandato, sus cupos o los datos vigentes requieren revisión. Conservamos el mismo reporte y sus cantidades. Consultá el recibo o pedí al responsable revisar la autorización; no generes otro hecho para reemplazar un resultado desconocido.'),{code:error.code}),prepared.state,{preserveConversation:true,disclosure:'REPORT'});});
+  }
+ }
  const api={async executeCompany(context){
   if(!canonicalFieldResolvers.has(resolveIdentity)||protocol!==META_CUSTOMER_PROTOCOL)throw new TypeError('Canonical company FIELD composition is required');
   const prepared=await within(async client=>{
@@ -478,13 +519,14 @@ export function createMetaFieldBridge({connect,environment=process.env,resolveId
    const value=await prepareResolved(client,scopedIdentity(dispatch.resolved,context,dispatch.resolved.now));
    // This composition is only a text catalog recovery. External media/plan I/O
    // and every other operation retain their ordinary separate transactions.
-   if(!value?.done)throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);
+   if(!value?.done&&!value?.execution)throw new WorkspaceError('META_CHANNEL_RECEIPT_INTEGRITY',409);
    return value;
   });
   if(!prepared)return null;if(prepared.done)return prepared.done;
   return api.execute(context);
  },async execute(context){
   const prepared=await within(client=>prepare(client,context));if(!prepared)return null;if(prepared.done)return prepared.done;
+  if(prepared.execution)return executeExecution(context,prepared);
   if(prepared.planning)return plans.execute(context,prepared);
   if(!provider||!put||!get||!analyzer)throw new WorkspaceError('META_CHANNEL_MEDIA_NOT_CONFIGURED',503);
   // No locks span provider I/O. Re-resolve the signed source, assignment,

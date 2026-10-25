@@ -138,7 +138,7 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
     const id=fieldReceiptId(member.actorId,command.projectId,command.operationId);
     const correlation=correlated(command.action)?{projectId:command.projectId,operationId:command.operationId,action:command.action}:{};
     await client.query(`INSERT INTO public."AuditLog"(id,"organizationId","actorId",action,"entityType","entityId",metadata) VALUES($1,$2,$3,'field.operation.recorded','Project',$4,$5::jsonb)`,[id,member.organizationId,member.actorId,command.projectId,JSON.stringify({version:1,projectId:command.projectId,command:command.action,requestDigest,...correlation,...(member.channelProof?{channelProof:member.channelProof}:{}),outcome})]);
-    return {saved:true,replayed:false,receiptId:id,...(Object.keys(correlation).length?{...correlation,state:'RECORDED'}:{}),...outcome};
+    return {saved:true,replayed:false,receiptId:id,...(Object.keys(correlation).length?{...correlation,state:'RECORDED'}:{}),...(EXECUTION_ACTIONS.includes(command.action)?{requestDigest}:{}),...outcome};
   }
   function config(project) {
     const c=project.metadata?.fieldOperations;
@@ -264,7 +264,7 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
             await recoveryPermission(client,member,session,command.projectId,previous);
             return {scope,saved:true,replayed:true,receiptId:id,projectId:command.projectId,operationId:command.operationId,action:measurementConfigurationAction,state:'RECORDED',...await recoveredOutcome(client,command.projectId,previous)};
           }
-          if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);await recoveryPermission(client,member,session,command.projectId,previous);return {scope,saved:true,replayed:true,receiptId:id,...(correlated(command.action)?{projectId:command.projectId,operationId:command.operationId,action:command.action,state:'RECORDED'}:{}),...await recoveredOutcome(client,command.projectId,previous)};
+          if(previous.metadata.requestDigest!==requestDigest)throw new WorkspaceError('FIELD_OPERATION_CONFLICT',409);await recoveryPermission(client,member,session,command.projectId,previous);return {scope,saved:true,replayed:true,receiptId:id,...(correlated(command.action)?{projectId:command.projectId,operationId:command.operationId,action:command.action,state:'RECORDED'}:{}),...(EXECUTION_ACTIONS.includes(command.action)?{requestDigest}:{}),...await recoveredOutcome(client,command.projectId,previous)};
         }
         const now=(await client.query('SELECT clock_timestamp() AS now')).rows[0].now;
         let outcome;
@@ -401,13 +401,14 @@ export function createFieldOperations({workspace,assertParticipant,usage=null}) 
         if(member.channelProof&&OVERTIME_ACTIONS.includes(row?.metadata?.command))throw new WorkspaceError('OVERTIME_WEB_ONLY',403);
         if(row)await recoveryPermission(client,member,session,context.projectId,row);
         if(measurementCancelled(row))return cancelledMeasurementOutcome(row,context,scope);
-        return row?{scope,state:'RECORDED',saved:true,replayed:true,receiptId:row.id,...(correlated(row.metadata.command)?{projectId:context.projectId,operationId:context.operationId,action:row.metadata.command}:{}),...await recoveredOutcome(client,context.projectId,row)}:{scope,projectId:context.projectId,operationId:context.operationId,state:'NOT_OBSERVED',definitive:false};
+        return row?{scope,state:'RECORDED',saved:true,replayed:true,receiptId:row.id,...(correlated(row.metadata.command)?{projectId:context.projectId,operationId:context.operationId,action:row.metadata.command}:{}),...(EXECUTION_ACTIONS.includes(row.metadata.command)?{requestDigest:row.metadata.requestDigest}:{}),...await recoveredOutcome(client,context.projectId,row)}:{scope,projectId:context.projectId,operationId:context.operationId,state:'NOT_OBSERVED',definitive:false};
       });
     },
     ownConsumptions(session,context){return run(session,context,true,async(client,member,scope,project)=>{await worker(client,member,session,project.id,context.workerId,'report');return {scope,projectId:project.id,workerId:context.workerId,...await readOwnConsumptions(client,member,project,{workerId:context.workerId,afterConsumption:context.afterConsumption??null,consumptionId:context.consumptionId??null})};});},
     ownReports(session,context){return run(session,context,true,async(client,member,scope,project)=>{await worker(client,member,session,project.id,context.workerId,'report');return {scope,projectId:project.id,workerId:context.workerId,...await readOwnFieldReports(client,member,project,{workerId:context.workerId,section:context.section,afterReport:context.afterReport??null,reportId:context.reportId??null})};});},
     inventoryHistory(session,context){return run(session,context,context.inventoryFilter===undefined,async(client,member,scope,project)=>{const reviewer=canApproveProgress(member.role);if((context.inventoryFilter!==undefined||context.afterMovement||context.afterAdjustment||context.adjustmentId)&&!reviewer)throw new WorkspaceError('INVENTORY_MANAGE_REQUIRED',403);const owned=reviewer?[]:(await reviewAccess(client,member,session,project.id,scope)).owned.filter(w=>w.metadata.participant.permissions?.report===true);for(const row of owned)await worker(client,member,session,project.id,row.id,'report');return {scope,projectId:project.id,inventory:await readInventory(client,member,project,{reviewer,workerIds:owned.map(w=>w.id),after:context.afterMovement,afterConsumption:context.afterConsumption,consumptionId:context.consumptionId,afterAdjustment:context.afterAdjustment,adjustmentId:context.adjustmentId,inventoryFilter:context.inventoryFilter})};});},
     executionMandate(session,context){return run(session,context,false,async(client,member,scope,project)=>({scope,projectId:project.id,readOnly:true,mandate:await execution.readMandate(client,member,session,project,context.executionMandateId)}));},
+    executionView(session,context){return run(session,context,false,(client,member,scope,project)=>execution.readView(client,member,session,project,scope));},
     // Media provider I/O is performed outside transactions. Every callback still
     // enters the same verified project transaction and rechecks actor/permissions.
     // Media's organization reservation must precede the canonical project lock.

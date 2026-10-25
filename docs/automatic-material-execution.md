@@ -84,6 +84,34 @@ base, conserva fechas y metadatos ajenos, y mantiene BLOCKED. Registra una
 canónica consultada por el Gantt recibe el avance; no se replanifican fechas,
 dependencias ni se infiere duración a partir del consumo.
 
+## Pantalla y WhatsApp
+
+La sección Materiales agrega Mandatos de ejecución y recibos. La autorización
+requiere elegir otra cuenta, tarea, sector, materiales, cupos, vigencia y motivo,
+revisar el resumen y confirmar ese alcance. Revocar requiere una confirmación
+separada. La pantalla conserva el comando completo en un journal de la sesión
+antes del POST; una respuesta ambigua conserva el UUID y obliga a consultar el
+recibo o reenviar el mismo intento. Compara el digest del comando con el recibo
+del servidor. Ese digest comprueba integridad; no concede permisos. Una pérdida
+de acceso borra la consulta visible y conserva sólo la referencia de recuperación.
+
+En WhatsApp, Registrar material o REPORTAR abre los mandatos de la propia cuenta
+para el catálogo vigente. Pregunta la cantidad exacta de cada material; cero
+indica que ese material no se usó. Permite registrar sólo materiales o, si el
+mandato lo autoriza, una cantidad adicional contra el metrado configurado con
+evidencia ya aprobada. La confirmación dice que se registrará una salida real.
+El borrador fija reportId, líneas y plazo; saludos y consultas no crean otro
+hecho ni sustituyen una confirmación. EJECUCIONES consulta los recibos propios.
+CONSUMO conserva la propuesta manual y su decisión independiente.
+
+El bridge prepara el comando confirmado en una primera transacción y lo aplica
+en una segunda resolución canónica firmada. El hook de autorización corre antes
+del lock de Project. Un frame privado vincula cliente, comando, identidad,
+binding, fuente y estado cifrado; no acepta una aprobación enviada por el caller
+ni ejecuta el hook tarde. Después de todos los efectos y recibos comprueba el
+WebhookEvent físico PENDING, token y lease con reloj SQL para cualquier canal,
+además del plazo del borrador y del mandato. Un fallo revierte la ejecución.
+
 ## Alcance de verificación
 
 Los tests `production-field-execution-policy.test.mjs` y
@@ -91,14 +119,15 @@ Los tests `production-field-execution-policy.test.mjs` y
 HTTP. El fixture rápido modela transacciones serializadas: sus resultados no
 demuestran locks de PostgreSQL. `verify-field-execution-postgres.mjs` prepara el
 ensayo SQL descartable con credenciales sintéticas, sin fallback a DATABASE_URL.
-Su ejecución real queda pendiente donde no hay PostgreSQL local disponible.
+Root verificó el snapshot backend001 en PostgreSQL descartable: CI40145444477,
+commit de operaciones 0e68842c7c65439f912f04ef732bd9d7cbee37aa. Esa ejecución no
+prueba la fase posterior de UI/WhatsApp. El harness extendido agrega callback
+HMAC, inbox cifrado, resolver canónico, OUT, consulta de recibos y rollback por
+lease vencido después del recibo de negocio; necesita su propia ejecución.
 
-Este incremento no agrega formularios de mandatos ni un diálogo nuevo de
-WhatsApp. El backend web sí admite los tres comandos. El planner de WhatsApp
-existente conserva las propuestas manuales y no emite REPORT_EXECUTION; su
-adaptador normal aún no reenvía el hook beforeProject necesario para ese
-comando. Intentar usar ese adaptador sin el hook falla cerrado. Una futura
-integración de canal debe persistir el mismo reportId/líneas y reenviar ese
-hook por la resolución canónica de identidad, sin fabricar un actor.
+Los tests de conversación ejecutan el planner y el store con datos sintéticos.
+El fixture headless de la pantalla usa el componente y el lifecycle reales con
+un store transaccional modelado, sin identidad real ni PostgreSQL. Sus capturas
+de escritorio/móvil no equivalen a aceptación de la aplicación publicada.
 
 No se ha aplicado ninguna migración ni se ha publicado este incremento.

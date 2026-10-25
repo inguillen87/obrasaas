@@ -87,3 +87,10 @@ test('the existing authenticated HTTP endpoint reaches the canonical execution s
  for(const suffix of ['&operationId='+randomUUID(),'&executionMandateId=extra','&unknown=value'])assert.equal((await handlers('worker').GET(new Request(url+suffix))).status,400);
  const before=f.snapshot(),bad=post(f.command('REPORT_EXECUTION',f.reportPayload(mandate.id)));bad.headers.set('origin','https://foreign.invalid');assert.equal((await handlers('worker').POST(bad)).status,403);assert.deepEqual(f.snapshot(),before);
 });
+
+test('the execution screen reader returns bounded current own mandates and recorded receipts from a read-only canonical snapshot',async()=>{
+ const f=fieldExecutionFixture(),m=(await f.issue()).mandate.id;await f.report(m);const before=f.snapshot();
+ const view=await f.operations.executionView(f.session('worker'),{projectId:'p-a',scope:f.scope});assert.equal(view.canManage,false);assert.equal(view.mandates[0].id,m);assert.equal(view.receipts.length,1);assert.equal(view.receipts[0].action,'REPORT_EXECUTION');assert.equal(view.receipts[0].scope,f.scope);assert.deepEqual(view.materials.map(row=>row.balance),['8.000','5.000']);assert.deepEqual(f.snapshot(),before);
+ const manager=await f.operations.executionView(f.session('owner'),{projectId:'p-a',scope:f.scope});assert.equal(manager.canManage,true);assert.equal(manager.receipts.length,2);assert.equal(manager.workers[0].id,'w-worker');
+ const h=createFieldHandlers({verify:async()=>f.session('owner'),operations:f.operations}),base='https://obrasaas.com/api/identity/field-operations?'+new URLSearchParams({projectId:'p-a',scope:f.scope,executionView:'1'});assert.equal((await h.GET(new Request(base))).status,200);for(const suffix of ['&operationId='+randomUUID(),'&executionView=1','&executionMandateId='+m])assert.equal((await h.GET(new Request(base+suffix))).status,400);
+});

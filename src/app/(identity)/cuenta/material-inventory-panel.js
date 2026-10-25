@@ -6,6 +6,7 @@ import {useWorksiteLiveRefresh,WorksiteLiveRefreshStatus} from './workspace-live
 import {WorksiteTaskSelector} from './worksite-task-selector';
 import {inventoryAccessDenied,inventorySnapshot,inventoryOutcome,mergeInventoryRows,mergeInventoryPage,inventoryAfterRecorded,inventoryPendingCounts,inventoryVisiblePage,INVENTORY_PENDING_EVENT,consumptionTraceability,inventoryReceiptPresentation,consumptionEvidenceViews} from './material-inventory-view.mjs';
 import {FieldMediaPreview} from './field-media-preview';
+import {ExecutionMandatePanel} from './field-execution-mandate-panel';
 import styles from './material-inventory-panel.module.css';
 const endpoint='/api/identity/field-operations';
 const units=['unidad','m','m2','m3','kg','litro','bolsa'];
@@ -52,20 +53,20 @@ async function api(request,params,options,validate){
   try{return validate(await response.json());}catch(error){if(options.method==='POST'){retained=Object.assign(error,{retainAttempt:true});return;}throw error;}
  });if(retained)throw retained;return result;
 }
-export function MaterialInventoryPanel(props){return <InventoryInner key={props.scope+':'+props.projectId} {...props}/>;}
-function InventoryInner({projectId,scope,active=false,backgroundBlocked=false,tasks=[],taskPaging,onLoadMoreTasks,onTaskReadBusy,onPending,getSessionToken}){
+export function MaterialInventoryPanel(props){return <InventoryInner key={props.scope+':'+props.projectId} {...props} ExecutionPanel={ExecutionMandatePanel}/>;}
+function InventoryInner({projectId,scope,active=false,backgroundBlocked=false,tasks=[],taskPaging,onLoadMoreTasks,onTaskReadBusy,onPending,getSessionToken,ExecutionPanel=null}){
  const request=useWorkspaceRequest(getSessionToken),[data,setData]=useState(null),[opened,setOpened]=useState(false),[busy,setBusy]=useState(false),[draft,setDraft]=useState(null),[attempt,setAttempt]=useState(null),[retryAllowed,setRetryAllowed]=useState(false),[notice,setNotice]=useState(''),[receipt,setReceipt]=useState(''),[blocked,setBlocked]=useState(false),[needsReview,setNeedsReview]=useState(false),[reviewLoaded,setReviewLoaded]=useState(false),[reviewed,setReviewed]=useState(false),[queueCurrent,setQueueCurrent]=useState(false),[pendingRequested,setPendingRequested]=useState(false);
  const alive=useRef(true),epoch=useRef(0),editor=useRef(null),abort=useRef(null),pendingNavigation=useRef(null),control=useRef(null),draftAction=draft?.action;
- const [livePageChanged,setLivePageChanged]=useState(false);
+ const [livePageChanged,setLivePageChanged]=useState(false),[executionPending,setExecutionPending]=useState(false),[executionTaskBusy,setExecutionTaskBusy]=useState(false);
  const [recordKind,setRecordKind]=useState('consumptions'),[recordPages,setRecordPages]=useState({consumptions:0,adjustments:0}),recordHeading=useRef(null),focusRecords=useRef(false);
- control.current={busy,draft,attempt};
+ control.current={busy,draft,attempt,executionPending};
  useEffect(()=>{alive.current=true;const ref=epoch;return()=>{alive.current=false;ref.current++;abort.current?.abort();};},[]);
- useEffect(()=>{onPending?.(busy||Boolean(draft)||Boolean(attempt));return()=>onPending?.(false);},[busy,draft,attempt,onPending]);
- useLayoutEffect(()=>{onTaskReadBusy?.(busy||Boolean(attempt));return()=>onTaskReadBusy?.(false);},[busy,attempt,onTaskReadBusy]);
+ useEffect(()=>{onPending?.(busy||Boolean(draft)||Boolean(attempt)||executionPending);return()=>onPending?.(false);},[busy,draft,attempt,executionPending,onPending]);
+ useLayoutEffect(()=>{onTaskReadBusy?.(busy||Boolean(attempt)||executionTaskBusy);return()=>onTaskReadBusy?.(false);},[busy,attempt,executionTaskBusy,onTaskReadBusy]);
  useEffect(()=>{if(draftAction){editor.current?.focus({preventScroll:true});editor.current?.scrollIntoView({block:'start',behavior:'auto'});}},[draftAction]);
  useEffect(()=>{if(focusRecords.current&&!busy){focusRecords.current=false;recordHeading.current?.focus({preventScroll:true});recordHeading.current?.scrollIntoView({block:'start',behavior:'auto'});}},[recordKind,recordPages,busy]);
  useEffect(()=>{const navigate=event=>{if(event.detail?.projectId===projectId&&event.detail?.scope===scope)pendingNavigation.current?.();};window.addEventListener(INVENTORY_PENDING_EVENT,navigate);return()=>window.removeEventListener(INVENTORY_PENDING_EVENT,navigate);},[projectId,scope]);
- const inventory=data?.inventory,materials=inventory?.materials.filter(m=>m.active)||[],workers=data?.selfWorkers.filter(w=>w.canReport)||[],disabled=busy||Boolean(attempt)||blocked||taskPaging?.loading===true;
+ const inventory=data?.inventory,materials=inventory?.materials.filter(m=>m.active)||[],workers=data?.selfWorkers.filter(w=>w.canReport)||[],disabled=busy||Boolean(attempt)||blocked||executionPending||taskPaging?.loading===true;
  const filter=inventory?.inventoryFilter,counts=queueCurrent?inventoryPendingCounts(inventory):null,queue=filter==='PENDING';
  const consumptionPage=inventoryVisiblePage(inventory?.consumptions||[],recordPages.consumptions),adjustmentPage=inventoryVisiblePage(inventory?.adjustments||[],recordPages.adjustments),activePage=recordKind==='consumptions'?consumptionPage:adjustmentPage,activeCursor=recordKind==='consumptions'?inventory?.nextConsumptionCursor:inventory?.nextAdjustmentCursor;
  const visibleConsumptions=inventory?.canManage?(recordKind==='consumptions'?consumptionPage.rows:[]):inventory?.consumptions||[],visibleAdjustments=inventory?.canManage&&recordKind==='adjustments'?adjustmentPage.rows:[];
@@ -73,11 +74,11 @@ function InventoryInner({projectId,scope,active=false,backgroundBlocked=false,ta
  const materialName=id=>inventory?.materials.find(m=>m.id===id)?.name||'Material registrado';
   const stockDraft=draft?.action==='PROPOSE_STOCK_ADJUSTMENT',stockReview=draft?.action==='DECIDE_STOCK_ADJUSTMENT';
  function deny(error){if(!inventoryAccessDenied(error)||error.requestDispatched===false)return false;epoch.current++;abort.current?.abort();setData(null);setDraft(null);setReceipt('');setBusy(false);setBlocked(true);setRetryAllowed(false);setNeedsReview(false);setAttempt(old=>old?{operationId:old.operationId,scope:old.scope,projectId:old.projectId,action:old.action}:null);return true;}
- pendingNavigation.current=()=>{setPendingRequested(true);if(control.current.busy||control.current.draft||control.current.attempt){setNotice('Conservamos tu operación en curso. Terminá o cancelá el borrador, o comprobá su recibo, antes de abrir los materiales por revisar.');return;}load(false,'PENDING');};
+ pendingNavigation.current=()=>{setPendingRequested(true);if(control.current.busy||control.current.draft||control.current.attempt||control.current.executionPending){setNotice('Conservamos tu operación en curso. Terminá o cancelá el borrador, o comprobá su recibo, antes de abrir los materiales por revisar.');return;}load(false,'PENDING');};
  async function consult(params,options={}){return api(request,{projectId,scope,...params},options,v=>inventorySnapshot(v,{projectId,scope,...params},{history:Boolean(params.inventoryFilter||params.afterConsumption||params.afterAdjustment||params.afterMovement||params.consumptionId||params.adjustmentId)}));}
  async function load(more=false,requestedFilter=null){
   if(more&&livePageChanged){setNotice('La cola cambió. Actualizá el inventario para incorporar los registros nuevos antes de cargar otra página.');return;}
-  if(control.current.busy||control.current.attempt||(more||requestedFilter)&&control.current.draft)return;control.current.busy=true;const n=++epoch.current,c=new AbortController();abort.current?.abort();abort.current=c;setBusy(true);setOpened(true);setNotice('');if(!more&&draft){setNeedsReview(true);setReviewLoaded(false);setReviewed(false);}
+  if(control.current.busy||control.current.attempt||control.current.executionPending||(more||requestedFilter)&&control.current.draft)return;control.current.busy=true;const n=++epoch.current,c=new AbortController();abort.current?.abort();abort.current=c;setBusy(true);setOpened(true);setNotice('');if(!more&&draft){setNeedsReview(true);setReviewLoaded(false);setReviewed(false);}
    try{
     const target=!more&&draft?.row?.id,targetKey=stockReview?'adjustmentId':'consumptionId',cursorKey={movements:'afterMovement',consumptions:'afterConsumption',adjustments:'afterAdjustment'}[more],cursor={movements:inventory?.nextMovementCursor,consumptions:inventory?.nextConsumptionCursor,adjustments:inventory?.nextAdjustmentCursor}[more];
     if(more&&!cursor)return;
@@ -165,9 +166,9 @@ function InventoryInner({projectId,scope,active=false,backgroundBlocked=false,ta
   onAccessRejected:error=>{if(!alive.current||liveInventoryContext.current.data!==data)return false;deny(error);setNotice('Tu acceso cambió. Volvé a consultar el inventario antes de continuar.');}
  });
  return <section className={styles.panel} aria-labelledby="inventory-title">
-  <div className={styles.heading}><div><p className={styles.eyebrow}>MATERIALES</p><h3 id="inventory-title">Inventario y consumo</h3></div><button type="button" disabled={busy||Boolean(attempt)} onClick={()=>load()}>{draft?'Consultar inventario vigente':opened?'Actualizar inventario':'Abrir inventario'}</button></div>
+  <div className={styles.heading}><div><p className={styles.eyebrow}>MATERIALES</p><h3 id="inventory-title">Inventario y consumo</h3></div><button type="button" disabled={busy||Boolean(attempt)||executionPending} onClick={()=>load()}>{draft?'Consultar inventario vigente':opened?'Actualizar inventario':'Abrir inventario'}</button></div>
   {active&&opened&&<WorksiteLiveRefreshStatus refresh={inventoryLive} paused={liveInventoryBlocked} label={recordKind==='consumptions'?'Saldos y consumos':'Saldos y existencias'} manual={()=>load()} manualLabel="Consultar inventario actual"/>}
-  <p className={styles.caption}>Consultá las existencias recibidas y proponé el material utilizado en obra. Cada consumo necesita la revisión de otro responsable para descontar stock.</p>
+   <p className={styles.caption}>Consultá existencias, proponé consumos para revisión o autorizá mandatos con cupos explícitos. Los informes de un mandato vigente descuentan stock al registrarse.</p>
   <p className={styles.status} role="status" aria-live="polite">{busy?'Consultando o guardando…':notice}</p>
   {pendingRequested&&(draft||attempt)&&<p className={styles.notice}>Materiales por revisar espera a que termines esta operación. Tus campos y la referencia del recibo se conservan.</p>}
   {pendingRequested&&!draft&&!attempt&&<button type="button" disabled={busy} onClick={()=>load(false,'PENDING')}>Abrir materiales por revisar</button>}
@@ -194,5 +195,6 @@ function InventoryInner({projectId,scope,active=false,backgroundBlocked=false,ta
    {draft.action!=='ADD_MATERIAL'&&<label>Motivo o detalle<textarea required minLength={8} maxLength={1000} disabled={disabled} value={draft.payload.reason} onChange={e=>edit('reason',e.target.value)}/></label>}
    <div className={styles.actions}><button type="submit" className={styles.primary} disabled={disabled||needsReview&&(!reviewed||!reviewLoaded)}>Confirmar operación</button><button type="button" disabled={disabled} onClick={()=>{setDraft(null);setNeedsReview(false);setNotice('');}}>Volver</button></div>
   </form>}
- </section>;
+   {ExecutionPanel&&<ExecutionPanel projectId={projectId} scope={scope} active={active} backgroundBlocked={backgroundBlocked||busy||Boolean(draft)||Boolean(attempt)} tasks={tasks} taskPaging={taskPaging} onLoadMoreTasks={onLoadMoreTasks} onPending={setExecutionPending} onTaskReadBusy={setExecutionTaskBusy} getSessionToken={getSessionToken}/>}
+  </section>;
 }
