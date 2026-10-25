@@ -6,6 +6,7 @@ on:
       - '.github/workflows/pilot-field-people-fixtures-diagnosis.yml'
       - 'scripts/verify-field-overtime-ui.mjs'
       - 'scripts/verify-mobile-identity-ui.mjs'
+      - 'scripts/verify-participant-kyc-chat-closure-ui.mjs'
 permissions:
   contents: read
 jobs:
@@ -20,6 +21,8 @@ jobs:
             command: OVERTIME_UI_SCENARIO=configure OVERTIME_UI_WIDTH=320 node scripts/verify-field-overtime-ui.mjs
           - name: mobile-identity-full
             command: node scripts/verify-mobile-identity-ui.mjs
+          - name: kyc-chat-closure-full
+            command: node scripts/verify-participant-kyc-chat-closure-ui.mjs
     name: ${{ matrix.name }}
     env:
       NEXT_TELEMETRY_DISABLED: '1'
@@ -44,5 +47,6 @@ jobs:
             .vercel/private/field-overtime-diagnostic/
             .vercel/private/field-overtime-ui-proof.json
             .vercel/mobile-identity-evidence/
+            .vercel/participant-onboarding-recovery-evidence/
           include-hidden-files: true
           retention-days: 7
