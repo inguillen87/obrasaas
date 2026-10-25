@@ -88,11 +88,39 @@ async function toggleTools(page,opened,activation='click'){
  if(activation==='click')await page.locator(toolsNav+' details summary').click();else{await summary.focus();await page.keyboard.press(activation);}
  await page.waitForFunction(value=>document.querySelector('nav[aria-label="Navegación de la obra"] details')?.open===value,{},opened);
 }
-async function narrowToolsBeforeOriginalTraversal(page,width,requests,posts){
+// All raw API requests are retained. Only this exact Home observation is
+// separate from the original request classes, with its own current assertions.
+async function respondNavigationHomeDecisions(request,{origin,projectId,scope,allowed,bodyMode,reads}){
+ const url=new URL(request.url());if(url.origin!==origin||url.pathname!=='/api/identity/operations-status')return false;
+ assert.equal(allowed,true,'A role without Home decision permission must not query observations');
+ assert.equal(request.method(),'GET');assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+ assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope','view']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),projectId);assert.equal(url.searchParams.get('view'),'decisions');
+ assert.ok(['VALID','FOREIGN_SCOPE','NEGATIVE_COUNT'].includes(bodyMode));
+ const body={scope,projectId,view:'decisions',observedAt:'2026-10-25T03:00:00.000Z',proposals:{pending:2},inventory:{canManage:true,pendingCounts:{consumptions:3,adjustments:4}}};
+ // Explicit invalid-response phases exercise the actual UI decoder.
+ if(bodyMode==='FOREIGN_SCOPE')body.scope='f'.repeat(64);if(bodyMode==='NEGATIVE_COUNT')body.inventory.pendingCounts.consumptions=-1;
+ reads.push({method:request.method(),path:url.pathname,query:url.search,bodyMode});
+ await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});return true;
+}
+async function assertNavigationHomeDecisions(page,{allowed,reads,expected,bodyMode}){
+ const selector='section[aria-labelledby="home-decisions-title"]';
+ if(!allowed){assert.equal(reads.length,0);assert.equal(await page.$(selector),null);return;}
+ for(let i=0;i<600&&reads.length<expected;i++)await new Promise(resolve=>setTimeout(resolve,25));
+ assert.equal(reads.length,expected,'One observation is required per actual return to Inicio');
+ await page.waitForNetworkIdle({idleTime:100,timeout:15000});
+ await page.waitForFunction((target,valid)=>{const section=document.querySelector(target);if(!section)return false;const status=section.querySelector('[role="status"]')?.textContent||'';
+  return valid?section.querySelector('article strong')?.textContent==='2'&&[...section.querySelectorAll('article dd')].map(node=>node.textContent).join('|')==='3|4'&&!status.includes('Consultando'):
+   status.includes('No pudimos confirmar los pendientes de esta obra. Volvé a consultar.')&&section.querySelectorAll('article').length===0&&section.querySelectorAll('strong,dd').length===0;
+ },{timeout:15000},selector,bodyMode==='VALID');
+ assert.equal(reads.length,expected,'Other network activity cannot hide a second observation');
+ assert.equal(await page.$eval(selector+' button',node=>node.disabled),false);
+}
+
+async function narrowToolsBeforeOriginalTraversal(page,width,requests,posts,onHomeObservation=null){
  const before=requests.length,forms=await page.$$eval('form',nodes=>nodes.length),picker=toolsNav+' select',desktop=toolsNav+' > div';
  await page.evaluate(()=>{window.__mobileNavigation=document.querySelector('nav[aria-label="Navegación de la obra"]');window.__mobileForms=[...document.querySelectorAll('form')];window.__mobileGroups=document.querySelector('nav[aria-label="Navegación de la obra"] select');});
  assert.equal(await page.$eval(picker,node=>node.tagName),'SELECT');assert.equal(await page.$eval(desktop,node=>node.getClientRects().length>0),width>=1100);assert.equal(await page.$eval(picker,node=>node.getClientRects().length>0),width<1100);
- if(width<1100){assert.ok(await page.$eval(picker,node=>node.getBoundingClientRect().height>=44));for(const activation of ['Enter','Space','click']){if(activation==='click')await page.click(picker);else{await page.focus(picker);await page.keyboard.press(activation);}await page.keyboard.press('Escape');await page.select(picker,'schedule-title');await page.waitForFunction(()=>document.querySelector('[data-workspace-screen="cronograma"]')?.hidden===false);assert.ok(await page.$eval('[data-workspace-screen="cronograma"]',node=>node.getClientRects().length>0));await page.select(picker,'workspace-home-title');await page.waitForFunction(()=>document.querySelector('[data-workspace-screen="inicio"]')?.hidden===false);assert.equal(await page.$eval('[data-workspace-screen="cronograma"]',node=>node.getClientRects().length>0),false);}}
+ if(width<1100){assert.ok(await page.$eval(picker,node=>node.getBoundingClientRect().height>=44));for(const activation of ['Enter','Space','click']){if(activation==='click')await page.click(picker);else{await page.focus(picker);await page.keyboard.press(activation);}await page.keyboard.press('Escape');await page.select(picker,'schedule-title');await page.waitForFunction(()=>document.querySelector('[data-workspace-screen="cronograma"]')?.hidden===false);assert.ok(await page.$eval('[data-workspace-screen="cronograma"]',node=>node.getClientRects().length>0));await page.select(picker,'workspace-home-title');await page.waitForFunction(()=>document.querySelector('[data-workspace-screen="inicio"]')?.hidden===false);assert.equal(await page.$eval('[data-workspace-screen="cronograma"]',node=>node.getClientRects().length>0),false);if(onHomeObservation)await onHomeObservation();}}
  await page.setViewport({width:1099,height:1000});assert.equal(await page.$eval(desktop,node=>node.getClientRects().length>0),false);await page.setViewport({width:1100,height:1000});assert.ok(await page.$eval(desktop,node=>node.getClientRects().length>0));assert.equal(await page.$eval(picker,node=>node.getClientRects().length>0),false);await page.setViewport({width:1099,height:1000});assert.equal(await page.$eval(desktop,node=>node.getClientRects().length>0),false);
  await page.setViewport({width:1280,height:1000});await page.focus(toolsNav+' details summary');await page.evaluate(()=>{window.__mobileFocusedGroup=document.activeElement;});await page.setViewport({width:320,height:1000});await page.waitForFunction(()=>document.querySelector('nav[aria-label="Navegación de la obra"] select')?.checkVisibility());assert.equal(await page.evaluate(()=>window.__mobileFocusedGroup.isConnected),true);assert.ok(await page.$eval(picker,node=>node.getClientRects().length>0));await page.focus(picker);assert.equal(await page.evaluate(()=>document.activeElement===document.querySelector('nav[aria-label="Navegación de la obra"] select')),true);
  await page.setViewport({width,height:1000});if(width>=1100)await toggleTools(page,true);assert.ok(await page.$eval(width<1100?picker:desktop,node=>node.getClientRects().length>0));assert.equal(await page.evaluate(()=>document.querySelector('nav[aria-label="Navegación de la obra"]')===window.__mobileNavigation&&document.querySelector('nav[aria-label="Navegación de la obra"] select')===window.__mobileGroups&&window.__mobileForms.every(node=>node.isConnected)),true);assert.equal(await page.$$eval('form',nodes=>nodes.length),forms);assert.equal(requests.length,before);assert.equal(posts.length,0);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));checks.push('mobile-tools-native-keyboard-pointer-breakpoint-focused-orientation-no-unmount-no-requests-'+width);
@@ -303,15 +331,19 @@ async function scheduleConflictScenario(mode,width=390){
 async function navigationScenario(role,width){
  const context=await browser.createBrowserContext(),page=await context.newPage();await manualWorkspaceReadPrecondition(page);await page.setViewport({width,height:1000});
  page.on('pageerror',error=>pageErrors.push({mode:'navigation-'+role,width,message:error.message}));
- const requests=[],posts=[],subscriptionReads=[],administrator=role==='ADMIN';let preparationReads=0,participantReads=0;
+ // requests keeps the original API classes; allRequests retains the raw audit.
+ const requests=[],allRequests=[],decisionReads=[],posts=[],subscriptionReads=[],administrator=role==='ADMIN';let preparationReads=0,participantReads=0,homeActivations=0,decisionBodyMode='VALID';
+ const writeNavigationAudit=()=>writeFileSync(path.join(evidence,'workspace-navigation-api-'+role+'-'+width+'.json'),JSON.stringify({role,width,homeActivations,bodyMode:decisionBodyMode,allRequests,legacyRequests:requests,decisionReads,posts},null,2));
  await page.setRequestInterception(true);
  page.on('request',async request=>{
   try{
-   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();return request.abort();}
+   const url=new URL(request.url());if(url.origin!==origin){if(['data:','blob:'].includes(url.protocol))return request.continue();allRequests.push({method:request.method(),origin:url.origin,path:url.pathname,query:url.search});writeNavigationAudit();throw Error('Unexpected external navigation request: '+url.origin);}
    if(!url.pathname.startsWith('/api/'))return request.continue();
-   requests.push({method:request.method(),path:url.pathname,query:url.search});
+   const raw={method:request.method(),path:url.pathname,query:url.search};allRequests.push(raw);writeNavigationAudit();
    if(request.method()!=='GET'){posts.push(request.postData());throw new Error('Navigation must not mutate a business record');}
    assert.equal(request.headers().authorization,'Bearer synthetic-active-tab-A');
+   if(await respondNavigationHomeDecisions(request,{origin,projectId:'p-a',scope,allowed:administrator,bodyMode:decisionBodyMode,reads:decisionReads})){writeNavigationAudit();return;}
+   requests.push(raw);writeNavigationAudit();
    if(await respondClosedCompanySubscription(request,{origin,scope,authorization:'Bearer synthetic-active-tab-A',allowed:administrator,reads:subscriptionReads}))return;
    if(['/api/identity/project-creation','/api/identity/office-review'].includes(url.pathname)){
     assert.equal(administrator,true);assert.deepEqual([...url.searchParams.keys()].sort(),['projectId','scope']);assert.equal(url.searchParams.get('scope'),scope);assert.equal(url.searchParams.get('projectId'),'p-a');
@@ -330,23 +362,29 @@ async function navigationScenario(role,width){
    await request.respond({status:200,contentType:'application/json',headers:{'Cache-Control':'no-store'},body:JSON.stringify(body)});
   }catch(error){pageErrors.push({mode:'navigation-'+role,width,message:error.message});if(!request.isInterceptResolutionHandled())await request.abort().catch(()=>{});}
  });
+ const observeHome=async()=>{homeActivations++;await assertNavigationHomeDecisions(page,{allowed:administrator,reads:decisionReads,expected:homeActivations,bodyMode:decisionBodyMode});};
+ const showNavigationSection=async id=>{
+  const wasHome=await page.evaluate(()=>document.querySelector('[data-workspace-screen="inicio"]')?.hidden===false),beforeReads=decisionReads.length;
+  await showWorkspaceSection(page,id);
+  if(id==='workspace-home-title'&&!wasHome)await observeHome();else assert.equal(decisionReads.length,beforeReads,'Other destinations must not create a Home observation');
+ };
  await page.goto(origin,{waitUntil:'networkidle0',timeout:90000});await waitText(page,'Empresa de ensayo de navegación');
  assert.equal(subscriptionReads.length,administrator?1:0,'Only the administrator automatically consults closed subscription status');
  await page.evaluate(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.includes('Obra de prueba A')).click());
  await page.waitForSelector(workspaceNav);
  const nav=workspaceNav;
  if(administrator){await page.waitForFunction(()=>document.querySelector('section[aria-labelledby="project-preparation-title"]')?.getAttribute('aria-busy')==='false');assert.equal(preparationReads,1);}else{assert.equal(preparationReads,0);assert.equal(await page.$('section[aria-labelledby="project-preparation-title"]'),null);}
- await showGuide(page);assert.ok(await page.$('#onboarding-guide-title'));
+ await observeHome();await showGuide(page);assert.ok(await page.$('#onboarding-guide-title'));
  const expected=['workspace-home-title','schedule-title','field-title','inventory-title','participant-title','worker-channel-title','workspace-recovery-title',...(administrator?['project-preparation-title','project-creation-title','site-register-title','purchase-title','own-company-number-title','own-company-templates-title','company-channel-title','customer-whatsapp-title','customer-meta-title','customer-inbox-title','template-send-title','constructor-crm-title','demo-pilot-title','operation-status-title','office-review-admin-title','company-subscription-title']:[])];
  const anchors=await page.$$eval(nav+' a[href^="#"]',elements=>elements.map(element=>element.hash.slice(1)));
  assert.deepEqual([...new Set(anchors)].sort(),expected.sort());
  assert.equal(await page.$eval(nav,element=>[...element.querySelectorAll('a[href^="#"]')].every(link=>document.getElementById(link.hash.slice(1)))),true);
- await narrowToolsBeforeOriginalTraversal(page,width,requests,posts);
+ await narrowToolsBeforeOriginalTraversal(page,width,requests,posts,observeHome);
  const groups=await page.$$(nav+' details');if(width>=1100){for(const group of groups){assert.ok(await group.$eval('summary',element=>element.getBoundingClientRect().height>=44));if(!await group.evaluate(element=>element.open))await page.locator(nav+' details summary').click();}}else assert.ok(await page.$eval(nav+' select',element=>element.getBoundingClientRect().height>=44));
  const initialRequestCount=requests.length,initialFormCount=await page.$$eval('form',elements=>elements.length);
- for(const id of expected){await showWorkspaceSection(page,id);await page.waitForFunction(target=>document.activeElement.id===target,{},id);assert.equal(await page.evaluate(()=>document.activeElement.id),id);assert.equal(await page.evaluate(()=>location.hash),'#'+id);}
+ for(const id of expected){await showNavigationSection(id);await page.waitForFunction(target=>document.activeElement.id===target,{},id);assert.equal(await page.evaluate(()=>document.activeElement.id),id);assert.equal(await page.evaluate(()=>location.hash),'#'+id);}
  await page.waitForNetworkIdle({idleTime:100,timeout:15000});assert.equal(participantReads,1);assert.equal(requests.length,initialRequestCount+participantReads);assert.equal(posts.length,0);assert.equal(await page.$$eval('form',elements=>elements.length),initialFormCount);
- if(width<1100){await showWorkspaceSection(page,'workspace-home-title');await page.focus(nav+' select');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');}else{const keyboard=await page.$(nav+' a[href="#schedule-title"]');await keyboard.focus();await page.keyboard.press('Enter');}await page.waitForFunction(()=>document.activeElement.id==='schedule-title');assert.equal(await page.evaluate(()=>document.activeElement.id),'schedule-title');
+ if(width<1100){await showNavigationSection('workspace-home-title');await page.focus(nav+' select');await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');}else{const keyboard=await page.$(nav+' a[href="#schedule-title"]');await keyboard.focus();await page.keyboard.press('Enter');}await page.waitForFunction(()=>document.activeElement.id==='schedule-title');assert.equal(await page.evaluate(()=>document.activeElement.id),'schedule-title');
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  checks.push('navigation-authorized-canonical-destinations-keyboard-no-requests-'+role+'-'+width);
  await (await page.$(nav)).screenshot({path:path.join(evidence,'workspace-navigation-'+role+'-'+width+'.png')});
@@ -357,7 +395,7 @@ async function navigationScenario(role,width){
   await page.screenshot({path:path.join(evidence,'workspace-editor-opening-'+width+'.png'),fullPage:false});
   assert.ok(editorGeometry.top>=0&&editorGeometry.top<editorGeometry.viewportHeight,JSON.stringify(editorGeometry));
   await page.type('textarea','Planificación de ensayo que debe conservarse.');
-  await showWorkspaceSection(page,'worker-channel-title');
+  await showNavigationSection('worker-channel-title');
   await page.locator(nav+' a[href="#schedule-edit-title"]').click();await page.waitForFunction(()=>document.activeElement.id==='schedule-edit-title',{timeout:15000});
   assert.equal(await page.evaluate(()=>document.activeElement.id),'schedule-edit-title');
   assert.equal(await page.$eval('textarea',element=>element.value),'Planificación de ensayo que debe conservarse.');
@@ -371,6 +409,19 @@ async function navigationScenario(role,width){
   assert.equal(await page.$(nav+' a[href="#schedule-edit-title"]'),null);
   assert.equal(posts.length,0);checks.push('cancel-clears-pending-navigation-without-mutation-'+width);
  }
+ // Invalid DTO phases are additive to the unchanged legacy traversal.
+ if(administrator)for(const invalidMode of ['FOREIGN_SCOPE','NEGATIVE_COUNT']){
+  decisionBodyMode=invalidMode;const legacyBefore=requests.length,observationsBefore=decisionReads.length;
+  await showNavigationSection('workspace-home-title');
+  assert.equal(decisionReads.length,observationsBefore+1);assert.equal(requests.length,legacyBefore);assert.equal(posts.length,0);
+  assert.equal(await page.$eval('[data-task-id="task-a"] [role="progressbar"]',node=>Number(node.getAttribute('aria-valuenow'))),37);
+  checks.push({mode:'navigation-decisions-invalid-response',role,width,response:invalidMode,unconfirmed:true,figuresHidden:true,legacyRequestsUnchanged:true,posts:0});
+  await showNavigationSection('schedule-title');
+ }
+ assert.equal(decisionReads.length,administrator?homeActivations:0);
+ assert.equal(allRequests.length,requests.length+decisionReads.length,'Every raw API request belongs to one explicitly validated class');
+ assert.equal(posts.length,0);
+ checks.push({mode:'navigation-current-home-observations',role,width,homeActivations,decisionReads:decisionReads.length,legacyRequests:requests.length,rawApiRequests:allRequests.length,allRequests,observations:decisionReads,forbiddenRoleQueries:administrator?null:0});
  await context.close();
 }
 const workbenchControl={search:'input[aria-label="Buscar tareas"]',status:'select[aria-label="Estado de las tareas"]',planning:'select[aria-label="Planificación de las tareas"]',order:'select[aria-label="Orden de las tareas"]'};

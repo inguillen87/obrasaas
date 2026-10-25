@@ -1,7 +1,7 @@
 name: Workspace manual circuit diagnosis
 on:
   push:
-    branches: ['operations/workspace-ui-circuit-fix-20261025']
+    branches: ['operations/workspace-home-observation-fix-20261025']
     paths:
       - '.github/workflows/pilot-workspace-ui-circuit-diagnosis.yml'
       - 'scripts/verify-workspace-ui.mjs'
