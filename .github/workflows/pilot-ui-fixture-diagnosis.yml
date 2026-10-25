@@ -1,0 +1,49 @@
+name: Isolated pilot UI fixture corrections
+on:
+  push:
+    branches: ['operations/pilot-ci-diagnosis-20261024']
+    paths:
+      - '.github/workflows/pilot-ui-fixture-diagnosis.yml'
+      - 'scripts/verify-material-inventory-ui.mjs'
+      - 'scripts/verify-participants-ui.mjs'
+      - 'scripts/verify-workspace-ui.mjs'
+      - 'scripts/verify-workspace-plan-recovery-ui.mjs'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: inventory
+            script: scripts/verify-material-inventory-ui.mjs
+          - name: participants
+            script: scripts/verify-participants-ui.mjs
+          - name: epoch
+            script: scripts/verify-workspace-ui.mjs
+          - name: recovery
+            script: scripts/verify-workspace-plan-recovery-ui.mjs
+    name: ${{ matrix.name }}
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+      MATERIAL_INVENTORY_UI_FOCUS: normal
+      PARTICIPANTS_UI_SCENARIO: selection
+      PARTICIPANTS_UI_WIDTH: '320'
+      WORKSPACE_UI_SCENARIO: onboarding-epoch
+      PLAN_RECOVERY_UI_MODES: read-failure,scope-mismatch,project-mismatch,context-change-read,unmount-read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Run the original focused scenarios with corrected synthetic fixtures
+        run: node ${{ matrix.script }}

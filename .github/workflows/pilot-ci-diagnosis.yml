@@ -2,6 +2,10 @@ name: Disposable Meta pilot diagnosis
 on:
   push:
     branches: ['operations/pilot-ci-diagnosis-20261024']
+    paths:
+      - '.github/workflows/pilot-ci-diagnosis.yml'
+      - 'scripts/verify-meta-development-pilot-postgres.mjs'
+      - 'src/lib/meta-customer-*.mjs'
 permissions:
   contents: read
 jobs:
