@@ -35,5 +35,5 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm ci --no-audit --no-fund
-      - name: Trace the original controlled fetch assertion without logging credentials
-        run: node --import ./scripts/diagnostics/trace-development-pilot-fetch.mjs scripts/verify-meta-development-pilot-postgres.mjs
+      - name: Verify locked subscription authority in the disposable pilot
+        run: node scripts/verify-meta-development-pilot-postgres.mjs
