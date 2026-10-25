@@ -1,7 +1,7 @@
 import historicalWeeklyRuntime from './fixtures/plan-budget-weekly-164-runtime.json' with {type:'json'};
 import {planBudgetValidationFiles,restorePlanBudgetPreviousContract,planBudgetCurrentBrowserBinding,planBudgetCompiledProof,verifyPlanBudgetCurrentSources,planBudgetCurrentSourcePin} from '../scripts/lib/plan-budget-current-ci-lineage.mjs';
 import {PLAN_PARTIDA_PREVIEW_CURRENT_REVISION} from '../scripts/lib/plan-partida-preview-current-ci-lineage.mjs';
-import {restoreWorksiteLiveHoursPreviousContract,restoreWorksiteLiveHoursSourceSet,worksiteLiveHoursCurrentSourcePin} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
+import {restoreWorksiteLiveHoursPreviousContract,restoreWorksiteLiveHoursSourceSet,worksiteLiveHoursCurrentSourcePin,worksiteLiveHoursValidationFiles} from '../scripts/lib/worksite-live-hours-current-ci-lineage.mjs';
 import {IDENTITY_DESTINATION_UX_CURRENT_REVISION as destinationExpected,IDENTITY_DESTINATION_UX_CURRENT_SECTION as destinationKey,restoreIdentityDestinationUxPreviousContract,identityDestinationUxCurrentSourcePin,identityDestinationUxPreviousSourcePin,restoreIdentityDestinationUxPreviousProducerText,identityDestinationUxProofSourceAdditions,verifyIdentityDestinationUxCurrentSources,validateIdentityDestinationUxBrowserSupplement,identityDestinationUxBrowserShadow} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {PROGRESS_EVIDENCE_WAIT_CURRENT_REVISION as waitExpected,PROGRESS_EVIDENCE_WAIT_CURRENT_SECTION as waitKey,restoreProgressEvidenceWaitPreviousContract,progressEvidenceWaitCurrentSourcePin,progressEvidenceWaitPreviousSourcePin,verifyProgressEvidenceWaitCurrentSources,validateProgressEvidenceWaitNativeProofBytes,validateProgressEvidenceWaitCompanyFacts} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
 import {COMPANY_ONBOARDING_UX_CURRENT_REVISION as companyExpected,COMPANY_ONBOARDING_UX_CURRENT_SECTION as companyKey,restoreCompanyOnboardingUxPreviousContract,companyOnboardingUxCurrentSourcePin,companyOnboardingUxPreviousSourcePin,verifyCompanyOnboardingUxCurrentSources,companyOnboardingUxHistoricalFocusedAssertions,COMPANY_ONBOARDING_UX_NATIVE_REVIEW,validateCompanyOnboardingUxNativeSourceManifest,validateCompanyOnboardingUxNativeProofBytes} from '../scripts/lib/home-decisions-current-ci-lineage.mjs';
@@ -351,18 +351,18 @@ function companyNativePhysicalManifest(){
  function scan(relative){for(const entry of readdirSync(relative,{withFileTypes:true})){const file=relative+'/'+entry.name;if(entry.isDirectory())scan(file);else files.add(file);}}
  scan('src/lib');
  for(const file of ['scripts/lib/company-channel-disposable-fixture.mjs','scripts/lib/company-channel-migration.mjs','scripts/lib/disposable-postgres-cleanup.mjs','scripts/fixtures/meta-signup-field-lifecycle-fixture.mjs','tests/fixtures/own-company-meta.mjs',...canonicalParticipantKycSourceFiles()])files.add(file);
- const paths=[...files].sort();assert.equal(paths.length,240);assert.equal(new Set(paths).size,240);
+ const paths=[...files].sort();assert.equal(paths.length,243);assert.equal(new Set(paths).size,243);
  return paths.map(path=>({path,sha256:sha(read(path))}));
 }
 const companyNativeDenied=error=>error?.code==='COMPANY_ONBOARDING_UX_NATIVE_PROOF_REJECTED';
-test('company native source frame authenticates240 physical RAW sources while preserving238 historical and54 semantic checks',()=>{
+test('company native source frame authenticates243 physical RAW sources while preserving238 historical and54 semantic checks',()=>{
  const manifest=companyNativePhysicalManifest(),before=serialize(manifest),contractBefore=read('.github/workspace-acceptance-contract.json');
  const result=validateCompanyOnboardingUxNativeSourceManifest(manifest,read);
- assert.deepEqual(result,{status:'PASS',sourceReferences:240,historicalSourceReferences:238,sourceScope:'CURRENT_AUTHENTICATED_OWNERS',nativeOrBrowserAcceptance:false});
+ assert.deepEqual(result,{status:'PASS',sourceReferences:243,historicalSourceReferences:238,sourceScope:'CURRENT_AUTHENTICATED_OWNERS',nativeOrBrowserAcceptance:false});
  assert.equal(serialize(manifest),before);assert.deepEqual(read('.github/workspace-acceptance-contract.json'),contractBefore);
  assert.equal(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.sourceCount,238);assert.equal(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.totalCheckCount,54);assert.equal(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.addedCheckNames.length,5);
  assert.equal(companyExpected.native.sourceCount,238);assert.equal(companyExpected.native.totalCheckCount,54);
- const historical=manifest.map(row=>row.path).filter(path=>!['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs'].includes(path)).sort();
+ const historical=manifest.map(row=>row.path).filter(path=>!['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs'].includes(path)).sort();
  assert.equal(historical.length,238);assert.equal(sha(JSON.stringify(historical)),COMPANY_ONBOARDING_UX_NATIVE_REVIEW.sourcePathsSha256);
 });
 test('company native source frame rejects missing foreign duplicate and corrupt source references',()=>{
@@ -370,7 +370,7 @@ test('company native source frame rejects missing foreign duplicate and corrupt 
  for(const edit of [m=>m.pop(),m=>m.push({...m[0]}),m=>{m[0]={...m[1]};},m=>{m[0].path='src/lib/foreign-native-source.mjs';},m=>{m[0].sha256='f'.repeat(64);},m=>{m[0].unreviewed=true;}]){
   const manifest=structuredClone(original);edit(manifest);assert.throws(()=>validateCompanyOnboardingUxNativeSourceManifest(manifest,read),companyNativeDenied);
  }
- for(const file of ['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs']){
+ for(const file of ['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs','src/lib/field-execution-policy.mjs','src/lib/field-execution-store.mjs','src/lib/meta-field-execution-conversation.mjs']){
   assert.throws(()=>validateCompanyOnboardingUxNativeSourceManifest(original,p=>p===file?null:read(p)),companyNativeDenied);
   assert.throws(()=>validateCompanyOnboardingUxNativeSourceManifest(original,p=>p===file?Buffer.concat([read(p),Buffer.from('\n// corrupt RAW bytes\n')]):read(p)),companyNativeDenied);
  }
@@ -403,4 +403,11 @@ test('company native historical source-set frame preserves the238 minimum reader
  const manifest=companyNativePhysicalManifest().filter(row=>!['src/lib/field-hours-report.mjs','src/lib/plan-budget-source.mjs'].includes(row.path)),allowed=new Set(manifest.map(row=>row.path));allowed.add(COMPANY_ONBOARDING_UX_NATIVE_REVIEW.producer);allowed.add('.github/workspace-acceptance-contract.json');
  const outside=[];const result=validateCompanyOnboardingUxNativeSourceManifest(manifest,file=>{if(!allowed.has(file)){outside.push(file);return null;}return file==='.github/workspace-acceptance-contract.json'?Buffer.from('{}'):read(file);});
  assert.deepEqual(outside,[]);assert.deepEqual(result,{status:'PASS',sourceReferences:238,historicalSourceReferences:238,sourceScope:'HISTORICAL_SOURCE_SET',nativeOrBrowserAcceptance:false});
+});
+
+test("native materials membership requires all three exact source owners and the complete bounded actual owner frame",function nativeMaterials(){
+ const manifest=companyNativePhysicalManifest(),paths=["src/lib/field-execution-policy.mjs","src/lib/field-execution-store.mjs","src/lib/meta-field-execution-conversation.mjs"],contract=current(),own=contract.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance;assert.equal(own.sourceChanges.length,57);assert.equal(own.retainedDependencies.length,5);
+ for(const path of paths){const row=own.sourceChanges.find(r=>r.path===path);assert.equal(row.status,'ADDED');assert.equal(row.previousSha256,null);assert.equal(sha(read(path).toString('utf8').replaceAll('\r\n','\n')),row.currentSha256);const changed=structuredClone(contract);changed.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges=changed.planBudgetCurrentRevision.ownRuntimeDiagnosticAdvance.sourceChanges.filter(r=>r.path!==path);assert.throws(()=>validateCompanyOnboardingUxNativeSourceManifest(manifest,p=>p==='.github/workspace-acceptance-contract.json'?Buffer.from(serialize(changed)):read(p)),companyNativeDenied);}
+ const allowed=new Set([...planBudgetValidationFiles(contract),...homeDecisionsValidationFiles(contract),...worksiteLiveHoursValidationFiles(contract)]),nativePaths=new Set(manifest.map(r=>r.path));const limited=file=>allowed.has(file)||nativePaths.has(file)||file===COMPANY_ONBOARDING_UX_NATIVE_REVIEW.producer||file==='.github/workspace-acceptance-contract.json'?read(file):null;
+ assert.equal(validateCompanyOnboardingUxNativeSourceManifest(manifest,limited).sourceReferences,243);
 });

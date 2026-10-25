@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdirSync,mkdtempSync,copyFileSync,readFileSync,writeFileSync,rmSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,copyFileSync,readFileSync,writeFileSync,rmSync,realpathSync,lstatSync,constants as fsConstants} from 'node:fs';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
@@ -13,13 +13,40 @@ import {inventoryQuery} from '../src/app/(identity)/cuenta/material-inventory-vi
 assert.ok(!process.env.VERCEL&&!process.env.VERCEL_ENV);
 const root=process.cwd(),output=path.resolve(root,'.vercel/material-inventory-evidence');mkdirSync(output,{recursive:true});
 const fixture=mkdtempSync(path.join(root,'.vercel/inventory-ui-')),app=path.join(fixture,'app');mkdirSync(app);
-const files=['field-media-preview.js','field-operations-panel.module.css','material-inventory-panel.js','worksite-task-selector.js','worksite-task-selector.module.css','material-inventory-panel.module.css','material-inventory-view.mjs','operations-status-panel.js','operations-status-panel.module.css','site-purchase-panel.js','site-purchase-panel.module.css','site-purchase-view.mjs','workspace-session-request.mjs','workspace-request-lifecycle.mjs','workspace-request-lifecycle.js','workspace-recovery-journal.mjs','participant-office-account-view.mjs','own-company-number-view.mjs','own-company-templates-view.mjs', 'private-bank-account-format.mjs','company-channel-view.mjs','workspace-recovery-storage.mjs','workspace-recovery-panel.js','workspace.module.css','template-send-view.mjs','plan-baseline-view.mjs','plan-source-curve.mjs'];
-for(const file of files)copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),path.join(app,file));
+const files=["field-media-preview.js","field-operations-panel.module.css","material-inventory-panel.js","worksite-task-selector.js","worksite-task-selector.module.css","material-inventory-panel.module.css","material-inventory-view.mjs","operations-status-panel.js","operations-status-panel.module.css","site-purchase-panel.js","site-purchase-panel.module.css","site-purchase-view.mjs","workspace-session-request.mjs","workspace-request-lifecycle.mjs","workspace-request-lifecycle.js","workspace-recovery-journal.mjs","participant-office-account-view.mjs","own-company-number-view.mjs","own-company-templates-view.mjs","private-bank-account-format.mjs","company-channel-view.mjs","workspace-recovery-storage.mjs","workspace-recovery-panel.js","workspace.module.css","template-send-view.mjs","plan-baseline-view.mjs","plan-source-curve.mjs","field-execution-mandate-panel.js","field-execution-mandate-panel.module.css","field-execution-view.mjs"];
+for(const file of files){const owned=realpathSync(fixture),directory=realpathSync(app),target=path.resolve(directory,file),relative=path.relative(owned,target);assert.ok(relative!==''&&!path.isAbsolute(relative)&&relative!=='..'&&!relative.startsWith('..'+path.sep));assert.equal(path.dirname(target),directory);assert.equal(realpathSync(path.dirname(target)),directory);assert.ok(!lstatSync(app).isSymbolicLink());copyFileSync(path.join(root,'src/app/(identity)/cuenta',file),target,fsConstants.COPYFILE_EXCL);}
 const sourceManifest=files.map(file=>({path:'src/app/(identity)/cuenta/'+file,sha256:createHash('sha256').update(readFileSync(path.join(app,file))).digest('hex')}));
 copyWorksiteLiveHoursFixture({root,fixture,components:app,sourceManifest,includeHours:false});
 const documentCurveSourceManifest=[];
 const {fixtureTransforms:documentCurveFixtureTransforms}=copyPlanDocumentCurveFixture({root,fixture,components:path.join(app),sourceManifest:documentCurveSourceManifest});
 for(const ref of documentCurveSourceManifest){const existing=sourceManifest.find(row=>row.path===ref.path);if(existing)assert.equal(existing.sha256,ref.sha256,'Original document dependency source hash');else sourceManifest.push(ref);}
+function prepareExecutionFixture(){
+ const owned=realpathSync(fixture),directory=realpathSync(app),accountRoot='src/app/(identity)/cuenta/',sourcePath=accountRoot+'field-execution-view.mjs',target=path.join(directory,'field-execution-view.mjs'),copiedFiles=[],fixtureTransforms=[];
+ const inside=destination=>{const relative=path.relative(owned,destination);return relative!==''&&!path.isAbsolute(relative)&&relative!=='..'&&!relative.startsWith('..'+path.sep);};
+ assert.ok(inside(directory)&&!lstatSync(app).isSymbolicLink(),'Execution fixture directory stays inside its owned tree');
+ const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
+ for(const filename of ['field-execution-mandate-panel.js','field-execution-mandate-panel.module.css','field-execution-view.mjs']){
+  const source=accountRoot+filename,destination=path.join(directory,filename),original=readFileSync(path.join(root,source));
+  assert.ok(inside(destination)&&lstatSync(destination).isFile()&&!lstatSync(destination).isSymbolicLink());assert.deepEqual(readFileSync(destination),original);
+  copiedFiles.push({sourcePath:source,sourceSha256:digest(original),fixtureRelativePath:path.relative(owned,destination).split(path.sep).join('/'),copiedExactlyBeforeRelocation:true});
+ }
+ const original=readFileSync(path.join(root,sourcePath));let generated=readFileSync(target);assert.deepEqual(generated,original);
+ for(const dependency of ['src/lib/procurement-quantity.js','src/lib/progress-measurement-quantity.js','src/lib/task-progress-measurement.js']){
+  const destination=path.join(directory,path.basename(dependency)),bytes=readFileSync(path.join(root,dependency));
+  assert.ok(inside(destination));let present=false;try{const stat=lstatSync(destination);assert.ok(stat.isFile()&&!stat.isSymbolicLink());present=true;}catch(error){if(error.code!=='ENOENT')throw error;}
+  if(present)assert.deepEqual(readFileSync(destination),bytes);else writeFileSync(destination,bytes,{flag:'wx'});
+  assert.deepEqual(readFileSync(destination),bytes);const entry={path:dependency,sha256:digest(bytes)},prior=sourceManifest.find(row=>row.path===dependency);if(prior)assert.equal(prior.sha256,entry.sha256);else sourceManifest.push(entry);
+  copiedFiles.push({sourcePath:dependency,sourceSha256:digest(bytes),fixtureRelativePath:path.relative(owned,destination).split(path.sep).join('/'),copiedExactly:true});
+  const needle='../../../lib/'+path.basename(dependency),before=generated;assert.equal(before.toString('utf8').split(needle).length,2,'One exact approved execution import');
+  generated=Buffer.from(before.toString('utf8').replace(needle,'./'+path.basename(dependency)));writeFileSync(target,generated);assert.deepEqual(readFileSync(target),generated);
+  fixtureTransforms.push({path:sourcePath,kind:'FLATTENED_FIXTURE_RELATIVE_IMPORT',sourceSha256:digest(original),copiedBeforeSha256:digest(before),fixtureSha256:digest(generated),fixtureRelativePath:path.relative(owned,target).split(path.sep).join('/'),dependencySourcePath:dependency,dependencyFixturePath:path.relative(owned,destination).split(path.sep).join('/')});
+ }
+ assert.equal(new Set(sourceManifest.map(row=>row.path)).size,sourceManifest.length);
+ assert.equal(sourceManifest.find(row=>row.path===sourcePath).sha256,digest(original),'Manifest retains original execution source, never generated bytes');
+ return {version:1,kind:'EXACT_EXECUTION_FIXTURE_COPY_PROVENANCE',copiedFiles,fixtureTransforms,originalSourceSha256:digest(original),generatedFixtureSha256:digest(generated),applicationSourceChanged:false,acceptance:false};
+}
+const executionFixtureSources=prepareExecutionFixture();
+writeFileSync(path.join(output,'execution-fixture-sources.json'),JSON.stringify(executionFixtureSources,null,2));
 writeFileSync(path.join(fixture,'package.json'),JSON.stringify({private:true,name:'controlled-inventory-ui'}));
 writeFileSync(path.join(fixture,'next.config.mjs'),`export default {agentRules:false,devIndicators:false,turbopack:{root:${JSON.stringify(root)}}};`);
 writeFileSync(path.join(app,'layout.js'),`export default function Layout({children}){return <html lang="es"><body style={{margin:0,padding:12,background:'#081c2d',fontFamily:'Arial,sans-serif'}}>{children}</body></html>}`);
