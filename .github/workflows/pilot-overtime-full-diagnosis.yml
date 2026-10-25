@@ -1,0 +1,54 @@
+name: Overtime complete reviewed diagnostic
+on:
+  push:
+    branches: ['operations/field-people-fixtures-diagnosis-20261025']
+    paths: ['.github/workflows/pilot-overtime-full-diagnosis.yml']
+permissions:
+  contents: read
+jobs:
+  overtime-full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      DATABASE_URL: postgresql://build_only:build_only@127.0.0.1:5432/build_only
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Require the exact reviewed harness and no focal variables
+        run: |
+          test "$(sha256sum scripts/verify-field-overtime-ui.mjs | cut -d ' ' -f 1)" = '05930ee73701138d92ed9fa784397b2c1421501ef8ff362631c02c24685334c5'
+          test -z "${OVERTIME_UI_SCENARIO:-}"
+          test -z "${OVERTIME_UI_WIDTH:-}"
+      - run: npm ci --no-audit --no-fund
+      - name: Execute the full original eighty-four-scenario loop
+        run: node scripts/verify-field-overtime-ui.mjs
+      - name: Verify this is complete evidence rather than a focal result
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const p=JSON.parse(readFileSync('.vercel/private/field-overtime-ui-proof.json','utf8'));
+          assert.equal(p.status,'PASS');assert.equal(p.fullSuite,true);
+          assert.equal(p.focusedScenario,null);assert.equal(p.focusedWidth,null);
+          assert.deepEqual(p.widths,[320,390,768,1280]);assert.deepEqual(p.executedWidths,p.widths);
+          assert.equal(p.checks.length,84);assert.equal(p.errors.length,0);
+          assert.equal(p.harnessSha256,'05930ee73701138d92ed9fa784397b2c1421501ef8ff362631c02c24685334c5');
+          assert.equal(p.fixtureRemoved,true);assert.equal(p.agentsRestored,true);
+          assert.equal(p.providerCalls,0);assert.equal(p.humanAccepted,false);
+          JS
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: overtime-full-${{ github.run_id }}
+          path: |
+            .vercel/private/field-overtime-ui-proof.json
+            .vercel/private/field-overtime-diagnostic/
+          include-hidden-files: true
+          retention-days: 7
